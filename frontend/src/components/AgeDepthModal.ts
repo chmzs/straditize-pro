@@ -318,12 +318,13 @@ export class AgeDepthModal {
     const w = this.bgImage.naturalWidth;
     const h = this.bgImage.naturalHeight;
 
-    // 拟合坐标轴标定 (以当前图幅长宽边界进行比例映射)
+    // 拟合坐标轴标定 (自动内缩避开外围坐标轴文字与刻度)
     const res = await this.rpcClient.call<any, any>('agedepth.extractAndInspect', {
       depth_px: [h * 0.04, h * 0.88],
       depth_vals: [depthTop, depthBottom],
       age_px: [w * 0.13, w * 0.94],
       age_vals: [ageLeft, ageRight],
+      roi_box: [w * 0.11, h * 0.035, w * 0.96, h * 0.89],
       curve_type: curveType,
       envelope_type: envType,
       depth_unit: 'cm',
@@ -424,14 +425,39 @@ export class AgeDepthModal {
       ctx.lineWidth = 1;
 
       sampleDepths.forEach((d) => {
-        // 在模型 depths 中插值出 y 像素
         const dSpan = bottomVal - topVal;
-        if (dSpan > 0) {
+        if (dSpan > 0 && px.y && px.x_curve) {
           const ratio = (d - topVal) / dSpan;
           const targetY = h * 0.04 + ratio * (h * 0.84);
-          if (targetY >= 0 && targetY <= h) {
+
+          // Find closest y index on curve
+          let closestYIdx = 0;
+          let minDiff = 9999;
+          for (let k = 0; k < px.y.length; k++) {
+            const diff = Math.abs(px.y[k] - targetY);
+            if (diff < minDiff) {
+              minDiff = diff;
+              closestYIdx = k;
+            }
+          }
+          const targetX = px.x_curve[closestYIdx];
+
+          if (minDiff < 30) {
+            // Draw horizontal connector line
             ctx.beginPath();
-            ctx.arc(w * 0.5, targetY, 2.5, 0, Math.PI * 2);
+            ctx.strokeStyle = "rgba(52, 211, 153, 0.35)";
+            ctx.setLineDash([3, 3]);
+            ctx.moveTo(w * 0.11, targetY);
+            ctx.lineTo(targetX, targetY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw glowing marker point on the actual curve
+            ctx.beginPath();
+            ctx.fillStyle = "#34d399";
+            ctx.strokeStyle = "#059669";
+            ctx.lineWidth = 1.5;
+            ctx.arc(targetX, targetY, 3.5, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
           }
