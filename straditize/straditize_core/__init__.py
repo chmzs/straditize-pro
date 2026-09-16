@@ -47,6 +47,12 @@ from .image import (
     to_binary,
     to_grey,
 )
+from .age_depth import (
+    AgeDepthAxisCalibrator,
+    AgeDepthModel,
+    extract_age_depth_model,
+    generate_bacon_script,
+)
 from .pipeline import StraditizePipeline
 
 # Optional RPC & Session exports for remote/headless RPC integration
@@ -84,6 +90,10 @@ __all__ = [
     "METHOD_NOT_FOUND",
     "PARSE_ERROR",
     "STATE_ERROR",
+        "AgeDepthAxisCalibrator",
+    "AgeDepthModel",
+    "extract_age_depth_model",
+    "generate_bacon_script",
     "ColumnBound",
     "ControlPointSet",
     "JsonRpcDispatcher",

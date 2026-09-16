@@ -96,6 +96,14 @@
 
 ### 核心规格与交付成果确认
 
+- **年代-深度模型 (Age-Depth Model) 解译与样品年代不确定性映射**：
+  - 新增 `straditize_core/age_depth.py` 科学算法模块，提供 `AgeDepthAxisCalibrator`、`AgeDepthModel` 与 `extract_age_depth_model`；
+  - 针对真实文献图谱（Bacon 拟合与 Bchron 阶梯沉积模型）实现中央拟合线追踪与 95% 置信带（HPD 包络线）自适应提取；
+  - 完整支持用户自定义元数据填报（中位数 vs 均值、95% HPD、IntCal 版本）；
+  - 实现花粉样品深度向日历年代（`age_est`, `age_min`, `age_max`）与沉积速率的无缝双向插值；
+  - 提供 `generate_bacon_script()` 自动生成可直接跑 1000 次 MCMC 的 R 语言脚本；
+  - 在 `tests/test_age_depth_model.py` 中全量验证通过（64/64 测试全绿，Ruff 0 错误）。
+
 - **数据导出表格预览与就地编辑 (Table Preview & Inline Cell Editing)**：
   - 导出模态框全面升级为双模式视图（`[📊 数据表格 (可就地编辑)]` / `[📝 原始文本 (CSV)]`）；
   - 渲染表头置顶固定、深度层位高亮的可视化数据网格，每行带行号，单元格支持直接键入微调；
