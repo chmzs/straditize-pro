@@ -461,12 +461,43 @@ class StraditizeSession:
         turning_rows, turning_vals, is_mand = detect_stratigraphic_turning_points(
             curve_profile, prominence=1.5, min_distance=3, epsilon=1.0, max_points=32
         )
+        ctrl_pts_list = []
         for r_rel, v_rel, mand in zip(turning_rows, turning_vals, is_mand):
-            control_points[int(y0 + r_rel)] = float(c_start + v_rel)
+            r_int = int(y0 + r_rel)
+            x_val = float(c_start + v_rel)
+            control_points[r_int] = x_val
+            ctrl_pts_list.append({
+                "id": f"pt_{col_index}_{r_int}",
+                "x": x_val,
+                "y": float(r_int),
+                "type": "peak" if v_rel > 1.0 else "trough",
+                "isManual": False,
+            })
 
         # Ensure endpoints exist
-        control_points[y0] = float(points[0]["x"])
-        control_points[y1] = float(points[-1]["x"])
+        y0_x = float(points[0]["x"])
+        y1_x = float(points[-1]["x"])
+        control_points[y0] = y0_x
+        control_points[y1] = y1_x
+
+        if not any(p["y"] == float(y0) for p in ctrl_pts_list):
+            ctrl_pts_list.insert(0, {
+                "id": f"pt_{col_index}_{y0}",
+                "x": y0_x,
+                "y": float(y0),
+                "type": "trough",
+                "isManual": False,
+            })
+        if not any(p["y"] == float(y1) for p in ctrl_pts_list):
+            ctrl_pts_list.append({
+                "id": f"pt_{col_index}_{y1}",
+                "x": y1_x,
+                "y": float(y1),
+                "type": "trough",
+                "isManual": False,
+            })
+
+        ctrl_pts_list.sort(key=lambda p: p["y"])
 
         self.column_points[col_index] = points
         self.control_points[col_index] = control_points
@@ -476,6 +507,7 @@ class StraditizeSession:
             "col_index": col_index,
             "reader_type": reader_type,
             "points": points,
+            "control_points": ctrl_pts_list,
             "control_points_count": len(control_points),
         }
 

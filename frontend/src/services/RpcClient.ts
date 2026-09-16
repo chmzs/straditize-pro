@@ -308,10 +308,29 @@ export class RpcClient {
 
   public async digitizeColumn(taxaId: string): Promise<ControlPoint[]> {
     const colIndex = this.currentDiagramData.columns.findIndex((c) => c.id === taxaId);
-    const res = await this.call<{ col_index: number }, { points: ControlPoint[] }>('core.digitize', {
+    const res = await this.call<{ col_index: number }, { points: ControlPoint[]; control_points?: ControlPoint[] }>('core.digitize', {
       col_index: Math.max(0, colIndex),
     });
-    return res.points || [];
+    // 优先采用后端拓扑显著性抽稀后的关键控制拐点 (15~32 个波峰波谷)，严禁直接把几百个逐像素行点作为手柄
+    if (res.control_points && res.control_points.length > 0) {
+      return res.control_points;
+    }
+    // 如果只有全量 points，前端自动进行特征抽稀降噪至约 25 个控制点
+    const rawPts = res.points || [];
+    if (rawPts.length <= 35) return rawPts;
+    return this.downsampleControlPoints(rawPts, 25);
+  }
+
+  private downsampleControlPoints(pts: ControlPoint[], targetCount: number = 25): ControlPoint[] {
+    if (pts.length <= targetCount) return pts;
+    const sorted = [...pts].sort((a, b) => a.y - b.y);
+    const step = Math.floor(sorted.length / (targetCount - 1));
+    const result: ControlPoint[] = [sorted[0]];
+    for (let i = step; i < sorted.length - 1; i += step) {
+      result.push(sorted[i]);
+    }
+    result.push(sorted[sorted.length - 1]);
+    return result;
   }
 
   public async exportData(format: 'csv' | 'json' = 'csv'): Promise<string> {

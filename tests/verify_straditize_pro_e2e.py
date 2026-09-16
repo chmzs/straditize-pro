@@ -275,6 +275,12 @@ class TestStraditizeProFullE2E(unittest.TestCase):
         # 2. Digitize column 0
         dig_res = session.digitize(0, "area")
         self.assertGreater(len(dig_res["points"]), 100)
+        # Control points for interactive handle editing must be sparse (<=35 points), never dense pixel points!
+        self.assertIn("control_points", dig_res)
+        ctrl_pts = dig_res["control_points"]
+        self.assertGreaterEqual(len(ctrl_pts), 5)
+        self.assertLessEqual(len(ctrl_pts), 35)
+        self.assertEqual(len(ctrl_pts), dig_res["control_points_count"])
 
         # 3. Batch set species names
         taxa = ["Pinus canariensis", "Juniperus", "Quercus", "Olea", "Betula"]
