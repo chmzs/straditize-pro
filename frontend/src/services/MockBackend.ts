@@ -571,7 +571,7 @@ export class MockBackend {
   }
 
   /**
-   * 为用户新上传或粘贴的任意地质图谱智能自适应生成分列与标定建议
+   * 为用户新上传的图谱生成初始纯净画布数据 (绝对不预先盲目切列和数字化，必须由用户进入 Step 1 框选 ROI)
    */
   public static createInitialSuggestion(
     imageWidth: number,
@@ -595,34 +595,33 @@ export class MockBackend {
       depthGridEnabled: true,
     };
 
-    const totalDataWidth = calibration.dataXMax - calibration.dataXMin;
-    const numCols = Math.max(3, Math.min(8, Math.round(totalDataWidth / 180)));
+    return {
+      imageSrc,
+      imageWidth: w,
+      imageHeight: h,
+      calibration: { ...calibration, isCalibrated: true },
+      columns: [],
+      activeTaxaId: '',
+      selectedEntity: { type: 'roi' },
+    };
+  }
+
+  /**
+   * 当用户在 Step 1 显式确认 ROI 后，在 ROI 数据区内推导初始列分界基线 (此时依然不跑轮廓点)
+   */
+  public static createColumnsFromRoi(cal: DiagramCalibration): TaxaColumn[] {
+    const totalDataWidth = cal.dataXMax - cal.dataXMin;
+    const numCols = Math.max(2, Math.min(12, Math.round(totalDataWidth / 140)));
     const colWidth = Math.round(totalDataWidth / numCols);
 
     const palette = ['#38bdf8', '#34d399', '#fbbf24', '#a78bfa', '#f472b6', '#fb7185', '#2dd4bf', '#818cf8'];
-    const defaultTaxaNames = [
-      'Taxon A (Dominant)',
-      'Taxon B (Secondary)',
-      'Taxon C (Woody)',
-      'Taxon D (Herbaceous)',
-      'Taxon E (Spores)',
-      'Taxon F (Aquatics)',
-      'Taxon G',
-      'Taxon H',
-    ];
-
     const columns: TaxaColumn[] = [];
-    for (let i = 0; i < numCols; i++) {
-      const startX = calibration.dataXMin + i * colWidth;
-      const endX = i === numCols - 1 ? calibration.dataXMax : startX + colWidth;
-      const name = defaultTaxaNames[i] || `Taxon ${i + 1}`;
-      const color = palette[i % palette.length];
 
-      // 生成平滑随机控制曲线
-      const profile = Array.from({ length: 9 }, (_, step) => {
-        const centerWave = Math.sin((step / 8) * Math.PI + i * 0.6);
-        return Math.max(0.08, Math.min(0.85, 0.25 + 0.35 * Math.abs(centerWave)));
-      });
+    for (let i = 0; i < numCols; i++) {
+      const startX = cal.dataXMin + i * colWidth;
+      const endX = i === numCols - 1 ? cal.dataXMax : startX + colWidth;
+      const name = `Taxon ${i + 1}`;
+      const color = palette[i % palette.length];
 
       columns.push({
         id: `taxa_auto_${Date.now()}_${i}`,
@@ -630,21 +629,19 @@ export class MockBackend {
         color,
         startX,
         endX,
-        maxPercent: 40 + (i % 3) * 20,
-        tickEndX: 0, unit: '%', isLocked: false, curveType: 'linear',
+        maxPercent: 100,
+        tickEndX: endX,
+        unit: '%',
+        isLocked: false,
+        curveType: 'linear',
         visible: true,
-        controlPoints: this.generatePoints(startX, endX - startX, calibration.dataYMin, calibration.dataYMax, profile),
+        controlPoints: [],
+        scale_type: 'linear',
+        startValue: 0,
+        tickValue: 100,
+        plotType: 'area',
       });
     }
-
-    return {
-      imageSrc,
-      imageWidth: w,
-      imageHeight: h,
-      calibration: { ...calibration, isCalibrated: true },
-      columns,
-      activeTaxaId: columns[0]?.id || 'taxa_0',
-      selectedEntity: null,
-    };
+    return columns;
   }
 }

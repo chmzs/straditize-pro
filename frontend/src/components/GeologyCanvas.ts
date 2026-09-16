@@ -4,6 +4,7 @@ import { SplineInterpolator } from '../core/SplineInterpolator';
 import { HistoryManager } from '../core/HistoryManager';
 import { ToolModeManager } from '../core/ToolModeManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
+import { tokens } from '../styles/tokens';
 import {
   AddPointCommand,
   DeletePointCommand,
@@ -67,6 +68,9 @@ export class GeologyCanvas {
   private readonly ANCHOR_HIT_RADIUS_SCREEN = 8.0;
   private readonly BOUNDARY_HIT_WIDTH_SCREEN = 6.0;
   private readonly ROI_HANDLE_SIZE_SCREEN = 8.0;
+
+  // 显式 4 步推进工作流状态 (1: ROI界定, 2: 列切分与形态, 3: 数字化与微调, 4: 导出)
+  public workflowStage: number = 3;
 
   constructor(
     container: HTMLElement,
@@ -1292,17 +1296,22 @@ export class GeologyCanvas {
     // 2. 地层深度标尺网格系统 (Depth Grid Ruler - 水平淡蓝色层位标线贯穿所有属种列)
     this.drawDepthGrid(ctx, isLight);
 
-    // 3. 沉积剖面有效范围指示与刻度
+    // 3. 沉积剖面有效范围指示与刻度 (ROI)
     this.drawCalibrationOverlay(ctx, isLight);
 
-    // 4. 各属种垂直分界标线与两点式物理刻度钉
-    this.drawColumnBoundaries(ctx, isLight);
+    // 4. 各属种垂直分界标线与两点式物理刻度钉 (Step 2 开始呈现)
+    if (this.workflowStage >= 2 && this.data.columns.length > 0) {
+      this.drawColumnBoundaries(ctx, isLight);
+    }
 
-    // 5. 花粉轮廓面积图与曲线
-    this.drawPollenCurves(ctx);
-
-    // 6. 控制锚点渲染
-    this.drawAnchors(ctx);
+    // 5. 花粉轮廓面积图与曲线 (Step 3 数字化后呈现)
+    if (this.workflowStage >= 3 && this.data.columns.length > 0) {
+      this.drawPollenCurves(ctx);
+      // 6. 控制锚点渲染
+      this.drawAnchors(ctx);
+      // 7. 原位半透明逆向重绘绿色质检比对层 (Visual Ghosting Layer)
+      this.drawGhostingOverlay(ctx);
+    }
 
     ctx.restore();
   }
@@ -1837,6 +1846,37 @@ export class GeologyCanvas {
         ctx.strokeStyle = activeCol.color || '#ffffff';
         ctx.lineWidth = 1.6 / scale;
         ctx.stroke();
+      }
+    });
+
+    ctx.restore();
+  }
+
+  public setWorkflowStage(stage: number): void {
+    this.workflowStage = stage;
+    this.requestRender();
+  }
+
+  private drawGhostingOverlay(ctx: CanvasRenderingContext2D): void {
+    if (!this.viewport.showGhosting) return;
+    const scale = this.viewport.scale;
+    ctx.save();
+
+    this.data.columns.forEach((col) => {
+      if (!col.visible || col.controlPoints.length === 0) return;
+      const sorted = [...col.controlPoints].sort((a, b) => a.y - b.y);
+      const pType = col.plotType || 'area';
+
+      if (pType === 'area') {
+        const areaPath = SplineInterpolator.buildAreaPath(sorted, col.startX, col.curveType);
+        ctx.fillStyle = tokens.color.ghost.overlayFill;
+        ctx.fill(areaPath);
+
+        const curvePath = SplineInterpolator.buildPath(sorted, col.curveType);
+        ctx.strokeStyle = tokens.color.ghost.overlayStroke;
+        ctx.lineWidth = 1.6 / scale;
+        ctx.setLineDash([4 / scale, 3 / scale]);
+        ctx.stroke(curvePath);
       }
     });
 

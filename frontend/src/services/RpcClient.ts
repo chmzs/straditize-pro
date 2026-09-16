@@ -1,5 +1,5 @@
 import { BackendStatus, JsonRpcRequest, JsonRpcResponse } from '../types/rpc';
-import { ControlPoint, DiagramData } from '../types/pollen';
+import { Column, ControlPoint, DiagramData } from '../types/pollen';
 import { MockBackend } from './MockBackend';
 import { SplineInterpolator } from '../core/SplineInterpolator';
 
@@ -282,8 +282,12 @@ export class RpcClient {
         }
 
         const backendResult = await this.call<Record<string, unknown>, any>('core.loadImage', payload);
-        if (backendResult && backendResult.columns && Array.isArray(backendResult.columns)) {
-          this.currentDiagramData.columns = backendResult.columns;
+        // 新载入图像只保留图谱元数据与居中 ROI，严禁自动盲目切列或数字化，严格进入 Step 1 等待用户界定有效区
+        this.currentDiagramData.columns = [];
+        this.currentDiagramData.activeTaxaId = '';
+        if (backendResult && backendResult.width && backendResult.height) {
+          this.currentDiagramData.imageWidth = backendResult.width;
+          this.currentDiagramData.imageHeight = backendResult.height;
         }
       } catch (err) {
         console.warn('Backend loadImage notification failed, using client suggested layout:', err);
@@ -291,6 +295,64 @@ export class RpcClient {
     }
 
     return this.currentDiagramData;
+  }
+
+  /**
+   * 步骤 2：用户在 Step 1 显式确认有效区 (ROI) 后，调用后端在纯数据区内进行垂直基线推导分列
+   */
+  public async detectColumnsInRoi(roi: { x0: number; x1: number; y0: number; y1: number }): Promise<Column[]> {
+    if (this.isMock) {
+      const cal = this.currentDiagramData.calibration;
+      cal.dataXMin = roi.x0;
+      cal.dataXMax = roi.x1;
+      cal.dataYMin = roi.y0;
+      cal.dataYMax = roi.y1;
+      const cols = MockBackend.createColumnsFromRoi(cal);
+      this.currentDiagramData.columns = cols;
+      this.currentDiagramData.activeTaxaId = cols[0]?.id || '';
+      return cols;
+    }
+
+    try {
+      const res = await this.call<{ x_bounds: [number, number]; y_bounds: [number, number] }, any[]>('core.detectColumns', {
+        x_bounds: [roi.x0, roi.x1],
+        y_bounds: [roi.y0, roi.y1],
+      });
+
+      if (Array.isArray(res) && res.length > 0) {
+        const palette = ['#38bdf8', '#34d399', '#fbbf24', '#a78bfa', '#f472b6', '#fb7185', '#2dd4bf', '#818cf8'];
+        const cols: Column[] = res.map((c, i) => ({
+          id: `taxa_${c.col_index ?? i}`,
+          name: c.name || `Taxon ${i + 1}`,
+          color: palette[i % palette.length],
+          startX: c.start,
+          endX: c.end,
+          maxPercent: 100,
+          tickEndX: c.tickEndX || c.end,
+          unit: '%',
+          isLocked: false,
+          curveType: 'linear',
+          visible: true,
+          controlPoints: [],
+          scale_type: c.scale_type || 'linear',
+          startValue: c.startValue || 0,
+          tickValue: c.tickValue || 100,
+          plotType: c.plot_type || 'area',
+          hasExaggeration: c.has_exaggeration || false,
+          exaggerationMult: c.exaggeration_multiplier || 5,
+        }));
+        this.currentDiagramData.columns = cols;
+        this.currentDiagramData.activeTaxaId = cols[0]?.id || '';
+        return cols;
+      }
+    } catch (e) {
+      console.warn('Backend detectColumns failed, fallback to ROI split:', e);
+    }
+
+    const fallbackCols = MockBackend.createColumnsFromRoi(this.currentDiagramData.calibration);
+    this.currentDiagramData.columns = fallbackCols;
+    this.currentDiagramData.activeTaxaId = fallbackCols[0]?.id || '';
+    return fallbackCols;
   }
 
   public async updateControlPoint(

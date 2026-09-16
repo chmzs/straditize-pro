@@ -25,6 +25,7 @@ except ImportError:
     PchipInterpolator = None
 
 from .calibration import LinearCalibration, LogCalibration
+from .age_depth import AgeDepthAxisCalibrator, AgeDepthModel, extract_age_depth_model
 from .protocol import (
     CALIBRATION_ERROR,
     EXPORT_ERROR,
@@ -72,6 +73,11 @@ class StraditizeSession:
         # Taxa names and Depth Grid
         self.taxa_names: list[str] = []
         self.depth_grid: list[float] = []
+
+        # Age-Depth Chronology integration
+        self.age_depth_model: AgeDepthModel | None = None
+        self.age_depth_image: Image.Image | None = None
+        self.age_depth_image_path: str | None = None
 
         # Command Undo/Redo stack (max 500 steps per Section 七)
         self.undo_stack: list[dict[str, Any]] = []
@@ -700,9 +706,16 @@ class StraditizeSession:
         if self.is_calibrated and self.y_scale is not None:
             sy = self.y_scale["slope"]
             iy = self.y_scale["intercept"]
-            data_dict["depth"] = [round(sy * r + iy, 4) for r in all_rows]
+            depth_series = [round(sy * r + iy, 4) for r in all_rows]
         else:
-            data_dict["depth"] = all_rows
+            depth_series = all_rows
+        data_dict["depth"] = depth_series
+
+        if self.age_depth_model is not None:
+            age_pred = self.age_depth_model.predict_age(depth_series)
+            data_dict["age_est"] = age_pred["age_est"]
+            data_dict["age_min_95"] = age_pred["age_min"]
+            data_dict["age_max_95"] = age_pred["age_max"]
 
         for c_idx in sorted(self.column_points.keys()):
             if self.taxa_names and c_idx < len(self.taxa_names):
@@ -1655,3 +1668,105 @@ class StraditizeSession:
             return {"path": output_path, "success": True}
         return r_script
 
+
+
+    # ========================================================================
+    # Age-Depth Chronology and Visual Inspection Methods
+    # ========================================================================
+
+    def load_age_depth_diagram(
+        self,
+        image_path: str | None = None,
+        base64_data: str | None = None,
+        sample_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Loads an age-depth model diagram image into session for chronological harmonization."""
+        if sample_key:
+            sample_map = {
+                "bacon": os.path.join(os.path.dirname(__file__), "..", "..", "tests", "test_figures", "age_models", "bacon_szek.png"),
+                "bchron": os.path.join(os.path.dirname(__file__), "..", "..", "tests", "test_figures", "age_models", "bchron_stepped.png"),
+            }
+            image_path = sample_map.get(sample_key.lower())
+
+        if base64_data:
+            if "," in base64_data:
+                base64_data = base64_data.split(",", 1)[1]
+            raw_bytes = base64.b64decode(base64_data)
+            self.age_depth_image = Image.open(io.BytesIO(raw_bytes))
+            self.age_depth_image_path = None
+        elif image_path and os.path.exists(image_path):
+            self.age_depth_image = Image.open(image_path)
+            self.age_depth_image_path = os.path.abspath(image_path)
+        else:
+            raise JsonRpcError(FILE_NOT_FOUND_ERROR, f"Age-depth image not found: {image_path}")
+
+        return {
+            "status": "loaded",
+            "width": self.age_depth_image.width,
+            "height": self.age_depth_image.height,
+            "has_model": self.age_depth_model is not None,
+        }
+
+    def calibrate_and_extract_age_depth(
+        self,
+        depth_px: list[float],
+        depth_vals: list[float],
+        age_px: list[float],
+        age_vals: list[float],
+        roi_box: tuple[float, float, float, float] | None = None,
+        curve_type: str = "median",
+        envelope_type: str = "95_hpd",
+        depth_unit: str = "cm",
+        age_unit: str = "cal BP",
+        cal_curve: str = "IntCal20",
+        notes: str = "",
+    ) -> dict[str, Any]:
+        """Extracts age-depth curves and 95% confidence envelope with visual inspection data."""
+        if self.age_depth_image is None:
+            # Fallback to sample if none loaded
+            self.load_age_depth_diagram(sample_key="bacon")
+
+        calibrator = AgeDepthAxisCalibrator(
+            depth_px=depth_px,
+            depth_vals=depth_vals,
+            age_px=age_px,
+            age_vals=age_vals,
+            depth_unit=depth_unit,
+            age_unit=age_unit,
+        )
+
+        model = extract_age_depth_model(
+            self.age_depth_image,
+            calibrator=calibrator,
+            roi_box=roi_box,
+            curve_type=curve_type,
+            envelope_type=envelope_type,
+            cal_curve=cal_curve,
+            notes=notes,
+        )
+        self.age_depth_model = model
+
+        # Harmonize with current pollen sample depths if available
+        sample_depths = []
+        if self.column_points and self.is_calibrated and self.y_scale:
+            all_r = sorted({p["row"] for pts in self.column_points.values() for p in pts})
+            sy = self.y_scale["slope"]
+            iy = self.y_scale["intercept"]
+            sample_depths = [round(sy * r + iy, 2) for r in all_r]
+
+        mapped_samples = model.predict_age(sample_depths) if sample_depths else None
+
+        return {
+            "status": "extracted",
+            "inspection": model.to_inspection_data(),
+            "mapped_samples": mapped_samples,
+        }
+
+    def get_age_depth_inspection(self) -> dict[str, Any]:
+        """Returns current age-depth model visual inspection data and metadata."""
+        if self.age_depth_model is None:
+            return {"has_model": False}
+        return {
+            "has_model": True,
+            "inspection": self.age_depth_model.to_inspection_data(),
+        }

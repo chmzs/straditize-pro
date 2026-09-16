@@ -24,6 +24,7 @@ export interface ToolbarCallbacks {
   onDeleteSelected?: () => void;
   onSaveProject?: () => void;
   onOpenProjectFile?: (file: File) => void;
+  onOpenAgeDepthModal?: () => void;
 }
 
 export class Toolbar {
@@ -307,6 +308,11 @@ export class Toolbar {
           </button>
         </div>
 
+        <!-- 年代-深度模型视觉检查与解译入口 -->
+        <button id="btn-age-depth-modal" class="tool-btn" title="解译并视觉核查同剖面年代-深度模型 (Bacon / Bchron 等)" style="padding: 4px 8px; font-size: 11px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.4);">
+          <span>⏳ 年代模型</span>
+        </button>
+
         <div class="dropdown-container">
           <button id="btn-export-csv" class="tool-btn export" title="导出为 CSV 表格" style="padding: 4px 7px; font-size: 11px;">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
@@ -414,6 +420,7 @@ export class Toolbar {
     this.element.querySelector('#btn-redo')?.addEventListener('click', () => this.callbacks.onRedo());
     this.element.querySelector('#btn-digitize')?.addEventListener('click', () => this.callbacks.onDigitize());
     this.element.querySelector('#btn-calibrate')?.addEventListener('click', () => this.callbacks.onOpenCalibrationModal());
+    this.element.querySelector('#btn-age-depth-modal')?.addEventListener('click', () => this.callbacks.onOpenAgeDepthModal?.());
     this.element.querySelector('#btn-export-csv')?.addEventListener('click', () => this.callbacks.onExport('csv'));
     this.element.querySelector('#btn-export-json')?.addEventListener('click', () => this.callbacks.onExport('json'));
     this.element.querySelector('#rpc-status-pill')?.addEventListener('click', () => this.callbacks.onToggleRpcConfig());

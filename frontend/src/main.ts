@@ -6,8 +6,11 @@ import { Toolbar } from './components/Toolbar';
 import { Sidebar } from './components/Sidebar';
 import { PropertyPanel } from './components/PropertyPanel';
 import { Inspector } from './components/Inspector';
+import { AgeDepthModal } from './components/AgeDepthModal';
 import { DiagramCalibration, DiagramData } from './types/pollen';
 import { ImageDisplayMode } from './core/Viewport';
+import { WORKFLOW_STAGES, WorkflowStage } from './types/workflow';
+import { tokens } from './styles/tokens';
 
 async function bootstrap() {
   const appContainer = document.getElementById('app');
@@ -48,6 +51,10 @@ async function bootstrap() {
       e.returnValue = '您有未保存的地学数字化工程修改，确定离开吗？';
     }
   });
+
+  let sidebar: any = null;
+  let inspector: any = null;
+  let toolbar: any = null;
 
   // 4. 构建工作区 DOM
   const workspace = document.createElement('main');
@@ -99,14 +106,14 @@ async function bootstrap() {
   // 6. 实例化画布组件
   const canvasComponent = new GeologyCanvas(canvasWrapper, initialData, history, {
     onTaxaChange: (_taxaId) => {
-      sidebar.updateData(canvasComponent.data);
-      inspector.updateData(canvasComponent.data);
+      sidebar?.updateData(canvasComponent.data);
+      inspector?.updateData(canvasComponent.data);
       updateFooter();
     },
     onDataChange: () => {
-      sidebar.updateData(canvasComponent.data);
-      inspector.updateData(canvasComponent.data);
-      toolbar.updateHistoryState();
+      sidebar?.updateData(canvasComponent.data);
+      inspector?.updateData(canvasComponent.data);
+      toolbar?.updateHistoryState();
       updateFooter();
       scheduleAutosave();
     },
@@ -131,7 +138,7 @@ async function bootstrap() {
       }
     },
     onFilterChange: (mode, binaryOverlay) => {
-      toolbar.updateFilterState(mode, binaryOverlay);
+      toolbar?.updateFilterState(mode, binaryOverlay);
     },
     onDropFile: (file) => {
       handleOpenFile(file);
@@ -144,8 +151,104 @@ async function bootstrap() {
     },
   });
 
+  // 6.2 显式分步推进状态机 (Step-by-Step Workflow State Machine)
+  let currentStage: WorkflowStage = canvasComponent.data.columns.length > 0 ? 3 : 1;
+  canvasComponent.setWorkflowStage(currentStage);
+
+  const workflowActionBar = document.createElement('div');
+  workflowActionBar.className = 'workflow-action-bar';
+  workflowActionBar.style.cssText = `
+    position: absolute;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 95;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 16px;
+    max-width: calc(100% - 40px);
+    width: max-content;
+    box-sizing: border-box;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid ${tokens.color.border.focus};
+    border-radius: ${tokens.radius.full}px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.65);
+    font-size: 11px;
+    color: ${tokens.color.text.primary};
+    pointer-events: auto;
+  `;
+  canvasWrapper.appendChild(workflowActionBar);
+
+  function updateWorkflowBar() {
+    const meta = WORKFLOW_STAGES[currentStage];
+    canvasComponent.setWorkflowStage(currentStage);
+    if (typeof toolbar !== 'undefined' && toolbar) {
+      toolbar.setWorkflowStep(currentStage);
+    }
+
+    workflowActionBar.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+        <span style="background: ${tokens.color.column.activeBadge}; color: #fff; font-weight: 700; font-size: 10px; padding: 2px 7px; border-radius: 9999px; flex-shrink: 0;">Step ${currentStage}/4</span>
+        <strong style="color: ${tokens.color.text.accent}; flex-shrink: 0;">${meta.stepName}</strong>
+        <span style="color: ${tokens.color.text.secondary}; font-size: 11px; max-width: 280px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${meta.guideText}</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+        ${currentStage > 1 ? `<button id="btn-wf-prev" class="tool-btn" style="padding: 3px 8px; font-size: 10px;">↺ 上一步</button>` : ''}
+        ${meta.primaryActionLabel ? `<button id="btn-wf-next" class="btn btn-primary" style="padding: 4px 10px; font-size: 10.5px; font-weight: 600; white-space: nowrap;">${meta.primaryActionLabel}</button>` : ''}
+      </div>
+    `;
+
+    workflowActionBar.querySelector('#btn-wf-prev')?.addEventListener('click', () => {
+      if (currentStage > 1) {
+        currentStage = (currentStage - 1) as WorkflowStage;
+        updateWorkflowBar();
+      }
+    });
+
+    workflowActionBar.querySelector('#btn-wf-next')?.addEventListener('click', async () => {
+      if (currentStage === 1) {
+        // Step 1 -> Step 2: 用户确认纯数据有效区，切分列
+        setHudNotice('正在基于纯数据有效区推导各花粉属种垂直基线...', 5000);
+        const cal = canvasComponent.data.calibration;
+        const cols = await rpcClient.detectColumnsInRoi({
+          x0: cal.dataXMin,
+          x1: cal.dataXMax,
+          y0: cal.dataYMin,
+          y1: cal.dataYMax,
+        });
+        currentStage = 2;
+        sidebar?.updateData(canvasComponent.data);
+        inspector?.updateData(canvasComponent.data);
+        updateWorkflowBar();
+        updateFooter();
+        setHudNotice(`✅ 成功切分 ${cols.length} 个属种列！请核对属种名称或批量导入。`, 4000);
+      } else if (currentStage === 2) {
+        // Step 2 -> Step 3: 用户确认列对齐无误，开始全列数字化识别
+        setHudNotice('正在提取各列花粉多边形轮廓与显著控制手柄...', 8000);
+        const cols = canvasComponent.data.columns;
+        for (const col of cols) {
+          const pts = await rpcClient.digitizeColumn(col.id);
+          if (pts.length > 0) col.controlPoints = pts;
+        }
+        currentStage = 3;
+        sidebar?.updateData(canvasComponent.data);
+        inspector?.updateData(canvasComponent.data);
+        updateWorkflowBar();
+        updateFooter();
+        setHudNotice('✅ 数字化完成！绿色半透明逆向对比层已开启，可直接在画布拖拽微调。', 4500);
+      } else if (currentStage === 3) {
+        // Step 3 -> Step 4: 进入数据质检与导出
+        currentStage = 4;
+        updateWorkflowBar();
+        propertyPanel.openExportModal();
+      }
+    });
+  }
+
   // 7. 实例化侧边栏
-  const sidebar = new Sidebar(canvasComponent.data, {
+  sidebar = new Sidebar(canvasComponent.data, {
     onSelectTaxa: (taxaId) => {
       canvasComponent.setActiveTaxa(taxaId);
       updateFooter();
@@ -155,7 +258,7 @@ async function bootstrap() {
       if (col) {
         col.visible = !col.visible;
         canvasComponent.requestRender();
-        sidebar.updateData(canvasComponent.data);
+        sidebar?.updateData(canvasComponent.data);
       }
     },
     onChangeCurveType: (taxaId, type) => {
@@ -164,7 +267,7 @@ async function bootstrap() {
         col.curveType = type;
         history.push(`Change Curve Type to ${type}`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
         canvasComponent.requestRender();
-        sidebar.updateData(canvasComponent.data);
+        sidebar?.updateData(canvasComponent.data);
       }
     },
     onUpdateTaxaColor: (taxaId, color) => {
@@ -172,13 +275,13 @@ async function bootstrap() {
       if (col) {
         col.color = color;
         canvasComponent.requestRender();
-        sidebar.updateData(canvasComponent.data);
+        sidebar?.updateData(canvasComponent.data);
       }
     },
     onBatchImportTaxa: (taxaNames) => {
       canvasComponent.batchUpdateTaxa(taxaNames);
-      sidebar.updateData(canvasComponent.data);
-      toolbar.updateHistoryState();
+      sidebar?.updateData(canvasComponent.data);
+      toolbar?.updateHistoryState();
       updateFooter();
       scheduleAutosave();
       setHudNotice(`✅ 成功批量导入 ${taxaNames.length} 个属种名单并完成自动拓展对齐！`, 3500);
@@ -190,9 +293,9 @@ async function bootstrap() {
         cols[idx1].name = cols[idx2].name;
         cols[idx2].name = tmpName;
         history.push(`Swap Taxa Names (${cols[idx1].name} <-> ${cols[idx2].name})`, cols, canvasComponent.data.activeTaxaId);
-        sidebar.updateData(canvasComponent.data);
-        inspector.updateData(canvasComponent.data);
-        toolbar.updateHistoryState();
+        sidebar?.updateData(canvasComponent.data);
+        inspector?.updateData(canvasComponent.data);
+        toolbar?.updateHistoryState();
         updateFooter();
         scheduleAutosave();
         setHudNotice(`🔀 已对调属种顺位: ${cols[idx1].name} 与 ${cols[idx2].name}`);
@@ -228,14 +331,24 @@ async function bootstrap() {
       canvasComponent.data.activeTaxaId = newCol.id;
       history.push(`Insert Gap Column at ${insertAt + 1}`, cols, newCol.id);
       canvasComponent.requestRender();
-      sidebar.updateData(canvasComponent.data);
-      inspector.updateData(canvasComponent.data);
-      toolbar.updateHistoryState();
+      sidebar?.updateData(canvasComponent.data);
+      inspector?.updateData(canvasComponent.data);
+      toolbar?.updateHistoryState();
       updateFooter();
       scheduleAutosave();
       setHudNotice(`➕ 已插入空缺占位列 [Gap_Col_${insertAt + 1}]，后续属种名字已顺延后推！`, 4000);
     },
   });
+
+  // 8.1 年代-深度模型解译与视觉检查弹窗
+  const ageDepthModal = new AgeDepthModal(
+    document.body,
+    canvasComponent.data,
+    rpcClient,
+    (ageModel) => {
+      setHudNotice(`✅ 成功关联年代模型 [${ageModel.metadata.curve_type || "Median"}]！导出时将自动注入日历年代与 95% 置信区间。`, 4000);
+    }
+  );
 
   // 8. 标定与弹窗交互面板
   const propertyPanel = new PropertyPanel(
@@ -246,32 +359,34 @@ async function bootstrap() {
       canvasComponent.data.calibration = newCal;
       history.push('Update Calibration', canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
       canvasComponent.requestRender();
-      inspector.updateData(canvasComponent.data);
+      inspector?.updateData(canvasComponent.data);
       updateFooter();
     },
     (projectData: DiagramData) => {
       canvasComponent.loadNewDiagram(projectData);
       history.reset(projectData.columns, projectData.activeTaxaId);
-      sidebar.updateData(canvasComponent.data);
-      inspector.updateData(canvasComponent.data);
-      toolbar.updateHistoryState();
-      toolbar.updateScale(canvasComponent.viewport.scale);
+      currentStage = 3;
+      updateWorkflowBar();
+      sidebar?.updateData(canvasComponent.data);
+      inspector?.updateData(canvasComponent.data);
+      toolbar?.updateHistoryState();
+      toolbar?.updateScale(canvasComponent.viewport.scale);
       updateFooter();
       setHudNotice('✅ 成功载入 Straditize 科学项目包 (.tar)！已 100% 还原全部属种、刻度钉与控制点。', 4500);
     }
   );
 
   // 9. 动态属性检查器 (Context Inspector)
-  const inspector = new Inspector(canvasComponent.data, history, {
+  inspector = new Inspector(canvasComponent.data, history, {
     onDataChange: () => {
       canvasComponent.requestRender();
-      sidebar.updateData(canvasComponent.data);
-      toolbar.updateHistoryState();
+      sidebar?.updateData(canvasComponent.data);
+      toolbar?.updateHistoryState();
       updateFooter();
     },
     onSelectTaxa: (taxaId) => {
       canvasComponent.setActiveTaxa(taxaId);
-      sidebar.updateData(canvasComponent.data);
+      sidebar?.updateData(canvasComponent.data);
       updateFooter();
     },
     onToggleCollapse: (collapsed) => {
@@ -286,8 +401,8 @@ async function bootstrap() {
         activeCol.controlPoints = points;
         history.push(`Re-digitize ${activeCol.name}`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
         canvasComponent.requestRender();
-        sidebar.updateData(canvasComponent.data);
-        inspector.updateData(canvasComponent.data);
+        sidebar?.updateData(canvasComponent.data);
+        inspector?.updateData(canvasComponent.data);
         setHudNotice(`⚡ 属种 ${activeCol.name} 轮廓已根据图像算法完成重识别！`);
       }
     },
@@ -321,17 +436,19 @@ async function bootstrap() {
         // 调用 RPC 客户端（若在线发送至 Python 会话进行专业尺寸与二值化解析，若离线自动生成初始建议）
         const newDiagramData = await rpcClient.loadCustomImage(dataUrl, w, h, file.name);
 
-        // Canvas 视口即时加载并以高清晰度展示，重置居中并触发分列初始建议
+        // Canvas 视口即时加载并以高清晰度展示，重置居中并严格进入 Step 1 等待用户界定有效区
         canvasComponent.loadNewDiagram(newDiagramData);
         history.reset(newDiagramData.columns, newDiagramData.activeTaxaId);
+        currentStage = 1;
+        updateWorkflowBar();
 
-        sidebar.updateData(canvasComponent.data);
-        toolbar.updateHistoryState();
-        toolbar.updateScale(canvasComponent.viewport.scale);
-        toolbar.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
+        sidebar?.updateData(canvasComponent.data);
+        toolbar?.updateHistoryState();
+        toolbar?.updateScale(canvasComponent.viewport.scale);
+        toolbar?.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
         updateFooter();
 
-        setHudNotice(`✅ 成功载入图谱 [${file.name}] (${w}×${h})，已自动重置视口居中并完成初始分列建议！`, 4000);
+        setHudNotice(`✅ 成功载入图谱 [${file.name}] (${w}×${h})！请在画布上调整数据有效区 (Step 1)，随后点击下方推进。`, 5000);
       };
       img.src = dataUrl;
     };
@@ -345,11 +462,13 @@ async function bootstrap() {
 
     canvasComponent.loadNewDiagram(newDiagramData);
     history.reset(newDiagramData.columns, newDiagramData.activeTaxaId);
+    currentStage = 3;
+    updateWorkflowBar();
 
-    sidebar.updateData(canvasComponent.data);
-    toolbar.updateHistoryState();
-    toolbar.updateScale(canvasComponent.viewport.scale);
-    toolbar.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
+    sidebar?.updateData(canvasComponent.data);
+    toolbar?.updateHistoryState();
+    toolbar?.updateScale(canvasComponent.viewport.scale);
+    toolbar?.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
     updateFooter();
 
     const nameMap: Record<string, string> = {
@@ -361,26 +480,26 @@ async function bootstrap() {
   }
 
   // 11. 实例化顶部工具栏
-  const toolbar = new Toolbar(history, rpcClient.getStatus(), {
+  toolbar = new Toolbar(history, rpcClient.getStatus(), {
     onFit: () => {
       canvasComponent.fitToScreen();
-      toolbar.updateScale(canvasComponent.viewport.scale);
+      toolbar?.updateScale(canvasComponent.viewport.scale);
     },
     onReset100: () => {
       canvasComponent.resetZoom100();
-      toolbar.updateScale(canvasComponent.viewport.scale);
+      toolbar?.updateScale(canvasComponent.viewport.scale);
     },
     onZoomIn: () => {
       const rect = canvasComponent.canvas.getBoundingClientRect();
       canvasComponent.viewport.zoomAt({ x: rect.width / 2, y: rect.height / 2 }, 1.25);
       canvasComponent.requestRender();
-      toolbar.updateScale(canvasComponent.viewport.scale);
+      toolbar?.updateScale(canvasComponent.viewport.scale);
     },
     onZoomOut: () => {
       const rect = canvasComponent.canvas.getBoundingClientRect();
       canvasComponent.viewport.zoomAt({ x: rect.width / 2, y: rect.height / 2 }, 0.8);
       canvasComponent.requestRender();
-      toolbar.updateScale(canvasComponent.viewport.scale);
+      toolbar?.updateScale(canvasComponent.viewport.scale);
     },
     onUndo: () => {
       const prev = history.undo();
@@ -388,8 +507,8 @@ async function bootstrap() {
         canvasComponent.data.columns = prev.columns;
         canvasComponent.data.activeTaxaId = prev.activeTaxaId;
         canvasComponent.requestRender();
-        sidebar.updateData(canvasComponent.data);
-        toolbar.updateHistoryState();
+        sidebar?.updateData(canvasComponent.data);
+        toolbar?.updateHistoryState();
       }
     },
     onRedo: () => {
@@ -398,8 +517,8 @@ async function bootstrap() {
         canvasComponent.data.columns = next.columns;
         canvasComponent.data.activeTaxaId = next.activeTaxaId;
         canvasComponent.requestRender();
-        sidebar.updateData(canvasComponent.data);
-        toolbar.updateHistoryState();
+        sidebar?.updateData(canvasComponent.data);
+        toolbar?.updateHistoryState();
       }
     },
     onDigitize: async () => {
@@ -410,7 +529,7 @@ async function bootstrap() {
         activeCol.controlPoints = points;
         history.push(`Re-digitize ${activeCol.name}`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
         canvasComponent.requestRender();
-        sidebar.updateData(canvasComponent.data);
+        sidebar?.updateData(canvasComponent.data);
       }
     },
     onExport: async (format) => {
@@ -427,6 +546,9 @@ async function bootstrap() {
     onOpenCalibrationModal: () => {
       propertyPanel.openCalibrationModal();
     },
+    onOpenAgeDepthModal: () => {
+      ageDepthModal.open();
+    },
     onToggleRpcConfig: () => {
       propertyPanel.openRpcConfigModal(() => {
         toolbar.updateStatus(rpcClient.getStatus());
@@ -441,13 +563,13 @@ async function bootstrap() {
     onChangeImageMode: (mode: ImageDisplayMode) => {
       canvasComponent.viewport.imageMode = mode;
       canvasComponent.requestRender();
-      toolbar.updateFilterState(mode, canvasComponent.viewport.showBinaryOverlay);
+      toolbar?.updateFilterState(mode, canvasComponent.viewport.showBinaryOverlay);
       setHudNotice(`底图滤镜模式切换为: ${mode}`);
     },
     onToggleBinaryOverlay: () => {
       const active = canvasComponent.viewport.toggleBinaryOverlay();
       canvasComponent.requestRender();
-      toolbar.updateFilterState(canvasComponent.viewport.imageMode, active);
+      toolbar?.updateFilterState(canvasComponent.viewport.imageMode, active);
       setHudNotice(active ? '透视遮罩: 墨迹高亮模式 [开启] (青蓝=保留花粉，红=切除横线，快捷键 B)' : '透视遮罩: [关闭]');
     },
     onChangeDegridStrength: (strength) => {
@@ -479,6 +601,9 @@ async function bootstrap() {
   appContainer.appendChild(toolbar.getElement());
   appContainer.appendChild(workspace);
   appContainer.appendChild(footer);
+
+  // 挂载就绪后更新初始工作流向导条
+  updateWorkflowBar();
 
   // 全局快捷键 [ 和 ] 折叠/展开侧边栏与检查器
   window.addEventListener('keydown', (e) => {
@@ -512,7 +637,7 @@ async function bootstrap() {
 
   // 监听滚轮更新 Toolbar 显示的缩放比例
   canvasComponent.canvas.addEventListener('wheel', () => {
-    toolbar.updateScale(canvasComponent.viewport.scale);
+    toolbar?.updateScale(canvasComponent.viewport.scale);
   });
 
   window.addEventListener('resize', () => {
@@ -523,12 +648,12 @@ async function bootstrap() {
   requestAnimationFrame(() => {
     canvasComponent.handleResize();
     canvasComponent.fitToScreen();
-    toolbar.updateScale(canvasComponent.viewport.scale);
+    toolbar?.updateScale(canvasComponent.viewport.scale);
   });
 
   updateFooter();
-  toolbar.updateScale(canvasComponent.viewport.scale);
-  toolbar.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
+  toolbar?.updateScale(canvasComponent.viewport.scale);
+  toolbar?.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
 
   // 检查是否存在未保存的自动草稿快照
   try {
@@ -553,9 +678,9 @@ async function bootstrap() {
         banner.querySelector('#btn-restore-draft')?.addEventListener('click', () => {
           canvasComponent.loadNewDiagram(draft.data);
           history.reset(draft.data.columns, draft.data.activeTaxaId);
-          sidebar.updateData(canvasComponent.data);
-          inspector.updateData(canvasComponent.data);
-          toolbar.updateHistoryState();
+          sidebar?.updateData(canvasComponent.data);
+          inspector?.updateData(canvasComponent.data);
+          toolbar?.updateHistoryState();
           updateFooter();
           banner.remove();
           setHudNotice('✅ 成功恢复上次自动暂存的项目草稿！', 3500);

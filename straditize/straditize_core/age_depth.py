@@ -84,6 +84,10 @@ class AgeDepthModel:
         self.age_unit = age_unit
         self.cal_curve = cal_curve
         self.notes = notes
+        self.px_y: np.ndarray | None = None
+        self.px_x_curve: np.ndarray | None = None
+        self.px_x_min: np.ndarray | None = None
+        self.px_x_max: np.ndarray | None = None
 
         # Monotonic-preserving PCHIP interpolators
         if len(self.depths) >= 2:
@@ -94,6 +98,35 @@ class AgeDepthModel:
             self._interp_age = None
             self._interp_min = None
             self._interp_max = None
+
+    def to_inspection_data(self) -> dict[str, Any]:
+        """Serializes curves, pixel coordinates, and metadata for visual overlay check in UI."""
+        px_dict = None
+        if self.px_y is not None and len(self.px_y) > 0:
+            # Downsample if dense to keep JSON payload lightweight for 60-120fps canvas rendering
+            step = max(1, len(self.px_y) // 400)
+            px_dict = {
+                "y": [round(float(y), 1) for y in self.px_y[::step]],
+                "x_curve": [round(float(x), 1) for x in self.px_x_curve[::step]],
+                "x_min": [round(float(x), 1) for x in self.px_x_min[::step]],
+                "x_max": [round(float(x), 1) for x in self.px_x_max[::step]],
+            }
+
+        return {
+            "depths": [round(float(d), 2) for d in self.depths],
+            "ages": [round(float(a), 2) for a in self.ages],
+            "age_min": [round(float(a), 2) for a in self.age_min],
+            "age_max": [round(float(a), 2) for a in self.age_max],
+            "px_points": px_dict,
+            "metadata": {
+                "curve_type": self.curve_type,
+                "envelope_type": self.envelope_type,
+                "depth_unit": self.depth_unit,
+                "age_unit": self.age_unit,
+                "calibration_curve": self.cal_curve,
+                "notes": self.notes,
+            },
+        }
 
     def predict_age(self, sample_depths: list[float] | np.ndarray) -> dict[str, list[float]]:
         """Maps sample depths to estimated ages, 95% uncertainty bounds, and sedimentation rates."""
@@ -167,7 +200,13 @@ def extract_age_depth_model(
         ry0 = max(0, min(h - 1, ry0))
         ry1 = max(0, min(h, ry1))
     else:
-        rx0, ry0, rx1, ry1 = 0, 0, w, h
+        # Automatically infer data frame region from calibration points, leaving margins for tick labels
+        px_ages = [calibrator.age_cal.px_points[0], calibrator.age_cal.px_points[1]]
+        px_depths = [calibrator.depth_cal.px_points[0], calibrator.depth_cal.px_points[1]]
+        rx0 = max(0, int(min(px_ages) - 10))
+        rx1 = min(w, int(max(px_ages) + 15))
+        ry0 = max(0, int(min(px_depths) - 10))
+        ry1 = min(h, int(max(px_depths) + 5))
 
     # Grayscale conversion: Y = 0.299 R + 0.587 G + 0.114 B
     if img_arr.ndim == 3:
@@ -217,16 +256,18 @@ def extract_age_depth_model(
         if np.any(is_red):
             curve_idx = int(np.median(np.where(is_red)[0]))
         else:
-            # Find the darkest pixel within the envelope span
             sub_span = row[x_min_idx : x_max_idx + 1]
             darkest_rel = np.argmin(sub_span)
             curve_idx = x_min_idx + darkest_rel
 
-        # Offset back to image coordinates
         real_y = float(y)
         real_x_curve = float(rx0 + curve_idx)
         real_x_min = float(rx0 + x_min_idx)
         real_x_max = float(rx0 + x_max_idx)
+
+        # Continuity protection: reject wild jumps caused by axis text / margin labels
+        if sample_x_curve and abs(real_x_curve - sample_x_curve[-1]) > 55:
+            continue
 
         sample_y.append(real_y)
         sample_x_curve.append(real_x_curve)
@@ -255,7 +296,7 @@ def extract_age_depth_model(
     true_min = np.minimum(phys_age_min, phys_age_max)
     true_max = np.maximum(phys_age_min, phys_age_max)
 
-    return AgeDepthModel(
+    model = AgeDepthModel(
         depths=phys_depths,
         ages=phys_ages,
         age_min=true_min,
@@ -267,6 +308,11 @@ def extract_age_depth_model(
         cal_curve=cal_curve,
         notes=notes,
     )
+    model.px_y = np.asarray(sample_y, dtype=float)
+    model.px_x_curve = np.asarray(sample_x_curve, dtype=float)
+    model.px_x_min = np.asarray(sample_x_min, dtype=float)
+    model.px_x_max = np.asarray(sample_x_max, dtype=float)
+    return model
 
 
 def generate_bacon_script(

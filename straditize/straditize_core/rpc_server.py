@@ -26,6 +26,7 @@ Image.MAX_IMAGE_PIXELS = None
 
 from .protocol import JsonRpcDispatcher, JsonRpcError
 from .session import StraditizeSession
+from .age_depth import generate_bacon_script
 
 
 def find_frontend_dist(custom_path: str | None = None) -> str | None:
@@ -87,6 +88,10 @@ def create_rpc_dispatcher(
     # Section 五: JSON-RPC 2.0 规范方法表 (project, image, roi, column, point, algorithm, history, export, shutdown)
     dispatcher.register_method("project.new", session.project_new)
     dispatcher.register_method("project.load", session.project_load)
+    dispatcher.register_method("agedepth.loadModelDiagram", session.load_age_depth_diagram)
+    dispatcher.register_method("agedepth.extractAndInspect", session.calibrate_and_extract_age_depth)
+    dispatcher.register_method("agedepth.getInspection", session.get_age_depth_inspection)
+    dispatcher.register_method("agedepth.generateBaconScript", lambda dates, core_name="MyCore", thickness=5, cc=1: generate_bacon_script(core_name=core_name, dates=dates, thickness=thickness, cc=cc))
     dispatcher.register_method("project.save", session.project_save)
 
     dispatcher.register_method("image.load", session.load_image)
@@ -480,6 +485,32 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
                     ensure_ascii=False,
                 ).encode("utf-8")
                 self.wfile.write(err_resp)
+            return
+
+        # Age-depth diagram image endpoint
+        if raw_path in ("/image/agedepth", "/api/image/agedepth"):
+            session = getattr(self, "session", None)
+            if session and session.age_depth_image is None:
+                try:
+                    session.load_age_depth_diagram(sample_key="bacon")
+                except Exception:
+                    pass
+
+            if session and session.age_depth_image is not None:
+                bio = io.BytesIO()
+                session.age_depth_image.save(bio, format="PNG")
+                img_bytes = bio.getvalue()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Content-Length", str(len(img_bytes)))
+                self.send_header("Cache-Control", "public, max-age=3600")
+                self._send_cors_headers()
+                self.end_headers()
+                self.wfile.write(img_bytes)
+            else:
+                self.send_response(404)
+                self.end_headers()
+                self.wfile.write(b"No age-depth diagram image loaded")
             return
 
         if raw_path in ("/image/current", "/api/image", "/image/preview"):

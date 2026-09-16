@@ -9,8 +9,9 @@ Automates real MS Edge browser interactions via playwright-cli:
 5. Tests ROI boundaries and column inspector controls.
 6. Tests Linear / Log two-point calibration inputs and Log constraint warnings.
 7. Tests Export modal dialog, interactive spreadsheet table preview, and inline cell editing.
-8. Asserts desktop mode [Shutdown] button presence.
-9. Saves a high-resolution screenshot as visual proof.
+8. Tests Age-Depth Model visual inspection modal, curve extraction overlay, and sample mapping.
+9. Asserts desktop mode [Shutdown] button presence.
+10. Saves high-resolution screenshots as visual proof.
 """
 import json
 import os
@@ -50,7 +51,14 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
             is_desktop_mode=True,
         )
         cls.server.start()
-        time.sleep(1.0)
+        import urllib.request
+        for _ in range(30):
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{cls.port}/status", timeout=0.5) as resp:
+                    if resp.status == 200:
+                        break
+            except Exception:
+                time.sleep(0.2)
 
     @classmethod
     def tearDownClass(cls):
@@ -65,21 +73,21 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         url = f"http://127.0.0.1:{self.port}/"
 
         # 1. Open browser to Straditize Pro URL
-        open_out = run_pw_cmd("open", url, "--browser", "msedge")
+        open_out = run_pw_cmd("open", url, "--browser", "msedge", "--idle-timeout", "0")
         self.assertIn("opened with pid", open_out.lower(), f"Browser failed to open: {open_out}")
         time.sleep(2.5)  # Wait for full frontend initialization and canvas rendering
 
         # 2. Check Document Title
         title_res = run_pw_cmd("eval", "document.title")
         self.assertIn("Straditize Pro", title_res, f"Unexpected page title: {title_res}")
-        print("  [Pass 1/8] Page title matches Straditize Pro v2.0")
+        print("  [Pass 1/9] Page title matches Straditize Pro v2.0")
 
         # 3. Check Canvas Viewport and Brand Logo
         canvas_res = run_pw_cmd("eval", "Boolean(document.getElementById('geology-canvas'))")
         self.assertIn("true", canvas_res.lower(), "Canvas geology-canvas not found in DOM")
         brand_res = run_pw_cmd("eval", "document.querySelector('.brand-name')?.textContent || ''")
         self.assertIn("Straditize", brand_res)
-        print("  [Pass 2/8] Canvas 2D viewport & PRO brand header confirmed")
+        print("  [Pass 2/9] Canvas 2D viewport & PRO brand header confirmed")
 
         # 4. Check 6-Tool Mode State Machine Buttons & Interactive Click Switch
         tools_res = run_pw_cmd(
@@ -93,12 +101,12 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         time.sleep(0.3)
         roi_active = run_pw_cmd("eval", "document.querySelector('button[data-tool-mode=\"roi\"]')?.classList.contains('active-mode')")
         self.assertIn("true", roi_active.lower())
-        print("  [Pass 3/8] All 6 tool mode buttons verified & interactive ROI mode switch confirmed")
+        print("  [Pass 3/9] All 6 tool mode buttons verified & interactive ROI mode switch confirmed")
 
         # 5. Check Desktop [Shutdown] Button (Only visible in desktop mode)
         shutdown_res = run_pw_cmd("eval", "Boolean(document.getElementById('btn-shutdown'))")
         self.assertIn("true", shutdown_res.lower(), "Desktop shutdown button must be rendered in desktop mode")
-        print("  [Pass 4/8] Desktop mode [Shutdown] button present and active")
+        print("  [Pass 4/9] Desktop mode [Shutdown] button present and active")
 
         # 6. Check Inspector Two-Point Calibration Inputs & Log Constraint Protection
         calib_inputs = run_pw_cmd(
@@ -111,7 +119,7 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         log_btn_disabled = run_pw_cmd("eval", "document.querySelector('button[data-scale=\"log\"]')?.disabled")
         log_err_visible = run_pw_cmd("eval", "Boolean(document.getElementById('log-scale-err'))")
         self.assertTrue("true" in log_btn_disabled.lower() or "true" in log_err_visible.lower())
-        print("  [Pass 5/8] Two-point physical calibration & Log constraint warning verified in Inspector")
+        print("  [Pass 5/9] Two-point physical calibration & Log constraint warning verified in Inspector")
 
         # 7. Check WPD Scientific Export Dialog & riojaPlot Link
         run_pw_cmd("click", "#btn-export-csv")
@@ -120,7 +128,7 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         riojaplot_btn = run_pw_cmd("eval", "Boolean(document.getElementById('btn-wpd-download-r'))")
         self.assertIn("true", modal_visible.lower())
         self.assertIn("true", riojaplot_btn.lower())
-        print("  [Pass 6/8] Scientific export modal dialog & riojaPlot direct link verified")
+        print("  [Pass 6/9] Scientific export modal dialog & riojaPlot direct link verified")
 
         # 8. Check Interactive Spreadsheet Table Preview & Inline Cell Editing
         table_rendered = run_pw_cmd(
@@ -139,21 +147,44 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         # Verify textarea synchronization reflects the edited cell value
         sync_res = run_pw_cmd("eval", "document.getElementById('wpd-data-textarea')?.value?.includes('99.88')")
         self.assertIn("true", sync_res.lower(), "Edited cell value was not synchronized to exported text")
-        print("  [Pass 7/8] Interactive spreadsheet table preview, inline cell editing & live CSV sync verified")
+        print("  [Pass 7/9] Interactive spreadsheet table preview, inline cell editing & live CSV sync verified")
 
-        # 9. Take High-Res Proof Screenshot
-        proof_path = os.path.abspath("real_browser_playwright_verified.png")
+        # Close export dialog
+        run_pw_cmd("click", "#modal-close")
+        time.sleep(0.3)
+
+        # 9. Open Age-Depth Model Visual Inspection Modal
+        run_pw_cmd("click", "#btn-age-depth-modal")
+        time.sleep(0.8)
+        ad_modal_visible = run_pw_cmd("eval", "Boolean(document.querySelector('.agedepth-dialog'))")
+        self.assertIn("true", ad_modal_visible.lower(), "Age-depth modal failed to open")
+
+        # Execute extraction and visual inspection overlay
+        run_pw_cmd("click", "#ad-btn-extract")
+        time.sleep(1.0)
+
+        # Check visual overlay canvas rendered
+        ad_canvas_ready = run_pw_cmd("eval", "Boolean(document.getElementById('ad-inspection-canvas')?.width > 0)")
+        self.assertIn("true", ad_canvas_ready.lower())
+
+        # Check mapping table populated
+        ad_table_populated = run_pw_cmd("eval", "Boolean(document.getElementById('ad-mapping-tbody')?.querySelector('tr td'))")
+        self.assertIn("true", ad_table_populated.lower())
+        print("  [Pass 8/9] Age-depth visual inspection modal, curve overlay & sample mapping table verified")
+
+        # Take High-Res Proof Screenshot of the visual inspection modal
+        proof_path = os.path.abspath("real_browser_agedepth_inspection_verified.png")
         shot_res = run_pw_cmd("screenshot")
         for word in shot_res.split():
             clean = word.strip("()[]\"'")
             if clean.endswith(".png") and os.path.exists(clean):
                 shutil.copy2(clean, proof_path)
                 break
-        print(f"  [Pass 8/8] High-res browser screenshot saved to: {proof_path}")
+        print(f"  [Pass 9/9] High-res visual inspection screenshot saved to: {proof_path}")
 
         # Cleanly close browser
         run_pw_cmd("close")
-        print("=== [Playwright Browser E2E] All 8 browser verification steps PASSED ===\n")
+        print("=== [Playwright Browser E2E] All 9 browser verification steps PASSED ===\n")
 
 
 if __name__ == "__main__":
