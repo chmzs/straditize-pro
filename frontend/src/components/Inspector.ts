@@ -253,6 +253,17 @@ export class Inspector {
             </div>
           </div>
 
+          <!-- 物理数轴跨度指示器 -->
+          <div style="margin: 6px 0; padding: 4px 6px; background: rgba(15, 23, 42, 0.5); border-radius: 4px; border: 1px solid rgba(255,255,255,0.06);">
+            <div style="display: flex; justify-content: space-between; font-size: 9.5px; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 2px;">
+              <span style="color: #38bdf8;">基线: ${sc.originVal}${sc.unit || '%'} (X=${sc.originX})</span>
+              <span style="color: #f97316;">刻度: ${sc.calibVal}${sc.unit || '%'} (X=${sc.calibX})</span>
+            </div>
+            <div style="position: relative; height: 5px; background: rgba(51, 65, 85, 0.6); border-radius: 3px; overflow: hidden;">
+              <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: linear-gradient(90deg, #38bdf8, #f97316); opacity: 0.85;"></div>
+            </div>
+          </div>
+
           <!-- 端点 2: 真实刻度齿 (用户直接看图输入对应数值) -->
           <div style="display: flex; gap: 8px;">
             <div style="flex: 1;">
@@ -299,12 +310,15 @@ export class Inspector {
 
         <!-- 图表形态选择 (面积图 / 柱状图 / 纯折线 / 散点符号) -->
         <div class="form-group" style="margin-top: 8px;">
-          <label style="font-size: 11px;">图表形态类型 (Plot Type):</label>
-          <div class="btn-group" style="display: flex; gap: 4px; width: 100%; margin-top: 4px;">
-            <button class="tool-btn quick-plottype-btn ${(col.plotType || 'area') === 'area' ? 'active-mode' : ''}" data-type="area" style="flex: 1; font-size: 10px;">面积 (Area)</button>
-            <button class="tool-btn quick-plottype-btn ${col.plotType === 'bar' ? 'active-mode' : ''}" data-type="bar" style="flex: 1; font-size: 10px;">柱状 (Bar)</button>
-            <button class="tool-btn quick-plottype-btn ${col.plotType === 'line' ? 'active-mode' : ''}" data-type="line" style="flex: 1; font-size: 10px;">折线 (Line)</button>
-            <button class="tool-btn quick-plottype-btn ${col.plotType === 'symbol' ? 'active-mode' : ''}" data-type="symbol" style="flex: 1; font-size: 10px;">符号 (Symbol)</button>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="font-size: 11px;">图表形态类型 (Plot Type):</label>
+            <button id="btn-apply-type-all" class="tool-btn" style="font-size: 9.5px; padding: 1px 5px; color: var(--text-muted);" title="将当前形态应用至全部属种列">应用至全列</button>
+          </div>
+          <div class="btn-group" style="display: flex; gap: 3px; width: 100%; margin-top: 4px;">
+            <button class="tool-btn quick-plottype-btn ${(col.plotType || 'area') === 'area' ? 'active-mode' : ''}" data-type="area" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">🌊 面积</button>
+            <button class="tool-btn quick-plottype-btn ${col.plotType === 'bar' ? 'active-mode' : ''}" data-type="bar" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">📊 柱状</button>
+            <button class="tool-btn quick-plottype-btn ${col.plotType === 'line' ? 'active-mode' : ''}" data-type="line" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">📈 折线</button>
+            <button class="tool-btn quick-plottype-btn ${col.plotType === 'symbol' ? 'active-mode' : ''}" data-type="symbol" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">➕ 符号</button>
           </div>
         </div>
 
@@ -519,6 +533,19 @@ export class Inspector {
           this.callbacks.onDataChange();
         }
       });
+    });
+
+    this.element.querySelector('#btn-apply-type-all')?.addEventListener('click', () => {
+      const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
+      if (activeCol) {
+        const pType = activeCol.plotType || 'area';
+        this.data.columns.forEach((c) => {
+          c.plotType = pType;
+        });
+        this.history.push(`Apply Plot Type ${pType} to All Columns`, this.data.columns, this.data.activeTaxaId);
+        this.render();
+        this.callbacks.onDataChange();
+      }
     });
 
     // 局部放大曲线勾选与倍数事件

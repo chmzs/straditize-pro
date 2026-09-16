@@ -1542,19 +1542,19 @@ export class GeologyCanvas {
       ctx.strokeRect(pt.x - hSize / 2, pt.y - hSize / 2, hSize, hSize);
     }
 
-    // 4. 标注顶部和底部深度提示文字 (恒定清晰)
+    // 4. 标注顶部和底部深度提示文字 (位于 ROI 左边缘外侧，杜绝侵入属种数据区造成文字遮挡重叠)
     ctx.fillStyle = isLight ? '#0284c7' : '#7dd3fc';
-    ctx.font = `bold ${Math.max(10, 12 / scale)}px 'JetBrains Mono', monospace`;
-    ctx.textAlign = 'left';
+    ctx.font = `bold ${Math.max(10, 11 / scale)}px 'JetBrains Mono', monospace`;
+    ctx.textAlign = 'right';
     ctx.fillText(
-      `▲ ROI Top: ${cal.depthTopValue} ${cal.unit} (y=${cal.dataYMin}px)`,
-      cal.dataXMin + 6 / scale,
-      cal.dataYMin - 8 / scale
+      `Top: ${cal.depthTopValue} ${cal.unit} ─┐`,
+      cal.dataXMin - 8 / scale,
+      cal.dataYMin + 4 / scale
     );
     ctx.fillText(
-      `▼ ROI Bottom: ${cal.depthBottomValue} ${cal.unit} (y=${cal.dataYMax}px)`,
-      cal.dataXMin + 6 / scale,
-      cal.dataYMax + 16 / scale
+      `Bottom: ${cal.depthBottomValue} ${cal.unit} ─┘`,
+      cal.dataXMin - 8 / scale,
+      cal.dataYMax + 4 / scale
     );
 
     ctx.restore();
@@ -1666,43 +1666,61 @@ export class GeologyCanvas {
       // 5. 属种名称与端点数值标签
       const width = col.endX - col.startX;
       const centerX = col.startX + width / 2;
-      const screenColW = width * scale;
 
-      // 缩放较小且列很窄时，非激活列避免密集重叠挤压，激活列以高亮胶囊清晰突出
-      const showLabels = isActive || screenColW >= 45 || scale >= 0.6;
-
-      if (showLabels) {
-        if (isActive) {
-          ctx.save();
-          ctx.font = `bold ${Math.max(10, 12 / scale)}px sans-serif`;
-          const textMetrics = ctx.measureText(col.name);
-          const badgeW = textMetrics.width + 12 / scale;
-          const badgeH = 18 / scale;
-          ctx.fillStyle = isLight ? '#0284c7' : '#38bdf8';
-          ctx.fillRect(centerX - badgeW / 2, topY - 24 / scale, badgeW, badgeH);
-          ctx.fillStyle = isLight ? '#ffffff' : '#0b0f19';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(col.name, centerX, topY - 15 / scale);
-          ctx.restore();
+      // 属种名称与刻度防重叠渲染
+      const colWidth = col.endX - col.startX;
+      if (isActive) {
+        ctx.save();
+        const fontSize = Math.max(10, 12 / scale);
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        const textMetrics = ctx.measureText(col.name);
+        const badgeW = textMetrics.width + 16 / scale;
+        const badgeH = 20 / scale;
+        ctx.fillStyle = isLight ? '#0284c7' : '#38bdf8';
+        const bx = centerX - badgeW / 2;
+        const by = topY - 26 / scale;
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(bx, by, badgeW, badgeH, 4 / scale);
         } else {
-          ctx.fillStyle = isLight ? '#475569' : 'rgba(255, 255, 255, 0.75)';
-          ctx.font = `bold ${Math.max(9.5, 11 / scale)}px sans-serif`;
-          ctx.textAlign = 'center';
-          const displayName = col.name.length > 10 ? col.name.substring(0, 8) + '…' : col.name;
-          ctx.fillText(displayName, centerX, topY - 14);
+          ctx.rect(bx, by, badgeW, badgeH);
         }
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(col.name, centerX, topY - 16 / scale);
+        ctx.restore();
 
-        // 端点 1 数值 (如 0% 或非零起点)
-        ctx.font = `${Math.max(8.5, 9.5 / scale)}px sans-serif`;
-        ctx.fillStyle = isLight ? '#0284c7' : 'rgba(56, 189, 248, 0.95)';
+        // 仅在当前选中的激活列显示清晰端点刻度，防止几十列文字相互横向打架
+        ctx.font = `600 ${Math.max(8.5, 9.5 / scale)}px sans-serif`;
+        ctx.fillStyle = isLight ? '#0284c7' : '#38bdf8';
         ctx.textAlign = 'left';
-        ctx.fillText(`${sc.originVal}${sc.unit || '%'}`, sc.originX + 2 / scale, topY + 12);
+        ctx.fillText(`${sc.originVal}${sc.unit || '%'}`, sc.originX + 2 / scale, topY - 2 / scale);
 
-        // 端点 2 数值 (真实刻度齿数值，如 20%, 40%, 100%)
-        ctx.fillStyle = isLight ? '#dc2626' : 'rgba(239, 68, 68, 0.95)';
+        ctx.fillStyle = isLight ? '#dc2626' : '#f87171';
         ctx.textAlign = 'right';
-        ctx.fillText(`${sc.calibVal}${sc.unit || '%'}`, sc.calibX - 2 / scale, topY + 12);
+        ctx.fillText(`${sc.calibVal}${sc.unit || '%'}`, sc.calibX - 2 / scale, topY - 2 / scale);
+      } else {
+        // 未激活列：若列较窄（< 40px），名称以 45 度优雅斜角呈现，杜绝多列名称横向重叠！
+        ctx.save();
+        ctx.fillStyle = isLight ? '#475569' : 'rgba(255, 255, 255, 0.75)';
+        const fontSize = Math.max(9, 10.5 / scale);
+        ctx.font = `500 ${fontSize}px sans-serif`;
+        if (colWidth < 42 && scale < 1.0) {
+          ctx.translate(centerX, topY - 6 / scale);
+          ctx.rotate(-Math.PI / 4); // 逆时针 45 度斜排
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          const shortName = col.name.length > 12 ? col.name.substring(0, 10) + '…' : col.name;
+          ctx.fillText(shortName, 0, 0);
+        } else {
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          const displayName = col.name.length > 12 ? col.name.substring(0, 10) + '…' : col.name;
+          ctx.fillText(displayName, centerX, topY - 4 / scale);
+        }
+        ctx.restore();
       }
     });
 

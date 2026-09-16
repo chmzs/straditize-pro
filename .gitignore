@@ -1,4 +1,4 @@
-﻿# pixi environments
+# pixi environments
 .pixi/
 
 # python & test caches
@@ -39,3 +39,5 @@ real_browser_inspection.png
 real_canvas_*.png
 real_edge_screenshot.png
 test_cli_output.csv
+current_live_ui.png
+polished_*.png

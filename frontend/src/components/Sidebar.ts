@@ -16,6 +16,7 @@ export class Sidebar {
   private data: DiagramData;
   private callbacks: SidebarCallbacks;
   private isCollapsed: boolean = false;
+  private isCompactView: boolean = true; // 默认紧凑列表，极大提升大剖面属种浏览检索效率
 
   constructor(data: DiagramData, callbacks: SidebarCallbacks) {
     this.data = data;
@@ -53,8 +54,11 @@ export class Sidebar {
           </svg>
           <span>Taxa 属种分列清单</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 6px;">
+        <div style="display: flex; align-items: center; gap: 4px;">
           <span class="badge">${this.data.columns.length}</span>
+          <button id="btn-toggle-compact" class="tool-btn" style="padding: 2px 5px; font-size: 10px;" title="切换紧凑列表/详细卡片视图">
+            ${this.isCompactView ? '☲ 卡片' : '≡ 紧凑'}
+          </button>
           <button id="btn-collapse-sidebar" class="icon-btn" title="收起/展开属种树 (快捷键: [)">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 18 9 12 15 6"/>
@@ -107,6 +111,29 @@ export class Sidebar {
     const manualCount = col.controlPoints.filter((p) => p.isManual).length;
     const totalCount = col.controlPoints.length;
 
+    if (this.isCompactView) {
+      return `
+        <div class="taxa-card compact-taxa-row ${isActive ? 'active' : ''}" data-taxa-id="${col.id}" style="padding: 4px 8px; margin-bottom: 2px; display: flex; align-items: center; justify-content: space-between; gap: 6px; border-radius: 4px; border: 1px solid ${isActive ? '#38bdf8' : 'rgba(255,255,255,0.06)'}; background: ${isActive ? 'rgba(56,189,248,0.12)' : 'rgba(30,41,59,0.35)'};">
+          <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+            <span class="color-dot" style="background-color: ${col.color}; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;"></span>
+            <input type="text" class="taxa-name-inline-input" data-action="inline-rename" value="${col.name}" style="font-size: 11px; font-weight: ${isActive ? '600' : '400'}; border: none; background: transparent; color: inherit; width: 100%; text-overflow: ellipsis; overflow: hidden; padding: 1px 2px;" title="点击直接改名" />
+          </div>
+          <div style="display: flex; align-items: center; gap: 2px; flex-shrink: 0;">
+            <span style="font-size: 9.5px; color: var(--text-muted); font-family: var(--font-mono); margin-right: 2px;">${totalCount}点</span>
+            <button class="icon-btn" data-action="swap-up" title="向上对调属种名称" style="padding: 1px 2px; font-size: 9px; line-height: 1;">▲</button>
+            <button class="icon-btn" data-action="swap-down" title="向下对调属种名称" style="padding: 1px 2px; font-size: 9px; line-height: 1;">▼</button>
+            <button class="icon-btn toggle-visibility ${col.visible ? 'visible' : 'hidden'}" data-action="toggle-visible" title="显隐属种" style="padding: 2px;">
+              ${
+                col.visible
+                  ? `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
+                  : `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
+              }
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
     return `
       <div class="taxa-card ${isActive ? 'active' : ''}" data-taxa-id="${col.id}">
         <div class="taxa-header">
@@ -157,9 +184,14 @@ export class Sidebar {
   }
 
   private bindEvents(): void {
-    // 0. 折叠侧边栏
+    // 0. 折叠侧边栏与紧凑/卡片视图切换
     this.element.querySelector('#btn-collapse-sidebar')?.addEventListener('click', () => {
       this.toggleCollapse();
+    });
+
+    this.element.querySelector('#btn-toggle-compact')?.addEventListener('click', () => {
+      this.isCompactView = !this.isCompactView;
+      this.render();
     });
 
     // 1. 批量导入属种名单弹窗触发按钮
