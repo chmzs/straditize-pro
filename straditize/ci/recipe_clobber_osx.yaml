@@ -1,0 +1,5 @@
+test:
+  commands:
+    - straditize --help
+    - pytest -v --cov=straditize tests/widgets/test_beginner.py
+    - codecov

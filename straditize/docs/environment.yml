@@ -1,0 +1,24 @@
+name: straditize_docs
+channels:
+    - chilipp/label/dev
+    - chilipp/label/master
+    - chilipp
+dependencies:
+    - python=3.12
+    - psyplot-gui>=1.5.0
+    - pygments
+    - sphinx!=1.7.5
+    - psy-simple>=1.5.0
+    - psyplot>=1.5.1
+    - pandas>=2.3
+    - matplotlib>=3.8
+    - xarray>=2024.7
+    - netcdf4
+    - openpyxl
+    - scikit-image
+    - scipy>=1.13
+    - psy-strat
+    - pip:
+        - autodocsumm
+        - sphinx-argparse
+        - sphinx-nbexamples

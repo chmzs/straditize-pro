@@ -1,0 +1,23 @@
+[lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",   # line length
+    "E402",   # module level import not at top
+    "E722",   # bare except
+    "E741",   # ambiguous variable name
+    "F403",   # from module import *
+    "F405",   # undefined from import *
+    "F841",   # unused local variable
+    "W605",   # invalid escape sequence
+]
+
+[lint.per-file-ignores]
+"straditize/tests/**" = ["ALL"]
+"tests/**" = ["ALL"]
+"straditize/docs/**" = ["ALL"]
+"straditize/ci/**" = ["ALL"]
+"straditize/setup.py" = ["ALL"]
+"straditize/straditize/widgets/**" = ["ALL"]
+"straditize/straditize/__init__.py" = ["F401"]
+"straditize/straditize/__main__.py" = ["F401"]
+"straditize/straditize/evaluator.py" = ["F401"]

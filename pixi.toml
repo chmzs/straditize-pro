@@ -1,0 +1,69 @@
+[workspace]
+name = "straditize"
+version = "0.2.2"
+description = "Installer for straditize and its dependencies"
+authors = ["chmzs <chmzs@outlook.com>"]
+channels = ["conda-forge"]
+platforms = ["win-64"]
+preview = ["pixi-build"]          # 启用预览特性，支持本地路径构建
+
+[pypi-options]
+index-url = "https://pypi.tuna.tsinghua.edu.cn/simple/"
+extra-index-urls = ["https://pypi.org/simple"]
+
+[tasks]
+run-straditize = "python -m straditize"   # 启动应用
+desktop = "python -m straditize_core.rpc_server"                            # 启动桌面模式 (自动端口/调起浏览器/退出按钮)
+rpc-server = "python -m straditize_core.rpc_server serve --port 8765"       # 启动服务器模式 (127.0.0.1:8765 / 无退出按钮)
+frontend-dev = "pnpm --prefix frontend run dev"                         # 启动现代版前端开发服务器
+
+[tasks.test]
+description = "Run the test suite"
+cmd = "python -m pytest -q"
+
+[tasks.install]
+description = "Install straditize in editable mode"
+cmd = "python -m pip install -e ./straditize --no-build-isolation"
+
+[tasks.lint]
+description = "Run lint checks"
+cmd = "ruff check straditize"
+
+[tasks.format]
+description = "Format Python code"
+cmd = "ruff format straditize"
+
+[tasks.build-windows]
+description = "Build Windows distribution bundle"
+cmd = "pyinstaller straditize/support/straditize_windows_pyinst.spec --distpath straditize/support/dist --workpath straditize/support/build --noconfirm"
+
+[dependencies]
+# 仅 Python、pip 走 conda；运行时和开发依赖优先使用 PyPI wheel，减少环境体积
+python = ">=3.12,<3.13"
+pip = "*"
+
+[pypi-dependencies]
+# ===== 运行时依赖 =====
+numpy = ">=1.26,<3.0"
+pandas = ">=2.3,<3.0"
+matplotlib = ">=3.8,<3.11"
+scipy = ">=1.13,<1.14"
+xarray = ">=2024.7,<2025"
+netcdf4 = ">=1.6.1,<2"
+scikit-image = ">=0.23,<1.0"
+openpyxl = ">=3.1,<4.0"
+pillow = ">=10,<12"
+psyplot = ">=1.5.1,<2.0"
+psyplot-gui = ">=1.5.0,<2.0"
+psy-strat = ">=0.1.1,<0.2"
+pyqt5 = ">=5.15.10,<6"
+pyqtwebengine = ">=5.15.6,<6"
+
+# ===== 开发/测试/打包依赖 =====
+setuptools = ">=70,<81"
+pytest = ">=9.0.2,<10"
+ruff = ">=0.11,<1"
+pyinstaller = ">=6.0,<7"
+
+# 本地源码包以 editable 方式安装
+straditize = { path = "./straditize", editable = true }

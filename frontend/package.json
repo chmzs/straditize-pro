@@ -1,0 +1,16 @@
+{
+  "name": "straditize-modern-frontend",
+  "version": "1.0.0",
+  "description": "Modern Interactive Geological Pollen Diagram Digitizer Frontend",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "node test-core.js"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
+  }
+}

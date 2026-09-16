@@ -1,0 +1,41 @@
+﻿# pixi environments
+.pixi/
+
+# python & test caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# build & dist
+build/
+dist/
+straditize/build/
+straditize/support/build/
+straditize/support/dist/
+straditize/straditize.egg-info/
+
+# frontend dependencies & cache
+frontend/node_modules/
+frontend/npm-cache/
+
+# playwright temporary artifacts & logs
+.playwright-cli/
+.positron/
+.claude/
+
+# OS and locks
+Thumbs.db
+Desktop.ini
+straditize_desktop.lock
+.git_upstream
+scratch_user_checklist.md
+full_user_checklist.md
+edge_*.png
+inspect_quercus_top.png
+real_browser_inspection.png
+real_canvas_*.png
+real_edge_screenshot.png
+test_cli_output.csv
