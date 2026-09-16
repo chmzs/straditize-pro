@@ -1,5 +1,31 @@
 # HANDOFF
 
+## 2026-09-16 — [agent02] 彻底修复“重新识别此列产生异常密集点”严重 Bug，对齐稀疏关键控制手柄
+
+### 开发者信息与协作分支
+- **开发者**：agent02 (`agent02@dsh.local`)
+- **分支状态**：已提交并合入 `dev-v2-modern` (commit `32500ce`)
+
+### 根因排查与修复
+
+1. **Bug 根因定位**：
+   - 后端 `session.digitize()` 返回的字典中，`points` 代表的是整条曲线上全部行像素（全量 300~500 个逐行扫描像素，供画曲线和导出）；
+   - 但前端 `main.ts` 的 `onDigitizeActiveColumn` 在点击“⚡ 重新识别此列”时，误将 `points` 全量数组直接赋值给了 `activeCol.controlPoints`；
+   - 导致画布将数百个连续像素行全都当成了可拖拽的控制手柄圆圈，视觉上呈现密密麻麻的黑圈，严重破坏交互体验。
+
+2. **前后端双重解耦与稀疏化修复**：
+   - **后端（`session.py`）**：在 `digitize` 方法中显式构造并返回 `control_points` 列表（由 `detect_stratigraphic_turning_points` 基于显著性拓扑提取出的 15~32 个波峰、波谷、极值锚点）；
+   - **前端（`RpcClient.ts`）**：`digitizeColumn` 优先读取 `res.control_points`；若老版本只有全量点，自动采用特征等距抽稀（`downsampleControlPoints`）严格将手柄数控制在 25 个左右黄金区间；
+   - **自动化测试加固**：在 `tests/verify_straditize_pro_e2e.py` 中增加强硬断言：`digitize` 返回的控制点必须在 5~35 个之间，严禁超过 35 个。
+
+### 验收结果
+
+- **代码规范检查**：`All checks passed! (0 错误 0 警告)`；
+- **全量测试用例**：`45/45` 全部通过（包含新增的控制点稀疏性断言）；
+- **前端打包编译**：`pnpm build`（137ms 干净生成产物）。
+
+---
+
 ## 2026-09-16 — [agent02] 落实人机协同工作流：明确有效区首要界定、用户指定放大倍数与形态、去横线红色高亮遮罩
 
 ### 开发者信息与协作分支

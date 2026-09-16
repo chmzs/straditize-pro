@@ -1,0 +1,31 @@
+name: CI Quality Gate
+
+on:
+  push:
+    branches:
+      - main
+      - dev-v2-modern
+  pull_request:
+    branches:
+      - main
+      - dev-v2-modern
+
+jobs:
+  test:
+    name: Python Lint & Tests
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: v0.41.4
+          cache: true
+
+      - name: Run Ruff Lint
+        run: pixi run lint
+
+      - name: Run Core & RPC Tests
+        run: pixi run python -m pytest straditize/tests/test_core.py straditize/tests/test_rpc.py tests/verify_straditize_pro_e2e.py

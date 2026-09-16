@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Straditize Pro v2.0 - 专业地层花粉与古气候图表数字化解译系统</title>
+  <link rel="icon" href="./demo/favicon.ico" />
+  <style>
+    :root {
+      --bg-base: #0a0e17;
+      --bg-surface: #111827;
+      --bg-card: rgba(17, 24, 39, 0.75);
+      --border-color: rgba(56, 189, 248, 0.18);
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --accent-primary: #38bdf8;
+      --accent-secondary: #34d399;
+      --accent-gradient: linear-gradient(135deg, #0284c7 0%, #38bdf8 50%, #34d399 100%);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at 50% 0%, #0f172a 0%, var(--bg-base) 70%);
+      color: var(--text-main);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* 顶部导航 */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+      background: rgba(10, 14, 23, 0.82);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 32px;
+    }
+    .logo {
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo-badge {
+      background: var(--accent-gradient);
+      color: #fff;
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    nav a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    nav a:hover { color: var(--accent-primary); }
+    .btn-nav-demo {
+      background: var(--accent-gradient);
+      color: #fff !important;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-weight: 600;
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-nav-demo:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(56, 189, 248, 0.45);
+    }
+
+    /* Hero 区域 */
+    .hero {
+      max-width: 1100px;
+      margin: 64px auto 40px;
+      text-align: center;
+      padding: 0 24px;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      padding: 4px 12px;
+      border-radius: 9999px;
+      color: var(--accent-primary);
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: clamp(32px, 5vw, 54px);
+      font-weight: 900;
+      letter-spacing: -1.5px;
+      line-height: 1.15;
+      margin-bottom: 20px;
+    }
+    .gradient-text {
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      font-size: clamp(16px, 2vw, 19px);
+      color: var(--text-muted);
+      max-width: 760px;
+      margin: 0 auto 36px;
+    }
+    .hero-actions {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent-gradient);
+      color: #fff;
+      padding: 12px 28px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      text-decoration: none;
+      box-shadow: 0 8px 24px rgba(2, 132, 199, 0.4);
+      transition: all 0.2s;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px rgba(56, 189, 248, 0.55);
+    }
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--text-main);
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    /* 预览截图容器 */
+    .preview-container {
+      max-width: 1100px;
+      margin: 48px auto;
+      padding: 0 24px;
+    }
+    .preview-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    }
+    .preview-card img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    /* 特性网格 */
+    .section-title {
+      text-align: center;
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin: 80px 0 16px;
+    }
+    .section-subtitle {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 16px;
+      margin-bottom: 48px;
+    }
+    .features-grid {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 28px;
+      transition: all 0.25s;
+    }
+    .feature-card:hover {
+      border-color: var(--border-color);
+      transform: translateY(-4px);
+    }
+    .feature-icon {
+      font-size: 28px;
+      margin-bottom: 16px;
+      display: inline-block;
+    }
+    .feature-card h3 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .feature-card p {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* 终端示例 */
+    .terminal-section {
+      max-width: 800px;
+      margin: 70px auto 40px;
+      padding: 0 24px;
+    }
+    .terminal-window {
+      background: #06090e;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .terminal-header {
+      background: rgba(255, 255, 255, 0.04);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dot { width: 11px; height: 11px; border-radius: 50%; }
+    .dot-red { background: #ef4444; }
+    .dot-yellow { background: #f59e0b; }
+    .dot-green { background: #10b981; }
+    .terminal-body {
+      padding: 20px;
+      font-family: "Cascadia Code", Consolas, Monaco, monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      color: #38bdf8;
+    }
+    .terminal-body .comment { color: #64748b; }
+    .terminal-body .cmd { color: #f1f5f9; }
+
+    /* 页脚 */
+    footer {
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-top: 80px;
+    }
+    footer a { color: var(--accent-primary); text-decoration: none; }
+  </style>
+</head>
+<body>
+
+  <!-- 导航栏 -->
+  <header>
+    <div class="logo">
+      <span>Straditize</span>
+      <span class="logo-badge">PRO v2.0</span>
+    </div>
+    <nav>
+      <a href="#features">核心特性</a>
+      <a href="./tutorials/01_quickstart.md">科研教程</a>
+      <a href="https://github.com/chmzs/straditize-pro" target="_blank">GitHub</a>
+      <a href="./demo/" class="btn-nav-demo">🚀 在线体验 Demo</a>
+    </nav>
+  </header>
+
+  <!-- Hero 区 -->
+  <section class="hero">
+    <div class="hero-badge">
+      <span>✨ 2026 全新重构架构</span>
+      <span>•</span>
+      <span>纯计算内核 + 120 FPS Web 视口</span>
+    </div>
+    <h1>专业地层花粉与古气候图表<br><span class="gradient-text">数字化科研解译系统</span></h1>
+    <p>
+      彻底告别传统 PyQt 桌面图形包卡顿与模糊。基于统一数学真相源、两点式物理标定、等深横向几何求交与 WPD 级多格式导出，专为第四纪古生态学与地质科学打造。
+    </p>
+    <div class="hero-actions">
+      <a href="./demo/" class="btn-primary">
+        <span>🚀 免安装在线体验 Demo (Live)</span>
+        <span>&rarr;</span>
+      </a>
+      <a href="./tutorials/01_quickstart.md" class="btn-secondary">
+        <span>📖 快速上手实战教程</span>
+      </a>
+      <a href="https://github.com/chmzs/straditize-pro" target="_blank" class="btn-secondary">
+        <span>⭐ 查看 GitHub 源码</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- 预览画廊 -->
+  <section class="preview-container">
+    <div class="preview-card">
+      <img src="../real_browser_playwright_verified.png" alt="Straditize Pro 界面实测" />
+    </div>
+  </section>
+
+  <!-- 核心特性网格 -->
+  <h2 class="section-title" id="features">六大科研级架构突破</h2>
+  <p class="section-subtitle">从算法底层到交互视口，重新定义地学图谱数字化行业基准</p>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">📐</div>
+      <h3>两点物理刻度钉标定</h3>
+      <p>拒绝生硬的 0-100% 相对比例假设。端点 1 锚定基准线与任意起始物理值，端点 2 精准对齐图谱刻度齿，直观可控。</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">📈</div>
+      <h3>Linear / Log 统一真相源</h3>
+      <p>单一模块集中维护 px ↔ cm ↔ value 变换。内置对数前置硬约束校验（start>0, tick>0），杜绝计算崩塌与静默降级。</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">🧬</div>
+      <h3>等深层位求交与零 NA 规范</h3>
+      <p>以地层连续剖面深度横向截交全属种轮廓线。未出现属种严格输出真值 <code>0.0</code>（绝不输出破坏生态统计模型的伪 NA）。</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">📊</div>
+      <h3>直通 rioja::strat.plot</h3>
+      <p>对齐 WebPlotDigitizer (WPD) 的专业导出器，一键生成配套 R 语言地层出图脚本，出版级花粉图谱开箱秒绘。</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">📦</div>
+      <h3>POSIX UStar 开放项目包</h3>
+      <p>无专有加密格式。项目保存为纯正 <code>.tar</code> 归档包（含原图、straditize.json 矢量模型、矩阵数据与绘图脚本），同行评议 100% 还原。</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">🔒</div>
+      <h3>SSH 隧道零认证安全模型</h3>
+      <p>废除繁琐易失效的 Token 与密码层。服务器严格监听 <code>127.0.0.1</code>，网络安全边界全权委托给 SSH 端口转发。</p>
+    </div>
+  </div>
+
+  <!-- 终端启动指南 -->
+  <section class="terminal-section">
+    <div class="terminal-window">
+      <div class="terminal-header">
+        <div class="dot dot-red"></div>
+        <div class="dot dot-yellow"></div>
+        <div class="dot dot-green"></div>
+        <span style="margin-left: 8px; font-size: 12px; color: #94a3b8;">Terminal / SSH Remote Forward</span>
+      </div>
+      <div class="terminal-body">
+        <div class="comment"># 1. 远程服务器前台启动服务 (只监听本地环回，杜绝未授权访问)</div>
+        <div class="cmd">$ straditize serve</div>
+        <div style="color: #34d399;">服务已启动：http://127.0.0.1:8765</div>
+        <br>
+        <div class="comment"># 2. 本地机器终端建立 SSH 本地端口转发</div>
+        <div class="cmd">$ ssh -L 8765:127.0.0.1:8765 user@remote-server</div>
+        <br>
+        <div class="comment"># 3. 本地浏览器免密直接秒开，享受极速 120 FPS 解译体验</div>
+        <div class="cmd">$ open http://127.0.0.1:8765</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 页脚 -->
+  <footer>
+    <p>Straditize Pro v2.0 • 基于 GNU General Public License v3.0 开源</p>
+    <p style="margin-top: 8px;">
+      GitHub 源码仓库: <a href="https://github.com/chmzs/straditize-pro" target="_blank">chmzs/straditize-pro</a>
+      • 在线文档部署于 GitHub Pages
+    </p>
+  </footer>
+
+</body>
+</html>
