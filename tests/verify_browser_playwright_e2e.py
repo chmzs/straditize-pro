@@ -8,12 +8,13 @@ Automates real MS Edge browser interactions via playwright-cli:
 4. Tests interactive switching of tool modes (click to activate ROI mode).
 5. Tests ROI boundaries and column inspector controls.
 6. Tests Linear / Log two-point calibration inputs and Log constraint warnings.
-7. Tests Export modal dialog open and riojaPlot direct link presence.
+7. Tests Export modal dialog, interactive spreadsheet table preview, and inline cell editing.
 8. Asserts desktop mode [Shutdown] button presence.
 9. Saves a high-resolution screenshot as visual proof.
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -71,14 +72,14 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         # 2. Check Document Title
         title_res = run_pw_cmd("eval", "document.title")
         self.assertIn("Straditize Pro", title_res, f"Unexpected page title: {title_res}")
-        print("  [Pass 1/7] Page title matches Straditize Pro v2.0")
+        print("  [Pass 1/8] Page title matches Straditize Pro v2.0")
 
         # 3. Check Canvas Viewport and Brand Logo
         canvas_res = run_pw_cmd("eval", "Boolean(document.getElementById('geology-canvas'))")
         self.assertIn("true", canvas_res.lower(), "Canvas geology-canvas not found in DOM")
         brand_res = run_pw_cmd("eval", "document.querySelector('.brand-name')?.textContent || ''")
         self.assertIn("Straditize", brand_res)
-        print("  [Pass 2/7] Canvas 2D viewport & PRO brand header confirmed")
+        print("  [Pass 2/8] Canvas 2D viewport & PRO brand header confirmed")
 
         # 4. Check 6-Tool Mode State Machine Buttons & Interactive Click Switch
         tools_res = run_pw_cmd(
@@ -92,12 +93,12 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         time.sleep(0.3)
         roi_active = run_pw_cmd("eval", "document.querySelector('button[data-tool-mode=\"roi\"]')?.classList.contains('active-mode')")
         self.assertIn("true", roi_active.lower())
-        print("  [Pass 3/7] All 6 tool mode buttons verified & interactive ROI mode switch confirmed")
+        print("  [Pass 3/8] All 6 tool mode buttons verified & interactive ROI mode switch confirmed")
 
         # 5. Check Desktop [Shutdown] Button (Only visible in desktop mode)
         shutdown_res = run_pw_cmd("eval", "Boolean(document.getElementById('btn-shutdown'))")
         self.assertIn("true", shutdown_res.lower(), "Desktop shutdown button must be rendered in desktop mode")
-        print("  [Pass 4/7] Desktop mode [Shutdown] button present and active")
+        print("  [Pass 4/8] Desktop mode [Shutdown] button present and active")
 
         # 6. Check Inspector Two-Point Calibration Inputs & Log Constraint Protection
         calib_inputs = run_pw_cmd(
@@ -110,7 +111,7 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         log_btn_disabled = run_pw_cmd("eval", "document.querySelector('button[data-scale=\"log\"]')?.disabled")
         log_err_visible = run_pw_cmd("eval", "Boolean(document.getElementById('log-scale-err'))")
         self.assertTrue("true" in log_btn_disabled.lower() or "true" in log_err_visible.lower())
-        print("  [Pass 5/7] Two-point physical calibration & Log constraint warning verified in Inspector")
+        print("  [Pass 5/8] Two-point physical calibration & Log constraint warning verified in Inspector")
 
         # 7. Check WPD Scientific Export Dialog & riojaPlot Link
         run_pw_cmd("click", "#btn-export-csv")
@@ -119,24 +120,40 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         riojaplot_btn = run_pw_cmd("eval", "Boolean(document.getElementById('btn-wpd-download-r'))")
         self.assertIn("true", modal_visible.lower())
         self.assertIn("true", riojaplot_btn.lower())
-        print("  [Pass 6/7] Scientific export modal dialog & riojaPlot direct link verified")
+        print("  [Pass 6/8] Scientific export modal dialog & riojaPlot direct link verified")
 
-        # 8. Take High-Res Proof Screenshot
+        # 8. Check Interactive Spreadsheet Table Preview & Inline Cell Editing
+        table_rendered = run_pw_cmd(
+            "eval",
+            "Boolean(document.getElementById('wpd-preview-table')?.querySelector('tbody tr'))"
+        )
+        self.assertIn("true", table_rendered.lower(), "Data table rows not rendered in preview table")
+
+        # Edit first editable cell value and verify live update & user-modified class
+        cell_edit_res = run_pw_cmd(
+            "eval",
+            "(() => { const inp = document.querySelector('input.wpd-cell-input'); if (!inp) return false; inp.value = '99.88'; inp.dispatchEvent(new Event('input')); return inp.classList.contains('user-modified'); })()"
+        )
+        self.assertIn("true", cell_edit_res.lower(), "Cell inline editing failed to trigger user-modified state")
+
+        # Verify textarea synchronization reflects the edited cell value
+        sync_res = run_pw_cmd("eval", "document.getElementById('wpd-data-textarea')?.value?.includes('99.88')")
+        self.assertIn("true", sync_res.lower(), "Edited cell value was not synchronized to exported text")
+        print("  [Pass 7/8] Interactive spreadsheet table preview, inline cell editing & live CSV sync verified")
+
+        # 9. Take High-Res Proof Screenshot
         proof_path = os.path.abspath("real_browser_playwright_verified.png")
         shot_res = run_pw_cmd("screenshot")
-        # Extract saved path from playwright-cli output
-        import re, shutil
-        import shutil
         for word in shot_res.split():
             clean = word.strip("()[]\"'")
             if clean.endswith(".png") and os.path.exists(clean):
                 shutil.copy2(clean, proof_path)
                 break
-        print(f"  [Pass 7/7] High-res browser screenshot saved to: {proof_path}")
+        print(f"  [Pass 8/8] High-res browser screenshot saved to: {proof_path}")
 
         # Cleanly close browser
         run_pw_cmd("close")
-        print("=== [Playwright Browser E2E] All 7 browser verification steps PASSED ===\n")
+        print("=== [Playwright Browser E2E] All 8 browser verification steps PASSED ===\n")
 
 
 if __name__ == "__main__":

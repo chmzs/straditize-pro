@@ -61,6 +61,13 @@
 
 ### 核心规格与交付成果确认
 
+- **数据导出表格预览与就地编辑 (Table Preview & Inline Cell Editing)**：
+  - 导出模态框全面升级为双模式视图（`[📊 数据表格 (可就地编辑)]` / `[📝 原始文本 (CSV)]`）；
+  - 渲染表头置顶固定、深度层位高亮的可视化数据网格，每行带行号，单元格支持直接键入微调；
+  - 手动修改项自动呈橙色边框高亮（`.user-modified`），数值实时同步反映至剪贴板、CSV、R 脚本与 TAR 包；
+  - 提供 `[↺ 还原提取值]` 按钮随时撤回编辑；
+  - 经由真实 MS Edge 浏览器自动化 Playwright E2E（8/8 项断言通过）验证无误。
+
 1. **唯一单二进制命名与产物规范 (去除任何 -lite 残留)**：
    - 彻底清除历史实验遗留的 `build-windows-lite` 与 `straditize-lite` 命名；
    - 更新 `pixi.toml` 与 `straditize_windows_pyinst.spec`，唯一构建目标为 `straditize.exe`（产物位于 `straditize/support/dist/straditize/straditize.exe`）；

@@ -7,6 +7,8 @@ export interface SidebarCallbacks {
   onChangeCurveType: (taxaId: string, type: 'linear' | 'bezier') => void;
   onUpdateTaxaColor: (taxaId: string, color: string) => void;
   onBatchImportTaxa?: (taxaNames: string[]) => void;
+  onInsertGapColumn?: (afterTaxaId: string) => void;
+  onSwapTaxaNames?: (idx1: number, idx2: number) => void;
 }
 
 export class Sidebar {
@@ -61,14 +63,18 @@ export class Sidebar {
         </div>
       </div>
 
-      <div class="sidebar-actions-bar">
-        <button id="btn-open-paste-taxa" class="btn-sidebar-action" title="从 Excel / 文献 Word 批量复制并粘贴属种名单">
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+      <div class="sidebar-actions-bar" style="display: flex; gap: 4px; padding: 6px 10px;">
+        <button id="btn-open-paste-taxa" class="btn-sidebar-action" style="flex: 1;" title="从 Excel / 文献 Word 批量复制并粘贴属种名单">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
             <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
             <path d="M12 11h4M12 16h4M8 11h.01M8 16h.01"/>
           </svg>
-          <span>批量导入属种名单 (Paste Taxa)</span>
+          <span>批量导入</span>
+        </button>
+        <button id="btn-insert-gap-col" class="btn-sidebar-action" title="在当前属种后插入空缺列（抢救中间漏切一列，将后续名字后推一格）" style="width: auto; padding: 4px 8px; font-size: 11px;">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>插空列</span>
         </button>
       </div>
 
@@ -108,13 +114,17 @@ export class Sidebar {
             <span class="color-dot" style="background-color: ${col.color};"></span>
             <input type="text" class="taxa-name-inline-input" data-action="inline-rename" value="${col.name}" title="点击可直接编辑此属种名称" />
           </div>
-          <button class="icon-btn toggle-visibility ${col.visible ? 'visible' : 'hidden'}" data-action="toggle-visible" title="显隐属种">
-            ${
-              col.visible
-                ? `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
-                : `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
-            }
-          </button>
+          <div style="display: flex; align-items: center; gap: 3px;">
+            <button class="icon-btn" data-action="swap-up" title="向上对调属种名称" style="padding: 1px 3px; font-size: 10px; line-height: 1;">▲</button>
+            <button class="icon-btn" data-action="swap-down" title="向下对调属种名称" style="padding: 1px 3px; font-size: 10px; line-height: 1;">▼</button>
+            <button class="icon-btn toggle-visibility ${col.visible ? 'visible' : 'hidden'}" data-action="toggle-visible" title="显隐属种">
+              ${
+                col.visible
+                  ? `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
+                  : `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
+              }
+            </button>
+          </div>
         </div>
 
         <div class="taxa-meta">
@@ -160,6 +170,11 @@ export class Sidebar {
       });
     }
 
+    // 插空列急救按钮
+    this.element.querySelector('#btn-insert-gap-col')?.addEventListener('click', () => {
+      this.callbacks.onInsertGapColumn?.(this.data.activeTaxaId);
+    });
+
     // 2. 列表卡片内部交互
     const list = this.element.querySelector('#taxa-list-container');
     if (!list) return;
@@ -194,6 +209,26 @@ export class Sidebar {
 
       const taxaId = card.getAttribute('data-taxa-id');
       if (!taxaId) return;
+
+      // 向上对调属种名称
+      if (target.closest('[data-action="swap-up"]')) {
+        e.stopPropagation();
+        const idx = this.data.columns.findIndex((c) => c.id === taxaId);
+        if (idx > 0) {
+          this.callbacks.onSwapTaxaNames?.(idx, idx - 1);
+        }
+        return;
+      }
+
+      // 向下对调属种名称
+      if (target.closest('[data-action="swap-down"]')) {
+        e.stopPropagation();
+        const idx = this.data.columns.findIndex((c) => c.id === taxaId);
+        if (idx >= 0 && idx < this.data.columns.length - 1) {
+          this.callbacks.onSwapTaxaNames?.(idx, idx + 1);
+        }
+        return;
+      }
 
       // 切换显隐按钮
       if (target.closest('[data-action="toggle-visible"]')) {

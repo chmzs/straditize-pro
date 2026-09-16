@@ -24,6 +24,31 @@ async function bootstrap() {
   const history = new HistoryManager(500);
   history.reset(initialData.columns, initialData.activeTaxaId);
 
+  // 自动暂存与草稿防翻车保护 (Autosave & Recovery Protection)
+  const AUTOSAVE_KEY = 'straditize_autosave_draft_v2';
+  let autosaveTimer: number | null = null;
+  function scheduleAutosave() {
+    if (autosaveTimer) clearTimeout(autosaveTimer);
+    autosaveTimer = window.setTimeout(() => {
+      try {
+        const draft = {
+          timestamp: Date.now(),
+          data: canvasComponent.data,
+        };
+        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(draft));
+      } catch {
+        // 忽略配额错误
+      }
+    }, 1000);
+  }
+
+  window.addEventListener('beforeunload', (e) => {
+    if (history.canUndo()) {
+      e.preventDefault();
+      e.returnValue = '您有未保存的地学数字化工程修改，确定离开吗？';
+    }
+  });
+
   // 4. 构建工作区 DOM
   const workspace = document.createElement('main');
   workspace.className = 'app-workspace';
@@ -83,6 +108,7 @@ async function bootstrap() {
       inspector.updateData(canvasComponent.data);
       toolbar.updateHistoryState();
       updateFooter();
+      scheduleAutosave();
     },
     onHoverInfo: (info) => {
       const cursorEl = document.getElementById('footer-cursor');
@@ -154,7 +180,60 @@ async function bootstrap() {
       sidebar.updateData(canvasComponent.data);
       toolbar.updateHistoryState();
       updateFooter();
+      scheduleAutosave();
       setHudNotice(`✅ 成功批量导入 ${taxaNames.length} 个属种名单并完成自动拓展对齐！`, 3500);
+    },
+    onSwapTaxaNames: (idx1, idx2) => {
+      const cols = canvasComponent.data.columns;
+      if (idx1 >= 0 && idx1 < cols.length && idx2 >= 0 && idx2 < cols.length) {
+        const tmpName = cols[idx1].name;
+        cols[idx1].name = cols[idx2].name;
+        cols[idx2].name = tmpName;
+        history.push(`Swap Taxa Names (${cols[idx1].name} <-> ${cols[idx2].name})`, cols, canvasComponent.data.activeTaxaId);
+        sidebar.updateData(canvasComponent.data);
+        inspector.updateData(canvasComponent.data);
+        toolbar.updateHistoryState();
+        updateFooter();
+        scheduleAutosave();
+        setHudNotice(`🔀 已对调属种顺位: ${cols[idx1].name} 与 ${cols[idx2].name}`);
+      }
+    },
+    onInsertGapColumn: (afterTaxaId) => {
+      const cols = canvasComponent.data.columns;
+      const curIdx = cols.findIndex((c) => c.id === afterTaxaId);
+      const insertAt = curIdx !== -1 ? curIdx + 1 : cols.length;
+      const refCol = curIdx !== -1 ? cols[curIdx] : cols[cols.length - 1];
+      const startX = refCol ? refCol.endX : canvasComponent.data.calibration.dataXMin;
+      const width = refCol ? (refCol.endX - refCol.startX) : 60;
+
+      const newCol = {
+        id: `col_${Date.now()}_gap`,
+        name: `Gap_Col_${insertAt + 1}`,
+        color: '#94a3b8',
+        startX: startX,
+        endX: startX + width,
+        maxPercent: 20,
+        tickEndX: startX + width,
+        unit: '%',
+        isLocked: false,
+        curveType: 'linear' as const,
+        visible: true,
+        controlPoints: [],
+        scale_type: 'linear' as const,
+        startValue: 0,
+        tickValue: 20,
+        plotType: 'area' as const,
+      };
+      cols.splice(insertAt, 0, newCol);
+      canvasComponent.data.activeTaxaId = newCol.id;
+      history.push(`Insert Gap Column at ${insertAt + 1}`, cols, newCol.id);
+      canvasComponent.requestRender();
+      sidebar.updateData(canvasComponent.data);
+      inspector.updateData(canvasComponent.data);
+      toolbar.updateHistoryState();
+      updateFooter();
+      scheduleAutosave();
+      setHudNotice(`➕ 已插入空缺占位列 [Gap_Col_${insertAt + 1}]，后续属种名字已顺延后推！`, 4000);
     },
   });
 
@@ -450,6 +529,47 @@ async function bootstrap() {
   updateFooter();
   toolbar.updateScale(canvasComponent.viewport.scale);
   toolbar.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
+
+  // 检查是否存在未保存的自动草稿快照
+  try {
+    const saved = localStorage.getItem(AUTOSAVE_KEY);
+    if (saved) {
+      const draft = JSON.parse(saved);
+      if (draft && draft.data && Array.isArray(draft.data.columns) && draft.data.columns.length > 0 && (Date.now() - draft.timestamp < 7 * 86400 * 1000)) {
+        const draftTime = new Date(draft.timestamp).toLocaleTimeString();
+        const banner = document.createElement('div');
+        banner.className = 'draft-recovery-banner';
+        banner.style.cssText = 'position: fixed; top: 48px; left: 50%; transform: translateX(-50%); z-index: 9999;';
+        banner.innerHTML = `
+          <div style="background: rgba(15, 23, 42, 0.95); border: 1px solid #38bdf8; border-radius: 6px; padding: 7px 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 4px 18px rgba(0,0,0,0.5); font-size: 11px; color: #f8fafc;">
+            <span>📋 发现上次未保存的草稿 (${draftTime}, 含 ${draft.data.columns.length} 个属种列)</span>
+            <div style="display: flex; gap: 6px;">
+              <button id="btn-restore-draft" class="btn btn-primary" style="padding: 2px 8px; font-size: 10px;">恢复草稿</button>
+              <button id="btn-discard-draft" class="btn btn-secondary" style="padding: 2px 8px; font-size: 10px;">忽略</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(banner);
+        banner.querySelector('#btn-restore-draft')?.addEventListener('click', () => {
+          canvasComponent.loadNewDiagram(draft.data);
+          history.reset(draft.data.columns, draft.data.activeTaxaId);
+          sidebar.updateData(canvasComponent.data);
+          inspector.updateData(canvasComponent.data);
+          toolbar.updateHistoryState();
+          updateFooter();
+          banner.remove();
+          setHudNotice('✅ 成功恢复上次自动暂存的项目草稿！', 3500);
+        });
+        banner.querySelector('#btn-discard-draft')?.addEventListener('click', () => {
+          localStorage.removeItem(AUTOSAVE_KEY);
+          banner.remove();
+        });
+      }
+    }
+  } catch {
+    // 忽略异常
+  }
+
   console.log('Straditize Modern Frontend Initialized Successfully');
 }
 

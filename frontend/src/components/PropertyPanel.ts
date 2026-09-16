@@ -145,13 +145,39 @@ export class PropertyPanel {
         </div>
 
         <div class="modal-body wpd-modal-body" style="display: flex; gap: 16px; padding: 16px;">
-          <!-- 左侧：大文本数据预览区 -->
-          <div class="wpd-left-area" style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
-            <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted);">
-              <span>Variables: <strong id="wpd-vars-label" style="color: var(--accent-blue);">Depth, All Taxa (29)</strong></span>
-              <span id="wpd-data-size-label">0 KB</span>
+          <!-- 左侧：双模式（表格预览与交互编辑 / 原始代码）区域 -->
+          <div class="wpd-left-area" style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;">
+            <!-- 地层丰度百分比总和自检门禁 (Sum Check QA Gate) -->
+            <div id="wpd-sum-check-banner" style="padding: 6px 10px; border-radius: 4px; font-size: 11px; display: flex; align-items: center; justify-content: space-between; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80;">
+              <span id="wpd-sum-check-text">🟢 <strong>百分比总和自检 (Sum Check)</strong>: 分析中...</span>
+              <span id="wpd-sum-check-sub" style="font-size: 10px; opacity: 0.85;">-- 层位</span>
             </div>
-            <textarea id="wpd-data-textarea" class="export-textarea" style="flex: 1; height: 320px; font-family: var(--font-mono); font-size: 11px; line-height: 1.45;" readonly></textarea>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <div class="btn-group" style="display: flex; gap: 4px;">
+                <button id="tab-btn-grid" class="tool-btn active-mode" style="font-size: 11px; padding: 4px 10px;">📊 数据表格 (可就地编辑)</button>
+                <button id="tab-btn-text" class="tool-btn" style="font-size: 11px; padding: 4px 10px;">📝 原始文本 (CSV)</button>
+              </div>
+              <div style="font-size: 11px; color: var(--text-muted); display: flex; gap: 10px; align-items: center;">
+                <span>Variables: <strong id="wpd-vars-label" style="color: var(--accent-blue);">Depth, 29 Taxa</strong></span>
+                <span id="wpd-data-size-label">0 KB</span>
+                <button id="btn-wpd-reset-edits" class="tool-btn" style="font-size: 10px; padding: 2px 7px; color: var(--text-muted);" title="清除所有手动微调，还原为图谱自动提取值">↺ 还原提取值</button>
+              </div>
+            </div>
+
+            <!-- 视图 1: 交互式表格视图 (支持直接点选单元格修改数字) -->
+            <div id="wpd-table-wrapper" class="wpd-table-wrapper" style="flex: 1; height: 340px; overflow: auto; border: 1px solid var(--border-light); border-radius: 6px; background: rgba(15, 23, 42, 0.6);">
+              <table id="wpd-preview-table" class="wpd-preview-table">
+                <!-- 动态填充 thead 与 tbody -->
+              </table>
+            </div>
+
+            <!-- 视图 2: 纯文本导出框 (可复制或手工调整) -->
+            <textarea id="wpd-data-textarea" class="export-textarea" style="display: none; flex: 1; height: 340px; font-family: var(--font-mono); font-size: 11px; line-height: 1.45;"></textarea>
+
+            <div style="font-size: 10px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;">
+              <span>💡 提示：点击任意表格单元格可直接修改数值（修改项呈橙色高亮），导出 CSV、R 脚本与 TAR 包将实时同步生效。</span>
+            </div>
           </div>
 
           <!-- 右侧：WPD 风格的控制面板 (Dataset, Sort, Format, Visualize) -->
@@ -257,11 +283,36 @@ export class PropertyPanel {
     const varsLabel = modal.querySelector('#wpd-vars-label') as HTMLElement;
     const sizeLabel = modal.querySelector('#wpd-data-size-label') as HTMLElement;
 
-    // 动态生成表格数据
-    const generateFormattedData = (): string => {
+    // 动态表格数据模型与手动微调记录
+    let currentHeaders: string[] = [];
+    let currentRows: Array<string[]> = [];
+    const userEdits = new Map<string, string>(); // key: `${rowIdx}_${colIdx}` -> editedValue
+
+    const tabBtnGrid = modal.querySelector('#tab-btn-grid') as HTMLButtonElement;
+    const tabBtnText = modal.querySelector('#tab-btn-text') as HTMLButtonElement;
+    const tableWrapper = modal.querySelector('#wpd-table-wrapper') as HTMLDivElement;
+    const previewTable = modal.querySelector('#wpd-preview-table') as HTMLTableElement;
+    const resetEditsBtn = modal.querySelector('#btn-wpd-reset-edits') as HTMLButtonElement;
+
+    // Tab 视图切换
+    tabBtnGrid?.addEventListener('click', () => {
+      tabBtnGrid.classList.add('active-mode');
+      tabBtnText?.classList.remove('active-mode');
+      tableWrapper.style.display = 'block';
+      textarea.style.display = 'none';
+    });
+
+    tabBtnText?.addEventListener('click', () => {
+      tabBtnText.classList.add('active-mode');
+      tabBtnGrid?.classList.remove('active-mode');
+      tableWrapper.style.display = 'none';
+      textarea.style.display = 'block';
+    });
+
+    // 重新计算原始提取数据矩阵
+    const extractRawMatrix = (): { headers: string[]; rows: Array<string[]> } => {
       const dataset = datasetSelect.value;
       const digits = parseInt(digitsInp.value, 10) || 2;
-      const sep = colSepSelect.value === '\\t' ? '\t' : colSepSelect.value;
       const naStr = naFillSelect.value;
       const isDesc = sortOrderSelect.value === 'desc';
 
@@ -271,29 +322,26 @@ export class PropertyPanel {
       if (dataset === 'turning_points') {
         varsLabel.textContent = 'Taxon, Type, Depth, Value, X, Y';
         const headers = ['Taxon', 'Type', `Depth_${cal.unit}`, 'Value', 'X_px', 'Y_px'];
-        const rows: string[] = [headers.join(sep)];
+        const matrix: Array<string[]> = [];
 
         visibleCols.forEach((col) => {
           const pts = [...col.controlPoints].sort((a, b) => (isDesc ? b.y - a.y : a.y - b.y));
           pts.forEach((pt) => {
             const depth = CoordinateSystem.imageYToDepth(pt.y, cal);
             const val = CoordinateSystem.imageXToPercent(pt.x, col);
-            rows.push(
-              [
-                col.name,
-                pt.type || 'transition',
-                depth !== undefined ? depth.toFixed(digits) : naStr,
-                val !== undefined ? val.toFixed(digits) : naStr,
-                pt.x,
-                pt.y,
-              ].join(sep)
-            );
+            matrix.push([
+              col.name,
+              pt.type || 'transition',
+              depth !== undefined ? depth.toFixed(digits) : naStr,
+              val !== undefined ? val.toFixed(digits) : naStr,
+              String(pt.x),
+              String(pt.y),
+            ]);
           });
         });
-        return rows.join('\n');
+        return { headers, rows: matrix };
       }
 
-      // 全属种特征层位并集矩阵 (Union of All Turning Points - 收集所有列的全部特征 Y，并进行无缝线性插值，保证 0 个 NA)
       if (dataset === 'union_points') {
         varsLabel.textContent = `Depth_${cal.unit}, ${visibleCols.length} Taxa (Union Horizons: 0 NA)`;
         const allYSet = new Set<number>();
@@ -301,28 +349,26 @@ export class PropertyPanel {
           col.controlPoints.forEach((pt) => allYSet.add(pt.y));
         });
         const sortedY = Array.from(allYSet).sort((a, b) => (isDesc ? b - a : a - b));
-
         const headers = [`Depth_${cal.unit}`, ...visibleCols.map((c) => c.name)];
-        const rows: string[] = [headers.join(sep)];
+        const matrix: Array<string[]> = [];
 
         for (const y of sortedY) {
           const depth = CoordinateSystem.imageYToDepth(y, cal);
           const rowVals: string[] = [depth !== undefined ? depth.toFixed(digits) : naStr];
-
           for (const col of visibleCols) {
             const v = SplineInterpolator.interpolatePercentAtY(col, y);
             rowVals.push(v !== undefined && !isNaN(v) ? v.toFixed(digits) : naStr);
           }
-          rows.push(rowVals.join(sep));
+          matrix.push(rowVals);
         }
-        return rows.join('\n');
+        return { headers, rows: matrix };
       }
 
-      // 标准深度层位网格 (Depth Horizons - 标准等间距采样，无错位，0 个 NA)
+      // 默认: 标准深度层位网格 (depth_grid)
       varsLabel.textContent = `Depth_${cal.unit}, ${visibleCols.length} Taxa`;
       const { depths, yPositions } = SplineInterpolator.getStandardDepthHorizons(cal);
       const headers = [`Depth_${cal.unit}`, ...visibleCols.map((c) => c.name)];
-      const rows: string[] = [headers.join(sep)];
+      const matrix: Array<string[]> = [];
 
       const indices = Array.from({ length: depths.length }, (_, i) => i);
       if (isDesc) indices.reverse();
@@ -340,26 +386,172 @@ export class PropertyPanel {
             rowVals.push(naStr);
           }
         }
-        rows.push(rowVals.join(sep));
+        matrix.push(rowVals);
+      }
+      return { headers, rows: matrix };
+    };
+
+    // 将当前内存矩阵格式化为文本 (包含用户编辑覆盖项)
+    const serializeMatrixToText = (headers: string[], rows: Array<string[]>): string => {
+      const sep = colSepSelect.value === '\t' ? '	' : colSepSelect.value;
+      const lines = [headers.join(sep)];
+      for (const row of rows) {
+        lines.push(row.join(sep));
+      }
+      return lines.join('\n');
+    };
+
+    // 渲染可交互表格
+    const renderTableGrid = () => {
+      previewTable.innerHTML = '';
+
+      // Thead
+      const thead = document.createElement('thead');
+      const trHead = document.createElement('tr');
+      const thNum = document.createElement('th');
+      thNum.className = 'col-row-num';
+      thNum.textContent = '#';
+      trHead.appendChild(thNum);
+
+      currentHeaders.forEach((h, cIdx) => {
+        const th = document.createElement('th');
+        if (cIdx === 0) th.className = 'col-depth';
+        th.textContent = h;
+        trHead.appendChild(th);
+      });
+      thead.appendChild(trHead);
+      previewTable.appendChild(thead);
+
+      // Tbody
+      const tbody = document.createElement('tbody');
+      currentRows.forEach((row, rIdx) => {
+        const tr = document.createElement('tr');
+
+        // 行号
+        const tdNum = document.createElement('td');
+        tdNum.className = 'col-row-num';
+        tdNum.textContent = String(rIdx + 1);
+        tr.appendChild(tdNum);
+
+        row.forEach((cellVal, cIdx) => {
+          const td = document.createElement('td');
+          if (cIdx === 0) {
+            td.className = 'col-depth';
+            td.textContent = cellVal;
+          } else {
+            const input = document.createElement('input');
+            input.className = 'wpd-cell-input';
+            const editKey = `${rIdx}_${cIdx}`;
+            if (userEdits.has(editKey)) {
+              input.classList.add('user-modified');
+              input.value = userEdits.get(editKey)!;
+            } else {
+              input.value = cellVal;
+            }
+
+            input.addEventListener('input', () => {
+              userEdits.set(editKey, input.value);
+              input.classList.add('user-modified');
+              currentRows[rIdx][cIdx] = input.value;
+              syncSerializedText();
+              updateSumCheck();
+            });
+
+            td.appendChild(input);
+          }
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      previewTable.appendChild(tbody);
+    };
+
+    const syncSerializedText = () => {
+      const dataStr = serializeMatrixToText(currentHeaders, currentRows);
+      textarea.value = dataStr;
+      sizeLabel.textContent = `${(dataStr.length / 1024).toFixed(1)} KB (${currentRows.length} rows)`;
+    };
+
+    const updateSumCheck = () => {
+      const bannerEl = modal.querySelector('#wpd-sum-check-banner') as HTMLElement;
+      const textEl = modal.querySelector('#wpd-sum-check-text') as HTMLElement;
+      const subEl = modal.querySelector('#wpd-sum-check-sub') as HTMLElement;
+      if (!bannerEl || !textEl || !subEl) return;
+
+      if (datasetSelect.value === 'turning_points' || currentRows.length === 0) {
+        bannerEl.style.display = 'none';
+        return;
+      }
+      bannerEl.style.display = 'flex';
+
+      let totalSum = 0;
+      let minSum = 999999;
+      let maxSum = 0;
+      let countedRows = 0;
+
+      for (const row of currentRows) {
+        let rowSum = 0;
+        for (let c = 1; c < row.length; c++) {
+          const val = parseFloat(row[c]);
+          if (!isNaN(val)) rowSum += val;
+        }
+        if (rowSum > 0) {
+          totalSum += rowSum;
+          minSum = Math.min(minSum, rowSum);
+          maxSum = Math.max(maxSum, rowSum);
+          countedRows++;
+        }
       }
 
-      return rows.join('\n');
+      const meanSum = countedRows > 0 ? totalSum / countedRows : 100;
+      subEl.textContent = `${countedRows} 层位质检`;
+
+      if (minSum >= 85 && maxSum <= 115) {
+        bannerEl.style.background = 'rgba(34, 197, 94, 0.1)';
+        bannerEl.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+        bannerEl.style.color = '#4ade80';
+        textEl.innerHTML = `🟢 <strong>地层百分比总和自检 (Sum Check)</strong>: 全剖面平均总和 <strong>${meanSum.toFixed(1)}%</strong> (各层位介于 ${minSum.toFixed(1)}% ~ ${maxSum.toFixed(1)}%，质检达标)`;
+      } else {
+        bannerEl.style.background = 'rgba(245, 158, 11, 0.12)';
+        bannerEl.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+        bannerEl.style.color = '#fbbf24';
+        const minDisp = minSum === 999999 ? 0 : minSum.toFixed(1);
+        textEl.innerHTML = `⚠️ <strong>质检提示 (Sum Warning)</strong>: 存在层位总和偏离 100% (范围: <strong>${minDisp}% ~ ${maxSum.toFixed(1)}%</strong>)，请检查是否有穿透越界峰或漏识属种`;
+      }
     };
 
-    const updateDisplay = () => {
-      const dataStr = generateFormattedData();
-      textarea.value = dataStr;
-      sizeLabel.textContent = `${(dataStr.length / 1024).toFixed(1)} KB (${dataStr.split('\n').length} rows)`;
+    const updateFullDisplay = () => {
+      const { headers, rows } = extractRawMatrix();
+      currentHeaders = headers;
+      // 叠加上用户修改
+      currentRows = rows.map((r, rIdx) => {
+        return r.map((cell, cIdx) => {
+          const key = `${rIdx}_${cIdx}`;
+          return userEdits.has(key) ? userEdits.get(key)! : cell;
+        });
+      });
+      renderTableGrid();
+      syncSerializedText();
+      updateSumCheck();
     };
 
-    datasetSelect.addEventListener('change', updateDisplay);
-    sortBySelect.addEventListener('change', updateDisplay);
-    sortOrderSelect.addEventListener('change', updateDisplay);
-    digitsInp.addEventListener('input', updateDisplay);
-    colSepSelect.addEventListener('change', updateDisplay);
-    naFillSelect.addEventListener('change', updateDisplay);
+    // 还原按钮
+    resetEditsBtn?.addEventListener('click', () => {
+      userEdits.clear();
+      updateFullDisplay();
+    });
 
-    updateDisplay();
+    datasetSelect.addEventListener('change', () => {
+      userEdits.clear();
+      updateFullDisplay();
+    });
+    sortBySelect.addEventListener('change', updateFullDisplay);
+    sortOrderSelect.addEventListener('change', updateFullDisplay);
+    digitsInp.addEventListener('input', updateFullDisplay);
+    colSepSelect.addEventListener('change', syncSerializedText);
+    naFillSelect.addEventListener('change', updateFullDisplay);
+
+    updateFullDisplay();
 
     // 复制到剪贴板
     const copyBtn = modal.querySelector('#btn-wpd-copy') as HTMLButtonElement;
