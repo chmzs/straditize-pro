@@ -388,7 +388,6 @@ export class Toolbar {
     this.element.querySelector('#step-btn-roi')?.addEventListener('click', () => {
       this.setWorkflowStep(2);
       this.callbacks.onSelectToolMode?.('roi');
-      this.callbacks.onOpenCalibrationModal();
     });
 
     this.element.querySelector('#step-btn-columns')?.addEventListener('click', () => {
