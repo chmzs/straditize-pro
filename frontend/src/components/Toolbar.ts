@@ -96,6 +96,7 @@ export class Toolbar {
   }
 
   public setWorkflowStep(step: number): void {
+    if (this.currentWorkflowStep === step) return;
     this.currentWorkflowStep = step;
     this.render();
   }

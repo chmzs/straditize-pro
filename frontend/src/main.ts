@@ -761,12 +761,10 @@ async function bootstrap() {
       toggleInspector();
     },
     onStepClick: (step) => {
-      if (step <= currentStage) {
-        currentStage = step as WorkflowStage;
-        updateWorkflowBar();
-      } else {
-        setHudNotice(`尚未完成前面步骤，请按顺序推进工作流`);
-      }
+      currentStage = step as WorkflowStage;
+      updateWorkflowBar();
+      const meta = WORKFLOW_STAGES[currentStage];
+      setHudNotice(`切换至步骤 ${step}: ${meta.stepName} - ${meta.title}`);
     },
   });
 
