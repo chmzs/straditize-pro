@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Straditize Pro
+GenericName=Stratigraphic Pollen Diagram Digitizer
+Comment=Next-Generation Geological and Stratigraphic Diagram Digitization System
+Exec=/usr/local/bin/straditize
+Icon=straditize
+Terminal=false
+Type=Application
+Categories=Science;Geology;Education;Graphics;
+StartupNotify=true

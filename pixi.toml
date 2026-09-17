@@ -4,7 +4,7 @@ version = "0.2.2"
 description = "Installer for straditize and its dependencies"
 authors = ["chmzs <chmzs@outlook.com>"]
 channels = ["conda-forge"]
-platforms = ["win-64"]
+platforms = ["win-64", "linux-64", "osx-arm64"]
 preview = ["pixi-build"]          # 启用预览特性，支持本地路径构建
 
 [pypi-options]
@@ -37,9 +37,13 @@ cmd = "ruff check straditize_core tests"
 description = "Format Python code"
 cmd = "ruff format straditize_core tests"
 
+[tasks.build]
+description = "Build standalone distribution bundle for current platform"
+cmd = "pyinstaller support/straditize_pro.spec --distpath dist --workpath build --noconfirm"
+
 [tasks.build-windows]
 description = "Build Windows distribution bundle"
-cmd = "pyinstaller straditize/support/straditize_windows_pyinst.spec --distpath straditize/support/dist --workpath straditize/support/build --noconfirm"
+cmd = "pyinstaller support/straditize_pro.spec --distpath dist --workpath build --noconfirm"
 
 [dependencies]
 # 仅 Python、pip 走 conda；运行时和开发依赖优先使用 PyPI wheel，减少环境体积
@@ -58,7 +62,7 @@ pypdf = ">=4.0,<6.0"
 onnxruntime = ">=1.17,<2.0"
 
 # ===== 开发/测试/独立分发打包依赖 =====
-setuptools = ">=70,<81"
+setuptools = ">=70"
 pytest = ">=9.0.2,<10"
 ruff = ">=0.11,<1"
 pyinstaller = ">=6.0,<7"
