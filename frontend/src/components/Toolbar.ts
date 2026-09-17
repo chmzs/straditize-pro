@@ -159,9 +159,24 @@ export class Toolbar {
     this.element.innerHTML = `
       <div class="toolbar-left">
         <div class="brand">
-          <div class="brand-logo">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M3 3v18h18M7 16l4-8 4 6 5-10" />
+          <div class="brand-logo" style="background: transparent; padding: 0;">
+            <svg viewBox="0 0 512 512" width="18" height="18" style="border-radius: 4px; display: block;">
+              <rect x="64" y="64" width="384" height="384" rx="84" fill="#1E293B" />
+              <path d="M 256 122 C 215 122, 202 144, 197 162 C 189 182, 138 195, 125 221 C 112 247, 163 260, 171 280 C 178 301, 155 326, 171 347 C 183 365, 215 379, 256 379 Z" fill="#E2E8F0" />
+              <line x1="256" y1="102" x2="256" y2="398" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" />
+              <g stroke="#2DD4BF" fill="#2DD4BF" stroke-width="4.5" stroke-linecap="round">
+                <line x1="256" y1="138" x2="279" y2="138" /><circle cx="279" cy="138" r="8" stroke="none" />
+                <line x1="256" y1="161" x2="305" y2="161" /><circle cx="305" cy="161" r="8" stroke="none" />
+                <line x1="256" y1="184" x2="328" y2="184" /><circle cx="328" cy="184" r="8" stroke="none" />
+                <line x1="256" y1="207" x2="310" y2="207" /><circle cx="310" cy="207" r="8" stroke="none" />
+                <line x1="256" y1="230" x2="325" y2="230" /><circle cx="325" cy="230" r="8" stroke="none" />
+                <line x1="256" y1="253" x2="348" y2="253" /><circle cx="348" cy="253" r="8" stroke="none" />
+                <line x1="256" y1="276" x2="380" y2="276" /><circle cx="380" cy="276" r="8" stroke="none" />
+                <line x1="256" y1="299" x2="353" y2="299" /><circle cx="353" cy="299" r="8" stroke="none" />
+                <line x1="256" y1="322" x2="326" y2="322" /><circle cx="326" cy="322" r="8" stroke="none" />
+                <line x1="256" y1="345" x2="303" y2="345" /><circle cx="303" cy="345" r="8" stroke="none" />
+                <line x1="256" y1="368" x2="278" y2="368" /><circle cx="278" cy="368" r="8" stroke="none" />
+              </g>
             </svg>
           </div>
           <span class="brand-name">Straditize <span style="background: linear-gradient(135deg, #0284c7, #38bdf8); color: #fff; font-size: 9.5px; font-weight: 700; padding: 1px 4px; border-radius: 4px; margin-left: 2px; letter-spacing: 0.5px;">PRO</span></span>

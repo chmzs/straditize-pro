@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="100%" height="100%">
+  <!-- 图标主体 -->
+  <g transform="translate(40, 20) scale(0.72)">
+    <rect x="0" y="0" width="384" height="384" rx="84" fill="#1E293B" />
+    <path d="M 192 58 C 151 58, 138 80, 133 98 C 125 118, 74 131, 61 157 C 48 183, 99 196, 107 216 C 114 237, 91 262, 107 283 C 119 301, 151 315, 192 315 Z" fill="#E2E8F0" />
+    <line x1="192" y1="38" x2="192" y2="334" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" />
+    
+    <g stroke="#2DD4BF" fill="#2DD4BF" stroke-width="3.5" stroke-linecap="round">
+      <line x1="192" y1="74" x2="215" y2="74" /><circle cx="215" cy="74" r="6.5" stroke="none" />
+      <line x1="192" y1="97" x2="241" y2="97" /><circle cx="241" cy="97" r="6.5" stroke="none" />
+      <line x1="192" y1="120" x2="264" y2="120" /><circle cx="264" cy="120" r="6.5" stroke="none" />
+      <line x1="192" y1="143" x2="246" y2="143" /><circle cx="246" cy="143" r="6.5" stroke="none" />
+      <line x1="192" y1="166" x2="261" y2="166" /><circle cx="261" cy="166" r="6.5" stroke="none" />
+      <line x1="192" y1="189" x2="284" y2="189" /><circle cx="284" cy="189" r="6.5" stroke="none" />
+      <line x1="192" y1="212" x2="316" y2="212" /><circle cx="316" cy="212" r="6.5" stroke="none" />
+      <line x1="192" y1="235" x2="289" y2="235" /><circle cx="289" cy="235" r="6.5" stroke="none" />
+      <line x1="192" y1="258" x2="262" y2="258" /><circle cx="262" cy="258" r="6.5" stroke="none" />
+      <line x1="192" y1="281" x2="239" y2="281" /><circle cx="239" cy="281" r="6.5" stroke="none" />
+      <line x1="192" y1="304" x2="214" y2="304" /><circle cx="214" cy="304" r="6.5" stroke="none" />
+    </g>
+  </g>
+  <!-- 品牌标准字排版 -->
+  <g transform="translate(360, 185)">
+    <text font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="105" letter-spacing="-1.5">
+      <tspan fill="#F1F5F9" font-weight="400">Straditize</tspan>
+      <tspan fill="#2DD4BF" font-weight="600" dx="18">Pro</tspan>
+    </text>
+  </g>
+</svg>

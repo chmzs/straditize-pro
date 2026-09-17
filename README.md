@@ -1,6 +1,10 @@
 # Straditize Pro (v2.0)
 
 <p align="center">
+  <img src="assets/logos/logo-horizontal.svg" alt="Straditize Pro Logo" width="480" />
+</p>
+
+<p align="center">
   <strong>下一代专业地层花粉与古气候图表数字化解译系统</strong><br>
   <em>Next-Generation Geological & Palynological Stratigraphic Diagram Digitization System</em>
 </p>
