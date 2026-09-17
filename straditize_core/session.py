@@ -26,7 +26,7 @@ except ImportError:
 
 from .calibration import LinearCalibration, LogCalibration
 from .age_depth import AgeDepthAxisCalibrator, AgeDepthModel, extract_age_depth_model
-from .ocr import OcrTaxaRecognitionEngine
+from .ocr import OcrTaxaRecognitionEngine, PollenDictionary
 from .metadata import (
     fetch_doi_metadata,
     extract_text_from_pdf,

@@ -8,6 +8,7 @@ import { PropertyPanel } from './components/PropertyPanel';
 import { Inspector } from './components/Inspector';
 import { AgeDepthModal } from './components/AgeDepthModal';
 import { MetadataModal } from './components/MetadataModal';
+import { OcrReviewModal } from './components/OcrReviewModal';
 import { DiagramCalibration, DiagramData } from './types/pollen';
 import { ImageDisplayMode } from './core/Viewport';
 import { WORKFLOW_STAGES, WorkflowStage } from './types/workflow';
@@ -390,6 +391,16 @@ async function bootstrap() {
         sidebar?.updateData(canvasComponent.data);
       }
     },
+    onChangePlotType: (taxaId, plotType) => {
+      const col = canvasComponent.data.columns.find((c) => c.id === taxaId);
+      if (col) {
+        col.plotType = plotType;
+        history.push(`Change ${col.name} Plot Type to ${plotType}`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
+        canvasComponent.requestRender();
+        inspector?.updateData(canvasComponent.data);
+        setHudNotice(`已将属种 [${col.name}] 图形形态切换为: ${plotType.toUpperCase()}`);
+      }
+    },
     onBatchImportTaxa: (taxaNames) => {
       canvasComponent.batchUpdateTaxa(taxaNames);
       sidebar?.updateData(canvasComponent.data);
@@ -471,6 +482,20 @@ async function bootstrap() {
     rpcClient,
     (ageModel) => {
       setHudNotice(`✅ 成功关联年代模型 [${ageModel.metadata.curve_type || "Median"}]！导出时将自动注入日历年代与 95% 置信区间。`, 4000);
+    }
+  );
+
+  // 8.2 花粉属种名 OCR 自动识别与审核汇总表弹窗
+  const ocrReviewModal = new OcrReviewModal(
+    document.body,
+    canvasComponent.data,
+    rpcClient,
+    () => {
+      sidebar?.updateData(canvasComponent.data);
+      inspector?.updateData(canvasComponent.data);
+      toolbar?.updateHistoryState();
+      updateFooter();
+      setHudNotice('✅ 已将审核确认的属种名称与拉丁学名一键应用至当前图谱各列！', 4000);
     }
   );
 
@@ -769,6 +794,9 @@ async function bootstrap() {
     },
     onOpenMetadataModal: () => {
       metadataModal.open();
+    },
+    onOpenOcrReviewModal: () => {
+      ocrReviewModal.open();
     },
     onOpenAgeDepthModal: () => {
       ageDepthModal.open();

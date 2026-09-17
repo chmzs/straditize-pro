@@ -5,6 +5,7 @@ export interface SidebarCallbacks {
   onSelectTaxa: (taxaId: string) => void;
   onToggleVisible: (taxaId: string) => void;
   onUpdateTaxaColor: (taxaId: string, color: string) => void;
+  onChangePlotType?: (taxaId: string, plotType: 'area' | 'bar' | 'line' | 'symbol') => void;
   onBatchImportTaxa?: (taxaNames: string[]) => void;
   onInsertGapColumn?: (afterTaxaId: string) => void;
   onSwapTaxaNames?: (idx1: number, idx2: number) => void;
@@ -107,8 +108,28 @@ export class Sidebar {
   }
 
   private renderTaxaItem(col: TaxaColumn, isActive: boolean): string {
-    const manualCount = col.controlPoints.filter((p) => p.isManual).length;
     const totalCount = col.controlPoints.length;
+    const pType = col.plotType || 'area';
+    const typeIcons: Record<string, string> = {
+      area: '🌊',
+      bar: '📊',
+      line: '📈',
+      symbol: '➕',
+    };
+    const typeIcon = typeIcons[pType] || '🌊';
+
+    // 计算实测最大峰值 (若已标定且有控制点)
+    let maxValStr = `${col.maxPercent}%`;
+    if (col.controlPoints && col.controlPoints.length > 0) {
+      const maxX = Math.max(...col.controlPoints.map((p) => p.x));
+      const originX = col.scaleCalib ? col.scaleCalib.originX : col.startX;
+      const calibX = col.scaleCalib ? col.scaleCalib.calibX : col.tickEndX || col.endX;
+      const originVal = col.scaleCalib ? col.scaleCalib.originVal : 0;
+      const calibVal = col.scaleCalib ? col.scaleCalib.calibVal : col.maxPercent || 100;
+      const span = Math.max(1, calibX - originX);
+      const measuredMax = Math.max(0, originVal + ((maxX - originX) / span) * (calibVal - originVal));
+      maxValStr = `${measuredMax.toFixed(1)}%`;
+    }
 
     if (this.isCompactView) {
       return `
@@ -117,8 +138,17 @@ export class Sidebar {
             <span class="color-dot" style="background-color: ${col.color}; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;"></span>
             <input type="text" class="taxa-name-inline-input" data-action="inline-rename" value="${col.name}" style="font-size: 11px; font-weight: ${isActive ? '600' : '400'}; border: none; background: transparent; color: inherit; width: 100%; text-overflow: ellipsis; overflow: hidden; padding: 1px 2px;" title="点击直接改名" />
           </div>
-          <div style="display: flex; align-items: center; gap: 2px; flex-shrink: 0;">
-            <span style="font-size: 9.5px; color: var(--text-muted); font-family: var(--font-mono); margin-right: 2px;">${totalCount}点</span>
+          <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
+            <!-- 最大实测峰值呈现 (一眼识别优势种) -->
+            <span class="taxa-peak-badge" style="font-size: 9.5px; font-weight: 700; color: ${isActive ? '#38bdf8' : 'var(--text-secondary)'}; font-family: var(--font-mono); min-width: 34px; text-align: right;" title="实测最大丰度峰值: ${maxValStr}">
+              ${maxValStr}
+            </span>
+
+            <!-- 就地快速切换形态微图标 [🌊/📊/📈/➕] -->
+            <button class="icon-btn" data-action="cycle-plot-type" title="当前形态: ${pType.toUpperCase()} (点击就地循环切换: 面积->柱状->折线->符号)" style="padding: 1px 3px; font-size: 11px; line-height: 1;">
+              ${typeIcon}
+            </button>
+
             <button class="icon-btn" data-action="swap-up" title="向上对调属种名称" style="padding: 1px 2px; font-size: 9px; line-height: 1;">▲</button>
             <button class="icon-btn" data-action="swap-down" title="向下对调属种名称" style="padding: 1px 2px; font-size: 9px; line-height: 1;">▼</button>
             <button class="icon-btn toggle-visibility ${col.visible ? 'visible' : 'hidden'}" data-action="toggle-visible" title="显隐属种" style="padding: 2px;">
@@ -140,7 +170,10 @@ export class Sidebar {
             <span class="color-dot" style="background-color: ${col.color};"></span>
             <input type="text" class="taxa-name-inline-input" data-action="inline-rename" value="${col.name}" title="点击可直接编辑此属种名称" />
           </div>
-          <div style="display: flex; align-items: center; gap: 3px;">
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <button class="icon-btn" data-action="cycle-plot-type" title="当前形态: ${pType.toUpperCase()} (点击切换)" style="font-size: 11px;">
+              ${typeIcon}
+            </button>
             <button class="icon-btn" data-action="swap-up" title="向上对调属种名称" style="padding: 1px 3px; font-size: 10px; line-height: 1;">▲</button>
             <button class="icon-btn" data-action="swap-down" title="向下对调属种名称" style="padding: 1px 3px; font-size: 10px; line-height: 1;">▼</button>
             <button class="icon-btn toggle-visibility ${col.visible ? 'visible' : 'hidden'}" data-action="toggle-visible" title="显隐属种">
@@ -159,12 +192,12 @@ export class Sidebar {
             <code>${col.startX} ~ ${col.endX} px</code>
           </div>
           <div class="meta-item">
-            <span>满刻度:</span>
-            <code>${col.maxPercent}%</code>
+            <span>实测峰值 / 满刻度:</span>
+            <code><strong>${maxValStr}</strong> / ${col.maxPercent}%</code>
           </div>
           <div class="meta-item">
             <span>锚点总数:</span>
-            <span><strong style="color: #fbbf24;">${manualCount}</strong> 手动 / ${totalCount} 点</span>
+            <span>${totalCount} 点</span>
           </div>
         </div>
       </div>
@@ -269,6 +302,21 @@ export class Sidebar {
         const idx = this.data.columns.findIndex((c) => c.id === taxaId);
         if (idx >= 0 && idx < this.data.columns.length - 1) {
           this.callbacks.onSwapTaxaNames?.(idx, idx + 1);
+        }
+        return;
+      }
+
+      // 循环就地切换形态微图标 [🌊/📊/📈/➕]
+      if (target.closest('[data-action="cycle-plot-type"]')) {
+        e.stopPropagation();
+        const col = this.data.columns.find((c) => c.id === taxaId);
+        if (col) {
+          const sequence: ('area' | 'bar' | 'line' | 'symbol')[] = ['area', 'bar', 'line', 'symbol'];
+          const curIdx = sequence.indexOf(col.plotType || 'area');
+          const nextType = sequence[(curIdx + 1) % sequence.length];
+          col.plotType = nextType;
+          this.callbacks.onChangePlotType?.(taxaId, nextType);
+          this.render();
         }
         return;
       }

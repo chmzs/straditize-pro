@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """Real browser end-to-end Playwright test for Straditize Pro (v2.0).
 
 Automates real MS Edge browser interactions via playwright-cli:
@@ -192,7 +192,35 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         run_pw_cmd("click", "#ad-close-btn")
         time.sleep(0.3)
 
-        # 10. Open Metadata Semi-Automatic Extraction & Review Modal (FAIR/LiPD Specification)
+        # 9. Open Pollen Taxa OCR Recognition & Review Modal
+        run_pw_cmd("click", "#btn-ocr-review-modal")
+        time.sleep(1.2)
+        ocr_modal_visible = run_pw_cmd("eval", "Boolean(document.querySelector('.ocr-review-dialog'))")
+        strip_rendered = run_pw_cmd("eval", "Boolean(document.getElementById('ocr-strip-img')?.src?.length > 100)")
+        ocr_table_rendered = run_pw_cmd("eval", "Boolean(document.getElementById('ocr-summary-tbody')?.querySelector('tr'))")
+        batch_btn_exists = run_pw_cmd("eval", "Boolean(document.getElementById('btn-ocr-accept-all'))")
+
+        self.assertIn("true", ocr_modal_visible.lower(), "OCR review modal failed to open")
+        self.assertIn("true", strip_rendered.lower(), "Original label strip image not rendered")
+        self.assertIn("true", ocr_table_rendered.lower(), "OCR summary review table not rendered")
+        self.assertIn("true", batch_btn_exists.lower(), "Batch accept button not found")
+        print("  [Pass 9/11] Pollen taxa OCR recognition & review modal (45° strip crop, summary table, batch accept) verified")
+
+        # Take High-Res Proof Screenshot of the OCR review modal
+        ocr_proof_path = os.path.abspath("real_browser_ocr_review_verified.png")
+        shot_res = run_pw_cmd("screenshot")
+        for word in shot_res.split():
+            clean = word.strip("()[]\"'")
+            if clean.endswith(".png") and os.path.exists(clean):
+                shutil.copy2(clean, ocr_proof_path)
+                break
+        print(f"  [Pass 10/11] High-res OCR review modal screenshot saved to: {ocr_proof_path}")
+
+        # Close OCR review modal
+        run_pw_cmd("click", "#ocr-close-btn")
+        time.sleep(0.3)
+
+        # 11. Open Metadata Semi-Automatic Extraction & Review Modal (FAIR/LiPD Specification)
         run_pw_cmd("click", "#btn-metadata-modal")
         time.sleep(0.8)
         meta_modal_visible = run_pw_cmd("eval", "Boolean(document.querySelector('.metadata-dialog'))")
@@ -202,7 +230,7 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         self.assertIn("true", meta_modal_visible.lower(), "Metadata modal failed to open")
         self.assertIn("true", doi_input_exists.lower(), "DOI input not found in metadata modal")
         self.assertIn("true", site_input_exists.lower(), "Site name input not found in metadata modal")
-        print("  [Pass 9/10] Metadata semi-automatic review modal (5 sections, DOI, PDF, LiPD registry) verified")
+        print("  [Pass 11/11] Metadata semi-automatic review modal (5 sections, DOI, PDF, LiPD registry) verified")
 
         # Take High-Res Proof Screenshot of the metadata modal
         proof_path = os.path.abspath("real_browser_metadata_verified.png")
@@ -216,7 +244,7 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
 
         # Cleanly close browser
         run_pw_cmd("close")
-        print("=== [Playwright Browser E2E] All 10 browser verification steps PASSED ===\n")
+        print("=== [Playwright Browser E2E] All 11 browser verification steps PASSED ===\n")
 
 
 if __name__ == "__main__":

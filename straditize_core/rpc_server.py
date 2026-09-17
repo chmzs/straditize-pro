@@ -97,6 +97,8 @@ def create_rpc_dispatcher(
     dispatcher.register_method("metadata.extractFromPdf", session.metadata_extract_pdf)
     dispatcher.register_method("metadata.update", session.metadata_update)
     dispatcher.register_method("metadata.get", session.metadata_get)
+    dispatcher.register_method("ocr.recognizeLabels", session.ocr_recognize_labels)
+    dispatcher.register_method("ocr.applyLabels", session.ocr_apply_labels)
     dispatcher.register_method("ensemble.add", session.ensemble_add)
     dispatcher.register_method("ensemble.list", session.ensemble_list)
     dispatcher.register_method("export.exportXlsx", session.export_advanced_xlsx)

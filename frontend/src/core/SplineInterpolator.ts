@@ -137,19 +137,30 @@ export class SplineInterpolator {
   }
 
   /**
-   * 根据地层标定配置生成标准剖面层位标尺列表 (Standard Depth Horizons)
-   * 严格按照用户设定的采样间隔（如从 0 到 150cm，每隔 2cm）生成固定深度层位与对应像素 Y 坐标
+   * 根据地层标定配置生成剖面层位标尺列表 (Depth Horizons)
+   * 优先采用用户从 Excel 粘贴的真实非等距深度层位序列 (customDepths)；
+   * 未提供时，才回退到基于用户指定步长的参考线 (如 0~150cm, Δ=2cm)。
    */
   public static getStandardDepthHorizons(cal: DiagramCalibration): {
     depths: number[];
     yPositions: number[];
   } {
-    const interval = cal.depthInterval && cal.depthInterval > 0 ? cal.depthInterval : 2;
     const top = cal.depthTopValue;
     const bottom = cal.depthBottomValue;
     const depthRange = bottom - top || 1;
     const yRange = cal.dataYMax - cal.dataYMin;
 
+    // 优先采用用户从 Excel 粘贴的真实非等距深度层位 (忠实于原始物理真实)
+    if (cal.customDepths && cal.customDepths.length > 0) {
+      const depths = [...cal.customDepths];
+      const yPositions = depths.map((d) => {
+        const fraction = (d - top) / depthRange;
+        return Number((cal.dataYMin + fraction * yRange).toFixed(2));
+      });
+      return { depths, yPositions };
+    }
+
+    const interval = cal.depthInterval && cal.depthInterval > 0 ? cal.depthInterval : 2;
     const startDepth = Math.min(top, bottom);
     const endDepth = Math.max(top, bottom);
     const isTopDown = top <= bottom;

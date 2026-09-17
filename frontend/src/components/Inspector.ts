@@ -121,7 +121,7 @@ export class Inspector {
       case 3:
         return this.renderS3ColumnsPanel(activeCol);
       case 4:
-        return activeCol ? this.renderColumnInspector(activeCol) : this.renderS3ColumnsPanel(activeCol);
+        return this.renderS4CalibrationPanel(cal, activeCol);
       case 5:
         return activeCol ? this.renderS5DigitizePanel(activeCol) : this.renderProjectOverview(cal);
       case 6:
@@ -131,6 +131,42 @@ export class Inspector {
       default:
         return activeCol ? this.renderColumnInspector(activeCol) : this.renderProjectOverview(cal);
     }
+  }
+
+  private renderS4CalibrationPanel(cal: DiagramCalibration, activeCol?: TaxaColumn): string {
+    const hasCustom = cal.customDepths && cal.customDepths.length > 0;
+    const customCount = hasCustom ? cal.customDepths!.length : 0;
+
+    return `
+      <div class="inspector-section">
+        <div class="section-title">S4：真实层位与标尺标定</div>
+        
+        <!-- 真实样品层位录入 (恪守物理真实，拒绝主观伪插值) -->
+        <div class="form-group" style="padding: 8px; background: rgba(56, 189, 248, 0.06); border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.25); margin-bottom: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="font-size: 11px; color: var(--text-primary);">钻孔真实样品层位序列:</strong>
+            <span style="font-size: 10px; color: ${hasCustom ? '#10b981' : '#f59e0b'}; font-weight: 700;">
+              ${hasCustom ? `✓ 已载入 ${customCount} 层` : '使用图谱标定'}
+            </span>
+          </div>
+          <p style="font-size: 10px; color: var(--text-secondary); margin: 4px 0 8px 0; line-height: 1.4;">
+            若持有钻孔当年实际测样的非等距深度表，可直接从 Excel 选中该列复制并一键粘贴。
+          </p>
+          <div style="display: flex; gap: 6px;">
+            <button id="btn-open-paste-depths" class="btn btn-primary" style="flex: 1; font-size: 10.5px; padding: 4px 6px;">
+              📋 从 Excel 粘贴深度 (Ctrl+V)
+            </button>
+            ${hasCustom ? `
+              <button id="btn-clear-custom-depths" class="tool-btn" style="font-size: 10px; padding: 4px 6px; color: #dc2626;" title="清除自定义层位，恢复图谱物理两端标尺">
+                清除
+              </button>
+            ` : ''}
+          </div>
+        </div>
+
+        ${activeCol ? this.renderColumnInspector(activeCol) : ''}
+      </div>
+    `;
   }
 
   private renderS0Panel(): string {
@@ -654,6 +690,19 @@ export class Inspector {
       }
     });
 
+    // 粘贴真实钻孔深度序列
+    this.element.querySelector('#btn-open-paste-depths')?.addEventListener('click', () => {
+      this.openPasteDepthsModal();
+    });
+
+    this.element.querySelector('#btn-clear-custom-depths')?.addEventListener('click', () => {
+      delete this.data.calibration.customDepths;
+      delete this.data.calibration.custom_depths;
+      this.history.push('Clear Custom Depths', this.data.columns, this.data.activeTaxaId, this.data.calibration);
+      this.render();
+      this.callbacks.onDataChange();
+    });
+
     // 局部放大曲线勾选与倍数
     this.element.querySelector('#chk-has-exag')?.addEventListener('change', (e) => {
       const checked = (e.target as HTMLInputElement).checked;
@@ -772,6 +821,89 @@ export class Inspector {
     this.element.querySelector('#select-inspector-degrid')?.addEventListener('change', (e) => {
       const val = (e.target as HTMLSelectElement).value as 'off' | 'weak' | 'medium' | 'strong';
       this.callbacks.onChangeDegridStrength?.(val);
+    });
+  }
+
+  public openPasteDepthsModal(): void {
+    const modal = document.createElement('div');
+    modal.className = 'modal-backdrop';
+    modal.innerHTML = `
+      <div class="modal-dialog" style="width: 440px; max-width: 95vw;">
+        <div class="modal-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+            </svg>
+            <h3 style="margin: 0; font-size: 13px;">从 Excel 粘贴钻孔真实样品层位序列</h3>
+          </div>
+          <button class="close-btn" id="modal-close-depths">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+          <p style="font-size: 11px; color: var(--text-secondary); margin: 0; line-height: 1.5;">
+            请在 Excel、Word 或纯文本中选中深度/年代列（允许非均匀/非等距采样），按 <strong>Ctrl+C</strong> 复制，然后直接在此处按 <strong>Ctrl+V</strong> 粘贴：
+          </p>
+          <textarea id="txt-paste-depths" placeholder="示例:\n12.5\n14.0\n18.2\n22.0\n35.5\n..." style="width: 100%; height: 160px; font-family: var(--font-mono); font-size: 11px; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); box-sizing: border-box;"></textarea>
+          <div id="paste-depths-feedback" style="font-size: 10.5px; color: var(--text-muted);">
+            尚未录入数据
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 10px 14px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color);">
+          <button class="btn btn-secondary" id="btn-cancel-depths">取消</button>
+          <button class="btn btn-primary" id="btn-confirm-depths" disabled style="padding: 5px 14px; font-size: 11px;">
+            确定应用真实层位
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const txt = modal.querySelector('#txt-paste-depths') as HTMLTextAreaElement;
+    const fb = modal.querySelector('#paste-depths-feedback') as HTMLElement;
+    const confirmBtn = modal.querySelector('#btn-confirm-depths') as HTMLButtonElement;
+
+    txt.focus();
+
+    let parsedDepths: number[] = [];
+
+    const updateFeedback = () => {
+      const raw = txt.value;
+      const lines = raw.split(/[\r\n,;]+/);
+      const nums = lines
+        .map((l) => parseFloat(l.trim()))
+        .filter((n) => !isNaN(n));
+
+      // 排序并去重
+      parsedDepths = Array.from(new Set(nums)).sort((a, b) => a - b);
+
+      if (parsedDepths.length >= 2) {
+        const minD = parsedDepths[0];
+        const maxD = parsedDepths[parsedDepths.length - 1];
+        fb.innerHTML = `✅ 已成功识别 <strong style="color: #10b981;">${parsedDepths.length}</strong> 个真实钻孔层位 (跨度: ${minD} ~ ${maxD} ${this.data.calibration.unit})`;
+        confirmBtn.disabled = false;
+      } else {
+        fb.innerHTML = `⚠️ 请输入至少 2 个有效数字层位`;
+        confirmBtn.disabled = true;
+      }
+    };
+
+    txt.addEventListener('input', updateFeedback);
+
+    modal.querySelector('#modal-close-depths')?.addEventListener('click', () => modal.remove());
+    modal.querySelector('#btn-cancel-depths')?.addEventListener('click', () => modal.remove());
+
+    confirmBtn.addEventListener('click', () => {
+      if (parsedDepths.length >= 2) {
+        this.data.calibration.customDepths = parsedDepths;
+        this.data.calibration.custom_depths = parsedDepths;
+        this.data.calibration.depthTopValue = parsedDepths[0];
+        this.data.calibration.depthBottomValue = parsedDepths[parsedDepths.length - 1];
+        this.history.push(`Apply ${parsedDepths.length} Custom Sample Depths from Excel`, this.data.columns, this.data.activeTaxaId, this.data.calibration);
+        this.render();
+        this.callbacks.onDataChange();
+        modal.remove();
+      }
     });
   }
 }

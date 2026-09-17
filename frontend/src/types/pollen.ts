@@ -64,6 +64,7 @@ export interface DepthCalibration {
   isCalibrated: boolean;
   depthInterval?: number;
   depthGridEnabled?: boolean;
+  customDepths?: number[]; // 用户从 Excel 粘贴的真实非等距深度层位序列
 
   // v2.0 属性
   top_px?: number;     // 沉积物顶界 y 像素
@@ -73,6 +74,7 @@ export interface DepthCalibration {
   depth_interval?: number;
   depth_grid_enabled?: boolean;
   is_calibrated?: boolean;
+  custom_depths?: number[];
 }
 
 export interface ImageMeta {
