@@ -238,6 +238,32 @@ export class PropertyPanel {
 
             <div class="divider" style="margin: 2px 0;"></div>
 
+            <!-- 导出内容选择与集成表 (规范第九章) -->
+            <div class="form-group" style="margin: 0; background: rgba(0,0,0,0.25); padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
+              <label style="font-size: 11px; font-weight: bold; color: #38bdf8;">导出内容选择 (Content Tree):</label>
+              <div style="display: flex; flex-direction: column; gap: 5px; font-size: 10px; margin-top: 5px;">
+                <label style="display: flex; align-items: center; gap: 6px; color: var(--text-muted); cursor: not-allowed;">
+                  <input type="checkbox" checked disabled />
+                  <span>核心数据 (meta_info + pollen) [必选]</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="chk-export-agedepth" checked />
+                  <span style="color: #f1f5f9;">深度-年代表 (age-depth)</span>
+                </label>
+                <label id="lbl-export-ensemble" style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="chk-export-ensemble" />
+                  <span id="txt-export-ensemble" style="color: #f59e0b; font-weight: 600;">集成表 (ensemble tables)</span>
+                </label>
+                <div id="ensemble-sub-options" style="display: none; padding-left: 18px; font-size: 9.5px; color: var(--text-muted);">
+                  <span id="ensemble-list-hint">暂无原生或导入集成表</span>
+                </div>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="chk-export-readme" checked />
+                  <span style="color: var(--text-muted);">说明文件 (readme)</span>
+                </label>
+              </div>
+            </div>
+
             <!-- 数据与发表级脚本说明 (Section 八: R 脚本本地出图) -->
             <div class="form-group" style="margin: 0;">
               <label style="font-size: 11px; font-weight: bold; color: #38bdf8;">科研发表级成果导出:</label>
@@ -259,7 +285,9 @@ export class PropertyPanel {
           </div>
           <div style="display: flex; gap: 6px;">
             <button class="btn btn-secondary" id="btn-wpd-copy">📋 复制</button>
-            <button class="btn btn-primary" id="btn-wpd-download-csv">💾 下载 CSV</button>
+            <button class="btn btn-primary" id="btn-wpd-download-csv">💾 CSV</button>
+            <button class="btn btn-primary" id="btn-wpd-download-xlsx" style="background: linear-gradient(135deg, #059669, #10b981);" title="导出包含 meta_info, pollen, age-depth, ensemble 等多 Sheet 的发表级 XLSX 工作簿">📊 XLSX (多Sheet)</button>
+            <button class="btn btn-primary" id="btn-wpd-download-lipd" style="background: linear-gradient(135deg, #0284c7, #38bdf8);" title="导出符合国际 LiPD / LinkedEarth 规范的 .lpd 数据包 (可直传 LiPDverse)">🌐 LiPD (.lpd)</button>
             <button class="btn btn-secondary" id="btn-wpd-download-r" title="下载配套 R 语言地层绘图脚本 (rioja::strat.plot)">📈 R 脚本</button>
             <button class="btn btn-secondary" id="btn-wpd-download-tar" title="下载包含数据、原图与 R 脚本的标准 TAR 归档包">📦 导出 TAR 包</button>
             <button class="btn btn-secondary" id="btn-wpd-download-json">JSON</button>
@@ -599,6 +627,109 @@ export class PropertyPanel {
     // 导出项目包 (.tar)
     modal.querySelector('#btn-wpd-download-tar')?.addEventListener('click', () => {
       this.saveProjectFile();
+    });
+
+    // 导出内容与集成表联动处理 (规范第九章)
+    const chkEnsemble = modal.querySelector('#chk-export-ensemble') as HTMLInputElement;
+    const subEnsemble = modal.querySelector('#ensemble-sub-options') as HTMLElement;
+    chkEnsemble.disabled = true;
+
+    this.rpcClient.call<void, { count: number; tables: Array<{ name: string; columns: string[]; rows: number }> }>('ensemble.list')
+      .then((res) => {
+        if (res && res.tables && res.tables.length > 0) {
+          chkEnsemble.disabled = false;
+          chkEnsemble.checked = true;
+          subEnsemble.style.display = 'block';
+          subEnsemble.innerHTML = res.tables.map((t, idx) => `
+            <label style="display: flex; align-items: center; gap: 4px; margin-top: 3px; cursor: pointer;">
+              <input type="checkbox" class="chk-sub-ensemble" value="${t.name}" ${idx === 0 ? 'checked' : ''} />
+              <span style="color: #f59e0b;">${t.name} (${t.rows} 行采样)</span>
+            </label>
+          `).join('');
+        } else {
+          chkEnsemble.disabled = true;
+          chkEnsemble.checked = false;
+          subEnsemble.style.display = 'none';
+        }
+      })
+      .catch(() => {
+        chkEnsemble.disabled = true;
+      });
+
+    chkEnsemble?.addEventListener('change', () => {
+      subEnsemble.style.display = chkEnsemble.checked ? 'block' : 'none';
+    });
+
+    // 导出多 Sheet XLSX (包含 meta_info, pollen, age-depth, ensemble)
+    modal.querySelector('#btn-wpd-download-xlsx')?.addEventListener('click', async () => {
+      const chkAgeDepth = (modal.querySelector('#chk-export-agedepth') as HTMLInputElement)?.checked ?? true;
+      const chkReadme = (modal.querySelector('#chk-export-readme') as HTMLInputElement)?.checked ?? true;
+      const selectedEnsembles: string[] = [];
+      if (chkEnsemble && chkEnsemble.checked) {
+        modal.querySelectorAll('.chk-sub-ensemble:checked').forEach((el) => {
+          selectedEnsembles.push((el as HTMLInputElement).value);
+        });
+      }
+
+      try {
+        const res = await this.rpcClient.call<any, any>('export.exportXlsx', {
+          include_age_depth: chkAgeDepth,
+          include_ensemble_names: selectedEnsembles,
+          include_readme: chkReadme,
+        });
+        if (res && res.base64) {
+          const byteCharacters = atob(res.base64);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `straditize_scientific_${Date.now()}.xlsx`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      } catch (err: any) {
+        alert(`导出 XLSX 失败: ${err.message || err}`);
+      }
+    });
+
+    // 导出 LiPD (.lpd zip) 容器
+    modal.querySelector('#btn-wpd-download-lipd')?.addEventListener('click', async () => {
+      const chkAgeDepth = (modal.querySelector('#chk-export-agedepth') as HTMLInputElement)?.checked ?? true;
+      const selectedEnsembles: string[] = [];
+      if (chkEnsemble && chkEnsemble.checked) {
+        modal.querySelectorAll('.chk-sub-ensemble:checked').forEach((el) => {
+          selectedEnsembles.push((el as HTMLInputElement).value);
+        });
+      }
+
+      try {
+        const res = await this.rpcClient.call<any, any>('export.exportLipd', {
+          include_age_depth: chkAgeDepth,
+          include_ensemble_names: selectedEnsembles,
+        });
+        if (res && res.base64) {
+          const byteCharacters = atob(res.base64);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'application/zip' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `straditize_lipdverse_${Date.now()}.lpd`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      } catch (err: any) {
+        alert(`导出 LiPD 失败: ${err.message || err}`);
+      }
     });
   }
 

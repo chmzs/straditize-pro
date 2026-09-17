@@ -19,7 +19,7 @@ frontend-dev = "pnpm --prefix frontend run dev"                         # 启动
 
 [tasks.test]
 description = "Run modern Straditize Pro test suite"
-cmd = "python -m pytest straditize/tests/test_core.py straditize/tests/test_rpc.py tests/verify_straditize_pro_e2e.py tests/test_age_depth_model.py -q"
+cmd = "python -m pytest tests/test_core.py tests/test_rpc.py tests/verify_straditize_pro_e2e.py tests/test_age_depth_model.py tests/test_metadata_and_lipd.py -q"
 
 [tasks.test-legacy]
 description = "Run legacy PyQt5 widget test suite (requires legacy dependencies)"
@@ -27,15 +27,15 @@ cmd = "python -m pytest straditize/tests/widgets -q"
 
 [tasks.install]
 description = "Install straditize in editable mode"
-cmd = "python -m pip install -e ./straditize --no-build-isolation"
+cmd = "python -m pip install -e . --no-build-isolation"
 
 [tasks.lint]
 description = "Run lint checks"
-cmd = "ruff check straditize"
+cmd = "ruff check straditize_core tests"
 
 [tasks.format]
 description = "Format Python code"
-cmd = "ruff format straditize"
+cmd = "ruff format straditize_core tests"
 
 [tasks.build-windows]
 description = "Build Windows distribution bundle"
@@ -53,6 +53,8 @@ scipy = ">=1.14,<2.0"
 pandas = ">=2.3,<3.0"
 scikit-image = ">=0.23,<1.0"
 pillow = ">=10,<12"
+openpyxl = ">=3.1,<4.0"
+pypdf = ">=4.0,<6.0"
 
 # ===== 开发/测试/独立分发打包依赖 =====
 setuptools = ">=70,<81"
@@ -61,4 +63,4 @@ ruff = ">=0.11,<1"
 pyinstaller = ">=6.0,<7"
 
 # 本地源码包以 editable 方式安装
-straditize = { path = "./straditize", editable = true }
+straditize-pro = { path = "./", editable = true }

@@ -91,7 +91,16 @@ def create_rpc_dispatcher(
     dispatcher.register_method("agedepth.loadModelDiagram", session.load_age_depth_diagram)
     dispatcher.register_method("agedepth.extractAndInspect", session.calibrate_and_extract_age_depth)
     dispatcher.register_method("agedepth.getInspection", session.get_age_depth_inspection)
+    dispatcher.register_method("agedepth.generateEnsemble", session.generate_age_ensemble)
     dispatcher.register_method("agedepth.generateBaconScript", lambda dates, core_name="MyCore", thickness=5, cc=1: generate_bacon_script(core_name=core_name, dates=dates, thickness=thickness, cc=cc))
+    dispatcher.register_method("metadata.fetchByDoi", session.metadata_fetch_doi)
+    dispatcher.register_method("metadata.extractFromPdf", session.metadata_extract_pdf)
+    dispatcher.register_method("metadata.update", session.metadata_update)
+    dispatcher.register_method("metadata.get", session.metadata_get)
+    dispatcher.register_method("ensemble.add", session.ensemble_add)
+    dispatcher.register_method("ensemble.list", session.ensemble_list)
+    dispatcher.register_method("export.exportXlsx", session.export_advanced_xlsx)
+    dispatcher.register_method("export.exportLipd", session.export_advanced_lipd)
     dispatcher.register_method("project.save", session.project_save)
 
     dispatcher.register_method("image.load", session.load_image)
@@ -966,6 +975,12 @@ def check_single_instance(lock_file: str) -> int | None:
 
 
 def main() -> None:
+    # 0. Headless batch CLI commands (extract, run-project)
+    if len(sys.argv) > 1 and sys.argv[1] in ("extract", "run-project"):
+        from .cli import main as cli_main
+        cli_main()
+        return
+
     # 1. Server mode: straditize serve [--port N]
     if len(sys.argv) > 1 and sys.argv[1] == "serve":
         if sys.platform == "win32":

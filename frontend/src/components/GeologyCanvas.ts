@@ -1398,8 +1398,8 @@ export class GeologyCanvas {
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // 视口底层画板底色：日间模式使用清爽明亮的洁净底 (#f8fafc)，夜间模式使用深蓝黑 (#0b0f19)
-    ctx.fillStyle = isLight ? '#f8fafc' : '#0b0f19';
+    // 视口底层画板底色：日间模式使用纯白清爽画板 (#ffffff)，夜间模式使用深蓝黑 (#0b0f19)
+    ctx.fillStyle = isLight ? '#ffffff' : '#0b0f19';
     ctx.fillRect(0, 0, rect.width, rect.height);
 
     // 绘制微网格
@@ -1411,19 +1411,23 @@ export class GeologyCanvas {
     // 1. 底层扫描地质图谱（支持原图、反相、高对比、纯二值化与透视遮罩）
     this.drawBackgroundDiagram(ctx, isLight);
 
-    // 2. 地层深度标尺网格系统 (Depth Grid Ruler - 水平淡蓝色层位标线贯穿所有属种列)
-    this.drawDepthGrid(ctx, isLight);
+    // 2. 地层深度标尺网格系统 (S4 标尺标定及之后阶段呈现)
+    if (this.workflowStage >= 4) {
+      this.drawDepthGrid(ctx, isLight);
+    }
 
-    // 3. 沉积剖面有效范围指示与刻度 (ROI)
-    this.drawCalibrationOverlay(ctx, isLight);
+    // 3. 沉积剖面数据有效区矩形与控制手柄 (ROI) (S1 阶段起呈现)
+    if (this.workflowStage >= 1) {
+      this.drawCalibrationOverlay(ctx, isLight);
+    }
 
-    // 4. 各属种垂直分界标线与两点式物理刻度钉 (Step 2 开始呈现)
-    if (this.workflowStage >= 2 && this.data.columns.length > 0) {
+    // 4. 各属种垂直分界标线与两点式物理刻度钉 (严格从 S3 分列阶段起才开始呈现，S1/S2 绝不呈现)
+    if (this.workflowStage >= 3 && this.data.columns.length > 0) {
       this.drawColumnBoundaries(ctx, isLight);
     }
 
-    // 5. 花粉轮廓面积图与曲线 (Step 3 数字化后呈现)
-    if (this.workflowStage >= 3 && this.data.columns.length > 0) {
+    // 5. 花粉轮廓面积图与曲线 (严格从 S5 拐点提取与数字化阶段起呈现，S1~S4 绝不呈现)
+    if (this.workflowStage >= 5 && this.data.columns.length > 0) {
       this.drawPollenCurves(ctx);
       // 6. 控制锚点渲染
       this.drawAnchors(ctx);
@@ -1569,13 +1573,13 @@ export class GeologyCanvas {
         ctx.lineWidth = 2.2 / scale;
         ctx.setLineDash([]);
       } else if (isMajor) {
-        ctx.strokeStyle = isLight ? 'rgba(2, 132, 199, 0.45)' : 'rgba(56, 189, 248, 0.45)';
+        ctx.strokeStyle = isLight ? 'rgba(2, 132, 199, 0.65)' : 'rgba(56, 189, 248, 0.45)';
         ctx.lineWidth = 1.3 / scale;
         ctx.setLineDash([5 / scale, 4 / scale]);
       } else {
-        ctx.strokeStyle = isLight ? 'rgba(100, 116, 139, 0.25)' : 'rgba(125, 211, 252, 0.22)';
-        ctx.lineWidth = 0.85 / scale;
-        ctx.setLineDash([2.5 / scale, 3.5 / scale]);
+        ctx.strokeStyle = isLight ? 'rgba(2, 132, 199, 0.35)' : 'rgba(125, 211, 252, 0.22)';
+        ctx.lineWidth = 0.95 / scale;
+        ctx.setLineDash([3 / scale, 3.5 / scale]);
       }
       ctx.stroke();
 

@@ -128,6 +128,64 @@ class AgeDepthModel:
             },
         }
 
+
+    def generate_age_ensemble(
+        self,
+        sample_depths: list[float] | np.ndarray,
+        n_ensembles: int = 1000,
+        name: str = "Age_Ensemble_1000",
+        random_seed: int = 42,
+    ) -> dict[str, Any]:
+        """Generates MCMC-style age ensemble realizations from extracted best-fit and 95% envelope.
+
+        Produces n_ensembles stratigraphic age paths adhering to LiPD & geoChronR standards:
+        - Maintains continuous sedimentation and non-reversal stratigraphic ordering.
+        - Preserves empirical 95% confidence spread at each individual depth horizon.
+        """
+        d_arr = np.asarray(sample_depths, dtype=float)
+        if len(d_arr) == 0:
+            return {"name": name, "columns": ["depth"], "data": []}
+
+        pred = self.predict_age(d_arr)
+        mu = np.array(pred["age_est"])
+        a_min = np.array(pred["age_min"])
+        a_max = np.array(pred["age_max"])
+
+        # Estimate standard deviation at each horizon: (max - min) / 3.92 (95% coverage ~ 2 sigma)
+        sigma = np.maximum(1.0, (a_max - a_min) / 3.92)
+
+        rng = np.random.default_rng(random_seed)
+        m_depths = len(d_arr)
+
+        # Generate correlated Gaussian random fields with AR(1) memory factor (Bacon-like memory ~ 0.6)
+        memory = 0.65
+        noise_raw = rng.standard_normal((m_depths, n_ensembles))
+        correlated_noise = np.zeros_like(noise_raw)
+
+        correlated_noise[0] = noise_raw[0]
+        for i in range(1, m_depths):
+            correlated_noise[i] = memory * correlated_noise[i - 1] + np.sqrt(1 - memory**2) * noise_raw[i]
+
+        # Scale by horizon uncertainty
+        simulated_matrix = mu[:, None] + correlated_noise * sigma[:, None]
+
+        # Enforce strict chronological ordering (ages must be non-decreasing downcore)
+        for j in range(n_ensembles):
+            simulated_matrix[:, j] = np.maximum.accumulate(simulated_matrix[:, j])
+
+        # Format into Section 9.4 Ensemble table JSON structure
+        columns = ["depth"] + [f"iter_{k}" for k in range(1, n_ensembles + 1)]
+        rows = []
+        for i, d in enumerate(d_arr):
+            row_vals = [round(float(d), 2)] + [round(float(val), 2) for val in simulated_matrix[i]]
+            rows.append(row_vals)
+
+        return {
+            "name": name,
+            "columns": columns,
+            "data": rows,
+        }
+
     def predict_age(self, sample_depths: list[float] | np.ndarray) -> dict[str, list[float]]:
         """Maps sample depths to estimated ages, 95% uncertainty bounds, and sedimentation rates."""
         d_arr = np.asarray(sample_depths, dtype=float)

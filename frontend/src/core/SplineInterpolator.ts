@@ -6,7 +6,7 @@ export class SplineInterpolator {
    * @param points 控制点列表（已按 y 升序）
    * @param type 'linear' 或 'bezier'
    */
-  public static buildPath(points: Point2D[], _type: 'linear' | 'bezier' = 'linear'): Path2D {
+  public static buildPath(points: Point2D[], _type: 'linear' = 'linear'): Path2D {
     const path = new Path2D();
     if (points.length === 0) return path;
 
@@ -18,7 +18,7 @@ export class SplineInterpolator {
 
     path.moveTo(points[0].x, points[0].y);
 
-    // 古地质沉积图谱严格采用分段折线连接真实拐点，避免贝塞尔过度平滑导致的峰值失真
+    // 默认且唯一采用严格折线连接真实拐点
     for (let i = 1; i < points.length; i++) {
       path.lineTo(points[i].x, points[i].y);
     }
@@ -31,7 +31,7 @@ export class SplineInterpolator {
   public static buildAreaPath(
     points: Point2D[],
     baselineX: number,
-    _type: 'linear' | 'bezier' = 'linear'
+    _type: 'linear' = 'linear'
   ): Path2D {
     const path = new Path2D();
     if (points.length < 2) return path;
@@ -119,25 +119,8 @@ export class SplineInterpolator {
       const t = span !== 0 ? (y - p1.y) / span : 0;
       const clampedT = Math.max(0, Math.min(1, t));
 
-      if (col.curveType === 'bezier' && sorted.length >= 3) {
-        const p0 = idx > 0 ? sorted[idx - 1] : p1;
-        const p3 = idx < sorted.length - 2 ? sorted[idx + 2] : p2;
-        const tension = 0.5;
-        const d1x = (p2.x - p0.x) * tension;
-        const d2x = (p3.x - p1.x) * tension;
-        const cp1x = p1.x + d1x / 3;
-        const cp2x = p2.x - d2x / 3;
-
-        // 三次贝塞尔曲线插值
-        const u = 1 - clampedT;
-        curX =
-          u * u * u * p1.x +
-          3 * u * u * clampedT * cp1x +
-          3 * u * clampedT * clampedT * cp2x +
-          clampedT * clampedT * clampedT * p2.x;
-      } else {
-        curX = p1.x + (p2.x - p1.x) * clampedT;
-      }
+      // 严格折线线性插值（彻底移除贝塞尔插值，确保数值可重复性与零虚假漂移）
+      curX = p1.x + (p2.x - p1.x) * clampedT;
     }
 
     // 两点式真实刻度钉换算 (若具备 scaleCalib 则优先采用物理刻度齿比例)

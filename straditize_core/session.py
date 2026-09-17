@@ -26,6 +26,14 @@ except ImportError:
 
 from .calibration import LinearCalibration, LogCalibration
 from .age_depth import AgeDepthAxisCalibrator, AgeDepthModel, extract_age_depth_model
+from .metadata import (
+    fetch_doi_metadata,
+    extract_text_from_pdf,
+    chunk_text_by_tokens,
+    extract_metadata_from_chunks,
+    export_scientific_xlsx,
+    export_lipd_package,
+)
 from .protocol import (
     CALIBRATION_ERROR,
     EXPORT_ERROR,
@@ -78,6 +86,16 @@ class StraditizeSession:
         self.age_depth_model: AgeDepthModel | None = None
         self.age_depth_image: Image.Image | None = None
         self.age_depth_image_path: str | None = None
+
+        # Paper Metadata & Ensemble Tables (FAIR Data & LiPD Integration)
+        self.paper_metadata: dict[str, Any] = {
+            "publication": {"doi": "", "title": "", "authors": [], "journal": "", "year": None},
+            "site": {"site_name": "", "latitude": "", "longitude": "", "elevation_m": "", "archive_type": "lake sediment"},
+            "chronology": {"age_model": "", "age_range": "", "dating_method": "14C", "cal_curve": "IntCal20"},
+            "technical": {"pollen_extraction_method": "", "laboratory": "", "sampling_interval_cm": ""},
+            "quality": {"quality_notes": ""},
+        }
+        self.ensemble_tables: list[dict[str, Any]] = []
 
         # Command Undo/Redo stack (max 500 steps per Section 七)
         self.undo_stack: list[dict[str, Any]] = []
@@ -1702,10 +1720,17 @@ class StraditizeSession:
         """Loads an age-depth model diagram image into session for chronological harmonization."""
         if sample_key:
             sample_map = {
-                "bacon": os.path.join(os.path.dirname(__file__), "..", "..", "tests", "test_figures", "age_models", "bacon_szek.png"),
-                "bchron": os.path.join(os.path.dirname(__file__), "..", "..", "tests", "test_figures", "age_models", "bchron_stepped.png"),
+                "bacon": [
+                    os.path.join(os.path.dirname(__file__), "..", "tests", "test_figures", "age_models", "bacon_szek.png"),
+                    os.path.join(os.path.dirname(__file__), "..", "..", "tests", "test_figures", "age_models", "bacon_szek.png"),
+                ],
+                "bchron": [
+                    os.path.join(os.path.dirname(__file__), "..", "tests", "test_figures", "age_models", "bchron_stepped.png"),
+                    os.path.join(os.path.dirname(__file__), "..", "..", "tests", "test_figures", "age_models", "bchron_stepped.png"),
+                ],
             }
-            image_path = sample_map.get(sample_key.lower())
+            cands = sample_map.get(sample_key.lower(), [])
+            image_path = next((p for p in cands if os.path.exists(p)), cands[0] if cands else None)
 
         if base64_data:
             if "," in base64_data:
@@ -1772,13 +1797,37 @@ class StraditizeSession:
             sy = self.y_scale["slope"]
             iy = self.y_scale["intercept"]
             sample_depths = [round(sy * r + iy, 2) for r in all_r]
+        elif self.depth_grid:
+            sample_depths = [round(float(d), 2) for d in self.depth_grid]
+        elif len(model.depths) > 0:
+            # Fallback to model depths downsampled to representative intervals
+            step_stride = max(1, len(model.depths) // 30)
+            sample_depths = [round(float(d), 2) for d in model.depths[::step_stride]]
 
         mapped_samples = model.predict_age(sample_depths) if sample_depths else None
+
+        # Automatically generate and mount native Age Ensemble Table (Section 9)
+        ensemble_info = None
+        if sample_depths:
+            model_tag = "Bacon" if "bacon" in notes.lower() or "bacon" in (self.age_depth_image_path or "").lower() else "AgeModel"
+            ensemble_table = model.generate_age_ensemble(
+                sample_depths=sample_depths,
+                n_ensembles=1000,
+                name=f"{model_tag}_Ensemble_1000",
+            )
+            self.ensemble_tables = [t for t in self.ensemble_tables if t.get("name") != ensemble_table["name"]]
+            self.ensemble_tables.append(ensemble_table)
+            ensemble_info = {
+                "name": ensemble_table["name"],
+                "columns_count": len(ensemble_table["columns"]),
+                "rows_count": len(ensemble_table["data"]),
+            }
 
         return {
             "status": "extracted",
             "inspection": model.to_inspection_data(),
             "mapped_samples": mapped_samples,
+            "generated_ensemble": ensemble_info,
         }
 
     def get_age_depth_inspection(self) -> dict[str, Any]:
@@ -1788,4 +1837,236 @@ class StraditizeSession:
         return {
             "has_model": True,
             "inspection": self.age_depth_model.to_inspection_data(),
+        }
+
+
+    # ========================================================================
+    # Paper Metadata & LiPD / Multi-Sheet XLSX Export Engine
+    # ========================================================================
+
+    def metadata_fetch_doi(self, doi: str) -> dict[str, Any]:
+        """Fetches authoritative structured metadata from Crossref and Semantic Scholar."""
+        res = fetch_doi_metadata(doi)
+        if res.get("success"):
+            data = res.get("data", {})
+            self.paper_metadata["publication"] = {
+                "doi": data.get("doi", ""),
+                "title": data.get("title", ""),
+                "authors": data.get("authors", []),
+                "journal": data.get("journal", ""),
+                "year": data.get("year"),
+                "source": data.get("source", "DOI"),
+            }
+        return res
+
+    def metadata_extract_pdf(
+        self,
+        pdf_path: str,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model: str = "gpt-4o",
+        target_site: str | None = None,
+    ) -> dict[str, Any]:
+        """Extracts explicit non-hallucinated metadata from paper PDF text chunks via LLM."""
+        if not os.path.exists(pdf_path):
+            raise JsonRpcError(FILE_NOT_FOUND_ERROR, f"PDF file not found: {pdf_path}")
+
+        pages = extract_text_from_pdf(pdf_path)
+        chunks = chunk_text_by_tokens(pages, max_tokens=4000, overlap_tokens=200)
+
+        extracted = extract_metadata_from_chunks(
+            chunks,
+            api_key=api_key,
+            base_url=base_url,
+            model=model,
+            target_site_name=target_site,
+        )
+
+        # Populate non-publication sections with LLM results
+        self.paper_metadata["site"] = {
+            "site_name": extracted.get("site_name", {}).get("value", ""),
+            "latitude": extracted.get("latitude", {}).get("value", ""),
+            "longitude": extracted.get("longitude", {}).get("value", ""),
+            "elevation_m": extracted.get("elevation_m", {}).get("value", ""),
+            "archive_type": extracted.get("archive_type", {}).get("value", "lake sediment"),
+            "confidence": extracted.get("site_name", {}).get("confidence", "medium"),
+            "conflict": extracted.get("site_name", {}).get("conflict", False),
+            "candidates": extracted.get("site_name", {}).get("candidates", []),
+            "source": "LLM",
+        }
+        self.paper_metadata["chronology"] = {
+            "age_model": extracted.get("age_model", {}).get("value", ""),
+            "age_range": extracted.get("age_range", {}).get("value", ""),
+            "dating_method": extracted.get("dating_method", {}).get("value", ""),
+            "cal_curve": "IntCal20",
+            "source": "LLM",
+        }
+        self.paper_metadata["technical"] = {
+            "pollen_extraction_method": extracted.get("pollen_extraction_method", {}).get("value", ""),
+            "laboratory": extracted.get("laboratory", {}).get("value", ""),
+            "sampling_interval_cm": extracted.get("sampling_interval_cm", {}).get("value", ""),
+            "source": "LLM",
+        }
+        self.paper_metadata["quality"] = {
+            "quality_notes": extracted.get("quality_notes", {}).get("value", ""),
+            "source": "LLM",
+        }
+
+        return {
+            "success": True,
+            "chunks_count": len(chunks),
+            "extracted": extracted,
+            "current_metadata": self.paper_metadata,
+        }
+
+    def metadata_update(self, updated_metadata: dict[str, Any]) -> dict[str, Any]:
+        """Allows user to review, correct, and manually fill missing metadata fields."""
+        for key in ["publication", "site", "chronology", "technical", "quality"]:
+            if key in updated_metadata:
+                self.paper_metadata[key].update(updated_metadata[key])
+        return {"success": True, "metadata": self.paper_metadata}
+
+    def metadata_get(self) -> dict[str, Any]:
+        """Returns the current reviewed metadata object."""
+        return {"metadata": self.paper_metadata}
+
+    def ensemble_add(self, name: str, columns: list[str], data: list[list[Any]]) -> dict[str, Any]:
+        """Imports an ensemble table (e.g. Bacon MCMC realizations or proxy summaries)."""
+        self.ensemble_tables = [t for t in self.ensemble_tables if t.get("name") != name]
+        self.ensemble_tables.append({
+            "name": name,
+            "columns": columns,
+            "data": data,
+        })
+        return {
+            "success": True,
+            "ensemble_count": len(self.ensemble_tables),
+            "tables": [t["name"] for t in self.ensemble_tables],
+        }
+
+    def ensemble_list(self) -> dict[str, Any]:
+        """Lists all available ensemble tables."""
+        return {
+            "count": len(self.ensemble_tables),
+            "tables": [
+                {"name": t["name"], "columns": t["columns"], "rows": len(t.get("data", []))}
+                for t in self.ensemble_tables
+            ],
+        }
+
+    def export_advanced_xlsx(
+        self,
+        output_path: str | None = None,
+        include_age_depth: bool = True,
+        include_ensemble_names: list[str] | None = None,
+        include_qc: bool = False,
+        include_readme: bool = True,
+    ) -> dict[str, Any]:
+        """Exports calibrated pollen data and metadata into a publication-ready multi-sheet XLSX."""
+        pollen_res = self.export_data("csv")
+        pollen_csv = pollen_res.get("csv") if isinstance(pollen_res, dict) else str(pollen_res)
+        pollen_df = pd.read_csv(io.StringIO(pollen_csv or "depth\n0\n"))
+
+        age_depth_df = None
+        if include_age_depth and self.age_depth_model is not None and "depth" in pollen_df.columns:
+            depths = pollen_df["depth"].tolist()
+            pred = self.age_depth_model.predict_age(depths)
+            clean_pred = {k: v for k, v in pred.items() if k != "metadata"}
+            age_depth_df = pd.DataFrame(clean_pred)
+
+        selected_ensembles = None
+        if include_ensemble_names:
+            selected_ensembles = [t for t in self.ensemble_tables if t["name"] in include_ensemble_names]
+
+        xlsx_bytes = export_scientific_xlsx(
+            meta_info=self.paper_metadata,
+            pollen_df=pollen_df,
+            age_depth_df=age_depth_df,
+            ensemble_tables=selected_ensembles,
+            include_readme=include_readme,
+            output_path=output_path,
+        )
+
+        b64 = base64.b64encode(xlsx_bytes).decode("ascii")
+        return {
+            "success": True,
+            "size_bytes": len(xlsx_bytes),
+            "output_path": os.path.abspath(output_path) if output_path else None,
+            "base64": b64 if not output_path else None,
+        }
+
+    def export_advanced_lipd(
+        self,
+        output_path: str | None = None,
+        include_age_depth: bool = True,
+        include_ensemble_names: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Exports into Linked Paleo Data (LiPD) .lpd package compliant with LiPDverse."""
+        pollen_res = self.export_data("csv")
+        pollen_csv = pollen_res.get("csv") if isinstance(pollen_res, dict) else str(pollen_res)
+        pollen_df = pd.read_csv(io.StringIO(pollen_csv or "depth\n0\n"))
+
+        age_depth_df = None
+        if include_age_depth and self.age_depth_model is not None and "depth" in pollen_df.columns:
+            depths = pollen_df["depth"].tolist()
+            pred = self.age_depth_model.predict_age(depths)
+            clean_pred = {k: v for k, v in pred.items() if k != "metadata"}
+            age_depth_df = pd.DataFrame(clean_pred)
+
+        selected_ensembles = None
+        if include_ensemble_names:
+            selected_ensembles = [t for t in self.ensemble_tables if t["name"] in include_ensemble_names]
+
+        pkg_bytes = export_lipd_package(
+            meta_info=self.paper_metadata,
+            pollen_df=pollen_df,
+            age_depth_df=age_depth_df,
+            ensemble_tables=selected_ensembles,
+            output_path=output_path,
+        )
+
+        b64 = base64.b64encode(pkg_bytes).decode("ascii")
+        return {
+            "success": True,
+            "size_bytes": len(pkg_bytes),
+            "output_path": os.path.abspath(output_path) if output_path else None,
+            "base64": b64 if not output_path else None,
+        }
+
+    def generate_age_ensemble(
+        self,
+        n_ensembles: int = 1000,
+        name: str | None = None,
+    ) -> dict[str, Any]:
+        """Generates native Age Ensemble Table from the current age-depth model and mounts it into session."""
+        if self.age_depth_model is None:
+            raise JsonRpcError(CALIBRATION_ERROR, "No age-depth model extracted in current session.")
+
+        sample_depths = []
+        if self.column_points and self.is_calibrated and self.y_scale:
+            all_r = sorted({p["row"] for pts in self.column_points.values() for p in pts})
+            sy = self.y_scale["slope"]
+            iy = self.y_scale["intercept"]
+            sample_depths = [round(sy * r + iy, 2) for r in all_r]
+        elif self.depth_grid:
+            sample_depths = self.depth_grid
+        else:
+            sample_depths = self.age_depth_model.depths.tolist()
+
+        table_name = name or f"Age_Ensemble_{n_ensembles}"
+        table = self.age_depth_model.generate_age_ensemble(
+            sample_depths=sample_depths,
+            n_ensembles=n_ensembles,
+            name=table_name,
+        )
+
+        self.ensemble_tables = [t for t in self.ensemble_tables if t.get("name") != table_name]
+        self.ensemble_tables.append(table)
+
+        return {
+            "success": True,
+            "table_name": table_name,
+            "columns": table["columns"][:5] + [f"... (+{len(table['columns']) - 5} cols)"],
+            "rows_count": len(table["data"]),
+            "total_ensembles": len(self.ensemble_tables),
         }

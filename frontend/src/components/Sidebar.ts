@@ -4,7 +4,7 @@ import { PollenGlossary, TaxaParseResult } from '../core/PollenGlossary';
 export interface SidebarCallbacks {
   onSelectTaxa: (taxaId: string) => void;
   onToggleVisible: (taxaId: string) => void;
-  onChangeCurveType: (taxaId: string, type: 'linear' | 'bezier') => void;
+  onChangeCurveType?: (taxaId: string, type: 'linear') => void;
   onUpdateTaxaColor: (taxaId: string, color: string) => void;
   onBatchImportTaxa?: (taxaNames: string[]) => void;
   onInsertGapColumn?: (afterTaxaId: string) => void;
@@ -70,7 +70,7 @@ export class Sidebar {
           <button id="btn-toggle-compact" class="tool-btn" style="padding: 2px 5px; font-size: 10px;" title="切换紧凑列表/详细卡片视图">
             ${this.isCompactView ? '☲ 卡片' : '≡ 紧凑'}
           </button>
-          <button id="btn-collapse-sidebar" class="icon-btn" title="收起/展开属种树 (快捷键: [)">
+          <button id="btn-collapse-sidebar" class="icon-btn" title="收起侧边栏 (Ctrl+B)">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
@@ -97,26 +97,11 @@ export class Sidebar {
         <input type="text" id="inp-search-taxa" placeholder="🔍 快速搜索属种 (输入即过滤)..." value="${this.searchQuery}" style="width: 100%; font-size: 10.5px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); box-sizing: border-box;" />
       </div>
 
-      <div class="taxa-list" id="taxa-list-container">
+      <div class="taxa-list" id="taxa-list-container" style="flex: 1; overflow-y: auto;">
         ${this.data.columns
           .filter((col) => !this.searchQuery || col.name.toLowerCase().includes(this.searchQuery.toLowerCase()))
           .map((col) => this.renderTaxaItem(col, col.id === this.data.activeTaxaId))
           .join('')}
-      </div>
-
-      <div class="sidebar-footer">
-        <div class="tip-card">
-          <div class="tip-title">⚡ 交互操作指南</div>
-          <ul class="tip-list">
-            <li><strong>📋 批量导入：</strong>一键从 Excel / Word 粘贴数十列属种名，自动 OCR 纠错</li>
-            <li><strong>普通左键单击：</strong>在点击位置直接添加控制点，轮廓吸附拉伸</li>
-            <li><strong>左键按住控制点：</strong>实时拖动修改轮廓形态</li>
-            <li><strong>右键点击控制点：</strong>直接删除该锚点</li>
-            <li><strong>红色垂线：</strong>鼠标悬停拖拽调整属种列基线与分界</li>
-            <li><strong>淡蓝横线：</strong>地层深度标尺网格，严格统一层位数据</li>
-            <li><strong>Ctrl+Z / Ctrl+Y：</strong>撤销与重做</li>
-          </ul>
-        </div>
       </div>
     `;
 
@@ -182,17 +167,6 @@ export class Sidebar {
           <div class="meta-item">
             <span>锚点总数:</span>
             <span><strong style="color: #fbbf24;">${manualCount}</strong> 手动 / ${totalCount} 点</span>
-          </div>
-        </div>
-
-        <div class="taxa-actions">
-          <div class="btn-group">
-            <button class="segmented-btn ${col.curveType === 'bezier' ? 'active' : ''}" data-action="curve-bezier">
-              贝塞尔平滑
-            </button>
-            <button class="segmented-btn ${col.curveType === 'linear' ? 'active' : ''}" data-action="curve-linear">
-              折线连接
-            </button>
           </div>
         </div>
       </div>
@@ -305,20 +279,6 @@ export class Sidebar {
       if (target.closest('[data-action="toggle-visible"]')) {
         e.stopPropagation();
         this.callbacks.onToggleVisible(taxaId);
-        return;
-      }
-
-      // 切换贝塞尔
-      if (target.closest('[data-action="curve-bezier"]')) {
-        e.stopPropagation();
-        this.callbacks.onChangeCurveType(taxaId, 'bezier');
-        return;
-      }
-
-      // 切换折线
-      if (target.closest('[data-action="curve-linear"]')) {
-        e.stopPropagation();
-        this.callbacks.onChangeCurveType(taxaId, 'linear');
         return;
       }
 

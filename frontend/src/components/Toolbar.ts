@@ -26,6 +26,7 @@ export interface ToolbarCallbacks {
   onSaveProject?: () => void;
   onOpenProjectFile?: (file: File) => void;
   onOpenAgeDepthModal?: () => void;
+  onOpenMetadataModal?: () => void;
   onToggleSidebar?: () => void;
   onToggleInspector?: () => void;
   onStepClick?: (step: number) => void;
@@ -55,31 +56,12 @@ export class Toolbar {
     this.render();
   }
 
-  private isSidebarActive: boolean = true;
-  private isInspectorActive: boolean = true;
-
-  public setSidebarActive(active: boolean): void {
-    this.isSidebarActive = active;
-    const btn = this.element.querySelector('#btn-toggle-sidebar-nav');
-    if (btn) {
-      if (active) {
-        btn.classList.add('highlight');
-      } else {
-        btn.classList.remove('highlight');
-      }
-    }
+  public setSidebarActive(_active: boolean): void {
+    // 侧边栏开关已收敛至侧边栏自身内部折叠按钮与边缘悬浮拉手
   }
 
-  public setInspectorActive(active: boolean): void {
-    this.isInspectorActive = active;
-    const btn = this.element.querySelector('#btn-toggle-inspector-nav');
-    if (btn) {
-      if (active) {
-        btn.classList.add('highlight');
-      } else {
-        btn.classList.remove('highlight');
-      }
-    }
+  public setInspectorActive(_active: boolean): void {
+    // 检查器开关已收敛至检查器自身内部折叠按钮与边缘悬浮拉手
   }
 
   public setDesktopMode(isDesktop: boolean): void {
@@ -176,13 +158,6 @@ export class Toolbar {
 
     this.element.innerHTML = `
       <div class="toolbar-left">
-        <button id="btn-toggle-sidebar-nav" class="tool-btn ${this.isSidebarActive ? 'highlight' : ''}" title="展开/收起属种分列侧边栏 (快捷键: [)">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
-          </svg>
-          <span>属种</span>
-        </button>
-
         <div class="brand">
           <div class="brand-logo">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -283,6 +258,11 @@ export class Toolbar {
           </select>
         </div>
 
+        <!-- 论文元数据提取与审核入口 (FAIR/LiPD) -->
+        <button id="btn-metadata-modal" class="tool-btn" title="论文元数据提取与审核 (DOI / PDF / LiPD)" style="padding: 3px 6px; font-size: 10.5px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);">
+          <span>📄 元数据</span>
+        </button>
+
         <!-- 年代-深度模型视觉检查与解译入口 -->
         <button id="btn-age-depth-modal" class="tool-btn" title="解译并视觉核查同剖面年代-深度模型 (Bacon / Bchron 等)" style="padding: 3px 6px; font-size: 10.5px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.4);">
           <span>⏳ 年代</span>
@@ -294,14 +274,6 @@ export class Toolbar {
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
           </svg>
           <span>导出</span>
-        </button>
-
-        <!-- 属性检查器展开/折叠按钮 (常驻顶栏最右侧) -->
-        <button id="btn-toggle-inspector-nav" class="tool-btn ${this.isInspectorActive ? 'highlight' : ''}" title="展开/收起右侧属性检查器 (快捷键: ])" style="padding: 3px 8px; font-size: 11px; font-weight: 600;">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-            <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>
-          </svg>
-          <span>属性 ☷</span>
         </button>
 
         <!-- 日夜间主题切换按钮 -->
@@ -358,30 +330,12 @@ export class Toolbar {
       document.body.appendChild(overlay);
     });
 
-    // 顶栏展开/收起侧边栏与属性检查器按钮
-    this.element.querySelector('#btn-toggle-sidebar-nav')?.addEventListener('click', () => {
-      this.callbacks.onToggleSidebar?.();
-    });
-
-    this.element.querySelector('#btn-toggle-inspector-nav')?.addEventListener('click', () => {
-      this.callbacks.onToggleInspector?.();
-    });
-
     // 现代化 7 步工作流导引胶囊点击触发
     this.element.querySelectorAll('.workflow-step-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         const step = parseInt(btn.getAttribute('data-step') || '1', 10);
+        this.setWorkflowStep(step);
         this.callbacks.onStepClick?.(step);
-      });
-    });
-
-    // 工具模式切换
-    this.element.querySelectorAll('[data-tool-mode]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const mode = btn.getAttribute('data-tool-mode') as ToolMode;
-        if (mode && this.callbacks.onSelectToolMode) {
-          this.callbacks.onSelectToolMode(mode);
-        }
       });
     });
 
@@ -394,6 +348,7 @@ export class Toolbar {
     this.element.querySelector('#btn-redo')?.addEventListener('click', () => this.callbacks.onRedo());
     this.element.querySelector('#btn-digitize')?.addEventListener('click', () => this.callbacks.onDigitize());
     this.element.querySelector('#btn-calibrate')?.addEventListener('click', () => this.callbacks.onOpenCalibrationModal());
+    this.element.querySelector('#btn-metadata-modal')?.addEventListener('click', () => this.callbacks.onOpenMetadataModal?.());
     this.element.querySelector('#btn-age-depth-modal')?.addEventListener('click', () => this.callbacks.onOpenAgeDepthModal?.());
     this.element.querySelector('#btn-export-csv')?.addEventListener('click', () => this.callbacks.onExport('csv'));
     this.element.querySelector('#btn-export-json')?.addEventListener('click', () => this.callbacks.onExport('json'));

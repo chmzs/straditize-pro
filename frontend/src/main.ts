@@ -7,6 +7,7 @@ import { Sidebar } from './components/Sidebar';
 import { PropertyPanel } from './components/PropertyPanel';
 import { Inspector } from './components/Inspector';
 import { AgeDepthModal } from './components/AgeDepthModal';
+import { MetadataModal } from './components/MetadataModal';
 import { DiagramCalibration, DiagramData } from './types/pollen';
 import { ImageDisplayMode } from './core/Viewport';
 import { WORKFLOW_STAGES, WorkflowStage } from './types/workflow';
@@ -78,11 +79,19 @@ async function bootstrap() {
   rightDrawerTab.style.display = 'none';
   workspace.appendChild(rightDrawerTab);
 
+  // 恢复上次关闭时的侧边栏与检查器折叠记忆状态 (localStorage 持久化)
+  const SIDEBAR_COLLAPSED_KEY = 'straditize_sidebar_collapsed';
+  const INSPECTOR_COLLAPSED_KEY = 'straditize_inspector_collapsed';
+
+  const initialSidebarCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+  const initialInspectorCollapsed = localStorage.getItem(INSPECTOR_COLLAPSED_KEY) === 'true';
+
   function setSidebarCollapsed(collapsed: boolean) {
     if (sidebar) sidebar.setCollapsed(collapsed);
     leftDrawerTab.style.display = collapsed ? 'flex' : 'none';
     if (toolbar) toolbar.setSidebarActive(!collapsed);
-    setHudNotice(collapsed ? '属种分列列表已收起 (可点击左边缘把手或按 [ 键展开)' : '属种分列列表已展开', 2000);
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
+    setHudNotice(collapsed ? '属种分列列表已收起 (Ctrl+B 或点击左侧拉手展开)' : '属种分列列表已展开', 2000);
     canvasComponent.handleResize();
   }
 
@@ -90,7 +99,8 @@ async function bootstrap() {
     if (inspector) inspector.setCollapsed(collapsed);
     rightDrawerTab.style.display = collapsed ? 'flex' : 'none';
     if (toolbar) toolbar.setInspectorActive(!collapsed);
-    setHudNotice(collapsed ? '属性检查器已收起 (点击右边缘把手或顶栏 [属性 ☷] 即可展开)' : '属性检查器已展开', 2500);
+    localStorage.setItem(INSPECTOR_COLLAPSED_KEY, String(collapsed));
+    setHudNotice(collapsed ? '属性检查器已收起 (Ctrl+Shift+I 或点击右侧拉手展开)' : '属性检查器已展开', 2000);
     canvasComponent.handleResize();
   }
 
@@ -104,6 +114,42 @@ async function bootstrap() {
 
   leftDrawerTab.addEventListener('click', () => setSidebarCollapsed(false));
   rightDrawerTab.addEventListener('click', () => setInspectorCollapsed(false));
+
+  // 悬浮帮助小圆钮与折叠面板 (替换原侧边栏大黑疙瘩)
+  const helpBtn = document.createElement('button');
+  helpBtn.className = 'floating-help-btn';
+  helpBtn.title = '交互操作指南 (快捷键: ?)';
+  helpBtn.textContent = '？';
+  canvasWrapper.appendChild(helpBtn);
+
+  const helpPanel = document.createElement('div');
+  helpPanel.className = 'floating-help-panel';
+  helpPanel.style.display = 'none';
+  helpPanel.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-light); padding-bottom: 4px;">
+      <strong style="color: var(--accent-blue);">⚡ 交互操作指南</strong>
+      <span id="help-panel-close" style="cursor: pointer; font-size: 14px; color: var(--text-muted);">&times;</span>
+    </div>
+    <ul style="margin: 0; padding-left: 16px; line-height: 1.6; font-size: 10.5px; color: var(--text-secondary);">
+      <li><strong>侧边栏收起/展开：</strong><code>Ctrl+B</code> (左栏), <code>Ctrl+Shift+I</code> (右栏)</li>
+      <li><strong>批量导入属种：</strong>一键从 Excel / Word 粘贴，自动 OCR 纠错</li>
+      <li><strong>鼠标左键单击：</strong>直接向当前属种插入强控制锚点并拉伸轮廓</li>
+      <li><strong>鼠标左键拖拽：</strong>实时微调锚点坐标或两列垂直分界线</li>
+      <li><strong>鼠标右键单击：</strong>直接删除该锚点</li>
+      <li><strong>透视遮罩 (B)：</strong>按 <code>B</code> 键预览切除横线 (红) 与花粉墨迹 (青蓝)</li>
+      <li><strong>撤销与重做：</strong><code>Ctrl+Z</code> / <code>Ctrl+Y</code></li>
+    </ul>
+  `;
+  canvasWrapper.appendChild(helpPanel);
+
+  helpBtn.addEventListener('click', () => {
+    const isHidden = helpPanel.style.display === 'none';
+    helpPanel.style.display = isHidden ? 'block' : 'none';
+  });
+
+  helpPanel.querySelector('#help-panel-close')?.addEventListener('click', () => {
+    helpPanel.style.display = 'none';
+  });
 
   // 浮动 HUD 提示
   const hud = document.createElement('div');
@@ -129,20 +175,26 @@ async function bootstrap() {
     }, duration);
   }
 
-  // 5. 底部状态栏 (28px 恒定)
+  // 5. 底部状态栏 (28px 恒定，竖线视觉分区，重要参数加粗)
   const footer = document.createElement('footer');
   footer.className = 'app-footer';
   footer.innerHTML = `
-    <div class="footer-left">
+    <div class="footer-left" style="display: flex; align-items: center; gap: 8px;">
       <div class="footer-item" id="footer-dimensions">图像: <code>${initialData.imageWidth}×${initialData.imageHeight}</code></div>
+      <span style="color: var(--border-color); opacity: 0.8;">│</span>
       <div class="footer-item" id="footer-zoom">缩放: <code>100%</code></div>
+      <span style="color: var(--border-color); opacity: 0.8;">│</span>
       <div class="footer-item" id="footer-cursor">光标: <code>--</code></div>
-      <div class="footer-item" id="footer-depth">深度: <code>--</code></div>
-      <div class="footer-item" id="footer-pollen">丰度: <code>--</code></div>
+      <span style="color: var(--border-color); opacity: 0.8;">│</span>
+      <div class="footer-item" id="footer-depth">深度: <strong style="font-size: 11.5px; color: var(--text-primary);">--</strong></div>
+      <span style="color: var(--border-color); opacity: 0.8;">│</span>
+      <div class="footer-item" id="footer-pollen">丰度: <strong style="font-size: 11.5px; color: #38bdf8;">--</strong></div>
+      <span style="color: var(--border-color); opacity: 0.8;">│</span>
       <div class="footer-item" id="footer-tool-mode">模式: <strong>选择 (V)</strong></div>
     </div>
-    <div class="footer-right">
+    <div class="footer-right" style="display: flex; align-items: center; gap: 8px;">
       <div class="footer-item" id="footer-active-taxa">当前属种: <strong>--</strong></div>
+      <span style="color: var(--border-color); opacity: 0.8;">│</span>
       <div class="footer-item" id="footer-anchors">锚点: <code>--</code></div>
     </div>
   `;
@@ -332,11 +384,11 @@ async function bootstrap() {
         sidebar?.updateData(canvasComponent.data);
       }
     },
-    onChangeCurveType: (taxaId, type) => {
+    onChangeCurveType: (taxaId) => {
       const col = canvasComponent.data.columns.find((c) => c.id === taxaId);
       if (col) {
-        col.curveType = type;
-        history.push(`Change Curve Type to ${type}`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
+        col.curveType = 'linear';
+        history.push(`Ensure Curve Linear`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
         canvasComponent.requestRender();
         sidebar?.updateData(canvasComponent.data);
       }
@@ -410,6 +462,15 @@ async function bootstrap() {
       setHudNotice(`➕ 已插入空缺占位列 [Gap_Col_${insertAt + 1}]，后续属种名字已顺延后推！`, 4000);
     },
   });
+
+  // 8.0 论文元数据半自动提取与审核弹窗 (DOI / PDF / LiPD / FAIR)
+  const metadataModal = new MetadataModal(
+    document.body,
+    rpcClient,
+    (_meta) => {
+      setHudNotice(`✅ 论文元数据已保存更新！已同步至 XLSX / LiPD 导出引擎。`, 3500);
+    }
+  );
 
   // 8.1 年代-深度模型解译与视觉检查弹窗
   const ageDepthModal = new AgeDepthModal(
@@ -714,6 +775,9 @@ async function bootstrap() {
     onOpenCalibrationModal: () => {
       propertyPanel.openCalibrationModal();
     },
+    onOpenMetadataModal: () => {
+      metadataModal.open();
+    },
     onOpenAgeDepthModal: () => {
       ageDepthModal.open();
     },
@@ -782,18 +846,22 @@ async function bootstrap() {
   appContainer.appendChild(workspace);
   appContainer.appendChild(footer);
 
+  // 应用初始折叠持久化状态
+  if (initialSidebarCollapsed) setSidebarCollapsed(true);
+  if (initialInspectorCollapsed) setInspectorCollapsed(true);
+
   // 挂载就绪后更新初始工作流向导条
   updateWorkflowBar();
 
-  // 全局快捷键 [ 和 ] 折叠/展开侧边栏与检查器
+  // 全局快捷键: Ctrl+B (左侧边栏), Ctrl+Shift+I (右侧属性检查器), [ / ] 兼顾单手快捷
   window.addEventListener('keydown', (e) => {
     const target = e.target as HTMLElement;
     if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return;
 
-    if (e.key === '[' && !e.ctrlKey && !e.metaKey) {
+    if ((e.ctrlKey && e.code === 'KeyB') || (e.key === '[' && !e.ctrlKey && !e.metaKey)) {
       e.preventDefault();
       toggleSidebar();
-    } else if (e.key === ']' && !e.ctrlKey && !e.metaKey) {
+    } else if ((e.ctrlKey && e.shiftKey && e.code === 'KeyI') || (e.key === ']' && !e.ctrlKey && !e.metaKey)) {
       e.preventDefault();
       toggleInspector();
     }

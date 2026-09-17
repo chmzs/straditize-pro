@@ -462,10 +462,10 @@ export class Inspector {
         </div>
 
         <div style="display: flex; gap: 8px; margin-top: 10px;">
-          <button id="btn-col-digitize" class="btn btn-primary" style="flex: 1; font-size: 11px; padding: 6px;">
+          <button id="btn-col-digitize" class="tool-btn" style="flex: 1; font-size: 11px; padding: 6px; color: #0284c7; border-color: rgba(2,132,199,0.3); background: rgba(2,132,199,0.06);">
             ⚡ 重新识别此列
           </button>
-          <button id="btn-col-delete" class="btn btn-secondary" style="color: #ef4444; border-color: rgba(239,68,68,0.4); font-size: 11px; padding: 6px;">
+          <button id="btn-col-delete" class="tool-btn" style="color: #dc2626; border-color: rgba(220,38,38,0.3); background: rgba(220,38,38,0.04); font-size: 11px; padding: 6px;">
             🗑 删除列
           </button>
         </div>

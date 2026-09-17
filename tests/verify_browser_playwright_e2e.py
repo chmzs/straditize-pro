@@ -20,6 +20,11 @@ import subprocess
 import sys
 import time
 import unittest
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from straditize_core.rpc_server import StraditizeRpcHttpServer, create_rpc_dispatcher
 from straditize_core.session import StraditizeSession
@@ -89,24 +94,28 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         self.assertIn("Straditize", brand_res)
         print("  [Pass 2/9] Canvas 2D viewport & PRO brand header confirmed")
 
-        # 4. Check 6-Tool Mode State Machine Buttons & Interactive Click Switch
-        tools_res = run_pw_cmd(
+        # 4. Check 7-Step Workflow Navigation & Interactive Step Switch
+        steps_res = run_pw_cmd(
             "eval",
-            "JSON.stringify(['select', 'pan', 'roi', 'addCol', 'addPoint', 'eraser'].map(m => Boolean(document.querySelector(`button[data-tool-mode=\"${m}\"]`))))"
+            "document.querySelectorAll('.workflow-step-btn').length"
         )
-        self.assertIn("[true,true,true,true,true,true]", tools_res.replace(" ", ""), f"Missing tool buttons: {tools_res}")
+        self.assertIn("7", steps_res, f"Expected 7 workflow steps, got: {steps_res}")
 
-        # Click ROI tool button and verify active-mode class changes
-        run_pw_cmd("click", "button[data-tool-mode=\"roi\"]")
+        # Click Step 2 (ROI 有效区) button and verify active-step state
+        run_pw_cmd("eval", "document.querySelector('.workflow-step-btn[data-step=\"2\"]')?.click()")
         time.sleep(0.3)
-        roi_active = run_pw_cmd("eval", "document.querySelector('button[data-tool-mode=\"roi\"]')?.classList.contains('active-mode')")
+        roi_active = run_pw_cmd("eval", "document.querySelector('.workflow-step-btn[data-step=\"2\"]')?.classList.contains('active-step')")
         self.assertIn("true", roi_active.lower())
-        print("  [Pass 3/9] All 6 tool mode buttons verified & interactive ROI mode switch confirmed")
+        print("  [Pass 3/10] 7-Step scientific workflow stepper & interactive step switch confirmed")
 
         # 5. Check Desktop [Shutdown] Button (Only visible in desktop mode)
         shutdown_res = run_pw_cmd("eval", "Boolean(document.getElementById('btn-shutdown'))")
         self.assertIn("true", shutdown_res.lower(), "Desktop shutdown button must be rendered in desktop mode")
         print("  [Pass 4/9] Desktop mode [Shutdown] button present and active")
+
+        # Switch to Step 3 (分列与刻度) so column calibration inspector is displayed
+        run_pw_cmd("eval", "document.querySelector('.workflow-step-btn[data-step=\"3\"]')?.click()")
+        time.sleep(0.4)
 
         # 6. Check Inspector Two-Point Calibration Inputs & Log Constraint Protection
         calib_inputs = run_pw_cmd(
@@ -126,9 +135,16 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         time.sleep(0.5)
         modal_visible = run_pw_cmd("eval", "Boolean(document.querySelector('.wpd-export-dialog'))")
         riojaplot_btn = run_pw_cmd("eval", "Boolean(document.getElementById('btn-wpd-download-r'))")
+        xlsx_btn = run_pw_cmd("eval", "Boolean(document.getElementById('btn-wpd-download-xlsx'))")
+        lipd_btn = run_pw_cmd("eval", "Boolean(document.getElementById('btn-wpd-download-lipd'))")
+        tree_check = run_pw_cmd("eval", "Boolean(document.getElementById('chk-export-agedepth')) && Boolean(document.getElementById('chk-export-ensemble'))")
+
         self.assertIn("true", modal_visible.lower())
         self.assertIn("true", riojaplot_btn.lower())
-        print("  [Pass 6/9] Scientific export modal dialog & riojaPlot direct link verified")
+        self.assertIn("true", xlsx_btn.lower())
+        self.assertIn("true", lipd_btn.lower())
+        self.assertIn("true", tree_check.lower())
+        print("  [Pass 6/10] Scientific export modal dialog, Content Tree, multi-sheet XLSX & LiPD export buttons verified")
 
         # 8. Check Interactive Spreadsheet Table Preview & Inline Cell Editing
         table_rendered = run_pw_cmd(
@@ -172,8 +188,24 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         self.assertIn("true", ad_table_populated.lower())
         print("  [Pass 8/9] Age-depth visual inspection modal, curve overlay & sample mapping table verified")
 
-        # Take High-Res Proof Screenshot of the visual inspection modal
-        proof_path = os.path.abspath("real_browser_agedepth_inspection_verified.png")
+        # Close age-depth modal
+        run_pw_cmd("click", "#ad-close-btn")
+        time.sleep(0.3)
+
+        # 10. Open Metadata Semi-Automatic Extraction & Review Modal (FAIR/LiPD Specification)
+        run_pw_cmd("click", "#btn-metadata-modal")
+        time.sleep(0.8)
+        meta_modal_visible = run_pw_cmd("eval", "Boolean(document.querySelector('.metadata-dialog'))")
+        doi_input_exists = run_pw_cmd("eval", "Boolean(document.getElementById('meta-inp-doi'))")
+        site_input_exists = run_pw_cmd("eval", "Boolean(document.getElementById('meta-site-name'))")
+
+        self.assertIn("true", meta_modal_visible.lower(), "Metadata modal failed to open")
+        self.assertIn("true", doi_input_exists.lower(), "DOI input not found in metadata modal")
+        self.assertIn("true", site_input_exists.lower(), "Site name input not found in metadata modal")
+        print("  [Pass 9/10] Metadata semi-automatic review modal (5 sections, DOI, PDF, LiPD registry) verified")
+
+        # Take High-Res Proof Screenshot of the metadata modal
+        proof_path = os.path.abspath("real_browser_metadata_verified.png")
         shot_res = run_pw_cmd("screenshot")
         for word in shot_res.split():
             clean = word.strip("()[]\"'")
@@ -184,7 +216,7 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
 
         # Cleanly close browser
         run_pw_cmd("close")
-        print("=== [Playwright Browser E2E] All 9 browser verification steps PASSED ===\n")
+        print("=== [Playwright Browser E2E] All 10 browser verification steps PASSED ===\n")
 
 
 if __name__ == "__main__":

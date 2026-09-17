@@ -29,7 +29,7 @@ export interface Column {
   tickEndX: number;   // 刻度终点像素 X
   unit: string;
   isLocked: boolean;
-  curveType: 'linear' | 'bezier';
+  curveType: 'linear';
   visible: boolean;
   controlPoints: Point[];
 
@@ -100,6 +100,20 @@ export type ToolMode =
   | 'addPoint' // 加控制点工具 (P)
   | 'eraser';  // 橡皮擦删除工具 (E)
 
+export interface DiagramPanel {
+  id: string;
+  name: string;            // 面板名称，如 "Pollen (花粉区)", "Charcoal (炭屑区)", "Spores (菌孢区)"
+  roi: {
+    xMin: number;
+    xMax: number;
+    yMin: number;
+    yMax: number;
+  };
+  calibration: DepthCalibration;
+  columns: Column[];
+  activeTaxaId: string;
+}
+
 export interface DiagramData {
   imageSrc: string;
   imageWidth: number;
@@ -108,6 +122,8 @@ export interface DiagramData {
   columns: Column[];
   activeTaxaId: string;
   isDesktopMode?: boolean; // 桌面模式显示右上角 [退出] 按钮，服务器模式隐藏
+  panels?: DiagramPanel[]; // 多面板多ROI架构扩展
+  activePanelId?: string;
   selectedEntity:
     | { type: 'roi'; handle?: string }
     | { type: 'column'; id: string; part?: 'start' | 'tick' | 'end' }

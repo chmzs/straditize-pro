@@ -23,16 +23,16 @@
 
 /* 日间模式 (Light Theme - 现代化专业科研洁净高对比质感) */
 body.theme-light {
-  --bg-primary: #f8fafc;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #f1f5f9;
+  --bg-primary: #ffffff;      /* 画布背景纯白 */
+  --bg-secondary: #f8f9fa;    /* 侧边栏与检查器底色极浅冷灰 */
+  --bg-tertiary: #f1f3f5;     /* 组块背景微灰 */
   --bg-card: #ffffff;
-  --border-color: #e2e8f0;
-  --border-light: rgba(0, 0, 0, 0.06);
+  --border-color: #e5e7eb;    /* 细边框 */
+  --border-light: rgba(0, 0, 0, 0.05);
 
-  --text-primary: #0f172a;
-  --text-secondary: #334155;
-  --text-muted: #64748b;
+  --text-primary: #111827;    /* 深炭黑主文本 */
+  --text-secondary: #4b5563;  /* 柔和深灰副文本 */
+  --text-muted: #6b7280;
 
   --accent-blue: #0284c7;
   --accent-amber: #d97706;
@@ -41,28 +41,75 @@ body.theme-light {
   --accent-orange: #ea580c;
 }
 
-body.theme-light .app-toolbar,
+body.theme-light .app-toolbar {
+  background: #ffffff;
+  border-color: #e5e7eb;
+}
+
 body.theme-light .app-sidebar,
-body.theme-light .app-inspector,
+body.theme-light .app-inspector {
+  background: #f8f9fa;
+  border-color: #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
 body.theme-light .app-footer {
   background: #ffffff;
-  border-color: #e2e8f0;
+  border-color: #e5e7eb;
 }
 
 body.theme-light .canvas-wrapper {
-  background: #f8fafc !important;
+  background: #ffffff !important;
 }
 
 body.theme-light .taxa-card {
   background: #ffffff;
-  border-color: #e2e8f0;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  border-color: #e5e7eb;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 body.theme-light .taxa-card.active {
-  background: rgba(2, 132, 199, 0.05);
+  background: rgba(2, 132, 199, 0.06);
   border-color: #0284c7;
   box-shadow: 0 0 0 1px #0284c7, 0 2px 4px rgba(2, 132, 199, 0.08);
+}
+
+body.theme-light .drawer-toggle-tab {
+  background: #f8f9fa;
+  border-color: #e5e7eb;
+  color: #4b5563;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+body.theme-light .drawer-toggle-tab:hover {
+  background: #0284c7;
+  border-color: #0284c7;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.25);
+}
+
+body.theme-light .workflow-stepper {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+}
+
+body.theme-light .workflow-step-btn {
+  color: #4b5563;
+}
+
+body.theme-light .workflow-step-btn:hover {
+  color: #111827;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+body.theme-light .btn-group {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+}
+
+body.theme-light .tool-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.05);
+  color: #111827;
 }
 
 body.theme-light .btn-sidebar-action {
@@ -76,11 +123,11 @@ body.theme-light .btn-sidebar-action:hover {
 }
 
 body.theme-light .prop-row[style*="background"] {
-  background: #f8fafc !important;
+  background: #f1f3f5 !important;
 }
 
 body.theme-light .prop-row .prop-label {
-  color: #475569 !important;
+  color: #4b5563 !important;
 }
 
 body.theme-light .btn-group,
@@ -90,14 +137,9 @@ body.theme-light .sample-select,
 body.theme-light .modal-dialog,
 body.theme-light .tip-card {
   background: #ffffff;
-  border-color: #e2e8f0;
-  color: #0f172a;
+  border-color: #e5e7eb;
+  color: #111827;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-body.theme-light .tool-btn:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.05);
-  color: #0f172a;
 }
 
 body.theme-light .tool-btn.active-mode {
@@ -107,24 +149,26 @@ body.theme-light .tool-btn.active-mode {
 }
 
 body.theme-light .taxa-name-inline-input {
-  color: #0f172a;
+  color: #111827;
 }
 
 body.theme-light .text-input,
 body.theme-light input[type="number"],
 body.theme-light input[type="text"],
-body.theme-light textarea {
+body.theme-light textarea,
+body.theme-light select {
   background: #ffffff;
-  border-color: #cbd5e1;
-  color: #0f172a;
+  border-color: #d1d5db;
+  color: #111827;
 }
 
 body.theme-light .text-input:focus,
 body.theme-light input[type="number"]:focus,
 body.theme-light input[type="text"]:focus,
-body.theme-light textarea:focus {
+body.theme-light textarea:focus,
+body.theme-light select:focus {
   border-color: #0284c7;
-  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.18);
 }
 
 * {
@@ -518,7 +562,63 @@ body.theme-light .step-num {
   border-right: none;
 }
 
-/* 抽屉边缘展开把手 (Drawer Pull Tab) */
+/* 悬浮快捷帮助按钮与浮层 */
+.floating-help-btn {
+  position: absolute;
+  bottom: 16px;
+  left: 275px;
+  z-index: 45;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  transition: all 0.2s ease;
+}
+
+body.theme-light .floating-help-btn {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  color: #4b5563;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.floating-help-btn:hover {
+  color: #38bdf8;
+  border-color: #38bdf8;
+  transform: scale(1.08);
+}
+
+.floating-help-panel {
+  position: absolute;
+  bottom: 56px;
+  left: 16px;
+  z-index: 90;
+  width: 300px;
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px 14px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+body.theme-light .floating-help-panel {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+  color: #111827;
+}
 .drawer-toggle-tab {
   position: absolute;
   top: 110px;
@@ -622,15 +722,15 @@ body.theme-light .drawer-toggle-tab {
   backdrop-filter: blur(10px);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 14px 35px -5px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
   overflow: hidden;
   user-select: none;
 }
 
 body.theme-light .minimap-widget {
   background: rgba(255, 255, 255, 0.96);
-  border-color: #e2e8f0;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  border-color: #e5e7eb;
+  box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
 }
 
 .minimap-header {

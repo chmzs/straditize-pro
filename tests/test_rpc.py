@@ -1,3 +1,4 @@
+from pathlib import Path
 """Comprehensive Integration and Unit Tests for Straditize JSON-RPC 2.0 Server."""
 
 import io
@@ -35,27 +36,18 @@ from straditize_core import (
     run_stdio_server,
 )
 
-import straditize
-
-
 def get_test_image_path() -> str:
     """Locate the hoya-del-castillo.png test image reliably."""
-    stradi_pkg_dir = os.path.dirname(straditize.__file__)
-    candidate = os.path.join(
-        stradi_pkg_dir,
-        "widgets",
-        "tutorial",
-        "hoya-del-castillo",
-        "hoya-del-castillo.png",
-    )
-    if os.path.exists(candidate):
-        return os.path.abspath(candidate)
-    fallback = os.path.abspath(
-        "straditize/straditize/widgets/tutorial/hoya-del-castillo/hoya-del-castillo.png"
-    )
-    if os.path.exists(fallback):
-        return fallback
-    raise FileNotFoundError(f"Cannot locate test image starting from {stradi_pkg_dir}")
+    repo_root = Path(__file__).resolve().parent.parent
+    candidates = [
+        repo_root / "frontend" / "public" / "hoya-del-castillo.png",
+        repo_root / "docs" / "demo" / "hoya-del-castillo.png",
+        repo_root / "straditize" / "straditize" / "widgets" / "tutorial" / "hoya-del-castillo" / "hoya-del-castillo.png",
+    ]
+    for c in candidates:
+        if c.exists():
+            return str(c.resolve())
+    return str(candidates[0].resolve())
 
 
 class TestStraditizeRpcProtocol(unittest.TestCase):
