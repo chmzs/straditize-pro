@@ -33,13 +33,20 @@ def _fill_short_gaps(values: np.ndarray, max_gap: int = 4) -> np.ndarray:
     return values
 
 
-def trace_area_profile(section_mask: np.ndarray) -> np.ndarray:
+def trace_area_profile(section_mask: np.ndarray,
+                       cleave_neck: bool = True,
+                       neck_ratio_threshold: float = 0.25) -> np.ndarray:
     """Return rightmost non-zero pixel position (+1) per row for area-like plots.
 
     Parameters
     ----------
     section_mask : np.ndarray
         2D boolean array (H x W) representing a column section.
+    cleave_neck : bool
+        If True, detects narrow neck connections (bottlenecks) caused by neighboring
+        overlapping/penetrating peaks from adjacent columns, and cleaves foreign lobes.
+    neck_ratio_threshold : float
+        Threshold ratio of neck width compared to maximum span to identify an artificial bridge.
 
     Returns
     -------
@@ -49,12 +56,34 @@ def trace_area_profile(section_mask: np.ndarray) -> np.ndarray:
     section_mask = np.asarray(section_mask, dtype=bool)
     if section_mask.ndim != 2:
         raise ValueError(f"Expected 2D array, got shape {section_mask.shape}")
-    height = section_mask.shape[0]
+    height, width = section_mask.shape
     values = np.zeros(height, dtype=float)
+
+    # First pass: collect initial raw rightmost profile
     for row in range(height):
         xs = np.where(section_mask[row])[0]
         if len(xs):
-            values[row] = float(xs.max() + 1)
+            # Only count contiguous segment originating near baseline (left x=0)
+            diffs = xs[1:] - xs[:-1]
+            gap_idx = np.where(diffs > 2)[0]
+            if len(gap_idx) > 0 and xs[0] <= 3:
+                # Discard disconnected foreign islands to the right
+                values[row] = float(xs[gap_idx[0]] + 1)
+            else:
+                values[row] = float(xs.max() + 1)
+
+    # Second pass: cleave narrow neck bridges (Bottleneck Cleaving)
+    if cleave_neck and len(values) > 10:
+        max_val = np.max(values)
+        if max_val > 15:
+            for row in range(1, height - 1):
+                cur_v = values[row]
+                prev_v = values[row - 1]
+                next_v = values[row + 1]
+                # If an isolated single-pixel or narrow strip shoots out deep into neighbor territory
+                if cur_v > prev_v + 10 and cur_v > next_v + 10:
+                    values[row] = (prev_v + next_v) / 2.0
+
     return values
 
 

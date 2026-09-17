@@ -50,8 +50,10 @@ from .image import (
 from .age_depth import (
     AgeDepthAxisCalibrator,
     AgeDepthModel,
+    check_local_r_environment,
     extract_age_depth_model,
     generate_bacon_script,
+    generate_geochronr_script,
 )
 from .metadata import (
     chunk_text_by_tokens,
@@ -95,6 +97,7 @@ __all__ = [
     "AgeDepthAxisCalibrator",
     "AgeDepthModel",
     "CALIBRATION_ERROR",
+    "check_local_r_environment",
     "ColumnBound",
     "ControlPointSet",
     "EXPORT_ERROR",
@@ -132,6 +135,7 @@ __all__ = [
     "extract_text_from_pdf",
     "fetch_doi_metadata",
     "generate_bacon_script",
+    "generate_geochronr_script",
     "groupby_arr",
     "guided_target_color_mask",
     "guided_target_hue_family_mask",

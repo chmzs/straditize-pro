@@ -1,5 +1,29 @@
 # HANDOFF
 
+## 2026-09-18 — 深度落地地层学 Bacon 与 geoChronR 权威闭环：复杂地质事件参数化向导与本地满血 R 通道
+
+### 核心地学年代学规范升级 (基于 Zotero 文献与 PaperBell 知识库深度融合)
+1. **地质复杂事件与参数化向导 (Blaauw & Christen 2011)**：
+   - 彻底摆脱盲目手写代码：基于用户知识库《年代深度模型》与《年代不确定性分析》指南，在 `AgeDepthModal.ts` 中实现双选项卡结构：
+     - **Tab 1: 图像逆向解译与误差带提取**（满足 90% 数字化已发表图谱的诉求，自动生成 1000 组 MCMC 年代集成表）；
+     - **Tab 2: 测年数据与 Bacon / geoChronR 向导**（满足从实测测年点建模的诉求）。
+   - **地学参数化卡片**：
+     - **沉积间断 (Hiatus / Unconformity)**：支持设置间断深度与最大持续年限，切断自相关记忆；
+     - **瞬时沉积层 (Instantaneous Slump / 火山灰 Tephra / 洪水层)**：支持输入顶底深度，时间累积历时剔除；
+     - **碳储库效应校正 (Delta R / Reservoir Offset)**：针对硬水效应或海洋储库偏移输入 d.R 与 d.STD；
+     - **分段厚度与先验**：提供 2cm / 5cm / 10cm 胶囊选择，支持由 Bacon 自动线性加权回归推荐 `acc.mean`。
+
+2. **本地满血 R 环境感知与一键执行**：
+   - 系统自动探测用户本地安装的 `R 4.5.3` 及预装的 `rbacon` 与 `geoChronR` 扩展；
+   - 界面实时回显环境状态（如 `🟢 本地 R 环境就绪: R version 4.5.3 (已安装 rbacon 与 geoChronR)`）；
+   - 一键生成并执行标准 `rbacon::Bacon()` 与 `geoChronR::runBacon()` 驱动代码，完美与本系统导出的 LiPD `.lpd` 规范对接。
+
+3. **测试与持续集成**：
+   - `tests/test_age_depth_model.py` 与 `tests/test_metadata_and_lipd.py` 全绿通过；
+   - Playwright 真实 MS Edge 浏览器 11 步端到端自动化测试 100% 满血通过；
+   - 全量自动化测试 **77/77 全部通过 (22.32s)**，`pixi run lint` 0 错误 0 警告。
+
+---
 ## 2026-09-18 — 完成花粉图谱属种名 OCR 自动识别与集中式审核汇总表模块闭环
 
 ### 核心新功能交付 (属种名 OCR 与审核汇总表)

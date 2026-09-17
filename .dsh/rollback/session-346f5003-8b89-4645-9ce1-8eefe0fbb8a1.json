@@ -2,7 +2,7 @@
   "version": 2,
   "sessionId": "session-346f5003-8b89-4645-9ce1-8eefe0fbb8a1",
   "cwd": "I:\\software_dev\\straditize",
-  "updatedAt": 1789661124687,
+  "updatedAt": 1789667623503,
   "checkpoints": [
     {
       "turn": 41,
@@ -250,6 +250,79 @@
       "parent": "8af24a7aa385a56053d33b72ae004c07ccbef5b6",
       "time": 1789661122742,
       "untracked": [],
+      "truncated": false
+    },
+    {
+      "turn": 66,
+      "commit": "15d8d43570548bbd19454b3ba07ffc33bbea9a86",
+      "parent": "a5161656ffbb1d0b8029feb31c6fc790a027d655",
+      "time": 1789664766265,
+      "untracked": [
+        "straditize_core/ocr/models/ch_PP-OCRv4_det_infer.onnx",
+        "straditize_core/ocr/models/ch_PP-OCRv4_rec_infer.onnx",
+        "straditize_core/ocr/models/ppocr_keys_v1.txt"
+      ],
+      "truncated": false
+    },
+    {
+      "turn": 67,
+      "commit": "e4c39e2db3a6ab33efc6a2eb1829cd9a4b6c9810",
+      "parent": "15d8d43570548bbd19454b3ba07ffc33bbea9a86",
+      "time": 1789665119302,
+      "untracked": [
+        "app.py",
+        "straditize_core/ocr/models/ch_PP-OCRv4_det_infer.onnx",
+        "straditize_core/ocr/models/ch_PP-OCRv4_rec_infer.onnx",
+        "straditize_core/ocr/models/ppocr_keys_v1.txt"
+      ],
+      "truncated": false
+    },
+    {
+      "turn": 68,
+      "commit": "e4c39e2db3a6ab33efc6a2eb1829cd9a4b6c9810",
+      "parent": "e4c39e2db3a6ab33efc6a2eb1829cd9a4b6c9810",
+      "time": 1789665229049,
+      "untracked": [
+        "app.py",
+        "straditize_core/ocr/models/ch_PP-OCRv4_det_infer.onnx",
+        "straditize_core/ocr/models/ch_PP-OCRv4_rec_infer.onnx",
+        "straditize_core/ocr/models/ppocr_keys_v1.txt"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "7216ccec57ac086be0b9b5fd52547d53fde5251e",
+        "time": 1789666148415
+      }
+    },
+    {
+      "turn": 69,
+      "commit": "39daff4bd1900bf798d6b1e8a620a755d11829f7",
+      "parent": "7216ccec57ac086be0b9b5fd52547d53fde5251e",
+      "time": 1789666326311,
+      "untracked": [],
+      "truncated": false,
+      "after": {
+        "commit": "dd83b251530e9a5e01e0b21a462e4c07a58293a4",
+        "time": 1789667306406
+      }
+    },
+    {
+      "turn": 70,
+      "commit": "9e30a542a1e6168a93b068d18151a775823ff045",
+      "parent": "dd83b251530e9a5e01e0b21a462e4c07a58293a4",
+      "time": 1789667620069,
+      "untracked": [
+        "docs/demo/assets/index-Bqh9fhut.js",
+        "docs/demo/assets/index-Bqh9fhut.js.map",
+        "docs/demo/assets/index-DoeZKsNc.js",
+        "docs/demo/assets/index-DoeZKsNc.js.map",
+        "exact_sample_word.png",
+        "exact_trimmed.png",
+        "real_title_crop.png",
+        "temp_crop1.png",
+        "tight_title.png",
+        "true_zhenye.png"
+      ],
       "truncated": false
     }
   ],

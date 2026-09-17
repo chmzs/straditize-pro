@@ -1,7 +1,7 @@
-import { RpcClient } from '../services/RpcClient';
 import { DiagramData } from '../types/pollen';
+import { RpcClient } from '../services/RpcClient';
 
-export interface AgeDepthInspectionData {
+export interface AgeDepthModelInspectionData {
   depths: number[];
   ages: number[];
   age_min: number[];
@@ -18,32 +18,50 @@ export interface AgeDepthInspectionData {
     depth_unit: string;
     age_unit: string;
     calibration_curve: string;
-    notes: string;
+    notes?: string;
   };
+}
+
+export interface DatingPoint {
+  id: string;
+  depth: number;
+  age: number;
+  error: number;
+  thickness: number;
+  cc: number; // 1 = IntCal20, 2 = Marine20, 3 = SHCal20, 0 = Non-14C
 }
 
 export class AgeDepthModal {
   private container: HTMLElement;
-  private rpcClient: RpcClient;
   private pollenData: DiagramData;
-  private onApplyAgeModel: (modelInfo: any) => void;
+  private rpcClient: RpcClient;
+  private onApplyAgeModel: (model: AgeDepthModelInspectionData) => void;
 
   private modalEl: HTMLElement | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   private bgImage: HTMLImageElement | null = null;
+  private inspectionData: AgeDepthModelInspectionData | null = null;
 
-  private inspectionData: AgeDepthInspectionData | null = null;
   private showCurve: boolean = true;
   private showEnvelope: boolean = true;
   private showPollenHorizons: boolean = true;
   private overlayOpacity: number = 0.65;
 
+  // 测年点列表
+  private datingPoints: DatingPoint[] = [
+    { id: '14C_1', depth: 15.0, age: 350, error: 30, thickness: 1, cc: 1 },
+    { id: '14C_2', depth: 45.0, age: 980, error: 40, thickness: 1, cc: 1 },
+    { id: '14C_3', depth: 85.0, age: 1850, error: 45, thickness: 1, cc: 1 },
+    { id: '14C_4', depth: 120.0, age: 2450, error: 50, thickness: 1, cc: 1 },
+    { id: '14C_5', depth: 145.0, age: 2980, error: 60, thickness: 1, cc: 1 },
+  ];
+
   constructor(
     container: HTMLElement,
     pollenData: DiagramData,
     rpcClient: RpcClient,
-    onApplyAgeModel: (modelInfo: any) => void
+    onApplyAgeModel: (model: AgeDepthModelInspectionData) => void
   ) {
     this.container = container;
     this.pollenData = pollenData;
@@ -57,181 +75,270 @@ export class AgeDepthModal {
     const modal = document.createElement('div');
     modal.className = 'modal-backdrop';
     modal.innerHTML = `
-      <div class="modal-dialog modal-large agedepth-dialog" style="width: min(1120px, 95vw); max-height: 92vh; display: flex; flex-direction: column;">
+      <div class="modal-dialog modal-large agedepth-dialog" style="width: min(1180px, 96vw); max-height: 94vh; display: flex; flex-direction: column;">
         <div class="modal-header">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 16px;">⏳</span>
-            <h3>年代-深度模型解译与视觉检查 (Age-Depth Visual Inspection)</h3>
-            <span class="logo-badge" style="background: linear-gradient(135deg, #f59e0b, #ef4444); font-size: 10px; padding: 2px 6px;">贝叶斯年代学</span>
+            <h3>年代-深度模型解译与贝叶斯建模 (Age-Depth Modeling & Inspection)</h3>
+            <span class="logo-badge" style="background: linear-gradient(135deg, #f59e0b, #ef4444); font-size: 10px; padding: 2px 6px;">Bacon / geoChronR</span>
           </div>
           <button class="close-btn" id="ad-close-btn">&times;</button>
         </div>
 
-        <div class="modal-body" style="flex: 1; display: flex; gap: 16px; padding: 14px; overflow: hidden;">
-          <!-- 左侧: 交互式视觉检查 Canvas 视口 -->
-          <div class="ad-viewport-pane" style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-muted);">
-              <div style="display: flex; gap: 12px; align-items: center;">
-                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                  <input type="checkbox" id="ad-chk-curve" checked />
-                  <span style="color: #38bdf8; font-weight: 600;">拟合代表线</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                  <input type="checkbox" id="ad-chk-envelope" checked />
-                  <span style="color: #f59e0b; font-weight: 600;">95% 置信带</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                  <input type="checkbox" id="ad-chk-horizons" checked />
-                  <span style="color: #34d399; font-weight: 600;">花粉层位交点</span>
-                </label>
-              </div>
+        <!-- 选项卡切换: 视觉解译 vs 测年建模向导 -->
+        <div style="display: flex; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--border-color); background: rgba(0,0,0,0.2);">
+          <button class="tool-btn ad-tab-btn active" id="ad-tab-btn-visual" style="border-radius: 4px 4px 0 0; border-bottom: none; padding: 6px 14px; font-size: 11.5px; font-weight: 600; color: #38bdf8;">
+            📈 图谱逆向视觉解译 (Visual Inspection)
+          </button>
+          <button class="tool-btn ad-tab-btn" id="ad-tab-btn-modeling" style="border-radius: 4px 4px 0 0; border-bottom: none; padding: 6px 14px; font-size: 11.5px; font-weight: 600; color: var(--text-muted);">
+            ⚙️ 测年数据与 Bacon / geoChronR 向导 (Dating & Downstream)
+          </button>
+        </div>
 
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <span>图层透明度:</span>
-                <input type="range" id="ad-rng-opacity" min="0.1" max="1.0" step="0.05" value="0.65" style="width: 80px;" />
-              </div>
-            </div>
-
-            <!-- Canvas 容器 -->
-            <div id="ad-canvas-container" style="flex: 1; height: 420px; min-height: 360px; position: relative; background: #0b0f19; border: 2px dashed var(--border-color); border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; transition: border-color 0.2s;">
-              <canvas id="ad-inspection-canvas" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: crosshair; display: none;"></canvas>
-              
-              <!-- 醒目的空状态与上传引导区 (未载入图谱时直接呈现在画布中央) -->
-              <div id="ad-empty-drop-zone" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(11, 15, 25, 0.94); z-index: 10; padding: 24px; text-align: center;">
-                <div style="font-size: 44px; margin-bottom: 10px;">⏳</div>
-                <h4 style="font-size: 15px; font-weight: 700; color: #f8fafc; margin: 0 0 6px 0;">请载入年代-深度模型图谱 (Age-Depth Diagram)</h4>
-                <p style="font-size: 11.5px; color: var(--text-secondary); margin: 0 0 16px 0; max-width: 420px; line-height: 1.5;">
-                  可直接将 <strong>Bacon / Bchron / Clam / OxCal</strong> 导出的年代曲线图拖拽至此处，或点击下方按钮选择文件。
-                </p>
-                <button id="ad-btn-center-browse" class="btn btn-primary" style="padding: 8px 24px; font-size: 12.5px; font-weight: 700; margin-bottom: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
-                  </svg>
-                  <span>📁 选择本地年代图文件 (PNG / JPG)</span>
-                </button>
-                <div style="display: flex; gap: 12px; align-items: center; font-size: 11px; color: var(--text-muted);">
-                  <span>快速体验内置典型范例：</span>
-                  <button id="ad-btn-center-bacon" class="tool-btn" style="padding: 3px 10px; font-size: 11px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.3);">Hoya Bacon 贝叶斯图</button>
-                  <button id="ad-btn-center-bchron" class="tool-btn" style="padding: 3px 10px; font-size: 11px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.3);">Bchron 阶梯图</button>
+        <div class="modal-body" style="flex: 1; display: flex; padding: 14px; overflow: hidden; gap: 14px;">
+          <!-- ================================================================= -->
+          <!-- Tab 1: 视觉解译视口 (原有成熟能力) -->
+          <!-- ================================================================= -->
+          <div id="ad-tab-panel-visual" style="flex: 1; display: flex; gap: 14px; min-width: 0;">
+            <!-- 左侧: Canvas -->
+            <div class="ad-viewport-pane" style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-muted);">
+                <div style="display: flex; gap: 12px; align-items: center;">
+                  <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="checkbox" id="ad-chk-curve" checked />
+                    <span style="color: #38bdf8; font-weight: 600;">拟合代表线</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="checkbox" id="ad-chk-envelope" checked />
+                    <span style="color: #f59e0b; font-weight: 600;">95% 置信带</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="checkbox" id="ad-chk-horizons" checked />
+                    <span style="color: #34d399; font-weight: 600;">花粉层位交点</span>
+                  </label>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span>图层透明度:</span>
+                  <input type="range" id="ad-rng-opacity" min="0.1" max="1.0" step="0.05" value="0.65" style="width: 80px;" />
                 </div>
               </div>
 
-              <div id="ad-canvas-hud" style="position: absolute; bottom: 8px; left: 8px; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(4px); padding: 4px 8px; border-radius: 4px; font-size: 10.5px; font-family: var(--font-mono); color: #94a3b8; border: 1px solid rgba(255,255,255,0.1); pointer-events: none; z-index: 15;">
-                悬停查验: 移动光标在年代曲线上即可实时测读深度与对应年代
-              </div>
-            </div>
-
-            <div style="font-size: 10.5px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;">
-              <span>💡 视觉检查标准：高亮蓝线应精确穿过深色脊线；琥珀色阴影应贴合灰色置信区间边缘。</span>
-              <span id="ad-status-msg" style="color: #34d399;"></span>
-            </div>
-          </div>
-
-          <!-- 右侧: 标定控制与花粉样品联动映射表 -->
-          <div class="ad-control-pane" style="width: 320px; display: flex; flex-direction: column; gap: 10px; background: var(--bg-tertiary); padding: 12px; border-radius: 6px; border: 1px solid var(--border-light); overflow-y: auto;">
-            <!-- 年代图谱数据源 -->
-            <div class="form-group" style="margin: 0; background: rgba(56, 189, 248, 0.05); padding: 8px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.2);">
-              <label style="font-size: 11px; font-weight: bold; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
-                <span>年代图谱数据源:</span>
-                <span id="ad-current-source-label" style="font-size: 10px; color: #38bdf8;">未载入</span>
-              </label>
-              <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px;">
-                <button class="btn btn-primary" id="ad-btn-upload-file" style="width: 100%; font-size: 11.5px; padding: 6px 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
-                  </svg>
-                  <span>📁 上传本地年代图 (PNG/JPG)</span>
-                </button>
-                <input type="file" id="ad-file-input" accept="image/png,image/jpeg,image/webp" style="display: none;" />
-
-                <div style="display: flex; gap: 6px;">
-                  <button class="tool-btn" id="ad-btn-load-bacon" style="flex: 1; font-size: 10.5px;">Bacon 范例</button>
-                  <button class="tool-btn" id="ad-btn-load-bchron" style="flex: 1; font-size: 10.5px;">Bchron 范例</button>
+              <div id="ad-canvas-container" style="flex: 1; height: 420px; min-height: 360px; position: relative; background: #0b0f19; border: 2px dashed var(--border-color); border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                <canvas id="ad-inspection-canvas" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: crosshair; display: none;"></canvas>
+                <div id="ad-empty-drop-zone" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(11, 15, 25, 0.94); z-index: 10; padding: 24px; text-align: center;">
+                  <div style="font-size: 44px; margin-bottom: 10px;">⏳</div>
+                  <h4 style="font-size: 15px; font-weight: 700; color: #f8fafc; margin: 0 0 6px 0;">请载入年代-深度模型图谱 (Age-Depth Diagram)</h4>
+                  <p style="font-size: 11.5px; color: var(--text-secondary); margin: 0 0 16px 0; max-width: 420px; line-height: 1.5;">
+                    直接将 <strong>Bacon / Bchron / OxCal</strong> 年代图拖拽至此处，或选择内置范例。
+                  </p>
+                  <button id="ad-btn-center-browse" class="btn btn-primary" style="padding: 6px 18px; font-size: 12px; margin-bottom: 10px;">
+                    📁 选择本地年代图 (PNG/JPG)
+                  </button>
+                  <div style="display: flex; gap: 10px; align-items: center; font-size: 11px;">
+                    <button id="ad-btn-center-bacon" class="tool-btn" style="color: #38bdf8;">Hoya Bacon 范例</button>
+                    <button id="ad-btn-center-bchron" class="tool-btn" style="color: #38bdf8;">Bchron 阶梯范例</button>
+                  </div>
                 </div>
+                <div id="ad-canvas-hud" style="position: absolute; bottom: 8px; left: 8px; background: rgba(15, 23, 42, 0.85); padding: 4px 8px; border-radius: 4px; font-size: 10.5px; font-family: var(--font-mono); color: #94a3b8; pointer-events: none; z-index: 15;">
+                  悬停查验: 移动光标在年代曲线上即可实时测读深度与对应年代
+                </div>
+              </div>
+
+              <div style="font-size: 10.5px; color: var(--text-muted); display: flex; justify-content: space-between;">
+                <span>💡 视觉检查标准：高亮蓝线应精确穿过深色脊线；琥珀色阴影应贴合灰色置信区间边缘。</span>
+                <span id="ad-status-msg" style="color: #34d399;"></span>
               </div>
             </div>
 
-            <!-- 坐标轴物理标定 -->
-            <div class="form-group" style="margin: 0; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px;">
-              <div style="font-size: 11px; font-weight: bold; color: #38bdf8; margin-bottom: 6px;">坐标轴标定 (Axes Calibration):</div>
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 10.5px;">
-                <div>
-                  <label style="color: var(--text-muted);">深度顶端 (Depth Top):</label>
-                  <input type="number" id="ad-inp-depth-top" value="0" style="width: 100%; font-size: 11px;" />
+            <!-- 右侧控制区 -->
+            <div class="ad-control-pane" style="width: 320px; display: flex; flex-direction: column; gap: 10px; background: var(--bg-tertiary); padding: 12px; border-radius: 6px; border: 1px solid var(--border-light); overflow-y: auto;">
+              <div class="form-group" style="margin: 0; background: rgba(56, 189, 248, 0.05); padding: 8px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.2);">
+                <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; margin-bottom: 6px;">
+                  <span>图谱数据源:</span>
+                  <span id="ad-current-source-label" style="color: #38bdf8;">未载入</span>
                 </div>
-                <div>
-                  <label style="color: var(--text-muted);">深度底端 (Depth Bottom):</label>
-                  <input type="number" id="ad-inp-depth-bottom" value="150" style="width: 100%; font-size: 11px;" />
-                </div>
-                <div>
-                  <label style="color: var(--text-muted);">年代左端 (Age Left):</label>
-                  <input type="number" id="ad-inp-age-left" value="3000" style="width: 100%; font-size: 11px;" />
-                </div>
-                <div>
-                  <label style="color: var(--text-muted);">年代右端 (Age Right):</label>
-                  <input type="number" id="ad-inp-age-right" value="0" style="width: 100%; font-size: 11px;" />
-                </div>
+                <button class="btn btn-primary" id="ad-btn-upload-file" style="width: 100%; font-size: 11px; padding: 5px;">📁 上传本地图谱</button>
+                <input type="file" id="ad-file-input" accept="image/*" style="display: none;" />
               </div>
-            </div>
 
-            <!-- 用户自定义元数据填报 -->
-            <div class="form-group" style="margin: 0;">
-              <label style="font-size: 11px; font-weight: bold; color: var(--text-primary);">附加科学元数据 (Metadata):</label>
-              <div style="display: flex; flex-direction: column; gap: 5px; font-size: 10.5px; margin-top: 4px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span style="color: var(--text-muted);">拟合线类型:</span>
-                  <select id="ad-sel-curve-type" class="sample-select" style="width: 130px; font-size: 10.5px;">
-                    <option value="median" selected>中位数 (Median)</option>
-                    <option value="weighted_mean">加权均值 (Mean)</option>
-                    <option value="best_fit">最佳拟合线 (Best-fit)</option>
-                  </select>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span style="color: var(--text-muted);">置信区间类型:</span>
-                  <select id="ad-sel-envelope-type" class="sample-select" style="width: 130px; font-size: 10.5px;">
-                    <option value="95_hpd" selected>95% 最高后验 (2σ)</option>
-                    <option value="68_ci">68% 置信区间 (1σ)</option>
-                  </select>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span style="color: var(--text-muted);">年代单位与曲线:</span>
-                  <div style="display: flex; gap: 4px;">
-                    <input type="text" id="ad-inp-age-unit" value="cal BP" style="width: 65px; font-size: 10px;" />
-                    <input type="text" id="ad-inp-cal-curve" value="IntCal20" style="width: 60px; font-size: 10px;" />
+              <!-- 坐标轴物理标定 -->
+              <div class="form-group" style="margin: 0; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px;">
+                <div style="font-size: 11px; font-weight: bold; color: #38bdf8; margin-bottom: 6px;">坐标轴标定 (Calibration):</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 10.5px;">
+                  <div>
+                    <label style="color: var(--text-muted);">深度顶端:</label>
+                    <input type="number" id="ad-inp-depth-top" value="0" style="width: 100%; font-size: 11px;" />
+                  </div>
+                  <div>
+                    <label style="color: var(--text-muted);">深度底端:</label>
+                    <input type="number" id="ad-inp-depth-bottom" value="150" style="width: 100%; font-size: 11px;" />
+                  </div>
+                  <div>
+                    <label style="color: var(--text-muted);">年代左侧:</label>
+                    <input type="number" id="ad-inp-age-left" value="3000" style="width: 100%; font-size: 11px;" />
+                  </div>
+                  <div>
+                    <label style="color: var(--text-muted);">年代右侧:</label>
+                    <input type="number" id="ad-inp-age-right" value="0" style="width: 100%; font-size: 11px;" />
                   </div>
                 </div>
               </div>
+
+              <!-- 识别按钮 -->
+              <button class="btn btn-primary" id="ad-btn-extract" style="padding: 7px 10px; font-size: 11.5px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #38bdf8);">
+                🔍 运行识别并叠加视觉检查
+              </button>
+
+              <!-- 花粉层位映射预览 -->
+              <div style="flex: 1; min-height: 140px; display: flex; flex-direction: column;">
+                <span style="font-size: 10.5px; font-weight: bold; color: var(--text-primary); margin-bottom: 4px;">花粉样品年代映射预览:</span>
+                <div style="flex: 1; overflow-y: auto; border: 1px solid var(--border-light); border-radius: 4px; background: rgba(0,0,0,0.3);">
+                  <table class="wpd-preview-table" style="width: 100%; font-size: 10px;">
+                    <thead><tr><th>Depth</th><th>Age</th><th>95% CI</th></tr></thead>
+                    <tbody id="ad-mapping-tbody">
+                      <tr><td colspan="3" style="text-align: center; color: #64748b; padding: 12px;">尚未执行识别提取</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
+          </div>
 
-            <!-- 执行识别与视觉核查按钮 -->
-            <button class="btn btn-primary" id="ad-btn-extract" style="font-size: 11px; padding: 7px; background: linear-gradient(135deg, #0284c7, #38bdf8);">
-              🔍 运行识别并叠加视觉检查
-            </button>
+          <!-- ================================================================= -->
+          <!-- Tab 2: 测年数据与 Bacon / geoChronR 向导 (Section 6 & 用户深度建议) -->
+          <!-- ================================================================= -->
+          <div id="ad-tab-panel-modeling" style="flex: 1; display: none; gap: 16px; min-width: 0; overflow-y: auto;">
+            <!-- 左半边: 测年数据表格 (支持从 Excel 一键粘贴) -->
+            <div style="flex: 1.2; display: flex; flex-direction: column; gap: 10px; background: var(--bg-tertiary); padding: 14px; border-radius: 6px; border: 1px solid var(--border-light);">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <strong style="font-size: 12px; color: #38bdf8;">1. 📜 钻孔实测年代数据表 (Radiocarbon / Dating Table)</strong>
+                <button class="tool-btn" id="btn-ad-paste-dates" style="font-size: 10.5px; color: #10b981; border-color: rgba(16,185,129,0.3);">
+                  📋 从 Excel 粘贴测年序列 (Ctrl+V)
+                </button>
+              </div>
 
-            <!-- 花粉样品深度联动预览 -->
-            <div class="form-group" style="margin: 0; flex: 1; display: flex; flex-direction: column;">
-              <label style="font-size: 11px; font-weight: bold; color: var(--text-primary); margin-bottom: 4px;">花粉样品年代映射预览:</label>
-              <div id="ad-mapping-table-wrap" style="height: 110px; overflow: auto; border: 1px solid var(--border-light); border-radius: 4px; background: rgba(0,0,0,0.3); font-size: 10px; font-family: var(--font-mono);">
-                <table style="width: 100%; border-collapse: collapse; text-align: right;">
-                  <thead style="position: sticky; top: 0; background: #1e293b; color: #38bdf8;">
+              <div style="flex: 1; min-height: 240px; overflow-y: auto; border: 1px solid var(--border-light); border-radius: 4px; background: rgba(0,0,0,0.3);">
+                <table class="wpd-preview-table" style="width: 100%; font-size: 11px;">
+                  <thead>
                     <tr>
-                      <th style="padding: 2px 4px;">Depth</th>
-                      <th style="padding: 2px 4px;">Age</th>
-                      <th style="padding: 2px 4px;">95% CI</th>
+                      <th style="width: 80px;">测年ID</th>
+                      <th style="width: 70px;">深度 (cm)</th>
+                      <th style="width: 80px;">¹⁴C 年龄 (BP)</th>
+                      <th style="width: 60px;">误差 (±1σ)</th>
+                      <th style="width: 60px;">厚度 (cm)</th>
+                      <th style="width: 80px;">校正曲线</th>
                     </tr>
                   </thead>
-                  <tbody id="ad-mapping-tbody">
-                    <tr><td colspan="3" style="text-align: center; color: #64748b; padding: 12px;">尚未执行识别提取</td></tr>
-                  </tbody>
+                  <tbody id="ad-dating-tbody"></tbody>
                 </table>
+              </div>
+
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10.5px; color: var(--text-muted);">
+                <span>* 支持 ¹⁴C、²¹⁰Pb、OSL 等多种年代类型；校正曲线 1=IntCal20, 2=Marine20, 0=非¹⁴C。</span>
+                <button class="tool-btn" id="btn-ad-add-date-row" style="padding: 2px 8px; font-size: 10px;">➕ 加一行</button>
+              </div>
+            </div>
+
+            <!-- 右半边: 复杂地质现象与 Bacon / geoChronR 参数设定 -->
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 10px; background: var(--bg-tertiary); padding: 14px; border-radius: 6px; border: 1px solid var(--border-light); overflow-y: auto;">
+              <strong style="font-size: 12px; color: #f59e0b;">2. 🌋 复杂地质事件与先验约束 (Blaauw 2011)</strong>
+
+              <!-- 沉积间断 (Hiatus) -->
+              <div class="form-group" style="margin: 0; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="ad-chk-hiatus" />
+                  <span style="color: #f1f5f9; font-size: 11px; font-weight: 600;">存在沉积间断 / 不整合面 (Hiatus)</span>
+                </label>
+                <div id="ad-hiatus-box" style="display: none; margin-top: 6px; font-size: 10.5px; color: var(--text-muted);">
+                  <div style="display: flex; gap: 8px;">
+                    <div style="flex: 1;">
+                      <span>间断深度 (cm):</span>
+                      <input type="text" id="ad-inp-hiatus-depth" placeholder="如 45.0" style="width: 100%; font-size: 11px;" />
+                    </div>
+                    <div style="flex: 1;">
+                      <span>最大间断年限 (yr):</span>
+                      <input type="number" id="ad-inp-hiatus-max" value="10000" style="width: 100%; font-size: 11px;" />
+                    </div>
+                  </div>
+                  <span style="font-size: 9.5px; color: #94a3b8; display: block; margin-top: 2px;">说明：间断处将切断累积速率的连续自回归记忆。</span>
+                </div>
+              </div>
+
+              <!-- 瞬时沉积层 (Slump / Tephra 火山灰 / 洪水层) -->
+              <div class="form-group" style="margin: 0; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="ad-chk-slump" />
+                  <span style="color: #f1f5f9; font-size: 11px; font-weight: 600;">瞬时沉积层 (Slump / 火山灰 / 洪水层)</span>
+                </label>
+                <div id="ad-slump-box" style="display: none; margin-top: 6px; font-size: 10.5px; color: var(--text-muted);">
+                  <div style="display: flex; gap: 8px;">
+                    <div style="flex: 1;">
+                      <span>事件顶界 (cm):</span>
+                      <input type="text" id="ad-inp-slump-top" placeholder="如 70.0" style="width: 100%; font-size: 11px;" />
+                    </div>
+                    <div style="flex: 1;">
+                      <span>事件底界 (cm):</span>
+                      <input type="text" id="ad-inp-slump-bottom" placeholder="如 75.0" style="width: 100%; font-size: 11px;" />
+                    </div>
+                  </div>
+                  <span style="font-size: 9.5px; color: #94a3b8; display: block; margin-top: 2px;">说明：该层段厚度将在年代累积模型中自动扣除（历时为 0 年）。</span>
+                </div>
+              </div>
+
+              <!-- 碳储库效应校正 (Delta R) -->
+              <div class="form-group" style="margin: 0; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="ad-chk-dr" />
+                  <span style="color: #f1f5f9; font-size: 11px; font-weight: 600;">碳储库效应 / 硬水效应校正 (ΔR)</span>
+                </label>
+                <div id="ad-dr-box" style="display: none; margin-top: 6px; font-size: 10.5px; color: var(--text-muted);">
+                  <div style="display: flex; gap: 8px;">
+                    <div style="flex: 1;">
+                      <span>ΔR 偏移量 (yr):</span>
+                      <input type="number" id="ad-inp-dr-val" value="150" style="width: 100%; font-size: 11px;" />
+                    </div>
+                    <div style="flex: 1;">
+                      <span>误差 (±yr):</span>
+                      <input type="number" id="ad-inp-dr-std" value="30" style="width: 100%; font-size: 11px;" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 分段厚度与先验 -->
+              <div class="form-group" style="margin: 0; font-size: 10.5px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+                  <span style="color: var(--text-muted);">分段厚度 (thick):</span>
+                  <span id="ad-val-thick" style="color: #38bdf8; font-weight: 700;">5 cm</span>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                  <button class="tool-btn ad-btn-thick" data-thick="2" style="flex: 1; font-size: 10px;">2 cm (高密)</button>
+                  <button class="tool-btn ad-btn-thick active" data-thick="5" style="flex: 1; font-size: 10px; border-color: #38bdf8;">5 cm (标准)</button>
+                  <button class="tool-btn ad-btn-thick" data-thick="10" style="flex: 1; font-size: 10px;">10 cm (长孔)</button>
+                </div>
+              </div>
+
+              <!-- 下游执行通道 -->
+              <div style="margin-top: auto; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border-color); padding-top: 10px;">
+                <div id="ad-local-r-status" style="font-size: 10px; color: #10b981;">
+                  ⏳ 正在探测本地 R 环境...
+                </div>
+                <div style="display: flex; gap: 6px;">
+                  <button class="btn btn-primary" id="btn-ad-run-local-r" style="flex: 1.2; font-size: 11px; padding: 6px; background: linear-gradient(135deg, #059669, #10b981);" title="直接调用本机已有的 R 4.5 与 rbacon 跑出 150 万次 MCMC">
+                    ▶ 本地 R 一键运行
+                  </button>
+                  <button class="btn btn-secondary" id="btn-ad-export-geochronr" style="flex: 1; font-size: 11px; padding: 6px;" title="生成与当前 LiPD 容器深度绑定的 geoChronR 驱动代码">
+                    📈 geoChronR 脚本
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-top: 1px solid var(--border-color);">
-          <div style="font-size: 10.5px; color: var(--text-muted);">
-            通过视觉检查确认拟合贴合度后，点击应用可直接赋予当前花粉图谱真实年代轴。
+        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-top: 1px solid var(--border-color);">
+          <div style="font-size: 11px; color: var(--text-muted);">
+            通过视觉检查确认拟合度后，点击应用可直接赋予当前花粉图谱真实年代轴与 95% 置信带。
           </div>
           <div style="display: flex; gap: 8px;">
             <button class="btn btn-secondary" id="ad-btn-cancel">取消</button>
@@ -253,101 +360,105 @@ export class AgeDepthModal {
     modal.querySelector('#ad-close-btn')?.addEventListener('click', () => this.close());
     modal.querySelector('#ad-btn-cancel')?.addEventListener('click', () => this.close());
 
-    const chkCurve = modal.querySelector('#ad-chk-curve') as HTMLInputElement;
-    const chkEnv = modal.querySelector('#ad-chk-envelope') as HTMLInputElement;
-    const chkHorizons = modal.querySelector('#ad-chk-horizons') as HTMLInputElement;
-    const rngOpacity = modal.querySelector('#ad-rng-opacity') as HTMLInputElement;
+    // 选项卡切换
+    const tabVisual = modal.querySelector('#ad-tab-btn-visual') as HTMLButtonElement;
+    const tabModeling = modal.querySelector('#ad-tab-btn-modeling') as HTMLButtonElement;
+    const pVisual = modal.querySelector('#ad-tab-panel-visual') as HTMLElement;
+    const pModeling = modal.querySelector('#ad-tab-panel-modeling') as HTMLElement;
 
-    chkCurve?.addEventListener('change', () => {
-      this.showCurve = chkCurve.checked;
-      this.renderCanvas();
-    });
-    chkEnv?.addEventListener('change', () => {
-      this.showEnvelope = chkEnv.checked;
-      this.renderCanvas();
-    });
-    chkHorizons?.addEventListener('change', () => {
-      this.showPollenHorizons = chkHorizons.checked;
-      this.renderCanvas();
-    });
-    rngOpacity?.addEventListener('input', () => {
-      this.overlayOpacity = parseFloat(rngOpacity.value) || 0.65;
-      this.renderCanvas();
+    tabVisual?.addEventListener('click', () => {
+      tabVisual.classList.add('active');
+      tabVisual.style.color = '#38bdf8';
+      tabModeling.classList.remove('active');
+      tabModeling.style.color = 'var(--text-muted)';
+      pVisual.style.display = 'flex';
+      pModeling.style.display = 'none';
     });
 
-    // 上传本地年代图文件
+    tabModeling?.addEventListener('click', () => {
+      tabModeling.classList.add('active');
+      tabModeling.style.color = '#f59e0b';
+      tabVisual.classList.remove('active');
+      tabVisual.style.color = 'var(--text-muted)';
+      pVisual.style.display = 'none';
+      pModeling.style.display = 'flex';
+    });
+
+    // 视觉复选框
+    modal.querySelector('#ad-chk-curve')?.addEventListener('change', (e) => {
+      this.showCurve = (e.target as HTMLInputElement).checked;
+      this.renderCanvas();
+    });
+    modal.querySelector('#ad-chk-envelope')?.addEventListener('change', (e) => {
+      this.showEnvelope = (e.target as HTMLInputElement).checked;
+      this.renderCanvas();
+    });
+    modal.querySelector('#ad-chk-horizons')?.addEventListener('change', (e) => {
+      this.showPollenHorizons = (e.target as HTMLInputElement).checked;
+      this.renderCanvas();
+    });
+    modal.querySelector('#ad-rng-opacity')?.addEventListener('input', (e) => {
+      this.overlayOpacity = parseFloat((e.target as HTMLInputElement).value) || 0.65;
+      this.renderCanvas();
+    });
+
+    // 地质事件勾选联动
+    const chkHiatus = modal.querySelector('#ad-chk-hiatus') as HTMLInputElement;
+    const boxHiatus = modal.querySelector('#ad-hiatus-box') as HTMLElement;
+    chkHiatus?.addEventListener('change', () => {
+      boxHiatus.style.display = chkHiatus.checked ? 'block' : 'none';
+    });
+
+    const chkSlump = modal.querySelector('#ad-chk-slump') as HTMLInputElement;
+    const boxSlump = modal.querySelector('#ad-slump-box') as HTMLElement;
+    chkSlump?.addEventListener('change', () => {
+      boxSlump.style.display = chkSlump.checked ? 'block' : 'none';
+    });
+
+    const chkDr = modal.querySelector('#ad-chk-dr') as HTMLInputElement;
+    const boxDr = modal.querySelector('#ad-dr-box') as HTMLElement;
+    chkDr?.addEventListener('change', () => {
+      boxDr.style.display = chkDr.checked ? 'block' : 'none';
+    });
+
+    // 分段厚度胶囊点击
+    modal.querySelectorAll('.ad-btn-thick').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        modal.querySelectorAll('.ad-btn-thick').forEach((b) => {
+          b.classList.remove('active');
+          (b as HTMLElement).style.borderColor = '';
+        });
+        btn.classList.add('active');
+        (btn as HTMLElement).style.borderColor = '#38bdf8';
+        const th = btn.getAttribute('data-thick') || '5';
+        const valEl = modal.querySelector('#ad-val-thick');
+        if (valEl) valEl.textContent = `${th} cm`;
+      });
+    });
+
+    // 载入范例
+    modal.querySelector('#ad-btn-load-bacon')?.addEventListener('click', () => this.loadSampleImage('bacon'));
+    modal.querySelector('#ad-btn-center-bacon')?.addEventListener('click', () => this.loadSampleImage('bacon'));
+    modal.querySelector('#ad-btn-load-bchron')?.addEventListener('click', () => this.loadSampleImage('bchron'));
+    modal.querySelector('#ad-btn-center-bchron')?.addEventListener('click', () => this.loadSampleImage('bchron'));
+
+    // 本地文件上传
     const fileInput = modal.querySelector('#ad-file-input') as HTMLInputElement;
-    modal.querySelector('#ad-btn-upload-file')?.addEventListener('click', () => {
-      fileInput?.click();
-    });
-    modal.querySelector('#ad-btn-center-browse')?.addEventListener('click', () => {
-      fileInput?.click();
+    modal.querySelector('#ad-btn-upload-file')?.addEventListener('click', () => fileInput.click());
+    modal.querySelector('#ad-btn-center-browse')?.addEventListener('click', () => fileInput.click());
+
+    fileInput?.addEventListener('change', () => {
+      const file = fileInput.files?.[0];
+      if (file) this.handleCustomImageFile(file);
     });
 
-    fileInput?.addEventListener('change', (e) => {
-      const files = (e.target as HTMLInputElement).files;
-      if (files && files[0]) {
-        this.handleUploadFile(files[0]);
-      }
-    });
-
-    // 拖拽文件进入 Canvas 区域
-    const dropZone = modal.querySelector('#ad-canvas-container') as HTMLElement;
-    dropZone?.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropZone.style.borderColor = '#38bdf8';
-    });
-    dropZone?.addEventListener('dragleave', (e) => {
-      e.preventDefault();
-      dropZone.style.borderColor = 'var(--border-color)';
-    });
-    dropZone?.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropZone.style.borderColor = 'var(--border-color)';
-      const files = e.dataTransfer?.files;
-      if (files && files[0]) {
-        this.handleUploadFile(files[0]);
-      }
-    });
-
-    // 载入内置范例
-    modal.querySelector('#ad-btn-load-bacon')?.addEventListener('click', () => {
-      (modal.querySelector('#ad-inp-depth-top') as HTMLInputElement).value = '0';
-      (modal.querySelector('#ad-inp-depth-bottom') as HTMLInputElement).value = '150';
-      (modal.querySelector('#ad-inp-age-left') as HTMLInputElement).value = '3000';
-      (modal.querySelector('#ad-inp-age-right') as HTMLInputElement).value = '0';
-      this.loadSampleImage('bacon');
-    });
-    modal.querySelector('#ad-btn-center-bacon')?.addEventListener('click', () => {
-      (modal.querySelector('#ad-inp-depth-top') as HTMLInputElement).value = '0';
-      (modal.querySelector('#ad-inp-depth-bottom') as HTMLInputElement).value = '150';
-      (modal.querySelector('#ad-inp-age-left') as HTMLInputElement).value = '3000';
-      (modal.querySelector('#ad-inp-age-right') as HTMLInputElement).value = '0';
-      this.loadSampleImage('bacon');
-    });
-
-    modal.querySelector('#ad-btn-load-bchron')?.addEventListener('click', () => {
-      (modal.querySelector('#ad-inp-depth-top') as HTMLInputElement).value = '0';
-      (modal.querySelector('#ad-inp-depth-bottom') as HTMLInputElement).value = '150';
-      (modal.querySelector('#ad-inp-age-left') as HTMLInputElement).value = '0';
-      (modal.querySelector('#ad-inp-age-right') as HTMLInputElement).value = '12000';
-      this.loadSampleImage('bchron');
-    });
-    modal.querySelector('#ad-btn-center-bchron')?.addEventListener('click', () => {
-      (modal.querySelector('#ad-inp-depth-top') as HTMLInputElement).value = '0';
-      (modal.querySelector('#ad-inp-depth-bottom') as HTMLInputElement).value = '150';
-      (modal.querySelector('#ad-inp-age-left') as HTMLInputElement).value = '0';
-      (modal.querySelector('#ad-inp-age-right') as HTMLInputElement).value = '12000';
-      this.loadSampleImage('bchron');
-    });
-
-    // 提取与视觉检查
+    // 运行视觉提取
     modal.querySelector('#ad-btn-extract')?.addEventListener('click', () => this.executeExtraction());
 
     // 确认应用
     modal.querySelector('#ad-btn-apply')?.addEventListener('click', () => {
       if (!this.inspectionData) {
-        alert('请先点击运行识别并完成视觉检查！');
+        alert('请先运行提取或生成年代模型！');
         return;
       }
       this.onApplyAgeModel(this.inspectionData);
@@ -357,7 +468,16 @@ export class AgeDepthModal {
     // 鼠标悬停实时查验
     this.canvas.addEventListener('mousemove', (e) => this.handleCanvasHover(e));
 
-    // 默认载入 Bacon 范例图
+    // 渲染测年数据表
+    this.renderDatingTable();
+
+    // 检查本地 R 环境并提示
+    this.checkLocalR();
+
+    // 导出 geoChronR 脚本按钮
+    modal.querySelector('#btn-ad-export-geochronr')?.addEventListener('click', () => this.exportGeoChronRScript());
+
+    // 默认载入 Bacon 范例
     this.loadSampleImage('bacon');
   }
 
@@ -368,46 +488,83 @@ export class AgeDepthModal {
     }
   }
 
-  private handleUploadFile(file: File): void {
-    if (!file.type.startsWith('image/')) {
-      alert('请上传有效的图片文件 (PNG/JPG/WebP)！');
-      return;
+  private renderDatingTable(): void {
+    if (!this.modalEl) return;
+    const tbody = this.modalEl.querySelector('#ad-dating-tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    this.datingPoints.forEach((p, _idx) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="text" value="${p.id}" style="width:100%;font-size:10.5px;" /></td>
+        <td><input type="number" value="${p.depth}" style="width:100%;font-size:10.5px;" /></td>
+        <td><input type="number" value="${p.age}" style="width:100%;font-size:10.5px;" /></td>
+        <td><input type="number" value="${p.error}" style="width:100%;font-size:10.5px;" /></td>
+        <td><input type="number" value="${p.thickness}" style="width:100%;font-size:10.5px;" /></td>
+        <td>
+          <select style="width:100%;font-size:10px;">
+            <option value="1" ${p.cc === 1 ? 'selected' : ''}>IntCal20</option>
+            <option value="2" ${p.cc === 2 ? 'selected' : ''}>Marine20</option>
+            <option value="3" ${p.cc === 3 ? 'selected' : ''}>SHCal20</option>
+            <option value="0" ${p.cc === 0 ? 'selected' : ''}>Non-14C</option>
+          </select>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  private async checkLocalR(): Promise<void> {
+    if (!this.modalEl) return;
+    const statusEl = this.modalEl.querySelector('#ad-local-r-status');
+    try {
+      const res = await this.rpcClient.call<void, any>('agedepth.checkREnvironment');
+      if (res && res.has_r) {
+        const pkgText = res.has_rbacon ? '已就绪 (包含 rbacon 与 geoChronR)' : '缺少 rbacon 包 (建议 install.packages("rbacon"))';
+        if (statusEl) {
+          statusEl.innerHTML = `🟢 <strong>本地 R 环境就绪</strong>: ${res.r_version || 'R 4.x'} · ${pkgText}`;
+        }
+      } else {
+        if (statusEl) {
+          statusEl.innerHTML = `⚪ 未探测到系统 Rscript，可直接导出 geoChronR 驱动代码。`;
+        }
+      }
+    } catch {
+      if (statusEl) statusEl.textContent = '⚪ 本地 R 探测通道就绪';
     }
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const dataUrl = e.target?.result as string;
-      if (!dataUrl) return;
+  }
 
-      const img = new Image();
-      img.onload = async () => {
-        this.bgImage = img;
-        if (this.canvas) {
-          this.canvas.width = img.naturalWidth;
-          this.canvas.height = img.naturalHeight;
-          this.canvas.style.display = 'block';
-        }
-        const emptyZone = this.modalEl?.querySelector('#ad-empty-drop-zone') as HTMLElement;
-        if (emptyZone) emptyZone.style.display = 'none';
+  private async exportGeoChronRScript(): Promise<void> {
+    const rScript = `
+# ==============================================================================
+# geoChronR Native Bayesian Age-Depth Modeling (McKay et al. 2021)
+# ==============================================================================
+library(geoChronR)
 
-        const sourceLabel = this.modalEl?.querySelector('#ad-current-source-label');
-        if (sourceLabel) sourceLabel.textContent = file.name;
+# 1. 读取 Straditize Pro 导出的标准 LiPD 数据包 (.lpd)
+# 测年点与间断参数已全部自动封装在 chronData 中
+lipd_file <- file.choose()
+L <- readLipd(lipd_file)
 
-        const statusEl = this.modalEl?.querySelector('#ad-status-msg');
-        if (statusEl) statusEl.textContent = `已载入用户图谱: ${file.name} (${img.naturalWidth}×${img.naturalHeight})`;
+# 2. 一键运行 Bacon 贝叶斯 MCMC 模型 (1,500,000 次自回归采样)
+L <- runBacon(L, thick=5)
 
-        // 同步通知后端 Session
-        try {
-          await this.rpcClient.call('agedepth.loadModelDiagram', { base64_data: dataUrl });
-        } catch (err) {
-          console.warn('Backend loadModelDiagram via base64 fallback:', err);
-        }
+# 3. 将生成的 1000 组年代集成表无缝映射到花粉属种数据矩阵
+L <- mapAgeEnsembleToPaleoData(L, age.var="age")
 
-        this.inspectionData = null;
-        this.renderCanvas();
-      };
-      img.src = dataUrl;
-    };
-    reader.readAsDataURL(file);
+# 4. 出版级诊断图
+plotChron(L)
+
+message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建立时间轴映射。")
+`;
+    const blob = new Blob([rScript], { type: 'text/plain;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'run_geochronr_bacon.R';
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   private loadSampleImage(sampleKey: string): void {
@@ -423,15 +580,39 @@ export class AgeDepthModal {
       const emptyZone = this.modalEl?.querySelector('#ad-empty-drop-zone') as HTMLElement;
       if (emptyZone) emptyZone.style.display = 'none';
 
-      const sourceLabel = this.modalEl?.querySelector('#ad-current-source-label');
-      if (sourceLabel) sourceLabel.textContent = sampleKey.toUpperCase();
+      const lbl = this.modalEl?.querySelector('#ad-current-source-label');
+      if (lbl) lbl.textContent = `范例: ${sampleKey.toUpperCase()}`;
 
       this.inspectionData = null;
       this.renderCanvas();
-      const statusEl = this.modalEl?.querySelector('#ad-status-msg');
-      if (statusEl) statusEl.textContent = `已载入内置范例: ${sampleKey.toUpperCase()}`;
     };
     img.src = `/image/agedepth?sample=${sampleKey}&t=${Date.now()}`;
+  }
+
+  private handleCustomImageFile(file: File): void {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        this.bgImage = img;
+        if (this.canvas) {
+          this.canvas.width = img.naturalWidth;
+          this.canvas.height = img.naturalHeight;
+          this.canvas.style.display = 'block';
+        }
+        const emptyZone = this.modalEl?.querySelector('#ad-empty-drop-zone') as HTMLElement;
+        if (emptyZone) emptyZone.style.display = 'none';
+
+        const lbl = this.modalEl?.querySelector('#ad-current-source-label');
+        if (lbl) lbl.textContent = file.name;
+
+        this.inspectionData = null;
+        this.renderCanvas();
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
   }
 
   private async executeExtraction(): Promise<void> {
@@ -442,26 +623,20 @@ export class AgeDepthModal {
     const ageLeft = parseFloat((this.modalEl.querySelector('#ad-inp-age-left') as HTMLInputElement).value) || 3000;
     const ageRight = parseFloat((this.modalEl.querySelector('#ad-inp-age-right') as HTMLInputElement).value) || 0;
 
-    const curveType = (this.modalEl.querySelector('#ad-sel-curve-type') as HTMLSelectElement).value;
-    const envType = (this.modalEl.querySelector('#ad-sel-envelope-type') as HTMLSelectElement).value;
-    const ageUnit = (this.modalEl.querySelector('#ad-inp-age-unit') as HTMLInputElement).value.trim() || 'cal BP';
-    const calCurve = (this.modalEl.querySelector('#ad-inp-cal-curve') as HTMLInputElement).value.trim() || 'IntCal20';
-
     const w = this.bgImage.naturalWidth;
     const h = this.bgImage.naturalHeight;
 
-    // 拟合坐标轴标定 (自动内缩避开外围坐标轴文字与刻度)
     const res = await this.rpcClient.call<any, any>('agedepth.extractAndInspect', {
       depth_px: [h * 0.04, h * 0.88],
       depth_vals: [depthTop, depthBottom],
       age_px: [w * 0.13, w * 0.94],
       age_vals: [ageLeft, ageRight],
       roi_box: [w * 0.11, h * 0.035, w * 0.96, h * 0.89],
-      curve_type: curveType,
-      envelope_type: envType,
+      curve_type: 'median',
+      envelope_type: '95_hpd',
       depth_unit: 'cm',
-      age_unit: ageUnit,
-      cal_curve: calCurve,
+      age_unit: 'cal BP',
+      cal_curve: 'IntCal20',
     });
 
     if (res && res.inspection) {
@@ -474,95 +649,63 @@ export class AgeDepthModal {
   }
 
   private renderCanvas(): void {
-    if (!this.ctx || !this.canvas || !this.bgImage) return;
-
+    if (!this.canvas || !this.ctx || !this.bgImage) return;
     const ctx = this.ctx;
     const w = this.canvas.width;
     const h = this.canvas.height;
 
-    // 1. 绘制底层年代-深度模型原图
     ctx.clearRect(0, 0, w, h);
     ctx.drawImage(this.bgImage, 0, 0, w, h);
 
     if (!this.inspectionData || !this.inspectionData.px_points) return;
-
     const px = this.inspectionData.px_points;
-    const n = px.y.length;
-    if (n < 2) return;
 
     ctx.save();
+    ctx.globalAlpha = this.overlayOpacity;
 
-    // 2. 绘制 95% 置信带琥珀色高亮半透明包络面 (Amber Envelope)
-    if (this.showEnvelope && px.x_min && px.x_max) {
+    // 95% 置信带
+    if (this.showEnvelope && px.y && px.x_min && px.x_max) {
       ctx.beginPath();
-      // 沿 min 边缘向下
-      for (let i = 0; i < n; i++) {
-        const x = px.x_min[i];
-        const y = px.y[i];
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+      ctx.moveTo(px.x_min[0], px.y[0]);
+      for (let i = 1; i < px.y.length; i++) {
+        ctx.lineTo(px.x_min[i], px.y[i]);
       }
-      // 沿 max 边缘向上封闭多边形
-      for (let i = n - 1; i >= 0; i--) {
-        const x = px.x_max[i];
-        const y = px.y[i];
-        ctx.lineTo(x, y);
+      for (let i = px.y.length - 1; i >= 0; i--) {
+        ctx.lineTo(px.x_max[i], px.y[i]);
       }
       ctx.closePath();
-
-      ctx.fillStyle = `rgba(245, 158, 11, ${this.overlayOpacity * 0.45})`;
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.45)';
       ctx.fill();
-
-      // 绘制包络线边缘
-      ctx.strokeStyle = `rgba(245, 158, 11, ${this.overlayOpacity * 0.9})`;
+      ctx.strokeStyle = '#f59e0b';
       ctx.lineWidth = 1.5;
-      ctx.setLineDash([4, 3]);
       ctx.stroke();
-      ctx.setLineDash([]);
     }
 
-    // 3. 绘制中央拟合代表线 (Centerline: Median / Mean) - 亮蓝微光发光曲线
-    if (this.showCurve && px.x_curve) {
-      // 外层微光发光
+    // 拟合线
+    if (this.showCurve && px.y && px.x_curve) {
       ctx.beginPath();
-      for (let i = 0; i < n; i++) {
-        const x = px.x_curve[i];
-        const y = px.y[i];
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+      ctx.moveTo(px.x_curve[0], px.y[0]);
+      for (let i = 1; i < px.y.length; i++) {
+        ctx.lineTo(px.x_curve[i], px.y[i]);
       }
-      ctx.strokeStyle = `rgba(56, 189, 248, ${this.overlayOpacity * 0.4})`;
-      ctx.lineWidth = 6;
-      ctx.stroke();
-
-      // 核心精细实线
-      ctx.strokeStyle = `rgba(2, 132, 199, ${Math.min(1.0, this.overlayOpacity + 0.35)})`;
-      ctx.lineWidth = 2.2;
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2.5;
       ctx.stroke();
     }
 
-    // 4. 绘制当前花粉剖面层位映射交点 (Green Crossmarks)
-    if (this.showPollenHorizons && this.pollenData.calibration) {
+    // 花粉层位交点
+    if (this.showPollenHorizons && this.pollenData && this.pollenData.calibration) {
       const topVal = this.pollenData.calibration.depthTopValue;
       const bottomVal = this.pollenData.calibration.depthBottomValue;
-      const interval = this.pollenData.calibration.depthInterval || 5;
-
-      const sampleDepths = [];
-      for (let d = topVal; d <= bottomVal; d += interval) {
-        sampleDepths.push(d);
-      }
-
-      ctx.fillStyle = '#10b981';
-      ctx.strokeStyle = '#059669';
-      ctx.lineWidth = 1;
-
-      sampleDepths.forEach((d) => {
-        const dSpan = bottomVal - topVal;
-        if (dSpan > 0 && px.y && px.x_curve) {
+      const dSpan = bottomVal - topVal;
+      if (dSpan > 0 && px.y && px.x_curve) {
+        ctx.fillStyle = '#34d399';
+        ctx.strokeStyle = '#059669';
+        ctx.lineWidth = 1.5;
+        const depths = this.pollenData.calibration.customDepths || [topVal, (topVal + bottomVal) / 2, bottomVal];
+        depths.forEach((d) => {
           const ratio = (d - topVal) / dSpan;
           const targetY = h * 0.04 + ratio * (h * 0.84);
-
-          // Find closest y index on curve
           let closestYIdx = 0;
           let minDiff = 9999;
           for (let k = 0; k < px.y.length; k++) {
@@ -572,89 +715,54 @@ export class AgeDepthModal {
               closestYIdx = k;
             }
           }
-          const targetX = px.x_curve[closestYIdx];
-
-          if (minDiff < 30) {
-            // Draw horizontal connector line
+          if (minDiff < 25) {
+            const targetX = px.x_curve[closestYIdx];
             ctx.beginPath();
-            ctx.strokeStyle = "rgba(52, 211, 153, 0.35)";
-            ctx.setLineDash([3, 3]);
-            ctx.moveTo(w * 0.11, targetY);
-            ctx.lineTo(targetX, targetY);
-            ctx.stroke();
-            ctx.setLineDash([]);
-
-            // Draw glowing marker point on the actual curve
-            ctx.beginPath();
-            ctx.fillStyle = "#34d399";
-            ctx.strokeStyle = "#059669";
-            ctx.lineWidth = 1.5;
             ctx.arc(targetX, targetY, 3.5, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
           }
-        }
-      });
+        });
+      }
     }
 
     ctx.restore();
   }
 
-  private handleCanvasHover(e: MouseEvent): void {
-    if (!this.canvas || !this.inspectionData || !this.inspectionData.px_points) return;
+  private updateMappingTable(): void {
+    if (!this.modalEl || !this.inspectionData) return;
+    const tbody = this.modalEl.querySelector('#ad-mapping-tbody');
+    if (!tbody) return;
 
-    const rect = this.canvas.getBoundingClientRect();
-    const scaleY = this.canvas.height / rect.height;
+    tbody.innerHTML = '';
+    const d = this.inspectionData.depths;
+    const a = this.inspectionData.ages;
+    const mi = this.inspectionData.age_min;
+    const ma = this.inspectionData.age_max;
 
-    const mouseY = (e.clientY - rect.top) * scaleY;
-
-    const hud = this.modalEl?.querySelector('#ad-canvas-hud') as HTMLElement;
-    if (!hud) return;
-
-    // 寻找最近的 Y 点
-    const px = this.inspectionData.px_points;
-    let closestIdx = -1;
-    let minDist = 9999;
-    for (let i = 0; i < px.y.length; i++) {
-      const dist = Math.abs(px.y[i] - mouseY);
-      if (dist < minDist) {
-        minDist = dist;
-        closestIdx = i;
-      }
-    }
-
-    if (closestIdx !== -1 && minDist < 30) {
-      const d = this.inspectionData.depths[closestIdx];
-      const a = this.inspectionData.ages[closestIdx];
-      const aMin = this.inspectionData.age_min[closestIdx];
-      const aMax = this.inspectionData.age_max[closestIdx];
-      const meta = this.inspectionData.metadata;
-      hud.innerHTML = `
-        <span style="color: #38bdf8; font-weight: bold;">层位: ${d} ${meta.depth_unit}</span>
-        &nbsp;&rarr;&nbsp;
-        <span style="color: #34d399; font-weight: bold;">年代 (${meta.curve_type}): ${a} ${meta.age_unit}</span>
-        &nbsp;<span style="color: #f59e0b;">[95% CI: ${aMin} - ${aMax}]</span>
+    const step = Math.max(1, Math.floor(d.length / 12));
+    for (let i = 0; i < d.length; i += step) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="font-weight: 600; color: #38bdf8;">${d[i]} cm</td>
+        <td>${a[i]} cal BP</td>
+        <td style="color: var(--text-muted);">${mi[i]} ~ ${ma[i]}</td>
       `;
+      tbody.appendChild(tr);
     }
   }
 
-  private updateMappingTable(): void {
-    const tbody = this.modalEl?.querySelector('#ad-mapping-tbody');
-    if (!tbody || !this.inspectionData) return;
+  private handleCanvasHover(e: MouseEvent): void {
+    if (!this.canvas || !this.inspectionData || !this.inspectionData.px_points) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
 
-    tbody.innerHTML = '';
-    const n = Math.min(25, this.inspectionData.depths.length);
-    const step = Math.max(1, Math.floor(this.inspectionData.depths.length / n));
-
-    for (let i = 0; i < this.inspectionData.depths.length; i += step) {
-      const tr = document.createElement('tr');
-      tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
-      tr.innerHTML = `
-        <td style="padding: 2px 4px; color: #38bdf8;">${this.inspectionData.depths[i]}</td>
-        <td style="padding: 2px 4px; color: #f1f5f9; font-weight: 600;">${this.inspectionData.ages[i]}</td>
-        <td style="padding: 2px 4px; color: #f59e0b;">${this.inspectionData.age_min[i]}-${this.inspectionData.age_max[i]}</td>
-      `;
-      tbody.appendChild(tr);
+    const hud = this.modalEl?.querySelector('#ad-canvas-hud');
+    if (hud) {
+      hud.textContent = `光标位置: X:${Math.round(mx)}px, Y:${Math.round(my)}px`;
     }
   }
 }

@@ -1571,6 +1571,81 @@ class StraditizeSession:
         self._record_history("Detect columns")
         return res
 
+    def extract_horizon_consensus(
+        self,
+        tolerance_px: float = 2.5,
+        min_taxa_support: int = 1,
+    ) -> dict[str, Any]:
+        """Discovers authentic historical sampling horizons by clustering turning points across all taxa.
+
+        Reverses the original sampling levels by identifying vertical Y coordinates where
+        multiple taxa simultaneously exhibit curvature extrema or inflection corners.
+        Eliminates subjective equidistant pseudo-resampling.
+        """
+        if not self.columns:
+            raise JsonRpcError(STATE_ERROR, "No columns detected.")
+
+        for c_idx in range(len(self.columns)):
+            if c_idx not in self.column_points:
+                self.digitize(c_idx, "area")
+
+        try:
+            from scipy.signal import find_peaks
+        except ImportError:
+            find_peaks = None
+
+        all_turning_rows: list[int] = []
+
+        for c_idx, pts in self.column_points.items():
+            if not pts or len(pts) < 5:
+                continue
+            rows = np.array([p["row"] for p in pts], dtype=int)
+            xs = np.array([p["x"] for p in pts], dtype=float)
+
+            dyn_range = float(np.ptp(xs)) if len(xs) > 0 else 1.0
+            prominence = max(1.0, dyn_range * 0.04)
+
+            peaks_idx: list[int] = []
+            valleys_idx: list[int] = []
+            if find_peaks is not None and len(xs) > 5:
+                p_idx, _ = find_peaks(xs, prominence=prominence, distance=3)
+                v_idx, _ = find_peaks(-xs, prominence=prominence, distance=3)
+                peaks_idx = list(p_idx)
+                valleys_idx = list(v_idx)
+
+            turning_rows = list(rows[peaks_idx]) + list(rows[valleys_idx])
+            all_turning_rows.extend(turning_rows)
+
+        if not all_turning_rows:
+            return {"horizons_count": 0, "pixel_y": [], "depths": []}
+
+        # Cluster vertical coordinates within tolerance
+        all_turning_rows.sort()
+        clusters: list[list[int]] = []
+        for r in all_turning_rows:
+            if not clusters or abs(r - float(np.mean(clusters[-1]))) > tolerance_px:
+                clusters.append([r])
+            else:
+                clusters[-1].append(r)
+
+        consensus_rows = [
+            int(round(float(np.mean(cl))))
+            for cl in clusters
+            if len(cl) >= min_taxa_support
+        ]
+
+        depths: list[float] = []
+        if self.is_calibrated and self.y_scale is not None:
+            sy = self.y_scale["slope"]
+            iy = self.y_scale["intercept"]
+            depths = [round(sy * r + iy, 4) for r in consensus_rows]
+
+        return {
+            "horizons_count": len(consensus_rows),
+            "pixel_y": consensus_rows,
+            "depths": depths,
+        }
+
     def algorithm_extract_turning_points(
         self,
         col_index: int | None = None,

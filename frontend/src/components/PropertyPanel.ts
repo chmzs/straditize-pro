@@ -186,8 +186,8 @@ export class PropertyPanel {
             <div class="form-group" style="margin: 0;">
               <label style="font-size: 11px; font-weight: bold; color: var(--text-primary);">Dataset (数据集形态):</label>
               <select id="wpd-dataset-select" class="sample-select" style="width: 100%; font-size: 11px;">
-                <option value="depth_grid" selected>1. 标准深度层位网格 [推荐: 无NA/全属种对齐]</option>
-                <option value="union_points">2. 全属种特征层位并集矩阵 [无NA/极值全捕获]</option>
+                <option value="union_points" selected>1. 真实物理拐点共振层位 [推荐: 忠实原图/无伪插值]</option>
+                <option value="depth_grid">2. 参考标尺均匀层位 [用于等距辅助测试]</option>
                 <option value="turning_points">3. 离散拐点稀疏特征清单 [原始坐标表]</option>
               </select>
             </div>

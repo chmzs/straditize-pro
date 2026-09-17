@@ -376,11 +376,18 @@ def extract_age_depth_model(
 def generate_bacon_script(
     core_name: str,
     dates: list[dict[str, Any]],
-    thickness: int = 5,
+    thickness: float = 5.0,
     cc: int = 1,
     sample_depths: list[float] | None = None,
+    hiatus_depths: list[float] | None = None,
+    hiatus_max: float | None = None,
+    slumps: list[list[float]] | list[tuple[float, float]] | None = None,
+    d_r: float | None = None,
+    d_std: float | None = None,
+    acc_mean: float | None = None,
+    mem_mean: float = 0.7,
 ) -> str:
-    """Generates an automated rbacon R modeling script that runs MCMC and outputs age ensembles.
+    """Generates an automated rbacon R modeling script supporting complex stratigraphic phenomena.
 
     Parameters
     ----------
@@ -391,9 +398,21 @@ def generate_bacon_script(
     thickness:
         Bacon section thickness (default: 5 cm).
     cc:
-        Calibration curve (1 = IntCal20 Northern Hemisphere, 2 = Marine20, 3 = SHCal20).
+        Calibration curve (1 = IntCal20 Northern Hemisphere, 2 = Marine20, 3 = SHCal20, 0 = Non-14C).
     sample_depths:
         Optional list of depths to evaluate and extract full MCMC ensembles.
+    hiatus_depths:
+        Optional list of depths (cm) where sedimentary hiatuses / unconformities occurred.
+    hiatus_max:
+        Prior maximum duration of the hiatus in years (default in Bacon: 10000).
+    slumps:
+        List of [top, bottom] depth intervals representing instantaneous events (tephra, turbidite, slump).
+    d_r, d_std:
+        Local carbon reservoir offset (Delta R) and uncertainty in 14C years.
+    acc_mean:
+        Optional user override for prior accumulation rate (yr/cm). If None, Bacon auto-estimates from dates.
+    mem_mean:
+        Memory/autocorrelation prior (0.1 to 0.9, default 0.7).
     """
     csv_rows = ["id,age,error,depth,thickness"]
     for d in dates:
@@ -411,12 +430,37 @@ target_depths <- c({d_str})
 write.table(target_depths, file.path(core_dir, "{core_name}_depths.txt"), row.names=FALSE, col.names=FALSE)
 """
 
+    extra_args = []
+    if hiatus_depths:
+        h_str = ", ".join(str(round(h, 2)) for h in hiatus_depths)
+        extra_args.append(f"hiatus.depths=c({h_str})")
+        if hiatus_max:
+            extra_args.append(f"hiatus.max={hiatus_max}")
+
+    if slumps:
+        s_parts = []
+        for s in slumps:
+            s_parts.append(f"c({s[0]}, {s[1]})")
+        extra_args.append(f"slump=c({', '.join(s_parts)})")
+
+    if d_r is not None and d_std is not None:
+        extra_args.append(f"d.R={d_r}, d.STD={d_std}")
+
+    if acc_mean is not None:
+        extra_args.append(f"acc.mean={acc_mean}")
+
+    if mem_mean != 0.7:
+        extra_args.append(f"mem.mean={mem_mean}")
+
+    extra_args_str = ", " + ", ".join(extra_args) if extra_args else ""
+
     return f"""# ==============================================================================
-# Automated Bayesian Age-Depth Modelling with rbacon
+# Automated Bayesian Age-Depth Modelling with rbacon (Blaauw & Christen 2011)
 # Core: {core_name}
 # ==============================================================================
 
 if (!requireNamespace("rbacon", quietly=TRUE)) {{
+  message("Package 'rbacon' is not installed. Installing from CRAN...")
   install.packages("rbacon", repos="https://cloud.r-project.org")
 }}
 library(rbacon)
@@ -424,13 +468,105 @@ library(rbacon)
 core_dir <- file.path("Cores", "{core_name}")
 dir.create(core_dir, recursive=TRUE, showWarnings=FALSE)
 
-# Write dating information
+# 1. Write dating information
 csv_content <- "{csv_payload}"
 cat(csv_content, file=file.path(core_dir, "{core_name}.csv"))
 {depths_snippet}
-# Run Bacon MCMC modelling
-info <- Bacon("{core_name}", thick={thickness}, cc={cc}, depths.file={str(bool(sample_depths)).upper()}, ask=FALSE, run=TRUE)
+# 2. Run Bacon MCMC modelling with stratigraphic controls
+message("Running Bacon Bayesian MCMC modeling (default 1,500,000 iterations)...")
+info <- Bacon("{core_name}", thick={thickness}, cc={cc}, depths.file={str(bool(sample_depths)).upper()}, ask=FALSE, run=TRUE{extra_args_str})
 
-# Output summary statistics and sample age estimates
-message("Age-depth modeling complete. Age-depth summary saved to: ", file.path(core_dir, "{core_name}_ages.txt"))
+# 3. Output summary statistics and sample age estimates
+message("Age-depth modeling complete. Results saved to: ", file.path(core_dir, "{core_name}_ages.txt"))
 """
+
+
+def generate_geochronr_script(
+    lipd_file_name: str,
+    site_name: str = "PollenSite",
+    thickness: float = 5.0,
+    hiatus_depths: list[float] | None = None,
+) -> str:
+    """Generates downstream R script for geoChronR (McKay et al. 2021) native integration."""
+    hiatus_str = ""
+    if hiatus_depths:
+        h_str = ", ".join(str(round(h, 2)) for h in hiatus_depths)
+        hiatus_str = f", hiatus.depths=c({h_str})"
+
+    return f"""# ==============================================================================
+# Downstream Bayesian Chronology Integration with geoChronR (McKay et al. 2021)
+# Reads Straditize Pro LiPD Container and runs Bacon/Bchron MCMC
+# ==============================================================================
+
+if (!requireNamespace("geoChronR", quietly=TRUE)) {{
+  message("Installing geoChronR and lipdR from GitHub / CRAN...")
+  if (!requireNamespace("remotes", quietly=TRUE)) install.packages("remotes")
+  remotes::install_github("nickmckay/geoChronR")
+}}
+library(geoChronR)
+
+# 1. Load Straditize Pro LiPD File
+lipd_file <- "{lipd_file_name}"
+message("Reading LiPD package: ", lipd_file)
+L <- readLipd(lipd_file)
+
+# 2. Run Bacon MCMC Age Modeling natively on LiPD chronData
+message("Running geoChronR::runBacon...")
+L <- runBacon(L, thick={thickness}{hiatus_str})
+
+# 3. Map MCMC Age Ensemble directly onto Pollen PaleoData
+message("Mapping age ensemble to pollen matrix...")
+L <- mapAgeEnsembleToPaleoData(L, age.var="age")
+
+# 4. Diagnostic Plot
+plotChron(L)
+
+# 5. Export Updated LiPD package with full MCMC ensemble
+writeLipd(L, path=dirname(lipd_file))
+message("Updated LiPD container with MCMC age ensembles successfully saved!")
+"""
+
+
+def check_local_r_environment() -> dict[str, Any]:
+    """Detects local R installation and available geochronology packages (rbacon, geoChronR)."""
+    import shutil
+    import subprocess
+
+    rscript_path = shutil.which("Rscript")
+    if not rscript_path:
+        return {
+            "has_r": False,
+            "rscript_path": None,
+            "has_rbacon": False,
+            "has_geochronr": False,
+            "r_version": None,
+        }
+
+    cmd = [
+        rscript_path,
+        "-e",
+        "cat(R.version.string, '\\n'); cat('rbacon:', requireNamespace('rbacon', quietly=TRUE), '\\n'); cat('geoChronR:', requireNamespace('geoChronR', quietly=TRUE), '\\n')",
+    ]
+
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=8.0, check=False)
+        out = res.stdout
+        has_rbacon = "rbacon: TRUE" in out
+        has_geochronr = "geoChronR: TRUE" in out
+        version_line = out.splitlines()[0] if out.splitlines() else "R"
+
+        return {
+            "has_r": True,
+            "rscript_path": rscript_path,
+            "has_rbacon": has_rbacon,
+            "has_geochronr": has_geochronr,
+            "r_version": version_line,
+        }
+    except Exception:
+        return {
+            "has_r": True,
+            "rscript_path": rscript_path,
+            "has_rbacon": False,
+            "has_geochronr": False,
+            "r_version": "Unknown",
+        }
