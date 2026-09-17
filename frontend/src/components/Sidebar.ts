@@ -174,7 +174,7 @@ export class Sidebar {
   private bindEvents(): void {
     // 0. 折叠侧边栏与紧凑/卡片视图切换
     this.element.querySelector('#btn-collapse-sidebar')?.addEventListener('click', () => {
-      this.toggleCollapse();
+      this.callbacks.onToggleCollapse?.(true);
     });
 
     this.element.querySelector('#btn-toggle-compact')?.addEventListener('click', () => {

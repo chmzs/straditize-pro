@@ -415,6 +415,9 @@ async function bootstrap() {
         setHudNotice(`🔀 已对调属种顺位: ${cols[idx1].name} 与 ${cols[idx2].name}`);
       }
     },
+    onToggleCollapse: (collapsed) => {
+      setSidebarCollapsed(collapsed);
+    },
     onInsertGapColumn: (afterTaxaId) => {
       const cols = canvasComponent.data.columns;
       const curIdx = cols.findIndex((c) => c.id === afterTaxaId);
