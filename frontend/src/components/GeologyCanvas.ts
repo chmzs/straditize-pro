@@ -1349,8 +1349,8 @@ export class GeologyCanvas {
         return { taxaId: col.id, type: 'tick', x: actualTickX };
       }
 
-      // 3. 列间隔离右界
-      if (col.endX > actualTickX + 4) {
+      // 3. 列间隔离右界 / 相邻两列公共分界线
+      if (col.endX > actualTickX + 2) {
         const endScreenX = this.viewport.worldToScreen({ x: col.endX, y: 0 }).x;
         if (Math.abs(screenPt.x - endScreenX) <= hitWidth) {
           return { taxaId: col.id, type: 'end', x: col.endX };

@@ -499,6 +499,43 @@ async function bootstrap() {
         updateFooter();
 
         setHudNotice(`✅ 成功载入图谱 [${file.name}] (${w}×${h})！请在画布上调整数据有效区 (Step 1)，随后点击下方推进。`, 5000);
+
+        // 异步执行微小倾斜检测提示 (Deskew Helper)
+        rpcClient.detectDeskew().then((skewRes) => {
+          if (skewRes && skewRes.has_skew && Math.abs(skewRes.suggested_rotation_angle) >= 0.3) {
+            const ang = skewRes.suggested_rotation_angle;
+            const banner = document.createElement('div');
+            banner.className = 'deskew-notice-banner';
+            banner.style.cssText = 'position: fixed; top: 52px; right: 20px; z-index: 9999;';
+            banner.innerHTML = `
+              <div style="background: rgba(15, 23, 42, 0.95); border: 1px solid #f59e0b; border-radius: 6px; padding: 8px 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); font-size: 11px; color: #f8fafc;">
+                <span>📐 <strong>图谱微斜提示</strong>: 检测到主轴倾斜约 <strong>${ang > 0 ? '+' : ''}${ang}°</strong>，是否自动水平矫正？</span>
+                <div style="display: flex; gap: 6px;">
+                  <button id="btn-deskew-apply" class="btn btn-primary" style="padding: 2px 8px; font-size: 10px; background: #f59e0b; border-color: #f59e0b;">旋转校正</button>
+                  <button id="btn-deskew-ignore" class="btn btn-secondary" style="padding: 2px 8px; font-size: 10px;">忽略</button>
+                </div>
+              </div>
+            `;
+            document.body.appendChild(banner);
+            banner.querySelector('#btn-deskew-apply')?.addEventListener('click', async () => {
+              banner.remove();
+              setHudNotice(`正在旋转矫正图谱 (${ang}°)...`, 5000);
+              const rotRes = await rpcClient.rotateImage(ang);
+              if (rotRes && rotRes.success) {
+                // 重新拉取图片数据
+                const refreshed = await rpcClient.getDiagramData();
+                canvasComponent.loadNewDiagram(refreshed);
+                history.reset([], '');
+                currentStage = 1;
+                updateWorkflowBar();
+                setHudNotice(`✅ 已水平矫正图谱！有效区已重置。`, 3500);
+              }
+            });
+            banner.querySelector('#btn-deskew-ignore')?.addEventListener('click', () => {
+              banner.remove();
+            });
+          }
+        });
       };
       img.src = dataUrl;
     };

@@ -95,6 +95,8 @@ def create_rpc_dispatcher(
     dispatcher.register_method("project.save", session.project_save)
 
     dispatcher.register_method("image.load", session.load_image)
+    dispatcher.register_method("image.detectDeskew", session.detect_deskew_angle)
+    dispatcher.register_method("image.rotate", session.rotate_image)
 
     dispatcher.register_method("roi.update", session.roi_update)
 

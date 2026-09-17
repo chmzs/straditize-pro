@@ -527,3 +527,40 @@ def split_primary_exagg(rgb: np.ndarray,
     candidate = remove_objects_smaller_than(candidate, 6)
     candidate = skim.remove_small_holes(candidate, max_size=12)
     return candidate
+
+
+def estimate_deskew_angle(pil_img: Image.Image, max_angle: float = 7.0) -> float:
+    """Estimates the tilt/skew angle (in degrees) of a stratigraphic diagram.
+
+    Uses a fast two-stage coarse-to-fine Radon transform on foreground projection.
+    Returns the angle in degrees that should be applied to rotate and level the diagram.
+    """
+    import warnings
+    from skimage.transform import radon
+
+    gray = pil_img.convert('L')
+    max_d = 260
+    if max(gray.width, gray.height) > max_d:
+        s = max_d / max(gray.width, gray.height)
+        gray = gray.resize((max(1, int(gray.width * s)), max(1, int(gray.height * s))), Image.Resampling.BILINEAR)
+    arr = np.array(gray)
+    binary = (arr < (np.mean(arr) * 0.9)).astype(float)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        # Stage 1: Coarse search step 0.5 deg
+        theta_coarse = np.arange(90 - max_angle, 90 + max_angle + 0.5, 0.5)
+        sino1 = radon(binary, theta=theta_coarse)
+        best_coarse = theta_coarse[np.argmax(np.var(sino1, axis=0))]
+
+        # Stage 2: Fine search +/- 0.6 deg with 0.05 step
+        theta_fine = np.arange(best_coarse - 0.6, best_coarse + 0.65, 0.05)
+        sino2 = radon(binary, theta=theta_fine)
+        best_fine = theta_fine[np.argmax(np.var(sino2, axis=0))]
+
+    skew = -(best_fine - 90.0)
+    # Filter negligible micro-tilt (< 0.25 degree)
+    if abs(skew) < 0.25:
+        return 0.0
+    return round(float(skew), 2)
+

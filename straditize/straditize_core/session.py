@@ -196,6 +196,46 @@ class StraditizeSession:
         new_h = max(1, round(self.height * scale))
         return self.image.resize((new_w, new_h), Image.Resampling.BILINEAR)
 
+    def detect_deskew_angle(self) -> dict[str, Any]:
+        """Detects whether the loaded diagram is tilted/skewed."""
+        if self.image is None:
+            raise JsonRpcError(STATE_ERROR, "No image loaded in session.")
+        from .image import estimate_deskew_angle
+
+        angle = estimate_deskew_angle(self.image)
+        return {
+            "has_skew": abs(angle) >= 0.25,
+            "suggested_rotation_angle": angle,
+        }
+
+    def rotate_image(self, angle: float) -> dict[str, Any]:
+        """Rotates the loaded diagram by angle degrees to correct tilt."""
+        if self.image is None:
+            raise JsonRpcError(STATE_ERROR, "No image loaded in session.")
+        if abs(angle) < 1e-4:
+            return {"success": True, "width": self.width, "height": self.height}
+
+        # Rotate with white background fill
+        self.image = self.image.rotate(
+            float(angle),
+            resample=Image.Resampling.BICUBIC,
+            expand=True,
+            fillcolor=(255, 255, 255, 255) if self.image.mode == "RGBA" else 255,
+        )
+        self.width, self.height = self.image.size
+        self.image_array = np.array(self.image)
+        self.foreground_mask = None
+        self.columns = []
+        self.column_points = {}
+        self.control_points = {}
+
+        return {
+            "success": True,
+            "angle": angle,
+            "width": self.width,
+            "height": self.height,
+        }
+
     def extract_foreground(
         self,
         threshold: float | None = None,

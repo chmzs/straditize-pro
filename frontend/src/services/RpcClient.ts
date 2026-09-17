@@ -355,6 +355,32 @@ export class RpcClient {
     return fallbackCols;
   }
 
+  public async detectDeskew(): Promise<{ has_skew: boolean; suggested_rotation_angle: number }> {
+    if (this.isMock) {
+      return { has_skew: false, suggested_rotation_angle: 0.0 };
+    }
+    try {
+      const res = await this.call<void, { has_skew: boolean; suggested_rotation_angle: number }>('image.detectDeskew');
+      return res || { has_skew: false, suggested_rotation_angle: 0.0 };
+    } catch (e) {
+      console.warn('Backend detectDeskew failed:', e);
+      return { has_skew: false, suggested_rotation_angle: 0.0 };
+    }
+  }
+
+  public async rotateImage(angle: number): Promise<{ success: boolean; width: number; height: number }> {
+    if (this.isMock) {
+      return { success: true, width: this.currentDiagramData.imageWidth, height: this.currentDiagramData.imageHeight };
+    }
+    try {
+      const res = await this.call<{ angle: number }, { success: boolean; width: number; height: number }>('image.rotate', { angle });
+      return res || { success: false, width: 0, height: 0 };
+    } catch (e) {
+      console.warn('Backend rotateImage failed:', e);
+      return { success: false, width: 0, height: 0 };
+    }
+  }
+
   public async updateControlPoint(
     colIndex: number,
     row: number,
