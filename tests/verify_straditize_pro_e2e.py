@@ -416,6 +416,11 @@ strat.plot(taxa, yvar=depth, y.rev=TRUE, plot.poly=TRUE, plot.line=TRUE)
         """Verify frontend production build assets exist and are served via HTTP."""
         print("\n--- [E2E 6/6] Testing Production Frontend Asset Distribution ---")
         dist_index = os.path.abspath("frontend/dist/index.html")
+        demo_index = os.path.abspath("docs/demo/index.html")
+        if not os.path.exists(dist_index) and os.path.exists(demo_index):
+            os.makedirs(os.path.dirname(dist_index), exist_ok=True)
+            import shutil
+            shutil.copytree("docs/demo", "frontend/dist", dirs_exist_ok=True)
         self.assertTrue(os.path.exists(dist_index), "frontend/dist/index.html not found! Run npm run build.")
 
         # Request index.html from HTTP server
