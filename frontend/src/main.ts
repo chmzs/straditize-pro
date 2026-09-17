@@ -384,15 +384,6 @@ async function bootstrap() {
         sidebar?.updateData(canvasComponent.data);
       }
     },
-    onChangeCurveType: (taxaId) => {
-      const col = canvasComponent.data.columns.find((c) => c.id === taxaId);
-      if (col) {
-        col.curveType = 'linear';
-        history.push(`Ensure Curve Linear`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
-        canvasComponent.requestRender();
-        sidebar?.updateData(canvasComponent.data);
-      }
-    },
     onUpdateTaxaColor: (taxaId, color) => {
       const col = canvasComponent.data.columns.find((c) => c.id === taxaId);
       if (col) {

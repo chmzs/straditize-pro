@@ -1901,12 +1901,12 @@ export class GeologyCanvas {
       } else {
         // 面积图 (Area) 或 纯折线图 (Line)
         if (pType === 'area') {
-          const areaPath = SplineInterpolator.buildAreaPath(sortedPoints, col.startX, col.curveType);
+          const areaPath = SplineInterpolator.buildAreaPath(sortedPoints, col.startX);
           ctx.fillStyle = isActive ? `${col.color}44` : `${col.color}1a`;
           ctx.fill(areaPath);
         }
 
-        const curvePath = SplineInterpolator.buildPath(sortedPoints, col.curveType);
+        const curvePath = SplineInterpolator.buildPath(sortedPoints);
         ctx.strokeStyle = col.color;
         ctx.lineWidth = (isActive ? 2.5 : 1.4) / scale;
         ctx.setLineDash([]);

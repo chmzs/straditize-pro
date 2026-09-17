@@ -2,11 +2,10 @@ import { Point2D, TaxaColumn, DiagramCalibration, DepthHorizon } from '../types/
 
 export class SplineInterpolator {
   /**
-   * 对一组控制点（按 Y 升序排列）构建平滑路径
+   * 对一组控制点（按 Y 升序排列）构建折线路径
    * @param points 控制点列表（已按 y 升序）
-   * @param type 'linear' 或 'bezier'
    */
-  public static buildPath(points: Point2D[], _type: 'linear' = 'linear'): Path2D {
+  public static buildPath(points: Point2D[], _type?: 'linear' | 'bezier'): Path2D {
     const path = new Path2D();
     if (points.length === 0) return path;
 
@@ -18,7 +17,7 @@ export class SplineInterpolator {
 
     path.moveTo(points[0].x, points[0].y);
 
-    // 默认且唯一采用严格折线连接真实拐点
+    // 严格折线连接各拐点
     for (let i = 1; i < points.length; i++) {
       path.lineTo(points[i].x, points[i].y);
     }
@@ -28,11 +27,7 @@ export class SplineInterpolator {
   /**
    * 构建花粉面积多边形路径（从基线 baselineX 出发，沿真实折线拐点前进，最后回到基线）
    */
-  public static buildAreaPath(
-    points: Point2D[],
-    baselineX: number,
-    _type: 'linear' = 'linear'
-  ): Path2D {
+  public static buildAreaPath(points: Point2D[], baselineX: number, _type?: 'linear' | 'bezier'): Path2D {
     const path = new Path2D();
     if (points.length < 2) return path;
 
@@ -49,10 +44,9 @@ export class SplineInterpolator {
       path.lineTo(points[i].x, points[i].y);
     }
 
-    // 从最后点回到基线
+    // 闭合到基线并回到底部起点
     path.lineTo(baselineX, last.y);
     path.closePath();
-
     return path;
   }
 

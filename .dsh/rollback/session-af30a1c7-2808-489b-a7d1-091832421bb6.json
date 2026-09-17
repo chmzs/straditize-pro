@@ -1,0 +1,96 @@
+{
+  "version": 2,
+  "sessionId": "session-af30a1c7-2808-489b-a7d1-091832421bb6",
+  "cwd": "I:\\software_dev\\straditize",
+  "updatedAt": 1789650415125,
+  "checkpoints": [
+    {
+      "turn": 104,
+      "commit": "6628b280f4bcdbb21627a9eb0fe68b1757a7a5c2",
+      "parent": "76e87e7d7d84d987383a8fe2b1f289b94e583101",
+      "time": 1789646157973,
+      "untracked": [
+        "audit_01_stage_s3_initial.png",
+        "audit_02_stage_s1_roi.png",
+        "audit_03_stage_s2_clean.png",
+        "audit_04_stage_s4_calibration.png",
+        "audit_05_stage_s5_refine.png",
+        "audit_06_stage_s6_verification.png",
+        "audit_07_stage_s7_export_modal.png",
+        "audit_08_inspector_drawer_tab.png",
+        "audit_09_agedepth_empty_upload_zone.png",
+        "real_click_step_1.png",
+        "real_click_step_2.png",
+        "real_click_step_4.png",
+        "real_click_step_6.png",
+        "real_click_step_7.png",
+        "tests/audit_full_workflow.py"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "e68e252510cef475eb8dc59c7a04b84382821322",
+        "time": 1789646361452
+      }
+    },
+    {
+      "turn": 105,
+      "commit": "b55dfaf727705c438a952f361d31c1a6d87ada2a",
+      "parent": "e68e252510cef475eb8dc59c7a04b84382821322",
+      "time": 1789647232236,
+      "untracked": [],
+      "truncated": false
+    },
+    {
+      "turn": 106,
+      "commit": "b55dfaf727705c438a952f361d31c1a6d87ada2a",
+      "parent": "b55dfaf727705c438a952f361d31c1a6d87ada2a",
+      "time": 1789647557079,
+      "untracked": [],
+      "truncated": false
+    },
+    {
+      "turn": 107,
+      "commit": "b55dfaf727705c438a952f361d31c1a6d87ada2a",
+      "parent": "b55dfaf727705c438a952f361d31c1a6d87ada2a",
+      "time": 1789647637276,
+      "untracked": [],
+      "truncated": false,
+      "after": {
+        "commit": "c316e6f37bf5895229838e01dffe9f9e2ba0ce92",
+        "time": 1789647901807
+      }
+    },
+    {
+      "turn": 108,
+      "commit": "82bfdf9ba2398a7e37bbd40fa25f402d9c680cb3",
+      "parent": "c316e6f37bf5895229838e01dffe9f9e2ba0ce92",
+      "time": 1789648905022,
+      "untracked": [],
+      "truncated": false
+    },
+    {
+      "turn": 109,
+      "commit": "82bfdf9ba2398a7e37bbd40fa25f402d9c680cb3",
+      "parent": "82bfdf9ba2398a7e37bbd40fa25f402d9c680cb3",
+      "time": 1789649027937,
+      "untracked": [],
+      "truncated": false,
+      "after": {
+        "commit": "53e8ac4337ecfbf3e4323f6fe5fd1811cf38f3fa",
+        "time": 1789650396077
+      }
+    },
+    {
+      "turn": 110,
+      "commit": "53e8ac4337ecfbf3e4323f6fe5fd1811cf38f3fa",
+      "parent": "53e8ac4337ecfbf3e4323f6fe5fd1811cf38f3fa",
+      "time": 1789650413326,
+      "untracked": [
+        "pyproject.toml"
+      ],
+      "truncated": false
+    }
+  ],
+  "rolls": [],
+  "undos": []
+}

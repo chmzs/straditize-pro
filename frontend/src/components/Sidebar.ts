@@ -4,7 +4,6 @@ import { PollenGlossary, TaxaParseResult } from '../core/PollenGlossary';
 export interface SidebarCallbacks {
   onSelectTaxa: (taxaId: string) => void;
   onToggleVisible: (taxaId: string) => void;
-  onChangeCurveType?: (taxaId: string, type: 'linear') => void;
   onUpdateTaxaColor: (taxaId: string, color: string) => void;
   onBatchImportTaxa?: (taxaNames: string[]) => void;
   onInsertGapColumn?: (afterTaxaId: string) => void;
@@ -47,7 +46,6 @@ export class Sidebar {
 
   public toggleCollapse(): boolean {
     this.setCollapsed(!this.isCollapsed);
-    this.callbacks.onToggleCollapse?.(this.isCollapsed);
     return this.isCollapsed;
   }
 

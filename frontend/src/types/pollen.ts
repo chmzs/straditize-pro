@@ -29,9 +29,9 @@ export interface Column {
   tickEndX: number;   // 刻度终点像素 X
   unit: string;
   isLocked: boolean;
-  curveType: 'linear';
   visible: boolean;
   controlPoints: Point[];
+  curveType?: 'linear' | 'bezier';
 
   scaleCalib?: {
     originX: number;

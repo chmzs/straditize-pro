@@ -1,0 +1,134 @@
+{
+  "version": 2,
+  "sessionId": "session-346f5003-8b89-4645-9ce1-8eefe0fbb8a1",
+  "cwd": "I:\\software_dev\\straditize",
+  "updatedAt": 1789654323551,
+  "checkpoints": [
+    {
+      "turn": 41,
+      "commit": "76e87e7d7d84d987383a8fe2b1f289b94e583101",
+      "parent": "76e87e7d7d84d987383a8fe2b1f289b94e583101",
+      "time": 1789640248684,
+      "untracked": [],
+      "truncated": false
+    },
+    {
+      "turn": 42,
+      "commit": "76e87e7d7d84d987383a8fe2b1f289b94e583101",
+      "parent": "76e87e7d7d84d987383a8fe2b1f289b94e583101",
+      "time": 1789643018305,
+      "untracked": [],
+      "truncated": false
+    },
+    {
+      "turn": 43,
+      "commit": "76e87e7d7d84d987383a8fe2b1f289b94e583101",
+      "parent": "76e87e7d7d84d987383a8fe2b1f289b94e583101",
+      "time": 1789644095283,
+      "untracked": [],
+      "truncated": false,
+      "after": {
+        "commit": "bbc6cbf49f9d02070bd61ab4a74446b6a1603c87",
+        "time": 1789647116663
+      }
+    },
+    {
+      "turn": 44,
+      "commit": "bbc6cbf49f9d02070bd61ab4a74446b6a1603c87",
+      "parent": "bbc6cbf49f9d02070bd61ab4a74446b6a1603c87",
+      "time": 1789647605620,
+      "untracked": [],
+      "truncated": false,
+      "after": {
+        "commit": "bc37bef59d9b5fff74b84756d5259dc643ff2552",
+        "time": 1789648767487
+      }
+    },
+    {
+      "turn": 45,
+      "commit": "bc37bef59d9b5fff74b84756d5259dc643ff2552",
+      "parent": "bc37bef59d9b5fff74b84756d5259dc643ff2552",
+      "time": 1789648959832,
+      "untracked": [],
+      "truncated": false
+    },
+    {
+      "turn": 46,
+      "commit": "9f9041a1bc66d048a06ee2b1effb90690853d4d2",
+      "parent": "bc37bef59d9b5fff74b84756d5259dc643ff2552",
+      "time": 1789649119444,
+      "untracked": [
+        "pyproject.toml"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "ec5f6fa21f0f19ad71771122b46598dd46cdc2f2",
+        "time": 1789651198203
+      }
+    },
+    {
+      "turn": 47,
+      "commit": "ec5f6fa21f0f19ad71771122b46598dd46cdc2f2",
+      "parent": "ec5f6fa21f0f19ad71771122b46598dd46cdc2f2",
+      "time": 1789651392028,
+      "untracked": [
+        "pyproject.toml",
+        "straditize_core/metadata/__init__.py",
+        "straditize_core/metadata/doi.py",
+        "straditize_core/metadata/exporter_lipd.py",
+        "straditize_core/metadata/exporter_xlsx.py",
+        "straditize_core/metadata/llm_extractor.py",
+        "straditize_core/metadata/pdf_parser.py"
+      ],
+      "truncated": false
+    },
+    {
+      "turn": 48,
+      "commit": "ec5f6fa21f0f19ad71771122b46598dd46cdc2f2",
+      "parent": "ec5f6fa21f0f19ad71771122b46598dd46cdc2f2",
+      "time": 1789651418061,
+      "untracked": [
+        "pyproject.toml",
+        "straditize_core/metadata/__init__.py",
+        "straditize_core/metadata/doi.py",
+        "straditize_core/metadata/exporter_lipd.py",
+        "straditize_core/metadata/exporter_xlsx.py",
+        "straditize_core/metadata/llm_extractor.py",
+        "straditize_core/metadata/pdf_parser.py"
+      ],
+      "truncated": false,
+      "after": {
+        "commit": "a0da2fb931fc2489a0e696d3d3c5ad42b9338d2d",
+        "time": 1789654318552
+      }
+    },
+    {
+      "turn": 49,
+      "commit": "a0da2fb931fc2489a0e696d3d3c5ad42b9338d2d",
+      "parent": "a0da2fb931fc2489a0e696d3d3c5ad42b9338d2d",
+      "time": 1789654318563,
+      "untracked": [
+        "docs/demo/assets/index-BPnagvBu.js",
+        "docs/demo/assets/index-BPnagvBu.js.map",
+        "docs/demo/assets/index-BdhZwhAH.css",
+        "docs/demo/assets/index-DAGOHVkv.js",
+        "docs/demo/assets/index-DAGOHVkv.js.map",
+        "docs/demo/assets/index-ldQq3r9W.js",
+        "docs/demo/assets/index-ldQq3r9W.js.map",
+        "docs/demo/assets/index-qvdMhU7d.css",
+        "frontend/src/components/MetadataModal.ts",
+        "pyproject.toml",
+        "straditize_core/metadata/__init__.py",
+        "straditize_core/metadata/doi.py",
+        "straditize_core/metadata/exporter_lipd.py",
+        "straditize_core/metadata/exporter_xlsx.py",
+        "straditize_core/metadata/llm_extractor.py",
+        "straditize_core/metadata/pdf_parser.py",
+        "tests/test_metadata_and_lipd.py"
+      ],
+      "truncated": false
+    }
+  ],
+  "rolls": [],
+  "undos": []
+}

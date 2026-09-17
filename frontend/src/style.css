@@ -656,7 +656,8 @@ body.theme-light .drawer-toggle-tab {
 }
 
 .drawer-toggle-tab.left-tab {
-  left: 0;
+  left: 0 !important;
+  right: auto !important;
   border-left: none;
   border-radius: 0 8px 8px 0;
   writing-mode: vertical-rl;

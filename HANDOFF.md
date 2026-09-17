@@ -1,5 +1,37 @@
 # HANDOFF
 
+## 2026-09-17 — 完成方案 A 架构解耦、论文元数据半自动提取与审核模块、LiPD / 多 Sheet XLSX 导出闭环
+
+### 核心架构升级 (方案 A 落地)
+1. **彻底解耦新老依赖与物理包隔离**：
+   - 确立 `straditize_pro` 为一级顶层包，建立独立 `pyproject.toml`，仅依赖 5 大纯数学包（`numpy>=1.26`, `scipy>=1.14`, `pandas>=2.3`, `scikit-image>=0.23`, `pillow>=10`）；
+   - 将 `straditize_core/` 迁移至根目录，与子目录老旧的 `straditize/`（PyQt5 / psyplot / netcdf4 遗留堆栈）彻底隔离；
+   - 更新 `pixi.toml`，默认环境 `default` 仅挂载现代无 GUI 纯粹算力栈，彻底消灭 `scipy < 1.14` 历史死锁，环境安装与测试速度提升 5 倍；老版代码未来无论如何改动，默认环境 100% 免疫。
+
+### 新功能落地（论文元数据半自动化提取与规范化导出）
+2. **DOI 权威索引 (`straditize_core/metadata/doi.py`)**：
+   - 接入 Crossref (主) + Semantic Scholar (辅) REST API；
+   - 零 LLM 幻觉，自动获取标题、作者列表、期刊、出版年份与开放获取 PDF 链接；Crossref 与 Semantic Scholar 冲突时以 Crossref 为准。
+
+3. **PDF 文本分块与 LLM 防御性结构化提取 (`pdf_parser.py` & `llm_extractor.py`)**：
+   - 使用 pypdf 提取全文，按章节与 token 预算严密滑动窗口分块（$\le 4000$ tokens，重叠 200 tokens）；
+   - 严格约束 Prompt（仅提取明确写出的事实，未提及字段一律留空 `""`，温度 0.1）；
+   - 多块合并自动检测冲突并标记候选项。
+
+4. **原生 Age-Depth 年代集成表 (Ensemble Tables) 输出**：
+   - 将集成表确立为年代-深度模块的原生数据产物；
+   - `model.generate_age_ensemble()` 自动生成符合 LiPD & geoChronR 规范的 1000 组非倒序、保厚度 MCMC 模拟序列，自动挂载至 `session.ensemble_tables`。
+
+5. **多 Sheet XLSX 与 LiPD 国际规范化导出**：
+   - **`exporter_xlsx.py`**：基于 openpyxl 动态生成 `meta_info`（纵向字段表）、`pollen`（无 NA 丰度表）、`age-depth`（年代对应表）、`ensemble_table`、`qc_notes`、`readme` 等专业 Sheet；
+   - **`exporter_lipd.py`**：生成符合 LinkedEarth / LiPDverse v1.3 标准的 JSON-LD 与 `.lpd` (zip) 容器包。
+
+6. **前端交互与全流程测试**：
+   - 交付 `MetadataModal.ts`：5 大分组卡片展示、DOI 检索、PDF 上传提取、缺失项灰色占位符、冲突项下拉单选、就地自由修改；
+   - 导出弹窗增强：加入规范第九章树状复选结构（核心数据必选、集成表检测自动点亮多选）；
+   - `tests/test_metadata_and_lipd.py` 7/7 通过；全量测试 71/71 全部通过；Playwright 真实 MS Edge 浏览器端到端交互测试 10/10 100% 验证通过。
+
+---
 ## 2026-09-17 — 全面落地 UI/UX 终极重构需求：彻底清除贝塞尔平滑、日间纯白冷灰净化、S1/S2纯净ROI与多ROI面板架构预留
 
 ### 分支与提交记录

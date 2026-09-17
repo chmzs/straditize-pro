@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "straditize-pro"
+version = "2.0.0"
+description = "Modern Geological & Stratigraphic Diagram Digitizer Core"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "GPL-3.0-or-later" }
+authors = [
+    { name = "chmzs", email = "chmzs@outlook.com" }
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.14",
+    "pandas>=2.3",
+    "scikit-image>=0.23",
+    "pillow>=10",
+    "openpyxl>=3.1",
+    "pypdf>=4.0",
+]
+
+[project.scripts]
+straditize = "straditize_core.rpc_server:main"
+straditize-cli = "straditize_core.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["straditize_core*"]
+exclude = ["straditize*", "frontend*", "tests*"]
