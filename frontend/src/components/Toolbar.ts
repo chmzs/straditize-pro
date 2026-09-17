@@ -27,6 +27,7 @@ export interface ToolbarCallbacks {
   onOpenProjectFile?: (file: File) => void;
   onOpenAgeDepthModal?: () => void;
   onOpenMetadataModal?: () => void;
+  onOpenOcrReviewModal?: () => void;
   onToggleSidebar?: () => void;
   onToggleInspector?: () => void;
   onStepClick?: (step: number) => void;
@@ -278,6 +279,11 @@ export class Toolbar {
           <span>📄 元数据</span>
         </button>
 
+        <!-- 花粉属种名 OCR 自动识别与审核入口 -->
+        <button id="btn-ocr-review-modal" class="tool-btn" title="自动识别图谱顶部属种名与中拉学名审核汇总表" style="padding: 3px 6px; font-size: 10.5px; color: #10b981; border-color: rgba(16, 185, 129, 0.4);">
+          <span>🔍 OCR</span>
+        </button>
+
         <!-- 年代-深度模型视觉检查与解译入口 -->
         <button id="btn-age-depth-modal" class="tool-btn" title="解译并视觉核查同剖面年代-深度模型 (Bacon / Bchron 等)" style="padding: 3px 6px; font-size: 10.5px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.4);">
           <span>⏳ 年代</span>
@@ -364,6 +370,7 @@ export class Toolbar {
     this.element.querySelector('#btn-digitize')?.addEventListener('click', () => this.callbacks.onDigitize());
     this.element.querySelector('#btn-calibrate')?.addEventListener('click', () => this.callbacks.onOpenCalibrationModal());
     this.element.querySelector('#btn-metadata-modal')?.addEventListener('click', () => this.callbacks.onOpenMetadataModal?.());
+    this.element.querySelector('#btn-ocr-review-modal')?.addEventListener('click', () => this.callbacks.onOpenOcrReviewModal?.());
     this.element.querySelector('#btn-age-depth-modal')?.addEventListener('click', () => this.callbacks.onOpenAgeDepthModal?.());
     this.element.querySelector('#btn-export-csv')?.addEventListener('click', () => this.callbacks.onExport('csv'));
     this.element.querySelector('#btn-export-json')?.addEventListener('click', () => this.callbacks.onExport('json'));
