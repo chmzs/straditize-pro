@@ -95,7 +95,6 @@ def create_rpc_dispatcher(
     dispatcher.register_method("project.save", session.project_save)
 
     dispatcher.register_method("image.load", session.load_image)
-    dispatcher.register_method("image.getTile", session.image_get_tile)
 
     dispatcher.register_method("roi.update", session.roi_update)
 
@@ -445,8 +444,8 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
                 self.broadcaster.remove_listener(q)
             return
 
-        # 3. Current loaded image binary stream, tile slice, or preview endpoints
-        if raw_path in ("/image/tile", "/api/image/tile", "/image/slice"):
+        # 3. Current loaded image preview endpoint
+        if raw_path in ("/image/slice", "/api/image/slice"):
             if (
                 hasattr(self, "session")
                 and self.session

@@ -12,7 +12,7 @@ Verifies the complete requirements according to the client opinion checklist:
    - Log scale strict constraint check (startValue > 0 && tickValue > 0 && startValue != tickValue)
 4. Extreme large image performance:
    - PIL decompression bomb limit bypassed (Image.MAX_IMAGE_PIXELS is None)
-   - /image/slice, /image/tile, /image/preview HTTP endpoints
+   - /image/slice, /image/preview HTTP endpoints
    - Memory safety for >16M pixel images (avoiding eager 2GB+ numpy array allocation)
 5. Geological digitization & extraction workflow:
    - core.loadImage -> core.detectColumns -> core.digitize -> core.batchSetTaxa -> core.applyDepthGrid -> core.extractGridValues

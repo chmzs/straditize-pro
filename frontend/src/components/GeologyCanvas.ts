@@ -5,6 +5,7 @@ import { HistoryManager } from '../core/HistoryManager';
 import { ToolModeManager } from '../core/ToolModeManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { tokens } from '../styles/tokens';
+import { Minimap } from './Minimap';
 import {
   AddPointCommand,
   DeletePointCommand,
@@ -19,6 +20,7 @@ export interface CanvasEventCallbacks {
   onStatusNotice?: (text: string) => void;
   onOpenCalibration?: () => void;
   onToolModeChange?: (mode: ToolMode) => void;
+  onOpenFileDialog?: () => void;
 }
 
 export class GeologyCanvas {
@@ -26,6 +28,9 @@ export class GeologyCanvas {
   private ctx: CanvasRenderingContext2D;
   private container: HTMLElement;
   private dropOverlay: HTMLElement | null = null;
+  private emptyStateOverlay: HTMLElement | null = null;
+  private minimap: Minimap | null = null;
+  private floatingToolbar: HTMLElement | null = null;
 
   public viewport: Viewport;
   public history: HistoryManager;
@@ -90,12 +95,23 @@ export class GeologyCanvas {
     this.container.appendChild(this.canvas);
 
     this.createDropOverlay();
+    this.initEmptyState();
+    this.createFloatingToolbar();
 
     const context = this.canvas.getContext('2d');
     if (!context) throw new Error('Cannot get 2D context from canvas');
     this.ctx = context;
 
     this.viewport = new Viewport();
+
+    this.minimap = new Minimap(this.container, {
+      onNavigate: (worldX, worldY) => {
+        const rect = this.canvas.getBoundingClientRect();
+        this.viewport.panX = rect.width / 2 - worldX * this.viewport.scale;
+        this.viewport.panY = rect.height / 2 - worldY * this.viewport.scale;
+        this.requestRender();
+      },
+    });
 
     this.initEventListeners();
     this.handleResize();
@@ -113,9 +129,72 @@ export class GeologyCanvas {
   public setToolMode(mode: ToolMode): void {
     this.toolModeManager.setMode(mode);
     this.updateCursor();
+    if (this.floatingToolbar) {
+      this.floatingToolbar.querySelectorAll('[data-fmode]').forEach((el) => {
+        if (el.getAttribute('data-fmode') === mode) {
+          el.classList.add('active-mode');
+        } else {
+          el.classList.remove('active-mode');
+        }
+      });
+    }
     if (this.callbacks.onToolModeChange) {
       this.callbacks.onToolModeChange(mode);
     }
+  }
+
+  private createFloatingToolbar(): void {
+    const palette = document.createElement('div');
+    palette.className = 'floating-tool-palette';
+    palette.innerHTML = `
+      <button class="floating-tool-btn active-mode" data-fmode="select" title="选择与微调模式 (快捷键: V)">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
+        </svg>
+        <span>选择</span>
+      </button>
+      <button class="floating-tool-btn" data-fmode="pan" title="平移抓手模式 (快捷键: H 或按住空格/中键拖动)">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
+        </svg>
+        <span>平移</span>
+      </button>
+      <button class="floating-tool-btn" data-fmode="roi" title="ROI 矩形数据区模式 (快捷键: R)">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <rect width="18" height="18" x="3" y="3" rx="2" stroke-dasharray="3 3"/>
+        </svg>
+        <span>ROI</span>
+      </button>
+      <button class="floating-tool-btn" data-fmode="addCol" title="添加属种列分界线 (快捷键: A)">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="2" x2="12" y2="22" stroke-dasharray="3 3"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        <span>+列</span>
+      </button>
+      <button class="floating-tool-btn" data-fmode="addPoint" title="添加控制拐点 (快捷键: P)">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="4" fill="currentColor"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
+        </svg>
+        <span>+点</span>
+      </button>
+      <button class="floating-tool-btn" data-fmode="eraser" title="橡皮擦删除工具 (快捷键: E)">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/>
+        </svg>
+        <span>橡皮</span>
+      </button>
+    `;
+    this.container.appendChild(palette);
+    this.floatingToolbar = palette;
+
+    palette.querySelectorAll('[data-fmode]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const mode = btn.getAttribute('data-fmode') as ToolMode;
+        if (mode) {
+          this.setToolMode(mode);
+        }
+      });
+    });
   }
 
   private createDropOverlay(): void {
@@ -134,6 +213,43 @@ export class GeologyCanvas {
     `;
     this.container.appendChild(overlay);
     this.dropOverlay = overlay;
+  }
+
+  private initEmptyState(): void {
+    const emptyBox = document.createElement('div');
+    emptyBox.className = 'empty-canvas-container';
+    emptyBox.innerHTML = `
+      <div class="empty-state-card">
+        <div class="empty-icon-wrap">
+          <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+          </svg>
+        </div>
+        <button id="btn-empty-load-img" class="btn btn-primary" style="padding: 8px 24px; font-size: 13px; font-weight: 600; margin-bottom: 8px; cursor: pointer;">
+          📁 加载图片
+        </button>
+        <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 16px 0;">或将图片拖拽到此处</p>
+        <div class="empty-specs-badge">
+          <span>支持格式：PNG / JPG / TIFF / WebP</span>
+          <span>建议尺寸：A4 600 DPI 以内</span>
+          <span>最大支持：8000×12000 px</span>
+        </div>
+      </div>
+    `;
+    this.container.appendChild(emptyBox);
+    this.emptyStateOverlay = emptyBox;
+
+    emptyBox.querySelector('#btn-empty-load-img')?.addEventListener('click', () => {
+      this.callbacks.onOpenFileDialog?.();
+    });
+
+    this.updateEmptyStateVisibility();
+  }
+
+  public updateEmptyStateVisibility(): void {
+    if (!this.emptyStateOverlay) return;
+    const isEmpty = !this.data.imageSrc || this.workflowStage === 0;
+    this.emptyStateOverlay.style.display = isEmpty ? 'flex' : 'none';
   }
 
   public loadNewDiagram(newData: DiagramData): void {
@@ -163,6 +279,8 @@ export class GeologyCanvas {
       // 生成高保真二值化离屏缓存
       this.generateBinaryCache();
 
+      this.minimap?.setImage(this.diagramImage, this.data.imageWidth, this.data.imageHeight);
+      this.updateEmptyStateVisibility();
       this.fitToScreen();
       this.requestRender();
     };
@@ -712,8 +830,8 @@ export class GeologyCanvas {
   private onWheel(e: WheelEvent): void {
     e.preventDefault();
     const screenPt = this.getCanvasPoint(e);
-    const zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
-    this.viewport.zoomAt(screenPt, zoomFactor);
+    const zoomIn = e.deltaY < 0;
+    this.viewport.zoomStepAt(screenPt, zoomIn, e.ctrlKey || e.metaKey);
     this.requestRender();
   }
 
@@ -1280,8 +1398,8 @@ export class GeologyCanvas {
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // 视口底层画板底色：日间模式使用柔和浅灰色 (#e2e8f0)，夜间模式使用深蓝黑 (#0b0f19)
-    ctx.fillStyle = isLight ? '#e2e8f0' : '#0b0f19';
+    // 视口底层画板底色：日间模式使用清爽明亮的洁净底 (#f8fafc)，夜间模式使用深蓝黑 (#0b0f19)
+    ctx.fillStyle = isLight ? '#f8fafc' : '#0b0f19';
     ctx.fillRect(0, 0, rect.width, rect.height);
 
     // 绘制微网格
@@ -1314,6 +1432,11 @@ export class GeologyCanvas {
     }
 
     ctx.restore();
+
+    // 8. 同步更新右下角 Minimap 视口框
+    if (this.minimap) {
+      this.minimap.updateViewport(this.viewport, rect.width, rect.height);
+    }
   }
 
   private drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number, isLight: boolean): void {
@@ -1854,6 +1977,7 @@ export class GeologyCanvas {
 
   public setWorkflowStage(stage: number): void {
     this.workflowStage = stage;
+    this.updateEmptyStateVisibility();
     this.requestRender();
   }
 

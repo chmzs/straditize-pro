@@ -87,15 +87,17 @@ async function bootstrap() {
     }, duration);
   }
 
-  // 5. 底部状态栏 (顶部工具条 + 底部状态栏显示当前模式)
+  // 5. 底部状态栏 (28px 恒定)
   const footer = document.createElement('footer');
   footer.className = 'app-footer';
   footer.innerHTML = `
     <div class="footer-left">
-      <div class="footer-item" id="footer-tool-mode">模式: <strong>选择 (V)</strong></div>
+      <div class="footer-item" id="footer-dimensions">图像: <code>${initialData.imageWidth}×${initialData.imageHeight}</code></div>
+      <div class="footer-item" id="footer-zoom">缩放: <code>100%</code></div>
       <div class="footer-item" id="footer-cursor">光标: <code>--</code></div>
       <div class="footer-item" id="footer-depth">深度: <code>--</code></div>
-      <div class="footer-item" id="footer-pollen">含量: <code>--</code></div>
+      <div class="footer-item" id="footer-pollen">丰度: <code>--</code></div>
+      <div class="footer-item" id="footer-tool-mode">模式: <strong>选择 (V)</strong></div>
     </div>
     <div class="footer-right">
       <div class="footer-item" id="footer-active-taxa">当前属种: <strong>--</strong></div>
@@ -149,6 +151,9 @@ async function bootstrap() {
     onOpenCalibration: () => {
       propertyPanel.openCalibrationModal();
     },
+    onOpenFileDialog: () => {
+      (document.getElementById('file-input-image') as HTMLInputElement)?.click();
+    },
   });
 
   // 6.2 显式分步推进状态机 (Step-by-Step Workflow State Machine)
@@ -187,12 +192,15 @@ async function bootstrap() {
     if (typeof toolbar !== 'undefined' && toolbar) {
       toolbar.setWorkflowStep(currentStage);
     }
+    if (typeof inspector !== 'undefined' && inspector) {
+      inspector.setWorkflowStage(currentStage);
+    }
 
     workflowActionBar.innerHTML = `
       <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
-        <span style="background: ${tokens.color.column.activeBadge}; color: #fff; font-weight: 700; font-size: 10px; padding: 2px 7px; border-radius: 9999px; flex-shrink: 0;">Step ${currentStage}/4</span>
+        <span style="background: ${tokens.color.column.activeBadge}; color: #fff; font-weight: 700; font-size: 10px; padding: 2px 7px; border-radius: 9999px; flex-shrink: 0;">S${currentStage}</span>
         <strong style="color: ${tokens.color.text.accent}; flex-shrink: 0;">${meta.stepName}</strong>
-        <span style="color: ${tokens.color.text.secondary}; font-size: 11px; max-width: 280px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${meta.guideText}</span>
+        <span style="color: ${tokens.color.text.secondary}; font-size: 11px; max-width: 320px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${meta.guideText}</span>
       </div>
       <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
         ${currentStage > 1 ? `<button id="btn-wf-prev" class="tool-btn" style="padding: 3px 8px; font-size: 10px;">↺ 上一步</button>` : ''}
@@ -406,6 +414,20 @@ async function bootstrap() {
         setHudNotice(`⚡ 属种 ${activeCol.name} 轮廓已根据图像算法完成重识别！`);
       }
     },
+    onOpenDataViewer: () => {
+      propertyPanel.openExportModal();
+    },
+    onToggleLayerVisibility: (layer, visible) => {
+      if (layer === 'ghost') {
+        canvasComponent.viewport.showGhosting = visible;
+        canvasComponent.requestRender();
+        setHudNotice(visible ? '🟢 绿色原位半透明对比层已开启' : '绿色对比层已关闭');
+      }
+    },
+    onChangeDegridStrength: (strength) => {
+      canvasComponent.setDegridStrength(strength);
+      setHudNotice(`去网格横线灵敏度设为: ${strength.toUpperCase()} (按 B 键透视查看红色切除预览)`);
+    },
   });
 
   // 9. 处理自定义图片或项目包打开与加载逻辑
@@ -421,24 +443,52 @@ async function bootstrap() {
       return;
     }
 
+    if (history.canUndo()) {
+      if (!window.confirm('当前项目有未保存修改，重新加载图片将清空当前工作区。是否继续？')) {
+        return;
+      }
+    }
+
     setHudNotice(`正在载入地质图谱: ${file.name}...`, 8000);
 
     const reader = new FileReader();
     reader.onload = async (e) => {
-      const dataUrl = e.target?.result as string;
+      let dataUrl = e.target?.result as string;
       if (!dataUrl) return;
 
       const img = new Image();
       img.onload = async () => {
-        const w = img.naturalWidth;
-        const h = img.naturalHeight;
+        let w = img.naturalWidth;
+        let h = img.naturalHeight;
+
+        // 图像尺寸与性能预算安全检查 (规范第一节)
+        const MAX_W = 8000;
+        const MAX_H = 12000;
+        const WARN_W = 6000;
+        const WARN_H = 9000;
+
+        if (w > MAX_W || h > MAX_H) {
+          const okDownsample = window.confirm(
+            `【图像尺寸过大提示】\n当前图像尺寸为 ${w}×${h} px，超过建议最大限制 (${MAX_W}×${MAX_H} px)。\n直接加载可能会耗尽浏览器内存导致崩溃。\n\n点击【确定】以 50% 降采样安全加载 (${Math.round(w / 2)}×${Math.round(h / 2)} px)；\n点击【取消】中止加载。`
+          );
+          if (!okDownsample) {
+            setHudNotice('已取消加载超限大图');
+            return;
+          }
+          const downsampled = downsampleImage(img, 0.5);
+          dataUrl = downsampled.dataUrl;
+          w = downsampled.w;
+          h = downsampled.h;
+        } else if (w >= WARN_W && h >= WARN_H) {
+          setHudNotice(`提示: 图像尺寸较大 (${w}×${h} px)，建议在充足内存环境下操作。`, 4000);
+        }
 
         // 调用 RPC 客户端（若在线发送至 Python 会话进行专业尺寸与二值化解析，若离线自动生成初始建议）
         const newDiagramData = await rpcClient.loadCustomImage(dataUrl, w, h, file.name);
 
-        // Canvas 视口即时加载并以高清晰度展示，重置居中并严格进入 Step 1 等待用户界定有效区
+        // 进入 S1 时清空：ROI、所有列、所有点、深度标定、撤销栈、选中状态
         canvasComponent.loadNewDiagram(newDiagramData);
-        history.reset(newDiagramData.columns, newDiagramData.activeTaxaId);
+        history.reset([], '');
         currentStage = 1;
         updateWorkflowBar();
 
@@ -453,6 +503,25 @@ async function bootstrap() {
       img.src = dataUrl;
     };
     reader.readAsDataURL(file);
+  }
+
+  function downsampleImage(img: HTMLImageElement, ratio: number = 0.5): { dataUrl: string; w: number; h: number } {
+    const targetW = Math.round(img.naturalWidth * ratio);
+    const targetH = Math.round(img.naturalHeight * ratio);
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = targetW;
+    offCanvas.height = targetH;
+    const ctx = offCanvas.getContext('2d');
+    if (ctx) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, targetW, targetH);
+    }
+    return {
+      dataUrl: offCanvas.toDataURL('image/png'),
+      w: targetW,
+      h: targetH,
+    };
   }
 
   // 10. 处理范例图谱切换
@@ -586,6 +655,20 @@ async function bootstrap() {
       }
       setHudNotice(`工具模式切换: ${desc.name} (${desc.shortcut}) - ${desc.hint}`);
     },
+    onToggleSidebar: () => {
+      toggleSidebar();
+    },
+    onToggleInspector: () => {
+      toggleInspector();
+    },
+    onStepClick: (step) => {
+      if (step <= currentStage) {
+        currentStage = step as WorkflowStage;
+        updateWorkflowBar();
+      } else {
+        setHudNotice(`尚未完成前面步骤，请按顺序推进工作流`);
+      }
+    },
   });
 
   const clientStatus = rpcClient.getStatus();
@@ -593,7 +676,39 @@ async function bootstrap() {
     toolbar.setDesktopMode(true);
   }
 
-  // 12. 组装与挂载页面
+  // 12. 左右抽屉展开把手 (Drawer Tabs)
+  const leftDrawerTab = document.createElement('div');
+  leftDrawerTab.className = 'drawer-toggle-tab left-tab';
+  leftDrawerTab.title = '展开属种分列清单 (快捷键: [)';
+  leftDrawerTab.innerHTML = `<span>›</span><span>属种清单</span>`;
+  leftDrawerTab.style.display = 'none';
+  canvasWrapper.appendChild(leftDrawerTab);
+
+  const rightDrawerTab = document.createElement('div');
+  rightDrawerTab.className = 'drawer-toggle-tab right-tab';
+  rightDrawerTab.title = '展开属性检查器 (快捷键: ])';
+  rightDrawerTab.innerHTML = `<span>‹</span><span>属性检查</span>`;
+  rightDrawerTab.style.display = 'none';
+  canvasWrapper.appendChild(rightDrawerTab);
+
+  function toggleSidebar() {
+    const isCol = sidebar.toggleCollapse();
+    leftDrawerTab.style.display = isCol ? 'flex' : 'none';
+    setHudNotice(isCol ? '属种分列列表已收起 (可点击左边缘把手或按 [ 键展开)' : '属种分列列表已展开', 2500);
+    canvasComponent.handleResize();
+  }
+
+  function toggleInspector() {
+    const isCol = inspector.toggleCollapse();
+    rightDrawerTab.style.display = isCol ? 'flex' : 'none';
+    setHudNotice(isCol ? '属性检查器已收起 (可点击右边缘把手或按 ] 键展开)' : '属性检查器已展开', 2500);
+    canvasComponent.handleResize();
+  }
+
+  leftDrawerTab.addEventListener('click', toggleSidebar);
+  rightDrawerTab.addEventListener('click', toggleInspector);
+
+  // 13. 组装与挂载页面
   workspace.appendChild(sidebar.getElement());
   workspace.appendChild(canvasWrapper);
   workspace.appendChild(inspector.getElement());
@@ -612,12 +727,10 @@ async function bootstrap() {
 
     if (e.key === '[' && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
-      const isCol = sidebar.toggleCollapse();
-      setHudNotice(isCol ? '属种分列列表已收起 (按 [ 键展开)' : '属种分列列表已展开 (按 [ 键收起)', 2000);
-      canvasComponent.handleResize();
+      toggleSidebar();
     } else if (e.key === ']' && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
-      inspector.toggleCollapse();
+      toggleInspector();
     }
   });
 
@@ -625,7 +738,15 @@ async function bootstrap() {
     const col = canvasComponent.getActiveColumn();
     const activeEl = document.getElementById('footer-active-taxa');
     const anchorsEl = document.getElementById('footer-anchors');
+    const dimEl = document.getElementById('footer-dimensions');
+    const zoomEl = document.getElementById('footer-zoom');
 
+    if (dimEl) {
+      dimEl.innerHTML = `图像: <code>${canvasComponent.data.imageWidth}×${canvasComponent.data.imageHeight}</code>`;
+    }
+    if (zoomEl) {
+      zoomEl.innerHTML = `缩放: <code>${Math.round(canvasComponent.viewport.scale * 100)}%</code>`;
+    }
     if (col && activeEl) {
       activeEl.innerHTML = `当前属种: <span style="color: ${col.color};">●</span> <strong>${col.name}</strong>`;
     }

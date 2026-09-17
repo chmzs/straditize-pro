@@ -144,16 +144,16 @@ export class PropertyPanel {
           <button class="close-btn" id="modal-close">&times;</button>
         </div>
 
-        <div class="modal-body wpd-modal-body" style="display: flex; gap: 16px; padding: 16px;">
+        <div class="modal-body wpd-modal-body" style="display: flex !important; flex-direction: row !important; gap: 16px; padding: 16px; flex: 1; min-height: 0; box-sizing: border-box;">
           <!-- 左侧：双模式（表格预览与交互编辑 / 原始代码）区域 -->
-          <div class="wpd-left-area" style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;">
+          <div class="wpd-left-area" style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; height: 100%;">
             <!-- 地层丰度百分比总和自检门禁 (Sum Check QA Gate) -->
-            <div id="wpd-sum-check-banner" style="padding: 6px 10px; border-radius: 4px; font-size: 11px; display: flex; align-items: center; justify-content: space-between; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80;">
+            <div id="wpd-sum-check-banner" style="padding: 6px 10px; border-radius: 4px; font-size: 11px; display: flex; align-items: center; justify-content: space-between; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80; flex-shrink: 0;">
               <span id="wpd-sum-check-text">🟢 <strong>百分比总和自检 (Sum Check)</strong>: 分析中...</span>
               <span id="wpd-sum-check-sub" style="font-size: 10px; opacity: 0.85;">-- 层位</span>
             </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; flex-shrink: 0;">
               <div class="btn-group" style="display: flex; gap: 4px;">
                 <button id="tab-btn-grid" class="tool-btn active-mode" style="font-size: 11px; padding: 4px 10px;">📊 数据表格 (可就地编辑)</button>
                 <button id="tab-btn-text" class="tool-btn" style="font-size: 11px; padding: 4px 10px;">📝 原始文本 (CSV)</button>
@@ -166,22 +166,22 @@ export class PropertyPanel {
             </div>
 
             <!-- 视图 1: 交互式表格视图 (支持直接点选单元格修改数字) -->
-            <div id="wpd-table-wrapper" class="wpd-table-wrapper" style="flex: 1; height: 340px; overflow: auto; border: 1px solid var(--border-light); border-radius: 6px; background: rgba(15, 23, 42, 0.6);">
+            <div id="wpd-table-wrapper" class="wpd-table-wrapper" style="flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--border-light); border-radius: 6px; background: rgba(15, 23, 42, 0.6);">
               <table id="wpd-preview-table" class="wpd-preview-table">
                 <!-- 动态填充 thead 与 tbody -->
               </table>
             </div>
 
             <!-- 视图 2: 纯文本导出框 (可复制或手工调整) -->
-            <textarea id="wpd-data-textarea" class="export-textarea" style="display: none; flex: 1; height: 340px; font-family: var(--font-mono); font-size: 11px; line-height: 1.45;"></textarea>
+            <textarea id="wpd-data-textarea" class="export-textarea" style="display: none; flex: 1; min-height: 0; font-family: var(--font-mono); font-size: 11px; line-height: 1.45;"></textarea>
 
-            <div style="font-size: 10px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;">
+            <div style="font-size: 10px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;">
               <span>💡 提示：点击任意表格单元格可直接修改数值（修改项呈橙色高亮），导出 CSV、R 脚本与 TAR 包将实时同步生效。</span>
             </div>
           </div>
 
-          <!-- 右侧：WPD 风格的控制面板 (Dataset, Sort, Format, Visualize) -->
-          <div class="wpd-right-controls" style="width: 260px; display: flex; flex-direction: column; gap: 12px; background: var(--bg-tertiary); padding: 12px; border-radius: 6px; border: 1px solid var(--border-light);">
+          <!-- 右侧：WPD 风格的控制面板 (Dataset, Sort, Format, Visualize) 并列排布 -->
+          <div class="wpd-right-controls" style="width: 270px; min-width: 270px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; background: var(--bg-tertiary); padding: 12px; border-radius: 6px; border: 1px solid var(--border-light); height: 100%; box-sizing: border-box; overflow-y: auto;">
             <!-- 数据集选择 -->
             <div class="form-group" style="margin: 0;">
               <label style="font-size: 11px; font-weight: bold; color: var(--text-primary);">Dataset (数据集形态):</label>

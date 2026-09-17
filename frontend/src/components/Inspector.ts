@@ -1,13 +1,18 @@
 import { DiagramData, TaxaColumn, ControlPoint, DiagramCalibration } from '../types/pollen';
 import { HistoryManager } from '../core/HistoryManager';
-import { DeletePointCommand, ResizeRoiCommand } from '../core/Commands';
 import { CoordinateSystem } from '../core/CoordinateSystem';
+import { tokens } from '../styles/tokens';
+import { DeletePointCommand, ResizeRoiCommand } from '../core/Commands';
 
 export interface InspectorCallbacks {
   onDataChange: () => void;
   onSelectTaxa: (taxaId: string) => void;
   onToggleCollapse: (collapsed: boolean) => void;
-  onDigitizeActiveColumn: () => void;
+  onDigitizeActiveColumn: () => Promise<void>;
+  onAdvanceWorkflowStage?: (targetStage: number) => void;
+  onOpenDataViewer?: () => void;
+  onToggleLayerVisibility?: (layer: string, visible: boolean) => void;
+  onChangeDegridStrength?: (strength: 'off' | 'weak' | 'medium' | 'strong') => void;
 }
 
 export class Inspector {
@@ -16,12 +21,9 @@ export class Inspector {
   private history: HistoryManager;
   private callbacks: InspectorCallbacks;
   private isCollapsed: boolean = false;
+  private currentStage: number = 3;
 
-  constructor(
-    data: DiagramData,
-    history: HistoryManager,
-    callbacks: InspectorCallbacks
-  ) {
+  constructor(data: DiagramData, history: HistoryManager, callbacks: InspectorCallbacks) {
     this.data = data;
     this.history = history;
     this.callbacks = callbacks;
@@ -32,6 +34,11 @@ export class Inspector {
 
   public getElement(): HTMLElement {
     return this.element;
+  }
+
+  public setWorkflowStage(stage: number): void {
+    this.currentStage = stage;
+    this.render();
   }
 
   public toggleCollapse(): boolean {
@@ -57,27 +64,19 @@ export class Inspector {
 
     let contentHtml = '';
 
+    // 若用户显式点击了某个控制点
     if (selected?.type === 'point') {
       const col = this.data.columns.find((c) => c.id === selected.colId);
       const pt = col?.controlPoints.find((p) => p.id === selected.pointId);
       if (col && pt) {
         contentHtml = this.renderPointInspector(col, pt);
       } else {
-        contentHtml = this.renderProjectOverview(cal);
+        contentHtml = this.renderStagePanel(activeCol, cal);
       }
-    } else if (selected?.type === 'column') {
-      const col = this.data.columns.find((c) => c.id === selected.id) || activeCol;
-      if (col) {
-        contentHtml = this.renderColumnInspector(col);
-      } else {
-        contentHtml = this.renderProjectOverview(cal);
-      }
-    } else if (selected?.type === 'roi') {
-      contentHtml = this.renderRoiInspector(cal);
-    } else if (activeCol) {
+    } else if (selected?.type === 'column' && activeCol) {
       contentHtml = this.renderColumnInspector(activeCol);
     } else {
-      contentHtml = this.renderProjectOverview(cal);
+      contentHtml = this.renderStagePanel(activeCol, cal);
     }
 
     this.element.innerHTML = `
@@ -101,6 +100,196 @@ export class Inspector {
     `;
 
     this.bindEvents();
+  }
+
+  private renderStagePanel(activeCol: TaxaColumn | undefined, cal: DiagramCalibration): string {
+    switch (this.currentStage) {
+      case 0:
+        return this.renderS0Panel();
+      case 1:
+        return this.renderS1RoiPanel(cal);
+      case 2:
+        return this.renderS2CleanPanel(cal);
+      case 3:
+        return this.renderS3ColumnsPanel(activeCol);
+      case 4:
+        return activeCol ? this.renderColumnInspector(activeCol) : this.renderS3ColumnsPanel(activeCol);
+      case 5:
+        return activeCol ? this.renderS5DigitizePanel(activeCol) : this.renderProjectOverview(cal);
+      case 6:
+        return this.renderS6VerificationPanel();
+      case 7:
+        return this.renderS7ExportPanel();
+      default:
+        return activeCol ? this.renderColumnInspector(activeCol) : this.renderProjectOverview(cal);
+    }
+  }
+
+  private renderS0Panel(): string {
+    return `
+      <div class="inspector-section">
+        <div class="section-title">S0：空状态</div>
+        <div class="tip-card" style="margin: 0; background: rgba(56, 189, 248, 0.08); border-color: rgba(56, 189, 248, 0.3);">
+          <p style="font-size: 11px; line-height: 1.6; color: ${tokens.color.text.secondary}; margin: 0;">
+            当前尚未载入地层图谱图像。<br><br>
+            请点击顶栏 <strong>[📁 图谱]</strong> 按钮，或直接将图片文件拖拽至中央画布区域。
+          </p>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderS1RoiPanel(cal: DiagramCalibration): string {
+    return `
+      <div class="inspector-section">
+        <div class="section-title">S1：界定纯数据有效区 (ROI)</div>
+        <div class="tip-card" style="margin-bottom: 10px; border-left: 3px solid #38bdf8; background: rgba(56, 189, 248, 0.08); padding: 8px 10px;">
+          <p style="font-size: 11px; line-height: 1.5; color: #bae6fd; margin: 0;">
+            <strong>工作流要点：</strong><br>
+            请在画布上拖拽 8 个十字手柄框选花粉数据区，<strong>务必将左侧 Y 轴线、右侧聚类树和底部 X 刻度排除在外</strong>，确保分列 100% 准确。
+          </p>
+        </div>
+        <div class="form-group">
+          <label>顶界深度 (Top Depth):</label>
+          <div class="input-row">
+            <input type="number" id="inp-roi-top" value="${cal.depthTopValue}" step="1" />
+            <input type="text" id="inp-roi-unit" value="${cal.unit}" style="width: 55px;" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>底界深度 (Bottom Depth):</label>
+          <div class="input-row">
+            <input type="number" id="inp-roi-bot" value="${cal.depthBottomValue}" step="1" />
+            <span class="unit-label">${cal.unit}</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>有效区像素 X 范围:</label>
+          <div class="input-row">
+            <input type="number" id="inp-roi-xmin" value="${cal.dataXMin}" />
+            <span style="color:#64748b;">~</span>
+            <input type="number" id="inp-roi-xmax" value="${cal.dataXMax}" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>有效区像素 Y 范围:</label>
+          <div class="input-row">
+            <input type="number" id="inp-roi-ymin" value="${cal.dataYMin}" />
+            <span style="color:#64748b;">~</span>
+            <input type="number" id="inp-roi-ymax" value="${cal.dataYMax}" />
+          </div>
+        </div>
+        <button id="btn-apply-roi" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
+          保存有效区设置
+        </button>
+      </div>
+    `;
+  }
+
+  private renderS2CleanPanel(cal: DiagramCalibration): string {
+    return `
+      <div class="inspector-section">
+        <div class="section-title">S2：数据区域与图像清理</div>
+        <div class="prop-row" style="margin-bottom: 8px;">
+          <span class="prop-label">有效区尺寸:</span>
+          <span class="prop-val">${cal.dataXMax - cal.dataXMin} × ${cal.dataYMax - cal.dataYMin} px</span>
+        </div>
+        <div class="form-group" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light);">
+          <label style="font-size: 11px; font-weight: 600; display: block; margin-bottom: 6px;">图像去横线与网格降噪:</label>
+          <select id="select-inspector-degrid" class="sample-select" style="width: 100%; font-size: 11px; margin-bottom: 6px;">
+            <option value="off">去横线: 关闭</option>
+            <option value="weak">去横线: 弱 (仅细线)</option>
+            <option value="medium" selected>去横线: 中 (推荐)</option>
+            <option value="strong">去横线: 强 (粗网格)</option>
+          </select>
+          <small style="font-size: 10px; color: var(--text-muted); line-height: 1.4; display: block;">
+            提示: 按键盘 <strong>B</strong> 键可在画布上即时透视查看被切除的横线（鲜红色标记）。
+          </small>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderS3ColumnsPanel(activeCol?: TaxaColumn): string {
+    return `
+      <div class="inspector-section">
+        <div class="section-title">S3：分列与属种名单对齐</div>
+        <div class="tip-card" style="margin-bottom: 10px; background: rgba(56, 189, 248, 0.06);">
+          <p style="font-size: 11px; line-height: 1.5; color: var(--text-secondary); margin: 0;">
+            当前已识别出 <strong>${this.data.columns.length}</strong> 个属种列。<br>
+            • 在侧边栏使用 <strong>[批量导入]</strong> 粘贴名单<br>
+            • 发现漏列点击 <strong>[➕插空列]</strong><br>
+            • 使用 <strong>▲/▼</strong> 箭头就地对调顺位
+          </p>
+        </div>
+        ${activeCol ? this.renderColumnInspector(activeCol) : ''}
+      </div>
+    `;
+  }
+
+  private renderS5DigitizePanel(activeCol: TaxaColumn): string {
+    return `
+      <div class="inspector-section">
+        <div class="section-title">S5：轮廓精修与特征拐点</div>
+        ${this.renderColumnInspector(activeCol)}
+      </div>
+    `;
+  }
+
+  private renderS6VerificationPanel(): string {
+    return `
+      <div class="inspector-section">
+        <div class="section-title">S6：地学校验与图层审查</div>
+        <div class="form-group" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light); margin-bottom: 12px;">
+          <label style="font-size: 11px; font-weight: 600; display: block; margin-bottom: 8px;">图层显隐开关 (Layer Toggles):</label>
+          <div style="display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: var(--text-secondary);">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" id="layer-chk-ghost" checked />
+              <span>🟢 绿色原位半透明重叠层 (Visual Ghosting)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" id="layer-chk-curves" checked />
+              <span>🌊 属种轮廓曲线与面积填充</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" id="layer-chk-anchors" checked />
+              <span>🟡 稀疏物理拐点手柄</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" id="layer-chk-grid" checked />
+              <span>📏 地层标准深度网格线</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" id="layer-chk-roi" checked />
+              <span>🟦 ROI 数据有效区边框</span>
+            </label>
+          </div>
+        </div>
+
+        <button id="btn-inspector-open-table" class="btn btn-primary" style="width: 100%; font-size: 11.5px; padding: 7px;">
+          📊 打开数据表格与 100% 总和自检
+        </button>
+      </div>
+    `;
+  }
+
+  private renderS7ExportPanel(): string {
+    return `
+      <div class="inspector-section">
+        <div class="section-title">S7：导出交付 (Export)</div>
+        <div class="tip-card" style="margin-bottom: 12px; background: rgba(34, 197, 94, 0.08); border-color: rgba(34, 197, 94, 0.3);">
+          <p style="font-size: 11px; line-height: 1.5; color: #4ade80; margin: 0;">
+            <strong>科学导出已就绪：</strong><br>
+            • CSV 矩阵首列严格为 depth，未出现属种为 0.0<br>
+            • POSIX UStar .tar 开放归档兼容任意系统<br>
+            • rioja 脚本自动适配每列形态与放大倍数
+          </p>
+        </div>
+        <button id="btn-inspector-open-export" class="btn btn-primary" style="width: 100%; font-size: 12px; padding: 8px;">
+          💾 打开科学数据导出面板
+        </button>
+      </div>
+    `;
   }
 
   private renderProjectOverview(cal: DiagramCalibration): string {
@@ -129,82 +318,7 @@ export class Inspector {
             <span class="prop-label">标准层位采样点:</span>
             <span class="prop-val">${numHorizons} 层 (Δ=${interval}${cal.unit})</span>
           </div>
-          <div class="prop-row">
-            <span class="prop-label">数据有效区 ROI:</span>
-            <span class="prop-val">[X: ${cal.dataXMin}~${cal.dataXMax}] [Y: ${cal.dataYMin}~${cal.dataYMax}]</span>
-          </div>
         </div>
-      </div>
-
-      <div class="inspector-section">
-        <div class="section-title">快速操作指南</div>
-        <div class="tip-card" style="margin: 0;">
-          <p style="font-size: 11px; line-height: 1.6; color: #94a3b8;">
-            • 鼠标在画布直接<strong>左键点击</strong>拉扯花粉轮廓<br>
-            • 快捷键 <strong>[</strong> 和 <strong>]</strong> 分别折叠左右面板<br>
-            • 按 <strong>V / H / R / C / P / E</strong> 切换工具模式<br>
-            • 任意误操作随时按 <strong>Ctrl+Z</strong> 撤销
-          </p>
-        </div>
-      </div>
-    `;
-  }
-
-  private renderRoiInspector(cal: DiagramCalibration): string {
-    return `
-      <div class="inspector-section">
-        <div class="section-title">第 2 步：地质数据有效区 (ROI Bounding Box)</div>
-        <div class="tip-card" style="margin-bottom: 10px; border-left: 3px solid #38bdf8; background: rgba(56, 189, 248, 0.08); padding: 8px 10px;">
-          <p style="font-size: 11px; line-height: 1.5; color: #bae6fd; margin: 0;">
-            <strong>科学工作流要点：</strong><br>
-            拖动画布四周的控制手柄，将纯花粉数据区框选，<strong>严格将左侧 Y 轴线、右侧聚类树和底部 X 刻度排除在外</strong>。有效区界定越干净，后续分列识别 100% 零错位！
-          </p>
-        </div>
-        <div class="form-group">
-          <label>顶界深度 (Top Depth):</label>
-          <div class="input-row">
-            <input type="number" id="inp-roi-top" value="${cal.depthTopValue}" step="1" />
-            <input type="text" id="inp-roi-unit" value="${cal.unit}" style="width: 55px;" />
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>底界深度 (Bottom Depth):</label>
-          <div class="input-row">
-            <input type="number" id="inp-roi-bot" value="${cal.depthBottomValue}" step="1" />
-            <span class="unit-label">${cal.unit}</span>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>数据区像素 X 范围 [Left, Right]:</label>
-          <div class="input-row">
-            <input type="number" id="inp-roi-xmin" value="${cal.dataXMin}" />
-            <span style="color:#64748b;">~</span>
-            <input type="number" id="inp-roi-xmax" value="${cal.dataXMax}" />
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>数据区像素 Y 范围 [Top, Bottom]:</label>
-          <div class="input-row">
-            <input type="number" id="inp-roi-ymin" value="${cal.dataYMin}" />
-            <span style="color:#64748b;">~</span>
-            <input type="number" id="inp-roi-ymax" value="${cal.dataYMax}" />
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>剖面采样间隔 (Depth Interval):</label>
-          <div class="input-row">
-            <input type="number" id="inp-roi-interval" value="${cal.depthInterval || 2}" min="0.1" step="0.5" />
-            <span class="unit-label">${cal.unit}/层</span>
-          </div>
-        </div>
-
-        <button id="btn-apply-roi" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
-          应用数据区修改
-        </button>
       </div>
     `;
   }
@@ -212,37 +326,35 @@ export class Inspector {
   private renderColumnInspector(col: TaxaColumn): string {
     const sc = col.scaleCalib || {
       originX: col.startX,
-      originVal: 0,
-      calibX: col.tickEndX || (col.startX + 60),
-      calibVal: col.maxPercent || 20,
+      originVal: col.startValue ?? 0,
+      calibX: (col.tickEndX && col.tickEndX > col.startX) ? col.tickEndX : col.endX,
+      calibVal: col.maxPercent ?? 20,
       unit: col.unit || '%',
     };
 
-    const tickSpanPx = sc.calibX - sc.originX;
-    const tickValSpan = sc.calibVal - sc.originVal;
-    const slope = tickSpanPx > 0 ? (tickValSpan / tickSpanPx) : 0;
-
+    const currentScaleType = col.scale_type || 'linear';
     const logCheck = CoordinateSystem.validateLogScale(col);
     const isLogValid = logCheck.valid;
-    const currentScaleType = col.scale_type || 'linear';
 
     return `
       <div class="inspector-section">
-        <div class="section-title">属种列属性: <strong style="color:${col.color}">${col.name}</strong></div>
+        <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>属种列属性: ${col.name.toUpperCase()}</span>
+          <span class="badge" style="background:${col.color}22; color:${col.color}; border:1px solid ${col.color}66;">${col.plotType || 'area'}</span>
+        </div>
 
         <div class="form-group">
           <label>属种名称 (Taxa Name):</label>
           <input type="text" id="inp-col-name" value="${col.name}" class="text-input" />
         </div>
 
-        <div class="form-group" style="background: rgba(15,23,42,0.4); padding: 10px; border-radius: 6px; border: 1px solid var(--border-light);">
-          <div style="font-weight: 700; font-size: 11px; color: #38bdf8; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
-            <span>📍 两点式 X 轴物理刻度标定</span>
-            <span style="font-size: 10px; color: var(--text-muted);">斜率: ${slope.toFixed(3)} ${sc.unit}/px</span>
+        <div class="form-group" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light);">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="font-size: 11px; font-weight: bold; color: ${tokens.color.column.baseline};">📍 两点式 X 轴物理刻度标定</label>
+            <span style="font-size: 9.5px; color: var(--text-muted);">斜率: ${CoordinateSystem.getScaleRatio(col).toFixed(3)} ${col.unit || '%'}/px</span>
           </div>
 
-          <!-- 端点 1: 起点基线齿 (默认 0，可改) -->
-          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+          <div style="display: flex; gap: 8px; margin-top: 6px;">
             <div style="flex: 1;">
               <label style="font-size: 10px; color: var(--text-muted);">端点 1 (原点像素 X):</label>
               <input type="number" id="inp-sc-origin-x" value="${sc.originX}" style="font-size: 11px;" />
@@ -264,7 +376,7 @@ export class Inspector {
             </div>
           </div>
 
-          <!-- 端点 2: 真实刻度齿 (用户直接看图输入对应数值) -->
+          <!-- 端点 2: 真实刻度齿 -->
           <div style="display: flex; gap: 8px;">
             <div style="flex: 1;">
               <label style="font-size: 10px; color: #f97316;">端点 2 (刻度齿像素 X):</label>
@@ -286,9 +398,6 @@ export class Inspector {
             <button class="tool-btn quick-tick-val-btn" data-val="20" style="flex:1; font-size: 10px;">齿:20%</button>
             <button class="tool-btn quick-tick-val-btn" data-val="10" style="flex:1; font-size: 10px;">齿:10%</button>
           </div>
-          <small style="color: #64748b; font-size: 10px; display: block; margin-top: 4px;">
-            提示: 画布横轴上的橙色刻度手柄可直接拖动微调端点 2 位置
-          </small>
         </div>
 
         <!-- 刻度尺度模式 (线性 Linear / 对数 Log) -->
@@ -341,17 +450,7 @@ export class Inspector {
                 <button class="tool-btn quick-exag-btn" data-exag="10" style="flex: 1; font-size: 9px; padding: 2px;">10×</button>
               </div>
             </div>
-            <small style="color: #64748b; font-size: 9px; display: block; margin-top: 4px; line-height: 1.3;">
-              由用户负责填写图谱注明的放大倍数，提取数值将按该倍率几何还原实际物理百分比
-            </small>
           ` : ''}
-        </div>
-
-        <div class="form-group" style="margin-top: 8px;">
-          <label>曲线控制拐点统计:</label>
-          <div class="prop-val" style="font-size: 11px; color: #94a3b8;">
-            共 ${col.controlPoints.length} 个拐点 (${col.controlPoints.filter(p => p.type === 'peak' || p.type === 'trough').length} 物理极值, ${col.controlPoints.filter(p => p.type === 'manual' || p.isManual).length} 手工微调)
-          </div>
         </div>
 
         <div style="display: flex; gap: 8px; margin-top: 10px;">
@@ -384,53 +483,52 @@ export class Inspector {
         <div class="section-title">选中的控制拐点</div>
         <div class="property-grid">
           <div class="prop-row">
-            <span class="prop-label">所属花粉属种:</span>
-            <span class="prop-val" style="color: ${col.color}; font-weight: bold;">${col.name}</span>
+            <span class="prop-label">所属属种:</span>
+            <span class="prop-val"><strong style="color: ${col.color};">${col.name}</strong></span>
           </div>
           <div class="prop-row">
-            <span class="prop-label">层位物理深度:</span>
-            <span class="prop-val"><strong style="color: #38bdf8;">${depth !== undefined ? depth + ' ' + this.data.calibration.unit : '未标定'}</strong></span>
+            <span class="prop-label">控制点类型:</span>
+            <span class="prop-val" style="color: ${typeInfo.color}; font-weight: 600;">${typeInfo.text}</span>
           </div>
           <div class="prop-row">
-            <span class="prop-label">花粉百分比丰度:</span>
-            <span class="prop-val"><strong style="color: #34d399;">${percent} ${col.unit || '%'}</strong></span>
+            <span class="prop-label">地层深度:</span>
+            <span class="prop-val">${depth !== undefined ? depth.toFixed(2) : '--'} ${this.data.calibration.unit}</span>
           </div>
           <div class="prop-row">
-            <span class="prop-label">图像物理像素:</span>
-            <span class="prop-val">X: ${pt.x} px, Y: ${pt.y} px</span>
+            <span class="prop-label">物理丰度:</span>
+            <span class="prop-val">${percent !== undefined ? percent.toFixed(2) : '--'}%</span>
           </div>
           <div class="prop-row">
-            <span class="prop-label">拐点科学类型:</span>
-            <span class="prop-val" style="color: ${typeInfo.color};">${typeInfo.text}</span>
+            <span class="prop-label">像素坐标:</span>
+            <span class="prop-val">X:${Math.round(pt.x)}, Y:${Math.round(pt.y)}</span>
           </div>
         </div>
 
-        <button id="btn-delete-point" class="btn btn-secondary" style="width: 100%; color: #ef4444; border-color: rgba(239,68,68,0.4); margin-top: 16px;">
-          🗑 删除此控制拐点
+        <button id="btn-delete-point" class="btn btn-secondary" style="width: 100%; margin-top: 12px; color: #ef4444; border-color: rgba(239,68,68,0.4);">
+          🗑 删除此控制锚点
         </button>
       </div>
     `;
   }
 
   private bindEvents(): void {
-    // 折叠按钮
     this.element.querySelector('#btn-collapse-inspector')?.addEventListener('click', () => {
       this.toggleCollapse();
     });
 
-    // 属种属性修改
+    // 属种名称改名
     const nameInp = this.element.querySelector('#inp-col-name') as HTMLInputElement;
     nameInp?.addEventListener('change', () => {
       const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
       if (activeCol && nameInp.value.trim()) {
-        const oldName = activeCol.name;
+        const old = activeCol.name;
         activeCol.name = nameInp.value.trim();
-        this.history.push(`Rename Taxa ${oldName} to ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
+        this.history.push(`Rename Taxa ${old} to ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
         this.callbacks.onDataChange();
       }
     });
 
-    // 两点式物理刻度钉参数绑定与更新
+    // 刻度更新
     const updateScaleCalib = () => {
       const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
       if (!activeCol) return;
@@ -548,7 +646,7 @@ export class Inspector {
       }
     });
 
-    // 局部放大曲线勾选与倍数事件
+    // 局部放大曲线勾选与倍数
     this.element.querySelector('#chk-has-exag')?.addEventListener('change', (e) => {
       const checked = (e.target as HTMLInputElement).checked;
       const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
@@ -587,7 +685,7 @@ export class Inspector {
       });
     });
 
-    // 删除列按钮
+    // 删除列
     this.element.querySelector('#btn-col-delete')?.addEventListener('click', () => {
       const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
       if (activeCol && this.data.columns.length > 1) {
@@ -602,20 +700,18 @@ export class Inspector {
       }
     });
 
-    // 重新识别该列
     this.element.querySelector('#btn-col-digitize')?.addEventListener('click', () => {
       this.callbacks.onDigitizeActiveColumn();
     });
 
-    // 删除点按钮
+    // 删除点
     this.element.querySelector('#btn-delete-point')?.addEventListener('click', () => {
       const sel = this.data.selectedEntity;
       if (sel?.type === 'point') {
         const col = this.data.columns.find((c) => c.id === sel.colId);
         const pt = col?.controlPoints.find((p) => p.id === sel.pointId);
         if (col && pt) {
-          const cmd = new DeletePointCommand(col.id, pt, col.name);
-          cmd.execute(this.data);
+          new DeletePointCommand(col.id, pt, col.name).execute(this.data);
           this.data.selectedEntity = null;
           this.history.push(`Delete Anchor from ${col.name}`, this.data.columns, this.data.activeTaxaId);
           this.render();
@@ -624,35 +720,50 @@ export class Inspector {
       }
     });
 
-    // 应用 ROI 修改
+    // 应用有效区
     this.element.querySelector('#btn-apply-roi')?.addEventListener('click', () => {
-      const xmin = parseInt((this.element.querySelector('#inp-roi-xmin') as HTMLInputElement).value, 10);
-      const xmax = parseInt((this.element.querySelector('#inp-roi-xmax') as HTMLInputElement).value, 10);
-      const ymin = parseInt((this.element.querySelector('#inp-roi-ymin') as HTMLInputElement).value, 10);
-      const ymax = parseInt((this.element.querySelector('#inp-roi-ymax') as HTMLInputElement).value, 10);
-      const topD = parseFloat((this.element.querySelector('#inp-roi-top') as HTMLInputElement).value);
-      const botD = parseFloat((this.element.querySelector('#inp-roi-bot') as HTMLInputElement).value);
+      const x0 = parseInt((this.element.querySelector('#inp-roi-xmin') as HTMLInputElement).value, 10);
+      const x1 = parseInt((this.element.querySelector('#inp-roi-xmax') as HTMLInputElement).value, 10);
+      const y0 = parseInt((this.element.querySelector('#inp-roi-ymin') as HTMLInputElement).value, 10);
+      const y1 = parseInt((this.element.querySelector('#inp-roi-ymax') as HTMLInputElement).value, 10);
+      const top = parseFloat((this.element.querySelector('#inp-roi-top') as HTMLInputElement).value);
+      const bot = parseFloat((this.element.querySelector('#inp-roi-bot') as HTMLInputElement).value);
       const unit = (this.element.querySelector('#inp-roi-unit') as HTMLInputElement).value.trim() || 'cm';
-      const interval = parseFloat((this.element.querySelector('#inp-roi-interval') as HTMLInputElement).value) || 2;
 
-      const oldCal = { ...this.data.calibration };
-      const newCal: DiagramCalibration = {
+      const prev = { ...this.data.calibration };
+      new ResizeRoiCommand(prev, {
         ...this.data.calibration,
-        dataXMin: isNaN(xmin) ? oldCal.dataXMin : xmin,
-        dataXMax: isNaN(xmax) ? oldCal.dataXMax : xmax,
-        dataYMin: isNaN(ymin) ? oldCal.dataYMin : ymin,
-        dataYMax: isNaN(ymax) ? oldCal.dataYMax : ymax,
-        depthTopValue: isNaN(topD) ? oldCal.depthTopValue : topD,
-        depthBottomValue: isNaN(botD) ? oldCal.depthBottomValue : botD,
+        dataXMin: isNaN(x0) ? prev.dataXMin : x0,
+        dataXMax: isNaN(x1) ? prev.dataXMax : x1,
+        dataYMin: isNaN(y0) ? prev.dataYMin : y0,
+        dataYMax: isNaN(y1) ? prev.dataYMax : y1,
+        depthTopValue: isNaN(top) ? prev.depthTopValue : top,
+        depthBottomValue: isNaN(bot) ? prev.depthBottomValue : bot,
         unit,
-        depthInterval: interval,
         isCalibrated: true,
-      };
+      }).execute(this.data);
 
-      const cmd = new ResizeRoiCommand(oldCal, newCal);
-      cmd.execute(this.data);
       this.history.push('Update ROI & Calibration', this.data.columns, this.data.activeTaxaId, this.data.calibration);
       this.callbacks.onDataChange();
+    });
+
+    // 图层显隐控制 (S6)
+    this.element.querySelector('#layer-chk-ghost')?.addEventListener('change', (e) => {
+      this.callbacks.onToggleLayerVisibility?.('ghost', (e.target as HTMLInputElement).checked);
+    });
+
+    this.element.querySelector('#btn-inspector-open-table')?.addEventListener('click', () => {
+      this.callbacks.onOpenDataViewer?.();
+    });
+
+    this.element.querySelector('#btn-inspector-open-export')?.addEventListener('click', () => {
+      this.callbacks.onOpenDataViewer?.();
+    });
+
+    // S2 图像清理灵敏度
+    this.element.querySelector('#select-inspector-degrid')?.addEventListener('change', (e) => {
+      const val = (e.target as HTMLSelectElement).value as 'off' | 'weak' | 'medium' | 'strong';
+      this.callbacks.onChangeDegridStrength?.(val);
     });
   }
 }

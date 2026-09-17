@@ -1367,27 +1367,6 @@ class StraditizeSession:
 
     save_project = project_save
 
-    def image_get_tile(
-        self,
-        x: int = 0,
-        y: int = 0,
-        w: int = 512,
-        h: int = 512,
-        max_dim: int | None = None,
-    ) -> dict[str, Any]:
-        """Returns base64 encoded PNG tile slice."""
-        slice_img = self.get_image_slice(x, y, w, h, max_dim=max_dim)
-        bio = io.BytesIO()
-        slice_img.save(bio, format="PNG")
-        b64 = base64.b64encode(bio.getvalue()).decode("ascii")
-        return {
-            "x": x,
-            "y": y,
-            "w": slice_img.width,
-            "h": slice_img.height,
-            "tile_base64": b64,
-        }
-
     def roi_update(
         self,
         x0: float | None = None,

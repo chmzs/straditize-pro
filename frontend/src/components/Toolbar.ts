@@ -2,6 +2,7 @@ import { BackendStatus } from '../types/rpc';
 import { HistoryManager } from '../core/HistoryManager';
 import { ImageDisplayMode } from '../core/Viewport';
 import { ToolMode } from '../types/pollen';
+import { WORKFLOW_STEP_ITEMS } from '../types/workflow';
 
 export interface ToolbarCallbacks {
   onFit: () => void;
@@ -25,6 +26,9 @@ export interface ToolbarCallbacks {
   onSaveProject?: () => void;
   onOpenProjectFile?: (file: File) => void;
   onOpenAgeDepthModal?: () => void;
+  onToggleSidebar?: () => void;
+  onToggleInspector?: () => void;
+  onStepClick?: (step: number) => void;
 }
 
 export class Toolbar {
@@ -67,13 +71,7 @@ export class Toolbar {
 
   public setWorkflowStep(step: number): void {
     this.currentWorkflowStep = step;
-    this.element.querySelectorAll('.workflow-step-btn').forEach((btn, idx) => {
-      if (idx + 1 === step) {
-        btn.classList.add('active-step');
-      } else {
-        btn.classList.remove('active-step');
-      }
-    });
+    this.render();
   }
 
   public setToolMode(mode: ToolMode): void {
@@ -141,8 +139,30 @@ export class Toolbar {
   public render(): void {
     const isConnected = this.backendStatus.connected;
 
+    // 构建标准 7 步工作流导引胶囊条
+    const stepperHtml = WORKFLOW_STEP_ITEMS.map((item, idx) => {
+      const isCompleted = item.step < this.currentWorkflowStep;
+      const isCurrent = item.step === this.currentWorkflowStep;
+      const statusIcon = isCompleted ? '✓' : (isCurrent ? '●' : '○');
+      const cls = isCurrent ? 'active-step' : (isCompleted ? 'completed-step' : 'upcoming-step');
+      return `
+        ${idx > 0 ? `<span class="workflow-arrow">›</span>` : ''}
+        <button class="workflow-step-btn ${cls}" data-step="${item.step}" title="步骤 ${item.step}: ${item.name}${isCompleted ? ' (已完成，点击可跳回)' : ''}">
+          <span class="step-num">${statusIcon}</span>
+          <span>${item.label}</span>
+        </button>
+      `;
+    }).join('');
+
     this.element.innerHTML = `
       <div class="toolbar-left">
+        <button id="btn-toggle-sidebar-nav" class="tool-btn highlight" title="展开/收起属种分列侧边栏 (快捷键: [)">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+          <span>属种</span>
+        </button>
+
         <div class="brand">
           <div class="brand-logo">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -190,28 +210,11 @@ export class Toolbar {
       </div>
 
       <div class="toolbar-center">
-        <!-- 现代化 4 步地学工作流导引 (Workflow Stepper) -->
+        <!-- 现代化 7 步地学工作流导引 Stepper -->
         <div class="workflow-stepper">
-          <button class="workflow-step-btn ${this.currentWorkflowStep === 1 ? 'active-step' : ''}" id="step-btn-load" title="第 1 步：打开本地图谱或内置经典地学范例">
-            <span class="step-num">1</span>
-            <span>载入</span>
-          </button>
-          <span class="workflow-arrow">›</span>
-          <button class="workflow-step-btn ${this.currentWorkflowStep === 2 ? 'active-step' : ''}" id="step-btn-roi" title="第 2 步：调整地质数据有效区与顶底物理深度">
-            <span class="step-num">2</span>
-            <span>有效区</span>
-          </button>
-          <span class="workflow-arrow">›</span>
-          <button class="workflow-step-btn ${this.currentWorkflowStep === 3 ? 'active-step' : ''}" id="step-btn-columns" title="第 3 步：确认各花粉属种分列线与两点式物理刻度">
-            <span class="step-num">3</span>
-            <span>分列刻度</span>
-          </button>
-          <span class="workflow-arrow">›</span>
-          <button class="workflow-step-btn ${this.currentWorkflowStep === 4 ? 'active-step' : ''}" id="step-btn-export" title="第 4 步：运行数字化并导出科学表格">
-            <span class="step-num">4</span>
-            <span>导出</span>
-          </button>
+          ${stepperHtml}
         </div>
+      </div>
 
         <div class="divider"></div>
 
@@ -323,6 +326,14 @@ export class Toolbar {
           <button id="btn-export-json" class="tool-btn export-sub" title="导出完整 JSON 数据" style="padding: 4px 5px; font-size: 10px;">JSON</button>
         </div>
 
+        <!-- 属性检查器展开/折叠 -->
+        <button id="btn-toggle-inspector-nav" class="tool-btn highlight" title="展开/收起右侧属性检查器 (快捷键: ])">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+            <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>
+          </svg>
+          <span>属性</span>
+        </button>
+
         <!-- 日夜间主题切换按钮 -->
         <button id="btn-toggle-theme" class="tool-btn" title="切换日间模式 / 夜间模式 (快捷键: T)" style="padding: 4px 6px;">
           <svg id="theme-icon-moon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
@@ -379,25 +390,21 @@ export class Toolbar {
       document.body.appendChild(overlay);
     });
 
-    // 现代化工作流步骤导引快速触发
-    this.element.querySelector('#step-btn-load')?.addEventListener('click', () => {
-      this.setWorkflowStep(1);
-      (this.element.querySelector('#btn-open-file') as HTMLButtonElement)?.click();
+    // 顶栏展开/收起侧边栏与属性检查器按钮
+    this.element.querySelector('#btn-toggle-sidebar-nav')?.addEventListener('click', () => {
+      this.callbacks.onToggleSidebar?.();
     });
 
-    this.element.querySelector('#step-btn-roi')?.addEventListener('click', () => {
-      this.setWorkflowStep(2);
-      this.callbacks.onSelectToolMode?.('roi');
+    this.element.querySelector('#btn-toggle-inspector-nav')?.addEventListener('click', () => {
+      this.callbacks.onToggleInspector?.();
     });
 
-    this.element.querySelector('#step-btn-columns')?.addEventListener('click', () => {
-      this.setWorkflowStep(3);
-      this.callbacks.onSelectToolMode?.('select');
-    });
-
-    this.element.querySelector('#step-btn-export')?.addEventListener('click', () => {
-      this.setWorkflowStep(4);
-      this.callbacks.onExport('csv');
+    // 现代化 7 步工作流导引胶囊点击触发
+    this.element.querySelectorAll('.workflow-step-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const step = parseInt(btn.getAttribute('data-step') || '1', 10);
+        this.callbacks.onStepClick?.(step);
+      });
     });
 
     // 工具模式切换

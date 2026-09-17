@@ -63,6 +63,18 @@ export class CoordinateSystem {
   }
 
   /**
+   * 4.1 获取列标定斜率 (单位物理值 / 像素)
+   */
+  public static getScaleRatio(col: Column): number {
+    const startX = col.startX;
+    const tickEndX = (col.tickEndX && col.tickEndX > col.startX) ? col.tickEndX : col.endX;
+    const startVal = col.startValue ?? (col.scaleCalib ? col.scaleCalib.originVal : 0);
+    const tickVal = col.tickValue ?? col.scaleCalib?.calibVal ?? col.maxPercent ?? 100;
+    const spanPx = Math.max(1, tickEndX - startX);
+    return Math.abs(tickVal - startVal) / spanPx;
+  }
+
+  /**
    * 5. 校验 Log 对数刻度约束: startValue > 0 且 tickValue > 0 且 startValue != tickValue
    */
   public static validateLogScale(col: Column): { valid: boolean; reason?: string } {

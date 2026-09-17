@@ -844,8 +844,8 @@ class TestStraditizeHttpTransport(unittest.TestCase):
         finally:
             desktop_server.stop()
 
-    def test_image_tile_slice_and_preview_endpoints(self):
-        """Verify GET /image/slice, /image/tile, and /image/preview endpoints."""
+    def test_image_slice_and_preview_endpoints(self):
+        """Verify GET /image/slice and /image/preview endpoints."""
         # First ensure an image is loaded in self.server.session
         img_path = get_test_image_path()
         self.server.session.load_image(img_path)
@@ -858,13 +858,7 @@ class TestStraditizeHttpTransport(unittest.TestCase):
             data = resp.read()
             self.assertGreater(len(data), 50)
 
-        # 2. Test /image/tile?x=0&y=0&w=64&h=64
-        req_tile = urllib.request.Request(f"{self.base_url}/image/tile?x=0&y=0&w=64&h=64")
-        with urllib.request.urlopen(req_tile) as resp:
-            self.assertEqual(resp.status, 200)
-            self.assertEqual(resp.headers.get("Content-Type"), "image/png")
-
-        # 3. Test /image/preview
+        # 2. Test /image/preview
         req_prev = urllib.request.Request(f"{self.base_url}/image/preview")
         with urllib.request.urlopen(req_prev) as resp:
             self.assertEqual(resp.status, 200)
@@ -1029,16 +1023,12 @@ class TestSectionFiveJsonRpcMethods(unittest.TestCase):
         self.assertNotIn(500, self.session.control_points[0])
 
     def test_section_five_algorithm_and_export(self):
-        """Tests image.getTile, algorithm.degrid, export.csv, and export.r."""
-        self.rpc_call("image.load", {"image_path": self.image_path})
+        """Tests algorithm.degrid, export.csv, and export.r."""
+        load_res = self.rpc_call("image.load", {"image_path": self.image_path})
+        self.assertIn("width", load_res)
+        self.assertIn("height", load_res)
 
-        # 1. image.getTile returns base64
-        tile = self.rpc_call("image.getTile", {"x": 100, "y": 100, "w": 256, "h": 256})
-        self.assertIn("tile_base64", tile)
-        self.assertEqual(tile["w"], 256)
-        self.assertEqual(tile["h"], 256)
-
-        # 2. algorithm.degrid runs with adaptive kernel
+        # 1. algorithm.degrid runs with adaptive kernel
         degrid_res = self.rpc_call("algorithm.degrid", {})
         self.assertTrue(degrid_res["success"])
         self.assertGreater(degrid_res["kernel_width"], 10)

@@ -17,6 +17,7 @@ export class Sidebar {
   private callbacks: SidebarCallbacks;
   private isCollapsed: boolean = false;
   private isCompactView: boolean = true; // 默认紧凑列表，极大提升大剖面属种浏览检索效率
+  private searchQuery: string = '';      // 属种快速搜索关键词
 
   constructor(data: DiagramData, callbacks: SidebarCallbacks) {
     this.data = data;
@@ -67,7 +68,7 @@ export class Sidebar {
         </div>
       </div>
 
-      <div class="sidebar-actions-bar" style="display: flex; gap: 4px; padding: 6px 10px;">
+      <div class="sidebar-actions-bar" style="display: flex; gap: 4px; padding: 6px 10px 4px 10px;">
         <button id="btn-open-paste-taxa" class="btn-sidebar-action" style="flex: 1;" title="从 Excel / 文献 Word 批量复制并粘贴属种名单">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
@@ -82,8 +83,13 @@ export class Sidebar {
         </button>
       </div>
 
+      <div style="padding: 2px 10px 6px 10px;">
+        <input type="text" id="inp-search-taxa" placeholder="🔍 快速搜索属种 (输入即过滤)..." value="${this.searchQuery}" style="width: 100%; font-size: 10.5px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); box-sizing: border-box;" />
+      </div>
+
       <div class="taxa-list" id="taxa-list-container">
         ${this.data.columns
+          .filter((col) => !this.searchQuery || col.name.toLowerCase().includes(this.searchQuery.toLowerCase()))
           .map((col) => this.renderTaxaItem(col, col.id === this.data.activeTaxaId))
           .join('')}
       </div>
@@ -206,6 +212,29 @@ export class Sidebar {
     this.element.querySelector('#btn-insert-gap-col')?.addEventListener('click', () => {
       this.callbacks.onInsertGapColumn?.(this.data.activeTaxaId);
     });
+
+    // 搜索输入过滤
+    const searchInp = this.element.querySelector('#inp-search-taxa') as HTMLInputElement;
+    if (searchInp) {
+      searchInp.addEventListener('input', (e) => {
+        this.searchQuery = (e.target as HTMLInputElement).value;
+        const list = this.element.querySelector('#taxa-list-container');
+        if (list) {
+          list.innerHTML = this.data.columns
+            .filter((col) => !this.searchQuery || col.name.toLowerCase().includes(this.searchQuery.toLowerCase()))
+            .map((col) => this.renderTaxaItem(col, col.id === this.data.activeTaxaId))
+            .join('');
+        }
+      });
+      searchInp.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          this.searchQuery = '';
+          searchInp.value = '';
+          searchInp.blur();
+          this.render();
+        }
+      });
+    }
 
     // 2. 列表卡片内部交互
     const list = this.element.querySelector('#taxa-list-container');

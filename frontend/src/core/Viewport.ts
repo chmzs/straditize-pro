@@ -9,8 +9,8 @@ export class Viewport {
   public panY: number = 0;
   public dpr: number = 1.0;
 
-  public minScale: number = 0.05;
-  public maxScale: number = 30.0;
+  public minScale: number = 0.1;  // 10%
+  public maxScale: number = 10.0; // 1000%
 
   // 图像高保真滤镜与透视遮罩模式
   public imageMode: ImageDisplayMode = 'normal';
@@ -79,6 +79,40 @@ export class Viewport {
   public zoomAt(screenPt: Point2D, zoomFactor: number): void {
     const oldScale = this.scale;
     const newScale = Math.min(Math.max(oldScale * zoomFactor, this.minScale), this.maxScale);
+
+    if (newScale === oldScale) return;
+
+    const worldPt = this.screenToWorld(screenPt);
+    this.scale = newScale;
+    this.panX = screenPt.x - worldPt.x * newScale;
+    this.panY = screenPt.y - worldPt.y * newScale;
+  }
+
+  /**
+   * 按照地学规范的阶梯步长进行缩放:
+   * 100% 以下: +10%
+   * 100% ~ 400%: +25%
+   * 400% 以上: +100%
+   * 支持 Ctrl+滚轮 加速缩放
+   */
+  public zoomStepAt(screenPt: Point2D, zoomIn: boolean, accelerated: boolean = false): void {
+    const oldScale = this.scale;
+    let delta = 0.10;
+    if (oldScale < 1.0) {
+      delta = 0.10;
+    } else if (oldScale < 4.0) {
+      delta = 0.25;
+    } else {
+      delta = 1.00;
+    }
+
+    if (accelerated) {
+      delta *= 2;
+    }
+
+    let newScale = zoomIn ? oldScale + delta : oldScale - delta;
+    newScale = Math.round(newScale * 100) / 100;
+    newScale = Math.min(Math.max(newScale, this.minScale), this.maxScale);
 
     if (newScale === oldScale) return;
 
