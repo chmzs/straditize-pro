@@ -373,14 +373,14 @@ export class Inspector {
             </div>
           </div>
 
-          <!-- 物理数轴跨度指示器 -->
-          <div style="margin: 6px 0; padding: 4px 6px; background: rgba(15, 23, 42, 0.5); border-radius: 4px; border: 1px solid rgba(255,255,255,0.06);">
-            <div style="display: flex; justify-content: space-between; font-size: 9.5px; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 2px;">
-              <span style="color: #38bdf8;">基线: ${sc.originVal}${sc.unit || '%'} (X=${sc.originX})</span>
-              <span style="color: #f97316;">刻度: ${sc.calibVal}${sc.unit || '%'} (X=${sc.calibX})</span>
+          <!-- 物理数轴跨度指示器 (自适应主题配色) -->
+          <div class="scale-axis-indicator">
+            <div class="scale-axis-header">
+              <span class="scale-axis-origin">基线: ${sc.originVal}${sc.unit || '%'} (X=${sc.originX})</span>
+              <span class="scale-axis-target">刻度: ${sc.calibVal}${sc.unit || '%'} (X=${sc.calibX})</span>
             </div>
-            <div style="position: relative; height: 5px; background: rgba(51, 65, 85, 0.6); border-radius: 3px; overflow: hidden;">
-              <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: linear-gradient(90deg, #38bdf8, #f97316); opacity: 0.85;"></div>
+            <div class="scale-axis-track">
+              <div class="scale-axis-bar"></div>
             </div>
           </div>
 
