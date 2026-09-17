@@ -18,8 +18,12 @@ rpc-server = "python -m straditize_core.rpc_server serve --port 8765"       # �
 frontend-dev = "pnpm --prefix frontend run dev"                         # 启动现代版前端开发服务器
 
 [tasks.test]
-description = "Run the test suite"
-cmd = "python -m pytest -q"
+description = "Run modern Straditize Pro test suite"
+cmd = "python -m pytest straditize/tests/test_core.py straditize/tests/test_rpc.py tests/verify_straditize_pro_e2e.py tests/test_age_depth_model.py -q"
+
+[tasks.test-legacy]
+description = "Run legacy PyQt5 widget test suite (requires legacy dependencies)"
+cmd = "python -m pytest straditize/tests/widgets -q"
 
 [tasks.install]
 description = "Install straditize in editable mode"
@@ -43,23 +47,14 @@ python = ">=3.12,<3.13"
 pip = "*"
 
 [pypi-dependencies]
-# ===== 运行时依赖 =====
+# ===== 核心科学计算运行时依赖 (纯无 GUI 现代化算力栈) =====
 numpy = ">=1.26,<3.0"
+scipy = ">=1.14,<2.0"
 pandas = ">=2.3,<3.0"
-matplotlib = ">=3.8,<3.11"
-scipy = ">=1.13,<1.14"
-xarray = ">=2024.7,<2025"
-netcdf4 = ">=1.6.1,<2"
 scikit-image = ">=0.23,<1.0"
-openpyxl = ">=3.1,<4.0"
 pillow = ">=10,<12"
-psyplot = ">=1.5.1,<2.0"
-psyplot-gui = ">=1.5.0,<2.0"
-psy-strat = ">=0.1.1,<0.2"
-pyqt5 = ">=5.15.10,<6"
-pyqtwebengine = ">=5.15.6,<6"
 
-# ===== 开发/测试/打包依赖 =====
+# ===== 开发/测试/独立分发打包依赖 =====
 setuptools = ">=70,<81"
 pytest = ">=9.0.2,<10"
 ruff = ">=0.11,<1"
