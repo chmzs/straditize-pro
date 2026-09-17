@@ -19,7 +19,7 @@ frontend-dev = "pnpm --prefix frontend run dev"                         # 启动
 
 [tasks.test]
 description = "Run modern Straditize Pro test suite"
-cmd = "python -m pytest tests/test_core.py tests/test_rpc.py tests/verify_straditize_pro_e2e.py tests/test_age_depth_model.py tests/test_metadata_and_lipd.py -q"
+cmd = "python -m pytest tests/test_core.py tests/test_rpc.py tests/verify_straditize_pro_e2e.py tests/test_age_depth_model.py tests/test_metadata_and_lipd.py tests/test_ocr_species_recognition.py -q"
 
 [tasks.test-legacy]
 description = "Run legacy PyQt5 widget test suite (requires legacy dependencies)"

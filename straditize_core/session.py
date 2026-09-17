@@ -26,6 +26,7 @@ except ImportError:
 
 from .calibration import LinearCalibration, LogCalibration
 from .age_depth import AgeDepthAxisCalibrator, AgeDepthModel, extract_age_depth_model
+from .ocr import OcrTaxaRecognitionEngine
 from .metadata import (
     fetch_doi_metadata,
     extract_text_from_pdf,
@@ -2070,3 +2071,59 @@ class StraditizeSession:
             "rows_count": len(table["data"]),
             "total_ensembles": len(self.ensemble_tables),
         }
+
+    # ========================================================================
+    # Pollen Taxa OCR Recognition & Summary Verification Engine
+    # ========================================================================
+
+    def ocr_recognize_labels(
+        self,
+        label_row_bbox: list[int] | tuple[int, int, int, int] | None = None,
+        angle_deg: float = -45.0,
+        custom_dict_path: str | None = None,
+    ) -> dict[str, Any]:
+        """Executes OCR detection and botanical matching on diagram top label row."""
+        if self.image is None:
+            raise JsonRpcError(STATE_ERROR, "No diagram image loaded in session.")
+
+        w, h = self.width, self.height
+        if label_row_bbox is None:
+            # Default to top 25% of the data ROI or diagram
+            if self.data_xlim and self.data_ylim:
+                x0, x1 = int(self.data_xlim[0]), int(self.data_xlim[1])
+                y0 = max(0, int(self.data_ylim[0] - 250))
+                y1 = int(self.data_ylim[0] + 10)
+                bbox = [x0, y0, x1, y1]
+            else:
+                bbox = [int(w * 0.1), int(h * 0.05), int(w * 0.9), int(h * 0.30)]
+        else:
+            bbox = list(label_row_bbox)
+
+        engine = OcrTaxaRecognitionEngine(custom_dict_path=custom_dict_path)
+        result = engine.recognize_label_row(
+            diagram_image=self.image,
+            label_row_bbox=bbox,
+            columns=self.columns,
+            angle_deg=angle_deg,
+        )
+        return {"success": True, "data": result}
+
+    def ocr_apply_labels(self, confirmed_labels: list[dict[str, Any]]) -> dict[str, Any]:
+        """Applies user-reviewed taxon names directly into column definitions."""
+        applied_count = 0
+        for item in confirmed_labels:
+            col_id = item.get("associated_column_id")
+            name_to_apply = item.get("suggested_name") or item.get("ocr_text")
+            if not col_id or not name_to_apply:
+                continue
+
+            for col in self.columns:
+                cid = col.get("id") or f"taxa_{col.get('col_index', '')}"
+                if cid == col_id or f"taxa_{col.get('col_index')}" == col_id:
+                    col["name"] = name_to_apply
+                    col["species"] = name_to_apply
+                    col["id"] = col_id
+                    applied_count += 1
+                    break
+
+        return {"success": True, "applied_count": applied_count, "columns_count": len(self.columns)}
