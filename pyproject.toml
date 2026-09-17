@@ -40,3 +40,6 @@ straditize-cli = "straditize_core.cli:main"
 where = ["."]
 include = ["straditize_core*"]
 exclude = ["straditize*", "frontend*", "tests*"]
+
+[tool.setuptools.package-data]
+"straditize_core.ocr" = ["models/*"]
