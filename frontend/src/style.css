@@ -599,10 +599,10 @@ body.theme-light .floating-help-btn {
 
 .floating-help-panel {
   position: absolute;
-  bottom: 56px;
+  bottom: 64px;
   left: 16px;
   z-index: 90;
-  width: 300px;
+  width: 320px;
   background: rgba(15, 23, 42, 0.96);
   backdrop-filter: blur(12px);
   border: 1px solid var(--border-color);
@@ -857,6 +857,7 @@ body.theme-light .minimap-header {
   left: 16px;
   z-index: 45;
   display: flex;
+  align-items: center;
   background: rgba(15, 23, 42, 0.94);
   backdrop-filter: blur(12px);
   border: 1px solid var(--border-color);
@@ -868,8 +869,17 @@ body.theme-light .minimap-header {
 
 body.theme-light .floating-tool-palette {
   background: rgba(255, 255, 255, 0.96);
-  border-color: #e2e8f0;
+  border-color: #e5e7eb;
   box-shadow: 0 8px 20px -3px rgba(0, 0, 0, 0.1);
+}
+
+.floating-tool-btn.help-btn-item {
+  color: var(--accent-blue);
+  border-color: transparent;
+}
+
+body.theme-light .floating-tool-btn.help-btn-item {
+  color: #0284c7;
 }
 
 .floating-tool-btn {

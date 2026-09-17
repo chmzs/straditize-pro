@@ -21,6 +21,7 @@ export interface CanvasEventCallbacks {
   onOpenCalibration?: () => void;
   onToolModeChange?: (mode: ToolMode) => void;
   onOpenFileDialog?: () => void;
+  onToggleHelp?: () => void;
 }
 
 export class GeologyCanvas {
@@ -147,6 +148,11 @@ export class GeologyCanvas {
     const palette = document.createElement('div');
     palette.className = 'floating-tool-palette';
     palette.innerHTML = `
+      <button class="floating-tool-btn help-btn-item" id="btn-palette-help" title="交互操作指南与快捷键速查 (快捷键: ?)">
+        <span style="font-size: 14px; font-weight: 700; line-height: 1;">?</span>
+        <span>帮助</span>
+      </button>
+      <div class="palette-divider" style="width: 1px; height: 24px; background: var(--border-color); opacity: 0.7; margin: 0 1px;"></div>
       <button class="floating-tool-btn active-mode" data-fmode="select" title="选择与微调模式 (快捷键: V)">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
           <path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
@@ -186,6 +192,10 @@ export class GeologyCanvas {
     `;
     this.container.appendChild(palette);
     this.floatingToolbar = palette;
+
+    palette.querySelector('#btn-palette-help')?.addEventListener('click', () => {
+      this.callbacks.onToggleHelp?.();
+    });
 
     palette.querySelectorAll('[data-fmode]').forEach((btn) => {
       btn.addEventListener('click', () => {

@@ -115,37 +115,32 @@ async function bootstrap() {
   leftDrawerTab.addEventListener('click', () => setSidebarCollapsed(false));
   rightDrawerTab.addEventListener('click', () => setInspectorCollapsed(false));
 
-  // 悬浮帮助小圆钮与折叠面板 (替换原侧边栏大黑疙瘩)
-  const helpBtn = document.createElement('button');
-  helpBtn.className = 'floating-help-btn';
-  helpBtn.title = '交互操作指南 (快捷键: ?)';
-  helpBtn.textContent = '？';
-  canvasWrapper.appendChild(helpBtn);
-
+  // 悬浮帮助折叠面板
   const helpPanel = document.createElement('div');
   helpPanel.className = 'floating-help-panel';
   helpPanel.style.display = 'none';
   helpPanel.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-light); padding-bottom: 4px;">
-      <strong style="color: var(--accent-blue);">⚡ 交互操作指南</strong>
+      <strong style="color: var(--accent-blue);">⚡ 交互操作指南与快捷键</strong>
       <span id="help-panel-close" style="cursor: pointer; font-size: 14px; color: var(--text-muted);">&times;</span>
     </div>
     <ul style="margin: 0; padding-left: 16px; line-height: 1.6; font-size: 10.5px; color: var(--text-secondary);">
       <li><strong>侧边栏收起/展开：</strong><code>Ctrl+B</code> (左栏), <code>Ctrl+Shift+I</code> (右栏)</li>
-      <li><strong>批量导入属种：</strong>一键从 Excel / Word 粘贴，自动 OCR 纠错</li>
+      <li><strong>模式切换：</strong><code>V</code> 选择, <code>H</code> 抓手, <code>R</code> 有效区, <code>A</code> 加列, <code>P</code> 加点, <code>E</code> 橡皮</li>
       <li><strong>鼠标左键单击：</strong>直接向当前属种插入强控制锚点并拉伸轮廓</li>
-      <li><strong>鼠标左键拖拽：</strong>实时微调锚点坐标或两列垂直分界线</li>
+      <li><strong>鼠标左键拖拽：</strong>实时微调锚点坐标或两列垂直分界线 (col-resize)</li>
       <li><strong>鼠标右键单击：</strong>直接删除该锚点</li>
       <li><strong>透视遮罩 (B)：</strong>按 <code>B</code> 键预览切除横线 (红) 与花粉墨迹 (青蓝)</li>
+      <li><strong>缩放视图：</strong>滚轮平滑缩放 (10%~1000%), <code>Ctrl+0</code> 适应屏幕, <code>Ctrl+1</code> 100%</li>
       <li><strong>撤销与重做：</strong><code>Ctrl+Z</code> / <code>Ctrl+Y</code></li>
     </ul>
   `;
   canvasWrapper.appendChild(helpPanel);
 
-  helpBtn.addEventListener('click', () => {
+  function toggleHelpPanel() {
     const isHidden = helpPanel.style.display === 'none';
     helpPanel.style.display = isHidden ? 'block' : 'none';
-  });
+  }
 
   helpPanel.querySelector('#help-panel-close')?.addEventListener('click', () => {
     helpPanel.style.display = 'none';
@@ -247,6 +242,9 @@ async function bootstrap() {
     },
     onOpenFileDialog: () => {
       (document.getElementById('file-input-image') as HTMLInputElement)?.click();
+    },
+    onToggleHelp: () => {
+      toggleHelpPanel();
     },
   });
 
