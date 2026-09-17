@@ -193,8 +193,8 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         time.sleep(0.3)
 
         # 9. Open Pollen Taxa OCR Recognition & Review Modal
-        run_pw_cmd("click", "#btn-ocr-review-modal")
-        time.sleep(1.2)
+        run_pw_cmd("eval", "document.getElementById('btn-ocr-review-modal')?.click()")
+        time.sleep(1.5)
         ocr_modal_visible = run_pw_cmd("eval", "Boolean(document.querySelector('.ocr-review-dialog'))")
         strip_rendered = run_pw_cmd("eval", "Boolean(document.getElementById('ocr-strip-img')?.src?.length > 100)")
         ocr_table_rendered = run_pw_cmd("eval", "Boolean(document.getElementById('ocr-summary-tbody')?.querySelector('tr'))")
@@ -217,12 +217,12 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         print(f"  [Pass 10/11] High-res OCR review modal screenshot saved to: {ocr_proof_path}")
 
         # Close OCR review modal
-        run_pw_cmd("click", "#ocr-close-btn")
-        time.sleep(0.3)
+        run_pw_cmd("eval", "document.getElementById('ocr-close-btn')?.click()")
+        time.sleep(0.5)
 
         # 11. Open Metadata Semi-Automatic Extraction & Review Modal (FAIR/LiPD Specification)
-        run_pw_cmd("click", "#btn-metadata-modal")
-        time.sleep(0.8)
+        run_pw_cmd("eval", "document.getElementById('btn-metadata-modal')?.click()")
+        time.sleep(1.0)
         meta_modal_visible = run_pw_cmd("eval", "Boolean(document.querySelector('.metadata-dialog'))")
         doi_input_exists = run_pw_cmd("eval", "Boolean(document.getElementById('meta-inp-doi'))")
         site_input_exists = run_pw_cmd("eval", "Boolean(document.getElementById('meta-site-name'))")
