@@ -1839,7 +1839,7 @@ export class GeologyCanvas {
         ctx.restore();
 
         // 仅在当前选中的激活列显示清晰端点刻度，防止几十列文字相互横向打架
-        ctx.font = `600 ${Math.max(8.5, 9.5 / scale)}px sans-serif`;
+        ctx.font = `600 ${Math.max(8.5, 9.5 / scale)}px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif`;
         ctx.fillStyle = isLight ? '#0284c7' : '#38bdf8';
         ctx.textAlign = 'left';
         ctx.fillText(`${sc.originVal}${sc.unit || '%'}`, sc.originX + 2 / scale, topY - 2 / scale);
@@ -1852,7 +1852,7 @@ export class GeologyCanvas {
         ctx.save();
         ctx.fillStyle = isLight ? '#475569' : 'rgba(255, 255, 255, 0.75)';
         const fontSize = Math.max(9, 10.5 / scale);
-        ctx.font = `500 ${fontSize}px sans-serif`;
+        ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif`;
         if (colWidth < 42 && scale < 1.0) {
           ctx.translate(centerX, topY - 6 / scale);
           ctx.rotate(-Math.PI / 4); // 逆时针 45 度斜排

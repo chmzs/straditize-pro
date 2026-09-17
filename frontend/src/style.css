@@ -17,8 +17,8 @@
   --accent-red: #ef4444;
   --accent-orange: #f97316;
 
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", Menlo, Consolas, Monaco, monospace;
 }
 
 /* 日间模式 (Light Theme - 现代化专业科研洁净高对比质感) */
@@ -188,7 +188,10 @@ html, body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   user-select: none;
 }
 
@@ -1276,6 +1279,7 @@ body.theme-light .floating-tool-btn.active-mode {
   display: block;
   width: 100%;
   height: 100%;
+  image-rendering: -webkit-optimize-contrast;
 }
 
 /* 浮动操作提示气泡 */
