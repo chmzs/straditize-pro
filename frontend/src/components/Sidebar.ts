@@ -9,6 +9,7 @@ export interface SidebarCallbacks {
   onBatchImportTaxa?: (taxaNames: string[]) => void;
   onInsertGapColumn?: (afterTaxaId: string) => void;
   onSwapTaxaNames?: (idx1: number, idx2: number) => void;
+  onToggleCollapse?: (collapsed: boolean) => void;
 }
 
 export class Sidebar {
@@ -31,13 +32,22 @@ export class Sidebar {
     return this.element;
   }
 
-  public toggleCollapse(): boolean {
-    this.isCollapsed = !this.isCollapsed;
+  public getIsCollapsed(): boolean {
+    return this.isCollapsed;
+  }
+
+  public setCollapsed(collapsed: boolean): void {
+    this.isCollapsed = collapsed;
     if (this.isCollapsed) {
       this.element.classList.add('collapsed');
     } else {
       this.element.classList.remove('collapsed');
     }
+  }
+
+  public toggleCollapse(): boolean {
+    this.setCollapsed(!this.isCollapsed);
+    this.callbacks.onToggleCollapse?.(this.isCollapsed);
     return this.isCollapsed;
   }
 

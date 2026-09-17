@@ -63,6 +63,48 @@ async function bootstrap() {
   const canvasWrapper = document.createElement('div');
   canvasWrapper.className = 'canvas-wrapper';
 
+  // 左右抽屉展开把手 (Drawer Tabs) - 直接挂载在 workspace 边缘，折叠时永远清晰可见
+  const leftDrawerTab = document.createElement('div');
+  leftDrawerTab.className = 'drawer-toggle-tab left-tab';
+  leftDrawerTab.title = '展开属种分列清单 (快捷键: [)';
+  leftDrawerTab.innerHTML = `<span>›</span><span>属种清单</span>`;
+  leftDrawerTab.style.display = 'none';
+  workspace.appendChild(leftDrawerTab);
+
+  const rightDrawerTab = document.createElement('div');
+  rightDrawerTab.className = 'drawer-toggle-tab right-tab';
+  rightDrawerTab.title = '展开属性检查器 (快捷键: ])';
+  rightDrawerTab.innerHTML = `<span>‹</span><span>属性检查器</span>`;
+  rightDrawerTab.style.display = 'none';
+  workspace.appendChild(rightDrawerTab);
+
+  function setSidebarCollapsed(collapsed: boolean) {
+    if (sidebar) sidebar.setCollapsed(collapsed);
+    leftDrawerTab.style.display = collapsed ? 'flex' : 'none';
+    if (toolbar) toolbar.setSidebarActive(!collapsed);
+    setHudNotice(collapsed ? '属种分列列表已收起 (可点击左边缘把手或按 [ 键展开)' : '属种分列列表已展开', 2000);
+    canvasComponent.handleResize();
+  }
+
+  function setInspectorCollapsed(collapsed: boolean) {
+    if (inspector) inspector.setCollapsed(collapsed);
+    rightDrawerTab.style.display = collapsed ? 'flex' : 'none';
+    if (toolbar) toolbar.setInspectorActive(!collapsed);
+    setHudNotice(collapsed ? '属性检查器已收起 (点击右边缘把手或顶栏 [属性 ☷] 即可展开)' : '属性检查器已展开', 2500);
+    canvasComponent.handleResize();
+  }
+
+  function toggleSidebar() {
+    setSidebarCollapsed(!sidebar?.getIsCollapsed());
+  }
+
+  function toggleInspector() {
+    setInspectorCollapsed(!inspector?.getIsCollapsed());
+  }
+
+  leftDrawerTab.addEventListener('click', () => setSidebarCollapsed(false));
+  rightDrawerTab.addEventListener('click', () => setInspectorCollapsed(false));
+
   // 浮动 HUD 提示
   const hud = document.createElement('div');
   hud.className = 'canvas-hud';
@@ -216,8 +258,16 @@ async function bootstrap() {
     });
 
     workflowActionBar.querySelector('#btn-wf-next')?.addEventListener('click', async () => {
-      if (currentStage === 1) {
-        // Step 1 -> Step 2: 用户确认纯数据有效区，切分列
+      if (currentStage === 0) {
+        // S0 -> S1
+        (document.getElementById('file-input-image') as HTMLInputElement)?.click();
+      } else if (currentStage === 1) {
+        // S1 -> S2: 用户确认纯数据有效区，进入图像清理
+        currentStage = 2;
+        updateWorkflowBar();
+        setHudNotice('✅ 数据有效区 (ROI) 已锁定！可在此阶段开启图像去横线并按 B 键预览，满意后进入分列。', 4500);
+      } else if (currentStage === 2) {
+        // S2 -> S3: 开始推导各花粉属种列
         setHudNotice('正在基于纯数据有效区推导各花粉属种垂直基线...', 5000);
         const cal = canvasComponent.data.calibration;
         const cols = await rpcClient.detectColumnsInRoi({
@@ -226,30 +276,43 @@ async function bootstrap() {
           y0: cal.dataYMin,
           y1: cal.dataYMax,
         });
-        currentStage = 2;
+        currentStage = 3;
         sidebar?.updateData(canvasComponent.data);
         inspector?.updateData(canvasComponent.data);
         updateWorkflowBar();
         updateFooter();
-        setHudNotice(`✅ 成功切分 ${cols.length} 个属种列！请核对属种名称或批量导入。`, 4000);
-      } else if (currentStage === 2) {
-        // Step 2 -> Step 3: 用户确认列对齐无误，开始全列数字化识别
+        setHudNotice(`✅ 成功切分 ${cols.length} 个属种列！请在侧边栏核对名单或使用 ▲/▼ 对调顺位。`, 4000);
+      } else if (currentStage === 3) {
+        // S3 -> S4: 推进至标尺标定
+        currentStage = 4;
+        updateWorkflowBar();
+        setHudNotice('👉 请在右侧属性检查器核查或微调两点式深度标尺与各列物理刻度齿。', 4000);
+      } else if (currentStage === 4) {
+        // S4 -> S5: 标尺确认，开始全列拐点数字化提取
         setHudNotice('正在提取各列花粉多边形轮廓与显著控制手柄...', 8000);
         const cols = canvasComponent.data.columns;
         for (const col of cols) {
           const pts = await rpcClient.digitizeColumn(col.id);
           if (pts.length > 0) col.controlPoints = pts;
         }
-        currentStage = 3;
+        currentStage = 5;
         sidebar?.updateData(canvasComponent.data);
         inspector?.updateData(canvasComponent.data);
         updateWorkflowBar();
         updateFooter();
-        setHudNotice('✅ 数字化完成！绿色半透明逆向对比层已开启，可直接在画布拖拽微调。', 4500);
-      } else if (currentStage === 3) {
-        // Step 3 -> Step 4: 进入数据质检与导出
-        currentStage = 4;
+        setHudNotice('✅ 数字化完成！绿色半透明逆向对比层已开启，可直接在画布拖拽控制点微调。', 4500);
+      } else if (currentStage === 5) {
+        // S5 -> S6: 进入地学校验与自检
+        currentStage = 6;
         updateWorkflowBar();
+        propertyPanel.openExportModal();
+        setHudNotice('🔍 已进入地学校验阶段：正在核验 100% 丰度总和自检门禁。', 4000);
+      } else if (currentStage === 6) {
+        // S6 -> S7: 进入导出交付
+        currentStage = 7;
+        updateWorkflowBar();
+        propertyPanel.openExportModal();
+      } else if (currentStage === 7) {
         propertyPanel.openExportModal();
       }
     });
@@ -398,8 +461,7 @@ async function bootstrap() {
       updateFooter();
     },
     onToggleCollapse: (collapsed) => {
-      setHudNotice(collapsed ? '属性检查器已收起 (按 ] 键展开)' : '属性检查器已展开 (按 ] 键收起)', 2000);
-      canvasComponent.handleResize();
+      setInspectorCollapsed(collapsed);
     },
     onDigitizeActiveColumn: async () => {
       const activeCol = canvasComponent.getActiveColumn();
@@ -712,38 +774,6 @@ async function bootstrap() {
   if (clientStatus.isDesktopMode ?? initialData.isDesktopMode) {
     toolbar.setDesktopMode(true);
   }
-
-  // 12. 左右抽屉展开把手 (Drawer Tabs)
-  const leftDrawerTab = document.createElement('div');
-  leftDrawerTab.className = 'drawer-toggle-tab left-tab';
-  leftDrawerTab.title = '展开属种分列清单 (快捷键: [)';
-  leftDrawerTab.innerHTML = `<span>›</span><span>属种清单</span>`;
-  leftDrawerTab.style.display = 'none';
-  canvasWrapper.appendChild(leftDrawerTab);
-
-  const rightDrawerTab = document.createElement('div');
-  rightDrawerTab.className = 'drawer-toggle-tab right-tab';
-  rightDrawerTab.title = '展开属性检查器 (快捷键: ])';
-  rightDrawerTab.innerHTML = `<span>‹</span><span>属性检查</span>`;
-  rightDrawerTab.style.display = 'none';
-  canvasWrapper.appendChild(rightDrawerTab);
-
-  function toggleSidebar() {
-    const isCol = sidebar.toggleCollapse();
-    leftDrawerTab.style.display = isCol ? 'flex' : 'none';
-    setHudNotice(isCol ? '属种分列列表已收起 (可点击左边缘把手或按 [ 键展开)' : '属种分列列表已展开', 2500);
-    canvasComponent.handleResize();
-  }
-
-  function toggleInspector() {
-    const isCol = inspector.toggleCollapse();
-    rightDrawerTab.style.display = isCol ? 'flex' : 'none';
-    setHudNotice(isCol ? '属性检查器已收起 (可点击右边缘把手或按 ] 键展开)' : '属性检查器已展开', 2500);
-    canvasComponent.handleResize();
-  }
-
-  leftDrawerTab.addEventListener('click', toggleSidebar);
-  rightDrawerTab.addEventListener('click', toggleInspector);
 
   // 13. 组装与挂载页面
   workspace.appendChild(sidebar.getElement());

@@ -39,7 +39,6 @@ export class Toolbar {
   private currentScaleText: string = '100%';
   private currentImageMode: ImageDisplayMode = 'normal';
   private isBinaryOverlayActive: boolean = false;
-  private currentToolMode: ToolMode = 'select';
   private currentWorkflowStep: number = 3;
   private isDesktopMode: boolean = false;
 
@@ -54,6 +53,33 @@ export class Toolbar {
     this.element = document.createElement('header');
     this.element.className = 'app-toolbar';
     this.render();
+  }
+
+  private isSidebarActive: boolean = true;
+  private isInspectorActive: boolean = true;
+
+  public setSidebarActive(active: boolean): void {
+    this.isSidebarActive = active;
+    const btn = this.element.querySelector('#btn-toggle-sidebar-nav');
+    if (btn) {
+      if (active) {
+        btn.classList.add('highlight');
+      } else {
+        btn.classList.remove('highlight');
+      }
+    }
+  }
+
+  public setInspectorActive(active: boolean): void {
+    this.isInspectorActive = active;
+    const btn = this.element.querySelector('#btn-toggle-inspector-nav');
+    if (btn) {
+      if (active) {
+        btn.classList.add('highlight');
+      } else {
+        btn.classList.remove('highlight');
+      }
+    }
   }
 
   public setDesktopMode(isDesktop: boolean): void {
@@ -74,15 +100,8 @@ export class Toolbar {
     this.render();
   }
 
-  public setToolMode(mode: ToolMode): void {
-    this.currentToolMode = mode;
-    this.element.querySelectorAll('[data-tool-mode]').forEach((el) => {
-      if (el.getAttribute('data-tool-mode') === mode) {
-        el.classList.add('active-mode');
-      } else {
-        el.classList.remove('active-mode');
-      }
-    });
+  public setToolMode(_mode: ToolMode): void {
+    // 6 大工具模式已完全下沉至左下角 40x40 浮动工具条，避免顶栏重复冗余
   }
 
   public updateStatus(status: BackendStatus): void {
@@ -156,7 +175,7 @@ export class Toolbar {
 
     this.element.innerHTML = `
       <div class="toolbar-left">
-        <button id="btn-toggle-sidebar-nav" class="tool-btn highlight" title="展开/收起属种分列侧边栏 (快捷键: [)">
+        <button id="btn-toggle-sidebar-nav" class="tool-btn ${this.isSidebarActive ? 'highlight' : ''}" title="展开/收起属种分列侧边栏 (快捷键: [)">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
           </svg>
@@ -165,11 +184,11 @@ export class Toolbar {
 
         <div class="brand">
           <div class="brand-logo">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M3 3v18h18M7 16l4-8 4 6 5-10" />
             </svg>
           </div>
-          <span class="brand-name">Straditize <span style="background: linear-gradient(135deg, #0284c7, #38bdf8); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 4px; margin-left: 3px; letter-spacing: 0.5px;">PRO</span></span>
+          <span class="brand-name">Straditize <span style="background: linear-gradient(135deg, #0284c7, #38bdf8); color: #fff; font-size: 9.5px; font-weight: 700; padding: 1px 4px; border-radius: 4px; margin-left: 2px; letter-spacing: 0.5px;">PRO</span></span>
         </div>
 
         <div class="divider"></div>
@@ -183,7 +202,7 @@ export class Toolbar {
           </button>
           <input type="file" id="file-input-image" accept="image/*" style="display: none;" />
 
-          <button id="btn-save-project" class="tool-btn" title="保存完整地质数字化项目 (.tar 开放归档) 供后续二次修改与复用">
+          <button id="btn-save-project" class="tool-btn" title="保存完整地质数字化项目 (.tar 开放归档)">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
               <polyline points="17 21 17 13 7 13 7 21"/>
@@ -192,7 +211,7 @@ export class Toolbar {
             <span>存项目</span>
           </button>
 
-          <button id="btn-open-project" class="tool-btn" title="打开已有数字化项目 (.tar / .json)">
+          <button id="btn-open-project" class="tool-btn" title="打开已有项目包 (.tar / .json)">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
             </svg>
@@ -200,7 +219,7 @@ export class Toolbar {
           </button>
           <input type="file" id="file-input-project" accept=".tar,.json,.tar.gz" style="display: none;" />
 
-          <select id="select-sample-diagram" class="sample-select" title="快速载入内置地学范例" style="max-width: 85px; font-size: 11px;">
+          <select id="select-sample-diagram" class="sample-select" title="快速载入经典地学剖面范例" style="max-width: 80px; font-size: 11px;">
             <option value="" disabled selected>📂 范例...</option>
             <option value="hoya">Hoya</option>
             <option value="verification">验证图谱</option>
@@ -210,86 +229,52 @@ export class Toolbar {
       </div>
 
       <div class="toolbar-center">
-        <!-- 现代化 7 步地学工作流导引 Stepper -->
+        <!-- 7 步工作流导引 Stepper -->
         <div class="workflow-stepper">
           ${stepperHtml}
         </div>
       </div>
 
-        <div class="divider"></div>
-
-        <!-- 显式 6 大工具模式工具箱 -->
-        <div class="btn-group tool-mode-group">
-          <button class="tool-btn ${this.currentToolMode === 'select' ? 'active-mode' : ''}" data-tool-mode="select" title="选择与微调模式 (快捷键: V)">
+      <div class="toolbar-right">
+        <!-- 撤销/重做 -->
+        <div class="btn-group">
+          <button id="btn-undo" class="tool-btn" title="撤销 (Ctrl+Z)" ${!this.history.canUndo() ? 'disabled' : ''} style="padding: 3px 6px;">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="m3 3 7 18 3-7 7-3L3 3z"/>
+              <path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/>
             </svg>
-            <span>选择 (V)</span>
           </button>
-
-          <button class="tool-btn ${this.currentToolMode === 'pan' ? 'active-mode' : ''}" data-tool-mode="pan" title="抓手平移模式 (快捷键: H / 空格)">
+          <button id="btn-redo" class="tool-btn" title="重做 (Ctrl+Y)" ${!this.history.canRedo() ? 'disabled' : ''} style="padding: 3px 6px;">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M18 11V6a2 2 0 0 0-4 0v3M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8M6 14v-2a2 2 0 0 0-4 0v5a7 7 0 0 0 7 7h3a7 7 0 0 0 7-7v-6a2 2 0 0 0-4 0"/>
+              <path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/>
             </svg>
-            <span>抓手 (H)</span>
-          </button>
-
-          <button class="tool-btn ${this.currentToolMode === 'roi' ? 'active-mode' : ''}" data-tool-mode="roi" title="数据有效区 ROI 工具 (快捷键: R)">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-              <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>
-            </svg>
-            <span>数据区 (R)</span>
-          </button>
-
-          <button class="tool-btn ${this.currentToolMode === 'addCol' ? 'active-mode' : ''}" data-tool-mode="addCol" title="添加分列线 (快捷键: C)">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="19" y1="5" x2="19" y2="19" stroke-dasharray="2 2"/>
-            </svg>
-            <span>+列 (C)</span>
-          </button>
-
-          <button class="tool-btn ${this.currentToolMode === 'addPoint' ? 'active-mode' : ''}" data-tool-mode="addPoint" title="添加控制拐点 (快捷键: P)">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="4" fill="currentColor"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
-            </svg>
-            <span>+点 (P)</span>
-          </button>
-
-          <button class="tool-btn ${this.currentToolMode === 'eraser' ? 'active-mode' : ''}" data-tool-mode="eraser" title="删除工具 (快捷键: E)">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/>
-            </svg>
-            <span>删 (E)</span>
           </button>
         </div>
-      </div>
 
-      <div class="toolbar-right">
-        <!-- 视图缩放控制 -->
+        <!-- 缩放控制 (10% ~ 1000%) -->
         <div class="btn-group">
-          <button id="btn-zoom-out" class="tool-btn" title="缩小">
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+          <button id="btn-zoom-out" class="tool-btn" title="缩小 (快捷键: 滚轮向下)" style="padding: 3px 5px;">
+            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>
             </svg>
           </button>
-          <span id="zoom-indicator" class="zoom-badge" style="min-width: 32px; font-size: 10px;">${this.currentScaleText}</span>
-          <button id="btn-zoom-in" class="tool-btn" title="放大">
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+          <span id="zoom-indicator" class="zoom-badge" style="min-width: 32px; font-size: 10px; cursor: pointer; padding: 2px 4px;" title="点击重置 100% (Ctrl+1)">${this.currentScaleText}</span>
+          <button id="btn-zoom-in" class="tool-btn" title="放大 (快捷键: 滚轮向上)" style="padding: 3px 5px;">
+            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
             </svg>
           </button>
         </div>
 
         <!-- 滤镜与二值透视 -->
-        <div class="btn-group" style="display: flex; align-items: center; gap: 4px;">
-          <button id="btn-toggle-binary" class="tool-btn ${this.isBinaryOverlayActive ? 'active' : ''}" title="二值化墨迹透视遮罩 (快捷键: B)">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+        <div class="btn-group" style="display: flex; align-items: center; gap: 3px;">
+          <button id="btn-toggle-binary" class="tool-btn ${this.isBinaryOverlayActive ? 'active' : ''}" title="二值化墨迹透视遮罩 (快捷键: B)" style="padding: 3px 6px; font-size: 10.5px;">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="9"/>
               <path d="M12 3v18A9 9 0 0 0 12 3z" fill="currentColor"/>
             </svg>
-            <span>透视 [B]</span>
+            <span>透视</span>
           </button>
-          <select id="select-degrid-strength" class="sample-select" title="去网格横线灵敏度 (配合 B 键红色高亮预览切除效果)" style="font-size: 10px; max-width: 68px; padding: 2px 3px;">
+          <select id="select-degrid-strength" class="sample-select" title="去网格横线灵敏度" style="font-size: 10px; max-width: 60px; padding: 2px 2px;">
             <option value="off">去线:关</option>
             <option value="weak">去线:弱</option>
             <option value="medium" selected>去线:中</option>
@@ -297,62 +282,44 @@ export class Toolbar {
           </select>
         </div>
 
-        <!-- 撤销/重做 -->
-        <div class="btn-group">
-          <button id="btn-undo" class="tool-btn" title="撤销 (Ctrl+Z)" ${!this.history.canUndo() ? 'disabled' : ''}>
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/>
-            </svg>
-          </button>
-          <button id="btn-redo" class="tool-btn" title="重做 (Ctrl+Y)" ${!this.history.canRedo() ? 'disabled' : ''}>
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/>
-            </svg>
-          </button>
-        </div>
-
         <!-- 年代-深度模型视觉检查与解译入口 -->
-        <button id="btn-age-depth-modal" class="tool-btn" title="解译并视觉核查同剖面年代-深度模型 (Bacon / Bchron 等)" style="padding: 4px 8px; font-size: 11px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.4);">
-          <span>⏳ 年代模型</span>
+        <button id="btn-age-depth-modal" class="tool-btn" title="解译并视觉核查同剖面年代-深度模型 (Bacon / Bchron 等)" style="padding: 3px 6px; font-size: 10.5px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.4);">
+          <span>⏳ 年代</span>
         </button>
 
-        <div class="dropdown-container">
-          <button id="btn-export-csv" class="tool-btn export" title="导出为 CSV 表格" style="padding: 4px 7px; font-size: 11px;">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-            </svg>
-            <span>导出 CSV</span>
-          </button>
-          <button id="btn-export-json" class="tool-btn export-sub" title="导出完整 JSON 数据" style="padding: 4px 5px; font-size: 10px;">JSON</button>
-        </div>
+        <!-- 导出主按钮 -->
+        <button id="btn-export-csv" class="btn btn-primary" title="打开数据导出与校验控制台 (S7)" style="padding: 4px 10px; font-size: 11px; font-weight: 700; white-space: nowrap;">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+          </svg>
+          <span>导出</span>
+        </button>
 
-        <!-- 属性检查器展开/折叠 -->
-        <button id="btn-toggle-inspector-nav" class="tool-btn highlight" title="展开/收起右侧属性检查器 (快捷键: ])">
+        <!-- 属性检查器展开/折叠按钮 (常驻顶栏最右侧) -->
+        <button id="btn-toggle-inspector-nav" class="tool-btn ${this.isInspectorActive ? 'highlight' : ''}" title="展开/收起右侧属性检查器 (快捷键: ])" style="padding: 3px 8px; font-size: 11px; font-weight: 600;">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
             <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>
           </svg>
-          <span>属性</span>
+          <span>属性 ☷</span>
         </button>
 
         <!-- 日夜间主题切换按钮 -->
-        <button id="btn-toggle-theme" class="tool-btn" title="切换日间模式 / 夜间模式 (快捷键: T)" style="padding: 4px 6px;">
-          <svg id="theme-icon-moon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+        <button id="btn-toggle-theme" class="tool-btn" title="切换日间/夜间模式 (快捷键: T)" style="padding: 4px 6px;">
+          <svg id="theme-icon-moon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
           </svg>
-          <span id="theme-text">主题</span>
         </button>
 
-        <div id="rpc-status-pill" class="status-pill ${isConnected ? 'online' : 'mock'}" title="点击配置后端 JSON-RPC" style="padding: 3px 6px; font-size: 10px;">
+        <div id="rpc-status-pill" class="status-pill ${isConnected ? 'online' : 'mock'}" title="点击配置后端 JSON-RPC" style="padding: 2px 5px; font-size: 9.5px;">
           <span class="status-dot"></span>
           <span class="status-text">${isConnected ? 'RPC' : 'Mock'}</span>
         </div>
 
         ${this.isDesktopMode ? `
-          <button id="btn-shutdown" class="tool-btn danger" title="退出程序并安全终止后台服务" style="background: rgba(239, 68, 68, 0.12); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.35); padding: 4px 8px; font-weight: 600; border-radius: 4px; display: flex; align-items: center; gap: 4px;">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+          <button id="btn-shutdown" class="tool-btn danger" title="退出程序并安全终止后台服务" style="background: rgba(239, 68, 68, 0.12); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.35); padding: 4px 6px;">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10"/>
             </svg>
-            <span>退出</span>
           </button>
         ` : ''}
       </div>

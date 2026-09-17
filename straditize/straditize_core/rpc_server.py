@@ -491,11 +491,19 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
         # Age-depth diagram image endpoint
         if raw_path in ("/image/agedepth", "/api/image/agedepth"):
             session = getattr(self, "session", None)
-            if session and session.age_depth_image is None:
-                try:
-                    session.load_age_depth_diagram(sample_key="bacon")
-                except Exception:
-                    pass
+            if session:
+                qs = parse_qs(parsed.query)
+                sample_key = qs.get("sample", [None])[0]
+                if sample_key in ("bacon", "bchron"):
+                    try:
+                        session.load_age_depth_diagram(sample_key=sample_key)
+                    except Exception:
+                        pass
+                elif session.age_depth_image is None:
+                    try:
+                        session.load_age_depth_diagram(sample_key="bacon")
+                    except Exception:
+                        pass
 
             if session and session.age_depth_image is not None:
                 bio = io.BytesIO()

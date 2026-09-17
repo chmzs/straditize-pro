@@ -36,18 +36,26 @@ export class Inspector {
     return this.element;
   }
 
+  public getIsCollapsed(): boolean {
+    return this.isCollapsed;
+  }
+
+  public setCollapsed(collapsed: boolean): void {
+    this.isCollapsed = collapsed;
+    if (this.isCollapsed) {
+      this.element.classList.add('collapsed');
+    } else {
+      this.element.classList.remove('collapsed');
+    }
+  }
+
   public setWorkflowStage(stage: number): void {
     this.currentStage = stage;
     this.render();
   }
 
   public toggleCollapse(): boolean {
-    this.isCollapsed = !this.isCollapsed;
-    if (this.isCollapsed) {
-      this.element.classList.add('collapsed');
-    } else {
-      this.element.classList.remove('collapsed');
-    }
+    this.setCollapsed(!this.isCollapsed);
     this.callbacks.onToggleCollapse(this.isCollapsed);
     return this.isCollapsed;
   }

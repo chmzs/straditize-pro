@@ -93,9 +93,30 @@ export class AgeDepthModal {
             </div>
 
             <!-- Canvas 容器 -->
-            <div id="ad-canvas-container" style="flex: 1; height: 380px; position: relative; background: #0b0f19; border: 1px solid var(--border-light); border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
-              <canvas id="ad-inspection-canvas" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: crosshair;"></canvas>
-              <div id="ad-canvas-hud" style="position: absolute; bottom: 8px; left: 8px; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(4px); padding: 4px 8px; border-radius: 4px; font-size: 10.5px; font-family: var(--font-mono); color: #94a3b8; border: 1px solid rgba(255,255,255,0.1); pointer-events: none;">
+            <div id="ad-canvas-container" style="flex: 1; height: 420px; min-height: 360px; position: relative; background: #0b0f19; border: 2px dashed var(--border-color); border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; transition: border-color 0.2s;">
+              <canvas id="ad-inspection-canvas" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: crosshair; display: none;"></canvas>
+              
+              <!-- 醒目的空状态与上传引导区 (未载入图谱时直接呈现在画布中央) -->
+              <div id="ad-empty-drop-zone" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(11, 15, 25, 0.94); z-index: 10; padding: 24px; text-align: center;">
+                <div style="font-size: 44px; margin-bottom: 10px;">⏳</div>
+                <h4 style="font-size: 15px; font-weight: 700; color: #f8fafc; margin: 0 0 6px 0;">请载入年代-深度模型图谱 (Age-Depth Diagram)</h4>
+                <p style="font-size: 11.5px; color: var(--text-secondary); margin: 0 0 16px 0; max-width: 420px; line-height: 1.5;">
+                  可直接将 <strong>Bacon / Bchron / Clam / OxCal</strong> 导出的年代曲线图拖拽至此处，或点击下方按钮选择文件。
+                </p>
+                <button id="ad-btn-center-browse" class="btn btn-primary" style="padding: 8px 24px; font-size: 12.5px; font-weight: 700; margin-bottom: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+                  </svg>
+                  <span>📁 选择本地年代图文件 (PNG / JPG)</span>
+                </button>
+                <div style="display: flex; gap: 12px; align-items: center; font-size: 11px; color: var(--text-muted);">
+                  <span>快速体验内置典型范例：</span>
+                  <button id="ad-btn-center-bacon" class="tool-btn" style="padding: 3px 10px; font-size: 11px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.3);">Hoya Bacon 贝叶斯图</button>
+                  <button id="ad-btn-center-bchron" class="tool-btn" style="padding: 3px 10px; font-size: 11px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.3);">Bchron 阶梯图</button>
+                </div>
+              </div>
+
+              <div id="ad-canvas-hud" style="position: absolute; bottom: 8px; left: 8px; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(4px); padding: 4px 8px; border-radius: 4px; font-size: 10.5px; font-family: var(--font-mono); color: #94a3b8; border: 1px solid rgba(255,255,255,0.1); pointer-events: none; z-index: 15;">
                 悬停查验: 移动光标在年代曲线上即可实时测读深度与对应年代
               </div>
             </div>
@@ -108,12 +129,25 @@ export class AgeDepthModal {
 
           <!-- 右侧: 标定控制与花粉样品联动映射表 -->
           <div class="ad-control-pane" style="width: 320px; display: flex; flex-direction: column; gap: 10px; background: var(--bg-tertiary); padding: 12px; border-radius: 6px; border: 1px solid var(--border-light); overflow-y: auto;">
-            <!-- 范例载入 -->
-            <div class="form-group" style="margin: 0;">
-              <label style="font-size: 11px; font-weight: bold; color: var(--text-primary);">年代图谱数据源:</label>
-              <div style="display: flex; gap: 6px; margin-top: 4px;">
-                <button class="tool-btn" id="ad-btn-load-bacon" style="flex: 1; font-size: 11px;">Hoya Bacon 图</button>
-                <button class="tool-btn" id="ad-btn-load-bchron" style="flex: 1; font-size: 11px;">Bchron 阶梯图</button>
+            <!-- 年代图谱数据源 -->
+            <div class="form-group" style="margin: 0; background: rgba(56, 189, 248, 0.05); padding: 8px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.2);">
+              <label style="font-size: 11px; font-weight: bold; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
+                <span>年代图谱数据源:</span>
+                <span id="ad-current-source-label" style="font-size: 10px; color: #38bdf8;">未载入</span>
+              </label>
+              <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px;">
+                <button class="btn btn-primary" id="ad-btn-upload-file" style="width: 100%; font-size: 11.5px; padding: 6px 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+                  </svg>
+                  <span>📁 上传本地年代图 (PNG/JPG)</span>
+                </button>
+                <input type="file" id="ad-file-input" accept="image/png,image/jpeg,image/webp" style="display: none;" />
+
+                <div style="display: flex; gap: 6px;">
+                  <button class="tool-btn" id="ad-btn-load-bacon" style="flex: 1; font-size: 10.5px;">Bacon 范例</button>
+                  <button class="tool-btn" id="ad-btn-load-bchron" style="flex: 1; font-size: 10.5px;">Bchron 范例</button>
+                </div>
               </div>
             </div>
 
@@ -241,6 +275,41 @@ export class AgeDepthModal {
       this.renderCanvas();
     });
 
+    // 上传本地年代图文件
+    const fileInput = modal.querySelector('#ad-file-input') as HTMLInputElement;
+    modal.querySelector('#ad-btn-upload-file')?.addEventListener('click', () => {
+      fileInput?.click();
+    });
+    modal.querySelector('#ad-btn-center-browse')?.addEventListener('click', () => {
+      fileInput?.click();
+    });
+
+    fileInput?.addEventListener('change', (e) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (files && files[0]) {
+        this.handleUploadFile(files[0]);
+      }
+    });
+
+    // 拖拽文件进入 Canvas 区域
+    const dropZone = modal.querySelector('#ad-canvas-container') as HTMLElement;
+    dropZone?.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = '#38bdf8';
+    });
+    dropZone?.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = 'var(--border-color)';
+    });
+    dropZone?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = 'var(--border-color)';
+      const files = e.dataTransfer?.files;
+      if (files && files[0]) {
+        this.handleUploadFile(files[0]);
+      }
+    });
+
     // 载入内置范例
     modal.querySelector('#ad-btn-load-bacon')?.addEventListener('click', () => {
       (modal.querySelector('#ad-inp-depth-top') as HTMLInputElement).value = '0';
@@ -249,8 +318,22 @@ export class AgeDepthModal {
       (modal.querySelector('#ad-inp-age-right') as HTMLInputElement).value = '0';
       this.loadSampleImage('bacon');
     });
+    modal.querySelector('#ad-btn-center-bacon')?.addEventListener('click', () => {
+      (modal.querySelector('#ad-inp-depth-top') as HTMLInputElement).value = '0';
+      (modal.querySelector('#ad-inp-depth-bottom') as HTMLInputElement).value = '150';
+      (modal.querySelector('#ad-inp-age-left') as HTMLInputElement).value = '3000';
+      (modal.querySelector('#ad-inp-age-right') as HTMLInputElement).value = '0';
+      this.loadSampleImage('bacon');
+    });
 
     modal.querySelector('#ad-btn-load-bchron')?.addEventListener('click', () => {
+      (modal.querySelector('#ad-inp-depth-top') as HTMLInputElement).value = '0';
+      (modal.querySelector('#ad-inp-depth-bottom') as HTMLInputElement).value = '150';
+      (modal.querySelector('#ad-inp-age-left') as HTMLInputElement).value = '0';
+      (modal.querySelector('#ad-inp-age-right') as HTMLInputElement).value = '12000';
+      this.loadSampleImage('bchron');
+    });
+    modal.querySelector('#ad-btn-center-bchron')?.addEventListener('click', () => {
       (modal.querySelector('#ad-inp-depth-top') as HTMLInputElement).value = '0';
       (modal.querySelector('#ad-inp-depth-bottom') as HTMLInputElement).value = '150';
       (modal.querySelector('#ad-inp-age-left') as HTMLInputElement).value = '0';
@@ -285,6 +368,48 @@ export class AgeDepthModal {
     }
   }
 
+  private handleUploadFile(file: File): void {
+    if (!file.type.startsWith('image/')) {
+      alert('请上传有效的图片文件 (PNG/JPG/WebP)！');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) return;
+
+      const img = new Image();
+      img.onload = async () => {
+        this.bgImage = img;
+        if (this.canvas) {
+          this.canvas.width = img.naturalWidth;
+          this.canvas.height = img.naturalHeight;
+          this.canvas.style.display = 'block';
+        }
+        const emptyZone = this.modalEl?.querySelector('#ad-empty-drop-zone') as HTMLElement;
+        if (emptyZone) emptyZone.style.display = 'none';
+
+        const sourceLabel = this.modalEl?.querySelector('#ad-current-source-label');
+        if (sourceLabel) sourceLabel.textContent = file.name;
+
+        const statusEl = this.modalEl?.querySelector('#ad-status-msg');
+        if (statusEl) statusEl.textContent = `已载入用户图谱: ${file.name} (${img.naturalWidth}×${img.naturalHeight})`;
+
+        // 同步通知后端 Session
+        try {
+          await this.rpcClient.call('agedepth.loadModelDiagram', { base64_data: dataUrl });
+        } catch (err) {
+          console.warn('Backend loadModelDiagram via base64 fallback:', err);
+        }
+
+        this.inspectionData = null;
+        this.renderCanvas();
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  }
+
   private loadSampleImage(sampleKey: string): void {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -293,11 +418,18 @@ export class AgeDepthModal {
       if (this.canvas) {
         this.canvas.width = img.naturalWidth;
         this.canvas.height = img.naturalHeight;
+        this.canvas.style.display = 'block';
       }
+      const emptyZone = this.modalEl?.querySelector('#ad-empty-drop-zone') as HTMLElement;
+      if (emptyZone) emptyZone.style.display = 'none';
+
+      const sourceLabel = this.modalEl?.querySelector('#ad-current-source-label');
+      if (sourceLabel) sourceLabel.textContent = sampleKey.toUpperCase();
+
       this.inspectionData = null;
       this.renderCanvas();
       const statusEl = this.modalEl?.querySelector('#ad-status-msg');
-      if (statusEl) statusEl.textContent = `已载入范例: ${sampleKey.toUpperCase()}`;
+      if (statusEl) statusEl.textContent = `已载入内置范例: ${sampleKey.toUpperCase()}`;
     };
     img.src = `/image/agedepth?sample=${sampleKey}&t=${Date.now()}`;
   }

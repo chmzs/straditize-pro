@@ -251,19 +251,40 @@ body.theme-light .step-num {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 8px;
-  z-index: 20;
-  gap: 4px;
-  white-space: nowrap;
-  overflow: hidden;
+  padding: 0 10px;
+  z-index: 25;
+  gap: 8px;
   box-sizing: border-box;
 }
 
-.toolbar-left, .toolbar-center, .toolbar-right {
+.toolbar-left {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   flex-shrink: 0;
+}
+
+.toolbar-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 4px;
+}
+
+.toolbar-center::-webkit-scrollbar {
+  display: none;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .brand {
@@ -500,22 +521,55 @@ body.theme-light .step-num {
 /* 抽屉边缘展开把手 (Drawer Pull Tab) */
 .drawer-toggle-tab {
   position: absolute;
-  top: 90px;
-  z-index: 50;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
+  top: 110px;
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-  transition: all 0.15s ease;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 8px 4px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.65);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 14px 6px;
   user-select: none;
+}
+
+body.theme-light .drawer-toggle-tab {
+  background: #ffffff;
+  border-color: #0284c7;
+  color: #0284c7;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.drawer-toggle-tab:hover {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.6);
+  transform: scale(1.06);
+}
+
+.drawer-toggle-tab.left-tab {
+  left: 0;
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  writing-mode: vertical-rl;
+  letter-spacing: 3px;
+}
+
+.drawer-toggle-tab.right-tab {
+  right: 0 !important;
+  left: auto !important;
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  writing-mode: vertical-rl;
+  letter-spacing: 3px;
 }
 
 /* S0 空状态画布样式 */
@@ -696,29 +750,6 @@ body.theme-light .floating-tool-btn.active-mode {
   background: rgba(2, 132, 199, 0.12) !important;
   color: #0284c7 !important;
   border-color: #0284c7 !important;
-}
-
-.drawer-toggle-tab:hover {
-  color: var(--text-primary);
-  background: var(--bg-tertiary);
-  border-color: var(--accent-blue);
-  box-shadow: 0 4px 18px rgba(56, 189, 248, 0.25);
-}
-
-.drawer-toggle-tab.left-tab {
-  left: 0;
-  border-left: none;
-  border-radius: 0 6px 6px 0;
-  writing-mode: vertical-rl;
-  letter-spacing: 2px;
-}
-
-.drawer-toggle-tab.right-tab {
-  right: 0;
-  border-right: none;
-  border-radius: 6px 0 0 6px;
-  writing-mode: vertical-rl;
-  letter-spacing: 2px;
 }
 
 /* ================= 右侧属性检查器 Inspector ================= */
