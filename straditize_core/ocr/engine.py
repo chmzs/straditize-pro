@@ -2,8 +2,8 @@
 
 Features:
 1. Label strip bounding box crop with margin padding.
-2. Oblique label 45-degree affine rectification.
-3. Native offline ONNX Runtime PP-OCRv4 text recognition (pre-installed weights, zero network reliance).
+2. User-guided or automatic 45-degree affine rectification to horizontal.
+3. Native offline ONNX Runtime PP-OCRv4 text detection (DBNet) & recognition (CRNN/CTC).
 4. Botanical dictionary fuzzy matching and status classification (auto / confirm / unrecognized).
 5. Spatial column snapping: aligns each label's bottom anchor (X_anchor) with the closest Column.startX below.
 """
@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 import numpy as np
 from PIL import Image
+from skimage.measure import label, regionprops
 
 from .affine import compute_baseline_anchor, map_box_to_original, rotate_label_strip
 from .dictionary import PollenDictionary
@@ -69,7 +70,6 @@ class OcrTaxaRecognitionEngine:
 
                 with open(key_path, "r", encoding="utf-8") as f:
                     self.keys = [c.strip("\r\n") for c in f.readlines()]
-                # PaddleOCR convention: index 0 is blank, last is space
                 self.keys = ["blank"] + self.keys + [" "]
 
                 if det_path.exists():
@@ -87,9 +87,21 @@ class OcrTaxaRecognitionEngine:
         diagram_image: Image.Image | np.ndarray,
         label_row_bbox: tuple[int, int, int, int] | list[int],
         columns: list[dict[str, Any]] | None = None,
-        angle_deg: float = -45.0,
+        angle_deg: float = 45.0,
     ) -> dict[str, Any]:
-        """Recognizes top label strip and snaps detected labels to columns."""
+        """Recognizes top label strip and snaps detected labels to columns.
+
+        Parameters
+        ----------
+        diagram_image:
+            Full diagram image.
+        label_row_bbox:
+            [x0, y0, x1, y1] enclosing the header label area.
+        columns:
+            List of detected Column definitions from session (each having 'startX', 'id', etc.).
+        angle_deg:
+            Label slant angle (default +45.0° rotates slanted text to horizontal).
+        """
         if isinstance(diagram_image, np.ndarray):
             full_img = Image.fromarray(diagram_image)
         else:
@@ -98,9 +110,9 @@ class OcrTaxaRecognitionEngine:
         w_img, h_img = full_img.size
         lx0, ly0, lx1, ly1 = label_row_bbox
 
-        crop_x0 = max(0, int(round(lx0 - 10)))
+        crop_x0 = max(0, int(round(lx0 - 5)))
         crop_y0 = max(0, int(round(ly0 - 5)))
-        crop_x1 = min(w_img, int(round(lx1 + 10)))
+        crop_x1 = min(w_img, int(round(lx1 + 5)))
         crop_y1 = min(h_img, int(round(ly1 + 5)))
 
         cropped_strip = full_img.crop((crop_x0, crop_y0, crop_x1, crop_y1))
@@ -109,7 +121,7 @@ class OcrTaxaRecognitionEngine:
         cropped_strip.save(bio, format="PNG")
         strip_b64 = "data:image/png;base64," + base64.b64encode(bio.getvalue()).decode("ascii")
 
-        # 1. Rotate oblique strip to horizontal reading posture
+        # 1. Rotate oblique strip to horizontal reading posture (default angle_deg=+45.0)
         rot_arr, meta = rotate_label_strip(cropped_strip, angle_deg=angle_deg)
 
         # 2. Extract text regions and transcribe text
@@ -137,6 +149,7 @@ class OcrTaxaRecognitionEngine:
                 "anchor_y": anchor_y,
                 "associated_column_id": None,
                 "associated_column_index": None,
+                "associated_column_name": None,
             }
             processed_labels.append(label_entry)
 
@@ -167,18 +180,81 @@ class OcrTaxaRecognitionEngine:
         global_offset: tuple[float, float],
     ) -> list[dict[str, Any]]:
         """Segments horizontal text regions and transcribes via ONNX PP-OCRv4."""
-        detections = []
         rot_h, rot_w = rectified_image.shape[:2]
+        rot_img = Image.fromarray(rectified_image)
 
+        # 1. Use DBNet detection model if available
+        if self.sess_det is not None:
+            limit_side_len = 1600
+            ratio = float(limit_side_len) / max(rot_h, rot_w)
+            resize_h = int(round(rot_h * ratio / 32) * 32)
+            resize_w = int(round(rot_w * ratio / 32) * 32)
+
+            resized = rot_img.resize((resize_w, resize_h), Image.Resampling.BILINEAR)
+            arr = np.array(resized, dtype=np.float32) / 255.0
+            mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+            std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+            arr = (arr - mean) / std
+            arr = arr.transpose((2, 0, 1))
+            blob = np.expand_dims(arr, axis=0)
+
+            input_name = self.sess_det.get_inputs()[0].name
+            pred = self.sess_det.run(None, {input_name: blob})[0][0, 0]
+
+            seg_mask = (pred > 0.2)
+            lbl = label(seg_mask)
+            props = regionprops(lbl)
+
+            scale_x = rot_w / float(resize_w)
+            scale_y = rot_h / float(resize_h)
+
+            sorted_props = sorted(props, key=lambda p: p.bbox[1])
+            detections = []
+
+            for p in sorted_props:
+                minr, minc, maxr, maxc = p.bbox
+                bw = (maxc - minc) * scale_x
+                bh = (maxr - minr) * scale_y
+
+                # Filter text-like components
+                if bw >= 16 and bh >= 8 and p.area > 35:
+                    x0 = int(max(0, minc * scale_x - 3))
+                    y0 = int(max(0, minr * scale_y - 3))
+                    x1 = int(min(rot_w, maxc * scale_x + 3))
+                    y1 = int(min(rot_h, maxr * scale_y + 3))
+
+                    crop_w = rot_img.crop((x0, y0, x1, y1))
+                    transcribed = self._transcribe_crop(np.array(crop_w))
+
+                    # Filter single-letter or meaningless artifacts
+                    if not transcribed or len(transcribed.strip()) <= 1:
+                        continue
+
+                    box_rot = [
+                        (float(x0), float(y0)),
+                        (float(x1), float(y0)),
+                        (float(x1), float(y1)),
+                        (float(x0), float(y1)),
+                    ]
+                    orig_bbox = map_box_to_original(box_rot, meta, global_offset=global_offset)
+
+                    detections.append({
+                        "text": transcribed,
+                        "bbox_orig": orig_bbox,
+                        "rot_span": (x0, x1),
+                    })
+
+            if len(detections) > 0:
+                return detections
+
+        # Fallback: Projection-based heuristic segmentation
+        detections = []
         if rectified_image.ndim == 3:
             gray = np.dot(rectified_image[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
         else:
             gray = rectified_image.astype(np.uint8)
 
-        # Invert: text foreground = white (1), background = black (0)
         binary = (gray < 160).astype(np.uint8)
-
-        # Vertical projection across horizontal strip
         v_proj = np.sum(binary, axis=0)
         from scipy.ndimage import uniform_filter1d
 
@@ -186,23 +262,20 @@ class OcrTaxaRecognitionEngine:
         threshold_val = max(5.0, np.mean(smooth_proj) * 0.25)
         active_cols = smooth_proj > threshold_val
 
-        # Segment contiguous clusters
         diffs = np.diff(np.pad(active_cols.astype(int), (1, 1), "constant"))
         starts = np.where(diffs == 1)[0]
         ends = np.where(diffs == -1)[0]
 
         for s, e in zip(starts, ends):
             span_w = e - s
-            if span_w < 12:  # Filter noise specks
+            if span_w < 12:
                 continue
 
-            # Crop word slice from rectified image
             pad_x = 3
             x0 = max(0, s - pad_x)
             x1 = min(rot_w, e + pad_x)
             word_crop = rectified_image[:, x0:x1]
 
-            # Transcribe via ONNX if session loaded, otherwise heuristic fallback
             transcribed_text = self._transcribe_crop(word_crop)
             if not transcribed_text:
                 transcribed_text = "Pinus"
@@ -233,7 +306,6 @@ class OcrTaxaRecognitionEngine:
             if h == 0 or w == 0:
                 return ""
 
-            # Target standard height = 48
             target_h = 48
             target_w = max(16, int(round(w * (target_h / float(h)))))
             target_w = min(640, int(np.ceil(target_w / 8.0) * 8))
@@ -242,15 +314,13 @@ class OcrTaxaRecognitionEngine:
             resized = pil_img.resize((target_w, target_h), Image.Resampling.BILINEAR)
 
             arr = np.array(resized, dtype=np.float32)
-            # Normalize to [-0.5, 0.5] per PP-OCRv4 rec convention
-            arr = arr.transpose((2, 0, 1)) / 255.0  # (3, H, W)
+            arr = arr.transpose((2, 0, 1)) / 255.0
             arr = (arr - 0.5) / 0.5
-            blob = np.expand_dims(arr, axis=0)  # (1, 3, H, W)
+            blob = np.expand_dims(arr, axis=0)
 
             input_name = self.sess_rec.get_inputs()[0].name
-            preds = self.sess_rec.run(None, {input_name: blob})[0]  # (1, T, num_classes)
+            preds = self.sess_rec.run(None, {input_name: blob})[0]
 
-            # CTC greedy decoding
             indices = np.argmax(preds[0], axis=-1)
             char_list = []
             prev_idx = -1
@@ -276,8 +346,8 @@ class OcrTaxaRecognitionEngine:
         sorted_cols = sorted(columns, key=lambda c: c.get("startX", c.get("start", 0.0)))
         used_col_indices = set()
 
-        for label in labels:
-            ax = label["anchor_x"]
+        for l_item in labels:
+            ax = l_item["anchor_x"]
             best_col = None
             best_dist = 99999.0
             best_c_idx = -1
@@ -291,7 +361,7 @@ class OcrTaxaRecognitionEngine:
                     best_c_idx = c_idx
 
             if best_col is not None and best_dist < 120.0 and best_c_idx not in used_col_indices:
-                label["associated_column_id"] = best_col.get("id") or f"taxa_{best_c_idx}"
-                label["associated_column_index"] = best_col.get("col_index", best_c_idx)
-                label["associated_column_name"] = best_col.get("name")
+                l_item["associated_column_id"] = best_col.get("id") or f"taxa_{best_c_idx}"
+                l_item["associated_column_index"] = best_col.get("col_index", best_c_idx)
+                l_item["associated_column_name"] = best_col.get("name")
                 used_col_indices.add(best_c_idx)

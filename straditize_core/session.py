@@ -2154,7 +2154,7 @@ class StraditizeSession:
     def ocr_recognize_labels(
         self,
         label_row_bbox: list[int] | tuple[int, int, int, int] | None = None,
-        angle_deg: float = -45.0,
+        angle_deg: float = 45.0,
         custom_dict_path: str | None = None,
     ) -> dict[str, Any]:
         """Executes OCR detection and botanical matching on diagram top label row."""
@@ -2163,14 +2163,14 @@ class StraditizeSession:
 
         w, h = self.width, self.height
         if label_row_bbox is None:
-            # Default to top 25% of the data ROI or diagram
+            # Default to top header region above data ROI
             if self.data_xlim and self.data_ylim:
                 x0, x1 = int(self.data_xlim[0]), int(self.data_xlim[1])
-                y0 = max(0, int(self.data_ylim[0] - 250))
-                y1 = int(self.data_ylim[0] + 10)
+                y0 = max(0, int(self.data_ylim[0] - 320))
+                y1 = int(self.data_ylim[0] + 5)
                 bbox = [x0, y0, x1, y1]
             else:
-                bbox = [int(w * 0.1), int(h * 0.05), int(w * 0.9), int(h * 0.30)]
+                bbox = [int(w * 0.1), int(h * 0.05), int(w * 0.9), int(h * 0.32)]
         else:
             bbox = list(label_row_bbox)
 
