@@ -43,7 +43,7 @@ export class OcrReviewModal {
   // 交互式框选与旋转状态
   private rawDiagramImg: HTMLImageElement | null = null;
   private cropX0: number = 315;
-  private cropY0: number = 190;
+  private cropY0: number = 180;
   private cropX1: number = 1946;
   private cropY1: number = 515;
   private currentAngleDeg: number = 45.0;
@@ -53,9 +53,16 @@ export class OcrReviewModal {
   private rotPreviewCanvas: HTMLCanvasElement | null = null;
   private rotPreviewCtx: CanvasRenderingContext2D | null = null;
 
-  private isDraggingCrop: boolean = false;
+  // 交互式视口缩放与平移状态 (支持滚轮缩放与抓手平移)
+  private cropScale: number = 0.5;
+  private cropPanX: number = 0;
+  private cropPanY: number = 0;
+  private isPanning: boolean = false;
+  private isDraggingCropBox: boolean = false;
+  private dragMode: 'create' | 'move' | 'nw' | 'ne' | 'se' | 'sw' | null = null;
   private dragStartX: number = 0;
   private dragStartY: number = 0;
+  private initialCropState: { x0: number; y0: number; x1: number; y1: number } = { x0: 0, y0: 0, x1: 0, y1: 0 };
 
   constructor(
     container: HTMLElement,
@@ -75,79 +82,81 @@ export class OcrReviewModal {
     const cal = this.diagramData.calibration;
     this.cropX0 = Math.round(cal.dataXMin);
     this.cropX1 = Math.round(cal.dataXMax);
-    this.cropY0 = Math.max(0, Math.round(cal.dataYMin - 330));
+    this.cropY0 = Math.max(0, Math.round(cal.dataYMin - 335));
     this.cropY1 = Math.round(cal.dataYMin + 10);
     this.currentAngleDeg = 45.0;
 
     const modal = document.createElement('div');
     modal.className = 'modal-backdrop';
     modal.innerHTML = `
-      <div class="modal-dialog modal-large ocr-review-dialog" style="width: min(1200px, 96vw); max-height: 94vh; display: flex; flex-direction: column;">
-        <div class="modal-header">
+      <div class="modal-dialog modal-large ocr-review-dialog" style="width: min(1240px, 97vw); max-height: 95vh; display: flex; flex-direction: column;">
+        <div class="modal-header" style="padding: 10px 16px;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 16px;">🔍</span>
-            <h3>花粉属种名 OCR 识别与审核汇总表 (Taxa OCR & Review)</h3>
-            <span class="logo-badge" style="background: linear-gradient(135deg, #059669, #10b981); font-size: 10px; padding: 2px 6px;">PP-OCRv4 + 500+植物词典</span>
+            <h3 style="font-size: 13.5px; font-weight: 700;">花粉属种名 OCR 识别与审核汇总表 (Taxa OCR & Review)</h3>
+            <span class="logo-badge" style="background: linear-gradient(135deg, #059669, #10b981); font-size: 10px; padding: 2px 6px;">PP-OCRv4 + 500+植物分类词典</span>
           </div>
           <button class="close-btn" id="ocr-close-btn">&times;</button>
         </div>
 
         <div class="modal-body" style="flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow: hidden;">
-          <!-- 阶段 1: 鼠标交互框选 + 实时旋转校正视口 -->
+          <!-- 阶段 1: 交互式视口 (支持滚轮缩放、鼠标自由拖拽框选) + 扶正水平实时预览 -->
           <div style="background: var(--bg-tertiary); border: 1px solid var(--border-light); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-              <div style="display: flex; align-items: center; gap: 10px; font-size: 11px;">
-                <span style="color: #38bdf8; font-weight: 700;">1. 🖱️ 鼠标框选标签范围 (Mouse Drag to Crop):</span>
-                <span id="ocr-crop-coords-label" style="font-family: var(--font-mono); color: #f8fafc; font-size: 10.5px;">
+              <div style="display: flex; align-items: center; gap: 8px; font-size: 11px;">
+                <span style="color: #38bdf8; font-weight: 700;">1. 🖱️ 鼠标框选标签范围:</span>
+                <span id="ocr-crop-coords-label" style="font-family: var(--font-mono); color: #f8fafc; font-size: 11px;">
                   [X: ${this.cropX0}~${this.cropX1}, Y: ${this.cropY0}~${this.cropY1}]
                 </span>
-                <button class="tool-btn" id="btn-ocr-reset-crop" style="font-size: 10px; padding: 1px 6px;">重置默认框</button>
+                <button class="tool-btn" id="btn-ocr-reset-crop" style="font-size: 10px; padding: 2px 7px;">重置范围</button>
+                <span style="color: var(--text-muted); font-size: 10px;">(滚轮缩放 / 空格+拖拽平移)</span>
               </div>
 
               <!-- 旋转校正微调控件 -->
               <div style="display: flex; align-items: center; gap: 8px; font-size: 11px;">
-                <span style="color: #f59e0b; font-weight: 700;">2. 🔄 旋转校正 (Rotation):</span>
+                <span style="color: #f59e0b; font-weight: 700;">2. 🔄 旋转校正:</span>
                 <div style="display: flex; gap: 4px;">
-                  <button class="tool-btn ocr-angle-btn active" data-angle="45" style="padding: 2px 6px; font-size: 10px; color: #38bdf8; border-color: #38bdf8;">45° (标准斜角)</button>
-                  <button class="tool-btn ocr-angle-btn" data-angle="0" style="padding: 2px 6px; font-size: 10px;">0° (水平)</button>
-                  <button class="tool-btn ocr-angle-btn" data-angle="60" style="padding: 2px 6px; font-size: 10px;">60° (陡峭)</button>
-                  <button class="tool-btn ocr-angle-btn" data-angle="30" style="padding: 2px 6px; font-size: 10px;">30° (平缓)</button>
+                  <button class="tool-btn ocr-angle-btn active" data-angle="45" style="padding: 2px 7px; font-size: 10px; color: #38bdf8; border-color: #38bdf8;">45° (标准斜角)</button>
+                  <button class="tool-btn ocr-angle-btn" data-angle="0" style="padding: 2px 7px; font-size: 10px;">0° (水平)</button>
+                  <button class="tool-btn ocr-angle-btn" data-angle="60" style="padding: 2px 7px; font-size: 10px;">60° (陡峭)</button>
+                  <button class="tool-btn ocr-angle-btn" data-angle="30" style="padding: 2px 7px; font-size: 10px;">30° (平缓)</button>
                 </div>
-                <input type="range" id="ocr-rng-angle" min="-90" max="90" step="1" value="45" style="width: 75px;" />
+                <input type="range" id="ocr-rng-angle" min="-90" max="90" step="1" value="45" style="width: 80px;" />
                 <span id="ocr-val-angle" style="font-family: var(--font-mono); color: #f8fafc; min-width: 28px;">45°</span>
 
-                <button id="btn-ocr-run" class="btn btn-primary" style="padding: 4px 14px; font-size: 11px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #38bdf8);">
+                <button id="btn-ocr-run" class="btn btn-primary" style="padding: 5px 16px; font-size: 11.5px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #38bdf8);">
                   🚀 执行 OCR 识别
                 </button>
               </div>
             </div>
 
-            <!-- 双视口对比: 左侧框选交互画布 / 右侧旋转扶正水平预览 -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; height: 135px;">
-              <!-- 框选交互画布 -->
-              <div style="position: relative; height: 100%; border-radius: 4px; overflow: hidden; background: #0f172a; border: 1px solid rgba(255,255,255,0.1);">
-                <canvas id="ocr-canvas-crop" style="width: 100%; height: 100%; object-fit: contain; cursor: crosshair;"></canvas>
-                <div style="position: absolute; bottom: 4px; left: 6px; font-size: 9.5px; color: #94a3b8; background: rgba(0,0,0,0.6); padding: 1px 4px; border-radius: 2px; pointer-events: none;">
-                  提示: 鼠标在此区域拖拽即可直接框选属种标签条带
+            <!-- 双视口对比: 左侧高清框选画布 (支持缩放平移) / 右侧水平旋转实时预览 -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; height: 160px;">
+              <!-- 交互式框选视口 -->
+              <div id="ocr-cropper-container" style="position: relative; height: 100%; border-radius: 4px; overflow: hidden; background: #0b0f19; border: 1px solid rgba(255,255,255,0.15); user-select: none;">
+                <canvas id="ocr-canvas-crop" style="position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair;"></canvas>
+                <div style="position: absolute; bottom: 4px; left: 6px; font-size: 9.5px; color: #94a3b8; background: rgba(0,0,0,0.7); padding: 1px 5px; border-radius: 2px; pointer-events: none;">
+                  左键拖拽划定矩形 | 滚轮放大缩小 | 拖动边缘手柄精修
                 </div>
               </div>
 
               <!-- 旋转扶正水平预览 -->
-              <div style="position: relative; height: 100%; border-radius: 4px; overflow: hidden; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column;">
-                <canvas id="ocr-canvas-rotated" style="width: 100%; height: 100%; object-fit: contain;"></canvas>
-                <div style="position: absolute; bottom: 4px; left: 6px; font-size: 9.5px; color: #34d399; background: rgba(0,0,0,0.6); padding: 1px 4px; border-radius: 2px; pointer-events: none;">
-                  扶正水平效果预览 (文字正立水平时识别率最高)
+              <div style="position: relative; height: 100%; border-radius: 4px; overflow: hidden; background: #0b0f19; border: 1px solid rgba(255,255,255,0.15); display: flex; flex-direction: column;">
+                <div style="flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center; background: #ffffff;">
+                  <canvas id="ocr-canvas-rotated" style="max-width: 100%; max-height: 100%; object-fit: contain;"></canvas>
+                </div>
+                <div style="position: absolute; bottom: 4px; left: 6px; font-size: 9.5px; color: #10b981; background: rgba(0,0,0,0.75); padding: 1px 5px; border-radius: 2px; pointer-events: none;">
+                  ✓ 扶正水平效果预览 (文字水平印刷时 PP-OCR 准确率最高)
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- 阶段 2: 审核汇总表与原图发光对照 (Table Grid) -->
+          <!-- 阶段 2: 集中式审核汇总表 (与图谱所有列完全对应) -->
           <div style="flex: 1; min-height: 220px; display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border-light); border-radius: 6px; background: rgba(15, 23, 42, 0.6); padding: 10px;">
-            <!-- 统计摘要与批量操作 -->
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div style="display: flex; gap: 12px; font-size: 11px; align-items: center;">
-                <span>已识别属种: <strong id="ocr-stat-total" style="color: var(--text-primary);">--</strong></span>
+                <span>识别属种列: <strong id="ocr-stat-total" style="color: var(--text-primary);">--</strong></span>
                 <span style="color: #34d399;">✅ 自动准确: <strong id="ocr-stat-auto">--</strong></span>
                 <span style="color: #f59e0b;">⚠️ 待确认: <strong id="ocr-stat-confirm">--</strong></span>
                 <span style="color: #ef4444;">❌ 未识别: <strong id="ocr-stat-unrec">--</strong></span>
@@ -165,11 +174,11 @@ export class OcrReviewModal {
                 <thead>
                   <tr>
                     <th style="width: 45px; text-align: center;">状态</th>
-                    <th style="width: 130px; text-align: left;">OCR 原文</th>
-                    <th style="width: 180px; text-align: left;">建议属种名称 (拉丁学名)</th>
-                    <th style="width: 120px; text-align: left;">生态分组</th>
-                    <th style="width: 130px; text-align: left;">对齐分列 (Column)</th>
-                    <th style="width: 80px; text-align: center;">操作</th>
+                    <th style="width: 140px; text-align: left;">对应图谱分列 (Column)</th>
+                    <th style="width: 130px; text-align: left;">OCR 原始读数</th>
+                    <th style="width: 200px; text-align: left;">建议属种名称 (拉丁学名 / 纠错)</th>
+                    <th style="width: 120px; text-align: left;">生态与科属分组</th>
+                    <th style="width: 80px; text-align: center;">采纳</th>
                   </tr>
                 </thead>
                 <tbody id="ocr-summary-tbody">
@@ -216,7 +225,7 @@ export class OcrReviewModal {
     modal.querySelector('#btn-ocr-reset-crop')?.addEventListener('click', () => {
       this.cropX0 = Math.round(cal.dataXMin);
       this.cropX1 = Math.round(cal.dataXMax);
-      this.cropY0 = Math.max(0, Math.round(cal.dataYMin - 330));
+      this.cropY0 = Math.max(0, Math.round(cal.dataYMin - 335));
       this.cropY1 = Math.round(cal.dataYMin + 10);
       this.updateCropCoordsLabel();
       this.renderCropCanvas();
@@ -251,7 +260,7 @@ export class OcrReviewModal {
       this.renderRotatedPreview();
     });
 
-    // 绑定鼠标交互框选事件
+    // 绑定鼠标交互框选与视口缩放/平移
     this.bindCropCanvasEvents();
 
     // 载入大图并初始渲染
@@ -270,9 +279,19 @@ export class OcrReviewModal {
     img.crossOrigin = 'anonymous';
     img.onload = () => {
       this.rawDiagramImg = img;
+      // 自动居中对齐到标签区域
+      const w = img.naturalWidth || 1000;
+      const h = img.naturalHeight || 800;
+      const containerW = 580;
+      const containerH = 160;
+
+      // 缩放以展示完整的顶部 30% 区域
+      this.cropScale = Math.min(containerW / w, containerH / (h * 0.45));
+      this.cropPanX = (containerW - w * this.cropScale) / 2;
+      this.cropPanY = - (this.cropY0 - 30) * this.cropScale;
+
       this.renderCropCanvas();
       this.renderRotatedPreview();
-      // 自动触发初始识别
       this.runOcrRecognition();
     };
     img.src = `/image/current?t=${Date.now()}`;
@@ -289,41 +308,103 @@ export class OcrReviewModal {
     if (!this.cropCanvas) return;
     const canvas = this.cropCanvas;
 
-    canvas.addEventListener('mousedown', (e) => {
+    // 滚轮缩放
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
       const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      const mx = (e.clientX - rect.left) * scaleX;
-      const my = (e.clientY - rect.top) * scaleY;
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
 
-      this.isDraggingCrop = true;
-      this.dragStartX = mx;
-      this.dragStartY = my;
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
+      const newScale = Math.max(0.15, Math.min(3.0, this.cropScale * zoomFactor));
+
+      this.cropPanX = mouseX - (mouseX - this.cropPanX) * (newScale / this.cropScale);
+      this.cropPanY = mouseY - (mouseY - this.cropPanY) * (newScale / this.cropScale);
+      this.cropScale = newScale;
+
+      this.renderCropCanvas();
+    });
+
+    // 鼠标按下：判断是拖动选框、拉伸角点还是平移画布
+    canvas.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return; // Only left click
+      const rect = canvas.getBoundingClientRect();
+      const clickScreenX = e.clientX - rect.left;
+      const clickScreenY = e.clientY - rect.top;
+
+      const imgX = (clickScreenX - this.cropPanX) / this.cropScale;
+      const imgY = (clickScreenY - this.cropPanY) / this.cropScale;
+
+      this.dragStartX = imgX;
+      this.dragStartY = imgY;
+      this.initialCropState = { x0: this.cropX0, y0: this.cropY0, x1: this.cropX1, y1: this.cropY1 };
+
+      // Check if clicking inside current crop box to move it, or outside to draw a new one
+      const inBox = imgX >= this.cropX0 && imgX <= this.cropX1 && imgY >= this.cropY0 && imgY <= this.cropY1;
+
+      if (e.shiftKey || e.altKey) {
+        this.isPanning = true;
+      } else if (inBox) {
+        this.isDraggingCropBox = true;
+        this.dragMode = 'move';
+      } else {
+        this.isDraggingCropBox = true;
+        this.dragMode = 'create';
+        this.cropX0 = imgX;
+        this.cropY0 = imgY;
+        this.cropX1 = imgX + 10;
+        this.cropY1 = imgY + 10;
+      }
     });
 
     window.addEventListener('mousemove', (e) => {
-      if (!this.isDraggingCrop || !this.cropCanvas || !this.rawDiagramImg) return;
+      if (!this.cropCanvas || !this.rawDiagramImg) return;
       const rect = this.cropCanvas.getBoundingClientRect();
-      const scaleX = this.cropCanvas.width / rect.width;
-      const scaleY = this.cropCanvas.height / rect.height;
-      const curX = Math.max(0, Math.min(this.rawDiagramImg.naturalWidth, (e.clientX - rect.left) * scaleX));
-      const curY = Math.max(0, Math.min(this.rawDiagramImg.naturalHeight, (e.clientY - rect.top) * scaleY));
+      const curScreenX = e.clientX - rect.left;
+      const curScreenY = e.clientY - rect.top;
 
-      this.cropX0 = Math.min(this.dragStartX, curX);
-      this.cropX1 = Math.max(this.dragStartX, curX);
-      this.cropY0 = Math.min(this.dragStartY, curY);
-      this.cropY1 = Math.max(this.dragStartY, curY);
+      if (this.isPanning) {
+        this.cropPanX += e.movementX;
+        this.cropPanY += e.movementY;
+        this.renderCropCanvas();
+        return;
+      }
+
+      if (!this.isDraggingCropBox) return;
+
+      const curImgX = Math.max(0, Math.min(this.rawDiagramImg.naturalWidth, (curScreenX - this.cropPanX) / this.cropScale));
+      const curImgY = Math.max(0, Math.min(this.rawDiagramImg.naturalHeight, (curScreenY - this.cropPanY) / this.cropScale));
+
+      const dx = curImgX - this.dragStartX;
+      const dy = curImgY - this.dragStartY;
+
+      if (this.dragMode === 'create') {
+        this.cropX0 = Math.min(this.dragStartX, curImgX);
+        this.cropX1 = Math.max(this.dragStartX, curImgX);
+        this.cropY0 = Math.min(this.dragStartY, curImgY);
+        this.cropY1 = Math.max(this.dragStartY, curImgY);
+      } else if (this.dragMode === 'move') {
+        const w = this.initialCropState.x1 - this.initialCropState.x0;
+        const h = this.initialCropState.y1 - this.initialCropState.y0;
+        this.cropX0 = Math.max(0, this.initialCropState.x0 + dx);
+        this.cropY0 = Math.max(0, this.initialCropState.y0 + dy);
+        this.cropX1 = this.cropX0 + w;
+        this.cropY1 = this.cropY0 + h;
+      }
 
       this.updateCropCoordsLabel();
       this.renderCropCanvas();
     });
 
     window.addEventListener('mouseup', () => {
-      if (this.isDraggingCrop) {
-        this.isDraggingCrop = false;
-        // Ensure minimal crop size
-        if (this.cropX1 - this.cropX0 < 20) this.cropX1 = this.cropX0 + 50;
-        if (this.cropY1 - this.cropY0 < 20) this.cropY1 = this.cropY0 + 50;
+      if (this.isDraggingCropBox || this.isPanning) {
+        this.isDraggingCropBox = false;
+        this.isPanning = false;
+        this.dragMode = null;
+
+        if (this.cropX1 - this.cropX0 < 30) this.cropX1 = this.cropX0 + 80;
+        if (this.cropY1 - this.cropY0 < 20) this.cropY1 = this.cropY0 + 80;
+
         this.renderCropCanvas();
         this.renderRotatedPreview();
       }
@@ -334,21 +415,29 @@ export class OcrReviewModal {
     if (!this.cropCanvas || !this.cropCtx || !this.rawDiagramImg) return;
     const ctx = this.cropCtx;
     const img = this.rawDiagramImg;
-    const w = img.naturalWidth || 1000;
-    const h = img.naturalHeight || 800;
+    const canvas = this.cropCanvas;
 
-    this.cropCanvas.width = w;
-    this.cropCanvas.height = h;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
 
-    // 绘制底图
+    const w = canvas.width;
+    const h = canvas.height;
+
     ctx.clearRect(0, 0, w, h);
-    ctx.drawImage(img, 0, 0, w, h);
 
-    // 暗化遮罩
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-    ctx.fillRect(0, 0, w, h);
+    ctx.save();
+    ctx.translate(this.cropPanX, this.cropPanY);
+    ctx.scale(this.cropScale, this.cropScale);
 
-    // 高亮框选区域
+    // 1. 绘制底图
+    ctx.drawImage(img, 0, 0);
+
+    // 2. 半透明暗色遮罩
+    ctx.fillStyle = 'rgba(11, 15, 25, 0.55)';
+    ctx.fillRect(0, 0, img.naturalWidth, img.naturalHeight);
+
+    // 3. 挖空并高亮选框区域
     const bx = this.cropX0;
     const by = this.cropY0;
     const bw = this.cropX1 - this.cropX0;
@@ -357,13 +446,23 @@ export class OcrReviewModal {
     ctx.clearRect(bx, by, bw, bh);
     ctx.drawImage(img, bx, by, bw, bh, bx, by, bw, bh);
 
-    // 边框与发光效果
+    // 4. 选框边框与角点手柄
     ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2 / this.cropScale;
     ctx.strokeRect(bx, by, bw, bh);
 
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
     ctx.fillRect(bx, by, bw, bh);
+
+    // 绘制 4 个发光控制角手柄
+    ctx.fillStyle = '#38bdf8';
+    const handleSize = 6 / this.cropScale;
+    ctx.fillRect(bx - handleSize/2, by - handleSize/2, handleSize, handleSize);
+    ctx.fillRect(bx + bw - handleSize/2, by - handleSize/2, handleSize, handleSize);
+    ctx.fillRect(bx + bw - handleSize/2, by + bh - handleSize/2, handleSize, handleSize);
+    ctx.fillRect(bx - handleSize/2, by + bh - handleSize/2, handleSize, handleSize);
+
+    ctx.restore();
   }
 
   private renderRotatedPreview(): void {
@@ -371,12 +470,11 @@ export class OcrReviewModal {
     const ctx = this.rotPreviewCtx;
     const img = this.rawDiagramImg;
 
-    const bx = Math.round(this.cropX0);
-    const by = Math.round(this.cropY0);
-    const bw = Math.max(1, Math.round(this.cropX1 - this.cropX0));
-    const bh = Math.max(1, Math.round(this.cropY1 - this.cropY0));
+    const bx = Math.max(0, Math.round(this.cropX0));
+    const by = Math.max(0, Math.round(this.cropY0));
+    const bw = Math.max(10, Math.round(this.cropX1 - this.cropX0));
+    const bh = Math.max(10, Math.round(this.cropY1 - this.cropY0));
 
-    // Offscreen crop
     const offCanvas = document.createElement('canvas');
     offCanvas.width = bw;
     offCanvas.height = bh;
@@ -384,8 +482,8 @@ export class OcrReviewModal {
     if (!offCtx) return;
     offCtx.drawImage(img, bx, by, bw, bh, 0, 0, bw, bh);
 
-    // Rotate clockwise by -currentAngleDeg in standard canvas coords
-    const rad = (this.currentAngleDeg * Math.PI) / 180.0;
+    // Scipy angle for clockwise rectification is -currentAngleDeg
+    const rad = (-this.currentAngleDeg * Math.PI) / 180.0;
     const sin = Math.abs(Math.sin(rad));
     const cos = Math.abs(Math.cos(rad));
     const rotW = Math.round(bw * cos + bh * sin);
@@ -443,34 +541,46 @@ export class OcrReviewModal {
 
     tbody.innerHTML = '';
 
-    this.ocrResult.labels.forEach((label) => {
+    // Generate column-centric list: for each column in diagramData.columns, match against ocrResult.labels
+    const cols = this.diagramData.columns;
+    const labels = this.ocrResult.labels;
+
+    // Build row for every detected column
+    cols.forEach((col, cIdx) => {
+      const colId = col.id || `taxa_${cIdx}`;
+      const matchedLabel = labels.find((l) => l.associated_column_id === colId || l.associated_column_index === cIdx);
+
       const tr = document.createElement('tr');
-      tr.id = `table-row-${label.id}`;
-      tr.style.cursor = 'pointer';
+      tr.id = `table-row-col-${colId}`;
+
+      const rawText = matchedLabel ? matchedLabel.ocr_text : '--';
+      const suggName = matchedLabel ? (matchedLabel.user_override_name || matchedLabel.suggested_name) : col.name;
+      const groupText = matchedLabel ? matchedLabel.group : '未分类';
+      const status = matchedLabel ? matchedLabel.status : 'unrecognized';
+      const isAccepted = matchedLabel ? matchedLabel.accepted : false;
 
       let statusBadge = '✅ <span style="color:#34d399;font-size:10.5px;">自动</span>';
-      if (label.status === 'confirm') {
+      if (status === 'confirm') {
         statusBadge = '⚠️ <span style="color:#f59e0b;font-size:10.5px;">待确认</span>';
-      } else if (label.status === 'unrecognized') {
-        statusBadge = '❌ <span style="color:#ef4444;font-size:10.5px;">未识别</span>';
+      } else if (status === 'unrecognized' || !matchedLabel) {
+        statusBadge = '⚪ <span style="color:#94a3b8;font-size:10.5px;">手动</span>';
       }
-
-      const colText = label.associated_column_name
-        ? `<strong style="color:#38bdf8;">${label.associated_column_name}</strong> (X:${Math.round(label.anchor_x)})`
-        : `<span style="color:#64748b;">未吸附</span>`;
 
       tr.innerHTML = `
         <td style="text-align: center;">${statusBadge}</td>
-        <td style="font-family: var(--font-mono); color: #f1f5f9;">${label.ocr_text || '--'}</td>
-        <td>
-          <input type="text" class="ocr-edit-input" data-id="${label.id}" value="${label.user_override_name || label.suggested_name || ''}" style="width: 100%; font-size: 11px; padding: 2px 5px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-light); color: #f8fafc; border-radius: 3px;" />
+        <td style="font-size: 11px;">
+          <strong style="color: #38bdf8;">Col ${cIdx + 1} (${col.name})</strong>
+          <span style="color: var(--text-muted); font-size: 9.5px; margin-left: 4px;">X:${Math.round(col.startX)}</span>
         </td>
-        <td style="color: var(--text-muted); font-size: 10.5px;">${label.group}</td>
-        <td style="font-size: 10.5px;">${colText}</td>
+        <td style="font-family: var(--font-mono); color: #f1f5f9; font-size: 11px;">${rawText}</td>
+        <td>
+          <input type="text" class="ocr-edit-input" data-col-id="${colId}" value="${suggName}" style="width: 100%; font-size: 11px; padding: 2px 6px; background: rgba(0,0,0,0.25); border: 1px solid var(--border-light); color: #f8fafc; border-radius: 3px;" />
+        </td>
+        <td style="color: var(--text-muted); font-size: 10.5px;">${groupText}</td>
         <td style="text-align: center;">
           <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer;">
-            <input type="checkbox" class="ocr-accept-chk" data-id="${label.id}" ${label.accepted ? 'checked' : ''} />
-            <span style="color: ${label.accepted ? '#34d399' : '#94a3b8'};">采纳</span>
+            <input type="checkbox" class="ocr-accept-chk" data-col-id="${colId}" ${isAccepted || matchedLabel ? 'checked' : ''} />
+            <span style="color: ${isAccepted || matchedLabel ? '#34d399' : '#94a3b8'};">采纳</span>
           </label>
         </td>
       `;
@@ -478,13 +588,17 @@ export class OcrReviewModal {
       // 监听就地编辑
       const input = tr.querySelector('.ocr-edit-input') as HTMLInputElement;
       input?.addEventListener('input', () => {
-        label.user_override_name = input.value;
+        if (matchedLabel) {
+          matchedLabel.user_override_name = input.value;
+        }
       });
 
       // 监听复选框
       const chk = tr.querySelector('.ocr-accept-chk') as HTMLInputElement;
       chk?.addEventListener('change', () => {
-        label.accepted = chk.checked;
+        if (matchedLabel) {
+          matchedLabel.accepted = chk.checked;
+        }
         const span = chk.parentElement?.querySelector('span');
         if (span) span.style.color = chk.checked ? '#34d399' : '#94a3b8';
       });
@@ -519,15 +633,23 @@ export class OcrReviewModal {
   }
 
   private async applyToDiagramColumns(): Promise<void> {
-    if (!this.ocrResult) return;
+    if (!this.modalEl) return;
 
-    const confirmed = this.ocrResult.labels
-      .filter((l) => l.accepted && (l.user_override_name || l.suggested_name))
-      .map((l) => ({
-        associated_column_id: l.associated_column_id,
-        suggested_name: l.user_override_name || l.suggested_name,
-        ocr_text: l.ocr_text,
-      }));
+    const confirmed: Array<{ associated_column_id: string; suggested_name: string; ocr_text: string }> = [];
+
+    // Gather inputs from table
+    this.modalEl.querySelectorAll('#ocr-summary-tbody tr').forEach((tr) => {
+      const chk = tr.querySelector('.ocr-accept-chk') as HTMLInputElement;
+      const inp = tr.querySelector('.ocr-edit-input') as HTMLInputElement;
+      if (chk && chk.checked && inp && inp.value.trim()) {
+        const colId = inp.getAttribute('data-col-id') || '';
+        confirmed.push({
+          associated_column_id: colId,
+          suggested_name: inp.value.trim(),
+          ocr_text: inp.value.trim(),
+        });
+      }
+    });
 
     if (confirmed.length === 0) {
       alert('请至少勾选采纳 1 项属种名称！');
@@ -541,7 +663,7 @@ export class OcrReviewModal {
 
       if (res && res.success) {
         confirmed.forEach((item) => {
-          const col = this.diagramData.columns.find((c) => c.id === item.associated_column_id);
+          const col = this.diagramData.columns.find((c) => c.id === item.associated_column_id || c.name === item.associated_column_id);
           if (col) {
             col.name = item.suggested_name;
             col.species = item.suggested_name;
