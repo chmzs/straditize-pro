@@ -27,6 +27,7 @@ Image.MAX_IMAGE_PIXELS = None
 from .protocol import JsonRpcDispatcher, JsonRpcError
 from .session import StraditizeSession
 from .age_depth import check_local_r_environment, generate_bacon_script, generate_geochronr_script
+from .components import component_manager
 
 
 def find_frontend_dist(custom_path: str | None = None) -> str | None:
@@ -95,6 +96,10 @@ def create_rpc_dispatcher(
     dispatcher.register_method("agedepth.generateBaconScript", lambda dates, core_name="MyCore", thickness=5.0, cc=1, hiatus_depths=None, slumps=None, d_r=None, d_std=None, acc_mean=None, mem_mean=0.7: generate_bacon_script(core_name=core_name, dates=dates, thickness=thickness, cc=cc, hiatus_depths=hiatus_depths, slumps=slumps, d_r=d_r, d_std=d_std, acc_mean=acc_mean, mem_mean=mem_mean))
     dispatcher.register_method("agedepth.generateGeoChronRScript", lambda lipd_file_name, site_name="PollenSite", thickness=5.0, hiatus_depths=None: generate_geochronr_script(lipd_file_name=lipd_file_name, site_name=site_name, thickness=thickness, hiatus_depths=hiatus_depths))
     dispatcher.register_method("agedepth.checkREnvironment", lambda: check_local_r_environment())
+    dispatcher.register_method("component.getStatus", lambda name="age-modeling": component_manager.get_status(name))
+    dispatcher.register_method("component.install", lambda name="age-modeling", custom_url=None: component_manager.start_download_task(name, custom_url))
+    dispatcher.register_method("component.installOfflineZip", lambda zip_path, name="age-modeling": component_manager.install_from_zip(zip_path, name))
+    dispatcher.register_method("component.uninstall", lambda name="age-modeling": component_manager.uninstall(name))
     dispatcher.register_method("metadata.fetchByDoi", session.metadata_fetch_doi)
     dispatcher.register_method("metadata.extractFromPdf", session.metadata_extract_pdf)
     dispatcher.register_method("metadata.update", session.metadata_update)

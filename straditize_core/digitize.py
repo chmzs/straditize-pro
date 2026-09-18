@@ -332,3 +332,104 @@ def digitize_columns(binary: np.ndarray,
         vals = interpolate_hlines(vals, hline_locs)
 
     return pd.DataFrame(vals, columns=column_names, index=np.arange(height))
+
+
+def extract_vector_polygon(
+    section_mask: np.ndarray,
+    baseline_x: float = 0.0,
+    min_area_px: int = 10,
+) -> np.ndarray:
+    """Extracts a closed, sub-pixel vector contour polygon representing an area silhouette.
+
+    Anchors and closes the polygon along the baseline (x = baseline_x).
+
+    Parameters
+    ----------
+    section_mask : np.ndarray
+        2D boolean or binary array (H x W) for a single column section.
+    baseline_x : float
+        X-offset of the column baseline in this coordinate system (default: 0.0).
+    min_area_px : int
+        Minimum bounding box area to filter out isolated specks.
+
+    Returns
+    -------
+    np.ndarray
+        (N, 2) array of float vertices (x, y) forming a closed clockwise/counter-clockwise polygon.
+    """
+    mask = np.asarray(section_mask, dtype=bool)
+    if mask.ndim != 2 or not mask.any():
+        return np.zeros((0, 2), dtype=float)
+
+    h, w = mask.shape
+
+    # Fast row-wise rightmost envelope tracing to guarantee single-valued function along baseline
+    profile_w = np.zeros(h, dtype=float)
+    for r in range(h):
+        xs = np.where(mask[r])[0]
+        if len(xs) > 0:
+            profile_w[r] = float(xs.max() + 1.0)
+        else:
+            profile_w[r] = 0.0
+
+    # Build closed continuous polygon anchored at baseline_x
+    poly_pts: list[tuple[float, float]] = [(baseline_x, 0.0)]
+    for r in range(h):
+        poly_pts.append((baseline_x + profile_w[r], float(r)))
+    poly_pts.append((baseline_x, float(h - 1)))
+    poly_pts.append((baseline_x, 0.0))
+
+    return np.asarray(poly_pts, dtype=float)
+
+
+def slice_vector_polygon_at_depths(
+    polygon_pts: np.ndarray,
+    target_ys: Sequence[float],
+) -> np.ndarray:
+    """Performs continuous analytical slicing (ray-casting intersection) across a vector polygon.
+
+    Solves the intersection of horizontal cut lines y = Y_k with polygon edge segments.
+    Decouples image resolution from sample resolution.
+
+    Parameters
+    ----------
+    polygon_pts : np.ndarray
+        (N, 2) array of (x, y) vertices representing a closed polygon.
+    target_ys : sequence of float
+        Target vertical coordinates (e.g. pixel Y positions corresponding to sample depths).
+
+    Returns
+    -------
+    np.ndarray
+        1D float array of intersected horizontal widths corresponding to each target Y.
+    """
+    pts = np.asarray(polygon_pts, dtype=float)
+    if len(pts) < 3:
+        return np.zeros(len(target_ys), dtype=float)
+
+    px = pts[:, 0]
+    py = pts[:, 1]
+
+    n_targets = len(target_ys)
+    widths = np.zeros(n_targets, dtype=float)
+
+    for k, ty in enumerate(target_ys):
+        cross = ((py[:-1] <= ty) & (py[1:] > ty)) | ((py[:-1] > ty) & (py[1:] <= ty))
+        idx = np.where(cross)[0]
+        if len(idx) == 0:
+            widths[k] = 0.0
+            continue
+
+        x_crosses = []
+        for i in idx:
+            denom = py[i + 1] - py[i]
+            t = (ty - py[i]) / (denom if abs(denom) > 1e-9 else 1e-9)
+            t = max(0.0, min(1.0, t))
+            x_crosses.append(px[i] + t * (px[i + 1] - px[i]))
+
+        if len(x_crosses) >= 2:
+            widths[k] = float(max(x_crosses) - min(x_crosses))
+        else:
+            widths[k] = 0.0
+
+    return widths

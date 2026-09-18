@@ -307,8 +307,9 @@ body.theme-light .step-num {
 .toolbar-left {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
+  z-index: 2;
 }
 
 .toolbar-center {
@@ -320,6 +321,7 @@ body.theme-light .step-num {
   overflow-x: auto;
   scrollbar-width: none;
   padding: 0 4px;
+  z-index: 1;
 }
 
 .toolbar-center::-webkit-scrollbar {

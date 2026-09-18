@@ -184,9 +184,25 @@ export class Inspector {
   }
 
   private renderS1RoiPanel(cal: DiagramCalibration): string {
+    const activePanel = this.data.panels?.find((p) => p.id === this.data.activePanelId) || this.data.panels?.[0];
+
     return `
       <div class="inspector-section">
         <div class="section-title">S1：界定纯数据有效区 (ROI)</div>
+        
+        <!-- 多 ROI 分区指示 (Y 轴强锁对齐) -->
+        <div style="margin-bottom: 10px; padding: 6px 8px; background: rgba(56, 189, 248, 0.08); border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.25);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <strong style="font-size: 11px; color: var(--text-primary);">当前有效分区:</strong>
+            <span style="font-size: 10px; color: #38bdf8; font-weight: 700;">${activePanel ? activePanel.name : '主图区 (ROI 1)'}</span>
+          </div>
+          <div style="display: flex; gap: 4px;">
+            <button id="btn-add-sub-roi" class="tool-btn" style="flex: 1; font-size: 10px; padding: 3px 6px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" title="追加同剖面子有效区 (如炭屑区、第一主成分折线区)，自动锁死并对准主图 Y 轴深度">
+              ➕ 追加子有效区 (锁定 Y 轴)
+            </button>
+          </div>
+        </div>
+
         <div class="tip-card" style="margin-bottom: 10px; border-left: 3px solid #38bdf8; background: rgba(56, 189, 248, 0.08); padding: 8px 10px;">
           <p style="font-size: 11px; line-height: 1.5; color: #bae6fd; margin: 0;">
             <strong>工作流要点：</strong><br>
@@ -216,7 +232,7 @@ export class Inspector {
           </div>
         </div>
         <div class="form-group">
-          <label>有效区像素 Y 范围:</label>
+          <label>有效区像素 Y 范围 (所有 ROI 共享共时性):</label>
           <div class="input-row">
             <input type="number" id="inp-roi-ymin" value="${cal.dataYMin}" />
             <span style="color:#64748b;">~</span>
@@ -757,6 +773,56 @@ export class Inspector {
       }
     });
 
+    // 追加子有效区 (锁定 Y 轴，只放开 X 轴水平微调)
+    this.element.querySelector('#btn-add-sub-roi')?.addEventListener('click', () => {
+      const cal = this.data.calibration;
+      if (!this.data.panels) {
+        this.data.panels = [
+          {
+            id: 'panel_1',
+            name: '主图区 (ROI 1)',
+            roi: { xMin: cal.dataXMin, xMax: cal.dataXMax, yMin: cal.dataYMin, yMax: cal.dataYMax },
+            calibration: { ...cal },
+            columns: [...this.data.columns],
+            activeTaxaId: this.data.activeTaxaId,
+          }
+        ];
+      }
+
+      const pIdx = this.data.panels.length + 1;
+      const subWidth = Math.round((cal.dataXMax - cal.dataXMin) * 0.3);
+      const subXMin = cal.dataXMax + 20;
+      const subXMax = subXMin + subWidth;
+
+      const newPanel = {
+        id: `panel_${pIdx}`,
+        name: `子分区 ${pIdx} (锁定Y轴)`,
+        roi: {
+          xMin: subXMin,
+          xMax: subXMax,
+          yMin: cal.dataYMin, // 100% 严格继承主图 Y 顶界
+          yMax: cal.dataYMax, // 100% 严格继承主图 Y 底界
+        },
+        calibration: {
+          ...cal,
+          dataXMin: subXMin,
+          dataXMax: subXMax,
+          // 深度范围严格锁定
+          depthTopValue: cal.depthTopValue,
+          depthBottomValue: cal.depthBottomValue,
+        },
+        columns: [],
+        activeTaxaId: '',
+      };
+
+      this.data.panels.push(newPanel);
+      this.data.activePanelId = newPanel.id;
+      this.history.push(`Add Sub-ROI Panel ${pIdx} with Y-Axis Lock`, this.data.columns, this.data.activeTaxaId, this.data.calibration);
+      this.render();
+      this.callbacks.onDataChange();
+    });
+
+    // 重新识别此列
     this.element.querySelector('#btn-col-digitize')?.addEventListener('click', () => {
       this.callbacks.onDigitizeActiveColumn();
     });

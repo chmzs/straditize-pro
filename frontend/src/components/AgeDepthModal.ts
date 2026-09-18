@@ -318,13 +318,36 @@ export class AgeDepthModal {
                 </div>
               </div>
 
+              <!-- WebR 增量扩展包状态管理 (规范第二方式) -->
+              <div class="form-group" style="margin: 0; background: rgba(15, 23, 42, 0.6); padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 10.5px; font-weight: 600; color: #38bdf8;">WebR 浏览器纯内置算力包:</span>
+                  <span id="ad-webr-comp-status" style="font-size: 9.5px; color: #f59e0b;">检查中...</span>
+                </div>
+                <div id="ad-webr-install-bar" style="display: flex; gap: 6px; margin-top: 5px;">
+                  <button class="tool-btn" id="btn-ad-install-webr" style="flex: 1; font-size: 10px; color: #38bdf8; border-color: rgba(56,189,248,0.3);">
+                    ⬇️ 一键下载组件 (~40MB)
+                  </button>
+                  <button class="tool-btn" id="btn-ad-import-webr-zip" style="font-size: 10px; padding: 2px 6px;" title="离线环境手动导入已下载的 age-modeling.zip">
+                    📂 离线导入
+                  </button>
+                  <input type="file" id="inp-ad-webr-zip" accept=".zip" style="display: none;" />
+                </div>
+                <div id="ad-webr-progress-box" style="display: none; margin-top: 4px;">
+                  <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
+                    <div id="ad-webr-progress-fill" style="width: 0%; height: 100%; background: #38bdf8; transition: width 0.2s;"></div>
+                  </div>
+                  <span id="ad-webr-progress-txt" style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">准备下载...</span>
+                </div>
+              </div>
+
               <!-- 下游执行通道 -->
               <div style="margin-top: auto; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border-color); padding-top: 10px;">
                 <div id="ad-local-r-status" style="font-size: 10px; color: #10b981;">
                   ⏳ 正在探测本地 R 环境...
                 </div>
                 <div style="display: flex; gap: 6px;">
-                  <button class="btn btn-primary" id="btn-ad-run-local-r" style="flex: 1.2; font-size: 11px; padding: 6px; background: linear-gradient(135deg, #059669, #10b981);" title="直接调用本机已有的 R 4.5 与 rbacon 跑出 150 万次 MCMC">
+                  <button class="btn btn-primary" id="btn-ad-run-local-r" style="flex: 1.2; font-size: 11px; padding: 6px; background: linear-gradient(135deg, #059669, #10b981);" title="直接调用本机已有的 R 与 rbacon 跑出 150 万次 MCMC">
                     ▶ 本地 R 一键运行
                   </button>
                   <button class="btn btn-secondary" id="btn-ad-export-geochronr" style="flex: 1; font-size: 11px; padding: 6px;" title="生成与当前 LiPD 容器深度绑定的 geoChronR 驱动代码">
@@ -473,6 +496,17 @@ export class AgeDepthModal {
 
     // 检查本地 R 环境并提示
     this.checkLocalR();
+    // 检查 WebR 增量扩展包状态
+    this.checkComponentStatus();
+
+    // 绑定组件安装与离线导入
+    modal.querySelector('#btn-ad-install-webr')?.addEventListener('click', () => this.handleInstallComponent());
+    const zipInput = modal.querySelector('#inp-ad-webr-zip') as HTMLInputElement;
+    modal.querySelector('#btn-ad-import-webr-zip')?.addEventListener('click', () => zipInput.click());
+    zipInput?.addEventListener('change', () => {
+      const file = zipInput.files?.[0];
+      if (file) this.handleOfflineZipUpload(file);
+    });
 
     // 导出 geoChronR 脚本按钮
     modal.querySelector('#btn-ad-export-geochronr')?.addEventListener('click', () => this.exportGeoChronRScript());
@@ -513,6 +547,110 @@ export class AgeDepthModal {
       `;
       tbody.appendChild(tr);
     });
+  }
+
+  private async checkComponentStatus(): Promise<void> {
+    if (!this.modalEl) return;
+    const statusEl = this.modalEl.querySelector('#ad-webr-comp-status');
+    const installBtn = this.modalEl.querySelector('#btn-ad-install-webr') as HTMLButtonElement;
+
+    try {
+      const res = await this.rpcClient.call<{ name: string }, any>('component.getStatus', { name: 'age-modeling' });
+      if (res) {
+        if (res.is_installed) {
+          if (statusEl) statusEl.innerHTML = `<strong style="color:#34d399;">✓ 已安装 (${res.installed_version})</strong>`;
+          if (installBtn) {
+            installBtn.textContent = '✓ 组件已激活';
+            installBtn.disabled = true;
+          }
+        } else if (res.downloading) {
+          if (statusEl) statusEl.innerHTML = `<strong style="color:#38bdf8;">下载中...</strong>`;
+          this.pollDownloadProgress();
+        } else {
+          if (statusEl) statusEl.innerHTML = `<span style="color:#f59e0b;">未安装 (需增量包)</span>`;
+          if (installBtn) {
+            installBtn.textContent = '⬇️ 一键下载组件 (~40MB)';
+            installBtn.disabled = false;
+          }
+        }
+      }
+    } catch {
+      if (statusEl) statusEl.textContent = '离线独立模式';
+    }
+  }
+
+  private async handleInstallComponent(): Promise<void> {
+    if (!this.modalEl) return;
+    const box = this.modalEl.querySelector('#ad-webr-progress-box') as HTMLElement;
+    const bar = this.modalEl.querySelector('#ad-webr-progress-fill') as HTMLElement;
+    const txt = this.modalEl.querySelector('#ad-webr-progress-txt') as HTMLElement;
+
+    if (box) box.style.display = 'block';
+    if (bar) bar.style.width = '5%';
+    if (txt) txt.textContent = '正在连接镜像下载 WebR + rbacon 运行时...';
+
+    try {
+      await this.rpcClient.call('component.install', { name: 'age-modeling' });
+      this.pollDownloadProgress();
+    } catch (err: any) {
+      if (txt) txt.textContent = `下载启动失败: ${err.message || err}`;
+    }
+  }
+
+  private pollDownloadProgress(): void {
+    const timer = setInterval(async () => {
+      if (!this.modalEl) {
+        clearInterval(timer);
+        return;
+      }
+      const res = await this.rpcClient.call<{ name: string }, any>('component.getStatus', { name: 'age-modeling' });
+      const bar = this.modalEl.querySelector('#ad-webr-progress-fill') as HTMLElement;
+      const txt = this.modalEl.querySelector('#ad-webr-progress-txt') as HTMLElement;
+      const box = this.modalEl.querySelector('#ad-webr-progress-box') as HTMLElement;
+
+      if (res && res.progress) {
+        if (box) box.style.display = 'block';
+        const pct = res.progress.progress_percent || 0;
+        if (bar) bar.style.width = `${pct}%`;
+        if (txt) txt.textContent = `下载进度: ${pct.toFixed(1)}% (${(res.progress.downloaded_bytes / 1048576).toFixed(1)} MB)`;
+
+        if (res.progress.status === 'completed') {
+          clearInterval(timer);
+          if (txt) txt.innerHTML = `<span style="color:#34d399;">✅ 安装成功！无需重启，已就地激活。</span>`;
+          this.checkComponentStatus();
+        } else if (res.progress.status === 'failed') {
+          clearInterval(timer);
+          if (txt) txt.innerHTML = `<span style="color:#ef4444;">❌ 下载失败: ${res.progress.error || '网络超时'}</span>`;
+        }
+      } else {
+        clearInterval(timer);
+      }
+    }, 1000);
+  }
+
+  private async handleOfflineZipUpload(file: File): Promise<void> {
+    const statusEl = this.modalEl?.querySelector('#ad-webr-comp-status');
+    if (statusEl) statusEl.textContent = '正在上传并安全解压离线包...';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const upRes = await fetch('/api/upload', { method: 'POST', body: formData });
+      const upJson = await upRes.json();
+      const zipPath = upJson.path || upJson.saved_path;
+
+      const instRes = await this.rpcClient.call<{ zip_path: string }, any>('component.installOfflineZip', {
+        zip_path: zipPath,
+      });
+
+      if (instRes && instRes.success) {
+        alert('✅ 离线组件解压安装成功！已就地激活，无需重启。');
+        this.checkComponentStatus();
+      }
+    } catch (err: any) {
+      alert(`离线导入失败: ${err.message || err}`);
+    }
   }
 
   private async checkLocalR(): Promise<void> {
