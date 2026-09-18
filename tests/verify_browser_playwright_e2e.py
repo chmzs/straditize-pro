@@ -196,15 +196,17 @@ class PlaywrightBrowserE2ETest(unittest.TestCase):
         run_pw_cmd("eval", "document.getElementById('btn-ocr-review-modal')?.click()")
         time.sleep(1.5)
         ocr_modal_visible = run_pw_cmd("eval", "Boolean(document.querySelector('.ocr-review-dialog'))")
-        strip_rendered = run_pw_cmd("eval", "Boolean(document.getElementById('ocr-strip-img')?.src?.length > 100)")
+        crop_canvas_ready = run_pw_cmd("eval", "Boolean(document.getElementById('ocr-canvas-crop')?.width > 0)")
+        rot_canvas_ready = run_pw_cmd("eval", "Boolean(document.getElementById('ocr-canvas-rotated')?.width > 0)")
         ocr_table_rendered = run_pw_cmd("eval", "Boolean(document.getElementById('ocr-summary-tbody')?.querySelector('tr'))")
         batch_btn_exists = run_pw_cmd("eval", "Boolean(document.getElementById('btn-ocr-accept-all'))")
 
         self.assertIn("true", ocr_modal_visible.lower(), "OCR review modal failed to open")
-        self.assertIn("true", strip_rendered.lower(), "Original label strip image not rendered")
+        self.assertIn("true", crop_canvas_ready.lower(), "Interactive crop canvas not initialized")
+        self.assertIn("true", rot_canvas_ready.lower(), "Rotated rectification canvas not rendered")
         self.assertIn("true", ocr_table_rendered.lower(), "OCR summary review table not rendered")
         self.assertIn("true", batch_btn_exists.lower(), "Batch accept button not found")
-        print("  [Pass 9/11] Pollen taxa OCR recognition & review modal (45° strip crop, summary table, batch accept) verified")
+        print("  [Pass 9/11] Pollen taxa OCR recognition & review modal (mouse drag crop, rotation rectification, summary table) verified")
 
         # Take High-Res Proof Screenshot of the OCR review modal
         ocr_proof_path = os.path.abspath("real_browser_ocr_review_verified.png")
