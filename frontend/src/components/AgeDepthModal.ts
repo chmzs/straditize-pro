@@ -42,6 +42,7 @@ export class AgeDepthModal {
   private ctx: CanvasRenderingContext2D | null = null;
   private bgImage: HTMLImageElement | null = null;
   private inspectionData: AgeDepthModelInspectionData | null = null;
+  private mappedSamples: { depths: number[]; age_est: number[]; age_min: number[]; age_max: number[] } | null = null;
 
   private showCurve: boolean = true;
   private showEnvelope: boolean = true;
@@ -779,6 +780,7 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
 
     if (res && res.inspection) {
       this.inspectionData = res.inspection;
+      this.mappedSamples = res.mapped_samples || null;
       this.renderCanvas();
       this.updateMappingTable();
       const statusEl = this.modalEl.querySelector('#ad-status-msg');
@@ -873,18 +875,37 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
     if (!tbody) return;
 
     tbody.innerHTML = '';
+
+    // If mapped pollen samples are returned from backend session, display them
+    if (this.mappedSamples && this.mappedSamples.depths && this.mappedSamples.depths.length > 0) {
+      const ms = this.mappedSamples;
+      for (let i = 0; i < ms.depths.length; i++) {
+        const tr = document.createElement('tr');
+        const minVal = ms.age_min ? ms.age_min[i] : (ms.age_est[i] - 100);
+        const maxVal = ms.age_max ? ms.age_max[i] : (ms.age_est[i] + 100);
+        tr.innerHTML = `
+          <td style="font-weight: 600; color: #38bdf8;">${ms.depths[i]} cm</td>
+          <td style="color: #f8fafc; font-weight: 500;">${Math.round(ms.age_est[i])} cal BP</td>
+          <td style="color: var(--text-muted); font-size: 9.5px;">${Math.round(minVal)} ~ ${Math.round(maxVal)}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+      return;
+    }
+
+    // Fallback: display representative depth steps from inspection model
     const d = this.inspectionData.depths;
     const a = this.inspectionData.ages;
     const mi = this.inspectionData.age_min;
     const ma = this.inspectionData.age_max;
 
-    const step = Math.max(1, Math.floor(d.length / 12));
+    const step = Math.max(1, Math.floor(d.length / 15));
     for (let i = 0; i < d.length; i += step) {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td style="font-weight: 600; color: #38bdf8;">${d[i]} cm</td>
-        <td>${a[i]} cal BP</td>
-        <td style="color: var(--text-muted);">${mi[i]} ~ ${ma[i]}</td>
+        <td style="font-weight: 600; color: #38bdf8;">${d[i].toFixed(1)} cm</td>
+        <td style="color: #f8fafc; font-weight: 500;">${Math.round(a[i])} cal BP</td>
+        <td style="color: var(--text-muted); font-size: 9.5px;">${Math.round(mi[i])} ~ ${Math.round(ma[i])}</td>
       `;
       tbody.appendChild(tr);
     }
@@ -893,14 +914,29 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
   private handleCanvasHover(e: MouseEvent): void {
     if (!this.canvas || !this.inspectionData || !this.inspectionData.px_points) return;
     const rect = this.canvas.getBoundingClientRect();
-    const scaleX = this.canvas.width / rect.width;
     const scaleY = this.canvas.height / rect.height;
-    const mx = (e.clientX - rect.left) * scaleX;
     const my = (e.clientY - rect.top) * scaleY;
 
+    const px = this.inspectionData.px_points;
     const hud = this.modalEl?.querySelector('#ad-canvas-hud');
-    if (hud) {
-      hud.textContent = `光标位置: X:${Math.round(mx)}px, Y:${Math.round(my)}px`;
+    if (!hud || !px.y || px.y.length === 0) return;
+
+    // Find nearest point on the curve along Y
+    let bestIdx = 0;
+    let minDiff = 99999;
+    for (let i = 0; i < px.y.length; i++) {
+      const diff = Math.abs(px.y[i] - my);
+      if (diff < minDiff) {
+        minDiff = diff;
+        bestIdx = i;
+      }
     }
+
+    const d = this.inspectionData.depths[bestIdx];
+    const a = this.inspectionData.ages[bestIdx];
+    const mi = this.inspectionData.age_min[bestIdx];
+    const ma = this.inspectionData.age_max[bestIdx];
+
+    hud.innerHTML = `深度: <strong style="color:#38bdf8;">${d.toFixed(1)} cm</strong> ➔ 年代: <strong style="color:#f8fafc;">${Math.round(a)} cal BP</strong> (95% CI: <span style="color:#f59e0b;">${Math.round(mi)} ~ ${Math.round(ma)}</span>)`;
   }
 }

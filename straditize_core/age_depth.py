@@ -14,6 +14,7 @@ import numpy as np
 from PIL import Image
 from scipy.interpolate import PchipInterpolator
 from scipy.ndimage import median_filter
+from skimage.measure import label, regionprops
 
 from .calibration import LinearCalibration
 
@@ -228,7 +229,7 @@ class AgeDepthModel:
 def extract_age_depth_model(
     image: Image.Image | np.ndarray,
     calibrator: AgeDepthAxisCalibrator,
-    roi_box: tuple[int, int, int, int] | None = None,
+    roi_box: tuple[int, int, int, int] | list[int] | None = None,
     curve_type: str = "median",
     envelope_type: str = "95_hpd",
     cal_curve: str = "IntCal20",
@@ -272,65 +273,39 @@ def extract_age_depth_model(
     else:
         gray = img_arr.astype(np.uint8)
 
+    # 1. Non-white thresholding within the active region
+    binary = np.zeros_like(gray, dtype=bool)
+    binary[ry0:ry1, rx0:rx1] = (gray[ry0:ry1, rx0:rx1] < 235)
+
+    # 2. Extract the largest connected component (isolates the age-depth envelope from text noise)
+    lbl = label(binary)
+    props = regionprops(lbl)
+
     sample_y = []
     sample_x_curve = []
     sample_x_min = []
     sample_x_max = []
 
-    # Row-by-row profile scanning
-    for y in range(ry0, ry1):
-        row = gray[y, rx0:rx1]
-        if len(row) == 0:
-            continue
+    if props:
+        largest = max(props, key=lambda p: p.area)
+        mask = (lbl == largest.label)
+        min_row, min_col, max_row, max_col = largest.bbox
 
-        # In Bacon / Bchron diagrams, background is white (>240),
-        # confidence envelope is grey (120 to 225),
-        # and the central line is dark/black (<110).
-        # We also check for colored central lines (e.g. red dashed lines)
-        if img_arr.ndim == 3:
-            r_chan = img_arr[y, rx0:rx1, 0].astype(float)
-            g_chan = img_arr[y, rx0:rx1, 1].astype(float)
-            b_chan = img_arr[y, rx0:rx1, 2].astype(float)
-            # Red line detection: high R, lower G and B
-            is_red = (r_chan > 140) & (g_chan < 100) & (b_chan < 100)
-        else:
-            is_red = np.zeros(len(row), dtype=bool)
+        for y in range(min_row, max_row):
+            cols = np.where(mask[y])[0]
+            if len(cols) == 0:
+                continue
+            xmin = float(cols[0])
+            xmax = float(cols[-1])
 
-        # 1. Detect envelope (grey pixels)
-        is_grey_envelope = (row < 235) & (row > 40)
-        envelope_indices = np.where(is_grey_envelope)[0]
+            row_vals = gray[y, int(xmin) : int(xmax) + 1]
+            dark_rel = np.argmin(row_vals)
+            xcurve = xmin + float(dark_rel)
 
-        if len(envelope_indices) < 3 and not np.any(is_red):
-            continue
-
-        if len(envelope_indices) >= 3:
-            x_min_idx = envelope_indices[0]
-            x_max_idx = envelope_indices[-1]
-        else:
-            x_min_idx = np.where(is_red)[0][0]
-            x_max_idx = x_min_idx
-
-        # 2. Detect central line inside or near the envelope
-        if np.any(is_red):
-            curve_idx = int(np.median(np.where(is_red)[0]))
-        else:
-            sub_span = row[x_min_idx : x_max_idx + 1]
-            darkest_rel = np.argmin(sub_span)
-            curve_idx = x_min_idx + darkest_rel
-
-        real_y = float(y)
-        real_x_curve = float(rx0 + curve_idx)
-        real_x_min = float(rx0 + x_min_idx)
-        real_x_max = float(rx0 + x_max_idx)
-
-        # Continuity protection: reject wild jumps caused by axis text / margin labels
-        if sample_x_curve and abs(real_x_curve - sample_x_curve[-1]) > 55:
-            continue
-
-        sample_y.append(real_y)
-        sample_x_curve.append(real_x_curve)
-        sample_x_min.append(real_x_min)
-        sample_x_max.append(real_x_max)
+            sample_y.append(float(y))
+            sample_x_curve.append(xcurve)
+            sample_x_min.append(xmin)
+            sample_x_max.append(xmax)
 
     if len(sample_y) < 5:
         # Fallback if image has non-standard palette: use simple scan
@@ -366,6 +341,11 @@ def extract_age_depth_model(
         cal_curve=cal_curve,
         notes=notes,
     )
+    model.px_y = np.asarray(sample_y, dtype=float)
+    model.px_x_curve = np.asarray(sample_x_curve, dtype=float)
+    model.px_x_min = np.asarray(sample_x_min, dtype=float)
+    model.px_x_max = np.asarray(sample_x_max, dtype=float)
+    return model
     model.px_y = np.asarray(sample_y, dtype=float)
     model.px_x_curve = np.asarray(sample_x_curve, dtype=float)
     model.px_x_min = np.asarray(sample_x_min, dtype=float)
