@@ -40,7 +40,7 @@ export class OcrReviewModal {
   private modalEl: HTMLElement | null = null;
   private ocrResult: OcrRecognitionResult | null = null;
   private activeHoverId: string | null = null;
-  private currentAngleDeg: number = -45.0;
+  private currentAngleDeg: number = 45.0;
 
   constructor(
     container: HTMLElement,
@@ -99,13 +99,13 @@ export class OcrReviewModal {
             <div style="display: flex; align-items: center; gap: 8px; font-size: 11px;">
               <span style="color: #f59e0b; font-weight: 700;">🔄 倾角扶正:</span>
               <div style="display: flex; gap: 4px;">
-                <button class="tool-btn ad-btn-angle" data-angle="-45" style="padding: 2px 7px; font-size: 10px; color: #38bdf8; border-color: #38bdf8;">-45° (标准斜角)</button>
+                <button class="tool-btn ad-btn-angle" data-angle="45" style="padding: 2px 7px; font-size: 10px; color: #38bdf8; border-color: #38bdf8;">45° (标准斜角)</button>
                 <button class="tool-btn ad-btn-angle" data-angle="0" style="padding: 2px 7px; font-size: 10px;">0° (水平)</button>
-                <button class="tool-btn ad-btn-angle" data-angle="-60" style="padding: 2px 7px; font-size: 10px;">-60° (陡峭)</button>
-                <button class="tool-btn ad-btn-angle" data-angle="-30" style="padding: 2px 7px; font-size: 10px;">-30° (平缓)</button>
+                <button class="tool-btn ad-btn-angle" data-angle="60" style="padding: 2px 7px; font-size: 10px;">60° (陡峭)</button>
+                <button class="tool-btn ad-btn-angle" data-angle="30" style="padding: 2px 7px; font-size: 10px;">30° (平缓)</button>
               </div>
-              <input type="range" id="ocr-rng-angle" min="-90" max="90" step="1" value="-45" style="width: 80px;" />
-              <span id="ocr-val-angle" style="font-family: var(--font-mono); color: #f8fafc; min-width: 32px;">-45°</span>
+              <input type="range" id="ocr-rng-angle" min="-90" max="90" step="1" value="45" style="width: 80px;" />
+              <span id="ocr-val-angle" style="font-family: var(--font-mono); color: #f8fafc; min-width: 32px;">45°</span>
             </div>
 
             <button id="btn-ocr-rerun" class="btn btn-primary" style="padding: 5px 14px; font-size: 11.5px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #38bdf8);">
@@ -196,7 +196,7 @@ export class OcrReviewModal {
         });
         (btn as HTMLElement).style.borderColor = '#38bdf8';
         (btn as HTMLElement).style.color = '#38bdf8';
-        const ang = parseFloat(btn.getAttribute('data-angle') || '-45');
+        const ang = parseFloat(btn.getAttribute('data-angle') || '45');
         this.currentAngleDeg = ang;
         const rng = modal.querySelector('#ocr-rng-angle') as HTMLInputElement;
         const valEl = modal.querySelector('#ocr-val-angle');

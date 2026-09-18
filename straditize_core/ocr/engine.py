@@ -100,12 +100,12 @@ class OcrTaxaRecognitionEngine:
         columns:
             List of detected Column definitions from session (each having 'startX', 'id', etc.).
         angle_deg:
-            Label slant angle (default +45.0° rotates slanted text to horizontal).
+            Label slant angle (default 45.0° rotates slanted text to horizontal).
         """
         if isinstance(diagram_image, np.ndarray):
-            full_img = Image.fromarray(diagram_image)
+            full_img = Image.fromarray(diagram_image).convert("RGB")
         else:
-            full_img = diagram_image
+            full_img = diagram_image.convert("RGB")
 
         w_img, h_img = full_img.size
         lx0, ly0, lx1, ly1 = label_row_bbox
@@ -121,7 +121,7 @@ class OcrTaxaRecognitionEngine:
         cropped_strip.save(bio, format="PNG")
         strip_b64 = "data:image/png;base64," + base64.b64encode(bio.getvalue()).decode("ascii")
 
-        # 1. Rotate oblique strip to horizontal reading posture (default angle_deg=+45.0)
+        # 1. Rotate oblique strip to horizontal reading posture
         rot_arr, meta = rotate_label_strip(cropped_strip, angle_deg=angle_deg)
 
         # 2. Extract text regions and transcribe text
@@ -181,7 +181,7 @@ class OcrTaxaRecognitionEngine:
     ) -> list[dict[str, Any]]:
         """Segments horizontal text regions and transcribes via ONNX PP-OCRv4."""
         rot_h, rot_w = rectified_image.shape[:2]
-        rot_img = Image.fromarray(rectified_image)
+        rot_img = Image.fromarray(rectified_image).convert("RGB")
 
         # 1. Use DBNet detection model if available
         if self.sess_det is not None:
@@ -201,7 +201,7 @@ class OcrTaxaRecognitionEngine:
             input_name = self.sess_det.get_inputs()[0].name
             pred = self.sess_det.run(None, {input_name: blob})[0][0, 0]
 
-            seg_mask = (pred > 0.2)
+            seg_mask = (pred > 0.22)
             lbl = label(seg_mask)
             props = regionprops(lbl)
 
@@ -217,17 +217,16 @@ class OcrTaxaRecognitionEngine:
                 bh = (maxr - minr) * scale_y
 
                 # Filter text-like components
-                if bw >= 16 and bh >= 8 and p.area > 35:
+                if bw >= 16 and bh >= 8 and p.area > 30:
                     x0 = int(max(0, minc * scale_x - 3))
                     y0 = int(max(0, minr * scale_y - 3))
                     x1 = int(min(rot_w, maxc * scale_x + 3))
                     y1 = int(min(rot_h, maxr * scale_y + 3))
 
                     crop_w = rot_img.crop((x0, y0, x1, y1))
-                    transcribed = self._transcribe_crop(np.array(crop_w))
+                    trans = self._transcribe_crop(np.array(crop_w))
 
-                    # Filter single-letter or meaningless artifacts
-                    if not transcribed or len(transcribed.strip()) <= 1:
+                    if not trans or len(trans.strip()) <= 1:
                         continue
 
                     box_rot = [
@@ -239,7 +238,7 @@ class OcrTaxaRecognitionEngine:
                     orig_bbox = map_box_to_original(box_rot, meta, global_offset=global_offset)
 
                     detections.append({
-                        "text": transcribed,
+                        "text": trans,
                         "bbox_orig": orig_bbox,
                         "rot_span": (x0, x1),
                     })
@@ -360,7 +359,7 @@ class OcrTaxaRecognitionEngine:
                     best_col = col
                     best_c_idx = c_idx
 
-            if best_col is not None and best_dist < 120.0 and best_c_idx not in used_col_indices:
+            if best_col is not None and best_dist < 45.0 and best_c_idx not in used_col_indices:
                 l_item["associated_column_id"] = best_col.get("id") or f"taxa_{best_c_idx}"
                 l_item["associated_column_index"] = best_col.get("col_index", best_c_idx)
                 l_item["associated_column_name"] = best_col.get("name")
