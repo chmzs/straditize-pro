@@ -133,7 +133,7 @@ export class Sidebar {
 
     if (this.isCompactView) {
       return `
-        <div class="taxa-card compact-taxa-row ${isActive ? 'active' : ''}" data-taxa-id="${col.id}" style="padding: 4px 8px; margin-bottom: 2px; display: flex; align-items: center; justify-content: space-between; gap: 6px; border-radius: 4px; border: 1px solid ${isActive ? '#38bdf8' : 'rgba(255,255,255,0.06)'}; background: ${isActive ? 'rgba(56,189,248,0.12)' : 'rgba(30,41,59,0.35)'};">
+        <div class="taxa-card compact-taxa-row ${isActive ? 'active' : ''}" data-taxa-id="${col.id}">
           <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
             <span class="color-dot" style="background-color: ${col.color}; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;"></span>
             <input type="text" class="taxa-name-inline-input" data-action="inline-rename" value="${col.name}" style="font-size: 11px; font-weight: ${isActive ? '600' : '400'}; border: none; background: transparent; color: inherit; width: 100%; text-overflow: ellipsis; overflow: hidden; padding: 1px 2px;" title="点击直接改名" />

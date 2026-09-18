@@ -1099,6 +1099,18 @@ body.theme-light .floating-tool-btn.active-mode {
   transition: all 0.2s ease;
 }
 
+.taxa-card.compact-taxa-row {
+  padding: 5px 8px;
+  margin-bottom: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+}
+
 .taxa-card:hover {
   border-color: rgba(255, 255, 255, 0.2);
   background: rgba(45, 55, 72, 0.8);
@@ -1108,6 +1120,35 @@ body.theme-light .floating-tool-btn.active-mode {
   border-color: var(--accent-blue);
   background: rgba(56, 189, 248, 0.1);
   box-shadow: 0 0 12px rgba(56, 189, 248, 0.15);
+}
+
+body.theme-light .taxa-card {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+body.theme-light .taxa-card:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+body.theme-light .taxa-card.compact-taxa-row {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+body.theme-light .taxa-card.compact-taxa-row:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+body.theme-light .taxa-card.active,
+body.theme-light .taxa-card.compact-taxa-row.active {
+  background: rgba(2, 132, 199, 0.07);
+  border-color: #0284c7;
+  box-shadow: 0 0 0 1px #0284c7, 0 2px 4px rgba(2, 132, 199, 0.08);
 }
 
 .taxa-header {
