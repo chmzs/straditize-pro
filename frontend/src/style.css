@@ -1055,6 +1055,28 @@ body.theme-light .floating-tool-btn.active-mode {
   background: rgba(15, 23, 42, 0.4);
 }
 
+body.theme-light .sidebar-actions-bar {
+  background: #f8f9fa;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+body.theme-light .sidebar-header {
+  background: #f8f9fa;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+body.theme-light .sidebar-actions-bar .btn-sidebar-action {
+  background: #0284c7;
+  border-color: #0284c7;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(2, 132, 199, 0.2);
+}
+
+body.theme-light .sidebar-actions-bar .btn-sidebar-action:hover {
+  background: #0369a1;
+  border-color: #0369a1;
+}
+
 .btn-sidebar-action {
   width: 100%;
   display: flex;
