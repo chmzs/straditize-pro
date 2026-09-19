@@ -223,6 +223,64 @@ export class RpcClient {
         return this.generateExportData(p?.format || 'csv') as TResult;
       }
 
+      case 'ocr.recognizeLabels': {
+        const sampleTaxa = [
+          'Pinus', 'Betula', 'Quercus ilex-type', 'Quercus suber-type', 'Olea',
+          'Corylus', 'Artemisia', 'Chenopodiaceae', 'Poaceae', 'Abies', 'Picea',
+          'Alnus', 'Ulmus', 'Salix', 'Ericaceae', 'Cyperaceae'
+        ];
+        const cols = this.currentDiagramData.columns || [];
+        const labels = cols.map((col, idx) => {
+          const matchedName = sampleTaxa[idx % sampleTaxa.length];
+          return {
+            id: `ocr_label_${idx + 1}`,
+            ocr_text: matchedName,
+            suggested_name: matchedName,
+            group: idx < 6 ? '乔木花粉 (AP)' : '草本与灌木花粉 (NAP)',
+            status: 'auto',
+            accepted: true,
+            anchor_x: col.startX,
+            anchor_y: 280,
+            associated_column_id: col.id,
+            associated_column_index: idx,
+            associated_column_name: col.name,
+          };
+        });
+        return {
+          success: true,
+          data: {
+            labels,
+            label_row_image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+            summary: {
+              total: labels.length,
+              auto: labels.length,
+              confirm: 0,
+              unrecognized: 0,
+            },
+          },
+        } as TResult;
+      }
+
+      case 'ocr.applyLabels': {
+        const p = params as { confirmed_labels: Array<{ associated_column_id: string; suggested_name: string }> };
+        let count = 0;
+        if (p?.confirmed_labels && Array.isArray(p.confirmed_labels)) {
+          p.confirmed_labels.forEach((item) => {
+            const col = this.currentDiagramData.columns.find((c) => c.id === item.associated_column_id || c.name === item.associated_column_id);
+            if (col && item.suggested_name) {
+              col.name = item.suggested_name;
+              col.species = item.suggested_name;
+              count++;
+            }
+          });
+        }
+        return {
+          success: true,
+          applied_count: count,
+          columns_count: this.currentDiagramData.columns.length,
+        } as TResult;
+      }
+
       default:
         return true as TResult;
     }
@@ -231,6 +289,23 @@ export class RpcClient {
   // 对外便捷方法
   public async getDiagramData(): Promise<DiagramData> {
     return this.call<void, DiagramData>('straditize.getDiagramData');
+  }
+
+  /**
+   * 一键归零：同步清空后端会话的列、控制点、标尺标定与撤销栈。
+   * 前端画布状态由 GeologyCanvas.resetAllOperations() 负责复位。
+   */
+  public async resetProjectState(): Promise<void> {
+    // 前端镜像状态同步清空，确保后续 RPC 调用不会读到旧列
+    this.currentDiagramData.columns = [];
+    this.currentDiagramData.activeTaxaId = '';
+
+    if (this.isMock) return;
+    try {
+      await this.call('project.new', {});
+    } catch (e) {
+      console.warn('Backend project.new reset sync failed:', e);
+    }
   }
 
   /**
@@ -321,26 +396,32 @@ export class RpcClient {
 
       if (Array.isArray(res) && res.length > 0) {
         const palette = ['#38bdf8', '#34d399', '#fbbf24', '#a78bfa', '#f472b6', '#fb7185', '#2dd4bf', '#818cf8'];
-        const cols: Column[] = res.map((c, i) => ({
-          id: `taxa_${c.col_index ?? i}`,
-          name: c.name || `Taxon ${i + 1}`,
-          color: palette[i % palette.length],
-          startX: c.start,
-          endX: c.end,
-          maxPercent: 100,
-          tickEndX: c.tickEndX || c.end,
-          unit: '%',
-          isLocked: false,
-          curveType: 'linear',
-          visible: true,
-          controlPoints: [],
-          scale_type: c.scale_type || 'linear',
-          startValue: c.startValue || 0,
-          tickValue: c.tickValue || 100,
-          plotType: c.plot_type || 'area',
-          hasExaggeration: c.has_exaggeration || false,
-          exaggerationMult: c.exaggeration_multiplier || 5,
-        }));
+        const cols: Column[] = res.map((c, i) => {
+          const colNum = String(i + 1).padStart(2, '0');
+          const defaultName = `col${colNum}`;
+          const colName = c.name || defaultName;
+          return {
+            id: `taxa_${c.col_index ?? i}`,
+            name: colName,
+            species: c.species || colName,
+            color: palette[i % palette.length],
+            startX: c.start,
+            endX: c.end,
+            maxPercent: 100,
+            tickEndX: c.tickEndX || c.end,
+            unit: '%',
+            isLocked: false,
+            curveType: 'linear',
+            visible: true,
+            controlPoints: [],
+            scale_type: c.scale_type || 'linear',
+            startValue: c.startValue || 0,
+            tickValue: c.tickValue || 100,
+            plotType: c.plot_type || 'area',
+            hasExaggeration: c.has_exaggeration || false,
+            exaggerationMult: c.exaggeration_multiplier || 5,
+          };
+        });
         this.currentDiagramData.columns = cols;
         this.currentDiagramData.activeTaxaId = cols[0]?.id || '';
         return cols;

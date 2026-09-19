@@ -153,41 +153,41 @@ export class GeologyCanvas {
         <span>帮助</span>
       </button>
       <div class="palette-divider" style="width: 1px; height: 24px; background: var(--border-color); opacity: 0.7; margin: 0 1px;"></div>
-      <button class="floating-tool-btn active-mode" data-fmode="select" title="选择与微调模式 (快捷键: V)">
+      <button class="floating-tool-btn active-mode" data-fmode="select" title="微调与选择 (Adjust Point, 快捷键: S / V)">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
           <path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
         </svg>
-        <span>选择</span>
+        <span>微调 (S)</span>
       </button>
-      <button class="floating-tool-btn" data-fmode="pan" title="平移抓手模式 (快捷键: H 或按住空格/中键拖动)">
+      <button class="floating-tool-btn" data-fmode="addPoint" title="添加控制点 (Add Point, 快捷键: A)">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="4" fill="currentColor"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
+        </svg>
+        <span>+点 (A)</span>
+      </button>
+      <button class="floating-tool-btn" data-fmode="eraser" title="删除控制点 (Delete Point, 快捷键: D)">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/>
+        </svg>
+        <span>删点 (D)</span>
+      </button>
+      <button class="floating-tool-btn" data-fmode="addCol" title="添加属种列分界线 (Column, 快捷键: C)">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="2" x2="12" y2="22" stroke-dasharray="3 3"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        <span>+列 (C)</span>
+      </button>
+      <button class="floating-tool-btn" data-fmode="pan" title="平移抓手模式 (快捷键: H 或 右键/中键/空格拖拽)">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
         </svg>
-        <span>平移</span>
+        <span>平移 (H)</span>
       </button>
       <button class="floating-tool-btn" data-fmode="roi" title="ROI 矩形数据区模式 (快捷键: R)">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
           <rect width="18" height="18" x="3" y="3" rx="2" stroke-dasharray="3 3"/>
         </svg>
-        <span>ROI</span>
-      </button>
-      <button class="floating-tool-btn" data-fmode="addCol" title="添加属种列分界线 (快捷键: A)">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="12" y1="2" x2="12" y2="22" stroke-dasharray="3 3"/><line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-        <span>+列</span>
-      </button>
-      <button class="floating-tool-btn" data-fmode="addPoint" title="添加控制拐点 (快捷键: P)">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="4" fill="currentColor"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
-        </svg>
-        <span>+点</span>
-      </button>
-      <button class="floating-tool-btn" data-fmode="eraser" title="橡皮擦删除工具 (快捷键: E)">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/>
-        </svg>
-        <span>橡皮</span>
+        <span>ROI (R)</span>
       </button>
     `;
     this.container.appendChild(palette);
@@ -622,6 +622,7 @@ export class GeologyCanvas {
 
     this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
     this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+    this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
     window.addEventListener('mousemove', (e) => this.onMouseMove(e));
     window.addEventListener('mouseup', (e) => this.onMouseUp(e));
     this.canvas.addEventListener('contextmenu', (e) => this.onContextMenu(e));
@@ -721,42 +722,116 @@ export class GeologyCanvas {
       return;
     }
 
-    // 1. 模式快捷键切换 (V, H, R, C, P, E)
-    if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-      if (e.code === 'KeyV') {
+    // 1. 方向键微调选中项 (Arrow Keys Nudge: 1px / Shift: 10px)
+    if (
+      e.code === 'ArrowUp' ||
+      e.code === 'ArrowDown' ||
+      e.code === 'ArrowLeft' ||
+      e.code === 'ArrowRight'
+    ) {
+      if (this.data.selectedEntity) {
         e.preventDefault();
-        this.setToolMode('select');
-        this.notifyNotice('切换工具: 选择与微调模式 (V)');
+        const step = e.shiftKey ? 10 : 1;
+        let dx = 0;
+        let dy = 0;
+        if (e.code === 'ArrowLeft') dx = -step;
+        if (e.code === 'ArrowRight') dx = step;
+        if (e.code === 'ArrowUp') dy = -step;
+        if (e.code === 'ArrowDown') dy = step;
+        this.nudgeSelectedEntity(dx, dy);
         return;
       }
+    }
+
+    // 2. 模式快捷键切换 (A: 加点, S: 微调, D: 删点, C: 加列, H: 平移, R: ROI)
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+      // S / V: 微调与选择模式 (Adjust Point)
+      if (e.code === 'KeyS' || e.code === 'KeyV') {
+        e.preventDefault();
+        this.setToolMode('select');
+        this.notifyNotice('切换工具: 微调与选择 (S) - 拖动锚点或方向键精调');
+        return;
+      }
+      // A: 添加控制点模式 (Add Point)
+      if (e.code === 'KeyA') {
+        e.preventDefault();
+        if (!this.guardTool('addPoint')) return;
+        this.setToolMode('addPoint');
+        this.notifyNotice('切换工具: 添加控制点 (A) - 点击左键插入锚点');
+        return;
+      }
+      // D: 删除控制点模式 (Delete Point)
+      if (e.code === 'KeyD') {
+        e.preventDefault();
+        if (!this.guardTool('eraser')) return;
+        this.setToolMode('eraser');
+        this.notifyNotice('切换工具: 删除控制点 (D) - 点击左键删除锚点或列');
+        return;
+      }
+      // C: 添加属种列 (Column)
+      if (e.code === 'KeyC') {
+        e.preventDefault();
+        if (!this.guardTool('addCol')) return;
+        this.setToolMode('addCol');
+        this.notifyNotice('切换工具: 添加属种列 (C) - 点击图表插入垂直基线');
+        return;
+      }
+      // H: 抓手平移模式 (Pan)
       if (e.code === 'KeyH') {
         e.preventDefault();
         this.setToolMode('pan');
-        this.notifyNotice('切换工具: 抓手平移模式 (H)');
+        this.notifyNotice('切换工具: 抓手平移模式 (H) [提示: 右键直接拖拽也可平移]');
         return;
       }
+      // R: ROI 矩形数据区
       if (e.code === 'KeyR') {
         e.preventDefault();
+        if (!this.guardTool('roi')) return;
         this.setToolMode('roi');
         this.notifyNotice('切换工具: 数据有效区 ROI 模式 (R)');
         return;
       }
-      if (e.code === 'KeyC') {
+      if (e.code === 'Escape') {
         e.preventDefault();
-        this.setToolMode('addCol');
-        this.notifyNotice('切换工具: 添加分列线 (C) - 点击图表插入垂直基线');
+        if (this.toolModeManager.getMode() !== 'select') {
+          this.setToolMode('select');
+          this.notifyNotice('已返回微调与选择模式 (S)');
+        } else if (this.data.selectedEntity) {
+          this.data.selectedEntity = null;
+          this.requestRender();
+          this.notifyNotice('已取消选中');
+        }
         return;
       }
-      if (e.code === 'KeyP') {
+      if (e.code === 'KeyF') {
         e.preventDefault();
-        this.setToolMode('addPoint');
-        this.notifyNotice('切换工具: 添加控制拐点 (P) - 点击向当前属种插入锚点');
+        this.fitToScreen();
+        this.notifyNotice('视图: 适应屏幕居中 (F)');
         return;
       }
-      if (e.code === 'KeyE') {
+      // Delete: 唯一的规范删除键（F1 帮助由全局统一处理，此处不再重复绑定）
+      if (e.code === 'Delete') {
+        if (this.data.selectedEntity) {
+          e.preventDefault();
+          if (!this.guardTool('eraser')) return;
+          this.deleteSelectedEntity();
+          return;
+        }
+      }
+      if (e.key === '=' || e.key === '+') {
         e.preventDefault();
-        this.setToolMode('eraser');
-        this.notifyNotice('切换工具: 橡皮擦删除工具 (E) - 点击锚点或分列线删除');
+        const rect = this.canvas.getBoundingClientRect();
+        this.viewport.zoomStepAt({ x: rect.width / 2, y: rect.height / 2 }, true);
+        this.requestRender();
+        this.notifyNotice(`视图放大: ${Math.round(this.viewport.scale * 100)}%`);
+        return;
+      }
+      if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        const rect = this.canvas.getBoundingClientRect();
+        this.viewport.zoomStepAt({ x: rect.width / 2, y: rect.height / 2 }, false);
+        this.requestRender();
+        this.notifyNotice(`视图缩小: ${Math.round(this.viewport.scale * 100)}%`);
         return;
       }
     }
@@ -803,6 +878,34 @@ export class GeologyCanvas {
       return;
     }
 
+    // Ctrl+1 原始尺寸 100%
+    if ((e.ctrlKey || e.metaKey) && e.code === 'Digit1') {
+      e.preventDefault();
+      this.resetZoom100();
+      this.notifyNotice('视图: 1:1 原始尺寸 (Ctrl+1)');
+      return;
+    }
+
+    // Ctrl + + / = 放大
+    if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
+      e.preventDefault();
+      const rect = this.canvas.getBoundingClientRect();
+      this.viewport.zoomStepAt({ x: rect.width / 2, y: rect.height / 2 }, true, true);
+      this.requestRender();
+      this.notifyNotice(`视图放大: ${Math.round(this.viewport.scale * 100)}%`);
+      return;
+    }
+
+    // Ctrl + - / _ 缩小
+    if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_')) {
+      e.preventDefault();
+      const rect = this.canvas.getBoundingClientRect();
+      this.viewport.zoomStepAt({ x: rect.width / 2, y: rect.height / 2 }, false, true);
+      this.requestRender();
+      this.notifyNotice(`视图缩小: ${Math.round(this.viewport.scale * 100)}%`);
+      return;
+    }
+
     // Ctrl+Z 撤销
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
       e.preventDefault();
@@ -814,11 +917,8 @@ export class GeologyCanvas {
       }
     }
 
-    // Ctrl+Y 或 Ctrl+Shift+Z 重做
-    if (
-      ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') ||
-      ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z')
-    ) {
+    // Ctrl+Y 重做（唯一的重做规范键）
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
       e.preventDefault();
       const next = this.history.redo();
       if (next) {
@@ -839,10 +939,45 @@ export class GeologyCanvas {
 
   private onWheel(e: WheelEvent): void {
     e.preventDefault();
+
+    // 1. Shift + 滚轮：水平平移视口
+    if (e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      this.viewport.panBy(-e.deltaY, 0);
+      this.requestRender();
+      return;
+    }
+
+    // 2. Alt + 滚轮：垂直平移视口
+    if (e.altKey && !e.ctrlKey && !e.metaKey) {
+      this.viewport.panBy(0, -e.deltaY);
+      this.requestRender();
+      return;
+    }
+
+    // 3. 默认 / Ctrl+滚轮：以鼠标所指处为锚点进行平滑缩放
     const screenPt = this.getCanvasPoint(e);
     const zoomIn = e.deltaY < 0;
     this.viewport.zoomStepAt(screenPt, zoomIn, e.ctrlKey || e.metaKey);
     this.requestRender();
+  }
+
+  private onDoubleClick(e: MouseEvent): void {
+    if (e.button !== 0) return;
+    const screenPt = this.getCanvasPoint(e);
+    const hitAnchor = this.findHitAnchor(screenPt);
+
+    if (hitAnchor) {
+      const col = this.data.columns.find((c) => c.id === hitAnchor.taxaId);
+      const pt = col?.controlPoints.find((p) => p.id === hitAnchor.pointId);
+      if (col && pt) {
+        this.notifyNotice(`已聚焦锚点: ${col.name} [X:${pt.x}, Y:${pt.y}]`);
+      }
+      return;
+    }
+
+    // 双击空白处：自适应居中适应屏幕 (Fit to Screen)
+    this.fitToScreen();
+    this.notifyNotice('双击快速适应屏幕居中 (Fit to Screen)');
   }
 
   private onMouseDown(e: MouseEvent): void {
@@ -853,8 +988,8 @@ export class GeologyCanvas {
 
     const mode = this.toolModeManager.getMode();
 
-    // 中键、空格键按住、或显式处于 pan 抓手模式：进入视口拖动平移
-    if (e.button === 1 || (e.button === 0 && (this.isSpaceDown || mode === 'pan'))) {
+    // 鼠标右键 (2)、鼠标中键 (1)、空格键按住、或处于 pan 抓手模式：一律进入视口平移
+    if (e.button === 2 || e.button === 1 || (e.button === 0 && (this.isSpaceDown || mode === 'pan'))) {
       this.isPanning = true;
       this.updateCursor();
       return;
@@ -904,9 +1039,11 @@ export class GeologyCanvas {
       if (mode === 'addCol') {
         const newX = Math.round(worldPt.x);
         const colWidth = 80;
+        const colNum = String(this.data.columns.length + 1).padStart(2, '0');
         const newCol: TaxaColumn = {
           id: `taxa_${Date.now()}`,
-          name: `Taxa ${this.data.columns.length + 1}`,
+          name: `col${colNum}`,
+          species: `col${colNum}`,
           color: '#38bdf8',
           startX: newX,
           endX: newX + colWidth,
@@ -1001,7 +1138,9 @@ export class GeologyCanvas {
       }
 
       // ================= 5. 添加拐点模式 (Add Point) 或在已激活属种列内点击拉伸 =================
-      if (mode === 'addPoint' || (mode === 'select' && this.isWithinDiagramBounds(worldPt))) {
+      // 关键门禁：select 模式下点击画布会隐式加锚点，必须与 A 键走同一套阶段表，
+      // 否则 S3/S4 的"禁止编辑控制点"门禁可被鼠标点击直接绕过。
+      if (this.isToolAllowed('addPoint') && (mode === 'addPoint' || (mode === 'select' && this.isWithinDiagramBounds(worldPt)))) {
         const activeCol = this.getActiveColumn();
         if (activeCol && this.isWithinDiagramBounds(worldPt)) {
           let targetY = Math.round(worldPt.y);
@@ -1248,23 +1387,110 @@ export class GeologyCanvas {
     this.requestRender();
   }
 
+  private nudgeTimer: number | null = null;
+
+  public nudgeSelectedEntity(dx: number, dy: number): void {
+    if (!this.data.selectedEntity) return;
+
+    if (this.data.selectedEntity.type === 'point') {
+      const { colId, pointId } = this.data.selectedEntity;
+      const col = this.data.columns.find((c) => c.id === colId);
+      if (col) {
+        const pt = col.controlPoints.find((p) => p.id === pointId);
+        if (pt) {
+          pt.x += dx;
+          pt.y += dy;
+          pt.isManual = true;
+          col.controlPoints.sort((a, b) => a.y - b.y);
+          this.requestRender();
+          this.callbacks.onDataChange?.();
+          this.notifyNotice(`微调控制点: ${col.name} [X:${pt.x}, Y:${pt.y}] (${dx !== 0 ? (dx > 0 ? `+${dx}px` : `${dx}px`) : ''} ${dy !== 0 ? (dy > 0 ? `+${dy}px` : `${dy}px`) : ''})`);
+
+          // 连续微调 500ms 后提交撤销历史记录
+          if (this.nudgeTimer) clearTimeout(this.nudgeTimer);
+          this.nudgeTimer = window.setTimeout(() => {
+            this.history.push(`Nudge Anchor in ${col.name}`, this.data.columns, this.data.activeTaxaId);
+            this.nudgeTimer = null;
+          }, 500);
+        }
+      }
+    } else if (this.data.selectedEntity.type === 'column') {
+      const colId = this.data.selectedEntity.id;
+      const part = this.data.selectedEntity.part;
+      const col = this.data.columns.find((c) => c.id === colId);
+      if (col && dx !== 0) {
+        if (part === 'start') {
+          col.startX += dx;
+          if (col.scaleCalib) col.scaleCalib.originX = col.startX;
+        } else if (part === 'tick') {
+          col.tickEndX = (col.tickEndX ?? col.endX) + dx;
+          if (col.scaleCalib) col.scaleCalib.calibX = col.tickEndX;
+        } else {
+          col.endX += dx;
+        }
+        this.requestRender();
+        this.callbacks.onDataChange?.();
+        this.notifyNotice(`微调分列线: ${col.name} (${dx > 0 ? `+${dx}px` : `${dx}px`})`);
+
+        if (this.nudgeTimer) clearTimeout(this.nudgeTimer);
+        this.nudgeTimer = window.setTimeout(() => {
+          this.history.push(`Nudge Column ${col.name}`, this.data.columns, this.data.activeTaxaId);
+          this.nudgeTimer = null;
+        }, 500);
+      }
+    }
+  }
+
   private onContextMenu(e: MouseEvent): void {
     e.preventDefault();
-    const screenPt = this.getCanvasPoint(e);
-    const hitAnchor = this.findHitAnchor(screenPt);
 
-    if (hitAnchor) {
-      const col = this.data.columns.find((c) => c.id === hitAnchor.taxaId);
+    // 右键原地点击（非拖动平移）：退出当前模式或取消选中
+    if (this.toolModeManager.getMode() !== 'select') {
+      this.setToolMode('select');
+      this.notifyNotice('右键已退出当前工具，返回微调与选择模式 (S)');
+      return;
+    }
+
+    if (this.data.selectedEntity) {
+      this.data.selectedEntity = null;
+      this.requestRender();
+      this.callbacks.onDataChange?.();
+      this.notifyNotice('已取消选中');
+      return;
+    }
+  }
+
+  public deleteSelectedEntity(): void {
+    if (!this.data.selectedEntity) return;
+
+    if (this.data.selectedEntity.type === 'point') {
+      const { colId, pointId } = this.data.selectedEntity;
+      const col = this.data.columns.find((c) => c.id === colId);
       if (col) {
-        const beforeCount = col.controlPoints.length;
-        col.controlPoints = col.controlPoints.filter((p) => p.id !== hitAnchor.pointId);
-
-        if (col.controlPoints.length < beforeCount) {
-          this.history.push(`Remove Anchor from ${col.name}`, this.data.columns, this.data.activeTaxaId);
-          this.hoveredAnchor = null;
-          this.updateCursor();
-          this.requestRender();
-        }
+        const pt = col.controlPoints.find((p) => p.id === pointId);
+        col.controlPoints = col.controlPoints.filter((p) => p.id !== pointId);
+        this.history.push(`Delete Anchor from ${col.name}`, this.data.columns, this.data.activeTaxaId);
+        this.data.selectedEntity = null;
+        this.hoveredAnchor = null;
+        this.updateCursor();
+        this.requestRender();
+        this.callbacks.onDataChange?.();
+        this.notifyNotice(`已删除 ${col.name} 的锚点 [Y:${pt ? pt.y : '--'}]`);
+      }
+    } else if (this.data.selectedEntity.type === 'column') {
+      const colId = this.data.selectedEntity.id;
+      const colIdx = this.data.columns.findIndex((c) => c.id === colId);
+      if (colIdx !== -1 && this.data.columns.length > 1) {
+        const deleted = this.data.columns.splice(colIdx, 1)[0];
+        this.data.selectedEntity = null;
+        this.data.activeTaxaId = this.data.columns[Math.max(0, colIdx - 1)].id;
+        this.history.push(`Delete Column ${deleted.name}`, this.data.columns, this.data.activeTaxaId);
+        this.hoveredBoundary = null;
+        this.updateCursor();
+        this.requestRender();
+        this.callbacks.onDataChange?.();
+        this.callbacks.onTaxaChange?.(this.data.activeTaxaId);
+        this.notifyNotice(`已删除属种列: ${deleted.name}`);
       }
     }
   }
@@ -1371,6 +1597,7 @@ export class GeologyCanvas {
   }
 
   private findHitRoiHandle(screenPt: Point2D): string | null {
+    if (this.workflowStage < 2) return null;
     const cal = this.data.calibration;
     const tlScreen = this.viewport.worldToScreen({ x: cal.dataXMin, y: cal.dataYMin });
     const brScreen = this.viewport.worldToScreen({ x: cal.dataXMax, y: cal.dataYMax });
@@ -1426,8 +1653,8 @@ export class GeologyCanvas {
       this.drawDepthGrid(ctx, isLight);
     }
 
-    // 3. 沉积剖面数据有效区矩形与控制手柄 (ROI) (S1 阶段起呈现)
-    if (this.workflowStage >= 1) {
+    // 3. 沉积剖面数据有效区矩形与控制手柄 (ROI) (严格从 S2 ROI 阶段起呈现，S0/S1 绝不呈现)
+    if (this.workflowStage >= 2) {
       this.drawCalibrationOverlay(ctx, isLight);
     }
 
@@ -1992,7 +2219,121 @@ export class GeologyCanvas {
   public setWorkflowStage(stage: number): void {
     this.workflowStage = stage;
     this.updateEmptyStateVisibility();
+    this.updateFloatingToolbarForStage(stage);
     this.requestRender();
+  }
+
+  /**
+   * 一键归零 (Reset All)：清空当前图谱上的全部操作 —— 分列、控制点、刻度钉、
+   * 深度标尺与 ROI 边界，仅保留底图本身，使用户可从 S1 重新开始。
+   * 注意：本方法只复位"数据内容"，不卸载底图，可被「重置」按钮与新建项目流程复用。
+   */
+  public resetAllOperations(): void {
+    const w = this.data.imageWidth || 1600;
+    const h = this.data.imageHeight || 1000;
+
+    // 1. 清空全部属种列、控制点与选中态
+    this.data.columns = [];
+    this.data.activeTaxaId = '';
+    this.data.selectedEntity = null;
+
+    // 2. ROI 与深度标尺回归初始建议值（与载入新图时完全一致）
+    this.data.calibration = {
+      dataXMin: Math.round(w * 0.12),
+      dataXMax: Math.round(w * 0.94),
+      dataYMin: Math.round(h * 0.18),
+      dataYMax: Math.round(h * 0.88),
+      depthTopValue: 0,
+      depthBottomValue: 100,
+      unit: 'cm',
+      isCalibrated: true,
+      depthInterval: 2,
+      depthGridEnabled: true,
+    };
+
+    // 3. 复位所有悬停 / 拖拽 / 平移交互状态，防止残留手势锁死
+    this.hoveredAnchor = null;
+    this.draggingAnchor = null;
+    this.hoveredBoundary = null;
+    this.draggingBoundary = null;
+    this.hoveredRoiHandle = null;
+    this.draggingRoiHandle = null;
+    this.hoveredDepthHorizon = null;
+    this.isHoveringDepthRulerBadge = false;
+    this.isPanning = false;
+    this.isMouseDown = false;
+    this.hasDraggedAnchor = false;
+    this.dragInitialPointPos = null;
+    this.dragInitialColumn = null;
+    this.dragInitialCalibration = null;
+
+    // 4. 视图滤镜回归原图，工具模式回归微调 (S)
+    this.viewport.imageMode = 'normal';
+    this.viewport.showBinaryOverlay = false;
+    this.viewport.degridStrength = 'off';
+    this.setToolMode('select');
+
+    // 5. 清空撤销历史栈（基线同步记录新标定），回到 S1 并重新居中
+    this.history.reset([], '', this.data.calibration);
+    this.workflowStage = 1;
+    this.updateEmptyStateVisibility();
+    this.updateFloatingToolbarForStage(1);
+    this.updateCursor();
+    this.fitToScreen();
+    this.requestRender();
+
+    this.callbacks.onFilterChange?.(this.viewport.imageMode, this.viewport.showBinaryOverlay);
+    this.callbacks.onTaxaChange?.('');
+    this.callbacks.onDataChange?.();
+  }
+
+  /**
+   * 工作流阶段 → 允许激活的工具集（唯一事实源 / Single Source of Truth）。
+   * 浮动工具条置灰、键盘模式切换守卫、鼠标编辑路径三处必须全部走本表，禁止各写一份。
+   *
+   *   S0–S1 加载   ：仅平移（截图与检查图谱形态）
+   *   S2    ROI    ：框选数据有效区
+   *   S3–S4 分列/标尺：可重新调整 ROI、加列、删列、选择、平移（仍禁止编辑控制点）
+   *   S5–S7 拐点及以后：开放全部编辑能力（含加点）
+   */
+  public getAllowedTools(stage: number = this.workflowStage): ToolMode[] {
+    if (stage <= 1) return ['pan'];
+    if (stage === 2) return ['roi', 'pan'];
+    if (stage === 3 || stage === 4) return ['roi', 'addCol', 'eraser', 'select', 'pan'];
+    return ['select', 'pan', 'roi', 'addCol', 'addPoint', 'eraser'];
+  }
+
+  /** 当前阶段是否允许该工具 */
+  public isToolAllowed(mode: ToolMode, stage: number = this.workflowStage): boolean {
+    return this.getAllowedTools(stage).includes(mode);
+  }
+
+  /** 各工具被阶段门禁拦下时的提示文案 */
+  private static readonly TOOL_STAGE_HINT: Partial<Record<ToolMode, string>> = {
+    roi: '提示: ROI 框选在 S2 阶段启用，请点击下方 [👉 进入数据有效区框选]',
+    addCol: '提示: 添加属种列在 S3 分列阶段启用，请先确认数据有效区 (ROI)',
+    addPoint: '提示: 控制点编辑在 S5 拐点提取阶段启用',
+    eraser: '提示: 删除操作在有属种列后 (S3 起) 启用',
+  };
+
+  /** 统一门禁：不允许时给出阶段提示并返回 false，允许时返回 true */
+  private guardTool(mode: ToolMode): boolean {
+    if (this.isToolAllowed(mode)) return true;
+    const hint = GeologyCanvas.TOOL_STAGE_HINT[mode];
+    if (hint) this.notifyNotice(hint);
+    return false;
+  }
+
+  private updateFloatingToolbarForStage(stage: number): void {
+    if (!this.floatingToolbar) return;
+    const allowed = this.getAllowedTools(stage);
+    this.floatingToolbar.querySelectorAll('[data-fmode]').forEach((btn) => {
+      const mode = btn.getAttribute('data-fmode') as ToolMode;
+      const btnEl = btn as HTMLButtonElement;
+      const isAllowed = allowed.includes(mode);
+      btnEl.style.opacity = isAllowed ? '1' : '0.35';
+      btnEl.style.pointerEvents = isAllowed ? 'auto' : 'none';
+    });
   }
 
   private drawGhostingOverlay(ctx: CanvasRenderingContext2D): void {

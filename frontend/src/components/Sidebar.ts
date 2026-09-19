@@ -69,7 +69,7 @@ export class Sidebar {
           <button id="btn-toggle-compact" class="tool-btn" style="padding: 2px 5px; font-size: 10px;" title="切换紧凑列表/详细卡片视图">
             ${this.isCompactView ? '☲ 卡片' : '≡ 紧凑'}
           </button>
-          <button id="btn-collapse-sidebar" class="icon-btn" title="收起侧边栏 (Ctrl+B)">
+          <button id="btn-collapse-sidebar" class="icon-btn" title="收起侧边栏 (Ctrl+[)">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
@@ -97,10 +97,19 @@ export class Sidebar {
       </div>
 
       <div class="taxa-list" id="taxa-list-container" style="flex: 1; overflow-y: auto;">
-        ${this.data.columns
-          .filter((col) => !this.searchQuery || col.name.toLowerCase().includes(this.searchQuery.toLowerCase()))
-          .map((col) => this.renderTaxaItem(col, col.id === this.data.activeTaxaId))
-          .join('')}
+        ${this.data.columns.length === 0
+          ? `
+            <div class="sidebar-empty-hint" style="padding: 30px 16px; text-align: center; color: var(--text-muted); font-size: 11.5px; line-height: 1.6;">
+              <div style="font-size: 26px; margin-bottom: 8px;">📏</div>
+              <strong style="color: var(--text-primary); font-size: 12px; display: block; margin-bottom: 6px;">暂未切分属种列</strong>
+              请先在图谱上框选数据有效区 (ROI)，点击下方 <strong>[确认有效区，开始分列]</strong>。<br><br>
+              系统将自动切分各列并生成 <code>col01</code>, <code>col02</code>... 默认编号列，随后您可点击顶部 <strong>[🔍 OCR]</strong> 自动匹配属种名。
+            </div>
+          `
+          : this.data.columns
+              .filter((col) => !this.searchQuery || col.name.toLowerCase().includes(this.searchQuery.toLowerCase()))
+              .map((col) => this.renderTaxaItem(col, col.id === this.data.activeTaxaId))
+              .join('')}
       </div>
     `;
 
@@ -219,12 +228,20 @@ export class Sidebar {
     const pasteBtn = this.element.querySelector('#btn-open-paste-taxa');
     if (pasteBtn) {
       pasteBtn.addEventListener('click', () => {
+        if (this.data.columns.length === 0) {
+          alert('提示：当前图谱尚未切分属种列。\n请先在图谱中框选数据有效区 (ROI) 并执行分列，系统将自动生成 col01, col02... 编号列，之后可使用 OCR 自动匹配或在此批量导入。');
+          return;
+        }
         this.openPasteTaxaModal();
       });
     }
 
     // 插空列急救按钮
     this.element.querySelector('#btn-insert-gap-col')?.addEventListener('click', () => {
+      if (this.data.columns.length === 0) {
+        alert('提示：当前图谱尚未切分属种列，请先执行分列。');
+        return;
+      }
       this.callbacks.onInsertGapColumn?.(this.data.activeTaxaId);
     });
 
@@ -358,8 +375,8 @@ export class Sidebar {
 
         <div class="modal-body">
           <p class="modal-description">
-            可直接从 <strong>Excel（整行或整列）</strong> 或 <strong>文献 Word</strong> 中复制拉丁属种名单粘贴于此（支持包含 Markdown <i>*Pinus*</i> 格式）。<br>
-            系统自动按回车或制表符切分，按图谱<strong>从左到右顺序重命名全部列</strong>；当属种数多于当前列数时，<strong>自动依据列间距向右拓展分列</strong>。
+            💡 <strong>提示</strong>：系统分列后已自动生成 <code>col01, col02...</code> 编号列，建议优先使用顶部 <strong>[🔍 OCR]</strong> 自动提取图谱顶部的属种名。<br>
+            若手头已有整理好的属种名单（Excel 或文献 Word），也可在此直接粘贴以快速覆盖当前列名（支持从左到右顺序重命名全部列，属种数多于当前列数时自动拓展分列）。
           </p>
 
           <div class="paste-options-bar">

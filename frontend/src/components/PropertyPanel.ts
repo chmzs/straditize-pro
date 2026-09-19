@@ -78,7 +78,7 @@ export class PropertyPanel {
 
           <div class="form-group">
             <div class="checkbox-row" style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
-              <input type="checkbox" id="cal-depth-grid" ${cal.depthGridEnabled !== false ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: #38bdf8; cursor: pointer;" />
+              <input type="checkbox" id="cal-depth-grid" ${cal.depthGridEnabled !== false ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: var(--accent-blue); cursor: pointer;" />
               <label for="cal-depth-grid" style="cursor: pointer; color: var(--text-primary); font-size: 12.5px; font-weight: 500;">
                 在画布上显示水平淡蓝色层位标线 (Depth Grid Lines)
               </label>
@@ -166,7 +166,7 @@ export class PropertyPanel {
             </div>
 
             <!-- 视图 1: 交互式表格视图 (支持直接点选单元格修改数字) -->
-            <div id="wpd-table-wrapper" class="wpd-table-wrapper" style="flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--border-light); border-radius: 6px; background: rgba(15, 23, 42, 0.6);">
+            <div id="wpd-table-wrapper" class="wpd-table-wrapper" style="flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--border-light); border-radius: 6px;">
               <table id="wpd-preview-table" class="wpd-preview-table">
                 <!-- 动态填充 thead 与 tbody -->
               </table>
@@ -239,8 +239,8 @@ export class PropertyPanel {
             <div class="divider" style="margin: 2px 0;"></div>
 
             <!-- 导出内容选择与集成表 (规范第九章) -->
-            <div class="form-group" style="margin: 0; background: rgba(0,0,0,0.25); padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
-              <label style="font-size: 11px; font-weight: bold; color: #38bdf8;">导出内容选择 (Content Tree):</label>
+            <div class="form-group wpd-content-tree-box" style="margin: 0; padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
+              <label style="font-size: 11px; font-weight: bold; color: var(--accent-blue);">导出内容选择 (Content Tree):</label>
               <div style="display: flex; flex-direction: column; gap: 5px; font-size: 10px; margin-top: 5px;">
                 <label style="display: flex; align-items: center; gap: 6px; color: var(--text-muted); cursor: not-allowed;">
                   <input type="checkbox" checked disabled />
@@ -248,11 +248,11 @@ export class PropertyPanel {
                 </label>
                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
                   <input type="checkbox" id="chk-export-agedepth" checked />
-                  <span style="color: #f1f5f9;">深度-年代表 (age-depth)</span>
+                  <span class="wpd-tree-label">深度-年代表 (age-depth)</span>
                 </label>
                 <label id="lbl-export-ensemble" style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
                   <input type="checkbox" id="chk-export-ensemble" />
-                  <span id="txt-export-ensemble" style="color: #f59e0b; font-weight: 600;">集成表 (ensemble tables)</span>
+                  <span id="txt-export-ensemble" style="color: var(--accent-amber); font-weight: 600;">集成表 (ensemble tables)</span>
                 </label>
                 <div id="ensemble-sub-options" style="display: none; padding-left: 18px; font-size: 9.5px; color: var(--text-muted);">
                   <span id="ensemble-list-hint">暂无原生或导入集成表</span>
@@ -266,12 +266,12 @@ export class PropertyPanel {
 
             <!-- 数据与发表级脚本说明 (Section 八: R 脚本本地出图) -->
             <div class="form-group" style="margin: 0;">
-              <label style="font-size: 11px; font-weight: bold; color: #38bdf8;">科研发表级成果导出:</label>
+              <label style="font-size: 11px; font-weight: bold; color: var(--accent-blue);">科研发表级成果导出:</label>
               <p style="font-size: 10px; color: var(--text-muted); line-height: 1.4; margin-bottom: 6px;">
                 支持一键生成无 NA 地学标准丰度表、基于 <code>rioja::strat.plot</code> 的自动化出图 R 脚本及 POSIX UStar 标准项目归档。
               </p>
-              <div style="background: rgba(15, 23, 42, 0.5); padding: 8px; border-radius: 4px; border: 1px solid var(--border-light); font-size: 10px; color: var(--text-muted); line-height: 1.4;">
-                <div style="color: #f59e0b; font-weight: 600; margin-bottom: 2px;">📌 地学科学规范：</div>
+              <div class="wpd-scientific-qc-box">
+                <div style="color: var(--accent-amber); font-weight: 600; margin-bottom: 2px;">📌 地学科学规范：</div>
                 <div>• 未出现属种严格填报 <code>0.00</code></div>
                 <div>• 对数分析请自行添加伪计数 (如 +0.01)</div>
               </div>
@@ -643,7 +643,7 @@ export class PropertyPanel {
           subEnsemble.innerHTML = res.tables.map((t, idx) => `
             <label style="display: flex; align-items: center; gap: 4px; margin-top: 3px; cursor: pointer;">
               <input type="checkbox" class="chk-sub-ensemble" value="${t.name}" ${idx === 0 ? 'checked' : ''} />
-              <span style="color: #f59e0b;">${t.name} (${t.rows} 行采样)</span>
+              <span style="color: var(--accent-amber);">${t.name} (${t.rows} 行采样)</span>
             </label>
           `).join('');
         } else {

@@ -86,8 +86,8 @@ export class MetadataModal {
 
         <div class="modal-body" style="flex: 1; display: flex; flex-direction: column; gap: 14px; padding: 16px; overflow-y: auto;">
           <!-- 顶部快捷工具栏: DOI 索引 & PDF 解析 -->
-          <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-light); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
-            <div style="font-size: 11px; font-weight: bold; color: #38bdf8; display: flex; justify-content: space-between; align-items: center;">
+          <div class="meta-quick-tools">
+            <div style="font-size: 11px; font-weight: bold; color: var(--accent-blue); display: flex; justify-content: space-between; align-items: center;">
               <span>⚡ 自动化提取工具通道 (DOI 索引 + 论文 PDF 提取)</span>
               <span style="font-size: 10px; color: var(--text-muted);">约束规范：仅提取明确写出的内容，零脑补零推测</span>
             </div>
@@ -107,10 +107,10 @@ export class MetadataModal {
           <!-- 表单 5 大分组卡片展示区 -->
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
             <!-- 分组 1: 出版信息 (DOI 来源) -->
-            <div class="meta-card" style="background: var(--bg-tertiary); border: 1px solid var(--border-light); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 4px;">
-                <strong style="font-size: 12px; color: #38bdf8;">1. 📚 来源文献与出版信息</strong>
-                <span class="chip-tag" style="background: rgba(2, 132, 199, 0.2); color: #38bdf8;">${this.metadata.publication.source || 'DOI'}</span>
+            <div class="meta-card">
+              <div class="meta-card-header">
+                <strong style="font-size: 12px; color: var(--accent-blue);">1. 📚 来源文献与出版信息</strong>
+                <span class="chip-tag">${this.metadata.publication.source || 'DOI'}</span>
               </div>
               <div class="form-group" style="margin: 0;">
                 <label style="font-size: 10.5px; color: var(--text-muted);">论文标题 (Title):</label>
@@ -133,15 +133,15 @@ export class MetadataModal {
             </div>
 
             <!-- 分组 2: 站点地理位置 (LLM / 手动) -->
-            <div class="meta-card" style="background: var(--bg-tertiary); border: 1px solid var(--border-light); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 4px;">
-                <strong style="font-size: 12px; color: #34d399;">2. 📍 钻孔/剖面地理位置</strong>
-                <span class="chip-tag" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">${this.metadata.site.source || 'LLM / User'}</span>
+            <div class="meta-card">
+              <div class="meta-card-header">
+                <strong style="font-size: 12px; color: var(--accent-green);">2. 📍 钻孔/剖面地理位置</strong>
+                <span class="chip-tag" style="color: var(--accent-green);">${this.metadata.site.source || 'LLM / User'}</span>
               </div>
               <div class="form-group" style="margin: 0;">
                 <div style="display: flex; justify-content: space-between;">
                   <label style="font-size: 10.5px; color: var(--text-muted);">站点名称 (Site Name):</label>
-                  ${this.metadata.site.conflict ? '<span style="color: #f59e0b; font-size: 10px;">⚠️ 检测到冲突候选项</span>' : ''}
+                  ${this.metadata.site.conflict ? '<span style="color: var(--accent-amber); font-size: 10px;">⚠️ 检测到冲突候选项</span>' : ''}
                 </div>
                 <input type="text" id="meta-site-name" value="${this.metadata.site.site_name || ''}" placeholder="未找到，请手动填写 (如 Hoya del Castillo)" style="width: 100%; font-size: 11px;" />
               </div>
@@ -168,10 +168,10 @@ export class MetadataModal {
             </div>
 
             <!-- 分组 3: 年代学与定年模型 -->
-            <div class="meta-card" style="background: var(--bg-tertiary); border: 1px solid var(--border-light); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 4px;">
-                <strong style="font-size: 12px; color: #f59e0b;">3. ⏳ 年代学与时间序列模型</strong>
-                <span class="chip-tag" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">Chronology</span>
+            <div class="meta-card">
+              <div class="meta-card-header">
+                <strong style="font-size: 12px; color: var(--accent-amber);">3. ⏳ 年代学与时间序列模型</strong>
+                <span class="chip-tag" style="color: var(--accent-amber);">Chronology</span>
               </div>
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                 <div class="form-group" style="margin: 0;">
@@ -196,8 +196,8 @@ export class MetadataModal {
             </div>
 
             <!-- 分组 4 & 5: 技术实验室与数据质量备注 -->
-            <div class="meta-card" style="background: var(--bg-tertiary); border: 1px solid var(--border-light); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 4px;">
+            <div class="meta-card">
+              <div class="meta-card-header">
                 <strong style="font-size: 12px; color: #a78bfa;">4. 🧪 提取实验、技术与质量备注</strong>
                 <span class="chip-tag" style="background: rgba(167, 139, 250, 0.2); color: #a78bfa;">Technical & QC</span>
               </div>

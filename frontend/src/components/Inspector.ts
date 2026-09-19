@@ -95,7 +95,7 @@ export class Inspector {
           </svg>
           <span>属性检查器</span>
         </div>
-        <button id="btn-collapse-inspector" class="icon-btn" title="收起/展开面板 (快捷键: ])">
+        <button id="btn-collapse-inspector" class="icon-btn" title="收起/展开面板 (快捷键: Ctrl+])">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"/>
           </svg>
@@ -115,9 +115,9 @@ export class Inspector {
       case 0:
         return this.renderS0Panel();
       case 1:
-        return this.renderS1RoiPanel(cal);
+        return this.renderS1ImageLoadedPanel();
       case 2:
-        return this.renderS2CleanPanel(cal);
+        return this.renderS2RoiPanel(cal);
       case 3:
         return this.renderS3ColumnsPanel(activeCol);
       case 4:
@@ -183,32 +183,71 @@ export class Inspector {
     `;
   }
 
-  private renderS1RoiPanel(cal: DiagramCalibration): string {
+  private renderS1ImageLoadedPanel(): string {
+    const w = this.data.imageWidth || 0;
+    const h = this.data.imageHeight || 0;
+    return `
+      <div class="inspector-section">
+        <div class="section-title">S1：图谱已加载 (Image Loaded)</div>
+        <div class="prop-row" style="margin-bottom: 8px;">
+          <span class="prop-label">原始图像尺寸:</span>
+          <span class="prop-val">${w} × ${h} px</span>
+        </div>
+        <div class="prop-row" style="margin-bottom: 8px;">
+          <span class="prop-label">图谱水平状态:</span>
+          <span class="prop-val" style="color: var(--accent-green);">已就绪</span>
+        </div>
+        <div class="tip-card" style="margin-bottom: 12px; background: rgba(56, 189, 248, 0.08); border-left: 3px solid var(--accent-blue); padding: 8px 10px;">
+          <p style="font-size: 11px; line-height: 1.6; color: var(--text-primary); margin: 0;">
+            <strong>步骤引导：</strong><br>
+            图谱底图已居中展示。您可使用鼠标中键/空格平移、滚轮缩放浏览图谱整体形态与层位。<br><br>
+            确认图谱就绪后，请点击底部 <strong>[👉 进入数据有效区框选 (S2)]</strong>，此时画布将呈现 ROI 调节框。
+          </p>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderS2RoiPanel(cal: DiagramCalibration): string {
     const activePanel = this.data.panels?.find((p) => p.id === this.data.activePanelId) || this.data.panels?.[0];
 
     return `
       <div class="inspector-section">
-        <div class="section-title">S1：界定纯数据有效区 (ROI)</div>
+        <div class="section-title">S2：界定纯数据有效区 (ROI)</div>
         
         <!-- 多 ROI 分区指示 (Y 轴强锁对齐) -->
         <div style="margin-bottom: 10px; padding: 6px 8px; background: rgba(56, 189, 248, 0.08); border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.25);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
             <strong style="font-size: 11px; color: var(--text-primary);">当前有效分区:</strong>
-            <span style="font-size: 10px; color: #38bdf8; font-weight: 700;">${activePanel ? activePanel.name : '主图区 (ROI 1)'}</span>
+            <span style="font-size: 10px; color: var(--accent-blue); font-weight: 700;">${activePanel ? activePanel.name : '主图区 (ROI 1)'}</span>
           </div>
           <div style="display: flex; gap: 4px;">
-            <button id="btn-add-sub-roi" class="tool-btn" style="flex: 1; font-size: 10px; padding: 3px 6px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" title="追加同剖面子有效区 (如炭屑区、第一主成分折线区)，自动锁死并对准主图 Y 轴深度">
+            <button id="btn-add-sub-roi" class="tool-btn" style="flex: 1; font-size: 10px; padding: 3px 6px; color: var(--accent-blue); border-color: var(--accent-blue);" title="追加同剖面子有效区 (如炭屑区、第一主成分折线区)，自动锁死并对准主图 Y 轴深度">
               ➕ 追加子有效区 (锁定 Y 轴)
             </button>
           </div>
         </div>
 
-        <div class="tip-card" style="margin-bottom: 10px; border-left: 3px solid #38bdf8; background: rgba(56, 189, 248, 0.08); padding: 8px 10px;">
-          <p style="font-size: 11px; line-height: 1.5; color: #bae6fd; margin: 0;">
+        <div class="tip-card" style="margin-bottom: 10px; border-left: 3px solid var(--accent-blue); padding: 8px 10px;">
+          <p style="font-size: 11px; line-height: 1.5; color: var(--text-primary); margin: 0;">
             <strong>工作流要点：</strong><br>
             请在画布上拖拽 8 个十字手柄框选花粉数据区，<strong>务必将左侧 Y 轴线、右侧聚类树和底部 X 刻度排除在外</strong>，确保分列 100% 准确。
           </p>
         </div>
+
+        <div class="form-group" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light); margin-bottom: 10px;">
+          <label style="font-size: 11px; font-weight: 600; display: block; margin-bottom: 6px;">图像去横线与网格降噪:</label>
+          <select id="select-inspector-degrid" class="sample-select" style="width: 100%; font-size: 11px; margin-bottom: 6px;">
+            <option value="off">去横线: 关闭</option>
+            <option value="weak">去横线: 弱 (仅细线)</option>
+            <option value="medium" selected>去横线: 中 (推荐)</option>
+            <option value="strong">去横线: 强 (粗网格)</option>
+          </select>
+          <small style="font-size: 10px; color: var(--text-muted); line-height: 1.4; display: block;">
+            提示: 按键盘 <strong>B</strong> 键可在画布上即时透视查看被切除的横线（鲜红色标记）。
+          </small>
+        </div>
+
         <div class="form-group">
           <label>顶界深度 (Top Depth):</label>
           <div class="input-row">
@@ -246,40 +285,16 @@ export class Inspector {
     `;
   }
 
-  private renderS2CleanPanel(cal: DiagramCalibration): string {
-    return `
-      <div class="inspector-section">
-        <div class="section-title">S2：数据区域与图像清理</div>
-        <div class="prop-row" style="margin-bottom: 8px;">
-          <span class="prop-label">有效区尺寸:</span>
-          <span class="prop-val">${cal.dataXMax - cal.dataXMin} × ${cal.dataYMax - cal.dataYMin} px</span>
-        </div>
-        <div class="form-group" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light);">
-          <label style="font-size: 11px; font-weight: 600; display: block; margin-bottom: 6px;">图像去横线与网格降噪:</label>
-          <select id="select-inspector-degrid" class="sample-select" style="width: 100%; font-size: 11px; margin-bottom: 6px;">
-            <option value="off">去横线: 关闭</option>
-            <option value="weak">去横线: 弱 (仅细线)</option>
-            <option value="medium" selected>去横线: 中 (推荐)</option>
-            <option value="strong">去横线: 强 (粗网格)</option>
-          </select>
-          <small style="font-size: 10px; color: var(--text-muted); line-height: 1.4; display: block;">
-            提示: 按键盘 <strong>B</strong> 键可在画布上即时透视查看被切除的横线（鲜红色标记）。
-          </small>
-        </div>
-      </div>
-    `;
-  }
-
   private renderS3ColumnsPanel(activeCol?: TaxaColumn): string {
     return `
       <div class="inspector-section">
-        <div class="section-title">S3：分列与属种名单对齐</div>
+        <div class="section-title">S3：分列与属种命名</div>
         <div class="tip-card" style="margin-bottom: 10px; background: rgba(56, 189, 248, 0.06);">
           <p style="font-size: 11px; line-height: 1.5; color: var(--text-secondary); margin: 0;">
-            当前已识别出 <strong>${this.data.columns.length}</strong> 个属种列。<br>
-            • 在侧边栏使用 <strong>[批量导入]</strong> 粘贴名单<br>
-            • 发现漏列点击 <strong>[➕插空列]</strong><br>
-            • 使用 <strong>▲/▼</strong> 箭头就地对调顺位
+            当前已切分出 <strong>${this.data.columns.length}</strong> 个属种列 (默认编号: col01, col02...)。<br>
+            • 推荐点击顶部 <strong>[🔍 OCR]</strong> 自动识别图谱标签并匹配新列名<br>
+            • 亦可在侧边栏点击列名直接重命名、微调对调顺位或按需导入<br>
+            • 发现漏列可随时点击 <strong>[➕插空列]</strong>
           </p>
         </div>
         ${activeCol ? this.renderColumnInspector(activeCol) : ''}
@@ -337,8 +352,8 @@ export class Inspector {
     return `
       <div class="inspector-section">
         <div class="section-title">S7：导出交付 (Export)</div>
-        <div class="tip-card" style="margin-bottom: 12px; background: rgba(34, 197, 94, 0.08); border-color: rgba(34, 197, 94, 0.3);">
-          <p style="font-size: 11px; line-height: 1.5; color: #4ade80; margin: 0;">
+        <div class="tip-card" style="margin-bottom: 12px; border-left: 3px solid var(--accent-green); padding: 8px 10px;">
+          <p style="font-size: 11px; line-height: 1.5; color: var(--text-primary); margin: 0;">
             <strong>科学导出已就绪：</strong><br>
             • CSV 矩阵首列严格为 depth，未出现属种为 0.0<br>
             • POSIX UStar .tar 开放归档兼容任意系统<br>
@@ -368,7 +383,7 @@ export class Inspector {
           </div>
           <div class="prop-row">
             <span class="prop-label">属种列总数:</span>
-            <span class="prop-val"><strong style="color: #38bdf8;">${numCols}</strong> 列</span>
+            <span class="prop-val"><strong style="color: var(--accent-blue);">${numCols}</strong> 列</span>
           </div>
           <div class="prop-row">
             <span class="prop-label">沉积深度跨度:</span>

@@ -32,16 +32,16 @@ export class ToolModeManager {
     switch (mode) {
       case 'select':
         return {
-          name: '选择与微调',
-          shortcut: 'V',
-          hint: '选择图元 / 拖动选中项 / 单击空白处取消选择',
+          name: '选择与微调 (Adjust)',
+          shortcut: 'S / V',
+          hint: '选择图元 / 拖动微调控制点 (S) / 方向键 1px 精调',
           cursor: 'default',
         };
       case 'pan':
         return {
-          name: '抓手平移',
-          shortcut: 'H / Space',
-          hint: '按住鼠标左键自由平移图谱视口',
+          name: '抓手平移 (Pan)',
+          shortcut: 'H / 右键 / 空格',
+          hint: '右键拖拽 / 中键拖拽 / 按住空格+左键平移图谱',
           cursor: 'grab',
         };
       case 'roi':
@@ -53,23 +53,23 @@ export class ToolModeManager {
         };
       case 'addCol':
         return {
-          name: '添加分列线',
+          name: '添加属种列 (Column)',
           shortcut: 'C',
-          hint: '在画布点击插入新属种垂直分列基线',
+          hint: '在画布点击插入新属种垂直分列基线 (C)',
           cursor: 'crosshair',
         };
       case 'addPoint':
         return {
-          name: '添加控制拐点',
-          shortcut: 'P',
-          hint: '单击向当前激活属种插入强控制锚点 (自动吸附层位)',
+          name: '添加控制点 (Add Point)',
+          shortcut: 'A',
+          hint: '点击左键向当前属种插入控制锚点 (A)',
           cursor: 'crosshair',
         };
       case 'eraser':
         return {
-          name: '删除工具',
-          shortcut: 'E',
-          hint: '点击任意控制点或分列线直接删除',
+          name: '删除控制点 (Delete Point)',
+          shortcut: 'D',
+          hint: '点击左键删除控制点或属种列 (D)',
           cursor: 'not-allowed',
         };
       default:

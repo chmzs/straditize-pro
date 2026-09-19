@@ -31,6 +31,7 @@ export interface ToolbarCallbacks {
   onToggleSidebar?: () => void;
   onToggleInspector?: () => void;
   onStepClick?: (step: number) => void;
+  onResetAll?: () => void;
 }
 
 export class Toolbar {
@@ -132,6 +133,11 @@ export class Toolbar {
     }
   }
 
+  public setDegridStrength(value: 'off' | 'weak' | 'medium' | 'strong'): void {
+    const sel = this.element.querySelector('#select-degrid-strength') as HTMLSelectElement;
+    if (sel) sel.value = value;
+  }
+
   public updateHistoryState(): void {
     const undoBtn = this.element.querySelector('#btn-undo') as HTMLButtonElement;
     const redoBtn = this.element.querySelector('#btn-redo') as HTMLButtonElement;
@@ -161,8 +167,8 @@ export class Toolbar {
       <div class="toolbar-left">
         <div class="brand">
           <div class="brand-logo" style="background: transparent; padding: 0;">
-            <svg viewBox="0 0 512 512" width="18" height="18" style="border-radius: 4px; display: block;">
-              <rect x="64" y="64" width="384" height="384" rx="84" fill="#1E293B" />
+            <svg viewBox="0 0 512 512" width="20" height="20" style="border-radius: 4px; display: block;">
+              <rect class="brand-icon-rect" x="64" y="64" width="384" height="384" rx="84" fill="#1E293B" />
               <path d="M 256 122 C 215 122, 202 144, 197 162 C 189 182, 138 195, 125 221 C 112 247, 163 260, 171 280 C 178 301, 155 326, 171 347 C 183 365, 215 379, 256 379 Z" fill="#E2E8F0" />
               <line x1="256" y1="102" x2="256" y2="398" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" />
               <g stroke="#2DD4BF" fill="#2DD4BF" stroke-width="4.5" stroke-linecap="round">
@@ -217,6 +223,13 @@ export class Toolbar {
             <option value="verification">验证图谱</option>
             <option value="beginner">沉积图谱</option>
           </select>
+
+          <button id="btn-reset-all" class="tool-btn reset-all-btn" title="一键重置：清空本图全部分列、控制点、标尺与 ROI，仅保留底图，从 S1 重新开始">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
+            </svg>
+            <span>重置</span>
+          </button>
         </div>
       </div>
 
@@ -244,16 +257,25 @@ export class Toolbar {
 
         <!-- 缩放控制 (10% ~ 1000%) -->
         <div class="btn-group">
-          <button id="btn-zoom-out" class="tool-btn" title="缩小 (快捷键: 滚轮向下)" style="padding: 3px 5px;">
+          <button id="btn-zoom-out" class="tool-btn" title="缩小 (快捷键: - 或 滚轮向下)" style="padding: 3px 5px;">
             <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>
             </svg>
           </button>
           <span id="zoom-indicator" class="zoom-badge" style="min-width: 32px; font-size: 10px; cursor: pointer; padding: 2px 4px;" title="点击重置 100% (Ctrl+1)">${this.currentScaleText}</span>
-          <button id="btn-zoom-in" class="tool-btn" title="放大 (快捷键: 滚轮向上)" style="padding: 3px 5px;">
+          <button id="btn-zoom-in" class="tool-btn" title="放大 (快捷键: + 或 滚轮向上)" style="padding: 3px 5px;">
             <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
             </svg>
+          </button>
+          <button id="btn-fit" class="tool-btn" title="全图自适应屏幕居中 (快捷键: F)" style="padding: 3px 6px; font-size: 10.5px;">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M16 21h3a2 2 0 0 0 2-2v-3M8 21H5a2 2 0 0 1-2-2v-3"/>
+            </svg>
+            <span>适应</span>
+          </button>
+          <button id="btn-100" class="tool-btn" title="100% 原始物理尺寸 1:1 (快捷键: Ctrl+1)" style="padding: 3px 6px; font-size: 10.5px;">
+            <span>1:1</span>
           </button>
         </div>
 
@@ -275,17 +297,17 @@ export class Toolbar {
         </div>
 
         <!-- 论文元数据提取与审核入口 (FAIR/LiPD) -->
-        <button id="btn-metadata-modal" class="tool-btn" title="论文元数据提取与审核 (DOI / PDF / LiPD)" style="padding: 3px 6px; font-size: 10.5px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);">
+        <button id="btn-metadata-modal" class="tool-btn" title="论文元数据提取与审核 (DOI / PDF / LiPD)" style="padding: 3px 6px; font-size: 10.5px; color: var(--accent-blue); border-color: rgba(56, 189, 248, 0.4);">
           <span>📄 元数据</span>
         </button>
 
-        <!-- 花粉属种名 OCR 自动识别与审核入口 -->
-        <button id="btn-ocr-review-modal" class="tool-btn" title="自动识别图谱顶部属种名与中拉学名审核汇总表" style="padding: 3px 6px; font-size: 10.5px; color: #10b981; border-color: rgba(16, 185, 129, 0.4);">
+        <!-- 花粉属种名 OCR 自动识别与审核入口 (S3阶段高亮引导，S1/S2未分列阶段弱化) -->
+        <button id="btn-ocr-review-modal" class="tool-btn" title="${this.currentWorkflowStep < 3 ? '请在 S3 分列完成后使用 OCR 自动匹配列名' : '自动识别图谱顶部属种名并为各列匹配新列名'}" style="padding: 3px 6px; font-size: 10.5px; color: #10b981; border-color: rgba(16, 185, 129, 0.4); opacity: ${this.currentWorkflowStep < 3 ? '0.45' : '1'}; ${this.currentWorkflowStep === 3 ? 'box-shadow: 0 0 6px rgba(16, 185, 129, 0.35); border-color: #10b981;' : ''}">
           <span>🔍 OCR</span>
         </button>
 
         <!-- 年代-深度模型视觉检查与解译入口 -->
-        <button id="btn-age-depth-modal" class="tool-btn" title="解译并视觉核查同剖面年代-深度模型 (Bacon / Bchron 等)" style="padding: 3px 6px; font-size: 10.5px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.4);">
+        <button id="btn-age-depth-modal" class="tool-btn" title="解译并视觉核查同剖面年代-深度模型 (Bacon / Bchron 等)" style="padding: 3px 6px; font-size: 10.5px; color: var(--accent-amber); border-color: rgba(245, 158, 11, 0.4);">
           <span>⏳ 年代</span>
         </button>
 
@@ -297,10 +319,10 @@ export class Toolbar {
           <span>导出</span>
         </button>
 
-        <!-- 日夜间主题切换按钮 -->
-        <button id="btn-toggle-theme" class="tool-btn" title="切换日间/夜间模式 (快捷键: T)" style="padding: 4px 6px;">
+        <!-- 日夜间主题切换按钮 (默认日间模式) -->
+        <button id="btn-toggle-theme" class="tool-btn" title="当前为日间模式 (点击切换深色模式)" style="padding: 4px 6px;">
           <svg id="theme-icon-moon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+            <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
           </svg>
         </button>
 
@@ -337,15 +359,16 @@ export class Toolbar {
       } catch {
         // Ignored as server shuts down immediately
       }
+      const isLight = document.body.classList.contains('theme-light');
       const overlay = document.createElement('div');
       overlay.style.cssText =
-        'position:fixed;inset:0;background:rgba(15,23,42,0.95);z-index:999999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);';
+        `position:fixed;inset:0;background:${isLight ? 'rgba(241,245,249,0.92)' : 'rgba(15,23,42,0.95)'};z-index:999999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);`;
       overlay.innerHTML = `
-        <div style="background:#1e293b;padding:36px 48px;border-radius:12px;border:1px solid #334155;text-align:center;box-shadow:0 25px 50px -12px rgba(0,0,0,0.6);max-width:440px;">
+        <div style="background:var(--bg-card);padding:36px 48px;border-radius:12px;border:1px solid var(--border-color);text-align:center;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);max-width:440px;">
           <div style="font-size:42px;margin-bottom:12px;">🛑</div>
-          <h2 style="font-size:20px;font-weight:700;color:#f8fafc;margin:0 0 8px 0;">服务已安全终止</h2>
-          <p style="font-size:14px;color:#94a3b8;margin:0 0 16px 0;">Straditize 后台进程已退出。</p>
-          <p style="font-size:13px;color:#64748b;margin:0;">您可以安全关闭此浏览器标签页。</p>
+          <h2 style="font-size:20px;font-weight:700;color:var(--text-heading);margin:0 0 8px 0;">服务已安全终止</h2>
+          <p style="font-size:14px;color:var(--text-secondary);margin:0 0 16px 0;">Straditize 后台进程已退出。</p>
+          <p style="font-size:13px;color:var(--text-muted);margin:0;">您可以安全关闭此浏览器标签页。</p>
         </div>
       `;
       document.body.appendChild(overlay);
@@ -363,6 +386,10 @@ export class Toolbar {
     // 视图操作
     this.element.querySelector('#btn-fit')?.addEventListener('click', () => this.callbacks.onFit());
     this.element.querySelector('#btn-100')?.addEventListener('click', () => this.callbacks.onReset100());
+    // 缩放百分比徽标：点击即回到 100% 原始尺寸
+    this.element.querySelector('#zoom-indicator')?.addEventListener('click', () => this.callbacks.onReset100());
+    // 一键重置当前图谱的全部操作
+    this.element.querySelector('#btn-reset-all')?.addEventListener('click', () => this.callbacks.onResetAll?.());
     this.element.querySelector('#btn-zoom-in')?.addEventListener('click', () => this.callbacks.onZoomIn());
     this.element.querySelector('#btn-zoom-out')?.addEventListener('click', () => this.callbacks.onZoomOut());
     this.element.querySelector('#btn-undo')?.addEventListener('click', () => this.callbacks.onUndo());
@@ -376,19 +403,34 @@ export class Toolbar {
     this.element.querySelector('#btn-export-json')?.addEventListener('click', () => this.callbacks.onExport('json'));
     this.element.querySelector('#rpc-status-pill')?.addEventListener('click', () => this.callbacks.onToggleRpcConfig());
 
-    // 日间/夜间主题切换
-    this.element.querySelector('#btn-toggle-theme')?.addEventListener('click', () => {
-      const isLight = document.body.classList.toggle('theme-light');
-      const textEl = this.element.querySelector('#theme-text');
+    // 日间/夜间主题切换与记忆 (默认日间模式)
+    const updateThemeUI = (isLight: boolean) => {
+      const btn = this.element.querySelector('#btn-toggle-theme') as HTMLElement;
       const iconEl = this.element.querySelector('#theme-icon-moon');
-      if (textEl) {
-        textEl.textContent = isLight ? '夜间' : '日间';
+      if (btn) {
+        btn.setAttribute('title', isLight ? '当前为日间模式 (点击切换深色模式)' : '当前为深色模式 (点击切换日间模式)');
       }
       if (iconEl) {
         iconEl.innerHTML = isLight
           ? `<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>`
           : `<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>`;
       }
+    };
+
+    // 读取已保存的主题，未保存时默认即为日间模式 ('light')
+    const savedTheme = localStorage.getItem('straditize-theme');
+    if (savedTheme === 'dark') {
+      document.body.classList.remove('theme-light');
+      updateThemeUI(false);
+    } else {
+      document.body.classList.add('theme-light');
+      updateThemeUI(true);
+    }
+
+    this.element.querySelector('#btn-toggle-theme')?.addEventListener('click', () => {
+      const isLight = document.body.classList.toggle('theme-light');
+      localStorage.setItem('straditize-theme', isLight ? 'light' : 'dark');
+      updateThemeUI(isLight);
     });
 
     // 保存与打开项目文件

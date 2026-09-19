@@ -620,12 +620,14 @@ export class MockBackend {
     for (let i = 0; i < numCols; i++) {
       const startX = cal.dataXMin + i * colWidth;
       const endX = i === numCols - 1 ? cal.dataXMax : startX + colWidth;
-      const name = `Taxon ${i + 1}`;
+      const colNum = String(i + 1).padStart(2, '0');
+      const name = `col${colNum}`;
       const color = palette[i % palette.length];
 
       columns.push({
         id: `taxa_auto_${Date.now()}_${i}`,
         name,
+        species: name,
         color,
         startX,
         endX,

@@ -92,7 +92,7 @@ async function bootstrap() {
     leftDrawerTab.style.display = collapsed ? 'flex' : 'none';
     if (toolbar) toolbar.setSidebarActive(!collapsed);
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
-    setHudNotice(collapsed ? '属种分列列表已收起 (Ctrl+B 或点击左侧拉手展开)' : '属种分列列表已展开', 2000);
+    setHudNotice(collapsed ? '属种分列列表已收起 (Ctrl+[ 或点击左侧拉手展开)' : '属种分列列表已展开', 2000);
     canvasComponent.handleResize();
   }
 
@@ -101,7 +101,7 @@ async function bootstrap() {
     rightDrawerTab.style.display = collapsed ? 'flex' : 'none';
     if (toolbar) toolbar.setInspectorActive(!collapsed);
     localStorage.setItem(INSPECTOR_COLLAPSED_KEY, String(collapsed));
-    setHudNotice(collapsed ? '属性检查器已收起 (Ctrl+Shift+I 或点击右侧拉手展开)' : '属性检查器已展开', 2000);
+    setHudNotice(collapsed ? '属性检查器已收起 (Ctrl+] 或点击右侧拉手展开)' : '属性检查器已展开', 2000);
     canvasComponent.handleResize();
   }
 
@@ -116,25 +116,74 @@ async function bootstrap() {
   leftDrawerTab.addEventListener('click', () => setSidebarCollapsed(false));
   rightDrawerTab.addEventListener('click', () => setInspectorCollapsed(false));
 
-  // 悬浮帮助折叠面板
+  // 悬浮帮助折叠面板 (统一交互系统与快捷键速查中心)
   const helpPanel = document.createElement('div');
   helpPanel.className = 'floating-help-panel';
   helpPanel.style.display = 'none';
   helpPanel.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-light); padding-bottom: 4px;">
-      <strong style="color: var(--accent-blue);">⚡ 交互操作指南与快捷键</strong>
-      <span id="help-panel-close" style="cursor: pointer; font-size: 14px; color: var(--text-muted);">&times;</span>
+    <div class="help-panel-header">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <span style="font-size: 14px;">⚡</span>
+        <strong style="color: var(--accent-blue); font-size: 12.5px;">统一交互系统与快捷键速查</strong>
+      </div>
+      <span id="help-panel-close" title="关闭 (Esc)" style="cursor: pointer; font-size: 16px; color: var(--text-muted); line-height: 1; padding: 2px 4px;">&times;</span>
     </div>
-    <ul style="margin: 0; padding-left: 16px; line-height: 1.6; font-size: 10.5px; color: var(--text-secondary);">
-      <li><strong>侧边栏收起/展开：</strong><code>Ctrl+B</code> (左栏), <code>Ctrl+Shift+I</code> (右栏)</li>
-      <li><strong>模式切换：</strong><code>V</code> 选择, <code>H</code> 抓手, <code>R</code> 有效区, <code>A</code> 加列, <code>P</code> 加点, <code>E</code> 橡皮</li>
-      <li><strong>鼠标左键单击：</strong>直接向当前属种插入强控制锚点并拉伸轮廓</li>
-      <li><strong>鼠标左键拖拽：</strong>实时微调锚点坐标或两列垂直分界线 (col-resize)</li>
-      <li><strong>鼠标右键单击：</strong>直接删除该锚点</li>
-      <li><strong>透视遮罩 (B)：</strong>按 <code>B</code> 键预览切除横线 (红) 与花粉墨迹 (青蓝)</li>
-      <li><strong>缩放视图：</strong>滚轮平滑缩放 (10%~1000%), <code>Ctrl+0</code> 适应屏幕, <code>Ctrl+1</code> 100%</li>
-      <li><strong>撤销与重做：</strong><code>Ctrl+Z</code> / <code>Ctrl+Y</code></li>
-    </ul>
+
+    <div class="help-panel-body">
+      <!-- 1. 鼠标交互规范 -->
+      <div class="help-section">
+        <div class="help-section-title">🖱️ 鼠标交互规范 (Mouse)</div>
+        <div class="help-grid">
+          <div class="help-row"><span class="help-key">右键拖拽 / 中键 / 空格+左键</span><span class="help-desc">全系统绝对统一视口平移 (Pan)</span></div>
+          <div class="help-row"><span class="help-key">滚轮滚动</span><span class="help-desc">以光标为中心缩放 (10%~1000%)；Ctrl 加速</span></div>
+          <div class="help-row"><span class="help-key">Shift / Alt + 滚轮</span><span class="help-desc">水平平移 (Shift) / 垂直平移 (Alt)</span></div>
+          <div class="help-row"><span class="help-key">左键单击</span><span class="help-desc">选中图元 / 插入锚点拉伸轮廓 / 空白取消选中</span></div>
+          <div class="help-row"><span class="help-key">左键双击</span><span class="help-desc">空白处快速适应屏幕 (Fit) / 锚点聚焦</span></div>
+          <div class="help-row"><span class="help-key">左键拖拽</span><span class="help-desc">微调锚点坐标 / 调整列基线刻度 / 调整 ROI</span></div>
+          <div class="help-row"><span class="help-key">右键单击</span><span class="help-desc">退出临时工具返回微调 (S) / 取消选中</span></div>
+        </div>
+      </div>
+
+      <!-- 2. 手动提取工具模式 (WebPlotDigitizer 规范) -->
+      <div class="help-section">
+        <div class="help-section-title">🛠️ 手动提取模式 (Manual Extraction)</div>
+        <div class="help-grid">
+          <div class="help-row"><span class="help-key">A</span><span class="help-desc">添加控制点模式 (Add Point)</span></div>
+          <div class="help-row"><span class="help-key">S / V</span><span class="help-desc">微调与选择模式 (Adjust Point)</span></div>
+          <div class="help-row"><span class="help-key">D</span><span class="help-desc">删除控制点模式 (Delete Point)</span></div>
+          <div class="help-row"><span class="help-key">C</span><span class="help-desc">添加属种分列线 (Add Column)</span></div>
+          <div class="help-row"><span class="help-key">H</span><span class="help-desc">抓手平移模式 (Hand / Pan)</span></div>
+          <div class="help-row"><span class="help-key">R</span><span class="help-desc">ROI 矩形数据有效区模式</span></div>
+          <div class="help-row"><span class="help-key">Esc</span><span class="help-desc">退出当前工具返回微调 (S) / 取消选中</span></div>
+        </div>
+      </div>
+
+      <!-- 3. 方向键微调与视图导航 -->
+      <div class="help-section">
+        <div class="help-section-title">🎯 方向键微调与视图导航</div>
+        <div class="help-grid">
+          <div class="help-row"><span class="help-key">↑ ↓ ← →</span><span class="help-desc">1 像素高精度微调 (1px Nudge)</span></div>
+          <div class="help-row"><span class="help-key">Shift + 方向键</span><span class="help-desc">10 像素快速微调 (10px Nudge)</span></div>
+          <div class="help-row"><span class="help-key">F</span><span class="help-desc">视图全图自适应屏幕居中 (Fit to Screen)</span></div>
+          <div class="help-row"><span class="help-key">Ctrl+1</span><span class="help-desc">100% 原始物理分辨率 (1:1)</span></div>
+          <div class="help-row"><span class="help-key">+ / -</span><span class="help-desc">平滑放大 / 缩小视图</span></div>
+          <div class="help-row"><span class="help-key">B / I / C</span><span class="help-desc">二值化透视遮罩 (B) / 反相 (I) / 对比度 (C)</span></div>
+        </div>
+      </div>
+
+      <!-- 4. 编辑历史与界面布局 -->
+      <div class="help-section">
+        <div class="help-section-title">⌨️ 编辑历史与界面布局</div>
+        <div class="help-grid">
+          <div class="help-row"><span class="help-key">Ctrl+Z</span><span class="help-desc">撤销单步操作 (Undo)</span></div>
+          <div class="help-row"><span class="help-key">Ctrl+Y</span><span class="help-desc">重做单步操作 (Redo)</span></div>
+          <div class="help-row"><span class="help-key">Delete</span><span class="help-desc">删除当前选中的控制点或属种分列</span></div>
+          <div class="help-row"><span class="help-key">Ctrl+[</span><span class="help-desc">展开 / 折叠左侧属种分列列表</span></div>
+          <div class="help-row"><span class="help-key">Ctrl+]</span><span class="help-desc">展开 / 折叠右侧属性检查器</span></div>
+          <div class="help-row"><span class="help-key">F1</span><span class="help-desc">呼出 / 关闭本交互系统与快捷键速查中心</span></div>
+        </div>
+      </div>
+    </div>
   `;
   canvasWrapper.appendChild(helpPanel);
 
@@ -152,12 +201,12 @@ async function bootstrap() {
   hud.className = 'canvas-hud';
   hud.innerHTML = `
     <span class="hud-dot"></span>
-    <span id="hud-text">就绪：单击左键添加锚点拉伸轮廓 | 拖拽微调 | 右键删点 | 按 B 键即时透视二值化墨迹</span>
+    <span id="hud-text">就绪：A 加点 | S 微调 (方向键 1px 精调) | D 删点 | 右键/中键拖拽平移 | 滚轮缩放 | F1 帮助</span>
   `;
   canvasWrapper.appendChild(hud);
 
   let hudTimer: number | null = null;
-  const defaultHudText = '就绪：单击左键添加锚点拉伸轮廓 | 拖拽微调 | 右键删点 | 按 B 键即时透视二值化墨迹';
+  const defaultHudText = '就绪：A 加点 | S 微调 (方向键 1px 精调) | D 删点 | 右键/中键拖拽平移 | 滚轮缩放 | F1 帮助';
 
   function setHudNotice(text: string, duration: number = 3000) {
     const hudTextEl = document.getElementById('hud-text');
@@ -247,6 +296,15 @@ async function bootstrap() {
     onToggleHelp: () => {
       toggleHelpPanel();
     },
+    // 画布内切换工具（A/S/D/C/H/R 快捷键与左下浮动工具条）时同步刷新底部状态栏模式标签。
+    // 此前该回调未被接线，导致经画布切换工具后页脚「模式:」长期停留在旧值。
+    onToolModeChange: (mode) => {
+      const desc = canvasComponent.toolModeManager.getToolDescription(mode);
+      const footerModeEl = document.getElementById('footer-tool-mode');
+      if (footerModeEl) {
+        footerModeEl.innerHTML = `模式: <strong>${desc.name} (${desc.shortcut})</strong>`;
+      }
+    },
   });
 
   // 6.2 显式分步推进状态机 (Step-by-Step Workflow State Machine)
@@ -257,24 +315,19 @@ async function bootstrap() {
   workflowActionBar.className = 'workflow-action-bar';
   workflowActionBar.style.cssText = `
     position: absolute;
-    bottom: 18px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 0;
+    left: 0;
+    right: 0;
     z-index: 95;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 12px;
-    padding: 6px 16px;
-    max-width: calc(100% - 40px);
-    width: max-content;
+    padding: 6px 14px;
+    width: 100%;
     box-sizing: border-box;
-    background: rgba(15, 23, 42, 0.95);
-    backdrop-filter: blur(12px);
-    border: 1px solid ${tokens.color.border.focus};
-    border-radius: ${tokens.radius.full}px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.65);
     font-size: 11px;
-    color: ${tokens.color.text.primary};
+    overflow: hidden;
     pointer-events: auto;
   `;
   canvasWrapper.appendChild(workflowActionBar);
@@ -292,8 +345,8 @@ async function bootstrap() {
     workflowActionBar.innerHTML = `
       <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
         <span style="background: ${tokens.color.column.activeBadge}; color: #fff; font-weight: 700; font-size: 10px; padding: 2px 7px; border-radius: 9999px; flex-shrink: 0;">S${currentStage}</span>
-        <strong style="color: ${tokens.color.text.accent}; flex-shrink: 0;">${meta.stepName}</strong>
-        <span style="color: ${tokens.color.text.secondary}; font-size: 11px; max-width: 320px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${meta.guideText}</span>
+        <strong style="color: var(--accent-blue); flex-shrink: 0;">${meta.stepName}</strong>
+        <span style="color: var(--text-secondary); font-size: 11px; max-width: 320px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${meta.guideText}</span>
       </div>
       <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
         ${currentStage > 1 ? `<button id="btn-wf-prev" class="tool-btn" style="padding: 3px 8px; font-size: 10px;">↺ 上一步</button>` : ''}
@@ -313,12 +366,14 @@ async function bootstrap() {
         // S0 -> S1
         (document.getElementById('file-input-image') as HTMLInputElement)?.click();
       } else if (currentStage === 1) {
-        // S1 -> S2: 用户确认纯数据有效区，进入图像清理
+        // S1 -> S2: 图谱就绪，进入数据有效区 (ROI) 框选阶段
         currentStage = 2;
+        canvasComponent.setToolMode('roi');
         updateWorkflowBar();
-        setHudNotice('✅ 数据有效区 (ROI) 已锁定！可在此阶段开启图像去横线并按 B 键预览，满意后进入分列。', 4500);
+        canvasComponent.requestRender();
+        setHudNotice('👉 已进入 S2 数据有效区 (ROI) 框选阶段！请拖拽画布上的 8 个十字手柄框选数据区。', 4500);
       } else if (currentStage === 2) {
-        // S2 -> S3: 开始推导各花粉属种列
+        // S2 -> S3: 确认有效区，开始推导各花粉属种垂直基线并分列
         setHudNotice('正在基于纯数据有效区推导各花粉属种垂直基线...', 5000);
         const cal = canvasComponent.data.calibration;
         const cols = await rpcClient.detectColumnsInRoi({
@@ -328,11 +383,13 @@ async function bootstrap() {
           y1: cal.dataYMax,
         });
         currentStage = 3;
+        canvasComponent.setToolMode('select');
         sidebar?.updateData(canvasComponent.data);
         inspector?.updateData(canvasComponent.data);
         updateWorkflowBar();
         updateFooter();
-        setHudNotice(`✅ 成功切分 ${cols.length} 个属种列！请在侧边栏核对名单或使用 ▲/▼ 对调顺位。`, 4000);
+        canvasComponent.requestRender();
+        setHudNotice(`✅ 成功切分 ${cols.length} 个属种列 (已生成 col01 ~ col${String(cols.length).padStart(2, '0')})！建议点击顶部【🔍 OCR】自动匹配属种名。`, 5000);
       } else if (currentStage === 3) {
         // S3 -> S4: 推进至标尺标定
         currentStage = 4;
@@ -648,7 +705,7 @@ async function bootstrap() {
             banner.className = 'deskew-notice-banner';
             banner.style.cssText = 'position: fixed; top: 52px; right: 20px; z-index: 9999;';
             banner.innerHTML = `
-              <div style="background: rgba(15, 23, 42, 0.95); border: 1px solid #f59e0b; border-radius: 6px; padding: 8px 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); font-size: 11px; color: #f8fafc;">
+              <div class="app-toast-badge" style="border: 1px solid #f59e0b;">
                 <span>📐 <strong>图谱微斜提示</strong>: 检测到主轴倾斜约 <strong>${ang > 0 ? '+' : ''}${ang}°</strong>，是否自动水平矫正？</span>
                 <div style="display: flex; gap: 6px;">
                   <button id="btn-deskew-apply" class="btn btn-primary" style="padding: 2px 8px; font-size: 10px; background: #f59e0b; border-color: #f59e0b;">旋转校正</button>
@@ -789,6 +846,41 @@ async function bootstrap() {
     onOpenProjectFile: (file) => {
       propertyPanel.openProjectFile(file);
     },
+    onResetAll: () => {
+      const confirmed = window.confirm(
+        '确定要重置当前图谱的全部操作吗？\n\n' +
+          '· 将清空：全部分列、控制点、刻度钉、深度标尺与 ROI 边界\n' +
+          '· 撤销历史将一并清空，且本操作不可撤销\n' +
+          '· 底图图片本身会完整保留\n\n' +
+          '重置后可从 S1（框选数据有效区）重新开始。'
+      );
+      if (!confirmed) return;
+
+      canvasComponent.resetAllOperations();
+      void rpcClient.resetProjectState();
+
+      // 清空自动草稿，避免重载后又弹出旧进度
+      if (autosaveTimer) {
+        clearTimeout(autosaveTimer);
+        autosaveTimer = null;
+      }
+      try {
+        localStorage.removeItem(AUTOSAVE_KEY);
+      } catch {
+        // 忽略隐私模式下的存储异常
+      }
+
+      currentStage = 1;
+      updateWorkflowBar();
+      sidebar?.updateData(canvasComponent.data);
+      inspector?.updateData(canvasComponent.data);
+      toolbar?.updateHistoryState();
+      toolbar?.updateScale(canvasComponent.viewport.scale);
+      toolbar?.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
+      toolbar?.setDegridStrength('off');
+      updateFooter();
+      setHudNotice('♻️ 已一键归零：本图全部分列、控制点与标尺已清空，请从 S1 重新框选数据有效区。', 5000);
+    },
     onOpenCalibrationModal: () => {
       propertyPanel.openCalibrationModal();
     },
@@ -796,6 +888,10 @@ async function bootstrap() {
       metadataModal.open();
     },
     onOpenOcrReviewModal: () => {
+      if (canvasComponent.data.columns.length === 0) {
+        setHudNotice('⚠️ 当前图谱尚未切分属种列。请先框选 ROI 并点击【确认有效区，开始分列】，系统将自动生成 col01, col02... 编号列后再进行 OCR。', 4500);
+        return;
+      }
       ocrReviewModal.open();
     },
     onOpenAgeDepthModal: () => {
@@ -846,7 +942,13 @@ async function bootstrap() {
     },
     onStepClick: (step) => {
       currentStage = step as WorkflowStage;
+      if (currentStage === 2) {
+        canvasComponent.setToolMode('roi');
+      } else if (currentStage === 3) {
+        canvasComponent.setToolMode('select');
+      }
       updateWorkflowBar();
+      canvasComponent.requestRender();
       const meta = WORKFLOW_STAGES[currentStage];
       setHudNotice(`切换至步骤 ${step}: ${meta.stepName} - ${meta.title}`);
     },
@@ -873,17 +975,27 @@ async function bootstrap() {
   // 挂载就绪后更新初始工作流向导条
   updateWorkflowBar();
 
-  // 全局快捷键: Ctrl+B (左侧边栏), Ctrl+Shift+I (右侧属性检查器), [ / ] 兼顾单手快捷
+  // 全局快捷键（唯一规范键位，无冗余别名）：
+  //   Ctrl+[  展开 / 折叠左侧属种分列列表
+  //   Ctrl+]  展开 / 折叠右侧属性检查器
+  //   F1      呼出 / 关闭《统一交互系统与快捷键速查中心》
+  //   Esc     关闭帮助面板
   window.addEventListener('keydown', (e) => {
     const target = e.target as HTMLElement;
-    if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return;
+    if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT') return;
 
-    if ((e.ctrlKey && e.code === 'KeyB') || (e.key === '[' && !e.ctrlKey && !e.metaKey)) {
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && e.code === 'BracketLeft') {
       e.preventDefault();
       toggleSidebar();
-    } else if ((e.ctrlKey && e.shiftKey && e.code === 'KeyI') || (e.key === ']' && !e.ctrlKey && !e.metaKey)) {
+    } else if (e.ctrlKey && !e.shiftKey && !e.altKey && e.code === 'BracketRight') {
       e.preventDefault();
       toggleInspector();
+    } else if (e.code === 'F1') {
+      e.preventDefault();
+      toggleHelpPanel();
+    } else if (e.code === 'Escape' && helpPanel.style.display !== 'none') {
+      e.preventDefault();
+      helpPanel.style.display = 'none';
     }
   });
 
@@ -900,12 +1012,19 @@ async function bootstrap() {
     if (zoomEl) {
       zoomEl.innerHTML = `缩放: <code>${Math.round(canvasComponent.viewport.scale * 100)}%</code>`;
     }
-    if (col && activeEl) {
-      activeEl.innerHTML = `当前属种: <span style="color: ${col.color};">●</span> <strong>${col.name}</strong>`;
+    // 无激活列（含一键重置后的空状态）时必须回落占位符，避免残留上一张图的属种与锚点数
+    if (activeEl) {
+      activeEl.innerHTML = col
+        ? `当前属种: <span style="color: ${col.color};">●</span> <strong>${col.name}</strong>`
+        : '当前属种: <strong>--</strong>';
     }
-    if (col && anchorsEl) {
-      const manual = col.controlPoints.filter((p) => p.isManual).length;
-      anchorsEl.innerHTML = `锚点数: <code>${manual} 手动 / ${col.controlPoints.length} 总计</code>`;
+    if (anchorsEl) {
+      if (col) {
+        const manual = col.controlPoints.filter((p) => p.isManual).length;
+        anchorsEl.innerHTML = `锚点数: <code>${manual} 手动 / ${col.controlPoints.length} 总计</code>`;
+      } else {
+        anchorsEl.innerHTML = '锚点数: <code>--</code>';
+      }
     }
   }
 
@@ -940,7 +1059,7 @@ async function bootstrap() {
         banner.className = 'draft-recovery-banner';
         banner.style.cssText = 'position: fixed; top: 48px; left: 50%; transform: translateX(-50%); z-index: 9999;';
         banner.innerHTML = `
-          <div style="background: rgba(15, 23, 42, 0.95); border: 1px solid #38bdf8; border-radius: 6px; padding: 7px 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 4px 18px rgba(0,0,0,0.5); font-size: 11px; color: #f8fafc;">
+          <div class="app-toast-badge" style="border: 1px solid var(--accent-blue);">
             <span>📋 发现上次未保存的草稿 (${draftTime}, 含 ${draft.data.columns.length} 个属种列)</span>
             <div style="display: flex; gap: 6px;">
               <button id="btn-restore-draft" class="btn btn-primary" style="padding: 2px 8px; font-size: 10px;">恢复草稿</button>
