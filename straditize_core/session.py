@@ -20,6 +20,58 @@ Image.MAX_IMAGE_PIXELS = None
 
 logger = logging.getLogger("straditize_rpc")
 
+#: Rate columns an age-depth export may carry, keyed by the ``predict_age`` field name.
+#: The value is a template whose ``{age_unit}`` / ``{depth_unit}`` placeholders are filled
+#: at export time, so the unit travels *inside the column name* rather than only in a
+#: side-channel that a spreadsheet would drop.
+AGE_DEPTH_RATE_COLUMNS: dict[str, str] = {
+    "volume_ar_cm_per_yr": "volume_ar (cm per yr; = cm3 cm-2 yr-1)",
+    "sed_rate_depth_per_yr": "sed_rate ({depth_unit} per yr)",
+    "acc_rate_yr_per_depth": "acc_rate ({age_unit} per {depth_unit})",
+    "interval_acc_rate_yr_per_depth": "interval_acc_rate ({age_unit} per {depth_unit})",
+    "interval_sed_rate_depth_per_yr": "interval_sed_rate ({depth_unit} per yr)",
+}
+
+#: Non-rate columns an age-depth export always carries. Everything not listed here and not
+#: in AGE_DEPTH_RATE_COLUMNS is dropped, so a unit-less legacy alias such as
+#: ``sed_rate_yr_per_cm`` cannot slip into the dataset as a duplicate of ``acc_rate``.
+AGE_DEPTH_BASE_COLUMNS: tuple[str, ...] = ("depths", "age_est", "age_min", "age_max")
+
+
+def build_age_depth_frame(
+    pred: dict[str, Any],
+    rate_columns: list[str] | None,
+    age_unit: str,
+    depth_unit: str,
+):
+    """Builds the exported age-depth table with units embedded in the column names.
+
+    Only :data:`AGE_DEPTH_BASE_COLUMNS` plus the user-selected rates survive. An allow-list
+    rather than a deny-list, because the field dict also carries unit-less legacy aliases
+    (``sed_rate_yr_per_cm``), ``rate_units``, and nested ``metadata`` that must never reach
+    a spreadsheet as columns. Selecting no rates still returns the age columns.
+    """
+    clean = {k: v for k, v in pred.items() if isinstance(v, (list, tuple))}
+    selected = set(rate_columns or [])
+
+    renamed: dict[str, Any] = {}
+    for key in AGE_DEPTH_BASE_COLUMNS:
+        if key in clean:
+            renamed[key] = clean[key]
+    for key, template in AGE_DEPTH_RATE_COLUMNS.items():
+        if key in selected and key in clean:
+            renamed[template.format(age_unit=age_unit, depth_unit=depth_unit)] = clean[key]
+
+    units = pred.get("rate_units", {})
+    n_rows = len(clean.get("depths", []))
+    if selected and units and n_rows:
+        # An explicit unit row, so the sheet still states its convention even if a
+        # downstream consumer renames the columns.
+        renamed["rate_units"] = [
+            f"acc={units.get('acc_rate', '')}; vol={units.get('volume_ar', '')}"
+        ] * n_rows
+    return pd.DataFrame(renamed)
+
 try:
     from scipy.interpolate import PchipInterpolator
 except ImportError:
@@ -93,6 +145,8 @@ class StraditizeSession:
 
         # Age-Depth Chronology integration
         self.age_depth_model: AgeDepthModel | None = None
+        self.age_depth_is_calendar_year: bool = True
+        self.age_depth_rate_columns: list[str] = []
         self.age_depth_image: Image.Image | None = None
         self.age_depth_image_path: str | None = None
 
@@ -1872,6 +1926,9 @@ class StraditizeSession:
         depth_log: bool = False,
         age_log: bool = False,
         exclude_boxes: list[list[float]] | None = None,
+        age_increases_downcore: bool = True,
+        age_is_calendar_year: bool = True,
+        rate_columns: list[str] | None = None,
     ) -> dict[str, Any]:
         """Extracts age-depth curves and the 95% confidence envelope with inspection data.
 
@@ -1879,6 +1936,19 @@ class StraditizeSession:
         ``depth_vals``) define the pixel-to-unit mapping. ``depth_range`` is deliberately
         independent of that mapping so a user may calibrate against the full axis while
         extracting only the analysed section.
+
+        ``depth_unit`` and ``age_unit`` are free-text labels: the literature uses ``cm``,
+        ``m``, ``cm b.s.``, ``mcd``, ``cal yr BP``, ``ka cal BP``, ``cal yr AD`` and more,
+        and an enum would make users misdeclare their own axis. Two machine-readable
+        conventions carry the semantics a label cannot:
+
+        ``age_increases_downcore``
+            ``True`` for BP-style axes (increase downcore), ``False`` for AD/CE-style axes
+            (increase upcore). Drives the monotonicity prior; guessing it from the label
+            would apply isotonic regression backwards on an AD figure.
+        ``age_is_calendar_year``
+            ``False`` marks an uncalibrated ¹⁴C axis, which is not a time axis. The curve is
+            still returned for digitisation but no calendar-age ensemble is produced.
         """
         if self.age_depth_image is None:
             # Fallback to sample if none loaded
@@ -1919,8 +1989,16 @@ class StraditizeSession:
             depth_range=depth_range,
             resample_step=resample_step,
             exclude_mask=exclude_mask,
+            age_increases_downcore=age_increases_downcore,
         )
         self.age_depth_model = model
+        self.age_depth_is_calendar_year = bool(age_is_calendar_year)
+        # Which rate columns the user ticked for export. Column *names* are built with the
+        # unit embedded (see AGE_DEPTH_RATE_COLUMNS) so a spreadsheet or LiPD container is
+        # self-describing: a bare "sed_rate" would lose the unit the moment it left here.
+        self.age_depth_rate_columns = [
+            c for c in (rate_columns or []) if c in AGE_DEPTH_RATE_COLUMNS
+        ]
 
         # Harmonize with current pollen sample depths if available
         sample_depths = []
@@ -1938,22 +2016,40 @@ class StraditizeSession:
 
         mapped_samples = model.predict_age(sample_depths) if sample_depths else None
 
-        # Automatically generate and mount native Age Ensemble Table (Section 9)
+        # Automatically generate and mount native Age Ensemble Table (Section 9).
+        # An uncalibrated ¹⁴C axis is not a time axis: an ensemble of "calendar ages" built
+        # on it would be wrong by the whole reservoir/calibration offset, so refuse rather
+        # than produce it. The extracted curve is still returned for digitisation.
         ensemble_info = None
-        if sample_depths:
+        if sample_depths and not age_is_calendar_year:
+            ensemble_info = {
+                "skipped": True,
+                "reason": "AGEDEPTH_UNCALIBRATED_14C",
+                "message": (
+                    "The age axis is uncalibrated 14C, not a calendar timescale. "
+                    "Calibrate the dates first; no age ensemble was generated."
+                ),
+            }
+        elif sample_depths:
             model_tag = "Bacon" if "bacon" in notes.lower() or "bacon" in (self.age_depth_image_path or "").lower() else "AgeModel"
             ensemble_table = model.generate_age_ensemble(
                 sample_depths=sample_depths,
                 n_ensembles=1000,
                 name=f"{model_tag}_Ensemble_1000",
+                return_diagnostics=True,
             )
             self.ensemble_tables = [t for t in self.ensemble_tables if t.get("name") != ensemble_table["name"]]
             self.ensemble_tables.append(ensemble_table)
+            diagnostics = ensemble_table.get("diagnostics", {})
             ensemble_info = {
                 "name": ensemble_table["name"],
                 "columns_count": len(ensemble_table["columns"]),
                 "rows_count": len(ensemble_table["data"]),
+                "diagnostics": diagnostics,
             }
+            # Per-sample rate posterior, surfaced alongside the ages it belongs with.
+            if isinstance(mapped_samples, dict) and diagnostics.get("rate"):
+                mapped_samples["rate"] = diagnostics["rate"]
 
         # Attach pixel positions for the mapped horizons. The calibrator lives here, so
         # the frontend never has to re-implement the pixel <-> unit transform (which
@@ -2256,8 +2352,15 @@ class StraditizeSession:
         if include_age_depth and self.age_depth_model is not None and "depth" in pollen_df.columns:
             depths = pollen_df["depth"].tolist()
             pred = self.age_depth_model.predict_age(depths)
-            clean_pred = {k: v for k, v in pred.items() if k != "metadata"}
-            age_depth_df = pd.DataFrame(clean_pred)
+            # Keep only per-horizon arrays. Anything else (the ``metadata`` and
+            # ``rate_units`` dicts) is not a column and would make DataFrame
+            # construction mix dicts with lists.
+            age_depth_df = build_age_depth_frame(
+                pred,
+                self.age_depth_rate_columns,
+                self.age_depth_model.age_unit,
+                self.age_depth_model.depth_unit,
+            )
 
         selected_ensembles = None
         if include_ensemble_names:
@@ -2295,8 +2398,15 @@ class StraditizeSession:
         if include_age_depth and self.age_depth_model is not None and "depth" in pollen_df.columns:
             depths = pollen_df["depth"].tolist()
             pred = self.age_depth_model.predict_age(depths)
-            clean_pred = {k: v for k, v in pred.items() if k != "metadata"}
-            age_depth_df = pd.DataFrame(clean_pred)
+            # Keep only per-horizon arrays. Anything else (the ``metadata`` and
+            # ``rate_units`` dicts) is not a column and would make DataFrame
+            # construction mix dicts with lists.
+            age_depth_df = build_age_depth_frame(
+                pred,
+                self.age_depth_rate_columns,
+                self.age_depth_model.age_unit,
+                self.age_depth_model.depth_unit,
+            )
 
         selected_ensembles = None
         if include_ensemble_names:

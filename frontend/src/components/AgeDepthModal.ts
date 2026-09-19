@@ -70,6 +70,13 @@ export class AgeDepthModal {
     age_max: number[];
     px_y?: number[];
     px_x_curve?: number[];
+    rate?: {
+      acc_rate_yr_per_depth: (number | null)[];
+      acc_rate_yr_per_depth_min: (number | null)[];
+      acc_rate_yr_per_depth_max: (number | null)[];
+      sed_rate_depth_per_yr: (number | null)[];
+      units?: { acc_rate: string; sed_rate: string };
+    };
   } | null = null;
 
   private showCurve: boolean = true;
@@ -253,6 +260,19 @@ export class AgeDepthModal {
                 </div>
               </div>
 
+              <!-- ============ 步骤 1b：单位约定（固定） ============ -->
+              <div class="form-group" style="margin: 0; padding: 8px; border-radius: 4px; border-left: 3px solid var(--accent-amber); background: rgba(245,158,11,0.07);">
+                <div style="font-size: 10.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 3px;">
+                  ①b 单位固定为 <code>cm</code> 与 <code>cal BP</code>
+                </div>
+                <div style="font-size: 9.5px; color: var(--text-secondary); line-height: 1.55;">
+                  本工具只认这两个单位，不做任何单位换算。<br>
+                  原图若用 <b>ka</b>（如 0–12 ka），请自己乘 1000 后填入标定值（0 / 12000）；<br>
+                  原图若用 <b>AD/CE</b>，请自己换成 BP（<code>BP = 1950 − AD</code>），否则年代方向相反。<br>
+                  <b>未校正 ¹⁴C BP</b> 不是时间轴，需先过校正曲线，本工具不做校正。
+                </div>
+              </div>
+
               <!-- ============ 步骤 2：提取深度范围 ============ -->
               <div class="form-group" style="margin: 0; padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
                 <div style="font-size: 11px; font-weight: bold; color: var(--accent-green); margin-bottom: 6px;">② 提取深度范围 (Extraction Range)</div>
@@ -295,14 +315,38 @@ export class AgeDepthModal {
 
               <!-- 花粉层位映射预览 -->
               <div style="flex: 1; min-height: 130px; display: flex; flex-direction: column;">
-                <span style="font-size: 10.5px; font-weight: bold; color: var(--text-primary); margin-bottom: 4px;">花粉样品年代映射预览:</span>
+                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px;">
+                  <span style="font-size: 10.5px; font-weight: bold; color: var(--text-primary);">花粉样品年代与沉积速率预览:</span>
+                  <span id="ad-rate-units" style="font-size: 9px; color: var(--text-muted); font-family: var(--font-mono);"></span>
+                </div>
                 <div style="flex: 1; overflow-y: auto; border: 1px solid var(--border-light); border-radius: 4px; background: var(--bg-card);">
                   <table class="wpd-preview-table" style="width: 100%; font-size: 10px;">
-                    <thead><tr><th>Depth</th><th>Age</th><th>95% CI</th></tr></thead>
+                    <thead><tr><th>Depth</th><th>Age</th><th>95% CI</th><th title="d(age)/d(depth)，由 1000 条集合成员求导得到的 95% 区间">Acc. rate</th></tr></thead>
                     <tbody id="ad-mapping-tbody">
-                      <tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 12px;">尚未执行识别提取</td></tr>
+                      <tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 12px;">尚未执行识别提取</td></tr>
                     </tbody>
                   </table>
+                </div>
+                <div style="font-size: 9px; color: var(--text-muted); margin-top: 3px; line-height: 1.45;">
+                  速率来自集合成员的导数（不是中位曲线的点估计），因此带 95% 区间。
+                </div>
+
+                <!-- 速率口径：由用户勾选，工具只提供能从图中导出的量 -->
+                <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-color);">
+                  <div style="font-size: 10px; font-weight: 600; margin-bottom: 4px;">导出哪些速率列:</div>
+                  <label style="display: flex; align-items: center; gap: 4px; font-size: 10px; cursor: pointer;">
+                    <input type="checkbox" id="ad-chk-rate-sr" checked />
+                    <span>线性/体积累积速率 <code>cm yr⁻¹</code></span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 4px; font-size: 10px; cursor: pointer; margin-top: 2px;">
+                    <input type="checkbox" id="ad-chk-rate-ar" checked />
+                    <span>时间-深度累积速率 <code>yr cm⁻¹</code></span>
+                  </label>
+                  <div style="font-size: 9px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;">
+                    <b>质量累积速率 MAR 不在列内</b>：<code>MAR = 体积累积速率 × 干容重</code>，
+                    而干容重逐样品不同、图里也读不出来。请导出体积累积速率后用你自己的干容重换算。<br>
+                    导出的列名会带上单位（如 <code>volume_ar (cm per yr)</code>），单位随数据一起进数据集。
+                  </div>
                 </div>
               </div>
             </div>
@@ -451,8 +495,8 @@ export class AgeDepthModal {
                   ⏳ 正在探测本地 R 与内置算力环境...
                 </div>
                 <div style="display: flex; gap: 6px;">
-                  <button class="btn btn-primary" id="btn-ad-run-local-r" style="flex: 1.3; font-size: 11px; padding: 6px; background: linear-gradient(135deg, #059669, #10b981);" title="根据探测层级自动调用系统原生 R 满血运行或拉起 WebR WASM 运算">
-                    ▶ 运行 Bacon 年龄建模
+                  <button class="btn btn-primary" id="btn-ad-run-local-r" style="flex: 1.3; font-size: 11px; padding: 6px; background: linear-gradient(135deg, #059669, #10b981);" title="优先调用本机 R + rbacon 原生运行；仅在本机没有 R 时才考虑内置 WebR 算力">
+                    ▶ 运行 Bacon 年龄建模（本机 R）
                   </button>
                   <button class="btn btn-secondary" id="btn-ad-export-geochronr" style="flex: 1; font-size: 11px; padding: 6px;" title="生成与当前 LiPD 容器深度绑定的 geoChronR 驱动代码">
                     📈 geoChronR 脚本
@@ -609,6 +653,15 @@ export class AgeDepthModal {
       this.updateExcludeCount();
       this.renderCanvas();
     });
+
+    // ================= 速率口径勾选 =================
+    // Bounds the exported age-depth table to the columns the user asked for. The tool
+    // only offers what is derivable from the figure; MAR needs per-sample dry bulk
+    // density and stays the user's own conversion.
+    (['ad-chk-rate-sr', 'ad-chk-rate-ar'] as const).forEach((id) =>
+      modal.querySelector(`#${id}`)?.addEventListener('change', () => this.renderRateOptionsNote())
+    );
+    this.renderRateOptionsNote();
 
     // 画布：标定点拾取 / 拖拽 / 排除框拖拽 / 悬停读数
     this.bindCanvasInteractions();
@@ -1111,6 +1164,7 @@ export class AgeDepthModal {
   private async checkLocalR(): Promise<void> {
     if (!this.modalEl) return;
     const statusEl = this.modalEl.querySelector('#ad-local-r-status');
+    const runBtn = this.modalEl.querySelector('#btn-ad-run-local-r') as HTMLButtonElement | null;
     try {
       const res = await this.rpcClient.call<void, any>('agedepth.checkREnvironment');
       // Mock returns a bare `true`, so `res.has_r` would read as undefined and the modal
@@ -1119,15 +1173,27 @@ export class AgeDepthModal {
         this.renderBackendOffline('#ad-local-r-status');
         return;
       }
+      if (res && res.has_r && res.has_rbacon) {
+        // Local R is the first-choice engine, so say so before the user clicks rather
+        // than only after. Nothing needs downloading in this case.
+        if (statusEl) {
+          statusEl.innerHTML =
+            `🟢 <strong>本机 R 已就绪，将直接调用</strong>: ${res.r_version || 'R 4.x'} · ` +
+            `rbacon 已安装 · 无需下载任何组件`;
+        }
+        if (runBtn) {
+          runBtn.textContent = '▶ 运行 Bacon 年龄建模（本机 R）';
+        }
+        return;
+      }
       if (res && res.has_r) {
-        const pkgText = res.has_rbacon ? '已就绪 (包含 rbacon 与 geoChronR)' : '缺少 rbacon 包 (建议 install.packages("rbacon"))';
         if (statusEl) {
-          statusEl.innerHTML = `🟢 <strong>本地 R 环境就绪</strong>: ${res.r_version || 'R 4.x'} · ${pkgText}`;
+          statusEl.innerHTML = `🟡 已探测到 ${res.r_version || 'R'}，但缺少 <code>rbacon</code> 包。装包后即可本机运行：<code>install.packages("rbacon")</code>`;
         }
-      } else {
-        if (statusEl) {
-          statusEl.innerHTML = `⚪ 未探测到系统 Rscript，可通过内置 WebR 运行年代建模。`;
-        }
+        return;
+      }
+      if (statusEl) {
+        statusEl.innerHTML = `⚪ 未探测到本机 R/rbacon。可安装 R + rbacon（推荐），或待 WebR 引擎接通后使用内置算力。`;
       }
     } catch {
       if (statusEl) statusEl.textContent = '⚪ 本地 R 探测通道就绪';
@@ -1298,9 +1364,17 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
         exclude_boxes: this.excludeBoxes,
         curve_type: 'median',
         envelope_type: '95_hpd',
+        // Units and the age-direction convention are fixed by contract, not user input:
+        // the tool speaks cm and cal BP only, and the user converts their own axis before
+        // entering calibration values. The backend still validates the direction and
+        // refuses a contradiction, which is what turns a silent 1000x / reversed-axis
+        // mistake into a readable error.
         depth_unit: 'cm',
         age_unit: 'cal BP',
         cal_curve: 'IntCal20',
+        age_increases_downcore: true,
+        age_is_calendar_year: true,
+        rate_columns: this.selectedRateColumns(),
       });
 
       if (res && res !== true && res.inspection) {
@@ -1311,8 +1385,16 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
         const statusEl = this.modalEl.querySelector('#ad-status-msg');
         const n = (res.inspection.depths || []).length;
         const sampled = res.mapped_samples?.depths?.length || 0;
+        const ens = res.generated_ensemble;
+        let note = '';
+        if (ens?.skipped) {
+          note = ' · ⚠️ 已跳过年代集合';
+        } else if (ens?.diagnostics) {
+          const dg = ens.diagnostics;
+          note = ` · L=${dg.correlation_length}cm`;
+        }
         if (statusEl) {
-          statusEl.textContent = `✅ 识别成功：提取 ${n} 个深度层位，映射 ${sampled} 个花粉样品`;
+          statusEl.textContent = `✅ 识别成功：提取 ${n} 个深度层位，映射 ${sampled} 个花粉样品${note}`;
         }
       } else {
         this.showExtractError(
@@ -1606,6 +1688,24 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
     return !!input?.checked;
   }
 
+  /** Rate column keys the user ticked, in export order. */
+  private selectedRateColumns(): string[] {
+    const cols: string[] = [];
+    if (this.readChecked('ad-chk-rate-sr')) cols.push('volume_ar_cm_per_yr');
+    if (this.readChecked('ad-chk-rate-ar')) cols.push('acc_rate_yr_per_depth');
+    return cols;
+  }
+
+  private renderRateOptionsNote(): void {
+    const el = this.modalEl?.querySelector('#ad-rate-units') as HTMLElement | null;
+    if (el) {
+      const sel = this.selectedRateColumns();
+      el.textContent = sel.length ? `${sel.length} 列速率将写入数据集（含单位）` : '不导出速率列';
+    }
+    // The preview table mirrors the export selection so what you see is what gets written.
+    if (this.inspectionData) this.updateMappingTable();
+  }
+
   /** Draws calibration handles, the calibration rectangle, and eraser boxes. */
   private renderCalibrationOverlay(ctx: CanvasRenderingContext2D): void {
     // Eraser boxes first so handles stay legible on top.
@@ -1769,6 +1869,32 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
 
     tbody.innerHTML = '';
 
+    const rates = this.mappedSamples?.rate;
+    const unitsEl = this.modalEl.querySelector('#ad-rate-units');
+    if (unitsEl) {
+      unitsEl.textContent = rates?.units?.acc_rate ? `${rates.units.acc_rate}` : '';
+    }
+    const accMid = rates?.acc_rate_yr_per_depth;
+    const accLo = rates?.acc_rate_yr_per_depth_min;
+    const accHi = rates?.acc_rate_yr_per_depth_max;
+    const fmt = (v: number | null | undefined): string =>
+      v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toFixed(2);
+    const rateCell = (i: number): string => {
+      const mid = accMid?.[i];
+      if (mid === undefined) {
+        return '<td style="color:var(--text-muted); font-size:9px;">—</td>';
+      }
+      // null marks an undefined rate (an instantaneous deposit: zero time per unit depth,
+      // so the reciprocal does not exist). Rendering it as 0 would claim the opposite.
+      if (mid === null) {
+        return '<td style="color:var(--accent-amber, #f59e0b); font-size:9px;" title="瞬时沉积层：该段历时为 0，速率无定义">∞</td>';
+      }
+      return (
+        `<td style="color:var(--text-secondary); font-size:9.5px;">${fmt(mid)}` +
+        `<br><span style="color:var(--text-muted); font-size:8.5px;">${fmt(accLo?.[i])}–${fmt(accHi?.[i])}</span></td>`
+      );
+    };
+
     // If mapped pollen samples are returned from backend session, display them
     if (this.mappedSamples && this.mappedSamples.depths && this.mappedSamples.depths.length > 0) {
       const ms = this.mappedSamples;
@@ -1778,8 +1904,9 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
         const maxVal = ms.age_max ? ms.age_max[i] : (ms.age_est[i] + 100);
         tr.innerHTML = `
           <td style="font-weight: 600; color: var(--accent-blue);">${ms.depths[i]} cm</td>
-          <td style="color: var(--text-primary); font-weight: 500;">${Math.round(ms.age_est[i])} cal BP</td>
+          <td style="color: var(--text-primary); font-weight: 500;">${Math.round(ms.age_est[i])}</td>
           <td style="color: var(--text-muted); font-size: 9.5px;">${Math.round(minVal)} ~ ${Math.round(maxVal)}</td>
+          ${rateCell(i)}
         `;
         tbody.appendChild(tr);
       }
@@ -1797,8 +1924,9 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td style="font-weight: 600; color: var(--accent-blue);">${d[i].toFixed(1)} cm</td>
-        <td style="color: var(--text-primary); font-weight: 500;">${Math.round(a[i])} cal BP</td>
+        <td style="color: var(--text-primary); font-weight: 500;">${Math.round(a[i])}</td>
         <td style="color: var(--text-muted); font-size: 9.5px;">${Math.round(mi[i])} ~ ${Math.round(ma[i])}</td>
+        <td style="color: var(--text-muted); font-size:9px;">—</td>
       `;
       tbody.appendChild(tr);
     }

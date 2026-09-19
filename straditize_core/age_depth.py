@@ -622,6 +622,60 @@ class AgeDepthModel:
             for i, d in enumerate(d_arr)
         ]
 
+        # Per-sample rate posterior. The ensemble already lives in rate space, so the
+        # member rates are free: differentiating each member's curve amplifies noise, which
+        # is exactly why the rate is typically more uncertain than the age and why a point
+        # estimate from the median curve should not be reported on its own.
+        rate_stats = None
+        if return_diagnostics:
+            grid_rate = ages_grid.copy()
+            # Member-wise interval rate over the grid, then resampled to the samples.
+            d_grid = np.diff(grid)
+            a_grid = np.diff(grid_rate, axis=0)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                grid_acc = np.where(
+                    np.abs(d_grid)[:, None] > 1e-12, a_grid / d_grid[:, None], np.nan
+                )
+            # A rate is a magnitude. Isotonic regression upstream fixes the sign
+            # consistently (positive for BP axes, negative for AD axes), so take the
+            # absolute value rather than leaking the age convention into the units.
+            grid_acc = np.abs(grid_acc)
+            member_acc = np.empty((d_arr.size, int(n_ensembles)), dtype=float)
+            for j in range(int(n_ensembles)):
+                col = grid_acc[:, j]
+                member_acc[:, j] = np.interp(
+                    d_arr, 0.5 * (grid[:-1] + grid[1:]), col, left=col[0], right=col[-1]
+                )
+            acc_lo = np.percentile(member_acc, 2.5, axis=1)
+            acc_mid = np.median(member_acc, axis=1)
+            acc_hi = np.percentile(member_acc, 97.5, axis=1)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                sed_lo = np.where(acc_hi > 0, 1.0 / acc_hi, np.nan)
+                sed_mid = np.where(acc_mid > 0, 1.0 / acc_mid, np.nan)
+                sed_hi = np.where(acc_lo > 0, 1.0 / acc_lo, np.nan)
+
+            def _c(v: np.ndarray) -> list[float | None]:
+                # See predict_age._clean: an undefined rate is null, not zero.
+                return [round(float(x), 4) if np.isfinite(x) else None for x in v]
+
+            rate_stats = {
+                "acc_rate_yr_per_depth": _c(acc_mid),
+                "acc_rate_yr_per_depth_min": _c(acc_lo),
+                "acc_rate_yr_per_depth_max": _c(acc_hi),
+                "sed_rate_depth_per_yr": _c(sed_mid),
+                "sed_rate_depth_per_yr_min": _c(sed_lo),
+                "sed_rate_depth_per_yr_max": _c(sed_hi),
+                # Volume accumulation rate per unit area (dimensionally the linear rate).
+                "volume_ar_cm_per_yr": _c(sed_mid),
+                "volume_ar_cm_per_yr_min": _c(sed_lo),
+                "volume_ar_cm_per_yr_max": _c(sed_hi),
+                "units": {
+                    "acc_rate": f"{self.age_unit} per {self.depth_unit}",
+                    "sed_rate": f"{self.depth_unit} per year",
+                    "volume_ar": "cm per year (cm3 cm-2 yr-1)",
+                },
+            }
+
         result: dict[str, Any] = {"name": name, "columns": columns, "data": rows}
         if return_diagnostics:
             simulated_width = np.percentile(ages_grid, 97.5, axis=1) - np.percentile(
@@ -657,36 +711,123 @@ class AgeDepthModel:
                     2,
                 ),
             }
+            if rate_stats is not None:
+                result["diagnostics"]["rate"] = rate_stats
         return result
 
-    def predict_age(self, sample_depths: list[float] | np.ndarray) -> dict[str, list[float]]:
-        """Maps sample depths to estimated ages, 95% uncertainty bounds, and sedimentation rates."""
+    def predict_age(
+        self,
+        sample_depths: list[float] | np.ndarray,
+    ) -> dict[str, list[float]]:
+        """Maps sample depths to ages, 95% uncertainty bounds, and sedimentation rates.
+
+        Rate conventions, labelled explicitly because the literature is inconsistent:
+
+        * ``acc_rate_yr_per_depth`` = d(age)/d(depth), in ``age_unit`` per ``depth_unit``.
+          This is what an age-depth model natively yields and what pollen-accumulation
+          work needs (time per unit depth).
+        * ``sed_rate_depth_per_yr`` = its reciprocal, the conventional "sedimentation
+          rate" in ``depth_unit`` per year.
+        * ``volume_ar_cm_per_yr`` = the same number read as a volume accumulation rate.
+          Per unit area, cm3 cm-2 yr-1 reduces dimensionally to cm/yr, so this is not a
+          separate measurement -- it is the linear rate under a volume interpretation.
+        Mass accumulation rate (MAR, g cm-2 yr-1) is deliberately absent: it needs a dry
+        bulk density that varies per sample and cannot be read off an age-depth figure, so
+        it stays the caller's own conversion from the volume rate.
+
+        ``interval_*`` rates are also returned: the finite difference between consecutive
+        sample horizons rather than a point derivative. A pollen count represents an
+        interval, not an instant, so interval rates are usually the honest choice.
+
+        Rate uncertainty is deliberately *not* reported here. It comes from
+        :meth:`generate_age_ensemble`, where differentiating each member's curve gives a
+        posterior; a point estimate from the median curve carries no uncertainty even
+        though the rate is typically more uncertain than the age itself.
+        """
         d_arr = np.asarray(sample_depths, dtype=float)
         if self._interp_age is None:
+            zeros = [0.0] * len(d_arr)
             return {
-                "depths": [round(d, 2) for d in d_arr],
+                "depths": [round(float(d), 2) for d in d_arr],
                 "age_est": [round(float(d), 1) for d in d_arr],
                 "age_min": [round(float(d), 1) for d in d_arr],
                 "age_max": [round(float(d), 1) for d in d_arr],
-                "sed_rate_yr_per_cm": [1.0] * len(d_arr),
+                "acc_rate_yr_per_depth": zeros,
+                "sed_rate_depth_per_yr": zeros,
+                "interval_acc_rate_yr_per_depth": zeros,
+                "interval_sed_rate_depth_per_yr": zeros,
+                # Legacy key retained so existing consumers keep working.
+                "sed_rate_yr_per_cm": zeros,
             }
 
         age_est = self._interp_age(d_arr)
         age_min = self._interp_min(d_arr)
         age_max = self._interp_max(d_arr)
 
-        # Calculate local sedimentation rate (years per unit depth: dt/dd)
-        # Using centered finite differences
-        eps = 1e-3
-        dt = (self._interp_age(d_arr + eps) - self._interp_age(d_arr - eps)) / (2 * eps)
-        sed_rate = np.abs(dt)
+        # Analytic PCHIP derivative: exact, and no finite-difference step to tune.
+        slope = np.asarray(self._interp_age.derivative()(d_arr), dtype=float)
+        # A rate is a magnitude. The sign is fixed by the age convention declared at
+        # extraction time (positive for BP axes, negative for AD axes), so report the
+        # absolute rate rather than leaking that convention into the units.
+        slope = np.abs(slope)
+        slope = np.where(slope < 1e-12, np.nan, slope)
+        sed = np.where(np.isnan(slope), 0.0, 1.0 / slope)
+
+        order = np.argsort(d_arr)
+        d_sorted = d_arr[order]
+        a_sorted = np.asarray(age_est, dtype=float)[order]
+        d_delta = np.diff(d_sorted)
+        a_delta = np.diff(a_sorted)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            interval = np.where(np.abs(d_delta) > 1e-12, a_delta / d_delta, np.nan)
+        interval = np.abs(interval)
+        # Broadcast each interval onto its two bounding horizons (forward difference).
+        interval_full = np.empty(len(d_arr), dtype=float)
+        interval_full[:-1] = interval
+        interval_full[-1] = interval[-1] if interval.size else np.nan
+        inv_interval_full = np.empty(len(d_arr), dtype=float)
+        interval_sorted_full = np.empty(len(d_arr), dtype=float)
+        interval_sorted_full[:-1] = interval
+        interval_sorted_full[-1] = interval[-1] if interval.size else np.nan
+        with np.errstate(divide="ignore", invalid="ignore"):
+            inv_interval_sorted = np.where(
+                np.abs(interval_sorted_full) > 1e-12, 1.0 / interval_sorted_full, np.nan
+            )
+        # Undo the sort so every array is in the caller's original order.
+        inv_order = np.empty_like(order)
+        inv_order[order] = np.arange(order.size)
+        interval_full = interval_sorted_full[inv_order]
+        inv_interval_full = inv_interval_sorted[inv_order]
+
+        def _clean(values: np.ndarray) -> list[float | None]:
+            """Serialises rates, using ``None`` where a rate is undefined.
+
+            Isotonic regression can pool horizons into a flat age segment, which means an
+            instantaneous deposit: the accumulation rate is genuinely zero and its
+            reciprocal is undefined. Reporting ``0.0`` there would claim "no deposition",
+            the exact opposite, so undefined is emitted as ``null``.
+            """
+            return [round(float(v), 4) if np.isfinite(v) else None for v in values]
 
         return {
             "depths": [round(float(d), 2) for d in d_arr],
             "age_est": [round(float(a), 2) for a in age_est],
             "age_min": [round(float(a), 2) for a in age_min],
             "age_max": [round(float(a), 2) for a in age_max],
-            "sed_rate_yr_per_cm": [round(float(s), 2) for s in sed_rate],
+            "acc_rate_yr_per_depth": _clean(slope),
+            "sed_rate_depth_per_yr": _clean(sed),
+            # Volume accumulation rate per unit area: dimensionally the same as the
+            # linear rate, exposed under its own name so the choice is explicit.
+            "volume_ar_cm_per_yr": _clean(sed),
+            "interval_acc_rate_yr_per_depth": _clean(interval_full),
+            "interval_sed_rate_depth_per_yr": _clean(inv_interval_full),
+            # Legacy key: same convention as acc_rate_yr_per_depth.
+            "sed_rate_yr_per_cm": _clean(slope),
+            "rate_units": {
+                "acc_rate": f"{self.age_unit} per {self.depth_unit}",
+                "sed_rate": f"{self.depth_unit} per year",
+                "volume_ar": "cm per year (cm3 cm-2 yr-1)",
+            },
             "metadata": {
                 "curve_type": self.curve_type,
                 "envelope_type": self.envelope_type,
@@ -695,6 +836,7 @@ class AgeDepthModel:
                 "calibration_curve": self.cal_curve,
                 "notes": self.notes,
             },
+
         }
 
 
@@ -849,6 +991,7 @@ def extract_age_depth_model(
     dark_threshold: float | None = None,
     loose_threshold: float = 240.0,
     enforce_monotonic: bool = True,
+    age_increases_downcore: bool = True,
     retain_frac: float = 0.30,
 ) -> AgeDepthModel:
     """Extracts the central best-fit line and the uncertainty envelope from an age-depth diagram.
@@ -901,7 +1044,13 @@ def extract_age_depth_model(
     loose_threshold:
         Greyscale ceiling (0-255) used to bound the envelope extent.
     enforce_monotonic:
-        Apply isotonic regression so extracted age never decreases with depth.
+        Apply isotonic regression so extracted age is monotonic in depth.
+    age_increases_downcore:
+        Direction of that monotonicity. ``True`` for BP-style axes ("cal yr BP", "ka BP",
+        "yr b2k"), which increase downcore; ``False`` for AD/CE-style axes, which increase
+        upcore so age decreases downcore. Getting this wrong applies the prior backwards
+        and flattens a valid chronology, so it is declared rather than guessed from the
+        unit label.
     retain_frac:
         How far beyond the calibration rectangle the axis-rule search window may grow,
         as a fraction of each calibrated span. Guards against an unrelated long rule
@@ -1198,21 +1347,44 @@ def extract_age_depth_model(
     min_sorted = true_min[order]
     max_sorted = true_max[order]
 
-    # "Years before present" style axes increase with depth. If the depth axis itself is
-    # inverted in pixel space, flip before enforcing so the prior is applied downcore.
+    # The prior is "age moves monotonically with depth", but *which way* depends on the age
+    # convention, not just on the depth axis. A BP-style axis ("cal yr BP", "ka BP", "b2k")
+    # increases downcore; an AD/CE-style axis increases upcore, so age decreases downcore.
+    # Assuming BP for an AD figure would apply isotonic regression in the wrong direction
+    # and flatten a valid chronology into a ramp, so the caller declares the convention.
     depth_increases_downward = calibrator.depth_cal.px2data(1.0) >= calibrator.depth_cal.px2data(0.0)
+    ascending = depth_increases_downward == bool(age_increases_downcore)
 
     if enforce_monotonic and ages_sorted.size >= 3:
-        target = ages_sorted if depth_increases_downward else ages_sorted[::-1]
+        # Guard against a misdeclared age direction. Isotonic regression happily "fixes"
+        # data that runs the other way by flattening it, which would return a degenerate
+        # constant chronology with no signal that anything was wrong. Check the raw trend
+        # against the declaration first and refuse instead.
+        raw_diffs = np.diff(ages_sorted)
+        agreement = (
+            float((raw_diffs >= 0).mean()) if ascending else float((raw_diffs <= 0).mean())
+        )
+        if agreement < 0.55:
+            declared = "increases" if age_increases_downcore else "decreases"
+            observed = "decreases" if float((raw_diffs >= 0).mean()) < 0.5 else "increases"
+            raise ValueError(
+                f"Declared age direction contradicts the figure: the calibration says age "
+                f"{declared} downcore, but the extracted curve {observed} downcore "
+                f"({agreement:.0%} of adjacent horizons agree). Check whether the age axis "
+                f"is BP-style (increasing downcore) or AD/CE-style (increasing upcore), or "
+                f"whether the two age calibration points are swapped."
+            )
+
+        target = ages_sorted if ascending else ages_sorted[::-1]
         fitted = _pava_increasing(target)
-        ages_sorted = fitted if depth_increases_downward else fitted[::-1]
+        ages_sorted = fitted if ascending else fitted[::-1]
 
         # Rebuild the envelope around the regularised median, then re-impose ordering.
         centre = ages_sorted
         lo = np.minimum(min_sorted, centre)
         hi = np.maximum(max_sorted, centre)
-        # The envelope must also be non-decreasing; otherwise a wiggle can invert it.
-        if depth_increases_downward:
+        # The envelope must be ordered the same way; otherwise a wiggle can invert it.
+        if ascending:
             min_sorted = _pava_increasing(lo)
             max_sorted = _pava_increasing(hi)
             max_sorted = np.maximum(max_sorted, centre)
