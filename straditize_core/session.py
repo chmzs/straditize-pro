@@ -2087,7 +2087,10 @@ class StraditizeSession:
             return {
                 "success": True,
                 "backend": "webr",
-                "message": "WebR 扩展包已安装，可通过客户端内置 WASM 算力直接计算",
+                # 后端不产出面向用户的译文：只回机器可读 code + 英文兜底 message，
+                # 中文/英文叙述由前端 i18n 字典按当前语言渲染。
+                "code": "AGEDEPTH_WEBR_READY",
+                "message": "WebR add-on is installed; computation runs in-browser via WASM.",
                 "component_status": status,
             }
 
@@ -2098,7 +2101,11 @@ class StraditizeSession:
             "has_rbacon": False,
             "r_version": r_env.get("r_version"),
             "component_status": status,
-            "message": "未探测到本地 rbacon 包，且 WebR 增量扩展包尚未就绪。请一键下载增量包(~40MB)或运行 install.packages('rbacon')。",
+            "code": "AGEDEPTH_NO_RBACON",
+            "message": (
+                "Local rbacon was not detected and the WebR add-on is not installed. "
+                "Download the ~40MB add-on, or run install.packages('rbacon')."
+            ),
         }
 
 

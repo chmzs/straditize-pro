@@ -4,12 +4,12 @@
 - 一键验证：`pixi run lint` ｜ `pixi run test` ｜ `cd frontend && npm run build`
 - 当前结果：lint ✓ ｜ build ✓ ｜ test **112/112 passed (100% 通过)**
 
-## [AGEDEPTH] 2026-09-20 05:10 — 年代-深度识别重构（未提交）
-- `straditize_core/age_depth.py`：废弃「整图二值化 + 最大连通域 + 每行 argmin」，改为逐行剖面双阈值 + 连续性追踪 + 长直线剔除 + PAVA 单调保序 + gap 插值 + 网格重采样；ROI 改由轴规则实际跨度推导。
-- 回归量化：合成图 `tests/test_age_depth_extraction_quality.py` 中位误差 0.19%/p95 1.0%/包络覆盖 100%；真实图 `tests/test_age_depth_real_figures.py` 锁定两个已修失效（`szek` 文本劫持引导、ROI 卡刻度漏掉曲线尾段）。
-- `session.py` 标定与提取范围解耦（`depth_range`）+ 分轴 `*_log` + `resample_step` + `exclude_boxes`，`mapped_samples` 回传 `px_y`/`px_x_curve`；`AgeDepthModal.ts` 四点标定点击交互（可拖拽）+ 批量填值 + 矩形橡皮擦，并补 `min-height:0`（控制栏变高会顶飞画布）。
-- 下一步：实测「上传本地图谱」完整手动标定链路；决定负年代（示例图曲线越过 0 刻度）是否在映射预览中提示。
-
+## [AGEDEPTH] 2026-09-20 05:10 — 年代-深度识别 + 年龄集合重构（已提交 339a34d）
+- 识别：废弃「整图二值化 + 最大连通域 + 每行 argmin」，改为逐行剖面双阈值 + 垂直支撑度引导 + 连续性追踪 + 长直线剔除 + PAVA 单调保序 + gap 插值；搜索窗改由**轴规则实际跨度**推导（刻度之外还有曲线）。
+- 年龄集合：改在**沉积速率空间**做相关高斯过程再积分，单调性由构造保证（旧实现 2cm 步长下 32.9% 成员有隐性年代倒转，被 `maximum.accumulate` 掩盖）；相关长度是物理深度，不再随重采样步长漂移。
+- 回归量化：合成图中位误差 0.19%/p95 1.0%/覆盖 100%；真实图 `test_age_depth_real_figures.py` 锁 2 个已修失效；`test_age_ensemble.py` 锁单调性/步长不变性/带宽量级。两图带宽误差 3%（Bacon）/14%（Bchron）。
+- 前端：`AgeDepthModal.ts` 四点标定点击（可拖拽）+ 批量填值 + 分轴 log + 深度范围 + 矩形橡皮擦；删除伪造的 WebR 路径（原为线性内插+拍脑袋误差项却报称贝叶斯建模）。
+- 下一步：实测「上传本地图谱」手动标定链路；包络在测年层位后收窄处模型无法跟随（无钉扎的累积过程不能减方差），此处保守偏宽输出，`envelope_mismatch_vs_extracted` 已如实记录。
 ## [I18N+PROVENANCE] 2026-09-20 06:00 — 多语言 + 数据来源完整性（未提交）
 - i18n：`frontend/src/i18n/`（t/setLocale/onLocaleChange + zh/en 字典 + 数值错误码映射）；`en.ts` 用 `satisfies Record<MessageKey,string>` 做漏翻门禁；顶栏 `#btn-toggle-locale` 一键切换、无需重启。
 - `RpcClient` 拆出 `backendOnline` / `demoMode` 两个独立状态，删除全部静默伪造（等分分列、随机抖动曲线、固定名单 OCR、前端自算导出、范例前端夹具）。
