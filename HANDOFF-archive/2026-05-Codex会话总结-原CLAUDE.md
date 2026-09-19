@@ -96,3 +96,7 @@
 | `straditize/straditizer.py` | 主界面，magnifier |
 | `straditize/tests/widgets/test_data.py` | Edit full data 回归测试 |
 | `straditize/tests/test_binary.py` | 数据持久化回归测试 |
+
+---
+
+详见 AGENTS.md 与根目录 HANDOFF.md。
