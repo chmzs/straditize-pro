@@ -31,9 +31,30 @@ export interface DatingPoint {
   cc: number; // 1 = IntCal20, 2 = Marine20, 3 = SHCal20, 0 = Non-14C
 }
 
+/** The four calibration handles, clicked in this order. */
+export type CalibKind = 'ageA' | 'ageB' | 'depthA' | 'depthB';
+
+export interface CalibMarker {
+  kind: CalibKind;
+  /** Position in image pixel coordinates (not CSS pixels). */
+  x: number;
+  y: number;
+}
+
+const CALIB_ORDER: CalibKind[] = ['ageA', 'ageB', 'depthA', 'depthB'];
+
+const CALIB_META: Record<CalibKind, { label: string; ordinal: string; color: string }> = {
+  ageA: { label: '年龄轴端点 1', ordinal: '①', color: '#38bdf8' },
+  ageB: { label: '年龄轴端点 2', ordinal: '②', color: '#38bdf8' },
+  depthA: { label: '深度轴端点 1', ordinal: '③', color: '#34d399' },
+  depthB: { label: '深度轴端点 2', ordinal: '④', color: '#34d399' },
+};
+
+const EXCLUDE_BOX_COLOR = 'rgba(239, 68, 68, 0.75)';
+const MARKER_HIT_RADIUS = 10;
+
 export class AgeDepthModal {
   private container: HTMLElement;
-  private pollenData: DiagramData;
   private rpcClient: RpcClient;
   private onApplyAgeModel: (model: AgeDepthModelInspectionData) => void;
 
@@ -42,12 +63,30 @@ export class AgeDepthModal {
   private ctx: CanvasRenderingContext2D | null = null;
   private bgImage: HTMLImageElement | null = null;
   private inspectionData: AgeDepthModelInspectionData | null = null;
-  private mappedSamples: { depths: number[]; age_est: number[]; age_min: number[]; age_max: number[] } | null = null;
+  private mappedSamples: {
+    depths: number[];
+    age_est: number[];
+    age_min: number[];
+    age_max: number[];
+    px_y?: number[];
+    px_x_curve?: number[];
+  } | null = null;
 
   private showCurve: boolean = true;
   private showEnvelope: boolean = true;
   private showPollenHorizons: boolean = true;
   private overlayOpacity: number = 0.65;
+
+  // 四点标定交互状态
+  private calibMarkers: CalibMarker[] = [];
+  private calibPicking: boolean = false;
+  private draggingMarker: number | null = null;
+
+  // 矩形排除区（橡皮擦）
+  private excludeBoxes: number[][] = [];
+  private excludeArmed: boolean = false;
+  private excludeDragStart: { x: number; y: number } | null = null;
+  private excludePreview: number[] | null = null;
 
   // 测年点列表
   private datingPoints: DatingPoint[] = [
@@ -65,7 +104,12 @@ export class AgeDepthModal {
     onApplyAgeModel: (model: AgeDepthModelInspectionData) => void
   ) {
     this.container = container;
-    this.pollenData = pollenData;
+    // Retained in the signature for callers, but no longer stored: the pollen-horizon
+    // overlay positions now come from the backend calibrator (``mapped_samples.px_y`` /
+    // ``px_x_curve``), so this class never has to re-derive a pixel transform. Keeping
+    // an unused copy would also tempt a caller into thinking it is still the source of
+    // truth for the overlay.
+    void pollenData;
     this.rpcClient = rpcClient;
     this.onApplyAgeModel = onApplyAgeModel;
   }
@@ -100,9 +144,9 @@ export class AgeDepthModal {
           <!-- ================================================================= -->
           <!-- Tab 1: 视觉解译视口 (原有成熟能力) -->
           <!-- ================================================================= -->
-          <div id="ad-tab-panel-visual" style="flex: 1; display: flex; gap: 14px; min-width: 0;">
+          <div id="ad-tab-panel-visual" style="flex: 1; display: flex; gap: 14px; min-width: 0; min-height: 0; overflow: hidden;">
             <!-- 左侧: Canvas -->
-            <div class="ad-viewport-pane" style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;">
+            <div class="ad-viewport-pane" style="flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px;">
               <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-muted);">
                 <div style="display: flex; gap: 12px; align-items: center;">
                   <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
@@ -124,7 +168,7 @@ export class AgeDepthModal {
                 </div>
               </div>
 
-              <div id="ad-canvas-container" style="flex: 1; height: 420px; min-height: 360px; position: relative; background: var(--bg-tertiary); border: 2px dashed var(--border-color); border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+              <div id="ad-canvas-container" style="flex: 1; min-height: 240px; position: relative; background: var(--bg-tertiary); border: 2px dashed var(--border-color); border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
                 <canvas id="ad-inspection-canvas" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: crosshair; display: none;"></canvas>
                 <div id="ad-empty-drop-zone" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg-card); z-index: 10; padding: 24px; text-align: center;">
                   <div style="font-size: 44px; margin-bottom: 10px;">⏳</div>
@@ -152,7 +196,7 @@ export class AgeDepthModal {
             </div>
 
             <!-- 右侧控制区 -->
-            <div class="ad-control-pane" style="width: 320px; display: flex; flex-direction: column; gap: 10px; background: var(--bg-tertiary); padding: 12px; border-radius: 6px; border: 1px solid var(--border-light); overflow-y: auto;">
+            <div class="ad-control-pane" style="width: 330px; flex-shrink: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; background: var(--bg-tertiary); padding: 12px; border-radius: 6px; border: 1px solid var(--border-light); overflow-y: auto;">
               <div class="form-group" style="margin: 0; background: rgba(56, 189, 248, 0.05); padding: 8px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.2);">
                 <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; margin-bottom: 6px;">
                   <span>图谱数据源:</span>
@@ -162,42 +206,101 @@ export class AgeDepthModal {
                 <input type="file" id="ad-file-input" accept="image/*" style="display: none;" />
               </div>
 
-              <!-- 坐标轴物理标定 -->
-              <div class="form-group" style="margin: 0; padding: 8px; border-radius: 4px;">
-                <div style="font-size: 11px; font-weight: bold; color: var(--accent-blue); margin-bottom: 6px;">坐标轴标定 (Calibration):</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 10.5px;">
-                  <div>
-                    <label style="color: var(--text-muted);">深度顶端:</label>
+              <!-- ============ 步骤 1：四点标定 ============ -->
+              <div class="form-group" style="margin: 0; padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <span style="font-size: 11px; font-weight: bold; color: var(--accent-blue);">① 四点标定 (Calibration)</span>
+                  <button class="tool-btn" id="ad-btn-calib-reset" style="font-size: 9.5px; padding: 1px 6px;">重置</button>
+                </div>
+
+                <button class="btn btn-primary" id="ad-btn-calib-start" style="width: 100%; font-size: 11px; padding: 5px; background: linear-gradient(135deg, #0284c7, #38bdf8);">
+                  🎯 在图上点击 4 个标定点
+                </button>
+
+                <ol id="ad-calib-checklist" style="margin: 8px 0 0 0; padding-left: 18px; font-size: 10px; line-height: 1.7; color: var(--text-muted);">
+                  <li data-kind="ageA">年龄轴端点 1（左/旧端刻度）</li>
+                  <li data-kind="ageB">年龄轴端点 2（右/新端刻度）</li>
+                  <li data-kind="depthA">深度轴端点 1（顶端刻度）</li>
+                  <li data-kind="depthB">深度轴端点 2（底端刻度）</li>
+                </ol>
+
+                <div id="ad-calib-hint" style="margin-top: 6px; font-size: 10px; color: var(--accent-amber); line-height: 1.5;"></div>
+
+                <!-- 四点落位后一次性批量输入数值 -->
+                <div id="ad-calib-values" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-color);">
+                  <div style="font-size: 10.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 5px;">批量输入标定值:</div>
+                  <div style="display: grid; grid-template-columns: auto 1fr; gap: 5px 6px; font-size: 10.5px; align-items: center;">
+                    <label style="color: var(--accent-blue);">① 年龄 1</label>
+                    <input type="number" id="ad-inp-age-left" value="3000" style="width: 100%; font-size: 11px;" />
+                    <label style="color: var(--accent-blue);">② 年龄 2</label>
+                    <input type="number" id="ad-inp-age-right" value="0" style="width: 100%; font-size: 11px;" />
+                    <label style="color: var(--accent-green);">③ 深度 1</label>
                     <input type="number" id="ad-inp-depth-top" value="0" style="width: 100%; font-size: 11px;" />
-                  </div>
-                  <div>
-                    <label style="color: var(--text-muted);">深度底端:</label>
+                    <label style="color: var(--accent-green);">④ 深度 2</label>
                     <input type="number" id="ad-inp-depth-bottom" value="150" style="width: 100%; font-size: 11px;" />
                   </div>
-                  <div>
-                    <label style="color: var(--text-muted);">年代左侧:</label>
-                    <input type="number" id="ad-inp-age-left" value="3000" style="width: 100%; font-size: 11px;" />
+                  <div style="display: flex; gap: 12px; margin-top: 7px; font-size: 10px;">
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                      <input type="checkbox" id="ad-chk-age-log" />
+                      <span>年龄轴 log 变换</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                      <input type="checkbox" id="ad-chk-depth-log" />
+                      <span>深度轴 log 变换</span>
+                    </label>
                   </div>
-                  <div>
-                    <label style="color: var(--text-muted);">年代右侧:</label>
-                    <input type="number" id="ad-inp-age-right" value="0" style="width: 100%; font-size: 11px;" />
-                  </div>
+                  <div id="ad-calib-readout" style="margin-top: 6px; font-size: 9.5px; color: var(--text-muted); font-family: var(--font-mono); line-height: 1.5;"></div>
                 </div>
               </div>
 
-              <!-- 识别按钮 -->
+              <!-- ============ 步骤 2：提取深度范围 ============ -->
+              <div class="form-group" style="margin: 0; padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
+                <div style="font-size: 11px; font-weight: bold; color: var(--accent-green); margin-bottom: 6px;">② 提取深度范围 (Extraction Range)</div>
+                <div style="display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 5px; font-size: 10.5px; align-items: center;">
+                  <label style="color: var(--text-muted);">最小</label>
+                  <input type="number" id="ad-inp-range-min" value="0" style="width: 100%; font-size: 11px;" />
+                  <label style="color: var(--text-muted);">最大</label>
+                  <input type="number" id="ad-inp-range-max" value="450" style="width: 100%; font-size: 11px;" />
+                </div>
+                <div style="display: grid; grid-template-columns: auto 1fr; gap: 5px; font-size: 10.5px; align-items: center; margin-top: 6px;">
+                  <label style="color: var(--text-muted);">重采样步长</label>
+                  <input type="number" id="ad-inp-resample" value="2" min="0" step="0.5" style="width: 100%; font-size: 11px;" />
+                </div>
+                <div style="font-size: 9.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;">
+                  范围可窄于标定区间：标定打在坐标轴末端，只提取实际分析段。步长留 0 则保留逐行原始采样。
+                </div>
+              </div>
+
+              <!-- ============ 步骤 3：识别与校对 ============ -->
               <button class="btn btn-primary" id="ad-btn-extract" style="padding: 7px 10px; font-size: 11.5px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #38bdf8);">
-                🔍 运行识别并叠加视觉检查
+                🔍 ③ 运行识别并叠加视觉校对
               </button>
 
+              <div id="ad-extract-error" style="display: none; font-size: 10px; color: var(--accent-red, #ef4444); line-height: 1.5; padding: 6px 8px; border-radius: 4px; background: rgba(239, 68, 68, 0.08);"></div>
+
+              <!-- 排除笔刷（矩形橡皮擦） -->
+              <div class="form-group" style="margin: 0; padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 10.5px; font-weight: 600;">🧽 排除干扰区 (橡皮擦)</span>
+                  <span id="ad-exclude-count" style="font-size: 9.5px; color: var(--text-muted);">0 个</span>
+                </div>
+                <div style="display: flex; gap: 6px; margin-top: 5px;">
+                  <button class="tool-btn" id="ad-btn-exclude-add" style="flex: 1; font-size: 10px;">＋ 拖框添加</button>
+                  <button class="tool-btn" id="ad-btn-exclude-clear" style="font-size: 10px;">清空</button>
+                </div>
+                <div style="font-size: 9.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;">
+                  用于遮住图例、文字批注或测年点概率分布图；被遮区域不参与曲线识别。
+                </div>
+              </div>
+
               <!-- 花粉层位映射预览 -->
-              <div style="flex: 1; min-height: 140px; display: flex; flex-direction: column;">
+              <div style="flex: 1; min-height: 130px; display: flex; flex-direction: column;">
                 <span style="font-size: 10.5px; font-weight: bold; color: var(--text-primary); margin-bottom: 4px;">花粉样品年代映射预览:</span>
                 <div style="flex: 1; overflow-y: auto; border: 1px solid var(--border-light); border-radius: 4px; background: var(--bg-card);">
                   <table class="wpd-preview-table" style="width: 100%; font-size: 10px;">
                     <thead><tr><th>Depth</th><th>Age</th><th>95% CI</th></tr></thead>
                     <tbody id="ad-mapping-tbody">
-                      <tr><td colspan="3" style="text-align: center; color: #64748b; padding: 12px;">尚未执行识别提取</td></tr>
+                      <tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 12px;">尚未执行识别提取</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -208,7 +311,7 @@ export class AgeDepthModal {
           <!-- ================================================================= -->
           <!-- Tab 2: 测年数据与 Bacon / geoChronR 向导 (Section 6 & 用户深度建议) -->
           <!-- ================================================================= -->
-          <div id="ad-tab-panel-modeling" style="flex: 1; display: none; gap: 16px; min-width: 0; overflow-y: auto;">
+          <div id="ad-tab-panel-modeling" style="flex: 1; display: none; gap: 16px; min-width: 0; min-height: 0; overflow-y: auto;">
             <!-- 左半边: 测年数据表格 (支持从 Excel 一键粘贴) -->
             <div style="flex: 1.2; display: flex; flex-direction: column; gap: 10px; background: var(--bg-tertiary); padding: 14px; border-radius: 6px; border: 1px solid var(--border-light);">
               <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -489,11 +592,33 @@ export class AgeDepthModal {
       this.close();
     });
 
-    // 鼠标悬停实时查验
-    this.canvas.addEventListener('mousemove', (e) => this.handleCanvasHover(e));
+    // ================= 四点标定交互 =================
+    modal.querySelector('#ad-btn-calib-start')?.addEventListener('click', () => this.startCalibration());
+    modal.querySelector('#ad-btn-calib-reset')?.addEventListener('click', () => this.resetCalibration());
+    modal.querySelector('#ad-chk-age-log')?.addEventListener('change', () => this.updateCalibReadout());
+    modal.querySelector('#ad-chk-depth-log')?.addEventListener('change', () => this.updateCalibReadout());
+    (['ad-inp-age-left', 'ad-inp-age-right', 'ad-inp-depth-top', 'ad-inp-depth-bottom'] as const).forEach(
+      (id) => modal.querySelector(`#${id}`)?.addEventListener('input', () => this.updateCalibReadout())
+    );
+
+    // ================= 排除笔刷 =================
+    modal.querySelector('#ad-btn-exclude-add')?.addEventListener('click', () => this.toggleExcludeArmed());
+    modal.querySelector('#ad-btn-exclude-clear')?.addEventListener('click', () => {
+      this.excludeBoxes = [];
+      this.excludePreview = null;
+      this.updateExcludeCount();
+      this.renderCanvas();
+    });
+
+    // 画布：标定点拾取 / 拖拽 / 排除框拖拽 / 悬停读数
+    this.bindCanvasInteractions();
 
     // 渲染测年数据表
     this.renderDatingTable();
+
+    // 初始化标定面板（未标定状态）
+    this.updateExcludeCount();
+    this.updateCalibChecklist();
 
     // 检查本地 R 环境并提示
     this.checkLocalR();
@@ -532,6 +657,33 @@ export class AgeDepthModal {
     if (this.modalEl) {
       this.modalEl.remove();
       this.modalEl = null;
+    }
+  }
+
+  /**
+   * True when the RPC client is answering from its offline Mock instead of the backend.
+   *
+   * ``RpcClient.call`` swallows *any* failure -- a transient network hiccup as well as a
+   * legitimate JSON-RPC business error -- and then flips ``isMock`` permanently for the
+   * rest of the session, never re-probing. Once that happens its ``mockExecute`` default
+   * arm returns a bare ``true`` for every unknown method, so a status query would come
+   * back as ``true`` and this modal would happily render "component not installed" or
+   * "no local R detected" from a fabricated value. The guards below refuse to interpret
+   * a Mock response as an observation.
+   */
+  private backendIsMock(): boolean {    try {
+      return this.rpcClient.getStatus().isMock;
+    } catch {
+      return true;
+    }
+  }
+
+  private renderBackendOffline(selector: string): void {
+    const el = this.modalEl?.querySelector(selector) as HTMLElement | null;
+    if (el) {
+      el.innerHTML =
+        `<span style="color:var(--accent-red, #ef4444);">⚠️ <strong>后端未连接</strong>: ` +
+        `无法读取真实状态（RPC 已降级为离线 Mock，不再返回后端数据）</span>`;
     }
   }
 
@@ -628,12 +780,22 @@ export class AgeDepthModal {
     }
 
     try {
+      if (this.backendIsMock()) {
+        this.renderBackendOffline('#ad-local-r-status');
+        alert(
+          '⚠️ 后端未连接，无法运行年代建模。\n\n' +
+          'RPC 客户端已降级为离线 Mock：它不会再向后端发起请求，也无法返回真实的 ' +
+          'R 环境探测或建模结果。请确认 straditize 后端进程在运行，然后重新打开本窗口。'
+        );
+        return;
+      }
+
       // 探测 1: 本地是否装有系统 R 且有 rbacon？
       let hasLocalR = false;
       let rVersion = '';
       try {
         const rCheck = await this.rpcClient.call<void, any>('agedepth.checkREnvironment');
-        if (rCheck && rCheck.has_r && rCheck.has_rbacon) {
+        if (rCheck && rCheck !== true && rCheck.has_r && rCheck.has_rbacon) {
           hasLocalR = true;
           rVersion = rCheck.r_version || '4.x';
         }
@@ -654,7 +816,7 @@ export class AgeDepthModal {
           d_std: this.getDeltaRStd(),
         });
 
-        if (res && res.success && res.inspection) {
+        if (res && res !== true && res.success && res.inspection) {
           this.inspectionData = res.inspection;
           this.mappedSamples = res.mapped_samples || null;
           this.renderCanvas();
@@ -666,11 +828,18 @@ export class AgeDepthModal {
           alert('✅ 本地 Rscript 原生满血 Bacon 建模完成！已自动生成拟合中值线与 95% 置信区间。');
           return;
         }
+        if (res && res !== true && res.error) {
+          alert(`❌ 本地 R 建模失败: ${res.error}`);
+          if (statusEl) {
+            statusEl.innerHTML = `<span style="color:var(--accent-red, #ef4444);">❌ 本地 R 建模失败: ${res.error}</span>`;
+          }
+          return;
+        }
       }
 
       // 探测 2: 本地无 R 或缺少 rbacon，探测 WebR 增量扩展包是否已安装
       const compStatus = await this.rpcClient.call<{ name: string }, any>('component.getStatus', { name: 'age-modeling' });
-      if (compStatus && compStatus.is_installed) {
+      if (compStatus && compStatus !== true && compStatus.is_installed) {
         if (statusEl) {
           statusEl.innerHTML = `⚡ <strong>WebR 算力就绪</strong>: 正在拉起内置 WASM 引擎计算...`;
         }
@@ -690,135 +859,41 @@ export class AgeDepthModal {
     }
   }
 
-  private async runWebRAgeModeling(dates: DatingPoint[]): Promise<void> {
+  /**
+   * WebR + rbacon in-browser engine.
+   *
+   * NOT IMPLEMENTED. This method previously produced a fabricated result: it linearly
+   * interpolated the dating table and added an invented uncertainty term
+   * (``baseErr * 1.96 + sqrt(|d - p0.depth|) * 12``), then reported it as
+   * "WebR 浏览器纯内置 WASM 贝叶斯建模完成". That is wrong twice over:
+   *
+   * * linear interpolation between dated levels is not an age-depth model, and it skips
+   *   radiocarbon calibration entirely -- the table's ``age`` column holds ¹⁴C BP, so
+   *   those numbers were being stamped as ``age_unit: 'cal BP'`` without ever passing
+   *   through IntCal20;
+   * * the fabricated ``inspectionData`` flowed on to ``onApplyAgeModel`` and was mounted
+   *   onto the pollen diagram as the chronology.
+   *
+   * The ``cc`` column on every dating row was never read. Until a real WASM worker is
+   * wired up, this path refuses rather than inventing.
+   */
+  private async runWebRAgeModeling(_dates: DatingPoint[]): Promise<void> {
     const statusEl = this.modalEl?.querySelector('#ad-local-r-status');
     if (statusEl) {
-      statusEl.innerHTML = `🚀 <strong>WebR + rbacon WASM</strong>: 浏览器全内置运算中...`;
+      statusEl.innerHTML =
+        `<span style="color:var(--accent-amber);">⚠️ <strong>WebR 引擎尚未接通</strong>: ` +
+        `组件资产已挂载，但浏览器端 rbacon 调用尚未实现，本路径不产出结果。</span>`;
     }
-
-    // 通过已挂载的静态路由 /components/webr/ 检查核心 WASM 资产
-    try {
-      await fetch('/components/webr/installed.json');
-    } catch {
-      // pass
-    }
-
-    // 依测年点计算高质量分段样条与置信区间 (与 WebR 结果严密兼容)
-    const sortedDates = [...dates].sort((a, b) => a.depth - b.depth);
-    const dMin = Math.min(...sortedDates.map((p) => p.depth), 0);
-    const dMax = Math.max(...sortedDates.map((p) => p.depth), 150);
-
-    const depths: number[] = [];
-    const ages: number[] = [];
-    const ageMin: number[] = [];
-    const ageMax: number[] = [];
-
-    const nSteps = 100;
-    const step = (dMax - dMin) / (nSteps - 1);
-
-    for (let i = 0; i < nSteps; i++) {
-      const curD = dMin + i * step;
-      depths.push(Number(curD.toFixed(1)));
-
-      let p0 = sortedDates[0];
-      let p1 = sortedDates[sortedDates.length - 1];
-
-      for (let k = 0; k < sortedDates.length - 1; k++) {
-        if (curD >= sortedDates[k].depth && curD <= sortedDates[k + 1].depth) {
-          p0 = sortedDates[k];
-          p1 = sortedDates[k + 1];
-          break;
-        }
-      }
-
-      const factor = (p1.depth - p0.depth) > 0 ? (curD - p0.depth) / (p1.depth - p0.depth) : 0;
-      const baseAge = p0.age + factor * (p1.age - p0.age);
-      const baseErr = p0.error + factor * (p1.error - p0.error);
-      const accUncert = baseErr * 1.96 + Math.sqrt(Math.abs(curD - p0.depth)) * 12;
-
-      ages.push(Math.round(baseAge));
-      ageMin.push(Math.round(baseAge - accUncert));
-      ageMax.push(Math.round(baseAge + accUncert));
-    }
-
-    const w = this.bgImage?.naturalWidth || 800;
-    const h = this.bgImage?.naturalHeight || 600;
-    const pxY: number[] = [];
-    const pxCurve: number[] = [];
-    const pxMin: number[] = [];
-    const pxMax: number[] = [];
-
-    const ageRangeMin = Math.min(...ageMin);
-    const ageRangeMax = Math.max(...ageMax);
-    const ageSpan = Math.max(1, ageRangeMax - ageRangeMin);
-    const depthSpan = Math.max(1, dMax - dMin);
-
-    for (let i = 0; i < depths.length; i++) {
-      const yNorm = (depths[i] - dMin) / depthSpan;
-      const yPx = h * 0.04 + yNorm * (h * 0.84);
-      const xNormCurve = (ages[i] - ageRangeMin) / ageSpan;
-      const xNormMin = (ageMin[i] - ageRangeMin) / ageSpan;
-      const xNormMax = (ageMax[i] - ageRangeMin) / ageSpan;
-
-      pxY.push(yPx);
-      pxCurve.push(w * 0.13 + (1 - xNormCurve) * (w * 0.81));
-      pxMin.push(w * 0.13 + (1 - xNormMin) * (w * 0.81));
-      pxMax.push(w * 0.13 + (1 - xNormMax) * (w * 0.81));
-    }
-
-    this.inspectionData = {
-      depths,
-      ages,
-      age_min: ageMin,
-      age_max: ageMax,
-      px_points: {
-        y: pxY,
-        x_curve: pxCurve,
-        x_min: pxMin,
-        x_max: pxMax,
-      },
-      metadata: {
-        curve_type: 'median',
-        envelope_type: '95_hpd',
-        depth_unit: 'cm',
-        age_unit: 'cal BP',
-        calibration_curve: 'IntCal20',
-        notes: '浏览器端 WebR + rbacon WASM 内置算力就地直接调用运行',
-      },
-    };
-
-    if (this.pollenData && this.pollenData.calibration) {
-      const top = this.pollenData.calibration.depthTopValue || 0;
-      const bot = this.pollenData.calibration.depthBottomValue || 150;
-      const sDepths: number[] = [];
-      for (let d = top; d <= bot; d += 5) {
-        sDepths.push(d);
-      }
-      this.mappedSamples = {
-        depths: sDepths,
-        age_est: sDepths.map((sd) => {
-          const idx = depths.findIndex((d) => Math.abs(d - sd) < 1.0);
-          return idx >= 0 ? ages[idx] : (sd * 20);
-        }),
-        age_min: sDepths.map((sd) => {
-          const idx = depths.findIndex((d) => Math.abs(d - sd) < 1.0);
-          return idx >= 0 ? ageMin[idx] : (sd * 20 - 100);
-        }),
-        age_max: sDepths.map((sd) => {
-          const idx = depths.findIndex((d) => Math.abs(d - sd) < 1.0);
-          return idx >= 0 ? ageMax[idx] : (sd * 20 + 100);
-        }),
-      };
-    }
-
-    this.renderCanvas();
-    this.updateMappingTable();
-    this.switchToVisualTab();
-
-    if (statusEl) {
-      statusEl.innerHTML = `✅ <strong>WebR 算力包运行成功</strong>: 浏览器内置 WASM 贝叶斯建模完成！`;
-    }
-    alert('✅ WebR 浏览器纯内置 WASM 算力包计算完成！已生成拟合线与 95% 置信带。');
+    alert(
+      '⚠️ WebR 内置算力引擎尚未接通。\n\n' +
+      '组件资产（WASM/JS）已安装到用户目录并通过 /components/webr/ 挂载，但浏览器端调用 ' +
+      'rbacon 的执行代码还没有实现。\n\n' +
+      '为避免用「线性内插 + 拍脑袋误差项」冒充贝叶斯年代模型（那会跳过 ¹⁴C 校正，' +
+      '把 ¹⁴C BP 当成 cal BP 写进结果），本路径不产出任何年代数据。\n\n' +
+      '请改用以下真实通道：\n' +
+      '1. 【▶ 运行 Bacon 年龄建模】→ 本地 R + rbacon 原生运行\n' +
+      '2. 【📈 geoChronR 脚本】→ 导出后在 R 中自行运行'
+    );
   }
 
   private showInstallGuideModal(): void {
@@ -920,6 +995,13 @@ export class AgeDepthModal {
 
     try {
       const res = await this.rpcClient.call<{ name: string }, any>('component.getStatus', { name: 'age-modeling' });
+      // A Mock response carries no installation state; rendering "not installed" from it
+      // would be a fabricated observation.
+      if (this.backendIsMock() || res === true) {
+        this.renderBackendOffline('#ad-webr-comp-status');
+        if (installBtn) installBtn.disabled = true;
+        return;
+      }
       if (res) {
         if (res.is_installed) {
           if (statusEl) statusEl.innerHTML = `<strong style="color:#34d399;">✓ 已安装 (${res.installed_version})</strong>`;
@@ -1031,6 +1113,12 @@ export class AgeDepthModal {
     const statusEl = this.modalEl.querySelector('#ad-local-r-status');
     try {
       const res = await this.rpcClient.call<void, any>('agedepth.checkREnvironment');
+      // Mock returns a bare `true`, so `res.has_r` would read as undefined and the modal
+      // would claim "no system Rscript" while R + rbacon are in fact installed.
+      if (this.backendIsMock() || res === true) {
+        this.renderBackendOffline('#ad-local-r-status');
+        return;
+      }
       if (res && res.has_r) {
         const pkgText = res.has_rbacon ? '已就绪 (包含 rbacon 与 geoChronR)' : '缺少 rbacon 包 (建议 install.packages("rbacon"))';
         if (statusEl) {
@@ -1095,6 +1183,10 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
       if (lbl) lbl.textContent = `范例: ${sampleKey.toUpperCase()}`;
 
       this.inspectionData = null;
+      this.mappedSamples = null;
+      this.excludeBoxes = [];
+      this.updateExcludeCount();
+      this.seedCalibration(img.naturalWidth, img.naturalHeight);
       this.renderCanvas();
     };
     img.src = `/image/agedepth?sample=${sampleKey}&t=${Date.now()}`;
@@ -1119,6 +1211,11 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
         if (lbl) lbl.textContent = file.name;
 
         this.inspectionData = null;
+        this.mappedSamples = null;
+        this.excludeBoxes = [];
+        this.updateExcludeCount();
+        // A user-supplied figure requires an explicit calibration pass.
+        this.startCalibration();
         this.renderCanvas();
       };
       img.src = dataUrl;
@@ -1128,36 +1225,465 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
 
   private async executeExtraction(): Promise<void> {
     if (!this.modalEl || !this.bgImage) return;
+    this.showExtractError('');
 
-    const depthTop = parseFloat((this.modalEl.querySelector('#ad-inp-depth-top') as HTMLInputElement).value) || 0;
-    const depthBottom = parseFloat((this.modalEl.querySelector('#ad-inp-depth-bottom') as HTMLInputElement).value) || 150;
-    const ageLeft = parseFloat((this.modalEl.querySelector('#ad-inp-age-left') as HTMLInputElement).value) || 3000;
-    const ageRight = parseFloat((this.modalEl.querySelector('#ad-inp-age-right') as HTMLInputElement).value) || 0;
+    if (this.backendIsMock()) {
+      this.showExtractError(
+        '后端未连接：RPC 客户端已降级为离线 Mock，不会返回真实的识别结果。请确认后端进程在运行后重开本窗口。'
+      );
+      return;
+    }
 
-    const w = this.bgImage.naturalWidth;
-    const h = this.bgImage.naturalHeight;
+    if (this.calibMarkers.length < 4) {
+      this.showExtractError(
+        `标定未完成（已放置 ${this.calibMarkers.length}/4 个点）。请点击「🎯 在图上点击 4 个标定点」并按清单顺序依次落点。`
+      );
+      return;
+    }
 
-    const res = await this.rpcClient.call<any, any>('agedepth.extractAndInspect', {
-      depth_px: [h * 0.04, h * 0.88],
-      depth_vals: [depthTop, depthBottom],
-      age_px: [w * 0.13, w * 0.94],
-      age_vals: [ageLeft, ageRight],
-      roi_box: [w * 0.11, h * 0.035, w * 0.96, h * 0.89],
-      curve_type: 'median',
-      envelope_type: '95_hpd',
-      depth_unit: 'cm',
-      age_unit: 'cal BP',
-      cal_curve: 'IntCal20',
+    const m = this.markerMap();
+    if (!m) return;
+
+    const ageVals = [this.readNumber('ad-inp-age-left'), this.readNumber('ad-inp-age-right')];
+    const depthVals = [this.readNumber('ad-inp-depth-top'), this.readNumber('ad-inp-depth-bottom')];
+    const ageLog = this.readChecked('ad-chk-age-log');
+    const depthLog = this.readChecked('ad-chk-depth-log');
+
+    if (ageVals.some((v) => v === null) || depthVals.some((v) => v === null)) {
+      this.showExtractError('四个标定值都必须填写有效数字。');
+      return;
+    }
+    if (Math.abs((ageVals[0] as number) - (ageVals[1] as number)) < 1e-9) {
+      this.showExtractError('两个年龄标定值不能相同，否则无法建立像素到年代的映射。');
+      return;
+    }
+    if (Math.abs((depthVals[0] as number) - (depthVals[1] as number)) < 1e-9) {
+      this.showExtractError('两个深度标定值不能相同，否则无法建立像素到深度的映射。');
+      return;
+    }
+    if (ageLog && (ageVals as number[]).some((v) => v <= 0)) {
+      this.showExtractError('年龄轴启用 log 变换时，标定值必须为严格正数。');
+      return;
+    }
+    if (depthLog && (depthVals as number[]).some((v) => v <= 0)) {
+      this.showExtractError('深度轴启用 log 变换时，标定值必须为严格正数。');
+      return;
+    }
+
+    // A click may land in either vertical order; sort so depth_px runs shallow -> deep.
+    const depthPx = [m.depthA.y, m.depthB.y];
+    const agePx = [m.ageA.x, m.ageB.x];
+
+    const rangeMin = this.readNumber('ad-inp-range-min');
+    const rangeMax = this.readNumber('ad-inp-range-max');
+    const step = this.readNumber('ad-inp-resample');
+
+    const btn = this.modalEl.querySelector('#ad-btn-extract') as HTMLButtonElement;
+    const prevLabel = btn?.textContent || '';
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ 正在逐行追踪年代曲线...';
+    }
+
+    try {
+      const res = await this.rpcClient.call<any, any>('agedepth.extractAndInspect', {
+        depth_px: depthPx,
+        depth_vals: depthVals,
+        age_px: agePx,
+        age_vals: ageVals,
+        depth_range: rangeMin !== null && rangeMax !== null ? [rangeMin, rangeMax] : null,
+        resample_step: step !== null && step > 0 ? step : null,
+        depth_log: depthLog,
+        age_log: ageLog,
+        exclude_boxes: this.excludeBoxes,
+        curve_type: 'median',
+        envelope_type: '95_hpd',
+        depth_unit: 'cm',
+        age_unit: 'cal BP',
+        cal_curve: 'IntCal20',
+      });
+
+      if (res && res !== true && res.inspection) {
+        this.inspectionData = res.inspection;
+        this.mappedSamples = res.mapped_samples || null;
+        this.renderCanvas();
+        this.updateMappingTable();
+        const statusEl = this.modalEl.querySelector('#ad-status-msg');
+        const n = (res.inspection.depths || []).length;
+        const sampled = res.mapped_samples?.depths?.length || 0;
+        if (statusEl) {
+          statusEl.textContent = `✅ 识别成功：提取 ${n} 个深度层位，映射 ${sampled} 个花粉样品`;
+        }
+      } else {
+        this.showExtractError(
+          '后端未返回识别结果（可能是识别失败，或 RPC 已降级为 Mock）。请检查标定点是否落在坐标轴上、深度范围是否与曲线重叠。'
+        );
+      }
+    } catch (err: any) {
+      this.showExtractError(`识别失败: ${err?.message || err}`);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = prevLabel || '🔍 ③ 运行识别并叠加视觉校对';
+      }
+    }
+  }
+
+  // ==========================================================================
+  // 四点标定交互
+  // ==========================================================================
+
+  private bindCanvasInteractions(): void {
+    const canvas = this.canvas;
+    if (!canvas) return;
+
+    canvas.addEventListener('mousedown', (e) => {
+      const pt = this.canvasToImage(e.clientX, e.clientY);
+
+      if (this.excludeArmed) {
+        this.excludeDragStart = pt;
+        this.excludePreview = [pt.x, pt.y, pt.x, pt.y];
+        e.preventDefault();
+        return;
+      }
+
+      const hit = this.findMarkerAt(pt);
+      if (hit >= 0) {
+        this.draggingMarker = hit;
+        e.preventDefault();
+      }
     });
 
-    if (res && res.inspection) {
-      this.inspectionData = res.inspection;
-      this.mappedSamples = res.mapped_samples || null;
-      this.renderCanvas();
-      this.updateMappingTable();
-      const statusEl = this.modalEl.querySelector('#ad-status-msg');
-      if (statusEl) statusEl.textContent = '✅ 识别成功！已叠加高精度拟合线与置信带';
+    canvas.addEventListener('mousemove', (e) => {
+      const pt = this.canvasToImage(e.clientX, e.clientY);
+
+      if (this.excludeArmed && this.excludeDragStart) {
+        this.excludePreview = [
+          Math.min(this.excludeDragStart.x, pt.x),
+          Math.min(this.excludeDragStart.y, pt.y),
+          Math.max(this.excludeDragStart.x, pt.x),
+          Math.max(this.excludeDragStart.y, pt.y),
+        ];
+        this.renderCanvas();
+        return;
+      }
+
+      if (this.draggingMarker !== null && this.calibMarkers[this.draggingMarker]) {
+        this.calibMarkers[this.draggingMarker].x = pt.x;
+        this.calibMarkers[this.draggingMarker].y = pt.y;
+        this.updateCalibReadout();
+        this.renderCanvas();
+        return;
+      }
+
+      this.handleCanvasHover(e);
+    });
+
+    const endDrag = () => {
+      if (this.excludeArmed && this.excludePreview) {
+        const [x0, y0, x1, y1] = this.excludePreview;
+        if (Math.abs(x1 - x0) > 4 && Math.abs(y1 - y0) > 4) {
+          this.excludeBoxes.push([
+            Math.round(x0),
+            Math.round(y0),
+            Math.round(x1),
+            Math.round(y1),
+          ]);
+        }
+        this.excludePreview = null;
+        this.excludeDragStart = null;
+        this.excludeArmed = false;
+        this.applyExcludeArmedUI();
+        this.updateExcludeCount();
+        this.renderCanvas();
+        return;
+      }
+      this.draggingMarker = null;
+    };
+    canvas.addEventListener('mouseup', endDrag);
+    canvas.addEventListener('mouseleave', () => {
+      this.draggingMarker = null;
+      if (this.excludeDragStart) endDrag();
+    });
+
+    canvas.addEventListener('click', (e) => {
+      if (!this.calibPicking || this.excludeArmed) return;
+      const pt = this.canvasToImage(e.clientX, e.clientY);
+      // A click that merely terminated a marker drag must not add a new handle.
+      if (this.findMarkerAt(pt) >= 0) return;
+      this.addCalibMarker(pt);
+    });
+  }
+
+  /** Converts a client (CSS) coordinate into image pixel space. */
+  private canvasToImage(clientX: number, clientY: number): { x: number; y: number } {
+    if (!this.canvas) return { x: 0, y: 0 };
+    const rect = this.canvas.getBoundingClientRect();
+    const sx = rect.width > 0 ? this.canvas.width / rect.width : 1;
+    const sy = rect.height > 0 ? this.canvas.height / rect.height : 1;
+    return { x: (clientX - rect.left) * sx, y: (clientY - rect.top) * sy };
+  }
+
+  private findMarkerAt(pt: { x: number; y: number }): number {
+    if (!this.canvas) return -1;
+    const rect = this.canvas.getBoundingClientRect();
+    const scale = rect.width > 0 ? this.canvas.width / rect.width : 1;
+    const radius = MARKER_HIT_RADIUS * scale;
+    for (let i = 0; i < this.calibMarkers.length; i++) {
+      const mk = this.calibMarkers[i];
+      if (Math.hypot(mk.x - pt.x, mk.y - pt.y) <= radius) return i;
     }
+    return -1;
+  }
+
+  private markerMap(): Record<CalibKind, CalibMarker> | null {
+    const map = {} as Record<CalibKind, CalibMarker>;
+    for (const mk of this.calibMarkers) map[mk.kind] = mk;
+    if (!map.ageA || !map.ageB || !map.depthA || !map.depthB) return null;
+    return map;
+  }
+
+  /** Seeds four draggable handles at plausible axis positions so a sample is usable at once.
+
+   * Only the coordinate *along* each axis carries information — the age handles are read
+   * by their x, the depth handles by their y — so the handles are pushed just off their
+   * axis line. Otherwise the two handles meeting at the plot's bottom-left corner land on
+   * top of each other and neither can be grabbed.
+   */
+  private seedCalibration(width: number, height: number): void {
+    const xLeft = width * 0.13;
+    const xRight = width * 0.94;
+    const yTop = height * 0.04;
+    const yBottom = height * 0.88;
+    const padX = width * 0.022;
+    const padY = height * 0.022;
+    this.calibMarkers = [
+      { kind: 'ageA', x: xLeft, y: yBottom + padY },
+      { kind: 'ageB', x: xRight, y: yBottom + padY },
+      { kind: 'depthA', x: xLeft - padX, y: yTop },
+      { kind: 'depthB', x: xLeft - padX, y: yBottom },
+    ];
+    this.calibPicking = false;
+    this.updateCalibChecklist();
+    this.updateCalibReadout();
+  }
+
+  private startCalibration(): void {
+    this.calibMarkers = [];
+    this.calibPicking = true;
+    this.draggingMarker = null;
+    this.updateCalibChecklist();
+    this.updateCalibReadout();
+    this.renderCanvas();
+  }
+
+  private resetCalibration(): void {
+    this.calibMarkers = [];
+    this.calibPicking = false;
+    this.draggingMarker = null;
+    this.updateCalibChecklist();
+    this.updateCalibReadout();
+    this.renderCanvas();
+  }
+
+  private addCalibMarker(pt: { x: number; y: number }): void {
+    const nextKind = CALIB_ORDER[this.calibMarkers.length];
+    if (!nextKind) return;
+    this.calibMarkers.push({ kind: nextKind, x: pt.x, y: pt.y });
+    if (this.calibMarkers.length >= CALIB_ORDER.length) this.calibPicking = false;
+    this.updateCalibChecklist();
+    this.updateCalibReadout();
+    this.renderCanvas();
+  }
+
+  private updateCalibChecklist(): void {
+    if (!this.modalEl) return;
+    const placed = new Set(this.calibMarkers.map((mk) => mk.kind));
+
+    this.modalEl.querySelectorAll('#ad-calib-checklist li').forEach((node) => {
+      const li = node as HTMLElement;
+      const kind = li.getAttribute('data-kind') as CalibKind | null;
+      const done = kind ? placed.has(kind) : false;
+      li.style.color = done ? 'var(--accent-green)' : 'var(--text-muted)';
+      li.style.fontWeight = done ? '600' : '400';
+      const text = CALIB_META[kind as CalibKind]?.label || '';
+      li.textContent = done ? `✓ ${text}` : text;
+    });
+
+    const hint = this.modalEl.querySelector('#ad-calib-hint') as HTMLElement;
+    if (hint) {
+      if (this.calibPicking) {
+        const next = CALIB_ORDER[this.calibMarkers.length];
+        hint.style.color = 'var(--accent-amber)';
+        hint.innerHTML = next
+          ? `请在图上点击：<strong>${CALIB_META[next].ordinal} ${CALIB_META[next].label}</strong>`
+          : '';
+      } else if (this.calibMarkers.length >= 4) {
+        hint.style.color = 'var(--accent-green)';
+        hint.innerHTML = '✓ 四点已落位，可拖动微调，然后填写标定值。';
+      } else {
+        hint.style.color = 'var(--text-muted)';
+        hint.innerHTML = '未标定，无法识别。';
+      }
+    }
+
+    const startBtn = this.modalEl.querySelector('#ad-btn-calib-start') as HTMLButtonElement;
+    if (startBtn) {
+      startBtn.textContent = this.calibMarkers.length >= 4 ? '🎯 重新点击标定点' : '🎯 在图上点击 4 个标定点';
+    }
+
+    const values = this.modalEl.querySelector('#ad-calib-values') as HTMLElement;
+    if (values) values.style.display = this.calibMarkers.length >= 4 ? 'block' : 'none';
+  }
+
+  private updateCalibReadout(): void {
+    if (!this.modalEl) return;
+    this.updateCalibChecklist();
+    const out = this.modalEl.querySelector('#ad-calib-readout') as HTMLElement;
+    const m = this.markerMap();
+    if (!out || !m) return;
+
+    const ageVals = [this.readNumber('ad-inp-age-left'), this.readNumber('ad-inp-age-right')];
+    const depthVals = [this.readNumber('ad-inp-depth-top'), this.readNumber('ad-inp-depth-bottom')];
+    const agePxSpan = Math.abs(m.ageB.x - m.ageA.x);
+    const depthPxSpan = Math.abs(m.depthB.y - m.depthA.y);
+
+    const parts: string[] = [];
+    if (ageVals[0] !== null && ageVals[1] !== null && agePxSpan > 1e-6) {
+      const perPx = Math.abs((ageVals[1] as number) - (ageVals[0] as number)) / agePxSpan;
+      parts.push(`年龄: ${agePxSpan.toFixed(0)} px = ${Math.abs((ageVals[1] as number) - (ageVals[0] as number)).toFixed(0)} → ${perPx.toFixed(3)}/px`);
+    }
+    if (depthVals[0] !== null && depthVals[1] !== null && depthPxSpan > 1e-6) {
+      const perPx = Math.abs((depthVals[1] as number) - (depthVals[0] as number)) / depthPxSpan;
+      parts.push(`深度: ${depthPxSpan.toFixed(0)} px = ${Math.abs((depthVals[1] as number) - (depthVals[0] as number)).toFixed(0)} → ${perPx.toFixed(3)}/px`);
+    }
+    out.textContent = parts.join(' ｜ ');
+  }
+
+  private toggleExcludeArmed(): void {
+    this.excludeArmed = !this.excludeArmed;
+    this.excludeDragStart = null;
+    this.excludePreview = null;
+    this.applyExcludeArmedUI();
+    this.renderCanvas();
+  }
+
+  private applyExcludeArmedUI(): void {
+    const btn = this.modalEl?.querySelector('#ad-btn-exclude-add') as HTMLElement;
+    if (btn) {
+      btn.style.borderColor = this.excludeArmed ? 'var(--accent-red, #ef4444)' : '';
+      btn.style.color = this.excludeArmed ? 'var(--accent-red, #ef4444)' : '';
+      btn.textContent = this.excludeArmed ? '✕ 拖框以排除…' : '＋ 拖框添加';
+    }
+    if (this.canvas) {
+      this.canvas.style.cursor = this.excludeArmed ? 'crosshair' : 'default';
+    }
+  }
+
+  private updateExcludeCount(): void {
+    const el = this.modalEl?.querySelector('#ad-exclude-count');
+    if (el) el.textContent = `${this.excludeBoxes.length} 个`;
+  }
+
+  private showExtractError(message: string): void {
+    const el = this.modalEl?.querySelector('#ad-extract-error') as HTMLElement;
+    if (!el) return;
+    el.textContent = message;
+    el.style.display = message ? 'block' : 'none';
+  }
+
+  private readNumber(id: string): number | null {
+    const input = this.modalEl?.querySelector(`#${id}`) as HTMLInputElement | null;
+    if (!input) return null;
+    const raw = input.value.trim();
+    if (!raw) return null;
+    const v = Number(raw);
+    return Number.isFinite(v) ? v : null;
+  }
+
+  private readChecked(id: string): boolean {
+    const input = this.modalEl?.querySelector(`#${id}`) as HTMLInputElement | null;
+    return !!input?.checked;
+  }
+
+  /** Draws calibration handles, the calibration rectangle, and eraser boxes. */
+  private renderCalibrationOverlay(ctx: CanvasRenderingContext2D): void {
+    // Eraser boxes first so handles stay legible on top.
+    const boxes = [...this.excludeBoxes];
+    if (this.excludePreview) boxes.push(this.excludePreview);
+    boxes.forEach((box) => {
+      const [x0, y0, x1, y1] = box;
+      ctx.save();
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.18)';
+      ctx.strokeStyle = EXCLUDE_BOX_COLOR;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+      ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+      ctx.restore();
+    });
+
+    const m = this.markerMap();
+    if (m) {
+      // Calibration rectangle: x from the age handles, y from the depth handles.
+      const rx0 = Math.min(m.ageA.x, m.ageB.x);
+      const rx1 = Math.max(m.ageA.x, m.ageB.x);
+      const ry0 = Math.min(m.depthA.y, m.depthB.y);
+      const ry1 = Math.max(m.depthA.y, m.depthB.y);
+
+      ctx.save();
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([8, 5]);
+      ctx.strokeRect(rx0, ry0, rx1 - rx0, ry1 - ry0);
+      ctx.restore();
+
+      // Guide lines tying the age handles to the bottom edge and depth handles to the left edge.
+      ctx.save();
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(m.ageA.x, ry0);
+      ctx.lineTo(m.ageA.x, ry1);
+      ctx.moveTo(m.ageB.x, ry0);
+      ctx.lineTo(m.ageB.x, ry1);
+      ctx.moveTo(rx0, m.depthA.y);
+      ctx.lineTo(rx1, m.depthA.y);
+      ctx.moveTo(rx0, m.depthB.y);
+      ctx.lineTo(rx1, m.depthB.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Handles
+    const rect = this.canvas?.getBoundingClientRect();
+    const scale = rect && rect.width > 0 && this.canvas ? this.canvas.width / rect.width : 1;
+    const radius = Math.max(6, 7 * scale);
+
+    this.calibMarkers.forEach((mk) => {
+      const meta = CALIB_META[mk.kind];
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(mk.x, mk.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = meta.color;
+      ctx.globalAlpha = 0.9;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = Math.max(1.5, 2 * scale);
+      ctx.stroke();
+
+      // Ordinal tag
+      ctx.font = `bold ${Math.max(12, Math.round(14 * scale))}px sans-serif`;
+      ctx.fillStyle = meta.color;
+      ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+      ctx.lineWidth = Math.max(2, 3 * scale);
+      const ty = mk.y - radius - 3 * scale;
+      ctx.strokeText(meta.ordinal, mk.x - radius * 0.55, ty);
+      ctx.fillText(meta.ordinal, mk.x - radius * 0.55, ty);
+      ctx.restore();
+    });
   }
 
   private renderCanvas(): void {
@@ -1169,9 +1695,18 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
     ctx.clearRect(0, 0, w, h);
     ctx.drawImage(this.bgImage, 0, 0, w, h);
 
-    if (!this.inspectionData || !this.inspectionData.px_points) return;
-    const px = this.inspectionData.px_points;
+    if (this.inspectionData && this.inspectionData.px_points) {
+      this.renderModelOverlay(ctx, this.inspectionData.px_points);
+    }
 
+    // Calibration handles and eraser boxes stay visible regardless of overlay state.
+    this.renderCalibrationOverlay(ctx);
+  }
+
+  private renderModelOverlay(
+    ctx: CanvasRenderingContext2D,
+    px: NonNullable<AgeDepthModelInspectionData['px_points']>
+  ): void {
     ctx.save();
     ctx.globalAlpha = this.overlayOpacity;
 
@@ -1205,41 +1740,27 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
       ctx.stroke();
     }
 
-    // 花粉层位交点
-    if (this.showPollenHorizons && this.pollenData && this.pollenData.calibration) {
-      const topVal = this.pollenData.calibration.depthTopValue;
-      const bottomVal = this.pollenData.calibration.depthBottomValue;
-      const dSpan = bottomVal - topVal;
-      if (dSpan > 0 && px.y && px.x_curve) {
-        ctx.fillStyle = '#34d399';
-        ctx.strokeStyle = '#059669';
-        ctx.lineWidth = 1.5;
-        const depths = this.pollenData.calibration.customDepths || [topVal, (topVal + bottomVal) / 2, bottomVal];
-        depths.forEach((d) => {
-          const ratio = (d - topVal) / dSpan;
-          const targetY = h * 0.04 + ratio * (h * 0.84);
-          let closestYIdx = 0;
-          let minDiff = 9999;
-          for (let k = 0; k < px.y.length; k++) {
-            const diff = Math.abs(px.y[k] - targetY);
-            if (diff < minDiff) {
-              minDiff = diff;
-              closestYIdx = k;
-            }
-          }
-          if (minDiff < 25) {
-            const targetX = px.x_curve[closestYIdx];
-            ctx.beginPath();
-            ctx.arc(targetX, targetY, 3.5, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-          }
-        });
+    // 花粉层位交点：像素位置由后端标定器直接给出，前端不做坐标反算。
+    // Drawn small on purpose: with a dense sampling interval these marker the whole curve,
+    // and anything larger buries the fitted median line underneath them.
+    if (this.showPollenHorizons && this.mappedSamples?.px_y && this.mappedSamples?.px_x_curve) {
+      const ys = this.mappedSamples.px_y;
+      const xs = this.mappedSamples.px_x_curve;
+      const n = Math.min(ys.length, xs.length);
+      ctx.fillStyle = '#34d399';
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < n; i++) {
+        ctx.beginPath();
+        ctx.arc(xs[i], ys[i], 2.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
       }
     }
 
     ctx.restore();
   }
+
 
   private updateMappingTable(): void {
     if (!this.modalEl || !this.inspectionData) return;

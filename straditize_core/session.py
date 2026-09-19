@@ -1851,8 +1851,19 @@ class StraditizeSession:
         age_unit: str = "cal BP",
         cal_curve: str = "IntCal20",
         notes: str = "",
+        depth_range: list[float] | tuple[float, float] | None = None,
+        resample_step: float | None = None,
+        depth_log: bool = False,
+        age_log: bool = False,
+        exclude_boxes: list[list[float]] | None = None,
     ) -> dict[str, Any]:
-        """Extracts age-depth curves and 95% confidence envelope with visual inspection data."""
+        """Extracts age-depth curves and the 95% confidence envelope with inspection data.
+
+        The four calibration points (``age_px`` / ``age_vals`` and ``depth_px`` /
+        ``depth_vals``) define the pixel-to-unit mapping. ``depth_range`` is deliberately
+        independent of that mapping so a user may calibrate against the full axis while
+        extracting only the analysed section.
+        """
         if self.age_depth_image is None:
             # Fallback to sample if none loaded
             self.load_age_depth_diagram(sample_key="bacon")
@@ -1864,7 +1875,22 @@ class StraditizeSession:
             age_vals=age_vals,
             depth_unit=depth_unit,
             age_unit=age_unit,
+            depth_log=depth_log,
+            age_log=age_log,
         )
+
+        # Rectangular eraser regions supplied by the UI, rasterised into a boolean mask.
+        exclude_mask = None
+        if exclude_boxes:
+            img_w, img_h = self.age_depth_image.size
+            exclude_mask = np.zeros((img_h, img_w), dtype=bool)
+            for box in exclude_boxes:
+                if len(box) != 4:
+                    continue
+                bx0, by0, bx1, by1 = (int(round(v)) for v in box)
+                lo_x, hi_x = sorted((max(0, min(img_w, bx0)), max(0, min(img_w, bx1))))
+                lo_y, hi_y = sorted((max(0, min(img_h, by0)), max(0, min(img_h, by1))))
+                exclude_mask[lo_y:hi_y, lo_x:hi_x] = True
 
         model = extract_age_depth_model(
             self.age_depth_image,
@@ -1874,6 +1900,9 @@ class StraditizeSession:
             envelope_type=envelope_type,
             cal_curve=cal_curve,
             notes=notes,
+            depth_range=depth_range,
+            resample_step=resample_step,
+            exclude_mask=exclude_mask,
         )
         self.age_depth_model = model
 
@@ -1909,6 +1938,18 @@ class StraditizeSession:
                 "columns_count": len(ensemble_table["columns"]),
                 "rows_count": len(ensemble_table["data"]),
             }
+
+        # Attach pixel positions for the mapped horizons. The calibrator lives here, so
+        # the frontend never has to re-implement the pixel <-> unit transform (which
+        # would also have to reproduce the log-axis option).
+        if mapped_samples and mapped_samples.get("depths"):
+            calib_year_ages = mapped_samples.get("age_est", [])
+            mapped_samples["px_y"] = [
+                round(float(calibrator.depth2px(d)), 1) for d in mapped_samples["depths"]
+            ]
+            mapped_samples["px_x_curve"] = [
+                round(float(calibrator.age2px(a)), 1) for a in calib_year_ages
+            ]
 
         return {
             "status": "extracted",
