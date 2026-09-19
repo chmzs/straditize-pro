@@ -1,8 +1,8 @@
 # straditize 开发交接卡 (HANDOFF.md)
-- 更新时间：2026-09-20 06:00 | 分支 dev-v2-modern | HEAD a3f02d5
+- 更新时间：2026-09-20 06:50 | 分支 dev-v2-modern | HEAD 0cc100b
 - 规则：**分节追加** —— 只改自己那一节，严禁整文件覆盖或改写他节；每节 ≤8 行，全文 ≤30 行，超限时最旧节整段移入 `HANDOFF-archive/`。
 - 一键验证：`pixi run lint` ｜ `pixi run test` ｜ `cd frontend && npm run build`
-- 当前结果：lint ✓ ｜ build ✓ ｜ test **112/112 passed (100% 通过)**
+- 当前结果：lint ✓ ｜ build ✓ ｜ test **118/118 passed (100% 通过)**
 
 ## [AGEDEPTH] 2026-09-20 05:10 — 年代-深度识别 + 年龄集合重构（已提交 339a34d）
 - 识别：废弃「整图二值化 + 最大连通域 + 每行 argmin」，改为逐行剖面双阈值 + 垂直支撑度引导 + 连续性追踪 + 长直线剔除 + PAVA 单调保序 + gap 插值；搜索窗改由**轴规则实际跨度**推导（刻度之外还有曲线）。
@@ -10,13 +10,13 @@
 - 回归量化：合成图中位误差 0.19%/p95 1.0%/覆盖 100%；真实图 `test_age_depth_real_figures.py` 锁 2 个已修失效；`test_age_ensemble.py` 锁单调性/步长不变性/带宽量级。两图带宽误差 3%（Bacon）/14%（Bchron）。
 - 前端：`AgeDepthModal.ts` 四点标定点击（可拖拽）+ 批量填值 + 分轴 log + 深度范围 + 矩形橡皮擦；删除伪造的 WebR 路径（原为线性内插+拍脑袋误差项却报称贝叶斯建模）。
 - 下一步：实测「上传本地图谱」手动标定链路；包络在测年层位后收窄处模型无法跟随（无钉扎的累积过程不能减方差），此处保守偏宽输出，`envelope_mismatch_vs_extracted` 已如实记录。
-## [I18N+PROVENANCE] 2026-09-20 06:00 — 多语言 + 数据来源完整性（未提交）
+## [I18N+PROVENANCE] 2026-09-20 06:00 — 多语言 + 数据来源完整性（已提交 a3f02d5/83f88ca/0cc100b）
 - i18n：`frontend/src/i18n/`（t/setLocale/onLocaleChange + zh/en 字典 + 数值错误码映射）；`en.ts` 用 `satisfies Record<MessageKey,string>` 做漏翻门禁；顶栏 `#btn-toggle-locale` 一键切换、无需重启。
 - `RpcClient` 拆出 `backendOnline` / `demoMode` 两个独立状态，删除全部静默伪造（等分分列、随机抖动曲线、固定名单 OCR、前端自算导出、范例前端夹具）。
 - 后端不可达 → 阻塞闸门（重新连接 / 显式进入演示模式）+ 常驻横幅；演示模式拒绝 digitize/export/OCR；胶囊区分 RPC / 演示 / 离线。
 - 顺带修掉被兜底掩盖的真实缺陷：`core.detectColumns` 前端发 `x_bounds/y_bounds` 而后端要 `data_xlim/data_ylim`，修后 S1→S2→S3 由真算法产出 29 列。
 - 实机复核（8942 真后端 / 8955 静态页）：无后端时 `app_rendered=false` 并弹闸门；演示模式导出被拒；后端中途断开→红色横幅 + 胶囊转「离线」。
-- 注：`session.py` 两条 message→code 与 [AGEDEPTH] 同文件，随该节提交；本批只提交 `frontend/`。
+- 范例修复（0cc100b）：`sample_key` 改基于 `__file__` 定位 + 修 beginner 文件名 + 未知 key/缺图如实报错；`session.py` 两条 message→code 已由 2d92b4a 落地。
 
 ## 黑名单（跨会话共享，只追加不覆盖）
 - ❌ 文字/描边严禁写死 `#fff`/`#38bdf8`/`#f59e0b`（日间隐形或低对比），必须用 `--text-heading`/`--accent-*`；
