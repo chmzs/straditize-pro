@@ -10,6 +10,7 @@ import { AgeDepthModal } from './components/AgeDepthModal';
 import { MetadataModal } from './components/MetadataModal';
 import { OcrReviewModal } from './components/OcrReviewModal';
 import { DiagramCalibration, DiagramData } from './types/pollen';
+import { onLocaleChange, applyLocaleToDocument } from './i18n';
 import { ImageDisplayMode } from './core/Viewport';
 import { WORKFLOW_STAGES, WorkflowStage } from './types/workflow';
 import { tokens } from './styles/tokens';
@@ -18,12 +19,23 @@ async function bootstrap() {
   const appContainer = document.getElementById('app');
   if (!appContainer) throw new Error('Missing #app container');
 
+  // 0. 恢复上次选择的语言并同步 <html lang>（必须在任何组件渲染之前执行）
+  applyLocaleToDocument();
+
   // 1. 初始化 JSON-RPC Client（先尝试探测后端，无后端自动降级为 Mock）
   const rpcClient = new RpcClient();
   await rpcClient.probeBackend();
 
   // 2. 获取初始图谱数据
-  const initialData = await rpcClient.getDiagramData();
+  //    后端在握手阶段就明确报错时不能静默用假数据冒充真实工程：记录错误并降级为本地示例图谱，
+  //    状态胶囊会同步显示 Mock，用户可据此判断当前看到的是演示数据。
+  let initialData: DiagramData;
+  try {
+    initialData = await rpcClient.getDiagramData();
+  } catch (err) {
+    console.error('[bootstrap] 初始工程数据获取失败，已降级为本地示例图谱:', err);
+    initialData = rpcClient.useLocalDemoDiagram();
+  }
 
   // 3. 初始化历史状态管理器 (支持 500 步命令撤销/重做)
   const history = new HistoryManager(500);
@@ -305,6 +317,15 @@ async function bootstrap() {
         footerModeEl.innerHTML = `模式: <strong>${desc.name} (${desc.shortcut})</strong>`;
       }
     },
+  });
+
+  // 6.1 语言切换订阅：文案是渲染时烧进 DOM 的，切语言必须重绘（与主题的纯 CSS 切换不同）。
+  //     组件都持有数据，DOM 只是派生物，因此重绘是安全的。
+  onLocaleChange(() => {
+    applyLocaleToDocument();
+    toolbar?.render();
+    updateWorkflowBar();
+    updateFooter();
   });
 
   // 6.2 显式分步推进状态机 (Step-by-Step Workflow State Machine)

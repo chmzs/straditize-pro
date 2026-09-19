@@ -1,4 +1,5 @@
 import { BackendStatus, JsonRpcRequest, JsonRpcResponse } from '../types/rpc';
+import { tError } from '../i18n/errorCodes';
 import { Column, ControlPoint, DiagramData } from '../types/pollen';
 import { MockBackend } from './MockBackend';
 import { SplineInterpolator } from '../core/SplineInterpolator';
@@ -116,11 +117,29 @@ export class RpcClient {
   /**
    * 通用 JSON-RPC 2.0 请求方法
    */
+  /**
+   * 后端「不可达」时的统一降级：切换为 Mock 模式并通知状态栏。
+   * 注意：只有传输层失败才能走这里。后端已明确应答的业务错误绝不能降级，
+   * 否则调用方永远收不到错误，用户会拿到伪造的 Mock 数据却显示成功。
+   */
+  private async degradeToMock<TParams, TResult>(
+    method: string,
+    params: TParams | undefined,
+    reason: unknown
+  ): Promise<TResult> {
+    console.warn(`Backend unreachable for ${method}, falling back to Mock:`, reason);
+    this.isMock = true;
+    this.notifyStatus();
+    return this.mockExecute<TParams, TResult>(method, params);
+  }
+
   public async call<TParams = unknown, TResult = unknown>(
     method: string,
     params?: TParams
   ): Promise<TResult> {
     if (!this.isMock) {
+      // ---- 1. 传输层：DNS/连接/超时失败 → 降级 Mock ----
+      let response: Response;
       try {
         const payload: JsonRpcRequest<TParams> = {
           jsonrpc: '2.0',
@@ -128,28 +147,51 @@ export class RpcClient {
           method,
           params,
         };
-
-        const response = await fetch(this.endpoint, {
+        response = await fetch(this.endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-
-        if (response.ok) {
-          const rpcRes: JsonRpcResponse<TResult> = await response.json();
-          if (rpcRes.error) {
-            throw new Error(`RPC Error [${rpcRes.error.code}]: ${rpcRes.error.message}`);
-          }
-          return rpcRes.result as TResult;
-        }
       } catch (err) {
-        console.warn(`Backend RPC call ${method} failed, falling back to Mock:`, err);
-        this.isMock = true;
-        this.notifyStatus();
+        return this.degradeToMock<TParams, TResult>(method, params, err);
       }
+
+      // ---- 2. HTTP 层：非 2xx 视为服务不可用 → 降级 Mock ----
+      if (!response.ok) {
+        return this.degradeToMock<TParams, TResult>(
+          method,
+          params,
+          new Error(`HTTP ${response.status} ${response.statusText}`)
+        );
+      }
+
+      // ---- 3. 解析层：响应不是合法 JSON-RPC → 降级 Mock ----
+      let rpcRes: JsonRpcResponse<TResult>;
+      try {
+        rpcRes = await response.json();
+      } catch (err) {
+        return this.degradeToMock<TParams, TResult>(method, params, err);
+      }
+
+      // ---- 4. 业务层：后端已明确应答错误 → 冒泡给调用方，绝不静默返回假数据 ----
+      if (rpcRes.error) {
+        // 面向用户的叙述按当前语言渲染；后端英文原文仅作为技术细节进 console
+        throw new Error(tError(rpcRes.error.code, rpcRes.error.message));
+      }
+      return rpcRes.result as TResult;
     }
 
     return this.mockExecute<TParams, TResult>(method, params);
+  }
+
+  /**
+   * 引导阶段兜底：后端在启动握手时就报错时，切回 Mock 并返回本地示例图谱。
+   * 仅供 bootstrap 使用，避免主界面白屏；常规调用一律走 call() 的错误冒泡。
+   */
+  public useLocalDemoDiagram(): DiagramData {
+    this.isMock = true;
+    this.notifyStatus();
+    return MockBackend.createDefaultDiagramData();
   }
 
   private async mockExecute<TParams, TResult>(method: string, params?: TParams): Promise<TResult> {

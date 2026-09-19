@@ -3,6 +3,7 @@ import { HistoryManager } from '../core/HistoryManager';
 import { ImageDisplayMode } from '../core/Viewport';
 import { ToolMode } from '../types/pollen';
 import { WORKFLOW_STEP_ITEMS } from '../types/workflow';
+import { t, toggleLocale } from '../i18n';
 
 export interface ToolbarCallbacks {
   onFit: () => void;
@@ -319,6 +320,11 @@ export class Toolbar {
           <span>导出</span>
         </button>
 
+        <!-- 语言切换按钮 (中 / EN，与主题切换同级，一键切换无需重启) -->
+        <button id="btn-toggle-locale" class="tool-btn locale-toggle-btn" title="${t('lang.switchTo')}" style="padding: 4px 7px; font-size: 10.5px; font-weight: 700; min-width: 34px;">
+          <span id="locale-badge">${t('lang.badge')}</span>
+        </button>
+
         <!-- 日夜间主题切换按钮 (默认日间模式) -->
         <button id="btn-toggle-theme" class="tool-btn" title="当前为日间模式 (点击切换深色模式)" style="padding: 4px 6px;">
           <svg id="theme-icon-moon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
@@ -386,6 +392,11 @@ export class Toolbar {
     // 视图操作
     this.element.querySelector('#btn-fit')?.addEventListener('click', () => this.callbacks.onFit());
     this.element.querySelector('#btn-100')?.addEventListener('click', () => this.callbacks.onReset100());
+    // 语言切换 (中 / EN)：写 localStorage 并通知订阅者重绘，无需重启
+    this.element.querySelector('#btn-toggle-locale')?.addEventListener('click', () => {
+      toggleLocale();
+    });
+
     // 缩放百分比徽标：点击即回到 100% 原始尺寸
     this.element.querySelector('#zoom-indicator')?.addEventListener('click', () => this.callbacks.onReset100());
     // 一键重置当前图谱的全部操作
