@@ -2,17 +2,31 @@ import { BackendStatus, JsonRpcRequest, JsonRpcResponse } from '../types/rpc';
 import { tError } from '../i18n/errorCodes';
 import { t } from '../i18n';
 import { Column, ControlPoint, DiagramData } from '../types/pollen';
-import { MockBackend } from './MockBackend';
-import { SplineInterpolator } from '../core/SplineInterpolator';
 
-/** 演示模式不支持的方法：这些方法会产出被当作科学结果的数据，绝不允许用示例数据替代 */
-const DEMO_FORBIDDEN_METHODS = new Set<string>([
-  'core.digitize',
-  'core.exportData',
-  'ocr.recognizeLabels',
-  'ocr.applyLabels',
-  'core.updateControlPoint',
-]);
+/**
+ * 干净的初始状态工厂（不预置任何属种列、控制点或示例数据）。
+ * 真实数据一律来自后端；前端不再持有任何可充当"结果"的替代数据源。
+ */
+function createEmptyDiagramData(): DiagramData {
+  return {
+    imageSrc: '',
+    imageWidth: 0,
+    imageHeight: 0,
+    calibration: {
+      dataXMin: 0,
+      dataXMax: 0,
+      dataYMin: 0,
+      dataYMax: 0,
+      depthTopValue: 0,
+      depthBottomValue: 100,
+      unit: 'cm',
+      isCalibrated: false,
+    },
+    columns: [],
+    activeTaxaId: '',
+    selectedEntity: null,
+  };
+}
 
 export class RpcClient {
   private endpoint: string;
@@ -21,11 +35,6 @@ export class RpcClient {
    * 为 false 时一律抛错，绝不返回替代数据。
    */
   private backendOnline: boolean = false;
-  /**
-   * 用户是否【显式】进入演示模式。这是唯一允许使用内置示例数据的场景。
-   * 严禁因为后端出错而自动置位 —— 那正是历史上产出虚假数据的根源。
-   */
-  private demoMode: boolean = false;
   private isDesktopMode: boolean = false;
   private requestId: number = 1;
   private currentDiagramData: DiagramData;
@@ -40,7 +49,12 @@ export class RpcClient {
     } else {
       this.endpoint = 'http://127.0.0.1:8765/rpc';
     }
-    this.currentDiagramData = MockBackend.createDefaultDiagramData();
+    this.currentDiagramData = createEmptyDiagramData();
+  }
+
+  /** 当前会话图谱的浏览器可直接访问的 URL（由后端提供，前端不再自带示例图片副本） */
+  private imageUrl(): string {
+    return `${this.endpoint.replace(/\/rpc$/, '')}/image/current?full=1&t=${Date.now()}`;
   }
 
   public setStatusCallback(callback: (status: BackendStatus) => void): void {
@@ -51,21 +65,11 @@ export class RpcClient {
   public getStatus(): BackendStatus {
     return {
       connected: this.backendOnline,
-      isMock: this.demoMode,
+      isMock: false,
       endpoint: this.endpoint,
       latencyMs: this.backendOnline ? 5 : 0,
       isDesktopMode: this.isDesktopMode,
     };
-  }
-
-  /** 演示模式：显式开关，仅用于界面预览，禁止产出任何被当作结果的数据 */
-  public isDemoMode(): boolean {
-    return this.demoMode;
-  }
-
-  public setDemoMode(enabled: boolean): void {
-    this.demoMode = enabled;
-    this.notifyStatus();
   }
 
   /**
@@ -168,22 +172,12 @@ export class RpcClient {
     method: string,
     params?: TParams
   ): Promise<TResult> {
-    // === 路径 A：演示模式（用户显式进入）===
-    // 仅允许界面预览类方法；会产出"看起来像科学结果"的方法一律拒绝，
-    // 避免演示数据被误当成真实分析结果。
-    if (this.demoMode) {
-      if (DEMO_FORBIDDEN_METHODS.has(method)) {
-        throw new Error(t('error.demoUnsupported'));
-      }
-      return this.mockExecute<TParams, TResult>(method, params);
-    }
-
-    // === 路径 B：未连接后端 —— 直接报错，绝不返回替代数据 ===
+    // === 路径 A：未连接后端 —— 直接报错，绝不返回替代数据 ===
     if (!this.backendOnline) {
       this.raiseBackendLost(method, new Error('backend not probed / offline'));
     }
 
-    // === 路径 C：真实后端 ===
+    // === 路径 B：真实后端（唯一的数据来源）===
     {
       // ---- 1. 传输层：DNS/连接/超时失败 → 标记离线并抛错 ----
       let response: Response;
@@ -225,140 +219,6 @@ export class RpcClient {
     }
   }
 
-  private async mockExecute<TParams, TResult>(method: string, params?: TParams): Promise<TResult> {
-    await new Promise((resolve) => setTimeout(resolve, 25));
-
-    switch (method) {
-      case 'core.loadImage': {
-        const p = params as { image_path?: string; image_data?: string; sample_key?: string } | undefined;
-        if (p?.sample_key) {
-          this.currentDiagramData = MockBackend.getSampleDiagram(p.sample_key);
-        }
-        return JSON.parse(JSON.stringify(this.currentDiagramData)) as TResult;
-      }
-
-      case 'straditize.getDiagramData': {
-        return JSON.parse(JSON.stringify(this.currentDiagramData)) as TResult;
-      }
-
-      case 'core.updateControlPoint': {
-        const p = params as { col_index: number; row: number; x: number; remove?: boolean };
-        const col = this.currentDiagramData.columns[p.col_index];
-        if (col) {
-          if (p.remove) {
-            col.controlPoints = col.controlPoints.filter((pt) => Math.abs(pt.y - p.row) > 6);
-          } else {
-            const existing = col.controlPoints.find((pt) => Math.abs(pt.y - p.row) <= 4);
-            if (existing) {
-              existing.x = p.x;
-              existing.y = p.row;
-              existing.isManual = true;
-            } else {
-              col.controlPoints.push({
-                id: `pt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-                x: p.x,
-                y: p.row,
-                type: 'manual',
-                isManual: true,
-                createdAt: Date.now(),
-              });
-              col.controlPoints.sort((a, b) => a.y - b.y);
-            }
-          }
-          return {
-            col_index: p.col_index,
-            action: p.remove ? 'removed' : 'updated',
-            points: col.controlPoints,
-          } as TResult;
-        }
-        return true as TResult;
-      }
-
-      case 'core.digitize': {
-        const p = params as { col_index: number };
-        const col = this.currentDiagramData.columns[p.col_index];
-        if (col) {
-          col.controlPoints.forEach((pt) => {
-            if (!pt.isManual) {
-              pt.x += (Math.random() - 0.5) * 4;
-            }
-          });
-          return {
-            col_index: p.col_index,
-            points: col.controlPoints,
-          } as TResult;
-        }
-        return { points: [] } as TResult;
-      }
-
-      case 'core.exportData': {
-        const p = params as { format: 'csv' | 'json' };
-        return this.generateExportData(p?.format || 'csv') as TResult;
-      }
-
-      case 'ocr.recognizeLabels': {
-        const sampleTaxa = [
-          'Pinus', 'Betula', 'Quercus ilex-type', 'Quercus suber-type', 'Olea',
-          'Corylus', 'Artemisia', 'Chenopodiaceae', 'Poaceae', 'Abies', 'Picea',
-          'Alnus', 'Ulmus', 'Salix', 'Ericaceae', 'Cyperaceae'
-        ];
-        const cols = this.currentDiagramData.columns || [];
-        const labels = cols.map((col, idx) => {
-          const matchedName = sampleTaxa[idx % sampleTaxa.length];
-          return {
-            id: `ocr_label_${idx + 1}`,
-            ocr_text: matchedName,
-            suggested_name: matchedName,
-            group: idx < 6 ? '乔木花粉 (AP)' : '草本与灌木花粉 (NAP)',
-            status: 'auto',
-            accepted: true,
-            anchor_x: col.startX,
-            anchor_y: 280,
-            associated_column_id: col.id,
-            associated_column_index: idx,
-            associated_column_name: col.name,
-          };
-        });
-        return {
-          success: true,
-          data: {
-            labels,
-            label_row_image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-            summary: {
-              total: labels.length,
-              auto: labels.length,
-              confirm: 0,
-              unrecognized: 0,
-            },
-          },
-        } as TResult;
-      }
-
-      case 'ocr.applyLabels': {
-        const p = params as { confirmed_labels: Array<{ associated_column_id: string; suggested_name: string }> };
-        let count = 0;
-        if (p?.confirmed_labels && Array.isArray(p.confirmed_labels)) {
-          p.confirmed_labels.forEach((item) => {
-            const col = this.currentDiagramData.columns.find((c) => c.id === item.associated_column_id || c.name === item.associated_column_id);
-            if (col && item.suggested_name) {
-              col.name = item.suggested_name;
-              col.species = item.suggested_name;
-              count++;
-            }
-          });
-        }
-        return {
-          success: true,
-          applied_count: count,
-          columns_count: this.currentDiagramData.columns.length,
-        } as TResult;
-      }
-
-      default:
-        return true as TResult;
-    }
-  }
-
   // 对外便捷方法
   public async getDiagramData(): Promise<DiagramData> {
     return this.call<void, DiagramData>('straditize.getDiagramData');
@@ -373,7 +233,6 @@ export class RpcClient {
     this.currentDiagramData.columns = [];
     this.currentDiagramData.activeTaxaId = '';
 
-    if (this.demoMode) return;
     // 后端清空失败必须冒泡：否则前端显示"已归零"而后端仍保留旧列，
     // 后续所有 col_index 都会指向错误的数据。
     await this.call('project.new', {});
@@ -383,30 +242,34 @@ export class RpcClient {
    * 加载内置范例图谱
    */
   public async loadSampleDiagram(key: string): Promise<DiagramData> {
-    // 内置范例是"内置输入"，但分列/数字化结果必须由后端真实计算得出。
-    // 历史实现直接把前端写死的 29 列夹具当作结果展示，与后端会话状态分歧
-    // （后端 columns 为空，前端却显示 29 列），用户会误以为看到了算法能力。
-    let imageSrc = '';
-    if (this.demoMode) {
-      imageSrc = MockBackend.getSampleDiagram(key).imageSrc;
-    }
-
+    // 内置范例只提供「输入」：后端解析内置图片并把会话切到该图；
+    // 图片由后端 /image/current 提供给浏览器，前端不再自带示例图副本，
+    // 分列与数字化结果一律由真实算法产生。
     const backendResult = await this.call<Record<string, unknown>, any>('core.loadImage', {
       sample_key: key,
-      ...(imageSrc ? { image_path: imageSrc } : {}),
     });
-
-    this.currentDiagramData.columns = [];
-    this.currentDiagramData.activeTaxaId = '';
-    this.currentDiagramData.calibration = {
-      ...this.currentDiagramData.calibration,
-      isCalibrated: false,
-    };
-    if (backendResult && backendResult.width && backendResult.height) {
-      this.currentDiagramData.imageWidth = backendResult.width;
-      this.currentDiagramData.imageHeight = backendResult.height;
-    }
+    this.applyLoadedImage(backendResult, this.imageUrl());
     return this.currentDiagramData;
+  }
+
+  /**
+   * 依据后端 core.loadImage 的返回值重建前端状态。
+   * 标定建议取自后端的 suggested_calibration —— 前端不得自造初始 ROI。
+   */
+  private applyLoadedImage(backendResult: any, imageSrc: string): void {
+    const suggested = backendResult?.suggested_calibration;
+    if (!suggested) {
+      throw new Error(tError(-32603, 'core.loadImage returned no suggested_calibration'));
+    }
+    this.currentDiagramData = {
+      imageSrc,
+      imageWidth: backendResult.width ?? 0,
+      imageHeight: backendResult.height ?? 0,
+      calibration: suggested,
+      columns: [],
+      activeTaxaId: '',
+      selectedEntity: { type: 'roi' },
+    };
   }
 
   /**
@@ -418,11 +281,9 @@ export class RpcClient {
     height: number,
     fileName: string = 'Custom Diagram'
   ): Promise<DiagramData> {
-    // 前端只提供"初始建议 ROI"作为起始值，但图像必须由后端真正载入成功才算数。
-    // 历史实现在后端载图失败时仍沿用前端建议布局继续工作，用户会在一个后端
-    // 并不知情的图像/ROI 上继续操作。
-    this.currentDiagramData = MockBackend.createInitialSuggestion(width, height, imageSrc, fileName);
-
+    // 图像必须由后端真正载入成功才算数，且初始 ROI 建议由后端给出。
+    // 历史实现在后端载图失败时沿用前端自造的建议布局继续工作，
+    // 用户会在一个后端并不知情的图像/ROI 上继续操作。
     const isDataUrl = imageSrc.startsWith('data:');
     const payload: Record<string, unknown> = {
       file_name: fileName,
@@ -436,14 +297,9 @@ export class RpcClient {
     }
 
     const backendResult = await this.call<Record<string, unknown>, any>('core.loadImage', payload);
-    // 新载入图像只保留图谱元数据与居中 ROI，严禁自动盲目切列或数字化，严格进入 Step 1 等待用户界定有效区
-    this.currentDiagramData.columns = [];
-    this.currentDiagramData.activeTaxaId = '';
-    if (backendResult && backendResult.width && backendResult.height) {
-      this.currentDiagramData.imageWidth = backendResult.width;
-      this.currentDiagramData.imageHeight = backendResult.height;
-    }
-
+    // 新载入图像：仅保留图谱元数据与后端建议 ROI，严禁自动切列或数字化，
+    // 严格停在 S1 等待用户界定有效区。本地上传图沿用用户自己的 data URL 显示。
+    this.applyLoadedImage(backendResult, imageSrc);
     return this.currentDiagramData;
   }
 
@@ -573,70 +429,9 @@ export class RpcClient {
     );
     if (typeof res === 'string') return res;
     if (res && 'csv_content' in res) return res.csv_content;
-    // 严禁回落到前端自算的 generateExportData()：那会在后端导出失败时
-    // 交给用户一份"看起来正常"的 CSV，属于伪造科学结果。
+    // 严禁在前端自行合成导出内容：那会在后端导出失败时交给用户一份
+    // "看起来正常"的 CSV，属于伪造科学结果。前端不再保留任何导出实现。
     throw new Error(tError(-32603, 'core.exportData returned an unexpected payload'));
   }
 
-  public generateExportData(format: 'csv' | 'json'): string {
-    const data = this.currentDiagramData;
-    const { unit } = data.calibration;
-    const { depths, yPositions } = SplineInterpolator.getStandardDepthHorizons(data.calibration);
-    const visibleColumns = data.columns.filter((c) => c.visible);
-
-    if (format === 'json') {
-      const exportObj = {
-        meta: {
-          exportTime: new Date().toISOString(),
-          calibration: data.calibration,
-          totalHorizons: depths.length,
-          depthInterval: data.calibration.depthInterval || 2,
-          unit,
-        },
-        horizons: depths.map((d, i) => {
-          const y = yPositions[i];
-          const values: Record<string, number> = {};
-          visibleColumns.forEach((col) => {
-            values[col.name] = SplineInterpolator.interpolatePercentAtY(col, y);
-          });
-          return {
-            depth: d,
-            unit,
-            y_px: y,
-            values,
-          };
-        }),
-        taxaColumns: data.columns.map((c) => ({
-          name: c.name,
-          color: c.color,
-          startX: c.startX,
-          endX: c.endX,
-          maxPercent: c.maxPercent,
-          curveType: c.curveType,
-          visible: c.visible,
-          controlPointsCount: c.controlPoints.length,
-        })),
-      };
-      return JSON.stringify(exportObj, null, 2);
-    }
-
-    // CSV 格式：严格按固定的标准深度层位输出，杜绝任何属种间层位错位
-    const headers = [`Depth (${unit})`, ...visibleColumns.map((c) => `"${c.name} (%)"`)];
-    const rows: string[] = [headers.join(',')];
-
-    for (let i = 0; i < depths.length; i++) {
-      const depth = depths[i];
-      const y = yPositions[i];
-      const rowValues: (string | number)[] = [depth.toFixed(2)];
-
-      visibleColumns.forEach((col) => {
-        const percent = SplineInterpolator.interpolatePercentAtY(col, y);
-        rowValues.push(percent.toFixed(2));
-      });
-
-      rows.push(rowValues.join(','));
-    }
-
-    return rows.join('\n');
-  }
 }

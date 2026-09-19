@@ -25,15 +25,12 @@ export const en = {
   'error.unknown': 'Unknown error',
 
   // ===== Data provenance (never mask a failure with substitute data) =====
-  'error.backendOffline': 'Backend not connected — real computation is unavailable. Start the backend or enter demo mode.',
+  'error.backendOffline': 'Backend not connected — real computation is unavailable. Start the backend first.',
   'error.backendLost': 'The backend connection was lost. This operation did not run and produced no data.',
-  'error.demoUnsupported': 'This operation is not available in demo mode (demo mode is for UI preview only).',
 
-  // ===== Data provenance banner =====
+  // ===== Data provenance =====
   'banner.backendOffline': 'Backend not connected — no real computation is possible',
   'banner.backendLost': 'Backend connection lost — reconnect to continue',
-  'banner.demoMode': 'Demo mode — built-in sample data is shown; never use it for real analysis or export',
   'banner.reconnect': 'Reconnect',
-  'banner.exitDemo': 'Exit demo mode',
-  'banner.enterDemo': 'Enter demo mode',
+  'gate.hint': 'Column detection, curve digitization and export are all performed by the backend. There is no substitute data path. Start the backend, then click Reconnect.',
 } satisfies Record<MessageKey, string>;

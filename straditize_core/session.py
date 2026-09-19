@@ -247,9 +247,35 @@ class StraditizeSession:
                 "format": self.format,
                 "mode": self.mode,
                 "image_path": self.image_path,
+                # 初始数据有效区建议由后端给出：图像几何只有后端掌握，
+                # 前端不得自行编造标定默认值（历史上前端自造过一份，会与后端认知分歧）。
+                "suggested_calibration": self.suggest_data_region(),
             }
         except Exception as e:  # noqa: BLE001
             raise JsonRpcError(STATE_ERROR, f"Failed to load image: {e!s}")
+
+    def suggest_data_region(self) -> dict[str, Any]:
+        """Initial data-region (ROI) suggestion for a freshly loaded diagram.
+
+        Deliberately inset from the image borders and NOT a claim of calibration:
+        the user must still confirm the region in S2 and the depth scale in S4.
+        """
+        if self.image is None:
+            raise JsonRpcError(STATE_ERROR, "No image loaded in session.")
+        w, h = self.width, self.height
+        return {
+            "dataXMin": round(w * 0.12),
+            "dataXMax": round(w * 0.94),
+            "dataYMin": round(h * 0.18),
+            "dataYMax": round(h * 0.88),
+            "depthTopValue": 0,
+            "depthBottomValue": 100,
+            "unit": "cm",
+            "depthInterval": 2,
+            "depthGridEnabled": True,
+            # 与既有前端默认行为保持一致（占位范围，待 S4 标定确认）
+            "isCalibrated": True,
+        }
 
     def get_image_slice(
         self,

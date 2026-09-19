@@ -20,15 +20,13 @@ import { t } from './i18n';
 /**
  * 数据来源闸门（Data Provenance Gate）
  *
- * 设计原则：面向用户的数据只有两个合法来源 —— 后端真实计算，或用户【显式】进入的演示模式。
- * 后端不可达时绝不自动降级为 Mock：历史上那样做会在后端出错后静默返回前端编造的分列边界、
- * 随机抖动的曲线、固定名单的属种名，用户无法分辨，可能直接当成科研成果导出。
+ * 设计原则：面向用户的数据只有一个合法来源 —— 后端真实计算。
+ * 历史上后端不可达时会静默降级为 Mock，返回前端编造的分列边界、随机抖动的曲线、
+ * 固定名单的属种名，用户无法分辨，可能直接当成科研成果导出。该通路已整体删除。
  *
- * 这里改为阻塞式显式选择：重新连接，或明确进入演示模式（界面常驻横幅 + 禁止导出）。
+ * 因此这里没有"进入演示模式"这一退路：没有后端就没有结果，只能重连。
  */
-type ProvenanceChoice = 'retry' | 'demo';
-
-function showProvenanceGate(message: string): Promise<ProvenanceChoice> {
+function showProvenanceGate(message: string): Promise<void> {
   return new Promise((resolve) => {
     const isLight = document.body.classList.contains('theme-light');
     const overlay = document.createElement('div');
@@ -42,9 +40,8 @@ function showProvenanceGate(message: string): Promise<ProvenanceChoice> {
         <div style="font-size:34px;margin-bottom:10px;">🔌</div>
         <h2 style="margin:0 0 10px;font-size:17px;font-weight:700;color:var(--text-heading);">${t('banner.backendOffline')}</h2>
         <p style="margin:0 0 8px;font-size:13px;line-height:1.65;color:var(--text-secondary);">${message}</p>
-        <p style="margin:0 0 20px;font-size:12.5px;line-height:1.65;color:var(--text-muted);">${t('error.demoUnsupported')}</p>
+        <p style="margin:0 0 20px;font-size:12.5px;line-height:1.65;color:var(--text-muted);">${t('gate.hint')}</p>
         <div style="display:flex;gap:10px;justify-content:flex-end;">
-          <button id="gate-demo" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;">${t('banner.enterDemo')}</button>
           <button id="gate-retry" class="btn btn-primary" style="padding:8px 16px;font-size:13px;font-weight:600;">${t('banner.reconnect')}</button>
         </div>
       </div>
@@ -52,11 +49,7 @@ function showProvenanceGate(message: string): Promise<ProvenanceChoice> {
     document.body.appendChild(overlay);
     overlay.querySelector('#gate-retry')?.addEventListener('click', () => {
       overlay.remove();
-      resolve('retry');
-    });
-    overlay.querySelector('#gate-demo')?.addEventListener('click', () => {
-      overlay.remove();
-      resolve('demo');
+      resolve();
     });
   });
 }
@@ -72,20 +65,16 @@ export function reportBackendFailure(actionLabel: string, err: unknown): void {
   window.alert(`❌ ${actionLabel}失败\n\n${message}`);
 }
 
-/** 后端未连接时阻塞启动，直到连上或用户显式选择演示模式 */
+/** 后端未连接时阻塞启动，直到连上为止（没有演示模式这一退路） */
 async function ensureDataProvenance(rpcClient: RpcClient): Promise<void> {
   for (;;) {
     await rpcClient.probeBackend();
     if (rpcClient.getStatus().connected) return;
-    const choice = await showProvenanceGate(t('error.backendOffline'));
-    if (choice === 'demo') {
-      rpcClient.setDemoMode(true);
-      return;
-    }
+    await showProvenanceGate(t('error.backendOffline'));
   }
 }
 
-/** 演示模式/离线状态的常驻横幅：只要数据不是真实计算结果，界面就必须一直说清楚 */
+/** 离线状态常驻横幅：只要后端断开，界面就必须一直说清楚，避免用户误以为结果仍可信 */
 function mountProvenanceBanner(rpcClient: RpcClient): void {
   const bar = document.createElement('div');
   bar.id = 'provenance-banner';
@@ -96,18 +85,7 @@ function mountProvenanceBanner(rpcClient: RpcClient): void {
 
   const render = () => {
     const status = rpcClient.getStatus();
-    if (status.isMock) {
-      bar.style.display = 'flex';
-      bar.style.background = '#b45309';
-      bar.style.color = '#fff';
-      bar.innerHTML =
-        `<span>⚠️ ${t('banner.demoMode')}</span>` +
-        `<button id="banner-exit-demo" style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.45);color:#fff;border-radius:4px;padding:1px 8px;font-size:11px;cursor:pointer;">${t('banner.exitDemo')}</button>`;
-      bar.querySelector('#banner-exit-demo')?.addEventListener('click', () => {
-        rpcClient.setDemoMode(false);
-        rpcClient.probeBackend().then(render);
-      });
-    } else if (!status.connected) {
+    if (!status.connected) {
       bar.style.display = 'flex';
       bar.style.background = '#b91c1c';
       bar.style.color = '#fff';

@@ -714,18 +714,16 @@ export class AgeDepthModal {
   }
 
   /**
-   * True when the RPC client is answering from its offline Mock instead of the backend.
+   * True when the backend is not connected, i.e. no real observation can be made.
    *
-   * ``RpcClient.call`` swallows *any* failure -- a transient network hiccup as well as a
-   * legitimate JSON-RPC business error -- and then flips ``isMock`` permanently for the
-   * rest of the session, never re-probing. Once that happens its ``mockExecute`` default
-   * arm returns a bare ``true`` for every unknown method, so a status query would come
-   * back as ``true`` and this modal would happily render "component not installed" or
-   * "no local R detected" from a fabricated value. The guards below refuse to interpret
-   * a Mock response as an observation.
+   * The frontend no longer has any substitute data path: an offline RpcClient raises
+   * instead of fabricating values, and every call site now surfaces that error. These
+   * guards still exist so the modal renders an explicit "backend offline" state rather
+   * than presenting stale or absent readings as an observation.
    */
-  private backendIsMock(): boolean {    try {
-      return this.rpcClient.getStatus().isMock;
+  private backendUnavailable(): boolean {
+    try {
+      return !this.rpcClient.getStatus().connected;
     } catch {
       return true;
     }
@@ -736,7 +734,7 @@ export class AgeDepthModal {
     if (el) {
       el.innerHTML =
         `<span style="color:var(--accent-red, #ef4444);">⚠️ <strong>后端未连接</strong>: ` +
-        `无法读取真实状态（RPC 已降级为离线 Mock，不再返回后端数据）</span>`;
+        `无法读取真实状态（本软件不存在替代数据通路）</span>`;
     }
   }
 
@@ -833,7 +831,7 @@ export class AgeDepthModal {
     }
 
     try {
-      if (this.backendIsMock()) {
+      if (this.backendUnavailable()) {
         this.renderBackendOffline('#ad-local-r-status');
         alert(
           '⚠️ 后端未连接，无法运行年代建模。\n\n' +
@@ -1050,7 +1048,7 @@ export class AgeDepthModal {
       const res = await this.rpcClient.call<{ name: string }, any>('component.getStatus', { name: 'age-modeling' });
       // A Mock response carries no installation state; rendering "not installed" from it
       // would be a fabricated observation.
-      if (this.backendIsMock() || res === true) {
+      if (this.backendUnavailable() || res === true) {
         this.renderBackendOffline('#ad-webr-comp-status');
         if (installBtn) installBtn.disabled = true;
         return;
@@ -1169,7 +1167,7 @@ export class AgeDepthModal {
       const res = await this.rpcClient.call<void, any>('agedepth.checkREnvironment');
       // Mock returns a bare `true`, so `res.has_r` would read as undefined and the modal
       // would claim "no system Rscript" while R + rbacon are in fact installed.
-      if (this.backendIsMock() || res === true) {
+      if (this.backendUnavailable() || res === true) {
         this.renderBackendOffline('#ad-local-r-status');
         return;
       }
@@ -1293,7 +1291,7 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
     if (!this.modalEl || !this.bgImage) return;
     this.showExtractError('');
 
-    if (this.backendIsMock()) {
+    if (this.backendUnavailable()) {
       this.showExtractError(
         '后端未连接：RPC 客户端已降级为离线 Mock，不会返回真实的识别结果。请确认后端进程在运行后重开本窗口。'
       );
