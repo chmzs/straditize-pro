@@ -96,6 +96,8 @@ def create_rpc_dispatcher(
     dispatcher.register_method("agedepth.generateBaconScript", lambda dates, core_name="MyCore", thickness=5.0, cc=1, hiatus_depths=None, slumps=None, d_r=None, d_std=None, acc_mean=None, mem_mean=0.7: generate_bacon_script(core_name=core_name, dates=dates, thickness=thickness, cc=cc, hiatus_depths=hiatus_depths, slumps=slumps, d_r=d_r, d_std=d_std, acc_mean=acc_mean, mem_mean=mem_mean))
     dispatcher.register_method("agedepth.generateGeoChronRScript", lambda lipd_file_name, site_name="PollenSite", thickness=5.0, hiatus_depths=None: generate_geochronr_script(lipd_file_name=lipd_file_name, site_name=site_name, thickness=thickness, hiatus_depths=hiatus_depths))
     dispatcher.register_method("agedepth.checkREnvironment", lambda: check_local_r_environment())
+    dispatcher.register_method("agedepth.runLocalBacon", session.run_local_bacon)
+    dispatcher.register_method("agedepth.runBaconModeling", session.run_age_modeling)
     dispatcher.register_method("component.getStatus", lambda name="age-modeling": component_manager.get_status(name))
     dispatcher.register_method("component.install", lambda name="age-modeling", custom_url=None: component_manager.start_download_task(name, custom_url))
     dispatcher.register_method("component.installOfflineZip", lambda zip_path, name="age-modeling": component_manager.install_from_zip(zip_path, name))
@@ -166,17 +168,6 @@ def create_rpc_dispatcher(
                     session.load_image(sample_path)
             if session.image is not None and not session.columns:
                 session.detect_columns([315, 1946], [511, 1311])
-                hoya_names = [
-                    'Charcoal', 'Pinus', 'Juniperus', 'Quercus ilex-type',
-                    'Quercus suber-type', 'Olea', 'Betula', 'Corylus', 'Carpinus-type',
-                    'Ericaceae', 'Ephedra distachya-type', 'Ephedra fragilis',
-                    'Mentha-type', 'Anthemis-type', 'Artemisia', 'Caryophyllaceae',
-                    'Chenopodiaceae', 'Cruciferae', 'Filipendula', 'Gramineae <40um',
-                    'Gramineae >40<50um', 'Gramineae >50<60um', 'Gramineae >60um',
-                    'Liguliflorae', 'Plantago coronopus', 'Pteridium', 'Filicales',
-                    'Pollen Concentration'
-                ]
-                session.batch_set_taxa(hoya_names)
                 session.apply_depth_grid(start_depth=0, end_depth=150, step=2)
 
         palette = [
@@ -584,6 +575,75 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
                 self.wfile.write(err_resp)
             return
 
+        # 3.5. Component static assets (WASM/JS/Data for WebR and extension packages)
+        if raw_path.startswith(("/components/", "/webr/")):
+            from .components.manager import get_base_components_dir
+
+            base_comp_dir = os.path.abspath(str(get_base_components_dir()))
+
+            if raw_path.startswith("/components/"):
+                rel_path = raw_path[len("/components/") :].lstrip("/")
+            else:
+                rel_path = "webr/" + raw_path[len("/webr/") :].lstrip("/")
+
+            target_file = os.path.abspath(os.path.join(base_comp_dir, rel_path))
+            if not os.path.exists(target_file):
+                alt_file = os.path.abspath(os.path.join(base_comp_dir, "age-modeling", rel_path))
+                if os.path.exists(alt_file):
+                    target_file = alt_file
+
+            # Security check: prevent directory traversal outside base_comp_dir
+            if not target_file.startswith(base_comp_dir):
+                self.send_response(403)
+                self._send_cors_headers()
+                self.end_headers()
+                self.wfile.write(b"Forbidden: Path traversal outside components directory")
+                return
+
+            if os.path.isfile(target_file):
+                content_type, _ = mimetypes.guess_type(target_file)
+                if not content_type:
+                    if target_file.endswith(".wasm"):
+                        content_type = "application/wasm"
+                    elif target_file.endswith((".js", ".mjs")):
+                        content_type = "application/javascript"
+                    elif target_file.endswith(".json"):
+                        content_type = "application/json"
+                    elif target_file.endswith(".data"):
+                        content_type = "application/octet-stream"
+                    elif target_file.endswith(".css"):
+                        content_type = "text/css"
+                    else:
+                        content_type = "application/octet-stream"
+
+                with open(target_file, "rb") as f:
+                    content = f.read()
+
+                self.send_response(200)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(content)))
+                self.send_header("Cross-Origin-Resource-Policy", "cross-origin")
+                self.send_header("Cache-Control", "public, max-age=3600")
+                self._send_cors_headers()
+                self.end_headers()
+                self.wfile.write(content)
+                return
+            else:
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self._send_cors_headers()
+                self.end_headers()
+                err_resp = json.dumps(
+                    {
+                        "error": f"Component asset not found: {rel_path}",
+                        "code": -32002,
+                        "status": "not_found",
+                    },
+                    ensure_ascii=False,
+                ).encode("utf-8")
+                self.wfile.write(err_resp)
+                return
+
         # 4. Frontend static files or diagnostic guidance
         dist_dir = find_frontend_dist(getattr(self, "dist_dir", None))
         if dist_dir:
@@ -911,6 +971,12 @@ class StraditizeRpcHttpServer:
         self._server = ThreadingHTTPServer((self.host, self.port), BoundHandler)
         self.actual_port = self._server.server_address[1]
         self._thread: threading.Thread | None = None
+
+        # Wire component_manager ready notifications to SSE broadcaster
+        self._component_ready_cb = lambda comp_name, meta: self.broadcaster.broadcast(
+            "component.ready", meta
+        )
+        component_manager.register_ready_callback(self._component_ready_cb)
 
     def start(self) -> None:
         """Starts the HTTP server in a background thread."""

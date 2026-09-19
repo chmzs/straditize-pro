@@ -85,7 +85,7 @@ class StraditizePipeline:
                 raise ValueError(f"Length of column_names ({len(column_names)}) != detected columns ({n_cols})")
             self.column_names = list(column_names)
         else:
-            self.column_names = [f"col_{i}" for i in range(n_cols)]
+            self.column_names = [f"col{i + 1:02d}" for i in range(n_cols)]
         return self
 
     def set_column_bounds(self,
@@ -99,7 +99,7 @@ class StraditizePipeline:
                 raise ValueError(f"Length of column_names ({len(column_names)}) != bounds ({n_cols})")
             self.column_names = list(column_names)
         else:
-            self.column_names = [f"col_{i}" for i in range(n_cols)]
+            self.column_names = [f"col{i + 1:02d}" for i in range(n_cols)]
         return self
 
     def digitize(self,

@@ -310,7 +310,7 @@ def digitize_columns(binary: np.ndarray,
     n_cols = len(column_bounds)
 
     if column_names is None:
-        column_names = [f"col_{i}" for i in range(n_cols)]
+        column_names = [f"col{i + 1:02d}" for i in range(n_cols)]
     elif len(column_names) != n_cols:
         raise ValueError(f"column_names length ({len(column_names)}) != column_bounds length ({n_cols})")
 

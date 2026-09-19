@@ -9,6 +9,8 @@ Provides scientific algorithms to:
 """
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import Any
 import numpy as np
 from PIL import Image
@@ -63,8 +65,12 @@ class AgeDepthModel:
         depth_unit: str = "cm",
         age_unit: str = "cal BP",
         cal_curve: str = "IntCal20",
+        calibration_curve: str | None = None,
         notes: str = "",
+        **kwargs: Any,
     ):
+        if calibration_curve is not None:
+            cal_curve = calibration_curve
         sort_idx = np.argsort(depths)
         self.depths = np.asarray(depths, dtype=float)[sort_idx]
         self.ages = np.asarray(ages, dtype=float)[sort_idx]
@@ -507,12 +513,35 @@ message("Updated LiPD container with MCMC age ensembles successfully saved!")
 """
 
 
+def find_rscript() -> str | None:
+    """Finds Rscript executable via PATH or common Windows / Unix installation paths."""
+    import shutil
+    import sys
+
+    p = shutil.which("Rscript")
+    if p:
+        return p
+    if sys.platform == "win32":
+        candidates = [
+            r"D:\Program Files\R\R\bin\Rscript.exe",
+            r"C:\Program Files\R\R\bin\Rscript.exe",
+            r"D:\Program Files\R\R-4.5.3\bin\Rscript.exe",
+            r"C:\Program Files\R\R-4.5.3\bin\Rscript.exe",
+            r"C:\Program Files\R\R-4.5.0\bin\Rscript.exe",
+            r"C:\Program Files\R\R-4.4.2\bin\Rscript.exe",
+            r"C:\Program Files\R\R-4.4.0\bin\Rscript.exe",
+        ]
+        for cand in candidates:
+            if os.path.isfile(cand):
+                return cand
+    return None
+
+
 def check_local_r_environment() -> dict[str, Any]:
     """Detects local R installation and available geochronology packages (rbacon, geoChronR)."""
-    import shutil
     import subprocess
 
-    rscript_path = shutil.which("Rscript")
+    rscript_path = find_rscript()
     if not rscript_path:
         return {
             "has_r": False,
@@ -550,3 +579,159 @@ def check_local_r_environment() -> dict[str, Any]:
             "has_geochronr": False,
             "r_version": "Unknown",
         }
+
+
+def run_local_bacon(
+    dates: list[dict[str, Any]],
+    core_name: str = "MyCore",
+    thickness: float = 5.0,
+    cc: int = 1,
+    hiatus_depths: list[float] | None = None,
+    slumps: list[tuple[float, float]] | None = None,
+    d_r: float | None = None,
+    d_std: float | None = None,
+    depth_min: float = 0.0,
+    depth_max: float = 150.0,
+    depth_step: float = 1.0,
+) -> dict[str, Any]:
+    """Runs native rbacon MCMC simulation via local system Rscript (2~3s native speed)."""
+    import subprocess
+    import tempfile
+
+    r_env = check_local_r_environment()
+    if not r_env.get("has_r") or not r_env.get("has_rbacon"):
+        return {
+            "success": False,
+            "has_local_r": r_env.get("has_r", False),
+            "has_rbacon": r_env.get("has_rbacon", False),
+            "error": "本地未安装 R 或缺少 rbacon 包，请通过增量包使用内置 WebR 算力。",
+        }
+
+    rscript_path = r_env["rscript_path"]
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cores_dir = Path(tmp_dir) / "Bacon_runs"
+        core_dir = cores_dir / core_name
+        core_dir.mkdir(parents=True, exist_ok=True)
+
+        # 1. Generate core_name.csv
+        csv_path = core_dir / f"{core_name}.csv"
+        csv_rows = ["id,age,error,depth,cc"]
+        for d in dates:
+            d_id = str(d.get("id", "14C"))
+            d_age = float(d.get("age", 0))
+            d_err = float(d.get("error", 30))
+            d_depth = float(d.get("depth", 0))
+            d_cc = int(d.get("cc", cc))
+            csv_rows.append(f"{d_id},{d_age},{d_err},{d_depth},{d_cc}")
+        csv_path.write_text("\n".join(csv_rows) + "\n", encoding="utf-8")
+
+        # 2. Build R runner script
+        r_script_path = Path(tmp_dir) / "run_bacon.R"
+        out_tsv_path = Path(tmp_dir) / "bacon_output.tsv"
+
+        hiatus_arg = f"c({', '.join(map(str, hiatus_depths))})" if hiatus_depths else "NA"
+        dr_val = float(d_r) if d_r is not None else 0.0
+        dr_std = float(d_std) if d_std is not None else 0.0
+
+        r_code = f"""
+suppressPackageStartupMessages(library(rbacon))
+coredir <- "{str(cores_dir).replace(chr(92), '/')}"
+core_name <- "{core_name}"
+thick <- {thickness}
+hiatus_vec <- {hiatus_arg}
+dr <- {dr_val}
+dr_std <- {dr_std}
+out_tsv <- "{str(out_tsv_path).replace(chr(92), '/')}"
+
+tryCatch({{
+    Bacon(
+        core=core_name,
+        thick=thick,
+        coredir=coredir,
+        hiatus.depths=hiatus_vec,
+        delta.R=dr,
+        delta.STD=dr_std,
+        ask=FALSE,
+        suggest=FALSE,
+        run=TRUE,
+        plot.pdf=FALSE,
+        ssize=2000,
+        verbose=FALSE
+    )
+
+    d_seq <- seq({depth_min}, {depth_max}, by={depth_step})
+    ages_mat <- sapply(d_seq, function(d) {{
+        ag <- tryCatch(Bacon.Age.d(d, BCAD=FALSE), error=function(e) numeric(0))
+        if(length(ag) < 2) return(c(NA, NA, NA))
+        c(stats::median(ag, na.rm=TRUE), stats::quantile(ag, probs=c(0.025, 0.975), na.rm=TRUE))
+    }})
+
+    df_out <- data.frame(
+        depth=d_seq,
+        age=as.numeric(ages_mat[1, ]),
+        age_min=as.numeric(ages_mat[2, ]),
+        age_max=as.numeric(ages_mat[3, ])
+    )
+
+    if(any(is.na(df_out$age))) {{
+        valid_idx <- which(!is.na(df_out$age))
+        if(length(valid_idx) >= 2) {{
+            df_out$age <- stats::approx(df_out$depth[valid_idx], df_out$age[valid_idx], xout=df_out$depth, rule=2)$y
+            df_out$age_min <- stats::approx(df_out$depth[valid_idx], df_out$age_min[valid_idx], xout=df_out$depth, rule=2)$y
+            df_out$age_max <- stats::approx(df_out$depth[valid_idx], df_out$age_max[valid_idx], xout=df_out$depth, rule=2)$y
+        }}
+    }}
+
+    write.table(df_out, file=out_tsv, sep="\\t", row.names=FALSE, quote=FALSE)
+}}, error=function(e) {{
+    cat("BACON_FATAL_ERROR:", conditionMessage(e), "\\n")
+}})
+"""
+        r_script_path.write_text(r_code, encoding="utf-8")
+
+        # 3. Execute via subprocess
+        try:
+            cmd = [rscript_path, str(r_script_path)]
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30.0, check=False)
+            if out_tsv_path.is_file():
+                depths, ages, age_min, age_max = [], [], [], []
+                lines = out_tsv_path.read_text(encoding="utf-8").strip().splitlines()
+                if len(lines) > 1:
+                    for line in lines[1:]:
+                        parts = line.split("\t")
+                        if len(parts) >= 4:
+                            try:
+                                depths.append(round(float(parts[0]), 1))
+                                ages.append(round(float(parts[1]), 1))
+                                age_min.append(round(float(parts[2]), 1))
+                                age_max.append(round(float(parts[3]), 1))
+                            except ValueError:
+                                continue
+
+                if depths and ages:
+                    return {
+                        "success": True,
+                        "backend": "local_r",
+                        "engine": f"rbacon native ({r_env['r_version']})",
+                        "depths": depths,
+                        "ages": ages,
+                        "age_min": age_min,
+                        "age_max": age_max,
+                        "metadata": {
+                            "curve_type": "median",
+                            "envelope_type": "95_hpd",
+                            "engine": "rbacon (native R)",
+                            "r_version": r_env["r_version"],
+                            "depth_unit": "cm",
+                            "age_unit": "cal BP",
+                            "calibration_curve": "IntCal20" if cc == 1 else f"cc_{cc}",
+                        },
+                    }
+            return {
+                "success": False,
+                "error": proc.stderr or proc.stdout or "Bacon execution produced no output TSV",
+            }
+        except Exception as e:
+            return {"success": False, "error": f"R execution failed: {e}"}
+
+    return {"success": False, "error": "Bacon execution produced no output"}

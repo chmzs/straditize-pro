@@ -96,6 +96,62 @@ class TestComponentManagerSuite(unittest.TestCase):
         self.assertTrue(un_res["removed"])
         self.assertFalse(self.mgr.get_status("age-modeling")["is_installed"])
 
+    def test_05_sha256_checksum_verification(self):
+        """Verify strict SHA256 validation prevents corrupted packages."""
+        import hashlib
+        bio = io.BytesIO()
+        with zipfile.ZipFile(bio, "w") as zf:
+            zf.writestr("test.txt", "valid content")
+        zip_bytes = bio.getvalue()
+        correct_sha = hashlib.sha256(zip_bytes).hexdigest()
+        bad_sha = "0000000000000000000000000000000000000000000000000000000000000000"
+
+        # Correct SHA should succeed
+        res = self.mgr.install_from_zip(zip_bytes, component_name="age-modeling", expected_sha256=correct_sha)
+        self.assertTrue(res["success"])
+
+        # Mismatched SHA should fail loudly
+        with self.assertRaises(ValueError) as ctx:
+            self.mgr.install_from_zip(zip_bytes, component_name="age-modeling", expected_sha256=bad_sha)
+        self.assertIn("SHA256 checksum mismatch", str(ctx.exception))
+
+    def test_06_ready_callback_trigger(self):
+        """Verify component.ready event callbacks are invoked on successful install."""
+        notified = []
+
+        def on_ready(comp_name, meta):
+            notified.append((comp_name, meta))
+
+        self.mgr.register_ready_callback(on_ready)
+
+        bio = io.BytesIO()
+        with zipfile.ZipFile(bio, "w") as zf:
+            zf.writestr("webr/worker.js", "mock_worker")
+        self.mgr.install_from_zip(bio.getvalue(), component_name="age-modeling")
+
+        self.assertEqual(len(notified), 1)
+        self.assertEqual(notified[0][0], "age-modeling")
+        self.assertEqual(notified[0][1]["status"], "ready")
+
+    def test_07_webr_directory_and_format_speed(self):
+        """Verify user directory webr alias structure and speed formatting helper."""
+        from straditize_core.components.manager import format_speed
+
+        self.assertEqual(format_speed(0), "0 KB/s")
+        self.assertEqual(format_speed(512000), "500.0 KB/s")
+        self.assertEqual(format_speed(2097152), "2.0 MB/s")
+
+        bio = io.BytesIO()
+        with zipfile.ZipFile(bio, "w") as zf:
+            zf.writestr("webr/R.bin.wasm", "mock_wasm")
+        self.mgr.install_from_zip(bio.getvalue(), component_name="age-modeling")
+
+        # Verify webr directory exists under base_path
+        webr_dir = self.base_path / "webr"
+        self.assertTrue(webr_dir.is_dir())
+        self.assertTrue((webr_dir / "R.bin.wasm").is_file())
+        self.assertTrue((webr_dir / "installed.json").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

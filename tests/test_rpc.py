@@ -351,7 +351,7 @@ class TestStraditizeRpcProtocol(unittest.TestCase):
             with open(csv_file, "r", encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("depth", content)
-            self.assertIn("col_0", content)
+            self.assertTrue("col01" in content or "col_0" in content)
 
     # -------------------------------------------------------------------------
     # 4. Taxa Batch Setting, Depth Grid and Matrix Extraction
@@ -889,6 +889,40 @@ class TestStraditizeHttpTransport(unittest.TestCase):
             except Exception:
                 pass
 
+    def test_component_static_route_serving(self):
+        """Verify static WASM/JS/JSON component routing under /components/ and /webr/."""
+        import urllib.request
+        from straditize_core.components.manager import get_base_components_dir
+
+        base_dir = get_base_components_dir()
+        test_webr_dir = base_dir / "webr"
+        test_webr_dir.mkdir(parents=True, exist_ok=True)
+        wasm_file = test_webr_dir / "test_module.wasm"
+        wasm_file.write_bytes(b"\x00asm\x01\x00\x00\x00")
+
+        try:
+            # 1. Access via /components/webr/test_module.wasm
+            req1 = urllib.request.Request(f"{self.base_url}/components/webr/test_module.wasm")
+            with urllib.request.urlopen(req1, timeout=3.0) as resp1:
+                self.assertEqual(resp1.status, 200)
+                self.assertEqual(resp1.headers.get("Content-Type"), "application/wasm")
+                self.assertEqual(resp1.read(), b"\x00asm\x01\x00\x00\x00")
+
+            # 2. Access via /webr/test_module.wasm
+            req2 = urllib.request.Request(f"{self.base_url}/webr/test_module.wasm")
+            with urllib.request.urlopen(req2, timeout=3.0) as resp2:
+                self.assertEqual(resp2.status, 200)
+                self.assertEqual(resp2.headers.get("Content-Type"), "application/wasm")
+
+            # 3. Path traversal attack blocked
+            with self.assertRaises(urllib.error.HTTPError) as ctx:
+                bad_req = urllib.request.Request(f"{self.base_url}/components/../../etc/passwd")
+                urllib.request.urlopen(bad_req, timeout=3.0)
+            self.assertEqual(ctx.exception.code, 403)
+        finally:
+            if wasm_file.exists():
+                wasm_file.unlink()
+
 
 class TestSectionFiveJsonRpcMethods(unittest.TestCase):
     """Verifies all JSON-RPC 2.0 methods and POSIX .tar archive specifications from Section 五 and 八."""
@@ -1078,6 +1112,15 @@ class TestSectionFiveJsonRpcMethods(unittest.TestCase):
                         os.remove(p)
                     except Exception:
                         pass
+
+    def test_agedepth_bacon_modeling_rpc(self):
+        """Verify agedepth.runBaconModeling hierarchy RPC invocation."""
+        dates = [
+            {"id": "14C_1", "depth": 10.0, "age": 200, "error": 30, "thickness": 1, "cc": 1},
+            {"id": "14C_2", "depth": 50.0, "age": 1000, "error": 40, "thickness": 1, "cc": 1},
+        ]
+        res = self.rpc_call("agedepth.runBaconModeling", {"dates": dates, "core_name": "TestCore", "thickness": 5.0})
+        self.assertTrue(res.get("success") or res.get("need_installation"))
 
 
 if __name__ == "__main__":
