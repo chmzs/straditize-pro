@@ -9,6 +9,7 @@ import logging
 import os
 import tarfile
 import time
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -116,14 +117,29 @@ class StraditizeSession:
         sample_key: str | None = None,
     ) -> dict[str, Any]:
         """Loads an image from filesystem into memory, supporting both direct path and sample keys."""
-        # Resolve sample_key if provided
+        # Resolve sample_key if provided.
+        #
+        # 内置范例是「内置输入」：只提供图谱图片本身，分列/数字化等结果一律由真实算法产生。
+        # 路径基于本文件定位（而非相对当前工作目录），否则从其它目录启动或打包分发后会失效。
+        # 文件名与经典版 straditize 教学资源保持一致，此处不再另存副本。
         if not image_path and sample_key:
+            repo_root = Path(__file__).resolve().parent.parent
+            tutorial_dir = repo_root / "straditize" / "straditize" / "widgets" / "tutorial"
             sample_candidates = {
-                "hoya": os.path.abspath("straditize/straditize/widgets/tutorial/hoya-del-castillo/hoya-del-castillo.png"),
-                "verification": os.path.abspath("verification_real_pollen_edit.png"),
-                "beginner": os.path.abspath("straditize/straditize/widgets/tutorial/beginner/beginner_diagram.png"),
+                "hoya": tutorial_dir / "hoya-del-castillo" / "hoya-del-castillo.png",
+                "verification": repo_root / "verification_real_pollen_edit.png",
+                "beginner": tutorial_dir / "beginner" / "beginner-tutorial.png",
             }
-            image_path = sample_candidates.get(sample_key.lower()) or sample_candidates.get("hoya")
+            candidate = sample_candidates.get(sample_key.lower())
+            if candidate is None:
+                raise JsonRpcError(
+                    INVALID_PARAMS,
+                    f"Unknown sample_key '{sample_key}'. Available: {sorted(sample_candidates)}",
+                )
+            if not candidate.is_file():
+                # 如实报错，不再回退到其它范例（否则用户会以为载入成功）
+                raise JsonRpcError(FILE_NOT_FOUND_ERROR, f"Sample image not found: {candidate}")
+            image_path = str(candidate)
 
         if not image_path:
             raise JsonRpcError(INVALID_PARAMS, "Either 'image_path' or 'sample_key' must be provided.")
