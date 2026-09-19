@@ -15,6 +15,120 @@ import { ImageDisplayMode } from './core/Viewport';
 import { WORKFLOW_STAGES, WorkflowStage } from './types/workflow';
 import { tokens } from './styles/tokens';
 
+import { t } from './i18n';
+
+/**
+ * 数据来源闸门（Data Provenance Gate）
+ *
+ * 设计原则：面向用户的数据只有两个合法来源 —— 后端真实计算，或用户【显式】进入的演示模式。
+ * 后端不可达时绝不自动降级为 Mock：历史上那样做会在后端出错后静默返回前端编造的分列边界、
+ * 随机抖动的曲线、固定名单的属种名，用户无法分辨，可能直接当成科研成果导出。
+ *
+ * 这里改为阻塞式显式选择：重新连接，或明确进入演示模式（界面常驻横幅 + 禁止导出）。
+ */
+type ProvenanceChoice = 'retry' | 'demo';
+
+function showProvenanceGate(message: string): Promise<ProvenanceChoice> {
+  return new Promise((resolve) => {
+    const isLight = document.body.classList.contains('theme-light');
+    const overlay = document.createElement('div');
+    overlay.id = 'provenance-gate';
+    overlay.style.cssText =
+      'position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;' +
+      'backdrop-filter:blur(10px);background:' +
+      (isLight ? 'rgba(241,245,249,0.94)' : 'rgba(15,23,42,0.95)') + ';';
+    overlay.innerHTML = `
+      <div style="max-width:520px;padding:32px 36px;border-radius:14px;background:var(--bg-card);border:1px solid var(--border-color);box-shadow:0 25px 50px -12px rgba(0,0,0,0.3);">
+        <div style="font-size:34px;margin-bottom:10px;">🔌</div>
+        <h2 style="margin:0 0 10px;font-size:17px;font-weight:700;color:var(--text-heading);">${t('banner.backendOffline')}</h2>
+        <p style="margin:0 0 8px;font-size:13px;line-height:1.65;color:var(--text-secondary);">${message}</p>
+        <p style="margin:0 0 20px;font-size:12.5px;line-height:1.65;color:var(--text-muted);">${t('error.demoUnsupported')}</p>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button id="gate-demo" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;">${t('banner.enterDemo')}</button>
+          <button id="gate-retry" class="btn btn-primary" style="padding:8px 16px;font-size:13px;font-weight:600;">${t('banner.reconnect')}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#gate-retry')?.addEventListener('click', () => {
+      overlay.remove();
+      resolve('retry');
+    });
+    overlay.querySelector('#gate-demo')?.addEventListener('click', () => {
+      overlay.remove();
+      resolve('demo');
+    });
+  });
+}
+
+/**
+ * 统一的后端失败上报。
+ * 移除静默兜底后，后端错误会真的冒泡到这里；必须显式告知用户，
+ * 否则会变成 unhandled rejection 而"点了没反应"，比假数据更糟。
+ */
+export function reportBackendFailure(actionLabel: string, err: unknown): void {
+  const message = (err as Error)?.message || t('error.unknown');
+  console.error(`[RPC failure] ${actionLabel}:`, err);
+  window.alert(`❌ ${actionLabel}失败\n\n${message}`);
+}
+
+/** 后端未连接时阻塞启动，直到连上或用户显式选择演示模式 */
+async function ensureDataProvenance(rpcClient: RpcClient): Promise<void> {
+  for (;;) {
+    await rpcClient.probeBackend();
+    if (rpcClient.getStatus().connected) return;
+    const choice = await showProvenanceGate(t('error.backendOffline'));
+    if (choice === 'demo') {
+      rpcClient.setDemoMode(true);
+      return;
+    }
+  }
+}
+
+/** 演示模式/离线状态的常驻横幅：只要数据不是真实计算结果，界面就必须一直说清楚 */
+function mountProvenanceBanner(rpcClient: RpcClient): void {
+  const bar = document.createElement('div');
+  bar.id = 'provenance-banner';
+  bar.style.cssText =
+    'position:fixed;top:0;left:0;right:0;z-index:99998;display:none;align-items:center;justify-content:center;' +
+    'gap:10px;padding:5px 12px;font-size:12px;font-weight:600;letter-spacing:0.2px;';
+  document.body.appendChild(bar);
+
+  const render = () => {
+    const status = rpcClient.getStatus();
+    if (status.isMock) {
+      bar.style.display = 'flex';
+      bar.style.background = '#b45309';
+      bar.style.color = '#fff';
+      bar.innerHTML =
+        `<span>⚠️ ${t('banner.demoMode')}</span>` +
+        `<button id="banner-exit-demo" style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.45);color:#fff;border-radius:4px;padding:1px 8px;font-size:11px;cursor:pointer;">${t('banner.exitDemo')}</button>`;
+      bar.querySelector('#banner-exit-demo')?.addEventListener('click', () => {
+        rpcClient.setDemoMode(false);
+        rpcClient.probeBackend().then(render);
+      });
+    } else if (!status.connected) {
+      bar.style.display = 'flex';
+      bar.style.background = '#b91c1c';
+      bar.style.color = '#fff';
+      bar.innerHTML =
+        `<span>⛔ ${t('banner.backendLost')}</span>` +
+        `<button id="banner-retry" style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.45);color:#fff;border-radius:4px;padding:1px 8px;font-size:11px;cursor:pointer;">${t('banner.reconnect')}</button>`;
+      bar.querySelector('#banner-retry')?.addEventListener('click', () => {
+        rpcClient.probeBackend().then(render);
+      });
+    } else {
+      bar.style.display = 'none';
+    }
+    // 顶栏与主体让出横幅高度，避免遮挡
+    const app = document.getElementById('app');
+    if (app) app.style.paddingTop = bar.style.display === 'flex' ? '26px' : '';
+  };
+
+  rpcClient.setStatusCallback(render);
+  render();
+}
+
 async function bootstrap() {
   const appContainer = document.getElementById('app');
   if (!appContainer) throw new Error('Missing #app container');
@@ -22,19 +136,19 @@ async function bootstrap() {
   // 0. 恢复上次选择的语言并同步 <html lang>（必须在任何组件渲染之前执行）
   applyLocaleToDocument();
 
-  // 1. 初始化 JSON-RPC Client（先尝试探测后端，无后端自动降级为 Mock）
+  // 1. 初始化 JSON-RPC Client，并阻塞式确认数据来源（后端真实计算 / 用户显式演示模式）
   const rpcClient = new RpcClient();
-  await rpcClient.probeBackend();
+  await ensureDataProvenance(rpcClient);
+  mountProvenanceBanner(rpcClient);
 
-  // 2. 获取初始图谱数据
-  //    后端在握手阶段就明确报错时不能静默用假数据冒充真实工程：记录错误并降级为本地示例图谱，
-  //    状态胶囊会同步显示 Mock，用户可据此判断当前看到的是演示数据。
+  // 2. 获取初始图谱数据。失败必须暴露，不再用任何替代数据蒙混。
   let initialData: DiagramData;
   try {
     initialData = await rpcClient.getDiagramData();
   } catch (err) {
-    console.error('[bootstrap] 初始工程数据获取失败，已降级为本地示例图谱:', err);
-    initialData = rpcClient.useLocalDemoDiagram();
+    console.error('[bootstrap] 初始工程数据获取失败:', err);
+    showProvenanceGate((err as Error).message || t('error.unknown')).then(() => window.location.reload());
+    return;
   }
 
   // 3. 初始化历史状态管理器 (支持 500 步命令撤销/重做)
@@ -397,12 +511,20 @@ async function bootstrap() {
         // S2 -> S3: 确认有效区，开始推导各花粉属种垂直基线并分列
         setHudNotice('正在基于纯数据有效区推导各花粉属种垂直基线...', 5000);
         const cal = canvasComponent.data.calibration;
-        const cols = await rpcClient.detectColumnsInRoi({
-          x0: cal.dataXMin,
-          x1: cal.dataXMax,
-          y0: cal.dataYMin,
-          y1: cal.dataYMax,
-        });
+        let cols: Awaited<ReturnType<typeof rpcClient.detectColumnsInRoi>>;
+        try {
+          cols = await rpcClient.detectColumnsInRoi({
+            x0: cal.dataXMin,
+            x1: cal.dataXMax,
+            y0: cal.dataYMin,
+            y1: cal.dataYMax,
+          });
+        } catch (err) {
+          // 分列失败必须停在 S2：绝不能带着"等分切割"这类替代结果推进到 S3
+          reportBackendFailure('分列识别', err);
+          setHudNotice('❌ 分列识别失败，已停留在 S2。请检查后端后重试。', 6000);
+          return;
+        }
         currentStage = 3;
         canvasComponent.setToolMode('select');
         sidebar?.updateData(canvasComponent.data);
@@ -420,9 +542,16 @@ async function bootstrap() {
         // S4 -> S5: 标尺确认，开始全列拐点数字化提取
         setHudNotice('正在提取各列花粉多边形轮廓与显著控制手柄...', 8000);
         const cols = canvasComponent.data.columns;
-        for (const col of cols) {
-          const pts = await rpcClient.digitizeColumn(col.id);
-          if (pts.length > 0) col.controlPoints = pts;
+        try {
+          for (const col of cols) {
+            const pts = await rpcClient.digitizeColumn(col.id);
+            if (pts.length > 0) col.controlPoints = pts;
+          }
+        } catch (err) {
+          // 数字化失败必须停在 S4：任何替代曲线都是伪造的科学数据
+          reportBackendFailure('拐点数字化提取', err);
+          setHudNotice('❌ 拐点提取失败，已停留在 S4。请检查后端后重试。', 6000);
+          return;
         }
         currentStage = 5;
         sidebar?.updateData(canvasComponent.data);
@@ -622,14 +751,18 @@ async function bootstrap() {
     onDigitizeActiveColumn: async () => {
       const activeCol = canvasComponent.getActiveColumn();
       if (!activeCol) return;
-      const points = await rpcClient.digitizeColumn(activeCol.id);
-      if (points.length > 0) {
-        activeCol.controlPoints = points;
-        history.push(`Re-digitize ${activeCol.name}`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
-        canvasComponent.requestRender();
-        sidebar?.updateData(canvasComponent.data);
-        inspector?.updateData(canvasComponent.data);
-        setHudNotice(`⚡ 属种 ${activeCol.name} 轮廓已根据图像算法完成重识别！`);
+      try {
+        const points = await rpcClient.digitizeColumn(activeCol.id);
+        if (points.length > 0) {
+          activeCol.controlPoints = points;
+          history.push(`Re-digitize ${activeCol.name}`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
+          canvasComponent.requestRender();
+          sidebar?.updateData(canvasComponent.data);
+          inspector?.updateData(canvasComponent.data);
+          setHudNotice(`⚡ 属种 ${activeCol.name} 轮廓已根据图像算法完成重识别！`);
+        }
+      } catch (err) {
+        reportBackendFailure('属种轮廓重识别', err);
       }
     },
     onOpenDataViewer: () => {
@@ -701,8 +834,15 @@ async function bootstrap() {
           setHudNotice(`提示: 图像尺寸较大 (${w}×${h} px)，建议在充足内存环境下操作。`, 4000);
         }
 
-        // 调用 RPC 客户端（若在线发送至 Python 会话进行专业尺寸与二值化解析，若离线自动生成初始建议）
-        const newDiagramData = await rpcClient.loadCustomImage(dataUrl, w, h, file.name);
+        // 调用 RPC 客户端：图像必须由后端真正载入成功，失败即中止
+        let newDiagramData: DiagramData;
+        try {
+          newDiagramData = await rpcClient.loadCustomImage(dataUrl, w, h, file.name);
+        } catch (err) {
+          reportBackendFailure('图谱载入', err);
+          setHudNotice('❌ 图谱载入失败：后端未确认接收该图像，未进入工作流。', 6000);
+          return;
+        }
 
         // 进入 S1 时清空：ROI、所有列、所有点、深度标定、撤销栈、选中状态
         canvasComponent.loadNewDiagram(newDiagramData);
@@ -738,21 +878,30 @@ async function bootstrap() {
             banner.querySelector('#btn-deskew-apply')?.addEventListener('click', async () => {
               banner.remove();
               setHudNotice(`正在旋转矫正图谱 (${ang}°)...`, 5000);
-              const rotRes = await rpcClient.rotateImage(ang);
-              if (rotRes && rotRes.success) {
-                // 重新拉取图片数据
-                const refreshed = await rpcClient.getDiagramData();
-                canvasComponent.loadNewDiagram(refreshed);
-                history.reset([], '');
-                currentStage = 1;
-                updateWorkflowBar();
-                setHudNotice(`✅ 已水平矫正图谱！有效区已重置。`, 3500);
+              try {
+                const rotRes = await rpcClient.rotateImage(ang);
+                if (rotRes && rotRes.success) {
+                  // 重新拉取图片数据
+                  const refreshed = await rpcClient.getDiagramData();
+                  canvasComponent.loadNewDiagram(refreshed);
+                  history.reset([], '');
+                  currentStage = 1;
+                  updateWorkflowBar();
+                  setHudNotice(`✅ 已水平矫正图谱！有效区已重置。`, 3500);
+                } else {
+                  throw new Error(t('error.unknown'));
+                }
+              } catch (err) {
+                reportBackendFailure('图谱旋转校正', err);
               }
             });
             banner.querySelector('#btn-deskew-ignore')?.addEventListener('click', () => {
               banner.remove();
             });
           }
+        }).catch((err) => {
+          // 倾斜探测失败不再伪报"未倾斜"：如实告知，让用户自己决定是否手动校正
+          reportBackendFailure('图谱倾斜检测', err);
         });
       };
       img.src = dataUrl;
@@ -782,11 +931,18 @@ async function bootstrap() {
   // 10. 处理范例图谱切换
   async function handleLoadSample(sampleKey: string) {
     setHudNotice(`正在切换内置范例图谱: ${sampleKey}...`, 5000);
-    const newDiagramData = await rpcClient.loadSampleDiagram(sampleKey);
+    let newDiagramData: DiagramData;
+    try {
+      newDiagramData = await rpcClient.loadSampleDiagram(sampleKey);
+    } catch (err) {
+      reportBackendFailure('内置范例载入', err);
+      return;
+    }
 
     canvasComponent.loadNewDiagram(newDiagramData);
     history.reset(newDiagramData.columns, newDiagramData.activeTaxaId);
-    currentStage = 3;
+    // 范例只提供"内置输入"；分列与数字化必须由用户走真实流程产生，因此停在 S1。
+    currentStage = 1;
     updateWorkflowBar();
 
     sidebar?.updateData(canvasComponent.data);
@@ -848,17 +1004,27 @@ async function bootstrap() {
     onDigitize: async () => {
       const activeCol = canvasComponent.getActiveColumn();
       if (!activeCol) return;
-      const points = await rpcClient.digitizeColumn(activeCol.id);
-      if (points.length > 0) {
-        activeCol.controlPoints = points;
-        history.push(`Re-digitize ${activeCol.name}`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
-        canvasComponent.requestRender();
-        sidebar?.updateData(canvasComponent.data);
+      try {
+        const points = await rpcClient.digitizeColumn(activeCol.id);
+        if (points.length > 0) {
+          activeCol.controlPoints = points;
+          history.push(`Re-digitize ${activeCol.name}`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
+          canvasComponent.requestRender();
+          sidebar?.updateData(canvasComponent.data);
+        }
+      } catch (err) {
+        reportBackendFailure('属种轮廓重识别', err);
       }
     },
     onExport: async (format) => {
-      const exportContent = await rpcClient.exportData(format);
-      propertyPanel.openExportModal(exportContent, format);
+      // 导出是产出正式数据的关键路径：后端失败或处于演示模式时，必须明确拒绝，
+      // 绝不能交给用户一份前端自算的 CSV。
+      try {
+        const exportContent = await rpcClient.exportData(format);
+        propertyPanel.openExportModal(exportContent, format);
+      } catch (err) {
+        reportBackendFailure('数据导出', err);
+      }
     },
     onSaveProject: () => {
       propertyPanel.saveProjectFile();
@@ -973,6 +1139,11 @@ async function bootstrap() {
       const meta = WORKFLOW_STAGES[currentStage];
       setHudNotice(`切换至步骤 ${step}: ${meta.stepName} - ${meta.title}`);
     },
+  });
+
+  // 顶栏状态胶囊订阅同一份后端状态（横幅已订阅，setStatusCallback 为多监听者，不会互相覆盖）
+  rpcClient.setStatusCallback((status) => {
+    toolbar?.updateStatus(status);
   });
 
   const clientStatus = rpcClient.getStatus();

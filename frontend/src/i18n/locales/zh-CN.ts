@@ -24,6 +24,19 @@ export const zhCN = {
   'error.calibration': '坐标标定缺失或无效',
   'error.export': '导出失败（格式或数据校验未通过）',
   'error.unknown': '未知错误',
+
+  // ===== 数据来源完整性（严禁用替代数据掩盖失败）=====
+  'error.backendOffline': '后端未连接，无法进行真实计算。请启动后端或进入演示模式。',
+  'error.backendLost': '与后端的连接已断开，本次操作未执行，未产生任何数据。',
+  'error.demoUnsupported': '演示模式不支持该操作（演示模式仅用于界面预览）。',
+
+  // ===== 数据来源横幅 =====
+  'banner.backendOffline': '后端未连接 —— 当前无法进行任何真实计算',
+  'banner.backendLost': '后端连接已断开 —— 请重连后再继续',
+  'banner.demoMode': '演示模式 —— 当前显示的是内置示例数据，严禁用于正式分析或导出',
+  'banner.reconnect': '重新连接',
+  'banner.exitDemo': '退出演示模式',
+  'banner.enterDemo': '进入演示模式',
 } as const;
 
 export type MessageKey = keyof typeof zhCN;

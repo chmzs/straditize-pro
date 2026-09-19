@@ -1,16 +1,36 @@
 import { BackendStatus, JsonRpcRequest, JsonRpcResponse } from '../types/rpc';
 import { tError } from '../i18n/errorCodes';
+import { t } from '../i18n';
 import { Column, ControlPoint, DiagramData } from '../types/pollen';
 import { MockBackend } from './MockBackend';
 import { SplineInterpolator } from '../core/SplineInterpolator';
 
+/** 演示模式不支持的方法：这些方法会产出被当作科学结果的数据，绝不允许用示例数据替代 */
+const DEMO_FORBIDDEN_METHODS = new Set<string>([
+  'core.digitize',
+  'core.exportData',
+  'ocr.recognizeLabels',
+  'ocr.applyLabels',
+  'core.updateControlPoint',
+]);
+
 export class RpcClient {
   private endpoint: string;
-  private isMock: boolean = true;
+  /**
+   * 后端是否可达。只由 probeBackend() 与 call() 的传输结果维护。
+   * 为 false 时一律抛错，绝不返回替代数据。
+   */
+  private backendOnline: boolean = false;
+  /**
+   * 用户是否【显式】进入演示模式。这是唯一允许使用内置示例数据的场景。
+   * 严禁因为后端出错而自动置位 —— 那正是历史上产出虚假数据的根源。
+   */
+  private demoMode: boolean = false;
   private isDesktopMode: boolean = false;
   private requestId: number = 1;
   private currentDiagramData: DiagramData;
-  private onStatusChange: ((status: BackendStatus) => void) | null = null;
+  /** 状态订阅者列表。用列表而非单一槽位：横幅与顶栏胶囊都需要同一份状态，互相覆盖会导致胶囊长期停留在旧值。 */
+  private statusListeners: Array<(status: BackendStatus) => void> = [];
 
   constructor(endpoint?: string) {
     if (endpoint) {
@@ -24,17 +44,28 @@ export class RpcClient {
   }
 
   public setStatusCallback(callback: (status: BackendStatus) => void): void {
-    this.onStatusChange = callback;
+    this.statusListeners.push(callback);
+    callback(this.getStatus());
   }
 
   public getStatus(): BackendStatus {
     return {
-      connected: !this.isMock,
-      isMock: this.isMock,
+      connected: this.backendOnline,
+      isMock: this.demoMode,
       endpoint: this.endpoint,
-      latencyMs: this.isMock ? 0 : 5,
+      latencyMs: this.backendOnline ? 5 : 0,
       isDesktopMode: this.isDesktopMode,
     };
+  }
+
+  /** 演示模式：显式开关，仅用于界面预览，禁止产出任何被当作结果的数据 */
+  public isDemoMode(): boolean {
+    return this.demoMode;
+  }
+
+  public setDemoMode(enabled: boolean): void {
+    this.demoMode = enabled;
+    this.notifyStatus();
   }
 
   /**
@@ -81,7 +112,7 @@ export class RpcClient {
           const data: JsonRpcResponse = await res.json();
           if (data && !data.error) {
             this.endpoint = url;
-            this.isMock = false;
+            this.backendOnline = true;
             try {
               const statusUrl = url.replace(/\/rpc$/, '/status');
               const sRes = await fetch(statusUrl);
@@ -103,14 +134,15 @@ export class RpcClient {
       }
     }
 
-    this.isMock = true;
+    this.backendOnline = false;
     this.notifyStatus();
     return this.getStatus();
   }
 
   private notifyStatus(): void {
-    if (this.onStatusChange) {
-      this.onStatusChange(this.getStatus());
+    const status = this.getStatus();
+    for (const listener of this.statusListeners) {
+      listener(status);
     }
   }
 
@@ -118,27 +150,42 @@ export class RpcClient {
    * 通用 JSON-RPC 2.0 请求方法
    */
   /**
-   * 后端「不可达」时的统一降级：切换为 Mock 模式并通知状态栏。
-   * 注意：只有传输层失败才能走这里。后端已明确应答的业务错误绝不能降级，
-   * 否则调用方永远收不到错误，用户会拿到伪造的 Mock 数据却显示成功。
+   * 后端「不可达」时的统一处理：标记离线、通知界面，然后【抛错】。
+   *
+   * 这里刻意不返回任何替代数据。历史实现会切换为 Mock 并返回前端编造的结果
+   * （随机抖动的曲线、固定名单的属种名、等分切割的分列边界），用户无法分辨，
+   * 可能直接当成科研成果导出。对科研数据工具而言，宁可中断也不能给假数据。
    */
-  private async degradeToMock<TParams, TResult>(
-    method: string,
-    params: TParams | undefined,
-    reason: unknown
-  ): Promise<TResult> {
-    console.warn(`Backend unreachable for ${method}, falling back to Mock:`, reason);
-    this.isMock = true;
+  private raiseBackendLost(method: string, reason: unknown): never {
+    console.warn(`Backend unreachable for ${method} (no substitute data returned):`, reason);
+    const wasOnline = this.backendOnline;
+    this.backendOnline = false;
     this.notifyStatus();
-    return this.mockExecute<TParams, TResult>(method, params);
+    throw new Error(t(wasOnline ? 'error.backendLost' : 'error.backendOffline'));
   }
 
   public async call<TParams = unknown, TResult = unknown>(
     method: string,
     params?: TParams
   ): Promise<TResult> {
-    if (!this.isMock) {
-      // ---- 1. 传输层：DNS/连接/超时失败 → 降级 Mock ----
+    // === 路径 A：演示模式（用户显式进入）===
+    // 仅允许界面预览类方法；会产出"看起来像科学结果"的方法一律拒绝，
+    // 避免演示数据被误当成真实分析结果。
+    if (this.demoMode) {
+      if (DEMO_FORBIDDEN_METHODS.has(method)) {
+        throw new Error(t('error.demoUnsupported'));
+      }
+      return this.mockExecute<TParams, TResult>(method, params);
+    }
+
+    // === 路径 B：未连接后端 —— 直接报错，绝不返回替代数据 ===
+    if (!this.backendOnline) {
+      this.raiseBackendLost(method, new Error('backend not probed / offline'));
+    }
+
+    // === 路径 C：真实后端 ===
+    {
+      // ---- 1. 传输层：DNS/连接/超时失败 → 标记离线并抛错 ----
       let response: Response;
       try {
         const payload: JsonRpcRequest<TParams> = {
@@ -153,24 +200,20 @@ export class RpcClient {
           body: JSON.stringify(payload),
         });
       } catch (err) {
-        return this.degradeToMock<TParams, TResult>(method, params, err);
+        this.raiseBackendLost(method, err);
       }
 
-      // ---- 2. HTTP 层：非 2xx 视为服务不可用 → 降级 Mock ----
+      // ---- 2. HTTP 层：非 2xx 视为服务不可用 → 报错并标记离线 ----
       if (!response.ok) {
-        return this.degradeToMock<TParams, TResult>(
-          method,
-          params,
-          new Error(`HTTP ${response.status} ${response.statusText}`)
-        );
+        this.raiseBackendLost(method, new Error(`HTTP ${response.status} ${response.statusText}`));
       }
 
-      // ---- 3. 解析层：响应不是合法 JSON-RPC → 降级 Mock ----
+      // ---- 3. 解析层：响应不是合法 JSON-RPC → 报错并标记离线 ----
       let rpcRes: JsonRpcResponse<TResult>;
       try {
         rpcRes = await response.json();
       } catch (err) {
-        return this.degradeToMock<TParams, TResult>(method, params, err);
+        this.raiseBackendLost(method, err);
       }
 
       // ---- 4. 业务层：后端已明确应答错误 → 冒泡给调用方，绝不静默返回假数据 ----
@@ -180,18 +223,6 @@ export class RpcClient {
       }
       return rpcRes.result as TResult;
     }
-
-    return this.mockExecute<TParams, TResult>(method, params);
-  }
-
-  /**
-   * 引导阶段兜底：后端在启动握手时就报错时，切回 Mock 并返回本地示例图谱。
-   * 仅供 bootstrap 使用，避免主界面白屏；常规调用一律走 call() 的错误冒泡。
-   */
-  public useLocalDemoDiagram(): DiagramData {
-    this.isMock = true;
-    this.notifyStatus();
-    return MockBackend.createDefaultDiagramData();
   }
 
   private async mockExecute<TParams, TResult>(method: string, params?: TParams): Promise<TResult> {
@@ -342,32 +373,39 @@ export class RpcClient {
     this.currentDiagramData.columns = [];
     this.currentDiagramData.activeTaxaId = '';
 
-    if (this.isMock) return;
-    try {
-      await this.call('project.new', {});
-    } catch (e) {
-      console.warn('Backend project.new reset sync failed:', e);
-    }
+    if (this.demoMode) return;
+    // 后端清空失败必须冒泡：否则前端显示"已归零"而后端仍保留旧列，
+    // 后续所有 col_index 都会指向错误的数据。
+    await this.call('project.new', {});
   }
 
   /**
    * 加载内置范例图谱
    */
   public async loadSampleDiagram(key: string): Promise<DiagramData> {
-    const sampleData = MockBackend.getSampleDiagram(key);
-    this.currentDiagramData = JSON.parse(JSON.stringify(sampleData));
-
-    if (!this.isMock) {
-      try {
-        await this.call('core.loadImage', {
-          sample_key: key,
-          image_path: sampleData.imageSrc,
-        });
-      } catch (e) {
-        console.warn('Backend load sample sync failed:', e);
-      }
+    // 内置范例是"内置输入"，但分列/数字化结果必须由后端真实计算得出。
+    // 历史实现直接把前端写死的 29 列夹具当作结果展示，与后端会话状态分歧
+    // （后端 columns 为空，前端却显示 29 列），用户会误以为看到了算法能力。
+    let imageSrc = '';
+    if (this.demoMode) {
+      imageSrc = MockBackend.getSampleDiagram(key).imageSrc;
     }
 
+    const backendResult = await this.call<Record<string, unknown>, any>('core.loadImage', {
+      sample_key: key,
+      ...(imageSrc ? { image_path: imageSrc } : {}),
+    });
+
+    this.currentDiagramData.columns = [];
+    this.currentDiagramData.activeTaxaId = '';
+    this.currentDiagramData.calibration = {
+      ...this.currentDiagramData.calibration,
+      isCalibrated: false,
+    };
+    if (backendResult && backendResult.width && backendResult.height) {
+      this.currentDiagramData.imageWidth = backendResult.width;
+      this.currentDiagramData.imageHeight = backendResult.height;
+    }
     return this.currentDiagramData;
   }
 
@@ -380,35 +418,30 @@ export class RpcClient {
     height: number,
     fileName: string = 'Custom Diagram'
   ): Promise<DiagramData> {
-    const initial = MockBackend.createInitialSuggestion(width, height, imageSrc, fileName);
-    this.currentDiagramData = initial;
+    // 前端只提供"初始建议 ROI"作为起始值，但图像必须由后端真正载入成功才算数。
+    // 历史实现在后端载图失败时仍沿用前端建议布局继续工作，用户会在一个后端
+    // 并不知情的图像/ROI 上继续操作。
+    this.currentDiagramData = MockBackend.createInitialSuggestion(width, height, imageSrc, fileName);
 
-    if (!this.isMock) {
-      try {
-        // 如果数据过大，传前缀或文件标头
-        const isDataUrl = imageSrc.startsWith('data:');
-        const payload: Record<string, unknown> = {
-          file_name: fileName,
-          width,
-          height,
-        };
-        if (isDataUrl) {
-          payload.image_data = imageSrc;
-        } else {
-          payload.image_path = imageSrc;
-        }
+    const isDataUrl = imageSrc.startsWith('data:');
+    const payload: Record<string, unknown> = {
+      file_name: fileName,
+      width,
+      height,
+    };
+    if (isDataUrl) {
+      payload.image_data = imageSrc;
+    } else {
+      payload.image_path = imageSrc;
+    }
 
-        const backendResult = await this.call<Record<string, unknown>, any>('core.loadImage', payload);
-        // 新载入图像只保留图谱元数据与居中 ROI，严禁自动盲目切列或数字化，严格进入 Step 1 等待用户界定有效区
-        this.currentDiagramData.columns = [];
-        this.currentDiagramData.activeTaxaId = '';
-        if (backendResult && backendResult.width && backendResult.height) {
-          this.currentDiagramData.imageWidth = backendResult.width;
-          this.currentDiagramData.imageHeight = backendResult.height;
-        }
-      } catch (err) {
-        console.warn('Backend loadImage notification failed, using client suggested layout:', err);
-      }
+    const backendResult = await this.call<Record<string, unknown>, any>('core.loadImage', payload);
+    // 新载入图像只保留图谱元数据与居中 ROI，严禁自动盲目切列或数字化，严格进入 Step 1 等待用户界定有效区
+    this.currentDiagramData.columns = [];
+    this.currentDiagramData.activeTaxaId = '';
+    if (backendResult && backendResult.width && backendResult.height) {
+      this.currentDiagramData.imageWidth = backendResult.width;
+      this.currentDiagramData.imageHeight = backendResult.height;
     }
 
     return this.currentDiagramData;
@@ -418,23 +451,22 @@ export class RpcClient {
    * 步骤 2：用户在 Step 1 显式确认有效区 (ROI) 后，调用后端在纯数据区内进行垂直基线推导分列
    */
   public async detectColumnsInRoi(roi: { x0: number; x1: number; y0: number; y1: number }): Promise<Column[]> {
-    if (this.isMock) {
-      const cal = this.currentDiagramData.calibration;
-      cal.dataXMin = roi.x0;
-      cal.dataXMax = roi.x1;
-      cal.dataYMin = roi.y0;
-      cal.dataYMax = roi.y1;
-      const cols = MockBackend.createColumnsFromRoi(cal);
-      this.currentDiagramData.columns = cols;
-      this.currentDiagramData.activeTaxaId = cols[0]?.id || '';
-      return cols;
-    }
+    this.currentDiagramData.calibration.dataXMin = roi.x0;
+    this.currentDiagramData.calibration.dataXMax = roi.x1;
+    this.currentDiagramData.calibration.dataYMin = roi.y0;
+    this.currentDiagramData.calibration.dataYMax = roi.y1;
 
-    try {
-      const res = await this.call<{ x_bounds: [number, number]; y_bounds: [number, number] }, any[]>('core.detectColumns', {
-        x_bounds: [roi.x0, roi.x1],
-        y_bounds: [roi.y0, roi.y1],
-      });
+    {
+      // 参数名必须与后端 session.detect_columns(data_xlim, data_ylim) 一致。
+      // 历史上前端发的是 x_bounds/y_bounds，后端一律回 INVALID_PARAMS，
+      // 而静默兜底又把它换成"等分切割"结果，于是缺陷被掩盖了很久。
+      const res = await this.call<{ data_xlim: [number, number]; data_ylim: [number, number] }, any[]>(
+        'core.detectColumns',
+        {
+          data_xlim: [roi.x0, roi.x1],
+          data_ylim: [roi.y0, roi.y1],
+        }
+      );
 
       if (Array.isArray(res) && res.length > 0) {
         const palette = ['#38bdf8', '#34d399', '#fbbf24', '#a78bfa', '#f472b6', '#fb7185', '#2dd4bf', '#818cf8'];
@@ -468,40 +500,30 @@ export class RpcClient {
         this.currentDiagramData.activeTaxaId = cols[0]?.id || '';
         return cols;
       }
-    } catch (e) {
-      console.warn('Backend detectColumns failed, fallback to ROI split:', e);
     }
 
-    const fallbackCols = MockBackend.createColumnsFromRoi(this.currentDiagramData.calibration);
-    this.currentDiagramData.columns = fallbackCols;
-    this.currentDiagramData.activeTaxaId = fallbackCols[0]?.id || '';
-    return fallbackCols;
+    // 后端未返回任何列边界：如实报错。
+    // 历史实现在此把 ROI 等分切割当作"识别出的分列边界"返回，用户确认 ROI 后
+    // 即使后端失败也会看到"分列完成"，是典型的伪造科学结果。
+    throw new Error(tError(-32603, 'core.detectColumns returned no column bounds'));
   }
 
   public async detectDeskew(): Promise<{ has_skew: boolean; suggested_rotation_angle: number }> {
-    if (this.isMock) {
-      return { has_skew: false, suggested_rotation_angle: 0.0 };
+    // 探测失败必须冒泡：返回 "没有倾斜" 会让用户以为已核查过，从而带着歪斜的图谱继续工作。
+    const res = await this.call<void, { has_skew: boolean; suggested_rotation_angle: number }>('image.detectDeskew');
+    if (!res || typeof res.has_skew !== 'boolean') {
+      throw new Error(tError(-32603, 'image.detectDeskew returned an unexpected payload'));
     }
-    try {
-      const res = await this.call<void, { has_skew: boolean; suggested_rotation_angle: number }>('image.detectDeskew');
-      return res || { has_skew: false, suggested_rotation_angle: 0.0 };
-    } catch (e) {
-      console.warn('Backend detectDeskew failed:', e);
-      return { has_skew: false, suggested_rotation_angle: 0.0 };
-    }
+    return res;
   }
 
   public async rotateImage(angle: number): Promise<{ success: boolean; width: number; height: number }> {
-    if (this.isMock) {
-      return { success: true, width: this.currentDiagramData.imageWidth, height: this.currentDiagramData.imageHeight };
+    // 旋转失败必须冒泡，否则调用方会以为图已转正、继续在错误朝向上标定。
+    const res = await this.call<{ angle: number }, { success: boolean; width: number; height: number }>('image.rotate', { angle });
+    if (!res || typeof res.success !== 'boolean') {
+      throw new Error(tError(-32603, 'image.rotate returned an unexpected payload'));
     }
-    try {
-      const res = await this.call<{ angle: number }, { success: boolean; width: number; height: number }>('image.rotate', { angle });
-      return res || { success: false, width: 0, height: 0 };
-    } catch (e) {
-      console.warn('Backend rotateImage failed:', e);
-      return { success: false, width: 0, height: 0 };
-    }
+    return res;
   }
 
   public async updateControlPoint(
@@ -551,7 +573,9 @@ export class RpcClient {
     );
     if (typeof res === 'string') return res;
     if (res && 'csv_content' in res) return res.csv_content;
-    return this.generateExportData(format);
+    // 严禁回落到前端自算的 generateExportData()：那会在后端导出失败时
+    // 交给用户一份"看起来正常"的 CSV，属于伪造科学结果。
+    throw new Error(tError(-32603, 'core.exportData returned an unexpected payload'));
   }
 
   public generateExportData(format: 'csv' | 'json'): string {

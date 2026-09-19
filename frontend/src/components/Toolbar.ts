@@ -99,11 +99,30 @@ export class Toolbar {
     }
     const rpcPill = this.element.querySelector('#rpc-status-pill');
     if (rpcPill) {
+      // 三种状态必须区分开：
+      //   connected          → RPC（真实后端）
+      //   !connected && demo → 演示（用户显式进入，展示内置示例数据）
+      //   !connected && !demo→ 离线（后端断开，不产出任何数据）
+      // 历史上把"离线"也显示成 Mock，会让用户误以为看到的是有意的演示数据。
+      const state = status.connected ? 'rpc' : status.isMock ? 'demo' : 'offline';
       rpcPill.className = `status-pill ${status.connected ? 'online' : 'mock'}`;
       const dot = rpcPill.querySelector('.status-dot');
       const text = rpcPill.querySelector('.status-text');
-      if (text) text.textContent = status.connected ? 'RPC: Online' : 'Mock';
-      if (dot && status.connected) (dot as HTMLElement).style.boxShadow = '0 0 8px #10b981';
+      if (text) {
+        text.textContent = state === 'rpc' ? 'RPC: Online' : state === 'demo' ? t('lang.badge') === 'EN' ? 'Demo' : '演示' : t('lang.badge') === 'EN' ? 'Offline' : '离线';
+      }
+      if (dot) {
+        (dot as HTMLElement).style.boxShadow =
+          state === 'rpc' ? '0 0 8px #10b981' : state === 'demo' ? '0 0 8px #b45309' : '0 0 8px #b91c1c';
+      }
+      rpcPill.setAttribute(
+        'title',
+        state === 'rpc'
+          ? t('banner.reconnect')
+          : state === 'demo'
+            ? t('banner.demoMode')
+            : t('banner.backendLost')
+      );
     }
   }
 
