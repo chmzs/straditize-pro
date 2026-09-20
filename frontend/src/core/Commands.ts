@@ -1,4 +1,4 @@
-import { ControlPoint, DiagramCalibration, DiagramData, Point2D, TaxaColumn } from '../types/pollen';
+import { ControlPoint, DataRoi, DiagramCalibration, DiagramData, Point2D, TaxaColumn } from '../types/pollen';
 import { Command } from './CommandManager';
 
 /**
@@ -150,31 +150,50 @@ export class MoveColumnBoundaryCommand implements Command {
 }
 
 /**
- * 调整地质数据有效区 (ROI) 边界命令
+ * 调整地质数据有效区 (ROI) 边界命令。
+ *
+ * 只动 `data.roi`：取数区域与 Y 轴标定是两个独立概念，本命令绝不触碰
+ * `data.calibration`（历史实现把两者塞进同一个结构体，导致拖框改深度）。
  */
 export class ResizeRoiCommand implements Command {
   public readonly description: string;
-  private oldCal: DiagramCalibration;
-  private newCal: DiagramCalibration;
+  private oldRoi: DataRoi;
+  private newRoi: DataRoi;
 
-  constructor(oldCal: DiagramCalibration, newCal: DiagramCalibration) {
-    this.oldCal = { ...oldCal };
-    this.newCal = { ...newCal };
+  constructor(oldRoi: DataRoi, newRoi: DataRoi) {
+    this.oldRoi = { ...oldRoi };
+    this.newRoi = { ...newRoi };
     this.description = '调整地质数据有效区 (ROI)';
   }
 
   public execute(data: DiagramData): void {
-    data.calibration.dataXMin = this.newCal.dataXMin;
-    data.calibration.dataXMax = this.newCal.dataXMax;
-    data.calibration.dataYMin = this.newCal.dataYMin;
-    data.calibration.dataYMax = this.newCal.dataYMax;
+    data.roi = { ...this.newRoi };
   }
 
   public undo(data: DiagramData): void {
-    data.calibration.dataXMin = this.oldCal.dataXMin;
-    data.calibration.dataXMax = this.oldCal.dataXMax;
-    data.calibration.dataYMin = this.oldCal.dataYMin;
-    data.calibration.dataYMax = this.oldCal.dataYMax;
+    data.roi = { ...this.oldRoi };
+  }
+}
+
+/**
+ * 设置 Y 轴两点标定命令。
+ */
+export class SetDepthCalibrationCommand implements Command {
+  public readonly description: string = '设置 Y 轴两点标定';
+  private oldCal: DiagramCalibration;
+  private newCal: DiagramCalibration;
+
+  constructor(oldCal: DiagramCalibration, newCal: DiagramCalibration) {
+    this.oldCal = JSON.parse(JSON.stringify(oldCal));
+    this.newCal = JSON.parse(JSON.stringify(newCal));
+  }
+
+  public execute(data: DiagramData): void {
+    data.calibration = JSON.parse(JSON.stringify(this.newCal));
+  }
+
+  public undo(data: DiagramData): void {
+    data.calibration = JSON.parse(JSON.stringify(this.oldCal));
   }
 }
 

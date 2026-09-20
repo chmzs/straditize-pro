@@ -1,4 +1,6 @@
-import { Point2D, Column, DepthCalibration } from '../types/pollen';
+// 仅类型导入：显式 `import type` 让本模块能被 Node 的类型剥离直接加载做单元测试
+// （见 frontend/test-roi-calibration.mjs），不会留下指向 .ts 的运行时依赖。
+import type { Point2D, Column, DepthCalibration } from '../types/pollen';
 
 export interface ViewportTransform {
   offsetX: number;
@@ -30,18 +32,17 @@ export class CoordinateSystem {
 
   /**
    * 3. 图像物理 Y 像素 -> 真实地层物理深度 (cm / m / cal kyr BP)
+   *
+   * 只读标定结构：未标定时返回 undefined，**绝不**回落到 ROI 边界。
+   * 历史上这里写作 `cal.top_px ?? cal.dataYMin`，于是"框选数据的方框"被当成了
+   * 时间轴 —— 拖动 ROI 就静默改写深度，这正是本次修复的核心缺陷。
    */
   public static imageYToDepth(y: number, cal: DepthCalibration): number | undefined {
-    const topPx = cal.top_px ?? cal.dataYMin ?? 0;
-    const bottomPx = cal.bottom_px ?? cal.dataYMax ?? 1000;
-    const topCm = cal.top_cm ?? cal.depthTopValue ?? 0;
-    const bottomCm = cal.bottom_cm ?? cal.depthBottomValue ?? 150;
+    const bounds = CoordinateSystem.calibrationBounds(cal);
+    if (!bounds) return undefined;
 
-    const pxRange = bottomPx - topPx;
-    if (pxRange === 0) return undefined;
-
-    const t = (y - topPx) / pxRange;
-    const depth = topCm + t * (bottomCm - topCm);
+    const t = (y - bounds.topPx) / (bounds.bottomPx - bounds.topPx);
+    const depth = bounds.topValue + t * (bounds.bottomValue - bounds.topValue);
     return Number(depth.toFixed(3));
   }
 
@@ -49,17 +50,33 @@ export class CoordinateSystem {
    * 4. 真实地层物理深度 -> 图像物理 Y 像素
    */
   public static depthToImageY(depth: number, cal: DepthCalibration): number | undefined {
-    const topPx = cal.top_px ?? cal.dataYMin ?? 0;
-    const bottomPx = cal.bottom_px ?? cal.dataYMax ?? 1000;
-    const topCm = cal.top_cm ?? cal.depthTopValue ?? 0;
-    const bottomCm = cal.bottom_cm ?? cal.depthBottomValue ?? 150;
+    const bounds = CoordinateSystem.calibrationBounds(cal);
+    if (!bounds) return undefined;
 
-    const depthRange = bottomCm - topCm;
+    const depthRange = bounds.bottomValue - bounds.topValue;
     if (depthRange === 0) return undefined;
 
-    const t = (depth - topCm) / depthRange;
-    const y = topPx + t * (bottomPx - topPx);
-    return Math.round(y);
+    const t = (depth - bounds.topValue) / depthRange;
+    return Math.round(bounds.topPx + t * (bounds.bottomPx - bounds.topPx));
+  }
+
+  /**
+   * 3.1 标定的四个端点；未标定（或端点缺失、像素跨度为零）时返回 null。
+   *
+   * 单一判定入口：调用方不得各自写一套 `??` 兜底，否则又会长出新的隐式耦合。
+   */
+  public static calibrationBounds(cal: DepthCalibration | undefined): {
+    topPx: number;
+    bottomPx: number;
+    topValue: number;
+    bottomValue: number;
+  } | null {
+    if (!cal || !cal.isCalibrated) return null;
+    const { top_px, bottom_px, top_cm, bottom_cm } = cal;
+    if (top_px === null || bottom_px === null || top_cm === null || bottom_cm === null) return null;
+    if (!Number.isFinite(top_px) || !Number.isFinite(bottom_px)) return null;
+    if (top_px === bottom_px) return null;
+    return { topPx: top_px, bottomPx: bottom_px, topValue: top_cm, bottomValue: bottom_cm };
   }
 
   /**

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "node test-core.js && node test-glossary.mjs"
+    "test": "node test-core.js && node test-glossary.mjs && node --experimental-strip-types test-roi-calibration.mjs"
   },
   "devDependencies": {
     "typescript": "^7.0.2",

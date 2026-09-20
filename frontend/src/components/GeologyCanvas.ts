@@ -1,4 +1,12 @@
-import { Point2D, ControlPoint, TaxaColumn, DiagramData, DiagramCalibration, ToolMode } from '../types/pollen';
+import {
+  Point2D,
+  ControlPoint,
+  TaxaColumn,
+  DiagramData,
+  DataRoi,
+  LineMaskStroke,
+  ToolMode,
+} from '../types/pollen';
 import { Viewport, ImageDisplayMode } from '../core/Viewport';
 import { SplineInterpolator } from '../core/SplineInterpolator';
 import { HistoryManager } from '../core/HistoryManager';
@@ -22,6 +30,12 @@ export interface CanvasEventCallbacks {
   onToolModeChange?: (mode: ToolMode) => void;
   onOpenFileDialog?: () => void;
   onToggleHelp?: () => void;
+  /** ROI 拖拽结束：调用方负责把新范围推给后端（去线掩膜必须在 ROI 内计算）。 */
+  onRoiCommitted?: (roi: DataRoi) => void;
+  /** Y 轴两点标定选点完成（按像素 Y 升序），调用方负责弹窗收真实值。 */
+  onYCalibPicked?: (marks: Point2D[]) => void;
+  /** 线掩膜人工修正笔迹结束，调用方负责提交后端并回灌新叠加层。 */
+  onLineFixStroke?: (stroke: LineMaskStroke) => void;
 }
 
 export class GeologyCanvas {
@@ -39,11 +53,12 @@ export class GeologyCanvas {
   public toolModeManager: ToolModeManager;
   private callbacks: CanvasEventCallbacks;
 
-  // 图像缓存与离屏二值化遮罩
+  // 图像缓存与后端下发的去线 QC 叠加层
   private diagramImage: HTMLImageElement | null = null;
   private isImageLoaded: boolean = false;
-  private binaryMonoCanvas: HTMLCanvasElement | null = null;
-  private binaryMaskCanvas: HTMLCanvasElement | null = null;
+  /** 后端 algorithm.degrid 返回的 RGBA 掩膜：白=保留墨迹，红=实际剔除的线像素。 */
+  private lineOverlayImage: HTMLImageElement | null = null;
+  private lineOverlayUrl: string | null = null;
 
   // 交互状态追踪
   private isSpaceDown: boolean = false;
@@ -54,7 +69,8 @@ export class GeologyCanvas {
   // 拖拽前状态备份（用于松手时提交单条不可逆原子 Command）
   private dragInitialPointPos: Point2D | null = null;
   private dragInitialColumn: { startX: number; endX: number; tickEndX: number } | null = null;
-  private dragInitialCalibration: DiagramCalibration | null = null;
+  /** ROI 拖拽起点快照。只保存 ROI —— 取数区域与深度标定互不相关。 */
+  private dragInitialRoi: DataRoi | null = null;
 
   // 拖动与悬停状态
   private hoveredAnchor: { taxaId: string; pointId: string } | null = null;
@@ -66,6 +82,12 @@ export class GeologyCanvas {
   private hoveredDepthHorizon: number | null = null;
   private isHoveringDepthRulerBadge: boolean = false;
 
+  // Y 轴两点标定：用户在图上点选的参考点（最多两个）
+  private yCalibMarks: Point2D[] = [];
+  // 线掩膜人工修正：当前笔刷模式与正在绘制的笔迹
+  public lineFixMode: 'erase' | 'restore' = 'erase';
+  private lineFixPoints: Point2D[] | null = null;
+
   // 点击添加锚点防误抖标识
   private hasDraggedAnchor: boolean = false;
   private renderPending: boolean = false;
@@ -74,6 +96,8 @@ export class GeologyCanvas {
   private readonly ANCHOR_HIT_RADIUS_SCREEN = 8.0;
   private readonly BOUNDARY_HIT_WIDTH_SCREEN = 6.0;
   private readonly ROI_HANDLE_SIZE_SCREEN = 8.0;
+  private readonly YCALIB_MARKER_RADIUS_SCREEN = 7.0;
+  private readonly LINEFIX_BRUSH_RADIUS_SCREEN = 7.0;
 
   // 显式 4 步推进工作流状态 (1: ROI界定, 2: 列切分与形态, 3: 数字化与微调, 4: 导出)
   public workflowStage: number = 3;
@@ -189,6 +213,18 @@ export class GeologyCanvas {
         </svg>
         <span>ROI (R)</span>
       </button>
+      <button class="floating-tool-btn" data-fmode="linefix" title="线掩膜人工修正笔刷 (Line Fix, 快捷键: K) —— 擦掉误标 / 补回漏标">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="m14 4 6 6-9.5 9.5a2 2 0 0 1-2.83 0L4 15.83a2 2 0 0 1 0-2.83L14 4z"/><line x1="12" y1="6" x2="18" y2="12"/>
+        </svg>
+        <span>修线 (K)</span>
+      </button>
+      <button class="floating-tool-btn" data-fmode="ycalib" title="Y 轴两点标定 (Calibrate, 快捷键: Y) —— 点两个已知刻度所在的行，再填真实值">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="4" y1="4" x2="4" y2="20"/><line x1="4" y1="8" x2="9" y2="8"/><line x1="4" y1="16" x2="9" y2="16"/><path d="M12 20V10m0 0 3 3m-3-3-3 3"/>
+        </svg>
+        <span>标定 (Y)</span>
+      </button>
     `;
     this.container.appendChild(palette);
     this.floatingToolbar = palette;
@@ -286,9 +322,8 @@ export class GeologyCanvas {
         this.data.imageHeight = this.diagramImage.naturalHeight;
       }
 
-      // 生成高保真二值化离屏缓存
-      this.generateBinaryCache();
-
+      // 后端下发的去线掩膜随底图一起失效：新图尚未在 S2 重新检测
+      this.setLineOverlay(null);
       this.minimap?.setImage(this.diagramImage, this.data.imageWidth, this.data.imageHeight);
       this.updateEmptyStateVisibility();
       this.fitToScreen();
@@ -303,155 +338,34 @@ export class GeologyCanvas {
   }
 
   /**
-   * 离屏生成纯黑白二值化图与荧光透视墨迹层
+   * 装载后端下发的去线 QC 叠加层（白=保留墨迹，红=实际剔除的线像素）。
+   *
+   * 前端不再自行实现一套"看起来像去线"的显示逻辑：历史实现是每行连续墨迹
+   * run 超阈值就整段标红，实测在 Hoya 图上把 Pinus 列 99% 的实心轮廓抹掉，
+   * 而那张图 ROI 内根本没有横向网格线。现在所见即后端数字化实际所用。
    */
-  private generateBinaryCache(): void {
-    if (!this.diagramImage || !this.isImageLoaded) return;
-
-    try {
-      const w = this.diagramImage.naturalWidth;
-      const h = this.diagramImage.naturalHeight;
-      if (w <= 0 || h <= 0) return;
-
-      // 1. 针对超大图谱（如 20000x30000 像素），将离屏缓存限制在最高 4096 像素，避免 2.4GB+ 内存溢出
-      const maxDim = 4096;
-      let targetW = w;
-      let targetH = h;
-      if (w > maxDim || h > maxDim) {
-        const ratio = maxDim / Math.max(w, h);
-        targetW = Math.max(1, Math.round(w * ratio));
-        targetH = Math.max(1, Math.round(h * ratio));
-      }
-
-      // 创建提取像素的临时离屏 Canvas
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = targetW;
-      tempCanvas.height = targetH;
-      const tempCtx = tempCanvas.getContext('2d');
-      if (!tempCtx) return;
-
-      tempCtx.drawImage(this.diagramImage, 0, 0, targetW, targetH);
-      const imgData = tempCtx.getImageData(0, 0, targetW, targetH);
-      const d = imgData.data;
-
-      // 2. 初始化目标 Canvas (尺寸等于 targetW, targetH)
-      this.binaryMonoCanvas = document.createElement('canvas');
-      this.binaryMonoCanvas.width = targetW;
-      this.binaryMonoCanvas.height = targetH;
-      const monoCtx = this.binaryMonoCanvas.getContext('2d');
-
-      this.binaryMaskCanvas = document.createElement('canvas');
-      this.binaryMaskCanvas.width = targetW;
-      this.binaryMaskCanvas.height = targetH;
-      const maskCtx = this.binaryMaskCanvas.getContext('2d');
-
-      if (!monoCtx || !maskCtx) return;
-
-      const monoImgData = monoCtx.createImageData(targetW, targetH);
-      const monoData = monoImgData.data;
-
-      const maskImgData = maskCtx.createImageData(targetW, targetH);
-      const maskData = maskImgData.data;
-
-      const threshold = this.viewport.binaryThreshold; // 默认 138
-
-      // 初步识别墨迹布尔矩阵
-      const inkGrid = new Uint8Array(targetW * targetH);
-      for (let y = 0; y < targetH; y++) {
-        const rowOffset = y * targetW;
-        for (let x = 0; x < targetW; x++) {
-          const idx = (rowOffset + x) * 4;
-          const r = d[idx];
-          const g = d[idx + 1];
-          const b = d[idx + 2];
-          const alpha = d[idx + 3];
-          const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-          if (alpha > 40 && gray < threshold) {
-            inkGrid[rowOffset + x] = 1;
-          }
-        }
-      }
-
-      // 根据去网格横线灵敏度 (Degrid Sensitivity) 检测水平贯穿线
-      const lineGrid = new Uint8Array(targetW * targetH);
-      if (this.viewport.degridStrength !== 'off') {
-        const minLineLen = this.viewport.degridStrength === 'weak' ? 55 : (this.viewport.degridStrength === 'strong' ? 20 : 35);
-        for (let y = 0; y < targetH; y++) {
-          const rowOffset = y * targetW;
-          let runStart = -1;
-          for (let x = 0; x < targetW; x++) {
-            if (inkGrid[rowOffset + x] === 1) {
-              if (runStart === -1) runStart = x;
-            } else {
-              if (runStart !== -1) {
-                const runLen = x - runStart;
-                if (runLen >= minLineLen) {
-                  for (let lx = runStart; lx < x; lx++) {
-                    lineGrid[rowOffset + lx] = 1;
-                  }
-                }
-                runStart = -1;
-              }
-            }
-          }
-          if (runStart !== -1 && (targetW - runStart) >= minLineLen) {
-            for (let lx = runStart; lx < targetW; lx++) {
-              lineGrid[rowOffset + lx] = 1;
-            }
-          }
-        }
-      }
-
-      for (let y = 0; y < targetH; y++) {
-        const rowOffset = y * targetW;
-        for (let x = 0; x < targetW; x++) {
-          const pIdx = rowOffset + x;
-          const i = pIdx * 4;
-          const isInk = inkGrid[pIdx] === 1;
-          const isGridLine = lineGrid[pIdx] === 1;
-
-          if (isGridLine) {
-            // 被去横线切除的像素: 黑白二值化抹平为背景暗色; 透视遮罩下呈现亮红高亮 (#ef4444) 供用户肉眼复核
-            monoData[i] = 9;
-            monoData[i + 1] = 15;
-            monoData[i + 2] = 25;
-            monoData[i + 3] = 255;
-
-            maskData[i] = 239;
-            maskData[i + 1] = 68;
-            maskData[i + 2] = 68;
-            maskData[i + 3] = 235;
-          } else if (isInk) {
-            // 正常花粉墨迹: 纯白亮色; 透视遮罩呈现醒目青蓝 (#38bdf8)
-            monoData[i] = 255;
-            monoData[i + 1] = 255;
-            monoData[i + 2] = 255;
-            monoData[i + 3] = 255;
-
-            maskData[i] = 56;
-            maskData[i + 1] = 189;
-            maskData[i + 2] = 248;
-            maskData[i + 3] = 235;
-          } else {
-            // 背景暗底，透视透明
-            monoData[i] = 9;
-            monoData[i + 1] = 15;
-            monoData[i + 2] = 25;
-            monoData[i + 3] = 255;
-
-            maskData[i] = 0;
-            maskData[i + 1] = 0;
-            maskData[i + 2] = 0;
-            maskData[i + 3] = 0;
-          }
-        }
-      }
-
-      monoCtx.putImageData(monoImgData, 0, 0);
-      maskCtx.putImageData(maskImgData, 0, 0);
-    } catch (err) {
-      console.warn('Canvas pixel extraction failed (CORS or memory limitation):', err);
+  public setLineOverlay(dataUrl: string | null): void {
+    this.lineOverlayUrl = dataUrl;
+    if (!dataUrl) {
+      this.lineOverlayImage = null;
+      this.requestRender();
+      return;
     }
+    const img = new Image();
+    img.onload = () => {
+      this.lineOverlayImage = img;
+      this.requestRender();
+    };
+    img.onerror = () => {
+      // 叠加层载入失败只影响透视，不影响提取；如实记录而不是静默假装成功。
+      console.warn('[canvas] 去线叠加层解码失败，B 键透视本次不可用');
+      this.lineOverlayImage = null;
+    };
+    img.src = dataUrl;
+  }
+
+  public getLineOverlayUrl(): string | null {
+    return this.lineOverlayUrl;
   }
 
   public fitToScreen(): void {
@@ -534,7 +448,7 @@ export class GeologyCanvas {
       }
 
       const lastCol = sortedCols[existingCount - 1];
-      let curStartX = lastCol ? lastCol.endX : this.data.calibration.dataXMin;
+      let curStartX = lastCol ? lastCol.endX : this.data.roi.xMin;
 
       const palette = [
         '#38bdf8', '#34d399', '#fbbf24', '#a78bfa',
@@ -542,9 +456,9 @@ export class GeologyCanvas {
         '#e879f9', '#38ef7d', '#11998e', '#f5af19'
       ];
 
-      const cal = this.data.calibration;
-      const yMin = cal.dataYMin;
-      const yMax = cal.dataYMax;
+      const roi = this.data.roi;
+      const yMin = roi.yMin;
+      const yMax = roi.yMax;
       const stepY = (yMax - yMin) / 12;
 
       for (let i = existingCount; i < inputCount; i++) {
@@ -585,8 +499,9 @@ export class GeologyCanvas {
         sortedCols.push(newCol);
         curStartX = newEndX;
 
-        if (newEndX > this.data.calibration.dataXMax) {
-          this.data.calibration.dataXMax = newEndX + 30;
+        // 自动扩展取数区域以容纳新列；只动 ROI，绝不改深度标定
+        if (newEndX > this.data.roi.xMax) {
+          this.data.roi.xMax = newEndX + 30;
         }
       }
     }
@@ -788,7 +703,28 @@ export class GeologyCanvas {
         e.preventDefault();
         if (!this.guardTool('roi')) return;
         this.setToolMode('roi');
-        this.notifyNotice('切换工具: 数据有效区 ROI 模式 (R)');
+        this.notifyNotice('切换工具: 数据取数区 ROI 模式 (R)');
+        return;
+      }
+      // K: 线掩膜人工修正笔刷
+      if (e.code === 'KeyK') {
+        e.preventDefault();
+        if (!this.guardTool('linefix')) return;
+        // 修正时必须能看见掩膜，否则等于闭眼涂改
+        this.viewport.showBinaryOverlay = true;
+        this.setToolMode('linefix');
+        this.notifyNotice(
+          `切换工具: 线掩膜修正 (K) —— 当前为${this.lineFixMode === 'erase' ? '擦除误标' : '补回漏标'}笔，按 B 可切换叠加层显隐`
+        );
+        return;
+      }
+      // Y: Y 轴两点标定
+      if (e.code === 'KeyY') {
+        e.preventDefault();
+        if (!this.guardTool('ycalib')) return;
+        this.clearYCalibMarks();
+        this.setToolMode('ycalib');
+        this.notifyNotice('切换工具: Y 轴两点标定 (Y) —— 依次点击 Y 轴上两个已知刻度所在的行');
         return;
       }
       if (e.code === 'Escape') {
@@ -1054,8 +990,8 @@ export class GeologyCanvas {
           visible: true,
           isLocked: true,
           controlPoints: [
-            { id: `pt_${Date.now()}_top`, x: newX + 5, y: cal.dataYMin, type: 'manual', createdAt: Date.now() },
-            { id: `pt_${Date.now()}_bot`, x: newX + 5, y: cal.dataYMax, type: 'manual', createdAt: Date.now() + 1 },
+            { id: `pt_${Date.now()}_top`, x: newX + 5, y: this.data.roi.yMin, type: 'manual', createdAt: Date.now() },
+            { id: `pt_${Date.now()}_bot`, x: newX + 5, y: this.data.roi.yMax, type: 'manual', createdAt: Date.now() + 1 },
           ],
         };
 
@@ -1071,12 +1007,42 @@ export class GeologyCanvas {
         return;
       }
 
+      // ================= 2.5 Y 轴两点标定 (Calibrate) =================
+      // 点在"行"上即可：深度映射只取决于像素 Y，与 X 无关。所以这里只要两个不同的行。
+      if (mode === 'ycalib') {
+        const markY = Math.round(worldPt.y);
+        if (this.yCalibMarks.some((m) => m.y === markY)) {
+          this.notifyNotice('两点标定需要两个不同的像素行，请再点另一行。');
+          return;
+        }
+        this.yCalibMarks.push({ x: Math.round(worldPt.x), y: markY });
+        this.requestRender();
+        if (this.yCalibMarks.length === 2) {
+          const picked = [...this.yCalibMarks].sort((a, b) => a.y - b.y);
+          this.callbacks.onYCalibPicked?.(picked);
+        } else {
+          this.notifyNotice(
+            `已记录第 1 个标定点 (Y=${markY}px)。请在 Y 轴上再点第二个已知刻度的位置。`
+          );
+        }
+        return;
+      }
+
+      // ================= 2.6 线掩膜人工修正笔刷 (Line Fix) =================
+      // 画布上直接涂抹：擦掉误标红线 / 补回漏标的线。笔迹落库为折线 + 半径，
+      // 由后端栅格化后与自动掩膜合成，所以改档位或改 ROI 后修正依然有效。
+      if (mode === 'linefix') {
+        this.lineFixPoints = [{ x: worldPt.x, y: worldPt.y }];
+        this.requestRender();
+        return;
+      }
+
       // ================= 3. ROI 区域手柄拖动模式 =================
       const hitRoi = this.findHitRoiHandle(screenPt);
       if (hitRoi || mode === 'roi') {
         if (hitRoi) {
           this.draggingRoiHandle = hitRoi;
-          this.dragInitialCalibration = { ...this.data.calibration };
+          this.dragInitialRoi = { ...this.data.roi };
           this.updateCursor();
           return;
         }
@@ -1145,12 +1111,13 @@ export class GeologyCanvas {
         if (activeCol && this.isWithinDiagramBounds(worldPt)) {
           let targetY = Math.round(worldPt.y);
 
-          // 磁力吸附到标准层位高度
-          if (this.hoveredDepthHorizon !== null) {
+          // 磁力吸附到标准层位高度（仅在已完成 Y 轴标定时才有层位可言）
+          const calib = CoordinateSystem.calibrationBounds(cal);
+          if (this.hoveredDepthHorizon !== null && calib) {
             const depthFraction =
-              (this.hoveredDepthHorizon - cal.depthTopValue) /
-              (cal.depthBottomValue - cal.depthTopValue || 1);
-            const horizonY = Math.round(cal.dataYMin + depthFraction * (cal.dataYMax - cal.dataYMin));
+              (this.hoveredDepthHorizon - calib.topValue) /
+              (calib.bottomValue - calib.topValue || 1);
+            const horizonY = Math.round(calib.topPx + depthFraction * (calib.bottomPx - calib.topPx));
             if (Math.abs(worldPt.y - horizonY) <= 10 / this.viewport.scale) {
               targetY = horizonY;
             }
@@ -1201,20 +1168,25 @@ export class GeologyCanvas {
 
     const worldPt = this.viewport.screenToWorld(screenPt);
     const cal = this.data.calibration;
-    const totalY = cal.dataYMax - cal.dataYMin;
+    const roi = this.data.roi;
+    // 深度只在已完成两点标定时才存在；未标定就是 undefined，绝不拿 ROI 边界顶替。
+    const calib = CoordinateSystem.calibrationBounds(cal);
     const interval = cal.depthInterval && cal.depthInterval > 0 ? cal.depthInterval : 2;
 
     // 探测当前是否悬停在特定标准地层层位附近
     let depth: number | undefined;
-    if (totalY > 0) {
-      depth = cal.depthTopValue + ((worldPt.y - cal.dataYMin) / totalY) * (cal.depthBottomValue - cal.depthTopValue);
+    if (calib) {
+      const totalPx = calib.bottomPx - calib.topPx;
+      depth =
+        calib.topValue +
+        ((worldPt.y - calib.topPx) / totalPx) * (calib.bottomValue - calib.topValue);
 
-      if (worldPt.y >= cal.dataYMin - 15 && worldPt.y <= cal.dataYMax + 15) {
+      if (worldPt.y >= calib.topPx - 15 && worldPt.y <= calib.bottomPx + 15) {
         const nearestHorizon = Math.round(depth / interval) * interval;
         const nearestHorizonY =
-          cal.dataYMin +
-          ((nearestHorizon - cal.depthTopValue) / (cal.depthBottomValue - cal.depthTopValue || 1)) *
-            totalY;
+          calib.topPx +
+          ((nearestHorizon - calib.topValue) / (calib.bottomValue - calib.topValue || 1)) *
+            totalPx;
         if (Math.abs(worldPt.y - nearestHorizonY) <= 8 / this.viewport.scale) {
           this.hoveredDepthHorizon = Number(nearestHorizon.toFixed(2));
         } else {
@@ -1223,16 +1195,18 @@ export class GeologyCanvas {
       } else {
         this.hoveredDepthHorizon = null;
       }
+    } else {
+      this.hoveredDepthHorizon = null;
     }
 
     // 探测是否悬停在左侧标尺顶部设定按钮
-    const gridStartX = Math.max(0, cal.dataXMin - 50);
+    const gridStartX = Math.max(0, roi.xMin - 50);
     const wasHoveringBadge = this.isHoveringDepthRulerBadge;
     this.isHoveringDepthRulerBadge =
       worldPt.x <= gridStartX &&
       worldPt.x >= gridStartX - 160 &&
-      worldPt.y >= cal.dataYMin - 35 &&
-      worldPt.y <= cal.dataYMin + 5;
+      worldPt.y >= roi.yMin - 35 &&
+      worldPt.y <= roi.yMin + 5;
 
     if (wasHoveringBadge !== this.isHoveringDepthRulerBadge) {
       this.updateCursor();
@@ -1257,17 +1231,23 @@ export class GeologyCanvas {
       });
     }
 
-    // 0. 正在拖动 ROI 8 手柄微调地质数据有效区
+    // 0a. 正在涂抹线掩膜修正笔迹
+    if (this.lineFixPoints) {
+      this.lineFixPoints.push({ x: worldPt.x, y: worldPt.y });
+      this.requestRender();
+      return;
+    }
+
+    // 0. 正在拖动 ROI 8 手柄微调取数区域（只影响取数范围，与深度标定无关）
     if (this.draggingRoiHandle) {
       const h = this.draggingRoiHandle;
-      const cal = this.data.calibration;
       const x = Math.round(worldPt.x);
       const y = Math.round(worldPt.y);
 
-      if (h.includes('l')) cal.dataXMin = Math.min(x, cal.dataXMax - 20);
-      if (h.includes('r')) cal.dataXMax = Math.max(x, cal.dataXMin + 20);
-      if (h.includes('t')) cal.dataYMin = Math.min(y, cal.dataYMax - 20);
-      if (h.includes('b')) cal.dataYMax = Math.max(y, cal.dataYMin + 20);
+      if (h.includes('l')) roi.xMin = Math.min(x, roi.xMax - 20);
+      if (h.includes('r')) roi.xMax = Math.max(x, roi.xMin + 20);
+      if (h.includes('t')) roi.yMin = Math.min(y, roi.yMax - 20);
+      if (h.includes('b')) roi.yMax = Math.max(y, roi.yMin + 20);
 
       this.requestRender();
       return;
@@ -1354,10 +1334,31 @@ export class GeologyCanvas {
   }
 
   private onMouseUp(_e: MouseEvent): void {
-    if (this.draggingRoiHandle && this.dragInitialCalibration) {
-      const cal = this.data.calibration;
-      this.history.push('Resize Data ROI', this.data.columns, this.data.activeTaxaId, this.data.calibration);
-      this.notifyNotice(`地质数据区已调整为: [${cal.dataXMin}, ${cal.dataXMax}] x [${cal.dataYMin}, ${cal.dataYMax}]`);
+    if (this.lineFixPoints && this.lineFixPoints.length > 0) {
+      const stroke: LineMaskStroke = {
+        id: `stroke_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        mode: this.lineFixMode,
+        // 笔刷半径按屏幕恒定语义落库为图像像素，缩放时手感一致。
+        radius: Math.max(2, Math.round(this.LINEFIX_BRUSH_RADIUS_SCREEN / this.viewport.scale)),
+        points: this.lineFixPoints.map((p) => [Math.round(p.x), Math.round(p.y)] as [number, number]),
+      };
+      this.lineFixPoints = null;
+      this.callbacks.onLineFixStroke?.(stroke);
+      this.requestRender();
+    } else if (this.draggingRoiHandle && this.dragInitialRoi) {
+      const roi = this.data.roi;
+      this.history.push(
+        'Resize Data ROI',
+        this.data.columns,
+        this.data.activeTaxaId,
+        this.data.calibration,
+        roi
+      );
+      this.notifyNotice(
+        `数据有效区已调整为: X [${roi.xMin}, ${roi.xMax}] × Y [${roi.yMin}, ${roi.yMax}] px（深度标定不受影响）`
+      );
+      // 去线掩膜在 ROI 内计算，范围变了必须让后端重算。
+      this.callbacks.onRoiCommitted?.({ ...roi });
       this.callbacks.onDataChange?.();
     } else if (this.draggingAnchor && this.hasDraggedAnchor && this.dragInitialPointPos) {
       const col = this.data.columns.find((c) => c.id === this.draggingAnchor!.taxaId);
@@ -1381,10 +1382,27 @@ export class GeologyCanvas {
     this.draggingRoiHandle = null;
     this.dragInitialPointPos = null;
     this.dragInitialColumn = null;
-    this.dragInitialCalibration = null;
+    this.dragInitialRoi = null;
+    this.lineFixPoints = null;
     this.hasDraggedAnchor = false;
     this.updateCursor();
     this.requestRender();
+  }
+
+  /** Y 轴两点标定：清空已点选但尚未提交的参考点。 */
+  public clearYCalibMarks(): void {
+    this.yCalibMarks = [];
+    this.requestRender();
+  }
+
+  /** 供外部（弹出真值对话框被取消时）回退已点选的参考点。 */
+  public setYCalibMarks(marks: Point2D[]): void {
+    this.yCalibMarks = marks.slice(0, 2);
+    this.requestRender();
+  }
+
+  public getYCalibMarks(): Point2D[] {
+    return [...this.yCalibMarks];
   }
 
   private nudgeTimer: number | null = null;
@@ -1515,9 +1533,9 @@ export class GeologyCanvas {
   }
 
   private findHitColumn(worldPt: Point2D): TaxaColumn | null {
-    const cal = this.data.calibration;
-    // 允许在图表有效深度范围以及上方标签区域点击选中该列
-    if (worldPt.y < cal.dataYMin - 60 || worldPt.y > cal.dataYMax + 40) {
+    const roi = this.data.roi;
+    // 允许在数据区深度范围以及上方标签区域点击选中该列
+    if (worldPt.y < roi.yMin - 60 || worldPt.y > roi.yMax + 40) {
       return null;
     }
 
@@ -1534,8 +1552,8 @@ export class GeologyCanvas {
   // ===================== 几何命中判定 (严格屏幕像素恒定) =====================
 
   private isWithinDiagramBounds(worldPt: Point2D): boolean {
-    const cal = this.data.calibration;
-    return worldPt.y >= cal.dataYMin - 50 && worldPt.y <= cal.dataYMax + 50;
+    const roi = this.data.roi;
+    return worldPt.y >= roi.yMin - 50 && worldPt.y <= roi.yMax + 50;
   }
 
   private findHitAnchor(screenPt: Point2D): { taxaId: string; pointId: string } | null {
@@ -1598,9 +1616,9 @@ export class GeologyCanvas {
 
   private findHitRoiHandle(screenPt: Point2D): string | null {
     if (this.workflowStage < 2) return null;
-    const cal = this.data.calibration;
-    const tlScreen = this.viewport.worldToScreen({ x: cal.dataXMin, y: cal.dataYMin });
-    const brScreen = this.viewport.worldToScreen({ x: cal.dataXMax, y: cal.dataYMax });
+    const roi = this.data.roi;
+    const tlScreen = this.viewport.worldToScreen({ x: roi.xMin, y: roi.yMin });
+    const brScreen = this.viewport.worldToScreen({ x: roi.xMax, y: roi.yMax });
     const midX = (tlScreen.x + brScreen.x) / 2;
     const midY = (tlScreen.y + brScreen.y) / 2;
 
@@ -1648,14 +1666,24 @@ export class GeologyCanvas {
     // 1. 底层扫描地质图谱（支持原图、反相、高对比、纯二值化与透视遮罩）
     this.drawBackgroundDiagram(ctx, isLight);
 
-    // 2. 地层深度标尺网格系统 (S4 标尺标定及之后阶段呈现)
+    // 2. 地层深度标尺网格系统 (S4 标尺标定及之后阶段呈现；未标定则不画)
     if (this.workflowStage >= 4) {
       this.drawDepthGrid(ctx, isLight);
     }
 
-    // 3. 沉积剖面数据有效区矩形与控制手柄 (ROI) (严格从 S2 ROI 阶段起呈现，S0/S1 绝不呈现)
+    // 3. 取数区域矩形与控制手柄 (ROI) (严格从 S2 ROI 阶段起呈现，S0/S1 绝不呈现)
     if (this.workflowStage >= 2) {
-      this.drawCalibrationOverlay(ctx, isLight);
+      this.drawRoiOverlay(ctx, isLight);
+    }
+
+    // 3.1 Y 轴两点标定记号与标定跨度指示 (S4 起呈现)
+    if (this.workflowStage >= 4) {
+      this.drawYAxisCalibration(ctx);
+    }
+
+    // 3.2 线掩膜人工修正笔迹预览 (涂抹中显示)
+    if (this.lineFixPoints && this.lineFixPoints.length > 0) {
+      this.drawLineFixStroke(ctx);
     }
 
     // 4. 各属种垂直分界标线与两点式物理刻度钉 (严格从 S3 分列阶段起才开始呈现，S1/S2 绝不呈现)
@@ -1720,9 +1748,11 @@ export class GeologyCanvas {
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
 
-      // 纯二值化模式
-      if (mode === 'binary' && this.binaryMonoCanvas) {
-        ctx.drawImage(this.binaryMonoCanvas, 0, 0, w, h);
+      // 纯二值化模式：直接用后端掩膜层（白=保留墨迹）铺在深色画板上
+      if (mode === 'binary' && this.lineOverlayImage) {
+        ctx.fillStyle = '#090f19';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(this.lineOverlayImage, 0, 0, w, h);
       } else {
         // CSS Canvas 滤镜
         if (mode === 'invert') {
@@ -1750,11 +1780,12 @@ export class GeologyCanvas {
       }
       ctx.restore();
 
-      // B 键二值化墨迹透视遮罩叠加层
-      if (this.viewport.showBinaryOverlay && this.binaryMaskCanvas) {
+      // B 键去线透视遮罩：画的就是后端掩膜（白=保留墨迹，红=实际剔除像素）。
+      // 所见即数字化实际所用，前后端不可能再各画一套而互相矛盾。
+      if (this.viewport.showBinaryOverlay && this.lineOverlayImage) {
         ctx.save();
         ctx.globalAlpha = 0.85;
-        ctx.drawImage(this.binaryMaskCanvas, 0, 0, w, h);
+        ctx.drawImage(this.lineOverlayImage, 0, 0, w, h);
         ctx.restore();
       }
     } else {
@@ -1769,12 +1800,16 @@ export class GeologyCanvas {
   }
 
   /**
-   * 绘制地层深度标尺网格系统 (Depth Grid Ruler)
-   * 在画布上高保真显示水平淡蓝色层位标线（贯穿所有属种列）以及左侧深度标尺
+   * 绘制地层深度标尺网格系统 (Depth Grid Ruler)。
+   *
+   * 未完成两点标定时整段不画：没有标定就没有"深度"这回事，画一组 0/50/100
+   * 的假刻度会让人以为深度轴已经生效（旧实现正是拿 ROI 边界冒充刻度）。
    */
   private drawDepthGrid(ctx: CanvasRenderingContext2D, isLight: boolean): void {
     const cal = this.data.calibration;
-    if (cal.depthGridEnabled === false) return;
+    const roi = this.data.roi;
+    const bounds = CoordinateSystem.calibrationBounds(cal);
+    if (!bounds || cal.depthGridEnabled === false) return;
 
     const interval = cal.depthInterval && cal.depthInterval > 0 ? cal.depthInterval : 2;
     const { depths, yPositions } = SplineInterpolator.getStandardDepthHorizons(cal);
@@ -1782,10 +1817,10 @@ export class GeologyCanvas {
 
     const scale = this.viewport.scale;
     const totalCols = this.data.columns;
-    const gridStartX = Math.max(0, cal.dataXMin - 50);
+    const gridStartX = Math.max(0, roi.xMin - 50);
     const gridEndX = totalCols.length > 0
-      ? Math.max(cal.dataXMax, totalCols[totalCols.length - 1].endX + 30)
-      : cal.dataXMax + 60;
+      ? Math.max(roi.xMax, totalCols[totalCols.length - 1].endX + 30)
+      : roi.xMax + 60;
 
     ctx.save();
 
@@ -1834,10 +1869,10 @@ export class GeologyCanvas {
       }
     }
 
-    // 3. 绘制左侧垂直深度标尺主轴
+    // 3. 绘制左侧垂直深度标尺主轴：跨度取【标定跨度】而非取数区域
     ctx.beginPath();
-    ctx.moveTo(gridStartX - 4, cal.dataYMin);
-    ctx.lineTo(gridStartX - 4, cal.dataYMax);
+    ctx.moveTo(gridStartX - 4, bounds.topPx);
+    ctx.lineTo(gridStartX - 4, bounds.bottomPx);
     ctx.strokeStyle = isLight ? 'rgba(2, 132, 199, 0.7)' : 'rgba(56, 189, 248, 0.6)';
     ctx.lineWidth = 1.5 / scale;
     ctx.setLineDash([]);
@@ -1845,7 +1880,7 @@ export class GeologyCanvas {
 
     // 4. 绘制深度标尺顶部单位与层位间隔 Badge
     const badgeX = gridStartX - 8;
-    const badgeY = cal.dataYMin - 16;
+    const badgeY = bounds.topPx - 16;
     ctx.font = `bold ${Math.max(10, 11.5 / scale)}px 'JetBrains Mono', monospace`;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
@@ -1861,21 +1896,27 @@ export class GeologyCanvas {
     ctx.restore();
   }
 
-  private drawCalibrationOverlay(ctx: CanvasRenderingContext2D, isLight: boolean): void {
-    const cal = this.data.calibration;
+  /**
+   * 绘制取数区域 (ROI) 矩形与 8 个手柄。
+   *
+   * 标签只报像素范围 —— 这个框不代表任何深度值。深度轴由 S4 的两点标定决定，
+   * 由 drawYAxisCalibration 单独呈现。
+   */
+  private drawRoiOverlay(ctx: CanvasRenderingContext2D, isLight: boolean): void {
+    const roi = this.data.roi;
     const scale = this.viewport.scale;
     const isRoiMode = this.toolModeManager.getMode() === 'roi';
 
     ctx.save();
 
-    // 1. 半透明数据区遮罩框
-    const boxW = cal.dataXMax - cal.dataXMin;
-    const boxH = cal.dataYMax - cal.dataYMin;
+    // 1. 半透明取数区遮罩框
+    const boxW = roi.xMax - roi.xMin;
+    const boxH = roi.yMax - roi.yMin;
 
     ctx.fillStyle = isLight
       ? (isRoiMode ? 'rgba(2, 132, 199, 0.08)' : 'rgba(2, 132, 199, 0.03)')
       : (isRoiMode ? 'rgba(56, 189, 248, 0.08)' : 'rgba(56, 189, 248, 0.03)');
-    ctx.fillRect(cal.dataXMin, cal.dataYMin, boxW, boxH);
+    ctx.fillRect(roi.xMin, roi.yMin, boxW, boxH);
 
     // 2. 数据有效区外边框 (ROI Bounding Box)
     ctx.strokeStyle = isLight
@@ -1883,23 +1924,22 @@ export class GeologyCanvas {
       : (isRoiMode ? '#38bdf8' : 'rgba(56, 189, 248, 0.7)');
     ctx.lineWidth = (isRoiMode ? 2.2 : 1.5) / scale;
     ctx.setLineDash(isRoiMode ? [] : [6 / scale, 4 / scale]);
-    ctx.strokeRect(cal.dataXMin, cal.dataYMin, boxW, boxH);
+    ctx.strokeRect(roi.xMin, roi.yMin, boxW, boxH);
 
     // 3. 绘制 8 个屏幕像素恒定的手柄 (Square Handles)
-    const handleScreenSize = this.ROI_HANDLE_SIZE_SCREEN;
-    const handleImgSize = handleScreenSize / scale;
-    const midX = (cal.dataXMin + cal.dataXMax) / 2;
-    const midY = (cal.dataYMin + cal.dataYMax) / 2;
+    const handleImgSize = this.ROI_HANDLE_SIZE_SCREEN / scale;
+    const midX = (roi.xMin + roi.xMax) / 2;
+    const midY = (roi.yMin + roi.yMax) / 2;
 
     const handles: Record<string, Point2D> = {
-      tl: { x: cal.dataXMin, y: cal.dataYMin },
-      tr: { x: cal.dataXMax, y: cal.dataYMin },
-      bl: { x: cal.dataXMin, y: cal.dataYMax },
-      br: { x: cal.dataXMax, y: cal.dataYMax },
-      t: { x: midX, y: cal.dataYMin },
-      b: { x: midX, y: cal.dataYMax },
-      l: { x: cal.dataXMin, y: midY },
-      r: { x: cal.dataXMax, y: midY },
+      tl: { x: roi.xMin, y: roi.yMin },
+      tr: { x: roi.xMax, y: roi.yMin },
+      bl: { x: roi.xMin, y: roi.yMax },
+      br: { x: roi.xMax, y: roi.yMax },
+      t: { x: midX, y: roi.yMin },
+      b: { x: midX, y: roi.yMax },
+      l: { x: roi.xMin, y: midY },
+      r: { x: roi.xMax, y: midY },
     };
 
     ctx.setLineDash([]);
@@ -1915,28 +1955,114 @@ export class GeologyCanvas {
       ctx.strokeRect(pt.x - hSize / 2, pt.y - hSize / 2, hSize, hSize);
     }
 
-    // 4. 标注顶部和底部深度提示文字 (位于 ROI 左边缘外侧，杜绝侵入属种数据区造成文字遮挡重叠)
+    // 4. 标签只报像素范围（ROI 不是刻度）
     ctx.fillStyle = isLight ? '#0284c7' : '#7dd3fc';
     ctx.font = `bold ${Math.max(10, 11 / scale)}px 'JetBrains Mono', monospace`;
     ctx.textAlign = 'right';
-    ctx.fillText(
-      `Top: ${cal.depthTopValue} ${cal.unit} ─┐`,
-      cal.dataXMin - 8 / scale,
-      cal.dataYMin + 4 / scale
-    );
-    ctx.fillText(
-      `Bottom: ${cal.depthBottomValue} ${cal.unit} ─┘`,
-      cal.dataXMin - 8 / scale,
-      cal.dataYMax + 4 / scale
-    );
+    ctx.fillText(`ROI Y: ${Math.round(roi.yMin)}px`, roi.xMin - 8 / scale, roi.yMin + 4 / scale);
+    ctx.fillText(`ROI Y: ${Math.round(roi.yMax)}px`, roi.xMin - 8 / scale, roi.yMax + 4 / scale);
 
     ctx.restore();
   }
 
-  private drawColumnBoundaries(ctx: CanvasRenderingContext2D, isLight: boolean): void {
+  /**
+   * 绘制 Y 轴两点标定：已选参考点 + 标定跨度带。
+   *
+   * 两个参考点之间的横向色带表示"这一段像素有确定的深度含义"，其外为外推区。
+   */
+  private drawYAxisCalibration(ctx: CanvasRenderingContext2D): void {
     const cal = this.data.calibration;
-    const topY = cal.dataYMin - 40;
-    const bottomY = cal.dataYMax + 30;
+    const roi = this.data.roi;
+    const scale = this.viewport.scale;
+    const marks = this.yCalibMarks;
+    const bounds = CoordinateSystem.calibrationBounds(cal);
+
+    if (marks.length === 0 && !bounds) return;
+
+    const bandStartX = Math.max(0, roi.xMin - 40);
+    const bandEndX = roi.xMax + 40;
+
+    ctx.save();
+
+    if (bounds) {
+      // 标定跨度带：只在这段像素上声称深度有效
+      ctx.fillStyle = 'rgba(250, 204, 21, 0.07)';
+      ctx.fillRect(bandStartX, bounds.topPx, bandEndX - bandStartX, bounds.bottomPx - bounds.topPx);
+
+      const pairs: Array<[number, number]> = [
+        [bounds.topPx, bounds.topValue],
+        [bounds.bottomPx, bounds.bottomValue],
+      ];
+      for (const [px, value] of pairs) {
+        ctx.setLineDash([7 / scale, 4 / scale]);
+        ctx.strokeStyle = 'rgba(250, 204, 21, 0.85)';
+        ctx.lineWidth = 1.4 / scale;
+        ctx.beginPath();
+        ctx.moveTo(bandStartX, px);
+        ctx.lineTo(bandEndX, px);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = '#facc15';
+        ctx.font = `bold ${Math.max(10, 11 / scale)}px 'JetBrains Mono', monospace`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`⚑ ${value} ${cal.unit}`, bandEndX + 6 / scale, px);
+      }
+      ctx.setLineDash([]);
+    }
+
+    // 尚未提交的待选参考点
+    marks.forEach((mark, idx) => {
+      const r = this.YCALIB_MARKER_RADIUS_SCREEN / scale;
+      ctx.beginPath();
+      ctx.arc(mark.x, mark.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = '#facc15';
+      ctx.fill();
+      ctx.strokeStyle = '#111827';
+      ctx.lineWidth = 1.8 / scale;
+      ctx.stroke();
+
+      ctx.fillStyle = '#facc15';
+      ctx.font = `bold ${Math.max(10, 12 / scale)}px 'JetBrains Mono', monospace`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${idx + 1}`, mark.x + r + 4 / scale, mark.y);
+    });
+
+    ctx.restore();
+  }
+
+  /** 涂抹中的线掩膜修正笔迹预览（青=擦除误标，红=补回漏标）。 */
+  private drawLineFixStroke(ctx: CanvasRenderingContext2D): void {
+    const pts = this.lineFixPoints;
+    if (!pts || pts.length === 0) return;
+
+    const scale = this.viewport.scale;
+    const radius = Math.max(2, this.LINEFIX_BRUSH_RADIUS_SCREEN / scale);
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = this.lineFixMode === 'erase' ? 'rgba(56, 189, 248, 0.85)' : 'rgba(239, 68, 68, 0.85)';
+    ctx.lineWidth = radius * 2;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (const p of pts.slice(1)) {
+      ctx.lineTo(p.x, p.y);
+    }
+    if (pts.length === 1) {
+      ctx.lineTo(pts[0].x + 0.01, pts[0].y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawColumnBoundaries(ctx: CanvasRenderingContext2D, isLight: boolean): void {
+    const roi = this.data.roi;
+    const topY = roi.yMin - 40;
+    const bottomY = roi.yMax + 30;
     const scale = this.viewport.scale;
 
     ctx.save();
@@ -2225,7 +2351,7 @@ export class GeologyCanvas {
 
   /**
    * 一键归零 (Reset All)：清空当前图谱上的全部操作 —— 分列、控制点、刻度钉、
-   * 深度标尺与 ROI 边界，仅保留底图本身，使用户可从 S1 重新开始。
+   * 取数区域、Y 轴标定与线掩膜修正，仅保留底图本身，使用户可从 S1 重新开始。
    * 注意：本方法只复位"数据内容"，不卸载底图，可被「重置」按钮与新建项目流程复用。
    */
   public resetAllOperations(): void {
@@ -2237,19 +2363,26 @@ export class GeologyCanvas {
     this.data.activeTaxaId = '';
     this.data.selectedEntity = null;
 
-    // 2. ROI 与深度标尺回归初始建议值（与载入新图时完全一致）
+    // 2. 取数区域回到几何建议值；Y 轴标定如实清空为"未标定"。
+    //    旧实现顺手写死 depthTopValue=0/depthBottomValue=100 并置 isCalibrated=true，
+    //    等于凭空声明了一把并不存在的深度尺。
+    this.data.roi = {
+      xMin: Math.round(w * 0.12),
+      xMax: Math.round(w * 0.94),
+      yMin: Math.round(h * 0.18),
+      yMax: Math.round(h * 0.88),
+    };
     this.data.calibration = {
-      dataXMin: Math.round(w * 0.12),
-      dataXMax: Math.round(w * 0.94),
-      dataYMin: Math.round(h * 0.18),
-      dataYMax: Math.round(h * 0.88),
-      depthTopValue: 0,
-      depthBottomValue: 100,
+      isCalibrated: false,
+      top_px: null,
+      top_cm: null,
+      bottom_px: null,
+      bottom_cm: null,
       unit: 'cm',
-      isCalibrated: true,
       depthInterval: 2,
       depthGridEnabled: true,
     };
+    this.data.lineCorrections = [];
 
     // 3. 复位所有悬停 / 拖拽 / 平移交互状态，防止残留手势锁死
     this.hoveredAnchor = null;
@@ -2265,16 +2398,19 @@ export class GeologyCanvas {
     this.hasDraggedAnchor = false;
     this.dragInitialPointPos = null;
     this.dragInitialColumn = null;
-    this.dragInitialCalibration = null;
+    this.dragInitialRoi = null;
+    this.yCalibMarks = [];
+    this.lineFixPoints = null;
 
     // 4. 视图滤镜回归原图，工具模式回归微调 (S)
     this.viewport.imageMode = 'normal';
     this.viewport.showBinaryOverlay = false;
     this.viewport.degridStrength = 'off';
+    this.setLineOverlay(null);
     this.setToolMode('select');
 
-    // 5. 清空撤销历史栈（基线同步记录新标定），回到 S1 并重新居中
-    this.history.reset([], '', this.data.calibration);
+    // 5. 清空撤销历史栈（基线同步记录 ROI 与空标定），回到 S1 并重新居中
+    this.history.reset([], '', this.data.calibration, this.data.roi);
     this.workflowStage = 1;
     this.updateEmptyStateVisibility();
     this.updateFloatingToolbarForStage(1);
@@ -2292,15 +2428,16 @@ export class GeologyCanvas {
    * 浮动工具条置灰、键盘模式切换守卫、鼠标编辑路径三处必须全部走本表，禁止各写一份。
    *
    *   S0–S1 加载   ：仅平移（截图与检查图谱形态）
-   *   S2    ROI    ：框选数据有效区
-   *   S3–S4 分列/标尺：可重新调整 ROI、加列、删列、选择、平移（仍禁止编辑控制点）
+   *   S2    ROI    ：框选数据有效区 + 线掩膜人工修正
+   *   S3–S4 分列/标尺：可重新调整 ROI、加列、删列、选择、平移、线掩膜修正；S4 起可做 Y 轴标定
    *   S5–S7 拐点及以后：开放全部编辑能力（含加点）
    */
   public getAllowedTools(stage: number = this.workflowStage): ToolMode[] {
     if (stage <= 1) return ['pan'];
-    if (stage === 2) return ['roi', 'pan'];
-    if (stage === 3 || stage === 4) return ['roi', 'addCol', 'eraser', 'select', 'pan'];
-    return ['select', 'pan', 'roi', 'addCol', 'addPoint', 'eraser'];
+    if (stage === 2) return ['roi', 'linefix', 'pan'];
+    if (stage === 3) return ['roi', 'linefix', 'addCol', 'eraser', 'select', 'pan'];
+    if (stage === 4) return ['roi', 'linefix', 'ycalib', 'addCol', 'eraser', 'select', 'pan'];
+    return ['select', 'pan', 'roi', 'linefix', 'ycalib', 'addCol', 'addPoint', 'eraser'];
   }
 
   /** 当前阶段是否允许该工具 */
@@ -2314,6 +2451,8 @@ export class GeologyCanvas {
     addCol: '提示: 添加属种列在 S3 分列阶段启用，请先确认数据有效区 (ROI)',
     addPoint: '提示: 控制点编辑在 S5 拐点提取阶段启用',
     eraser: '提示: 删除操作在有属种列后 (S3 起) 启用',
+    ycalib: '提示: Y 轴两点标定在 S4 标尺阶段启用',
+    linefix: '提示: 线掩膜人工修正在 S2 起启用',
   };
 
   /** 统一门禁：不允许时给出阶段提示并返回 false，允许时返回 true */
@@ -2362,9 +2501,23 @@ export class GeologyCanvas {
     ctx.restore();
   }
 
+  /**
+   * 记录去线档位。
+   *
+   * 掩膜本身由后端计算并下发（见 `setLineOverlay`）：前端不再自行判定"哪条是线"，
+   * 否则用户按 B 看到的红标就与数字化实际剔除的像素不是同一批。
+   */
   public setDegridStrength(strength: 'off' | 'weak' | 'medium' | 'strong'): void {
     this.viewport.degridStrength = strength;
-    this.generateBinaryCache();
+    if (strength === 'off') {
+      this.setLineOverlay(null);
+    }
     this.render();
+  }
+
+  /** 修正笔刷模式：erase = 擦掉误标，restore = 补回漏标。 */
+  public setLineFixMode(mode: 'erase' | 'restore'): void {
+    this.lineFixMode = mode;
+    this.requestRender();
   }
 }

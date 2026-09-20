@@ -1117,10 +1117,23 @@ class TestSectionFiveJsonRpcMethods(unittest.TestCase):
         self.assertIn("width", load_res)
         self.assertIn("height", load_res)
 
-        # 1. algorithm.degrid runs with adaptive kernel
-        degrid_res = self.rpc_call("algorithm.degrid", {})
+        # 0. Line removal is region-scoped: without a declared data region there
+        #    is no defined scope, and guessing one would be a silent substitution.
+        with self.assertRaises(AssertionError):
+            self.rpc_call("algorithm.degrid", {})
+
+        self.rpc_call("roi.update", {"x0": 315, "x1": 1946, "y0": 511, "y1": 1311})
+
+        # 1. algorithm.degrid detects both orientations inside the ROI and returns
+        #    the QC overlay the frontend paints (white = kept ink, red = removed).
+        degrid_res = self.rpc_call("algorithm.degrid", {"strength": "medium"})
         self.assertTrue(degrid_res["success"])
-        self.assertGreater(degrid_res["kernel_width"], 10)
+        self.assertEqual(degrid_res["strength"], "medium")
+        self.assertEqual(degrid_res["max_thickness"], 3)
+        self.assertIn("horizontal_rows", degrid_res)
+        self.assertIn("vertical_cols", degrid_res)
+        self.assertTrue(degrid_res["remove_vertical"])
+        self.assertTrue(degrid_res["overlay_png"].startswith("data:image/png;base64,"))
 
         # 3. export.r returns valid rioja script
         r_script = self.rpc_call("export.r")

@@ -4,6 +4,8 @@ Pure Python/NumPy/SciPy/scikit-image/Pillow pipeline without GUI or Matplotlib.
 """
 from __future__ import annotations
 
+import base64
+import io
 import re
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -97,60 +99,270 @@ def normalize_extraction_mode(extraction_mode: str | None) -> str:
         raise ValueError(f"Unknown extraction mode: {extraction_mode}")
 
 
+#: Grid-line removal presets, keyed by the UI strength label.
+#:
+#: ``run_frac`` / ``span_frac`` are fractions of the ROI extent, so the same
+#: preset behaves sensibly on a 400 px and a 4000 px wide diagram.
+#: ``max_thickness`` is the decisive criterion: a real grid line is razor thin,
+#: whereas a filled pollen silhouette crossed by that line is tens of pixels
+#: thick and must survive. Without this bound the detector used to delete entire
+#: taxa (measured on the built-in Hoya diagram: 95% of everything it flagged at
+#: the "weak" preset was >= 4 px thick real silhouette, and 99% of the *Pinus*
+#: column was erased).
+GRID_LINE_PRESETS: dict[str, dict[str, float]] = {
+    'weak': {'run_frac': 0.55, 'span_frac': 0.80, 'min_run_px': 55, 'max_thickness': 2},
+    'medium': {'run_frac': 0.40, 'span_frac': 0.65, 'min_run_px': 35, 'max_thickness': 3},
+    'strong': {'run_frac': 0.25, 'span_frac': 0.45, 'min_run_px': 20, 'max_thickness': 5},
+}
+
+
+def normalize_grid_line_strength(strength: str | None) -> str:
+    """Normalize a grid-line removal strength label."""
+    key = str(strength or 'medium').strip().lower()
+    if key not in GRID_LINE_PRESETS:
+        raise ValueError(f'Unknown grid-line removal strength: {strength}')
+    return key
+
+
+def _run_lengths_along_rows(mask: np.ndarray) -> np.ndarray:
+    """Per-pixel length of the contiguous True run containing that pixel (axis 0)."""
+    rows = mask.shape[0]
+    if rows == 0:
+        return np.zeros(mask.shape, dtype=np.int32)
+    previous = np.vstack([np.zeros((1, mask.shape[1]), dtype=bool), mask[:-1]])
+    starts = mask & ~previous
+    indices = np.arange(rows)[:, None]
+    run_start = np.maximum.accumulate(np.where(starts, indices, -1), axis=0)
+    return np.where(mask, indices - run_start + 1, 0).astype(np.int32)
+
+
+def stroke_thickness(mask: np.ndarray, axis: int = 0) -> np.ndarray:
+    """Per-pixel thickness of the ink stroke measured along ``axis``.
+
+    ``axis=0`` gives the vertical extent (what makes a left-right line thin);
+    ``axis=1`` gives the horizontal extent (for up-down lines).
+    """
+    binary = np.asarray(mask, dtype=bool)
+    work = binary if axis == 0 else binary.T
+    forward = _run_lengths_along_rows(work)
+    backward = _run_lengths_along_rows(work[::-1])[::-1]
+    # Background pixels have no stroke, so report 0 rather than the -1 the
+    # forward+backward-1 arithmetic would produce for them.
+    thickness = np.where(work, forward + backward - 1, 0)
+    return thickness if axis == 0 else thickness.T
+
+
+def _detect_linear_structures(
+    binary: np.ndarray,
+    *,
+    run_length: int,
+    min_span: int,
+    max_thickness: int,
+    vertical: bool,
+) -> np.ndarray:
+    """Isolate thin linear strokes of one orientation.
+
+    A pixel is kept only when it belongs to (a) a long straight run, (b) a stroke
+    whose perpendicular thickness is ``<= max_thickness``, and (c) a line whose
+    surviving pixels add up to at least ``min_span``. Criterion (b) is what
+    protects solid pollen silhouettes from being eaten by their own row length;
+    criterion (c) is counted rather than measured as a bounding span, because a
+    bell silhouette carries thin apex *and* base pixels in the same columns, and
+    their bounding box would otherwise look like one continuous line.
+    """
+    if binary.size == 0:
+        return np.zeros_like(binary)
+
+    kernel_length = max(3, int(run_length))
+    kernel = (
+        np.ones((kernel_length, 1), dtype=bool)
+        if vertical
+        else np.ones((1, kernel_length), dtype=bool)
+    )
+    opened = skim.opening(binary, kernel)
+    thickness = stroke_thickness(binary, axis=1 if vertical else 0)
+    candidate = opened & (thickness <= max_thickness)
+
+    counts = candidate.sum(axis=0) if vertical else candidate.sum(axis=1)
+    accepted = counts >= min_span
+    if vertical:
+        return candidate & accepted[np.newaxis, :]
+    return candidate & accepted[:, np.newaxis]
+
+
+def _clip_roi(shape: tuple[int, int], roi: Sequence[float] | None) -> tuple[int, int, int, int]:
+    """Clip ``roi`` (x0, y0, x1, y1) to the image, defaulting to the whole image."""
+    height, width = shape
+    if roi is None:
+        return 0, 0, width, height
+    x0, y0, x1, y1 = (int(round(float(v))) for v in roi)
+    x0, x1 = sorted((max(0, min(width, x0)), max(0, min(width, x1))))
+    y0, y1 = sorted((max(0, min(height, y0)), max(0, min(height, y1))))
+    return x0, y0, x1, y1
+
+
+def detect_grid_lines(
+    binary: np.ndarray,
+    *,
+    strength: str = 'medium',
+    roi: Sequence[float] | None = None,
+    remove_vertical: bool = True,
+    max_thickness: int | None = None,
+) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    """Detect horizontal and vertical coordinate lines inside the data ROI.
+
+    Detection is scoped to ``roi`` because that is the region the user declared as
+    data: axis spines, zone brackets and cluster trees living outside it must not
+    influence the thresholds, and nothing outside it is digitised anyway.
+
+    Parameters
+    ----------
+    binary : np.ndarray
+        2D binary image (H x W), True = ink.
+    strength : str
+        One of :data:`GRID_LINE_PRESETS`.
+    roi : sequence, optional
+        ``(x0, y0, x1, y1)`` in image pixels. Defaults to the whole image.
+    remove_vertical : bool
+        Also detect up-down lines (column baselines, vertical grid lines).
+    max_thickness : int, optional
+        Override the preset's perpendicular-thickness bound.
+
+    Returns
+    -------
+    horizontal_mask, vertical_mask, info : np.ndarray, np.ndarray, dict
+        Full image sized boolean masks plus a small statistics dict.
+    """
+    binary = np.asarray(binary, dtype=bool)
+    height, width = binary.shape
+    empty = np.zeros_like(binary)
+    if binary.ndim != 2 or binary.size == 0:
+        return empty, np.zeros_like(binary), {'strength': strength, 'roi': None}
+
+    preset = GRID_LINE_PRESETS[normalize_grid_line_strength(strength)]
+    thickness_bound = int(preset['max_thickness'] if max_thickness is None else max_thickness)
+
+    x0, y0, x1, y1 = _clip_roi(binary.shape, roi)
+    sub = binary[y0:y1, x0:x1]
+    if sub.size == 0:
+        return empty, np.zeros_like(binary), {'strength': strength, 'roi': [x0, y0, x1, y1]}
+
+    sub_width, sub_height = sub.shape[1], sub.shape[0]
+    horizontal = _detect_linear_structures(
+        sub,
+        run_length=max(preset['min_run_px'], preset['run_frac'] * sub_width),
+        min_span=max(preset['min_run_px'], preset['span_frac'] * sub_width),
+        max_thickness=thickness_bound,
+        vertical=False,
+    )
+
+    vertical = np.zeros_like(sub)
+    if remove_vertical:
+        vertical = _detect_linear_structures(
+            sub,
+            run_length=max(preset['min_run_px'], preset['run_frac'] * sub_height),
+            min_span=max(preset['min_run_px'], preset['span_frac'] * sub_height),
+            max_thickness=thickness_bound,
+            vertical=True,
+        )
+
+    horizontal_mask = np.zeros_like(binary)
+    vertical_mask = np.zeros_like(binary)
+    horizontal_mask[y0:y1, x0:x1] = horizontal
+    vertical_mask[y0:y1, x0:x1] = vertical
+
+    info = {
+        'strength': normalize_grid_line_strength(strength),
+        'roi': [x0, y0, x1, y1],
+        'max_thickness': thickness_bound,
+        'removed_vertical': bool(remove_vertical),
+        'horizontal_rows': sorted(np.unique(np.nonzero(horizontal)[0] + y0).tolist()),
+        'vertical_cols': sorted(np.unique(np.nonzero(vertical)[1] + x0).tolist()),
+        'horizontal_pixels': int(horizontal.sum()),
+        'vertical_pixels': int(vertical.sum()),
+    }
+    return horizontal_mask, vertical_mask, info
+
+
+def remove_grid_lines(
+    binary: np.ndarray,
+    *,
+    strength: str = 'medium',
+    roi: Sequence[float] | None = None,
+    remove_vertical: bool = True,
+    max_thickness: int | None = None,
+) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    """Subtract detected grid lines from ``binary``.
+
+    Returns ``(cleaned, line_mask, info)``.
+    """
+    horizontal, vertical, info = detect_grid_lines(
+        binary,
+        strength=strength,
+        roi=roi,
+        remove_vertical=remove_vertical,
+        max_thickness=max_thickness,
+    )
+    line_mask = horizontal | vertical
+    info['removed_pixels'] = int(line_mask.sum())
+    return np.asarray(binary, dtype=bool) & ~line_mask, line_mask, info
+
+
 def detect_horizontal_grid_lines(
     binary: np.ndarray,
     min_length: int = 35,
     min_row_occupancy_ratio: float = 0.35,
+    max_thickness: int = 3,
 ) -> tuple[np.ndarray, list[int]]:
     """Detect horizontal coordinate lines and cross-column grid lines.
 
-    Uses morphological horizontal opening combined with cross-column occupancy
-    analysis to identify grid lines without misclassifying local wide pollen lobes.
+    Kept for callers that only care about the horizontal pass. Unlike the original
+    implementation -- which deleted every ink pixel in a flagged row, decapitating
+    filled taxa -- only pixels belonging to a *thin* stroke are reported, and the
+    band must span ``min_row_occupancy_ratio`` of the width rather than merely
+    having that many foreground pixels scattered across it.
 
     Parameters
     ----------
     binary : np.ndarray
         2D binary image (H x W) where True/1 is dark ink/foreground.
     min_length : int
-        Minimum width threshold for horizontal linear structures (default: 35).
+        Minimum width of a horizontal linear structure.
     min_row_occupancy_ratio : float
-        Fraction of diagram total width that must be foreground to flag a line (default: 0.35).
+        Fraction of the width the thin band must span to be accepted.
+    max_thickness : int
+        Maximum vertical extent, in pixels, for a stroke to count as a line.
 
     Returns
     -------
     hlines_mask : np.ndarray
         2D boolean mask of pixels belonging to detected horizontal grid lines.
     hline_rows : list of int
-        Sorted list of row indices identified as containing pervasive horizontal grid lines.
+        Sorted row indices containing horizontal grid lines.
     """
     binary = np.asarray(binary, dtype=bool)
     if binary.ndim != 2 or binary.size == 0:
         return np.zeros_like(binary, dtype=bool), []
 
-    _height, width = binary.shape
-    # 1. Morphological horizontal opening to isolate linear horizontal strokes
-    line_kernel = np.ones((1, max(3, int(min_length))), dtype=bool)
-    morph_hlines = skim.opening(binary, line_kernel)
-
-    # 2. Cross-column pervasive line detection
-    row_counts = np.sum(morph_hlines, axis=1)
-    min_row_px = max(float(min_length), float(min_row_occupancy_ratio) * width)
-    hline_rows = sorted(np.where(row_counts >= min_row_px)[0].tolist())
-
-    # Build mask containing only verified grid lines
-    hlines_mask = np.zeros_like(binary, dtype=bool)
-    if hline_rows:
-        hlines_mask[hline_rows, :] = morph_hlines[hline_rows, :]
-
-    return hlines_mask, hline_rows
+    width = binary.shape[1]
+    mask = _detect_linear_structures(
+        binary,
+        run_length=max(3, int(min_length)),
+        min_span=max(float(min_length), float(min_row_occupancy_ratio) * width),
+        max_thickness=int(max_thickness),
+        vertical=False,
+    )
+    rows = sorted(np.unique(np.nonzero(mask)[0]).tolist())
+    return mask, rows
 
 
 def remove_horizontal_grid_lines(
     binary: np.ndarray,
     min_length: int = 35,
     min_row_occupancy_ratio: float = 0.35,
+    max_thickness: int = 3,
 ) -> tuple[np.ndarray, list[int]]:
-    """Remove pervasive horizontal grid lines from binary image to prevent profile inflation.
+    """Remove pervasive horizontal grid lines from a binary image.
 
     Parameters
     ----------
@@ -159,7 +371,9 @@ def remove_horizontal_grid_lines(
     min_length : int
         Minimum horizontal line length.
     min_row_occupancy_ratio : float
-        Minimum width occupancy fraction.
+        Minimum fraction of the width the thin band must span.
+    max_thickness : int
+        Maximum vertical stroke extent still counted as a line.
 
     Returns
     -------
@@ -172,9 +386,89 @@ def remove_horizontal_grid_lines(
         binary,
         min_length=min_length,
         min_row_occupancy_ratio=min_row_occupancy_ratio,
+        max_thickness=max_thickness,
     )
-    cleaned = binary & (~hlines_mask)
+    cleaned = np.asarray(binary, dtype=bool) & (~hlines_mask)
     return cleaned, hline_rows
+
+
+def rasterize_strokes(
+    shape: tuple[int, int],
+    strokes: Iterable[dict[str, Any]] | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Rasterize user brush strokes into ``(restore_mask, erase_mask)``.
+
+    Each stroke is ``{'mode': 'erase'|'restore', 'radius': int, 'points': [[x, y], ...]}``
+    in image pixel coordinates. Strokes are stored (rather than a bitmap) so they
+    stay serialisable, undoable, and re-appliable when the strength preset or the
+    ROI changes the automatic mask underneath them.
+    """
+    restore = np.zeros(shape, dtype=bool)
+    erase = np.zeros(shape, dtype=bool)
+    for stroke in strokes or ():
+        if not isinstance(stroke, dict):
+            continue
+        points: list[tuple[float, float]] = []
+        for point in stroke.get('points') or ():
+            if not isinstance(point, (list, tuple)) or len(point) < 2:
+                continue
+            try:
+                points.append((float(point[0]), float(point[1])))
+            except (TypeError, ValueError):
+                # A non-numeric coordinate marks a malformed stroke; skip the
+                # point rather than aborting the whole correction layer.
+                continue
+        if not points:
+            continue
+        target = restore if str(stroke.get('mode')) == 'restore' else erase
+        radius = max(1.0, float(stroke.get('radius', 4)))
+        _draw_polyline(target, points, radius)
+    return restore, erase
+
+
+def _draw_polyline(canvas: np.ndarray, points: list[tuple[float, float]], radius: float) -> None:
+    """Stamp a disc of ``radius`` along a polyline directly into ``canvas``."""
+    height, width = canvas.shape
+    if len(points) == 1:
+        points = [points[0], points[0]]
+    for (ax, ay), (bx, by) in zip(points[:-1], points[1:]):
+        lo_x = max(0, int(np.floor(min(ax, bx) - radius)))
+        hi_x = min(width, int(np.ceil(max(ax, bx) + radius)) + 1)
+        lo_y = max(0, int(np.floor(min(ay, by) - radius)))
+        hi_y = min(height, int(np.ceil(max(ay, by) + radius)) + 1)
+        if hi_x <= lo_x or hi_y <= lo_y:
+            continue
+        ys, xs = np.mgrid[lo_y:hi_y, lo_x:hi_x]
+        dx, dy = bx - ax, by - ay
+        span = dx * dx + dy * dy
+        if span <= 0:
+            nearest_x, nearest_y = np.full(xs.shape, ax), np.full(ys.shape, ay)
+        else:
+            t = ((xs - ax) * dx + (ys - ay) * dy) / span
+            np.clip(t, 0.0, 1.0, out=t)
+            nearest_x = ax + t * dx
+            nearest_y = ay + t * dy
+        inside = (xs - nearest_x) ** 2 + (ys - nearest_y) ** 2 <= radius * radius
+        canvas[lo_y:hi_y, lo_x:hi_x] |= inside
+
+
+def mask_overlay_data_url(ink: np.ndarray, line_mask: np.ndarray) -> str:
+    """Render the line-removal QC overlay as a ``data:image/png;base64`` URL.
+
+    Transparent background, opaque white for ink that is kept, opaque red for
+    pixels the pipeline actually removes. The frontend draws exactly this image,
+    so what the user inspects under the B key *is* what extraction sees.
+    """
+    ink = np.asarray(ink, dtype=bool)
+    line_mask = np.asarray(line_mask, dtype=bool)
+    height, width = ink.shape
+    rgba = np.zeros((height, width, 4), dtype=np.uint8)
+    rgba[ink & ~line_mask] = (255, 255, 255, 255)
+    rgba[line_mask] = (239, 68, 68, 235)
+    buffer = io.BytesIO()
+    Image.fromarray(rgba).save(buffer, format='PNG', optimize=True)
+    encoded = base64.b64encode(buffer.getvalue()).decode('ascii')
+    return 'data:image/png;base64,' + encoded
 
 
 def normalize_segmentation_mode(segmentation_mode: str | None) -> str:

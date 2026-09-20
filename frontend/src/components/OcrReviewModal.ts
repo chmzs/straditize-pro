@@ -102,11 +102,11 @@ export class OcrReviewModal {
   public async open(): Promise<void> {
     this.close();
 
-    const cal = this.diagramData.calibration;
-    this.cropX0 = Math.round(cal.dataXMin);
-    this.cropX1 = Math.round(cal.dataXMax);
-    this.cropY0 = Math.max(0, Math.round(cal.dataYMin - 335));
-    this.cropY1 = Math.round(cal.dataYMin + 10);
+    const roi = this.diagramData.roi;
+    this.cropX0 = Math.round(roi.xMin);
+    this.cropX1 = Math.round(roi.xMax);
+    this.cropY0 = Math.max(0, Math.round(roi.yMin - 335));
+    this.cropY1 = Math.round(roi.yMin + 10);
     this.currentAngleDeg = 45.0;
 
     const modal = document.createElement('div');
@@ -260,12 +260,13 @@ export class OcrReviewModal {
     modal.querySelector('#btn-ocr-run')?.addEventListener('click', () => this.runOcrRecognition());
     modal.querySelector('#ocr-btn-apply')?.addEventListener('click', () => this.applyToDiagramColumns());
 
-    // 重置默认框
+    // 重置默认框（OCR 标签带位于取数区顶界之上，用 ROI 而非深度标定）
     modal.querySelector('#btn-ocr-reset-crop')?.addEventListener('click', () => {
-      this.cropX0 = Math.round(cal.dataXMin);
-      this.cropX1 = Math.round(cal.dataXMax);
-      this.cropY0 = Math.max(0, Math.round(cal.dataYMin - 335));
-      this.cropY1 = Math.round(cal.dataYMin + 10);
+      const roi = this.diagramData.roi;
+      this.cropX0 = Math.round(roi.xMin);
+      this.cropX1 = Math.round(roi.xMax);
+      this.cropY0 = Math.max(0, Math.round(roi.yMin - 335));
+      this.cropY1 = Math.round(roi.yMin + 10);
       this.updateCropCoordsLabel();
       this.renderCropCanvas();
       this.resetRotView();

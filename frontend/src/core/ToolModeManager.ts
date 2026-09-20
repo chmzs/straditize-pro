@@ -72,6 +72,20 @@ export class ToolModeManager {
           hint: '点击左键删除控制点或属种列 (D)',
           cursor: 'not-allowed',
         };
+      case 'ycalib':
+        return {
+          name: 'Y 轴两点标定 (Calibrate)',
+          shortcut: 'Y',
+          hint: '在图上依次点击 Y 轴上两个已知刻度所在的行，随后填写其真实值',
+          cursor: 'crosshair',
+        };
+      case 'linefix':
+        return {
+          name: '线掩膜人工修正 (Line Fix)',
+          shortcut: 'K',
+          hint: '按住左键涂抹：擦掉误标红线 / 补回漏标的线（按 B 可叠加查看）',
+          cursor: 'crosshair',
+        };
       default:
         return {
           name: '选择',

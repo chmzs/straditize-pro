@@ -374,7 +374,8 @@ assert.ok(aliasPairs.some(([s, a]) => s === 'Thalasiosira' && a === 'Thalassiosi
 console.log('✔ 硅藻属名表（内陆+海相 227 属）与源表拼写异名验证通过');
 
 // 6. 【新增重点功能测试】批量导入属种名单自动列间距拓展分列测试
-function simulateBatchTaxaUpdate(existingColumns, newTaxaNames, calibration) {
+//    注意入参是【取数区域 ROI】而非标定：真实现只按 ROI 展宽，绝不触碰深度标定。
+function simulateBatchTaxaUpdate(existingColumns, newTaxaNames, roi) {
   const sortedCols = [...existingColumns].sort((a, b) => a.startX - b.startX);
   const existingCount = sortedCols.length;
   const inputCount = newTaxaNames.length;
@@ -405,8 +406,8 @@ function simulateBatchTaxaUpdate(existingColumns, newTaxaNames, calibration) {
         visible: true,
       });
       curStartX = newEndX;
-      if (newEndX > calibration.dataXMax) {
-        calibration.dataXMax = newEndX + 30;
+      if (newEndX > roi.xMax) {
+        roi.xMax = newEndX + 30;
       }
     }
   }
@@ -418,10 +419,10 @@ const initialCols = [
   { id: '1', name: 'OldColA', startX: 100, endX: 200 },
   { id: '2', name: 'OldColB', startX: 200, endX: 300 },
 ];
-const calib = { dataXMin: 100, dataXMax: 350, dataYMin: 100, dataYMax: 500, depthTopValue: 0, depthBottomValue: 100, unit: 'cm' };
+const roiFixture = { xMin: 100, xMax: 350, yMin: 100, yMax: 500 };
 const inputList = ['Pinus', 'Artemisia', 'Chenopodiaceae', 'Poaceae', 'Betula'];
 
-const expanded = simulateBatchTaxaUpdate(initialCols, inputList, calib);
+const expanded = simulateBatchTaxaUpdate(initialCols, inputList, roiFixture);
 assert.strictEqual(expanded.length, 5, '列数应自动从 2 拓展至 5 列');
 assert.strictEqual(expanded[0].name, 'Pinus');
 assert.strictEqual(expanded[1].name, 'Artemisia');
@@ -433,143 +434,16 @@ assert.strictEqual(expanded[2].startX, 300, '第 3 列 startX 接在第 2 列 en
 assert.strictEqual(expanded[2].endX, 400, '保持 100px 列宽间距');
 assert.strictEqual(expanded[3].startX, 400);
 assert.strictEqual(expanded[4].endX, 600);
-assert(calib.dataXMax >= 630, '图谱总宽度上限 dataXMax 随之自动安全拓展');
+assert(roiFixture.xMax >= 630, '取数区右界随之自动安全拓展');
 console.log('✔ 批量导入属种名单从左到右重命名与自动列间距拓展分列验证通过');
 
-// 7. 【新增重点功能测试】地层深度标尺网格系统 (Depth Grid Ruler) 与统一层位锚定测试
-function getStandardDepthHorizons(cal) {
-  const interval = cal.depthInterval && cal.depthInterval > 0 ? cal.depthInterval : 2;
-  const top = cal.depthTopValue;
-  const bottom = cal.depthBottomValue;
-  const depthRange = bottom - top || 1;
-  const yRange = cal.dataYMax - cal.dataYMin;
-
-  const startDepth = Math.min(top, bottom);
-  const endDepth = Math.max(top, bottom);
-  const count = Math.round((endDepth - startDepth) / interval);
-
-  const depths = [];
-  const yPositions = [];
-  for (let i = 0; i <= count; i++) {
-    const d = Number((top + i * interval).toFixed(4));
-    const fraction = (d - top) / depthRange;
-    const y = Number((cal.dataYMin + fraction * yRange).toFixed(2));
-    depths.push(d);
-    yPositions.push(y);
-  }
-  return { depths, yPositions };
-}
-
-function interpolatePercent(col, y, cal) {
-  // 简化的线性插值模拟
-  const pts = col.controlPoints;
-  const colWidth = col.endX - col.startX;
-  if (pts.length === 0 || colWidth <= 0) return 0;
-  let idx = 0;
-  while (idx < pts.length - 1 && pts[idx + 1].y < y) idx++;
-  const p1 = pts[idx], p2 = pts[Math.min(idx + 1, pts.length - 1)];
-  const t = p2.y !== p1.y ? (y - p1.y) / (p2.y - p1.y) : 0;
-  const curX = p1.x + (p2.x - p1.x) * Math.max(0, Math.min(1, t));
-  return Number((((curX - col.startX) / colWidth) * col.maxPercent).toFixed(2));
-}
-
-// 模拟剖面：从 0 到 150cm，每隔 2cm 设定为一个标准采样层位
-const depthCal = {
-  dataXMin: 100,
-  dataXMax: 800,
-  dataYMin: 200,
-  dataYMax: 1100, // 高度 900px 对应 150cm (每 cm 对应 6px, 每 2cm 对应 12px)
-  depthTopValue: 0,
-  depthBottomValue: 150,
-  depthInterval: 2,
-  unit: 'cm',
-};
-
-const horizons = getStandardDepthHorizons(depthCal);
-// (150 - 0) / 2 + 1 = 76 个固定层位
-assert.strictEqual(horizons.depths.length, 76, '0~150cm 每隔 2cm 应生成 76 个标准层位');
-assert.strictEqual(horizons.depths[0], 0, '顶层为 0cm');
-assert.strictEqual(horizons.depths[1], 2, '第 2 层位为 2cm');
-assert.strictEqual(horizons.depths[75], 150, '底层位为 150cm');
-assert.strictEqual(horizons.yPositions[0], 200, '顶层像素位置为 200px');
-assert.strictEqual(horizons.yPositions[1], 212, '第 2 层位像素位置为 212px (2cm * 6px/cm)');
-assert.strictEqual(horizons.yPositions[75], 1100, '底层像素位置为 1100px');
-
-// 模拟 3 列属种在固定层位上的数据提取
-const testCols = [
-  {
-    name: 'Pinus',
-    startX: 100, endX: 200, maxPercent: 100,
-    controlPoints: [{ x: 150, y: 200 }, { x: 180, y: 650 }, { x: 140, y: 1100 }]
-  },
-  {
-    name: 'Artemisia',
-    startX: 200, endX: 300, maxPercent: 50,
-    controlPoints: [{ x: 230, y: 200 }, { x: 260, y: 650 }, { x: 220, y: 1100 }]
-  },
-  {
-    name: 'Poaceae',
-    startX: 300, endX: 400, maxPercent: 40,
-    controlPoints: [{ x: 320, y: 200 }, { x: 350, y: 650 }, { x: 310, y: 1100 }]
-  }
-];
-
-// 提取全量锚定数据
-const extractedRows = horizons.depths.map((d, i) => {
-  const y = horizons.yPositions[i];
-  return {
-    depth: d,
-    pinus: interpolatePercent(testCols[0], y, depthCal),
-    artemisia: interpolatePercent(testCols[1], y, depthCal),
-    poaceae: interpolatePercent(testCols[2], y, depthCal),
-  };
-});
-
-assert.strictEqual(extractedRows.length, 76);
-// 验证所有属种严格对齐在完全相同的深度层位上，绝无任何错位
-for (let i = 0; i < extractedRows.length; i++) {
-  assert.strictEqual(extractedRows[i].depth, i * 2, `第 ${i} 行深度应严格为 ${i * 2} cm`);
-  assert(extractedRows[i].pinus >= 0 && extractedRows[i].pinus <= 100);
-  assert(extractedRows[i].artemisia >= 0 && extractedRows[i].artemisia <= 50);
-  assert(extractedRows[i].poaceae >= 0 && extractedRows[i].poaceae <= 40);
-}
-console.log('✔ 地层深度标尺网格系统 (0~150cm, Δ=2cm) 与多属种无错位锚定提取验证通过');
-
-// 5. 验证四元坐标系统转换纯逻辑
-function testCoordinateSystemPure() {
-  const cal = {
-    dataXMin: 315,
-    dataXMax: 1946,
-    dataYMin: 511,
-    dataYMax: 1311,
-    depthTopValue: 0,
-    depthBottomValue: 150,
-    unit: 'cm',
-    isCalibrated: true
-  };
-  const vt = { offsetX: 100, offsetY: 50, scale: 2.0, dpr: 1.0 };
-
-  // 1. 屏幕与物理像素双向
-  const screenPt = { x: 500, y: 450 };
-  const imgPt = { x: (screenPt.x - vt.offsetX) / vt.scale, y: (screenPt.y - vt.offsetY) / vt.scale }; // (200, 200)
-  assert.strictEqual(imgPt.x, 200);
-  assert.strictEqual(imgPt.y, 200);
-  const backScreen = { x: imgPt.x * vt.scale + vt.offsetX, y: imgPt.y * vt.scale + vt.offsetY };
-  assert.strictEqual(backScreen.x, 500);
-  assert.strictEqual(backScreen.y, 450);
-
-  // 2. 物理Y与深度双向
-  const yMid = 511 + (1311 - 511) / 2; // 911
-  const t = (yMid - 511) / (1311 - 511);
-  const depth = cal.depthTopValue + t * (cal.depthBottomValue - cal.depthTopValue); // 75.0 cm
-  assert.strictEqual(depth, 75.0);
-
-  // 3. 屏幕恒定距离换算 (8px 屏幕手柄在 2.0 缩放下等于 4.0 图像物理像素)
-  const imgDist = 8.0 / vt.scale;
-  assert.strictEqual(imgDist, 4.0);
-}
-testCoordinateSystemPure();
-console.log('✔ 四元坐标转换与屏幕像素恒定换算引擎验证通过');
+// 7. 地层深度标尺 / 坐标换算：真实模块测试见 test-roi-calibration.mjs。
+//
+// 本文件里原本复刻了一份 getStandardDepthHorizons 与四元坐标换算的内联副本，
+// 副本读的是 dataYMin/dataYMax + depthTopValue 这一组【已废弃的耦合字段】，
+// 所以在真模块解耦之后它依然"通过"，等于用一份过时的实现给自己背书。
+// 该部分断言已迁移到 test-roi-calibration.mjs（直接 import 真 .ts 模块）。
+console.log('↷ 深度标尺与坐标换算已迁移至 test-roi-calibration.mjs（真实模块）');
 
 // 6. 验证开放标准 .tar (POSIX UStar) 打包与解包引擎
 function testTarArchivePure() {

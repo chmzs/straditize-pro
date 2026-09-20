@@ -1,4 +1,5 @@
-import { Point2D, TaxaColumn, DiagramCalibration, DepthHorizon } from '../types/pollen';
+import type { Point2D, TaxaColumn, DiagramCalibration, DepthHorizon } from '../types/pollen';
+import { CoordinateSystem } from './CoordinateSystem.ts';
 
 export class SplineInterpolator {
   /**
@@ -137,25 +138,35 @@ export class SplineInterpolator {
   }
 
   /**
-   * 根据地层标定配置生成剖面层位标尺列表 (Depth Horizons)
+   * 根据 Y 轴标定生成剖面层位标尺列表 (Depth Horizons)。
+   *
+   * 深度只来自用户的两点标定（`calibration`），像素跨度只来自取数区域（`roi`）——
+   * 二者互不推导。未标定时返回空列表：宁可没有刻度，也不能把 ROI 边界冒充成深度。
+   *
    * 优先采用用户从 Excel 粘贴的真实非等距深度层位序列 (customDepths)；
    * 未提供时，才回退到基于用户指定步长的参考线 (如 0~150cm, Δ=2cm)。
    */
-  public static getStandardDepthHorizons(cal: DiagramCalibration): {
+  public static getStandardDepthHorizons(
+    cal: DiagramCalibration
+  ): {
     depths: number[];
     yPositions: number[];
   } {
-    const top = cal.depthTopValue;
-    const bottom = cal.depthBottomValue;
+    const bounds = CoordinateSystem.calibrationBounds(cal);
+    if (!bounds) return { depths: [], yPositions: [] };
+
+    const { topPx, bottomPx, topValue, bottomValue } = bounds;
+    const top = topValue;
+    const bottom = bottomValue;
     const depthRange = bottom - top || 1;
-    const yRange = cal.dataYMax - cal.dataYMin;
+    const yRange = bottomPx - topPx;
 
     // 优先采用用户从 Excel 粘贴的真实非等距深度层位 (忠实于原始物理真实)
     if (cal.customDepths && cal.customDepths.length > 0) {
       const depths = [...cal.customDepths];
       const yPositions = depths.map((d) => {
         const fraction = (d - top) / depthRange;
-        return Number((cal.dataYMin + fraction * yRange).toFixed(2));
+        return Number((topPx + fraction * yRange).toFixed(2));
       });
       return { depths, yPositions };
     }
@@ -173,7 +184,7 @@ export class SplineInterpolator {
       const d = Number((isTopDown ? top + i * interval : top - i * interval).toFixed(4));
       // 物理深度映射到像素 Y 坐标
       const fraction = (d - top) / depthRange;
-      const y = Number((cal.dataYMin + fraction * yRange).toFixed(2));
+      const y = Number((topPx + fraction * yRange).toFixed(2));
 
       depths.push(d);
       yPositions.push(y);

@@ -1,4 +1,4 @@
-import { DiagramData, TaxaColumn, ControlPoint, DiagramCalibration } from '../types/pollen';
+import { DataRoi, DiagramData, TaxaColumn, ControlPoint, DiagramCalibration } from '../types/pollen';
 import { HistoryManager } from '../core/HistoryManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { tokens } from '../styles/tokens';
@@ -13,6 +13,18 @@ export interface InspectorCallbacks {
   onOpenDataViewer?: () => void;
   onToggleLayerVisibility?: (layer: string, visible: boolean) => void;
   onChangeDegridStrength?: (strength: 'off' | 'weak' | 'medium' | 'strong') => void;
+  /** 切换「去竖线」开关：竖线（轴线/列基线）与横线分开控制。 */
+  onToggleVerticalLineRemoval?: (enabled: boolean) => void;
+  /** 进入线掩膜人工修正笔刷（erase=擦掉误标 / restore=补回漏标）。 */
+  onStartLineFix?: (mode: 'erase' | 'restore') => void;
+  /** 清空全部人工修正笔迹并重新下发自动掩膜。 */
+  onClearLineFix?: () => void;
+  /** 启动 Y 轴两点标定（由画布收点，再弹窗收真实值）。 */
+  onStartYCalibration?: () => void;
+  /** 手动输入两点数值重新标定（兜底：不使用画布点选）。 */
+  onSubmitYCalibration?: (top_px: number, topValue: number, bottom_px: number, bottomValue: number, unit: string) => void;
+  /** ROI 输入框提交，需要同步后端并重算线掩膜。 */
+  onRoiCommitted?: (roi: DataRoi) => void;
 }
 
 export class Inspector {
@@ -133,16 +145,69 @@ export class Inspector {
     }
   }
 
+  /**
+   * S4：Y 轴两点标定。
+   *
+   * 标定与 ROI 完全无关：用户在图上的 Y 轴点两个已知刻度的位置，填入其真实值，
+   * 像素↔数值的线性映射由此确定。这里只呈现状态与入口，收点在画布上完成。
+   */
   private renderS4CalibrationPanel(cal: DiagramCalibration, activeCol?: TaxaColumn): string {
     const hasCustom = cal.customDepths && cal.customDepths.length > 0;
     const customCount = hasCustom ? cal.customDepths!.length : 0;
+    const bounds = CoordinateSystem.calibrationBounds(cal);
+
+    const statusBlock = bounds
+      ? `
+        <div class="prop-row" style="margin-bottom: 4px;">
+          <span class="prop-label">① 上方参考点:</span>
+          <span class="prop-val"><code>Y=${bounds.topPx}px</code> → <strong>${bounds.topValue} ${cal.unit}</strong></span>
+        </div>
+        <div class="prop-row" style="margin-bottom: 4px;">
+          <span class="prop-label">② 下方参考点:</span>
+          <span class="prop-val"><code>Y=${bounds.bottomPx}px</code> → <strong>${bounds.bottomValue} ${cal.unit}</strong></span>
+        </div>
+        <div class="prop-row">
+          <span class="prop-label">换算比例:</span>
+          <span class="prop-val">${((bounds.bottomValue - bounds.topValue) / (bounds.bottomPx - bounds.topPx)).toFixed(4)} ${cal.unit}/px</span>
+        </div>
+      `
+      : `
+        <div style="font-size: 11px; color: #f59e0b; font-weight: 700; line-height: 1.6;">
+          ⚠ 尚未标定：当前深度一律显示为 <code>--</code>，不会用取数区边界充当刻度。
+        </div>
+      `;
 
     return `
       <div class="inspector-section">
-        <div class="section-title">S4：真实层位与标尺标定</div>
-        
+        <div class="section-title">S4：Y 轴两点标定</div>
+
+        <div class="form-group" style="padding: 8px; background: rgba(250, 204, 21, 0.07); border-radius: 6px; border: 1px solid rgba(250, 204, 21, 0.35); margin-bottom: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <strong style="font-size: 11px; color: var(--text-primary);">Y 轴标定状态:</strong>
+            <span style="font-size: 10px; color: ${bounds ? '#10b981' : '#f59e0b'}; font-weight: 700;">
+              ${bounds ? '✓ 已标定' : '未标定'}
+            </span>
+          </div>
+          ${statusBlock}
+        </div>
+
+        <div class="tip-card" style="margin-bottom: 10px; border-left: 3px solid var(--accent-blue); padding: 8px 10px;">
+          <p style="font-size: 11px; line-height: 1.5; color: var(--text-primary); margin: 0;">
+            <strong>怎么标：</strong>点下方按钮进入标定模式（快捷键 <strong>Y</strong>），
+            在图上依次点击 <strong>Y 轴上两个已知刻度所在的行</strong>（例如 0 与 300cm 两条水平位置），
+            随后在弹出的对话框里填入这两行的真实值。两点顺序无所谓，后端会按像素 Y 排序。
+          </p>
+        </div>
+
+        <button id="btn-start-ycalib" class="btn btn-primary" style="width: 100%; margin-bottom: 8px;">
+          🎯 ${bounds ? '重新标定两点' : '开始两点标定 (Y)'}
+        </button>
+        <button id="btn-open-ycalib-manual" class="tool-btn" style="width: 100%; font-size: 10.5px; padding: 5px 6px;">
+          ⌨ 手动输入像素/数值
+        </button>
+
         <!-- 真实样品层位录入 (恪守物理真实，拒绝主观伪插值) -->
-        <div class="form-group" style="padding: 8px; background: rgba(56, 189, 248, 0.06); border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.25); margin-bottom: 10px;">
+        <div class="form-group" style="padding: 8px; background: rgba(56, 189, 248, 0.06); border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.25); margin: 10px 0;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <strong style="font-size: 11px; color: var(--text-primary);">钻孔真实样品层位序列:</strong>
             <span style="font-size: 10px; color: ${hasCustom ? '#10b981' : '#f59e0b'}; font-weight: 700;">
@@ -208,13 +273,22 @@ export class Inspector {
     `;
   }
 
+  /**
+   * S2：界定纯数据取数区 (ROI)。
+   *
+   * 这里只有"从哪里取数"与"如何清理干扰线"。深度输入框已迁至 S4 的两点标定 ——
+   * 历史上它们并排放在 S2，拖一下 ROI 就改了深度，是本次修复的缺陷本体。
+   */
   private renderS2RoiPanel(cal: DiagramCalibration): string {
+    const roi = this.data.roi;
     const activePanel = this.data.panels?.find((p) => p.id === this.data.activePanelId) || this.data.panels?.[0];
+    const correctionCount = this.data.lineCorrections.length;
+    const bounds = CoordinateSystem.calibrationBounds(cal);
 
     return `
       <div class="inspector-section">
-        <div class="section-title">S2：界定纯数据有效区 (ROI)</div>
-        
+        <div class="section-title">S2：界定纯数据取数区 (ROI)</div>
+
         <!-- 多 ROI 分区指示 (Y 轴强锁对齐) -->
         <div style="margin-bottom: 10px; padding: 6px 8px; background: rgba(56, 189, 248, 0.08); border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.25);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
@@ -231,54 +305,64 @@ export class Inspector {
         <div class="tip-card" style="margin-bottom: 10px; border-left: 3px solid var(--accent-blue); padding: 8px 10px;">
           <p style="font-size: 11px; line-height: 1.5; color: var(--text-primary); margin: 0;">
             <strong>工作流要点：</strong><br>
-            请在画布上拖拽 8 个十字手柄框选花粉数据区，<strong>务必将左侧 Y 轴线、右侧聚类树和底部 X 刻度排除在外</strong>，确保分列 100% 准确。
+            在画布上拖拽 8 个十字手柄框选花粉数据区，<strong>务必将左侧 Y 轴线、右侧聚类树和底部 X 刻度排除在外</strong>，
+            确保分列 100% 准确。本框只决定「从哪里取数」，不决定任何深度值。
           </p>
         </div>
 
         <div class="form-group" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light); margin-bottom: 10px;">
-          <label style="font-size: 11px; font-weight: 600; display: block; margin-bottom: 6px;">图像去横线与网格降噪:</label>
+          <label style="font-size: 11px; font-weight: 600; display: block; margin-bottom: 6px;">图像去线与网格降噪:</label>
           <select id="select-inspector-degrid" class="sample-select" style="width: 100%; font-size: 11px; margin-bottom: 6px;">
-            <option value="off">去横线: 关闭</option>
-            <option value="weak">去横线: 弱 (仅细线)</option>
-            <option value="medium" selected>去横线: 中 (推荐)</option>
-            <option value="strong">去横线: 强 (粗网格)</option>
+            <option value="off">去线: 关闭</option>
+            <option value="weak">去线: 弱 (仅 1-2px 细线)</option>
+            <option value="medium" selected>去线: 中 (推荐)</option>
+            <option value="strong">去线: 强 (含较粗网格)</option>
           </select>
-          <small style="font-size: 10px; color: var(--text-muted); line-height: 1.4; display: block;">
-            提示: 按键盘 <strong>B</strong> 键可在画布上即时透视查看被切除的横线（鲜红色标记）。
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-secondary); cursor: pointer; margin-bottom: 6px;">
+            <input type="checkbox" id="chk-degrid-vertical" checked />
+            <span>同时去除竖线（坐标轴脊线、列基线）</span>
+          </label>
+          <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+            <button id="btn-linefix-erase" class="tool-btn" style="flex: 1; font-size: 10px; padding: 4px 6px;" title="按住左键涂抹，把被误标成线的数据擦回来">
+              🧽 擦掉误标
+            </button>
+            <button id="btn-linefix-restore" class="tool-btn" style="flex: 1; font-size: 10px; padding: 4px 6px;" title="按住左键涂抹，手工补上算法漏掉的线">
+              🖌 补回漏标
+            </button>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text-muted);">
+            <span>人工修正笔迹: <strong>${correctionCount}</strong> 条</span>
+            <button id="btn-linefix-clear" class="tool-btn" style="font-size: 9.5px; padding: 2px 6px; ${correctionCount ? '' : 'opacity: 0.45; pointer-events: none;'}">清空修正</button>
+          </div>
+          <small style="font-size: 10px; color: var(--text-muted); line-height: 1.4; display: block; margin-top: 6px;">
+            提示: 按键盘 <strong>B</strong> 键叠加查看去线结果 —— <span style="color:#f87171;">红色</span>=实际被剔除的像素，
+            <span style="color:#e2e8f0;">白色</span>=保留下来的墨迹。进入修正笔刷时会自动打开该叠加层。
           </small>
         </div>
 
         <div class="form-group">
-          <label>顶界深度 (Top Depth):</label>
-          <div class="input-row">
-            <input type="number" id="inp-roi-top" value="${cal.depthTopValue}" step="1" />
-            <input type="text" id="inp-roi-unit" value="${cal.unit}" style="width: 55px;" />
-          </div>
-        </div>
-        <div class="form-group">
-          <label>底界深度 (Bottom Depth):</label>
-          <div class="input-row">
-            <input type="number" id="inp-roi-bot" value="${cal.depthBottomValue}" step="1" />
-            <span class="unit-label">${cal.unit}</span>
-          </div>
-        </div>
-        <div class="form-group">
           <label>有效区像素 X 范围:</label>
           <div class="input-row">
-            <input type="number" id="inp-roi-xmin" value="${cal.dataXMin}" />
+            <input type="number" id="inp-roi-xmin" value="${Math.round(roi.xMin)}" />
             <span style="color:#64748b;">~</span>
-            <input type="number" id="inp-roi-xmax" value="${cal.dataXMax}" />
+            <input type="number" id="inp-roi-xmax" value="${Math.round(roi.xMax)}" />
           </div>
         </div>
         <div class="form-group">
           <label>有效区像素 Y 范围 (所有 ROI 共享共时性):</label>
           <div class="input-row">
-            <input type="number" id="inp-roi-ymin" value="${cal.dataYMin}" />
+            <input type="number" id="inp-roi-ymin" value="${Math.round(roi.yMin)}" />
             <span style="color:#64748b;">~</span>
-            <input type="number" id="inp-roi-ymax" value="${cal.dataYMax}" />
+            <input type="number" id="inp-roi-ymax" value="${Math.round(roi.yMax)}" />
           </div>
         </div>
-        <button id="btn-apply-roi" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
+
+        <div style="font-size: 10px; color: var(--text-muted); line-height: 1.5; margin-bottom: 8px;">
+          Y 轴深度标定不在本步骤：${bounds ? `当前已标定 ${bounds.topValue} ~ ${bounds.bottomValue} ${cal.unit}。` : '尚未标定，深度显示为 --。'}
+          请到 <strong>S4</strong> 用「两点标定」在图上点两个已知刻度。
+        </div>
+
+        <button id="btn-apply-roi" class="btn btn-primary" style="width: 100%; margin-top: 4px;">
           保存有效区设置
         </button>
       </div>
@@ -369,13 +453,16 @@ export class Inspector {
 
   private renderProjectOverview(cal: DiagramCalibration): string {
     const numCols = this.data.columns.length;
-    const totalDepth = cal.depthBottomValue - cal.depthTopValue;
+    const bounds = CoordinateSystem.calibrationBounds(cal);
     const interval = cal.depthInterval || 2;
-    const numHorizons = Math.round(totalDepth / interval) + 1;
+    // 未标定时不报"层位数"：那会凭空给出一个并不存在的采样层数。
+    const numHorizons = bounds
+      ? Math.round(Math.abs(bounds.bottomValue - bounds.topValue) / interval) + 1
+      : null;
 
     return `
       <div class="inspector-section">
-        <div class="section-title">地质剖面与数据区概览</div>
+        <div class="section-title">地质剖面与取数区概览</div>
         <div class="property-grid">
           <div class="prop-row">
             <span class="prop-label">底图分辨率:</span>
@@ -386,12 +473,16 @@ export class Inspector {
             <span class="prop-val"><strong style="color: var(--accent-blue);">${numCols}</strong> 列</span>
           </div>
           <div class="prop-row">
-            <span class="prop-label">沉积深度跨度:</span>
-            <span class="prop-val">${cal.depthTopValue} ~ ${cal.depthBottomValue} ${cal.unit}</span>
+            <span class="prop-label">取数区 (ROI):</span>
+            <span class="prop-val">X ${Math.round(this.data.roi.xMin)}~${Math.round(this.data.roi.xMax)} × Y ${Math.round(this.data.roi.yMin)}~${Math.round(this.data.roi.yMax)} px</span>
+          </div>
+          <div class="prop-row">
+            <span class="prop-label">深度跨度:</span>
+            <span class="prop-val">${bounds ? `${bounds.topValue} ~ ${bounds.bottomValue} ${cal.unit}` : '<span style="color:#f59e0b;">未标定 (S4 两点标定)</span>'}</span>
           </div>
           <div class="prop-row">
             <span class="prop-label">标准层位采样点:</span>
-            <span class="prop-val">${numHorizons} 层 (Δ=${interval}${cal.unit})</span>
+            <span class="prop-val">${numHorizons !== null ? `${numHorizons} 层 (Δ=${interval}${cal.unit})` : '--'}</span>
           </div>
         </div>
       </div>
@@ -727,9 +818,9 @@ export class Inspector {
     });
 
     this.element.querySelector('#btn-clear-custom-depths')?.addEventListener('click', () => {
+      // 只清层位序列，不动标定端点（旧实现把两者写在一起，清理层位会顺手改刻度）。
       delete this.data.calibration.customDepths;
-      delete this.data.calibration.custom_depths;
-      this.history.push('Clear Custom Depths', this.data.columns, this.data.activeTaxaId, this.data.calibration);
+      this.history.push('Clear Custom Depths', this.data.columns, this.data.activeTaxaId, this.data.calibration, this.data.roi);
       this.render();
       this.callbacks.onDataChange();
     });
@@ -791,12 +882,13 @@ export class Inspector {
     // 追加子有效区 (锁定 Y 轴，只放开 X 轴水平微调)
     this.element.querySelector('#btn-add-sub-roi')?.addEventListener('click', () => {
       const cal = this.data.calibration;
+      const mainRoi = this.data.roi;
       if (!this.data.panels) {
         this.data.panels = [
           {
             id: 'panel_1',
             name: '主图区 (ROI 1)',
-            roi: { xMin: cal.dataXMin, xMax: cal.dataXMax, yMin: cal.dataYMin, yMax: cal.dataYMax },
+            roi: { ...mainRoi },
             calibration: { ...cal },
             columns: [...this.data.columns],
             activeTaxaId: this.data.activeTaxaId,
@@ -805,34 +897,29 @@ export class Inspector {
       }
 
       const pIdx = this.data.panels.length + 1;
-      const subWidth = Math.round((cal.dataXMax - cal.dataXMin) * 0.3);
-      const subXMin = cal.dataXMax + 20;
+      const subWidth = Math.round((mainRoi.xMax - mainRoi.xMin) * 0.3);
+      const subXMin = mainRoi.xMax + 20;
       const subXMax = subXMin + subWidth;
 
       const newPanel = {
         id: `panel_${pIdx}`,
         name: `子分区 ${pIdx} (锁定Y轴)`,
+        // 子区的 Y 范围严格继承主图取数区；深度标定是整幅图共用的同一把尺，
+        // 不经由 ROI 推导，因此这里原样复制即可。
         roi: {
           xMin: subXMin,
           xMax: subXMax,
-          yMin: cal.dataYMin, // 100% 严格继承主图 Y 顶界
-          yMax: cal.dataYMax, // 100% 严格继承主图 Y 底界
+          yMin: mainRoi.yMin,
+          yMax: mainRoi.yMax,
         },
-        calibration: {
-          ...cal,
-          dataXMin: subXMin,
-          dataXMax: subXMax,
-          // 深度范围严格锁定
-          depthTopValue: cal.depthTopValue,
-          depthBottomValue: cal.depthBottomValue,
-        },
+        calibration: { ...cal },
         columns: [],
         activeTaxaId: '',
       };
 
       this.data.panels.push(newPanel);
       this.data.activePanelId = newPanel.id;
-      this.history.push(`Add Sub-ROI Panel ${pIdx} with Y-Axis Lock`, this.data.columns, this.data.activeTaxaId, this.data.calibration);
+      this.history.push(`Add Sub-ROI Panel ${pIdx} with Y-Axis Lock`, this.data.columns, this.data.activeTaxaId, this.data.calibration, this.data.roi);
       this.render();
       this.callbacks.onDataChange();
     });
@@ -858,30 +945,24 @@ export class Inspector {
       }
     });
 
-    // 应用有效区
+    // 应用有效区：只改 ROI。深度标定由 S4 的两点标定负责，绝不在这里顺带改写。
     this.element.querySelector('#btn-apply-roi')?.addEventListener('click', () => {
       const x0 = parseInt((this.element.querySelector('#inp-roi-xmin') as HTMLInputElement).value, 10);
       const x1 = parseInt((this.element.querySelector('#inp-roi-xmax') as HTMLInputElement).value, 10);
       const y0 = parseInt((this.element.querySelector('#inp-roi-ymin') as HTMLInputElement).value, 10);
       const y1 = parseInt((this.element.querySelector('#inp-roi-ymax') as HTMLInputElement).value, 10);
-      const top = parseFloat((this.element.querySelector('#inp-roi-top') as HTMLInputElement).value);
-      const bot = parseFloat((this.element.querySelector('#inp-roi-bot') as HTMLInputElement).value);
-      const unit = (this.element.querySelector('#inp-roi-unit') as HTMLInputElement).value.trim() || 'cm';
 
-      const prev = { ...this.data.calibration };
-      new ResizeRoiCommand(prev, {
-        ...this.data.calibration,
-        dataXMin: isNaN(x0) ? prev.dataXMin : x0,
-        dataXMax: isNaN(x1) ? prev.dataXMax : x1,
-        dataYMin: isNaN(y0) ? prev.dataYMin : y0,
-        dataYMax: isNaN(y1) ? prev.dataYMax : y1,
-        depthTopValue: isNaN(top) ? prev.depthTopValue : top,
-        depthBottomValue: isNaN(bot) ? prev.depthBottomValue : bot,
-        unit,
-        isCalibrated: true,
-      }).execute(this.data);
+      const prev = { ...this.data.roi };
+      const next: DataRoi = {
+        xMin: isNaN(x0) ? prev.xMin : x0,
+        xMax: isNaN(x1) ? prev.xMax : x1,
+        yMin: isNaN(y0) ? prev.yMin : y0,
+        yMax: isNaN(y1) ? prev.yMax : y1,
+      };
 
-      this.history.push('Update ROI & Calibration', this.data.columns, this.data.activeTaxaId, this.data.calibration);
+      new ResizeRoiCommand(prev, next).execute(this.data);
+      this.history.push('Update ROI', this.data.columns, this.data.activeTaxaId, this.data.calibration, next);
+      this.callbacks.onRoiCommitted?.(next);
       this.callbacks.onDataChange();
     });
 
@@ -898,10 +979,106 @@ export class Inspector {
       this.callbacks.onOpenDataViewer?.();
     });
 
-    // S2 图像清理灵敏度
+    // S2 图像清理灵敏度（横线 + 竖线由后端在同一档位内一起判定）
     this.element.querySelector('#select-inspector-degrid')?.addEventListener('change', (e) => {
       const val = (e.target as HTMLSelectElement).value as 'off' | 'weak' | 'medium' | 'strong';
       this.callbacks.onChangeDegridStrength?.(val);
+    });
+
+    this.element.querySelector('#chk-degrid-vertical')?.addEventListener('change', (e) => {
+      this.callbacks.onToggleVerticalLineRemoval?.((e.target as HTMLInputElement).checked);
+    });
+
+    // 线掩膜人工修正
+    this.element.querySelector('#btn-linefix-erase')?.addEventListener('click', () => {
+      this.callbacks.onStartLineFix?.('erase');
+    });
+    this.element.querySelector('#btn-linefix-restore')?.addEventListener('click', () => {
+      this.callbacks.onStartLineFix?.('restore');
+    });
+    this.element.querySelector('#btn-linefix-clear')?.addEventListener('click', () => {
+      this.callbacks.onClearLineFix?.();
+    });
+
+    // S4 两点式 Y 轴标定
+    this.element.querySelector('#btn-start-ycalib')?.addEventListener('click', () => {
+      this.callbacks.onStartYCalibration?.();
+    });
+    this.element.querySelector('#btn-open-ycalib-manual')?.addEventListener('click', () => {
+      this.openManualYCalibrationModal();
+    });
+  }
+
+  /**
+   * 手动输入两点坐标的兜底入口：适合已从图上量好像素行、只想填数字的场景。
+   * 与画布点选走同一条后端通路（core.calibrateAxes），不另立算法。
+   */
+  public openManualYCalibrationModal(): void {
+    const cal = this.data.calibration;
+    const modal = document.createElement('div');
+    modal.className = 'modal-backdrop';
+    modal.innerHTML = `
+      <div class="modal-dialog" style="width: 460px; max-width: 95vw;">
+        <div class="modal-header">
+          <h3>Y 轴两点标定 (像素 → 真实值)</h3>
+          <button class="close-btn" id="modal-close-ycal">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+          <p style="font-size: 11px; color: var(--text-secondary); margin: 0; line-height: 1.5;">
+            填写 Y 轴上两个已知刻度所在的<strong>像素行</strong>与其<strong>真实数值</strong>。
+            数值可以向下递增（深度）或递增向上（年代），映射方向由数值本身决定。
+          </p>
+          <div class="input-row">
+            <span style="width: 92px; font-size: 11px;">① 上方点 Y</span>
+            <input type="number" id="ycal-top-px" value="${cal.top_px ?? ''}" placeholder="px" style="flex: 1;" />
+            <span style="width: 92px; font-size: 11px; text-align: right;">真实值</span>
+            <input type="number" id="ycal-top-val" value="${cal.top_cm ?? ''}" step="any" style="flex: 1;" />
+          </div>
+          <div class="input-row">
+            <span style="width: 92px; font-size: 11px;">② 下方点 Y</span>
+            <input type="number" id="ycal-bot-px" value="${cal.bottom_px ?? ''}" placeholder="px" style="flex: 1;" />
+            <span style="width: 92px; font-size: 11px; text-align: right;">真实值</span>
+            <input type="number" id="ycal-bot-val" value="${cal.bottom_cm ?? ''}" step="any" style="flex: 1;" />
+          </div>
+          <div class="input-row">
+            <span style="width: 92px; font-size: 11px;">单位</span>
+            <input type="text" id="ycal-unit" value="${cal.unit || 'cm'}" placeholder="cm / m / cal yr BP" style="flex: 1;" />
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 10px 14px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color);">
+          <button class="btn btn-secondary" id="btn-cancel-ycal">取消</button>
+          <button class="btn btn-primary" id="btn-confirm-ycal" style="padding: 5px 14px; font-size: 11px;">应用标定</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const close = () => modal.remove();
+    modal.querySelector('#modal-close-ycal')?.addEventListener('click', close);
+    modal.querySelector('#btn-cancel-ycal')?.addEventListener('click', close);
+    modal.querySelector('#btn-confirm-ycal')?.addEventListener('click', () => {
+      const topPx = parseFloat((modal.querySelector('#ycal-top-px') as HTMLInputElement).value);
+      const topVal = parseFloat((modal.querySelector('#ycal-top-val') as HTMLInputElement).value);
+      const botPx = parseFloat((modal.querySelector('#ycal-bot-px') as HTMLInputElement).value);
+      const botVal = parseFloat((modal.querySelector('#ycal-bot-val') as HTMLInputElement).value);
+      const unit = (modal.querySelector('#ycal-unit') as HTMLInputElement).value.trim() || 'cm';
+
+      if ([topPx, topVal, botPx, botVal].some((v) => isNaN(v))) {
+        alert('四个字段都必须填数字：两个像素行 + 两个真实值。');
+        return;
+      }
+      if (topPx === botPx) {
+        alert('两个像素行不能相同，否则无法确定像素↔数值的比例。');
+        return;
+      }
+      this.callbacks.onSubmitYCalibration?.(
+        Math.min(topPx, botPx),
+        topPx <= botPx ? topVal : botVal,
+        Math.max(topPx, botPx),
+        topPx <= botPx ? botVal : topVal,
+        unit
+      );
+      close();
     });
   }
 
@@ -976,11 +1153,24 @@ export class Inspector {
 
     confirmBtn.addEventListener('click', () => {
       if (parsedDepths.length >= 2) {
+        // 只登记层位序列；**不**改写标定端点。旧实现把这两个概念混在一起，
+        // 粘贴一次 Excel 就悄悄把 Y 轴刻度换成了样品深度范围。
         this.data.calibration.customDepths = parsedDepths;
-        this.data.calibration.custom_depths = parsedDepths;
-        this.data.calibration.depthTopValue = parsedDepths[0];
-        this.data.calibration.depthBottomValue = parsedDepths[parsedDepths.length - 1];
-        this.history.push(`Apply ${parsedDepths.length} Custom Sample Depths from Excel`, this.data.columns, this.data.activeTaxaId, this.data.calibration);
+        const bounds = CoordinateSystem.calibrationBounds(this.data.calibration);
+        const outside =
+          bounds !== null &&
+          (parsedDepths[0] < Math.min(bounds.topValue, bounds.bottomValue) ||
+            parsedDepths[parsedDepths.length - 1] > Math.max(bounds.topValue, bounds.bottomValue));
+        if (outside && bounds) {
+          this.callbacks.onDataChange();
+          // 如实告知需要外推，而不是悄悄把标定改成能容纳它的样子。
+          alert(
+            `提示：粘贴的层位范围 (${parsedDepths[0]} ~ ${parsedDepths[parsedDepths.length - 1]} ${this.data.calibration.unit}) ` +
+              `超出现有 Y 轴标定范围 (${bounds.topValue} ~ ${bounds.bottomValue} ${this.data.calibration.unit})，` +
+              `超出的层位属于外推区，请确认标定是否准确。`
+          );
+        }
+        this.history.push(`Apply ${parsedDepths.length} Custom Sample Depths from Excel`, this.data.columns, this.data.activeTaxaId, this.data.calibration, this.data.roi);
         this.render();
         this.callbacks.onDataChange();
         modal.remove();

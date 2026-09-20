@@ -6,10 +6,11 @@ import { Toolbar } from './components/Toolbar';
 import { Sidebar } from './components/Sidebar';
 import { PropertyPanel } from './components/PropertyPanel';
 import { Inspector } from './components/Inspector';
+import { ResizeRoiCommand } from './core/Commands';
 import { AgeDepthModal } from './components/AgeDepthModal';
 import { MetadataModal } from './components/MetadataModal';
 import { OcrReviewModal } from './components/OcrReviewModal';
-import { DiagramCalibration, DiagramData } from './types/pollen';
+import { DataRoi, DiagramCalibration, DiagramData, HistorySnapshot, LineMaskStroke, Point2D } from './types/pollen';
 import { onLocaleChange, applyLocaleToDocument } from './i18n';
 import { ImageDisplayMode } from './core/Viewport';
 import { WORKFLOW_STAGES, WorkflowStage } from './types/workflow';
@@ -143,7 +144,7 @@ async function bootstrap() {
 
   // 3. 初始化历史状态管理器 (支持 500 步命令撤销/重做)
   const history = new HistoryManager(500);
-  history.reset(initialData.columns, initialData.activeTaxaId);
+  history.reset(initialData.columns, initialData.activeTaxaId, initialData.calibration, initialData.roi);
 
   // 自动暂存与草稿防翻车保护 (Autosave & Recovery Protection)
   const AUTOSAVE_KEY = 'straditize_autosave_draft_v2';
@@ -269,7 +270,9 @@ async function bootstrap() {
           <div class="help-row"><span class="help-key">D</span><span class="help-desc">删除控制点模式 (Delete Point)</span></div>
           <div class="help-row"><span class="help-key">C</span><span class="help-desc">添加属种分列线 (Add Column)</span></div>
           <div class="help-row"><span class="help-key">H</span><span class="help-desc">抓手平移模式 (Hand / Pan)</span></div>
-          <div class="help-row"><span class="help-key">R</span><span class="help-desc">ROI 矩形数据有效区模式</span></div>
+          <div class="help-row"><span class="help-key">R</span><span class="help-desc">ROI 矩形取数区模式（只框定取数范围，与深度无关）</span></div>
+          <div class="help-row"><span class="help-key">K</span><span class="help-desc">线掩膜人工修正笔刷（涂抹擦掉误标 / 补回漏标）</span></div>
+          <div class="help-row"><span class="help-key">Y</span><span class="help-desc">Y 轴两点标定（点两个已知刻度所在的行，再填真实值）</span></div>
           <div class="help-row"><span class="help-key">Esc</span><span class="help-desc">退出当前工具返回微调 (S) / 取消选中</span></div>
         </div>
       </div>
@@ -373,6 +376,19 @@ async function bootstrap() {
       toolbar?.updateHistoryState();
       updateFooter();
       scheduleAutosave();
+    },
+    // ROI 拖拽结束：后端的分列/去线都以 ROI 为范围，必须同步过去，
+    // 否则画布上框选的是新范围、后端算的还是旧范围。
+    onRoiCommitted: (roi) => {
+      void commitRoi(roi);
+    },
+    // Y 轴两点选完：弹窗收真实值
+    onYCalibPicked: (marks) => {
+      openYCalibrationDialog(marks);
+    },
+    // 线掩膜人工修正笔迹：提交后端重算叠加层
+    onLineFixStroke: (stroke) => {
+      void appendLineFixStroke(stroke);
     },
     onHoverInfo: (info) => {
       const cursorEl = document.getElementById('footer-cursor');
@@ -505,17 +521,11 @@ async function bootstrap() {
         canvasComponent.requestRender();
         setHudNotice('👉 已进入 S2 数据有效区 (ROI) 框选阶段！请拖拽画布上的 8 个十字手柄框选数据区。', 4500);
       } else if (currentStage === 2) {
-        // S2 -> S3: 确认有效区，开始推导各花粉属种垂直基线并分列
-        setHudNotice('正在基于纯数据有效区推导各花粉属种垂直基线...', 5000);
-        const cal = canvasComponent.data.calibration;
+        // S2 -> S3: 确认取数区，开始推导各花粉属种垂直基线并分列
+        setHudNotice('正在基于纯数据取数区推导各花粉属种垂直基线...', 5000);
         let cols: Awaited<ReturnType<typeof rpcClient.detectColumnsInRoi>>;
         try {
-          cols = await rpcClient.detectColumnsInRoi({
-            x0: cal.dataXMin,
-            x1: cal.dataXMax,
-            y0: cal.dataYMin,
-            y1: cal.dataYMax,
-          });
+          cols = await rpcClient.detectColumnsInRoi({ ...canvasComponent.data.roi });
         } catch (err) {
           // 分列失败必须停在 S2：绝不能带着"等分切割"这类替代结果推进到 S3
           reportBackendFailure('分列识别', err);
@@ -529,6 +539,9 @@ async function bootstrap() {
         updateWorkflowBar();
         updateFooter();
         canvasComponent.requestRender();
+        // 进入 S3 立刻把当前去线档位算一遍：掩膜必须在后端按 ROI 生成，
+        // 否则用户按 B 看到的红标与数字化用的掩膜不是同一批像素。
+        void refreshLineMask();
         setHudNotice(`✅ 成功切分 ${cols.length} 个属种列 (已生成 col01 ~ col${String(cols.length).padStart(2, '0')})！建议点击顶部【🔍 OCR】自动匹配属种名。`, 5000);
       } else if (currentStage === 3) {
         // S3 -> S4: 推进至标尺标定
@@ -636,7 +649,7 @@ async function bootstrap() {
       const curIdx = cols.findIndex((c) => c.id === afterTaxaId);
       const insertAt = curIdx !== -1 ? curIdx + 1 : cols.length;
       const refCol = curIdx !== -1 ? cols[curIdx] : cols[cols.length - 1];
-      const startX = refCol ? refCol.endX : canvasComponent.data.calibration.dataXMin;
+      const startX = refCol ? refCol.endX : canvasComponent.data.roi.xMin;
       const width = refCol ? (refCol.endX - refCol.startX) : 60;
 
       const newCol = {
@@ -709,15 +722,21 @@ async function bootstrap() {
     canvasComponent.data,
     rpcClient,
     (newCal: DiagramCalibration) => {
+      // 这里只落深度网格偏好：真正的两点标定走 applyDepthCalibration。
       canvasComponent.data.calibration = newCal;
-      history.push('Update Calibration', canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
+      history.push('Update Grid Settings', canvasComponent.data.columns, canvasComponent.data.activeTaxaId, newCal, canvasComponent.data.roi);
       canvasComponent.requestRender();
       inspector?.updateData(canvasComponent.data);
       updateFooter();
     },
+    (roi: DataRoi) => {
+      new ResizeRoiCommand(canvasComponent.data.roi, roi).execute(canvasComponent.data);
+      canvasComponent.requestRender();
+      void commitRoi(roi);
+    },
     (projectData: DiagramData) => {
       canvasComponent.loadNewDiagram(projectData);
-      history.reset(projectData.columns, projectData.activeTaxaId);
+      history.reset(projectData.columns, projectData.activeTaxaId, projectData.calibration, projectData.roi);
       currentStage = 3;
       updateWorkflowBar();
       sidebar?.updateData(canvasComponent.data);
@@ -725,6 +744,7 @@ async function bootstrap() {
       toolbar?.updateHistoryState();
       toolbar?.updateScale(canvasComponent.viewport.scale);
       updateFooter();
+      void refreshLineMask();
       setHudNotice('✅ 成功载入 Straditize 科学项目包 (.tar)！已 100% 还原全部属种、刻度钉与控制点。', 4500);
     }
   );
@@ -774,9 +794,259 @@ async function bootstrap() {
     },
     onChangeDegridStrength: (strength) => {
       canvasComponent.setDegridStrength(strength);
-      setHudNotice(`去网格横线灵敏度设为: ${strength.toUpperCase()} (按 B 键透视查看红色切除预览)`);
+      setHudNotice(`去线灵敏度设为: ${strength.toUpperCase()}（按 B 键复核红色标记）`);
+      void refreshLineMask();
+    },
+    onToggleVerticalLineRemoval: (enabled) => {
+      verticalLineRemoval = enabled;
+      setHudNotice(enabled ? '去线：竖线（坐标轴脊线/列基线）一并剔除' : '去线：仅处理横线');
+      void refreshLineMask();
+    },
+    onStartLineFix: (mode) => {
+      if (!canvasComponent.isToolAllowed('linefix')) {
+        setHudNotice('线掩膜修正从 S2 起可用。', 4000);
+        return;
+      }
+      // 修正时必须看得见掩膜，否则等于闭眼涂改。B 键叠加层自动打开。
+      canvasComponent.viewport.showBinaryOverlay = true;
+      canvasComponent.setLineFixMode(mode);
+      canvasComponent.setToolMode('linefix');
+      toolbar?.updateFilterState(canvasComponent.viewport.imageMode, true);
+      setHudNotice(
+        mode === 'erase'
+          ? '🧽 擦除笔：按住左键涂抹被误标成线的数据区，松手即重算。'
+          : '🖌 补线笔：按住左键涂抹算法漏掉的线，松手即重算。',
+        6000
+      );
+    },
+    onClearLineFix: () => {
+      canvasComponent.data.lineCorrections = [];
+      history.push('Clear Line-mask Corrections', canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
+      canvasComponent.requestRender();
+      void refreshLineMask();
+      setHudNotice('已清空全部人工修正笔迹，掩膜回到算法结果。');
+    },
+    onStartYCalibration: () => {
+      startYCalibration();
+    },
+    onSubmitYCalibration: (topPx, topValue, bottomPx, bottomValue, unit) => {
+      void applyDepthCalibration(
+        [
+          { x: 0, y: topPx },
+          { x: 0, y: bottomPx },
+        ],
+        [topValue, bottomValue],
+        unit
+      );
+    },
+    onRoiCommitted: (roi) => {
+      void commitRoi(roi);
     },
   });
+
+  /** 去线是否同时剔除竖线（坐标轴脊线、列基线）。 */
+  let verticalLineRemoval = true;
+
+  /**
+   * 让后端按「当前 ROI + 当前档位 + 当前人工修正」重算线掩膜，并把 QC 叠加层回灌画布。
+   *
+   * 掩膜只在后端生成：前端历史上另有一套"每行连续墨迹 run 超阈值即整段标红"的
+   * 显示逻辑，实测在 Hoya 图上把 Pinus 列 99% 的实心轮廓标成"可删除"，而那张图
+   * ROI 内根本没有横向网格线。现在 B 键看到的就是数字化实际剔除的像素。
+   */
+  async function refreshLineMask(): Promise<void> {
+    const strength = canvasComponent.viewport.degridStrength;
+    const data = canvasComponent.data;
+    if (strength === 'off') {
+      // 关闭也要通知后端：它会主动清掉会话里的旧掩膜。只隐藏叠加层是不够的，
+      // 否则关闭后数字化仍在减掉那批像素。
+      try {
+        await rpcClient.applyLineRemoval('off', data.lineCorrections, verticalLineRemoval);
+      } catch (err) {
+        reportBackendFailure('关闭去线', err);
+      }
+      canvasComponent.setLineOverlay(null);
+      return;
+    }
+    try {
+      const res = await rpcClient.applyLineRemoval(strength, data.lineCorrections, verticalLineRemoval);
+      if (!res || !res.overlay_png) {
+        canvasComponent.setLineOverlay(null);
+        return;
+      }
+      canvasComponent.setLineOverlay(res.overlay_png);
+      inspector?.updateData(data);
+      const manual = res.manual_erase_pixels + res.manual_restore_pixels;
+      setHudNotice(
+        `🧹 去线(${strength}): 剔除 ${res.removed_pixels} px（横线 ${res.horizontal_rows.length} 行 / 竖线 ${res.vertical_cols.length} 列` +
+          `${manual > 0 ? `；含人工修正 ${manual} px` : ''}）。按 B 键复核红色标记。`,
+        5000
+      );
+    } catch (err) {
+      reportBackendFailure('去线掩膜计算', err);
+    }
+  }
+
+  /** 把取数区推给后端，并重算依赖 ROI 的线掩膜。 */
+  async function commitRoi(roi: DataRoi): Promise<void> {
+    try {
+      await rpcClient.updateRoi(roi);
+    } catch (err) {
+      reportBackendFailure('同步取数区到后端', err);
+      return;
+    }
+    await refreshLineMask();
+  }
+
+  /**
+   * 应用一条撤销/重做快照。
+   *
+   * 取数区与深度标定也必须一起回滚：它们和列一样是用户操作的结果，
+   * 只回滚列会让"撤销"看起来生效、实际上框选与刻度停在撤销后的状态。
+   */
+  function applyHistorySnapshot(snapshot: HistorySnapshot): void {
+    canvasComponent.data.columns = snapshot.columns;
+    canvasComponent.data.activeTaxaId = snapshot.activeTaxaId;
+    if (snapshot.calibration) {
+      canvasComponent.data.calibration = { ...snapshot.calibration };
+    }
+    if (snapshot.roi) {
+      canvasComponent.data.roi = { ...snapshot.roi };
+    }
+    canvasComponent.clearYCalibMarks();
+    canvasComponent.requestRender();
+    sidebar?.updateData(canvasComponent.data);
+    inspector?.updateData(canvasComponent.data);
+    toolbar?.updateHistoryState();
+    updateFooter();
+    if (snapshot.roi) {
+      // 掩膜是 ROI 的函数，ROI 回滚了就必须让后端按新范围重算。
+      void commitRoi(canvasComponent.data.roi);
+    }
+  }
+
+  /** 追加一条线掩膜人工修正笔迹并重算叠加层。 */
+  async function appendLineFixStroke(stroke: LineMaskStroke): Promise<void> {
+    if (canvasComponent.viewport.degridStrength === 'off') {
+      setHudNotice('当前去线为「关闭」，修正笔迹已记录但不会生效。请先把去线档位调为弱/中/强。', 6000);
+    }
+    canvasComponent.data.lineCorrections.push(stroke);
+    history.push(
+      stroke.mode === 'erase' ? 'Erase Line-mask Mark' : 'Restore Line-mask Mark',
+      canvasComponent.data.columns,
+      canvasComponent.data.activeTaxaId
+    );
+    await refreshLineMask();
+  }
+
+  /** 进入 Y 轴两点标定：由画布收集两个像素行。 */
+  function startYCalibration(): void {
+    if (!canvasComponent.isToolAllowed('ycalib')) {
+      setHudNotice('请先推进到 S4 标尺阶段再做 Y 轴标定。', 4000);
+      return;
+    }
+    canvasComponent.clearYCalibMarks();
+    canvasComponent.setToolMode('ycalib');
+    setHudNotice('🎯 请在图上依次点击 Y 轴上两个已知刻度所在的行（两行像素 Y 必须不同）。', 7000);
+  }
+
+  /**
+   * 收真实值：画布点选的两个像素行已经确定，这里只要用户填它们代表什么数值。
+   */
+  function openYCalibrationDialog(marks: Point2D[]): void {
+    const cal = canvasComponent.data.calibration;
+    const modal = document.createElement('div');
+    modal.className = 'modal-backdrop';
+    modal.innerHTML = `
+      <div class="modal-dialog" style="width: 440px; max-width: 95vw;">
+        <div class="modal-header">
+          <h3>填写两点真实值</h3>
+          <button class="close-btn" id="modal-close-yv">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+          <p style="font-size: 11px; color: var(--text-secondary); margin: 0; line-height: 1.5;">
+            已记录两个像素行。请填写它们在图谱坐标轴上对应的<strong>真实数值</strong>；
+            数值向下递增（深度）或递增向上（年代）都可以。
+          </p>
+          <div class="input-row">
+            <span style="width: 118px; font-size: 11px;">① 上方点 <code>Y=${marks[0].y}px</code></span>
+            <input type="number" id="yv-top" step="any" value="${cal.top_cm ?? ''}" style="flex: 1;" placeholder="真实值" />
+          </div>
+          <div class="input-row">
+            <span style="width: 118px; font-size: 11px;">② 下方点 <code>Y=${marks[1].y}px</code></span>
+            <input type="number" id="yv-bot" step="any" value="${cal.bottom_cm ?? ''}" style="flex: 1;" placeholder="真实值" />
+          </div>
+          <div class="input-row">
+            <span style="width: 118px; font-size: 11px;">单位</span>
+            <input type="text" id="yv-unit" value="${cal.unit || 'cm'}" placeholder="cm / m / cal yr BP" style="flex: 1;" />
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 10px 14px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color);">
+          <button class="btn btn-secondary" id="btn-cancel-yv">取消</button>
+          <button class="btn btn-primary" id="btn-confirm-yv" style="padding: 5px 14px; font-size: 11px;">应用标定</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const cancel = () => {
+      // 取消则丢弃已点选的点，避免半截标定留在画布上误导后续操作。
+      canvasComponent.clearYCalibMarks();
+      modal.remove();
+    };
+    modal.querySelector('#modal-close-yv')?.addEventListener('click', cancel);
+    modal.querySelector('#btn-cancel-yv')?.addEventListener('click', cancel);
+    modal.querySelector('#btn-confirm-yv')?.addEventListener('click', () => {
+      const topVal = parseFloat((modal.querySelector('#yv-top') as HTMLInputElement).value);
+      const botVal = parseFloat((modal.querySelector('#yv-bot') as HTMLInputElement).value);
+      const unit = (modal.querySelector('#yv-unit') as HTMLInputElement).value.trim() || 'cm';
+      if (isNaN(topVal) || isNaN(botVal)) {
+        alert('两个真实值都必须填写。');
+        return;
+      }
+      modal.remove();
+      void applyDepthCalibration(marks, [topVal, botVal], unit);
+    });
+  }
+
+  /** 提交两点标定到后端，成功后写回前端标定结构。 */
+  async function applyDepthCalibration(
+    marks: Point2D[],
+    values: number[],
+    unit: string
+  ): Promise<void> {
+    const cal = canvasComponent.data.calibration;
+    try {
+      const res = await rpcClient.calibrateDepthAxis(
+        [
+          { pixel: marks[0].y, value: values[0] },
+          { pixel: marks[1].y, value: values[1] },
+        ],
+        unit
+      );
+      const previous = { ...cal };
+      canvasComponent.data.calibration = { ...res.canvas, depthInterval: cal.depthInterval, depthGridEnabled: cal.depthGridEnabled };
+      history.push(
+        'Set Y-Axis Two-Point Calibration',
+        canvasComponent.data.columns,
+        canvasComponent.data.activeTaxaId,
+        previous,
+        canvasComponent.data.roi
+      );
+      canvasComponent.clearYCalibMarks();
+      canvasComponent.setToolMode('select');
+      canvasComponent.requestRender();
+      inspector?.updateData(canvasComponent.data);
+      updateFooter();
+      setHudNotice(
+        `✅ Y 轴已标定: Y=${res.canvas.top_px}px → ${res.canvas.top_cm} ${unit}，` +
+          `Y=${res.canvas.bottom_px}px → ${res.canvas.bottom_cm} ${unit}`,
+        6000
+      );
+    } catch (err) {
+      reportBackendFailure('Y 轴两点标定', err);
+    }
+  }
 
   // 9. 处理自定义图片或项目包打开与加载逻辑
   async function handleOpenFile(file: File) {
@@ -981,21 +1251,13 @@ async function bootstrap() {
     onUndo: () => {
       const prev = history.undo();
       if (prev) {
-        canvasComponent.data.columns = prev.columns;
-        canvasComponent.data.activeTaxaId = prev.activeTaxaId;
-        canvasComponent.requestRender();
-        sidebar?.updateData(canvasComponent.data);
-        toolbar?.updateHistoryState();
+        applyHistorySnapshot(prev);
       }
     },
     onRedo: () => {
       const next = history.redo();
       if (next) {
-        canvasComponent.data.columns = next.columns;
-        canvasComponent.data.activeTaxaId = next.activeTaxaId;
-        canvasComponent.requestRender();
-        sidebar?.updateData(canvasComponent.data);
-        toolbar?.updateHistoryState();
+        applyHistorySnapshot(next);
       }
     },
     onDigitize: async () => {
@@ -1063,7 +1325,9 @@ async function bootstrap() {
       toolbar?.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
       toolbar?.setDegridStrength('off');
       updateFooter();
-      setHudNotice('♻️ 已一键归零：本图全部分列、控制点与标尺已清空，请从 S1 重新框选数据有效区。', 5000);
+      // 归零同时要让后端丢掉旧掩膜，否则重新开始时数字化仍在用上一轮的线
+      void refreshLineMask();
+      setHudNotice('♻️ 已一键归零：本图全部分列、控制点与标尺已清空，请从 S1 重新框选数据取数区。', 5000);
     },
     onOpenCalibrationModal: () => {
       propertyPanel.openCalibrationModal();
@@ -1102,11 +1366,12 @@ async function bootstrap() {
       const active = canvasComponent.viewport.toggleBinaryOverlay();
       canvasComponent.requestRender();
       toolbar?.updateFilterState(canvasComponent.viewport.imageMode, active);
-      setHudNotice(active ? '透视遮罩: 墨迹高亮模式 [开启] (青蓝=保留花粉，红=切除横线，快捷键 B)' : '透视遮罩: [关闭]');
+      setHudNotice(active ? '透视遮罩: 去线复核模式 [开启] (白=保留墨迹，红=实际剔除像素，快捷键 B)' : '透视遮罩: [关闭]');
     },
     onChangeDegridStrength: (strength) => {
       canvasComponent.setDegridStrength(strength);
-      setHudNotice(`去网格横线灵敏度设为: ${strength.toUpperCase()} (按 B 键透视查看红色切除预览)`);
+      setHudNotice(`去线灵敏度设为: ${strength.toUpperCase()}（按 B 键复核红色标记）`);
+      void refreshLineMask();
     },
     onSelectToolMode: (mode) => {
       canvasComponent.setToolMode(mode);

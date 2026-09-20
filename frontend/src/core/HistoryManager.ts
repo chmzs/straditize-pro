@@ -1,4 +1,4 @@
-import { DiagramCalibration, HistorySnapshot, TaxaColumn } from '../types/pollen';
+import { DataRoi, DiagramCalibration, HistorySnapshot, TaxaColumn } from '../types/pollen';
 
 export class HistoryManager {
   private undoStack: HistorySnapshot[] = [];
@@ -10,21 +10,31 @@ export class HistoryManager {
     this.maxHistory = maxHistory;
   }
 
-  public push(
+  private static snapshot(
     description: string,
     columns: TaxaColumn[],
     activeTaxaId: string,
-    calibration?: DiagramCalibration
-  ): void {
-    const snapshot: HistorySnapshot = {
+    calibration?: DiagramCalibration,
+    roi?: DataRoi
+  ): HistorySnapshot {
+    return {
       timestamp: Date.now(),
       description,
       columns: JSON.parse(JSON.stringify(columns)),
       activeTaxaId,
       calibration: calibration ? JSON.parse(JSON.stringify(calibration)) : undefined,
+      roi: roi ? JSON.parse(JSON.stringify(roi)) : undefined,
     };
+  }
 
-    this.undoStack.push(snapshot);
+  public push(
+    description: string,
+    columns: TaxaColumn[],
+    activeTaxaId: string,
+    calibration?: DiagramCalibration,
+    roi?: DataRoi
+  ): void {
+    this.undoStack.push(HistoryManager.snapshot(description, columns, activeTaxaId, calibration, roi));
     if (this.undoStack.length > this.maxHistory) {
       this.undoStack.shift();
     }
@@ -59,20 +69,18 @@ export class HistoryManager {
 
     const next = this.redoStack.pop()!;
     this.undoStack.push(next);
-
     this.notify();
     return JSON.parse(JSON.stringify(next));
   }
 
-  public reset(initialColumns: TaxaColumn[], activeTaxaId: string, calibration?: DiagramCalibration): void {
+  public reset(
+    initialColumns: TaxaColumn[],
+    activeTaxaId: string,
+    calibration?: DiagramCalibration,
+    roi?: DataRoi
+  ): void {
     this.undoStack = [
-      {
-        timestamp: Date.now(),
-        description: 'Initial State',
-        columns: JSON.parse(JSON.stringify(initialColumns)),
-        activeTaxaId,
-        calibration: calibration ? JSON.parse(JSON.stringify(calibration)) : undefined,
-      },
+      HistoryManager.snapshot('Initial State', initialColumns, activeTaxaId, calibration, roi),
     ];
     this.redoStack = [];
     this.notify();

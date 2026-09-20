@@ -1,7 +1,7 @@
 import { BackendStatus, JsonRpcRequest, JsonRpcResponse } from '../types/rpc';
 import { tError } from '../i18n/errorCodes';
 import { t } from '../i18n';
-import { Column, ControlPoint, DiagramData } from '../types/pollen';
+import { Column, ControlPoint, DataRoi, DepthCalibration, DiagramData, LineMaskStroke } from '../types/pollen';
 import { PollenGlossary } from '../core/PollenGlossary';
 
 /** 后端 ocr.getTaxaDict 的返回结构 */
@@ -44,26 +44,47 @@ export interface TaxaSaveResult {
 /**
  * 干净的初始状态工厂（不预置任何属种列、控制点或示例数据）。
  * 真实数据一律来自后端；前端不再持有任何可充当"结果"的替代数据源。
+ *
+ * 注意 `calibration.isCalibrated` 为 false 且四个端点为 null：未标定就是未标定，
+ * 前端绝不填 0/150 这类占位刻度（那会让用户以为深度轴已经生效）。
  */
 function createEmptyDiagramData(): DiagramData {
   return {
     imageSrc: '',
     imageWidth: 0,
     imageHeight: 0,
+    roi: { xMin: 0, xMax: 0, yMin: 0, yMax: 0 },
     calibration: {
-      dataXMin: 0,
-      dataXMax: 0,
-      dataYMin: 0,
-      dataYMax: 0,
-      depthTopValue: 0,
-      depthBottomValue: 100,
-      unit: 'cm',
       isCalibrated: false,
+      top_px: null,
+      top_cm: null,
+      bottom_px: null,
+      bottom_cm: null,
+      unit: 'cm',
     },
+    lineCorrections: [],
     columns: [],
     activeTaxaId: '',
     selectedEntity: null,
   };
+}
+
+/** 后端 algorithm.degrid 的返回值 */
+export interface DegridResult {
+  success: boolean;
+  strength: string;
+  remove_vertical: boolean;
+  max_thickness: number;
+  horizontal_rows: number[];
+  vertical_cols: number[];
+  removed_lines_count: number;
+  removed_pixels: number;
+  auto_pixels: number;
+  manual_restore_pixels: number;
+  manual_erase_pixels: number;
+  roi: [number, number, number, number];
+  /** `strength === 'off'` 时为 null：没有掩膜可显示。 */
+  overlay_png: string | null;
 }
 
 export class RpcClient {
@@ -259,7 +280,100 @@ export class RpcClient {
 
   // 对外便捷方法
   public async getDiagramData(): Promise<DiagramData> {
-    return this.call<void, DiagramData>('straditize.getDiagramData');
+    const raw = await this.call<void, any>('straditize.getDiagramData');
+    // 后端把取数区域与深度标定分两个键返回（`roi` / `calibration`），
+    // 线掩膜修正笔迹在 `lineRemoval.corrections` —— 这里只做结构映射，
+    // 不补任何默认值：缺字段就是缺字段，不能替后端编一个刻度出来。
+    const data = raw as DiagramData & {
+      lineRemoval?: { corrections?: LineMaskStroke[] };
+    };
+    data.roi = data.roi ?? { xMin: 0, xMax: 0, yMin: 0, yMax: 0 };
+    data.calibration = data.calibration ?? {
+      isCalibrated: false,
+      top_px: null,
+      top_cm: null,
+      bottom_px: null,
+      bottom_cm: null,
+      unit: 'cm',
+    };
+    data.lineCorrections = data.lineRemoval?.corrections ?? [];
+    this.currentDiagramData = data;
+    return data;
+  }
+
+  /**
+   * 把当前取数区域 (ROI) 推送给后端。
+   *
+   * 后端的分列、去线与数字化都以 ROI 为范围；不推送的话，用户在画布上拖框
+   * 只会改前端显示，后端仍在旧范围上算（历史实现就是这样，直到 S2→S3 才对齐）。
+   */
+  public async updateRoi(roi: DataRoi): Promise<void> {
+    await this.call('roi.update', {
+      x0: Math.round(roi.xMin),
+      x1: Math.round(roi.xMax),
+      y0: Math.round(roi.yMin),
+      y1: Math.round(roi.yMax),
+    });
+  }
+
+  /**
+   * 两点式 Y 轴标定：用户在画布上点选的两个参考点 + 其真实值。
+   *
+   * 返回后端建立的像素↔数值映射；前端据此填充 `data.calibration`。
+   * 点序无所谓，后端会按像素 Y 排序。
+   */
+  public async calibrateDepthAxis(
+    marks: Array<{ pixel: number; value: number }>,
+    unit: string
+  ): Promise<{ canvas: DepthCalibration }> {
+    const res = await this.call<
+      { y_marks: Array<{ pixel: number; val: number }>; unit: string },
+      { status: string; y_scale: { slope: number; intercept: number } }
+    >('core.calibrateAxes', {
+      y_marks: marks.map((m) => ({ pixel: m.pixel, val: m.value })),
+      unit,
+    });
+    if (!res?.y_scale) {
+      throw new Error(tError(-32603, 'core.calibrateAxes returned no y_scale'));
+    }
+    const ordered = [...marks].sort((a, b) => a.pixel - b.pixel);
+    return {
+      canvas: {
+        isCalibrated: true,
+        top_px: ordered[0].pixel,
+        top_cm: ordered[0].value,
+        bottom_px: ordered[ordered.length - 1].pixel,
+        bottom_cm: ordered[ordered.length - 1].value,
+        unit,
+      },
+    };
+  }
+
+  /**
+   * 在 ROI 内检测横/竖线并取回 QC 叠加掩膜。
+   *
+   * 后端是唯一事实源：B 键透视看到的就是数字化实际剔除的像素，
+   * 前端不再自行实现一套"看起来像去线"的显示逻辑。
+   *
+   * `strength === 'off'` 也要走一次后端 —— 它会主动清掉会话里的旧掩膜；
+   * 只在前端隐藏叠加层的话，关闭后的数字化仍在偷偷减掉那批像素。
+   */
+  public async applyLineRemoval(
+    strength: 'off' | 'weak' | 'medium' | 'strong',
+    corrections: LineMaskStroke[],
+    removeVertical: boolean
+  ): Promise<DegridResult | null> {
+    const res = await this.call<
+      { strength: string; corrections: LineMaskStroke[]; remove_vertical: boolean },
+      DegridResult
+    >('algorithm.degrid', { strength, corrections, remove_vertical: removeVertical });
+    if (!res || typeof res.success !== 'boolean') {
+      throw new Error(tError(-32603, 'algorithm.degrid returned an unexpected payload'));
+    }
+    if (strength !== 'off' && !res.overlay_png) {
+      throw new Error(tError(-32603, 'algorithm.degrid returned no overlay_png'));
+    }
+    return res;
   }
 
   /**
@@ -292,18 +406,34 @@ export class RpcClient {
 
   /**
    * 依据后端 core.loadImage 的返回值重建前端状态。
-   * 标定建议取自后端的 suggested_calibration —— 前端不得自造初始 ROI。
+   *
+   * `core.loadImage` 只给几何 ROI 建议（`suggested_roi`）—— 图像几何只有后端掌握，
+   * 前端不得自造。深度标定此时必然为空：它要等用户在 S4 亲手点两个 Y 轴参考点。
    */
   private applyLoadedImage(backendResult: any, imageSrc: string): void {
-    const suggested = backendResult?.suggested_calibration;
+    const suggested = backendResult?.suggested_roi;
     if (!suggested) {
-      throw new Error(tError(-32603, 'core.loadImage returned no suggested_calibration'));
+      throw new Error(tError(-32603, 'core.loadImage returned no suggested_roi'));
     }
     this.currentDiagramData = {
       imageSrc,
       imageWidth: backendResult.width ?? 0,
       imageHeight: backendResult.height ?? 0,
-      calibration: suggested,
+      roi: {
+        xMin: suggested.xMin,
+        xMax: suggested.xMax,
+        yMin: suggested.yMin,
+        yMax: suggested.yMax,
+      },
+      calibration: {
+        isCalibrated: false,
+        top_px: null,
+        top_cm: null,
+        bottom_px: null,
+        bottom_cm: null,
+        unit: 'cm',
+      },
+      lineCorrections: [],
       columns: [],
       activeTaxaId: '',
       selectedEntity: { type: 'roi' },
@@ -344,11 +474,8 @@ export class RpcClient {
   /**
    * 步骤 2：用户在 Step 1 显式确认有效区 (ROI) 后，调用后端在纯数据区内进行垂直基线推导分列
    */
-  public async detectColumnsInRoi(roi: { x0: number; x1: number; y0: number; y1: number }): Promise<Column[]> {
-    this.currentDiagramData.calibration.dataXMin = roi.x0;
-    this.currentDiagramData.calibration.dataXMax = roi.x1;
-    this.currentDiagramData.calibration.dataYMin = roi.y0;
-    this.currentDiagramData.calibration.dataYMax = roi.y1;
+  public async detectColumnsInRoi(roi: DataRoi): Promise<Column[]> {
+    this.currentDiagramData.roi = { ...roi };
 
     {
       // 参数名必须与后端 session.detect_columns(data_xlim, data_ylim) 一致。
@@ -357,8 +484,8 @@ export class RpcClient {
       const res = await this.call<{ data_xlim: [number, number]; data_ylim: [number, number] }, any[]>(
         'core.detectColumns',
         {
-          data_xlim: [roi.x0, roi.x1],
-          data_ylim: [roi.y0, roi.y1],
+          data_xlim: [Math.round(roi.xMin), Math.round(roi.xMax)],
+          data_ylim: [Math.round(roi.yMin), Math.round(roi.yMax)],
         }
       );
 

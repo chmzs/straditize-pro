@@ -1,4 +1,4 @@
-import { Column, DiagramCalibration, DiagramData } from '../types/pollen';
+import { Column, DataRoi, DiagramCalibration, DiagramData } from '../types/pollen';
 import { RpcClient } from '../services/RpcClient';
 import { SplineInterpolator } from '../core/SplineInterpolator';
 import { CoordinateSystem } from '../core/CoordinateSystem';
@@ -10,18 +10,21 @@ export class PropertyPanel {
   private rpcClient: RpcClient;
   private onCalibrationSave: (cal: DiagramCalibration) => void;
   private onProjectLoad?: (projectData: DiagramData) => void;
+  private onRoiSave: (roi: DataRoi) => void;
 
   constructor(
     container: HTMLElement,
     data: DiagramData,
     rpcClient: RpcClient,
     onCalibrationSave: (cal: DiagramCalibration) => void,
+    onRoiSave: (roi: DataRoi) => void,
     onProjectLoad?: (projectData: DiagramData) => void
   ) {
     this.container = container;
     this.data = data;
     this.rpcClient = rpcClient;
     this.onCalibrationSave = onCalibrationSave;
+    this.onRoiSave = onRoiSave;
     this.onProjectLoad = onProjectLoad;
   }
 
@@ -30,41 +33,53 @@ export class PropertyPanel {
   }
 
   /**
-   * 1. 渲染并打开标定设置模态框 (岩心范围 min, max, 单位整合为一行)
+   * 1. 打开取数区域与深度网格设置模态框。
+   *
+   * 深度轴本身不在这里设：它由 S4 画布上的两点标定确定（像素点 + 真实值），
+   * 用一对"min/max 数字框"表达不了"哪一行像素对应哪个值"。
    */
   public openCalibrationModal(): void {
     const modal = document.createElement('div');
     modal.className = 'modal-backdrop';
     const cal = this.data.calibration;
+    const roi = this.data.roi;
+    const bounds = CoordinateSystem.calibrationBounds(cal);
 
     modal.innerHTML = `
       <div class="modal-dialog">
         <div class="modal-header">
-          <h3>地层深度与图谱标定设置 (Calibration)</h3>
+          <h3>取数区域与层位网格设置 (ROI &amp; Grid)</h3>
           <button class="close-btn" id="modal-close">&times;</button>
         </div>
         <div class="modal-body">
-          <!-- 岩心范围合并为单行：min 至 max，单位由用户自由输入 (cm / m / cal kyr BP) -->
           <div class="form-group">
-            <label>岩心范围 (Core Depth Range):</label>
+            <label>数据取数区像素范围 (Data ROI):</label>
             <div class="input-row">
-              <input type="number" id="cal-depth-top" value="${cal.depthTopValue}" step="any" placeholder="Min" title="岩心顶部/最年轻层位深度" />
-              <span style="color: var(--text-muted);">至</span>
-              <input type="number" id="cal-depth-bottom" value="${cal.depthBottomValue}" step="any" placeholder="Max" title="岩心底部/最老沉积层深度" />
-              <input type="text" id="cal-unit" value="${cal.unit}" style="width: 80px;" placeholder="单位" title="自定义深度单位 (如 cm, m, cal kyr BP)" />
+              <input type="number" id="roi-xmin" value="${Math.round(roi.xMin)}" title="左界" />
+              <span style="color: var(--text-muted);">~</span>
+              <input type="number" id="roi-xmax" value="${Math.round(roi.xMax)}" title="右界" />
+              <span class="unit-label">px (X)</span>
             </div>
-            <small>设定地质剖面顶部 (Min) 至底部 (Max) 物理跨度与测量单位</small>
+            <div class="input-row" style="margin-top: 6px;">
+              <input type="number" id="roi-ymin" value="${Math.round(roi.yMin)}" title="顶界" />
+              <span style="color: var(--text-muted);">~</span>
+              <input type="number" id="roi-ymax" value="${Math.round(roi.yMax)}" title="底界" />
+              <span class="unit-label">px (Y)</span>
+            </div>
+            <small>框定纯数据区，排除坐标轴、文字与聚类树。此框不携带任何深度含义。</small>
           </div>
 
-          <div class="form-group">
-            <label>沉积剖面图谱像素 Y 范围 (Y-Limits):</label>
-            <div class="input-row">
-              <input type="number" id="cal-ymin" value="${cal.dataYMin}" />
-              <span style="color: var(--text-muted);">至</span>
-              <input type="number" id="cal-ymax" value="${cal.dataYMax}" />
-              <span class="unit-label">px</span>
+          <div class="form-group" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light);">
+            <label style="display: block; margin-bottom: 6px;">Y 轴深度标定 (只读):</label>
+            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.7;">
+              ${
+                bounds
+                  ? `① Y=${bounds.topPx}px → <strong>${bounds.topValue} ${cal.unit}</strong><br>
+                     ② Y=${bounds.bottomPx}px → <strong>${bounds.bottomValue} ${cal.unit}</strong>`
+                  : '<span style="color: #f59e0b; font-weight: 700;">尚未标定</span> —— 深度一律显示为 --'
+              }
             </div>
-            <small>地学剖面有效图表像素纵轴范围</small>
+            <small style="display: block; margin-top: 6px;">在 S4 面板点击「🎯 开始两点标定」后在画布上点两个已知刻度即可修改。</small>
           </div>
 
           <div class="form-group">
@@ -73,7 +88,7 @@ export class PropertyPanel {
               <input type="number" id="cal-depth-interval" value="${cal.depthInterval ?? 2}" step="any" min="0.01" />
               <span class="unit-label">${cal.unit} / 层位</span>
             </div>
-            <small>设定剖面采样间隔（例如从 ${cal.depthTopValue} 到 ${cal.depthBottomValue} ${cal.unit}，每隔 ${cal.depthInterval ?? 2} ${cal.unit} 作为一个标准层位）</small>
+            <small>设定剖面采样间隔（例如从 ${bounds ? bounds.topValue : '?'} 到 ${bounds ? bounds.bottomValue : '?'} ${cal.unit}，每隔 ${cal.depthInterval ?? 2} ${cal.unit} 作为一个标准层位）</small>
           </div>
 
           <div class="form-group">
@@ -88,7 +103,7 @@ export class PropertyPanel {
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" id="modal-cancel">取消</button>
-          <button class="btn btn-primary" id="modal-save">保存标定</button>
+          <button class="btn btn-primary" id="modal-save">保存设置</button>
         </div>
       </div>
     `;
@@ -100,27 +115,26 @@ export class PropertyPanel {
     modal.querySelector('#modal-cancel')?.addEventListener('click', closeModal);
 
     modal.querySelector('#modal-save')?.addEventListener('click', () => {
-      const topVal = parseFloat((modal.querySelector('#cal-depth-top') as HTMLInputElement).value) || 0;
-      const bottomVal = parseFloat((modal.querySelector('#cal-depth-bottom') as HTMLInputElement).value) || 100;
-      const unitVal = (modal.querySelector('#cal-unit') as HTMLInputElement).value.trim() || 'cm';
-      const yMin = parseInt((modal.querySelector('#cal-ymin') as HTMLInputElement).value, 10) || cal.dataYMin;
-      const yMax = parseInt((modal.querySelector('#cal-ymax') as HTMLInputElement).value, 10) || cal.dataYMax;
-      const intervalVal = parseFloat((modal.querySelector('#cal-depth-interval') as HTMLInputElement).value) || 2;
+      const num = (sel: string, fallback: number) => {
+        const parsed = parseFloat((modal.querySelector(sel) as HTMLInputElement).value);
+        return isNaN(parsed) ? fallback : parsed;
+      };
+      const intervalVal = num('#cal-depth-interval', cal.depthInterval ?? 2);
       const gridEnabledVal = (modal.querySelector('#cal-depth-grid') as HTMLInputElement).checked;
 
-      const newCal: DiagramCalibration = {
-        ...this.data.calibration,
-        depthTopValue: topVal,
-        depthBottomValue: bottomVal,
-        unit: unitVal,
-        dataYMin: yMin,
-        dataYMax: yMax,
+      const nextRoi: DataRoi = {
+        xMin: num('#roi-xmin', roi.xMin),
+        xMax: num('#roi-xmax', roi.xMax),
+        yMin: num('#roi-ymin', roi.yMin),
+        yMax: num('#roi-ymax', roi.yMax),
+      };
+      this.onRoiSave(nextRoi);
+
+      this.onCalibrationSave({
+        ...cal,
         depthInterval: intervalVal,
         depthGridEnabled: gridEnabledVal,
-        isCalibrated: true,
-      };
-
-      this.onCalibrationSave(newCal);
+      });
       closeModal();
     });
   }
@@ -739,6 +753,7 @@ export class PropertyPanel {
    */
   public async saveProjectFile(): Promise<void> {
     const cal = this.data.calibration;
+    const roi = this.data.roi;
 
     // 1. manifest.json (元数据、版本与时间戳)
     const manifestJson = {
@@ -749,6 +764,7 @@ export class PropertyPanel {
     };
 
     // 2. straditize.json (矢量项目模型：ROI、列、两点刻度、控制拐点)
+    //    取数区域与深度标定分两个键写入 —— 二者互不推导，读回来也不许互相兜底。
     const straditizeJson = {
       version: '2.0.0',
       image: {
@@ -757,20 +773,24 @@ export class PropertyPanel {
         height: this.data.imageHeight,
       },
       depth_calibration: {
-        top_px: cal.top_px ?? cal.dataYMin,
-        bottom_px: cal.bottom_px ?? cal.dataYMax,
-        top_cm: cal.top_cm ?? cal.depthTopValue,
-        bottom_cm: cal.bottom_cm ?? cal.depthBottomValue,
+        is_calibrated: cal.isCalibrated,
+        top_px: cal.top_px,
+        bottom_px: cal.bottom_px,
+        top_cm: cal.top_cm,
+        bottom_cm: cal.bottom_cm,
         unit: cal.unit || 'cm',
         depthInterval: cal.depthInterval || 2,
         depthGridEnabled: cal.depthGridEnabled ?? true,
-        isCalibrated: cal.isCalibrated ?? true,
+        customDepths: cal.customDepths ?? [],
       },
       roi: {
-        x: cal.dataXMin,
-        y: cal.dataYMin,
-        w: cal.dataXMax - cal.dataXMin,
-        h: cal.dataYMax - cal.dataYMin,
+        x: roi.xMin,
+        y: roi.yMin,
+        w: roi.xMax - roi.xMin,
+        h: roi.yMax - roi.yMin,
+      },
+      line_removal: {
+        corrections: this.data.lineCorrections,
       },
       columns: this.data.columns.map((col) => ({
         id: col.id,
@@ -796,7 +816,6 @@ export class PropertyPanel {
         controlPoints: col.controlPoints,
         scaleCalib: col.scaleCalib,
       })),
-      calibration: cal,
       activeTaxaId: this.data.activeTaxaId,
     };
 
@@ -1015,27 +1034,44 @@ message("Finished! Stratigraphic plot generated successfully.")
       file.type.includes('tar');
 
     const normalizeProject = (parsed: any, imageBlobUrl: string | null): DiagramData | null => {
-      const cal = parsed.calibration || parsed.depth_calibration;
+      const rawCal = parsed.depth_calibration || parsed.calibration;
+      const rawRoi = parsed.roi;
       const rawCols = parsed.columns;
-      if (!rawCols || !Array.isArray(rawCols) || !cal) {
+      if (!rawCols || !Array.isArray(rawCols) || (!rawCal && !rawRoi)) {
         return null;
       }
 
-      const normalizedCal = {
-        dataXMin: cal.dataXMin ?? parsed.roi?.x ?? 0,
-        dataXMax: cal.dataXMax ?? (parsed.roi ? parsed.roi.x + parsed.roi.w : 1000),
-        dataYMin: cal.dataYMin ?? cal.top_px ?? parsed.roi?.y ?? 0,
-        dataYMax: cal.dataYMax ?? cal.bottom_px ?? (parsed.roi ? parsed.roi.y + parsed.roi.h : 1000),
-        depthTopValue: cal.depthTopValue ?? cal.top_cm ?? 0,
-        depthBottomValue: cal.depthBottomValue ?? cal.bottom_cm ?? 150,
+      // ROI 与深度标定各读各的键。旧实现用 `cal.top_px ?? parsed.roi.y` 之类互相
+      // 兜底，等于让取数框冒充刻度，读回来的深度是编的。
+      const normalizedRoi: DataRoi = rawRoi
+        ? 'w' in rawRoi
+          ? {
+              xMin: rawRoi.x ?? 0,
+              yMin: rawRoi.y ?? 0,
+              xMax: (rawRoi.x ?? 0) + (rawRoi.w ?? 0),
+              yMax: (rawRoi.y ?? 0) + (rawRoi.h ?? 0),
+            }
+          : {
+              xMin: rawRoi.xMin ?? 0,
+              xMax: rawRoi.xMax ?? 0,
+              yMin: rawRoi.yMin ?? 0,
+              yMax: rawRoi.yMax ?? 0,
+            }
+        : { xMin: 0, xMax: 0, yMin: 0, yMax: 0 };
+
+      const cal = rawCal || {};
+      const hasBothMarks =
+        cal.top_px != null && cal.bottom_px != null && cal.top_cm != null && cal.bottom_cm != null;
+      const normalizedCal: DiagramCalibration = {
+        isCalibrated: hasBothMarks && (cal.is_calibrated ?? cal.isCalibrated ?? true),
+        top_px: cal.top_px ?? null,
+        top_cm: cal.top_cm ?? null,
+        bottom_px: cal.bottom_px ?? null,
+        bottom_cm: cal.bottom_cm ?? null,
         unit: cal.unit || 'cm',
         depthInterval: cal.depthInterval ?? cal.depth_interval ?? 2,
         depthGridEnabled: cal.depthGridEnabled ?? cal.depth_grid_enabled ?? true,
-        isCalibrated: cal.isCalibrated ?? cal.is_calibrated ?? true,
-        top_px: cal.top_px ?? cal.dataYMin,
-        bottom_px: cal.bottom_px ?? cal.dataYMax,
-        top_cm: cal.top_cm ?? cal.depthTopValue,
-        bottom_cm: cal.bottom_cm ?? cal.depthBottomValue,
+        customDepths: cal.customDepths ?? cal.custom_depths ?? [],
       };
 
       const normalizedCols = rawCols.map((c: any, idx: number) => {
@@ -1091,7 +1127,9 @@ message("Finished! Stratigraphic plot generated successfully.")
         imageSrc: imageBlobUrl || parsed.image?.src || parsed.imageSrc || this.data.imageSrc,
         imageWidth: parsed.image?.width || parsed.imageWidth || this.data.imageWidth,
         imageHeight: parsed.image?.height || parsed.imageHeight || this.data.imageHeight,
+        roi: normalizedRoi,
         calibration: normalizedCal,
+        lineCorrections: parsed.line_removal?.corrections || [],
         columns: normalizedCols,
         activeTaxaId: parsed.activeTaxaId || normalizedCols[0]?.id || '',
         selectedEntity: null,

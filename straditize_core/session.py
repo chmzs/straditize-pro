@@ -122,6 +122,16 @@ class StraditizeSession:
         self.threshold: float | None = None
         self.segmentation_mode: str | None = None
 
+        # Grid-line removal (separate from the raw mask so column detection keeps
+        # seeing the full ink, and so the removal stays inspectable/undoable).
+        self.grid_line_mask: np.ndarray | None = None
+        self.degrid_strength: str | None = None
+        self.degrid_remove_vertical: bool = True
+        self.degrid_info: dict[str, Any] | None = None
+        #: User brush strokes that correct the automatic mask; see
+        #: :func:`straditize_core.image.rasterize_strokes`.
+        self.line_corrections: list[dict[str, Any]] = []
+
         # Data Region and Columns
         self.data_xlim: list[float] | None = None
         self.data_ylim: list[float] | None = None
@@ -134,10 +144,14 @@ class StraditizeSession:
         self.control_points: dict[int, dict[int, float]] = {}
         self.reader_types: dict[int, str] = {}
 
-        # Axes Calibration
+        # Axes Calibration. ``depth_calib`` records the two pixel/value marks the
+        # user picked on the Y axis; it is deliberately NOT derived from
+        # ``data_ylim`` -- the ROI is a digitising region, not a timescale.
         self.is_calibrated: bool = False
         self.y_scale: dict[str, float] | None = None  # slope, intercept
         self.x_scales: dict[int, dict[str, float]] = {}  # col_index -> slope, intercept
+        self.depth_calib: dict[str, Any] | None = None
+        self.depth_unit: str = "cm"
 
         # Taxa names and Depth Grid
         self.taxa_names: list[str] = []
@@ -234,10 +248,16 @@ class StraditizeSession:
 
             # Reset downstream state
             self.foreground_mask = None
+            self.grid_line_mask = None
+            self.degrid_strength = None
+            self.degrid_info = None
+            self.line_corrections = []
             self.columns = []
             self.column_points = {}
             self.control_points = {}
             self.is_calibrated = False
+            self.y_scale = None
+            self.depth_calib = None
             self.taxa_names = []
             self.depth_grid = []
 
@@ -248,33 +268,29 @@ class StraditizeSession:
                 "mode": self.mode,
                 "image_path": self.image_path,
                 # 初始数据有效区建议由后端给出：图像几何只有后端掌握，
-                # 前端不得自行编造标定默认值（历史上前端自造过一份，会与后端认知分歧）。
-                "suggested_calibration": self.suggest_data_region(),
+                # 前端不得自行编造 ROI 默认值（历史上前端自造过一份，会与后端认知分歧）。
+                # 注意这里只给 ROI，不给深度：ROI 是取数区域，不是时间/深度标尺。
+                "suggested_roi": self.suggest_data_region(),
             }
         except Exception as e:  # noqa: BLE001
             raise JsonRpcError(STATE_ERROR, f"Failed to load image: {e!s}")
 
-    def suggest_data_region(self) -> dict[str, Any]:
+    def suggest_data_region(self) -> dict[str, float]:
         """Initial data-region (ROI) suggestion for a freshly loaded diagram.
 
-        Deliberately inset from the image borders and NOT a claim of calibration:
-        the user must still confirm the region in S2 and the depth scale in S4.
+        Deliberately inset from the image borders. This is a *region* only: it
+        carries no depth values, because the pixel-to-depth mapping is the user's
+        two-point calibration on the Y axis (S4), which is independent of where
+        the digitising box happens to sit.
         """
         if self.image is None:
             raise JsonRpcError(STATE_ERROR, "No image loaded in session.")
         w, h = self.width, self.height
         return {
-            "dataXMin": round(w * 0.12),
-            "dataXMax": round(w * 0.94),
-            "dataYMin": round(h * 0.18),
-            "dataYMax": round(h * 0.88),
-            "depthTopValue": 0,
-            "depthBottomValue": 100,
-            "unit": "cm",
-            "depthInterval": 2,
-            "depthGridEnabled": True,
-            # 与既有前端默认行为保持一致（占位范围，待 S4 标定确认）
-            "isCalibrated": True,
+            "xMin": round(w * 0.12),
+            "xMax": round(w * 0.94),
+            "yMin": round(h * 0.18),
+            "yMax": round(h * 0.88),
         }
 
     def get_image_slice(
@@ -473,6 +489,10 @@ class StraditizeSession:
 
         self.data_xlim = [x0, x1]
         self.data_ylim = [y0, y1]
+        # The removal mask was computed for the previous region; drop it rather
+        # than silently digitising through a mask that no longer matches.
+        self.grid_line_mask = None
+        self.degrid_info = None
 
         if self.foreground_mask is None:
             self.extract_foreground()
@@ -544,6 +564,50 @@ class StraditizeSession:
         self.columns = detected_cols
         return self.columns
 
+    def _roi_box(self) -> tuple[float, float, float, float] | None:
+        """The data region as ``(x0, y0, x1, y1)``, or ``None`` when unset."""
+        if not self.data_xlim or not self.data_ylim:
+            return None
+        x0, x1 = sorted((float(self.data_xlim[0]), float(self.data_xlim[1])))
+        y0, y1 = sorted((float(self.data_ylim[0]), float(self.data_ylim[1])))
+        return x0, y0, x1, y1
+
+    def _roi_mask(self) -> np.ndarray:
+        """Boolean mask of the data region, used to fence off everything outside it."""
+        mask = np.zeros((self.height, self.width), dtype=bool)
+        box = self._roi_box()
+        if box is None:
+            return ~mask
+        x0, y0, x1, y1 = (int(round(v)) for v in box)
+        x0, x1 = sorted((max(0, min(self.width, x0)), max(0, min(self.width, x1))))
+        y0, y1 = sorted((max(0, min(self.height, y0)), max(0, min(self.height, y1))))
+        mask[y0:y1, x0:x1] = True
+        return mask
+
+    def _extraction_mask(self) -> np.ndarray | None:
+        """Ink actually offered to the digitizer: inside the ROI, minus grid lines.
+
+        Recomputed on demand when the user asked for grid-line removal but the
+        cached mask was invalidated by an ROI change, so a stale mask can never be
+        silently substituted for the current region.
+        """
+        if self.foreground_mask is None:
+            return None
+        mask = self.foreground_mask
+        if (
+            self.grid_line_mask is None
+            and self.degrid_strength is not None
+            and self._roi_box() is not None
+        ):
+            self.algorithm_degrid(
+                strength=self.degrid_strength,
+                corrections=self.line_corrections,
+                remove_vertical=self.degrid_remove_vertical,
+            )
+        if self.grid_line_mask is not None:
+            mask = mask & ~self.grid_line_mask
+        return mask & self._roi_mask()
+
     def digitize(
         self,
         col_index: int,
@@ -574,13 +638,28 @@ class StraditizeSession:
         y0 = round(self.data_ylim[0])
         y1 = round(self.data_ylim[1])
 
+        # A column lying entirely outside the ROI cannot yield data, because the
+        # ROI fences extraction (that is what keeps axis spines and cluster trees
+        # out). Refuse loudly instead of writing a column of silent zeros.
+        roi = self._roi_box()
+        if roi is not None and not (c_end > round(roi[0]) and c_start < round(roi[2])):
+            name = col.get("species") or col.get("name") or f"col{col_index + 1:02d}"
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                f"Column '{name}' (x {c_start}..{c_end}) lies entirely outside the data "
+                f"ROI (x {round(roi[0])}..{round(roi[2])}). Widen the ROI or move the column; "
+                "no data was produced.",
+            )
+
         if self.foreground_mask is None:
             if self.image is not None:
                 self.extract_foreground()
             else:
                 raise JsonRpcError(STATE_ERROR, "No foreground mask or image loaded.")
 
-        mask = self.foreground_mask
+        mask = self._extraction_mask()
+        if mask is None:
+            raise JsonRpcError(STATE_ERROR, "No foreground mask or image loaded.")
         points: list[dict[str, float]] = []
         control_points: dict[int, float] = {}
 
@@ -758,8 +837,16 @@ class StraditizeSession:
         self,
         y_marks: list[dict[str, float]],
         x_marks: list[dict[str, float]] | None = None,
+        unit: str | None = None,
     ) -> dict[str, Any]:
-        """Calibrates pixel coordinates into scientific depth/age and percentage units."""
+        """Calibrates pixel coordinates into scientific depth/age and percentage units.
+
+        ``y_marks`` are the two points the user picked on the Y axis, each
+        ``{'pixel': <image y>, 'val': <true value>}``. The marks carry the user's
+        own units, so ``unit`` is free text (``cm``, ``m``, ``cal yr BP``, ``ka``):
+        an enum would make users misdeclare their own axis. Both directions are
+        accepted -- values may increase or decrease downcore.
+        """
         if not y_marks or len(y_marks) < 2:
             raise JsonRpcError(
                 INVALID_PARAMS,
@@ -777,6 +864,17 @@ class StraditizeSession:
 
         slope_y, intercept_y = np.polyfit(y_pixels, y_vals, deg=1)
         self.y_scale = {"slope": float(slope_y), "intercept": float(intercept_y)}
+
+        ordered = sorted(zip(y_pixels.tolist(), y_vals.tolist()), key=lambda pair: pair[0])
+        self.depth_calib = {
+            "top_px": float(ordered[0][0]),
+            "top_cm": float(ordered[0][1]),
+            "bottom_px": float(ordered[-1][0]),
+            "bottom_cm": float(ordered[-1][1]),
+        }
+        if unit:
+            self.depth_unit = str(unit).strip() or self.depth_unit
+        self.depth_calib["unit"] = self.depth_unit
 
         # Fit X scale for each column
         self.x_scales = {}
@@ -1234,6 +1332,11 @@ class StraditizeSession:
         self.is_calibrated = False
         self.y_scale = None
         self.x_scales = {}
+        self.depth_calib = None
+        self.grid_line_mask = None
+        self.degrid_strength = None
+        self.degrid_info = None
+        self.line_corrections = []
         self.taxa_names = []
         self.depth_grid = []
         self.undo_stack = []
@@ -1285,26 +1388,46 @@ class StraditizeSession:
                     parsed = json.load(f)
                 return self.project_load(parsed)
 
-        cal = project_data.get("depth_calibration") or project_data.get("calibration", {})
-        roi = project_data.get("roi", {})
+        cal = project_data.get("depth_calibration") or project_data.get("calibration") or {}
+        roi = project_data.get("roi") or {}
 
-        top_px = cal.get("top_px") or cal.get("dataYMin") or roi.get("y", 0)
-        bot_px = cal.get("bottom_px") or cal.get("dataYMax") or (roi.get("y", 0) + roi.get("h", 1000) if "h" in roi else 1000)
-        left_px = cal.get("dataXMin") or roi.get("x", 0)
-        right_px = cal.get("dataXMax") or (roi.get("x", 0) + roi.get("w", 1000) if "w" in roi else 1000)
+        # ROI and calibration are read from their own keys. The old loader fell
+        # back to `roi.y`/`roi.h` for the calibration endpoints, which is exactly
+        # how a digitising box ended up masquerading as a timescale.
+        self.data_xlim = None
+        self.data_ylim = None
+        if "w" in roi and "h" in roi:
+            self.data_xlim = [float(roi.get("x", 0)), float(roi.get("x", 0)) + float(roi["w"])]
+            self.data_ylim = [float(roi.get("y", 0)), float(roi.get("y", 0)) + float(roi["h"])]
+        elif roi:
+            if "x0" in roi and "x1" in roi:
+                self.data_xlim = [float(roi["x0"]), float(roi["x1"])]
+            if "y0" in roi and "y1" in roi:
+                self.data_ylim = [float(roi["y0"]), float(roi["y1"])]
 
-        self.data_xlim = [float(left_px), float(right_px)]
-        self.data_ylim = [float(top_px), float(bot_px)]
+        self.is_calibrated = False
+        self.y_scale = None
+        self.depth_calib = None
+        self.grid_line_mask = None
+        self.degrid_info = None
+        line_removal = project_data.get("line_removal") or {}
+        self.degrid_strength = line_removal.get("strength") or None
+        self.degrid_remove_vertical = bool(line_removal.get("remove_vertical", True))
+        corrections = line_removal.get("corrections") or []
+        self.line_corrections = [c for c in corrections if isinstance(c, dict)]
+        if unit := cal.get("unit"):
+            self.depth_unit = str(unit)
 
-        top_cm = float(cal.get("top_cm", cal.get("depthTopValue", 0)))
-        bot_cm = float(cal.get("bottom_cm", cal.get("depthBottomValue", 150)))
-
-        if bot_px != top_px and bot_cm != top_cm:
+        top_px, bottom_px = cal.get("top_px"), cal.get("bottom_px")
+        top_val = cal.get("top_cm", cal.get("top_val"))
+        bottom_val = cal.get("bottom_cm", cal.get("bottom_val"))
+        if None not in (top_px, bottom_px, top_val, bottom_val) and float(bottom_px) != float(top_px):
             self.calibrate_axes(
                 y_marks=[
-                    {"pixel": float(top_px), "val": top_cm},
-                    {"pixel": float(bot_px), "val": bot_cm},
-                ]
+                    {"pixel": float(top_px), "val": float(top_val)},
+                    {"pixel": float(bottom_px), "val": float(bottom_val)},
+                ],
+                unit=self.depth_unit,
             )
 
         raw_cols = project_data.get("columns", [])
@@ -1358,32 +1481,32 @@ class StraditizeSession:
             "schema_version": "2.0",
         }
 
-        calib = {}
-        if self.is_calibrated and self.y_scale:
-            sy = self.y_scale["slope"]
-            iy = self.y_scale["intercept"]
+        # Depth calibration and ROI are stored separately on purpose: the ROI is
+        # where data is read from, the calibration is what the pixel rows mean.
+        # Deriving one from the other is what used to make dragging the ROI box
+        # silently rewrite the core's timescale.
+        if self.depth_calib:
             calib = {
-                "top_px": self.data_ylim[0] if self.data_ylim else 0,
-                "bottom_px": self.data_ylim[1] if self.data_ylim else 1000,
-                "top_cm": iy + sy * (self.data_ylim[0] if self.data_ylim else 0),
-                "bottom_cm": iy + sy * (self.data_ylim[1] if self.data_ylim else 1000),
-                "unit": "cm",
+                "is_calibrated": True,
+                "top_px": self.depth_calib["top_px"],
+                "bottom_px": self.depth_calib["bottom_px"],
+                "top_cm": self.depth_calib["top_cm"],
+                "bottom_cm": self.depth_calib["bottom_cm"],
+                "unit": self.depth_calib.get("unit") or self.depth_unit,
             }
-        elif self.data_ylim:
-            calib = {
-                "top_px": self.data_ylim[0],
-                "bottom_px": self.data_ylim[1],
-                "top_cm": 0,
-                "bottom_cm": 150,
-                "unit": "cm",
-            }
+        else:
+            calib = {"is_calibrated": False, "unit": self.depth_unit}
 
-        roi = {
-            "x": self.data_xlim[0] if self.data_xlim else 0,
-            "y": self.data_ylim[0] if self.data_ylim else 0,
-            "w": (self.data_xlim[1] - self.data_xlim[0]) if self.data_xlim else 0,
-            "h": (self.data_ylim[1] - self.data_ylim[0]) if self.data_ylim else 0,
-        }
+        roi = (
+            {
+                "x": self.data_xlim[0],
+                "y": self.data_ylim[0],
+                "w": self.data_xlim[1] - self.data_xlim[0],
+                "h": self.data_ylim[1] - self.data_ylim[0],
+            }
+            if self.data_xlim and self.data_ylim
+            else None
+        )
 
         cols_export = []
         for idx, col in enumerate(self.columns):
@@ -1424,6 +1547,13 @@ class StraditizeSession:
             },
             "depth_calibration": calib,
             "roi": roi,
+            # Manual line-mask corrections are user work, so they travel with the
+            # project; the automatic part is recomputed on load from the presets.
+            "line_removal": {
+                "strength": self.degrid_strength,
+                "remove_vertical": self.degrid_remove_vertical,
+                "corrections": self.line_corrections,
+            },
             "columns": cols_export,
         }
 
@@ -1543,7 +1673,12 @@ class StraditizeSession:
         w: float | None = None,
         h: float | None = None,
     ) -> dict[str, Any]:
-        """Updates data region bounding box."""
+        """Updates the data region bounding box.
+
+        Region only: this never touches the depth calibration. The two are
+        independent -- the ROI says *where* data is read, the calibration (S4,
+        ``calibrate_axes``) says what a pixel row *means*.
+        """
         if x is not None and w is not None:
             x0 = x
             x1 = x + w
@@ -1556,10 +1691,15 @@ class StraditizeSession:
         if y0 is not None and y1 is not None:
             self.data_ylim = [float(y0), float(y1)]
 
+        # Line removal is region-scoped, so a new region invalidates the mask.
+        self.grid_line_mask = None
+        self.degrid_info = None
+
         self._record_history("Update ROI")
         return {
             "data_xlim": self.data_xlim,
             "data_ylim": self.data_ylim,
+            "roi": self._roi_box(),
         }
 
     def column_add(self, column: dict[str, Any]) -> dict[str, Any]:
@@ -1807,33 +1947,104 @@ class StraditizeSession:
 
     def algorithm_degrid(
         self,
-        kernel_width: int | None = None,
-        kernel_height: int | None = None,
+        strength: str = "medium",
+        corrections: list[dict[str, Any]] | None = None,
+        remove_vertical: bool = True,
     ) -> dict[str, Any]:
-        """Degrid algorithm: removes horizontal grid lines while preserving vertical pollen curves (Section 六 item 6)."""
+        """Detect grid/axis lines inside the ROI and publish the removal mask.
+
+        Both orientations are handled. A stroke only counts as a line when it is
+        *long* and *thin*: a filled pollen silhouette crossed by a horizontal
+        grid line is tens of pixels thick and survives, whereas the old
+        row-occupancy rule deleted the whole row and wiped out entire taxa.
+
+        Nothing here mutates ``self.foreground_mask``. The result lives in
+        ``self.grid_line_mask`` and is subtracted on the digitising path, so
+        column detection still sees the untouched ink and the removal stays
+        inspectable (and reversible) instead of being baked in.
+        """
+        from .image import GRID_LINE_PRESETS, detect_grid_lines, mask_overlay_data_url, normalize_grid_line_strength
+
         if self.image is None:
             raise JsonRpcError(STATE_ERROR, "No image loaded in session.")
 
-        if kernel_width is None:
-            kernel_width = max(15, int(self.width * 0.02))
+        # "off" must actively clear the session mask, not merely stop drawing it:
+        # otherwise the previous mask keeps being subtracted on the digitising
+        # path after the user turned line removal off.
+        if str(strength).strip().lower() == "off":
+            self.grid_line_mask = None
+            self.degrid_strength = None
+            self.degrid_info = None
+            self._record_history("Degrid off")
+            return {
+                "success": True,
+                "strength": "off",
+                "remove_vertical": bool(remove_vertical),
+                "max_thickness": 0,
+                "horizontal_rows": [],
+                "vertical_cols": [],
+                "removed_lines_count": 0,
+                "removed_pixels": 0,
+                "auto_pixels": 0,
+                "manual_restore_pixels": 0,
+                "manual_erase_pixels": 0,
+                "roi": list(self._roi_box() or (0, 0, 0, 0)),
+                "overlay_png": None,
+            }
+
+        strength = normalize_grid_line_strength(strength)
+        roi = self._roi_box()
+        if roi is None:
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                "Data ROI bounds must be set before grid-line removal.",
+            )
 
         if self.foreground_mask is None:
             self.extract_foreground()
 
-        from .image import remove_horizontal_grid_lines
-
-        cleaned_mask, hline_rows = remove_horizontal_grid_lines(
-            self.foreground_mask,
-            min_length=kernel_width,
-            min_row_occupancy_ratio=0.30,
+        ink = self.foreground_mask
+        horizontal, vertical, info = detect_grid_lines(
+            ink,
+            strength=strength,
+            roi=roi,
+            remove_vertical=remove_vertical,
         )
-        self.foreground_mask = cleaned_mask
+        auto = horizontal | vertical
+
+        from .image import rasterize_strokes
+
+        restore, erase = rasterize_strokes(ink.shape, corrections)
+        line_mask = (auto | restore) & ~erase
+
+        self.grid_line_mask = line_mask
+        self.degrid_strength = strength
+        self.degrid_remove_vertical = bool(remove_vertical)
+        self.line_corrections = list(corrections or [])
+        self.degrid_info = {
+            **info,
+            "correction_restore_pixels": int((restore & ~auto).sum()),
+            "correction_erase_pixels": int((auto & erase).sum()),
+        }
 
         self._record_history("Degrid")
         return {
             "success": True,
-            "kernel_width": kernel_width,
-            "removed_lines_count": len(hline_rows),
+            "strength": strength,
+            "remove_vertical": bool(remove_vertical),
+            "max_thickness": GRID_LINE_PRESETS[strength]["max_thickness"],
+            "horizontal_rows": info["horizontal_rows"],
+            "vertical_cols": info["vertical_cols"],
+            "removed_lines_count": len(info["horizontal_rows"]) + len(info["vertical_cols"]),
+            "removed_pixels": int(line_mask.sum()),
+            "auto_pixels": int(auto.sum()),
+            "manual_restore_pixels": int((restore & ~auto).sum()),
+            "manual_erase_pixels": int((auto & erase).sum()),
+            "roi": list(roi),
+            # The QC overlay the frontend paints under the B key: white = ink kept,
+            # red = pixels actually removed. Single source of truth, so the preview
+            # cannot drift from what extraction sees.
+            "overlay_png": mask_overlay_data_url(ink, line_mask),
         }
 
     def export_csv(

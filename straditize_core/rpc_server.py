@@ -161,17 +161,24 @@ def create_rpc_dispatcher(
         "system.ping", lambda: {"pong": True, "timestamp": time.time()}
     )
 
+    #: Data region of the built-in Hoya tutorial figure, in its own pixels. Only
+    #: used for the zero-state demo below; a user-supplied figure always gets its
+    #: region from the backend's geometric suggestion plus the user's S2 box.
+    HOYA_SAMPLE_ROI = (315, 1946, 511, 1311)
+
     def get_diagram_data() -> dict[str, Any]:
         """Provides diagram state representation for web frontend."""
-        # Auto-initialize Hoya sample if nothing loaded or no columns detected yet
-        if session.image is None or not session.columns:
-            if session.image is None:
-                sample_path = os.path.abspath("straditize/straditize/widgets/tutorial/hoya-del-castillo/hoya-del-castillo.png")
-                if os.path.exists(sample_path):
-                    session.load_image(sample_path)
-            if session.image is not None and not session.columns:
-                session.detect_columns([315, 1946], [511, 1311])
-                session.apply_depth_grid(start_depth=0, end_depth=150, step=2)
+        # Zero-state demo: load the built-in tutorial figure so the UI has
+        # something to show. No depth grid and no calibration are invented here --
+        # the figure's own 1500-4500 axis is unknown to us until the user picks
+        # the two Y-axis marks in S4.
+        if session.image is None:
+            sample_path = os.path.abspath("straditize/straditize/widgets/tutorial/hoya-del-castillo/hoya-del-castillo.png")
+            if os.path.exists(sample_path):
+                session.load_image(sample_path)
+        if session.image is not None and not session.columns:
+            x0, x1, y0, y1 = HOYA_SAMPLE_ROI
+            session.detect_columns([x0, x1], [y0, y1])
 
         palette = [
             '#38bdf8', '#34d399', '#fbbf24', '#a78bfa', '#f472b6', '#fb7185',
@@ -232,25 +239,40 @@ def create_rpc_dispatcher(
                 "controlPoints": pts,
             })
 
+        depth_calib = session.depth_calib or {}
+        roi_box = session._roi_box()
         return {
             "imageSrc": "/image/current",
-            "imageWidth": session.width or 2339,
-            "imageHeight": session.height or 1654,
+            "imageWidth": session.width or 0,
+            "imageHeight": session.height or 0,
             "columns": formatted_cols,
-            "activeTaxaId": formatted_cols[0]["id"] if formatted_cols else "taxa_0",
+            "activeTaxaId": formatted_cols[0]["id"] if formatted_cols else "",
             "selectedEntity": None,
             "isDesktopMode": getattr(session, "is_desktop_mode", False),
+            # Region and timescale are reported separately: the ROI is where data
+            # is read from, the calibration is what the pixel rows mean. Neither
+            # is invented here -- an uncalibrated session reports isCalibrated
+            # false and null endpoints so the UI can say "not calibrated yet"
+            # instead of rendering a fabricated 0-150 cm scale.
+            "roi": (
+                {"xMin": roi_box[0], "yMin": roi_box[1], "xMax": roi_box[2], "yMax": roi_box[3]}
+                if roi_box
+                else None
+            ),
             "calibration": {
-                "dataXMin": session.data_xlim[0] if session.data_xlim else 315,
-                "dataXMax": session.data_xlim[1] if session.data_xlim else 1946,
-                "dataYMin": session.data_ylim[0] if session.data_ylim else 511,
-                "dataYMax": session.data_ylim[1] if session.data_ylim else 1311,
-                "depthTopValue": 0,
-                "depthBottomValue": 150,
-                "unit": "cm",
+                "isCalibrated": bool(session.is_calibrated and session.depth_calib),
+                "top_px": depth_calib.get("top_px"),
+                "top_cm": depth_calib.get("top_cm"),
+                "bottom_px": depth_calib.get("bottom_px"),
+                "bottom_cm": depth_calib.get("bottom_cm"),
+                "unit": session.depth_unit,
                 "depthInterval": 2,
                 "depthGridEnabled": True,
-                "isCalibrated": True,
+            },
+            "lineRemoval": {
+                "strength": session.degrid_strength,
+                "remove_vertical": session.degrid_remove_vertical,
+                "corrections": session.line_corrections,
             },
         }
 
@@ -803,8 +825,8 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
             "message": "Straditize Web Frontend is ready for connection, but production assets (frontend/dist) were not found.",
             "hint": "Please build the production frontend or start the Vite development server.",
             "quick_start": {
-                "dev_server": "cd frontend && pnpm dev (accessible at http://localhost:5173)",
-                "build_static": "cd frontend && pnpm build (compiles to frontend/dist/)",
+                "dev_server": "cd frontend && npm run dev (accessible at http://localhost:5173)",
+                "build_static": "cd frontend && npm run build (compiles to frontend/dist/)",
             },
             "available_endpoints": {
                 "gui": "/",

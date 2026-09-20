@@ -15,11 +15,11 @@ extra-index-urls = ["https://pypi.org/simple"]
 run-straditize = "python -m straditize"   # 启动应用
 desktop = "python -m straditize_core.rpc_server"                            # 启动桌面模式 (自动端口/调起浏览器/退出按钮)
 rpc-server = "python -m straditize_core.rpc_server serve --port 8765"       # 启动服务器模式 (127.0.0.1:8765 / 无退出按钮)
-frontend-dev = "pnpm --prefix frontend run dev"                         # 启动现代版前端开发服务器
+frontend-dev = "npm --prefix frontend run dev"                          # 启动现代版前端开发服务器
 
 [tasks.test]
 description = "Run modern Straditize Pro test suite"
-cmd = "python -m pytest tests/test_core.py tests/test_rpc.py tests/verify_straditize_pro_e2e.py tests/test_age_depth_model.py tests/test_age_depth_extraction_quality.py tests/test_age_depth_real_figures.py tests/test_age_ensemble.py tests/test_no_fabrication.py tests/test_metadata_and_lipd.py tests/test_ocr_species_recognition.py tests/test_component_manager.py tests/test_horizon_consensus.py tests/test_vector_first_digitize.py -q"
+cmd = "python -m pytest tests/test_core.py tests/test_rpc.py tests/verify_straditize_pro_e2e.py tests/test_age_depth_model.py tests/test_age_depth_extraction_quality.py tests/test_age_depth_real_figures.py tests/test_age_ensemble.py tests/test_no_fabrication.py tests/test_metadata_and_lipd.py tests/test_ocr_species_recognition.py tests/test_component_manager.py tests/test_horizon_consensus.py tests/test_vector_first_digitize.py tests/test_grid_line_removal.py -q"
 
 [tasks.test-legacy]
 description = "Run legacy PyQt5 widget test suite (requires legacy dependencies)"
