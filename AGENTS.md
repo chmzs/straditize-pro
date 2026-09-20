@@ -24,6 +24,9 @@
 - 修改 `pixi.toml` 后运行 `pixi install` 并检查 `pixi.lock` 的变化。
 - Python 包安装使用 Pixi 任务或 `pixi run python -m pip`，不要直接污染全局环境。
 - `frontend/dist` 不入库且被 `pyproject.toml` 排除，**全新克隆必须先构建前端**；Node.js ≥ 20 是运行必需。
+- ⚠️ 本机 npm 的 cache 默认指向 `D:\Program Files\nodejs\node_cache`（受保护目录），
+  `npm install` 会以 `EPERM errno -4048` 失败。加 `--cache "$env:LOCALAPPDATA\npm-cache"` 即可，
+  或一次性 `npm config set cache "$env:LOCALAPPDATA\npm-cache"` 改到可写位置。
 
 ## 常用命令
 
@@ -41,7 +44,7 @@ pixi run rpc-server       # 现代版服务器模式（固定 8765，无退出�
 pixi run build-windows    # PyInstaller 独立分发包
 ```
 
-前端另有两份锁文件（`package-lock.json` 供 CI/npm，`pnpm-lock.yaml` 供 pixi 任务），改动依赖时需同时照顾。
+前端包管理统一为 **npm**（锁文件只有 `frontend/package-lock.json`）；CI、pixi 任务与文档均使用 npm。
 
 ⚠️ 两个陷阱命令：
 
