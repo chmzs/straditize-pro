@@ -89,17 +89,26 @@
 加载图表原始图像到后端核心会话。
 
 - **参数 (params)**：
-  - `image_path` (string, 必填): 本地文件绝对路径或相对工作区路径。
+  - `image_path` (string, 可选): 本地文件绝对路径或相对工作区路径。
+  - `image_data` (string, 可选): `data:image/...;base64,...` 内联图像；适用于浏览器拖入的本地文件。
+  - `sample_key` (string, 可选): 内置范例键（`hoya` / `verification` / `beginner`）。
+  - `file_name` / `width` / `height` (可选): 仅作为元数据回显。
+  - 三者必须给出其一。
 - **返回 (result)**：
   ```json
   {
-    "width": 1946,
-    "height": 1311,
+    "width": 2339,
+    "height": 1654,
     "format": "PNG",
-    "mode": "RGBA",
-    "image_path": "I:/software_dev/straditize/diagram.png"
+    "mode": "RGB",
+    "image_path": "I:/software_dev/straditize/hoya-del-castillo.png",
+    "suggested_roi": { "xMin": 281, "xMax": 2199, "yMin": 298, "yMax": 1456 }
   }
   ```
+- **契约要点**：`suggested_roi` 是**几何区域建议**，**只给区域、不给深度**。
+  历史上这里返回的是一个含 `depthTopValue/depthBottomValue/isCalibrated` 的
+  `suggested_calibration`，等于替用户声称了一把并不存在的深度尺；该字段已删除。
+  深度只能来自用户在 S4 的两点标定（`core.calibrateAxes`）。
 
 ---
 
@@ -159,6 +168,9 @@
     ]
   }
   ```
+- **契约要点**：数字化是**纯像素几何**，不需要标定；但取数范围受 ROI 约束。
+  若某列 `[start, end]` 与 ROI 的 X 范围**完全不相交**，本方法返回 `-32602`，
+  而不是产出一整列静默的 0 —— 列落在取数区之外意味着"没有数据"，不等于"数据为零"。
 
 ---
 
@@ -189,11 +201,16 @@
 ---
 
 ### 4.6 `core.calibrateAxes`
-绑定图表的科学标定轴（如垂直深度的标尺，各列 X 轴的物理百分比/浓度比例尺）。
+绑定图表的科学标定轴（垂直深度的标尺，各列 X 轴的物理百分比/浓度比例尺）。
 
 - **参数 (params)**：
-  - `y_marks` (array of objects, 必填): Y 轴标定标记列表，至少 2 个点：`[{"pixel": 511.0, "val": 0.0}, {"pixel": 1311.0, "val": 800.0}]`。
+  - `y_marks` (array of objects, 必填): Y 轴上**用户亲自点选的两个参考点**，至少 2 个：
+    `[{"pixel": 556.0, "val": 1500.0}, {"pixel": 1311.0, "val": 4500.0}]`。
+    点序无所谓，后端按像素 Y 排序后记录为 `top_px/top_cm` 与 `bottom_px/bottom_cm`。
   - `x_marks` (array of objects, 可选): X 轴各列标定标记列表：`[{"col_index": 0, "pixel": 315.0, "val": 0.0}, {"col_index": 0, "pixel": 445.0, "val": 100.0}]`。
+  - `unit` (string, 可选, 默认 `"cm"`): 深度/年代单位自由文本（`cm` / `m` / `mm` / `cal yr BP` / `ka`）。
+    刻意不做枚举：强行枚举会迫使用户误报自己的坐标轴。数值可向下递增（深度）或向上递增（年代），
+    方向由 `val` 本身决定。
 - **返回 (result)**：
   ```json
   {
@@ -204,10 +221,70 @@
     }
   }
   ```
+- **契约要点**：本方法**只写深度轴**，绝不改动取数区域 (ROI)；反向亦然（见 `roi.update`）。
+  两个 `pixel` 相同会返回 `-32602`。
 
 ---
 
-### 4.7 `core.exportData`
+### 4.7 `roi.update`
+更新数据取数区域 (ROI)。ROI 仅框定**从哪里取数**（排除坐标轴、文字、聚类树），不携带任何深度含义。
+
+- **参数 (params)**（两种写法等价，取其一）：
+  - `x0` / `x1` / `y0` / `y1` (number): 像素边界；或
+  - `x` / `y` / `w` / `h` (number): 左上角 + 宽高。
+- **返回 (result)**：
+  ```json
+  {
+    "data_xlim": [315.0, 1946.0],
+    "data_ylim": [511.0, 1311.0],
+    "roi": [315.0, 511.0, 1946.0, 1311.0]
+  }
+  ```
+- **契约要点**：**绝不改动 `core.calibrateAxes` 建立的深度轴**。历史上两者共用一个结构体，
+  拖一下 ROI 手柄就静默改写了深度。此外 ROI 是线去除的检测范围：更新 ROI 会作废缓存的线掩膜，
+  下一次数字化按新范围重算。
+
+---
+
+### 4.8 `algorithm.degrid`
+在 ROI 内检测横线（坐标网格线）与竖线（轴线脊线、列基线）并发布**去线掩膜**。
+
+- **参数 (params)**：
+  - `strength` (string, 可选, 默认 `"medium"`): `"off"` / `"weak"` / `"medium"` / `"strong"`。
+    `"off"` 会**主动清空**会话中的掩膜（不是只让前端停止绘制）。
+  - `corrections` (array of objects, 可选): 用户人工修正笔迹，
+    `[{"mode": "erase"|"restore", "radius": 6, "points": [[x, y], ...]}]`；`erase` 擦掉误标，`restore` 补回漏标。
+  - `remove_vertical` (boolean, 可选, 默认 `true`): 是否同时剔除竖线。
+- **返回 (result)**：
+  ```json
+  {
+    "success": true,
+    "strength": "medium",
+    "remove_vertical": true,
+    "max_thickness": 3,
+    "horizontal_rows": [],
+    "vertical_cols": [319, 320, 1774, 1775],
+    "removed_lines_count": 4,
+    "removed_pixels": 2900,
+    "auto_pixels": 2900,
+    "manual_restore_pixels": 0,
+    "manual_erase_pixels": 0,
+    "roi": [315, 511, 1946, 1311],
+    "overlay_png": "data:image/png;base64,..."
+  }
+  ```
+- **判定准则**：一条线必须同时**够长**（相对 ROI 跨度的形态学开运算）且**够薄**
+  （垂直于线方向的墨迹厚度 ≤ `max_thickness`）。真实花粉实心轮廓被横线穿过时厚度达数十像素，
+  因此被保留；旧实现按"整行占据率"删除整行，实测在内置 Hoya 图上把 *Pinus* 列 **99%** 的实心轮廓抹掉，
+  而该图 ROI 内根本没有横向网格线。
+- **契约要点**：`overlay_png` 是**唯一事实源**——前端 B 键透视画的
+  就是这张图（白=保留墨迹，红=实际剔除像素），所见即数字化所用。
+  掩膜存于会话（`grid_line_mask`），数字化时从墨迹中减去；原始 `foreground_mask` **不被就地修改**，
+  分列检测仍看到完整墨迹。
+
+---
+
+### 4.9 `core.exportData`
 将数值化并经过标定的完整数据矩阵导出为结构化表格（CSV 或 Parquet）。
 
 - **参数 (params)**：

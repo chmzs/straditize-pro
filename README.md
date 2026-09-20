@@ -50,7 +50,7 @@
 
 ## 🖥️ 软件界面与实测截图 (Preview)
 
-![Straditize Pro 科学数据导出与在线成图面板](real_browser_playwright_verified.png)
+![Straditize Pro 科学数据导出与在线成图面板](docs/assets/real_browser_playwright_verified.png)
 
 > 上图为 Straditize Pro 在真实浏览器中解译经典地层图谱 *Hoya del Castillo* 并导出科学矩阵与 `riojaPlot` 脚本的实测截图。
 

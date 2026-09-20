@@ -105,7 +105,8 @@ ssh -L 8765:127.0.0.1:8765 用户@远端主机
 | 键盘 | 行为 |
 | --- | --- |
 | `A` / `S` / `D` / `C` | 加点 / 微调 / 删点 / 加列（对齐 WebPlotDigitizer） |
-| `H` / `R` | 抓手平移 / ROI 有效区 |
+| `H` / `R` | 抓手平移 / ROI 取数区 |
+| `K` / `Y` | 线掩膜人工修正笔刷 / Y 轴两点标定 |
 | `F` / `Ctrl+1` | 适应屏幕 / 1:1 |
 | `Ctrl+Z` / `Ctrl+Y` | 撤销 / 重做 |
 | `Delete` | 删除选中项 |
@@ -120,11 +121,22 @@ ssh -L 8765:127.0.0.1:8765 用户@远端主机
 ## 5. 工作流状态机 S0–S7
 
 ```text
-S0 空状态 → S1 载入 → S2 ROI 有效区 → S3 分列 → S4 标尺标定 → S5 拐点精修 → S6 校验 → S7 导出
+S0 空状态 → S1 载入 → S2 ROI 取数区 → S3 分列 → S4 标尺标定 → S5 拐点精修 → S6 校验 → S7 导出
 ```
 
 定义见 `frontend/src/types/workflow.ts`。阶段与可用工具的映射是**唯一事实源**：
 `GeologyCanvas.getAllowedTools()` —— 浮动工具条置灰、键盘守卫、鼠标编辑路径三处都必须走它。
+
+工具模式（`types/pollen.ts` 的 `ToolMode`）与阶段：
+
+| 键 | 工具 | 起始阶段 |
+| --- | --- | --- |
+| `R` | ROI 取数区手柄 | S2 |
+| `K` | 线掩膜人工修正笔刷（擦掉误标 / 补回漏标） | S2 |
+| `Y` | Y 轴两点标定（点两个参考行 → 填真实值） | S4 |
+| `A` / `S` / `D` / `C` / `H` | 加点 / 微调 / 删点 / 加列 / 平移 | 见 §9.6 |
+
+进入 `K` 笔刷时**强制打开 B 键叠加层**：看不见掩膜就等于闭眼涂改。
 
 ---
 
@@ -145,6 +157,25 @@ $$\text{Log: } v(x) = \exp\left(\ln s + \frac{x - x_s}{x_t - x_s}(\ln t - \ln s)
 - 后端 `suggest_data_region()` **只给区域、不给深度**；深度只能来自用户在 S4 的两点标定。
 - 逐列百分比同理：每列印出的最大刻度值只能**人读**，禁止推断或填默认值冒充。
 
+### 6.1 数据模型（前端）
+
+两者是 `DiagramData` 上**两个互不派生的字段**：
+
+```ts
+roi:         { xMin, xMax, yMin, yMax }                 // 只框取数范围
+calibration: { isCalibrated, top_px, top_cm,
+               bottom_px, bottom_cm, unit, ... }        // 只描述像素行代表什么数值
+```
+
+- 未标定时 `isCalibrated === false` 且四个端点为 `null`。`CoordinateSystem.calibrationBounds()`
+  是**唯一判定入口**：取不到就返回 `null`，深度一律显示 `--`。**禁止**任何
+  `top_px ?? dataYMin` 式的回落——那正是把"框选数据的方框"当成时间轴的老路。
+- 层位标尺（`SplineInterpolator.getStandardDepthHorizons`）铺在**标定跨度**上，与 ROI 无关；
+  未标定时返回空数组，不生成假刻度。
+- 两个参考点的 `val` 可向下递增（深度）或向上递增（年代），方向由数值本身决定，不做假设。
+- 后端对应 `session.depth_calib`，与 `data_xlim/data_ylim` 同样互不派生；
+  `project_save` 分 `depth_calibration` / `roi` 两个键写入，读回也不许互相兜底。
+
 ---
 
 ## 7. 分列 → 数字化的数据流
@@ -152,13 +183,37 @@ $$\text{Log: } v(x) = \exp\left(\ln s + \frac{x - x_s}{x_t - x_s}(\ln t - \ln s)
 ```text
 core.loadImage          → 载入图像 + suggested_roi（仅区域）
 core.detectColumns      → 列边界（data_xlim / data_ylim 为参）
-core.digitize(col)      → 该列曲线控制点（纯像素几何，与标定无关）
-calibrate_axes          → y_scale（深度）+ x_scales[col]（百分比）
+roi.update              → 取数区域（frontend↔backend 同步；不碰标定）
+algorithm.degrid        → ROI 内的线掩膜 + B 键 QC 叠加层（横线与竖线）
+core.digitize(col)      → 该列曲线控制点（纯像素几何，线圈在 ROI 内并被去线掩膜扣除）
+core.calibrateAxes      → y_scale（深度，来自用户两点）+ x_scales[col]（百分比）
 core.extractGridValues  → 按标准深度层位求交，未观测填 0.0（绝不输出 NA）
 core.exportData / project.save
 ```
 
 **注意**：`digitize` 是纯几何，不需要标定；`x_scales` 缺失时**不得**拿列宽当 100% 冒充读数。
+
+### 7.1 线去除（去线）
+
+数据流上只有**一份**掩膜，由后端产生：
+
+```text
+ink = foreground_mask                      # 原始墨迹，分列检测仍看这一份（不被就地修改）
+h, v = detect_grid_lines(ink, roi, strength, remove_vertical)
+line_mask = (h | v | 手工 restore) & ~手工 erase
+digitize 用 ink & ~line_mask & roi_mask
+```
+
+- **判据是「够长 + 够薄」**：形态学开运算保证线足够长（相对 ROI 跨度），
+  垂直于线方向的墨迹厚度必须 ≤ `max_thickness`（弱 2 / 中 3 / 强 5 px）。
+  真实花粉实心轮廓被横线穿过处厚达数十像素，因此**豁免**。
+- **历史缺陷（已修）**：旧实现是"某行横向 run 超过阈值 → 删掉整行"，
+  实测在内置 Hoya 图上 ROI 墨迹的 **55–70%** 被标成线，其中 **95%** 是 ≥4px 的实心轮廓，
+  *Pinus* 列 **99%** 被抹掉——而那张图 ROI 内横向贯穿 run 行数为 **0**，即全是误标。
+- **前端不得自行判定"哪条是线"**：`overlay_png` 是唯一事实源，B 键透视与数字化用的是同一批像素。
+- 人工修正以**折线笔迹**（`{mode, radius, points}`）落库，而非位图：改档位或改 ROI 后
+  自动掩膜会变，笔迹仍可重放；随 `straditize.json` 的 `line_removal.corrections` 持久化。
+- `strength: "off"` 必须**主动清空**会话掩膜，否则关闭后数字化仍在扣除旧掩膜。
 
 ---
 
@@ -167,8 +222,8 @@ core.exportData / project.save
 - `frontend/dist` **不入库**（`frontend/.gitignore`），且 `pyproject.toml` 显式 `exclude = ["frontend*"]`。
   因此**全新克隆必须先构建前端**，否则后端托管不到界面（会在 `/status` 给出提示）。
 - Node.js ≥ 20 是**运行必需**，不是"仅开发需要"。
-- 前端存在**两份锁文件**（`package-lock.json` 与 `pnpm-lock.yaml`）：CI 用 npm，
-  `pixi run frontend-dev` 用 pnpm。二者可能漂移，改动依赖时需同时照顾。
+- 前端包管理**统一为 npm**，锁文件只有 `frontend/package-lock.json`。
+  （曾同时存在 `pnpm-lock.yaml`：CI 用 npm 而 pixi 任务用 pnpm，两份锁必然漂移，已统一。）
 - 开发模式用 Vite 代理保持同源（`frontend/vite.config.ts`），**不要**为此放开后端跨源。
   代理的 `changeOrigin` 必须为 `false`，否则 Host 被改写会触发同源校验拒绝。
 
@@ -178,9 +233,14 @@ core.exportData / project.save
 
 1. 数据只能来自后端真实计算；取不到就报错，禁止替代数据。
 2. 平移手势全画布一致：右键 / 中键 / 空格+左键。
-3. ROI ≠ 标尺；`suggest_data_region()` 不给深度。
+3. ROI ≠ 标尺；`suggest_data_region()` 不给深度；未标定 → 深度为 `--`，**禁止**
+   `top_px ?? dataYMin` 式回落（`calibrationBounds()` 是唯一判定入口）。
 4. 每列刻度值只能人读，不得填默认值冒充。
 5. 绝不回显 `Access-Control-Allow-Origin: *`，绝不放开跨源换开发便利。
 6. 阶段→工具表只有 `getAllowedTools()` 一份。
 7. 画布叠加层用**固定高对比色**（主题色会消失在用户图上）；UI 文字必须用主题变量。
 8. 改 RPC 契约必须同步前端、测试与本文档。
+9. 线掩膜只有一份、由后端产生（`overlay_png` = B 键所见 = 数字化所用）；
+   前端禁止自行判定"哪条是线"。
+10. 线去除判据必须含**厚度上限**（够长 + 够薄）；禁止按行/列整条删除。
+11. 落在 ROI 之外的数据一律不存在；整列在 ROI 外必须**报错**，不得静默产 0。
