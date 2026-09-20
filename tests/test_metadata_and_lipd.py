@@ -207,7 +207,10 @@ class TestMetadataAndLiPDSuite(unittest.TestCase):
             "site": {"site_name": "Hoya del Castillo", "latitude": "39.5", "longitude": "-2.8", "elevation_m": "950", "archive_type": "lake sediment"},
         })
 
-        # 2. Extract age-depth model (which automatically generates and mounts native ensemble)
+        # 2. Load the figure explicitly, then extract. The figure must be named: the session
+        # used to fall back to the built-in bacon sample when nothing was loaded, which
+        # returned a full chronology extracted from a diagram the caller never supplied.
+        session.load_age_depth_diagram(sample_key="bacon")
         ad_res = session.calibrate_and_extract_age_depth(
             depth_px=[32.0, 668.0],
             depth_vals=[0.0, 150.0],

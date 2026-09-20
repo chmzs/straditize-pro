@@ -44,14 +44,64 @@ export interface CalibMarker {
 const CALIB_ORDER: CalibKind[] = ['ageA', 'ageB', 'depthA', 'depthB'];
 
 const CALIB_META: Record<CalibKind, { label: string; ordinal: string; color: string }> = {
-  ageA: { label: '年龄轴端点 1', ordinal: '①', color: '#38bdf8' },
-  ageB: { label: '年龄轴端点 2', ordinal: '②', color: '#38bdf8' },
+  // Yellow, deliberately moved off the blue the median curve uses: the two must stay
+  // distinguishable once median control points exist near the axis handles.
+  ageA: { label: '年龄轴端点 1', ordinal: '①', color: '#facc15' },
+  ageB: { label: '年龄轴端点 2', ordinal: '②', color: '#facc15' },
   depthA: { label: '深度轴端点 1', ordinal: '③', color: '#34d399' },
   depthB: { label: '深度轴端点 2', ordinal: '④', color: '#34d399' },
 };
 
 const EXCLUDE_BOX_COLOR = 'rgba(239, 68, 68, 0.75)';
 const MARKER_HIT_RADIUS = 10;
+
+/**
+ * Canvas overlay palette.
+ *
+ * The three extracted curves get three distinct colours because they are (or will be)
+ * separately editable: with both envelope edges the same colour a user marking points
+ * cannot tell which bound they are editing, and the two edges overlap wherever the
+ * envelope narrows. Each curve's handles will reuse its line colour so the association is
+ * carried by colour rather than guessed.
+ *
+ * These are deliberately fixed hex values rather than the theme's `--accent-*` variables.
+ * The project blacklist that bans hardcoded `#38bdf8` / `#f59e0b` targets the UI *chrome*,
+ * where a hardcoded colour can vanish under the light theme. This is a canvas composited
+ * over an arbitrary user-supplied figure: a theme colour is exactly what would disappear,
+ * since the figure may itself be pale blue or amber. Fixed high-contrast values are correct
+ * here, and the halo below makes them legible over any background.
+ */
+const CURVE_COLORS = {
+  median: '#38bdf8', // blue
+  max: '#a78bfa', // violet
+  min: '#fb923c', // orange
+} as const;
+
+/** Dark halo drawn under each overlay stroke so it reads over any figure content. */
+const HALO_COLOR = 'rgba(15, 23, 42, 0.55)';
+
+/** Draws a stroke twice: a wider dark halo, then the bright line on top. */
+function strokeWithHalo(
+  ctx: CanvasRenderingContext2D,
+  path: () => void,
+  color: string,
+  width: number
+): void {
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  path();
+  ctx.strokeStyle = HALO_COLOR;
+  ctx.lineWidth = width + 3;
+  ctx.stroke();
+  ctx.beginPath();
+  path();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.stroke();
+  ctx.restore();
+}
 
 export class AgeDepthModal {
   private container: HTMLElement;
@@ -292,6 +342,18 @@ export class AgeDepthModal {
               </div>
 
               <!-- ============ 步骤 3：识别与校对 ============ -->
+              <div class="form-group" style="margin: 0; padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
+                <div style="display: grid; grid-template-columns: auto 1fr; gap: 5px 6px; font-size: 10.5px; align-items: center;">
+                  <label style="color: var(--text-muted);" title="用哪个响应通道定位中位线。自动会同时试暗度与色度，取贯穿画布更高的那个。">识别通道</label>
+                  <select id="ad-sel-channel" class="sample-select" style="width: 100%; font-size: 11px;">
+                    <option value="auto">自动（推荐）</option>
+                    <option value="chroma">色度（彩色笔画）</option>
+                    <option value="darkness">暗度（灰度笔画）</option>
+                  </select>
+                </div>
+                <div id="ad-channel-reason" style="font-size: 9.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;"></div>
+              </div>
+
               <button class="btn btn-primary" id="ad-btn-extract" style="padding: 7px 10px; font-size: 11.5px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #38bdf8);">
                 🔍 ③ 运行识别并叠加视觉校对
               </button>
@@ -1231,8 +1293,21 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
   }
 
   private loadSampleImage(sampleKey: string): void {
+    // Load through the RPC first, then fetch the pixels. `/image/agedepth` is read-only and
+    // returns 404 for an empty session, so the order matters: it must not be asked to serve
+    // a figure the backend has not been told about.
+    void this.rpcClient
+      .call<any, any>('agedepth.loadModelDiagram', { sample_key: sampleKey })
+      .catch((err) => {
+        this.showExtractError(`后端未能载入范例图谱 (${sampleKey}): ${err?.message || err}`);
+      })
+      .then(() => {
+        this.fetchAgeDepthPixels(`范例: ${sampleKey.toUpperCase()}`);
+      });
+  }
+
+  private fetchAgeDepthPixels(label: string): void {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
     img.onload = () => {
       this.bgImage = img;
       if (this.canvas) {
@@ -1244,7 +1319,7 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
       if (emptyZone) emptyZone.style.display = 'none';
 
       const lbl = this.modalEl?.querySelector('#ad-current-source-label');
-      if (lbl) lbl.textContent = `范例: ${sampleKey.toUpperCase()}`;
+      if (lbl) lbl.textContent = label;
 
       this.inspectionData = null;
       this.mappedSamples = null;
@@ -1252,16 +1327,13 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
       this.updateExcludeCount();
       this.seedCalibration(img.naturalWidth, img.naturalHeight);
       this.renderCanvas();
-      // Name the sample explicitly instead of relying on the side effect of the image GET
-      // above: extraction must never depend on which request happened to touch the backend
-      // session first.
-      void this.rpcClient
-        .call<any, any>('agedepth.loadModelDiagram', { sample_key: sampleKey })
-        .catch(() => {
-          /* sample loading is best-effort; extraction reports its own failure */
-        });
     };
-    img.src = `/image/agedepth?sample=${sampleKey}&t=${Date.now()}`;
+    img.onerror = () => {
+      this.showExtractError(
+        '后端没有返回范例图谱像素（/image/agedepth 只读且需要先载入）。请检查后端连接。'
+      );
+    };
+    img.src = `/image/agedepth?t=${Date.now()}`;
   }
 
   private handleCustomImageFile(file: File): void {
@@ -1409,6 +1481,7 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
         age_increases_downcore: true,
         age_is_calendar_year: true,
         rate_columns: this.selectedRateColumns(),
+        curve_channel: (this.modalEl.querySelector('#ad-sel-channel') as HTMLSelectElement | null)?.value || 'auto',
       });
 
       if (res && res !== true && res.inspection) {
@@ -1420,15 +1493,25 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
         const n = (res.inspection.depths || []).length;
         const sampled = res.mapped_samples?.depths?.length || 0;
         const ens = res.generated_ensemble;
+        const meta = res.inspection.metadata || {};
+        const channel = meta.curve_channel === 'chroma' ? '色度' : '暗度';
         let note = '';
         if (ens?.skipped) {
           note = ' · ⚠️ 已跳过年代集合';
         } else if (ens?.diagnostics) {
-          const dg = ens.diagnostics;
-          note = ` · L=${dg.correlation_length}cm`;
+          note = ` · L=${ens.diagnostics.correlation_length}cm`;
         }
         if (statusEl) {
-          statusEl.textContent = `✅ 识别成功：提取 ${n} 个深度层位，映射 ${sampled} 个花粉样品${note}`;
+          statusEl.textContent = `✅ 识别成功（通道: ${channel}）：提取 ${n} 个深度层位，映射 ${sampled} 个花粉样品${note}`;
+        }
+        // Surface *why* a channel was chosen, so an automatic fallback is legible instead
+        // of mysterious -- and so the user can tell when to override it.
+        const reasonEl = this.modalEl.querySelector('#ad-channel-reason') as HTMLElement;
+        if (reasonEl) {
+          const reason = meta.curve_channel_reason || '';
+          reasonEl.textContent = `通道: ${channel}${reason ? ' — ' + reason : ''}`;
+          reasonEl.style.color =
+            meta.curve_channel === 'chroma' ? 'var(--accent-green)' : 'var(--text-muted)';
         }
       } else {
         this.showExtractError(
@@ -1844,34 +1927,39 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
     ctx.save();
     ctx.globalAlpha = this.overlayOpacity;
 
-    // 95% 置信带
-    if (this.showEnvelope && px.y && px.x_min && px.x_max) {
-      ctx.beginPath();
-      ctx.moveTo(px.x_min[0], px.y[0]);
-      for (let i = 1; i < px.y.length; i++) {
-        ctx.lineTo(px.x_min[i], px.y[i]);
-      }
-      for (let i = px.y.length - 1; i >= 0; i--) {
-        ctx.lineTo(px.x_max[i], px.y[i]);
-      }
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(245, 158, 11, 0.45)';
-      ctx.fill();
-      ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    }
-
-    // 拟合线
-    if (this.showCurve && px.y && px.x_curve) {
-      ctx.beginPath();
+    const curvePath = () => {
       ctx.moveTo(px.x_curve[0], px.y[0]);
       for (let i = 1; i < px.y.length; i++) {
         ctx.lineTo(px.x_curve[i], px.y[i]);
       }
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
+    };
+    const edgePath = (xs: number[]) => {
+      ctx.moveTo(xs[0], px.y[0]);
+      for (let i = 1; i < px.y.length; i++) {
+        ctx.lineTo(xs[i], px.y[i]);
+      }
+    };
+
+    // 95% 置信带（填充），并给上下界各自一条可分辨的边
+    if (this.showEnvelope && px.y && px.x_min && px.x_max) {
+      ctx.beginPath();
+      edgePath(px.x_min);
+      for (let i = px.y.length - 1; i >= 0; i--) {
+        ctx.lineTo(px.x_max[i], px.y[i]);
+      }
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.32)';
+      ctx.fill();
+
+      // Both bounds used to share one amber stroke, which is fine for reading the band but
+      // ambiguous the moment a user has to edit one of them.
+      strokeWithHalo(ctx, () => edgePath(px.x_max), CURVE_COLORS.max, 1.5);
+      strokeWithHalo(ctx, () => edgePath(px.x_min), CURVE_COLORS.min, 1.5);
+    }
+
+    // 拟合中位线
+    if (this.showCurve && px.y && px.x_curve) {
+      strokeWithHalo(ctx, curvePath, CURVE_COLORS.median, 2.5);
     }
 
     // 花粉层位交点：像素位置由后端标定器直接给出，前端不做坐标反算。

@@ -108,6 +108,9 @@ def create_rpc_dispatcher(
     dispatcher.register_method("metadata.get", session.metadata_get)
     dispatcher.register_method("ocr.recognizeLabels", session.ocr_recognize_labels)
     dispatcher.register_method("ocr.applyLabels", session.ocr_apply_labels)
+    dispatcher.register_method("ocr.getTaxaDict", session.ocr_get_taxa_dict)
+    dispatcher.register_method("ocr.parseTaxaText", session.ocr_parse_taxa_text)
+    dispatcher.register_method("ocr.saveCustomTaxa", session.ocr_save_custom_taxa)
     dispatcher.register_method("ensemble.add", session.ensemble_add)
     dispatcher.register_method("ensemble.list", session.ensemble_list)
     dispatcher.register_method("export.exportXlsx", session.export_advanced_xlsx)
@@ -568,23 +571,15 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
                 self.wfile.write(err_resp)
             return
 
-        # Age-depth diagram image endpoint
+        # Age-depth diagram image endpoint (read-only)
         if raw_path in ("/image/agedepth", "/api/image/agedepth"):
+            # This endpoint deliberately does NOT load anything. It used to accept
+            # ?sample=bacon|bchron and fall back to the bacon sample when a session had no
+            # diagram, which both mutated extraction state as a side effect of a plain image
+            # GET and silently substituted a different figure. The displayed pixels and the
+            # pixels the extractor operates on could then diverge with nothing to signal it.
+            # Loading happens only through `agedepth.loadModelDiagram`.
             session = getattr(self, "session", None)
-            if session:
-                qs = parse_qs(parsed.query)
-                sample_key = qs.get("sample", [None])[0]
-                if sample_key in ("bacon", "bchron"):
-                    try:
-                        session.load_age_depth_diagram(sample_key=sample_key)
-                    except Exception:
-                        pass
-                elif session.age_depth_image is None:
-                    try:
-                        session.load_age_depth_diagram(sample_key="bacon")
-                    except Exception:
-                        pass
-
             if session and session.age_depth_image is not None:
                 bio = io.BytesIO()
                 session.age_depth_image.save(bio, format="PNG")
@@ -592,14 +587,26 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header("Content-Type", "image/png")
                 self.send_header("Content-Length", str(len(img_bytes)))
-                self.send_header("Cache-Control", "public, max-age=3600")
+                self.send_header("Cache-Control", "no-cache, must-revalidate")
                 self._send_cors_headers()
                 self.end_headers()
                 self.wfile.write(img_bytes)
             else:
                 self.send_response(404)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self._send_cors_headers()
                 self.end_headers()
-                self.wfile.write(b"No age-depth diagram image loaded")
+                self.wfile.write(
+                    json.dumps(
+                        {
+                            "error": "No age-depth diagram loaded in this session.",
+                            "hint": "Call agedepth.loadModelDiagram first.",
+                            "code": -32001,
+                            "status": "not_found",
+                        },
+                        ensure_ascii=False,
+                    ).encode("utf-8")
+                )
             return
 
         if raw_path in ("/image/current", "/api/image", "/image/preview"):

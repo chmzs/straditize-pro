@@ -107,6 +107,11 @@ class AgeDepthModel:
         self.depths = np.asarray(depths, dtype=float)[sort_idx]
         self.ages = np.asarray(ages, dtype=float)[sort_idx]
 
+        # A missing envelope is tracked as missing rather than silently defaulted to the
+        # median. `self.age_min = self.ages.copy()` would describe a ZERO-WIDTH envelope,
+        # i.e. a chronology claimed to be exact, and every downstream consumer (the age
+        # ensemble, the rate posterior, the exported 95% CI column) would report that
+        # certainty as if it had been measured.
         if age_min is not None:
             self.age_min = np.asarray(age_min, dtype=float)[sort_idx]
         else:
@@ -116,6 +121,8 @@ class AgeDepthModel:
             self.age_max = np.asarray(age_max, dtype=float)[sort_idx]
         else:
             self.age_max = self.ages.copy()
+
+        self.has_envelope = age_min is not None and age_max is not None
 
         self.curve_type = curve_type  # 'median' | 'weighted_mean' | 'mode' | 'best_fit' | 'custom'
         self.envelope_type = envelope_type  # '95_hpd' | '68_ci' | 'custom'
@@ -130,6 +137,12 @@ class AgeDepthModel:
         #: Which response channel located the median line ("chroma" or "darkness").
         self.curve_channel: str = "darkness"
         self.curve_channel_reason: str = ""
+        #: Fraction of the traced span that was actually observed rather than interpolated.
+        self.observed_row_fraction: float = 0.0
+        #: False when the model was built without an envelope, so its band is unknown
+        #: rather than zero-width. Set where the envelope arguments are consumed above --
+        #: assigning a default here would overwrite the computed value.
+        self.has_envelope: bool
 
         # Interpolators are built from the finest sampling available.
         if analysis_depths is not None and np.asarray(analysis_depths).size >= 2:
@@ -192,6 +205,9 @@ class AgeDepthModel:
                 "age_unit": self.age_unit,
                 "calibration_curve": self.cal_curve,
                 "notes": self.notes,
+                "curve_channel": self.curve_channel,
+                "curve_channel_reason": self.curve_channel_reason,
+                "observed_row_fraction": self.observed_row_fraction,
             },
         }
 
@@ -491,6 +507,15 @@ class AgeDepthModel:
         d_arr = np.asarray(sample_depths, dtype=float)
         if d_arr.size == 0 or self._interp_age is None:
             return {"name": name, "columns": ["depth"], "data": []}
+        if not self.has_envelope:
+            # Without a measured envelope there is nothing to spread the ensemble across.
+            # Proceeding would emit 1000 identical trajectories, i.e. a fabricated claim of
+            # certainty, which is worse than no ensemble at all.
+            raise ValueError(
+                "This age-depth model has no confidence envelope, so an age ensemble cannot "
+                "be generated (all members would be identical copies of the median). "
+                "Extract the figure including its 95% envelope first."
+            )
 
         model_lo = float(np.min(self.analysis_depths))
         model_hi = float(np.max(self.analysis_depths))
@@ -718,6 +743,16 @@ class AgeDepthModel:
                 result["diagnostics"]["rate"] = rate_stats
         return result
 
+    def observed_depth_range(self) -> tuple[float, float]:
+        """The depth span the curve was actually traced over, in ``depth_unit``.
+
+        Requested horizons outside this span are extrapolated from the end slope rather than
+        measured, which :meth:`predict_age` reports per row via ``extrapolated``.
+        """
+        if self.analysis_depths is None or len(self.analysis_depths) == 0:
+            return (0.0, 0.0)
+        return (float(np.min(self.analysis_depths)), float(np.max(self.analysis_depths)))
+
     def predict_age(
         self,
         sample_depths: list[float] | np.ndarray,
@@ -749,23 +784,25 @@ class AgeDepthModel:
         """
         d_arr = np.asarray(sample_depths, dtype=float)
         if self._interp_age is None:
-            zeros = [0.0] * len(d_arr)
-            return {
-                "depths": [round(float(d), 2) for d in d_arr],
-                "age_est": [round(float(d), 1) for d in d_arr],
-                "age_min": [round(float(d), 1) for d in d_arr],
-                "age_max": [round(float(d), 1) for d in d_arr],
-                "acc_rate_yr_per_depth": zeros,
-                "sed_rate_depth_per_yr": zeros,
-                "interval_acc_rate_yr_per_depth": zeros,
-                "interval_sed_rate_depth_per_yr": zeros,
-                # Legacy key retained so existing consumers keep working.
-                "sed_rate_yr_per_cm": zeros,
-            }
+            # Refuse rather than return numbers. This branch used to report `age_est = depth`
+            # (and zero rates), i.e. it handed back fabricated ages that looked like a
+            # result. A model with fewer than two horizons has no curve to evaluate.
+            raise ValueError(
+                "This age-depth model holds fewer than two horizons, so no age, envelope or "
+                "rate can be evaluated. Refusing rather than returning placeholder values."
+            )
 
         age_est = self._interp_age(d_arr)
         age_min = self._interp_min(d_arr)
         age_max = self._interp_max(d_arr)
+
+        # Mark horizons that fall outside the observed depth range. The interpolators
+        # extrapolate, so these ages are invented from the end slope rather than measured,
+        # and a consumer must be able to tell. This happens as soon as the requested depths
+        # (a pollen sample grid, typically) reach past the extracted curve.
+        observed_lo = float(np.min(self.analysis_depths))
+        observed_hi = float(np.max(self.analysis_depths))
+        extrapolated = (d_arr < observed_lo) | (d_arr > observed_hi)
 
         # Analytic PCHIP derivative: exact, and no finite-difference step to tune.
         slope = np.asarray(self._interp_age.derivative()(d_arr), dtype=float)
@@ -831,6 +868,12 @@ class AgeDepthModel:
                 "sed_rate": f"{self.depth_unit} per year",
                 "volume_ar": "cm per year (cm3 cm-2 yr-1)",
             },
+            # Horizons outside the observed range are extrapolated from the end slope, not
+            # measured. Flagged per row so a consumer can drop or mark them.
+            "extrapolated": [bool(v) for v in extrapolated],
+            "observed_depth_range": [round(observed_lo, 2), round(observed_hi, 2)],
+            "extrapolated_count": int(extrapolated.sum()),
+            "has_envelope": self.has_envelope,
             "metadata": {
                 "curve_type": self.curve_type,
                 "envelope_type": self.envelope_type,
@@ -995,6 +1038,7 @@ def extract_age_depth_model(
     loose_threshold: float = 240.0,
     enforce_monotonic: bool = True,
     age_increases_downcore: bool = True,
+    curve_channel: str = "auto",
     retain_frac: float = 0.30,
 ) -> AgeDepthModel:
     """Extracts the central best-fit line and the uncertainty envelope from an age-depth diagram.
@@ -1054,6 +1098,15 @@ def extract_age_depth_model(
         upcore so age decreases downcore. Getting this wrong applies the prior backwards
         and flattens a valid chronology, so it is declared rather than guessed from the
         unit label.
+    curve_channel:
+        Which response locates the median line.
+
+        ``"auto"`` (default) traces both the darkness and the chromatic channel and picks
+        whichever covers more of the panel height, which is the right answer for the
+        rendering styles seen so far. ``"chroma"`` / ``"darkness"`` force one channel, as a
+        manual override for a figure where the automatic comparison picks wrong -- the
+        chosen channel and the reason are reported on the returned model via
+        ``curve_channel`` / ``curve_channel_reason``.
     retain_frac:
         How far beyond the calibration rectangle the axis-rule search window may grow,
         as a fraction of each calibrated span. Guards against an unrelated long rule
@@ -1361,10 +1414,40 @@ def extract_age_depth_model(
     use_chroma = False
     chroma_mode_reason = "figure carries no chromatic stroke"
 
+    forced = str(curve_channel or "auto").lower()
+    if forced not in ("auto", "chroma", "darkness"):
+        raise ValueError(
+            f"curve_channel must be 'auto', 'chroma' or 'darkness' (got {curve_channel!r})."
+        )
+    if forced == "chroma" and not chroma_available:
+        raise ValueError(
+            "curve_channel='chroma' was requested, but this figure carries no chromatic "
+            "stroke (no pixel deviates enough from grey). Use 'auto' or 'darkness'."
+        )
+
     if chroma_available:
         c_rows, c_curve, c_min, c_max = trace_curve(chroma_smoothed, thr_chroma, generous)
         span_ratio = len(c_rows) / max(1, len(row_idx))
-        if len(c_rows) >= 5 and span_ratio >= 0.55:
+        auto_prefers_chroma = len(c_rows) >= 5 and span_ratio >= 0.55
+
+        if forced == "chroma":
+            if len(c_rows) < 5:
+                raise ValueError(
+                    f"curve_channel='chroma' was requested, but the chromatic trace found "
+                    f"only {len(c_rows)} usable rows. Try 'auto' or 'darkness'."
+                )
+            row_idx, x_curve, x_min, x_max = c_rows, c_curve, c_min, c_max
+            use_chroma = True
+            chroma_mode_reason = (
+                f"forced to chroma by the caller; automatic selection would have "
+                f"{'chosen it' if auto_prefers_chroma else f'rejected it (row ratio {span_ratio:.2f})'}"
+            )
+        elif forced == "darkness":
+            chroma_mode_reason = (
+                "forced to darkness by the caller; automatic selection would have "
+                f"{'chosen chroma (row ratio ' + format(span_ratio, '.2f') + ')' if auto_prefers_chroma else f'rejected chroma (row ratio {span_ratio:.2f})'}"
+            )
+        elif auto_prefers_chroma:
             row_idx, x_curve, x_min, x_max = c_rows, c_curve, c_min, c_max
             use_chroma = True
             chroma_mode_reason = (
@@ -1376,6 +1459,8 @@ def extract_age_depth_model(
                 f"darkness (ratio {span_ratio:.2f}); chromatic pixels are probably dating "
                 f"distributions or a legend, not the median line"
             )
+    elif forced == "darkness":
+        chroma_mode_reason = "forced to darkness by the caller"
 
     # Tighten the envelope window once the median channel is settled.
     if len(row_idx) >= 5:
@@ -1410,6 +1495,26 @@ def extract_age_depth_model(
         if keep.sum() >= 5:
             rows_arr, curve_arr = rows_arr[keep], curve_arr[keep]
             min_arr, max_arr = min_arr[keep], max_arr[keep]
+
+    # Rows the tracer actually observed, before any gap interpolation. Everything below
+    # measures against this, because after interpolation the array is contiguous by
+    # construction and any coverage statistic computed on it reads a meaningless 100%.
+    observed_rows = int(rows_arr.size)
+    observed_span = float(rows_arr.max() - rows_arr.min() + 1.0) if rows_arr.size else 0.0
+    observed_fraction = observed_rows / max(1.0, observed_span)
+
+    # Refuse a trace that is mostly interpolation. A handful of surviving rows over a tall
+    # panel produces a smooth-looking curve that is almost entirely invented between them,
+    # and nothing downstream can tell. Measured on real figures, a genuine trace observes
+    # at least ~55% of its own span, so 0.35 leaves room for genuinely dashed or broken
+    # curves while catching "the channel found 36 rows out of 680".
+    if rows_arr.size and observed_fraction < 0.35:
+        raise ValueError(
+            f"The '{'chroma' if use_chroma else 'darkness'}' channel only observed "
+            f"{observed_rows} of {int(observed_span)} rows ({observed_fraction:.0%}); the "
+            f"rest would be interpolated rather than traced. Try the other channel, widen "
+            f"the depth range, or mark the problem region with the eraser."
+        )
 
     # ---- 10. Interpolate the gaps onto every row in the window --------------
     full_rows = np.arange(rows_arr.min(), rows_arr.max() + 1, dtype=float)
@@ -1519,6 +1624,9 @@ def extract_age_depth_model(
     # when a figure fell back to darkness despite carrying colour.
     model.curve_channel = "chroma" if use_chroma else "darkness"
     model.curve_channel_reason = chroma_mode_reason
+    # Fraction of the traced span the channel actually observed; the remainder is
+    # interpolated. Reported so a mostly-interpolated curve is visible rather than silent.
+    model.observed_row_fraction = round(float(observed_fraction), 4)
 
     # ---- 13. Optional regular depth grid -----------------------------------
     if resample_step is not None and float(resample_step) > 0:
@@ -1570,6 +1678,7 @@ def extract_age_depth_model(
             # `curve_channel` off a resampled model silently gets the class default.
             resampled.curve_channel = model.curve_channel
             resampled.curve_channel_reason = model.curve_channel_reason
+            resampled.observed_row_fraction = model.observed_row_fraction
             return resampled
 
     return model

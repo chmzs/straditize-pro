@@ -86,7 +86,7 @@ from .age_depth import (
     run_local_bacon,
 )
 from .components import component_manager
-from .ocr import OcrTaxaRecognitionEngine
+from .ocr import OcrTaxaRecognitionEngine, PollenDictionary
 from .metadata import (
     fetch_doi_metadata,
     extract_text_from_pdf,
@@ -1955,6 +1955,7 @@ class StraditizeSession:
         age_increases_downcore: bool = True,
         age_is_calendar_year: bool = True,
         rate_columns: list[str] | None = None,
+        curve_channel: str = "auto",
     ) -> dict[str, Any]:
         """Extracts age-depth curves and the 95% confidence envelope with inspection data.
 
@@ -1977,8 +1978,15 @@ class StraditizeSession:
             still returned for digitisation but no calendar-age ensemble is produced.
         """
         if self.age_depth_image is None:
-            # Fallback to sample if none loaded
-            self.load_age_depth_diagram(sample_key="bacon")
+            # Refuse rather than substitute the built-in sample. This used to fall back to
+            # `load_age_depth_diagram(sample_key="bacon")`, which meant a caller who never
+            # loaded a figure received a complete chronology extracted from a *different*
+            # diagram, with no indication anything was substituted.
+            raise JsonRpcError(
+                STATE_ERROR,
+                "No age-depth diagram is loaded in this session. Load the figure first "
+                "(agedepth.loadModelDiagram) before calibrating and extracting.",
+            )
 
         calibrator = AgeDepthAxisCalibrator(
             depth_px=depth_px,
@@ -2016,6 +2024,7 @@ class StraditizeSession:
             resample_step=resample_step,
             exclude_mask=exclude_mask,
             age_increases_downcore=age_increases_downcore,
+            curve_channel=curve_channel,
         )
         self.age_depth_model = model
         self.age_depth_is_calendar_year = bool(age_is_calendar_year)
@@ -2496,13 +2505,26 @@ class StraditizeSession:
     # Pollen Taxa OCR Recognition & Summary Verification Engine
     # ========================================================================
 
+    @staticmethod
+    def user_taxa_dict_path() -> str:
+        """Returns the persistent per-user custom taxa vocabulary path."""
+        override = os.environ.get("STRADITIZE_TAXA_DICT")
+        if override:
+            return os.path.abspath(override)
+        return os.path.join(os.path.expanduser("~"), ".straditize", "taxa_custom.txt")
+
     def ocr_recognize_labels(
         self,
         label_row_bbox: list[int] | tuple[int, int, int, int] | None = None,
         angle_deg: float = 45.0,
         custom_dict_path: str | None = None,
     ) -> dict[str, Any]:
-        """Executes OCR detection and botanical matching on diagram top label row."""
+        """Executes OCR detection and botanical matching on diagram top label row.
+
+        The imported dictionary is merged on top of the built-in pollen + NPP
+        vocabulary. When ``custom_dict_path`` is omitted, the persistent
+        per-user vocabulary is used automatically.
+        """
         if self.image is None:
             raise JsonRpcError(STATE_ERROR, "No diagram image loaded in session.")
 
@@ -2519,14 +2541,116 @@ class StraditizeSession:
         else:
             bbox = list(label_row_bbox)
 
-        engine = OcrTaxaRecognitionEngine(custom_dict_path=custom_dict_path)
+        dict_path = custom_dict_path or self.user_taxa_dict_path()
+        engine = OcrTaxaRecognitionEngine(
+            custom_dict_path=dict_path if os.path.exists(dict_path) else None
+        )
         result = engine.recognize_label_row(
             diagram_image=self.image,
             label_row_bbox=bbox,
             columns=self.columns,
             angle_deg=angle_deg,
         )
+        result["custom_dict_path"] = dict_path
+        result["custom_dict_entries"] = len(engine.dictionary.custom_entries)
+        result["builtin_dict_entries"] = len(engine.dictionary.entries) - len(
+            engine.dictionary.custom_entries
+        )
         return {"success": True, "data": result}
+
+    def ocr_get_taxa_dict(self) -> dict[str, Any]:
+        """Returns the built-in vocabulary summary plus user custom entries."""
+        from .ocr.dictionary import DEFAULT_NPP_DICT, DEFAULT_POLLEN_DICT
+
+        path = self.user_taxa_dict_path()
+        probe = OcrTaxaRecognitionEngine(
+            custom_dict_path=path if os.path.exists(path) else None
+        )
+        custom = sorted(
+            probe.dictionary.custom_entries.values(), key=lambda item: item["zh"]
+        )
+        return {
+            "success": True,
+            "path": path,
+            "exists": os.path.exists(path),
+            "builtin_pollen_count": len(DEFAULT_POLLEN_DICT),
+            "builtin_npp_count": len(DEFAULT_NPP_DICT),
+            "custom": custom,
+            "custom_count": len(custom),
+        }
+
+    def ocr_parse_taxa_text(self, text: str = "") -> dict[str, Any]:
+        """Parses pasted vocabulary text into structured taxa entries.
+
+        Single source of truth for vocabulary parsing: the frontend sends the raw
+        paste buffer here for preview and for saving, so a journal figure caption
+        is understood identically on both sides.
+        """
+        entries = PollenDictionary.parse_taxa_text(text or "")
+        is_caption = bool(PollenDictionary.extract_caption_taxa(text or ""))
+        return {
+            "success": True,
+            "entries": entries,
+            "count": len(entries),
+            "format": "figure_caption" if is_caption else "list",
+        }
+
+    def ocr_save_custom_taxa(
+        self,
+        entries: list[dict[str, Any]] | None = None,
+        raw_text: str | None = None,
+        mode: str = "append",
+        clear: bool = False,
+    ) -> dict[str, Any]:
+        """Persists user-supplied taxa into the per-user vocabulary file.
+
+        Parameters
+        ----------
+        entries:
+            List of ``{"zh_name": str, "latin_name": str, "group": str}`` records.
+        raw_text:
+            Raw pasted text (figure caption or name list). Parsed with
+            :meth:`PollenDictionary.parse_taxa_text`. Used when ``entries`` is absent.
+        mode:
+            ``"append"`` keeps existing custom entries, ``"replace"`` drops them.
+        clear:
+            When true the custom vocabulary is emptied (entries are ignored).
+        """
+        path = self.user_taxa_dict_path()
+        dict_obj = PollenDictionary(custom_dict_path=path if os.path.exists(path) else None)
+        if clear or mode == "replace":
+            dict_obj.custom_entries = {}
+
+        if not entries and raw_text:
+            entries = PollenDictionary.parse_taxa_text(raw_text)
+
+        added = 0
+        skipped: list[str] = []
+        for raw in entries or []:
+            if not isinstance(raw, dict):
+                continue
+            zh = str(raw.get("zh_name") or raw.get("zh") or "").strip()
+            latin = str(raw.get("latin_name") or raw.get("latin") or "").strip()
+            if not latin:
+                skipped.append(zh or "<empty>")
+                continue
+            if not zh:
+                zh = latin
+            group = str(raw.get("group") or "用户自定义 (User Custom)").strip()
+            dict_obj.add_entry(
+                zh, latin, group=group, cls="custom", is_custom=True
+            )
+            added += 1
+
+        count = dict_obj.save_custom_txt(path)
+        return {
+            "success": True,
+            "path": path,
+            "added": added,
+            "skipped": skipped,
+            "custom_count": count,
+            "entries": sorted(dict_obj.custom_entries.values(), key=lambda i: i["zh"]),
+        }
 
     def ocr_apply_labels(self, confirmed_labels: list[dict[str, Any]]) -> dict[str, Any]:
         """Applies user-reviewed taxon names directly into column definitions."""
