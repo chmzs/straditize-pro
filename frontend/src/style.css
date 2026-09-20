@@ -1513,6 +1513,37 @@ body.theme-light .icon-btn.panel-toggle {
   image-rendering: -webkit-optimize-contrast;
 }
 
+/* 底部画布视口栏（缩放 / 透视）：贴在画布底部右侧，紧邻雷达图左侧的空白带 */
+.canvas-view-bar {
+  position: absolute;
+  bottom: 16px;
+  right: 192px;      /* = 雷达图 right 16 + 宽 170 + 间隙 6（左留 7px 给工具条） */
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.canvas-view-bar:empty {
+  display: none;
+}
+
+/* 紧凑化：工具条(右缘 608) 与雷达图(左缘 834) 之间只有 226px 空白，
+   必须把这一栏压到 210px 以内才能单排放进去并留出呼吸间隙 */
+.canvas-view-bar .btn-group {
+  padding: 1px;
+  gap: 1px;
+}
+
+.canvas-view-bar .tool-btn {
+  padding: 3px 5px;
+}
+
+.canvas-view-bar #zoom-indicator {
+  min-width: 28px;
+  padding: 2px 3px;
+}
+
 /* 浮动操作提示气泡 */
 .canvas-hud {
   position: absolute;

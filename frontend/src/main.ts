@@ -457,6 +457,13 @@ async function bootstrap() {
   `;
   canvasWrapper.appendChild(workflowActionBar);
 
+  // 底部画布视口栏（缩放 / 透视）：由 Toolbar 在每次 render 后把对应控件搬进来。
+  // 放在画布底部是为了就近操作画布，并给顶栏的 7 步工作流导引条腾出宽度。
+  const viewControlsBar = document.createElement('div');
+  viewControlsBar.className = 'canvas-view-bar';
+  viewControlsBar.id = 'canvas-view-bar';
+  canvasWrapper.appendChild(viewControlsBar);
+
   function updateWorkflowBar() {
     const meta = WORKFLOW_STAGES[currentStage];
     canvasComponent.setWorkflowStage(currentStage);
@@ -468,10 +475,10 @@ async function bootstrap() {
     }
 
     workflowActionBar.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+      <div style="display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0;">
         <span style="background: ${tokens.color.column.activeBadge}; color: #fff; font-weight: 700; font-size: 10px; padding: 2px 7px; border-radius: 9999px; flex-shrink: 0;">S${currentStage}</span>
         <strong style="color: var(--accent-blue); flex-shrink: 0;">${meta.stepName}</strong>
-        <span style="color: var(--text-secondary); font-size: 11px; max-width: 320px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${meta.guideText}</span>
+        <span style="color: var(--text-secondary); font-size: 11px; flex: 1 1 auto; min-width: 0; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${meta.guideText}</span>
       </div>
       <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
         ${currentStage > 1 ? `<button id="btn-wf-prev" class="tool-btn" style="padding: 3px 8px; font-size: 10px;">↺ 上一步</button>` : ''}
@@ -949,7 +956,7 @@ async function bootstrap() {
     setHudNotice(`✅ 已载入范例: ${nameMap[sampleKey] || sampleKey}，已自动居中重置！`, 3500);
   }
 
-  // 11. 实例化顶部工具栏
+  // 11. 实例化顶部工具栏（缩放/透视控件在 render 后搬到底部视口栏）
   toolbar = new Toolbar(history, rpcClient.getStatus(), {
     onFit: () => {
       canvasComponent.fitToScreen();
@@ -1130,6 +1137,9 @@ async function bootstrap() {
       setHudNotice(`切换至步骤 ${step}: ${meta.stepName} - ${meta.title}`);
     },
   });
+
+  // 把缩放/透视控件交到底部画布视口栏（Toolbar 每次 render 后会同步搬移）
+  toolbar.setViewControlsHost(viewControlsBar);
 
   // 顶栏状态胶囊订阅同一份后端状态（横幅已订阅，setStatusCallback 为多监听者，不会互相覆盖）
   rpcClient.setStatusCallback((status) => {

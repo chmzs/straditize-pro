@@ -45,6 +45,7 @@ export class Toolbar {
   private isBinaryOverlayActive: boolean = false;
   private currentWorkflowStep: number = 3;
   private isDesktopMode: boolean = false;
+  private viewControlsHost: HTMLElement | null = null;
 
   constructor(
     history: HistoryManager,
@@ -70,6 +71,28 @@ export class Toolbar {
   public setDesktopMode(isDesktop: boolean): void {
     this.isDesktopMode = isDesktop;
     this.render();
+  }
+
+  /**
+   * 底部画布视口栏宿主。设置后，缩放组与透视组会在每次 render 后被搬进该容器，
+   * 让它们留在画布底部（就近操作画布），而非占用顶栏宽度。
+   */
+  public setViewControlsHost(host: HTMLElement): void {
+    this.viewControlsHost = host;
+    this.relocateViewControls();
+  }
+
+  private relocateViewControls(): void {
+    if (!this.viewControlsHost) return;
+    const ids = ['tb-view-group', 'tb-binary-group'];
+    // render() 会重建节点，但不会清掉已搬走的旧节点 —— 先清除遗留，避免重复 ID
+    for (const id of ids) {
+      this.viewControlsHost.querySelector('#' + id)?.remove();
+    }
+    for (const id of ids) {
+      const el = this.element.querySelector('#' + id);
+      if (el) this.viewControlsHost.appendChild(el);
+    }
   }
 
   public getElement(): HTMLElement {
@@ -115,7 +138,7 @@ export class Toolbar {
 
   public updateScale(scale: number): void {
     this.currentScaleText = `${Math.round(scale * 100)}%`;
-    const scaleEl = this.element.querySelector('#zoom-indicator');
+    const scaleEl = document.getElementById('zoom-indicator');
     if (scaleEl) {
       scaleEl.textContent = this.currentScaleText;
     }
@@ -125,7 +148,7 @@ export class Toolbar {
     this.currentImageMode = mode;
     this.isBinaryOverlayActive = binaryOverlay;
 
-    const binaryBtn = this.element.querySelector('#btn-toggle-binary') as HTMLButtonElement;
+    const binaryBtn = document.getElementById('btn-toggle-binary') as HTMLButtonElement;
     if (binaryBtn) {
       if (binaryOverlay || mode === 'binary') {
         binaryBtn.classList.add('active');
@@ -140,9 +163,9 @@ export class Toolbar {
     }
   }
 
-  public setDegridStrength(value: 'off' | 'weak' | 'medium' | 'strong'): void {
-    const sel = this.element.querySelector('#select-degrid-strength') as HTMLSelectElement;
-    if (sel) sel.value = value;
+  public setDegridStrength(_value: 'off' | 'weak' | 'medium' | 'strong'): void {
+    // 「去线」强度控件已收敛到右侧属性检查器的 S2 面板（#select-inspector-degrid），
+    // 顶栏原有的同名 select 是重复入口且两处显示值互不同步，已移除。
   }
 
   public updateHistoryState(): void {
@@ -262,8 +285,8 @@ export class Toolbar {
           </button>
         </div>
 
-        <!-- 缩放控制 (10% ~ 1000%) -->
-        <div class="btn-group">
+        <!-- 缩放控制 (10% ~ 1000%)：运行时被搬到底部画布视口栏 -->
+        <div class="btn-group" id="tb-view-group">
           <button id="btn-zoom-out" class="tool-btn" title="缩小 (快捷键: - 或 滚轮向下)" style="padding: 3px 5px;">
             <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>
@@ -286,8 +309,8 @@ export class Toolbar {
           </button>
         </div>
 
-        <!-- 滤镜与二值透视 -->
-        <div class="btn-group" style="display: flex; align-items: center; gap: 3px;">
+        <!-- 滤镜与二值透视：运行时被搬到底部画布视口栏 -->
+        <div class="btn-group" id="tb-binary-group" style="display: flex; align-items: center; gap: 3px;">
           <button id="btn-toggle-binary" class="tool-btn ${this.isBinaryOverlayActive ? 'active' : ''}" title="二值化墨迹透视遮罩 (快捷键: B)" style="padding: 3px 6px; font-size: 10.5px;">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="9"/>
@@ -295,12 +318,6 @@ export class Toolbar {
             </svg>
             <span>透视</span>
           </button>
-          <select id="select-degrid-strength" class="sample-select" title="去网格横线灵敏度" style="font-size: 10px; max-width: 60px; padding: 2px 2px;">
-            <option value="off">去线:关</option>
-            <option value="weak">去线:弱</option>
-            <option value="medium" selected>去线:中</option>
-            <option value="strong">去线:强</option>
-          </select>
         </div>
 
         <!-- 论文元数据提取与审核入口 (FAIR/LiPD) -->
@@ -354,6 +371,7 @@ export class Toolbar {
     `;
 
     this.bindEvents();
+    this.relocateViewControls();
   }
 
   private bindEvents(): void {
@@ -500,11 +518,6 @@ export class Toolbar {
     const binaryBtn = this.element.querySelector('#btn-toggle-binary');
     binaryBtn?.addEventListener('click', () => {
       this.callbacks.onToggleBinaryOverlay();
-    });
-
-    this.element.querySelector('#select-degrid-strength')?.addEventListener('change', (e) => {
-      const val = (e.target as HTMLSelectElement).value as 'off' | 'weak' | 'medium' | 'strong';
-      this.callbacks.onChangeDegridStrength?.(val);
     });
 
     const modeSelect = this.element.querySelector('#select-image-mode') as HTMLSelectElement;
