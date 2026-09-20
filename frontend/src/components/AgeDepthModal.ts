@@ -1,5 +1,6 @@
 import { DiagramData } from '../types/pollen';
 import { RpcClient } from '../services/RpcClient';
+import { Viewport } from '../core/Viewport';
 
 export interface AgeDepthModelInspectionData {
   depths: number[];
@@ -139,6 +140,13 @@ export class AgeDepthModal {
   private calibPicking: boolean = false;
   private draggingMarker: number | null = null;
 
+  // 视口：与主画布共用 core/Viewport，负责缩放/平移/DPR 与世界坐标换算
+  private viewport: Viewport = new Viewport();
+  private isSpaceDown: boolean = false;
+  private panning: { lastX: number; lastY: number } | null = null;
+  /** Teardown callbacks for listeners registered outside the modal's own DOM subtree. */
+  private disposers: Array<() => void> = [];
+
   // 矩形排除区（橡皮擦）
   private excludeBoxes: number[][] = [];
   private excludeArmed: boolean = false;
@@ -223,10 +231,17 @@ export class AgeDepthModal {
                   <span>图层透明度:</span>
                   <input type="range" id="ad-rng-opacity" min="0.1" max="1.0" step="0.05" value="0.65" style="width: 80px;" />
                 </div>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <button class="tool-btn" id="ad-btn-zoom-out" title="缩小 (滚轮)" style="padding: 1px 6px;">−</button>
+                  <span id="ad-zoom-label" style="font-family: var(--font-mono); min-width: 38px; text-align: center;">—</span>
+                  <button class="tool-btn" id="ad-btn-zoom-in" title="放大 (滚轮)" style="padding: 1px 6px;">＋</button>
+                  <button class="tool-btn" id="ad-btn-zoom-fit" title="适应窗口" style="padding: 1px 6px;">⛶适应</button>
+                  <button class="tool-btn" id="ad-btn-zoom-100" title="原始尺寸 100%" style="padding: 1px 6px;">1:1</button>
+                </div>
               </div>
 
-              <div id="ad-canvas-container" style="flex: 1; min-height: 240px; position: relative; background: var(--bg-tertiary); border: 2px dashed var(--border-color); border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
-                <canvas id="ad-inspection-canvas" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: crosshair; display: none;"></canvas>
+              <div id="ad-canvas-container" style="flex: 1; min-height: 240px; position: relative; background: var(--bg-tertiary); border: 2px dashed var(--border-color); border-radius: 6px; overflow: hidden;">
+                <canvas id="ad-inspection-canvas" style="position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; display: none;"></canvas>
                 <div id="ad-empty-drop-zone" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg-card); z-index: 10; padding: 24px; text-align: center;">
                   <div style="font-size: 44px; margin-bottom: 10px;">⏳</div>
                   <h4 style="font-size: 15px; font-weight: 700; color: var(--text-heading); margin: 0 0 6px 0;">请载入年代-深度模型图谱 (Age-Depth Diagram)</h4>
@@ -725,8 +740,29 @@ export class AgeDepthModal {
     );
     this.renderRateOptionsNote();
 
-    // 画布：标定点拾取 / 拖拽 / 排除框拖拽 / 悬停读数
+    // 画布：标定点拾取 / 拖拽 / 排除框拖拽 / 缩放平移 / 悬停读数
     this.bindCanvasInteractions();
+
+    // 缩放控件（与主画布同约定）
+    modal.querySelector('#ad-btn-zoom-in')?.addEventListener('click', () => this.zoomAtCentre(true));
+    modal.querySelector('#ad-btn-zoom-out')?.addEventListener('click', () => this.zoomAtCentre(false));
+    modal.querySelector('#ad-btn-zoom-fit')?.addEventListener('click', () => {
+      this.fitViewport();
+      this.renderCanvas();
+    });
+    modal.querySelector('#ad-btn-zoom-100')?.addEventListener('click', () => {
+      if (!this.canvas || !this.bgImage) return;
+      const host = modal.querySelector('#ad-canvas-container') as HTMLElement | null;
+      if (!host) return;
+      this.viewport.reset100(
+        host.clientWidth,
+        host.clientHeight,
+        this.bgImage.naturalWidth,
+        this.bgImage.naturalHeight
+      );
+      this.updateZoomLabel();
+      this.renderCanvas();
+    });
 
     // 渲染测年数据表
     this.renderDatingTable();
@@ -765,6 +801,16 @@ export class AgeDepthModal {
   private sseSource: EventSource | null = null;
 
   public close(): void {
+    this.disposers.forEach((fn) => {
+      try {
+        fn();
+      } catch {
+        /* teardown must not throw */
+      }
+    });
+    this.disposers = [];
+    this.isSpaceDown = false;
+    this.panning = null;
     if (this.sseSource) {
       this.sseSource.close();
       this.sseSource = null;
@@ -1326,6 +1372,7 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
       this.excludeBoxes = [];
       this.updateExcludeCount();
       this.seedCalibration(img.naturalWidth, img.naturalHeight);
+      this.fitViewport();
       this.renderCanvas();
     };
     img.onerror = () => {
@@ -1359,6 +1406,7 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
         this.excludeBoxes = [];
         this.updateExcludeCount();
         // A user-supplied figure requires an explicit calibration pass.
+        this.fitViewport();
         this.startCalibration();
         this.renderCanvas();
         void this.pushImageToBackend(dataUrl);
@@ -1536,8 +1584,35 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
     const canvas = this.canvas;
     if (!canvas) return;
 
+    // Zoom: wheel about the cursor, Ctrl/⌘ accelerates — same convention as the main canvas.
+    canvas.addEventListener(
+      'wheel',
+      (e: WheelEvent) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        this.viewport.zoomStepAt(
+          { x: e.clientX - rect.left, y: e.clientY - rect.top },
+          e.deltaY < 0,
+          e.ctrlKey || e.metaKey
+        );
+        this.updateZoomLabel();
+        this.renderCanvas();
+      },
+      { passive: false }
+    );
+
+    // Panning is middle-button or space+left only. The project blacklist forbids right-drag
+    // panning on auxiliary canvases, so this deliberately differs from the main canvas.
+    const canPan = (e: MouseEvent) => e.button === 1 || (e.button === 0 && this.isSpaceDown);
+
     canvas.addEventListener('mousedown', (e) => {
       const pt = this.canvasToImage(e.clientX, e.clientY);
+
+      if (canPan(e)) {
+        e.preventDefault();
+        this.panning = { lastX: e.clientX, lastY: e.clientY };
+        return;
+      }
 
       if (this.excludeArmed) {
         this.excludeDragStart = pt;
@@ -1555,6 +1630,13 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
 
     canvas.addEventListener('mousemove', (e) => {
       const pt = this.canvasToImage(e.clientX, e.clientY);
+
+      if (this.panning) {
+        this.viewport.panBy(e.clientX - this.panning.lastX, e.clientY - this.panning.lastY);
+        this.panning = { lastX: e.clientX, lastY: e.clientY };
+        this.renderCanvas();
+        return;
+      }
 
       if (this.excludeArmed && this.excludeDragStart) {
         this.excludePreview = [
@@ -1579,6 +1661,10 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
     });
 
     const endDrag = () => {
+      if (this.panning) {
+        this.panning = null;
+        return;
+      }
       if (this.excludeArmed && this.excludePreview) {
         const [x0, y0, x1, y1] = this.excludePreview;
         if (Math.abs(x1 - x0) > 4 && Math.abs(y1 - y0) > 4) {
@@ -1602,6 +1688,7 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
     canvas.addEventListener('mouseup', endDrag);
     canvas.addEventListener('mouseleave', () => {
       this.draggingMarker = null;
+      this.panning = null;
       if (this.excludeDragStart) endDrag();
     });
 
@@ -1612,22 +1699,94 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
       if (this.findMarkerAt(pt) >= 0) return;
       this.addCalibMarker(pt);
     });
+
+    // Space toggles pan mode, mirroring the main canvas.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !this.isSpaceDown) {
+        this.isSpaceDown = true;
+        if (canvas) canvas.style.cursor = 'grab';
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        this.isSpaceDown = false;
+        if (canvas) canvas.style.cursor = this.excludeArmed ? 'crosshair' : 'default';
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    // Bound listeners live on window, so they must be released when the modal closes.
+    this.disposers.push(() => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    });
+
+    const observedParent = canvas.parentElement;
+    if (typeof ResizeObserver !== 'undefined' && observedParent) {
+      const ro = new ResizeObserver(() => this.renderCanvas());
+      ro.observe(observedParent);
+      this.disposers.push(() => ro.disconnect());
+    }
   }
 
-  /** Converts a client (CSS) coordinate into image pixel space. */
+  /** Converts a client (CSS) coordinate into image pixel space via the shared Viewport. */
   private canvasToImage(clientX: number, clientY: number): { x: number; y: number } {
     if (!this.canvas) return { x: 0, y: 0 };
     const rect = this.canvas.getBoundingClientRect();
-    const sx = rect.width > 0 ? this.canvas.width / rect.width : 1;
-    const sy = rect.height > 0 ? this.canvas.height / rect.height : 1;
-    return { x: (clientX - rect.left) * sx, y: (clientY - rect.top) * sy };
+    return this.viewport.screenToWorld({ x: clientX - rect.left, y: clientY - rect.top });
+  }
+
+  /** Sizes the canvas backing store to the container at device pixel ratio. */
+  private resizeCanvasBackingStore(): boolean {
+    if (!this.canvas) return false;
+    const host = this.modalEl?.querySelector('#ad-canvas-container') as HTMLElement | null;
+    if (!host) return false;
+    const cssW = Math.max(1, Math.round(host.clientWidth));
+    const cssH = Math.max(1, Math.round(host.clientHeight));
+    this.viewport.updateDpr();
+    const needW = Math.round(cssW * this.viewport.dpr);
+    const needH = Math.round(cssH * this.viewport.dpr);
+    if (this.canvas.width !== needW || this.canvas.height !== needH) {
+      this.canvas.width = needW;
+      this.canvas.height = needH;
+    }
+    return true;
+  }
+
+  private fitViewport(): void {
+    if (!this.canvas || !this.bgImage) return;
+    const host = this.modalEl?.querySelector('#ad-canvas-container') as HTMLElement | null;
+    if (!host) return;
+    const cssW = Math.max(1, Math.round(host.clientWidth));
+    const cssH = Math.max(1, Math.round(host.clientHeight));
+    this.viewport.fitToScreen(cssW, cssH, this.bgImage.naturalWidth, this.bgImage.naturalHeight, 16);
+    this.updateZoomLabel();
+  }
+
+  private updateZoomLabel(): void {
+    const el = this.modalEl?.querySelector('#ad-zoom-label') as HTMLElement | null;
+    if (el) el.textContent = `${Math.round(this.viewport.scale * 100)}%`;
+  }
+
+  /** Zoom about the viewport centre — used by the +/- buttons. */
+  private zoomAtCentre(zoomIn: boolean, accelerated: boolean = false): void {
+    if (!this.canvas) return;
+    const host = this.modalEl?.querySelector('#ad-canvas-container') as HTMLElement | null;
+    if (!host) return;
+    this.viewport.zoomStepAt(
+      { x: host.clientWidth / 2, y: host.clientHeight / 2 },
+      zoomIn,
+      accelerated
+    );
+    this.updateZoomLabel();
+    this.renderCanvas();
   }
 
   private findMarkerAt(pt: { x: number; y: number }): number {
-    if (!this.canvas) return -1;
-    const rect = this.canvas.getBoundingClientRect();
-    const scale = rect.width > 0 ? this.canvas.width / rect.width : 1;
-    const radius = MARKER_HIT_RADIUS * scale;
+    // `pt` is already in world (image) coordinates, so the hit radius is simply converted
+    // from screen pixels through the current scale. This used to be computed from a
+    // getBoundingClientRect ratio, duplicating the transform the canvas already applied.
+    const radius = MARKER_HIT_RADIUS / Math.max(this.viewport.scale, 1e-6);
     for (let i = 0; i < this.calibMarkers.length; i++) {
       const mk = this.calibMarkers[i];
       if (Math.hypot(mk.x - pt.x, mk.y - pt.y) <= radius) return i;
@@ -1873,10 +2032,10 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
       ctx.restore();
     }
 
-    // Handles
-    const rect = this.canvas?.getBoundingClientRect();
-    const scale = rect && rect.width > 0 && this.canvas ? this.canvas.width / rect.width : 1;
-    const radius = Math.max(6, 7 * scale);
+    // Handles are drawn in world coordinates, so their radius is divided by scale to keep
+    // a constant on-screen size at any zoom level.
+    const inv = 1 / Math.max(this.viewport.scale, 1e-6);
+    const radius = Math.max(6, 7 * inv);
 
     this.calibMarkers.forEach((mk) => {
       const meta = CALIB_META[mk.kind];
@@ -1888,15 +2047,15 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
       ctx.fill();
       ctx.globalAlpha = 1;
       ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = Math.max(1.5, 2 * scale);
+      ctx.lineWidth = Math.max(1.5, 2 * inv);
       ctx.stroke();
 
       // Ordinal tag
-      ctx.font = `bold ${Math.max(12, Math.round(14 * scale))}px sans-serif`;
+      ctx.font = `bold ${Math.max(12, Math.round(14 * inv))}px sans-serif`;
       ctx.fillStyle = meta.color;
       ctx.strokeStyle = 'rgba(0,0,0,0.65)';
-      ctx.lineWidth = Math.max(2, 3 * scale);
-      const ty = mk.y - radius - 3 * scale;
+      ctx.lineWidth = Math.max(2, 3 * inv);
+      const ty = mk.y - radius - 3 * inv;
       ctx.strokeText(meta.ordinal, mk.x - radius * 0.55, ty);
       ctx.fillText(meta.ordinal, mk.x - radius * 0.55, ty);
       ctx.restore();
@@ -1905,12 +2064,18 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
 
   private renderCanvas(): void {
     if (!this.canvas || !this.ctx || !this.bgImage) return;
+    if (!this.resizeCanvasBackingStore()) return;
     const ctx = this.ctx;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
 
-    ctx.clearRect(0, 0, w, h);
-    ctx.drawImage(this.bgImage, 0, 0, w, h);
+    // Everything below is drawn in WORLD (image pixel) coordinates; the Viewport transform
+    // maps that to the screen. Previously each overlay converted coordinates by hand.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.save();
+    this.viewport.applyTransform(ctx);
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(this.bgImage, 0, 0);
 
     if (this.inspectionData && this.inspectionData.px_points) {
       this.renderModelOverlay(ctx, this.inspectionData.px_points);
@@ -1918,6 +2083,9 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
 
     // Calibration handles and eraser boxes stay visible regardless of overlay state.
     this.renderCalibrationOverlay(ctx);
+    ctx.restore();
+
+    this.updateZoomLabel();
   }
 
   private renderModelOverlay(
@@ -1926,6 +2094,7 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
   ): void {
     ctx.save();
     ctx.globalAlpha = this.overlayOpacity;
+    const inv = 1 / Math.max(this.viewport.scale, 1e-6);
 
     const curvePath = () => {
       ctx.moveTo(px.x_curve[0], px.y[0]);
@@ -1953,13 +2122,13 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
 
       // Both bounds used to share one amber stroke, which is fine for reading the band but
       // ambiguous the moment a user has to edit one of them.
-      strokeWithHalo(ctx, () => edgePath(px.x_max), CURVE_COLORS.max, 1.5);
-      strokeWithHalo(ctx, () => edgePath(px.x_min), CURVE_COLORS.min, 1.5);
+      strokeWithHalo(ctx, () => edgePath(px.x_max), CURVE_COLORS.max, 1.5 * inv);
+      strokeWithHalo(ctx, () => edgePath(px.x_min), CURVE_COLORS.min, 1.5 * inv);
     }
 
     // 拟合中位线
     if (this.showCurve && px.y && px.x_curve) {
-      strokeWithHalo(ctx, curvePath, CURVE_COLORS.median, 2.5);
+      strokeWithHalo(ctx, curvePath, CURVE_COLORS.median, 2.5 * inv);
     }
 
     // 花粉层位交点：像素位置由后端标定器直接给出，前端不做坐标反算。
@@ -1971,10 +2140,10 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
       const n = Math.min(ys.length, xs.length);
       ctx.fillStyle = '#34d399';
       ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1 * inv;
       for (let i = 0; i < n; i++) {
         ctx.beginPath();
-        ctx.arc(xs[i], ys[i], 2.6, 0, Math.PI * 2);
+        ctx.arc(xs[i], ys[i], 2.6 * inv, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
       }
