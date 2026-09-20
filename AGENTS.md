@@ -1,15 +1,20 @@
 # straditize 开发代理指南
 
+> **这是操作手册。** 设计规范 / 架构不变量 / 交互规范在 `docs/ARCHITECTURE.md`；
+> 跨会话断点与试错黑名单在 `HANDOFF.md`。三者分工不重叠，改动前先各就各位。
+
 ## 项目定位
 
-现代版是 **Python 后端（`straditize_core`，JSON-RPC over HTTP）+ TypeScript 前端（`frontend/`，Vite 构建）**。
-后端同时负责提供构建好的前端静态资源，因此正常使用时浏览器只访问一个地址（默认 `http://127.0.0.1:8765/`）。
+现代版是 **Python 后端（`straditize_core`，JSON-RPC over HTTP）+ TypeScript 前端（`frontend/`，Vite）**。
+后端同时托管前端静态资源，故浏览器**始终同源**（默认 `http://127.0.0.1:8765/`）。
 
-`straditize/` 子树是上游第三方 PyQt5 原版（Author: Philipp Sommer），**本项目不再维护、当前环境也缺依赖跑不起来**；
-它现在只作为教学图片资源被内置范例引用（`straditize/straditize/widgets/tutorial/`）。
+`straditize/` 是上游第三方 PyQt5 原版（Author: Philipp Sommer），**本项目不维护、当前环境缺依赖跑不起来**，
+仅作为内置范例的图片资源被引用。
 
-**数据来源不变量**：前端不存在任何替代数据通路。图谱分列、轮廓数字化、数据导出全部由后端真实计算；
-后端不可达时前端直接报错并停在原地，绝不返回替代数据（见 `RpcClient.call()` 与 `HANDOFF.md` 黑名单节）。
+**两条不可违反的不变量**（详见 `docs/ARCHITECTURE.md` §2、§9）：
+
+1. 面向用户的数据**只能来自后端对用户输入的真实计算**；取不到就报错并停在原地，绝不返回替代数据。
+2. 平移手势**全画布一致**：右键拖拽 / 中键拖拽 / 空格+左键，三者等价。
 
 ## 环境与依赖
 
@@ -18,59 +23,41 @@
 - 默认优先 PyPI wheel，以减小环境体积；只有 PyPI 不可用或缺少系统/原生依赖时才放入 `[dependencies]`（conda-forge）。
 - 修改 `pixi.toml` 后运行 `pixi install` 并检查 `pixi.lock` 的变化。
 - Python 包安装使用 Pixi 任务或 `pixi run python -m pip`，不要直接污染全局环境。
+- `frontend/dist` 不入库且被 `pyproject.toml` 排除，**全新克隆必须先构建前端**；Node.js ≥ 20 是运行必需。
 
 ## 常用命令
 
 ```bash
-pixi run install          # 源码 editable 安装
-pixi run test             # pytest 全量测试
-pixi run lint             # ruff 检查
+# 质量门禁
+pixi run lint             # ruff 检查（straditize_core + tests）
 pixi run format           # ruff 格式化
-pixi run desktop          # 启动现代版（桌面模式：自动开浏览器 + 顶栏有退出按钮）
-pixi run rpc-server       # 启动现代版（服务器模式：固定 8765，无退出按钮）
+pixi run test             # pytest 全量后端测试
 pixi run frontend-dev     # 前端开发服务器（vite:5173，已配好到 8765 的代理）
+
+# 构建与启动
+npm --prefix frontend run build   # 前端产物 → frontend/dist（后端据此托管界面）
+pixi run desktop          # 现代版桌面模式（自动开浏览器 + 顶栏退出按钮）
+pixi run rpc-server       # 现代版服务器模式（固定 8765，无退出按钮）
+pixi run build-windows    # PyInstaller 独立分发包
 ```
 
-⚠️ `pixi run run-straditize`（即 `python -m straditize`）启动的是**上游 PyQt5 原版**，不是本项目维护的现代版，
-且当前环境缺 `docrep` 等依赖会直接报错。命令名有误导性，不要用它验证现代版功能。
+前端另有两份锁文件（`package-lock.json` 供 CI/npm，`pnpm-lock.yaml` 供 pixi 任务），改动依赖时需同时照顾。
 
-## 远程访问（前后端在不同电脑）
+⚠️ 两个陷阱命令：
 
-**推荐 SSH 隧道**：后端只监听回环、不对外暴露，流量加密，且无需改动任何防火墙规则。
-
-```bash
-# 在笔记本上执行：把台式机的 8765 映射到本机 8765
-ssh -L 8765:127.0.0.1:8765 用户@台式机
-# 然后在同一台笔记本的浏览器打开
-http://127.0.0.1:8765/
-```
-
-浏览器看到的是**同源** `127.0.0.1:8765`，前端自动连 `${origin}/rpc`，示例图走 `${origin}/image/current`，
-因此无需 token、无需 `--host`、无需放行防火墙入站规则。
-
-**不要**用 `--host 0.0.0.0` 把后端直接暴露到局域网：后端**没有任何认证**，
-局域网内任何人都能操作并下载你的导出数据。
-
-### 访问控制模型（`straditize_core/rpc_server.py`）
-
-| 校验 | 目的 |
-| --- | --- |
-| `Host` 必须是回环（或显式绑定的主机） | 阻断 DNS rebinding：攻击者域名解析到 127.0.0.1 时 Origin 与 Host 会同时是攻击者域名，仅比对二者会被绕过 |
-| `Origin` 若存在，必须与请求自身 Host 同源（或命中 `allow_origins` 白名单） | 阻断 CSRF；浏览器对**同源 POST 也会发送 Origin**，故同源必须放行 |
-| 绝不回显 `Access-Control-Allow-Origin: *` | 历史上该头使**用户浏览的任意网页都能读写本机后端**（CORS 允许读取响应），既可窃取载入的图谱与数字化数据，也可篡改会话 |
-
-**不要为了开发方便把跨源放开为通配符。** 开发模式（`pixi run frontend-dev`）已在
-`frontend/vite.config.ts` 配置到 8765 的代理，浏览器端始终同源。注意代理的 `changeOrigin` 必须为 `false`，
-否则 Host 被改写成 127.0.0.1:8765 而 Origin 仍是 localhost:5173，同源校验会（正确地）拒绝该请求。
+- `pixi run run-straditize`（`python -m straditize`）启动的是**上游 PyQt5 原版**，不是现代版，且当前环境缺 `docrep` 会直接报错。
+- `pixi run test-legacy` 需要上述遗留依赖，当前环境不可用。
 
 ## 修改规范
 
 - 先读相关模块和测试，再修改；优先补充回归测试。
 - 不擅自删除或重命名公共 API。
-- 捕获具体异常类型；顶层 GUI 主循环如需兜底必须记录异常。
-- 修改数据持久化、交互事件或 Qt 信号时，必须覆盖旧文件兼容性和边界行为。
+- **前端错误必须冒泡到用户**：后端失败、契约不符一律显式报错；禁止静默兜底或替代数据（`docs/ARCHITECTURE.md` §2）。
+- 改 **RPC 契约**（方法名 / 参数名 / 返回字段）必须同步前端、测试与 `docs/ARCHITECTURE.md`。
+  —— 历史事故：前端发 `x_bounds` 而后端要 `data_xlim`，被静默兜底掩盖很久。
+- 交互/键位变更必须同步全部画布与所有 tooltip / 注释 / 文档，不允许残留旧说法。
 - 不提交 `.pixi/`、缓存、构建产物和本地 IDE 状态。
-- 不自动执行破坏性 Git 操作；提交前保留用户现有修改。
+- 不自动执行破坏性 Git 操作；提交前保留他人的未提交修改。
 
 ## 验收门槛
 
@@ -78,29 +65,20 @@ http://127.0.0.1:8765/
 
 1. `pixi run lint`
 2. `pixi run test`
+3. `npm --prefix frontend run build`（含 `tsc` 类型检查）
+4. 改动前端逻辑时另跑 `npm --prefix frontend test`
 
-GUI 测试在无显示环境失败时，记录 `QT_QPA_PLATFORM=offscreen` 或具体失败原因，不把环境限制误判为代码回归。
+CI（`.github/workflows/ci.yml`）执行的就是前三条；本地跑通这三条即与 CI 一致。
 
-## 会话交接制度（冷热分层 + 分节追加）
-跨会话状态交接以项目根目录 `HANDOFF.md` 为唯一状态单一事实源（Hot SSOT）。**收工采用「分节追加」：只增改自己那一节，严禁整文件覆盖或改写他人的节**（多 agent 并发时防互相抹除）。全文物理行数严格限制在 30 行以内（~300 tokens），单节 ≤8 行；超限时把最旧的节整段移入 `HANDOFF-archive/`（只增不减）。
+## 会话交接（项目特定部分）
 
-### 1. 标准触发口令与动作
-- **「接盘开工」/「继续」**（零噪音开工）：
-  1. 仅读 `HANDOFF.md` 微状态卡；
-  2. 运行卡片中的一键验证命令确认断点现场；
-  3. 简短汇报「当前断点 + 马上改动的文件」，立即动笔，不讲套话。
-- **「收工交接」**（分节追加）：
-  1. 运行项目验证命令（lint/test/build）；
-  2. 提取当前具体停滞断点（精确到相对文件路径与行号）；
-  3. 按 `## [标签] 时间 — 主题` 找到自己的节就地更新，无则追加新节；**只动自己那一节**，并刷新头部「更新时间 / 当前结果」行；
-  4. 自检全文行数并汇报：`HANDOFF.md 已更新（XX 行，符合 ≤30 行规范）`；若超 30 行，把最旧的节整段移入 `HANDOFF-archive/`。
+规则与触发口令以全局 `~/.dsh/AGENTS.md` 为准，此处只记本项目特有的落点：
 
-### 2. 卡片结构（分节）
-- **头部**（共享，各节都可刷新状态行）：更新时间 / 分支 / 一键验证命令 / 当前结果；
-- **分节**（每会话每工作流一节，≤8 行）：`## [标签] 时间 — 主题`，内含「停滞断点 / 下一步」；
-- **黑名单节**（跨会话共享，只追加不覆盖）；
-- 每节只写特定落点：文件路径 + 行号，不写代码、不写日志、不写表格。
+- 单一事实源：项目根 `HANDOFF.md`；全文 ≤ **50 行**，单节 ≤ 8 行，超限把最旧节整段移入 `HANDOFF-archive/`。
+- **只改自己那一节**，严禁整文件覆盖或改写他节（本仓库长期多会话并发）。
+- 黑名单节只追加不覆盖；冷历史（复盘、归档）只增不减、日常不加载。
 
-### 3. 约束与冷历史
-- 工件指针原则：只记相对路径与行号，严禁大段复述代码、控制台完整日志或表格；
-- 冷历史留痕：历史细节留痕依赖 Git commit；重大阶段性复盘归档至 `HANDOFF-archive/`（只增不减，日常绝不加载）。
+## 索引
+
+- 设计规范：`docs/ARCHITECTURE.md` ｜ 交接卡：`HANDOFF.md` ｜ 历史归档：`HANDOFF-archive/`
+- 协议规范：`docs/JSON_RPC_SPECIFICATION.md` ｜ 教程：`docs/tutorials/`

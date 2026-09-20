@@ -20,6 +20,10 @@
 
 ---
 
+> **文档导航**：本文面向使用者；开发者另有
+> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)（架构与设计规范 · 活文档）与
+> [`AGENTS.md`](AGENTS.md)（开发操作手册）；跨会话开发断点见 `HANDOFF.md`。
+
 ## 📖 项目简介 (Overview)
 
 **Straditize Pro** 是针对地质剖面图、沉积物花粉图谱、地球化学指标以及年代-深度序列图表专门重构的数字化科研软件。
@@ -32,6 +36,15 @@
 - **在线文档与教程**：GitHub Pages 提供官方文档与图文实战教程。
   ⚠️ 原「免安装在线体验 Demo」已**下架**：该产物是一份早期构建快照，其内部保留了已被删除的示例数据通路，
   会向访问者展示并非由真实算法产出的结果。在线演示将改为「预置真实工程 + 只读浏览」的形式后再重新上线。
+
+### 数据可信度：不存在替代数据通路
+
+面向用户的数据**只有唯一合法来源：后端对用户输入的真实计算**。取不到就报错并停在原地。
+
+这不是口号，而是被测试守卫的架构不变量（`tests/test_no_fabrication.py`）：
+历史上曾有"算法失败时用等分切割冒充识别结果 / 用随机抖动冒充提取曲线 / 用固定名单冒充 OCR 识别 /
+用前端自算 CSV 冒充导出"等通路，现已全部**物理删除**而非仅加开关关闭。
+详见 `docs/ARCHITECTURE.md` §2。
 
 ---
 
@@ -63,7 +76,7 @@
 - **绿色原位半透明重叠层 (Visual Ghosting)**：数字化结果以半透明绿多边形原位叠加在底图黑白墨迹上方，肉眼秒级核对吻合度；
 - **Radon 变换微斜角检测与矫正**：400ms 内求出图像扫描微小倾斜角并提供一键水平矫正；
 - **全景 Minimap 缩略雷达导航**：右下角常驻 160×120px 缩略雷达，当前视口白框高亮，支持点击拖拽平滑漫游；
-- **左右抽屉防丢拉环**：侧边栏与属性检查器折叠后，边缘常驻实体把手 `[› 属种清单]` 与 `[‹ 属性检查器]`，配合快捷键 `[` / `]` 双重保障；
+- **左右抽屉防丢拉环**：侧边栏与属性检查器折叠后，边缘常驻实体把手 `[› 属种清单]` 与 `[‹ 属性检查器]`，配合快捷键 `Ctrl+[` / `Ctrl+]` 双重保障；
 - **100% 丰度总和自检门禁**：导出前自动计算各层位加和，偏离 100% 醒目警示，支持在双向冻结（表头与 Depth 列固定）表格中就地在线改数。
 
 ### 4. 研发发表级成果导出 (WPD-Aligned Exporter)
@@ -81,7 +94,7 @@
 
 ### 环境要求
 - **Python**: `>= 3.12`
-- **Node.js**: `>= 20` (仅开发或二次编译前端需要)
+- **Node.js**: `>= 20`（**运行必需**：前端产物 `frontend/dist` 不入库，需本地构建后由后端托管）
 - **包管理器**: 推荐使用 [Pixi](https://pixi.sh) (一键配置 C/C++ 与 Python 依赖)
 
 ### 1. 源码克隆与环境就绪
@@ -89,8 +102,13 @@
 git clone https://github.com/chmzs/straditize-pro.git
 cd straditize-pro
 
-# 安装并同步项目环境 (自动包含 NumPy, SciPy, scikit-image 等依赖)
+# 1.1 安装 Python 后端与科学计算依赖 (NumPy / SciPy / scikit-image 等)
 pixi run install
+
+# 1.2 构建前端界面产物 → frontend/dist
+#     该目录不入库，跳过这步后端将托管不到任何界面
+npm --prefix frontend install
+npm --prefix frontend run build
 ```
 
 ### 2. 启动方式
@@ -179,9 +197,11 @@ http://127.0.0.1:8765
 straditize-pro/
 ├── .github/
 │   └── workflows/                # GitHub Actions CI 与 Pages 自动化工作流
-├── docs/                         # 官方文档与 GitHub Pages 在线展示站点
-│   ├── index.html                # GitHub Pages 官网主页与教程入口
+├── docs/                         # 官方文档与 GitHub Pages 站点
+│   ├── ARCHITECTURE.md           # 架构与设计规范 (活文档：不变量 / 交互规范 / 数据流)
 │   ├── JSON_RPC_SPECIFICATION.md # 核心 JSON-RPC 2.0 通信协议规范
+│   ├── TASK_SPEC_V2_FINAL.md     # 早期需求任务书 (历史件，不再更新)
+│   ├── index.html                # GitHub Pages 官网主页与教程入口
 │   └── tutorials/                # 图文科研实战教程
 ├── frontend/                     # 现代 Web 前端 (Vite + TypeScript)
 │   ├── src/
@@ -189,17 +209,18 @@ straditize-pro/
 │   │   ├── core/                 # 坐标真相源、历史管理、样条插值器、POSIX Tar 归档器
 │   │   ├── services/             # JSON-RPC 客户端与同源自适应探测
 │   │   └── types/                # 前端地学数据模型接口
-│   └── dist/                     # 预编译好的纯静态 SPA 生产产物
+│   └── dist/                     # 前端构建产物 (不入库；由 npm run build 生成，后端据此托管界面)
 ├── straditize_core/              # 现代版纯无 GUI 算力内核 (本项目维护)
 │   ├── calibration.py            # LinearCalibration 与 LogCalibration 核心类
 │   ├── curve.py                  # 显著度拐点提取与 RDP 轮廓压缩
 │   ├── columns.py                # 分列线与基准纵线探测
 │   ├── image.py                  # 图像去网格、二值化、色彩掩膜
 │   ├── age_depth.py              # 年代-深度模型识别、提取与不确定性映射
+│   ├── ocr/                      # OCR 识别与科属中拉丁词典
 │   ├── rpc_server.py             # HTTP / Stdio 双协议服务、访问控制与静态资源托管
 │   └── session.py                # 会话状态机、数据求交与 POSIX UStar 导出
+├── support/                      # 现代版打包配方 (PyInstaller spec) 与数据同步脚本
 ├── straditize/                   # 上游第三方 PyQt5 原版 (不维护；仅提供范例示例图片)
-│   └── support/                  # PyInstaller 独立打包配方与产物
 ├── tests/                        # 真实浏览器与端到端自动化测试
 │   ├── verify_browser_playwright_e2e.py # Playwright 真实 MS Edge 浏览器 E2E 交互测试
 │   ├── verify_straditize_pro_e2e.py     # 科学求交与坐标真相源端到端测试
@@ -215,27 +236,32 @@ straditize-pro/
 
 ## 🧪 测试与质量验证 (Testing & Verification)
 
-项目内置了从底层数学到真实浏览器的三层金字塔自动化测试验证体系：
+三层验证体系：**数学内核单元测试 → 端到端集成测试 → 真实浏览器交互测试**。
+以下四条与 CI（`.github/workflows/ci.yml`）一致，可在仓库根目录直接执行：
 
 ```bash
-# 1. 全量测试 (核心算法 / JSON-RPC / 端到端 / 年龄模型 / OCR / 组件管理等)
+# 1. 后端全量测试 (核心算法 / JSON-RPC / 端到端 / 年龄模型 / OCR / 组件管理等)
 pixi run test
 
-# 2. 代码质量检查 (Ruff Linter)
+# 2. 代码质量检查 (Ruff)
 pixi run lint
 
-# 3. 前端核心功能自检 (Node)
-cd frontend && npm test
+# 3. 前端类型检查与构建 (tsc + vite)
+npm --prefix frontend run build
+
+# 4. 前端核心功能自检 (Node)
+npm --prefix frontend test
 ```
 
-> 上述命令均可在仓库根目录直接执行。注意现代版测试位于仓库根 `tests/`，
-> 而非上游遗留的 `straditize/tests/`（后者只包含那条 PyQt5 分支自己的测试，当前环境跑不起来）。
+> 现代版测试位于仓库根 `tests/`，而非上游遗留的 `straditize/tests/`
+> （后者只属于那条 PyQt5 分支，当前环境缺依赖跑不起来）。
+> 其中 `tests/test_no_fabrication.py` 专门守卫"不得返回替代数据"这条不变量。
 
 ---
 
 ## 📄 许可证与引用 (License & Citation)
 
-本项目遵循 **GNU General Public License v3.0 (GPL-3.0)** 开源。
+本项目遵循 **GNU General Public License v3.0 or later (GPL-3.0-or-later)** 开源。
 
 如在古生态学、地质学、第四纪环境演变或古气候重建研究中使用了 Straditize Pro，欢迎引用本项目或原始文献：
 - **Straditize Pro v2.0**: [https://github.com/chmzs/straditize-pro](https://github.com/chmzs/straditize-pro)
