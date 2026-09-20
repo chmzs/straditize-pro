@@ -491,5 +491,83 @@ class TestChromaticMedianLine(unittest.TestCase):
         self.assertLess(float(np.percentile(np.abs(rel), 95)), 0.05)
 
 
+class TestChannelOverride(unittest.TestCase):
+    """The channel can be forced, and forcing it wrong must fail loudly, not quietly."""
+
+    def _bacon_lithology(self):
+        img = Image.open(FIGURE_DIR / "bacon_lithology.jpg").convert("RGB")
+        cal = AgeDepthAxisCalibrator(
+            depth_px=[100.0, 865.0], depth_vals=[0.0, 150.0],
+            age_px=[148.0, 733.0], age_vals=[0.0, 9000.0],
+        )
+        return img, cal
+
+    def _bacon_grey(self):
+        img = Image.open(FIGURE_DIR / "bacon_szek.png").convert("RGB")
+        cal = AgeDepthAxisCalibrator(
+            depth_px=[32.0, 668.0], depth_vals=[0.0, 150.0],
+            age_px=[110.0, 803.5], age_vals=[3000.0, 0.0],
+        )
+        return img, cal
+
+    def test_auto_and_forced_chroma_agree(self):
+        img, cal = self._bacon_lithology()
+        auto = extract_age_depth_model(img, cal, depth_range=(0.0, 160.0))
+        forced = extract_age_depth_model(
+            img, cal, depth_range=(0.0, 160.0), curve_channel="chroma"
+        )
+        self.assertEqual(auto.curve_channel, "chroma")
+        self.assertEqual(forced.curve_channel, "chroma")
+        self.assertAlmostEqual(
+            float(np.median(np.asarray(auto.ages))), float(np.median(np.asarray(forced.ages))), places=6
+        )
+        self.assertIn("forced", forced.curve_channel_reason)
+
+    def test_forced_darkness_is_honoured_and_worse(self):
+        """Forcing the wrong channel must be allowed, and visibly worse."""
+        img, cal = self._bacon_lithology()
+        forced = extract_age_depth_model(
+            img, cal, depth_range=(0.0, 160.0), curve_channel="darkness"
+        )
+        self.assertEqual(forced.curve_channel, "darkness")
+        self.assertIn("forced", forced.curve_channel_reason)
+
+    def test_forced_chroma_without_a_chromatic_stroke_is_refused(self):
+        img, cal = self._bacon_grey()
+        with self.assertRaises(ValueError) as ctx:
+            extract_age_depth_model(img, cal, depth_range=(0.0, 160.0), curve_channel="chroma")
+        self.assertIn("would be interpolated", str(ctx.exception))
+
+    def test_invalid_channel_value_is_refused(self):
+        img, cal = self._bacon_grey()
+        with self.assertRaises(ValueError) as ctx:
+            extract_age_depth_model(img, cal, depth_range=(0.0, 160.0), curve_channel="bogus")
+        self.assertIn("must be 'auto'", str(ctx.exception))
+
+    def test_observed_fraction_is_reported(self):
+        img, cal = self._bacon_grey()
+        model = extract_age_depth_model(img, cal, depth_range=(0.0, 160.0))
+        # A genuine trace observes nearly all of its own span; the remainder is interpolated.
+        self.assertGreater(model.observed_row_fraction, 0.5)
+        self.assertLessEqual(model.observed_row_fraction, 1.0)
+        payload = model.to_inspection_data()
+        self.assertIn("observed_row_fraction", payload["metadata"])
+        self.assertIn("curve_channel", payload["metadata"])
+
+    def test_mostly_interpolated_trace_is_refused(self):
+        """A trace built from a handful of rows must not be returned as a curve.
+
+        The chroma channel on a greyscale figure finds a few dozen stray chromatic pixels.
+        Interpolating between them would produce a smooth-looking curve that is almost
+        entirely invented, and nothing downstream could tell.
+        """
+        img, cal = self._bacon_grey()
+        with self.assertRaises(ValueError) as ctx:
+            extract_age_depth_model(img, cal, depth_range=(0.0, 160.0), curve_channel="chroma")
+        message = str(ctx.exception)
+        self.assertIn("only observed", message)
+        self.assertIn("interpolated rather than traced", message)
+
+
 if __name__ == "__main__":
     unittest.main()
