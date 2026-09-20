@@ -29,7 +29,9 @@
 **Straditize Pro v2.0** 彻底重构了底层架构：
 - **纯 Python 内核 (`straditize_core`)**：剥离所有桌面 GUI 与 Matplotlib 依赖，沉淀为基于 NumPy、SciPy 与 scikit-image 的高性能算力引擎，通过标准 JSON-RPC 2.0 协议向外提供服务；
 - **现代 Web 前端 (`frontend`)**：采用 TypeScript 与原生 HTML5 Canvas 2D 视口，提供 120 FPS 平滑漫游、视网膜 DPR 自适应、高对比度色盲友好配色与对齐 WebPlotDigitizer (WPD) 的科学导出能力；
-- **在线体验与教程**：支持通过 GitHub Pages 直接免安装在线体验交互 Demo 与操作教程。
+- **在线文档与教程**：GitHub Pages 提供官方文档与图文实战教程。
+  ⚠️ 原「免安装在线体验 Demo」已**下架**：该产物是一份早期构建快照，其内部保留了已被删除的示例数据通路，
+  会向访问者展示并非由真实算法产出的结果。在线演示将改为「预置真实工程 + 只读浏览」的形式后再重新上线。
 
 ---
 

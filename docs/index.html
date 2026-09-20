@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Straditize Pro v2.0 - 专业地层花粉与古气候图表数字化解译系统</title>
-  <link rel="icon" href="./demo/favicon.ico" />
+  <link rel="icon" type="image/svg+xml" href="./assets/logos/logo-icon.svg" />
   <style>
     :root {
       --bg-base: #0a0e17;
@@ -70,20 +70,6 @@
       transition: color 0.2s;
     }
     nav a:hover { color: var(--accent-primary); }
-    .btn-nav-demo {
-      background: var(--accent-gradient);
-      color: #fff !important;
-      padding: 6px 14px;
-      border-radius: 6px;
-      font-weight: 600;
-      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
-      transition: transform 0.15s, box-shadow 0.15s;
-    }
-    .btn-nav-demo:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 20px rgba(56, 189, 248, 0.45);
-    }
-
     /* Hero 区域 */
     .hero {
       max-width: 1100px;
@@ -291,7 +277,6 @@
       <a href="#features">核心特性</a>
       <a href="./tutorials/01_quickstart.md">科研教程</a>
       <a href="https://github.com/chmzs/straditize-pro" target="_blank">GitHub</a>
-      <a href="./demo/" class="btn-nav-demo">🚀 在线体验 Demo</a>
     </nav>
   </header>
 
@@ -307,12 +292,9 @@
       彻底告别传统 PyQt 桌面图形包卡顿与模糊。基于统一数学真相源、两点式物理标定、等深横向几何求交与 WPD 级多格式导出，专为第四纪古生态学与地质科学打造。
     </p>
     <div class="hero-actions">
-      <a href="./demo/" class="btn-primary">
-        <span>🚀 免安装在线体验 Demo (Live)</span>
-        <span>&rarr;</span>
-      </a>
-      <a href="./tutorials/01_quickstart.md" class="btn-secondary">
+      <a href="./tutorials/01_quickstart.md" class="btn-primary">
         <span>📖 快速上手实战教程</span>
+        <span>&rarr;</span>
       </a>
       <a href="https://github.com/chmzs/straditize-pro" target="_blank" class="btn-secondary">
         <span>⭐ 查看 GitHub 源码</span>
@@ -323,7 +305,7 @@
   <!-- 预览画廊 -->
   <section class="preview-container">
     <div class="preview-card">
-      <img src="../real_browser_playwright_verified.png" alt="Straditize Pro 界面实测" />
+      <img src="./assets/real_browser_playwright_verified.png" alt="Straditize Pro 界面实测" />
     </div>
   </section>
 
