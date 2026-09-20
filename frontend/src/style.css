@@ -158,8 +158,9 @@ body.theme-light .btn-group {
 }
 
 body.theme-light .tool-btn:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.05);
-  color: #111827;
+  background: rgba(2, 132, 199, 0.10);
+  border-color: rgba(2, 132, 199, 0.35);
+  color: var(--accent-blue);
 }
 
 body.theme-light .btn-sidebar-action {
@@ -477,8 +478,9 @@ body.theme-light .brand-icon-rect {
 }
 
 .tool-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: var(--accent-blue);
 }
 
 .tool-btn:active:not(:disabled) {
@@ -959,17 +961,26 @@ body.theme-light .minimap-header {
 }
 
 .minimap-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
   cursor: pointer;
-  padding: 0 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
   font-size: 11px;
-  line-height: 1;
+  line-height: 1.4;
+  transition: all 0.15s ease;
 }
 
 .minimap-btn:hover {
-  color: var(--text-primary);
+  background: rgba(56, 189, 248, 0.14);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+body.theme-light .minimap-btn {
+  background: #f1f3f5;
+  border-color: #cbd5e1;
 }
 
 .minimap-body {
@@ -1361,19 +1372,44 @@ body.theme-light .taxa-card.compact-taxa-row.active {
 
 .icon-btn {
   background: transparent;
-  border: none;
-  color: var(--text-muted);
+  border: 1px solid transparent;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: 5px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.15s ease;
 }
 
 .icon-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--accent-blue);
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+/* 面板级折叠按钮：给足容器与点击区，消除"看不见的按钮" */
+.icon-btn.panel-toggle {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  min-width: 28px;
+  min-height: 28px;
+  padding: 6px;
+  border-radius: 6px;
+}
+
+.icon-btn.panel-toggle:hover {
+  background: rgba(56, 189, 248, 0.14);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+body.theme-light .icon-btn.panel-toggle {
+  background: #f1f3f5;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .icon-btn.visible {

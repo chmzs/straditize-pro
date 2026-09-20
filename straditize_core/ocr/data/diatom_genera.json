@@ -1,0 +1,1620 @@
+{
+ "source": {
+  "inland": "http://plant.yic.ac.cn/microalgae/diatom/key/inland.php",
+  "marine": "http://plant.yic.ac.cn/microalgae/diatom/key/marine.php",
+  "inland_classification": "Round (1990), translated from Kociolek et al. (2003); 152 genera",
+  "marine_classification": "金德祥 (1982), amended from 金德祥 (1965) and 杨树民/董树刚 (2006); 114 genera",
+  "harvested_by": "support/harvest_diatom_genera.py"
+ },
+ "genera": [
+  {
+   "latin": "Aalafia",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Acanthoceras",
+   "zh": "四棘藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Achnanthes",
+   "zh": "曲壳藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Achnanthidium",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Actinella",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Actinocyclus",
+   "zh": "辐环藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Actinoptychus",
+   "zh": "辐裥藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Amphicampa",
+   "zh": "双弯藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Amphipleura",
+   "zh": "双肋藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Amphiprora",
+   "zh": "茧形藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Amphora",
+   "zh": "双眉藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Amphorotia",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Anaulus",
+   "zh": "无管藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Aneumastus",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Anomoeoneis",
+   "zh": "花舟藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Anorthoneis",
+   "zh": "偏缝藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Arachnoidiscus",
+   "zh": "蛛网藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Asterionella",
+   "zh": "星形藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Asterolampra",
+   "zh": "星纹藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Asteromphalus",
+   "zh": "星脐藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Attheya",
+   "zh": "四棘藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Aulacodiscus",
+   "zh": "沟盘藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Aulacoseira",
+   "zh": "沟链藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Auliscus",
+   "zh": "眼纹藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Auricula",
+   "zh": "耳形藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Bacillaria",
+   "zh": "棍形藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Bacteriastrum",
+   "zh": "辐杆藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Bellerochea",
+   "zh": "中鼓藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Berkeleya",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Biddulphia",
+   "zh": "盒形藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Biremis",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Boreozonacola",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Brachysira",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Brevilinea",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Brevisira",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Caloneis",
+   "zh": "美壁藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Campylodiscus",
+   "zh": "马鞍藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Campyloneis",
+   "zh": "鞍形藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Capartogramma",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Cavinula",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Cerataulina",
+   "zh": "角管藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Cerataulus",
+   "zh": "角状藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Ceratoneis",
+   "zh": "蛾眉藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Chaetoceros",
+   "zh": "角毛藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Chamaepinnularia",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Cistula",
+   "zh": "小箱藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Climacodium",
+   "zh": "梯形藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Climacosphenia",
+   "zh": "梯楔藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Cocconeis",
+   "zh": "卵形藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Corethron",
+   "zh": "环毛藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Coscinodiscus",
+   "zh": "圆筛藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Coscinosira",
+   "zh": "筛链藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Cosmioneis",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Craticula",
+   "zh": "杯状藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Ctenophora",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Cyclostephanos",
+   "zh": "环冠藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Cyclotella",
+   "zh": "小环藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Cyclotubicoalitus",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Cylindrotheca",
+   "zh": "细纹藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Cymatopleura",
+   "zh": "波缘藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Cymatosira",
+   "zh": "波纹藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Cymbella",
+   "zh": "桥弯藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Cymbellafalsa",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Cymbellonitzschia",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Cymbopleura",
+   "zh": "弯肋藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Dactyliosolen",
+   "zh": "指管藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Decussata",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Delicata",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Denticula",
+   "zh": "细齿藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Desmogonium",
+   "zh": "端节藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Diadesmis",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Diatoma",
+   "zh": "等片藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Diatomella",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Didymosphenia",
+   "zh": "双楔藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Diploneis",
+   "zh": "双壁藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Discostlla",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Distrionella",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Ditylum",
+   "zh": "双尾藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Ellerbeckia",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Encyonema",
+   "zh": "内丝藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Encyonopsis",
+   "zh": "尖月藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Endictyca",
+   "zh": "内网藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Entomoneis",
+   "zh": "翼茧形藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Envekadea",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Eolimna",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Epithemia",
+   "zh": "窗纹藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Eucampia",
+   "zh": "弯角藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Eucocconeis",
+   "zh": "真卵形藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Eunoita",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Eunotia",
+   "zh": "短缝藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Fallacia",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Fistulifera",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Fragilaria",
+   "zh": "脆杆藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Fragilariforma",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Frickea",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Frustulia",
+   "zh": "肋缝藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Geissleria",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Gomphoeymbella",
+   "zh": "楔月形藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Gomphoneis",
+   "zh": "异楔藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Gomphonema",
+   "zh": "异极藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Gomphonitzschia",
+   "zh": "楔菱藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Gomphosphenia",
+   "zh": "楔异极藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Gossleriella",
+   "zh": "顾氏藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Grammatophora",
+   "zh": "斑条藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Guinardia",
+   "zh": "几内亚藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Gyrosigma",
+   "zh": "布纹藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Halamphora",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Handmannia",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Hannara",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Hantzschia",
+   "zh": "菱板藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Haslea",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Hemiaulus",
+   "zh": "半管藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Hemidiscus",
+   "zh": "半盘藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Hippodonta",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Humidophila",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Hyalodiscus",
+   "zh": "明盘藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Hydrosera",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Hygropetra",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Isthmia",
+   "zh": "扁梯藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Karayevia",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Kobayasiella",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Kolbesia",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Lauderia",
+   "zh": "屡氏藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Lemnicola",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Leptocylindrus",
+   "zh": "细柱藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Leudugera",
+   "zh": "刘氏藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Licmophora",
+   "zh": "楔形藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Luticola",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Mastogloia",
+   "zh": "胸隔藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Mastogonia",
+   "zh": "乳头藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Mayamaea",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Melosira",
+   "zh": "直链藻属",
+   "habitat": "both",
+   "rank": [
+    "Coscinodiscophyceae",
+    "Coscinodiscophycidae",
+    "Melosirales",
+    "Melosiraceae"
+   ],
+   "family": "Melosiraceae"
+  },
+  {
+   "latin": "Meridiom",
+   "zh": "扇形藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Meridion",
+   "zh": "扇形藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Mesodictyon",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Microcostatus",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Muelleria",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Navicula",
+   "zh": "舟形藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Navicymbula",
+   "zh": "舟形桥弯藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Neidiomorpha",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Neidiopsis",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Neidium",
+   "zh": "长篦藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Nitzschia",
+   "zh": "菱形藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Nupela",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Orthoseira",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Oxyneis",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Parlibellus",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Peronia",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Phaeodactylum",
+   "zh": "褐指藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Pinnularia",
+   "zh": "羽纹藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Placoneis",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Plagiogramma",
+   "zh": "斜斑藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Plagiotropis",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Planktoniella",
+   "zh": "漂流藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Planothidium",
+   "zh": "平面藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Playaensis",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Pleurosigma",
+   "zh": "斜纹藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Pleurosira",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Pliocaenicus",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Podocystis",
+   "zh": "足囊藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Podosira",
+   "zh": "柄链藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Prestauroneis",
+   "zh": "类辐节藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Proschkinia",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Psammodictyon",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Psammothidium",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Pseudo-Eunotia",
+   "zh": "拟短缝藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Pseudo-Nitzschia",
+   "zh": "拟菱形藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Pseudostaurosira",
+   "zh": "拟辐节藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Pulchella",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Punctastriata",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Pyxidicula",
+   "zh": "圆箱藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Raphidodiscus",
+   "zh": "缝盘藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Reimeria",
+   "zh": "瑞氏藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Rexlowea",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Rhabdomema",
+   "zh": "杆线藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Rhaphoneis",
+   "zh": "缝舟藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Rhizosolenia",
+   "zh": "根管藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Rhoiconeis",
+   "zh": "弯卵藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Rhoicosphenia",
+   "zh": "弯楔藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Rhopalodia",
+   "zh": "棒杆藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Roperia",
+   "zh": "罗氏藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Rossithidium",
+   "zh": "钙丝藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Rutilaria",
+   "zh": "舟辐藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Schroederella",
+   "zh": "旭氏藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Scoliopleura",
+   "zh": "旋舟藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Sellaphora",
+   "zh": "鞍型藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Semiorbis",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Sieminskia",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Simonsenia",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Skeletonema",
+   "zh": "骨条藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Soliopleura",
+   "zh": "旋舟藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Spicaticribra",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Stauroforma",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Stauroneis",
+   "zh": "辐节藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Staurophora",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Staurosira",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Staurosirella",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Stenopterobia",
+   "zh": "长羽藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Stephanocostis",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Stephanodiscus",
+   "zh": "冠盘藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Stephanopyxis",
+   "zh": "冠盖藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Stictocyclus",
+   "zh": "斑环藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Stictodiscus",
+   "zh": "斑盘藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Stoermeria",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Strelnikoviella",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Streptotheca",
+   "zh": "扭鞘藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Striatella",
+   "zh": "条纹藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Surirella",
+   "zh": "双菱藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Synedra",
+   "zh": "针杆藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Tabellaria",
+   "zh": "平板藻属",
+   "habitat": "both",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Tabularia",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Terpsinoe",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Tertiarius",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Tetracyclus",
+   "zh": "四环藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Tetratella",
+   "zh": "四环藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Thalasiosira",
+   "zh": "海链藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Thalassionema",
+   "zh": "海线藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Thalassiosira",
+   "zh": "海链藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Thalassiothrix",
+   "zh": "海毛藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Trachyneis",
+   "zh": "粗纹藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Tropidoneis",
+   "zh": "龙骨藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Tryblionella",
+   "zh": "盘杆藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Tryblioptychus",
+   "zh": "摺盘藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Tubularia",
+   "zh": "管形藻属",
+   "habitat": "marine",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Ulnaria",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Urosolenia",
+   "zh": "尾管藻属",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  },
+  {
+   "latin": "Williamsella",
+   "zh": "",
+   "habitat": "inland",
+   "rank": [],
+   "family": ""
+  }
+ ],
+ "aliases": {
+  "Thalasiosira": "Thalassiosira",
+  "Bacteriastru": "Bacteriastrum",
+  "Eunoita": "Eunotia",
+  "Meridiom": "Meridion",
+  "Neidiun": "Neidium",
+  "Soliopleura": "Scoliopleura",
+  "Discostlla": "Discostella",
+  "Endictyca": "Endictya",
+  "Gomphoeymbella": "Gomphocymbella",
+  "Rhabdomema": "Rhabdonema",
+  "Leudugera": "Leudugeria",
+  "Tetratella": "Tetracyclus",
+  "Rhoiconeis": "Rhoicosphenia"
+ }
+}

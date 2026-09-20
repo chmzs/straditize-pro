@@ -69,7 +69,7 @@ export class Sidebar {
           <button id="btn-toggle-compact" class="tool-btn" style="padding: 2px 5px; font-size: 10px;" title="切换紧凑列表/详细卡片视图">
             ${this.isCompactView ? '☲ 卡片' : '≡ 紧凑'}
           </button>
-          <button id="btn-collapse-sidebar" class="icon-btn" title="收起侧边栏 (Ctrl+[)">
+          <button id="btn-collapse-sidebar" class="icon-btn panel-toggle" title="收起侧边栏 (Ctrl+[)">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 18 9 12 15 6"/>
             </svg>

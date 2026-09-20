@@ -129,6 +129,18 @@ async function bootstrap() {
     return;
   }
 
+  // 2.1 同步用户自定义属种词汇表到前端纠错词典。
+  //     前后端共用同一份词表，否则侧边栏"批量导入名单"认不出用户在
+  //     OCR 弹窗里补充的属种（例如盘星藻、摇蚊等 NPP 与地方特有种）。
+  try {
+    const synced = await rpcClient.syncCustomTaxaToGlossary();
+    if (synced > 0) {
+      console.info(`[bootstrap] 已载入 ${synced} 条用户自定义属种词汇`);
+    }
+  } catch (err) {
+    console.warn('[bootstrap] 自定义词汇表同步失败（不影响主流程）:', err);
+  }
+
   // 3. 初始化历史状态管理器 (支持 500 步命令撤销/重做)
   const history = new HistoryManager(500);
   history.reset(initialData.columns, initialData.activeTaxaId);

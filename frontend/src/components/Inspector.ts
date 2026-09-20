@@ -95,7 +95,7 @@ export class Inspector {
           </svg>
           <span>属性检查器</span>
         </div>
-        <button id="btn-collapse-inspector" class="icon-btn" title="收起/展开面板 (快捷键: Ctrl+])">
+        <button id="btn-collapse-inspector" class="icon-btn panel-toggle" title="收起/展开面板 (快捷键: Ctrl+])">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"/>
           </svg>

@@ -3,6 +3,8 @@
  * 标准化古生态/花粉属种拉丁学名词典与 OCR 常见错别字模糊纠错引擎
  */
 
+import { DIATOM_GENERA, DIATOM_SOURCE_ALIASES } from './diatomGenera.ts';
+
 export interface TaxaParseResult {
   original: string;
   corrected: string;
@@ -228,20 +230,207 @@ export class PollenGlossary {
     'Ophioglossum',
     'Sphagnum',
     'Bryophyta',
+
+    // ==================== 非花粉微体古生物 (NPP) ====================
+    // 绿藻类 (Green algae)
+    'Pediastrum',
+    'Pediastrum boryanum',
+    // Pediastrum 种下分类单元 (图版 I / II，中国与蒙古西部湖泊-水库表层沉积物常见)
+    'Pediastrum simplex var. simplex',
+    'Pediastrum simplex var. sturmmi',
+    'Pediastrum simplex var. clathratum',
+    'Pediastrum simplex var. biwaense',
+    'Pediastrum simplex var. echinulatum',
+    'Pediastrum duplex var. duplex',
+    'Pediastrum duplex var. gracillim',
+    'Pediastrum duplex var. rugulosum',
+    'Pediastrum tetras',
+    'Pediastrum boryanum var. boryanum',
+    'Pediastrum boryanum var. longicorne type 1',
+    'Pediastrum boryanum var. longicorne type 2',
+    'Pediastrum cf. argentinense',
+    'Pediastrum alternans',
+    'Pediastrum boryanum var. brevicorne',
+    'Pediastrum kawraiskyi',
+    'Pediastrum angulosum var. angulosum',
+    'Pediastrum asymmetricum',
+    'Botryococcus',
+    'Botryococcus braunii',
+    'Zygnema',
+    'Zygnema-type',
+    'Spirogyra',
+    'Mougeotia',
+    'Cosmarium',
+    'Staurastrum',
+    'Scenedesmus',
+    'Green algae',
+
+    // 硅藻类 (Diatoms)
+    'Diatom',
+    'Diatoms',
+    'Diatom frustule',
+    'Melosira',
+    'Cyclotella',
+    'Navicula',
+    'Pinnularia',
+    'Cymbella',
+    'Fragilaria',
+    'Asterionella',
+    'Synedra',
+    'Tabellaria',
+    'Gomphonema',
+    'Nitzschia',
+    'Coscinodiscus',
+
+    // 摇蚊 (Chironomidae)
+    'Chironomidae',
+    'Chironomid head capsule',
+    'Chironomid larva',
+    'Chironomus',
+    'Orthocladius',
+
+    // 介形虫 (Ostracoda)
+    'Ostracoda',
+    'Ostracod',
+    'Ostracod valve',
+    'Ilyocypris',
+    'Candona',
+    'Eucypris',
+    'Limnocythere',
+    'Leucocythere',
+    'Darwinula',
+    'Candoniella',
+
+    // 粪生真菌孢子 (Coprophilous fungal spores)
+    'Coprophilous fungal spore',
+    'Coprophilous fungi',
+    'Sporormiella',
+    'Sporormiella-type',
+    'Sordariaceae',
+    'Sordaria',
+    'Cercophora',
+    'Delitschia',
+    'Podospora',
+    'Chaetomium',
+    'Xylaria',
+    'Daldinia',
+    'Coniochaeta',
+    'Carbonicolous fungal spore',
+
+    // 其他微体指标 (Other NPP)
+    'Bryophyte spore',
+    'Sphagnum spore',
+    'Chrysophyte cyst',
+    'Sponge spicule',
+    'Cladocera',
+    'Testate amoeba',
+    'Rotifera',
+    'Insect remains',
+    'Plant tissue',
+
+    // 火事件与统计指标 (Fire & Metrics)
+    'Charcoal',
+    'Micro-charcoal',
+    'Macro-charcoal',
+    'Pollen Concentration',
+    'Total Pollen Sum',
+
+    // ==================== 硅藻属 (Diatom genera) ====================
+    // 自动注入自 ./diatomGenera（与后端 PollenDictionary 同一份词表）：
+    // 内陆/淡水 151 属 + 海洋 114 属，含源表拼写别名。
+    ...DIATOM_GENERA,
   ];
 
-  // 构建小写规范快速索引表
-  private static normalizedMap: Map<string, string> = new Map(
+  /** 源检索表中的拼写异名 -> 规范属名（如 Thalasiosira -> Thalassiosira） */
+  public static readonly SOURCE_ALIASES: Record<string, string> = DIATOM_SOURCE_ALIASES;
+
+  /**
+   * 内置词典的不可变索引。自定义词汇一律叠加在它之上，
+   * 需要「清空/覆盖」时直接由它重建，避免把内置词条一起抹掉。
+   */
+  private static readonly builtinMap: Map<string, string> = new Map(
     PollenGlossary.CANONICAL_TAXA.map((t) => [t.toLowerCase(), t])
   );
 
+  /** 当前生效的索引 = 内置词典 + 用户自定义扩展 */
+  private static normalizedMap: Map<string, string> = new Map(PollenGlossary.builtinMap);
+
+  /** 用户自定义扩展词汇 (内置词典之外追加，始终冗余保留，不会被覆盖) */
+  private static customTaxa: string[] = [];
+
   /**
-   * 清理并规范化原始输入字符串（移除 Markdown 斜体 *、下划线、编号前缀等）
+   * 设置用户自定义属种名，并保持与后端 `ocr.saveCustomTaxa` 的语义一致。
+   *
+   * @param names 全量自定义词汇
+   * @param mode `'append'` 在内置词典与已有自定义之上追加；
+   *             `'replace'` 先清空已有自定义再写入（内置词典不受影响）
+   * @returns 实际写入的条目数
+   */
+  public static setCustomTaxa(names: string[], mode: 'append' | 'replace' = 'append'): number {
+    if (mode === 'replace') {
+      this.clearCustomTaxa();
+    }
+    let added = 0;
+    for (const raw of names) {
+      const name = this.cleanRawName(raw);
+      if (!name) continue;
+      const key = name.toLowerCase();
+      const existing = this.normalizedMap.get(key);
+      if (existing === name) continue;
+      if (!this.customTaxa.includes(name)) {
+        this.customTaxa.push(name);
+      }
+      this.normalizedMap.set(key, name);
+      added++;
+    }
+    return added;
+  }
+
+  /**
+   * 清空用户自定义扩展，并把索引重置回纯内置词典。
+   *
+   * 由 `builtinMap` 重建而非逐个 delete：自定义词条可能以不同大小写覆盖过
+   * 内置键（用户输入 `pinus` vs 内置 `Pinus`），逐个删会把内置键一起删掉。
+   */
+  public static clearCustomTaxa(): void {
+    this.customTaxa = [];
+    this.normalizedMap = new Map(this.builtinMap);
+  }
+
+  /**
+   * 追加用户自定义属种名到纠错词典（`setCustomTaxa` 的追加模式快捷方式）。
+   * @returns 实际新增的条目数
+   */
+  public static addCustomTaxa(names: string[]): number {
+    return this.setCustomTaxa(names, 'append');
+  }
+
+  /** 返回当前已加载的用户自定义词汇 */
+  public static getCustomTaxa(): string[] {
+    return [...this.customTaxa];
+  }
+
+  /** 内置词典条目数 (不含用户自定义扩展) */
+  public static getBuiltinCount(): number {
+    return this.CANONICAL_TAXA.length;
+  }
+
+  /**
+   * 图版键匹配：独立单字母 + `)` `]` `、` 或 `.`（后接大写属名）。
+   * 前置否定环视是必需的：否则 `Pediastrum cf. argentinense` 里的 `f.`、
+   * `var.` 里的 `r.` 都会被当成图版键切掉。
+   */
+  private static readonly PLATE_KEY_RE = /(?<![A-Za-z])[a-zA-Z]\s*(?:[)\]。、]|\.(?=\s+[A-Z]))/g;
+
+  /**
+   * 清理并规范化原始输入字符串
+   * （移除 Markdown 斜体 *、下划线、前导编号、图版键 `a)` 等）
    */
   public static cleanRawName(raw: string): string {
     return raw
       .replace(/[*_~`"']/g, '') // 移除 Markdown 强调符号与引号
       .replace(/^[\d+.)\-•\s]+/, '') // 移除前导数字或项目符号，如 "1. " 或 "- "
+      .replace(/^[a-zA-Z]\s*[)\]。、]\s*(?=[A-Z\u4e00-\u9fff])/, '') // 移除期刊图版键，如 "a) "
       .replace(/\s+/g, ' ') // 多个空格合并为一个
       .trim();
   }
@@ -416,7 +605,17 @@ export class PollenGlossary {
   }
 
   /**
-   * 将用户从 Excel（单行制表符分隔/单列回车分隔）或 Word 文献复制的批量属种名进行切分并纠错
+   * 判断文本是否为期刊图版说明（含 `a)` / `b.` 等图版键）。
+   */
+  public static looksLikePlateCaption(input: string): boolean {
+    return /(?<![A-Za-z])[a-zA-Z]\s*(?:[)\]。、]|\.(?=\s+[A-Z]))/.test(input);
+  }
+
+  /**
+   * 将用户从 Excel（单行制表符分隔/单列回车分隔）、Word 文献，或
+   * 期刊图版说明（`a) Genus species; b) ...`，含属名中间的硬换行）复制的
+   * 批量属种名进行切分并纠错。
+   *
    * @param input 原始文本内容
    * @param enableFuzzy 是否启用花粉词典自动模糊纠错
    */
@@ -426,9 +625,18 @@ export class PollenGlossary {
   ): TaxaParseResult[] {
     if (!input || !input.trim()) return [];
 
+    let work = input;
+    if (this.looksLikePlateCaption(input)) {
+      // 图版说明：先折叠全部空白以修复属名中间的硬换行，
+      // 再把图版键替换成分隔符（而非按它切分）——否则 `c), d)` 这种
+      // 后一个键后面才跟大写属名的多键前缀会残留一个孤立的 `c)`。
+      work = input.replace(/\s+/g, ' ').replace(this.PLATE_KEY_RE, ';');
+      const firstSep = work.indexOf(';');
+      if (firstSep >= 0) work = work.slice(firstSep); // 丢弃图版键之前的标题文字
+    }
+
     // 切分正则：支持回车、换行、制表符、分号、逗号（非括号内）
-    // 先将回车、换行、制表符统一转为统一标记
-    const tokens = input
+    const tokens = work
       .split(/[\r\n\t;]+/)
       .flatMap((part) => {
         // 如果一行内含有逗号且不包含括号，则按逗号细分
@@ -437,7 +645,7 @@ export class PollenGlossary {
         }
         return [part];
       })
-      .map((s) => s.trim())
+      .map((s) => s.trim().replace(/[.。]$/, ''))
       .filter((s) => s.length > 0);
 
     return tokens.map((token) => {

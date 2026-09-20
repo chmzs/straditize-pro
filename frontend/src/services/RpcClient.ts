@@ -2,6 +2,44 @@ import { BackendStatus, JsonRpcRequest, JsonRpcResponse } from '../types/rpc';
 import { tError } from '../i18n/errorCodes';
 import { t } from '../i18n';
 import { Column, ControlPoint, DiagramData } from '../types/pollen';
+import { PollenGlossary } from '../core/PollenGlossary';
+
+/** 后端 ocr.getTaxaDict 的返回结构 */
+export interface TaxaDictEntry {
+  zh: string;
+  latin: string;
+  group: string;
+  family: string;
+}
+
+export interface TaxaDictSummary {
+  success: boolean;
+  path: string;
+  exists: boolean;
+  builtin_pollen_count: number;
+  builtin_npp_count: number;
+  custom: TaxaDictEntry[];
+  custom_count: number;
+}
+
+/** 后端 ocr.parseTaxaText 的返回结构 */
+export interface TaxaParseResult {
+  success: boolean;
+  entries: Array<{ zh_name: string; latin_name: string; group: string }>;
+  count: number;
+  /** 'figure_caption' 表示识别为期刊图版说明，'list' 为普通名单 */
+  format: 'figure_caption' | 'list';
+}
+
+/** 后端 ocr.saveCustomTaxa 的返回结构 */
+export interface TaxaSaveResult {
+  success: boolean;
+  path: string;
+  added: number;
+  skipped: string[];
+  custom_count: number;
+  entries: TaxaDictEntry[];
+}
 
 /**
  * 干净的初始状态工厂（不预置任何属种列、控制点或示例数据）。
@@ -371,6 +409,72 @@ export class RpcClient {
       throw new Error(tError(-32603, 'image.detectDeskew returned an unexpected payload'));
     }
     return res;
+  }
+
+  /**
+   * 获取当前词汇表概况：内置花粉 + 内置 NPP 条数，以及用户自定义条目。
+   */
+  public async getTaxaDict(): Promise<TaxaDictSummary> {
+    const res = await this.call<void, TaxaDictSummary>('ocr.getTaxaDict');
+    if (!res || !Array.isArray(res.custom)) {
+      throw new Error(tError(-32603, 'ocr.getTaxaDict returned an unexpected payload'));
+    }
+    return res;
+  }
+
+  /**
+   * 解析粘贴的词汇表文本（后端为唯一解析实现）。
+   *
+   * 支持三种形态：期刊图版说明（`a) Genus species; b) ...`，含硬换行与
+   * `c), d)` 多键前缀）、`中文名,拉丁名[,分组]`、单列名称。
+   */
+  public async parseTaxaText(text: string): Promise<TaxaParseResult> {
+    const res = await this.call<{ text: string }, TaxaParseResult>('ocr.parseTaxaText', { text });
+    if (!res || !Array.isArray(res.entries)) {
+      throw new Error(tError(-32603, 'ocr.parseTaxaText returned an unexpected payload'));
+    }
+    return res;
+  }
+
+  /**
+   * 保存用户自定义属种词汇表（追加或覆盖）。
+   *
+   * 传 `rawText` 时由后端解析（图版说明也能直接贴），传 `entries` 时按结构写入。
+   */
+  public async saveCustomTaxa(
+    payload: { rawText?: string; entries?: Array<{ zh_name?: string; latin_name?: string; group?: string }> },
+    options: { mode?: 'append' | 'replace'; clear?: boolean } = {}
+  ): Promise<TaxaSaveResult> {
+    const res = await this.call<
+      { entries?: unknown; raw_text?: string; mode: string; clear: boolean },
+      TaxaSaveResult
+    >('ocr.saveCustomTaxa', {
+      entries: payload.entries,
+      raw_text: payload.rawText,
+      mode: options.mode || 'append',
+      clear: options.clear ?? false,
+    });
+    // 前后端共用同一份词汇表。后端返回的 `entries` 是操作后的【全量】自定义集合，
+    // 所以这里按 replace 重建：追加模式下等价于并集，覆盖/清空模式下才能真正
+    // 删掉前端残留的旧条目（否则被后端清掉的词仍会被侧边栏"批量导入"纠出来）。
+    const names = (res.entries || [])
+      .map((e) => (e.latin || e.zh || '').trim())
+      .filter(Boolean);
+    PollenGlossary.setCustomTaxa(names, 'replace');
+    return res;
+  }
+
+  /**
+   * 拉取持久化的用户自定义词汇并注入前端纠错词典（会话启动时调用）。
+   *
+   * 同样按 replace 重建：启动时前端状态虽为初始态，但语义上后端才是权威。
+   */
+  public async syncCustomTaxaToGlossary(): Promise<number> {
+    const summary = await this.getTaxaDict();
+    const names = summary.custom
+      .map((item) => (item.latin || item.zh || '').trim())
+      .filter(Boolean);
+    return PollenGlossary.setCustomTaxa(names, 'replace');
   }
 
   public async rotateImage(angle: number): Promise<{ success: boolean; width: number; height: number }> {

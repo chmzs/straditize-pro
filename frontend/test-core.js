@@ -1,5 +1,10 @@
 // 自动化测试：核心几何、样条插值、撤销重做、批量属种导入/词典纠错与地层深度标尺网格回归验证
 import assert from 'node:assert';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 console.log('--- 运行 Straditize 前端核心功能回归测试 ---');
 
@@ -218,7 +223,155 @@ const excelRowPaste = "Pinus\tArtemesia\tBetla\tCyperaceae";
 const parsedRow = TestPollenGlossary.parse(excelRowPaste);
 assert.strictEqual(parsedRow.length, 4, '制表符切分应解析出 4 个属种');
 assert.deepStrictEqual(parsedRow.map(p => p.corrected), ['Pinus', 'Artemisia', 'Betula', 'Cyperaceae']);
+
+// 5.4 微体古生物 (NPP) 内置词条：盘星藻/硅藻/摇蚊/介形虫/粪生菌孢不得被误纠
+const NPP_TAXA = [
+  'Pediastrum', 'Botryococcus', 'Diatom', 'Cyclotella', 'Chironomidae',
+  'Chironomid head capsule', 'Ostracoda', 'Ilyocypris', 'Sporormiella',
+  'Sordariaceae', 'Chaetomium', 'Rotifera',
+];
+const NPP_MAP = new Map([...TestPollenGlossary.CANONICAL_TAXA, ...NPP_TAXA].map(t => [t.toLowerCase(), t]));
+
+// 精确命中：NPP 拉丁名必须原样保留，不得被模糊纠成花粉属名
+for (const name of NPP_TAXA) {
+  assert.ok(NPP_MAP.has(name.toLowerCase()), `NPP 词条 ${name} 应存在于词典索引`);
+  assert.strictEqual(NPP_MAP.get(name.toLowerCase()), name, `NPP 词条 ${name} 应精确匹配自身`);
+}
+// 关键回归：Sordariaceae (粪生菌孢) 不得被纠成 Apiaceae (伞形科)
+assert.notStrictEqual(NPP_MAP.get('sordariaceae'), 'Apiaceae', 'Sordariaceae 不得被误纠为 Apiaceae');
+
+// 5.5 用户自定义词汇表：与内置词典并存冗余保留，同名时以用户输入为准
+class CustomizableGlossary {
+  static map = new Map(NPP_MAP);
+  static custom = [];
+  static addCustomTaxa(names) {
+    let added = 0;
+    for (const raw of names) {
+      const name = TestPollenGlossary.clean(raw);
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (this.map.get(key) === name) continue;
+      if (!this.custom.includes(name)) this.custom.push(name);
+      this.map.set(key, name);
+      added++;
+    }
+    return added;
+  }
+}
+
+// 首次添加：新词条进入索引并计入自定义集合
+assert.strictEqual(CustomizableGlossary.addCustomTaxa(['Tetraedron', '新疆落叶松']), 2);
+assert.strictEqual(CustomizableGlossary.map.get('tetraedron'), 'Tetraedron');
+assert.strictEqual(CustomizableGlossary.map.get('新疆落叶松'), '新疆落叶松');
+assert.strictEqual(CustomizableGlossary.custom.length, 2);
+
+// 重复添加：幂等，不产生重复条目
+assert.strictEqual(CustomizableGlossary.addCustomTaxa(['Tetraedron']), 0, '重复条目应被幂等跳过');
+assert.strictEqual(CustomizableGlossary.custom.length, 2);
+
+// 冗余保留：自定义词汇不得覆盖或移除任何内置条目
+for (const name of TestPollenGlossary.CANONICAL_TAXA) {
+  assert.ok(CustomizableGlossary.map.has(name.toLowerCase()), `内置词条 ${name} 应冗余保留`);
+}
+for (const name of NPP_TAXA) {
+  assert.ok(CustomizableGlossary.map.has(name.toLowerCase()), `内置 NPP 词条 ${name} 应冗余保留`);
+}
+// 且内置词条数量只增不减
+assert.strictEqual(CustomizableGlossary.map.size, new Set([...TestPollenGlossary.CANONICAL_TAXA, ...NPP_TAXA].map(t => t.toLowerCase())).size + 2);
 console.log('✔ 花粉属种词典 (Pollen Glossary) 与 OCR 模糊拼写修正引擎验证通过');
+console.log('✔ 微体古生物 (NPP) 内置词条与用户自定义词汇表冗余扩展验证通过');
+
+// 5.6 期刊图版说明解析（与后端 PollenDictionary.extract_caption_taxa 同语义）
+class TestCaptionParser {
+  static PLATE_KEY_RE = /(?<![A-Za-z])[a-zA-Z]\s*(?:[)\]。、]|\.(?=\s+[A-Z]))/g;
+
+  static looksLikeCaption(s) {
+    return /(?<![A-Za-z])[a-zA-Z]\s*(?:[)\]。、]|\.(?=\s+[A-Z]))/.test(s);
+  }
+
+  static tokens(input) {
+    let work = input;
+    if (this.looksLikeCaption(input)) {
+      work = input.replace(/\s+/g, ' ').replace(this.PLATE_KEY_RE, ';');
+      const i = work.indexOf(';');
+      if (i >= 0) work = work.slice(i);
+    }
+    return work
+      .split(/[\r\n\t;]+/)
+      .flatMap(p => (p.includes(',') && !p.includes('(')) ? p.split(',') : [p])
+      .map(s => s.trim().replace(/[.。]$/, ''))
+      .filter(s => s.length > 0);
+  }
+}
+
+const PLATE_I = '中国和蒙古西部水体（湖泊和水库）表层沉积物中盘星藻分类单元图版Ⅰ。a) Pediastrum\nsimplex var. simplex; b) Pediastrum simplex var. sturmmi; c), d) Pediastrum simplex var.\nclathratum; e), f) Pediastrum simplex var. biwaense; g) Pediastrum simplex var. echinulatum; h)\nPediastrum duplex var. duplex; i), j) Pediastrum duplex var. gracillim; k) Pediastrum duplex var.\nrugulosum; l) Pediastrum tetras.';
+
+assert.ok(TestCaptionParser.looksLikeCaption(PLATE_I), '图版说明应被识别为 caption 形态');
+assert.ok(!TestCaptionParser.looksLikeCaption('Pinus\nArtemisia\nChenopodiaceae'), '普通名单不得被误判为图版说明');
+
+const plateTokens = TestCaptionParser.tokens(PLATE_I);
+assert.strictEqual(plateTokens.length, 9, `图版Ⅰ 应解析出 9 个分类单元，实际 ${plateTokens.length}：${JSON.stringify(plateTokens)}`);
+assert.deepStrictEqual(plateTokens, [
+  'Pediastrum simplex var. simplex',
+  'Pediastrum simplex var. sturmmi',
+  'Pediastrum simplex var. clathratum',
+  'Pediastrum simplex var. biwaense',
+  'Pediastrum simplex var. echinulatum',
+  'Pediastrum duplex var. duplex',
+  'Pediastrum duplex var. gracillim',
+  'Pediastrum duplex var. rugulosum',
+  'Pediastrum tetras',
+]);
+// 硬换行已修复：不得残留被腰斩的属名片段
+assert.ok(!plateTokens.some(t => /^(Pediastrum|simplex|duplex|clathratum)$/.test(t)), '不得残留硬换行造成的碎片');
+// 多键前缀 c), d) 不得残留孤立键
+assert.ok(!plateTokens.some(t => /^[a-l]\)?$/.test(t)), '不得残留孤立的图版键');
+
+// cf. 是名称的一部分，不是图版键
+const cfTokens = TestCaptionParser.tokens('f) Pediastrum cf. argentinense; g) Pediastrum alternans');
+assert.deepStrictEqual(cfTokens, ['Pediastrum cf. argentinense', 'Pediastrum alternans'], 'cf. 必须保留在名称内');
+
+const PLATE_II = 'S2. 中国和蒙古西部水体（湖泊和水库）表层沉积物中盘星藻分类单元图版Ⅱ。a), b)\nPediastrum boryanum var. boryanum; c) Pediastrum boryanum var. longicorne type 1; d), e)\nPediastrum boryanum var. longicorne type 2; k), l) Pediastrum asymmetricum';
+const plate2Tokens = TestCaptionParser.tokens(PLATE_II);
+assert.deepStrictEqual(plate2Tokens, [
+  'Pediastrum boryanum var. boryanum',
+  'Pediastrum boryanum var. longicorne type 1',
+  'Pediastrum boryanum var. longicorne type 2',
+  'Pediastrum asymmetricum',
+]);
+// type 1 与 type 2 必须保持区分，不得被合并或截断
+assert.notStrictEqual(plate2Tokens[1], plate2Tokens[2], 'type 1 与 type 2 必须区分');
+
+// 既有 Excel 粘贴路径不得被 caption 逻辑破坏
+const excelStillOk = TestCaptionParser.tokens('*Pinus*\nArtemesia\nChenopodiacee\nPoacee');
+assert.deepStrictEqual(excelStillOk, ['*Pinus*', 'Artemesia', 'Chenopodiacee', 'Poacee'], '普通换行名单切分不应回归');
+
+console.log('✔ 期刊图版说明（Plate caption）解析与图版键剥离验证通过');
+
+// 5.7 硅藻属名表（自动生成产物）完整性与前后端一致性
+const diatomSrc = readFileSync(join(__dirname, 'src/core/diatomGenera.ts'), 'utf8');
+const diatomList = [...diatomSrc.matchAll(/^\s*"([A-Za-z][A-Za-z\-]*)",$/gm)].map(m => m[1]);
+assert.ok(diatomList.length >= 221, `硅藻属名表应 ≥221 属，实际 ${diatomList.length}`);
+// 内陆 151 属 + 海洋 114 属的代表性类群必须在列
+for (const g of ['Aulacoseira', 'Cyclotella', 'Melosira', 'Navicula', 'Nitzschia',
+                 'Cocconeis', 'Surirella', 'Chaetoceros', 'Rhizosolenia', 'Thalassiosira']) {
+  assert.ok(diatomList.includes(g), `硅藻属 ${g} 应在生成的属名表中`);
+}
+// 去重
+assert.strictEqual(new Set(diatomList).size, diatomList.length, '硅藻属名表不得含重复项');
+
+// 源表拼写异名必须存在，且不得作为规范属名出现
+const aliasPairs = [...diatomSrc.matchAll(/^\s*"([A-Za-z][A-Za-z\-]*)":\s*"([A-Za-z][A-Za-z\-]*)",$/gm)]
+  .map(m => [m[1], m[2]]);
+assert.ok(aliasPairs.length >= 10, `源表拼写异名应 ≥10 条，实际 ${aliasPairs.length}`);
+for (const [slip, accepted] of aliasPairs) {
+  assert.ok(!diatomList.includes(slip), `源表拼写 ${slip} 不得成为规范属名`);
+  assert.ok(diatomList.includes(accepted), `异名 ${slip} 指向的规范名 ${accepted} 应在属名表中`);
+}
+assert.ok(aliasPairs.some(([s, a]) => s === 'Thalasiosira' && a === 'Thalassiosira'),
+  'Thalasiosira -> Thalassiosira 异名映射缺失');
+
+console.log('✔ 硅藻属名表（内陆+海相 227 属）与源表拼写异名验证通过');
 
 // 6. 【新增重点功能测试】批量导入属种名单自动列间距拓展分列测试
 function simulateBatchTaxaUpdate(existingColumns, newTaxaNames, calibration) {

@@ -17,6 +17,12 @@ models_dir = os.path.join(source_root, "ocr", "models")
 if os.path.isdir(models_dir):
     datas.append((models_dir, os.path.join("straditize_core", "ocr", "models")))
 
+# Vocabulary data (harvested diatom genera etc.). Without this the frozen build
+# silently falls back to the pollen-only dictionary.
+ocr_data_dir = os.path.join(source_root, "ocr", "data")
+if os.path.isdir(ocr_data_dir):
+    datas.append((ocr_data_dir, os.path.join("straditize_core", "ocr", "data")))
+
 excludes = [
     # Legacy PyQt5 & WebEngine
     "PyQt5",
