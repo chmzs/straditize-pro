@@ -142,7 +142,7 @@ In `frontend/src/types/pollen.ts`:
 
 **Step 4: Test and Build Frontend**
 
-Run: `pnpm --prefix frontend run test && pnpm --prefix frontend run build`
+Run: `npm --prefix frontend test && npm --prefix frontend run build`
 
 **Step 5: Commit**
 
