@@ -578,13 +578,70 @@ class TestStraditizeHttpTransport(unittest.TestCase):
             self.assertEqual(data["status"], "ok")
             self.assertEqual(data["service"], "straditize_rpc")
 
-    def test_http_options_cors(self):
-        """Verify OPTIONS /rpc returns 204 with CORS headers."""
+    def test_http_options_cors_same_origin(self):
+        """OPTIONS /rpc succeeds for same-origin but must not advertise a wildcard origin."""
         req = urllib.request.Request(f"{self.base_url}/rpc", method="OPTIONS")
         with urllib.request.urlopen(req) as resp:
             self.assertEqual(resp.status, 204)
-            self.assertEqual(resp.headers.get("Access-Control-Allow-Origin"), "*")
-            self.assertIn("POST", resp.headers.get("Access-Control-Allow-Methods", ""))
+            # 同源请求无需 CORS 头；绝不允许通配符（否则任意网页都能读写本机后端）
+            self.assertIsNone(resp.headers.get("Access-Control-Allow-Origin"))
+
+    def test_cross_origin_request_is_rejected(self):
+        """A cross-origin request must be refused: CORS '*' allowed any visited page to
+        drive this backend and read the responses (loaded diagrams, digitized data)."""
+        import urllib.error
+
+        for method in ("OPTIONS", "POST"):
+            kwargs = {
+                "method": method,
+                "headers": {"Origin": "http://evil.example", "Content-Type": "application/json"},
+            }
+            if method == "POST":
+                kwargs["data"] = b'{"jsonrpc":"2.0","method":"system.ping","id":1}'
+            req = urllib.request.Request(f"{self.base_url}/rpc", **kwargs)
+            with self.assertRaises(urllib.error.HTTPError) as ctx:
+                urllib.request.urlopen(req, timeout=5.0)
+            self.assertEqual(ctx.exception.code, 403)
+
+    def test_disallowed_host_header_is_rejected(self):
+        """A non-loopback Host must be refused, otherwise DNS rebinding defeats the
+        same-origin check (Origin and Host would both be the attacker's domain)."""
+        import urllib.error
+
+        req = urllib.request.Request(
+            f"{self.base_url}/rpc",
+            data=b'{"jsonrpc":"2.0","method":"system.ping","id":1}',
+            headers={"Content-Type": "application/json", "Host": "evil.example"},
+            method="POST",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(req, timeout=5.0)
+        self.assertEqual(ctx.exception.code, 403)
+
+    def test_allowlisted_origin_is_echoed(self):
+        """An explicitly allow-listed origin gets its own origin echoed back (never '*')."""
+        import threading
+        from straditize_core.rpc_server import find_available_port, StraditizeRpcHttpServer
+
+        port = find_available_port(8990)
+        srv = StraditizeRpcHttpServer(
+            host="127.0.0.1", port=port, allow_origins=["http://localhost:5173"]
+        )
+        srv.start()
+        try:
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{srv.actual_port}/rpc",
+                method="OPTIONS",
+                headers={"Origin": "http://localhost:5173"},
+            )
+            with urllib.request.urlopen(req, timeout=5.0) as resp:
+                self.assertEqual(resp.status, 204)
+                self.assertEqual(
+                    resp.headers.get("Access-Control-Allow-Origin"), "http://localhost:5173"
+                )
+                self.assertIn("POST", resp.headers.get("Access-Control-Allow-Methods", ""))
+        finally:
+            srv.stop()
 
     def test_http_post_rpc_roundtrip(self):
         """Verify HTTP POST /rpc handles JSON-RPC 2.0 requests."""
@@ -604,7 +661,8 @@ class TestStraditizeHttpTransport(unittest.TestCase):
         )
         with urllib.request.urlopen(req) as resp:
             self.assertEqual(resp.status, 200)
-            self.assertEqual(resp.headers.get("Access-Control-Allow-Origin"), "*")
+            # 同源请求不应携带 CORS 头（历史实现无条件回 *，已移除）
+            self.assertIsNone(resp.headers.get("Access-Control-Allow-Origin"))
             data = json.loads(resp.read().decode("utf-8"))
             self.assertEqual(data["id"], "http-1")
             self.assertTrue(data["result"]["pong"])

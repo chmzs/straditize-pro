@@ -344,6 +344,29 @@ class EventBroadcaster:
                     logger.debug("Broadcast queue put error: %s", ex)
 
 
+# ==============================================================================
+# 跨源访问控制 (Loopback-first security)
+# ==============================================================================
+# 默认策略：只接受来自本机回环的请求。
+#   1. Host 必须是回环地址（或显式绑定的主机）—— 阻断 DNS rebinding：
+#      攻击者域名解析到 127.0.0.1 时，Origin 与 Host 都是攻击者域名，
+#      仅比对 Origin/Host 会被绕过，因此必须单独校验 Host。
+#   2. Origin 若存在，必须与请求自身的 Host 同源，或在显式白名单内 —— 阻断 CSRF。
+#         浏览器自 2020 起对同源 POST 也会发送 Origin，所以同源必须放行。
+#   3. 不发送 Access-Control-Allow-Origin: *。
+#      历史上该头是 *，意味着用户浏览的任意网页都能读写本机后端
+#      （CORS 允许读取响应），既可窃取载入的图谱与数字化数据，也可篡改会话。
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def _split_host(host_header: str) -> str:
+    """Extract the bare host from a Host header, handling IPv6 brackets."""
+    host = (host_header or "").strip()
+    if host.startswith("["):
+        return host[1 : host.find("]")].lower() if "]" in host else host[1:].lower()
+    return host.split(":")[0].lower()
+
+
 class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
     """HTTP Request Handler providing JSON-RPC 2.0 endpoint, static web files, and SSE."""
 
@@ -362,22 +385,69 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
             format % args,
         )
 
+    # ------------------------------------------------------------------
+    # 访问控制
+    # ------------------------------------------------------------------
+    def _host_header_allowed(self) -> bool:
+        host = _split_host(self.headers.get("Host", ""))
+        if not host:
+            return False
+        return host in _LOOPBACK_HOSTS or host in getattr(self, "allowed_hosts", set())
+
+    def _origin_allowed(self) -> bool:
+        origin = self.headers.get("Origin")
+        if not origin:
+            return True  # 非浏览器 / 同源导航
+        if origin in getattr(self, "allowed_origins", set()):
+            return True
+        # 同源：Origin 必须等于 http://<请求的 Host>
+        host_header = self.headers.get("Host", "")
+        return origin.rstrip("/") in {f"http://{host_header}", f"https://{host_header}"}
+
+    def _reject_request(self, status: int, reason: str) -> None:
+        body = json.dumps({"error": reason, "code": status}, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _guard_request(self) -> bool:
+        """返回 True 表示请求可以继续；否则已回写 403 并返回 False。"""
+        if not self._host_header_allowed():
+            logger.warning("Rejected request with disallowed Host header: %s", self.headers.get("Host"))
+            self._reject_request(403, "Host header not allowed")
+            return False
+        if not self._origin_allowed():
+            logger.warning("Rejected cross-origin request from: %s", self.headers.get("Origin"))
+            self._reject_request(403, "Cross-origin request not allowed")
+            return False
+        return True
+
     def _send_cors_headers(self) -> None:
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-        self.send_header(
-            "Access-Control-Allow-Headers",
-            "Content-Type, Authorization, X-Requested-With",
-        )
+        """仅为显式白名单内的跨源来源回显 CORS 头；绝不使用通配符。
+
+        同源请求（后端自带前端、或经 SSH 隧道访问 127.0.0.1）本就不需要 CORS 头。
+        """
+        origin = self.headers.get("Origin")
+        if origin and origin in getattr(self, "allowed_origins", set()):
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
     def do_OPTIONS(self) -> None:
-        """Handle CORS pre-flight requests."""
+        """Handle CORS pre-flight requests (only for explicitly allowed origins)."""
+        if not self._guard_request():
+            return
         self.send_response(204)
         self._send_cors_headers()
         self.end_headers()
 
     def do_GET(self) -> None:
         """Handle health check, status, current image, SSE stream, and static web files."""
+        if not self._guard_request():
+            return
         parsed = urlparse(self.path)
         raw_path = unquote(parsed.path)
 
@@ -746,6 +816,8 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         """Handle JSON-RPC 2.0 requests, file uploads, and graceful shutdown."""
+        if not self._guard_request():
+            return
         parsed = urlparse(self.path)
         path = parsed.path
 
@@ -948,10 +1020,13 @@ class StraditizeRpcHttpServer:
         dist_dir: str | None = None,
         is_desktop_mode: bool = False,
         shutdown_fn: Any = None,
+        allow_origins: list[str] | None = None,
     ):
         self.host = host
         self.port = port
         self.is_desktop_mode = is_desktop_mode
+        # 跨源白名单：默认空 = 拒绝一切跨源请求（同源与 SSH 隧道访问不受影响）
+        self.allow_origins = {o.rstrip("/") for o in (allow_origins or [])}
         self._shutdown_fn = shutdown_fn or os._exit
         self.session = session or StraditizeSession()
         self.session.is_desktop_mode = is_desktop_mode
@@ -960,6 +1035,13 @@ class StraditizeRpcHttpServer:
         self.dist_dir = dist_dir
 
         # Build custom handler class with injected dependencies
+        # 允许的 Host：回环始终允许；若显式绑定非回环地址，则该地址也允许。
+        # 注意变量名不能与类体内属性同名：类体中的赋值会让右侧解析为类局部名而 NameError。
+        host_allowlist = {"localhost", "127.0.0.1", "::1"}
+        bound = _split_host(self.host)
+        if bound and bound not in ("0.0.0.0", "::"):
+            host_allowlist.add(bound)
+
         class BoundHandler(StraditizeRpcHttpRequestHandler):
             dispatcher = self.dispatcher
             broadcaster = self.broadcaster
@@ -967,6 +1049,8 @@ class StraditizeRpcHttpServer:
             dist_dir = self.dist_dir
             is_desktop_mode = self.is_desktop_mode
             _shutdown_fn = self._shutdown_fn
+            allowed_origins = self.allow_origins
+            allowed_hosts = host_allowlist
 
         self._server = ThreadingHTTPServer((self.host, self.port), BoundHandler)
         self.actual_port = self._server.server_address[1]

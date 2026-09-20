@@ -2,7 +2,14 @@
 
 ## 项目定位
 
-`straditize/` 是源码仓库目录；项目根目录同时保存 Pixi 环境配置和分析资料。应用是 Python + PyQt5 的古气候图表数值化工具。
+现代版是 **Python 后端（`straditize_core`，JSON-RPC over HTTP）+ TypeScript 前端（`frontend/`，Vite 构建）**。
+后端同时负责提供构建好的前端静态资源，因此正常使用时浏览器只访问一个地址（默认 `http://127.0.0.1:8765/`）。
+
+`straditize/` 子树是上游第三方 PyQt5 原版（Author: Philipp Sommer），**本项目不再维护、当前环境也缺依赖跑不起来**；
+它现在只作为教学图片资源被内置范例引用（`straditize/straditize/widgets/tutorial/`）。
+
+**数据来源不变量**：前端不存在任何替代数据通路。图谱分列、轮廓数字化、数据导出全部由后端真实计算；
+后端不可达时前端直接报错并停在原地，绝不返回替代数据（见 `RpcClient.call()` 与 `HANDOFF.md` 黑名单节）。
 
 ## 环境与依赖
 
@@ -15,12 +22,46 @@
 ## 常用命令
 
 ```bash
-pixi run install       # 源码 editable 安装
-pixi run test          # pytest 全量测试
-pixi run lint          # ruff 检查
-pixi run format        # ruff 格式化
-pixi run run-straditize # 启动应用
+pixi run install          # 源码 editable 安装
+pixi run test             # pytest 全量测试
+pixi run lint             # ruff 检查
+pixi run format           # ruff 格式化
+pixi run desktop          # 启动现代版（桌面模式：自动开浏览器 + 顶栏有退出按钮）
+pixi run rpc-server       # 启动现代版（服务器模式：固定 8765，无退出按钮）
+pixi run frontend-dev     # 前端开发服务器（vite:5173，已配好到 8765 的代理）
 ```
+
+⚠️ `pixi run run-straditize`（即 `python -m straditize`）启动的是**上游 PyQt5 原版**，不是本项目维护的现代版，
+且当前环境缺 `docrep` 等依赖会直接报错。命令名有误导性，不要用它验证现代版功能。
+
+## 远程访问（前后端在不同电脑）
+
+**推荐 SSH 隧道**：后端只监听回环、不对外暴露，流量加密，且无需改动任何防火墙规则。
+
+```bash
+# 在笔记本上执行：把台式机的 8765 映射到本机 8765
+ssh -L 8765:127.0.0.1:8765 用户@台式机
+# 然后在同一台笔记本的浏览器打开
+http://127.0.0.1:8765/
+```
+
+浏览器看到的是**同源** `127.0.0.1:8765`，前端自动连 `${origin}/rpc`，示例图走 `${origin}/image/current`，
+因此无需 token、无需 `--host`、无需放行防火墙入站规则。
+
+**不要**用 `--host 0.0.0.0` 把后端直接暴露到局域网：后端**没有任何认证**，
+局域网内任何人都能操作并下载你的导出数据。
+
+### 访问控制模型（`straditize_core/rpc_server.py`）
+
+| 校验 | 目的 |
+| --- | --- |
+| `Host` 必须是回环（或显式绑定的主机） | 阻断 DNS rebinding：攻击者域名解析到 127.0.0.1 时 Origin 与 Host 会同时是攻击者域名，仅比对二者会被绕过 |
+| `Origin` 若存在，必须与请求自身 Host 同源（或命中 `allow_origins` 白名单） | 阻断 CSRF；浏览器对**同源 POST 也会发送 Origin**，故同源必须放行 |
+| 绝不回显 `Access-Control-Allow-Origin: *` | 历史上该头使**用户浏览的任意网页都能读写本机后端**（CORS 允许读取响应），既可窃取载入的图谱与数字化数据，也可篡改会话 |
+
+**不要为了开发方便把跨源放开为通配符。** 开发模式（`pixi run frontend-dev`）已在
+`frontend/vite.config.ts` 配置到 8765 的代理，浏览器端始终同源。注意代理的 `changeOrigin` 必须为 `false`，
+否则 Host 被改写成 127.0.0.1:8765 而 Origin 仍是 localhost:5173，同源校验会（正确地）拒绝该请求。
 
 ## 修改规范
 
