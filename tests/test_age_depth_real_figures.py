@@ -384,10 +384,111 @@ class TestUploadedFigureReachesBackend(unittest.TestCase):
             depth_range=[0.0, 160.0], resample_step=2.0,
         )
         after = session.age_depth_model
-        self.assertEqual(len(after.depths), before)
-        # Pixel tracks must be in the *new* image's coordinate space.
-        self.assertLessEqual(float(max(after.px_y)), 998.0)
-        self.assertLessEqual(float(max(after.px_x_curve)), 761.0)
+        # Pixel tracks must live in the NEW image's coordinate space. The old figure was
+        # 850x811; the uploaded one is 761x998, so a track row beyond 811 can only come
+        # from the new image. (A depth-count comparison would be brittle: the traced span
+        # differs by a row or two between figures.)
+        self.assertGreater(
+            float(np.max(after.px_y)),
+            811.0,
+            "extraction still reports rows inside the previous figure",
+        )
+        self.assertLessEqual(float(np.max(after.px_y)), 998.0)
+        self.assertLessEqual(float(np.max(after.px_x_curve)), 761.0)
+
+
+class TestChromaticMedianLine(unittest.TestCase):
+    """A coloured median over a grey cloud must be traced by its colour, not its darkness.
+
+    bacon_lithology.jpg draws the median as a RED DASHED line and the envelope as a BLACK
+    dashed outline. In greyscale red (255,0,0) is 76 and black is 0, so a darkness-only
+    tracker follows the younger envelope boundary: measured 0 cm -> -105 and 150 cm -> 4269
+    cal BP against a reference of ~0 and ~6550. The extractor now projects colour onto the
+    figure's own dominant chromatic direction and prefers that channel when it spans the
+    panel, so the median is located by hue while the envelope is still measured by darkness.
+    """
+
+    def _model(self, **kw):
+        img = Image.open(FIGURE_DIR / "bacon_lithology.jpg").convert("RGB")
+        cal = AgeDepthAxisCalibrator(
+            depth_px=[100.0, 865.0], depth_vals=[0.0, 150.0],
+            age_px=[148.0, 733.0], age_vals=[0.0, 9000.0],
+        )
+        return extract_age_depth_model(img, cal, depth_range=(0.0, 160.0), **kw)
+
+    def test_chromatic_channel_selected(self):
+        model = self._model()
+        self.assertEqual(
+            model.curve_channel,
+            "chroma",
+            f"fell back to darkness: {model.curve_channel_reason}",
+        )
+        # The diagnostic must also survive resampling, not silently reset to the default.
+        self.assertEqual(self._model(resample_step=2.0).curve_channel, "chroma")
+
+    def test_greyscale_figures_stay_on_darkness(self):
+        """Figures without a coloured stroke must not switch channels."""
+        reasons = {}
+        for name, depth_px, age_px, age_vals, drange in (
+            ("bacon_szek.png", [32.0, 668.0], [110.0, 803.5], [3000.0, 0.0], (0.0, 160.0)),
+            ("bchron_stepped.png", [10.0, 355.0], [95.0, 645.0], [0.0, 12000.0], (0.0, 180.0)),
+        ):
+            img = Image.open(FIGURE_DIR / name).convert("RGB")
+            cal = AgeDepthAxisCalibrator(
+                depth_px=depth_px, depth_vals=[0.0, 150.0],
+                age_px=age_px, age_vals=age_vals,
+            )
+            model = extract_age_depth_model(img, cal, depth_range=drange)
+            self.assertEqual(
+                model.curve_channel, "darkness", f"{name} unexpectedly switched to chroma"
+            )
+            reasons[name] = model.curve_channel_reason
+
+        # Bchron carries thin BLUE dating-point bars. They are chromatic and thin, so a
+        # width-only test would pick them; the row-span comparison must reject them and say
+        # why, so the fallback is legible rather than mysterious.
+        self.assertIn("dating", reasons["bchron_stepped.png"])
+
+    def test_traces_the_coloured_median(self):
+        """Against an independent per-row colour-argmax reference, error must be tiny."""
+        img = Image.open(FIGURE_DIR / "bacon_lithology.jpg").convert("RGB")
+        rgb = np.array(img)[..., :3].astype(np.int16)
+        # R - max(G,B): grey and black are 0, a red stroke is strongly positive.
+        redness = rgb[..., 0] - np.maximum(rgb[..., 1], rgb[..., 2])
+        cal = AgeDepthAxisCalibrator(
+            depth_px=[100.0, 865.0], depth_vals=[0.0, 150.0],
+            age_px=[148.0, 733.0], age_vals=[0.0, 9000.0],
+        )
+
+        ref_depth, ref_age = [], []
+        for y in range(110, 880):
+            strip = redness[y, 148:734]
+            xs = np.flatnonzero(strip > 10)
+            if xs.size:
+                ref_depth.append(float(cal.px2depth(float(y))))
+                ref_age.append(float(cal.px2age(float(148 + xs[int(np.argmax(strip[xs]))]))))
+        ref_depth = np.asarray(ref_depth)
+        ref_age = np.asarray(ref_age)
+        self.assertGreater(ref_depth.size, 500, "reference trace is too sparse to score")
+
+        model = self._model()
+        depths = np.asarray(model.depths, dtype=float)
+        ages = np.asarray(model.ages, dtype=float)
+
+        rel = []
+        for dep, age in zip(depths, ages):
+            if ref_depth.min() <= dep <= ref_depth.max():
+                truth = ref_age[int(np.argmin(np.abs(ref_depth - dep)))]
+                if truth > 200:  # skip the near-zero top of the core
+                    rel.append((age - truth) / truth)
+        rel = np.asarray(rel)
+        self.assertGreater(rel.size, 300)
+        self.assertLess(
+            float(np.median(np.abs(rel))),
+            0.02,
+            f"median |error| {np.median(np.abs(rel)):.2%} against the colour reference",
+        )
+        self.assertLess(float(np.percentile(np.abs(rel), 95)), 0.05)
 
 
 if __name__ == "__main__":

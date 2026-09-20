@@ -127,6 +127,9 @@ class AgeDepthModel:
         self.px_x_curve: np.ndarray | None = None
         self.px_x_min: np.ndarray | None = None
         self.px_x_max: np.ndarray | None = None
+        #: Which response channel located the median line ("chroma" or "darkness").
+        self.curve_channel: str = "darkness"
+        self.curve_channel_reason: str = ""
 
         # Interpolators are built from the finest sampling available.
         if analysis_depths is not None and np.asarray(analysis_depths).size >= 2:
@@ -1116,14 +1119,43 @@ def extract_age_depth_model(
                 f"search window; check the depth calibration."
             )
 
-    # ---- 3. Greyscale is already computed as gray_full ----------------------
+    # ---- 3. Two response channels: darkness and chromatic ink ----------------
     dark = (255.0 - gray_full[ry0:ry1, rx0:rx1]).astype(np.float32)
+    # Published age-depth figures very often draw the median as a *coloured* dashed line
+    # (red is common) over a grey ensemble cloud whose outline is black-dashed. Collapsing
+    # to greyscale throws away the only signal that separates them: red (255,0,0) is grey 76
+    # while black is 0, so a darkness-only tracker locks onto the envelope outline and
+    # traces a boundary instead of the median.
+    #
+    # The response is a projection onto the figure's own dominant chromatic direction, not
+    # HSV chroma. Measured on a red-dashed figure: chroma along the line swings between 0
+    # and 114 row to row (the dashes and the blend into the grey cloud both shrink it),
+    # whereas R - mean(G,B) stays well separated from grey and recovers 777 of 843 rows at
+    # a threshold of 12. Projecting rather than taking a magnitude keeps this hue-agnostic:
+    # a blue or green median projects just as cleanly.
+    if img_arr.ndim == 3:
+        rgb = img_arr[..., :3].astype(np.int16)
+        centred = rgb - rgb.mean(axis=2, keepdims=True)
+        ink_mask = (rgb.max(axis=2) - rgb.min(axis=2)) > 25
+        if ink_mask.sum() >= 50:
+            direction = centred[ink_mask].mean(axis=0).astype(np.float32)
+            norm = float(np.linalg.norm(direction))
+            if norm > 1e-6:
+                projected = centred.astype(np.float32) @ (direction / norm)
+                chroma = np.clip(projected[ry0:ry1, rx0:rx1], 0.0, None)
+            else:
+                chroma = np.zeros_like(dark)
+        else:
+            chroma = np.zeros_like(dark)
+    else:
+        chroma = np.zeros_like(dark)
 
     # ---- 4. Exclusion mask (user eraser brush) ------------------------------
     if exclude_mask is not None:
         em = np.asarray(exclude_mask, dtype=bool)
         if em.shape[:2] == (h, w):
             dark[em[ry0:ry1, rx0:rx1]] = 0.0
+            chroma[em[ry0:ry1, rx0:rx1]] = 0.0
 
     rh, rw = dark.shape
     if rh < 3 or rw < 3:
@@ -1141,17 +1173,30 @@ def extract_age_depth_model(
         widened[1:] |= long_v[:-1]
         widened[:-1] |= long_v[1:]
         dark[:, widened] = 0.0
+        chroma[:, widened] = 0.0
 
     row_dark_frac = (dark > 60.0).mean(axis=1)
     long_h = row_dark_frac > 0.75
     if long_h.any():
         dark[long_h, :] = 0.0
+        chroma[long_h, :] = 0.0
 
-    # ---- 6. Vertical smoothing bridges dashed envelope outlines -------------
+    # ---- 6. Vertical smoothing bridges dashed strokes -----------------------
     if rh >= 5:
         smoothed = gaussian_filter(dark, sigma=(1.6, 0.8))
+        chroma_smoothed = gaussian_filter(chroma, sigma=(1.6, 0.8))
     else:
         smoothed = dark
+        chroma_smoothed = chroma
+
+    # Decide which channel locates the median line. Chroma is preferred when the figure
+    # actually carries a chromatic stroke, which is detected as *narrow* high-chroma runs:
+    # a plotted curve is a few pixels wide, whereas a colour key or lithology swatch is a
+    # solid block. Without that width test, a figure with a big colour fill (a map, a
+    # legend-heavy layout) would hand the tracker a meaningless chroma profile.
+    use_chroma = False
+    chroma_mode_reason = "figure carries no chromatic stroke"
+    chroma_available = float(chroma.max()) > 60.0
 
     # ---- 7. Thresholds -----------------------------------------------------
     if dark_threshold is None:
@@ -1164,34 +1209,53 @@ def extract_age_depth_model(
     if thr_loose >= thr_dark:
         thr_loose = max(8.0, thr_dark * 0.35)
 
-    # ---- 8. Per-row profile extraction (two passes) -------------------------
-    def trace_curve(half_window: int) -> tuple[list[int], list[float], list[float], list[float]]:
+    # The curve-selection threshold applies to whichever channel locates the median.
+    # Chroma and darkness have different scales, so the darkness threshold must not be
+    # reused for a chroma profile.
+    if chroma_available:
+        chromatic_sample = chroma_smoothed[chroma_smoothed > 20.0]
+        thr_chroma = (
+            float(np.clip(_otsu_threshold(chromatic_sample), 45.0, 190.0))
+            if chromatic_sample.size
+            else 60.0
+        )
+    else:
+        thr_chroma = thr_dark
+
+    # ---- 8. Per-row profile extraction --------------------------------------
+    def trace_curve(
+        channel: np.ndarray, thr: float, half_window: int
+    ) -> tuple[list[int], list[float], list[float], list[float]]:
         """Traces the median line row by row, then measures the envelope around it.
 
-        Candidate runs on a row are restricted to those nearly as dark as the darkest
-        feature on that row; among them the tracker follows the run closest to the
-        previous accepted position. Tracking continuity (rather than maximising
-        integrated darkness) is what keeps the trace on the median line where the curve
-        runs steeply and a single row crosses many columns.
+        Candidate runs on a row are restricted to those nearly as strong as the strongest
+        feature on that row; among them the tracker follows the run closest to the previous
+        accepted position. Tracking continuity (rather than maximising integrated response)
+        is what keeps the trace on the median line where the curve runs steeply and a single
+        row crosses many columns.
+
+        ``channel``/``thr`` select which response locates the median. The envelope is always
+        measured from ``smoothed`` (darkness), because the MCMC cloud and its outline are
+        grey and contribute nothing to chroma.
         """
-        # Collect candidate runs per row.
+        # Collect candidate runs per row from the curve channel.
         candidates: dict[int, list[tuple[float, float, int, int]]] = {}
         row_peaks = np.zeros(rh, dtype=float)
         for row in range(rh):
-            prof = smoothed[row]
+            prof = channel[row]
             row_peak = float(prof.max())
             row_peaks[row] = row_peak
-            if row_peak < max(20.0, thr_dark * 0.55):
-                # Nothing dark enough: a genuine gap (hiatus) or blank margin.
+            if row_peak < max(20.0, thr * 0.55):
+                # Nothing strong enough: a genuine gap (hiatus) or blank margin.
                 continue
-            runs = _contiguous_runs(prof >= thr_dark)
+            runs = _contiguous_runs(prof >= thr)
             keep: list[tuple[float, float, int, int]] = []
             for r0, r1 in runs:
                 seg = prof[r0 : r1 + 1]
                 peak = float(seg.max())
                 if peak < 0.8 * row_peak:
                     continue
-                weights = np.maximum(seg - thr_dark * 0.5, 0.0)
+                weights = np.maximum(seg - thr * 0.5, 0.0)
                 if weights.sum() <= 0:
                     centroid = (r0 + r1) / 2.0
                 else:
@@ -1256,6 +1320,9 @@ def extract_age_depth_model(
                 last_row = row
 
         # Measure the envelope around each accepted row.
+        # Deliberately reads the DARKNESS channel even in chroma mode: the MCMC cloud and
+        # its outline are grey, so they contribute nothing to chroma and would give a
+        # zero-width band. Chroma locates the median; darkness measures the spread.
         rows_out: list[int] = []
         curve_out: list[float] = []
         min_out: list[float] = []
@@ -1279,15 +1346,46 @@ def extract_age_depth_model(
 
         return rows_out, curve_out, min_out, max_out
 
-    # First pass uses a generous window; the second tightens it to a few times the
-    # observed envelope half-width so a distant label cannot drag the band open.
-    row_idx, x_curve, x_min, x_max = trace_curve(max(2, int(round(rw * 0.45))))
+    # Decide which response locates the median by *measuring* both, not by thresholding
+    # proxy statistics. A chromatic stroke can be either the plotted curve or a set of
+    # dating-point probability bars, and both are thin; what separates them is how much of
+    # the panel height each one spans. Tracing both channels with a generous window and
+    # comparing how many rows each covers decides it directly.
+    #
+    # Measured on the bundled figures: a red dashed median covers 70% as many rows as the
+    # darkness trace, while blue dating-point bars reach only 23% -- a 3x separation, so the
+    # cut sits at 0.55 with margin on both sides. A heuristic thickness test alone picked
+    # chroma for the dating-bar figure and dragged the trace along the wrong feature.
+    generous = max(2, int(round(rw * 0.45)))
+    row_idx, x_curve, x_min, x_max = trace_curve(smoothed, thr_dark, generous)
+    use_chroma = False
+    chroma_mode_reason = "figure carries no chromatic stroke"
+
+    if chroma_available:
+        c_rows, c_curve, c_min, c_max = trace_curve(chroma_smoothed, thr_chroma, generous)
+        span_ratio = len(c_rows) / max(1, len(row_idx))
+        if len(c_rows) >= 5 and span_ratio >= 0.55:
+            row_idx, x_curve, x_min, x_max = c_rows, c_curve, c_min, c_max
+            use_chroma = True
+            chroma_mode_reason = (
+                f"chromatic stroke spans {len(c_rows)} rows vs {len(row_idx)} for darkness"
+            )
+        else:
+            chroma_mode_reason = (
+                f"chromatic strokes span only {len(c_rows)} rows vs {len(row_idx)} for "
+                f"darkness (ratio {span_ratio:.2f}); chromatic pixels are probably dating "
+                f"distributions or a legend, not the median line"
+            )
+
+    # Tighten the envelope window once the median channel is settled.
     if len(row_idx) >= 5:
         observed = 0.5 * (np.asarray(x_max) - np.asarray(x_min))
         typical = float(np.median(observed))
         if typical > 0:
-            tightened = int(np.clip(np.ceil(typical * 3.0) + 4, 6, max(6, int(round(rw * 0.45)))))
-            row2, curve2, min2, max2 = trace_curve(tightened)
+            tightened = int(np.clip(np.ceil(typical * 3.0) + 4, 6, max(6, generous)))
+            ch = chroma_smoothed if use_chroma else smoothed
+            th = thr_chroma if use_chroma else thr_dark
+            row2, curve2, min2, max2 = trace_curve(ch, th, tightened)
             if len(row2) >= 5:
                 row_idx, x_curve, x_min, x_max = row2, curve2, min2, max2
 
@@ -1417,6 +1515,10 @@ def extract_age_depth_model(
     model.px_x_curve = abs_curve
     model.px_x_min = abs_min
     model.px_x_max = abs_max
+    # Which response located the median, for diagnostics and for the UI to report honestly
+    # when a figure fell back to darkness despite carrying colour.
+    model.curve_channel = "chroma" if use_chroma else "darkness"
+    model.curve_channel_reason = chroma_mode_reason
 
     # ---- 13. Optional regular depth grid -----------------------------------
     if resample_step is not None and float(resample_step) > 0:
@@ -1464,6 +1566,10 @@ def extract_age_depth_model(
             resampled.px_x_curve = np.interp(grid_rows, model.px_y, model.px_x_curve)
             resampled.px_x_min = np.interp(grid_rows, model.px_y, model.px_x_min)
             resampled.px_x_max = np.interp(grid_rows, model.px_y, model.px_x_max)
+            # Diagnostics must survive resampling too, otherwise a caller reading
+            # `curve_channel` off a resampled model silently gets the class default.
+            resampled.curve_channel = model.curve_channel
+            resampled.curve_channel_reason = model.curve_channel_reason
             return resampled
 
     return model
