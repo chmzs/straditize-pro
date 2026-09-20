@@ -1252,6 +1252,14 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
       this.updateExcludeCount();
       this.seedCalibration(img.naturalWidth, img.naturalHeight);
       this.renderCanvas();
+      // Name the sample explicitly instead of relying on the side effect of the image GET
+      // above: extraction must never depend on which request happened to touch the backend
+      // session first.
+      void this.rpcClient
+        .call<any, any>('agedepth.loadModelDiagram', { sample_key: sampleKey })
+        .catch(() => {
+          /* sample loading is best-effort; extraction reports its own failure */
+        });
     };
     img.src = `/image/agedepth?sample=${sampleKey}&t=${Date.now()}`;
   }
@@ -1281,10 +1289,38 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
         // A user-supplied figure requires an explicit calibration pass.
         this.startCalibration();
         this.renderCanvas();
+        void this.pushImageToBackend(dataUrl);
       };
       img.src = dataUrl;
     };
     reader.readAsDataURL(file);
+  }
+
+  /**
+   * Hands the uploaded figure to the backend session.
+   *
+   * Extraction reads the backend's own `age_depth_image`, so without this the calibration
+   * points came from the uploaded figure while the pixels came from whatever was loaded
+   * before. That silently yields a chronology for the *wrong diagram* whenever the two
+   * happen to agree in direction; measured on bacon_lithology.jpg (761x998) against the
+   * stale bacon_szek.png (850x811) it only surfaced because the age-direction guard
+   * refused the mismatch.
+   *
+   * Deliberately not routed through /api/upload: that endpoint calls
+   * `session.load_image()` and would replace the user's pollen diagram as a side effect.
+   */
+  private async pushImageToBackend(dataUrl: string): Promise<void> {
+    this.showExtractError('');
+    try {
+      const res = await this.rpcClient.call<any, any>('agedepth.loadModelDiagram', {
+        base64_data: dataUrl,
+      });
+      if (!res || res === true || res.status !== 'loaded') {
+        this.showExtractError('后端未能载入该图谱，识别会拒绝执行。请检查后端连接后重试。');
+      }
+    } catch (err: any) {
+      this.showExtractError(`图谱上传到后端失败: ${err?.message || err}`);
+    }
   }
 
   private async executeExtraction(): Promise<void> {

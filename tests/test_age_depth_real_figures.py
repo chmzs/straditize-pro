@@ -333,5 +333,62 @@ class TestAgeDepthExportColumns(unittest.TestCase):
             )
 
 
+class TestUploadedFigureReachesBackend(unittest.TestCase):
+    """The backend extracts from its OWN session image, so an upload must be handed over.
+
+    Regression: ``handleCustomImageFile`` used to set only the local canvas image. The
+    calibration points then came from the user's figure while the pixels came from whatever
+    the backend still held. Measured with bacon_lithology.jpg (761x998) against a stale
+    bacon_szek.png (850x811) it surfaced only because the age-direction guard refused the
+    mismatch; two similar figures would have produced a chronology for the wrong diagram.
+    """
+
+    def test_base64_load_replaces_session_image(self):
+        import base64
+
+        from straditize_core.session import StraditizeSession
+
+        session = StraditizeSession()
+        session.load_age_depth_diagram(sample_key="bacon")
+        self.assertEqual((session.age_depth_image.width, session.age_depth_image.height), (850, 811))
+
+        raw = (FIGURE_DIR / "bacon_lithology.jpg").read_bytes()
+        payload = "data:image/jpeg;base64," + base64.b64encode(raw).decode("ascii")
+        res = session.load_age_depth_diagram(base64_data=payload)
+        self.assertEqual(res["status"], "loaded")
+        self.assertEqual((res["width"], res["height"]), (761, 998))
+        self.assertIsNone(session.age_depth_image_path)
+
+    def test_extraction_follows_the_loaded_upload(self):
+        """Extraction geometry must change when a different figure is loaded."""
+        import base64
+
+        from straditize_core.session import StraditizeSession
+
+        session = StraditizeSession()
+        session.load_age_depth_diagram(sample_key="bacon")
+        session.calibrate_and_extract_age_depth(
+            depth_px=[32.0, 668.0], depth_vals=[0.0, 150.0],
+            age_px=[110.0, 803.5], age_vals=[3000.0, 0.0],
+            depth_range=[0.0, 160.0], resample_step=2.0,
+        )
+        before = len(session.age_depth_model.depths)
+
+        raw = (FIGURE_DIR / "bacon_lithology.jpg").read_bytes()
+        session.load_age_depth_diagram(
+            base64_data="data:image/jpeg;base64," + base64.b64encode(raw).decode("ascii")
+        )
+        session.calibrate_and_extract_age_depth(
+            depth_px=[100.0, 865.0], depth_vals=[0.0, 150.0],
+            age_px=[148.0, 733.0], age_vals=[0.0, 9000.0],
+            depth_range=[0.0, 160.0], resample_step=2.0,
+        )
+        after = session.age_depth_model
+        self.assertEqual(len(after.depths), before)
+        # Pixel tracks must be in the *new* image's coordinate space.
+        self.assertLessEqual(float(max(after.px_y)), 998.0)
+        self.assertLessEqual(float(max(after.px_x_curve)), 761.0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -949,16 +949,24 @@ class TestStraditizeHttpTransport(unittest.TestCase):
 
     def test_component_static_route_serving(self):
         """Verify static WASM/JS/JSON component routing under /components/ and /webr/."""
+        import tempfile
         import urllib.request
-        from straditize_core.components.manager import get_base_components_dir
+        from unittest import mock
 
-        base_dir = get_base_components_dir()
+        # Redirect the components root to a temp dir. The handler resolves the base
+        # directory per request through this function, so patching it keeps the test off
+        # the user's real %APPDATA%/Straditize/components tree.
+        tmp_root = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp_root.cleanup)
+        base_dir = Path(tmp_root.name)
         test_webr_dir = base_dir / "webr"
         test_webr_dir.mkdir(parents=True, exist_ok=True)
-        wasm_file = test_webr_dir / "test_module.wasm"
-        wasm_file.write_bytes(b"\x00asm\x01\x00\x00\x00")
+        (test_webr_dir / "test_module.wasm").write_bytes(b"\x00asm\x01\x00\x00\x00")
 
-        try:
+        with mock.patch(
+            "straditize_core.components.manager.get_base_components_dir",
+            return_value=base_dir,
+        ):
             # 1. Access via /components/webr/test_module.wasm
             req1 = urllib.request.Request(f"{self.base_url}/components/webr/test_module.wasm")
             with urllib.request.urlopen(req1, timeout=3.0) as resp1:
@@ -977,9 +985,6 @@ class TestStraditizeHttpTransport(unittest.TestCase):
                 bad_req = urllib.request.Request(f"{self.base_url}/components/../../etc/passwd")
                 urllib.request.urlopen(bad_req, timeout=3.0)
             self.assertEqual(ctx.exception.code, 403)
-        finally:
-            if wasm_file.exists():
-                wasm_file.unlink()
 
 
 class TestSectionFiveJsonRpcMethods(unittest.TestCase):
