@@ -200,7 +200,7 @@ export class Inspector {
         <div class="tip-card" style="margin-bottom: 12px; background: rgba(56, 189, 248, 0.08); border-left: 3px solid var(--accent-blue); padding: 8px 10px;">
           <p style="font-size: 11px; line-height: 1.6; color: var(--text-primary); margin: 0;">
             <strong>步骤引导：</strong><br>
-            图谱底图已居中展示。您可使用鼠标中键/空格平移、滚轮缩放浏览图谱整体形态与层位。<br><br>
+图谱底图已居中展示。您可使用右键或中键拖拽（或按住空格+左键）平移、滚轮缩放浏览图谱整体形态与层位。
             确认图谱就绪后，请点击底部 <strong>[👉 进入数据有效区框选 (S2)]</strong>，此时画布将呈现 ROI 调节框。
           </p>
         </div>

@@ -1601,9 +1601,11 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
       { passive: false }
     );
 
-    // Panning is middle-button or space+left only. The project blacklist forbids right-drag
-    // panning on auxiliary canvases, so this deliberately differs from the main canvas.
-    const canPan = (e: MouseEvent) => e.button === 1 || (e.button === 0 && this.isSpaceDown);
+    // 平移与主画布、OCR 画布统一：右键(2) / 中键(1) / 空格+左键(0) 三者等价。
+    // 右键须一并屏蔽原生菜单，否则拖拽途中会弹出浏览器上下文菜单。
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    const canPan = (e: MouseEvent) =>
+      e.button === 2 || e.button === 1 || (e.button === 0 && this.isSpaceDown);
 
     canvas.addEventListener('mousedown', (e) => {
       const pt = this.canvasToImage(e.clientX, e.clientY);

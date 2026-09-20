@@ -71,7 +71,7 @@ export class OcrReviewModal {
   private dragStartY: number = 0;
   private initialCropState: { x0: number; y0: number; x1: number; y1: number } = { x0: 0, y0: 0, x1: 0, y1: 0 };
 
-  // 2. 左侧旋转扶正预览视口缩放与平移状态 (严格对齐主视图: 滚轮缩放 + 中键/空格+左键平移)
+  // 2. 左侧旋转扶正预览视口缩放与平移状态 (与主视图同一套规范: 滚轮缩放 + 右键 / 中键 / 空格+左键 平移)
   private rotScale: number = 1.0;
   private rotPanX: number = 0;
   private rotPanY: number = 0;
@@ -126,7 +126,7 @@ export class OcrReviewModal {
         </div>
 
         <div class="modal-body" style="flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow: hidden;">
-          <!-- 1. 全宽交互式框选视口 (贯穿整个面板横向空间，支持 8 向手柄自由调整边框与滚轮缩放/中键平移) -->
+          <!-- 1. 全宽交互式框选视口 (贯穿整个面板横向空间，支持 8 向手柄自由调整边框与滚轮缩放/右键 / 中键 / 空格+左键 平移) -->
           <div class="ocr-crop-card">
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
               <div style="display: flex; align-items: center; gap: 8px;">
@@ -138,7 +138,7 @@ export class OcrReviewModal {
                 <button class="tool-btn" id="btn-ocr-fit-crop" style="font-size: 10px; padding: 2px 8px;">自适应视口</button>
               </div>
               <div style="font-size: 10.5px; color: var(--text-muted);">
-                💡 拖拽 8 点手柄精修边框 | 滚轮缩放 | <b>按住滚轮中键(或空格+左键)平移</b> | 双击复位
+                💡 拖拽 8 点手柄精修边框 | 滚轮缩放 | <b>右键 / 中键拖拽（或空格+左键）平移</b> | 双击复位
               </div>
             </div>
 
@@ -150,7 +150,7 @@ export class OcrReviewModal {
 
           <!-- 下方主区域: 左侧垂直旋转扶正控制与预览栏 + 右侧集中式审核汇总表 -->
           <div style="flex: 1; min-height: 250px; display: flex; gap: 12px; overflow: hidden;">
-            <!-- 左侧: 旋转扶正控制器与垂直条带预览栏 (全功能支持滚轮缩放与鼠标中键平移) -->
+            <!-- 左侧: 旋转扶正控制器与垂直条带预览栏 (全功能支持滚轮缩放与 右键 / 中键 / 空格+左键 平移) -->
             <div class="ocr-rot-card">
               <div style="display: flex; justify-content: space-between; align-items: center;">
                 <strong style="font-size: 11px; color: var(--accent-orange, #ea580c);">2. 🔄 旋转校正与执行:</strong>
@@ -183,7 +183,7 @@ export class OcrReviewModal {
                 </div>
                 <div class="ocr-rot-status-bar">
                   <span style="font-weight: 600;">✓ 扶正水平效果预览</span>
-                  <span style="font-size: 9.5px; color: var(--text-muted);">滚轮缩放 | 按住滚轮中键(或空格+左键)平移 | 双击居中</span>
+                  <span style="font-size: 9.5px; color: var(--text-muted);">滚轮缩放 | 右键 / 中键拖拽（或空格+左键）平移 | 双击居中</span>
                 </div>
               </div>
             </div>
@@ -638,7 +638,7 @@ export class OcrReviewModal {
     return 'create';
   }
 
-  // ===================== 1. 上栏画布交互 (严格对齐主视图: 滚轮缩放 + 鼠标中键/空格+左键平移 + 8向手柄调整) =====================
+  // ===================== 1. 上栏画布交互 (与主视图同一套规范: 滚轮缩放 + 右键 / 中键 / 空格+左键 平移 + 8向手柄调整) =====================
   private bindCropCanvasEvents(): void {
     if (!this.cropCanvas) return;
     const canvas = this.cropCanvas;
@@ -695,7 +695,7 @@ export class OcrReviewModal {
       this.fitCropToView();
     });
 
-    // 鼠标按下：严格与主视图一致，仅中键(1) 或 空格键按住时左键(0) 触发平移
+    // 鼠标按下：与主视图同一套规范，右键 / 中键 / 空格+左键 三者等价
     canvas.addEventListener('mousedown', (e) => {
       const rect = canvas.getBoundingClientRect();
       const clickScreenX = e.clientX - rect.left;
@@ -855,7 +855,7 @@ export class OcrReviewModal {
     });
   }
 
-  // ===================== 2. 左侧旋转扶正预览画布交互 (严格对齐主视图: 滚轮缩放 + 中键/空格+左键平移) =====================
+  // ===================== 2. 左侧旋转扶正预览画布交互 (与主视图同一套规范: 滚轮缩放 + 右键 / 中键 / 空格+左键 平移) =====================
   private bindRotPreviewEvents(): void {
     if (!this.rotPreviewCanvas) return;
     const canvas = this.rotPreviewCanvas;

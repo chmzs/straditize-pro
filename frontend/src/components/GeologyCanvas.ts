@@ -148,7 +148,7 @@ export class GeologyCanvas {
     const palette = document.createElement('div');
     palette.className = 'floating-tool-palette';
     palette.innerHTML = `
-      <button class="floating-tool-btn help-btn-item" id="btn-palette-help" title="交互操作指南与快捷键速查 (快捷键: ?)">
+      <button class="floating-tool-btn help-btn-item" id="btn-palette-help" title="交互操作指南与快捷键速查 (快捷键: F1)">
         <span style="font-size: 14px; font-weight: 700; line-height: 1;">?</span>
         <span>帮助</span>
       </button>
