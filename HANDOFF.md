@@ -1,8 +1,8 @@
 # straditize 开发交接卡 (HANDOFF.md)
-- 更新时间：2026-09-20 08:00 | 分支 dev-v2-modern | HEAD a136dfe
+- 更新时间：2026-09-20 08:40 | 分支 dev-v2-modern | HEAD c4aa52b
 - 规则：**分节追加** —— 只改自己那一节，严禁整文件覆盖或改写他节；每节 ≤8 行，全文 ≤30 行，超限时最旧节整段移入 `HANDOFF-archive/`。
 - 一键验证：`pixi run lint` ｜ `pixi run test` ｜ `cd frontend && npm run build`
-- 当前结果：lint ✓ ｜ build ✓ ｜ test **122/122 passed (100% 通过)** ｜ `pixi run rpc-server` 在 8765 服务新代码
+- 当前结果：lint ✓ ｜ build ✓ ｜ test **125/125 passed (100% 通过)** ｜ 后端务必用 `pixi run rpc-server` 重启以载入新的访问控制
 
 ## [AGEDEPTH] 2026-09-20 05:10 — 年代-深度识别 + 集合 + 速率（已提交 339a34d/df7dff3/e452fb5）
 - 识别改为逐行剖面双阈值 + 垂直支撑度引导 + 连续性追踪 + 长直线剔除 + PAVA 保序；搜索窗由**轴规则实际跨度**推导（`age_depth.py:_detect_axis_rule_box`，标定框 ≠ 数据区）。集合改在**沉积速率空间**构造相关高斯过程再积分，单调性由构造保证，相关长度是物理深度、不随重采样步长漂移；幅度见 `_solve_amplitude`(:266)。
@@ -15,8 +15,8 @@
 - `RpcClient.call()` 只剩两条路径：离线即报错 / 真后端。已删除 `MockBackend.ts`(649 行)、`mockExecute`、`demoMode`、`generateExportData` 及前端 3 张重复示例图。
 - 初始 ROI 建议改由后端 `Session.suggest_data_region()` 提供（随 `core.loadImage` 返回 `suggested_calibration`）；范例图由后端 `/image/current` 供图。
 - 顺带修掉被兜底掩盖的真实缺陷：`core.detectColumns` 前端发 `x_bounds/y_bounds` 而后端要 `data_xlim/data_ylim`，修后 S1→S2→S3 由真算法产出 29 列。
-- 启动闸门只剩「重新连接」——没有后端就没有结果可展示；胶囊只剩 RPC / 离线两态。无后端实测：闸门出现、无演示按钮、`app_rendered=false`。
-- 实机复核（8943 真后端 / 8961 静态页）：`/image/current` 供图 70064B；S1→S2→S3 真算法产出 31 列；bundle 394→339KB；lint ✓ ｜ test 122 ✓。
+- 启动闸门只剩「重新连接」，胶囊只剩 RPC / 离线；实机复核（8943/8961）：`/image/current` 供图 70064B、S1→S2→S3 真算法 31 列、bundle 394→339KB。
+- 安全（c4aa52b）：原 `Access-Control-Allow-Origin: *` + 零 Origin/Host 校验 = **用户浏览的任意网页都能读写本机后端**；现改为回环 Host 校验（防 DNS rebinding）+ 同源 Origin 校验，跨源默认拒绝；`vite.config.ts` 加代理使开发也同源。
 
 ## 黑名单（跨会话共享，只追加不覆盖）
 - ❌ 文字/描边严禁写死 `#fff`/`#38bdf8`/`#f59e0b`（日间隐形或低对比），必须用 `--text-heading`/`--accent-*`；
