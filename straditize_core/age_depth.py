@@ -139,6 +139,8 @@ class AgeDepthModel:
         self.curve_channel_reason: str = ""
         #: Fraction of the traced span that was actually observed rather than interpolated.
         self.observed_row_fraction: float = 0.0
+        #: How the extraction search region was derived.
+        self.roi_source: str = ""
         #: False when the model was built without an envelope, so its band is unknown
         #: rather than zero-width. Set where the envelope arguments are consumed above --
         #: assigning a default here would overwrite the computed value.
@@ -208,6 +210,7 @@ class AgeDepthModel:
                 "curve_channel": self.curve_channel,
                 "curve_channel_reason": self.curve_channel_reason,
                 "observed_row_fraction": self.observed_row_fraction,
+                "roi_source": self.roi_source,
             },
         }
 
@@ -1023,6 +1026,33 @@ def _detect_axis_rule_box(
     return x_lo, y_lo, x_hi + 1, y_hi + 1
 
 
+def _rule_box_holds_calibration(
+    box: tuple[int, int, int, int],
+    px_ages: list[float],
+    px_depths: list[float],
+    w: int,
+    h: int,
+    tol_frac: float = 0.02,
+) -> bool:
+    """Whether a detected rule box plausibly *is* this figure's plot area.
+
+    The four calibration points sit on the plot's own axes, so any genuine data-area box
+    must contain them (within a small tolerance for a point placed just outside a tick).
+    This rejects a long rule found elsewhere on the figure -- a table border in a caption,
+    a second panel -- which would otherwise hijack the search window.
+    """
+    x0, y0, x1, y1 = box
+    tol_x = tol_frac * w
+    tol_y = tol_frac * h
+    for x in px_ages:
+        if not (x0 - tol_x <= x <= x1 + tol_x):
+            return False
+    for y in px_depths:
+        if not (y0 - tol_y <= y <= y1 + tol_y):
+            return False
+    return True
+
+
 def extract_age_depth_model(
     image: Image.Image | np.ndarray,
     calibrator: AgeDepthAxisCalibrator,
@@ -1108,9 +1138,9 @@ def extract_age_depth_model(
         chosen channel and the reason are reported on the returned model via
         ``curve_channel`` / ``curve_channel_reason``.
     retain_frac:
-        How far beyond the calibration rectangle the axis-rule search window may grow,
-        as a fraction of each calibrated span. Guards against an unrelated long rule
-        elsewhere on the figure hijacking the window.
+        Margin applied when the axis rules cannot be used, as a fraction of each calibrated
+        span. Only a fallback: the primary search region comes from the axis rule extents
+        and is deliberately independent of the calibration points.
     """
     if isinstance(image, Image.Image):
         img_arr = np.array(image.convert("RGB"))
@@ -1135,24 +1165,46 @@ def extract_age_depth_model(
 
     if roi_box is not None:
         rx0, ry0, rx1, ry1 = (int(round(v)) for v in roi_box)
+        roi_source = "caller-supplied roi_box"
     else:
-        # Prefer the axis-rule extents: the drawn data area is bounded by the plot's own
-        # rules, which normally reach past the outermost tick the user calibrated against.
-        rule_box = _detect_axis_rule_box(gray_full)
+        # The search region is the plot's own data area, derived from the axis rules and
+        # INDEPENDENT of where the calibration points sit.
+        #
+        # This used to clamp the rule extent to at most `retain_frac` beyond the
+        # calibration rectangle. That coupling is unjustified: the two calibration points
+        # say what the pixels MEAN, not which part of the panel to read. It also failed
+        # silently on the bundled Bacon figure, because a user picks two legible ticks
+        # rather than the outermost ones:
+        #
+        #   ticks 3000/0     -> depth   0.0 .. 160.1,  age  -30 .. 2871   (full curve)
+        #   ticks 2000/1000  -> depth  64.6 .. 148.8,  age  734 .. 2242   (upper 65 cm lost)
+        #   ticks 1500/500   -> depth  25.7 .. 140.3,  age  208 .. 1791
+        #
+        # The truncation was horizontal, so rows whose curve fell outside the clamped
+        # x-window found no candidates at all and dropped out vertically too; a generous
+        # depth_range could not recover them.
         span_x = max(1.0, px_ages[1] - px_ages[0])
         span_y = max(1.0, px_depths[1] - px_depths[0])
-        if rule_box is not None:
-            kx0, ky0, kx1, ky1 = rule_box
-            rx0 = int(min(px_ages[0], max(kx0, px_ages[0] - retain_frac * span_x)))
-            rx1 = int(max(px_ages[1], min(kx1, px_ages[1] + retain_frac * span_x)))
-            ry0 = int(min(px_depths[0], max(ky0, px_depths[0] - retain_frac * span_y)))
-            ry1 = int(max(px_depths[1], min(ky1, px_depths[1] + retain_frac * span_y)))
+        rule_box = _detect_axis_rule_box(gray_full)
+        if rule_box is not None and _rule_box_holds_calibration(
+            rule_box, px_ages, px_depths, w, h
+        ):
+            rx0, ry0, rx1, ry1 = rule_box
+            roi_source = f"axis rule extents {rule_box}"
         else:
-            # No long rule found (e.g. a light or frame-less rendering): small margin only.
-            rx0 = int(px_ages[0] - 0.03 * span_x)
-            rx1 = int(px_ages[1] + 0.03 * span_x) + 1
-            ry0 = int(px_depths[0] - 0.03 * span_y)
-            ry1 = int(px_depths[1] + 0.03 * span_y) + 1
+            # No usable rule box (a frame-less or very light rendering, or the detected
+            # rules are something else on the figure): fall back to the calibration
+            # rectangle plus a margin, and record that this weaker basis was used.
+            margin_x = retain_frac * span_x
+            margin_y = retain_frac * span_y
+            rx0 = int(px_ages[0] - margin_x)
+            rx1 = int(px_ages[1] + margin_x) + 1
+            ry0 = int(px_depths[0] - margin_y)
+            ry1 = int(px_depths[1] + margin_y) + 1
+            roi_source = (
+                "calibration rectangle + "
+                f"{retain_frac:.0%} margin (no usable axis rules detected)"
+            )
 
     rx0 = max(0, min(w - 1, rx0))
     rx1 = max(rx0 + 1, min(w, rx1))
@@ -1627,6 +1679,8 @@ def extract_age_depth_model(
     # Fraction of the traced span the channel actually observed; the remainder is
     # interpolated. Reported so a mostly-interpolated curve is visible rather than silent.
     model.observed_row_fraction = round(float(observed_fraction), 4)
+    #: How the search region was derived, so a fallback to the weaker basis is visible.
+    model.roi_source = roi_source
 
     # ---- 13. Optional regular depth grid -----------------------------------
     if resample_step is not None and float(resample_step) > 0:
@@ -1679,6 +1733,7 @@ def extract_age_depth_model(
             resampled.curve_channel = model.curve_channel
             resampled.curve_channel_reason = model.curve_channel_reason
             resampled.observed_row_fraction = model.observed_row_fraction
+            resampled.roi_source = model.roi_source
             return resampled
 
     return model

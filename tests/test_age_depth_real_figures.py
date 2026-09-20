@@ -491,6 +491,68 @@ class TestChromaticMedianLine(unittest.TestCase):
         self.assertLess(float(np.percentile(np.abs(rel), 95)), 0.05)
 
 
+class TestSearchRegionIndependentOfCalibration(unittest.TestCase):
+    """The search region must not be derived from where the calibration points sit.
+
+    The two age calibration points say what the pixels MEAN, not which part of the panel to
+    read. Clamping the axis-rule extent to a margin around the calibration rectangle coupled
+    them, and failed silently because users pick two legible ticks rather than the outermost
+    ones -- the truncation was horizontal, so rows whose curve fell outside the clamped
+    x-window found no candidates and dropped out vertically too.
+    """
+
+    #: Three equally legitimate choices of which two age ticks to calibrate against.
+    CALIBRATIONS = [
+        ([110.0, 803.5], [3000.0, 0.0]),
+        ([340.0, 573.0], [2000.0, 1000.0]),
+        ([458.0, 688.0], [1500.0, 500.0]),
+    ]
+
+    def _extract(self, age_px, age_vals):
+        img = Image.open(FIGURE_DIR / "bacon_szek.png").convert("RGB")
+        cal = AgeDepthAxisCalibrator(
+            depth_px=[32.0, 668.0], depth_vals=[0.0, 150.0],
+            age_px=age_px, age_vals=age_vals,
+        )
+        return extract_age_depth_model(img, cal, depth_range=(0.0, 160.0))
+
+    def test_depth_span_is_identical_across_calibration_choices(self):
+        spans = []
+        for age_px, age_vals in self.CALIBRATIONS:
+            model = self._extract(age_px, age_vals)
+            depths = np.asarray(model.depths, dtype=float)
+            spans.append((round(float(depths.min()), 1), round(float(depths.max()), 1)))
+        self.assertEqual(
+            len(set(spans)), 1, f"depth span depends on the calibration choice: {spans}"
+        )
+        # And it must be the full requested range, not a truncated slice. (The native trace
+        # is per-pixel-row, so it lands a fraction past the requested 160.)
+        self.assertAlmostEqual(spans[0][0], 0.0, places=1)
+        self.assertAlmostEqual(spans[0][1], 160.0, delta=0.5)
+
+    def test_search_region_comes_from_the_axis_rules(self):
+        for age_px, age_vals in self.CALIBRATIONS:
+            model = self._extract(age_px, age_vals)
+            self.assertIn("axis rule", model.roi_source)
+            # The same region regardless of calibration.
+            self.assertIn("(74, 5, 845, 739)", model.roi_source)
+
+    def test_age_span_agrees_across_calibration_choices(self):
+        """Different calibrations describe the same curve, so the ages must agree."""
+        spans = []
+        for age_px, age_vals in self.CALIBRATIONS:
+            model = self._extract(age_px, age_vals)
+            ages = np.asarray(model.ages, dtype=float)
+            spans.append((float(ages.min()), float(ages.max())))
+        widest = max(hi - lo for lo, hi in spans)
+        narrowest = min(hi - lo for lo, hi in spans)
+        self.assertLess(
+            abs(widest - narrowest) / widest,
+            0.02,
+            f"age span varies with the calibration choice: {spans}",
+        )
+
+
 class TestChannelOverride(unittest.TestCase):
     """The channel can be forced, and forcing it wrong must fail loudly, not quietly."""
 
