@@ -110,8 +110,8 @@ pixi run install
 - **启动命令**：
   ```bash
   pixi run rpc-server
-  # 或自定义端口：
-  python -m straditize serve --port 8765
+  # 或自定义端口（注意模块名是 straditize_core，不是 straditize）：
+  python -m straditize_core.rpc_server serve --port 8765
   ```
   *(Windows 用户也可直接双击根目录下的 `start_straditize_server.bat`)*
 - **运行特征**：
@@ -119,6 +119,19 @@ pixi run install
   - **端口被占保护**：若指定端口被占用，直接向终端报错并退出，绝不静默 +1；
   - 终端前台流式输出访问日志；
   - **退出方式**：终端按下 `Ctrl+C` 终止；**网页界面严格隐藏退出按钮**（且 `/shutdown` 端点返回 403 Forbidden），防止协作人员误关后台。
+
+#### 方式 C：前端开发模式 (Frontend Dev - 仅修改前端时使用)
+- **启动命令**：
+  ```bash
+  pixi run rpc-server     # 终端 1：后端
+  pixi run frontend-dev   # 终端 2：Vite 开发服务器 → http://localhost:5173
+  ```
+- 浏览器访问 `http://localhost:5173`。Vite 已把后端路由前缀代理到 8765，
+  因此**浏览器端始终是同源**，无需为开发模式开放任何跨源例外。
+
+> ⚠️ **不要用 `pixi run run-straditize`**（即 `python -m straditize`）：它启动的是上游第三方 PyQt5 原版，
+> **不是本项目的现代版**，且当前环境缺少 `docrep` 等依赖会直接报错，命令名具有误导性。
+> 该子树目前仅因提供内置范例所需的示例图片而保留。
 
 ---
 
@@ -128,7 +141,7 @@ Straditize Pro 遵循现代运维最佳实践，放弃易失效且容易产生�
 
 ```bash
 # 步骤 1: 在远程计算节点/服务器启动服务 (前台或放入 tmux/screen)
-straditize serve
+pixi run rpc-server
 # 控制台输出：服务已启动：http://127.0.0.1:8765
 
 # 步骤 2: 在你本地的笔记本/工作站打开终端，建立 SSH 本地端口转发
@@ -139,6 +152,22 @@ http://127.0.0.1:8765
 
 # 步骤 4: 实验完毕后，在远程终端按 Ctrl+C 安全退出服务
 ```
+
+### 为什么不需要 Token / 密码
+
+网络边界完全由 SSH 承担（后端只监听回环），同时后端自身还有两道校验
+（`straditize_core/rpc_server.py`）：
+
+| 校验 | 目的 |
+| --- | --- |
+| `Host` 必须是回环（或显式绑定的主机） | 阻断 **DNS rebinding**——攻击者域名解析到 127.0.0.1 时 Origin 与 Host 会同时是攻击者域名，仅比对二者会被绕过 |
+| `Origin` 若存在，必须与请求自身 Host 同源 | 阻断 **CSRF**；浏览器对同源 POST 也会发送 Origin，故同源必须放行 |
+
+并且**绝不回显 `Access-Control-Allow-Origin: *`**。历史上该头使**用户浏览的任意网页都能读写本机后端**
+（CORS 允许读取响应），既可窃取已载入的图谱与数字化数据，也可篡改会话——该漏洞已于 2026-09-20 修复。
+
+> 请勿为了"方便"把它改回通配符。开发模式所需的跨源已由 Vite 代理消除
+> （见方式 C；代理的 `changeOrigin` 必须保持 `false`，否则同源校验会正确地拒绝请求）。
 
 ---
 
@@ -159,14 +188,15 @@ straditize-pro/
 │   │   ├── services/             # JSON-RPC 客户端与同源自适应探测
 │   │   └── types/                # 前端地学数据模型接口
 │   └── dist/                     # 预编译好的纯静态 SPA 生产产物
-├── straditize/                   # Python 核心与算法层
-│   ├── straditize_core/          # 纯无 GUI 现代化算力内核
-│   │   ├── calibration.py        # LinearCalibration 与 LogCalibration 核心类
-│   │   ├── curve.py              # 显著度拐点提取与 RDP 轮廓压缩
-│   │   ├── columns.py            # 分列线与基准纵线探测
-│   │   ├── image.py              # 图像去网格、二值化、色彩掩膜
-│   │   ├── rpc_server.py         # HTTP / Stdio 双协议服务与静态资源托管
-│   │   └── session.py            # 会话状态机、数据求交与 POSIX UStar 导出
+├── straditize_core/              # 现代版纯无 GUI 算力内核 (本项目维护)
+│   ├── calibration.py            # LinearCalibration 与 LogCalibration 核心类
+│   ├── curve.py                  # 显著度拐点提取与 RDP 轮廓压缩
+│   ├── columns.py                # 分列线与基准纵线探测
+│   ├── image.py                  # 图像去网格、二值化、色彩掩膜
+│   ├── age_depth.py              # 年代-深度模型识别、提取与不确定性映射
+│   ├── rpc_server.py             # HTTP / Stdio 双协议服务、访问控制与静态资源托管
+│   └── session.py                # 会话状态机、数据求交与 POSIX UStar 导出
+├── straditize/                   # 上游第三方 PyQt5 原版 (不维护；仅提供范例示例图片)
 │   └── support/                  # PyInstaller 独立打包配方与产物
 ├── tests/                        # 真实浏览器与端到端自动化测试
 │   ├── verify_browser_playwright_e2e.py # Playwright 真实 MS Edge 浏览器 E2E 交互测试
@@ -186,21 +216,18 @@ straditize-pro/
 项目内置了从底层数学到真实浏览器的三层金字塔自动化测试验证体系：
 
 ```bash
-# 1. 运行核心算法与标定单元测试
-pixi run python -m pytest straditize/tests/test_core.py
+# 1. 全量测试 (核心算法 / JSON-RPC / 端到端 / 年龄模型 / OCR / 组件管理等)
+pixi run test
 
-# 2. 运行 JSON-RPC 2.0 协议全量测试
-pixi run python -m pytest straditize/tests/test_rpc.py
-
-# 3. 运行端到端科学计算与导出集成测试
-pixi run python tests/verify_straditize_pro_e2e.py
-
-# 4. 运行基于真实 MS Edge 浏览器的 Playwright 交互测试
-pixi run python tests/verify_browser_playwright_e2e.py
-
-# 5. 代码质量检查 (Ruff Linter)
+# 2. 代码质量检查 (Ruff Linter)
 pixi run lint
+
+# 3. 前端核心功能自检 (Node)
+cd frontend && npm test
 ```
+
+> 上述命令均可在仓库根目录直接执行。注意现代版测试位于仓库根 `tests/`，
+> 而非上游遗留的 `straditize/tests/`（后者只包含那条 PyQt5 分支自己的测试，当前环境跑不起来）。
 
 ---
 
