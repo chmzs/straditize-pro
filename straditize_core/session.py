@@ -103,9 +103,28 @@ from .protocol import (
     STATE_ERROR,
     JsonRpcError,
 )
+from .session_parts import (
+    CleanupMixin,
+    CoreMixin,
+    ExportMixin,
+    LayersMixin,
+    QaMixin,
+    RoiMixin,
+    SamplesMixin,
+    XTicksMixin,
+)
 
 
-class StraditizeSession:
+class StraditizeSession(
+    CoreMixin,
+    RoiMixin,
+    CleanupMixin,
+    XTicksMixin,
+    SamplesMixin,
+    LayersMixin,
+    QaMixin,
+    ExportMixin,
+):
     """Encapsulates the state and processing pipeline of a digitization workflow."""
 
     def __init__(self):
@@ -116,6 +135,9 @@ class StraditizeSession:
         self.height: int = 0
         self.format: str = ""
         self.mode: str = ""
+
+        # Multi-ROI state (managed by RoiMixin)
+        self._init_rois()
 
         # Foreground & Segmentation
         self.foreground_mask: np.ndarray | None = None
@@ -260,7 +282,11 @@ class StraditizeSession:
             self.depth_calib = None
             self.taxa_names = []
             self.depth_grid = []
+            self.data_xlim = None
+            self.data_ylim = None
+            self._init_rois()
 
+            sug = self.suggest_data_region()
             return {
                 "width": self.width,
                 "height": self.height,
@@ -270,7 +296,10 @@ class StraditizeSession:
                 # 初始数据有效区建议由后端给出：图像几何只有后端掌握，
                 # 前端不得自行编造 ROI 默认值（历史上前端自造过一份，会与后端认知分歧）。
                 # 注意这里只给 ROI，不给深度：ROI 是取数区域，不是时间/深度标尺。
-                "suggested_roi": self.suggest_data_region(),
+                "suggested_roi": sug,
+                "rois": self.rois,
+                "primary_roi_id": self.primary_roi_id,
+                "active_roi_id": self.active_roi_id,
             }
         except Exception as e:  # noqa: BLE001
             raise JsonRpcError(STATE_ERROR, f"Failed to load image: {e!s}")
@@ -464,14 +493,33 @@ class StraditizeSession:
 
     def detect_columns(
         self,
-        data_xlim: list[float],
-        data_ylim: list[float],
+        data_xlim: list[float] | None = None,
+        data_ylim: list[float] | None = None,
+        roi_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Detects or divides diagram data columns within provided diagram bounds."""
         if self.image is None:
             raise JsonRpcError(STATE_ERROR, "No image loaded.")
 
-        if len(data_xlim) != 2 or len(data_ylim) != 2:
+        target_roi = None
+        if roi_id:
+            target_roi = self._get_roi(roi_id)
+            target_roi_id = roi_id
+            if data_xlim is None:
+                data_xlim = list(target_roi["xlim"])
+            if data_ylim is None:
+                data_ylim = list(target_roi["ylim"])
+        elif hasattr(self, "rois") and self.rois:
+            target_roi_id = self.active_roi_id or self.rois[0]["id"]
+            target_roi = self._get_roi(target_roi_id)
+            if data_xlim is None:
+                data_xlim = list(target_roi["xlim"])
+            if data_ylim is None:
+                data_ylim = list(target_roi["ylim"])
+        else:
+            target_roi_id = "roi_1"
+
+        if data_xlim is None or data_ylim is None or len(data_xlim) != 2 or len(data_ylim) != 2:
             raise JsonRpcError(
                 INVALID_PARAMS,
                 "data_xlim and data_ylim must each have 2 elements [min, max]",
@@ -521,6 +569,8 @@ class StraditizeSession:
                 detected_cols.append(
                     {
                         "col_index": idx,
+                        "id": f"{target_roi_id}_col{idx + 1:02d}",
+                        "roi_id": target_roi_id,
                         "start": col_start,
                         "end": col_end,
                         "scale_type": "linear",
@@ -543,6 +593,8 @@ class StraditizeSession:
                 detected_cols.append(
                     {
                         "col_index": idx,
+                        "id": f"{target_roi_id}_col{idx + 1:02d}",
+                        "roi_id": target_roi_id,
                         "start": c_start,
                         "end": c_end,
                         "scale_type": "linear",
@@ -561,8 +613,18 @@ class StraditizeSession:
                 col["name"] = col_code
                 col["species"] = col_code
 
-        self.columns = detected_cols
-        return self.columns
+        # Preserve columns belonging to other ROIs
+        other_cols = [c for c in getattr(self, "columns", []) if c.get("roi_id") != target_roi_id]
+        merged_cols = other_cols + detected_cols
+        for i, c in enumerate(merged_cols):
+            c["col_index"] = i
+        self.columns = merged_cols
+
+        # Reset columns_stale for this ROI
+        if target_roi:
+            target_roi["columns_stale"] = False
+
+        return detected_cols
 
     def _roi_box(self) -> tuple[float, float, float, float] | None:
         """The data region as ``(x0, y0, x1, y1)``, or ``None`` when unset."""
@@ -854,8 +916,14 @@ class StraditizeSession:
             )
 
         # Fit Y scale: val = slope * pixel + intercept
-        y_pixels = np.array([m["pixel"] for m in y_marks], dtype=float)
-        y_vals = np.array([m["val"] for m in y_marks], dtype=float)
+        y_pixels = np.array(
+            [m.get("pixel") if "pixel" in m else m.get("px") for m in y_marks],
+            dtype=float,
+        )
+        y_vals = np.array(
+            [m.get("val") if "val" in m else m.get("value") for m in y_marks],
+            dtype=float,
+        )
 
         if np.all(y_pixels == y_pixels[0]):
             raise JsonRpcError(
@@ -1662,46 +1730,6 @@ class StraditizeSession:
 
     save_project = project_save
 
-    def roi_update(
-        self,
-        x0: float | None = None,
-        x1: float | None = None,
-        y0: float | None = None,
-        y1: float | None = None,
-        x: float | None = None,
-        y: float | None = None,
-        w: float | None = None,
-        h: float | None = None,
-    ) -> dict[str, Any]:
-        """Updates the data region bounding box.
-
-        Region only: this never touches the depth calibration. The two are
-        independent -- the ROI says *where* data is read, the calibration (S4,
-        ``calibrate_axes``) says what a pixel row *means*.
-        """
-        if x is not None and w is not None:
-            x0 = x
-            x1 = x + w
-        if y is not None and h is not None:
-            y0 = y
-            y1 = y + h
-
-        if x0 is not None and x1 is not None:
-            self.data_xlim = [float(x0), float(x1)]
-        if y0 is not None and y1 is not None:
-            self.data_ylim = [float(y0), float(y1)]
-
-        # Line removal is region-scoped, so a new region invalidates the mask.
-        self.grid_line_mask = None
-        self.degrid_info = None
-
-        self._record_history("Update ROI")
-        return {
-            "data_xlim": self.data_xlim,
-            "data_ylim": self.data_ylim,
-            "roi": self._roi_box(),
-        }
-
     def column_add(self, column: dict[str, Any]) -> dict[str, Any]:
         """Adds a column definition to the project."""
         self._record_history("Add column")
@@ -1806,15 +1834,21 @@ class StraditizeSession:
         ylim: list[float] | None = None,
         data_xlim: list[float] | None = None,
         data_ylim: list[float] | None = None,
+        roi_id: str | None = None,
         min_width: int = 10,
         threshold: float | None = None,
     ) -> list[dict[str, Any]]:
         """Runs column detection inside ROI."""
-        target_xlim = xlim or data_xlim or self.data_xlim
-        target_ylim = ylim or data_ylim or self.data_ylim
+        if roi_id:
+            roi = self._get_roi(roi_id)
+            target_xlim = list(roi["xlim"])
+            target_ylim = list(roi["ylim"])
+        else:
+            target_xlim = xlim or data_xlim or self.data_xlim
+            target_ylim = ylim or data_ylim or self.data_ylim
         if not target_xlim or not target_ylim:
             raise JsonRpcError(INVALID_PARAMS, "Data ROI bounds must be specified or set in session.")
-        res = self.detect_columns(data_xlim=target_xlim, data_ylim=target_ylim)
+        res = self.detect_columns(data_xlim=target_xlim, data_ylim=target_ylim, roi_id=roi_id)
         self._record_history("Detect columns")
         return res
 

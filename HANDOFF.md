@@ -1,8 +1,8 @@
 # straditize 开发交接卡 (HANDOFF.md)
-- 更新时间：2026-09-20 13:35 | 分支 dev-v2-modern | HEAD 1c356c1
+- 更新时间：2026-09-24 18:00 | 分支 dev-v2-modern | HEAD 1c356c1
 - 规则：**分节追加** —— 只改自己那一节，严禁整文件覆盖或改写他节；每节 ≤8 行，全文 ≤50 行，超限时最旧节整段移入 `HANDOFF-archive/`。
-- 一键验证：`pixi run lint` ｜ `pixi run test` ｜ `npm --prefix frontend run build` ｜ `npm --prefix frontend test`
-- 当前结果：lint ✓ ｜ test **179 passed + 84 subtests** ｜ build ✓ ｜ 前端 test ✓ ｜ ⚠️ 运行中的 8765 仍是旧进程（既无本轮 ROI/标定/去线改动，也仍回 `Access-Control-Allow-Origin: *`）→ **须重启 `pixi run rpc-server`**（前端 dist 已重建，刷新即可）
+- 一键验证：`pixi run lint` ｜ `pixi run test` ｜ `npm --prefix frontend run build` ｜ `npm --prefix frontend test` ｜ `pixi run python support/probe_truth/check_ticket_ownership.py` ｜ `pixi run python support/probe_x_ticks.py`
+- 当前结果：**W2 (T01) 后端骨架解耦与多ROI落地已完成**；`pixi run test` **196 passed + 96 subtests**（新增 T01 多ROI套件9项全过）｜ lint ✓ ｜ ownership ✓ ｜ 前端 build/test ✓
 
 ## [AGEDEPTH] 2026-09-20 12:20 — 彩色中位线 + 通道覆盖 + 编造路径清查（已提交 160b060/93084b1/8a93b92）
 - 识别加**色度通道**：投影到图形自身主色方向（**不是** HSV chroma——虚线+灰云混合使 chroma 逐行在 0~114 间跳，而 `R−mean(G,B)` 阈值 12 即恢复 843 行中的 777 行）；自动按「**贯穿行数**」选通道（红线达暗度的 70%、Bchron 蓝色测年条仅 23%，切 55%），另可强制 `curve_channel`。独立参考（逐行 `R−max(G,B)` argmax）误差 **median 0.00% / p95 1.69%**（n=733）。入口 `age_depth.py:extract_age_depth_model`；界面加**通道下拉 + 原因显示**，三曲线分色（中位蓝/上界紫/下界橙）+ 深色光晕，年龄标定手柄改黄避免撞色。**画布叠加层刻意用固定色**（主题色会消失在一张浅色图上，与黑名单第 1 条的区别已入代码注释）。
@@ -23,13 +23,12 @@
 - **停滞断点/下一步**：① 竖线在「强」档会连真实细竖数据一起剔（Hoya strong = 3.20%），现靠 `K` 笔刷兜底；② **虚线网格**因形态学开运算检不出，只能手工补——要全自动需先做笔画宽度/拓扑先验；③ 只对 `grid_line_mask` 做了 ROI 约束，`detect_columns` 仍只做横向去线（未接竖线）。
 - **验证**：`pixi run lint` ✓ ｜ `pixi run test` **179 passed + 84 subtests** ｜ `npm --prefix frontend run build` ✓ ｜ `npm --prefix frontend test` ✓ ｜ 浏览器实测（临时 8899，已关）：Pinus 白色保留、仅剩 2 条真竖线红标、ROI 511/1311 与标定 524/1327 **并存互不影响**、涂抹 342→77→清空恢复 342。
 
-## [UI] 2026-09-20 12:03 — 顶栏减负：去线去重 + 缩放/透视下沉到底部视口栏
-- 折叠按钮辨识度（前一轮，已提交）：`.icon-btn` 基色→`--text-secondary`、hover 去写死白字；`.icon-btn.panel-toggle`（28×28+底+框）挂 `Sidebar.ts:72`/`Inspector.ts:98`。
-- **删顶栏「去线」**：与 `Inspector.ts:240 #select-inspector-degrid` 是同回调**重复入口**且两处显示值互不同步。副作用：该控件现在只在 S2 面板可见（原顶栏常驻），S3+ 要改需点步骤条回 S2。
-- **缩放组 + 透视组下沉**到画布底部新 `.canvas-view-bar`：`main.ts` 建宿主 → `Toolbar.setViewControlsHost()` 每次 render 后搬移，**搬前先清宿主里同 ID 旧节点**（render 重建不会清走已搬走的）。搬移后只有 render 之后的更新方法改 `document.getElementById`；`bindEvents` 必须仍用 `this.element`（构造函数内首次 render 时元素未挂载 document）。
-- 实测：顶栏中间容器 29 → **317px**；底部栏 213px，左距工具条 7px / 右距雷达图 6px；缩放点击 27%→33% ✓、透视 active 切换 ✓。build ✓ ｜ E2E 11/11 ✓ ｜ test 153 passed ｜ lint ✓。
-- 引导栏文字：去掉写死的 `max-width:320px` 改 `flex:1 1 auto`，可用宽度 320 → 约 410px（不再无谓截断）。
-- ⚠️ **步骤条仍溢出 216px**（需 534 / 实得 317）。已批准减负共释放 288px，原始缺口 505px；不压步骤条（用户已否决）就还差约 216px，需再往下搬 元数据/OCR/年代（约 164px）或收窄左组文案。**未做，等用户定。**
+## [8STEP-W2-T01] 2026-09-24 18:00 — 后端骨架解耦+多ROI落地 (契约v1.3/T01完成)
+- 架构解耦：`session.py`组合8个Mixin；`rpc_server.py`全动态注册（11个垂直模块，彻底消灭`legacy.py`，无硬编码方法名）。
+- 多ROI模型与单一事实源：`DataRoi`补齐全9字段（含`name_source/xlim/ylim/visible`）；删除`override/scaleCalib`等死灰；`columns_stale`严格per-ROI。
+- 安全收敛：`get_diagram_data`彻底移除未载图自动加载Hoya违规兜底（黑名单39条）；旧测试通过`data_xlim/data_ylim`代理无感过渡。
+- 验收全绿：`pixi run test` 196 passed + 96 subtests（新增T01套件9项全过）｜ `pixi run lint` ✓ ｜ 前端编译与测试 ✓ ｜ ticket ownership ✓。
+- 下一步：启动W3（T02 前端骨架+模型+E2E夹具），冻结前端类型并搭建Panel/Overlay注册中心与Playwright夹具。
 
 ## 黑名单（跨会话共享，只追加不覆盖）
 - ❌ 文字/描边严禁写死 `#fff`/`#38bdf8`/`#f59e0b`（日间隐形或低对比），必须用 `--text-heading`/`--accent-*`；**但画布叠加层例外**——它叠在任意用户图上，主题色会消失，须用固定高对比色 + 深色光晕；
@@ -40,8 +39,10 @@
 - ❌ 平移规范唯一且**全画布一致**：**右键拖拽 / 中键拖拽 / 空格+左键**三者等价，主画布与所有辅助画布（OCR 框选、旋转预览、年代弹窗）均须支持；严禁任何画布只支持其中一部分，也严禁再出现「黑名单禁辅助画布右键」这类已废弃说法（该说法曾导致年代弹窗长期与主画布行为不一致）；
 - ❌ 年龄集合严禁「按采样点序号做 AR(1) + `maximum.accumulate` 事后排序」：前者使相关长度随重采样步长漂移（2→10cm 改 2.8×，特征层位差 4cm），后者掩盖倒转并引入与步长相关的单向偏差；必须在速率空间构造，且拟合须读图形**原生采样**而非重采样后的包络；
 - ❌ ROI（取数框）与深度/年代标定**严禁互相推导或互相兜底**：`top_px ?? dataYMin`、由 `data_ylim` 反算 `top/bottom_cm`、拿 ROI 边界当刻度端点，全属此列；未标定必须在界面上如实显示 `--`，`CoordinateSystem.calibrationBounds()` 是唯一判定入口；
-- ❌ 线去除严禁按「整行/整列占据率」整条删除——必须带**垂直于线方向的厚度上限**（实心花粉轮廓被线穿过处厚达数十像素，必须豁免）；且掩膜只允许后端产生（`overlay_png` 即 B 键所见 = 数字化所用），前端不得另算一套"看起来像去线"的显示逻辑；`strength:"off"` 必须主动清空会话掩膜。
+- ❌ 线去除严禁按「整行/整列占据率」整条删除——必须带**垂直于线方向的厚度上限**（实心花粉轮廓被线穿过处厚达数十像素，必须豁免）；且掩膜只允许后端产生（`overlay_png` 即 B 键所见 = 数字化所用），前端不得另算一套"看起来像去线"的显示逻辑；`strength:"off"` 必须主动清空会话掩膜；
+- ❌ 契约字段只能来自 `docs/plans/2026-09-20-frozen-contracts.md`（**单子不得自行发明字段**）；ROI 上的表单值/继承值严禁被当作事实源；特性单严禁写"无人可写"的共享文件（`support/probe_truth/check_ticket_ownership.py` 机器校验，发单前必须跑通）；掩膜优先级**排除区绝对优先**，restore 落在排除区内必须拒绝或提示，**不得静默无效**。
 
 ## 索引
-- 历史归档：`HANDOFF-archive/`（含 `2026-09-20-agedepth-fabrication-audit.md`、`2026-09-20-taxadict-ocr-vocabulary.md`、`2026-09-20-ui-button-visibility.md`）｜ 规范：`AGENTS.md`
+- 历史归档：`HANDOFF-archive/`（含 `2026-09-20-topbar-slimming.md`、`2026-09-20-agedepth-fabrication-audit.md`、`2026-09-20-taxadict-ocr-vocabulary.md`、`2026-09-20-ui-button-visibility.md`）｜ 规范：`AGENTS.md`
 - 设计规范：`docs/ARCHITECTURE.md`（§6.1 ROI/标定数据模型、§7.1 线去除）｜ 协议：`docs/JSON_RPC_SPECIFICATION.md`（§4.6–4.8）
+- **8 步重构三件套**：设计稿 / **冻结契约 v1.1（唯一字段事实源）** / 任务单 v2.1 —— 均在 `docs/plans/2026-09-20-*`
