@@ -3,6 +3,7 @@ import { HistoryManager } from '../core/HistoryManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { tokens } from '../styles/tokens';
 import { DeletePointCommand, ResizeRoiCommand } from '../core/Commands';
+import { getStepPanel } from './steps/_registry';
 
 export interface InspectorCallbacks {
   onDataChange: () => void;
@@ -123,6 +124,12 @@ export class Inspector {
   }
 
   private renderStagePanel(activeCol: TaxaColumn | undefined, cal: DiagramCalibration): string {
+    // 优先从 Step Registry 动态路由挂载
+    const registered = getStepPanel(this.currentStage);
+    if (registered) {
+      return registered.render(this.data);
+    }
+
     switch (this.currentStage) {
       case 0:
         return this.renderS0Panel();
@@ -948,6 +955,16 @@ export class Inspector {
     this.element.querySelector('#btn-open-ycalib-manual')?.addEventListener('click', () => {
       this.openManualYCalibrationModal();
     });
+
+    // 挂载当前步骤 Panel 的事件监听 (Step Registry)
+    const registered = getStepPanel(this.currentStage);
+    if (registered) {
+      registered.mount(this.element, {
+        ...this.callbacks,
+        onDataChange: this.callbacks.onDataChange,
+        onAdvanceWorkflowStage: this.callbacks.onAdvanceWorkflowStage,
+      });
+    }
   }
 
   /**
