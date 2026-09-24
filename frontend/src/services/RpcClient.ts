@@ -53,7 +53,10 @@ function createEmptyDiagramData(): DiagramData {
     imageSrc: '',
     imageWidth: 0,
     imageHeight: 0,
-    roi: { xMin: 0, xMax: 0, yMin: 0, yMax: 0 },
+    rois: [],
+    primary_roi_id: '',
+    active_roi_id: '',
+    roi: { id: '', name: 'pollen', name_source: 'default', composition: true, visible: true, xlim: [0, 0], ylim: [0, 0], columns_stale: false, form_defaults: null, xMin: 0, xMax: 0, yMin: 0, yMax: 0 },
     calibration: {
       isCalibrated: false,
       top_px: null,
@@ -62,6 +65,11 @@ function createEmptyDiagramData(): DiagramData {
       bottom_cm: null,
       unit: 'cm',
     },
+    line_candidates: [],
+    selected_candidate_ids: [],
+    line_strokes: [],
+    exclusion_regions: [],
+    samples: [],
     lineCorrections: [],
     columns: [],
     activeTaxaId: '',
@@ -286,8 +294,48 @@ export class RpcClient {
     // 不补任何默认值：缺字段就是缺字段，不能替后端编一个刻度出来。
     const data = raw as DiagramData & {
       lineRemoval?: { corrections?: LineMaskStroke[] };
+      primaryRoiId?: string;
+      activeRoiId?: string;
     };
-    data.roi = data.roi ?? { xMin: 0, xMax: 0, yMin: 0, yMax: 0 };
+    data.rois = data.rois ?? [];
+    data.primary_roi_id = data.primary_roi_id ?? data.primaryRoiId ?? (data.rois[0]?.id || '');
+    data.active_roi_id = data.active_roi_id ?? data.activeRoiId ?? (data.rois[0]?.id || '');
+    data.line_candidates = data.line_candidates ?? [];
+    data.selected_candidate_ids = data.selected_candidate_ids ?? [];
+    data.line_strokes = data.line_strokes ?? [];
+    data.exclusion_regions = data.exclusion_regions ?? [];
+    data.samples = data.samples ?? [];
+
+    const activeRoi = data.rois.find((r) => r.id === data.active_roi_id) || data.rois[0];
+    if (activeRoi) {
+      const x0 = activeRoi.xlim?.[0] ?? activeRoi.xMin ?? 0;
+      const x1 = activeRoi.xlim?.[1] ?? activeRoi.xMax ?? 0;
+      const y0 = activeRoi.ylim?.[0] ?? activeRoi.yMin ?? 0;
+      const y1 = activeRoi.ylim?.[1] ?? activeRoi.yMax ?? 0;
+      data.roi = {
+        ...activeRoi,
+        xMin: x0,
+        xMax: x1,
+        yMin: y0,
+        yMax: y1,
+      };
+    } else {
+      data.roi = data.roi ?? {
+        id: '',
+        name: 'pollen',
+        name_source: 'default',
+        composition: true,
+        visible: true,
+        xlim: [0, 0],
+        ylim: [0, 0],
+        columns_stale: false,
+        form_defaults: null,
+        xMin: 0,
+        xMax: 0,
+        yMin: 0,
+        yMax: 0,
+      };
+    }
     data.calibration = data.calibration ?? {
       isCalibrated: false,
       top_px: null,
@@ -415,11 +463,31 @@ export class RpcClient {
     if (!suggested) {
       throw new Error(tError(-32603, 'core.loadImage returned no suggested_roi'));
     }
+    const rois = backendResult.rois ?? [];
+    const primaryId = backendResult.primary_roi_id ?? (rois[0]?.id || 'roi_1');
+    const activeId = backendResult.active_roi_id ?? (rois[0]?.id || 'roi_1');
     this.currentDiagramData = {
       imageSrc,
       imageWidth: backendResult.width ?? 0,
       imageHeight: backendResult.height ?? 0,
+      rois,
+      primary_roi_id: primaryId,
+      active_roi_id: activeId,
+      line_candidates: [],
+      selected_candidate_ids: [],
+      line_strokes: [],
+      exclusion_regions: [],
+      samples: [],
       roi: {
+        id: activeId,
+        name: 'pollen',
+        name_source: 'default',
+        composition: true,
+        visible: true,
+        xlim: [suggested.xMin, suggested.xMax],
+        ylim: [suggested.yMin, suggested.yMax],
+        columns_stale: false,
+        form_defaults: null,
         xMin: suggested.xMin,
         xMax: suggested.xMax,
         yMin: suggested.yMin,
@@ -665,4 +733,40 @@ export class RpcClient {
     throw new Error(tError(-32603, 'core.exportData returned an unexpected payload'));
   }
 
+  // === 冻结契约 v1.3 多 ROI RPC 核心方法 ===
+  public async roiCreate(params: { name?: string; x0?: number; x1?: number; y0?: number; y1?: number; composition?: boolean }): Promise<{ roi: DataRoi; rois_count: number }> {
+    return this.call('roi.create', params);
+  }
+
+  public async roiUpdate(params: { roi_id?: string; name?: string; xlim?: [number, number]; ylim?: [number, number]; visible?: boolean; composition?: boolean; form_defaults?: any; columns_stale?: boolean; x0?: number; x1?: number; y0?: number; y1?: number }): Promise<{ roi: DataRoi }> {
+    return this.call('roi.update', params);
+  }
+
+  public async roiRemove(roiId: string): Promise<{ success: boolean; removed_column_ids: string[] }> {
+    return this.call('roi.remove', { roi_id: roiId });
+  }
+
+  public async roiList(): Promise<{ rois: DataRoi[]; primary_roi_id: string; active_roi_id: string }> {
+    return this.call('roi.list', undefined);
+  }
+
+  public async roiSetActive(roiId: string): Promise<{ active_roi_id: string }> {
+    return this.call('roi.setActive', { roi_id: roiId });
+  }
+
+  public async roiSetPrimary(roiId: string): Promise<{ primary_roi_id: string }> {
+    return this.call('roi.setPrimary', { roi_id: roiId });
+  }
+
+  public async roiApplyFormDefaults(roiId: string): Promise<{ changed: any[]; count: number }> {
+    return this.call('roi.applyFormDefaults', { roi_id: roiId });
+  }
+
+  public async detectColumns(roiId?: string): Promise<Column[]> {
+    return this.call('algorithm.detectColumns', roiId ? { roi_id: roiId } : undefined);
+  }
+
+  public async updateColumn(colIndex: number, updates: Partial<Column>): Promise<{ column: Column }> {
+    return this.call('column.update', { col_index: colIndex, updates });
+  }
 }

@@ -281,26 +281,12 @@ export class Inspector {
    */
   private renderS2RoiPanel(cal: DiagramCalibration): string {
     const roi = this.data.roi;
-    const activePanel = this.data.panels?.find((p) => p.id === this.data.activePanelId) || this.data.panels?.[0];
-    const correctionCount = this.data.lineCorrections.length;
+    const correctionCount = this.data.lineCorrections?.length ?? 0;
     const bounds = CoordinateSystem.calibrationBounds(cal);
 
     return `
       <div class="inspector-section">
         <div class="section-title">S2：界定纯数据取数区 (ROI)</div>
-
-        <!-- 多 ROI 分区指示 (Y 轴强锁对齐) -->
-        <div style="margin-bottom: 10px; padding: 6px 8px; background: rgba(56, 189, 248, 0.08); border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.25);">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-            <strong style="font-size: 11px; color: var(--text-primary);">当前有效分区:</strong>
-            <span style="font-size: 10px; color: var(--accent-blue); font-weight: 700;">${activePanel ? activePanel.name : '主图区 (ROI 1)'}</span>
-          </div>
-          <div style="display: flex; gap: 4px;">
-            <button id="btn-add-sub-roi" class="tool-btn" style="flex: 1; font-size: 10px; padding: 3px 6px; color: var(--accent-blue); border-color: var(--accent-blue);" title="追加同剖面子有效区 (如炭屑区、第一主成分折线区)，自动锁死并对准主图 Y 轴深度">
-              ➕ 追加子有效区 (锁定 Y 轴)
-            </button>
-          </div>
-        </div>
 
         <div class="tip-card" style="margin-bottom: 10px; border-left: 3px solid var(--accent-blue); padding: 8px 10px;">
           <p style="font-size: 11px; line-height: 1.5; color: var(--text-primary); margin: 0;">
@@ -877,51 +863,6 @@ export class Inspector {
           this.callbacks.onSelectTaxa(this.data.activeTaxaId);
         }
       }
-    });
-
-    // 追加子有效区 (锁定 Y 轴，只放开 X 轴水平微调)
-    this.element.querySelector('#btn-add-sub-roi')?.addEventListener('click', () => {
-      const cal = this.data.calibration;
-      const mainRoi = this.data.roi;
-      if (!this.data.panels) {
-        this.data.panels = [
-          {
-            id: 'panel_1',
-            name: '主图区 (ROI 1)',
-            roi: { ...mainRoi },
-            calibration: { ...cal },
-            columns: [...this.data.columns],
-            activeTaxaId: this.data.activeTaxaId,
-          }
-        ];
-      }
-
-      const pIdx = this.data.panels.length + 1;
-      const subWidth = Math.round((mainRoi.xMax - mainRoi.xMin) * 0.3);
-      const subXMin = mainRoi.xMax + 20;
-      const subXMax = subXMin + subWidth;
-
-      const newPanel = {
-        id: `panel_${pIdx}`,
-        name: `子分区 ${pIdx} (锁定Y轴)`,
-        // 子区的 Y 范围严格继承主图取数区；深度标定是整幅图共用的同一把尺，
-        // 不经由 ROI 推导，因此这里原样复制即可。
-        roi: {
-          xMin: subXMin,
-          xMax: subXMax,
-          yMin: mainRoi.yMin,
-          yMax: mainRoi.yMax,
-        },
-        calibration: { ...cal },
-        columns: [],
-        activeTaxaId: '',
-      };
-
-      this.data.panels.push(newPanel);
-      this.data.activePanelId = newPanel.id;
-      this.history.push(`Add Sub-ROI Panel ${pIdx} with Y-Axis Lock`, this.data.columns, this.data.activeTaxaId, this.data.calibration, this.data.roi);
-      this.render();
-      this.callbacks.onDataChange();
     });
 
     // 重新识别此列

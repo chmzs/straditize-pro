@@ -1,8 +1,8 @@
 # straditize 开发交接卡 (HANDOFF.md)
-- 更新时间：2026-09-24 18:00 | 分支 dev-v2-modern | HEAD 1c356c1
+- 更新时间：2026-09-24 20:30 | 分支 dev-v2-modern | HEAD 9ed125b
 - 规则：**分节追加** —— 只改自己那一节，严禁整文件覆盖或改写他节；每节 ≤8 行，全文 ≤50 行，超限时最旧节整段移入 `HANDOFF-archive/`。
-- 一键验证：`pixi run lint` ｜ `pixi run test` ｜ `npm --prefix frontend run build` ｜ `npm --prefix frontend test` ｜ `pixi run python support/probe_truth/check_ticket_ownership.py` ｜ `pixi run python support/probe_x_ticks.py`
-- 当前结果：**W2 (T01) 后端骨架解耦与多ROI落地已完成**；`pixi run test` **196 passed + 96 subtests**（新增 T01 多ROI套件9项全过）｜ lint ✓ ｜ ownership ✓ ｜ 前端 build/test ✓
+- 一键验证：`pixi run lint` ｜ `pixi run test` ｜ `pixi run test-e2e` ｜ `npm --prefix frontend run build` ｜ `npm --prefix frontend test` ｜ `pixi run python support/probe_truth/check_ticket_ownership.py`
+- 当前结果：**W3 (T02) 前端骨架+模型+E2E环境已完成**；`pixi run test-e2e` **PASS (8步/无导出阶段/顶栏导出在)** ｜ `npm --prefix frontend test` 4 套全过 ｜ 前端编译 ✓ ｜ 共享文件已冻结只读。
 
 ## [AGEDEPTH] 2026-09-20 12:20 — 彩色中位线 + 通道覆盖 + 编造路径清查（已提交 160b060/93084b1/8a93b92）
 - 识别加**色度通道**：投影到图形自身主色方向（**不是** HSV chroma——虚线+灰云混合使 chroma 逐行在 0~114 间跳，而 `R−mean(G,B)` 阈值 12 即恢复 843 行中的 777 行）；自动按「**贯穿行数**」选通道（红线达暗度的 70%、Bchron 蓝色测年条仅 23%，切 55%），另可强制 `curve_channel`。独立参考（逐行 `R−max(G,B)` argmax）误差 **median 0.00% / p95 1.69%**（n=733）。入口 `age_depth.py:extract_age_depth_model`；界面加**通道下拉 + 原因显示**，三曲线分色（中位蓝/上界紫/下界橙）+ 深色光晕，年龄标定手柄改黄避免撞色。**画布叠加层刻意用固定色**（主题色会消失在一张浅色图上，与黑名单第 1 条的区别已入代码注释）。
@@ -23,12 +23,12 @@
 - **停滞断点/下一步**：① 竖线在「强」档会连真实细竖数据一起剔（Hoya strong = 3.20%），现靠 `K` 笔刷兜底；② **虚线网格**因形态学开运算检不出，只能手工补——要全自动需先做笔画宽度/拓扑先验；③ 只对 `grid_line_mask` 做了 ROI 约束，`detect_columns` 仍只做横向去线（未接竖线）。
 - **验证**：`pixi run lint` ✓ ｜ `pixi run test` **179 passed + 84 subtests** ｜ `npm --prefix frontend run build` ✓ ｜ `npm --prefix frontend test` ✓ ｜ 浏览器实测（临时 8899，已关）：Pinus 白色保留、仅剩 2 条真竖线红标、ROI 511/1311 与标定 524/1327 **并存互不影响**、涂抹 342→77→清空恢复 342。
 
-## [8STEP-W2-T01] 2026-09-24 18:00 — 后端骨架解耦+多ROI落地 (契约v1.3/T01完成)
-- 架构解耦：`session.py`组合8个Mixin；`rpc_server.py`全动态注册（11个垂直模块，彻底消灭`legacy.py`，无硬编码方法名）。
-- 多ROI模型与单一事实源：`DataRoi`补齐全9字段（含`name_source/xlim/ylim/visible`）；删除`override/scaleCalib`等死灰；`columns_stale`严格per-ROI。
-- 安全收敛：`get_diagram_data`彻底移除未载图自动加载Hoya违规兜底（黑名单39条）；旧测试通过`data_xlim/data_ylim`代理无感过渡。
-- 验收全绿：`pixi run test` 196 passed + 96 subtests（新增T01套件9项全过）｜ `pixi run lint` ✓ ｜ 前端编译与测试 ✓ ｜ ticket ownership ✓。
-- 下一步：启动W3（T02 前端骨架+模型+E2E夹具），冻结前端类型并搭建Panel/Overlay注册中心与Playwright夹具。
+## [8STEP-W3-T02] 2026-09-24 20:30 — 前端骨架+模型+E2E环境 (契约v1.3/T02完成)
+- 物理清除与模型落地：彻底移除`panels/activePanelId`；`pollen.ts`齐备`DataRoi`9字段/`Column.x_ticks`/4扁平列表。
+- 8步重排与Registry扩展点：`workflow.ts`重排为8步（删导出阶段，顶栏总出口承担）；新增`steps/_registry.ts`与`canvas/_registry.ts`。
+- 快照与路由薄化：`HistoryManager`撤销重做覆盖`rois/primary_roi_id/active_roi_id`深比较；`Inspector.ts`移除越权代码。
+- L4 E2E与门禁通过：新增`tests/e2e/test_smoke.py`+`conftest.py`（输出grammar合规）｜ `pixi run test-e2e` PASS ｜ 前端编译测试全绿。
+- 冻结生效：`types/pollen.ts`、`Inspector.ts`、`main.ts`、`RpcClient.ts`正式冻结只读；准予开启W4（T05-T11六单并行）。
 
 ## 黑名单（跨会话共享，只追加不覆盖）
 - ❌ 文字/描边严禁写死 `#fff`/`#38bdf8`/`#f59e0b`（日间隐形或低对比），必须用 `--text-heading`/`--accent-*`；**但画布叠加层例外**——它叠在任意用户图上，主题色会消失，须用固定高对比色 + 深色光晕；

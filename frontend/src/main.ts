@@ -510,11 +510,11 @@ async function bootstrap() {
     });
 
     workflowActionBar.querySelector('#btn-wf-next')?.addEventListener('click', async () => {
-      if (currentStage === 0) {
-        // S0 -> S1
+      if (currentStage === 1 && !canvasComponent.data.imageSrc) {
+        // Step 1: 未加载图片时触发文件选取
         (document.getElementById('file-input-image') as HTMLInputElement)?.click();
       } else if (currentStage === 1) {
-        // S1 -> S2: 图谱就绪，进入数据有效区 (ROI) 框选阶段
+        // Step 1 -> 2: 图谱就绪，进入数据有效区 (ROI) 框选阶段
         currentStage = 2;
         canvasComponent.setToolMode('roi');
         updateWorkflowBar();

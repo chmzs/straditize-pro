@@ -168,10 +168,24 @@ export class ResizeRoiCommand implements Command {
 
   public execute(data: DiagramData): void {
     data.roi = { ...this.newRoi };
+    if (data.rois) {
+      const target = data.rois.find((r) => r.id === data.active_roi_id) || data.rois[0];
+      if (target) {
+        target.xlim = [this.newRoi.xMin ?? this.newRoi.xlim?.[0] ?? 0, this.newRoi.xMax ?? this.newRoi.xlim?.[1] ?? 0];
+        target.ylim = [this.newRoi.yMin ?? this.newRoi.ylim?.[0] ?? 0, this.newRoi.yMax ?? this.newRoi.ylim?.[1] ?? 0];
+      }
+    }
   }
 
   public undo(data: DiagramData): void {
     data.roi = { ...this.oldRoi };
+    if (data.rois) {
+      const target = data.rois.find((r) => r.id === data.active_roi_id) || data.rois[0];
+      if (target) {
+        target.xlim = [this.oldRoi.xMin ?? this.oldRoi.xlim?.[0] ?? 0, this.oldRoi.xMax ?? this.oldRoi.xlim?.[1] ?? 0];
+        target.ylim = [this.oldRoi.yMin ?? this.oldRoi.ylim?.[0] ?? 0, this.oldRoi.yMax ?? this.oldRoi.ylim?.[1] ?? 0];
+      }
+    }
   }
 }
 

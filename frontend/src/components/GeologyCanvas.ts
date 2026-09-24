@@ -14,6 +14,7 @@ import { ToolModeManager } from '../core/ToolModeManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { tokens } from '../styles/tokens';
 import { Minimap } from './Minimap';
+import { getAllOverlays } from './canvas/_registry';
 import {
   AddPointCommand,
   DeletePointCommand,
@@ -1700,6 +1701,16 @@ export class GeologyCanvas {
       this.drawGhostingOverlay(ctx);
     }
 
+    // 7.1 自动收集并调用注册叠加层 (W3 叠加层扩展点)
+    try {
+      const overlays = getAllOverlays();
+      for (const ov of overlays) {
+        ov.draw(ctx, this.data, this.viewport);
+      }
+    } catch {
+      // 容错防止叠加层中断主渲染
+    }
+
     ctx.restore();
 
     // 8. 同步更新右下角 Minimap 视口框
@@ -2432,11 +2443,23 @@ export class GeologyCanvas {
    *   S3–S4 分列/标尺：可重新调整 ROI、加列、删列、选择、平移、线掩膜修正；S4 起可做 Y 轴标定
    *   S5–S7 拐点及以后：开放全部编辑能力（含加点）
    */
+  /**
+   * 8 步工作流阶段门禁：
+   *   Step 1    载入：仅平移
+   *   Step 2    ROI ：框选数据有效区 + 平移
+   *   Step 3    Y标定：Y轴两点标定 + 平移
+   *   Step 4    清理：线掩膜修正 + 平移
+   *   Step 5    分列：加列、删列、选择、平移
+   *   Step 6    标定列：选择、加列、删列、平移
+   *   Step 7-8  拐点与采样/校验：开放全部编辑能力（加点等）
+   */
   public getAllowedTools(stage: number = this.workflowStage): ToolMode[] {
     if (stage <= 1) return ['pan'];
-    if (stage === 2) return ['roi', 'linefix', 'pan'];
-    if (stage === 3) return ['roi', 'linefix', 'addCol', 'eraser', 'select', 'pan'];
-    if (stage === 4) return ['roi', 'linefix', 'ycalib', 'addCol', 'eraser', 'select', 'pan'];
+    if (stage === 2) return ['roi', 'pan'];
+    if (stage === 3) return ['ycalib', 'pan'];
+    if (stage === 4) return ['linefix', 'pan'];
+    if (stage === 5) return ['addCol', 'eraser', 'select', 'pan'];
+    if (stage === 6) return ['select', 'addCol', 'eraser', 'pan'];
     return ['select', 'pan', 'roi', 'linefix', 'ycalib', 'addCol', 'addPoint', 'eraser'];
   }
 

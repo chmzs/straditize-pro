@@ -1,4 +1,4 @@
-import { DataRoi, DiagramCalibration, HistorySnapshot, TaxaColumn } from '../types/pollen';
+import type { DataRoi, DiagramCalibration, HistorySnapshot, TaxaColumn } from '../types/pollen';
 
 export class HistoryManager {
   private undoStack: HistorySnapshot[] = [];
@@ -15,7 +15,10 @@ export class HistoryManager {
     columns: TaxaColumn[],
     activeTaxaId: string,
     calibration?: DiagramCalibration,
-    roi?: DataRoi
+    roi?: DataRoi,
+    rois?: DataRoi[],
+    primary_roi_id?: string,
+    active_roi_id?: string
   ): HistorySnapshot {
     return {
       timestamp: Date.now(),
@@ -24,6 +27,9 @@ export class HistoryManager {
       activeTaxaId,
       calibration: calibration ? JSON.parse(JSON.stringify(calibration)) : undefined,
       roi: roi ? JSON.parse(JSON.stringify(roi)) : undefined,
+      rois: rois ? JSON.parse(JSON.stringify(rois)) : undefined,
+      primary_roi_id,
+      active_roi_id,
     };
   }
 
@@ -32,9 +38,23 @@ export class HistoryManager {
     columns: TaxaColumn[],
     activeTaxaId: string,
     calibration?: DiagramCalibration,
-    roi?: DataRoi
+    roi?: DataRoi,
+    rois?: DataRoi[],
+    primary_roi_id?: string,
+    active_roi_id?: string
   ): void {
-    this.undoStack.push(HistoryManager.snapshot(description, columns, activeTaxaId, calibration, roi));
+    this.undoStack.push(
+      HistoryManager.snapshot(
+        description,
+        columns,
+        activeTaxaId,
+        calibration,
+        roi,
+        rois,
+        primary_roi_id,
+        active_roi_id
+      )
+    );
     if (this.undoStack.length > this.maxHistory) {
       this.undoStack.shift();
     }
@@ -77,10 +97,22 @@ export class HistoryManager {
     initialColumns: TaxaColumn[],
     activeTaxaId: string,
     calibration?: DiagramCalibration,
-    roi?: DataRoi
+    roi?: DataRoi,
+    rois?: DataRoi[],
+    primary_roi_id?: string,
+    active_roi_id?: string
   ): void {
     this.undoStack = [
-      HistoryManager.snapshot('Initial State', initialColumns, activeTaxaId, calibration, roi),
+      HistoryManager.snapshot(
+        'Initial State',
+        initialColumns,
+        activeTaxaId,
+        calibration,
+        roi,
+        rois,
+        primary_roi_id,
+        active_roi_id
+      ),
     ];
     this.redoStack = [];
     this.notify();
