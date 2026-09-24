@@ -15,6 +15,8 @@ def test_qa_panel_and_diagnostics_l4(e2e_server):
 
     # Prepare standard L4 geological test horizons on the session
     # 76 horizons: 2 empty horizons, 1 peak horizon Σ=103.2, 73 valid horizons ensuring mean shortfall exactly 4.0
+    session.rois.clear()
+    session.columns.clear()
     target_sums = [96.0] * 72 + [92.0, 103.2, 0.0, 0.0]
     assert len(target_sums) == 76
 

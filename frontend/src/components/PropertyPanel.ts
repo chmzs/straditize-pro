@@ -3,6 +3,7 @@ import { RpcClient } from '../services/RpcClient';
 import { SplineInterpolator } from '../core/SplineInterpolator';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { TarArchive, TarFileEntry } from '../core/TarArchive';
+import { computeExportReadiness, renderExportReadiness } from './steps/ExportReadinessPanel';
 
 export class PropertyPanel {
   private container: HTMLElement;
@@ -145,15 +146,20 @@ export class PropertyPanel {
   public openExportModal(_initialContent: string = '', _format: 'csv' | 'json' = 'csv'): void {
     const modal = document.createElement('div');
     modal.className = 'modal-backdrop';
+    const readiness = computeExportReadiness(this.data);
 
     modal.innerHTML = `
-      <div class="modal-dialog modal-large wpd-export-dialog">
+      <div class="modal-dialog modal-large wpd-export-dialog"
+           data-sheets="${readiness.sheets.join(',')}"
+           data-primary="${readiness.primaryRoi}"
+           data-data-csv-equals-primary="true"
+           data-readiness-missing="${readiness.readinessMissing.join(',')}">
         <div class="modal-header">
           <div style="display: flex; align-items: center; gap: 8px;">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
             </svg>
-            <h3>数字化数据导出与在线成图 (Acquired Data & Visualize)</h3>
+            <h3>数字化数据导出与在线成图 (Acquired Data &amp; Visualize)</h3>
           </div>
           <button class="close-btn" id="modal-close">&times;</button>
         </div>
@@ -196,6 +202,9 @@ export class PropertyPanel {
 
           <!-- 右侧：WPD 风格的控制面板 (Dataset, Sort, Format, Visualize) 并列排布 -->
           <div class="wpd-right-controls" style="width: 270px; min-width: 270px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; background: var(--bg-tertiary); padding: 12px; border-radius: 6px; border: 1px solid var(--border-light); height: 100%; box-sizing: border-box; overflow-y: auto;">
+            <!-- 导出就绪状态清单 (T10) -->
+            ${renderExportReadiness(this.data)}
+
             <!-- 数据集选择 -->
             <div class="form-group" style="margin: 0;">
               <label style="font-size: 11px; font-weight: bold; color: var(--text-primary);">Dataset (数据集形态):</label>

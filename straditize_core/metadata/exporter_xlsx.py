@@ -1,13 +1,14 @@
-"""Scientific Multi-Sheet XLSX Export Engine using pandas and openpyxl.
+"""Scientific Multi-Sheet XLSX Export Engine using pandas and openpyxl (T10).
 
 Sheets:
-1. meta_info: Structured vertical layout (Category, Field, Value, Source, Confidence).
-2. pollen: Calibrated abundance matrix (depth in first col, strictly 0.0 for unobserved taxa).
-3. age-depth: Chronological tie-in (depth, calendar age, 95% min/max, sed_rate).
-4. ensemble_tables: Optional MCMC or multi-model ensemble realizations.
-5. qc_notes: Optional quality control flags and remarks.
-6. readme: Automatically generated variable glossary, units, and software provenance.
+- Per-ROI sheets: One sheet per ROI, sheet name = ROI name (Contract §4.2, supports Chinese/Unicode, e.g. '花粉').
+- meta_info (optional): Structured vertical layout (Category, Field, Value, Source, Confidence).
+- age-depth (optional): Chronological tie-in (depth, calendar age, 95% min/max, sed_rate).
+- ensemble_tables (optional): MCMC or multi-model ensemble realizations.
+- qc_notes (optional): Quality control flags and remarks.
+- readme (optional): Automatically generated variable glossary, units, and software provenance.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -20,74 +21,236 @@ import pandas as pd
 
 
 def export_scientific_xlsx(
-    meta_info: dict[str, Any],
-    pollen_df: pd.DataFrame,
+    meta_info: dict[str, Any] | None = None,
+    pollen_df: pd.DataFrame | None = None,
+    roi_dfs: dict[str, pd.DataFrame] | None = None,
+    include_meta_sheets: bool = True,
     age_depth_df: pd.DataFrame | None = None,
     ensemble_tables: list[dict[str, Any]] | None = None,
     qc_notes: list[dict[str, Any]] | None = None,
     include_readme: bool = True,
     output_path: str | None = None,
 ) -> bytes:
-    """Generates a publication-grade multi-sheet Excel (.xlsx) workbook conforming to Section 8.1."""
+    """Generates a publication-grade multi-sheet Excel (.xlsx) workbook conforming to Section 8.1 & T10."""
+    meta_info = meta_info or {}
     bio = io.BytesIO()
     with pd.ExcelWriter(bio, engine="openpyxl") as writer:
         # ====================================================================
-        # 1. meta_info Sheet
+        # 1. meta_info Sheet (Optional)
         # ====================================================================
-        meta_rows = []
+        if include_meta_sheets and meta_info:
+            meta_rows = []
 
-        # Group 1: Publication
-        pub = meta_info.get("publication", {})
-        meta_rows.append({"Category": "Publication", "Field": "DOI", "Value": pub.get("doi", ""), "Source": pub.get("source", "DOI"), "Confidence": "high"})
-        meta_rows.append({"Category": "Publication", "Field": "Title", "Value": pub.get("title", ""), "Source": pub.get("source", "DOI"), "Confidence": "high"})
-        authors_val = ", ".join(pub.get("authors", [])) if isinstance(pub.get("authors"), list) else str(pub.get("authors", ""))
-        meta_rows.append({"Category": "Publication", "Field": "Authors", "Value": authors_val, "Source": pub.get("source", "DOI"), "Confidence": "high"})
-        meta_rows.append({"Category": "Publication", "Field": "Journal", "Value": pub.get("journal", ""), "Source": pub.get("source", "DOI"), "Confidence": "high"})
-        meta_rows.append({"Category": "Publication", "Field": "Year", "Value": pub.get("year", ""), "Source": pub.get("source", "DOI"), "Confidence": "high"})
+            # Group 1: Publication
+            pub = meta_info.get("publication", {})
+            meta_rows.append(
+                {
+                    "Category": "Publication",
+                    "Field": "DOI",
+                    "Value": pub.get("doi", ""),
+                    "Source": pub.get("source", "DOI"),
+                    "Confidence": "high",
+                }
+            )
+            meta_rows.append(
+                {
+                    "Category": "Publication",
+                    "Field": "Title",
+                    "Value": pub.get("title", ""),
+                    "Source": pub.get("source", "DOI"),
+                    "Confidence": "high",
+                }
+            )
+            authors_val = (
+                ", ".join(pub.get("authors", []))
+                if isinstance(pub.get("authors"), list)
+                else str(pub.get("authors", ""))
+            )
+            meta_rows.append(
+                {
+                    "Category": "Publication",
+                    "Field": "Authors",
+                    "Value": authors_val,
+                    "Source": pub.get("source", "DOI"),
+                    "Confidence": "high",
+                }
+            )
+            meta_rows.append(
+                {
+                    "Category": "Publication",
+                    "Field": "Journal",
+                    "Value": pub.get("journal", ""),
+                    "Source": pub.get("source", "DOI"),
+                    "Confidence": "high",
+                }
+            )
+            meta_rows.append(
+                {
+                    "Category": "Publication",
+                    "Field": "Year",
+                    "Value": pub.get("year", ""),
+                    "Source": pub.get("source", "DOI"),
+                    "Confidence": "high",
+                }
+            )
 
-        # Group 2: Site Location
-        site = meta_info.get("site", {})
-        meta_rows.append({"Category": "Site Location", "Field": "Site Name", "Value": site.get("site_name", ""), "Source": site.get("source", "LLM"), "Confidence": site.get("confidence", "medium")})
-        meta_rows.append({"Category": "Site Location", "Field": "Latitude (°N)", "Value": site.get("latitude", ""), "Source": site.get("source", "LLM"), "Confidence": site.get("confidence", "medium")})
-        meta_rows.append({"Category": "Site Location", "Field": "Longitude (°E)", "Value": site.get("longitude", ""), "Source": site.get("source", "LLM"), "Confidence": site.get("confidence", "medium")})
-        meta_rows.append({"Category": "Site Location", "Field": "Elevation (m a.s.l.)", "Value": site.get("elevation_m", ""), "Source": site.get("source", "LLM"), "Confidence": site.get("confidence", "medium")})
-        meta_rows.append({"Category": "Site Location", "Field": "Archive Type", "Value": site.get("archive_type", "lake sediment"), "Source": site.get("source", "LLM"), "Confidence": site.get("confidence", "medium")})
+            # Group 2: Site Location
+            site = meta_info.get("site", {})
+            meta_rows.append(
+                {
+                    "Category": "Site Location",
+                    "Field": "Site Name",
+                    "Value": site.get("site_name", ""),
+                    "Source": site.get("source", "LLM"),
+                    "Confidence": site.get("confidence", "medium"),
+                }
+            )
+            meta_rows.append(
+                {
+                    "Category": "Site Location",
+                    "Field": "Latitude (°N)",
+                    "Value": site.get("latitude", ""),
+                    "Source": site.get("source", "LLM"),
+                    "Confidence": site.get("confidence", "medium"),
+                }
+            )
+            meta_rows.append(
+                {
+                    "Category": "Site Location",
+                    "Field": "Longitude (°E)",
+                    "Value": site.get("longitude", ""),
+                    "Source": site.get("source", "LLM"),
+                    "Confidence": site.get("confidence", "medium"),
+                }
+            )
+            meta_rows.append(
+                {
+                    "Category": "Site Location",
+                    "Field": "Elevation (m a.s.l.)",
+                    "Value": site.get("elevation_m", ""),
+                    "Source": site.get("source", "LLM"),
+                    "Confidence": site.get("confidence", "medium"),
+                }
+            )
+            meta_rows.append(
+                {
+                    "Category": "Site Location",
+                    "Field": "Archive Type",
+                    "Value": site.get("archive_type", "lake sediment"),
+                    "Source": site.get("source", "LLM"),
+                    "Confidence": site.get("confidence", "medium"),
+                }
+            )
 
-        # Group 3: Chronology
-        chron = meta_info.get("chronology", {})
-        meta_rows.append({"Category": "Chronology", "Field": "Age Model", "Value": chron.get("age_model", "Bacon"), "Source": chron.get("source", "LLM"), "Confidence": chron.get("confidence", "medium")})
-        meta_rows.append({"Category": "Chronology", "Field": "Age Range", "Value": chron.get("age_range", ""), "Source": chron.get("source", "LLM"), "Confidence": chron.get("confidence", "medium")})
-        meta_rows.append({"Category": "Chronology", "Field": "Dating Method", "Value": chron.get("dating_method", "14C"), "Source": chron.get("source", "LLM"), "Confidence": chron.get("confidence", "medium")})
-        meta_rows.append({"Category": "Chronology", "Field": "Calibration Curve", "Value": chron.get("cal_curve", "IntCal20"), "Source": "User", "Confidence": "high"})
+            # Group 3: Chronology
+            chron = meta_info.get("chronology", {})
+            meta_rows.append(
+                {
+                    "Category": "Chronology",
+                    "Field": "Age Model",
+                    "Value": chron.get("age_model", "Bacon"),
+                    "Source": chron.get("source", "LLM"),
+                    "Confidence": chron.get("confidence", "medium"),
+                }
+            )
+            meta_rows.append(
+                {
+                    "Category": "Chronology",
+                    "Field": "Age Range",
+                    "Value": chron.get("age_range", ""),
+                    "Source": chron.get("source", "LLM"),
+                    "Confidence": chron.get("confidence", "medium"),
+                }
+            )
+            meta_rows.append(
+                {
+                    "Category": "Chronology",
+                    "Field": "Dating Method",
+                    "Value": chron.get("dating_method", "14C"),
+                    "Source": chron.get("source", "LLM"),
+                    "Confidence": chron.get("confidence", "medium"),
+                }
+            )
+            meta_rows.append(
+                {
+                    "Category": "Chronology",
+                    "Field": "Calibration Curve",
+                    "Value": chron.get("cal_curve", "IntCal20"),
+                    "Source": "User",
+                    "Confidence": "high",
+                }
+            )
 
-        # Group 4: Technical & Laboratory
-        tech = meta_info.get("technical", {})
-        meta_rows.append({"Category": "Technical", "Field": "Pollen Extraction Method", "Value": tech.get("pollen_extraction_method", "HF digestion / sieving"), "Source": tech.get("source", "LLM"), "Confidence": tech.get("confidence", "medium")})
-        meta_rows.append({"Category": "Technical", "Field": "Laboratory", "Value": tech.get("laboratory", ""), "Source": tech.get("source", "LLM"), "Confidence": tech.get("confidence", "medium")})
-        meta_rows.append({"Category": "Technical", "Field": "Sampling Interval (cm)", "Value": tech.get("sampling_interval_cm", ""), "Source": tech.get("source", "LLM"), "Confidence": tech.get("confidence", "medium")})
+            # Group 4: Technical & Laboratory
+            tech = meta_info.get("technical", {})
+            meta_rows.append(
+                {
+                    "Category": "Technical",
+                    "Field": "Pollen Extraction Method",
+                    "Value": tech.get(
+                        "pollen_extraction_method", "HF digestion / sieving"
+                    ),
+                    "Source": tech.get("source", "LLM"),
+                    "Confidence": tech.get("confidence", "medium"),
+                }
+            )
+            meta_rows.append(
+                {
+                    "Category": "Technical",
+                    "Field": "Laboratory",
+                    "Value": tech.get("laboratory", ""),
+                    "Source": tech.get("source", "LLM"),
+                    "Confidence": tech.get("confidence", "medium"),
+                }
+            )
+            meta_rows.append(
+                {
+                    "Category": "Technical",
+                    "Field": "Sampling Interval (cm)",
+                    "Value": tech.get("sampling_interval_cm", ""),
+                    "Source": tech.get("source", "LLM"),
+                    "Confidence": tech.get("confidence", "medium"),
+                }
+            )
 
-        # Group 5: Quality Remarks
-        qual = meta_info.get("quality", {})
-        meta_rows.append({"Category": "Quality & Remarks", "Field": "Quality Notes", "Value": qual.get("quality_notes", "Unobserved taxa strictly filled as 0.00 (Zero-Abundance standard)."), "Source": qual.get("source", "User"), "Confidence": "high"})
+            # Group 5: Quality Remarks
+            qual = meta_info.get("quality", {})
+            meta_rows.append(
+                {
+                    "Category": "Quality & Remarks",
+                    "Field": "Quality Notes",
+                    "Value": qual.get(
+                        "quality_notes",
+                        "Unobserved taxa strictly filled as 0.00 (Zero-Abundance standard).",
+                    ),
+                    "Source": qual.get("source", "User"),
+                    "Confidence": "high",
+                }
+            )
 
-        df_meta = pd.DataFrame(meta_rows)
-        df_meta.to_excel(writer, sheet_name="meta_info", index=False)
+            df_meta = pd.DataFrame(meta_rows)
+            df_meta.to_excel(writer, sheet_name="meta_info", index=False)
 
         # ====================================================================
-        # 2. pollen Sheet
+        # 2. ROI Sheets: One sheet per ROI, sheet name = ROI name (Contract §4.2)
         # ====================================================================
-        pollen_df.to_excel(writer, sheet_name="pollen", index=False)
+        if roi_dfs:
+            for roi_name, df in roi_dfs.items():
+                clean_sheet_name = str(roi_name)[:31]
+                df.to_excel(writer, sheet_name=clean_sheet_name, index=False)
+        elif pollen_df is not None:
+            pollen_df.to_excel(writer, sheet_name="pollen", index=False)
 
         # ====================================================================
-        # 3. age-depth Sheet
+        # 3. age-depth Sheet (Optional)
         # ====================================================================
-        if age_depth_df is not None and not age_depth_df.empty:
+        if include_meta_sheets and age_depth_df is not None and not age_depth_df.empty:
             age_depth_df.to_excel(writer, sheet_name="age-depth", index=False)
 
         # ====================================================================
-        # 4. ensemble tables (Section 9)
+        # 4. ensemble tables (Section 9, Optional)
         # ====================================================================
-        if ensemble_tables:
+        if include_meta_sheets and ensemble_tables:
             if len(ensemble_tables) == 1:
                 t0 = ensemble_tables[0]
                 df_ens = pd.DataFrame(t0.get("data", []), columns=t0.get("columns"))
@@ -101,20 +264,35 @@ def export_scientific_xlsx(
         # ====================================================================
         # 5. qc_notes Sheet (Optional)
         # ====================================================================
-        if qc_notes:
+        if include_meta_sheets and qc_notes:
             df_qc = pd.DataFrame(qc_notes)
             df_qc.to_excel(writer, sheet_name="qc_notes", index=False)
 
         # ====================================================================
         # 6. readme Sheet (Optional)
         # ====================================================================
-        if include_readme:
+        if include_meta_sheets and include_readme:
             readme_data = [
-                {"Item": "Software", "Description": "Straditize Pro v2.0 (Modern Geological Stratigraphic Digitizer)"},
-                {"Item": "Export Timestamp", "Description": datetime.now(timezone.utc).isoformat()},
-                {"Item": "Pollen Matrix Standard", "Description": "Depths in 1st column. Unobserved taxa strictly filled as 0.00 (never NA)."},
-                {"Item": "LiPD Compatibility", "Description": "Conforms to Linked Paleo Data (LiPD) & PaCTS community standards."},
-                {"Item": "R Ecosystem", "Description": "Compatible with rioja::strat.plot, vegan, and geoChronR."},
+                {
+                    "Item": "Software",
+                    "Description": "Straditize Pro v2.0 (Modern Geological Stratigraphic Digitizer)",
+                },
+                {
+                    "Item": "Export Timestamp",
+                    "Description": datetime.now(timezone.utc).isoformat(),
+                },
+                {
+                    "Item": "Pollen Matrix Standard",
+                    "Description": "Depths in 1st column. Unobserved taxa strictly filled as 0.00 (never NA).",
+                },
+                {
+                    "Item": "LiPD Compatibility",
+                    "Description": "Conforms to Linked Paleo Data (LiPD) & PaCTS community standards.",
+                },
+                {
+                    "Item": "R Ecosystem",
+                    "Description": "Compatible with rioja::strat.plot, vegan, and geoChronR.",
+                },
             ]
             df_readme = pd.DataFrame(readme_data)
             df_readme.to_excel(writer, sheet_name="readme", index=False)
@@ -124,9 +302,13 @@ def export_scientific_xlsx(
     wb = openpyxl.load_workbook(bio)
 
     header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
-    header_fill = PatternFill(start_color="0F172A", end_color="0F172A", fill_type="solid")
+    header_fill = PatternFill(
+        start_color="0F172A", end_color="0F172A", fill_type="solid"
+    )
     border_thin = Side(border_style="thin", color="CBD5E1")
-    grid_border = Border(left=border_thin, right=border_thin, top=border_thin, bottom=border_thin)
+    grid_border = Border(
+        left=border_thin, right=border_thin, top=border_thin, bottom=border_thin
+    )
 
     for sheetname in wb.sheetnames:
         ws = wb[sheetname]

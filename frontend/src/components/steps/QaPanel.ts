@@ -231,11 +231,16 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     try {
       const activeRoiId = cachedData?.active_roi_id || cachedData?.rois?.[0]?.id;
       const endpoint = typeof window !== 'undefined' && window.location.origin ? `${window.location.origin}/rpc` : 'http://127.0.0.1:8765/rpc';
+      const params: Record<string, any> = { tolerance: tol };
+      if (activeRoiId && cachedData?.rois?.some((r) => r.id === activeRoiId)) {
+        params.roi_id = activeRoiId;
+      }
+
       const payload = {
         jsonrpc: '2.0',
         id: Date.now(),
         method: 'qa.summarize',
-        params: activeRoiId ? { roi_id: activeRoiId, tolerance: tol } : { tolerance: tol },
+        params,
       };
 
       const response = await fetch(endpoint, {
