@@ -1,17 +1,8 @@
 # straditize 开发交接卡 (HANDOFF.md)
-- 更新时间：2026-09-24 21:35 | 分支 dev-v2-modern | HEAD c2ab0b1
+- 更新时间：2026-09-24 22:30 | 分支 dev-v2-modern | HEAD c2ab0b1
 - 规则：**分节追加** —— 只改自己那一节，严禁整文件覆盖或改写他节；每节 ≤8 行，全文 ≤50 行，超限时最旧节整段移入 `HANDOFF-archive/`。
 - 一键验证：`pixi run lint` ｜ `pixi run test` ｜ `pixi run test-e2e` ｜ `npm --prefix frontend run build` ｜ `npm --prefix frontend test` ｜ `pixi run python support/probe_truth/check_ticket_ownership.py`
-- 当前结果：**W4 (T08) 采样层位与拐点提取已完成**；`tests/test_sample_horizons.py` 4/4 PASS ｜ `tests/e2e/test_samples.py` Edge L4 PASS ｜ 未标定depth===None守卫生效 ｜ 全量门禁全绿。
-
-## [AGEDEPTH] 2026-09-20 12:20 — 彩色中位线 + 通道覆盖 + 编造路径清查（已提交 160b060/93084b1/8a93b92）
-- 识别加**色度通道**：投影到图形自身主色方向（**不是** HSV chroma——虚线+灰云混合使 chroma 逐行在 0~114 间跳，而 `R−mean(G,B)` 阈值 12 即恢复 843 行中的 777 行）；自动按「**贯穿行数**」选通道（红线达暗度的 70%、Bchron 蓝色测年条仅 23%，切 55%），另可强制 `curve_channel`。独立参考（逐行 `R−max(G,B)` argmax）误差 **median 0.00% / p95 1.69%**（n=733）。入口 `age_depth.py:extract_age_depth_model`；界面加**通道下拉 + 原因显示**，三曲线分色（中位蓝/上界紫/下界橙）+ 深色光晕，年龄标定手柄改黄避免撞色。**画布叠加层刻意用固定色**（主题色会消失在一张浅色图上，与黑名单第 1 条的区别已入代码注释）。
-- **清查并清除 7 条编造路径**（静默换图源×2 / 占位数字×3 / 编造曲率×1 / 静默赋值覆盖×1），细节 `HANDOFF-archive/2026-09-20-agedepth-fabrication-audit.md`，守卫 `tests/test_no_fabrication.py`。关键：`observed_row_fraction` 守卫**必须在 gap 插值之前量**（插值后按构造恒 100%）；`observed_depth_range` 报**原生** traced span。
-- **更正一条已废弃的数字**：色度修复前我报过该图「+34% 误差」，那是**我目测读图读错**，不是提取错误。改用独立参考（逐行 `R−max(G,B)` argmax，无追踪）比对后真实误差为 median **0.00%**。见到旧的 +34% 数字请忽略。
-- **已修（891c347）**：搜索区曾按「标定框外扩 `retain_frac`」夹紧 → **标定刻度选得不同就静默截断曲线**（实测同一张图：`3000/0` 得深度 0–160、`2000/1000` 只得 64.6–148.8 丢掉上 65cm、`1500/500` 得 25.7–140.3）。现搜索区**直接取轴规则跨度，与标定无关**；`retain_frac` 只作取不到规则时的兜底，`model.roi_source` 如实记录用了哪种依据。
-- **已修（1c356c1）**：弹窗原手搓 `canvasToImage` 逆变换（`findMarkerAt` 里还抄了第二遍 scale），**无缩放/平移/DPR**；现复用 `core/Viewport`，叠加层改在世界坐标画（**代码净减少**），滚轮/±/`⛶适应`/`1:1` 与主画布同约定，平移**中键/空格+左键**（当时所依据的那条「禁辅助画布右键」黑名单规则**已废弃**：右键现可平移，见下方黑名单平移条），手柄/线宽/光晕/交点均除以 scale 保持屏幕尺寸。实机验证：适应 79% 点真实刻度世界坐标读出 **693 px**（真值 693.5，精确往返）；109% 下 400 CSS px 位移读出 **367 px** = 400/1.09（缩放正确）；中键平移生效；`ResizeObserver` 重排自适应。window 级按键监听经 `disposers` 在 `close()` 释放。
-- **停滞断点**：(a) **下一步就是它**：中位线/包络的手工控制点尚未做——需 ① 复用 `Viewport` 命中测试（已完成）② 复用 `HistoryManager` 得撤销 ③ 后端拆轻量 `agedepth.applyManualCurve`（否则拖点要等提取+1000 集合 1–6s）④ 只标中位线时包络按 auto 偏移跟随（`min = user_median − (auto_median − auto_min)`），0 点击时行为不变；(b) 中位线与包络**都是灰**且描边更暗时无硬保证（靠垂直支撑度+连续性，`bacon_szek.png` 属此类），修法是笔画宽度/拓扑先验，**颜色救不了**；(c) WebR 引擎未实现，`AgeDepthModal.ts` 如实拒绝——但**那个 40MB 自定义包不需要存在**：WebR 官方仓库已有 rbacon 3.5.2 + 完整依赖链 WASM（~10MB），在线直接 `installPackages`，仅离线才需自建 bundle；(d) `_median_rate` 无插值器时返回全 1 哑值（已被上游拒绝，不可达）。
-- 下一步原子动作：**做中位线/包络手工标点（辅助修正，非纯手工）**——自动结果当底稿，用户加点/拖点；只标中位线时包络按 auto 偏移跟随，0 点击时行为不变。需复用已完成的世界坐标命中测试 + `HistoryManager` 撤销，后端拆轻量 `agedepth.applyManualCurve`（否则拖点要等提取+1000 集合 1–6s）。**缩略图（Minimap）用户明确不需要，勿加。**
+- 当前结果：**W4 (T09) 校验门禁与质量诊断已完成**；主工作流 8 步闭环全线打通；`tests/test_qa_summary.py` 6/6 PASS ｜ `tests/e2e/test_qa.py` Edge L4 PASS ｜ 全量门禁全绿。
 
 ## [ROI-CALIB] 2026-09-20 13:35 — ROI 与 Y 轴标定解耦 + 去线重做（含人工修正笔刷）
 - **缺陷**：ROI 与深度共用一个 `DepthCalibration`，前端 `imageYToDepth` 写 `top_px ?? dataYMin`、后端 `project_save` 由 `data_ylim` 反算 `top/bottom_cm` —— 拖一下取数框就静默改写时间轴；S2 面板还直接摆着「顶界/底界深度」输入框。
@@ -30,6 +21,13 @@
 - 门禁验收：`tests/test_sample_horizons.py` 4/4全过；`tests/e2e/test_samples.py`真实Edge L4通过；全量测试与拥有权全绿。
 - 下一步：开启T09（校验门禁与异常诊断），打通Step 8地学校验。
 
+## [8STEP-W4-T09] 2026-09-24 22:30 — 校验门禁与质量诊断完成 (T09)
+- 诊断实体契约：`QaSummary`严格实现组分总和门禁（≤100%+tolerance）、空层位排查与单列满刻度一致性诊断。
+- 单一事实源派生：`declared_max`严格由`x_ticks`派生，物理剔除遗留存储字段；非组分数据如实豁免总和门禁。
+- 界面与诊断闭环：`QaPanel.ts`挂载Step 8，呈现三级状态横幅（🔴红/🟡黄/🟢绿）、四宫格指标卡及超标异常清单。
+- 验收门禁通过：`test_qa_summary.py` 6/6全绿（含L3真数据）；`test_e2e/test_qa.py` Edge真实L4全通过。
+- 阶段意义：主工作流全部 8 个步骤（载入/ROI/Y标定/清理/分列/标定列/拐点采样/校验）闭环全线贯通！
+
 ## 黑名单（跨会话共享，只追加不覆盖）
 - ❌ 文字/描边严禁写死 `#fff`/`#38bdf8`/`#f59e0b`（日间隐形或低对比），必须用 `--text-heading`/`--accent-*`；**但画布叠加层例外**——它叠在任意用户图上，主题色会消失，须用固定高对比色 + 深色光晕；
 - ❌ 弹窗页脚与条带禁止写死半透明黑，必须用 `--bg-footer`；CSS 覆盖前核对真实类名（`.agedepth-dialog` 无连字符）；
@@ -43,6 +41,6 @@
 - ❌ 契约字段只能来自 `docs/plans/2026-09-20-frozen-contracts.md`（**单子不得自行发明字段**）；ROI 上的表单值/继承值严禁被当作事实源；特性单严禁写"无人可写"的共享文件（`support/probe_truth/check_ticket_ownership.py` 机器校验，发单前必须跑通）；掩膜优先级**排除区绝对优先**，restore 落在排除区内必须拒绝或提示，**不得静默无效**。
 
 ## 索引
-- 历史归档：`HANDOFF-archive/`（含 `2026-09-20-topbar-slimming.md`、`2026-09-20-agedepth-fabrication-audit.md`、`2026-09-20-taxadict-ocr-vocabulary.md`、`2026-09-20-ui-button-visibility.md`）｜ 规范：`AGENTS.md`
+- 历史归档：`HANDOFF-archive/`（含 `2026-09-20-topbar-slimming.md`、`2026-09-20-agedepth-fabrication-audit.md`、`2026-09-20-taxadict-ocr-vocabulary.md`、`2026-09-20-ui-button-visibility.md`、`2026-09-20-agedepth-median-channels.md`）｜ 规范：`AGENTS.md`
 - 设计规范：`docs/ARCHITECTURE.md`（§6.1 ROI/标定数据模型、§7.1 线去除）｜ 协议：`docs/JSON_RPC_SPECIFICATION.md`（§4.6–4.8）
 - **8 步重构三件套**：设计稿 / **冻结契约 v1.1（唯一字段事实源）** / 任务单 v2.1 —— 均在 `docs/plans/2026-09-20-*`
