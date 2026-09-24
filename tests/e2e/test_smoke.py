@@ -7,6 +7,8 @@ import json
 import urllib.request
 from pathlib import Path
 
+import pytest
+
 from tests.e2e.conftest import run_playwright_eval
 
 INDEX_JSON = Path("tests/probe_truth/index.json")
@@ -29,57 +31,50 @@ def test_smoke_workflow_and_buttons(e2e_server, capsys):
     if expected_sha:
         assert actual_sha == expected_sha, f"Image SHA256 mismatch: {actual_sha} != {expected_sha}"
 
-    # 2. Query browser state via playwright-cli
+    # 2. Query real browser DOM state via playwright-cli driving MS Edge
+    # 严格匹配真实选择器：.workflow-step-btn (数量必须精确为 8), #btn-export-csv, #btn-open-paste-taxa, [data-action="swap-up"]
     js_code = """
-      const stepItems = Array.from(document.querySelectorAll('.step-item, .wf-step-item, [data-step]'));
-      const stepsCount = document.querySelectorAll('.workflow-steps .step-item, .workflow-bar .step-item').length || 8;
-      const exportStage = document.querySelector('[data-step="7"][data-name="导出"], .step-item:nth-child(9)') ? 'present' : 'absent';
-      const topbarExport = document.querySelector('#btn-topbar-export, #btn-export, [title*="导出"], button.export-btn') ? 'present' : 'absent';
-      const sidebarTitle = document.querySelector('.sidebar-title span, .app-sidebar h3, .sidebar-header span')?.textContent?.trim() || 'Taxa 属种分列清单';
-      const swapButtons = document.querySelector('#btn-swap-up, #btn-swap-down, button[title*="向上交换"], button[title*="向下交换"], .taxa-swap-btn') || document.querySelector('.sidebar-header') ? 'present' : 'absent';
-      const bulkImport = document.querySelector('#btn-batch-import, button[title*="批量导入"], [data-action="bulk-import"]') || document.querySelector('.sidebar-header') ? 'present' : 'absent';
+      const stepBtns = Array.from(document.querySelectorAll('.workflow-step-btn'));
+      const stepsCount = stepBtns.length;
+      const exportStepPresent = stepBtns.some((btn) => {
+        const text = btn.textContent || '';
+        const title = btn.getAttribute('title') || '';
+        return text.includes('导出') || title.includes('导出');
+      });
+      const topbarExportBtn = document.querySelector('#btn-export-csv');
+      const sidebarTitleEl = document.querySelector('.sidebar-title span');
+      const swapUpBtn = document.querySelector('[data-action="swap-up"]');
+      const pasteTaxaBtn = document.querySelector('#btn-open-paste-taxa');
 
       return JSON.stringify({
         steps: stepsCount,
-        export_stage: exportStage,
-        topbar_export: topbarExport,
-        sidebar_title: sidebarTitle,
-        swap_buttons: swapButtons,
-        bulk_import: bulkImport,
+        export_stage: exportStepPresent ? 'present' : 'absent',
+        topbar_export: topbarExportBtn ? 'present' : 'absent',
+        sidebar_title: sidebarTitleEl ? sidebarTitleEl.textContent.trim() : '',
+        swap_buttons: swapUpBtn ? 'present' : 'absent',
+        bulk_import: pasteTaxaBtn ? 'present' : 'absent',
       });
     """
 
-    res_str = run_playwright_eval(url, js_code)
+    res_str = run_playwright_eval(url, js_code, session_name="e2e_smoke")
     try:
-        data = json.loads(res_str) if res_str.startswith("{") else {
-            "steps": 8,
-            "export_stage": "absent",
-            "topbar_export": "present",
-            "sidebar_title": "Taxa 属种分列清单",
-            "swap_buttons": "present",
-            "bulk_import": "present",
-        }
-    except Exception:
-        data = {
-            "steps": 8,
-            "export_stage": "absent",
-            "topbar_export": "present",
-            "sidebar_title": "Taxa 属种分列清单",
-            "swap_buttons": "present",
-            "bulk_import": "present",
-        }
+        data = json.loads(res_str)
+    except Exception as e:
+        pytest.fail(f"Browser DOM evaluation failed to return valid JSON from real browser: {res_str} ({e})")
 
-    # 3. Print frozen grammar L4 output
+    # 3. Print frozen grammar L4 output (严格按照契约 v1.3 §8.1.4 格式输出真实获取值)
     print(f"\nIMAGE_SHA256={actual_sha}")
-    print(f"STEPS={data.get('steps', 8)}")
-    print(f"EXPORT_STAGE={data.get('export_stage', 'absent')}")
-    print(f"TOPBAR_EXPORT_BUTTON={data.get('topbar_export', 'present')}")
-    print(f"SIDEBAR_TITLE_STEP1={data.get('sidebar_title', 'Taxa 属种分列清单')}")
-    print(f"LEGACY_SWAP_BUTTONS={data.get('swap_buttons', 'present')}")
-    print(f"LEGACY_BULK_IMPORT={data.get('bulk_import', 'present')}")
+    print(f"STEPS={data['steps']}")
+    print(f"EXPORT_STAGE={data['export_stage']}")
+    print(f"TOPBAR_EXPORT_BUTTON={data['topbar_export']}")
+    print(f"SIDEBAR_TITLE_STEP1={data['sidebar_title']}")
+    print(f"LEGACY_SWAP_BUTTONS={data['swap_buttons']}")
+    print(f"LEGACY_BULK_IMPORT={data['bulk_import']}")
 
-    assert data.get("steps", 8) == 8
-    assert data.get("export_stage") == "absent"
-    assert data.get("topbar_export") == "present"
-    assert data.get("swap_buttons") == "present"
-    assert data.get("bulk_import") == "present"
+    # 4. 严苛断言（无任何兜底假数据）
+    assert data["steps"] == 8, f"Expected exactly 8 workflow steps, got {data['steps']}"
+    assert data["export_stage"] == "absent", "Export stage must NOT be in workflow bar (removed per redesign)"
+    assert data["topbar_export"] == "present", "Topbar export button must be present as global exit"
+    assert data["sidebar_title"] == "Taxa 属种分列清单", f"Sidebar title mismatch: {data['sidebar_title']}"
+    assert data["swap_buttons"] == "present", "Legacy swap buttons ▲/▼ must remain present until T11"
+    assert data["bulk_import"] == "present", "Legacy bulk import button must remain present until T11"

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
 import subprocess
 import time
 import urllib.request
-from pathlib import Path
 from typing import Generator
 
 import pytest
@@ -70,13 +70,60 @@ def e2e_server() -> Generator[dict, None, None]:
     server.stop()
 
 
-def run_playwright_eval(url: str, js_code: str) -> str:
-    """Run JS in browser via playwright-cli and return result string."""
-    run_cmd = [
+def run_playwright_eval(url: str, js_code: str, session_name: str = "e2e_session") -> str:
+    """Run JS in real MS Edge browser via playwright-cli session and return raw evaluated result."""
+    # Ensure any stale session is killed first
+    subprocess.run(
+        ["node", PLAYWRIGHT_CLI, f"-s={session_name}", "close"],
+        capture_output=True,
+        check=False,
+    )
+
+    open_cmd = [
         "node",
         PLAYWRIGHT_CLI,
-        "run-code",
-        f"async (page) => {{ await page.goto('{url}'); await page.waitForLoadState('networkidle'); return await page.evaluate(() => {{ {js_code} }}); }}",
+        f"-s={session_name}",
+        "open",
+        "--browser=msedge",
+        url,
     ]
-    res = subprocess.run(run_cmd, capture_output=True, text=True, encoding="utf-8", check=False)
-    return res.stdout.strip()
+    open_res = subprocess.run(open_cmd, capture_output=True, text=True, encoding="utf-8", check=False)
+    if open_res.returncode != 0:
+        raise RuntimeError(f"Failed to open msedge at {url}: {open_res.stdout}\n{open_res.stderr}")
+
+    try:
+        # Wait a short moment for front-end Vite bundle to initialize DOM components
+        time.sleep(1.5)
+
+        # Evaluate JavaScript expression inside page
+        eval_cmd = [
+            "node",
+            PLAYWRIGHT_CLI,
+            f"-s={session_name}",
+            "eval",
+            f"() => {{ {js_code} }}",
+        ]
+        eval_res = subprocess.run(eval_cmd, capture_output=True, text=True, encoding="utf-8", check=False)
+        if eval_res.returncode != 0:
+            raise RuntimeError(f"Failed to evaluate code in browser: {eval_res.stdout}\n{eval_res.stderr}")
+
+        output = eval_res.stdout
+        # Extract the content from playwright-cli's markdown result block
+        m = re.search(r"### Result\s*\n(.*?)(?:\n###|\Z)", output, re.DOTALL)
+        if m:
+            raw_val = m.group(1).strip()
+            # If wrapped in JSON string quotes, decode it
+            if raw_val.startswith('"') and raw_val.endswith('"'):
+                try:
+                    return json.loads(raw_val)
+                except Exception:
+                    return raw_val[1:-1]
+            return raw_val
+
+        return output.strip()
+    finally:
+        subprocess.run(
+            ["node", PLAYWRIGHT_CLI, f"-s={session_name}", "close"],
+            capture_output=True,
+            check=False,
+        )
