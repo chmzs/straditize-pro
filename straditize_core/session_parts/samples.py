@@ -113,12 +113,18 @@ class SamplesMixin:
         Requires Y-axis calibration to map depths back to pixel rows.
         """
         if not getattr(self, "is_calibrated", False) or getattr(self, "y_scale", None) is None:
-            raise JsonRpcError(-32602, "Session must be calibrated on Y-axis to map pasted depths to pixel rows.")
+            raise JsonRpcError(
+                -32001,
+                "前置状态缺失：无法映射外部粘贴深度。当前图谱尚未建立 Y 轴标定，请先前往【步骤 3: Y轴标定】完成两点深度标定。",
+            )
 
         slope = self.y_scale.get("slope", 0.0)
         intercept = self.y_scale.get("intercept", 0.0)
         if abs(slope) < 1e-9:
-            raise JsonRpcError(-32602, "Invalid calibration slope.")
+            raise JsonRpcError(
+                -32003,
+                "算法解算中断：当前 Y 轴标定斜率为 0，无法将物理深度逆向映射回像素行。请在【步骤 3: Y轴标定】中重新设置有效的两点标定。",
+            )
 
         new_samples = []
         for d in depths:

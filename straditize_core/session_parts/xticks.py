@@ -63,18 +63,27 @@ class XTicksMixin:
         - Updates Column.x_ticks as the sole source of truth.
         """
         if not ticks or len(ticks) != 2:
-            raise JsonRpcError(-32602, f"Exactly two tick endpoints required for calibration, got {len(ticks) if ticks else 0}.")
+            raise JsonRpcError(
+                -32602,
+                f"参数格式不合规：每列标定需要恰好 2 个端点刻度齿 (Tick)，当前提供了 {len(ticks) if ticks else 0} 个。请在【步骤 6: 标定列】点选起点和终点刻度。",
+            )
 
         t0, t1 = ticks[0], ticks[1]
         px0, val0 = float(t0.get("px", t0.get("pixel", 0))), float(t0.get("value", t0.get("val", 0)))
         px1, val1 = float(t1.get("px", t1.get("pixel", 0))), float(t1.get("value", t1.get("val", 0)))
 
         if px0 == px1:
-            raise JsonRpcError(-32602, "Tick endpoint pixel coordinates cannot be identical.")
+            raise JsonRpcError(
+                -32602,
+                "参数格式不合规：两个标定刻度齿的像素 X 坐标不能相同。请重新拾取相隔一定距离的刻度线齿。",
+            )
 
         columns = getattr(self, "columns", [])
         if col_index < 0 or col_index >= len(columns):
-            raise JsonRpcError(-32602, f"Column index {col_index} out of range.")
+            raise JsonRpcError(
+                -32001,
+                f"前置状态缺失：列索引 {col_index} 超出范围。请先在【步骤 5: 分列】确认列切分。",
+            )
 
         col = columns[col_index]
 
@@ -84,7 +93,10 @@ class XTicksMixin:
         lo, hi = min(c_start, c_end) - 10, max(c_start, c_end) + 10
         if not (lo <= px0 <= hi and lo <= px1 <= hi):
             # Out of bounds warning / guard
-            raise JsonRpcError(-32602, f"Tick points ({px0}, {px1}) fall outside column range [{lo}, {hi}].")
+            raise JsonRpcError(
+                -32602,
+                f"参数范围越界：刻度点像素 ({px0}, {px1}) 超出该列物理范围 [{lo}, {hi}]。请在列边界内拾取有效标尺刻度。",
+            )
 
         # Set sole source of truth
         col["x_ticks"] = [{"px": px0, "value": val0}, {"px": px1, "value": val1}]

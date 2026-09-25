@@ -1,15 +1,8 @@
 # straditize 开发交接卡 (HANDOFF.md)
-- 更新时间：2026-09-25 10:45 | 分支 dev-v2-modern | HEAD 73e73b7
+- 更新时间：2026-09-25 11:20 | 分支 dev-v2-modern | HEAD b0000de
 - 规则：**分节追加** —— 只改自己那一节，严禁整文件覆盖或改写他节；每节 ≤8 行，全文 ≤50 行，超限时最旧节整段移入 `HANDOFF-archive/`。
 - 一键验证：`pixi run lint` ｜ `pixi run test` ｜ `pixi run test-e2e` ｜ `npm --prefix frontend run build` ｜ `npm --prefix frontend test` ｜ `pixi run python support/probe_truth/check_ticket_ownership.py`
-- 当前结果：**W4 (T11 + WebMCP) 属种命名、旧债务清理与 WebMCP 接入已完成**；8 步工作流全拼图闭环；`tests/test_label_snapping.py` 7/7 PASS ｜ 全套 7 个 Edge E2E 测试 PASS。
-
-## [8STEP-W4-T09] 2026-09-24 22:30 — 校验门禁与质量诊断完成 (T09)
-- 诊断实体契约：`QaSummary`严格实现组分总和门禁（≤100%+tolerance）、空层位排查与单列满刻度一致性诊断。
-- 单一事实源派生：`declared_max`严格由`x_ticks`派生，物理剔除遗留存储字段；非组分数据如实豁免总和门禁。
-- 界面与诊断闭环：`QaPanel.ts`挂载Step 8，呈现三级状态横幅（🔴红/🟡黄/🟢绿）、四宫格指标卡及超标异常清单。
-- 验收门禁通过：`test_qa_summary.py` 6/6全绿（含L3真数据）；`test_e2e/test_qa.py` Edge真实L4全通过。
-- 阶段意义：主工作流全部 8 个步骤（载入/ROI/Y标定/清理/分列/标定列/拐点采样/校验）闭环全线贯通！
+- 当前结果：**错误码体系整改 + 单页PDF原生支持 + 启动收敛完成**；`tests/test_error_guidance_and_pdf.py` 3/3 PASS ｜ 全量门禁全绿。
 
 ## [8STEP-W4-T10] 2026-09-24 23:30 — 顶栏导出体系与就绪清单完成 (T10)
 - 多 ROI 规范导出：XLSX 每 ROI 一张 sheet（支持中文），LiPD 每 ROI 一张 measurementTable，列名无前缀。
@@ -25,6 +18,13 @@
 - CLI 升级 WebMCP：`mcp_server.py` 与 `cli.py` 提供 14 个 8 步工作流 MCP 工具，支持活体 Web 会话桥接与 `window.webMCP`。
 - 门禁验收：`test_label_snapping.py` 7/7 全过；`test_e2e/test_naming.py` 等全套 7 项 Edge E2E 全绿。
 
+## [ERROR-PDF-START] 2026-09-25 11:20 — 错误体系整改、单页PDF支持与启动收敛
+- 拒绝偷懒 -32602：严格区分 语法(-32602)、状态缺失(-32001)、命名冲突(-32002)、算法中断(-32003)、文件错误(-32004)。
+- 修复引导透传：前端 `tError` 彻底保留后端修复引导并结构化显示；杜绝“参数不合法”单一弹窗。
+- 图片与单页PDF：`load_image` 支持 Base64 data URL；通过 `pypdf` 原生支持单页 PDF 高清图版直接载入与画布显示。
+- 启动收敛唯一化：统一为 `pixi run start`（固定 8765 端口/自动打开浏览器/同源 /mcp 与 SSE/顶栏退出按钮）。
+- 门禁验证：`test_error_guidance_and_pdf.py` 3/3 PASS；全量测试与拥有权全绿。
+
 ## 黑名单（跨会话共享，只追加不覆盖）
 - ❌ 文字/描边严禁写死 `#fff`/`#38bdf8`/`#f59e0b`（日间隐形或低对比），必须用 `--text-heading`/`--accent-*`；**但画布叠加层例外**——它叠在任意用户图上，主题色会消失，须用固定高对比色 + 深色光晕；
 - ❌ 弹窗页脚与条带禁止写死半透明黑，必须用 `--bg-footer`；CSS 覆盖前核对真实类名（`.agedepth-dialog` 无连字符）；
@@ -38,6 +38,6 @@
 - ❌ 契约字段只能来自 `docs/plans/2026-09-20-frozen-contracts.md`（**单子不得自行发明字段**）；ROI 上的表单值/继承值严禁被当作事实源；特性单严禁写"无人可写"的共享文件（`support/probe_truth/check_ticket_ownership.py` 机器校验，发单前必须跑通）；掩膜优先级**排除区绝对优先**，restore 落在排除区内必须拒绝或提示，**不得静默无效**。
 
 ## 索引
-- 历史归档：`HANDOFF-archive/`（含 `2026-09-20-topbar-slimming.md`、`2026-09-20-agedepth-fabrication-audit.md`、`2026-09-20-taxadict-ocr-vocabulary.md`、`2026-09-20-ui-button-visibility.md`、`2026-09-20-agedepth-median-channels.md`、`2026-09-20-roi-calib-decoupling.md`、`2026-09-24-t08-samples.md`）｜ 规范：`AGENTS.md`
+- 历史归档：`HANDOFF-archive/`（含 `2026-09-20-topbar-slimming.md`、`2026-09-20-agedepth-fabrication-audit.md`、`2026-09-20-taxadict-ocr-vocabulary.md`、`2026-09-20-ui-button-visibility.md`、`2026-09-20-agedepth-median-channels.md`、`2026-09-20-roi-calib-decoupling.md`、`2026-09-24-t08-samples.md`、`2026-09-24-t09-qa-summary.md`）｜ 规范：`AGENTS.md`
 - 设计规范：`docs/ARCHITECTURE.md`（§6.1 ROI/标定数据模型、§7.1 线去除）｜ 协议：`docs/JSON_RPC_SPECIFICATION.md`（§4.6–4.8）
 - **8 步重构三件套**：设计稿 / **冻结契约 v1.1（唯一字段事实源）** / 任务单 v2.1 —— 均在 `docs/plans/2026-09-20-*`

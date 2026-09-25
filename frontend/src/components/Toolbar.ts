@@ -222,13 +222,13 @@ export class Toolbar {
         <div class="divider"></div>
 
         <div class="btn-group file-actions-group">
-          <button id="btn-open-file" class="tool-btn open-file-btn highlight" title="打开本地地质图谱图片">
+          <button id="btn-open-file" class="tool-btn open-file-btn highlight" title="打开本地地质图谱图片或单页 PDF">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
             </svg>
             <span>图谱</span>
           </button>
-          <input type="file" id="file-input-image" accept="image/*" style="display: none;" />
+          <input type="file" id="file-input-image" accept="image/*,.pdf,application/pdf" style="display: none;" />
 
           <button id="btn-save-project" class="tool-btn" title="保存完整地质数字化项目 (.tar 开放归档)">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">

@@ -1058,12 +1058,41 @@ async function bootstrap() {
 
     setHudNotice(`正在载入地质图谱: ${file.name}...`, 8000);
 
+    const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
     const reader = new FileReader();
     reader.onload = async (e) => {
       let dataUrl = e.target?.result as string;
       if (!dataUrl) return;
 
+      if (isPdf) {
+        let newDiagramData: DiagramData;
+        try {
+          newDiagramData = await rpcClient.loadCustomImage(dataUrl, 0, 0, file.name);
+        } catch (err) {
+          reportBackendFailure('图谱载入', err);
+          setHudNotice('❌ PDF 图谱载入失败：请确认该 PDF 为包含图谱的单页文件。', 6000);
+          return;
+        }
+
+        canvasComponent.loadNewDiagram(newDiagramData);
+        history.reset([], '');
+        currentStage = 1;
+        updateWorkflowBar();
+
+        sidebar?.updateData(canvasComponent.data);
+        toolbar?.updateHistoryState();
+        toolbar?.updateScale(canvasComponent.viewport.scale);
+        toolbar?.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
+        updateFooter();
+
+        setHudNotice(`✅ 成功载入单页 PDF 图谱 [${file.name}] (${newDiagramData.imageWidth}×${newDiagramData.imageHeight})！请在画布上调整数据有效区 (Step 1)。`, 5000);
+        return;
+      }
+
       const img = new Image();
+      img.onerror = () => {
+        reportBackendFailure('图谱载入', new Error('浏览器无法解码该图像文件，请确认是否为有效图片格式。'));
+      };
       img.onload = async () => {
         let w = img.naturalWidth;
         let h = img.naturalHeight;

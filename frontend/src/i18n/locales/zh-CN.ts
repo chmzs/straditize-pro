@@ -15,11 +15,14 @@ export const zhCN = {
   'error.parse': '请求格式无法解析',
   'error.invalidRequest': '请求对象不合法',
   'error.methodNotFound': '后端不支持该接口',
-  'error.invalidParams': '参数不合法',
+  'error.invalidParams': '参数格式不合规',
   'error.internal': '后端内部错误',
 
-  // ===== Straditize 业务错误码 =====
-  'error.state': '会话状态异常（请先载入图谱）',
+  // ===== Straditize 业务错误码（四类严格区分）=====
+  'error.state': '前置状态未就绪',
+  'error.conflict': '命名或实体冲突',
+  'error.algorithm': '算法解算中断',
+  'error.fileError': '文件读取失败',
   'error.fileNotFound': '文件未找到',
   'error.calibration': '坐标标定缺失或无效',
   'error.export': '导出失败（格式或数据校验未通过）',

@@ -1069,8 +1069,8 @@ def main() -> None:
             server.stop()
         return
 
-    # 4. Desktop Mode (Default on double-click or no args)
-    if sys.platform == "win32":
+    # 4. Desktop / Default One-Click Mode
+    if getattr(sys, "frozen", False) and sys.platform == "win32":
         try:
             import ctypes
 
@@ -1085,6 +1085,7 @@ def main() -> None:
     if existing_port is not None:
         import webbrowser
 
+        print(f"检测到已有运行实例，正在打开浏览器：http://127.0.0.1:{existing_port}/")
         webbrowser.open(f"http://127.0.0.1:{existing_port}/")
         sys.exit(0)
 
@@ -1107,6 +1108,15 @@ def main() -> None:
     )
     server.start()
 
+    print(
+        f"\n=================================================================\n"
+        f"  Straditize Pro 已启动！\n"
+        f"  • 浏览器访问：http://127.0.0.1:{server.actual_port}/\n"
+        f"  • AI WebMCP 端点：http://127.0.0.1:{server.actual_port}/mcp\n"
+        f"  • 关闭方式：网页右上角点击 [退出] 或在终端按 Ctrl+C\n"
+        f"=================================================================\n"
+    )
+
     import webbrowser
 
     webbrowser.open(f"http://127.0.0.1:{server.actual_port}/")
@@ -1115,6 +1125,7 @@ def main() -> None:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
+        print("\n正在停止 Straditize 服务...")
         server.stop()
     finally:
         try:

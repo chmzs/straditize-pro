@@ -14,9 +14,9 @@ export const RPC_ERROR_KEYS: Record<number, MessageKey> = {
   [-32602]: 'error.invalidParams',
   [-32603]: 'error.internal',
   [-32001]: 'error.state',
-  [-32002]: 'error.fileNotFound',
-  [-32003]: 'error.calibration',
-  [-32004]: 'error.export',
+  [-32002]: 'error.conflict',
+  [-32003]: 'error.algorithm',
+  [-32004]: 'error.fileError',
 };
 
 export function tError(code: number | string, detail?: string): string {
@@ -25,6 +25,7 @@ export function tError(code: number | string, detail?: string): string {
   const base = key ? t(key) : t('error.unknown');
   if (detail) {
     console.warn(`[RPC ${code}] ${detail}`);
+    return `${base} (code ${code})\n\n💡 修复引导: ${detail}`;
   }
   return `${base} (code ${code})`;
 }

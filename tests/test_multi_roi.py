@@ -57,11 +57,11 @@ def test_roi_create_name_validation():
     r_cn = session.roi_create(name="花粉主区-1", x0=500, x1=1200, y0=511, y1=1311)
     assert r_cn["roi"]["name"] == "花粉主区-1"
 
-    # Duplicate name raises -32602
+    # Duplicate name raises -32002 (CONFLICT_ERROR)
     with pytest.raises(JsonRpcError) as exc_info:
         session.roi_create(name="charcoal", x0=100, x1=200, y0=100, y1=200)
-    assert exc_info.value.code == -32602
-    assert "already exists" in exc_info.value.message
+    assert exc_info.value.code == -32002
+    assert "已存在" in exc_info.value.message or "already exists" in exc_info.value.message
 
     # Name containing slash '/' raises -32602
     with pytest.raises(JsonRpcError) as exc_info:

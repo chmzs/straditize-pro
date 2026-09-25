@@ -178,8 +178,8 @@ def test_criterion_6_duplicate_column_name_raises():
         )
 
     err = exc_info.value
-    assert err.code == -32602
-    assert "Duplicate column name 'Taxa2'" in err.message
+    assert err.code == -32002
+    assert "Taxa2" in err.message
     assert "col_1" in err.message and "col_2" in err.message
 
 

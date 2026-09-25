@@ -12,7 +12,7 @@ index-url = "https://pypi.tuna.tsinghua.edu.cn/simple/"
 extra-index-urls = ["https://pypi.org/simple"]
 
 [tasks]
-run-straditize = "python -m straditize"   # 启动应用
+start = "python -m straditize_core.rpc_server"                                 # 一键启动现代版 (浏览器 + JSON-RPC + WebMCP)
 desktop = "python -m straditize_core.rpc_server"                            # 启动桌面模式 (自动端口/调起浏览器/退出按钮)
 rpc-server = "python -m straditize_core.rpc_server serve --port 8765"       # 启动服务器模式 (127.0.0.1:8765 / 无退出按钮)
 frontend-dev = "npm --prefix frontend run dev"                          # 启动现代版前端开发服务器

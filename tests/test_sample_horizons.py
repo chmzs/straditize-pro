@@ -58,10 +58,11 @@ def test_sample_horizon_paste_depths():
     """Pasting real depths maps back to pixel rows using calibration slope and intercept."""
     session = StraditizeSession()
 
-    # Uncalibrated paste must raise -32602
+    # Uncalibrated paste must raise -32001 (STATE_ERROR)
     with pytest.raises(JsonRpcError) as exc_info:
         session.samples_paste_depths([10.0, 20.0, 30.0])
-    assert exc_info.value.code == -32602
+    assert exc_info.value.code == -32001
+    assert "Y" in exc_info.value.message or "标定" in exc_info.value.message
 
     # Calibrate
     session.calibrate_axes(

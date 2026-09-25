@@ -1,12 +1,27 @@
-"""JSON-RPC 2.0 Protocol specification and dispatcher for Straditize."""
+"""JSON-RPC 2.0 Protocol specification and dispatcher for Straditize.
+
+Standard Error Codes (-32700 to -32600):
+- PARSE_ERROR (-32700): Invalid JSON received.
+- INVALID_REQUEST (-32600): The JSON sent is not a valid Request object.
+- METHOD_NOT_FOUND (-32601): The method does not exist / is not available.
+- INVALID_PARAMS (-32602): Invalid method parameter(s) (syntax/types).
+- INTERNAL_ERROR (-32603): Internal JSON-RPC error.
+
+Application-Specific Error Codes (-32000 to -32099):
+- STATE_ERROR (-32001): Prerequisite state missing (e.g. image not loaded, uncalibrated Y axis).
+- CONFLICT_ERROR (-32002): Naming or business entity conflict (e.g. duplicate ROI/column name).
+- ALGORITHM_ERROR (-32003): Algorithmic computation/extraction failed or out of bounds.
+- FILE_ERROR (-32004): File not found, unreadable, or corrupted.
+"""
+
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
 import inspect
 import json
 import logging
 import traceback
-from collections.abc import Callable
-from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger("straditize_rpc")
@@ -19,10 +34,17 @@ INVALID_PARAMS = -32602
 INTERNAL_ERROR = -32603
 
 # Application-specific Server Error Codes (-32000 to -32099)
-STATE_ERROR = -32001        # Core session state invalid (e.g. image not loaded)
-FILE_NOT_FOUND_ERROR = -32002  # Image or target file not found
-CALIBRATION_ERROR = -32003   # Axes calibration missing or invalid
-EXPORT_ERROR = -32004        # Data export format / strict validation failure
+STATE_ERROR = -32001  # Prerequisite state missing (tell user which step to complete)
+CONFLICT_ERROR = -32002  # Naming / business entity conflict (unique name required)
+ALGORITHM_ERROR = (
+    -32003
+)  # Algorithmic calculation / extraction failure or boundary violation
+FILE_ERROR = -32004  # File not found, format corrupted, or unreadable
+
+# Backward compatibility aliases
+FILE_NOT_FOUND_ERROR = FILE_ERROR
+CALIBRATION_ERROR = ALGORITHM_ERROR
+EXPORT_ERROR = STATE_ERROR
 
 ERROR_MESSAGES = {
     PARSE_ERROR: "Parse error",
@@ -30,15 +52,15 @@ ERROR_MESSAGES = {
     METHOD_NOT_FOUND: "Method not found",
     INVALID_PARAMS: "Invalid params",
     INTERNAL_ERROR: "Internal error",
-    STATE_ERROR: "Session state error",
-    FILE_NOT_FOUND_ERROR: "File not found",
-    CALIBRATION_ERROR: "Calibration error",
-    EXPORT_ERROR: "Export error",
+    STATE_ERROR: "Prerequisite state missing",
+    CONFLICT_ERROR: "Naming or entity conflict",
+    ALGORITHM_ERROR: "Algorithmic computation error",
+    FILE_ERROR: "File error",
 }
 
 
 class JsonRpcError(Exception):
-    """Exception carrying JSON-RPC 2.0 error attributes."""
+    """Exception carrying JSON-RPC 2.0 error attributes with human remediation guidance."""
 
     def __init__(
         self,
@@ -137,32 +159,52 @@ class JsonRpcDispatcher:
                 "jsonrpc": "2.0",
                 "error": JsonRpcError(
                     METHOD_NOT_FOUND,
-                    f"Method '{request.method}' not found",
+                    f"后端未提供接口 '{request.method}'。请检查方法名拼写或接口版本。",
                 ).to_dict(),
                 "id": request.id,
             }
 
         func = self._methods[request.method]
         try:
-            # Bind parameters
+            # Bind parameters with flexible kwargs support
             if request.params is None:
                 result = func()
             elif isinstance(request.params, dict):
                 sig = inspect.signature(func)
-                try:
-                    sig.bind(**request.params)
-                except TypeError as te:
-                    raise JsonRpcError(INVALID_PARAMS, f"Invalid arguments: {te}") from te
-                result = func(**request.params)
+                has_varkw = any(
+                    p.kind == inspect.Parameter.VAR_KEYWORD
+                    for p in sig.parameters.values()
+                )
+                if has_varkw:
+                    result = func(**request.params)
+                else:
+                    # Filter parameters accepting only known keywords if func does not take **kwargs
+                    valid_params = {}
+                    for k, v in request.params.items():
+                        if k in sig.parameters:
+                            valid_params[k] = v
+                    try:
+                        sig.bind(**valid_params)
+                    except TypeError as te:
+                        raise JsonRpcError(
+                            INVALID_PARAMS,
+                            f"参数绑定失败: {te}。请核对接口传参要求。",
+                        ) from te
+                    result = func(**valid_params)
             elif isinstance(request.params, list):
                 sig = inspect.signature(func)
                 try:
                     sig.bind(*request.params)
                 except TypeError as te:
-                    raise JsonRpcError(INVALID_PARAMS, f"Invalid arguments: {te}") from te
+                    raise JsonRpcError(
+                        INVALID_PARAMS,
+                        f"位置参数数量不匹配: {te}。请检查参数列表。",
+                    ) from te
                 result = func(*request.params)
             else:
-                raise JsonRpcError(INVALID_PARAMS, "Unsupported params type")
+                raise JsonRpcError(
+                    INVALID_PARAMS, "参数类型不支持，必须为 JSON 对象或数组。"
+                )
 
             if request.is_notification:
                 return None
@@ -182,19 +224,23 @@ class JsonRpcDispatcher:
                 "jsonrpc": "2.0",
                 "error": {
                     "code": INTERNAL_ERROR,
-                    "message": f"Internal error: {ex!s}",
+                    "message": f"后端算法执行异常: {ex!s}。请查看服务器控制台日志排查。",
                     "data": {"type": type(ex).__name__},
                 },
                 "id": request.id,
             }
 
-    def handle_object(self, payload: Any) -> dict[str, Any] | list[dict[str, Any]] | None:
+    def handle_object(
+        self, payload: Any
+    ) -> dict[str, Any] | list[dict[str, Any]] | None:
         """Handles parsed JSON data (either a single request or a batch array)."""
         if isinstance(payload, list):
             if not payload:
                 return {
                     "jsonrpc": "2.0",
-                    "error": JsonRpcError(INVALID_REQUEST, "Batch cannot be empty").to_dict(),
+                    "error": JsonRpcError(
+                        INVALID_REQUEST, "批量请求列表不能为空。"
+                    ).to_dict(),
                     "id": None,
                 }
             responses = []
@@ -206,7 +252,9 @@ class JsonRpcDispatcher:
                         responses.append(resp)
                 except JsonRpcError as jre:
                     req_id = item.get("id") if isinstance(item, dict) else None
-                    responses.append({"jsonrpc": "2.0", "error": jre.to_dict(), "id": req_id})
+                    responses.append(
+                        {"jsonrpc": "2.0", "error": jre.to_dict(), "id": req_id}
+                    )
                 except Exception as ex:  # noqa: BLE001
                     req_id = item.get("id") if isinstance(item, dict) else None
                     responses.append(
@@ -214,7 +262,7 @@ class JsonRpcDispatcher:
                             "jsonrpc": "2.0",
                             "error": {
                                 "code": INVALID_REQUEST,
-                                "message": str(ex),
+                                "message": f"请求对象格式错误: {ex}",
                             },
                             "id": req_id,
                         }
@@ -232,13 +280,18 @@ class JsonRpcDispatcher:
                 req_id = payload.get("id") if isinstance(payload, dict) else None
                 return {
                     "jsonrpc": "2.0",
-                    "error": {"code": INVALID_REQUEST, "message": str(ex)},
+                    "error": {
+                        "code": INVALID_REQUEST,
+                        "message": f"请求解析异常: {ex}",
+                    },
                     "id": req_id,
                 }
 
         return {
             "jsonrpc": "2.0",
-            "error": JsonRpcError(INVALID_REQUEST, "Payload must be object or array").to_dict(),
+            "error": JsonRpcError(
+                INVALID_REQUEST, "请求载荷必须是 JSON 对象或数组。"
+            ).to_dict(),
             "id": None,
         }
 
@@ -253,7 +306,9 @@ class JsonRpcDispatcher:
         except Exception as e:  # noqa: BLE001
             err_resp = {
                 "jsonrpc": "2.0",
-                "error": JsonRpcError(PARSE_ERROR, f"Parse error: {e!s}").to_dict(),
+                "error": JsonRpcError(
+                    PARSE_ERROR, f"JSON 语法解析失败: {e!s}。请核对请求字符串。"
+                ).to_dict(),
                 "id": None,
             }
             return json.dumps(err_resp, ensure_ascii=False)

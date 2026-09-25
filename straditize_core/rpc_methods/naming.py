@@ -23,11 +23,15 @@ def validate_column_unique_name(
 ) -> None:
     """Validates that a new column name is unique within its ROI.
 
-    Raises JsonRpcError(-32602) and points out conflicting columns if duplicate.
+    Raises JsonRpcError(-32002) for naming conflict, -32001 for missing column,
+    and -32602 for syntax errors.
     """
     clean_name = new_name.strip()
     if not clean_name or not COLUMN_NAME_PATTERN.match(clean_name):
-        raise JsonRpcError(-32602, f"Invalid column name '{new_name}'.")
+        raise JsonRpcError(
+            -32602,
+            f"参数格式不合规：属种列名 '{new_name}' 不合法。请输入 1-63 位字母、数字、点号或汉字。",
+        )
 
     # Find the target column to know its roi_id
     target_col = None
@@ -47,7 +51,10 @@ def validate_column_unique_name(
                 break
 
     if target_col is None:
-        raise JsonRpcError(-32602, f"Column '{target_col_id_or_index}' not found.")
+        raise JsonRpcError(
+            -32001,
+            f"前置状态缺失：未找到目标属种列 '{target_col_id_or_index}'。请先在【步骤 5: 分列】确认列切分。",
+        )
 
     target_roi_id = target_col.get("roi_id")
     target_id = target_col.get("id") or f"col_{target_idx}"
@@ -61,9 +68,9 @@ def validate_column_unique_name(
             c_name = (c.get("name") or c.get("species") or "").strip()
             if c_name == clean_name:
                 raise JsonRpcError(
-                    -32602,
-                    f"Duplicate column name '{clean_name}' in ROI '{target_roi_id or 'default'}'. "
-                    f"Conflicts between column '{target_id}' and column '{c_id}'.",
+                    -32002,
+                    f"命名冲突：属种列名 '{clean_name}' 在有效区 '{target_roi_id or 'default'}' 内已存在。"
+                    f"列 '{target_id}' 与列 '{c_id}' 产生重名冲突，请修改名称。",
                 )
 
 

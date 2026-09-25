@@ -30,18 +30,24 @@ class RoiMixin:
         if not isinstance(name, str) or not ROI_NAME_PATTERN.match(name):
             raise JsonRpcError(
                 -32602,
-                f"Invalid ROI name '{name}'. Name must match ^[\\w\\u4e00-\\u9fa5-]{{1,31}}$ (1-31 alphanumeric/Chinese/hyphen characters without spaces or slashes).",
+                f"参数格式不合规：ROI 名称 '{name}' 格式不合法。名称必须为 1-31 位中英文字符、数字或连字符，不得包含空格或斜杠。",
             )
         for r in getattr(self, "rois", []):
             if r["name"] == name and r["id"] != current_roi_id:
-                raise JsonRpcError(-32602, f"ROI name '{name}' already exists.")
+                raise JsonRpcError(
+                    -32002,
+                    f"命名冲突：区域名称 '{name}' 已存在。同一项目中 ROI 名称必须唯一，请修改名称。",
+                )
 
     def _get_roi(self, roi_id: str) -> dict[str, Any]:
-        """Look up an ROI by id or raise -32602."""
+        """Look up an ROI by id or raise -32001."""
         for r in getattr(self, "rois", []):
             if r["id"] == roi_id:
                 return r
-        raise JsonRpcError(-32602, f"ROI '{roi_id}' not found.")
+        raise JsonRpcError(
+            -32001,
+            f"前置状态缺失：未找到 ROI '{roi_id}'。请在【步骤 2: ROI】中先创建或选取该有效区。",
+        )
 
     def roi_create(
         self,

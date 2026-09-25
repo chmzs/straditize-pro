@@ -60,7 +60,9 @@ def build_age_depth_frame(
             renamed[key] = clean[key]
     for key, template in AGE_DEPTH_RATE_COLUMNS.items():
         if key in selected and key in clean:
-            renamed[template.format(age_unit=age_unit, depth_unit=depth_unit)] = clean[key]
+            renamed[template.format(age_unit=age_unit, depth_unit=depth_unit)] = clean[
+                key
+            ]
 
     units = pred.get("rate_units", {})
     n_rows = len(clean.get("depths", []))
@@ -71,6 +73,7 @@ def build_age_depth_frame(
             f"acc={units.get('acc_rate', '')}; vol={units.get('volume_ar', '')}"
         ] * n_rows
     return pd.DataFrame(renamed)
+
 
 try:
     from scipy.interpolate import PchipInterpolator
@@ -98,6 +101,7 @@ from .metadata import (
 from .protocol import (
     CALIBRATION_ERROR,
     EXPORT_ERROR,
+    FILE_ERROR,
     FILE_NOT_FOUND_ERROR,
     INVALID_PARAMS,
     STATE_ERROR,
@@ -113,6 +117,158 @@ from .session_parts import (
     SamplesMixin,
     XTicksMixin,
 )
+
+
+def _decode_diagram_source(
+    image_path: str | None = None,
+    image_data: str | None = None,
+    sample_key: str | None = None,
+    file_name: str | None = None,
+) -> tuple[Image.Image, str, str | None]:
+    """Decodes bitmap image or extracts page from single-page PDF.
+
+    Returns (PIL_Image, format_str, resolved_path).
+    Raises JsonRpcError with human guidance on failures.
+    """
+    resolved_path: str | None = None
+
+    # Case 1: Built-in sample key
+    if not image_path and not image_data and sample_key:
+        repo_root = Path(__file__).resolve().parent.parent
+        tutorial_dir = repo_root / "straditize" / "straditize" / "widgets" / "tutorial"
+        sample_candidates = {
+            "hoya": tutorial_dir / "hoya-del-castillo" / "hoya-del-castillo.png",
+            "verification": repo_root / "verification_real_pollen_edit.png",
+            "beginner": tutorial_dir / "beginner" / "beginner-tutorial.png",
+        }
+        cand = sample_candidates.get(sample_key.lower())
+        if cand is None:
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                f"未知的 sample_key '{sample_key}'。可选范例：{sorted(sample_candidates)}。",
+            )
+        if not cand.is_file():
+            raise JsonRpcError(
+                FILE_ERROR,
+                f"内置范例图片缺失: {cand}。请确认仓库完整性。",
+            )
+        image_path = str(cand)
+
+    # Case 2: Base64 data URL or raw Base64 string
+    if image_data:
+        raw_b64 = image_data
+        is_pdf = False
+        name_hint = file_name or ""
+        if raw_b64.startswith("data:"):
+            header, raw_b64 = raw_b64.split(",", 1)
+            if "application/pdf" in header:
+                is_pdf = True
+        elif name_hint.lower().endswith(".pdf"):
+            is_pdf = True
+
+        try:
+            raw_bytes = base64.b64decode(raw_b64)
+        except Exception as e:
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                f"Base64 图像数据解析失败: {e}。请重新上传有效图片。",
+            ) from e
+
+        if is_pdf or raw_bytes.startswith(b"%PDF"):
+            try:
+                import pypdf
+
+                reader = pypdf.PdfReader(io.BytesIO(raw_bytes))
+                if len(reader.pages) == 0:
+                    raise ValueError("PDF 文档为空，未包含任何页面。")
+                page = reader.pages[0]
+                if page.images:
+                    imgs = [img.image for img in page.images]
+                    best_img = max(imgs, key=lambda im: im.size[0] * im.size[1])
+                    return best_img, "PDF_IMAGE", None
+                raise ValueError(
+                    "该单页 PDF 为纯矢量流未内嵌位图图谱。请将 PDF 在外部转换/导出为 PNG/JPG 图像后载入。"
+                )
+            except Exception as e:
+                raise JsonRpcError(
+                    FILE_ERROR,
+                    f"单页 PDF 解析失败: {e}。请确认 PDF 包含位图图版，或转为 PNG 导入。",
+                ) from e
+
+        try:
+            img = Image.open(io.BytesIO(raw_bytes))
+            img.load()
+            fmt = img.format or "PNG"
+            return img, fmt, None
+        except Exception as e:
+            raise JsonRpcError(
+                FILE_ERROR,
+                f"上传图像数据解码失败: {e}。请检查文件是否损坏。",
+            ) from e
+
+    # Case 3: Local file path
+    if not image_path:
+        raise JsonRpcError(
+            STATE_ERROR,
+            "前置输入缺失：未提供图谱源。请在【步骤 1: 载入图谱】中选择本地图片/单页PDF上传，或指定 sample_key（如 'hoya'）。",
+        )
+
+    # Fallback search if relative path
+    if not os.path.isabs(image_path) and not os.path.exists(image_path):
+        cwd_cand = os.path.abspath(os.path.join(os.getcwd(), image_path))
+        core_cand = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", image_path)
+        )
+        if os.path.exists(cwd_cand):
+            image_path = cwd_cand
+        elif os.path.exists(core_cand):
+            image_path = core_cand
+
+    if not os.path.exists(image_path):
+        raise JsonRpcError(
+            FILE_ERROR,
+            f"未找到图谱文件: '{image_path}'。请检查路径是否存在或已移动。",
+        )
+
+    resolved_path = os.path.abspath(image_path)
+    is_pdf = resolved_path.lower().endswith(".pdf")
+
+    if is_pdf:
+        try:
+            import pypdf
+
+            with open(resolved_path, "rb") as f:
+                reader = pypdf.PdfReader(f)
+                if len(reader.pages) == 0:
+                    raise ValueError("PDF 文档为空，未包含任何有效页面。")
+                page = reader.pages[0]
+                if page.images:
+                    imgs = [img.image for img in page.images]
+                    best_img = max(imgs, key=lambda im: im.size[0] * im.size[1])
+                    return best_img, "PDF_IMAGE", resolved_path
+                raise ValueError(
+                    "该单页 PDF 为纯矢量流未内嵌位图图谱。请将 PDF 在外部转换/导出为 PNG/JPG 图像后载入。"
+                )
+        except Exception as e:
+            raise JsonRpcError(
+                FILE_ERROR,
+                f"单页 PDF 解析失败: {e}。请确认 PDF 包含图谱位图或转为 PNG 后导入。",
+            ) from e
+
+    try:
+        img = Image.open(resolved_path)
+        img.load()
+        fmt = (
+            img.format
+            or os.path.splitext(resolved_path)[1].lstrip(".").upper()
+            or "PNG"
+        )
+        return img, fmt, resolved_path
+    except Exception as e:
+        raise JsonRpcError(
+            FILE_ERROR,
+            f"无法解析图像文件 '{image_path}': {e}。请确认文件为有效图片格式。",
+        ) from e
 
 
 class StraditizeSession(
@@ -188,10 +344,31 @@ class StraditizeSession(
 
         # Paper Metadata & Ensemble Tables (FAIR Data & LiPD Integration)
         self.paper_metadata: dict[str, Any] = {
-            "publication": {"doi": "", "title": "", "authors": [], "journal": "", "year": None},
-            "site": {"site_name": "", "latitude": "", "longitude": "", "elevation_m": "", "archive_type": "lake sediment"},
-            "chronology": {"age_model": "", "age_range": "", "dating_method": "14C", "cal_curve": "IntCal20"},
-            "technical": {"pollen_extraction_method": "", "laboratory": "", "sampling_interval_cm": ""},
+            "publication": {
+                "doi": "",
+                "title": "",
+                "authors": [],
+                "journal": "",
+                "year": None,
+            },
+            "site": {
+                "site_name": "",
+                "latitude": "",
+                "longitude": "",
+                "elevation_m": "",
+                "archive_type": "lake sediment",
+            },
+            "chronology": {
+                "age_model": "",
+                "age_range": "",
+                "dating_method": "14C",
+                "cal_curve": "IntCal20",
+            },
+            "technical": {
+                "pollen_extraction_method": "",
+                "laboratory": "",
+                "sampling_interval_cm": "",
+            },
             "quality": {"quality_notes": ""},
         }
         self.ensemble_tables: list[dict[str, Any]] = []
@@ -204,105 +381,72 @@ class StraditizeSession(
     def load_image(
         self,
         image_path: str | None = None,
+        image_data: str | None = None,
         sample_key: str | None = None,
+        file_name: str | None = None,
+        **kwargs: Any,
     ) -> dict[str, Any]:
-        """Loads an image from filesystem into memory, supporting both direct path and sample keys."""
-        # Resolve sample_key if provided.
-        #
-        # 内置范例是「内置输入」：只提供图谱图片本身，分列/数字化等结果一律由真实算法产生。
-        # 路径基于本文件定位（而非相对当前工作目录），否则从其它目录启动或打包分发后会失效。
-        # 文件名与经典版 straditize 教学资源保持一致，此处不再另存副本。
-        if not image_path and sample_key:
-            repo_root = Path(__file__).resolve().parent.parent
-            tutorial_dir = repo_root / "straditize" / "straditize" / "widgets" / "tutorial"
-            sample_candidates = {
-                "hoya": tutorial_dir / "hoya-del-castillo" / "hoya-del-castillo.png",
-                "verification": repo_root / "verification_real_pollen_edit.png",
-                "beginner": tutorial_dir / "beginner" / "beginner-tutorial.png",
-            }
-            candidate = sample_candidates.get(sample_key.lower())
-            if candidate is None:
-                raise JsonRpcError(
-                    INVALID_PARAMS,
-                    f"Unknown sample_key '{sample_key}'. Available: {sorted(sample_candidates)}",
-                )
-            if not candidate.is_file():
-                # 如实报错，不再回退到其它范例（否则用户会以为载入成功）
-                raise JsonRpcError(FILE_NOT_FOUND_ERROR, f"Sample image not found: {candidate}")
-            image_path = str(candidate)
+        """Loads a diagram image or single-page PDF into memory.
 
-        if not image_path:
-            raise JsonRpcError(INVALID_PARAMS, "Either 'image_path' or 'sample_key' must be provided.")
+        Supports:
+        - image_path: Local filesystem path to image or PDF;
+        - image_data: Base64-encoded Data URL (e.g. data:image/png;base64,... or data:application/pdf;base64,...);
+        - sample_key: Built-in sample identifier (e.g. 'hoya', 'beginner', 'verification').
+        """
+        img, fmt, resolved_path = _decode_diagram_source(
+            image_path=image_path,
+            image_data=image_data,
+            sample_key=sample_key,
+            file_name=file_name,
+        )
 
-        # Fallback search if relative path
-        if not os.path.isabs(image_path) and not os.path.exists(image_path):
-            cwd_cand = os.path.abspath(os.path.join(os.getcwd(), image_path))
-            core_cand = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", image_path))
-            if os.path.exists(cwd_cand):
-                image_path = cwd_cand
-            elif os.path.exists(core_cand):
-                image_path = core_cand
+        self.image_path = resolved_path or (
+            f"upload://{file_name}" if file_name else "upload://diagram.png"
+        )
+        self.width, self.height = img.size
+        self.format = fmt
+        self.mode = img.mode
 
-        if not os.path.exists(image_path):
-            raise JsonRpcError(
-                FILE_NOT_FOUND_ERROR, f"Image path not found: {image_path}"
-            )
+        # Memory optimization: For ultra-large images (>16M px), keep image as PIL to avoid 2GB+ memory spike
+        if self.width * self.height > 16_000_000:
+            self.image = img.convert("RGBA") if img.mode != "RGBA" else img
+            self.image_array = None
+        else:
+            self.image = img.convert("RGBA")
+            self.image_array = np.array(self.image)
 
-        try:
-            img = Image.open(image_path)
-            # Retain image metadata
-            self.image_path = os.path.abspath(image_path)
-            self.width, self.height = img.size
-            self.format = (
-                img.format
-                or os.path.splitext(image_path)[1].lstrip(".").upper()
-                or "PNG"
-            )
-            self.mode = img.mode
+        # Reset downstream state
+        self.foreground_mask = None
+        self.grid_line_mask = None
+        self.degrid_strength = None
+        self.degrid_info = None
+        self.line_corrections = []
+        self.columns = []
+        self.column_points = {}
+        self.control_points = {}
+        self.is_calibrated = False
+        self.y_scale = None
+        self.depth_calib = None
+        self.taxa_names = []
+        self.depth_grid = []
+        self.data_xlim = None
+        self.data_ylim = None
+        self._init_rois()
 
-            # Memory optimization: For ultra-large images (>16M px), keep image as PIL to avoid 2GB+ memory spike
-            if self.width * self.height > 16_000_000:
-                self.image = img.convert("RGBA") if img.mode != "RGBA" else img
-                self.image_array = None
-            else:
-                self.image = img.convert("RGBA")
-                self.image_array = np.array(self.image)
-
-            # Reset downstream state
-            self.foreground_mask = None
-            self.grid_line_mask = None
-            self.degrid_strength = None
-            self.degrid_info = None
-            self.line_corrections = []
-            self.columns = []
-            self.column_points = {}
-            self.control_points = {}
-            self.is_calibrated = False
-            self.y_scale = None
-            self.depth_calib = None
-            self.taxa_names = []
-            self.depth_grid = []
-            self.data_xlim = None
-            self.data_ylim = None
-            self._init_rois()
-
-            sug = self.suggest_data_region()
-            return {
-                "width": self.width,
-                "height": self.height,
-                "format": self.format,
-                "mode": self.mode,
-                "image_path": self.image_path,
-                # 初始数据有效区建议由后端给出：图像几何只有后端掌握，
-                # 前端不得自行编造 ROI 默认值（历史上前端自造过一份，会与后端认知分歧）。
-                # 注意这里只给 ROI，不给深度：ROI 是取数区域，不是时间/深度标尺。
-                "suggested_roi": sug,
-                "rois": self.rois,
-                "primary_roi_id": self.primary_roi_id,
-                "active_roi_id": self.active_roi_id,
-            }
-        except Exception as e:  # noqa: BLE001
-            raise JsonRpcError(STATE_ERROR, f"Failed to load image: {e!s}")
+        sug = self.suggest_data_region()
+        return {
+            "success": True,
+            "width": self.width,
+            "height": self.height,
+            "format": self.format,
+            "mode": self.mode,
+            "image_path": self.image_path,
+            "image_url": "/image/current",
+            "suggested_roi": sug,
+            "rois": self.rois,
+            "primary_roi_id": self.primary_roi_id,
+            "active_roi_id": self.active_roi_id,
+        }
 
     def suggest_data_region(self) -> dict[str, float]:
         """Initial data-region (ROI) suggestion for a freshly loaded diagram.
@@ -519,7 +663,12 @@ class StraditizeSession(
         else:
             target_roi_id = "roi_1"
 
-        if data_xlim is None or data_ylim is None or len(data_xlim) != 2 or len(data_ylim) != 2:
+        if (
+            data_xlim is None
+            or data_ylim is None
+            or len(data_xlim) != 2
+            or len(data_ylim) != 2
+        ):
             raise JsonRpcError(
                 INVALID_PARAMS,
                 "data_xlim and data_ylim must each have 2 elements [min, max]",
@@ -614,7 +763,9 @@ class StraditizeSession(
                 col["species"] = col_code
 
         # Preserve columns belonging to other ROIs
-        other_cols = [c for c in getattr(self, "columns", []) if c.get("roi_id") != target_roi_id]
+        other_cols = [
+            c for c in getattr(self, "columns", []) if c.get("roi_id") != target_roi_id
+        ]
         merged_cols = other_cols + detected_cols
         for i, c in enumerate(merged_cols):
             c["col_index"] = i
@@ -762,7 +913,9 @@ class StraditizeSession(
             # hline_rows are relative to y0
             rel_hlines = [hr for hr in self.hline_rows if 0 <= hr < len(raw_vals)]
             if rel_hlines:
-                interp_vals = interpolate_hlines(raw_vals[:, np.newaxis], rel_hlines)[:, 0]
+                interp_vals = interpolate_hlines(raw_vals[:, np.newaxis], rel_hlines)[
+                    :, 0
+                ]
                 for p_idx, new_v in enumerate(interp_vals):
                     points[p_idx]["x"] = float(c_start + new_v)
 
@@ -778,13 +931,15 @@ class StraditizeSession(
             r_int = int(y0 + r_rel)
             x_val = float(c_start + v_rel)
             control_points[r_int] = x_val
-            ctrl_pts_list.append({
-                "id": f"pt_{col_index}_{r_int}",
-                "x": x_val,
-                "y": float(r_int),
-                "type": "peak" if v_rel > 1.0 else "trough",
-                "isManual": False,
-            })
+            ctrl_pts_list.append(
+                {
+                    "id": f"pt_{col_index}_{r_int}",
+                    "x": x_val,
+                    "y": float(r_int),
+                    "type": "peak" if v_rel > 1.0 else "trough",
+                    "isManual": False,
+                }
+            )
 
         # Ensure endpoints exist
         y0_x = float(points[0]["x"])
@@ -793,21 +948,26 @@ class StraditizeSession(
         control_points[y1] = y1_x
 
         if not any(p["y"] == float(y0) for p in ctrl_pts_list):
-            ctrl_pts_list.insert(0, {
-                "id": f"pt_{col_index}_{y0}",
-                "x": y0_x,
-                "y": float(y0),
-                "type": "trough",
-                "isManual": False,
-            })
+            ctrl_pts_list.insert(
+                0,
+                {
+                    "id": f"pt_{col_index}_{y0}",
+                    "x": y0_x,
+                    "y": float(y0),
+                    "type": "trough",
+                    "isManual": False,
+                },
+            )
         if not any(p["y"] == float(y1) for p in ctrl_pts_list):
-            ctrl_pts_list.append({
-                "id": f"pt_{col_index}_{y1}",
-                "x": y1_x,
-                "y": float(y1),
-                "type": "trough",
-                "isManual": False,
-            })
+            ctrl_pts_list.append(
+                {
+                    "id": f"pt_{col_index}_{y1}",
+                    "x": y1_x,
+                    "y": float(y1),
+                    "type": "trough",
+                    "isManual": False,
+                }
+            )
 
         ctrl_pts_list.sort(key=lambda p: p["y"])
 
@@ -933,7 +1093,9 @@ class StraditizeSession(
         slope_y, intercept_y = np.polyfit(y_pixels, y_vals, deg=1)
         self.y_scale = {"slope": float(slope_y), "intercept": float(intercept_y)}
 
-        ordered = sorted(zip(y_pixels.tolist(), y_vals.tolist()), key=lambda pair: pair[0])
+        ordered = sorted(
+            zip(y_pixels.tolist(), y_vals.tolist()), key=lambda pair: pair[0]
+        )
         self.depth_calib = {
             "top_px": float(ordered[0][0]),
             "top_cm": float(ordered[0][1]),
@@ -992,13 +1154,14 @@ class StraditizeSession(
         """Exports the calibrated data matrix to CSV or Parquet format."""
         if not self.column_points:
             if self.control_points and any(self.control_points.values()):
-                all_r = sorted({r for ctrls in self.control_points.values() for r in ctrls})
+                all_r = sorted(
+                    {r for ctrls in self.control_points.values() for r in ctrls}
+                )
                 for c_idx in range(len(self.columns)):
                     ctrls = self.control_points.get(c_idx, {})
                     c_start = float(self.columns[c_idx].get("start", 0))
                     self.column_points[c_idx] = [
-                        {"row": r, "x": float(ctrls.get(r, c_start))}
-                        for r in all_r
+                        {"row": r, "x": float(ctrls.get(r, c_start))} for r in all_r
                     ]
             elif self.columns and self.image is not None:
                 for col in self.columns:
@@ -1011,7 +1174,9 @@ class StraditizeSession(
                 sample_rows = list(range(y0, y1 + 1, max(1, (y1 - y0) // 50)))
                 for c_idx in range(len(self.columns)):
                     c_start = float(self.columns[c_idx].get("start", 0))
-                    self.column_points[c_idx] = [{"row": r, "x": c_start} for r in sample_rows]
+                    self.column_points[c_idx] = [
+                        {"row": r, "x": c_start} for r in sample_rows
+                    ]
 
         if not self.column_points:
             raise JsonRpcError(STATE_ERROR, "No digitized data available to export.")
@@ -1029,7 +1194,9 @@ class StraditizeSession(
                 "Axes calibration is required when strict=True.",
             )
 
-        all_rows = sorted({p["row"] for pts in self.column_points.values() for p in pts})
+        all_rows = sorted(
+            {p["row"] for pts in self.column_points.values() for p in pts}
+        )
         if not all_rows:
             all_rows = [0]
 
@@ -1063,7 +1230,9 @@ class StraditizeSession(
             raw_x = [p_dict.get(r, default_start) for r in all_rows]
 
             scale_type = col_def.get("scale_type", "linear")
-            s_val = float(col_def.get("startValue", 0.0 if scale_type == "linear" else 1.0))
+            s_val = float(
+                col_def.get("startValue", 0.0 if scale_type == "linear" else 1.0)
+            )
             t_val = float(col_def.get("tickValue", 100.0))
             s_px = float(col_def.get("start", 0.0))
             t_px = float(col_def.get("tickEndX", col_def.get("end", s_px + 100.0)))
@@ -1073,7 +1242,9 @@ class StraditizeSession(
             if scale_type == "log":
                 try:
                     calib = LogCalibration([s_px, t_px], [s_val, t_val], name=col_name)
-                    data_dict[col_name] = [round(float(calib.px2data(x)), 4) for x in raw_x]
+                    data_dict[col_name] = [
+                        round(float(calib.px2data(x)), 4) for x in raw_x
+                    ]
                 except ValueError as exc:
                     if strict:
                         raise JsonRpcError(
@@ -1081,26 +1252,45 @@ class StraditizeSession(
                             f"Invalid log scale calibration for column '{col_name}': {exc}",
                         ) from exc
                     span = max(1e-9, t_px - s_px)
-                    data_dict[col_name] = [round(max(0.0, s_val + (x - s_px) / span * (t_val - s_val)), 4) for x in raw_x]
+                    data_dict[col_name] = [
+                        round(max(0.0, s_val + (x - s_px) / span * (t_val - s_val)), 4)
+                        for x in raw_x
+                    ]
             else:
                 # Linear two-point calibration
                 try:
-                    calib = LinearCalibration([s_px, t_px], [s_val, t_val], name=col_name)
-                    data_dict[col_name] = [round(max(0.0, float(calib.px2data(x))), 4) for x in raw_x]
+                    calib = LinearCalibration(
+                        [s_px, t_px], [s_val, t_val], name=col_name
+                    )
+                    data_dict[col_name] = [
+                        round(max(0.0, float(calib.px2data(x))), 4) for x in raw_x
+                    ]
                 except (ValueError, ZeroDivisionError):
                     if self.is_calibrated and c_idx in self.x_scales:
                         sx = self.x_scales[c_idx]["slope"]
                         ix = self.x_scales[c_idx]["intercept"]
-                        data_dict[col_name] = [round(max(0.0, sx * x + ix), 4) for x in raw_x]
+                        data_dict[col_name] = [
+                            round(max(0.0, sx * x + ix), 4) for x in raw_x
+                        ]
                     else:
                         span = max(1e-9, t_px - s_px)
-                        data_dict[col_name] = [round(max(0.0, (x - s_px) / span * 100.0), 4) for x in raw_x]
+                        data_dict[col_name] = [
+                            round(max(0.0, (x - s_px) / span * 100.0), 4) for x in raw_x
+                        ]
 
             # If column has an exaggeration multiplier specified by user, scale back to 1x true abundance
-            has_exag = bool(col_def.get("has_exaggeration", col_def.get("hasExaggeration", False)))
-            exag_mult = float(col_def.get("exaggeration_multiplier", col_def.get("exaggerationMult", 1.0)))
+            has_exag = bool(
+                col_def.get("has_exaggeration", col_def.get("hasExaggeration", False))
+            )
+            exag_mult = float(
+                col_def.get(
+                    "exaggeration_multiplier", col_def.get("exaggerationMult", 1.0)
+                )
+            )
             if has_exag and exag_mult > 1.0:
-                data_dict[col_name] = [round(val / exag_mult, 4) for val in data_dict[col_name]]
+                data_dict[col_name] = [
+                    round(val / exag_mult, 4) for val in data_dict[col_name]
+                ]
 
         df = pd.DataFrame(data_dict)
 
@@ -1290,7 +1480,9 @@ class StraditizeSession(
 
                 col_def = self.columns[c_idx] if c_idx < len(self.columns) else {}
                 scale_type = col_def.get("scale_type", "linear")
-                s_val = float(col_def.get("startValue", 0.0 if scale_type == "linear" else 1.0))
+                s_val = float(
+                    col_def.get("startValue", 0.0 if scale_type == "linear" else 1.0)
+                )
                 t_val = float(col_def.get("tickValue", 100.0))
                 s_px = float(col_def.get("start", 0.0))
                 t_px = float(col_def.get("tickEndX", col_def.get("end", s_px + 100.0)))
@@ -1303,10 +1495,17 @@ class StraditizeSession(
                         val = round(float(calib.px2data(interp_x)), 4)
                     except ValueError:
                         span = max(1e-9, t_px - s_px)
-                        val = round(max(0.0, s_val + (interp_x - s_px) / span * (t_val - s_val)), 4)
+                        val = round(
+                            max(
+                                0.0, s_val + (interp_x - s_px) / span * (t_val - s_val)
+                            ),
+                            4,
+                        )
                 else:
                     try:
-                        calib = LinearCalibration([s_px, t_px], [s_val, t_val], name=taxon)
+                        calib = LinearCalibration(
+                            [s_px, t_px], [s_val, t_val], name=taxon
+                        )
                         val = round(max(0.0, float(calib.px2data(interp_x))), 4)
                     except (ValueError, ZeroDivisionError):
                         if self.is_calibrated and c_idx in self.x_scales:
@@ -1419,7 +1618,9 @@ class StraditizeSession(
         if isinstance(project_data, str):
             path = os.path.abspath(project_data)
             if not os.path.exists(path):
-                raise JsonRpcError(FILE_NOT_FOUND_ERROR, f"Project file not found: {path}")
+                raise JsonRpcError(
+                    FILE_NOT_FOUND_ERROR, f"Project file not found: {path}"
+                )
 
             if path.endswith(".tar") or tarfile.is_tarfile(path):
                 with tarfile.open(path, "r") as tf:
@@ -1427,17 +1628,26 @@ class StraditizeSession(
                     img_member = None
                     for m in tf.getmembers():
                         nl = m.name.lower()
-                        if nl.endswith("straditize.json") or (nl.endswith(".json") and "manifest" not in nl and "info" not in nl):
+                        if nl.endswith("straditize.json") or (
+                            nl.endswith(".json")
+                            and "manifest" not in nl
+                            and "info" not in nl
+                        ):
                             json_member = m
                         elif nl.endswith((".png", ".jpg", ".jpeg")):
                             img_member = m
 
                     if not json_member:
-                        raise JsonRpcError(INVALID_PARAMS, "No straditize.json found in .tar archive.")
+                        raise JsonRpcError(
+                            INVALID_PARAMS, "No straditize.json found in .tar archive."
+                        )
 
                     f_json = tf.extractfile(json_member)
                     if not f_json:
-                        raise JsonRpcError(INVALID_PARAMS, "Could not extract straditize.json from archive.")
+                        raise JsonRpcError(
+                            INVALID_PARAMS,
+                            "Could not extract straditize.json from archive.",
+                        )
                     parsed = json.loads(f_json.read().decode("utf-8"))
 
                     if img_member:
@@ -1456,7 +1666,11 @@ class StraditizeSession(
                     parsed = json.load(f)
                 return self.project_load(parsed)
 
-        cal = project_data.get("depth_calibration") or project_data.get("calibration") or {}
+        cal = (
+            project_data.get("depth_calibration")
+            or project_data.get("calibration")
+            or {}
+        )
         roi = project_data.get("roi") or {}
 
         # ROI and calibration are read from their own keys. The old loader fell
@@ -1465,8 +1679,14 @@ class StraditizeSession(
         self.data_xlim = None
         self.data_ylim = None
         if "w" in roi and "h" in roi:
-            self.data_xlim = [float(roi.get("x", 0)), float(roi.get("x", 0)) + float(roi["w"])]
-            self.data_ylim = [float(roi.get("y", 0)), float(roi.get("y", 0)) + float(roi["h"])]
+            self.data_xlim = [
+                float(roi.get("x", 0)),
+                float(roi.get("x", 0)) + float(roi["w"]),
+            ]
+            self.data_ylim = [
+                float(roi.get("y", 0)),
+                float(roi.get("y", 0)) + float(roi["h"]),
+            ]
         elif roi:
             if "x0" in roi and "x1" in roi:
                 self.data_xlim = [float(roi["x0"]), float(roi["x1"])]
@@ -1489,7 +1709,9 @@ class StraditizeSession(
         top_px, bottom_px = cal.get("top_px"), cal.get("bottom_px")
         top_val = cal.get("top_cm", cal.get("top_val"))
         bottom_val = cal.get("bottom_cm", cal.get("bottom_val"))
-        if None not in (top_px, bottom_px, top_val, bottom_val) and float(bottom_px) != float(top_px):
+        if None not in (top_px, bottom_px, top_val, bottom_val) and float(
+            bottom_px
+        ) != float(top_px):
             self.calibrate_axes(
                 y_marks=[
                     {"pixel": float(top_px), "val": float(top_val)},
@@ -1579,32 +1801,44 @@ class StraditizeSession(
         cols_export = []
         for idx, col in enumerate(self.columns):
             c_idx = col.get("col_index", idx)
-            name = col.get("species") or col.get("name") or (self.taxa_names[c_idx] if c_idx < len(self.taxa_names) else f"Col {c_idx}")
+            name = (
+                col.get("species")
+                or col.get("name")
+                or (
+                    self.taxa_names[c_idx]
+                    if c_idx < len(self.taxa_names)
+                    else f"Col {c_idx}"
+                )
+            )
             ctrls = self.control_points.get(c_idx, {})
             pts = []
             for y_r, x_c in ctrls.items():
-                pts.append({
-                    "x": round(x_c, 2),
-                    "y": y_r,
-                    "value": round(x_c, 2),
-                    "kind": "peak",
-                    "valid_segment": True,
-                })
+                pts.append(
+                    {
+                        "x": round(x_c, 2),
+                        "y": y_r,
+                        "value": round(x_c, 2),
+                        "kind": "peak",
+                        "valid_segment": True,
+                    }
+                )
             pts.sort(key=lambda p: p["y"])
-            cols_export.append({
-                "id": f"col_{c_idx}",
-                "species": name,
-                "name": name,
-                "color": "#38bdf8",
-                "visible": True,
-                "scale_type": col.get("scale_type", "linear"),
-                "startX": col.get("start", 0),
-                "startValue": col.get("startValue", 0),
-                "tickEndX": col.get("tickEndX", col.get("end", 100)),
-                "tickValue": col.get("tickValue", 100),
-                "endX": col.get("end", 100),
-                "points": pts,
-            })
+            cols_export.append(
+                {
+                    "id": f"col_{c_idx}",
+                    "species": name,
+                    "name": name,
+                    "color": "#38bdf8",
+                    "visible": True,
+                    "scale_type": col.get("scale_type", "linear"),
+                    "startX": col.get("start", 0),
+                    "startValue": col.get("startValue", 0),
+                    "tickEndX": col.get("tickEndX", col.get("end", 100)),
+                    "tickValue": col.get("tickValue", 100),
+                    "endX": col.get("end", 100),
+                    "points": pts,
+                }
+            )
 
         project_json = {
             "version": "2.0.0",
@@ -1643,7 +1877,9 @@ class StraditizeSession(
             tf.addfile(ti_m, io.BytesIO(m_bytes))
 
             # 2. straditize.json
-            sj_bytes = json.dumps(project_json, indent=2, ensure_ascii=False).encode("utf-8")
+            sj_bytes = json.dumps(project_json, indent=2, ensure_ascii=False).encode(
+                "utf-8"
+            )
             ti_sj = tarfile.TarInfo(name="straditize.json")
             ti_sj.size = len(sj_bytes)
             ti_sj.mtime = int(time.time())
@@ -1665,16 +1901,25 @@ class StraditizeSession(
                     for col in self.columns:
                         self.digitize(col["col_index"])
                 res = self.export_data("csv")
-                csv_str = (res.get("csv") or res.get("csv_content") or "") if isinstance(res, dict) else str(res)
+                csv_str = (
+                    (res.get("csv") or res.get("csv_content") or "")
+                    if isinstance(res, dict)
+                    else str(res)
+                )
                 if not csv_str.strip():
                     raise ValueError("empty csv")
                 csv_data = csv_str.encode("utf-8")
             except (ValueError, KeyError, RuntimeError, JsonRpcError):
-                headers = ["depth"] + [c.get("species") or c.get("name") or f"col_{idx}" for idx, c in enumerate(self.columns)]
+                headers = ["depth"] + [
+                    c.get("species") or c.get("name") or f"col_{idx}"
+                    for idx, c in enumerate(self.columns)
+                ]
                 lines = [",".join(headers)]
                 depth_vals = self.depth_grid or [0.0, 50.0, 100.0, 150.0]
                 for d in depth_vals:
-                    lines.append(",".join([str(round(d, 2))] + ["0.00"] * len(self.columns)))
+                    lines.append(
+                        ",".join([str(round(d, 2))] + ["0.00"] * len(self.columns))
+                    )
                 csv_data = "\n".join(lines).encode("utf-8")
 
             ti_csv = tarfile.TarInfo(name="data.csv")
@@ -1768,7 +2013,9 @@ class StraditizeSession(
             return {"success": True, "removed": target_idx}
         raise JsonRpcError(INVALID_PARAMS, f"Column index out of bounds: {target_idx}")
 
-    def column_update(self, col_index: int | str, updates: dict[str, Any]) -> dict[str, Any]:
+    def column_update(
+        self, col_index: int | str, updates: dict[str, Any]
+    ) -> dict[str, Any]:
         """Updates column properties."""
         self._record_history("Update column")
         target_idx = int(col_index)
@@ -1803,7 +2050,13 @@ class StraditizeSession(
         if c_idx not in self.control_points:
             self.control_points[c_idx] = {}
         self.control_points[c_idx][y_int] = float(x)
-        return {"success": True, "col_index": c_idx, "y": y_int, "x": float(x), "kind": kind}
+        return {
+            "success": True,
+            "col_index": c_idx,
+            "y": y_int,
+            "x": float(x),
+            "kind": kind,
+        }
 
     def point_move(
         self,
@@ -1847,8 +2100,12 @@ class StraditizeSession(
             target_xlim = xlim or data_xlim or self.data_xlim
             target_ylim = ylim or data_ylim or self.data_ylim
         if not target_xlim or not target_ylim:
-            raise JsonRpcError(INVALID_PARAMS, "Data ROI bounds must be specified or set in session.")
-        res = self.detect_columns(data_xlim=target_xlim, data_ylim=target_ylim, roi_id=roi_id)
+            raise JsonRpcError(
+                INVALID_PARAMS, "Data ROI bounds must be specified or set in session."
+            )
+        res = self.detect_columns(
+            data_xlim=target_xlim, data_ylim=target_ylim, roi_id=roi_id
+        )
         self._record_history("Detect columns")
         return res
 
@@ -1933,7 +2190,11 @@ class StraditizeSession(
         prominence_ratio: float = 0.05,
     ) -> dict[str, Any]:
         """Extracts peak and valley control points per column, preserving manual points (Section 六 item 7)."""
-        target_cols = [col_index] if col_index is not None else [c["col_index"] for c in self.columns]
+        target_cols = (
+            [col_index]
+            if col_index is not None
+            else [c["col_index"] for c in self.columns]
+        )
         if not target_cols:
             return {"success": False, "message": "No columns available"}
 
@@ -1997,7 +2258,12 @@ class StraditizeSession(
         column detection still sees the untouched ink and the removal stays
         inspectable (and reversible) instead of being baked in.
         """
-        from .image import GRID_LINE_PRESETS, detect_grid_lines, mask_overlay_data_url, normalize_grid_line_strength
+        from .image import (
+            GRID_LINE_PRESETS,
+            detect_grid_lines,
+            mask_overlay_data_url,
+            normalize_grid_line_strength,
+        )
 
         if self.image is None:
             raise JsonRpcError(STATE_ERROR, "No image loaded in session.")
@@ -2069,7 +2335,8 @@ class StraditizeSession(
             "max_thickness": GRID_LINE_PRESETS[strength]["max_thickness"],
             "horizontal_rows": info["horizontal_rows"],
             "vertical_cols": info["vertical_cols"],
-            "removed_lines_count": len(info["horizontal_rows"]) + len(info["vertical_cols"]),
+            "removed_lines_count": len(info["horizontal_rows"])
+            + len(info["vertical_cols"]),
             "removed_pixels": int(line_mask.sum()),
             "auto_pixels": int(auto.sum()),
             "manual_restore_pixels": int((restore & ~auto).sum()),
@@ -2133,8 +2400,6 @@ class StraditizeSession(
             return {"path": output_path, "success": True}
         return r_script
 
-
-
     # ========================================================================
     # Age-Depth Chronology and Visual Inspection Methods
     # ========================================================================
@@ -2149,16 +2414,48 @@ class StraditizeSession(
         if sample_key:
             sample_map = {
                 "bacon": [
-                    os.path.join(os.path.dirname(__file__), "..", "tests", "test_figures", "age_models", "bacon_szek.png"),
-                    os.path.join(os.path.dirname(__file__), "..", "..", "tests", "test_figures", "age_models", "bacon_szek.png"),
+                    os.path.join(
+                        os.path.dirname(__file__),
+                        "..",
+                        "tests",
+                        "test_figures",
+                        "age_models",
+                        "bacon_szek.png",
+                    ),
+                    os.path.join(
+                        os.path.dirname(__file__),
+                        "..",
+                        "..",
+                        "tests",
+                        "test_figures",
+                        "age_models",
+                        "bacon_szek.png",
+                    ),
                 ],
                 "bchron": [
-                    os.path.join(os.path.dirname(__file__), "..", "tests", "test_figures", "age_models", "bchron_stepped.png"),
-                    os.path.join(os.path.dirname(__file__), "..", "..", "tests", "test_figures", "age_models", "bchron_stepped.png"),
+                    os.path.join(
+                        os.path.dirname(__file__),
+                        "..",
+                        "tests",
+                        "test_figures",
+                        "age_models",
+                        "bchron_stepped.png",
+                    ),
+                    os.path.join(
+                        os.path.dirname(__file__),
+                        "..",
+                        "..",
+                        "tests",
+                        "test_figures",
+                        "age_models",
+                        "bchron_stepped.png",
+                    ),
                 ],
             }
             cands = sample_map.get(sample_key.lower(), [])
-            image_path = next((p for p in cands if os.path.exists(p)), cands[0] if cands else None)
+            image_path = next(
+                (p for p in cands if os.path.exists(p)), cands[0] if cands else None
+            )
 
         if base64_data:
             if "," in base64_data:
@@ -2170,7 +2467,9 @@ class StraditizeSession(
             self.age_depth_image = Image.open(image_path)
             self.age_depth_image_path = os.path.abspath(image_path)
         else:
-            raise JsonRpcError(FILE_NOT_FOUND_ERROR, f"Age-depth image not found: {image_path}")
+            raise JsonRpcError(
+                FILE_NOT_FOUND_ERROR, f"Age-depth image not found: {image_path}"
+            )
 
         return {
             "status": "loaded",
@@ -2283,7 +2582,9 @@ class StraditizeSession(
         # Harmonize with current pollen sample depths if available
         sample_depths = []
         if self.column_points and self.is_calibrated and self.y_scale:
-            all_r = sorted({p["row"] for pts in self.column_points.values() for p in pts})
+            all_r = sorted(
+                {p["row"] for pts in self.column_points.values() for p in pts}
+            )
             sy = self.y_scale["slope"]
             iy = self.y_scale["intercept"]
             sample_depths = [round(sy * r + iy, 2) for r in all_r]
@@ -2311,14 +2612,23 @@ class StraditizeSession(
                 ),
             }
         elif sample_depths:
-            model_tag = "Bacon" if "bacon" in notes.lower() or "bacon" in (self.age_depth_image_path or "").lower() else "AgeModel"
+            model_tag = (
+                "Bacon"
+                if "bacon" in notes.lower()
+                or "bacon" in (self.age_depth_image_path or "").lower()
+                else "AgeModel"
+            )
             ensemble_table = model.generate_age_ensemble(
                 sample_depths=sample_depths,
                 n_ensembles=1000,
                 name=f"{model_tag}_Ensemble_1000",
                 return_diagnostics=True,
             )
-            self.ensemble_tables = [t for t in self.ensemble_tables if t.get("name") != ensemble_table["name"]]
+            self.ensemble_tables = [
+                t
+                for t in self.ensemble_tables
+                if t.get("name") != ensemble_table["name"]
+            ]
             self.ensemble_tables.append(ensemble_table)
             diagnostics = ensemble_table.get("diagnostics", {})
             ensemble_info = {
@@ -2337,7 +2647,8 @@ class StraditizeSession(
         if mapped_samples and mapped_samples.get("depths"):
             calib_year_ages = mapped_samples.get("age_est", [])
             mapped_samples["px_y"] = [
-                round(float(calibrator.depth2px(d)), 1) for d in mapped_samples["depths"]
+                round(float(calibrator.depth2px(d)), 1)
+                for d in mapped_samples["depths"]
             ]
             mapped_samples["px_x_curve"] = [
                 round(float(calibrator.age2px(a)), 1) for a in calib_year_ages
@@ -2411,7 +2722,9 @@ class StraditizeSession(
             if self.depth_grid:
                 sample_depths = [round(float(d), 2) for d in self.depth_grid]
             elif self.column_points and self.is_calibrated and self.y_scale:
-                all_r = sorted({p["row"] for pts in self.column_points.values() for p in pts})
+                all_r = sorted(
+                    {p["row"] for pts in self.column_points.values() for p in pts}
+                )
                 sy = self.y_scale["slope"]
                 iy = self.y_scale["intercept"]
                 sample_depths = [round(sy * r + iy, 2) for r in all_r]
@@ -2427,7 +2740,11 @@ class StraditizeSession(
                     n_ensembles=1000,
                     name="Bacon_Native_Ensemble_1000",
                 )
-                self.ensemble_tables = [t for t in self.ensemble_tables if t.get("name") != ens_table["name"]]
+                self.ensemble_tables = [
+                    t
+                    for t in self.ensemble_tables
+                    if t.get("name") != ens_table["name"]
+                ]
                 self.ensemble_tables.append(ens_table)
                 res["generated_ensemble"] = {
                     "name": ens_table["name"],
@@ -2500,7 +2817,6 @@ class StraditizeSession(
             ),
         }
 
-
     # ========================================================================
     # Paper Metadata & LiPD / Multi-Sheet XLSX Export Engine
     # ========================================================================
@@ -2549,7 +2865,9 @@ class StraditizeSession(
             "latitude": extracted.get("latitude", {}).get("value", ""),
             "longitude": extracted.get("longitude", {}).get("value", ""),
             "elevation_m": extracted.get("elevation_m", {}).get("value", ""),
-            "archive_type": extracted.get("archive_type", {}).get("value", "lake sediment"),
+            "archive_type": extracted.get("archive_type", {}).get(
+                "value", "lake sediment"
+            ),
             "confidence": extracted.get("site_name", {}).get("confidence", "medium"),
             "conflict": extracted.get("site_name", {}).get("conflict", False),
             "candidates": extracted.get("site_name", {}).get("candidates", []),
@@ -2563,9 +2881,13 @@ class StraditizeSession(
             "source": "LLM",
         }
         self.paper_metadata["technical"] = {
-            "pollen_extraction_method": extracted.get("pollen_extraction_method", {}).get("value", ""),
+            "pollen_extraction_method": extracted.get(
+                "pollen_extraction_method", {}
+            ).get("value", ""),
             "laboratory": extracted.get("laboratory", {}).get("value", ""),
-            "sampling_interval_cm": extracted.get("sampling_interval_cm", {}).get("value", ""),
+            "sampling_interval_cm": extracted.get("sampling_interval_cm", {}).get(
+                "value", ""
+            ),
             "source": "LLM",
         }
         self.paper_metadata["quality"] = {
@@ -2591,14 +2913,20 @@ class StraditizeSession(
         """Returns the current reviewed metadata object."""
         return {"metadata": self.paper_metadata}
 
-    def ensemble_add(self, name: str, columns: list[str], data: list[list[Any]]) -> dict[str, Any]:
+    def ensemble_add(
+        self, name: str, columns: list[str], data: list[list[Any]]
+    ) -> dict[str, Any]:
         """Imports an ensemble table (e.g. Bacon MCMC realizations or proxy summaries)."""
-        self.ensemble_tables = [t for t in self.ensemble_tables if t.get("name") != name]
-        self.ensemble_tables.append({
-            "name": name,
-            "columns": columns,
-            "data": data,
-        })
+        self.ensemble_tables = [
+            t for t in self.ensemble_tables if t.get("name") != name
+        ]
+        self.ensemble_tables.append(
+            {
+                "name": name,
+                "columns": columns,
+                "data": data,
+            }
+        )
         return {
             "success": True,
             "ensemble_count": len(self.ensemble_tables),
@@ -2610,7 +2938,11 @@ class StraditizeSession(
         return {
             "count": len(self.ensemble_tables),
             "tables": [
-                {"name": t["name"], "columns": t["columns"], "rows": len(t.get("data", []))}
+                {
+                    "name": t["name"],
+                    "columns": t["columns"],
+                    "rows": len(t.get("data", [])),
+                }
                 for t in self.ensemble_tables
             ],
         }
@@ -2625,11 +2957,17 @@ class StraditizeSession(
     ) -> dict[str, Any]:
         """Exports calibrated pollen data and metadata into a publication-ready multi-sheet XLSX."""
         pollen_res = self.export_data("csv")
-        pollen_csv = pollen_res.get("csv") if isinstance(pollen_res, dict) else str(pollen_res)
+        pollen_csv = (
+            pollen_res.get("csv") if isinstance(pollen_res, dict) else str(pollen_res)
+        )
         pollen_df = pd.read_csv(io.StringIO(pollen_csv or "depth\n0\n"))
 
         age_depth_df = None
-        if include_age_depth and self.age_depth_model is not None and "depth" in pollen_df.columns:
+        if (
+            include_age_depth
+            and self.age_depth_model is not None
+            and "depth" in pollen_df.columns
+        ):
             depths = pollen_df["depth"].tolist()
             pred = self.age_depth_model.predict_age(depths)
             # Keep only per-horizon arrays. Anything else (the ``metadata`` and
@@ -2644,7 +2982,9 @@ class StraditizeSession(
 
         selected_ensembles = None
         if include_ensemble_names:
-            selected_ensembles = [t for t in self.ensemble_tables if t["name"] in include_ensemble_names]
+            selected_ensembles = [
+                t for t in self.ensemble_tables if t["name"] in include_ensemble_names
+            ]
 
         xlsx_bytes = export_scientific_xlsx(
             meta_info=self.paper_metadata,
@@ -2671,11 +3011,17 @@ class StraditizeSession(
     ) -> dict[str, Any]:
         """Exports into Linked Paleo Data (LiPD) .lpd package compliant with LiPDverse."""
         pollen_res = self.export_data("csv")
-        pollen_csv = pollen_res.get("csv") if isinstance(pollen_res, dict) else str(pollen_res)
+        pollen_csv = (
+            pollen_res.get("csv") if isinstance(pollen_res, dict) else str(pollen_res)
+        )
         pollen_df = pd.read_csv(io.StringIO(pollen_csv or "depth\n0\n"))
 
         age_depth_df = None
-        if include_age_depth and self.age_depth_model is not None and "depth" in pollen_df.columns:
+        if (
+            include_age_depth
+            and self.age_depth_model is not None
+            and "depth" in pollen_df.columns
+        ):
             depths = pollen_df["depth"].tolist()
             pred = self.age_depth_model.predict_age(depths)
             # Keep only per-horizon arrays. Anything else (the ``metadata`` and
@@ -2690,7 +3036,9 @@ class StraditizeSession(
 
         selected_ensembles = None
         if include_ensemble_names:
-            selected_ensembles = [t for t in self.ensemble_tables if t["name"] in include_ensemble_names]
+            selected_ensembles = [
+                t for t in self.ensemble_tables if t["name"] in include_ensemble_names
+            ]
 
         pkg_bytes = export_lipd_package(
             meta_info=self.paper_metadata,
@@ -2715,11 +3063,15 @@ class StraditizeSession(
     ) -> dict[str, Any]:
         """Generates native Age Ensemble Table from the current age-depth model and mounts it into session."""
         if self.age_depth_model is None:
-            raise JsonRpcError(CALIBRATION_ERROR, "No age-depth model extracted in current session.")
+            raise JsonRpcError(
+                CALIBRATION_ERROR, "No age-depth model extracted in current session."
+            )
 
         sample_depths = []
         if self.column_points and self.is_calibrated and self.y_scale:
-            all_r = sorted({p["row"] for pts in self.column_points.values() for p in pts})
+            all_r = sorted(
+                {p["row"] for pts in self.column_points.values() for p in pts}
+            )
             sy = self.y_scale["slope"]
             iy = self.y_scale["intercept"]
             sample_depths = [round(sy * r + iy, 2) for r in all_r]
@@ -2735,13 +3087,16 @@ class StraditizeSession(
             name=table_name,
         )
 
-        self.ensemble_tables = [t for t in self.ensemble_tables if t.get("name") != table_name]
+        self.ensemble_tables = [
+            t for t in self.ensemble_tables if t.get("name") != table_name
+        ]
         self.ensemble_tables.append(table)
 
         return {
             "success": True,
             "table_name": table_name,
-            "columns": table["columns"][:5] + [f"... (+{len(table['columns']) - 5} cols)"],
+            "columns": table["columns"][:5]
+            + [f"... (+{len(table['columns']) - 5} cols)"],
             "rows_count": len(table["data"]),
             "total_ensembles": len(self.ensemble_tables),
         }
@@ -2862,7 +3217,9 @@ class StraditizeSession(
             When true the custom vocabulary is emptied (entries are ignored).
         """
         path = self.user_taxa_dict_path()
-        dict_obj = PollenDictionary(custom_dict_path=path if os.path.exists(path) else None)
+        dict_obj = PollenDictionary(
+            custom_dict_path=path if os.path.exists(path) else None
+        )
         if clear or mode == "replace":
             dict_obj.custom_entries = {}
 
@@ -2882,9 +3239,7 @@ class StraditizeSession(
             if not zh:
                 zh = latin
             group = str(raw.get("group") or "用户自定义 (User Custom)").strip()
-            dict_obj.add_entry(
-                zh, latin, group=group, cls="custom", is_custom=True
-            )
+            dict_obj.add_entry(zh, latin, group=group, cls="custom", is_custom=True)
             added += 1
 
         count = dict_obj.save_custom_txt(path)
@@ -2897,7 +3252,9 @@ class StraditizeSession(
             "entries": sorted(dict_obj.custom_entries.values(), key=lambda i: i["zh"]),
         }
 
-    def ocr_apply_labels(self, confirmed_labels: list[dict[str, Any]]) -> dict[str, Any]:
+    def ocr_apply_labels(
+        self, confirmed_labels: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """Applies user-reviewed taxon names directly into column definitions."""
         applied_count = 0
         for item in confirmed_labels:
@@ -2915,4 +3272,8 @@ class StraditizeSession(
                     applied_count += 1
                     break
 
-        return {"success": True, "applied_count": applied_count, "columns_count": len(self.columns)}
+        return {
+            "success": True,
+            "applied_count": applied_count,
+            "columns_count": len(self.columns),
+        }

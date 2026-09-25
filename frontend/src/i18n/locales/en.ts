@@ -18,7 +18,10 @@ export const en = {
   'error.internal': 'Backend internal error',
 
   // ===== Straditize domain error codes =====
-  'error.state': 'Invalid session state (load a diagram first)',
+  'error.state': 'Prerequisite state not ready',
+  'error.conflict': 'Naming or entity conflict',
+  'error.algorithm': 'Algorithm execution interrupted',
+  'error.fileError': 'File reading error',
   'error.fileNotFound': 'File not found',
   'error.calibration': 'Axis calibration missing or invalid',
   'error.export': 'Export failed (format or data validation error)',
