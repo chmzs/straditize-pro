@@ -245,3 +245,75 @@ def test_webmcp_server_protocol_and_workflow():
     assert qa_call["result"]["isError"] is False
     qa_data = json.loads(qa_call["result"]["content"][0]["text"])
     assert qa_data["roi_name"] == "pollen"
+
+
+def test_streamable_http_mcp_endpoint():
+    """Verify Streamable HTTP /mcp endpoint directly on StraditizeRpcHttpServer."""
+    import json
+    import socket
+    import urllib.request
+    from straditize_core.rpc_server import (
+        StraditizeRpcHttpServer,
+        create_rpc_dispatcher,
+    )
+    from straditize_core.session import StraditizeSession
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+
+    session = StraditizeSession()
+    dispatcher = create_rpc_dispatcher(session)
+    server = StraditizeRpcHttpServer(
+        host="127.0.0.1", port=port, dispatcher=dispatcher, session=session
+    )
+    server.start()
+
+    try:
+        mcp_url = f"http://127.0.0.1:{port}/mcp"
+
+        def post_mcp(payload: dict) -> dict:
+            req = urllib.request.Request(
+                mcp_url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=2.0) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+
+        # 1. initialize over /mcp
+        res_init = post_mcp(
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+        )
+        assert res_init["result"]["serverInfo"]["name"] == "straditize-webmcp"
+
+        # 2. tools/list over /mcp
+        res_list = post_mcp(
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
+        )
+        assert len(res_list["result"]["tools"]) >= 14
+
+        # 3. tools/call over /mcp mutating the shared live session
+        res_call = post_mcp(
+            {
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {
+                    "name": "straditize_roi_create",
+                    "arguments": {
+                        "name": "charcoal",
+                        "x0": 50,
+                        "x1": 200,
+                        "y0": 100,
+                        "y1": 500,
+                        "composition": False,
+                    },
+                },
+            }
+        )
+        assert res_call["result"]["isError"] is False
+        assert any(r["name"] == "charcoal" for r in session.rois)
+    finally:
+        server.stop()

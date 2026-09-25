@@ -347,11 +347,15 @@ class StraditizeWebMcpServer:
         self,
         web_rpc_url: str | None = "http://127.0.0.1:8765/rpc",
         session: StraditizeSession | None = None,
+        dispatcher: JsonRpcDispatcher | None = None,
     ) -> None:
         self.web_rpc_url = web_rpc_url
         self.session = session or StraditizeSession()
-        self.dispatcher = JsonRpcDispatcher()
-        register_all(self.dispatcher, self.session)
+        if dispatcher is not None:
+            self.dispatcher = dispatcher
+        else:
+            self.dispatcher = JsonRpcDispatcher()
+            register_all(self.dispatcher, self.session)
         self._tool_map = {t["name"]: t for t in WEBMCP_TOOLS}
 
     def list_tools(self) -> list[dict[str, Any]]:

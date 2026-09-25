@@ -205,7 +205,9 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
         return origin.rstrip("/") in {f"http://{host_header}", f"https://{host_header}"}
 
     def _reject_request(self, status: int, reason: str) -> None:
-        body = json.dumps({"error": reason, "code": status}, ensure_ascii=False).encode("utf-8")
+        body = json.dumps({"error": reason, "code": status}, ensure_ascii=False).encode(
+            "utf-8"
+        )
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -215,11 +217,16 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
     def _guard_request(self) -> bool:
         """返回 True 表示请求可以继续；否则已回写 403 并返回 False。"""
         if not self._host_header_allowed():
-            logger.warning("Rejected request with disallowed Host header: %s", self.headers.get("Host"))
+            logger.warning(
+                "Rejected request with disallowed Host header: %s",
+                self.headers.get("Host"),
+            )
             self._reject_request(403, "Host header not allowed")
             return False
         if not self._origin_allowed():
-            logger.warning("Rejected cross-origin request from: %s", self.headers.get("Origin"))
+            logger.warning(
+                "Rejected cross-origin request from: %s", self.headers.get("Origin")
+            )
             self._reject_request(403, "Cross-origin request not allowed")
             return False
         return True
@@ -462,7 +469,9 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
 
             target_file = os.path.abspath(os.path.join(base_comp_dir, rel_path))
             if not os.path.exists(target_file):
-                alt_file = os.path.abspath(os.path.join(base_comp_dir, "age-modeling", rel_path))
+                alt_file = os.path.abspath(
+                    os.path.join(base_comp_dir, "age-modeling", rel_path)
+                )
                 if os.path.exists(alt_file):
                     target_file = alt_file
 
@@ -471,7 +480,9 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
                 self.send_response(403)
                 self._send_cors_headers()
                 self.end_headers()
-                self.wfile.write(b"Forbidden: Path traversal outside components directory")
+                self.wfile.write(
+                    b"Forbidden: Path traversal outside components directory"
+                )
                 return
 
             if os.path.isfile(target_file):
@@ -634,7 +645,10 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(
                     json.dumps(
-                        {"error": "Shutdown is only permitted in desktop mode.", "code": 403},
+                        {
+                            "error": "Shutdown is only permitted in desktop mode.",
+                            "code": 403,
+                        },
                         ensure_ascii=False,
                     ).encode("utf-8")
                 )
@@ -654,7 +668,9 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
 
             def _delayed_exit():
                 time.sleep(0.5)
-                lock_file = os.path.join(tempfile.gettempdir(), "straditize_desktop.lock")
+                lock_file = os.path.join(
+                    tempfile.gettempdir(), "straditize_desktop.lock"
+                )
                 try:
                     if os.path.exists(lock_file):
                         os.remove(lock_file)
@@ -776,8 +792,8 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
                 self.wfile.write(err_bytes)
                 return
 
-        # 2. JSON-RPC 2.0 requests at /rpc or /
-        if path not in ("/rpc", "/"):
+        # 2. JSON-RPC 2.0 & Streamable HTTP MCP requests at /rpc, /mcp, or /
+        if path not in ("/rpc", "/mcp", "/"):
             self.send_response(404)
             self._send_cors_headers()
             self.end_headers()
@@ -789,11 +805,17 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
 
         response = self.dispatcher.handle_text(post_data)
 
-        # Broadcast event notification on significant operations
+        # Broadcast event notification on significant operations (including WebMCP tool calls)
         try:
             req_json = json.loads(post_data)
             if isinstance(req_json, dict) and "method" in req_json:
-                self.broadcaster.broadcast("rpc_call", {"method": req_json["method"]})
+                b_payload: dict[str, Any] = {"method": req_json["method"]}
+                if req_json["method"] in (
+                    "tools/call",
+                    "webmcp.callTool",
+                ) and isinstance(req_json.get("params"), dict):
+                    b_payload["tool"] = req_json["params"].get("name", "")
+                self.broadcaster.broadcast("rpc_call", b_payload)
         except Exception as ex:  # noqa: BLE001
             logger.debug("Error parsing broadcast request: %s", ex)
 
@@ -942,6 +964,7 @@ def main() -> None:
     # 0. Headless batch CLI commands (extract, run-project)
     if len(sys.argv) > 1 and sys.argv[1] in ("extract", "run-project"):
         from .cli import main as cli_main
+
         cli_main()
         return
 
@@ -950,12 +973,18 @@ def main() -> None:
         if sys.platform == "win32":
             try:
                 import ctypes
+
                 kernel32 = ctypes.windll.kernel32
                 if kernel32.AttachConsole(-1):
                     # Attach standard output and error to parent console
                     import io
-                    sys.stdout = io.TextIOWrapper(open("CONOUT$", "wb"), encoding="utf-8", write_through=True)  # noqa: SIM115
-                    sys.stderr = io.TextIOWrapper(open("CONOUT$", "wb"), encoding="utf-8", write_through=True)  # noqa: SIM115
+
+                    sys.stdout = io.TextIOWrapper(
+                        open("CONOUT$", "wb"), encoding="utf-8", write_through=True
+                    )  # noqa: SIM115
+                    sys.stderr = io.TextIOWrapper(
+                        open("CONOUT$", "wb"), encoding="utf-8", write_through=True
+                    )  # noqa: SIM115
             except Exception:  # noqa: BLE001, S110
                 pass
 
@@ -973,7 +1002,10 @@ def main() -> None:
 
         target_port = args.port
         if is_port_in_use(target_port, "127.0.0.1"):
-            print(f"Error: Port {target_port} is already in use. Exiting.", file=sys.stderr)
+            print(
+                f"Error: Port {target_port} is already in use. Exiting.",
+                file=sys.stderr,
+            )
             sys.exit(1)
 
         session = StraditizeSession()

@@ -1534,21 +1534,44 @@ async function bootstrap() {
     // 忽略异常
   }
 
-  // 14. 注册浏览器端 WebMCP (W3C Web Model Context Protocol) 桥接器
+  // 14. 注册浏览器端 WebMCP (W3C Web Model Context Protocol) 桥接器 + /events 实时同步入撤销栈
+  const syncWebMcpState = async (actionName: string) => {
+    const freshData = await rpcClient.getDiagramData();
+    canvasComponent.loadNewDiagram(freshData);
+    history.push(
+      `WebMCP: ${actionName}`,
+      canvasComponent.data.columns,
+      canvasComponent.data.activeTaxaId,
+      canvasComponent.data.calibration,
+      canvasComponent.data.roi
+    );
+    sidebar?.updateData(canvasComponent.data);
+    inspector?.updateData(canvasComponent.data);
+    toolbar?.updateHistoryState();
+    updateFooter();
+    scheduleAutosave();
+    setHudNotice(`🤖 WebMCP 已执行: ${actionName}（支持 Ctrl+Z 撤销）`, 3500);
+  };
+
+  let inPageCallInFlight = false;
   const webMcpApi = {
     version: '2024-11-05',
+    endpoint: typeof window !== 'undefined' && window.location.origin ? `${window.location.origin}/mcp` : 'http://127.0.0.1:8765/mcp',
     listTools: async () => {
-      const res = await rpcClient.call<any, any>('webmcp.listTools', {});
+      const res = await rpcClient.call<any, any>('tools/list', {});
       return res?.tools || [];
     },
-    callTool: async (method: string, params: Record<string, any> = {}) => {
-      const res = await rpcClient.call<any, any>(method, params);
-      const freshData = await rpcClient.getDiagramData();
-      canvasComponent.loadNewDiagram(freshData);
-      sidebar?.updateData(canvasComponent.data);
-      inspector?.updateData(canvasComponent.data);
-      updateFooter();
-      return res;
+    callTool: async (name: string, args: Record<string, any> = {}) => {
+      inPageCallInFlight = true;
+      try {
+        const res = name.startsWith('straditize_')
+          ? await rpcClient.call<any, any>('tools/call', { name, arguments: args })
+          : await rpcClient.call<any, any>(name, args);
+        await syncWebMcpState(name);
+        return res;
+      } finally {
+        inPageCallInFlight = false;
+      }
     },
     setWorkflowStep: (step: WorkflowStage) => {
       currentStage = step;
@@ -1562,6 +1585,27 @@ async function bootstrap() {
       Object.defineProperty(navigator, 'modelContext', { value: webMcpApi, configurable: true });
     } catch {
       // Ignore read-only navigator environments
+    }
+  }
+
+  // 订阅后端 /events SSE 流：当外部 AI Agent 通过 http://127.0.0.1:8765/mcp 调用工具时，
+  // 浏览器画布自动同步最新状态并压入 HistoryManager 撤销栈
+  if (typeof EventSource !== 'undefined') {
+    try {
+      const es = new EventSource('/events');
+      es.addEventListener('rpc_call', (ev: MessageEvent) => {
+        if (inPageCallInFlight) return;
+        try {
+          const payload = JSON.parse(ev.data || '{}');
+          if ((payload.method === 'tools/call' || payload.method === 'webmcp.callTool') && payload.tool) {
+            void syncWebMcpState(payload.tool);
+          }
+        } catch {
+          // Ignore malformed event
+        }
+      });
+    } catch {
+      // Ignore if SSE unavailable
     }
   }
 

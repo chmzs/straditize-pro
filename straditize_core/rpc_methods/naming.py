@@ -112,8 +112,8 @@ def register(dispatcher: Any, session: Any) -> None:
     dispatcher.register_method("naming.renameColumn", rename_column)
     dispatcher.register_method("naming.snapLabels", snap_labels)
 
-    # Expose WebMCP tool inspection & execution on the HTTP JSON-RPC server
-    def webmcp_list_tools() -> dict[str, Any]:
+    # Expose WebMCP tool inspection & Streamable HTTP MCP protocol on the JSON-RPC server
+    def webmcp_list_tools(**_kwargs: Any) -> dict[str, Any]:
         from ..mcp_server import WEBMCP_TOOLS
 
         return {
@@ -127,4 +127,41 @@ def register(dispatcher: Any, session: Any) -> None:
             ]
         }
 
+    def mcp_initialize(**_kwargs: Any) -> dict[str, Any]:
+        from ..mcp_server import MCP_PROTOCOL_VERSION
+
+        return {
+            "protocolVersion": MCP_PROTOCOL_VERSION,
+            "capabilities": {"tools": {"listChanged": False}},
+            "serverInfo": {"name": "straditize-webmcp", "version": "2.0.0"},
+        }
+
+    def mcp_notifications_initialized(**_kwargs: Any) -> None:
+        return None
+
+    def mcp_ping(**_kwargs: Any) -> dict[str, Any]:
+        return {}
+
+    def mcp_tools_call(
+        name: str = "",
+        arguments: dict[str, Any] | None = None,
+        **_kwargs: Any,
+    ) -> dict[str, Any]:
+        from ..mcp_server import StraditizeWebMcpServer
+
+        server = StraditizeWebMcpServer(
+            web_rpc_url=None,
+            session=session,
+            dispatcher=dispatcher,
+        )
+        return server.call_tool(name, arguments)
+
     dispatcher.register_method("webmcp.listTools", webmcp_list_tools)
+    dispatcher.register_method("webmcp.callTool", mcp_tools_call)
+    dispatcher.register_method("initialize", mcp_initialize)
+    dispatcher.register_method(
+        "notifications/initialized", mcp_notifications_initialized
+    )
+    dispatcher.register_method("ping", mcp_ping)
+    dispatcher.register_method("tools/list", webmcp_list_tools)
+    dispatcher.register_method("tools/call", mcp_tools_call)
