@@ -26,6 +26,16 @@ export interface InspectorCallbacks {
   onSubmitYCalibration?: (top_px: number, topValue: number, bottom_px: number, bottomValue: number, unit: string) => void;
   /** ROI 输入框提交，需要同步后端并重算线掩膜。 */
   onRoiCommitted?: (roi: DataRoi) => void;
+  onSelectRoi?: (roiId: string) => void;
+  onCreateRoi?: () => void;
+  onSetPrimaryRoi?: (roiId: string) => void;
+  onDeleteRoi?: (roiId: string) => void;
+  onRenameActiveRoi?: (name: string) => void;
+  onUpdateRoiComposition?: (composition: boolean) => void;
+  onDetectLineCandidates?: () => void;
+  onDetectXTicks?: () => void;
+  onExtractConsensusHorizons?: () => void;
+  onClearHorizons?: () => void;
 }
 
 export class Inspector {
@@ -124,32 +134,12 @@ export class Inspector {
   }
 
   private renderStagePanel(activeCol: TaxaColumn | undefined, cal: DiagramCalibration): string {
-    // 优先从 Step Registry 动态路由挂载
+    // 统一从 Step Registry 动态路由挂载 8 步工作流面板
     const registered = getStepPanel(this.currentStage);
     if (registered) {
       return registered.render(this.data);
     }
-
-    switch (this.currentStage) {
-      case 0:
-        return this.renderS0Panel();
-      case 1:
-        return this.renderS1ImageLoadedPanel();
-      case 2:
-        return this.renderS2RoiPanel(cal);
-      case 3:
-        return this.renderS3ColumnsPanel(activeCol);
-      case 4:
-        return this.renderS4CalibrationPanel(cal, activeCol);
-      case 5:
-        return activeCol ? this.renderS5DigitizePanel(activeCol) : this.renderProjectOverview(cal);
-      case 6:
-        return this.renderS6VerificationPanel();
-      case 7:
-        return this.renderS7ExportPanel();
-      default:
-        return activeCol ? this.renderColumnInspector(activeCol) : this.renderProjectOverview(cal);
-    }
+    return activeCol ? this.renderColumnInspector(activeCol) : this.renderProjectOverview(cal);
   }
 
   /**
@@ -158,292 +148,6 @@ export class Inspector {
    * 标定与 ROI 完全无关：用户在图上的 Y 轴点两个已知刻度的位置，填入其真实值，
    * 像素↔数值的线性映射由此确定。这里只呈现状态与入口，收点在画布上完成。
    */
-  private renderS4CalibrationPanel(cal: DiagramCalibration, activeCol?: TaxaColumn): string {
-    const hasCustom = cal.customDepths && cal.customDepths.length > 0;
-    const customCount = hasCustom ? cal.customDepths!.length : 0;
-    const bounds = CoordinateSystem.calibrationBounds(cal);
-
-    const statusBlock = bounds
-      ? `
-        <div class="prop-row" style="margin-bottom: 4px;">
-          <span class="prop-label">① 上方参考点:</span>
-          <span class="prop-val"><code>Y=${bounds.topPx}px</code> → <strong>${bounds.topValue} ${cal.unit}</strong></span>
-        </div>
-        <div class="prop-row" style="margin-bottom: 4px;">
-          <span class="prop-label">② 下方参考点:</span>
-          <span class="prop-val"><code>Y=${bounds.bottomPx}px</code> → <strong>${bounds.bottomValue} ${cal.unit}</strong></span>
-        </div>
-        <div class="prop-row">
-          <span class="prop-label">换算比例:</span>
-          <span class="prop-val">${((bounds.bottomValue - bounds.topValue) / (bounds.bottomPx - bounds.topPx)).toFixed(4)} ${cal.unit}/px</span>
-        </div>
-      `
-      : `
-        <div style="font-size: 11px; color: #f59e0b; font-weight: 700; line-height: 1.6;">
-          ⚠ 尚未标定：当前深度一律显示为 <code>--</code>，不会用取数区边界充当刻度。
-        </div>
-      `;
-
-    return `
-      <div class="inspector-section">
-        <div class="section-title">S4：Y 轴两点标定</div>
-
-        <div class="form-group" style="padding: 8px; background: rgba(250, 204, 21, 0.07); border-radius: 6px; border: 1px solid rgba(250, 204, 21, 0.35); margin-bottom: 10px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-            <strong style="font-size: 11px; color: var(--text-primary);">Y 轴标定状态:</strong>
-            <span style="font-size: 10px; color: ${bounds ? '#10b981' : '#f59e0b'}; font-weight: 700;">
-              ${bounds ? '✓ 已标定' : '未标定'}
-            </span>
-          </div>
-          ${statusBlock}
-        </div>
-
-        <div class="tip-card" style="margin-bottom: 10px; border-left: 3px solid var(--accent-blue); padding: 8px 10px;">
-          <p style="font-size: 11px; line-height: 1.5; color: var(--text-primary); margin: 0;">
-            <strong>怎么标：</strong>点下方按钮进入标定模式（快捷键 <strong>Y</strong>），
-            在图上依次点击 <strong>Y 轴上两个已知刻度所在的行</strong>（例如 0 与 300cm 两条水平位置），
-            随后在弹出的对话框里填入这两行的真实值。两点顺序无所谓，后端会按像素 Y 排序。
-          </p>
-        </div>
-
-        <button id="btn-start-ycalib" class="btn btn-primary" style="width: 100%; margin-bottom: 8px;">
-          🎯 ${bounds ? '重新标定两点' : '开始两点标定 (Y)'}
-        </button>
-        <button id="btn-open-ycalib-manual" class="tool-btn" style="width: 100%; font-size: 10.5px; padding: 5px 6px;">
-          ⌨ 手动输入像素/数值
-        </button>
-
-        <!-- 真实样品层位录入 (恪守物理真实，拒绝主观伪插值) -->
-        <div class="form-group" style="padding: 8px; background: rgba(56, 189, 248, 0.06); border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.25); margin: 10px 0;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <strong style="font-size: 11px; color: var(--text-primary);">钻孔真实样品层位序列:</strong>
-            <span style="font-size: 10px; color: ${hasCustom ? '#10b981' : '#f59e0b'}; font-weight: 700;">
-              ${hasCustom ? `✓ 已载入 ${customCount} 层` : '使用图谱标定'}
-            </span>
-          </div>
-          <p style="font-size: 10px; color: var(--text-secondary); margin: 4px 0 8px 0; line-height: 1.4;">
-            若持有钻孔当年实际测样的非等距深度表，可直接从 Excel 选中该列复制并一键粘贴。
-          </p>
-          <div style="display: flex; gap: 6px;">
-            <button id="btn-open-paste-depths" class="btn btn-primary" style="flex: 1; font-size: 10.5px; padding: 4px 6px;">
-              📋 从 Excel 粘贴深度 (Ctrl+V)
-            </button>
-            ${hasCustom ? `
-              <button id="btn-clear-custom-depths" class="tool-btn" style="font-size: 10px; padding: 4px 6px; color: #dc2626;" title="清除自定义层位，恢复图谱物理两端标尺">
-                清除
-              </button>
-            ` : ''}
-          </div>
-        </div>
-
-        ${activeCol ? this.renderColumnInspector(activeCol) : ''}
-      </div>
-    `;
-  }
-
-  private renderS0Panel(): string {
-    return `
-      <div class="inspector-section">
-        <div class="section-title">S0：空状态</div>
-        <div class="tip-card" style="margin: 0; background: rgba(56, 189, 248, 0.08); border-color: rgba(56, 189, 248, 0.3);">
-          <p style="font-size: 11px; line-height: 1.6; color: ${tokens.color.text.secondary}; margin: 0;">
-            当前尚未载入地层图谱图像。<br><br>
-            请点击顶栏 <strong>[📁 图谱]</strong> 按钮，或直接将图片文件拖拽至中央画布区域。
-          </p>
-        </div>
-      </div>
-    `;
-  }
-
-  private renderS1ImageLoadedPanel(): string {
-    const w = this.data.imageWidth || 0;
-    const h = this.data.imageHeight || 0;
-    return `
-      <div class="inspector-section">
-        <div class="section-title">S1：图谱已加载 (Image Loaded)</div>
-        <div class="prop-row" style="margin-bottom: 8px;">
-          <span class="prop-label">原始图像尺寸:</span>
-          <span class="prop-val">${w} × ${h} px</span>
-        </div>
-        <div class="prop-row" style="margin-bottom: 8px;">
-          <span class="prop-label">图谱水平状态:</span>
-          <span class="prop-val" style="color: var(--accent-green);">已就绪</span>
-        </div>
-        <div class="tip-card" style="margin-bottom: 12px; background: rgba(56, 189, 248, 0.08); border-left: 3px solid var(--accent-blue); padding: 8px 10px;">
-          <p style="font-size: 11px; line-height: 1.6; color: var(--text-primary); margin: 0;">
-            <strong>步骤引导：</strong><br>
-图谱底图已居中展示。您可使用右键或中键拖拽（或按住空格+左键）平移、滚轮缩放浏览图谱整体形态与层位。
-            确认图谱就绪后，请点击底部 <strong>[👉 进入数据有效区框选 (S2)]</strong>，此时画布将呈现 ROI 调节框。
-          </p>
-        </div>
-      </div>
-    `;
-  }
-
-  /**
-   * S2：界定纯数据取数区 (ROI)。
-   *
-   * 这里只有"从哪里取数"与"如何清理干扰线"。深度输入框已迁至 S4 的两点标定 ——
-   * 历史上它们并排放在 S2，拖一下 ROI 就改了深度，是本次修复的缺陷本体。
-   */
-  private renderS2RoiPanel(cal: DiagramCalibration): string {
-    const roi = this.data.roi;
-    const correctionCount = this.data.lineCorrections?.length ?? 0;
-    const bounds = CoordinateSystem.calibrationBounds(cal);
-
-    return `
-      <div class="inspector-section">
-        <div class="section-title">S2：界定纯数据取数区 (ROI)</div>
-
-        <div class="tip-card" style="margin-bottom: 10px; border-left: 3px solid var(--accent-blue); padding: 8px 10px;">
-          <p style="font-size: 11px; line-height: 1.5; color: var(--text-primary); margin: 0;">
-            <strong>工作流要点：</strong><br>
-            在画布上拖拽 8 个十字手柄框选花粉数据区，<strong>务必将左侧 Y 轴线、右侧聚类树和底部 X 刻度排除在外</strong>，
-            确保分列 100% 准确。本框只决定「从哪里取数」，不决定任何深度值。
-          </p>
-        </div>
-
-        <div class="form-group" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light); margin-bottom: 10px;">
-          <label style="font-size: 11px; font-weight: 600; display: block; margin-bottom: 6px;">图像去线与网格降噪:</label>
-          <select id="select-inspector-degrid" class="sample-select" style="width: 100%; font-size: 11px; margin-bottom: 6px;">
-            <option value="off">去线: 关闭</option>
-            <option value="weak">去线: 弱 (仅 1-2px 细线)</option>
-            <option value="medium" selected>去线: 中 (推荐)</option>
-            <option value="strong">去线: 强 (含较粗网格)</option>
-          </select>
-          <label style="display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-secondary); cursor: pointer; margin-bottom: 6px;">
-            <input type="checkbox" id="chk-degrid-vertical" checked />
-            <span>同时去除竖线（坐标轴脊线、列基线）</span>
-          </label>
-          <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-            <button id="btn-linefix-erase" class="tool-btn" style="flex: 1; font-size: 10px; padding: 4px 6px;" title="按住左键涂抹，把被误标成线的数据擦回来">
-              🧽 擦掉误标
-            </button>
-            <button id="btn-linefix-restore" class="tool-btn" style="flex: 1; font-size: 10px; padding: 4px 6px;" title="按住左键涂抹，手工补上算法漏掉的线">
-              🖌 补回漏标
-            </button>
-          </div>
-          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text-muted);">
-            <span>人工修正笔迹: <strong>${correctionCount}</strong> 条</span>
-            <button id="btn-linefix-clear" class="tool-btn" style="font-size: 9.5px; padding: 2px 6px; ${correctionCount ? '' : 'opacity: 0.45; pointer-events: none;'}">清空修正</button>
-          </div>
-          <small style="font-size: 10px; color: var(--text-muted); line-height: 1.4; display: block; margin-top: 6px;">
-            提示: 按键盘 <strong>B</strong> 键叠加查看去线结果 —— <span style="color:#f87171;">红色</span>=实际被剔除的像素，
-            <span style="color:#e2e8f0;">白色</span>=保留下来的墨迹。进入修正笔刷时会自动打开该叠加层。
-          </small>
-        </div>
-
-        <div class="form-group">
-          <label>有效区像素 X 范围:</label>
-          <div class="input-row">
-            <input type="number" id="inp-roi-xmin" value="${Math.round(roi.xMin)}" />
-            <span style="color:#64748b;">~</span>
-            <input type="number" id="inp-roi-xmax" value="${Math.round(roi.xMax)}" />
-          </div>
-        </div>
-        <div class="form-group">
-          <label>有效区像素 Y 范围 (所有 ROI 共享共时性):</label>
-          <div class="input-row">
-            <input type="number" id="inp-roi-ymin" value="${Math.round(roi.yMin)}" />
-            <span style="color:#64748b;">~</span>
-            <input type="number" id="inp-roi-ymax" value="${Math.round(roi.yMax)}" />
-          </div>
-        </div>
-
-        <div style="font-size: 10px; color: var(--text-muted); line-height: 1.5; margin-bottom: 8px;">
-          Y 轴深度标定不在本步骤：${bounds ? `当前已标定 ${bounds.topValue} ~ ${bounds.bottomValue} ${cal.unit}。` : '尚未标定，深度显示为 --。'}
-          请到 <strong>S4</strong> 用「两点标定」在图上点两个已知刻度。
-        </div>
-
-        <button id="btn-apply-roi" class="btn btn-primary" style="width: 100%; margin-top: 4px;">
-          保存有效区设置
-        </button>
-      </div>
-    `;
-  }
-
-  private renderS3ColumnsPanel(activeCol?: TaxaColumn): string {
-    return `
-      <div class="inspector-section">
-        <div class="section-title">S3：分列与属种命名</div>
-        <div class="tip-card" style="margin-bottom: 10px; background: rgba(56, 189, 248, 0.06);">
-          <p style="font-size: 11px; line-height: 1.5; color: var(--text-secondary); margin: 0;">
-            当前已切分出 <strong>${this.data.columns.length}</strong> 个属种列 (默认编号: col01, col02...)。<br>
-            • 推荐点击顶部 <strong>[🔍 OCR]</strong> 自动识别图谱标签并匹配新列名<br>
-            • 亦可在侧边栏点击列名直接重命名、微调对调顺位或按需导入<br>
-            • 发现漏列可随时点击 <strong>[➕插空列]</strong>
-          </p>
-        </div>
-        ${activeCol ? this.renderColumnInspector(activeCol) : ''}
-      </div>
-    `;
-  }
-
-  private renderS5DigitizePanel(activeCol: TaxaColumn): string {
-    return `
-      <div class="inspector-section">
-        <div class="section-title">S5：轮廓精修与特征拐点</div>
-        ${this.renderColumnInspector(activeCol)}
-      </div>
-    `;
-  }
-
-  private renderS6VerificationPanel(): string {
-    return `
-      <div class="inspector-section">
-        <div class="section-title">S6：地学校验与图层审查</div>
-        <div class="form-group" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light); margin-bottom: 12px;">
-          <label style="font-size: 11px; font-weight: 600; display: block; margin-bottom: 8px;">图层显隐开关 (Layer Toggles):</label>
-          <div style="display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: var(--text-secondary);">
-            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-              <input type="checkbox" id="layer-chk-ghost" checked />
-              <span>🟢 绿色原位半透明重叠层 (Visual Ghosting)</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-              <input type="checkbox" id="layer-chk-curves" checked />
-              <span>🌊 属种轮廓曲线与面积填充</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-              <input type="checkbox" id="layer-chk-anchors" checked />
-              <span>🟡 稀疏物理拐点手柄</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-              <input type="checkbox" id="layer-chk-grid" checked />
-              <span>📏 地层标准深度网格线</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-              <input type="checkbox" id="layer-chk-roi" checked />
-              <span>🟦 ROI 数据有效区边框</span>
-            </label>
-          </div>
-        </div>
-
-        <button id="btn-inspector-open-table" class="btn btn-primary" style="width: 100%; font-size: 11.5px; padding: 7px;">
-          📊 打开数据表格与 100% 总和自检
-        </button>
-      </div>
-    `;
-  }
-
-  private renderS7ExportPanel(): string {
-    return `
-      <div class="inspector-section">
-        <div class="section-title">S7：导出交付 (Export)</div>
-        <div class="tip-card" style="margin-bottom: 12px; border-left: 3px solid var(--accent-green); padding: 8px 10px;">
-          <p style="font-size: 11px; line-height: 1.5; color: var(--text-primary); margin: 0;">
-            <strong>科学导出已就绪：</strong><br>
-            • CSV 矩阵首列严格为 depth，未出现属种为 0.0<br>
-            • POSIX UStar .tar 开放归档兼容任意系统<br>
-            • rioja 脚本自动适配每列形态与放大倍数
-          </p>
-        </div>
-        <button id="btn-inspector-open-export" class="btn btn-primary" style="width: 100%; font-size: 12px; padding: 8px;">
-          💾 打开科学数据导出面板
-        </button>
-      </div>
-    `;
-  }
-
   private renderProjectOverview(cal: DiagramCalibration): string {
     const numCols = this.data.columns.length;
     const bounds = CoordinateSystem.calibrationBounds(cal);
@@ -948,13 +652,7 @@ export class Inspector {
       this.callbacks.onClearLineFix?.();
     });
 
-    // S4 两点式 Y 轴标定
-    this.element.querySelector('#btn-start-ycalib')?.addEventListener('click', () => {
-      this.callbacks.onStartYCalibration?.();
-    });
-    this.element.querySelector('#btn-open-ycalib-manual')?.addEventListener('click', () => {
-      this.openManualYCalibrationModal();
-    });
+
 
     // 挂载当前步骤 Panel 的事件监听 (Step Registry)
     const registered = getStepPanel(this.currentStage);
@@ -971,75 +669,6 @@ export class Inspector {
    * 手动输入两点坐标的兜底入口：适合已从图上量好像素行、只想填数字的场景。
    * 与画布点选走同一条后端通路（core.calibrateAxes），不另立算法。
    */
-  public openManualYCalibrationModal(): void {
-    const cal = this.data.calibration;
-    const modal = document.createElement('div');
-    modal.className = 'modal-backdrop';
-    modal.innerHTML = `
-      <div class="modal-dialog" style="width: 460px; max-width: 95vw;">
-        <div class="modal-header">
-          <h3>Y 轴两点标定 (像素 → 真实值)</h3>
-          <button class="close-btn" id="modal-close-ycal">&times;</button>
-        </div>
-        <div class="modal-body" style="padding: 14px; display: flex; flex-direction: column; gap: 10px;">
-          <p style="font-size: 11px; color: var(--text-secondary); margin: 0; line-height: 1.5;">
-            填写 Y 轴上两个已知刻度所在的<strong>像素行</strong>与其<strong>真实数值</strong>。
-            数值可以向下递增（深度）或递增向上（年代），映射方向由数值本身决定。
-          </p>
-          <div class="input-row">
-            <span style="width: 92px; font-size: 11px;">① 上方点 Y</span>
-            <input type="number" id="ycal-top-px" value="${cal.top_px ?? ''}" placeholder="px" style="flex: 1;" />
-            <span style="width: 92px; font-size: 11px; text-align: right;">真实值</span>
-            <input type="number" id="ycal-top-val" value="${cal.top_cm ?? ''}" step="any" style="flex: 1;" />
-          </div>
-          <div class="input-row">
-            <span style="width: 92px; font-size: 11px;">② 下方点 Y</span>
-            <input type="number" id="ycal-bot-px" value="${cal.bottom_px ?? ''}" placeholder="px" style="flex: 1;" />
-            <span style="width: 92px; font-size: 11px; text-align: right;">真实值</span>
-            <input type="number" id="ycal-bot-val" value="${cal.bottom_cm ?? ''}" step="any" style="flex: 1;" />
-          </div>
-          <div class="input-row">
-            <span style="width: 92px; font-size: 11px;">单位</span>
-            <input type="text" id="ycal-unit" value="${cal.unit || 'cm'}" placeholder="cm / m / cal yr BP" style="flex: 1;" />
-          </div>
-        </div>
-        <div class="modal-footer" style="padding: 10px 14px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color);">
-          <button class="btn btn-secondary" id="btn-cancel-ycal">取消</button>
-          <button class="btn btn-primary" id="btn-confirm-ycal" style="padding: 5px 14px; font-size: 11px;">应用标定</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-
-    const close = () => modal.remove();
-    modal.querySelector('#modal-close-ycal')?.addEventListener('click', close);
-    modal.querySelector('#btn-cancel-ycal')?.addEventListener('click', close);
-    modal.querySelector('#btn-confirm-ycal')?.addEventListener('click', () => {
-      const topPx = parseFloat((modal.querySelector('#ycal-top-px') as HTMLInputElement).value);
-      const topVal = parseFloat((modal.querySelector('#ycal-top-val') as HTMLInputElement).value);
-      const botPx = parseFloat((modal.querySelector('#ycal-bot-px') as HTMLInputElement).value);
-      const botVal = parseFloat((modal.querySelector('#ycal-bot-val') as HTMLInputElement).value);
-      const unit = (modal.querySelector('#ycal-unit') as HTMLInputElement).value.trim() || 'cm';
-
-      if ([topPx, topVal, botPx, botVal].some((v) => isNaN(v))) {
-        alert('四个字段都必须填数字：两个像素行 + 两个真实值。');
-        return;
-      }
-      if (topPx === botPx) {
-        alert('两个像素行不能相同，否则无法确定像素↔数值的比例。');
-        return;
-      }
-      this.callbacks.onSubmitYCalibration?.(
-        Math.min(topPx, botPx),
-        topPx <= botPx ? topVal : botVal,
-        Math.max(topPx, botPx),
-        topPx <= botPx ? botVal : topVal,
-        unit
-      );
-      close();
-    });
-  }
-
   public openPasteDepthsModal(): void {
     const modal = document.createElement('div');
     modal.className = 'modal-backdrop';

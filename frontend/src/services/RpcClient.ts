@@ -95,6 +95,19 @@ export interface DegridResult {
   overlay_png: string | null;
 }
 
+export interface SystemConfig {
+  remote_access_enabled: boolean;
+  allowed_hosts: string[];
+  locale: string;
+  theme: string;
+  rpc_endpoint?: string;
+  webmcp_endpoint?: string;
+  server_bound_host?: string;
+  server_bound_port?: number;
+  is_desktop_mode?: boolean;
+  connected?: boolean;
+}
+
 export class RpcClient {
   private endpoint: string;
   /**
@@ -553,11 +566,12 @@ export class RpcClient {
       // 参数名必须与后端 session.detect_columns(data_xlim, data_ylim) 一致。
       // 历史上前端发的是 x_bounds/y_bounds，后端一律回 INVALID_PARAMS，
       // 而静默兜底又把它换成"等分切割"结果，于是缺陷被掩盖了很久。
-      const res = await this.call<{ data_xlim: [number, number]; data_ylim: [number, number] }, any[]>(
+      const res = await this.call<{ data_xlim: [number, number]; data_ylim: [number, number]; roi_id?: string }, any[]>(
         'core.detectColumns',
         {
           data_xlim: [Math.round(roi.xMin), Math.round(roi.xMax)],
           data_ylim: [Math.round(roi.yMin), Math.round(roi.yMax)],
+          roi_id: roi.id,
         }
       );
 
@@ -772,5 +786,18 @@ export class RpcClient {
 
   public async updateColumn(colIndex: number, updates: Partial<Column>): Promise<{ column: Column }> {
     return this.call('column.update', { col_index: colIndex, updates });
+  }
+
+  public async getSystemConfig(): Promise<SystemConfig> {
+    return this.call<void, SystemConfig>('system.getConfig');
+  }
+
+  public async updateSystemConfig(
+    updates: Partial<SystemConfig> & { allowed_hosts?: string[] | string }
+  ): Promise<{ success: boolean; config: SystemConfig; message?: string }> {
+    return this.call<unknown, { success: boolean; config: SystemConfig; message?: string }>(
+      'system.updateConfig',
+      updates
+    );
   }
 }

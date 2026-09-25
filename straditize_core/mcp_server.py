@@ -129,7 +129,7 @@ WEBMCP_TOOLS: list[dict[str, Any]] = [
     {
         "name": "straditize_detect_line_candidates",
         "description": "Step 4: Scan ROI for coordinate grid lines and artifact candidates (kinds A, B, C).",
-        "rpc_method": "cleanup.detectCandidates",
+        "rpc_method": "algorithm.detectLineCandidates",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -157,7 +157,7 @@ WEBMCP_TOOLS: list[dict[str, Any]] = [
     {
         "name": "straditize_apply_line_removal",
         "description": "Step 4: Apply selected line removal candidates and exclusion regions to the extraction mask.",
-        "rpc_method": "cleanup.apply",
+        "rpc_method": "algorithm.applyLineRemoval",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -227,7 +227,7 @@ WEBMCP_TOOLS: list[dict[str, Any]] = [
     {
         "name": "straditize_detect_xticks",
         "description": "Step 6: Detect X-axis scale tick marks using 1-D vertical run geometry.",
-        "rpc_method": "xticks.detect",
+        "rpc_method": "algorithm.detectXTicks",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -242,7 +242,7 @@ WEBMCP_TOOLS: list[dict[str, Any]] = [
     {
         "name": "straditize_calibrate_column",
         "description": "Step 6: Calibrate a column's X-axis scale using two tick endpoints [Tick(px, value), Tick(px, value)].",
-        "rpc_method": "xticks.calibrateColumn",
+        "rpc_method": "column.calibrateXTicks",
         "inputSchema": {
             "type": "object",
             "properties": {

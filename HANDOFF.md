@@ -11,14 +11,14 @@
 - 启动收敛唯一化：统一为 `pixi run start`（固定 8765 端口/自动打开浏览器/同源 /mcp 与 SSE/顶栏退出按钮）。
 - 门禁验证：`test_error_guidance_and_pdf.py` 4/4 PASS；全量测试与拥有权全绿。
 
-## [GOLDEN-JOURNEY-T14] 2026-09-25 14:00 — 生产真图鲁棒性与全流程 E2E 完成 (T14)
-- 全地形图谱套件：`test_corpus_robustness.py` 覆盖 5 张真实复杂文献大图，全流程流水线 0 崩溃，去线安全性与双 ROI 隔离全过。
-- Golden Journey E2E：`test_golden_journey.py` 经原生 MS Edge 驱动，从载图、双 ROI、标尺、排除区、分列、采样到校验导出全线打通。
-- 归档解压物理核验：导出的 `.tar` 真实解包，`data.csv` 逐字节匹配 Primary ROI，分表无前缀，数据真实无损。
-- 门禁结果：`tests/test_corpus_robustness.py` 7/7 PASS ｜ `tests/e2e/test_golden_journey.py` Edge L4 PASS (12.82s)。
+## [GOLDEN-JOURNEY-T14] 2026-09-25 15:15 — 8步面板齐备、视觉纠偏与纯DOM Golden Journey 完成 (T14)
+- 补齐面板干掉弹窗：新建 `RoiPanel.ts` (S2) 与 `YCalibPanel.ts` (S3) 常驻侧栏；物理删除 `openYCalibrationDialog` 等弹窗与 `Minimap.ts`。
+- 消除步骤精神分裂：`main.ts` 严格对齐 1→8 步递进，清理 `Inspector.ts` 400行 `renderS0..S7` 死代码；铲除画布黄色半透明遮罩与越界横线。
+- 零摆拍纯DOM旅程：`test_golden_journey.py` 完全由 MS Edge 真实 DOM 点击走通 1→8 步并导出解包 `.tar`，`test_corpus_robustness.py` 7/7 全过。
+- 门禁全绿：`tests/e2e/` 全套 9 项 Edge E2E 测试 9/9 PASS；`pixi run lint` / `npm run build` / `npm test` / 拥有权全过。
 
-## [TOPBAR-SETTINGS] 2026-09-25 14:30 — 顶栏瘦身与全局设置弹窗（语言/外观/网关白名单/WebMCP）完成
-- 顶栏极致瘦身：移除 [中/EN]、日夜间切换图标、[RPC] 胶囊；撤销重做移至左组；右侧仅留 [OCR] [年代] [导出] [⚙ 设置] [退出]。
+## [TOPBAR-SETTINGS] 2026-09-25 14:35 — 顶栏瘦身、全局设置弹窗与退出一致性完成
+- 顶栏与启动收敛：唯一主入口定为 `pixi run app`；顶栏右侧仅留 [OCR] [年代] [导出] [⚙ 设置] [退出]；`graceful_shutdown` 单一清理。
 - 全局设置模态框：`SettingsModal.ts` 整合通用偏好（i18n即时重绘/暗黑深浅主题）、远程网关（开关/通配符白名单）、后端与WebMCP端点。
 - 后端配置持久化：`config.py` 持久化 `~/.straditize/config.json`；`system.getConfig`/`system.updateConfig` 动态热更新内网/Tailscale 白名单。
 - 自动化门禁测试：`tests/test_remote_settings.py` 4/4 PASS（403严格拦截/白名单动态穿透）；`tests/e2e/test_settings.py` Edge E2E 验证全绿。

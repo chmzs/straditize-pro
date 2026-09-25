@@ -13,7 +13,6 @@ import { HistoryManager } from '../core/HistoryManager';
 import { ToolModeManager } from '../core/ToolModeManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { tokens } from '../styles/tokens';
-import { Minimap } from './Minimap';
 import { getAllOverlays } from './canvas/_registry';
 import {
   AddPointCommand,
@@ -45,7 +44,6 @@ export class GeologyCanvas {
   private container: HTMLElement;
   private dropOverlay: HTMLElement | null = null;
   private emptyStateOverlay: HTMLElement | null = null;
-  private minimap: Minimap | null = null;
   private floatingToolbar: HTMLElement | null = null;
 
   public viewport: Viewport;
@@ -129,15 +127,6 @@ export class GeologyCanvas {
     this.ctx = context;
 
     this.viewport = new Viewport();
-
-    this.minimap = new Minimap(this.container, {
-      onNavigate: (worldX, worldY) => {
-        const rect = this.canvas.getBoundingClientRect();
-        this.viewport.panX = rect.width / 2 - worldX * this.viewport.scale;
-        this.viewport.panY = rect.height / 2 - worldY * this.viewport.scale;
-        this.requestRender();
-      },
-    });
 
     this.initEventListeners();
     this.handleResize();
@@ -325,7 +314,6 @@ export class GeologyCanvas {
 
       // 后端下发的去线掩膜随底图一起失效：新图尚未在 S2 重新检测
       this.setLineOverlay(null);
-      this.minimap?.setImage(this.diagramImage, this.data.imageWidth, this.data.imageHeight);
       this.updateEmptyStateVisibility();
       this.fitToScreen();
       this.requestRender();
@@ -1712,11 +1700,6 @@ export class GeologyCanvas {
     }
 
     ctx.restore();
-
-    // 8. 同步更新右下角 Minimap 视口框
-    if (this.minimap) {
-      this.minimap.updateViewport(this.viewport, rect.width, rect.height);
-    }
   }
 
   private drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number, isLight: boolean): void {
@@ -1977,9 +1960,7 @@ export class GeologyCanvas {
   }
 
   /**
-   * 绘制 Y 轴两点标定：已选参考点 + 标定跨度带。
-   *
-   * 两个参考点之间的横向色带表示"这一段像素有确定的深度含义"，其外为外推区。
+   * 绘制 Y 轴两点标定：仅在最左侧 Y 轴刻度轨道内绘制指示刻度，绝不允许侵入属种数据区。
    */
   private drawYAxisCalibration(ctx: CanvasRenderingContext2D): void {
     const cal = this.data.calibration;
@@ -1990,37 +1971,31 @@ export class GeologyCanvas {
 
     if (marks.length === 0 && !bounds) return;
 
-    const bandStartX = Math.max(0, roi.xMin - 40);
-    const bandEndX = roi.xMax + 40;
+    // 严格限制在最左侧 Y 轴刻度轨道内（roi.xMin 之前），绝不侵入属种数据区
+    const railStartX = Math.max(0, roi.xMin - 40);
+    const railEndX = roi.xMin;
 
     ctx.save();
 
     if (bounds) {
-      // 标定跨度带：只在这段像素上声称深度有效
-      ctx.fillStyle = 'rgba(250, 204, 21, 0.07)';
-      ctx.fillRect(bandStartX, bounds.topPx, bandEndX - bandStartX, bounds.bottomPx - bounds.topPx);
-
       const pairs: Array<[number, number]> = [
         [bounds.topPx, bounds.topValue],
         [bounds.bottomPx, bounds.bottomValue],
       ];
       for (const [px, value] of pairs) {
-        ctx.setLineDash([7 / scale, 4 / scale]);
-        ctx.strokeStyle = 'rgba(250, 204, 21, 0.85)';
-        ctx.lineWidth = 1.4 / scale;
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 2.0 / scale;
         ctx.beginPath();
-        ctx.moveTo(bandStartX, px);
-        ctx.lineTo(bandEndX, px);
+        ctx.moveTo(railStartX, px);
+        ctx.lineTo(railEndX, px);
         ctx.stroke();
-        ctx.setLineDash([]);
 
         ctx.fillStyle = '#facc15';
         ctx.font = `bold ${Math.max(10, 11 / scale)}px 'JetBrains Mono', monospace`;
-        ctx.textAlign = 'left';
+        ctx.textAlign = 'right';
         ctx.textBaseline = 'middle';
-        ctx.fillText(`⚑ ${value} ${cal.unit}`, bandEndX + 6 / scale, px);
+        ctx.fillText(`⚑ ${value} ${cal.unit}`, railStartX - 4 / scale, px);
       }
-      ctx.setLineDash([]);
     }
 
     // 尚未提交的待选参考点

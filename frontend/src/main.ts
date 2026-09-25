@@ -10,6 +10,7 @@ import { ResizeRoiCommand } from './core/Commands';
 import { AgeDepthModal } from './components/AgeDepthModal';
 import { MetadataModal } from './components/MetadataModal';
 import { OcrReviewModal } from './components/OcrReviewModal';
+import { SettingsModal } from './components/SettingsModal';
 import { DataRoi, DiagramCalibration, DiagramData, HistorySnapshot, LineMaskStroke, Point2D } from './types/pollen';
 import { onLocaleChange, applyLocaleToDocument } from './i18n';
 import { ImageDisplayMode } from './core/Viewport';
@@ -115,6 +116,14 @@ async function bootstrap() {
   // 0. 恢复上次选择的语言并同步 <html lang>（必须在任何组件渲染之前执行）
   applyLocaleToDocument();
 
+  // 0.1 恢复上次选择的主题外观 (默认日间模式)
+  const savedTheme = localStorage.getItem('straditize-theme');
+  if (savedTheme === 'dark') {
+    document.body.classList.remove('theme-light');
+  } else {
+    document.body.classList.add('theme-light');
+  }
+
   // 1. 初始化 JSON-RPC Client，并阻塞式确认数据来源（后端真实计算 / 用户显式演示模式）
   const rpcClient = new RpcClient();
   await ensureDataProvenance(rpcClient);
@@ -164,7 +173,13 @@ async function bootstrap() {
     }, 1000);
   }
 
+  let isShuttingDown = false;
+  (window as any).__straditize_suppress_beforeunload = () => {
+    isShuttingDown = true;
+  };
+
   window.addEventListener('beforeunload', (e) => {
+    if (isShuttingDown) return;
     if (history.canUndo()) {
       e.preventDefault();
       e.returnValue = '您有未保存的地学数字化工程修改，确定离开吗？';
@@ -299,6 +314,7 @@ async function bootstrap() {
           <div class="help-row"><span class="help-key">Delete</span><span class="help-desc">删除当前选中的控制点或属种分列</span></div>
           <div class="help-row"><span class="help-key">Ctrl+[</span><span class="help-desc">展开 / 折叠左侧属种分列列表</span></div>
           <div class="help-row"><span class="help-key">Ctrl+]</span><span class="help-desc">展开 / 折叠右侧属性检查器</span></div>
+          <div class="help-row"><span class="help-key">Ctrl+,</span><span class="help-desc">呼出全局偏好与系统设置 (Settings)</span></div>
           <div class="help-row"><span class="help-key">F1</span><span class="help-desc">呼出 / 关闭本交互系统与快捷键速查中心</span></div>
         </div>
       </div>
@@ -382,9 +398,14 @@ async function bootstrap() {
     onRoiCommitted: (roi) => {
       void commitRoi(roi);
     },
-    // Y 轴两点选完：弹窗收真实值
+    // Y 轴两点选完：填入 Step 3 侧边栏常驻输入框，绝不弹窗
     onYCalibPicked: (marks) => {
-      openYCalibrationDialog(marks);
+      const topPx = marks[0].y;
+      const botPx = marks[1].y;
+      canvasComponent.data.calibration.top_px = topPx;
+      canvasComponent.data.calibration.bottom_px = botPx;
+      inspector?.updateData(canvasComponent.data);
+      setHudNotice(`🎯 已拾取两点像素行 (①Y=${Math.round(topPx)}px, ②Y=${Math.round(botPx)}px)！请在右侧侧栏输入对应真实数值并应用标定。`, 5000);
     },
     // 线掩膜人工修正笔迹：提交后端重算叠加层
     onLineFixStroke: (stroke) => {
@@ -449,7 +470,7 @@ async function bootstrap() {
   });
 
   // 6.2 显式分步推进状态机 (Step-by-Step Workflow State Machine)
-  let currentStage: WorkflowStage = canvasComponent.data.columns.length > 0 ? 3 : 1;
+  let currentStage: WorkflowStage = 1;
   canvasComponent.setWorkflowStage(currentStage);
 
   const workflowActionBar = document.createElement('div');
@@ -479,6 +500,82 @@ async function bootstrap() {
   viewControlsBar.className = 'canvas-view-bar';
   viewControlsBar.id = 'canvas-view-bar';
   canvasWrapper.appendChild(viewControlsBar);
+
+  async function advanceToWorkflowStage(targetStage: WorkflowStage) {
+    if (targetStage === 1 && !canvasComponent.data.imageSrc) {
+      (document.getElementById('file-input-image') as HTMLInputElement)?.click();
+    } else if (targetStage === 2) {
+      currentStage = 2;
+      canvasComponent.setToolMode('roi');
+      updateWorkflowBar();
+      canvasComponent.requestRender();
+      setHudNotice('👉 已进入 Step 2 数据有效区 (ROI) 划分！请拖拽手柄界定数据区或在侧栏新建多 ROI。', 4500);
+    } else if (targetStage === 3) {
+      currentStage = 3;
+      canvasComponent.setToolMode('ycalib');
+      updateWorkflowBar();
+      canvasComponent.requestRender();
+      setHudNotice('👉 已进入 Step 3 Y 轴标定！请在图上点选两点，或在右侧侧栏直接填入已知刻度与真实深度值。', 5000);
+    } else if (targetStage === 4) {
+      currentStage = 4;
+      canvasComponent.setToolMode('select');
+      updateWorkflowBar();
+      canvasComponent.requestRender();
+      void refreshLineMask();
+      setHudNotice('👉 已进入 Step 4 干扰清理！请在右侧侧栏选择去线强度、划定排除区或使用 K 键笔刷微调。', 4500);
+    } else if (targetStage === 5) {
+      setHudNotice('正在基于数据有效区与清理后墨迹切分属种垂直基线...', 5000);
+      try {
+        const rois = canvasComponent.data.rois || [];
+        if (rois.length > 0) {
+          for (const r of rois) {
+            const xMin = r.xMin ?? r.xlim?.[0] ?? canvasComponent.data.roi.xMin;
+            const xMax = r.xMax ?? r.xlim?.[1] ?? canvasComponent.data.roi.xMax;
+            const yMin = r.yMin ?? r.ylim?.[0] ?? canvasComponent.data.roi.yMin;
+            const yMax = r.yMax ?? r.ylim?.[1] ?? canvasComponent.data.roi.yMax;
+            await rpcClient.detectColumnsInRoi({
+              ...r,
+              xMin,
+              xMax,
+              yMin,
+              yMax,
+            });
+          }
+        } else {
+          await rpcClient.detectColumnsInRoi({ ...canvasComponent.data.roi });
+        }
+        const freshData = await rpcClient.getDiagramData();
+        canvasComponent.loadNewDiagram(freshData);
+      } catch (err) {
+        reportBackendFailure('分列识别', err);
+        setHudNotice('❌ 分列识别失败，已停留在 Step 4。请检查有效区后重试。', 6000);
+        return;
+      }
+      currentStage = 5;
+      canvasComponent.setToolMode('select');
+      sidebar?.updateData(canvasComponent.data);
+      inspector?.updateData(canvasComponent.data);
+      updateWorkflowBar();
+      updateFooter();
+      canvasComponent.requestRender();
+      setHudNotice(`✅ 成功切分 ${canvasComponent.data.columns.length} 个属种列！可点击 OCR 识别或在左栏输入各列名称。`, 5000);
+    } else if (targetStage === 6) {
+      currentStage = 6;
+      updateWorkflowBar();
+      inspector?.updateData(canvasComponent.data);
+      setHudNotice('👉 已进入 Step 6 列标定！在侧边栏点击自动提取刻度齿，或双击端点手动标定。', 4500);
+    } else if (targetStage === 7) {
+      currentStage = 7;
+      updateWorkflowBar();
+      inspector?.updateData(canvasComponent.data);
+      setHudNotice('👉 已进入 Step 7 采样层位！点击侧栏【提取采样共识】或从外部粘贴真实层位。', 4500);
+    } else if (targetStage === 8) {
+      currentStage = 8;
+      updateWorkflowBar();
+      inspector?.updateData(canvasComponent.data);
+      setHudNotice('🔍 已进入 Step 8 地学校验！正在核验组分总和 ≤100% 门禁与空层位排查。', 4000);
+    }
+  }
 
   function updateWorkflowBar() {
     const meta = WORKFLOW_STAGES[currentStage];
@@ -510,78 +607,11 @@ async function bootstrap() {
     });
 
     workflowActionBar.querySelector('#btn-wf-next')?.addEventListener('click', async () => {
-      if (currentStage === 1 && !canvasComponent.data.imageSrc) {
-        // Step 1: 未加载图片时触发文件选取
-        (document.getElementById('file-input-image') as HTMLInputElement)?.click();
-      } else if (currentStage === 1) {
-        // Step 1 -> 2: 图谱就绪，进入数据有效区 (ROI) 框选阶段
-        currentStage = 2;
-        canvasComponent.setToolMode('roi');
-        updateWorkflowBar();
-        canvasComponent.requestRender();
-        setHudNotice('👉 已进入 S2 数据有效区 (ROI) 框选阶段！请拖拽画布上的 8 个十字手柄框选数据区。', 4500);
-      } else if (currentStage === 2) {
-        // S2 -> S3: 确认取数区，开始推导各花粉属种垂直基线并分列
-        setHudNotice('正在基于纯数据取数区推导各花粉属种垂直基线...', 5000);
-        let cols: Awaited<ReturnType<typeof rpcClient.detectColumnsInRoi>>;
-        try {
-          cols = await rpcClient.detectColumnsInRoi({ ...canvasComponent.data.roi });
-        } catch (err) {
-          // 分列失败必须停在 S2：绝不能带着"等分切割"这类替代结果推进到 S3
-          reportBackendFailure('分列识别', err);
-          setHudNotice('❌ 分列识别失败，已停留在 S2。请检查后端后重试。', 6000);
-          return;
-        }
-        currentStage = 3;
-        canvasComponent.setToolMode('select');
-        sidebar?.updateData(canvasComponent.data);
-        inspector?.updateData(canvasComponent.data);
-        updateWorkflowBar();
-        updateFooter();
-        canvasComponent.requestRender();
-        // 进入 S3 立刻把当前去线档位算一遍：掩膜必须在后端按 ROI 生成，
-        // 否则用户按 B 看到的红标与数字化用的掩膜不是同一批像素。
-        void refreshLineMask();
-        setHudNotice(`✅ 成功切分 ${cols.length} 个属种列 (已生成 col01 ~ col${String(cols.length).padStart(2, '0')})！建议点击顶部【🔍 OCR】自动匹配属种名。`, 5000);
-      } else if (currentStage === 3) {
-        // S3 -> S4: 推进至标尺标定
-        currentStage = 4;
-        updateWorkflowBar();
-        setHudNotice('👉 请在右侧属性检查器核查或微调两点式深度标尺与各列物理刻度齿。', 4000);
-      } else if (currentStage === 4) {
-        // S4 -> S5: 标尺确认，开始全列拐点数字化提取
-        setHudNotice('正在提取各列花粉多边形轮廓与显著控制手柄...', 8000);
-        const cols = canvasComponent.data.columns;
-        try {
-          for (const col of cols) {
-            const pts = await rpcClient.digitizeColumn(col.id);
-            if (pts.length > 0) col.controlPoints = pts;
-          }
-        } catch (err) {
-          // 数字化失败必须停在 S4：任何替代曲线都是伪造的科学数据
-          reportBackendFailure('拐点数字化提取', err);
-          setHudNotice('❌ 拐点提取失败，已停留在 S4。请检查后端后重试。', 6000);
-          return;
-        }
-        currentStage = 5;
-        sidebar?.updateData(canvasComponent.data);
-        inspector?.updateData(canvasComponent.data);
-        updateWorkflowBar();
-        updateFooter();
-        setHudNotice('✅ 数字化完成！绿色半透明逆向对比层已开启，可直接在画布拖拽控制点微调。', 4500);
-      } else if (currentStage === 5) {
-        // S5 -> S6: 进入地学校验与自检
-        currentStage = 6;
-        updateWorkflowBar();
+      if (currentStage === 8) {
+        propertyPanel.updateData(canvasComponent.data);
         propertyPanel.openExportModal();
-        setHudNotice('🔍 已进入地学校验阶段：正在核验 100% 丰度总和自检门禁。', 4000);
-      } else if (currentStage === 6) {
-        // S6 -> S7: 进入导出交付
-        currentStage = 7;
-        updateWorkflowBar();
-        propertyPanel.openExportModal();
-      } else if (currentStage === 7) {
-        propertyPanel.openExportModal();
+      } else {
+        await advanceToWorkflowStage((currentStage + 1) as WorkflowStage);
       }
     });
   }
@@ -705,6 +735,16 @@ async function bootstrap() {
     }
   );
 
+  // 8.3 全局偏好与系统设置弹窗 (语言/外观/远程访问网关/WebMCP)
+  const settingsModal = new SettingsModal(
+    document.body,
+    rpcClient,
+    () => {
+      setHudNotice(t('settings.saved'), 3500);
+      toolbar?.updateStatus(rpcClient.getStatus());
+    }
+  );
+
   // 8. 标定与弹窗交互面板
   const propertyPanel = new PropertyPanel(
     document.body,
@@ -772,6 +812,7 @@ async function bootstrap() {
       }
     },
     onOpenDataViewer: () => {
+      propertyPanel.updateData(canvasComponent.data);
       propertyPanel.openExportModal();
     },
     onToggleLayerVisibility: (layer, visible) => {
@@ -817,6 +858,171 @@ async function bootstrap() {
     },
     onStartYCalibration: () => {
       startYCalibration();
+    },
+    onAdvanceWorkflowStage: (targetStage: number) => {
+      void advanceToWorkflowStage(targetStage as WorkflowStage);
+    },
+    onSelectRoi: async (roiId: string) => {
+      try {
+        await rpcClient.call('roi.setActive', { roi_id: roiId });
+        const freshData = await rpcClient.getDiagramData();
+        canvasComponent.loadNewDiagram(freshData);
+        sidebar?.updateData(canvasComponent.data);
+        inspector?.updateData(canvasComponent.data);
+        canvasComponent.requestRender();
+      } catch (err) {
+        reportBackendFailure('切换有效区', err);
+      }
+    },
+    onCreateRoi: async () => {
+      try {
+        const nextIdx = (canvasComponent.data.rois?.length || 0) + 1;
+        const x0 = canvasComponent.data.roi?.xMin || 315;
+        const x1 = canvasComponent.data.roi?.xMax || (canvasComponent.data.imageWidth ? Math.round(canvasComponent.data.imageWidth * 0.85) : 1946);
+        const y0 = canvasComponent.data.roi?.yMin || 511;
+        const y1 = canvasComponent.data.roi?.yMax || (canvasComponent.data.imageHeight ? Math.round(canvasComponent.data.imageHeight * 0.85) : 1311);
+        const res = await rpcClient.call<any, any>('roi.create', {
+          name: `roi_${nextIdx}`,
+          x0,
+          x1,
+          y0,
+          y1,
+          composition: true,
+        });
+        if (res?.roi) {
+          await rpcClient.call('roi.setActive', { roi_id: res.roi.id });
+          const freshData = await rpcClient.getDiagramData();
+          canvasComponent.loadNewDiagram(freshData);
+          sidebar?.updateData(canvasComponent.data);
+          inspector?.updateData(canvasComponent.data);
+          canvasComponent.requestRender();
+          setHudNotice(`✅ 已新建并选中有效区: ${res.roi.name}`);
+        }
+      } catch (err) {
+        reportBackendFailure('新建有效区', err);
+      }
+    },
+    onSetPrimaryRoi: async (roiId: string) => {
+      try {
+        await rpcClient.call('roi.setPrimary', { roi_id: roiId });
+        const freshData = await rpcClient.getDiagramData();
+        canvasComponent.loadNewDiagram(freshData);
+        inspector?.updateData(canvasComponent.data);
+        setHudNotice(`⭐ 已将 ${roiId} 设为主有效区 (对应导出 data.csv)`);
+      } catch (err) {
+        reportBackendFailure('设置主有效区', err);
+      }
+    },
+    onDeleteRoi: async (roiId: string) => {
+      try {
+        await rpcClient.call('roi.remove', { roi_id: roiId });
+        const freshData = await rpcClient.getDiagramData();
+        canvasComponent.loadNewDiagram(freshData);
+        sidebar?.updateData(canvasComponent.data);
+        inspector?.updateData(canvasComponent.data);
+        canvasComponent.requestRender();
+        setHudNotice(`🗑️ 已删除有效区: ${roiId}`);
+      } catch (err) {
+        reportBackendFailure('删除有效区', err);
+      }
+    },
+    onRenameActiveRoi: async (newName: string) => {
+      try {
+        const rois = canvasComponent.data.rois || [];
+        if (rois.length === 0) {
+          const x0 = canvasComponent.data.roi?.xMin || 315;
+          const x1 = canvasComponent.data.roi?.xMax || (canvasComponent.data.imageWidth ? Math.round(canvasComponent.data.imageWidth * 0.85) : 1946);
+          const y0 = canvasComponent.data.roi?.yMin || 511;
+          const y1 = canvasComponent.data.roi?.yMax || (canvasComponent.data.imageHeight ? Math.round(canvasComponent.data.imageHeight * 0.85) : 1311);
+          await rpcClient.call('roi.create', {
+            name: newName,
+            x0,
+            x1,
+            y0,
+            y1,
+            composition: true,
+          });
+        } else {
+          const activeId = canvasComponent.data.active_roi_id || (canvasComponent.data as any).activeRoiId || rois[0]?.id;
+          await rpcClient.call('roi.update', { roi_id: activeId, name: newName });
+        }
+        const freshData = await rpcClient.getDiagramData();
+        canvasComponent.loadNewDiagram(freshData);
+        sidebar?.updateData(canvasComponent.data);
+        inspector?.updateData(canvasComponent.data);
+        setHudNotice(`🏷️ 有效区已更名为: ${newName}`);
+      } catch (err) {
+        reportBackendFailure('重命名有效区', err);
+      }
+    },
+    onUpdateRoiComposition: async (composition: boolean) => {
+      const activeId = canvasComponent.data.active_roi_id || canvasComponent.data.rois?.[0]?.id;
+      if (!activeId) return;
+      try {
+        await rpcClient.call('roi.update', { roi_id: activeId, composition });
+        const freshData = await rpcClient.getDiagramData();
+        canvasComponent.loadNewDiagram(freshData);
+        inspector?.updateData(canvasComponent.data);
+      } catch (err) {
+        reportBackendFailure('更新有效区组分属性', err);
+      }
+    },
+    onDetectLineCandidates: async () => {
+      try {
+        const activeRoi = canvasComponent.data.active_roi_id || canvasComponent.data.rois?.[0]?.id;
+        const res = await rpcClient.call<any, any>('algorithm.detectLineCandidates', { roi_id: activeRoi });
+        if (res?.candidates) {
+          canvasComponent.data.line_candidates = res.candidates;
+          canvasComponent.data.selected_candidate_ids = res.candidates.map((c: any) => c.id);
+          inspector?.updateData(canvasComponent.data);
+          canvasComponent.requestRender();
+          setHudNotice(`🔍 已检测出 ${res.candidates.length} 条候选干扰线`);
+        }
+      } catch (err) {
+        reportBackendFailure('检测候选线', err);
+      }
+    },
+    onDetectXTicks: async () => {
+      try {
+        const activeRoi = canvasComponent.data.active_roi_id || canvasComponent.data.rois?.[0]?.id;
+        const res = await rpcClient.call<any, any>('algorithm.detectXTicks', { roi_id: activeRoi });
+        if (res?.per_column) {
+          setHudNotice(`📐 已成功提取 ${res.per_column.length} 列刻度线齿`);
+        }
+      } catch (err) {
+        reportBackendFailure('自动提取刻度', err);
+      }
+    },
+    onExtractConsensusHorizons: async () => {
+      try {
+        const cols = canvasComponent.data.columns || [];
+        for (const col of cols) {
+          if (!col.controlPoints || col.controlPoints.length === 0) {
+            const pts = await rpcClient.digitizeColumn(col.id);
+            if (pts.length > 0) col.controlPoints = pts;
+          }
+        }
+        const res = await rpcClient.call<any, any>('samples.extractConsensus', { tolerance_px: 4.0, min_taxa_support: 1 });
+        if (res?.samples) {
+          canvasComponent.data.samples = res.samples;
+          inspector?.updateData(canvasComponent.data);
+          canvasComponent.requestRender();
+          setHudNotice(`🧬 成功提取 ${res.samples.length} 个跨属种拐点共识采样层位！`, 4000);
+        }
+      } catch (err) {
+        reportBackendFailure('提取采样层位', err);
+      }
+    },
+    onClearHorizons: async () => {
+      try {
+        await rpcClient.call('samples.clear', {});
+        canvasComponent.data.samples = [];
+        inspector?.updateData(canvasComponent.data);
+        canvasComponent.requestRender();
+        setHudNotice('已清空全部采样层位');
+      } catch (err) {
+        reportBackendFailure('清空层位', err);
+      }
     },
     onSubmitYCalibration: (topPx, topValue, bottomPx, bottomValue, unit) => {
       void applyDepthCalibration(
@@ -928,74 +1134,13 @@ async function bootstrap() {
     await refreshLineMask();
   }
 
-  /** 进入 Y 轴两点标定：由画布收集两个像素行。 */
+  /** 进入 Y 轴两点标定：由画布收集两个像素行，实时落格到 Step 3 侧栏。 */
   function startYCalibration(): void {
-    if (!canvasComponent.isToolAllowed('ycalib')) {
-      setHudNotice('请先推进到 S4 标尺阶段再做 Y 轴标定。', 4000);
-      return;
-    }
+    currentStage = 3;
+    updateWorkflowBar();
     canvasComponent.clearYCalibMarks();
     canvasComponent.setToolMode('ycalib');
-    setHudNotice('🎯 请在图上依次点击 Y 轴上两个已知刻度所在的行（两行像素 Y 必须不同）。', 7000);
-  }
-
-  /**
-   * 收真实值：画布点选的两个像素行已经确定，这里只要用户填它们代表什么数值。
-   */
-  function openYCalibrationDialog(marks: Point2D[]): void {
-    const cal = canvasComponent.data.calibration;
-    const modal = document.createElement('div');
-    modal.className = 'modal-backdrop';
-    modal.innerHTML = `
-      <div class="modal-dialog" style="width: 440px; max-width: 95vw;">
-        <div class="modal-header">
-          <h3>填写两点真实值</h3>
-          <button class="close-btn" id="modal-close-yv">&times;</button>
-        </div>
-        <div class="modal-body" style="padding: 14px; display: flex; flex-direction: column; gap: 10px;">
-          <p style="font-size: 11px; color: var(--text-secondary); margin: 0; line-height: 1.5;">
-            已记录两个像素行。请填写它们在图谱坐标轴上对应的<strong>真实数值</strong>；
-            数值向下递增（深度）或递增向上（年代）都可以。
-          </p>
-          <div class="input-row">
-            <span style="width: 118px; font-size: 11px;">① 上方点 <code>Y=${marks[0].y}px</code></span>
-            <input type="number" id="yv-top" step="any" value="${cal.top_cm ?? ''}" style="flex: 1;" placeholder="真实值" />
-          </div>
-          <div class="input-row">
-            <span style="width: 118px; font-size: 11px;">② 下方点 <code>Y=${marks[1].y}px</code></span>
-            <input type="number" id="yv-bot" step="any" value="${cal.bottom_cm ?? ''}" style="flex: 1;" placeholder="真实值" />
-          </div>
-          <div class="input-row">
-            <span style="width: 118px; font-size: 11px;">单位</span>
-            <input type="text" id="yv-unit" value="${cal.unit || 'cm'}" placeholder="cm / m / cal yr BP" style="flex: 1;" />
-          </div>
-        </div>
-        <div class="modal-footer" style="padding: 10px 14px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color);">
-          <button class="btn btn-secondary" id="btn-cancel-yv">取消</button>
-          <button class="btn btn-primary" id="btn-confirm-yv" style="padding: 5px 14px; font-size: 11px;">应用标定</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-
-    const cancel = () => {
-      // 取消则丢弃已点选的点，避免半截标定留在画布上误导后续操作。
-      canvasComponent.clearYCalibMarks();
-      modal.remove();
-    };
-    modal.querySelector('#modal-close-yv')?.addEventListener('click', cancel);
-    modal.querySelector('#btn-cancel-yv')?.addEventListener('click', cancel);
-    modal.querySelector('#btn-confirm-yv')?.addEventListener('click', () => {
-      const topVal = parseFloat((modal.querySelector('#yv-top') as HTMLInputElement).value);
-      const botVal = parseFloat((modal.querySelector('#yv-bot') as HTMLInputElement).value);
-      const unit = (modal.querySelector('#yv-unit') as HTMLInputElement).value.trim() || 'cm';
-      if (isNaN(topVal) || isNaN(botVal)) {
-        alert('两个真实值都必须填写。');
-        return;
-      }
-      modal.remove();
-      void applyDepthCalibration(marks, [topVal, botVal], unit);
-    });
+    setHudNotice('🎯 请在图上依次点击 Y 轴上两个已知刻度所在的行，数值将实时填入侧栏。', 7000);
   }
 
   /** 提交两点标定到后端，成功后写回前端标定结构。 */
@@ -1304,6 +1449,7 @@ async function bootstrap() {
       // 绝不能交给用户一份前端自算的 CSV。
       try {
         const exportContent = await rpcClient.exportData(format);
+        propertyPanel.updateData(canvasComponent.data);
         propertyPanel.openExportModal(exportContent, format);
       } catch (err) {
         reportBackendFailure('数据导出', err);
@@ -1369,10 +1515,11 @@ async function bootstrap() {
     onOpenAgeDepthModal: () => {
       ageDepthModal.open();
     },
+    onOpenSettings: () => {
+      settingsModal.open();
+    },
     onToggleRpcConfig: () => {
-      propertyPanel.openRpcConfigModal(() => {
-        toolbar.updateStatus(rpcClient.getStatus());
-      });
+      settingsModal.open();
     },
     onOpenFile: (file) => {
       handleOpenFile(file);
@@ -1471,6 +1618,9 @@ async function bootstrap() {
     } else if (e.ctrlKey && !e.shiftKey && !e.altKey && e.code === 'BracketRight') {
       e.preventDefault();
       toggleInspector();
+    } else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === ',' || e.code === 'Comma')) {
+      e.preventDefault();
+      settingsModal.open();
     } else if (e.code === 'F1') {
       e.preventDefault();
       toggleHelpPanel();
