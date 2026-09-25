@@ -112,3 +112,38 @@ def test_single_page_pdf_support():
     finally:
         if tmp_pdf.exists():
             tmp_pdf.unlink()
+
+
+def test_multi_page_pdf_page_selection():
+    """Verify selecting specific page in a multi-page PDF."""
+    import pypdf
+
+    # Create a 3-page PDF: Page 1=red (100x80), Page 2=green (120x90), Page 3=blue (140x100)
+    writer = pypdf.PdfWriter()
+    sizes = [(100, 80, "red"), (120, 90, "green"), (140, 100, "blue")]
+    for w, h, col in sizes:
+        sub_im = Image.new("RGB", (w, h), color=col)
+        sub_bio = io.BytesIO()
+        sub_im.save(sub_bio, format="PDF")
+        r = pypdf.PdfReader(sub_bio)
+        writer.add_page(r.pages[0])
+
+    out_bio = io.BytesIO()
+    writer.write(out_bio)
+    pdf_bytes = out_bio.getvalue()
+    b64_pdf = "data:application/pdf;base64," + base64.b64encode(pdf_bytes).decode("ascii")
+
+    session = StraditizeSession()
+
+    # 1. Load Page 2 directly (should be 120x90)
+    res_p2 = session.load_image(image_data=b64_pdf, page_number=2)
+    assert res_p2["width"] == 120
+    assert res_p2["height"] == 90
+    assert res_p2["pdf_info"] == {"total_pages": 3, "current_page": 2}
+
+    # 2. Out of bounds page raises INVALID_PARAMS (-32602) with clear range guidance
+    with pytest.raises(JsonRpcError) as exc_info:
+        session.load_image(image_data=b64_pdf, page_number=5)
+    assert exc_info.value.code == INVALID_PARAMS
+    assert "共有 3 页" in exc_info.value.message
+

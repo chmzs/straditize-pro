@@ -515,7 +515,8 @@ export class RpcClient {
     imageSrc: string,
     width: number,
     height: number,
-    fileName: string = 'Custom Diagram'
+    fileName: string = 'Custom Diagram',
+    pageNumber: number = 1
   ): Promise<DiagramData> {
     // 图像必须由后端真正载入成功才算数，且初始 ROI 建议由后端给出。
     // 历史实现在后端载图失败时沿用前端自造的建议布局继续工作，
@@ -525,6 +526,7 @@ export class RpcClient {
       file_name: fileName,
       width,
       height,
+      page_number: pageNumber,
     };
     if (isDataUrl) {
       payload.image_data = imageSrc;

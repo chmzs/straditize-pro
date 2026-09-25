@@ -124,10 +124,11 @@ def _decode_diagram_source(
     image_data: str | None = None,
     sample_key: str | None = None,
     file_name: str | None = None,
-) -> tuple[Image.Image, str, str | None]:
-    """Decodes bitmap image or extracts page from single-page PDF.
+    page_number: int = 1,
+) -> tuple[Image.Image, str, str | None, dict[str, Any] | None, bytes | None]:
+    """Decodes bitmap image or extracts page from PDF.
 
-    Returns (PIL_Image, format_str, resolved_path).
+    Returns (PIL_Image, format_str, resolved_path, pdf_info, raw_pdf_bytes).
     Raises JsonRpcError with human guidance on failures.
     """
     resolved_path: str | None = None
@@ -179,27 +180,36 @@ def _decode_diagram_source(
                 import pypdf
 
                 reader = pypdf.PdfReader(io.BytesIO(raw_bytes))
-                if len(reader.pages) == 0:
+                total_pages = len(reader.pages)
+                if total_pages == 0:
                     raise ValueError("PDF 文档为空，未包含任何页面。")
-                page = reader.pages[0]
-                if page.images:
-                    imgs = [img.image for img in page.images]
+                if page_number < 1 or page_number > total_pages:
+                    raise JsonRpcError(
+                        INVALID_PARAMS,
+                        f"页码超出有效范围：该 PDF 共有 {total_pages} 页，请求的第 {page_number} 页不存在。请输入 1 到 {total_pages} 之间的页码。",
+                    )
+                target_page = reader.pages[page_number - 1]
+                pdf_info = {"total_pages": total_pages, "current_page": page_number}
+                if target_page.images:
+                    imgs = [img.image for img in target_page.images]
                     best_img = max(imgs, key=lambda im: im.size[0] * im.size[1])
-                    return best_img, "PDF_IMAGE", None
+                    return best_img, "PDF_IMAGE", None, pdf_info, raw_bytes
                 raise ValueError(
-                    "该单页 PDF 为纯矢量流未内嵌位图图谱。请将 PDF 在外部转换/导出为 PNG/JPG 图像后载入。"
+                    f"该 PDF 第 {page_number} 页为纯矢量流未内嵌位图图谱。请将该页导出为 PNG/JPG 图像后载入。"
                 )
+            except JsonRpcError:
+                raise
             except Exception as e:
                 raise JsonRpcError(
                     FILE_ERROR,
-                    f"单页 PDF 解析失败: {e}。请确认 PDF 包含位图图版，或转为 PNG 导入。",
+                    f"PDF 解析失败: {e}。请确认 PDF 包含位图图版，或转为 PNG 导入。",
                 ) from e
 
         try:
             img = Image.open(io.BytesIO(raw_bytes))
             img.load()
             fmt = img.format or "PNG"
-            return img, fmt, None
+            return img, fmt, None, None, None
         except Exception as e:
             raise JsonRpcError(
                 FILE_ERROR,
@@ -238,21 +248,31 @@ def _decode_diagram_source(
             import pypdf
 
             with open(resolved_path, "rb") as f:
-                reader = pypdf.PdfReader(f)
-                if len(reader.pages) == 0:
-                    raise ValueError("PDF 文档为空，未包含任何有效页面。")
-                page = reader.pages[0]
-                if page.images:
-                    imgs = [img.image for img in page.images]
-                    best_img = max(imgs, key=lambda im: im.size[0] * im.size[1])
-                    return best_img, "PDF_IMAGE", resolved_path
-                raise ValueError(
-                    "该单页 PDF 为纯矢量流未内嵌位图图谱。请将 PDF 在外部转换/导出为 PNG/JPG 图像后载入。"
+                raw_bytes = f.read()
+            reader = pypdf.PdfReader(io.BytesIO(raw_bytes))
+            total_pages = len(reader.pages)
+            if total_pages == 0:
+                raise ValueError("PDF 文档为空，未包含任何有效页面。")
+            if page_number < 1 or page_number > total_pages:
+                raise JsonRpcError(
+                    INVALID_PARAMS,
+                    f"页码超出有效范围：该 PDF 共有 {total_pages} 页，请求的第 {page_number} 页不存在。请输入 1 到 {total_pages} 之间的页码。",
                 )
+            target_page = reader.pages[page_number - 1]
+            pdf_info = {"total_pages": total_pages, "current_page": page_number}
+            if target_page.images:
+                imgs = [img.image for img in target_page.images]
+                best_img = max(imgs, key=lambda im: im.size[0] * im.size[1])
+                return best_img, "PDF_IMAGE", resolved_path, pdf_info, raw_bytes
+            raise ValueError(
+                f"该 PDF 第 {page_number} 页为纯矢量流未内嵌位图图谱。请将该页在外部导出为 PNG/JPG 图像后载入。"
+            )
+        except JsonRpcError:
+            raise
         except Exception as e:
             raise JsonRpcError(
                 FILE_ERROR,
-                f"单页 PDF 解析失败: {e}。请确认 PDF 包含图谱位图或转为 PNG 后导入。",
+                f"PDF 解析失败: {e}。请确认 PDF 包含图谱位图或转为 PNG 后导入。",
             ) from e
 
     try:
@@ -263,7 +283,7 @@ def _decode_diagram_source(
             or os.path.splitext(resolved_path)[1].lstrip(".").upper()
             or "PNG"
         )
-        return img, fmt, resolved_path
+        return img, fmt, resolved_path, None, None
     except Exception as e:
         raise JsonRpcError(
             FILE_ERROR,
@@ -384,21 +404,34 @@ class StraditizeSession(
         image_data: str | None = None,
         sample_key: str | None = None,
         file_name: str | None = None,
+        page_number: int = 1,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Loads a diagram image or single-page PDF into memory.
+        """Loads a diagram image or PDF page into memory.
 
         Supports:
         - image_path: Local filesystem path to image or PDF;
         - image_data: Base64-encoded Data URL (e.g. data:image/png;base64,... or data:application/pdf;base64,...);
-        - sample_key: Built-in sample identifier (e.g. 'hoya', 'beginner', 'verification').
+        - sample_key: Built-in sample identifier (e.g. 'hoya', 'beginner', 'verification');
+        - page_number: 1-based page number for multi-page PDF documents.
         """
-        img, fmt, resolved_path = _decode_diagram_source(
+        # Support page flipping from cached PDF
+        if not image_path and not image_data and not sample_key:
+            if getattr(self, "cached_pdf_data", None):
+                image_data = f"data:application/pdf;base64,{base64.b64encode(self.cached_pdf_data).decode('ascii')}"
+            elif getattr(self, "cached_pdf_path", None):
+                image_path = self.cached_pdf_path
+
+        img, fmt, resolved_path, pdf_info, raw_pdf_bytes = _decode_diagram_source(
             image_path=image_path,
             image_data=image_data,
             sample_key=sample_key,
             file_name=file_name,
+            page_number=page_number,
         )
+        self.cached_pdf_data = raw_pdf_bytes
+        self.cached_pdf_path = resolved_path if (resolved_path and resolved_path.lower().endswith('.pdf')) else None
+        self.pdf_info = pdf_info
 
         self.image_path = resolved_path or (
             f"upload://{file_name}" if file_name else "upload://diagram.png"
@@ -446,7 +479,12 @@ class StraditizeSession(
             "rois": self.rois,
             "primary_roi_id": self.primary_roi_id,
             "active_roi_id": self.active_roi_id,
+            "pdf_info": self.pdf_info,
         }
+
+    def switch_pdf_page(self, page_number: int = 1) -> dict[str, Any]:
+        """Switch to a specific 1-based page of the currently loaded PDF."""
+        return self.load_image(page_number=page_number)
 
     def suggest_data_region(self) -> dict[str, float]:
         """Initial data-region (ROI) suggestion for a freshly loaded diagram.

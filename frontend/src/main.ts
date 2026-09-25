@@ -1065,12 +1065,18 @@ async function bootstrap() {
       if (!dataUrl) return;
 
       if (isPdf) {
+        const inputPage = window.prompt(`检测到 PDF 文档 [${file.name}]\n请输入要提取图谱的页码 (从 1 开始):`, '1');
+        if (inputPage === null) {
+          setHudNotice('已取消载入 PDF');
+          return;
+        }
+        const pageNum = Math.max(1, parseInt(inputPage.trim() || '1', 10) || 1);
+
         let newDiagramData: DiagramData;
         try {
-          newDiagramData = await rpcClient.loadCustomImage(dataUrl, 0, 0, file.name);
+          newDiagramData = await rpcClient.loadCustomImage(dataUrl, 0, 0, file.name, pageNum);
         } catch (err) {
           reportBackendFailure('图谱载入', err);
-          setHudNotice('❌ PDF 图谱载入失败：请确认该 PDF 为包含图谱的单页文件。', 6000);
           return;
         }
 
@@ -1085,7 +1091,7 @@ async function bootstrap() {
         toolbar?.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
         updateFooter();
 
-        setHudNotice(`✅ 成功载入单页 PDF 图谱 [${file.name}] (${newDiagramData.imageWidth}×${newDiagramData.imageHeight})！请在画布上调整数据有效区 (Step 1)。`, 5000);
+        setHudNotice(`✅ 成功载入 PDF [${file.name}] 第 ${pageNum} 页图谱 (${newDiagramData.imageWidth}×${newDiagramData.imageHeight})！请在画布上调整数据有效区 (Step 1)。`, 5000);
         return;
       }
 
