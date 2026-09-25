@@ -961,8 +961,14 @@ def check_single_instance(lock_file: str) -> int | None:
 
 
 def main() -> None:
-    # 0. Headless batch CLI commands (extract, run-project)
-    if len(sys.argv) > 1 and sys.argv[1] in ("extract", "run-project"):
+    # 0. WebMCP & Headless CLI commands (mcp, list-tools, call-tool, extract, run-project)
+    if len(sys.argv) > 1 and sys.argv[1] in (
+        "mcp",
+        "list-tools",
+        "call-tool",
+        "extract",
+        "run-project",
+    ):
         from .cli import main as cli_main
 
         cli_main()
