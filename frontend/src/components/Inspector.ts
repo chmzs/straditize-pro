@@ -33,6 +33,8 @@ export interface InspectorCallbacks {
   onRenameActiveRoi?: (name: string) => void;
   onUpdateRoiComposition?: (composition: boolean) => void;
   onDetectLineCandidates?: () => void;
+  onAddExclusionRect?: () => void;
+  onToggleCandidateSelection?: (candId: string, selected: boolean) => void;
   onDetectXTicks?: () => void;
   onExtractConsensusHorizons?: () => void;
   onClearHorizons?: () => void;

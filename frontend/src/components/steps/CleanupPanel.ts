@@ -90,7 +90,45 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onDetectLineCandidates?.();
   });
 
-  root.querySelector('#btn-apply-cleanup-next')?.addEventListener('click', () => {
-    ctx.onAdvanceWorkflowStage?.(5);
+  // 划定排除区
+  root.querySelector('#btn-add-exclusion-rect')?.addEventListener('click', () => {
+    if (ctx.onAddExclusionRect) {
+      ctx.onAddExclusionRect();
+    }
+  });
+
+  // K 键画笔 (擦除模式)
+  root.querySelector('#btn-trigger-linefix')?.addEventListener('click', () => {
+    ctx.onStartLineFix?.('erase');
+  });
+
+  // 候选线勾选状态联动
+  root.querySelectorAll('.chk-candidate').forEach((chk) => {
+    chk.addEventListener('change', (e) => {
+      const target = e.target as HTMLInputElement;
+      const candId = target.getAttribute('data-cand-id');
+      if (!candId) return;
+      if (ctx.onToggleCandidateSelection) {
+        ctx.onToggleCandidateSelection(candId, target.checked);
+      }
+    });
+  });
+
+  const applyBtn = root.querySelector('#btn-apply-cleanup-next') as HTMLButtonElement | null;
+  applyBtn?.addEventListener('click', async () => {
+    if (applyBtn.disabled) return;
+    const originalText = applyBtn.innerHTML;
+    applyBtn.disabled = true;
+    applyBtn.style.opacity = '0.75';
+    applyBtn.style.cursor = 'wait';
+    applyBtn.innerHTML = '⏳ 正在切分属种基线，请稍候...';
+    try {
+      await ctx.onAdvanceWorkflowStage?.(5);
+    } finally {
+      applyBtn.disabled = false;
+      applyBtn.style.opacity = '1';
+      applyBtn.style.cursor = 'pointer';
+      applyBtn.innerHTML = originalText;
+    }
   });
 }

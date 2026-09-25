@@ -7,6 +7,7 @@ import os
 import re
 import socket
 import subprocess
+import tempfile
 import time
 import urllib.request
 from typing import Generator
@@ -30,6 +31,23 @@ def e2e_server() -> Generator[dict, None, None]:
     """Starts an isolated Straditize Pro server with Hoya loaded for E2E tests."""
     port_env = os.environ.get("STRADITIZE_E2E_PORT")
     port = int(port_env) if port_env else get_free_port()
+
+    # Isolate test config path so E2E tests never pollute user's ~/.straditize/config.json
+    temp_config_dir = tempfile.mkdtemp(prefix="straditize_e2e_cfg_")
+    temp_config_path = os.path.join(temp_config_dir, "config.json")
+    with open(temp_config_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "remote_access_enabled": False,
+                "allowed_hosts": ["127.0.0.1", "localhost"],
+                "locale": "zh-CN",
+                "theme": "light",
+            },
+            f,
+            indent=2,
+        )
+    old_cfg_env = os.environ.get("STRADITIZE_CONFIG_PATH")
+    os.environ["STRADITIZE_CONFIG_PATH"] = temp_config_path
 
     session = StraditizeSession()
     session.load_image(sample_key="hoya")
@@ -68,6 +86,16 @@ def e2e_server() -> Generator[dict, None, None]:
     }
 
     server.stop()
+    if old_cfg_env is not None:
+        os.environ["STRADITIZE_CONFIG_PATH"] = old_cfg_env
+    else:
+        os.environ.pop("STRADITIZE_CONFIG_PATH", None)
+    try:
+        if os.path.exists(temp_config_path):
+            os.remove(temp_config_path)
+        os.rmdir(temp_config_dir)
+    except OSError:
+        pass
 
 
 def run_playwright_eval(url: str, js_code: str, session_name: str = "e2e_session") -> str:

@@ -11,11 +11,13 @@
 - 启动收敛唯一化：统一为 `pixi run start`（固定 8765 端口/自动打开浏览器/同源 /mcp 与 SSE/顶栏退出按钮）。
 - 门禁验证：`test_error_guidance_and_pdf.py` 4/4 PASS；全量测试与拥有权全绿。
 
-## [GOLDEN-JOURNEY-T14] 2026-09-25 15:15 — 8步面板齐备、视觉纠偏与纯DOM Golden Journey 完成 (T14)
-- 补齐面板干掉弹窗：新建 `RoiPanel.ts` (S2) 与 `YCalibPanel.ts` (S3) 常驻侧栏；物理删除 `openYCalibrationDialog` 等弹窗与 `Minimap.ts`。
-- 消除步骤精神分裂：`main.ts` 严格对齐 1→8 步递进，清理 `Inspector.ts` 400行 `renderS0..S7` 死代码；铲除画布黄色半透明遮罩与越界横线。
-- 零摆拍纯DOM旅程：`test_golden_journey.py` 完全由 MS Edge 真实 DOM 点击走通 1→8 步并导出解包 `.tar`，`test_corpus_robustness.py` 7/7 全过。
-- 门禁全绿：`tests/e2e/` 全套 9 项 Edge E2E 测试 9/9 PASS；`pixi run lint` / `npm run build` / `npm test` / 拥有权全过。
+## [AUDIT-FIX-5DEFECTS] 2026-09-25 15:30 — 5大核心病灶彻底清零与全流程实操验收
+- 病灶1网格外推：`SplineInterpolator` 与 `GeologyCanvas` 按比例尺外推至完整 `[yMin, yMax]`，彻底消除截断误导。
+- 病灶2测试隔离：`conftest.py` 隔离临时配置，`~/.straditize/config.json` 恢复出厂 `remote_access_enabled: false`。
+- 病灶3假功能接线：`CleanupPanel.ts` 绑定 `[⛶ 划定排除区]` 与 `[🖌 K键画笔]`，画布联动与候选线复选打通。
+- 病灶4后端总出口：`PropertyPanel.ts` 导出与存项目全面直连 `export.tar`、`export.csv`、`export.r`，废除前端手搓。
+- 病灶5防抖与Loading：Step 4 推进 Step 5 按钮立即禁用并显示 `⏳ 正在切分属种基线...`，彻底消除假死与连击。
+- 门禁全绿：44 项单元测试 PASS，全套 9 项 MS Edge E2E 测试全部 100% 通过。
 
 ## [TOPBAR-SETTINGS] 2026-09-25 14:35 — 顶栏瘦身、全局设置弹窗与退出一致性完成
 - 顶栏与启动收敛：唯一主入口定为 `pixi run app`；顶栏右侧仅留 [OCR] [年代] [导出] [⚙ 设置] [退出]；`graceful_shutdown` 单一清理。

@@ -1806,7 +1806,7 @@ export class GeologyCanvas {
     if (!bounds || cal.depthGridEnabled === false) return;
 
     const interval = cal.depthInterval && cal.depthInterval > 0 ? cal.depthInterval : 2;
-    const { depths, yPositions } = SplineInterpolator.getStandardDepthHorizons(cal);
+    const { depths, yPositions } = SplineInterpolator.getStandardDepthHorizons(cal, roi);
     if (depths.length === 0) return;
 
     const scale = this.viewport.scale;
@@ -1863,10 +1863,10 @@ export class GeologyCanvas {
       }
     }
 
-    // 3. 绘制左侧垂直深度标尺主轴：跨度取【标定跨度】而非取数区域
+    // 3. 绘制左侧垂直深度标尺主轴：贯穿整个数据有效区
     ctx.beginPath();
-    ctx.moveTo(gridStartX - 4, bounds.topPx);
-    ctx.lineTo(gridStartX - 4, bounds.bottomPx);
+    ctx.moveTo(gridStartX - 4, roi.yMin);
+    ctx.lineTo(gridStartX - 4, roi.yMax);
     ctx.strokeStyle = isLight ? 'rgba(2, 132, 199, 0.7)' : 'rgba(56, 189, 248, 0.6)';
     ctx.lineWidth = 1.5 / scale;
     ctx.setLineDash([]);

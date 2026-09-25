@@ -612,15 +612,32 @@ export class PropertyPanel {
       setTimeout(() => (copyBtn.textContent = '📋 复制到剪贴板'), 1500);
     });
 
-    // 下载 CSV
-    modal.querySelector('#btn-wpd-download-csv')?.addEventListener('click', () => {
-      const blob = new Blob([textarea.value], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `straditize_pollen_${Date.now()}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+    // 下载 CSV (直连后端 export.csv)
+    modal.querySelector('#btn-wpd-download-csv')?.addEventListener('click', async () => {
+      try {
+        const res = await this.rpcClient.call<any, any>('export.csv');
+        const csvStr = typeof res === 'string' ? res : (res?.csv || res?.csv_content || '');
+        if (csvStr) {
+          const blob = new Blob([csvStr], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `straditize_${this.data.primary_roi_id || 'data'}_${Date.now()}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } else {
+          // Fallback to textarea text if offline
+          const blob = new Blob([textarea.value], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `straditize_pollen_${Date.now()}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      } catch (err: any) {
+        alert(`导出 CSV 失败: ${err.message || err}`);
+      }
     });
 
     // 下载 JSON
@@ -635,21 +652,27 @@ export class PropertyPanel {
       URL.revokeObjectURL(url);
     });
 
-    // 下载配套 R 语言地层图绘图脚本 (rioja::strat.plot)
-    modal.querySelector('#btn-wpd-download-r')?.addEventListener('click', () => {
-      const rScript = PropertyPanel.generateRScript(this.data.columns, this.data.calibration.unit || 'cm');
-      const blob = new Blob([rScript], { type: 'text/plain;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'plot_strat.R';
-      a.click();
-      URL.revokeObjectURL(url);
+    // 下载配套 R 语言地层图绘图脚本 (直连后端 export.r)
+    modal.querySelector('#btn-wpd-download-r')?.addEventListener('click', async () => {
+      try {
+        const res = await this.rpcClient.call<any, any>('export.r');
+        const rStr = typeof res === 'string' ? res : (res?.r || res?.script || '');
+        const scriptToUse = rStr || PropertyPanel.generateRScript(this.data.columns, this.data.calibration.unit || 'cm');
+        const blob = new Blob([scriptToUse], { type: 'text/plain;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'plot_strat.R';
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (err: any) {
+        alert(`导出 R 脚本失败: ${err.message || err}`);
+      }
     });
 
-    // 导出项目包 (.tar)
+    // 导出项目包 (.tar) (直连后端 T10 多 ROI 权威归档)
     modal.querySelector('#btn-wpd-download-tar')?.addEventListener('click', () => {
-      this.saveProjectFile();
+      void this.saveProjectFile();
     });
 
     // 导出内容与集成表联动处理 (规范第九章)
@@ -758,9 +781,35 @@ export class PropertyPanel {
 
   /**
    * 3. 项目化保存为开放标准 .tar 归档 (POSIX UStar)
-   * 包含 manifest.json, image/original.png, straditize.json, data.csv, plot_strat.R, README.txt
+   * 优先直连后端 T10 权威 export.tar 多 ROI 导出；
+   * 包含 manifest.json, image/original.png, straditize.json, data.csv, data/<roi>.csv, plot_strat.R, README.txt
    */
   public async saveProjectFile(): Promise<void> {
+    try {
+      const res = await this.rpcClient.call<any, any>('export.tar');
+      if (res && (res.tar_base64 || res.data)) {
+        const b64 = res.tar_base64 || (typeof res.data === 'string' ? res.data : '');
+        if (b64) {
+          const byteCharacters = atob(b64);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'application/x-tar' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `straditize_project_${Date.now()}.tar`;
+          a.click();
+          URL.revokeObjectURL(url);
+          return;
+        }
+      }
+    } catch (err: any) {
+      console.warn('后端 export.tar 调用未成功，执行前端兼容打包:', err);
+    }
+
     const cal = this.data.calibration;
     const roi = this.data.roi;
 

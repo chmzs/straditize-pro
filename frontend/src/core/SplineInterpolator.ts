@@ -147,7 +147,8 @@ export class SplineInterpolator {
    * 未提供时，才回退到基于用户指定步长的参考线 (如 0~150cm, Δ=2cm)。
    */
   public static getStandardDepthHorizons(
-    cal: DiagramCalibration
+    cal: DiagramCalibration,
+    roi?: { yMin: number; yMax: number }
   ): {
     depths: number[];
     yPositions: number[];
@@ -160,6 +161,12 @@ export class SplineInterpolator {
     const bottom = bottomValue;
     const depthRange = bottom - top || 1;
     const yRange = bottomPx - topPx;
+    if (Math.abs(yRange) < 1e-6) {
+      return { depths: [], yPositions: [] };
+    }
+
+    const slope = (bottomValue - topValue) / yRange;
+    const intercept = topValue - slope * topPx;
 
     // 优先采用用户从 Excel 粘贴的真实非等距深度层位 (忠实于原始物理真实)
     if (cal.customDepths && cal.customDepths.length > 0) {
@@ -172,6 +179,43 @@ export class SplineInterpolator {
     }
 
     const interval = cal.depthInterval && cal.depthInterval > 0 ? cal.depthInterval : 2;
+
+    // 若提供了数据有效区 ROI，则网格线依据标尺比例尺外推至整个数据区，彻底消除"截断图谱"错觉
+    if (roi && roi.yMin !== undefined && roi.yMax !== undefined && roi.yMax > roi.yMin) {
+      const yStart = roi.yMin;
+      const yEnd = roi.yMax;
+      const d1 = slope * yStart + intercept;
+      const d2 = slope * yEnd + intercept;
+      const minD = Math.min(d1, d2);
+      const maxD = Math.max(d1, d2);
+
+      const isTopDown = slope > 0;
+      const firstTick = Math.ceil(minD / interval) * interval;
+      const lastTick = Math.floor(maxD / interval) * interval;
+
+      const depths: number[] = [];
+      const yPositions: number[] = [];
+
+      if (isTopDown) {
+        for (let d = firstTick; d <= lastTick + 1e-6; d += interval) {
+          const roundedD = Number(d.toFixed(4));
+          const y = Number(((roundedD - intercept) / slope).toFixed(2));
+          depths.push(roundedD);
+          yPositions.push(y);
+        }
+      } else {
+        for (let d = lastTick; d >= firstTick - 1e-6; d -= interval) {
+          const roundedD = Number(d.toFixed(4));
+          const y = Number(((roundedD - intercept) / slope).toFixed(2));
+          depths.push(roundedD);
+          yPositions.push(y);
+        }
+      }
+
+      return { depths, yPositions };
+    }
+
+    // 未提供 ROI 时保持标定跨度内网格 (向后兼容)
     const startDepth = Math.min(top, bottom);
     const endDepth = Math.max(top, bottom);
     const isTopDown = top <= bottom;

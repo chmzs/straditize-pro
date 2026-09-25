@@ -524,7 +524,12 @@ async function bootstrap() {
       void refreshLineMask();
       setHudNotice('👉 已进入 Step 4 干扰清理！请在右侧侧栏选择去线强度、划定排除区或使用 K 键笔刷微调。', 4500);
     } else if (targetStage === 5) {
-      setHudNotice('正在基于数据有效区与清理后墨迹切分属种垂直基线...', 5000);
+      const wfNextBtn = document.querySelector('#btn-wf-next') as HTMLButtonElement | null;
+      if (wfNextBtn) {
+        wfNextBtn.disabled = true;
+        wfNextBtn.textContent = '⏳ 正在切分属种基线...';
+      }
+      setHudNotice('⏳ 正在基于数据有效区与清理后墨迹切分属种垂直基线，请稍候...', 5000);
       try {
         const rois = canvasComponent.data.rois || [];
         if (rois.length > 0) {
@@ -547,6 +552,9 @@ async function bootstrap() {
         const freshData = await rpcClient.getDiagramData();
         canvasComponent.loadNewDiagram(freshData);
       } catch (err) {
+        if (wfNextBtn) {
+          wfNextBtn.disabled = false;
+        }
         reportBackendFailure('分列识别', err);
         setHudNotice('❌ 分列识别失败，已停留在 Step 4。请检查有效区后重试。', 6000);
         return;
@@ -980,6 +988,63 @@ async function bootstrap() {
         }
       } catch (err) {
         reportBackendFailure('检测候选线', err);
+      }
+    },
+    onAddExclusionRect: async () => {
+      const activeRoi = canvasComponent.data.active_roi_id || canvasComponent.data.rois?.[0]?.id || 'pollen';
+      const roi = canvasComponent.data.roi;
+      // 在当前有效区右侧区域默认添加排除区矩形 (CONISS / 图例树常见区)
+      const exX0 = Math.round(roi.xMax - Math.min(250, (roi.xMax - roi.xMin) * 0.25));
+      const exX1 = Math.round(roi.xMax);
+      const exY0 = Math.round(roi.yMin);
+      const exY1 = Math.round(roi.yMax);
+
+      const newEx = {
+        id: `ex_${Date.now()}`,
+        roi_id: activeRoi,
+        kind: 'rect' as const,
+        points: [
+          [exX0, exY0],
+          [exX1, exY0],
+          [exX1, exY1],
+          [exX0, exY1],
+        ] as [number, number][],
+      };
+
+      canvasComponent.data.exclusion_regions = canvasComponent.data.exclusion_regions || [];
+      canvasComponent.data.exclusion_regions.push(newEx);
+
+      try {
+        await rpcClient.call('algorithm.applyLineRemoval', {
+          roi_id: activeRoi,
+          exclusion_regions: canvasComponent.data.exclusion_regions,
+        });
+        inspector?.updateData(canvasComponent.data);
+        canvasComponent.requestRender();
+        setHudNotice(`⛶ 已划定排除区 [X: ${exX0}~${exX1}]！该区域所有墨迹在数字化时将被绝对剔除。`, 4500);
+      } catch (err) {
+        reportBackendFailure('添加排除区', err);
+      }
+    },
+    onToggleCandidateSelection: async (candId: string, selected: boolean) => {
+      const currentSelected = new Set(canvasComponent.data.selected_candidate_ids || []);
+      if (selected) {
+        currentSelected.add(candId);
+      } else {
+        currentSelected.delete(candId);
+      }
+      canvasComponent.data.selected_candidate_ids = Array.from(currentSelected);
+
+      const activeRoi = canvasComponent.data.active_roi_id || canvasComponent.data.rois?.[0]?.id;
+      try {
+        await rpcClient.call('algorithm.applyLineRemoval', {
+          roi_id: activeRoi,
+          selected_ids: canvasComponent.data.selected_candidate_ids,
+        });
+        inspector?.updateData(canvasComponent.data);
+        canvasComponent.requestRender();
+      } catch (err) {
+        reportBackendFailure('更新候选线选择', err);
       }
     },
     onDetectXTicks: async () => {
