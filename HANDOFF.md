@@ -18,12 +18,12 @@
 - CLI 升级 WebMCP：`mcp_server.py` 与 `cli.py` 提供 14 个 8 步工作流 MCP 工具，支持活体 Web 会话桥接与 `window.webMCP`。
 - 门禁验收：`test_label_snapping.py` 7/7 全过；`test_e2e/test_naming.py` 等全套 7 项 Edge E2E 全绿。
 
-## [ERROR-PDF-START] 2026-09-25 11:20 — 错误体系整改、单页PDF支持与启动收敛
+## [ERROR-PDF-START] 2026-09-25 11:20 — 错误体系整改、PDF多页指定与启动收敛
 - 拒绝偷懒 -32602：严格区分 语法(-32602)、状态缺失(-32001)、命名冲突(-32002)、算法中断(-32003)、文件错误(-32004)。
 - 修复引导透传：前端 `tError` 彻底保留后端修复引导并结构化显示；杜绝“参数不合法”单一弹窗。
-- 图片与单页PDF：`load_image` 支持 Base64 data URL；通过 `pypdf` 原生支持单页 PDF 高清图版直接载入与画布显示。
+- 图片与单页/多页PDF：`load_image` 支持 Base64 上传；选 PDF 时弹窗输入页码，指定提取哪一页图版并渲染。
 - 启动收敛唯一化：统一为 `pixi run start`（固定 8765 端口/自动打开浏览器/同源 /mcp 与 SSE/顶栏退出按钮）。
-- 门禁验证：`test_error_guidance_and_pdf.py` 3/3 PASS；全量测试与拥有权全绿。
+- 门禁验证：`test_error_guidance_and_pdf.py` 4/4 PASS；全量测试与拥有权全绿。
 
 ## 黑名单（跨会话共享，只追加不覆盖）
 - ❌ 文字/描边严禁写死 `#fff`/`#38bdf8`/`#f59e0b`（日间隐形或低对比），必须用 `--text-heading`/`--accent-*`；**但画布叠加层例外**——它叠在任意用户图上，主题色会消失，须用固定高对比色 + 深色光晕；
