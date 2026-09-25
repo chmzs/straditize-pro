@@ -18,6 +18,7 @@ import {
   AddPointCommand,
   DeletePointCommand,
 } from '../core/Commands';
+import { t, onLocaleChange } from '../i18n';
 
 export interface CanvasEventCallbacks {
   onTaxaChange?: (taxaId: string) => void;
@@ -83,6 +84,7 @@ export class GeologyCanvas {
 
   // Y 轴两点标定：用户在图上点选的参考点（最多两个）
   private yCalibMarks: Point2D[] = [];
+  private hoverWorldPt: Point2D | null = null;
   // 线掩膜人工修正：当前笔刷模式与正在绘制的笔迹
   public lineFixMode: 'erase' | 'restore' = 'erase';
   private lineFixPoints: Point2D[] | null = null;
@@ -139,6 +141,10 @@ export class GeologyCanvas {
         this.callbacks.onDataChange();
       }
     };
+
+    onLocaleChange(() => {
+      this.createFloatingToolbar();
+    });
   }
 
   public setToolMode(mode: ToolMode): void {
@@ -159,65 +165,58 @@ export class GeologyCanvas {
   }
 
   private createFloatingToolbar(): void {
+    if (this.floatingToolbar) {
+      this.floatingToolbar.remove();
+      this.floatingToolbar = null;
+    }
     const palette = document.createElement('div');
     palette.className = 'floating-tool-palette';
     palette.innerHTML = `
-      <button class="floating-tool-btn help-btn-item" id="btn-palette-help" title="交互操作指南与快捷键速查 (快捷键: F1)">
+      <button class="floating-tool-btn help-btn-item" id="btn-palette-help" title="${t('tool.helpTitle')}">
         <span style="font-size: 14px; font-weight: 700; line-height: 1;">?</span>
-        <span>帮助</span>
+        <span>${t('tool.help')}</span>
       </button>
       <div class="palette-divider" style="width: 1px; height: 24px; background: var(--border-color); opacity: 0.7; margin: 0 1px;"></div>
-      <button class="floating-tool-btn active-mode" data-fmode="select" title="微调与选择 (Adjust Point, 快捷键: S / V)">
+      <button class="floating-tool-btn active-mode" data-fmode="select" title="${t('tool.selectHint')}">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
           <path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
         </svg>
-        <span>微调 (S)</span>
+        <span>${t('tool.select')}</span>
       </button>
-      <button class="floating-tool-btn" data-fmode="addPoint" title="添加控制点 (Add Point, 快捷键: A)">
+      <button class="floating-tool-btn" data-fmode="addPoint" title="${t('tool.addPointHint')}">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="4" fill="currentColor"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
         </svg>
-        <span>+点 (A)</span>
+        <span>${t('tool.addPoint')}</span>
       </button>
-      <button class="floating-tool-btn" data-fmode="eraser" title="删除控制点 (Delete Point, 快捷键: D)">
+      <button class="floating-tool-btn" data-fmode="eraser" title="${t('tool.eraserHint')}">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
           <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/>
         </svg>
-        <span>删点 (D)</span>
+        <span>${t('tool.eraser')}</span>
       </button>
-      <button class="floating-tool-btn" data-fmode="addCol" title="添加属种列分界线 (Column, 快捷键: C)">
+      <button class="floating-tool-btn" data-fmode="addCol" title="${t('tool.addColHint')}">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="12" y1="2" x2="12" y2="22" stroke-dasharray="3 3"/><line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
-        <span>+列 (C)</span>
+        <span>${t('tool.addCol')}</span>
       </button>
-      <button class="floating-tool-btn" data-fmode="pan" title="平移抓手模式 (快捷键: H 或 右键/中键/空格拖拽)">
+      <button class="floating-tool-btn" data-fmode="pan" title="${t('tool.panHint')}">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
         </svg>
-        <span>平移 (H)</span>
+        <span>${t('tool.pan')}</span>
       </button>
-      <button class="floating-tool-btn" data-fmode="roi" title="ROI 矩形数据区模式 (快捷键: R)">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-          <rect width="18" height="18" x="3" y="3" rx="2" stroke-dasharray="3 3"/>
-        </svg>
-        <span>ROI (R)</span>
-      </button>
-      <button class="floating-tool-btn" data-fmode="linefix" title="线掩膜人工修正笔刷 (Line Fix, 快捷键: K) —— 擦掉误标 / 补回漏标">
+      <button class="floating-tool-btn" data-fmode="linefix" title="${t('tool.linefixHint')}">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
           <path d="m14 4 6 6-9.5 9.5a2 2 0 0 1-2.83 0L4 15.83a2 2 0 0 1 0-2.83L14 4z"/><line x1="12" y1="6" x2="18" y2="12"/>
         </svg>
-        <span>修线 (K)</span>
-      </button>
-      <button class="floating-tool-btn" data-fmode="ycalib" title="Y 轴两点标定 (Calibrate, 快捷键: Y) —— 点两个已知刻度所在的行，再填真实值">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="4" y1="4" x2="4" y2="20"/><line x1="4" y1="8" x2="9" y2="8"/><line x1="4" y1="16" x2="9" y2="16"/><path d="M12 20V10m0 0 3 3m-3-3-3 3"/>
-        </svg>
-        <span>标定 (Y)</span>
+        <span>${t('tool.linefix')}</span>
       </button>
     `;
     this.container.appendChild(palette);
     this.floatingToolbar = palette;
+    this.updateFloatingToolbarForStage(this.workflowStage);
 
     palette.querySelector('#btn-palette-help')?.addEventListener('click', () => {
       this.callbacks.onToggleHelp?.();
@@ -527,6 +526,12 @@ export class GeologyCanvas {
     this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
     this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
     this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
+    this.canvas.addEventListener('mouseleave', () => {
+      this.hoverWorldPt = null;
+      if (this.toolModeManager.getMode() === 'ycalib') {
+        this.requestRender();
+      }
+    });
     window.addEventListener('mousemove', (e) => this.onMouseMove(e));
     window.addEventListener('mouseup', (e) => this.onMouseUp(e));
     this.canvas.addEventListener('contextmenu', (e) => this.onContextMenu(e));
@@ -1000,6 +1005,10 @@ export class GeologyCanvas {
       // 点在"行"上即可：深度映射只取决于像素 Y，与 X 无关。所以这里只要两个不同的行。
       if (mode === 'ycalib') {
         const markY = Math.round(worldPt.y);
+        // 若已选满 2 个点，第 3 次点击自动重置并作为新的第 1 个点 Y1
+        if (this.yCalibMarks.length >= 2) {
+          this.yCalibMarks = [];
+        }
         if (this.yCalibMarks.some((m) => m.y === markY)) {
           this.notifyNotice('两点标定需要两个不同的像素行，请再点另一行。');
           return;
@@ -1008,10 +1017,12 @@ export class GeologyCanvas {
         this.requestRender();
         if (this.yCalibMarks.length === 2) {
           const picked = [...this.yCalibMarks].sort((a, b) => a.y - b.y);
+          this.yCalibMarks = picked;
           this.callbacks.onYCalibPicked?.(picked);
         } else {
+          this.callbacks.onYCalibPicked?.([...this.yCalibMarks]);
           this.notifyNotice(
-            `已记录第 1 个标定点 (Y=${markY}px)。请在 Y 轴上再点第二个已知刻度的位置。`
+            `🎯 已记录第 1 个标定点 Y1 = ${markY}px。请在 Y 轴上再点第 2 个已知刻度的位置 (Y2)。`
           );
         }
         return;
@@ -1156,6 +1167,10 @@ export class GeologyCanvas {
     this.lastMouseScreen = screenPt;
 
     const worldPt = this.viewport.screenToWorld(screenPt);
+    this.hoverWorldPt = { x: worldPt.x, y: worldPt.y };
+    if (this.toolModeManager.getMode() === 'ycalib') {
+      this.requestRender();
+    }
     const cal = this.data.calibration;
     const roi = this.data.roi;
     // 深度只在已完成两点标定时才存在；未标定就是 undefined，绝不拿 ROI 边界顶替。
@@ -1960,61 +1975,180 @@ export class GeologyCanvas {
   }
 
   /**
-   * 绘制 Y 轴两点标定：仅在最左侧 Y 轴刻度轨道内绘制指示刻度，绝不允许侵入属种数据区。
+   * 绘制 Y 轴两点标定：清晰呈现 Y1 / Y2 两个标定锚点、左侧刻度引线与实时选点准星预览。
+   * 严格限制在左侧 Y 轴刻度区域，绝不生成横穿全图数据区的遮罩或干扰线。
    */
   private drawYAxisCalibration(ctx: CanvasRenderingContext2D): void {
     const cal = this.data.calibration;
     const roi = this.data.roi;
     const scale = this.viewport.scale;
     const marks = this.yCalibMarks;
-    const bounds = CoordinateSystem.calibrationBounds(cal);
+    const isYCalibMode = this.toolModeManager.getMode() === 'ycalib';
 
-    if (marks.length === 0 && !bounds) return;
+    const defaultRailX = Math.max(20 / scale, roi.xMin - 24 / scale);
 
-    // 严格限制在最左侧 Y 轴刻度轨道内（roi.xMin 之前），绝不侵入属种数据区
-    const railStartX = Math.max(0, roi.xMin - 40);
-    const railEndX = roi.xMin;
+    // 汇总当前已选或已填入的 Y1、Y2 点位（无论来自画布点击还是侧边栏输入）
+    interface CalibPointItem {
+      tag: 'Y1' | 'Y2';
+      x: number;
+      y: number;
+      val: number | null | undefined;
+      color: string;
+    }
+    const items: CalibPointItem[] = [];
+
+    const y1Px = marks[0]?.y ?? (cal.top_px !== null && cal.top_px !== undefined ? Number(cal.top_px) : null);
+    const y1X = marks[0]?.x ?? defaultRailX;
+    if (y1Px !== null && !Number.isNaN(y1Px)) {
+      items.push({
+        tag: 'Y1',
+        x: y1X,
+        y: y1Px,
+        val: cal.top_cm,
+        color: '#f59e0b', // 醒目琥珀橙
+      });
+    }
+
+    const y2Px = marks[1]?.y ?? (cal.bottom_px !== null && cal.bottom_px !== undefined ? Number(cal.bottom_px) : null);
+    const y2X = marks[1]?.x ?? defaultRailX;
+    if (y2Px !== null && !Number.isNaN(y2Px)) {
+      items.push({
+        tag: 'Y2',
+        x: y2X,
+        y: y2Px,
+        val: cal.bottom_cm,
+        color: '#10b981', // 醒目翠绿
+      });
+    }
+
+    if (items.length === 0 && (!isYCalibMode || !this.hoverWorldPt)) return;
 
     ctx.save();
 
-    if (bounds) {
-      const pairs: Array<[number, number]> = [
-        [bounds.topPx, bounds.topValue],
-        [bounds.bottomPx, bounds.bottomValue],
-      ];
-      for (const [px, value] of pairs) {
-        ctx.strokeStyle = '#facc15';
-        ctx.lineWidth = 2.0 / scale;
-        ctx.beginPath();
-        ctx.moveTo(railStartX, px);
-        ctx.lineTo(railEndX, px);
-        ctx.stroke();
+    const fontPx = Math.max(10, 11.5 / scale);
+    ctx.font = `bold ${fontPx}px 'JetBrains Mono', monospace`;
 
-        ctx.fillStyle = '#facc15';
-        ctx.font = `bold ${Math.max(10, 11 / scale)}px 'JetBrains Mono', monospace`;
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(`⚑ ${value} ${cal.unit}`, railStartX - 4 / scale, px);
-      }
-    }
+    const drawPill = (
+      text: string,
+      anchorX: number,
+      centerY: number,
+      borderColor: string,
+      textColor: string,
+      alignLeft: boolean = true
+    ) => {
+      const padX = 6 / scale;
+      const padY = 3.5 / scale;
+      const textW = ctx.measureText(text).width;
+      const boxW = textW + padX * 2;
+      const boxH = fontPx + padY * 2;
+      const boxX = alignLeft ? anchorX : anchorX - boxW;
+      const boxY = centerY - boxH / 2;
+      const radius = 4 / scale;
 
-    // 尚未提交的待选参考点
-    marks.forEach((mark, idx) => {
-      const r = this.YCALIB_MARKER_RADIUS_SCREEN / scale;
       ctx.beginPath();
-      ctx.arc(mark.x, mark.y, r, 0, Math.PI * 2);
-      ctx.fillStyle = '#facc15';
+      ctx.roundRect(boxX, boxY, boxW, boxH, radius);
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
       ctx.fill();
-      ctx.strokeStyle = '#111827';
+      ctx.lineWidth = 1.5 / scale;
+      ctx.strokeStyle = borderColor;
+      ctx.stroke();
+
+      ctx.fillStyle = textColor;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, boxX + padX, centerY);
+    };
+
+    // 1. 绘制鼠标悬停时的实时选点准星预览（仅在 ycalib 模式下）
+    if (isYCalibMode && this.hoverWorldPt) {
+      const hy = Math.round(this.hoverWorldPt.y);
+      const hx = Math.round(this.hoverWorldPt.x);
+      const nextTag = items.length === 1 ? 'Y2' : 'Y1';
+      const previewColor = nextTag === 'Y1' ? '#f59e0b' : '#10b981';
+
+      // 左侧轨道准星短线（限制在点击点与 roi.xMin 之间，不侵入右侧数据列）
+      const lineLeft = Math.min(hx, Math.max(0, roi.xMin - 45 / scale));
+      const lineRight = Math.min(Math.max(hx, roi.xMin), roi.xMin);
+
+      ctx.save();
+      ctx.setLineDash([4 / scale, 3 / scale]);
+      ctx.strokeStyle = previewColor;
+      ctx.lineWidth = 1.5 / scale;
+      ctx.beginPath();
+      ctx.moveTo(lineLeft, hy);
+      ctx.lineTo(lineRight, hy);
+      ctx.stroke();
+      ctx.restore();
+
+      // 准星小圆圈
+      const hr = 5 / scale;
+      ctx.beginPath();
+      ctx.arc(hx, hy, hr, 0, Math.PI * 2);
+      ctx.strokeStyle = previewColor;
       ctx.lineWidth = 1.8 / scale;
       ctx.stroke();
 
-      ctx.fillStyle = '#facc15';
-      ctx.font = `bold ${Math.max(10, 12 / scale)}px 'JetBrains Mono', monospace`;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(`${idx + 1}`, mark.x + r + 4 / scale, mark.y);
-    });
+      drawPill(
+        `🎯 点击定 ${nextTag}: ${hy}px`,
+        hx + 10 / scale,
+        hy,
+        previewColor,
+        '#f8fafc',
+        true
+      );
+    }
+
+    // 2. 绘制已选定的 Y1 / Y2 靶心锚点、刻度短针与胶囊铭牌
+    for (const item of items) {
+      const { tag, x, y, val, color } = item;
+      const railLeft = Math.min(x, Math.max(0, roi.xMin - 40 / scale));
+      const railRight = roi.xMin;
+
+      // (a) 水平刻度指示针（带深色衬底光晕，仅在左侧 Y 轴轨道内延伸至 roi.xMin）
+      ctx.beginPath();
+      ctx.moveTo(railLeft, y);
+      ctx.lineTo(railRight, y);
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.lineWidth = 4.0 / scale;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(railLeft, y);
+      ctx.lineTo(railRight, y);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.2 / scale;
+      ctx.stroke();
+
+      // (b) 高对比度双环靶心圆点
+      const rOuter = (this.YCALIB_MARKER_RADIUS_SCREEN + 1.5) / scale;
+      const rInner = (this.YCALIB_MARKER_RADIUS_SCREEN - 0.5) / scale;
+      const rDot = 2.2 / scale;
+
+      ctx.beginPath();
+      ctx.arc(x, y, rOuter, 0, Math.PI * 2);
+      ctx.fillStyle = '#0f172a';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(x, y, rInner, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(x, y, rDot, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      // (c) 胶囊文字标签（显示 Y1/Y2 像素行及已绑定的物理深度/年代值）
+      const hasVal = val !== null && val !== undefined && !Number.isNaN(Number(val));
+      const labelText = hasVal
+        ? `${tag}: ${Math.round(y)}px → ${val} ${cal.unit || 'cm'}`
+        : `${tag}: ${Math.round(y)}px`;
+
+      // 若点击点靠左边缘太近，则胶囊向右展开，否则向左或向右避让数据区
+      const badgeX = x + rOuter + 6 / scale;
+      drawPill(labelText, badgeX, y, color, '#ffffff', true);
+    }
 
     ctx.restore();
   }
@@ -2435,7 +2569,7 @@ export class GeologyCanvas {
     if (stage === 4) return ['linefix', 'pan'];
     if (stage === 5) return ['addCol', 'eraser', 'select', 'pan'];
     if (stage === 6) return ['select', 'addCol', 'eraser', 'pan'];
-    return ['select', 'pan', 'roi', 'linefix', 'ycalib', 'addCol', 'addPoint', 'eraser'];
+    return ['select', 'addPoint', 'eraser', 'pan'];
   }
 
   /** 当前阶段是否允许该工具 */
@@ -2445,12 +2579,12 @@ export class GeologyCanvas {
 
   /** 各工具被阶段门禁拦下时的提示文案 */
   private static readonly TOOL_STAGE_HINT: Partial<Record<ToolMode, string>> = {
-    roi: '提示: ROI 框选在 S2 阶段启用，请点击下方 [👉 进入数据有效区框选]',
-    addCol: '提示: 添加属种列在 S3 分列阶段启用，请先确认数据有效区 (ROI)',
-    addPoint: '提示: 控制点编辑在 S5 拐点提取阶段启用',
-    eraser: '提示: 删除操作在有属种列后 (S3 起) 启用',
-    ycalib: '提示: Y 轴两点标定在 S4 标尺阶段启用',
-    linefix: '提示: 线掩膜人工修正在 S2 起启用',
+    roi: '提示: ROI 框选在步骤 2 (ROI) 启用',
+    addCol: '提示: 添加属种列在步骤 5 (分列) 启用',
+    addPoint: '提示: 控制点编辑在步骤 7 (拐点与采样) 启用',
+    eraser: '提示: 删除操作在步骤 5 起启用',
+    ycalib: '提示: Y 轴两点标定在步骤 3 (Y标定) 启用',
+    linefix: '提示: 线掩膜人工修正在步骤 4 (清理) 启用',
   };
 
   /** 统一门禁：不允许时给出阶段提示并返回 false，允许时返回 true */
@@ -2468,8 +2602,10 @@ export class GeologyCanvas {
       const mode = btn.getAttribute('data-fmode') as ToolMode;
       const btnEl = btn as HTMLButtonElement;
       const isAllowed = allowed.includes(mode);
-      btnEl.style.opacity = isAllowed ? '1' : '0.35';
-      btnEl.style.pointerEvents = isAllowed ? 'auto' : 'none';
+      // 严格遵循设计稿 §7：浮动工具条只显示当前步骤可用的工具，不把无关按钮长期置灰
+      btnEl.style.display = isAllowed ? '' : 'none';
+      btnEl.style.opacity = '1';
+      btnEl.style.pointerEvents = 'auto';
     });
   }
 

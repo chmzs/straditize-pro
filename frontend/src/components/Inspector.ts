@@ -4,6 +4,7 @@ import { CoordinateSystem } from '../core/CoordinateSystem';
 import { tokens } from '../styles/tokens';
 import { DeletePointCommand, ResizeRoiCommand } from '../core/Commands';
 import { getStepPanel } from './steps/_registry';
+import { t, onLocaleChange } from '../i18n';
 
 export interface InspectorCallbacks {
   onDataChange: () => void;
@@ -24,6 +25,8 @@ export interface InspectorCallbacks {
   onStartYCalibration?: () => void;
   /** 手动输入两点数值重新标定（兜底：不使用画布点选）。 */
   onSubmitYCalibration?: (top_px: number, topValue: number, bottom_px: number, bottomValue: number, unit: string) => void;
+  /** 实时预览侧栏输入的 Y1 / Y2 像素位置。 */
+  onPreviewYCalibrationPx?: (topPx: number | null, bottomPx: number | null) => void;
   /** ROI 输入框提交，需要同步后端并重算线掩膜。 */
   onRoiCommitted?: (roi: DataRoi) => void;
   onSelectRoi?: (roiId: string) => void;

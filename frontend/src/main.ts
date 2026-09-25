@@ -200,17 +200,21 @@ async function bootstrap() {
   // 左右抽屉展开把手 (Drawer Tabs) - 直接挂载在 workspace 边缘，折叠时永远清晰可见
   const leftDrawerTab = document.createElement('div');
   leftDrawerTab.className = 'drawer-toggle-tab left-tab';
-  leftDrawerTab.title = '展开属种分列清单 (快捷键: [)';
-  leftDrawerTab.innerHTML = `<span>›</span><span>属种清单</span>`;
   leftDrawerTab.style.display = 'none';
   workspace.appendChild(leftDrawerTab);
 
   const rightDrawerTab = document.createElement('div');
   rightDrawerTab.className = 'drawer-toggle-tab right-tab';
-  rightDrawerTab.title = '展开属性检查器 (快捷键: ])';
-  rightDrawerTab.innerHTML = `<span>‹</span><span>属性检查器</span>`;
   rightDrawerTab.style.display = 'none';
   workspace.appendChild(rightDrawerTab);
+
+  function updateDrawers() {
+    leftDrawerTab.title = t('drawer.taxaTitle');
+    leftDrawerTab.innerHTML = `<span>›</span><span>${t('drawer.taxa')}</span>`;
+    rightDrawerTab.title = t('drawer.inspectorTitle');
+    rightDrawerTab.innerHTML = `<span>‹</span><span>${t('drawer.inspector')}</span>`;
+  }
+  updateDrawers();
 
   // 恢复上次关闭时的侧边栏与检查器折叠记忆状态 (localStorage 持久化)
   const SIDEBAR_COLLAPSED_KEY = 'straditize_sidebar_collapsed';
@@ -360,22 +364,22 @@ async function bootstrap() {
   footer.className = 'app-footer';
   footer.innerHTML = `
     <div class="footer-left" style="display: flex; align-items: center; gap: 8px;">
-      <div class="footer-item" id="footer-dimensions">图像: <code>${initialData.imageWidth}×${initialData.imageHeight}</code></div>
+      <div class="footer-item" id="footer-dimensions">${t('footer.image')}: <code>${initialData.imageWidth}×${initialData.imageHeight}</code></div>
       <span style="color: var(--border-color); opacity: 0.8;">│</span>
-      <div class="footer-item" id="footer-zoom">缩放: <code>100%</code></div>
+      <div class="footer-item" id="footer-zoom">${t('footer.zoom')}: <code>100%</code></div>
       <span style="color: var(--border-color); opacity: 0.8;">│</span>
-      <div class="footer-item" id="footer-cursor">光标: <code>--</code></div>
+      <div class="footer-item" id="footer-cursor">${t('footer.cursor')}: <code>--</code></div>
       <span style="color: var(--border-color); opacity: 0.8;">│</span>
-      <div class="footer-item" id="footer-depth">深度: <strong style="font-size: 11.5px; color: var(--text-primary);">--</strong></div>
+      <div class="footer-item" id="footer-depth">${t('footer.depth')}: <strong style="font-size: 11.5px; color: var(--text-primary);">--</strong></div>
       <span style="color: var(--border-color); opacity: 0.8;">│</span>
-      <div class="footer-item" id="footer-pollen">丰度: <strong style="font-size: 11.5px; color: #38bdf8;">--</strong></div>
+      <div class="footer-item" id="footer-pollen">${t('footer.abundance')}: <strong style="font-size: 11.5px; color: #38bdf8;">--</strong></div>
       <span style="color: var(--border-color); opacity: 0.8;">│</span>
-      <div class="footer-item" id="footer-tool-mode">模式: <strong>选择 (V)</strong></div>
+      <div class="footer-item" id="footer-tool-mode">${t('footer.mode')}: <strong>${t('footer.modeSelect')}</strong></div>
     </div>
     <div class="footer-right" style="display: flex; align-items: center; gap: 8px;">
-      <div class="footer-item" id="footer-active-taxa">当前属种: <strong>--</strong></div>
+      <div class="footer-item" id="footer-active-taxa">${t('footer.activeTaxa')}: <strong>--</strong></div>
       <span style="color: var(--border-color); opacity: 0.8;">│</span>
-      <div class="footer-item" id="footer-anchors">锚点: <code>--</code></div>
+      <div class="footer-item" id="footer-anchors">${t('footer.anchors')}: <code>--</code></div>
     </div>
   `;
 
@@ -398,14 +402,28 @@ async function bootstrap() {
     onRoiCommitted: (roi) => {
       void commitRoi(roi);
     },
-    // Y 轴两点选完：填入 Step 3 侧边栏常驻输入框，绝不弹窗
+    // Y 轴标定选点：无论是第 1 个点 (Y1) 还是第 2 个点 (Y2)，实时同步到 Step 3 侧边栏与画布
     onYCalibPicked: (marks) => {
-      const topPx = marks[0].y;
-      const botPx = marks[1].y;
-      canvasComponent.data.calibration.top_px = topPx;
-      canvasComponent.data.calibration.bottom_px = botPx;
-      inspector?.updateData(canvasComponent.data);
-      setHudNotice(`🎯 已拾取两点像素行 (①Y=${Math.round(topPx)}px, ②Y=${Math.round(botPx)}px)！请在右侧侧栏输入对应真实数值并应用标定。`, 5000);
+      const cal = canvasComponent.data.calibration;
+      if (marks.length === 1) {
+        cal.top_px = marks[0].y;
+        cal.bottom_px = null;
+        cal.isCalibrated = false;
+        inspector?.updateData(canvasComponent.data);
+        canvasComponent.requestRender();
+      } else if (marks.length >= 2) {
+        const topPx = marks[0].y;
+        const botPx = marks[1].y;
+        cal.top_px = topPx;
+        cal.bottom_px = botPx;
+        inspector?.updateData(canvasComponent.data);
+        canvasComponent.requestRender();
+        if (cal.top_cm !== null && cal.top_cm !== undefined && cal.bottom_cm !== null && cal.bottom_cm !== undefined) {
+          void applyDepthCalibration(marks, [Number(cal.top_cm), Number(cal.bottom_cm)], cal.unit || 'cm');
+        } else {
+          setHudNotice(`🎯 已拾取两点像素行 (Y1=${Math.round(topPx)}px, Y2=${Math.round(botPx)}px)！请在右侧侧栏输入对应真实数值并应用标定。`, 5000);
+        }
+      }
     },
     // 线掩膜人工修正笔迹：提交后端重算叠加层
     onLineFixStroke: (stroke) => {
@@ -417,17 +435,17 @@ async function bootstrap() {
       const pollenEl = document.getElementById('footer-pollen');
 
       if (info) {
-        if (cursorEl) cursorEl.innerHTML = `坐标: <code>X:${info.worldX} Y:${info.worldY}</code>`;
+        if (cursorEl) cursorEl.innerHTML = `${t('footer.coords')}: <code>X:${info.worldX} Y:${info.worldY}</code>`;
         if (depthEl) {
           const unit = canvasComponent.data.calibration.unit;
           if (info.horizonDepth !== undefined && info.horizonDepth !== null) {
-            depthEl.innerHTML = `深度: <code>${info.depth !== undefined ? info.depth + ' ' + unit : '--'}</code> <strong style="color: #38bdf8; margin-left: 6px;">[层位: ${info.horizonDepth} ${unit}]</strong>`;
+            depthEl.innerHTML = `${t('footer.depth')}: <code>${info.depth !== undefined ? info.depth + ' ' + unit : '--'}</code> <strong style="color: #38bdf8; margin-left: 6px;">[${t('footer.horizon')}: ${info.horizonDepth} ${unit}]</strong>`;
           } else {
-            depthEl.innerHTML = `深度: <code>${info.depth !== undefined ? info.depth + ' ' + unit : '--'}</code>`;
+            depthEl.innerHTML = `${t('footer.depth')}: <code>${info.depth !== undefined ? info.depth + ' ' + unit : '--'}</code>`;
           }
         }
         if (pollenEl) {
-          pollenEl.innerHTML = `丰度: <code>${info.percent !== undefined ? info.percent + '%' : '--'}</code>`;
+          pollenEl.innerHTML = `${t('footer.abundance')}: <code>${info.percent !== undefined ? info.percent + '%' : '--'}</code>`;
         }
       }
     },
@@ -455,7 +473,7 @@ async function bootstrap() {
       const desc = canvasComponent.toolModeManager.getToolDescription(mode);
       const footerModeEl = document.getElementById('footer-tool-mode');
       if (footerModeEl) {
-        footerModeEl.innerHTML = `模式: <strong>${desc.name} (${desc.shortcut})</strong>`;
+        footerModeEl.innerHTML = `${t('footer.mode')}: <strong>${desc.name} (${desc.shortcut})</strong>`;
       }
     },
   });
@@ -467,6 +485,7 @@ async function bootstrap() {
     toolbar?.render();
     updateWorkflowBar();
     updateFooter();
+    updateDrawers();
   });
 
   // 6.2 显式分步推进状态机 (Step-by-Step Workflow State Machine)
@@ -502,8 +521,14 @@ async function bootstrap() {
   canvasWrapper.appendChild(viewControlsBar);
 
   async function advanceToWorkflowStage(targetStage: WorkflowStage) {
-    if (targetStage === 1 && !canvasComponent.data.imageSrc) {
-      (document.getElementById('file-input-image') as HTMLInputElement)?.click();
+    if (targetStage === 1) {
+      currentStage = 1;
+      canvasComponent.setToolMode('pan');
+      updateWorkflowBar();
+      canvasComponent.requestRender();
+      if (!canvasComponent.data.imageSrc) {
+        (document.getElementById('file-input-image') as HTMLInputElement)?.click();
+      }
     } else if (targetStage === 2) {
       currentStage = 2;
       canvasComponent.setToolMode('roi');
@@ -609,8 +634,7 @@ async function bootstrap() {
 
     workflowActionBar.querySelector('#btn-wf-prev')?.addEventListener('click', () => {
       if (currentStage > 1) {
-        currentStage = (currentStage - 1) as WorkflowStage;
-        updateWorkflowBar();
+        void advanceToWorkflowStage((currentStage - 1) as WorkflowStage);
       }
     });
 
@@ -1089,11 +1113,27 @@ async function bootstrap() {
         reportBackendFailure('清空层位', err);
       }
     },
+    onPreviewYCalibrationPx: (topPx, bottomPx) => {
+      canvasComponent.data.calibration.top_px = topPx;
+      canvasComponent.data.calibration.bottom_px = bottomPx;
+      const existingMarks = canvasComponent.getYCalibMarks();
+      const railX = Math.max(20, canvasComponent.data.roi.xMin - 24);
+      const nextMarks: Point2D[] = [];
+      if (topPx !== null) {
+        nextMarks.push({ x: existingMarks[0]?.x ?? railX, y: topPx });
+      }
+      if (bottomPx !== null) {
+        nextMarks.push({ x: existingMarks[1]?.x ?? railX, y: bottomPx });
+      }
+      canvasComponent.setYCalibMarks(nextMarks);
+    },
     onSubmitYCalibration: (topPx, topValue, bottomPx, bottomValue, unit) => {
+      const existingMarks = canvasComponent.getYCalibMarks();
+      const railX = Math.max(20, canvasComponent.data.roi.xMin - 24);
       void applyDepthCalibration(
         [
-          { x: 0, y: topPx },
-          { x: 0, y: bottomPx },
+          { x: existingMarks[0]?.x ?? railX, y: topPx },
+          { x: existingMarks[1]?.x ?? railX, y: bottomPx },
         ],
         [topValue, bottomValue],
         unit
@@ -1232,14 +1272,18 @@ async function bootstrap() {
         previous,
         canvasComponent.data.roi
       );
-      canvasComponent.clearYCalibMarks();
-      canvasComponent.setToolMode('select');
+      canvasComponent.setYCalibMarks(marks);
+      if (currentStage === 3) {
+        canvasComponent.setToolMode('ycalib');
+      } else {
+        canvasComponent.setToolMode('select');
+      }
       canvasComponent.requestRender();
       inspector?.updateData(canvasComponent.data);
       updateFooter();
       setHudNotice(
-        `✅ Y 轴已标定: Y=${res.canvas.top_px}px → ${res.canvas.top_cm} ${unit}，` +
-          `Y=${res.canvas.bottom_px}px → ${res.canvas.bottom_cm} ${unit}`,
+        `✅ Y 轴已标定: Y1=${res.canvas.top_px}px → ${res.canvas.top_cm} ${unit}，` +
+          `Y2=${res.canvas.bottom_px}px → ${res.canvas.bottom_cm} ${unit}`,
         6000
       );
     } catch (err) {
@@ -1626,14 +1670,7 @@ async function bootstrap() {
       toggleInspector();
     },
     onStepClick: (step) => {
-      currentStage = step as WorkflowStage;
-      if (currentStage === 2) {
-        canvasComponent.setToolMode('roi');
-      } else if (currentStage === 3) {
-        canvasComponent.setToolMode('select');
-      }
-      updateWorkflowBar();
-      canvasComponent.requestRender();
+      void advanceToWorkflowStage(step as WorkflowStage);
       const meta = WORKFLOW_STAGES[currentStage];
       setHudNotice(`切换至步骤 ${step}: ${meta.stepName} - ${meta.title}`);
     },
@@ -1703,23 +1740,23 @@ async function bootstrap() {
     const zoomEl = document.getElementById('footer-zoom');
 
     if (dimEl) {
-      dimEl.innerHTML = `图像: <code>${canvasComponent.data.imageWidth}×${canvasComponent.data.imageHeight}</code>`;
+      dimEl.innerHTML = `${t('footer.image')}: <code>${canvasComponent.data.imageWidth}×${canvasComponent.data.imageHeight}</code>`;
     }
     if (zoomEl) {
-      zoomEl.innerHTML = `缩放: <code>${Math.round(canvasComponent.viewport.scale * 100)}%</code>`;
+      zoomEl.innerHTML = `${t('footer.zoom')}: <code>${Math.round(canvasComponent.viewport.scale * 100)}%</code>`;
     }
     // 无激活列（含一键重置后的空状态）时必须回落占位符，避免残留上一张图的属种与锚点数
     if (activeEl) {
       activeEl.innerHTML = col
-        ? `当前属种: <span style="color: ${col.color};">●</span> <strong>${col.name}</strong>`
-        : '当前属种: <strong>--</strong>';
+        ? `${t('footer.activeTaxa')}: <span style="color: ${col.color};">●</span> <strong>${col.name}</strong>`
+        : `${t('footer.activeTaxa')}: <strong>--</strong>`;
     }
     if (anchorsEl) {
       if (col) {
         const manual = col.controlPoints.filter((p) => p.isManual).length;
-        anchorsEl.innerHTML = `锚点数: <code>${manual} 手动 / ${col.controlPoints.length} 总计</code>`;
+        anchorsEl.innerHTML = `${t('footer.anchors')}: <code>${manual} ${t('footer.manual')} / ${col.controlPoints.length} ${t('footer.total')}</code>`;
       } else {
-        anchorsEl.innerHTML = '锚点数: <code>--</code>';
+        anchorsEl.innerHTML = `${t('footer.anchors')}: <code>--</code>`;
       }
     }
   }

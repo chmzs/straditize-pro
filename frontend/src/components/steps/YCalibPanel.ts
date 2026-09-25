@@ -43,12 +43,15 @@ export function render(data: DiagramData): string {
       <div class="inspector-section" style="margin-bottom: 12px;">
         <div style="font-size: 11px; font-weight: 700; margin-bottom: 8px;">标定参考点参数</div>
 
-        <!-- 参考点 1 -->
-        <div style="background: var(--bg-tertiary); padding: 8px; border-radius: 6px; margin-bottom: 8px; border: 1px solid var(--border-light);">
-          <div style="font-size: 10.5px; font-weight: 600; margin-bottom: 4px; color: var(--accent-blue);">① 上方/基准点:</div>
+        <!-- 参考点 1 (Y1) -->
+        <div style="background: var(--bg-tertiary); padding: 8px; border-radius: 6px; margin-bottom: 8px; border: 1px solid rgba(245, 158, 11, 0.35);">
+          <div style="font-size: 10.5px; font-weight: 700; margin-bottom: 4px; color: #f59e0b; display: flex; justify-content: space-between;">
+            <span>① 基准点 Y1 (上方):</span>
+            <span style="font-family: monospace;">${topPx !== '' ? `Y1=${topPx}px` : '待选点'}</span>
+          </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
             <div>
-              <label style="font-size: 10px; color: var(--text-muted);">像素 Y (px):</label>
+              <label style="font-size: 10px; color: var(--text-muted);">像素 Y1 (px):</label>
               <input type="number" id="ycal-inp-top-px" value="${topPx}" placeholder="如 556" style="width: 100%; font-size: 11px; padding: 3px 6px; box-sizing: border-box; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
             </div>
             <div>
@@ -58,12 +61,15 @@ export function render(data: DiagramData): string {
           </div>
         </div>
 
-        <!-- 参考点 2 -->
-        <div style="background: var(--bg-tertiary); padding: 8px; border-radius: 6px; margin-bottom: 8px; border: 1px solid var(--border-light);">
-          <div style="font-size: 10.5px; font-weight: 600; margin-bottom: 4px; color: var(--accent-blue);">② 下方/对照点:</div>
+        <!-- 参考点 2 (Y2) -->
+        <div style="background: var(--bg-tertiary); padding: 8px; border-radius: 6px; margin-bottom: 8px; border: 1px solid rgba(16, 185, 129, 0.35);">
+          <div style="font-size: 10.5px; font-weight: 700; margin-bottom: 4px; color: #10b981; display: flex; justify-content: space-between;">
+            <span>② 对照点 Y2 (下方):</span>
+            <span style="font-family: monospace;">${botPx !== '' ? `Y2=${botPx}px` : '待选点'}</span>
+          </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
             <div>
-              <label style="font-size: 10px; color: var(--text-muted);">像素 Y (px):</label>
+              <label style="font-size: 10px; color: var(--text-muted);">像素 Y2 (px):</label>
               <input type="number" id="ycal-inp-bot-px" value="${botPx}" placeholder="如 1320" style="width: 100%; font-size: 11px; padding: 3px 6px; box-sizing: border-box; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
             </div>
             <div>
@@ -105,6 +111,14 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     const botVal = parseFloat((root.querySelector('#ycal-inp-bot-val') as HTMLInputElement)?.value || '');
     const unit = (root.querySelector('#ycal-inp-unit') as HTMLInputElement)?.value.trim() || 'cm';
 
+    // 即使真实数值尚未填齐，也实时同步 Y1/Y2 像素位置到画布预览
+    if (ctx.onPreviewYCalibrationPx) {
+      ctx.onPreviewYCalibrationPx(
+        isNaN(topPx) ? null : topPx,
+        isNaN(botPx) ? null : botPx
+      );
+    }
+
     if (isNaN(topPx) || isNaN(topVal) || isNaN(botPx) || isNaN(botVal)) {
       return;
     }
@@ -118,7 +132,15 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     }
   };
 
-  // 失去焦点时即时同步标定
+  // 输入或失去焦点时即时同步画布锚点与标定
+  root.querySelectorAll('#ycal-inp-top-px, #ycal-inp-bot-px').forEach((inp) => {
+    inp.addEventListener('input', () => {
+      const topPx = parseFloat((root.querySelector('#ycal-inp-top-px') as HTMLInputElement)?.value || '');
+      const botPx = parseFloat((root.querySelector('#ycal-inp-bot-px') as HTMLInputElement)?.value || '');
+      ctx.onPreviewYCalibrationPx?.(isNaN(topPx) ? null : topPx, isNaN(botPx) ? null : botPx);
+    });
+  });
+
   root.querySelectorAll('#ycal-inp-top-px, #ycal-inp-top-val, #ycal-inp-bot-px, #ycal-inp-bot-val, #ycal-inp-unit').forEach((inp) => {
     inp.addEventListener('change', commitCalibration);
   });
