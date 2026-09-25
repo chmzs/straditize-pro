@@ -29,7 +29,9 @@ def test_smoke_workflow_and_buttons(e2e_server, capsys):
         expected_sha = truth.get("hoya", {}).get("sha256")
 
     if expected_sha:
-        assert actual_sha == expected_sha, f"Image SHA256 mismatch: {actual_sha} != {expected_sha}"
+        assert actual_sha == expected_sha, (
+            f"Image SHA256 mismatch: {actual_sha} != {expected_sha}"
+        )
 
     # 2. Query real browser DOM state via playwright-cli driving MS Edge
     # 严格匹配真实选择器：.workflow-step-btn (数量必须精确为 8), #btn-export-csv, #btn-open-paste-taxa, [data-action="swap-up"]
@@ -60,7 +62,9 @@ def test_smoke_workflow_and_buttons(e2e_server, capsys):
     try:
         data = json.loads(res_str)
     except Exception as e:
-        pytest.fail(f"Browser DOM evaluation failed to return valid JSON from real browser: {res_str} ({e})")
+        pytest.fail(
+            f"Browser DOM evaluation failed to return valid JSON from real browser: {res_str} ({e})"
+        )
 
     # 3. Print frozen grammar L4 output (严格按照契约 v1.3 §8.1.4 格式输出真实获取值)
     print(f"\nIMAGE_SHA256={actual_sha}")
@@ -73,8 +77,18 @@ def test_smoke_workflow_and_buttons(e2e_server, capsys):
 
     # 4. 严苛断言（无任何兜底假数据）
     assert data["steps"] == 8, f"Expected exactly 8 workflow steps, got {data['steps']}"
-    assert data["export_stage"] == "absent", "Export stage must NOT be in workflow bar (removed per redesign)"
-    assert data["topbar_export"] == "present", "Topbar export button must be present as global exit"
-    assert data["sidebar_title"] == "Taxa 属种分列清单", f"Sidebar title mismatch: {data['sidebar_title']}"
-    assert data["swap_buttons"] == "present", "Legacy swap buttons ▲/▼ must remain present until T11"
-    assert data["bulk_import"] == "present", "Legacy bulk import button must remain present until T11"
+    assert data["export_stage"] == "absent", (
+        "Export stage must NOT be in workflow bar (removed per redesign)"
+    )
+    assert data["topbar_export"] == "present", (
+        "Topbar export button must be present as global exit"
+    )
+    assert data["sidebar_title"] == "Taxa 属种分列清单", (
+        f"Sidebar title mismatch: {data['sidebar_title']}"
+    )
+    assert data["swap_buttons"] == "absent", (
+        "Legacy swap buttons ▲/▼ must be removed in T11"
+    )
+    assert data["bulk_import"] == "absent", (
+        "Legacy bulk import button must be removed in T11"
+    )

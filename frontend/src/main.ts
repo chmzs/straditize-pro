@@ -618,27 +618,16 @@ async function bootstrap() {
         setHudNotice(`已将属种 [${col.name}] 图形形态切换为: ${plotType.toUpperCase()}`);
       }
     },
-    onBatchImportTaxa: (taxaNames) => {
-      canvasComponent.batchUpdateTaxa(taxaNames);
-      sidebar?.updateData(canvasComponent.data);
-      toolbar?.updateHistoryState();
-      updateFooter();
-      scheduleAutosave();
-      setHudNotice(`✅ 成功批量导入 ${taxaNames.length} 个属种名单并完成自动拓展对齐！`, 3500);
-    },
-    onSwapTaxaNames: (idx1, idx2) => {
-      const cols = canvasComponent.data.columns;
-      if (idx1 >= 0 && idx1 < cols.length && idx2 >= 0 && idx2 < cols.length) {
-        const tmpName = cols[idx1].name;
-        cols[idx1].name = cols[idx2].name;
-        cols[idx2].name = tmpName;
-        history.push(`Swap Taxa Names (${cols[idx1].name} <-> ${cols[idx2].name})`, cols, canvasComponent.data.activeTaxaId);
-        sidebar?.updateData(canvasComponent.data);
+    onRenameTaxa: (taxaId, newName) => {
+      const col = canvasComponent.data.columns.find((c) => c.id === taxaId);
+      if (col) {
+        history.push(`Rename Taxa ${col.name} to ${newName}`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
+        canvasComponent.requestRender();
         inspector?.updateData(canvasComponent.data);
         toolbar?.updateHistoryState();
         updateFooter();
         scheduleAutosave();
-        setHudNotice(`🔀 已对调属种顺位: ${cols[idx1].name} 与 ${cols[idx2].name}`);
+        setHudNotice(`🏷️ 属种已更名为: ${newName}`);
       }
     },
     onToggleCollapse: (collapsed) => {
@@ -1543,6 +1532,37 @@ async function bootstrap() {
     }
   } catch {
     // 忽略异常
+  }
+
+  // 14. 注册浏览器端 WebMCP (W3C Web Model Context Protocol) 桥接器
+  const webMcpApi = {
+    version: '2024-11-05',
+    listTools: async () => {
+      const res = await rpcClient.call<any, any>('webmcp.listTools', {});
+      return res?.tools || [];
+    },
+    callTool: async (method: string, params: Record<string, any> = {}) => {
+      const res = await rpcClient.call<any, any>(method, params);
+      const freshData = await rpcClient.getDiagramData();
+      canvasComponent.loadNewDiagram(freshData);
+      sidebar?.updateData(canvasComponent.data);
+      inspector?.updateData(canvasComponent.data);
+      updateFooter();
+      return res;
+    },
+    setWorkflowStep: (step: WorkflowStage) => {
+      currentStage = step;
+      updateWorkflowBar();
+      canvasComponent.requestRender();
+    },
+  };
+  (window as any).webMCP = webMcpApi;
+  if (typeof navigator !== 'undefined' && !('modelContext' in navigator)) {
+    try {
+      Object.defineProperty(navigator, 'modelContext', { value: webMcpApi, configurable: true });
+    } catch {
+      // Ignore read-only navigator environments
+    }
   }
 
   console.log('Straditize Modern Frontend Initialized Successfully');

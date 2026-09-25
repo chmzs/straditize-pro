@@ -7,6 +7,7 @@ Features:
 4. Botanical dictionary fuzzy matching and status classification (auto / confirm / unrecognized).
 5. Spatial column snapping: aligns each label's bottom anchor (X_anchor) with the closest Column.startX below.
 """
+
 from __future__ import annotations
 
 import base64
@@ -37,6 +38,119 @@ def get_models_dir() -> Path:
 MODELS_DIR = get_models_dir()
 
 
+def snap_labels_to_columns(
+    labels: list[dict[str, Any]],
+    columns: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Associates OCR labels with columns based on [startX, endX) interval containment.
+
+    Rules (Frozen Contracts v1.3 §8 & Ticket T11):
+    1. Interval containment: a label belongs to column col if its anchor_x falls in [col.startX, col.endX);
+    2. Boundary crossing: if a label's horizontal extent spans across column boundaries,
+       it is assigned to anchor_x's column and added to 'ambiguous';
+    3. Count mismatch refusal: if len(labels) != len(columns) or not 1-to-1, NO pairing is made
+       (associated_column_id remains None), and three-category reconciliation is returned;
+    4. Order-independent: sorting/shuffling labels produces identical assignments and reconciliation;
+    5. No greedy 45px nearest-neighbor matching or used_col_indices preemption.
+    """
+    # Sort columns by startX for stable lookup
+    sorted_cols = sorted(
+        columns, key=lambda c: float(c.get("startX", c.get("start", 0.0)))
+    )
+
+    # Reset association on all labels
+    for lbl in labels:
+        lbl["associated_column_id"] = None
+        lbl["associated_column_index"] = None
+        lbl["associated_column_name"] = None
+
+    columns_without_label: list[str] = []
+    labels_without_column: list[str] = []
+    ambiguous: list[str] = []
+
+    # Map each label to its containing column
+    label_to_col: dict[str, dict[str, Any]] = {}
+    col_to_labels: dict[str, list[dict[str, Any]]] = {
+        str(c.get("id") or f"col_{c.get('col_index', idx)}"): []
+        for idx, c in enumerate(sorted_cols)
+    }
+
+    for lbl in labels:
+        lbl_id = str(lbl.get("id", ""))
+        ax = float(lbl.get("anchor_x", 0.0))
+
+        # Determine bounding box horizontal extent
+        bbox = lbl.get("bbox")
+        min_x = ax
+        max_x = ax
+        if bbox:
+            try:
+                if isinstance(bbox[0], (list, tuple)):
+                    min_x = min(float(pt[0]) for pt in bbox)
+                    max_x = max(float(pt[0]) for pt in bbox)
+                elif len(bbox) >= 4:
+                    min_x = min(float(bbox[0]), float(bbox[2]))
+                    max_x = max(float(bbox[0]), float(bbox[2]))
+            except (ValueError, TypeError, IndexError):
+                pass
+
+        matched_col = None
+        for idx, col in enumerate(sorted_cols):
+            c_start = float(col.get("startX", col.get("start", 0.0)))
+            c_end = float(col.get("endX", col.get("end", c_start + 100.0)))
+            if c_start <= ax < c_end:
+                matched_col = col
+                # Check if label crosses boundary
+                if min_x < c_start or max_x >= c_end:
+                    if lbl_id not in ambiguous:
+                        ambiguous.append(lbl_id)
+                break
+
+        if matched_col is not None:
+            c_id = str(
+                matched_col.get("id") or f"col_{matched_col.get('col_index', 0)}"
+            )
+            label_to_col[lbl_id] = matched_col
+            col_to_labels[c_id].append(lbl)
+        else:
+            if lbl_id not in labels_without_column:
+                labels_without_column.append(lbl_id)
+
+    # Detect columns without label or with multiple labels
+    for c_id, matched_lbls in col_to_labels.items():
+        if len(matched_lbls) == 0:
+            columns_without_label.append(c_id)
+        elif len(matched_lbls) > 1:
+            for m_lbl in matched_lbls:
+                m_id = str(m_lbl.get("id", ""))
+                if m_id not in ambiguous:
+                    ambiguous.append(m_id)
+
+    # Count mismatch check: if label count != column count, refuse pairing
+    can_pair = (
+        len(labels) == len(columns)
+        and len(columns_without_label) == 0
+        and len(labels_without_column) == 0
+        and all(len(lbls) == 1 for lbls in col_to_labels.values())
+    )
+
+    if can_pair:
+        for lbl in labels:
+            lbl_id = str(lbl.get("id", ""))
+            col = label_to_col.get(lbl_id)
+            if col is not None:
+                lbl["associated_column_id"] = col.get("id")
+                lbl["associated_column_index"] = col.get("col_index")
+                lbl["associated_column_name"] = col.get("name")
+
+    return {
+        "columns_without_label": sorted(columns_without_label),
+        "labels_without_column": sorted(labels_without_column),
+        "ambiguous": sorted(ambiguous),
+        "matched": can_pair,
+    }
+
+
 class OcrTaxaRecognitionEngine:
     """End-to-end OCR and botanical taxon verification engine."""
 
@@ -60,7 +174,9 @@ class OcrTaxaRecognitionEngine:
                 opts = ort.SessionOptions()
                 opts.inter_op_num_threads = 2
                 opts.intra_op_num_threads = 2
-                opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+                opts.graph_optimization_level = (
+                    ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+                )
 
                 self.sess_rec = ort.InferenceSession(
                     str(rec_path),
@@ -78,7 +194,9 @@ class OcrTaxaRecognitionEngine:
                         sess_options=opts,
                         providers=["CPUExecutionProvider"],
                     )
-                logger.info("Pre-installed PP-OCRv4 models loaded successfully (offline mode).")
+                logger.info(
+                    "Pre-installed PP-OCRv4 models loaded successfully (offline mode)."
+                )
         except Exception as e:
             logger.warning("Failed to initialize ONNX Runtime PP-OCR models: %s", e)
 
@@ -119,13 +237,17 @@ class OcrTaxaRecognitionEngine:
 
         bio = io.BytesIO()
         cropped_strip.save(bio, format="PNG")
-        strip_b64 = "data:image/png;base64," + base64.b64encode(bio.getvalue()).decode("ascii")
+        strip_b64 = "data:image/png;base64," + base64.b64encode(bio.getvalue()).decode(
+            "ascii"
+        )
 
         # 1. Rotate oblique strip to horizontal reading posture
         rot_arr, meta = rotate_label_strip(cropped_strip, angle_deg=angle_deg)
 
         # 2. Extract text regions and transcribe text
-        raw_detections = self._detect_and_recognize_regions(rot_arr, meta, global_offset=(crop_x0, crop_y0))
+        raw_detections = self._detect_and_recognize_regions(
+            rot_arr, meta, global_offset=(crop_x0, crop_y0)
+        )
 
         # 3. Match each text against botanical dictionary
         processed_labels = []
@@ -153,9 +275,22 @@ class OcrTaxaRecognitionEngine:
             }
             processed_labels.append(label_entry)
 
-        # 4. Spatial Column Snapping
+        # 4. Spatial Column Snapping (Interval-based)
+        reconciliation = {
+            "columns_without_label": [
+                str(c.get("id") or f"col_{c.get('col_index', idx)}")
+                for idx, c in enumerate(columns)
+            ]
+            if columns
+            else [],
+            "labels_without_column": [str(l.get("id", "")) for l in processed_labels]
+            if processed_labels
+            else [],
+            "ambiguous": [],
+            "matched": False,
+        }
         if columns and processed_labels:
-            self._snap_labels_to_columns(processed_labels, columns)
+            reconciliation = self._snap_labels_to_columns(processed_labels, columns)
 
         auto_cnt = sum(1 for l in processed_labels if l["status"] == "auto")
         confirm_cnt = sum(1 for l in processed_labels if l["status"] == "confirm")
@@ -165,6 +300,7 @@ class OcrTaxaRecognitionEngine:
             "labels": processed_labels,
             "label_row_bbox": [crop_x0, crop_y0, crop_x1, crop_y1],
             "label_row_image": strip_b64,
+            "reconciliation": reconciliation,
             "summary": {
                 "total": len(processed_labels),
                 "auto": auto_cnt,
@@ -201,7 +337,7 @@ class OcrTaxaRecognitionEngine:
             input_name = self.sess_det.get_inputs()[0].name
             pred = self.sess_det.run(None, {input_name: blob})[0][0, 0]
 
-            seg_mask = (pred > 0.22)
+            seg_mask = pred > 0.22
             lbl = label(seg_mask)
             props = regionprops(lbl)
 
@@ -235,13 +371,17 @@ class OcrTaxaRecognitionEngine:
                         (float(x1), float(y1)),
                         (float(x0), float(y1)),
                     ]
-                    orig_bbox = map_box_to_original(box_rot, meta, global_offset=global_offset)
+                    orig_bbox = map_box_to_original(
+                        box_rot, meta, global_offset=global_offset
+                    )
 
-                    detections.append({
-                        "text": trans,
-                        "bbox_orig": orig_bbox,
-                        "rot_span": (x0, x1),
-                    })
+                    detections.append(
+                        {
+                            "text": trans,
+                            "bbox_orig": orig_bbox,
+                            "rot_span": (x0, x1),
+                        }
+                    )
 
             if len(detections) > 0:
                 return detections
@@ -249,7 +389,9 @@ class OcrTaxaRecognitionEngine:
         # Fallback: Projection-based heuristic segmentation
         detections = []
         if rectified_image.ndim == 3:
-            gray = np.dot(rectified_image[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
+            gray = np.dot(rectified_image[..., :3], [0.299, 0.587, 0.114]).astype(
+                np.uint8
+            )
         else:
             gray = rectified_image.astype(np.uint8)
 
@@ -287,11 +429,13 @@ class OcrTaxaRecognitionEngine:
             ]
 
             orig_bbox = map_box_to_original(box_rot, meta, global_offset=global_offset)
-            detections.append({
-                "text": transcribed_text,
-                "bbox_orig": orig_bbox,
-                "rot_span": (s, e),
-            })
+            detections.append(
+                {
+                    "text": transcribed_text,
+                    "bbox_orig": orig_bbox,
+                    "rot_span": (s, e),
+                }
+            )
 
         return detections
 
@@ -340,27 +484,6 @@ class OcrTaxaRecognitionEngine:
         self,
         labels: list[dict[str, Any]],
         columns: list[dict[str, Any]],
-    ) -> None:
-        """Associates each OCR label with the nearest physical Column.startX below it."""
-        sorted_cols = sorted(columns, key=lambda c: c.get("startX", c.get("start", 0.0)))
-        used_col_indices = set()
-
-        for l_item in labels:
-            ax = l_item["anchor_x"]
-            best_col = None
-            best_dist = 99999.0
-            best_c_idx = -1
-
-            for c_idx, col in enumerate(sorted_cols):
-                cx = float(col.get("startX", col.get("start", 0.0)))
-                dist = abs(ax - cx)
-                if dist < best_dist:
-                    best_dist = dist
-                    best_col = col
-                    best_c_idx = c_idx
-
-            if best_col is not None and best_dist < 45.0 and best_c_idx not in used_col_indices:
-                l_item["associated_column_id"] = best_col.get("id") or f"taxa_{best_c_idx}"
-                l_item["associated_column_index"] = best_col.get("col_index", best_c_idx)
-                l_item["associated_column_name"] = best_col.get("name")
-                used_col_indices.add(best_c_idx)
+    ) -> dict[str, Any]:
+        """Delegates to interval-based snap_labels_to_columns."""
+        return snap_labels_to_columns(labels, columns)
