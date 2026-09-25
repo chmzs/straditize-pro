@@ -1002,8 +1002,8 @@ export class GeologyCanvas {
       }
 
       // ================= 2.5 Y 轴两点标定 (Calibrate) =================
-      // 点在"行"上即可：深度映射只取决于像素 Y，与 X 无关。所以这里只要两个不同的行。
-      if (mode === 'ycalib') {
+      // 在 Step 3 或 ycalib 模式下，左键点击画布直接拾取 Y1 / Y2 标定点并绘制圆点标记
+      if (mode === 'ycalib' || this.workflowStage === 3) {
         const markY = Math.round(worldPt.y);
         // 若已选满 2 个点，第 3 次点击自动重置并作为新的第 1 个点 Y1
         if (this.yCalibMarks.length >= 2) {
@@ -2466,6 +2466,18 @@ export class GeologyCanvas {
     this.workflowStage = stage;
     this.updateEmptyStateVisibility();
     this.updateFloatingToolbarForStage(stage);
+    // 切换步骤时自动激活该步骤对应的默认主画布工具
+    if (stage === 1) {
+      this.toolModeManager.setMode('pan');
+    } else if (stage === 2) {
+      this.toolModeManager.setMode('roi');
+    } else if (stage === 3) {
+      this.toolModeManager.setMode('ycalib');
+    } else if (!this.isToolAllowed(this.toolModeManager.getMode(), stage)) {
+      const allowed = this.getAllowedTools(stage);
+      this.toolModeManager.setMode(allowed[0] || 'pan');
+    }
+    this.updateCursor();
     this.requestRender();
   }
 

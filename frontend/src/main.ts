@@ -228,7 +228,7 @@ async function bootstrap() {
     leftDrawerTab.style.display = collapsed ? 'flex' : 'none';
     if (toolbar) toolbar.setSidebarActive(!collapsed);
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
-    setHudNotice(collapsed ? '属种分列列表已收起 (Ctrl+[ 或点击左侧拉手展开)' : '属种分列列表已展开', 2000);
+    setHudNotice(collapsed ? t('hud.sidebarCollapsed') : t('hud.sidebarExpanded'), 2000);
     canvasComponent.handleResize();
   }
 
@@ -237,7 +237,7 @@ async function bootstrap() {
     rightDrawerTab.style.display = collapsed ? 'flex' : 'none';
     if (toolbar) toolbar.setInspectorActive(!collapsed);
     localStorage.setItem(INSPECTOR_COLLAPSED_KEY, String(collapsed));
-    setHudNotice(collapsed ? '属性检查器已收起 (Ctrl+] 或点击右侧拉手展开)' : '属性检查器已展开', 2000);
+    setHudNotice(collapsed ? t('hud.inspectorCollapsed') : t('hud.inspectorExpanded'), 2000);
     canvasComponent.handleResize();
   }
 
@@ -340,12 +340,12 @@ async function bootstrap() {
   hud.className = 'canvas-hud';
   hud.innerHTML = `
     <span class="hud-dot"></span>
-    <span id="hud-text">就绪：A 加点 | S 微调 (方向键 1px 精调) | D 删点 | 右键/中键拖拽平移 | 滚轮缩放 | F1 帮助</span>
+    <span id="hud-text">${t('hud.default')}</span>
   `;
   canvasWrapper.appendChild(hud);
 
   let hudTimer: number | null = null;
-  const defaultHudText = '就绪：A 加点 | S 微调 (方向键 1px 精调) | D 删点 | 右键/中键拖拽平移 | 滚轮缩放 | F1 帮助';
+  const getDefaultHudText = () => t('hud.default');
 
   function setHudNotice(text: string, duration: number = 3000) {
     const hudTextEl = document.getElementById('hud-text');
@@ -354,7 +354,7 @@ async function bootstrap() {
 
     if (hudTimer) clearTimeout(hudTimer);
     hudTimer = window.setTimeout(() => {
-      hudTextEl.textContent = defaultHudText;
+      hudTextEl.textContent = getDefaultHudText();
       hudTimer = null;
     }, duration);
   }
@@ -486,6 +486,10 @@ async function bootstrap() {
     updateWorkflowBar();
     updateFooter();
     updateDrawers();
+    const hudTextEl = document.getElementById('hud-text');
+    if (hudTextEl && !hudTimer) {
+      hudTextEl.textContent = getDefaultHudText();
+    }
   });
 
   // 6.2 显式分步推进状态机 (Step-by-Step Workflow State Machine)
@@ -523,28 +527,28 @@ async function bootstrap() {
   async function advanceToWorkflowStage(targetStage: WorkflowStage) {
     if (targetStage === 1) {
       currentStage = 1;
-      canvasComponent.setToolMode('pan');
       updateWorkflowBar();
+      canvasComponent.setToolMode('pan');
       canvasComponent.requestRender();
       if (!canvasComponent.data.imageSrc) {
         (document.getElementById('file-input-image') as HTMLInputElement)?.click();
       }
     } else if (targetStage === 2) {
       currentStage = 2;
-      canvasComponent.setToolMode('roi');
       updateWorkflowBar();
+      canvasComponent.setToolMode('roi');
       canvasComponent.requestRender();
       setHudNotice('👉 已进入 Step 2 数据有效区 (ROI) 划分！请拖拽手柄界定数据区或在侧栏新建多 ROI。', 4500);
     } else if (targetStage === 3) {
       currentStage = 3;
-      canvasComponent.setToolMode('ycalib');
       updateWorkflowBar();
+      canvasComponent.setToolMode('ycalib');
       canvasComponent.requestRender();
       setHudNotice('👉 已进入 Step 3 Y 轴标定！请在图上点选两点，或在右侧侧栏直接填入已知刻度与真实深度值。', 5000);
     } else if (targetStage === 4) {
       currentStage = 4;
-      canvasComponent.setToolMode('select');
       updateWorkflowBar();
+      canvasComponent.setToolMode('linefix');
       canvasComponent.requestRender();
       void refreshLineMask();
       setHudNotice('👉 已进入 Step 4 干扰清理！请在右侧侧栏选择去线强度、划定排除区或使用 K 键笔刷微调。', 4500);
@@ -1793,10 +1797,10 @@ async function bootstrap() {
         banner.style.cssText = 'position: fixed; top: 48px; left: 50%; transform: translateX(-50%); z-index: 9999;';
         banner.innerHTML = `
           <div class="app-toast-badge" style="border: 1px solid var(--accent-blue);">
-            <span>📋 发现上次未保存的草稿 (${draftTime}, 含 ${draft.data.columns.length} 个属种列)</span>
+            <span>${t('draft.found', { time: draftTime, count: draft.data.columns.length })}</span>
             <div style="display: flex; gap: 6px;">
-              <button id="btn-restore-draft" class="btn btn-primary" style="padding: 2px 8px; font-size: 10px;">恢复草稿</button>
-              <button id="btn-discard-draft" class="btn btn-secondary" style="padding: 2px 8px; font-size: 10px;">忽略</button>
+              <button id="btn-restore-draft" class="btn btn-primary" style="padding: 2px 8px; font-size: 10px;">${t('draft.restore')}</button>
+              <button id="btn-discard-draft" class="btn btn-secondary" style="padding: 2px 8px; font-size: 10px;">${t('draft.ignore')}</button>
             </div>
           </div>
         `;
@@ -1809,7 +1813,7 @@ async function bootstrap() {
           toolbar?.updateHistoryState();
           updateFooter();
           banner.remove();
-          setHudNotice('✅ 成功恢复上次自动暂存的项目草稿！', 3500);
+          setHudNotice(t('draft.restored'), 3500);
         });
         banner.querySelector('#btn-discard-draft')?.addEventListener('click', () => {
           localStorage.removeItem(AUTOSAVE_KEY);

@@ -88,7 +88,23 @@ def test_golden_journey_full_dom_lifecycle(e2e_server):
         if (step2Next) step2Next.click();
         await sleep(400);
 
-        // ================= Step 3 (YCalibPanel: 100% Sidebar, Zero Modals) =================
+        // ================= Step 3 (YCalibPanel: Click Y1 & Y2 on Canvas + Sidebar) =================
+        const cvs = document.querySelector('#geology-canvas');
+        if (cvs) {
+          const rect = cvs.getBoundingClientRect();
+          // Click point 1 (Y1) on canvas
+          cvs.dispatchEvent(new MouseEvent('mousedown', { button: 0, clientX: rect.left + 120, clientY: rect.top + 150, bubbles: true }));
+          window.dispatchEvent(new MouseEvent('mouseup', { button: 0, clientX: rect.left + 120, clientY: rect.top + 150, bubbles: true }));
+          await sleep(150);
+          // Click point 2 (Y2) on canvas
+          cvs.dispatchEvent(new MouseEvent('mousedown', { button: 0, clientX: rect.left + 120, clientY: rect.top + 350, bubbles: true }));
+          window.dispatchEvent(new MouseEvent('mouseup', { button: 0, clientX: rect.left + 120, clientY: rect.top + 350, bubbles: true }));
+          await sleep(150);
+        }
+
+        const pickedY1 = document.querySelector('#ycal-inp-top-px')?.value || '';
+        const pickedY2 = document.querySelector('#ycal-inp-bot-px')?.value || '';
+
         const topPx = document.querySelector('#ycal-inp-top-px');
         const topVal = document.querySelector('#ycal-inp-top-val');
         const botPx = document.querySelector('#ycal-inp-bot-px');
@@ -155,6 +171,8 @@ def test_golden_journey_full_dom_lifecycle(e2e_server):
 
         return JSON.stringify({
           completed_to_step8: Boolean(qaBanner),
+          picked_y1: pickedY1,
+          picked_y2: pickedY2,
           sheets: sheetsAttr ? sheetsAttr.split(',') : [],
           primary_roi: primaryAttr,
         });
@@ -168,6 +186,13 @@ def test_golden_journey_full_dom_lifecycle(e2e_server):
         pytest.fail(
             f"Pure DOM Golden journey evaluation failed to return valid JSON: {res_str} ({e})"
         )
+
+    assert data["picked_y1"] != "" and data["picked_y2"] != "", (
+        f"Canvas clicks in Step 3 must populate Y1 and Y2, got: {data['picked_y1']}, {data['picked_y2']}"
+    )
+    assert data["picked_y1"] != data["picked_y2"], (
+        "Y1 and Y2 must be distinct pixel rows"
+    )
 
     # Verify project archive physically generated from the end-to-end user state
     tar_export_res = session.export_multi_tar()

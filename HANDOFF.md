@@ -1,29 +1,21 @@
 # straditize 开发交接卡 (HANDOFF.md)
-- 更新时间：2026-09-25 14:30 | 分支 dev-v2-modern | HEAD cb832e4
+- 更新时间：2026-09-25 21:35 | 分支 dev-v2-modern | HEAD a8f450c
 - 规则：**分节追加** —— 只改自己那一节，严禁整文件覆盖或改写他节；每节 ≤8 行，全文 ≤50 行，超限时最旧节整段移入 `HANDOFF-archive/`。
 - 一键验证：`pixi run lint` ｜ `pixi run test` ｜ `pixi run test-e2e` ｜ `npm --prefix frontend run build` ｜ `npm --prefix frontend test` ｜ `pixi run python support/probe_truth/check_ticket_ownership.py`
-- 当前结果：**顶栏瘦身与全局设置弹窗（语言/外观/网关白名单/WebMCP）完成**；单元测试与 Edge E2E 测试全绿。
+- 当前结果：**8步工作流全闭环 + 5大审查病灶清零 + Y1/Y2靶心反馈 + 顶栏i18n全绿**；44项单测与9项Edge E2E全过。
 
-## [ERROR-PDF-START] 2026-09-25 11:20 — 错误体系整改、PDF多页指定与启动收敛
-- 拒绝偷懒 -32602：严格区分 语法(-32602)、状态缺失(-32001)、命名冲突(-32002)、算法中断(-32003)、文件错误(-32004)。
-- 修复引导透传：前端 `tError` 彻底保留后端修复引导并结构化显示；杜绝“参数不合法”单一弹窗。
-- 图片与单页/多页PDF：`load_image` 支持 Base64 上传；选 PDF 时弹窗输入页码，指定提取哪一页图版并渲染。
-- 启动收敛唯一化：统一为 `pixi run start`（固定 8765 端口/自动打开浏览器/同源 /mcp 与 SSE/顶栏退出按钮）。
-- 门禁验证：`test_error_guidance_and_pdf.py` 4/4 PASS；全量测试与拥有权全绿。
+## [TOPBAR-SETTINGS] 2026-09-25 15:45 — 启动收敛至 pixi run app 与全界面 i18n 即时无缝切换完成
+- 启动任务唯一化：`pixi.toml`、脚本与文档彻底删除 `start`/`rpc-server`/`desktop`，仅保留 `pixi run app` 单一入口。
+- 全界面 i18n 覆盖：顶栏各按钮/提示、8 步工作流标签/导引/操作按钮、底部状态栏、侧栏拉手全部接入 `t(...)`。
+- 零刷新无缝切换：设置内切换语言即时通知全局组件重绘，免刷新、免重启；`tests/e2e/test_settings.py` 严格验证。
+- 门禁验收全绿：Ruff lint PASS，前端构建与测试通过，E2E 浏览器真机测试 100% 通过。
 
-## [AUDIT-FIX-5DEFECTS] 2026-09-25 15:30 — 5大核心病灶彻底清零与全流程实操验收
-- 病灶1网格外推：`SplineInterpolator` 与 `GeologyCanvas` 按比例尺外推至完整 `[yMin, yMax]`，彻底消除截断误导。
-- 病灶2测试隔离：`conftest.py` 隔离临时配置，`~/.straditize/config.json` 恢复出厂 `remote_access_enabled: false`。
-- 病灶3假功能接线：`CleanupPanel.ts` 绑定 `[⛶ 划定排除区]` 与 `[🖌 K键画笔]`，画布联动与候选线复选打通。
-- 病灶4后端总出口：`PropertyPanel.ts` 导出与存项目全面直连 `export.tar`、`export.csv`、`export.r`，废除前端手搓。
-- 病灶5防抖与Loading：Step 4 推进 Step 5 按钮立即禁用并显示 `⏳ 正在切分属种基线...`，彻底消除假死与连击。
-- 门禁全绿：44 项单元测试 PASS，全套 9 项 MS Edge E2E 测试全部 100% 通过。
-
-## [TOPBAR-SETTINGS] 2026-09-25 14:35 — 顶栏瘦身、全局设置弹窗与退出一致性完成
-- 顶栏与启动收敛：唯一主入口定为 `pixi run app`；顶栏右侧仅留 [OCR] [年代] [导出] [⚙ 设置] [退出]；`graceful_shutdown` 单一清理。
-- 全局设置模态框：`SettingsModal.ts` 整合通用偏好（i18n即时重绘/暗黑深浅主题）、远程网关（开关/通配符白名单）、后端与WebMCP端点。
-- 后端配置持久化：`config.py` 持久化 `~/.straditize/config.json`；`system.getConfig`/`system.updateConfig` 动态热更新内网/Tailscale 白名单。
-- 自动化门禁测试：`tests/test_remote_settings.py` 4/4 PASS（403严格拦截/白名单动态穿透）；`tests/e2e/test_settings.py` Edge E2E 验证全绿。
+## [AUDIT-FIX-UX] 2026-09-25 21:35 — 5大病灶清零、Y1/Y2选点靶心反馈与浮动工具条收敛
+- 病灶清零：网格外推至完整 `[roi.yMin, roi.yMax]`（`SplineInterpolator.ts:183`）；`conftest.py` 隔离临时配置；Step 4 排除区/画笔接线与分列防抖 Loading 完成；`PropertyPanel.ts` 直连后端 `export.tar/csv/r`。
+- Y1/Y2 强视觉反馈：`GeologyCanvas.ts:1968` 绘制 Y1(橙)/Y2(绿) 双环靶心 + 深色胶囊铭牌 + 鼠标实时准星预览；`YCalibPanel.ts` 支持单点/双点实时回填与画布双向联动。
+- 浮动工具栏收敛：移除左下角冗余 `标定(Y)` 与 `ROI(R)`，按当前步骤 `display:none` 动态显隐（`GeologyCanvas.ts:2530`）。
+- 停滞断点：W1–W5 主干（T01–T11, T14）已全部竣工；仅剩延后增强项 T12（`straditize_core/layers.py` 双层放大曲线分层）与年代弹窗手工控制点（`AgeDepthModal.ts`）。
+- 下一步原子动作：若开启 T12，新建 `straditize_core/layers.py` 与 `frontend/src/components/steps/LayersPanel.ts` 实现色相分组双峰阈值分层；否则直接进入发版打包验收（`pixi run build-windows`）。
 
 ## 黑名单（跨会话共享，只追加不覆盖）
 - ❌ 文字/描边严禁写死 `#fff`/`#38bdf8`/`#f59e0b`（日间隐形或低对比），必须用 `--text-heading`/`--accent-*`；**但画布叠加层例外**——它叠在任意用户图上，主题色会消失，须用固定高对比色 + 深色光晕；
@@ -38,6 +30,6 @@
 - ❌ 契约字段只能来自 `docs/plans/2026-09-20-frozen-contracts.md`（**单子不得自行发明字段**）；ROI 上的表单值/继承值严禁被当作事实源；特性单严禁写"无人可写"的共享文件（`support/probe_truth/check_ticket_ownership.py` 机器校验，发单前必须跑通）；掩膜优先级**排除区绝对优先**，restore 落在排除区内必须拒绝或提示，**不得静默无效**。
 
 ## 索引
-- 历史归档：`HANDOFF-archive/`（含 `2026-09-20-topbar-slimming.md`、`2026-09-20-agedepth-fabrication-audit.md`、`2026-09-20-taxadict-ocr-vocabulary.md`、`2026-09-20-ui-button-visibility.md`、`2026-09-20-agedepth-median-channels.md`、`2026-09-20-roi-calib-decoupling.md`、`2026-09-24-t08-samples.md`、`2026-09-24-t09-qa-summary.md`、`2026-09-24-t10-export.md`、`2026-09-25-t11-naming.md`）｜ 规范：`AGENTS.md`
+- 历史归档：`HANDOFF-archive/`（含 `2026-09-20-*`、`2026-09-24-t08/t09/t10`、`2026-09-25-t11-naming.md`、`2026-09-25-error-pdf-start.md`）｜ 规范：`AGENTS.md`
 - 设计规范：`docs/ARCHITECTURE.md`（§6.1 ROI/标定数据模型、§7.1 线去除）｜ 协议：`docs/JSON_RPC_SPECIFICATION.md`（§4.6–4.8）
-- **8 步重构三件套**：设计稿 / **冻结契约 v1.1（唯一字段事实源）** / 任务单 v2.1 —— 均在 `docs/plans/2026-09-20-*`
+- **8 步重构三件套**：设计稿 / **冻结契约 v1.3（唯一字段事实源）** / 任务单 v2.1 —— 均在 `docs/plans/2026-09-20-*`
