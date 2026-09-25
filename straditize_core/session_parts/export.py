@@ -8,6 +8,7 @@ Strictly adheres to:
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 import os
@@ -358,7 +359,13 @@ class ExportMixin:
                 "success": True,
             }
 
-        return {"data": tar_bytes, "size": len(tar_bytes), "success": True}
+        b64_tar = base64.b64encode(tar_bytes).decode("ascii")
+        return {
+            "data": tar_bytes,
+            "tar_base64": b64_tar,
+            "size": len(tar_bytes),
+            "success": True,
+        }
 
     def export_multi_xlsx(
         self,

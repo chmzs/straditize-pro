@@ -1,22 +1,8 @@
 # straditize 开发交接卡 (HANDOFF.md)
-- 更新时间：2026-09-25 11:20 | 分支 dev-v2-modern | HEAD b0000de
+- 更新时间：2026-09-25 14:30 | 分支 dev-v2-modern | HEAD cb832e4
 - 规则：**分节追加** —— 只改自己那一节，严禁整文件覆盖或改写他节；每节 ≤8 行，全文 ≤50 行，超限时最旧节整段移入 `HANDOFF-archive/`。
 - 一键验证：`pixi run lint` ｜ `pixi run test` ｜ `pixi run test-e2e` ｜ `npm --prefix frontend run build` ｜ `npm --prefix frontend test` ｜ `pixi run python support/probe_truth/check_ticket_ownership.py`
-- 当前结果：**错误码体系整改 + 单页PDF原生支持 + 启动收敛完成**；`tests/test_error_guidance_and_pdf.py` 3/3 PASS ｜ 全量门禁全绿。
-
-## [8STEP-W4-T10] 2026-09-24 23:30 — 顶栏导出体系与就绪清单完成 (T10)
-- 多 ROI 规范导出：XLSX 每 ROI 一张 sheet（支持中文），LiPD 每 ROI 一张 measurementTable，列名无前缀。
-- 主 ROI 绑定：`.tar` 内 `data.csv` 严格绑定 `primary_roi_id`（改主 ROI 随之变），各 ROI 独立为 `data/<roi>.csv`。
-- 导出就绪清单：`PropertyPanel.ts` 与 `ExportReadinessPanel.ts` 接入顶栏总出口，自动扫描未命名/无列 ROI。
-- 门禁验收：`tests/test_multi_roi_export.py` 6/6 全过；`tests/e2e/test_export.py` Edge L4 真机全通过。
-- 战略进展：主工作流 8 步闭环 + 顶栏数据交付总出口全线打通！
-
-## [8STEP-W4-T11] 2026-09-25 10:45 — 属种命名、区间归属、旧债务清零与 WebMCP 完成 (T11)
-- 区间归属对账：`ocr/engine.py` 实现 `[startX, endX)` 区间包含与乱序无关性，数量不等拒绝配对并报三类对账。
-- 旧债务物理清零：`Sidebar.ts` 与 `main.ts` 彻底删除 `▲/▼` 与批量导入（`grep` 检出为 0）；同 ROI 重名报 `-32602`。
-- Step 5 与逐列点名：`NamingPanel.ts` 挂载 Step 5；左栏输入框绑定 `col.id`，获焦时画布即时高亮对应列。
-- CLI 升级 WebMCP：`mcp_server.py` 与 `cli.py` 提供 14 个 8 步工作流 MCP 工具，支持活体 Web 会话桥接与 `window.webMCP`。
-- 门禁验收：`test_label_snapping.py` 7/7 全过；`test_e2e/test_naming.py` 等全套 7 项 Edge E2E 全绿。
+- 当前结果：**顶栏瘦身与全局设置弹窗（语言/外观/网关白名单/WebMCP）完成**；单元测试与 Edge E2E 测试全绿。
 
 ## [ERROR-PDF-START] 2026-09-25 11:20 — 错误体系整改、PDF多页指定与启动收敛
 - 拒绝偷懒 -32602：严格区分 语法(-32602)、状态缺失(-32001)、命名冲突(-32002)、算法中断(-32003)、文件错误(-32004)。
@@ -24,6 +10,18 @@
 - 图片与单页/多页PDF：`load_image` 支持 Base64 上传；选 PDF 时弹窗输入页码，指定提取哪一页图版并渲染。
 - 启动收敛唯一化：统一为 `pixi run start`（固定 8765 端口/自动打开浏览器/同源 /mcp 与 SSE/顶栏退出按钮）。
 - 门禁验证：`test_error_guidance_and_pdf.py` 4/4 PASS；全量测试与拥有权全绿。
+
+## [GOLDEN-JOURNEY-T14] 2026-09-25 14:00 — 生产真图鲁棒性与全流程 E2E 完成 (T14)
+- 全地形图谱套件：`test_corpus_robustness.py` 覆盖 5 张真实复杂文献大图，全流程流水线 0 崩溃，去线安全性与双 ROI 隔离全过。
+- Golden Journey E2E：`test_golden_journey.py` 经原生 MS Edge 驱动，从载图、双 ROI、标尺、排除区、分列、采样到校验导出全线打通。
+- 归档解压物理核验：导出的 `.tar` 真实解包，`data.csv` 逐字节匹配 Primary ROI，分表无前缀，数据真实无损。
+- 门禁结果：`tests/test_corpus_robustness.py` 7/7 PASS ｜ `tests/e2e/test_golden_journey.py` Edge L4 PASS (12.82s)。
+
+## [TOPBAR-SETTINGS] 2026-09-25 14:30 — 顶栏瘦身与全局设置弹窗（语言/外观/网关白名单/WebMCP）完成
+- 顶栏极致瘦身：移除 [中/EN]、日夜间切换图标、[RPC] 胶囊；撤销重做移至左组；右侧仅留 [OCR] [年代] [导出] [⚙ 设置] [退出]。
+- 全局设置模态框：`SettingsModal.ts` 整合通用偏好（i18n即时重绘/暗黑深浅主题）、远程网关（开关/通配符白名单）、后端与WebMCP端点。
+- 后端配置持久化：`config.py` 持久化 `~/.straditize/config.json`；`system.getConfig`/`system.updateConfig` 动态热更新内网/Tailscale 白名单。
+- 自动化门禁测试：`tests/test_remote_settings.py` 4/4 PASS（403严格拦截/白名单动态穿透）；`tests/e2e/test_settings.py` Edge E2E 验证全绿。
 
 ## 黑名单（跨会话共享，只追加不覆盖）
 - ❌ 文字/描边严禁写死 `#fff`/`#38bdf8`/`#f59e0b`（日间隐形或低对比），必须用 `--text-heading`/`--accent-*`；**但画布叠加层例外**——它叠在任意用户图上，主题色会消失，须用固定高对比色 + 深色光晕；
@@ -38,6 +36,6 @@
 - ❌ 契约字段只能来自 `docs/plans/2026-09-20-frozen-contracts.md`（**单子不得自行发明字段**）；ROI 上的表单值/继承值严禁被当作事实源；特性单严禁写"无人可写"的共享文件（`support/probe_truth/check_ticket_ownership.py` 机器校验，发单前必须跑通）；掩膜优先级**排除区绝对优先**，restore 落在排除区内必须拒绝或提示，**不得静默无效**。
 
 ## 索引
-- 历史归档：`HANDOFF-archive/`（含 `2026-09-20-topbar-slimming.md`、`2026-09-20-agedepth-fabrication-audit.md`、`2026-09-20-taxadict-ocr-vocabulary.md`、`2026-09-20-ui-button-visibility.md`、`2026-09-20-agedepth-median-channels.md`、`2026-09-20-roi-calib-decoupling.md`、`2026-09-24-t08-samples.md`、`2026-09-24-t09-qa-summary.md`）｜ 规范：`AGENTS.md`
+- 历史归档：`HANDOFF-archive/`（含 `2026-09-20-topbar-slimming.md`、`2026-09-20-agedepth-fabrication-audit.md`、`2026-09-20-taxadict-ocr-vocabulary.md`、`2026-09-20-ui-button-visibility.md`、`2026-09-20-agedepth-median-channels.md`、`2026-09-20-roi-calib-decoupling.md`、`2026-09-24-t08-samples.md`、`2026-09-24-t09-qa-summary.md`、`2026-09-24-t10-export.md`、`2026-09-25-t11-naming.md`）｜ 规范：`AGENTS.md`
 - 设计规范：`docs/ARCHITECTURE.md`（§6.1 ROI/标定数据模型、§7.1 线去除）｜ 协议：`docs/JSON_RPC_SPECIFICATION.md`（§4.6–4.8）
 - **8 步重构三件套**：设计稿 / **冻结契约 v1.1（唯一字段事实源）** / 任务单 v2.1 —— 均在 `docs/plans/2026-09-20-*`
