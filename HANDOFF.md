@@ -2,16 +2,16 @@
 - 更新时间：2026-09-25 21:35 | 分支 dev-v2-modern | HEAD a8f450c
 - 规则：**分节追加** —— 只改自己那一节，严禁整文件覆盖或改写他节；每节 ≤8 行，全文 ≤50 行，超限时最旧节整段移入 `HANDOFF-archive/`。
 - 一键验证：`pixi run lint` ｜ `pixi run test` ｜ `pixi run test-e2e` ｜ `npm --prefix frontend run build` ｜ `npm --prefix frontend test` ｜ `pixi run python support/probe_truth/check_ticket_ownership.py`
-- 当前结果：**8步工作流全闭环 + 5大审查病灶清零 + Y1/Y2靶心反馈 + 顶栏i18n全绿**；后端全量 254 项**全绿（0 failed / 0 xfailed，隔离区已清空）** + 前端 4 组自检，四条门禁 PASS —— 逐条数字见 [QA-RESTRUCTURE] 节（原"44项单测"为白名单口径的旧数，已更正）。
+- 当前结果：**8步工作流全闭环 + 5大审查病灶清零 + Y1/Y2靶心反馈 + 顶栏i18n全绿**；后端全量 266 项**全绿（0 failed / 0 xfailed，隔离区已清空）** + 前端 4 组自检，四条门禁 PASS —— 逐条数字见 [QA-RESTRUCTURE] 节（原"44项单测"为白名单口径的旧数，已更正）。
 
 ## [QA-RESTRUCTURE] 2026-09-26 — 门禁改全量、测试三层分目录、配置并入 pyproject
-- 门禁真跑：`pixi run test` 原是手写 16 文件白名单（只覆盖 196/248，且自身 7 红），已改为全量 254 项；CI 补 `npm test`（前端测试此前从不执行）。
+- 门禁真跑：`pixi run test` 原是手写 16 文件白名单（只覆盖 196/248，且自身 7 红），已改为全量（现 266 项）；CI 补 `npm test`（前端测试此前从不执行）。
 - 隔离区 `tests/quarantine.txt` **已清空（0 条）**：13 项逐个溯源后全部修复 —— [A] tar 返回 base64 测试补解码 ｜ [B] `load_image` 自动建默认 ROI 致同名冲突/坐标漂移，测试改断言不变量 ｜ [C] `73e73b7` 改 LiPD/XLSX API 与结构，`session.py` 调用方与测试断言同步 ｜ [D] 关停闩锁为进程级全局致跨测试污染，改 per-server ｜ [E] 新发现 `detect_columns` 不同步 ROI 记录，`roi_update` 用旧 xlim 覆盖（产品补同步）。
 - 结构：`tests/{unit 21, integration 6, e2e, data/{figures,truth,corpus}}`；6 个非测试脚本移 `scripts/`；12 文件去 sys.path 样板改由 `tests/conftest.py` 注入；`ruff.toml` 并入 `pyproject.toml`；根目录 3 张验证截图已 git rm。
-- 验证：`pixi run lint` PASS ｜ `pixi run test` **254 passed / 0 failed / 0 xfailed（隔离区空，非 xfail 掩盖）** ｜ `npm --prefix frontend test` 19 项 PASS ｜ `npm --prefix frontend run build` PASS。
+- 验证：`pixi run lint` PASS ｜ `pixi run test` **266 passed / 0 failed / 0 xfailed（隔离区空，非 xfail 掩盖）** ｜ `npm --prefix frontend test` PASS ｜ `npm --prefix frontend run build` PASS。
 - 已修（原"范围外待决策"两项）：① `frontend/test-core.js` 5 个复刻类（History/Viewport/Display/Glossary/Caption）+ UStar 本地实现全部改为 `await import` 真 `.ts` 模块，diatom 改用真实导出而非 readFileSync 抠文本，仅剩 2 处就地标注的非模块断言；② `session.py` 范例改读 `straditize_core/assets/age_models/`，已入 package-data 与 PyInstaller datas。
 - 连带挖出并修复：`pyproject` 的 `exclude = ["straditize*"]` 因 fnmatch 也匹配 `straditize_core`，**wheel 里 0 个 .py、只剩 dist-info**（pip install 形同虚设）；同时漏配的 `ocr/data/diatom_genera.json` 也补进 package-data。现 wheel 55 个 .py + age_models 3 + ocr/models 3 + ocr/data 1，已实测。
-- 已拆两个 commit 入库：`f0c6e26` 补录 09-25~26 遗留功能批（53 文件，5 个与本批混写的文件按内容还原后入库），`3b83a61` 本批测试重组与打包修复；双向泄漏扫描均为空，四条门禁在提交后复跑全绿。剩余技术债：18 处非 `import type` 的类型导入（Node 加载 `.ts` 会 `ERR_MODULE_NOT_FOUND`，仅 `Viewport.ts` 已修）。
+- 已入库 5 个 commit（`f0c6e26` 补录 09-25~26 遗留批 / `3b83a61` 测试重组 / `6597709` 交接 / `90481d0` 隔离区 13 项全修 / `e6fda9a` 列 id 寻址 + 12 项契约测试），四条门禁在每次提交后复跑全绿。**剩余技术债**：① 111/255 个公开 API 零覆盖（下一批优先 `agedepth.*`/`samples.*`/`metadata.*`）；② 21 个 RPC 端点前端与测试零引用（`column.remove`/`naming.renameColumn`/`image.switchPdfPage`/`samples.*` 等，部分仅经 WebMCP 暴露）；③ `project_new` docstring 称清"全部会话状态"但不清 ROI/样点/元数据，与前端注释口径不一致；④ 18 处非 `import type` 类型导入（仅 `Viewport.ts` 已修）。
 
 ## [TOPBAR-SETTINGS] 2026-09-26 00:30 — 导出拦截与左栏文字间距两大体验瑕疵优化完成
 - 导出拦截温和化：未提取数据时点击顶栏 [💾 导出]，彻底消除后端原生 -32001 弹窗，平滑打开导出面板并在就绪清单清晰标出待完善项。
