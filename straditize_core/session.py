@@ -2075,10 +2075,29 @@ class StraditizeSession(
         self.control_points[c_idx] = {}
         return {"col_index": c_idx, "column": col_dict}
 
+    def _resolve_col_index(self, col_index: int | str) -> int:
+        """列的两种寻址：``col_index``(int) 或列 id(如 ``roi_1_col01``)。
+
+        ``column_remove``/``column_update``/``point_add``/``point_remove`` 的签名
+        都写着 ``int | str``，若直接 ``int()``，收到真实列 id 会抛 ValueError，
+        被 dispatcher 兜成 -32603 内部错误而不是干净的 -32602 参数错误。
+        """
+        if isinstance(col_index, bool):
+            raise JsonRpcError(INVALID_PARAMS, f"Invalid column reference: {col_index!r}")
+        if isinstance(col_index, int):
+            return col_index
+        text = str(col_index).strip()
+        if text.lstrip("-").isdigit():
+            return int(text)
+        for col in getattr(self, "columns", []):
+            if col.get("id") == text:
+                return int(col["col_index"])
+        raise JsonRpcError(INVALID_PARAMS, f"Unknown column: {col_index!r}")
+
     def column_remove(self, col_index: int | str) -> dict[str, Any]:
         """Removes a column from the project."""
         self._record_history("Remove column")
-        target_idx = int(col_index)
+        target_idx = self._resolve_col_index(col_index)
         if 0 <= target_idx < len(self.columns):
             self.columns.pop(target_idx)
             if target_idx in self.control_points:
@@ -2096,7 +2115,7 @@ class StraditizeSession(
     ) -> dict[str, Any]:
         """Updates column properties."""
         self._record_history("Update column")
-        target_idx = int(col_index)
+        target_idx = self._resolve_col_index(col_index)
         if 0 <= target_idx < len(self.columns):
             col = self.columns[target_idx]
             for k, v in updates.items():
@@ -2123,7 +2142,7 @@ class StraditizeSession(
     ) -> dict[str, Any]:
         """Adds or updates a control point in a column."""
         self._record_history("Add point")
-        c_idx = int(col_index)
+        c_idx = self._resolve_col_index(col_index)
         y_int = round(y)
         if c_idx not in self.control_points:
             self.control_points[c_idx] = {}
@@ -2152,7 +2171,7 @@ class StraditizeSession(
     ) -> dict[str, Any]:
         """Removes a control point."""
         self._record_history("Remove point")
-        c_idx = int(col_index)
+        c_idx = self._resolve_col_index(col_index)
         y_int = round(y)
         if c_idx in self.control_points and y_int in self.control_points[c_idx]:
             del self.control_points[c_idx][y_int]
