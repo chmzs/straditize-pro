@@ -178,7 +178,15 @@ export class SplineInterpolator {
       return { depths, yPositions };
     }
 
-    const interval = cal.depthInterval && cal.depthInterval > 0 ? cal.depthInterval : 2;
+    const totalSpan = Math.abs(bottom - top);
+    let interval = cal.depthInterval && cal.depthInterval > 0 ? cal.depthInterval : 2;
+    if (cal.depthInterval === undefined || (cal.depthInterval === 2 && totalSpan > 200)) {
+      if (totalSpan > 5000) interval = 500;
+      else if (totalSpan > 2000) interval = 200;
+      else if (totalSpan > 1000) interval = 100;
+      else if (totalSpan > 500) interval = 50;
+      else if (totalSpan > 200) interval = 20;
+    }
 
     // 若提供了数据有效区 ROI，则网格线依据标尺比例尺外推至整个数据区，彻底消除"截断图谱"错觉
     if (roi && roi.yMin !== undefined && roi.yMax !== undefined && roi.yMax > roi.yMin) {

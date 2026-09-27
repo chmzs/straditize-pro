@@ -2,7 +2,7 @@ import { Column, DataRoi, DiagramCalibration, DiagramData } from '../types/polle
 import { RpcClient } from '../services/RpcClient';
 import { SplineInterpolator } from '../core/SplineInterpolator';
 import { CoordinateSystem } from '../core/CoordinateSystem';
-import { TarArchive, TarFileEntry } from '../core/TarArchive';
+import { TarArchive } from '../core/TarArchive';
 import { computeExportReadiness, renderExportReadiness } from './steps/ExportReadinessPanel';
 
 export class PropertyPanel {
@@ -806,170 +806,11 @@ export class PropertyPanel {
           return;
         }
       }
+      throw new Error('export.tar 返回的数据不合法');
     } catch (err: any) {
-      console.warn('后端 export.tar 调用未成功，执行前端兼容打包:', err);
+      console.error('后端 export.tar 导出失败:', err);
+      alert('❌ 科学项目包 (.tar) 导出失败：' + (err.message || err));
     }
-
-    const cal = this.data.calibration;
-    const roi = this.data.roi;
-
-    // 1. manifest.json (元数据、版本与时间戳)
-    const manifestJson = {
-      version: '2.0.0',
-      tool: 'straditize pro',
-      timestamp: new Date().toISOString(),
-      schema_version: '2.0',
-    };
-
-    // 2. straditize.json (矢量项目模型：ROI、列、两点刻度、控制拐点)
-    //    取数区域与深度标定分两个键写入 —— 二者互不推导，读回来也不许互相兜底。
-    const straditizeJson = {
-      version: '2.0.0',
-      image: {
-        path: 'image/original.png',
-        width: this.data.imageWidth,
-        height: this.data.imageHeight,
-      },
-      depth_calibration: {
-        is_calibrated: cal.isCalibrated,
-        top_px: cal.top_px,
-        bottom_px: cal.bottom_px,
-        top_cm: cal.top_cm,
-        bottom_cm: cal.bottom_cm,
-        unit: cal.unit || 'cm',
-        depthInterval: cal.depthInterval || 2,
-        depthGridEnabled: cal.depthGridEnabled ?? true,
-        customDepths: cal.customDepths ?? [],
-      },
-      roi: {
-        x: roi.xMin,
-        y: roi.yMin,
-        w: roi.xMax - roi.xMin,
-        h: roi.yMax - roi.yMin,
-      },
-      line_removal: {
-        corrections: this.data.lineCorrections,
-      },
-      columns: this.data.columns.map((col) => ({
-        id: col.id,
-        species: col.name,
-        name: col.name,
-        color: col.color,
-        visible: col.visible,
-        scale_type: col.scale_type || 'linear',
-        startX: col.startX,
-        startValue: col.startValue ?? (col.scaleCalib?.originVal ?? 0),
-        tickEndX: col.tickEndX ?? col.endX,
-        tickValue: col.tickValue ?? (col.scaleCalib?.calibVal ?? col.maxPercent ?? 100),
-        endX: col.endX,
-        curveType: col.curveType,
-        unit: col.unit,
-        points: (col.controlPoints || []).map((pt) => ({
-          x: pt.x,
-          y: pt.y,
-          value: pt.value ?? CoordinateSystem.imageXToValue(pt.x, col),
-          kind: pt.kind || (pt.type === 'manual' || pt.isManual ? 'manual' : 'peak'),
-          valid_segment: pt.valid_segment ?? true,
-        })),
-        controlPoints: col.controlPoints,
-        scaleCalib: col.scaleCalib,
-      })),
-      activeTaxaId: this.data.activeTaxaId,
-    };
-
-    const entries: TarFileEntry[] = [];
-
-    // 1. 添加 manifest.json
-    entries.push({
-      name: 'manifest.json',
-      data: new TextEncoder().encode(JSON.stringify(manifestJson, null, 2)),
-    });
-
-    // 2. 添加 straditize.json
-    entries.push({
-      name: 'straditize.json',
-      data: new TextEncoder().encode(JSON.stringify(straditizeJson, null, 2)),
-    });
-
-    // 3. 将当前底图转为二进制加入 tar (存为 image/original.png)
-    try {
-      if (this.data.imageSrc) {
-        let imageBytes: Uint8Array | null = null;
-        if (this.data.imageSrc.startsWith('data:')) {
-          const parts = this.data.imageSrc.split(',');
-          const binStr = atob(parts[1] || '');
-          const len = binStr.length;
-          const u8 = new Uint8Array(len);
-          for (let i = 0; i < len; i++) u8[i] = binStr.charCodeAt(i);
-          imageBytes = u8;
-        } else {
-          const resp = await fetch(this.data.imageSrc);
-          const buf = await resp.arrayBuffer();
-          imageBytes = new Uint8Array(buf);
-        }
-
-        if (imageBytes) {
-          entries.push({
-            name: 'image/original.png',
-            data: imageBytes,
-          });
-        }
-      }
-    } catch (err) {
-      console.warn('Failed to embed raw image into project tar:', err);
-    }
-
-    // 4. 添加标准 CSV 表格 data.csv (首列为深度，未出现属种严格填 0.0)
-    const csvContent = this.generateStandardCsv();
-    entries.push({
-      name: 'data.csv',
-      data: new TextEncoder().encode(csvContent),
-    });
-
-    // 5. 添加配套 R 绘图脚本 plot_strat.R (基于 rioja::strat.plot)
-    const rScript = PropertyPanel.generateRScript(this.data.columns, this.data.calibration.unit || 'cm');
-    entries.push({
-      name: 'plot_strat.R',
-      data: new TextEncoder().encode(rScript),
-    });
-
-    // 6. 添加说明文档 README.txt
-    const readmeText = `Straditize Pro - Stratigraphic Project Archive (POSIX UStar .tar)
-================================================================
-
-Archive File Hierarchy:
------------------------
-manifest.json      - Metadata, tool version, and timestamp.
-image/original.png - High-resolution original stratigraphic diagram image.
-straditize.json    - Full vector project model (ROI, columns, control points, calibrations).
-data.csv           - Calibrated stratigraphic abundance matrix (Depth in 1st column, unobserved taxa = 0.0).
-plot_strat.R       - Automated R script to render publication-quality diagram via rioja::strat.plot.
-README.txt         - Archive documentation and scientific notices.
-
-CRITICAL SCIENTIFIC NOTICES (Section 八):
-----------------------------------------
-1. In data.csv, unobserved taxa are strictly encoded as 0.0 (never NA).
-2. Before taking log transformations or log-ratio calculations, please add an appropriate pseudocount (e.g. +0.01 or +0.1) to avoid log(0) undefined errors.
-
-Reproduce Stratigraphic Diagram in R:
--------------------------------------
-1. Extract tar archive:  tar -xf <filename>.tar
-2. Run script:           Rscript plot_strat.R
-`;
-    entries.push({
-      name: 'README.txt',
-      data: new TextEncoder().encode(readmeText),
-    });
-
-    // 7. 打包为开放标准 .tar 并触发下载
-    const tarData = TarArchive.create(entries);
-    const blob = new Blob([tarData as unknown as BlobPart], { type: 'application/x-tar' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `straditize_project_${Date.now()}.tar`;
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
   /**

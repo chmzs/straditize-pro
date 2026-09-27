@@ -361,7 +361,7 @@ class ExportMixin:
 
         b64_tar = base64.b64encode(tar_bytes).decode("ascii")
         return {
-            "data": tar_bytes,
+            "data": b64_tar,
             "tar_base64": b64_tar,
             "size": len(tar_bytes),
             "success": True,
@@ -396,12 +396,25 @@ class ExportMixin:
                         "age_max": pred.get("age_max", []),
                     }
                 )
+                if getattr(age_depth_model, "has_envelope", False) and not any(t.get("name") == "Age_Uncertainty_U1000" for t in ensemble_tables):
+                    try:
+                        ens = age_depth_model.generate_age_ensemble(
+                            sample_depths=depths,
+                            n_ensembles=1000,
+                            name="Age_Uncertainty_U1000",
+                        )
+                        if ens and ens.get("data"):
+                            ensemble_tables = list(ensemble_tables) + [ens]
+                    except Exception as ex:
+                        pass
 
         selected_ensembles = None
         if include_ensemble_names:
             selected_ensembles = [
                 t for t in ensemble_tables if t.get("name") in include_ensemble_names
             ]
+        elif ensemble_tables:
+            selected_ensembles = ensemble_tables
 
         xlsx_bytes = export_scientific_xlsx(
             meta_info=paper_meta,
@@ -418,6 +431,7 @@ class ExportMixin:
             "success": True,
             "size_bytes": len(xlsx_bytes),
             "output_path": os.path.abspath(output_path) if output_path else None,
+            "data": xlsx_bytes if not output_path else None,
         }
 
     def export_multi_lipd(

@@ -4,11 +4,10 @@
 - 一键验证：`pixi run lint` ｜ `pixi run test` ｜ `pixi run test-e2e` ｜ `npm --prefix frontend run build` ｜ `npm --prefix frontend test` ｜ `pixi run python support/probe_truth/check_ticket_ownership.py`
 - 当前结果：**8步工作流全闭环 + 5大审查病灶清零 + Y1/Y2靶心反馈 + 顶栏i18n全绿**；44项单测与9项Edge E2E全过。
 
-## [TOPBAR-SETTINGS] 2026-09-25 15:45 — 启动收敛至 pixi run app 与全界面 i18n 即时无缝切换完成
-- 启动任务唯一化：`pixi.toml`、脚本与文档彻底删除 `start`/`rpc-server`/`desktop`，仅保留 `pixi run app` 单一入口。
-- 全界面 i18n 覆盖：顶栏各按钮/提示、8 步工作流标签/导引/操作按钮、底部状态栏、侧栏拉手全部接入 `t(...)`。
-- 零刷新无缝切换：设置内切换语言即时通知全局组件重绘，免刷新、免重启；`tests/e2e/test_settings.py` 严格验证。
-- 门禁验收全绿：Ruff lint PASS，前端构建与测试通过，E2E 浏览器真机测试 100% 通过。
+## [TOPBAR-SETTINGS] 2026-09-26 00:30 — 导出拦截与左栏文字间距两大体验瑕疵优化完成
+- 导出拦截温和化：未提取数据时点击顶栏 [💾 导出]，彻底消除后端原生 -32001 弹窗，平滑打开导出面板并在就绪清单清晰标出待完善项。
+- 属种栏空状态排版：重构 `sidebar-empty-hint` 为弹性纵向布局，设置独立文本容器与 `gap: 10px`，彻底杜绝图标与引导文字挨近重叠。
+- 门禁全绿：Ruff lint PASS，前端打包与自检通过，60 项核心单测 PASS，MS Edge E2E 自动化测试 100% 通过。
 
 ## [AUDIT-FIX-UX] 2026-09-25 21:35 — 5大病灶清零、Y1/Y2选点靶心反馈与浮动工具条收敛
 - 病灶清零：网格外推至完整 `[roi.yMin, roi.yMax]`（`SplineInterpolator.ts:183`）；`conftest.py` 隔离临时配置；Step 4 排除区/画笔接线与分列防抖 Loading 完成；`PropertyPanel.ts` 直连后端 `export.tar/csv/r`。

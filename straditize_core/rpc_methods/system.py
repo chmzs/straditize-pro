@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import threading
 import time
 from typing import Any
 
@@ -17,11 +15,10 @@ def register(dispatcher: Any, session: Any) -> None:
         if not getattr(session, "is_desktop_mode", False):
             raise JsonRpcError(403, "Shutdown is only permitted in desktop mode.")
 
-        def _delayed():
-            time.sleep(0.5)
-            os._exit(0)
+        from ..rpc_server import graceful_shutdown
 
-        threading.Thread(target=_delayed, daemon=True).start()
+        app_server = getattr(session, "server", None)
+        graceful_shutdown(server=app_server, exit_code=0, delayed_seconds=0.5)
         return {"success": True, "message": "Server shutting down..."}
 
     dispatcher.register_method("shutdown", rpc_shutdown)
@@ -183,3 +180,69 @@ def register(dispatcher: Any, session: Any) -> None:
         return {"reset": True}
 
     dispatcher.register_method("core.reset", reset_session)
+
+    def rpc_get_config() -> dict[str, Any]:
+        from ..config import load_config
+
+        cfg = load_config()
+        server = getattr(session, "server", None)
+        port = (
+            getattr(server, "actual_port", getattr(server, "port", 8765))
+            if server
+            else 8765
+        )
+        host = getattr(server, "host", "127.0.0.1") if server else "127.0.0.1"
+        return {
+            "remote_access_enabled": cfg.get("remote_access_enabled", False),
+            "allowed_hosts": cfg.get("allowed_hosts", ["127.0.0.1", "localhost"]),
+            "locale": cfg.get("locale", "zh-CN"),
+            "theme": cfg.get("theme", "light"),
+            "rpc_endpoint": f"http://127.0.0.1:{port}/rpc",
+            "webmcp_endpoint": "/mcp",
+            "server_bound_host": host,
+            "server_bound_port": port,
+            "is_desktop_mode": getattr(session, "is_desktop_mode", False),
+            "connected": True,
+        }
+
+    dispatcher.register_method("system.getConfig", rpc_get_config)
+
+    def rpc_update_config(
+        remote_access_enabled: bool | None = None,
+        allowed_hosts: list[str] | str | None = None,
+        locale: str | None = None,
+        theme: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        import re
+        from ..config import save_config
+
+        updates: dict[str, Any] = {}
+        if remote_access_enabled is not None:
+            updates["remote_access_enabled"] = bool(remote_access_enabled)
+        if allowed_hosts is not None:
+            if isinstance(allowed_hosts, str):
+                parsed = [
+                    h.strip() for h in re.split(r"[,;\n\r]+", allowed_hosts) if h.strip()
+                ]
+                updates["allowed_hosts"] = parsed
+            elif isinstance(allowed_hosts, list):
+                updates["allowed_hosts"] = [
+                    str(h).strip() for h in allowed_hosts if str(h).strip()
+                ]
+        if locale is not None:
+            updates["locale"] = str(locale)
+        if theme is not None:
+            updates["theme"] = str(theme)
+
+        saved = save_config(updates)
+        server = getattr(session, "server", None)
+        if server is not None and hasattr(server, "sync_config"):
+            server.sync_config(saved)
+        return {
+            "success": True,
+            "config": saved,
+            "message": "配置已成功保存并应用",
+        }
+
+    dispatcher.register_method("system.updateConfig", rpc_update_config)

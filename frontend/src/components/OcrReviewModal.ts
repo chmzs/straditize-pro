@@ -1,5 +1,6 @@
 import { RpcClient } from '../services/RpcClient';
 import { DiagramData } from '../types/pollen';
+import { setLatestReconciliation } from './steps/NamingPanel';
 
 export interface OcrLabelEntry {
   id: string;
@@ -99,14 +100,18 @@ export class OcrReviewModal {
     this.onApplySuccess = onApplySuccess;
   }
 
-  public async open(): Promise<void> {
+  public async open(latestData?: DiagramData): Promise<void> {
     this.close();
+    if (latestData) {
+      this.diagramData = latestData;
+    }
 
     const roi = this.diagramData.roi;
     this.cropX0 = Math.round(roi.xMin);
     this.cropX1 = Math.round(roi.xMax);
-    this.cropY0 = Math.max(0, Math.round(roi.yMin - 335));
-    this.cropY1 = Math.round(roi.yMin + 10);
+    const textBandHeight = Math.min(roi.yMin, Math.max(120, Math.round((roi.yMax - roi.yMin) * 0.35)));
+    this.cropY0 = Math.max(0, Math.round(roi.yMin - textBandHeight));
+    this.cropY1 = Math.round(roi.yMin + 15);
     this.currentAngleDeg = 45.0;
 
     const modal = document.createElement('div');
@@ -260,13 +265,14 @@ export class OcrReviewModal {
     modal.querySelector('#btn-ocr-run')?.addEventListener('click', () => this.runOcrRecognition());
     modal.querySelector('#ocr-btn-apply')?.addEventListener('click', () => this.applyToDiagramColumns());
 
-    // 重置默认框（OCR 标签带位于取数区顶界之上，用 ROI 而非深度标定）
+    // 重置默认框（OCR 标签带位于取数区顶界之上，自适应高度贴合）
     modal.querySelector('#btn-ocr-reset-crop')?.addEventListener('click', () => {
       const roi = this.diagramData.roi;
       this.cropX0 = Math.round(roi.xMin);
       this.cropX1 = Math.round(roi.xMax);
-      this.cropY0 = Math.max(0, Math.round(roi.yMin - 335));
-      this.cropY1 = Math.round(roi.yMin + 10);
+      const textBandHeight = Math.min(roi.yMin, Math.max(120, Math.round((roi.yMax - roi.yMin) * 0.35)));
+      this.cropY0 = Math.max(0, Math.round(roi.yMin - textBandHeight));
+      this.cropY1 = Math.round(roi.yMin + 15);
       this.updateCropCoordsLabel();
       this.renderCropCanvas();
       this.resetRotView();
@@ -1096,6 +1102,34 @@ export class OcrReviewModal {
 
       if (res && res.success && res.data) {
         this.ocrResult = res.data;
+        if ((res.data as any).reconciliation) {
+          setLatestReconciliation((res.data as any).reconciliation);
+        } else {
+          // 根据 labels 构造对账信息并同步 Step 5
+          const assigned: Record<string, string> = {};
+          this.ocrResult.labels.forEach((l) => {
+            if (l.associated_column_id) {
+              assigned[l.id] = l.associated_column_id;
+            } else {
+              const matchedCol = (this.diagramData.columns || []).find(
+                (c) => l.anchor_x >= c.startX && l.anchor_x < c.endX
+              );
+              if (matchedCol) {
+                assigned[l.id] = matchedCol.id;
+                l.associated_column_id = matchedCol.id;
+              }
+            }
+          });
+          const colsWithLabel = new Set(Object.values(assigned));
+          const colsWithout = (this.diagramData.columns || []).map((c) => c.id).filter((id) => !colsWithLabel.has(id));
+          setLatestReconciliation({
+            columns_without_label: colsWithout,
+            labels_without_column: this.ocrResult.labels.filter((l) => !assigned[l.id]).map((l) => l.id),
+            ambiguous: [],
+            matched: colsWithout.length === 0,
+            assigned,
+          });
+        }
         this.ocrResult.labels.forEach((l) => {
           l.accepted = l.status !== 'unrecognized';
           l.user_override_name = l.suggested_name;
@@ -1140,7 +1174,13 @@ export class OcrReviewModal {
 
     cols.forEach((col, cIdx) => {
       const colId = col.id || `taxa_${cIdx}`;
-      const matchedLabel = labels.find((l) => l.associated_column_id === colId || l.associated_column_index === cIdx);
+      const matchedLabel =
+        labels.find((l) => l.associated_column_id === colId || l.associated_column_index === cIdx) ||
+        labels.find((l) => l.anchor_x >= col.startX && l.anchor_x < col.endX);
+      if (matchedLabel && !matchedLabel.associated_column_id) {
+        matchedLabel.associated_column_id = colId;
+        matchedLabel.associated_column_index = cIdx;
+      }
 
       const tr = document.createElement('tr');
       tr.id = `table-row-col-${colId}`;

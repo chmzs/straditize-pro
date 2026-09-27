@@ -68,30 +68,34 @@ from .metadata import (
 )
 from .pipeline import StraditizePipeline
 
-# Optional RPC & Session exports for remote/headless RPC integration
-try:
-    from .protocol import (
-        CALIBRATION_ERROR,
-        EXPORT_ERROR,
-        FILE_NOT_FOUND_ERROR,
-        INTERNAL_ERROR,
-        INVALID_PARAMS,
-        INVALID_REQUEST,
-        METHOD_NOT_FOUND,
-        PARSE_ERROR,
-        STATE_ERROR,
-        JsonRpcDispatcher,
-        JsonRpcError,
-        JsonRpcRequest,
-    )
-    from .rpc_server import (
-        StraditizeRpcHttpServer,
-        create_rpc_dispatcher,
-        run_stdio_server,
-    )
-    from .session import StraditizeSession
-except ImportError:
-    pass
+# Lazy exports for protocol, rpc_server, and session to avoid runpy RuntimeWarning on `python -m`
+_LAZY_EXPORTS = {
+    "StraditizeRpcHttpServer": ".rpc_server",
+    "create_rpc_dispatcher": ".rpc_server",
+    "run_stdio_server": ".rpc_server",
+    "StraditizeSession": ".session",
+    "CALIBRATION_ERROR": ".protocol",
+    "EXPORT_ERROR": ".protocol",
+    "FILE_NOT_FOUND_ERROR": ".protocol",
+    "INTERNAL_ERROR": ".protocol",
+    "INVALID_PARAMS": ".protocol",
+    "INVALID_REQUEST": ".protocol",
+    "METHOD_NOT_FOUND": ".protocol",
+    "PARSE_ERROR": ".protocol",
+    "STATE_ERROR": ".protocol",
+    "JsonRpcDispatcher": ".protocol",
+    "JsonRpcError": ".protocol",
+    "JsonRpcRequest": ".protocol",
+}
+
+
+def __getattr__(name: str):
+    if name in _LAZY_EXPORTS:
+        import importlib
+
+        mod = importlib.import_module(_LAZY_EXPORTS[name], __package__)
+        return getattr(mod, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
     "AgeDepthAxisCalibrator",

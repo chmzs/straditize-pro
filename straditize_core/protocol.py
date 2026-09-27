@@ -159,7 +159,7 @@ class JsonRpcDispatcher:
                 "jsonrpc": "2.0",
                 "error": JsonRpcError(
                     METHOD_NOT_FOUND,
-                    f"后端未提供接口 '{request.method}'。请检查方法名拼写或接口版本。",
+                    f"Method not found: 后端未提供接口 '{request.method}'。请检查方法名拼写或接口版本。",
                 ).to_dict(),
                 "id": request.id,
             }
@@ -307,7 +307,7 @@ class JsonRpcDispatcher:
             err_resp = {
                 "jsonrpc": "2.0",
                 "error": JsonRpcError(
-                    PARSE_ERROR, f"JSON 语法解析失败: {e!s}。请核对请求字符串。"
+                    PARSE_ERROR, f"Parse error: JSON 语法解析失败: {e!s}。请核对请求字符串。"
                 ).to_dict(),
                 "id": None,
             }

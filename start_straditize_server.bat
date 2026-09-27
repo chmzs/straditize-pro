@@ -1,14 +1,14 @@
 @echo off
 chcp 65001 >nul
-title Straditize Pro - 服务器模式 (Server Mode)
+title Straditize Pro - 应用启动 (App)
 
 echo ======================================================================
-echo   🌐 正在启动 Straditize Pro 服务器模式
+echo   🌐 正在启动 Straditize Pro 应用程序
+echo   • 模式: 桌面完整交互模式 (自动开浏览器 + 顶栏退出 + WebMCP)
 echo   • 绑定: 127.0.0.1:8765
-echo   • 安全: 严格本地回环 (外网远程请使用 SSH 端口转发)
-echo   • 退出: 请在终端按 Ctrl+C 终止服务
+echo   • 退出: 网页右上角点击 [退出] 或在终端按 Ctrl+C
 echo ======================================================================
 
-pixi run rpc-server
+pixi run app
 
 pause

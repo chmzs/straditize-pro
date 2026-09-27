@@ -157,6 +157,9 @@ class RoiMixin:
                 by1 = y1 if y1 is not None else (ylim[1] if ylim else curr_y[1])
                 res = self.roi_create(name="pollen", x0=bx0, x1=bx1, y0=by0, y1=by1)
                 r_created = res["roi"]
+                self.active_roi_id = r_created["id"]
+                self.data_xlim = list(r_created["xlim"])
+                self.data_ylim = list(r_created["ylim"])
                 if hasattr(self, "rois") and self.rois:
                     self.rois[0]["name_source"] = "default"
                 self.grid_line_mask = None

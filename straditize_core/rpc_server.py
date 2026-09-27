@@ -79,6 +79,117 @@ def create_rpc_dispatcher(
 
 
 # ============================================================================
+# Centralized Graceful Shutdown & Resource Cleanup Hook
+# ============================================================================
+
+_registered_subprocesses: set[Any] = set()
+_shutdown_lock = threading.Lock()
+_is_shutting_down = False
+
+
+def register_subprocess(proc: Any) -> None:
+    """Register a subprocess to be cleaned up on graceful shutdown."""
+    _registered_subprocesses.add(proc)
+
+
+def _cleanup_subprocesses() -> None:
+    """Terminate all tracked child processes (e.g. background R scripts, headless instances)."""
+    for proc in list(_registered_subprocesses):
+        try:
+            if hasattr(proc, "poll") and proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=1.0)
+                except Exception:
+                    proc.kill()
+        except Exception as e:
+            logger.debug("Error terminating subprocess during cleanup: %s", e)
+    _registered_subprocesses.clear()
+
+
+def cleanup_lock_file(lock_file_path: str | None = None) -> None:
+    """Safely remove the desktop single-instance lock file."""
+    path = lock_file_path or os.path.join(tempfile.gettempdir(), "straditize_desktop.lock")
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+            logger.debug("Removed desktop single-instance lock: %s", path)
+    except OSError as e:
+        logger.debug("Could not remove lock file %s: %s", path, e)
+
+
+def graceful_shutdown(
+    server: Any = None,
+    exit_code: int = 0,
+    delayed_seconds: float = 0.0,
+    shutdown_fn: Any = None,
+) -> None:
+    """Unified graceful shutdown hook (Single Source of Truth for exit cleanup).
+
+    1. Removes single-instance lock file (straditize_desktop.lock)
+    2. Safely stops HTTP Listener to immediately release port
+    3. Terminates any spawned child processes (R scripts, headless browsers)
+    4. Exits process cleanly
+    """
+    def _do_shutdown() -> None:
+        global _is_shutting_down
+        with _shutdown_lock:
+            if _is_shutting_down:
+                return
+            _is_shutting_down = True
+
+        if delayed_seconds > 0:
+            time.sleep(delayed_seconds)
+
+        logger.info("Executing unified graceful shutdown (cleaning single source of truth)...")
+
+        # 1. 移除单例锁文件
+        cleanup_lock_file()
+
+        # 2. 安全关闭 Web 服务的 HTTP Listener，立即释放端口
+        srv = server or getattr(StraditizeRpcHttpServer, "_active_instance", None)
+        if srv is not None:
+            try:
+                srv.stop()
+            except Exception as e:
+                logger.debug("Error stopping HTTP server during shutdown: %s", e)
+
+        # 3. 杀掉可能派生的子进程 (如后台运行的 R 脚本或 headless 浏览器实例)
+        _cleanup_subprocesses()
+
+        # 4. 退出进程
+        fn = shutdown_fn or (getattr(srv, "_shutdown_fn", None) if srv else None) or os._exit
+        logger.info("Graceful shutdown completed. Exiting.")
+        try:
+            fn(exit_code)
+        except TypeError:
+            fn()
+
+    if delayed_seconds > 0:
+        threading.Thread(target=_do_shutdown, daemon=True).start()
+    else:
+        _do_shutdown()
+
+
+def setup_signal_handlers(server: Any = None) -> None:
+    """Register SIGINT and SIGTERM handlers to trigger unified graceful_shutdown."""
+    import signal
+
+    def _on_signal(signum, frame):
+        logger.info("Captured signal %d (SIGINT/SIGTERM), triggering graceful shutdown...", signum)
+        graceful_shutdown(server=server, exit_code=0, delayed_seconds=0.0)
+
+    try:
+        signal.signal(signal.SIGINT, _on_signal)
+    except (ValueError, AttributeError):
+        pass
+    try:
+        signal.signal(signal.SIGTERM, _on_signal)
+    except (ValueError, AttributeError):
+        pass
+
+
+# ============================================================================
 # Stdio Server Implementation
 # ============================================================================
 
@@ -176,6 +287,16 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
     dist_dir: str | None = None
     is_desktop_mode: bool = False
 
+    def handle(self):
+        """Handle multiple requests if necessary, suppressing client disconnect errors."""
+        self.close_connection = True
+        try:
+            self.handle_one_request()
+            while not self.close_connection:
+                self.handle_one_request()
+        except (ConnectionError, BrokenPipeError, OSError):
+            self.close_connection = True
+
     def log_message(self, format, *args):
         # Redirect request logs to module logger (sys.stderr)
         logger.debug(
@@ -188,11 +309,25 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
     # 访问控制
     # ------------------------------------------------------------------
-    def _host_header_allowed(self) -> bool:
-        host = _split_host(self.headers.get("Host", ""))
+    def _is_host_matched(self, host: str) -> bool:
         if not host:
             return False
-        return host in _LOOPBACK_HOSTS or host in getattr(self, "allowed_hosts", set())
+        if host in _LOOPBACK_HOSTS:
+            return True
+        bound = _split_host(getattr(self.server, "bound_host", ""))
+        if bound and bound not in ("0.0.0.0", "::") and host == bound:
+            return True
+        remote_enabled = getattr(self.server, "remote_access_enabled", False)
+        if not remote_enabled:
+            return False
+        allowed = getattr(self.server, "allowed_hosts", [])
+        from .config import is_host_allowed
+
+        return is_host_allowed(host, allowed)
+
+    def _host_header_allowed(self) -> bool:
+        host = _split_host(self.headers.get("Host", ""))
+        return self._is_host_matched(host)
 
     def _origin_allowed(self) -> bool:
         origin = self.headers.get("Origin")
@@ -202,7 +337,15 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
             return True
         # 同源：Origin 必须等于 http://<请求的 Host>
         host_header = self.headers.get("Host", "")
-        return origin.rstrip("/") in {f"http://{host_header}", f"https://{host_header}"}
+        if origin.rstrip("/") in {f"http://{host_header}", f"https://{host_header}"}:
+            return True
+        try:
+            origin_host = _split_host(urlparse(origin).netloc)
+            if self._is_host_matched(origin_host):
+                return True
+        except Exception:
+            pass
+        return False
 
     def _reject_request(self, status: int, reason: str) -> None:
         body = json.dumps({"error": reason, "code": status}, ensure_ascii=False).encode(
@@ -237,7 +380,17 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
         同源请求（后端自带前端、或经 SSH 隧道访问 127.0.0.1）本就不需要 CORS 头。
         """
         origin = self.headers.get("Origin")
-        if origin and origin in getattr(self, "allowed_origins", set()):
+        if not origin:
+            return
+        should_send = origin in getattr(self, "allowed_origins", set())
+        if not should_send:
+            try:
+                origin_host = _split_host(urlparse(origin).netloc)
+                if self._is_host_matched(origin_host):
+                    should_send = True
+            except Exception:
+                pass
+        if should_send:
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
@@ -313,7 +466,7 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
             try:
                 self.wfile.write(b": connected\n\n")
                 self.wfile.flush()
-            except (ConnectionResetError, BrokenPipeError):
+            except (ConnectionError, BrokenPipeError, OSError):
                 self.broadcaster.remove_listener(q)
                 return
 
@@ -327,7 +480,7 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
                         # Send keep-alive comment
                         self.wfile.write(b": keep-alive\n\n")
                         self.wfile.flush()
-            except (ConnectionResetError, BrokenPipeError):
+            except (ConnectionError, BrokenPipeError, OSError):
                 pass
             finally:
                 self.broadcaster.remove_listener(q)
@@ -666,23 +819,15 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
             )
             self.wfile.flush()
 
-            def _delayed_exit():
-                time.sleep(0.5)
-                lock_file = os.path.join(
-                    tempfile.gettempdir(), "straditize_desktop.lock"
-                )
-                try:
-                    if os.path.exists(lock_file):
-                        os.remove(lock_file)
-                except OSError:
-                    pass
-                shutdown_fn = getattr(self.__class__, "_shutdown_fn", os._exit)
-                try:
-                    shutdown_fn(0)
-                except TypeError:
-                    shutdown_fn()
-
-            threading.Thread(target=_delayed_exit, daemon=True).start()
+            # 触发统一 graceful_shutdown 单一事实源清理钩子
+            app_server = getattr(self.server, "app_server", None)
+            shutdown_fn = getattr(self, "_shutdown_fn", None)
+            graceful_shutdown(
+                server=app_server,
+                exit_code=0,
+                delayed_seconds=0.5,
+                shutdown_fn=shutdown_fn,
+            )
             return
 
         # 1. Image upload endpoint
@@ -837,6 +982,8 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
 class StraditizeRpcHttpServer:
     """Wrapper around ThreadingHTTPServer for managing local JSON-RPC server lifecycle."""
 
+    _active_instance: StraditizeRpcHttpServer | None = None
+
     def __init__(
         self,
         host: str = "127.0.0.1",
@@ -856,6 +1003,16 @@ class StraditizeRpcHttpServer:
         self._shutdown_fn = shutdown_fn or os._exit
         self.session = session or StraditizeSession()
         self.session.is_desktop_mode = is_desktop_mode
+        self.session.server = self
+
+        from .config import load_config
+
+        self.config = load_config()
+        self.remote_access_enabled = self.config.get("remote_access_enabled", False)
+        self.user_allowed_hosts = list(
+            self.config.get("allowed_hosts", ["127.0.0.1", "localhost"])
+        )
+
         self.dispatcher = dispatcher or create_rpc_dispatcher(self.session)
         self.broadcaster = EventBroadcaster()
         self.dist_dir = dist_dir
@@ -879,6 +1036,10 @@ class StraditizeRpcHttpServer:
             allowed_hosts = host_allowlist
 
         self._server = ThreadingHTTPServer((self.host, self.port), BoundHandler)
+        self._server.remote_access_enabled = self.remote_access_enabled
+        self._server.allowed_hosts = self.user_allowed_hosts
+        self._server.bound_host = self.host
+        self._server.app_server = self
         self.actual_port = self._server.server_address[1]
         self._thread: threading.Thread | None = None
 
@@ -888,8 +1049,20 @@ class StraditizeRpcHttpServer:
         )
         component_manager.register_ready_callback(self._component_ready_cb)
 
+    def sync_config(self, new_config: dict[str, Any]) -> None:
+        """Dynamically update in-memory access control from config."""
+        self.config.update(new_config)
+        self.remote_access_enabled = bool(new_config.get("remote_access_enabled", False))
+        self.user_allowed_hosts = list(
+            new_config.get("allowed_hosts", ["127.0.0.1", "localhost"])
+        )
+        if hasattr(self, "_server") and self._server:
+            self._server.remote_access_enabled = self.remote_access_enabled
+            self._server.allowed_hosts = self.user_allowed_hosts
+
     def start(self) -> None:
         """Starts the HTTP server in a background thread."""
+        StraditizeRpcHttpServer._active_instance = self
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
         logger.info(
@@ -900,6 +1073,8 @@ class StraditizeRpcHttpServer:
 
     def stop(self) -> None:
         """Stops the HTTP server and joins thread."""
+        if getattr(StraditizeRpcHttpServer, "_active_instance", None) is self:
+            StraditizeRpcHttpServer._active_instance = None
         if self._server:
             self._server.shutdown()
             self._server.server_close()
@@ -1004,8 +1179,20 @@ def main() -> None:
             default=8765,
             help="Port to listen on (default: 8765)",
         )
+        parser.add_argument(
+            "--host",
+            type=str,
+            default=None,
+            help="Host to bind (default: 127.0.0.1 or 0.0.0.0 when remote access is enabled)",
+        )
         args = parser.parse_args(sys.argv[2:])
 
+        from .config import load_config
+
+        cfg = load_config()
+        bind_host = args.host or (
+            "0.0.0.0" if cfg.get("remote_access_enabled", False) else "127.0.0.1"
+        )
         target_port = args.port
         if is_port_in_use(target_port, "127.0.0.1"):
             print(
@@ -1018,20 +1205,22 @@ def main() -> None:
         session.is_desktop_mode = False
         dispatcher = create_rpc_dispatcher(session)
         server = StraditizeRpcHttpServer(
-            host="127.0.0.1",
+            host=bind_host,
             port=target_port,
             dispatcher=dispatcher,
             session=session,
             is_desktop_mode=False,
         )
         server.start()
-        print(f"服务已启动：http://127.0.0.1:{server.actual_port}")
+        print(f"服务已启动：http://{bind_host}:{server.actual_port}")
 
+        setup_signal_handlers(server)
         try:
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            server.stop()
+            print("\n正在停止 Straditize 服务...")
+            graceful_shutdown(server=server, exit_code=0, delayed_seconds=0.0)
         return
 
     # 2. Standard I/O pipe mode
@@ -1062,11 +1251,13 @@ def main() -> None:
         )
         server.start()
         print(f"服务已启动：http://127.0.0.1:{server.actual_port}")
+        setup_signal_handlers(server)
         try:
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            server.stop()
+            print("\n正在停止 Straditize 服务...")
+            graceful_shutdown(server=server, exit_code=0, delayed_seconds=0.0)
         return
 
     # 4. Desktop / Default One-Click Mode
@@ -1096,11 +1287,16 @@ def main() -> None:
     except OSError:
         pass
 
+    from .config import load_config
+
+    cfg = load_config()
+    bind_host = "0.0.0.0" if cfg.get("remote_access_enabled", False) else "127.0.0.1"
+
     session = StraditizeSession()
     session.is_desktop_mode = True
     dispatcher = create_rpc_dispatcher(session)
     server = StraditizeRpcHttpServer(
-        host="127.0.0.1",
+        host=bind_host,
         port=chosen_port,
         dispatcher=dispatcher,
         session=session,
@@ -1121,18 +1317,15 @@ def main() -> None:
 
     webbrowser.open(f"http://127.0.0.1:{server.actual_port}/")
 
+    setup_signal_handlers(server)
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
         print("\n正在停止 Straditize 服务...")
-        server.stop()
+        graceful_shutdown(server=server, exit_code=0, delayed_seconds=0.0)
     finally:
-        try:
-            if os.path.exists(lock_file):
-                os.remove(lock_file)
-        except OSError:
-            pass
+        cleanup_lock_file(lock_file)
 
 
 if __name__ == "__main__":

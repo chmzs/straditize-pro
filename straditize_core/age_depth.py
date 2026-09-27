@@ -786,6 +786,19 @@ class AgeDepthModel:
         though the rate is typically more uncertain than the age itself.
         """
         d_arr = np.asarray(sample_depths, dtype=float)
+        if d_arr.size == 0:
+            return {
+                "depths": [],
+                "age_est": [],
+                "age_min": [],
+                "age_max": [],
+                "extrapolated": [],
+                "acc_rate_yr_per_depth": [],
+                "sed_rate_depth_per_yr": [],
+                "volume_ar_cm_per_yr": [],
+                "interval_acc_rate_yr_per_depth": [],
+                "interval_sed_rate_depth_per_yr": [],
+            }
         if self._interp_age is None:
             # Refuse rather than return numbers. This branch used to report `age_est = depth`
             # (and zero rates), i.e. it handed back fabricated ages that looked like a
@@ -885,7 +898,55 @@ class AgeDepthModel:
                 "calibration_curve": self.cal_curve,
                 "notes": self.notes,
             },
+        }
 
+    def predict_depth(
+        self,
+        sample_ages: list[float] | np.ndarray,
+    ) -> dict[str, Any]:
+        """Inversely maps sample ages to physical depths using the median age-depth trajectory.
+
+        Guards:
+        * Enforces strict monotonicity checks via PCHIP interpolation.
+        * Flags points beyond observed age bounds with ``extrapolated = True``.
+        """
+        a_arr = np.asarray(sample_ages, dtype=float)
+        if self._interp_age is None or self.analysis_depths is None or len(self.analysis_depths) < 2:
+            raise ValueError(
+                "This age-depth model has no valid curve to inversely predict depth."
+            )
+
+        grid_d = np.linspace(np.min(self.analysis_depths), np.max(self.analysis_depths), 400)
+        grid_a = self._interp_age(grid_d)
+
+        # Ensure monotonic relationship for inversion
+        sort_idx = np.argsort(grid_a)
+        sorted_a = grid_a[sort_idx]
+        sorted_d = grid_d[sort_idx]
+
+        unique_a, u_idx = np.unique(sorted_a, return_index=True)
+        unique_d = sorted_d[u_idx]
+
+        if len(unique_a) < 2:
+            raise ValueError("Extracted age-depth relationship is degenerate (flat ages).")
+
+        from scipy.interpolate import PchipInterpolator
+
+        try:
+            inv_pchip = PchipInterpolator(unique_a, unique_d)
+            pred_d = inv_pchip(a_arr)
+        except Exception:
+            pred_d = np.interp(a_arr, unique_a, unique_d)
+
+        observed_min_a = float(np.min(unique_a))
+        observed_max_a = float(np.max(unique_a))
+        extrapolated = (a_arr < observed_min_a) | (a_arr > observed_max_a)
+
+        return {
+            "ages": [round(float(a), 2) for a in a_arr],
+            "depth_est": [round(float(d), 2) for d in pred_d],
+            "extrapolated": [bool(ex) for ex in extrapolated],
+            "observed_age_range": [round(observed_min_a, 2), round(observed_max_a, 2)],
         }
 
 

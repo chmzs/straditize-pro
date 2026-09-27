@@ -7,27 +7,33 @@ export const z = 10;
 export function draw(ctx: CanvasRenderingContext2D, data: DiagramData, vp: Viewport): void {
   if (!data.rois || data.rois.length === 0) return;
 
+  const scale = vp.scale || 1;
+  const activeId = data.active_roi_id || (data as any).activeRoiId || data.rois[0]?.id;
+
   for (const roi of data.rois) {
     if (!roi.visible) continue;
+    // Active ROI is already drawn with 8 resize handles by GeologyCanvas.drawRoiOverlay
+    if (roi.id === activeId) continue;
+
     const x0 = roi.xlim?.[0] ?? roi.xMin ?? 0;
     const x1 = roi.xlim?.[1] ?? roi.xMax ?? 0;
     const y0 = roi.ylim?.[0] ?? roi.yMin ?? 0;
     const y1 = roi.ylim?.[1] ?? roi.yMax ?? 0;
-    const s0 = vp.worldToScreen({ x: x0, y: y0 });
-    const s1 = vp.worldToScreen({ x: x1, y: y1 });
-
-    const w = s1.x - s0.x;
-    const h = s1.y - s0.y;
+    const w = x1 - x0;
+    const h = y1 - y0;
+    if (w <= 0 || h <= 0) continue;
 
     ctx.save();
-    ctx.strokeStyle = roi.id === data.active_roi_id ? '#38bdf8' : 'rgba(56, 189, 248, 0.4)';
-    ctx.lineWidth = roi.id === data.active_roi_id ? 2 : 1;
-    ctx.strokeRect(s0.x, s0.y, w, h);
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.55)';
+    ctx.lineWidth = 1.5 / scale;
+    ctx.setLineDash([6 / scale, 4 / scale]);
+    ctx.strokeRect(x0, y0, w, h);
+    ctx.setLineDash([]);
 
-    // 标签标识
-    ctx.fillStyle = roi.id === data.active_roi_id ? '#38bdf8' : 'rgba(56, 189, 248, 0.6)';
-    ctx.font = '10px sans-serif';
-    ctx.fillText(`${roi.name ?? 'ROI'}${roi.composition ? ' (100%)' : ''}`, s0.x + 4, s0.y - 4);
+    // 标签标识（世界坐标系下按 scale 反算字号保持清晰）
+    ctx.fillStyle = 'rgba(2, 132, 199, 0.85)';
+    ctx.font = `bold ${Math.max(10, 11 / scale)}px sans-serif`;
+    ctx.fillText(`${roi.name ?? 'ROI'}${roi.composition ? ' (100%)' : ''}`, x0 + 4 / scale, y0 - 6 / scale);
     ctx.restore();
   }
 }

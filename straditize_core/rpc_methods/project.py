@@ -13,6 +13,7 @@ def register(dispatcher: Any, session: Any) -> None:
 
     dispatcher.register_method("core.loadImage", session.load_image)
     dispatcher.register_method("image.load", session.load_image)
+    dispatcher.register_method("image.switchPdfPage", session.switch_pdf_page)
     dispatcher.register_method("image.detectDeskew", session.detect_deskew_angle)
     dispatcher.register_method("image.rotate", session.rotate_image)
 

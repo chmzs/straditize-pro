@@ -1,6 +1,7 @@
 import { DiagramData } from '../../types/pollen';
 import { CoordinateSystem } from '../../core/CoordinateSystem';
 import { StepContext } from './_registry';
+import { t } from '../../i18n';
 
 export const step = 3;
 export const title = '3. Y 轴物理标定';
@@ -24,39 +25,39 @@ export function render(data: DiagramData): string {
 
   return `
     <div class="step-panel" data-step="3">
-      <div class="step-title">3. Y 轴物理标定 (Calibration)</div>
+      <div class="step-title">${t('step3.title')}</div>
       <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5;">
-        两点标定物理深度/年代轴。在左侧标尺上点选两个已知刻度线所在像素行，填入真实值。
+        ${t('step3.desc')}
       </div>
 
       <!-- 标定状态指示条 -->
       <div class="inspector-section" style="padding: 8px; background: ${isCalibrated ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)'}; border: 1px solid ${isCalibrated ? '#10b981' : '#f59e0b'}; border-radius: 6px; margin-bottom: 12px;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <span style="font-size: 11px; font-weight: 700; color: ${isCalibrated ? '#059669' : '#d97706'};">
-            ${isCalibrated ? '✓ Y 轴标定生效中' : '⚠️ 尚未完成 Y 轴标定'}
+            ${isCalibrated ? t('step3.active') : t('step3.inactive')}
           </span>
-          <button id="btn-repick-ycalib" class="tool-btn" style="font-size: 10px; padding: 2px 6px;">🎯 图上选点</button>
+          <button id="btn-repick-ycalib" class="tool-btn" style="font-size: 10px; padding: 2px 6px;">${t('step3.pickPoints')}</button>
         </div>
       </div>
 
       <!-- 常驻两点标定输入表单 (100% 常驻侧栏，彻底告别弹窗) -->
       <div class="inspector-section" style="margin-bottom: 12px;">
-        <div style="font-size: 11px; font-weight: 700; margin-bottom: 8px;">标定参考点参数</div>
+        <div style="font-size: 11px; font-weight: 700; margin-bottom: 8px;">${t('step3.params')}</div>
 
         <!-- 参考点 1 (Y1) -->
         <div style="background: var(--bg-tertiary); padding: 8px; border-radius: 6px; margin-bottom: 8px; border: 1px solid rgba(245, 158, 11, 0.35);">
           <div style="font-size: 10.5px; font-weight: 700; margin-bottom: 4px; color: #f59e0b; display: flex; justify-content: space-between;">
-            <span>① 基准点 Y1 (上方):</span>
-            <span style="font-family: monospace;">${topPx !== '' ? `Y1=${topPx}px` : '待选点'}</span>
+            <span>${t('step3.ref1')}</span>
+            <span style="font-family: monospace;">${topPx !== '' ? `Y1=${topPx}px` : '--'}</span>
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
             <div>
-              <label style="font-size: 10px; color: var(--text-muted);">像素 Y1 (px):</label>
-              <input type="number" id="ycal-inp-top-px" value="${topPx}" placeholder="如 556" style="width: 100%; font-size: 11px; padding: 3px 6px; box-sizing: border-box; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
+              <label style="font-size: 10px; color: var(--text-muted);">Y1 (px):</label>
+              <input type="number" id="ycal-inp-top-px" value="${topPx}" placeholder="556" style="width: 100%; font-size: 11px; padding: 3px 6px; box-sizing: border-box; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
             </div>
             <div>
-              <label style="font-size: 10px; color: var(--text-muted);">真实数值:</label>
-              <input type="number" id="ycal-inp-top-val" value="${topVal}" step="any" placeholder="如 0" style="width: 100%; font-size: 11px; padding: 3px 6px; box-sizing: border-box; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
+              <label style="font-size: 10px; color: var(--text-muted);">${t('step3.unit')}:</label>
+              <input type="number" id="ycal-inp-top-val" value="${topVal}" step="any" placeholder="0" style="width: 100%; font-size: 11px; padding: 3px 6px; box-sizing: border-box; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
             </div>
           </div>
         </div>
@@ -64,17 +65,17 @@ export function render(data: DiagramData): string {
         <!-- 参考点 2 (Y2) -->
         <div style="background: var(--bg-tertiary); padding: 8px; border-radius: 6px; margin-bottom: 8px; border: 1px solid rgba(16, 185, 129, 0.35);">
           <div style="font-size: 10.5px; font-weight: 700; margin-bottom: 4px; color: #10b981; display: flex; justify-content: space-between;">
-            <span>② 对照点 Y2 (下方):</span>
-            <span style="font-family: monospace;">${botPx !== '' ? `Y2=${botPx}px` : '待选点'}</span>
+            <span>${t('step3.ref2')}</span>
+            <span style="font-family: monospace;">${botPx !== '' ? `Y2=${botPx}px` : '--'}</span>
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
             <div>
-              <label style="font-size: 10px; color: var(--text-muted);">像素 Y2 (px):</label>
-              <input type="number" id="ycal-inp-bot-px" value="${botPx}" placeholder="如 1320" style="width: 100%; font-size: 11px; padding: 3px 6px; box-sizing: border-box; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
+              <label style="font-size: 10px; color: var(--text-muted);">Y2 (px):</label>
+              <input type="number" id="ycal-inp-bot-px" value="${botPx}" placeholder="1320" style="width: 100%; font-size: 11px; padding: 3px 6px; box-sizing: border-box; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
             </div>
             <div>
-              <label style="font-size: 10px; color: var(--text-muted);">真实数值:</label>
-              <input type="number" id="ycal-inp-bot-val" value="${botVal}" step="any" placeholder="如 1500" style="width: 100%; font-size: 11px; padding: 3px 6px; box-sizing: border-box; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
+              <label style="font-size: 10px; color: var(--text-muted);">${t('step3.unit')}:</label>
+              <input type="number" id="ycal-inp-bot-val" value="${botVal}" step="any" placeholder="1500" style="width: 100%; font-size: 11px; padding: 3px 6px; box-sizing: border-box; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
             </div>
           </div>
         </div>
@@ -82,22 +83,22 @@ export function render(data: DiagramData): string {
         <!-- 单位与比例 -->
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 2px; font-size: 10.5px;">
           <div style="display: flex; align-items: center; gap: 4px;">
-            <label style="color: var(--text-muted);">单位:</label>
+            <label style="color: var(--text-muted);">${t('step3.unit')}:</label>
             <input type="text" id="ycal-inp-unit" value="${unit}" style="width: 50px; font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
           </div>
           <div style="color: var(--text-muted);">
-            换算比: <strong id="lbl-ycal-ratio" style="color: var(--accent-green, #10b981);">${ratioStr}</strong>
+            Ratio: <strong id="lbl-ycal-ratio" style="color: var(--accent-green, #10b981);">${ratioStr}</strong>
           </div>
         </div>
 
         <button id="btn-apply-ycalib" class="tool-btn" style="width: 100%; font-size: 11px; padding: 5px; margin-top: 6px;">
-          💾 应用两点标定
+          💾 ${t('step3.apply')}
         </button>
       </div>
 
       <!-- 推进到 Step 4 -->
       <button id="btn-apply-ycalib-next" class="primary-btn" style="width: 100%; padding: 6px 12px; font-size: 12px;">
-        👉 确认标尺，进入干扰清理 (步骤 4)
+        ${t('step3.next')}
       </button>
     </div>
   `;

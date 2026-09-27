@@ -39,8 +39,7 @@ pixi run frontend-dev     # 前端开发服务器（vite:5173，已配好到 876
 
 # 构建与启动
 npm --prefix frontend run build   # 前端产物 → frontend/dist（后端据此托管界面）
-pixi run desktop          # 现代版桌面模式（自动开浏览器 + 顶栏退出按钮）
-pixi run rpc-server       # 现代版服务器模式（固定 8765，无退出按钮）
+pixi run app              # 现代版应用主入口（自动开浏览器 + 顶栏退出按钮 + WebMCP）
 pixi run build-windows    # PyInstaller 独立分发包
 ```
 

@@ -113,14 +113,13 @@ npm --prefix frontend run build
 
 ### 2. 启动方式
 
-#### 方式 A：桌面模式 (Desktop Mode - 本地研究与交互)
+#### 方式 A：标准应用模式 (App Mode - 本地研究与交互推荐)
 - **启动命令**：
   ```bash
-  pixi run desktop
+  pixi run app
   ```
   *(Windows 用户也可直接双击根目录下的 `start_straditize.bat`)*
 - **运行特征**：
-  - Windows 环境首行自动隐藏控制台黑框；
   - 自动从 `8765` 起寻找未被占用的空闲端口；
   - 自动创建单实例锁（多次启动直接激活浏览器已有页面，不重复起进程）；
   - 自动调起系统默认浏览器访问；
@@ -129,13 +128,10 @@ npm --prefix frontend run build
 #### 方式 B：服务器模式 (Server Mode - 远程计算与无头服务器)
 - **启动命令**：
   ```bash
-  pixi run rpc-server
-  # 或自定义端口（注意模块名是 straditize_core，不是 straditize）：
   python -m straditize_core.rpc_server serve --port 8765
   ```
-  *(Windows 用户也可直接双击根目录下的 `start_straditize_server.bat`)*
 - **运行特征**：
-  - 严格只监听本机环回地址 `127.0.0.1:8765`；
+  - 默认监听本机环回地址 `127.0.0.1:8765`（或在设置开启远程访问后监听局域网/Tailscale）；
   - **端口被占保护**：若指定端口被占用，直接向终端报错并退出，绝不静默 +1；
   - 终端前台流式输出访问日志；
   - **退出方式**：终端按下 `Ctrl+C` 终止；**网页界面严格隐藏退出按钮**（且 `/shutdown` 端点返回 403 Forbidden），防止协作人员误关后台。
@@ -143,7 +139,7 @@ npm --prefix frontend run build
 #### 方式 C：前端开发模式 (Frontend Dev - 仅修改前端时使用)
 - **启动命令**：
   ```bash
-  pixi run rpc-server     # 终端 1：后端
+  pixi run app            # 终端 1：后端
   pixi run frontend-dev   # 终端 2：Vite 开发服务器 → http://localhost:5173
   ```
 - 浏览器访问 `http://localhost:5173`。Vite 已把后端路由前缀代理到 8765，

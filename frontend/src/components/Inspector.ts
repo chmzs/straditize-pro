@@ -58,6 +58,10 @@ export class Inspector {
     this.element = document.createElement('aside');
     this.element.className = 'app-inspector';
     this.render();
+
+    onLocaleChange(() => {
+      this.render();
+    });
   }
 
   public getElement(): HTMLElement {
@@ -121,9 +125,9 @@ export class Inspector {
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
             <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M9 21V9"/>
           </svg>
-          <span>属性检查器</span>
+          <span>${t('inspector.title')}</span>
         </div>
-        <button id="btn-collapse-inspector" class="icon-btn panel-toggle" title="收起/展开面板 (快捷键: Ctrl+])">
+        <button id="btn-collapse-inspector" class="icon-btn panel-toggle" title="${t('inspector.collapseTitle')}">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"/>
           </svg>

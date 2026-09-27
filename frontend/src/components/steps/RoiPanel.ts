@@ -1,5 +1,6 @@
 import { DiagramData } from '../../types/pollen';
 import { StepContext } from './_registry';
+import { t } from '../../i18n';
 
 export const step = 2;
 export const title = '2. 数据有效区 (ROI)';
@@ -17,16 +18,16 @@ export function render(data: DiagramData): string {
 
   return `
     <div class="step-panel" data-step="2">
-      <div class="step-title">2. 数据有效区界定 (ROI)</div>
+      <div class="step-title">${t('step2.title')}</div>
       <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5;">
-        在画布上拖拽手柄划定当前数据区 (ROI)。支持多 ROI 划分（如乔木花粉、草本、炭屑独立分块）。
+        ${t('step2.desc')}
       </div>
 
       <!-- ROI 选择与操作区 -->
       <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 12px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="font-size: 11px; font-weight: 700;">有效区容器 (共 ${rois.length} 个)</span>
-          <button id="btn-create-roi" class="tool-btn" style="font-size: 10px; padding: 2px 6px;">+ 新建 ROI</button>
+          <span style="font-size: 11px; font-weight: 700;">${t('step2.container', { count: rois.length })}</span>
+          <button id="btn-create-roi" class="tool-btn" style="font-size: 10px; padding: 2px 6px;">${t('step2.newRoi')}</button>
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
@@ -40,11 +41,11 @@ export function render(data: DiagramData): string {
                   <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
                     <span style="font-size: 10px; color: ${isAct ? 'var(--accent-blue)' : 'var(--text-muted)'}; font-weight: 700;">${isPrim ? '★' : '○'}</span>
                     <strong style="font-size: 11px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${r.name || r.id}</strong>
-                    <span style="font-size: 9.5px; color: var(--text-muted);">(${colCnt}列)</span>
+                    <span style="font-size: 9.5px; color: var(--text-muted);">(${colCnt}${t('step2.cols')})</span>
                   </div>
                   <div style="display: flex; gap: 4px; align-items: center;">
-                    ${!isPrim ? `<button class="icon-btn btn-set-primary" data-roi-id="${r.id}" title="设为主 ROI (data.csv)" style="font-size: 10px;">设为主</button>` : '<span style="font-size: 9px; color: #10b981; font-weight: 700;">主区</span>'}
-                    ${rois.length > 1 ? `<button class="icon-btn btn-delete-roi" data-roi-id="${r.id}" title="删除该 ROI" style="font-size: 10px; color: #ef4444;">&times;</button>` : ''}
+                    ${!isPrim ? `<button class="icon-btn btn-set-primary" data-roi-id="${r.id}" title="${t('step2.setPrimaryTitle')}" style="font-size: 10px;">${t('step2.setPrimary')}</button>` : `<span style="font-size: 9px; color: #10b981; font-weight: 700;">${t('step2.primary')}</span>`}
+                    ${rois.length > 1 ? `<button class="icon-btn btn-delete-roi" data-roi-id="${r.id}" title="${t('step2.deleteRoiTitle')}" style="font-size: 10px; color: #ef4444;">&times;</button>` : ''}
                   </div>
                 </div>
               `;
@@ -55,27 +56,27 @@ export function render(data: DiagramData): string {
 
       <!-- 当前选中 ROI 属性编辑 -->
       <div class="inspector-section" style="margin-bottom: 12px;">
-        <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">当前 ROI: ${activeRoi.name || activeRoi.id}</div>
+        <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">${t('step2.currentRoi')}: ${activeRoi.name || activeRoi.id}</div>
         <div style="display: flex; flex-direction: column; gap: 6px; font-size: 11px;">
           <div>
-            <label style="color: var(--text-muted); font-size: 10px;">区域名称 (唯一):</label>
+            <label style="color: var(--text-muted); font-size: 10px;">${t('step2.roiName')}</label>
             <input type="text" id="inp-roi-name" value="${activeRoi.name || activeRoi.id}" style="width: 100%; font-size: 11px; padding: 3px 6px; box-sizing: border-box; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
           </div>
           <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
             <input type="checkbox" id="chk-roi-composition" ${activeRoi.composition ? 'checked' : ''} />
-            <label for="chk-roi-composition" style="font-size: 10.5px; cursor: pointer;">百分比组成数据 (执行总和 ≤100% 门禁)</label>
+            <label for="chk-roi-composition" style="font-size: 10.5px; cursor: pointer;">${t('step2.composition')}</label>
           </div>
           <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px; line-height: 1.5; padding: 6px; background: rgba(0,0,0,0.02); border-radius: 4px;">
-            <div>像素边界: X [${Math.round(activeRoi.xlim ? activeRoi.xlim[0] : data.roi.xMin)} ~ ${Math.round(activeRoi.xlim ? activeRoi.xlim[1] : data.roi.xMax)}]</div>
-            <div>像素边界: Y [${Math.round(activeRoi.ylim ? activeRoi.ylim[0] : data.roi.yMin)} ~ ${Math.round(activeRoi.ylim ? activeRoi.ylim[1] : data.roi.yMax)}]</div>
-            <div>归属列数: <strong>${currentColumns.length}</strong> 列</div>
+            <div>${t('step2.pixelX')} [${Math.round(activeRoi.xlim ? activeRoi.xlim[0] : data.roi.xMin)} ~ ${Math.round(activeRoi.xlim ? activeRoi.xlim[1] : data.roi.xMax)}]</div>
+            <div>${t('step2.pixelY')} [${Math.round(activeRoi.ylim ? activeRoi.ylim[0] : data.roi.yMin)} ~ ${Math.round(activeRoi.ylim ? activeRoi.ylim[1] : data.roi.yMax)}]</div>
+            <div>${t('step2.assignedCols')} <strong>${currentColumns.length}</strong> ${t('step2.cols')}</div>
           </div>
         </div>
       </div>
 
       <!-- 推进到 Step 3 -->
       <button id="btn-apply-roi-next" class="primary-btn" style="width: 100%; padding: 6px 12px; font-size: 12px;">
-        👉 确认有效区，进入 Y 轴标定 (步骤 3)
+        ${t('step2.next')}
       </button>
     </div>
   `;

@@ -253,11 +253,12 @@ def export_scientific_xlsx(
         if include_meta_sheets and ensemble_tables:
             if len(ensemble_tables) == 1:
                 t0 = ensemble_tables[0]
+                sheet_label = str(t0.get("name") or "Age_Uncertainty_U1000")[:31]
                 df_ens = pd.DataFrame(t0.get("data", []), columns=t0.get("columns"))
-                df_ens.to_excel(writer, sheet_name="ensemble_table", index=False)
+                df_ens.to_excel(writer, sheet_name=sheet_label, index=False)
             else:
                 for idx, t in enumerate(ensemble_tables):
-                    sheet_label = f"ensemble_{idx + 1}"
+                    sheet_label = str(t.get("name") or f"ensemble_{idx + 1}")[:31]
                     df_ens = pd.DataFrame(t.get("data", []), columns=t.get("columns"))
                     df_ens.to_excel(writer, sheet_name=sheet_label, index=False)
 

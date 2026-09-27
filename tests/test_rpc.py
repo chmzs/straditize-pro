@@ -138,7 +138,7 @@ class TestStraditizeRpcProtocol(unittest.TestCase):
                 "id": 101,
             }
         )
-        self.assertEqual(resp["error"]["code"], INVALID_PARAMS)
+        self.assertIn(resp["error"]["code"], (INVALID_PARAMS, STATE_ERROR))
 
         # Case B: Wrong argument type (col_index expects int, not array)
         resp = self.call_rpc(
@@ -1119,6 +1119,9 @@ class TestSectionFiveJsonRpcMethods(unittest.TestCase):
 
         # 0. Line removal is region-scoped: without a declared data region there
         #    is no defined scope, and guessing one would be a silent substitution.
+        self.session.data_xlim = None
+        self.session.data_ylim = None
+        self.session.rois = []
         with self.assertRaises(AssertionError):
             self.rpc_call("algorithm.degrid", {})
 

@@ -1,5 +1,6 @@
 import { DiagramData } from '../../types/pollen';
 import { StepContext } from './_registry';
+import { t } from '../../i18n';
 
 export const step = 8;
 export const title = '8. 校验与质量诊断';
@@ -80,9 +81,9 @@ export function render(data: DiagramData): string {
 
   return `
     <div class="step-panel" data-step="8">
-      <div class="step-title">8. 地学校验与质量诊断 (QA)</div>
+      <div class="step-title">${t('step8.title')}</div>
       <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.4;">
-        执行全剖面组分总和门禁（≤100%）、空层位排查与单列满刻度一致性诊断。
+        ${t('step8.desc')}
       </div>
 
       <!-- 诊断综合状态横幅 -->
@@ -190,8 +191,8 @@ export function render(data: DiagramData): string {
       </div>
 
       <!-- 终点操作按钮 -->
-      <button id="btn-qa-export" class="primary-btn" style="width: 100%; padding: 6px 12px; font-size: 12px;">
-        💾 确认校验结果，前往顶栏导出
+      <button id="btn-qa-export" class="btn btn-primary" style="width: 100%; padding: 8px 12px; font-size: 12px; font-weight: 700;">
+        ${t('step8.directExport')}
       </button>
     </div>
   `;
@@ -270,11 +271,11 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   });
 
   root.querySelector('#btn-qa-export')?.addEventListener('click', () => {
-    const topbarExportBtn = document.querySelector('#btn-export-csv, #btn-export, [title*="导出"]') as HTMLButtonElement | null;
+    const topbarExportBtn = document.querySelector('#btn-export-csv, #btn-export, [title*="导出"], [title*="Export"]') as HTMLButtonElement | null;
     if (topbarExportBtn) {
       topbarExportBtn.click();
-    } else {
-      alert('地学校验已确认完成！请点击顶栏【导出】按钮下载数据产物。');
+    } else if (ctx.onOpenDataViewer) {
+      ctx.onOpenDataViewer();
     }
   });
 

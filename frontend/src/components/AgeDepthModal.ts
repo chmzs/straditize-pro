@@ -153,14 +153,13 @@ export class AgeDepthModal {
   private excludeDragStart: { x: number; y: number } | null = null;
   private excludePreview: number[] | null = null;
 
-  // 测年点列表
-  private datingPoints: DatingPoint[] = [
-    { id: '14C_1', depth: 15.0, age: 350, error: 30, thickness: 1, cc: 1 },
-    { id: '14C_2', depth: 45.0, age: 980, error: 40, thickness: 1, cc: 1 },
-    { id: '14C_3', depth: 85.0, age: 1850, error: 45, thickness: 1, cc: 1 },
-    { id: '14C_4', depth: 120.0, age: 2450, error: 50, thickness: 1, cc: 1 },
-    { id: '14C_5', depth: 145.0, age: 2980, error: 60, thickness: 1, cc: 1 },
-  ];
+  // 测年点列表 (严格纯净初始化，无预设假数据)
+  private datingPoints: DatingPoint[] = [];
+
+  // 曲线控制点与测年点交互模式
+  private activeFMode: 'adjust' | 'add' | 'delete' | 'pickDate' = 'adjust';
+  private controlPoints: Array<{ id: string; x: number; y: number; kind: 'curve' | 'min' | 'max' }> = [];
+  private draggingControlPoint: number | null = null;
 
   constructor(
     container: HTMLElement,
@@ -241,6 +240,13 @@ export class AgeDepthModal {
               </div>
 
               <div id="ad-canvas-container" style="flex: 1; min-height: 240px; position: relative; background: var(--bg-tertiary); border: 2px dashed var(--border-color); border-radius: 6px; overflow: hidden;">
+                <!-- 画布左上角控制点与测年点交互工具条 -->
+                <div id="ad-floating-toolbar" style="position: absolute; top: 8px; left: 8px; z-index: 20; display: flex; gap: 4px; background: rgba(15,23,42,0.85); padding: 4px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15);">
+                  <button class="tool-btn ad-fmode-btn active" data-fmode="adjust" style="font-size: 10px; padding: 2px 7px;">微调 (V)</button>
+                  <button class="tool-btn ad-fmode-btn" data-fmode="add" style="font-size: 10px; padding: 2px 7px;">➕ 加点 (A)</button>
+                  <button class="tool-btn ad-fmode-btn" data-fmode="delete" style="font-size: 10px; padding: 2px 7px;">➖ 删点 (D)</button>
+                  <button class="tool-btn ad-fmode-btn" data-fmode="pickDate" style="font-size: 10px; padding: 2px 7px; color: #34d399;">🎯 拾取测年点 (P)</button>
+                </div>
                 <canvas id="ad-inspection-canvas" style="position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; display: none;"></canvas>
                 <div id="ad-empty-drop-zone" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg-card); z-index: 10; padding: 24px; text-align: center;">
                   <div style="font-size: 44px; margin-bottom: 10px;">⏳</div>
@@ -278,11 +284,23 @@ export class AgeDepthModal {
                 <input type="file" id="ad-file-input" accept="image/*" style="display: none;" />
               </div>
 
-              <!-- ============ 步骤 1：四点标定 ============ -->
+              <!-- ============ 步骤 1：坐标轴标定 ============ -->
               <div class="form-group" style="margin: 0; padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                  <span style="font-size: 11px; font-weight: bold; color: var(--accent-blue);">① 四点标定 (Calibration)</span>
+                  <span style="font-size: 11px; font-weight: bold; color: var(--accent-blue);">① 坐标轴标定 (Calibration)</span>
                   <button class="tool-btn" id="ad-btn-calib-reset" style="font-size: 9.5px; padding: 1px 6px;">重置</button>
+                </div>
+
+                <!-- 轴向翻转选择 (支持标准 Bacon 与深度为 X 的反向文献) -->
+                <div style="display: flex; gap: 10px; margin-bottom: 8px; font-size: 10px;">
+                  <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="radio" name="ad-axis-orient" id="ad-orient-std" value="std" checked />
+                    <span>X=年代, Y=深度</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="radio" name="ad-axis-orient" id="ad-orient-rev" value="rev" />
+                    <span>X=深度, Y=年代</span>
+                  </label>
                 </div>
 
                 <button class="btn btn-primary" id="ad-btn-calib-start" style="width: 100%; font-size: 11px; padding: 5px; background: linear-gradient(135deg, #0284c7, #38bdf8);">
@@ -446,12 +464,13 @@ export class AgeDepthModal {
                 <table class="wpd-preview-table" style="width: 100%; font-size: 11px;">
                   <thead>
                     <tr>
-                      <th style="width: 80px;">测年ID</th>
-                      <th style="width: 70px;">深度 (cm)</th>
-                      <th style="width: 80px;">¹⁴C 年龄 (BP)</th>
-                      <th style="width: 60px;">误差 (±1σ)</th>
-                      <th style="width: 60px;">厚度 (cm)</th>
-                      <th style="width: 80px;">校正曲线</th>
+                      <th style="width: 70px;">测年ID</th>
+                      <th style="width: 65px;">深度 (cm)</th>
+                      <th style="width: 75px;">¹⁴C 年龄 (BP)</th>
+                      <th style="width: 55px;">误差 (±1σ)</th>
+                      <th style="width: 55px;">厚度 (cm)</th>
+                      <th style="width: 75px;">校正曲线</th>
+                      <th style="width: 38px; text-align: center;">操作</th>
                     </tr>
                   </thead>
                   <tbody id="ad-dating-tbody"></tbody>
@@ -713,6 +732,16 @@ export class AgeDepthModal {
       this.close();
     });
 
+    // ================= 浮动交互工具条模式切换 =================
+    modal.querySelectorAll('.ad-fmode-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        modal.querySelectorAll('.ad-fmode-btn').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        const mode = btn.getAttribute('data-fmode') as any;
+        if (mode) this.activeFMode = mode;
+      });
+    });
+
     // ================= 四点标定交互 =================
     modal.querySelector('#ad-btn-calib-start')?.addEventListener('click', () => this.startCalibration());
     modal.querySelector('#ad-btn-calib-reset')?.addEventListener('click', () => this.resetCalibration());
@@ -794,8 +823,7 @@ export class AgeDepthModal {
     // 导出 geoChronR 脚本按钮
     modal.querySelector('#btn-ad-export-geochronr')?.addEventListener('click', () => this.exportGeoChronRScript());
 
-    // 默认载入 Bacon 范例
-    this.loadSampleImage('bacon');
+    // 未载入图谱时展示干净的拖拽/选择区域，不自动载入内置示例（点击示例按钮才载入）
   }
 
   private sseSource: EventSource | null = null;
@@ -852,24 +880,39 @@ export class AgeDepthModal {
     if (!tbody) return;
 
     tbody.innerHTML = '';
-    this.datingPoints.forEach((p, _idx) => {
+    this.datingPoints.forEach((p, idx) => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td><input type="text" value="${p.id}" style="width:100%;font-size:10.5px;" /></td>
-        <td><input type="number" value="${p.depth}" style="width:100%;font-size:10.5px;" /></td>
-        <td><input type="number" value="${p.age}" style="width:100%;font-size:10.5px;" /></td>
-        <td><input type="number" value="${p.error}" style="width:100%;font-size:10.5px;" /></td>
-        <td><input type="number" value="${p.thickness}" style="width:100%;font-size:10.5px;" /></td>
+        <td><input type="text" value="${p.id}" style="width:100%;font-size:10px;" /></td>
+        <td><input type="number" value="${p.depth}" style="width:100%;font-size:10px;" /></td>
+        <td><input type="number" value="${p.age}" style="width:100%;font-size:10px;" /></td>
+        <td><input type="number" value="${p.error}" style="width:100%;font-size:10px;" /></td>
+        <td><input type="number" value="${p.thickness}" style="width:100%;font-size:10px;" /></td>
         <td>
-          <select style="width:100%;font-size:10px;">
+          <select style="width:100%;font-size:9.5px;">
             <option value="1" ${p.cc === 1 ? 'selected' : ''}>IntCal20</option>
             <option value="2" ${p.cc === 2 ? 'selected' : ''}>Marine20</option>
             <option value="3" ${p.cc === 3 ? 'selected' : ''}>SHCal20</option>
             <option value="0" ${p.cc === 0 ? 'selected' : ''}>Non-14C</option>
           </select>
         </td>
+        <td style="text-align: center;">
+          <button class="icon-btn btn-del-date-row" data-idx="${idx}" style="color: #ef4444; font-size: 13px; cursor: pointer; background: none; border: none; padding: 0 4px;">&times;</button>
+        </td>
       `;
       tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('.btn-del-date-row').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const rowIdx = parseInt((btn as HTMLElement).getAttribute('data-idx') || '-1', 10);
+        if (rowIdx >= 0 && rowIdx < this.datingPoints.length) {
+          this.datingPoints.splice(rowIdx, 1);
+          this.renderDatingTable();
+          this.renderCanvas();
+        }
+      });
     });
   }
 
@@ -1535,6 +1578,31 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
       if (res && res !== true && res.inspection) {
         this.inspectionData = res.inspection;
         this.mappedSamples = res.mapped_samples || null;
+
+        // 初始化可编辑控制点
+        if (res.inspection.px_points && res.inspection.px_points.x_curve) {
+          const px = res.inspection.px_points;
+          const stepSize = Math.max(1, Math.floor(px.y.length / 20));
+          this.controlPoints = [];
+          for (let i = 0; i < px.y.length; i += stepSize) {
+            this.controlPoints.push({
+              id: `cp_${i}`,
+              x: px.x_curve[i],
+              y: px.y[i],
+              kind: 'curve',
+            });
+          }
+          if ((px.y.length - 1) % stepSize !== 0) {
+            const lastIdx = px.y.length - 1;
+            this.controlPoints.push({
+              id: `cp_${lastIdx}`,
+              x: px.x_curve[lastIdx],
+              y: px.y[lastIdx],
+              kind: 'curve',
+            });
+          }
+        }
+
         this.renderCanvas();
         this.updateMappingTable();
         const statusEl = this.modalEl.querySelector('#ad-status-msg');
@@ -1623,6 +1691,75 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
         return;
       }
 
+      if (this.activeFMode === 'pickDate') {
+        const orientStd = (this.modalEl?.querySelector('#ad-orient-std') as HTMLInputElement)?.checked ?? true;
+        const aL = parseFloat((this.modalEl?.querySelector('#ad-inp-age-left') as HTMLInputElement)?.value || '3000');
+        const aR = parseFloat((this.modalEl?.querySelector('#ad-inp-age-right') as HTMLInputElement)?.value || '0');
+        const dT = parseFloat((this.modalEl?.querySelector('#ad-inp-depth-top') as HTMLInputElement)?.value || '0');
+        const dB = parseFloat((this.modalEl?.querySelector('#ad-inp-depth-bottom') as HTMLInputElement)?.value || '150');
+
+        let pickedDepth = 0;
+        let pickedAge = 0;
+        if (this.calibMarkers.length >= 4) {
+          const x0 = this.calibMarkers[0].x;
+          const x1 = this.calibMarkers[1].x;
+          const y0 = this.calibMarkers[2].y;
+          const y1 = this.calibMarkers[3].y;
+          const fx = (pt.x - x0) / Math.max(1, x1 - x0);
+          const fy = (pt.y - y0) / Math.max(1, y1 - y0);
+          if (orientStd) {
+            pickedAge = Math.round(aL + fx * (aR - aL));
+            pickedDepth = Math.round((dT + fy * (dB - dT)) * 10) / 10;
+          } else {
+            pickedDepth = Math.round((dT + fx * (dB - dT)) * 10) / 10;
+            pickedAge = Math.round(aL + fy * (aR - aL));
+          }
+        }
+        this.datingPoints.push({
+          id: `14C_${this.datingPoints.length + 1}`,
+          depth: Math.max(0, pickedDepth),
+          age: Math.max(0, pickedAge),
+          error: 30,
+          thickness: 1,
+          cc: 1,
+        });
+        this.renderDatingTable();
+        this.renderCanvas();
+        return;
+      }
+
+      if (this.activeFMode === 'add') {
+        this.controlPoints.push({
+          id: `cp_${Date.now()}`,
+          x: pt.x,
+          y: pt.y,
+          kind: 'curve',
+        });
+        this.controlPoints.sort((a, b) => a.y - b.y);
+        this.refitCurveFromControlPoints();
+        this.renderCanvas();
+        return;
+      }
+
+      if (this.activeFMode === 'delete') {
+        const cpIdx = this.findControlPointAt(pt);
+        if (cpIdx >= 0) {
+          this.controlPoints.splice(cpIdx, 1);
+          this.refitCurveFromControlPoints();
+          this.renderCanvas();
+          return;
+        }
+      }
+
+      if (this.activeFMode === 'adjust') {
+        const cpIdx = this.findControlPointAt(pt);
+        if (cpIdx >= 0) {
+          this.draggingControlPoint = cpIdx;
+          e.preventDefault();
+          return;
+        }
+      }
+
       const hit = this.findMarkerAt(pt);
       if (hit >= 0) {
         this.draggingMarker = hit;
@@ -1636,6 +1773,14 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
       if (this.panning) {
         this.viewport.panBy(e.clientX - this.panning.lastX, e.clientY - this.panning.lastY);
         this.panning = { lastX: e.clientX, lastY: e.clientY };
+        this.renderCanvas();
+        return;
+      }
+
+      if (this.draggingControlPoint !== null && this.controlPoints[this.draggingControlPoint]) {
+        this.controlPoints[this.draggingControlPoint].x = pt.x;
+        this.controlPoints[this.draggingControlPoint].y = pt.y;
+        this.refitCurveFromControlPoints();
         this.renderCanvas();
         return;
       }
@@ -1663,6 +1808,10 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
     });
 
     const endDrag = () => {
+      if (this.draggingControlPoint !== null) {
+        this.draggingControlPoint = null;
+        return;
+      }
       if (this.panning) {
         this.panning = null;
         return;
@@ -1782,6 +1931,36 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
     );
     this.updateZoomLabel();
     this.renderCanvas();
+  }
+
+  private findControlPointAt(pt: { x: number; y: number }): number {
+    const radius = 9.0 / Math.max(this.viewport.scale, 1e-6);
+    for (let i = 0; i < this.controlPoints.length; i++) {
+      const cp = this.controlPoints[i];
+      if (Math.hypot(cp.x - pt.x, cp.y - pt.y) <= radius) return i;
+    }
+    return -1;
+  }
+
+  private refitCurveFromControlPoints(): void {
+    if (!this.inspectionData?.px_points || this.controlPoints.length < 2) return;
+    const px = this.inspectionData.px_points;
+    const sorted = [...this.controlPoints].sort((a, b) => a.y - b.y);
+    const sortedY = sorted.map((p) => p.y);
+    const sortedX = sorted.map((p) => p.x);
+    for (let i = 0; i < px.y.length; i++) {
+      const cy = px.y[i];
+      if (cy <= sortedY[0]) {
+        px.x_curve[i] = sortedX[0];
+      } else if (cy >= sortedY[sortedY.length - 1]) {
+        px.x_curve[i] = sortedX[sortedX.length - 1];
+      } else {
+        let j = 0;
+        while (j < sortedY.length - 1 && sortedY[j + 1] < cy) j++;
+        const frac = (cy - sortedY[j]) / Math.max(1e-6, sortedY[j + 1] - sortedY[j]);
+        px.x_curve[i] = sortedX[j] + frac * (sortedX[j + 1] - sortedX[j]);
+      }
+    }
   }
 
   private findMarkerAt(pt: { x: number; y: number }): number {
@@ -2131,6 +2310,60 @@ message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建�
     // 拟合中位线
     if (this.showCurve && px.y && px.x_curve) {
       strokeWithHalo(ctx, curvePath, CURVE_COLORS.median, 2.5 * inv);
+    }
+
+    // 可编辑离散控制点 (Control Points)
+    if (this.showCurve && this.controlPoints.length > 0) {
+      for (const cp of this.controlPoints) {
+        ctx.beginPath();
+        ctx.arc(cp.x, cp.y, 4.2 * inv, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = '#0284c7';
+        ctx.lineWidth = 1.8 * inv;
+        ctx.stroke();
+      }
+    }
+
+    // 测年点散点与标记 (Radiocarbon / Dating Points)
+    if (this.datingPoints.length > 0 && this.calibMarkers.length >= 4) {
+      const orientStd = (this.modalEl?.querySelector('#ad-orient-std') as HTMLInputElement)?.checked ?? true;
+      const aL = parseFloat((this.modalEl?.querySelector('#ad-inp-age-left') as HTMLInputElement)?.value || '3000');
+      const aR = parseFloat((this.modalEl?.querySelector('#ad-inp-age-right') as HTMLInputElement)?.value || '0');
+      const dT = parseFloat((this.modalEl?.querySelector('#ad-inp-depth-top') as HTMLInputElement)?.value || '0');
+      const dB = parseFloat((this.modalEl?.querySelector('#ad-inp-depth-bottom') as HTMLInputElement)?.value || '150');
+
+      const x0 = this.calibMarkers[0].x;
+      const x1 = this.calibMarkers[1].x;
+      const y0 = this.calibMarkers[2].y;
+      const y1 = this.calibMarkers[3].y;
+
+      for (const dp of this.datingPoints) {
+        let pxX = 0;
+        let pxY = 0;
+        if (orientStd) {
+          const fx = (dp.age - aL) / Math.max(1, aR - aL);
+          const fy = (dp.depth - dT) / Math.max(1, dB - dT);
+          pxX = x0 + fx * (x1 - x0);
+          pxY = y0 + fy * (y1 - y0);
+        } else {
+          const fx = (dp.depth - dT) / Math.max(1, dB - dT);
+          const fy = (dp.age - aL) / Math.max(1, aR - aL);
+          pxX = x0 + fx * (x1 - x0);
+          pxY = y0 + fy * (y1 - y0);
+        }
+        ctx.beginPath();
+        ctx.arc(pxX, pxY, 6.0 * inv, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.35)';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(pxX, pxY, 3.5 * inv, 0, Math.PI * 2);
+        ctx.fillStyle = '#10b981';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.2 * inv;
+        ctx.stroke();
+      }
     }
 
     // 花粉层位交点：像素位置由后端标定器直接给出，前端不做坐标反算。

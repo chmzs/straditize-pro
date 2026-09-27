@@ -1,5 +1,6 @@
 import { DiagramData } from '../../types/pollen';
 import { StepContext } from './_registry';
+import { t } from '../../i18n';
 
 export const step = 5;
 export const title = '5. 自动分列与属种命名';
@@ -13,6 +14,10 @@ export interface LabelReconciliation {
 }
 
 let latestReconciliation: LabelReconciliation | null = null;
+
+export function setLatestReconciliation(recon: LabelReconciliation | null): void {
+  latestReconciliation = recon;
+}
 
 export function render(data: DiagramData): string {
   const columns = data.columns || [];
@@ -38,25 +43,25 @@ export function render(data: DiagramData): string {
          data-without-label="${recon.columns_without_label.join(',')}"
          data-without-column="${recon.labels_without_column.join(',')}"
          data-highlight-col="${activeColId}">
-      <div class="step-title">5. 自动分列与属种命名 (Columns &amp; Naming)</div>
+      <div class="step-title">${t('step5.title')}</div>
       <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5;">
-        基于墨迹切分属种垂直区间。支持 OCR 自动识别属种名与区间对账，或在左栏逐列输入。
+        ${t('step5.desc')}
       </div>
 
       <!-- OCR 属种识别区域 -->
       <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px;">
-        <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">🔍 顶栏属种标签 OCR 识别</div>
+        <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">${t('step5.ocrSection')}</div>
         <p style="font-size: 10px; color: var(--text-muted); margin: 0 0 8px 0; line-height: 1.4;">
-          自动框选并透视矫正图顶属种标签带，执行 PP-OCRv4 离线识别与植物属种词典纠错。
+          ${t('step5.ocrDesc')}
         </p>
         <button id="btn-trigger-ocr" class="tool-btn" style="width: 100%; font-size: 11px; padding: 4px;">
-          ⚡ 扫描并匹配属种名称
+          ${t('step5.ocrBtn')}
         </button>
       </div>
 
       <!-- 区间归属与对账清单 (Ticket T11) -->
       <div class="inspector-section" style="margin-bottom: 12px;">
-        <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">区间归属对账状态</div>
+        <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">${t('step5.reconTitle')}</div>
         <div id="naming-recon-box" style="padding: 6px 8px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; font-size: 10px; line-height: 1.6; font-family: monospace;">
           <div>• 配对列表: <span id="lbl-assign" style="color: var(--accent-blue);">${assignGrammar}</span></div>
           <div>• 缺标签列: <span id="lbl-without-label" style="color: ${recon.columns_without_label.length > 0 ? '#f59e0b' : 'inherit'};">${withoutLabelGrammar}</span></div>
@@ -67,16 +72,16 @@ export function render(data: DiagramData): string {
 
       <!-- 逐列点名模式说明 -->
       <div class="inspector-section" style="padding: 8px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 6px; margin-bottom: 12px;">
-        <div style="font-size: 11px; font-weight: 700; color: var(--accent-blue); margin-bottom: 4px;">📝 逐列点名模式 (顺序无关)</div>
+        <div style="font-size: 11px; font-weight: 700; color: var(--accent-blue); margin-bottom: 4px;">${t('step5.sequentialTitle')}</div>
         <div style="font-size: 10px; color: var(--text-secondary); line-height: 1.4;">
-          当前选中列: <strong id="naming-sequential-highlight" style="color: var(--accent-green, #10b981);">${activeColId}</strong><br>
-          在左侧栏中直接输入各列属种名，获得焦点时画布将即时高亮该列，杜绝顺序假定。
+          ${t('step5.selectedCol')} <strong id="naming-sequential-highlight" style="color: var(--accent-green, #10b981);">${activeColId}</strong><br>
+          ${t('step5.sequentialDesc')}
         </div>
       </div>
 
       <!-- 阶段提交按钮 -->
       <button id="btn-apply-naming-next" class="primary-btn" style="width: 100%; padding: 6px 12px; font-size: 12px;">
-        👉 确认列命名，进入 X 轴刻度标定 (步骤 6)
+        ${t('step5.next')}
       </button>
     </div>
   `;

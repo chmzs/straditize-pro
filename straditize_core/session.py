@@ -467,6 +467,14 @@ class StraditizeSession(
         self._init_rois()
 
         sug = self.suggest_data_region()
+        self.roi_create(
+            name="pollen",
+            x0=sug["xMin"],
+            x1=sug["xMax"],
+            y0=sug["yMin"],
+            y1=sug["yMax"],
+            composition=True,
+        )
         return {
             "success": True,
             "width": self.width,
@@ -489,14 +497,38 @@ class StraditizeSession(
     def suggest_data_region(self) -> dict[str, float]:
         """Initial data-region (ROI) suggestion for a freshly loaded diagram.
 
-        Deliberately inset from the image borders. This is a *region* only: it
-        carries no depth values, because the pixel-to-depth mapping is the user's
-        two-point calibration on the Y axis (S4), which is independent of where
-        the digitising box happens to sit.
+        Uses vertical baseline morphology when column baselines are detectable so
+        angled header labels above the columns are excluded from the data ROI.
+        Falls back to standard inset proportions when fewer than 3 vertical lines exist.
         """
         if self.image is None:
             raise JsonRpcError(STATE_ERROR, "No image loaded in session.")
         w, h = self.width, self.height
+        try:
+            from scipy.ndimage import binary_opening
+
+            gray = np.array(self.image.convert("L"))
+            dark = gray < 180
+            vert_len = max(20, int(h * 0.22))
+            vert_lines = binary_opening(dark, structure=np.ones((vert_len, 1)))
+            vert_row_counts = vert_lines.sum(axis=1)
+            active_rows = np.where(vert_row_counts >= 6)[0]
+            if len(active_rows) > 10:
+                y0, y1 = int(active_rows[0]), int(active_rows[-1])
+                active_cols = np.where(vert_lines[y0:y1, :].any(axis=0))[0]
+                if len(active_cols) >= 2 and (y1 - y0) >= int(h * 0.15):
+                    x0 = max(round(w * 0.05), int(active_cols[0]))
+                    x1 = min(round(w * 0.96), int(active_cols[-1]))
+                    if x1 - x0 >= int(w * 0.20):
+                        return {
+                            "xMin": float(x0),
+                            "xMax": float(x1),
+                            "yMin": float(y0),
+                            "yMax": float(y1),
+                        }
+        except Exception:  # noqa: BLE001
+            pass
+
         return {
             "xMin": round(w * 0.12),
             "xMax": round(w * 0.94),

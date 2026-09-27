@@ -1,4 +1,5 @@
 import { ToolMode } from '../types/pollen';
+import { t } from '../i18n';
 
 export class ToolModeManager {
   private currentMode: ToolMode = 'select';
@@ -32,65 +33,65 @@ export class ToolModeManager {
     switch (mode) {
       case 'select':
         return {
-          name: '选择与微调 (Adjust)',
-          shortcut: 'S / V',
-          hint: '选择图元 / 拖动微调控制点 (S) / 方向键 1px 精调',
+          name: t('tool.selectName'),
+          shortcut: t('tool.selectShortcut'),
+          hint: t('tool.selectHint'),
           cursor: 'default',
         };
       case 'pan':
         return {
-          name: '抓手平移 (Pan)',
-          shortcut: 'H / 右键 / 空格',
-          hint: '右键拖拽 / 中键拖拽 / 按住空格+左键平移图谱',
+          name: t('tool.panName'),
+          shortcut: t('tool.panShortcut'),
+          hint: t('tool.panHint'),
           cursor: 'grab',
         };
       case 'roi':
         return {
-          name: 'ROI 矩形数据区',
-          shortcut: 'R',
-          hint: '拖拽 8 个恒定手柄微调地质数据有效区边界',
+          name: t('tool.roiName'),
+          shortcut: t('tool.roiShortcut'),
+          hint: t('tool.roiHint'),
           cursor: 'crosshair',
         };
       case 'addCol':
         return {
-          name: '添加属种列 (Column)',
-          shortcut: 'C',
-          hint: '在画布点击插入新属种垂直分列基线 (C)',
+          name: t('tool.addColName'),
+          shortcut: t('tool.addColShortcut'),
+          hint: t('tool.addColHint'),
           cursor: 'crosshair',
         };
       case 'addPoint':
         return {
-          name: '添加控制点 (Add Point)',
-          shortcut: 'A',
-          hint: '点击左键向当前属种插入控制锚点 (A)',
+          name: t('tool.addPointName'),
+          shortcut: t('tool.addPointShortcut'),
+          hint: t('tool.addPointHint'),
           cursor: 'crosshair',
         };
       case 'eraser':
         return {
-          name: '删除控制点 (Delete Point)',
-          shortcut: 'D',
-          hint: '点击左键删除控制点或属种列 (D)',
+          name: t('tool.eraserName'),
+          shortcut: t('tool.eraserShortcut'),
+          hint: t('tool.eraserHint'),
           cursor: 'not-allowed',
         };
       case 'ycalib':
         return {
-          name: 'Y 轴两点标定 (Calibrate)',
-          shortcut: 'Y',
-          hint: '在图上依次点击 Y 轴上两个已知刻度所在的行，随后填写其真实值',
+          name: t('tool.ycalibName'),
+          shortcut: t('tool.ycalibShortcut'),
+          hint: t('tool.ycalibHint'),
           cursor: 'crosshair',
         };
       case 'linefix':
         return {
-          name: '线掩膜人工修正 (Line Fix)',
-          shortcut: 'K',
-          hint: '按住左键涂抹：擦掉误标红线 / 补回漏标的线（按 B 可叠加查看）',
+          name: t('tool.linefixName'),
+          shortcut: t('tool.linefixShortcut'),
+          hint: t('tool.linefixHint'),
           cursor: 'crosshair',
         };
       default:
         return {
-          name: '选择',
+          name: t('tool.selectName'),
           shortcut: 'V',
-          hint: '选择与微调',
+          hint: t('tool.selectHint'),
           cursor: 'default',
         };
     }

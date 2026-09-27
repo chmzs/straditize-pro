@@ -1820,7 +1820,21 @@ export class GeologyCanvas {
     const bounds = CoordinateSystem.calibrationBounds(cal);
     if (!bounds || cal.depthGridEnabled === false) return;
 
-    const interval = cal.depthInterval && cal.depthInterval > 0 ? cal.depthInterval : 2;
+    // 网格线仅在 Step 7（采样层位）或 Step 3（物理标定）等需要时显示，
+    // Step 4 (干扰清理) 和 Step 5 (自动分列) 默认不绘制网格线，彻底消除抹黑图谱的灾难
+    if (this.workflowStage === 4 || this.workflowStage === 5) {
+      return;
+    }
+
+    const totalSpan = Math.abs(bounds.bottomValue - bounds.topValue);
+    let interval = cal.depthInterval && cal.depthInterval > 0 ? cal.depthInterval : 2;
+    if (cal.depthInterval === undefined || (cal.depthInterval === 2 && totalSpan > 200)) {
+      if (totalSpan > 5000) interval = 500;
+      else if (totalSpan > 2000) interval = 200;
+      else if (totalSpan > 1000) interval = 100;
+      else if (totalSpan > 500) interval = 50;
+      else if (totalSpan > 200) interval = 20;
+    }
     const { depths, yPositions } = SplineInterpolator.getStandardDepthHorizons(cal, roi);
     if (depths.length === 0) return;
 
