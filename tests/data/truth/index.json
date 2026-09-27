@@ -1,0 +1,40 @@
+{
+  "images": {
+    "exaggeration_bell": {
+      "sha256": "6e0437c00cad46be66b897ab6a63abfdb8b47458634ee50888cc86ca41dd1794",
+      "size": [
+        1290,
+        933
+      ],
+      "has_tick_ruler": true,
+      "ticks": 65
+    },
+    "composite_cluster": {
+      "sha256": "631ba0458f79798b45959474d3ee2b12c045140b7f245c2fe358e496f839103d",
+      "size": [
+        1325,
+        865
+      ],
+      "has_tick_ruler": true,
+      "ticks": 120
+    },
+    "filled_silhouette": {
+      "sha256": "6ec1da6b97f2b5071dfbbe0145ad10bc502eb2095ef9882c7dc75b1dc226f8b8",
+      "size": [
+        771,
+        500
+      ],
+      "has_tick_ruler": false,
+      "ticks": 0
+    },
+    "hoya": {
+      "sha256": "f94196e6a81666c61c72ea7a2c731ee5d29dfe914414a2f35628d3ed5ed91c1f",
+      "size": [
+        2339,
+        1654
+      ],
+      "has_tick_ruler": false,
+      "ticks": 0
+    }
+  }
+}

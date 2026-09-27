@@ -11,22 +11,16 @@ Covers the complete typological spectrum extracted from Bell (2018) and riojaPlo
 """
 
 import os
-import sys
+
 import unittest
 
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if root_dir not in sys.path:
-    sys.path.insert(0, root_dir)
-core_dir = os.path.join(root_dir, "straditize")
-if core_dir not in sys.path:
-    sys.path.insert(0, core_dir)
 
 from straditize_core.session import StraditizeSession
 from straditize_core.calibration import LinearCalibration, LogCalibration
 
 
 class TestPollenMorphologyBenchmarks(unittest.TestCase):
-    BENCHMARK_DIR = os.path.join(os.path.dirname(__file__), "test_figures", "benchmark_types")
+    BENCHMARK_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "figures", "benchmark_types")
 
     def _get_image_path(self, filename: str) -> str:
         path = os.path.join(self.BENCHMARK_DIR, filename)

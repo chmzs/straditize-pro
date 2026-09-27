@@ -24,10 +24,10 @@ class TestAberPollenAccuracyBenchmark(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.image_path = os.path.join(
-            "tests", "test_figures", "benchmark_types", "type1_filled_silhouette_aber.png"
+            "tests", "data", "figures", "benchmark_types", "type1_filled_silhouette_aber.png"
         )
         cls.gt_csv_path = os.path.join(
-            "tests", "test_figures", "benchmark_types", "data", "aber_ground_truth.csv"
+            "tests", "data", "figures", "benchmark_types", "data", "aber_ground_truth.csv"
         )
 
         assert os.path.exists(cls.image_path), f"Missing test image {cls.image_path}"

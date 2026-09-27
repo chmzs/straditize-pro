@@ -2,7 +2,7 @@ import os
 import shutil
 import urllib.request
 
-target_dir = r"I:\software_dev\straditize\tests\test_figures\benchmark_types"
+target_dir = r"I:\software_dev\straditize\tests\data\figures\benchmark_types"
 os.makedirs(target_dir, exist_ok=True)
 
 headers = {"User-Agent": "Mozilla/5.0"}

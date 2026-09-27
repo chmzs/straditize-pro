@@ -12,7 +12,7 @@ from straditize_core.session import StraditizeSession
 from straditize_core.xticks import detect_xticks
 
 BELL_IMG_PATH = Path("straditize/straditize/widgets/tutorial/beginner/beginner-tutorial.png") # fallback / probe path
-TRUTH_DIR = Path("tests/probe_truth")
+TRUTH_DIR = Path("tests/data/truth")
 
 
 def test_two_endpoints_arbitrary_order_mapping():

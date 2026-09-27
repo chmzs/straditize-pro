@@ -16,8 +16,10 @@ app = "python -m straditize_core.rpc_server"                                   #
 frontend-dev = "npm --prefix frontend run dev"                            # 启动现代版前端开发服务器
 
 [tasks.test]
-description = "Run modern Straditize Pro test suite"
-cmd = "python -m pytest tests/test_core.py tests/test_rpc.py tests/verify_straditize_pro_e2e.py tests/test_age_depth_model.py tests/test_age_depth_extraction_quality.py tests/test_age_depth_real_figures.py tests/test_age_ensemble.py tests/test_no_fabrication.py tests/test_metadata_and_lipd.py tests/test_ocr_species_recognition.py tests/test_component_manager.py tests/test_horizon_consensus.py tests/test_vector_first_digitize.py tests/test_grid_line_removal.py tests/test_probe_x_ticks.py tests/test_multi_roi.py -q"
+description = "Run the FULL backend test suite (was: a hand-picked 16-file whitelist)"
+cmd = "python -m pytest --ignore=tests/e2e -q"
+# 已知失败用例由 tests/quarantine.txt 标记为 strict xfail，不再靠文件白名单隐藏；
+# 用例一旦修好会以 XPASS 让本任务变红，强制把条目从隔离区删除。新增测试文件无需改这里。
 
 [tasks.test-e2e]
 description = "Run Playwright end-to-end browser tests"

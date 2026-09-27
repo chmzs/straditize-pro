@@ -10,12 +10,7 @@ Conforms to Section 3 of the OCR & Review Specification:
 6. Baseline anchor point calculation and spatial column snapping (X_anchor -> Column.startX).
 7. End-to-end Session RPC workflow integration.
 """
-import sys
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 import os
 import tempfile

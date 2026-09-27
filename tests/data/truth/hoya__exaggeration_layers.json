@@ -1,0 +1,47 @@
+{
+  "image": "straditize/straditize/widgets/tutorial/hoya-del-castillo/hoya-del-castillo.png",
+  "sha256": "f94196e6a81666c61c72ea7a2c731ee5d29dfe914414a2f35628d3ed5ed91c1f",
+  "size": [
+    2339,
+    1654
+  ],
+  "rule": "A pixel belongs to a layer iff its RGB is within 12 (sum of absolute differences) of that layer's exact colour. Colours are constants of the generating script, not of any algorithm.",
+  "layers": {
+    "true_green": {
+      "colour": [
+        34,
+        139,
+        34
+      ],
+      "pixels": 0,
+      "bbox": null
+    },
+    "exag_green": {
+      "colour": [
+        143,
+        197,
+        143
+      ],
+      "pixels": 0,
+      "bbox": null
+    },
+    "true_yellow": {
+      "colour": [
+        238,
+        201,
+        0
+      ],
+      "pixels": 0,
+      "bbox": null
+    },
+    "exag_yellow": {
+      "colour": [
+        247,
+        228,
+        126
+      ],
+      "pixels": 0,
+      "bbox": null
+    }
+  }
+}

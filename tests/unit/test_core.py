@@ -9,10 +9,8 @@ import sys
 import unittest
 from pathlib import Path
 
-# Ensure straditize_core can be imported even if not installed in site-packages
-REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+# 仓库根路径：下方子进程测试靠它注入 sys.path
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 import numpy as np
 import pandas as pd
@@ -52,8 +50,8 @@ from straditize_core.image import (
 )
 from straditize_core.pipeline import StraditizePipeline
 
-TEST_DIR = Path(__file__).resolve().parent
-TEST_FIGURES_DIR = TEST_DIR / "test_figures"
+TEST_DIR = Path(__file__).resolve().parent.parent
+TEST_FIGURES_DIR = TEST_DIR / "data" / "figures"
 
 
 class PureCoreIsolationTest(unittest.TestCase):

@@ -1,0 +1,47 @@
+{
+  "image": "tests/data/figures/benchmark_types/type1_filled_silhouette_aber.png",
+  "sha256": "6ec1da6b97f2b5071dfbbe0145ad10bc502eb2095ef9882c7dc75b1dc226f8b8",
+  "size": [
+    771,
+    500
+  ],
+  "rule": "A pixel belongs to a layer iff its RGB is within 12 (sum of absolute differences) of that layer's exact colour. Colours are constants of the generating script, not of any algorithm.",
+  "layers": {
+    "true_green": {
+      "colour": [
+        34,
+        139,
+        34
+      ],
+      "pixels": 0,
+      "bbox": null
+    },
+    "exag_green": {
+      "colour": [
+        143,
+        197,
+        143
+      ],
+      "pixels": 0,
+      "bbox": null
+    },
+    "true_yellow": {
+      "colour": [
+        238,
+        201,
+        0
+      ],
+      "pixels": 0,
+      "bbox": null
+    },
+    "exag_yellow": {
+      "colour": [
+        247,
+        228,
+        126
+      ],
+      "pixels": 0,
+      "bbox": null
+    }
+  }
+}

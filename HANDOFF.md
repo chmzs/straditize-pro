@@ -2,7 +2,16 @@
 - 更新时间：2026-09-25 21:35 | 分支 dev-v2-modern | HEAD a8f450c
 - 规则：**分节追加** —— 只改自己那一节，严禁整文件覆盖或改写他节；每节 ≤8 行，全文 ≤50 行，超限时最旧节整段移入 `HANDOFF-archive/`。
 - 一键验证：`pixi run lint` ｜ `pixi run test` ｜ `pixi run test-e2e` ｜ `npm --prefix frontend run build` ｜ `npm --prefix frontend test` ｜ `pixi run python support/probe_truth/check_ticket_ownership.py`
-- 当前结果：**8步工作流全闭环 + 5大审查病灶清零 + Y1/Y2靶心反馈 + 顶栏i18n全绿**；44项单测与9项Edge E2E全过。
+- 当前结果：**8步工作流全闭环 + 5大审查病灶清零 + Y1/Y2靶心反馈 + 顶栏i18n全绿**；后端全量 254 项（13 项在隔离区）+ 前端 4 组自检，四条门禁 PASS —— 逐条数字见 [QA-RESTRUCTURE] 节（原"44项单测"为白名单口径的旧数，已更正）。
+
+## [QA-RESTRUCTURE] 2026-09-26 — 门禁改全量、测试三层分目录、配置并入 pyproject
+- 门禁真跑：`pixi run test` 原是手写 16 文件白名单（只覆盖 196/248，且自身 7 红），已改为全量 254 项；CI 补 `npm test`（前端测试此前从不执行）。
+- 隔离区 `tests/quarantine.txt` 13 项 strict xfail 承接全部已知失败，归因 [A] tar bytes/str [B] ROI 默认值/命名 [C] 签名几何漂移 [D] 关闭回调时序；用例修好即 XPASS 让门禁变红，强制删条目。
+- 结构：`tests/{unit 21, integration 6, e2e, data/{figures,truth,corpus}}`；6 个非测试脚本移 `scripts/`；12 文件去 sys.path 样板改由 `tests/conftest.py` 注入；`ruff.toml` 并入 `pyproject.toml`；根目录 3 张验证截图已 git rm。
+- 验证：`pixi run lint` PASS ｜ `pixi run test` **241 passed / 13 xfailed / 0 failed** ｜ `npm --prefix frontend test` PASS ｜ `npm --prefix frontend run build` PASS。
+- 已修（原"范围外待决策"两项）：① `frontend/test-core.js` 5 个复刻类（History/Viewport/Display/Glossary/Caption）+ UStar 本地实现全部改为 `await import` 真 `.ts` 模块，diatom 改用真实导出而非 readFileSync 抠文本，仅剩 2 处就地标注的非模块断言；② `session.py` 范例改读 `straditize_core/assets/age_models/`，已入 package-data 与 PyInstaller datas。
+- 连带挖出并修复：`pyproject` 的 `exclude = ["straditize*"]` 因 fnmatch 也匹配 `straditize_core`，**wheel 里 0 个 .py、只剩 dist-info**（pip install 形同虚设）；同时漏配的 `ocr/data/diatom_genera.json` 也补进 package-data。现 wheel 55 个 .py + age_models 3 + ocr/models 3 + ocr/data 1，已实测。
+- 下一步原子动作：`pixi run test` 复验后按需 `git commit`（**勿整包提交**：工作树另有他人 39 文件在途改动）。
 
 ## [TOPBAR-SETTINGS] 2026-09-26 00:30 — 导出拦截与左栏文字间距两大体验瑕疵优化完成
 - 导出拦截温和化：未提取数据时点击顶栏 [💾 导出]，彻底消除后端原生 -32001 弹窗，平滑打开导出面板并在就绪清单清晰标出待完善项。

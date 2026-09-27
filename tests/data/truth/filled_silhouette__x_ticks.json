@@ -1,0 +1,16 @@
+{
+  "image": "tests/data/figures/benchmark_types/type1_filled_silhouette_aber.png",
+  "sha256": "6ec1da6b97f2b5071dfbbe0145ad10bc502eb2095ef9882c7dc75b1dc226f8b8",
+  "size": [
+    771,
+    500
+  ],
+  "rule": "Band rule: the band's per-column darkness is bimodal (>=0.97 of columns almost fully dark or almost fully light), >=3 stroke columns, at most half the width, AND every stroke column's absolute vertical run <= 12 px (a short isolated tick, not a column baseline crossing the band). Tick rule A: a column is a tick iff every row of the band is dark (<160). Rule B: runs of columns with >60% dark rows whose width is 1..4 px. Ground truth keeps only strokes confirmed by BOTH rules within 1 px. If no band satisfies the band rule, has_tick_ruler is false and there are no ticks.",
+  "band": null,
+  "has_tick_ruler": false,
+  "ticks": [],
+  "count": 0,
+  "rule_a_count": 0,
+  "rule_b_count": 0,
+  "agreement": null
+}

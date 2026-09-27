@@ -1,4 +1,4 @@
-import { Point2D } from '../types/pollen';
+import type { Point2D } from '../types/pollen';
 
 export type ImageDisplayMode = 'normal' | 'invert' | 'contrast' | 'binary';
 

@@ -16,12 +16,7 @@ looked like a result:
 * ages outside the observed depth range were extrapolated with nothing marking them;
 * a trace built from a handful of rows was gap-interpolated into a smooth invented curve.
 """
-from pathlib import Path
-import sys
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 import unittest
 
@@ -30,9 +25,6 @@ import numpy as np
 from straditize_core.age_depth import AgeDepthModel, AgeDepthAxisCalibrator
 from straditize_core.protocol import JsonRpcError
 from straditize_core.session import StraditizeSession
-
-FIGURE_DIR = REPO_ROOT / "tests" / "test_figures" / "age_models"
-
 
 def _bacon_calibrator():
     return AgeDepthAxisCalibrator(

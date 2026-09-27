@@ -39,7 +39,51 @@ straditize-cli = "straditize_core.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["straditize_core*"]
-exclude = ["straditize*", "frontend*", "tests*"]
+# 只靠 include 收窄即可。原先这里还写了 exclude = ["straditize*", ...]，
+# 而 fnmatch 规则下 "straditize*" 同时匹配 "straditize_core" —— 导致打包时
+# 把自己整个排除，wheel 里只剩 dist-info、0 个 .py（pip install 形同虚设）。
+# 遗留的 straditize/ 包本就不匹配 include，无需再排除。
 
 [tool.setuptools.package-data]
-"straditize_core.ocr" = ["models/*"]
+# models = ONNX 识别模型；data = 硅藻属词表 diatom_genera.json。
+# 后者原先漏配，pip 装的包会静默退回"只有花粉词表"（PyInstaller 路径早已登记）。
+"straditize_core.ocr" = ["models/*", "data/*"]
+# 内置范例图（session.load_age_depth_diagram(sample_key=...) 读取）
+"straditize_core.assets" = ["age_models/*"]
+
+# ---------------------------------------------------------------------------
+# Ruff（原独立 ruff.toml，已并入本文件作为唯一配置源）
+# ---------------------------------------------------------------------------
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",   # line length
+    "E402",   # module level import not at top
+    "E722",   # bare except
+    "E741",   # ambiguous variable name
+    "F403",   # from module import *
+    "F405",   # undefined from import *
+    "F841",   # unused local variable
+    "W605",   # invalid escape sequence
+]
+
+[tool.ruff.lint.per-file-ignores]
+"straditize/tests/**" = ["ALL"]
+"tests/**" = ["ALL"]
+"straditize/docs/**" = ["ALL"]
+"straditize/ci/**" = ["ALL"]
+"straditize/setup.py" = ["ALL"]
+"straditize/straditize/widgets/**" = ["ALL"]
+"straditize/straditize/__init__.py" = ["F401"]
+"straditize/straditize/__main__.py" = ["F401"]
+"straditize/straditize/evaluator.py" = ["F401"]
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# verify_straditize_pro_e2e.py 沿用历史命名，但确为正式测试套件，须纳入收集
+python_files = ["test_*.py", "verify_straditize_pro_e2e.py"]
+addopts = "--strict-markers"
+

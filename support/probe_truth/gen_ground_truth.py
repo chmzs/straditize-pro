@@ -23,12 +23,12 @@ import numpy as np
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / "tests" / "probe_truth"
+OUT = ROOT / "tests" / "data" / "truth"
 
 IMAGES = {
-    "exaggeration_bell": ROOT / "tests/test_figures/benchmark_types/type2_exaggeration_bell.png",
-    "composite_cluster": ROOT / "tests/test_figures/benchmark_types/type6_composite_zonation_cluster.png",
-    "filled_silhouette": ROOT / "tests/test_figures/benchmark_types/type1_filled_silhouette_aber.png",
+    "exaggeration_bell": ROOT / "tests/data/figures/benchmark_types/type2_exaggeration_bell.png",
+    "composite_cluster": ROOT / "tests/data/figures/benchmark_types/type6_composite_zonation_cluster.png",
+    "filled_silhouette": ROOT / "tests/data/figures/benchmark_types/type1_filled_silhouette_aber.png",
     "hoya": ROOT / "straditize/straditize/widgets/tutorial/hoya-del-castillo/hoya-del-castillo.png",
 }
 

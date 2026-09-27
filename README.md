@@ -41,7 +41,7 @@
 
 面向用户的数据**只有唯一合法来源：后端对用户输入的真实计算**。取不到就报错并停在原地。
 
-这不是口号，而是被测试守卫的架构不变量（`tests/test_no_fabrication.py`）：
+这不是口号，而是被测试守卫的架构不变量（`tests/integration/test_no_fabrication.py`）：
 历史上曾有"算法失败时用等分切割冒充识别结果 / 用随机抖动冒充提取曲线 / 用固定名单冒充 OCR 识别 /
 用前端自算 CSV 冒充导出"等通路，现已全部**物理删除**而非仅加开关关闭。
 详见 `docs/ARCHITECTURE.md` §2。
@@ -217,10 +217,14 @@ straditize-pro/
 │   └── session.py                # 会话状态机、数据求交与 POSIX UStar 导出
 ├── support/                      # 现代版打包配方 (PyInstaller spec) 与数据同步脚本
 ├── straditize/                   # 上游第三方 PyQt5 原版 (不维护；仅提供范例示例图片)
-├── tests/                        # 真实浏览器与端到端自动化测试
-│   ├── verify_browser_playwright_e2e.py # Playwright 真实 MS Edge 浏览器 E2E 交互测试
-│   ├── verify_straditize_pro_e2e.py     # 科学求交与坐标真相源端到端测试
-│   └── test_benchmark_morphologies.py   # 6 大图表形态基准测试
+├── tests/                        # pytest 测试：按层级分 unit / integration / e2e
+│   ├── conftest.py               # 仓库根 sys.path 注入 + 装载隔离区
+│   ├── quarantine.txt            # 已知失败用例隔离区（strict xfail，只减不增）
+│   ├── unit/                     # 21 个文件：直接调 straditize_core API
+│   ├── integration/              # 6 个文件：经 JSON-RPC dispatcher / HTTP 传输
+│   ├── e2e/                      # Playwright 真实 MS Edge 浏览器 E2E 交互测试
+│   └── data/                     # 测试夹具：figures / truth / corpus
+├── scripts/                      # 手工验收、基准与下载脚本（不被 pytest 收集）
 ├── pixi.toml                     # 项目环境、任务与依赖声明
 ├── start_straditize.bat          # Windows 桌面模式双击启动器
 ├── start_straditize_server.bat   # Windows 服务器模式双击启动器
@@ -251,7 +255,7 @@ npm --prefix frontend test
 
 > 现代版测试位于仓库根 `tests/`，而非上游遗留的 `straditize/tests/`
 > （后者只属于那条 PyQt5 分支，当前环境缺依赖跑不起来）。
-> 其中 `tests/test_no_fabrication.py` 专门守卫"不得返回替代数据"这条不变量。
+> 其中 `tests/integration/test_no_fabrication.py` 专门守卫"不得返回替代数据"这条不变量。
 
 ---
 

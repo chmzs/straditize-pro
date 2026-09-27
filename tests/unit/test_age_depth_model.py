@@ -15,8 +15,8 @@ from straditize_core.age_depth import (
     generate_bacon_script,
 )
 
-TEST_DIR = Path(__file__).resolve().parent
-AGE_MODELS_DIR = TEST_DIR / "test_figures" / "age_models"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+AGE_MODELS_DIR = REPO_ROOT / "straditize_core" / "assets" / "age_models"
 
 
 class AgeDepthModelRecognitionTest(unittest.TestCase):

@@ -1,0 +1,77 @@
+{
+  "version": "1.0",
+  "description": "Straditize Production Ground-Truth Corpus & Test Suite Assets",
+  "generated_at": "2026-09-25",
+  "figures": {
+    "01_chinese_scanned_hlines": {
+      "file": "tests/data/corpus/raw/01_chinese_scanned_hlines.png",
+      "format": "PNG",
+      "dimensions": [1807, 745],
+      "sha256": "871c09f5790aefcc097b56d891183d7cf3216365fdbfaf33ae4bfd3061da0e8e",
+      "genre": "dirty_scanned_hlines",
+      "description": "中文古气候期刊真实黑白扫描件（带复印黑边、水平密集采样指示横线、中文花粉带IV-I与双尺度深度/14C年代）",
+      "test_focus": [
+        "deskew_and_binarization",
+        "horizontal_grid_line_removal",
+        "dual_axis_labels_chinese",
+        "discrete_samples_across_columns"
+      ]
+    },
+    "02_muricuo_multicolor_dual_y": {
+      "file": "tests/data/corpus/raw/02_muricuo_multicolor_dual_y.jpg",
+      "format": "JPEG",
+      "dimensions": [2251, 1203],
+      "sha256": "498f89d76bc7896af42ef8dca77930371fbf423ca32e96c536328116652aa198",
+      "genre": "multicolor_dual_y_multigroup",
+      "description": "现代高清地质图版（木里错花粉浓度，带Tree/Shrub/Grass顶部分组、双Y轴深度cm/年代cal yr BP、多色半透明叠加与Exaggeration阴影）",
+      "test_focus": [
+        "dual_y_calibration_mapping",
+        "multicolor_chroma_separation",
+        "top_group_bracket_exclusion",
+        "multiple_taxa_columns_high_density"
+      ]
+    },
+    "03_lough_inchiquin_vertical_strip": {
+      "file": "tests/data/corpus/raw/03_lough_inchiquin_vertical_strip.jpg",
+      "format": "JPEG",
+      "dimensions": [1636, 2562],
+      "sha256": "0880df91372b07ea48dd02e5868f9cf072604daf31c61971cc7df02bfe2f6cb0",
+      "genre": "vertical_composite_stratigraphy",
+      "description": "竖直高纵横比全剖面图（爱尔兰 Lough Inchiquin 湖泊花粉图，含左侧岩性带柱状图、累积面积百分比总图、多组单种轮廓、超细水平采样线）",
+      "test_focus": [
+        "high_aspect_ratio_viewport",
+        "lithology_and_cumulative_area_roi",
+        "sparse_taxa_cross_detection",
+        "extreme_vertical_span"
+      ]
+    },
+    "04_elsevier_two_tier_coniss": {
+      "file": "tests/data/corpus/raw/04_elsevier_two_tier_coniss.jpg",
+      "format": "JPEG",
+      "dimensions": [2428, 1727],
+      "sha256": "07f3bb713bc9c2c5ed5551eaeb60090eb2043cab865e71fdaa724564ca834cdf",
+      "genre": "two_tier_multi_roi_coniss",
+      "description": "Elsevier顶刊经典两层排版花粉图（上层乔木+灌木，下层草本+炭屑，右侧CONISS聚类树，左侧带彩色地层与双Y轴）",
+      "test_focus": [
+        "multi_roi_two_tier_layout",
+        "coniss_dendrogram_exclusion",
+        "multi_proxy_pollen_charcoal",
+        "non_interfering_roi_isolation"
+      ]
+    },
+    "05_scanned_hatched_lithology": {
+      "file": "tests/data/corpus/raw/05_scanned_hatched_lithology.jpg",
+      "format": "JPEG",
+      "dimensions": [1476, 965],
+      "sha256": "dcbe0195af3d41842187ed8401e361437a507dac4473ed86fc7b537d62b95ed6",
+      "genre": "hatched_exaggeration_lithology",
+      "description": "扫描文献图（含左侧花纹岩性柱Lithology Unit A/B/C、斜网格阴影5x放大曲线Hatched 5x Exaggeration、右侧水平直方图Sum arboreal）",
+      "test_focus": [
+        "hatched_pattern_vs_ink_discrimination",
+        "lithology_pattern_exclusion",
+        "discrete_horizontal_bar_histogram",
+        "black_white_scanned_noise"
+      ]
+    }
+  }
+}

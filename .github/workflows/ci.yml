@@ -29,6 +29,11 @@ jobs:
           npm install
           npm run build
 
+      # 前端自检此前完全不在 CI 内（只有 build），复刻实现的假测试因此长期无人复核
+      - name: Run Frontend Tests
+        working-directory: frontend
+        run: npm test
+
       - name: Setup Pixi
         uses: prefix-dev/setup-pixi@v0.8.3
         with:

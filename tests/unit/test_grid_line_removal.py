@@ -33,7 +33,7 @@ from straditize_core.image import (
 )
 from straditize_core.session import StraditizeSession
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 HOYA = REPO_ROOT / "straditize" / "straditize" / "widgets" / "tutorial" / "hoya-del-castillo" / "hoya-del-castillo.png"
 #: The figure's own data region (the tutorial's canonical box).
 HOYA_ROI = (315, 511, 1946, 1311)

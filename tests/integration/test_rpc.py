@@ -4,24 +4,12 @@ from pathlib import Path
 import io
 import json
 import os
-import sys
+
 import tempfile
 import time
 import unittest
 import urllib.error
 import urllib.request
-
-# Ensure straditize package and straditize_core are in sys.path
-_this_dir = os.path.dirname(os.path.abspath(__file__))
-# Try multiple candidate paths for workspace root and straditize package
-for candidate in [
-    os.path.abspath(os.path.join(_this_dir, "..")),
-    os.path.abspath(os.path.join(_this_dir, "..", "straditize")),
-    os.path.abspath(os.path.join(_this_dir, "..", "..", "straditize")),
-    os.path.abspath(os.path.join(_this_dir, "straditize")),
-]:
-    if os.path.exists(candidate) and candidate not in sys.path:
-        sys.path.insert(0, candidate)
 
 from straditize_core import (
     FILE_NOT_FOUND_ERROR,
@@ -38,7 +26,7 @@ from straditize_core import (
 
 def get_test_image_path() -> str:
     """Locate the hoya-del-castillo.png test image reliably."""
-    repo_root = Path(__file__).resolve().parent.parent
+    repo_root = Path(__file__).resolve().parents[2]
     candidates = [
         repo_root / "frontend" / "public" / "hoya-del-castillo.png",
         repo_root / "docs" / "demo" / "hoya-del-castillo.png",

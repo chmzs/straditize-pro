@@ -59,7 +59,7 @@ straditize/  (上游第三方 PyQt5 原版, 本项目不维护)
 | 未载图时回落内置范例 | 冒充"用户自己的工程" |
 
 **执行约束**：`RpcClient.call()` 只有两条路径（离线即抛错 / 真后端）；
-`tests/test_no_fabrication.py` 是守卫测试，不得放宽。
+`tests/integration/test_no_fabrication.py` 是守卫测试，不得放宽。
 
 ---
 

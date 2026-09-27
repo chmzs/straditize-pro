@@ -24,7 +24,7 @@ import pytest
 
 from straditize_core.session import StraditizeSession
 
-CORPUS_JSON_PATH = Path("tests/corpus/index.json")
+CORPUS_JSON_PATH = Path("tests/data/corpus/index.json")
 
 
 def load_corpus_manifest() -> dict[str, dict]:

@@ -16,11 +16,8 @@ These tests pin the replacement's guarantees: monotone by construction, invarian
 output sampling step, and faithful to the extracted envelope's magnitude.
 """
 from pathlib import Path
-import sys
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 import unittest
 
@@ -29,7 +26,7 @@ from PIL import Image
 
 from straditize_core.age_depth import AgeDepthAxisCalibrator, extract_age_depth_model
 
-FIGURE_DIR = REPO_ROOT / "tests" / "test_figures" / "age_models"
+FIGURE_DIR = REPO_ROOT / "straditize_core" / "assets" / "age_models"
 
 
 def _bacon():

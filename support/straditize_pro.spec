@@ -23,6 +23,12 @@ ocr_data_dir = os.path.join(source_root, "ocr", "data")
 if os.path.isdir(ocr_data_dir):
     datas.append((ocr_data_dir, os.path.join("straditize_core", "ocr", "data")))
 
+# Built-in age-depth sample diagrams. Without this the frozen build raises
+# FILE_NOT_FOUND_ERROR on load_age_depth_diagram(sample_key=...).
+age_models_dir = os.path.join(source_root, "assets", "age_models")
+if os.path.isdir(age_models_dir):
+    datas.append((age_models_dir, os.path.join("straditize_core", "assets", "age_models")))
+
 excludes = [
     # Legacy PyQt5 & WebEngine
     "PyQt5",

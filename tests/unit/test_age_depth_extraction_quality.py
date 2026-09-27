@@ -13,12 +13,6 @@ These tests render synthetic diagrams from a known ground-truth curve and assert
 recovered ages stay within tolerance, so a regression in the extractor fails loudly
 instead of quietly returning plausible-looking noise.
 """
-from pathlib import Path
-import sys
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 import unittest
 

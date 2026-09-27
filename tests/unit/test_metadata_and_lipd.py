@@ -9,12 +9,7 @@ Tests conforming to Section 10 of the Specification (v1.2):
 5. Publication-grade multi-sheet XLSX export (openpyxl).
 6. Linked Paleo Data (LiPD) JSON-LD and .lpd package container generation.
 """
-import sys
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 import unittest
 import numpy as np

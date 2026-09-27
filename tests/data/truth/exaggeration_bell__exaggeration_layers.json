@@ -1,0 +1,67 @@
+{
+  "image": "tests/data/figures/benchmark_types/type2_exaggeration_bell.png",
+  "sha256": "6e0437c00cad46be66b897ab6a63abfdb8b47458634ee50888cc86ca41dd1794",
+  "size": [
+    1290,
+    933
+  ],
+  "rule": "A pixel belongs to a layer iff its RGB is within 12 (sum of absolute differences) of that layer's exact colour. Colours are constants of the generating script, not of any algorithm.",
+  "layers": {
+    "true_green": {
+      "colour": [
+        34,
+        139,
+        34
+      ],
+      "pixels": 45539,
+      "bbox": [
+        50,
+        267,
+        495,
+        879
+      ]
+    },
+    "exag_green": {
+      "colour": [
+        143,
+        197,
+        143
+      ],
+      "pixels": 21330,
+      "bbox": [
+        163,
+        267,
+        353,
+        880
+      ]
+    },
+    "true_yellow": {
+      "colour": [
+        238,
+        201,
+        0
+      ],
+      "pixels": 39342,
+      "bbox": [
+        522,
+        267,
+        1273,
+        879
+      ]
+    },
+    "exag_yellow": {
+      "colour": [
+        247,
+        228,
+        126
+      ],
+      "pixels": 37155,
+      "bbox": [
+        522,
+        267,
+        1283,
+        880
+      ]
+    }
+  }
+}

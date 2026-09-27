@@ -26,7 +26,7 @@ import io
 import json
 import math
 import os
-import sys
+
 import tarfile
 import tempfile
 import threading
@@ -37,12 +37,6 @@ import urllib.request
 from PIL import Image
 
 # Ensure straditize and straditize_core are importable
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if root_dir not in sys.path:
-    sys.path.insert(0, root_dir)
-core_dir = os.path.join(root_dir, "straditize")
-if core_dir not in sys.path:
-    sys.path.insert(0, core_dir)
 
 from straditize_core.calibration import LinearCalibration, LogCalibration
 from straditize_core.protocol import JsonRpcError

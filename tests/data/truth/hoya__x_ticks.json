@@ -1,0 +1,16 @@
+{
+  "image": "straditize/straditize/widgets/tutorial/hoya-del-castillo/hoya-del-castillo.png",
+  "sha256": "f94196e6a81666c61c72ea7a2c731ee5d29dfe914414a2f35628d3ed5ed91c1f",
+  "size": [
+    2339,
+    1654
+  ],
+  "rule": "Band rule: the band's per-column darkness is bimodal (>=0.97 of columns almost fully dark or almost fully light), >=3 stroke columns, at most half the width, AND every stroke column's absolute vertical run <= 12 px (a short isolated tick, not a column baseline crossing the band). Tick rule A: a column is a tick iff every row of the band is dark (<160). Rule B: runs of columns with >60% dark rows whose width is 1..4 px. Ground truth keeps only strokes confirmed by BOTH rules within 1 px. If no band satisfies the band rule, has_tick_ruler is false and there are no ticks.",
+  "band": null,
+  "has_tick_ruler": false,
+  "ticks": [],
+  "count": 0,
+  "rule_a_count": 0,
+  "rule_b_count": 0,
+  "agreement": null
+}

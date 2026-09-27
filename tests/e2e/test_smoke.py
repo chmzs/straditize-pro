@@ -11,7 +11,7 @@ import pytest
 
 from tests.e2e.conftest import run_playwright_eval
 
-INDEX_JSON = Path("tests/probe_truth/index.json")
+INDEX_JSON = Path("tests/data/truth/index.json")
 
 
 def test_smoke_workflow_and_buttons(e2e_server, capsys):

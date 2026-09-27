@@ -2482,50 +2482,15 @@ class StraditizeSession(
     ) -> dict[str, Any]:
         """Loads an age-depth model diagram image into session for chronological harmonization."""
         if sample_key:
+            # 内置范例随包分发（pyproject package-data 与 PyInstaller datas 均已登记）。
+            # 此前指向仓库里的 tests/data/figures/，打包版 __file__ 解析不到，必然抛
+            # FILE_NOT_FOUND_ERROR —— 范例功能在分发包里从未真正可用过。
+            sample_dir = os.path.join(os.path.dirname(__file__), "assets", "age_models")
             sample_map = {
-                "bacon": [
-                    os.path.join(
-                        os.path.dirname(__file__),
-                        "..",
-                        "tests",
-                        "test_figures",
-                        "age_models",
-                        "bacon_szek.png",
-                    ),
-                    os.path.join(
-                        os.path.dirname(__file__),
-                        "..",
-                        "..",
-                        "tests",
-                        "test_figures",
-                        "age_models",
-                        "bacon_szek.png",
-                    ),
-                ],
-                "bchron": [
-                    os.path.join(
-                        os.path.dirname(__file__),
-                        "..",
-                        "tests",
-                        "test_figures",
-                        "age_models",
-                        "bchron_stepped.png",
-                    ),
-                    os.path.join(
-                        os.path.dirname(__file__),
-                        "..",
-                        "..",
-                        "tests",
-                        "test_figures",
-                        "age_models",
-                        "bchron_stepped.png",
-                    ),
-                ],
+                "bacon": os.path.join(sample_dir, "bacon_szek.png"),
+                "bchron": os.path.join(sample_dir, "bchron_stepped.png"),
             }
-            cands = sample_map.get(sample_key.lower(), [])
-            image_path = next(
-                (p for p in cands if os.path.exists(p)), cands[0] if cands else None
-            )
+            image_path = sample_map.get(sample_key.lower())
 
         if base64_data:
             if "," in base64_data:
