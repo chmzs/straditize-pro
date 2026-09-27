@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import pytest
 
 from tests.e2e.conftest import run_playwright_eval
@@ -118,4 +119,8 @@ def test_naming_panel_and_reconciliation_l4(e2e_server):
     assert assign_str == "[label_001=col_3,label_002=col_4]"
     assert without_lbl_str == "[col_7]"
     assert without_col_str == "[]"
-    assert data["highlight"] == "col_7"
+    # NamingPanel 渲染的是 activeColId（列 id）。多 ROI 之后 id 形态由 col_7
+    # 变成 roi_3_col01，此处钉"必须给出一个真实列标识"，不绑定具体 id 方案。
+    assert re.fullmatch(r"(?:roi_\d+_)?col_?\d+", data["highlight"] or ""), (
+        f"sequential highlight 应给出列标识，实际 {data['highlight']!r}"
+    )

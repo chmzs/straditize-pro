@@ -155,3 +155,61 @@ def run_playwright_eval(url: str, js_code: str, session_name: str = "e2e_session
             capture_output=True,
             check=False,
         )
+
+
+def run_playwright_console(
+    url: str, min_level: str = "error", session_name: str = "e2e_console"
+) -> str:
+    """打开真实浏览器加载页面，取回该会话的控制台消息。
+
+    与 `run_playwright_eval` 同源，但走 `console` 子命令——用来断言
+    「页面加载后控制台有/没有 N 条 error」，这类缺陷 headless 单测抓不到。
+    """
+    subprocess.run(
+        ["node", PLAYWRIGHT_CLI, f"-s={session_name}", "close"],
+        capture_output=True,
+        check=False,
+    )
+    open_res = subprocess.run(
+        ["node", PLAYWRIGHT_CLI, f"-s={session_name}", "open", "--browser=msedge", url],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    if open_res.returncode != 0:
+        raise RuntimeError(f"Failed to open msedge at {url}: {open_res.stdout}\n{open_res.stderr}")
+
+    try:
+        # 冷启动时 Edge + bundle 初始化可能远超固定延时，控制台还没产生消息就去
+        # 读会读到 0 条——改成轮询：只要还在出消息就继续等，最多 ~10s。
+        result = ""
+        for _ in range(10):
+            time.sleep(1.0)
+            res = subprocess.run(
+                ["node", PLAYWRIGHT_CLI, f"-s={session_name}", "console", min_level],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+            result = f"{res.stdout or ''}\n{res.stderr or ''}"
+            m = re.search(r"Total messages:\s*(\d+)", result)
+            if m and int(m.group(1)) > 0:
+                # 至少拿到一条消息；再等一拍把可能的尾随消息收齐
+                time.sleep(1.0)
+                res2 = subprocess.run(
+                    ["node", PLAYWRIGHT_CLI, f"-s={session_name}", "console", min_level],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    check=False,
+                )
+                return f"{res2.stdout or ''}\n{res2.stderr or ''}"
+        return result
+    finally:
+        subprocess.run(
+            ["node", PLAYWRIGHT_CLI, f"-s={session_name}", "close"],
+            capture_output=True,
+            check=False,
+        )

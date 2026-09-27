@@ -319,8 +319,13 @@ export class GeologyCanvas {
     };
 
     this.diagramImage.onerror = () => {
-      console.warn('Failed to load image from', src, 'using procedural canvas');
-      this.isImageLoaded = true;
+      // 图片没加载成功就不能算"已加载"：置 true 会让下面的 drawBackgroundDiagram
+      // 对处于 broken 状态的元素调用 drawImage，抛 InvalidStateError 并把整条
+      // render() 管线中断掉——ROI 矩形、深度网格、分列标线全都不会被画出来。
+      // （原注释声称会 "using procedural canvas"，但那个兜底并不存在。）
+      console.warn('Failed to load image from', src, '- background will be skipped');
+      this.isImageLoaded = false;
+      this.updateEmptyStateVisibility();
       this.requestRender();
     };
   }
@@ -1736,7 +1741,9 @@ export class GeologyCanvas {
   }
 
   private drawBackgroundDiagram(ctx: CanvasRenderingContext2D, isLight: boolean): void {
-    if (this.diagramImage && this.isImageLoaded) {
+    // naturalWidth === 0 表示图片 broken（加载失败/未完成）；此时 drawImage 会抛
+    // InvalidStateError。isImageLoaded 只是第一道闸，这里必须再兜一次。
+    if (this.diagramImage && this.isImageLoaded && this.diagramImage.naturalWidth > 0) {
       const mode = this.viewport.imageMode;
       const w = this.diagramImage.naturalWidth;
       const h = this.diagramImage.naturalHeight;

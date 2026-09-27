@@ -22,8 +22,10 @@ cmd = "python -m pytest --ignore=tests/e2e -q"
 # 用例一旦修好会以 XPASS 让本任务变红，强制把条目从隔离区删除。新增测试文件无需改这里。
 
 [tasks.test-e2e]
-description = "Run Playwright end-to-end browser tests"
-cmd = "python -m pytest tests/e2e/test_smoke.py -v -s"
+description = "Run ALL Playwright end-to-end browser tests (was: test_smoke.py only, 1 of 10)"
+cmd = "python -m pytest tests/e2e -q"
+# 原先只跑 tests/e2e/test_smoke.py —— 9 条 E2E 里 8 条从未被任何门禁执行，
+# golden_journey 的 base64 与 naming 的列 id 两处回归就是这样漏掉的。
 
 [tasks.test-legacy]
 description = "Run legacy PyQt5 widget test suite (requires legacy dependencies)"

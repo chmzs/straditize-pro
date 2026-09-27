@@ -20,6 +20,7 @@ interactively through real DOM clicks and inputs in Microsoft Edge:
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 import tarfile
@@ -197,7 +198,9 @@ def test_golden_journey_full_dom_lifecycle(e2e_server):
     # Verify project archive physically generated from the end-to-end user state
     tar_export_res = session.export_multi_tar()
     assert tar_export_res["success"] is True
-    tar_bytes = tar_export_res["data"]
+    # export.tar 的 data 是 base64 字符串（JSON-RPC 无法传原始字节，
+    # 前端 PropertyPanel 也是按 base64 解的），必须先解码再喂给 tarfile。
+    tar_bytes = base64.b64decode(tar_export_res["data"])
     assert len(tar_bytes) > 0
 
     with tarfile.open(fileobj=io.BytesIO(tar_bytes)) as tf:
