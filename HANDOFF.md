@@ -11,7 +11,7 @@
 - 验证：`pixi run lint` PASS ｜ `pixi run test` **241 passed / 13 xfailed / 0 failed** ｜ `npm --prefix frontend test` PASS ｜ `npm --prefix frontend run build` PASS。
 - 已修（原"范围外待决策"两项）：① `frontend/test-core.js` 5 个复刻类（History/Viewport/Display/Glossary/Caption）+ UStar 本地实现全部改为 `await import` 真 `.ts` 模块，diatom 改用真实导出而非 readFileSync 抠文本，仅剩 2 处就地标注的非模块断言；② `session.py` 范例改读 `straditize_core/assets/age_models/`，已入 package-data 与 PyInstaller datas。
 - 连带挖出并修复：`pyproject` 的 `exclude = ["straditize*"]` 因 fnmatch 也匹配 `straditize_core`，**wheel 里 0 个 .py、只剩 dist-info**（pip install 形同虚设）；同时漏配的 `ocr/data/diatom_genera.json` 也补进 package-data。现 wheel 55 个 .py + age_models 3 + ocr/models 3 + ocr/data 1，已实测。
-- 下一步原子动作：`pixi run test` 复验后按需 `git commit`（**勿整包提交**：工作树另有他人 39 文件在途改动）。
+- 已拆两个 commit 入库：`f0c6e26` 补录 09-25~26 遗留功能批（53 文件，5 个与本批混写的文件按内容还原后入库），`3b83a61` 本批测试重组与打包修复；双向泄漏扫描均为空，四条门禁在提交后复跑全绿。剩余技术债：18 处非 `import type` 的类型导入（Node 加载 `.ts` 会 `ERR_MODULE_NOT_FOUND`，仅 `Viewport.ts` 已修）。
 
 ## [TOPBAR-SETTINGS] 2026-09-26 00:30 — 导出拦截与左栏文字间距两大体验瑕疵优化完成
 - 导出拦截温和化：未提取数据时点击顶栏 [💾 导出]，彻底消除后端原生 -32001 弹窗，平滑打开导出面板并在就绪清单清晰标出待完善项。
@@ -36,6 +36,7 @@
 - ❌ ROI（取数框）与深度/年代标定**严禁互相推导或互相兜底**：`top_px ?? dataYMin`、由 `data_ylim` 反算 `top/bottom_cm`、拿 ROI 边界当刻度端点，全属此列；未标定必须在界面上如实显示 `--`，`CoordinateSystem.calibrationBounds()` 是唯一判定入口；
 - ❌ 线去除严禁按「整行/整列占据率」整条删除——必须带**垂直于线方向的厚度上限**（实心花粉轮廓被线穿过处厚达数十像素，必须豁免）；且掩膜只允许后端产生（`overlay_png` 即 B 键所见 = 数字化所用），前端不得另算一套"看起来像去线"的显示逻辑；`strength:"off"` 必须主动清空会话掩膜；
 - ❌ 契约字段只能来自 `docs/plans/2026-09-20-frozen-contracts.md`（**单子不得自行发明字段**）；ROI 上的表单值/继承值严禁被当作事实源；特性单严禁写"无人可写"的共享文件（`support/probe_truth/check_ticket_ownership.py` 机器校验，发单前必须跑通）；掩膜优先级**排除区绝对优先**，restore 落在排除区内必须拒绝或提示，**不得静默无效**。
+- ❌ 严禁用 junction/symlink 把 worktree 的 `frontend/node_modules` 指回主仓库来复用依赖：`git worktree remove --force` 会顺着 reparse point 递归删进去，**直接清空主仓库的包目录**（2026-09-27 实测踩中，靠 `npm ci` 从 lockfile 还原）。worktree 需要依赖就单独 `npm ci`；临时复用完必须先摘链接再 `git worktree remove`。
 
 ## 索引
 - 历史归档：`HANDOFF-archive/`（含 `2026-09-20-*`、`2026-09-24-t08/t09/t10`、`2026-09-25-t11-naming.md`、`2026-09-25-error-pdf-start.md`）｜ 规范：`AGENTS.md`
