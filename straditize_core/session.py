@@ -96,6 +96,7 @@ from .metadata import (
     chunk_text_by_tokens,
     extract_metadata_from_chunks,
     export_scientific_xlsx,
+    export_lipd_jsonld,
     export_lipd_package,
 )
 from .protocol import (
@@ -756,6 +757,13 @@ class StraditizeSession(
 
         self.data_xlim = [x0, x1]
         self.data_ylim = [y0, y1]
+        # 本次边界就是取数区本身，必须同步写回 ROI 记录。
+        # roi_update 是以 roi["xlim"] 为准回写 data_xlim 的；若记录仍停在载图时的
+        # 建议值，下一次 roi_update（哪怕只改 y0/y1）就会把这里算出的边界静默覆盖掉
+        # —— 实测 data_xlim 从 [315,1946] 被打回 [161,2206]。
+        if target_roi is not None:
+            target_roi["xlim"] = [x0, x1]
+            target_roi["ylim"] = [y0, y1]
         # The removal mask was computed for the previous region; drop it rather
         # than silently digitising through a mask that no longer matches.
         self.grid_line_mask = None
@@ -3075,13 +3083,18 @@ class StraditizeSession(
                 t for t in self.ensemble_tables if t["name"] in include_ensemble_names
             ]
 
-        pkg_bytes = export_lipd_package(
+        # 73e73b7 把 package_lipd_archive 的入参从 (meta_info, pollen_df,
+        # age_depth_df, ensemble_tables, output_path) 改成了 (lipd_jsonld,
+        # output_path)，但本调用点漏改，导致 export_advanced_lipd 一执行就
+        # TypeError —— LiPD 导出实际从未可用。先建 JSON-LD 再打包，
+        # 保持重构前的单表可观测行为。
+        lipd_jsonld = export_lipd_jsonld(
             meta_info=self.paper_metadata,
             pollen_df=pollen_df,
             age_depth_df=age_depth_df,
             ensemble_tables=selected_ensembles,
-            output_path=output_path,
         )
+        pkg_bytes = export_lipd_package(lipd_jsonld, output_path=output_path)
 
         b64 = base64.b64encode(pkg_bytes).decode("ascii")
         return {

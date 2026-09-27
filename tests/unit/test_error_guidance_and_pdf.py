@@ -43,6 +43,9 @@ def test_error_classification_and_remediation_guidance():
     session.load_image(sample_key="hoya")
 
     # 3. CONFLICT_ERROR (-32002): Duplicate naming in same project / ROI
+    # load_image 已自动建了一个叫 "pollen" 的默认 ROI，会让第一次创建就撞冲突，
+    # 从而测不到"重复命名"这条规则本身；先清空，从零 ROI 状态开始。
+    session._init_rois()
     session.roi_create(name="pollen", composition=True)
     with pytest.raises(JsonRpcError) as exc_info:
         session.roi_create(name="pollen", composition=True)

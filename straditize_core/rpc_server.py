@@ -84,7 +84,12 @@ def create_rpc_dispatcher(
 
 _registered_subprocesses: set[Any] = set()
 _shutdown_lock = threading.Lock()
-_is_shutting_down = False
+# 关停闩锁：按 server 实例分键，不是进程级全局。
+# 模块级单个 bool 会让「一进程多服务器」场景下第二个 server 的关停被静默跳过
+# （回调永不触发）——同进程内多实例只该各自关停一次，而不是整个进程只关一次。
+# 值保留强引用，避免 id() 被 GC 复用后误判为「未关停过」。
+_shutdown_started: dict[int, Any] = {}
+_is_shutting_down = False  # 无 server 实例（信号处理器直调）时的进程级回退
 
 
 def register_subprocess(proc: Any) -> None:
@@ -130,13 +135,24 @@ def graceful_shutdown(
     2. Safely stops HTTP Listener to immediately release port
     3. Terminates any spawned child processes (R scripts, headless browsers)
     4. Exits process cleanly
+
+    Latching is per-server (see ``_shutdown_started``), so two servers in one
+    process each get exactly one shutdown and each fires its own ``shutdown_fn``.
     """
+    resolved = server or getattr(StraditizeRpcHttpServer, "_active_instance", None)
+    key = id(resolved) if resolved is not None else 0
+
     def _do_shutdown() -> None:
         global _is_shutting_down
         with _shutdown_lock:
-            if _is_shutting_down:
+            if resolved is None:
+                if _is_shutting_down:
+                    return
+                _is_shutting_down = True
+            elif key in _shutdown_started:
                 return
-            _is_shutting_down = True
+            else:
+                _shutdown_started[key] = resolved
 
         if delayed_seconds > 0:
             time.sleep(delayed_seconds)
@@ -147,7 +163,7 @@ def graceful_shutdown(
         cleanup_lock_file()
 
         # 2. 安全关闭 Web 服务的 HTTP Listener，立即释放端口
-        srv = server or getattr(StraditizeRpcHttpServer, "_active_instance", None)
+        srv = resolved
         if srv is not None:
             try:
                 srv.stop()

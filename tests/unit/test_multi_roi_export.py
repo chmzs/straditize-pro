@@ -11,6 +11,7 @@ Plus L3 check on real Hoya three-ROI export.
 
 from __future__ import annotations
 
+import base64
 import io
 from pathlib import Path
 import tarfile
@@ -113,7 +114,7 @@ def test_criterion_3_tar_archive_and_primary_roi_switch():
     tar_res1 = session.export_multi_tar()
     assert tar_res1["success"] is True
 
-    with tarfile.open(fileobj=io.BytesIO(tar_res1["data"])) as tf:
+    with tarfile.open(fileobj=io.BytesIO(base64.b64decode(tar_res1["data"]))) as tf:
         names = tf.getnames()
         assert "data/pollen.csv" in names
         assert "data/charcoal.csv" in names
@@ -131,7 +132,7 @@ def test_criterion_3_tar_archive_and_primary_roi_switch():
     session.roi_set_primary(r2_id)
     tar_res2 = session.export_multi_tar()
 
-    with tarfile.open(fileobj=io.BytesIO(tar_res2["data"])) as tf:
+    with tarfile.open(fileobj=io.BytesIO(base64.b64decode(tar_res2["data"]))) as tf:
         data_csv_2 = tf.extractfile("data.csv").read()
         charcoal_csv_2 = tf.extractfile("data/charcoal.csv").read()
 
@@ -181,7 +182,7 @@ def test_criterion_5_chinese_roi_name():
 
     # 2. TAR Filename check
     tar_res = session.export_multi_tar()
-    with tarfile.open(fileobj=io.BytesIO(tar_res["data"])) as tf:
+    with tarfile.open(fileobj=io.BytesIO(base64.b64decode(tar_res["data"]))) as tf:
         names = tf.getnames()
         assert "data/花粉.csv" in names
 
@@ -218,7 +219,7 @@ def test_l3_three_rois_reporting():
 
     # 3. TAR Data files
     tar_res = session.export_multi_tar()
-    with tarfile.open(fileobj=io.BytesIO(tar_res["data"])) as tf:
+    with tarfile.open(fileobj=io.BytesIO(base64.b64decode(tar_res["data"]))) as tf:
         data_files = [n for n in tf.getnames() if n.startswith("data/")]
 
     print(f"\n[L3 Three ROIs Report]")

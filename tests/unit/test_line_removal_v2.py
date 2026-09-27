@@ -139,6 +139,9 @@ def test_hoya_real_regression():
     """Real Hoya figure regression: A=0 rows, Pinus column ink removal < 1%."""
     session = get_hoya_session()
     # Hoya data region
+    # get_hoya_session() 走 load_image，已自动建了一个名为 "pollen" 的建议取数区；
+    # 这里要钉死 Hoya 的实测边界，先清掉默认 ROI 再按精确坐标重建。
+    session._init_rois()
     roi = session.roi_create(name="pollen", x0=315, x1=1946, y0=511, y1=1311)["roi"]
 
     # Detect line candidates

@@ -226,8 +226,13 @@ def test_qa_l3_hoya_pollen_roi():
     session.load_image(str(HOYA_PATH))
 
     # Detect columns on Hoya pollen ROI
-    session.roi_create(name="pollen", x0=315, x1=1946, y0=511, y1=1311)
-    session.detect_columns([315, 1946], [511, 1311], roi_id="roi_1")
+    # load_image 已自动建了一个默认 ROI（会占掉 roi_1）；本用例要按精确边界建自己的
+    # 取数区，先清空再建，并使用返回的真实 id 而不是写死 "roi_1"。
+    session._init_rois()
+    roi_id = session.roi_create(
+        name="pollen", x0=315, x1=1946, y0=511, y1=1311
+    )["roi"]["id"]
+    session.detect_columns([315, 1946], [511, 1311], roi_id=roi_id)
 
     # Digitize columns so turning points and data exist
     for col in session.columns[:8]:

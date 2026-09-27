@@ -237,9 +237,14 @@ class TestRoiCalibrationSeparation(unittest.TestCase):
             y_marks=[{"pixel": 556, "val": 1500}, {"pixel": 1311, "val": 4500}], unit="mm"
         )
         before = dict(self.session.depth_calib)
+        roi_x0, roi_x1 = self.session._roi_box()[0], self.session._roi_box()[2]
         self.session.roi_update(y0=560, y1=1300)
         self.assertEqual(self.session.depth_calib, before)
-        self.assertEqual(self.session._roi_box(), (315.0, 560.0, 1946.0, 1300.0))
+        # 断言不变量，而不是写死 suggest_data_region 的返回值：
+        # roi_update 只允许改 y（取数区上下界），x 必须原样保留。
+        box_after = self.session._roi_box()
+        self.assertEqual((box_after[0], box_after[2]), (roi_x0, roi_x1))
+        self.assertEqual((box_after[1], box_after[3]), (560.0, 1300.0))
 
     def test_calibration_never_touches_the_roi(self) -> None:
         roi_before = self.session._roi_box()
@@ -279,6 +284,7 @@ class TestRoiCalibrationSeparation(unittest.TestCase):
         self.session.calibrate_axes(
             y_marks=[{"pixel": 556, "val": 1500}, {"pixel": 1311, "val": 4500}], unit="mm"
         )
+        roi_x0, roi_x1 = self.session._roi_box()[0], self.session._roi_box()[2]
         self.session.roi_update(y0=560, y1=1300)
         self.session.algorithm_degrid(
             strength="medium",
@@ -286,7 +292,12 @@ class TestRoiCalibrationSeparation(unittest.TestCase):
         )
         saved = self.session.project_save(format="json")["data"]
 
-        self.assertEqual(saved["roi"], {"x": 315.0, "y": 560.0, "w": 1631.0, "h": 740.0})
+        # x 来自建议取数区（会随 suggest_data_region 演进），y 是本用例刚写入的值；
+        # 两者必须能从同一份 saved["roi"] 里各自还原，这才是"存对了"的判据。
+        self.assertEqual(
+            saved["roi"],
+            {"x": roi_x0, "y": 560.0, "w": roi_x1 - roi_x0, "h": 740.0},
+        )
         self.assertEqual(saved["depth_calibration"]["top_px"], 556.0)
         self.assertEqual(saved["depth_calibration"]["bottom_cm"], 4500.0)
         self.assertEqual(saved["depth_calibration"]["unit"], "mm")
@@ -297,7 +308,7 @@ class TestRoiCalibrationSeparation(unittest.TestCase):
         restored.project_load(json.loads(json.dumps(saved)))
         # The written file stores ROI y=560, calibration y=556 -- different values,
         # which is the whole point: nothing can be reconstructed from the other.
-        self.assertEqual(restored._roi_box(), (315.0, 560.0, 1946.0, 1300.0))
+        self.assertEqual(restored._roi_box(), (roi_x0, 560.0, roi_x1, 1300.0))
         self.assertEqual(restored.depth_calib["top_px"], 556.0)
         self.assertEqual(restored.depth_calib["top_cm"], 1500.0)
         self.assertEqual(restored.degrid_strength, "medium")
@@ -313,6 +324,12 @@ class TestRoiCalibrationSeparation(unittest.TestCase):
 
         fresh = StraditizeSession()
         fresh.load_image(sample_key="hoya")
+        # 载图会自动建一个建议取数区；本用例要验的是"一个取数区都没声明"分支。
+        # _init_rois() 只清 rois 列表，data_xlim/data_ylim 是会话级字段，
+        # 必须一并清空，否则 _roi_box() 仍非 None、守卫不会触发。
+        fresh._init_rois()
+        fresh.data_xlim = None
+        fresh.data_ylim = None
         with self.assertRaises(JsonRpcError):
             fresh.algorithm_degrid(strength="medium")
 

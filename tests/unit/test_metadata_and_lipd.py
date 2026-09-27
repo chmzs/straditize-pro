@@ -150,7 +150,9 @@ class TestMetadataAndLiPDSuite(unittest.TestCase):
         self.assertIn("meta_info", wb.sheetnames)
         self.assertIn("pollen", wb.sheetnames)
         self.assertIn("age-depth", wb.sheetnames)
-        self.assertIn("ensemble_table", wb.sheetnames)
+        # ensemble sheet 的名字 = 表自己的 name（不再写死 "ensemble_table"）。
+        # 断言"契约"而不是某个字面量，产品再改默认表名也不会假红。
+        self.assertIn(ensemble_tables[0]["name"], wb.sheetnames)
         self.assertIn("readme", wb.sheetnames)
 
         # Check meta_info contents
@@ -174,20 +176,39 @@ class TestMetadataAndLiPDSuite(unittest.TestCase):
         ]
 
         # 1. JSON-LD structure
-        jsonld = export_lipd_jsonld(meta_info, pollen_df, age_depth_df, ensemble_tables)
-        self.assertEqual(jsonld["@context"], "https://linked.earth/ontology/lipd.jsonld")
+        # 73e73b7 在 pollen_df 之后插入了 roi_dfs 形参，位置传参会让第三个实参
+        # (age_depth_df) 落到 roi_dfs 上，`if roi_dfs:` 遇到 DataFrame 直接
+        # ValueError —— 必须按关键字传。
+        jsonld = export_lipd_jsonld(
+            meta_info=meta_info,
+            pollen_df=pollen_df,
+            age_depth_df=age_depth_df,
+            ensemble_tables=ensemble_tables,
+        )
+        # 73e73b7 把 @context 换成了 LinkedEarth 真实发布的 context URL（旧值
+        # linked.earth/ontology/lipd.jsonld 已废弃），断言随产品同步到现行值。
+        self.assertEqual(
+            jsonld["@context"], "https://linkedearth.github.io/schema/context.json"
+        )
         self.assertEqual(jsonld["geo"]["siteName"], "Loch_Chon")
         self.assertEqual(jsonld["geo"]["latitude"], 56.12)
         self.assertEqual(len(jsonld["paleoData"][0]["paleoMeasurementTable"][0]["columns"]), 2)
-        self.assertIn("ensembleTable", jsonld)
+        # 73e73b7 把 ensemble 从顶层 "ensembleTable" 移到了 LiPD 规范位置
+        # chronData[0].chronEnsembleTable；断言现行结构 + 表名，比断言键名更抗漂移。
+        self.assertIn("chronEnsembleTable", jsonld["chronData"][0])
+        self.assertEqual(
+            jsonld["chronData"][0]["chronEnsembleTable"][0]["tableName"], "Bacon_1000"
+        )
 
         # 2. .lpd (zip) packaging
-        pkg_bytes = export_lipd_package(meta_info, pollen_df, age_depth_df, ensemble_tables)
+        # 73e73b7 之后 package 只收 (lipd_jsonld, output_path)，不再收原始表格
+        pkg_bytes = export_lipd_package(jsonld)
         import io
         with zipfile.ZipFile(io.BytesIO(pkg_bytes), "r") as zf:
             namelist = zf.namelist()
+            # 73e73b7 移除了 bagit.txt，现包体 = <dataset>.jsonld + 各测量表 .csv
             self.assertTrue(any(name.endswith(".jsonld") for name in namelist))
-            self.assertIn("bagit.txt", namelist)
+            self.assertTrue(any(name.endswith(".csv") for name in namelist))
 
     def test_07_session_integration_full_pipeline(self):
         """Verify full session workflow from DOI -> age-depth extraction -> native ensemble -> XLSX & LiPD export."""
