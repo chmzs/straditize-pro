@@ -1256,7 +1256,47 @@ async function bootstrap() {
       reportBackendFailure('同步取数区到后端', err);
       return;
     }
+    // 后端此刻已是新范围，但本地 data.rois[] 还停在拖拽前的值。
+    // 步骤 5 分列读的正是 data.rois（main.ts 步骤5），改名/组分两条路径
+    // 都各自 getDiagramData() 刷新过，唯独拖拽这条没有——不补的话：
+    // 分列会拿旧 r.xMin/r.xlim 当 data_xlim 盖回后端，用户拖的框等于白拖。
+    // （不能用 loadNewDiagram：它会重新 loadImage，拖拽结束会闪一下。）
+    syncActiveRoiBounds(roi);
+    // commitRoi 是异步的，而 GeologyCanvas.onMouseUp 里 `onDataChange` 是在
+    // `void commitRoi(...)` 之后同步执行的——它跑在 await 完成之前。所以
+    // 数据同步完必须自己再刷一次界面，否则步骤 2 面板仍显示拖拽前的边界
+    // （实测：后端已是 [161,1598]，面板还写着 [161,2206]）。
+    sidebar?.updateData(canvasComponent.data);
+    inspector?.updateData(canvasComponent.data);
     await refreshLineMask();
+  }
+
+  /**
+   * 把刚提交的取数区范围回写到本地 `data.rois[]` 的活动 ROI 上。
+   *
+   * 画布拖拽只改 `data.roi`（派生自活动 ROI 的单数旧字段），而分列、
+   * RoiPanel、CleanupPanel、ExportReadinessPanel、Sidebar 读的都是 `rois[]`。
+   */
+  function syncActiveRoiBounds(roi: DataRoi): void {
+    const list = canvasComponent.data.rois ?? [];
+    if (list.length === 0) return;
+    const activeId = canvasComponent.data.active_roi_id || list[0]?.id;
+    const idx = list.findIndex((r) => r.id === activeId);
+    if (idx < 0) return;
+    const x0 = Math.round(roi.xMin);
+    const x1 = Math.round(roi.xMax);
+    const y0 = Math.round(roi.yMin);
+    const y1 = Math.round(roi.yMax);
+    list[idx] = {
+      ...list[idx],
+      // 两套字段都要写：读方有的取 xMin/xMax、有的取 xlim/ylim（步骤5 两者都试）
+      xMin: x0,
+      xMax: x1,
+      yMin: y0,
+      yMax: y1,
+      xlim: [x0, x1],
+      ylim: [y0, y1],
+    };
   }
 
   /**

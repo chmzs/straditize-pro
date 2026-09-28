@@ -1675,18 +1675,21 @@ export class GeologyCanvas {
     // 1. 底层扫描地质图谱（支持原图、反相、高对比、纯二值化与透视遮罩）
     this.drawBackgroundDiagram(ctx, isLight);
 
-    // 2. 地层深度标尺网格系统 (S4 标尺标定及之后阶段呈现；未标定则不画)
+    // 2. 地层深度标尺网格系统（现行 8 步：6 标定列及之后；4 清理 / 5 分列 内部会排除）
     if (this.workflowStage >= 4) {
       this.drawDepthGrid(ctx, isLight);
     }
 
-    // 3. 取数区域矩形与控制手柄 (ROI) (严格从 S2 ROI 阶段起呈现，S0/S1 绝不呈现)
+    // 3. 取数区域矩形与控制手柄 (ROI)（步骤 2 起呈现，步骤 1 绝不呈现）
     if (this.workflowStage >= 2) {
       this.drawRoiOverlay(ctx, isLight);
     }
 
-    // 3.1 Y 轴两点标定记号与标定跨度指示 (S4 起呈现)
-    if (this.workflowStage >= 4) {
+    // 3.1 Y 轴两点标定记号与标定跨度指示
+    // 必须从 S3（Y 标定）就呈现：选点守卫是 `workflowStage === 3`（见 onMouseDown），
+    // 这里若等到 S4，用户在步骤 3 点完两点画布毫无反应，要等"应用标定"跳到
+    // 下一步才看见 Y1/Y2 —— 即时反馈就没了。
+    if (this.workflowStage >= 3) {
       this.drawYAxisCalibration(ctx);
     }
 
@@ -1695,13 +1698,19 @@ export class GeologyCanvas {
       this.drawLineFixStroke(ctx);
     }
 
-    // 4. 各属种垂直分界标线与两点式物理刻度钉 (严格从 S3 分列阶段起才开始呈现，S1/S2 绝不呈现)
+    // 4. 各属种垂直分界标线与两点式物理刻度钉
+    // 注意编号：设计稿现行 8 步为「5 分列」，此处守卫故意放宽到 >=3 并靠
+    // columns.length > 0 兜底——分列之前本来就没有列，分列之后无论回到哪一步
+    // 都要能看见列边界（否则回到步骤 3/4 会突然消失）。
     if (this.workflowStage >= 3 && this.data.columns.length > 0) {
       this.drawColumnBoundaries(ctx, isLight);
     }
 
-    // 5. 花粉轮廓面积图与曲线 (严格从 S5 拐点提取与数字化阶段起呈现，S1~S4 绝不呈现)
-    if (this.workflowStage >= 5 && this.data.columns.length > 0) {
+    // 5. 花粉轮廓面积图与曲线 + 控制锚点 + 质检比对层
+    // 必须等到步骤 7（拐点与采样层位）。原守卫写的是 >=5，那是旧 7 步编号里
+    // "S5=拐点" 的写法；8 步重构后 5 变成了"分列"，于是用户一分列就看见已经
+    // 描好的曲线和锚点——而此时还没进拐点步骤，这些本不该出现。
+    if (this.workflowStage >= 7 && this.data.columns.length > 0) {
       this.drawPollenCurves(ctx);
       // 6. 控制锚点渲染
       this.drawAnchors(ctx);
