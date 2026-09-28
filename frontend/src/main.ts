@@ -14,6 +14,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { DataRoi, DiagramCalibration, DiagramData, HistorySnapshot, LineMaskStroke, Point2D } from './types/pollen';
 import { onLocaleChange, applyLocaleToDocument, getLocale, t } from './i18n';
 import { ImageDisplayMode } from './core/Viewport';
+import { visibleLayers } from './core/WorkflowStage';
 import { WORKFLOW_STAGES, WorkflowStage } from './types/workflow';
 import { tokens } from './styles/tokens';
 
@@ -2012,6 +2013,56 @@ async function bootstrap() {
       // Ignore if SSE unavailable
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // 调试/验收句柄：window.__straditize
+  //
+  // 给 MCP 与 e2e 提供**权威状态**与直达入口。此前只能读 DOM 文本反推状态，
+  // 于是出现过「evaluate 报 S5、紧接着截图是 S3」这类误判，也拿不到 data.rois
+  // 这种只有前端镜像才知道的值——而这恰恰是「分列用错 ROI」那个 bug 的藏身处。
+  //
+  // 不构成提权：页面本身就能发同样的 RPC，这里只是把状态显式化。
+  // ---------------------------------------------------------------------------
+  (window as unknown as Record<string, unknown>).__straditize = {
+    /** 一次拿到判题所需的全部状态，免去轮询 DOM 与可见性过滤 */
+    getState: () => {
+      const data = canvasComponent.data;
+      const cal = data.calibration;
+      return {
+        stage: currentStage,
+        image: { src: data.imageSrc || null, width: data.imageWidth, height: data.imageHeight },
+        // 分列/去线/就绪清单读的就是这个 rois[] 镜像——出问题时先看它和 roi 是否一致
+        rois: (data.rois ?? []).map((r) => ({
+          id: r.id, name: r.name, xlim: r.xlim, ylim: r.ylim, name_source: r.name_source,
+        })),
+        activeRoiId: data.active_roi_id ?? null,
+        // 派生自活动 ROI 的旧单数字段（画布拖拽改的就是它）
+        legacyRoi: {
+          xMin: data.roi?.xMin ?? null, xMax: data.roi?.xMax ?? null,
+          yMin: data.roi?.yMin ?? null, yMax: data.roi?.yMax ?? null,
+        },
+        columns: data.columns.map((c) => ({
+          id: c.id, name: c.name, startX: c.startX, endX: c.endX, roi_id: c.roi_id,
+        })),
+        calibration: {
+          isCalibrated: !!cal?.isCalibrated,
+          top_px: cal?.top_px ?? null, bottom_px: cal?.bottom_px ?? null,
+          unit: cal?.unit ?? null,
+        },
+        yCalibMarks: canvasComponent.getYCalibMarks().map((m) => ({ x: m.x, y: m.y })),
+        // 当前步骤下"应该画哪些层"——UI 断言直接打这里，不用去数像素
+        layers: visibleLayers(currentStage, {
+          hasImage: !!data.imageSrc,
+          columnCount: data.columns.length,
+        }),
+      };
+    },
+    /** 直达任意步骤；走的是与工作流按钮完全相同的 advanceToWorkflowStage */
+    gotoStage: (stage: number) => advanceToWorkflowStage(stage as WorkflowStage),
+    /** 直发后端 RPC，用于断言后端权威值（与前端镜像对账） */
+    rpc: (method: string, params: Record<string, unknown> = {}) =>
+      rpcClient.call(method, params),
+  };
 
   console.log('Straditize Modern Frontend Initialized Successfully');
 }

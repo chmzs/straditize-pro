@@ -36,8 +36,16 @@ description = "Install straditize in editable mode"
 cmd = "python -m pip install -e . --no-build-isolation"
 
 [tasks.lint]
-description = "Run lint checks"
+description = "Run lint checks (ruff + 跨文件一致性核对)"
+depends-on = ["lint-ruff", "lint-consistency"]
+
+[tasks.lint-ruff]
+description = "Run ruff checks"
 cmd = "ruff check straditize_core tests"
+
+[tasks.lint-consistency]
+description = "核对跨文件必须一致的两端：签名/类型标注/package-data/测试收集/阶段编号/注释编号"
+cmd = "python support/consistency_check.py"
 
 [tasks.format]
 description = "Format Python code"

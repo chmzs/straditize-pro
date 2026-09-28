@@ -12,6 +12,16 @@ import { SplineInterpolator } from '../core/SplineInterpolator';
 import { HistoryManager } from '../core/HistoryManager';
 import { ToolModeManager } from '../core/ToolModeManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
+import {
+  STAGE,
+  canHitRoiHandle,
+  canPickYCalibMark,
+  showsColumnBoundaries,
+  showsDepthGrid,
+  showsPollenCurves,
+  showsRoiOverlay,
+  showsYCalibMarks,
+} from '../core/WorkflowStage';
 import { tokens } from '../styles/tokens';
 import { getAllOverlays } from './canvas/_registry';
 import {
@@ -283,7 +293,7 @@ export class GeologyCanvas {
 
   public updateEmptyStateVisibility(): void {
     if (!this.emptyStateOverlay) return;
-    const isEmpty = !this.data.imageSrc || this.workflowStage === 0;
+    const isEmpty = !this.data.imageSrc || this.workflowStage === STAGE.EMPTY;
     this.emptyStateOverlay.style.display = isEmpty ? 'flex' : 'none';
   }
 
@@ -1008,7 +1018,7 @@ export class GeologyCanvas {
 
       // ================= 2.5 Y 轴两点标定 (Calibrate) =================
       // 在 Step 3 或 ycalib 模式下，左键点击画布直接拾取 Y1 / Y2 标定点并绘制圆点标记
-      if (mode === 'ycalib' || this.workflowStage === 3) {
+      if (canPickYCalibMark(this.workflowStage, mode)) {
         const markY = Math.round(worldPt.y);
         // 若已选满 2 个点，第 3 次点击自动重置并作为新的第 1 个点 Y1
         if (this.yCalibMarks.length >= 2) {
@@ -1624,7 +1634,7 @@ export class GeologyCanvas {
   }
 
   private findHitRoiHandle(screenPt: Point2D): string | null {
-    if (this.workflowStage < 2) return null;
+    if (!canHitRoiHandle(this.workflowStage)) return null;
     const roi = this.data.roi;
     const tlScreen = this.viewport.worldToScreen({ x: roi.xMin, y: roi.yMin });
     const brScreen = this.viewport.worldToScreen({ x: roi.xMax, y: roi.yMax });
@@ -1675,21 +1685,19 @@ export class GeologyCanvas {
     // 1. 底层扫描地质图谱（支持原图、反相、高对比、纯二值化与透视遮罩）
     this.drawBackgroundDiagram(ctx, isLight);
 
-    // 2. 地层深度标尺网格系统（现行 8 步：6 标定列及之后；4 清理 / 5 分列 内部会排除）
-    if (this.workflowStage >= 4) {
+    // 2. 地层深度标尺网格系统（阶段语义集中在 core/WorkflowStage.ts）
+    if (showsDepthGrid(this.workflowStage)) {
       this.drawDepthGrid(ctx, isLight);
     }
 
-    // 3. 取数区域矩形与控制手柄 (ROI)（步骤 2 起呈现，步骤 1 绝不呈现）
-    if (this.workflowStage >= 2) {
+    // 3. 取数区域矩形与控制手柄 (ROI)
+    if (showsRoiOverlay(this.workflowStage)) {
       this.drawRoiOverlay(ctx, isLight);
     }
 
     // 3.1 Y 轴两点标定记号与标定跨度指示
-    // 必须从 S3（Y 标定）就呈现：选点守卫是 `workflowStage === 3`（见 onMouseDown），
-    // 这里若等到 S4，用户在步骤 3 点完两点画布毫无反应，要等"应用标定"跳到
-    // 下一步才看见 Y1/Y2 —— 即时反馈就没了。
-    if (this.workflowStage >= 3) {
+    // 与 canPickYCalibMark 成对：绘制与拾取任一侧落后一步都会让点击毫无反馈。
+    if (showsYCalibMarks(this.workflowStage)) {
       this.drawYAxisCalibration(ctx);
     }
 
@@ -1699,18 +1707,12 @@ export class GeologyCanvas {
     }
 
     // 4. 各属种垂直分界标线与两点式物理刻度钉
-    // 注意编号：设计稿现行 8 步为「5 分列」，此处守卫故意放宽到 >=3 并靠
-    // columns.length > 0 兜底——分列之前本来就没有列，分列之后无论回到哪一步
-    // 都要能看见列边界（否则回到步骤 3/4 会突然消失）。
-    if (this.workflowStage >= 3 && this.data.columns.length > 0) {
+    if (showsColumnBoundaries(this.workflowStage, this.data.columns.length)) {
       this.drawColumnBoundaries(ctx, isLight);
     }
 
     // 5. 花粉轮廓面积图与曲线 + 控制锚点 + 质检比对层
-    // 必须等到步骤 7（拐点与采样层位）。原守卫写的是 >=5，那是旧 7 步编号里
-    // "S5=拐点" 的写法；8 步重构后 5 变成了"分列"，于是用户一分列就看见已经
-    // 描好的曲线和锚点——而此时还没进拐点步骤，这些本不该出现。
-    if (this.workflowStage >= 7 && this.data.columns.length > 0) {
+    if (showsPollenCurves(this.workflowStage, this.data.columns.length)) {
       this.drawPollenCurves(ctx);
       // 6. 控制锚点渲染
       this.drawAnchors(ctx);
@@ -1838,7 +1840,7 @@ export class GeologyCanvas {
 
     // 网格线仅在 Step 7（采样层位）或 Step 3（物理标定）等需要时显示，
     // Step 4 (干扰清理) 和 Step 5 (自动分列) 默认不绘制网格线，彻底消除抹黑图谱的灾难
-    if (this.workflowStage === 4 || this.workflowStage === 5) {
+    if (this.workflowStage === STAGE.CLEANUP || this.workflowStage === STAGE.SPLIT) {
       return;
     }
 
