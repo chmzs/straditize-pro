@@ -1,11 +1,16 @@
 import { defineConfig, devices } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 
-// 端口默认**每次运行都不同**：本仓库是明确的多会话并发环境（HANDOFF.md 规则），
-// 固定端口会让两个会话抢同一个后端——一方把另一方当"孤儿"杀掉、或双方共用同一份
-// 会话状态互相 `e2e.reset`（实测报 `命名冲突：区域名称 'pollen' 已存在`）。
-// 需要固定端口时用 `STRADITIZE_E2E_PORT` 显式覆盖。
-const PORT = Number(process.env.STRADITIZE_E2E_PORT ?? 20000 + (process.pid % 20000));
+// 端口必须**在一次运行内对所有进程一致**：Playwright 会在**每个 worker 进程**里
+// 重新求值本配置文件，任何依赖 `process.pid` 的"随机端口"都会让主进程把后端起在
+// A 端口、而 worker 用 `baseURL` 去连 B 端口（实测：后端起在 20988，worker 却去连
+// 22652/21548，25 条全报 ERR_CONNECTION_REFUSED）。所以端口只从**环境变量**取
+// （子进程继承，因而稳定），默认固定 8799。
+//
+// 本仓库多会话并发，默认端口可能被另一会话占着：此时 `reuseExistingServer: false`
+// 会让本次运行**快速失败并指名占用者**，而不是静默共用对方的后端会话。并发跑第二
+// 份请显式错开：`STRADITIZE_E2E_PORT=22600 pixi run test-e2e`。
+const PORT = Number(process.env.STRADITIZE_E2E_PORT ?? 8799);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 // 仓库根：本配置在 frontend/ 下。package.json 是 ESM，没有 __dirname。
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -13,7 +18,7 @@ const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 /**
  * Straditize 的 e2e 配置。
  *
- * 三条设计决定，都是被旧套件的实际缺陷逼出来的：
+ * 四条设计决定，都是被旧套件与并发环境的实际缺陷逼出来的：
  *
  * 1. **一个后端、一个浏览器上下文跑完整个套件。** 旧套件每个测试都
  *    `close` → `open --browser=msedge` → `eval` → `close`，11 个文件等于 11 次
@@ -25,14 +30,16 @@ const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
  *    `e2e.reset` 交错执行，一方 `project_new` 清了图而另一方正在断言它，症状是
  *    "ROI 'pollen' 已存在""连接已断开"这类与代码无关的随机失败。宁可快速失败并
  *    指向占用者，也不要静默共享。
- * 4. **端口与产物目录都按运行隔离。** 见下方 PORT 与 outputDir 的注释。
+ * 4. **端口与产物目录都由环境变量决定，且在一次运行内恒定。** 见文件顶部 PORT 注释：
+ *    端口若按 `process.pid` 随机化会直接毁掉 `baseURL`（每个 worker 重新求值配置）。
  */
 export default defineConfig({
   testDir: './e2e',
   // 产物目录按端口隔离：两个会话同时跑时，共享 `test-results/` 会让 Playwright
   // 在收尾写 trace 时报 `browserContext.close: ENOENT ...recordingN.network`
-  // ——测试体其实通过了，红的是产物记账（实测踩中）。CI 只有一个运行，保持
-  // 固定路径以便 upload-artifact 直接取用。
+  // ——测试体其实通过了，红的是产物记账（实测踩中）。端口取自环境变量，因而
+  // 主进程与各 worker 得到的路径一致。CI 只有一个运行，保持固定路径以便
+  // upload-artifact 直接取用。
   outputDir: process.env.CI ? 'test-results' : `test-results-${PORT}`,
   fullyParallel: false,
   workers: 1,

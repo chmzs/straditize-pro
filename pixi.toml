@@ -35,11 +35,12 @@ cmd = "npm --prefix frontend run build && npm --prefix frontend run test:e2e"
 # 恒为真（读错真值文件路径、读错层名词汇表、用 snake_case 读 camelCase 键）。
 # Playwright 版每条用例前经 `e2e.reset` 复位，并由启动器断言复位后状态确实干净。
 # 依赖：Node ≥ 20 + 系统已装 Edge；后端由 playwright.config.ts 的 webServer 拉起。
-# **端口每次运行自动取唯一值**（`20000 + pid % 20000`），产物目录 `frontend/test-results-<port>/`
-# 同样按运行隔离——本仓库多会话并发，固定端口/固定产物目录会让两个会话互相
-# 杀后端、共用会话状态、争写 trace（实测症状：`url is already used`、
-# `ECONNREFUSED`、`ROI 'pollen' 已存在`、`browserContext.close: ENOENT ...recordingN.network`）。
-# 需要固定端口做手工联调时：`STRADITIZE_E2E_PORT=8799 pixi run test-e2e`。
+# 端口默认 8799。本仓库多会话并发，若该端口已被**另一个会话的 e2e 后端**占用，
+# 本次运行会立刻失败并指名占用者（`reuseExistingServer: false`）——这是有意的：
+# 共用同一份后端会话会让两边的 `e2e.reset` 交错，产生"ROI 'pollen' 已存在""连接
+# 已断开"这类与代码无关的随机红。并发跑第二份请显式错开端口：
+#     STRADITIZE_E2E_PORT=22600 pixi run test-e2e
+# 产物目录随之变为 `frontend/test-results-22600/`，两个会话不会互写 trace。
 
 [tasks.test-legacy]
 description = "Run legacy PyQt5 widget test suite (requires legacy dependencies)"
