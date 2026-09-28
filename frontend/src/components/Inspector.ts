@@ -38,6 +38,18 @@ export interface InspectorCallbacks {
   onDetectLineCandidates?: () => void;
   onAddExclusionRect?: () => void;
   onToggleCandidateSelection?: (candId: string, selected: boolean) => void;
+  onAddLineGeometry?: (axis: 'h' | 'v') => void;
+  onEditLineGeometry?: (candidateId: string) => void;
+  /** Step 4：画布拖拽/缩放 geometry 结束（新建时 id 为 null）。 */
+  onGeometryCommit?: (
+    id: string | null,
+    axis: 'h' | 'v',
+    rect: { x0: number; y0: number; x1: number; y1: number }
+  ) => void;
+  /** Step 4：画布上 Delete 删除选中的 geometry。 */
+  onGeometryDelete?: (id: string) => void;
+  /** Step 4：清空本步全部几何、排除区与笔迹。 */
+  onClearCleanupEdits?: () => void;
   onDetectXTicks?: () => void;
   onExtractConsensusHorizons?: () => void;
   onClearHorizons?: () => void;

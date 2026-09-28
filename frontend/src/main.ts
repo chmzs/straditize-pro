@@ -11,7 +11,7 @@ import { AgeDepthModal } from './components/AgeDepthModal';
 import { MetadataModal } from './components/MetadataModal';
 import { OcrReviewModal } from './components/OcrReviewModal';
 import { SettingsModal } from './components/SettingsModal';
-import { DataRoi, DiagramCalibration, DiagramData, HistorySnapshot, LineMaskStroke, Point2D } from './types/pollen';
+import { DataRoi, DiagramCalibration, DiagramData, HistorySnapshot, LineCandidate, LineMaskStroke, Point2D } from './types/pollen';
 import { onLocaleChange, applyLocaleToDocument, getLocale, t } from './i18n';
 import { ImageDisplayMode } from './core/Viewport';
 import { STAGE, visibleLayers } from './core/WorkflowStage';
@@ -451,6 +451,20 @@ async function bootstrap() {
       updateFooter();
       scheduleAutosave();
     },
+    /**
+     * 底图重新加载后，后端下发的叠加层已失效，必须重取一次。
+     *
+     * 否则 `loadNewDiagram`（十余处调用点）之后画布上只剩矢量几何，
+     * 已确认剔除的红色像素预览消失——用户会以为清理没生效。
+     */
+    onDiagramReloaded: () => {
+      const data = canvasComponent.data;
+      const hasCleanup =
+        (data.line_candidates || []).length > 0 || (data.exclusion_regions || []).length > 0;
+      if (hasCleanup) {
+        void scheduleLineMaskRefresh();
+      }
+    },
     // ROI 拖拽结束：后端的分列/去线都以 ROI 为范围，必须同步过去，
     // 否则画布上框选的是新范围、后端算的还是旧范围。
     onRoiCommitted: (roi) => {
@@ -511,6 +525,17 @@ async function bootstrap() {
     },
     onStatusNotice: (text) => {
       setHudNotice(text, 2500);
+    },
+    /**
+     * 叠加层渲染失败必须显式暴露。
+     *
+     * 画布原先用 `catch {}` 把叠加层异常整体吞掉，任何绘制错误的表现都是
+     * "画布上什么都没有"——用户无法区分"没检测到"与"画错了"。
+     */
+    onOverlayError: (overlayId, error) => {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error(`[overlay] ${overlayId} 渲染失败:`, error);
+      setHudNotice(`⚠️ 叠加层 ${overlayId} 渲染失败：${detail}`, 8000);
     },
     onOpenCalibration: () => {
       propertyPanel.openCalibrationModal();
@@ -613,7 +638,11 @@ async function bootstrap() {
       canvasComponent.setToolMode('linefix');
       canvasComponent.requestRender();
       void scheduleLineMaskRefresh();
-      setHudNotice('👉 已进入 Step 4 干扰清理！请在右侧侧栏选择去线强度、划定排除区或使用 K 键笔刷微调。', 4500);
+      // Step 4 进入即显示候选几何；用户只确认是否删除，不必先猜该点哪个按钮。
+      queueMicrotask(() => {
+        (document.querySelector('#btn-detect-candidates') as HTMLButtonElement | null)?.click();
+      });
+      setHudNotice('👉 已进入 Step 4 干扰清理！候选 geometry 正在生成，橙色待确认、红色已去除。', 4500);
     } else if (targetStage === STAGE.SPLIT) {
       const wfNextBtn = document.querySelector('#btn-wf-next') as HTMLButtonElement | null;
       if (wfNextBtn) {
@@ -763,20 +792,23 @@ async function bootstrap() {
     },
     onInsertGapColumn: (afterTaxaId) => {
       const cols = canvasComponent.data.columns;
+      const maxW = canvasComponent.data.imageWidth || 8000;
       const curIdx = cols.findIndex((c) => c.id === afterTaxaId);
       const insertAt = curIdx !== -1 ? curIdx + 1 : cols.length;
       const refCol = curIdx !== -1 ? cols[curIdx] : cols[cols.length - 1];
-      const startX = refCol ? refCol.endX : canvasComponent.data.roi.xMin;
-      const width = refCol ? (refCol.endX - refCol.startX) : 60;
+      const rawStartX = refCol ? refCol.endX : canvasComponent.data.roi.xMin;
+      const width = Math.min(60, Math.max(20, refCol ? (refCol.endX - refCol.startX) : 60));
+      const startX = Math.min(rawStartX, maxW - width);
+      const endX = Math.min(startX + width, maxW);
 
       const newCol = {
         id: `col_${Date.now()}_gap`,
         name: `Gap_Col_${insertAt + 1}`,
         color: '#94a3b8',
         startX: startX,
-        endX: startX + width,
+        endX: endX,
         maxPercent: 20,
-        tickEndX: startX + width,
+        tickEndX: endX,
         unit: '%',
         isLocked: false,
         curveType: 'linear' as const,
@@ -922,7 +954,9 @@ async function bootstrap() {
     },
     onChangeDegridStrength: (strength) => {
       canvasComponent.setDegridStrength(strength);
-      setHudNotice(`去线灵敏度设为: ${strength.toUpperCase()}（按 B 键复核红色标记）`);
+      canvasComponent.viewport.showBinaryOverlay = strength !== 'off';
+      toolbar?.updateFilterState(canvasComponent.viewport.imageMode, strength !== 'off');
+      setHudNotice(`去线灵敏度设为: ${strength.toUpperCase()}（已显示实际剔除区域）`);
       void scheduleLineMaskRefresh();
     },
     onToggleVerticalLineRemoval: (enabled) => {
@@ -1066,19 +1100,46 @@ async function bootstrap() {
       }
     },
     onDetectLineCandidates: async () => {
-      try {
-        const activeRoi = canvasComponent.data.active_roi_id || canvasComponent.data.rois?.[0]?.id;
-        const res = await rpcClient.call<any, any>('algorithm.detectLineCandidates', { roi_id: activeRoi });
-        if (res?.candidates) {
-          canvasComponent.data.line_candidates = res.candidates;
-          canvasComponent.data.selected_candidate_ids = res.candidates.map((c: any) => c.id);
-          inspector?.updateData(canvasComponent.data);
-          canvasComponent.requestRender();
-          setHudNotice(`🔍 已检测出 ${res.candidates.length} 条候选干扰线`);
-        }
-      } catch (err) {
-        reportBackendFailure('检测候选线', err);
-      }
+      await runCleanupAction('检测候选线', async () => {
+        const res = await rpcClient.call<any, any>('algorithm.detectLineCandidates', {
+          roi_id: activeCleanupRoiId(),
+        });
+        // 检测只产出"待确认"geometry；紧接着重算一次掩膜，把叠加层与统计一起拿回来。
+        const composed = await rpcClient.refreshCleanup(activeCleanupRoiId());
+        canvasComponent.setSelectedGeometryId(null);
+        const count = res?.candidates?.length ?? composed.candidates?.length ?? 0;
+        setHudNotice(
+          `🔍 已检测 ${count} 条候选干扰线（橙色=待确认）。在图上点选/拖动修正，确认后才会真正去除。`,
+          5000
+        );
+        return composed;
+      });
+    },
+    /**
+     * 手动添加 geometry —— 不再弹窗要四个数字。
+     *
+     * 切到画布拖拽模式：用户在图上按住拖出一段，松手即由 `onGeometryCommit`
+     * 提交后端。这是"在图中修改"的主路径，prompt 只作为精确微调的补充入口。
+     */
+    onAddLineGeometry: async (axis: 'h' | 'v') => {
+      canvasComponent.setSelectedGeometryId(null);
+      canvasComponent.setToolMode(axis === 'h' ? 'drawLineH' : 'drawLineV');
+      setHudNotice(
+        axis === 'h'
+          ? '✏️ 请在图上按住左键，横向拖出一段作为干扰线（拖出的厚度即线宽）。'
+          : '✏️ 请在图上按住左键，竖向拖出一段作为干扰线（拖出的宽度即线宽）。',
+        6000
+      );
+    },
+    /** 选中一条 geometry：在画布上高亮并允许拖动/缩放，不再弹窗改数值。 */
+    onEditLineGeometry: async (candidateId: string) => {
+      const cand = canvasComponent.data.line_candidates?.find((item) => item.id === candidateId);
+      if (!cand) return;
+      canvasComponent.setSelectedGeometryId(candidateId);
+      setHudNotice(
+        `已选中 ${cand.axis === 'h' ? '横向' : '竖向'}几何：拖动整体移动，拖端点手柄改范围，Delete 删除。`,
+        6000
+      );
     },
     onAddExclusionRect: async () => {
       const activeRoi = canvasComponent.data.active_roi_id || canvasComponent.data.rois?.[0]?.id || 'pollen';
@@ -1108,10 +1169,14 @@ async function bootstrap() {
       toolbar?.updateFilterState(canvasComponent.viewport.imageMode, true);
 
       try {
-        await rpcClient.call('algorithm.applyLineRemoval', {
+        const maskRes = await rpcClient.call<any, any>('algorithm.applyLineRemoval', {
           roi_id: activeRoi,
+          selected_ids: canvasComponent.data.selected_candidate_ids || [],
           exclusion_regions: canvasComponent.data.exclusion_regions,
         });
+        if (maskRes?.overlay_png) {
+          canvasComponent.setLineOverlay(maskRes.overlay_png);
+        }
         inspector?.updateData(canvasComponent.data);
         canvasComponent.requestRender();
         setHudNotice(`⛶ 已划定排除区 [X: ${exX0}~${exX1}]！该区域所有墨迹在数字化时将被绝对剔除。`, 4500);
@@ -1119,26 +1184,49 @@ async function bootstrap() {
         reportBackendFailure('添加排除区', err);
       }
     },
+    /** 确认 / 撤回一条 geometry：改的是后端 status，掩膜由后端重算。 */
     onToggleCandidateSelection: async (candId: string, selected: boolean) => {
-      const currentSelected = new Set(canvasComponent.data.selected_candidate_ids || []);
-      if (selected) {
-        currentSelected.add(candId);
-      } else {
-        currentSelected.delete(candId);
-      }
-      canvasComponent.data.selected_candidate_ids = Array.from(currentSelected);
-
-      const activeRoi = canvasComponent.data.active_roi_id || canvasComponent.data.rois?.[0]?.id;
-      try {
-        await rpcClient.call('algorithm.applyLineRemoval', {
-          roi_id: activeRoi,
-          selected_ids: canvasComponent.data.selected_candidate_ids,
+      await runCleanupAction('更新候选线选择', () =>
+        rpcClient.setGeometryStatus(candId, selected ? 'removed' : 'candidate')
+      );
+      setHudNotice(selected ? '✅ 已确认该几何：数字化将剔除这块像素。' : '↩️ 已撤回为待确认：不再剔除。');
+    },
+    /** 画布拖拽/缩放 geometry 结束（新建时 id 为 null）。 */
+    onGeometryCommit: async (
+      id: string | null,
+      axis: 'h' | 'v',
+      rect: { x0: number; y0: number; x1: number; y1: number }
+    ) => {
+      await runCleanupAction(id ? '移动几何' : '新建几何', async () => {
+        const res = await rpcClient.upsertLineGeometry({
+          roi_id: activeCleanupRoiId(),
+          axis,
+          candidate_id: id,
+          geometry: rect,
+          // 新建默认待确认：不确认就不动像素。
+          status: 'candidate',
         });
-        inspector?.updateData(canvasComponent.data);
-        canvasComponent.requestRender();
-      } catch (err) {
-        reportBackendFailure('更新候选线选择', err);
-      }
+        if (!id && res.candidates?.length) {
+          // 新建后自动选中它，便于立刻微调。
+          const created = res.candidates[res.candidates.length - 1];
+          canvasComponent.setSelectedGeometryId(created.id);
+        }
+        return res;
+      });
+    },
+    /** 画布上 Delete 删除选中的 geometry。 */
+    onGeometryDelete: async (id: string) => {
+      await runCleanupAction('删除几何', () => rpcClient.deleteLineGeometry(id));
+      setHudNotice('🗑️ 已删除该几何。');
+    },
+    /** 清空本步全部 geometry / 排除区 / 笔迹。 */
+    onClearCleanupEdits: async () => {
+      await runCleanupAction('清空清理编辑', async () => {
+        const res = await rpcClient.clearCleanupEdits(activeCleanupRoiId());
+        canvasComponent.setSelectedGeometryId(null);
+        setHudNotice('🧽 已清空本步的全部几何、排除区与笔迹。');
+        return res;
+      });
     },
     onDetectXTicks: async () => {
       try {
@@ -1237,15 +1325,24 @@ async function bootstrap() {
     const strength = canvasComponent.viewport.degridStrength;
     const data = canvasComponent.data;
     if (strength === 'off') {
-      // 关闭也要通知后端：它会主动清掉会话里的旧掩膜。只隐藏叠加层是不够的，
+      // 关闭也要通知后端：它会主动清掉会话里的"自动去线"掩膜。只隐藏叠加层是不够的，
       // 否则关闭后数字化仍在减掉那批像素。
       try {
-        await rpcClient.applyLineRemoval('off', data.lineCorrections, verticalLineRemoval);
+        const res = await rpcClient.applyLineRemoval('off', data.lineCorrections, verticalLineRemoval);
+        if (requestVersion !== lineMaskRequestVersion) return;
+        // 关的只是"自动去线"，手工 geometry / 排除区 / 笔迹仍然有效。
+        // 这里必须继续显示后端合成了全部来源的叠加层，不能再无条件 setLineOverlay(null)
+        // —— 那会把用户在 Step 4 画好的几何一起抹掉视觉反馈（历史 bug）。
+        const hasManual =
+          (data.line_candidates || []).length > 0 || (data.exclusion_regions || []).length > 0;
+        if (hasManual && res?.overlay_png) {
+          canvasComponent.setLineOverlay(res.overlay_png);
+        } else {
+          canvasComponent.setLineOverlay(null);
+        }
       } catch (err) {
         reportBackendFailure('关闭去线', err);
       }
-      if (requestVersion !== lineMaskRequestVersion) return;
-      canvasComponent.setLineOverlay(null);
       return;
     }
     try {
@@ -1265,6 +1362,69 @@ async function bootstrap() {
       );
     } catch (err) {
       reportBackendFailure('去线掩膜计算', err);
+    }
+  }
+
+  /**
+   * 把后端下发的**完整**清理状态灌回前端。
+   *
+   * Step 4 的唯一数据来源：candidates / 统计 / 叠加层 png 全部用后端返回值覆盖，
+   * 前端不再自行拼装 `line_candidates`（自造状态会与后端 mask 脱节，
+   * 表现为"界面显示已去除但数字化没变"）。
+   */
+  function applyCleanupState(res: {
+    candidates?: LineCandidate[];
+    selected_ids?: string[];
+    stats?: Record<string, number>;
+    overlay_png?: string;
+  }): void {
+    const data = canvasComponent.data;
+    if (Array.isArray(res.candidates)) {
+      data.line_candidates = res.candidates;
+    }
+    if (Array.isArray(res.selected_ids)) {
+      data.selected_candidate_ids = res.selected_ids;
+    }
+    if (res.stats) {
+      data.cleanup_stats = res.stats;
+    }
+    if (res.overlay_png) {
+      canvasComponent.setLineOverlay(res.overlay_png);
+      canvasComponent.viewport.showBinaryOverlay = true;
+      toolbar?.updateFilterState(canvasComponent.viewport.imageMode, true);
+    } else {
+      canvasComponent.setLineOverlay(null);
+    }
+    inspector?.updateData(data);
+    sidebar?.updateData(data);
+    canvasComponent.requestRender();
+  }
+
+  /** 活动 ROI id（后端所有清理 RPC 都以 ROI 为作用域）。 */
+  function activeCleanupRoiId(): string {
+    return (
+      canvasComponent.data.active_roi_id ||
+      canvasComponent.data.rois?.[0]?.id ||
+      canvasComponent.data.roi?.id ||
+      'pollen'
+    );
+  }
+
+  /** 统一入口：跑一个清理类 RPC 并把结果灌回前端。 */
+  async function runCleanupAction(
+    label: string,
+    action: () => Promise<{
+      candidates?: LineCandidate[];
+      selected_ids?: string[];
+      stats?: Record<string, number>;
+      overlay_png?: string;
+    }>
+  ): Promise<void> {
+    try {
+      const res = await action();
+      applyCleanupState(res);
+    } catch (err) {
+      reportBackendFailure(label, err);
     }
   }
 
@@ -1794,7 +1954,9 @@ async function bootstrap() {
     },
     onChangeDegridStrength: (strength) => {
       canvasComponent.setDegridStrength(strength);
-      setHudNotice(`去线灵敏度设为: ${strength.toUpperCase()}（按 B 键复核红色标记）`);
+      canvasComponent.viewport.showBinaryOverlay = strength !== 'off';
+      toolbar?.updateFilterState(canvasComponent.viewport.imageMode, strength !== 'off');
+      setHudNotice(`去线灵敏度设为: ${strength.toUpperCase()}（已显示实际剔除区域）`);
       void scheduleLineMaskRefresh();
     },
     onSelectToolMode: (mode) => {

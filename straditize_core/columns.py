@@ -85,49 +85,44 @@ def detect_column_starts(binary: np.ndarray,
         return np.array([], dtype=int)
 
     diff = nulls[1:] - nulls[:-1]
-    starts = []
-    # If the very first column with data is isolated or starts at index 0
     if len(diff) == 0:
-        starts = [nulls[0]]
+        starts = np.array([], dtype=int)
     else:
-        starts = np.r_[[nulls[0]], nulls[1:][diff > 1]].astype(int)
-    starts = starts[valid[starts]] if len(starts) else np.array([], dtype=int)
+        # An isolated first foreground run is not a column start. This mirrors
+        # the legacy estimator: only a contiguous run from the first pixel or
+        # a later gap can introduce a start.
+        starts = np.asarray(
+            np.r_[[nulls[0]] if diff[0] == 1 else [], nulls[1:][diff > 1]],
+            dtype=int,
+        )
+        starts = starts[valid[starts]]
 
-    # Where data doubles compared to previous column
-    doubled = np.where((summed[1:] >= summed[:-1] * 2) & valid[1:])[0] + 1
+    doubled = np.where((summed[1:] > summed[:-1] * 2) & valid[1:])[0] + 1
 
-    # Where data steadily increases over a run
-    if len(summed) > 1:
-        increasing, bounds = groupby_arr(summed[1:] > summed[:-1])
-        if len(increasing):
-            from0 = int(not increasing[0])
-            starts_ends = zip(bounds[from0::2], bounds[1 + from0::2])
-            increased = [
-                s + 1 for s, e in starts_ends
-                if (e < len(summed) and summed[e] >= summed[s] * 2 and valid[e])
-            ]
-        else:
-            increased = []
-    else:
-        increased = []
+    increasing, bounds = groupby_arr(summed[1:] > summed[:-1])
+    increased: list[int] = []
+    if len(increasing):
+        from0 = int(not increasing[0])
+        starts_ends = zip(bounds[from0::2], bounds[1 + from0::2])
+        increased = [
+            s + 1
+            for s, e in starts_ends
+            if e < len(summed) and summed[e] > summed[s] * 2 and valid[e]
+        ]
 
     candidates = np.unique(np.r_[starts, doubled, increased]).astype(int)
     if not len(candidates):
-        # Fallback to the first valid column if any exists
         valid_indices = np.where(valid)[0]
-        if len(valid_indices):
-            candidates = np.array([valid_indices[0]], dtype=int)
-        else:
+        if not len(valid_indices):
             return np.array([], dtype=int)
+        candidates = np.array([valid_indices[0]], dtype=int)
 
-    # Filter candidates too close to each other
+    # A candidate is useful only when the following column span is wide enough
+    # to represent a real column. The legacy code applies this to the gap to
+    # the next candidate, including the image's right edge for the last one.
     min_diff = max(1.0, float(min_col_width_ratio) * width)
-    filtered = [candidates[0]]
-    for c in candidates[1:]:
-        if c - filtered[-1] >= min_diff:
-            filtered.append(c)
-
-    return np.asarray(filtered, dtype=int)
+    gaps = np.r_[candidates[1:], width] - candidates
+    return candidates[gaps > min_diff].astype(int)
 
 
 def detect_column_bounds(binary: np.ndarray,

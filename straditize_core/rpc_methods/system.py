@@ -156,6 +156,28 @@ def register(dispatcher: Any, session: Any) -> None:
                 "remove_vertical": session.degrid_remove_vertical,
                 "corrections": session.line_corrections,
             },
+            # Cleanup geometry is authoritative backend state. It MUST travel
+            # with the diagram payload: the frontend used to hold it only in
+            # memory, so every refresh silently reset it to [] and the
+            # geometry vanished from the canvas.
+            "line_candidates": [dict(c) for c in getattr(session, "line_candidates", [])],
+            "selected_candidate_ids": sorted(
+                getattr(session, "selected_candidate_ids", set())
+            ),
+            "exclusion_regions": [
+                dict(e) for e in getattr(session, "exclusion_regions", [])
+            ],
+            "line_strokes": [dict(s) for s in getattr(session, "line_strokes", [])],
+            "cleanup": {
+                "roi_id": getattr(session, "active_roi_id", None),
+                "stats": getattr(session, "cleanup_stats", {}),
+                "legend": {
+                    "candidate": "#f59e0b",
+                    "removed": "#ef4444",
+                    "exclusion": "#9ca3af",
+                    "kept": "#ffffff",
+                },
+            },
         }
 
     dispatcher.register_method("straditize.getDiagramData", get_diagram_data)

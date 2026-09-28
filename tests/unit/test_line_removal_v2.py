@@ -69,6 +69,41 @@ def test_line_width_max_filter():
     assert cands_all[0]["width"] == 3
 
 
+def test_adaptive_width_max_scales_with_roi_resolution():
+    """线宽判据必须随分辨率自适应，否则真实扫描件一条线都检测不到。
+
+    Regression（实测事故）：一张 6126×3477 的扫描图，其 ROI 内肉眼可见 3 条
+    zone 横线（覆盖率 93–98%，原图厚度约 6px）。默认 `line_width_max=2` 时
+    `algorithm.detectLineCandidates` 返回 **0 条**——固定像素阈值是为小尺寸教程图
+    调的，在大扫描件上把真实区带线全部判为"太厚"。
+    """
+    from straditize_core.lines import resolve_width_max
+
+    # 分辨率越高，允许的线宽越大
+    assert resolve_width_max((800, 4855), None) > resolve_width_max((800, 1600), None)
+    # 有下限，避免抗锯齿边缘被当成结构线
+    assert resolve_width_max((50, 50), None) >= 3
+    # 显式传值必须原样生效（调用方始终能钉死行为）
+    assert resolve_width_max((800, 4855), 2) == 2
+
+    # 同一条 6px 线：小图默认判太厚，大图默认应能检出
+    def build(scale: int) -> np.ndarray:
+        ink = np.zeros((scale, scale), dtype=bool)
+        ink[scale // 2 : scale // 2 + 6, 10 : scale - 10] = True
+        return ink
+
+    small = build(400)
+    big = build(4000)
+
+    # 小图（长边 400 -> 自适应上限 3）：6px 线超限
+    assert len(detect_line_candidates(small, {"xlim": [0, 400], "ylim": [0, 400]},
+                                      line_fraction_h=0.5, line_width_max=2)) == 0
+    # 大图（长边 4000 -> 自适应上限 16）：同样的 6px 线必须被检出
+    big_cands = detect_line_candidates(big, {"xlim": [0, 4000], "ylim": [0, 4000]},
+                                       line_fraction_h=0.5, line_width_max=None)
+    assert [c["kind"] for c in big_cands].count("A") == 1
+
+
 def test_exclusion_absolute_priority():
     """Exclusion region is absolute: restore strokes inside exclusion are completely ineffective."""
     session = StraditizeSession()
@@ -136,7 +171,7 @@ def test_columns_stale_local_to_roi():
 
 
 def test_hoya_real_regression():
-    """Real Hoya figure regression: A=0 rows, Pinus column ink removal < 1%."""
+    """Real Hoya figure regression: zone lines are detected without erasing Pinus."""
     session = get_hoya_session()
     # Hoya data region
     # get_hoya_session() 走 load_image，已自动建了一个名为 "pollen" 的建议取数区；
@@ -155,8 +190,14 @@ def test_hoya_real_regression():
     cands = cands_res["candidates"]
     kinds = [c["kind"] for c in cands]
 
-    # In Hoya ROI, there are 0 full-width horizontal coordinate lines
-    assert kinds.count("A") == 0
+    # Hoya contains three interrupted-but-wide zone separators. They must be
+    # detected by the coverage-aware horizontal pass.
+    #
+    # 断言 3 而非 2：Hoya 的 zone 行实测为 y=818/819、1129/1130、1306/1307 三条。
+    # 旧断言 2 锁的是一个 edge_margin 缺陷——第三条距 ROI 底(y1=1311)仅 4px，
+    # 而保护带曾是 `2 * line_width_max` = 4px，`at_local >= sub_h - 1 - 4` 恰好把它
+    # 当成 ROI 边框丢掉。保护带已改为只与边框粗细有关（上限 4px），不再随线宽膨胀。
+    assert kinds.count("A") == 3
 
     # Apply all detected vertical line candidates
     selected_ids = [c["id"] for c in cands]

@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import numpy as np
 import pytest
+from PIL import Image, ImageDraw
 
 from straditize_core.age_depth import AgeDepthModel
 from straditize_core.session import StraditizeSession
@@ -36,6 +37,26 @@ def test_module1_load_image_creates_default_roi(tmp_path, monkeypatch):
     assert roi_1["ylim"] == [sug["yMin"], sug["yMax"]]
     assert session.data_xlim == [sug["xMin"], sug["xMax"]]
     assert session.data_ylim == [sug["yMin"], sug["yMax"]]
+
+
+def test_suggest_data_region_tracks_connected_diagram_bounds():
+    """The initial ROI should follow the diagram block, not fixed insets."""
+    image = Image.new("RGBA", (1000, 800), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((150, 120, 850, 700), outline="black", width=3)
+    for x in (300, 500, 700):
+        draw.line((x, 200, x, 650), fill="black", width=3)
+
+    session = StraditizeSession()
+    session.image = image
+    session.width, session.height = image.size
+
+    assert session.suggest_data_region() == {
+        "xMin": 150.0,
+        "xMax": 851.0,
+        "yMin": 120.0,
+        "yMax": 701.0,
+    }
 
 
 def test_module2_predict_depth_inverse_mapping():

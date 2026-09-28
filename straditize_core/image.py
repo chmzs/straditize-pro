@@ -181,7 +181,18 @@ def _detect_linear_structures(
     )
     opened = skim.opening(binary, kernel)
     thickness = stroke_thickness(binary, axis=1 if vertical else 0)
-    candidate = opened & (thickness <= max_thickness)
+    thin = binary & (thickness <= max_thickness)
+    candidate = opened & thin
+
+    if not vertical:
+        # Zone separators often cross plot columns that contain labels or curves,
+        # so a strict continuous opening misses the line despite high coverage.
+        # Keep thin foreground pixels on rows whose *thin* coverage reaches the
+        # same span threshold; this preserves the thickness guard against filled
+        # silhouettes while allowing small interruptions in the horizontal stroke.
+        thin_row_counts = thin.sum(axis=1)
+        accepted_rows = thin_row_counts >= min_span
+        candidate |= thin & accepted_rows[:, np.newaxis]
 
     counts = candidate.sum(axis=0) if vertical else candidate.sum(axis=1)
     accepted = counts >= min_span
@@ -255,6 +266,11 @@ def detect_grid_lines(
         max_thickness=thickness_bound,
         vertical=False,
     )
+    # The ROI frame itself is not an artifact. Exclude a small edge band so a
+    # full-width border cannot become a removable zone separator.
+    edge_margin = max(2, thickness_bound * 2) + 1
+    horizontal[:edge_margin, :] = False
+    horizontal[-edge_margin:, :] = False
 
     vertical = np.zeros_like(sub)
     if remove_vertical:

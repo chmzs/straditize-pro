@@ -47,6 +47,26 @@ export interface CanvasEventCallbacks {
   onYCalibPicked?: (marks: Point2D[]) => void;
   /** 线掩膜人工修正笔迹结束，调用方负责提交后端并回灌新叠加层。 */
   onLineFixStroke?: (stroke: LineMaskStroke) => void;
+  /** Step 4：一条 geometry 被拖动/缩放/新建完成，调用方提交后端。 */
+  onGeometryCommit?: (
+    id: string | null,
+    axis: 'h' | 'v',
+    rect: { x0: number; y0: number; x1: number; y1: number }
+  ) => void;
+  /** Step 4：geometry 选中态变化（面板同步高亮）。 */
+  onGeometrySelected?: (id: string | null) => void;
+  /** Step 4：删除一条 geometry。 */
+  onGeometryDelete?: (id: string) => void;
+  /** 叠加层渲染失败：必须上报，禁止静默吞掉（否则表现为"什么都没画"）。 */
+  onOverlayError?: (overlayId: string, error: unknown) => void;
+  /**
+   * 底图加载完成。
+   *
+   * `loadImage` 会重置后端下发的线掩膜叠加层（它随旧底图失效），而
+   * `loadNewDiagram` 有十几处调用点。集中在这里通知一次，调用方重新向后端
+   * 取一次清理叠加层，避免"刷新一次几何就看不见了"。
+   */
+  onDiagramReloaded?: () => void;
 }
 
 export class GeologyCanvas {
@@ -99,10 +119,22 @@ export class GeologyCanvas {
   public lineFixMode: 'erase' | 'restore' = 'erase';
   private lineFixPoints: Point2D[] | null = null;
 
+  // Step 4 geometry 编辑：选中项、拖拽会话、拖拽新建会话
+  private selectedGeometryId: string | null = null;
+  private geometryDrag: {
+    id: string;
+    handle: 'move' | 'start' | 'end';
+    startWorld: Point2D;
+    startRect: { x0: number; y0: number; x1: number; y1: number };
+  } | null = null;
+  private geometryCreate: { axis: 'h' | 'v'; startWorld: Point2D; endWorld: Point2D } | null = null;
+
   // 点击添加锚点防误抖标识
   private hasDraggedAnchor: boolean = false;
   private renderPending: boolean = false;
   private lastRenderedLayers: Set<string> = new Set();
+  /** 上一次渲染中失败的叠加层：暴露出来供验收句柄与状态栏读取。 */
+  private overlayErrors: Map<string, unknown> = new Map();
 
   // 屏幕恒定像素常量
   private readonly ANCHOR_HIT_RADIUS_SCREEN = 8.0;
@@ -110,6 +142,9 @@ export class GeologyCanvas {
   private readonly ROI_HANDLE_SIZE_SCREEN = 8.0;
   private readonly YCALIB_MARKER_RADIUS_SCREEN = 7.0;
   private readonly LINEFIX_BRUSH_RADIUS_SCREEN = 7.0;
+  /** geometry 命中带最小半宽（屏幕像素），保证 2px 的线也点得中。 */
+  private readonly GEOMETRY_HIT_PAD_SCREEN = 6.0;
+  private readonly GEOMETRY_HANDLE_SIZE_SCREEN = 9.0;
 
   // 显式 4 步推进工作流状态 (1: ROI界定, 2: 列切分与形态, 3: 数字化与微调, 4: 导出)
   public workflowStage: number = 3;
@@ -300,6 +335,15 @@ export class GeologyCanvas {
 
   public loadNewDiagram(newData: DiagramData): void {
     this.data = newData;
+    // 选中态是画布 UI 状态：数据刷新后若该 geometry 已不存在就必须清掉，
+    // 否则 CleanupOverlay 会为一个悬空 id 画手柄。
+    if (
+      this.selectedGeometryId &&
+      !(newData.line_candidates || []).some((c) => c.id === this.selectedGeometryId)
+    ) {
+      this.selectedGeometryId = null;
+    }
+    this.data.cleanup_selected_id = this.selectedGeometryId;
     this.loadImage(newData.imageSrc);
     if (this.callbacks.onDataChange) {
       this.callbacks.onDataChange();
@@ -327,6 +371,8 @@ export class GeologyCanvas {
       this.updateEmptyStateVisibility();
       this.fitToScreen();
       this.requestRender();
+      // 通知调用方重新向后端取一次清理叠加层（几何/排除区仍存在于 data 中）。
+      this.callbacks.onDiagramReloaded?.();
     };
 
     this.diagramImage.onerror = () => {
@@ -503,9 +549,10 @@ export class GeologyCanvas {
         sortedCols.push(newCol);
         curStartX = newEndX;
 
-        // 自动扩展取数区域以容纳新列；只动 ROI，绝不改深度标定
+        // 自动扩展取数区域以容纳新列；严格钳位在图谱物理宽度内
+        const maxW = this.data.imageWidth || 8000;
         if (newEndX > this.data.roi.xMax) {
-          this.data.roi.xMax = newEndX + 30;
+          this.data.roi.xMax = Math.min(maxW, newEndX + 30);
         }
       }
     }
@@ -666,6 +713,17 @@ export class GeologyCanvas {
         this.nudgeSelectedEntity(dx, dy);
         return;
       }
+    }
+
+    // 1b. 删除选中的 Step 4 geometry
+    if ((e.code === 'Delete' || e.code === 'Backspace') && this.selectedGeometryId) {
+      e.preventDefault();
+      const id = this.selectedGeometryId;
+      this.selectedGeometryId = null;
+      this.data.cleanup_selected_id = null;
+      this.callbacks.onGeometryDelete?.(id);
+      this.requestRender();
+      return;
     }
 
     // 2. 模式快捷键切换 (A: 加点, S: 微调, D: 删点, C: 加列, H: 平移, R: ROI)
@@ -1020,7 +1078,10 @@ export class GeologyCanvas {
       // ================= 2.5 Y 轴两点标定 (Calibrate) =================
       // 在 Step 3 或 ycalib 模式下，左键点击画布直接拾取 Y1 / Y2 标定点并绘制圆点标记
       if (canPickYCalibMark(this.workflowStage, mode)) {
-        const markY = Math.round(worldPt.y);
+        const maxH = this.data.imageHeight || 12000;
+        const maxW = this.data.imageWidth || 8000;
+        const markY = Math.max(0, Math.min(Math.round(worldPt.y), maxH));
+        const markX = Math.max(0, Math.min(Math.round(worldPt.x), maxW));
         // 若已选满 2 个点，第 3 次点击自动重置并作为新的第 1 个点 Y1
         if (this.yCalibMarks.length >= 2) {
           this.yCalibMarks = [];
@@ -1029,7 +1090,7 @@ export class GeologyCanvas {
           this.notifyNotice('两点标定需要两个不同的像素行，请再点另一行。');
           return;
         }
-        this.yCalibMarks.push({ x: Math.round(worldPt.x), y: markY });
+        this.yCalibMarks.push({ x: markX, y: markY });
         this.requestRender();
         if (this.yCalibMarks.length === 2) {
           const picked = [...this.yCalibMarks].sort((a, b) => a.y - b.y);
@@ -1051,6 +1112,33 @@ export class GeologyCanvas {
         this.lineFixPoints = [{ x: worldPt.x, y: worldPt.y }];
         this.requestRender();
         return;
+      }
+
+      // ================= 2.7 Step 4 geometry 拖拽新建 / 选中编辑 =================
+      // 优先于 ROI 手柄：geometry 是 Step 4 的主角，ROI 边框不该抢命中。
+      const createAxis = this.getGeometryCreateAxis();
+      if (createAxis) {
+        this.geometryCreate = { axis: createAxis, startWorld: worldPt, endWorld: worldPt };
+        this.requestRender();
+        return;
+      }
+
+      const hitGeometry = this.findHitGeometry(worldPt);
+      if (hitGeometry) {
+        const cand = (this.data.line_candidates || []).find((c) => c.id === hitGeometry.id);
+        this.setSelectedGeometryId(hitGeometry.id);
+        if (cand?.geometry) {
+          const g = cand.geometry;
+          this.geometryDrag = {
+            id: hitGeometry.id,
+            handle: hitGeometry.handle,
+            startWorld: worldPt,
+            startRect: { x0: g.x0, y0: g.y0, x1: g.x1, y1: g.y1 },
+          };
+          this.updateCursor();
+          this.requestRender();
+          return;
+        }
       }
 
       // ================= 3. ROI 区域手柄拖动模式 =================
@@ -1258,16 +1346,68 @@ export class GeologyCanvas {
       return;
     }
 
+    // 0b. 正在拖拽新建 geometry：只更新预览，松手才提交
+    if (this.geometryCreate) {
+      this.geometryCreate.endWorld = worldPt;
+      this.requestRender();
+      return;
+    }
+
+    // 0c. 正在移动/缩放已有 geometry：只改本地临时值，松手才提交。
+    //     与 ROI 手柄一致——拖拽期间不刷 RPC，保证跟手。
+    if (this.geometryDrag) {
+      const drag = this.geometryDrag;
+      const cand = (this.data.line_candidates || []).find((c) => c.id === drag.id);
+      if (cand) {
+        const dx = Math.round(worldPt.x - drag.startWorld.x);
+        const dy = Math.round(worldPt.y - drag.startWorld.y);
+        const r = drag.startRect;
+        let next: { x0: number; y0: number; x1: number; y1: number };
+
+        if (drag.handle === 'move') {
+          next = { x0: r.x0 + dx, y0: r.y0 + dy, x1: r.x1 + dx, y1: r.y1 + dy };
+        } else if (cand.axis === 'h') {
+          // 横向线：端点手柄只改 x 范围（线是全宽的，不让人误改成半截）
+          next =
+            drag.handle === 'start'
+              ? { ...r, x0: r.x0 + dx }
+              : { ...r, x1: r.x1 + dx };
+        } else {
+          next =
+            drag.handle === 'start'
+              ? { ...r, y0: r.y0 + dy }
+              : { ...r, y1: r.y1 + dy };
+        }
+
+        cand.geometry = { type: 'rect', ...next };
+        // 同步派生显示字段，面板里的读数才不会滞后。
+        if (cand.axis === 'h') {
+          cand.at = Math.round((next.y0 + next.y1) / 2);
+          cand.span = [Math.min(next.x0, next.x1), Math.max(next.x0, next.x1)];
+          cand.width = Math.abs(next.y1 - next.y0) + 1;
+        } else {
+          cand.at = Math.round((next.x0 + next.x1) / 2);
+          cand.span = [Math.min(next.y0, next.y1), Math.max(next.y0, next.y1)];
+          cand.width = Math.abs(next.x1 - next.x0) + 1;
+        }
+        this.requestRender();
+      }
+      return;
+    }
+
     // 0. 正在拖动 ROI 8 手柄微调取数区域（只影响取数范围，与深度标定无关）
     if (this.draggingRoiHandle) {
       const h = this.draggingRoiHandle;
-      const x = Math.round(worldPt.x);
-      const y = Math.round(worldPt.y);
+      const maxW = this.data.imageWidth || 8000;
+      const maxH = this.data.imageHeight || 12000;
+      // 严格钳位在图谱有效物理像素范围内，严禁拖拽溢出到画布外虚无空间
+      const x = Math.max(0, Math.min(Math.round(worldPt.x), maxW));
+      const y = Math.max(0, Math.min(Math.round(worldPt.y), maxH));
 
-      if (h.includes('l')) roi.xMin = Math.min(x, roi.xMax - 20);
-      if (h.includes('r')) roi.xMax = Math.max(x, roi.xMin + 20);
-      if (h.includes('t')) roi.yMin = Math.min(y, roi.yMax - 20);
-      if (h.includes('b')) roi.yMax = Math.max(y, roi.yMin + 20);
+      if (h.includes('l')) roi.xMin = Math.max(0, Math.min(x, roi.xMax - 20));
+      if (h.includes('r')) roi.xMax = Math.min(maxW, Math.max(x, roi.xMin + 20));
+      if (h.includes('t')) roi.yMin = Math.max(0, Math.min(y, roi.yMax - 20));
+      if (h.includes('b')) roi.yMax = Math.min(maxH, Math.max(y, roi.yMin + 20));
 
       this.requestRender();
       return;
@@ -1395,6 +1535,37 @@ export class GeologyCanvas {
       }
     }
 
+    // Step 4 geometry：松手才提交给后端（一次拖拽 = 一次 RPC）。
+    if (this.geometryDrag) {
+      const drag = this.geometryDrag;
+      const cand = (this.data.line_candidates || []).find((c) => c.id === drag.id);
+      if (cand?.geometry) {
+        const g = cand.geometry;
+        this.commitGeometry(drag.id, cand.axis, { x0: g.x0, y0: g.y0, x1: g.x1, y1: g.y1 });
+      }
+      this.geometryDrag = null;
+    }
+    if (this.geometryCreate) {
+      const create = this.geometryCreate;
+      const x0 = Math.min(create.startWorld.x, create.endWorld.x);
+      const x1 = Math.max(create.startWorld.x, create.endWorld.x);
+      const y0 = Math.min(create.startWorld.y, create.endWorld.y);
+      const y1 = Math.max(create.startWorld.y, create.endWorld.y);
+      this.geometryCreate = null;
+      // 拖拽距离过小视为误点，不建 geometry（否则会留下 1px 垃圾对象）。
+      const moved = Math.hypot(x1 - x0, y1 - y0);
+      if (moved * this.viewport.scale >= 6) {
+        this.commitGeometry(null, create.axis, {
+          x0: Math.round(x0),
+          y0: Math.round(y0),
+          x1: Math.round(x1),
+          y1: Math.round(y1),
+        });
+      } else {
+        this.notifyNotice('拖拽距离太短，未新建干扰线。请在图上按住并拖出一段距离。');
+      }
+    }
+
     this.isMouseDown = false;
     this.isPanning = false;
     this.draggingAnchor = null;
@@ -1428,6 +1599,11 @@ export class GeologyCanvas {
   /** 返回最近一次完整渲染实际调用过的图层，供只读验收句柄使用。 */
   public getLastRenderedLayers(): string[] {
     return [...this.lastRenderedLayers];
+  }
+
+  /** 返回最近一次渲染中失败的叠加层 id → 错误，供验收与状态栏读取。 */
+  public getOverlayErrors(): Array<{ id: string; error: unknown }> {
+    return [...this.overlayErrors.entries()].map(([id, error]) => ({ id, error }));
   }
 
   private nudgeTimer: number | null = null;
@@ -1671,6 +1847,7 @@ export class GeologyCanvas {
 
   public render(): void {
     this.lastRenderedLayers.clear();
+    this.overlayErrors.clear();
     const ctx = this.ctx;
     const rect = this.canvas.getBoundingClientRect();
     const dpr = this.viewport.dpr;
@@ -1734,14 +1911,25 @@ export class GeologyCanvas {
       this.lastRenderedLayers.add('ghosting');
     }
 
-    // 7.1 自动收集并调用注册叠加层 (W3 叠加层扩展点)
-    try {
-      const overlays = getAllOverlays();
-      for (const ov of overlays) {
+    // 7.1 拖拽新建 geometry 的实时预览
+    if (this.geometryCreate) {
+      this.drawGeometryCreatePreview(ctx);
+      this.lastRenderedLayers.add('geometryCreatePreview');
+    }
+
+    // 7.2 自动收集并调用注册叠加层 (W3 叠加层扩展点)
+    // 叠加层在世界坐标下绘制（见 `canvas/_registry.ts` 的坐标契约）。
+    // 逐个 try/catch 而不是整体包一层：一个叠加层出错不能再连累其他叠加层，
+    // 也不能静默 —— 静默吞异常会表现成"画布上什么都没有"，极难排查。
+    const overlays = getAllOverlays();
+    for (const ov of overlays) {
+      try {
         ov.draw(ctx, this.data, this.viewport);
+        this.lastRenderedLayers.add(ov.id);
+      } catch (error) {
+        this.overlayErrors.set(ov.id, error);
+        this.callbacks.onOverlayError?.(ov.id, error);
       }
-    } catch {
-      // 容错防止叠加层中断主渲染
     }
 
     ctx.restore();
@@ -2229,8 +2417,9 @@ export class GeologyCanvas {
 
   private drawColumnBoundaries(ctx: CanvasRenderingContext2D, isLight: boolean): void {
     const roi = this.data.roi;
-    const topY = roi.yMin - 40;
-    const bottomY = roi.yMax + 30;
+    const maxH = this.data.imageHeight || 12000;
+    const topY = Math.max(0, roi.yMin - 40);
+    const bottomY = Math.min(maxH, roi.yMax + 30);
     const scale = this.viewport.scale;
 
     ctx.save();
@@ -2617,7 +2806,7 @@ export class GeologyCanvas {
    *   Step 1    载入：仅平移
    *   Step 2    ROI ：框选数据有效区 + 平移
    *   Step 3    Y标定：Y轴两点标定 + 平移
-   *   Step 4    清理：线掩膜修正 + 平移
+   *   Step 4    清理：选择/微调候选几何 + 线掩膜修正 + 平移
    *   Step 5    分列：加列、删列、选择、平移
    *   Step 6    标定列：选择、加列、删列、平移
    *   Step 7-8  拐点与采样/校验：开放全部编辑能力（加点等）
@@ -2626,7 +2815,11 @@ export class GeologyCanvas {
     if (stage <= STAGE.LOAD) return ['pan'];
     if (stage === STAGE.ROI) return ['roi', 'pan'];
     if (stage === STAGE.Y_CALIB) return ['ycalib', 'pan'];
-    if (stage === STAGE.CLEANUP) return ['linefix', 'pan'];
+    // 步骤 4 必须同时给出「微调/选择 (S)」：候选几何要在画布上点选、整体拖动、
+    // 拖端点改范围，全靠 select 模式；只给 linefix 会表现为「工具栏缺了微调(S)」。
+    // select 放首位 = 进入步骤 4 的默认工具；画笔(修线 K)是局部修补的备用工具，
+    // 不该抢默认。新建几何走 drawLineH/drawLineV，由侧栏按钮触发，不占按钮位。
+    if (stage === STAGE.CLEANUP) return ['select', 'linefix', 'pan'];
     if (stage === STAGE.SPLIT) return ['addCol', 'eraser', 'select', 'pan'];
     if (stage === STAGE.CALIBRATE_COLUMNS) return ['select', 'addCol', 'eraser', 'pan'];
     return ['select', 'addPoint', 'eraser', 'pan'];
@@ -2713,5 +2906,117 @@ export class GeologyCanvas {
   public setLineFixMode(mode: 'erase' | 'restore'): void {
     this.lineFixMode = mode;
     this.requestRender();
+  }
+
+  // ===================== Step 4：geometry 画布编辑 =====================
+
+  /** 当前选中的 geometry id（未选中为 null）。 */
+  public getSelectedGeometryId(): string | null {
+    return this.selectedGeometryId;
+  }
+
+  /** 选中/取消选中一条 geometry；选中态由叠加层画成白色描边 + 端点手柄。 */
+  public setSelectedGeometryId(id: string | null): void {
+    if (this.selectedGeometryId === id) return;
+    this.selectedGeometryId = id;
+    // 叠加层通过 data 读取选中态（纯前端交互状态，不属于后端契约）。
+    this.data.cleanup_selected_id = id;
+    this.requestRender();
+    this.callbacks.onGeometrySelected?.(id);
+  }
+
+  /** 当前是否处于"拖拽新建 geometry"模式。 */
+  public getGeometryCreateAxis(): 'h' | 'v' | null {
+    const mode = this.toolModeManager.getMode();
+    if (mode === 'drawLineH') return 'h';
+    if (mode === 'drawLineV') return 'v';
+    return null;
+  }
+
+  /** 命中测试：返回鼠标下的 geometry id 与抓取的手柄。 */
+  private findHitGeometry(
+    worldPt: Point2D
+  ): { id: string; handle: 'move' | 'start' | 'end' } | null {
+    const inv = 1 / (this.viewport.scale || 1);
+    const pad = this.GEOMETRY_HIT_PAD_SCREEN * inv;
+    const handleR = (this.GEOMETRY_HANDLE_SIZE_SCREEN * inv) / 2 + 2 * inv;
+    const cands = this.data.line_candidates || [];
+
+    // 从后往前：后加入的 geometry 视觉上在上层，应优先命中。
+    for (let i = cands.length - 1; i >= 0; i--) {
+      const c = cands[i];
+      const g = c.geometry;
+      if (!g) continue;
+      const x0 = Math.min(g.x0, g.x1);
+      const x1 = Math.max(g.x0, g.x1);
+      const y0 = Math.min(g.y0, g.y1);
+      const y1 = Math.max(g.y0, g.y1);
+      const midX = (x0 + x1) / 2;
+      const midY = (y0 + y1) / 2;
+
+      // 已选中的 geometry 先判手柄，否则细线端点永远抓不住。
+      if (c.id === this.selectedGeometryId) {
+        const handles: Array<['start' | 'end', Point2D]> =
+          c.axis === 'h'
+            ? [
+                ['start', { x: x0, y: midY }],
+                ['end', { x: x1, y: midY }],
+              ]
+            : [
+                ['start', { x: midX, y: y0 }],
+                ['end', { x: midX, y: y1 }],
+              ];
+        for (const [key, pt] of handles) {
+          if (Math.hypot(worldPt.x - pt.x, worldPt.y - pt.y) <= handleR) {
+            return { id: c.id, handle: key };
+          }
+        }
+      }
+
+      if (
+        worldPt.x >= x0 - pad &&
+        worldPt.x <= x1 + pad &&
+        worldPt.y >= y0 - pad &&
+        worldPt.y <= y1 + pad
+      ) {
+        return { id: c.id, handle: 'move' };
+      }
+    }
+    return null;
+  }
+
+  /** 拖拽新建 geometry 时的实时预览（世界坐标，跟随鼠标）。 */
+  private drawGeometryCreatePreview(ctx: CanvasRenderingContext2D): void {
+    const create = this.geometryCreate;
+    if (!create) return;
+    const inv = 1 / (this.viewport.scale || 1);
+    const x0 = Math.min(create.startWorld.x, create.endWorld.x);
+    const x1 = Math.max(create.startWorld.x, create.endWorld.x);
+    const y0 = Math.min(create.startWorld.y, create.endWorld.y);
+    const y1 = Math.max(create.startWorld.y, create.endWorld.y);
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 1.5 * inv;
+    ctx.setLineDash([6 * inv, 4 * inv]);
+    if (create.axis === 'h') {
+      // 横向线：拖拽的 y 跨度就是线厚，x 跨度是覆盖范围。
+      ctx.fillRect(x0, y0, Math.max(x1 - x0, inv), Math.max(y1 - y0, inv));
+      ctx.strokeRect(x0, y0, Math.max(x1 - x0, inv), Math.max(y1 - y0, inv));
+    } else {
+      ctx.fillRect(x0, y0, Math.max(x1 - x0, inv), Math.max(y1 - y0, inv));
+      ctx.strokeRect(x0, y0, Math.max(x1 - x0, inv), Math.max(y1 - y0, inv));
+    }
+    ctx.restore();
+  }
+
+  /** 提交一条 geometry 变更给后端（松手时调用，避免拖拽期间刷屏 RPC）。 */
+  private commitGeometry(
+    id: string | null,
+    axis: 'h' | 'v',
+    rect: { x0: number; y0: number; x1: number; y1: number }
+  ): void {
+    this.callbacks.onGeometryCommit?.(id, axis, rect);
   }
 }

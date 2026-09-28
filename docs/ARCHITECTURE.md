@@ -193,17 +193,29 @@ core.exportData / project.save
 
 **注意**：`digitize` 是纯几何，不需要标定；`x_scales` 缺失时**不得**拿列宽当 100% 冒充读数。
 
-### 7.1 线去除（去线）
+### 7.1 线去除（干扰清理）
 
-数据流上只有**一份**掩膜，由后端产生：
+数据流上只有**一份**掩膜，由后端产生。Step 4 的模型是
+**「矢量候选几何 → 栅格化 → 反向掩膜提取」**（等价于 GIS 的反向掩膜）：
 
 ```text
 ink = foreground_mask                      # 原始墨迹，分列检测仍看这一份（不被就地修改）
-h, v = detect_grid_lines(ink, roi, strength, remove_vertical)
-line_mask = (h | v | 手工 restore) & ~手工 erase
-digitize 用 ink & ~line_mask & roi_mask
+candidate_line_mask = 栅格化(status == "removed" 的 geometry)
+degrid_line_mask    = detect_grid_lines(ink, roi, strength, remove_vertical)   # S2 档位路径
+exclusion_mask      = 栅格化(排除区；绝对优先)
+manual_erase / manual_restore = 栅格化(笔迹)
+
+line = (candidate_line_mask | degrid_line_mask | manual_erase)
+line &= ~(manual_restore & ~exclusion_mask)
+grid_line_mask = line | exclusion_mask          # 单一合成点：_rebuild_grid_line_mask()
+digitize 用 ink & ~grid_line_mask & roi_mask
 ```
 
+- **geometry 是唯一几何真相**：`geometry: {type:'rect', x0,y0,x1,y1}`（ROI 内像素矩形）。
+  `at` / `span` / `width` / `kind` 都是后端按它**派生**的显示字段，前端不得反向写回。
+- **检测与删除解耦**：检测只产出 `status="candidate"` 的几何（琥珀色，**不动任何像素**）；
+  用户确认后才置 `status="removed"`（红色，实际剔除）。敏感度不再是独立旋钮，
+  它就是检测阈值，入口只有一个。
 - **判据是「够长 + 够薄」**：形态学开运算保证线足够长（相对 ROI 跨度），
   垂直于线方向的墨迹厚度必须 ≤ `max_thickness`（弱 2 / 中 3 / 强 5 px）。
   真实花粉实心轮廓被横线穿过处厚达数十像素，因此**豁免**。
@@ -211,9 +223,33 @@ digitize 用 ink & ~line_mask & roi_mask
   实测在内置 Hoya 图上 ROI 墨迹的 **55–70%** 被标成线，其中 **95%** 是 ≥4px 的实心轮廓，
   *Pinus* 列 **99%** 被抹掉——而那张图 ROI 内横向贯穿 run 行数为 **0**，即全是误标。
 - **前端不得自行判定"哪条是线"**：`overlay_png` 是唯一事实源，B 键透视与数字化用的是同一批像素。
-- 人工修正以**折线笔迹**（`{mode, radius, points}`）落库，而非位图：改档位或改 ROI 后
-  自动掩膜会变，笔迹仍可重放；随 `straditize.json` 的 `line_removal.corrections` 持久化。
-- `strength: "off"` 必须**主动清空**会话掩膜，否则关闭后数字化仍在扣除旧掩膜。
+- 人工修正分两层，**职责不重叠**：
+  - **geometry**（承载工具）：整条横/竖线，可增删改、可复用；
+  - **笔迹**（修补工具）：只处理 geometry 漏标/误标的**局部像元**，不画线。
+  笔迹以折线 `{mode, radius, points}` 落库而非位图：改档位或改 ROI 后自动掩膜会变，
+  笔迹仍可重放；随 `straditize.json` 的 `line_removal.corrections` 持久化。
+- `strength: "off"` 必须**主动清空**自动去线掩膜，否则关闭后数字化仍在扣除旧掩膜；
+  但它**不得**清掉 geometry / 排除区 / 笔迹——那三者与档位无关。
+
+#### Step 4 RPC 契约
+
+| 方法 | 作用 | 返回 |
+| --- | --- | --- |
+| `algorithm.detectLineCandidates` | 投影检测，产出 `status="candidate"` 几何 | `{candidates, roi_id}` |
+| `algorithm.upsertLineGeometry` | 新建（`candidate_id` 为空）或移动/缩放几何 | 清理状态 |
+| `algorithm.deleteLineGeometry` | 删除一条几何 | 清理状态 |
+| `algorithm.setGeometryStatus` | 确认(`removed`) / 撤回(`candidate`) | 清理状态 |
+| `algorithm.clearCleanupEdits` | 清空本 ROI 的几何 + 排除区 + 笔迹 | 清理状态 |
+| `algorithm.applyLineRemoval` | 只重新合成，不改输入 | 清理状态 |
+| `algorithm.degrid` | S2 的档位式自动去线（与 geometry 取并集） | `DegridResult` |
+
+「清理状态」= `{roi_id, stats, candidates, selected_ids, overlay_png, overlay_legend}`，
+**这六项必须整体回灌前端**。`stats` 是面板显示的唯一数字来源。
+
+`straditize.getDiagramData` 必须平铺下发 `line_candidates` / `selected_candidate_ids` /
+`exclusion_regions` / `line_strokes`，并附 `cleanup: {roi_id, stats, legend}`。
+—— 历史事故：这几个键曾**只**出现在完整分支，前端 `data.line_candidates ?? []`
+于是在每次刷新时把它解析成 `[]`，用户一进 Step 4 或一拖 ROI，几何就全部从画布上消失。
 
 ---
 
@@ -244,3 +280,9 @@ digitize 用 ink & ~line_mask & roi_mask
    前端禁止自行判定"哪条是线"。
 10. 线去除判据必须含**厚度上限**（够长 + 够薄）；禁止按行/列整条删除。
 11. 落在 ROI 之外的数据一律不存在；整列在 ROI 外必须**报错**，不得静默产 0。
+12. **画布叠加层在「世界坐标」下绘制**：`*Overlay.ts` 在 `applyTransform` 之后执行，
+    ctx 已带 world→screen 变换，因此**禁止**再调 `vp.worldToScreen()`（会变换两次，
+    几何被画到错误位置）。需要屏幕恒定尺寸时用 `1 / vp.scale` 反算。
+    历史事故：`CleanupOverlay` / `XTickOverlay` / `SampleOverlay` 三个叠加层都犯过此错，
+    表现为"检测到了但前端什么都看不到"。
+13. 叠加层异常**逐个**上报，禁止整体 `catch {}` 吞掉：静默吞异常与"没检测到"无法区分。

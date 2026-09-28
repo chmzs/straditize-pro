@@ -452,6 +452,13 @@ class StraditizeSession(
         # Reset downstream state
         self.foreground_mask = None
         self.grid_line_mask = None
+        self.candidate_line_mask = None
+        self.degrid_line_mask = None
+        self.exclusion_mask = None
+        self.manual_restore_mask = None
+        self.manual_erase_mask = None
+        self.cleanup_stats = {}
+        self.cleanup_overlay_png = None
         self.degrid_strength = None
         self.degrid_info = None
         self.line_corrections = []
@@ -495,46 +502,101 @@ class StraditizeSession(
         """Switch to a specific 1-based page of the currently loaded PDF."""
         return self.load_image(page_number=page_number)
 
-    def suggest_data_region(self) -> dict[str, float]:
-        """Initial data-region (ROI) suggestion for a freshly loaded diagram.
+    def suggest_data_region(self, fraction: float = 0.7) -> dict[str, float]:
+        """Suggest the main diagram rectangle using the legacy ROI heuristic.
 
-        Uses vertical baseline morphology when column baselines are detectable so
-        angled header labels above the columns are excluded from the data ROI.
-        Falls back to standard inset proportions when fewer than 3 vertical lines exist.
+        The legacy desktop application proposed ROI marks from a temporary
+        foreground mask, then let the user adjust them on the original image.
+        This implementation ports that estimator: it finds a rectangle whose
+        left/right and top/bottom cumulative foreground coverage reaches a
+        fraction of the densest row/column, then expands the right edge to the
+        connected foreground component when appropriate.
         """
         if self.image is None:
             raise JsonRpcError(STATE_ERROR, "No image loaded in session.")
-        w, h = self.width, self.height
-        try:
-            from scipy.ndimage import binary_opening
+        if not 0 < fraction <= 1:
+            raise ValueError("fraction must be in the interval (0, 1].")
 
-            gray = np.array(self.image.convert("L"))
-            dark = gray < 180
-            vert_len = max(20, int(h * 0.22))
-            vert_lines = binary_opening(dark, structure=np.ones((vert_len, 1)))
-            vert_row_counts = vert_lines.sum(axis=1)
-            active_rows = np.where(vert_row_counts >= 6)[0]
-            if len(active_rows) > 10:
-                y0, y1 = int(active_rows[0]), int(active_rows[-1])
-                active_cols = np.where(vert_lines[y0:y1, :].any(axis=0))[0]
-                if len(active_cols) >= 2 and (y1 - y0) >= int(h * 0.15):
-                    x0 = max(round(w * 0.05), int(active_cols[0]))
-                    x1 = min(round(w * 0.96), int(active_cols[-1]))
-                    if x1 - x0 >= int(w * 0.20):
-                        return {
-                            "xMin": float(x0),
-                            "xMax": float(x1),
-                            "yMin": float(y0),
-                            "yMax": float(y1),
-                        }
-        except Exception:  # noqa: BLE001
-            pass
+        width, height = self.width, self.height
+        fallback = {
+            "xMin": round(width * 0.12),
+            "xMax": round(width * 0.94),
+            "yMin": round(height * 0.18),
+            "yMax": round(height * 0.88),
+        }
 
+        from .image import to_binary
+        from skimage.measure import label
+
+        mask = np.asarray(to_binary(self.image), dtype=bool)
+        if not mask.any():
+            return fallback
+
+        max_horizontal = fraction * float(mask.sum(axis=1).max())
+        max_vertical = fraction * float(mask.sum(axis=0).max())
+        cumulative_left = mask.cumsum(axis=1)
+        cumulative_top = mask.cumsum(axis=0)
+        cumulative_right = mask[:, ::-1].cumsum(axis=1)[:, ::-1]
+        cumulative_bottom = mask[::-1].cumsum(axis=0)[::-1]
+
+        right_candidates = np.vstack(
+            np.where(
+                (cumulative_left > max_horizontal)
+                & (cumulative_top > max_vertical)
+            )
+        )
+        if right_candidates.size:
+            candidate_index = (
+                right_candidates.shape[1]
+                - 1
+                - right_candidates.max(axis=0)[::-1].argmax()
+            )
+            y_max, x_max = right_candidates[:, candidate_index]
+        else:
+            x_max = cumulative_top.shape[1] - 1 - (
+                cumulative_top[:, ::-1] > max_vertical
+            ).any(axis=0).argmax()
+            y_max = cumulative_left.shape[0] - 1 - (
+                cumulative_left[::-1] > max_horizontal
+            ).any(axis=1).argmax()
+
+        left_candidates = np.vstack(
+            np.where(
+                (cumulative_right > max_horizontal)
+                & (cumulative_bottom > max_vertical)
+            )
+        )
+        if left_candidates.size:
+            candidate_index = left_candidates.min(axis=0).argmin()
+            y_min, x_min = left_candidates[:, candidate_index]
+        else:
+            x_min = (cumulative_bottom > max_vertical).any(axis=0).argmax()
+            y_min = (cumulative_right > max_horizontal).any(axis=1).argmax()
+
+        x_min, x_max = sorted((int(x_min), int(x_max)))
+        y_min, y_max = sorted((int(y_min), int(y_max)))
+        if y_min == y_max:
+            y_min = int(cumulative_right.any(axis=1).argmax())
+        if x_min == x_max:
+            x_min = int(cumulative_bottom.any(axis=0).argmax())
+
+        if 0 <= y_max < height and 0 <= x_max < width and mask[y_max, x_max]:
+            labels = label(mask, connectivity=2)
+            component_id = labels[y_max, x_max]
+            if component_id:
+                component_rows, component_cols = np.where(
+                    labels[y_min : y_max + 1] == component_id
+                )
+                if component_cols.size:
+                    x_max = max(x_max, int(component_cols.max()))
+
+        if x_max <= x_min or y_max <= y_min:
+            return fallback
         return {
-            "xMin": round(w * 0.12),
-            "xMax": round(w * 0.94),
-            "yMin": round(h * 0.18),
-            "yMax": round(h * 0.88),
+            "xMin": float(x_min),
+            "xMax": float(x_max + 1),
+            "yMin": float(y_min),
+            "yMax": float(y_max + 1),
         }
 
     def get_image_slice(
@@ -748,11 +810,16 @@ class StraditizeSession(
         x0, x1 = sorted([float(data_xlim[0]), float(data_xlim[1])])
         y0, y1 = sorted([float(data_ylim[0]), float(data_ylim[1])])
 
-        # Validate range within image bounds
-        if x0 < 0 or y0 < 0 or x1 > self.width or y1 > self.height:
+        # 防御性钳位在图谱物理尺寸内（严禁超出图谱边界导致切分跑到白布外或报错中断）
+        x0 = max(0.0, min(x0, float(self.width)))
+        x1 = max(0.0, min(x1, float(self.width)))
+        y0 = max(0.0, min(y0, float(self.height)))
+        y1 = max(0.0, min(y1, float(self.height)))
+
+        if (x1 - x0) < 5 or (y1 - y0) < 5:
             raise JsonRpcError(
                 INVALID_PARAMS,
-                f"Bounds [{x0}, {x1}], [{y0}, {y1}] exceed image dimensions ({self.width}x{self.height})",
+                f"Bounds [{x0}, {x1}], [{y0}, {y1}] is too small (image is {self.width}x{self.height})",
             )
 
         self.data_xlim = [x0, x1]
@@ -785,7 +852,7 @@ class StraditizeSession(
         )
 
         bounds = detect_column_bounds(
-            cleaned_sub_mask, threshold=0.04, min_col_width_ratio=0.012
+            cleaned_sub_mask, threshold=0.10, min_col_width_ratio=0.01
         )
 
         detected_cols = []
@@ -1679,6 +1746,13 @@ class StraditizeSession(
         self.x_scales = {}
         self.depth_calib = None
         self.grid_line_mask = None
+        self.candidate_line_mask = None
+        self.degrid_line_mask = None
+        self.exclusion_mask = None
+        self.manual_restore_mask = None
+        self.manual_erase_mask = None
+        self.cleanup_stats = {}
+        self.cleanup_overlay_png = None
         self.degrid_strength = None
         self.degrid_info = None
         self.line_corrections = []
@@ -1775,6 +1849,13 @@ class StraditizeSession(
         self.y_scale = None
         self.depth_calib = None
         self.grid_line_mask = None
+        self.candidate_line_mask = None
+        self.degrid_line_mask = None
+        self.exclusion_mask = None
+        self.manual_restore_mask = None
+        self.manual_erase_mask = None
+        self.cleanup_stats = {}
+        self.cleanup_overlay_png = None
         self.degrid_info = None
         line_removal = project_data.get("line_removal") or {}
         self.degrid_strength = line_removal.get("strength") or None
@@ -2369,7 +2450,8 @@ class StraditizeSession(
         # otherwise the previous mask keeps being subtracted on the digitising
         # path after the user turned line removal off.
         if str(strength).strip().lower() == "off":
-            self.grid_line_mask = None
+            self.degrid_line_mask = None
+            self._rebuild_grid_line_mask()
             self.degrid_strength = None
             self.degrid_info = None
             self._record_history("Degrid off")
@@ -2412,9 +2494,10 @@ class StraditizeSession(
         from .image import rasterize_strokes
 
         restore, erase = rasterize_strokes(ink.shape, corrections)
-        line_mask = (auto | restore) & ~erase
-
-        self.grid_line_mask = line_mask
+        self.manual_restore_mask = restore
+        self.manual_erase_mask = erase
+        self.degrid_line_mask = auto
+        self._rebuild_grid_line_mask()
         self.degrid_strength = strength
         self.degrid_remove_vertical = bool(remove_vertical)
         self.line_corrections = list(corrections or [])
@@ -2434,7 +2517,7 @@ class StraditizeSession(
             "vertical_cols": info["vertical_cols"],
             "removed_lines_count": len(info["horizontal_rows"])
             + len(info["vertical_cols"]),
-            "removed_pixels": int(line_mask.sum()),
+            "removed_pixels": int(self.grid_line_mask.sum()) if self.grid_line_mask is not None else 0,
             "auto_pixels": int(auto.sum()),
             "manual_restore_pixels": int((restore & ~auto).sum()),
             "manual_erase_pixels": int((auto & erase).sum()),
@@ -2442,7 +2525,7 @@ class StraditizeSession(
             # The QC overlay the frontend paints under the B key: white = ink kept,
             # red = pixels actually removed. Single source of truth, so the preview
             # cannot drift from what extraction sees.
-            "overlay_png": mask_overlay_data_url(ink, line_mask),
+            "overlay_png": mask_overlay_data_url(ink, self.grid_line_mask),
         }
 
     def export_csv(

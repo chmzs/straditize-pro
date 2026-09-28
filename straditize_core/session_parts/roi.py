@@ -77,8 +77,14 @@ class RoiMixin:
         self._validate_roi_name(name)
 
         roi_id = f"roi_{self._roi_counter}"
-        xlim = [min(float(x0), float(x1)), max(float(x0), float(x1))]
-        ylim = [min(float(y0), float(y1)), max(float(y0), float(y1))]
+        max_w = float(getattr(self, "width", 0) or 100000.0)
+        max_h = float(getattr(self, "height", 0) or 100000.0)
+        min_x = max(0.0, min(float(x0), float(x1)))
+        max_x = min(max_w, max(float(x0), float(x1))) if max_w > 0 else max(float(x0), float(x1))
+        min_y = max(0.0, min(float(y0), float(y1)))
+        max_y = min(max_h, max(float(y0), float(y1))) if max_h > 0 else max(float(y0), float(y1))
+        xlim = [min_x, max_x]
+        ylim = [min_y, max_y]
 
         roi: dict[str, Any] = {
             "id": roi_id,
@@ -179,19 +185,29 @@ class RoiMixin:
         coord_changed = False
         new_xlim = list(roi["xlim"])
         new_ylim = list(roi["ylim"])
+        max_w = float(getattr(self, "width", 0) or 100000.0)
+        max_h = float(getattr(self, "height", 0) or 100000.0)
 
         if xlim is not None and len(xlim) == 2:
-            new_xlim = [min(float(xlim[0]), float(xlim[1])), max(float(xlim[0]), float(xlim[1]))]
+            min_x = max(0.0, min(float(xlim[0]), float(xlim[1])))
+            max_x = min(max_w, max(float(xlim[0]), float(xlim[1]))) if max_w > 0 else max(float(xlim[0]), float(xlim[1]))
+            new_xlim = [min_x, max_x]
             coord_changed = True
         elif x0 is not None and x1 is not None:
-            new_xlim = [min(float(x0), float(x1)), max(float(x0), float(x1))]
+            min_x = max(0.0, min(float(x0), float(x1)))
+            max_x = min(max_w, max(float(x0), float(x1))) if max_w > 0 else max(float(x0), float(x1))
+            new_xlim = [min_x, max_x]
             coord_changed = True
 
         if ylim is not None and len(ylim) == 2:
-            new_ylim = [min(float(ylim[0]), float(ylim[1])), max(float(ylim[0]), float(ylim[1]))]
+            min_y = max(0.0, min(float(ylim[0]), float(ylim[1])))
+            max_y = min(max_h, max(float(ylim[0]), float(ylim[1]))) if max_h > 0 else max(float(ylim[0]), float(ylim[1]))
+            new_ylim = [min_y, max_y]
             coord_changed = True
         elif y0 is not None and y1 is not None:
-            new_ylim = [min(float(y0), float(y1)), max(float(y0), float(y1))]
+            min_y = max(0.0, min(float(y0), float(y1)))
+            max_y = min(max_h, max(float(y0), float(y1))) if max_h > 0 else max(float(y0), float(y1))
+            new_ylim = [min_y, max_y]
             coord_changed = True
 
         if coord_changed:

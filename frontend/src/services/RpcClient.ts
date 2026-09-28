@@ -1,7 +1,7 @@
 import { BackendStatus, JsonRpcRequest, JsonRpcResponse } from '../types/rpc';
 import { tError } from '../i18n/errorCodes';
 import { t } from '../i18n';
-import { Column, ControlPoint, DataRoi, DepthCalibration, DiagramData, LineMaskStroke } from '../types/pollen';
+import { Column, ControlPoint, CleanupResult, DataRoi, DepthCalibration, DiagramData, LineMaskStroke } from '../types/pollen';
 import { PollenGlossary } from '../core/PollenGlossary';
 
 /** 后端 ocr.getTaxaDict 的返回结构 */
@@ -309,15 +309,22 @@ export class RpcClient {
       lineRemoval?: { corrections?: LineMaskStroke[] };
       primaryRoiId?: string;
       activeRoiId?: string;
+      cleanup?: { roi_id?: string; stats?: Record<string, number>; legend?: Record<string, string> };
     };
     data.rois = data.rois ?? [];
     data.primary_roi_id = data.primary_roi_id ?? data.primaryRoiId ?? (data.rois[0]?.id || '');
     data.active_roi_id = data.active_roi_id ?? data.activeRoiId ?? (data.rois[0]?.id || '');
+    // 这四个平铺数组是画布几何叠加层的唯一来源。曾经后端不下发它们，
+    // 这里的 `?? []` 就变成"每次刷新把用户的几何清空"——必须由后端保证有值。
     data.line_candidates = data.line_candidates ?? [];
     data.selected_candidate_ids = data.selected_candidate_ids ?? [];
     data.line_strokes = data.line_strokes ?? [];
     data.exclusion_regions = data.exclusion_regions ?? [];
     data.samples = data.samples ?? [];
+    // 面板统计数字同样只认后端。
+    if (data.cleanup?.stats) {
+      data.cleanup_stats = data.cleanup.stats;
+    }
 
     const activeRoi = data.rois.find((r) => r.id === data.active_roi_id) || data.rois[0];
     if (activeRoi) {
@@ -433,6 +440,76 @@ export class RpcClient {
     }
     if (strength !== 'off' && !res.overlay_png) {
       throw new Error(tError(-32603, 'algorithm.degrid returned no overlay_png'));
+    }
+    return res;
+  }
+
+  // ===================== Step 4：清理 geometry 契约 =====================
+
+  /**
+   * 新增或移动/缩放一条干扰线 geometry，返回重算后的**完整**清理状态。
+   *
+   * 前端不自行合成掩膜：所有叠加层像素与统计数字都来自这一次调用的返回。
+   */
+  public async upsertLineGeometry(params: {
+    roi_id?: string;
+    axis: 'h' | 'v';
+    candidate_id?: string | null;
+    geometry: { x0: number; y0: number; x1: number; y1: number };
+    status?: 'candidate' | 'removed';
+  }): Promise<CleanupResult> {
+    return this.callCleanup('algorithm.upsertLineGeometry', {
+      roi_id: params.roi_id,
+      axis: params.axis,
+      candidate_id: params.candidate_id ?? undefined,
+      geometry: { type: 'rect', ...params.geometry },
+      selected: params.status === 'removed',
+      status: params.status,
+    });
+  }
+
+  /** 确认（removed）或撤回（candidate）一条 geometry。 */
+  public async setGeometryStatus(
+    candidateId: string,
+    status: 'candidate' | 'removed'
+  ): Promise<CleanupResult> {
+    return this.callCleanup('algorithm.setGeometryStatus', {
+      candidate_id: candidateId,
+      status,
+    });
+  }
+
+  /** 删除一条 geometry。 */
+  public async deleteLineGeometry(candidateId: string): Promise<CleanupResult> {
+    return this.callCleanup('algorithm.deleteLineGeometry', { candidate_id: candidateId });
+  }
+
+  /** 清空本步（本 ROI）的全部 geometry / 排除区 / 笔迹。 */
+  public async clearCleanupEdits(roiId?: string): Promise<CleanupResult> {
+    return this.callCleanup('algorithm.clearCleanupEdits', { roi_id: roiId });
+  }
+
+  /** 重新合成当前清理掩膜，用于数据刷新后重建叠加层与统计。 */
+  public async refreshCleanup(roiId?: string): Promise<CleanupResult> {
+    return this.callCleanup('algorithm.applyLineRemoval', { roi_id: roiId });
+  }
+
+  /**
+   * 调用清理类 RPC 并校验返回契约。
+   *
+   * 缺 `overlay_png` 或 `stats` 一律抛错：这两样是面板与画布的唯一数据来源，
+   * 静默兜底会让界面显示"已完成"而实际什么都没发生。
+   */
+  private async callCleanup(method: string, params: Record<string, unknown>): Promise<CleanupResult> {
+    const res = await this.call<Record<string, unknown>, CleanupResult>(method, params);
+    if (!res || typeof res !== 'object') {
+      throw new Error(tError(-32603, `${method} returned an unexpected payload`));
+    }
+    if (typeof res.overlay_png !== 'string' || !res.overlay_png) {
+      throw new Error(tError(-32603, `${method} returned no overlay_png`));
+    }
+    if (!res.stats || typeof res.stats !== 'object') {
+      throw new Error(tError(-32603, `${method} returned no stats`));
     }
     return res;
   }

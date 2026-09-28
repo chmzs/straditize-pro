@@ -117,11 +117,36 @@ export interface LineCandidate {
   id: string;
   kind: 'A' | 'B' | 'C'; // A 贯穿横 / B 贯穿竖 / C 列内竖
   axis: 'h' | 'v';
-  at: number; // axis='h' 时是行号；'v' 时是列号
+  at: number; // axis='h' 时是行号；'v' 时是列号（由 geometry 派生）
   span: [number, number];
-  width: number; // 实测线宽，px
+  width: number; // 实测线宽，px（由 geometry 派生）
+  /**
+   * 可编辑的 ROI 内矩形几何 —— **唯一几何真相**。
+   * `at` / `span` / `width` 是后端按它派生的显示字段，不要反向写回。
+   */
+  geometry: {
+    type: 'rect';
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  };
+  /** 'candidate' 待确认（琥珀，未删除）；'removed' 已确认（红色，实际剔除）。 */
+  status: 'candidate' | 'removed';
+  source: 'auto' | 'manual';
+  confidence: number | null;
   roi_id: string;
   column_index: number | null; // 仅 kind C 非空
+}
+
+/** 后端 `algorithm.*LineGeometry` 统一返回的清理状态与预览。 */
+export interface CleanupResult {
+  roi_id: string;
+  stats: Record<string, number>;
+  candidates: LineCandidate[];
+  selected_ids: string[];
+  overlay_png: string;
+  overlay_legend: Record<string, string>;
 }
 
 /** 线掩膜的人工修正笔迹：mode=erase 擦掉误标，mode=restore 补回漏标。 */
@@ -170,7 +195,9 @@ export type ToolMode =
   | 'addPoint' // 加控制点工具 (P)
   | 'eraser' // 橡皮擦删除工具 (E)
   | 'ycalib' // Y 轴两点标定 (Y)
-  | 'linefix'; // 线掩膜人工修正笔刷 (K)
+  | 'linefix' // 线掩膜人工修正笔刷 (K)
+  | 'drawLineH' // 拖拽新建横向干扰线 geometry
+  | 'drawLineV'; // 拖拽新建竖向干扰线 geometry
 
 export interface DiagramData {
   imageSrc: string;
@@ -193,6 +220,13 @@ export interface DiagramData {
   selected_candidate_ids: string[];
   line_strokes: LineMaskStroke[];
   exclusion_regions: ExclusionRegion[];
+  /**
+   * 画布上当前选中的 geometry id —— 纯前端交互态（不属于后端契约），
+   * `GeologyCanvas` 每帧写入，供 `CleanupOverlay` 画手柄。
+   */
+  cleanup_selected_id?: string | null;
+  /** 后端下发的清理统计，面板必须显示真实数字。 */
+  cleanup_stats?: Record<string, number>;
 
   /** 采样层位扁平列表 */
   samples: SampleHorizon[];
