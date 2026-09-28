@@ -19,7 +19,7 @@
  *   - 「为什么分列就直接描列图形轮廓了？」→ 步骤 5 不得出现花粉曲线
  *   - 「应该在我点两点就即时出现，而不是点确定应用后才出现」→ 步骤 3 必须能画 Y 标记
  */
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { clickCanvas, getState, gotoStage, resetBaseline, rpc, waitForDiagram } from './helpers';
 
 interface StageState {

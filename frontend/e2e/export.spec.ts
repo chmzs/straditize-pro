@@ -18,15 +18,12 @@
  * 唯一地是"名字还是默认名"，而不会与"没有属种列"这条规则混淆。
  */
 import { Buffer } from 'node:buffer';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 import {
   diagramData,
-  expectNoDialogs,
   openApp,
   resetBaseline,
   rpc,
-  watchPage,
-  type PageTelemetry,
 } from './helpers';
 
 const ROW_TOP = 100;
@@ -48,8 +45,6 @@ interface Readiness {
   total_rois: number;
   ready: boolean;
 }
-
-let telemetry: PageTelemetry = { consoleErrors: [], dialogs: [] };
 
 /**
  * 极简 POSIX UStar 读取器。
@@ -84,7 +79,6 @@ function untarArchive(buf: Buffer): Map<string, Buffer> {
 
 test.describe('导出就绪清单与 .tar 归档', () => {
   test.beforeEach(async ({ page }) => {
-    telemetry = watchPage(page);
     await resetBaseline(page);
   });
 
@@ -266,6 +260,5 @@ test.describe('导出就绪清单与 .tar 归档', () => {
     await expect(readinessBox).toHaveAttribute('data-primary', 'pollen');
     await expect(readinessBox).toHaveAttribute('data-readiness-missing', unnamed.name);
 
-    expectNoDialogs(telemetry);
   });
 });

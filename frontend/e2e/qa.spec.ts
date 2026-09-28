@@ -14,16 +14,13 @@
  * 于是 76 / 103.2 / 4.0 / 2 这几个数字是后端 compute_qa_summary 从真实状态推出来的，
  * 而不是测试自己写死的期望。
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 import {
-  expectNoDialogs,
   getState,
   gotoStage,
   openApp,
   resetBaseline,
   rpc,
-  watchPage,
-  type PageTelemetry,
 } from './helpers';
 
 const ROI_X0 = 100;
@@ -56,11 +53,8 @@ interface QaSummary {
   per_column_max: { name: string; peak: number; declared_max: number; over: boolean }[];
 }
 
-let telemetry: PageTelemetry = { consoleErrors: [], dialogs: [] };
-
 test.describe('Step 8 QA 诊断门禁', () => {
   test.beforeEach(async ({ page }) => {
-    telemetry = watchPage(page);
     await resetBaseline(page);
   });
 
@@ -159,6 +153,5 @@ test.describe('Step 8 QA 诊断门禁', () => {
 
     expect((await getState<{ stage: number }>(page)).stage, '应停在步骤 8').toBe(8);
 
-    expectNoDialogs(telemetry);
   });
 });

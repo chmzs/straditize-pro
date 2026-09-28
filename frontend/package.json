@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "node --experimental-strip-types test-core.js && node test-glossary.mjs && node --experimental-strip-types test-roi-calibration.mjs && node --experimental-strip-types test-roi-model.mjs && node --experimental-strip-types test-workflow-stage.mjs",
     "test:e2e": "playwright test",
+    "test:e2e:contract": "playwright test contract.spec.ts",
     "test:e2e:typecheck": "tsc -p tsconfig.e2e.json"
   },
   "devDependencies": {

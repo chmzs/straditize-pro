@@ -5,25 +5,22 @@
  * msedge channel 能跑、`e2e.reset` 复位有效、RPC 直连后端拿得到权威数据。
  * 它失败时，其它 spec 的失败都不必看。
  */
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import {
   diagramData,
-  expectNoDialogs,
   getState,
   openApp,
   resetBaseline,
-  watchPage,
 } from './helpers';
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
 test.describe('应用外壳与基线', () => {
   test('冷启动：8 步工作流、无第 9 步、前后端 ROI 一致、无原生对话框', async ({ page }) => {
-    const telemetry = watchPage(page);
     await openApp(page);
 
     await expect(page.locator('.workflow-step-btn')).toHaveCount(8);
@@ -39,7 +36,6 @@ test.describe('应用外壳与基线', () => {
       '前端 ROI 镜像必须与后端权威一致'
     ).toEqual(state.rois.map((r) => r.id));
 
-    expectNoDialogs(telemetry);
   });
 
   test('e2e.reset 能把被污染的会话复原（测试间隔离的前提）', async ({ page }) => {

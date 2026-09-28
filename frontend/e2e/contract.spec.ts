@@ -23,7 +23,7 @@
  */
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { diagramData, gotoStage, resetBaseline, rpc } from './helpers';
 
 const POLLEN_TS = fileURLToPath(new URL('../src/types/pollen.ts', import.meta.url));

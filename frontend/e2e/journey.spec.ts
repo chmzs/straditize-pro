@@ -17,16 +17,13 @@
  * "Set tree_pollen as primary"。这里按真实语义断言，并记录该差异。
  */
 import { Buffer } from 'node:buffer';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 import {
   canvasBox,
   diagramData,
-  expectNoDialogs,
   getState,
   resetBaseline,
   rpc,
-  watchPage,
-  type PageTelemetry,
 } from './helpers';
 
 interface RoiSummary {
@@ -52,8 +49,6 @@ interface Readiness {
   primary_roi: string;
   primary_roi_id: string;
 }
-
-let telemetry: PageTelemetry = { consoleErrors: [], dialogs: [] };
 
 /** 等前端状态机真的落到目标步骤（旧测试用固定 sleep，是假绿的主要来源）。 */
 async function waitStage(page: Page, step: number): Promise<void> {
@@ -90,7 +85,6 @@ function untarArchive(buf: Buffer): Map<string, Buffer> {
 
 test.describe('八步黄金旅程（全 DOM 点击驱动）', () => {
   test.beforeEach(async ({ page }) => {
-    telemetry = watchPage(page);
     await resetBaseline(page);
   });
 
@@ -230,6 +224,5 @@ test.describe('八步黄金旅程（全 DOM 点击驱动）', () => {
     expect(dataCsv.equals(primaryCsv), 'data.csv 必须等于主 ROI 的分表').toBe(true);
 
     expect((await getState<{ stage: number }>(page)).stage, '旅程结束时必须停在 Step 8').toBe(8);
-    expectNoDialogs(telemetry);
   });
 });

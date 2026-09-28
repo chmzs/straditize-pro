@@ -15,8 +15,8 @@
  * 运行内是共享且持久的**，所以仍用 before/afterEach 记录并复原原值，避免这个"会改配置"
  * 的用例污染同一次运行中的后续用例。
  */
-import { expect, test } from '@playwright/test';
-import { expectNoDialogs, resetBaseline, rpc, watchPage, type PageTelemetry } from './helpers';
+import { expect, test } from './fixtures';
+import { resetBaseline, rpc } from './helpers';
 
 interface SystemConfig {
   remote_access_enabled: boolean;
@@ -25,12 +25,10 @@ interface SystemConfig {
   theme: string;
 }
 
-let telemetry: PageTelemetry = { consoleErrors: [], dialogs: [] };
 let originalConfig: SystemConfig | null = null;
 
 test.describe('顶栏与设置弹窗', () => {
   test.beforeEach(async ({ page }) => {
-    telemetry = watchPage(page);
     await resetBaseline(page);
     originalConfig = await rpc<SystemConfig>(page, 'system.getConfig');
   });
@@ -62,7 +60,6 @@ test.describe('顶栏与设置弹窗', () => {
     ]) {
       await expect(page.locator(`#${id}`), `${id} 必须常驻顶栏`).toBeVisible();
     }
-    expectNoDialogs(telemetry);
   });
 
   test('设置弹窗：切英文 + 暗色 + 开远程白名单，保存后浏览器与后端两侧都要生效', async ({
@@ -111,7 +108,11 @@ test.describe('顶栏与设置弹窗', () => {
       ['#btn-open-file', 'Diagram'],
       ['#btn-settings', 'Settings'],
       ['#btn-export-csv', 'Export'],
-      ['.workflow-step-btn[data-step="1"] span:last-child', '1.Load'],
+      // 断言整颗按钮的文本，而不是 `span:last-child`：按钮内部是
+      // `<span class="step-num">` + `<span>{label}</span>`，靠子元素顺序定位会在
+      // 任何一次徽标/图标插入后失效（知乎《大型 ToB 项目的前端自动化测试实践》
+      // 的"可维护的 CSS 选择器"一节即针对这类位置依赖）。
+      ['.workflow-step-btn[data-step="1"]', '1.Load'],
       ['#footer-dimensions', 'Image'],
       ['.sidebar-title span', 'Taxa Columns List'],
       ['#btn-insert-gap-col', 'Insert Gap'],
@@ -126,6 +127,5 @@ test.describe('顶栏与设置弹窗', () => {
       '悬浮工具条上的"调整"应切换为 Adjust'
     ).toContainText('Adjust');
 
-    expectNoDialogs(telemetry);
   });
 });

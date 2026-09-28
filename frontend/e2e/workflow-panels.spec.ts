@@ -15,7 +15,7 @@
  * 浮动工具条**只显示**当前步允许的工具，所以"可见集"就是门禁的可见表达。
  * 这条门禁有真实用户反馈背书——源码注释里记着「工具栏缺了微调(S)」。
  */
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import {
   gotoStage,
   paletteActiveTool,

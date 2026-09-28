@@ -14,8 +14,8 @@
  * 这里比旧版多测一条：**零状态**（未载图）也必须零 error。旧版只测了有图状态，
  * 而 broken-image 那条历史缺陷恰恰只在"图没加载好"时触发。
  */
-import { expect, test } from '@playwright/test';
-import { backendRpc, openApp, watchPage } from './helpers';
+import { expect, test } from './fixtures';
+import { backendRpc, openApp } from './helpers';
 
 function report(errors: string[]): string {
   return `页面加载后出现 ${errors.length} 条控制台 error（headless 测试抓不到这类问题）：\n` +
@@ -23,8 +23,7 @@ function report(errors: string[]): string {
 }
 
 test.describe('控制台洁净度', () => {
-  test('有图状态：基线加载后零 error、零页面异常、零原生弹窗', async ({ page }) => {
-    const telemetry = watchPage(page);
+  test('有图状态：基线加载后零 error、零页面异常、零原生弹窗', async ({ page, telemetry }) => {
     await openApp(page);
 
     // 等渲染管线真正跑过一帧再下结论，否则只是"还没跑到"
@@ -37,11 +36,12 @@ test.describe('控制台洁净度', () => {
     expect(telemetry.dialogs, `出现了原生弹窗：${JSON.stringify(telemetry.dialogs)}`).toEqual([]);
   });
 
-  test('零状态：清空图像后重新加载同样零 error', async ({ page }) => {
-    // 先复位到零状态（此时后端没有图像），再挂监听并加载页面
+  test('零状态：清空图像后重新加载同样零 error', async ({ page, telemetry }) => {
+    // 先复位到零状态（此时后端没有图像）再加载页面。
+    // 监听由 `fixtures.ts` 的 auto fixture 在本用例开始前就挂好了，比这里更早，
+    // 因此零状态期间发出的任何 error 都跑不掉。
     await backendRpc(page, 'project.new', { clear_image: true });
 
-    const telemetry = watchPage(page);
     await page.goto('/');
     await page.waitForFunction(() => Boolean((window as any).__straditize), undefined, {
       timeout: 30_000,

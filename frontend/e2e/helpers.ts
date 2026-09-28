@@ -10,6 +10,10 @@
  *    promise 拒绝直接抛到测试里。
  * 2. **断言后端权威状态，而不是 DOM 文本。** 旧套件 94 条断言里只有 1 条读了
  *    后端。DOM 正常而状态机错乱（例如"删除后几何复活"）对纯 DOM 断言完全隐形。
+ *
+ * 监听（控制台 error / 未捕获异常 / 失败的 RPC / 原生弹窗）由本文件的 `watchPage`
+ * 采集，**门禁断言**则统一放在 `fixtures.ts` 的 auto fixture 里 —— 见那里的说明，
+ * 用例不再各自手写监听。
  */
 import { expect, type Page } from '@playwright/test';
 
@@ -21,20 +25,26 @@ export interface StraditizeHandle {
 }
 
 export interface PageTelemetry {
-  /** 控制台 error 文本（按出现顺序）。 */
+  /** 控制台 error 文本 + 未捕获异常（`pageerror:` 前缀），按出现顺序。 */
   consoleErrors: string[];
+  /** 失败的 JSON-RPC 响应（`方法名 [码] 消息`）；前端自己发起的也算。 */
+  rpcErrors: string[];
   /** 页面弹过的原生对话框文本；非空通常意味着前置状态缺失。 */
   dialogs: string[];
 }
 
 /**
- * 在 `goto` **之前**挂上控制台与对话框监听。
+ * 在 `goto` **之前**挂上控制台、网络与对话框监听。
  *
  * 对话框必须显式接管：Playwright 默认会自动 dismiss，但那样测试只看到一个
  * 卡住或语义不明的失败；这里把文本留下来，失败信息才指向真正的原因。
+ *
+ * RPC 失败必须读 **body** 而不是只看 status：本后端的 JSON-RPC 错误是
+ * `HTTP 200 + body.error`（见下方 `backendRpc`），只看 status 会漏掉全部应用级
+ * 错误。判断"前端自己发起的请求是否异常"正是 E2E 的职责之一。
  */
-export function watchPage(page: Page): PageTelemetry {
-  const telemetry: PageTelemetry = { consoleErrors: [], dialogs: [] };
+export function watchPage(page: Page, rpcErrorAllow: (string | RegExp)[] = []): PageTelemetry {
+  const telemetry: PageTelemetry = { consoleErrors: [], rpcErrors: [], dialogs: [] };
   page.on('console', (msg) => {
     if (msg.type() === 'error') telemetry.consoleErrors.push(msg.text());
   });
@@ -42,6 +52,24 @@ export function watchPage(page: Page): PageTelemetry {
   page.on('dialog', (dialog) => {
     telemetry.dialogs.push(dialog.message());
     void dialog.dismiss();
+  });
+  page.on('response', (res) => {
+    if (!res.url().includes('/rpc')) return;
+    void res
+      .json()
+      .then((body: unknown) => {
+        const err = (body as { error?: { code?: number; message?: string } } | null)?.error;
+        if (!err) return;
+        const text = `${res.request().postDataJSON?.()?.method ?? '?'} [${err.code ?? '?'}] ${
+          err.message ?? ''
+        }`;
+        if (!rpcErrorAllow.some((p) => (typeof p === 'string' ? text.includes(p) : p.test(text)))) {
+          telemetry.rpcErrors.push(text);
+        }
+      })
+      .catch(() => {
+        /* 非 JSON 响应不参与本门禁 */
+      });
   });
   return telemetry;
 }
@@ -206,12 +234,4 @@ export async function footerToolMode(page: Page): Promise<string> {
  */
 export async function activeTool(page: Page): Promise<{ footer: string; palette: string | null }> {
   return { footer: await footerToolMode(page), palette: await paletteActiveTool(page) };
-}
-
-/** 断言没有意外弹出原生对话框（前置状态缺失会走这条路）。 */
-export function expectNoDialogs(telemetry: PageTelemetry): void {
-  expect(
-    telemetry.dialogs,
-    `应用弹出了原生对话框，通常是前置状态缺失：\n${telemetry.dialogs.join('\n')}`
-  ).toEqual([]);
 }

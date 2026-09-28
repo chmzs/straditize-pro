@@ -42,6 +42,15 @@ cmd = "npm --prefix frontend run build && npm --prefix frontend run test:e2e"
 #     STRADITIZE_E2E_PORT=22600 pixi run test-e2e
 # 产物目录随之变为 `frontend/test-results-22600/`，两个会话不会互写 trace。
 
+[tasks.test-contract]
+description = "只跑前后端契约 lane（构建 SPA + e2e/contract.spec.ts），用于契约变更后的快速反馈"
+# 契约破坏是本仓库已知最高危的失效类型（历史事故：前端发 `x_bounds` 而后端要
+# `data_xlim`，被静默兜底掩盖很久）。全量 test-e2e 实测 95s，本 lane 只跑 5 条契约
+# 用例、实测 26s，把"后端改了返回字段名"的反馈从分钟级压到半分钟级。语义与
+# test-e2e 完全一致（同样先 build，避免对着旧的 frontend/dist 跑），且同样受
+# fixtures.ts 的全局错误门禁约束。改 RPC 契约时先跑这个，再跑全量。
+cmd = "npm --prefix frontend run build && npm --prefix frontend run test:e2e:contract"
+
 [tasks.test-legacy]
 description = "Run legacy PyQt5 widget test suite (requires legacy dependencies)"
 cmd = "python -m pytest straditize/tests/widgets -q"

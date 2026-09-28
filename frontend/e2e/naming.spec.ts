@@ -14,15 +14,12 @@
  * 多 ROI 后 id 形态会从 col_7 变成 roi_3_col01，所以只钉形态）。这条保留并加强为
  * "高亮值必须真的存在于后端当前的列集合里"。
  */
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import {
   diagramData,
-  expectNoDialogs,
   gotoStage,
   resetBaseline,
   rpc,
-  watchPage,
-  type PageTelemetry,
 } from './helpers';
 
 /** 旧测试摆的三列：col_3 [100,200)、col_4 [200,300)、col_7 [300,400)。 */
@@ -53,11 +50,8 @@ interface SnapResult {
   reconciliation: Reconciliation;
 }
 
-let telemetry: PageTelemetry = { consoleErrors: [], dialogs: [] };
-
 test.describe('Step 5 分列与属种命名', () => {
   test.beforeEach(async ({ page }) => {
-    telemetry = watchPage(page);
     await resetBaseline(page);
   });
 
@@ -127,7 +121,6 @@ test.describe('Step 5 分列与属种命名', () => {
     const noLabels = await rpc<SnapResult>(page, 'naming.snapLabels', { labels: [] });
     expect(noLabels.reconciliation.columns_without_label).toEqual(liveIds);
 
-    expectNoDialogs(telemetry);
   });
 
   test('Step 5 面板：逐列点名高亮必须指向后端当前真实存在的列', async ({ page }) => {
@@ -160,6 +153,5 @@ test.describe('Step 5 分列与属种命名', () => {
       '侧栏点名后，Step 5 面板的高亮必须跟着切到该列'
     ).toHaveText(other.id);
 
-    expectNoDialogs(telemetry);
   });
 });

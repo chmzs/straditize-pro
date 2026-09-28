@@ -217,10 +217,10 @@ straditize-pro/
 │   └── session.py                # 会话状态机、数据求交与 POSIX UStar 导出
 ├── support/                      # 现代版打包配方 (PyInstaller spec) 与数据同步脚本
 ├── straditize/                   # 上游第三方 PyQt5 原版 (不维护；仅提供范例示例图片)
-├── tests/                        # pytest 测试：按层级分 unit / integration / e2e
+├── tests/                        # pytest 测试：按层级分 unit / integration
 │   ├── conftest.py               # 仓库根 sys.path 注入 + 装载隔离区
 │   ├── quarantine.txt            # 已知失败用例隔离区（strict xfail，只减不增）
-│   ├── unit/                     # 21 个文件：直接调 straditize_core API
+│   ├── unit/                     # 24 个文件：直接调 straditize_core API
 │   ├── integration/              # 6 个文件：经 JSON-RPC dispatcher / HTTP 传输
 │   └── data/                     # 测试夹具：figures / truth / corpus
 ├── frontend/e2e/                 # 真实浏览器 E2E（@playwright/test + 系统 MS Edge）
@@ -237,13 +237,13 @@ straditize-pro/
 ## 🧪 测试与质量验证 (Testing & Verification)
 
 三层验证体系：**数学内核单元测试 → 端到端集成测试 → 真实浏览器交互测试**。
-以下四条与 CI（`.github/workflows/ci.yml`）一致，可在仓库根目录直接执行：
+以下命令与 CI（`.github/workflows/ci.yml`）一致，可在仓库根目录直接执行：
 
 ```bash
 # 1. 后端全量测试 (核心算法 / JSON-RPC / 端到端 / 年龄模型 / OCR / 组件管理等)
 pixi run test
 
-# 2. 代码质量检查 (Ruff)
+# 2. 代码质量检查 (Ruff + 8 项跨文件一致性核对)
 pixi run lint
 
 # 3. 前端类型检查与构建 (tsc + vite)
@@ -255,6 +255,9 @@ npm --prefix frontend test
 # 5. 真实浏览器 E2E（@playwright/test，驱动系统已装 MS Edge）
 pixi run test-e2e
 npm --prefix frontend run test:e2e:typecheck   # e2e 代码的类型检查
+
+# 6. 只跑契约 lane（改 RPC 契约时的快速反馈：实测 26s，全量约 95s）
+pixi run test-contract
 ```
 
 > 现代版测试位于仓库根 `tests/`，而非上游遗留的 `straditize/tests/`
@@ -265,6 +268,9 @@ npm --prefix frontend run test:e2e:typecheck   # e2e 代码的类型检查
 > 一个隔离后端（`support/serve_e2e_backend.py`，默认端口 8799），每条用例前经
 > `e2e.reset` 复位到 hoya 基线，因此不依赖、也不干扰你手工打开的 8765 实例。
 > 需要本机已装 Edge 与 Node ≥ 20；不需要 `playwright install`。
+>
+> 分层职责、各层的取舍与"明确不做的事"见 **`docs/testing-strategy.md`**；
+> 新增测试该放哪一层也查那张表。
 
 ---
 
