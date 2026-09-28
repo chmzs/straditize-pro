@@ -9,14 +9,18 @@ export function render(data: DiagramData): string {
   return `
     <div class="step-panel" data-step="1">
       <div class="step-title">1. 载入地质图谱</div>
-      <p style="font-size: 11px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px;">
-        ${hasImage ? `当前图谱尺寸：${data.imageWidth} × ${data.imageHeight} px` : '尚未载入剖面图，请点击上方按钮或拖拽图片文件到画布。'}
-      </p>
       ${hasImage ? `
-        <button id="btn-goto-step2" class="primary-btn" style="width: 100%; padding: 6px 12px; font-size: 12px;">
+        <div class="info-callout success">
+          <span>🖼️ 当前图谱尺寸：<strong>${data.imageWidth} × ${data.imageHeight} px</strong></span>
+        </div>
+        <button id="btn-goto-step2" class="btn btn-primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
           👉 进入多 ROI 划分 (步骤 2)
         </button>
-      ` : ''}
+      ` : `
+        <div class="info-callout">
+          <span>💡 尚未载入剖面图。请点击顶栏【📂 范例】快速体验，或将图片文件拖拽至中央画布。</span>
+        </div>
+      `}
     </div>
   `;
 }

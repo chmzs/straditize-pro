@@ -36,6 +36,7 @@ console.log('✔ panels / activePanelId 遗留结构已彻底物理清除');
 
 // 2. 动态 import 真 TS 编译产物测试 HistoryManager
 import { HistoryManager } from './src/core/HistoryManager.ts';
+import { ResizeRoiCommand } from './src/core/Commands.ts';
 
 const hm = new HistoryManager(10);
 
@@ -102,7 +103,27 @@ assert.deepEqual(redone.rois?.[1].name, 'charcoal', '重做后 charcoal ROI 必�
 
 console.log('✔ HistoryManager 对 rois / primary_roi_id / active_roi_id 的深比较还原验证通过');
 
-// 3. 验证步骤与叠加层 Registry 架构
+// 3. ROI 拖拽必须同时更新单数 ROI 与 rois[] 的双字段镜像。
+const commandOldRoi = { ...initialRois[0], xMin: 100, xMax: 500, yMin: 200, yMax: 800 };
+const commandNewRoi = { ...commandOldRoi, xMin: 160, xMax: 760, yMin: 240, yMax: 740 };
+const commandData = {
+  roi: { ...commandOldRoi },
+  rois: [{ ...commandOldRoi }],
+  active_roi_id: 'roi_1',
+};
+const resizeCommand = new ResizeRoiCommand(commandOldRoi, commandNewRoi);
+resizeCommand.execute(commandData);
+assert.deepEqual(commandData.rois[0].xlim, [160, 760], 'ROI 执行后 xlim 必须同步');
+assert.deepEqual(commandData.rois[0].ylim, [240, 740], 'ROI 执行后 ylim 必须同步');
+assert.equal(commandData.rois[0].xMin, 160, 'ROI 执行后 xMin 必须同步');
+assert.equal(commandData.rois[0].yMax, 740, 'ROI 执行后 yMax 必须同步');
+resizeCommand.undo(commandData);
+assert.deepEqual(commandData.rois[0].xlim, [100, 500], 'ROI 撤销后 xlim 必须恢复');
+assert.deepEqual(commandData.rois[0].ylim, [200, 800], 'ROI 撤销后 ylim 必须恢复');
+assert.equal(commandData.rois[0].xMin, 100, 'ROI 撤销后 xMin 必须恢复');
+console.log('✔ ROI 拖拽/撤销会同步 xMin/xMax/yMin/yMax 与 xlim/ylim');
+
+// 4. 验证步骤与叠加层 Registry 架构
 const stepsRegistryPath = path.join(__dirname, 'src/components/steps/_registry.ts');
 const canvasRegistryPath = path.join(__dirname, 'src/components/canvas/_registry.ts');
 

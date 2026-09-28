@@ -62,9 +62,9 @@ export function showsYCalibMarks(stage: number): boolean {
   return stage >= STAGE.Y_CALIB;
 }
 
-/** 是否处于「画布左键点击即拾取 Y1/Y2」的步骤（mode 为 ycalib 时同样放行）。 */
+/** 是否处于「画布左键点击即拾取 Y1/Y2」的步骤。 */
 export function canPickYCalibMark(stage: number, mode: string): boolean {
-  return mode === 'ycalib' || stage === STAGE.Y_CALIB;
+  return stage === STAGE.Y_CALIB && mode === 'ycalib';
 }
 
 /**

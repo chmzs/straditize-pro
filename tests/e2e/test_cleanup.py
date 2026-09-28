@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-
 import pytest
 
 from tests.e2e.conftest import run_playwright_eval
@@ -16,10 +14,22 @@ def test_cleanup_panel_and_interactions(e2e_server):
 
     # 1. Navigate to Step 4 via real UI clicks or direct step trigger
     js_code = """
-      // Switch to Step 4 (清理)
-      const step4Btn = document.querySelector('.workflow-step-btn[data-step="4"]');
-      if (step4Btn) {
-        step4Btn.click();
+      return (async () => {
+      let api;
+      for (let i = 0; i < 40; i++) {
+        api = window.__straditize;
+        if (api) break;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      if (!api) return JSON.stringify({ error: 'no-handle' });
+
+      // Switch to Step 4 (清理) through the same workflow entry point as production.
+      await api.gotoStage(4);
+
+      // 工作流切换包含异步后端刷新；轮询面板出现，避免固定 sleep 与竞态。
+      for (let i = 0; i < 40; i++) {
+        if (document.querySelector('.step-panel[data-step="4"]')) break;
+        await new Promise((resolve) => setTimeout(resolve, 250));
       }
 
       // Query Cleanup panel controls
@@ -36,6 +46,7 @@ def test_cleanup_panel_and_interactions(e2e_server):
         linefix_btn: linefixBtn ? 'present' : 'absent',
         next_btn: nextBtn ? 'present' : 'absent',
       });
+      })();
     """
 
     res_str = run_playwright_eval(url, js_code, session_name="e2e_cleanup")

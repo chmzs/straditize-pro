@@ -1,4 +1,4 @@
-import { DiagramData } from '../types/pollen';
+import type { DiagramData } from '../types/pollen.ts';
 
 export interface Command {
   readonly description: string;

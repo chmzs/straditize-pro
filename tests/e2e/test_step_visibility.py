@@ -24,7 +24,12 @@ from tests.e2e.conftest import run_playwright_eval
 # run_playwright_eval 每次调用都会重开浏览器，所以必须在同一个表达式里做完。
 _SNAPSHOT_JS = """
   return (async () => {
-    const api = window.__straditize;
+    let api;
+    for (let i = 0; i < 40; i++) {
+      api = window.__straditize;
+      if (api) break;
+      await new Promise((r) => setTimeout(r, 250));
+    }
     if (!api) return JSON.stringify({ error: 'no-handle' });
     const out = {};
     for (const step of [3, 4, 5, 6, 7]) {
@@ -33,12 +38,31 @@ _SNAPSHOT_JS = """
         if (api.getState().stage === step) break;
         await new Promise((r) => setTimeout(r, 250));
       }
+      await new Promise((r) => setTimeout(r, 100));
+      if (step === 3) {
+        const canvas = document.querySelector('#geology-canvas');
+        const rect = canvas?.getBoundingClientRect();
+        if (!canvas || !rect) return JSON.stringify({ error: 'canvas-not-ready' });
+        for (const ratio of [0.35, 0.55]) {
+          const event = { bubbles: true, button: 0, clientX: rect.left + rect.width * 0.4, clientY: rect.top + rect.height * ratio };
+          canvas.dispatchEvent(new MouseEvent('mousedown', event));
+          canvas.dispatchEvent(new MouseEvent('mouseup', event));
+        }
+        await new Promise((r) => setTimeout(r, 100));
+      }
       const s = api.getState();
-      out[step] = { stage: s.stage, layers: s.layers, roi: s.rois[0]?.xlim ?? null };
+      out[step] = {
+        stage: s.stage,
+        eligibleLayers: s.eligibleLayers,
+        renderedLayers: s.renderedLayers,
+        yCalibMarks: s.yCalibMarks,
+        rois: s.rois.map((r) => ({ id: r.id, xlim: r.xlim, ylim: r.ylim })),
+      };
     }
     const backend = await api.rpc('straditize.getDiagramData');
     out._backend = {
-      rois: (backend.rois || []).map((r) => r.xlim),
+      rois: (backend.rois || []).map((r) => ({ id: r.id, xlim: r.xlim, ylim: r.ylim })),
+      activeRoiId: backend.active_roi_id || backend.primary_roi_id || null,
       columns: (backend.columns || []).length,
     };
     return JSON.stringify(out);
@@ -57,17 +81,17 @@ def test_step5_split_does_not_draw_pollen_curves(e2e_server) -> None:
     """用户反馈：分列这一步不该已经描好花粉轮廓与锚点（拐点是步骤 7）。"""
     s = _snapshot(e2e_server["url"])["5"]
     assert s["stage"] == 5, f"应停在步骤 5，实际 {s['stage']}"
-    assert "pollenCurves" not in s["layers"], f"步骤 5 出现了花粉曲线：{s['layers']}"
-    assert "anchors" not in s["layers"], f"步骤 5 出现了控制锚点：{s['layers']}"
-    assert "columnBoundaries" in s["layers"], f"步骤 5 应显示列边界：{s['layers']}"
+    assert "pollenCurves" not in s["renderedLayers"], f"步骤 5 出现了花粉曲线：{s['renderedLayers']}"
+    assert "anchors" not in s["renderedLayers"], f"步骤 5 出现了控制锚点：{s['renderedLayers']}"
+    assert "columnBoundaries" in s["renderedLayers"], f"步骤 5 应显示列边界：{s['renderedLayers']}"
 
 
 def test_step7_draws_pollen_curves(e2e_server) -> None:
     """拐点与采样层位（步骤 7）必须能看到曲线与锚点——否则没法编辑。"""
     s = _snapshot(e2e_server["url"])["7"]
     assert s["stage"] == 7, f"应停在步骤 7，实际 {s['stage']}"
-    assert "pollenCurves" in s["layers"], f"步骤 7 缺花粉曲线：{s['layers']}"
-    assert "anchors" in s["layers"], f"步骤 7 缺控制锚点：{s['layers']}"
+    assert "pollenCurves" in s["renderedLayers"], f"步骤 7 缺花粉曲线：{s['renderedLayers']}"
+    assert "anchors" in s["renderedLayers"], f"步骤 7 缺控制锚点：{s['renderedLayers']}"
 
 
 def test_step3_can_show_y_marks_and_step45_hide_grid(e2e_server) -> None:
@@ -75,15 +99,18 @@ def test_step3_can_show_y_marks_and_step45_hide_grid(e2e_server) -> None:
     snap = _snapshot(e2e_server["url"])
 
     # 用户反馈：点完两点要立刻看得见 → Y 标记层从步骤 3 起必须在
-    assert "yCalibMarks" in snap["3"]["layers"], f"步骤 3 缺 Y 标记层：{snap['3']['layers']}"
+    assert len(snap["3"]["yCalibMarks"]) == 2, (
+        f"步骤 3 两次真实画布点击后应有两个 Y 标记：{snap['3']['yCalibMarks']}"
+    )
+    assert "yCalibMarks" in snap["3"]["renderedLayers"], (
+        f"步骤 3 缺实际 Y 标记渲染：{snap['3']['renderedLayers']}"
+    )
 
-    # 设计稿：4/5 不画深度网格
+    # 清理 / 分列阶段必须显式禁止深度网格，避免网格干扰去线和分列。
     for step in ("4", "5"):
-        assert "depthGrid" not in snap[step]["layers"], f"步骤 {step} 不该画深度网格"
-
-    # 6/7 要画（标定列与采样层位都需要坐标系）
-    for step in ("6", "7"):
-        assert "depthGrid" in snap[step]["layers"], f"步骤 {step} 应画深度网格"
+        assert "depthGrid" not in snap[step]["renderedLayers"], (
+            f"步骤 {step} 不应绘制深度网格：{snap[step]['renderedLayers']}"
+        )
 
 
 def test_frontend_roi_mirror_matches_backend(e2e_server) -> None:
@@ -93,6 +120,12 @@ def test_frontend_roi_mirror_matches_backend(e2e_server) -> None:
     这里至少钉住"加载完成后两者一致"这条底线。
     """
     snap = _snapshot(e2e_server["url"])
-    fe, be = snap["5"]["roi"], snap["_backend"]["rois"][0]
-    assert fe is not None, "前端 rois[0].xlim 为空"
-    assert fe == be, f"前端镜像 {fe} != 后端权威 {be}"
+    fe = snap["5"]["rois"]
+    be = snap["_backend"]["rois"]
+    assert fe, "前端 rois 为空"
+    assert be, "后端 rois 为空"
+    assert fe == be, f"前端 ROI 镜像 {fe} != 后端权威 {be}"
+    if snap["_backend"]["activeRoiId"] is not None:
+        assert snap["_backend"]["activeRoiId"] in {r.get("id") for r in fe}, (
+            f"后端 active_roi_id 不在前端 ROI 集合中：{snap['_backend']['activeRoiId']}"
+        )

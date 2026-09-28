@@ -1786,8 +1786,13 @@ input[type="text"]:focus, input[type="number"]:focus {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  border: none;
-  transition: all 0.15s;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-decoration: none;
 }
 
 .btn-secondary {
@@ -1796,18 +1801,135 @@ input[type="text"]:focus, input[type="number"]:focus {
   border: 1px solid var(--border-color);
 }
 
-.btn-secondary:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+.btn-secondary:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.35);
 }
 
-.btn-primary {
-  background: #3b82f6;
-  color: #fff;
+.btn-primary,
+.primary-btn {
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  color: #ffffff;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
+  cursor: pointer;
 }
 
-.btn-primary:hover {
-  background: #2563eb;
+.btn-primary:hover:not(:disabled),
+.primary-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0369a1, #075985);
+  border-color: #38bdf8;
+  box-shadow: 0 3px 10px rgba(2, 132, 199, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled),
+.primary-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(2, 132, 199, 0.2);
+}
+
+.btn-primary:disabled,
+.primary-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  border-color: var(--border-color);
+}
+
+/* ================= 面板级次要操作按钮 (清晰实体质感) ================= */
+.btn-subaction,
+.inspector-section .tool-btn:not(.icon-btn) {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: 5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.15s ease;
+}
+
+.btn-subaction:hover:not(:disabled),
+.inspector-section .tool-btn:not(.icon-btn):hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.14);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+  box-shadow: 0 2px 6px rgba(56, 189, 248, 0.15);
+}
+
+.btn-subaction:active:not(:disabled),
+.inspector-section .tool-btn:not(.icon-btn):active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* ================= 步骤面板排版与知识说明卡片 ================= */
+.step-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.step-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-heading, #f8fafc);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.3px;
+}
+
+body.theme-light .step-title {
+  color: #0f172a;
+}
+
+.step-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 2px;
+}
+
+.info-callout {
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--accent-blue);
+  cursor: default;
+  user-select: text;
+}
+
+.info-callout.warning {
+  border-left-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.info-callout.success {
+  border-left-color: #10b981;
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.info-kv-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  font-size: 10px;
+  color: var(--text-secondary);
+  cursor: default;
 }
 
 /* ================= 文件操作与范例下拉 ================= */

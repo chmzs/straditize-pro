@@ -14,7 +14,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { DataRoi, DiagramCalibration, DiagramData, HistorySnapshot, LineMaskStroke, Point2D } from './types/pollen';
 import { onLocaleChange, applyLocaleToDocument, getLocale, t } from './i18n';
 import { ImageDisplayMode } from './core/Viewport';
-import { visibleLayers } from './core/WorkflowStage';
+import { STAGE, visibleLayers } from './core/WorkflowStage';
 import { WORKFLOW_STAGES, WorkflowStage } from './types/workflow';
 import { tokens } from './styles/tokens';
 
@@ -454,7 +454,7 @@ async function bootstrap() {
     // ROI 拖拽结束：后端的分列/去线都以 ROI 为范围，必须同步过去，
     // 否则画布上框选的是新范围、后端算的还是旧范围。
     onRoiCommitted: (roi) => {
-      void commitRoi(roi);
+      void enqueueRoiCommit(roi);
     },
     // Y 轴标定选点：无论是第 1 个点 (Y1) 还是第 2 个点 (Y2)，实时同步到 Step 3 侧边栏与画布
     onYCalibPicked: (marks) => {
@@ -548,7 +548,8 @@ async function bootstrap() {
   });
 
   // 6.2 显式分步推进状态机 (Step-by-Step Workflow State Machine)
-  let currentStage: WorkflowStage = 1;
+  let currentStage: WorkflowStage = STAGE.LOAD;
+  let roiCommitPromise: Promise<void> = Promise.resolve();
   canvasComponent.setWorkflowStage(currentStage);
 
   const workflowActionBar = document.createElement('div');
@@ -579,35 +580,41 @@ async function bootstrap() {
   viewControlsBar.id = 'canvas-view-bar';
   canvasWrapper.appendChild(viewControlsBar);
 
-  async function advanceToWorkflowStage(targetStage: WorkflowStage) {
-    if (targetStage === 1) {
-      currentStage = 1;
+  async function advanceToWorkflowStage(targetStage: WorkflowStage): Promise<void> {
+    if (!Number.isInteger(targetStage) || targetStage < STAGE.LOAD || targetStage > STAGE.QA) {
+      throw new RangeError(`Invalid workflow stage: ${String(targetStage)}`);
+    }
+    if (targetStage >= STAGE.Y_CALIB) {
+      await roiCommitPromise;
+    }
+    if (targetStage === STAGE.LOAD) {
+      currentStage = STAGE.LOAD;
       updateWorkflowBar();
       canvasComponent.setToolMode('pan');
       canvasComponent.requestRender();
       if (!canvasComponent.data.imageSrc) {
         (document.getElementById('file-input-image') as HTMLInputElement)?.click();
       }
-    } else if (targetStage === 2) {
-      currentStage = 2;
+    } else if (targetStage === STAGE.ROI) {
+      currentStage = STAGE.ROI;
       updateWorkflowBar();
       canvasComponent.setToolMode('roi');
       canvasComponent.requestRender();
       setHudNotice('👉 已进入 Step 2 数据有效区 (ROI) 划分！请拖拽手柄界定数据区或在侧栏新建多 ROI。', 4500);
-    } else if (targetStage === 3) {
-      currentStage = 3;
+    } else if (targetStage === STAGE.Y_CALIB) {
+      currentStage = STAGE.Y_CALIB;
       updateWorkflowBar();
       canvasComponent.setToolMode('ycalib');
       canvasComponent.requestRender();
       setHudNotice('👉 已进入 Step 3 Y 轴标定！请在图上点选两点，或在右侧侧栏直接填入已知刻度与真实深度值。', 5000);
-    } else if (targetStage === 4) {
-      currentStage = 4;
+    } else if (targetStage === STAGE.CLEANUP) {
+      currentStage = STAGE.CLEANUP;
       updateWorkflowBar();
       canvasComponent.setToolMode('linefix');
       canvasComponent.requestRender();
-      void refreshLineMask();
+      void scheduleLineMaskRefresh();
       setHudNotice('👉 已进入 Step 4 干扰清理！请在右侧侧栏选择去线强度、划定排除区或使用 K 键笔刷微调。', 4500);
-    } else if (targetStage === 5) {
+    } else if (targetStage === STAGE.SPLIT) {
       const wfNextBtn = document.querySelector('#btn-wf-next') as HTMLButtonElement | null;
       if (wfNextBtn) {
         wfNextBtn.disabled = true;
@@ -643,7 +650,7 @@ async function bootstrap() {
         setHudNotice('❌ 分列识别失败，已停留在 Step 4。请检查有效区后重试。', 6000);
         return;
       }
-      currentStage = 5;
+      currentStage = STAGE.SPLIT;
       canvasComponent.setToolMode('select');
       sidebar?.updateData(canvasComponent.data);
       inspector?.updateData(canvasComponent.data);
@@ -651,18 +658,18 @@ async function bootstrap() {
       updateFooter();
       canvasComponent.requestRender();
       setHudNotice(`✅ 成功切分 ${canvasComponent.data.columns.length} 个属种列！可点击 OCR 识别或在左栏输入各列名称。`, 5000);
-    } else if (targetStage === 6) {
-      currentStage = 6;
+    } else if (targetStage === STAGE.CALIBRATE_COLUMNS) {
+      currentStage = STAGE.CALIBRATE_COLUMNS;
       updateWorkflowBar();
       inspector?.updateData(canvasComponent.data);
       setHudNotice('👉 已进入 Step 6 列标定！在侧边栏点击自动提取刻度齿，或双击端点手动标定。', 4500);
-    } else if (targetStage === 7) {
-      currentStage = 7;
+    } else if (targetStage === STAGE.SPEARS_AND_SAMPLES) {
+      currentStage = STAGE.SPEARS_AND_SAMPLES;
       updateWorkflowBar();
       inspector?.updateData(canvasComponent.data);
       setHudNotice('👉 已进入 Step 7 采样层位！点击侧栏【提取采样共识】或从外部粘贴真实层位。', 4500);
-    } else if (targetStage === 8) {
-      currentStage = 8;
+    } else if (targetStage === STAGE.QA) {
+      currentStage = STAGE.QA;
       updateWorkflowBar();
       inspector?.updateData(canvasComponent.data);
       setHudNotice('🔍 已进入 Step 8 地学校验！正在核验组分总和 ≤100% 门禁与空层位排查。', 4000);
@@ -698,7 +705,7 @@ async function bootstrap() {
     });
 
     workflowActionBar.querySelector('#btn-wf-next')?.addEventListener('click', async () => {
-      if (currentStage === 8) {
+      if (currentStage === STAGE.QA) {
         propertyPanel.updateData(canvasComponent.data);
         propertyPanel.openExportModal();
       } else {
@@ -857,14 +864,14 @@ async function bootstrap() {
     (projectData: DiagramData) => {
       canvasComponent.loadNewDiagram(projectData);
       history.reset(projectData.columns, projectData.activeTaxaId, projectData.calibration, projectData.roi);
-      currentStage = 3;
+      currentStage = STAGE.Y_CALIB;
       updateWorkflowBar();
       sidebar?.updateData(canvasComponent.data);
       inspector?.updateData(canvasComponent.data);
       toolbar?.updateHistoryState();
       toolbar?.updateScale(canvasComponent.viewport.scale);
       updateFooter();
-      void refreshLineMask();
+      void scheduleLineMaskRefresh();
       setHudNotice('✅ 成功载入 Straditize 科学项目包 (.tar)！已 100% 还原全部属种、刻度钉与控制点。', 4500);
     }
   );
@@ -916,12 +923,12 @@ async function bootstrap() {
     onChangeDegridStrength: (strength) => {
       canvasComponent.setDegridStrength(strength);
       setHudNotice(`去线灵敏度设为: ${strength.toUpperCase()}（按 B 键复核红色标记）`);
-      void refreshLineMask();
+      void scheduleLineMaskRefresh();
     },
     onToggleVerticalLineRemoval: (enabled) => {
       verticalLineRemoval = enabled;
       setHudNotice(enabled ? '去线：竖线（坐标轴脊线/列基线）一并剔除' : '去线：仅处理横线');
-      void refreshLineMask();
+      void scheduleLineMaskRefresh();
     },
     onStartLineFix: (mode) => {
       if (!canvasComponent.isToolAllowed('linefix')) {
@@ -944,7 +951,7 @@ async function bootstrap() {
       canvasComponent.data.lineCorrections = [];
       history.push('Clear Line-mask Corrections', canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
       canvasComponent.requestRender();
-      void refreshLineMask();
+      void scheduleLineMaskRefresh();
       setHudNotice('已清空全部人工修正笔迹，掩膜回到算法结果。');
     },
     onStartYCalibration: () => {
@@ -1216,7 +1223,17 @@ async function bootstrap() {
    * 显示逻辑，实测在 Hoya 图上把 Pinus 列 99% 的实心轮廓标成"可删除"，而那张图
    * ROI 内根本没有横向网格线。现在 B 键看到的就是数字化实际剔除的像素。
    */
-  async function refreshLineMask(): Promise<void> {
+  let lineMaskRefreshPromise: Promise<void> = Promise.resolve();
+  let lineMaskRequestVersion = 0;
+
+  function scheduleLineMaskRefresh(): Promise<void> {
+    const requestVersion = ++lineMaskRequestVersion;
+    const task = lineMaskRefreshPromise.then(() => refreshLineMask(requestVersion));
+    lineMaskRefreshPromise = task.catch(() => undefined);
+    return task;
+  }
+
+  async function refreshLineMask(requestVersion: number): Promise<void> {
     const strength = canvasComponent.viewport.degridStrength;
     const data = canvasComponent.data;
     if (strength === 'off') {
@@ -1227,11 +1244,13 @@ async function bootstrap() {
       } catch (err) {
         reportBackendFailure('关闭去线', err);
       }
+      if (requestVersion !== lineMaskRequestVersion) return;
       canvasComponent.setLineOverlay(null);
       return;
     }
     try {
       const res = await rpcClient.applyLineRemoval(strength, data.lineCorrections, verticalLineRemoval);
+      if (requestVersion !== lineMaskRequestVersion) return;
       if (!res || !res.overlay_png) {
         canvasComponent.setLineOverlay(null);
         return;
@@ -1247,6 +1266,13 @@ async function bootstrap() {
     } catch (err) {
       reportBackendFailure('去线掩膜计算', err);
     }
+  }
+
+  /** 按拖拽顺序提交 ROI，避免连续拖拽请求乱序覆盖。 */
+  function enqueueRoiCommit(roi: DataRoi): Promise<void> {
+    const task = roiCommitPromise.then(() => commitRoi(roi));
+    roiCommitPromise = task.catch(() => undefined);
+    return task;
   }
 
   /** 把取数区推给后端，并重算依赖 ROI 的线掩膜。 */
@@ -1269,7 +1295,7 @@ async function bootstrap() {
     // （实测：后端已是 [161,1598]，面板还写着 [161,2206]）。
     sidebar?.updateData(canvasComponent.data);
     inspector?.updateData(canvasComponent.data);
-    await refreshLineMask();
+    await scheduleLineMaskRefresh();
   }
 
   /**
@@ -1338,7 +1364,7 @@ async function bootstrap() {
       canvasComponent.data.columns,
       canvasComponent.data.activeTaxaId
     );
-    await refreshLineMask();
+    await scheduleLineMaskRefresh();
   }
 
   /** 进入 Y 轴两点标定：由画布收集两个像素行，实时落格到 Step 3 侧栏。 */
@@ -1723,7 +1749,7 @@ async function bootstrap() {
       toolbar?.setDegridStrength('off');
       updateFooter();
       // 归零同时要让后端丢掉旧掩膜，否则重新开始时数字化仍在用上一轮的线
-      void refreshLineMask();
+      void scheduleLineMaskRefresh();
       setHudNotice('♻️ 已一键归零：本图全部分列、控制点与标尺已清空，请从 S1 重新框选数据取数区。', 5000);
     },
     onOpenCalibrationModal: () => {
@@ -1769,7 +1795,7 @@ async function bootstrap() {
     onChangeDegridStrength: (strength) => {
       canvasComponent.setDegridStrength(strength);
       setHudNotice(`去线灵敏度设为: ${strength.toUpperCase()}（按 B 键复核红色标记）`);
-      void refreshLineMask();
+      void scheduleLineMaskRefresh();
     },
     onSelectToolMode: (mode) => {
       canvasComponent.setToolMode(mode);
@@ -2026,6 +2052,7 @@ async function bootstrap() {
   (window as unknown as Record<string, unknown>).__straditize = {
     /** 一次拿到判题所需的全部状态，免去轮询 DOM 与可见性过滤 */
     getState: () => {
+      canvasComponent.render();
       const data = canvasComponent.data;
       const cal = data.calibration;
       return {
@@ -2050,11 +2077,12 @@ async function bootstrap() {
           unit: cal?.unit ?? null,
         },
         yCalibMarks: canvasComponent.getYCalibMarks().map((m) => ({ x: m.x, y: m.y })),
-        // 当前步骤下"应该画哪些层"——UI 断言直接打这里，不用去数像素
-        layers: visibleLayers(currentStage, {
+        // eligibleLayers 是阶段能力，不代表 Canvas 实际已绘制；renderedLayers 才是最近一帧的真实调用记录。
+        eligibleLayers: visibleLayers(currentStage, {
           hasImage: !!data.imageSrc,
           columnCount: data.columns.length,
         }),
+        renderedLayers: canvasComponent.getLastRenderedLayers(),
       };
     },
     /** 直达任意步骤；走的是与工作流按钮完全相同的 advanceToWorkflowStage */

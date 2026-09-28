@@ -26,18 +26,16 @@ export function render(data: DiagramData): string {
   return `
     <div class="step-panel" data-step="3">
       <div class="step-title">${t('step3.title')}</div>
-      <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5;">
+      <div class="step-desc">
         ${t('step3.desc')}
       </div>
 
       <!-- 标定状态指示条 -->
-      <div class="inspector-section" style="padding: 8px; background: ${isCalibrated ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)'}; border: 1px solid ${isCalibrated ? '#10b981' : '#f59e0b'}; border-radius: 6px; margin-bottom: 12px;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-size: 11px; font-weight: 700; color: ${isCalibrated ? '#059669' : '#d97706'};">
-            ${isCalibrated ? t('step3.active') : t('step3.inactive')}
-          </span>
-          <button id="btn-repick-ycalib" class="tool-btn" style="font-size: 10px; padding: 2px 6px;">${t('step3.pickPoints')}</button>
-        </div>
+      <div class="info-callout ${isCalibrated ? 'success' : 'warning'}" style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 11px; font-weight: 700;">
+          ${isCalibrated ? t('step3.active') : t('step3.inactive')}
+        </span>
+        <button id="btn-repick-ycalib" class="tool-btn btn-subaction" style="font-size: 10.5px; padding: 3px 8px;">${t('step3.pickPoints')}</button>
       </div>
 
       <!-- 常驻两点标定输入表单 (100% 常驻侧栏，彻底告别弹窗) -->
@@ -87,17 +85,17 @@ export function render(data: DiagramData): string {
             <input type="text" id="ycal-inp-unit" value="${unit}" style="width: 50px; font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
           </div>
           <div style="color: var(--text-muted);">
-            Ratio: <strong id="lbl-ycal-ratio" style="color: var(--accent-green, #10b981);">${ratioStr}</strong>
+            Ratio: <strong id="lbl-ycal-ratio" style="color: var(--accent-green, #10b981); font-family: monospace;">${ratioStr}</strong>
           </div>
         </div>
 
-        <button id="btn-apply-ycalib" class="tool-btn" style="width: 100%; font-size: 11px; padding: 5px; margin-top: 6px;">
+        <button id="btn-apply-ycalib" class="btn btn-secondary" style="width: 100%; font-size: 11px; padding: 5px; margin-top: 6px;">
           💾 ${t('step3.apply')}
         </button>
       </div>
 
       <!-- 推进到 Step 4 -->
-      <button id="btn-apply-ycalib-next" class="primary-btn" style="width: 100%; padding: 6px 12px; font-size: 12px;">
+      <button id="btn-apply-ycalib-next" class="btn btn-primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
         ${t('step3.next')}
       </button>
     </div>

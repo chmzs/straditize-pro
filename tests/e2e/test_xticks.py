@@ -13,21 +13,35 @@ def test_xticks_panel_and_controls(e2e_server):
     url = e2e_server["url"]
 
     js_code = """
-      // Switch to Step 6 (标定列)
-      const step6Btn = document.querySelector('.workflow-step-btn[data-step="6"]');
-      if (step6Btn) {
-        step6Btn.click();
-      }
+      return (async () => {
+        // Wait for app to be ready
+        for (let i = 0; i < 30; i++) {
+          if (window.__straditize || document.querySelector('.workflow-step-btn[data-step="6"]')) break;
+          await new Promise(r => setTimeout(r, 100));
+        }
 
-      const panel = document.querySelector('.step-panel[data-step="6"]');
-      const detectBtn = document.querySelector('#btn-detect-xticks');
-      const nextBtn = document.querySelector('#btn-apply-xticks-next');
+        if (window.__straditize) {
+          await window.__straditize.gotoStage(6);
+        } else {
+          const step6Btn = document.querySelector('.workflow-step-btn[data-step="6"]');
+          if (step6Btn) step6Btn.click();
+        }
 
-      return JSON.stringify({
-        panel_present: panel ? 'present' : 'absent',
-        detect_btn: detectBtn ? 'present' : 'absent',
-        next_btn: nextBtn ? 'present' : 'absent',
-      });
+        for (let i = 0; i < 30; i++) {
+          if (document.querySelector('.step-panel[data-step="6"]')) break;
+          await new Promise(r => setTimeout(r, 100));
+        }
+
+        const panel = document.querySelector('.step-panel[data-step="6"]');
+        const detectBtn = document.querySelector('#btn-detect-xticks');
+        const nextBtn = document.querySelector('#btn-apply-xticks-next');
+
+        return JSON.stringify({
+          panel_present: panel ? 'present' : 'absent',
+          detect_btn: detectBtn ? 'present' : 'absent',
+          next_btn: nextBtn ? 'present' : 'absent',
+        });
+      })();
     """
 
     res_str = run_playwright_eval(url, js_code, session_name="e2e_xticks")

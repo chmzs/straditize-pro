@@ -190,8 +190,8 @@ export class Sidebar {
             </span>
 
             <!-- 就地快速切换形态微图标 [🌊/📊/📈/➕] -->
-            <button class="icon-btn" data-action="cycle-plot-type" title="当前形态: ${pType.toUpperCase()} (点击就地循环切换: 面积->柱状->折线->符号)" style="padding: 1px 3px; font-size: 11px; line-height: 1;">
-              ${typeIcon}
+            <button class="icon-btn plot-type-btn" data-action="cycle-plot-type" title="当前形态: ${pType.toUpperCase()} (点击切换形态: 面积/柱状/折线/符号)" style="padding: 1px 4px; font-size: 10px; line-height: 1.2; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 3px; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;">
+              <span>${typeIcon}</span><span style="font-size: 7px; opacity: 0.6;">▾</span>
             </button>
 
             <button class="icon-btn toggle-visibility ${col.visible ? 'visible' : 'hidden'}" data-action="toggle-visible" title="显隐属种" style="padding: 2px;">
@@ -214,8 +214,8 @@ export class Sidebar {
             <input type="text" class="taxa-name-inline-input" data-col-id="${col.id}" data-action="inline-rename" value="${col.name}" title="点击可直接编辑此属种名称，获得焦点时画布高亮该列" />
           </div>
           <div style="display: flex; align-items: center; gap: 4px;">
-            <button class="icon-btn" data-action="cycle-plot-type" title="当前形态: ${pType.toUpperCase()} (点击切换)" style="font-size: 11px;">
-              ${typeIcon}
+            <button class="icon-btn plot-type-btn" data-action="cycle-plot-type" title="当前形态: ${pType.toUpperCase()} (点击切换形态: 面积/柱状/折线/符号)" style="font-size: 10px; padding: 2px 4px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 3px; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;">
+              <span>${typeIcon}</span><span style="font-size: 8px; opacity: 0.6;">▾</span>
             </button>
             <button class="icon-btn toggle-visibility ${col.visible ? 'visible' : 'hidden'}" data-action="toggle-visible" title="显隐属种">
               ${

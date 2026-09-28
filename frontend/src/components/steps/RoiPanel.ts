@@ -19,15 +19,15 @@ export function render(data: DiagramData): string {
   return `
     <div class="step-panel" data-step="2">
       <div class="step-title">${t('step2.title')}</div>
-      <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5;">
+      <div class="step-desc">
         ${t('step2.desc')}
       </div>
 
       <!-- ROI 选择与操作区 -->
-      <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 12px;">
+      <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 12px; border: 1px solid var(--border-color);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
           <span style="font-size: 11px; font-weight: 700;">${t('step2.container', { count: rois.length })}</span>
-          <button id="btn-create-roi" class="tool-btn" style="font-size: 10px; padding: 2px 6px;">${t('step2.newRoi')}</button>
+          <button id="btn-create-roi" class="tool-btn btn-subaction" style="font-size: 10px; padding: 2px 7px;">+ ${t('step2.newRoi')}</button>
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
@@ -66,16 +66,16 @@ export function render(data: DiagramData): string {
             <input type="checkbox" id="chk-roi-composition" ${activeRoi.composition ? 'checked' : ''} />
             <label for="chk-roi-composition" style="font-size: 10.5px; cursor: pointer;">${t('step2.composition')}</label>
           </div>
-          <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px; line-height: 1.5; padding: 6px; background: rgba(0,0,0,0.02); border-radius: 4px;">
-            <div>${t('step2.pixelX')} [${Math.round(activeRoi.xlim ? activeRoi.xlim[0] : data.roi.xMin)} ~ ${Math.round(activeRoi.xlim ? activeRoi.xlim[1] : data.roi.xMax)}]</div>
-            <div>${t('step2.pixelY')} [${Math.round(activeRoi.ylim ? activeRoi.ylim[0] : data.roi.yMin)} ~ ${Math.round(activeRoi.ylim ? activeRoi.ylim[1] : data.roi.yMax)}]</div>
+          <div class="info-kv-box">
+            <div>${t('step2.pixelX')} <strong>[${Math.round(activeRoi.xlim ? activeRoi.xlim[0] : data.roi.xMin)} ~ ${Math.round(activeRoi.xlim ? activeRoi.xlim[1] : data.roi.xMax)}]</strong></div>
+            <div>${t('step2.pixelY')} <strong>[${Math.round(activeRoi.ylim ? activeRoi.ylim[0] : data.roi.yMin)} ~ ${Math.round(activeRoi.ylim ? activeRoi.ylim[1] : data.roi.yMax)}]</strong></div>
             <div>${t('step2.assignedCols')} <strong>${currentColumns.length}</strong> ${t('step2.cols')}</div>
           </div>
         </div>
       </div>
 
       <!-- 推进到 Step 3 -->
-      <button id="btn-apply-roi-next" class="primary-btn" style="width: 100%; padding: 6px 12px; font-size: 12px;">
+      <button id="btn-apply-roi-next" class="btn btn-primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
         ${t('step2.next')}
       </button>
     </div>

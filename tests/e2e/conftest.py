@@ -115,15 +115,18 @@ def run_playwright_eval(url: str, js_code: str, session_name: str = "e2e_session
         "--browser=msedge",
         url,
     ]
-    open_res = subprocess.run(open_cmd, capture_output=True, text=True, encoding="utf-8", check=False)
-    if open_res.returncode != 0:
+    open_res = None
+    for _ in range(10):
+        open_res = subprocess.run(open_cmd, capture_output=True, text=True, encoding="utf-8", check=False)
+        if open_res.returncode == 0:
+            break
+        time.sleep(0.5)
+    else:
+        assert open_res is not None
         raise RuntimeError(f"Failed to open msedge at {url}: {open_res.stdout}\n{open_res.stderr}")
 
     try:
-        # Wait a short moment for front-end Vite bundle to initialize DOM components
-        time.sleep(1.5)
-
-        # Evaluate JavaScript expression inside page
+        # Evaluate only after the session is ready; browser startup time is machine-dependent.
         eval_cmd = [
             "node",
             PLAYWRIGHT_CLI,
@@ -131,10 +134,23 @@ def run_playwright_eval(url: str, js_code: str, session_name: str = "e2e_session
             "eval",
             f"() => {{ {js_code} }}",
         ]
-        eval_res = subprocess.run(eval_cmd, capture_output=True, text=True, encoding="utf-8", check=False)
-        if eval_res.returncode != 0:
-            raise RuntimeError(f"Failed to evaluate code in browser: {eval_res.stdout}\n{eval_res.stderr}")
+        eval_res = None
+        for _ in range(20):
+            eval_res = subprocess.run(eval_cmd, capture_output=True, text=True, encoding="utf-8", check=False)
+            if eval_res.returncode == 0:
+                break
+            combined = f"{eval_res.stdout}\n{eval_res.stderr}"
+            if "is not open" not in combined:
+                raise RuntimeError(f"Failed to evaluate code in browser: {combined}")
+            time.sleep(0.5)
+        else:
+            assert eval_res is not None
+            raise RuntimeError(
+                f"Browser session {session_name!r} was not ready after retries:\n"
+                f"{eval_res.stdout}\n{eval_res.stderr}"
+            )
 
+        assert eval_res is not None
         output = eval_res.stdout
         # Extract the content from playwright-cli's markdown result block
         m = re.search(r"### Result\s*\n(.*?)(?:\n###|\Z)", output, re.DOTALL)

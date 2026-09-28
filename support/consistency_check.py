@@ -37,20 +37,22 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+Signature = tuple[list[str], int, list[str], bool, str]
+SignatureMap = dict[str, list[Signature]]
 
 
 # ---------------------------------------------------------------- A. 签名核对
-def collect_signatures() -> dict[str, list[tuple[list[str], int, list[str], bool, str]]]:
-    """name -> [(positional, required, kwonly, has_varargs, file)]"""
-    sigs: dict[str, list] = {}
-    for p in list((ROOT / "straditize_core").rglob("*.py")) + list(
-        (ROOT / "frontend").rglob("*.ts")
-    ):
+def collect_signatures() -> tuple[SignatureMap, list[str]]:
+    """收集后端 Python 函数签名，并返回无法解析的文件。"""
+    sigs: SignatureMap = {}
+    parse_errors: list[str] = []
+    for p in (ROOT / "straditize_core").rglob("*.py"):
         if "__pycache__" in str(p):
             continue
         try:
             tree = ast.parse(p.read_text(encoding="utf-8", errors="replace"))
-        except SyntaxError:
+        except SyntaxError as exc:
+            parse_errors.append(f"{p.relative_to(ROOT)}: Python 语法解析失败: {exc}")
             continue
         for n in ast.walk(tree):
             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -65,7 +67,7 @@ def collect_signatures() -> dict[str, list[tuple[list[str], int, list[str], bool
                         str(p.relative_to(ROOT)),
                     )
                 )
-    return sigs
+    return sigs, parse_errors
 
 
 # 这些名字太通用：既有 stdlib/第三方方法（PIL Image.load、pandas DataFrame.to_dict、
@@ -78,7 +80,7 @@ GENERIC_NAMES = {
 }
 
 
-def check_signature_calls(sigs) -> list[str]:
+def check_signature_calls(sigs: SignatureMap) -> list[str]:
     problems = []
     # 只扫本项目维护的代码。`straditize/` 是上游第三方 PyQt5 原版（AGENTS.md：
     # 本项目不维护、当前环境缺依赖跑不起来），`build/` 是构建产物，扫它们只会
@@ -93,7 +95,8 @@ def check_signature_calls(sigs) -> list[str]:
     for p in files:
         try:
             tree = ast.parse(p.read_text(encoding="utf-8", errors="replace"))
-        except SyntaxError:
+        except SyntaxError as exc:
+            problems.append(f"{p.relative_to(ROOT)}: Python 语法解析失败: {exc}")
             continue
         for n in ast.walk(tree):
             if not isinstance(n, ast.Call):
@@ -144,7 +147,8 @@ def check_int_str_annotation() -> list[str]:
             continue
         try:
             tree = ast.parse(p.read_text(encoding="utf-8", errors="replace"))
-        except SyntaxError:
+        except SyntaxError as exc:
+            problems.append(f"{p.relative_to(ROOT)}: Python 语法解析失败: {exc}")
             continue
         for n in ast.walk(tree):
             if not isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -287,10 +291,11 @@ def check_stale_comments() -> list[str]:
 
 def main() -> int:
     strict = "--strict" in sys.argv
-    sigs = collect_signatures()
+    sigs, signature_parse_errors = collect_signatures()
 
     sections = [
         ("A. 调用点 ↔ 函数签名", check_signature_calls(sigs)),
+        ("A0. 签名源文件语法", signature_parse_errors),
         ("B. int|str 标注 ↔ 实现", check_int_str_annotation()),
         ("C. package-data 声明 ↔ 真实文件", check_package_data()),
         ("D. pytest python_files 覆盖", check_test_discovery()),

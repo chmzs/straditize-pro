@@ -32,7 +32,9 @@ console.log('✔ 步骤编号与设计稿一致');
 //    （用户反馈：「应该在我点两点就即时出现，而不是点确定应用后才出现」）
 // ---------------------------------------------------------------------------
 assert.equal(S.showsYCalibMarks(S.STAGE.Y_CALIB), true, '步骤3 必须绘制 Y1/Y2 标记');
-assert.equal(S.canPickYCalibMark(S.STAGE.Y_CALIB, 'select'), true, '步骤3 左键必须能拾取');
+assert.equal(S.canPickYCalibMark(S.STAGE.Y_CALIB, 'ycalib'), true, '步骤3 Y 标定模式必须能拾取');
+assert.equal(S.canPickYCalibMark(S.STAGE.Y_CALIB, 'select'), false, '步骤3 非 Y 标定模式不得拾取');
+assert.equal(S.canPickYCalibMark(S.STAGE.ROI, 'ycalib'), false, '步骤2 不得拾取 Y 标定点');
 assert.equal(S.showsYCalibMarks(S.STAGE.ROI), false, '步骤2 尚未进入标定，不该画标记');
 
 // 本轮缺陷的形状：绘制守卫 >=4、拾取守卫 ===3 —— 结果是"点得上却看不见"。
@@ -50,7 +52,7 @@ for (let stage = 0; stage <= 8; stage++) {
   );
 }
 // 步骤 4 的具体语义（本轮推敲后确定，别再改回"两态一致"）
-assert.equal(S.canPickYCalibMark(S.STAGE.CLEANUP, 'select'), false, '步骤4 清理不允许再拾取 Y 点');
+assert.equal(S.canPickYCalibMark(S.STAGE.CLEANUP, 'ycalib'), false, '步骤4 清理不允许再拾取 Y 点');
 assert.equal(S.showsYCalibMarks(S.STAGE.CLEANUP), true, '步骤4 仍须显示已拾取的 Y1/Y2');
 console.log('✔ 「能点 ⟹ 能画」成立，且 ROI 手柄绘制/命中成对');
 

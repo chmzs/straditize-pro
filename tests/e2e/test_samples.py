@@ -13,23 +13,37 @@ def test_samples_panel_and_controls(e2e_server):
     url = e2e_server["url"]
 
     js_code = """
-      // Switch to Step 7 (拐点与采样)
-      const step7Btn = document.querySelector('.workflow-step-btn[data-step="7"]');
-      if (step7Btn) {
-        step7Btn.click();
-      }
+      return (async () => {
+        // Wait for app to be ready
+        for (let i = 0; i < 30; i++) {
+          if (window.__straditize || document.querySelector('.workflow-step-btn[data-step="7"]')) break;
+          await new Promise(r => setTimeout(r, 100));
+        }
 
-      const panel = document.querySelector('.step-panel[data-step="7"]');
-      const consensusBtn = document.querySelector('#btn-extract-consensus');
-      const clearBtn = document.querySelector('#btn-clear-horizons');
-      const nextBtn = document.querySelector('#btn-apply-samples-next');
+        if (window.__straditize) {
+          await window.__straditize.gotoStage(7);
+        } else {
+          const step7Btn = document.querySelector('.workflow-step-btn[data-step="7"]');
+          if (step7Btn) step7Btn.click();
+        }
 
-      return JSON.stringify({
-        panel_present: panel ? 'present' : 'absent',
-        consensus_btn: consensusBtn ? 'present' : 'absent',
-        clear_btn: clearBtn ? 'present' : 'absent',
-        next_btn: nextBtn ? 'present' : 'absent',
-      });
+        for (let i = 0; i < 30; i++) {
+          if (document.querySelector('.step-panel[data-step="7"]')) break;
+          await new Promise(r => setTimeout(r, 100));
+        }
+
+        const panel = document.querySelector('.step-panel[data-step="7"]');
+        const consensusBtn = document.querySelector('#btn-extract-consensus');
+        const clearBtn = document.querySelector('#btn-clear-horizons');
+        const nextBtn = document.querySelector('#btn-apply-samples-next');
+
+        return JSON.stringify({
+          panel_present: panel ? 'present' : 'absent',
+          consensus_btn: consensusBtn ? 'present' : 'absent',
+          clear_btn: clearBtn ? 'present' : 'absent',
+          next_btn: nextBtn ? 'present' : 'absent',
+        });
+      })();
     """
 
     res_str = run_playwright_eval(url, js_code, session_name="e2e_samples")

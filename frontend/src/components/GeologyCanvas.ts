@@ -102,6 +102,7 @@ export class GeologyCanvas {
   // 点击添加锚点防误抖标识
   private hasDraggedAnchor: boolean = false;
   private renderPending: boolean = false;
+  private lastRenderedLayers: Set<string> = new Set();
 
   // 屏幕恒定像素常量
   private readonly ANCHOR_HIT_RADIUS_SCREEN = 8.0;
@@ -1424,6 +1425,11 @@ export class GeologyCanvas {
     return [...this.yCalibMarks];
   }
 
+  /** 返回最近一次完整渲染实际调用过的图层，供只读验收句柄使用。 */
+  public getLastRenderedLayers(): string[] {
+    return [...this.lastRenderedLayers];
+  }
+
   private nudgeTimer: number | null = null;
 
   public nudgeSelectedEntity(dx: number, dy: number): void {
@@ -1664,6 +1670,7 @@ export class GeologyCanvas {
   // ===================== 核心高保真渲染管线 =====================
 
   public render(): void {
+    this.lastRenderedLayers.clear();
     const ctx = this.ctx;
     const rect = this.canvas.getBoundingClientRect();
     const dpr = this.viewport.dpr;
@@ -1684,40 +1691,47 @@ export class GeologyCanvas {
 
     // 1. 底层扫描地质图谱（支持原图、反相、高对比、纯二值化与透视遮罩）
     this.drawBackgroundDiagram(ctx, isLight);
+    this.lastRenderedLayers.add('background');
 
     // 2. 地层深度标尺网格系统（阶段语义集中在 core/WorkflowStage.ts）
-    if (showsDepthGrid(this.workflowStage)) {
-      this.drawDepthGrid(ctx, isLight);
+    if (showsDepthGrid(this.workflowStage) && this.drawDepthGrid(ctx, isLight)) {
+      this.lastRenderedLayers.add('depthGrid');
     }
 
     // 3. 取数区域矩形与控制手柄 (ROI)
     if (showsRoiOverlay(this.workflowStage)) {
       this.drawRoiOverlay(ctx, isLight);
+      this.lastRenderedLayers.add('roi');
     }
 
     // 3.1 Y 轴两点标定记号与标定跨度指示
     // 与 canPickYCalibMark 成对：绘制与拾取任一侧落后一步都会让点击毫无反馈。
-    if (showsYCalibMarks(this.workflowStage)) {
-      this.drawYAxisCalibration(ctx);
+    if (showsYCalibMarks(this.workflowStage) && this.drawYAxisCalibration(ctx)) {
+      this.lastRenderedLayers.add('yCalibMarks');
     }
 
     // 3.2 线掩膜人工修正笔迹预览 (涂抹中显示)
     if (this.lineFixPoints && this.lineFixPoints.length > 0) {
       this.drawLineFixStroke(ctx);
+      this.lastRenderedLayers.add('lineFix');
     }
 
     // 4. 各属种垂直分界标线与两点式物理刻度钉
     if (showsColumnBoundaries(this.workflowStage, this.data.columns.length)) {
       this.drawColumnBoundaries(ctx, isLight);
+      this.lastRenderedLayers.add('columnBoundaries');
     }
 
     // 5. 花粉轮廓面积图与曲线 + 控制锚点 + 质检比对层
     if (showsPollenCurves(this.workflowStage, this.data.columns.length)) {
       this.drawPollenCurves(ctx);
+      this.lastRenderedLayers.add('pollenCurves');
       // 6. 控制锚点渲染
       this.drawAnchors(ctx);
+      this.lastRenderedLayers.add('anchors');
       // 7. 原位半透明逆向重绘绿色质检比对层 (Visual Ghosting Layer)
       this.drawGhostingOverlay(ctx);
+      this.lastRenderedLayers.add('ghosting');
     }
 
     // 7.1 自动收集并调用注册叠加层 (W3 叠加层扩展点)
@@ -1832,16 +1846,16 @@ export class GeologyCanvas {
    * 未完成两点标定时整段不画：没有标定就没有"深度"这回事，画一组 0/50/100
    * 的假刻度会让人以为深度轴已经生效（旧实现正是拿 ROI 边界冒充刻度）。
    */
-  private drawDepthGrid(ctx: CanvasRenderingContext2D, isLight: boolean): void {
+  private drawDepthGrid(ctx: CanvasRenderingContext2D, isLight: boolean): boolean {
     const cal = this.data.calibration;
     const roi = this.data.roi;
     const bounds = CoordinateSystem.calibrationBounds(cal);
-    if (!bounds || cal.depthGridEnabled === false) return;
+    if (!bounds || cal.depthGridEnabled === false) return false;
 
     // 网格线仅在 Step 7（采样层位）或 Step 3（物理标定）等需要时显示，
     // Step 4 (干扰清理) 和 Step 5 (自动分列) 默认不绘制网格线，彻底消除抹黑图谱的灾难
     if (this.workflowStage === STAGE.CLEANUP || this.workflowStage === STAGE.SPLIT) {
-      return;
+      return false;
     }
 
     const totalSpan = Math.abs(bounds.bottomValue - bounds.topValue);
@@ -1854,7 +1868,7 @@ export class GeologyCanvas {
       else if (totalSpan > 200) interval = 20;
     }
     const { depths, yPositions } = SplineInterpolator.getStandardDepthHorizons(cal, roi);
-    if (depths.length === 0) return;
+    if (depths.length === 0) return false;
 
     const scale = this.viewport.scale;
     const totalCols = this.data.columns;
@@ -1935,6 +1949,7 @@ export class GeologyCanvas {
     }
 
     ctx.restore();
+    return true;
   }
 
   /**
@@ -2010,7 +2025,7 @@ export class GeologyCanvas {
    * 绘制 Y 轴两点标定：清晰呈现 Y1 / Y2 两个标定锚点、左侧刻度引线与实时选点准星预览。
    * 严格限制在左侧 Y 轴刻度区域，绝不生成横穿全图数据区的遮罩或干扰线。
    */
-  private drawYAxisCalibration(ctx: CanvasRenderingContext2D): void {
+  private drawYAxisCalibration(ctx: CanvasRenderingContext2D): boolean {
     const cal = this.data.calibration;
     const roi = this.data.roi;
     const scale = this.viewport.scale;
@@ -2053,7 +2068,7 @@ export class GeologyCanvas {
       });
     }
 
-    if (items.length === 0 && (!isYCalibMode || !this.hoverWorldPt)) return;
+    if (items.length === 0 && (!isYCalibMode || !this.hoverWorldPt)) return false;
 
     ctx.save();
 
@@ -2183,6 +2198,7 @@ export class GeologyCanvas {
     }
 
     ctx.restore();
+    return true;
   }
 
   /** 涂抹中的线掩膜修正笔迹预览（青=擦除误标，红=补回漏标）。 */
@@ -2499,11 +2515,11 @@ export class GeologyCanvas {
     this.updateEmptyStateVisibility();
     this.updateFloatingToolbarForStage(stage);
     // 切换步骤时自动激活该步骤对应的默认主画布工具
-    if (stage === 1) {
+    if (stage === STAGE.LOAD) {
       this.toolModeManager.setMode('pan');
-    } else if (stage === 2) {
+    } else if (stage === STAGE.ROI) {
       this.toolModeManager.setMode('roi');
-    } else if (stage === 3) {
+    } else if (stage === STAGE.Y_CALIB) {
       this.toolModeManager.setMode('ycalib');
     } else if (!this.isToolAllowed(this.toolModeManager.getMode(), stage)) {
       const allowed = this.getAllowedTools(stage);
@@ -2575,9 +2591,9 @@ export class GeologyCanvas {
 
     // 5. 清空撤销历史栈（基线同步记录 ROI 与空标定），回到 S1 并重新居中
     this.history.reset([], '', this.data.calibration, this.data.roi);
-    this.workflowStage = 1;
+    this.workflowStage = STAGE.LOAD;
     this.updateEmptyStateVisibility();
-    this.updateFloatingToolbarForStage(1);
+    this.updateFloatingToolbarForStage(STAGE.LOAD);
     this.updateCursor();
     this.fitToScreen();
     this.requestRender();
@@ -2607,12 +2623,12 @@ export class GeologyCanvas {
    *   Step 7-8  拐点与采样/校验：开放全部编辑能力（加点等）
    */
   public getAllowedTools(stage: number = this.workflowStage): ToolMode[] {
-    if (stage <= 1) return ['pan'];
-    if (stage === 2) return ['roi', 'pan'];
-    if (stage === 3) return ['ycalib', 'pan'];
-    if (stage === 4) return ['linefix', 'pan'];
-    if (stage === 5) return ['addCol', 'eraser', 'select', 'pan'];
-    if (stage === 6) return ['select', 'addCol', 'eraser', 'pan'];
+    if (stage <= STAGE.LOAD) return ['pan'];
+    if (stage === STAGE.ROI) return ['roi', 'pan'];
+    if (stage === STAGE.Y_CALIB) return ['ycalib', 'pan'];
+    if (stage === STAGE.CLEANUP) return ['linefix', 'pan'];
+    if (stage === STAGE.SPLIT) return ['addCol', 'eraser', 'select', 'pan'];
+    if (stage === STAGE.CALIBRATE_COLUMNS) return ['select', 'addCol', 'eraser', 'pan'];
     return ['select', 'addPoint', 'eraser', 'pan'];
   }
 

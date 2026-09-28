@@ -15,27 +15,27 @@ export function render(data: DiagramData): string {
   return `
     <div class="step-panel" data-step="4">
       <div class="step-title">${t('step4.title')}</div>
-      <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5;">
+      <div class="step-desc">
         ${t('step4.forRoi')}<strong style="color: var(--accent-blue);">${roiName}</strong>
       </div>
 
       <!-- 参数调节旋钮 -->
-      <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px;">
+      <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border-color);">
         <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px; color: var(--text-primary);">${t('step4.sensitivity')}</div>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 10.5px;">
           <span>${t('step4.spanH')}</span>
-          <span id="lbl-line-frac-h" style="font-weight: 600;">75%</span>
+          <span id="lbl-line-frac-h" style="font-weight: 600; font-family: monospace;">75%</span>
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 10.5px;">
           <span>${t('step4.spanV')}</span>
-          <span id="lbl-line-frac-v" style="font-weight: 600;">30%</span>
+          <span id="lbl-line-frac-v" style="font-weight: 600; font-family: monospace;">30%</span>
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10.5px;">
           <span>${t('step4.maxWidth')}</span>
-          <span id="lbl-line-width-max" style="font-weight: 600;">2 px</span>
+          <span id="lbl-line-width-max" style="font-weight: 600; font-family: monospace;">2 px</span>
         </div>
-        <button id="btn-detect-candidates" class="tool-btn" style="width: 100%; margin-top: 8px; font-size: 11px; padding: 4px;">
-          ${t('step4.rescan')}
+        <button id="btn-detect-candidates" class="btn btn-secondary" style="width: 100%; margin-top: 8px; font-size: 11px; padding: 5px;">
+          🔍 ${t('step4.rescan')}
         </button>
       </div>
 
@@ -68,17 +68,17 @@ export function render(data: DiagramData): string {
       <div class="inspector-section" style="margin-bottom: 12px;">
         <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">${t('step4.exclusions', { count: exclusionCount })}</div>
         <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-          <button id="btn-add-exclusion-rect" class="tool-btn" style="flex: 1; font-size: 10.5px; padding: 4px;">
-            ${t('step4.addExclusion')}
+          <button id="btn-add-exclusion-rect" class="btn btn-secondary" style="flex: 1; font-size: 10.5px; padding: 5px;">
+            ⬚ ${t('step4.addExclusion')}
           </button>
-          <button id="btn-trigger-linefix" class="tool-btn" style="flex: 1; font-size: 10.5px; padding: 4px;">
-            ${t('step4.brush')}
+          <button id="btn-trigger-linefix" class="btn btn-secondary" style="flex: 1; font-size: 10.5px; padding: 5px;">
+            🖌️ ${t('step4.brush')}
           </button>
         </div>
       </div>
 
       <!-- 阶段提交按钮 -->
-      <button id="btn-apply-cleanup-next" class="primary-btn" style="width: 100%; padding: 6px 12px; font-size: 12px;">
+      <button id="btn-apply-cleanup-next" class="btn btn-primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
         ${t('step4.next')}
       </button>
     </div>

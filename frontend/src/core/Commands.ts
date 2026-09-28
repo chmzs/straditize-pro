@@ -1,5 +1,5 @@
-import { ControlPoint, DataRoi, DiagramCalibration, DiagramData, Point2D, TaxaColumn } from '../types/pollen';
-import { Command } from './CommandManager';
+import type { ControlPoint, DataRoi, DiagramCalibration, DiagramData, Point2D, TaxaColumn } from '../types/pollen.ts';
+import type { Command } from './CommandManager.ts';
 
 /**
  * 拖动/微调单个拐点命令
@@ -155,6 +155,19 @@ export class MoveColumnBoundaryCommand implements Command {
  * 只动 `data.roi`：取数区域与 Y 轴标定是两个独立概念，本命令绝不触碰
  * `data.calibration`（历史实现把两者塞进同一个结构体，导致拖框改深度）。
  */
+function copyRoiBounds(target: DataRoi, source: DataRoi): void {
+  const xMin = source.xMin ?? source.xlim?.[0] ?? 0;
+  const xMax = source.xMax ?? source.xlim?.[1] ?? 0;
+  const yMin = source.yMin ?? source.ylim?.[0] ?? 0;
+  const yMax = source.yMax ?? source.ylim?.[1] ?? 0;
+  target.xMin = xMin;
+  target.xMax = xMax;
+  target.yMin = yMin;
+  target.yMax = yMax;
+  target.xlim = [xMin, xMax];
+  target.ylim = [yMin, yMax];
+}
+
 export class ResizeRoiCommand implements Command {
   public readonly description: string;
   private oldRoi: DataRoi;
@@ -168,24 +181,14 @@ export class ResizeRoiCommand implements Command {
 
   public execute(data: DiagramData): void {
     data.roi = { ...this.newRoi };
-    if (data.rois) {
-      const target = data.rois.find((r) => r.id === data.active_roi_id) || data.rois[0];
-      if (target) {
-        target.xlim = [this.newRoi.xMin ?? this.newRoi.xlim?.[0] ?? 0, this.newRoi.xMax ?? this.newRoi.xlim?.[1] ?? 0];
-        target.ylim = [this.newRoi.yMin ?? this.newRoi.ylim?.[0] ?? 0, this.newRoi.yMax ?? this.newRoi.ylim?.[1] ?? 0];
-      }
-    }
+    const target = data.rois?.find((r) => r.id === data.active_roi_id) || data.rois?.[0];
+    if (target) copyRoiBounds(target, this.newRoi);
   }
 
   public undo(data: DiagramData): void {
     data.roi = { ...this.oldRoi };
-    if (data.rois) {
-      const target = data.rois.find((r) => r.id === data.active_roi_id) || data.rois[0];
-      if (target) {
-        target.xlim = [this.oldRoi.xMin ?? this.oldRoi.xlim?.[0] ?? 0, this.oldRoi.xMax ?? this.oldRoi.xlim?.[1] ?? 0];
-        target.ylim = [this.oldRoi.yMin ?? this.oldRoi.ylim?.[0] ?? 0, this.oldRoi.yMax ?? this.oldRoi.ylim?.[1] ?? 0];
-      }
-    }
+    const target = data.rois?.find((r) => r.id === data.active_roi_id) || data.rois?.[0];
+    if (target) copyRoiBounds(target, this.oldRoi);
   }
 }
 
