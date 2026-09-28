@@ -143,14 +143,21 @@ def detect_line_candidates(
     # 检出，它也只是 `status="candidate"`（不确认就不动像素），用户否掉即可；
     # 反过来漏掉一条真实 zone 线，用户是没有任何补救手段的。
     edge_margin = 2
+    # Ids are OPAQUE and positional. They used to be f"line_h_{at}_{w}px", which
+    # baked two mutable facts into an identity: the user's very first nudge moves
+    # `at`, and `set_line_thickness` rewrites `width`, after which the id claimed
+    # things that were no longer true. The current facts live in `at`/`width`/
+    # `span`/`geometry` — the id only has to be unique and stable.
+    seq = 0
     for cluster in _cluster_indices(rows_h):
         at_local = int(round(float(np.mean(cluster))))
         # ROI borders are framing geometry, never removable artifacts.
         if at_local <= edge_margin or at_local >= sub_h - 1 - edge_margin:
             continue
         at_global = ry0 + at_local
+        seq += 1
         candidates.append({
-            "id": f"line_h_{at_global}_{len(cluster)}px",
+            "id": f"line_h_{seq}",
             "kind": "A",
             "axis": "h",
             "at": at_global,
@@ -179,8 +186,9 @@ def detect_line_candidates(
         if at_local <= edge_margin or at_local >= sub_w - 1 - edge_margin:
             continue
         at_global = rx0 + at_local
+        seq += 1
         candidates.append({
-            "id": f"line_v_{at_global}_{len(cluster)}px",
+            "id": f"line_v_{seq}",
             "kind": "B",
             "axis": "v",
             "at": at_global,

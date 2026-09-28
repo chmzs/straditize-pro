@@ -484,6 +484,23 @@ export class RpcClient {
     return this.callCleanup('algorithm.deleteLineGeometry', { candidate_id: candidateId });
   }
 
+  /**
+   * 把几何的像素厚度统一改成 `thickness`。
+   *
+   * 不给 `candidateId` = 改该 ROI 内全部几何；中心行不动，只向两侧撑宽/收窄，
+   * 保证原本压对行的线改完仍压对行。
+   */
+  public async setLineThickness(
+    thickness: number,
+    candidateId?: string,
+    roiId?: string
+  ): Promise<CleanupResult> {
+    const params: Record<string, unknown> = { thickness };
+    if (candidateId) params.candidate_id = candidateId;
+    if (roiId) params.roi_id = roiId;
+    return this.callCleanup('algorithm.setLineThickness', params);
+  }
+
   /** 清空本步（本 ROI）的全部 geometry / 排除区 / 笔迹。 */
   public async clearCleanupEdits(roiId?: string): Promise<CleanupResult> {
     return this.callCleanup('algorithm.clearCleanupEdits', { roi_id: roiId });

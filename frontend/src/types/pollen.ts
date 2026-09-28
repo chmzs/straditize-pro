@@ -188,14 +188,15 @@ export interface Project {
 }
 
 export type ToolMode =
-  | 'select' // 选择/微调模式 (V)
+  | 'select' // 选择/微调模式 (S)
   | 'pan' // 抓手平移 (H / Space)
   | 'roi' // 数据有效区框选 (R)
   | 'addCol' // 加列工具 (C)
-  | 'addPoint' // 加控制点工具 (P)
-  | 'eraser' // 橡皮擦删除工具 (E)
+  | 'addPoint' // 加控制点工具 (A)
+  | 'eraser' // 橡皮擦删除工具 (D，步骤 5 起)
   | 'ycalib' // Y 轴两点标定 (Y)
   | 'linefix' // 线掩膜人工修正笔刷 (K)
+  | 'measure' // 像素测量尺 (M)，步骤 4
   | 'drawLineH' // 拖拽新建横向干扰线 geometry
   | 'drawLineV'; // 拖拽新建竖向干扰线 geometry
 

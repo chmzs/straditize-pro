@@ -1,8 +1,25 @@
 # straditize 开发交接卡 (HANDOFF.md)
-- 更新时间：2026-09-25 21:35 | 分支 dev-v2-modern | HEAD a8f450c
+- 更新时间：2026-09-29 06:15 | 分支 dev-v2-modern | HEAD 9dfebd7
 - 规则：**分节追加** —— 只改自己那一节，严禁整文件覆盖或改写他节；每节 ≤8 行，全文 ≤50 行，超限时最旧节整段移入 `HANDOFF-archive/`。
 - 一键验证：`pixi run lint` ｜ `pixi run test` ｜ `pixi run test-e2e` ｜ `npm --prefix frontend run build` ｜ `npm --prefix frontend test` ｜ `pixi run python support/probe_truth/check_ticket_ownership.py`
 - 当前结果：**8步工作流全闭环 + 5大审查病灶清零 + Y1/Y2靶心反馈 + 顶栏i18n全绿**；后端全量 266 项**全绿（0 failed / 0 xfailed，隔离区已清空）** + 前端 4 组自检，四条门禁 PASS —— 逐条数字见 [QA-RESTRUCTURE] 节（原"44项单测"为白名单口径的旧数，已更正）。
+
+## [E2E-PLAYWRIGHT] 2026-09-29 06:15 — 浏览器 E2E 由 pytest 整体迁到 @playwright/test（驱动真实 Edge）
+- **结构性变更**：`tests/e2e/`（12 个 .py + conftest，1451 行）**已删除**；新套件在 `frontend/e2e/`（10 个 spec、**25 passed**、176 条 `expect`）。`pixi run test-e2e` 现为 `npm --prefix frontend run test:e2e`；`pixi run test` 去掉了 `--ignore=tests/e2e`（仍 276 passed）；CI 新增 e2e 步骤 + e2e 类型检查（`frontend/tsconfig.e2e.json`，依赖新增 `@types/node`）+ 失败时上传 `playwright-report`。
+- **为什么必须换**：旧套件用 session 级共享后端，用例互相污染 —— 全量 `4 failed / 10 passed`，逐条单跑却全过（残留 ROI `roi_2` 触发 `session_parts/roi.py:49` 告警 → JS 返回页面文本 → `JSONDecodeError`）。且多条断言**恒真**：`test_smoke.py` 读 `truth["hoya"]` 而真值在 `truth["images"]["hoya"]`（sha256 断言从未执行）；`test_step_visibility.py` 用 snake_case 读 camelCase 的 `activeRoiId`（两键皆 undefined，守卫块从不执行）；`test_naming.py` 把期望串硬编码后再断言常量等于自身。
+- **新套件的真值锚**：每条用例前 `e2e.reset`（`support/serve_e2e_backend.py`）复位到 hoya 基线，并**在启动器内断言复位后确实干净**（有残留即 `RuntimeError` 快速失败；本轮已修 `_reset()` 补 `_init_cleanup()` + `samples_clear()`，否则候选几何跨 spec 泄漏会让 WorkflowPanels 步骤 4 以"复位后仍有候选"假红）；后端配置隔离到临时目录，不碰真实 `~/.straditize/config.json`；`playwright.config.ts` 固定 `locale:'zh-CN'` —— `devices['Desktop Edge']` 会强制 en-US，中文文案断言在非中文系统上会假红（旧套件只因本机恰好是中文才通过）。
+- **层门禁真值表（实测非推导）**：`renderedLayers` 混装"管线层"与 4 个**每帧无条件绘制**的 overlay id（`roi-indicator`/`cleanup-lines-and-exclusions`/`xticks-ruler-overlay`/`sample-horizons-overlay`），按 stage 断言前必须先过滤；`depthGrid`/`yCalibMarks` 只在其绘制函数返回真时才入列，属"状态相关"而非纯 stage。另外 overlay 的 `draw()` 抛异常会被 `GeologyCanvas.render()` **静默吞掉**（该 id 不入列，表现就是"画布上什么都没有"），故 spec 加了"4 个 overlay 必须全部在场"的崩溃报警。
+- **本次新发现（范围外，只报不改）**：① `straditize_core/session.py:1739` 的 `project_new()` 不重置 `line_candidates`/`exclusion_regions`/`line_strokes` —— 探针实测"新建项目"后第 4 步候选几何 **24 条原样留存**，即会把手头项目的清理成果带进下一个项目。② `frontend/src/components/steps/ExportReadinessPanel.ts:41/56/69` 把"根数据归属"写死为 `true`，`DATA_CSV_EQUALS_PRIMARY` 指示灯恒亮、真出错也无信号（该不变量本身确实成立，故不显示错值，但提供不了任何告警）。
+- **下一步原子动作**：P2 收尾 —— 归并/降级 `docs/JSON_RPC_SPECIFICATION.md`；把 4 处裸 `fetch`（`AgeDepthModal.ts:1295`、`MetadataModal.ts:290`、`QaPanel.ts:315`/`247`、`Toolbar.ts:392`）收进 `RpcClient`；Step 4 恢复「灵敏度/阈值」控件。
+- **验证**：`pixi run lint` PASS（8 项一致性核对）｜`pixi run test` **276 passed / 96 subtests**｜`pixi run test-e2e` **25 passed**｜`npm --prefix frontend run build` PASS｜`npm run test:e2e:typecheck` PASS。真实 Edge 手动 A/B 复核：步骤 5 无曲线层，步骤 7 出现绿色 ghosting + 蓝曲线 + 左缘黄锚点。
+
+## [STEP4-CLEANUP] 2026-09-29 05:15 — Step4 五件套 + 遗留四项清零（真实浏览器逐条实测）
+- P1–P3 键位与手柄：Step4 仅 `Delete`/`Backspace` 删几何、`D` 不再删；`↑↓←→` 1px、`Shift` 10px；拖本体位移落库；选中画白方块（端点/长度）+ 青圆点（中边/厚度），拖青点对边锚定不动。`CleanupOverlay.bandOf()` 修竖线 1px 塌陷（`const w`→`let w`）。nudge 有 500ms 防抖，<400ms 读后端会读到旧值。
+- P4–P5 新能力：`algorithm.setLineThickness`（`straditize_core/session_parts/cleanup.py`）按选中/全 ROI 统一厚度且中心行不动，非法值标红不发 RPC；工具栏新增「测量 (M)」。契约已同步 `docs/ARCHITECTURE.md`（键位表 + §7.1 + Step4 RPC 表）。
+- **三处工具模式展示缺陷（前两条是"工具栏缺了微调(S)""几何没视觉显示""自动检测是假的"的总根因）**：① `frontend/src/main.ts` 进 Step4 硬写 `setToolMode('linefix')` —— 用户一进第 4 步手上是橡皮笔刷，点候选线是涂改不是选中，白/青手柄永远够不着，改 `'select'`；② `setWorkflowStage` 直调 `toolModeManager.setMode()` 绕过 `setToolMode()`，高亮与页脚双双卡旧值；③ 同函数在"当前工具恰好等于该步默认工具"时整段跳过，冷启动页脚停在第 1 步写死的「选择 (V)」而高亮在 `pan` —— 抽出 `syncToolModeUi()`，模式仍按门控切、展示每次强制同步。①②已入黑名单节。
+- 四遗留已修：① `straditize_core/rpc_methods/system.py` 抽出 `cleanup_payload()`，零状态分支与载图分支共用同一形状（探针实测键集完全一致、18 键无缺，此前零状态只回 `lineRemoval`）；② 候选 id 改会话级单调计数器 `line_{axis}_{n}`/`manual_{axis}_{n}`，不再把 `at`/`width` 烤进身份（旧 `line_h_819_2px` 改厚度后即说谎），且跨 ROI、跨删除唯一（旧 `manual_{axis}_{len+1}` 删除后撞号）；③ 点画布空白补 `setSelectedGeometryId(null)`（实测 `data-selected-cand-id` 转空、apply-selected 自动禁用）；④ 微调防抖改 `pendingGeometryNudge` 载荷 + `flushPendingGeometryEdits()`。
+- **④ 实测复现了"几何复活"**：微调后 60ms 内删几何，旧实现删除先落地（22→21）、500ms 后延迟 upsert 到达使其**原地复活**（21→22，`at` 还是微调后的 819）。根因：只堵了画布入口而侧栏删除走 RPC 直连，且同步 flush 无法保证顺序。改为 `onGeometryCommit` 可 await + `runCleanupAction`（Step4 全部几何写操作唯一入口）先 `await flushPendingGeometryEdits()` 再执行 —— 同一脚本 `resurrected` 由 `true` 转 `false`，正常微调仍落库（1128→1129）。
+- 验证：`pixi run test` **276 passed / 96 subtests**｜`pixi run lint` PASS（含 6 项一致性核对）｜`npm --prefix frontend run build` PASS｜`npm --prefix frontend test` PASS。**下一步原子动作**：Step4 恢复「灵敏度/阈值」控件；候选 id 换代须 `pixi run app` **重启后端**才生效（旧会话仍是 `line_h_819_2px` 式 id）。
 
 ## [QA-RESTRUCTURE] 2026-09-26 — 门禁改全量、测试三层分目录、配置并入 pyproject
 - 门禁真跑：`pixi run test` 原是手写 16 文件白名单（只覆盖 196/248，且自身 7 红），已改为全量（现 266 项）；CI 补 `npm test`（前端测试此前从不执行）。
@@ -12,18 +29,6 @@
 - 已修（打包与假测试）：`test-core.js` 5 个复刻类全改 `await import` 真模块；`session.py` 范例改读 `straditize_core/assets/age_models/`（已入 package-data 与 PyInstaller datas）；`pyproject` 的 `exclude=["straditize*"]` 因 fnmatch 也匹配 `straditize_core` 致 **wheel 里 0 个 .py**、外加漏配 `ocr/data` 词表——均已修并实测（wheel 55 个 .py + 全部资产）。
 - **真实浏览器逐条取证修复 5 个核心交互/渲染缺陷**：① `onerror` 把加载失败标成已加载 → broken 图 `drawImage` 中断整条 render；② `commitRoi` 不回写 `data.rois[]`；③ `drawYAxisCalibration >=4` 导致 Y 标定无即时反馈；④ `drawPollenCurves >=5` 导致分列早出曲线；⑤ **ROI 与选点全局缺少图谱尺寸钳位**：拖拽/选点/插列可延伸至负数或 2898px 虚空，导致分列向右飞出白布且后端拒绝（已在前后端全链路加上 `[0, imageWidth]` / `[0, imageHeight]` 物理钳位，分列 29 属种 100% 精确落回图谱内）。
 - 本轮新增三道防线与交互层级治理：① 步骤→能力映射收敛到 `core/WorkflowStage.ts`（8 步单一源），配 `test-workflow-stage.mjs` 6 组断言 + e2e 4 条，修 `drawDepthGrid` 守卫；② `window.__straditize` 调试句柄挂载；③ `consistency_check.py` 6 项一致性核对并入 lint；④ **UI 交互层级重构**：修复 `.primary-btn` 样式脱落（灰方块→实体蓝胶囊）、次要操作按钮实体化、纯展示信息框去操作化、属种形态微按钮加 `▾` 下拉线索。**待查**：切到步骤 5 后约 1s 自动跳回 3。**技术债**：111/255 API 零覆盖、21 个 RPC 端点零引用、`project_new` docstring 超范围、18 处非 `import type`。
-
-## [TOPBAR-SETTINGS] 2026-09-26 00:30 — 导出拦截与左栏文字间距两大体验瑕疵优化完成
-- 导出拦截温和化：未提取数据时点击顶栏 [💾 导出]，彻底消除后端原生 -32001 弹窗，平滑打开导出面板并在就绪清单清晰标出待完善项。
-- 属种栏空状态排版：重构 `sidebar-empty-hint` 为弹性纵向布局，设置独立文本容器与 `gap: 10px`，彻底杜绝图标与引导文字挨近重叠。
-- 门禁全绿：Ruff lint PASS，前端打包与自检通过，60 项核心单测 PASS，MS Edge E2E 自动化测试 100% 通过。
-
-## [AUDIT-FIX-UX] 2026-09-25 21:35 — 5大病灶清零、Y1/Y2选点靶心反馈与浮动工具条收敛
-- 病灶清零：网格外推至完整 `[roi.yMin, roi.yMax]`（`SplineInterpolator.ts:183`）；`conftest.py` 隔离临时配置；Step 4 排除区/画笔接线与分列防抖 Loading 完成；`PropertyPanel.ts` 直连后端 `export.tar/csv/r`。
-- Y1/Y2 强视觉反馈：`GeologyCanvas.ts:1968` 绘制 Y1(橙)/Y2(绿) 双环靶心 + 深色胶囊铭牌 + 鼠标实时准星预览；`YCalibPanel.ts` 支持单点/双点实时回填与画布双向联动。
-- 浮动工具栏收敛：移除左下角冗余 `标定(Y)` 与 `ROI(R)`，按当前步骤 `display:none` 动态显隐（`GeologyCanvas.ts:2530`）。
-- 停滞断点：W1–W5 主干（T01–T11, T14）已全部竣工；仅剩延后增强项 T12（`straditize_core/layers.py` 双层放大曲线分层）与年代弹窗手工控制点（`AgeDepthModal.ts`）。
-- 下一步原子动作：若开启 T12，新建 `straditize_core/layers.py` 与 `frontend/src/components/steps/LayersPanel.ts` 实现色相分组双峰阈值分层；否则直接进入发版打包验收（`pixi run build-windows`）。
 
 ## 黑名单（跨会话共享，只追加不覆盖）
 - ❌ 文字/描边严禁写死 `#fff`/`#38bdf8`/`#f59e0b`（日间隐形或低对比），必须用 `--text-heading`/`--accent-*`；**但画布叠加层例外**——它叠在任意用户图上，主题色会消失，须用固定高对比色 + 深色光晕；
@@ -37,8 +42,9 @@
 - ❌ 线去除严禁按「整行/整列占据率」整条删除——必须带**垂直于线方向的厚度上限**（实心花粉轮廓被线穿过处厚达数十像素，必须豁免）；且掩膜只允许后端产生（`overlay_png` 即 B 键所见 = 数字化所用），前端不得另算一套"看起来像去线"的显示逻辑；`strength:"off"` 必须主动清空会话掩膜；
 - ❌ 契约字段只能来自 `docs/plans/2026-09-20-frozen-contracts.md`（**单子不得自行发明字段**）；ROI 上的表单值/继承值严禁被当作事实源；特性单严禁写"无人可写"的共享文件（`support/probe_truth/check_ticket_ownership.py` 机器校验，发单前必须跑通）；掩膜优先级**排除区绝对优先**，restore 落在排除区内必须拒绝或提示，**不得静默无效**。
 - ❌ 严禁用 junction/symlink 把 worktree 的 `frontend/node_modules` 指回主仓库来复用依赖：`git worktree remove --force` 会顺着 reparse point 递归删进去，**直接清空主仓库的包目录**（2026-09-27 实测踩中，靠 `npm ci` 从 lockfile 还原）。worktree 需要依赖就单独 `npm ci`；临时复用完必须先摘链接再 `git worktree remove`。
+- ❌ 步骤切换/工作流推进处**严禁硬写画布工具模式**（如进 Step4 直接 `setToolMode('linefix')`），必须走 `getAllowedTools(stage)[0]` 这一单一事实源，且只能经 `setToolMode()` 落地；直调 `toolModeManager.setMode()` 会跳过 active-mode 高亮与页脚「模式:」同步。硬写曾致用户一进第 4 步手上是橡皮笔刷、点线成涂改、白/青手柄永远够不着，被误判成"工具栏缺了微调(S)""几何没有视觉显示""自动检测是假的"（2026-09-28 实测定位）。
 
 ## 索引
-- 历史归档：`HANDOFF-archive/`（含 `2026-09-20-*`、`2026-09-24-t08/t09/t10`、`2026-09-25-t11-naming.md`、`2026-09-25-error-pdf-start.md`）｜ 规范：`AGENTS.md`
+- 历史归档：`HANDOFF-archive/`（含 `2026-09-20-*`、`2026-09-24-t08/t09/t10`、`2026-09-25-t11-naming.md`、`2026-09-25-error-pdf-start.md`、`2026-09-25-audit-fix-ux.md`、`2026-09-26-topbar-settings.md`）｜ 规范：`AGENTS.md`
 - 设计规范：`docs/ARCHITECTURE.md`（§6.1 ROI/标定数据模型、§7.1 线去除）｜ 协议：`docs/JSON_RPC_SPECIFICATION.md`（§4.6–4.8）
 - **8 步重构三件套**：设计稿 / **冻结契约 v1.3（唯一字段事实源）** / 任务单 v2.1 —— 均在 `docs/plans/2026-09-20-*`

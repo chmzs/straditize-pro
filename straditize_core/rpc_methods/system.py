@@ -26,6 +26,40 @@ def register(dispatcher: Any, session: Any) -> None:
         "system.ping", lambda: {"pong": True, "timestamp": time.time()}
     )
 
+    def cleanup_payload() -> dict[str, Any]:
+        """Cleanup keys that MUST travel with every diagram payload.
+
+        Both branches (zero-state and loaded) return these, and they used to be
+        written out twice — which is exactly how the zero-state branch ended up
+        missing five of them: the frontend then read `undefined` where it meant
+        "empty", so the Step-4 panel was structurally different before any image
+        was loaded. One helper, one shape, no drift.
+        """
+        return {
+            "line_candidates": [
+                dict(c) for c in getattr(session, "line_candidates", []) or []
+            ],
+            "selected_candidate_ids": sorted(
+                getattr(session, "selected_candidate_ids", set()) or set()
+            ),
+            "exclusion_regions": [
+                dict(e) for e in getattr(session, "exclusion_regions", []) or []
+            ],
+            "line_strokes": [
+                dict(s) for s in getattr(session, "line_strokes", []) or []
+            ],
+            "cleanup": {
+                "roi_id": getattr(session, "active_roi_id", None),
+                "stats": getattr(session, "cleanup_stats", {}) or {},
+                "legend": {
+                    "candidate": "#f59e0b",
+                    "removed": "#ef4444",
+                    "exclusion": "#9ca3af",
+                    "kept": "#ffffff",
+                },
+            },
+        }
+
     def get_diagram_data() -> dict[str, Any]:
         """Provides diagram state representation for web frontend.
 
@@ -60,6 +94,7 @@ def register(dispatcher: Any, session: Any) -> None:
                     "remove_vertical": True,
                     "corrections": [],
                 },
+                **cleanup_payload(),
             }
 
         palette = [
@@ -160,24 +195,7 @@ def register(dispatcher: Any, session: Any) -> None:
             # with the diagram payload: the frontend used to hold it only in
             # memory, so every refresh silently reset it to [] and the
             # geometry vanished from the canvas.
-            "line_candidates": [dict(c) for c in getattr(session, "line_candidates", [])],
-            "selected_candidate_ids": sorted(
-                getattr(session, "selected_candidate_ids", set())
-            ),
-            "exclusion_regions": [
-                dict(e) for e in getattr(session, "exclusion_regions", [])
-            ],
-            "line_strokes": [dict(s) for s in getattr(session, "line_strokes", [])],
-            "cleanup": {
-                "roi_id": getattr(session, "active_roi_id", None),
-                "stats": getattr(session, "cleanup_stats", {}),
-                "legend": {
-                    "candidate": "#f59e0b",
-                    "removed": "#ef4444",
-                    "exclusion": "#9ca3af",
-                    "kept": "#ffffff",
-                },
-            },
+            **cleanup_payload(),
         }
 
     dispatcher.register_method("straditize.getDiagramData", get_diagram_data)

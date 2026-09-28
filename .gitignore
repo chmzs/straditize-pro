@@ -23,6 +23,12 @@ frontend/npm-cache/
 
 # playwright temporary artifacts & logs
 .playwright-cli/
+# @playwright/test 的产物：HTML 报告与失败用例的 trace/screenshot，均可由重跑再生
+frontend/playwright-report/
+frontend/test-results/
+# 本地并发运行时的按端口隔离产物目录（test-results-<port>/）
+frontend/test-results-*/
+.playwright-mcp/
 .positron/
 .claude/
 

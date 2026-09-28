@@ -11,6 +11,7 @@ def register(dispatcher: Any, session: Any) -> None:
     dispatcher.register_method("algorithm.detectLineCandidates", session.detect_line_candidates)
     dispatcher.register_method("algorithm.upsertLineGeometry", session.upsert_line_geometry)
     dispatcher.register_method("algorithm.deleteLineGeometry", session.delete_line_geometry)
+    dispatcher.register_method("algorithm.setLineThickness", session.set_line_thickness)
     dispatcher.register_method("algorithm.setGeometryStatus", session.set_line_geometry_status)
     dispatcher.register_method("algorithm.clearCleanupEdits", session.clear_cleanup_edits)
     dispatcher.register_method("algorithm.applyLineRemoval", session.apply_line_removal)

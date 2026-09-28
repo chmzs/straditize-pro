@@ -20,6 +20,8 @@ const COLOR_CANDIDATE_FILL = 'rgba(245, 158, 11, 0.28)';
 const COLOR_REMOVED = 'rgba(239, 68, 68, 0.95)';
 const COLOR_REMOVED_FILL = 'rgba(239, 68, 68, 0.30)';
 const COLOR_SELECTED = '#ffffff';
+/** 厚度手柄配色：与选中行高亮同色的青色，一眼区别于白色端点手柄。 */
+const COLOR_THICKNESS = '#38bdf8';
 
 interface Band {
   x: number;
@@ -29,14 +31,20 @@ interface Band {
 }
 
 /** 把一个 geometry 归一化成世界坐标条带，并施加最小屏幕厚度。 */
-function bandOf(
+/**
+ * 把一个 geometry 归一化成世界坐标条带，并施加最小屏幕厚度。
+ *
+ * 导出供 `GeologyCanvas` 复用：命中测试与绘制必须共用同一套坐标，
+ * 否则薄线的"显示条带"与"真实矩形"会错开，手柄看着抓到、实际抓空。
+ */
+export function bandOf(
   geometry: { x0: number; y0: number; x1: number; y1: number },
   inv: number
 ): Band {
   const minH = MIN_BAND_SCREEN * inv;
   let x = Math.min(geometry.x0, geometry.x1);
   let y = Math.min(geometry.y0, geometry.y1);
-  const w = Math.max(Math.abs(geometry.x1 - geometry.x0), inv);
+  let w = Math.max(Math.abs(geometry.x1 - geometry.x0), inv);
   let h = Math.max(Math.abs(geometry.y1 - geometry.y0), inv);
 
   // 只在"真实厚度"不足时向两侧补足，保持条带中心不变。
@@ -44,19 +52,24 @@ function bandOf(
     y -= (minH - h) / 2;
     h = minH;
   }
+  // 这里原本只挪了 x 却没把 w 撑到 minH —— 竖向 candidate 线因此在缩略视图上
+  // 仍是一根发丝（横向被上面的 h 分支救过，竖向漏了）。补上，与 h 对称。
   if (w < minH) {
     x -= (minH - w) / 2;
+    w = minH;
   }
   return { x, y, w: Math.max(w, inv), h };
 }
 
-/** 绘制选中 geometry 的端点手柄，提示"可以拖动/缩放"。 */
+/** 绘制选中 geometry 的端点手柄，端点=改长度、长边中点=改厚度。 */
 function drawHandles(ctx: CanvasRenderingContext2D, band: Band, axis: 'h' | 'v', inv: number): void {
   const size = HANDLE_SIZE_SCREEN * inv;
   const midX = band.x + band.w / 2;
   const midY = band.y + band.h / 2;
 
-  const points: Array<[number, number]> =
+  // 两种手柄必须一眼可分，否则用户不知道拖哪个：
+  // 白色方形 = 端点 → 改长度(span)；青色圆形 = 长边中点 → 改厚度(width)。
+  const ends: Array<[number, number]> =
     axis === 'h'
       ? [
           [band.x, midY],
@@ -67,14 +80,32 @@ function drawHandles(ctx: CanvasRenderingContext2D, band: Band, axis: 'h' | 'v',
           [midX, band.y + band.h],
         ];
 
+  const thickness: Array<[number, number]> =
+    axis === 'h'
+      ? [
+          [midX, band.y],
+          [midX, band.y + band.h],
+        ]
+      : [
+          [band.x, midY],
+          [band.x + band.w, midY],
+        ];
+
   ctx.save();
   ctx.setLineDash([]);
-  for (const [px, py] of points) {
+  ctx.strokeStyle = 'rgba(15, 23, 42, 0.9)';
+  ctx.lineWidth = 1.5 * inv;
+  for (const [px, py] of ends) {
     ctx.fillStyle = COLOR_SELECTED;
-    ctx.strokeStyle = 'rgba(15, 23, 42, 0.9)';
-    ctx.lineWidth = 1.5 * inv;
     ctx.beginPath();
     ctx.rect(px - size / 2, py - size / 2, size, size);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.fillStyle = COLOR_THICKNESS;
+  for (const [px, py] of thickness) {
+    ctx.beginPath();
+    ctx.arc(px, py, size / 2, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
   }

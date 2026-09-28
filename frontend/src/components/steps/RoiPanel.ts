@@ -123,14 +123,16 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     });
   });
 
-  // 修改 ROI 名称
+  // 修改 ROI 名称（change 与 blur 均触发，防止失焦时未按回车导致重命名丢失）
   const nameInp = root.querySelector('#inp-roi-name') as HTMLInputElement | null;
-  nameInp?.addEventListener('change', () => {
-    const val = nameInp.value.trim();
+  const handleRename = () => {
+    const val = nameInp?.value.trim();
     if (val && ctx.onRenameActiveRoi) {
       ctx.onRenameActiveRoi(val);
     }
-  });
+  };
+  nameInp?.addEventListener('change', handleRename);
+  nameInp?.addEventListener('blur', handleRename);
 
   // 修改 composition 属性
   const compChk = root.querySelector('#chk-roi-composition') as HTMLInputElement | null;

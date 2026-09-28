@@ -107,6 +107,7 @@ ssh -L 8765:127.0.0.1:8765 用户@远端主机
 | `A` / `S` / `D` / `C` | 加点 / 微调 / 删点 / 加列（对齐 WebPlotDigitizer） |
 | `H` / `R` | 抓手平移 / ROI 取数区 |
 | `K` / `Y` | 线掩膜人工修正笔刷 / Y 轴两点标定 |
+| `M` | 像素测量尺（步骤 4）：在图上拖一条线，读出 `Δx / Δy / 距离`（图像像素）|
 | `F` / `Ctrl+1` | 适应屏幕 / 1:1 |
 | `Ctrl+Z` / `Ctrl+Y` | 撤销 / 重做 |
 | `Delete` | 删除选中项 |
@@ -223,6 +224,30 @@ digitize 用 ink & ~grid_line_mask & roi_mask
   实测在内置 Hoya 图上 ROI 墨迹的 **55–70%** 被标成线，其中 **95%** 是 ≥4px 的实心轮廓，
   *Pinus* 列 **99%** 被抹掉——而那张图 ROI 内横向贯穿 run 行数为 **0**，即全是误标。
 - **前端不得自行判定"哪条是线"**：`overlay_png` 是唯一事实源，B 键透视与数字化用的是同一批像素。
+- **几何编辑语义**（步骤 4 画布）：选中几何后有两类手柄，形状与配色必须一眼可分——
+  **白色方块 = 端点，改长度 `span`**；**青色圆点 = 长边中点，改厚度 `width`**。
+  手柄坐标由叠加层 `bandOf()` 统一给出（含薄线的最小屏幕厚度补偿），
+  命中测试与绘制共用同一条带，否则 2px 的真线在缩略视图上会"看着抓到、实际抓空"。
+  拖动整体平移；方向键 1px（`Shift` 10px）精调；改厚度时中心行 `at` 不动，
+  保证原本压对行的线改完仍压对行。
+- **删除键归属**：步骤 4 删除几何**只认 `Delete` / `Backspace`**；`D` 是步骤 5 起的
+  「删点」工具模式，在步骤 4 按下只会给出"尚未启用"提示，绝不删除几何。
+- **统一厚度**：侧栏可填一个像素值，一键把选中 / 本 ROI 全部几何改成该厚度
+  （`algorithm.setLineThickness`）。配合 `M` 测量尺先量后填，避免逐条手调。
+- **候选 id 是不透明身份，不得编码可变事实**：id 由会话级单调计数器铸造
+  （`line_{axis}_{n}` / `manual_{axis}_{n}`），**禁止**再出现 `line_h_{at}_{w}px`
+  这类写法——第一次方向键微调就改了 `at`、改厚度又改了 `width`，id 会一直宣称
+  已经不成立的事实。当前事实一律从 `at` / `width` / `span` / `geometry` 读。
+  且 id 必须**跨 ROI、跨删除全局唯一**（状态切换与删除都按 id 全局匹配），
+  故不能用 `len(line_candidates)+1` 这类会因删除而复用的值来铸造。
+- **待提交的微调必须先落库再执行别的几何写操作**：方向键微调是「本地即时改 +
+  500ms 防抖提交」。所有 Step 4 几何写操作都经前端 `runCleanupAction` 单一入口，
+  它**先 `await flushPendingGeometryEdits()` 再执行动作**。否则两个 RPC 同时在途、
+  顺序无保证：实测微调后 60ms 内删除，删除先落地（22→21），延迟的 upsert 后到，
+  被删的几何**原地复活**（21→22，且带着微调后的 `at`）。
+- **点击画布空白处必须清掉几何选中态**：空白分支要同时清 `selectedEntity` 与
+  `selectedGeometryId`；只清前者会让侧栏那一行持续高亮、画布持续画手柄，
+  表现为"取消了但没取消掉"。
 - 人工修正分两层，**职责不重叠**：
   - **geometry**（承载工具）：整条横/竖线，可增删改、可复用；
   - **笔迹**（修补工具）：只处理 geometry 漏标/误标的**局部像元**，不画线。
@@ -239,6 +264,7 @@ digitize 用 ink & ~grid_line_mask & roi_mask
 | `algorithm.upsertLineGeometry` | 新建（`candidate_id` 为空）或移动/缩放几何 | 清理状态 |
 | `algorithm.deleteLineGeometry` | 删除一条几何 | 清理状态 |
 | `algorithm.setGeometryStatus` | 确认(`removed`) / 撤回(`candidate`) | 清理状态 |
+| `algorithm.setLineThickness` | 把选中(`candidate_id`)/本 ROI 全部几何统一成指定像素厚度，中心行不动 | 清理状态 |
 | `algorithm.clearCleanupEdits` | 清空本 ROI 的几何 + 排除区 + 笔迹 | 清理状态 |
 | `algorithm.applyLineRemoval` | 只重新合成，不改输入 | 清理状态 |
 | `algorithm.degrid` | S2 的档位式自动去线（与 geometry 取并集） | `DegridResult` |

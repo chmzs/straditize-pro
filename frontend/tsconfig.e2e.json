@@ -1,0 +1,19 @@
+{
+  /*
+   * e2e 测试与 Playwright 配置的独立类型检查面。
+   *
+   * 为什么不塞进 `tsconfig.json`：那个配置的 `include` 只有 `src`，而 `npm run
+   * build` 会跑 `tsc`。把 `e2e/` 并进去会让**生产构建**依赖测试工具链
+   * （`@playwright/test`、Node 内置模块），并使 `noUnusedLocals` 之类的严格项
+   * 作用于测试代码。分开之后：构建门禁管产品代码，`test:e2e:typecheck` 管测试代码。
+   *
+   * `types: ["node"]` 是必需的 —— smoke.spec.ts 用 `node:crypto` / `node:fs`
+   * 校验样本真值，playwright.config.ts 用 `node:url` 求仓库根路径。
+   */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["e2e/**/*.ts", "playwright.config.ts"]
+}

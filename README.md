@@ -222,8 +222,8 @@ straditize-pro/
 │   ├── quarantine.txt            # 已知失败用例隔离区（strict xfail，只减不增）
 │   ├── unit/                     # 21 个文件：直接调 straditize_core API
 │   ├── integration/              # 6 个文件：经 JSON-RPC dispatcher / HTTP 传输
-│   ├── e2e/                      # Playwright 真实 MS Edge 浏览器 E2E 交互测试
 │   └── data/                     # 测试夹具：figures / truth / corpus
+├── frontend/e2e/                 # 真实浏览器 E2E（@playwright/test + 系统 MS Edge）
 ├── scripts/                      # 手工验收、基准与下载脚本（不被 pytest 收集）
 ├── pixi.toml                     # 项目环境、任务与依赖声明
 ├── start_straditize.bat          # Windows 桌面模式双击启动器
@@ -251,11 +251,20 @@ npm --prefix frontend run build
 
 # 4. 前端核心功能自检 (Node)
 npm --prefix frontend test
+
+# 5. 真实浏览器 E2E（@playwright/test，驱动系统已装 MS Edge）
+pixi run test-e2e
+npm --prefix frontend run test:e2e:typecheck   # e2e 代码的类型检查
 ```
 
 > 现代版测试位于仓库根 `tests/`，而非上游遗留的 `straditize/tests/`
 > （后者只属于那条 PyQt5 分支，当前环境缺依赖跑不起来）。
 > 其中 `tests/integration/test_no_fabrication.py` 专门守卫"不得返回替代数据"这条不变量。
+>
+> 浏览器 E2E 在 `frontend/e2e/`：`playwright.config.ts` 的 `webServer` 会自动拉起
+> 一个隔离后端（`support/serve_e2e_backend.py`，默认端口 8799），每条用例前经
+> `e2e.reset` 复位到 hoya 基线，因此不依赖、也不干扰你手工打开的 8765 实例。
+> 需要本机已装 Edge 与 Node ≥ 20；不需要 `playwright install`。
 
 ---
 

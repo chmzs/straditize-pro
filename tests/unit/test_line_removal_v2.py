@@ -210,3 +210,142 @@ def test_hoya_real_regression():
     removed_ratio = pinus_removed / max(1, pinus_ink_before)
     print(f"\nHoya Pinus ink removal ratio: {removed_ratio * 100:.2f}% (removed {pinus_removed} / {pinus_ink_before})")
     assert removed_ratio < 0.01, f"Pinus removal ratio {removed_ratio:.4f} exceeded 1%!"
+
+
+def test_set_line_thickness_keeps_centre_and_is_uniform():
+    """统一厚度：中心行一个都不动、全部几何被改成同一厚度，派生字段同步刷新。"""
+    session = StraditizeSession()
+    session.foreground_mask = np.zeros((100, 100), dtype=bool)
+    session.image = object()
+    session._init_rois()
+    roi = session.roi_create(name="pollen", x0=0, x1=100, y0=0, y1=100)["roi"]
+
+    # 三条中心行与厚度都不同的横向几何
+    specs = [(40, 1), (60, 4), (80, 7)]  # (中心行, 厚度)
+    ids = []
+    for centre, thick in specs:
+        half = (thick - 1) // 2
+        res = session.upsert_line_geometry(
+            roi_id=roi["id"],
+            axis="h",
+            geometry={
+                "type": "rect",
+                "x0": 10,
+                "y0": centre - half,
+                "x1": 90,
+                "y1": centre - half + thick - 1,
+            },
+        )
+        new = next(
+            c for c in res["candidates"] if c["source"] == "manual" and c["at"] == centre
+        )
+        ids.append(new["id"])
+
+    # 统一改成 5px
+    res = session.set_line_thickness(5, roi_id=roi["id"])
+    assert {c["width"] for c in res["candidates"]} == {5}
+    # 中心行一个都没挪 —— 这条是"中心线不动"的核心保证
+    assert {c["at"] for c in res["candidates"]} == {40, 60, 80}
+
+    # 只改选中那条
+    res = session.set_line_thickness(9, candidate_id=ids[0], roi_id=roi["id"])
+    by_id = {c["id"]: c for c in res["candidates"]}
+    assert by_id[ids[0]]["width"] == 9
+    assert by_id[ids[0]]["at"] == 40
+    assert by_id[ids[1]]["width"] == 5
+
+    # 越界必须显式报错，不静默夹逼
+    for bad in (0, -3, 501):
+        try:
+            session.set_line_thickness(bad, roi_id=roi["id"])
+        except ValueError:
+            continue
+        raise AssertionError(f"thickness={bad} 应当报错")
+
+
+def test_set_line_thickness_vertical_uses_x_axis():
+    """竖向几何改厚度动的是 x 跨度，中心列不动。"""
+    session = StraditizeSession()
+    session.foreground_mask = np.zeros((100, 100), dtype=bool)
+    session.image = object()
+    session._init_rois()
+    roi = session.roi_create(name="pollen", x0=0, x1=100, y0=0, y1=100)["roi"]
+
+    res = session.upsert_line_geometry(
+        roi_id=roi["id"],
+        axis="v",
+        geometry={"type": "rect", "x0": 48, "y0": 10, "x1": 49, "y1": 90},
+    )
+    # 中心列 (48+49)//2 = 48，half=(6-1)//2=2 -> x0=46,x1=51
+    res = session.set_line_thickness(6, roi_id=roi["id"])
+    cand = res["candidates"][0]
+    assert cand["width"] == 6
+    assert cand["at"] == 48
+    assert cand["geometry"]["x0"] == 46
+    assert cand["geometry"]["x1"] == 51
+    assert cand["geometry"]["y0"] == 10
+    assert cand["geometry"]["y1"] == 90
+
+
+def test_candidate_id_never_encodes_mutable_facts():
+    """id 是身份，不是标签：微调/改厚度都不得让 id 变得不实。
+
+    回归的是 ``f"line_h_{at}_{w}px"`` —— 第一次方向键微调就让 ``at`` 变了，
+    改厚度又让 ``width`` 变了，于是 id 一直宣称着早已不成立的事实。
+    """
+    session = StraditizeSession()
+    session.foreground_mask = np.zeros((100, 100), dtype=bool)
+    session.image = object()
+    session._init_rois()
+    roi = session.roi_create(name="pollen", x0=0, x1=100, y0=0, y1=100)["roi"]
+
+    res = session.upsert_line_geometry(
+        roi_id=roi["id"],
+        axis="h",
+        geometry={"type": "rect", "x0": 10, "y0": 40, "x1": 90, "y1": 40},
+    )
+    cid = res["candidates"][0]["id"]
+    # 身份不得随时间/可变状态漂移：改厚度、挪中心行，id 都不许变
+    assert session.set_line_thickness(7, roi_id=roi["id"])["candidates"][0]["id"] == cid
+    moved = session.upsert_line_geometry(
+        roi_id=roi["id"],
+        axis="h",
+        candidate_id=cid,
+        geometry={"type": "rect", "x0": 10, "y0": 70, "x1": 90, "y1": 76},
+    )
+    assert next(c for c in moved["candidates"] if c["id"] == cid)["at"] == 73
+    assert [c["id"] for c in moved["candidates"]] == [cid]
+    # id 里不该再出现会过期的 at / 宽度
+    assert "px" not in cid
+
+
+def test_candidate_ids_unique_across_rois_and_after_delete():
+    """按 id 查找是全局的，所以 id 必须跨 ROI、跨删除都不撞。"""
+    session = StraditizeSession()
+    session.foreground_mask = np.zeros((100, 100), dtype=bool)
+    session.image = object()
+    session._init_rois()
+    roi_a = session.roi_create(name="a", x0=0, x1=100, y0=0, y1=100)["roi"]
+    roi_b = session.roi_create(name="b", x0=0, x1=100, y0=0, y1=100)["roi"]
+
+    ids = []
+    for roi in (roi_a, roi_b):
+        for y0, y1 in ((30, 30), (60, 62)):
+            res = session.upsert_line_geometry(
+                roi_id=roi["id"],
+                axis="h",
+                geometry={"type": "rect", "x0": 10, "y0": y0, "x1": 90, "y1": y1},
+            )
+            ids.append(res["candidates"][-1]["id"])
+    assert len(set(ids)) == len(ids), f"id 跨 ROI 撞了: {ids}"
+
+    # 删一条再加一条：旧实现用 len(line_candidates)+1，会重新铸出仍然存在的 id
+    session.delete_line_geometry(candidate_id=ids[0], roi_id=roi_a["id"])
+    res = session.upsert_line_geometry(
+        roi_id=roi_a["id"],
+        axis="h",
+        geometry={"type": "rect", "x0": 10, "y0": 84, "x1": 90, "y1": 84},
+    )
+    live = [c["id"] for c in res["candidates"]]
+    assert len(set(live)) == len(live), f"删除后重铸撞了 id: {live}"
+    assert res["candidates"][-1]["id"] not in ids

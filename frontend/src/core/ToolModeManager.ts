@@ -87,6 +87,13 @@ export class ToolModeManager {
           hint: t('tool.linefixHint'),
           cursor: 'crosshair',
         };
+      case 'measure':
+        return {
+          name: t('tool.measureName'),
+          shortcut: t('tool.measureShortcut'),
+          hint: t('tool.measureHint'),
+          cursor: 'crosshair',
+        };
       default:
         return {
           name: t('tool.selectName'),

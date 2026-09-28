@@ -30,6 +30,7 @@ import {
 } from '../core/Commands';
 import { t, onLocaleChange } from '../i18n';
 
+import { bandOf } from './canvas/CleanupOverlay';
 export interface CanvasEventCallbacks {
   onTaxaChange?: (taxaId: string) => void;
   onDataChange?: () => void;
@@ -52,7 +53,7 @@ export interface CanvasEventCallbacks {
     id: string | null,
     axis: 'h' | 'v',
     rect: { x0: number; y0: number; x1: number; y1: number }
-  ) => void;
+  ) => void | Promise<void>;
   /** Step 4：geometry 选中态变化（面板同步高亮）。 */
   onGeometrySelected?: (id: string | null) => void;
   /** Step 4：删除一条 geometry。 */
@@ -123,7 +124,7 @@ export class GeologyCanvas {
   private selectedGeometryId: string | null = null;
   private geometryDrag: {
     id: string;
-    handle: 'move' | 'start' | 'end';
+    handle: 'move' | 'start' | 'end' | 'thick0' | 'thick1';
     startWorld: Point2D;
     startRect: { x0: number; y0: number; x1: number; y1: number };
   } | null = null;
@@ -194,7 +195,25 @@ export class GeologyCanvas {
   }
 
   public setToolMode(mode: ToolMode): void {
+    if (mode !== 'measure' && (this.measureDrag || this.measureLine)) {
+      // 离开测量模式就收起测量尺，避免一条青色辅助线永久赖在画布上。
+      this.measureDrag = null;
+      this.measureLine = null;
+      this.requestRender();
+    }
     this.toolModeManager.setMode(mode);
+    this.syncToolModeUi(mode);
+  }
+
+  /**
+   * 把工具模式同步到界面（浮动条高亮 + 页脚「模式:」）。幂等，可重复调用。
+   *
+   * 与 `setToolMode` 拆开，是因为「当前用哪个工具」和「界面有没有如实显示它」
+   * 是两件事：浮动条的初始 HTML 把 `active-mode` 写死在 select 上、页脚把
+   * 「选择 (V)」写死在初始 HTML 里，而各步的真实默认工具未必是 select。只切
+   * 模式而不强制刷展示时，初始状态恰好已等于默认工具的场景就会两者同时说谎。
+   */
+  private syncToolModeUi(mode: ToolMode): void {
     this.updateCursor();
     if (this.floatingToolbar) {
       this.floatingToolbar.querySelectorAll('[data-fmode]').forEach((el) => {
@@ -252,6 +271,12 @@ export class GeologyCanvas {
           <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
         </svg>
         <span>${t('tool.pan')}</span>
+      </button>
+      <button class="floating-tool-btn" data-fmode="measure" title="${t('tool.measureHint')}">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 17 17 3l4 4L7 21z"/><path d="m8 12 2 2M11 9l2 2M14 6l2 2"/>
+        </svg>
+        <span>${t('tool.measure')}</span>
       </button>
       <button class="floating-tool-btn" data-fmode="linefix" title="${t('tool.linefixHint')}">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
@@ -334,6 +359,10 @@ export class GeologyCanvas {
   }
 
   public loadNewDiagram(newData: DiagramData): void {
+    // 方向键微调是「本地即时改 + 500ms 防抖提交」。数据刷新会整块替换 this.data，
+    // 所以必须**先**把待提交的改动落库，否则防抖窗口内的最后一次微调会被这次刷新
+    // 无声吃掉（本地改动被覆盖、闭包又还没发出去）。
+    void this.flushPendingGeometryEdits();
     this.data = newData;
     // 选中态是画布 UI 状态：数据刷新后若该 geometry 已不存在就必须清掉，
     // 否则 CleanupOverlay 会为一个悬空 id 画手柄。
@@ -354,6 +383,15 @@ export class GeologyCanvas {
   }
 
   public loadImage(src: string): void {
+    if (!src) {
+      this.isImageLoaded = false;
+      this.diagramImage = null;
+      this.setLineOverlay(null);
+      this.updateEmptyStateVisibility();
+      this.requestRender();
+      return;
+    }
+
     this.isImageLoaded = false;
     this.diagramImage = new Image();
     this.diagramImage.crossOrigin = 'anonymous';
@@ -701,7 +739,11 @@ export class GeologyCanvas {
       e.code === 'ArrowLeft' ||
       e.code === 'ArrowRight'
     ) {
-      if (this.data.selectedEntity) {
+      // 步骤 4 的 geometry 选中也要能用方向键精调 —— tooltip 早就承诺了
+      // "方向键 1px 精调"，但入口此前只认 selectedEntity（控制点/列），几何被挡在外面。
+      const geoNudge =
+        this.workflowStage === STAGE.CLEANUP && !!this.selectedGeometryId && !this.data.selectedEntity;
+      if (this.data.selectedEntity || geoNudge) {
         e.preventDefault();
         const step = e.shiftKey ? 10 : 1;
         let dx = 0;
@@ -710,19 +752,19 @@ export class GeologyCanvas {
         if (e.code === 'ArrowRight') dx = step;
         if (e.code === 'ArrowUp') dy = -step;
         if (e.code === 'ArrowDown') dy = step;
-        this.nudgeSelectedEntity(dx, dy);
+        if (geoNudge) {
+          this.nudgeSelectedGeometry(dx, dy);
+        } else {
+          this.nudgeSelectedEntity(dx, dy);
+        }
         return;
       }
     }
 
-    // 1b. 删除选中的 Step 4 geometry
+    // 1b. 删除选中的 Step 4 geometry（Delete / Backspace）
     if ((e.code === 'Delete' || e.code === 'Backspace') && this.selectedGeometryId) {
       e.preventDefault();
-      const id = this.selectedGeometryId;
-      this.selectedGeometryId = null;
-      this.data.cleanup_selected_id = null;
-      this.callbacks.onGeometryDelete?.(id);
-      this.requestRender();
+      void this.deleteSelectedGeometry();
       return;
     }
 
@@ -743,12 +785,27 @@ export class GeologyCanvas {
         this.notifyNotice('切换工具: 添加控制点 (A) - 点击左键插入锚点');
         return;
       }
-      // D: 删除控制点模式 (Delete Point)
+      // D: 步骤 4 已选中几何时 = 删除该几何（与 Delete 键等价）；
+      //    其余情况仍是"删除控制点"工具（步骤 5 起可用）。
+      //    步骤 4 没有"删点"工具，所以 D 在这里不该被 eraser 门禁吞掉。
       if (e.code === 'KeyD') {
         e.preventDefault();
         if (!this.guardTool('eraser')) return;
         this.setToolMode('eraser');
         this.notifyNotice('切换工具: 删除控制点 (D) - 点击左键删除锚点或列');
+        return;
+      }
+      // M: 像素测量尺 —— 量干扰线实际有多粗，再把数字填进侧栏"统一厚度"
+      if (e.code === 'KeyM') {
+        e.preventDefault();
+        if (!this.guardTool('measure')) return;
+        if (this.toolModeManager.getMode() === 'measure') {
+          this.setToolMode('select');
+          this.notifyNotice('已退出测量尺');
+          return;
+        }
+        this.setToolMode('measure');
+        this.notifyNotice('测量尺 (M): 在图上按住左键拖一条线，读出 Δx / Δy / 距离 (px)');
         return;
       }
       // C: 添加属种列 (Column)
@@ -1114,6 +1171,14 @@ export class GeologyCanvas {
         return;
       }
 
+      // ================= 2.55 测量尺 (Measure) =================
+      if (mode === 'measure') {
+        this.measureDrag = { a: { x: worldPt.x, y: worldPt.y }, b: { x: worldPt.x, y: worldPt.y } };
+        this.measureLine = null;
+        this.requestRender();
+        return;
+      }
+
       // ================= 2.7 Step 4 geometry 拖拽新建 / 选中编辑 =================
       // 优先于 ROI 手柄：geometry 是 Step 4 的主角，ROI 边框不该抢命中。
       const createAxis = this.getGeometryCreateAxis();
@@ -1258,6 +1323,9 @@ export class GeologyCanvas {
       this.hoveredBoundary = null;
       this.hoveredRoiHandle = null;
       this.data.selectedEntity = null;
+      // Step 4 的 geometry 选中态也必须一起清，否则点空白之后侧栏那一行仍然高亮、
+      // 画布仍画着手柄，用户以为"取消不掉"（此前只清了 selectedEntity）。
+      this.setSelectedGeometryId(null);
       this.updateCursor();
       this.requestRender();
       this.callbacks.onDataChange?.();
@@ -1265,6 +1333,14 @@ export class GeologyCanvas {
   }
 
   private onMouseMove(e: MouseEvent): void {
+    // 测量尺拖拽中：实时更新终点，松手前的读数就已经是准的。
+    if (this.measureDrag) {
+      const pt = this.viewport.screenToWorld(this.getCanvasPoint(e));
+      this.measureDrag.b = { x: pt.x, y: pt.y };
+      this.requestRender();
+      return;
+    }
+
     const screenPt = this.getCanvasPoint(e);
     const deltaX = screenPt.x - this.lastMouseScreen.x;
     const deltaY = screenPt.y - this.lastMouseScreen.y;
@@ -1367,16 +1443,24 @@ export class GeologyCanvas {
         if (drag.handle === 'move') {
           next = { x0: r.x0 + dx, y0: r.y0 + dy, x1: r.x1 + dx, y1: r.y1 + dy };
         } else if (cand.axis === 'h') {
-          // 横向线：端点手柄只改 x 范围（线是全宽的，不让人误改成半截）
-          next =
-            drag.handle === 'start'
-              ? { ...r, x0: r.x0 + dx }
-              : { ...r, x1: r.x1 + dx };
+          // 端点手柄改长度，长边中点手柄改厚度。
+          if (drag.handle === 'start') next = { ...r, x0: r.x0 + dx };
+          else if (drag.handle === 'end') next = { ...r, x1: r.x1 + dx };
+          else if (drag.handle === 'thick0') next = { ...r, y0: r.y0 + dy };
+          else next = { ...r, y1: r.y1 + dy };
         } else {
-          next =
-            drag.handle === 'start'
-              ? { ...r, y0: r.y0 + dy }
-              : { ...r, y1: r.y1 + dy };
+          if (drag.handle === 'start') next = { ...r, y0: r.y0 + dy };
+          else if (drag.handle === 'end') next = { ...r, y1: r.y1 + dy };
+          else if (drag.handle === 'thick0') next = { ...r, x0: r.x0 + dx };
+          else next = { ...r, x1: r.x1 + dx };
+        }
+
+        // 厚度塌缩到 0 会让反掩膜抠不到任何像元，至少保留 1px。
+        if (cand.axis === 'h' && Math.abs(next.y1 - next.y0) < 1) {
+          next = drag.handle === 'thick0' ? { ...next, y0: next.y1 - 1 } : { ...next, y1: next.y0 + 1 };
+        }
+        if (cand.axis === 'v' && Math.abs(next.x1 - next.x0) < 1) {
+          next = drag.handle === 'thick0' ? { ...next, x0: next.x1 - 1 } : { ...next, x1: next.x0 + 1 };
         }
 
         cand.geometry = { type: 'rect', ...next };
@@ -1494,6 +1578,23 @@ export class GeologyCanvas {
   }
 
   private onMouseUp(_e: MouseEvent): void {
+    // 测量尺落定：固化成可读结果（留在画布上），并在 HUD 报出读数。
+    if (this.measureDrag) {
+      const m = this.measureDrag;
+      this.measureDrag = null;
+      this.measureLine = m;
+      const dx = Math.abs(m.b.x - m.a.x);
+      const dy = Math.abs(m.b.y - m.a.y);
+      const dist = Math.hypot(dx, dy);
+      // 一端明显短的那一向就是"横跨线"的方向，也就是线宽。给一句人话提示。
+      const thin = dx > 0 && dy > 0 && Math.min(dx, dy) <= 12 && Math.max(dx, dy) > 12;
+      this.notifyNotice(
+        `📏 测量: Δx ${dx.toFixed(1)} · Δy ${dy.toFixed(1)} · 距离 ${dist.toFixed(1)} px` +
+          (thin ? `（横跨方向的 ${Math.min(dx, dy).toFixed(1)}px 即线宽，可填入侧栏"统一厚度"）` : '')
+      );
+      this.requestRender();
+    }
+
     if (this.lineFixPoints && this.lineFixPoints.length > 0) {
       const stroke: LineMaskStroke = {
         id: `stroke_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -1658,6 +1759,90 @@ export class GeologyCanvas {
         }, 500);
       }
     }
+  }
+
+  private geometryNudgeTimer: number | null = null;
+  /** 防抖窗口内待提交的微调；与回调闭包解耦，flush 时按此载荷提交。 */
+  private pendingGeometryNudge: {
+    id: string;
+    axis: 'h' | 'v';
+    rect: { x0: number; y0: number; x1: number; y1: number };
+  } | null = null;
+
+  /**
+   * 立刻把待提交的方向键微调落库（无待提交时为空操作）。**必须 await**。
+   *
+   * 防抖是为了不把 RPC 打爆，但防抖窗口内的改动不能是「薛定谔的改动」：只要
+   * 后面还有别的几何写操作（删除 / 改厚度 / 重扫 / 清空），就必须先让它落地。
+   *
+   * 为什么必须是 async 而不是"发出去就算"：`onGeometryCommit` 内部要走一次 RPC。
+   * 若只同步发起，微调的 upsert 与随后的 delete 会同时在途、顺序无保证 —— 实测
+   * 复现过 delete 先到、延迟的 upsert 后到，于是被删掉的几何**原地复活**。
+   *
+   * 先把 `pendingGeometryNudge` 清空再回调，故回调内部再次调用本函数会立即返回，
+   * 不会无限递归（runCleanupAction 内部也会 flush 一次）。
+   */
+  public async flushPendingGeometryEdits(): Promise<void> {
+    if (this.geometryNudgeTimer) {
+      clearTimeout(this.geometryNudgeTimer);
+      this.geometryNudgeTimer = null;
+    }
+    const pending = this.pendingGeometryNudge;
+    if (!pending) return;
+    this.pendingGeometryNudge = null;
+    await this.callbacks.onGeometryCommit?.(pending.id, pending.axis, pending.rect);
+  }
+
+  /** 测量尺（M）：拖拽中的临时线段。世界坐标。 */
+  private measureDrag: { a: Point2D; b: Point2D } | null = null;
+  /** 测量尺（M）：已落定的测量结果，松手后保留供读数。世界坐标。 */
+  private measureLine: { a: Point2D; b: Point2D } | null = null;
+
+  /**
+   * 方向键微调选中的 geometry（步骤 4）。
+   *
+   * 与 `nudgeSelectedEntity` 同构：先本地即时改（跟手、不卡），连按停止 500ms 后
+   * 才提交后端——否则按住方向键会把 RPC 打爆。
+   */
+  public nudgeSelectedGeometry(dx: number, dy: number): void {
+    const id = this.selectedGeometryId;
+    if (!id) return;
+    const cand = (this.data.line_candidates || []).find((c) => c.id === id);
+    const g = cand?.geometry;
+    if (!cand || !g) return;
+
+    const next = {
+      type: 'rect' as const,
+      x0: g.x0 + dx,
+      y0: g.y0 + dy,
+      x1: g.x1 + dx,
+      y1: g.y1 + dy,
+    };
+    cand.geometry = next;
+    // 同步派生显示字段，面板读数不滞后。
+    if (cand.axis === 'h') cand.at = Math.round((next.y0 + next.y1) / 2);
+    else cand.at = Math.round((next.x0 + next.x1) / 2);
+    this.requestRender();
+    const d = [
+      dx !== 0 ? `${dx > 0 ? '+' : ''}${dx}px` : '',
+      dy !== 0 ? `${dy > 0 ? '+' : ''}${dy}px` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    this.notifyNotice(`微调几何: ${d}`);
+
+    // 载荷存在字段里，而不是靠回调闭包捕获 next：数据刷新会先 flush（见
+    // loadNewDiagram），随后 this.data 被整块替换，闭包里的 next 就不再是权威值。
+    this.pendingGeometryNudge = {
+      id,
+      axis: cand.axis,
+      rect: { x0: next.x0, y0: next.y0, x1: next.x1, y1: next.y1 },
+    };
+    if (this.geometryNudgeTimer) clearTimeout(this.geometryNudgeTimer);
+    this.geometryNudgeTimer = window.setTimeout(() => {
+      // 走同一个 flush，保证"防抖到期提交"与"被别的操作逼着提交"两条路径行为一致。
+      void this.flushPendingGeometryEdits();
+    }, 500);
   }
 
   private onContextMenu(e: MouseEvent): void {
@@ -1917,6 +2102,12 @@ export class GeologyCanvas {
       this.lastRenderedLayers.add('geometryCreatePreview');
     }
 
+    // 7.1b 测量尺（M）
+    if (this.measureDrag || this.measureLine) {
+      this.drawMeasureRuler(ctx);
+      this.lastRenderedLayers.add('measureRuler');
+    }
+
     // 7.2 自动收集并调用注册叠加层 (W3 叠加层扩展点)
     // 叠加层在世界坐标下绘制（见 `canvas/_registry.ts` 的坐标契约）。
     // 逐个 try/catch 而不是整体包一层：一个叠加层出错不能再连累其他叠加层，
@@ -2017,13 +2208,15 @@ export class GeologyCanvas {
         ctx.drawImage(this.lineOverlayImage, 0, 0, w, h);
         ctx.restore();
       }
-    } else {
+    } else if (this.data.imageSrc) {
+      // 仅在已声明图谱路径但尚未完成解码的短暂瞬间展示加载占位；
+      // 未载入任何图片时（S0/S1 空态）绝不画任何假框或'正在载入'文字，由 emptyStateOverlay 接管引导。
       ctx.save();
       ctx.fillStyle = isLight ? '#f8fafc' : '#1e293b';
       ctx.fillRect(0, 0, this.data.imageWidth || 1600, this.data.imageHeight || 1000);
       ctx.fillStyle = isLight ? '#64748b' : '#94a3b8';
-      ctx.font = '24px sans-serif';
-      ctx.fillText('正在载入地质图谱...', 400, 400);
+      ctx.font = '16px sans-serif';
+      ctx.fillText('正在解码地质图谱...', 40, 60);
       ctx.restore();
     }
   }
@@ -2700,19 +2893,28 @@ export class GeologyCanvas {
   }
 
   public setWorkflowStage(stage: number): void {
+    // 换步之前先把待提交的微调落库（切步后 this.data 会被刷新覆盖）。
+    if (this.workflowStage !== stage) void this.flushPendingGeometryEdits();
+    const stageChanged = this.workflowStage !== stage;
     this.workflowStage = stage;
     this.updateEmptyStateVisibility();
     this.updateFloatingToolbarForStage(stage);
-    // 切换步骤时自动激活该步骤对应的默认主画布工具
-    if (stage === STAGE.LOAD) {
-      this.toolModeManager.setMode('pan');
-    } else if (stage === STAGE.ROI) {
-      this.toolModeManager.setMode('roi');
-    } else if (stage === STAGE.Y_CALIB) {
-      this.toolModeManager.setMode('ycalib');
-    } else if (!this.isToolAllowed(this.toolModeManager.getMode(), stage)) {
-      const allowed = this.getAllowedTools(stage);
-      this.toolModeManager.setMode(allowed[0] || 'pan');
+    // 进入某一步时激活该步的默认主画布工具（`getAllowedTools` 的首位，
+    // 与旧的 LOAD→pan / ROI→roi / Y_CALIB→ycalib 三个特例逐一对应）。
+    //
+    // 两个约束，缺一个就会退回历史投诉的样子：
+    // ① 必须走 `setToolMode()`，不能直接 `toolModeManager.setMode()`——后者只改内部
+    //    状态，跳过 active-mode 高亮与页脚「模式:」的同步，于是工具条高亮/页脚卡在
+    //    上一个工具上（"工具条缺了微调(S)"、"模式不对"的真身之一）。
+    // ② 只在**真的换了步**时才重置。`updateWorkflowBar()` 会被数据刷新反复调用，
+    //    无条件重置会在用户干活时把工具抢走。
+    const allowed = this.getAllowedTools(stage);
+    if (stageChanged || !allowed.includes(this.toolModeManager.getMode())) {
+      this.setToolMode(allowed[0] || 'pan');
+    } else {
+      // 模式不用切，但展示仍要重刷：浮动条与页脚的初值都是写死的 HTML，
+      // 冷启动时当前工具恰好等于该步默认工具，就会「高亮在 A、页脚写 B」。
+      this.syncToolModeUi(this.toolModeManager.getMode());
     }
     this.updateCursor();
     this.requestRender();
@@ -2819,7 +3021,7 @@ export class GeologyCanvas {
     // 拖端点改范围，全靠 select 模式；只给 linefix 会表现为「工具栏缺了微调(S)」。
     // select 放首位 = 进入步骤 4 的默认工具；画笔(修线 K)是局部修补的备用工具，
     // 不该抢默认。新建几何走 drawLineH/drawLineV，由侧栏按钮触发，不占按钮位。
-    if (stage === STAGE.CLEANUP) return ['select', 'linefix', 'pan'];
+    if (stage === STAGE.CLEANUP) return ['select', 'measure', 'linefix', 'pan'];
     if (stage === STAGE.SPLIT) return ['addCol', 'eraser', 'select', 'pan'];
     if (stage === STAGE.CALIBRATE_COLUMNS) return ['select', 'addCol', 'eraser', 'pan'];
     return ['select', 'addPoint', 'eraser', 'pan'];
@@ -2925,6 +3127,24 @@ export class GeologyCanvas {
     this.callbacks.onGeometrySelected?.(id);
   }
 
+  /**
+   * 删除当前选中的 Step 4 geometry（Delete/Backspace 与步骤 4 的 D 键共用）。
+   *
+   * 顺序很关键：先 `setSelectedGeometryId(null)` 再回调删除。前者会立刻通知
+   * 侧栏重绘取消高亮，后者异步刷新清单把那一行移除；反过来的话，删完几何后
+   * 侧栏那一行还会亮着（选中 id 指向一个已不存在的几何）。
+   */
+  private async deleteSelectedGeometry(): Promise<void> {
+    const id = this.selectedGeometryId;
+    if (!id) return;
+    // 必须先 await 微调落库再删：同步发起的话两个 RPC 同时在途，删除可能先落地，
+    // 随后到达的 upsert 会把这条几何重新写回来。
+    await this.flushPendingGeometryEdits();
+    this.setSelectedGeometryId(null);
+    this.callbacks.onGeometryDelete?.(id);
+    this.requestRender();
+  }
+
   /** 当前是否处于"拖拽新建 geometry"模式。 */
   public getGeometryCreateAxis(): 'h' | 'v' | null {
     const mode = this.toolModeManager.getMode();
@@ -2936,7 +3156,7 @@ export class GeologyCanvas {
   /** 命中测试：返回鼠标下的 geometry id 与抓取的手柄。 */
   private findHitGeometry(
     worldPt: Point2D
-  ): { id: string; handle: 'move' | 'start' | 'end' } | null {
+  ): { id: string; handle: 'move' | 'start' | 'end' | 'thick0' | 'thick1' } | null {
     const inv = 1 / (this.viewport.scale || 1);
     const pad = this.GEOMETRY_HIT_PAD_SCREEN * inv;
     const handleR = (this.GEOMETRY_HANDLE_SIZE_SCREEN * inv) / 2 + 2 * inv;
@@ -2956,15 +3176,26 @@ export class GeologyCanvas {
 
       // 已选中的 geometry 先判手柄，否则细线端点永远抓不住。
       if (c.id === this.selectedGeometryId) {
-        const handles: Array<['start' | 'end', Point2D]> =
+        // 手柄必须落在 CleanupOverlay 实际画出来的位置：薄线真实只有 2px、
+        // 显示被撑到 8px，若按真实矩形做命中就会"看着抓到、实际抓空"。
+        const band = bandOf(g, inv);
+        const bMidX = band.x + band.w / 2;
+        const bMidY = band.y + band.h / 2;
+        const handles: Array<['start' | 'end' | 'thick0' | 'thick1', Point2D]> =
           c.axis === 'h'
             ? [
+                // 端点：改长度
                 ['start', { x: x0, y: midY }],
                 ['end', { x: x1, y: midY }],
+                // 长边中点：改厚度
+                ['thick0', { x: bMidX, y: band.y }],
+                ['thick1', { x: bMidX, y: band.y + band.h }],
               ]
             : [
                 ['start', { x: midX, y: y0 }],
                 ['end', { x: midX, y: y1 }],
+                ['thick0', { x: band.x, y: bMidY }],
+                ['thick1', { x: band.x + band.w, y: bMidY }],
               ];
         for (const [key, pt] of handles) {
           if (Math.hypot(worldPt.x - pt.x, worldPt.y - pt.y) <= handleR) {
@@ -2986,6 +3217,72 @@ export class GeologyCanvas {
   }
 
   /** 拖拽新建 geometry 时的实时预览（世界坐标，跟随鼠标）。 */
+  /**
+   * 绘制测量尺（M）。
+   *
+   * 本函数在世界坐标下被调用（见叠加层坐标契约：绘制发生在 applyTransform 之内），
+   * 所以线宽、字号、虚线间隔一律乘 `1 / scale` 抵消缩放，屏幕上才是恒定粗细。
+   */
+  private drawMeasureRuler(ctx: CanvasRenderingContext2D): void {
+    const m = this.measureDrag || this.measureLine;
+    if (!m) return;
+    const inv = 1 / this.viewport.scale;
+    const dx = Math.abs(m.b.x - m.a.x);
+    const dy = Math.abs(m.b.y - m.a.y);
+    const dist = Math.hypot(dx, dy);
+
+    ctx.save();
+
+    // 主测量线
+    ctx.setLineDash([6 * inv, 4 * inv]);
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 1.5 * inv;
+    ctx.beginPath();
+    ctx.moveTo(m.a.x, m.a.y);
+    ctx.lineTo(m.b.x, m.b.y);
+    ctx.stroke();
+
+    // 正交投影边：量线宽看 Δy，量间距看 Δx
+    ctx.setLineDash([3 * inv, 3 * inv]);
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
+    ctx.beginPath();
+    ctx.moveTo(m.a.x, m.a.y);
+    ctx.lineTo(m.b.x, m.a.y);
+    ctx.lineTo(m.b.x, m.b.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 两端十字准星
+    for (const p of [m.a, m.b]) {
+      ctx.beginPath();
+      ctx.moveTo(p.x - 5 * inv, p.y);
+      ctx.lineTo(p.x + 5 * inv, p.y);
+      ctx.moveTo(p.x, p.y - 5 * inv);
+      ctx.lineTo(p.x, p.y + 5 * inv);
+      ctx.stroke();
+    }
+
+    // 读数标签
+    const label = `Δx ${dx.toFixed(1)} · Δy ${dy.toFixed(1)} · ${dist.toFixed(1)} px`;
+    ctx.font = `${12 * inv}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    const tw = ctx.measureText(label).width;
+    const padX = 6 * inv;
+    const padY = 4 * inv;
+    const boxH = 12 * inv + padY * 2;
+    const bx = m.b.x + 10 * inv;
+    const by = m.b.y - boxH - 10 * inv;
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+    ctx.fillRect(bx, by, tw + padX * 2, boxH);
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 1 * inv;
+    ctx.strokeRect(bx, by, tw + padX * 2, boxH);
+    ctx.fillStyle = '#e0f2fe';
+    ctx.textBaseline = 'top';
+    ctx.fillText(label, bx + padX, by + padY);
+
+    ctx.restore();
+  }
+
   private drawGeometryCreatePreview(ctx: CanvasRenderingContext2D): void {
     const create = this.geometryCreate;
     if (!create) return;

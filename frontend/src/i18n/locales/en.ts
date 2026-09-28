@@ -158,6 +158,9 @@ export const en = {
   'draft.ignore': 'Discard',
   'draft.restored': '✅ Restored unsaved draft project successfully!',
   'hud.default': 'Ready: A Add | S Adjust (Arrows 1px nudge) | D Delete | Right-drag / Mid-drag Pan | Wheel Zoom | F1 Help',
+  // Step 4 has a different tool set (Select / Line-fix / Pan; no Add, and D is not 'delete point'),
+  // so the global hint would teach keys that do nothing here.
+  'hud.cleanup': 'Ready: S Select/Adjust | Click candidate · Drag to move · Drag handle to resize | Arrow keys nudge 1px | Delete removes selection | M measure | +H/+V to add | Right-drag / Mid-drag Pan | Wheel Zoom | F1 Help',
   'hud.sidebarCollapsed': 'Taxa columns list collapsed (Ctrl+[ to expand)',
   'hud.sidebarExpanded': 'Taxa columns list expanded',
   'hud.inspectorCollapsed': 'Property inspector collapsed (Ctrl+] to expand)',
@@ -214,6 +217,10 @@ export const en = {
   'tool.linefixName': 'Line Mask Correction',
   'tool.linefixShortcut': 'K',
   'tool.linefixHint': 'Left-click & drag brush to erase false positives or restore missing lines (B to preview)',
+  'tool.measure': 'Measure (M)',
+  'tool.measureName': 'Pixel Ruler (Measure)',
+  'tool.measureShortcut': 'M',
+  'tool.measureHint': 'Drag a line on the canvas to read Δx / Δy / distance in image pixels; Δx across a vertical line is its width',
 
   // ===== Step 2: ROI Panel =====
   'step2.title': '2. Data ROI Definition',

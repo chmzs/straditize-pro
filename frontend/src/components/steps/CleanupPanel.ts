@@ -35,6 +35,25 @@ export function render(data: DiagramData): string {
   const exclusionCount = data.exclusion_regions ? data.exclusion_regions.length : 0;
   const selectedId = data.cleanup_selected_id ?? null;
 
+  // 统一厚度输入框的默认值：优先取选中几何的实际宽度，否则取出现次数最多的宽度。
+  // 这样用户点一条线再看侧栏，输入框里就是那条线的真实厚度。
+  const suggestedThickness = (() => {
+    const sel = cands.find((c) => c.id === selectedId);
+    if (sel) return sel.width;
+    if (cands.length === 0) return 1;
+    const tally = new Map<number, number>();
+    for (const c of cands) tally.set(c.width, (tally.get(c.width) || 0) + 1);
+    let best = cands[0].width;
+    let bestN = 0;
+    for (const [w, n] of tally) {
+      if (n > bestN) {
+        best = w;
+        bestN = n;
+      }
+    }
+    return best;
+  })();
+
   const rowOf = (c: LineCandidate): string => {
     const isRemoved = c.status === 'removed';
     const isSelected = c.id === selectedId;
@@ -65,7 +84,7 @@ export function render(data: DiagramData): string {
   };
 
   return `
-    <div class="step-panel" data-step="4">
+    <div class="step-panel" data-step="4" data-selected-cand-id="${selectedId ?? ''}">
       <div class="step-title">${t('step4.title')}</div>
       <div class="step-desc">
         ${t('step4.forRoi')}<strong style="color: var(--accent-blue);">${roiName}</strong>
@@ -102,7 +121,21 @@ export function render(data: DiagramData): string {
           <button id="btn-add-vertical-geometry" class="btn btn-secondary" style="flex:1; font-size:10px; padding:4px;">＋竖向（图上拖出）</button>
         </div>
         <div style="font-size:9.5px;color:var(--text-muted);line-height:1.45;margin-top:5px;">
-          点按钮后在图上<strong>按住左键拖出一段</strong>即可。选中几何后可整体拖动、拖端点改范围、按 Delete 删除。
+          点按钮后在图上<strong>按住左键拖出一段</strong>即可。选中几何后可整体拖动、
+          拖<strong>白色方块</strong>改长度、拖<strong>青色圆点</strong>改厚度、方向键 1px 精调、按 Delete 删除。
+        </div>
+
+        <!-- 4. 统一厚度：先用测量 (M) 量出真实粗细，填进来一键统一 -->
+        <div style="display:flex; gap:6px; margin-top:8px; align-items:center;">
+          <label for="cleanup-thickness-input" style="font-size:10px;color:var(--text-secondary);white-space:nowrap;">统一厚度</label>
+          <input id="cleanup-thickness-input" type="number" min="1" max="500" step="1" value="${suggestedThickness}"
+                 style="width:52px;font-size:10px;padding:3px 4px;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-color);border-radius:4px;" />
+          <span style="font-size:10px;color:var(--text-muted);">px</span>
+          <button id="btn-apply-thickness-selected" class="btn btn-secondary" style="flex:1;font-size:10px;padding:4px;" ${selectedId ? '' : 'disabled'}>应用到选中</button>
+          <button id="btn-apply-thickness-all" class="btn btn-secondary" style="flex:1;font-size:10px;padding:4px;">应用到全部</button>
+        </div>
+        <div style="font-size:9.5px;color:var(--text-muted);line-height:1.45;margin-top:4px;">
+          用工具栏<strong>测量 (M)</strong>在图上量出干扰线的实际粗细，填进来即可统一改成该值（中心行不动）。
         </div>
       </div>
 
@@ -197,6 +230,27 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   // 局部像元修正画笔
   root.querySelector('#btn-trigger-linefix')?.addEventListener('click', () => {
     ctx.onStartLineFix?.('erase');
+  });
+
+  // 统一厚度（P4）：中心行不动，只改带宽
+  const thicknessInput = root.querySelector('#cleanup-thickness-input') as HTMLInputElement | null;
+  const selectedCandId =
+    root.querySelector('.step-panel')?.getAttribute('data-selected-cand-id') || undefined;
+  const applyThickness = (candidateId?: string) => {
+    const raw = Number(thicknessInput?.value);
+    if (!Number.isFinite(raw) || raw < 1 || raw > 500) {
+      // 越界不静默：把输入框标红，用户一眼知道是输入的问题。
+      if (thicknessInput) thicknessInput.style.borderColor = '#ef4444';
+      return;
+    }
+    if (thicknessInput) thicknessInput.style.borderColor = 'var(--border-color)';
+    ctx.onSetLineThickness?.(Math.round(raw), candidateId);
+  };
+  root.querySelector('#btn-apply-thickness-selected')?.addEventListener('click', () => {
+    applyThickness(selectedCandId);
+  });
+  root.querySelector('#btn-apply-thickness-all')?.addEventListener('click', () => {
+    applyThickness(undefined);
   });
 
   // 清空本步编辑

@@ -45,3 +45,27 @@ jobs:
 
       - name: Run Full Test Suite
         run: pixi run test
+
+      # e2e 此前完全不在 CI 内：`pixi run test` 曾显式 --ignore=tests/e2e，
+      # 旧 e2e 全靠本地手动跑，8 条回归因此长期无人复核。
+      # 用系统已装的 Edge（playwright.config.ts 设了 channel=msedge），
+      # 故不需要 `playwright install`（那会去下载 chromium，白花几分钟）。
+      # 后端由 config 的 webServer 拉起，cwd 是仓库根，所以 pixi 必须先就位。
+      - name: Run E2E Browser Tests
+        run: pixi run test-e2e
+
+      # e2e 代码没过类型检查，会以"跑起来才报错"的形式漏到 CI 之后
+      - name: Typecheck E2E Tests
+        working-directory: frontend
+        run: npm run test:e2e:typecheck
+
+      # 失败时没有 trace/screenshot 就只能靠猜；Playwright 已经按配置存好了
+      - name: Upload Playwright Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 7

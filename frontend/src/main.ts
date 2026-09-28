@@ -399,7 +399,11 @@ async function bootstrap() {
   canvasWrapper.appendChild(hud);
 
   let hudTimer: number | null = null;
-  const getDefaultHudText = () => t('hud.default');
+  // 步骤 4 不复用全局提示：那里的键位（A 加点 / D 删点）在本步不可用。
+  // 注意 canvasComponent 在下方才声明，而本函数只在 setTimeout 回调与阶段切换时被调用，
+  // 全都晚于其初始化，故不存在 TDZ 问题。
+  const getDefaultHudText = () =>
+    canvasComponent.workflowStage === STAGE.CLEANUP ? t('hud.cleanup') : t('hud.default');
 
   function setHudNotice(text: string, duration: number = 3000) {
     const hudTextEl = document.getElementById('hud-text');
@@ -437,8 +441,60 @@ async function bootstrap() {
     </div>
   `;
 
+  // —— Step 4 几何的三个共享回调 ——
+  // 画布（下方构造）与侧栏检查器（916 行构造）用的是两个互相独立的回调对象，
+  // 而这三件事两边都要：画布侧负责"拖完提交 / 按 Delete 或 D 删除 / 选中联动"，
+  // 侧栏侧负责清单里的按钮。此前只写进了检查器那个对象，画布那侧全是 undefined，
+  // 被 `?.()` 静默吞掉——表现为"图上拖拽新建、移动、改范围、删除全都没反应"。
+  // 故在此定义一次，两处共用。
+  const handleGeometryCommit = async (
+    id: string | null,
+    axis: 'h' | 'v',
+    rect: { x0: number; y0: number; x1: number; y1: number }
+  ): Promise<void> => {
+    await runCleanupAction(id ? '移动几何' : '新建几何', async () => {
+      const res = await rpcClient.upsertLineGeometry({
+        roi_id: activeCleanupRoiId(),
+        axis,
+        candidate_id: id,
+        geometry: rect,
+        // 新建默认待确认：不确认就不动像素。
+        status: 'candidate',
+      });
+      if (!id && res.candidates?.length) {
+        // 新建后自动选中它，便于立刻微调。
+        const created = res.candidates[res.candidates.length - 1];
+        canvasComponent.setSelectedGeometryId(created.id);
+      }
+      return res;
+    });
+  };
+
+  const handleGeometryDelete = async (id: string): Promise<void> => {
+    await runCleanupAction('删除几何', () => rpcClient.deleteLineGeometry(id));
+    setHudNotice('🗑️ 已删除该几何。');
+  };
+
+  /**
+   * 画布侧选中 geometry → 侧栏「候选线清单」联动高亮。
+   *
+   * `CleanupPanel` 的选中样式本来就是读 `data.cleanup_selected_id` 渲染的，
+   * 但此前没有任何地方在「画布选中」之后触发侧栏重绘，所以清单里看不到联动。
+   * 这里补上重绘，并把选中行滚进可视区——候选常有 20+ 条，否则会停在列表顶部。
+   */
+  const handleGeometrySelected = (id: string | null): void => {
+    inspector?.updateData(canvasComponent.data);
+    if (!id) return;
+    const row = document.querySelector(`.cleanup-row[data-cand-id="${CSS.escape(id)}"]`);
+    row?.scrollIntoView({ block: 'nearest' });
+  };
+
   // 6. 实例化画布组件
   const canvasComponent = new GeologyCanvas(canvasWrapper, initialData, history, {
+    // Step 4 几何：画布侧拖拽提交 / 删除 / 选中联动，缺一个就静默失效。
+    onGeometryCommit: handleGeometryCommit,
+    onGeometryDelete: handleGeometryDelete,
+    onGeometrySelected: handleGeometrySelected,
     onTaxaChange: (_taxaId) => {
       sidebar?.updateData(canvasComponent.data);
       inspector?.updateData(canvasComponent.data);
@@ -635,7 +691,11 @@ async function bootstrap() {
     } else if (targetStage === STAGE.CLEANUP) {
       currentStage = STAGE.CLEANUP;
       updateWorkflowBar();
-      canvasComponent.setToolMode('linefix');
+      // 进入 Step 4 必须落在「微调/选择 (S)」上——`getAllowedTools(STAGE.CLEANUP)[0]` 就是
+      // select。这里曾经硬写 'linefix'，于是用户一进第 4 步手上就是橡皮笔刷：点候选线不是
+      // 选中而是涂改，白/青手柄根本够不着，表现成"工具栏缺了微调(S)""图上拖了没反应"。
+      // 画笔只在用户显式点「局部像元修正」或拖排除区时才切过去。
+      canvasComponent.setToolMode('select');
       canvasComponent.requestRender();
       void scheduleLineMaskRefresh();
       // Step 4 进入即显示候选几何；用户只确认是否删除，不必先猜该点哪个按钮。
@@ -1191,34 +1251,10 @@ async function bootstrap() {
       );
       setHudNotice(selected ? '✅ 已确认该几何：数字化将剔除这块像素。' : '↩️ 已撤回为待确认：不再剔除。');
     },
-    /** 画布拖拽/缩放 geometry 结束（新建时 id 为 null）。 */
-    onGeometryCommit: async (
-      id: string | null,
-      axis: 'h' | 'v',
-      rect: { x0: number; y0: number; x1: number; y1: number }
-    ) => {
-      await runCleanupAction(id ? '移动几何' : '新建几何', async () => {
-        const res = await rpcClient.upsertLineGeometry({
-          roi_id: activeCleanupRoiId(),
-          axis,
-          candidate_id: id,
-          geometry: rect,
-          // 新建默认待确认：不确认就不动像素。
-          status: 'candidate',
-        });
-        if (!id && res.candidates?.length) {
-          // 新建后自动选中它，便于立刻微调。
-          const created = res.candidates[res.candidates.length - 1];
-          canvasComponent.setSelectedGeometryId(created.id);
-        }
-        return res;
-      });
-    },
-    /** 画布上 Delete 删除选中的 geometry。 */
-    onGeometryDelete: async (id: string) => {
-      await runCleanupAction('删除几何', () => rpcClient.deleteLineGeometry(id));
-      setHudNotice('🗑️ 已删除该几何。');
-    },
+    // 与画布侧共用同一份实现（见文件上方 handleGeometry*）。
+    // 注意：onGeometrySelected 只属于画布回调（选中由画布发起），InspectorCallbacks 没有它。
+    onGeometryCommit: handleGeometryCommit,
+    onGeometryDelete: handleGeometryDelete,
     /** 清空本步全部 geometry / 排除区 / 笔迹。 */
     onClearCleanupEdits: async () => {
       await runCleanupAction('清空清理编辑', async () => {
@@ -1227,6 +1263,18 @@ async function bootstrap() {
         setHudNotice('🧽 已清空本步的全部几何、排除区与笔迹。');
         return res;
       });
+    },
+    /** 统一厚度：把选中 / 全部几何的像素厚度改成用户填写的值，中心行不动。 */
+    onSetLineThickness: async (thickness: number, candidateId?: string) => {
+      await runCleanupAction('统一几何厚度', () =>
+        rpcClient.setLineThickness(thickness, candidateId, activeCleanupRoiId())
+      );
+      setHudNotice(
+        candidateId
+          ? `📏 已把选中几何的厚度统一改为 ${thickness}px。`
+          : `📏 已把本有效区全部几何的厚度统一改为 ${thickness}px（中心行未移动）。`,
+        5000
+      );
     },
     onDetectXTicks: async () => {
       try {
@@ -1421,6 +1469,14 @@ async function bootstrap() {
     }>
   ): Promise<void> {
     try {
+      // 微调几何是「本地即时改 + 500ms 防抖提交」。这里是 Step 4 所有几何写操作
+      // 的唯一入口（删除/改厚度/确认去除/重扫/清空），所以必须在这里先把待提交的
+      // 微调 **await** 落库，再执行本次动作。
+      //
+      // 实测复现过不这么做的后果：微调后 60ms 内点侧栏「删除」，删除先落地（22→21），
+      // 500ms 后那次延迟 upsert 到达，几何**原地复活**（21→22，还带着微调后的 at）。
+      // 侧栏按钮走 RPC 直连，不经过画布的删除入口，所以只堵画布是堵不住的。
+      await canvasComponent.flushPendingGeometryEdits();
       const res = await action();
       applyCleanupState(res);
     } catch (err) {

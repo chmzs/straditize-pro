@@ -17,15 +17,29 @@ frontend-dev = "npm --prefix frontend run dev"                            # 启�
 
 [tasks.test]
 description = "Run the FULL backend test suite (was: a hand-picked 16-file whitelist)"
-cmd = "python -m pytest --ignore=tests/e2e -q"
+cmd = "python -m pytest -q"
 # 已知失败用例由 tests/quarantine.txt 标记为 strict xfail，不再靠文件白名单隐藏；
 # 用例一旦修好会以 XPASS 让本任务变红，强制把条目从隔离区删除。新增测试文件无需改这里。
+# 原命令带 `--ignore=tests/e2e`；e2e 已整体迁到 Playwright（见 test-e2e），该目录已不存在。
 
 [tasks.test-e2e]
-description = "Run ALL Playwright end-to-end browser tests (was: test_smoke.py only, 1 of 10)"
-cmd = "python -m pytest tests/e2e -q"
-# 原先只跑 tests/e2e/test_smoke.py —— 9 条 E2E 里 8 条从未被任何门禁执行，
-# golden_journey 的 base64 与 naming 的列 id 两处回归就是这样漏掉的。
+description = "Build the SPA, then run ALL Playwright end-to-end browser tests (real Edge via channel=msedge)"
+# 必须先 build：后端是通过 `find_frontend_dist()` 从 `frontend/dist` 托管 SPA 的
+# （`straditize_core/rpc_server.py:686`，按 cwd/frontend/dist 解析），而 playwright 的
+# webServer cwd 就是仓库根。若跳过这一步，e2e 会对着**上一次构建的旧产物**跑：改了
+# `frontend/src` 却只跑 test-e2e，用例照样全绿——那等于没测真实代码。build 本身含
+# `tsc` 类型检查，代价约 2s，换取"测的就是当前源码"。
+cmd = "npm --prefix frontend run build && npm --prefix frontend run test:e2e"
+# 迁移自 12 个 pytest 文件（1451 行）：旧套件的会话是 session 级共享的，
+# 测试间互相污染，全量跑 4 failed / 10 passed，单跑却通过；且其中多条断言
+# 恒为真（读错真值文件路径、读错层名词汇表、用 snake_case 读 camelCase 键）。
+# Playwright 版每条用例前经 `e2e.reset` 复位，并由启动器断言复位后状态确实干净。
+# 依赖：Node ≥ 20 + 系统已装 Edge；后端由 playwright.config.ts 的 webServer 拉起。
+# **端口每次运行自动取唯一值**（`20000 + pid % 20000`），产物目录 `frontend/test-results-<port>/`
+# 同样按运行隔离——本仓库多会话并发，固定端口/固定产物目录会让两个会话互相
+# 杀后端、共用会话状态、争写 trace（实测症状：`url is already used`、
+# `ECONNREFUSED`、`ROI 'pollen' 已存在`、`browserContext.close: ENOENT ...recordingN.network`）。
+# 需要固定端口做手工联调时：`STRADITIZE_E2E_PORT=8799 pixi run test-e2e`。
 
 [tasks.test-legacy]
 description = "Run legacy PyQt5 widget test suite (requires legacy dependencies)"

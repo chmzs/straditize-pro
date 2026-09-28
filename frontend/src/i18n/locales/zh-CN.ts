@@ -159,6 +159,9 @@ export const zhCN = {
   'draft.ignore': '忽略',
   'draft.restored': '✅ 成功恢复上次自动暂存的项目草稿！',
   'hud.default': '就绪：A 加点 | S 微调 (方向键 1px 精调) | D 删点 | 右键/中键拖拽平移 | 滚轮缩放 | F1 帮助',
+  // 步骤 4 的工具集与全局默认不同（只有 微调/修线/平移，没有 A 加点、D 也不是"删点"），
+  // 全局提示会教用户按不存在的键，所以单列一条按阶段切换。
+  'hud.cleanup': '就绪：S 微调/选择 | 点选候选线 · 拖动整体移动 · 拖端点改范围 | 方向键 1px 精调 | Delete 删除选中几何 | M 测量尺 | ＋横向/＋竖向 新建 | 右键/中键拖拽平移 | 滚轮缩放 | F1 帮助',
   'hud.sidebarCollapsed': '属种分列列表已收起 (Ctrl+[ 或点击左侧拉手展开)',
   'hud.sidebarExpanded': '属种分列列表已展开',
   'hud.inspectorCollapsed': '属性检查器已收起 (Ctrl+] 或点击右侧拉手展开)',
@@ -215,6 +218,10 @@ export const zhCN = {
   'tool.linefixName': '线掩膜人工修正 (Line Fix)',
   'tool.linefixShortcut': 'K',
   'tool.linefixHint': '按住左键涂抹：擦掉误标红线 / 补回漏标的线（按 B 可叠加查看）',
+  'tool.measure': '测量 (M)',
+  'tool.measureName': '像素测量尺 (Measure)',
+  'tool.measureShortcut': 'M',
+  'tool.measureHint': '按住左键在图上拖一条线，读出 Δx / Δy / 直线距离（单位：图像像素）；量竖直线段的 Δx 即线宽',
 
   // ===== 步骤 2：ROI 面板 =====
   'step2.title': '2. 数据有效区界定 (ROI)',

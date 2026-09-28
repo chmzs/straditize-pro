@@ -89,6 +89,27 @@ class CleanupMixin:
         self.cleanup_stats: dict[str, Any] = {}
         self.cleanup_overlay_png: str | None = None
 
+    def _next_candidate_id(self, axis: str, *, prefix: str = "line") -> str:
+        """Mint a stable, unique, opaque candidate id.
+
+        Deliberately a session-lifetime counter, not something derived from the
+        candidate itself. Two separate bugs came from deriving identity from a
+        mutable source:
+
+        * the detector used ``f"line_h_{at}_{w}px"`` — the first nudge moves
+          ``at`` and ``set_line_thickness`` rewrites ``width``, so the id started
+          claiming things that were no longer true;
+        * manual creation used ``len(self.line_candidates) + 1``, which collides
+          as soon as one is deleted (delete one of two, add one, and you mint an
+          id that still exists).
+
+        Lookups (status toggle, delete, selection) all match on id globally, so
+        uniqueness is a correctness requirement, not cosmetics.
+        """
+        seq = getattr(self, "_candidate_seq", 0) + 1
+        self._candidate_seq = seq
+        return f"{prefix}_{axis}_{seq}"
+
     # ------------------------------------------------------------------
     # status truth + derived compatibility view
     # ------------------------------------------------------------------
@@ -256,6 +277,10 @@ class CleanupMixin:
             cand.setdefault("status", CANDIDATE)
             cand.setdefault("source", "auto")
             cand.setdefault("confidence", None)
+            # Namespace the detector's positional id session-wide: detection runs
+            # per ROI, so "line_h_1" would otherwise repeat across ROIs and a
+            # delete-by-id would hit every ROI's first line.
+            cand["id"] = self._next_candidate_id(cand.get("axis", "h"))
             _apply_derived_fields(cand)
 
         # Re-detection replaces this ROI's candidate set but keeps other ROIs.
@@ -301,7 +326,7 @@ class CleanupMixin:
             y1 = y0 + 1
 
         roi_id, _ = self._roi_for(roi_id)
-        candidate_id = candidate_id or f"manual_{axis}_{len(self.line_candidates) + 1}"
+        candidate_id = candidate_id or self._next_candidate_id(axis, prefix="manual")
         existing = next(
             (item for item in self.line_candidates if item["id"] == candidate_id), None
         )
@@ -345,6 +370,50 @@ class CleanupMixin:
             raise ValueError(f"unknown geometry id: {candidate_id}")
         target["status"] = status
         roi_id, _ = self._roi_for(roi_id or target.get("roi_id"))
+        return self._recompose(roi_id)
+
+    def set_line_thickness(
+        self,
+        thickness: int,
+        candidate_id: str | None = None,
+        roi_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Force one or all geometries in a ROI to an exact thickness in pixels.
+
+        ``candidate_id`` given -> only that geometry; omitted -> every geometry of
+        the ROI (the sidebar's "统一厚度"). The centre line (``at``) never moves:
+        the band only widens/shrinks around it, so a line already sitting on the
+        right row stays there. ``thickness`` is the inclusive pixel count, i.e.
+        the same number the sidebar shows as ``width``.
+        """
+        thickness = int(thickness)
+        if thickness < 1:
+            raise ValueError("thickness must be >= 1")
+        if thickness > 500:
+            raise ValueError("thickness must be <= 500")
+
+        roi_id, _ = self._roi_for(roi_id)
+        if candidate_id is None:
+            targets = [c for c in self.line_candidates if str(c.get("roi_id")) == str(roi_id)]
+        else:
+            targets = [c for c in self.line_candidates if str(c.get("id")) == str(candidate_id)]
+            if not targets:
+                raise ValueError(f"unknown geometry id: {candidate_id}")
+
+        half = (thickness - 1) // 2
+        for target in targets:
+            x0, y0, x1, y1 = _rect_of(target)
+            if target.get("axis") == "h":
+                centre = (y0 + y1) // 2
+                y0 = centre - half
+                y1 = y0 + thickness - 1
+            else:
+                centre = (x0 + x1) // 2
+                x0 = centre - half
+                x1 = x0 + thickness - 1
+            target["geometry"] = {"type": "rect", "x0": x0, "y0": y0, "x1": x1, "y1": y1}
+            _apply_derived_fields(target)
+
         return self._recompose(roi_id)
 
     def delete_line_geometry(

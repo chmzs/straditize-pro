@@ -13,7 +13,16 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    /*
+     * 显式声明"不使用任何 @types 包"。不写这一行时，TypeScript 会把
+     * node_modules/@types/* 全自动纳入编译（此处当前有供 e2e 用的
+     * @types/node），于是生产构建会看到 Node 全局变量（如 setTimeout 的
+     * 返回类型），一旦与 DOM lib 冲突就是静默的类型语义漂移。
+     * DOM 类型来自上面的 "lib"，不依赖 @types，故置空不影响前端代码；
+     * e2e 需要 Node 类型，由 `tsconfig.e2e.json` 单独声明。
+     */
+    "types": []
   },
   "include": ["src"]
 }

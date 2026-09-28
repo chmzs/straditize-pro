@@ -1735,8 +1735,8 @@ class StraditizeSession(
         self.taxa_names = nxt["taxa_names"]
         return {"success": True, "action": nxt.get("action", "redo")}
 
-    def project_new(self) -> dict[str, Any]:
-        """Clears all session state to create a new project."""
+    def project_new(self, clear_image: bool = False) -> dict[str, Any]:
+        """Clears session state to start a clean project."""
         self.columns = []
         self.column_points = {}
         self.control_points = {}
@@ -1758,8 +1758,21 @@ class StraditizeSession(
         self.line_corrections = []
         self.taxa_names = []
         self.depth_grid = []
+        self.samples = []
         self.undo_stack = []
         self.redo_stack = []
+        self._init_rois()
+
+        if clear_image:
+            self.image = None
+            self.image_path = None
+            self.width = 0
+            self.height = 0
+            self.foreground_mask = None
+            self.data_xlim = None
+            self.data_ylim = None
+            self.meta_info = {}
+
         return {"success": True, "status": "new_project_created"}
 
     def project_load(self, project_data: dict[str, Any] | str) -> dict[str, Any]:

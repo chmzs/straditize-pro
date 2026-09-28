@@ -25,6 +25,7 @@
     D pytest python_files 声明覆盖不到的测试文件
     E GeologyCanvas 中残留的裸 workflowStage 数字比较
     F 注释中残留的旧 7 步编号措辞（warning，不阻断）
+    G 前端 RpcClient 调用的 RPC 方法名 ⊆ 后端注册表
 
 用法：pixi run python support/consistency_check.py [--strict]
       --strict 时把 warning 也算失败（CI 可视需要开启）
@@ -289,6 +290,71 @@ def check_stale_comments() -> list[str]:
     return warnings
 
 
+# ------------------------------- G. 前端 RPC 方法名 ⊆ 后端注册表
+# 匹配 `this.call('x.y', ...)` 与 `this.callCleanup('x.y', ...)`（含泛型实参形态）。
+FRONTEND_CALL_RE = re.compile(r"""(?:call|callCleanup)(?:<[^>]*>)?\(\s*'([^']+)'""")
+
+
+def collect_backend_rpc_methods() -> set[str]:
+    """用 ast 精确提取 `dispatcher.register_method("<name>", ...)` 的字面量方法名。
+
+    正则在这里不够用：有 6 处注册把方法名写在下一行（多行调用），
+    且 naming.py 还注册了 `tools/list` 这类非 `ns.name` 形态的 MCP 协议方法。
+    """
+    names: set[str] = set()
+    for p in (ROOT / "straditize_core" / "rpc_methods").glob("*.py"):
+        try:
+            tree = ast.parse(p.read_text(encoding="utf-8", errors="replace"))
+        except SyntaxError:
+            continue
+        for n in ast.walk(tree):
+            if not isinstance(n, ast.Call):
+                continue
+            fn = n.func
+            if not (isinstance(fn, ast.Attribute) and fn.attr == "register_method"):
+                continue
+            if n.args and isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, str):
+                names.add(n.args[0].value)
+    return names
+
+
+def check_frontend_rpc_methods() -> list[str]:
+    """前端调用的每个 RPC 方法名都必须在后端注册表里存在。
+
+    历史事故（AGENTS.md）：前端发 `x_bounds` 而后端要 `data_xlim`，被静默兜底掩盖很久。
+    方法名写错在运行期报 `methodNotFound`，但没人会在门禁里点遍所有按钮——
+    这条把"名字打错"变成 `pixi run lint` 就能拦下的静态错误。
+
+    **必须扫整个 `frontend/src`**：调用点散在 6 个文件里（main.ts 15 处、
+    RpcClient.ts 24 处，另有 4 个弹窗组件），只扫 RpcClient.ts 会漏掉
+    `algorithm.detectLineCandidates` 这类从 main.ts 用泛型 `call()` 发的方法。
+    `frontend/e2e/` 明确排除：测试会调 `e2e.reset` 这类只存在于测试进程的方法。
+    """
+    problems: list[str] = []
+    backend = collect_backend_rpc_methods()
+    if not backend:
+        return [
+            "未能从 straditize_core/rpc_methods/ 提取到任何注册方法名——"
+            "检查 G 自身已失效，不要误当成通过"
+        ]
+    src = ROOT / "frontend" / "src"
+    if not src.exists():
+        return problems
+    called: dict[str, tuple[str, int]] = {}
+    for p in sorted(src.rglob("*.ts")):
+        rel = p.relative_to(ROOT).as_posix()
+        for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+            for m in FRONTEND_CALL_RE.finditer(line):
+                called.setdefault(m.group(1), (rel, i))
+    for name, (rel, line) in sorted(called.items()):
+        if name not in backend:
+            problems.append(
+                f"{rel}:{line}  调用了后端未注册的 RPC 方法 '{name}'\n"
+                f"        后端注册表：straditize_core/rpc_methods/*.py 的 register_method(...)"
+            )
+    return problems
+
+
 def main() -> int:
     strict = "--strict" in sys.argv
     sigs, signature_parse_errors = collect_signatures()
@@ -300,6 +366,7 @@ def main() -> int:
         ("C. package-data 声明 ↔ 真实文件", check_package_data()),
         ("D. pytest python_files 覆盖", check_test_discovery()),
         ("E. 裸步骤数字（应走 WorkflowStage）", check_stage_literals()),
+        ("G. 前端 RPC 方法名 ⊆ 后端注册表", check_frontend_rpc_methods()),
     ]
     warnings = [("F. 注释残留旧 7 步编号", check_stale_comments())]
 
