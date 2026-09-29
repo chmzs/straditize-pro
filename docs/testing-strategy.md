@@ -13,7 +13,7 @@
 | 后端逻辑 | `pixi run test` | 276 passed + 96 subtests | 计算正确性；数据来源不变量（`tests/integration/test_no_fabrication.py` 是守卫测试，不得放宽） | ~185 s |
 | 前端模块 | `npm --prefix frontend test` | 5 个 node 脚本 | 纯函数 / 模型 / 注册表 / 阶段映射 / 契约字段完整性 | ~2 s |
 | 跨文件一致性 | `pixi run lint` | 8 项检查 | 签名↔调用点、类型标注↔实现、package-data、pytest 收集、裸步骤数字、**前端 RPC 方法名 ⊆ 后端注册表** | ~1 s |
-| 端到端 | `pixi run test-e2e` | 10 spec / 25 用例 / 178 条断言 | 真实浏览器里的集成事实：画布渲染管线、手势、i18n、错误冒泡 | ~95 s |
+| 端到端 | `pixi run test-e2e` | 11 spec / 28 用例 / 191 条断言，含 **67 次真实后端读取** | 真实浏览器里的集成事实：画布渲染管线、手势、i18n、错误冒泡 | ~110 s |
 | 契约快速 lane | `pixi run test-contract` | 5 用例 | 同上，只取契约部分 | 26 s |
 
 `pixi run test-e2e` 与 `test-contract` 都会**先 build SPA**：后端通过
@@ -57,12 +57,15 @@ payload** 的方式解决——比 Pact 的 mock 更接近真相。
 
 ## 4 E2E 的八条纪律（每条都有具体落点）
 
-1. **错误必须冒泡。** `frontend/e2e/fixtures.ts` 提供 auto fixture：控制台 `error`、
-   未捕获异常、**前端自己发起的失败 RPC**、原生弹窗，一律在 teardown 断言为空。
-   之前的 10 条 spec 里有 3 条完全没有监听，另外 7 条靠用例末尾手写——用例中途失败就
-   永远走不到那一行。已知实例：`QaPanel.triggerSummarize` 失败时只 `console.warn`，
-   面板数字静默停在默认值 0；只断言 DOM 抓不到。
-   注意本后端的 JSON-RPC 错误是 `HTTP 200 + body.error`，只看 status 会漏掉全部应用级错误。
+1. **错误必须冒泡，且两个方向都要证。** 反向：`frontend/e2e/fixtures.ts` 提供 auto
+   fixture，控制台 `error`、未捕获异常、**前端自己发起的失败 RPC**、原生弹窗，一律在
+   teardown 断言为空——之前的 10 条 spec 里有 3 条完全没有监听，另外 7 条靠用例末尾
+   手写，用例中途失败就永远走不到那一行。正向：`frontend/e2e/error-surfacing.spec.ts`
+   用 `page.route` 只让某个 RPC 失败，断言用户**真的看见了**弹框文案。
+   只有反向那一半时，一个"把错误全吞进 `console.warn`"的实现能让门禁全绿。
+   注意本后端的 JSON-RPC 错误是 `HTTP 200 + body.error`，只看 status 会漏掉全部应用级错误；
+   故意触发异常的用例在文件里用 `test.use({ allowlists: { rpcError: [...], dialog: [...] } })`
+   显式声明豁免。
 2. **断言后端权威状态，而不是 DOM 文本。** DOM 正常而状态机错乱（"删除后几何复活"）
    对纯 DOM 断言完全隐形。
 3. **零固定 sleep。** 等待一律走 Playwright 的智能等待或 `expect.poll`；`waitForTimeout`
@@ -84,11 +87,23 @@ payload** 的方式解决——比 Pact 的 mock 更接近真相。
 
 | 不做 | 理由 |
 | --- | --- |
-| 视觉/截图回归（`toMatchSnapshot`） | canvas 渲染 + 跨 OS 字体差异会让基线图在 Windows 本地与 CI Linux 之间抖动；那篇文章本身也把"噪音处理/基线维护"明确列为 E2E 的成本。改用**结构化断言**：`renderedLayers` 词汇表、后端数值本身。 |
+| 视觉/截图回归（`toMatchSnapshot` **基线比对**） | 跨 OS 字体/抗锯齿差异会让基线图在 Windows 本地与 CI Linux 之间抖动，那篇文章也把"噪音处理/基线维护"列为 E2E 的成本。但**"不看像素"是错的**：`renderedLayers` 只证明某个 `drawXxx()` 被调用过，绘制函数提前 `return` 时层名照样进集合（已用金丝雀实测：让 `drawRoiOverlay` 无条件提前返回后，三条结构断言全绿、画布上一个像素都没画）。改用**同轮内步骤间的像素不等式**（`step-visibility.spec.ts` 的「画布墨迹」用例）：不存基线、不比绝对值，只问"这一层有没有让墨迹变多"，阈值按实测信噪比（层间差 ~19 万 px vs 轮间噪声 ~1700 px）留足余量。 |
 | Pact / Pact Broker | 见 §3。 |
-| 追覆盖率百分比 | 覆盖率不区分"断言了后端权威状态"和"断言了 DOM 没报错"。本仓库更在意**断言的种类**：178 条断言里必须有多少条真的读了后端。 |
+| 追覆盖率百分比 | 覆盖率不区分"断言了后端权威状态"和"断言了 DOM 没报错"。替代判据见下表后的两行命令，都可机检。 |
 | 引入第二个 E2E 框架 | 一个真浏览器驱动就够；多一套框架等于多一套 flaky 与依赖。 |
 | 为"将来可能复用"抽测试工具层 | 只有一处调用的抽象是负债。 |
+
+覆盖率的替代判据（**只增不减**，当前实测值写在注释里）：
+
+```bash
+# ① 后端读取总次数 —— 当前 67（11 spec / 28 用例）
+grep -oE '\b(rpc|backendRpc|diagramData)\s*[<(]' frontend/e2e/*.spec.ts | wc -l
+
+# ② 一次后端都不读的 spec —— 当前只应有 error-surfacing.spec.ts
+for f in frontend/e2e/*.spec.ts; do
+  grep -qE '\b(rpc|backendRpc|diagramData)\s*[<(]' "$f" || echo "$f"
+done
+```
 
 ## 6 新增测试该放哪一层
 
@@ -102,7 +117,8 @@ payload** 的方式解决——比 Pact 的 mock 更接近真相。
 
 新 spec 从 `./fixtures` 取 `test` / `expect`（**不要**直接从 `@playwright/test` 取，
 否则丢掉全局错误门禁）；需要故意触发错误路径时，用
-`test.use({ consoleErrorAllowlist: [...] })` 在用例文件里显式声明豁免，不允许关掉门禁。
+`test.use({ allowlists: { rpcError: [/方法名/], dialog: [/文案/] } })` 在用例文件里显式
+声明豁免，不允许关掉门禁。
 
 ## 7 门禁
 
@@ -110,3 +126,31 @@ payload** 的方式解决——比 Pact 的 mock 更接近真相。
 改了前端逻辑加 `npm --prefix frontend test`；改了 RPC 契约或界面行为加
 `pixi run test-e2e`。CI（`.github/workflows/ci.yml`）跑的就是这些，外加 e2e 类型检查
 （`npm --prefix frontend run test:e2e:typecheck`），失败时上传 Playwright 报告。
+
+## 8 门禁自身的可信度：金丝雀纪律
+
+**一个从不失败的门禁等于没有门禁。** 新增或修改门禁后，必须**故意制造它要抓的那种失效**
+并确认它真的变红，再还原。本文件里的数字与结论都经过了这一步：
+
+| 门禁 | 金丝雀（怎么弄红） | 实测结果 |
+| --- | --- | --- |
+| 契约 lane | 把后端 `rpc_methods/system.py` 的 `line_candidates` 改名 | 5 用例中 3 条红，报"真实 payload 缺少 DiagramData 的必填字段" |
+| 画布墨迹 | 让 `drawRoiOverlay` 无条件提前 `return` | 墨迹差值 193600 → 13395，用例红；而三条 `renderedLayers` 结构断言**全绿** |
+| 错误冒泡（正向） | 把 `PropertyPanel.ts:639` 的 `alert` 换成 `console.warn` | 用例红：`Received string: ""`（一个弹框都没有）；同文件第二条用例仍绿 |
+
+相反方向同样要证：**负向对照**。画布探针在"本不该有这一层"的步骤上必须为 0
+（步骤 1 的 ROI 特征色实测 0）。做不到 0 的探针不能用——「ROI 蓝」就是这样被否掉的：
+叠加层 `RoiOverlay`（id `roi-indicator`）与管线 `roi` 层共用 `#0284c7`，像素不可区分，
+所以它只能当阶段级信号，不能当层专属证据。
+
+## 9 已知缺口（已报告，未修）
+
+这些是**测试策略想抓、但当前还抓不住**的失效，属于既有代码问题，按"只报不改"登记：
+
+| 缺口 | 位置 | 为什么危险 |
+| --- | --- | --- |
+| 导出失败被静默吞掉 | `main.ts:1922` 捕 `core.exportData` 失败后只 `console.warn`，再打开一个**空**的导出面板 | 直接违反不变量 1。用户会以为是自己没做分列，实际是后端/契约坏了；且 `console.warn` 不在门禁覆盖范围内（门禁只认 `console.error`），现状下**没有任何一层会红**。正确写法就在同文件 `main.ts:63` 的 `reportBackendFailure`。 |
+| `export.csv` 空载荷静默回退 | `PropertyPanel.ts:617` 当返回非字符串时回退到 `textarea.value` | 与历史 `x_bounds`/`data_xlim` 事故同型：用"看起来正常"的内容掩盖契约破裂。 |
+| 就绪清单字段硬编码 | `ExportReadinessPanel.ts:41` `dataCsvEqualsPrimary: true` | 该属性永远为真，断言它等于没断言。 |
+| 汇总失败只 `console.warn` | `QaPanel.triggerSummarize` | 面板数字静默停在默认值 0，纯 DOM 断言完全隐形。 |
+| 前端 TS 类型与真实 payload 不完全一致 | `frontend/src/types/` | `contract.spec.ts` 只验"真实 payload ⊇ 声明字段"，声明里多余或失真的字段抓不到。 |

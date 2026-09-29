@@ -20,7 +20,16 @@
  *   - 「应该在我点两点就即时出现，而不是点确定应用后才出现」→ 步骤 3 必须能画 Y 标记
  */
 import { expect, test } from './fixtures';
-import { clickCanvas, getState, gotoStage, resetBaseline, rpc, waitForDiagram } from './helpers';
+import {
+  canvasColorPixels,
+  canvasInk,
+  clickCanvas,
+  getState,
+  gotoStage,
+  resetBaseline,
+  rpc,
+  waitForDiagram,
+} from './helpers';
 
 interface StageState {
   stage: number;
@@ -193,5 +202,74 @@ test.describe('步骤 → 画布可见层', () => {
         backend.activeRoiId
       );
     }
+  });
+
+  /**
+   * 用画布像素补上 `renderedLayers` 看不见的那一类失效。
+   *
+   * `renderedLayers` 只证明某个 `drawXxx()` 被**调用过**：绘制函数提前 `return`、
+   * 算错坐标、画到画布外面，层名照样进集合，而用户屏幕上什么都没有。本用例改问
+   * "像素上真的多出东西了吗"。
+   *
+   * 阈值全部来自实测（hoya 基线，`#geology-canvas` 为 1140×974）：
+   *
+   * | 量                  | 步骤 1 | 步骤 3 | 点两点后 | 轮间噪声 |
+   * |---------------------|--------|--------|----------|----------|
+   * | 整幅墨迹 `ink`      | 184956 | 378556 | —        | ~1700    |
+   * | `#0284c7` ROI 蓝    | 0      | 7665   | —        | 0        |
+   * | `#f59e0b` Y 标定橙  | 0      | 0      | 411      | 0        |
+   *
+   * 所以一律写**带余量的不等式**：绝对值会因 ~1% 的抖动误报。信噪比约 100×
+   * （层间差 ~19 万 vs 噪声 ~1700），阈值取到 5 万仍极稳。
+   */
+  test('画布墨迹：层注册 ≠ 真的画了东西', async ({ page }) => {
+    const ROI_BLUE: [number, number, number] = [2, 132, 199]; // #0284c7
+    const YCALIB_AMBER: [number, number, number] = [245, 158, 11]; // #f59e0b
+
+    await gotoStage(page, 1);
+    const step1 = await canvasInk(page);
+    expect(step1.opaque, '底图必须铺满整幅画布，不留未绘制区域').toBe(
+      step1.size[0] * step1.size[1]
+    );
+    expect(step1.ink, '底图必须真的落下墨迹').toBeGreaterThan(100_000);
+    // 负向对照：步骤 1 没有任何 ROI，ROI 特征色必须是 0（证明探针不是恒真）。
+    // 但这条只说明"ROI 相关绘制尚未上屏"，**不能**用来断言某一个绘制层——
+    // 叠加层 `RoiOverlay`（id `roi-indicator`）与管线 `roi` 层共用这个蓝
+    // （`RoiOverlay.ts:34` 的 rgba(2,132,199,0.85)），像素上不可区分。
+    expect(await canvasColorPixels(page, ROI_BLUE), '步骤 1 无 ROI，不应有 ROI 特征色').toBe(0);
+
+    await gotoStage(page, 3);
+    const step3 = await canvasInk(page);
+    expect(
+      await canvasColorPixels(page, ROI_BLUE),
+      '步骤 3 已有 ROI，ROI 特征色应真的上屏（阶段级信号）'
+    ).toBeGreaterThan(1000);
+    // 下面这条才是"层真的落了墨"的载荷断言，且灵敏度已用金丝雀验证：
+    // 让 `drawRoiOverlay` 无条件提前 return（层名照样进 renderedLayers、
+    // 上面三条结构断言全绿）后，本差值从 ~193600 掉到 ~13395，用例变红。
+    expect(
+      step3.ink - step1.ink,
+      '步骤 3 应比步骤 1 多出 ROI / 列边界 / 深度网格的墨迹'
+    ).toBeGreaterThan(50_000);
+
+    // Y 标定记号：步骤 3 上能画出琥珀色的只有 `drawYAxisCalibration`（`drawAnchors`
+    // 也用 #f59e0b，但那个层只在步骤 7 出现），所以这条是**层专属**探针。
+    // 用 poll 读像素而不是 sleep —— 标记状态与重绘之间隔着一次 rAF。
+    expect(await canvasColorPixels(page, YCALIB_AMBER), '未拾取标定点时不应有 Y 标记墨迹').toBe(0);
+    await clickCanvas(page, 0.4, 0.35);
+    await clickCanvas(page, 0.4, 0.55);
+    await expect
+      .poll(async () => canvasColorPixels(page, YCALIB_AMBER), {
+        message: 'Y 标记层已注册，必须在画布上真的落下橙色墨迹',
+        timeout: 10_000,
+      })
+      .toBeGreaterThan(100);
+
+    await gotoStage(page, 7);
+    const step7 = await canvasInk(page);
+    expect(
+      step7.ink - step1.ink,
+      '步骤 7 的花粉曲线 / 控制锚点 / 质检比对层必须真的落下墨迹'
+    ).toBeGreaterThan(50_000);
   });
 });

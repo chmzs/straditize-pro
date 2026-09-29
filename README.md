@@ -256,7 +256,7 @@ npm --prefix frontend test
 pixi run test-e2e
 npm --prefix frontend run test:e2e:typecheck   # e2e 代码的类型检查
 
-# 6. 只跑契约 lane（改 RPC 契约时的快速反馈：实测 26s，全量约 95s）
+# 6. 只跑契约 lane（改 RPC 契约时的快速反馈：实测 26s，全量约 110s）
 pixi run test-contract
 ```
 

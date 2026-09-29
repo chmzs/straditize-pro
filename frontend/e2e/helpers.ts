@@ -42,8 +42,12 @@ export interface PageTelemetry {
  * RPC 失败必须读 **body** 而不是只看 status：本后端的 JSON-RPC 错误是
  * `HTTP 200 + body.error`（见下方 `backendRpc`），只看 status 会漏掉全部应用级
  * 错误。判断"前端自己发起的请求是否异常"正是 E2E 的职责之一。
+ *
+ * 这里**一律如实记录，不做豁免过滤** —— 豁免是门禁策略，统一在 `fixtures.ts`
+ * 的 teardown 里判定。分开的理由：过滤若散在采集侧，"这条为什么没报"就变成
+ * 要看两处才能回答；集中在一处，`test.use({ allowlists: { rpcError: [...] } })` 就是唯一答案。
  */
-export function watchPage(page: Page, rpcErrorAllow: (string | RegExp)[] = []): PageTelemetry {
+export function watchPage(page: Page): PageTelemetry {
   const telemetry: PageTelemetry = { consoleErrors: [], rpcErrors: [], dialogs: [] };
   page.on('console', (msg) => {
     if (msg.type() === 'error') telemetry.consoleErrors.push(msg.text());
@@ -60,12 +64,9 @@ export function watchPage(page: Page, rpcErrorAllow: (string | RegExp)[] = []): 
       .then((body: unknown) => {
         const err = (body as { error?: { code?: number; message?: string } } | null)?.error;
         if (!err) return;
-        const text = `${res.request().postDataJSON?.()?.method ?? '?'} [${err.code ?? '?'}] ${
-          err.message ?? ''
-        }`;
-        if (!rpcErrorAllow.some((p) => (typeof p === 'string' ? text.includes(p) : p.test(text)))) {
-          telemetry.rpcErrors.push(text);
-        }
+        telemetry.rpcErrors.push(
+          `${res.request().postDataJSON?.()?.method ?? '?'} [${err.code ?? '?'}] ${err.message ?? ''}`
+        );
       })
       .catch(() => {
         /* 非 JSON 响应不参与本门禁 */
@@ -200,6 +201,98 @@ export async function canvasBox(page: Page): Promise<{ x: number; y: number; wid
 export async function clickCanvas(page: Page, rx: number, ry: number): Promise<void> {
   const b = await canvasBox(page);
   await page.mouse.click(b.x + b.width * rx, b.y + b.height * ry);
+}
+
+/** `canvasInk()` 的返回：画布上"真的落了墨"的像素统计。 */
+export interface CanvasInk {
+  /** 画布像素尺寸 `[width, height]`。 */
+  size: [number, number];
+  /** 不透明像素数；底图铺满整幅时应等于 `size[0] * size[1]`。 */
+  opaque: number;
+  /** 非白的不透明像素数，即整幅"墨迹"总量。 */
+  ink: number;
+}
+
+/**
+ * 读画布像素，统计"墨迹"。
+ *
+ * ## 为什么需要它：`renderedLayers` 会被骗
+ *
+ * `step-visibility.spec.ts` 比对的是 `renderedLayers` —— 它只证明某个
+ * `drawXxx()` 被**调用过**（且返回真 / 叠加层没抛异常），**不证明它真的往画布上
+ * 落了墨**。一个提前 `return` 或算错坐标的绘制函数，在这套结构断言下完全隐形：
+ * 层名照样进集合，用户屏幕上却什么都没有。
+ *
+ * `#geology-canvas` 是普通 2D canvas（`GeologyCanvas.ts:174` 取 `'2d'` 上下文），
+ * 所以 `getImageData` 直接可用，不需要任何依赖、也不需要存基线图。
+ *
+ * ## 用不等式，不用绝对值
+ *
+ * 实测同一进程内连测两轮，`ink` 有约 1% 的轮间抖动（底图重绘 / 抗锯齿），
+ * 但层与层之间的差是 ~19 万像素量级、噪声只有 ~1700 —— 信噪比约 100×。
+ * 所以断言一律写成**步骤之间的不等式**（带余量），绝不写绝对值：
+ * 绝对值既会因抖动误报，又会因换台机器/换浏览器而失效。
+ */
+export async function canvasInk(page: Page): Promise<CanvasInk> {
+  return page.evaluate(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>('#geology-canvas');
+    if (!canvas) throw new Error('#geology-canvas 不存在，无法读画布墨迹');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('#geology-canvas 拿不到 2d 上下文');
+    const { width, height } = canvas;
+    const d = ctx.getImageData(0, 0, width, height).data;
+    let opaque = 0;
+    let ink = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0) continue;
+      opaque++;
+      if (!(d[i] > 250 && d[i + 1] > 250 && d[i + 2] > 250)) ink++;
+    }
+    return { size: [width, height] as [number, number], opaque, ink };
+  });
+}
+
+/**
+ * 数画布上近似等于某**特征色**的不透明像素个数。
+ *
+ * `canvasInk()` 只能回答"整幅有没有变化"，回答不了"**这一层**有没有画"。
+ * 把某一层的特征色（见 `GeologyCanvas` 各 `drawXxx` 里的描边色）单独拎出来计数，
+ * 就得到了针对该层的探针：**该出现时必须 > 0，不该出现时必须为 0** —— 后者是
+ * 负向对照，证明这个探针不是恒真。
+ *
+ * 实测（hoya 基线）：
+ *   - `#0284c7` ROI 蓝：步骤 1 = 0，步骤 3 = 7665（`roi` 层从无到有）；
+ *   - `#f59e0b` Y 标定橙：点两点前 = 0，点完两点后 = 411。
+ *
+ * 容差默认 24：`drawYAxisCalibration` 等用纯色描边，但抗锯齿会让边缘像素偏移。
+ */
+export async function canvasColorPixels(
+  page: Page,
+  rgb: [number, number, number],
+  tolerance = 24
+): Promise<number> {
+  return page.evaluate(
+    ([r, g, b, tol]) => {
+      const canvas = document.querySelector<HTMLCanvasElement>('#geology-canvas');
+      if (!canvas) throw new Error('#geology-canvas 不存在，无法读画布像素');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('#geology-canvas 拿不到 2d 上下文');
+      const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] < 200) continue;
+        if (
+          Math.abs(d[i] - r) <= tol &&
+          Math.abs(d[i + 1] - g) <= tol &&
+          Math.abs(d[i + 2] - b) <= tol
+        ) {
+          n++;
+        }
+      }
+      return n;
+    },
+    [rgb[0], rgb[1], rgb[2], tolerance] as const
+  );
 }
 
 /** 当前可见的工具按钮顺序（`data-fmode`），隐藏的不计。 */

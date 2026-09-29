@@ -69,7 +69,7 @@ pixi run build-windows    # PyInstaller 独立分发包
 2. `pixi run test`
 3. `npm --prefix frontend run build`（含 `tsc` 类型检查）
 4. 改动前端逻辑时另跑 `npm --prefix frontend test`
-5. 改动界面行为或 RPC 契约时另跑 `pixi run test-e2e`（改契约时先跑 `pixi run test-contract`，26s vs 95s）
+5. 改动界面行为或 RPC 契约时另跑 `pixi run test-e2e`（改契约时先跑 `pixi run test-contract`，26s vs 110s）
 
 CI（`.github/workflows/ci.yml`）执行的就是前三条；本地跑通这三条即与 CI 一致。
 分层职责与各层取舍见 `docs/testing-strategy.md`。
