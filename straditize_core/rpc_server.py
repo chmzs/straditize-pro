@@ -1323,9 +1323,9 @@ def main() -> None:
     print(
         f"\n=================================================================\n"
         f"  Straditize Pro 已启动！\n"
-        f"  • 浏览器访问：http://127.0.0.1:{server.actual_port}/\n"
-        f"  • AI WebMCP 端点：http://127.0.0.1:{server.actual_port}/mcp\n"
-        f"  • 关闭方式：网页右上角点击 [退出] 或在终端按 Ctrl+C\n"
+        f"  - 浏览器访问：http://127.0.0.1:{server.actual_port}/\n"
+        f"  - AI WebMCP 端点：http://127.0.0.1:{server.actual_port}/mcp\n"
+        f"  - 关闭方式：网页右上角点击 [退出] 或在终端按 Ctrl+C\n"
         f"=================================================================\n"
     )
 

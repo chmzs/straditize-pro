@@ -14,7 +14,7 @@ from straditize_core.rpc_methods import register_all
 from straditize_core.rpc_server import create_rpc_dispatcher
 from straditize_core.session import StraditizeSession
 
-HOYA_PATH = Path("straditize/straditize/widgets/tutorial/hoya-del-castillo/hoya-del-castillo.png")
+HOYA_PATH = Path("straditize_core/assets/tutorials/hoya-del-castillo.png")
 HOYA_SHA256 = "f94196e6a81666c61c72ea7a2c731ee5d29dfe914414a2f35628d3ed5ed91c1f"
 
 

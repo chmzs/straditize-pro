@@ -119,7 +119,7 @@ test.describe('应用外壳与基线', () => {
     // 该文件若被替换或移动，本断言会失败——这正是它要钉住的东西。
     const samplePath = join(
       REPO_ROOT,
-      'straditize/straditize/widgets/tutorial/hoya-del-castillo/hoya-del-castillo.png'
+      'straditize_core/assets/tutorials/hoya-del-castillo.png'
     );
     const actualSha = createHash('sha256').update(readFileSync(samplePath)).digest('hex');
     expect(actualSha, `样本文件 ${samplePath} 的 sha256 与真值不符`).toBe(hoya.sha256);

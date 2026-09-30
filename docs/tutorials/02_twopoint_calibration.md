@@ -8,6 +8,8 @@
 
 为此，**Straditize Pro** 提出了**两点式物理刻度标定系统 (Two-Point Physical Tick Calibration)**。
 
+![两点式物理标定与对数尺度保护动图演示](../assets/tutorials/02_twopoint_calibration.gif)
+
 ---
 
 ## 1. 物理标定原理

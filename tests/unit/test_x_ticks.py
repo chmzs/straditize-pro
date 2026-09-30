@@ -11,7 +11,7 @@ from straditize_core.protocol import JsonRpcError
 from straditize_core.session import StraditizeSession
 from straditize_core.xticks import detect_xticks
 
-BELL_IMG_PATH = Path("straditize/straditize/widgets/tutorial/beginner/beginner-tutorial.png") # fallback / probe path
+BELL_IMG_PATH = Path("straditize_core/assets/tutorials/beginner-tutorial.png") # fallback / probe path
 TRUTH_DIR = Path("tests/data/truth")
 
 

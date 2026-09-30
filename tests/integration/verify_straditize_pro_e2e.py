@@ -254,7 +254,7 @@ class TestStraditizeProFullE2E(unittest.TestCase):
     def test_04_full_scientific_digitization_pipeline(self):
         """Verify genuine pollen diagram digitization, 0.0 unobserved taxa, and CSV export."""
         print("\n--- [E2E 4/6] Testing Full Scientific Digitization Pipeline ---")
-        hoya_img = os.path.abspath("straditize/straditize/widgets/tutorial/hoya-del-castillo/hoya-del-castillo.png")
+        hoya_img = os.path.abspath("straditize_core/assets/tutorials/hoya-del-castillo.png")
         self.assertTrue(os.path.exists(hoya_img), f"Sample image not found: {hoya_img}")
 
         session = StraditizeSession()

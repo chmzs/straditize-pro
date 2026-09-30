@@ -136,12 +136,13 @@ def _decode_diagram_source(
 
     # Case 1: Built-in sample key
     if not image_path and not image_data and sample_key:
-        repo_root = Path(__file__).resolve().parent.parent
-        tutorial_dir = repo_root / "straditize" / "straditize" / "widgets" / "tutorial"
+        pkg_root = Path(__file__).resolve().parent
+        repo_root = pkg_root.parent
+        tutorial_dir = pkg_root / "assets" / "tutorials"
         sample_candidates = {
-            "hoya": tutorial_dir / "hoya-del-castillo" / "hoya-del-castillo.png",
+            "hoya": tutorial_dir / "hoya-del-castillo.png",
             "verification": repo_root / "verification_real_pollen_edit.png",
-            "beginner": tutorial_dir / "beginner" / "beginner-tutorial.png",
+            "beginner": tutorial_dir / "beginner-tutorial.png",
         }
         cand = sample_candidates.get(sample_key.lower())
         if cand is None:

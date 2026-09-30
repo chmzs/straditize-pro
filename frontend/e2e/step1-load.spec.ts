@@ -23,9 +23,9 @@ import { diagramData, resetBaseline, rpc } from './helpers';
 
 /** 每个可选项对应的真值尺寸——取自真实样本文件，改动样本即须同步改这里。 */
 const SAMPLE_TRUTH: Record<string, [number, number]> = {
-  // straditize/straditize/widgets/tutorial/hoya-del-castillo/hoya-del-castillo.png
+  // straditize_core/assets/tutorials/hoya-del-castillo.png
   hoya: [2339, 1654],
-  // straditize/straditize/widgets/tutorial/beginner/beginner-tutorial.png
+  // straditize_core/assets/tutorials/beginner-tutorial.png
   beginner: [1923, 1796],
 };
 

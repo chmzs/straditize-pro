@@ -28,9 +28,9 @@ def get_test_image_path() -> str:
     """Locate the hoya-del-castillo.png test image reliably."""
     repo_root = Path(__file__).resolve().parents[2]
     candidates = [
+        repo_root / "straditize_core" / "assets" / "tutorials" / "hoya-del-castillo.png",
         repo_root / "frontend" / "public" / "hoya-del-castillo.png",
         repo_root / "docs" / "demo" / "hoya-del-castillo.png",
-        repo_root / "straditize" / "straditize" / "widgets" / "tutorial" / "hoya-del-castillo" / "hoya-del-castillo.png",
     ]
     for c in candidates:
         if c.exists():

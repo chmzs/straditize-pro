@@ -49,8 +49,8 @@ include = ["straditize_core*"]
 # models = ONNX 识别模型；data = 硅藻属词表 diatom_genera.json。
 # 后者原先漏配，pip 装的包会静默退回"只有花粉词表"（PyInstaller 路径早已登记）。
 "straditize_core.ocr" = ["models/*", "data/*"]
-# 内置范例图（session.load_age_depth_diagram(sample_key=...) 读取）
-"straditize_core.assets" = ["age_models/*"]
+# 内置范例图（load_image / load_age_depth_diagram 的 sample_key 读取）
+"straditize_core.assets" = ["age_models/*", "tutorials/*"]
 
 # ---------------------------------------------------------------------------
 # Ruff（原独立 ruff.toml，已并入本文件作为唯一配置源）
@@ -69,15 +69,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"straditize/tests/**" = ["ALL"]
 "tests/**" = ["ALL"]
-"straditize/docs/**" = ["ALL"]
-"straditize/ci/**" = ["ALL"]
-"straditize/setup.py" = ["ALL"]
-"straditize/straditize/widgets/**" = ["ALL"]
-"straditize/straditize/__init__.py" = ["F401"]
-"straditize/straditize/__main__.py" = ["F401"]
-"straditize/straditize/evaluator.py" = ["F401"]
 
 # ---------------------------------------------------------------------------
 # pytest

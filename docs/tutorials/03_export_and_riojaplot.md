@@ -4,6 +4,8 @@
 
 本教程介绍 Straditize Pro 对齐 **WebPlotDigitizer (WPD)** 的科学导出面板，以及如何无缝配合 R 语言生态（`rioja`、`vegan`）完成高水平地层图谱绘制。
 
+![核心模态框与科学导出全流程演示](../assets/tutorials/03_modals_and_export.gif)
+
 ---
 
 ## 1. 地学导出规范与“零 NA 原则”

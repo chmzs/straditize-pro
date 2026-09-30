@@ -50,9 +50,9 @@
 
 ## 🖥️ 软件界面与实测截图 (Preview)
 
-![Straditize Pro 科学数据导出与在线成图面板](docs/assets/real_browser_playwright_verified.png)
+![Straditize Pro 8步完整工作流真机动图演示](docs/assets/tutorials/01_workflow_8steps.gif)
 
-> 上图为 Straditize Pro 在真实浏览器中解译经典地层图谱 *Hoya del Castillo* 并导出科学矩阵与 `riojaPlot` 脚本的实测截图。
+> 上图为 Straditize Pro 在真实浏览器中完成 8 步工作流解译经典地层图谱 *Hoya del Castillo* 并导出科学矩阵与 `riojaPlot` 脚本的实机录制动图。
 
 ---
 
@@ -70,19 +70,19 @@
 - **零丰度真值原则**：未出现属种或低于检出限层位在输出矩阵中**严格填入 `0.0`**（绝不输出可能破坏生态统计软件的伪 `NA`）；
 - **首列无条件命名为 `depth`**，开箱直连 `rioja`、`vegan`、`Tilia` 及 `CONISS` 等分析管线。
 
-### 3. S0 ~ S7 七阶段严格线性工作流状态机
+### 3. 8 阶段地学图谱科学解译工作流
 - 彻底告别打开图片后后台胡乱盲跑切列引发错位的历史缺陷；
-- 遵循 **S0 空状态 $\to$ S1 载入 $\to$ S2 ROI $\to$ S3 分列 $\to$ S4 标尺 $\to$ S5 拐点精修 $\to$ S6 校验 $\to$ S7 导出** 7 阶段状态机，胶囊打勾高亮，已完成阶段可自由跳回；
+- 严格遵循 **1.载入 $\to$ 2.取数区 (Multi-ROI) $\to$ 3.Y标定 $\to$ 4.去线清理 $\to$ 5.分列与命名 (含离线 OCR) $\to$ 6.X刻度与列组 $\to$ 7.数字化与层位 (含年代模型) $\to$ 8.校验与导出 (含 LiPD 元数据)** 8 阶段状态机，胶囊打勾高亮，已完成阶段可自由跳回；
 - **绿色原位半透明重叠层 (Visual Ghosting)**：数字化结果以半透明绿多边形原位叠加在底图黑白墨迹上方，肉眼秒级核对吻合度；
 - **Radon 变换微斜角检测与矫正**：400ms 内求出图像扫描微小倾斜角并提供一键水平矫正；
 - **全景 Minimap 缩略雷达导航**：右下角常驻 160×120px 缩略雷达，当前视口白框高亮，支持点击拖拽平滑漫游；
 - **左右抽屉防丢拉环**：侧边栏与属性检查器折叠后，边缘常驻实体把手 `[› 属种清单]` 与 `[‹ 属性检查器]`，配合快捷键 `Ctrl+[` / `Ctrl+]` 双重保障；
-- **100% 丰度总和自检门禁**：导出前自动计算各层位加和，偏离 100% 醒目警示，支持在双向冻结（表头与 Depth 列固定）表格中就地在线改数。
+- **地学 QA 诊断与 100% 丰度总和自检门禁**：导出前自动检验各层位加和与未标定列，偏离 100% 醒目警示，支持在双向冻结（表头与 Depth 列固定）表格中就地在线改数。
 
 ### 4. 研发发表级成果导出 (WPD-Aligned Exporter)
-- **科学数据矩阵**：支持排序（深度升序/降序）、浮点精度格式化、一键复制到剪贴板与 CSV / Parquet 下载；
+- **科学数据矩阵**：支持排序（深度升序/降序）、浮点精度格式化、一键复制到剪贴板与 CSV / Excel / LiPD / TAR 下载；
 - **直通 `rioja::strat.plot`**：一键生成开箱即用的 R 语言地层出图脚本，完美复刻出版级花粉图谱；
-- **开放标准工程归档 (`.tar`)**：依据 POSIX UStar 标准打包，包含 `manifest.json`、`image/original.png`、`straditize.json`、`data.csv`、`plot_strat.R` 及 `README.txt`，支持工程 100% 原样还原。
+- **开放标准工程归档 (`.tar`)**：依据 POSIX UStar 标准打包，包含双原图、`straditize.json` 矢量模型、`data.csv`、`plot_strat.R` 及元数据，支持工程 100% 原样还原。
 
 ### 5. 单二进制与双启动模式 (Dual Launch Modes)
 - **一个二进制产物 `straditize.exe`**，自动根据参数切换运行形态；
@@ -144,10 +144,6 @@ npm --prefix frontend run build
   ```
 - 浏览器访问 `http://localhost:5173`。Vite 已把后端路由前缀代理到 8765，
   因此**浏览器端始终是同源**，无需为开发模式开放任何跨源例外。
-
-> ⚠️ **不要用 `pixi run run-straditize`**（即 `python -m straditize`）：它启动的是上游第三方 PyQt5 原版，
-> **不是本项目的现代版**，且当前环境缺少 `docrep` 等依赖会直接报错，命令名具有误导性。
-> 该子树目前仅因提供内置范例所需的示例图片而保留。
 
 ---
 
@@ -213,10 +209,10 @@ straditize-pro/
 │   ├── image.py                  # 图像去网格、二值化、色彩掩膜
 │   ├── age_depth.py              # 年代-深度模型识别、提取与不确定性映射
 │   ├── ocr/                      # OCR 识别与科属中拉丁词典
+│   ├── assets/                   # 内置教学范例与年代模型样本图 (tutorials / age_models)
 │   ├── rpc_server.py             # HTTP / Stdio 双协议服务、访问控制与静态资源托管
 │   └── session.py                # 会话状态机、数据求交与 POSIX UStar 导出
 ├── support/                      # 现代版打包配方 (PyInstaller spec) 与数据同步脚本
-├── straditize/                   # 上游第三方 PyQt5 原版 (不维护；仅提供范例示例图片)
 ├── tests/                        # pytest 测试：按层级分 unit / integration
 │   ├── conftest.py               # 仓库根 sys.path 注入 + 装载隔离区
 │   ├── quarantine.txt            # 已知失败用例隔离区（strict xfail，只减不增）
@@ -260,8 +256,7 @@ npm --prefix frontend run test:e2e:typecheck   # e2e 代码的类型检查
 pixi run test-contract
 ```
 
-> 现代版测试位于仓库根 `tests/`，而非上游遗留的 `straditize/tests/`
-> （后者只属于那条 PyQt5 分支，当前环境缺依赖跑不起来）。
+> 现代版测试位于仓库根 `tests/`（上游 PyQt5 原版已归档至 `legacy` 分支）。
 > 其中 `tests/integration/test_no_fabrication.py` 专门守卫"不得返回替代数据"这条不变量。
 >
 > 浏览器 E2E 在 `frontend/e2e/`：`playwright.config.ts` 的 `webServer` 会自动拉起

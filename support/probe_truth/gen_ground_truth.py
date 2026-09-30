@@ -29,7 +29,7 @@ IMAGES = {
     "exaggeration_bell": ROOT / "tests/data/figures/benchmark_types/type2_exaggeration_bell.png",
     "composite_cluster": ROOT / "tests/data/figures/benchmark_types/type6_composite_zonation_cluster.png",
     "filled_silhouette": ROOT / "tests/data/figures/benchmark_types/type1_filled_silhouette_aber.png",
-    "hoya": ROOT / "straditize/straditize/widgets/tutorial/hoya-del-castillo/hoya-del-castillo.png",
+    "hoya": ROOT / "straditize_core/assets/tutorials/hoya-del-castillo.png",
 }
 
 

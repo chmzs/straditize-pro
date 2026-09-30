@@ -3,6 +3,7 @@
 
 import os
 import sys
+from PyInstaller.utils.hooks import collect_submodules
 
 # SPECPATH is support/ -> repo_root is one level up
 repo_root = os.path.abspath(os.path.join(SPECPATH, ".."))
@@ -28,6 +29,10 @@ if os.path.isdir(ocr_data_dir):
 age_models_dir = os.path.join(source_root, "assets", "age_models")
 if os.path.isdir(age_models_dir):
     datas.append((age_models_dir, os.path.join("straditize_core", "assets", "age_models")))
+
+tutorials_dir = os.path.join(source_root, "assets", "tutorials")
+if os.path.isdir(tutorials_dir):
+    datas.append((tutorials_dir, os.path.join("straditize_core", "assets", "tutorials")))
 
 excludes = [
     # Legacy PyQt5 & WebEngine
@@ -68,18 +73,7 @@ analysis = Analysis(
     pathex=[repo_root],
     binaries=[],
     datas=datas,
-    hiddenimports=[
-        "straditize_core",
-        "straditize_core.rpc_server",
-        "straditize_core.cli",
-        "straditize_core.session",
-        "straditize_core.digitize",
-        "straditize_core.curve",
-        "straditize_core.columns",
-        "straditize_core.image",
-        "straditize_core.calibration",
-        "straditize_core.protocol",
-        "straditize_core.age_depth",
+    hiddenimports=collect_submodules("straditize_core") + [
         "skimage",
         "skimage.morphology",
         "skimage.color",
@@ -95,11 +89,6 @@ analysis = Analysis(
         "openpyxl",
         "pypdf",
         "onnxruntime",
-        "straditize_core.ocr",
-        "straditize_core.ocr.engine",
-        "straditize_core.ocr.dictionary",
-        "straditize_core.ocr.affine",
-        "straditize_core.metadata",
     ],
     hookspath=[],
     hooksconfig={},

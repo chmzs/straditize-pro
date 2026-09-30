@@ -14,6 +14,7 @@ extra-index-urls = ["https://pypi.org/simple"]
 [tasks]
 app = "python -m straditize_core.rpc_server"                                   # 启动现代版应用 (浏览器 + JSON-RPC + WebMCP + 退出)
 frontend-dev = "npm --prefix frontend run dev"                            # 启动现代版前端开发服务器
+record-tutorials = "python scripts/record_tutorials.py"                   # 自动录制 8 步工作流与三大模态框真机动图与视频
 
 [tasks.test]
 description = "Run the FULL backend test suite (was: a hand-picked 16-file whitelist)"
@@ -50,10 +51,6 @@ description = "只跑前后端契约 lane（构建 SPA + e2e/contract.spec.ts）
 # test-e2e 完全一致（同样先 build，避免对着旧的 frontend/dist 跑），且同样受
 # fixtures.ts 的全局错误门禁约束。改 RPC 契约时先跑这个，再跑全量。
 cmd = "npm --prefix frontend run build && npm --prefix frontend run test:e2e:contract"
-
-[tasks.test-legacy]
-description = "Run legacy PyQt5 widget test suite (requires legacy dependencies)"
-cmd = "python -m pytest straditize/tests/widgets -q"
 
 [tasks.install]
 description = "Install straditize in editable mode"

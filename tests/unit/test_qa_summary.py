@@ -18,7 +18,7 @@ import pytest
 from straditize_core.session import StraditizeSession
 
 HOYA_PATH = Path(
-    "straditize/straditize/widgets/tutorial/hoya-del-castillo/hoya-del-castillo.png"
+    "straditize_core/assets/tutorials/hoya-del-castillo.png"
 )
 
 

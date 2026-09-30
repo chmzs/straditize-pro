@@ -7,9 +7,7 @@
 
 现代版是 **Python 后端（`straditize_core`，JSON-RPC over HTTP）+ TypeScript 前端（`frontend/`，Vite）**。
 后端同时托管前端静态资源，故浏览器**始终同源**（默认 `http://127.0.0.1:8765/`）。
-
-`straditize/` 是上游第三方 PyQt5 原版（Author: Philipp Sommer），**本项目不维护、当前环境缺依赖跑不起来**，
-仅作为内置范例的图片资源被引用。
+上游 PyQt5 原版（Author: Philipp S. Sommer）已完整归档至 `legacy` 分支，内置范例图片已迁入 `straditize_core/assets/tutorials/`。
 
 **两条不可违反的不变量**（详见 `docs/ARCHITECTURE.md` §2、§9）：
 
@@ -44,11 +42,6 @@ pixi run build-windows    # PyInstaller 独立分发包
 ```
 
 前端包管理统一为 **npm**（锁文件只有 `frontend/package-lock.json`）；CI、pixi 任务与文档均使用 npm。
-
-⚠️ 两个陷阱命令：
-
-- `pixi run run-straditize`（`python -m straditize`）启动的是**上游 PyQt5 原版**，不是现代版，且当前环境缺 `docrep` 会直接报错。
-- `pixi run test-legacy` 需要上述遗留依赖，当前环境不可用。
 
 ## 修改规范
 
