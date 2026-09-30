@@ -252,6 +252,47 @@ class TestMetadataAndLiPDSuite(unittest.TestCase):
         self.assertTrue(lipd_res["success"])
         self.assertGreater(lipd_res["size_bytes"], 1000)
 
+    def test_08_external_llm_paste_parser_supports_fenced_and_flat_json(self):
+        """Verify zero-token external LLM paste assistant parses fenced Markdown & flat/nested JSON."""
+        session = StraditizeSession()
+        chat_reply = """当然可以！以下是从您上传的 PDF 论文中提取的元数据：
+```json
+{
+  "publication": {
+    "doi": "https://doi.org/10.1016/j.quascirev.2024.108504",
+    "title": "Holocene pollen record from Lake Gahai",
+    "authors": "Shan Zhou, Jiawu Zhang",
+    "journal": "Quaternary Science Reviews",
+    "year": "2024",
+    "funding_agency": "NSFC",
+    "funding_grant": "41771212"
+  },
+  "site": {
+    "site_name": "Lake Gahai (GHB core)",
+    "water_depth_m": "11.4",
+    "core_length_m": "14.0",
+    "collection_date": "2008-05"
+  },
+  "technical": {
+    "investigators": "Jiawu Zhang, Shan Zhou",
+    "affiliation": "Lanzhou University"
+  }
+}
+```
+希望对您有帮助！"""
+        res = session.metadata_parse_external(chat_reply, apply_to_session=True)
+        self.assertTrue(res["success"])
+        meta = session.paper_metadata
+        self.assertEqual(meta["publication"]["doi"], "10.1016/j.quascirev.2024.108504")
+        self.assertEqual(meta["publication"]["authors"], ["Shan Zhou", "Jiawu Zhang"])
+        self.assertEqual(meta["publication"]["year"], 2024)
+        self.assertEqual(meta["publication"]["funding_grant"], "41771212")
+        self.assertEqual(meta["site"]["site_name"], "Lake Gahai (GHB core)")
+        self.assertEqual(meta["site"]["water_depth_m"], "11.4")
+        self.assertEqual(meta["site"]["collection_date"], "2008-05")
+        self.assertEqual(meta["technical"]["investigators"], "Jiawu Zhang, Shan Zhou")
+        self.assertEqual(meta["technical"]["affiliation"], "Lanzhou University")
+
 
 if __name__ == "__main__":
     unittest.main()

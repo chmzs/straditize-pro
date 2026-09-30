@@ -118,18 +118,23 @@ def compute_qa_summary(
 
     # Per-column peak vs declared scale max
     per_column_max: list[dict[str, Any]] = []
+    uncalibrated_columns: list[str] = []
     for col in columns_info:
         c_name = col.get("name", "")
         declared_max = float(col.get("declared_max", 0.0))
         c_vals = col.get("col_values", [])
         peak = float(np.max(c_vals)) if len(c_vals) > 0 else 0.0
-        over = bool(declared_max > 0.0 and peak > declared_max)
+        calibrated = bool(col.get("calibrated", declared_max > 0.0))
+        if not calibrated:
+            uncalibrated_columns.append(c_name)
+        over = bool(calibrated and declared_max > 0.0 and peak > declared_max)
         per_column_max.append(
             {
                 "name": c_name,
                 "peak": round(peak, 1),
                 "declared_max": round(declared_max, 1),
                 "over": over,
+                "calibrated": calibrated,
             }
         )
 
@@ -146,4 +151,6 @@ def compute_qa_summary(
         "violations_over": violations_over,
         "shortfall": shortfall_dict,
         "per_column_max": per_column_max,
+        "n_uncalibrated": len(uncalibrated_columns),
+        "uncalibrated_columns": uncalibrated_columns,
     }

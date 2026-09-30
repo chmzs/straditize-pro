@@ -1224,6 +1224,12 @@ export class OcrReviewModal {
         if (matchedLabel) {
           matchedLabel.user_override_name = input.value;
         }
+        if (chk && input.value.trim()) {
+          chk.disabled = false;
+          chk.checked = true;
+          const span = chk.parentElement?.querySelector('span');
+          if (span) span.style.color = 'var(--accent-green, #059669)';
+        }
       });
 
       const chk = tr.querySelector('.ocr-accept-chk') as HTMLInputElement;
@@ -1308,7 +1314,6 @@ export class OcrReviewModal {
           }
         });
 
-        alert(`✅ 成功将 ${res.applied_count} 个经审核属种名赋予图谱各列（已更新默认 colxx 编号）！`);
         this.onApplySuccess();
         this.close();
       }

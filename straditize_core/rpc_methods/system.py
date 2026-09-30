@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from ..protocol import JsonRpcError
+from ..session_parts.xscale import resolve_column_scale
 
 
 def register(dispatcher: Any, session: Any) -> None:
@@ -124,32 +125,40 @@ def register(dispatcher: Any, session: Any) -> None:
                 })
             pts.sort(key=lambda p: p["y"])
 
-            scale_type = c.get("scale_type", "linear")
-            start_val = c.get("startValue", 0)
-            calib_val = c.get("tickValue", (100 if c_idx < 3 else (50 if c_idx < 8 else 20)))
-            calib_x = c.get("tickEndX", (c_end if (c_end - c_start) > 0 else (c_start + 60)))
+            scale = resolve_column_scale(session, c, c_idx)
             species_val = c.get("species", name)
 
             formatted_cols.append({
                 "id": c.get("id") or f"taxa_{c_idx}",
+                # 后端自己的权威列序号；前端拿它寻址。不要用数组下标代替：
+                # column_add 造的列没有 id，payload 会合成 taxa_N，按 id 反而找不到。
+                "col_index": c_idx,
                 "name": name,
                 "species": species_val,
                 "color": palette[c_idx % len(palette)],
                 "startX": c_start,
                 "endX": c_end,
-                "scale_type": scale_type,
-                "startValue": start_val,
-                "tickValue": calib_val,
+                "scale_type": scale.scale_type,
+                "plot_type": scale.plot_type,
+                "plotType": scale.plot_type,
+                "exaggeration_mult": scale.exaggeration_mult,
+                "hasExaggeration": scale.exaggeration_mult is not None,
+                "exaggerationMult": scale.exaggeration_mult,
+                # 标度的唯一事实源：两个真实刻度端点。null = 未标定。
+                # 删掉它整条链路就断（载荷剥字段 → 前端 hasTicks 恒 false → 标尺画不出来）。
+                "x_ticks": c.get("x_ticks"),
+                "startValue": scale.val0,
+                "tickValue": scale.val1,
                 "scaleCalib": {
-                    "originX": c_start,
-                    "originVal": start_val,
-                    "calibX": calib_x,
-                    "calibVal": calib_val,
-                    "unit": "%",
+                    "originX": scale.abs_px0,
+                    "originVal": scale.val0,
+                    "calibX": scale.abs_px1,
+                    "calibVal": scale.val1,
+                    "unit": scale.unit,
                 },
-                "tickEndX": calib_x,
-                "maxPercent": calib_val,
-                "unit": "%",
+                "tickEndX": scale.abs_px1,
+                "maxPercent": max(scale.val0, scale.val1),
+                "unit": scale.unit,
                 "curveType": "linear",
                 "visible": True,
                 "isLocked": False,
@@ -237,6 +246,10 @@ def register(dispatcher: Any, session: Any) -> None:
             "allowed_hosts": cfg.get("allowed_hosts", ["127.0.0.1", "localhost"]),
             "locale": cfg.get("locale", "zh-CN"),
             "theme": cfg.get("theme", "light"),
+            "llm_base_url": cfg.get("llm_base_url", "https://api.openai.com/v1"),
+            "llm_api_key": cfg.get("llm_api_key", ""),
+            "llm_model": cfg.get("llm_model", "gpt-4o"),
+            "llm_prompt_template": cfg.get("llm_prompt_template", ""),
             "rpc_endpoint": f"http://127.0.0.1:{port}/rpc",
             "webmcp_endpoint": "/mcp",
             "server_bound_host": host,
@@ -252,6 +265,10 @@ def register(dispatcher: Any, session: Any) -> None:
         allowed_hosts: list[str] | str | None = None,
         locale: str | None = None,
         theme: str | None = None,
+        llm_base_url: str | None = None,
+        llm_api_key: str | None = None,
+        llm_model: str | None = None,
+        llm_prompt_template: str | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         import re
@@ -274,6 +291,14 @@ def register(dispatcher: Any, session: Any) -> None:
             updates["locale"] = str(locale)
         if theme is not None:
             updates["theme"] = str(theme)
+        if llm_base_url is not None:
+            updates["llm_base_url"] = str(llm_base_url).strip()
+        if llm_api_key is not None:
+            updates["llm_api_key"] = str(llm_api_key).strip()
+        if llm_model is not None:
+            updates["llm_model"] = str(llm_model).strip()
+        if llm_prompt_template is not None:
+            updates["llm_prompt_template"] = str(llm_prompt_template)
 
         saved = save_config(updates)
         server = getattr(session, "server", None)

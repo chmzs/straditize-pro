@@ -125,6 +125,11 @@ ssh -L 8765:127.0.0.1:8765 用户@远端主机
 S0 空状态 → S1 载入 → S2 ROI 取数区 → S3 分列 → S4 标尺标定 → S5 拐点精修 → S6 校验 → S7 导出
 ```
 
+⚠️ 上面是**设计稿编号**，与已实现 UI 的步骤号**不一致**（设计稿漏了「清理」与「标定列」）。
+UI 的权威步骤号只有一处：`frontend/src/types/workflow.ts` ——
+`1 载入 → 2 ROI → 3 Y 轴标定 → 4 清理 → 5 分列 → 6 标定列 → 7 拐点与采样层位 → 8 校验`。
+下文提到阶段时若用 `S<n>` 一律指设计稿编号；指 UI 步骤时写「步骤 n」。
+
 定义见 `frontend/src/types/workflow.ts`。阶段与可用工具的映射是**唯一事实源**：
 `GeologyCanvas.getAllowedTools()` —— 浮动工具条置灰、键盘守卫、鼠标编辑路径三处都必须走它。
 
@@ -133,7 +138,7 @@ S0 空状态 → S1 载入 → S2 ROI 取数区 → S3 分列 → S4 标尺标�
 | 键 | 工具 | 起始阶段 |
 | --- | --- | --- |
 | `R` | ROI 取数区手柄 | S2 |
-| `K` | 线掩膜人工修正笔刷（擦掉误标 / 补回漏标） | S2 |
+| `K` | 线掩膜人工修正笔刷（擦掉误标 / 补回漏标） | 步骤 4（清理） |
 | `Y` | Y 轴两点标定（点两个参考行 → 填真实值） | S4 |
 | `A` / `S` / `D` / `C` / `H` | 加点 / 微调 / 删点 / 加列 / 平移 | 见 §9.6 |
 
@@ -150,6 +155,18 @@ $$\text{Linear: } v(x) = s + \frac{x - x_s}{x_t - x_s}(t - s)$$
 $$\text{Log: } v(x) = \exp\left(\ln s + \frac{x - x_s}{x_t - x_s}(\ln t - \ln s)\right)$$
 
 **Log 硬约束**：`startValue > 0`、`tickValue > 0`、二者不等；界面即时禁用并提示，绝不静默退化。
+
+### 6.0 列分组与标度统一解析源（2026-09-29 v2 设计）
+
+为彻底杜绝「两条换算链导致同一列在 CSV/Parquet 与 XLSX/LiPD 导出不同数值」的历史顽疾，
+前后端所有换算点（导出、网格采样、QA 校验、前端投影）统一收口至单一解析入口：
+- 后端：`straditize_core.session_parts.xscale::resolve_column_scale`
+- 前端：`CoordinateSystem.resolveColumnScale`
+
+**ROI 内列分组架构 (D1 / D2 / D3)**：
+1. **组在 ROI 内**：组共享 **单位 / 图形形态 / 尺度类型 / 放大倍数 / 刻度位置**；刻度**数值**留在每列上（D1: 组管形式与位置，列管满量程数值）。
+2. **重新分列数值保全**：重新分列时，若本 ROI 列数不变，自动回填列级标定数值并施加区间守卫（刻度像素落在列边界 `[start-10, end+10]` 内），避免改名或重分列静默清空标定。
+3. **多 ROI 工程包承载 (D3)**：`project_save` 与 `project_load` (v3.0.0) 完整承载多 ROI、各 ROI 内列组与每列 `roi_id` / `x_group_id` / `x_values`，旧版 v2.x 工程载入时自动按 D2 逐列一组保真迁移。
 
 **关键区分（易错）**：
 
@@ -185,8 +202,9 @@ calibration: { isCalibrated, top_px, top_cm,
 core.loadImage          → 载入图像 + suggested_roi（仅区域）
 core.detectColumns      → 列边界（data_xlim / data_ylim 为参）
 roi.update              → 取数区域（frontend↔backend 同步；不碰标定）
-algorithm.degrid        → ROI 内的线掩膜 + B 键 QC 叠加层（横线与竖线）
-core.digitize(col)      → 该列曲线控制点（纯像素几何，线圈在 ROI 内并被去线掩膜扣除）
+algorithm.detectLineCandidates → ROI 内的候选干扰线几何（status=candidate，不动像素）
+algorithm.applyLineRemoval → 重新合成线掩膜 + B 键 QC 叠加层（不改输入）
+core.digitize(col)      → 该列曲线控制点（纯像素几何，线圈在 ROI 内并被线掩膜扣除）
 core.calibrateAxes      → y_scale（深度，来自用户两点）+ x_scales[col]（百分比）
 core.extractGridValues  → 按标准深度层位求交，未观测填 0.0（绝不输出 NA）
 core.exportData / project.save
@@ -202,23 +220,31 @@ core.exportData / project.save
 ```text
 ink = foreground_mask                      # 原始墨迹，分列检测仍看这一份（不被就地修改）
 candidate_line_mask = 栅格化(status == "removed" 的 geometry)
-degrid_line_mask    = detect_grid_lines(ink, roi, strength, remove_vertical)   # S2 档位路径
 exclusion_mask      = 栅格化(排除区；绝对优先)
 manual_erase / manual_restore = 栅格化(笔迹)
 
-line = (candidate_line_mask | degrid_line_mask | manual_erase)
+line = (candidate_line_mask | manual_erase)
 line &= ~(manual_restore & ~exclusion_mask)
 grid_line_mask = line | exclusion_mask          # 单一合成点：_rebuild_grid_line_mask()
 digitize 用 ink & ~grid_line_mask & roi_mask
 ```
 
+⚠️ 后端 `_recompose` 仍会把一个 `degrid_line_mask` 并进上式（`_rebuild_grid_line_mask()`），
+但**前端已无任何调用方**：`algorithm.degrid`（档位式自动去线 + 笔迹 corrections）是已下线的
+旧模型，仅作为后端能力保留。`degrid_line_mask` 默认 `None`，因此该项恒为空集。
+下线的理由：档位是把"阈值 + 竖线开关 + 笔迹"三件事捆在一个预设里，用户无法判断某一档
+到底动了哪些像素；现行模型把控制权拆成**可见的几何**（哪条线、多厚、多长）与**笔迹**
+（哪几个像元），二者都能单独增删改，且与 `algorithm.detectLineCandidates` 的判据同源。
+
 - **geometry 是唯一几何真相**：`geometry: {type:'rect', x0,y0,x1,y1}`（ROI 内像素矩形）。
   `at` / `span` / `width` / `kind` 都是后端按它**派生**的显示字段，前端不得反向写回。
 - **检测与删除解耦**：检测只产出 `status="candidate"` 的几何（琥珀色，**不动任何像素**）；
-  用户确认后才置 `status="removed"`（红色，实际剔除）。敏感度不再是独立旋钮，
-  它就是检测阈值，入口只有一个。
-- **判据是「够长 + 够薄」**：形态学开运算保证线足够长（相对 ROI 跨度），
-  垂直于线方向的墨迹厚度必须 ≤ `max_thickness`（弱 2 / 中 3 / 强 5 px）。
+  用户确认后才置 `status="removed"`（红色，实际剔除）。**没有"灵敏度"旋钮**：
+  旧档位（弱/中/强）已随旧模型下线，详见上面 ⚠️。
+- **判据是「够长 + 够薄」**：形态学开运算保证线足够长（相对 ROI 跨度，
+  默认 `line_fraction_h=0.75` / `line_fraction_v=0.30`），
+  垂直于线方向的墨迹厚度必须 ≤ `line_width_max`（默认 2px，由 `resolve_width_max()` 兜底）。
+  这两组值定义在 `straditize_core/lines.py`，是后端常量，前端不暴露旋钮。
   真实花粉实心轮廓被横线穿过处厚达数十像素，因此**豁免**。
 - **历史缺陷（已修）**：旧实现是"某行横向 run 超过阈值 → 删掉整行"，
   实测在内置 Hoya 图上 ROI 墨迹的 **55–70%** 被标成线，其中 **95%** 是 ≥4px 的实心轮廓，
@@ -251,10 +277,16 @@ digitize 用 ink & ~grid_line_mask & roi_mask
 - 人工修正分两层，**职责不重叠**：
   - **geometry**（承载工具）：整条横/竖线，可增删改、可复用；
   - **笔迹**（修补工具）：只处理 geometry 漏标/误标的**局部像元**，不画线。
-  笔迹以折线 `{mode, radius, points}` 落库而非位图：改档位或改 ROI 后自动掩膜会变，
-  笔迹仍可重放；随 `straditize.json` 的 `line_removal.corrections` 持久化。
-- `strength: "off"` 必须**主动清空**自动去线掩膜，否则关闭后数字化仍在扣除旧掩膜；
-  但它**不得**清掉 geometry / 排除区 / 笔迹——那三者与档位无关。
+  笔迹以折线 `{id, mode: 'erase'|'restore', radius, points}` 落库而非位图，
+  随 `straditize.json` 的顶层 `line_strokes` 持久化（`straditize.getDiagramData` 平铺下发）。
+  写成折线而非位图是为了**可重放**：改 ROI、改几何后掩膜会变，笔迹按新尺寸重新栅格化。
+  提交方式是**全量覆盖**：前端把当前全部笔迹交给 `algorithm.applyLineRemoval` 的 `strokes`，
+  后端不做增量合并——增量语义在多入口（画布涂抹 / 侧栏清空 / 撤销）下必然分叉。
+  清空笔迹只清笔迹（把空数组**显式**交给 `strokes` 再合成），**不动** geometry 与排除区；
+  要连几何一起清走 `algorithm.clearCleanupEdits`。
+  ⚠️ 清空必须走**全量覆盖**（前端统一入口 `RpcClient.setLineStrokes([])`），不能只发一次
+  "不带 `strokes` 的重算请求"——`strokes is None` 的语义是**保持原值**，那样会表现为
+  "界面提示已清空、掩膜一点没变"（实测过的失效形态）。
 
 #### Step 4 RPC 契约
 
@@ -266,8 +298,8 @@ digitize 用 ink & ~grid_line_mask & roi_mask
 | `algorithm.setGeometryStatus` | 确认(`removed`) / 撤回(`candidate`) | 清理状态 |
 | `algorithm.setLineThickness` | 把选中(`candidate_id`)/本 ROI 全部几何统一成指定像素厚度，中心行不动 | 清理状态 |
 | `algorithm.clearCleanupEdits` | 清空本 ROI 的几何 + 排除区 + 笔迹 | 清理状态 |
-| `algorithm.applyLineRemoval` | 只重新合成，不改输入 | 清理状态 |
-| `algorithm.degrid` | S2 的档位式自动去线（与 geometry 取并集） | `DegridResult` |
+| `algorithm.applyLineRemoval` | 重新合成掩膜；可选 `strokes` **全量覆盖**笔迹 | 清理状态 |
+| ~~`algorithm.degrid`~~ | **已下线**，后端保留但前端无调用方（见上文 ⚠️） | `DegridResult` |
 
 「清理状态」= `{roi_id, stats, candidates, selected_ids, overlay_png, overlay_legend}`，
 **这六项必须整体回灌前端**。`stats` 是面板显示的唯一数字来源。

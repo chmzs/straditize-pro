@@ -30,6 +30,8 @@ import { gotoStage, resetBaseline, waitForDiagram } from './helpers';
 
 /** 注入文本：既证明确实是"我们制造的那次失败"，也不会和真实错误混淆。 */
 const INJECTED = 'PROBE 注入的后端导出失败';
+/** QA 面板那条用独立文案：免得断言"看到了导出失败"其实命中的是别处的常量。 */
+const INJECTED_QA = 'PROBE 注入的 QA 汇总失败';
 
 /**
  * 只让 `method` 失败，其余 RPC 请求照常透传。
@@ -106,5 +108,108 @@ test.describe('客户端校验失败同样必须被用户看见', () => {
         timeout: 10_000,
       })
       .toContain('两点标定错误');
+  });
+});
+
+/**
+ * 第三条走的是**另一条**用户可见通道：面板自己的 banner，而不是 `alert`。
+ *
+ * `QaPanel`（步骤 8）把错误写在面板顶部的 banner 里。它曾经自己拼 JSON-RPC
+ * 信封 + 裸 `fetch`，写成 `if (response.ok) { if (json.result) {…} }`。本后端把
+ * 应用级错误放在 `HTTP 200 + body.error` 里 —— 于是 `response.ok` 为真、
+ * `json.result` 为空，**每一个后端错误都被静默吞掉**（连 `console.warn` 都没有）。
+ *
+ * 危害不在于"少了个提示"，而在于失败时 banner 仍停在渲染初值
+ * 「🟢 地学校验门禁通过，数据符合规律」—— 用户拿到的是一个**假结论**。
+ * 这也正是"只断言 DOM 里的数字"抓不到它的原因：数字停在默认 0，看着像正常空数据。
+ */
+test.describe('面板内的后端失败也必须被用户看见（banner 通道）', () => {
+  test.use({
+    allowlists: { rpcError: [/qa\.summarize/], consoleError: [/\[QA\]/] },
+  });
+
+  test('qa.summarize 失败必须把 banner 切成错误态，而不是留着绿色的「门禁通过」', async ({
+    page,
+  }) => {
+    await failRpcMethod(page, 'qa.summarize', INJECTED_QA);
+
+    // 进入步骤 8 时 `QaPanel.mount` 末尾会自动拉一次诊断，不需要点击。
+    await gotoStage(page, 8);
+
+    const banner = page.locator('#qa-banner');
+    await expect(banner, '用户必须看到失败原因，而不是一个静默的 0').toContainText(INJECTED_QA);
+    await expect(banner, 'banner 必须进入错误态').toHaveAttribute('data-level', 'red');
+    // 负向对照：失败时绝不能继续宣称"门禁通过"（修复前正是这个表现）。
+    await expect(banner, '失败时残留绿色结论就是伪造科学结论').not.toContainText('门禁通过');
+  });
+});
+
+/**
+ * 第四条走的是**非 JSON-RPC 的上传端点** `/api/upload`。
+ *
+ * 它和上面三条的失败形状不同：`/api/upload` 成功是 2xx + `{path}`，失败是
+ * **非 2xx**（不是 JSON-RPC 的 `200 + body.error`）。`AgeDepthModal` 曾经
+ * 拿到响应后**完全不查 `ok`**，直接把 `upJson.path || upJson.saved_path` 当路径 ——
+ * 错误响应体若不含那个字段，`zip_path` 就是 `undefined`，被原样喂给
+ * `component.installOfflineZip`。
+ *
+ * ## 注入形状必须是「合法 JSON 但没有 path」
+ *
+ * 这一点是被金丝雀验证逼出来的。第一版注入的是 `500 + text/plain`，看着合理，
+ * 却**证明了任何事**：那种 body 会让新旧两版代码都在 `res.json()` 处抛错，
+ * 于是两者都会弹框 —— 测试无法区分修复前后。真正能区分的是"能解析、但没有路径"
+ * 这种响应（例如后端返 `{"detail": ...}` 的 5xx）：旧代码会一路带着 `undefined`
+ * 去调用下游 RPC，新代码在 `!res.ok` 就停下。
+ *
+ * 所以本用例的承重断言不是"弹了框"，而是**下游那个 RPC 根本没有被发出去**。
+ */
+test.describe('上传失败必须被用户看见（/api/upload 通道）', () => {
+  test.use({
+    allowlists: {
+      dialog: [/离线导入失败/],
+      // 注入 5xx 会让**浏览器自己**往控制台打一条 "Failed to load resource ... 500"，
+      // 那是 Chromium 对非 2xx 响应的记录，不是应用代码的 error。本仓库的 500 由本
+      // 用例故意制造，故显式豁免；应用侧的报错仍由下面的弹框断言把守。
+      consoleError: [/Failed to load resource.*500/],
+    },
+  });
+
+  test('离线包上传失败时不得把 undefined 当路径喂给下游 RPC', async ({ page, telemetry }) => {
+    // 记录前端实际发出的 RPC 方法名，用来断言"下游调用没有发生"。
+    const rpcMethods: string[] = [];
+    await page.route('**/rpc', async (route) => {
+      const method = (route.request().postDataJSON() as { method?: string } | null)?.method;
+      if (method) rpcMethods.push(method);
+      await route.continue();
+    });
+
+    await page.route('**/api/upload', (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        // 能解析成 JSON，但没有 path / saved_path —— 旧代码正是被这种响应骗过。
+        body: JSON.stringify({ detail: '解压失败：不是合法的 zip' }),
+      })
+    );
+
+    await page.locator('#btn-age-depth-modal').click();
+    await page.locator('#inp-ad-webr-zip').setInputFiles({
+      name: 'webr-offline.zip',
+      mimeType: 'application/zip',
+      buffer: Buffer.from('PK\x03\x04-not-a-real-zip'),
+    });
+
+    await expect
+      .poll(() => telemetry.dialogs.join('\n'), {
+        message: '上传 5xx 必须弹框告知用户',
+        timeout: 10_000,
+      })
+      .toContain('离线导入失败');
+
+    // 承重断言：失败的上传绝不能推进到安装步骤（那会拿 undefined 去换取一个错位诊断）。
+    expect(
+      rpcMethods.filter((m) => m === 'component.installOfflineZip'),
+      '上传失败后不得调用 component.installOfflineZip'
+    ).toEqual([]);
   });
 });

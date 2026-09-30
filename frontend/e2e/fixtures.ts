@@ -24,10 +24,12 @@
  * ## 三道门禁
  *
  * * `console.error` / 未捕获异常（`pageerror`）——前端把错误吞在控制台里；
- * * 失败的 JSON-RPC 响应——**前端自己发起的** RPC 失败了却被静默吞掉
- *   （已知实例：`QaPanel.triggerSummarize` 失败时只 `console.warn`，面板数字
- *   静默停在默认值 0；这类问题只断言 DOM 是抓不到的。注意本后端返回
- *   `HTTP 200 + body.error`，只看 status 会漏）；
+ * * 失败的 JSON-RPC 响应——**前端自己发起的** RPC 失败了却被静默吞掉。
+ *   实测样本：`QaPanel` 曾自己拼 JSON-RPC 信封 + 裸 `fetch`，写成
+ *   `if (response.ok) { if (json.result) … }`，而本后端返回 `HTTP 200 + body.error`，
+ *   于是每个后端错误都被吞掉、面板静默停在默认值 0（这类问题只断言 DOM 抓不到，
+ *   现在既有本条门禁也有 `error-surfacing.spec.ts` 的正向用例兜着）。
+ *   注意只看 status 会漏；
  * * 原生 `dialog`——用户可见的报错通道就是它，见下。
  *
  * 注意门禁只覆盖 `console.error`，**故意不覆盖 `console.warn`**：`RpcClient` 的

@@ -256,7 +256,6 @@ export const en = {
   // ===== Step 4: Clean Panel =====
   'step4.title': '4. Grid Line & Noise Cleanup',
   'step4.forRoi': 'Target ROI:',
-  'step4.sensitivity': 'Sensitivity Control',
   'step4.spanH': 'Horizontal Span Ratio (A):',
   'step4.spanV': 'Vertical Span Ratio (B):',
   'step4.maxWidth': 'Max Line Thickness:',

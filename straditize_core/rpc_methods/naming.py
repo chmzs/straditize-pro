@@ -97,9 +97,26 @@ def register(dispatcher: Any, session: Any) -> None:
         clean_name = name.strip()
         col["name"] = clean_name
         col["species"] = clean_name
-        taxa_names = getattr(session, "taxa_names", [])
-        if idx < len(taxa_names):
-            taxa_names[idx] = clean_name
+        # `session.taxa_names` 是 `detect_columns` 重新分列时唯一的名字来源
+        # （session.py:901-908），但它只在"载入项目"（session.py:1898）与
+        # "新增列"（session.py:2168）时被填充。走"载入图片 → 自动分列"这条常规路径
+        # 时它是**空的**：session.py:471 载图时清空它，而 detect_columns 只读不写。
+        # 于是 `if idx < len(taxa_names)` 会**静默丢弃**这次改名 —— 名字留在
+        # col["name"] 上，下一次分列立刻回到 colNN（步骤 5 e2e T2 实测：
+        # 改完立刻读是 E2E_TAXA_01，重新分列后变回 col02）。
+        # 这里先把 taxa_names 补齐到与 columns 等长（用各列当前名字，保证其余列
+        # 不会因为补齐而改名），再写入本次改名。
+        taxa_names = getattr(session, "taxa_names", None)
+        if taxa_names is None:
+            taxa_names = []
+            session.taxa_names = taxa_names
+        for i in range(len(taxa_names), len(columns)):
+            taxa_names.append(
+                columns[i].get("name")
+                or columns[i].get("species")
+                or f"col{i + 1:02d}"
+            )
+        taxa_names[idx] = clean_name
 
         record_history = getattr(session, "_record_history", None)
         if record_history:

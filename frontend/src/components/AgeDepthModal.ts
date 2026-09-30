@@ -793,8 +793,23 @@ export class AgeDepthModal {
       this.renderCanvas();
     });
 
-    // 渲染测年数据表
+    // 渲染测年数据表并绑定增行按钮
     this.renderDatingTable();
+    modal.querySelector('#btn-ad-add-date-row')?.addEventListener('click', () => {
+      const nextNum = this.datingPoints.length + 1;
+      const lastDepth = this.datingPoints.length > 0 ? this.datingPoints[this.datingPoints.length - 1].depth + 20 : 10;
+      const lastAge = this.datingPoints.length > 0 ? this.datingPoints[this.datingPoints.length - 1].age + 500 : 500;
+      this.datingPoints.push({
+        id: `14C_${nextNum}`,
+        depth: lastDepth,
+        age: lastAge,
+        error: 30,
+        thickness: 1,
+        cc: 1,
+      });
+      this.renderDatingTable();
+      this.renderCanvas();
+    });
 
     // 初始化标定面板（未标定状态）
     this.updateExcludeCount();
@@ -823,7 +838,77 @@ export class AgeDepthModal {
     // 导出 geoChronR 脚本按钮
     modal.querySelector('#btn-ad-export-geochronr')?.addEventListener('click', () => this.exportGeoChronRScript());
 
-    // 未载入图谱时展示干净的拖拽/选择区域，不自动载入内置示例（点击示例按钮才载入）
+    // 若后端会话已载入年代深度图或模型（例如从 .tar/.json 工程包恢复），自动拉取并还原显示
+    void this.restoreExistingSessionModel();
+  }
+
+  private async restoreExistingSessionModel(): Promise<void> {
+    if (this.backendUnavailable()) return;
+    try {
+      const res = await this.rpcClient.call<void, any>('agedepth.getInspection');
+      if (!res || (!res.has_image && !res.has_model)) return;
+
+      const img = new Image();
+      img.onload = () => {
+        this.bgImage = img;
+        if (this.canvas) {
+          this.canvas.width = img.naturalWidth;
+          this.canvas.height = img.naturalHeight;
+          this.canvas.style.display = 'block';
+        }
+        const emptyZone = this.modalEl?.querySelector('#ad-empty-drop-zone') as HTMLElement;
+        if (emptyZone) emptyZone.style.display = 'none';
+        const lbl = this.modalEl?.querySelector('#ad-current-source-label');
+        if (lbl) lbl.textContent = '已载入工程年代图';
+
+        const cs = res.calib_state;
+        if (cs && Array.isArray(cs.age_px) && cs.age_px.length === 2 && Array.isArray(cs.depth_px) && cs.depth_px.length === 2) {
+          const padX = img.naturalWidth * 0.022;
+          const padY = img.naturalHeight * 0.022;
+          this.calibMarkers = [
+            { kind: 'ageA', x: Number(cs.age_px[0]), y: Number(cs.depth_px[1]) + padY },
+            { kind: 'ageB', x: Number(cs.age_px[1]), y: Number(cs.depth_px[1]) + padY },
+            { kind: 'depthA', x: Number(cs.age_px[0]) - padX, y: Number(cs.depth_px[0]) },
+            { kind: 'depthB', x: Number(cs.age_px[0]) - padX, y: Number(cs.depth_px[1]) },
+          ];
+          this.calibPicking = false;
+          if (Array.isArray(cs.age_vals) && cs.age_vals.length === 2) {
+            const inpL = this.modalEl?.querySelector('#ad-inp-age-left') as HTMLInputElement;
+            const inpR = this.modalEl?.querySelector('#ad-inp-age-right') as HTMLInputElement;
+            if (inpL) inpL.value = String(cs.age_vals[0]);
+            if (inpR) inpR.value = String(cs.age_vals[1]);
+          }
+          if (Array.isArray(cs.depth_vals) && cs.depth_vals.length === 2) {
+            const inpT = this.modalEl?.querySelector('#ad-inp-depth-top') as HTMLInputElement;
+            const inpB = this.modalEl?.querySelector('#ad-inp-depth-bottom') as HTMLInputElement;
+            if (inpT) inpT.value = String(cs.depth_vals[0]);
+            if (inpB) inpB.value = String(cs.depth_vals[1]);
+          }
+          if (Array.isArray(cs.exclude_boxes)) {
+            this.excludeBoxes = cs.exclude_boxes.map((b: number[]) => [b[0], b[1], b[2], b[3]] as [number, number, number, number]);
+            this.updateExcludeCount();
+          }
+          this.updateCalibChecklist();
+          this.updateCalibReadout();
+        } else {
+          this.seedCalibration(img.naturalWidth, img.naturalHeight);
+        }
+
+        if (res.has_model && res.inspection) {
+          this.inspectionData = res.inspection;
+          this.updateMappingTable();
+          const statusEl = this.modalEl?.querySelector('#ad-status-msg');
+          if (statusEl) {
+            statusEl.textContent = `✅ 已从工程还原年代模型（${(res.inspection.depths || []).length} 个深度层位）`;
+          }
+        }
+        this.fitViewport();
+        this.renderCanvas();
+      };
+      img.src = `/image/agedepth?t=${Date.now()}`;
+    } catch {
+      // ignore if no image loaded
+    }
   }
 
   private sseSource: EventSource | null = null;
@@ -883,13 +968,13 @@ export class AgeDepthModal {
     this.datingPoints.forEach((p, idx) => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td><input type="text" value="${p.id}" style="width:100%;font-size:10px;" /></td>
-        <td><input type="number" value="${p.depth}" style="width:100%;font-size:10px;" /></td>
-        <td><input type="number" value="${p.age}" style="width:100%;font-size:10px;" /></td>
-        <td><input type="number" value="${p.error}" style="width:100%;font-size:10px;" /></td>
-        <td><input type="number" value="${p.thickness}" style="width:100%;font-size:10px;" /></td>
+        <td><input type="text" class="ad-date-id" value="${p.id}" style="width:100%;font-size:10px;" /></td>
+        <td><input type="number" class="ad-date-depth" value="${p.depth}" style="width:100%;font-size:10px;" /></td>
+        <td><input type="number" class="ad-date-age" value="${p.age}" style="width:100%;font-size:10px;" /></td>
+        <td><input type="number" class="ad-date-error" value="${p.error}" style="width:100%;font-size:10px;" /></td>
+        <td><input type="number" class="ad-date-thick" value="${p.thickness}" style="width:100%;font-size:10px;" /></td>
         <td>
-          <select style="width:100%;font-size:9.5px;">
+          <select class="ad-date-cc" style="width:100%;font-size:9.5px;">
             <option value="1" ${p.cc === 1 ? 'selected' : ''}>IntCal20</option>
             <option value="2" ${p.cc === 2 ? 'selected' : ''}>Marine20</option>
             <option value="3" ${p.cc === 3 ? 'selected' : ''}>SHCal20</option>
@@ -900,6 +985,28 @@ export class AgeDepthModal {
           <button class="icon-btn btn-del-date-row" data-idx="${idx}" style="color: #ef4444; font-size: 13px; cursor: pointer; background: none; border: none; padding: 0 4px;">&times;</button>
         </td>
       `;
+      tr.querySelector('.ad-date-id')?.addEventListener('change', (e) => {
+        p.id = (e.target as HTMLInputElement).value.trim() || p.id;
+      });
+      tr.querySelector('.ad-date-depth')?.addEventListener('change', (e) => {
+        const v = parseFloat((e.target as HTMLInputElement).value);
+        if (Number.isFinite(v)) p.depth = v;
+      });
+      tr.querySelector('.ad-date-age')?.addEventListener('change', (e) => {
+        const v = parseFloat((e.target as HTMLInputElement).value);
+        if (Number.isFinite(v)) p.age = v;
+      });
+      tr.querySelector('.ad-date-error')?.addEventListener('change', (e) => {
+        const v = parseFloat((e.target as HTMLInputElement).value);
+        if (Number.isFinite(v)) p.error = v;
+      });
+      tr.querySelector('.ad-date-thick')?.addEventListener('change', (e) => {
+        const v = parseFloat((e.target as HTMLInputElement).value);
+        if (Number.isFinite(v)) p.thickness = v;
+      });
+      tr.querySelector('.ad-date-cc')?.addEventListener('change', (e) => {
+        p.cc = parseInt((e.target as HTMLSelectElement).value, 10) || 0;
+      });
       tbody.appendChild(tr);
     });
 
@@ -1288,13 +1395,11 @@ export class AgeDepthModal {
     const statusEl = this.modalEl?.querySelector('#ad-webr-comp-status');
     if (statusEl) statusEl.textContent = '正在上传并安全解压离线包...';
 
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
-      const upRes = await fetch('/api/upload', { method: 'POST', body: formData });
-      const upJson = await upRes.json();
-      const zipPath = upJson.path || upJson.saved_path;
+      // 上传统一走 RpcClient：它检查 HTTP 状态并保证拿到真实路径。
+      // 曾经这里自己 fetch 且不查 `ok`，错误响应会被当 JSON 解析出 undefined，
+      // 再作为 zip_path 喂给下面的 installOfflineZip。
+      const zipPath = await this.rpcClient.uploadFile(file);
 
       const instRes = await this.rpcClient.call<{ zip_path: string }, any>('component.installOfflineZip', {
         zip_path: zipPath,

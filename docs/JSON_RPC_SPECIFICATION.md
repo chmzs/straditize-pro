@@ -2,6 +2,22 @@
 
 本文档定义古气候图表数值化引擎 `straditize_core` 与前端（Web / Electron / Desktop UI）之间的 JSON-RPC 2.0 通信标准。
 
+## 权威范围（请先读这段）
+
+| 内容 | 权威来源 |
+| :--- | :--- |
+| 信封格式、错误码语义、传输方式（§1–§3） | **本文档**（已与 `protocol.py` / `errorCodes.ts` 对齐） |
+| 逐方法的**参数名与返回字段** | **代码本身**：`straditize_core/rpc_methods/*.py` 中 `register_method` 的目标签名，以及 `session*.py` 的返回字典 |
+| 前后端字段级对账 | `frontend/e2e/contract.spec.ts`（对真实 payload 断言 TS 声明） |
+| 架构不变量与工作流语义 | `docs/ARCHITECTURE.md` |
+
+**§4 是"示例目录"，不是全量清单。** 后端当前注册 **97** 个方法
+（90 个应用 RPC + 7 个 MCP 协议方法），§4 只逐一展开了其中 9 个。拿 §4 当接口全集会漏掉
+绝大多数方法；新增或修改方法时请以代码与 `contract.spec.ts` 为准，本文档按需补示例。
+
+已核对并修正的偏差（2026-09-29）：§3 错误码表（`-32002` / `-32004` 原按旧语义书写）、
+§4.1 `core.loadImage`（参数、缺失的副作用与返回字段）、§4.7 `roi.update`（缺 `roi_id`）。
+
 ---
 
 ## 1. 协议总览
@@ -76,14 +92,24 @@
 | `-32601` | **Method not found** | 调用的核心方法或系统方法未在服务端注册。 |
 | `-32602` | **Invalid params** | 缺少必填参数、参数类型错误或参数超出合法取值范围。 |
 | `-32603` | **Internal error** | 服务端内部未捕获的运行时异常。 |
-| `-32001` | **Session state error** | 业务前置条件未满足（例如未加载图片直接执行识别列或数字化）。 |
-| `-32002` | **File not found error** | 指定的图片文件或输入目标路径在文件系统不存在。 |
-| `-32003` | **Calibration error** | 科学坐标标定数据缺失（例如 `strict: true` 导出时未先完成标定）。 |
-| `-32004` | **Export error** | 导出数据格式失败或缺少依赖（如缺少 parquet 引擎）。 |
+| `-32001` | **STATE_ERROR** | 业务前置条件未满足（例如未加载图片直接执行识别列或数字化）。 |
+| `-32002` | **CONFLICT_ERROR** | 命名 / 业务实体冲突（例如同一 ROI 内出现重复的属种列名或 ROI 名）。 |
+| `-32003` | **ALGORITHM_ERROR** | 算法计算或提取失败、越界（例如整列落在 ROI 之外）。 |
+| `-32004` | **FILE_ERROR** | 文件不存在、格式损坏或不可读。 |
+
+> ⚠️ **本表以 `straditize_core/protocol.py` 与前端 `frontend/src/i18n/errorCodes.ts` 为准。**
+> 这两处当前完全一致（`-32001` state / `-32002` conflict / `-32003` algorithm / `-32004` file）。
+> 本文档此前把 `-32002` 记作 "File not found"、`-32004` 记作 "Export error"，那是**更早一版的
+> 语义**——`protocol.py` 至今保留 `FILE_NOT_FOUND_ERROR` / `CALIBRATION_ERROR` / `EXPORT_ERROR`
+> 三个仅作向后兼容的别名常量，但数值早已重新指派。照旧表把 `-32002` 渲染成"文件不存在"，
+> 会把一次**命名冲突**误报成缺文件，正是历史上 `x_bounds` / `data_xlim` 那一类错位诊断。
 
 ---
 
-## 4. 核心 RPC 方法定义
+## 4. 核心 RPC 方法定义（示例目录，非全量）
+
+> 下面 9 个方法用于演示本协议的请求/返回形态与契约要点；后端实际注册 90 个应用 RPC。
+> 需要某个方法的确切参数名时，读 `straditize_core/rpc_methods/` 中对应的 `register_method` 目标函数。
 
 ### 4.1 `core.loadImage`
 加载图表原始图像到后端核心会话。
@@ -92,23 +118,38 @@
   - `image_path` (string, 可选): 本地文件绝对路径或相对工作区路径。
   - `image_data` (string, 可选): `data:image/...;base64,...` 内联图像；适用于浏览器拖入的本地文件。
   - `sample_key` (string, 可选): 内置范例键（`hoya` / `verification` / `beginner`）。
-  - `file_name` / `width` / `height` (可选): 仅作为元数据回显。
-  - 三者必须给出其一。
+  - `file_name` (string, 可选): 仅作为元数据回显。
+  - `page_number` (number, 可选, 默认 1): 多页 PDF 的页码（1 基）。
+  - 以上**都不给**时，若会话中已有缓存的 PDF，则翻到该 PDF 的第 `page_number` 页
+    （见 `session.load_image` 中 `cached_pdf_data` / `cached_pdf_path` 分支）。
+    因此旧版本文档写的"三者必须给出其一"**已不成立**。
 - **返回 (result)**：
   ```json
   {
+    "success": true,
     "width": 2339,
     "height": 1654,
     "format": "PNG",
     "mode": "RGB",
     "image_path": "I:/software_dev/straditize/hoya-del-castillo.png",
-    "suggested_roi": { "xMin": 281, "xMax": 2199, "yMin": 298, "yMax": 1456 }
+    "image_url": "/image/current",
+    "suggested_roi": { "xMin": 281, "xMax": 2199, "yMin": 298, "yMax": 1456 },
+    "rois": [],
+    "primary_roi_id": null,
+    "active_roi_id": null,
+    "pdf_info": null
   }
   ```
-- **契约要点**：`suggested_roi` 是**几何区域建议**，**只给区域、不给深度**。
+- **契约要点 ①（几何建议，不含深度）**：`suggested_roi` 是**几何区域建议**，**只给区域、不给深度**。
   历史上这里返回的是一个含 `depthTopValue/depthBottomValue/isCalibrated` 的
   `suggested_calibration`，等于替用户声称了一把并不存在的深度尺；该字段已删除。
   深度只能来自用户在 S4 的两点标定（`core.calibrateAxes`）。
+- **契约要点 ②（有副作用，且返回体比上面这份示例更宽）**：`core.loadImage` **不是只读的**——
+  它在返回前会按 `suggested_roi` **自动创建一个名为 `pollen` 的 ROI**，并重置
+  `depth_grid` / `data_xlim` / `data_ylim`。因此返回体还包含 `success`、`image_url`、
+  `rois`、`primary_roi_id`、`active_roi_id`、`pdf_info`（上面的示例按"尚未建 ROI"的
+  初始形态书写，实际以 `session.load_image` 的返回字典为准）。前端 `RpcClient` 依赖
+  `suggested_roi` 存在，缺失即抛错，不静默回退。
 
 ---
 
@@ -229,9 +270,18 @@
 ### 4.7 `roi.update`
 更新数据取数区域 (ROI)。ROI 仅框定**从哪里取数**（排除坐标轴、文字、聚类树），不携带任何深度含义。
 
-- **参数 (params)**（两种写法等价，取其一）：
-  - `x0` / `x1` / `y0` / `y1` (number): 像素边界；或
-  - `x` / `y` / `w` / `h` (number): 左上角 + 宽高。
+- **参数 (params)**：
+  - `roi_id` (string, 可选): 目标 ROI。**多 ROI（冻结契约 v1.3）下这是关键参数**；
+    省略时作用于 `active_roi_id`，仍无则退回首个 ROI。
+  - `name` (string, 可选): 改名。
+  - 几何（两种写法等价，取其一）：
+    - `x0` / `x1` / `y0` / `y1` (number): 像素边界；或
+    - `x` / `y` / `w` / `h` (number): 左上角 + 宽高。
+  - `xlim` / `ylim` (number[2], 可选): 直接给区间写法（与 `x0/x1` 同义）。
+  - `visible` (boolean, 可选): 显隐。
+  - `composition` (boolean, 可选): 是否花粉组成型 ROI。
+  - `form_defaults` (object, 可选): 形态默认值。
+  - `columns_stale` (boolean, 可选): 标记已有列结果是否失效。
 - **返回 (result)**：
   ```json
   {
@@ -240,6 +290,7 @@
     "roi": [315.0, 511.0, 1946.0, 1311.0]
   }
   ```
+  实际返回体另含 `success` 与 `rois` 列表；以上为最小形状。
 - **契约要点**：**绝不改动 `core.calibrateAxes` 建立的深度轴**。历史上两者共用一个结构体，
   拖一下 ROI 手柄就静默改写了深度。此外 ROI 是线去除的检测范围：更新 ROI 会作废缓存的线掩膜，
   下一次数字化按新范围重算。
@@ -307,6 +358,42 @@
     "csv_content": null
   }
   ```
+
+---
+
+### 4.10 `column.calibrateXTicks` 与 `column.clearXTicks`
+步骤 6 属种列 X-轴标尺标定与清空。
+
+- **`column.calibrateXTicks`**：
+  - **参数 (params)**：
+    - `col_index` (int | str, 必填): 目标列全局序号或列 id（如 `"roi_1_col01"`）。
+    - `ticks` (array of `{px: float, value: float}`, 必填): 恰好 2 个端点刻度齿。
+    - `unit` (string, 可选): 单位（未传保持原值）。
+    - `plot_type` (string, 可选): 图表形态（未传保持原值）。
+    - `scale_type` (string, 可选): `"linear"` 或 `"log"`（未传保持原值）。
+    - `exaggeration_mult` (float | null, 可选): 局部放大倍数。
+  - **返回 (result)**：`{"col_index": 0, "x_ticks": [...], "px_per_unit": 2.5, "column": {...}}`
+
+- **`column.clearXTicks`**：
+  - **参数 (params)**：`{"col_index": 0}`
+  - **返回 (result)**：`{"col_index": 0, "x_ticks": null, "cleared": true}`
+
+---
+
+### 4.11 `roi.groupCreate` / `roi.groupUpdate` / `roi.groupRemove`
+ROI 内列分组管理（设计 2026-09-29 v2）。
+
+- **`roi.groupCreate`**：
+  - **参数 (params)**：`{"roi_id": "roi_1", "name": "默认组", "unit": "%", "plot_type": "area", "scale_type": "linear", "tick_layout": [{"rel": 0.0}, {"rel": 1.0}]}`
+  - **返回 (result)**：`{"roi_id": "roi_1", "group": {...}, "groups_count": 2}`
+
+- **`roi.groupUpdate`**：
+  - **参数 (params)**：`{"roi_id": "roi_1", "group_id": "roi_1_grp1", "updates": {"unit": "‰"}}`
+  - **返回 (result)**：`{"roi_id": "roi_1", "group": {...}}`
+
+- **`roi.groupRemove`**：
+  - **参数 (params)**：`{"roi_id": "roi_1", "group_id": "roi_1_grp2"}`
+  - **返回 (result)**：`{"roi_id": "roi_1", "removed_group_id": "roi_1_grp2", "fallback_group_id": "roi_1_grp1", "reassigned_columns_count": 3, "groups_count": 1}`
 
 ---
 

@@ -48,19 +48,26 @@ class XTicksMixin:
 
     def calibrate_column_xticks(
         self,
-        col_index: int,
+        col_index: int | str,
         ticks: list[dict[str, float]],
-        unit: str = "%",
-        plot_type: str = "area",
-        scale_type: str = "linear",
+        unit: str | None = None,
+        plot_type: str | None = None,
+        scale_type: str | None = None,
         exaggeration_mult: float | None = None,
     ) -> dict[str, Any]:
         """Calibrate a column's scale using exactly two tick endpoints [Tick(px, value), Tick(px, value)].
+
+        ``col_index`` accepts either the numeric index or the column id
+        (``roi_1_col01``) — same convention as ``column_remove``/``column_update``.
 
         Enforces:
         - Exactly two ticks required;
         - Pixel coordinates must not be identical;
         - Updates Column.x_ticks as the sole source of truth.
+
+        ``unit``/``plot_type``/``scale_type``/``exaggeration_mult`` are written
+        **only when actually passed** (``None`` = keep the current value), so
+        calibrating ticks never silently resets a column's other scale fields.
         """
         if not ticks or len(ticks) != 2:
             raise JsonRpcError(
@@ -78,14 +85,15 @@ class XTicksMixin:
                 "参数格式不合规：两个标定刻度齿的像素 X 坐标不能相同。请重新拾取相隔一定距离的刻度线齿。",
             )
 
+        resolved = self._resolve_col_index(col_index)
         columns = getattr(self, "columns", [])
-        if col_index < 0 or col_index >= len(columns):
+        if resolved < 0 or resolved >= len(columns):
             raise JsonRpcError(
                 -32001,
-                f"前置状态缺失：列索引 {col_index} 超出范围。请先在【步骤 5: 分列】确认列切分。",
+                f"前置状态缺失：列索引 {resolved} 超出范围。请先在【步骤 5: 分列】确认列切分。",
             )
 
-        col = columns[col_index]
+        col = columns[resolved]
 
         # Check bounds: tick endpoints should fall reasonably near column boundaries
         c_start = float(col.get("startX", col.get("start", 0)))
@@ -100,11 +108,19 @@ class XTicksMixin:
 
         # Set sole source of truth
         col["x_ticks"] = [{"px": px0, "value": val0}, {"px": px1, "value": val1}]
-        col["unit"] = unit
-        col["plot_type"] = plot_type
-        col["scale_type"] = scale_type
-        col["exaggeration_mult"] = exaggeration_mult
-        col["mult_source"] = "user" if exaggeration_mult is not None else None
+        # 只写调用方真正传了的字段：**未传 = 保持原值**。
+        # 这几个形参原本是 "%"/"area"/"linear"/None 的固定默认值，于是「标定刻度」
+        # 会顺手把用户设好的单位 / plot_type / scale_type / 放大倍数重置掉
+        # ——面板只发 col_index+ticks+unit，点一次【保存】就静默清空三项。
+        if unit is not None:
+            col["unit"] = unit
+        if plot_type is not None:
+            col["plot_type"] = plot_type
+        if scale_type is not None:
+            col["scale_type"] = scale_type
+        if exaggeration_mult is not None:
+            col["exaggeration_mult"] = exaggeration_mult
+            col["mult_source"] = "user"
 
         # Derive px_per_unit for inspection
         px_span = abs(px1 - px0)
@@ -113,11 +129,39 @@ class XTicksMixin:
 
         record_history = getattr(self, "_record_history", None)
         if callable(record_history):
-            record_history(f"Calibrate X-Ticks for {col.get('name', f'col_{col_index}')}")
+            record_history(f"Calibrate X-Ticks for {col.get('name', f'col_{resolved}')}")
 
         return {
-            "col_index": col_index,
+            "col_index": resolved,
             "x_ticks": col["x_ticks"],
             "px_per_unit": px_per_unit,
             "column": col,
         }
+
+    def clear_column_xticks(self, col_index: int | str) -> dict[str, Any]:
+        """Remove a column's scale calibration, returning it to the uncalibrated state.
+
+        Inverse of `calibrate_column_xticks`: afterwards the column has no
+        `x_ticks` (i.e. `null` = 未标定). Consumers must then either refuse or
+        explicitly flag the fallback — never silently substitute a scale.
+
+        History is recorded **only when something was actually cleared**, so a
+        no-op click cannot plant a phantom undo entry.
+        """
+        resolved = self._resolve_col_index(col_index)
+        columns = getattr(self, "columns", [])
+        if resolved < 0 or resolved >= len(columns):
+            raise JsonRpcError(
+                -32001,
+                f"前置状态缺失：列索引 {resolved} 超出范围。请先在【步骤 5: 分列】确认列切分。",
+            )
+
+        col = columns[resolved]
+        had_ticks = col.pop("x_ticks", None) is not None
+
+        if had_ticks:
+            record_history = getattr(self, "_record_history", None)
+            if callable(record_history):
+                record_history(f"Clear X-Ticks for {col.get('name', f'col_{resolved}')}")
+
+        return {"col_index": resolved, "x_ticks": None, "cleared": had_ticks}

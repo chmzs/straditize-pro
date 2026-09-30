@@ -77,6 +77,17 @@ class RoiMixin:
         self._validate_roi_name(name)
 
         roi_id = f"roi_{self._roi_counter}"
+        default_grp_id = f"{roi_id}_grp1"
+        default_grp = {
+            "id": default_grp_id,
+            "name": "默认组",
+            "unit": "%",
+            "plot_type": "area",
+            "scale_type": "linear",
+            "exaggeration_mult": None,
+            "tick_layout": [{"rel": 0.0}, {"rel": 1.0}],
+        }
+
         max_w = float(getattr(self, "width", 0) or 100000.0)
         max_h = float(getattr(self, "height", 0) or 100000.0)
         min_x = max(0.0, min(float(x0), float(x1)))
@@ -96,6 +107,8 @@ class RoiMixin:
             "ylim": ylim,
             "columns_stale": False,
             "form_defaults": None,
+            "x_groups": [default_grp],
+            "default_group_id": default_grp_id,
         }
         self.rois.append(roi)
 
@@ -258,22 +271,28 @@ class RoiMixin:
         roi = self._get_roi(roi_id)
         self.rois.remove(roi)
 
-        # Cascade delete columns belonging to this ROI
+        # Cascade delete columns belonging to this ROI and re-index point stores
         removed_column_ids: list[str] = []
         kept_columns = []
-        for col in getattr(self, "columns", []):
+        removed_indices: set[int] = set()
+        for idx, col in enumerate(getattr(self, "columns", [])):
+            col.setdefault("col_index", idx)
             if col.get("roi_id") == roi_id:
                 cid = col.get("id") or f"col_{col.get('col_index')}"
                 removed_column_ids.append(cid)
                 c_idx = col.get("col_index")
-                if c_idx is not None:
-                    if hasattr(self, "column_points") and c_idx in self.column_points:
-                        del self.column_points[c_idx]
-                    if hasattr(self, "control_points") and c_idx in self.control_points:
-                        del self.control_points[c_idx]
+                if isinstance(c_idx, int):
+                    removed_indices.add(c_idx)
             else:
                 kept_columns.append(col)
         self.columns = kept_columns
+        if hasattr(self, "taxa_names") and self.taxa_names:
+            self.taxa_names = [
+                n for i, n in enumerate(self.taxa_names) if i not in removed_indices
+            ]
+        reindex = getattr(self, "_reindex_columns", None)
+        if callable(reindex):
+            reindex(sync_taxa_names=False)
 
         # Re-assign active and primary if deleted
         if self.active_roi_id == roi_id:
@@ -372,3 +391,105 @@ class RoiMixin:
             record_history(f"Apply form defaults to ROI {roi_id}")
 
         return {"changed": changed, "count": len(changed)}
+
+    # ========================================================================
+    # X-Groups within ROI Management (Design 2026-09-29 P2)
+    # ========================================================================
+
+    def roi_group_create(
+        self,
+        roi_id: str,
+        name: str | None = None,
+        unit: str = "%",
+        plot_type: str = "area",
+        scale_type: str = "linear",
+        exaggeration_mult: float | None = None,
+        tick_layout: list[dict[str, float]] | None = None,
+    ) -> dict[str, Any]:
+        """Create a new column group within an ROI (Invariant 1: 组在 ROI 内)."""
+        roi = self._get_roi(roi_id)
+        groups = roi.setdefault("x_groups", [])
+        grp_num = len(groups) + 1
+        grp_id = f"{roi_id}_grp{grp_num}"
+        while any(g.get("id") == grp_id for g in groups):
+            grp_num += 1
+            grp_id = f"{roi_id}_grp{grp_num}"
+
+        group_name = name or f"组 {grp_num}"
+        layout = tick_layout or [{"rel": 0.0}, {"rel": 1.0}]
+
+        grp: dict[str, Any] = {
+            "id": grp_id,
+            "name": group_name,
+            "unit": unit,
+            "plot_type": plot_type,
+            "scale_type": scale_type,
+            "exaggeration_mult": exaggeration_mult,
+            "tick_layout": layout,
+        }
+        groups.append(grp)
+        return {"roi_id": roi_id, "group": grp, "groups_count": len(groups)}
+
+    def roi_group_update(
+        self,
+        roi_id: str,
+        group_id: str,
+        updates: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Update properties of a column group within an ROI."""
+        roi = self._get_roi(roi_id)
+        groups = roi.setdefault("x_groups", [])
+        target = next((g for g in groups if g.get("id") == group_id), None)
+        if not target:
+            raise JsonRpcError(-32602, f"Group '{group_id}' not found in ROI '{roi_id}'.")
+
+        allowed_fields = (
+            "name",
+            "unit",
+            "plot_type",
+            "scale_type",
+            "exaggeration_mult",
+            "tick_layout",
+        )
+        for field in allowed_fields:
+            if field in updates:
+                target[field] = updates[field]
+
+        return {"roi_id": roi_id, "group": target}
+
+    def roi_group_remove(
+        self,
+        roi_id: str,
+        group_id: str,
+    ) -> dict[str, Any]:
+        """Remove a group from an ROI (cannot remove the only remaining group; columns fallback to default_group_id)."""
+        roi = self._get_roi(roi_id)
+        groups = roi.setdefault("x_groups", [])
+        if len(groups) <= 1:
+            raise JsonRpcError(
+                -32602,
+                f"不能删除 ROI '{roi_id}' 内唯一的组（每列必须恰属一组）。",
+            )
+
+        target = next((g for g in groups if g.get("id") == group_id), None)
+        if not target:
+            raise JsonRpcError(-32602, f"Group '{group_id}' not found in ROI '{roi_id}'.")
+
+        groups.remove(target)
+        if roi.get("default_group_id") == group_id:
+            roi["default_group_id"] = groups[0]["id"]
+
+        fallback_id = roi["default_group_id"]
+        reassigned_count = 0
+        for col in getattr(self, "columns", []):
+            if col.get("roi_id") == roi_id and col.get("x_group_id") == group_id:
+                col["x_group_id"] = fallback_id
+                reassigned_count += 1
+
+        return {
+            "roi_id": roi_id,
+            "removed_group_id": group_id,
+            "fallback_group_id": fallback_id,
+            "reassigned_columns_count": reassigned_count,
+            "groups_count": len(groups),
+        }

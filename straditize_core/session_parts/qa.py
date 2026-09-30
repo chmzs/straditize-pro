@@ -6,10 +6,10 @@ Strictly adheres to Frozen Contracts v1.3 §2.7 (QaSummary) and §4 (Derived Qua
 from __future__ import annotations
 
 from typing import Any
-import numpy as np
 
 from ..protocol import JsonRpcError
 from ..qa import compute_qa_summary
+from .xscale import resolve_column_scale
 
 
 class QaMixin:
@@ -126,22 +126,8 @@ class QaMixin:
             c_idx = col.get("col_index", idx)
             c_name = col.get("name") or col.get("species") or f"col{c_idx + 1:02d}"
 
-            # Derive declared_max strictly from x_ticks (Contract v1 §4: declaredMax(col))
-            x_ticks = col.get("x_ticks")
-            if x_ticks and len(x_ticks) >= 2:
-                v0 = float(x_ticks[0].get("value", 0.0))
-                v1 = float(x_ticks[1].get("value", 0.0))
-                declared_max = max(v0, v1)
-                px0 = float(x_ticks[0].get("px", 0.0))
-                px1 = float(x_ticks[1].get("px", 0.0))
-                has_ticks = True
-            else:
-                declared_max = 0.0
-                has_ticks = False
-                px0 = float(col.get("startX", col.get("start", 0.0)))
-                px1 = float(col.get("endX", col.get("end", px0 + 100.0)))
-                v0 = 0.0
-                v1 = 100.0
+            scale = resolve_column_scale(self, col, c_idx)
+            declared_max = scale.declared_max
 
             # Pixel mapping
             pts = (
@@ -151,44 +137,19 @@ class QaMixin:
             )
             p_dict = {p["row"]: p["x"] for p in pts}
 
-            col_start_px = float(col.get("startX", col.get("start", px0)))
-            scale_type = col.get("scale_type", "linear")
+            col_start_px = float(
+                col.get("startX", col.get("start", scale.abs_px0))
+            )
 
-            c_vals: list[float] = []
-            for r in horizon_rows:
-                if r in p_dict:
-                    raw_x = p_dict[r]
-                else:
-                    raw_x = col_start_px
-
-                if abs(raw_x - col_start_px) < 1e-6:
-                    val = 0.0
-                else:
-                    if has_ticks:
-                        span = px1 - px0
-                        if abs(span) > 1e-9:
-                            if scale_type == "log" and v0 > 0 and v1 > 0:
-                                log_v = np.log10(v0) + (raw_x - px0) / span * (
-                                    np.log10(v1) - np.log10(v0)
-                                )
-                                val = float(10**log_v)
-                            else:
-                                val = float(v0 + (raw_x - px0) / span * (v1 - v0))
-                        else:
-                            val = 0.0
-                    else:
-                        span = px1 - px0
-                        if abs(span) > 1e-9:
-                            val = float((raw_x - px0) / span * 100.0)
-                        else:
-                            val = 0.0
-
-                    # Handle exaggeration multiplier
-                    exag = col.get("exaggeration_mult")
-                    if exag is not None and float(exag) > 1.0:
-                        val = val / float(exag)
-
-                c_vals.append(max(0.0, val))
+            c_vals = [
+                scale.px_to_value(
+                    p_dict.get(r, col_start_px),
+                    baseline_px=col_start_px,
+                    col_name=c_name,
+                    ndigits=None,
+                )
+                for r in horizon_rows
+            ]
 
             col_values_by_column.append(c_vals)
             columns_info.append(
@@ -196,6 +157,7 @@ class QaMixin:
                     "name": c_name,
                     "declared_max": declared_max,
                     "col_values": c_vals,
+                    "calibrated": scale.calibrated,
                 }
             )
 

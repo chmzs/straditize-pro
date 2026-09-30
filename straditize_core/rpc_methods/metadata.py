@@ -9,5 +9,6 @@ def register(dispatcher: Any, session: Any) -> None:
     """Register metadata operations."""
     dispatcher.register_method("metadata.fetchByDoi", session.metadata_fetch_doi)
     dispatcher.register_method("metadata.extractFromPdf", session.metadata_extract_pdf)
+    dispatcher.register_method("metadata.parseExternalText", session.metadata_parse_external)
     dispatcher.register_method("metadata.update", session.metadata_update)
     dispatcher.register_method("metadata.get", session.metadata_get)

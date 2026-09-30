@@ -8,11 +8,17 @@ import os
 from pathlib import Path
 from typing import Any
 
+from .metadata.llm_extractor import EXTRACTION_SYSTEM_PROMPT
+
 DEFAULT_CONFIG: dict[str, Any] = {
     "remote_access_enabled": False,
     "allowed_hosts": ["127.0.0.1", "localhost"],
     "locale": "zh-CN",
     "theme": "light",
+    "llm_base_url": "https://api.openai.com/v1",
+    "llm_api_key": "",
+    "llm_model": "gpt-4o",
+    "llm_prompt_template": EXTRACTION_SYSTEM_PROMPT,
 }
 
 

@@ -118,23 +118,9 @@ export class SplineInterpolator {
       curX = p1.x + (p2.x - p1.x) * clampedT;
     }
 
-    // 两点式真实刻度钉换算 (若具备 scaleCalib 则优先采用物理刻度齿比例)
-    const sc = col.scaleCalib;
-    if (sc && sc.calibX !== sc.originX) {
-      const dx = sc.calibX - sc.originX;
-      const dval = sc.calibVal - sc.originVal;
-      const slope = dval / dx;
-      const val = sc.originVal + (curX - sc.originX) * slope;
-      return Number(val.toFixed(2));
-    }
-
-    const tickSpan = (col.tickEndX && col.tickEndX > col.startX)
-      ? (col.tickEndX - col.startX)
-      : (col.endX - col.startX);
-
-    const maxPercent = col.maxPercent ?? 100;
-    const percent = ((curX - col.startX) / (tickSpan || 1)) * maxPercent;
-    return Number(Math.max(0, percent).toFixed(2));
+    // 统一走 CoordinateSystem.imageXToValue（x_ticks 优先、legacy/scaleCalib 兜底）
+    const val = CoordinateSystem.imageXToValue(curX, col);
+    return Number(Math.max(0, val).toFixed(2));
   }
 
   /**

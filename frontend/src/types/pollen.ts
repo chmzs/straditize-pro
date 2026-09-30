@@ -24,10 +24,22 @@ export interface Tick {
   value: number;
 }
 
+export interface ColumnGroup {
+  id: string;
+  name: string;
+  unit: string;
+  plot_type: 'area' | 'bar' | 'line' | 'symbol';
+  scale_type: 'linear' | 'log';
+  exaggeration_mult?: number | null;
+  tick_layout: Array<{ rel: number }>;
+}
+
 export interface Column {
   id: string;
   name: string; // 同一 ROI 内唯一
   roi_id?: string;
+  x_group_id?: string;
+  x_values?: [number, number];
   startX: number;
   endX: number;
   visible: boolean;
@@ -35,6 +47,9 @@ export interface Column {
 
   /** 标度的唯一事实源：两个真实刻度端点（像素 + 读数）。null = 未标定。 */
   x_ticks?: [Tick, Tick] | null;
+
+  /** 后端权威列序号：前端寻址列级 RPC 用它（不要用数组下标——列增删后不等价）。 */
+  col_index?: number;
 
   /** 逐列具体值（不是继承） */
   plot_type?: 'area' | 'bar' | 'line' | 'symbol';
@@ -90,6 +105,8 @@ export interface DataRoi {
   ylim?: [number, number];
   columns_stale?: boolean; // per-ROI：本 ROI 的掩膜变过，分列可能已失效
   form_defaults?: XScaleForm | null; // 仅表单记忆，不参与任何计算
+  x_groups?: ColumnGroup[];
+  default_group_id?: string;
 
   // 坐标别名兼容只读/过渡
   xMin: number;
@@ -242,7 +259,6 @@ export interface DiagramData {
 
   // 兼容过渡属性
   roi: DataRoi;
-  lineCorrections: LineMaskStroke[];
 }
 
 export interface HistorySnapshot {

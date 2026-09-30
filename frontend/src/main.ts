@@ -518,7 +518,7 @@ async function bootstrap() {
       const hasCleanup =
         (data.line_candidates || []).length > 0 || (data.exclusion_regions || []).length > 0;
       if (hasCleanup) {
-        void scheduleLineMaskRefresh();
+        void recomposeCleanupState('重载后重算清理掩膜');
       }
     },
     // ROI 拖拽结束：后端的分列/去线都以 ROI 为范围，必须同步过去，
@@ -694,11 +694,11 @@ async function bootstrap() {
       // 进入 Step 4 必须落在「微调/选择 (S)」上——`getAllowedTools(STAGE.CLEANUP)[0]` 就是
       // select。这里曾经硬写 'linefix'，于是用户一进第 4 步手上就是橡皮笔刷：点候选线不是
       // 选中而是涂改，白/青手柄根本够不着，表现成"工具栏缺了微调(S)""图上拖了没反应"。
-      // 画笔只在用户显式点「局部像元修正」或拖排除区时才切过去。
+      // 画笔只在用户显式点「擦掉误标 / 补回漏标」或拖排除区时才切过去。
       canvasComponent.setToolMode('select');
       canvasComponent.requestRender();
-      void scheduleLineMaskRefresh();
       // Step 4 进入即显示候选几何；用户只确认是否删除，不必先猜该点哪个按钮。
+      // 这一步（refreshCleanup + applyCleanupState）本身就是掩膜重算，无需另行刷新。
       queueMicrotask(() => {
         (document.querySelector('#btn-detect-candidates') as HTMLButtonElement | null)?.click();
       });
@@ -837,15 +837,41 @@ async function bootstrap() {
     },
     onRenameTaxa: (taxaId, newName) => {
       const col = canvasComponent.data.columns.find((c) => c.id === taxaId);
-      if (col) {
-        history.push(`Rename Taxa ${col.name} to ${newName}`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
-        canvasComponent.requestRender();
-        inspector?.updateData(canvasComponent.data);
-        toolbar?.updateHistoryState();
-        updateFooter();
-        scheduleAutosave();
-        setHudNotice(`🏷️ 属种已更名为: ${newName}`);
-      }
+      if (!col) return;
+      const prevName = col.name ?? '';
+      col.name = newName;
+      col.species = newName;
+      canvasComponent.requestRender();
+      inspector?.updateData(canvasComponent.data);
+      toolbar?.updateHistoryState();
+      updateFooter();
+      scheduleAutosave();
+      // 名字必须写回后端：`naming.renameColumn` 是唯一会更新 `session.taxa_names` 的通道，
+      // 而每次重新分列都从 `taxa_names` 还原列名（`session.py:901-908`）。只改前端内存的话，
+      // 重分列 / 重载 / 导出都会退回 colNN，后端那道 ROI 内重名校验也永远不会执行。
+      // 失败必须回滚并冒泡——绝不允许留下"界面改了、后端没改"的假状态。
+      void (async () => {
+        try {
+          await rpcClient.renameColumn(taxaId, newName);
+          // 撤销项只在**后端确认之后**才入栈。后端也会拒绝非法名字（`COLUMN_NAME_PATTERN`），
+          // 若先入栈再回滚，栈顶就留下一条"按下去什么都不变"的幽灵撤销项，
+          // 且把 canUndo() 从 false 顶成 true（与步骤 4 第 3 号缺陷同族）。
+          history.push(`Rename Taxa ${prevName} to ${newName}`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
+          toolbar?.updateHistoryState();
+          // 成功提示放在 RPC 之后：后端也有它自己的名字合法性校验（`COLUMN_NAME_PATTERN`
+          // 拒绝 `/`、`#`、超长等），先说"已更名"再被后端打脸就成了假状态。
+          setHudNotice(`🏷️ 属种已更名为: ${newName}`);
+        } catch (err) {
+          col.name = prevName;
+          col.species = prevName;
+          // 先 blur：否则 sidebar.updateData 会把焦点输入框里那个已被拒绝的名字搬过去。
+          (document.activeElement as HTMLElement | null)?.blur?.();
+          canvasComponent.requestRender();
+          sidebar?.updateData(canvasComponent.data);
+          inspector?.updateData(canvasComponent.data);
+          reportBackendFailure('属种改名', err);
+        }
+      })();
     },
     onToggleCollapse: (collapsed) => {
       setSidebarCollapsed(collapsed);
@@ -925,6 +951,23 @@ async function bootstrap() {
     }
   );
 
+  /**
+   * 打开 OCR 复核模态的统一入口（顶栏按钮与步骤 5 面板按钮共用）。
+   *
+   * 收敛成一个函数是因为步骤 5 面板原先自己 `document.querySelector` 去顶栏碰按钮，
+   * 而它找的三个选择器（`#btn-open-ocr`、`#topbar-btn-ocr`、`[title*="OCR"]`）在仓库里
+   * 一个都不存在 —— 顶栏真实按钮是 `#btn-ocr-review-modal`，title 为
+   * "自动识别图谱顶部属种名并为各列匹配新列名"，不含 "OCR"。于是那个按钮永远只弹
+   * 一句"请使用顶栏按钮"，从来没有真正打开过模态。
+   */
+  const openOcrReviewModal = (): void => {
+    if (canvasComponent.data.columns.length === 0) {
+      setHudNotice('⚠️ 当前图谱尚未切分属种列。请先框选 ROI 并点击【确认有效区，开始分列】，系统将自动生成 col01, col02... 编号列后再进行 OCR。', 4500);
+      return;
+    }
+    ocrReviewModal.open(canvasComponent.data);
+  };
+
   // 8.3 全局偏好与系统设置弹窗 (语言/外观/远程访问网关/WebMCP)
   const settingsModal = new SettingsModal(
     document.body,
@@ -963,7 +1006,7 @@ async function bootstrap() {
       toolbar?.updateHistoryState();
       toolbar?.updateScale(canvasComponent.viewport.scale);
       updateFooter();
-      void scheduleLineMaskRefresh();
+      void recomposeCleanupState('载入项目后重算清理掩膜');
       setHudNotice('✅ 成功载入 Straditize 科学项目包 (.tar)！已 100% 还原全部属种、刻度钉与控制点。', 4500);
     }
   );
@@ -1005,6 +1048,9 @@ async function bootstrap() {
       propertyPanel.updateData(canvasComponent.data);
       propertyPanel.openExportModal();
     },
+    // 步骤 5 面板的【自动识别属种名】按钮走这里（Inspector 会把整份 callbacks 展开成
+    // 步骤上下文交给各 Panel）。缺了它，那个按钮只能退回一句"请使用顶栏按钮"的提示。
+    onOpenOcrReviewModal: openOcrReviewModal,
     onToggleLayerVisibility: (layer, visible) => {
       if (layer === 'ghost') {
         canvasComponent.viewport.showGhosting = visible;
@@ -1012,21 +1058,9 @@ async function bootstrap() {
         setHudNotice(visible ? '🟢 绿色原位半透明对比层已开启' : '绿色对比层已关闭');
       }
     },
-    onChangeDegridStrength: (strength) => {
-      canvasComponent.setDegridStrength(strength);
-      canvasComponent.viewport.showBinaryOverlay = strength !== 'off';
-      toolbar?.updateFilterState(canvasComponent.viewport.imageMode, strength !== 'off');
-      setHudNotice(`去线灵敏度设为: ${strength.toUpperCase()}（已显示实际剔除区域）`);
-      void scheduleLineMaskRefresh();
-    },
-    onToggleVerticalLineRemoval: (enabled) => {
-      verticalLineRemoval = enabled;
-      setHudNotice(enabled ? '去线：竖线（坐标轴脊线/列基线）一并剔除' : '去线：仅处理横线');
-      void scheduleLineMaskRefresh();
-    },
     onStartLineFix: (mode) => {
       if (!canvasComponent.isToolAllowed('linefix')) {
-        setHudNotice('线掩膜修正从 S2 起可用。', 4000);
+        setHudNotice('线掩膜修正从步骤 4 (清理) 起可用。', 4000);
         return;
       }
       // 修正时必须看得见掩膜，否则等于闭眼涂改。B 键叠加层自动打开。
@@ -1042,11 +1076,7 @@ async function bootstrap() {
       );
     },
     onClearLineFix: () => {
-      canvasComponent.data.lineCorrections = [];
-      history.push('Clear Line-mask Corrections', canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
-      canvasComponent.requestRender();
-      void scheduleLineMaskRefresh();
-      setHudNotice('已清空全部人工修正笔迹，掩膜回到算法结果。');
+      void clearLineFixStrokes();
     },
     onStartYCalibration: () => {
       startYCalibration();
@@ -1258,8 +1288,22 @@ async function bootstrap() {
     /** 清空本步全部 geometry / 排除区 / 笔迹。 */
     onClearCleanupEdits: async () => {
       await runCleanupAction('清空清理编辑', async () => {
-        const res = await rpcClient.clearCleanupEdits(activeCleanupRoiId());
+        const roiId = activeCleanupRoiId();
+        const res = await rpcClient.clearCleanupEdits(roiId);
         canvasComponent.setSelectedGeometryId(null);
+        // 后端 `_recompose` 的返回体只含 candidates / selected_ids / stats / overlay_png，
+        // **不含** `exclusion_regions` 与 `line_strokes`，而 `applyCleanupState` 只覆盖
+        // 它认识的那四个键。所以这两项必须在这里同步归零，否则面板会继续显示
+        // 「排除区 (N 个)」——后端已清空、界面还在宣称存在，等于这个按钮骗人。
+        // 同 `clearLineFixStrokes()` 的做法（那里也是先清镜像再灌返回值）。
+        //
+        // 作用域要对齐后端语义（`cleanup.py` `clear_cleanup_edits`）：`line_strokes`
+        // 是全局的，后端整个清空；`exclusion_regions` 只清 `roi_id` 为**本 ROI 或 None**
+        // 的那些，别的 ROI 的要留着——所以这里是过滤而不是整体置空。
+        canvasComponent.data.line_strokes = [];
+        canvasComponent.data.exclusion_regions = (
+          canvasComponent.data.exclusion_regions || []
+        ).filter((e) => e.roi_id != null && e.roi_id !== roiId);
         setHudNotice('🧽 已清空本步的全部几何、排除区与笔迹。');
         return res;
       });
@@ -1285,6 +1329,93 @@ async function bootstrap() {
         }
       } catch (err) {
         reportBackendFailure('自动提取刻度', err);
+      }
+    },
+    // 步骤 6【保存手动输入】：像素端点取自列几何（列左边界与标尺终点），用户只填两个读数。
+    // `x_ticks` 是标度的唯一事实源，必须写回后端——只改前端内存的话，任何一次重取
+    // （切步骤 / 重分列 / 重新载入）都会把它丢掉，而导出与步骤 7 采样读的也是后端。
+    onCalibrateXTicks: async (colIndex: number, val1Raw: string, val2Raw: string) => {
+      const col = canvasComponent.data.columns.find((c) => c.col_index === colIndex);
+      if (!col) {
+        reportBackendFailure('标定列 X 刻度', new Error(`载荷里找不到列 ${colIndex}`));
+        return;
+      }
+      // 解析放在这里而不是面板里：面板拿不到统一错误出口，一旦在面板里写
+      // `parseFloat(...) || 0` 就会把空输入悄悄变成 0（"界面显示的值来路不明"正是老毛病）。
+      const val1 = Number.parseFloat(val1Raw);
+      const val2 = Number.parseFloat(val2Raw);
+      if (!Number.isFinite(val1) || !Number.isFinite(val2)) {
+        reportBackendFailure(
+          '标定列 X 刻度',
+          new Error(`两个端点读数都必须填数字，当前收到「${val1Raw}」「${val2Raw}」。`)
+        );
+        return;
+      }
+      const px1 = col.startX;
+      const px2 = col.tickEndX ?? col.endX;
+      const unit = col.unit || '%';
+      try {
+        const res = await rpcClient.calibrateColumnXTicks(
+          colIndex,
+          [
+            { px: px1, value: val1 },
+            { px: px2, value: val2 },
+          ],
+          unit
+        );
+        // 镜像取**后端返回值**而不是用户输入：后端会校验并可能归一（排序/边界），
+        // 用输入直接覆盖就又把"界面显示的值"和"后端存的值"分家了。
+        col.x_ticks = res.x_ticks;
+        // 撤销项只在后端确认之后入栈；否则栈顶会留下"按下去什么都没变"的幽灵项。
+        history.push(
+          `Calibrate X-Ticks ${col.name}`,
+          canvasComponent.data.columns,
+          canvasComponent.data.activeTaxaId
+        );
+        canvasComponent.requestRender();
+        // 成功后按后端真值重建面板：状态徽标、两端点读数、以及只在已标定时才渲染的
+        // 【清空】按钮都据此更新。这里是点击而非连续输入，重挂不会打断用户。
+        inspector?.updateData(canvasComponent.data);
+        sidebar?.updateData(canvasComponent.data);
+        toolbar?.updateHistoryState();
+        updateFooter();
+        scheduleAutosave();
+        setHudNotice(
+          `📏 列 ${col.name} 已标定：X=${res.x_ticks[0].px}px → ${res.x_ticks[0].value}${unit}，` +
+            `X=${res.x_ticks[1].px}px → ${res.x_ticks[1].value}${unit}`
+        );
+      } catch (err) {
+        // 后端拒绝（像素越界 / 两端像素相同 / 值非法）时**不回写镜像**，只冒泡：
+        // 步骤 5 的教训是把焦点框的旧值搬过去会掩盖后端的纠正。
+        reportBackendFailure('标定列 X 刻度', err);
+      }
+    },
+    onClearXTicks: async (colIndex: number) => {
+      const col = canvasComponent.data.columns.find((c) => c.col_index === colIndex);
+      if (!col) {
+        reportBackendFailure('清空列 X 刻度', new Error(`载荷里找不到列 ${colIndex}`));
+        return;
+      }
+      try {
+        const res = await rpcClient.clearColumnXTicks(colIndex);
+        col.x_ticks = null;
+        // 后端对未标定列是幂等空操作（cleared=false）；那种情况不该产生撤销项。
+        if (res.cleared) {
+          history.push(
+            `Clear X-Ticks ${col.name}`,
+            canvasComponent.data.columns,
+            canvasComponent.data.activeTaxaId
+          );
+          setHudNotice(`🧹 列 ${col.name} 的 X 标度已清空（回到未标定）`);
+        }
+        canvasComponent.requestRender();
+        inspector?.updateData(canvasComponent.data);
+        sidebar?.updateData(canvasComponent.data);
+        toolbar?.updateHistoryState();
+        updateFooter();
+        scheduleAutosave();
+      } catch (err) {
+        reportBackendFailure('清空列 X 刻度', err);
       }
     },
     onExtractConsensusHorizons: async () => {
@@ -1347,70 +1478,65 @@ async function bootstrap() {
     onRoiCommitted: (roi) => {
       void commitRoi(roi);
     },
+    // 步骤面板直连后端的唯一通道（如 Step 8 的 qa.summarize）。
+    rpcClient,
   });
 
-  /** 去线是否同时剔除竖线（坐标轴脊线、列基线）。 */
-  let verticalLineRemoval = true;
-
   /**
-   * 让后端按「当前 ROI + 当前档位 + 当前人工修正」重算线掩膜，并把 QC 叠加层回灌画布。
+   * 让后端按「当前 ROI + 已确认 geometry + 排除区 + 人工笔迹」重新合成清理掩膜，
+   * 并把 QC 叠加层与统计回灌画布。
    *
    * 掩膜只在后端生成：前端历史上另有一套"每行连续墨迹 run 超阈值即整段标红"的
    * 显示逻辑，实测在 Hoya 图上把 Pinus 列 99% 的实心轮廓标成"可删除"，而那张图
    * ROI 内根本没有横向网格线。现在 B 键看到的就是数字化实际剔除的像素。
+   *
+   * 串行化 + 版本号：连拖 ROI 或连涂笔刷时，后发的请求必须等前一个完成，
+   * 且只有最新版本的返回允许落地（否则旧掩膜会盖掉新掩膜）。
    */
-  let lineMaskRefreshPromise: Promise<void> = Promise.resolve();
-  let lineMaskRequestVersion = 0;
+  let cleanupRecomposePromise: Promise<void> = Promise.resolve();
+  let cleanupRecomposeVersion = 0;
 
-  function scheduleLineMaskRefresh(): Promise<void> {
-    const requestVersion = ++lineMaskRequestVersion;
-    const task = lineMaskRefreshPromise.then(() => refreshLineMask(requestVersion));
-    lineMaskRefreshPromise = task.catch(() => undefined);
+  function recomposeCleanupState(label = '重算清理掩膜'): Promise<void> {
+    const requestVersion = ++cleanupRecomposeVersion;
+    const task = cleanupRecomposePromise.then(async () => {
+      try {
+        const roiId = activeCleanupRoiId();
+        const res = await rpcClient.refreshCleanup(roiId);
+        if (requestVersion !== cleanupRecomposeVersion) return;
+        applyCleanupState(res);
+      } catch (err) {
+        reportBackendFailure(label, err);
+      }
+    });
+    cleanupRecomposePromise = task.catch(() => undefined);
     return task;
   }
 
-  async function refreshLineMask(requestVersion: number): Promise<void> {
-    const strength = canvasComponent.viewport.degridStrength;
-    const data = canvasComponent.data;
-    if (strength === 'off') {
-      // 关闭也要通知后端：它会主动清掉会话里的"自动去线"掩膜。只隐藏叠加层是不够的，
-      // 否则关闭后数字化仍在减掉那批像素。
+  /**
+   * 清空人工修正笔迹。
+   *
+   * 必须把**空的 strokes 显式推给后端**：`line_strokes` 是与 `line_candidates`
+   * 并列的后端权威状态，而 `refreshCleanup` 发的是不带 `strokes` 的"只重算"请求
+   * ——后端语义是 `strokes is None` → **保持原值**。所以"只清前端镜像 + 一次
+   * refresh"会让后端把笔迹原样发回来：按钮看起来生效（HUD 提示、镜像瞬时归零），
+   * 掩膜其实一点没变。走 `setLineStrokes([])` 才是真正的清空。
+   */
+  function clearLineFixStrokes(): Promise<void> {
+    const requestVersion = ++cleanupRecomposeVersion;
+    const task = cleanupRecomposePromise.then(async () => {
       try {
-        const res = await rpcClient.applyLineRemoval('off', data.lineCorrections, verticalLineRemoval);
-        if (requestVersion !== lineMaskRequestVersion) return;
-        // 关的只是"自动去线"，手工 geometry / 排除区 / 笔迹仍然有效。
-        // 这里必须继续显示后端合成了全部来源的叠加层，不能再无条件 setLineOverlay(null)
-        // —— 那会把用户在 Step 4 画好的几何一起抹掉视觉反馈（历史 bug）。
-        const hasManual =
-          (data.line_candidates || []).length > 0 || (data.exclusion_regions || []).length > 0;
-        if (hasManual && res?.overlay_png) {
-          canvasComponent.setLineOverlay(res.overlay_png);
-        } else {
-          canvasComponent.setLineOverlay(null);
-        }
+        const res = await rpcClient.setLineStrokes([], activeCleanupRoiId());
+        if (requestVersion !== cleanupRecomposeVersion) return;
+        canvasComponent.data.line_strokes = [];
+        applyCleanupState(res);
+        canvasComponent.requestRender();
+        setHudNotice('已清空全部人工修正笔迹，掩膜回到算法结果。');
       } catch (err) {
-        reportBackendFailure('关闭去线', err);
+        reportBackendFailure('清空人工修正笔迹', err);
       }
-      return;
-    }
-    try {
-      const res = await rpcClient.applyLineRemoval(strength, data.lineCorrections, verticalLineRemoval);
-      if (requestVersion !== lineMaskRequestVersion) return;
-      if (!res || !res.overlay_png) {
-        canvasComponent.setLineOverlay(null);
-        return;
-      }
-      canvasComponent.setLineOverlay(res.overlay_png);
-      inspector?.updateData(data);
-      const manual = res.manual_erase_pixels + res.manual_restore_pixels;
-      setHudNotice(
-        `🧹 去线(${strength}): 剔除 ${res.removed_pixels} px（横线 ${res.horizontal_rows.length} 行 / 竖线 ${res.vertical_cols.length} 列` +
-          `${manual > 0 ? `；含人工修正 ${manual} px` : ''}）。按 B 键复核红色标记。`,
-        5000
-      );
-    } catch (err) {
-      reportBackendFailure('去线掩膜计算', err);
-    }
+    });
+    cleanupRecomposePromise = task.catch(() => undefined);
+    return task;
   }
 
   /**
@@ -1511,7 +1637,8 @@ async function bootstrap() {
     // （实测：后端已是 [161,1598]，面板还写着 [161,2206]）。
     sidebar?.updateData(canvasComponent.data);
     inspector?.updateData(canvasComponent.data);
-    await scheduleLineMaskRefresh();
+    // 掩膜是 ROI 的函数：ROI 变了必须让后端按新范围重算，否则红标与实际剔除脱节。
+    await recomposeCleanupState('ROI 变更后重算清理掩膜');
   }
 
   /**
@@ -1569,18 +1696,36 @@ async function bootstrap() {
     }
   }
 
-  /** 追加一条线掩膜人工修正笔迹并重算叠加层。 */
+  /**
+   * 追加一条线掩膜人工修正笔迹并让后端重新合成掩膜。
+   *
+   * 笔迹是当前清理模型的一部分（后端 `_recompose` 会把它们栅格化成
+   * manual_erase / manual_restore 掩膜），所以这里必须把**全量**笔迹提交给
+   * `algorithm.applyLineRemoval`，而不是只提交这一条增量。
+   */
   async function appendLineFixStroke(stroke: LineMaskStroke): Promise<void> {
-    if (canvasComponent.viewport.degridStrength === 'off') {
-      setHudNotice('当前去线为「关闭」，修正笔迹已记录但不会生效。请先把去线档位调为弱/中/强。', 6000);
+    canvasComponent.data.line_strokes.push(stroke);
+    // 刻意**不进撤销栈**：`HistorySnapshot` 只覆盖前端自有的 columns / calibration / roi(s)，
+    // 不含 line_strokes，所以为笔迹 push 只会得到一条"按下去什么都不会变"的幽灵记录——
+    // 撤销栈深度被虚假占用，用户以为能撤销笔迹。清理编辑的回收出口是本步显式提供的
+    // 「清空笔迹」/「清空本步编辑」两个按钮（上游原版根本没有撤销机制，无须追求 parity）。
+    const roiId = activeCleanupRoiId();
+    try {
+      const res = await rpcClient.setLineStrokes(canvasComponent.data.line_strokes, roiId);
+      applyCleanupState(res);
+      const total = canvasComponent.data.line_strokes.length;
+      setHudNotice(
+        stroke.mode === 'erase'
+          ? `🧽 已擦除该处误标（人工修正共 ${total} 条）。`
+          : `🖌 已补回该处漏标（人工修正共 ${total} 条）。`,
+        3500
+      );
+    } catch (err) {
+      // 提交失败必须把本地刚追加的笔迹撤回，否则前端会显示一条后端并不知道的笔迹。
+      canvasComponent.data.line_strokes.pop();
+      canvasComponent.requestRender();
+      reportBackendFailure('提交人工修正笔迹', err);
     }
-    canvasComponent.data.lineCorrections.push(stroke);
-    history.push(
-      stroke.mode === 'erase' ? 'Erase Line-mask Mark' : 'Restore Line-mask Mark',
-      canvasComponent.data.columns,
-      canvasComponent.data.activeTaxaId
-    );
-    await scheduleLineMaskRefresh();
   }
 
   /** 进入 Y 轴两点标定：由画布收集两个像素行，实时落格到 Step 3 侧栏。 */
@@ -1920,8 +2065,11 @@ async function bootstrap() {
         const exportContent = await rpcClient.exportData(format);
         propertyPanel.openExportModal(exportContent, format);
       } catch (err) {
-        console.warn('后端数据导出暂未就绪，直接呈现导出就绪面板:', err);
-        propertyPanel.openExportModal('', format);
+        // 不变量 1：取不到就报错并**停在原地**。原先这里只 console.warn，再打开一个
+        // 内容为空的导出面板——等于把"后端导出失败"伪装成"导出成功但没有内容"，
+        // 用户完全可能把空面板当成结果。未就绪的友好路径已由上面的预检查承担，
+        // 所以走到这里一定是真失败，必须显式冒泡。
+        reportBackendFailure('数据导出', err);
       }
     },
     onSaveProject: () => {
@@ -1962,10 +2110,9 @@ async function bootstrap() {
       toolbar?.updateHistoryState();
       toolbar?.updateScale(canvasComponent.viewport.scale);
       toolbar?.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
-      toolbar?.setDegridStrength('off');
       updateFooter();
       // 归零同时要让后端丢掉旧掩膜，否则重新开始时数字化仍在用上一轮的线
-      void scheduleLineMaskRefresh();
+      void recomposeCleanupState('归零后重算清理掩膜');
       setHudNotice('♻️ 已一键归零：本图全部分列、控制点与标尺已清空，请从 S1 重新框选数据取数区。', 5000);
     },
     onOpenCalibrationModal: () => {
@@ -1974,13 +2121,7 @@ async function bootstrap() {
     onOpenMetadataModal: () => {
       metadataModal.open();
     },
-    onOpenOcrReviewModal: () => {
-      if (canvasComponent.data.columns.length === 0) {
-        setHudNotice('⚠️ 当前图谱尚未切分属种列。请先框选 ROI 并点击【确认有效区，开始分列】，系统将自动生成 col01, col02... 编号列后再进行 OCR。', 4500);
-        return;
-      }
-      ocrReviewModal.open(canvasComponent.data);
-    },
+    onOpenOcrReviewModal: openOcrReviewModal,
     onOpenAgeDepthModal: () => {
       ageDepthModal.open();
     },
@@ -2008,13 +2149,6 @@ async function bootstrap() {
       toolbar?.updateFilterState(canvasComponent.viewport.imageMode, active);
       setHudNotice(active ? '透视遮罩: 去线复核模式 [开启] (白=保留墨迹，红=实际剔除像素，快捷键 B)' : '透视遮罩: [关闭]');
     },
-    onChangeDegridStrength: (strength) => {
-      canvasComponent.setDegridStrength(strength);
-      canvasComponent.viewport.showBinaryOverlay = strength !== 'off';
-      toolbar?.updateFilterState(canvasComponent.viewport.imageMode, strength !== 'off');
-      setHudNotice(`去线灵敏度设为: ${strength.toUpperCase()}（已显示实际剔除区域）`);
-      void scheduleLineMaskRefresh();
-    },
     onSelectToolMode: (mode) => {
       canvasComponent.setToolMode(mode);
       toolbar.setToolMode(mode);
@@ -2035,6 +2169,10 @@ async function bootstrap() {
       void advanceToWorkflowStage(step as WorkflowStage);
       const meta = WORKFLOW_STAGES[currentStage];
       setHudNotice(`切换至步骤 ${step}: ${meta.stepName} - ${meta.title}`);
+    },
+    // 进程控制不是数据 RPC：由 RpcClient 统一下发，并集中说明"为什么可以忽略异常"。
+    onShutdown: () => {
+      void rpcClient.requestShutdown();
     },
   });
 
@@ -2288,6 +2426,11 @@ async function bootstrap() {
         },
         columns: data.columns.map((c) => ({
           id: c.id, name: c.name, startX: c.startX, endX: c.endX, roi_id: c.roi_id,
+          // 步骤 6 之后判题要看这两个：x_ticks 是列标度的唯一事实源（null = 未标定），
+          // col_index 是前端寻址列级 RPC 用的后端权威序号。投影里漏掉它们，
+          // 测试就只能去读 DOM 文本反推"到底标定没有"。
+          col_index: c.col_index ?? null,
+          x_ticks: c.x_ticks ?? null,
         })),
         calibration: {
           isCalibrated: !!cal?.isCalibrated,
@@ -2308,6 +2451,13 @@ async function bootstrap() {
     /** 直发后端 RPC，用于断言后端权威值（与前端镜像对账） */
     rpc: (method: string, params: Record<string, unknown> = {}) =>
       rpcClient.call(method, params),
+    /** 选中指定属种列并激活属性面板 */
+    selectColumn: (colId: string) => {
+      canvasComponent.data.selectedEntity = { type: 'column', id: colId };
+      canvasComponent.data.activeTaxaId = colId;
+      inspector?.updateData(canvasComponent.data);
+      sidebar?.updateData(canvasComponent.data);
+    },
   };
 
   console.log('Straditize Modern Frontend Initialized Successfully');

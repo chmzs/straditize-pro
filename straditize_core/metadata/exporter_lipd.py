@@ -24,6 +24,8 @@ def export_lipd_jsonld(
     roi_dfs: dict[str, pd.DataFrame] | None = None,
     age_depth_df: pd.DataFrame | None = None,
     ensemble_tables: list[dict[str, Any]] | None = None,
+    column_units: dict[str, str] | None = None,
+    depth_unit: str = "cm",
 ) -> dict[str, Any]:
     """Builds a complete Linked Paleo Data (LiPD) JSON-LD structure conforming to LiPDverse and Contract §4.2."""
     meta_info = meta_info or {}
@@ -32,6 +34,7 @@ def export_lipd_jsonld(
     chron = meta_info.get("chronology", {})
     tech = meta_info.get("technical", {})
     qual = meta_info.get("quality", {})
+    col_unit_map = column_units or {}
 
     site_name = site.get("site_name") or "Unnamed_Site"
     year_str = str(pub.get("year") or "2026")
@@ -42,7 +45,7 @@ def export_lipd_jsonld(
     ).split()[-1]
     dataset_name = f"{site_name}_{authors_first}_{year_str}".replace(" ", "_")
 
-    # 1. Geographic metadata
+    # 1. Geographic metadata (LiPD v1.3 geo & site properties)
     try:
         lat = float(site.get("latitude", 0.0))
     except (ValueError, TypeError):
@@ -58,12 +61,26 @@ def export_lipd_jsonld(
     except (ValueError, TypeError):
         elev = None
 
-    geo_meta = {
+    geo_meta: dict[str, Any] = {
         "siteName": site_name,
         "latitude": lat,
         "longitude": lon,
         "elevation": elev,
     }
+    if site.get("country"):
+        geo_meta["country"] = str(site["country"])
+    if site.get("water_depth_m") not in (None, ""):
+        try:
+            geo_meta["waterDepth"] = float(site["water_depth_m"])
+        except (ValueError, TypeError):
+            geo_meta["waterDepth"] = str(site["water_depth_m"])
+    if site.get("core_length_m") not in (None, ""):
+        try:
+            geo_meta["coreLength"] = float(site["core_length_m"])
+        except (ValueError, TypeError):
+            geo_meta["coreLength"] = str(site["core_length_m"])
+    if site.get("collection_date"):
+        geo_meta["collectionDate"] = str(site["collection_date"])
 
     # 2. Publication metadata
     pub_meta = [
@@ -87,15 +104,20 @@ def export_lipd_jsonld(
                 vals = df[col_name].tolist()
                 clean_vals = [float(v) if pd.notna(v) else None for v in vals]
                 is_depth = col_name.lower().startswith("depth")
+                resolved_unit = (
+                    (depth_unit or "cm")
+                    if is_depth
+                    else (col_unit_map.get(col_name) or "%")
+                )
                 paleo_columns.append(
                     {
                         "variableName": col_name,
-                        "units": "cm" if is_depth else "%",
+                        "units": resolved_unit,
                         "values": clean_vals,
                         "dataType": "float",
                         "variableType": "depth" if is_depth else "measured",
                         "proxy": "pollen" if not is_depth else None,
-                        "description": f"Digitized {col_name} abundance"
+                        "description": f"Digitized {col_name} ({resolved_unit})"
                         if not is_depth
                         else "Core composite depth",
                     }
@@ -112,15 +134,20 @@ def export_lipd_jsonld(
             vals = pollen_df[col_name].tolist()
             clean_vals = [float(v) if pd.notna(v) else None for v in vals]
             is_depth = col_name.lower().startswith("depth")
+            resolved_unit = (
+                (depth_unit or "cm")
+                if is_depth
+                else (col_unit_map.get(col_name) or "%")
+            )
             paleo_columns.append(
                 {
                     "variableName": col_name,
-                    "units": "cm" if is_depth else "%",
+                    "units": resolved_unit,
                     "values": clean_vals,
                     "dataType": "float",
                     "variableType": "depth" if is_depth else "measured",
                     "proxy": "pollen" if not is_depth else None,
-                    "description": f"Digitized {col_name} abundance"
+                    "description": f"Digitized {col_name} ({resolved_unit})"
                     if not is_depth
                     else "Core composite depth",
                 }
@@ -185,12 +212,21 @@ def export_lipd_jsonld(
                 }
             )
 
+    # Resolve investigators (explicit field/lab investigators if provided, else publication authors)
+    raw_inv = tech.get("investigators")
+    if isinstance(raw_inv, list) and raw_inv:
+        investigators = raw_inv
+    elif isinstance(raw_inv, str) and raw_inv.strip():
+        investigators = [s.strip() for s in raw_inv.split(",") if s.strip()]
+    else:
+        investigators = pub.get("authors", [])
+
     # Assemble Root LiPD JSON-LD Object
     lipd_obj: dict[str, Any] = {
         "@context": "https://linkedearth.github.io/schema/context.json",
         "dataSetName": dataset_name,
         "archiveType": site.get("archive_type", "LakeSediment"),
-        "investigators": pub.get("authors", []),
+        "investigators": investigators,
         "pub": pub_meta,
         "geo": geo_meta,
         "paleoData": [
@@ -204,6 +240,30 @@ def export_lipd_jsonld(
             }
         ],
     }
+
+    if pub.get("funding_agency") or pub.get("funding_grant"):
+        lipd_obj["funding"] = [
+            {
+                "fundingAgency": pub.get("funding_agency", ""),
+                "fundingGrant": pub.get("funding_grant", ""),
+            }
+        ]
+    if tech.get("digitizer"):
+        lipd_obj["createdBy"] = str(tech["digitizer"])
+    if tech.get("affiliation"):
+        lipd_obj["affiliation"] = str(tech["affiliation"])
+    if tech.get("laboratory"):
+        lipd_obj["laboratory"] = str(tech["laboratory"])
+    if tech.get("digitization_date"):
+        lipd_obj["digitizationDate"] = str(tech["digitization_date"])
+    if site.get("collection_date"):
+        lipd_obj["collectionDate"] = str(site["collection_date"])
+    if qual.get("dataset_version"):
+        lipd_obj["datasetVersion"] = str(qual["dataset_version"])
+    if qual.get("original_data_url"):
+        lipd_obj["originalDataUrl"] = str(qual["original_data_url"])
+    if qual.get("quality_notes"):
+        lipd_obj["notes"] = str(qual["quality_notes"])
 
     if ensemble_measurement_table:
         lipd_obj["chronData"][0]["chronEnsembleTable"] = ensemble_measurement_table

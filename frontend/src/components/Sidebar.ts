@@ -19,6 +19,8 @@ export class Sidebar {
   private isCompactView: boolean = true; // 默认紧凑列表，极大提升大剖面属种浏览检索效率
   private searchQuery: string = '';      // 属种快速搜索关键词
   private collapsedRois: Set<string> = new Set(); // 折叠的 ROI 分组
+  /** 正在把焦点还给重建后的行内改名输入框；此期间必须忽略 focusin，否则重渲染递归。 */
+  private restoringInlineEdit = false;
 
   constructor(data: DiagramData, callbacks: SidebarCallbacks) {
     this.data = data;
@@ -28,7 +30,7 @@ export class Sidebar {
     this.render();
 
     onLocaleChange(() => {
-      this.render();
+      this.renderPreservingInlineEdit();
     });
   }
 
@@ -56,7 +58,53 @@ export class Sidebar {
 
   public updateData(data: DiagramData): void {
     this.data = data;
+    this.renderPreservingInlineEdit();
+  }
+
+  /**
+   * 重渲染侧栏，但**不打断正在进行的行内改名**。
+   *
+   * `render()` 会整体重写 `innerHTML`。而用户点开改名输入框时，`focusin` 会经由
+   * `onSelectTaxa` → `setActiveTaxa` → `onTaxaChange`（`main.ts:498`）触发一次
+   * `updateData`，于是刚拿到焦点的那个 `<input>` 立刻被销毁：焦点掉回 `<body>`，
+   * 用户一个字也打不进去，已敲入但尚未 `change` 的内容也一起消失。
+   *
+   * 步骤 5 e2e 实测（改前）：聚焦前后不是同一个 DOM 节点、`document.activeElement`
+   * 的 tagName 变成 `BODY`、逐字符输入 9 个字符后 `value` 仍是 `col01`。
+   *
+   * 重渲染本身躲不掉——画布高亮与步骤 5 对账清单都依赖它——所以只能把编辑现场
+   * 搬到新节点上：焦点、光标位置、以及"还没提交的值"。
+   */
+  private renderPreservingInlineEdit(): void {
+    const active = document.activeElement;
+    const snapshot =
+      active instanceof HTMLInputElement &&
+      this.element.contains(active) &&
+      active.getAttribute('data-action') === 'inline-rename'
+        ? {
+            colId: active.getAttribute('data-col-id') ?? '',
+            value: active.value,
+            caret: active.selectionStart,
+          }
+        : null;
+
     this.render();
+
+    if (!snapshot?.colId) return;
+    const again = this.element.querySelector<HTMLInputElement>(
+      `input.taxa-name-inline-input[data-col-id="${CSS.escape(snapshot.colId)}"]`
+    );
+    if (!again) return;
+    again.value = snapshot.value;
+    this.restoringInlineEdit = true;
+    try {
+      // focus() 同步派发 focusin —— 那正是下面那个监听器会再次触发重渲染的时刻，
+      // 所以标志必须在 focus() 之前立起来。
+      again.focus();
+      if (snapshot.caret !== null) again.setSelectionRange(snapshot.caret, snapshot.caret);
+    } finally {
+      this.restoringInlineEdit = false;
+    }
   }
 
   public render(): void {
@@ -176,6 +224,9 @@ export class Sidebar {
       maxValStr = `${measuredMax.toFixed(1)}%`;
     }
 
+    const roi = this.data.rois?.find((r) => r.id === col.roi_id) || this.data.rois?.[0];
+    const groupName = roi?.x_groups?.find((g) => g.id === col.x_group_id)?.name || '默认组';
+
     if (this.isCompactView) {
       return `
         <div class="taxa-card compact-taxa-row ${isActive ? 'active' : ''}" data-taxa-id="${col.id}">
@@ -228,6 +279,10 @@ export class Sidebar {
         </div>
 
         <div class="taxa-meta">
+          <div class="meta-item">
+            <span>所属组:</span>
+            <span class="badge" style="font-size: 9.5px; padding: 1px 4px;">${groupName}</span>
+          </div>
           <div class="meta-item">
             <span>基线范围:</span>
             <code>${col.startX} ~ ${col.endX} px</code>
@@ -305,6 +360,9 @@ export class Sidebar {
 
     // 逐列点名获得焦点时画布高亮该列 (Ticket T11)
     list.addEventListener('focusin', (e) => {
+      // 见 renderPreservingInlineEdit：把焦点还给重建后的输入框时也会走到这里，
+      // 不挡住就是 focusin → onSelectTaxa → updateData → 重建 → focus → focusin… 无限递归。
+      if (this.restoringInlineEdit) return;
       const target = e.target as HTMLInputElement;
       if (target && target.getAttribute('data-action') === 'inline-rename') {
         const colId = target.getAttribute('data-col-id');
@@ -330,8 +388,9 @@ export class Sidebar {
             target.value = col.name;
             return;
           }
-          col.name = newName;
-          col.species = newName;
+          // 状态变更统一交给 onRenameTaxa：它要先把**旧名字**记下来，后端拒绝时才好回滚。
+          // 这里抢先改 col.name 会让旧名字当场丢失（撤销标签也会退化成
+          // "Rename Taxa 新名 to 新名"）。
           this.callbacks.onRenameTaxa?.(col.id, newName);
         }
       }

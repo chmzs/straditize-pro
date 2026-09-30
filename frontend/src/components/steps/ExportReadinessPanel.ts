@@ -49,6 +49,12 @@ export function renderExportReadiness(data: DiagramData): string {
   const sheetsStr = `[${state.sheets.join(',')}]`;
   const missingStr = `[${state.readinessMissing.join(',')}]`;
 
+  const cols = data.columns || [];
+  const calibratedCount = cols.filter(
+    (c) => Array.isArray(c.x_ticks) && c.x_ticks.length === 2
+  ).length;
+  const uncalibratedCount = cols.length - calibratedCount;
+
   return `
     <div id="export-readiness-container" class="export-readiness-box"
          data-sheets="${state.sheets.join(',')}"
@@ -67,6 +73,7 @@ export function renderExportReadiness(data: DiagramData): string {
         <div>• 导出分表 (SHEETS): <strong id="lbl-export-sheets" style="color: var(--accent-blue);">${sheetsStr}</strong></div>
         <div>• 主工作区 (PRIMARY_ROI): <strong id="lbl-export-primary" style="color: var(--accent-green, #10b981);">${state.primaryRoi}</strong> (对应归档 <code>data.csv</code>)</div>
         <div>• 根数据归属: <span id="lbl-export-data-csv-primary">DATA_CSV_EQUALS_PRIMARY=true</span></div>
+        <div>• 属种刻度标定: <span id="lbl-export-calibration-status">${calibratedCount} 列已标定${uncalibratedCount > 0 ? ` / <strong style="color: #f59e0b;">${uncalibratedCount} 列未标定</strong> (按列宽百分比估算)` : ' (全部已标定)'}</span></div>
         <div>• 未就绪清单 (READINESS_MISSING): <strong id="lbl-export-missing" style="color: ${state.readinessMissing.length > 0 ? '#ef4444' : 'var(--text-muted)'};">${missingStr}</strong></div>
       </div>
       ${

@@ -20,7 +20,6 @@ export interface ToolbarCallbacks {
   onLoadSample: (sampleKey: string) => void;
   onChangeImageMode: (mode: ImageDisplayMode) => void;
   onToggleBinaryOverlay: () => void;
-  onChangeDegridStrength?: (strength: 'off' | 'weak' | 'medium' | 'strong') => void;
   onSelectToolMode?: (mode: ToolMode) => void;
   onAddColumn?: () => void;
   onDeleteSelected?: () => void;
@@ -34,6 +33,8 @@ export interface ToolbarCallbacks {
   onToggleInspector?: () => void;
   onStepClick?: (step: number) => void;
   onResetAll?: () => void;
+  /** 请求后端进程退出。进程控制不是数据 RPC，所以经回调交给 main.ts 统一下发。 */
+  onShutdown?: () => void;
 }
 
 export class Toolbar {
@@ -168,11 +169,6 @@ export class Toolbar {
     }
   }
 
-  public setDegridStrength(_value: 'off' | 'weak' | 'medium' | 'strong'): void {
-    // 「去线」强度控件已收敛到右侧属性检查器的 S2 面板（#select-inspector-degrid），
-    // 顶栏原有的同名 select 是重复入口且两处显示值互不同步，已移除。
-  }
-
   public updateHistoryState(): void {
     const undoBtn = this.element.querySelector('#btn-undo') as HTMLButtonElement;
     const redoBtn = this.element.querySelector('#btn-redo') as HTMLButtonElement;
@@ -253,7 +249,12 @@ export class Toolbar {
           <select id="select-sample-diagram" class="sample-select" title="快速载入经典地学剖面范例" style="max-width: 80px; font-size: 11px;">
             <option value="" disabled selected>${t('toolbar.sample')}</option>
             <option value="hoya">Hoya</option>
-            <option value="verification">验证图谱</option>
+            <!--
+              曾有 value="verification"（验证图谱）：它的图片是 scripts/verify_real_pollen_edit.py
+              的产物、且被 .gitignore 的 verification_*.png 规则排除，任何全新克隆都拿不到 →
+              选中必定 -32004 失败。后端 core.loadImage 仍保留该 key，只是不再作为菜单项暴露。
+              新增选项前请确认图片真的随仓库分发：step1-load.spec.ts 会把每个可选项逐个载入。
+            -->
             <option value="beginner">沉积图谱</option>
           </select>
 
@@ -321,8 +322,10 @@ export class Toolbar {
           </button>
         </div>
 
-        <!-- 保持 DOM 兼容性的隐藏元数据入口 (脚本可触发) -->
-        <button id="btn-metadata-modal" style="display: none;"></button>
+        <!-- 论文与站点 FAIR / LiPD 元数据提取与录入入口 -->
+        <button id="btn-metadata-modal" class="tool-btn" title="论文、钻孔站点与 LiPD 元数据录入" style="padding: 3px 6px; font-size: 10.5px; color: var(--accent-blue); border-color: rgba(2, 132, 199, 0.4);">
+          <span>📄 元数据</span>
+        </button>
 
         <!-- 花粉属种名 OCR 自动识别与审核入口 (S3阶段高亮引导，S1/S2未分列阶段弱化) -->
         <button id="btn-ocr-review-modal" class="tool-btn" title="${this.currentWorkflowStep < 3 ? t('toolbar.ocrTitleDisabled') : t('toolbar.ocrTitle')}" style="padding: 3px 6px; font-size: 10.5px; color: #10b981; border-color: rgba(16, 185, 129, 0.4); opacity: ${this.currentWorkflowStep < 3 ? '0.45' : '1'}; ${this.currentWorkflowStep === 3 ? 'box-shadow: 0 0 6px rgba(16, 185, 129, 0.35); border-color: #10b981;' : ''}">
@@ -389,11 +392,7 @@ export class Toolbar {
       document.body.appendChild(overlay);
 
       try {
-        await fetch('/shutdown', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'shutdown' }),
-        });
+        await this.callbacks.onShutdown?.();
       } catch {
         // Ignored as server shuts down immediately
       }

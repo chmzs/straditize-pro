@@ -10,7 +10,8 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "GPL-3.0-or-later" }
 authors = [
-    { name = "chmzs", email = "chmzs@outlook.com" }
+    { name = "chmzs", email = "chmzs@outlook.com" },
+    { name = "Philipp S. Sommer", email = "philipp.sommer@unil.ch" },
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

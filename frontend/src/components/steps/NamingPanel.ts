@@ -32,10 +32,10 @@ export function render(data: DiagramData): string {
     assigned: {},
   };
 
-  const assignPairs = Object.entries(recon.assigned).map(([lbl, col]) => `${lbl}=${col}`);
+  const assignPairs = Object.entries(recon.assigned || {}).map(([lbl, col]) => `${lbl}=${col}`);
   const assignGrammar = `[${assignPairs.join(',')}]`;
-  const withoutLabelGrammar = `[${recon.columns_without_label.join(',')}]`;
-  const withoutColumnGrammar = `[${recon.labels_without_column.join(',')}]`;
+  const withoutLabelGrammar = `[${(recon.columns_without_label || []).join(',')}]`;
+  const withoutColumnGrammar = `[${(recon.labels_without_column || []).join(',')}]`;
 
   return `
     <div class="step-panel" data-step="5"
@@ -89,12 +89,16 @@ export function render(data: DiagramData): string {
 
 export function mount(root: HTMLElement, ctx: StepContext): void {
   root.querySelector('#btn-trigger-ocr')?.addEventListener('click', () => {
-    const ocrBtn = document.querySelector('#btn-open-ocr, #topbar-btn-ocr, [title*="OCR"]') as HTMLButtonElement | null;
-    if (ocrBtn) {
-      ocrBtn.click();
-    } else {
-      alert('请使用顶栏【🔍 OCR】按钮框选并识别图谱顶部标签。');
+    // 旧实现是去顶栏"碰"按钮：`#btn-open-ocr`、`#topbar-btn-ocr`、`[title*="OCR"]`
+    // 这三个选择器在整个仓库里一个都不存在（顶栏真实按钮是 `#btn-ocr-review-modal`，
+    // 其 title 为"自动识别图谱顶部属种名并为各列匹配新列名"，不含 "OCR"），
+    // 于是永远走 else 分支只弹一句提示 —— 这个按钮从来没有打开过 OCR 模态。
+    // 步骤 5 e2e 实测：点击后可见的 `[id^="ocr-"]` 元素数为 0，弹窗是那句提示。
+    if (ctx.onOpenOcrReviewModal) {
+      ctx.onOpenOcrReviewModal();
+      return;
     }
+    alert('请使用顶栏【🔍 OCR】按钮框选并识别图谱顶部标签。');
   });
 
   root.querySelector('#btn-apply-naming-next')?.addEventListener('click', () => {

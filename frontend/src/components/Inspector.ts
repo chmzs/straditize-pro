@@ -5,6 +5,7 @@ import { tokens } from '../styles/tokens';
 import { DeletePointCommand, ResizeRoiCommand } from '../core/Commands';
 import { getStepPanel } from './steps/_registry';
 import { t, onLocaleChange } from '../i18n';
+import { RpcClient } from '../services/RpcClient';
 
 export interface InspectorCallbacks {
   onDataChange: () => void;
@@ -13,13 +14,16 @@ export interface InspectorCallbacks {
   onDigitizeActiveColumn: () => Promise<void>;
   onAdvanceWorkflowStage?: (targetStage: number) => void;
   onOpenDataViewer?: () => void;
+  /** 打开 OCR 复核模态；由步骤 5 面板的【自动识别属种名】按钮调用。 */
+  onOpenOcrReviewModal?: () => void;
+  /** 步骤 6：两点式 X 轴（列标度）标定；像素取自列几何，用户只填两个读数（原始字符串）。 */
+  onCalibrateXTicks?: (colIndex: number, val1Raw: string, val2Raw: string) => void;
+  /** 步骤 6：清空该列的 X 标度，回到「未标定」。 */
+  onClearXTicks?: (colIndex: number) => void;
   onToggleLayerVisibility?: (layer: string, visible: boolean) => void;
-  onChangeDegridStrength?: (strength: 'off' | 'weak' | 'medium' | 'strong') => void;
-  /** 切换「去竖线」开关：竖线（轴线/列基线）与横线分开控制。 */
-  onToggleVerticalLineRemoval?: (enabled: boolean) => void;
   /** 进入线掩膜人工修正笔刷（erase=擦掉误标 / restore=补回漏标）。 */
   onStartLineFix?: (mode: 'erase' | 'restore') => void;
-  /** 清空全部人工修正笔迹并重新下发自动掩膜。 */
+  /** 清空全部人工修正笔迹并重新合成清理掩膜。 */
   onClearLineFix?: () => void;
   /** 启动 Y 轴两点标定（由画布收点，再弹窗收真实值）。 */
   onStartYCalibration?: () => void;
@@ -55,6 +59,12 @@ export interface InspectorCallbacks {
   onDetectXTicks?: () => void;
   onExtractConsensusHorizons?: () => void;
   onClearHorizons?: () => void;
+  /**
+   * 步骤面板直连后端的通道。面板不再各自裸写 fetch —— 共享客户端负责
+   * 检查 HTTP 状态、解析 JSON-RPC 信封，并在 `200 + body.error` 时抛错，
+   * 从而被 e2e 的全局错误门禁覆盖。
+   */
+  rpcClient?: RpcClient;
 }
 
 export class Inspector {
@@ -210,15 +220,19 @@ export class Inspector {
   }
 
   private renderColumnInspector(col: TaxaColumn): string {
-    const sc = col.scaleCalib || {
-      originX: col.startX,
-      originVal: col.startValue ?? 0,
-      calibX: (col.tickEndX && col.tickEndX > col.startX) ? col.tickEndX : col.endX,
-      calibVal: col.maxPercent ?? 20,
-      unit: col.unit || '%',
+    const resolved = CoordinateSystem.resolveColumnScale(col);
+    const sc = {
+      originX: resolved.px0,
+      originVal: resolved.val0,
+      calibX: resolved.px1,
+      calibVal: resolved.val1,
+      unit: resolved.unit,
     };
 
-    const currentScaleType = col.scale_type || 'linear';
+    const currentScaleType = resolved.scaleType;
+    const currentPlotType = resolved.plotType;
+    const hasExag = resolved.exaggerationMult !== null;
+    const exagMult = resolved.exaggerationMult ?? col.exaggerationMult ?? 5;
     const logCheck = CoordinateSystem.validateLogScale(col);
     const isLogValid = logCheck.valid;
 
@@ -226,7 +240,10 @@ export class Inspector {
       <div class="inspector-section">
         <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
           <span>属种列属性: ${col.name.toUpperCase()}</span>
-          <span class="badge" style="background:${col.color}22; color:${col.color}; border:1px solid ${col.color}66;">${col.plotType || 'area'}</span>
+          <div style="display:flex; gap: 4px; align-items:center;">
+            <span class="badge" style="background:${col.color}22; color:${col.color}; border:1px solid ${col.color}66;">${currentPlotType}</span>
+            <button id="btn-back-to-step" class="tool-btn" style="font-size: 9.5px; padding: 1px 5px; color: var(--text-muted);" title="返回步骤面板">✕</button>
+          </div>
         </div>
 
         <div class="form-group">
@@ -310,10 +327,10 @@ export class Inspector {
             <button id="btn-apply-type-all" class="tool-btn" style="font-size: 9.5px; padding: 1px 5px; color: var(--text-muted);" title="将当前形态应用至全部属种列">应用至全列</button>
           </div>
           <div class="btn-group" style="display: flex; gap: 3px; width: 100%; margin-top: 4px;">
-            <button class="tool-btn quick-plottype-btn ${(col.plotType || 'area') === 'area' ? 'active-mode' : ''}" data-type="area" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">🌊 面积</button>
-            <button class="tool-btn quick-plottype-btn ${col.plotType === 'bar' ? 'active-mode' : ''}" data-type="bar" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">📊 柱状</button>
-            <button class="tool-btn quick-plottype-btn ${col.plotType === 'line' ? 'active-mode' : ''}" data-type="line" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">📈 折线</button>
-            <button class="tool-btn quick-plottype-btn ${col.plotType === 'symbol' ? 'active-mode' : ''}" data-type="symbol" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">➕ 符号</button>
+            <button class="tool-btn quick-plottype-btn ${currentPlotType === 'area' ? 'active-mode' : ''}" data-type="area" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">🌊 面积</button>
+            <button class="tool-btn quick-plottype-btn ${currentPlotType === 'bar' ? 'active-mode' : ''}" data-type="bar" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">📊 柱状</button>
+            <button class="tool-btn quick-plottype-btn ${currentPlotType === 'line' ? 'active-mode' : ''}" data-type="line" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">📈 折线</button>
+            <button class="tool-btn quick-plottype-btn ${currentPlotType === 'symbol' ? 'active-mode' : ''}" data-type="symbol" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">➕ 符号</button>
           </div>
         </div>
 
@@ -321,15 +338,15 @@ export class Inspector {
         <div class="form-group" style="margin-top: 8px; padding: 6px 8px; background: rgba(148,163,184,0.06); border-radius: 4px; border: 1px dashed rgba(148,163,184,0.25);">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <label style="font-size: 11px; display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0;">
-              <input type="checkbox" id="chk-has-exag" ${col.hasExaggeration ? 'checked' : ''} style="cursor: pointer;" />
+              <input type="checkbox" id="chk-has-exag" ${hasExag ? 'checked' : ''} style="cursor: pointer;" />
               <span style="font-weight: 500;">局部放大曲线 (Exaggeration)</span>
             </label>
-            <span style="font-size: 10px; color: #a855f7; font-weight: 600;">${col.hasExaggeration ? `${col.exaggerationMult || 5}× 启用` : '未勾选'}</span>
+            <span style="font-size: 10px; color: #a855f7; font-weight: 600;">${hasExag ? `${exagMult}× 启用` : '未勾选'}</span>
           </div>
-          ${col.hasExaggeration ? `
+          ${hasExag ? `
             <div style="margin-top: 6px; display: flex; align-items: center; gap: 6px;">
               <span style="font-size: 10px; color: #94a3b8;">放大倍数:</span>
-              <input type="number" id="inp-exag-mult" value="${col.exaggerationMult || 5}" min="1" max="100" style="width: 50px; font-size: 11px; padding: 2px 4px;" />
+              <input type="number" id="inp-exag-mult" value="${exagMult}" min="1" max="100" style="width: 50px; font-size: 11px; padding: 2px 4px;" />
               <div class="btn-group" style="display: flex; gap: 2px; flex: 1;">
                 <button class="tool-btn quick-exag-btn" data-exag="3" style="flex: 1; font-size: 9px; padding: 2px;">3×</button>
                 <button class="tool-btn quick-exag-btn" data-exag="5" style="flex: 1; font-size: 9px; padding: 2px;">5×</button>
@@ -402,69 +419,116 @@ export class Inspector {
       this.toggleCollapse();
     });
 
-    // 属种名称改名
-    const nameInp = this.element.querySelector('#inp-col-name') as HTMLInputElement;
-    nameInp?.addEventListener('change', () => {
-      const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
-      if (activeCol && nameInp.value.trim()) {
-        const old = activeCol.name;
-        activeCol.name = nameInp.value.trim();
-        this.history.push(`Rename Taxa ${old} to ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
-        this.callbacks.onDataChange();
-      }
+    this.element.querySelector('#btn-back-to-step')?.addEventListener('click', () => {
+      this.data.selectedEntity = null;
+      this.render();
     });
 
-    // 刻度更新
-    const updateScaleCalib = () => {
+    const getColIdx = (col: TaxaColumn) => col.col_index ?? this.data.columns.indexOf(col);
+
+    // 属种名称改名（同步后端 core.renameColumn，失败冒泡且不留幻影撤销项）
+    const nameInp = this.element.querySelector('#inp-col-name') as HTMLInputElement;
+    nameInp?.addEventListener('change', async () => {
+      const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
+      const nextName = nameInp.value.trim();
+      if (!activeCol || !nextName) return;
+      const old = activeCol.name;
+      if (this.callbacks.rpcClient) {
+        try {
+          await this.callbacks.rpcClient.renameColumn(getColIdx(activeCol), nextName);
+        } catch (err) {
+          alert(err instanceof Error ? err.message : String(err));
+          this.render();
+          return;
+        }
+      }
+      activeCol.name = nextName;
+      activeCol.species = nextName;
+      this.history.push(`Rename Taxa ${old} to ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
+      this.callbacks.onDataChange();
+    });
+
+    // 刻度更新（同步后端 column.calibrateXTicks —— 修复缺陷 #23：左栏五个标定框从不落库）
+    const updateScaleCalib = async () => {
       const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
       if (!activeCol) return;
 
-      const originX = parseInt((this.element.querySelector('#inp-sc-origin-x') as HTMLInputElement)?.value, 10);
-      const originVal = parseFloat((this.element.querySelector('#inp-sc-origin-val') as HTMLInputElement)?.value);
-      const calibX = parseInt((this.element.querySelector('#inp-sc-calib-x') as HTMLInputElement)?.value, 10);
+      const originX = parseFloat((this.element.querySelector('#inp-sc-origin-x') as HTMLInputElement)?.value);
+      const originValRaw = parseFloat((this.element.querySelector('#inp-sc-origin-val') as HTMLInputElement)?.value);
+      const calibX = parseFloat((this.element.querySelector('#inp-sc-calib-x') as HTMLInputElement)?.value);
       const calibVal = parseFloat((this.element.querySelector('#inp-sc-calib-val') as HTMLInputElement)?.value);
       const unit = (this.element.querySelector('#inp-sc-unit') as HTMLInputElement)?.value.trim() || '%';
 
-      if (!isNaN(originX) && !isNaN(calibX) && !isNaN(calibVal) && calibX !== originX) {
-        activeCol.scaleCalib = {
-          originX,
-          originVal: isNaN(originVal) ? 0 : originVal,
-          calibX,
-          calibVal,
-          unit,
-        };
-        activeCol.startX = originX;
-        activeCol.startValue = isNaN(originVal) ? 0 : originVal;
-        activeCol.unit = unit;
-        activeCol.maxPercent = calibVal;
-        activeCol.tickValue = calibVal;
-        activeCol.tickEndX = calibX;
-        activeCol.isLocked = true;
+      if (!Number.isFinite(originX) || !Number.isFinite(calibX) || !Number.isFinite(calibVal) || calibX === originX) {
+        return;
+      }
+      const originVal = Number.isFinite(originValRaw) ? originValRaw : 0;
+      const ticks: [{ px: number; value: number }, { px: number; value: number }] = [
+        { px: originX, value: originVal },
+        { px: calibX, value: calibVal },
+      ];
 
-        if (activeCol.scale_type === 'log') {
-          const check = CoordinateSystem.validateLogScale(activeCol);
-          if (!check.valid) {
-            activeCol.scale_type = 'linear';
+      if (this.callbacks.rpcClient) {
+        try {
+          const res = await this.callbacks.rpcClient.calibrateColumnXTicks(
+            getColIdx(activeCol),
+            ticks,
+            unit
+          );
+          activeCol.x_ticks = res.x_ticks;
+        } catch (err) {
+          alert(err instanceof Error ? err.message : String(err));
+          this.render();
+          return;
+        }
+      } else {
+        activeCol.x_ticks = ticks;
+      }
+
+      activeCol.scaleCalib = {
+        originX,
+        originVal,
+        calibX,
+        calibVal,
+        unit,
+      };
+      activeCol.startValue = originVal;
+      activeCol.unit = unit;
+      activeCol.maxPercent = calibVal;
+      activeCol.tickValue = calibVal;
+      activeCol.tickEndX = calibX;
+      activeCol.isLocked = true;
+
+      if (activeCol.scale_type === 'log') {
+        const check = CoordinateSystem.validateLogScale(activeCol);
+        if (!check.valid) {
+          activeCol.scale_type = 'linear';
+          if (this.callbacks.rpcClient) {
+            try {
+              await this.callbacks.rpcClient.updateColumn(getColIdx(activeCol), { scale_type: 'linear' });
+            } catch {
+              // 已在本地回退 linear
+            }
           }
         }
-
-        if (activeCol.controlPoints) {
-          activeCol.controlPoints.forEach((p) => {
-            p.value = CoordinateSystem.imageXToValue(p.x, activeCol);
-          });
-        }
-
-        this.history.push(`Update Tick Calibration for ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
-        this.render();
-        this.callbacks.onDataChange();
       }
+
+      if (activeCol.controlPoints) {
+        activeCol.controlPoints.forEach((p) => {
+          p.value = CoordinateSystem.imageXToValue(p.x, activeCol);
+        });
+      }
+
+      this.history.push(`Update Tick Calibration for ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
+      this.render();
+      this.callbacks.onDataChange();
     };
 
-    this.element.querySelector('#inp-sc-origin-x')?.addEventListener('change', updateScaleCalib);
-    this.element.querySelector('#inp-sc-origin-val')?.addEventListener('change', updateScaleCalib);
-    this.element.querySelector('#inp-sc-calib-x')?.addEventListener('change', updateScaleCalib);
-    this.element.querySelector('#inp-sc-calib-val')?.addEventListener('change', updateScaleCalib);
-    this.element.querySelector('#inp-sc-unit')?.addEventListener('change', updateScaleCalib);
+    this.element.querySelector('#inp-sc-origin-x')?.addEventListener('change', () => void updateScaleCalib());
+    this.element.querySelector('#inp-sc-origin-val')?.addEventListener('change', () => void updateScaleCalib());
+    this.element.querySelector('#inp-sc-calib-x')?.addEventListener('change', () => void updateScaleCalib());
+    this.element.querySelector('#inp-sc-calib-val')?.addEventListener('change', () => void updateScaleCalib());
+    this.element.querySelector('#inp-sc-unit')?.addEventListener('change', () => void updateScaleCalib());
 
     this.element.querySelectorAll('.quick-tick-val-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -472,13 +536,13 @@ export class Inspector {
         const calibValInp = this.element.querySelector('#inp-sc-calib-val') as HTMLInputElement;
         if (calibValInp && !isNaN(val)) {
           calibValInp.value = String(val);
-          updateScaleCalib();
+          void updateScaleCalib();
         }
       });
     });
 
     this.element.querySelectorAll('.quick-scaletype-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const sType = btn.getAttribute('data-scale') as 'linear' | 'log';
         const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
         if (activeCol && sType && activeCol.scale_type !== sType) {
@@ -486,6 +550,14 @@ export class Inspector {
             const check = CoordinateSystem.validateLogScale(activeCol);
             if (!check.valid) {
               alert(`无法切换到对数刻度：\n${check.reason}`);
+              return;
+            }
+          }
+          if (this.callbacks.rpcClient) {
+            try {
+              await this.callbacks.rpcClient.updateColumn(getColIdx(activeCol), { scale_type: sType });
+            } catch (err) {
+              alert(err instanceof Error ? err.message : String(err));
               return;
             }
           }
@@ -507,10 +579,19 @@ export class Inspector {
     });
 
     this.element.querySelectorAll('.quick-plottype-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const pType = btn.getAttribute('data-type') as 'area' | 'bar' | 'line' | 'symbol';
         const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
         if (activeCol && pType) {
+          if (this.callbacks.rpcClient) {
+            try {
+              await this.callbacks.rpcClient.updateColumn(getColIdx(activeCol), { plot_type: pType });
+            } catch (err) {
+              alert(err instanceof Error ? err.message : String(err));
+              return;
+            }
+          }
+          activeCol.plot_type = pType;
           activeCol.plotType = pType;
           this.history.push(`Change ${activeCol.name} Plot Type to ${pType}`, this.data.columns, this.data.activeTaxaId);
           this.render();
@@ -519,11 +600,22 @@ export class Inspector {
       });
     });
 
-    this.element.querySelector('#btn-apply-type-all')?.addEventListener('click', () => {
+    this.element.querySelector('#btn-apply-type-all')?.addEventListener('click', async () => {
       const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
       if (activeCol) {
-        const pType = activeCol.plotType || 'area';
+        const pType = activeCol.plot_type || activeCol.plotType || 'area';
+        if (this.callbacks.rpcClient) {
+          try {
+            for (const c of this.data.columns) {
+              await this.callbacks.rpcClient.updateColumn(getColIdx(c), { plot_type: pType });
+            }
+          } catch (err) {
+            alert(err instanceof Error ? err.message : String(err));
+            return;
+          }
+        }
         this.data.columns.forEach((c) => {
+          c.plot_type = pType;
           c.plotType = pType;
         });
         this.history.push(`Apply Plot Type ${pType} to All Columns`, this.data.columns, this.data.activeTaxaId);
@@ -545,14 +637,28 @@ export class Inspector {
       this.callbacks.onDataChange();
     });
 
-    // 局部放大曲线勾选与倍数
-    this.element.querySelector('#chk-has-exag')?.addEventListener('change', (e) => {
+    // 局部放大曲线勾选与倍数（同步后端 column.update）
+    this.element.querySelector('#chk-has-exag')?.addEventListener('change', async (e) => {
       const checked = (e.target as HTMLInputElement).checked;
       const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
       if (activeCol) {
+        const mult = checked ? (activeCol.exaggeration_mult || activeCol.exaggerationMult || 5) : null;
+        if (this.callbacks.rpcClient) {
+          try {
+            await this.callbacks.rpcClient.updateColumn(getColIdx(activeCol), {
+              hasExaggeration: checked,
+              exaggeration_mult: mult,
+            });
+          } catch (err) {
+            alert(err instanceof Error ? err.message : String(err));
+            this.render();
+            return;
+          }
+        }
         activeCol.hasExaggeration = checked;
-        if (checked && !activeCol.exaggerationMult) {
-          activeCol.exaggerationMult = 5;
+        activeCol.exaggeration_mult = mult;
+        if (checked && mult) {
+          activeCol.exaggerationMult = mult;
         }
         this.history.push(`Toggle Exaggeration for ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
         this.render();
@@ -560,10 +666,24 @@ export class Inspector {
       }
     });
 
-    this.element.querySelector('#inp-exag-mult')?.addEventListener('change', (e) => {
+    this.element.querySelector('#inp-exag-mult')?.addEventListener('change', async (e) => {
       const mult = parseFloat((e.target as HTMLInputElement).value);
       const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
-      if (activeCol && !isNaN(mult) && mult >= 1) {
+      if (activeCol && !isNaN(mult) && mult > 1) {
+        if (this.callbacks.rpcClient) {
+          try {
+            await this.callbacks.rpcClient.updateColumn(getColIdx(activeCol), {
+              hasExaggeration: true,
+              exaggeration_mult: mult,
+            });
+          } catch (err) {
+            alert(err instanceof Error ? err.message : String(err));
+            this.render();
+            return;
+          }
+        }
+        activeCol.hasExaggeration = true;
+        activeCol.exaggeration_mult = mult;
         activeCol.exaggerationMult = mult;
         this.history.push(`Set Exaggeration to ${mult}x for ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
         this.render();
@@ -572,10 +692,23 @@ export class Inspector {
     });
 
     this.element.querySelectorAll('.quick-exag-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const mult = parseFloat(btn.getAttribute('data-exag') || '5');
         const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
-        if (activeCol && !isNaN(mult)) {
+        if (activeCol && !isNaN(mult) && mult > 1) {
+          if (this.callbacks.rpcClient) {
+            try {
+              await this.callbacks.rpcClient.updateColumn(getColIdx(activeCol), {
+                hasExaggeration: true,
+                exaggeration_mult: mult,
+              });
+            } catch (err) {
+              alert(err instanceof Error ? err.message : String(err));
+              return;
+            }
+          }
+          activeCol.hasExaggeration = true;
+          activeCol.exaggeration_mult = mult;
           activeCol.exaggerationMult = mult;
           this.history.push(`Set Exaggeration to ${mult}x for ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
           this.render();
@@ -584,13 +717,24 @@ export class Inspector {
       });
     });
 
-    // 删除列
-    this.element.querySelector('#btn-col-delete')?.addEventListener('click', () => {
+    // 删除列（同步后端 column.remove，并重编前端镜像的 col_index）
+    this.element.querySelector('#btn-col-delete')?.addEventListener('click', async () => {
       const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
       if (activeCol && this.data.columns.length > 1) {
+        if (this.callbacks.rpcClient) {
+          try {
+            await this.callbacks.rpcClient.removeColumn(getColIdx(activeCol));
+          } catch (err) {
+            alert(err instanceof Error ? err.message : String(err));
+            return;
+          }
+        }
         const idx = this.data.columns.findIndex((c) => c.id === activeCol.id);
         if (idx !== -1) {
           this.data.columns.splice(idx, 1);
+          this.data.columns.forEach((c, i) => {
+            c.col_index = i;
+          });
           this.data.activeTaxaId = this.data.columns[0]?.id || '';
           this.history.push(`Delete Column ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
           this.callbacks.onDataChange();
@@ -653,29 +797,6 @@ export class Inspector {
     this.element.querySelector('#btn-inspector-open-export')?.addEventListener('click', () => {
       this.callbacks.onOpenDataViewer?.();
     });
-
-    // S2 图像清理灵敏度（横线 + 竖线由后端在同一档位内一起判定）
-    this.element.querySelector('#select-inspector-degrid')?.addEventListener('change', (e) => {
-      const val = (e.target as HTMLSelectElement).value as 'off' | 'weak' | 'medium' | 'strong';
-      this.callbacks.onChangeDegridStrength?.(val);
-    });
-
-    this.element.querySelector('#chk-degrid-vertical')?.addEventListener('change', (e) => {
-      this.callbacks.onToggleVerticalLineRemoval?.((e.target as HTMLInputElement).checked);
-    });
-
-    // 线掩膜人工修正
-    this.element.querySelector('#btn-linefix-erase')?.addEventListener('click', () => {
-      this.callbacks.onStartLineFix?.('erase');
-    });
-    this.element.querySelector('#btn-linefix-restore')?.addEventListener('click', () => {
-      this.callbacks.onStartLineFix?.('restore');
-    });
-    this.element.querySelector('#btn-linefix-clear')?.addEventListener('click', () => {
-      this.callbacks.onClearLineFix?.();
-    });
-
-
 
     // 挂载当前步骤 Panel 的事件监听 (Step Registry)
     const registered = getStepPanel(this.currentStage);

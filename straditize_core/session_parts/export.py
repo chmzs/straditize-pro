@@ -15,11 +15,11 @@ import os
 import tarfile
 import time
 from typing import Any
-import numpy as np
 import pandas as pd
 
 from ..metadata.exporter_xlsx import export_scientific_xlsx
 from ..metadata.exporter_lipd import export_lipd_jsonld
+from .xscale import resolve_column_scale
 
 
 class ExportMixin:
@@ -118,64 +118,33 @@ class ExportMixin:
             data_dict: dict[str, Any] = {"depth": depth_list}
 
             # Calculate readings for each column (without ROI prefix)
+            taxa_names = getattr(self, "taxa_names", None) or []
             for idx, col in enumerate(roi_cols):
                 c_idx = col.get("col_index", idx)
                 # Strict: column name does NOT contain ROI prefix
-                col_name = (
-                    col.get("name") or col.get("species") or f"col{c_idx + 1:02d}"
-                )
-
-                x_ticks = col.get("x_ticks")
-                if x_ticks and len(x_ticks) >= 2:
-                    px0 = float(x_ticks[0].get("px", 0.0))
-                    val0 = float(x_ticks[0].get("value", 0.0))
-                    px1 = float(x_ticks[1].get("px", 0.0))
-                    val1 = float(x_ticks[1].get("value", 0.0))
-                    has_ticks = True
+                if taxa_names and c_idx < len(taxa_names) and taxa_names[c_idx]:
+                    col_name = taxa_names[c_idx]
                 else:
-                    px0 = float(col.get("startX", col.get("start", 0.0)))
-                    px1 = float(col.get("endX", col.get("end", px0 + 100.0)))
-                    val0 = 0.0
-                    val1 = 100.0
-                    has_ticks = False
+                    col_name = (
+                        col.get("name") or col.get("species") or f"col{c_idx + 1:02d}"
+                    )
 
+                scale = resolve_column_scale(self, col, c_idx)
                 pts = column_points.get(c_idx, [])
                 p_dict = {p["row"]: p["x"] for p in pts}
-                c_start_px = float(col.get("startX", col.get("start", px0)))
-                scale_type = col.get("scale_type", "linear")
+                c_start_px = float(
+                    col.get("startX", col.get("start", scale.abs_px0))
+                )
 
-                vals: list[float] = []
-                for r in row_list:
-                    if r in p_dict:
-                        raw_x = p_dict[r]
-                    else:
-                        raw_x = c_start_px
-
-                    if abs(raw_x - c_start_px) < 1e-6:
-                        val = 0.0
-                    else:
-                        span = px1 - px0
-                        if abs(span) > 1e-9:
-                            if has_ticks:
-                                if scale_type == "log" and val0 > 0 and val1 > 0:
-                                    log_v = np.log10(val0) + (raw_x - px0) / span * (
-                                        np.log10(val1) - np.log10(val0)
-                                    )
-                                    val = float(10**log_v)
-                                else:
-                                    val = float(
-                                        val0 + (raw_x - px0) / span * (val1 - val0)
-                                    )
-                            else:
-                                val = float((raw_x - px0) / span * 100.0)
-                        else:
-                            val = 0.0
-
-                        exag = col.get("exaggeration_mult")
-                        if exag is not None and float(exag) > 1.0:
-                            val = val / float(exag)
-
-                    vals.append(round(max(0.0, val), 4))
+                vals = [
+                    scale.px_to_value(
+                        p_dict.get(r, c_start_px),
+                        baseline_px=c_start_px,
+                        col_name=col_name,
+                        ndigits=4,
+                    )
+                    for r in row_list
+                ]
 
                 data_dict[col_name] = vals
 
@@ -466,6 +435,19 @@ class ExportMixin:
             selected_ensembles = [
                 t for t in ensemble_tables if t.get("name") in include_ensemble_names
             ]
+        elif ensemble_tables:
+            selected_ensembles = ensemble_tables
+
+        col_units: dict[str, str] = {}
+        taxa_names = getattr(self, "taxa_names", None) or []
+        for idx, col in enumerate(getattr(self, "columns", [])):
+            c_idx = col.get("col_index", idx)
+            c_name = (
+                taxa_names[c_idx]
+                if (taxa_names and c_idx < len(taxa_names) and taxa_names[c_idx])
+                else (col.get("name") or col.get("species") or f"col{c_idx + 1:02d}")
+            )
+            col_units[c_name] = resolve_column_scale(self, col, c_idx).unit
 
         lipd_jsonld = export_lipd_jsonld(
             meta_info=paper_meta,
@@ -473,6 +455,8 @@ class ExportMixin:
             roi_dfs=roi_dfs,
             age_depth_df=age_depth_df,
             ensemble_tables=selected_ensembles,
+            column_units=col_units,
+            depth_unit=getattr(self, "depth_unit", "cm") or "cm",
         )
 
         if output_path:

@@ -36,10 +36,10 @@ interface TsField {
 /**
  * 后端实际发送**驼峰名**、而 TS 声明**下划线名**的字段。
  *
- * 这是**已知债，不是设计**：四处全部由 `RpcClient` 的归一化垫片兜住
- * （`primary_roi_id`/`active_roi_id` → `RpcClient.ts:315-316`；
- *  `lineCorrections` → `RpcClient.ts:367`）。垫片能work，但**类型系统在这里
- * 提供零保护**——垫片一旦被删就会静默退化成 `rois[0]`，多 ROI 时就是错的。
+ * 这是**已知债，不是设计**：两处全部由 `RpcClient` 的归一化垫片兜住
+ * （`primary_roi_id`/`active_roi_id` → `RpcClient.ts:315-316`）。垫片能work，但
+ * **类型系统在这里提供零保护**——垫片一旦被删就会静默退化成 `rois[0]`，
+ * 多 ROI 时就是错的。
  *
  * 放进这张表意味着"债务被登记在案，且不再增长"：任何**新增**的名字不一致
  * 都会让本文件失败。要删条目，先让后端改名（那是契约变更，需同步前端/测试/文档）。
@@ -47,7 +47,6 @@ interface TsField {
 const KNOWN_WIRE_ALIASES: Record<string, string> = {
   primary_roi_id: 'primaryRoiId',
   active_roi_id: 'activeRoiId',
-  lineCorrections: 'lineRemoval.corrections',
 };
 
 /**

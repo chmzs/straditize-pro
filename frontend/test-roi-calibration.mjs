@@ -116,8 +116,44 @@ assert.deepStrictEqual(
   '未标定不得产出任何层位数据行'
 );
 
+// 10. 列 X 标度唯一解析入口：x_ticks 优先于 legacy 三件套，CoordinateSystem 与 SplineInterpolator 数值一致
+const colWithTicks = {
+  id: 'roi_1_col01',
+  name: 'Pinus',
+  startX: 100,
+  endX: 200,
+  visible: true,
+  color: '#0284c7',
+  unit: '粒',
+  x_ticks: [
+    { px: 100, value: 0 },
+    { px: 200, value: 40 },
+  ],
+  startValue: 0,
+  tickValue: 100,
+  tickEndX: 200,
+  maxPercent: 100,
+  exaggeration_mult: 5,
+  controlPoints: [
+    { id: 'p1', x: 150, y: 500 },
+    { id: 'p2', x: 150, y: 600 },
+  ],
+};
+const resolvedScale = CoordinateSystem.resolveColumnScale(colWithTicks);
+assert.strictEqual(resolvedScale.calibrated, true, '有 x_ticks 时 calibrated=true');
+assert.strictEqual(resolvedScale.source, 'x_ticks', '有 x_ticks 时 source=x_ticks');
+assert.strictEqual(resolvedScale.val1, 40, 'x_ticks 优先于 legacy tickValue=100');
+assert.strictEqual(resolvedScale.exaggerationMult, 5, '读取 exaggeration_mult');
+assert.strictEqual(CoordinateSystem.imageXToValue(150, colWithTicks), 20, 'x=150 按 0..40 换算为 20');
+assert.strictEqual(
+  SplineInterpolator.interpolatePercentAtY(colWithTicks, 550),
+  20,
+  'SplineInterpolator 与 CoordinateSystem 使用同一标度入口'
+);
+
 console.log('✔ 未标定 → 深度一律 undefined，绝不回落 ROI 边界');
 console.log('✔ 标定结构不含 ROI 字段，深度换算与取数区完全解耦');
 console.log('✔ 支持深度向下递增与年代向上递增两种方向');
 console.log('✔ 层位标尺铺在标定跨度上；未标定时为空');
+console.log('✔ 列 X 标度唯一解析入口：x_ticks 优先且 CoordinateSystem/SplineInterpolator 一致');
 console.log('\n🎉 ROI 与 Y 轴标定解耦 真实模块测试通过！');

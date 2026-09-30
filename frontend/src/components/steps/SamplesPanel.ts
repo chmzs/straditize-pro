@@ -77,12 +77,20 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onClearHorizons?.();
   });
 
-  // 单行层位删除
+  // 单行层位删除 (同步后端 samples.set)
   root.querySelectorAll('.btn-delete-sample').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const idx = parseInt(btn.getAttribute('data-sample-idx') || '-1', 10);
       if (idx >= 0 && cachedSamplesData && cachedSamplesData.samples && cachedSamplesData.samples[idx]) {
         cachedSamplesData.samples.splice(idx, 1);
+        if (ctx.rpcClient) {
+          try {
+            await ctx.rpcClient.call('samples.set', { samples: cachedSamplesData.samples });
+          } catch (err) {
+            alert(err instanceof Error ? err.message : String(err));
+            return;
+          }
+        }
         ctx.onDataChange?.();
       }
     });

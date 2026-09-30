@@ -9,3 +9,4 @@ def register(dispatcher: Any, session: Any) -> None:
     """Register x-ticks methods."""
     dispatcher.register_method("algorithm.detectXTicks", session.detect_xticks_rpc)
     dispatcher.register_method("column.calibrateXTicks", session.calibrate_column_xticks)
+    dispatcher.register_method("column.clearXTicks", session.clear_column_xticks)

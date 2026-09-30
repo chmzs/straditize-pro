@@ -830,9 +830,10 @@ export class PropertyPanel {
       for (const col of visibleCols) {
         let v = SplineInterpolator.interpolatePercentAtY(col, y);
         if (v !== undefined && !isNaN(v)) {
-          // 若用户勾选了放大线反算，按用户填写的放大倍数还原真实物理百分比
-          if (col.hasExaggeration && col.exaggerationMult && col.exaggerationMult > 1) {
-            v = v / col.exaggerationMult;
+          // 统一经 CoordinateSystem.resolveColumnScale 读取放大倍数（兼容 exaggeration_mult 与 legacy 字段）
+          const scale = CoordinateSystem.resolveColumnScale(col);
+          if (scale.exaggerationMult && scale.exaggerationMult > 1) {
+            v = v / scale.exaggerationMult;
           }
           rowVals.push(v.toFixed(2));
         } else {
@@ -975,9 +976,9 @@ message("Finished! Stratigraphic plot generated successfully.")
 
       const normalizedCols = rawCols.map((c: any, idx: number) => {
         const name = c.name || c.species || `Col ${idx + 1}`;
-        const startX = c.startX ?? 0;
-        const tickEndX = c.tickEndX ?? (c.scaleCalib?.calibX ?? c.endX ?? startX + 50);
-        const endX = c.endX ?? tickEndX;
+        const startX = c.startX ?? (c.start ?? 0);
+        const tickEndX = c.tickEndX ?? (c.scaleCalib?.calibX ?? c.endX ?? c.end ?? startX + 50);
+        const endX = c.endX ?? (c.end ?? tickEndX);
         const startVal = c.startValue ?? (c.scaleCalib?.originVal ?? 0);
         const tickVal = c.tickValue ?? (c.scaleCalib?.calibVal ?? c.maxPercent ?? 100);
         const rawPts = c.controlPoints || c.points || [];
@@ -994,8 +995,20 @@ message("Finished! Stratigraphic plot generated successfully.")
           createdAt: p.createdAt || Date.now(),
         }));
 
+        const xTicks =
+          c.x_ticks && Array.isArray(c.x_ticks) && c.x_ticks.length === 2
+            ? c.x_ticks
+            : null;
+
+        const exagMult =
+          c.exaggeration_mult ?? (c.has_exaggeration && c.exaggeration_multiplier ? c.exaggeration_multiplier : c.exaggerationMult);
+
         return {
           id: c.id || `col_${idx}`,
+          col_index: c.col_index ?? idx,
+          roi_id: c.roi_id,
+          x_group_id: c.x_group_id,
+          x_values: c.x_values,
           name,
           species: name,
           color: c.color || '#38bdf8',
@@ -1008,6 +1021,12 @@ message("Finished! Stratigraphic plot generated successfully.")
           curveType: c.curveType || 'linear',
           visible: c.visible !== false,
           scale_type: c.scale_type || 'linear',
+          plot_type: c.plot_type || c.plotType || 'area',
+          plotType: c.plot_type || c.plotType || 'area',
+          exaggeration_mult: exagMult,
+          hasExaggeration: exagMult != null && exagMult > 1,
+          exaggerationMult: exagMult,
+          x_ticks: xTicks,
           startValue: startVal,
           tickValue: tickVal,
           controlPoints: pts,
@@ -1022,8 +1041,16 @@ message("Finished! Stratigraphic plot generated successfully.")
         };
       });
 
+      // 如果 JSON 内嵌了 base64 图片且没有从 tar 解压出外部 blob，优先使用内嵌图片（自包含）
+      const resolvedImageSrc =
+        imageBlobUrl ||
+        (parsed.image?.base64 ? `data:image/png;base64,${parsed.image.base64}` : null) ||
+        parsed.image?.src ||
+        parsed.imageSrc ||
+        this.data.imageSrc;
+
       return {
-        imageSrc: imageBlobUrl || parsed.image?.src || parsed.imageSrc || this.data.imageSrc,
+        imageSrc: resolvedImageSrc,
         imageWidth: parsed.image?.width || parsed.imageWidth || this.data.imageWidth,
         imageHeight: parsed.image?.height || parsed.imageHeight || this.data.imageHeight,
         rois: parsed.rois || (normalizedRoi ? [normalizedRoi] : []),
@@ -1036,16 +1063,27 @@ message("Finished! Stratigraphic plot generated successfully.")
         line_strokes: parsed.line_strokes || [],
         exclusion_regions: parsed.exclusion_regions || [],
         samples: parsed.samples || [],
-        lineCorrections: parsed.line_removal?.corrections || [],
         columns: normalizedCols,
         activeTaxaId: parsed.activeTaxaId || normalizedCols[0]?.id || '',
         selectedEntity: null,
       };
     };
 
+    const uint8ToBase64 = (bytes: Uint8Array): string => {
+      let binary = '';
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode.apply(
+          null,
+          Array.from(bytes.subarray(i, i + chunkSize))
+        );
+      }
+      return btoa(binary);
+    };
+
     if (isTar) {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
           const buf = e.target?.result as ArrayBuffer;
           if (!buf) return;
@@ -1058,21 +1096,27 @@ message("Finished! Stratigraphic plot generated successfully.")
 
           let jsonContent: string | null = null;
           let imageBlobUrl: string | null = null;
+          let mainImgEntry: Uint8Array | null = null;
+          let adImgEntry: Uint8Array | null = null;
 
           for (const entry of entries) {
+            const nl = entry.name.toLowerCase();
             if (
-              entry.name.endsWith('straditize.json') ||
-              entry.name.endsWith('wpd.json') ||
-              (entry.name.endsWith('.json') && !entry.name.includes('manifest.json') && !entry.name.includes('info.json'))
+              nl.endsWith('straditize.json') ||
+              nl.endsWith('wpd.json') ||
+              (nl.endsWith('.json') && !nl.includes('manifest.json') && !nl.includes('info.json'))
             ) {
               jsonContent = new TextDecoder().decode(entry.data);
+            } else if (nl.includes('age_depth') && (nl.endsWith('.png') || nl.endsWith('.jpg') || nl.endsWith('.jpeg'))) {
+              adImgEntry = entry.data;
             } else if (
-              entry.name.endsWith('.png') ||
-              entry.name.endsWith('.jpg') ||
-              entry.name.endsWith('.jpeg') ||
-              entry.name.endsWith('.webp')
+              nl.endsWith('.png') ||
+              nl.endsWith('.jpg') ||
+              nl.endsWith('.jpeg') ||
+              nl.endsWith('.webp')
             ) {
-              const mime = entry.name.endsWith('.jpg') || entry.name.endsWith('.jpeg') ? 'image/jpeg' : 'image/png';
+              mainImgEntry = entry.data;
+              const mime = nl.endsWith('.jpg') || nl.endsWith('.jpeg') ? 'image/jpeg' : 'image/png';
               const imgBlob = new Blob([entry.data as unknown as BlobPart], { type: mime });
               imageBlobUrl = URL.createObjectURL(imgBlob);
             }
@@ -1080,6 +1124,21 @@ message("Finished! Stratigraphic plot generated successfully.")
 
           if (jsonContent) {
             const parsed = JSON.parse(jsonContent);
+            // 将内嵌的底图与年代深度图一并同步至后端会话，保证前后端权威状态一致
+            if (mainImgEntry) {
+              parsed.image = parsed.image || {};
+              parsed.image.base64 = uint8ToBase64(mainImgEntry);
+            }
+            if (adImgEntry) {
+              parsed.age_depth = parsed.age_depth || {};
+              parsed.age_depth.image_base64 = uint8ToBase64(adImgEntry);
+            }
+            try {
+              await this.rpcClient.call('project.load', { project_data: parsed });
+            } catch {
+              // 离线模式忽略
+            }
+
             const projectData = normalizeProject(parsed, imageBlobUrl);
             if (projectData) {
               if (this.onProjectLoad) {
@@ -1101,10 +1160,15 @@ message("Finished! Stratigraphic plot generated successfully.")
 
     // 普通 JSON 文件读取
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const text = (e.target?.result as string) || '';
         const parsed = JSON.parse(text);
+        try {
+          await this.rpcClient.call('project.load', { project_data: parsed });
+        } catch {
+          // 离线模式忽略
+        }
         const projectData = normalizeProject(parsed, null);
         if (projectData) {
           if (this.onProjectLoad) {

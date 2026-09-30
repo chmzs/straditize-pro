@@ -88,6 +88,88 @@ class TestColumnEditAcceptsIndexOrId(unittest.TestCase):
             self.session.point_add("no_such_column", 700.0, 420.0)
         self.assertEqual(ctx.exception.code, -32602)
 
+    def test_column_remove_migrates_point_stores_and_taxa_names(self) -> None:
+        """删除中间列后，后续列的 column_points / control_points / taxa_names 必须随 col_index 同步左移，绝不张冠李戴。"""
+        s = StraditizeSession()
+        r_id = s.roi_create(name="pollen", composition=True)["roi"]["id"]
+        s.columns = [
+            {
+                "col_index": 0,
+                "id": f"{r_id}_col01",
+                "name": "Pinus",
+                "species": "Pinus",
+                "roi_id": r_id,
+                "start": 100.0,
+                "end": 200.0,
+                "startX": 100.0,
+                "endX": 200.0,
+                "x_ticks": [{"px": 100.0, "value": 0.0}, {"px": 200.0, "value": 100.0}],
+            },
+            {
+                "col_index": 1,
+                "id": f"{r_id}_col02",
+                "name": "Betula",
+                "species": "Betula",
+                "roi_id": r_id,
+                "start": 200.0,
+                "end": 300.0,
+                "startX": 200.0,
+                "endX": 300.0,
+                "x_ticks": [{"px": 200.0, "value": 0.0}, {"px": 300.0, "value": 100.0}],
+            },
+            {
+                "col_index": 2,
+                "id": f"{r_id}_col03",
+                "name": "Quercus",
+                "species": "Quercus",
+                "roi_id": r_id,
+                "start": 300.0,
+                "end": 400.0,
+                "startX": 300.0,
+                "endX": 400.0,
+                "x_ticks": [{"px": 300.0, "value": 0.0}, {"px": 400.0, "value": 100.0}],
+            },
+        ]
+        s.taxa_names = ["Pinus", "Betula", "Quercus"]
+        s.samples = [{"row_px": 50, "depth": 10.0, "source": "manual"}]
+        # Pinus=25%, Betula=60%, Quercus=85%
+        s.column_points = {
+            0: [{"row": 50, "x": 125.0}],
+            1: [{"row": 50, "x": 260.0}],
+            2: [{"row": 50, "x": 385.0}],
+        }
+        s.control_points = {
+            0: {50: 125.0},
+            1: {50: 260.0},
+            2: {50: 385.0},
+        }
+
+        # 删除中间列 Betula (index 1)
+        s.column_remove(1)
+
+        self.assertEqual([c["name"] for c in s.columns], ["Pinus", "Quercus"])
+        self.assertEqual([c["col_index"] for c in s.columns], [0, 1])
+        self.assertEqual(s.taxa_names, ["Pinus", "Quercus"])
+        self.assertEqual(set(s.column_points.keys()), {0, 1})
+        self.assertEqual(s.column_points[1][0]["x"], 385.0)
+        self.assertEqual(s.control_points[1][50], 385.0)
+
+        # 验证导出与 QA 读到的 Quercus 数值仍是 85.0%，而非被删列的残留或空值
+        dfs = s.get_roi_dataframes()
+        self.assertEqual(dfs["pollen"]["Pinus"].tolist(), [25.0])
+        self.assertEqual(dfs["pollen"]["Quercus"].tolist(), [85.0])
+
+    def test_ocr_engine_caches_onnx_sessions_singleton(self) -> None:
+        """OcrTaxaRecognitionEngine 多次实例化必须复用同一组 ONNX InferenceSession。"""
+        from straditize_core.ocr import OcrTaxaRecognitionEngine
+
+        e1 = OcrTaxaRecognitionEngine()
+        e2 = OcrTaxaRecognitionEngine()
+        if e1.sess_rec is not None:
+            self.assertIs(e1.sess_rec, e2.sess_rec)
+        if e1.sess_det is not None:
+            self.assertIs(e1.sess_det, e2.sess_det)
+
 
 class TestExportReadinessAndOutputs(unittest.TestCase):
     """导出三件套零覆盖补齐：就绪清单、CSV、TAR。"""

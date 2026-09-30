@@ -9,6 +9,7 @@ from .layers import LayersMixin
 from .qa import QaMixin
 from .roi import RoiMixin
 from .samples import SamplesMixin
+from .xscale import ColumnScale, resolve_column_scale
 from .xticks import XTicksMixin
 
 __all__ = [
@@ -20,4 +21,6 @@ __all__ = [
     "LayersMixin",
     "QaMixin",
     "ExportMixin",
+    "ColumnScale",
+    "resolve_column_scale",
 ]

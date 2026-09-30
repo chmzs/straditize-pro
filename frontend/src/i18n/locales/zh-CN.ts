@@ -257,7 +257,6 @@ export const zhCN = {
   // ===== 步骤 4：清理面板 =====
   'step4.title': '4. 干扰清理 (去线与排除区)',
   'step4.forRoi': '当前针对分区：',
-  'step4.sensitivity': '去线灵敏度控制',
   'step4.spanH': '横向跨度比 (A类):',
   'step4.spanV': '纵向跨度比 (B类):',
   'step4.maxWidth': '最大线宽上限:',

@@ -143,8 +143,10 @@ test.describe('Step 8 QA 诊断门禁', () => {
     await expect(page.locator('#qa-banner')).toBeVisible();
     await page.locator('#btn-run-qa').click();
 
-    // 面板上的数字必须是后端值本身。QaPanel.triggerSummarize 在 RPC 失败时只
-    // console.warn，DOM 会静默停在默认值 0 —— 只断言"面板存在"会漏掉这种失败。
+    // 面板上的数字必须是后端值本身。这里同时是"调用已走共享 RpcClient"的
+    // 回归证据：`QaPanel` 曾自己裸 fetch 且把 `200 + body.error` 当成功，
+    // 失败时 DOM 会静默停在默认值 0 —— 只断言"面板存在"会漏掉这种失败。
+    // 失败路径本身由 `error-surfacing.spec.ts` 的 banner 用例正面覆盖。
     await expect(page.locator('#qa-n-horizons')).toHaveText('76');
     await expect(page.locator('#qa-n-empty')).toHaveText('2');
     await expect(page.locator('#qa-sum-max')).toHaveText('103.2');

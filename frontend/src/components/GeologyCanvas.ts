@@ -1164,7 +1164,7 @@ export class GeologyCanvas {
 
       // ================= 2.6 线掩膜人工修正笔刷 (Line Fix) =================
       // 画布上直接涂抹：擦掉误标红线 / 补回漏标的线。笔迹落库为折线 + 半径，
-      // 由后端栅格化后与自动掩膜合成，所以改档位或改 ROI 后修正依然有效。
+      // 由后端栅格化后与几何 / 排除区一起合成，所以改 ROI 或改几何后修正依然有效。
       if (mode === 'linefix') {
         this.lineFixPoints = [{ x: worldPt.x, y: worldPt.y }];
         this.requestRender();
@@ -1260,8 +1260,8 @@ export class GeologyCanvas {
         return;
       }
 
-      // D. 如果点击了某列的区域，且当前激活列不是它，则直接在图上选中该列！
-      if (hitCol && hitCol.id !== this.data.activeTaxaId) {
+      // D. 如果点击了某列的区域，则在图上选中该列并打开属种属性面板
+      if (hitCol) {
         this.data.activeTaxaId = hitCol.id;
         this.data.selectedEntity = { type: 'column', id: hitCol.id };
         this.notifyNotice(`已选中属种列: ${hitCol.name} (可直接在图上拉点修改)`);
@@ -2953,7 +2953,7 @@ export class GeologyCanvas {
       depthInterval: 2,
       depthGridEnabled: true,
     };
-    this.data.lineCorrections = [];
+    this.data.line_strokes = [];
 
     // 3. 复位所有悬停 / 拖拽 / 平移交互状态，防止残留手势锁死
     this.hoveredAnchor = null;
@@ -2976,7 +2976,6 @@ export class GeologyCanvas {
     // 4. 视图滤镜回归原图，工具模式回归微调 (S)
     this.viewport.imageMode = 'normal';
     this.viewport.showBinaryOverlay = false;
-    this.viewport.degridStrength = 'off';
     this.setLineOverlay(null);
     this.setToolMode('select');
 
@@ -3088,20 +3087,6 @@ export class GeologyCanvas {
     });
 
     ctx.restore();
-  }
-
-  /**
-   * 记录去线档位。
-   *
-   * 掩膜本身由后端计算并下发（见 `setLineOverlay`）：前端不再自行判定"哪条是线"，
-   * 否则用户按 B 看到的红标就与数字化实际剔除的像素不是同一批。
-   */
-  public setDegridStrength(strength: 'off' | 'weak' | 'medium' | 'strong'): void {
-    this.viewport.degridStrength = strength;
-    if (strength === 'off') {
-      this.setLineOverlay(null);
-    }
-    this.render();
   }
 
   /** 修正笔刷模式：erase = 擦掉误标，restore = 补回漏标。 */

@@ -80,25 +80,96 @@ export class CoordinateSystem {
   }
 
   /**
+   * 4.0 唯一列标度解析入口（与后端 resolve_column_scale 对齐）：
+   * 优先级：x_ticks（两真实刻度端点） -> legacy 三件套 / scaleCalib 兜底。
+   */
+  public static resolveColumnScale(col: Column): {
+    px0: number;
+    val0: number;
+    px1: number;
+    val1: number;
+    unit: string;
+    plotType: 'area' | 'bar' | 'line' | 'symbol';
+    scaleType: 'linear' | 'log';
+    exaggerationMult: number | null;
+    calibrated: boolean;
+    source: 'x_ticks' | 'legacy' | 'default';
+  } {
+    const scaleType: 'linear' | 'log' = col.scale_type === 'log' ? 'log' : 'linear';
+    const unit = col.unit || col.scaleCalib?.unit || '%';
+    const plotType = col.plot_type || col.plotType || 'area';
+
+    let exaggerationMult: number | null = null;
+    if (col.exaggeration_mult !== undefined && col.exaggeration_mult !== null) {
+      if (col.exaggeration_mult > 1) exaggerationMult = col.exaggeration_mult;
+    } else if (col.hasExaggeration && col.exaggerationMult && col.exaggerationMult > 1) {
+      exaggerationMult = col.exaggerationMult;
+    }
+
+    if (Array.isArray(col.x_ticks) && col.x_ticks.length >= 2) {
+      const t0 = col.x_ticks[0];
+      const t1 = col.x_ticks[1];
+      return {
+        px0: Number(t0.px),
+        val0: Number(t0.value),
+        px1: Number(t1.px),
+        val1: Number(t1.value),
+        unit,
+        plotType,
+        scaleType,
+        exaggerationMult,
+        calibrated: true,
+        source: 'x_ticks',
+      };
+    }
+
+    const hasExplicitLegacy =
+      col.startValue !== undefined || col.tickValue !== undefined || col.tickEndX !== undefined;
+    const sc = col.scaleCalib;
+    const px0 = !hasExplicitLegacy && sc ? sc.originX : col.startX;
+    const rawTickEnd =
+      col.tickEndX !== undefined && col.tickEndX !== px0
+        ? col.tickEndX
+        : sc && sc.calibX !== px0
+          ? sc.calibX
+          : col.endX;
+    const px1 = rawTickEnd !== px0 ? rawTickEnd : px0 + 100;
+    const defaultVal0 = scaleType === 'log' ? 1 : 0;
+    const val0 = col.startValue ?? sc?.originVal ?? defaultVal0;
+    const val1 = col.tickValue ?? sc?.calibVal ?? col.maxPercent ?? 100;
+
+    return {
+      px0,
+      val0,
+      px1,
+      val1,
+      unit,
+      plotType,
+      scaleType,
+      exaggerationMult,
+      calibrated: false,
+      source: hasExplicitLegacy || sc ? 'legacy' : 'default',
+    };
+  }
+
+  /**
    * 4.1 获取列标定斜率 (单位物理值 / 像素)
    */
   public static getScaleRatio(col: Column): number {
-    const startX = col.startX;
-    const tickEndX = (col.tickEndX && col.tickEndX > col.startX) ? col.tickEndX : col.endX;
-    const startVal = col.startValue ?? (col.scaleCalib ? col.scaleCalib.originVal : 0);
-    const tickVal = col.tickValue ?? col.scaleCalib?.calibVal ?? col.maxPercent ?? 100;
-    const spanPx = Math.max(1, tickEndX - startX);
-    return Math.abs(tickVal - startVal) / spanPx;
+    const scale = this.resolveColumnScale(col);
+    const spanPx = Math.max(1, Math.abs(scale.px1 - scale.px0));
+    return Math.abs(scale.val1 - scale.val0) / spanPx;
   }
 
   /**
    * 5. 校验 Log 对数刻度约束: startValue > 0 且 tickValue > 0 且 startValue != tickValue
    */
   public static validateLogScale(col: Column): { valid: boolean; reason?: string } {
-    const startVal = col.startValue ?? (col.scaleCalib ? col.scaleCalib.originVal : 0);
-    const tickVal = col.tickValue ?? col.scaleCalib?.calibVal ?? col.maxPercent ?? 100;
-    const startX = col.startX;
-    const tickEndX = col.tickEndX ?? col.endX;
+    const scale = this.resolveColumnScale(col);
+    const startVal = scale.val0;
+    const tickVal = scale.val1;
+    const startX = scale.px0;
+    const tickEndX = scale.px1;
 
     if (startX === tickEndX) {
       return { valid: false, reason: '基线 X 与刻度终点 X 重合 (除以零)' };
@@ -125,16 +196,17 @@ export class CoordinateSystem {
    *   value(x) = exp( ln(startValue) + (x - startX) / (tickEndX - startX) * (ln(tickValue) - ln(startValue)) )
    */
   public static imageXToValue(x: number, col: Column): number {
-    const startX = col.startX;
-    const tickEndX = (col.tickEndX && col.tickEndX !== startX) ? col.tickEndX : col.endX;
+    const scale = this.resolveColumnScale(col);
+    const startX = scale.px0;
+    const tickEndX = scale.px1;
     const spanPx = tickEndX - startX;
     if (spanPx === 0) return 0;
 
     const t = (x - startX) / spanPx;
-    const startVal = col.startValue ?? 0;
-    const tickVal = col.tickValue ?? col.maxPercent ?? 100;
+    const startVal = scale.val0;
+    const tickVal = scale.val1;
 
-    if (col.scale_type === 'log') {
+    if (scale.scaleType === 'log') {
       const check = this.validateLogScale(col);
       if (!check.valid) {
         // Log 约束不满足时安全退回线性并输出
@@ -164,13 +236,14 @@ export class CoordinateSystem {
    * 7. 物理数值 (百分比 / 浓度) -> 图像物理 X 像素
    */
   public static valueToImageX(value: number, col: Column): number {
-    const startX = col.startX;
-    const tickEndX = (col.tickEndX && col.tickEndX !== startX) ? col.tickEndX : col.endX;
+    const scale = this.resolveColumnScale(col);
+    const startX = scale.px0;
+    const tickEndX = scale.px1;
     const spanPx = tickEndX - startX;
-    const startVal = col.startValue ?? 0;
-    const tickVal = col.tickValue ?? col.maxPercent ?? 100;
+    const startVal = scale.val0;
+    const tickVal = scale.val1;
 
-    if (col.scale_type === 'log') {
+    if (scale.scaleType === 'log') {
       const check = this.validateLogScale(col);
       if (!check.valid || value <= 0) {
         const dVal = tickVal - startVal || 1;

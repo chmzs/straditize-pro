@@ -17,7 +17,6 @@ export class Viewport {
   public showBinaryOverlay: boolean = false; // B 键快速透视遮罩
   public showGhosting: boolean = true;        // 原位逆向重叠质检覆盖层 (Ghosting)
   public binaryThreshold: number = 138;      // 墨迹灰度阈值
-  public degridStrength: 'off' | 'weak' | 'medium' | 'strong' = 'off'; // 去网格横线灵敏度模式
 
   constructor() {
     this.updateDpr();

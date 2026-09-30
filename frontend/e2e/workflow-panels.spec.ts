@@ -17,6 +17,7 @@
  */
 import { expect, test } from './fixtures';
 import {
+  canvasBox,
   gotoStage,
   paletteActiveTool,
   resetBaseline,
@@ -110,6 +111,113 @@ test.describe('步骤面板与阶段工具门禁', () => {
       after.line_candidates.every((c) => ['A', 'B', 'C'].includes(c.kind)),
       '候选 kind 只能是 A/B/C'
     ).toBe(true);
+  });
+
+  test('步骤 4 笔刷：涂抹落库到 line_strokes，两种笔与清空都真的改变后端掩膜', async ({ page }) => {
+    // 这条用例钉住的是"笔迹属于**当前**清理模型"这一事实。
+    //
+    // 旧实现里笔刷把笔迹写进的是**已下线**的档位模型字段（`lineCorrections`），
+    // 而当前模型的 `line_strokes` 恒空——两者在类型系统里都"看着正常"，
+    // 因为 `?.` 与 `?? []` 把断裂全吃掉了。所以这里一律断言**后端权威状态**：
+    // `line_strokes` 真的多了一条、`stats.manual_*_pixels` 真的动起来。
+    await gotoStage(page, 4);
+    await expect(page.locator('.step-panel[data-step="4"]')).toBeVisible();
+
+    // 三件套缺一不可：旧的擦除/补回/清空按钮死在 Inspector 的死监听里，
+    // 只有 id 存在才证明它们被恢复到了**这一步**的面板上。
+    for (const id of ['#btn-trigger-linefix', '#btn-linefix-restore', '#btn-linefix-clear']) {
+      await expect(page.locator(id), `${id} 应存在于步骤 4`).toBeVisible();
+    }
+
+    interface CleanupData {
+      line_strokes: { mode: string; radius: number; points: number[][] }[];
+      cleanup: { stats: Record<string, number> };
+    }
+    const read = () => rpc<CleanupData>(page, 'straditize.getDiagramData');
+    const roiId = (await rpc<{ rois: { id: string }[] }>(page, 'straditize.getDiagramData')).rois[0].id;
+
+    // 从"没有笔迹"出发，否则下面的"多了一条"可能来自上一轮的残留。
+    await rpc(page, 'algorithm.applyLineRemoval', { roi_id: roiId, strokes: [] });
+    expect((await read()).line_strokes, '前置：清空后不应有笔迹').toEqual([]);
+
+    // 真实用户路径：点擦除笔 → 在画布上拖一笔 → 松手提交。
+    const dragStroke = async (rx0: number, ry0: number) => {
+      const b = await canvasBox(page);
+      const x = b.x + b.width * rx0;
+      const y = b.y + b.height * ry0;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x + 24, y + 6, { steps: 6 });
+      await page.mouse.move(x + 48, y + 12, { steps: 6 });
+      await page.mouse.up();
+    };
+
+    // 等待条件必须是**统计量本身**，不能是 `line_strokes.length`。
+    //
+    // `apply_line_removal` 分两阶段落地：先写 `line_strokes`，再跑 `_recompose`
+    // ——后者在写入 `cleanup_stats` 之前还要编码一张 overlay PNG（毫秒级）。
+    // 只等 `line_strokes` 就会撞进"笔迹已可见、统计还是上一轮"的窗口里读到 0。
+    // 本用例最初正是这样假失败的：后端日志显示 `_recompose` 已算出 4424，
+    // 而同期的 `getDiagramData` 仍读到上一轮的 0（重放同一笔迹立刻得 4424）。
+    const statOf = async (key: string) => (await read()).cleanup.stats[key] ?? 0;
+
+    await page.click('#btn-trigger-linefix');
+    await dragStroke(0.35, 0.45);
+    await expect
+      .poll(() => statOf('manual_erase_pixels'), {
+        message: '擦除笔拖一笔后后端 manual_erase_pixels 应大于 0',
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(0);
+
+    const afterErase = await read();
+    expect(afterErase.line_strokes.length, '擦除笔落库后应有 1 条笔迹').toBe(1);
+    expect(afterErase.line_strokes[0].mode, '擦除笔落库的 mode 必须是 erase').toBe('erase');
+    expect(afterErase.line_strokes[0].points.length, '笔迹应是折线（≥1 个点）').toBeGreaterThan(0);
+    expect(
+      afterErase.cleanup.stats.manual_erase_pixels,
+      '擦除笔必须真的改变后端掩膜，而不是只在前端画了一道'
+    ).toBeGreaterThan(0);
+
+    // 清空笔迹：只清笔迹，掩膜统计必须跟着回到 0。
+    await page.click('#btn-linefix-clear');
+    await expect
+      .poll(
+        async () => {
+          const d = await read();
+          return [d.line_strokes.length, d.cleanup.stats.manual_erase_pixels ?? 0];
+        },
+        {
+          message: '点「清空笔迹」后 line_strokes 应回到 0 且统计同步归零',
+          timeout: 30_000,
+        }
+      )
+      .toEqual([0, 0]);
+
+    // 补回笔：另一种 mode，走的是另一半掩膜通道。
+    await page.click('#btn-linefix-restore');
+    await dragStroke(0.5, 0.6);
+    await expect
+      .poll(() => statOf('manual_restore_pixels'), {
+        message: '补回笔拖一笔后后端 manual_restore_pixels 应大于 0',
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(0);
+
+    const afterRestore = await read();
+    expect(afterRestore.line_strokes.length, '补回笔落库后应有 1 条笔迹').toBe(1);
+    expect(afterRestore.line_strokes[0].mode, '补回笔落库的 mode 必须是 restore').toBe('restore');
+    expect(
+      afterRestore.cleanup.stats.manual_restore_pixels,
+      '补回笔必须走上 manual_restore 通道'
+    ).toBeGreaterThan(0);
+    expect(
+      afterRestore.cleanup.stats.manual_erase_pixels,
+      '补回笔不该同时增长 manual_erase'
+    ).toBe(0);
+
+    // 收尾：把笔迹交还给干净基线，避免污染同文件后续用例。
+    await rpc(page, 'algorithm.applyLineRemoval', { roi_id: roiId, strokes: [] });
   });
 
   test('步骤 6 刻度：检测接口可用，且对本样本不假报刻度', async ({ page }) => {

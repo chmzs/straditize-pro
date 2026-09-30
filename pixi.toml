@@ -2,7 +2,7 @@
 name = "straditize"
 version = "0.2.2"
 description = "Installer for straditize and its dependencies"
-authors = ["chmzs <chmzs@outlook.com>"]
+authors = ["chmzs <chmzs@outlook.com>", "Philipp S. Sommer <philipp.sommer@unil.ch>"]
 channels = ["conda-forge"]
 platforms = ["win-64", "linux-64", "osx-arm64"]
 preview = ["pixi-build"]          # 启用预览特性，支持本地路径构建

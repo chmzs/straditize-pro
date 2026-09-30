@@ -14,3 +14,6 @@ def register(dispatcher: Any, session: Any) -> None:
     dispatcher.register_method("roi.setActive", session.roi_set_active)
     dispatcher.register_method("roi.setPrimary", session.roi_set_primary)
     dispatcher.register_method("roi.applyFormDefaults", session.roi_apply_form_defaults)
+    dispatcher.register_method("roi.groupCreate", session.roi_group_create)
+    dispatcher.register_method("roi.groupUpdate", session.roi_group_update)
+    dispatcher.register_method("roi.groupRemove", session.roi_group_remove)

@@ -93,6 +93,26 @@ def export_scientific_xlsx(
                     "Confidence": "high",
                 }
             )
+            if pub.get("funding_agency"):
+                meta_rows.append(
+                    {
+                        "Category": "Publication",
+                        "Field": "Funding Agency",
+                        "Value": pub.get("funding_agency", ""),
+                        "Source": pub.get("source", "User"),
+                        "Confidence": "high",
+                    }
+                )
+            if pub.get("funding_grant"):
+                meta_rows.append(
+                    {
+                        "Category": "Publication",
+                        "Field": "Funding Grant",
+                        "Value": pub.get("funding_grant", ""),
+                        "Source": pub.get("source", "User"),
+                        "Confidence": "high",
+                    }
+                )
 
             # Group 2: Site Location
             site = meta_info.get("site", {})
@@ -141,6 +161,46 @@ def export_scientific_xlsx(
                     "Confidence": site.get("confidence", "medium"),
                 }
             )
+            if site.get("country"):
+                meta_rows.append(
+                    {
+                        "Category": "Site Location",
+                        "Field": "Country / Region",
+                        "Value": site.get("country", ""),
+                        "Source": site.get("source", "User"),
+                        "Confidence": "high",
+                    }
+                )
+            if site.get("water_depth_m"):
+                meta_rows.append(
+                    {
+                        "Category": "Site Location",
+                        "Field": "Water Depth (m)",
+                        "Value": site.get("water_depth_m", ""),
+                        "Source": site.get("source", "User"),
+                        "Confidence": "high",
+                    }
+                )
+            if site.get("core_length_m"):
+                meta_rows.append(
+                    {
+                        "Category": "Site Location",
+                        "Field": "Core Length (m)",
+                        "Value": site.get("core_length_m", ""),
+                        "Source": site.get("source", "User"),
+                        "Confidence": "high",
+                    }
+                )
+            if site.get("collection_date"):
+                meta_rows.append(
+                    {
+                        "Category": "Site Location",
+                        "Field": "Collection Date",
+                        "Value": site.get("collection_date", ""),
+                        "Source": site.get("source", "User"),
+                        "Confidence": "high",
+                    }
+                )
 
             # Group 3: Chronology
             chron = meta_info.get("chronology", {})
@@ -212,6 +272,46 @@ def export_scientific_xlsx(
                     "Confidence": tech.get("confidence", "medium"),
                 }
             )
+            if tech.get("investigators"):
+                meta_rows.append(
+                    {
+                        "Category": "Technical",
+                        "Field": "Investigators / Collectors",
+                        "Value": tech.get("investigators", ""),
+                        "Source": tech.get("source", "User"),
+                        "Confidence": "high",
+                    }
+                )
+            if tech.get("digitizer"):
+                meta_rows.append(
+                    {
+                        "Category": "Technical",
+                        "Field": "Digitizer / Curator",
+                        "Value": tech.get("digitizer", ""),
+                        "Source": tech.get("source", "User"),
+                        "Confidence": "high",
+                    }
+                )
+            if tech.get("affiliation"):
+                meta_rows.append(
+                    {
+                        "Category": "Technical",
+                        "Field": "Affiliation / Institution",
+                        "Value": tech.get("affiliation", ""),
+                        "Source": tech.get("source", "User"),
+                        "Confidence": "high",
+                    }
+                )
+            if tech.get("digitization_date"):
+                meta_rows.append(
+                    {
+                        "Category": "Technical",
+                        "Field": "Digitization Date",
+                        "Value": tech.get("digitization_date", ""),
+                        "Source": tech.get("source", "User"),
+                        "Confidence": "high",
+                    }
+                )
 
             # Group 5: Quality Remarks
             qual = meta_info.get("quality", {})
@@ -227,6 +327,26 @@ def export_scientific_xlsx(
                     "Confidence": "high",
                 }
             )
+            if qual.get("dataset_version"):
+                meta_rows.append(
+                    {
+                        "Category": "Quality & Remarks",
+                        "Field": "Dataset Version",
+                        "Value": qual.get("dataset_version", ""),
+                        "Source": qual.get("source", "User"),
+                        "Confidence": "high",
+                    }
+                )
+            if qual.get("original_data_url"):
+                meta_rows.append(
+                    {
+                        "Category": "Quality & Remarks",
+                        "Field": "Original Data URL",
+                        "Value": qual.get("original_data_url", ""),
+                        "Source": qual.get("source", "User"),
+                        "Confidence": "high",
+                    }
+                )
 
             df_meta = pd.DataFrame(meta_rows)
             df_meta.to_excel(writer, sheet_name="meta_info", index=False)

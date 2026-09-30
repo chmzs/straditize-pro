@@ -33,6 +33,7 @@ export function render(data: DiagramData): string {
   const cands = data.line_candidates || [];
   const selectedCount = data.selected_candidate_ids ? data.selected_candidate_ids.length : 0;
   const exclusionCount = data.exclusion_regions ? data.exclusion_regions.length : 0;
+  const strokeCount = data.line_strokes ? data.line_strokes.length : 0;
   const selectedId = data.cleanup_selected_id ?? null;
 
   // 统一厚度输入框的默认值：优先取选中几何的实际宽度，否则取出现次数最多的宽度。
@@ -90,7 +91,7 @@ export function render(data: DiagramData): string {
         ${t('step4.forRoi')}<strong style="color: var(--accent-blue);">${roiName}</strong>
       </div>
 
-      <!-- 1. 检测：唯一条目（灵敏度不再是独立旋钮，等价于检测阈值） -->
+      <!-- 1. 检测：唯一条目（无"灵敏度"旋钮，档位模型已下线） -->
       <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border-color);">
         <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px; color: var(--text-primary);">① 检测干扰线</div>
         <button id="btn-detect-candidates" class="btn btn-secondary" style="width: 100%; font-size: 11px; padding: 5px;">
@@ -154,12 +155,30 @@ export function render(data: DiagramData): string {
           <button id="btn-add-exclusion-rect" class="btn btn-secondary" style="flex: 1; font-size: 10.5px; padding: 5px;">
             ⬚ ${t('step4.addExclusion')}
           </button>
-          <button id="btn-trigger-linefix" class="btn btn-secondary" style="flex: 1; font-size: 10.5px; padding: 5px;">
-            🖌️ 局部像元修正
+        </div>
+        <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+          <button id="btn-trigger-linefix" class="btn btn-secondary" style="flex: 1; font-size: 10.5px; padding: 5px;"
+                  title="按住左键涂抹，把被误标成线的数据擦回来">
+            🧽 擦掉误标
+          </button>
+          <button id="btn-linefix-restore" class="btn btn-secondary" style="flex: 1; font-size: 10.5px; padding: 5px;"
+                  title="按住左键涂抹，手工补上算法漏掉的线">
+            🖌 补回漏标
+          </button>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px;">
+          <span style="font-size: 10px; color: var(--text-secondary);">
+            人工修正笔迹: <strong>${strokeCount}</strong> 条
+          </span>
+          <button id="btn-linefix-clear" class="btn btn-secondary"
+                  style="font-size: 9.5px; padding: 2px 6px; ${strokeCount ? '' : 'opacity: 0.45; pointer-events: none;'}"
+                  ${strokeCount ? '' : 'disabled'}>
+            清空笔迹
           </button>
         </div>
         <div style="font-size:10px;color:var(--text-muted);line-height:1.45;">
           几何用于整条横/竖线；画笔只修补几何漏标或误标的<strong>局部像元</strong>，不替代几何。
+          按键盘 <strong>B</strong> 叠加查看掩膜（<span style="color:#f87171;">红色</span>=实际剔除的像素，<span style="color:#e8e8f0;">白色</span>=保留的墨迹）。
         </div>
       </div>
 
@@ -227,9 +246,16 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onAddExclusionRect?.();
   });
 
-  // 局部像元修正画笔
+  // 局部像元修正画笔：擦掉误标 / 补回漏标 两种笔，外加只清笔迹
+  // （与下方「清空本步全部几何/排除区/笔迹」区分开——那个会连几何一起清）。
   root.querySelector('#btn-trigger-linefix')?.addEventListener('click', () => {
     ctx.onStartLineFix?.('erase');
+  });
+  root.querySelector('#btn-linefix-restore')?.addEventListener('click', () => {
+    ctx.onStartLineFix?.('restore');
+  });
+  root.querySelector('#btn-linefix-clear')?.addEventListener('click', () => {
+    ctx.onClearLineFix?.();
   });
 
   // 统一厚度（P4）：中心行不动，只改带宽
@@ -240,10 +266,19 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     const raw = Number(thicknessInput?.value);
     if (!Number.isFinite(raw) || raw < 1 || raw > 500) {
       // 越界不静默：把输入框标红，用户一眼知道是输入的问题。
-      if (thicknessInput) thicknessInput.style.borderColor = '#ef4444';
+      //
+      // 必须带 `!important`。日间模式有一条"强兜底安全网"
+      // （`style.css`：`body.theme-light input[type="number"] { border-color: … !important }`），
+      // 普通内联样式会被它压掉 —— 标红写了但**用户看不到**。内联的 `!important`
+      // 优先级高于作者样式表的 `!important`，这是唯一能穿透那条安全网的写法。
+      if (thicknessInput) {
+        thicknessInput.style.setProperty('border-color', '#ef4444', 'important');
+      }
       return;
     }
-    if (thicknessInput) thicknessInput.style.borderColor = 'var(--border-color)';
+    // 复位用 removeProperty：连 `!important` 优先级一起清掉，
+    // 让样式表（含主题兜底）重新接管，而不是留一个普通内联值。
+    if (thicknessInput) thicknessInput.style.removeProperty('border-color');
     ctx.onSetLineThickness?.(Math.round(raw), candidateId);
   };
   root.querySelector('#btn-apply-thickness-selected')?.addEventListener('click', () => {

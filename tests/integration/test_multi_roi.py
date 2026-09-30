@@ -130,6 +130,59 @@ def test_multi_roi_column_detection_isolation():
                 assert c_orig[k] == c_now[k], f"Field {k} altered in concentration column: {c_orig[k]} != {c_now[k]}"
 
 
+def test_multi_roi_column_names_follow_global_col_index():
+    """列名还原必须用**全局** ``col_index``，不能只用 ROI 局部下标。
+
+    真实缺陷（2026-09-29，步骤 5 排查）：``detect_columns`` 的还原循环原先用
+    ``enumerate(detected_cols)`` 的 **ROI 局部** ``idx`` 去读 ``self.taxa_names``，
+    而写入点 ``naming.rename_column`` 与本文件另外三个读取点（``session.py:1364`` /
+    ``:1586`` / ``:1980``）用的都是**全局** ``col_index``。多 ROI 时两边差一个
+    ``len(other_cols)``：在右 ROI 上改的名字，重新分列右 ROI 时读回来的却是左 ROI 的名字。
+
+    本用例只钉住"检测当时"的口径。⚠️ 更深一层的结构问题见
+    ``docs/testing-strategy.md`` §9：``col_index`` 由 ``merged_cols = other + detected``
+    现场重排，换个 ROI 重新分列会让**所有**列的下标平移，而 ``taxa_names`` 是扁平的
+    按下标索引的列表 —— 它扛不住这种平移；彻底解决要把名字按列 id 存。
+    """
+    session = get_hoya_session()
+    session.rois.clear()
+    session.columns.clear()
+    session.column_points.clear()
+    session.control_points.clear()
+
+    r_left = session.roi_create(name="left", x0=315, x1=800, y0=511, y1=1311)["roi"]
+    r_right = session.roi_create(name="right", x0=900, x1=1600, y0=511, y1=1311)["roi"]
+
+    cols_left = session.detect_columns(roi_id=r_left["id"])
+    cols_right = session.detect_columns(roi_id=r_right["id"])
+    assert len(cols_left) >= 2, "前置条件：左 ROI 至少切出两列"
+    assert len(cols_right) >= 2, "前置条件：右 ROI 至少切出两列"
+
+    # 模拟 naming.rename_column 的写入口径：按**全局** col_index 写 taxa_names。
+    session.taxa_names = [c["name"] for c in session.columns]
+    right_first_global = next(
+        i for i, c in enumerate(session.columns) if c["id"] == cols_right[0]["id"]
+    )
+    assert right_first_global == len(cols_left), "前置条件：右 ROI 的列排在左 ROI 之后"
+    session.taxa_names[right_first_global] = "RIGHT_ONLY"
+
+    # 重新分列右 ROI：必须读回它自己的名字（用 ROI 局部下标会读到左 ROI 的名字）
+    again_right = session.detect_columns(roi_id=r_right["id"])
+    assert all(c["roi_id"] == r_right["id"] for c in again_right)
+    assert again_right[0]["name"] == "RIGHT_ONLY", (
+        f"右 ROI 重新分列后第一列应叫 RIGHT_ONLY，实际 {again_right[0]['name']!r}"
+        "（说明还原循环用的是 ROI 局部下标而不是全局 col_index）"
+    )
+
+    # 再给左 ROI 第一列命名并重新分列左 ROI：不得对调左右 ROI 顺序，也不得覆盖右 ROI 名字
+    session.taxa_names[0] = "LEFT_ONLY"
+    again_left = session.detect_columns(roi_id=r_left["id"])
+    assert again_left[0]["name"] == "LEFT_ONLY"
+    right_after_left = [c for c in session.columns if c["roi_id"] == r_right["id"]]
+    assert right_after_left[0]["name"] == "RIGHT_ONLY"
+    assert session.columns[0]["roi_id"] == r_left["id"]
+
+
 def test_apply_form_defaults_no_inheritance():
     """applyFormDefaults writes values and diffs, but establishes no dynamic inheritance."""
     session = get_hoya_session()
@@ -334,3 +387,10 @@ def test_l3_hoya_three_rois():
     assert len(cols2) > 0
     assert len(cols3) > 0
     assert len(session.columns) == len(cols1) + len(cols2) + len(cols3)
+
+    # Verify that digitize() works on columns across ALL ROIs (not just active_roi_id) — Defect #30 regression
+    session.roi_set_active(r2["id"])
+    c1_idx = next(c["col_index"] for c in session.columns if c["roi_id"] == r1["id"])
+    c3_idx = next(c["col_index"] for c in session.columns if c["roi_id"] == r3["id"])
+    assert len(session.digitize(c1_idx)["points"]) > 0
+    assert len(session.digitize(c3_idx)["points"]) > 0

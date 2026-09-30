@@ -134,35 +134,48 @@ def snap_labels_to_columns(
         and all(len(lbls) == 1 for lbls in col_to_labels.values())
     )
 
+    assigned: dict[str, str] = {}
     if can_pair:
         for lbl in labels:
             lbl_id = str(lbl.get("id", ""))
             col = label_to_col.get(lbl_id)
             if col is not None:
+                c_id = str(col.get("id") or f"col_{col.get('col_index', 0)}")
                 lbl["associated_column_id"] = col.get("id")
                 lbl["associated_column_index"] = col.get("col_index")
                 lbl["associated_column_name"] = col.get("name")
+                assigned[lbl_id] = c_id
 
     return {
         "columns_without_label": sorted(columns_without_label),
         "labels_without_column": sorted(labels_without_column),
         "ambiguous": sorted(ambiguous),
         "matched": can_pair,
+        "assigned": assigned,
     }
 
 
 class OcrTaxaRecognitionEngine:
     """End-to-end OCR and botanical taxon verification engine."""
 
+    #: Process-level cache of (sess_det, sess_rec, keys) keyed by MODELS_DIR
+    #: so PP-OCRv4 ONNX models are loaded from disk at most once per process.
+    _MODEL_CACHE: dict[Path, tuple[Any, Any, list[str]]] = {}
+
     def __init__(self, custom_dict_path: str | None = None):
         self.dictionary = PollenDictionary(custom_dict_path)
         self.sess_det = None
         self.sess_rec = None
-        self.keys = []
+        self.keys: list[str] = []
         self._init_models()
 
     def _init_models(self) -> None:
-        """Initializes pre-installed ONNX Runtime inference sessions if present."""
+        """Initializes pre-installed ONNX Runtime inference sessions if present (cached per process)."""
+        cached = self._MODEL_CACHE.get(MODELS_DIR)
+        if cached is not None:
+            self.sess_det, self.sess_rec, self.keys = cached
+            return
+
         try:
             import onnxruntime as ort
 
@@ -194,6 +207,11 @@ class OcrTaxaRecognitionEngine:
                         sess_options=opts,
                         providers=["CPUExecutionProvider"],
                     )
+                self._MODEL_CACHE[MODELS_DIR] = (
+                    self.sess_det,
+                    self.sess_rec,
+                    self.keys,
+                )
                 logger.info(
                     "Pre-installed PP-OCRv4 models loaded successfully (offline mode)."
                 )

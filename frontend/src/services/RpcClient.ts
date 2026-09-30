@@ -1,7 +1,7 @@
 import { BackendStatus, JsonRpcRequest, JsonRpcResponse } from '../types/rpc';
 import { tError } from '../i18n/errorCodes';
 import { t } from '../i18n';
-import { Column, ControlPoint, CleanupResult, DataRoi, DepthCalibration, DiagramData, LineMaskStroke } from '../types/pollen';
+import { Column, ColumnGroup, ControlPoint, CleanupResult, DataRoi, DepthCalibration, DiagramData, LineMaskStroke, Tick } from '../types/pollen';
 import { PollenGlossary } from '../core/PollenGlossary';
 
 /** 后端 ocr.getTaxaDict 的返回结构 */
@@ -70,29 +70,10 @@ function createEmptyDiagramData(): DiagramData {
     line_strokes: [],
     exclusion_regions: [],
     samples: [],
-    lineCorrections: [],
     columns: [],
     activeTaxaId: '',
     selectedEntity: null,
   };
-}
-
-/** 后端 algorithm.degrid 的返回值 */
-export interface DegridResult {
-  success: boolean;
-  strength: string;
-  remove_vertical: boolean;
-  max_thickness: number;
-  horizontal_rows: number[];
-  vertical_cols: number[];
-  removed_lines_count: number;
-  removed_pixels: number;
-  auto_pixels: number;
-  manual_restore_pixels: number;
-  manual_erase_pixels: number;
-  roi: [number, number, number, number];
-  /** `strength === 'off'` 时为 null：没有掩膜可显示。 */
-  overlay_png: string | null;
 }
 
 export interface SystemConfig {
@@ -100,6 +81,10 @@ export interface SystemConfig {
   allowed_hosts: string[];
   locale: string;
   theme: string;
+  llm_base_url?: string;
+  llm_api_key?: string;
+  llm_model?: string;
+  llm_prompt_template?: string;
   rpc_endpoint?: string;
   webmcp_endpoint?: string;
   server_bound_host?: string;
@@ -303,10 +288,9 @@ export class RpcClient {
   public async getDiagramData(): Promise<DiagramData> {
     const raw = await this.call<void, any>('straditize.getDiagramData');
     // 后端把取数区域与深度标定分两个键返回（`roi` / `calibration`），
-    // 线掩膜修正笔迹在 `lineRemoval.corrections` —— 这里只做结构映射，
+    // 线掩膜修正笔迹是顶层 `line_strokes` —— 这里只做结构映射，
     // 不补任何默认值：缺字段就是缺字段，不能替后端编一个刻度出来。
     const data = raw as DiagramData & {
-      lineRemoval?: { corrections?: LineMaskStroke[] };
       primaryRoiId?: string;
       activeRoiId?: string;
       cleanup?: { roi_id?: string; stats?: Record<string, number>; legend?: Record<string, string> };
@@ -364,7 +348,6 @@ export class RpcClient {
       bottom_cm: null,
       unit: 'cm',
     };
-    data.lineCorrections = data.lineRemoval?.corrections ?? [];
     this.currentDiagramData = data;
     return data;
   }
@@ -382,6 +365,60 @@ export class RpcClient {
       y0: Math.round(roi.yMin),
       y1: Math.round(roi.yMax),
     });
+  }
+
+  /**
+   * 属种列改名（步骤 5）。
+   *
+   * 这是**唯一**会把名字写进后端 `session.taxa_names` 的通道（`rpc_methods/naming.py`），
+   * 而 `detect_columns` 每次重新分列都从 `taxa_names` 还原列名
+   * （`session.py:901-908`）。不走它，用户改的名字只活在前端内存里：重分列、
+   * 重载、导出都会回到 `colNN`，而后端那道 ROI 内重名校验也永远不会执行。
+   *
+   * `col_index` 传列 **id**（如 `roi_1_col01`）而不是下标：下标会随重分列漂移。
+   * 后端接受 id（`naming.validate_column_unique_name` 同时支持 int 与 id 字符串）。
+   */
+  public async renameColumn(colId: string | number, name: string): Promise<void> {
+    await this.call('naming.renameColumn', { col_index: colId, name });
+  }
+
+  /**
+   * 两点式 X 轴（列标度）标定：两个真实刻度端点（像素 + 读数）。
+   *
+   * `x_ticks` 是标度的唯一事实源；后端会做「恰好两个端点 / 像素不等 /
+   * 落在这列的物理范围内」三道校验，越界或同像素都返回 -32602。
+   * 列寻址用后端权威序号 `col_index`（也接受列 id）。
+   */
+  public async calibrateColumnXTicks(
+    colIndex: number | string,
+    ticks: [Tick, Tick] | Tick[],
+    unit?: string,
+    plotType?: string,
+    scaleType?: string,
+    exaggerationMult?: number | null
+  ): Promise<{ x_ticks: [Tick, Tick]; px_per_unit: number }> {
+    const params: Record<string, any> = { col_index: colIndex, ticks };
+    if (unit !== undefined) params.unit = unit;
+    if (plotType !== undefined) params.plot_type = plotType;
+    if (scaleType !== undefined) params.scale_type = scaleType;
+    if (exaggerationMult !== undefined) params.exaggeration_mult = exaggerationMult;
+
+    const res = await this.call<
+      Record<string, any>,
+      { x_ticks: [Tick, Tick]; px_per_unit: number }
+    >('column.calibrateXTicks', params);
+    if (!res?.x_ticks) {
+      throw new Error(tError(-32603, 'column.calibrateXTicks returned no x_ticks'));
+    }
+    return res;
+  }
+
+  /** 清空某列的 X 标度，回到「未标定」。后端对未标定列是幂等空操作。 */
+  public async clearColumnXTicks(colIndex: number): Promise<{ cleared: boolean }> {
+    return this.call<
+      { col_index: number },
+      { col_index: number; x_ticks: null; cleared: boolean }
+    >('column.clearXTicks', { col_index: colIndex });
   }
 
   /**
@@ -415,33 +452,6 @@ export class RpcClient {
         unit,
       },
     };
-  }
-
-  /**
-   * 在 ROI 内检测横/竖线并取回 QC 叠加掩膜。
-   *
-   * 后端是唯一事实源：B 键透视看到的就是数字化实际剔除的像素，
-   * 前端不再自行实现一套"看起来像去线"的显示逻辑。
-   *
-   * `strength === 'off'` 也要走一次后端 —— 它会主动清掉会话里的旧掩膜；
-   * 只在前端隐藏叠加层的话，关闭后的数字化仍在偷偷减掉那批像素。
-   */
-  public async applyLineRemoval(
-    strength: 'off' | 'weak' | 'medium' | 'strong',
-    corrections: LineMaskStroke[],
-    removeVertical: boolean
-  ): Promise<DegridResult | null> {
-    const res = await this.call<
-      { strength: string; corrections: LineMaskStroke[]; remove_vertical: boolean },
-      DegridResult
-    >('algorithm.degrid', { strength, corrections, remove_vertical: removeVertical });
-    if (!res || typeof res.success !== 'boolean') {
-      throw new Error(tError(-32603, 'algorithm.degrid returned an unexpected payload'));
-    }
-    if (strength !== 'off' && !res.overlay_png) {
-      throw new Error(tError(-32603, 'algorithm.degrid returned no overlay_png'));
-    }
-    return res;
   }
 
   // ===================== Step 4：清理 geometry 契约 =====================
@@ -509,6 +519,17 @@ export class RpcClient {
   /** 重新合成当前清理掩膜，用于数据刷新后重建叠加层与统计。 */
   public async refreshCleanup(roiId?: string): Promise<CleanupResult> {
     return this.callCleanup('algorithm.applyLineRemoval', { roi_id: roiId });
+  }
+
+  /**
+   * 提交线掩膜人工修正笔迹（擦掉误标 / 补回漏标）。
+   *
+   * 笔迹属于**当前清理模型**：后端会把它们栅格化成 `manual_erase_mask` /
+   * `manual_restore_mask` 并参与最终掩膜合成，所以必须走
+   * `algorithm.applyLineRemoval` 落库，不存在"前端本地擦掉就算数"的捷径。
+   */
+  public async setLineStrokes(strokes: LineMaskStroke[], roiId?: string): Promise<CleanupResult> {
+    return this.callCleanup('algorithm.applyLineRemoval', { roi_id: roiId, strokes });
   }
 
   /**
@@ -608,7 +629,6 @@ export class RpcClient {
         bottom_cm: null,
         unit: 'cm',
       },
-      lineCorrections: [],
       columns: [],
       activeTaxaId: '',
       selectedEntity: { type: 'roi' },
@@ -845,6 +865,71 @@ export class RpcClient {
     throw new Error(tError(-32603, 'core.exportData returned an unexpected payload'));
   }
 
+  // === 后端非 JSON-RPC 的 HTTP 端点 ===
+  // `/api/upload` 与 `/shutdown` 不返回 JSON-RPC 信封，但**必须**集中在这里：
+  // 调用点各自裸写 fetch 时，错误处理就会各写一套。实测有调用点不查 `ok`，
+  // 把错误响应当成功解析，再把 undefined 当路径喂给下一个 RPC。
+
+  /** 后端 origin（去掉 `/rpc` 后缀）。非 RPC 端点都挂在同一 origin 下。 */
+  private baseUrl(): string {
+    return this.endpoint.replace(/\/rpc$/, '');
+  }
+
+  /**
+   * 上传文件到后端 `/api/upload`，返回后端落盘后的绝对路径。
+   *
+   * 契约：成功是 2xx + `{path | saved_path}`；失败是**非 2xx**（不是 JSON-RPC
+   * 的 `200 + body.error`）。所以这里必须显式检查 `ok` —— 漏掉就会把错误页当
+   * JSON 解析、`path` 取到 `undefined`，然后被原样喂给 `component.installOfflineZip`，
+   * 表现为"上传好像成功了，但后端说没这个文件"。
+   */
+  public async uploadFile(file: File): Promise<string> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseUrl()}/api/upload`, { method: 'POST', body: formData });
+    } catch (err) {
+      this.raiseBackendLost('api.upload', err);
+    }
+    if (!res.ok) {
+      throw new Error(tError(-32603, `upload failed: HTTP ${res.status} ${res.statusText}`));
+    }
+
+    let json: any;
+    try {
+      json = await res.json();
+    } catch (err) {
+      throw new Error(tError(-32603, `upload returned a non-JSON body: ${String(err)}`));
+    }
+    const path = json?.path ?? json?.saved_path;
+    if (typeof path !== 'string' || path.length === 0) {
+      throw new Error(tError(-32603, 'upload returned no file path'));
+    }
+    return path;
+  }
+
+  /**
+   * 请求后端进程退出（`POST /shutdown`）。
+   *
+   * 这是**进程控制，不是数据 RPC**，所以不走 `call()`。后端收到请求后立即关闭
+   * 监听，连接被重置属于正常路径 —— 调用方只能忽略这个异常。这里显式吞掉并
+   * 写明理由，是为了把"为什么可以不处理错误"固定在一处，而不是让每个调用点
+   * 各写一个来路不明的空 catch。
+   */
+  public async requestShutdown(): Promise<void> {
+    try {
+      await fetch(`${this.baseUrl()}/shutdown`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'shutdown' }),
+      });
+    } catch {
+      // 预期内：后端已开始关闭，连接重置/拒绝均属正常。
+    }
+  }
+
   // === 冻结契约 v1.3 多 ROI RPC 核心方法 ===
   public async roiCreate(params: { name?: string; x0?: number; x1?: number; y0?: number; y1?: number; composition?: boolean }): Promise<{ roi: DataRoi; rois_count: number }> {
     return this.call('roi.create', params);
@@ -874,12 +959,51 @@ export class RpcClient {
     return this.call('roi.applyFormDefaults', { roi_id: roiId });
   }
 
+  public async roiGroupCreate(
+    roiId: string,
+    params: {
+      name?: string;
+      unit?: string;
+      plot_type?: string;
+      scale_type?: string;
+      exaggeration_mult?: number | null;
+      tick_layout?: Array<{ rel: number }>;
+    }
+  ): Promise<{ roi_id: string; group: ColumnGroup; groups_count: number }> {
+    return this.call('roi.groupCreate', { roi_id: roiId, ...params });
+  }
+
+  public async roiGroupUpdate(
+    roiId: string,
+    groupId: string,
+    updates: Partial<ColumnGroup>
+  ): Promise<{ roi_id: string; group: ColumnGroup }> {
+    return this.call('roi.groupUpdate', { roi_id: roiId, group_id: groupId, updates });
+  }
+
+  public async roiGroupRemove(
+    roiId: string,
+    groupId: string
+  ): Promise<{
+    roi_id: string;
+    removed_group_id: string;
+    fallback_group_id: string;
+    reassigned_columns_count: number;
+    groups_count: number;
+  }> {
+    return this.call('roi.groupRemove', { roi_id: roiId, group_id: groupId });
+  }
+
   public async detectColumns(roiId?: string): Promise<Column[]> {
     return this.call('algorithm.detectColumns', roiId ? { roi_id: roiId } : undefined);
   }
 
   public async updateColumn(colIndex: number, updates: Partial<Column>): Promise<{ column: Column }> {
     return this.call('column.update', { col_index: colIndex, updates });
+  }
+
+  public async removeColumn(colIndex: number | string): Promise<{ success: boolean; removed: number }> {
+    return this.call('column.remove', { col_index: colIndex });
   }
 
   public async getSystemConfig(): Promise<SystemConfig> {

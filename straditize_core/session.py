@@ -80,7 +80,6 @@ try:
 except ImportError:
     PchipInterpolator = None
 
-from .calibration import LinearCalibration, LogCalibration
 from .age_depth import (
     AgeDepthAxisCalibrator,
     AgeDepthModel,
@@ -117,6 +116,7 @@ from .session_parts import (
     RoiMixin,
     SamplesMixin,
     XTicksMixin,
+    resolve_column_scale,
 )
 
 
@@ -363,7 +363,7 @@ class StraditizeSession(
         self.age_depth_image: Image.Image | None = None
         self.age_depth_image_path: str | None = None
 
-        # Paper Metadata & Ensemble Tables (FAIR Data & LiPD Integration)
+        # Paper Metadata & Ensemble Tables (FAIR Data & LiPD v1.3 Integration)
         self.paper_metadata: dict[str, Any] = {
             "publication": {
                 "doi": "",
@@ -371,13 +371,19 @@ class StraditizeSession(
                 "authors": [],
                 "journal": "",
                 "year": None,
+                "funding_agency": "",
+                "funding_grant": "",
             },
             "site": {
                 "site_name": "",
+                "country": "",
                 "latitude": "",
                 "longitude": "",
                 "elevation_m": "",
+                "water_depth_m": "",
+                "core_length_m": "",
                 "archive_type": "lake sediment",
+                "collection_date": "",
             },
             "chronology": {
                 "age_model": "",
@@ -388,9 +394,17 @@ class StraditizeSession(
             "technical": {
                 "pollen_extraction_method": "",
                 "laboratory": "",
+                "investigators": "",
+                "digitizer": "",
+                "affiliation": "",
+                "digitization_date": "",
                 "sampling_interval_cm": "",
             },
-            "quality": {"quality_notes": ""},
+            "quality": {
+                "quality_notes": "",
+                "dataset_version": "1.0.0",
+                "original_data_url": "",
+            },
         }
         self.ensemble_tables: list[dict[str, Any]] = []
 
@@ -898,23 +912,105 @@ class StraditizeSession(
                     }
                 )
 
-        for idx, col in enumerate(detected_cols):
-            col_code = f"col{idx + 1:02d}"
-            if self.taxa_names and idx < len(self.taxa_names):
-                col["name"] = self.taxa_names[idx]
-                col["species"] = self.taxa_names[idx]
-            else:
-                col["name"] = col_code
-                col["species"] = col_code
-
-        # Preserve columns belonging to other ROIs
-        other_cols = [
-            c for c in getattr(self, "columns", []) if c.get("roi_id") != target_roi_id
+        # 保持各 ROI 列在全局列表中的原有相对位置（before + detected + after），
+        # 避免 `other_cols + detected_cols` 在重切左侧 ROI 时把左右 ROI 顺序对调。
+        existing_cols = getattr(self, "columns", [])
+        first_roi_pos = next(
+            (
+                i
+                for i, c in enumerate(existing_cols)
+                if c.get("roi_id") == target_roi_id
+            ),
+            len(existing_cols),
+        )
+        before_cols = [
+            c
+            for i, c in enumerate(existing_cols)
+            if i < first_roi_pos and c.get("roi_id") != target_roi_id
         ]
-        merged_cols = other_cols + detected_cols
-        for i, c in enumerate(merged_cols):
-            c["col_index"] = i
-        self.columns = merged_cols
+        after_cols = [
+            c
+            for i, c in enumerate(existing_cols)
+            if i >= first_roi_pos and c.get("roi_id") != target_roi_id
+        ]
+        offset = len(before_cols)
+
+        # 保留在重新分列前已设定的列级用户态（设计 2026-09-29 §6 重新分列数值保全）：
+        # 若本 ROI 列数不变，按列序号回填 x_values / x_ticks / x_group_id / 形式与放大倍数
+        old_roi_cols = [
+            c for c in existing_cols if c.get("roi_id") == target_roi_id
+        ]
+        preserve_state = len(old_roi_cols) == len(detected_cols)
+        def_grp_id = target_roi.get("default_group_id") if target_roi else None
+
+        for k, col in enumerate(detected_cols):
+            col["_is_new_col"] = True
+            col_code = f"col{k + 1:02d}"
+            old_c_for_name = old_roi_cols[k] if k < len(old_roi_cols) else None
+            gi = (
+                old_c_for_name.get("col_index", offset + k)
+                if old_c_for_name is not None
+                else (offset + k)
+            )
+            taxa_cand = (
+                self.taxa_names[gi]
+                if (self.taxa_names and 0 <= gi < len(self.taxa_names))
+                else None
+            )
+            old_name = (
+                old_c_for_name.get("name") or old_c_for_name.get("species")
+                if old_c_for_name is not None
+                else None
+            )
+            if taxa_cand and taxa_cand != col_code:
+                resolved_name = taxa_cand
+            elif old_name and old_name != col_code:
+                resolved_name = old_name
+            elif taxa_cand:
+                resolved_name = taxa_cand
+            elif old_name:
+                resolved_name = old_name
+            else:
+                resolved_name = col_code
+            col["name"] = resolved_name
+            col["species"] = resolved_name
+
+            if preserve_state:
+                old_c = old_roi_cols[k]
+                col["x_group_id"] = old_c.get("x_group_id") or def_grp_id
+                col["x_values"] = old_c.get("x_values")
+                if old_c.get("x_ticks"):
+                    t = old_c["x_ticks"]
+                    lo = min(col["start"], col["end"]) - 10
+                    hi = max(col["start"], col["end"]) + 10
+                    if (
+                        len(t) == 2
+                        and lo <= t[0].get("px", 0) <= hi
+                        and lo <= t[1].get("px", 0) <= hi
+                    ):
+                        col["x_ticks"] = t
+                if old_c.get("unit"):
+                    col["unit"] = old_c["unit"]
+                if old_c.get("plot_type"):
+                    col["plot_type"] = old_c["plot_type"]
+                if old_c.get("scale_type"):
+                    col["scale_type"] = old_c["scale_type"]
+                if old_c.get("exaggeration_mult") is not None:
+                    col["exaggeration_mult"] = old_c["exaggeration_mult"]
+                    col["has_exaggeration"] = True
+            else:
+                col["x_group_id"] = def_grp_id
+
+        self.columns = before_cols + detected_cols + after_cols
+        had_taxa_names = bool(self.taxa_names)
+        extra_tail = (
+            self.taxa_names[len( self.columns ) :]
+            if len(self.taxa_names) > len(self.columns)
+            else []
+        )
+        self._reindex_columns(sync_taxa_names=had_taxa_names)
+        if extra_tail:
+            self.taxa_names.extend(extra_tail)
 
         # Reset columns_stale for this ROI
         if target_roi:
@@ -922,18 +1018,26 @@ class StraditizeSession(
 
         return detected_cols
 
-    def _roi_box(self) -> tuple[float, float, float, float] | None:
+    def _roi_box(
+        self, roi_id: str | None = None
+    ) -> tuple[float, float, float, float] | None:
         """The data region as ``(x0, y0, x1, y1)``, or ``None`` when unset."""
+        if roi_id and hasattr(self, "rois") and self.rois:
+            roi_obj = next((r for r in self.rois if r.get("id") == roi_id), None)
+            if roi_obj and roi_obj.get("xlim") and roi_obj.get("ylim"):
+                x0, x1 = sorted((float(roi_obj["xlim"][0]), float(roi_obj["xlim"][1])))
+                y0, y1 = sorted((float(roi_obj["ylim"][0]), float(roi_obj["ylim"][1])))
+                return x0, y0, x1, y1
         if not self.data_xlim or not self.data_ylim:
             return None
         x0, x1 = sorted((float(self.data_xlim[0]), float(self.data_xlim[1])))
         y0, y1 = sorted((float(self.data_ylim[0]), float(self.data_ylim[1])))
         return x0, y0, x1, y1
 
-    def _roi_mask(self) -> np.ndarray:
+    def _roi_mask(self, roi_id: str | None = None) -> np.ndarray:
         """Boolean mask of the data region, used to fence off everything outside it."""
         mask = np.zeros((self.height, self.width), dtype=bool)
-        box = self._roi_box()
+        box = self._roi_box(roi_id=roi_id)
         if box is None:
             return ~mask
         x0, y0, x1, y1 = (int(round(v)) for v in box)
@@ -942,7 +1046,7 @@ class StraditizeSession(
         mask[y0:y1, x0:x1] = True
         return mask
 
-    def _extraction_mask(self) -> np.ndarray | None:
+    def _extraction_mask(self, roi_id: str | None = None) -> np.ndarray | None:
         """Ink actually offered to the digitizer: inside the ROI, minus grid lines.
 
         Recomputed on demand when the user asked for grid-line removal but the
@@ -955,7 +1059,7 @@ class StraditizeSession(
         if (
             self.grid_line_mask is None
             and self.degrid_strength is not None
-            and self._roi_box() is not None
+            and self._roi_box(roi_id=roi_id) is not None
         ):
             self.algorithm_degrid(
                 strength=self.degrid_strength,
@@ -964,7 +1068,7 @@ class StraditizeSession(
             )
         if self.grid_line_mask is not None:
             mask = mask & ~self.grid_line_mask
-        return mask & self._roi_mask()
+        return mask & self._roi_mask(roi_id=roi_id)
 
     def digitize(
         self,
@@ -991,15 +1095,20 @@ class StraditizeSession(
             )
 
         col = self.columns[col_index]
-        c_start = round(col["start"])
-        c_end = round(col["end"])
-        y0 = round(self.data_ylim[0])
-        y1 = round(self.data_ylim[1])
+        col_roi_id = col.get("roi_id")
+        roi = self._roi_box(roi_id=col_roi_id)
+        c_start = round(col.get("start", col.get("startX", 0)))
+        c_end = round(col.get("end", col.get("endX", 100)))
+        if roi is not None:
+            y0 = round(roi[1])
+            y1 = round(roi[3])
+        else:
+            y0 = round(self.data_ylim[0])
+            y1 = round(self.data_ylim[1])
 
         # A column lying entirely outside the ROI cannot yield data, because the
         # ROI fences extraction (that is what keeps axis spines and cluster trees
         # out). Refuse loudly instead of writing a column of silent zeros.
-        roi = self._roi_box()
         if roi is not None and not (c_end > round(roi[0]) and c_start < round(roi[2])):
             name = col.get("species") or col.get("name") or f"col{col_index + 1:02d}"
             raise JsonRpcError(
@@ -1015,7 +1124,7 @@ class StraditizeSession(
             else:
                 raise JsonRpcError(STATE_ERROR, "No foreground mask or image loaded.")
 
-        mask = self._extraction_mask()
+        mask = self._extraction_mask(roi_id=col_roi_id)
         if mask is None:
             raise JsonRpcError(STATE_ERROR, "No foreground mask or image loaded.")
         points: list[dict[str, float]] = []
@@ -1339,20 +1448,36 @@ class StraditizeSession(
                 "Axes calibration is required when strict=True.",
             )
 
-        all_rows = sorted(
-            {p["row"] for pts in self.column_points.values() for p in pts}
-        )
-        if not all_rows:
-            all_rows = [0]
-
-        data_dict: dict[str, Any] = {}
-        if self.is_calibrated and self.y_scale is not None:
-            sy = self.y_scale["slope"]
-            iy = self.y_scale["intercept"]
-            depth_series = [round(sy * r + iy, 4) for r in all_rows]
+        samples = getattr(self, "samples", None) or []
+        if samples:
+            all_rows = [int(round(s.get("row_px", 0))) for s in samples]
+            raw_depths = [s.get("depth") for s in samples]
+            if self.is_calibrated and self.y_scale is not None:
+                sy = self.y_scale["slope"]
+                iy = self.y_scale["intercept"]
+                depth_series = [
+                    round(float(d), 4) if d is not None else round(sy * r + iy, 4)
+                    for r, d in zip(all_rows, raw_depths)
+                ]
+            else:
+                depth_series = [
+                    d if d is not None else r for r, d in zip(all_rows, raw_depths)
+                ]
         else:
-            depth_series = all_rows
-        data_dict["depth"] = depth_series
+            all_rows = sorted(
+                {p["row"] for pts in self.column_points.values() for p in pts}
+            )
+            if not all_rows:
+                all_rows = [0]
+
+            if self.is_calibrated and self.y_scale is not None:
+                sy = self.y_scale["slope"]
+                iy = self.y_scale["intercept"]
+                depth_series = [round(sy * r + iy, 4) for r in all_rows]
+            else:
+                depth_series = all_rows
+
+        data_dict: dict[str, Any] = {"depth": depth_series}
 
         if self.age_depth_model is not None:
             age_pred = self.age_depth_model.predict_age(depth_series)
@@ -1361,81 +1486,34 @@ class StraditizeSession(
             data_dict["age_max_95"] = age_pred["age_max"]
 
         for c_idx in sorted(self.column_points.keys()):
-            if self.taxa_names and c_idx < len(self.taxa_names):
+            col_def = self.columns[c_idx] if c_idx < len(self.columns) else {}
+            if self.taxa_names and c_idx < len(self.taxa_names) and self.taxa_names[c_idx]:
                 col_name = self.taxa_names[c_idx]
-            elif c_idx < len(self.columns) and "name" in self.columns[c_idx]:
-                col_name = self.columns[c_idx]["name"]
             else:
-                col_name = f"col_{c_idx}"
+                col_name = (
+                    col_def.get("name")
+                    or col_def.get("species")
+                    or f"col{c_idx + 1:02d}"
+                )
 
             pts = self.column_points[c_idx]
             p_dict = {p["row"]: p["x"] for p in pts}
-            col_def = self.columns[c_idx] if c_idx < len(self.columns) else {}
-            default_start = float(col_def.get("start", 0.0))
+            default_start = float(
+                col_def.get("startX", col_def.get("start", 0.0))
+            )
             raw_x = [p_dict.get(r, default_start) for r in all_rows]
 
-            scale_type = col_def.get("scale_type", "linear")
-            s_val = float(
-                col_def.get("startValue", 0.0 if scale_type == "linear" else 1.0)
-            )
-            t_val = float(col_def.get("tickValue", 100.0))
-            s_px = float(col_def.get("start", 0.0))
-            t_px = float(col_def.get("tickEndX", col_def.get("end", s_px + 100.0)))
-            if abs(t_px - s_px) < 1e-9:
-                t_px = s_px + 100.0
-
-            if scale_type == "log":
-                try:
-                    calib = LogCalibration([s_px, t_px], [s_val, t_val], name=col_name)
-                    data_dict[col_name] = [
-                        round(float(calib.px2data(x)), 4) for x in raw_x
-                    ]
-                except ValueError as exc:
-                    if strict:
-                        raise JsonRpcError(
-                            CALIBRATION_ERROR,
-                            f"Invalid log scale calibration for column '{col_name}': {exc}",
-                        ) from exc
-                    span = max(1e-9, t_px - s_px)
-                    data_dict[col_name] = [
-                        round(max(0.0, s_val + (x - s_px) / span * (t_val - s_val)), 4)
-                        for x in raw_x
-                    ]
-            else:
-                # Linear two-point calibration
-                try:
-                    calib = LinearCalibration(
-                        [s_px, t_px], [s_val, t_val], name=col_name
-                    )
-                    data_dict[col_name] = [
-                        round(max(0.0, float(calib.px2data(x))), 4) for x in raw_x
-                    ]
-                except (ValueError, ZeroDivisionError):
-                    if self.is_calibrated and c_idx in self.x_scales:
-                        sx = self.x_scales[c_idx]["slope"]
-                        ix = self.x_scales[c_idx]["intercept"]
-                        data_dict[col_name] = [
-                            round(max(0.0, sx * x + ix), 4) for x in raw_x
-                        ]
-                    else:
-                        span = max(1e-9, t_px - s_px)
-                        data_dict[col_name] = [
-                            round(max(0.0, (x - s_px) / span * 100.0), 4) for x in raw_x
-                        ]
-
-            # If column has an exaggeration multiplier specified by user, scale back to 1x true abundance
-            has_exag = bool(
-                col_def.get("has_exaggeration", col_def.get("hasExaggeration", False))
-            )
-            exag_mult = float(
-                col_def.get(
-                    "exaggeration_multiplier", col_def.get("exaggerationMult", 1.0)
+            scale = resolve_column_scale(self, col_def, c_idx)
+            data_dict[col_name] = [
+                scale.px_to_value(
+                    x,
+                    baseline_px=default_start,
+                    strict=strict,
+                    col_name=col_name,
+                    ndigits=4,
                 )
-            )
-            if has_exag and exag_mult > 1.0:
-                data_dict[col_name] = [
-                    round(val / exag_mult, 4) for val in data_dict[col_name]
-                ]
+                for x in raw_x
+            ]
 
         df = pd.DataFrame(data_dict)
 
@@ -1624,41 +1702,16 @@ class StraditizeSession(
                 )
 
                 col_def = self.columns[c_idx] if c_idx < len(self.columns) else {}
-                scale_type = col_def.get("scale_type", "linear")
-                s_val = float(
-                    col_def.get("startValue", 0.0 if scale_type == "linear" else 1.0)
+                c_start_px = float(
+                    col_def.get("startX", col_def.get("start", 0.0))
                 )
-                t_val = float(col_def.get("tickValue", 100.0))
-                s_px = float(col_def.get("start", 0.0))
-                t_px = float(col_def.get("tickEndX", col_def.get("end", s_px + 100.0)))
-                if abs(t_px - s_px) < 1e-9:
-                    t_px = s_px + 100.0
-
-                if scale_type == "log":
-                    try:
-                        calib = LogCalibration([s_px, t_px], [s_val, t_val], name=taxon)
-                        val = round(float(calib.px2data(interp_x)), 4)
-                    except ValueError:
-                        span = max(1e-9, t_px - s_px)
-                        val = round(
-                            max(
-                                0.0, s_val + (interp_x - s_px) / span * (t_val - s_val)
-                            ),
-                            4,
-                        )
-                else:
-                    try:
-                        calib = LinearCalibration(
-                            [s_px, t_px], [s_val, t_val], name=taxon
-                        )
-                        val = round(max(0.0, float(calib.px2data(interp_x))), 4)
-                    except (ValueError, ZeroDivisionError):
-                        if self.is_calibrated and c_idx in self.x_scales:
-                            sx = self.x_scales[c_idx]["slope"]
-                            ix = self.x_scales[c_idx]["intercept"]
-                            val = round(max(0.0, sx * interp_x + ix), 4)
-                        else:
-                            val = round(interp_x, 2)
+                scale = resolve_column_scale(self, col_def, c_idx)
+                val = scale.px_to_value(
+                    interp_x,
+                    baseline_px=c_start_px,
+                    col_name=taxon,
+                    ndigits=4,
+                )
 
                 row_vals.append(val)
                 row_dict[taxon] = val
@@ -1791,6 +1844,7 @@ class StraditizeSession(
                 with tarfile.open(path, "r") as tf:
                     json_member = None
                     img_member = None
+                    ad_img_member = None
                     for m in tf.getmembers():
                         nl = m.name.lower()
                         if nl.endswith("straditize.json") or (
@@ -1799,6 +1853,8 @@ class StraditizeSession(
                             and "info" not in nl
                         ):
                             json_member = m
+                        elif "age_depth" in nl and nl.endswith((".png", ".jpg", ".jpeg")):
+                            ad_img_member = m
                         elif nl.endswith((".png", ".jpg", ".jpeg")):
                             img_member = m
 
@@ -1820,10 +1876,20 @@ class StraditizeSession(
                         if f_img:
                             img_bytes = f_img.read()
                             img_obj = Image.open(io.BytesIO(img_bytes))
+                            img_obj.load()
                             self.image = img_obj
                             self.width, self.height = img_obj.size
                             self.format = img_obj.format or "PNG"
                             self.mode = img_obj.mode
+
+                    if ad_img_member:
+                        f_ad = tf.extractfile(ad_img_member)
+                        if f_ad:
+                            ad_bytes = f_ad.read()
+                            ad_obj = Image.open(io.BytesIO(ad_bytes))
+                            ad_obj.load()
+                            self.age_depth_image = ad_obj
+                            self.age_depth_image_path = "archive://image/age_depth.png"
 
                     return self.project_load(parsed)
             else:
@@ -1897,16 +1963,123 @@ class StraditizeSession(
         self.control_points = {}
         self.taxa_names = []
 
+        # Multi-ROI & Column Group restoration (v3.0.0) with v2.x migration (D2 / D3)
+        self._init_rois()
+        saved_rois = project_data.get("rois")
+        if saved_rois and isinstance(saved_rois, list):
+            self.rois = [dict(r) for r in saved_rois]
+            self.primary_roi_id = project_data.get("primary_roi_id") or (
+                self.rois[0]["id"] if self.rois else None
+            )
+            self.active_roi_id = (
+                project_data.get("active_roi_id") or self.primary_roi_id
+            )
+            for r in self.rois:
+                if not r.get("x_groups"):
+                    def_grp = {
+                        "id": f"{r['id']}_grp1",
+                        "name": "默认组",
+                        "unit": "%",
+                        "plot_type": "area",
+                        "scale_type": "linear",
+                        "exaggeration_mult": None,
+                        "tick_layout": [{"rel": 0.0}, {"rel": 1.0}],
+                    }
+                    r["x_groups"] = [def_grp]
+                    r["default_group_id"] = def_grp["id"]
+        else:
+            # v2 migration: synthesize ROI from `roi` field or image defaults
+            roi_raw = project_data.get("roi")
+            if roi_raw and isinstance(roi_raw, dict):
+                rx0 = float(roi_raw.get("x", 0.0))
+                ry0 = float(roi_raw.get("y", 0.0))
+                rx1 = rx0 + float(roi_raw.get("w", 100.0))
+                ry1 = ry0 + float(roi_raw.get("h", 100.0))
+            else:
+                rx0, ry0 = 0.0, 0.0
+                rx1 = float(getattr(self, "width", 100.0) or 100.0)
+                ry1 = float(getattr(self, "height", 100.0) or 100.0)
+            created = self.roi_create(name="pollen", x0=rx0, x1=rx1, y0=ry0, y1=ry1)["roi"]
+            self.primary_roi_id = created["id"]
+            self.active_roi_id = created["id"]
+
+        primary_roi = (
+            self._get_roi(self.primary_roi_id)
+            if self.primary_roi_id
+            else (self.rois[0] if self.rois else None)
+        )
+
         for idx, c in enumerate(raw_cols):
             name = c.get("species") or c.get("name") or f"Col {idx}"
             self.taxa_names.append(name)
+            col_roi_id = c.get("roi_id") or (
+                self.primary_roi_id if len(self.rois) <= 1 else None
+            )
+            if not col_roi_id and self.rois:
+                col_roi_id = self.rois[0]["id"]
+
+            target_roi = self._get_roi(col_roi_id) if col_roi_id else primary_roi
+
+            x_group_id = c.get("x_group_id")
+            x_values = c.get("x_values")
+            x_ticks = c.get("x_ticks")
+
+            if not x_group_id and target_roi:
+                # D2: 逐列一组保真迁移
+                grp_id = f"{col_roi_id}_grp_{idx + 1}"
+                c_start = float(c.get("startX", c.get("start", 0)))
+                c_end = float(c.get("endX", c.get("end", c_start + 100)))
+                c_span = max(1e-9, c_end - c_start)
+
+                if x_ticks and len(x_ticks) >= 2:
+                    val0 = float(x_ticks[0].get("value", 0))
+                    val1 = float(x_ticks[1].get("value", 100))
+                    px0 = float(x_ticks[0].get("px", c_start))
+                    px1 = float(x_ticks[1].get("px", c_end))
+                    rel0 = (px0 - c_start) / c_span
+                    rel1 = (px1 - c_start) / c_span
+                    x_values = [val0, val1]
+                else:
+                    rel0 = 0.0
+                    rel1 = 1.0
+                    if (
+                        c.get("startValue") is not None
+                        or c.get("tickValue") is not None
+                    ):
+                        x_values = [
+                            float(c.get("startValue", 0)),
+                            float(c.get("tickValue", 100)),
+                        ]
+
+                grp = {
+                    "id": grp_id,
+                    "name": f"{name}组",
+                    "unit": c.get("unit", "%"),
+                    "plot_type": c.get("plot_type") or c.get("plotType") or "area",
+                    "scale_type": c.get("scale_type", "linear"),
+                    "exaggeration_mult": c.get("exaggeration_mult"),
+                    "tick_layout": [{"rel": rel0}, {"rel": rel1}],
+                }
+                target_roi.setdefault("x_groups", []).append(grp)
+                x_group_id = grp_id
+
             col_dict = {
                 "col_index": idx,
+                "id": c.get("id") or f"{col_roi_id}_col{idx + 1:02d}",
                 "name": name,
                 "species": name,
-                "start": c.get("startX", 0),
-                "end": c.get("endX", c.get("tickEndX", 100)),
+                "roi_id": col_roi_id,
+                "x_group_id": x_group_id,
+                "x_values": x_values,
+                "start": c.get("startX", c.get("start", 0)),
+                "startX": c.get("startX", c.get("start", 0)),
+                "end": c.get("endX", c.get("end", 100)),
+                "endX": c.get("endX", c.get("end", 100)),
                 "scale_type": c.get("scale_type", "linear"),
+                "plot_type": c.get("plot_type") or c.get("plotType") or "area",
+                "unit": c.get("unit", "%"),
+                "exaggeration_mult": c.get("exaggeration_mult"),
+                "x_ticks": x_ticks,
                 "startValue": c.get("startValue", 0),
                 "tickValue": c.get("tickValue", 100),
                 "tickEndX": c.get("tickEndX", c.get("endX", 100)),
@@ -1921,11 +2094,73 @@ class StraditizeSession(
                 ctrls[y_val] = x_val
             self.control_points[idx] = ctrls
 
+        # Restore embedded images (if loading from self-contained .json)
+        img_meta = project_data.get("image") or {}
+        if isinstance(img_meta, dict) and img_meta.get("base64") and self.image is None:
+            raw_b64 = img_meta["base64"]
+            if "," in raw_b64:
+                raw_b64 = raw_b64.split(",", 1)[1]
+            img_obj = Image.open(io.BytesIO(base64.b64decode(raw_b64)))
+            img_obj.load()
+            self.image = img_obj
+            self.width, self.height = img_obj.size
+            self.format = img_obj.format or "PNG"
+            self.mode = img_obj.mode
+
+        # Restore paper_metadata, samples, line_candidates, and age_depth state
+        if project_data.get("paper_metadata"):
+            self.metadata_update(project_data["paper_metadata"])
+        if project_data.get("samples") is not None:
+            self.samples = list(project_data["samples"])
+        if project_data.get("line_candidates") is not None:
+            self.line_candidates = list(project_data["line_candidates"])
+        if project_data.get("selected_candidate_ids") is not None:
+            self.selected_candidate_ids = set(project_data["selected_candidate_ids"])
+        if project_data.get("ensemble_tables") is not None:
+            self.ensemble_tables = list(project_data["ensemble_tables"])
+
+        ad_data = project_data.get("age_depth")
+        if isinstance(ad_data, dict):
+            if ad_data.get("image_base64") and getattr(self, "age_depth_image", None) is None:
+                ad_b64 = ad_data["image_base64"]
+                if "," in ad_b64:
+                    ad_b64 = ad_b64.split(",", 1)[1]
+                ad_obj = Image.open(io.BytesIO(base64.b64decode(ad_b64)))
+                ad_obj.load()
+                self.age_depth_image = ad_obj
+                self.age_depth_image_path = "archive://image/age_depth.png"
+            if ad_data.get("calib_state"):
+                self.age_depth_calib_state = dict(ad_data["calib_state"])
+            insp = ad_data.get("inspection")
+            if isinstance(insp, dict) and insp.get("depths") and insp.get("ages"):
+                meta = insp.get("metadata") or {}
+                model = AgeDepthModel(
+                    depths=insp["depths"],
+                    ages=insp["ages"],
+                    age_min=insp.get("age_min"),
+                    age_max=insp.get("age_max"),
+                    curve_type=meta.get("curve_type", "median"),
+                    envelope_type=meta.get("envelope_type", "95_hpd"),
+                    depth_unit=meta.get("depth_unit", "cm"),
+                    age_unit=meta.get("age_unit", "cal BP"),
+                    cal_curve=meta.get("calibration_curve", "IntCal20"),
+                    notes=meta.get("notes", ""),
+                )
+                px_pts = insp.get("px_points")
+                if isinstance(px_pts, dict):
+                    model.px_y = np.asarray(px_pts.get("y", []), dtype=float)
+                    model.px_x_curve = np.asarray(px_pts.get("x_curve", []), dtype=float)
+                    model.px_x_min = np.asarray(px_pts.get("x_min", []), dtype=float)
+                    model.px_x_max = np.asarray(px_pts.get("x_max", []), dtype=float)
+                self.age_depth_model = model
+
         return {
             "success": True,
             "columns_count": len(self.columns),
             "taxa": self.taxa_names,
             "is_calibrated": self.is_calibrated,
+            "has_age_depth_image": getattr(self, "age_depth_image", None) is not None,
+            "has_age_depth_model": self.age_depth_model is not None,
         }
 
     load_project = project_load
@@ -1995,25 +2230,52 @@ class StraditizeSession(
                     }
                 )
             pts.sort(key=lambda p: p["y"])
+            scale = resolve_column_scale(self, col, c_idx)
             cols_export.append(
                 {
-                    "id": f"col_{c_idx}",
+                    "id": col.get("id") or f"col_{c_idx}",
+                    "col_index": c_idx,
                     "species": name,
                     "name": name,
-                    "color": "#38bdf8",
-                    "visible": True,
-                    "scale_type": col.get("scale_type", "linear"),
-                    "startX": col.get("start", 0),
-                    "startValue": col.get("startValue", 0),
-                    "tickEndX": col.get("tickEndX", col.get("end", 100)),
-                    "tickValue": col.get("tickValue", 100),
-                    "endX": col.get("end", 100),
+                    "roi_id": col.get("roi_id"),
+                    "x_group_id": col.get("x_group_id"),
+                    "x_values": col.get("x_values"),
+                    "x_ticks": col.get("x_ticks"),
+                    "color": col.get("color", "#38bdf8"),
+                    "visible": col.get("visible", True),
+                    "scale_type": scale.scale_type,
+                    "plot_type": scale.plot_type,
+                    "unit": scale.unit,
+                    "exaggeration_mult": scale.exaggeration_mult,
+                    "has_exaggeration": scale.exaggeration_mult is not None,
+                    "startX": col.get("startX", col.get("start", 0)),
+                    "start": col.get("start", 0),
+                    "endX": col.get("endX", col.get("end", 100)),
+                    "end": col.get("end", 100),
+                    "startValue": scale.val0,
+                    "tickValue": scale.val1,
+                    "tickEndX": scale.abs_px1,
                     "points": pts,
                 }
             )
 
-        project_json = {
-            "version": "2.0.0",
+        ad_export: dict[str, Any] | None = None
+        if getattr(self, "age_depth_image", None) is not None or self.age_depth_model is not None:
+            ad_export = {
+                "image_path": "image/age_depth.png" if getattr(self, "age_depth_image", None) is not None else None,
+                "width": self.age_depth_image.width if getattr(self, "age_depth_image", None) is not None else 0,
+                "height": self.age_depth_image.height if getattr(self, "age_depth_image", None) is not None else 0,
+                "calib_state": getattr(self, "age_depth_calib_state", None),
+                "inspection": (
+                    self.age_depth_model.to_inspection_data()
+                    if self.age_depth_model is not None
+                    else None
+                ),
+            }
+
+        project_json: dict[str, Any] = {
+            "version": "3.0.0",
+            "schema_version": "3.0",
             "image": {
                 "path": "image/original.png",
                 "width": self.width,
@@ -2021,17 +2283,34 @@ class StraditizeSession(
             },
             "depth_calibration": calib,
             "roi": roi,
-            # Manual line-mask corrections are user work, so they travel with the
-            # project; the automatic part is recomputed on load from the presets.
+            "rois": getattr(self, "rois", []),
+            "primary_roi_id": getattr(self, "primary_roi_id", None),
+            "active_roi_id": getattr(self, "active_roi_id", None),
             "line_removal": {
                 "strength": self.degrid_strength,
                 "remove_vertical": self.degrid_remove_vertical,
                 "corrections": self.line_corrections,
             },
+            "line_candidates": getattr(self, "line_candidates", []),
+            "selected_candidate_ids": sorted(getattr(self, "selected_candidate_ids", set()) or set()),
+            "samples": getattr(self, "samples", []),
+            "paper_metadata": getattr(self, "paper_metadata", {}),
+            "age_depth": ad_export,
+            "ensemble_tables": getattr(self, "ensemble_tables", []),
             "columns": cols_export,
         }
 
         if format.lower() == "json":
+            # When saving a standalone .json file to disk, embed base64 images so the single file is 100% self-contained
+            if output_path:
+                if self.image is not None:
+                    ib = io.BytesIO()
+                    self.image.save(ib, format="PNG")
+                    project_json["image"]["base64"] = base64.b64encode(ib.getvalue()).decode("ascii")
+                if ad_export is not None and getattr(self, "age_depth_image", None) is not None:
+                    ab = io.BytesIO()
+                    self.age_depth_image.save(ab, format="PNG")
+                    ad_export["image_base64"] = base64.b64encode(ab.getvalue()).decode("ascii")
             json_str = json.dumps(project_json, indent=2, ensure_ascii=False)
             if output_path:
                 with open(output_path, "w", encoding="utf-8") as f:
@@ -2066,6 +2345,16 @@ class StraditizeSession(
                 ti_img.size = len(img_data)
                 ti_img.mtime = int(time.time())
                 tf.addfile(ti_img, io.BytesIO(img_data))
+
+            # 3b. image/age_depth.png (Age-Depth diagram embedded in archive)
+            if getattr(self, "age_depth_image", None) is not None:
+                ad_bio = io.BytesIO()
+                self.age_depth_image.save(ad_bio, format="PNG")
+                ad_data = ad_bio.getvalue()
+                ti_ad = tarfile.TarInfo(name="image/age_depth.png")
+                ti_ad.size = len(ad_data)
+                ti_ad.mtime = int(time.time())
+                tf.addfile(ti_ad, io.BytesIO(ad_data))
 
             # 4. data.csv (首列深度，未出现属种严格 0.0)
             try:
@@ -2160,6 +2449,7 @@ class StraditizeSession(
             "start": column.get("startX", column.get("start", 0)),
             "end": column.get("endX", column.get("end", 100)),
             "scale_type": column.get("scale_type", "linear"),
+            "x_ticks": column.get("x_ticks"),
             "startValue": column.get("startValue", 0),
             "tickValue": column.get("tickValue", 100),
             "tickEndX": column.get("tickEndX", column.get("end", 100)),
@@ -2188,19 +2478,58 @@ class StraditizeSession(
                 return int(col["col_index"])
         raise JsonRpcError(INVALID_PARAMS, f"Unknown column: {col_index!r}")
 
+    def _reindex_columns(self, sync_taxa_names: bool = False) -> None:
+        """Re-assigns sequential ``col_index = 0..N-1`` on ``self.columns`` and
+        migrates per-column dictionaries (``column_points``, ``control_points``,
+        ``reader_types``, ``x_scales``) from each surviving column's previous
+        ``col_index`` to its new index.
+        """
+        new_column_points: dict[int, list[dict[str, float]]] = {}
+        new_control_points: dict[int, dict[int, float]] = {}
+        new_reader_types: dict[int, str] = {}
+        new_x_scales: dict[int, dict[str, float]] = {}
+
+        old_column_points = getattr(self, "column_points", {}) or {}
+        old_control_points = getattr(self, "control_points", {}) or {}
+        old_reader_types = getattr(self, "reader_types", {}) or {}
+        old_x_scales = getattr(self, "x_scales", {}) or {}
+
+        for new_idx, col in enumerate(self.columns):
+            is_new = bool(col.pop("_is_new_col", False))
+            old_idx = col.get("col_index")
+            col["col_index"] = new_idx
+            if not is_new and isinstance(old_idx, int):
+                if old_idx in old_column_points:
+                    new_column_points[new_idx] = old_column_points[old_idx]
+                if old_idx in old_control_points:
+                    new_control_points[new_idx] = old_control_points[old_idx]
+                if old_idx in old_reader_types:
+                    new_reader_types[new_idx] = old_reader_types[old_idx]
+                if old_idx in old_x_scales:
+                    new_x_scales[new_idx] = old_x_scales[old_idx]
+
+        self.column_points = new_column_points
+        self.control_points = new_control_points
+        self.reader_types = new_reader_types
+        self.x_scales = new_x_scales
+
+        if sync_taxa_names:
+            self.taxa_names = [
+                c.get("name") or c.get("species") or f"col{i + 1:02d}"
+                for i, c in enumerate(self.columns)
+            ]
+
     def column_remove(self, col_index: int | str) -> dict[str, Any]:
-        """Removes a column from the project."""
+        """Removes a column from the project and re-indexes point stores."""
         self._record_history("Remove column")
         target_idx = self._resolve_col_index(col_index)
         if 0 <= target_idx < len(self.columns):
-            self.columns.pop(target_idx)
-            if target_idx in self.control_points:
-                del self.control_points[target_idx]
-            if target_idx in self.column_points:
-                del self.column_points[target_idx]
-            # Re-index remaining columns
             for idx, c in enumerate(self.columns):
-                c["col_index"] = idx
+                c.setdefault("col_index", idx)
+            self.columns.pop(target_idx)
+            if hasattr(self, "taxa_names") and 0 <= target_idx < len(self.taxa_names):
+                self.taxa_names.pop(target_idx)
+            self._reindex_columns(sync_taxa_names=False)
             return {"success": True, "removed": target_idx}
         raise JsonRpcError(INVALID_PARAMS, f"Column index out of bounds: {target_idx}")
 
@@ -2216,12 +2545,39 @@ class StraditizeSession(
                 if k in ("name", "species"):
                     col["name"] = v
                     col["species"] = v
-                    if target_idx < len(self.taxa_names):
-                        self.taxa_names[target_idx] = v
+                    while len(self.taxa_names) < len(self.columns):
+                        idx_pad = len(self.taxa_names)
+                        c_pad = self.columns[idx_pad]
+                        self.taxa_names.append(
+                            c_pad.get("name")
+                            or c_pad.get("species")
+                            or f"col{idx_pad + 1:02d}"
+                        )
+                    self.taxa_names[target_idx] = v
                 elif k == "startX":
                     col["start"] = v
+                    col["startX"] = v
                 elif k == "endX":
                     col["end"] = v
+                    col["endX"] = v
+                elif k in ("plot_type", "plotType"):
+                    col["plot_type"] = v
+                elif k in ("exaggeration_mult", "exaggerationMult", "exaggeration_multiplier"):
+                    if v is None or float(v) <= 1.0:
+                        col["exaggeration_mult"] = None
+                        col["has_exaggeration"] = False
+                        col["mult_source"] = None
+                    else:
+                        col["exaggeration_mult"] = float(v)
+                        col["exaggeration_multiplier"] = float(v)
+                        col["has_exaggeration"] = True
+                        col["mult_source"] = "user"
+                elif k in ("has_exaggeration", "hasExaggeration"):
+                    has_ex = bool(v)
+                    col["has_exaggeration"] = has_ex
+                    if not has_ex:
+                        col["exaggeration_mult"] = None
+                        col["mult_source"] = None
                 else:
                     col[k] = v
             return {"success": True, "column": col}
@@ -2730,6 +3086,21 @@ class StraditizeSession(
         )
         self.age_depth_model = model
         self.age_depth_is_calendar_year = bool(age_is_calendar_year)
+        self.age_depth_calib_state = {
+            "depth_px": [float(v) for v in depth_px],
+            "depth_vals": [float(v) for v in depth_vals],
+            "age_px": [float(v) for v in age_px],
+            "age_vals": [float(v) for v in age_vals],
+            "depth_unit": depth_unit,
+            "age_unit": age_unit,
+            "cal_curve": cal_curve,
+            "depth_range": list(depth_range) if depth_range else None,
+            "resample_step": float(resample_step) if resample_step is not None else None,
+            "depth_log": bool(depth_log),
+            "age_log": bool(age_log),
+            "exclude_boxes": [list(b) for b in (exclude_boxes or [])],
+            "notes": notes,
+        }
         # Which rate columns the user ticked for export. Column *names* are built with the
         # unit embedded (see AGE_DEPTH_RATE_COLUMNS) so a spreadsheet or LiPD container is
         # self-describing: a bare "sed_rate" would lose the unit the moment it left here.
@@ -2821,11 +3192,19 @@ class StraditizeSession(
 
     def get_age_depth_inspection(self) -> dict[str, Any]:
         """Returns current age-depth model visual inspection data and metadata."""
-        if self.age_depth_model is None:
-            return {"has_model": False}
+        if self.age_depth_model is None and getattr(self, "age_depth_image", None) is None:
+            return {"has_model": False, "has_image": False}
         return {
-            "has_model": True,
-            "inspection": self.age_depth_model.to_inspection_data(),
+            "has_model": self.age_depth_model is not None,
+            "has_image": getattr(self, "age_depth_image", None) is not None,
+            "image_width": self.age_depth_image.width if getattr(self, "age_depth_image", None) else 0,
+            "image_height": self.age_depth_image.height if getattr(self, "age_depth_image", None) else 0,
+            "calib_state": getattr(self, "age_depth_calib_state", None),
+            "inspection": (
+                self.age_depth_model.to_inspection_data()
+                if self.age_depth_model is not None
+                else None
+            ),
         }
 
     def run_local_bacon(
@@ -2999,33 +3378,58 @@ class StraditizeSession(
         pdf_path: str,
         api_key: str | None = None,
         base_url: str | None = None,
-        model: str = "gpt-4o",
+        model: str | None = None,
         target_site: str | None = None,
+        prompt_template: str | None = None,
     ) -> dict[str, Any]:
         """Extracts explicit non-hallucinated metadata from paper PDF text chunks via LLM."""
         if not os.path.exists(pdf_path):
             raise JsonRpcError(FILE_NOT_FOUND_ERROR, f"PDF file not found: {pdf_path}")
+
+        from .config import load_config
+
+        cfg = load_config()
+        eff_api_key = api_key if api_key is not None else (cfg.get("llm_api_key") or None)
+        eff_base_url = base_url if base_url is not None else (cfg.get("llm_base_url") or None)
+        eff_model = model if model is not None else (cfg.get("llm_model") or "gpt-4o")
+        eff_prompt = (
+            prompt_template
+            if prompt_template is not None
+            else (cfg.get("llm_prompt_template") or None)
+        )
 
         pages = extract_text_from_pdf(pdf_path)
         chunks = chunk_text_by_tokens(pages, max_tokens=4000, overlap_tokens=200)
 
         extracted = extract_metadata_from_chunks(
             chunks,
-            api_key=api_key,
-            base_url=base_url,
-            model=model,
+            api_key=eff_api_key,
+            base_url=eff_base_url,
+            model=eff_model,
             target_site_name=target_site,
+            prompt_template=eff_prompt,
         )
+
+        # Update funding fields on publication if extracted
+        pub_curr = self.paper_metadata.get("publication", {})
+        if extracted.get("funding_agency", {}).get("value"):
+            pub_curr["funding_agency"] = extracted["funding_agency"]["value"]
+        if extracted.get("funding_grant", {}).get("value"):
+            pub_curr["funding_grant"] = extracted["funding_grant"]["value"]
+        self.paper_metadata["publication"] = pub_curr
 
         # Populate non-publication sections with LLM results
         self.paper_metadata["site"] = {
             "site_name": extracted.get("site_name", {}).get("value", ""),
+            "country": extracted.get("country", {}).get("value", ""),
             "latitude": extracted.get("latitude", {}).get("value", ""),
             "longitude": extracted.get("longitude", {}).get("value", ""),
             "elevation_m": extracted.get("elevation_m", {}).get("value", ""),
-            "archive_type": extracted.get("archive_type", {}).get(
-                "value", "lake sediment"
-            ),
+            "water_depth_m": extracted.get("water_depth_m", {}).get("value", ""),
+            "core_length_m": extracted.get("core_length_m", {}).get("value", ""),
+            "archive_type": extracted.get("archive_type", {}).get("value", "")
+            or "lake sediment",
+            "collection_date": extracted.get("collection_date", {}).get("value", ""),
             "confidence": extracted.get("site_name", {}).get("confidence", "medium"),
             "conflict": extracted.get("site_name", {}).get("conflict", False),
             "candidates": extracted.get("site_name", {}).get("candidates", []),
@@ -3035,21 +3439,29 @@ class StraditizeSession(
             "age_model": extracted.get("age_model", {}).get("value", ""),
             "age_range": extracted.get("age_range", {}).get("value", ""),
             "dating_method": extracted.get("dating_method", {}).get("value", ""),
-            "cal_curve": "IntCal20",
+            "cal_curve": extracted.get("cal_curve", {}).get("value", "") or "IntCal20",
             "source": "LLM",
         }
+        tech_curr = self.paper_metadata.get("technical", {})
         self.paper_metadata["technical"] = {
             "pollen_extraction_method": extracted.get(
                 "pollen_extraction_method", {}
             ).get("value", ""),
             "laboratory": extracted.get("laboratory", {}).get("value", ""),
+            "investigators": extracted.get("investigators", {}).get("value", ""),
+            "digitizer": tech_curr.get("digitizer", ""),
+            "affiliation": tech_curr.get("affiliation", ""),
+            "digitization_date": tech_curr.get("digitization_date", ""),
             "sampling_interval_cm": extracted.get("sampling_interval_cm", {}).get(
                 "value", ""
             ),
             "source": "LLM",
         }
+        qual_curr = self.paper_metadata.get("quality", {})
         self.paper_metadata["quality"] = {
             "quality_notes": extracted.get("quality_notes", {}).get("value", ""),
+            "dataset_version": qual_curr.get("dataset_version", "1.0.0"),
+            "original_data_url": qual_curr.get("original_data_url", ""),
             "source": "LLM",
         }
 
@@ -3063,9 +3475,34 @@ class StraditizeSession(
     def metadata_update(self, updated_metadata: dict[str, Any]) -> dict[str, Any]:
         """Allows user to review, correct, and manually fill missing metadata fields."""
         for key in ["publication", "site", "chronology", "technical", "quality"]:
-            if key in updated_metadata:
+            if key in updated_metadata and isinstance(updated_metadata[key], dict):
                 self.paper_metadata[key].update(updated_metadata[key])
         return {"success": True, "metadata": self.paper_metadata}
+
+    def metadata_parse_external(
+        self, raw_text: str, apply_to_session: bool = True
+    ) -> dict[str, Any]:
+        """Parses external LLM output (fenced JSON or flat/nested schema) and optionally updates session metadata."""
+        from .metadata.llm_extractor import EXTERNAL_CHAT_PROMPT, parse_external_llm_metadata
+
+        try:
+            parsed_meta = parse_external_llm_metadata(raw_text)
+        except ValueError as exc:
+            raise JsonRpcError(INVALID_PARAMS, str(exc)) from exc
+
+        if apply_to_session:
+            for section_key, section_dict in parsed_meta.items():
+                if section_key in self.paper_metadata and isinstance(section_dict, dict):
+                    for k, v in section_dict.items():
+                        if v not in (None, "", []):
+                            self.paper_metadata[section_key][k] = v
+
+        return {
+            "success": True,
+            "parsed_metadata": parsed_meta,
+            "current_metadata": self.paper_metadata,
+            "default_external_prompt": EXTERNAL_CHAT_PROMPT,
+        }
 
     def metadata_get(self) -> dict[str, Any]:
         """Returns the current reviewed metadata object."""
@@ -3326,11 +3763,11 @@ class StraditizeSession(
         from .ocr.dictionary import DEFAULT_NPP_DICT, DEFAULT_POLLEN_DICT
 
         path = self.user_taxa_dict_path()
-        probe = OcrTaxaRecognitionEngine(
+        dictionary = PollenDictionary(
             custom_dict_path=path if os.path.exists(path) else None
         )
         custom = sorted(
-            probe.dictionary.custom_entries.values(), key=lambda item: item["zh"]
+            dictionary.custom_entries.values(), key=lambda item: item["zh"]
         )
         return {
             "success": True,
@@ -3426,12 +3863,23 @@ class StraditizeSession(
             if not col_id or not name_to_apply:
                 continue
 
-            for col in self.columns:
-                cid = col.get("id") or f"taxa_{col.get('col_index', '')}"
-                if cid == col_id or f"taxa_{col.get('col_index')}" == col_id:
+            for idx, col in enumerate(self.columns):
+                c_idx = col.get("col_index", idx)
+                cid = col.get("id") or f"taxa_{c_idx}"
+                if cid == col_id or f"taxa_{c_idx}" == col_id or f"col_{c_idx}" == col_id:
                     col["name"] = name_to_apply
                     col["species"] = name_to_apply
                     col["id"] = col_id
+                    while len(self.taxa_names) < len(self.columns):
+                        pad_i = len(self.taxa_names)
+                        c_pad = self.columns[pad_i]
+                        self.taxa_names.append(
+                            c_pad.get("name")
+                            or c_pad.get("species")
+                            or f"col{pad_i + 1:02d}"
+                        )
+                    if 0 <= c_idx < len(self.taxa_names):
+                        self.taxa_names[c_idx] = name_to_apply
                     applied_count += 1
                     break
 
