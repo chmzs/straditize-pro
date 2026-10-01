@@ -28,7 +28,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Build Frontend SPA
         working-directory: frontend
@@ -48,7 +48,15 @@ jobs:
       - name: Build Windows Setup Installer (NSIS)
         shell: pwsh
         run: |
-          makensis support/installer.nsi
+          if (Get-Command makensis -ErrorAction SilentlyContinue) {
+            makensis support/installer.nsi
+          } elseif (Test-Path "C:\Program Files (x86)\NSIS\makensis.exe") {
+            & "C:\Program Files (x86)\NSIS\makensis.exe" support/installer.nsi
+          } else {
+            choco install nsis -y
+            $env:PATH += ";C:\Program Files (x86)\NSIS"
+            makensis support/installer.nsi
+          }
 
       - name: Package Windows Zip (Portable)
         shell: pwsh
@@ -79,7 +87,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Build Frontend SPA
         working-directory: frontend
@@ -174,7 +182,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Build Frontend SPA
         working-directory: frontend
