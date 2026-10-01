@@ -1,7 +1,11 @@
 # Straditize Pro (v2.0)
 
 <p align="center">
-  <img src="docs/assets/logos/logo-horizontal.svg" alt="Straditize Pro Logo" width="460" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logos/logo-horizontal-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/logos/logo-horizontal-light.svg">
+    <img src="docs/assets/logos/logo-horizontal-light.svg" alt="Straditize Pro Logo" width="460" />
+  </picture>
 </p>
 
 <p align="center">

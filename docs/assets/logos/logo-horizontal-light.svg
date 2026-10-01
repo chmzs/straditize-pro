@@ -1,12 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="100%" height="100%">
-  <style>
-    .brand-title { fill: #0F172A; font-weight: 700; }
-    .brand-accent { fill: #0D9488; font-weight: 700; }
-    @media (prefers-color-scheme: dark) {
-      .brand-title { fill: #F8FAFC; }
-      .brand-accent { fill: #2DD4BF; }
-    }
-  </style>
   <!-- 图标主体 -->
   <g transform="translate(40, 20) scale(0.72)">
     <rect x="0" y="0" width="384" height="384" rx="84" fill="#0F172A" />
@@ -27,11 +19,11 @@
       <line x1="192" y1="304" x2="214" y2="304" /><circle cx="214" cy="304" r="6.5" stroke="none" />
     </g>
   </g>
-  <!-- 品牌标准字排版 (自适应明暗模式) -->
+  <!-- 品牌标准字排版 (针对白色/浅色背景优化：深藏青文本 + 翡翠青Pro) -->
   <g transform="translate(360, 185)">
     <text font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="105" letter-spacing="-1.5">
-      <tspan class="brand-title">Straditize</tspan>
-      <tspan class="brand-accent" dx="18">Pro</tspan>
+      <tspan fill="#0F172A" font-weight="700">Straditize</tspan>
+      <tspan fill="#0D9488" font-weight="700" dx="18">Pro</tspan>
     </text>
   </g>
 </svg>
