@@ -45,20 +45,26 @@ jobs:
       - name: Build Standalone Executable
         run: pixi run build
 
-      - name: Package Windows Zip
+      - name: Build Windows Setup Installer (NSIS)
+        shell: pwsh
+        run: |
+          makensis support/installer.nsi
+
+      - name: Package Windows Zip (Portable)
         shell: pwsh
         run: |
           $tag = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "${{ github.event.inputs.release_tag }}" }
           if (-not $tag) { $tag = "v2.0.0" }
-          $zipName = "straditize-$tag-windows-x64.zip"
+          $zipName = "straditize-$tag-windows-x64-portable.zip"
           Compress-Archive -Path "dist/straditize/*" -DestinationPath $zipName -Force
-          echo "ASSET_NAME=$zipName" >> $env:GITHUB_ENV
 
-      - name: Upload Windows Artifact
+      - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-x64-bundle
-          path: straditize-*-windows-x64.zip
+          path: |
+            dist/*Setup.exe
+            straditize-*-windows-x64-portable.zip
 
   # ==========================================================================
   # 2. Linux x64 Build (.deb, .rpm, .tar.gz)

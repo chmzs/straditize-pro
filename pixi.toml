@@ -80,6 +80,10 @@ cmd = "pyinstaller support/straditize_pro.spec --distpath dist --workpath build 
 description = "Build Windows distribution bundle"
 cmd = "pyinstaller support/straditize_pro.spec --distpath dist --workpath build --noconfirm"
 
+[tasks.build-installer]
+description = "Build Windows Setup executable installer (.exe) via NSIS"
+cmd = "makensis support/installer.nsi"
+
 [dependencies]
 # 仅 Python、pip 走 conda；运行时和开发依赖优先使用 PyPI wheel，减少环境体积
 python = ">=3.12,<3.13"

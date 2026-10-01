@@ -109,6 +109,7 @@ exe = EXE(
     strip=False,
     upx=False,
     console=True,
+    icon=os.path.join(repo_root, "docs", "assets", "logos", "straditize.ico"),
 )
 
 coll = COLLECT(
