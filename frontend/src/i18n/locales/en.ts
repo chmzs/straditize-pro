@@ -272,7 +272,7 @@ export const en = {
   'step5.title': '5. Columns & Taxa Naming',
   'step5.desc': 'Columns segmented from clean ink. Run OCR to match names or edit inline in sidebar.',
   'step5.ocrSection': '🔍 Top Taxa Labels OCR',
-  'step5.ocrDesc': 'Crop and rectify top labels with PP-OCRv4 and glossary correction.',
+  'step5.ocrDesc': 'Crop and rectify top labels with PP-OCRv6 and glossary correction.',
   'step5.ocrBtn': '⚡ Scan & Match Taxa Names',
   'step5.reconTitle': 'Interval Alignment Reconciliation',
   'step5.sequentialTitle': '📝 Sequential Naming Mode',

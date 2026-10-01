@@ -3,7 +3,7 @@
 Features:
 1. Label strip bounding box crop with margin padding.
 2. User-guided or automatic 45-degree affine rectification to horizontal.
-3. Native offline ONNX Runtime PP-OCRv4 text detection (DBNet) & recognition (CRNN/CTC).
+3. Native offline ONNX Runtime PP-OCRv6 text detection (DBNet) & recognition (CRNN/CTC).
 4. Botanical dictionary fuzzy matching and status classification (auto / confirm / unrecognized).
 5. Spatial column snapping: aligns each label's bottom anchor (X_anchor) with the closest Column.startX below.
 """
@@ -159,7 +159,7 @@ class OcrTaxaRecognitionEngine:
     """End-to-end OCR and botanical taxon verification engine."""
 
     #: Process-level cache of (sess_det, sess_rec, keys) keyed by MODELS_DIR
-    #: so PP-OCRv4 ONNX models are loaded from disk at most once per process.
+    #: so PP-OCRv6 ONNX models are loaded from disk at most once per process.
     _MODEL_CACHE: dict[Path, tuple[Any, Any, list[str]]] = {}
 
     def __init__(self, custom_dict_path: str | None = None):
@@ -179,9 +179,16 @@ class OcrTaxaRecognitionEngine:
         try:
             import onnxruntime as ort
 
-            det_path = MODELS_DIR / "ch_PP-OCRv4_det_infer.onnx"
-            rec_path = MODELS_DIR / "ch_PP-OCRv4_rec_infer.onnx"
-            key_path = MODELS_DIR / "ppocr_keys_v1.txt"
+            det_path = MODELS_DIR / "ch_PP-OCRv6_det_infer.onnx"
+            rec_path = MODELS_DIR / "ch_PP-OCRv6_rec_infer.onnx"
+            key_path = MODELS_DIR / "ppocr_keys_v6.txt"
+            version_str = "PP-OCRv6"
+
+            if not rec_path.exists() or not key_path.exists():
+                det_path = MODELS_DIR / "ch_PP-OCRv4_det_infer.onnx"
+                rec_path = MODELS_DIR / "ch_PP-OCRv4_rec_infer.onnx"
+                key_path = MODELS_DIR / "ppocr_keys_v1.txt"
+                version_str = "PP-OCRv4"
 
             if rec_path.exists() and key_path.exists():
                 opts = ort.SessionOptions()
@@ -213,7 +220,8 @@ class OcrTaxaRecognitionEngine:
                     self.keys,
                 )
                 logger.info(
-                    "Pre-installed PP-OCRv4 models loaded successfully (offline mode)."
+                    "Pre-installed %s models loaded successfully (offline mode).",
+                    version_str,
                 )
         except Exception as e:
             logger.warning("Failed to initialize ONNX Runtime PP-OCR models: %s", e)
@@ -333,7 +341,7 @@ class OcrTaxaRecognitionEngine:
         meta: dict[str, Any],
         global_offset: tuple[float, float],
     ) -> list[dict[str, Any]]:
-        """Segments horizontal text regions and transcribes via ONNX PP-OCRv4."""
+        """Segments horizontal text regions and transcribes via ONNX PP-OCRv6."""
         rot_h, rot_w = rectified_image.shape[:2]
         rot_img = Image.fromarray(rectified_image).convert("RGB")
 
@@ -458,7 +466,7 @@ class OcrTaxaRecognitionEngine:
         return detections
 
     def _transcribe_crop(self, img_crop: np.ndarray) -> str:
-        """Transcribes single horizontal word crop with PP-OCRv4 rec ONNX model."""
+        """Transcribes single horizontal word crop with PP-OCRv6 rec ONNX model."""
         if self.sess_rec is None or len(self.keys) == 0:
             return ""
 

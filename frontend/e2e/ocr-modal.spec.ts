@@ -5,7 +5,7 @@
  * 1. 打开 OCR 复核弹窗 (#btn-ocr-review-modal) -> 打开词汇表弹窗 (#btn-ocr-taxa-dict)；
  * 2. 粘贴期刊图版说明文本，触发后端 ocr.parseTaxaText 实时解析预览，点击 #dict-save-btn 保存 (ocr.saveCustomTaxa)，
  *    断言后端 ocr.getTaxaDict 权威自定义词条落库，且顶部徽标 #ocr-dict-badge 实时更新；
- * 3. 点击 #btn-ocr-run 触发真实离线 PP-OCRv4 识别 (ocr.recognizeLabels)，在汇总表审校修改属种名并勾选采纳，
+ * 3. 点击 #btn-ocr-run 触发真实离线 PP-OCRv6 识别 (ocr.recognizeLabels)，在汇总表审校修改属种名并勾选采纳，
  *    点击 #ocr-btn-apply (ocr.applyLabels)，断言后端 getDiagramData 列名更新且经得起重新分列 (core.detectColumns)。
  */
 import { expect, test } from './fixtures';
@@ -63,7 +63,7 @@ test.describe('OcrReviewModal (OCR 识别与词汇表管理模块) E2E', () => {
     await ocrDialog.locator('#ocr-close-btn').click();
   });
 
-  test('T2 执行真实 PP-OCRv4 识别 → 审校修改属种名 → 一键赋予图谱各列并活过重新分列', async ({
+  test('T2 执行真实 PP-OCRv6 识别 → 审校修改属种名 → 一键赋予图谱各列并活过重新分列', async ({
     page,
   }) => {
     await gotoStage(page, 5);
@@ -72,7 +72,7 @@ test.describe('OcrReviewModal (OCR 识别与词汇表管理模块) E2E', () => {
     const ocrDialog = page.locator('.ocr-review-dialog');
     await expect(ocrDialog).toBeVisible();
 
-    // 1. 点击【🚀 执行 OCR 识别】调用真实后端 PP-OCRv4 引擎
+    // 1. 点击【🚀 执行 OCR 识别】调用真实后端 PP-OCRv6 引擎
     await ocrDialog.locator('#btn-ocr-run').click();
 
     // 等待识别完成（表格第一行渲染出 .ocr-edit-input）

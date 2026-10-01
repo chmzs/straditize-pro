@@ -273,7 +273,7 @@ export const zhCN = {
   'step5.title': '5. 自动分列与属种命名 (Columns & Naming)',
   'step5.desc': '基于墨迹切分属种垂直区间。支持 OCR 自动识别属种名与区间对账，或在左栏逐列输入。',
   'step5.ocrSection': '🔍 顶栏属种标签 OCR 识别',
-  'step5.ocrDesc': '自动框选并透视矫正图顶属种标签带，执行 PP-OCRv4 离线识别与植物属种词典纠错。',
+  'step5.ocrDesc': '自动框选并透视矫正图顶属种标签带，执行 PP-OCRv6 离线识别与植物属种词典纠错。',
   'step5.ocrBtn': '⚡ 扫描并匹配属种名称',
   'step5.reconTitle': '区间归属对账状态',
   'step5.sequentialTitle': '📝 逐列点名模式 (顺序无关)',

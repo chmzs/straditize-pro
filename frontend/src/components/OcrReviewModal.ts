@@ -122,7 +122,7 @@ export class OcrReviewModal {
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 16px;">🔍</span>
             <h3 style="font-size: 13.5px; font-weight: 700;">花粉属种名 OCR 识别与审核汇总表 (Taxa OCR & Review)</h3>
-            <span class="logo-badge" style="background: linear-gradient(135deg, #059669, #10b981); font-size: 10px; padding: 2px 6px;" id="ocr-dict-badge">PP-OCRv4 + 内置词典</span>
+            <span class="logo-badge" style="background: linear-gradient(135deg, #059669, #10b981); font-size: 10px; padding: 2px 6px;" id="ocr-dict-badge">PP-OCRv6 + 内置词典</span>
             <button class="tool-btn" id="btn-ocr-taxa-dict" title="查看/导入自定义属种词汇表（补充内置词典未收录的微体古生物与地方特有种）" style="font-size: 10.5px; padding: 2px 8px; color: #7c3aed; border-color: rgba(124, 58, 237, 0.4);">
               📚 词汇表
             </button>
@@ -365,7 +365,7 @@ export class OcrReviewModal {
         `内置花粉 ${summary.builtin_pollen_count} 条 / 内置微体古生物(NPP) ${summary.builtin_npp_count} 条 / 用户自定义 ${summary.custom_count} 条\n词汇表文件: ${summary.path}`
       );
     } catch (err: any) {
-      badge.textContent = 'PP-OCRv4 + 内置词典';
+      badge.textContent = 'PP-OCRv6 + 内置词典';
       console.warn('getTaxaDict failed:', err?.message || err);
     }
   }
@@ -1091,7 +1091,7 @@ export class OcrReviewModal {
     if (!this.modalEl) return;
     const tbody = this.modalEl.querySelector('#ocr-summary-tbody');
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--accent-blue, #0284c7); padding: 24px;">⏳ 正在以 ${this.currentAngleDeg}° 旋转扶正并执行 PP-OCRv4 识别与 500+ 植物学词典匹配...</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--accent-blue, #0284c7); padding: 24px;">⏳ 正在以 ${this.currentAngleDeg}° 旋转扶正并执行 PP-OCRv6 识别与 500+ 植物学词典匹配...</td></tr>`;
     }
 
     try {
