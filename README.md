@@ -14,13 +14,21 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/chmzs/straditize-pro/releases/latest"><img src="https://img.shields.io/badge/Release-v2.0.0-0284c7.svg?style=flat-square" alt="Latest Release" /></a>
+  <a href="https://chmzs.github.io/straditize-pro/"><img src="https://img.shields.io/badge/Website-chmzs.github.io%2Fstraditize--pro-0284c7.svg?style=flat-square&logo=googlechrome&logoColor=white" alt="Official Website" /></a>
+  <a href="https://github.com/chmzs/straditize-pro/releases/latest"><img src="https://img.shields.io/badge/Release-v2.0.0-059669.svg?style=flat-square" alt="Latest Release" /></a>
   <img src="https://img.shields.io/badge/Windows-Setup.exe%20%7C%20Portable.zip-059669.svg?style=flat-square&logo=windows" alt="Windows Support" />
   <img src="https://img.shields.io/badge/OCR-PP--OCRv6%20(Latin%20Script)-7c3aed.svg?style=flat-square" alt="PP-OCRv6" />
   <img src="https://img.shields.io/badge/Python-3.12%2B-blue.svg?style=flat-square&logo=python" alt="Python 3.12+" />
   <img src="https://img.shields.io/badge/Frontend-TypeScript%20%7C%20120FPS%20Canvas-10b981.svg?style=flat-square&logo=typescript" alt="TypeScript Frontend" />
   <img src="https://img.shields.io/badge/Metadata-LiPD%20v1.3%20%7C%20FAIR-d97706.svg?style=flat-square" alt="LiPD v1.3" />
   <img src="https://img.shields.io/badge/License-GPL--3.0-lightgrey.svg?style=flat-square" alt="License" />
+</p>
+
+<p align="center">
+  <a href="https://chmzs.github.io/straditize-pro/"><strong>🌐 访问官方宣传主页与完整文档 (Official Website) &rarr;</strong></a><br>
+  <a href="https://github.com/chmzs/straditize-pro/releases/latest"><strong>🚀 下载 Windows 一键安装包 (.exe)</strong></a> &nbsp;|&nbsp;
+  <a href="#-8-阶段地学科学解译工作流"><strong>📖 8 步地学工作流快速上手</strong></a> &nbsp;|&nbsp;
+  <a href="docs/tutorials/01_quickstart.md"><strong>📚 实战教程</strong></a>
 </p>
 
 ---

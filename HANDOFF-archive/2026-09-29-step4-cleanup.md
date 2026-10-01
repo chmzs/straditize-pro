@@ -1,9 +1,0 @@
-# [STEP4-CLEANUP] 归档（原 HANDOFF.md 第 25–31 行，2026-09-29 16:40 因超 50 行上限移出）
-
-## [STEP4-CLEANUP] 2026-09-29 05:15 — Step4 五件套 + 遗留四项清零（真实浏览器逐条实测）
-- P1–P3 键位与手柄：Step4 仅 `Delete`/`Backspace` 删几何、`D` 不再删；`↑↓←→` 1px、`Shift` 10px；拖本体位移落库；选中画白方块（端点/长度）+ 青圆点（中边/厚度），拖青点对边锚定不动。`CleanupOverlay.bandOf()` 修竖线 1px 塌陷（`const w`→`let w`）。nudge 有 500ms 防抖，<400ms 读后端会读到旧值。
-- P4–P5 新能力：`algorithm.setLineThickness`（`straditize_core/session_parts/cleanup.py`）按选中/全 ROI 统一厚度且中心行不动，非法值标红不发 RPC；工具栏新增「测量 (M)」。契约已同步 `docs/ARCHITECTURE.md`（键位表 + §7.1 + Step4 RPC 表）。
-- **三处工具模式展示缺陷（前两条是"工具栏缺了微调(S)""几何没视觉显示""自动检测是假的"的总根因）**：① `frontend/src/main.ts` 进 Step4 硬写 `setToolMode('linefix')` —— 用户一进第 4 步手上是橡皮笔刷，点候选线是涂改不是选中，白/青手柄永远够不着，改 `'select'`；② `setWorkflowStage` 直调 `toolModeManager.setMode()` 绕过 `setToolMode()`，高亮与页脚双双卡旧值；③ 同函数在"当前工具恰好等于该步默认工具"时整段跳过，冷启动页脚停在第 1 步写死的「选择 (V)」而高亮在 `pan` —— 抽出 `syncToolModeUi()`，模式仍按门控切、展示每次强制同步。①②已入黑名单节。
-- 四遗留已修：① `straditize_core/rpc_methods/system.py` 抽出 `cleanup_payload()`，零状态分支与载图分支共用同一形状（探针实测键集完全一致、18 键无缺，此前零状态只回 `lineRemoval`）；② 候选 id 改会话级单调计数器 `line_{axis}_{n}`/`manual_{axis}_{n}`，不再把 `at`/`width` 烤进身份（旧 `line_h_819_2px` 改厚度后即说谎），且跨 ROI、跨删除唯一（旧 `manual_{axis}_{len+1}` 删除后撞号）；③ 点画布空白补 `setSelectedGeometryId(null)`（实测 `data-selected-cand-id` 转空、apply-selected 自动禁用）；④ 微调防抖改 `pendingGeometryNudge` 载荷 + `flushPendingGeometryEdits()`。
-- **④ 实测复现了"几何复活"**：微调后 60ms 内删几何，旧实现删除先落地（22→21）、500ms 后延迟 upsert 到达使其**原地复活**（21→22，`at` 还是微调后的 819）。根因：只堵了画布入口而侧栏删除走 RPC 直连，且同步 flush 无法保证顺序。改为 `onGeometryCommit` 可 await + `runCleanupAction`（Step4 全部几何写操作唯一入口）先 `await flushPendingGeometryEdits()` 再执行 —— 同一脚本 `resurrected` 由 `true` 转 `false`，正常微调仍落库（1128→1129）。
-- 验证：`pixi run test` **276 passed / 96 subtests**｜`pixi run lint` PASS（含 6 项一致性核对）｜`npm --prefix frontend run build` PASS｜`npm --prefix frontend test` PASS。**下一步原子动作**：Step4 恢复「灵敏度/阈值」控件；候选 id 换代须 `pixi run app` **重启后端**才生效（旧会话仍是 `line_h_819_2px` 式 id）。

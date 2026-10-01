@@ -65,3 +65,10 @@ real_browser_*_verified.png
 verification_*.png
 output/
 
+# Internal agent guidelines, handoff states & private design plans (keep local only)
+AGENTS.md
+HANDOFF.md
+HANDOFF-archive/
+docs/plans/
+docs/TASK_SPEC_V2_FINAL.md
+

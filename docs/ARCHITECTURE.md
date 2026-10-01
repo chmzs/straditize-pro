@@ -1,8 +1,7 @@
 # Straditize Pro 架构与设计规范
 
 > **本文是活的设计文档**：记录系统架构、不可违反的设计不变量与统一交互规范。
-> 操作手册（命令 / 验收 / 交接）见 `AGENTS.md`；跨会话断点见 `HANDOFF.md`；
-> 早期需求任务书见 `TASK_SPEC_V2_FINAL.md`（历史件，不再更新）。
+> 协议通信规范见 `docs/JSON_RPC_SPECIFICATION.md`；测试验证策略见 `docs/testing-strategy.md`。
 
 ---
 
