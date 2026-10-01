@@ -66,7 +66,7 @@ cmd = "ruff check straditize_core tests"
 
 [tasks.lint-consistency]
 description = "核对跨文件必须一致的两端：签名/类型标注/package-data/测试收集/阶段编号/注释编号"
-cmd = "python support/consistency_check.py"
+cmd = "python -X utf8 support/consistency_check.py"
 
 [tasks.format]
 description = "Format Python code"
