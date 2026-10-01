@@ -12,6 +12,7 @@ from .metadata.llm_extractor import EXTRACTION_SYSTEM_PROMPT
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "remote_access_enabled": False,
+    "remote_password": "",
     "allowed_hosts": ["127.0.0.1", "localhost"],
     "locale": "zh-CN",
     "theme": "light",

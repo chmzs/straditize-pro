@@ -78,6 +78,8 @@ function createEmptyDiagramData(): DiagramData {
 
 export interface SystemConfig {
   remote_access_enabled: boolean;
+  has_remote_password?: boolean;
+  remote_password?: string;
   allowed_hosts: string[];
   locale: string;
   theme: string;
@@ -105,8 +107,17 @@ export class RpcClient {
   private currentDiagramData: DiagramData;
   /** 状态订阅者列表。用列表而非单一槽位：横幅与顶栏胶囊都需要同一份状态，互相覆盖会导致胶囊长期停留在旧值。 */
   private statusListeners: Array<(status: BackendStatus) => void> = [];
+  private authToken: string | null = null;
+  private onAuthRequiredListeners: Array<() => void> = [];
 
   constructor(endpoint?: string) {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      try {
+        this.authToken = sessionStorage.getItem('straditize_auth_token') || null;
+      } catch {
+        this.authToken = null;
+      }
+    }
     if (endpoint) {
       this.endpoint = endpoint;
     } else if (typeof window !== 'undefined' && window.location.origin && window.location.origin.startsWith('http')) {
@@ -119,7 +130,14 @@ export class RpcClient {
 
   /** 当前会话图谱的浏览器可直接访问的 URL（由后端提供，前端不再自带示例图片副本） */
   private imageUrl(): string {
-    return `${this.endpoint.replace(/\/rpc$/, '')}/image/current?full=1&t=${Date.now()}`;
+    const base = `${this.endpoint.replace(/\/rpc$/, '')}/image/current?full=1&t=${Date.now()}`;
+    return this.authToken ? `${base}&auth=${encodeURIComponent(this.authToken)}` : base;
+  }
+
+  public signUrl(url: string): string {
+    if (!this.authToken) return url;
+    const delim = url.includes('?') ? '&' : '?';
+    return `${url}${delim}auth=${encodeURIComponent(this.authToken)}`;
   }
 
   public setStatusCallback(callback: (status: BackendStatus) => void): void {
@@ -190,6 +208,9 @@ export class RpcClient {
                 if (sData && typeof sData.is_desktop_mode === 'boolean') {
                   this.isDesktopMode = sData.is_desktop_mode;
                 }
+                if (sData && sData.auth_required) {
+                  this.triggerAuthRequired();
+                }
               }
             } catch {
               // ignore
@@ -206,6 +227,57 @@ export class RpcClient {
     this.backendOnline = false;
     this.notifyStatus();
     return this.getStatus();
+  }
+
+  public async authenticate(password: string): Promise<boolean> {
+    const authUrl = this.endpoint.replace(/\/rpc$/, '/api/auth');
+    try {
+      const res = await fetch(authUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (res.ok && data && data.authenticated) {
+        this.setAuthToken(data.token || '');
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  public setAuthToken(token: string): void {
+    this.authToken = token || null;
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      try {
+        if (token) {
+          sessionStorage.setItem('straditize_auth_token', token);
+        } else {
+          sessionStorage.removeItem('straditize_auth_token');
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  public onAuthRequired(listener: () => void): () => void {
+    this.onAuthRequiredListeners.push(listener);
+    return () => {
+      this.onAuthRequiredListeners = this.onAuthRequiredListeners.filter((l) => l !== listener);
+    };
+  }
+
+  private triggerAuthRequired(): void {
+    for (const listener of this.onAuthRequiredListeners) {
+      try {
+        listener();
+      } catch (e) {
+        console.error('Error in onAuthRequired listener:', e);
+      }
+    }
   }
 
   private notifyStatus(): void {
@@ -253,9 +325,13 @@ export class RpcClient {
           method,
           params,
         };
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (this.authToken) {
+          headers['X-Straditize-Auth'] = this.authToken;
+        }
         response = await fetch(this.endpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify(payload),
         });
       } catch (err) {
@@ -264,6 +340,10 @@ export class RpcClient {
 
       // ---- 2. HTTP 层：非 2xx 视为服务不可用 → 报错并标记离线 ----
       if (!response.ok) {
+        if (response.status === 401) {
+          this.triggerAuthRequired();
+          throw new Error('需要远程访问密码 (Authentication required)');
+        }
         this.raiseBackendLost(method, new Error(`HTTP ${response.status} ${response.statusText}`));
       }
 

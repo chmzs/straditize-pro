@@ -312,4 +312,15 @@ export const en = {
   'step8.runQa': '⚡ Rerun All-Profile QA Check',
   'step8.exportBtn': '💾 Open Export Readiness Checklist',
   'step8.directExport': '💾 Direct Export Datasets (Delivery Exit)',
+
+  // ===== Remote Authentication =====
+  'auth.title': 'Remote Access Protected',
+  'auth.desc': 'Connected from an external device. Enter the remote access PIN / password to proceed.',
+  'auth.placeholder': 'Enter remote PIN / password',
+  'auth.toggleShow': 'Show/Hide password',
+  'auth.unlock': '🔓 Unlock Connection',
+  'auth.verifying': 'Verifying...',
+  'auth.failed': '❌ Incorrect password, please try again',
+  'settings.remotePassword': 'Remote Password / PIN',
+  'settings.remotePasswordHint': 'Leave empty for no password. When set, external devices on LAN/Tailscale must enter this password to connect; local machine access is always exempt.',
 } satisfies Record<MessageKey, string>;

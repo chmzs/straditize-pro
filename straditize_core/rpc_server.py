@@ -12,6 +12,7 @@ import json
 import logging
 import mimetypes
 import os
+import secrets
 import sys
 import tempfile
 import threading
@@ -373,8 +374,75 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _is_loopback(self) -> bool:
+        """Check if request originates from local loopback (127.0.0.1, ::1, localhost).
+
+        Both client IP and Host header must be loopback. If a client targets a LAN/remote
+        IP or hostname, it is treated as a remote connection subject to access control.
+        """
+        client_ip = (
+            self.client_address[0]
+            if hasattr(self, "client_address") and self.client_address
+            else ""
+        )
+        host = _split_host(self.headers.get("Host", ""))
+        return (client_ip in ("127.0.0.1", "::1", "localhost")) and (host in _LOOPBACK_HOSTS)
+
+    def _is_authenticated(self) -> bool:
+        """Verifies remote auth token if remote_password is set. Loopback is always authenticated."""
+        if self._is_loopback():
+            return True
+        remote_pwd = str(getattr(self.server, "remote_password", "") or "")
+        if not remote_pwd:
+            return True
+        expected_token = getattr(self.server, "auth_token", None)
+        if not expected_token:
+            return True
+
+        # 1. Header X-Straditize-Auth
+        token = self.headers.get("X-Straditize-Auth")
+        if token and secrets.compare_digest(token, expected_token):
+            return True
+
+        # 2. Query parameter ?auth=...
+        try:
+            query = parse_qs(urlparse(self.path).query)
+            q_token = query.get("auth", [None])[0]
+            if q_token and secrets.compare_digest(q_token, expected_token):
+                return True
+        except Exception:
+            pass
+
+        return False
+
+    def _is_public_path(self, path: str) -> bool:
+        """Paths that do not require an auth token (auth endpoint, status, and static assets)."""
+        if path in ("/api/auth", "/status", "/health", "/favicon.ico"):
+            return True
+        ext = os.path.splitext(path)[1].lower()
+        if ext in (
+            ".html", ".js", ".css", ".png", ".jpg", ".jpeg",
+            ".svg", ".ico", ".woff", ".woff2", ".ttf", ".map",
+        ) or path.startswith(("/assets/", "/static/")):
+            return True
+        if path in ("/", ""):
+            return True
+        return False
+
+    def _reject_auth_required(self) -> None:
+        body = json.dumps(
+            {"error": "Authentication required", "auth_required": True, "code": 401},
+            ensure_ascii=False,
+        ).encode("utf-8")
+        self.send_response(401)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self._send_cors_headers()
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _guard_request(self) -> bool:
-        """返回 True 表示请求可以继续；否则已回写 403 并返回 False。"""
+        """返回 True 表示请求可以继续；否则已回写 401/403 并返回 False。"""
         if not self._host_header_allowed():
             logger.warning(
                 "Rejected request with disallowed Host header: %s",
@@ -388,6 +456,15 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
             )
             self._reject_request(403, "Cross-origin request not allowed")
             return False
+
+        path = urlparse(self.path).path
+        if not self._is_public_path(path) and not self._is_authenticated():
+            logger.warning(
+                "Rejected unauthenticated request from remote client to: %s", path
+            )
+            self._reject_auth_required()
+            return False
+
         return True
 
     def _send_cors_headers(self) -> None:
@@ -446,6 +523,13 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
                 is_calib = self.session.is_calibrated
                 taxa_list = getattr(self.session, "taxa_names", [])
 
+            remote_pwd = str(getattr(self.server, "remote_password", "") or "")
+            auth_required = (
+                bool(remote_pwd)
+                and (not self._is_loopback())
+                and (not self._is_authenticated())
+            )
+
             body = json.dumps(
                 {
                     "status": "ok",
@@ -458,6 +542,8 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
                     "columns_count": cols_cnt,
                     "is_calibrated": is_calib,
                     "taxa": taxa_list,
+                    "auth_required": auth_required,
+                    "has_remote_password": bool(remote_pwd),
                 },
                 ensure_ascii=False,
             ).encode("utf-8")
@@ -846,6 +932,49 @@ class StraditizeRpcHttpRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
+        # 0.5 Remote authentication endpoint
+        if path == "/api/auth":
+            content_length = int(self.headers.get("Content-Length", 0))
+            post_bytes = self.rfile.read(content_length)
+            try:
+                payload = json.loads(post_bytes.decode("utf-8")) if post_bytes else {}
+            except Exception:
+                payload = {}
+            password = str(payload.get("password", "") or "")
+            remote_pwd = str(getattr(self.server, "remote_password", "") or "")
+
+            if not remote_pwd:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self._send_cors_headers()
+                self.end_headers()
+                self.wfile.write(
+                    json.dumps({"authenticated": True, "token": ""}).encode("utf-8")
+                )
+                return
+
+            if secrets.compare_digest(password, remote_pwd):
+                token = getattr(self.server, "auth_token", "") or ""
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self._send_cors_headers()
+                self.end_headers()
+                self.wfile.write(
+                    json.dumps({"authenticated": True, "token": token}).encode("utf-8")
+                )
+            else:
+                time.sleep(0.5)  # Anti-brute-force rate limit
+                self.send_response(401)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self._send_cors_headers()
+                self.end_headers()
+                self.wfile.write(
+                    json.dumps(
+                        {"authenticated": False, "error": "访问密码错误，请重新输入"}
+                    ).encode("utf-8")
+                )
+            return
+
         # 1. Image upload endpoint
         if path == "/api/upload":
             content_length = int(self.headers.get("Content-Length", 0))
@@ -1025,6 +1154,8 @@ class StraditizeRpcHttpServer:
 
         self.config = load_config()
         self.remote_access_enabled = self.config.get("remote_access_enabled", False)
+        self.remote_password = str(self.config.get("remote_password", "") or "")
+        self.auth_token = secrets.token_hex(24) if self.remote_password else None
         self.user_allowed_hosts = list(
             self.config.get("allowed_hosts", ["127.0.0.1", "localhost"])
         )
@@ -1053,6 +1184,8 @@ class StraditizeRpcHttpServer:
 
         self._server = ThreadingHTTPServer((self.host, self.port), BoundHandler)
         self._server.remote_access_enabled = self.remote_access_enabled
+        self._server.remote_password = self.remote_password
+        self._server.auth_token = self.auth_token
         self._server.allowed_hosts = self.user_allowed_hosts
         self._server.bound_host = self.host
         self._server.app_server = self
@@ -1069,11 +1202,20 @@ class StraditizeRpcHttpServer:
         """Dynamically update in-memory access control from config."""
         self.config.update(new_config)
         self.remote_access_enabled = bool(new_config.get("remote_access_enabled", False))
+        if "remote_password" in new_config:
+            self.remote_password = str(new_config.get("remote_password", "") or "")
+            if self.remote_password:
+                if not getattr(self, "auth_token", None):
+                    self.auth_token = secrets.token_hex(24)
+            else:
+                self.auth_token = None
         self.user_allowed_hosts = list(
             new_config.get("allowed_hosts", ["127.0.0.1", "localhost"])
         )
         if hasattr(self, "_server") and self._server:
             self._server.remote_access_enabled = self.remote_access_enabled
+            self._server.remote_password = self.remote_password
+            self._server.auth_token = self.auth_token
             self._server.allowed_hosts = self.user_allowed_hosts
 
     def start(self) -> None:

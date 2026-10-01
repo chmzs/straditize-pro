@@ -243,6 +243,7 @@ def register(dispatcher: Any, session: Any) -> None:
         host = getattr(server, "host", "127.0.0.1") if server else "127.0.0.1"
         return {
             "remote_access_enabled": cfg.get("remote_access_enabled", False),
+            "has_remote_password": bool(cfg.get("remote_password", "")),
             "allowed_hosts": cfg.get("allowed_hosts", ["127.0.0.1", "localhost"]),
             "locale": cfg.get("locale", "zh-CN"),
             "theme": cfg.get("theme", "light"),
@@ -262,6 +263,7 @@ def register(dispatcher: Any, session: Any) -> None:
 
     def rpc_update_config(
         remote_access_enabled: bool | None = None,
+        remote_password: str | None = None,
         allowed_hosts: list[str] | str | None = None,
         locale: str | None = None,
         theme: str | None = None,
@@ -277,6 +279,8 @@ def register(dispatcher: Any, session: Any) -> None:
         updates: dict[str, Any] = {}
         if remote_access_enabled is not None:
             updates["remote_access_enabled"] = bool(remote_access_enabled)
+        if remote_password is not None:
+            updates["remote_password"] = str(remote_password).strip()
         if allowed_hosts is not None:
             if isinstance(allowed_hosts, str):
                 parsed = [
@@ -304,9 +308,12 @@ def register(dispatcher: Any, session: Any) -> None:
         server = getattr(session, "server", None)
         if server is not None and hasattr(server, "sync_config"):
             server.sync_config(saved)
+        res_cfg = dict(saved)
+        pwd = res_cfg.pop("remote_password", "")
+        res_cfg["has_remote_password"] = bool(pwd)
         return {
             "success": True,
-            "config": saved,
+            "config": res_cfg,
             "message": "配置已成功保存并应用",
         }
 

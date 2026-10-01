@@ -11,6 +11,7 @@ import { AgeDepthModal } from './components/AgeDepthModal';
 import { MetadataModal } from './components/MetadataModal';
 import { OcrReviewModal } from './components/OcrReviewModal';
 import { SettingsModal } from './components/SettingsModal';
+import { AuthModal } from './components/AuthModal';
 import { DataRoi, DiagramCalibration, DiagramData, HistorySnapshot, LineCandidate, LineMaskStroke, Point2D } from './types/pollen';
 import { onLocaleChange, applyLocaleToDocument, getLocale, t } from './i18n';
 import { ImageDisplayMode } from './core/Viewport';
@@ -125,6 +126,11 @@ async function bootstrap() {
 
   // 1. 初始化 JSON-RPC Client，并阻塞式确认数据来源（后端真实计算 / 用户显式演示模式）
   const rpcClient = new RpcClient();
+  rpcClient.onAuthRequired(() => {
+    new AuthModal(rpcClient, () => {
+      window.location.reload();
+    }).show();
+  });
   await ensureDataProvenance(rpcClient);
   mountProvenanceBanner(rpcClient);
 

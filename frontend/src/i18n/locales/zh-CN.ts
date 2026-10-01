@@ -313,6 +313,17 @@ export const zhCN = {
   'step8.runQa': '⚡ 重新运行全剖面 QA 诊断',
   'step8.exportBtn': '💾 打开顶栏导出就绪清单',
   'step8.directExport': '💾 直通导出数据 (进入交付出口)',
+
+  // ===== 远程安全认证 =====
+  'auth.title': '远程访问保护 (Remote Protected)',
+  'auth.desc': '当前连接来自外部设备，请输入主机设置的远程访问密码 / PIN 码以继续。',
+  'auth.placeholder': '输入远程访问密码 / PIN 码',
+  'auth.toggleShow': '显示/隐藏密码',
+  'auth.unlock': '🔓 解锁连接',
+  'auth.verifying': '正在验证...',
+  'auth.failed': '❌ 访问密码错误，请重新输入',
+  'settings.remotePassword': '远程访问保护密码 (PIN / Password)',
+  'settings.remotePasswordHint': '留空免密；设置后，局域网/Tailscale 内的其他设备（如 iPad、笔记本）访问本系统时需输入密码解锁，免受 IP 白名单变动困扰；本机回环访问永远免密。',
 } as const;
 
 export type MessageKey = keyof typeof zhCN;

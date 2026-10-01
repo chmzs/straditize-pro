@@ -221,3 +221,122 @@ def test_http_remote_access_blocking_and_dynamic_whitelist(monkeypatch, tmp_path
     finally:
         server.stop()
 
+
+def test_remote_password_protection_and_api_auth():
+    """Verify password protection for remote connections, auth token generation, and loopback bypass."""
+    port = get_free_port()
+    session = StraditizeSession()
+    server = StraditizeRpcHttpServer(host="127.0.0.1", port=port, session=session)
+    server.start()
+
+    try:
+        # 1. Update config: enable remote access with password
+        req_up = json.dumps({
+            "jsonrpc": "2.0",
+            "method": "system.updateConfig",
+            "params": {
+                "remote_access_enabled": True,
+                "remote_password": "MySecretLabPassword2026",
+                "allowed_hosts": ["192.168.1.*"],
+            },
+            "id": 1,
+        })
+        res_up = json.loads(server.dispatcher.handle_text(req_up))
+        assert res_up["result"]["success"] is True
+        assert res_up["result"]["config"]["has_remote_password"] is True
+        assert "remote_password" not in res_up["result"]["config"]
+
+        # 2. Local loopback access remains zero-friction (always authorized)
+        req_loopback = urllib.request.Request(
+            f"http://127.0.0.1:{port}/status",
+            headers={"Host": f"127.0.0.1:{port}"},
+        )
+        with urllib.request.urlopen(req_loopback, timeout=1.0) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            assert data["status"] == "ok"
+            assert data["auth_required"] is False
+            assert data["has_remote_password"] is True
+
+        # 3. Remote client status reports auth_required
+        req_remote_status = urllib.request.Request(
+            f"http://127.0.0.1:{port}/status",
+            headers={"Host": f"192.168.1.50:{port}"},
+        )
+        with urllib.request.urlopen(req_remote_status, timeout=1.0) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            assert data["status"] == "ok"
+            assert data["auth_required"] is True
+            assert data["has_remote_password"] is True
+
+        # 4. Remote unauthenticated request to /rpc is blocked with 401
+        rpc_payload = json.dumps({
+            "jsonrpc": "2.0",
+            "method": "system.ping",
+            "id": 2,
+        }).encode("utf-8")
+        req_unauth = urllib.request.Request(
+            f"http://127.0.0.1:{port}/rpc",
+            data=rpc_payload,
+            headers={
+                "Host": f"192.168.1.50:{port}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(req_unauth, timeout=1.0)
+        assert exc_info.value.code == 401
+
+        # 5. Wrong password to /api/auth returns 401
+        auth_wrong = json.dumps({"password": "WrongPassword"}).encode("utf-8")
+        req_auth_bad = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/auth",
+            data=auth_wrong,
+            headers={
+                "Host": f"192.168.1.50:{port}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(req_auth_bad, timeout=2.0)
+        assert exc_info.value.code == 401
+
+        # 6. Correct password to /api/auth returns 200 with auth token
+        auth_correct = json.dumps({"password": "MySecretLabPassword2026"}).encode("utf-8")
+        req_auth_ok = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/auth",
+            data=auth_correct,
+            headers={
+                "Host": f"192.168.1.50:{port}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req_auth_ok, timeout=1.0) as resp:
+            assert resp.status == 200
+            auth_res = json.loads(resp.read().decode("utf-8"))
+            assert auth_res["authenticated"] is True
+            token = auth_res["token"]
+            assert len(token) > 10
+
+        # 7. Authenticated remote request with X-Straditize-Auth header penetrates
+        req_auth_rpc = urllib.request.Request(
+            f"http://127.0.0.1:{port}/rpc",
+            data=rpc_payload,
+            headers={
+                "Host": f"192.168.1.50:{port}",
+                "Content-Type": "application/json",
+                "X-Straditize-Auth": token,
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req_auth_rpc, timeout=1.0) as resp:
+            assert resp.status == 200
+            res = json.loads(resp.read().decode("utf-8"))
+            assert res.get("result", {}).get("pong") is True
+
+    finally:
+        server.stop()
+
+

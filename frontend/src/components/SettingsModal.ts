@@ -138,6 +138,21 @@ export class SettingsModal {
                   ${t('settings.allowedHostsHint')}
                 </small>
               </div>
+
+              <!-- 访问保护密码 -->
+              <div style="display: flex; flex-direction: column; gap: 5px;">
+                <label for="settings-remote-password" style="font-size: 12px; color: var(--text-primary); font-weight: 500; display: flex; align-items: center; justify-content: space-between;">
+                  <span>• ${t('settings.remotePassword')}:</span>
+                  <span id="remote-pwd-status-badge" style="font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: rgba(148,163,184,0.15); color: var(--text-muted);">[免密]</span>
+                </label>
+                <div style="display: flex; gap: 6px;">
+                  <input type="password" id="settings-remote-password" placeholder="${t('settings.remotePasswordHint')}" style="flex: 1; padding: 5px 10px; font-size: 11.5px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
+                  <button type="button" id="btn-toggle-remote-pwd" class="tool-btn" style="padding: 2px 8px; font-size: 12px;" title="${t('auth.toggleShow')}">👁️</button>
+                </div>
+                <small style="font-size: 10.5px; color: var(--text-muted); line-height: 1.4;">
+                  ${t('settings.remotePasswordHint')}
+                </small>
+              </div>
             </div>
           </div>
 
@@ -210,10 +225,30 @@ export class SettingsModal {
               : String(remoteCfg.allowed_hosts);
           }
         }
+        const pwdBadge = modal.querySelector('#remote-pwd-status-badge') as HTMLElement;
+        const pwdInput = modal.querySelector('#settings-remote-password') as HTMLInputElement;
+        if (remoteCfg.has_remote_password) {
+          if (pwdBadge) {
+            pwdBadge.textContent = '[已设密码]';
+            pwdBadge.style.color = '#10b981';
+            pwdBadge.style.background = 'rgba(34, 197, 94, 0.15)';
+          }
+          if (pwdInput) {
+            pwdInput.placeholder = '留空保持原密码；输入新密码修改；输入 CLEAR 清除';
+          }
+        }
       }).catch(() => {});
     }
 
     // 绑定交互事件
+    const pwdInput = modal.querySelector('#settings-remote-password') as HTMLInputElement;
+    const togglePwdBtn = modal.querySelector('#btn-toggle-remote-pwd') as HTMLButtonElement;
+    togglePwdBtn?.addEventListener('click', () => {
+      if (pwdInput) {
+        pwdInput.type = pwdInput.type === 'password' ? 'text' : 'password';
+      }
+    });
+
     const closeModal = () => {
       // 若取消，复原主题预览
       if (this.initialThemeIsLight) {
@@ -319,12 +354,19 @@ export class SettingsModal {
       // 3. 异步同步至后端 RPC 持久化与动态白名单
       try {
         if (this.rpcClient.getStatus().connected) {
-          await this.rpcClient.updateSystemConfig({
+          const updates: any = {
             remote_access_enabled: remoteVal,
             allowed_hosts: hostsList,
             locale: langVal,
             theme: themeVal,
-          });
+          };
+          const pwdVal = pwdInput?.value?.trim() || '';
+          if (pwdVal === 'CLEAR') {
+            updates.remote_password = '';
+          } else if (pwdVal) {
+            updates.remote_password = pwdVal;
+          }
+          await this.rpcClient.updateSystemConfig(updates);
         }
       } catch (err) {
         console.warn('[SettingsModal] 保存远程配置到后端失败（可能处于离线模式）:', err);
