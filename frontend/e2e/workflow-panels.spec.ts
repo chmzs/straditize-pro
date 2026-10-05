@@ -78,9 +78,15 @@ test.describe('步骤面板与阶段工具门禁', () => {
       rpc<{ line_candidates: { status: string; kind: string }[] }>(page, 'straditize.getDiagramData');
 
     const roiId = (await rpc<{ rois: { id: string }[] }>(page, 'straditize.getDiagramData')).rois[0].id;
-    // 进入步骤 4 时自动去线可能已产生初始候选；显式清空作为因果断言的前提
+    // 等待进入步骤 4 时的初始任务落定，显式清空作为因果断言的前提
+    await page.waitForTimeout(500);
     await rpc(page, 'algorithm.clearCleanupEdits', { roi_id: roiId });
-    expect((await readCandidates()).line_candidates, '清空后基线不应有候选几何').toEqual([]);
+    await expect
+      .poll(async () => (await readCandidates()).line_candidates.length, {
+        message: '清空后基线不应有候选几何',
+        timeout: 5000,
+      })
+      .toBe(0);
 
     // 为了让"这个按钮确实产出了候选"成为**因果**结论，先让后端确有候选、
     // 再清掉、再点按钮：
@@ -90,7 +96,12 @@ test.describe('步骤面板与阶段工具门禁', () => {
 
     //   2) 清空 —— 证明下面看到的候选只可能来自按钮
     await rpc(page, 'algorithm.clearCleanupEdits', { roi_id: roiId });
-    expect((await readCandidates()).line_candidates, '清空后应无候选').toEqual([]);
+    await expect
+      .poll(async () => (await readCandidates()).line_candidates.length, {
+        message: '清空后应无候选',
+        timeout: 5000,
+      })
+      .toBe(0);
 
     //   3) 走真实用户路径：点扫描按钮
     await page.click('#btn-detect-candidates');

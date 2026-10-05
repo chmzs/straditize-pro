@@ -62,6 +62,11 @@ def _reset(session: StraditizeSession) -> dict:
     _load_baseline(session)
     session._init_cleanup()
     session.samples_clear()
+    session.age_depth_model = None
+    session.age_depth_image = None
+    session.age_depth_image_path = None
+    session.ensemble_tables = {}
+    session.chron_events = []
 
     # 复位后必须成立的不变量：任何一条不成立就**立刻抛错**，而不是让测试带着
     # 上个测试的残留继续跑（那会表现为"某条断言莫名失败"，极难定位）。

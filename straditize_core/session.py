@@ -1813,6 +1813,11 @@ class StraditizeSession(
         self.taxa_names = []
         self.depth_grid = []
         self.samples = []
+        self.age_depth_model = None
+        self.age_depth_image = None
+        self.age_depth_image_path = None
+        self.ensemble_tables = {}
+        self.chron_events = []
         self.undo_stack = []
         self.redo_stack = []
         self._init_rois()

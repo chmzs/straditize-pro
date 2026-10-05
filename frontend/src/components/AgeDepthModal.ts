@@ -180,6 +180,12 @@ export class AgeDepthModal {
 
   public open(): void {
     this.close();
+    this.bgImage = null;
+    this.inspectionData = null;
+    this.mappedSamples = null;
+    this.excludeBoxes = [];
+    this.calibMarkers = [];
+    this.calibPicking = false;
 
     const modal = document.createElement('div');
     modal.className = 'modal-backdrop';

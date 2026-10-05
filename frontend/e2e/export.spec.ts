@@ -128,15 +128,14 @@ test.describe('导出就绪清单与 .tar 归档', () => {
     expect(unnamed.name_source, '没传 name 的 ROI 必须落到默认命名').toBe('default');
 
     // column.add 不接收 roi_id（就地丢弃），归属只能靠 column.update 写进去。
-    const columns: [Roi, string][] = [
-      [pollen, 'Pinus'],
-      [charcoal, 'MicroCharcoal'],
-      [unnamed, 'NAP'],
+    const columns: [Roi, string, number, number][] = [
+      [pollen, 'Pinus', 100, 200],
+      [charcoal, 'MicroCharcoal', 700, 800],
+      [unnamed, 'NAP', 1300, 1400],
     ];
-    // roi_id 不在 column.add 的入参里（会被 dispatcher 静默丢掉），所以这里只取 name，
-    // 归属留到下面 column.update 再写。
-    for (const [, name] of columns) {
-      await rpc(page, 'column.add', { column: { name, startX: 100, endX: 200 } });
+    // 各列放置在其对应 ROI 跨度内，避免跨 ROI 边界越界校验报错。
+    for (const [, name, startX, endX] of columns) {
+      await rpc(page, 'column.add', { column: { name, startX, endX } });
     }
     for (let i = 0; i < columns.length; i++) {
       await rpc(page, 'column.update', {

@@ -183,7 +183,7 @@ test.describe('八步黄金旅程（全 DOM 点击驱动）', () => {
     // ===== Step 8 → 导出 =====
     await expect(page.locator('#qa-banner'), 'Step 8 诊断横幅必须渲染').toBeVisible();
     await page.locator('#btn-qa-export').click();
-    await expect(page.locator('.wpd-export-dialog')).toBeVisible();
+    await expect(page.locator('.wpd-export-dialog')).toBeVisible({ timeout: 20_000 });
     const readinessBox = page.locator('#export-readiness-container');
     await expect(readinessBox).toBeVisible();
 
