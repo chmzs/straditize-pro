@@ -127,5 +127,11 @@ test.describe('顶栏与设置弹窗', () => {
       '悬浮工具条上的"调整"应切换为 Adjust'
     ).toContainText('Adjust');
 
+    // 重新打开设置弹窗，验证保存的 allowed_hosts 准确回显在 textarea 中（防止默认值覆盖）
+    await page.locator('#btn-settings').click();
+    const reopenDialog = page.locator('.settings-dialog');
+    await expect(reopenDialog).toBeVisible();
+    await expect(reopenDialog.locator('#settings-allowed-hosts')).toHaveValue(/192\.168\.1\.100/);
+    await reopenDialog.locator('#settings-close-btn').click();
   });
 });

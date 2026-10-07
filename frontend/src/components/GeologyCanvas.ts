@@ -15,7 +15,6 @@ import { CoordinateSystem } from '../core/CoordinateSystem';
 import {
   STAGE,
   canHitRoiHandle,
-  canPickYCalibMark,
   showsColumnBoundaries,
   showsDepthGrid,
   showsPollenCurves,
@@ -25,9 +24,18 @@ import {
 import { tokens } from '../styles/tokens';
 import { getAllOverlays } from './canvas/_registry';
 import {
-  AddPointCommand,
-  DeletePointCommand,
-} from '../core/Commands';
+  createToolStrategies,
+  ToolStrategy,
+  ToolContext,
+  YCalibToolStrategy,
+  LineFixToolStrategy,
+  DrawLineToolStrategy,
+  MeasureToolStrategy,
+  RoiToolStrategy,
+  SelectToolStrategy,
+  AddPointToolStrategy,
+  RoiHandle,
+} from '../core/tools';
 import { t, onLocaleChange } from '../i18n';
 
 import { bandOf } from './canvas/CleanupOverlay';
@@ -97,41 +105,25 @@ export class GeologyCanvas {
   private isPanning: boolean = false;
   private lastMouseScreen: Point2D = { x: 0, y: 0 };
 
-  // 拖拽前状态备份（用于松手时提交单条不可逆原子 Command）
-  private dragInitialPointPos: Point2D | null = null;
-  private dragInitialColumn: { startX: number; endX: number; tickEndX: number } | null = null;
-  /** ROI 拖拽起点快照。只保存 ROI —— 取数区域与深度标定互不相关。 */
-  private dragInitialRoi: DataRoi | null = null;
+  // 策略化工具注册表
+  private toolStrategies: Map<ToolMode, ToolStrategy>;
 
-  // 拖动与悬停状态
+  // 悬停状态
   private hoveredAnchor: { taxaId: string; pointId: string } | null = null;
-  private draggingAnchor: { taxaId: string; pointId: string } | null = null;
   private hoveredBoundary: { taxaId: string; type: 'start' | 'tick' | 'end'; x: number } | null = null;
-  private draggingBoundary: { taxaId: string; type: 'start' | 'tick' | 'end' } | null = null;
-  private hoveredRoiHandle: string | null = null; // 'tl','tr','bl','br','t','b','l','r'
-  private draggingRoiHandle: string | null = null;
+  private hoveredRoiHandle: RoiHandle | null = null; // 'tl','tr','bl','br','t','b','l','r'
   private hoveredDepthHorizon: number | null = null;
   private isHoveringDepthRulerBadge: boolean = false;
 
   // Y 轴两点标定：用户在图上点选的参考点（最多两个）
   private yCalibMarks: Point2D[] = [];
   private hoverWorldPt: Point2D | null = null;
-  // 线掩膜人工修正：当前笔刷模式与正在绘制的笔迹
+  // 线掩膜人工修正：当前笔刷模式
   public lineFixMode: 'erase' | 'restore' = 'erase';
-  private lineFixPoints: Point2D[] | null = null;
 
-  // Step 4 geometry 编辑：选中项、拖拽会话、拖拽新建会话
+  // Step 4 geometry 编辑：选中项
   private selectedGeometryId: string | null = null;
-  private geometryDrag: {
-    id: string;
-    handle: 'move' | 'start' | 'end' | 'thick0' | 'thick1';
-    startWorld: Point2D;
-    startRect: { x0: number; y0: number; x1: number; y1: number };
-  } | null = null;
-  private geometryCreate: { axis: 'h' | 'v'; startWorld: Point2D; endWorld: Point2D } | null = null;
 
-  // 点击添加锚点防误抖标识
-  private hasDraggedAnchor: boolean = false;
   private renderPending: boolean = false;
   private lastRenderedLayers: Set<string> = new Set();
   /** 上一次渲染中失败的叠加层：暴露出来供验收句柄与状态栏读取。 */
@@ -141,8 +133,6 @@ export class GeologyCanvas {
   private readonly ANCHOR_HIT_RADIUS_SCREEN = 8.0;
   private readonly BOUNDARY_HIT_WIDTH_SCREEN = 6.0;
   private readonly ROI_HANDLE_SIZE_SCREEN = 8.0;
-  private readonly YCALIB_MARKER_RADIUS_SCREEN = 7.0;
-  private readonly LINEFIX_BRUSH_RADIUS_SCREEN = 7.0;
   /** geometry 命中带最小半宽（屏幕像素），保证 2px 的线也点得中。 */
   private readonly GEOMETRY_HIT_PAD_SCREEN = 6.0;
   private readonly GEOMETRY_HANDLE_SIZE_SCREEN = 9.0;
@@ -161,6 +151,7 @@ export class GeologyCanvas {
     this.history = history;
     this.callbacks = callbacks;
     this.toolModeManager = new ToolModeManager('select');
+    this.toolStrategies = createToolStrategies();
 
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'geology-canvas';
@@ -195,14 +186,13 @@ export class GeologyCanvas {
   }
 
   public setToolMode(mode: ToolMode): void {
-    if (mode !== 'measure' && (this.measureDrag || this.measureLine)) {
-      // 离开测量模式就收起测量尺，避免一条青色辅助线永久赖在画布上。
-      this.measureDrag = null;
-      this.measureLine = null;
-      this.requestRender();
+    const prevMode = this.toolModeManager.getMode();
+    if (prevMode !== mode) {
+      this.toolStrategies.get(prevMode)?.onDeactivate?.(this.getToolContext());
     }
     this.toolModeManager.setMode(mode);
     this.syncToolModeUi(mode);
+    this.toolStrategies.get(mode)?.onActivate?.(this.getToolContext());
   }
 
   /**
@@ -627,12 +617,7 @@ export class GeologyCanvas {
     this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
     this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
     this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
-    this.canvas.addEventListener('mouseleave', () => {
-      this.hoverWorldPt = null;
-      if (this.toolModeManager.getMode() === 'ycalib') {
-        this.requestRender();
-      }
-    });
+    this.canvas.addEventListener('mouseleave', (e) => this.onMouseLeave(e));
     window.addEventListener('mousemove', (e) => this.onMouseMove(e));
     window.addEventListener('mouseup', (e) => this.onMouseUp(e));
     this.canvas.addEventListener('contextmenu', (e) => this.onContextMenu(e));
@@ -1041,11 +1026,41 @@ export class GeologyCanvas {
     this.notifyNotice('双击快速适应屏幕居中 (Fit to Screen)');
   }
 
+  private getToolContext(): ToolContext {
+    return {
+      data: this.data,
+      viewport: this.viewport,
+      workflowStage: this.workflowStage,
+      history: this.history,
+      requestRender: () => this.requestRender(),
+      notifyNotice: (msg) => this.notifyNotice(msg),
+      updateCursor: () => this.updateCursor(),
+      setToolMode: (mode) => this.setToolMode(mode),
+      getActiveColumn: () => this.getActiveColumn() ?? null,
+      callbacks: this.callbacks,
+      isToolAllowed: (mode) => this.isToolAllowed(mode),
+      isWithinDiagramBounds: (worldPt) => this.isWithinDiagramBounds(worldPt),
+      findHitAnchor: (screenPt) => this.findHitAnchor(screenPt),
+      findHitBoundary: (screenPt) => this.findHitBoundary(screenPt),
+      findHitRoiHandle: (screenPt) => this.findHitRoiHandle(screenPt),
+      findHitColumn: (worldPt) => this.findHitColumn(worldPt),
+      findHitGeometry: (worldPt) => this.findHitGeometry(worldPt),
+      getSelectedGeometryId: () => this.selectedGeometryId,
+      setSelectedGeometryId: (id) => this.setSelectedGeometryId(id),
+      commitGeometry: (id, axis, r) => this.commitGeometry(id, axis, r),
+      hoveredDepthHorizon: this.hoveredDepthHorizon,
+      hoverWorldPt: this.hoverWorldPt,
+      lineFixMode: this.lineFixMode,
+      yCalibMarks: this.yCalibMarks,
+      setYCalibMarks: (marks) => this.setYCalibMarks(marks),
+      clearYCalibMarks: () => this.clearYCalibMarks(),
+    };
+  }
+
   private onMouseDown(e: MouseEvent): void {
     const screenPt = this.getCanvasPoint(e);
     this.lastMouseScreen = screenPt;
     this.isMouseDown = true;
-    this.hasDraggedAnchor = false;
 
     const mode = this.toolModeManager.getMode();
 
@@ -1058,289 +1073,15 @@ export class GeologyCanvas {
 
     if (e.button === 0) {
       const worldPt = this.viewport.screenToWorld(screenPt);
-      const cal = this.data.calibration;
-
-      // ================= 1. 橡皮擦删除模式 (Eraser) =================
-      if (mode === 'eraser') {
-        const hitAnchor = this.findHitAnchor(screenPt);
-        if (hitAnchor) {
-          const col = this.data.columns.find((c) => c.id === hitAnchor.taxaId);
-          if (col) {
-            const pt = col.controlPoints.find((p) => p.id === hitAnchor.pointId);
-            if (pt) {
-              const cmd = new DeletePointCommand(col.id, pt, col.name);
-              this.history.push(`Delete Anchor from ${col.name}`, this.data.columns, this.data.activeTaxaId);
-              cmd.execute(this.data);
-              this.hoveredAnchor = null;
-              this.notifyNotice(`已删除 ${col.name} 在深度层位 Y:${pt.y} 处的拐点`);
-              this.requestRender();
-              this.callbacks.onDataChange?.();
-            }
-          }
-          return;
-        }
-
-        const hitBoundary = this.findHitBoundary(screenPt);
-        if (hitBoundary) {
-          const colIdx = this.data.columns.findIndex((c) => c.id === hitBoundary.taxaId);
-          if (colIdx !== -1 && this.data.columns.length > 1) {
-            const deleted = this.data.columns.splice(colIdx, 1)[0];
-            this.history.push(`Delete Column ${deleted.name}`, this.data.columns, this.data.activeTaxaId);
-            this.notifyNotice(`已删除属种列: ${deleted.name}`);
-            this.hoveredBoundary = null;
-            this.requestRender();
-            this.callbacks.onDataChange?.();
-          }
-          return;
-        }
-        return;
+      const strategy = this.toolStrategies.get(mode);
+      if (strategy?.onMouseDown) {
+        const handled = strategy.onMouseDown(e, screenPt, worldPt, this.getToolContext());
+        if (handled) return;
       }
-
-      // ================= 2. 添加分列线模式 (Add Column) =================
-      if (mode === 'addCol') {
-        const newX = Math.round(worldPt.x);
-        const colWidth = 80;
-        const colNum = String(this.data.columns.length + 1).padStart(2, '0');
-        const newCol: TaxaColumn = {
-          id: `taxa_${Date.now()}`,
-          name: `col${colNum}`,
-          species: `col${colNum}`,
-          color: '#38bdf8',
-          startX: newX,
-          endX: newX + colWidth,
-          tickEndX: newX + colWidth,
-          maxPercent: 50,
-          unit: '%',
-          curveType: 'linear',
-          visible: true,
-          isLocked: true,
-          controlPoints: [
-            { id: `pt_${Date.now()}_top`, x: newX + 5, y: this.data.roi.yMin, type: 'manual', createdAt: Date.now() },
-            { id: `pt_${Date.now()}_bot`, x: newX + 5, y: this.data.roi.yMax, type: 'manual', createdAt: Date.now() + 1 },
-          ],
-        };
-
-        this.data.columns.push(newCol);
-        this.data.columns.sort((a, b) => a.startX - b.startX);
-        this.data.activeTaxaId = newCol.id;
-        this.history.push(`Add Column ${newCol.name}`, this.data.columns, this.data.activeTaxaId);
-        this.notifyNotice(`已在 X:${newX}px 处插入新属种分列！`);
-        this.setToolMode('select'); // 自动切回选择模式便于立即微调
-        this.requestRender();
-        this.callbacks.onDataChange?.();
-        this.callbacks.onTaxaChange?.(newCol.id);
-        return;
-      }
-
-      // ================= 2.5 Y 轴两点标定 (Calibrate) =================
-      // 在 Step 3 或 ycalib 模式下，左键点击画布直接拾取 Y1 / Y2 标定点并绘制圆点标记
-      if (canPickYCalibMark(this.workflowStage, mode)) {
-        const maxH = this.data.imageHeight || 12000;
-        const maxW = this.data.imageWidth || 8000;
-        const markY = Math.max(0, Math.min(Math.round(worldPt.y), maxH));
-        const markX = Math.max(0, Math.min(Math.round(worldPt.x), maxW));
-        // 若已选满 2 个点，第 3 次点击自动重置并作为新的第 1 个点 Y1
-        if (this.yCalibMarks.length >= 2) {
-          this.yCalibMarks = [];
-        }
-        if (this.yCalibMarks.some((m) => m.y === markY)) {
-          this.notifyNotice('两点标定需要两个不同的像素行，请再点另一行。');
-          return;
-        }
-        this.yCalibMarks.push({ x: markX, y: markY });
-        this.requestRender();
-        if (this.yCalibMarks.length === 2) {
-          const picked = [...this.yCalibMarks].sort((a, b) => a.y - b.y);
-          this.yCalibMarks = picked;
-          this.callbacks.onYCalibPicked?.(picked);
-        } else {
-          this.callbacks.onYCalibPicked?.([...this.yCalibMarks]);
-          this.notifyNotice(
-            `🎯 已记录第 1 个标定点 Y1 = ${markY}px。请在 Y 轴上再点第 2 个已知刻度的位置 (Y2)。`
-          );
-        }
-        return;
-      }
-
-      // ================= 2.6 线掩膜人工修正笔刷 (Line Fix) =================
-      // 画布上直接涂抹：擦掉误标红线 / 补回漏标的线。笔迹落库为折线 + 半径，
-      // 由后端栅格化后与几何 / 排除区一起合成，所以改 ROI 或改几何后修正依然有效。
-      if (mode === 'linefix') {
-        this.lineFixPoints = [{ x: worldPt.x, y: worldPt.y }];
-        this.requestRender();
-        return;
-      }
-
-      // ================= 2.55 测量尺 (Measure) =================
-      if (mode === 'measure') {
-        this.measureDrag = { a: { x: worldPt.x, y: worldPt.y }, b: { x: worldPt.x, y: worldPt.y } };
-        this.measureLine = null;
-        this.requestRender();
-        return;
-      }
-
-      // ================= 2.7 Step 4 geometry 拖拽新建 / 选中编辑 =================
-      // 优先于 ROI 手柄：geometry 是 Step 4 的主角，ROI 边框不该抢命中。
-      const createAxis = this.getGeometryCreateAxis();
-      if (createAxis) {
-        this.geometryCreate = { axis: createAxis, startWorld: worldPt, endWorld: worldPt };
-        this.requestRender();
-        return;
-      }
-
-      const hitGeometry = this.findHitGeometry(worldPt);
-      if (hitGeometry) {
-        const cand = (this.data.line_candidates || []).find((c) => c.id === hitGeometry.id);
-        this.setSelectedGeometryId(hitGeometry.id);
-        if (cand?.geometry) {
-          const g = cand.geometry;
-          this.geometryDrag = {
-            id: hitGeometry.id,
-            handle: hitGeometry.handle,
-            startWorld: worldPt,
-            startRect: { x0: g.x0, y0: g.y0, x1: g.x1, y1: g.y1 },
-          };
-          this.updateCursor();
-          this.requestRender();
-          return;
-        }
-      }
-
-      // ================= 3. ROI 区域手柄拖动模式 =================
-      const hitRoi = this.findHitRoiHandle(screenPt);
-      if (hitRoi || mode === 'roi') {
-        if (hitRoi) {
-          this.draggingRoiHandle = hitRoi;
-          this.dragInitialRoi = { ...this.data.roi };
-          this.updateCursor();
-          return;
-        }
-      }
-
-      // ================= 4. 选择与微调模式 (Select / Default) =================
-      // A. 优先检查是否直接点击了某个属种列的几何范围（列内部或顶部标签区域）
-      const hitCol = this.findHitColumn(worldPt);
-
-      // B. 检查是否命中控制锚点
-      const hitAnchor = this.findHitAnchor(screenPt);
-      if (hitAnchor) {
-        this.draggingAnchor = hitAnchor;
-        this.data.activeTaxaId = hitAnchor.taxaId;
-        this.data.selectedEntity = { type: 'point', colId: hitAnchor.taxaId, pointId: hitAnchor.pointId };
-        const col = this.data.columns.find((c) => c.id === hitAnchor.taxaId);
-        const pt = col?.controlPoints.find((p) => p.id === hitAnchor.pointId);
-        if (pt) {
-          this.dragInitialPointPos = { x: pt.x, y: pt.y };
-        }
-        if (this.callbacks.onTaxaChange) {
-          this.callbacks.onTaxaChange(hitAnchor.taxaId);
-        }
-        this.updateCursor();
-        this.requestRender();
-        return;
-      }
-
-      // C. 检查是否命中垂直分列标线 (基线/刻度终点/隔离界)
-      const hitBoundary = this.findHitBoundary(screenPt);
-      if (hitBoundary) {
-        this.draggingBoundary = {
-          taxaId: hitBoundary.taxaId,
-          type: hitBoundary.type,
-        };
-        this.data.activeTaxaId = hitBoundary.taxaId;
-        this.data.selectedEntity = { type: 'column', id: hitBoundary.taxaId, part: hitBoundary.type };
-        const col = this.data.columns.find((c) => c.id === hitBoundary.taxaId);
-        if (col) {
-          this.dragInitialColumn = { startX: col.startX, endX: col.endX, tickEndX: col.tickEndX ?? col.endX };
-        }
-        if (this.callbacks.onTaxaChange) {
-          this.callbacks.onTaxaChange(hitBoundary.taxaId);
-        }
-        this.updateCursor();
-        return;
-      }
-
-      // D. 如果点击了某列的区域，则在图上选中该列并打开属种属性面板
-      if (hitCol) {
-        this.data.activeTaxaId = hitCol.id;
-        this.data.selectedEntity = { type: 'column', id: hitCol.id };
-        this.notifyNotice(`已选中属种列: ${hitCol.name} (可直接在图上拉点修改)`);
-        if (this.callbacks.onTaxaChange) {
-          this.callbacks.onTaxaChange(hitCol.id);
-        }
-        this.requestRender();
-        return;
-      }
-
-      // ================= 5. 添加拐点模式 (Add Point) 或在已激活属种列内点击拉伸 =================
-      // 关键门禁：select 模式下点击画布会隐式加锚点，必须与 A 键走同一套阶段表，
-      // 否则 S3/S4 的"禁止编辑控制点"门禁可被鼠标点击直接绕过。
-      if (this.isToolAllowed('addPoint') && (mode === 'addPoint' || (mode === 'select' && this.isWithinDiagramBounds(worldPt)))) {
-        const activeCol = this.getActiveColumn();
-        if (activeCol && this.isWithinDiagramBounds(worldPt)) {
-          let targetY = Math.round(worldPt.y);
-
-          // 磁力吸附到标准层位高度（仅在已完成 Y 轴标定时才有层位可言）
-          const calib = CoordinateSystem.calibrationBounds(cal);
-          if (this.hoveredDepthHorizon !== null && calib) {
-            const depthFraction =
-              (this.hoveredDepthHorizon - calib.topValue) /
-              (calib.bottomValue - calib.topValue || 1);
-            const horizonY = Math.round(calib.topPx + depthFraction * (calib.bottomPx - calib.topPx));
-            if (Math.abs(worldPt.y - horizonY) <= 10 / this.viewport.scale) {
-              targetY = horizonY;
-            }
-          }
-
-          const newPoint: ControlPoint = {
-            id: `pt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-            x: Math.round(worldPt.x),
-            y: targetY,
-            type: 'manual',
-            isManual: true,
-            createdAt: Date.now(),
-          };
-
-          const cmd = new AddPointCommand(activeCol.id, newPoint, activeCol.name);
-          this.history.push(`Add Anchor to ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
-          cmd.execute(this.data);
-
-          this.dragInitialPointPos = { x: newPoint.x, y: newPoint.y };
-          this.draggingAnchor = {
-            taxaId: activeCol.id,
-            pointId: newPoint.id,
-          };
-          this.data.selectedEntity = { type: 'point', colId: activeCol.id, pointId: newPoint.id };
-
-          this.requestRender();
-          this.callbacks.onDataChange?.();
-          return;
-        }
-      }
-
-      // 点击空白处：取消当前选择
-      this.hoveredAnchor = null;
-      this.hoveredBoundary = null;
-      this.hoveredRoiHandle = null;
-      this.data.selectedEntity = null;
-      // Step 4 的 geometry 选中态也必须一起清，否则点空白之后侧栏那一行仍然高亮、
-      // 画布仍画着手柄，用户以为"取消不掉"（此前只清了 selectedEntity）。
-      this.setSelectedGeometryId(null);
-      this.updateCursor();
-      this.requestRender();
-      this.callbacks.onDataChange?.();
     }
   }
 
   private onMouseMove(e: MouseEvent): void {
-    // 测量尺拖拽中：实时更新终点，松手前的读数就已经是准的。
-    if (this.measureDrag) {
-      const pt = this.viewport.screenToWorld(this.getCanvasPoint(e));
-      this.measureDrag.b = { x: pt.x, y: pt.y };
-      this.requestRender();
-      return;
-    }
-
     const screenPt = this.getCanvasPoint(e);
     const deltaX = screenPt.x - this.lastMouseScreen.x;
     const deltaY = screenPt.y - this.lastMouseScreen.y;
@@ -1348,16 +1089,26 @@ export class GeologyCanvas {
 
     const worldPt = this.viewport.screenToWorld(screenPt);
     this.hoverWorldPt = { x: worldPt.x, y: worldPt.y };
-    if (this.toolModeManager.getMode() === 'ycalib') {
+
+    if (this.isPanning) {
+      this.viewport.panBy(deltaX, deltaY);
       this.requestRender();
+      return;
     }
+
+    const mode = this.toolModeManager.getMode();
+    const strategy = this.toolStrategies.get(mode);
+    if (strategy?.onMouseMove) {
+      const handled = strategy.onMouseMove(e, screenPt, worldPt, { x: deltaX, y: deltaY }, this.getToolContext());
+      if (handled) return;
+    }
+
+    // 探测当前是否悬停在特定标准地层层位附近
     const cal = this.data.calibration;
     const roi = this.data.roi;
-    // 深度只在已完成两点标定时才存在；未标定就是 undefined，绝不拿 ROI 边界顶替。
     const calib = CoordinateSystem.calibrationBounds(cal);
     const interval = cal.depthInterval && cal.depthInterval > 0 ? cal.depthInterval : 2;
 
-    // 探测当前是否悬停在特定标准地层层位附近
     let depth: number | undefined;
     if (calib) {
       const totalPx = calib.bottomPx - calib.topPx;
@@ -1415,270 +1166,54 @@ export class GeologyCanvas {
       });
     }
 
-    // 0a. 正在涂抹线掩膜修正笔迹
-    if (this.lineFixPoints) {
-      this.lineFixPoints.push({ x: worldPt.x, y: worldPt.y });
-      this.requestRender();
-      return;
-    }
-
-    // 0b. 正在拖拽新建 geometry：只更新预览，松手才提交
-    if (this.geometryCreate) {
-      this.geometryCreate.endWorld = worldPt;
-      this.requestRender();
-      return;
-    }
-
-    // 0c. 正在移动/缩放已有 geometry：只改本地临时值，松手才提交。
-    //     与 ROI 手柄一致——拖拽期间不刷 RPC，保证跟手。
-    if (this.geometryDrag) {
-      const drag = this.geometryDrag;
-      const cand = (this.data.line_candidates || []).find((c) => c.id === drag.id);
-      if (cand) {
-        const dx = Math.round(worldPt.x - drag.startWorld.x);
-        const dy = Math.round(worldPt.y - drag.startWorld.y);
-        const r = drag.startRect;
-        let next: { x0: number; y0: number; x1: number; y1: number };
-
-        if (drag.handle === 'move') {
-          next = { x0: r.x0 + dx, y0: r.y0 + dy, x1: r.x1 + dx, y1: r.y1 + dy };
-        } else if (cand.axis === 'h') {
-          // 端点手柄改长度，长边中点手柄改厚度。
-          if (drag.handle === 'start') next = { ...r, x0: r.x0 + dx };
-          else if (drag.handle === 'end') next = { ...r, x1: r.x1 + dx };
-          else if (drag.handle === 'thick0') next = { ...r, y0: r.y0 + dy };
-          else next = { ...r, y1: r.y1 + dy };
-        } else {
-          if (drag.handle === 'start') next = { ...r, y0: r.y0 + dy };
-          else if (drag.handle === 'end') next = { ...r, y1: r.y1 + dy };
-          else if (drag.handle === 'thick0') next = { ...r, x0: r.x0 + dx };
-          else next = { ...r, x1: r.x1 + dx };
-        }
-
-        // 厚度塌缩到 0 会让反掩膜抠不到任何像元，至少保留 1px。
-        if (cand.axis === 'h' && Math.abs(next.y1 - next.y0) < 1) {
-          next = drag.handle === 'thick0' ? { ...next, y0: next.y1 - 1 } : { ...next, y1: next.y0 + 1 };
-        }
-        if (cand.axis === 'v' && Math.abs(next.x1 - next.x0) < 1) {
-          next = drag.handle === 'thick0' ? { ...next, x0: next.x1 - 1 } : { ...next, x1: next.x0 + 1 };
-        }
-
-        cand.geometry = { type: 'rect', ...next };
-        // 同步派生显示字段，面板里的读数才不会滞后。
-        if (cand.axis === 'h') {
-          cand.at = Math.round((next.y0 + next.y1) / 2);
-          cand.span = [Math.min(next.x0, next.x1), Math.max(next.x0, next.x1)];
-          cand.width = Math.abs(next.y1 - next.y0) + 1;
-        } else {
-          cand.at = Math.round((next.x0 + next.x1) / 2);
-          cand.span = [Math.min(next.y0, next.y1), Math.max(next.y0, next.y1)];
-          cand.width = Math.abs(next.x1 - next.x0) + 1;
-        }
-        this.requestRender();
-      }
-      return;
-    }
-
-    // 0. 正在拖动 ROI 8 手柄微调取数区域（只影响取数范围，与深度标定无关）
-    if (this.draggingRoiHandle) {
-      const h = this.draggingRoiHandle;
-      const maxW = this.data.imageWidth || 8000;
-      const maxH = this.data.imageHeight || 12000;
-      // 严格钳位在图谱有效物理像素范围内，严禁拖拽溢出到画布外虚无空间
-      const x = Math.max(0, Math.min(Math.round(worldPt.x), maxW));
-      const y = Math.max(0, Math.min(Math.round(worldPt.y), maxH));
-
-      if (h.includes('l')) roi.xMin = Math.max(0, Math.min(x, roi.xMax - 20));
-      if (h.includes('r')) roi.xMax = Math.min(maxW, Math.max(x, roi.xMin + 20));
-      if (h.includes('t')) roi.yMin = Math.max(0, Math.min(y, roi.yMax - 20));
-      if (h.includes('b')) roi.yMax = Math.min(maxH, Math.max(y, roi.yMin + 20));
-
-      this.requestRender();
-      return;
-    }
-
-    // 1. 正在平移画布
-    if (this.isPanning) {
-      this.viewport.panBy(deltaX, deltaY);
-      this.requestRender();
-      return;
-    }
-
-    // 2. 正在拖动锚点
-    if (this.draggingAnchor) {
-      this.hasDraggedAnchor = true;
-      const col = this.data.columns.find((c) => c.id === this.draggingAnchor!.taxaId);
-      if (col) {
-        const pt = col.controlPoints.find((p) => p.id === this.draggingAnchor!.pointId);
-        if (pt) {
-          pt.x = Math.round(worldPt.x);
-          pt.y = Math.round(worldPt.y);
-          pt.isManual = true;
-          col.controlPoints.sort((a, b) => a.y - b.y);
-          this.requestRender();
-        }
-      }
-      return;
-    }
-
-    // 3. 正在拖动垂直分列标线或两点式刻度钉
-    if (this.draggingBoundary) {
-      const { taxaId, type } = this.draggingBoundary;
-      const colIndex = this.data.columns.findIndex((c) => c.id === taxaId);
-      if (colIndex !== -1) {
-        const targetCol = this.data.columns[colIndex];
-        const newX = Math.round(worldPt.x);
-
-        if (type === 'start') {
-          targetCol.startX = newX;
-          if (targetCol.scaleCalib) {
-            targetCol.scaleCalib.originX = newX;
-          }
-          if (colIndex > 0) {
-            this.data.columns[colIndex - 1].endX = newX;
-          }
-        } else if (type === 'tick') {
-          // 拖拽物理刻度齿手柄
-          targetCol.tickEndX = newX;
-          if (targetCol.scaleCalib) {
-            targetCol.scaleCalib.calibX = newX;
-          }
-        } else {
-          targetCol.endX = newX;
-          if (colIndex < this.data.columns.length - 1) {
-            const nextCol = this.data.columns[colIndex + 1];
-            if (nextCol) {
-              nextCol.startX = newX;
-              if (nextCol.scaleCalib) {
-                nextCol.scaleCalib.originX = newX;
-              }
-            }
-          }
-        }
-        this.requestRender();
-      }
-      return;
-    }
-
-    // 4. 普通悬停探测
+    // 普通悬停探测
     const prevHoverAnchor = this.hoveredAnchor;
     const prevHoverBoundary = this.hoveredBoundary;
+    const prevHoverRoi = this.hoveredRoiHandle;
 
+    this.hoveredRoiHandle = canHitRoiHandle(this.workflowStage) ? this.findHitRoiHandle(screenPt) : null;
     this.hoveredAnchor = this.findHitAnchor(screenPt);
     this.hoveredBoundary = !this.hoveredAnchor ? this.findHitBoundary(screenPt) : null;
 
     if (
       prevHoverAnchor?.pointId !== this.hoveredAnchor?.pointId ||
       prevHoverBoundary?.taxaId !== this.hoveredBoundary?.taxaId ||
-      prevHoverBoundary?.type !== this.hoveredBoundary?.type
+      prevHoverBoundary?.type !== this.hoveredBoundary?.type ||
+      prevHoverRoi !== this.hoveredRoiHandle
     ) {
       this.updateCursor();
       this.requestRender();
     }
   }
 
-  private onMouseUp(_e: MouseEvent): void {
-    // 测量尺落定：固化成可读结果（留在画布上），并在 HUD 报出读数。
-    if (this.measureDrag) {
-      const m = this.measureDrag;
-      this.measureDrag = null;
-      this.measureLine = m;
-      const dx = Math.abs(m.b.x - m.a.x);
-      const dy = Math.abs(m.b.y - m.a.y);
-      const dist = Math.hypot(dx, dy);
-      // 一端明显短的那一向就是"横跨线"的方向，也就是线宽。给一句人话提示。
-      const thin = dx > 0 && dy > 0 && Math.min(dx, dy) <= 12 && Math.max(dx, dy) > 12;
-      this.notifyNotice(
-        `📏 测量: Δx ${dx.toFixed(1)} · Δy ${dy.toFixed(1)} · 距离 ${dist.toFixed(1)} px` +
-          (thin ? `（横跨方向的 ${Math.min(dx, dy).toFixed(1)}px 即线宽，可填入侧栏"统一厚度"）` : '')
-      );
+  private onMouseUp(e: MouseEvent): void {
+    if (this.isPanning) {
+      this.isPanning = false;
+      this.isMouseDown = false;
+      this.updateCursor();
       this.requestRender();
+      return;
     }
 
-    if (this.lineFixPoints && this.lineFixPoints.length > 0) {
-      const stroke: LineMaskStroke = {
-        id: `stroke_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-        mode: this.lineFixMode,
-        // 笔刷半径按屏幕恒定语义落库为图像像素，缩放时手感一致。
-        radius: Math.max(2, Math.round(this.LINEFIX_BRUSH_RADIUS_SCREEN / this.viewport.scale)),
-        points: this.lineFixPoints.map((p) => [Math.round(p.x), Math.round(p.y)] as [number, number]),
-      };
-      this.lineFixPoints = null;
-      this.callbacks.onLineFixStroke?.(stroke);
-      this.requestRender();
-    } else if (this.draggingRoiHandle && this.dragInitialRoi) {
-      const roi = this.data.roi;
-      this.history.push(
-        'Resize Data ROI',
-        this.data.columns,
-        this.data.activeTaxaId,
-        this.data.calibration,
-        roi
-      );
-      this.notifyNotice(
-        `数据有效区已调整为: X [${roi.xMin}, ${roi.xMax}] × Y [${roi.yMin}, ${roi.yMax}] px（深度标定不受影响）`
-      );
-      // 去线掩膜在 ROI 内计算，范围变了必须让后端重算。
-      this.callbacks.onRoiCommitted?.({ ...roi });
-      this.callbacks.onDataChange?.();
-    } else if (this.draggingAnchor && this.hasDraggedAnchor && this.dragInitialPointPos) {
-      const col = this.data.columns.find((c) => c.id === this.draggingAnchor!.taxaId);
-      const pt = col?.controlPoints.find((p) => p.id === this.draggingAnchor!.pointId);
-      if (col && pt) {
-        this.history.push(`Move Anchor in ${col.name}`, this.data.columns, this.data.activeTaxaId);
-        this.callbacks.onDataChange?.();
-      }
-    } else if (this.draggingBoundary && this.dragInitialColumn) {
-      const col = this.data.columns.find((c) => c.id === this.draggingBoundary!.taxaId);
-      if (col) {
-        this.history.push(`Adjust Column Boundary ${col.name}`, this.data.columns, this.data.activeTaxaId);
-        this.callbacks.onDataChange?.();
-      }
-    }
-
-    // Step 4 geometry：松手才提交给后端（一次拖拽 = 一次 RPC）。
-    if (this.geometryDrag) {
-      const drag = this.geometryDrag;
-      const cand = (this.data.line_candidates || []).find((c) => c.id === drag.id);
-      if (cand?.geometry) {
-        const g = cand.geometry;
-        this.commitGeometry(drag.id, cand.axis, { x0: g.x0, y0: g.y0, x1: g.x1, y1: g.y1 });
-      }
-      this.geometryDrag = null;
-    }
-    if (this.geometryCreate) {
-      const create = this.geometryCreate;
-      const x0 = Math.min(create.startWorld.x, create.endWorld.x);
-      const x1 = Math.max(create.startWorld.x, create.endWorld.x);
-      const y0 = Math.min(create.startWorld.y, create.endWorld.y);
-      const y1 = Math.max(create.startWorld.y, create.endWorld.y);
-      this.geometryCreate = null;
-      // 拖拽距离过小视为误点，不建 geometry（否则会留下 1px 垃圾对象）。
-      const moved = Math.hypot(x1 - x0, y1 - y0);
-      if (moved * this.viewport.scale >= 6) {
-        this.commitGeometry(null, create.axis, {
-          x0: Math.round(x0),
-          y0: Math.round(y0),
-          x1: Math.round(x1),
-          y1: Math.round(y1),
-        });
-      } else {
-        this.notifyNotice('拖拽距离太短，未新建干扰线。请在图上按住并拖出一段距离。');
-      }
+    const screenPt = this.getCanvasPoint(e);
+    const worldPt = this.viewport.screenToWorld(screenPt);
+    const mode = this.toolModeManager.getMode();
+    const strategy = this.toolStrategies.get(mode);
+    if (strategy?.onMouseUp) {
+      strategy.onMouseUp(e, screenPt, worldPt, this.getToolContext());
     }
 
     this.isMouseDown = false;
-    this.isPanning = false;
-    this.draggingAnchor = null;
-    this.draggingBoundary = null;
-    this.draggingRoiHandle = null;
-    this.dragInitialPointPos = null;
-    this.dragInitialColumn = null;
-    this.dragInitialRoi = null;
-    this.lineFixPoints = null;
-    this.hasDraggedAnchor = false;
     this.updateCursor();
     this.requestRender();
+  }
+
+  private onMouseLeave(e: MouseEvent): void {
+    this.isMouseDown = false;
+    this.isPanning = false;
+    const mode = this.toolModeManager.getMode();
+    this.toolStrategies.get(mode)?.onMouseLeave?.(e, this.getToolContext());
+    this.updateCursor();
   }
 
   /** Y 轴两点标定：清空已点选但尚未提交的参考点。 */
@@ -1793,11 +1328,6 @@ export class GeologyCanvas {
     await this.callbacks.onGeometryCommit?.(pending.id, pending.axis, pending.rect);
   }
 
-  /** 测量尺（M）：拖拽中的临时线段。世界坐标。 */
-  private measureDrag: { a: Point2D; b: Point2D } | null = null;
-  /** 测量尺（M）：已落定的测量结果，松手后保留供读数。世界坐标。 */
-  private measureLine: { a: Point2D; b: Point2D } | null = null;
-
   /**
    * 方向键微调选中的 geometry（步骤 4）。
    *
@@ -1902,18 +1432,28 @@ export class GeologyCanvas {
   private updateCursor(): void {
     if (this.isPanning || this.isSpaceDown || this.toolModeManager.getMode() === 'pan') {
       this.canvas.style.cursor = this.isMouseDown ? 'grabbing' : 'grab';
-    } else if (this.draggingRoiHandle || this.hoveredRoiHandle) {
-      const h = this.draggingRoiHandle || this.hoveredRoiHandle;
+      return;
+    }
+    const mode = this.toolModeManager.getMode();
+    const strategy = this.toolStrategies.get(mode);
+    const customCursor = strategy?.getCursor?.(this.getToolContext());
+
+    const roiStrat = strategy instanceof RoiToolStrategy ? strategy : undefined;
+    const activeRoiHandle = roiStrat?.getDraggingHandle() || this.hoveredRoiHandle;
+
+    if (activeRoiHandle) {
+      const h = activeRoiHandle;
       if (h === 'tl' || h === 'br') this.canvas.style.cursor = 'nwse-resize';
       else if (h === 'tr' || h === 'bl') this.canvas.style.cursor = 'nesw-resize';
       else if (h === 't' || h === 'b') this.canvas.style.cursor = 'ns-resize';
       else if (h === 'l' || h === 'r') this.canvas.style.cursor = 'ew-resize';
-    } else if (this.draggingAnchor || this.hoveredAnchor) {
+    } else if (this.hoveredAnchor || customCursor === 'move') {
       this.canvas.style.cursor = 'move';
-    } else if (this.draggingBoundary || this.hoveredBoundary) {
+    } else if (this.hoveredBoundary || customCursor === 'col-resize') {
       this.canvas.style.cursor = 'col-resize';
+    } else if (customCursor) {
+      this.canvas.style.cursor = customCursor;
     } else {
-      const mode = this.toolModeManager.getMode();
       this.canvas.style.cursor = this.toolModeManager.getToolDescription(mode).cursor;
     }
   }
@@ -2000,7 +1540,7 @@ export class GeologyCanvas {
     return null;
   }
 
-  private findHitRoiHandle(screenPt: Point2D): string | null {
+  private findHitRoiHandle(screenPt: Point2D): RoiHandle | null {
     if (!canHitRoiHandle(this.workflowStage)) return null;
     const roi = this.data.roi;
     const tlScreen = this.viewport.worldToScreen({ x: roi.xMin, y: roi.yMin });
@@ -2008,7 +1548,7 @@ export class GeologyCanvas {
     const midX = (tlScreen.x + brScreen.x) / 2;
     const midY = (tlScreen.y + brScreen.y) / 2;
 
-    const handles: Record<string, Point2D> = {
+    const handles: Record<RoiHandle, Point2D> = {
       tl: { x: tlScreen.x, y: tlScreen.y },
       tr: { x: brScreen.x, y: tlScreen.y },
       bl: { x: tlScreen.x, y: brScreen.y },
@@ -2020,7 +1560,7 @@ export class GeologyCanvas {
     };
 
     const hitDist = this.ROI_HANDLE_SIZE_SCREEN + 2.0;
-    for (const [key, pt] of Object.entries(handles)) {
+    for (const [key, pt] of Object.entries(handles) as [RoiHandle, Point2D][]) {
       if (Math.hypot(screenPt.x - pt.x, screenPt.y - pt.y) <= hitDist) {
         return key;
       }
@@ -2068,13 +1608,18 @@ export class GeologyCanvas {
 
     // 3.1 Y 轴两点标定记号与标定跨度指示
     // 与 canPickYCalibMark 成对：绘制与拾取任一侧落后一步都会让点击毫无反馈。
-    if (showsYCalibMarks(this.workflowStage) && this.drawYAxisCalibration(ctx)) {
-      this.lastRenderedLayers.add('yCalibMarks');
+    if (showsYCalibMarks(this.workflowStage)) {
+      const ystrat = this.toolStrategies.get('ycalib') as YCalibToolStrategy | undefined;
+      if (ystrat && ystrat.hasMarksOrHover(this.getToolContext())) {
+        ystrat.renderOverlay(ctx, this.getToolContext());
+        this.lastRenderedLayers.add('yCalibMarks');
+      }
     }
 
     // 3.2 线掩膜人工修正笔迹预览 (涂抹中显示)
-    if (this.lineFixPoints && this.lineFixPoints.length > 0) {
-      this.drawLineFixStroke(ctx);
+    const lineFixStrat = this.toolStrategies.get('linefix') as LineFixToolStrategy | undefined;
+    if (lineFixStrat?.hasStrokePreview()) {
+      lineFixStrat.renderOverlay(ctx, this.getToolContext());
       this.lastRenderedLayers.add('lineFix');
     }
 
@@ -2097,14 +1642,20 @@ export class GeologyCanvas {
     }
 
     // 7.1 拖拽新建 geometry 的实时预览
-    if (this.geometryCreate) {
-      this.drawGeometryCreatePreview(ctx);
+    const drawH = this.toolStrategies.get('drawLineH') as DrawLineToolStrategy | undefined;
+    const drawV = this.toolStrategies.get('drawLineV') as DrawLineToolStrategy | undefined;
+    if (drawH?.getGeometryCreate()) {
+      drawH.renderOverlay(ctx, this.getToolContext());
+      this.lastRenderedLayers.add('geometryCreatePreview');
+    } else if (drawV?.getGeometryCreate()) {
+      drawV.renderOverlay(ctx, this.getToolContext());
       this.lastRenderedLayers.add('geometryCreatePreview');
     }
 
     // 7.1b 测量尺（M）
-    if (this.measureDrag || this.measureLine) {
-      this.drawMeasureRuler(ctx);
+    const measureStrat = this.toolStrategies.get('measure') as MeasureToolStrategy | undefined;
+    if (measureStrat?.hasActiveRuler()) {
+      measureStrat.renderOverlay(ctx, this.getToolContext());
       this.lastRenderedLayers.add('measureRuler');
     }
 
@@ -2380,8 +1931,9 @@ export class GeologyCanvas {
     };
 
     ctx.setLineDash([]);
+    const draggingRoi = (this.toolStrategies.get('roi') as RoiToolStrategy | undefined)?.getDraggingHandle();
     for (const [key, pt] of Object.entries(handles)) {
-      const isHovered = this.hoveredRoiHandle === key || this.draggingRoiHandle === key;
+      const isHovered = this.hoveredRoiHandle === key || draggingRoi === key;
       const hSize = isHovered ? handleImgSize * 1.3 : handleImgSize;
 
       ctx.fillStyle = isHovered ? '#f97316' : '#ffffff';
@@ -2399,212 +1951,6 @@ export class GeologyCanvas {
     ctx.fillText(`ROI Y: ${Math.round(roi.yMin)}px`, roi.xMin - 8 / scale, roi.yMin + 4 / scale);
     ctx.fillText(`ROI Y: ${Math.round(roi.yMax)}px`, roi.xMin - 8 / scale, roi.yMax + 4 / scale);
 
-    ctx.restore();
-  }
-
-  /**
-   * 绘制 Y 轴两点标定：清晰呈现 Y1 / Y2 两个标定锚点、左侧刻度引线与实时选点准星预览。
-   * 严格限制在左侧 Y 轴刻度区域，绝不生成横穿全图数据区的遮罩或干扰线。
-   */
-  private drawYAxisCalibration(ctx: CanvasRenderingContext2D): boolean {
-    const cal = this.data.calibration;
-    const roi = this.data.roi;
-    const scale = this.viewport.scale;
-    const marks = this.yCalibMarks;
-    const isYCalibMode = this.toolModeManager.getMode() === 'ycalib';
-
-    const defaultRailX = Math.max(20 / scale, roi.xMin - 24 / scale);
-
-    // 汇总当前已选或已填入的 Y1、Y2 点位（无论来自画布点击还是侧边栏输入）
-    interface CalibPointItem {
-      tag: 'Y1' | 'Y2';
-      x: number;
-      y: number;
-      val: number | null | undefined;
-      color: string;
-    }
-    const items: CalibPointItem[] = [];
-
-    const y1Px = marks[0]?.y ?? (cal.top_px !== null && cal.top_px !== undefined ? Number(cal.top_px) : null);
-    const y1X = marks[0]?.x ?? defaultRailX;
-    if (y1Px !== null && !Number.isNaN(y1Px)) {
-      items.push({
-        tag: 'Y1',
-        x: y1X,
-        y: y1Px,
-        val: cal.top_cm,
-        color: '#f59e0b', // 醒目琥珀橙
-      });
-    }
-
-    const y2Px = marks[1]?.y ?? (cal.bottom_px !== null && cal.bottom_px !== undefined ? Number(cal.bottom_px) : null);
-    const y2X = marks[1]?.x ?? defaultRailX;
-    if (y2Px !== null && !Number.isNaN(y2Px)) {
-      items.push({
-        tag: 'Y2',
-        x: y2X,
-        y: y2Px,
-        val: cal.bottom_cm,
-        color: '#10b981', // 醒目翠绿
-      });
-    }
-
-    if (items.length === 0 && (!isYCalibMode || !this.hoverWorldPt)) return false;
-
-    ctx.save();
-
-    const fontPx = Math.max(10, 11.5 / scale);
-    ctx.font = `bold ${fontPx}px 'JetBrains Mono', monospace`;
-
-    const drawPill = (
-      text: string,
-      anchorX: number,
-      centerY: number,
-      borderColor: string,
-      textColor: string,
-      alignLeft: boolean = true
-    ) => {
-      const padX = 6 / scale;
-      const padY = 3.5 / scale;
-      const textW = ctx.measureText(text).width;
-      const boxW = textW + padX * 2;
-      const boxH = fontPx + padY * 2;
-      const boxX = alignLeft ? anchorX : anchorX - boxW;
-      const boxY = centerY - boxH / 2;
-      const radius = 4 / scale;
-
-      ctx.beginPath();
-      ctx.roundRect(boxX, boxY, boxW, boxH, radius);
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
-      ctx.fill();
-      ctx.lineWidth = 1.5 / scale;
-      ctx.strokeStyle = borderColor;
-      ctx.stroke();
-
-      ctx.fillStyle = textColor;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(text, boxX + padX, centerY);
-    };
-
-    // 1. 绘制鼠标悬停时的实时选点准星预览（仅在 ycalib 模式下）
-    if (isYCalibMode && this.hoverWorldPt) {
-      const hy = Math.round(this.hoverWorldPt.y);
-      const hx = Math.round(this.hoverWorldPt.x);
-      const nextTag = items.length === 1 ? 'Y2' : 'Y1';
-      const previewColor = nextTag === 'Y1' ? '#f59e0b' : '#10b981';
-
-      // 左侧轨道准星短线（限制在点击点与 roi.xMin 之间，不侵入右侧数据列）
-      const lineLeft = Math.min(hx, Math.max(0, roi.xMin - 45 / scale));
-      const lineRight = Math.min(Math.max(hx, roi.xMin), roi.xMin);
-
-      ctx.save();
-      ctx.setLineDash([4 / scale, 3 / scale]);
-      ctx.strokeStyle = previewColor;
-      ctx.lineWidth = 1.5 / scale;
-      ctx.beginPath();
-      ctx.moveTo(lineLeft, hy);
-      ctx.lineTo(lineRight, hy);
-      ctx.stroke();
-      ctx.restore();
-
-      // 准星小圆圈
-      const hr = 5 / scale;
-      ctx.beginPath();
-      ctx.arc(hx, hy, hr, 0, Math.PI * 2);
-      ctx.strokeStyle = previewColor;
-      ctx.lineWidth = 1.8 / scale;
-      ctx.stroke();
-
-      drawPill(
-        `🎯 点击定 ${nextTag}: ${hy}px`,
-        hx + 10 / scale,
-        hy,
-        previewColor,
-        '#f8fafc',
-        true
-      );
-    }
-
-    // 2. 绘制已选定的 Y1 / Y2 靶心锚点、刻度短针与胶囊铭牌
-    for (const item of items) {
-      const { tag, x, y, val, color } = item;
-      const railLeft = Math.min(x, Math.max(0, roi.xMin - 40 / scale));
-      const railRight = roi.xMin;
-
-      // (a) 水平刻度指示针（带深色衬底光晕，仅在左侧 Y 轴轨道内延伸至 roi.xMin）
-      ctx.beginPath();
-      ctx.moveTo(railLeft, y);
-      ctx.lineTo(railRight, y);
-      ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.lineWidth = 4.0 / scale;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(railLeft, y);
-      ctx.lineTo(railRight, y);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2.2 / scale;
-      ctx.stroke();
-
-      // (b) 高对比度双环靶心圆点
-      const rOuter = (this.YCALIB_MARKER_RADIUS_SCREEN + 1.5) / scale;
-      const rInner = (this.YCALIB_MARKER_RADIUS_SCREEN - 0.5) / scale;
-      const rDot = 2.2 / scale;
-
-      ctx.beginPath();
-      ctx.arc(x, y, rOuter, 0, Math.PI * 2);
-      ctx.fillStyle = '#0f172a';
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.arc(x, y, rInner, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.arc(x, y, rDot, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffffff';
-      ctx.fill();
-
-      // (c) 胶囊文字标签（显示 Y1/Y2 像素行及已绑定的物理深度/年代值）
-      const hasVal = val !== null && val !== undefined && !Number.isNaN(Number(val));
-      const labelText = hasVal
-        ? `${tag}: ${Math.round(y)}px → ${val} ${cal.unit || 'cm'}`
-        : `${tag}: ${Math.round(y)}px`;
-
-      // 若点击点靠左边缘太近，则胶囊向右展开，否则向左或向右避让数据区
-      const badgeX = x + rOuter + 6 / scale;
-      drawPill(labelText, badgeX, y, color, '#ffffff', true);
-    }
-
-    ctx.restore();
-    return true;
-  }
-
-  /** 涂抹中的线掩膜修正笔迹预览（青=擦除误标，红=补回漏标）。 */
-  private drawLineFixStroke(ctx: CanvasRenderingContext2D): void {
-    const pts = this.lineFixPoints;
-    if (!pts || pts.length === 0) return;
-
-    const scale = this.viewport.scale;
-    const radius = Math.max(2, this.LINEFIX_BRUSH_RADIUS_SCREEN / scale);
-
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = this.lineFixMode === 'erase' ? 'rgba(56, 189, 248, 0.85)' : 'rgba(239, 68, 68, 0.85)';
-    ctx.lineWidth = radius * 2;
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (const p of pts.slice(1)) {
-      ctx.lineTo(p.x, p.y);
-    }
-    if (pts.length === 1) {
-      ctx.lineTo(pts[0].x + 0.01, pts[0].y);
-    }
-    ctx.stroke();
     ctx.restore();
   }
 
@@ -2629,17 +1975,18 @@ export class GeologyCanvas {
         unit: col.unit || '%',
       };
 
+      const dragBoundary = (this.toolStrategies.get('select') as SelectToolStrategy | undefined)?.getDraggingBoundary();
       const isOriginHovered =
         (this.hoveredBoundary?.taxaId === col.id && this.hoveredBoundary.type === 'start') ||
-        (this.draggingBoundary?.taxaId === col.id && this.draggingBoundary.type === 'start');
+        (dragBoundary?.taxaId === col.id && dragBoundary.type === 'start');
 
       const isCalibHovered =
         (this.hoveredBoundary?.taxaId === col.id && this.hoveredBoundary.type === 'tick') ||
-        (this.draggingBoundary?.taxaId === col.id && this.draggingBoundary.type === 'tick');
+        (dragBoundary?.taxaId === col.id && dragBoundary.type === 'tick');
 
       const isEndHovered =
         (this.hoveredBoundary?.taxaId === col.id && this.hoveredBoundary.type === 'end') ||
-        (this.draggingBoundary?.taxaId === col.id && this.draggingBoundary.type === 'end');
+        (dragBoundary?.taxaId === col.id && dragBoundary.type === 'end');
 
       // 1. 端点 1 垂直基准线 (sc.originX - 对应数值 sc.originVal)
       ctx.beginPath();
@@ -2837,9 +2184,13 @@ export class GeologyCanvas {
 
     ctx.save();
 
+    const dragAnchor =
+      (this.toolStrategies.get('select') as SelectToolStrategy | undefined)?.getDraggingAnchor() ||
+      (this.toolStrategies.get('addPoint') as AddPointToolStrategy | undefined)?.getDraggingAnchor();
+
     activeCol.controlPoints.forEach((pt) => {
       const isHovered = this.hoveredAnchor?.pointId === pt.id;
-      const isDragging = this.draggingAnchor?.pointId === pt.id;
+      const isDragging = dragAnchor?.pointId === pt.id;
 
       // 手柄半径屏幕恒定
       const baseRadius = pt.type === 'peak' || pt.type === 'trough' ? 6.0 : pt.type === 'manual' || pt.isManual ? 5.5 : 4.0;
@@ -2957,21 +2308,13 @@ export class GeologyCanvas {
 
     // 3. 复位所有悬停 / 拖拽 / 平移交互状态，防止残留手势锁死
     this.hoveredAnchor = null;
-    this.draggingAnchor = null;
     this.hoveredBoundary = null;
-    this.draggingBoundary = null;
     this.hoveredRoiHandle = null;
-    this.draggingRoiHandle = null;
     this.hoveredDepthHorizon = null;
     this.isHoveringDepthRulerBadge = false;
     this.isPanning = false;
     this.isMouseDown = false;
-    this.hasDraggedAnchor = false;
-    this.dragInitialPointPos = null;
-    this.dragInitialColumn = null;
-    this.dragInitialRoi = null;
     this.yCalibMarks = [];
-    this.lineFixPoints = null;
 
     // 4. 视图滤镜回归原图，工具模式回归微调 (S)
     this.viewport.imageMode = 'normal';
@@ -3202,97 +2545,6 @@ export class GeologyCanvas {
   }
 
   /** 拖拽新建 geometry 时的实时预览（世界坐标，跟随鼠标）。 */
-  /**
-   * 绘制测量尺（M）。
-   *
-   * 本函数在世界坐标下被调用（见叠加层坐标契约：绘制发生在 applyTransform 之内），
-   * 所以线宽、字号、虚线间隔一律乘 `1 / scale` 抵消缩放，屏幕上才是恒定粗细。
-   */
-  private drawMeasureRuler(ctx: CanvasRenderingContext2D): void {
-    const m = this.measureDrag || this.measureLine;
-    if (!m) return;
-    const inv = 1 / this.viewport.scale;
-    const dx = Math.abs(m.b.x - m.a.x);
-    const dy = Math.abs(m.b.y - m.a.y);
-    const dist = Math.hypot(dx, dy);
-
-    ctx.save();
-
-    // 主测量线
-    ctx.setLineDash([6 * inv, 4 * inv]);
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 1.5 * inv;
-    ctx.beginPath();
-    ctx.moveTo(m.a.x, m.a.y);
-    ctx.lineTo(m.b.x, m.b.y);
-    ctx.stroke();
-
-    // 正交投影边：量线宽看 Δy，量间距看 Δx
-    ctx.setLineDash([3 * inv, 3 * inv]);
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
-    ctx.beginPath();
-    ctx.moveTo(m.a.x, m.a.y);
-    ctx.lineTo(m.b.x, m.a.y);
-    ctx.lineTo(m.b.x, m.b.y);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // 两端十字准星
-    for (const p of [m.a, m.b]) {
-      ctx.beginPath();
-      ctx.moveTo(p.x - 5 * inv, p.y);
-      ctx.lineTo(p.x + 5 * inv, p.y);
-      ctx.moveTo(p.x, p.y - 5 * inv);
-      ctx.lineTo(p.x, p.y + 5 * inv);
-      ctx.stroke();
-    }
-
-    // 读数标签
-    const label = `Δx ${dx.toFixed(1)} · Δy ${dy.toFixed(1)} · ${dist.toFixed(1)} px`;
-    ctx.font = `${12 * inv}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-    const tw = ctx.measureText(label).width;
-    const padX = 6 * inv;
-    const padY = 4 * inv;
-    const boxH = 12 * inv + padY * 2;
-    const bx = m.b.x + 10 * inv;
-    const by = m.b.y - boxH - 10 * inv;
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
-    ctx.fillRect(bx, by, tw + padX * 2, boxH);
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 1 * inv;
-    ctx.strokeRect(bx, by, tw + padX * 2, boxH);
-    ctx.fillStyle = '#e0f2fe';
-    ctx.textBaseline = 'top';
-    ctx.fillText(label, bx + padX, by + padY);
-
-    ctx.restore();
-  }
-
-  private drawGeometryCreatePreview(ctx: CanvasRenderingContext2D): void {
-    const create = this.geometryCreate;
-    if (!create) return;
-    const inv = 1 / (this.viewport.scale || 1);
-    const x0 = Math.min(create.startWorld.x, create.endWorld.x);
-    const x1 = Math.max(create.startWorld.x, create.endWorld.x);
-    const y0 = Math.min(create.startWorld.y, create.endWorld.y);
-    const y1 = Math.max(create.startWorld.y, create.endWorld.y);
-
-    ctx.save();
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 1.5 * inv;
-    ctx.setLineDash([6 * inv, 4 * inv]);
-    if (create.axis === 'h') {
-      // 横向线：拖拽的 y 跨度就是线厚，x 跨度是覆盖范围。
-      ctx.fillRect(x0, y0, Math.max(x1 - x0, inv), Math.max(y1 - y0, inv));
-      ctx.strokeRect(x0, y0, Math.max(x1 - x0, inv), Math.max(y1 - y0, inv));
-    } else {
-      ctx.fillRect(x0, y0, Math.max(x1 - x0, inv), Math.max(y1 - y0, inv));
-      ctx.strokeRect(x0, y0, Math.max(x1 - x0, inv), Math.max(y1 - y0, inv));
-    }
-    ctx.restore();
-  }
-
   /** 提交一条 geometry 变更给后端（松手时调用，避免拖拽期间刷屏 RPC）。 */
   private commitGeometry(
     id: string | null,

@@ -148,6 +148,7 @@ export class SettingsModal {
                 <div style="display: flex; gap: 6px;">
                   <input type="password" id="settings-remote-password" placeholder="${t('settings.remotePasswordHint')}" style="flex: 1; padding: 5px 10px; font-size: 11.5px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
                   <button type="button" id="btn-toggle-remote-pwd" class="tool-btn" style="padding: 2px 8px; font-size: 12px;" title="${t('auth.toggleShow')}">👁️</button>
+                  <button type="button" id="btn-clear-remote-pwd" class="tool-btn" style="padding: 2px 8px; font-size: 11px; color: var(--accent-red, #ef4444); display: none;" title="清除当前密码">🗑️ 清除密码</button>
                 </div>
                 <small style="font-size: 10.5px; color: var(--text-muted); line-height: 1.4;">
                   ${t('settings.remotePasswordHint')}
@@ -209,6 +210,8 @@ export class SettingsModal {
 
     this.container.appendChild(modal);
 
+    let shouldClearPassword = false;
+
     // 异步同步后端已持久化的配置
     if (this.rpcClient.getStatus().connected) {
       this.rpcClient.getSystemConfig().then((remoteCfg) => {
@@ -219,7 +222,7 @@ export class SettingsModal {
         }
         if (remoteCfg.allowed_hosts) {
           const hostsArea = modal.querySelector('#settings-allowed-hosts') as HTMLTextAreaElement;
-          if (hostsArea && !hostsArea.value) {
+          if (hostsArea) {
             hostsArea.value = Array.isArray(remoteCfg.allowed_hosts)
               ? remoteCfg.allowed_hosts.join(', ')
               : String(remoteCfg.allowed_hosts);
@@ -227,6 +230,7 @@ export class SettingsModal {
         }
         const pwdBadge = modal.querySelector('#remote-pwd-status-badge') as HTMLElement;
         const pwdInput = modal.querySelector('#settings-remote-password') as HTMLInputElement;
+        const btnClearPwd = modal.querySelector('#btn-clear-remote-pwd') as HTMLButtonElement;
         if (remoteCfg.has_remote_password) {
           if (pwdBadge) {
             pwdBadge.textContent = '[已设密码]';
@@ -234,7 +238,22 @@ export class SettingsModal {
             pwdBadge.style.background = 'rgba(34, 197, 94, 0.15)';
           }
           if (pwdInput) {
-            pwdInput.placeholder = '留空保持原密码；输入新密码修改；输入 CLEAR 清除';
+            pwdInput.placeholder = '留空保持原密码；输入新密码修改';
+          }
+          if (btnClearPwd) {
+            btnClearPwd.style.display = 'inline-block';
+          }
+        } else {
+          if (pwdBadge) {
+            pwdBadge.textContent = '[免密]';
+            pwdBadge.style.color = 'var(--text-muted)';
+            pwdBadge.style.background = 'rgba(148,163,184,0.15)';
+          }
+          if (pwdInput) {
+            pwdInput.placeholder = '留空免密；输入密码以启用保护';
+          }
+          if (btnClearPwd) {
+            btnClearPwd.style.display = 'none';
           }
         }
       }).catch(() => {});
@@ -243,9 +262,34 @@ export class SettingsModal {
     // 绑定交互事件
     const pwdInput = modal.querySelector('#settings-remote-password') as HTMLInputElement;
     const togglePwdBtn = modal.querySelector('#btn-toggle-remote-pwd') as HTMLButtonElement;
+    const btnClearPwd = modal.querySelector('#btn-clear-remote-pwd') as HTMLButtonElement;
+
     togglePwdBtn?.addEventListener('click', () => {
       if (pwdInput) {
         pwdInput.type = pwdInput.type === 'password' ? 'text' : 'password';
+      }
+    });
+
+    btnClearPwd?.addEventListener('click', () => {
+      shouldClearPassword = true;
+      if (pwdInput) {
+        pwdInput.value = '';
+        pwdInput.placeholder = '已标记清除密码，点击【保存】后生效';
+      }
+      const pwdBadge = modal.querySelector('#remote-pwd-status-badge') as HTMLElement;
+      if (pwdBadge) {
+        pwdBadge.textContent = '[待清除]';
+        pwdBadge.style.color = '#ef4444';
+        pwdBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+      }
+      if (btnClearPwd) {
+        btnClearPwd.style.display = 'none';
+      }
+    });
+
+    pwdInput?.addEventListener('input', () => {
+      if (pwdInput.value) {
+        shouldClearPassword = false;
       }
     });
 
@@ -361,7 +405,7 @@ export class SettingsModal {
             theme: themeVal,
           };
           const pwdVal = pwdInput?.value?.trim() || '';
-          if (pwdVal === 'CLEAR') {
+          if (shouldClearPassword || pwdVal === 'CLEAR') {
             updates.remote_password = '';
           } else if (pwdVal) {
             updates.remote_password = pwdVal;

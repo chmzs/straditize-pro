@@ -360,6 +360,72 @@ def check_frontend_rpc_methods() -> list[str]:
     return problems
 
 
+# ------------------------------- H. 协议层 ALL_RPC_METHODS ↔ 后端注册表
+def check_protocol_rpc_inventory() -> list[str]:
+    """核对 straditize_core/protocol.py:ALL_RPC_METHODS 与后端实际注册的方法完全一致。"""
+    problems: list[str] = []
+    protocol_path = ROOT / "straditize_core" / "protocol.py"
+    if not protocol_path.exists():
+        return ["未找到 straditize_core/protocol.py 文件"]
+
+    try:
+        tree = ast.parse(protocol_path.read_text(encoding="utf-8", errors="replace"))
+    except SyntaxError as exc:
+        return [f"protocol.py 语法解析失败: {exc}"]
+
+    declared: set[str] = set()
+    for n in ast.walk(tree):
+        if isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name) and n.target.id == "ALL_RPC_METHODS":
+            if isinstance(n.value, (ast.Tuple, ast.List)):
+                declared = {
+                    elt.value
+                    for elt in n.value.elts
+                    if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
+                }
+            break
+
+    if not declared:
+        return ["未能从 protocol.py 提取到 ALL_RPC_METHODS 声明列表"]
+
+    backend = collect_backend_rpc_methods()
+    missing_in_proto = sorted(backend - declared)
+    missing_in_backend = sorted(declared - backend)
+
+    for m in missing_in_proto:
+        problems.append(f"后端已注册方法 '{m}'，但未在 protocol.py:ALL_RPC_METHODS 契约清单中声明")
+    for m in missing_in_backend:
+        problems.append(f"protocol.py:ALL_RPC_METHODS 声明了 '{m}'，但后端 rpc_methods 未实际注册")
+
+    return problems
+
+
+# ------------------------------- I. 前端 RpcMethod 类型 ↔ 后端注册表
+def check_frontend_rpc_type_inventory() -> list[str]:
+    """核对 frontend/src/types/rpc.ts 的 RpcMethod 联合类型与后端实际注册的方法完全一致。"""
+    problems: list[str] = []
+    rpc_ts = ROOT / "frontend" / "src" / "types" / "rpc.ts"
+    if not rpc_ts.exists():
+        return ["未找到 frontend/src/types/rpc.ts 文件"]
+
+    content = rpc_ts.read_text(encoding="utf-8")
+    m = re.search(r"export type RpcMethod\s*=\s*([^;]+);", content)
+    if not m:
+        return ["未能从 frontend/src/types/rpc.ts 提取到 RpcMethod 联合类型定义"]
+
+    declared_ts = set(re.findall(r"'([^']+)'", m.group(1)))
+    backend = collect_backend_rpc_methods()
+
+    missing_in_ts = sorted(backend - declared_ts)
+    missing_in_backend = sorted(declared_ts - backend)
+
+    for name in missing_in_ts:
+        problems.append(f"后端已注册方法 '{name}'，但未在 rpc.ts:RpcMethod 类型中声明")
+    for name in missing_in_backend:
+        problems.append(f"rpc.ts:RpcMethod 声明了 '{name}'，但后端 rpc_methods 未实际注册")
+
+    return problems
+
+
 def main() -> int:
     strict = "--strict" in sys.argv
     sigs, signature_parse_errors = collect_signatures()
@@ -372,6 +438,8 @@ def main() -> int:
         ("D. pytest python_files 覆盖", check_test_discovery()),
         ("E. 裸步骤数字（应走 WorkflowStage）", check_stage_literals()),
         ("G. 前端 RPC 方法名 ⊆ 后端注册表", check_frontend_rpc_methods()),
+        ("H. 协议层 ALL_RPC_METHODS ↔ 后端注册表", check_protocol_rpc_inventory()),
+        ("I. 前端 RpcMethod 类型 ↔ 后端注册表", check_frontend_rpc_type_inventory()),
     ]
     warnings = [("F. 注释残留旧 7 步编号", check_stale_comments())]
 

@@ -16,6 +16,7 @@ def register(dispatcher: Any, session: Any) -> None:
     dispatcher.register_method("agedepth.loadModelDiagram", session.load_age_depth_diagram)
     dispatcher.register_method("agedepth.extractAndInspect", session.calibrate_and_extract_age_depth)
     dispatcher.register_method("agedepth.getInspection", session.get_age_depth_inspection)
+    dispatcher.register_method("agedepth.updateModel", session.update_age_depth_model)
     dispatcher.register_method("agedepth.generateEnsemble", session.generate_age_ensemble)
     dispatcher.register_method(
         "agedepth.generateBaconScript",

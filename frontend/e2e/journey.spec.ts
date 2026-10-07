@@ -183,6 +183,8 @@ test.describe('八步黄金旅程（全 DOM 点击驱动）', () => {
     // ===== Step 8 → 导出 =====
     await expect(page.locator('#qa-banner'), 'Step 8 诊断横幅必须渲染').toBeVisible();
     await page.locator('#btn-qa-export').click();
+    // 等待全剖面 56 属种列密集等深几何求交完成并将导出模态框挂载至 DOM
+    await page.waitForTimeout(1500);
     await expect(page.locator('.wpd-export-dialog')).toBeVisible({ timeout: 20_000 });
     const readinessBox = page.locator('#export-readiness-container');
     await expect(readinessBox).toBeVisible();

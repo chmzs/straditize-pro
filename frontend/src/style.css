@@ -2782,6 +2782,53 @@ body.theme-light #ad-canvas-container {
   border-color: #cbd5e1 !important;
 }
 
+#ad-floating-toolbar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 20;
+  display: flex;
+  gap: 4px;
+  background: var(--bg-card);
+  padding: 4px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(8px);
+}
+
+body.theme-light #ad-floating-toolbar {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+#ad-floating-toolbar .ad-fmode-btn {
+  font-size: 10px;
+  padding: 2px 7px;
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+#ad-floating-toolbar .ad-fmode-btn:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.1));
+}
+
+body.theme-light #ad-floating-toolbar .ad-fmode-btn:hover {
+  background: #f1f5f9 !important;
+}
+
+#ad-floating-toolbar .ad-fmode-btn.active {
+  background: var(--accent-blue, #0284c7) !important;
+  color: #ffffff !important;
+  border-color: var(--accent-blue, #0284c7) !important;
+  font-weight: 600;
+}
+
 body.theme-light #ad-canvas-hud {
   background: rgba(255, 255, 255, 0.94) !important;
   color: #334155 !important;
@@ -2945,4 +2992,57 @@ body.theme-light .settings-section {
 .settings-dialog input:checked + .slider:before {
   transform: translateX(18px);
 }
+
+/* ================= 年代-深度结果可编辑表格样式 ================= */
+.ad-tbl-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: inherit;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  padding: 3px 5px;
+  text-align: right;
+  transition: all 0.15s ease;
+}
+
+.ad-tbl-input:hover {
+  border-color: var(--border-color);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+body.theme-light .ad-tbl-input:hover {
+  background: #f1f5f9;
+}
+
+.ad-tbl-input:focus {
+  border-color: var(--accent-blue, #0284c7) !important;
+  background: var(--bg-card, #0f172a) !important;
+  outline: none;
+  box-shadow: 0 0 0 1px var(--accent-blue, #0284c7);
+}
+
+body.theme-light .ad-tbl-input:focus {
+  background: #ffffff !important;
+}
+
+.ad-row-inversion td {
+  background: rgba(239, 68, 68, 0.14) !important;
+}
+
+body.theme-light .ad-row-inversion td {
+  background: #fee2e2 !important;
+}
+
+.ad-full-table th {
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+.ad-full-table td {
+  padding: 2px 4px;
+}
+
 

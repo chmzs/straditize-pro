@@ -109,11 +109,20 @@ export class RpcClient {
   private statusListeners: Array<(status: BackendStatus) => void> = [];
   private authToken: string | null = null;
   private onAuthRequiredListeners: Array<() => void> = [];
+  private needsAuthentication: boolean = false;
 
   constructor(endpoint?: string) {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
+    if (typeof window !== 'undefined') {
       try {
-        this.authToken = sessionStorage.getItem('straditize_auth_token') || null;
+        let savedToken =
+          sessionStorage.getItem('straditize_auth_token') ||
+          localStorage.getItem('straditize_auth_token') ||
+          null;
+        if (!savedToken && document.cookie) {
+          const match = document.cookie.match(/(?:^|;\s*)straditize_auth_token=([^;]+)/);
+          if (match) savedToken = decodeURIComponent(match[1]);
+        }
+        this.authToken = savedToken;
       } catch {
         this.authToken = null;
       }
@@ -179,6 +188,12 @@ export class RpcClient {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 1000);
 
+        // 优先带上已有 authToken（如果有的话）
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (this.authToken) {
+          headers['X-Straditize-Auth'] = this.authToken;
+        }
+
         const requestPayload: JsonRpcRequest = {
           jsonrpc: '2.0',
           id: ++this.requestId,
@@ -188,12 +203,22 @@ export class RpcClient {
 
         const res = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify(requestPayload),
           signal: controller.signal,
         });
 
         clearTimeout(timeoutId);
+
+        // 关键：如果后端返回 401 Unauthorized（未认证远程客户端），说明后端在线！只是需要输入密码
+        if (res.status === 401) {
+          this.endpoint = url;
+          this.backendOnline = true;
+          this.needsAuthentication = true;
+          this.triggerAuthRequired();
+          this.notifyStatus();
+          return this.getStatus();
+        }
 
         if (res.ok) {
           const data: JsonRpcResponse = await res.json();
@@ -209,7 +234,10 @@ export class RpcClient {
                   this.isDesktopMode = sData.is_desktop_mode;
                 }
                 if (sData && sData.auth_required) {
+                  this.needsAuthentication = true;
                   this.triggerAuthRequired();
+                } else {
+                  this.needsAuthentication = false;
                 }
               }
             } catch {
@@ -240,6 +268,7 @@ export class RpcClient {
       const data = await res.json();
       if (res.ok && data && data.authenticated) {
         this.setAuthToken(data.token || '');
+        this.needsAuthentication = false;
         return true;
       }
       return false;
@@ -248,14 +277,22 @@ export class RpcClient {
     }
   }
 
+  public isAuthNeeded(): boolean {
+    return this.needsAuthentication;
+  }
+
   public setAuthToken(token: string): void {
     this.authToken = token || null;
-    if (typeof window !== 'undefined' && window.sessionStorage) {
+    if (typeof window !== 'undefined') {
       try {
         if (token) {
           sessionStorage.setItem('straditize_auth_token', token);
+          localStorage.setItem('straditize_auth_token', token);
+          document.cookie = `straditize_auth_token=${encodeURIComponent(token)}; path=/; max-age=2592000; SameSite=Lax`;
         } else {
           sessionStorage.removeItem('straditize_auth_token');
+          localStorage.removeItem('straditize_auth_token');
+          document.cookie = 'straditize_auth_token=; path=/; max-age=0';
         }
       } catch {
         // ignore

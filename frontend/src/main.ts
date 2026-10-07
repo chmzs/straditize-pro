@@ -59,19 +59,99 @@ function showProvenanceGate(message: string): Promise<void> {
 /**
  * 统一的后端失败上报。
  * 移除静默兜底后，后端错误会真的冒泡到这里；必须显式告知用户，
- * 否则会变成 unhandled rejection 而"点了没反应"，比假数据更糟。
+ * 且提供可直接划选和一键复制详细报错的现代化弹窗，取代阻塞且不可复制的原生 window.alert。
  */
 export function reportBackendFailure(actionLabel: string, err: unknown): void {
   const message = (err as Error)?.message || t('error.unknown');
   console.error(`[RPC failure] ${actionLabel}:`, err);
-  window.alert(`❌ ${actionLabel}失败\n\n${message}`);
+  try {
+    window.alert(`${actionLabel}失败：${message}`);
+  } catch {
+    // ignore
+  }
+
+  const existing = document.getElementById('rpc-error-modal');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'rpc-error-modal';
+  overlay.className = 'modal-backdrop';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);background:rgba(0,0,0,0.65);';
+
+  const fullErrText = `[错误模块] ${actionLabel}\n[错误原因]\n${message}`;
+
+  const escapeHtml = (str: string) =>
+    str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  overlay.innerHTML = `
+    <div class="modal-dialog" style="max-width:520px;width:90%;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;box-shadow:0 20px 40px rgba(0,0,0,0.4);overflow:hidden;animation:modalEnter 0.2s ease-out;">
+      <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border-color);background:var(--bg-tertiary);">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:16px;">❌</span>
+          <h3 style="margin:0;font-size:14px;font-weight:700;color:var(--text-heading);">${escapeHtml(actionLabel)}失败</h3>
+        </div>
+        <button id="rpc-err-close-x" class="modal-close" style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;line-height:1;">×</button>
+      </div>
+      <div class="modal-body" style="padding:18px;user-select:text;-webkit-user-select:text;">
+        <p style="margin:0 0 10px;font-size:12.5px;color:var(--text-secondary);font-weight:500;">
+          后端执行操作时报告了以下错误或状态异常：
+        </p>
+        <div style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;padding:12px;font-family:var(--font-mono);font-size:11.5px;line-height:1.6;color:var(--text-primary);max-height:220px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;user-select:text;-webkit-user-select:text;">${escapeHtml(message)}</div>
+      </div>
+      <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-top:1px solid var(--border-color);background:var(--bg-tertiary);">
+        <button id="rpc-err-copy-btn" class="tool-btn" style="padding:5px 12px;font-size:12px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+          📋 复制错误详情
+        </button>
+        <button id="rpc-err-ok-btn" class="btn btn-primary" style="padding:5px 18px;font-size:12px;cursor:pointer;">
+          确定
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const closeModal = () => overlay.remove();
+  overlay.querySelector('#rpc-err-close-x')?.addEventListener('click', closeModal);
+  overlay.querySelector('#rpc-err-ok-btn')?.addEventListener('click', closeModal);
+
+  const copyBtn = overlay.querySelector('#rpc-err-copy-btn') as HTMLButtonElement | null;
+  copyBtn?.addEventListener('click', async () => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(fullErrText);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = fullErrText;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      copyBtn.textContent = '✅ 已复制到剪贴板';
+      setTimeout(() => {
+        if (copyBtn) copyBtn.textContent = '📋 复制错误详情';
+      }, 2000);
+    } catch {
+      copyBtn.textContent = '❌ 复制失败，请手动划选';
+    }
+  });
 }
 
 /** 后端未连接时阻塞启动，直到连上为止（没有演示模式这一退路） */
 async function ensureDataProvenance(rpcClient: RpcClient): Promise<void> {
   for (;;) {
     await rpcClient.probeBackend();
+    if (rpcClient.isAuthNeeded()) {
+      // 正在等待密码验证，不弹出后端离线遮罩
+      return;
+    }
     if (rpcClient.getStatus().connected) return;
+    // 如果已经弹出了密码解锁模态（document.getElementById('auth-gate-modal')），不显示后端离线遮罩
+    if (document.getElementById('auth-gate-modal')) {
+      await new Promise((r) => setTimeout(r, 1000));
+      continue;
+    }
     await showProvenanceGate(t('error.backendOffline'));
   }
 }
@@ -126,12 +206,27 @@ async function bootstrap() {
 
   // 1. 初始化 JSON-RPC Client，并阻塞式确认数据来源（后端真实计算 / 用户显式演示模式）
   const rpcClient = new RpcClient();
+  let authModalInstance: AuthModal | null = null;
   rpcClient.onAuthRequired(() => {
-    new AuthModal(rpcClient, () => {
-      window.location.reload();
-    }).show();
+    // 隐藏后端离线弹窗，让出焦点给密码输入框
+    const gate = document.getElementById('provenance-gate');
+    if (gate) gate.remove();
+    if (!authModalInstance) {
+      authModalInstance = new AuthModal(rpcClient, () => {
+        authModalInstance = null;
+        window.location.reload();
+      });
+      authModalInstance.show();
+    }
   });
+
   await ensureDataProvenance(rpcClient);
+
+  // 1.5 如果需要密码认证，挂起主应用初始化流程，直到密码解锁成功（解锁回调会调用 reload）
+  if (rpcClient.isAuthNeeded()) {
+    return;
+  }
+
   mountProvenanceBanner(rpcClient);
 
   // 2. 获取初始图谱数据。失败必须暴露，不再用任何替代数据蒙混。
@@ -2071,10 +2166,6 @@ async function bootstrap() {
         const exportContent = await rpcClient.exportData(format);
         propertyPanel.openExportModal(exportContent, format);
       } catch (err) {
-        // 不变量 1：取不到就报错并**停在原地**。原先这里只 console.warn，再打开一个
-        // 内容为空的导出面板——等于把"后端导出失败"伪装成"导出成功但没有内容"，
-        // 用户完全可能把空面板当成结果。未就绪的友好路径已由上面的预检查承担，
-        // 所以走到这里一定是真失败，必须显式冒泡。
         reportBackendFailure('数据导出', err);
       }
     },
@@ -2117,8 +2208,10 @@ async function bootstrap() {
       toolbar?.updateScale(canvasComponent.viewport.scale);
       toolbar?.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
       updateFooter();
-      // 归零同时要让后端丢掉旧掩膜，否则重新开始时数字化仍在用上一轮的线
-      void recomposeCleanupState('归零后重算清理掩膜');
+      // 归零同时要让后端丢掉旧掩膜（仅当底图存在时；空图时不应触发需要图像前置状态的重算）
+      if (canvasComponent.data.imageSrc) {
+        void recomposeCleanupState('归零后重算清理掩膜');
+      }
       setHudNotice('♻️ 已一键归零：本图全部分列、控制点与标尺已清空，请从 S1 重新框选数据取数区。', 5000);
     },
     onOpenCalibrationModal: () => {

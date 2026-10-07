@@ -63,6 +63,11 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
     const tbodyRows = dialog.locator('#ad-mapping-tbody tr');
     expect(await tbodyRows.count()).toBeGreaterThan(0);
 
+    // 断言解译质量诊断卡片可见且显示质量评级
+    const qcCard = dialog.locator('#ad-quality-card');
+    await expect(qcCard).toBeVisible();
+    await expect(dialog.locator('#ad-qc-badge')).toContainText('质量优良');
+
     // 4. 点击【✅ 确认无误，关联至花粉图谱】
     await dialog.locator('#ad-btn-apply').click();
     await expect(dialog).toHaveCount(0);
@@ -136,6 +141,89 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
     await expect(modelingPanel.locator('#ad-val-thick')).toHaveText('2 cm');
 
     await dialog.locator('#ad-close-btn').click();
+    await expect(dialog).toHaveCount(0);
+  });
+
+  test.describe('T3 专用子组（放行重置弹窗）', () => {
+    test.use({ allowlists: { dialog: [/确定要重置当前图谱的全部操作吗/] } });
+
+    test('T3 空状态重置防崩溃测试与浮动工具条主题适配', async ({ page }) => {
+      // 1. 在未载入底图的空状态下触发顶栏重置
+      const resetBtn = page.locator('#btn-reset-all');
+      if (await resetBtn.isVisible()) {
+        await resetBtn.click();
+      }
+
+      // 确认未炸出 rpc-error-modal
+      await expect(page.locator('#rpc-error-modal')).toHaveCount(0);
+
+      // 2. 打开年代-深度弹窗，验证浮动工具栏主题结构已正规化
+      await page.locator('#btn-age-depth-modal').click();
+      const dialog = page.locator('.agedepth-dialog');
+      await expect(dialog).toBeVisible();
+
+      const floatToolbar = dialog.locator('#ad-floating-toolbar');
+      await expect(floatToolbar).toBeVisible();
+      await expect(floatToolbar.locator('.ad-fmode-btn')).toHaveCount(4);
+
+      await dialog.locator('#ad-close-btn').click();
+      await expect(dialog).toHaveCount(0);
+    });
+  });
+
+  test('T4 年代-深度提取结果表格呈现与就地可编辑性验证', async ({ page }) => {
+    await gotoStage(page, 3);
+
+    // 1. 打开年代-深度弹窗并载入 Bacon 范例
+    await page.locator('#btn-age-depth-modal').click();
+    const dialog = page.locator('.agedepth-dialog');
+    await expect(dialog).toBeVisible();
+
+    await dialog.locator('#ad-btn-center-bacon').click();
+    await expect(dialog.locator('#ad-current-source-label')).toHaveText('范例: BACON', {
+      timeout: 10_000,
+    });
+
+    // 2. 运行提取
+    await dialog.locator('#ad-btn-extract').click();
+    await expect(dialog.locator('#ad-status-msg')).toContainText('✅ 识别成功', {
+      timeout: 20_000,
+    });
+
+    // 3. 验证侧边栏表格渲染出可编辑输入框
+    const sideInputs = dialog.locator('#ad-mapping-tbody .ad-input-side-age');
+    expect(await sideInputs.count()).toBeGreaterThan(0);
+
+    // 4. 切换到 Tab 2【📋 年代-深度结果数据表】
+    await dialog.locator('#ad-tab-btn-table').click();
+    const tablePanel = dialog.locator('#ad-tab-panel-table');
+    await expect(tablePanel).toBeVisible();
+
+    // 验证大表格行数与可编辑输入框
+    const fullRows = tablePanel.locator('#ad-full-table-tbody tr');
+    const rowCount = await fullRows.count();
+    expect(rowCount).toBeGreaterThan(10);
+
+    // 5. 编辑第一行的年代数值
+    const firstAgeInput = tablePanel.locator('.ad-input-full-age').first();
+    await firstAgeInput.fill('150');
+    await firstAgeInput.dispatchEvent('change');
+
+    // 6. 测试添加新层位
+    await tablePanel.locator('#ad-tbl-btn-add').click();
+    expect(await tablePanel.locator('#ad-full-table-tbody tr').count()).toBe(rowCount + 1);
+
+    // 7. 测试按深度升序排序
+    await tablePanel.locator('#ad-tbl-btn-sort').click();
+
+    // 8. 测试保存同步到模型
+    await tablePanel.locator('#ad-tbl-btn-sync').click();
+    await expect(tablePanel.locator('#ad-table-sync-status')).toContainText('已成功将修改后的年代-深度数据同步', {
+      timeout: 10_000,
+    });
+
+    // 9. 应用并关闭弹窗
+    await dialog.locator('#ad-btn-apply').click();
     await expect(dialog).toHaveCount(0);
   });
 });
