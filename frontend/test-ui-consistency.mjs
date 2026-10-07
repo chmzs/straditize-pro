@@ -169,6 +169,23 @@ check(
   `标题不得中英重复（如「属种词汇表 (Taxa Vocabulary)」）：${bilingualTitles.slice(0, 4).join('、')}`,
 );
 
+// ---- 10. 中文词条内禁止英文译文括注（只保留领域缩写 / 键位 / 后端字段名）----
+// 例：`3. Y 轴物理标定 (Calibration)` 属重复翻译；`(ROI)` `(Ctrl+Z)` `(x_ticks)` 属有效信息。
+const GLOSS_BAN = [
+  '(Adjust)', '(Pan)', '(Column)', '(Add Point)', '(Delete Point)', '(Calibrate)',
+  '(Line Fix)', '(Measure)', '(Calibration)', '(Columns & Naming)', '(Horizons)',
+  '(Verification & QA)', '(Remote Protected)', '(Allowed Hosts & IPs)', '(PIN / Password)', '(T00-b)',
+];
+{
+  const lines = read('./src/i18n/locales/zh-CN.ts').split(String.fromCharCode(10));
+  lines.forEach((line, index) => {
+    const gloss = GLOSS_BAN.find((g) => line.includes(g));
+    if (gloss) {
+      failures.push(`src/i18n/locales/zh-CN.ts:${index + 1} 中文词条不得携带英文译文括注 ${gloss}：${line.trim()}`);
+    }
+  });
+}
+
 if (failures.length > 0) {
   console.error(`✘ UI 一致性门禁失败（${failures.length} 项）:`);
   for (const failure of failures) console.error(`  - ${failure}`);
