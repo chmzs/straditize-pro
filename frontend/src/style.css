@@ -3242,6 +3242,10 @@ body.theme-light .ad-row-inversion td {
   box-shadow: var(--shadow-modal);
 }
 
+.ui-btn--block {
+  width: 100%;
+}
+
 .ui-modal__header,
 .ui-modal__footer {
   display: flex;
@@ -3314,6 +3318,13 @@ body.theme-light .ad-row-inversion td {
 .ui-status--success::before { background: var(--accent-green); }
 .ui-status--warning::before { background: var(--accent-amber); }
 .ui-status--danger::before { background: var(--accent-red); }
+
+.ocr-modal-header__lead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
 
 .sidebar-header-actions {
   display: flex;
@@ -3430,6 +3441,45 @@ body.theme-light .ad-row-inversion td {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.wpd-qa-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+}
+
+.wpd-qa-banner--ok {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #4ade80;
+}
+
+.wpd-qa-banner--warn {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+}
+
+.wpd-qa-banner__sub {
+  font-size: var(--font-size-xs);
+  opacity: 0.85;
+}
+
+.wpd-qc-title {
+  color: var(--accent-amber);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.wpd-qc-list {
+  margin: 0;
+  padding-left: var(--space-4);
 }
 
 .export-modal-footer {

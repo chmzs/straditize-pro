@@ -55,20 +55,20 @@ export class ExportModal {
           <!-- 左侧：双模式（表格预览与交互编辑 / 原始代码）区域 -->
           <div class="wpd-left-area" style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; height: 100%;">
             <!-- 地层丰度百分比总和自检门禁 (Sum Check QA Gate) -->
-            <div id="wpd-sum-check-banner" style="padding: 6px 10px; border-radius: 4px; font-size: 11px; display: flex; align-items: center; justify-content: space-between; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80; flex-shrink: 0;">
-              <span id="wpd-sum-check-text">🟢 <strong>百分比总和自检 (Sum Check)</strong>: 分析中...</span>
-              <span id="wpd-sum-check-sub" style="font-size: 10px; opacity: 0.85;">-- 层位</span>
+            <div id="wpd-sum-check-banner" class="wpd-qa-banner wpd-qa-banner--ok">
+              <span id="wpd-sum-check-text"><strong>百分比总和自检</strong>: 分析中...</span>
+              <span id="wpd-sum-check-sub" class="wpd-qa-banner__sub">-- 层位</span>
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; flex-shrink: 0;">
-              <div class="btn-group" style="display: flex; gap: 4px;">
-                <button id="tab-btn-grid" class="tool-btn active-mode" style="font-size: 11px; padding: 4px 10px;">📊 数据表格 (可就地编辑)</button>
-                <button id="tab-btn-text" class="tool-btn" style="font-size: 11px; padding: 4px 10px;">📝 原始文本 (CSV)</button>
+              <div style="display: flex; gap: 4px;">
+                <button id="tab-btn-grid" class="tool-btn active-mode" style="font-size: 11px; padding: 4px 10px;" title="可就地编辑的数值表格">数据表格</button>
+                <button id="tab-btn-text" class="tool-btn" style="font-size: 11px; padding: 4px 10px;" title="原始 CSV 文本，可复制或手工调整">原始文本</button>
               </div>
               <div style="font-size: 11px; color: var(--text-muted); display: flex; gap: 10px; align-items: center;">
                 <span>Variables: <strong id="wpd-vars-label" style="color: var(--accent-blue);">Depth, 29 Taxa</strong></span>
                 <span id="wpd-data-size-label">0 KB</span>
-                <button id="btn-wpd-reset-edits" class="tool-btn" style="font-size: 10px; padding: 2px 7px; color: var(--text-muted);" title="清除所有手动微调，还原为图谱自动提取值">↺ 还原提取值</button>
+                <button id="btn-wpd-reset-edits" class="tool-btn" style="font-size: 10px; padding: 2px 7px; color: var(--text-muted);" title="清除所有手动微调，还原为图谱自动提取值">还原提取值</button>
               </div>
             </div>
 
@@ -83,7 +83,7 @@ export class ExportModal {
             <textarea id="wpd-data-textarea" class="export-textarea" style="display: none; flex: 1; min-height: 0; font-family: var(--font-mono); font-size: 11px; line-height: 1.45;"></textarea>
 
             <div style="font-size: 10px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;">
-              <span>💡 提示：点击任意表格单元格可直接修改数值（修改项呈橙色高亮），导出 CSV、R 脚本与 TAR 包将实时同步生效。</span>
+              <span>提示：点击任意表格单元格可直接修改数值（修改项呈橙色高亮），导出 CSV、R 脚本与 TAR 包将实时同步生效。</span>
             </div>
           </div>
 
@@ -181,9 +181,11 @@ export class ExportModal {
                 可导出无 NA 的地学标准丰度表、<code>rioja::strat.plot</code> 绘图脚本与 POSIX UStar 项目归档。
               </p>
               <div class="wpd-scientific-qc-box">
-                <div style="color: var(--accent-amber); font-weight: 600; margin-bottom: 2px;">📌 地学科学规范：</div>
-                <div>• 未出现属种严格填报 <code>0.00</code></div>
-                <div>• 对数分析请自行添加伪计数 (如 +0.01)</div>
+                <div class="wpd-qc-title">地学科学规范：</div>
+                <ul class="wpd-qc-list">
+                  <li>未出现属种严格填报 <code>0.00</code></li>
+                  <li>对数分析请自行添加伪计数 (如 +0.01)</li>
+                </ul>
               </div>
             </div>
           </div>
@@ -442,16 +444,12 @@ export class ExportModal {
       subEl.textContent = `${countedRows} 层位质检`;
 
       if (minSum >= 85 && maxSum <= 115) {
-        bannerEl.style.background = 'rgba(34, 197, 94, 0.1)';
-        bannerEl.style.borderColor = 'rgba(34, 197, 94, 0.3)';
-        bannerEl.style.color = '#4ade80';
-        textEl.innerHTML = `🟢 <strong>地层百分比总和自检 (Sum Check)</strong>: 全剖面平均总和 <strong>${meanSum.toFixed(1)}%</strong> (各层位介于 ${minSum.toFixed(1)}% ~ ${maxSum.toFixed(1)}%，质检达标)`;
+        bannerEl.className = 'wpd-qa-banner wpd-qa-banner--ok';
+        textEl.innerHTML = `<strong>百分比总和自检</strong>: 全剖面平均总和 <strong>${meanSum.toFixed(1)}%</strong> (各层位介于 ${minSum.toFixed(1)}% ~ ${maxSum.toFixed(1)}%，质检达标)`;
       } else {
-        bannerEl.style.background = 'rgba(245, 158, 11, 0.12)';
-        bannerEl.style.borderColor = 'rgba(245, 158, 11, 0.4)';
-        bannerEl.style.color = '#fbbf24';
+        bannerEl.className = 'wpd-qa-banner wpd-qa-banner--warn';
         const minDisp = minSum === 999999 ? 0 : minSum.toFixed(1);
-        textEl.innerHTML = `⚠️ <strong>质检提示 (Sum Warning)</strong>: 存在层位总和偏离 100% (范围: <strong>${minDisp}% ~ ${maxSum.toFixed(1)}%</strong>)，请检查是否有穿透越界峰或漏识属种`;
+        textEl.innerHTML = `<strong>质检提示</strong>: 存在层位总和偏离 100% (范围: <strong>${minDisp}% ~ ${maxSum.toFixed(1)}%</strong>)，请检查是否有穿透越界峰或漏识属种`;
       }
     };
 
@@ -492,8 +490,8 @@ export class ExportModal {
     const copyBtn = modal.querySelector('#btn-wpd-copy') as HTMLButtonElement;
     copyBtn?.addEventListener('click', async () => {
       await navigator.clipboard.writeText(textarea.value);
-      copyBtn.textContent = '✅ 已复制!';
-      setTimeout(() => (copyBtn.textContent = '📋 复制到剪贴板'), 1500);
+      copyBtn.textContent = '已复制';
+      setTimeout(() => (copyBtn.textContent = '复制当前数据'), 1500);
     });
 
     // 下载 CSV (直连后端 export.csv)

@@ -61,16 +61,13 @@ export class OcrReviewModal {
     modal.className = 'modal-backdrop';
     modal.innerHTML = `
       <div class="modal-dialog modal-large ocr-review-dialog">
-        <div class="modal-header" style="padding: 10px 16px;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 16px;">🔍</span>
-            <h3 style="font-size: 13.5px; font-weight: 700;">花粉属种名 OCR 识别与审核汇总表 (Taxa OCR & Review)</h3>
-            <span class="logo-badge" style="background: linear-gradient(135deg, #059669, #10b981); font-size: 10px; padding: 2px 6px;" id="ocr-dict-badge">PP-OCRv6 + 内置词典</span>
-            <button class="tool-btn" id="btn-ocr-taxa-dict" title="查看/导入自定义属种词汇表（补充内置词典未收录的微体古生物与地方特有种）" style="font-size: 10.5px; padding: 2px 8px; color: #7c3aed; border-color: rgba(124, 58, 237, 0.4);">
-              📚 词汇表
-            </button>
+        <div class="modal-header ui-modal__header">
+          <div class="ocr-modal-header__lead">
+            <h3 class="ui-modal__title">花粉属种名 OCR 识别与审核</h3>
+            <span class="ui-status ui-status--success" id="ocr-dict-badge">PP-OCRv6 + 内置词典</span>
+            <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-ocr-taxa-dict" title="查看或导入自定义属种词汇表，补充内置词典未收录的微体古生物与地方特有种">词汇表</button>
           </div>
-          <button class="close-btn" id="ocr-close-btn">&times;</button>
+          <button class="ui-icon-btn" id="ocr-close-btn" aria-label="关闭" title="关闭">&times;</button>
         </div>
 
         <div class="modal-body" style="flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow: hidden;">
@@ -78,15 +75,15 @@ export class OcrReviewModal {
           <div class="ocr-crop-card">
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <strong style="color: var(--accent-blue, #0284c7); font-weight: 700;">1. 🖱️ 鼠标框选标签范围 (全宽交互画布):</strong>
+                <strong style="color: var(--accent-blue, #0284c7); font-weight: 700;">1. 鼠标框选标签范围:</strong>
                 <span id="ocr-crop-coords-label" style="font-family: var(--font-mono); color: var(--text-primary); font-size: 11px; font-weight: 600;">
                   [X: ${initialCropX0}~${initialCropX1}, Y: ${initialCropY0}~${initialCropY1}]
                 </span>
-                <button class="tool-btn" id="btn-ocr-reset-crop" style="font-size: 10px; padding: 2px 8px;">重置选框</button>
-                <button class="tool-btn" id="btn-ocr-fit-crop" style="font-size: 10px; padding: 2px 8px;">自适应视口</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-ocr-reset-crop">重置选框</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-ocr-fit-crop">自适应视口</button>
               </div>
               <div style="font-size: 10.5px; color: var(--text-muted);">
-                💡 拖拽 8 点手柄精修边框 | 滚轮缩放 | <b>右键 / 中键拖拽（或空格+左键）平移</b> | 双击复位
+                拖拽 8 点手柄精修边框 | 滚轮缩放 | <b>右键 / 中键拖拽（或空格+左键）平移</b> | 双击复位
               </div>
             </div>
 
@@ -101,16 +98,16 @@ export class OcrReviewModal {
             <!-- 左侧: 旋转扶正控制器与垂直条带预览栏 -->
             <div class="ocr-rot-card">
               <div style="display: flex; justify-content: space-between; align-items: center;">
-                <strong style="font-size: 11px; color: var(--accent-orange, #ea580c);">2. 🔄 旋转校正与执行:</strong>
+                <strong style="font-size: 11px; color: var(--accent-orange, #ea580c);">2. 旋转校正:</strong>
                 <span id="ocr-val-angle" style="font-family: var(--font-mono); color: var(--accent-blue, #0284c7); font-weight: 700; font-size: 11px;">45°</span>
               </div>
 
               <!-- 快捷角度胶囊 -->
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-                <button class="tool-btn ocr-angle-btn active" data-angle="45" style="padding: 3px; font-size: 10px;">45° (标准斜角)</button>
-                <button class="tool-btn ocr-angle-btn" data-angle="0" style="padding: 3px; font-size: 10px;">0° (水平)</button>
-                <button class="tool-btn ocr-angle-btn" data-angle="60" style="padding: 3px; font-size: 10px;">60° (陡峭)</button>
-                <button class="tool-btn ocr-angle-btn" data-angle="30" style="padding: 3px; font-size: 10px;">30° (平缓)</button>
+                <button class="tool-btn ocr-angle-btn active" data-angle="45" style="padding: 3px; font-size: 10px;">45° 标准斜角</button>
+                <button class="tool-btn ocr-angle-btn" data-angle="0" style="padding: 3px; font-size: 10px;">0° 水平</button>
+                <button class="tool-btn ocr-angle-btn" data-angle="60" style="padding: 3px; font-size: 10px;">60° 陡峭</button>
+                <button class="tool-btn ocr-angle-btn" data-angle="30" style="padding: 3px; font-size: 10px;">30° 平缓</button>
               </div>
 
               <div style="display: flex; align-items: center; gap: 6px;">
@@ -120,8 +117,8 @@ export class OcrReviewModal {
               </div>
 
               <!-- 执行按钮 -->
-              <button id="btn-ocr-run" class="btn btn-primary" style="width: 100%; padding: 6px; font-size: 11.5px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #38bdf8);">
-                🚀 执行 OCR 识别
+              <button id="btn-ocr-run" class="ui-btn ui-btn--primary ui-btn--block">
+                执行 OCR 识别
               </button>
 
               <!-- 垂直方向扶正预览视口 (交互式 Canvas 视口) -->
@@ -130,7 +127,7 @@ export class OcrReviewModal {
                   <canvas id="ocr-canvas-rotated" style="position: absolute; inset: 0; width: 100%; height: 100%; display: block;"></canvas>
                 </div>
                 <div class="ocr-rot-status-bar">
-                  <span style="font-weight: 600;">✓ 扶正水平效果预览</span>
+                  <span style="font-weight: 600;">扶正水平效果预览</span>
                   <span style="font-size: 9.5px; color: var(--text-muted);">滚轮缩放 | 右键 / 中键拖拽（或空格+左键）平移 | 双击居中</span>
                 </div>
               </div>
@@ -141,16 +138,16 @@ export class OcrReviewModal {
               <!-- 统计摘要与批量操作 -->
               <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div style="display: flex; gap: 12px; font-size: 11px; align-items: center;">
-                  <strong style="color: var(--text-primary);">3. 📋 属种审核与分列对齐:</strong>
+                  <strong style="color: var(--text-primary);">3. 属种审核与分列对齐:</strong>
                   <span>列数: <strong id="ocr-stat-total" style="color: var(--text-primary);">--</strong></span>
-                  <span style="color: var(--accent-green, #059669);">✅ 自动准确: <strong id="ocr-stat-auto">--</strong></span>
-                  <span style="color: var(--accent-amber, #d97706);">⚠️ 待确认: <strong id="ocr-stat-confirm">--</strong></span>
-                  <span style="color: var(--accent-red, #dc2626);">❌ 未识别: <strong id="ocr-stat-unrec">--</strong></span>
+                  <span class="ui-status ui-status--success">自动准确: <strong id="ocr-stat-auto">--</strong></span>
+                  <span class="ui-status ui-status--warning">待确认: <strong id="ocr-stat-confirm">--</strong></span>
+                  <span class="ui-status ui-status--danger">未识别: <strong id="ocr-stat-unrec">--</strong></span>
                 </div>
 
                 <div style="display: flex; gap: 6px;">
-                  <button id="btn-ocr-accept-all" class="tool-btn" style="font-size: 10.5px; padding: 3px 8px; color: var(--accent-green, #059669); border-color: rgba(5,150,105,0.3);">✓ 全部接受</button>
-                  <button id="btn-ocr-skip-all" class="tool-btn" style="font-size: 10.5px; padding: 3px 8px; color: var(--text-muted);">✗ 全部跳过</button>
+                  <button id="btn-ocr-accept-all" class="ui-btn ui-btn--secondary ui-btn--sm">全部接受</button>
+                  <button id="btn-ocr-skip-all" class="ui-btn ui-btn--quiet ui-btn--sm">全部跳过</button>
                 </div>
               </div>
 
@@ -168,7 +165,7 @@ export class OcrReviewModal {
                     </tr>
                   </thead>
                   <tbody id="ocr-summary-tbody">
-                    <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">点击左侧“🚀 执行 OCR 识别”即可获取属种名单</td></tr>
+                    <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">点击左侧“执行 OCR 识别”获取属种名单</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -176,13 +173,13 @@ export class OcrReviewModal {
           </div>
         </div>
 
-        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 18px;">
+        <div class="modal-footer ui-modal__footer" style="justify-content: space-between;">
           <div style="font-size: 11px; color: var(--text-muted);">
             点击右下角按钮，将审核结果写入图谱下方全部花粉列名与分类属性。
           </div>
           <div style="display: flex; gap: 8px;">
-            <button class="btn btn-secondary" id="ocr-btn-cancel">取消</button>
-            <button class="btn btn-primary" id="ocr-btn-apply" style="background: linear-gradient(135deg, #059669, #10b981);">
+            <button class="ui-btn ui-btn--secondary" id="ocr-btn-cancel">取消</button>
+            <button class="ui-btn ui-btn--primary" id="ocr-btn-apply">
               应用到图谱各列
             </button>
           </div>
@@ -306,7 +303,7 @@ export class OcrReviewModal {
     const bounds = this.cropperCanvas.getCropBounds();
 
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--accent-blue, #0284c7); padding: 24px;">⏳ 正在以 ${angle}° 旋转扶正并执行 PP-OCRv6 识别与 500+ 植物学词典匹配...</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--accent-blue, #0284c7); padding: 24px;">正在以 ${angle}° 旋转扶正并执行 PP-OCRv6 识别与 500+ 植物学词典匹配...</td></tr>`;
     }
 
     try {
@@ -355,7 +352,7 @@ export class OcrReviewModal {
       }
     } catch (err: any) {
       if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--accent-red, #dc2626); padding: 24px;">❌ 识别失败: ${err.message || err}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--accent-red, #dc2626); padding: 24px;">识别失败: ${err.message || err}</td></tr>`;
       }
     }
   }
