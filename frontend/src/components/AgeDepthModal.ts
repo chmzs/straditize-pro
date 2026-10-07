@@ -189,7 +189,7 @@ export class AgeDepthModal {
           this.tableComp.setInspectionData(payload.inspection);
           const statusEl = modal.querySelector('#ad-status-msg');
           if (statusEl) {
-            statusEl.textContent = `✅ 已从工程还原年代模型（${(payload.inspection.depths || []).length} 个深度层位）`;
+            statusEl.textContent = `已从工程还原年代模型（${(payload.inspection.depths || []).length} 个深度层位）`;
           }
         }
         this.canvasComp.fitViewport();

@@ -218,7 +218,7 @@ export class ProjectManager {
       throw new Error('export.tar 返回的数据不合法');
     } catch (err: any) {
       console.error('后端 export.tar 导出失败:', err);
-      notifyError('❌ 科学项目包 (.tar) 导出失败：' + (err.message || err));
+      notifyError('科学项目包 (.tar) 导出失败：' + (err.message || err));
     }
   }
 

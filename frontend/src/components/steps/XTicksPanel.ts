@@ -32,7 +32,7 @@ export function render(data: DiagramData): string {
       <!-- 列所属组与组管理 (Design 2026-09-29 P3) -->
       <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border-color);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 11px; font-weight: 700;">🏷️ 所属组 (X-Group)</span>
+          <span style="font-size: 11px; font-weight: 700;">所属组 (X-Group)</span>
           <div style="display: flex; gap: 4px;">
             <button id="btn-create-group" class="icon-btn" style="font-size: 10px; padding: 1px 5px;" title="在当前 ROI 内新建列组">+ 新组</button>
             <button id="btn-merge-groups" class="icon-btn" style="font-size: 10px; padding: 1px 5px;" title="合并同 ROI 内标度相同的组">合并同类组</button>
@@ -73,7 +73,7 @@ export function render(data: DiagramData): string {
           ${t('step6.autoTicksDesc')}
         </p>
         <button id="btn-detect-xticks" class="btn btn-secondary" style="width: 100%; font-size: 11px; padding: 5px;">
-          🔍 ${t('step6.autoTicksBtn')}
+          ${t('step6.autoTicksBtn')}
         </button>
       </div>
 
@@ -109,7 +109,7 @@ export function render(data: DiagramData): string {
             </div>
           </div>
           <button id="btn-save-manual-ticks" class="btn btn-secondary" style="width: 100%; font-size: 10.5px; padding: 4px 6px; margin-top: 6px;">
-            💾 ${t('step6.saveTicks')}
+            ${t('step6.saveTicks')}
           </button>
         </div>
       </div>

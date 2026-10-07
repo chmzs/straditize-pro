@@ -25,7 +25,7 @@ export function tError(code: number | string, detail?: string): string {
   const base = key ? t(key) : t('error.unknown');
   if (detail) {
     console.warn(`[RPC ${code}] ${detail}`);
-    return `${base} (code ${code})\n\n💡 修复引导: ${detail}`;
+    return `${base} (code ${code})\n\n 修复引导: ${detail}`;
   }
   return `${base} (code ${code})`;
 }

@@ -58,7 +58,7 @@ export class AgeDepthController {
     const el = this.container.querySelector(selector) as HTMLElement | null;
     if (el) {
       el.innerHTML =
-        `<span style="color:var(--accent-red, #ef4444);">⚠️ <strong>后端未连接</strong>: ` +
+        `<span style="color:var(--accent-red, #ef4444);"><strong>后端未连接</strong>: ` +
         `无法读取真实状态（本软件不存在替代数据通路）</span>`;
     }
   }
@@ -194,7 +194,7 @@ export class AgeDepthController {
 
     if (params.calibMarkers.length < 4) {
       this.showExtractError(
-        `标定未完成（已放置 ${params.calibMarkers.length}/4 个点）。请点击「🎯 在图上点击 4 个标定点」并按清单顺序依次落点。`
+        `标定未完成（已放置 ${params.calibMarkers.length}/4 个点）。请点击「 在图上点击 4 个标定点」并按清单顺序依次落点。`
       );
       return;
     }
@@ -239,7 +239,7 @@ export class AgeDepthController {
     const prevLabel = btn?.textContent || '';
     if (btn) {
       btn.disabled = true;
-      btn.textContent = '⏳ 正在逐行追踪年代曲线...';
+      btn.textContent = '正在逐行追踪年代曲线...';
     }
 
     try {
@@ -275,12 +275,12 @@ export class AgeDepthController {
         const channel = meta.curve_channel === 'chroma' ? '色度' : '暗度';
         let note = '';
         if (ens?.skipped) {
-          note = ' · ⚠️ 已跳过年代集合';
+          note = ' · 已跳过年代集合';
         } else if (ens?.diagnostics) {
           note = ` · L=${ens.diagnostics.correlation_length}cm`;
         }
         if (statusEl) {
-          statusEl.textContent = `✅ 识别成功（通道: ${channel}）：提取 ${n} 个深度层位，映射 ${sampled} 个花粉样品${note}`;
+          statusEl.textContent = `识别成功（通道: ${channel}）：提取 ${n} 个深度层位，映射 ${sampled} 个花粉样品${note}`;
         }
         const reasonEl = this.container.querySelector('#ad-channel-reason') as HTMLElement | null;
         if (reasonEl) {
@@ -299,7 +299,7 @@ export class AgeDepthController {
     } finally {
       if (btn) {
         btn.disabled = false;
-        btn.textContent = prevLabel || '🔍 ③ 运行识别并叠加视觉校对';
+        btn.textContent = prevLabel || '③ 运行识别并叠加视觉校对';
       }
     }
   }
@@ -309,7 +309,7 @@ export class AgeDepthController {
   public async syncModelToBackend(inspectionData: AgeDepthModelInspectionData): Promise<void> {
     if (!inspectionData || inspectionData.depths.length < 2) return;
     const statusEl = this.container.querySelector('#ad-table-sync-status');
-    if (statusEl) statusEl.textContent = '⏳ 正在同步模型到后端...';
+    if (statusEl) statusEl.textContent = '正在同步模型到后端...';
     try {
       await this.rpcClient.call('agedepth.updateModel', {
         depths: inspectionData.depths,
@@ -319,12 +319,12 @@ export class AgeDepthController {
         metadata: inspectionData.metadata,
       });
       if (statusEl) {
-        statusEl.textContent = '✅ 已成功将修改后的年代-深度数据同步到工程！';
+        statusEl.textContent = '已成功将修改后的年代-深度数据同步到工程！';
         setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
       }
     } catch (err: any) {
       if (statusEl) {
-        statusEl.textContent = `❌ 同步失败: ${err.message || err}`;
+        statusEl.textContent = `同步失败: ${err.message || err}`;
       }
     }
   }
@@ -343,7 +343,7 @@ export class AgeDepthController {
       if (res && res.has_r && res.has_rbacon) {
         if (statusEl) {
           statusEl.innerHTML =
-            `🟢 <strong>本机 R 已就绪，将直接调用</strong>: ${res.r_version || 'R 4.x'} · ` +
+            `<strong>本机 R 已就绪，将直接调用</strong>: ${res.r_version || 'R 4.x'} · ` +
             `rbacon 已安装 · 无需下载组件`;
         }
         if (runBtn) {
@@ -353,15 +353,15 @@ export class AgeDepthController {
       }
       if (res && res.has_r) {
         if (statusEl) {
-          statusEl.innerHTML = `🟡 已探测到 ${res.r_version || 'R'}，但缺少 <code>rbacon</code> 包。装包后即可本机运行：<code>install.packages("rbacon")</code>`;
+          statusEl.innerHTML = `已探测到 ${res.r_version || 'R'}，但缺少 <code>rbacon</code> 包。装包后即可本机运行：<code>install.packages("rbacon")</code>`;
         }
         return;
       }
       if (statusEl) {
-        statusEl.innerHTML = `⚪ 未探测到本机 R/rbacon。可安装 R + rbacon（推荐），或待 WebR 引擎接通后使用内置算力。`;
+        statusEl.innerHTML = `未探测到本机 R/rbacon。可安装 R + rbacon（推荐），或待 WebR 引擎接通后使用内置算力。`;
       }
     } catch {
-      if (statusEl) statusEl.textContent = '⚪ 本地 R 探测通道就绪';
+      if (statusEl) statusEl.textContent = '本地 R 探测通道就绪';
     }
   }
 
@@ -443,7 +443,7 @@ export class AgeDepthController {
         } else if (res.progress.status === 'failed') {
           clearInterval(this.downloadTimer);
           this.downloadTimer = null;
-          if (txt) txt.innerHTML = `<span style="color:#ef4444;">❌ 下载失败: ${res.progress.error || '网络超时'}</span>`;
+          if (txt) txt.innerHTML = `<span style="color:#ef4444;">下载失败: ${res.progress.error || '网络超时'}</span>`;
         }
       } else if (res && res.is_installed) {
         clearInterval(this.downloadTimer);
@@ -468,7 +468,7 @@ export class AgeDepthController {
 
       if (instRes && instRes.success) {
         this.onComponentReady(instRes);
-        notifyError('✅ 组件已就绪，年龄建模功能已激活！');
+        notifyError('组件已就绪，年龄建模功能已激活！');
         this.checkComponentStatus();
       }
     } catch (err: any) {
@@ -510,7 +510,7 @@ export class AgeDepthController {
     if (box) box.style.display = 'block';
     if (bar) bar.style.width = '100%';
     if (txt) {
-      txt.innerHTML = `<span style="color:#34d399; font-weight: 700;">✅ 组件已就绪，年龄建模功能已激活！</span>`;
+      txt.innerHTML = `<span style="color:#34d399; font-weight: 700;">组件已就绪，年龄建模功能已激活！</span>`;
     }
     if (statusEl) {
       const ver = data?.version || '1.0.0';
@@ -522,7 +522,7 @@ export class AgeDepthController {
     }
     const hintEl = this.container.querySelector('#ad-local-r-status');
     if (hintEl) {
-      hintEl.innerHTML = `<strong style="color:#34d399;">✅ 年龄建模组件已就绪</strong> · 随时可运行 Bacon 建模`;
+      hintEl.innerHTML = `<strong style="color:#34d399;">年龄建模组件已就绪</strong> · 随时可运行 Bacon 建模`;
     }
   }
 
@@ -542,14 +542,14 @@ export class AgeDepthController {
     const statusEl = this.container.querySelector('#ad-local-r-status');
     if (runBtn) {
       runBtn.disabled = true;
-      runBtn.textContent = '⏳ 正在进行探测与建模计算...';
+      runBtn.textContent = '正在进行探测与建模计算...';
     }
 
     try {
       if (this.backendUnavailable()) {
         this.renderBackendOffline('#ad-local-r-status');
         notifyError(
-          '⚠️ 后端未连接，无法运行年代建模。\n\n' +
+          '后端未连接，无法运行年代建模。\n\n' +
           'RPC 客户端已降级为离线 Mock：它不会再向后端发起请求，也无法返回真实的 ' +
           'R 环境探测或建模结果。请确认 straditize 后端进程在运行，然后重新打开本窗口。'
         );
@@ -570,7 +570,7 @@ export class AgeDepthController {
 
       if (hasLocalR) {
         if (statusEl) {
-          statusEl.innerHTML = `🟢 <strong>本地 R 环境就绪 (${rVersion})</strong>: 原生满血 150 万次 MCMC 运算中 (仅需 2~3 秒)...`;
+          statusEl.innerHTML = `<strong>本地 R 环境就绪 (${rVersion})</strong>: 原生满血 150 万次 MCMC 运算中 (仅需 2~3 秒)...`;
         }
         const res = await this.rpcClient.call<any, any>('agedepth.runLocalBacon', {
           dates: params.dates,
@@ -584,15 +584,15 @@ export class AgeDepthController {
         if (res && res !== true && res.success && res.inspection) {
           this.callbacks.onLocalBaconSuccess?.(res);
           if (statusEl) {
-            statusEl.innerHTML = `✅ <strong>本地 R 建模完成</strong>: 原生 150 万次 MCMC 成功完成并生成 95% 置信带！`;
+            statusEl.innerHTML = `<strong>本地 R 建模完成</strong>: 原生 150 万次 MCMC 成功完成并生成 95% 置信带！`;
           }
-          notifyError('✅ 本地 Rscript 原生满血 Bacon 建模完成！已自动生成拟合中值线与 95% 置信区间。');
+          notifyError('本地 Rscript 原生满血 Bacon 建模完成！已自动生成拟合中值线与 95% 置信区间。');
           return;
         }
         if (res && res !== true && res.error) {
-          notifyError(`❌ 本地 R 建模失败: ${res.error}`);
+          notifyError(`本地 R 建模失败: ${res.error}`);
           if (statusEl) {
-            statusEl.innerHTML = `<span style="color:var(--accent-red, #ef4444);">❌ 本地 R 建模失败: ${res.error}</span>`;
+            statusEl.innerHTML = `<span style="color:var(--accent-red, #ef4444);">本地 R 建模失败: ${res.error}</span>`;
           }
           return;
         }
@@ -601,7 +601,7 @@ export class AgeDepthController {
       const compStatus = await this.rpcClient.call<{ name: string }, any>('component.getStatus', { name: 'age-modeling' });
       if (compStatus && compStatus !== true && compStatus.is_installed) {
         if (statusEl) {
-          statusEl.innerHTML = `⚡ <strong>WebR 算力就绪</strong>: 正在拉起内置 WASM 引擎计算...`;
+          statusEl.innerHTML = `<strong>WebR 算力就绪</strong>: 正在拉起内置 WASM 引擎计算...`;
         }
         await this.runWebRAgeModeling();
         return;
@@ -622,18 +622,18 @@ export class AgeDepthController {
     const statusEl = this.container.querySelector('#ad-local-r-status');
     if (statusEl) {
       statusEl.innerHTML =
-        `<span style="color:var(--accent-amber);">⚠️ <strong>WebR 引擎尚未接通</strong>: ` +
+        `<span style="color:var(--accent-amber);"><strong>WebR 引擎尚未接通</strong>: ` +
         `组件资产已挂载，但浏览器端 rbacon 调用尚未实现，本路径不产出结果。</span>`;
     }
     notifyError(
-      '⚠️ WebR 内置算力引擎尚未接通。\n\n' +
+      'WebR 内置算力引擎尚未接通。\n\n' +
       '组件资产（WASM/JS）已安装到用户目录并通过 /components/webr/ 挂载，但浏览器端调用 ' +
       'rbacon 的执行代码还没有实现。\n\n' +
       '为避免用「线性内插 + 拍脑袋误差项」冒充贝叶斯年代模型（那会跳过 ¹⁴C 校正，' +
       '把 ¹⁴C BP 当成 cal BP 写进结果），本路径不产出任何年代数据。\n\n' +
       '请改用以下真实通道：\n' +
       '1. 【▶ 运行 Bacon 年龄建模】→ 本地 R + rbacon 原生运行\n' +
-      '2. 【📈 geoChronR 脚本】→ 导出后在 R 中自行运行'
+      '2. 【geoChronR 脚本】→ 导出后在 R 中自行运行'
     );
   }
 
@@ -648,11 +648,11 @@ export class AgeDepthController {
       }, 3000);
     }
     notifyError(
-      '💡 未检测到本地 R/rbacon 环境，且尚未安装浏览器内置 WebR 算力包。\n\n' +
+      '未检测到本地 R/rbacon 环境，且尚未安装浏览器内置 WebR 算力包。\n\n' +
       '您可以通过以下方式之一运行年龄建模：\n' +
       '1. 点击下方【下载组件 (~40 MB)】（流式拉取、进度与速度实时显示、SHA256严密校验）\n' +
       '2. 或在 R 终端中运行：install.packages("rbacon")\n' +
-      '3. 或点击【📂 离线导入】选择 age-modeling.zip'
+      '3. 或点击【离线导入】选择 age-modeling.zip'
     );
   }
 

@@ -66,7 +66,6 @@ export class SettingsModal {
           <!-- 一、通用偏好 -->
           <div class="settings-section" style="background: var(--bg-tertiary); border: 1px solid var(--border-light); border-radius: 8px; padding: 14px 16px;">
             <div style="font-weight: 700; font-size: 13px; color: var(--text-heading); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
-              <span>🌐</span>
               <span>${t('settings.preferences')}</span>
             </div>
 
@@ -90,11 +89,11 @@ export class SettingsModal {
                 <div style="display: flex; align-items: center; gap: 14px;">
                   <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-primary); cursor: pointer;">
                     <input type="radio" name="settings-theme" id="theme-light-radio" value="light" ${isLight ? 'checked' : ''} style="cursor: pointer;" />
-                    <span>☀️ ${t('settings.themeLight')}</span>
+                    <span>${t('settings.themeLight')}</span>
                   </label>
                   <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-primary); cursor: pointer;">
                     <input type="radio" name="settings-theme" id="theme-dark-radio" value="dark" ${!isLight ? 'checked' : ''} style="cursor: pointer;" />
-                    <span>🌙 ${t('settings.themeDark')}</span>
+                    <span>${t('settings.themeDark')}</span>
                   </label>
                 </div>
               </div>
@@ -104,7 +103,6 @@ export class SettingsModal {
           <!-- 二、远程访问与网关 -->
           <div class="settings-section" style="background: var(--bg-tertiary); border: 1px solid var(--border-light); border-radius: 8px; padding: 14px 16px;">
             <div style="font-weight: 700; font-size: 13px; color: var(--text-heading); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
-              <span>🌐</span>
               <span>${t('settings.remote')}</span>
             </div>
 
@@ -147,8 +145,8 @@ export class SettingsModal {
                 </label>
                 <div style="display: flex; gap: 6px;">
                   <input type="password" id="settings-remote-password" placeholder="${t('settings.remotePasswordHint')}" style="flex: 1; padding: 5px 10px; font-size: 11.5px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
-                  <button type="button" id="btn-toggle-remote-pwd" class="tool-btn" style="padding: 2px 8px; font-size: 12px;" title="${t('auth.toggleShow')}">👁️</button>
-                  <button type="button" id="btn-clear-remote-pwd" class="tool-btn" style="padding: 2px 8px; font-size: 11px; color: var(--accent-red, #ef4444); display: none;" title="清除当前密码">🗑️ 清除密码</button>
+                  <button type="button" id="btn-toggle-remote-pwd" class="tool-btn" style="padding: 2px 8px; font-size: 12px;" title="${t('auth.toggleShow')}"></button>
+                  <button type="button" id="btn-clear-remote-pwd" class="tool-btn" style="padding: 2px 8px; font-size: 11px; color: var(--accent-red, #ef4444); display: none;" title="清除当前密码">清除密码</button>
                 </div>
                 <small style="font-size: 10.5px; color: var(--text-muted); line-height: 1.4;">
                   ${t('settings.remotePasswordHint')}
@@ -160,7 +158,6 @@ export class SettingsModal {
           <!-- 三、后端连接与 WebMCP 状态 -->
           <div class="settings-section" style="background: var(--bg-tertiary); border: 1px solid var(--border-light); border-radius: 8px; padding: 14px 16px;">
             <div style="font-weight: 700; font-size: 13px; color: var(--text-heading); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
-              <span>🔌</span>
               <span>${t('settings.backend')}</span>
             </div>
 

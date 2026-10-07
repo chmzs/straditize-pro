@@ -484,7 +484,7 @@ export class AgeDepthCanvas {
 
     const startBtn = this.container.querySelector('#ad-btn-calib-start') as HTMLButtonElement | null;
     if (startBtn) {
-      startBtn.textContent = this.calibMarkers.length >= 4 ? '🎯 重新点击标定点' : '🎯 在图上点击 4 个标定点';
+      startBtn.textContent = this.calibMarkers.length >= 4 ? '重新点击标定点' : '在图上点击 4 个标定点';
     }
 
     const values = this.container.querySelector('#ad-calib-values') as HTMLElement | null;

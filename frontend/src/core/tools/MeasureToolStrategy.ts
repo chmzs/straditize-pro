@@ -67,7 +67,7 @@ export class MeasureToolStrategy implements ToolStrategy {
       const dist = Math.hypot(dx, dy);
       const thin = dx > 0 && dy > 0 && Math.min(dx, dy) <= 12 && Math.max(dx, dy) > 12;
       ctx.notifyNotice(
-        `📏 测量: Δx ${dx.toFixed(1)} · Δy ${dy.toFixed(1)} · 距离 ${dist.toFixed(1)} px` +
+        `测量: Δx ${dx.toFixed(1)} · Δy ${dy.toFixed(1)} · 距离 ${dist.toFixed(1)} px` +
           (thin ? `（横跨方向的 ${Math.min(dx, dy).toFixed(1)}px 即线宽，可填入侧栏"统一厚度"）` : '')
       );
       ctx.requestRender();

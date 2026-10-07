@@ -29,7 +29,7 @@ export function render(data: DiagramData): string {
           ${t('step7.consensusDesc')}
         </p>
         <button id="btn-extract-consensus" class="btn btn-secondary" style="width: 100%; font-size: 11px; padding: 5px;">
-          ⚡ ${t('step7.consensusBtn')}
+          ${t('step7.consensusBtn')}
         </button>
       </div>
 

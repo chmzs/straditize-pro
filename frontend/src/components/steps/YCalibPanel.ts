@@ -91,7 +91,7 @@ export function render(data: DiagramData): string {
         </div>
 
         <button id="btn-apply-ycalib" class="btn btn-secondary" style="width: 100%; font-size: 11px; padding: 5px; margin-top: 6px;">
-          💾 ${t('step3.apply')}
+          ${t('step3.apply')}
         </button>
       </div>
 

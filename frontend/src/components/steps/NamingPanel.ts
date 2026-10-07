@@ -56,7 +56,7 @@ export function render(data: DiagramData): string {
           ${t('step5.ocrDesc')}
         </p>
         <button id="btn-trigger-ocr" class="btn btn-secondary" style="width: 100%; font-size: 11px; padding: 5px;">
-          ⚡ ${t('step5.ocrBtn')}
+          ${t('step5.ocrBtn')}
         </button>
       </div>
 
@@ -99,7 +99,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       ctx.onOpenOcrReviewModal();
       return;
     }
-    notifyError('请使用顶栏【🔍 OCR】按钮框选并识别图谱顶部标签。');
+    notifyError('请使用顶栏【OCR】按钮框选并识别图谱顶部标签。');
   });
 
   root.querySelector('#btn-apply-naming-next')?.addEventListener('click', () => {

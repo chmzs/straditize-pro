@@ -10,7 +10,7 @@
  * - 步骤 8 QaPanel + ExportReadinessPanel：
  *   5. 【调整容差】（#qa-inp-tolerance）触发 qa.summarize 重新计算，且 banner/指标实时联动；
  *   6. 【重新执行 QA】（#btn-run-qa）真发 RPC；
- *   7. 未标定属种列在 #qa-column-peaks-container 中显式标出 ⚠️ 未标定，
+ * 7. 未标定属种列在 #qa-column-peaks-container 中显式标出 未标定，
  *      且 #lbl-export-calibration-status 显示未标定列数统计（P1: 未标定显式化）；
  *   8. 【直接导出】（#btn-qa-export）触发导出通道。
  */

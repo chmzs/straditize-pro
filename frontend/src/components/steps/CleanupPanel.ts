@@ -74,7 +74,7 @@ export function render(data: DiagramData): string {
                   border:1px solid ${isSelected ? '#38bdf8' : 'transparent'};">
         <span title="在水印图上选中并拖动编辑" class="btn-select-geometry" data-cand-id="${c.id}"
               style="cursor:pointer;font-family:monospace;color:var(--text-muted);flex:1;font-size:9.5px;">
-          ${c.axis === 'h' ? '↔' : '↕'} ${range} <span style="opacity:.7;">(${c.width}px, ${src})</span>
+          ${c.axis === 'h' ? '↔' : ''} ${range} <span style="opacity:.7;">(${c.width}px, ${src})</span>
         </span>
         ${badge}
         <button class="btn-toggle-geometry" data-cand-id="${c.id}" data-next="${isRemoved ? 'candidate' : 'removed'}"
@@ -95,7 +95,7 @@ export function render(data: DiagramData): string {
       <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border-color);">
         <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px; color: var(--text-primary);">① 检测干扰线</div>
         <button id="btn-detect-candidates" class="btn btn-secondary" style="width: 100%; font-size: 11px; padding: 5px;">
-          🔍 ${t('step4.rescan')}
+          ${t('step4.rescan')}
         </button>
         <div style="font-size: 10px; color: var(--text-muted); line-height: 1.45; margin-top: 6px;">
           检测出的几何一律为<strong style="color:#f59e0b;">待确认</strong>：不点"确认去除"就不会动任何一个像素。
@@ -159,11 +159,11 @@ export function render(data: DiagramData): string {
         <div style="display: flex; gap: 6px; margin-bottom: 6px;">
           <button id="btn-trigger-linefix" class="btn btn-secondary" style="flex: 1; font-size: 10.5px; padding: 5px;"
                   title="按住左键涂抹，把被误标成线的数据擦回来">
-            🧽 擦掉误标
+            擦掉误标
           </button>
           <button id="btn-linefix-restore" class="btn btn-secondary" style="flex: 1; font-size: 10.5px; padding: 5px;"
                   title="按住左键涂抹，手工补上算法漏掉的线">
-            🖌 补回漏标
+            补回漏标
           </button>
         </div>
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px;">
@@ -189,7 +189,7 @@ export function render(data: DiagramData): string {
           ${statsLine(data)}
         </div>
         <button id="btn-clear-cleanup-edits" class="btn btn-secondary" style="width:100%; margin-top:6px; font-size:10px; padding:4px;">
-          🧽 清空本步全部几何 / 排除区 / 笔迹
+          清空本步全部几何 / 排除区 / 笔迹
         </button>
       </div>
 
@@ -300,7 +300,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     applyBtn.disabled = true;
     applyBtn.style.opacity = '0.75';
     applyBtn.style.cursor = 'wait';
-    applyBtn.innerHTML = '⏳ 正在切分属种基线，请稍候...';
+    applyBtn.innerHTML = '正在切分属种基线，请稍候...';
     try {
       await ctx.onAdvanceWorkflowStage?.(5);
     } finally {

@@ -3443,6 +3443,15 @@ body.theme-light .ad-row-inversion td {
   gap: var(--space-3);
 }
 
+/* 空态占位块：替代 emoji 图标，见 docs/UI_DESIGN_SYSTEM.md */
+.ui-empty-glyph {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 10px;
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-md);
+}
+
 .wpd-qa-banner {
   display: flex;
   align-items: center;

@@ -65,19 +65,19 @@ export function createAgeDepthModalHtml(): string {
               <!-- 画布左上角控制点与测年点交互工具条 -->
               <div id="ad-floating-toolbar">
                 <button class="tool-btn ad-fmode-btn active" data-fmode="adjust">微调 (V)</button>
-                <button class="tool-btn ad-fmode-btn" data-fmode="add">➕ 加点 (A)</button>
-                <button class="tool-btn ad-fmode-btn" data-fmode="delete">➖ 删点 (D)</button>
-                <button class="tool-btn ad-fmode-btn" data-fmode="pickDate" style="color: #34d399;">🎯 拾取测年点 (P)</button>
+                <button class="tool-btn ad-fmode-btn" data-fmode="add">加点 (A)</button>
+                <button class="tool-btn ad-fmode-btn" data-fmode="delete">删点 (D)</button>
+                <button class="tool-btn ad-fmode-btn" data-fmode="pickDate" style="color: #34d399;">拾取测年点 (P)</button>
               </div>
               <canvas id="ad-inspection-canvas" style="position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; display: none;"></canvas>
               <div id="ad-empty-drop-zone" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg-card); z-index: 10; padding: 24px; text-align: center;">
-                <div style="font-size: 44px; margin-bottom: 10px;">⏳</div>
-                <h4 style="font-size: 15px; font-weight: 700; color: var(--text-heading); margin: 0 0 6px 0;">请载入年代-深度模型图谱 (Age-Depth Diagram)</h4>
+                <div class="ui-empty-glyph" aria-hidden="true"></div>
+                <h4 style="font-size: 15px; font-weight: 700; color: var(--text-heading); margin: 0 0 6px 0;">请载入年代-深度模型图谱</h4>
                 <p style="font-size: 11.5px; color: var(--text-secondary); margin: 0 0 16px 0; max-width: 420px; line-height: 1.5;">
                   直接将 <strong>Bacon / Bchron / OxCal</strong> 年代图拖拽至此处，或选择内置范例。
                 </p>
                 <button id="ad-btn-center-browse" class="btn btn-primary" style="padding: 6px 18px; font-size: 12px; margin-bottom: 10px;">
-                  📁 选择本地年代图 (PNG/JPG)
+                  选择本地年代图 (PNG/JPG)
                 </button>
                 <div style="display: flex; gap: 10px; align-items: center; font-size: 11px;">
                   <button id="ad-btn-center-bacon" class="tool-btn" style="color: var(--accent-blue);">Hoya Bacon 范例</button>
@@ -90,7 +90,7 @@ export function createAgeDepthModalHtml(): string {
             </div>
 
             <div style="font-size: 10.5px; color: var(--text-muted); display: flex; justify-content: space-between;">
-              <span>💡 视觉检查标准：高亮蓝线应精确穿过深色脊线；琥珀色阴影应贴合灰色置信区间边缘。</span>
+              <span>视觉检查标准：高亮蓝线应精确穿过深色脊线；琥珀色阴影应贴合灰色置信区间边缘。</span>
               <span id="ad-status-msg" style="color: #34d399;"></span>
             </div>
           </div>
@@ -102,7 +102,7 @@ export function createAgeDepthModalHtml(): string {
                 <span>图谱数据源:</span>
                 <span id="ad-current-source-label" style="color: var(--accent-blue);">未载入</span>
               </div>
-              <button class="btn btn-primary" id="ad-btn-upload-file" style="width: 100%; font-size: 11px; padding: 5px;">📁 上传本地图谱</button>
+              <button class="btn btn-primary" id="ad-btn-upload-file" style="width: 100%; font-size: 11px; padding: 5px;">上传本地图谱</button>
               <input type="file" id="ad-file-input" accept="image/*" style="display: none;" />
             </div>
 
@@ -126,7 +126,7 @@ export function createAgeDepthModalHtml(): string {
               </div>
 
               <button class="btn btn-primary" id="ad-btn-calib-start" style="width: 100%; font-size: 11px; padding: 5px; background: linear-gradient(135deg, #0284c7, #38bdf8);">
-                🎯 在图上点击 4 个标定点
+                在图上点击 4 个标定点
               </button>
 
               <ol id="ad-calib-checklist" style="margin: 8px 0 0 0; padding-left: 18px; font-size: 10px; line-height: 1.7; color: var(--text-muted);">
@@ -210,7 +210,7 @@ export function createAgeDepthModalHtml(): string {
             </div>
 
             <button class="btn btn-primary" id="ad-btn-extract" style="padding: 7px 10px; font-size: 11.5px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #38bdf8);">
-              🔍 ③ 运行识别并叠加视觉校对
+              ③ 运行识别并叠加视觉校对
             </button>
 
             <div id="ad-extract-error" style="display: none; font-size: 10px; color: var(--accent-red, #ef4444); line-height: 1.5; padding: 6px 8px; border-radius: 4px; background: rgba(239, 68, 68, 0.08);"></div>
@@ -218,7 +218,7 @@ export function createAgeDepthModalHtml(): string {
             <!-- 排除笔刷（矩形橡皮擦） -->
             <div class="form-group" style="margin: 0; padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
               <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 10.5px; font-weight: 600;">🧽 排除干扰区 (橡皮擦)</span>
+                <span style="font-size: 10.5px; font-weight: 600;">排除干扰区 (橡皮擦)</span>
                 <span id="ad-exclude-count" style="font-size: 9.5px; color: var(--text-muted);">0 个</span>
               </div>
               <div style="display: flex; gap: 6px; margin-top: 5px;">
@@ -243,7 +243,7 @@ export function createAgeDepthModalHtml(): string {
               <!-- 提取质量指标卡片 (Quality Audit) -->
               <div id="ad-quality-card" style="display: none; margin-bottom: 6px; padding: 6px 8px; border-radius: 4px; background: var(--bg-tertiary); border: 1px solid var(--border-color); font-size: 9.5px; line-height: 1.4;">
                 <div style="display: flex; justify-content: space-between; align-items: center; font-weight: 600; margin-bottom: 3px;">
-                  <span style="color: var(--text-heading);">📊 解译质量诊断:</span>
+                  <span style="color: var(--text-heading);">解译质量诊断:</span>
                   <span id="ad-qc-badge" style="padding: 1px 5px; border-radius: 3px; font-size: 9px; font-weight: bold;">--</span>
                 </div>
                 <div id="ad-qc-details" style="color: var(--text-secondary); display: flex; flex-direction: column; gap: 2px;">
@@ -301,11 +301,11 @@ export function createAgeDepthModalHtml(): string {
               <button class="tool-btn ad-table-view-btn active" id="ad-tbl-view-model" style="font-size: 10.5px; padding: 3px 8px;">提取全量模型层位</button>
               <button class="tool-btn ad-table-view-btn" id="ad-tbl-view-samples" style="font-size: 10.5px; padding: 3px 8px;">花粉样品采样层位</button>
               <span style="border-left: 1px solid var(--border-color); height: 16px; margin: 0 4px;"></span>
-              <button class="tool-btn" id="ad-tbl-btn-add" style="font-size: 10.5px; padding: 3px 8px; color: #10b981;">➕ 添加层位</button>
-              <button class="tool-btn" id="ad-tbl-btn-sort" style="font-size: 10.5px; padding: 3px 8px;">🔄 按深度升序排序</button>
-              <button class="tool-btn" id="ad-tbl-btn-copy" style="font-size: 10.5px; padding: 3px 8px;">📋 复制全部 (TSV)</button>
-              <button class="tool-btn" id="ad-tbl-btn-paste" style="font-size: 10.5px; padding: 3px 8px;">📥 粘贴导入 (Excel/TSV)</button>
-              <button class="btn btn-primary" id="ad-tbl-btn-sync" style="font-size: 10.5px; padding: 3px 12px; background: linear-gradient(135deg, #0284c7, #38bdf8);">💾 保存同步至模型</button>
+              <button class="tool-btn" id="ad-tbl-btn-add" style="font-size: 10.5px; padding: 3px 8px; color: #10b981;">添加层位</button>
+              <button class="tool-btn" id="ad-tbl-btn-sort" style="font-size: 10.5px; padding: 3px 8px;">按深度升序排序</button>
+              <button class="tool-btn" id="ad-tbl-btn-copy" style="font-size: 10.5px; padding: 3px 8px;">复制全部 (TSV)</button>
+              <button class="tool-btn" id="ad-tbl-btn-paste" style="font-size: 10.5px; padding: 3px 8px;">粘贴导入 (Excel/TSV)</button>
+              <button class="btn btn-primary" id="ad-tbl-btn-sync" style="font-size: 10.5px; padding: 3px 12px; background: linear-gradient(135deg, #0284c7, #38bdf8);">保存同步至模型</button>
             </div>
             <div id="ad-table-summary-badge" style="font-size: 10.5px; font-family: var(--font-mono); color: var(--text-secondary);">
               共 0 个层位
@@ -334,7 +334,7 @@ export function createAgeDepthModalHtml(): string {
           </div>
 
           <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text-muted);">
-            <span>💡 提示：所有数值支持就地直接点击修改；修改年代将实时联动更新左侧图谱画布与 95% 置信带。深层比浅层年龄小处会自动标红提示倒置。</span>
+            <span>提示：所有数值支持就地直接点击修改；修改年代将实时联动更新左侧图谱画布与 95% 置信带。深层比浅层年龄小处会自动标红提示倒置。</span>
             <span id="ad-table-sync-status" style="color: #10b981; font-weight: 600;"></span>
           </div>
         </div>
@@ -346,9 +346,9 @@ export function createAgeDepthModalHtml(): string {
           <!-- 左半边: 测年数据表格 (支持从 Excel 粘贴) -->
           <div style="flex: 1.2; display: flex; flex-direction: column; gap: 10px; background: var(--bg-tertiary); padding: 14px; border-radius: 6px; border: 1px solid var(--border-light);">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <strong style="font-size: 12px; color: var(--accent-blue);">1. 📜 钻孔实测年代数据表 (Radiocarbon / Dating Table)</strong>
+              <strong style="font-size: 12px; color: var(--accent-blue);">1. 钻孔实测年代数据表 (Radiocarbon / Dating Table)</strong>
               <button class="tool-btn" id="btn-ad-paste-dates" style="font-size: 10.5px; color: #10b981; border-color: rgba(16,185,129,0.3);">
-                📋 从 Excel 粘贴测年序列 (Ctrl+V)
+                从 Excel 粘贴测年序列 (Ctrl+V)
               </button>
             </div>
 
@@ -371,13 +371,13 @@ export function createAgeDepthModalHtml(): string {
 
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10.5px; color: var(--text-muted);">
               <span>* 支持 ¹⁴C、²¹⁰Pb、OSL 等多种年代类型；校正曲线 1=IntCal20, 2=Marine20, 0=非¹⁴C。</span>
-              <button class="tool-btn" id="btn-ad-add-date-row" style="padding: 2px 8px; font-size: 10px;">➕ 加一行</button>
+              <button class="tool-btn" id="btn-ad-add-date-row" style="padding: 2px 8px; font-size: 10px;">加一行</button>
             </div>
           </div>
 
           <!-- 右半边: 复杂地质现象与 Bacon / geoChronR 参数设定 -->
           <div style="flex: 1; display: flex; flex-direction: column; gap: 10px; background: var(--bg-tertiary); padding: 14px; border-radius: 6px; border: 1px solid var(--border-light); overflow-y: auto;">
-            <strong style="font-size: 12px; color: var(--accent-amber);">2. 🌋 复杂地质事件与先验约束 (Blaauw 2011)</strong>
+            <strong style="font-size: 12px; color: var(--accent-amber);">2. 复杂地质事件与先验约束 (Blaauw 2011)</strong>
 
             <!-- 沉积间断 (Hiatus) -->
             <div class="form-group" style="margin: 0; background: var(--bg-card); padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
@@ -465,7 +465,7 @@ export function createAgeDepthModalHtml(): string {
                   下载组件 (~40 MB)
                 </button>
                 <button class="tool-btn" id="btn-ad-import-webr-zip" style="font-size: 10px; padding: 2px 6px;" title="离线环境手动导入已下载的 age-modeling.zip">
-                  📂 离线导入
+                  离线导入
                 </button>
                 <input type="file" id="inp-ad-webr-zip" accept=".zip" style="display: none;" />
               </div>
@@ -511,7 +511,7 @@ export function createAgeDepthModalHtml(): string {
       <div id="ad-paste-data-modal" style="display: none; position: fixed; inset: 0; z-index: 10000; background: rgba(0,0,0,0.65); align-items: center; justify-content: center; backdrop-filter: blur(4px);">
         <div style="width: 500px; background: var(--bg-card); padding: 18px; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: 0 16px 36px rgba(0,0,0,0.4); display: flex; flex-direction: column; gap: 10px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h4 style="margin: 0; font-size: 13px; font-weight: 700; color: var(--text-heading);">📥 粘贴导入年代-深度数据表</h4>
+            <h4 style="margin: 0; font-size: 13px; font-weight: 700; color: var(--text-heading);">粘贴导入年代-深度数据表</h4>
             <button id="ad-paste-cancel-x" class="modal-close" style="background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer;">×</button>
           </div>
           <p style="font-size: 11px; color: var(--text-secondary); margin: 0; line-height: 1.5;">

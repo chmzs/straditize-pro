@@ -595,12 +595,12 @@ export class AgeDepthDatingTable {
     card.style.display = 'block';
 
     if (inversions === 0) {
-      badge.textContent = '✅ 质量优良 (单调)';
+      badge.textContent = '质量优良 (单调)';
       badge.style.background = 'rgba(16, 185, 129, 0.15)';
       badge.style.color = '#10b981';
       badge.style.border = '1px solid rgba(16, 185, 129, 0.4)';
     } else {
-      badge.textContent = `⚠️ 发现 ${inversions} 处年代倒置`;
+      badge.textContent = `发现 ${inversions} 处年代倒置`;
       badge.style.background = 'rgba(239, 68, 68, 0.15)';
       badge.style.color = '#ef4444';
       badge.style.border = '1px solid rgba(239, 68, 68, 0.4)';
@@ -739,7 +739,7 @@ export class AgeDepthDatingTable {
       }
       const statusEl = this.container.querySelector('#ad-table-sync-status');
       if (statusEl) {
-        statusEl.textContent = `📋 已成功复制 ${d.length} 行数据至剪贴板（TSV 格式）！`;
+        statusEl.textContent = `已成功复制 ${d.length} 行数据至剪贴板（TSV 格式）！`;
         setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
       }
     } catch {

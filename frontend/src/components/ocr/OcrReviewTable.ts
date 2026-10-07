@@ -38,7 +38,7 @@ export class OcrReviewTable {
       tbody.innerHTML = `
         <tr>
           <td colspan="6" style="text-align: center; color: var(--accent-amber, #d97706); padding: 28px; line-height: 1.6;">
-            ⚠️ <strong>当前图谱尚未切分属种列</strong><br>
+            <strong>当前图谱尚未切分属种列</strong><br>
             <span style="font-size: 11px; color: var(--text-muted);">
               列是在完成数据有效区 (ROI) 确认后分列产生的。<br>
               请先在主界面 S3 阶段完成分列（自动生成 col01, col02... 编号列），随后再使用 OCR 自动匹配列名。
@@ -70,13 +70,13 @@ export class OcrReviewTable {
       const status = matchedLabel ? matchedLabel.status : (this.ocrResult ? 'unrecognized' : 'pending');
       const isAccepted = matchedLabel ? matchedLabel.accepted : false;
 
-      let statusBadge = '<span style="color:var(--text-muted);font-weight:600;">⚪ 待识别</span>';
+      let statusBadge = '<span style="color:var(--text-muted);font-weight:600;">待识别</span>';
       if (status === 'auto') {
-        statusBadge = '<span style="color:var(--accent-green, #059669);font-weight:600;">✅ 自动</span>';
+        statusBadge = '<span style="color:var(--accent-green, #059669);font-weight:600;">自动</span>';
       } else if (status === 'confirm') {
-        statusBadge = '<span style="color:var(--accent-amber, #d97706);font-weight:600;">⚠️ 待确认</span>';
+        statusBadge = '<span style="color:var(--accent-amber, #d97706);font-weight:600;">待确认</span>';
       } else if (status === 'unrecognized') {
-        statusBadge = '<span style="color:var(--text-muted);font-weight:600;">⚪ 手动</span>';
+        statusBadge = '<span style="color:var(--text-muted);font-weight:600;">手动</span>';
       }
 
       tr.innerHTML = `

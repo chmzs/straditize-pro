@@ -11,14 +11,14 @@ export function render(data: DiagramData): string {
       <div class="step-title">1. 载入地质图谱</div>
       ${hasImage ? `
         <div class="info-callout success">
-          <span>🖼️ 当前图谱尺寸：<strong>${data.imageWidth} × ${data.imageHeight} px</strong></span>
+          <span>当前图谱尺寸：<strong>${data.imageWidth} × ${data.imageHeight} px</strong></span>
         </div>
         <button id="btn-goto-step2" class="btn btn-primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
-          👉 进入多 ROI 划分 (步骤 2)
+          进入多 ROI 划分 (步骤 2)
         </button>
       ` : `
         <div class="info-callout">
-          <span>💡 尚未载入剖面图。请点击顶栏【📂 范例】快速体验，或将图片文件拖拽至中央画布。</span>
+          <span>尚未载入剖面图。请点击顶栏【范例】快速体验，或将图片文件拖拽至中央画布。</span>
         </div>
       `}
     </div>

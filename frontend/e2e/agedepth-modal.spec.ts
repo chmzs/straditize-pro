@@ -6,7 +6,7 @@
  * 2. 点击 #ad-btn-center-bacon 载入内置 Bacon 年代图谱（触发 agedepth.loadModelDiagram + /image/agedepth 真图像加载）；
  * 3. 验证 4 个标定点自动就位、#ad-calib-values 标定值面板可见（3000 -> 0 cal BP, 0 -> 150 cm）；
  * 4. 点击 #ad-btn-extract 执行真实逐行年代曲线与 95% 置信包络提取（agedepth.extractAndInspect），
- *    断言 #ad-status-msg 显示 "✅ 识别成功"、预览表格 #ad-mapping-tbody 渲染出层位年代与沉积速率；
+ * 断言 #ad-status-msg 显示 "识别成功"、预览表格 #ad-mapping-tbody 渲染出层位年代与沉积速率；
  * 5. 点击 #ad-btn-apply 关联至花粉图谱，断言后端 ensemble.list 已注册 1000 条集合实现表，
  *    且 core.exportData 与 export.exportLipd 真实包含 age_est / age_min_95 / age_max_95 与 chronEnsembleTable。
  */
@@ -53,11 +53,11 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
     await expect(dialog.locator('#ad-calib-values')).toBeVisible();
     await expect(dialog.locator('#ad-calib-hint')).toContainText('四点已落位');
 
-    // 3. 点击【🔍 ③ 运行识别并叠加视觉校对】触发真实提取
+    // 3. 点击【③ 运行识别并叠加视觉校对】触发真实提取
     await dialog.locator('#ad-btn-extract').click();
 
     const statusMsg = dialog.locator('#ad-status-msg');
-    await expect(statusMsg).toContainText('✅ 识别成功', { timeout: 20_000 });
+    await expect(statusMsg).toContainText('识别成功', { timeout: 20_000 });
 
     // 断言映射预览表渲染出真实深度与年代行
     const tbodyRows = dialog.locator('#ad-mapping-tbody tr');
@@ -68,7 +68,7 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
     await expect(qcCard).toBeVisible();
     await expect(dialog.locator('#ad-qc-badge')).toContainText('质量优良');
 
-    // 4. 点击【✅ 确认无误，关联至花粉图谱】
+    // 4. 点击【确认无误，关联至花粉图谱】
     await dialog.locator('#ad-btn-apply').click();
     await expect(dialog).toHaveCount(0);
 
@@ -186,7 +186,7 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
 
     // 2. 运行提取
     await dialog.locator('#ad-btn-extract').click();
-    await expect(dialog.locator('#ad-status-msg')).toContainText('✅ 识别成功', {
+    await expect(dialog.locator('#ad-status-msg')).toContainText('识别成功', {
       timeout: 20_000,
     });
 
@@ -194,7 +194,7 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
     const sideInputs = dialog.locator('#ad-mapping-tbody .ad-input-side-age');
     expect(await sideInputs.count()).toBeGreaterThan(0);
 
-    // 4. 切换到 Tab 2【📋 年代-深度结果数据表】
+    // 4. 切换到 Tab 2【年代-深度结果数据表】
     await dialog.locator('#ad-tab-btn-table').click();
     const tablePanel = dialog.locator('#ad-tab-panel-table');
     await expect(tablePanel).toBeVisible();

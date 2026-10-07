@@ -72,7 +72,7 @@ test.describe('OcrReviewModal (OCR 识别与词汇表管理模块) E2E', () => {
     const ocrDialog = page.locator('.ocr-review-dialog');
     await expect(ocrDialog).toBeVisible();
 
-    // 1. 点击【🚀 执行 OCR 识别】调用真实后端 PP-OCRv6 引擎
+    // 1. 点击【执行 OCR 识别】调用真实后端 PP-OCRv6 引擎
     await ocrDialog.locator('#btn-ocr-run').click();
 
     // 等待识别完成（表格第一行渲染出 .ocr-edit-input）
@@ -89,7 +89,7 @@ test.describe('OcrReviewModal (OCR 识别与词汇表管理模块) E2E', () => {
     await expect(ocrDialog.locator('#ocr-summary-tbody .ocr-accept-chk').nth(0)).toBeChecked();
     await expect(ocrDialog.locator('#ocr-summary-tbody .ocr-accept-chk').nth(1)).toBeChecked();
 
-    // 3. 点击【✅ 确认无误，一键赋予图谱各列】
+    // 3. 点击【确认无误，一键赋予图谱各列】
     await ocrDialog.locator('#ocr-btn-apply').click();
     await expect(ocrDialog).toHaveCount(0);
 

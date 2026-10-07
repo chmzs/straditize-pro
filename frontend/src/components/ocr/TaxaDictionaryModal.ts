@@ -53,8 +53,7 @@ export class TaxaDictionaryModal {
       <div class="modal-dialog" style="width: min(760px, 94vw); max-height: 88vh; display: flex; flex-direction: column;">
         <div class="modal-header" style="padding: 10px 16px;">
           <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 16px;">📚</span>
-            <h3 style="font-size: 13.5px; font-weight: 700;">属种词汇表 (Taxa Vocabulary)</h3>
+            <h3 style="font-size: 13.5px; font-weight: 700;">属种词汇表</h3>
           </div>
           <button class="close-btn" id="dict-close-btn">&times;</button>
         </div>
@@ -76,7 +75,7 @@ export class TaxaDictionaryModal {
             </label>
             <textarea id="dict-import-input" rows="7" style="width: 100%; font-family: var(--font-mono); font-size: 11px; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); box-sizing: border-box;" placeholder="示例 1（直接粘贴论文图版说明，支持硬换行与 a), b) 多键前缀）：&#10;图版Ⅱ。a), b) Pediastrum boryanum var. boryanum; c) Pediastrum boryanum var. longicorne type 1; f) Pediastrum cf. argentinense; k), l) Pediastrum asymmetricum&#10;&#10;示例 2（每行一条）：&#10;水绵属,Spirogyra,绿藻类&#10;新疆落叶松,Larix sibirica,地方特有种"></textarea>
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap;">
-              <button class="tool-btn" id="dict-upload-file" style="font-size: 10.5px; padding: 3px 8px;">📄 从 CSV / TXT 文件导入</button>
+              <button class="tool-btn" id="dict-upload-file" style="font-size: 10.5px; padding: 3px 8px;">从 CSV / TXT 文件导入</button>
               <input type="file" id="dict-file-input" accept=".csv,.txt,.tsv" style="display: none;" />
               <label style="font-size: 10.5px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
                 <input type="checkbox" id="dict-replace-mode" />
@@ -102,7 +101,7 @@ export class TaxaDictionaryModal {
 
         <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px;">
           <button class="btn btn-secondary" id="dict-cancel-btn">关闭</button>
-          <button class="btn btn-primary" id="dict-save-btn" style="background: linear-gradient(135deg, #7c3aed, #a855f7);">💾 保存并应用</button>
+          <button class="btn btn-primary" id="dict-save-btn" style="background: linear-gradient(135deg, #7c3aed, #a855f7);">保存并应用</button>
         </div>
       </div>
     `;
@@ -137,7 +136,7 @@ export class TaxaDictionaryModal {
             preview.innerHTML = '<span style="color: var(--accent-amber, #d97706);">未解析出任何词汇，请检查格式</span>';
             return;
           }
-          const kind = res.format === 'figure_caption' ? '📑 识别为期刊图版说明' : '📋 识别为名单';
+          const kind = res.format === 'figure_caption' ? '识别为期刊图版说明' : '识别为名单';
           hint.textContent = `${kind} · 解析出 ${res.count} 条`;
           preview.innerHTML =
             `<strong>${kind}</strong>，将写入 ${res.count} 条：` +
@@ -181,13 +180,13 @@ export class TaxaDictionaryModal {
           { rawText },
           { mode: replaceMode ? 'replace' : 'append' }
         );
-        hint.textContent = `✅ 已写入 ${res.added} 条，共 ${res.custom_count} 条自定义词汇`;
+        hint.textContent = `已写入 ${res.added} 条，共 ${res.custom_count} 条自定义词汇`;
         await this.onDictSaved?.();
         closeDict();
       } catch (err: any) {
-        hint.textContent = `❌ 保存失败: ${err?.message || err}`;
+        hint.textContent = `保存失败: ${err?.message || err}`;
         saveBtn.disabled = false;
-        saveBtn.textContent = '💾 保存并应用';
+        saveBtn.textContent = '保存并应用';
       }
     });
   }

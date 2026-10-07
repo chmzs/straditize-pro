@@ -48,7 +48,7 @@ test.describe('顶栏与设置弹窗', () => {
   test('顶栏精简：旧的中英切换/主题图标/RPC 胶囊已移除，[设置] 与导出/OCR/年代按钮常驻', async ({
     page,
   }) => {
-    // 这三个 id 曾经是顶栏控件，已被 [⚙ 设置] 收拢；用 toHaveCount(0) 断言它们确实不再渲染。
+    // 这三个 id 曾经是顶栏控件，已被 [设置] 收拢；用 toHaveCount(0) 断言它们确实不再渲染。
     for (const id of ['btn-toggle-locale', 'btn-toggle-theme', 'rpc-status-pill']) {
       await expect(page.locator(`#${id}`), `${id} 属于旧顶栏，必须已被移除`).toHaveCount(0);
     }

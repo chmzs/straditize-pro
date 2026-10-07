@@ -344,7 +344,7 @@ export class Toolbar {
           <span>${t('toolbar.export')}</span>
         </button>
 
-        <!-- 唯一常驻偏好入口：[⚙ 设置] 齿轮图标按钮 -->
+        <!-- 唯一常驻偏好入口：[设置] 齿轮图标按钮 -->
         <button id="btn-settings" class="tool-btn ui-btn ui-btn--secondary ui-btn--sm" title="${t('toolbar.settingsTitle')}">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"/>

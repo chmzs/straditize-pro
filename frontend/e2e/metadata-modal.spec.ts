@@ -27,7 +27,7 @@ test.describe('MetadataModal (FAIR / LiPD v1.3 元数据模块) E2E', () => {
   }) => {
     await gotoStage(page, 6);
 
-    // 1. 点击顶栏【📄 元数据】按钮打开弹窗
+    // 1. 点击顶栏【元数据】按钮打开弹窗
     const openBtn = page.locator('#btn-metadata-modal');
     await expect(openBtn).toBeVisible();
     await openBtn.click();
@@ -160,7 +160,7 @@ test.describe('MetadataModal (FAIR / LiPD v1.3 元数据模块) E2E', () => {
     const dialog = page.locator('.metadata-dialog');
     await expect(dialog).toBeVisible();
 
-    // 1. 点击【⚙️ LLM 与提示词配置】展开面板
+    // 1. 点击【LLM 与提示词配置】展开面板
     await dialog.locator('#btn-toggle-llm-config').click();
     const llmPanel = dialog.locator('#meta-llm-config-panel');
     await expect(llmPanel).toBeVisible();
@@ -187,7 +187,7 @@ test.describe('MetadataModal (FAIR / LiPD v1.3 元数据模块) E2E', () => {
     expect(cfg.llm_model).toBe('deepseek-chat');
     expect(cfg.llm_prompt_template).toBe('Custom prompt for Lake Gahai extraction');
 
-    // 5. 点击【🔄 恢复默认提示词】并再次保存复原
+    // 5. 点击【恢复默认提示词】并再次保存复原
     await llmPanel.locator('#btn-reset-llm-prompt').click();
     expect(await promptInp.inputValue()).toContain('water_depth_m');
     await llmPanel.locator('#meta-llm-base-url').fill('https://api.openai.com/v1');
@@ -205,12 +205,12 @@ test.describe('MetadataModal (FAIR / LiPD v1.3 元数据模块) E2E', () => {
     const dialog = page.locator('.metadata-dialog');
     await expect(dialog).toBeVisible();
 
-    // 1. 点击【📥 外部 AI 导入助手 (免Token)】展开面板
+    // 1. 点击【外部 AI 导入助手 (免Token)】展开面板
     await dialog.locator('#btn-toggle-external-assistant').click();
     const extPanel = dialog.locator('#meta-external-assistant-panel');
     await expect(extPanel).toBeVisible();
 
-    // 2. 点击【👁️ 查看/编辑提示词】，确认预置了完整 LiPD v1.3 JSON 提示词模板
+    // 2. 点击【查看/编辑提示词】，确认预置了完整 LiPD v1.3 JSON 提示词模板
     await extPanel.locator('#btn-toggle-external-prompt-preview').click();
     const extPromptBox = extPanel.locator('#meta-external-prompt-box');
     await expect(extPromptBox).toBeVisible();

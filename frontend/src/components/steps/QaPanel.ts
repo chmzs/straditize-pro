@@ -48,17 +48,17 @@ const BANNER_RED_STYLE =
 
 function computeBannerMeta(summary: QaSummary) {
   let bannerLevel = 'green';
-  let bannerText = '🟢 地学校验门禁通过，数据符合规律';
+  let bannerText = '地学校验门禁通过，数据符合规律';
   if (summary.violations_over && summary.violations_over.length > 0) {
     bannerLevel = 'red';
-    bannerText = `🔴 组分总和超标报警 (发现 ${summary.violations_over.length} 个层位总和 > 100%+${summary.tolerance}%)`;
+    bannerText = `组分总和超标报警 (发现 ${summary.violations_over.length} 个层位总和 > 100%+${summary.tolerance}%)`;
   } else if (summary.per_column_max && summary.per_column_max.some((c) => c.over)) {
     bannerLevel = 'yellow';
     const overCount = summary.per_column_max.filter((c) => c.over).length;
-    bannerText = `🟡 单列峰值超刻度警告 (发现 ${overCount} 列峰值超出声明满刻度)`;
+    bannerText = `单列峰值超刻度警告 (发现 ${overCount} 列峰值超出声明满刻度)`;
   } else if (summary.uncalibrated_columns && summary.uncalibrated_columns.length > 0) {
     bannerLevel = 'yellow';
-    bannerText = `🟡 存在未标定列 (发现 ${summary.uncalibrated_columns.length} 列未在步骤 6 标定 X 刻度，当前按列宽百分比估算)`;
+    bannerText = `存在未标定列 (发现 ${summary.uncalibrated_columns.length} 列未在步骤 6 标定 X 刻度，当前按列宽百分比估算)`;
   }
 
   const bannerColor =
@@ -80,7 +80,7 @@ function renderExceptionsHtml(summary: QaSummary): string {
       .map(
         (v) => `
       <div style="display: flex; justify-content: space-between; padding: 2px 4px; color: #ef4444; border-bottom: 1px solid rgba(0,0,0,0.04);">
-        <span>⚠️ 超标 深度: ${v.depth !== null ? `${v.depth}` : '[未标定]'}</span>
+        <span>超标 深度: ${v.depth !== null ? `${v.depth}` : '[未标定]'}</span>
         <span>Σ = <strong>${v.sum}%</strong></span>
       </div>
     `
@@ -90,7 +90,7 @@ function renderExceptionsHtml(summary: QaSummary): string {
       .map(
         (e) => `
       <div style="display: flex; justify-content: space-between; padding: 2px 4px; color: #f59e0b; border-bottom: 1px solid rgba(0,0,0,0.04);">
-        <span>⚪ 空层 深度: ${e.depth !== null ? `${e.depth}` : '[未标定]'}</span>
+        <span>空层 深度: ${e.depth !== null ? `${e.depth}` : '[未标定]'}</span>
         <span>${e.reason || 'no ink read'}</span>
       </div>
     `
@@ -110,9 +110,9 @@ function renderColumnPeaksHtml(summary: QaSummary): string {
       <span>${col.name}</span>
       <span>峰值: ${col.peak} / 标度: ${col.calibrated === false ? '--' : col.declared_max} ${
         col.calibrated === false
-          ? '<span style="color: #f59e0b;">⚠️ 未标定</span>'
+          ? '<span style="color: #f59e0b;">未标定</span>'
           : col.over
-          ? '🚨 超刻度'
+          ? '超刻度'
           : '✓'
       }</span>
     </div>
@@ -191,7 +191,7 @@ export function render(data: DiagramData): string {
           </div>
         </div>
         <button id="btn-run-qa" class="tool-btn" style="width: 100%; font-size: 11px; padding: 4px;">
-          🔄 重新执行 QA 诊断
+          重新执行 QA 诊断
         </button>
       </div>
 
@@ -260,7 +260,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     if (banner) {
       banner.setAttribute('data-level', 'red');
       banner.className = 'qa-banner banner-red';
-      banner.textContent = `🔴 QA 汇总失败：${message}`;
+      banner.textContent = `QA 汇总失败：${message}`;
       banner.setAttribute(
         'style',
         `padding: 8px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; margin-bottom: 12px; ${BANNER_RED_STYLE}`

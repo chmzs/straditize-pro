@@ -254,7 +254,7 @@ export class Inspector {
 
         <div class="form-group" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light);">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <label style="font-size: 11px; font-weight: bold; color: ${tokens.color.column.baseline};">📍 两点式 X 轴物理刻度标定</label>
+            <label style="font-size: 11px; font-weight: bold; color: ${tokens.color.column.baseline};">两点式 X 轴物理刻度标定</label>
             <span style="font-size: 9.5px; color: var(--text-muted);">斜率: ${CoordinateSystem.getScaleRatio(col).toFixed(3)} ${col.unit || '%'}/px</span>
           </div>
 
@@ -316,7 +316,7 @@ export class Inspector {
           </div>
           ${!isLogValid ? `
             <div id="log-scale-err" style="color: #ef4444; font-size: 10px; margin-top: 4px; line-height: 1.3;">
-              ⚠️ ${logCheck.reason}
+              ${logCheck.reason}
             </div>
           ` : ''}
         </div>
@@ -328,10 +328,10 @@ export class Inspector {
             <button id="btn-apply-type-all" class="tool-btn" style="font-size: 9.5px; padding: 1px 5px; color: var(--text-muted);" title="将当前形态应用至全部属种列">应用至全列</button>
           </div>
           <div class="btn-group" style="display: flex; gap: 3px; width: 100%; margin-top: 4px;">
-            <button class="tool-btn quick-plottype-btn ${currentPlotType === 'area' ? 'active-mode' : ''}" data-type="area" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">🌊 面积</button>
-            <button class="tool-btn quick-plottype-btn ${currentPlotType === 'bar' ? 'active-mode' : ''}" data-type="bar" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">📊 柱状</button>
-            <button class="tool-btn quick-plottype-btn ${currentPlotType === 'line' ? 'active-mode' : ''}" data-type="line" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">📈 折线</button>
-            <button class="tool-btn quick-plottype-btn ${currentPlotType === 'symbol' ? 'active-mode' : ''}" data-type="symbol" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">➕ 符号</button>
+            <button class="tool-btn quick-plottype-btn ${currentPlotType === 'area' ? 'active-mode' : ''}" data-type="area" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">面积</button>
+            <button class="tool-btn quick-plottype-btn ${currentPlotType === 'bar' ? 'active-mode' : ''}" data-type="bar" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">柱状</button>
+            <button class="tool-btn quick-plottype-btn ${currentPlotType === 'line' ? 'active-mode' : ''}" data-type="line" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">折线</button>
+            <button class="tool-btn quick-plottype-btn ${currentPlotType === 'symbol' ? 'active-mode' : ''}" data-type="symbol" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">符号</button>
           </div>
         </div>
 
@@ -359,10 +359,10 @@ export class Inspector {
 
         <div style="display: flex; gap: 8px; margin-top: 10px;">
           <button id="btn-col-digitize" class="tool-btn" style="flex: 1; font-size: 11px; padding: 6px; color: #0284c7; border-color: rgba(2,132,199,0.3); background: rgba(2,132,199,0.06);">
-            ⚡ 重新识别此列
+            重新识别此列
           </button>
           <button id="btn-col-delete" class="tool-btn" style="color: #dc2626; border-color: rgba(220,38,38,0.3); background: rgba(220,38,38,0.04); font-size: 11px; padding: 6px;">
-            🗑 删除列
+            删除列
           </button>
         </div>
       </div>
@@ -409,7 +409,7 @@ export class Inspector {
         </div>
 
         <button id="btn-delete-point" class="btn btn-secondary" style="width: 100%; margin-top: 12px; color: #ef4444; border-color: rgba(239,68,68,0.4);">
-          🗑 删除此控制锚点
+          删除此控制锚点
         </button>
       </div>
     `;
@@ -870,10 +870,10 @@ export class Inspector {
       if (parsedDepths.length >= 2) {
         const minD = parsedDepths[0];
         const maxD = parsedDepths[parsedDepths.length - 1];
-        fb.innerHTML = `✅ 已成功识别 <strong style="color: #10b981;">${parsedDepths.length}</strong> 个真实钻孔层位 (跨度: ${minD} ~ ${maxD} ${this.data.calibration.unit})`;
+        fb.innerHTML = `已成功识别 <strong style="color: #10b981;">${parsedDepths.length}</strong> 个真实钻孔层位 (跨度: ${minD} ~ ${maxD} ${this.data.calibration.unit})`;
         confirmBtn.disabled = false;
       } else {
-        fb.innerHTML = `⚠️ 请输入至少 2 个有效数字层位`;
+        fb.innerHTML = `请输入至少 2 个有效数字层位`;
         confirmBtn.disabled = true;
       }
     };

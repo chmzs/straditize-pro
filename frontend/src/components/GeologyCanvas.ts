@@ -322,7 +322,7 @@ export class GeologyCanvas {
           </svg>
         </div>
         <button id="btn-empty-load-img" class="btn btn-primary" style="padding: 8px 24px; font-size: 13px; font-weight: 600; margin-bottom: 8px; cursor: pointer;">
-          📁 加载图片
+          加载图片
         </button>
         <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 16px 0;">或将图片拖拽到此处</p>
         <div class="empty-specs-badge">
@@ -1874,7 +1874,7 @@ export class GeologyCanvas {
 
     if (this.isHoveringDepthRulerBadge) {
       ctx.fillStyle = isLight ? '#0284c7' : '#38bdf8';
-      ctx.fillText(`⚙ 标尺: ${interval}${cal.unit} [点击修改]`, badgeX, badgeY);
+      ctx.fillText(`标尺: ${interval}${cal.unit} [点击修改]`, badgeX, badgeY);
     } else {
       ctx.fillStyle = isLight ? 'rgba(2, 132, 199, 0.9)' : 'rgba(56, 189, 248, 0.85)';
       ctx.fillText(`Depth (${cal.unit}) [Δ=${interval}]`, badgeX, badgeY);

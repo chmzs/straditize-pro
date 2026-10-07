@@ -48,7 +48,7 @@ export class YCalibToolStrategy implements ToolStrategy {
       } else {
         ctx.callbacks.onYCalibPicked?.([...marks]);
         ctx.notifyNotice(
-          `🎯 已记录第 1 个标定点 Y1 = ${markY}px。请在 Y 轴上再点第 2 个已知刻度的位置 (Y2)。`
+          `已记录第 1 个标定点 Y1 = ${markY}px。请在 Y 轴上再点第 2 个已知刻度的位置 (Y2)。`
         );
       }
       return true;
@@ -191,7 +191,7 @@ export class YCalibToolStrategy implements ToolStrategy {
 
       const nextTag = marks.length === 0 ? 'Y1' : marks.length === 1 ? 'Y2' : 'Y1 (重置)';
       drawPill(
-        `🎯 点击确定 ${nextTag}: ${hy}px`,
+        `点击确定 ${nextTag}: ${hy}px`,
         toolCtx.hoverWorldPt.x + 12 / scale,
         hy,
         '#f59e0b',

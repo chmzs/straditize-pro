@@ -63,9 +63,9 @@ export function renderExportReadiness(data: DiagramData): string {
          data-readiness-missing="${state.readinessMissing.join(',')}"
          style="padding: 10px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light); margin-bottom: 12px; font-size: 11px;">
       <div style="font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-        <span>📋 导出就绪状态清单 (Export Readiness)</span>
+        <span>导出就绪状态清单 (Export Readiness)</span>
         <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; ${state.allReady ? 'background: #dcfce7; color: #166534;' : 'background: #fef3c7; color: #92400e;'}">
-          ${state.allReady ? '✓ 全部就绪' : `⚠️ 待完善 (${state.readinessMissing.length})`}
+          ${state.allReady ? '✓ 全部就绪' : `待完善 (${state.readinessMissing.length})`}
         </span>
       </div>
 

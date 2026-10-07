@@ -25,7 +25,6 @@ export class AuthModal {
 
     overlay.innerHTML = `
       <div class="modal-dialog auth-dialog" style="width: min(420px, 92vw); padding: 28px 24px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--border-color); box-shadow: 0 20px 40px rgba(0,0,0,0.4); text-align: center; display: flex; flex-direction: column; gap: 16px;">
-        <div style="font-size: 38px; line-height: 1;">🔒</div>
         <div>
           <h3 style="margin: 0 0 6px; font-size: 16px; font-weight: 700; color: var(--text-heading);">${t('auth.title')}</h3>
           <p style="margin: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.5;">${t('auth.desc')}</p>
@@ -35,7 +34,7 @@ export class AuthModal {
 
         <div style="display: flex; gap: 6px; position: relative;">
           <input type="password" id="auth-password-input" placeholder="${t('auth.placeholder')}" style="flex: 1; padding: 8px 12px; font-size: 13px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); outline: none;" autofocus />
-          <button type="button" id="auth-toggle-pwd" class="tool-btn" style="padding: 4px 10px; font-size: 12px;" title="${t('auth.toggleShow')}">👁️</button>
+          <button type="button" id="auth-toggle-pwd" class="tool-btn" style="padding: 4px 10px; font-size: 12px;" title="${t('auth.toggleShow')}">${t('auth.show')}</button>
         </div>
 
         <div style="display: flex; justify-content: stretch;">
@@ -56,6 +55,7 @@ export class AuthModal {
 
     toggle?.addEventListener('click', () => {
       inp.type = inp.type === 'password' ? 'text' : 'password';
+      toggle.textContent = inp.type === 'password' ? t('auth.show') : t('auth.hide');
     });
 
     const submit = async () => {

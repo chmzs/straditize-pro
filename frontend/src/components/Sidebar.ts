@@ -207,13 +207,13 @@ export class Sidebar {
   private renderTaxaItem(col: TaxaColumn, isActive: boolean): string {
     const totalCount = col.controlPoints.length;
     const pType = col.plotType || 'area';
-    const typeIcons: Record<string, string> = {
-      area: '🌊',
-      bar: '📊',
-      line: '📈',
-      symbol: '➕',
+    const typeLabels: Record<string, string> = {
+      area: '面积',
+      bar: '柱状',
+      line: '折线',
+      symbol: '符号',
     };
-    const typeIcon = typeIcons[pType] || '🌊';
+    const typeLabel = typeLabels[pType] || typeLabels.area;
 
     // 计算实测最大峰值 (若已标定且有控制点)
     let maxValStr = `${col.maxPercent}%`;
@@ -244,9 +244,9 @@ export class Sidebar {
               ${maxValStr}
             </span>
 
-            <!-- 就地快速切换形态微图标 [🌊/📊/📈/➕] -->
+            <!-- 就地快速切换形态微图标 [///] -->
             <button class="icon-btn plot-type-btn" data-action="cycle-plot-type" title="当前形态: ${pType.toUpperCase()} (点击切换形态: 面积/柱状/折线/符号)" style="padding: 1px 4px; font-size: 10px; line-height: 1.2; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 3px; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;">
-              <span>${typeIcon}</span><span style="font-size: 7px; opacity: 0.6;">▾</span>
+              <span>${typeLabel}</span><span style="font-size: 7px; opacity: 0.6;">▾</span>
             </button>
 
             <button class="icon-btn toggle-visibility ${col.visible ? 'visible' : 'hidden'}" data-action="toggle-visible" title="显隐属种" style="padding: 2px;">
@@ -270,7 +270,7 @@ export class Sidebar {
           </div>
           <div style="display: flex; align-items: center; gap: 4px;">
             <button class="icon-btn plot-type-btn" data-action="cycle-plot-type" title="当前形态: ${pType.toUpperCase()} (点击切换形态: 面积/柱状/折线/符号)" style="font-size: 10px; padding: 2px 4px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 3px; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;">
-              <span>${typeIcon}</span><span style="font-size: 8px; opacity: 0.6;">▾</span>
+              <span>${typeLabel}</span><span style="font-size: 8px; opacity: 0.6;">▾</span>
             </button>
             <button class="icon-btn toggle-visibility ${col.visible ? 'visible' : 'hidden'}" data-action="toggle-visible" title="显隐属种">
               ${
@@ -413,7 +413,7 @@ export class Sidebar {
       const taxaId = card.getAttribute('data-taxa-id');
       if (!taxaId) return;
 
-      // 循环就地切换形态微图标 [🌊/📊/📈/➕]
+      // 循环就地切换形态微图标 [///]
       if (target.closest('[data-action="cycle-plot-type"]')) {
         e.stopPropagation();
         const col = this.data.columns.find((c) => c.id === taxaId);

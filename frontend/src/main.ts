@@ -40,7 +40,6 @@ function showProvenanceGate(message: string): Promise<void> {
       (isLight ? 'rgba(241,245,249,0.94)' : 'rgba(15,23,42,0.95)') + ';';
     overlay.innerHTML = `
       <div style="max-width:520px;padding:32px 36px;border-radius:14px;background:var(--bg-card);border:1px solid var(--border-color);box-shadow:0 25px 50px -12px rgba(0,0,0,0.3);">
-        <div style="font-size:34px;margin-bottom:10px;">🔌</div>
         <h2 style="margin:0 0 10px;font-size:17px;font-weight:700;color:var(--text-heading);">${t('banner.backendOffline')}</h2>
         <p style="margin:0 0 8px;font-size:13px;line-height:1.65;color:var(--text-secondary);">${message}</p>
         <p style="margin:0 0 20px;font-size:12.5px;line-height:1.65;color:var(--text-muted);">${t('gate.hint')}</p>
@@ -163,7 +162,7 @@ function mountProvenanceBanner(rpcClient: RpcClient): void {
       bar.style.background = '#b91c1c';
       bar.style.color = '#fff';
       bar.innerHTML =
-        `<span>⛔ ${t('banner.backendLost')}</span>` +
+        `<span>${t('banner.backendLost')}</span>` +
         `<button id="banner-retry" style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.45);color:#fff;border-radius:4px;padding:1px 8px;font-size:11px;cursor:pointer;">${t('banner.reconnect')}</button>`;
       bar.querySelector('#banner-retry')?.addEventListener('click', () => {
         rpcClient.probeBackend().then(render);
@@ -354,14 +353,13 @@ async function bootstrap() {
     helpPanel.innerHTML = isEn ? `
       <div class="help-panel-header">
         <div style="display: flex; align-items: center; gap: 6px;">
-          <span style="font-size: 14px;">⚡</span>
           <strong style="color: var(--accent-blue); font-size: 12.5px;">Interaction Guide & Shortcuts</strong>
         </div>
         <span id="help-panel-close" title="Close (Esc)" style="cursor: pointer; font-size: 16px; color: var(--text-muted); line-height: 1; padding: 2px 4px;">&times;</span>
       </div>
       <div class="help-panel-body">
         <div class="help-section">
-          <div class="help-section-title">🖱️ Mouse Operations</div>
+          <div class="help-section-title">Mouse Operations</div>
           <div class="help-grid">
             <div class="help-row"><span class="help-key">Right-drag / Mid-drag / Space+Left</span><span class="help-desc">Unified Viewport Pan</span></div>
             <div class="help-row"><span class="help-key">Wheel Scroll</span><span class="help-desc">Zoom centered on cursor (10%~1000%); Ctrl speeds up</span></div>
@@ -373,7 +371,7 @@ async function bootstrap() {
           </div>
         </div>
         <div class="help-section">
-          <div class="help-section-title">🛠️ Manual Extraction Modes</div>
+          <div class="help-section-title">Manual Extraction Modes</div>
           <div class="help-grid">
             <div class="help-row"><span class="help-key">A</span><span class="help-desc">Add Control Point</span></div>
             <div class="help-row"><span class="help-key">S / V</span><span class="help-desc">Select & Adjust Point</span></div>
@@ -387,7 +385,7 @@ async function bootstrap() {
           </div>
         </div>
         <div class="help-section">
-          <div class="help-section-title">🎯 Navigation & Nudge</div>
+          <div class="help-section-title">Navigation & Nudge</div>
           <div class="help-grid">
             <div class="help-row"><span class="help-key">Arrow Keys</span><span class="help-desc">1px Precision Nudge</span></div>
             <div class="help-row"><span class="help-key">Shift + Arrow Keys</span><span class="help-desc">10px Fast Nudge</span></div>
@@ -398,7 +396,7 @@ async function bootstrap() {
           </div>
         </div>
         <div class="help-section">
-          <div class="help-section-title">⌨️ History & Layout</div>
+          <div class="help-section-title">History & Layout</div>
           <div class="help-grid">
             <div class="help-row"><span class="help-key">Ctrl+Z / Ctrl+Y</span><span class="help-desc">Undo / Redo</span></div>
             <div class="help-row"><span class="help-key">Delete</span><span class="help-desc">Delete selected point or column</span></div>
@@ -411,14 +409,13 @@ async function bootstrap() {
     ` : `
       <div class="help-panel-header">
         <div style="display: flex; align-items: center; gap: 6px;">
-          <span style="font-size: 14px;">⚡</span>
           <strong style="color: var(--accent-blue); font-size: 12.5px;">统一交互系统与快捷键速查</strong>
         </div>
         <span id="help-panel-close" title="关闭 (Esc)" style="cursor: pointer; font-size: 16px; color: var(--text-muted); line-height: 1; padding: 2px 4px;">&times;</span>
       </div>
       <div class="help-panel-body">
         <div class="help-section">
-          <div class="help-section-title">🖱️ 鼠标交互规范 (Mouse)</div>
+          <div class="help-section-title">鼠标交互规范</div>
           <div class="help-grid">
             <div class="help-row"><span class="help-key">右键拖拽 / 中键 / 空格+左键</span><span class="help-desc">全系统绝对统一视口平移 (Pan)</span></div>
             <div class="help-row"><span class="help-key">滚轮滚动</span><span class="help-desc">以光标为中心缩放 (10%~1000%)；Ctrl 加速</span></div>
@@ -430,7 +427,7 @@ async function bootstrap() {
           </div>
         </div>
         <div class="help-section">
-          <div class="help-section-title">🛠️ 手动提取模式 (Manual Extraction)</div>
+          <div class="help-section-title">手动提取模式</div>
           <div class="help-grid">
             <div class="help-row"><span class="help-key">A</span><span class="help-desc">添加控制点模式 (Add Point)</span></div>
             <div class="help-row"><span class="help-key">S / V</span><span class="help-desc">微调与选择模式 (Adjust Point)</span></div>
@@ -444,7 +441,7 @@ async function bootstrap() {
           </div>
         </div>
         <div class="help-section">
-          <div class="help-section-title">🎯 方向键微调与视图导航</div>
+          <div class="help-section-title">方向键微调与视图导航</div>
           <div class="help-grid">
             <div class="help-row"><span class="help-key">↑ ↓ ← →</span><span class="help-desc">1 像素高精度微调 (1px Nudge)</span></div>
             <div class="help-row"><span class="help-key">Shift + 方向键</span><span class="help-desc">10 像素快速微调 (10px Nudge)</span></div>
@@ -455,7 +452,7 @@ async function bootstrap() {
           </div>
         </div>
         <div class="help-section">
-          <div class="help-section-title">⌨️ 编辑历史与界面布局</div>
+          <div class="help-section-title">编辑历史与界面布局</div>
           <div class="help-grid">
             <div class="help-row"><span class="help-key">Ctrl+Z / Ctrl+Y</span><span class="help-desc">撤销 / 重做</span></div>
             <div class="help-row"><span class="help-key">Delete</span><span class="help-desc">删除当前选中的控制点或属种分列</span></div>
@@ -564,7 +561,7 @@ async function bootstrap() {
 
   const handleGeometryDelete = async (id: string): Promise<void> => {
     await runCleanupAction('删除几何', () => rpcClient.deleteLineGeometry(id));
-    setHudNotice('🗑️ 已删除该几何。');
+    setHudNotice('已删除该几何。');
   };
 
   /**
@@ -637,7 +634,7 @@ async function bootstrap() {
         if (cal.top_cm !== null && cal.top_cm !== undefined && cal.bottom_cm !== null && cal.bottom_cm !== undefined) {
           void applyDepthCalibration(marks, [Number(cal.top_cm), Number(cal.bottom_cm)], cal.unit || 'cm');
         } else {
-          setHudNotice(`🎯 已拾取两点像素行 (Y1=${Math.round(topPx)}px, Y2=${Math.round(botPx)}px)！请在右侧侧栏输入对应真实数值并应用标定。`, 5000);
+          setHudNotice(`已拾取两点像素行 (Y1=${Math.round(topPx)}px, Y2=${Math.round(botPx)}px)！请在右侧侧栏输入对应真实数值并应用标定。`, 5000);
         }
       }
     },
@@ -683,7 +680,7 @@ async function bootstrap() {
     onOverlayError: (overlayId, error) => {
       const detail = error instanceof Error ? error.message : String(error);
       console.error(`[overlay] ${overlayId} 渲染失败:`, error);
-      setHudNotice(`⚠️ 叠加层 ${overlayId} 渲染失败：${detail}`, 8000);
+      setHudNotice(`叠加层 ${overlayId} 渲染失败：${detail}`, 8000);
     },
     onOpenCalibration: () => {
       propertyPanel.openCalibrationModal();
@@ -773,13 +770,13 @@ async function bootstrap() {
       updateWorkflowBar();
       canvasComponent.setToolMode('roi');
       canvasComponent.requestRender();
-      setHudNotice('👉 已进入 Step 2 数据有效区 (ROI) 划分！请拖拽手柄界定数据区或在侧栏新建多 ROI。', 4500);
+      setHudNotice('已进入 Step 2 数据有效区 (ROI) 划分！请拖拽手柄界定数据区或在侧栏新建多 ROI。', 4500);
     } else if (targetStage === STAGE.Y_CALIB) {
       currentStage = STAGE.Y_CALIB;
       updateWorkflowBar();
       canvasComponent.setToolMode('ycalib');
       canvasComponent.requestRender();
-      setHudNotice('👉 已进入 Step 3 Y 轴标定！请在图上点选两点，或在右侧侧栏直接填入已知刻度与真实深度值。', 5000);
+      setHudNotice('已进入 Step 3 Y 轴标定！请在图上点选两点，或在右侧侧栏直接填入已知刻度与真实深度值。', 5000);
     } else if (targetStage === STAGE.CLEANUP) {
       currentStage = STAGE.CLEANUP;
       updateWorkflowBar();
@@ -794,14 +791,14 @@ async function bootstrap() {
       queueMicrotask(() => {
         (document.querySelector('#btn-detect-candidates') as HTMLButtonElement | null)?.click();
       });
-      setHudNotice('👉 已进入 Step 4 干扰清理！候选 geometry 正在生成，橙色待确认、红色已去除。', 4500);
+      setHudNotice('已进入 Step 4 干扰清理！候选 geometry 正在生成，橙色待确认、红色已去除。', 4500);
     } else if (targetStage === STAGE.SPLIT) {
       const wfNextBtn = document.querySelector('#btn-wf-next') as HTMLButtonElement | null;
       if (wfNextBtn) {
         wfNextBtn.disabled = true;
-        wfNextBtn.textContent = '⏳ 正在切分属种基线...';
+        wfNextBtn.textContent = '正在切分属种基线...';
       }
-      setHudNotice('⏳ 正在基于数据有效区与清理后墨迹切分属种垂直基线，请稍候...', 5000);
+      setHudNotice('正在基于数据有效区与清理后墨迹切分属种垂直基线，请稍候...', 5000);
       try {
         const rois = canvasComponent.data.rois || [];
         if (rois.length > 0) {
@@ -828,7 +825,7 @@ async function bootstrap() {
           wfNextBtn.disabled = false;
         }
         reportBackendFailure('分列识别', err);
-        setHudNotice('❌ 分列识别失败，已停留在 Step 4。请检查有效区后重试。', 6000);
+        setHudNotice('分列识别失败，已停留在 Step 4。请检查有效区后重试。', 6000);
         return;
       }
       currentStage = STAGE.SPLIT;
@@ -838,22 +835,22 @@ async function bootstrap() {
       updateWorkflowBar();
       updateFooter();
       canvasComponent.requestRender();
-      setHudNotice(`✅ 成功切分 ${canvasComponent.data.columns.length} 个属种列！可点击 OCR 识别或在左栏输入各列名称。`, 5000);
+      setHudNotice(`成功切分 ${canvasComponent.data.columns.length} 个属种列！可点击 OCR 识别或在左栏输入各列名称。`, 5000);
     } else if (targetStage === STAGE.CALIBRATE_COLUMNS) {
       currentStage = STAGE.CALIBRATE_COLUMNS;
       updateWorkflowBar();
       inspector?.updateData(canvasComponent.data);
-      setHudNotice('👉 已进入 Step 6 列标定！在侧边栏点击自动提取刻度齿，或双击端点手动标定。', 4500);
+      setHudNotice('已进入 Step 6 列标定！在侧边栏点击自动提取刻度齿，或双击端点手动标定。', 4500);
     } else if (targetStage === STAGE.SPEARS_AND_SAMPLES) {
       currentStage = STAGE.SPEARS_AND_SAMPLES;
       updateWorkflowBar();
       inspector?.updateData(canvasComponent.data);
-      setHudNotice('👉 已进入 Step 7 采样层位！点击侧栏【提取采样共识】或从外部粘贴真实层位。', 4500);
+      setHudNotice('已进入 Step 7 采样层位！点击侧栏【提取采样共识】或从外部粘贴真实层位。', 4500);
     } else if (targetStage === STAGE.QA) {
       currentStage = STAGE.QA;
       updateWorkflowBar();
       inspector?.updateData(canvasComponent.data);
-      setHudNotice('🔍 已进入 Step 8 地学校验！正在核验组分总和 ≤100% 门禁与空层位排查。', 4000);
+      setHudNotice('已进入 Step 8 地学校验！正在核验组分总和 ≤100% 门禁与空层位排查。', 4000);
     }
   }
 
@@ -952,7 +949,7 @@ async function bootstrap() {
           toolbar?.updateHistoryState();
           // 成功提示放在 RPC 之后：后端也有它自己的名字合法性校验（`COLUMN_NAME_PATTERN`
           // 拒绝 `/`、`#`、超长等），先说"已更名"再被后端打脸就成了假状态。
-          setHudNotice(`🏷️ 属种已更名为: ${newName}`);
+          setHudNotice(`属种已更名为: ${newName}`);
         } catch (err) {
           col.name = prevName;
           col.species = prevName;
@@ -1006,7 +1003,7 @@ async function bootstrap() {
       toolbar?.updateHistoryState();
       updateFooter();
       scheduleAutosave();
-      setHudNotice(`➕ 已插入空缺占位列 [Gap_Col_${insertAt + 1}]，后续属种名字已顺延后推！`, 4000);
+      setHudNotice(`已插入空缺占位列 [Gap_Col_${insertAt + 1}]，后续属种名字已顺延后推！`, 4000);
     },
   });
 
@@ -1015,7 +1012,7 @@ async function bootstrap() {
     document.body,
     rpcClient,
     (_meta) => {
-      setHudNotice(`✅ 论文元数据已保存更新！已同步至 XLSX / LiPD 导出引擎。`, 3500);
+      setHudNotice(`论文元数据已保存更新！已同步至 XLSX / LiPD 导出引擎。`, 3500);
     }
   );
 
@@ -1025,7 +1022,7 @@ async function bootstrap() {
     canvasComponent.data,
     rpcClient,
     (ageModel) => {
-      setHudNotice(`✅ 成功关联年代模型 [${ageModel.metadata.curve_type || "Median"}]！导出时将自动注入日历年代与 95% 置信区间。`, 4000);
+      setHudNotice(`成功关联年代模型 [${ageModel.metadata.curve_type || "Median"}]！导出时将自动注入日历年代与 95% 置信区间。`, 4000);
     }
   );
 
@@ -1054,7 +1051,7 @@ async function bootstrap() {
    */
   const openOcrReviewModal = (): void => {
     if (canvasComponent.data.columns.length === 0) {
-      setHudNotice('⚠️ 当前图谱尚未切分属种列。请先框选 ROI 并点击【确认有效区，开始分列】，系统将自动生成 col01, col02... 编号列后再进行 OCR。', 4500);
+      setHudNotice('当前图谱尚未切分属种列。请先框选 ROI 并点击【确认有效区，开始分列】，系统将自动生成 col01, col02... 编号列后再进行 OCR。', 4500);
       return;
     }
     ocrReviewModal.open(canvasComponent.data);
@@ -1082,7 +1079,7 @@ async function bootstrap() {
     toolbar?.updateScale(canvasComponent.viewport.scale);
     updateFooter();
     void recomposeCleanupState('载入项目后重算清理掩膜');
-    setHudNotice('✅ 成功载入 Straditize 科学项目包 (.tar)！已 100% 还原全部属种、刻度钉与控制点。', 4500);
+    setHudNotice('成功载入 Straditize 科学项目包 (.tar)！已 100% 还原全部属种、刻度钉与控制点。', 4500);
   };
 
   const projectManager = new ProjectManager(
@@ -1145,7 +1142,7 @@ async function bootstrap() {
           canvasComponent.requestRender();
           sidebar?.updateData(canvasComponent.data);
           inspector?.updateData(canvasComponent.data);
-          setHudNotice(`⚡ 属种 ${activeCol.name} 轮廓已根据图像算法完成重识别！`);
+          setHudNotice(`属种 ${activeCol.name} 轮廓已根据图像算法完成重识别！`);
         }
       } catch (err) {
         reportBackendFailure('属种轮廓重识别', err);
@@ -1162,7 +1159,7 @@ async function bootstrap() {
       if (layer === 'ghost') {
         canvasComponent.viewport.showGhosting = visible;
         canvasComponent.requestRender();
-        setHudNotice(visible ? '🟢 绿色原位半透明对比层已开启' : '绿色对比层已关闭');
+        setHudNotice(visible ? '绿色原位半透明对比层已开启' : '绿色对比层已关闭');
       }
     },
     onStartLineFix: (mode) => {
@@ -1177,8 +1174,8 @@ async function bootstrap() {
       toolbar?.updateFilterState(canvasComponent.viewport.imageMode, true);
       setHudNotice(
         mode === 'erase'
-          ? '🧽 擦除笔：按住左键涂抹被误标成线的数据区，松手即重算。'
-          : '🖌 补线笔：按住左键涂抹算法漏掉的线，松手即重算。',
+          ? '擦除笔：按住左键涂抹被误标成线的数据区，松手即重算。'
+          : '补线笔：按住左键涂抹算法漏掉的线，松手即重算。',
         6000
       );
     },
@@ -1225,7 +1222,7 @@ async function bootstrap() {
           sidebar?.updateData(canvasComponent.data);
           inspector?.updateData(canvasComponent.data);
           canvasComponent.requestRender();
-          setHudNotice(`✅ 已新建并选中有效区: ${res.roi.name}`);
+          setHudNotice(`已新建并选中有效区: ${res.roi.name}`);
         }
       } catch (err) {
         reportBackendFailure('新建有效区', err);
@@ -1237,7 +1234,7 @@ async function bootstrap() {
         const freshData = await rpcClient.getDiagramData();
         canvasComponent.loadNewDiagram(freshData);
         inspector?.updateData(canvasComponent.data);
-        setHudNotice(`⭐ 已将 ${roiId} 设为主有效区 (对应导出 data.csv)`);
+        setHudNotice(`已将 ${roiId} 设为主有效区 (对应导出 data.csv)`);
       } catch (err) {
         reportBackendFailure('设置主有效区', err);
       }
@@ -1250,7 +1247,7 @@ async function bootstrap() {
         sidebar?.updateData(canvasComponent.data);
         inspector?.updateData(canvasComponent.data);
         canvasComponent.requestRender();
-        setHudNotice(`🗑️ 已删除有效区: ${roiId}`);
+        setHudNotice(`已删除有效区: ${roiId}`);
       } catch (err) {
         reportBackendFailure('删除有效区', err);
       }
@@ -1279,7 +1276,7 @@ async function bootstrap() {
         canvasComponent.loadNewDiagram(freshData);
         sidebar?.updateData(canvasComponent.data);
         inspector?.updateData(canvasComponent.data);
-        setHudNotice(`🏷️ 有效区已更名为: ${newName}`);
+        setHudNotice(`有效区已更名为: ${newName}`);
       } catch (err) {
         reportBackendFailure('重命名有效区', err);
       }
@@ -1306,7 +1303,7 @@ async function bootstrap() {
         canvasComponent.setSelectedGeometryId(null);
         const count = res?.candidates?.length ?? composed.candidates?.length ?? 0;
         setHudNotice(
-          `🔍 已检测 ${count} 条候选干扰线（橙色=待确认）。在图上点选/拖动修正，确认后才会真正去除。`,
+          `已检测 ${count} 条候选干扰线（橙色=待确认）。在图上点选/拖动修正，确认后才会真正去除。`,
           5000
         );
         return composed;
@@ -1323,8 +1320,8 @@ async function bootstrap() {
       canvasComponent.setToolMode(axis === 'h' ? 'drawLineH' : 'drawLineV');
       setHudNotice(
         axis === 'h'
-          ? '✏️ 请在图上按住左键，横向拖出一段作为干扰线（拖出的厚度即线宽）。'
-          : '✏️ 请在图上按住左键，竖向拖出一段作为干扰线（拖出的宽度即线宽）。',
+          ? '请在图上按住左键，横向拖出一段作为干扰线（拖出的厚度即线宽）。'
+          : '请在图上按住左键，竖向拖出一段作为干扰线（拖出的宽度即线宽）。',
         6000
       );
     },
@@ -1386,7 +1383,7 @@ async function bootstrap() {
       await runCleanupAction('更新候选线选择', () =>
         rpcClient.setGeometryStatus(candId, selected ? 'removed' : 'candidate')
       );
-      setHudNotice(selected ? '✅ 已确认该几何：数字化将剔除这块像素。' : '↩️ 已撤回为待确认：不再剔除。');
+      setHudNotice(selected ? '已确认该几何：数字化将剔除这块像素。' : '已撤回为待确认：不再剔除。');
     },
     // 与画布侧共用同一份实现（见文件上方 handleGeometry*）。
     // 注意：onGeometrySelected 只属于画布回调（选中由画布发起），InspectorCallbacks 没有它。
@@ -1411,7 +1408,7 @@ async function bootstrap() {
         canvasComponent.data.exclusion_regions = (
           canvasComponent.data.exclusion_regions || []
         ).filter((e) => e.roi_id != null && e.roi_id !== roiId);
-        setHudNotice('🧽 已清空本步的全部几何、排除区与笔迹。');
+        setHudNotice('已清空本步的全部几何、排除区与笔迹。');
         return res;
       });
     },
@@ -1422,8 +1419,8 @@ async function bootstrap() {
       );
       setHudNotice(
         candidateId
-          ? `📏 已把选中几何的厚度统一改为 ${thickness}px。`
-          : `📏 已把本有效区全部几何的厚度统一改为 ${thickness}px（中心行未移动）。`,
+          ? `已把选中几何的厚度统一改为 ${thickness}px。`
+          : `已把本有效区全部几何的厚度统一改为 ${thickness}px（中心行未移动）。`,
         5000
       );
     },
@@ -1432,7 +1429,7 @@ async function bootstrap() {
         const activeRoi = canvasComponent.data.active_roi_id || canvasComponent.data.rois?.[0]?.id;
         const res = await rpcClient.call<any, any>('algorithm.detectXTicks', { roi_id: activeRoi });
         if (res?.per_column) {
-          setHudNotice(`📐 已成功提取 ${res.per_column.length} 列刻度线齿`);
+          setHudNotice(`已成功提取 ${res.per_column.length} 列刻度线齿`);
         }
       } catch (err) {
         reportBackendFailure('自动提取刻度', err);
@@ -1488,7 +1485,7 @@ async function bootstrap() {
         updateFooter();
         scheduleAutosave();
         setHudNotice(
-          `📏 列 ${col.name} 已标定：X=${res.x_ticks[0].px}px → ${res.x_ticks[0].value}${unit}，` +
+          `列 ${col.name} 已标定：X=${res.x_ticks[0].px}px → ${res.x_ticks[0].value}${unit}，` +
             `X=${res.x_ticks[1].px}px → ${res.x_ticks[1].value}${unit}`
         );
       } catch (err) {
@@ -1513,7 +1510,7 @@ async function bootstrap() {
             canvasComponent.data.columns,
             canvasComponent.data.activeTaxaId
           );
-          setHudNotice(`🧹 列 ${col.name} 的 X 标度已清空（回到未标定）`);
+          setHudNotice(`列 ${col.name} 的 X 标度已清空（回到未标定）`);
         }
         canvasComponent.requestRender();
         inspector?.updateData(canvasComponent.data);
@@ -1539,7 +1536,7 @@ async function bootstrap() {
           canvasComponent.data.samples = res.samples;
           inspector?.updateData(canvasComponent.data);
           canvasComponent.requestRender();
-          setHudNotice(`🧬 成功提取 ${res.samples.length} 个跨属种拐点共识采样层位！`, 4000);
+          setHudNotice(`成功提取 ${res.samples.length} 个跨属种拐点共识采样层位！`, 4000);
         }
       } catch (err) {
         reportBackendFailure('提取采样层位', err);
@@ -1823,8 +1820,8 @@ async function bootstrap() {
       const total = canvasComponent.data.line_strokes.length;
       setHudNotice(
         stroke.mode === 'erase'
-          ? `🧽 已擦除该处误标（人工修正共 ${total} 条）。`
-          : `🖌 已补回该处漏标（人工修正共 ${total} 条）。`,
+          ? `已擦除该处误标（人工修正共 ${total} 条）。`
+          : `已补回该处漏标（人工修正共 ${total} 条）。`,
         3500
       );
     } catch (err) {
@@ -1841,7 +1838,7 @@ async function bootstrap() {
     updateWorkflowBar();
     canvasComponent.clearYCalibMarks();
     canvasComponent.setToolMode('ycalib');
-    setHudNotice('🎯 请在图上依次点击 Y 轴上两个已知刻度所在的行，数值将实时填入侧栏。', 7000);
+    setHudNotice('请在图上依次点击 Y 轴上两个已知刻度所在的行，数值将实时填入侧栏。', 7000);
   }
 
   /** 提交两点标定到后端，成功后写回前端标定结构。 */
@@ -1878,7 +1875,7 @@ async function bootstrap() {
       inspector?.updateData(canvasComponent.data);
       updateFooter();
       setHudNotice(
-        `✅ Y 轴已标定: Y1=${res.canvas.top_px}px → ${res.canvas.top_cm} ${unit}，` +
+        `Y 轴已标定: Y1=${res.canvas.top_px}px → ${res.canvas.top_cm} ${unit}，` +
           `Y2=${res.canvas.bottom_px}px → ${res.canvas.bottom_cm} ${unit}`,
         6000
       );
@@ -1943,7 +1940,7 @@ async function bootstrap() {
         toolbar?.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
         updateFooter();
 
-        setHudNotice(`✅ 成功载入 PDF [${file.name}] 第 ${pageNum} 页图谱 (${newDiagramData.imageWidth}×${newDiagramData.imageHeight})！请在画布上调整数据有效区 (Step 1)。`, 5000);
+        setHudNotice(`成功载入 PDF [${file.name}] 第 ${pageNum} 页图谱 (${newDiagramData.imageWidth}×${newDiagramData.imageHeight})！请在画布上调整数据有效区 (Step 1)。`, 5000);
         return;
       }
 
@@ -1983,7 +1980,7 @@ async function bootstrap() {
           newDiagramData = await rpcClient.loadCustomImage(dataUrl, w, h, file.name);
         } catch (err) {
           reportBackendFailure('图谱载入', err);
-          setHudNotice('❌ 图谱载入失败：后端未确认接收该图像，未进入工作流。', 6000);
+          setHudNotice('图谱载入失败：后端未确认接收该图像，未进入工作流。', 6000);
           return;
         }
 
@@ -1999,7 +1996,7 @@ async function bootstrap() {
         toolbar?.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
         updateFooter();
 
-        setHudNotice(`✅ 成功载入图谱 [${file.name}] (${w}×${h})！请在画布上调整数据有效区 (Step 1)，随后点击下方推进。`, 5000);
+        setHudNotice(`成功载入图谱 [${file.name}] (${w}×${h})！请在画布上调整数据有效区 (Step 1)，随后点击下方推进。`, 5000);
 
         // 异步执行微小倾斜检测提示 (Deskew Helper)
         rpcClient.detectDeskew().then((skewRes) => {
@@ -2010,7 +2007,7 @@ async function bootstrap() {
             banner.style.cssText = 'position: fixed; top: 52px; right: 20px; z-index: 9999;';
             banner.innerHTML = `
               <div class="app-toast-badge" style="border: 1px solid #f59e0b;">
-                <span>📐 <strong>图谱微斜提示</strong>: 检测到主轴倾斜约 <strong>${ang > 0 ? '+' : ''}${ang}°</strong>，是否自动水平矫正？</span>
+                <span><strong>图谱微斜提示</strong>: 检测到主轴倾斜约 <strong>${ang > 0 ? '+' : ''}${ang}°</strong>，是否自动水平矫正？</span>
                 <div style="display: flex; gap: 6px;">
                   <button id="btn-deskew-apply" class="btn btn-primary" style="padding: 2px 8px; font-size: 10px; background: #f59e0b; border-color: #f59e0b;">旋转校正</button>
                   <button id="btn-deskew-ignore" class="btn btn-secondary" style="padding: 2px 8px; font-size: 10px;">忽略</button>
@@ -2030,7 +2027,7 @@ async function bootstrap() {
                   history.reset([], '');
                   currentStage = 1;
                   updateWorkflowBar();
-                  setHudNotice(`✅ 已水平矫正图谱！有效区已重置。`, 3500);
+                  setHudNotice(`已水平矫正图谱！有效区已重置。`, 3500);
                 } else {
                   throw new Error(t('error.unknown'));
                 }
@@ -2099,7 +2096,7 @@ async function bootstrap() {
       verification: '标定验证地质图谱',
       beginner: '初学者沉积图谱',
     };
-    setHudNotice(`✅ 已载入范例: ${nameMap[sampleKey] || sampleKey}，已自动居中重置！`, 3500);
+    setHudNotice(`已载入范例: ${nameMap[sampleKey] || sampleKey}，已自动居中重置！`, 3500);
   }
 
   // 11. 实例化顶部工具栏（缩放/透视控件在 render 后搬到底部视口栏）
@@ -2160,8 +2157,8 @@ async function bootstrap() {
       if (cols.length === 0 || !hasPoints) {
         setHudNotice(
           getLocale() === 'en'
-            ? 'ℹ️ Notice: Please complete Step 5 columns & extraction before exporting. Opening readiness checklist.'
-            : 'ℹ️ 提示：当前图谱尚未切分属种列或提取数据，已为您打开导出就绪清单。请先完成 Step 5 分列与提取再导出。',
+            ? 'Notice: Please complete Step 5 columns & extraction before exporting. Opening readiness checklist.'
+            : '提示：当前图谱尚未切分属种列或提取数据，已为您打开导出就绪清单。请先完成 Step 5 分列与提取再导出。',
           5000
         );
         exportModal.open('', format);
@@ -2177,7 +2174,7 @@ async function bootstrap() {
     },
     onSaveProject: () => {
       void projectManager.saveProjectFile();
-      setHudNotice('💾 数字化项目已打包导出为标准归档包 (.tar)！', 3500);
+      setHudNotice('数字化项目已打包导出为标准归档包 (.tar)！', 3500);
     },
     onOpenProjectFile: (file) => {
       projectManager.openProjectFile(file);
@@ -2442,7 +2439,7 @@ async function bootstrap() {
     toolbar?.updateHistoryState();
     updateFooter();
     scheduleAutosave();
-    setHudNotice(`🤖 WebMCP 已执行: ${actionName}（支持 Ctrl+Z 撤销）`, 3500);
+    setHudNotice(`WebMCP 已执行: ${actionName}（支持 Ctrl+Z 撤销）`, 3500);
   };
 
   let inPageCallInFlight = false;

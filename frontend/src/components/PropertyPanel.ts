@@ -85,7 +85,7 @@ export class PropertyPanel {
                   : '<span style="color: #f59e0b; font-weight: 700;">尚未标定</span> —— 深度一律显示为 --'
               }
             </div>
-            <small style="display: block; margin-top: 6px;">在 S4 面板点击「🎯 开始两点标定」后在画布上点两个已知刻度即可修改。</small>
+            <small style="display: block; margin-top: 6px;">在 S4 面板点击「 开始两点标定」后在画布上点两个已知刻度即可修改。</small>
           </div>
 
           <div class="form-group">
@@ -206,7 +206,7 @@ export class PropertyPanel {
           <div class="form-group">
             <label>当前运行模式:</label>
             <div class="mode-pill ${status.connected ? 'online' : 'mock'}">
-              ${status.connected ? '🟢 已连接到后端 Agent 2' : '🟡 本地 Mock 仿真自主运行 (无后端)'}
+              ${status.connected ? '已连接到后端 Agent 2' : '本地 Mock 仿真自主运行 (无后端)'}
             </div>
           </div>
         </div>

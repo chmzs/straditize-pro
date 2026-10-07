@@ -215,12 +215,12 @@ export class MetadataModal {
             <div id="meta-external-assistant-panel" style="display: none; margin-top: 8px; padding: 10px; border-top: 1px dashed var(--border-color); background: rgba(16, 185, 129, 0.05); border-radius: 6px; flex-direction: column; gap: 8px;">
               <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
                 <div style="font-size: 11px; color: var(--text-primary);">
-                  <strong style="color: #10b981;">💡 零 API 费用三步法：</strong>
+                  <strong style="color: #10b981;">零 API 费用三步法：</strong>
                   ① 点击右侧【复制提取提示词】 → ② 打开网页版 DeepSeek / ChatGPT / Kimi 上传论文 PDF 并粘贴发送 → ③ 将 AI 回复的内容粘贴到下方并点击【解析并填入表单】
                 </div>
                 <div style="display: flex; gap: 6px;">
-                  <button id="btn-copy-external-prompt" class="btn btn-secondary" style="font-size: 10.5px; padding: 3px 8px;">📋 复制提取提示词</button>
-                  <button id="btn-toggle-external-prompt-preview" class="tool-btn" style="font-size: 10px; padding: 3px 8px;">👁️ 查看/编辑提示词</button>
+                  <button id="btn-copy-external-prompt" class="btn btn-secondary" style="font-size: 10.5px; padding: 3px 8px;">复制提取提示词</button>
+                  <button id="btn-toggle-external-prompt-preview" class="tool-btn" style="font-size: 10px; padding: 3px 8px;">查看/编辑提示词</button>
                 </div>
               </div>
               <textarea id="meta-external-prompt-box" rows="5" style="display: none; width: 100%; font-family: var(--font-mono); font-size: 10px; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-secondary); box-sizing: border-box;"></textarea>
@@ -229,8 +229,8 @@ export class MetadataModal {
                   <label style="font-size: 10.5px; font-weight: 600; color: var(--text-primary);">粘贴外部 AI 输出结果 (支持直接粘贴含 JSON 代码块的整段回复，或导入 .json/.txt 文件):</label>
                   <div style="display: flex; gap: 6px;">
                     <input type="file" id="meta-file-external-json" accept=".json,.txt,.md" style="display: none;" />
-                    <button id="btn-upload-external-json" class="tool-btn" style="font-size: 10px; padding: 2px 8px;">📂 从文件导入 (.json/.txt)</button>
-                    <button id="btn-parse-external-json" class="btn btn-primary" style="font-size: 10.5px; padding: 3px 12px; background: #10b981; border-color: #059669;">✨ 解析并填入表单</button>
+                    <button id="btn-upload-external-json" class="tool-btn" style="font-size: 10px; padding: 2px 8px;">从文件导入 (.json/.txt)</button>
+                    <button id="btn-parse-external-json" class="btn btn-primary" style="font-size: 10.5px; padding: 3px 12px; background: #10b981; border-color: #059669;">解析并填入表单</button>
                   </div>
                 </div>
                 <textarea id="meta-external-paste-input" rows="5" placeholder="将 DeepSeek / ChatGPT / Kimi / Claude 生成的回复直接粘贴到这里（无需手动删掉前后的聊天文字或代码块标记，系统会自动剥离并识别）..." style="width: 100%; font-family: var(--font-mono); font-size: 10.5px; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); box-sizing: border-box;"></textarea>
@@ -252,12 +252,12 @@ export class MetadataModal {
                   <label style="font-size: 10px; color: var(--text-muted);">模型名称 (Model):</label>
                   <input type="text" id="meta-llm-model" value="${this.llmModel}" placeholder="gpt-4o / deepseek-chat" style="width: 100%; font-size: 11px;" />
                 </div>
-                <button id="btn-save-llm-config" class="btn btn-primary" style="font-size: 10.5px; padding: 5px 10px; white-space: nowrap;">💾 保存配置</button>
+                <button id="btn-save-llm-config" class="btn btn-primary" style="font-size: 10.5px; padding: 5px 10px; white-space: nowrap;">保存配置</button>
               </div>
               <div class="form-group" style="margin: 0;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
                   <label style="font-size: 10px; color: var(--text-muted);">提取 Meta 系统提示词配置 (System Prompt Template — 决定提取规则与 JSON 字段):</label>
-                  <button id="btn-reset-llm-prompt" class="tool-btn" style="font-size: 9.5px; padding: 1px 6px;">🔄 恢复默认提示词</button>
+                  <button id="btn-reset-llm-prompt" class="tool-btn" style="font-size: 9.5px; padding: 1px 6px;">恢复默认提示词</button>
                 </div>
                 <textarea id="meta-llm-prompt" rows="6" style="width: 100%; font-family: var(--font-mono); font-size: 10.5px; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); box-sizing: border-box;"></textarea>
               </div>
@@ -269,7 +269,7 @@ export class MetadataModal {
             <!-- 分组 1: 出版信息 (DOI 来源) -->
             <div class="meta-card">
               <div class="meta-card-header">
-                <strong style="font-size: 12px; color: var(--accent-blue);">1. 📚 来源文献与出版信息</strong>
+                <strong style="font-size: 12px; color: var(--accent-blue);">1. 来源文献与出版信息</strong>
                 <span class="chip-tag">${this.metadata.publication.source || 'DOI'}</span>
               </div>
               <div class="form-group" style="margin: 0;">
@@ -305,14 +305,14 @@ export class MetadataModal {
             <!-- 分组 2: 站点地理位置 (LLM / 手动) -->
             <div class="meta-card">
               <div class="meta-card-header">
-                <strong style="font-size: 12px; color: var(--accent-green);">2. 📍 钻孔/剖面地理位置与野外采集</strong>
+                <strong style="font-size: 12px; color: var(--accent-green);">2. 钻孔/剖面地理位置与野外采集</strong>
                 <span class="chip-tag" style="color: var(--accent-green);">${this.metadata.site.source || 'LLM / User'}</span>
               </div>
               <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px;">
                 <div class="form-group" style="margin: 0;">
                   <div style="display: flex; justify-content: space-between;">
                     <label style="font-size: 10.5px; color: var(--text-muted);">站点名称 (Site Name):</label>
-                    ${this.metadata.site.conflict ? '<span style="color: var(--accent-amber); font-size: 10px;">⚠️ 检测到冲突候选项</span>' : ''}
+                    ${this.metadata.site.conflict ? '<span style="color: var(--accent-amber); font-size: 10px;">检测到冲突候选项</span>' : ''}
                   </div>
                   <input type="text" id="meta-site-name" value="${this.metadata.site.site_name || ''}" placeholder="未找到，请手动填写 (如 Hoya del Castillo)" style="width: 100%; font-size: 11px;" />
                 </div>
@@ -360,7 +360,7 @@ export class MetadataModal {
             <!-- 分组 3: 年代学与定年模型 -->
             <div class="meta-card">
               <div class="meta-card-header">
-                <strong style="font-size: 12px; color: var(--accent-amber);">3. ⏳ 年代学与时间序列模型</strong>
+                <strong style="font-size: 12px; color: var(--accent-amber);">3. 年代学与时间序列模型</strong>
                 <span class="chip-tag" style="color: var(--accent-amber);">Chronology</span>
               </div>
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
@@ -388,7 +388,7 @@ export class MetadataModal {
             <!-- 分组 4 & 5: 采集/分析责任人、单位与质量控制 -->
             <div class="meta-card">
               <div class="meta-card-header">
-                <strong style="font-size: 12px; color: #a78bfa;">4. 🧪 采集/分析人、单位、技术与质量备注</strong>
+                <strong style="font-size: 12px; color: #a78bfa;">4. 采集/分析人、单位、技术与质量备注</strong>
                 <span class="chip-tag" style="background: rgba(167, 139, 250, 0.2); color: #a78bfa;">Provenance & QC</span>
               </div>
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
@@ -465,7 +465,7 @@ export class MetadataModal {
         return;
       }
       const statusEl = modal.querySelector('#meta-extract-status');
-      if (statusEl) statusEl.textContent = '⏳ 正在检索 Crossref 与 Semantic Scholar...';
+      if (statusEl) statusEl.textContent = '正在检索 Crossref 与 Semantic Scholar...';
 
       try {
         const res = await this.rpcClient.call<{ doi: string }, any>('metadata.fetchByDoi', { doi: doiInp });
@@ -475,12 +475,12 @@ export class MetadataModal {
           (modal.querySelector('#meta-pub-authors') as HTMLInputElement).value = (d.authors || []).join(', ');
           (modal.querySelector('#meta-pub-journal') as HTMLInputElement).value = d.journal || '';
           (modal.querySelector('#meta-pub-year') as HTMLInputElement).value = String(d.year || '');
-          if (statusEl) statusEl.textContent = `✅ 成功索引出版信息 (来源: ${d.source})！`;
+          if (statusEl) statusEl.textContent = `成功索引出版信息 (来源: ${d.source})！`;
         } else {
-          if (statusEl) statusEl.textContent = `⚠️ 未检索到 DOI，请核对编号或手动填写。`;
+          if (statusEl) statusEl.textContent = `未检索到 DOI，请核对编号或手动填写。`;
         }
       } catch (err: any) {
-        if (statusEl) statusEl.textContent = `❌ 检索失败: ${err.message || err}`;
+        if (statusEl) statusEl.textContent = `检索失败: ${err.message || err}`;
       }
     });
 
@@ -516,13 +516,13 @@ export class MetadataModal {
       const statusEl = modal.querySelector('#meta-extract-status');
       try {
         await navigator.clipboard.writeText(textToCopy);
-        if (statusEl) statusEl.textContent = '✅ 已复制提取提示词！请前往网页版 AI 上传论文 PDF 并粘贴发送。';
+        if (statusEl) statusEl.textContent = '已复制提取提示词！请前往网页版 AI 上传论文 PDF 并粘贴发送。';
       } catch {
         if (extPromptBox) {
           extPromptBox.style.display = 'block';
           extPromptBox.select();
         }
-        if (statusEl) statusEl.textContent = '💡 已展开提示词框，请按 Ctrl+C 复制。';
+        if (statusEl) statusEl.textContent = '已展开提示词框，请按 Ctrl+C 复制。';
       }
     });
 
@@ -589,7 +589,7 @@ export class MetadataModal {
         if (res && res.success && res.current_metadata) {
           applyMetadataToForm(res.current_metadata);
           if (statusEl) {
-            statusEl.textContent = '✅ 已成功解析外部 AI 结果并填入全部元数据字段！';
+            statusEl.textContent = '已成功解析外部 AI 结果并填入全部元数据字段！';
           }
         }
       } catch (err: any) {
@@ -644,11 +644,11 @@ export class MetadataModal {
           llm_prompt_template: this.llmPromptTemplate,
         });
         if (showNotice && statusEl) {
-          statusEl.textContent = '✅ LLM 配置与提示词已保存！';
+          statusEl.textContent = 'LLM 配置与提示词已保存！';
         }
       } catch (err: any) {
         if (showNotice && statusEl) {
-          statusEl.textContent = `❌ 保存 LLM 配置失败: ${err.message || err}`;
+          statusEl.textContent = `保存 LLM 配置失败: ${err.message || err}`;
         }
       }
     };
@@ -668,7 +668,7 @@ export class MetadataModal {
       await saveLlmConfigFromInputs(false);
 
       const statusEl = modal.querySelector('#meta-extract-status');
-      if (statusEl) statusEl.textContent = `⏳ 正在分块提取论文文本并调用 LLM (${this.llmModel})...`;
+      if (statusEl) statusEl.textContent = `正在分块提取论文文本并调用 LLM (${this.llmModel})...`;
 
       try {
         // 上传统一走 RpcClient（含 HTTP 状态检查与"必须拿到真实路径"校验）。
@@ -683,10 +683,10 @@ export class MetadataModal {
         });
         if (res && res.success && res.current_metadata) {
           applyMetadataToForm(res.current_metadata);
-          if (statusEl) statusEl.textContent = `✅ 完成 ${res.chunks_count} 块文本提取！未提及项已严格留空。`;
+          if (statusEl) statusEl.textContent = `完成 ${res.chunks_count} 块文本提取！未提及项已严格留空。`;
         }
       } catch (err: any) {
-        if (statusEl) statusEl.textContent = `⚠️ PDF 提取提示: ${err.message || err}`;
+        if (statusEl) statusEl.textContent = `PDF 提取提示: ${err.message || err}`;
       }
     });
 

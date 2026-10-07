@@ -115,6 +115,60 @@ check(settingsModal.includes('ui-modal__body'), '设置弹窗主体必须使用�
 check(!/toolbar\.(?:ocr|ageDepth|export)'\s*:\s*'[🔍⏳💾]/u.test(zh), '中文顶栏文案不得依赖 emoji');
 check(!/toolbar\.(?:ocr|ageDepth|export)'\s*:\s*'[🔍⏳💾]/u.test(en), '英文顶栏文案不得依赖 emoji');
 
+// ---- 8. 全局：源码与端到端用例不得用 emoji 充当界面语义 ---------------------
+// 允许的排版记号（连接符 / 折叠与运行指示，属排版而非 emoji 语义）：↔ ▲ ▶ ▼ ◀
+const ALLOWED_GLYPHS = new Set(['\u2194', '\u25B2', '\u25B6', '\u25BC', '\u25C0']);
+const PICTOGRAPH = /[\p{Extended_Pictographic}\u{FE0F}\u{20E3}]/gu;
+const ROOT = fileURLToPath(new URL('.', import.meta.url));
+const walkSources = (dir, filePattern, callback) => {
+  const walk = (abs) => {
+    for (const entry of readdirSync(abs, { withFileTypes: true })) {
+      if (entry.name === 'node_modules') continue;
+      const child = join(abs, entry.name);
+      if (entry.isDirectory()) walk(child);
+      else if (filePattern.test(entry.name)) callback(child);
+    }
+  };
+  walk(join(ROOT, dir));
+};
+const pictographHits = [];
+for (const dir of ['src', 'e2e']) {
+  walkSources(dir, /\.(ts|css|html)$/, (file) => {
+    readFileSync(file, 'utf8')
+      .split(/\r?\n/)
+      .forEach((line, index) => {
+        if ((line.match(PICTOGRAPH) ?? []).some((glyph) => !ALLOWED_GLYPHS.has(glyph))) {
+          pictographHits.push(`${relative(ROOT, file)}:${index + 1}`);
+        }
+      });
+  });
+}
+check(
+  pictographHits.length === 0,
+  `源码与用例不得以 emoji 充当界面语义：${pictographHits.slice(0, 4).join('、')}${pictographHits.length > 4 ? ` 等 ${pictographHits.length} 处` : ''}`,
+);
+
+// ---- 9. 标题不得中英重复 ----------------------------------------------------
+const BILINGUAL_TITLE = /(?:<h[1-6][^>]*>|help-section-title">)([^<]{2,90}?)<\//g;
+const bilingualTitles = [];
+walkSources('src', /\.ts$/, (file) => {
+  readFileSync(file, 'utf8')
+    .split(/\r?\n/)
+    .forEach((line, index) => {
+      for (const match of line.matchAll(BILINGUAL_TITLE)) {
+        // 动态标题（模板表达式）无法静态判定，跳过
+        if (match[1].includes('${')) continue;
+        if (/\([A-Za-z][A-Za-z -]{2,40}\)/.test(match[1])) {
+          bilingualTitles.push(`${relative(ROOT, file)}:${index + 1}`);
+        }
+      }
+    });
+});
+check(
+  bilingualTitles.length === 0,
+  `标题不得中英重复（如「属种词汇表 (Taxa Vocabulary)」）：${bilingualTitles.slice(0, 4).join('、')}`,
+);
+
 if (failures.length > 0) {
   console.error(`✘ UI 一致性门禁失败（${failures.length} 项）:`);
   for (const failure of failures) console.error(`  - ${failure}`);
