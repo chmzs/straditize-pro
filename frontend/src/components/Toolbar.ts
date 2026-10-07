@@ -214,7 +214,7 @@ export class Toolbar {
               </g>
             </svg>
           </div>
-          <span class="brand-name">Straditize <span style="background: linear-gradient(135deg, #0284c7, #38bdf8); color: #fff; font-size: 9.5px; font-weight: 700; padding: 1px 4px; border-radius: 4px; margin-left: 2px; letter-spacing: 0.5px;">PRO</span></span>
+          <span class="brand-name">Straditize <span style="background: var(--brand-gradient); color: #fff; font-size: 9.5px; font-weight: 700; padding: 1px 4px; border-radius: 4px; margin-left: 2px; letter-spacing: 0.5px;">PRO</span></span>
         </div>
 
         <div class="divider"></div>

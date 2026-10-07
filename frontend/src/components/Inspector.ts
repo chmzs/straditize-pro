@@ -283,11 +283,11 @@ export class Inspector {
           <!-- 端点 2: 真实刻度齿 -->
           <div style="display: flex; gap: 8px;">
             <div style="flex: 1;">
-              <label style="font-size: 10px; color: #f97316;">端点 2 (刻度齿像素 X):</label>
+              <label style="font-size: 10px; color: var(--accent-orange);">端点 2 (刻度齿像素 X):</label>
               <input type="number" id="inp-sc-calib-x" value="${sc.calibX}" style="font-size: 11px; border-color: rgba(249,115,22,0.4);" />
             </div>
             <div style="flex: 1;">
-              <label style="font-size: 10px; color: #f97316;">端点 2 刻度齿数值:</label>
+              <label style="font-size: 10px; color: var(--accent-orange);">端点 2 刻度齿数值:</label>
               <div class="input-row">
                 <input type="number" id="inp-sc-calib-val" value="${sc.calibVal}" style="font-size: 11px; border-color: rgba(249,115,22,0.4);" />
                 <input type="text" id="inp-sc-unit" value="${sc.unit || '%'}" style="width: 45px; font-size: 11px;" />
@@ -308,14 +308,14 @@ export class Inspector {
         <div class="form-group" style="margin-top: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <label style="font-size: 11px;">刻度尺度 (Scale Type):</label>
-            <span style="font-size: 10px; color: ${currentScaleType === 'log' ? '#f59e0b' : '#38bdf8'}; font-weight: 600;">${currentScaleType.toUpperCase()}</span>
+            <span style="font-size: 10px; color: ${currentScaleType === 'log' ? '#f59e0b' : 'var(--accent-blue)'}; font-weight: 600;">${currentScaleType.toUpperCase()}</span>
           </div>
           <div class="btn-group" style="display: flex; gap: 4px; width: 100%; margin-top: 4px;">
             <button class="tool-btn quick-scaletype-btn ${currentScaleType === 'linear' ? 'active-mode' : ''}" data-scale="linear" style="flex: 1; font-size: 10px;">线性 (Linear)</button>
             <button class="tool-btn quick-scaletype-btn ${currentScaleType === 'log' ? 'active-mode' : ''}" data-scale="log" ${!isLogValid ? 'disabled title="对数刻度要求: 起点值 > 0 且 刻度值 > 0" style="flex: 1; font-size: 10px; opacity: 0.45; cursor: not-allowed;"' : 'style="flex: 1; font-size: 10px;"'}>对数 (Log)</button>
           </div>
           ${!isLogValid ? `
-            <div id="log-scale-err" style="color: #ef4444; font-size: 10px; margin-top: 4px; line-height: 1.3;">
+            <div id="log-scale-err" style="color: var(--accent-red); font-size: 10px; margin-top: 4px; line-height: 1.3;">
               ${logCheck.reason}
             </div>
           ` : ''}
@@ -346,7 +346,7 @@ export class Inspector {
           </div>
           ${hasExag ? `
             <div style="margin-top: 6px; display: flex; align-items: center; gap: 6px;">
-              <span style="font-size: 10px; color: #94a3b8;">放大倍数:</span>
+              <span style="font-size: 10px; color: var(--text-secondary);">放大倍数:</span>
               <input type="number" id="inp-exag-mult" value="${exagMult}" min="1" max="100" style="width: 50px; font-size: 11px; padding: 2px 4px;" />
               <div class="btn-group" style="display: flex; gap: 2px; flex: 1;">
                 <button class="tool-btn quick-exag-btn" data-exag="3" style="flex: 1; font-size: 9px; padding: 2px;">3×</button>
@@ -358,10 +358,10 @@ export class Inspector {
         </div>
 
         <div style="display: flex; gap: 8px; margin-top: 10px;">
-          <button id="btn-col-digitize" class="tool-btn" style="flex: 1; font-size: 11px; padding: 6px; color: #0284c7; border-color: rgba(2,132,199,0.3); background: rgba(2,132,199,0.06);">
+          <button id="btn-col-digitize" class="tool-btn" style="flex: 1; font-size: 11px; padding: 6px; color: var(--accent-blue); border-color: rgba(2,132,199,0.3); background: rgba(2,132,199,0.06);">
             重新识别此列
           </button>
-          <button id="btn-col-delete" class="tool-btn" style="color: #dc2626; border-color: rgba(220,38,38,0.3); background: rgba(220,38,38,0.04); font-size: 11px; padding: 6px;">
+          <button id="btn-col-delete" class="tool-btn" style="color: var(--accent-red); border-color: rgba(220,38,38,0.3); background: rgba(220,38,38,0.04); font-size: 11px; padding: 6px;">
             删除列
           </button>
         </div>
@@ -408,7 +408,7 @@ export class Inspector {
           </div>
         </div>
 
-        <button id="btn-delete-point" class="ui-btn ui-btn--secondary" style="width: 100%; margin-top: 12px; color: #ef4444; border-color: rgba(239,68,68,0.4);">
+        <button id="btn-delete-point" class="ui-btn ui-btn--secondary" style="width: 100%; margin-top: 12px; color: var(--accent-red); border-color: rgba(239,68,68,0.4);">
           删除此控制锚点
         </button>
       </div>

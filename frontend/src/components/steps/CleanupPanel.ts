@@ -64,14 +64,14 @@ export function render(data: DiagramData): string {
         ? `y=${Math.min(g.y0, g.y1)}–${Math.max(g.y0, g.y1)} · x=${Math.min(g.x0, g.x1)}–${Math.max(g.x0, g.x1)}`
         : `x=${Math.min(g.x0, g.x1)}–${Math.max(g.x0, g.x1)} · y=${Math.min(g.y0, g.y1)}–${Math.max(g.y0, g.y1)}`;
     const badge = isRemoved
-      ? '<span style="color:#ef4444;font-weight:700;">已确认</span>'
+      ? '<span style="color:var(--accent-red);font-weight:700;">已确认</span>'
       : '<span style="color:#f59e0b;font-weight:700;">待确认</span>';
     const src = c.source === 'manual' ? '手动' : '自动';
     return `
       <div class="cleanup-row" data-cand-id="${c.id}"
            style="display:flex;align-items:center;gap:5px;padding:3px 4px;border-radius:3px;margin-bottom:2px;
                   background:${isSelected ? 'rgba(56,189,248,0.18)' : 'transparent'};
-                  border:1px solid ${isSelected ? '#38bdf8' : 'transparent'};">
+                  border:1px solid ${isSelected ? 'var(--accent-blue)' : 'transparent'};">
         <span title="在水印图上选中并拖动编辑" class="btn-select-geometry" data-cand-id="${c.id}"
               style="cursor:pointer;font-family:monospace;color:var(--text-muted);flex:1;font-size:9.5px;">
           ${c.axis === 'h' ? '↔' : ''} ${range} <span style="opacity:.7;">(${c.width}px, ${src})</span>
@@ -143,7 +143,7 @@ export function render(data: DiagramData): string {
       <!-- 4. 颜色图例：与后端 overlay_legend 一致 -->
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; font-size: 10px; margin-bottom: 10px;">
         <span><i style="display:inline-block;width:9px;height:9px;background:#f59e0b;border-radius:2px;margin-right:4px;"></i>待确认（不剔除）</span>
-        <span><i style="display:inline-block;width:9px;height:9px;background:#ef4444;border-radius:2px;margin-right:4px;"></i>已确认（实际剔除）</span>
+        <span><i style="display:inline-block;width:9px;height:9px;background:var(--accent-red);border-radius:2px;margin-right:4px;"></i>已确认（实际剔除）</span>
         <span><i style="display:inline-block;width:9px;height:9px;background:#9ca3af;border-radius:2px;margin-right:4px;"></i>排除区（绝对剔除）</span>
         <span><i style="display:inline-block;width:9px;height:9px;background:#fff;border:1px solid #aaa;border-radius:2px;margin-right:4px;"></i>保留墨迹</span>
       </div>

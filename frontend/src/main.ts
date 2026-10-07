@@ -519,7 +519,7 @@ async function bootstrap() {
       <span style="color: var(--border-color); opacity: 0.8;">│</span>
       <div class="footer-item" id="footer-depth">${t('footer.depth')}: <strong style="font-size: 11.5px; color: var(--text-primary);">--</strong></div>
       <span style="color: var(--border-color); opacity: 0.8;">│</span>
-      <div class="footer-item" id="footer-pollen">${t('footer.abundance')}: <strong style="font-size: 11.5px; color: #38bdf8;">--</strong></div>
+      <div class="footer-item" id="footer-pollen">${t('footer.abundance')}: <strong style="font-size: 11.5px; color: var(--accent-blue);">--</strong></div>
       <span style="color: var(--border-color); opacity: 0.8;">│</span>
       <div class="footer-item" id="footer-tool-mode">${t('footer.mode')}: <strong>${t('footer.modeSelect')}</strong></div>
     </div>
@@ -652,7 +652,7 @@ async function bootstrap() {
         if (depthEl) {
           const unit = canvasComponent.data.calibration.unit;
           if (info.horizonDepth !== undefined && info.horizonDepth !== null) {
-            depthEl.innerHTML = `${t('footer.depth')}: <code>${info.depth !== undefined ? info.depth + ' ' + unit : '--'}</code> <strong style="color: #38bdf8; margin-left: 6px;">[${t('footer.horizon')}: ${info.horizonDepth} ${unit}]</strong>`;
+            depthEl.innerHTML = `${t('footer.depth')}: <code>${info.depth !== undefined ? info.depth + ' ' + unit : '--'}</code> <strong style="color: var(--accent-blue); margin-left: 6px;">[${t('footer.horizon')}: ${info.horizonDepth} ${unit}]</strong>`;
           } else {
             depthEl.innerHTML = `${t('footer.depth')}: <code>${info.depth !== undefined ? info.depth + ' ' + unit : '--'}</code>`;
           }

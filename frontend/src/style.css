@@ -21,6 +21,7 @@
   --accent-green: #34d399;
   --accent-red: #ef4444;
   --accent-orange: #f97316;
+  --brand-gradient: linear-gradient(135deg, #0284c7, #38bdf8);  /* 品牌徽标专用渐变：唯一允许写死品牌色的位置 */
 
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", Menlo, Consolas, Monaco, monospace;

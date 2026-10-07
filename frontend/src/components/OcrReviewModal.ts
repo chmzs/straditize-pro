@@ -75,7 +75,7 @@ export class OcrReviewModal {
           <div class="ocr-crop-card">
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <strong style="color: var(--accent-blue, #0284c7); font-weight: 700;">1. 鼠标框选标签范围:</strong>
+                <strong style="color: var(--accent-blue); font-weight: 700;">1. 鼠标框选标签范围:</strong>
                 <span id="ocr-crop-coords-label" style="font-family: var(--font-mono); color: var(--text-primary); font-size: 11px; font-weight: 600;">
                   [X: ${initialCropX0}~${initialCropX1}, Y: ${initialCropY0}~${initialCropY1}]
                 </span>
@@ -98,8 +98,8 @@ export class OcrReviewModal {
             <!-- 左侧: 旋转扶正控制器与垂直条带预览栏 -->
             <div class="ocr-rot-card">
               <div style="display: flex; justify-content: space-between; align-items: center;">
-                <strong style="font-size: 11px; color: var(--accent-orange, #ea580c);">2. 旋转校正:</strong>
-                <span id="ocr-val-angle" style="font-family: var(--font-mono); color: var(--accent-blue, #0284c7); font-weight: 700; font-size: 11px;">45°</span>
+                <strong style="font-size: 11px; color: var(--accent-orange);">2. 旋转校正:</strong>
+                <span id="ocr-val-angle" style="font-family: var(--font-mono); color: var(--accent-blue); font-weight: 700; font-size: 11px;">45°</span>
               </div>
 
               <!-- 快捷角度胶囊 -->
@@ -303,7 +303,7 @@ export class OcrReviewModal {
     const bounds = this.cropperCanvas.getCropBounds();
 
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--accent-blue, #0284c7); padding: 24px;">正在以 ${angle}° 旋转扶正并执行 PP-OCRv6 识别与 500+ 植物学词典匹配...</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--accent-blue); padding: 24px;">正在以 ${angle}° 旋转扶正并执行 PP-OCRv6 识别与 500+ 植物学词典匹配...</td></tr>`;
     }
 
     try {
@@ -352,7 +352,7 @@ export class OcrReviewModal {
       }
     } catch (err: any) {
       if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--accent-red, #dc2626); padding: 24px;">识别失败: ${err.message || err}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--accent-red); padding: 24px;">识别失败: ${err.message || err}</td></tr>`;
       }
     }
   }

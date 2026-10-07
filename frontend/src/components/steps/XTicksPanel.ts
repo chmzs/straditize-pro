@@ -81,7 +81,7 @@ export function render(data: DiagramData): string {
       <div class="inspector-section" style="margin-bottom: 12px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
           <span style="font-size: 11px; font-weight: 700;">${t('step6.ticksSource')}</span>
-          ${hasTicks ? `<button id="btn-clear-col-ticks" class="icon-btn btn-subaction" style="font-size: 10px; color: #ef4444; padding: 1px 4px;" title="${t('step6.clearTicks')}">${t('step6.clearTicks')}</button>` : ''}
+          ${hasTicks ? `<button id="btn-clear-col-ticks" class="icon-btn btn-subaction" style="font-size: 10px; color: var(--accent-red); padding: 1px 4px;" title="${t('step6.clearTicks')}">${t('step6.clearTicks')}</button>` : ''}
         </div>
         <div class="info-kv-box">
           <div>状态: <strong style="color: ${hasTicks ? 'var(--accent-green, #10b981)' : 'var(--accent-orange, #f59e0b)'}; font-weight: 700;">${hasTicks ? t('step6.calibrated') : t('step6.uncalibrated')}</strong></div>

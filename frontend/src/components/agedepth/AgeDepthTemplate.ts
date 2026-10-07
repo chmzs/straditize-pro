@@ -45,7 +45,7 @@ export function createAgeDepthModalHtml(): string {
                 </label>
                 <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
                   <input type="checkbox" id="ad-chk-horizons" checked />
-                  <span style="color: #34d399; font-weight: 600;">花粉层位交点</span>
+                  <span style="color: var(--accent-green); font-weight: 600;">花粉层位交点</span>
                 </label>
               </div>
               <div style="display: flex; align-items: center; gap: 6px;">
@@ -67,7 +67,7 @@ export function createAgeDepthModalHtml(): string {
                 <button class="tool-btn ad-fmode-btn active" data-fmode="adjust">微调 (V)</button>
                 <button class="tool-btn ad-fmode-btn" data-fmode="add">加点 (A)</button>
                 <button class="tool-btn ad-fmode-btn" data-fmode="delete">删点 (D)</button>
-                <button class="tool-btn ad-fmode-btn" data-fmode="pickDate" style="color: #34d399;">拾取测年点 (P)</button>
+                <button class="tool-btn ad-fmode-btn" data-fmode="pickDate" style="color: var(--accent-green);">拾取测年点 (P)</button>
               </div>
               <canvas id="ad-inspection-canvas" style="position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; display: none;"></canvas>
               <div id="ad-empty-drop-zone" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg-card); z-index: 10; padding: 24px; text-align: center;">
@@ -91,7 +91,7 @@ export function createAgeDepthModalHtml(): string {
 
             <div style="font-size: 10.5px; color: var(--text-muted); display: flex; justify-content: space-between;">
               <span>视觉检查标准：高亮蓝线应精确穿过深色脊线；琥珀色阴影应贴合灰色置信区间边缘。</span>
-              <span id="ad-status-msg" style="color: #34d399;"></span>
+              <span id="ad-status-msg" style="color: var(--accent-green);"></span>
             </div>
           </div>
 
@@ -125,7 +125,7 @@ export function createAgeDepthModalHtml(): string {
                 </label>
               </div>
 
-              <button class="ui-btn ui-btn--primary" id="ad-btn-calib-start" style="width: 100%; font-size: 11px; padding: 5px; background: linear-gradient(135deg, #0284c7, #38bdf8);">
+              <button class="ui-btn ui-btn--primary" id="ad-btn-calib-start" style="width: 100%; font-size: 11px; padding: 5px;">
                 在图上点击 4 个标定点
               </button>
 
@@ -209,11 +209,11 @@ export function createAgeDepthModalHtml(): string {
               <div id="ad-channel-reason" style="font-size: 9.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;"></div>
             </div>
 
-            <button class="ui-btn ui-btn--primary" id="ad-btn-extract" style="padding: 7px 10px; font-size: 11.5px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #38bdf8);">
+            <button class="ui-btn ui-btn--primary" id="ad-btn-extract" style="padding: 7px 10px; font-size: 11.5px; font-weight: 700;">
               ③ 运行识别并叠加视觉校对
             </button>
 
-            <div id="ad-extract-error" style="display: none; font-size: 10px; color: var(--accent-red, #ef4444); line-height: 1.5; padding: 6px 8px; border-radius: 4px; background: rgba(239, 68, 68, 0.08);"></div>
+            <div id="ad-extract-error" style="display: none; font-size: 10px; color: var(--accent-red); line-height: 1.5; padding: 6px 8px; border-radius: 4px; background: rgba(239, 68, 68, 0.08);"></div>
 
             <!-- 排除笔刷（矩形橡皮擦） -->
             <div class="form-group" style="margin: 0; padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
@@ -305,7 +305,7 @@ export function createAgeDepthModalHtml(): string {
               <button class="tool-btn" id="ad-tbl-btn-sort" style="font-size: 10.5px; padding: 3px 8px;">按深度升序排序</button>
               <button class="tool-btn" id="ad-tbl-btn-copy" style="font-size: 10.5px; padding: 3px 8px;">复制全部 (TSV)</button>
               <button class="tool-btn" id="ad-tbl-btn-paste" style="font-size: 10.5px; padding: 3px 8px;">粘贴导入 (Excel/TSV)</button>
-              <button class="ui-btn ui-btn--primary" id="ad-tbl-btn-sync" style="font-size: 10.5px; padding: 3px 12px; background: linear-gradient(135deg, #0284c7, #38bdf8);">保存同步至模型</button>
+              <button class="ui-btn ui-btn--primary" id="ad-tbl-btn-sync" style="font-size: 10.5px; padding: 3px 12px;">保存同步至模型</button>
             </div>
             <div id="ad-table-summary-badge" style="font-size: 10.5px; font-family: var(--font-mono); color: var(--text-secondary);">
               共 0 个层位
@@ -396,7 +396,7 @@ export function createAgeDepthModalHtml(): string {
                     <input type="number" id="ad-inp-hiatus-max" value="10000" style="width: 100%; font-size: 11px;" />
                   </div>
                 </div>
-                <span style="font-size: 9.5px; color: #94a3b8; display: block; margin-top: 2px;">说明：间断处将切断累积速率的连续自回归记忆。</span>
+                <span style="font-size: 9.5px; color: var(--text-secondary); display: block; margin-top: 2px;">说明：间断处将切断累积速率的连续自回归记忆。</span>
               </div>
             </div>
 
@@ -417,7 +417,7 @@ export function createAgeDepthModalHtml(): string {
                     <input type="text" id="ad-inp-slump-bottom" placeholder="如 75.0" style="width: 100%; font-size: 11px;" />
                   </div>
                 </div>
-                <span style="font-size: 9.5px; color: #94a3b8; display: block; margin-top: 2px;">说明：该层段厚度将在年代累积模型中自动扣除（历时为 0 年）。</span>
+                <span style="font-size: 9.5px; color: var(--text-secondary); display: block; margin-top: 2px;">说明：该层段厚度将在年代累积模型中自动扣除（历时为 0 年）。</span>
               </div>
             </div>
 
@@ -471,7 +471,7 @@ export function createAgeDepthModalHtml(): string {
               </div>
               <div id="ad-webr-progress-box" style="display: none; margin-top: 4px;">
                 <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
-                  <div id="ad-webr-progress-fill" style="width: 0%; height: 100%; background: #38bdf8; transition: width 0.2s;"></div>
+                  <div id="ad-webr-progress-fill" style="width: 0%; height: 100%; background: var(--accent-blue); transition: width 0.2s;"></div>
                 </div>
                 <span id="ad-webr-progress-txt" style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">准备下载...</span>
               </div>

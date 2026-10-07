@@ -37,7 +37,7 @@ export class OcrReviewTable {
     if (!cols || cols.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="6" style="text-align: center; color: var(--accent-amber, #d97706); padding: 28px; line-height: 1.6;">
+          <td colspan="6" style="text-align: center; color: var(--accent-amber); padding: 28px; line-height: 1.6;">
             <strong>当前图谱尚未切分属种列</strong><br>
             <span style="font-size: 11px; color: var(--text-muted);">
               列是在完成数据有效区 (ROI) 确认后分列产生的。<br>
@@ -72,9 +72,9 @@ export class OcrReviewTable {
 
       let statusBadge = '<span style="color:var(--text-muted);font-weight:600;">待识别</span>';
       if (status === 'auto') {
-        statusBadge = '<span style="color:var(--accent-green, #059669);font-weight:600;">自动</span>';
+        statusBadge = '<span style="color:var(--accent-green);font-weight:600;">自动</span>';
       } else if (status === 'confirm') {
-        statusBadge = '<span style="color:var(--accent-amber, #d97706);font-weight:600;">待确认</span>';
+        statusBadge = '<span style="color:var(--accent-amber);font-weight:600;">待确认</span>';
       } else if (status === 'unrecognized') {
         statusBadge = '<span style="color:var(--text-muted);font-weight:600;">手动</span>';
       }
@@ -82,7 +82,7 @@ export class OcrReviewTable {
       tr.innerHTML = `
         <td style="text-align: center;">${statusBadge}</td>
         <td style="font-size: 11px;">
-          <strong style="color: var(--accent-blue, #0284c7);">Col ${cIdx + 1} (${col.name})</strong>
+          <strong style="color: var(--accent-blue);">Col ${cIdx + 1} (${col.name})</strong>
           <span style="color: var(--text-muted); font-size: 9.5px; margin-left: 4px;">X:${Math.round(col.startX)}</span>
         </td>
         <td style="font-family: var(--font-mono); color: var(--text-primary); font-size: 11px;">${rawText}</td>
@@ -93,7 +93,7 @@ export class OcrReviewTable {
         <td style="text-align: center;">
           <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer;">
             <input type="checkbox" class="ocr-accept-chk" data-col-id="${colId}" ${isAccepted || (matchedLabel && isAccepted) ? 'checked' : ''} ${!matchedLabel ? 'disabled' : ''} />
-            <span style="color: ${isAccepted ? 'var(--accent-green, #059669)' : 'var(--text-muted)'}; font-weight:600;">采纳</span>
+            <span style="color: ${isAccepted ? 'var(--accent-green)' : 'var(--text-muted)'}; font-weight:600;">采纳</span>
           </label>
         </td>
       `;

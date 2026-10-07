@@ -52,7 +52,7 @@ export function render(data: DiagramData): string {
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 3px 6px; border-bottom: 1px solid rgba(0,0,0,0.04);">
                   <span>#${idx + 1} Y=${s.row_px}px</span>
                   <span>${s.depth !== null ? `<strong>${s.depth}</strong> ${data.calibration?.unit || 'cm'}` : '[--]'}</span>
-                  <button class="icon-btn btn-delete-sample" data-sample-idx="${idx}" title="删除该层位" style="color: #ef4444; font-size: 12px; padding: 0 4px; background: none; border: none; cursor: pointer;">&times;</button>
+                  <button class="icon-btn btn-delete-sample" data-sample-idx="${idx}" title="删除该层位" style="color: var(--accent-red); font-size: 12px; padding: 0 4px; background: none; border: none; cursor: pointer;">&times;</button>
                 </div>
               `
                   )

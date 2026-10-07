@@ -30,7 +30,7 @@ export class AuthModal {
           <p style="margin: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.5;">${t('auth.desc')}</p>
         </div>
 
-        <div id="auth-error-banner" style="display: none; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; font-size: 11.5px; padding: 6px 12px; border-radius: 6px;"></div>
+        <div id="auth-error-banner" style="display: none; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: var(--accent-red); font-size: 11.5px; padding: 6px 12px; border-radius: 6px;"></div>
 
         <div style="display: flex; gap: 6px; position: relative;">
           <input type="password" id="auth-password-input" placeholder="${t('auth.placeholder')}" style="flex: 1; padding: 8px 12px; font-size: 13px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); outline: none;" autofocus />
@@ -38,7 +38,7 @@ export class AuthModal {
         </div>
 
         <div style="display: flex; justify-content: stretch;">
-          <button type="button" id="auth-submit-btn" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 16px; font-size: 13px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #38bdf8);">
+          <button type="button" id="auth-submit-btn" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 16px; font-size: 13px; font-weight: 700;">
             ${t('auth.unlock')}
           </button>
         </div>

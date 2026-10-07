@@ -195,7 +195,7 @@ export class PropertyPanel {
           <button class="close-btn" id="modal-close">&times;</button>
         </div>
         <div class="modal-body">
-          <p style="color: #94a3b8; font-size: 13px; line-height: 1.5; margin-bottom: 16px;">
+          <p style="color: var(--text-secondary); font-size: 13px; line-height: 1.5; margin-bottom: 16px;">
             前端自带高仿真 Mock 引擎，即使后端服务未启动也可完全自主交互、加点吸附、撤销重做和导出数据；
             当 Agent 2 的 JSON-RPC 服务启动时，可在此输入地址无缝直连。
           </p>

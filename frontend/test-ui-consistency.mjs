@@ -208,6 +208,98 @@ const GLOSS_BAN = [
   check(!cssSrc.includes('.btn-primary') && !cssSrc.includes('.btn-secondary') && !cssSrc.includes(String.fromCharCode(10) + '.btn {'), 'style.css 不得再定义已退役的 .btn / .btn-primary / .btn-secondary');
 }
 
+// ---- 12. 内联样式不得写死设计 token 的颜色值 / 硬编码渐变 ----
+// 内联色值不随 body.theme-light 切换，是黑名单里「日间隐形或低对比」的成因；
+// 只有与 token 等值的写法才可机械替换（外观不变，仅让主题切换生效）。
+{
+  const tokenHexes = new Map();
+  for (const line of css.split(String.fromCharCode(10))) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('--')) continue;
+    const colon = trimmed.indexOf(':');
+    if (colon === -1) continue;
+    const value = trimmed.slice(colon + 1).split(';')[0].trim();
+    if (value.startsWith('#') && !tokenHexes.has(value.toLowerCase())) {
+      tokenHexes.set(value.toLowerCase(), trimmed.slice(0, colon).trim());
+    }
+  }
+  const HEX_CHARS = '0123456789abcdefABCDEF';
+  const inlineColorOffenders = [];
+  const scanInlineStyles = (label, text) => {
+    for (const quote of ['style="', "style='"]) {
+      let cursor = 0;
+      while ((cursor = text.indexOf(quote, cursor)) !== -1) {
+        const end = text.indexOf(quote.slice(-1), cursor + quote.length);
+        const value = text.slice(cursor + quote.length, end === -1 ? text.length : end);
+        const lineNo = text.slice(0, cursor).split(String.fromCharCode(10)).length;
+        let i = 0;
+        while (i < value.length) {
+          if (value[i] !== '#') { i++; continue; }
+          let j = i + 1;
+          while (j < value.length && HEX_CHARS.indexOf(value[j]) !== -1) j++;
+          const size = j - i - 1;
+          if (size === 3 || size === 4 || size === 6 || size === 8) {
+            const hex = value.slice(i, j).toLowerCase();
+            const token = tokenHexes.get(hex);
+            if (token) inlineColorOffenders.push(label + ':' + lineNo + ' 写死 ' + hex + '，请改用 var(' + token + ')');
+          }
+          i = j;
+        }
+        const hasGradient = value.includes('gradient(') && value.includes('#');
+        if (hasGradient) inlineColorOffenders.push(label + ':' + lineNo + ' 内联硬编码渐变，请改为 token（如 var(--brand-gradient)）');
+        cursor += quote.length;
+      }
+    }
+  };
+  const dirStack = ['./src'];
+  while (dirStack.length > 0) {
+    const dir = dirStack.pop();
+    for (const name of readdirSync(dir)) {
+      const full = dir + '/' + name;
+      if (statSync(full).isDirectory()) { if (name !== 'node_modules') dirStack.push(full); continue; }
+      if (!name.endsWith('.ts') && !name.endsWith('.html')) continue;
+      scanInlineStyles(relative(ROOT, full), readFileSync(full, 'utf8'));
+    }
+  }
+  scanInlineStyles('index.html', read('./index.html'));
+  check(
+    inlineColorOffenders.length === 0,
+    '内联样式不得写死设计 token 的颜色值或硬编码渐变：' + inlineColorOffenders.slice(0, 4).join('、'),
+  );
+}
+// ---- 13. var() 不得用自身兜底（等值替换后的退化写法）----
+// `var(--accent-red, #ef4444)` 若被机械替换为 `var(--accent-red, var(--accent-red))` 毫无意义：
+// token 缺失时整条声明照样失效。要兜底就必须换一个不同的值，否则删掉兜底。
+{
+  const selfFallback = [];
+  const scanSelfFallback = (label, text) => {
+    let i = 0;
+    while (true) {
+      const k = text.indexOf('var(--', i);
+      if (k === -1) return;
+      let j = k + 6;
+      while (j < text.length && text[j] !== ',' && text[j] !== ')') j++;
+      const name = text.slice(k + 6, j);
+      if (name.length > 0 && text.startsWith(', var(--' + name + '))', j)) {
+        const lineNo = text.slice(0, k).split(String.fromCharCode(10)).length;
+        selfFallback.push(label + ':' + lineNo + ' var(--' + name + ', var(--' + name + ')) 应简化为 var(--' + name + ')');
+      }
+      i = j;
+    }
+  };
+  const selfStack = ['./src'];
+  while (selfStack.length > 0) {
+    const dir = selfStack.pop();
+    for (const name of readdirSync(dir)) {
+      const full = dir + '/' + name;
+      if (statSync(full).isDirectory()) { if (name !== 'node_modules') selfStack.push(full); continue; }
+      if (!name.endsWith('.ts') && !name.endsWith('.html')) continue;
+      scanSelfFallback(relative(ROOT, full), readFileSync(full, 'utf8'));
+    }
+  }
+  scanSelfFallback('index.html', read('./index.html'));
+  check(selfFallback.length === 0, 'var() 不得用自身兜底：' + selfFallback.slice(0, 4).join('、'));
+}
 if (failures.length > 0) {
   console.error(`✘ UI 一致性门禁失败（${failures.length} 项）:`);
   for (const failure of failures) console.error(`  - ${failure}`);

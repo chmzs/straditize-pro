@@ -79,7 +79,7 @@ function renderExceptionsHtml(summary: QaSummary): string {
     ${summary.violations_over
       .map(
         (v) => `
-      <div style="display: flex; justify-content: space-between; padding: 2px 4px; color: #ef4444; border-bottom: 1px solid rgba(0,0,0,0.04);">
+      <div style="display: flex; justify-content: space-between; padding: 2px 4px; color: var(--accent-red); border-bottom: 1px solid rgba(0,0,0,0.04);">
         <span>超标 深度: ${v.depth !== null ? `${v.depth}` : '[未标定]'}</span>
         <span>Σ = <strong>${v.sum}%</strong></span>
       </div>
@@ -106,7 +106,7 @@ function renderColumnPeaksHtml(summary: QaSummary): string {
   return summary.per_column_max
     .map(
       (col) => `
-    <div style="display: flex; justify-content: space-between; padding: 2px 4px; border-bottom: 1px solid rgba(0,0,0,0.04); ${col.over ? 'color: #d97706; font-weight: 700;' : ''}">
+    <div style="display: flex; justify-content: space-between; padding: 2px 4px; border-bottom: 1px solid rgba(0,0,0,0.04); ${col.over ? 'color: var(--accent-amber); font-weight: 700;' : ''}">
       <span>${col.name}</span>
       <span>峰值: ${col.peak} / 标度: ${col.calibrated === false ? '--' : col.declared_max} ${
         col.calibrated === false
@@ -168,7 +168,7 @@ export function render(data: DiagramData): string {
           </div>
           <div style="background: var(--bg-tertiary); padding: 6px 8px; border-radius: 4px;">
             <div style="font-size: 10px; color: var(--text-muted);">最大总和 (SUM_MAX)</div>
-            <div style="font-size: 14px; font-weight: 700; color: ${summary.sum.max > 100 + summary.tolerance ? '#ef4444' : 'inherit'};">
+            <div style="font-size: 14px; font-weight: 700; color: ${summary.sum.max > 100 + summary.tolerance ? 'var(--accent-red)' : 'inherit'};">
               <span id="qa-sum-max">${Number(summary.sum.max).toFixed(1)}</span>%
             </div>
           </div>

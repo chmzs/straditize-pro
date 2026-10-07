@@ -58,7 +58,7 @@ export class AgeDepthController {
     const el = this.container.querySelector(selector) as HTMLElement | null;
     if (el) {
       el.innerHTML =
-        `<span style="color:var(--accent-red, #ef4444);"><strong>后端未连接</strong>: ` +
+        `<span style="color:var(--accent-red);"><strong>后端未连接</strong>: ` +
         `无法读取真实状态（本软件不存在替代数据通路）</span>`;
     }
   }
@@ -378,7 +378,7 @@ export class AgeDepthController {
       }
       if (res) {
         if (res.is_installed) {
-          if (statusEl) statusEl.innerHTML = `<strong style="color:#34d399;">✓ 已安装 (${res.installed_version})</strong>`;
+          if (statusEl) statusEl.innerHTML = `<strong style="color:var(--accent-green);">✓ 已安装 (${res.installed_version})</strong>`;
           if (installBtn) {
             installBtn.textContent = '✓ 组件已激活';
             installBtn.disabled = true;
@@ -443,7 +443,7 @@ export class AgeDepthController {
         } else if (res.progress.status === 'failed') {
           clearInterval(this.downloadTimer);
           this.downloadTimer = null;
-          if (txt) txt.innerHTML = `<span style="color:#ef4444;">下载失败: ${res.progress.error || '网络超时'}</span>`;
+          if (txt) txt.innerHTML = `<span style="color:var(--accent-red);">下载失败: ${res.progress.error || '网络超时'}</span>`;
         }
       } else if (res && res.is_installed) {
         clearInterval(this.downloadTimer);
@@ -510,11 +510,11 @@ export class AgeDepthController {
     if (box) box.style.display = 'block';
     if (bar) bar.style.width = '100%';
     if (txt) {
-      txt.innerHTML = `<span style="color:#34d399; font-weight: 700;">组件已就绪，年龄建模功能已激活！</span>`;
+      txt.innerHTML = `<span style="color:var(--accent-green); font-weight: 700;">组件已就绪，年龄建模功能已激活！</span>`;
     }
     if (statusEl) {
       const ver = data?.version || '1.0.0';
-      statusEl.innerHTML = `<strong style="color:#34d399;">✓ 已就绪 (${ver})</strong>`;
+      statusEl.innerHTML = `<strong style="color:var(--accent-green);">✓ 已就绪 (${ver})</strong>`;
     }
     if (installBtn) {
       installBtn.textContent = '✓ 组件已激活';
@@ -522,7 +522,7 @@ export class AgeDepthController {
     }
     const hintEl = this.container.querySelector('#ad-local-r-status');
     if (hintEl) {
-      hintEl.innerHTML = `<strong style="color:#34d399;">年龄建模组件已就绪</strong> · 随时可运行 Bacon 建模`;
+      hintEl.innerHTML = `<strong style="color:var(--accent-green);">年龄建模组件已就绪</strong> · 随时可运行 Bacon 建模`;
     }
   }
 
@@ -592,7 +592,7 @@ export class AgeDepthController {
         if (res && res !== true && res.error) {
           notifyError(`本地 R 建模失败: ${res.error}`);
           if (statusEl) {
-            statusEl.innerHTML = `<span style="color:var(--accent-red, #ef4444);">本地 R 建模失败: ${res.error}</span>`;
+            statusEl.innerHTML = `<span style="color:var(--accent-red);">本地 R 建模失败: ${res.error}</span>`;
           }
           return;
         }

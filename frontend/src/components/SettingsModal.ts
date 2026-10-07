@@ -118,7 +118,7 @@ export class SettingsModal {
                   </label>
                   <label class="switch" style="position: relative; display: inline-block; width: 38px; height: 20px;">
                     <input type="checkbox" id="settings-remote-toggle" ${isRemote ? 'checked' : ''} style="opacity: 0; width: 0; height: 0;" />
-                    <span class="slider round" style="position: absolute; cursor: pointer; inset: 0; background-color: ${isRemote ? '#10b981' : '#64748b'}; transition: .3s; border-radius: 20px;"></span>
+                    <span class="slider round" style="position: absolute; cursor: pointer; inset: 0; background-color: ${isRemote ? '#10b981' : 'var(--text-muted)'}; transition: .3s; border-radius: 20px;"></span>
                   </label>
                 </div>
                 <small style="font-size: 11px; line-height: 1.5; color: var(--text-secondary);">
@@ -146,7 +146,7 @@ export class SettingsModal {
                 <div style="display: flex; gap: 6px;">
                   <input type="password" id="settings-remote-password" placeholder="${t('settings.remotePasswordHint')}" style="flex: 1; padding: 5px 10px; font-size: 11.5px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
                   <button type="button" id="btn-toggle-remote-pwd" class="tool-btn" style="padding: 2px 8px; font-size: 12px;" title="${t('auth.toggleShow')}"></button>
-                  <button type="button" id="btn-clear-remote-pwd" class="tool-btn" style="padding: 2px 8px; font-size: 11px; color: var(--accent-red, #ef4444); display: none;" title="清除当前密码">清除密码</button>
+                  <button type="button" id="btn-clear-remote-pwd" class="tool-btn" style="padding: 2px 8px; font-size: 11px; color: var(--accent-red); display: none;" title="清除当前密码">清除密码</button>
                 </div>
                 <small style="font-size: 10.5px; color: var(--text-muted); line-height: 1.4;">
                   ${t('settings.remotePasswordHint')}

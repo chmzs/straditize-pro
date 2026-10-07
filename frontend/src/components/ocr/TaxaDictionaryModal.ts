@@ -101,7 +101,7 @@ export class TaxaDictionaryModal {
 
         <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px;">
           <button class="ui-btn ui-btn--secondary" id="dict-cancel-btn">关闭</button>
-          <button class="ui-btn ui-btn--primary" id="dict-save-btn" style="background: linear-gradient(135deg, #7c3aed, #a855f7);">保存并应用</button>
+          <button class="ui-btn ui-btn--primary" id="dict-save-btn">保存并应用</button>
         </div>
       </div>
     `;
@@ -133,7 +133,7 @@ export class TaxaDictionaryModal {
         try {
           const res = await this.rpcClient.parseTaxaText(text);
           if (res.count === 0) {
-            preview.innerHTML = '<span style="color: var(--accent-amber, #d97706);">未解析出任何词汇，请检查格式</span>';
+            preview.innerHTML = '<span style="color: var(--accent-amber);">未解析出任何词汇，请检查格式</span>';
             return;
           }
           const kind = res.format === 'figure_caption' ? '识别为期刊图版说明' : '识别为名单';
@@ -141,10 +141,10 @@ export class TaxaDictionaryModal {
           preview.innerHTML =
             `<strong>${kind}</strong>，将写入 ${res.count} 条：` +
             res.entries
-              .map((e) => `<code style="color: var(--accent-blue, #0284c7);">${e.latin_name}</code>`)
+              .map((e) => `<code style="color: var(--accent-blue);">${e.latin_name}</code>`)
               .join('、');
         } catch (err: any) {
-          preview.innerHTML = `<span style="color: var(--accent-red, #dc2626);">解析失败: ${err?.message || err}</span>`;
+          preview.innerHTML = `<span style="color: var(--accent-red);">解析失败: ${err?.message || err}</span>`;
         }
       }, 220);
     };

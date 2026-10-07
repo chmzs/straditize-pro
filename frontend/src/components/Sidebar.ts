@@ -187,9 +187,9 @@ export class Sidebar {
         const isCollapsed = this.collapsedRois.has(roiId) && !this.searchQuery;
         return `
           <div class="sidebar-roi-group" data-group-roi="${roiId}" style="margin-bottom: 8px;">
-            <div class="sidebar-roi-header" data-toggle-roi="${roiId}" style="display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; background: rgba(56, 189, 248, 0.08); border-left: 3px solid ${isPrim ? 'var(--accent-blue)' : '#94a3b8'}; cursor: pointer; user-select: none; border-radius: 0 4px 4px 0; margin-bottom: 4px;">
+            <div class="sidebar-roi-header" data-toggle-roi="${roiId}" style="display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; background: rgba(56, 189, 248, 0.08); border-left: 3px solid ${isPrim ? 'var(--accent-blue)' : 'var(--text-secondary)'}; cursor: pointer; user-select: none; border-radius: 0 4px 4px 0; margin-bottom: 4px;">
               <div style="display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;">
-                <span style="font-size: 9px; color: ${isPrim ? 'var(--accent-blue)' : '#94a3b8'};">${isCollapsed ? '▶' : '▼'}</span>
+                <span style="font-size: 9px; color: ${isPrim ? 'var(--accent-blue)' : 'var(--text-secondary)'};">${isCollapsed ? '▶' : '▼'}</span>
                 <span style="color: var(--text-heading);">${roi.name || roiId}</span>
                 ${isPrim ? `<span style="font-size: 8.5px; background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 1px 4px; border-radius: 3px;">${t('step2.primary')}</span>` : ''}
               </div>
@@ -240,7 +240,7 @@ export class Sidebar {
           </div>
           <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
             <!-- 最大实测峰值呈现 (一眼识别优势种) -->
-            <span class="taxa-peak-badge" style="font-size: 9.5px; font-weight: 700; color: ${isActive ? '#38bdf8' : 'var(--text-secondary)'}; font-family: var(--font-mono); min-width: 34px; text-align: right;" title="实测最大丰度峰值: ${maxValStr}">
+            <span class="taxa-peak-badge" style="font-size: 9.5px; font-weight: 700; color: ${isActive ? 'var(--accent-blue)' : 'var(--text-secondary)'}; font-family: var(--font-mono); min-width: 34px; text-align: right;" title="实测最大丰度峰值: ${maxValStr}">
               ${maxValStr}
             </span>
 

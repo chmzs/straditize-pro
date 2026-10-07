@@ -146,7 +146,7 @@ export class AgeDepthDatingTable {
           </select>
         </td>
         <td style="text-align: center;">
-          <button class="icon-btn btn-del-date-row" data-idx="${idx}" style="color: #ef4444; font-size: 13px; cursor: pointer; background: none; border: none; padding: 0 4px;">&times;</button>
+          <button class="icon-btn btn-del-date-row" data-idx="${idx}" style="color: var(--accent-red); font-size: 13px; cursor: pointer; background: none; border: none; padding: 0 4px;">&times;</button>
         </td>
       `;
       tr.querySelector('.ad-date-id')?.addEventListener('change', (e) => {
@@ -497,7 +497,7 @@ export class AgeDepthDatingTable {
         <td style="color: var(--text-muted); font-size: 10px;">${Math.round(width)}</td>
         <td style="color: var(--text-secondary); font-size: 10px;">${rateStr}</td>
         <td style="text-align: center;">
-          <button class="tool-btn ad-btn-del-full-row" data-idx="${i}" title="删除此行" style="padding: 1px 6px; font-size: 9.5px; color: var(--accent-red, #ef4444);">✕</button>
+          <button class="tool-btn ad-btn-del-full-row" data-idx="${i}" title="删除此行" style="padding: 1px 6px; font-size: 9.5px; color: var(--accent-red);">✕</button>
         </td>
       `;
       tbody.appendChild(tr);
@@ -609,7 +609,7 @@ export class AgeDepthDatingTable {
     details.innerHTML = `
       <div>• 深度跨度: <b>${d[0].toFixed(1)} ~ ${d[d.length - 1].toFixed(1)} cm</b> (跨 ${depthSpan} cm, ${d.length} 个点位)</div>
       <div>• 年代跨度: <b>${Math.round(a[0])} ~ ${Math.round(a[a.length - 1])} cal BP</b> (平均 95% CI 宽度: ±${avgSpan} yr)</div>
-      ${inversions > 0 ? '<div style="color:#ef4444;">• 提示: 存在年代倒置，建议在倒置深度处修改表格数值、使用【微调 (V)】或拖框排除杂斑。</div>' : '<div style="color:#10b981;">• 年代单调递增，无层位倒置，拟合曲线连续平滑。</div>'}
+      ${inversions > 0 ? '<div style="color:var(--accent-red);">• 提示: 存在年代倒置，建议在倒置深度处修改表格数值、使用【微调 (V)】或拖框排除杂斑。</div>' : '<div style="color:#10b981;">• 年代单调递增，无层位倒置，拟合曲线连续平滑。</div>'}
     `;
   }
 

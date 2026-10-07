@@ -27,8 +27,17 @@
 - 圆角：`--radius-sm/md/lg/xl`
 - 阴影：`--shadow-panel/modal`
 - 字号：`--font-size-xs/sm/md/lg/xl`
+- 内联色值：`style` 属性中禁止写死与 token 等值的色值（含渐变实参），必须写 `var(--token)`；
+  第 12 组门禁强制该规则——内联色值不随主题切换，正是黑名单里「日间隐形或低对比」的成因。
 
 `frontend/src/styles/tokens.ts` 仅用于 Canvas 固定高对比叠加色、命中尺寸和绘图几何，不是 DOM UI 色板。
+
+品牌徽标渐变是唯一允许写死品牌色的位置：`--brand-gradient`（定义在 `style.css` 的 `:root` 内）。
+`--accent-*` 在 `:root`（深色）与 `body.theme-light`（浅色）取值不同，
+故界面内写死任一具体色值都会在另一主题下失真；跨主题一致性只能靠 token。
+
+遗留待并（尚未完成）：`.tool-btn`（历史基类，仍有多处使用）与 `.primary-btn` 尚未并入 `.ui-btn`；
+已退役的 `.btn-primary` 从未做过 token 别名，迁移时不要回填它的渐变。
 
 ## 4. 按钮
 
@@ -46,6 +55,8 @@
 - 图标按钮必须有 `aria-label` 与 `title`。
 - emoji 不承担操作语义；状态使用 icon、颜色、文字三者至少两种。
 - 加载态保留按钮宽度并禁用重复提交。
+- 语义变体负责外观：带 `.ui-btn--primary` 的元素不得再用内联 `style` 覆盖 `background`，
+  否则会连带覆盖禁用态与主题切换（第 12 组门禁会拦下等值色值与硬编码渐变两种写法）。
 
 ## 5. 文案
 
