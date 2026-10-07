@@ -75,7 +75,7 @@ export function render(data: DiagramData): string {
       </div>
 
       <!-- 推进到 Step 3 -->
-      <button id="btn-apply-roi-next" class="btn btn-primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+      <button id="btn-apply-roi-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
         ${t('step2.next')}
       </button>
     </div>

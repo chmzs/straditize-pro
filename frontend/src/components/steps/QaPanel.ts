@@ -214,7 +214,7 @@ export function render(data: DiagramData): string {
       </div>
 
       <!-- 终点操作按钮 -->
-      <button id="btn-qa-export" class="btn btn-primary" style="width: 100%; padding: 8px 12px; font-size: 12px; font-weight: 700;">
+      <button id="btn-qa-export" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px; font-weight: 700;">
         ${t('step8.directExport')}
       </button>
     </div>

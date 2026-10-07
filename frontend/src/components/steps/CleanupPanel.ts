@@ -94,7 +94,7 @@ export function render(data: DiagramData): string {
       <!-- 1. 检测：唯一条目（无"灵敏度"旋钮，档位模型已下线） -->
       <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border-color);">
         <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px; color: var(--text-primary);">① 检测干扰线</div>
-        <button id="btn-detect-candidates" class="btn btn-secondary" style="width: 100%; font-size: 11px; padding: 5px;">
+        <button id="btn-detect-candidates" class="ui-btn ui-btn--secondary" style="width: 100%; font-size: 11px; padding: 5px;">
           ${t('step4.rescan')}
         </button>
         <div style="font-size: 10px; color: var(--text-muted); line-height: 1.45; margin-top: 6px;">
@@ -118,8 +118,8 @@ export function render(data: DiagramData): string {
 
         <!-- 3. 手动添加：在图上拖拽，不再输入四至值 -->
         <div style="display:flex; gap:6px; margin-top:6px;">
-          <button id="btn-add-horizontal-geometry" class="btn btn-secondary" style="flex:1; font-size:10px; padding:4px;">＋横向（图上拖出）</button>
-          <button id="btn-add-vertical-geometry" class="btn btn-secondary" style="flex:1; font-size:10px; padding:4px;">＋竖向（图上拖出）</button>
+          <button id="btn-add-horizontal-geometry" class="ui-btn ui-btn--secondary" style="flex:1; font-size:10px; padding:4px;">＋横向（图上拖出）</button>
+          <button id="btn-add-vertical-geometry" class="ui-btn ui-btn--secondary" style="flex:1; font-size:10px; padding:4px;">＋竖向（图上拖出）</button>
         </div>
         <div style="font-size:9.5px;color:var(--text-muted);line-height:1.45;margin-top:5px;">
           点按钮后在图上<strong>按住左键拖出一段</strong>即可。选中几何后可整体拖动、
@@ -132,8 +132,8 @@ export function render(data: DiagramData): string {
           <input id="cleanup-thickness-input" type="number" min="1" max="500" step="1" value="${suggestedThickness}"
                  style="width:52px;font-size:10px;padding:3px 4px;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-color);border-radius:4px;" />
           <span style="font-size:10px;color:var(--text-muted);">px</span>
-          <button id="btn-apply-thickness-selected" class="btn btn-secondary" style="flex:1;font-size:10px;padding:4px;" ${selectedId ? '' : 'disabled'}>应用到选中</button>
-          <button id="btn-apply-thickness-all" class="btn btn-secondary" style="flex:1;font-size:10px;padding:4px;">应用到全部</button>
+          <button id="btn-apply-thickness-selected" class="ui-btn ui-btn--secondary" style="flex:1;font-size:10px;padding:4px;" ${selectedId ? '' : 'disabled'}>应用到选中</button>
+          <button id="btn-apply-thickness-all" class="ui-btn ui-btn--secondary" style="flex:1;font-size:10px;padding:4px;">应用到全部</button>
         </div>
         <div style="font-size:9.5px;color:var(--text-muted);line-height:1.45;margin-top:4px;">
           用工具栏<strong>测量 (M)</strong>在图上量出干扰线的实际粗细，填进来即可统一改成该值（中心行不动）。
@@ -152,16 +152,16 @@ export function render(data: DiagramData): string {
       <div class="inspector-section" style="margin-bottom: 10px;">
         <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">③ ${t('step4.exclusions', { count: exclusionCount })}</div>
         <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-          <button id="btn-add-exclusion-rect" class="btn btn-secondary" style="flex: 1; font-size: 10.5px; padding: 5px;">
+          <button id="btn-add-exclusion-rect" class="ui-btn ui-btn--secondary" style="flex: 1; font-size: 10.5px; padding: 5px;">
             ⬚ ${t('step4.addExclusion')}
           </button>
         </div>
         <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-          <button id="btn-trigger-linefix" class="btn btn-secondary" style="flex: 1; font-size: 10.5px; padding: 5px;"
+          <button id="btn-trigger-linefix" class="ui-btn ui-btn--secondary" style="flex: 1; font-size: 10.5px; padding: 5px;"
                   title="按住左键涂抹，把被误标成线的数据擦回来">
             擦掉误标
           </button>
-          <button id="btn-linefix-restore" class="btn btn-secondary" style="flex: 1; font-size: 10.5px; padding: 5px;"
+          <button id="btn-linefix-restore" class="ui-btn ui-btn--secondary" style="flex: 1; font-size: 10.5px; padding: 5px;"
                   title="按住左键涂抹，手工补上算法漏掉的线">
             补回漏标
           </button>
@@ -170,7 +170,7 @@ export function render(data: DiagramData): string {
           <span style="font-size: 10px; color: var(--text-secondary);">
             人工修正笔迹: <strong>${strokeCount}</strong> 条
           </span>
-          <button id="btn-linefix-clear" class="btn btn-secondary"
+          <button id="btn-linefix-clear" class="ui-btn ui-btn--secondary"
                   style="font-size: 9.5px; padding: 2px 6px; ${strokeCount ? '' : 'opacity: 0.45; pointer-events: none;'}"
                   ${strokeCount ? '' : 'disabled'}>
             清空笔迹
@@ -188,13 +188,13 @@ export function render(data: DiagramData): string {
         <div id="cleanup-stats" style="font-size: 10px; color: var(--text-secondary); line-height: 1.5;">
           ${statsLine(data)}
         </div>
-        <button id="btn-clear-cleanup-edits" class="btn btn-secondary" style="width:100%; margin-top:6px; font-size:10px; padding:4px;">
+        <button id="btn-clear-cleanup-edits" class="ui-btn ui-btn--secondary" style="width:100%; margin-top:6px; font-size:10px; padding:4px;">
           清空本步全部几何 / 排除区 / 笔迹
         </button>
       </div>
 
       <!-- 7. 推进到下一步 -->
-      <button id="btn-apply-cleanup-next" class="btn btn-primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+      <button id="btn-apply-cleanup-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
         ${t('step4.next')}
       </button>
     </div>

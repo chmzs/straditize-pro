@@ -38,7 +38,7 @@ export class AuthModal {
         </div>
 
         <div style="display: flex; justify-content: stretch;">
-          <button type="button" id="auth-submit-btn" class="btn btn-primary" style="width: 100%; padding: 8px 16px; font-size: 13px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #38bdf8);">
+          <button type="button" id="auth-submit-btn" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 16px; font-size: 13px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #38bdf8);">
             ${t('auth.unlock')}
           </button>
         </div>

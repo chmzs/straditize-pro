@@ -108,8 +108,8 @@ export class PropertyPanel {
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" id="modal-cancel">取消</button>
-          <button class="btn btn-primary" id="modal-save">保存设置</button>
+          <button class="ui-btn ui-btn--secondary" id="modal-cancel">取消</button>
+          <button class="ui-btn ui-btn--primary" id="modal-save">保存设置</button>
         </div>
       </div>
     `;
@@ -211,8 +211,8 @@ export class PropertyPanel {
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" id="modal-close-btn">关闭</button>
-          <button class="btn btn-primary" id="btn-probe">重新探测连接</button>
+          <button class="ui-btn ui-btn--secondary" id="modal-close-btn">关闭</button>
+          <button class="ui-btn ui-btn--primary" id="btn-probe">重新探测连接</button>
         </div>
       </div>
     `;

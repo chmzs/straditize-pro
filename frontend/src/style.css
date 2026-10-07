@@ -1811,34 +1811,9 @@ input[type="text"]:focus, input[type="number"]:focus {
   background: var(--bg-footer);
 }
 
-.btn {
-  padding: 7px 14px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: all 0.15s ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  text-decoration: none;
-}
 
-.btn-secondary {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-color);
-}
 
-.btn-secondary:hover:not(:disabled) {
-  color: var(--text-primary);
-  background: rgba(56, 189, 248, 0.12);
-  border-color: rgba(56, 189, 248, 0.35);
-}
 
-.btn-primary,
 .primary-btn {
   background: linear-gradient(135deg, #0284c7, #0369a1);
   color: #ffffff;
@@ -1848,7 +1823,6 @@ input[type="text"]:focus, input[type="number"]:focus {
   cursor: pointer;
 }
 
-.btn-primary:hover:not(:disabled),
 .primary-btn:hover:not(:disabled) {
   background: linear-gradient(135deg, #0369a1, #075985);
   border-color: #38bdf8;
@@ -1856,13 +1830,11 @@ input[type="text"]:focus, input[type="number"]:focus {
   transform: translateY(-1px);
 }
 
-.btn-primary:active:not(:disabled),
 .primary-btn:active:not(:disabled) {
   transform: translateY(0);
   box-shadow: 0 1px 3px rgba(2, 132, 199, 0.2);
 }
 
-.btn-primary:disabled,
 .primary-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;

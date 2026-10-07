@@ -13,7 +13,7 @@ export function render(data: DiagramData): string {
         <div class="info-callout success">
           <span>当前图谱尺寸：<strong>${data.imageWidth} × ${data.imageHeight} px</strong></span>
         </div>
-        <button id="btn-goto-step2" class="btn btn-primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+        <button id="btn-goto-step2" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
           进入多 ROI 划分 (步骤 2)
         </button>
       ` : `

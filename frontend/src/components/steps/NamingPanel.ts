@@ -55,7 +55,7 @@ export function render(data: DiagramData): string {
         <p style="font-size: 10px; color: var(--text-muted); margin: 0 0 8px 0; line-height: 1.4;">
           ${t('step5.ocrDesc')}
         </p>
-        <button id="btn-trigger-ocr" class="btn btn-secondary" style="width: 100%; font-size: 11px; padding: 5px;">
+        <button id="btn-trigger-ocr" class="ui-btn ui-btn--secondary" style="width: 100%; font-size: 11px; padding: 5px;">
           ${t('step5.ocrBtn')}
         </button>
       </div>
@@ -81,7 +81,7 @@ export function render(data: DiagramData): string {
       </div>
 
       <!-- 阶段提交按钮 -->
-      <button id="btn-apply-naming-next" class="btn btn-primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+      <button id="btn-apply-naming-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
         ${t('step5.next')}
       </button>
     </div>

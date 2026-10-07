@@ -219,7 +219,7 @@ export class MetadataModal {
                   ① 点击右侧【复制提取提示词】 → ② 打开网页版 DeepSeek / ChatGPT / Kimi 上传论文 PDF 并粘贴发送 → ③ 将 AI 回复的内容粘贴到下方并点击【解析并填入表单】
                 </div>
                 <div style="display: flex; gap: 6px;">
-                  <button id="btn-copy-external-prompt" class="btn btn-secondary" style="font-size: 10.5px; padding: 3px 8px;">复制提取提示词</button>
+                  <button id="btn-copy-external-prompt" class="ui-btn ui-btn--secondary" style="font-size: 10.5px; padding: 3px 8px;">复制提取提示词</button>
                   <button id="btn-toggle-external-prompt-preview" class="tool-btn" style="font-size: 10px; padding: 3px 8px;">查看/编辑提示词</button>
                 </div>
               </div>
@@ -230,7 +230,7 @@ export class MetadataModal {
                   <div style="display: flex; gap: 6px;">
                     <input type="file" id="meta-file-external-json" accept=".json,.txt,.md" style="display: none;" />
                     <button id="btn-upload-external-json" class="tool-btn" style="font-size: 10px; padding: 2px 8px;">从文件导入 (.json/.txt)</button>
-                    <button id="btn-parse-external-json" class="btn btn-primary" style="font-size: 10.5px; padding: 3px 12px; background: #10b981; border-color: #059669;">解析并填入表单</button>
+                    <button id="btn-parse-external-json" class="ui-btn ui-btn--primary" style="font-size: 10.5px; padding: 3px 12px; background: #10b981; border-color: #059669;">解析并填入表单</button>
                   </div>
                 </div>
                 <textarea id="meta-external-paste-input" rows="5" placeholder="将 DeepSeek / ChatGPT / Kimi / Claude 生成的回复直接粘贴到这里（无需手动删掉前后的聊天文字或代码块标记，系统会自动剥离并识别）..." style="width: 100%; font-family: var(--font-mono); font-size: 10.5px; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); box-sizing: border-box;"></textarea>
@@ -252,7 +252,7 @@ export class MetadataModal {
                   <label style="font-size: 10px; color: var(--text-muted);">模型名称 (Model):</label>
                   <input type="text" id="meta-llm-model" value="${this.llmModel}" placeholder="gpt-4o / deepseek-chat" style="width: 100%; font-size: 11px;" />
                 </div>
-                <button id="btn-save-llm-config" class="btn btn-primary" style="font-size: 10.5px; padding: 5px 10px; white-space: nowrap;">保存配置</button>
+                <button id="btn-save-llm-config" class="ui-btn ui-btn--primary" style="font-size: 10.5px; padding: 5px 10px; white-space: nowrap;">保存配置</button>
               </div>
               <div class="form-group" style="margin: 0;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">

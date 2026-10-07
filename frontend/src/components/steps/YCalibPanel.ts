@@ -90,13 +90,13 @@ export function render(data: DiagramData): string {
           </div>
         </div>
 
-        <button id="btn-apply-ycalib" class="btn btn-secondary" style="width: 100%; font-size: 11px; padding: 5px; margin-top: 6px;">
+        <button id="btn-apply-ycalib" class="ui-btn ui-btn--secondary" style="width: 100%; font-size: 11px; padding: 5px; margin-top: 6px;">
           ${t('step3.apply')}
         </button>
       </div>
 
       <!-- 推进到 Step 4 -->
-      <button id="btn-apply-ycalib-next" class="btn btn-primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+      <button id="btn-apply-ycalib-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
         ${t('step3.next')}
       </button>
     </div>

@@ -408,7 +408,7 @@ export class Inspector {
           </div>
         </div>
 
-        <button id="btn-delete-point" class="btn btn-secondary" style="width: 100%; margin-top: 12px; color: #ef4444; border-color: rgba(239,68,68,0.4);">
+        <button id="btn-delete-point" class="ui-btn ui-btn--secondary" style="width: 100%; margin-top: 12px; color: #ef4444; border-color: rgba(239,68,68,0.4);">
           删除此控制锚点
         </button>
       </div>
@@ -839,8 +839,8 @@ export class Inspector {
           </div>
         </div>
         <div class="modal-footer" style="padding: 10px 14px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color);">
-          <button class="btn btn-secondary" id="btn-cancel-depths">取消</button>
-          <button class="btn btn-primary" id="btn-confirm-depths" disabled style="padding: 5px 14px; font-size: 11px;">
+          <button class="ui-btn ui-btn--secondary" id="btn-cancel-depths">取消</button>
+          <button class="ui-btn ui-btn--primary" id="btn-confirm-depths" disabled style="padding: 5px 14px; font-size: 11px;">
             确定应用真实层位
           </button>
         </div>

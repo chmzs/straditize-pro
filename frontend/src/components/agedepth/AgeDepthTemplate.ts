@@ -26,7 +26,7 @@ export function createAgeDepthModalHtml(): string {
         </button>
       </div>
 
-      <div class="modal-body">
+      <div class="modal-body ui-modal__body">
         <!-- ================================================================= -->
         <!-- Tab 1: 视觉解译视口 (Visual Inspection) -->
         <!-- ================================================================= -->
@@ -76,7 +76,7 @@ export function createAgeDepthModalHtml(): string {
                 <p style="font-size: 11.5px; color: var(--text-secondary); margin: 0 0 16px 0; max-width: 420px; line-height: 1.5;">
                   直接将 <strong>Bacon / Bchron / OxCal</strong> 年代图拖拽至此处，或选择内置范例。
                 </p>
-                <button id="ad-btn-center-browse" class="btn btn-primary" style="padding: 6px 18px; font-size: 12px; margin-bottom: 10px;">
+                <button id="ad-btn-center-browse" class="ui-btn ui-btn--primary" style="padding: 6px 18px; font-size: 12px; margin-bottom: 10px;">
                   选择本地年代图 (PNG/JPG)
                 </button>
                 <div style="display: flex; gap: 10px; align-items: center; font-size: 11px;">
@@ -102,7 +102,7 @@ export function createAgeDepthModalHtml(): string {
                 <span>图谱数据源:</span>
                 <span id="ad-current-source-label" style="color: var(--accent-blue);">未载入</span>
               </div>
-              <button class="btn btn-primary" id="ad-btn-upload-file" style="width: 100%; font-size: 11px; padding: 5px;">上传本地图谱</button>
+              <button class="ui-btn ui-btn--primary" id="ad-btn-upload-file" style="width: 100%; font-size: 11px; padding: 5px;">上传本地图谱</button>
               <input type="file" id="ad-file-input" accept="image/*" style="display: none;" />
             </div>
 
@@ -125,7 +125,7 @@ export function createAgeDepthModalHtml(): string {
                 </label>
               </div>
 
-              <button class="btn btn-primary" id="ad-btn-calib-start" style="width: 100%; font-size: 11px; padding: 5px; background: linear-gradient(135deg, #0284c7, #38bdf8);">
+              <button class="ui-btn ui-btn--primary" id="ad-btn-calib-start" style="width: 100%; font-size: 11px; padding: 5px; background: linear-gradient(135deg, #0284c7, #38bdf8);">
                 在图上点击 4 个标定点
               </button>
 
@@ -209,7 +209,7 @@ export function createAgeDepthModalHtml(): string {
               <div id="ad-channel-reason" style="font-size: 9.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;"></div>
             </div>
 
-            <button class="btn btn-primary" id="ad-btn-extract" style="padding: 7px 10px; font-size: 11.5px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #38bdf8);">
+            <button class="ui-btn ui-btn--primary" id="ad-btn-extract" style="padding: 7px 10px; font-size: 11.5px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #38bdf8);">
               ③ 运行识别并叠加视觉校对
             </button>
 
@@ -305,7 +305,7 @@ export function createAgeDepthModalHtml(): string {
               <button class="tool-btn" id="ad-tbl-btn-sort" style="font-size: 10.5px; padding: 3px 8px;">按深度升序排序</button>
               <button class="tool-btn" id="ad-tbl-btn-copy" style="font-size: 10.5px; padding: 3px 8px;">复制全部 (TSV)</button>
               <button class="tool-btn" id="ad-tbl-btn-paste" style="font-size: 10.5px; padding: 3px 8px;">粘贴导入 (Excel/TSV)</button>
-              <button class="btn btn-primary" id="ad-tbl-btn-sync" style="font-size: 10.5px; padding: 3px 12px; background: linear-gradient(135deg, #0284c7, #38bdf8);">保存同步至模型</button>
+              <button class="ui-btn ui-btn--primary" id="ad-tbl-btn-sync" style="font-size: 10.5px; padding: 3px 12px; background: linear-gradient(135deg, #0284c7, #38bdf8);">保存同步至模型</button>
             </div>
             <div id="ad-table-summary-badge" style="font-size: 10.5px; font-family: var(--font-mono); color: var(--text-secondary);">
               共 0 个层位
@@ -527,7 +527,7 @@ export function createAgeDepthModalHtml(): string {
             </label>
             <div style="display: flex; gap: 8px;">
               <button class="tool-btn" id="ad-paste-cancel-btn">取消</button>
-              <button class="btn btn-primary" id="ad-paste-confirm-btn" style="padding: 4px 14px; font-size: 11.5px;">确认导入</button>
+              <button class="ui-btn ui-btn--primary" id="ad-paste-confirm-btn" style="padding: 4px 14px; font-size: 11.5px;">确认导入</button>
             </div>
           </div>
         </div>

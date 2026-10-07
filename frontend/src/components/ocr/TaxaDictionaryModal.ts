@@ -100,8 +100,8 @@ export class TaxaDictionaryModal {
         </div>
 
         <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px;">
-          <button class="btn btn-secondary" id="dict-cancel-btn">关闭</button>
-          <button class="btn btn-primary" id="dict-save-btn" style="background: linear-gradient(135deg, #7c3aed, #a855f7);">保存并应用</button>
+          <button class="ui-btn ui-btn--secondary" id="dict-cancel-btn">关闭</button>
+          <button class="ui-btn ui-btn--primary" id="dict-save-btn" style="background: linear-gradient(135deg, #7c3aed, #a855f7);">保存并应用</button>
         </div>
       </div>
     `;

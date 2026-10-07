@@ -72,7 +72,7 @@ export function render(data: DiagramData): string {
         <p style="font-size: 10px; color: var(--text-muted); margin: 0 0 8px 0; line-height: 1.4;">
           ${t('step6.autoTicksDesc')}
         </p>
-        <button id="btn-detect-xticks" class="btn btn-secondary" style="width: 100%; font-size: 11px; padding: 5px;">
+        <button id="btn-detect-xticks" class="ui-btn ui-btn--secondary" style="width: 100%; font-size: 11px; padding: 5px;">
           ${t('step6.autoTicksBtn')}
         </button>
       </div>
@@ -108,14 +108,14 @@ export function render(data: DiagramData): string {
               <input type="number" id="inp-manual-tick-val2" value="${hasTicks ? activeCol.x_ticks![1].value : (activeCol?.tickValue ?? 20)}" style="width: 100%; font-size: 10.5px; padding: 2px 4px; box-sizing: border-box; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
             </div>
           </div>
-          <button id="btn-save-manual-ticks" class="btn btn-secondary" style="width: 100%; font-size: 10.5px; padding: 4px 6px; margin-top: 6px;">
+          <button id="btn-save-manual-ticks" class="ui-btn ui-btn--secondary" style="width: 100%; font-size: 10.5px; padding: 4px 6px; margin-top: 6px;">
             ${t('step6.saveTicks')}
           </button>
         </div>
       </div>
 
       <!-- 阶段提交按钮 -->
-      <button id="btn-apply-xticks-next" class="btn btn-primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+      <button id="btn-apply-xticks-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
         ${t('step6.next')}
       </button>
     </div>

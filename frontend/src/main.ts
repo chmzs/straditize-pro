@@ -44,7 +44,7 @@ function showProvenanceGate(message: string): Promise<void> {
         <p style="margin:0 0 8px;font-size:13px;line-height:1.65;color:var(--text-secondary);">${message}</p>
         <p style="margin:0 0 20px;font-size:12.5px;line-height:1.65;color:var(--text-muted);">${t('gate.hint')}</p>
         <div style="display:flex;gap:10px;justify-content:flex-end;">
-          <button id="gate-retry" class="btn btn-primary" style="padding:8px 16px;font-size:13px;font-weight:600;">${t('banner.reconnect')}</button>
+          <button id="gate-retry" class="ui-btn ui-btn--primary" style="padding:8px 16px;font-size:13px;font-weight:600;">${t('banner.reconnect')}</button>
         </div>
       </div>
     `;
@@ -2009,8 +2009,8 @@ async function bootstrap() {
               <div class="app-toast-badge" style="border: 1px solid #f59e0b;">
                 <span><strong>图谱微斜提示</strong>: 检测到主轴倾斜约 <strong>${ang > 0 ? '+' : ''}${ang}°</strong>，是否自动水平矫正？</span>
                 <div style="display: flex; gap: 6px;">
-                  <button id="btn-deskew-apply" class="btn btn-primary" style="padding: 2px 8px; font-size: 10px; background: #f59e0b; border-color: #f59e0b;">旋转校正</button>
-                  <button id="btn-deskew-ignore" class="btn btn-secondary" style="padding: 2px 8px; font-size: 10px;">忽略</button>
+                  <button id="btn-deskew-apply" class="ui-btn ui-btn--primary" style="padding: 2px 8px; font-size: 10px; background: #f59e0b; border-color: #f59e0b;">旋转校正</button>
+                  <button id="btn-deskew-ignore" class="ui-btn ui-btn--secondary" style="padding: 2px 8px; font-size: 10px;">忽略</button>
                 </div>
               </div>
             `;
@@ -2397,8 +2397,8 @@ async function bootstrap() {
           <div class="app-toast-badge" style="border: 1px solid var(--accent-blue);">
             <span>${t('draft.found', { time: draftTime, count: draft.data.columns.length })}</span>
             <div style="display: flex; gap: 6px;">
-              <button id="btn-restore-draft" class="btn btn-primary" style="padding: 2px 8px; font-size: 10px;">${t('draft.restore')}</button>
-              <button id="btn-discard-draft" class="btn btn-secondary" style="padding: 2px 8px; font-size: 10px;">${t('draft.ignore')}</button>
+              <button id="btn-restore-draft" class="ui-btn ui-btn--primary" style="padding: 2px 8px; font-size: 10px;">${t('draft.restore')}</button>
+              <button id="btn-discard-draft" class="ui-btn ui-btn--secondary" style="padding: 2px 8px; font-size: 10px;">${t('draft.ignore')}</button>
             </div>
           </div>
         `;

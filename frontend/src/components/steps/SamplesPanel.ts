@@ -28,7 +28,7 @@ export function render(data: DiagramData): string {
         <p style="font-size: 10px; color: var(--text-muted); margin: 0 0 8px 0; line-height: 1.4;">
           ${t('step7.consensusDesc')}
         </p>
-        <button id="btn-extract-consensus" class="btn btn-secondary" style="width: 100%; font-size: 11px; padding: 5px;">
+        <button id="btn-extract-consensus" class="ui-btn ui-btn--secondary" style="width: 100%; font-size: 11px; padding: 5px;">
           ${t('step7.consensusBtn')}
         </button>
       </div>
@@ -62,7 +62,7 @@ export function render(data: DiagramData): string {
       </div>
 
       <!-- 阶段提交按钮 -->
-      <button id="btn-apply-samples-next" class="btn btn-primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+      <button id="btn-apply-samples-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
         ${t('step7.next')}
       </button>
     </div>

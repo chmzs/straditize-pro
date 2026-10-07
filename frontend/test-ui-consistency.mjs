@@ -186,6 +186,28 @@ const GLOSS_BAN = [
   });
 }
 
+// ---- 11. 按钮规范：旧基类 .btn 已退役，必须使用 .ui-btn 语义变体 ----
+{
+  const offenders = [];
+  const stack = ['./src'];
+  while (stack.length > 0) {
+    const dir = stack.pop();
+    for (const name of readdirSync(dir)) {
+      const full = dir + '/' + name;
+      if (statSync(full).isDirectory()) { if (name !== 'node_modules') stack.push(full); continue; }
+      if (!name.endsWith('.ts') && !name.endsWith('.html')) continue;
+      const lines = readFileSync(full,
+        'utf8').split(String.fromCharCode(10));
+      lines.forEach((line, index) => {
+        if (line.includes('class="btn btn-') || line.includes('class="btn ')) offenders.push(full + ':' + (index + 1));
+      });
+    }
+  }
+  check(offenders.length === 0, '按钮必须用 .ui-btn 语义变体，旧基类 .btn 已退役：' + offenders.slice(0, 4).join('、'));
+  const cssSrc = read('./src/style.css');
+  check(!cssSrc.includes('.btn-primary') && !cssSrc.includes('.btn-secondary') && !cssSrc.includes(String.fromCharCode(10) + '.btn {'), 'style.css 不得再定义已退役的 .btn / .btn-primary / .btn-secondary');
+}
+
 if (failures.length > 0) {
   console.error(`✘ UI 一致性门禁失败（${failures.length} 项）:`);
   for (const failure of failures) console.error(`  - ${failure}`);
