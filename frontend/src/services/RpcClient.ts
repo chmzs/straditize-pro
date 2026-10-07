@@ -670,7 +670,7 @@ export class RpcClient {
   }
 
   /**
-   * 一键归零：同步清空后端会话的列、控制点、标尺标定与撤销栈。
+   * 重置：同步清空后端会话的列、控制点、标尺标定与撤销栈。
    * 前端画布状态由 GeologyCanvas.resetAllOperations() 负责复位。
    */
   public async resetProjectState(): Promise<void> {

@@ -1,6 +1,7 @@
 import { DiagramData } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
+import { notifyError } from '../../ui/feedback';
 
 export const step = 7;
 export const title = '7. 拐点与采样层位';
@@ -87,7 +88,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
           try {
             await ctx.rpcClient.call('samples.set', { samples: cachedSamplesData.samples });
           } catch (err) {
-            alert(err instanceof Error ? err.message : String(err));
+            notifyError(err instanceof Error ? err.message : String(err));
             return;
           }
         }

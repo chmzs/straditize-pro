@@ -19,7 +19,6 @@ import { onLocaleChange, applyLocaleToDocument, getLocale, t } from './i18n';
 import { ImageDisplayMode } from './core/Viewport';
 import { STAGE, visibleLayers } from './core/WorkflowStage';
 import { WORKFLOW_STAGES, WorkflowStage } from './types/workflow';
-import { tokens } from './styles/tokens';
 
 /**
  * 数据来源闸门（Data Provenance Gate）
@@ -61,16 +60,15 @@ function showProvenanceGate(message: string): Promise<void> {
 /**
  * 统一的后端失败上报。
  * 移除静默兜底后，后端错误会真的冒泡到这里；必须显式告知用户，
- * 且提供可直接划选和一键复制详细报错的现代化弹窗，取代阻塞且不可复制的原生 window.alert。
+ * 且提供可直接划选和复制的富文本弹窗，取代阻塞且不可复制的原生 window.alert。
+ *
+ * 只走**一个**通道（可复制的详情弹窗），不叠加 toast：一次失败对应一个通知。
+ * 叠加会让同一次失败同时出现在 toast 和弹窗里，用户读两遍同样的信息；
+ * 且后端 detail 往往很长，toast 会截断并自动消失，反而不如弹窗可留可复制。
  */
 export function reportBackendFailure(actionLabel: string, err: unknown): void {
   const message = (err as Error)?.message || t('error.unknown');
   console.error(`[RPC failure] ${actionLabel}:`, err);
-  try {
-    window.alert(`${actionLabel}失败：${message}`);
-  } catch {
-    // ignore
-  }
 
   const existing = document.getElementById('rpc-error-modal');
   if (existing) existing.remove();
@@ -86,27 +84,18 @@ export function reportBackendFailure(actionLabel: string, err: unknown): void {
     str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   overlay.innerHTML = `
-    <div class="modal-dialog" style="max-width:520px;width:90%;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;box-shadow:0 20px 40px rgba(0,0,0,0.4);overflow:hidden;animation:modalEnter 0.2s ease-out;">
-      <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border-color);background:var(--bg-tertiary);">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:16px;">❌</span>
-          <h3 style="margin:0;font-size:14px;font-weight:700;color:var(--text-heading);">${escapeHtml(actionLabel)}失败</h3>
-        </div>
-        <button id="rpc-err-close-x" class="modal-close" style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;line-height:1;">×</button>
+    <div class="modal-dialog ui-modal" style="--modal-width: 560px;">
+      <div class="ui-modal__header">
+        <h3 class="ui-modal__title">${escapeHtml(actionLabel)}失败</h3>
+        <button id="rpc-err-close-x" class="ui-icon-btn" aria-label="关闭" title="关闭">&times;</button>
       </div>
-      <div class="modal-body" style="padding:18px;user-select:text;-webkit-user-select:text;">
-        <p style="margin:0 0 10px;font-size:12.5px;color:var(--text-secondary);font-weight:500;">
-          后端执行操作时报告了以下错误或状态异常：
-        </p>
-        <div style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;padding:12px;font-family:var(--font-mono);font-size:11.5px;line-height:1.6;color:var(--text-primary);max-height:220px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;user-select:text;-webkit-user-select:text;">${escapeHtml(message)}</div>
+      <div class="modal-body ui-modal__body">
+        <p class="ui-detail-hint">后端执行操作时报告了以下错误或状态异常：</p>
+        <pre class="ui-detail-text">${escapeHtml(message)}</pre>
       </div>
-      <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-top:1px solid var(--border-color);background:var(--bg-tertiary);">
-        <button id="rpc-err-copy-btn" class="tool-btn" style="padding:5px 12px;font-size:12px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
-          📋 复制错误详情
-        </button>
-        <button id="rpc-err-ok-btn" class="btn btn-primary" style="padding:5px 18px;font-size:12px;cursor:pointer;">
-          确定
-        </button>
+      <div class="ui-modal__footer">
+        <button id="rpc-err-copy-btn" class="ui-btn ui-btn--secondary ui-btn--sm">复制错误详情</button>
+        <button id="rpc-err-ok-btn" class="ui-btn ui-btn--primary ui-btn--sm">关闭</button>
       </div>
     </div>
   `;
@@ -130,12 +119,12 @@ export function reportBackendFailure(actionLabel: string, err: unknown): void {
         document.execCommand('copy');
         ta.remove();
       }
-      copyBtn.textContent = '✅ 已复制到剪贴板';
+      copyBtn.textContent = '已复制到剪贴板';
       setTimeout(() => {
-        if (copyBtn) copyBtn.textContent = '📋 复制错误详情';
+        if (copyBtn) copyBtn.textContent = '复制错误详情';
       }, 2000);
     } catch {
-      copyBtn.textContent = '❌ 复制失败，请手动划选';
+      copyBtn.textContent = '复制失败，请手动划选';
     }
   });
 }
@@ -879,14 +868,14 @@ async function bootstrap() {
     }
 
     workflowActionBar.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0;">
-        <span style="background: ${tokens.color.column.activeBadge}; color: #fff; font-weight: 700; font-size: 10px; padding: 2px 7px; border-radius: 9999px; flex-shrink: 0;">S${currentStage}</span>
-        <strong style="color: var(--accent-blue); flex-shrink: 0;">${meta.stepName}</strong>
-        <span style="color: var(--text-secondary); font-size: 11px; flex: 1 1 auto; min-width: 0; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${meta.guideText}</span>
+      <div class="workflow-action-bar__context">
+        <span class="workflow-action-bar__step">${currentStage}</span>
+        <strong>${meta.stepName}</strong>
+        <span class="workflow-action-bar__guide">${meta.guideText}</span>
       </div>
-      <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-        ${currentStage > 1 ? `<button id="btn-wf-prev" class="tool-btn" style="padding: 3px 8px; font-size: 10px;">↺ ${t('workflow.prev')}</button>` : ''}
-        ${meta.primaryActionLabel ? `<button id="btn-wf-next" class="btn btn-primary" style="padding: 4px 10px; font-size: 10.5px; font-weight: 600; white-space: nowrap;">${meta.primaryActionLabel}</button>` : ''}
+      <div class="workflow-action-bar__actions">
+        ${currentStage > 1 ? `<button id="btn-wf-prev" class="ui-btn ui-btn--quiet ui-btn--sm">${t('workflow.prev')}</button>` : ''}
+        ${meta.primaryActionLabel ? `<button id="btn-wf-next" class="ui-btn ui-btn--primary ui-btn--sm">${meta.primaryActionLabel}</button>` : ''}
       </div>
     `;
 
@@ -1050,7 +1039,7 @@ async function bootstrap() {
       inspector?.updateData(canvasComponent.data);
       toolbar?.updateHistoryState();
       updateFooter();
-      setHudNotice('✅ 已将审核确认的属种名称与拉丁学名一键应用至当前图谱各列！', 4000);
+      setHudNotice('已把审核确认的属种名称与拉丁学名应用到当前图谱各列', 4000);
     }
   );
 
@@ -2229,7 +2218,7 @@ async function bootstrap() {
       if (canvasComponent.data.imageSrc) {
         void recomposeCleanupState('归零后重算清理掩膜');
       }
-      setHudNotice('♻️ 已一键归零：本图全部分列、控制点与标尺已清空，请从 S1 重新框选数据取数区。', 5000);
+      setHudNotice('已重置：本图全部分列、控制点与标尺已清空，请从步骤 1 重新框选数据有效区。', 5000);
     },
     onOpenCalibrationModal: () => {
       propertyPanel.openCalibrationModal();
@@ -2361,7 +2350,7 @@ async function bootstrap() {
     if (zoomEl) {
       zoomEl.innerHTML = `${t('footer.zoom')}: <code>${Math.round(canvasComponent.viewport.scale * 100)}%</code>`;
     }
-    // 无激活列（含一键重置后的空状态）时必须回落占位符，避免残留上一张图的属种与锚点数
+    // 无激活列（含重置后的空状态）时必须回落占位符，避免残留上一张图的属种与锚点数
     if (activeEl) {
       activeEl.innerHTML = col
         ? `${t('footer.activeTaxa')}: <span style="color: ${col.color};">●</span> <strong>${col.name}</strong>`

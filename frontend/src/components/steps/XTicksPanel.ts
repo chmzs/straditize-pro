@@ -1,6 +1,7 @@
 import { DiagramData, ColumnGroup } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
+import { notifyError } from '../../ui/feedback';
 
 export const step = 6;
 export const title = '6. 标定列与 X 刻度';
@@ -148,7 +149,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         try {
           await ctx.rpcClient.updateColumn(columnIndex(activeCol), { x_group_id: newGrpId } as any);
         } catch (err) {
-          alert(err instanceof Error ? err.message : String(err));
+          notifyError(err instanceof Error ? err.message : String(err));
           return;
         }
       }
@@ -181,7 +182,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       }
       ctx.onDataChange?.();
     } catch (err) {
-      alert(err instanceof Error ? err.message : String(err));
+      notifyError(err instanceof Error ? err.message : String(err));
     }
   });
 
@@ -189,7 +190,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   root.querySelector('#btn-merge-groups')?.addEventListener('click', async () => {
     const roi = activeRoi();
     if (!roi || !roi.x_groups || roi.x_groups.length <= 1 || !ctx.rpcClient) {
-      alert('当前 ROI 仅有 1 个或没有组，无需合并。');
+      notifyError('当前 ROI 仅有 1 个或没有组，无需合并。');
       return;
     }
 
@@ -223,13 +224,13 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         }
       }
       if (mergedCount > 0) {
-        alert(`已成功合并 ${mergedCount} 个标度相同的列组！`);
+        notifyError(`已成功合并 ${mergedCount} 个标度相同的列组！`);
         ctx.onDataChange?.();
       } else {
-        alert('当前 ROI 内所有列组的形态或标度各不相同，未发现可合并的同类组。');
+        notifyError('当前 ROI 内所有列组的形态或标度各不相同，未发现可合并的同类组。');
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : String(err));
+      notifyError(err instanceof Error ? err.message : String(err));
     }
   });
 

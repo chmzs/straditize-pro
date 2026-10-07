@@ -50,19 +50,19 @@ export class SettingsModal {
     const isConnected = this.rpcClient.getStatus().connected;
 
     modal.innerHTML = `
-      <div class="modal-dialog settings-dialog" style="width: min(640px, 94vw); max-height: 90vh; display: flex; flex-direction: column;">
-        <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding: 12px 18px; display: flex; align-items: center; justify-content: space-between;">
+      <div class="modal-dialog settings-dialog ui-modal" style="--modal-width: 640px;">
+        <div class="modal-header ui-modal__header">
           <div style="display: flex; align-items: center; gap: 8px;">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-blue);">
               <circle cx="12" cy="12" r="3"/>
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
             </svg>
-            <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--text-heading);">${t('settings.title')} (Settings)</h3>
+            <h3 class="ui-modal__title">${t('settings.title')}</h3>
           </div>
-          <button class="close-btn" id="settings-close-btn" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); padding: 0 4px;">&times;</button>
+          <button class="ui-icon-btn" id="settings-close-btn" aria-label="${t('settings.cancel')}" title="${t('settings.cancel')}">&times;</button>
         </div>
 
-        <div class="modal-body settings-modal-body" style="padding: 16px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; flex: 1;">
+        <div class="modal-body settings-modal-body ui-modal__body">
           <!-- 一、通用偏好 -->
           <div class="settings-section" style="background: var(--bg-tertiary); border: 1px solid var(--border-light); border-radius: 8px; padding: 14px 16px;">
             <div style="font-weight: 700; font-size: 13px; color: var(--text-heading); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
@@ -74,7 +74,7 @@ export class SettingsModal {
               <!-- 语言切换 -->
               <div style="display: flex; align-items: center; justify-content: space-between;">
                 <label for="settings-language" style="font-size: 12px; color: var(--text-primary); font-weight: 500;">
-                  • ${t('settings.language')} (Language):
+                  ${t('settings.language')}
                 </label>
                 <select id="settings-language" style="padding: 4px 10px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); min-width: 160px;">
                   <option value="zh-CN" ${currentLoc === 'zh-CN' ? 'selected' : ''}>简体中文 (zh-CN)</option>
@@ -201,9 +201,9 @@ export class SettingsModal {
           </div>
         </div>
 
-        <div class="modal-footer" style="padding: 12px 18px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px;">
-          <button class="btn btn-secondary" id="btn-settings-cancel" style="padding: 6px 14px; font-size: 12px;">${t('settings.cancel')}</button>
-          <button class="btn btn-primary" id="btn-settings-save" style="padding: 6px 16px; font-size: 12px; font-weight: 600;">${t('settings.save')}</button>
+        <div class="modal-footer ui-modal__footer">
+          <button class="ui-btn ui-btn--secondary" id="btn-settings-cancel">${t('settings.cancel')}</button>
+          <button class="ui-btn ui-btn--primary" id="btn-settings-save">${t('settings.save')}</button>
         </div>
       </div>
     `;

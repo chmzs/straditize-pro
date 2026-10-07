@@ -26,29 +26,40 @@
  * * `console.error` / 未捕获异常（`pageerror`）——前端把错误吞在控制台里；
  * * 失败的 JSON-RPC 响应——**前端自己发起的** RPC 失败了却被静默吞掉。
  *   实测样本：`QaPanel` 曾自己拼 JSON-RPC 信封 + 裸 `fetch`，写成
- *   `if (response.ok) { if (json.result) … }`，而本后端返回 `HTTP 200 + body.error`，
- *   于是每个后端错误都被吞掉、面板静默停在默认值 0（这类问题只断言 DOM 抓不到，
+ *   `if (response.ok) { if (json.result) … }`，而本后端返回
+ *   `HTTP 200 + body.error`，于是每个后端错误都被吞掉、面板静默停在默认值 0（这类问题只断言 DOM 抓不到，
  *   现在既有本条门禁也有 `error-surfacing.spec.ts` 的正向用例兜着）。
  *   注意只看 status 会漏；
- * * 原生 `dialog`——用户可见的报错通道就是它，见下。
+ * * 用户通知——用户可见的报错通道，见下。
  *
  * 注意门禁只覆盖 `console.error`，**故意不覆盖 `console.warn`**：`RpcClient` 的
  * `tError()` 在渲染本地化文案时会把后端英文 detail 打进 `console.warn`，若把
- * warn 也当失败，任何一次合法的、已经弹框告知用户的错误都会被判红。真正兜住
+ * warn 也当失败，任何一次合法的、已经告知用户的错误都会被判红。真正兜住
  * "错误被静默吞掉"的是**读响应 body** 的那条（即 `rpcErrors`）。
  *
- * ## 为什么 dialog 必须留在门禁里
+ * ## 为什么用户通知必须留在门禁里
  *
- * 本应用**没有**全局错误条 / toast 通道：用户可见的错误上报一律是
- * `window.alert`（~30 处；正确写法集中在 `main.ts:63` 的 `reportBackendFailure`，
- * 即 `console.error` + `alert('❌ xxx失败')`）。也就是说 `alert` 就是"错误冒泡"
- * 本身，`dialogs` 非空即意味着**用户被打断**。Playwright 默认会自动 dismiss，
- * 从而只留下一个语义不明的失败，所以必须自己接管。
+ * 用户可见的通知有两类来源，`helpers.ts` 把二者合并采集为 `notices`：
+ *
+ * 1. **原生对话框**——`window.confirm` / `window.prompt` 仍是原生的（重置全部、
+ *    退出、重载图片、选择 PDF 页码等确认/输入场景），以及任何遗留的 `alert`；
+ * 2. **应用内通知通道**——`src/ui/feedback.ts` 的 `notify()` toast、
+ *    `main.ts:reportBackendFailure` 的 `#rpc-error-modal` 详情弹窗、
+ *    `showDetailModal()` 的 `#ui-detail-modal`。
+ *
+ * 也就是说 `notices` 非空即意味着**用户被打断或被额外告知了一件事**：正常流程里
+ * 它应当为空。Playwright 对原生对话框默认会自动 dismiss，从而只留下一个语义不明
+ * 的失败，所以必须自己接管。
+ *
+ * ⚠️ 本门禁曾经只监听原生对话框，因为当年 `alert()` 是唯一的用户可见报错通道。
+ * 当 `alert()` 全部迁移到非阻塞 toast 后，若不同步扩展采集面，`notices` 会恒为空、
+ * 门禁**静默失去全部覆盖**。迁移报错通道时必须同时改 `helpers.ts` 的采集与这里的
+ * 判定，两边缺一不可。
  *
  * ## 豁免怎么写（以及为什么是**一个对象**选项）
  *
  * ```ts
- * test.use({ allowlists: { rpcError: [/export\.csv/], dialog: [/导出失败/] } });
+ * test.use({ allowlists: { rpcError: [/export\.csv/], notice: [/导出失败/] } });
  * ```
  *
  * 曾经把三个白名单做成三个**数组型** option（`rpcErrorAllowlist: [[], {option:true}]`）。
@@ -78,8 +89,8 @@ export interface Allowlists {
   consoleError: Matcher[];
   /** 允许出现的失败 RPC（子串或正则匹配 `方法名 [码] 消息`）。 */
   rpcError: Matcher[];
-  /** 允许出现的原生弹窗文本（验证错误路径的用例才需要）。 */
-  dialog: Matcher[];
+  /** 允许出现的用户通知文本（原生对话框 + 应用内 toast / 错误弹窗）。 */
+  notice: Matcher[];
 }
 
 function matches(text: string, allow: Matcher[]): boolean {
@@ -104,13 +115,13 @@ export const test = base.extend<{
   telemetry: [
     async ({ page, allowlists }, use) => {
       // setup 早于 `beforeEach`，而各 spec 的 `resetBaseline` 正是在 `beforeEach`
-      // 里首次导航，所以这里是"任何 goto 之前"。
-      const telemetry = watchPage(page);
+      // 里首次导航，所以 `watchPage` 里的 `addInitScript` 一定赶在任何 `goto` 之前。
+      const telemetry = await watchPage(page);
 
       await use(telemetry);
 
       // 调用方可以只写需要的键，所以在这里补齐缺省（对象选项整体替换，不合并）。
-      const allow: Allowlists = { consoleError: [], rpcError: [], dialog: [], ...allowlists };
+      const allow: Allowlists = { consoleError: [], rpcError: [], notice: [], ...allowlists };
 
       // teardown：这里才是门禁的权威位置——用例无论怎么结束都会走到。
       const unexpectedConsole = telemetry.consoleErrors.filter(
@@ -135,13 +146,13 @@ export const test = base.extend<{
         )
       ).toEqual([]);
 
-      const unexpectedDialogs = telemetry.dialogs.filter((e) => !matches(e, allow.dialog));
+      const unexpectedNotices = telemetry.notices.filter((e) => !matches(e, allow.notice));
       expect(
-        unexpectedDialogs,
+        unexpectedNotices,
         report(
-          '出现了未预期的原生弹窗',
-          unexpectedDialogs,
-          '弹窗是本应用唯一的用户可见报错通道，非预期弹窗通常意味着前置状态缺失；若为故意触发，请用 test.use({ allowlists: { dialog: [...] } }) 声明豁免'
+          '出现了未预期的用户通知',
+          unexpectedNotices,
+          '通知是本应用唯一的用户可见报错通道，非预期通知通常意味着前置状态缺失或静默兜底；若为故意触发，请用 test.use({ allowlists: { notice: [...] } }) 声明豁免'
         )
       ).toEqual([]);
     },

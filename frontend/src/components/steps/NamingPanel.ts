@@ -1,6 +1,7 @@
 import { DiagramData } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
+import { notifyError } from '../../ui/feedback';
 
 export const step = 5;
 export const title = '5. 自动分列与属种命名';
@@ -98,7 +99,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       ctx.onOpenOcrReviewModal();
       return;
     }
-    alert('请使用顶栏【🔍 OCR】按钮框选并识别图谱顶部标签。');
+    notifyError('请使用顶栏【🔍 OCR】按钮框选并识别图谱顶部标签。');
   });
 
   root.querySelector('#btn-apply-naming-next')?.addEventListener('click', () => {

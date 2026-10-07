@@ -145,7 +145,7 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
   });
 
   test.describe('T3 专用子组（放行重置弹窗）', () => {
-    test.use({ allowlists: { dialog: [/确定要重置当前图谱的全部操作吗/] } });
+    test.use({ allowlists: { notice: [/确定要重置当前图谱的全部操作吗/] } });
 
     test('T3 空状态重置防崩溃测试与浮动工具条主题适配', async ({ page }) => {
       // 1. 在未载入底图的空状态下触发顶栏重置

@@ -23,7 +23,7 @@ function report(errors: string[]): string {
 }
 
 test.describe('控制台洁净度', () => {
-  test('有图状态：基线加载后零 error、零页面异常、零原生弹窗', async ({ page, telemetry }) => {
+  test('有图状态：基线加载后零 error、零页面异常、零用户通知', async ({ page, telemetry }) => {
     await openApp(page);
 
     // 等渲染管线真正跑过一帧再下结论，否则只是"还没跑到"
@@ -33,7 +33,7 @@ test.describe('控制台洁净度', () => {
     }, undefined, { timeout: 30_000 });
 
     expect(telemetry.consoleErrors, report(telemetry.consoleErrors)).toEqual([]);
-    expect(telemetry.dialogs, `出现了原生弹窗：${JSON.stringify(telemetry.dialogs)}`).toEqual([]);
+    expect(telemetry.notices, `出现了未预期的用户通知：${JSON.stringify(telemetry.notices)}`).toEqual([]);
   });
 
   test('零状态：清空图像后重新加载同样零 error', async ({ page, telemetry }) => {
@@ -55,6 +55,6 @@ test.describe('控制台洁净度', () => {
     expect(state.image.width, '前置条件：应是零状态').toBe(0);
 
     expect(telemetry.consoleErrors, report(telemetry.consoleErrors)).toEqual([]);
-    expect(telemetry.dialogs, `出现了原生弹窗：${JSON.stringify(telemetry.dialogs)}`).toEqual([]);
+    expect(telemetry.notices, `出现了未预期的用户通知：${JSON.stringify(telemetry.notices)}`).toEqual([]);
   });
 });

@@ -1,6 +1,7 @@
 import { RpcClient } from '../services/RpcClient';
 import { DiagramData } from '../types/pollen';
 import { setLatestReconciliation } from './steps/NamingPanel';
+import { notifyError } from '../ui/feedback';
 import {
   OcrLabelEntry,
   OcrRecognitionResult,
@@ -177,12 +178,12 @@ export class OcrReviewModal {
 
         <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 18px;">
           <div style="font-size: 11px; color: var(--text-muted);">
-            💡 确认无误后点击右下角按钮，将直接一键赋予图谱下方全部花粉列名与分类属性。
+            点击右下角按钮，将审核结果写入图谱下方全部花粉列名与分类属性。
           </div>
           <div style="display: flex; gap: 8px;">
             <button class="btn btn-secondary" id="ocr-btn-cancel">取消</button>
             <button class="btn btn-primary" id="ocr-btn-apply" style="background: linear-gradient(135deg, #059669, #10b981);">
-              ✅ 确认无误，一键赋予图谱各列
+              应用到图谱各列
             </button>
           </div>
         </div>
@@ -364,7 +365,7 @@ export class OcrReviewModal {
     const confirmed = this.reviewTable.getConfirmedLabels();
 
     if (confirmed.length === 0) {
-      alert('请至少勾选采纳 1 项属种名称！');
+      notifyError('请至少勾选采纳 1 项属种名称！');
       return;
     }
 
@@ -386,7 +387,7 @@ export class OcrReviewModal {
         this.close();
       }
     } catch (err: any) {
-      alert(`应用属种名称失败: ${err.message || err}`);
+      notifyError(`应用属种名称失败: ${err.message || err}`);
     }
   }
 }

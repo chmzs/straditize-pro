@@ -3,6 +3,7 @@ import { RpcClient } from '../services/RpcClient';
 import { SplineInterpolator } from './SplineInterpolator';
 import { CoordinateSystem } from './CoordinateSystem';
 import { TarArchive } from './TarArchive';
+import { notifyError } from '../ui/feedback';
 
 export interface ProjectManagerCallbacks {
   onProjectLoad?: (projectData: DiagramData) => void;
@@ -217,7 +218,7 @@ export class ProjectManager {
       throw new Error('export.tar 返回的数据不合法');
     } catch (err: any) {
       console.error('后端 export.tar 导出失败:', err);
-      alert('❌ 科学项目包 (.tar) 导出失败：' + (err.message || err));
+      notifyError('❌ 科学项目包 (.tar) 导出失败：' + (err.message || err));
     }
   }
 
@@ -357,7 +358,7 @@ message("Finished! Stratigraphic plot generated successfully.")
 
           const entries = TarArchive.extract(buf);
           if (entries.length === 0) {
-            alert('读取 .tar 归档失败：未找到有效的文件块。');
+            notifyError('读取 .tar 归档失败：未找到有效的文件块。');
             return;
           }
 
@@ -412,13 +413,13 @@ message("Finished! Stratigraphic plot generated successfully.")
                 this.onProjectLoad(projectData);
               }
             } else {
-              alert('解包成功，但未在 JSON 中找到合法的 columns 或 calibration 字段。');
+              notifyError('解包成功，但未在 JSON 中找到合法的 columns 或 calibration 字段。');
             }
           } else {
-            alert('未在 .tar 归档中找到项目数据 JSON 文件。');
+            notifyError('未在 .tar 归档中找到项目数据 JSON 文件。');
           }
         } catch (err) {
-          alert('解析 .tar 归档失败：' + (err as Error).message);
+          notifyError('解析 .tar 归档失败：' + (err as Error).message);
         }
       };
       reader.readAsArrayBuffer(file);
@@ -442,10 +443,10 @@ message("Finished! Stratigraphic plot generated successfully.")
             this.onProjectLoad(projectData);
           }
         } else {
-          alert('项目文件格式不匹配：未找到有效的 columns 或 calibration 配置。');
+          notifyError('项目文件格式不匹配：未找到有效的 columns 或 calibration 配置。');
         }
       } catch (err) {
-        alert('读取项目文件失败：无效的 JSON 格式。');
+        notifyError('读取项目文件失败：无效的 JSON 格式。');
       }
     };
     reader.readAsText(file, 'utf-8');

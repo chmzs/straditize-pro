@@ -115,7 +115,7 @@ test.describe('步骤 5 分列与命名', () => {
     await page.keyboard.type('ZZ', { delay: 20 });
     await expect(renameInput(page, col.id), '真实键盘输入必须能落进改名输入框').toHaveValue(/ZZ/);
 
-    expect(telemetry.dialogs, '正常改名不该弹任何原生提示').toEqual([]);
+    expect(telemetry.notices, '正常改名不该出现任何用户通知').toEqual([]);
   });
 
   test('T2 改名写进后端权威字段，并且经得起一次真实的重新分列', async ({ page, telemetry }) => {
@@ -156,8 +156,8 @@ test.describe('步骤 5 分列与命名', () => {
   });
 
   test.describe('T3 同 ROI 重名', () => {
-    // 前端在提交前就把重名拦下来了（并且故意不惊动后端），这里放行那条原生提示。
-    test.use({ allowlists: { dialog: [/严禁重名/] } });
+    // 前端在提交前就把重名拦下来了（并且故意不惊动后端），这里放行那条提示。
+    test.use({ allowlists: { notice: [/严禁重名/] } });
 
     test('T3 同有效区内重名：当场拦下并回滚，后端不被惊动', async ({ page, telemetry }) => {
       await gotoStage(page, 5);
@@ -169,8 +169,8 @@ test.describe('步骤 5 分列与命名', () => {
       const origin = target.name ?? '';
       await renameViaUI(page, target.id, other.name ?? '');
 
-      await expect.poll(() => telemetry.dialogs.length, { timeout: 10_000 }).toBe(1);
-      expect(telemetry.dialogs[0]).toContain('严禁重名');
+      await expect.poll(() => telemetry.notices.length, { timeout: 10_000 }).toBe(1);
+      expect(telemetry.notices[0]).toContain('严禁重名');
 
       await expect(renameInput(page, target.id), '被拒的名字必须当场回滚到原名').toHaveValue(origin);
       expect((await colById(page, target.id))?.name, '后端不该收到这个请求').toBe(origin);
@@ -183,7 +183,7 @@ test.describe('步骤 5 分列与命名', () => {
     // 应用必须把这条失败冒泡给用户，并把输入回滚（绝不留"界面改了、后端没改"）。
     test.use({
       allowlists: {
-        dialog: [/属种改名失败/],
+        notice: [/属种改名失败/],
         consoleError: [/属种改名/],
         rpcError: [/naming\.renameColumn/],
       },
@@ -196,9 +196,9 @@ test.describe('步骤 5 分列与命名', () => {
 
       await renameViaUI(page, col.id, 'bad/name');
 
-      await expect.poll(() => telemetry.dialogs.length, { timeout: 10_000 }).toBe(1);
+      await expect.poll(() => telemetry.notices.length, { timeout: 10_000 }).toBe(1);
       expect(
-        telemetry.dialogs[0],
+        telemetry.notices[0],
         '后端 -32602 必须原样冒泡到用户，而不是悄悄吞掉'
       ).toContain('属种改名失败');
 
@@ -216,7 +216,7 @@ test.describe('步骤 5 分列与命名', () => {
       await page.locator('.step-panel[data-step="5"] #btn-trigger-ocr').click();
 
       await expect(page.locator('#ocr-close-btn'), '该按钮必须打开 OCR 模态').toBeVisible();
-      expect(telemetry.dialogs, '按钮不该退化成一句"请使用顶栏按钮"的提示').toEqual([]);
+      expect(telemetry.notices, '按钮不该退化成一句"请使用顶栏按钮"的提示').toEqual([]);
     });
   });
 });

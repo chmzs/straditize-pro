@@ -4,30 +4,29 @@
  */
 export function createAgeDepthModalHtml(): string {
   return `
-    <div class="modal-dialog modal-large agedepth-dialog" style="width: min(1180px, 96vw); max-height: 94vh; display: flex; flex-direction: column;">
-      <div class="modal-header">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 16px;">⏳</span>
-          <h3>年代-深度模型解译与贝叶斯建模 (Age-Depth Modeling & Inspection)</h3>
-          <span class="logo-badge" style="background: linear-gradient(135deg, #f59e0b, #ef4444); font-size: 10px; padding: 2px 6px;">Bacon / geoChronR</span>
+    <div class="modal-dialog modal-large agedepth-dialog">
+      <div class="modal-header ui-modal__header">
+        <div>
+          <h3 class="ui-modal__title">年代-深度模型</h3>
+          <span class="ui-status">Bacon / geoChronR</span>
         </div>
-        <button class="close-btn" id="ad-close-btn">&times;</button>
+        <button class="ui-icon-btn" id="ad-close-btn" aria-label="关闭年代模型窗口" title="关闭">&times;</button>
       </div>
 
       <!-- 选项卡切换: 视觉解译 vs 结果数据表 vs 测年建模向导 -->
-      <div class="ad-tab-strip" style="display: flex; gap: 4px; padding: 0 16px;">
-        <button class="tool-btn ad-tab-btn active" id="ad-tab-btn-visual" style="border-radius: 4px 4px 0 0; border-bottom: none; padding: 6px 14px; font-size: 11.5px; font-weight: 600; color: var(--accent-blue);">
-          📈 图谱逆向视觉解译 (Visual Inspection)
+      <div class="ad-tab-strip" role="tablist">
+        <button class="ui-btn ui-btn--quiet ui-btn--sm ad-tab-btn active" id="ad-tab-btn-visual" role="tab" aria-selected="true">
+          图像检查
         </button>
-        <button class="tool-btn ad-tab-btn" id="ad-tab-btn-table" style="border-radius: 4px 4px 0 0; border-bottom: none; padding: 6px 14px; font-size: 11.5px; font-weight: 600; color: var(--text-muted);">
-          📋 年代-深度结果数据表 (Age-Depth Table)
+        <button class="ui-btn ui-btn--quiet ui-btn--sm ad-tab-btn" id="ad-tab-btn-table" role="tab" aria-selected="false">
+          结果表
         </button>
-        <button class="tool-btn ad-tab-btn" id="ad-tab-btn-modeling" style="border-radius: 4px 4px 0 0; border-bottom: none; padding: 6px 14px; font-size: 11.5px; font-weight: 600; color: var(--text-muted);">
-          ⚙️ 测年数据与 Bacon / geoChronR 向导 (Dating & Downstream)
+        <button class="ui-btn ui-btn--quiet ui-btn--sm ad-tab-btn" id="ad-tab-btn-modeling" role="tab" aria-selected="false">
+          测年与建模
         </button>
       </div>
 
-      <div class="modal-body" style="flex: 1; display: flex; padding: 14px; overflow: hidden; gap: 14px;">
+      <div class="modal-body">
         <!-- ================================================================= -->
         <!-- Tab 1: 视觉解译视口 (Visual Inspection) -->
         <!-- ================================================================= -->
@@ -344,7 +343,7 @@ export function createAgeDepthModalHtml(): string {
         <!-- Tab 3: 测年数据与 Bacon / geoChronR 向导 (Dating & Downstream) -->
         <!-- ================================================================= -->
         <div id="ad-tab-panel-modeling" style="flex: 1; display: none; gap: 16px; min-width: 0; min-height: 0; overflow-y: auto;">
-          <!-- 左半边: 测年数据表格 (支持从 Excel 一键粘贴) -->
+          <!-- 左半边: 测年数据表格 (支持从 Excel 粘贴) -->
           <div style="flex: 1.2; display: flex; flex-direction: column; gap: 10px; background: var(--bg-tertiary); padding: 14px; border-radius: 6px; border: 1px solid var(--border-light);">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <strong style="font-size: 12px; color: var(--accent-blue);">1. 📜 钻孔实测年代数据表 (Radiocarbon / Dating Table)</strong>
@@ -463,7 +462,7 @@ export function createAgeDepthModalHtml(): string {
               </div>
               <div id="ad-webr-install-bar" style="display: flex; gap: 6px; margin-top: 5px;">
                 <button class="tool-btn" id="btn-ad-install-webr" style="flex: 1; font-size: 10px; color: var(--accent-blue); border-color: rgba(56,189,248,0.3);">
-                  ⬇️ 一键下载组件 (~40MB)
+                  下载组件 (~40 MB)
                 </button>
                 <button class="tool-btn" id="btn-ad-import-webr-zip" style="font-size: 10px; padding: 2px 6px;" title="离线环境手动导入已下载的 age-modeling.zip">
                   📂 离线导入
@@ -480,15 +479,15 @@ export function createAgeDepthModalHtml(): string {
 
             <!-- 下游执行通道 -->
             <div style="margin-top: auto; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border-color); padding-top: 10px;">
-              <div id="ad-local-r-status" style="font-size: 10px; color: #10b981;">
-                ⏳ 正在探测本地 R 与内置算力环境...
+              <div id="ad-local-r-status" class="ui-status">
+                正在检测本机 R 环境…
               </div>
               <div style="display: flex; gap: 6px;">
-                <button class="btn btn-primary" id="btn-ad-run-local-r" style="flex: 1.3; font-size: 11px; padding: 6px; background: linear-gradient(135deg, #059669, #10b981);" title="优先调用本机 R + rbacon 原生运行；仅在本机没有 R 时才考虑内置 WebR 算力">
-                  ▶ 运行 Bacon 年龄建模（本机 R）
+                <button class="ui-btn ui-btn--primary ui-btn--sm" id="btn-ad-run-local-r" style="flex: 1.3;" title="调用本机 R + rbacon 运行年龄建模">
+                  运行年龄建模（本机 R）
                 </button>
-                <button class="btn btn-secondary" id="btn-ad-export-geochronr" style="flex: 1; font-size: 11px; padding: 6px;" title="生成与当前 LiPD 容器深度绑定的 geoChronR 驱动代码">
-                  📈 geoChronR 脚本
+                <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-ad-export-geochronr" style="flex: 1;" title="生成绑定当前数据集的 geoChronR 驱动代码">
+                  geoChronR 脚本
                 </button>
               </div>
             </div>
@@ -496,14 +495,14 @@ export function createAgeDepthModalHtml(): string {
         </div>
       </div>
 
-      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-top: 1px solid var(--border-color);">
-        <div style="font-size: 11px; color: var(--text-muted);">
-          通过视觉检查确认拟合度后，点击应用可直接赋予当前花粉图谱真实年代轴与 95% 置信带。
+      <div class="modal-footer ui-modal__footer">
+        <div class="ad-footer-hint">
+          确认拟合结果后应用，为当前花粉图谱赋予年代轴与 95% 置信带。
         </div>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn btn-secondary" id="ad-btn-cancel">取消</button>
-          <button class="btn btn-primary" id="ad-btn-apply" style="background: linear-gradient(135deg, #059669, #10b981);">
-            ✅ 确认无误，关联至花粉图谱
+        <div class="ad-footer-actions">
+          <button class="ui-btn ui-btn--secondary" id="ad-btn-cancel">取消</button>
+          <button class="ui-btn ui-btn--primary" id="ad-btn-apply">
+            应用年代模型
           </button>
         </div>
       </div>

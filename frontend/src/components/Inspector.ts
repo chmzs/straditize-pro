@@ -6,6 +6,7 @@ import { DeletePointCommand, ResizeRoiCommand } from '../core/Commands';
 import { getStepPanel } from './steps/_registry';
 import { t, onLocaleChange } from '../i18n';
 import { RpcClient } from '../services/RpcClient';
+import { notifyError } from '../ui/feedback';
 
 export interface InspectorCallbacks {
   onDataChange: () => void;
@@ -437,7 +438,7 @@ export class Inspector {
         try {
           await this.callbacks.rpcClient.renameColumn(getColIdx(activeCol), nextName);
         } catch (err) {
-          alert(err instanceof Error ? err.message : String(err));
+          notifyError(err instanceof Error ? err.message : String(err));
           this.render();
           return;
         }
@@ -477,7 +478,7 @@ export class Inspector {
           );
           activeCol.x_ticks = res.x_ticks;
         } catch (err) {
-          alert(err instanceof Error ? err.message : String(err));
+          notifyError(err instanceof Error ? err.message : String(err));
           this.render();
           return;
         }
@@ -549,7 +550,7 @@ export class Inspector {
           if (sType === 'log') {
             const check = CoordinateSystem.validateLogScale(activeCol);
             if (!check.valid) {
-              alert(`无法切换到对数刻度：\n${check.reason}`);
+              notifyError(`无法切换到对数刻度：\n${check.reason}`);
               return;
             }
           }
@@ -557,7 +558,7 @@ export class Inspector {
             try {
               await this.callbacks.rpcClient.updateColumn(getColIdx(activeCol), { scale_type: sType });
             } catch (err) {
-              alert(err instanceof Error ? err.message : String(err));
+              notifyError(err instanceof Error ? err.message : String(err));
               return;
             }
           }
@@ -587,7 +588,7 @@ export class Inspector {
             try {
               await this.callbacks.rpcClient.updateColumn(getColIdx(activeCol), { plot_type: pType });
             } catch (err) {
-              alert(err instanceof Error ? err.message : String(err));
+              notifyError(err instanceof Error ? err.message : String(err));
               return;
             }
           }
@@ -610,7 +611,7 @@ export class Inspector {
               await this.callbacks.rpcClient.updateColumn(getColIdx(c), { plot_type: pType });
             }
           } catch (err) {
-            alert(err instanceof Error ? err.message : String(err));
+            notifyError(err instanceof Error ? err.message : String(err));
             return;
           }
         }
@@ -650,7 +651,7 @@ export class Inspector {
               exaggeration_mult: mult,
             });
           } catch (err) {
-            alert(err instanceof Error ? err.message : String(err));
+            notifyError(err instanceof Error ? err.message : String(err));
             this.render();
             return;
           }
@@ -677,7 +678,7 @@ export class Inspector {
               exaggeration_mult: mult,
             });
           } catch (err) {
-            alert(err instanceof Error ? err.message : String(err));
+            notifyError(err instanceof Error ? err.message : String(err));
             this.render();
             return;
           }
@@ -703,7 +704,7 @@ export class Inspector {
                 exaggeration_mult: mult,
               });
             } catch (err) {
-              alert(err instanceof Error ? err.message : String(err));
+              notifyError(err instanceof Error ? err.message : String(err));
               return;
             }
           }
@@ -725,7 +726,7 @@ export class Inspector {
           try {
             await this.callbacks.rpcClient.removeColumn(getColIdx(activeCol));
           } catch (err) {
-            alert(err instanceof Error ? err.message : String(err));
+            notifyError(err instanceof Error ? err.message : String(err));
             return;
           }
         }
@@ -895,7 +896,7 @@ export class Inspector {
         if (outside && bounds) {
           this.callbacks.onDataChange();
           // 如实告知需要外推，而不是悄悄把标定改成能容纳它的样子。
-          alert(
+          notifyError(
             `提示：粘贴的层位范围 (${parsedDepths[0]} ~ ${parsedDepths[parsedDepths.length - 1]} ${this.data.calibration.unit}) ` +
               `超出现有 Y 轴标定范围 (${bounds.topValue} ~ ${bounds.bottomValue} ${this.data.calibration.unit})，` +
               `超出的层位属于外推区，请确认标定是否准确。`

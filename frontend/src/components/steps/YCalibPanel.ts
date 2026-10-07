@@ -2,6 +2,7 @@ import { DiagramData } from '../../types/pollen';
 import { CoordinateSystem } from '../../core/CoordinateSystem';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
+import { notifyError } from '../../ui/feedback';
 
 export const step = 3;
 export const title = '3. Y 轴物理标定';
@@ -122,7 +123,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       return;
     }
     if (topPx === botPx) {
-      alert('两点标定错误：两个参考点的像素 Y 坐标不能相同！');
+      notifyError('两点标定错误：两个参考点的像素 Y 坐标不能相同！');
       return;
     }
 

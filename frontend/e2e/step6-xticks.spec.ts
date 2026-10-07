@@ -157,7 +157,7 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
       methods,
       '判据是"这个动作发了什么请求"：必须真的发出 column.calibrateXTicks'
     ).toContain('column.calibrateXTicks');
-    expect(telemetry.dialogs, '正常标定不该弹任何原生提示').toEqual([]);
+    expect(telemetry.notices, '正常标定不该出现任何用户通知').toEqual([]);
     expect(telemetry.rpcErrors).toEqual([]);
   });
 
@@ -200,12 +200,12 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
       .toBeNull();
     expect(methods, '【清空】必须发出 column.clearXTicks').toContain('column.clearXTicks');
     await expect(page.locator(CLEAR_BTN), '清空后按钮必须消失').toHaveCount(0);
-    expect(telemetry.dialogs).toEqual([]);
+    expect(telemetry.notices).toEqual([]);
   });
 
   test.describe('T3 空读数', () => {
     // 这是应用自己发出的用户可见错误，放行并断言它。
-    test.use({ allowlists: { dialog: [/标定列 X 刻度失败/], consoleError: [/标定列 X 刻度/] } });
+    test.use({ allowlists: { notice: [/标定列 X 刻度失败/], consoleError: [/标定列 X 刻度/] } });
 
     test('T3 空读数当场拦下：弹错误、不发 RPC、后端不变（绝不悄悄兜底成 0）', async ({
       page,
@@ -217,9 +217,9 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
       const methods = watchRpc(page);
       await calibrateViaUI(page, '', '');
 
-      await expect.poll(() => telemetry.dialogs.length, { timeout: 10_000 }).toBe(1);
+      await expect.poll(() => telemetry.notices.length, { timeout: 10_000 }).toBe(1);
       expect(
-        telemetry.dialogs[0],
+        telemetry.notices[0],
         '空输入必须冒泡成用户可见的失败，而不是静默当成 0/20'
       ).toContain('标定列 X 刻度失败');
 
@@ -262,7 +262,7 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
       { px: px1, value: 5 },
       { px: px2, value: 25 },
     ]);
-    expect(telemetry.dialogs).toEqual([]);
+    expect(telemetry.notices).toEqual([]);
   });
 
   test('T5 列载荷必须同时带 x_ticks 与 col_index（前端寻址与判定的依据）', async ({ page }) => {

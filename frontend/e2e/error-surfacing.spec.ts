@@ -1,19 +1,21 @@
 /**
  * 「前端错误必须冒泡到用户」的**正向**测试。
  *
- * ## 为什么需要它：全局门禁只证明了"没出错时不弹框"
+ * ## 为什么需要它：全局门禁只证明了"没出错时用户没被打扰"
  *
- * `fixtures.ts` 的门禁断言 `console.error` / 失败 RPC / 原生弹窗**为空**。那是
+ * `fixtures.ts` 的门禁断言 `console.error` / 失败 RPC / 用户通知**为空**。那是
  * 反向覆盖：它证明"一切正常时用户没被打扰"，**不证明"出问题时用户看得见"**。
  * 这两件事差得很远 —— 一个把错误全吞进 `console.warn` 的实现能让门禁全绿，而
  * 用户面对的是一个静默失效的界面。历史上"前端发 x_bounds、后端要 data_xlim
  * 被静默兜底掩盖很久"就是这一类。
  *
- * ## 本应用的用户可见报错通道就是 `alert()`
+ * ## 本应用的用户可见通知通道
  *
- * 没有全局错误条 / toast：正确写法集中在 `main.ts:63` 的 `reportBackendFailure`
- * （`console.error` + `alert('❌ xxx失败')`）。所以这里断言"弹框文本"，就是断言
- * "用户被告知了"。
+ * 短消息走 `src/ui/feedback.ts` 的 `notify()` toast（非阻塞、数秒后自动消失）；
+ * 后端失败另走 `main.ts:reportBackendFailure` 的 `#rpc-error-modal` 详情弹窗
+ * （可划选、可复制，取代了阻塞且不可复制的原生 `window.alert`）。
+ * `helpers.ts` 把这两类与仍在使用的原生 `confirm` / `prompt` 合并采集为
+ * `telemetry.notices`，所以这里断言"通知文本"，就是断言"用户被告知了"。
  *
  * ## 注入失败是"必要才 mock"
  *
@@ -65,10 +67,10 @@ test.beforeEach(async ({ page }) => {
 
 test.describe('后端失败必须被用户看见', () => {
   test.use({
-    allowlists: { rpcError: [/export\.csv/], dialog: [INJECTED, /导出 CSV 失败/] },
+    allowlists: { rpcError: [/export\.csv/], notice: [INJECTED, /导出 CSV 失败/] },
   });
 
-  test('导出失败必须弹框告知，而不是静默给一份空数据', async ({ page, telemetry }) => {
+  test('导出失败必须通知用户，而不是静默给一份空数据', async ({ page, telemetry }) => {
     // 导出面板：`#btn-export-csv` 无禁用逻辑，任何步骤都打得开
     await page.locator('#btn-export-csv').click();
     await expect(page.locator('.wpd-export-dialog'), '导出面板应打开').toBeVisible();
@@ -78,19 +80,19 @@ test.describe('后端失败必须被用户看见', () => {
 
     // 断言"用户看见了"，而不是"代码里有个 catch"
     await expect
-      .poll(() => telemetry.dialogs.join('\n'), {
-        message: '后端导出失败必须弹框告知用户，而不是静默吞掉',
+      .poll(() => telemetry.notices.join('\n'), {
+        message: '后端导出失败必须通知用户，而不是静默吞掉',
         timeout: 10_000,
       })
       .toContain(INJECTED);
-    expect(telemetry.dialogs.join('\n'), '弹框应说明失败的是导出').toContain('导出 CSV 失败');
+    expect(telemetry.notices.join('\n'), '通知应说明失败的是导出').toContain('导出 CSV 失败');
   });
 });
 
 test.describe('客户端校验失败同样必须被用户看见', () => {
-  test.use({ allowlists: { dialog: [/两点标定错误/] } });
+  test.use({ allowlists: { notice: [/两点标定错误/] } });
 
-  test('两点像素 Y 相同时必须弹框拒绝，而不是静默不生效', async ({ page, telemetry }) => {
+  test('两点像素 Y 相同时必须明确提示，而不是静默不生效', async ({ page, telemetry }) => {
     await gotoStage(page, 3);
 
     // 先填像素、后填数值：这样中途每次 change 都因"数值未填齐"而提前 return，
@@ -103,8 +105,8 @@ test.describe('客户端校验失败同样必须被用户看见', () => {
     await page.locator('#btn-apply-ycalib').click();
 
     await expect
-      .poll(() => telemetry.dialogs.join('\n'), {
-        message: '两个参考点像素 Y 相同时必须弹框拒绝（静默忽略会让用户以为已标定）',
+      .poll(() => telemetry.notices.join('\n'), {
+        message: '两个参考点像素 Y 相同时必须明确提示（静默忽略会让用户以为已标定）',
         timeout: 10_000,
       })
       .toContain('两点标定错误');
@@ -112,7 +114,7 @@ test.describe('客户端校验失败同样必须被用户看见', () => {
 });
 
 /**
- * 第三条走的是**另一条**用户可见通道：面板自己的 banner，而不是 `alert`。
+ * 第三条走的是**另一条**用户可见通道：面板自己的 banner，而不是 toast / 错误弹窗。
  *
  * `QaPanel`（步骤 8）把错误写在面板顶部的 banner 里。它曾经自己拼 JSON-RPC
  * 信封 + 裸 `fetch`，写成 `if (response.ok) { if (json.result) {…} }`。本后端把
@@ -157,7 +159,7 @@ test.describe('面板内的后端失败也必须被用户看见（banner 通道�
  *
  * 这一点是被金丝雀验证逼出来的。第一版注入的是 `500 + text/plain`，看着合理，
  * 却**证明了任何事**：那种 body 会让新旧两版代码都在 `res.json()` 处抛错，
- * 于是两者都会弹框 —— 测试无法区分修复前后。真正能区分的是"能解析、但没有路径"
+ * 于是两者都会通知 —— 测试无法区分修复前后。真正能区分的是"能解析、但没有路径"
  * 这种响应（例如后端返 `{"detail": ...}` 的 5xx）：旧代码会一路带着 `undefined`
  * 去调用下游 RPC，新代码在 `!res.ok` 就停下。
  *
@@ -166,10 +168,10 @@ test.describe('面板内的后端失败也必须被用户看见（banner 通道�
 test.describe('上传失败必须被用户看见（/api/upload 通道）', () => {
   test.use({
     allowlists: {
-      dialog: [/离线导入失败/],
+      notice: [/离线导入失败/],
       // 注入 5xx 会让**浏览器自己**往控制台打一条 "Failed to load resource ... 500"，
       // 那是 Chromium 对非 2xx 响应的记录，不是应用代码的 error。本仓库的 500 由本
-      // 用例故意制造，故显式豁免；应用侧的报错仍由下面的弹框断言把守。
+      // 用例故意制造，故显式豁免；应用侧的报错仍由下面的通知断言把守。
       consoleError: [/Failed to load resource.*500/],
     },
   });
@@ -200,8 +202,8 @@ test.describe('上传失败必须被用户看见（/api/upload 通道）', () =>
     });
 
     await expect
-      .poll(() => telemetry.dialogs.join('\n'), {
-        message: '上传 5xx 必须弹框告知用户',
+      .poll(() => telemetry.notices.join('\n'), {
+        message: '上传 5xx 必须通知用户',
         timeout: 10_000,
       })
       .toContain('离线导入失败');

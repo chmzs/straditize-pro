@@ -1,4 +1,5 @@
 import { RpcClient } from '../../services/RpcClient';
+import { notifyError } from '../../ui/feedback';
 
 export class TaxaDictionaryModal {
   private rpcClient: RpcClient;
@@ -41,7 +42,7 @@ export class TaxaDictionaryModal {
     try {
       summary = await this.rpcClient.getTaxaDict();
     } catch (err: any) {
-      alert(`无法读取词汇表: ${err?.message || err}`);
+      notifyError(`无法读取词汇表: ${err?.message || err}`);
       return;
     }
 

@@ -10,6 +10,7 @@ import { AgeDepthCanvas } from './agedepth/AgeDepthCanvas';
 import { AgeDepthDatingTable } from './agedepth/AgeDepthDatingTable';
 import { AgeDepthController } from './agedepth/AgeDepthController';
 import { createAgeDepthModalHtml } from './agedepth/AgeDepthTemplate';
+import { notifyError } from '../ui/feedback';
 
 export type {
   AgeDepthModelInspectionData,
@@ -263,30 +264,29 @@ export class AgeDepthModal {
     const pTable = this.modalEl.querySelector('#ad-tab-panel-table') as HTMLElement | null;
     const pModeling = this.modalEl.querySelector('#ad-tab-panel-modeling') as HTMLElement | null;
 
-    [btnVisual, btnTable, btnModeling].forEach((b) => b?.classList.remove('active'));
-    if (btnVisual) btnVisual.style.color = 'var(--text-muted)';
-    if (btnTable) btnTable.style.color = 'var(--text-muted)';
-    if (btnModeling) btnModeling.style.color = 'var(--text-muted)';
+    const tabs: Array<[HTMLElement | null, string]> = [
+      [btnVisual, 'visual'],
+      [btnTable, 'table'],
+      [btnModeling, 'modeling'],
+    ];
+    tabs.forEach(([btn, name]) => {
+      btn?.classList.toggle('active', name === tab);
+      btn?.setAttribute('aria-selected', name === tab ? 'true' : 'false');
+    });
 
     if (pVisual) pVisual.style.display = 'none';
     if (pTable) pTable.style.display = 'none';
     if (pModeling) pModeling.style.display = 'none';
 
     if (tab === 'visual') {
-      btnVisual?.classList.add('active');
-      if (btnVisual) btnVisual.style.color = 'var(--accent-blue)';
       if (pVisual) pVisual.style.display = 'flex';
       this.canvasComp?.renderCanvas();
       this.tableComp?.updateMappingTable();
     } else if (tab === 'table') {
-      btnTable?.classList.add('active');
-      if (btnTable) btnTable.style.color = 'var(--accent-blue)';
       if (pTable) pTable.style.display = 'flex';
       this.tableComp?.renderFullDataTable();
-    } else {
-      btnModeling?.classList.add('active');
-      if (btnModeling) btnModeling.style.color = 'var(--accent-amber)';
-      if (pModeling) pModeling.style.display = 'flex';
+    } else if (pModeling) {
+      pModeling.style.display = 'flex';
     }
   }
 
@@ -384,7 +384,7 @@ export class AgeDepthModal {
     modal.querySelector('#ad-btn-apply')?.addEventListener('click', async () => {
       const inspection = this.canvasComp?.getInspectionData();
       if (!inspection) {
-        alert('请先运行提取或生成年代模型！');
+        notifyError('请先运行提取或生成年代模型！');
         return;
       }
       try {

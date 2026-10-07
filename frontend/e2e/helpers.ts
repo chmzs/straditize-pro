@@ -29,14 +29,40 @@ export interface PageTelemetry {
   consoleErrors: string[];
   /** 失败的 JSON-RPC 响应（`方法名 [码] 消息`）；前端自己发起的也算。 */
   rpcErrors: string[];
-  /** 页面弹过的原生对话框文本；非空通常意味着前置状态缺失。 */
-  dialogs: string[];
+  /**
+   * 用户可见的通知文本，按出现顺序。
+   *
+   * 本通道**合并两类**来源，因为它们对用户是同一件事："界面打断你，告诉你一件事"：
+   *
+   * 1. 原生对话框（`window.confirm` / `window.prompt` 仍是原生的）；
+   * 2. 应用内通知通道（`src/ui/feedback.ts` 的 `notify()` toast、
+   *    `#rpc-error-modal` 后端失败详情弹窗、`#ui-detail-modal` 详情弹窗）。
+   *
+   * 合并的理由见下方 `watchPage` 注释：门禁要守的是"正常流程里用户不该被
+   * 意外通知打断"，通道换了不该出现覆盖空洞。
+   */
+  notices: string[];
 }
 
 /**
- * 在 `goto` **之前**挂上控制台、网络与对话框监听。
+ * 在 `goto` **之前**挂上控制台、网络与用户通知监听。
  *
- * 对话框必须显式接管：Playwright 默认会自动 dismiss，但那样测试只看到一个
+ * ## 为什么通知通道是"合并采集"的
+ *
+ * 历史上本应用**没有**应用内通知通道，用户可见的报错一律是 `window.alert`，
+ * 所以本文件只监听 `page.on('dialog')`。现在 `src/ui/feedback.ts` 提供了
+ * `notify()`（非阻塞 toast）与 `showDetailModal()`（可复制详情），
+ * `main.ts:reportBackendFailure` 也从 `alert` 改为「toast + 可复制详情弹窗」。
+ *
+ * 如果继续只监听原生 dialog，那个门禁会**静默失去全部覆盖**：alert 迁移到 toast 后
+ * `dialogs` 恒为空，"用户被打断"再也测不出来。所以这里把应用内通知也采集成
+ * `notices`；同时保留原生 dialog 采集——`confirm` / `prompt` 仍是原生的。
+ *
+ * 采集方式：`addInitScript` 在页面脚本之前装一个 `MutationObserver`（因此在任何
+ * `goto` 之前、也跨导航存活），命中即通过 `exposeFunction` 把文本发回 Node 侧。
+ * 这样即使 toast 4 秒后自行消失，文本也已经留在遥测里。
+ *
+ * 原生对话框必须显式接管：Playwright 默认会自动 dismiss，但那样测试只看到一个
  * 卡住或语义不明的失败；这里把文本留下来，失败信息才指向真正的原因。
  *
  * RPC 失败必须读 **body** 而不是只看 status：本后端的 JSON-RPC 错误是
@@ -45,17 +71,59 @@ export interface PageTelemetry {
  *
  * 这里**一律如实记录，不做豁免过滤** —— 豁免是门禁策略，统一在 `fixtures.ts`
  * 的 teardown 里判定。分开的理由：过滤若散在采集侧，"这条为什么没报"就变成
- * 要看两处才能回答；集中在一处，`test.use({ allowlists: { rpcError: [...] } })` 就是唯一答案。
+ * 要看两处才能回答；集中在一处，`test.use({ allowlists: { notice: [...] } })` 就是唯一答案。
  */
-export function watchPage(page: Page): PageTelemetry {
-  const telemetry: PageTelemetry = { consoleErrors: [], rpcErrors: [], dialogs: [] };
+export async function watchPage(page: Page): Promise<PageTelemetry> {
+  const telemetry: PageTelemetry = { consoleErrors: [], rpcErrors: [], notices: [] };
   page.on('console', (msg) => {
     if (msg.type() === 'error') telemetry.consoleErrors.push(msg.text());
   });
   page.on('pageerror', (err) => telemetry.consoleErrors.push(`pageerror: ${err.message}`));
   page.on('dialog', (dialog) => {
-    telemetry.dialogs.push(dialog.message());
+    telemetry.notices.push(dialog.message());
     void dialog.dismiss();
+  });
+
+  // 应用内通知通道：initScript 装的观察器把文本回传到 Node 侧的数组。
+  await page.exposeFunction('__e2eRecordNotice', (text: unknown) => {
+    const clean = String(text ?? '').trim();
+    if (clean) telemetry.notices.push(clean);
+  });
+  await page.addInitScript(() => {
+    // `.ui-toast` 是非阻塞提示；两个 `#…-modal` 是带详情的应用内弹窗。
+    const SELECTOR = '.ui-toast, #rpc-error-modal, #ui-detail-modal';
+    const record = (el: Element): void => {
+      const text = (el.textContent ?? '').trim();
+      if (!text) return;
+      const fn = (
+        window as unknown as { __e2eRecordNotice?: (value: string) => void }
+      ).__e2eRecordNotice;
+      if (typeof fn === 'function') fn(text);
+    };
+    // 按元素去重，每批 addedNodes 重置一次。`notify()` 先把 `.ui-toast-host` 挂到
+    // body、再把 `.ui-toast` 挂进 host，两者落在**同一批** addedNodes 里：host 的
+    // `querySelectorAll` 与 toast 自身会各命中一次，一次通知就会被算成两条。
+    let recorded = new WeakSet<Element>();
+    const recordOnce = (el: Element): void => {
+      if (recorded.has(el)) return;
+      recorded.add(el);
+      record(el);
+    };
+    const scan = (node: Node): void => {
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      const el = node as Element;
+      if (el.matches(SELECTOR)) recordOnce(el);
+      el.querySelectorAll(SELECTOR).forEach(recordOnce);
+    };
+    const start = (): void => {
+      scan(document.documentElement);
+      new MutationObserver((records) => {
+        recorded = new WeakSet<Element>();
+        for (const rec of records) rec.addedNodes.forEach(scan);
+      }).observe(document.documentElement, { childList: true, subtree: true });
+    };
+    if (document.documentElement) start();
+    else document.addEventListener('DOMContentLoaded', start, { once: true });
   });
   page.on('response', (res) => {
     if (!res.url().includes('/rpc')) return;

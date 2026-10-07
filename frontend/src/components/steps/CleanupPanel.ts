@@ -126,7 +126,7 @@ export function render(data: DiagramData): string {
           拖<strong>白色方块</strong>改长度、拖<strong>青色圆点</strong>改厚度、方向键 1px 精调、按 Delete 删除。
         </div>
 
-        <!-- 4. 统一厚度：先用测量 (M) 量出真实粗细，填进来一键统一 -->
+        <!-- 4. 统一厚度：先用测量 (M) 量出真实粗细，填进来统一 -->
         <div style="display:flex; gap:6px; margin-top:8px; align-items:center;">
           <label for="cleanup-thickness-input" style="font-size:10px;color:var(--text-secondary);white-space:nowrap;">统一厚度</label>
           <input id="cleanup-thickness-input" type="number" min="1" max="500" step="1" value="${suggestedThickness}"

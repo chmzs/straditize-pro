@@ -1,4 +1,5 @@
 import { RpcClient } from '../../services/RpcClient';
+import { notifyError } from '../../ui/feedback';
 import {
   AgeDepthModelInspectionData,
   CalibMarker,
@@ -343,7 +344,7 @@ export class AgeDepthController {
         if (statusEl) {
           statusEl.innerHTML =
             `🟢 <strong>本机 R 已就绪，将直接调用</strong>: ${res.r_version || 'R 4.x'} · ` +
-            `rbacon 已安装 · 无需下载任何组件`;
+            `rbacon 已安装 · 无需下载组件`;
         }
         if (runBtn) {
           runBtn.textContent = '▶ 运行 Bacon 年龄建模（本机 R）';
@@ -388,7 +389,7 @@ export class AgeDepthController {
         } else {
           if (statusEl) statusEl.innerHTML = `<span style="color:var(--accent-amber);">未安装 (需增量包)</span>`;
           if (installBtn) {
-            installBtn.textContent = '⬇️ 一键下载组件 (~40MB)';
+            installBtn.textContent = '下载组件 (~40 MB)';
             installBtn.disabled = false;
           }
         }
@@ -467,11 +468,11 @@ export class AgeDepthController {
 
       if (instRes && instRes.success) {
         this.onComponentReady(instRes);
-        alert('✅ 组件已就绪，年龄建模功能已激活！');
+        notifyError('✅ 组件已就绪，年龄建模功能已激活！');
         this.checkComponentStatus();
       }
     } catch (err: any) {
-      alert(`离线导入失败: ${err.message || err}`);
+      notifyError(`离线导入失败: ${err.message || err}`);
     }
   }
 
@@ -533,7 +534,7 @@ export class AgeDepthController {
     deltaRStd: number | undefined;
   }): Promise<void> {
     if (params.dates.length < 2) {
-      alert('请至少在测年数据表中保留或输入 2 个测年层位！');
+      notifyError('请至少在测年数据表中保留或输入 2 个测年层位！');
       return;
     }
 
@@ -547,7 +548,7 @@ export class AgeDepthController {
     try {
       if (this.backendUnavailable()) {
         this.renderBackendOffline('#ad-local-r-status');
-        alert(
+        notifyError(
           '⚠️ 后端未连接，无法运行年代建模。\n\n' +
           'RPC 客户端已降级为离线 Mock：它不会再向后端发起请求，也无法返回真实的 ' +
           'R 环境探测或建模结果。请确认 straditize 后端进程在运行，然后重新打开本窗口。'
@@ -585,11 +586,11 @@ export class AgeDepthController {
           if (statusEl) {
             statusEl.innerHTML = `✅ <strong>本地 R 建模完成</strong>: 原生 150 万次 MCMC 成功完成并生成 95% 置信带！`;
           }
-          alert('✅ 本地 Rscript 原生满血 Bacon 建模完成！已自动生成拟合中值线与 95% 置信区间。');
+          notifyError('✅ 本地 Rscript 原生满血 Bacon 建模完成！已自动生成拟合中值线与 95% 置信区间。');
           return;
         }
         if (res && res !== true && res.error) {
-          alert(`❌ 本地 R 建模失败: ${res.error}`);
+          notifyError(`❌ 本地 R 建模失败: ${res.error}`);
           if (statusEl) {
             statusEl.innerHTML = `<span style="color:var(--accent-red, #ef4444);">❌ 本地 R 建模失败: ${res.error}</span>`;
           }
@@ -608,7 +609,7 @@ export class AgeDepthController {
 
       this.showInstallGuideModal();
     } catch (err: any) {
-      alert(`运行 Bacon 年龄建模失败: ${err.message || err}`);
+      notifyError(`运行 Bacon 年龄建模失败: ${err.message || err}`);
     } finally {
       if (runBtn) {
         runBtn.disabled = false;
@@ -624,7 +625,7 @@ export class AgeDepthController {
         `<span style="color:var(--accent-amber);">⚠️ <strong>WebR 引擎尚未接通</strong>: ` +
         `组件资产已挂载，但浏览器端 rbacon 调用尚未实现，本路径不产出结果。</span>`;
     }
-    alert(
+    notifyError(
       '⚠️ WebR 内置算力引擎尚未接通。\n\n' +
       '组件资产（WASM/JS）已安装到用户目录并通过 /components/webr/ 挂载，但浏览器端调用 ' +
       'rbacon 的执行代码还没有实现。\n\n' +
@@ -646,10 +647,10 @@ export class AgeDepthController {
         if (installBar) installBar.style.outline = '';
       }, 3000);
     }
-    alert(
+    notifyError(
       '💡 未检测到本地 R/rbacon 环境，且尚未安装浏览器内置 WebR 算力包。\n\n' +
       '您可以通过以下方式之一运行年龄建模：\n' +
-      '1. 点击下方【⬇️ 一键下载组件 (~40MB)】（流式拉取、进度与速度实时显示、SHA256严密校验）\n' +
+      '1. 点击下方【下载组件 (~40 MB)】（流式拉取、进度与速度实时显示、SHA256严密校验）\n' +
       '2. 或在 R 终端中运行：install.packages("rbacon")\n' +
       '3. 或点击【📂 离线导入】选择 age-modeling.zip'
     );
@@ -667,7 +668,7 @@ library(geoChronR)
 lipd_file <- file.choose()
 L <- readLipd(lipd_file)
 
-# 2. 一键运行 Bacon 贝叶斯 MCMC 模型 (1,500,000 次自回归采样)
+# 2. 运行 Bacon 贝叶斯 MCMC 模型 (1,500,000 次自回归采样)
 L <- runBacon(L, thick=5)
 
 # 3. 将生成的 1000 组年代集成表无缝映射到花粉属种数据矩阵

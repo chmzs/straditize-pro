@@ -1,5 +1,6 @@
 import { DiagramData, TaxaColumn } from '../types/pollen';
 import { t, onLocaleChange } from '../i18n';
+import { notifyError } from '../ui/feedback';
 
 export interface SidebarCallbacks {
   onSelectTaxa: (taxaId: string) => void;
@@ -116,12 +117,14 @@ export class Sidebar {
           </svg>
           <span>${t('sidebar.title')}</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 4px;">
+        <div class="sidebar-header-actions">
           <span class="badge">${this.data.columns.length}</span>
-          <button id="btn-toggle-compact" class="tool-btn" style="padding: 2px 5px; font-size: 10px;" title="${t('sidebar.viewToggleTitle')}">
-            ${this.isCompactView ? t('sidebar.card') : t('sidebar.compact')}
-          </button>
-          <button id="btn-collapse-sidebar" class="icon-btn panel-toggle" title="${t('sidebar.collapseTitle')}">
+          ${this.data.columns.length > 0 ? `
+            <button id="btn-toggle-compact" class="ui-icon-btn ui-btn--sm" aria-label="${t('sidebar.viewToggleTitle')}" title="${t('sidebar.viewToggleTitle')}">
+              ${this.isCompactView ? '▦' : '☰'}
+            </button>
+          ` : ''}
+          <button id="btn-collapse-sidebar" class="ui-icon-btn panel-toggle" aria-label="${t('sidebar.collapseTitle')}" title="${t('sidebar.collapseTitle')}">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
@@ -129,18 +132,19 @@ export class Sidebar {
         </div>
       </div>
 
-      <div class="sidebar-actions-bar" style="display: flex; gap: 4px; padding: 6px 10px 4px 10px;">
-        <button id="btn-insert-gap-col" class="btn-sidebar-action" title="${t('sidebar.insertGapTitle')}" style="width: 100%; padding: 4px 8px; font-size: 11px;">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          <span>${t('sidebar.insertGap')}</span>
-        </button>
-      </div>
+      ${this.data.columns.length > 0 ? `
+        <div class="sidebar-actions-bar">
+          <button id="btn-insert-gap-col" class="ui-btn ui-btn--secondary ui-btn--sm" title="${t('sidebar.insertGapTitle')}">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>${t('sidebar.insertGap')}</span>
+          </button>
+        </div>
+        <div class="sidebar-search">
+          <input type="text" id="inp-search-taxa" class="ui-field" placeholder="${t('sidebar.searchPlaceholder')}" value="${this.searchQuery}" />
+        </div>
+      ` : ''}
 
-      <div style="padding: 2px 10px 6px 10px;">
-        <input type="text" id="inp-search-taxa" placeholder="${t('sidebar.searchPlaceholder')}" value="${this.searchQuery}" style="width: 100%; font-size: 10.5px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); box-sizing: border-box;" />
-      </div>
-
-      <div class="taxa-list" id="taxa-list-container" style="flex: 1; overflow-y: auto;">
+      <div class="taxa-list" id="taxa-list-container">
         ${this.renderColumnsList()}
       </div>
     `;
@@ -152,12 +156,12 @@ export class Sidebar {
     const cols = this.data.columns || [];
     if (cols.length === 0) {
       return `
-        <div class="sidebar-empty-hint" style="padding: 36px 18px 24px; text-align: center; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 10px;">
-          <div style="font-size: 32px; line-height: 1; margin: 0; user-select: none;">📏</div>
-          <strong style="color: var(--text-primary); font-size: 13px; font-weight: 700; line-height: 1.4; margin: 0;">${t('sidebar.emptyTitle')}</strong>
-          <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.6; margin: 0; max-width: 240px; word-break: break-word;">
-            ${t('sidebar.emptyDesc')}
-          </div>
+        <div class="sidebar-empty-hint">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>
+          </svg>
+          <strong>${t('sidebar.emptyTitle')}</strong>
+          <span>${t('sidebar.emptyDesc')}</span>
         </div>
       `;
     }
@@ -311,12 +315,9 @@ export class Sidebar {
       this.render();
     });
 
-    // 插空列急救按钮
+    // 在当前列后添加空白列；无列状态下入口不渲染。
     this.element.querySelector('#btn-insert-gap-col')?.addEventListener('click', () => {
-      if (this.data.columns.length === 0) {
-        alert('提示：当前图谱尚未切分属种列，请先执行分列。');
-        return;
-      }
+      if (this.data.columns.length === 0) return;
       this.callbacks.onInsertGapColumn?.(this.data.activeTaxaId);
     });
 
@@ -384,7 +385,7 @@ export class Sidebar {
           // Check for duplicate in same ROI
           const duplicate = this.data.columns.some((c) => c.id !== col.id && c.roi_id === col.roi_id && c.name === newName);
           if (duplicate) {
-            alert(`列名 '${newName}' 在当前有效区已存在，严禁重名！`);
+            notifyError(`列名 '${newName}' 在当前有效区已存在，严禁重名！`);
             target.value = col.name;
             return;
           }

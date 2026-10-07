@@ -68,7 +68,7 @@ test.describe('步骤 1 载入：每条入口都必须真的把后端切到那�
         .toEqual(truth);
     }
 
-    expect(telemetry.dialogs, '正常载入范例不该弹任何原生对话框').toEqual([]);
+    expect(telemetry.notices, '正常载入范例不该出现任何用户通知').toEqual([]);
   });
 
   test('拖拽一张真实 PNG 到画布：后端尺寸必须等于该 PNG 的尺寸', async ({ page, telemetry }) => {
@@ -110,7 +110,7 @@ test.describe('步骤 1 载入：每条入口都必须真的把后端切到那�
       )
       .toEqual([W, H]);
 
-    expect(telemetry.dialogs, '拖拽载入不该弹任何原生对话框').toEqual([]);
+    expect(telemetry.notices, '拖拽载入不该出现任何用户通知').toEqual([]);
   });
 
   test('载入的副作用：后端自动建一个 composition=True 的 pollen ROI，且能推进到步骤 2', async ({

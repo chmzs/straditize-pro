@@ -181,13 +181,12 @@ export class Toolbar {
     const stepperHtml = WORKFLOW_STEP_ITEMS.map((item, idx) => {
       const isCompleted = item.step < this.currentWorkflowStep;
       const isCurrent = item.step === this.currentWorkflowStep;
-      const statusIcon = isCompleted ? '✓' : (isCurrent ? '●' : '○');
       const cls = isCurrent ? 'active-step' : (isCompleted ? 'completed-step' : 'upcoming-step');
       return `
-        ${idx > 0 ? `<span class="workflow-arrow">›</span>` : ''}
-        <button class="workflow-step-btn ${cls}" data-step="${item.step}" title="${t('workflow.stepPrefix')} ${item.step}: ${item.name}${isCompleted ? ` (${t('workflow.completed')})` : ''}">
-          <span class="step-num">${statusIcon}</span>
-          <span>${item.label}</span>
+        ${idx > 0 ? `<span class="workflow-arrow" aria-hidden="true">›</span>` : ''}
+        <button class="workflow-step-btn ${cls}" data-step="${item.step}" ${isCurrent ? 'aria-current="step"' : ''} title="${t('workflow.stepPrefix')} ${item.step}: ${item.name}${isCompleted ? ` (${t('workflow.completed')})` : ''}">
+          <span class="step-num" aria-hidden="true">${item.step}</span>
+          <span>${item.name}</span>
         </button>
       `;
     }).join('');
@@ -221,15 +220,15 @@ export class Toolbar {
         <div class="divider"></div>
 
         <div class="btn-group file-actions-group">
-          <button id="btn-open-file" class="tool-btn open-file-btn highlight" title="${t('toolbar.diagramTitle')}">
+          <button id="btn-open-file" class="tool-btn ui-btn ui-btn--primary ui-btn--sm open-file-btn" title="${t('toolbar.diagramTitle')}">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
             </svg>
             <span>${t('toolbar.diagram')}</span>
           </button>
-          <input type="file" id="file-input-image" accept="image/*,.pdf,application/pdf" style="display: none;" />
+          <input type="file" id="file-input-image" accept="image/*,.pdf,application/pdf" hidden />
 
-          <button id="btn-save-project" class="tool-btn" title="${t('toolbar.saveProjTitle')}">
+          <button id="btn-save-project" class="tool-btn ui-btn ui-btn--secondary ui-btn--sm" title="${t('toolbar.saveProjTitle')}">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
               <polyline points="17 21 17 13 7 13 7 21"/>
@@ -238,15 +237,15 @@ export class Toolbar {
             <span>${t('toolbar.saveProj')}</span>
           </button>
 
-          <button id="btn-open-project" class="tool-btn" title="${t('toolbar.openProjTitle')}">
+          <button id="btn-open-project" class="tool-btn ui-btn ui-btn--secondary ui-btn--sm" title="${t('toolbar.openProjTitle')}">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
             </svg>
             <span>${t('toolbar.openProj')}</span>
           </button>
-          <input type="file" id="file-input-project" accept=".tar,.json,.tar.gz" style="display: none;" />
+          <input type="file" id="file-input-project" accept=".tar,.json,.tar.gz" hidden />
 
-          <select id="select-sample-diagram" class="sample-select" title="快速载入经典地学剖面范例" style="max-width: 80px; font-size: 11px;">
+          <select id="select-sample-diagram" class="sample-select" title="${t('toolbar.sampleTitle')}">
             <option value="" disabled selected>${t('toolbar.sample')}</option>
             <option value="hoya">Hoya</option>
             <!--
@@ -258,7 +257,7 @@ export class Toolbar {
             <option value="beginner">沉积图谱</option>
           </select>
 
-          <button id="btn-reset-all" class="tool-btn reset-all-btn" title="${t('toolbar.resetTitle')}">
+          <button id="btn-reset-all" class="tool-btn ui-btn ui-btn--quiet ui-btn--sm reset-all-btn" title="${t('toolbar.resetTitle')}">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
             </svg>
@@ -266,12 +265,12 @@ export class Toolbar {
           </button>
 
           <!-- 撤销/重做 -->
-          <button id="btn-undo" class="tool-btn" title="${t('toolbar.undoTitle')}" ${!this.history.canUndo() ? 'disabled' : ''} style="padding: 3px 6px;">
+          <button id="btn-undo" class="tool-btn ui-icon-btn" aria-label="${t('toolbar.undoTitle')}" title="${t('toolbar.undoTitle')}" ${!this.history.canUndo() ? 'disabled' : ''}>
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/>
             </svg>
           </button>
-          <button id="btn-redo" class="tool-btn" title="${t('toolbar.redoTitle')}" ${!this.history.canRedo() ? 'disabled' : ''} style="padding: 3px 6px;">
+          <button id="btn-redo" class="tool-btn ui-icon-btn" aria-label="${t('toolbar.redoTitle')}" title="${t('toolbar.redoTitle')}" ${!this.history.canRedo() ? 'disabled' : ''}>
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/>
             </svg>
@@ -323,22 +322,22 @@ export class Toolbar {
         </div>
 
         <!-- 论文与站点 FAIR / LiPD 元数据提取与录入入口 -->
-        <button id="btn-metadata-modal" class="tool-btn" title="论文、钻孔站点与 LiPD 元数据录入" style="padding: 3px 6px; font-size: 10.5px; color: var(--accent-blue); border-color: rgba(2, 132, 199, 0.4);">
-          <span>📄 元数据</span>
+        <button id="btn-metadata-modal" class="tool-btn ui-btn ui-btn--quiet ui-btn--sm" title="${t('toolbar.metadataTitle')}">
+          <span>${t('toolbar.metadata')}</span>
         </button>
 
         <!-- 花粉属种名 OCR 自动识别与审核入口 (S3阶段高亮引导，S1/S2未分列阶段弱化) -->
-        <button id="btn-ocr-review-modal" class="tool-btn" title="${this.currentWorkflowStep < 3 ? t('toolbar.ocrTitleDisabled') : t('toolbar.ocrTitle')}" style="padding: 3px 6px; font-size: 10.5px; color: #10b981; border-color: rgba(16, 185, 129, 0.4); opacity: ${this.currentWorkflowStep < 3 ? '0.45' : '1'}; ${this.currentWorkflowStep === 3 ? 'box-shadow: 0 0 6px rgba(16, 185, 129, 0.35); border-color: #10b981;' : ''}">
+        <button id="btn-ocr-review-modal" class="tool-btn ui-btn ui-btn--quiet ui-btn--sm ${this.currentWorkflowStep === 5 ? 'is-recommended' : ''}" title="${this.currentWorkflowStep < 5 ? t('toolbar.ocrTitleDisabled') : t('toolbar.ocrTitle')}" ${this.currentWorkflowStep < 5 ? 'disabled' : ''}>
           <span>${t('toolbar.ocr')}</span>
         </button>
 
         <!-- 年代-深度模型视觉检查与解译入口 -->
-        <button id="btn-age-depth-modal" class="tool-btn" title="${t('toolbar.ageDepthTitle')}" style="padding: 3px 6px; font-size: 10.5px; color: var(--accent-amber); border-color: rgba(245, 158, 11, 0.4);">
+        <button id="btn-age-depth-modal" class="tool-btn ui-btn ui-btn--quiet ui-btn--sm" title="${t('toolbar.ageDepthTitle')}">
           <span>${t('toolbar.ageDepth')}</span>
         </button>
 
         <!-- 导出主按钮 -->
-        <button id="btn-export-csv" class="btn btn-primary" title="${t('toolbar.exportTitle')}" style="padding: 4px 10px; font-size: 11px; font-weight: 700; white-space: nowrap;">
+        <button id="btn-export-csv" class="ui-btn ui-btn--primary ui-btn--sm" title="${t('toolbar.exportTitle')}">
           <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
           </svg>
@@ -346,7 +345,7 @@ export class Toolbar {
         </button>
 
         <!-- 唯一常驻偏好入口：[⚙ 设置] 齿轮图标按钮 -->
-        <button id="btn-settings" class="tool-btn" title="${t('toolbar.settingsTitle')}" style="padding: 4px 8px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; font-weight: 500;">
+        <button id="btn-settings" class="tool-btn ui-btn ui-btn--secondary ui-btn--sm" title="${t('toolbar.settingsTitle')}">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -355,7 +354,7 @@ export class Toolbar {
         </button>
 
         ${this.isDesktopMode ? `
-          <button id="btn-shutdown" class="tool-btn danger" title="${t('toolbar.shutdownTitle')}" style="background: rgba(239, 68, 68, 0.12); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.35); padding: 4px 6px;">
+          <button id="btn-shutdown" class="tool-btn ui-icon-btn" aria-label="${t('toolbar.shutdownTitle')}" title="${t('toolbar.shutdownTitle')}">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10"/>
             </svg>
@@ -413,7 +412,7 @@ export class Toolbar {
 
     // 缩放百分比徽标：点击即回到 100% 原始尺寸
     this.element.querySelector('#zoom-indicator')?.addEventListener('click', () => this.callbacks.onReset100());
-    // 一键重置当前图谱的全部操作
+    // 重置当前图谱的全部操作
     this.element.querySelector('#btn-reset-all')?.addEventListener('click', () => this.callbacks.onResetAll?.());
     this.element.querySelector('#btn-zoom-in')?.addEventListener('click', () => this.callbacks.onZoomIn());
     this.element.querySelector('#btn-zoom-out')?.addEventListener('click', () => this.callbacks.onZoomOut());

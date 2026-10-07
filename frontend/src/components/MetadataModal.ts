@@ -1,4 +1,5 @@
 import { RpcClient } from '../services/RpcClient';
+import { notifyError } from '../ui/feedback';
 
 export interface PaperMetadata {
   publication: {
@@ -180,33 +181,32 @@ export class MetadataModal {
     const modal = document.createElement('div');
     modal.className = 'modal-backdrop';
     modal.innerHTML = `
-      <div class="modal-dialog modal-large metadata-dialog" style="width: min(980px, 94vw); max-height: 90vh; display: flex; flex-direction: column;">
-        <div class="modal-header">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 16px;">📄</span>
-            <h3>论文元数据半自动化提取与审核 (Paper Metadata & FAIR Registry)</h3>
-            <span class="logo-badge" style="background: linear-gradient(135deg, #0284c7, #38bdf8); font-size: 10px; padding: 2px 6px;">FAIR / LiPD 兼容</span>
+      <div class="modal-dialog modal-large metadata-dialog ui-modal" style="--modal-width: 980px;">
+        <div class="modal-header ui-modal__header">
+          <div>
+            <h3 class="ui-modal__title">论文与站点元数据</h3>
+            <span class="ui-status ui-status--success">FAIR / LiPD 兼容</span>
           </div>
-          <button class="close-btn" id="meta-close-btn">&times;</button>
+          <button class="ui-icon-btn" id="meta-close-btn" aria-label="关闭元数据窗口" title="关闭">&times;</button>
         </div>
 
-        <div class="modal-body" style="flex: 1; display: flex; flex-direction: column; gap: 14px; padding: 16px; overflow-y: auto;">
+        <div class="modal-body ui-modal__body metadata-modal-body">
           <!-- 顶部快捷工具栏: DOI 索引 & PDF 解析 & LLM 配置 -->
           <div class="meta-quick-tools">
             <div style="font-size: 11px; font-weight: bold; color: var(--accent-blue); display: flex; justify-content: space-between; align-items: center;">
-              <span>⚡ 自动化提取工具通道 (DOI 索引 + 论文 PDF 提取)</span>
-              <span style="font-size: 10px; color: var(--text-muted);">约束规范：仅提取明确写出的内容，零脑补零推测</span>
+              <span>自动提取</span>
+              <span style="font-size: 10px; color: var(--text-muted);">只填入来源中明确出现的内容</span>
             </div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
               <div style="flex: 1; min-width: 220px; display: flex; gap: 6px;">
                 <input type="text" id="meta-inp-doi" placeholder="输入论文 DOI (如 10.1016/j.quascirev.2020.106500)" value="${this.metadata.publication.doi}" style="flex: 1; font-size: 11px;" />
-                <button id="btn-fetch-doi" class="btn btn-primary" style="font-size: 11px; padding: 4px 10px;">🔍 索引 DOI</button>
+                <button id="btn-fetch-doi" class="ui-btn ui-btn--primary ui-btn--sm">检索 DOI</button>
               </div>
               <div style="display: flex; gap: 6px; align-items: center;">
-                <input type="file" id="meta-file-pdf" accept=".pdf" style="display: none;" />
-                <button id="btn-upload-pdf" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;">📤 上传 PDF 提取</button>
-                <button id="btn-toggle-external-assistant" class="tool-btn" style="font-size: 11px; padding: 4px 10px; color: #10b981; border-color: rgba(16, 185, 129, 0.4);" title="无需 API Key：复制提示词到网页版 DeepSeek/ChatGPT/Kimi 传 PDF 生成后粘贴回填">📥 外部 AI 导入助手 (免Token)</button>
-                <button id="btn-toggle-llm-config" class="tool-btn" style="font-size: 11px; padding: 4px 10px;" title="配置 LLM API 地址、Key、模型与提取提示词">⚙️ LLM 与提示词配置</button>
+                <input type="file" id="meta-file-pdf" accept=".pdf" hidden />
+                <button id="btn-upload-pdf" class="ui-btn ui-btn--secondary ui-btn--sm">从 PDF 提取</button>
+                <button id="btn-toggle-external-assistant" class="ui-btn ui-btn--quiet ui-btn--sm" title="导入外部工具生成的结构化结果">导入外部结果</button>
+                <button id="btn-toggle-llm-config" class="ui-btn ui-btn--quiet ui-btn--sm" title="配置模型接口与提取提示词">提取设置</button>
                 <span id="meta-extract-status" style="font-size: 11px; color: #34d399;"></span>
               </div>
             </div>
@@ -443,16 +443,9 @@ export class MetadataModal {
           </div>
         </div>
 
-        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-top: 1px solid var(--border-color);">
-          <div style="font-size: 11px; color: var(--text-muted);">
-            💡 所有字段均可自由手动更正补全，确认后将永久绑定至当前工程并参与 XLSX 与 LiPD 规范化导出。
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn btn-secondary" id="meta-btn-cancel">取消</button>
-            <button class="btn btn-primary" id="meta-btn-save" style="background: linear-gradient(135deg, #0284c7, #38bdf8);">
-              💾 保存并绑定元数据
-            </button>
-          </div>
+        <div class="modal-footer ui-modal__footer">
+          <button class="ui-btn ui-btn--secondary" id="meta-btn-cancel">取消</button>
+          <button class="ui-btn ui-btn--primary" id="meta-btn-save">保存元数据</button>
         </div>
       </div>
     `;
@@ -468,7 +461,7 @@ export class MetadataModal {
     modal.querySelector('#btn-fetch-doi')?.addEventListener('click', async () => {
       const doiInp = (modal.querySelector('#meta-inp-doi') as HTMLInputElement).value.trim();
       if (!doiInp) {
-        alert('请输入有效的 DOI 编号！');
+        notifyError('请输入有效的 DOI 编号！');
         return;
       }
       const statusEl = modal.querySelector('#meta-extract-status');
@@ -585,7 +578,7 @@ export class MetadataModal {
     const parseAndApplyExternalText = async (rawText: string) => {
       const statusEl = modal.querySelector('#meta-extract-status');
       if (!rawText.trim()) {
-        alert('请先在文本框中粘贴外部 AI 生成的 JSON 内容，或选择文件导入！');
+        notifyError('请先在文本框中粘贴外部 AI 生成的 JSON 内容，或选择文件导入！');
         return;
       }
       try {
@@ -600,7 +593,7 @@ export class MetadataModal {
           }
         }
       } catch (err: any) {
-        alert(`解析外部 AI 结果失败: ${err.message || err}`);
+        notifyError(`解析外部 AI 结果失败: ${err.message || err}`);
       }
     };
 
@@ -703,7 +696,7 @@ export class MetadataModal {
       try {
         await this.rpcClient.call('metadata.update', { updated_metadata: this.metadata });
       } catch (err) {
-        alert(err instanceof Error ? err.message : String(err));
+        notifyError(err instanceof Error ? err.message : String(err));
         return;
       }
       if (this.onSaveCallback) {

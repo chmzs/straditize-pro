@@ -1,3 +1,4 @@
+import { notifyError } from '../../ui/feedback';
 import {
   AgeDepthModelInspectionData,
   DatingPoint,
@@ -638,7 +639,7 @@ export class AgeDepthDatingTable {
 
   public addTableRow(): void {
     if (!this.inspectionData) {
-      alert('请先运行提取或载入年代模型！');
+      notifyError('请先运行提取或载入年代模型！');
       return;
     }
     const d = this.inspectionData.depths;
@@ -676,7 +677,7 @@ export class AgeDepthDatingTable {
 
   public deleteTableRow(idx: number): void {
     if (!this.inspectionData || this.inspectionData.depths.length <= 2) {
-      alert('年代模型至少需要保留 2 个层位！');
+      notifyError('年代模型至少需要保留 2 个层位！');
       return;
     }
     this.inspectionData.depths.splice(idx, 1);
@@ -712,7 +713,7 @@ export class AgeDepthDatingTable {
 
   public async copyTableTsv(): Promise<void> {
     if (!this.inspectionData || this.inspectionData.depths.length === 0) {
-      alert('当前尚无年代-深度数据可复制！');
+      notifyError('当前尚无年代-深度数据可复制！');
       return;
     }
     const d = this.inspectionData.depths;
@@ -742,7 +743,7 @@ export class AgeDepthDatingTable {
         setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
       }
     } catch {
-      alert('复制失败，请检查剪贴板权限。');
+      notifyError('复制失败，请检查剪贴板权限。');
     }
   }
 
@@ -784,7 +785,7 @@ export class AgeDepthDatingTable {
     }
 
     if (newDepths.length < 2) {
-      alert('未能解析出有效的年代-深度数据，请确认至少包含两列数值（深度与年代）且至少两行。');
+      notifyError('未能解析出有效的年代-深度数据，请确认至少包含两列数值（深度与年代）且至少两行。');
       return;
     }
 
@@ -916,13 +917,13 @@ export class AgeDepthDatingTable {
     this.container.querySelector('#btn-ad-paste-dates')?.addEventListener('click', async () => {
       try {
         if (!navigator?.clipboard?.readText) {
-          alert('请直接在网页上使用快捷键 Ctrl+V，或手动在测年数据表中填入数据。');
+          notifyError('请直接在网页上使用快捷键 Ctrl+V，或手动在测年数据表中填入数据。');
           return;
         }
         const text = await navigator.clipboard.readText();
         this.processPastedDates(text);
       } catch {
-        alert('无法访问剪贴板，请检查权限。');
+        notifyError('无法访问剪贴板，请检查权限。');
       }
     });
   }

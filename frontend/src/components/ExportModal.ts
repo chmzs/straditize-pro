@@ -4,6 +4,7 @@ import { SplineInterpolator } from '../core/SplineInterpolator';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { ProjectManager } from '../core/ProjectManager';
 import { computeExportReadiness, renderExportReadiness } from './steps/ExportReadinessPanel';
+import { notifyError } from '../ui/feedback';
 
 export class ExportModal {
   private container: HTMLElement;
@@ -29,7 +30,7 @@ export class ExportModal {
   }
 
   /**
-   * 导出界面打开 (对齐 WebPlotDigitizer / WPD 专业科学数据导出面板，支持排序、格式化、一键复制、下载与在线成图)
+   * 导出界面打开 (对齐 WebPlotDigitizer / WPD 专业科学数据导出面板，支持排序、格式化、复制、下载与在线成图)
    */
   public open(_initialContent: string = '', _format: 'csv' | 'json' = 'csv'): void {
     const modal = document.createElement('div');
@@ -37,22 +38,20 @@ export class ExportModal {
     const readiness = computeExportReadiness(this.data);
 
     modal.innerHTML = `
-      <div class="modal-dialog modal-large wpd-export-dialog"
+      <div class="modal-dialog modal-large wpd-export-dialog ui-modal" style="--modal-width: 1180px;"
            data-sheets="${readiness.sheets.join(',')}"
            data-primary="${readiness.primaryRoi}"
            data-data-csv-equals-primary="true"
            data-readiness-missing="${readiness.readinessMissing.join(',')}">
-        <div class="modal-header">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-            </svg>
-            <h3>数字化数据导出与在线成图 (Acquired Data &amp; Visualize)</h3>
+        <div class="modal-header ui-modal__header">
+          <div>
+            <h3 class="ui-modal__title">检查并导出数据</h3>
+            <span class="ui-status" id="export-readiness-status">正在检查导出条件</span>
           </div>
-          <button class="close-btn" id="modal-close">&times;</button>
+          <button class="ui-icon-btn" id="modal-close" aria-label="关闭导出窗口" title="关闭">&times;</button>
         </div>
 
-        <div class="modal-body wpd-modal-body" style="display: flex !important; flex-direction: row !important; gap: 16px; padding: 16px; flex: 1; min-height: 0; box-sizing: border-box;">
+        <div class="modal-body wpd-modal-body ui-modal__body">
           <!-- 左侧：双模式（表格预览与交互编辑 / 原始代码）区域 -->
           <div class="wpd-left-area" style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; height: 100%;">
             <!-- 地层丰度百分比总和自检门禁 (Sum Check QA Gate) -->
@@ -175,11 +174,11 @@ export class ExportModal {
               </div>
             </div>
 
-            <!-- 数据与发表级脚本说明 (Section 八: R 脚本本地出图) -->
+            <!-- 导出说明 (Section 八: R 脚本本地出图) -->
             <div class="form-group" style="margin: 0;">
-              <label style="font-size: 11px; font-weight: bold; color: var(--accent-blue);">科研发表级成果导出:</label>
+              <label style="font-size: 11px; font-weight: bold; color: var(--accent-blue);">导出格式说明:</label>
               <p style="font-size: 10px; color: var(--text-muted); line-height: 1.4; margin-bottom: 6px;">
-                支持一键生成无 NA 地学标准丰度表、基于 <code>rioja::strat.plot</code> 的自动化出图 R 脚本及 POSIX UStar 标准项目归档。
+                可导出无 NA 的地学标准丰度表、<code>rioja::strat.plot</code> 绘图脚本与 POSIX UStar 项目归档。
               </p>
               <div class="wpd-scientific-qc-box">
                 <div style="color: var(--accent-amber); font-weight: 600; margin-bottom: 2px;">📌 地学科学规范：</div>
@@ -190,19 +189,16 @@ export class ExportModal {
           </div>
         </div>
 
-        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <div style="font-size: 10px; color: var(--text-muted);">
-            * 提示：未出现属种严格输出 0.0；可直接导出配套 R 脚本与标准 TAR 归档。
+        <div class="modal-footer ui-modal__footer export-modal-footer">
+          <button class="ui-btn ui-btn--quiet" id="btn-wpd-copy">复制当前数据</button>
+          <div class="export-format-actions">
+            <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-csv">CSV</button>
+            <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-lipd" title="导出符合 LiPD / LinkedEarth 规范的数据包">LiPD</button>
+            <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-r" title="下载 rioja::strat.plot 绘图脚本">R 脚本</button>
+            <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-tar" title="下载包含数据、原图与脚本的项目归档">TAR 归档</button>
+            <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-json">JSON</button>
           </div>
-          <div style="display: flex; gap: 6px;">
-            <button class="btn btn-secondary" id="btn-wpd-copy">📋 复制</button>
-            <button class="btn btn-primary" id="btn-wpd-download-csv">💾 CSV</button>
-            <button class="btn btn-primary" id="btn-wpd-download-xlsx" style="background: linear-gradient(135deg, #059669, #10b981);" title="导出包含 meta_info, pollen, age-depth, ensemble 等多 Sheet 的发表级 XLSX 工作簿">📊 XLSX (多Sheet)</button>
-            <button class="btn btn-primary" id="btn-wpd-download-lipd" style="background: linear-gradient(135deg, #0284c7, #38bdf8);" title="导出符合国际 LiPD / LinkedEarth 规范的 .lpd 数据包 (可直传 LiPDverse)">🌐 LiPD (.lpd)</button>
-            <button class="btn btn-secondary" id="btn-wpd-download-r" title="下载配套 R 语言地层绘图脚本 (rioja::strat.plot)">📈 R 脚本</button>
-            <button class="btn btn-secondary" id="btn-wpd-download-tar" title="下载包含数据、原图与 R 脚本的标准 TAR 归档包">📦 导出 TAR 包</button>
-            <button class="btn btn-secondary" id="btn-wpd-download-json">JSON</button>
-          </div>
+          <button class="ui-btn ui-btn--primary" id="btn-wpd-download-xlsx" title="导出包含元数据、花粉、年代与集成表的工作簿">导出 XLSX</button>
         </div>
       </div>
     `;
@@ -524,7 +520,7 @@ export class ExportModal {
           URL.revokeObjectURL(url);
         }
       } catch (err: any) {
-        alert(`导出 CSV 失败: ${err.message || err}`);
+        notifyError(`导出 CSV 失败: ${err.message || err}`);
       }
     });
 
@@ -554,7 +550,7 @@ export class ExportModal {
         a.click();
         URL.revokeObjectURL(url);
       } catch (err: any) {
-        alert(`导出 R 脚本失败: ${err.message || err}`);
+        notifyError(`导出 R 脚本失败: ${err.message || err}`);
       }
     });
 
@@ -632,7 +628,7 @@ export class ExportModal {
           URL.revokeObjectURL(url);
         }
       } catch (err: any) {
-        alert(`导出 XLSX 失败: ${err.message || err}`);
+        notifyError(`导出 XLSX 失败: ${err.message || err}`);
       }
     });
 
@@ -667,7 +663,7 @@ export class ExportModal {
           URL.revokeObjectURL(url);
         }
       } catch (err: any) {
-        alert(`导出 LiPD 失败: ${err.message || err}`);
+        notifyError(`导出 LiPD 失败: ${err.message || err}`);
       }
     });
   }

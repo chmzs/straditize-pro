@@ -207,7 +207,7 @@ test.describe('步骤 2 改名撞车：后端必须拒绝，且名字不得被�
   test.use({
     allowlists: {
       rpcError: [/roi\.update \[-32002\]/],
-      dialog: [/重命名有效区失败/],
+      notice: [/重命名有效区失败/],
       consoleError: [/\[RPC failure\] 重命名有效区/],
     },
   });
@@ -227,10 +227,10 @@ test.describe('步骤 2 改名撞车：后端必须拒绝，且名字不得被�
     await nameInp.fill('pollen');
     await nameInp.press('Enter');
 
-    // 用户必须被告知（alert 是本应用唯一的用户可见报错通道）。
+    // 用户必须被告知（后端失败走 reportBackendFailure 的详情弹窗）。
     await expect
-      .poll(() => telemetry.dialogs.join(' || '), {
-        message: '重名改名失败必须弹框告知用户，而不是静默不生效',
+      .poll(() => telemetry.notices.join(' || '), {
+        message: '重名改名失败必须通知用户，而不是静默不生效',
         timeout: 15_000,
       })
       .toContain('重命名有效区失败');

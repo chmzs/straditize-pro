@@ -104,7 +104,7 @@ test.describe('顶栏与设置弹窗', () => {
     expect(persisted.allowed_hosts).toContain('192.168.1.100');
 
     // ---- 语言确实整站生效：这是纯 UI 事实，只能读 DOM ----
-    const englishTexts: [string, string][] = [
+    const englishTexts: [string, string | RegExp][] = [
       ['#btn-open-file', 'Diagram'],
       ['#btn-settings', 'Settings'],
       ['#btn-export-csv', 'Export'],
@@ -112,10 +112,12 @@ test.describe('顶栏与设置弹窗', () => {
       // `<span class="step-num">` + `<span>{label}</span>`，靠子元素顺序定位会在
       // 任何一次徽标/图标插入后失效（知乎《大型 ToB 项目的前端自动化测试实践》
       // 的"可维护的 CSS 选择器"一节即针对这类位置依赖）。
-      ['.workflow-step-btn[data-step="1"]', '1.Load'],
+      // 步骤号与列名之间的分隔符用正则容忍：是否落一个 `.` 属排版细节，不该让
+      // i18n 用例变红。
+      ['.workflow-step-btn[data-step="1"]', /1\s*\.?\s*Load/],
       ['#footer-dimensions', 'Image'],
-      ['.sidebar-title span', 'Taxa Columns List'],
-      ['#btn-insert-gap-col', 'Insert Gap'],
+      ['.sidebar-title span', 'Taxa Columns'],
+      ['#btn-insert-gap-col', 'Add Blank Column'],
       ['.inspector-title span', 'Inspector'],
     ];
     for (const [selector, text] of englishTexts) {

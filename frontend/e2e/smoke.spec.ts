@@ -20,7 +20,7 @@ import {
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
 test.describe('应用外壳与基线', () => {
-  test('冷启动：8 步工作流、无第 9 步、前后端 ROI 一致、无原生对话框', async ({ page }) => {
+  test('冷启动：8 步工作流、无第 9 步、前后端 ROI 一致、无用户通知', async ({ page }) => {
     await openApp(page);
 
     await expect(page.locator('.workflow-step-btn')).toHaveCount(8);
@@ -80,8 +80,9 @@ test.describe('应用外壳与基线', () => {
     await expect(page.locator('[data-action="swap-up"]')).toHaveCount(0);
     await expect(page.locator('#btn-open-paste-taxa')).toHaveCount(0);
 
-    // 侧栏标题是步骤 1 的权威文案
-    await expect(page.locator('.sidebar-title span')).toHaveText('Taxa 属种分列清单');
+    // 侧栏标题是步骤 1 的权威文案；按设计规范只保留中文一种说法，
+    // 不再拼「Taxa + 中文」的双语标题（见 docs/UI_DESIGN_SYSTEM.md 文案规则）。
+    await expect(page.locator('.sidebar-title span')).toHaveText('属种列');
   });
 
   test('内置样本真值：尺寸一致，且真值 sha256 与磁盘上的样本文件一致', async ({ page }) => {
