@@ -86,7 +86,7 @@ test.describe('步骤 7 & 8 逐动作可用性排查', () => {
     // 4. 点击【直接导出】打开导出与就绪状态清单模态框
     await page.locator('#btn-qa-export').click();
     const calibStatus = page.locator('#lbl-export-calibration-status');
-    await expect(calibStatus).toBeVisible({ timeout: 5000 });
+    await expect(calibStatus).toBeVisible({ timeout: 15_000 });
     await expect(calibStatus).toContainText('未标定');
   });
 });

@@ -43,8 +43,11 @@ export default defineConfig({
           if (id.includes('/components/agedepth/') || id.includes('AgeDepthModal')) {
             return 'agedepth';
           }
-          if (id.includes('OcrReviewModal') || id.includes('diatomGenera') || id.includes('PollenGlossary')) {
+          if (id.includes('/components/ocr/') || id.includes('OcrReviewModal') || id.includes('diatomGenera') || id.includes('PollenGlossary')) {
             return 'ocr';
+          }
+          if (id.includes('ExportModal') || id.includes('ProjectManager') || id.includes('TarArchive')) {
+            return 'export';
           }
           if (id.includes('MetadataModal')) {
             return 'metadata';

@@ -5,6 +5,8 @@ import { GeologyCanvas } from './components/GeologyCanvas';
 import { Toolbar } from './components/Toolbar';
 import { Sidebar } from './components/Sidebar';
 import { PropertyPanel } from './components/PropertyPanel';
+import { ExportModal } from './components/ExportModal';
+import { ProjectManager } from './core/ProjectManager';
 import { Inspector } from './components/Inspector';
 import { ResizeRoiCommand } from './core/Commands';
 import { AgeDepthModal } from './components/AgeDepthModal';
@@ -896,8 +898,8 @@ async function bootstrap() {
 
     workflowActionBar.querySelector('#btn-wf-next')?.addEventListener('click', async () => {
       if (currentStage === STAGE.QA) {
-        propertyPanel.updateData(canvasComponent.data);
-        propertyPanel.openExportModal();
+        exportModal.updateData(canvasComponent.data);
+        exportModal.open();
       } else {
         await advanceToWorkflowStage((currentStage + 1) as WorkflowStage);
       }
@@ -1079,7 +1081,34 @@ async function bootstrap() {
     }
   );
 
-  // 8. 标定与弹窗交互面板
+  // 8. 标定与工程管理、数据导出面板
+  const onProjectLoad = (projectData: DiagramData) => {
+    canvasComponent.loadNewDiagram(projectData);
+    history.reset(projectData.columns, projectData.activeTaxaId, projectData.calibration, projectData.roi);
+    currentStage = STAGE.Y_CALIB;
+    updateWorkflowBar();
+    sidebar?.updateData(canvasComponent.data);
+    inspector?.updateData(canvasComponent.data);
+    toolbar?.updateHistoryState();
+    toolbar?.updateScale(canvasComponent.viewport.scale);
+    updateFooter();
+    void recomposeCleanupState('载入项目后重算清理掩膜');
+    setHudNotice('✅ 成功载入 Straditize 科学项目包 (.tar)！已 100% 还原全部属种、刻度钉与控制点。', 4500);
+  };
+
+  const projectManager = new ProjectManager(
+    canvasComponent.data,
+    rpcClient,
+    onProjectLoad
+  );
+
+  const exportModal = new ExportModal(
+    document.body,
+    canvasComponent.data,
+    rpcClient,
+    projectManager
+  );
+
   const propertyPanel = new PropertyPanel(
     document.body,
     canvasComponent.data,
@@ -1097,19 +1126,7 @@ async function bootstrap() {
       canvasComponent.requestRender();
       void commitRoi(roi);
     },
-    (projectData: DiagramData) => {
-      canvasComponent.loadNewDiagram(projectData);
-      history.reset(projectData.columns, projectData.activeTaxaId, projectData.calibration, projectData.roi);
-      currentStage = STAGE.Y_CALIB;
-      updateWorkflowBar();
-      sidebar?.updateData(canvasComponent.data);
-      inspector?.updateData(canvasComponent.data);
-      toolbar?.updateHistoryState();
-      toolbar?.updateScale(canvasComponent.viewport.scale);
-      updateFooter();
-      void recomposeCleanupState('载入项目后重算清理掩膜');
-      setHudNotice('✅ 成功载入 Straditize 科学项目包 (.tar)！已 100% 还原全部属种、刻度钉与控制点。', 4500);
-    }
+    onProjectLoad
   );
 
   // 9. 动态属性检查器 (Context Inspector)
@@ -1146,8 +1163,8 @@ async function bootstrap() {
       }
     },
     onOpenDataViewer: () => {
-      propertyPanel.updateData(canvasComponent.data);
-      propertyPanel.openExportModal();
+      exportModal.updateData(canvasComponent.data);
+      exportModal.open();
     },
     // 步骤 5 面板的【自动识别属种名】按钮走这里（Inspector 会把整份 callbacks 展开成
     // 步骤上下文交给各 Panel）。缺了它，那个按钮只能退回一句"请使用顶栏按钮"的提示。
@@ -1885,7 +1902,7 @@ async function bootstrap() {
   async function handleOpenFile(file: File) {
     const lowerName = file.name.toLowerCase();
     if (lowerName.endsWith('.tar') || lowerName.endsWith('.json') || lowerName.endsWith('.tar.gz')) {
-      propertyPanel.openProjectFile(file);
+      projectManager.openProjectFile(file);
       return;
     }
 
@@ -2146,7 +2163,7 @@ async function bootstrap() {
       }
     },
     onExport: async (format) => {
-      propertyPanel.updateData(canvasComponent.data);
+      exportModal.updateData(canvasComponent.data);
       const cols = canvasComponent.data.columns || [];
       const hasPoints = cols.some((c) => c.controlPoints && c.controlPoints.length > 0);
 
@@ -2158,23 +2175,23 @@ async function bootstrap() {
             : 'ℹ️ 提示：当前图谱尚未切分属种列或提取数据，已为您打开导出就绪清单。请先完成 Step 5 分列与提取再导出。',
           5000
         );
-        propertyPanel.openExportModal('', format);
+        exportModal.open('', format);
         return;
       }
 
       try {
         const exportContent = await rpcClient.exportData(format);
-        propertyPanel.openExportModal(exportContent, format);
+        exportModal.open(exportContent, format);
       } catch (err) {
         reportBackendFailure('数据导出', err);
       }
     },
     onSaveProject: () => {
-      propertyPanel.saveProjectFile();
+      void projectManager.saveProjectFile();
       setHudNotice('💾 数字化项目已打包导出为标准归档包 (.tar)！', 3500);
     },
     onOpenProjectFile: (file) => {
-      propertyPanel.openProjectFile(file);
+      projectManager.openProjectFile(file);
     },
     onResetAll: () => {
       const confirmed = window.confirm(
