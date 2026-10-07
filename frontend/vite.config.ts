@@ -37,5 +37,20 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('/components/agedepth/') || id.includes('AgeDepthModal')) {
+            return 'agedepth';
+          }
+          if (id.includes('OcrReviewModal') || id.includes('diatomGenera') || id.includes('PollenGlossary')) {
+            return 'ocr';
+          }
+          if (id.includes('MetadataModal')) {
+            return 'metadata';
+          }
+        },
+      },
+    },
   },
 });
