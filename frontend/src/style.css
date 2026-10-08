@@ -30,6 +30,14 @@
   --accent-violet: #a855f7;    /* OCR / 词典等「自定义来源」强调色，深色底 4.84:1 */
   --text-on-accent: #ffffff;   /* 品牌渐变等饱和底色上的文字，两主题均为白 */
   --text-on-status: #0b0f19;   /* 状态填充上的文字：深色主题填充偏亮，需深字（8.92:1） */
+  /* 动作填充与填充上的文字成对达标（WCAG AA ≥4.5:1）：填充色按对比度独立取值，
+     装饰性强调仍用 --accent-*，状态填充仍用 --status-*。深色主题填充偏亮 → 深墨字。 */
+  --action-primary-bg: #38bdf8;    /* 主按钮/主色指示：与深墨字 8.94:1 */
+  --action-primary-text: #0b0f19;
+  --action-success-bg: #10b981;    /* 执行/确认类动作：与深墨字 7.55:1 */
+  --action-success-text: #0b0f19;
+  --action-danger-bg: #ef4444;     /* 破坏性动作：与深墨字 5.09:1 */
+  --action-danger-text: #0b0f19;
   /* 导出就绪状态胶囊：自带浅底 + 深字，两主题共用，不随主题变 */
   --pill-success-bg: #dcfce7;
   --pill-success-text: #166534;
@@ -101,6 +109,13 @@ body.theme-light {
   --status-success: #047857;   /* 白底 5.48:1 */
   --accent-violet: #7c3aed;    /* 白底 5.70:1 */
   --text-on-status: #ffffff;   /* 浅色主题状态填充偏暗，需白字 */
+  /* 浅色主题填充偏深 → 白字；主色填充比装饰蓝 --accent-blue(#0284c7) 深一档，白字才达标。 */
+  --action-primary-bg: #0369a1;    /* 主按钮/主色指示：与白字 5.93:1 */
+  --action-primary-text: #ffffff;
+  --action-success-bg: #047857;    /* 执行/确认类动作：与白字 5.48:1 */
+  --action-success-text: #ffffff;
+  --action-danger-bg: #dc2626;     /* 破坏性动作：与白字 4.83:1 */
+  --action-danger-text: #ffffff;
 }
 
 /* 日间模式全局文本与表单强兜底安全网 (彻底阻断文字隐形与脏灰底) */
@@ -184,9 +199,9 @@ body.theme-light .drawer-toggle-tab {
 }
 
 body.theme-light .drawer-toggle-tab:hover {
-  background: #0284c7;
-  border-color: #0284c7;
-  color: #ffffff;
+  background: var(--action-primary-bg);
+  border-color: var(--action-primary-bg);
+  color: var(--action-primary-text);
   box-shadow: 0 4px 14px rgba(2, 132, 199, 0.25);
 }
 
@@ -216,13 +231,13 @@ body.theme-light .tool-btn:hover:not(:disabled) {
 }
 
 body.theme-light .btn-sidebar-action {
-  background: #0284c7;
-  color: #ffffff;
-  border-color: #0284c7;
+  background: var(--action-primary-bg);
+  color: var(--action-primary-text);
+  border-color: var(--action-primary-bg);
 }
 
 body.theme-light .btn-sidebar-action:hover {
-  background: #0369a1;
+  filter: brightness(0.9);
 }
 
 body.theme-light .prop-row[style*="background"] {
@@ -570,14 +585,20 @@ body.theme-light .brand-icon-rect {
 }
 
 .tool-btn.action {
-  background: linear-gradient(135deg, #059669, #10b981);
-  color: #fff;
+  background: var(--action-success-bg);
+  color: var(--action-success-text);
   border: none;
   font-weight: 600;
 }
 
-.tool-btn.action:hover {
-  background: linear-gradient(135deg, #047857, #059669);
+/* 通用 `.tool-btn:hover:not(:disabled)`（深色 (0,3,1)、浅色 (0,4,1)）会盖掉动作填充并把文字
+   改回 --accent-blue：深色下这里必须带上 `:not(:disabled)` 把权重提到 (0,3,1) 后置取胜，
+   浅色下另有 (0,4,1) 的同级覆盖（见文件后部浅色兼容规则）。 */
+.tool-btn.action:hover:not(:disabled) {
+  background: var(--action-success-bg);
+  border-color: var(--action-success-bg);
+  color: var(--action-success-text);
+  filter: brightness(1.08);
   box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
 }
 
@@ -595,13 +616,31 @@ body.theme-light .brand-icon-rect {
 }
 
 .tool-btn.export {
-  background: #3b82f6;
-  color: #fff;
+  background: var(--action-primary-bg);
+  color: var(--action-primary-text);
   border-radius: 5px 0 0 5px;
 }
 
-.tool-btn.export:hover {
-  background: #2563eb;
+.tool-btn.export:hover:not(:disabled) {
+  background: var(--action-primary-bg);
+  border-color: var(--action-primary-bg);
+  color: var(--action-primary-text);
+  filter: brightness(0.92);
+}
+
+/* 浅色主题下通用 `.tool-btn:hover:not(:disabled)` 的选择器权重为 (0,4,1)，同级压过上面的
+   (0,3,1) 动作填充并把文字改回 --accent-blue：主操作按钮必须同级后置覆盖，否则 hover 时
+   底色与对比度一起丢失。E2E `e2e/contrast.spec.ts` 在两种主题里都复算了实际渲染对比度。 */
+body.theme-light .tool-btn.action:hover {
+  background: var(--action-success-bg);
+  border-color: var(--action-success-bg);
+  color: var(--action-success-text);
+}
+
+body.theme-light .tool-btn.export:hover {
+  background: var(--action-primary-bg);
+  border-color: var(--action-primary-bg);
+  color: var(--action-primary-text);
 }
 
 .tool-btn.export-sub {
@@ -845,9 +884,9 @@ body.theme-light .drawer-toggle-tab {
 }
 
 .drawer-toggle-tab:hover {
-  background: #0284c7;
-  border-color: var(--accent-blue);
-  color: #ffffff;
+  background: var(--action-primary-bg);
+  border-color: var(--action-primary-bg);
+  color: var(--action-primary-text);
   box-shadow: 0 0 20px rgba(56, 189, 248, 0.6);
   transform: scale(1.06);
 }
@@ -1267,15 +1306,14 @@ body.theme-light .sidebar-header {
 }
 
 body.theme-light .sidebar-actions-bar .btn-sidebar-action {
-  background: #0284c7;
-  border-color: #0284c7;
-  color: #ffffff;
+  background: var(--action-primary-bg);
+  border-color: var(--action-primary-bg);
+  color: var(--action-primary-text);
   box-shadow: 0 1px 3px rgba(2, 132, 199, 0.2);
 }
 
 body.theme-light .sidebar-actions-bar .btn-sidebar-action:hover {
-  background: #0369a1;
-  border-color: #0369a1;
+  filter: brightness(0.9);
 }
 
 .btn-sidebar-action {
@@ -1513,7 +1551,7 @@ body.theme-light .icon-btn.panel-toggle {
 }
 
 .segmented-btn:hover {
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .segmented-btn.active {
@@ -1948,7 +1986,7 @@ body.theme-light .step-title {
 
 .open-file-btn:hover {
   background: rgba(56, 189, 248, 0.25) !important;
-  color: #ffffff !important;
+  color: var(--text-primary) !important;
   box-shadow: 0 0 15px rgba(56, 189, 248, 0.25);
 }
 
@@ -2824,8 +2862,8 @@ body.theme-light #ad-floating-toolbar .ad-fmode-btn:hover {
 }
 
 #ad-floating-toolbar .ad-fmode-btn.active {
-  background: var(--accent-blue, #0284c7) !important;
-  color: #ffffff !important;
+  background: var(--action-primary-bg) !important;
+  color: var(--action-primary-text) !important;
   border-color: var(--accent-blue, #0284c7) !important;
   font-weight: 600;
 }
@@ -2933,8 +2971,8 @@ body.theme-light .meta-card input[type="text"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent-blue);
-  color: #fff;
+  background: var(--action-primary-bg);
+  color: var(--action-primary-text);
   font-size: var(--font-size-xs);
   font-weight: 700;
 }
@@ -3132,9 +3170,9 @@ body.theme-light .ad-row-inversion td {
 }
 
 .ui-btn--primary {
-  background: var(--accent-blue);
-  border-color: var(--accent-blue);
-  color: #fff;
+  background: var(--action-primary-bg);
+  border-color: var(--action-primary-bg);
+  color: var(--action-primary-text);
 }
 
 .ui-btn--primary:hover:not(:disabled) {
@@ -3166,9 +3204,9 @@ body.theme-light .ad-row-inversion td {
 }
 
 .ui-btn--danger {
-  background: var(--accent-red);
-  border-color: var(--accent-red);
-  color: #fff;
+  background: var(--action-danger-bg);
+  border-color: var(--action-danger-bg);
+  color: var(--action-danger-text);
 }
 
 .ui-btn--sm {

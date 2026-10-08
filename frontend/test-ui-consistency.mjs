@@ -411,6 +411,121 @@ const GLOSS_BAN = [
   check(!css.includes('primary-btn'), '已退役的 .primary-btn 不得回填（31 行、全仓库零消费者、含 2 处硬编码渐变）');
 }
 
+// ---- 16. 动作填充与填充文字必须成对达标（WCAG AA ≥4.5:1）--------------------
+// 填充色和它上面的文字颜色是一对契约，不能各自独立取值：饱和填充（品牌蓝/绿/红）
+// 配白字在深色主题只有 2.2~3.8:1，浅色主题的 --accent-blue 配白字也只有 4.1:1，
+// 这正是「按钮看不清」的量化成因。本组在本机复算 WCAG 相对亮度，不依赖浏览器；
+// 契约值、主题重定义与「原语必须引用成对 token」三项一起被守。
+{
+  const relLum = (hex) => {
+    if (typeof hex !== 'string') return null;
+    const h = hex.replace('#', '');
+    if (!/^[0-9a-f]{6}$/i.test(h)) return null;
+    const ch = [0, 2, 4]
+      .map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+  };
+  const contrast = (a, b) => {
+    const [hi, lo] = [relLum(a), relLum(b)].sort((m, n) => n - m);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  // 取选择器后面的第一个平铺声明块（token 块都是平铺的，无嵌套）
+  const blocksOf = (selector) => {
+    const out = [];
+    let at = css.indexOf(selector);
+    while (at >= 0) {
+      const open = css.indexOf('{', at);
+      const close = css.indexOf('}', open);
+      if (open < 0 || close < 0) break;
+      out.push(css.slice(open + 1, close));
+      at = css.indexOf(selector, close);
+    }
+    return out;
+  };
+  const decls = (block) => {
+    const map = new Map();
+    for (const m of block.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;}]+)/gi)) map.set(m[1], m[2].trim());
+    return map;
+  };
+  // 解析 var() 引用链，只接受最终落到 #rrggbb 的值
+  const resolve = (map, value, depth = 0) => {
+    if (depth > 5) return null;
+    const t = String(value ?? '').trim();
+    if (/^#[0-9a-f]{6}$/i.test(t)) return t;
+    const m = t.match(/^var\(\s*(--[a-z0-9-]+)\s*(?:,\s*([^()]+?)\s*)?\)$/i);
+    if (!m) return null;
+    if (map.has(m[1])) return resolve(map, map.get(m[1]), depth + 1);
+    return m[2] ? resolve(map, m[2], depth + 1) : null;
+  };
+  const themeTokens = (label, selector, marker) => {
+    const block = blocksOf(selector).find((b) => b.includes(marker));
+    check(Boolean(block), `对比度契约：找不到${label}主题 token 块（${selector} 内含 ${marker}）`);
+    return block ? decls(block) : new Map();
+  };
+  const dark = themeTokens('深色', ':root', '--text-on-status');
+  const light = themeTokens('浅色', 'body.theme-light', '--action-primary-bg');
+  for (const [label, map] of [['深色', dark], ['浅色', light]]) {
+    for (const kind of ['primary', 'success', 'danger']) {
+      const bg = resolve(map, map.get(`--action-${kind}-bg`));
+      const fg = resolve(map, map.get(`--action-${kind}-text`));
+      check(Boolean(bg && fg), `对比度契约：${label}主题缺少可解析的 --action-${kind}-bg / -text`);
+      if (!bg || !fg) continue;
+      const r = contrast(bg, fg);
+      check(r >= 4.5, `对比度契约：${label}主题 --action-${kind}-bg ${bg} 上的文字 ${fg} 只有 ${r.toFixed(2)}:1（要求 ≥4.5:1）`);
+      if (label === '浅色') {
+        const darkBg = resolve(dark, dark.get(`--action-${kind}-bg`));
+        check(darkBg !== bg, `对比度契约：浅色主题 --action-${kind}-bg 未按主题重定义（与深色同为 ${bg}）`);
+      }
+    }
+    // 状态填充沿用同一契约：填充偏亮配深墨字、偏暗配白字
+    for (const kind of ['warning', 'success']) {
+      const bg = resolve(map, map.get(`--status-${kind}`));
+      const fg = resolve(map, map.get('--text-on-status'));
+      if (!bg || !fg) {
+        check(false, `对比度契约：${label}主题缺少可解析的 --status-${kind} / --text-on-status`);
+        continue;
+      }
+      const r = contrast(bg, fg);
+      check(r >= 4.5, `对比度契约：${label}主题 --status-${kind} ${bg} 上的 --text-on-status ${fg} 只有 ${r.toFixed(2)}:1（要求 ≥4.5:1）`);
+    }
+  }
+  // 原语必须引用成对 token，而不是裸白字或装饰性 --accent-*
+  for (const [selector, token] of [
+    ['.ui-btn--primary', '--action-primary-bg'],
+    ['.ui-btn--danger', '--action-danger-bg'],
+    ['.workflow-action-bar__step', '--action-primary-bg'],
+  ]) {
+    const body = blocksOf(selector)[0] ?? '';
+    check(body.includes(`var(${token})`), `对比度契约：${selector} 未使用成对 token var(${token})`);
+    check(!/(^|[^-\w])color:\s*#fff/i.test(body), `对比度契约：${selector} 又直接写死白字（填充色一变就会掉出 AA）`);
+  }
+  // 浅色主题通用 .tool-btn:hover:not(:disabled) 权重 (0,4,1)，会盖掉动作填充并把文字改回
+  // --accent-blue：主操作按钮必须同级后置显式覆盖，否则 hover 时身份与对比度一起丢失。
+  for (const selector of ['body.theme-light .tool-btn.action:hover', 'body.theme-light .tool-btn.export:hover']) {
+    check(css.includes(selector), `对比度契约：缺少 ${selector}（通用 .tool-btn:hover 会覆盖动作填充）`);
+  }
+  // 深色主题没有主题前缀，通用 .tool-btn:hover:not(:disabled) 是 (0,3,1)，照样压过 (0,2,1) 的动作填充：
+  // 基础 hover 规则必须自带 :not(:disabled) 把权重提到同级后置取胜（e2e/contrast.spec.ts 抓到过这条）。
+  for (const selector of ['.tool-btn.action:hover', '.tool-btn.export:hover']) {
+    check(
+      css.includes(`${selector}:not(:disabled)`),
+      `对比度契约：${selector} 缺少 :not(:disabled)，权重低于通用 .tool-btn:hover:not(:disabled)，深色主题下动作填充会被覆盖`,
+    );
+    const block = blocksOf(selector).find((b) => b.includes('var(--action-')) ?? '';
+    check(block !== '', `对比度契约：${selector} 未显式恢复成对 token（hover 会把文字改回装饰色）`);
+  }
+  // 半透明叠加底上的白字：叠加后是小面积浅底，两种主题下都读不出来
+  check(
+    !/\.segmented-btn:hover\s*\{[^}]*color:\s*#fff/i.test(css),
+    '对比度契约：.segmented-btn:hover 又改回白字（底色是 25% 黑叠加，浅色主题下必然不可读）',
+  );
+  check(
+    !/\.open-file-btn:hover\s*\{[^}]*color:\s*#ffffff/i.test(css),
+    '对比度契约：.open-file-btn:hover 又改回白字（底色是 25% 蓝色半透明叠加）',
+  );
+}
+
 if (failures.length > 0) {
   console.error(`✘ UI 一致性门禁失败（${failures.length} 项）:`);
   for (const failure of failures) console.error(`  - ${failure}`);
