@@ -84,7 +84,7 @@ export function render(data: DiagramData): string {
           ${hasTicks ? `<button id="btn-clear-col-ticks" class="icon-btn btn-subaction" style="font-size: 10px; color: var(--accent-red); padding: 1px 4px;" title="${t('step6.clearTicks')}">${t('step6.clearTicks')}</button>` : ''}
         </div>
         <div class="info-kv-box">
-          <div>状态: <strong style="color: ${hasTicks ? 'var(--accent-green, #10b981)' : 'var(--accent-orange, #f59e0b)'}; font-weight: 700;">${hasTicks ? t('step6.calibrated') : t('step6.uncalibrated')}</strong></div>
+          <div>状态: <strong style="color: ${hasTicks ? 'var(--accent-green)' : 'var(--accent-orange)'}; font-weight: 700;">${hasTicks ? t('step6.calibrated') : t('step6.uncalibrated')}</strong></div>
           ${
             hasTicks && activeCol?.x_ticks
               ? `

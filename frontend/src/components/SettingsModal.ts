@@ -112,13 +112,13 @@ export class SettingsModal {
                 <div style="display: flex; align-items: center; justify-content: space-between;">
                   <label for="settings-remote-toggle" style="font-size: 12px; color: var(--text-primary); font-weight: 500; display: flex; align-items: center; gap: 6px;">
                     <span>• ${t('settings.remoteToggle')}:</span>
-                    <span id="remote-toggle-badge" style="font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 12px; background: ${isRemote ? 'rgba(34, 197, 94, 0.15)' : 'rgba(148, 163, 184, 0.2)'}; color: ${isRemote ? '#10b981' : 'var(--text-muted)'};">
+                    <span id="remote-toggle-badge" style="font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 12px; background: ${isRemote ? 'rgba(34, 197, 94, 0.15)' : 'rgba(148, 163, 184, 0.2)'}; color: ${isRemote ? 'var(--status-success)' : 'var(--text-muted)'};">
                       ${isRemote ? '[ ON ]' : '[ OFF ]'}
                     </span>
                   </label>
                   <label class="switch" style="position: relative; display: inline-block; width: 38px; height: 20px;">
                     <input type="checkbox" id="settings-remote-toggle" ${isRemote ? 'checked' : ''} style="opacity: 0; width: 0; height: 0;" />
-                    <span class="slider round" style="position: absolute; cursor: pointer; inset: 0; background-color: ${isRemote ? '#10b981' : 'var(--text-muted)'}; transition: .3s; border-radius: 20px;"></span>
+                    <span class="slider round" style="position: absolute; cursor: pointer; inset: 0; background-color: ${isRemote ? 'var(--status-success)' : 'var(--text-muted)'}; transition: .3s; border-radius: 20px;"></span>
                   </label>
                 </div>
                 <small style="font-size: 11px; line-height: 1.5; color: var(--text-secondary);">

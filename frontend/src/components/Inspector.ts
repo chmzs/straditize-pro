@@ -209,7 +209,7 @@ export class Inspector {
           </div>
           <div class="prop-row">
             <span class="prop-label">深度跨度:</span>
-            <span class="prop-val">${bounds ? `${bounds.topValue} ~ ${bounds.bottomValue} ${cal.unit}` : '<span style="color:#f59e0b;">未标定 (S4 两点标定)</span>'}</span>
+            <span class="prop-val">${bounds ? `${bounds.topValue} ~ ${bounds.bottomValue} ${cal.unit}` : '<span style="color:var(--status-warning);">未标定 (S4 两点标定)</span>'}</span>
           </div>
           <div class="prop-row">
             <span class="prop-label">标准层位采样点:</span>
@@ -308,7 +308,7 @@ export class Inspector {
         <div class="form-group" style="margin-top: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <label style="font-size: 11px;">刻度尺度 (Scale Type):</label>
-            <span style="font-size: 10px; color: ${currentScaleType === 'log' ? '#f59e0b' : 'var(--accent-blue)'}; font-weight: 600;">${currentScaleType.toUpperCase()}</span>
+            <span style="font-size: 10px; color: ${currentScaleType === 'log' ? 'var(--status-warning)' : 'var(--accent-blue)'}; font-weight: 600;">${currentScaleType.toUpperCase()}</span>
           </div>
           <div class="btn-group" style="display: flex; gap: 4px; width: 100%; margin-top: 4px;">
             <button class="tool-btn quick-scaletype-btn ${currentScaleType === 'linear' ? 'active-mode' : ''}" data-scale="linear" style="flex: 1; font-size: 10px;">线性 (Linear)</button>
@@ -342,7 +342,7 @@ export class Inspector {
               <input type="checkbox" id="chk-has-exag" ${hasExag ? 'checked' : ''} style="cursor: pointer;" />
               <span style="font-weight: 500;">局部放大曲线 (Exaggeration)</span>
             </label>
-            <span style="font-size: 10px; color: #a855f7; font-weight: 600;">${hasExag ? `${exagMult}× 启用` : '未勾选'}</span>
+            <span style="font-size: 10px; color: var(--accent-violet); font-weight: 600;">${hasExag ? `${exagMult}× 启用` : '未勾选'}</span>
           </div>
           ${hasExag ? `
             <div style="margin-top: 6px; display: flex; align-items: center; gap: 6px;">
@@ -870,7 +870,7 @@ export class Inspector {
       if (parsedDepths.length >= 2) {
         const minD = parsedDepths[0];
         const maxD = parsedDepths[parsedDepths.length - 1];
-        fb.innerHTML = `已成功识别 <strong style="color: #10b981;">${parsedDepths.length}</strong> 个真实钻孔层位 (跨度: ${minD} ~ ${maxD} ${this.data.calibration.unit})`;
+        fb.innerHTML = `已成功识别 <strong style="color: var(--status-success);">${parsedDepths.length}</strong> 个真实钻孔层位 (跨度: ${minD} ~ ${maxD} ${this.data.calibration.unit})`;
         confirmBtn.disabled = false;
       } else {
         fb.innerHTML = `请输入至少 2 个有效数字层位`;

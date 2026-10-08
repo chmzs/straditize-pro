@@ -163,7 +163,7 @@ function mountProvenanceBanner(rpcClient: RpcClient): void {
       bar.style.color = '#fff';
       bar.innerHTML =
         `<span>${t('banner.backendLost')}</span>` +
-        `<button id="banner-retry" style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.45);color:#fff;border-radius:4px;padding:1px 8px;font-size:11px;cursor:pointer;">${t('banner.reconnect')}</button>`;
+        `<button id="banner-retry" style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.45);color:var(--text-on-accent);border-radius:4px;padding:1px 8px;font-size:11px;cursor:pointer;">${t('banner.reconnect')}</button>`;
       bar.querySelector('#banner-retry')?.addEventListener('click', () => {
         rpcClient.probeBackend().then(render);
       });
@@ -2006,10 +2006,10 @@ async function bootstrap() {
             banner.className = 'deskew-notice-banner';
             banner.style.cssText = 'position: fixed; top: 52px; right: 20px; z-index: 9999;';
             banner.innerHTML = `
-              <div class="app-toast-badge" style="border: 1px solid #f59e0b;">
+              <div class="app-toast-badge" style="border: 1px solid var(--status-warning);">
                 <span><strong>图谱微斜提示</strong>: 检测到主轴倾斜约 <strong>${ang > 0 ? '+' : ''}${ang}°</strong>，是否自动水平矫正？</span>
                 <div style="display: flex; gap: 6px;">
-                  <button id="btn-deskew-apply" class="ui-btn ui-btn--primary" style="padding: 2px 8px; font-size: 10px; background: #f59e0b; border-color: #f59e0b;">旋转校正</button>
+                  <button id="btn-deskew-apply" class="ui-btn ui-btn--warning" style="padding: 2px 8px; font-size: 10px;">旋转校正</button>
                   <button id="btn-deskew-ignore" class="ui-btn ui-btn--secondary" style="padding: 2px 8px; font-size: 10px;">忽略</button>
                 </div>
               </div>

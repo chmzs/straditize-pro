@@ -300,6 +300,49 @@ const GLOSS_BAN = [
   scanSelfFallback('index.html', read('./index.html'));
   check(selfFallback.length === 0, 'var() 不得用自身兜底：' + selfFallback.slice(0, 4).join('、'));
 }
+// ---- 14. 内联 style 一律不得出现裸 hex 色值 -------------------------------
+// 第 12 组只拦「与 token 等值」的写法；本组把它推到终局：内联样式里任何裸色值都不允许——
+// 内联色值不参与 body.theme-light 切换，浅色主题下必然失真。
+// 例外只能是 token 自身（var(--x)）或透明色（rgba()），不接受按文件白名单。
+{
+  const bareHex = [];
+  const HEXCHARS = '0123456789abcdefABCDEF';
+  const scanBareHex = (label, text) => {
+    for (const quote of ['style="', "style='"]) {
+      let cursor = 0;
+      while ((cursor = text.indexOf(quote, cursor)) !== -1) {
+        const end = text.indexOf(quote.slice(-1), cursor + quote.length);
+        const value = text.slice(cursor + quote.length, end === -1 ? text.length : end);
+        const lineNo = text.slice(0, cursor).split(String.fromCharCode(10)).length;
+        let i = 0;
+        while (i < value.length) {
+          if (value[i] !== '#') { i++; continue; }
+          let j = i + 1;
+          while (j < value.length && HEXCHARS.indexOf(value[j]) !== -1) j++;
+          const size = j - i - 1;
+          if (size === 3 || size === 4 || size === 6 || size === 8) {
+            bareHex.push(label + ':' + lineNo + ' 内联裸色值 ' + value.slice(i, j) + ', 请改用语义 token（var(--token)）');
+          }
+          i = j;
+        }
+        cursor += quote.length;
+      }
+    }
+  };
+  const bareStack = ['./src'];
+  while (bareStack.length > 0) {
+    const dir = bareStack.pop();
+    for (const name of readdirSync(dir)) {
+      const full = dir + '/' + name;
+      if (statSync(full).isDirectory()) { if (name !== 'node_modules') bareStack.push(full); continue; }
+      if (!name.endsWith('.ts') && !name.endsWith('.html')) continue;
+      scanBareHex(relative(ROOT, full), readFileSync(full, 'utf8'));
+    }
+  }
+  scanBareHex('index.html', read('./index.html'));
+  check(bareHex.length === 0, '内联 style 不得出现裸 hex 色值（不随主题切换，浅色主题必然失真）：' + bareHex.slice(0, 4).join('、'));
+}
+
 if (failures.length > 0) {
   console.error(`✘ UI 一致性门禁失败（${failures.length} 项）:`);
   for (const failure of failures) console.error(`  - ${failure}`);

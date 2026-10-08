@@ -45,7 +45,7 @@ export function render(data: DiagramData): string {
 
         <!-- 参考点 1 (Y1) -->
         <div style="background: var(--bg-tertiary); padding: 8px; border-radius: 6px; margin-bottom: 8px; border: 1px solid rgba(245, 158, 11, 0.35);">
-          <div style="font-size: 10.5px; font-weight: 700; margin-bottom: 4px; color: #f59e0b; display: flex; justify-content: space-between;">
+          <div style="font-size: 10.5px; font-weight: 700; margin-bottom: 4px; color: var(--status-warning); display: flex; justify-content: space-between;">
             <span>${t('step3.ref1')}</span>
             <span style="font-family: monospace;">${topPx !== '' ? `Y1=${topPx}px` : '--'}</span>
           </div>
@@ -63,7 +63,7 @@ export function render(data: DiagramData): string {
 
         <!-- 参考点 2 (Y2) -->
         <div style="background: var(--bg-tertiary); padding: 8px; border-radius: 6px; margin-bottom: 8px; border: 1px solid rgba(16, 185, 129, 0.35);">
-          <div style="font-size: 10.5px; font-weight: 700; margin-bottom: 4px; color: #10b981; display: flex; justify-content: space-between;">
+          <div style="font-size: 10.5px; font-weight: 700; margin-bottom: 4px; color: var(--status-success); display: flex; justify-content: space-between;">
             <span>${t('step3.ref2')}</span>
             <span style="font-family: monospace;">${botPx !== '' ? `Y2=${botPx}px` : '--'}</span>
           </div>
@@ -86,7 +86,7 @@ export function render(data: DiagramData): string {
             <input type="text" id="ycal-inp-unit" value="${unit}" style="width: 50px; font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
           </div>
           <div style="color: var(--text-muted);">
-            Ratio: <strong id="lbl-ycal-ratio" style="color: var(--accent-green, #10b981); font-family: monospace;">${ratioStr}</strong>
+            Ratio: <strong id="lbl-ycal-ratio" style="color: var(--accent-green); font-family: monospace;">${ratioStr}</strong>
           </div>
         </div>
 

@@ -191,7 +191,7 @@ export class Sidebar {
               <div style="display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;">
                 <span style="font-size: 9px; color: ${isPrim ? 'var(--accent-blue)' : 'var(--text-secondary)'};">${isCollapsed ? '▶' : '▼'}</span>
                 <span style="color: var(--text-heading);">${roi.name || roiId}</span>
-                ${isPrim ? `<span style="font-size: 8.5px; background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 1px 4px; border-radius: 3px;">${t('step2.primary')}</span>` : ''}
+                ${isPrim ? `<span style="font-size: 8.5px; background: rgba(16, 185, 129, 0.15); color: var(--status-success); padding: 1px 4px; border-radius: 3px;">${t('step2.primary')}</span>` : ''}
               </div>
               <span style="font-size: 10px; color: var(--text-muted); font-weight: 500;">${groupCols.length} ${t('step2.cols')}</span>
             </div>

@@ -44,7 +44,7 @@ export function render(data: DiagramData): string {
                     <span style="font-size: 9.5px; color: var(--text-muted);">(${colCnt}${t('step2.cols')})</span>
                   </div>
                   <div style="display: flex; gap: 4px; align-items: center;">
-                    ${!isPrim ? `<button class="icon-btn btn-set-primary" data-roi-id="${r.id}" title="${t('step2.setPrimaryTitle')}" style="font-size: 10px;">${t('step2.setPrimary')}</button>` : `<span style="font-size: 9px; color: #10b981; font-weight: 700;">${t('step2.primary')}</span>`}
+                    ${!isPrim ? `<button class="icon-btn btn-set-primary" data-roi-id="${r.id}" title="${t('step2.setPrimaryTitle')}" style="font-size: 10px;">${t('step2.setPrimary')}</button>` : `<span style="font-size: 9px; color: var(--status-success); font-weight: 700;">${t('step2.primary')}</span>`}
                     ${rois.length > 1 ? `<button class="icon-btn btn-delete-roi" data-roi-id="${r.id}" title="${t('step2.deleteRoiTitle')}" style="font-size: 10px; color: var(--accent-red);">&times;</button>` : ''}
                   </div>
                 </div>

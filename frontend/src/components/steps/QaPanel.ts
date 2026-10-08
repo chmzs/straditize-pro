@@ -89,7 +89,7 @@ function renderExceptionsHtml(summary: QaSummary): string {
     ${summary.empty_horizons
       .map(
         (e) => `
-      <div style="display: flex; justify-content: space-between; padding: 2px 4px; color: #f59e0b; border-bottom: 1px solid rgba(0,0,0,0.04);">
+      <div style="display: flex; justify-content: space-between; padding: 2px 4px; color: var(--status-warning); border-bottom: 1px solid rgba(0,0,0,0.04);">
         <span>空层 深度: ${e.depth !== null ? `${e.depth}` : '[未标定]'}</span>
         <span>${e.reason || 'no ink read'}</span>
       </div>
@@ -110,7 +110,7 @@ function renderColumnPeaksHtml(summary: QaSummary): string {
       <span>${col.name}</span>
       <span>峰值: ${col.peak} / 标度: ${col.calibrated === false ? '--' : col.declared_max} ${
         col.calibrated === false
-          ? '<span style="color: #f59e0b;">未标定</span>'
+          ? '<span style="color: var(--status-warning);">未标定</span>'
           : col.over
           ? '超刻度'
           : '✓'
@@ -162,7 +162,7 @@ export function render(data: DiagramData): string {
           </div>
           <div style="background: var(--bg-tertiary); padding: 6px 8px; border-radius: 4px;">
             <div style="font-size: 10px; color: var(--text-muted);">空层位数 (N_EMPTY)</div>
-            <div style="font-size: 14px; font-weight: 700; color: ${summary.n_horizons_empty > 0 ? '#f59e0b' : 'inherit'};">
+            <div style="font-size: 14px; font-weight: 700; color: ${summary.n_horizons_empty > 0 ? 'var(--status-warning)' : 'inherit'};">
               <span id="qa-n-empty">${summary.n_horizons_empty}</span>
             </div>
           </div>

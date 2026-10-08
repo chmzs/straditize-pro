@@ -65,7 +65,7 @@ export function render(data: DiagramData): string {
         <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">${t('step5.reconTitle')}</div>
         <div id="naming-recon-box" class="info-kv-box" style="line-height: 1.6; font-family: monospace;">
           <div>• 配对列表: <span id="lbl-assign" style="color: var(--accent-blue); font-weight: 600;">${assignGrammar}</span></div>
-          <div>• 缺标签列: <span id="lbl-without-label" style="color: ${recon.columns_without_label.length > 0 ? '#f59e0b' : 'inherit'}; font-weight: 600;">${withoutLabelGrammar}</span></div>
+          <div>• 缺标签列: <span id="lbl-without-label" style="color: ${recon.columns_without_label.length > 0 ? 'var(--status-warning)' : 'inherit'}; font-weight: 600;">${withoutLabelGrammar}</span></div>
           <div>• 列外标签: <span id="lbl-without-column" style="color: ${recon.labels_without_column.length > 0 ? 'var(--accent-red)' : 'inherit'}; font-weight: 600;">${withoutColumnGrammar}</span></div>
           <div>• 跨界/歧义: <span>[${recon.ambiguous.join(',')}]</span></div>
         </div>
@@ -75,7 +75,7 @@ export function render(data: DiagramData): string {
       <div class="info-callout" style="margin-bottom: 12px;">
         <div style="font-size: 11px; font-weight: 700; color: var(--accent-blue); margin-bottom: 4px;">${t('step5.sequentialTitle')}</div>
         <div style="font-size: 10px; line-height: 1.4;">
-          ${t('step5.selectedCol')} <strong id="naming-sequential-highlight" style="color: var(--accent-green, #10b981);">${activeColId}</strong><br>
+          ${t('step5.selectedCol')} <strong id="naming-sequential-highlight" style="color: var(--accent-green);">${activeColId}</strong><br>
           ${t('step5.sequentialDesc')}
         </div>
       </div>

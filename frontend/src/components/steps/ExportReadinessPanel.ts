@@ -64,21 +64,21 @@ export function renderExportReadiness(data: DiagramData): string {
          style="padding: 10px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light); margin-bottom: 12px; font-size: 11px;">
       <div style="font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
         <span>导出就绪状态清单 (Export Readiness)</span>
-        <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; ${state.allReady ? 'background: #dcfce7; color: #166534;' : 'background: #fef3c7; color: #92400e;'}">
+        <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; ${state.allReady ? 'background: var(--pill-success-bg); color: var(--pill-success-text);' : 'background: var(--pill-warning-bg); color: var(--pill-warning-text);'}">
           ${state.allReady ? '✓ 全部就绪' : `待完善 (${state.readinessMissing.length})`}
         </span>
       </div>
 
       <div style="line-height: 1.6; font-size: 10.5px;">
         <div>• 导出分表 (SHEETS): <strong id="lbl-export-sheets" style="color: var(--accent-blue);">${sheetsStr}</strong></div>
-        <div>• 主工作区 (PRIMARY_ROI): <strong id="lbl-export-primary" style="color: var(--accent-green, #10b981);">${state.primaryRoi}</strong> (对应归档 <code>data.csv</code>)</div>
+        <div>• 主工作区 (PRIMARY_ROI): <strong id="lbl-export-primary" style="color: var(--accent-green);">${state.primaryRoi}</strong> (对应归档 <code>data.csv</code>)</div>
         <div>• 根数据归属: <span id="lbl-export-data-csv-primary">DATA_CSV_EQUALS_PRIMARY=true</span></div>
-        <div>• 属种刻度标定: <span id="lbl-export-calibration-status">${calibratedCount} 列已标定${uncalibratedCount > 0 ? ` / <strong style="color: #f59e0b;">${uncalibratedCount} 列未标定</strong> (按列宽百分比估算)` : ' (全部已标定)'}</span></div>
+        <div>• 属种刻度标定: <span id="lbl-export-calibration-status">${calibratedCount} 列已标定${uncalibratedCount > 0 ? ` / <strong style="color: var(--status-warning);">${uncalibratedCount} 列未标定</strong> (按列宽百分比估算)` : ' (全部已标定)'}</span></div>
         <div>• 未就绪清单 (READINESS_MISSING): <strong id="lbl-export-missing" style="color: ${state.readinessMissing.length > 0 ? 'var(--accent-red)' : 'var(--text-muted)'};">${missingStr}</strong></div>
       </div>
       ${
         state.readinessMissing.length > 0
-          ? `<div style="margin-top: 6px; font-size: 10px; color: #b45309; line-height: 1.4;">
+          ? `<div style="margin-top: 6px; font-size: 10px; color: var(--status-warning); line-height: 1.4;">
                提示：未命名（使用默认名）或无属种列的 ROI 将列在未就绪清单中。请在步骤 2 中命名或为其划分属种列。
              </div>`
           : ''

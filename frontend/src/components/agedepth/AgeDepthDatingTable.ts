@@ -246,7 +246,7 @@ export class AgeDepthDatingTable {
         return '<td style="color:var(--text-muted); font-size:9px;">—</td>';
       }
       if (mid === null) {
-        return '<td style="color:var(--accent-amber, #f59e0b); font-size:9px;" title="瞬时沉积层：该段历时为 0，速率无定义">∞</td>';
+        return '<td style="color:var(--accent-amber); font-size:9px;" title="瞬时沉积层：该段历时为 0，速率无定义">∞</td>';
       }
       return (
         `<td style="color:var(--text-secondary); font-size:9.5px;">${fmt(mid)}` +
@@ -609,7 +609,7 @@ export class AgeDepthDatingTable {
     details.innerHTML = `
       <div>• 深度跨度: <b>${d[0].toFixed(1)} ~ ${d[d.length - 1].toFixed(1)} cm</b> (跨 ${depthSpan} cm, ${d.length} 个点位)</div>
       <div>• 年代跨度: <b>${Math.round(a[0])} ~ ${Math.round(a[a.length - 1])} cal BP</b> (平均 95% CI 宽度: ±${avgSpan} yr)</div>
-      ${inversions > 0 ? '<div style="color:var(--accent-red);">• 提示: 存在年代倒置，建议在倒置深度处修改表格数值、使用【微调 (V)】或拖框排除杂斑。</div>' : '<div style="color:#10b981;">• 年代单调递增，无层位倒置，拟合曲线连续平滑。</div>'}
+      ${inversions > 0 ? '<div style="color:var(--accent-red);">• 提示: 存在年代倒置，建议在倒置深度处修改表格数值、使用【微调 (V)】或拖框排除杂斑。</div>' : '<div style="color:var(--status-success);">• 年代单调递增，无层位倒置，拟合曲线连续平滑。</div>'}
     `;
   }
 

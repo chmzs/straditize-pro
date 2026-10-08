@@ -59,7 +59,7 @@ export class TaxaDictionaryModal {
         </div>
 
         <div class="modal-body" style="padding: 12px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;">
-          <div class="tip-card" style="margin: 0; padding: 8px 10px; border-left: 3px solid #7c3aed; background: rgba(124, 58, 237, 0.06);">
+          <div class="tip-card" style="margin: 0; padding: 8px 10px; border-left: 3px solid var(--accent-violet); background: rgba(124, 58, 237, 0.06);">
             <p style="font-size: 11px; line-height: 1.6; color: var(--text-primary); margin: 0;">
               <strong>内置词典:</strong>
               花粉与孢子 <strong>${summary.builtin_pollen_count}</strong> 条 +

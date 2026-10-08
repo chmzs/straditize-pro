@@ -82,7 +82,7 @@ export class PropertyPanel {
                 bounds
                   ? `① Y=${bounds.topPx}px → <strong>${bounds.topValue} ${cal.unit}</strong><br>
                      ② Y=${bounds.bottomPx}px → <strong>${bounds.bottomValue} ${cal.unit}</strong>`
-                  : '<span style="color: #f59e0b; font-weight: 700;">尚未标定</span> —— 深度一律显示为 --'
+                  : '<span style="color: var(--status-warning); font-weight: 700;">尚未标定</span> —— 深度一律显示为 --'
               }
             </div>
             <small style="display: block; margin-top: 6px;">在 S4 面板点击「 开始两点标定」后在画布上点两个已知刻度即可修改。</small>

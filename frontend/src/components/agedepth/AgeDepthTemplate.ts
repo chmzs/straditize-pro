@@ -301,7 +301,7 @@ export function createAgeDepthModalHtml(): string {
               <button class="tool-btn ad-table-view-btn active" id="ad-tbl-view-model" style="font-size: 10.5px; padding: 3px 8px;">提取全量模型层位</button>
               <button class="tool-btn ad-table-view-btn" id="ad-tbl-view-samples" style="font-size: 10.5px; padding: 3px 8px;">花粉样品采样层位</button>
               <span style="border-left: 1px solid var(--border-color); height: 16px; margin: 0 4px;"></span>
-              <button class="tool-btn" id="ad-tbl-btn-add" style="font-size: 10.5px; padding: 3px 8px; color: #10b981;">添加层位</button>
+              <button class="tool-btn" id="ad-tbl-btn-add" style="font-size: 10.5px; padding: 3px 8px; color: var(--status-success);">添加层位</button>
               <button class="tool-btn" id="ad-tbl-btn-sort" style="font-size: 10.5px; padding: 3px 8px;">按深度升序排序</button>
               <button class="tool-btn" id="ad-tbl-btn-copy" style="font-size: 10.5px; padding: 3px 8px;">复制全部 (TSV)</button>
               <button class="tool-btn" id="ad-tbl-btn-paste" style="font-size: 10.5px; padding: 3px 8px;">粘贴导入 (Excel/TSV)</button>
@@ -335,7 +335,7 @@ export function createAgeDepthModalHtml(): string {
 
           <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text-muted);">
             <span>提示：所有数值支持就地直接点击修改；修改年代将实时联动更新左侧图谱画布与 95% 置信带。深层比浅层年龄小处会自动标红提示倒置。</span>
-            <span id="ad-table-sync-status" style="color: #10b981; font-weight: 600;"></span>
+            <span id="ad-table-sync-status" style="color: var(--status-success); font-weight: 600;"></span>
           </div>
         </div>
 
@@ -347,7 +347,7 @@ export function createAgeDepthModalHtml(): string {
           <div style="flex: 1.2; display: flex; flex-direction: column; gap: 10px; background: var(--bg-tertiary); padding: 14px; border-radius: 6px; border: 1px solid var(--border-light);">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <strong style="font-size: 12px; color: var(--accent-blue);">1. 钻孔实测年代数据表 (Radiocarbon / Dating Table)</strong>
-              <button class="tool-btn" id="btn-ad-paste-dates" style="font-size: 10.5px; color: #10b981; border-color: rgba(16,185,129,0.3);">
+              <button class="tool-btn" id="btn-ad-paste-dates" style="font-size: 10.5px; color: var(--status-success); border-color: rgba(16,185,129,0.3);">
                 从 Excel 粘贴测年序列 (Ctrl+V)
               </button>
             </div>

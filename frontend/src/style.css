@@ -23,6 +23,27 @@
   --accent-orange: #f97316;
   --brand-gradient: linear-gradient(135deg, #0284c7, #38bdf8);  /* 品牌徽标专用渐变：唯一允许写死品牌色的位置 */
 
+  /* 状态语义色：状态文本 / 指示器 / 状态填充的唯一来源（装饰性强调仍用 --accent-*）。
+     深色取值即历史硬编码值，故深色外观不变；浅色值在 body.theme-light 中重定义。 */
+  --status-warning: #f59e0b;   /* 深色底 8.92:1 */
+  --status-success: #10b981;   /* 深色底 7.55:1 */
+  --accent-violet: #a855f7;    /* OCR / 词典等「自定义来源」强调色，深色底 4.84:1 */
+  --text-on-accent: #ffffff;   /* 品牌渐变等饱和底色上的文字，两主题均为白 */
+  --text-on-status: #0b0f19;   /* 状态填充上的文字：深色主题填充偏亮，需深字（8.92:1） */
+  /* 导出就绪状态胶囊：自带浅底 + 深字，两主题共用，不随主题变 */
+  --pill-success-bg: #dcfce7;
+  --pill-success-text: #166534;
+  --pill-warning-bg: #fef3c7;
+  --pill-warning-text: #92400e;
+  /* 后端 overlay_legend / 画布掩膜契约色：必须与后端及 src/styles/tokens.ts 的画布色一致。
+     画布叠加层的底色由图像决定，与界面主题无关，故不随主题变化。 */
+  --overlay-pending: #f59e0b;
+  --overlay-excluded: #9ca3af;
+  --overlay-kept-bg: #ffffff;
+  --overlay-kept-border: #aaaaaa;
+  --overlay-removed: #f87171;
+  --overlay-kept-text: #e8e8f0;
+
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", Menlo, Consolas, Monaco, monospace;
 
@@ -73,6 +94,13 @@ body.theme-light {
   --accent-green: #059669;    /* 科学绿 */
   --accent-red: #dc2626;
   --accent-orange: #ea580c;
+
+  /* 状态语义色：浅色底必须重定义。沿用深色值只有 2.15:1 / 2.54:1，
+     这正是黑名单「日间隐形或低对比」的量化成因。 */
+  --status-warning: #b45309;   /* 白底 5.02:1 */
+  --status-success: #047857;   /* 白底 5.48:1 */
+  --accent-violet: #7c3aed;    /* 白底 5.70:1 */
+  --text-on-status: #ffffff;   /* 浅色主题状态填充偏暗，需白字 */
 }
 
 /* 日间模式全局文本与表单强兜底安全网 (彻底阻断文字隐形与脏灰底) */
@@ -3162,6 +3190,12 @@ body.theme-light .ad-row-inversion td {
   color: var(--accent-blue);
 }
 
+.ui-btn--warning {
+  background: var(--status-warning);
+  border-color: var(--status-warning);
+  color: var(--text-on-status);
+}
+
 .ui-btn--danger {
   background: var(--accent-red);
   border-color: var(--accent-red);
@@ -3288,8 +3322,8 @@ body.theme-light .ad-row-inversion td {
   background: var(--text-muted);
 }
 
-.ui-status--success::before { background: var(--accent-green); }
-.ui-status--warning::before { background: var(--accent-amber); }
+.ui-status--success::before { background: var(--status-success); }
+.ui-status--warning::before { background: var(--status-warning); }
 .ui-status--danger::before { background: var(--accent-red); }
 
 .ocr-modal-header__lead {

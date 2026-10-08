@@ -215,7 +215,7 @@ export class MetadataModal {
             <div id="meta-external-assistant-panel" style="display: none; margin-top: 8px; padding: 10px; border-top: 1px dashed var(--border-color); background: rgba(16, 185, 129, 0.05); border-radius: 6px; flex-direction: column; gap: 8px;">
               <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
                 <div style="font-size: 11px; color: var(--text-primary);">
-                  <strong style="color: #10b981;">零 API 费用三步法：</strong>
+                  <strong style="color: var(--status-success);">零 API 费用三步法：</strong>
                   ① 点击右侧【复制提取提示词】 → ② 打开网页版 DeepSeek / ChatGPT / Kimi 上传论文 PDF 并粘贴发送 → ③ 将 AI 回复的内容粘贴到下方并点击【解析并填入表单】
                 </div>
                 <div style="display: flex; gap: 6px;">
@@ -230,7 +230,7 @@ export class MetadataModal {
                   <div style="display: flex; gap: 6px;">
                     <input type="file" id="meta-file-external-json" accept=".json,.txt,.md" style="display: none;" />
                     <button id="btn-upload-external-json" class="tool-btn" style="font-size: 10px; padding: 2px 8px;">从文件导入 (.json/.txt)</button>
-                    <button id="btn-parse-external-json" class="ui-btn ui-btn--primary" style="font-size: 10.5px; padding: 3px 12px; background: #10b981; border-color: var(--accent-green);">解析并填入表单</button>
+                    <button id="btn-parse-external-json" class="ui-btn ui-btn--primary" style="font-size: 10.5px; padding: 3px 12px; background: var(--status-success); border-color: var(--accent-green);">解析并填入表单</button>
                   </div>
                 </div>
                 <textarea id="meta-external-paste-input" rows="5" placeholder="将 DeepSeek / ChatGPT / Kimi / Claude 生成的回复直接粘贴到这里（无需手动删掉前后的聊天文字或代码块标记，系统会自动剥离并识别）..." style="width: 100%; font-family: var(--font-mono); font-size: 10.5px; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); box-sizing: border-box;"></textarea>
@@ -388,8 +388,8 @@ export class MetadataModal {
             <!-- 分组 4 & 5: 采集/分析责任人、单位与质量控制 -->
             <div class="meta-card">
               <div class="meta-card-header">
-                <strong style="font-size: 12px; color: #a78bfa;">4. 采集/分析人、单位、技术与质量备注</strong>
-                <span class="chip-tag" style="background: rgba(167, 139, 250, 0.2); color: #a78bfa;">Provenance & QC</span>
+                <strong style="font-size: 12px; color: var(--accent-violet);">4. 采集/分析人、单位、技术与质量备注</strong>
+                <span class="chip-tag" style="background: rgba(167, 139, 250, 0.2); color: var(--accent-violet);">Provenance & QC</span>
               </div>
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                 <div class="form-group" style="margin: 0;">

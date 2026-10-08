@@ -214,7 +214,7 @@ export class Toolbar {
               </g>
             </svg>
           </div>
-          <span class="brand-name">Straditize <span style="background: var(--brand-gradient); color: #fff; font-size: 9.5px; font-weight: 700; padding: 1px 4px; border-radius: 4px; margin-left: 2px; letter-spacing: 0.5px;">PRO</span></span>
+          <span class="brand-name">Straditize <span style="background: var(--brand-gradient); color: var(--text-on-accent); font-size: 9.5px; font-weight: 700; padding: 1px 4px; border-radius: 4px; margin-left: 2px; letter-spacing: 0.5px;">PRO</span></span>
         </div>
 
         <div class="divider"></div>
@@ -383,7 +383,7 @@ export class Toolbar {
         `position:fixed;inset:0;background:${isLight ? 'rgba(241,245,249,0.92)' : 'rgba(15,23,42,0.95)'};z-index:999999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);`;
       overlay.innerHTML = `
         <div style="background:var(--bg-card);padding:36px 48px;border-radius:12px;border:1px solid var(--border-color);text-align:center;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);max-width:440px;">
-          <div style="font-size:36px;margin-bottom:12px;color:#10b981;line-height:1;">✓</div>
+          <div style="font-size:36px;margin-bottom:12px;color:var(--status-success);line-height:1;">✓</div>
           <h2 style="font-size:18px;font-weight:700;color:var(--text-heading);margin:0 0 10px 0;">Straditize 服务已安全退出</h2>
           <p style="font-size:13.5px;color:var(--text-secondary);margin:0;line-height:1.6;">您可以安全关闭此浏览器标签页。</p>
         </div>

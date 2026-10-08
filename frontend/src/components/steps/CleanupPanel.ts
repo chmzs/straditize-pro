@@ -65,7 +65,7 @@ export function render(data: DiagramData): string {
         : `x=${Math.min(g.x0, g.x1)}–${Math.max(g.x0, g.x1)} · y=${Math.min(g.y0, g.y1)}–${Math.max(g.y0, g.y1)}`;
     const badge = isRemoved
       ? '<span style="color:var(--accent-red);font-weight:700;">已确认</span>'
-      : '<span style="color:#f59e0b;font-weight:700;">待确认</span>';
+      : '<span style="color:var(--status-warning);font-weight:700;">待确认</span>';
     const src = c.source === 'manual' ? '手动' : '自动';
     return `
       <div class="cleanup-row" data-cand-id="${c.id}"
@@ -98,7 +98,7 @@ export function render(data: DiagramData): string {
           ${t('step4.rescan')}
         </button>
         <div style="font-size: 10px; color: var(--text-muted); line-height: 1.45; margin-top: 6px;">
-          检测出的几何一律为<strong style="color:#f59e0b;">待确认</strong>：不点"确认去除"就不会动任何一个像素。
+          检测出的几何一律为<strong style="color:var(--status-warning);">待确认</strong>：不点"确认去除"就不会动任何一个像素。
         </div>
       </div>
 
@@ -142,10 +142,10 @@ export function render(data: DiagramData): string {
 
       <!-- 4. 颜色图例：与后端 overlay_legend 一致 -->
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; font-size: 10px; margin-bottom: 10px;">
-        <span><i style="display:inline-block;width:9px;height:9px;background:#f59e0b;border-radius:2px;margin-right:4px;"></i>待确认（不剔除）</span>
+        <span><i style="display:inline-block;width:9px;height:9px;background:var(--overlay-pending);border-radius:2px;margin-right:4px;"></i>待确认（不剔除）</span>
         <span><i style="display:inline-block;width:9px;height:9px;background:var(--accent-red);border-radius:2px;margin-right:4px;"></i>已确认（实际剔除）</span>
-        <span><i style="display:inline-block;width:9px;height:9px;background:#9ca3af;border-radius:2px;margin-right:4px;"></i>排除区（绝对剔除）</span>
-        <span><i style="display:inline-block;width:9px;height:9px;background:#fff;border:1px solid #aaa;border-radius:2px;margin-right:4px;"></i>保留墨迹</span>
+        <span><i style="display:inline-block;width:9px;height:9px;background:var(--overlay-excluded);border-radius:2px;margin-right:4px;"></i>排除区（绝对剔除）</span>
+        <span><i style="display:inline-block;width:9px;height:9px;background:var(--overlay-kept-bg);border:1px solid var(--overlay-kept-border);border-radius:2px;margin-right:4px;"></i>保留墨迹</span>
       </div>
 
       <!-- 5. 局部修正与排除区 -->
@@ -178,7 +178,7 @@ export function render(data: DiagramData): string {
         </div>
         <div style="font-size:10px;color:var(--text-muted);line-height:1.45;">
           几何用于整条横/竖线；画笔只修补几何漏标或误标的<strong>局部像元</strong>，不替代几何。
-          按键盘 <strong>B</strong> 叠加查看掩膜（<span style="color:#f87171;">红色</span>=实际剔除的像素，<span style="color:#e8e8f0;">白色</span>=保留的墨迹）。
+          按键盘 <strong>B</strong> 叠加查看掩膜（<span style="color:var(--overlay-removed);">红色</span>=实际剔除的像素，<span style="color:var(--overlay-kept-text);">白色</span>=保留的墨迹）。
         </div>
       </div>
 
