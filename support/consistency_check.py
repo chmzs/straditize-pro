@@ -426,6 +426,64 @@ def check_frontend_rpc_type_inventory() -> list[str]:
     return problems
 
 
+# ------------------------------- J. pyproject.toml 依赖对账
+MODULE_TO_DIST = {
+    "PIL": "pillow",
+    "skimage": "scikit-image",
+}
+
+
+def check_dependency_reconciliation() -> list[str]:
+    """解析 straditize_core 中所有第三方 import，并断言其在 pyproject.toml dependencies 中已声明。"""
+    import tomllib
+
+    problems: list[str] = []
+    pyproject = ROOT / "pyproject.toml"
+    if not pyproject.exists():
+        return ["未找到 pyproject.toml 文件"]
+
+    try:
+        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return [f"pyproject.toml 解析失败: {exc}"]
+
+    declared_deps = set()
+    for dep in data.get("project", {}).get("dependencies", []):
+        dep_name = re.split(r"[><=~!]", dep)[0].strip().lower()
+        if dep_name:
+            declared_deps.add(dep_name)
+
+    stdlib = sys.stdlib_module_names
+    core_imports = set()
+    for p in (ROOT / "straditize_core").rglob("*.py"):
+        if "__pycache__" in str(p):
+            continue
+        try:
+            tree = ast.parse(p.read_text(encoding="utf-8", errors="replace"))
+        except SyntaxError:
+            continue
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Import):
+                for a in n.names:
+                    mod = a.name.split(".")[0]
+                    core_imports.add(mod)
+            elif isinstance(n, ast.ImportFrom):
+                if n.level == 0 and n.module:
+                    mod = n.module.split(".")[0]
+                    core_imports.add(mod)
+
+    for mod in sorted(core_imports):
+        if mod in stdlib or mod in ("straditize_core", "straditize"):
+            continue
+        pkg_name = MODULE_TO_DIST.get(mod, mod).lower()
+        if pkg_name not in declared_deps:
+            problems.append(
+                f"代码中使用了第三方库 '{mod}' (对应包 '{pkg_name}')，但未在 pyproject.toml 的 dependencies 中声明"
+            )
+
+    return problems
+
+
 def main() -> int:
     strict = "--strict" in sys.argv
     sigs, signature_parse_errors = collect_signatures()
@@ -440,6 +498,7 @@ def main() -> int:
         ("G. 前端 RPC 方法名 ⊆ 后端注册表", check_frontend_rpc_methods()),
         ("H. 协议层 ALL_RPC_METHODS ↔ 后端注册表", check_protocol_rpc_inventory()),
         ("I. 前端 RpcMethod 类型 ↔ 后端注册表", check_frontend_rpc_type_inventory()),
+        ("J. pyproject.toml 依赖对账", check_dependency_reconciliation()),
     ]
     warnings = [("F. 注释残留旧 7 步编号", check_stale_comments())]
 
