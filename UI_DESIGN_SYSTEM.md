@@ -44,6 +44,11 @@
   浅色 `#b45309`（5.02:1）、`#047857`（5.48:1）。沿用深色值在浅色底只剩 **2.15:1 / 2.54:1**，不达标。
 - `--accent-violet` 同理：深色 `#a855f7`（4.84:1）→ 浅色 `#7c3aed`（5.70:1）；旧值 `#7c3aed` 在深色底仅 3.36:1。
 - 状态填充上的文字用 `--text-on-status`（深色主题状态底色偏亮 → 深字，浅色反之）；品牌渐变等饱和底上的白字用 `--text-on-accent`。
+- **动作填充与填充文字成对取值**：`--action-primary-bg/-text`、`--action-success-bg/-text`、`--action-danger-bg/-text`，
+  两主题各取一次（深色 `#38bdf8`/`#10b981`/`#ef4444` 配深字 `#0b0f19`；浅色 `#0369a1`/`#047857`/`#dc2626` 配白字）。
+  禁止在按钮规则里再写死字色：改填充色时字色必须一起复算（第 16 组门禁按 WCAG 复算声明值，`e2e/contrast.spec.ts` 复算实际渲染值）。
+  悬停只调 `filter: brightness()`，且**必须与 token 同源**——通用 `.tool-btn:hover:not(:disabled)` 的权重是深色 (0,3,1)、浅色 (0,4,1)，
+  会盖掉 (0,2,x) 的动作填充并把文字改回 `--accent-blue`，动作按钮的 hover 规则要提到同级并后置。
 - 以下四类**不随主题变**，不得当作主题色使用：导出就绪胶囊 `--pill-*-bg/text`（自带浅底深字）、
   画布掩膜契约色 `--overlay-*`（须与后端 `overlay_legend` 及 `src/styles/tokens.ts` 一致）、`--text-on-accent`、`--brand-gradient`。
 
@@ -57,14 +62,24 @@
   直接给 `.ui-modal__body` 补契约会把 16px 覆盖成 14px——迁移必须先重排规则顺序。
   尚未迁移的纯 legacy 弹窗：`Inspector.ts`（3 处）、`ocr/TaxaDictionaryModal.ts`（3 处）、
   `PropertyPanel.ts`（6 处）、`OcrReviewModal.ts` 的 body（header/footer 已迁）。
-- `.primary-btn` 已退役（第 15 组门禁拦回填）：4 条规则共 31 行、全仓零消费者、含 2 处硬编码渐变；
+- `.primary-btn` 已退役（第 14 组门禁拦回填）：4 条规则共 31 行、全仓零消费者、含 2 处硬编码渐变；
   已退役的 `.btn-primary` 从未做过 token 别名，两者都不要回填渐变。
 - 状态文本仍有直接取 `--accent-*` 的调用点（`--accent-green` 24 处 / `--accent-amber` 22 处，含画布侧 `AgeDepthCanvas.ts`），
   画布叠加色与界面状态色同值时无法从调用点区分，待逐处判定语义后并入 `--status-*`。
 
-已知缺陷（待决策，未经授权不要单独修改）：`.ui-btn--primary` 白字压在 `--accent-blue` 上，
-深色 `#38bdf8` 仅 **2.14:1**、浅色 `#0284c7` **4.09:1**，均低于 AA 文字线 4.5:1；
-该缺陷是全局性的，修法（加深底色 / 改深字 / 提高字重字号）会影响所有主按钮观感，需先定方案。
+对比度契约（第 16 组静态门禁按声明 token 复算，`frontend/e2e/contrast.spec.ts` 在真实浏览器里复算渲染值，
+两处都必须 ≥4.5:1；下表为浏览器实测值）：
+
+| 动作填充 | 深色（字 `#0b0f19`） | 浅色（白字） | 悬停（`filter: brightness()` 同作用于底色与文字） |
+| --- | --- | --- | --- |
+| `.ui-btn--primary` | `#38bdf8` **8.94:1** | `#0369a1` **5.93:1** | 深 10.20（×1.08）/ 浅 5.26（×1.08） |
+| `.tool-btn.export` | `#38bdf8` **8.94:1** | `#0369a1` **5.93:1** | 深 7.64（×0.92）/ 浅 5.61（×0.92） |
+| `.tool-btn.action` | `#10b981` **7.55:1** | `#047857` **5.48:1** | 深 8.71 / 浅 4.84（×1.08） |
+| `.ui-btn--danger` | `#ef4444` **5.09:1** | `#dc2626` **4.83:1** | 无 hover filter，比例不变 |
+
+旧写法（白字压在装饰色 `--accent-blue` 上，深色 2.14:1 / 浅色 `#0284c7` 4.10:1）已废弃：
+`--accent-*` 是装饰色，不是可承载文字的填充色——需要白字就得把底色压到亮度 ≤0.183，需要亮色底就得换深字。
+`.open-file-btn:hover` 仍是 25% 蓝半透明叠加 + `--text-primary`（不透明化后不可复算，只由 E2E 断言文字取色）。
 
 ## 4. 按钮
 
@@ -86,6 +101,8 @@
 - 语义变体负责外观：`background` / `border-color` / `color` 只在变体规则里定义，元素上不得再用内联 `style` 覆盖；
   内联覆盖会绕过禁用态与主题切换（第 12 组拦等值色值与硬编码渐变，第 14 组拦全部裸色值）。
 - 状态填充按钮用 `--status-*` 变体取色，文字色由 `--text-on-status` 给出，保证深浅主题都达 AA。
+- 悬停/激活态不得把文字改回装饰色：动作按钮的 hover 规则与通用 `.tool-btn:hover` 同级（见 §3 动作填充），
+  且只用 `filter: brightness()` 微调亮度；改完必须在两种主题下复算文字与底色的对比度。
 
 ## 5. 文案
 
@@ -150,6 +167,8 @@
 - 当前步骤使用 `aria-current="step"`；tab 使用 `role="tab"`、`aria-selected`。
 - focus ring 在深浅主题均清晰可见。
 - 不能只靠颜色表达状态。
+- 带填充的动作按钮（主/成功/危险）与状态填充：文字与底色对比度 ≥ **4.5:1**（WCAG AA 小字线，
+  10–11px 加粗仍算小字），常态与悬停都算；`filter: brightness()` 会把底色与文字一起缩放，复算时要一并叠上。
 
 ## 10. 验收
 
@@ -161,10 +180,13 @@ npm --prefix frontend run build
 STRADITIZE_E2E_PORT=22900 npm --prefix frontend run test:e2e
 ```
 
-- `npm --prefix frontend test` 里的 `test-ui-consistency.mjs` 是 15 组 UI 门禁：design tokens、语义控件、
-  内联色值/裸 hex、原生 `alert`、emoji、中英重复标题、模态框原语等；新增规则就加一组，别只写在文档里。
+- `npm --prefix frontend test` 里的 `test-ui-consistency.mjs` 是 16 组 UI 门禁：design tokens、语义控件、
+  内联色值/裸 hex、原生 `alert`、emoji、中英重复标题、模态框原语、动作填充对比度等；新增规则就加一组，别只写在文档里。
 - `frontend/e2e/modal-primitive.spec.ts` 是弹窗原语的**运行时契约**：既断言 header/footer 不混 legacy 类，
   也用计算样式断言深浅主题下分隔线与底色真的落在原语作用域（单靠类名或计算样式任一维度都会被绕过）。
+- `frontend/e2e/contrast.spec.ts` 是动作填充的**运行时对比度契约**：把带真实类名的探针插进真实文档，
+  读 `getComputedStyle` 后按 WCAG 复算 4 类按钮 × 两主题 × 常态/悬停；探针继承真实层叠，
+  所以能抓到"静态声明达标但被通用 hover 规则盖掉"这类回归（编写时即抓到深色主题的这条）。
 - `frontend/e2e/ui-layout.spec.ts` 覆盖 1280×720 / 1366×768 / 1920×1080 三档顶栏两行不重叠。
 
 交付前再运行 `pixi run lint` 与 `pixi run test`。
