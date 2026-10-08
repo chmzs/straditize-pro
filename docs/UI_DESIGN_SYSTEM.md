@@ -55,6 +55,8 @@
 - `.modal-body` 尚未并入 `.ui-modal__body`：原语不提供堆叠契约（`display:flex; flex-direction:column; gap:14px`），
   6 处元素仍靠 legacy 类拿这两个属性；而 `.wpd-modal-body` 自带 `gap:16px` 且位置在原语规则之前，
   直接给 `.ui-modal__body` 补契约会把 16px 覆盖成 14px——迁移必须先重排规则顺序。
+  尚未迁移的纯 legacy 弹窗：`Inspector.ts`（3 处）、`ocr/TaxaDictionaryModal.ts`（3 处）、
+  `PropertyPanel.ts`（6 处）、`OcrReviewModal.ts` 的 body（header/footer 已迁）。
 - `.primary-btn` 已退役（第 15 组门禁拦回填）：4 条规则共 31 行、全仓零消费者、含 2 处硬编码渐变；
   已退役的 `.btn-primary` 从未做过 token 别名，两者都不要回填渐变。
 - 状态文本仍有直接取 `--accent-*` 的调用点（`--accent-green` 24 处 / `--accent-amber` 22 处，含画布侧 `AgeDepthCanvas.ts`），
@@ -94,6 +96,14 @@
 - 状态统一为：未开始、进行中、已完成、需要处理、失败。
 - 错误必须说明“发生了什么 + 下一步”，并保留真实后端错误。
 
+反馈通道（§1 第 5 条原则的落地）：
+
+- **轻量提示**走 `frontend/src/ui/feedback.ts`：`notify(text, level)` / `notifyError(text)` 弹出可自动消失的 toast；
+  `notifyCaught(prefix, err)` 供 catch 分支连错误原文一起冒泡；`showDetailModal(title, detail, hint?)` 用于需要留存的详情。
+- **后端失败**走 `frontend/src/services/ProvenanceGate.ts` 的 `reportBackendFailure(action, err)`：弹窗保留
+  「`action` 失败」标题、后端原文与「复制错误详情」，不自动消失——后端 detail 往往很长，toast 会截断并自动消失。
+- 两条通道都不得用原生 `alert()`（第 4 组门禁拦回填），也不得静默吞掉异常。
+
 ## 6. 表单
 
 - label 位于控件上方；必填、单位、示例分开表达。
@@ -105,11 +115,20 @@
 
 ```html
 <div class="modal-dialog ui-modal">
-  <header class="ui-modal__header">…</header>
-  <section class="ui-modal__body">…</section>
-  <footer class="ui-modal__footer">…</footer>
+  <div class="ui-modal__header">
+    <h3 class="ui-modal__title">标题</h3>
+    <button class="ui-icon-btn" aria-label="关闭" title="关闭">&times;</button>
+  </div>
+  <div class="modal-body ui-modal__body">…</div>
+  <div class="ui-modal__footer">
+    <button class="ui-btn ui-btn--secondary ui-btn--sm">取消</button>
+    <button class="ui-btn ui-btn--primary ui-btn--sm">保存</button>
+  </div>
 </div>
 ```
+
+- 标题排版统一由 `ui-modal__title` 承载，不再依赖 `.modal-header h3`；header 右侧固定一个 `.ui-icon-btn` 关闭按钮。
+- header/footer 用 `<div>` 承载（契约按类名判定，不按标签名）。
 
 - `max-height: calc(100dvh - 48px)`。
 - footer 最多三个动作，primary 在最右。
@@ -141,5 +160,11 @@ npm --prefix frontend test
 npm --prefix frontend run build
 STRADITIZE_E2E_PORT=22900 npm --prefix frontend run test:e2e
 ```
+
+- `npm --prefix frontend test` 里的 `test-ui-consistency.mjs` 是 15 组 UI 门禁：design tokens、语义控件、
+  内联色值/裸 hex、原生 `alert`、emoji、中英重复标题、模态框原语等；新增规则就加一组，别只写在文档里。
+- `frontend/e2e/modal-primitive.spec.ts` 是弹窗原语的**运行时契约**：既断言 header/footer 不混 legacy 类，
+  也用计算样式断言深浅主题下分隔线与底色真的落在原语作用域（单靠类名或计算样式任一维度都会被绕过）。
+- `frontend/e2e/ui-layout.spec.ts` 覆盖 1280×720 / 1366×768 / 1920×1080 三档顶栏两行不重叠。
 
 交付前再运行 `pixi run lint` 与 `pixi run test`。
