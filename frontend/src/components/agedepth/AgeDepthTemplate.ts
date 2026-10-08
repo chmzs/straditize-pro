@@ -5,7 +5,7 @@
 export function createAgeDepthModalHtml(): string {
   return `
     <div class="modal-dialog modal-large agedepth-dialog">
-      <div class="modal-header ui-modal__header">
+      <div class="ui-modal__header">
         <div>
           <h3 class="ui-modal__title">年代-深度模型</h3>
           <span class="ui-status">Bacon / geoChronR</span>
@@ -495,7 +495,7 @@ export function createAgeDepthModalHtml(): string {
         </div>
       </div>
 
-      <div class="modal-footer ui-modal__footer">
+      <div class="ui-modal__footer">
         <div class="ad-footer-hint">
           确认拟合结果后应用，为当前花粉图谱赋予年代轴与 95% 置信带。
         </div>

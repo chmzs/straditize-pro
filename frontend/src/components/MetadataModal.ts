@@ -182,7 +182,7 @@ export class MetadataModal {
     modal.className = 'modal-backdrop';
     modal.innerHTML = `
       <div class="modal-dialog modal-large metadata-dialog ui-modal" style="--modal-width: 980px;">
-        <div class="modal-header ui-modal__header">
+        <div class="ui-modal__header">
           <div>
             <h3 class="ui-modal__title">论文与站点元数据</h3>
             <span class="ui-status ui-status--success">FAIR / LiPD 兼容</span>
@@ -443,7 +443,7 @@ export class MetadataModal {
           </div>
         </div>
 
-        <div class="modal-footer ui-modal__footer">
+        <div class="ui-modal__footer">
           <button class="ui-btn ui-btn--secondary" id="meta-btn-cancel">取消</button>
           <button class="ui-btn ui-btn--primary" id="meta-btn-save">保存元数据</button>
         </div>

@@ -51,7 +51,7 @@ export class SettingsModal {
 
     modal.innerHTML = `
       <div class="modal-dialog settings-dialog ui-modal" style="--modal-width: 640px;">
-        <div class="modal-header ui-modal__header">
+        <div class="ui-modal__header">
           <div style="display: flex; align-items: center; gap: 8px;">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-blue);">
               <circle cx="12" cy="12" r="3"/>
@@ -198,7 +198,7 @@ export class SettingsModal {
           </div>
         </div>
 
-        <div class="modal-footer ui-modal__footer">
+        <div class="ui-modal__footer">
           <button class="ui-btn ui-btn--secondary" id="btn-settings-cancel">${t('settings.cancel')}</button>
           <button class="ui-btn ui-btn--primary" id="btn-settings-save">${t('settings.save')}</button>
         </div>

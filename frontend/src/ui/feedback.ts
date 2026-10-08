@@ -103,7 +103,7 @@ export function showDetailModal(title: string, detail: string, hint?: string): v
 
   overlay.innerHTML = `
     <div class="modal-dialog ui-modal" style="--modal-width: 520px;" role="dialog" aria-modal="true">
-      <div class="modal-header ui-modal__header">
+      <div class="ui-modal__header">
         <h3 class="ui-modal__title">${escapeHtml(title)}</h3>
         <button class="ui-icon-btn" data-ui-detail-close aria-label="关闭" title="关闭">&times;</button>
       </div>
@@ -111,7 +111,7 @@ export function showDetailModal(title: string, detail: string, hint?: string): v
         ${hint ? `<p class="ui-detail-hint">${escapeHtml(hint)}</p>` : ''}
         <pre class="ui-detail-text" data-ui-detail-text></pre>
       </div>
-      <div class="modal-footer ui-modal__footer">
+      <div class="ui-modal__footer">
         <button class="ui-btn ui-btn--secondary" data-ui-detail-copy>复制详情</button>
         <button class="ui-btn ui-btn--primary" data-ui-detail-close>关闭</button>
       </div>

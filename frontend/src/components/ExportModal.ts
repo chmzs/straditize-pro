@@ -43,7 +43,7 @@ export class ExportModal {
            data-primary="${readiness.primaryRoi}"
            data-data-csv-equals-primary="true"
            data-readiness-missing="${readiness.readinessMissing.join(',')}">
-        <div class="modal-header ui-modal__header">
+        <div class="ui-modal__header">
           <div>
             <h3 class="ui-modal__title">检查并导出数据</h3>
             <span class="ui-status" id="export-readiness-status">正在检查导出条件</span>
@@ -191,7 +191,7 @@ export class ExportModal {
           </div>
         </div>
 
-        <div class="modal-footer ui-modal__footer export-modal-footer">
+        <div class="ui-modal__footer export-modal-footer">
           <button class="ui-btn ui-btn--quiet" id="btn-wpd-copy">复制当前数据</button>
           <div class="export-format-actions">
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-csv">CSV</button>

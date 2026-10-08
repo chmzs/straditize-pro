@@ -61,7 +61,7 @@ export class OcrReviewModal {
     modal.className = 'modal-backdrop';
     modal.innerHTML = `
       <div class="modal-dialog modal-large ocr-review-dialog">
-        <div class="modal-header ui-modal__header">
+        <div class="ui-modal__header">
           <div class="ocr-modal-header__lead">
             <h3 class="ui-modal__title">花粉属种名 OCR 识别与审核</h3>
             <span class="ui-status ui-status--success" id="ocr-dict-badge">PP-OCRv6 + 内置词典</span>
@@ -173,7 +173,7 @@ export class OcrReviewModal {
           </div>
         </div>
 
-        <div class="modal-footer ui-modal__footer" style="justify-content: space-between;">
+        <div class="ui-modal__footer" style="justify-content: space-between;">
           <div style="font-size: 11px; color: var(--text-muted);">
             点击右下角按钮，将审核结果写入图谱下方全部花粉列名与分类属性。
           </div>

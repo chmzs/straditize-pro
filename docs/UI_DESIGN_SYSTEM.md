@@ -47,10 +47,18 @@
 - 以下四类**不随主题变**，不得当作主题色使用：导出就绪胶囊 `--pill-*-bg/text`（自带浅底深字）、
   画布掩膜契约色 `--overlay-*`（须与后端 `overlay_legend` 及 `src/styles/tokens.ts` 一致）、`--text-on-accent`、`--brand-gradient`。
 
-遗留待并（尚未完成）：`.tool-btn`（历史基类，仍有多处使用）与 `.primary-btn` 尚未并入 `.ui-btn`；
-已退役的 `.btn-primary` 从未做过 token 别名，迁移时不要回填它的渐变。
-状态文本仍有直接取 `--accent-*` 的调用点（`--accent-green` 24 处 / `--accent-amber` 22 处，含画布侧 `AgeDepthCanvas.ts`），
-画布叠加色与界面状态色同值时无法从调用点区分，待逐处判定语义后并入 `--status-*`。
+遗留待并（尚未完成）：
+
+- `.tool-btn`（历史基类，89 个 DOM 站点）尚未并入 `.ui-btn`——它的 `padding:4px 6px`、`font-size:11px`、
+  `:active{transform:scale(0.97)}`、`.active-mode` 三件套在 `.ui-btn` 内没有对应变体，需先补尺寸与激活态变体，
+  且波及面广（每个弹窗都要视觉复核），不可批量替换。
+- `.modal-body` 尚未并入 `.ui-modal__body`：原语不提供堆叠契约（`display:flex; flex-direction:column; gap:14px`），
+  6 处元素仍靠 legacy 类拿这两个属性；而 `.wpd-modal-body` 自带 `gap:16px` 且位置在原语规则之前，
+  直接给 `.ui-modal__body` 补契约会把 16px 覆盖成 14px——迁移必须先重排规则顺序。
+- `.primary-btn` 已退役（第 15 组门禁拦回填）：4 条规则共 31 行、全仓零消费者、含 2 处硬编码渐变；
+  已退役的 `.btn-primary` 从未做过 token 别名，两者都不要回填渐变。
+- 状态文本仍有直接取 `--accent-*` 的调用点（`--accent-green` 24 处 / `--accent-amber` 22 处，含画布侧 `AgeDepthCanvas.ts`），
+  画布叠加色与界面状态色同值时无法从调用点区分，待逐处判定语义后并入 `--status-*`。
 
 已知缺陷（待决策，未经授权不要单独修改）：`.ui-btn--primary` 白字压在 `--accent-blue` 上，
 深色 `#38bdf8` 仅 **2.14:1**、浅色 `#0284c7` **4.09:1**，均低于 AA 文字线 4.5:1；
@@ -107,6 +115,9 @@
 - footer 最多三个动作，primary 在最右。
 - 1366×768 下关键动作始终可见。
 - Escape 关闭最上层弹窗；Tab 焦点不进入背景页面。
+- header/footer 只挂 `ui-modal__header|footer`，不得再带 legacy `modal-header|modal-footer`；上下文选择器
+  （如浅色主题的 `.ocr-review-dialog` 规则）必须直接指向原语，否则类名一改颜色就静默失效——第 15 组门禁强制这两点。
+- `ui-modal__body` 目前仍与 legacy `modal-body` 并存，原因与迁移前置条件见 §3「遗留待并」。
 
 ## 8. 响应式与密度
 

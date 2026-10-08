@@ -343,6 +343,74 @@ const GLOSS_BAN = [
   check(bareHex.length === 0, '内联 style 不得出现裸 hex 色值（不随主题切换，浅色主题必然失真）：' + bareHex.slice(0, 4).join('、'));
 }
 
+// 15. 模态框原语唯一化：同一元素不得同时挂 legacy 与 ui-modal 两套类名，上下文选择器必须指向原语
+// 注：本组只守卫 header/footer。`modal-body` 暂不在守卫范围——`.ui-modal__body` 目前不提供
+// display:flex/flex-direction/gap（堆叠契约），6 处 ui-modal__body 元素仍靠 legacy `.modal-body`
+// 提供 flex + gap:14px；而 `.wpd-modal-body`(2317) 自带 gap:16px 且位置在 `.ui-modal__body` 之前，
+// 若把堆叠契约直接加到 `.ui-modal__body` 会把 16px 覆盖成 14px。迁移 body 必须先重排规则顺序。
+{
+  const LEGACY_MODAL = new Set(['modal-header', 'modal-footer']);
+  const mixed = [];
+  const LFCH = String.fromCharCode(10);
+  const files = [];
+  const stack = ['./src'];
+  while (stack.length) {
+    const cur = stack.pop();
+    let st;
+    try {
+      st = statSync(cur);
+    } catch {
+      continue;
+    }
+    if (st.isDirectory()) {
+      for (const e of readdirSync(cur)) {
+        if (e === 'node_modules') continue;
+        stack.push(join(cur, e));
+      }
+      continue;
+    }
+    if (cur.endsWith('.ts') || cur.endsWith('.html')) files.push(cur);
+  }
+  files.push('./index.html');
+  for (const file of files) {
+    const text = read(file);
+    const label = relative('.', file);
+    let cursor = 0;
+    while (true) {
+      const at = text.indexOf('class="', cursor);
+      if (at < 0) break;
+      const start = at + 7;
+      const endq = text.indexOf('"', start);
+      if (endq < 0) break;
+      const tokens = text.slice(start, endq).split(' ').filter((t) => t !== '');
+      const hasUi = tokens.some((t) => t.startsWith('ui-modal__'));
+      const legacy = tokens.filter((t) => LEGACY_MODAL.has(t));
+      if (hasUi && legacy.length) {
+        const lineNo = text.slice(0, at).split(LFCH).length;
+        mixed.push(label + ':' + lineNo + '（' + legacy.join('/') + '）');
+      }
+      cursor = endq + 1;
+    }
+  }
+  check(mixed.length === 0, '同一元素不得混用两套模态框类名（legacy modal-header/footer 与 ui-modal__*）：' + mixed.slice(0, 4).join('、'));
+
+  const RETARGETED = [
+    'body.theme-light .ocr-review-dialog .ui-modal__header',
+    'body.theme-light .ocr-review-dialog .ui-modal__footer',
+    '.agedepth-dialog .ui-modal__body',
+  ];
+  const STALE = [
+    'body.theme-light .ocr-review-dialog .modal-header',
+    'body.theme-light .ocr-review-dialog .modal-footer',
+    '.agedepth-dialog .modal-body',
+  ];
+  const missRetarget = RETARGETED.filter((sel) => !css.includes(sel));
+  const staleHits = STALE.filter((sel) => css.includes(sel));
+  check(missRetarget.length === 0, '上下文选择器必须指向模态框原语，缺失：' + missRetarget.join('、'));
+  check(staleHits.length === 0, '上下文选择器仍指向 legacy 类名（浅色主题会静默失效）：' + staleHits.join('、'));
+  check(!css.includes('primary-btn'), '已退役的 .primary-btn 不得回填（31 行、全仓库零消费者、含 2 处硬编码渐变）');
+}
+
 if (failures.length > 0) {
   console.error(`✘ UI 一致性门禁失败（${failures.length} 项）:`);
   for (const failure of failures) console.error(`  - ${failure}`);
