@@ -190,7 +190,7 @@ export function render(data: DiagramData): string {
             <span style="font-size: 11px;">%</span>
           </div>
         </div>
-        <button id="btn-run-qa" class="tool-btn" style="width: 100%; font-size: 11px; padding: 4px;">
+        <button id="btn-run-qa" class="ui-btn ui-btn--quiet ui-btn--xs" style="width: 100%; font-size: 11px; padding: 4px;">
           重新执行 QA 诊断
         </button>
       </div>

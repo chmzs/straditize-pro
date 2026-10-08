@@ -220,7 +220,7 @@ export class MetadataModal {
                 </div>
                 <div style="display: flex; gap: 6px;">
                   <button id="btn-copy-external-prompt" class="ui-btn ui-btn--secondary" style="font-size: 10.5px; padding: 3px 8px;">复制提取提示词</button>
-                  <button id="btn-toggle-external-prompt-preview" class="tool-btn" style="font-size: 10px; padding: 3px 8px;">查看/编辑提示词</button>
+                  <button id="btn-toggle-external-prompt-preview" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 3px 8px;">查看/编辑提示词</button>
                 </div>
               </div>
               <textarea id="meta-external-prompt-box" rows="5" style="display: none; width: 100%; font-family: var(--font-mono); font-size: 10px; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-secondary); box-sizing: border-box;"></textarea>
@@ -229,7 +229,7 @@ export class MetadataModal {
                   <label style="font-size: 10.5px; font-weight: 600; color: var(--text-primary);">粘贴外部 AI 输出结果 (支持直接粘贴含 JSON 代码块的整段回复，或导入 .json/.txt 文件):</label>
                   <div style="display: flex; gap: 6px;">
                     <input type="file" id="meta-file-external-json" accept=".json,.txt,.md" style="display: none;" />
-                    <button id="btn-upload-external-json" class="tool-btn" style="font-size: 10px; padding: 2px 8px;">从文件导入 (.json/.txt)</button>
+                    <button id="btn-upload-external-json" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 2px 8px;">从文件导入 (.json/.txt)</button>
                     <button id="btn-parse-external-json" class="ui-btn ui-btn--primary" style="font-size: 10.5px; padding: 3px 12px; background: var(--status-success); border-color: var(--accent-green);">解析并填入表单</button>
                   </div>
                 </div>
@@ -257,7 +257,7 @@ export class MetadataModal {
               <div class="form-group" style="margin: 0;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
                   <label style="font-size: 10px; color: var(--text-muted);">提取 Meta 系统提示词配置 (System Prompt Template — 决定提取规则与 JSON 字段):</label>
-                  <button id="btn-reset-llm-prompt" class="tool-btn" style="font-size: 9.5px; padding: 1px 6px;">恢复默认提示词</button>
+                  <button id="btn-reset-llm-prompt" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 1px 6px;">恢复默认提示词</button>
                 </div>
                 <textarea id="meta-llm-prompt" rows="6" style="width: 100%; font-family: var(--font-mono); font-size: 10.5px; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); box-sizing: border-box;"></textarea>
               </div>

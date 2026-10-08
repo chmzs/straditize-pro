@@ -62,13 +62,13 @@ export class ExportModal {
 
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; flex-shrink: 0;">
               <div style="display: flex; gap: 4px;">
-                <button id="tab-btn-grid" class="tool-btn active-mode" style="font-size: 11px; padding: 4px 10px;" title="可就地编辑的数值表格">数据表格</button>
-                <button id="tab-btn-text" class="tool-btn" style="font-size: 11px; padding: 4px 10px;" title="原始 CSV 文本，可复制或手工调整">原始文本</button>
+                <button id="tab-btn-grid" class="ui-btn ui-btn--quiet ui-btn--xs active-mode" style="font-size: 11px; padding: 4px 10px;" title="可就地编辑的数值表格">数据表格</button>
+                <button id="tab-btn-text" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 11px; padding: 4px 10px;" title="原始 CSV 文本，可复制或手工调整">原始文本</button>
               </div>
               <div style="font-size: 11px; color: var(--text-muted); display: flex; gap: 10px; align-items: center;">
                 <span>Variables: <strong id="wpd-vars-label" style="color: var(--accent-blue);">Depth, 29 Taxa</strong></span>
                 <span id="wpd-data-size-label">0 KB</span>
-                <button id="btn-wpd-reset-edits" class="tool-btn" style="font-size: 10px; padding: 2px 7px; color: var(--text-muted);" title="清除所有手动微调，还原为图谱自动提取值">还原提取值</button>
+                <button id="btn-wpd-reset-edits" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 2px 7px; color: var(--text-muted);" title="清除所有手动微调，还原为图谱自动提取值">还原提取值</button>
               </div>
             </div>
 

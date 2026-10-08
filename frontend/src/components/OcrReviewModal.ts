@@ -104,10 +104,10 @@ export class OcrReviewModal {
 
               <!-- 快捷角度胶囊 -->
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-                <button class="tool-btn ocr-angle-btn active" data-angle="45" style="padding: 3px; font-size: 10px;">45° 标准斜角</button>
-                <button class="tool-btn ocr-angle-btn" data-angle="0" style="padding: 3px; font-size: 10px;">0° 水平</button>
-                <button class="tool-btn ocr-angle-btn" data-angle="60" style="padding: 3px; font-size: 10px;">60° 陡峭</button>
-                <button class="tool-btn ocr-angle-btn" data-angle="30" style="padding: 3px; font-size: 10px;">30° 平缓</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs ocr-angle-btn active" data-angle="45" style="padding: 3px; font-size: 10px;">45° 标准斜角</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs ocr-angle-btn" data-angle="0" style="padding: 3px; font-size: 10px;">0° 水平</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs ocr-angle-btn" data-angle="60" style="padding: 3px; font-size: 10px;">60° 陡峭</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs ocr-angle-btn" data-angle="30" style="padding: 3px; font-size: 10px;">30° 平缓</button>
               </div>
 
               <div style="display: flex; align-items: center; gap: 6px;">

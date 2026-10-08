@@ -220,7 +220,7 @@ export class Toolbar {
         <div class="divider"></div>
 
         <div class="btn-group file-actions-group">
-          <button id="btn-open-file" class="tool-btn ui-btn ui-btn--primary ui-btn--sm open-file-btn" title="${t('toolbar.diagramTitle')}">
+          <button id="btn-open-file" class="ui-btn ui-btn--primary ui-btn--sm open-file-btn" title="${t('toolbar.diagramTitle')}">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
             </svg>
@@ -228,7 +228,7 @@ export class Toolbar {
           </button>
           <input type="file" id="file-input-image" accept="image/*,.pdf,application/pdf" hidden />
 
-          <button id="btn-save-project" class="tool-btn ui-btn ui-btn--secondary ui-btn--sm" title="${t('toolbar.saveProjTitle')}">
+          <button id="btn-save-project" class="ui-btn ui-btn--secondary ui-btn--sm" title="${t('toolbar.saveProjTitle')}">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
               <polyline points="17 21 17 13 7 13 7 21"/>
@@ -237,7 +237,7 @@ export class Toolbar {
             <span>${t('toolbar.saveProj')}</span>
           </button>
 
-          <button id="btn-open-project" class="tool-btn ui-btn ui-btn--secondary ui-btn--sm" title="${t('toolbar.openProjTitle')}">
+          <button id="btn-open-project" class="ui-btn ui-btn--secondary ui-btn--sm" title="${t('toolbar.openProjTitle')}">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
             </svg>
@@ -257,7 +257,7 @@ export class Toolbar {
             <option value="beginner">沉积图谱</option>
           </select>
 
-          <button id="btn-reset-all" class="tool-btn ui-btn ui-btn--quiet ui-btn--sm reset-all-btn" title="${t('toolbar.resetTitle')}">
+          <button id="btn-reset-all" class="ui-btn ui-btn--quiet ui-btn--sm reset-all-btn" title="${t('toolbar.resetTitle')}">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
             </svg>
@@ -265,12 +265,12 @@ export class Toolbar {
           </button>
 
           <!-- 撤销/重做 -->
-          <button id="btn-undo" class="tool-btn ui-icon-btn" aria-label="${t('toolbar.undoTitle')}" title="${t('toolbar.undoTitle')}" ${!this.history.canUndo() ? 'disabled' : ''}>
+          <button id="btn-undo" class="ui-btn ui-icon-btn" aria-label="${t('toolbar.undoTitle')}" title="${t('toolbar.undoTitle')}" ${!this.history.canUndo() ? 'disabled' : ''}>
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/>
             </svg>
           </button>
-          <button id="btn-redo" class="tool-btn ui-icon-btn" aria-label="${t('toolbar.redoTitle')}" title="${t('toolbar.redoTitle')}" ${!this.history.canRedo() ? 'disabled' : ''}>
+          <button id="btn-redo" class="ui-btn ui-icon-btn" aria-label="${t('toolbar.redoTitle')}" title="${t('toolbar.redoTitle')}" ${!this.history.canRedo() ? 'disabled' : ''}>
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/>
             </svg>
@@ -288,31 +288,31 @@ export class Toolbar {
       <div class="toolbar-right">
         <!-- 缩放控制 (10% ~ 1000%)：运行时被搬到底部画布视口栏 -->
         <div class="btn-group" id="tb-view-group">
-          <button id="btn-zoom-out" class="tool-btn" title="${t('toolbar.zoomOutTitle')}" style="padding: 3px 5px;">
+          <button id="btn-zoom-out" class="ui-btn ui-btn--quiet ui-btn--xs" title="${t('toolbar.zoomOutTitle')}" style="padding: 3px 5px;">
             <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>
             </svg>
           </button>
           <span id="zoom-indicator" class="zoom-badge" style="min-width: 32px; font-size: 10px; cursor: pointer; padding: 2px 4px;" title="${t('toolbar.oneToOneTitle')}">${this.currentScaleText}</span>
-          <button id="btn-zoom-in" class="tool-btn" title="${t('toolbar.zoomInTitle')}" style="padding: 3px 5px;">
+          <button id="btn-zoom-in" class="ui-btn ui-btn--quiet ui-btn--xs" title="${t('toolbar.zoomInTitle')}" style="padding: 3px 5px;">
             <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
             </svg>
           </button>
-          <button id="btn-fit" class="tool-btn" title="${t('toolbar.fitTitle')}" style="padding: 3px 6px; font-size: 10.5px;">
+          <button id="btn-fit" class="ui-btn ui-btn--quiet ui-btn--xs" title="${t('toolbar.fitTitle')}" style="padding: 3px 6px; font-size: 10.5px;">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M16 21h3a2 2 0 0 0 2-2v-3M8 21H5a2 2 0 0 1-2-2v-3"/>
             </svg>
             <span>${t('toolbar.fit')}</span>
           </button>
-          <button id="btn-100" class="tool-btn" title="${t('toolbar.oneToOneTitle')}" style="padding: 3px 6px; font-size: 10.5px;">
+          <button id="btn-100" class="ui-btn ui-btn--quiet ui-btn--xs" title="${t('toolbar.oneToOneTitle')}" style="padding: 3px 6px; font-size: 10.5px;">
             <span>1:1</span>
           </button>
         </div>
 
         <!-- 滤镜与二值透视：运行时被搬到底部画布视口栏 -->
         <div class="btn-group" id="tb-binary-group" style="display: flex; align-items: center; gap: 3px;">
-          <button id="btn-toggle-binary" class="tool-btn ${this.isBinaryOverlayActive ? 'active' : ''}" title="${t('toolbar.binaryTitle')}" style="padding: 3px 6px; font-size: 10.5px;">
+          <button id="btn-toggle-binary" class="ui-btn ui-btn--quiet ui-btn--xs ${this.isBinaryOverlayActive ? 'active' : ''}" title="${t('toolbar.binaryTitle')}" style="padding: 3px 6px; font-size: 10.5px;">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="9"/>
               <path d="M12 3v18A9 9 0 0 0 12 3z" fill="currentColor"/>
@@ -322,17 +322,17 @@ export class Toolbar {
         </div>
 
         <!-- 论文与站点 FAIR / LiPD 元数据提取与录入入口 -->
-        <button id="btn-metadata-modal" class="tool-btn ui-btn ui-btn--quiet ui-btn--sm" title="${t('toolbar.metadataTitle')}">
+        <button id="btn-metadata-modal" class="ui-btn ui-btn--quiet ui-btn--sm" title="${t('toolbar.metadataTitle')}">
           <span>${t('toolbar.metadata')}</span>
         </button>
 
         <!-- 花粉属种名 OCR 自动识别与审核入口 (S3阶段高亮引导，S1/S2未分列阶段弱化) -->
-        <button id="btn-ocr-review-modal" class="tool-btn ui-btn ui-btn--quiet ui-btn--sm ${this.currentWorkflowStep === 5 ? 'is-recommended' : ''}" title="${this.currentWorkflowStep < 5 ? t('toolbar.ocrTitleDisabled') : t('toolbar.ocrTitle')}" ${this.currentWorkflowStep < 5 ? 'disabled' : ''}>
+        <button id="btn-ocr-review-modal" class="ui-btn ui-btn--quiet ui-btn--sm ${this.currentWorkflowStep === 5 ? 'is-recommended' : ''}" title="${this.currentWorkflowStep < 5 ? t('toolbar.ocrTitleDisabled') : t('toolbar.ocrTitle')}" ${this.currentWorkflowStep < 5 ? 'disabled' : ''}>
           <span>${t('toolbar.ocr')}</span>
         </button>
 
         <!-- 年代-深度模型视觉检查与解译入口 -->
-        <button id="btn-age-depth-modal" class="tool-btn ui-btn ui-btn--quiet ui-btn--sm" title="${t('toolbar.ageDepthTitle')}">
+        <button id="btn-age-depth-modal" class="ui-btn ui-btn--quiet ui-btn--sm" title="${t('toolbar.ageDepthTitle')}">
           <span>${t('toolbar.ageDepth')}</span>
         </button>
 
@@ -345,7 +345,7 @@ export class Toolbar {
         </button>
 
         <!-- 唯一常驻偏好入口：[设置] 齿轮图标按钮 -->
-        <button id="btn-settings" class="tool-btn ui-btn ui-btn--secondary ui-btn--sm" title="${t('toolbar.settingsTitle')}">
+        <button id="btn-settings" class="ui-btn ui-btn--secondary ui-btn--sm" title="${t('toolbar.settingsTitle')}">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -354,7 +354,7 @@ export class Toolbar {
         </button>
 
         ${this.isDesktopMode ? `
-          <button id="btn-shutdown" class="tool-btn ui-icon-btn" aria-label="${t('toolbar.shutdownTitle')}" title="${t('toolbar.shutdownTitle')}">
+          <button id="btn-shutdown" class="ui-btn ui-icon-btn" aria-label="${t('toolbar.shutdownTitle')}" title="${t('toolbar.shutdownTitle')}">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10"/>
             </svg>

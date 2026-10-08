@@ -243,7 +243,7 @@ export class Inspector {
           <span>属种列属性: ${col.name.toUpperCase()}</span>
           <div style="display:flex; gap: 4px; align-items:center;">
             <span class="badge" style="background:${col.color}22; color:${col.color}; border:1px solid ${col.color}66;">${currentPlotType}</span>
-            <button id="btn-back-to-step" class="tool-btn" style="font-size: 9.5px; padding: 1px 5px; color: var(--text-muted);" title="返回步骤面板">✕</button>
+            <button id="btn-back-to-step" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 1px 5px; color: var(--text-muted);" title="返回步骤面板">✕</button>
           </div>
         </div>
 
@@ -297,10 +297,10 @@ export class Inspector {
 
           <!-- 常用刻度快捷填入胶囊 -->
           <div class="btn-group" style="margin-top: 8px; width: 100%; display: flex; gap: 4px;">
-            <button class="tool-btn quick-tick-val-btn" data-val="100" style="flex:1; font-size: 10px;">齿:100%</button>
-            <button class="tool-btn quick-tick-val-btn" data-val="50" style="flex:1; font-size: 10px;">齿:50%</button>
-            <button class="tool-btn quick-tick-val-btn" data-val="20" style="flex:1; font-size: 10px;">齿:20%</button>
-            <button class="tool-btn quick-tick-val-btn" data-val="10" style="flex:1; font-size: 10px;">齿:10%</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-tick-val-btn" data-val="100" style="flex:1; font-size: 10px;">齿:100%</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-tick-val-btn" data-val="50" style="flex:1; font-size: 10px;">齿:50%</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-tick-val-btn" data-val="20" style="flex:1; font-size: 10px;">齿:20%</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-tick-val-btn" data-val="10" style="flex:1; font-size: 10px;">齿:10%</button>
           </div>
         </div>
 
@@ -311,8 +311,8 @@ export class Inspector {
             <span style="font-size: 10px; color: ${currentScaleType === 'log' ? 'var(--status-warning)' : 'var(--accent-blue)'}; font-weight: 600;">${currentScaleType.toUpperCase()}</span>
           </div>
           <div class="btn-group" style="display: flex; gap: 4px; width: 100%; margin-top: 4px;">
-            <button class="tool-btn quick-scaletype-btn ${currentScaleType === 'linear' ? 'active-mode' : ''}" data-scale="linear" style="flex: 1; font-size: 10px;">线性 (Linear)</button>
-            <button class="tool-btn quick-scaletype-btn ${currentScaleType === 'log' ? 'active-mode' : ''}" data-scale="log" ${!isLogValid ? 'disabled title="对数刻度要求: 起点值 > 0 且 刻度值 > 0" style="flex: 1; font-size: 10px; opacity: 0.45; cursor: not-allowed;"' : 'style="flex: 1; font-size: 10px;"'}>对数 (Log)</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-scaletype-btn ${currentScaleType === 'linear' ? 'active-mode' : ''}" data-scale="linear" style="flex: 1; font-size: 10px;">线性 (Linear)</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-scaletype-btn ${currentScaleType === 'log' ? 'active-mode' : ''}" data-scale="log" ${!isLogValid ? 'disabled title="对数刻度要求: 起点值 > 0 且 刻度值 > 0" style="flex: 1; font-size: 10px; opacity: 0.45; cursor: not-allowed;"' : 'style="flex: 1; font-size: 10px;"'}>对数 (Log)</button>
           </div>
           ${!isLogValid ? `
             <div id="log-scale-err" style="color: var(--accent-red); font-size: 10px; margin-top: 4px; line-height: 1.3;">
@@ -325,13 +325,13 @@ export class Inspector {
         <div class="form-group" style="margin-top: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <label style="font-size: 11px;">图表形态类型 (Plot Type):</label>
-            <button id="btn-apply-type-all" class="tool-btn" style="font-size: 9.5px; padding: 1px 5px; color: var(--text-muted);" title="将当前形态应用至全部属种列">应用至全列</button>
+            <button id="btn-apply-type-all" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 1px 5px; color: var(--text-muted);" title="将当前形态应用至全部属种列">应用至全列</button>
           </div>
           <div class="btn-group" style="display: flex; gap: 3px; width: 100%; margin-top: 4px;">
-            <button class="tool-btn quick-plottype-btn ${currentPlotType === 'area' ? 'active-mode' : ''}" data-type="area" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">面积</button>
-            <button class="tool-btn quick-plottype-btn ${currentPlotType === 'bar' ? 'active-mode' : ''}" data-type="bar" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">柱状</button>
-            <button class="tool-btn quick-plottype-btn ${currentPlotType === 'line' ? 'active-mode' : ''}" data-type="line" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">折线</button>
-            <button class="tool-btn quick-plottype-btn ${currentPlotType === 'symbol' ? 'active-mode' : ''}" data-type="symbol" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">符号</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-plottype-btn ${currentPlotType === 'area' ? 'active-mode' : ''}" data-type="area" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">面积</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-plottype-btn ${currentPlotType === 'bar' ? 'active-mode' : ''}" data-type="bar" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">柱状</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-plottype-btn ${currentPlotType === 'line' ? 'active-mode' : ''}" data-type="line" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">折线</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-plottype-btn ${currentPlotType === 'symbol' ? 'active-mode' : ''}" data-type="symbol" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">符号</button>
           </div>
         </div>
 
@@ -349,19 +349,19 @@ export class Inspector {
               <span style="font-size: 10px; color: var(--text-secondary);">放大倍数:</span>
               <input type="number" id="inp-exag-mult" value="${exagMult}" min="1" max="100" style="width: 50px; font-size: 11px; padding: 2px 4px;" />
               <div class="btn-group" style="display: flex; gap: 2px; flex: 1;">
-                <button class="tool-btn quick-exag-btn" data-exag="3" style="flex: 1; font-size: 9px; padding: 2px;">3×</button>
-                <button class="tool-btn quick-exag-btn" data-exag="5" style="flex: 1; font-size: 9px; padding: 2px;">5×</button>
-                <button class="tool-btn quick-exag-btn" data-exag="10" style="flex: 1; font-size: 9px; padding: 2px;">10×</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="3" style="flex: 1; font-size: 9px; padding: 2px;">3×</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="5" style="flex: 1; font-size: 9px; padding: 2px;">5×</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="10" style="flex: 1; font-size: 9px; padding: 2px;">10×</button>
               </div>
             </div>
           ` : ''}
         </div>
 
         <div style="display: flex; gap: 8px; margin-top: 10px;">
-          <button id="btn-col-digitize" class="tool-btn" style="flex: 1; font-size: 11px; padding: 6px; color: var(--accent-blue); border-color: rgba(2,132,199,0.3); background: rgba(2,132,199,0.06);">
+          <button id="btn-col-digitize" class="ui-btn ui-btn--quiet ui-btn--xs" style="flex: 1; font-size: 11px; padding: 6px; color: var(--accent-blue); border-color: rgba(2,132,199,0.3); background: rgba(2,132,199,0.06);">
             重新识别此列
           </button>
-          <button id="btn-col-delete" class="tool-btn" style="color: var(--accent-red); border-color: rgba(220,38,38,0.3); background: rgba(220,38,38,0.04); font-size: 11px; padding: 6px;">
+          <button id="btn-col-delete" class="ui-btn ui-btn--quiet ui-btn--xs" style="color: var(--accent-red); border-color: rgba(220,38,38,0.3); background: rgba(220,38,38,0.04); font-size: 11px; padding: 6px;">
             删除列
           </button>
         </div>

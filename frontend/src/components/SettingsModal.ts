@@ -145,8 +145,8 @@ export class SettingsModal {
                 </label>
                 <div style="display: flex; gap: 6px;">
                   <input type="password" id="settings-remote-password" placeholder="${t('settings.remotePasswordHint')}" style="flex: 1; padding: 5px 10px; font-size: 11.5px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
-                  <button type="button" id="btn-toggle-remote-pwd" class="tool-btn" style="padding: 2px 8px; font-size: 12px;" title="${t('auth.toggleShow')}"></button>
-                  <button type="button" id="btn-clear-remote-pwd" class="tool-btn" style="padding: 2px 8px; font-size: 11px; color: var(--accent-red); display: none;" title="清除当前密码">清除密码</button>
+                  <button type="button" id="btn-toggle-remote-pwd" class="ui-btn ui-btn--quiet ui-btn--xs" style="padding: 2px 8px; font-size: 12px;" title="${t('auth.toggleShow')}"></button>
+                  <button type="button" id="btn-clear-remote-pwd" class="ui-btn ui-btn--quiet ui-btn--xs" style="padding: 2px 8px; font-size: 11px; color: var(--accent-red); display: none;" title="清除当前密码">清除密码</button>
                 </div>
                 <small style="font-size: 10.5px; color: var(--text-muted); line-height: 1.4;">
                   ${t('settings.remotePasswordHint')}
@@ -169,7 +169,7 @@ export class SettingsModal {
                 </label>
                 <div style="display: flex; gap: 6px; flex: 1; justify-content: flex-end; max-width: 380px;">
                   <input type="text" id="settings-rpc-endpoint" value="${config.rpc_endpoint || 'http://127.0.0.1:8765/rpc'}" style="flex: 1; padding: 4px 8px; font-size: 11px; font-family: var(--font-mono); border-radius: 5px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
-                  <button id="btn-settings-probe-rpc" class="tool-btn" style="padding: 3px 8px; font-size: 11px; white-space: nowrap;">${t('settings.probe')}</button>
+                  <button id="btn-settings-probe-rpc" class="ui-btn ui-btn--quiet ui-btn--xs" style="padding: 3px 8px; font-size: 11px; white-space: nowrap;">${t('settings.probe')}</button>
                 </div>
               </div>
 

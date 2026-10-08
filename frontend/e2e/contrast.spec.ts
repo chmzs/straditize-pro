@@ -6,11 +6,12 @@
  * 再按 WCAG 复算，两种主题 × 常态/悬停 全部要求 ≥4.5:1。
  *
  * 为什么用探针而不是现成按钮：
- *   1) `.tool-btn.action` 只出现在深度模板的浮层里，正常启动流程里根本不在 DOM；
- *   2) 悬停态必须先真实 hover 才能测到级联关系——通用
- *      `body.theme-light .tool-btn:hover:not(:disabled)` 权重 (0,4,1)、深色下无主题前缀的
- *      `(0,3,1)`，都会盖掉动作填充并把文字改回 `--accent-blue`：这正是「按钮悬停后
- *      文字突然看不清」的成因，本用例第一次跑就抓到了深色主题的这条回归；
+ *   1) `.ui-btn--success`（原 `.tool-btn.action`）只出现在深度模板的动作按钮上，
+ *      正常启动流程里根本不在 DOM；
+ *   2) 悬停态必须先真实 hover 才能测到级联关系——浅色下曾出现
+ *      `body.theme-light .ui-btn--xs:hover:not(:disabled)`（(0,4,1)）盖掉
+ *      `.ui-btn--success`（(0,3,0)）动作填充、把文字改回 `--accent-blue` 的事故：这正是
+ *      「按钮悬停后文字突然看不清」的成因，本用例第一次跑就抓到了深色主题的这条回归；
  *   3) `filter: brightness()` 只影响渲染、不写进 computed 值，必须在 Node 侧按同一公式叠上去。
  *
  * 探针继承真实文档的层叠与主题作用域，所以它测的就是应用里的那条规则，不是复制品。
@@ -18,16 +19,15 @@
 import { expect, test, type Page } from './fixtures';
 import { resetBaseline } from './helpers';
 
-/** 4 类带不透明填充的动作按钮：填充与文字必须成对达标。 */
+/** 3 类带不透明填充的动作按钮：填充与文字必须成对达标。 */
 const PROBES = [
   { name: '主按钮', cls: 'ui-btn ui-btn--primary' },
   { name: '危险按钮', cls: 'ui-btn ui-btn--danger' },
-  { name: '执行按钮', cls: 'tool-btn action' },
-  { name: '导出按钮', cls: 'tool-btn export' },
+  { name: '执行按钮', cls: 'ui-btn ui-btn--success' },
 ] as const;
 
 /** 打开文件按钮：真实站点把 `.open-file-btn` 的 `!important` 半透明填充盖在 `.ui-btn--primary` 上。 */
-const OPEN_FILE_CLS = 'tool-btn ui-btn ui-btn--primary ui-btn--sm open-file-btn';
+const OPEN_FILE_CLS = 'ui-btn ui-btn--primary ui-btn--sm open-file-btn';
 
 interface Rgb {
   r: number;

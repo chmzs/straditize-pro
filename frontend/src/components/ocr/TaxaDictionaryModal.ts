@@ -75,7 +75,7 @@ export class TaxaDictionaryModal {
             </label>
             <textarea id="dict-import-input" rows="7" style="width: 100%; font-family: var(--font-mono); font-size: 11px; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); box-sizing: border-box;" placeholder="示例 1（直接粘贴论文图版说明，支持硬换行与 a), b) 多键前缀）：&#10;图版Ⅱ。a), b) Pediastrum boryanum var. boryanum; c) Pediastrum boryanum var. longicorne type 1; f) Pediastrum cf. argentinense; k), l) Pediastrum asymmetricum&#10;&#10;示例 2（每行一条）：&#10;水绵属,Spirogyra,绿藻类&#10;新疆落叶松,Larix sibirica,地方特有种"></textarea>
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap;">
-              <button class="tool-btn" id="dict-upload-file" style="font-size: 10.5px; padding: 3px 8px;">从 CSV / TXT 文件导入</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs" id="dict-upload-file" style="font-size: 10.5px; padding: 3px 8px;">从 CSV / TXT 文件导入</button>
               <input type="file" id="dict-file-input" accept=".csv,.txt,.tsv" style="display: none;" />
               <label style="font-size: 10.5px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
                 <input type="checkbox" id="dict-replace-mode" />

@@ -27,7 +27,7 @@ export function render(data: DiagramData): string {
       <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 12px; border: 1px solid var(--border-color);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
           <span style="font-size: 11px; font-weight: 700;">${t('step2.container', { count: rois.length })}</span>
-          <button id="btn-create-roi" class="tool-btn btn-subaction" style="font-size: 10px; padding: 2px 7px;">+ ${t('step2.newRoi')}</button>
+          <button id="btn-create-roi" class="ui-btn ui-btn--quiet ui-btn--xs btn-subaction" style="font-size: 10px; padding: 2px 7px;">+ ${t('step2.newRoi')}</button>
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">

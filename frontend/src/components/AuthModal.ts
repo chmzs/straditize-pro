@@ -34,7 +34,7 @@ export class AuthModal {
 
         <div style="display: flex; gap: 6px; position: relative;">
           <input type="password" id="auth-password-input" placeholder="${t('auth.placeholder')}" style="flex: 1; padding: 8px 12px; font-size: 13px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); outline: none;" autofocus />
-          <button type="button" id="auth-toggle-pwd" class="tool-btn" style="padding: 4px 10px; font-size: 12px;" title="${t('auth.toggleShow')}">${t('auth.show')}</button>
+          <button type="button" id="auth-toggle-pwd" class="ui-btn ui-btn--quiet ui-btn--xs" style="padding: 4px 10px; font-size: 12px;" title="${t('auth.toggleShow')}">${t('auth.show')}</button>
         </div>
 
         <div style="display: flex; justify-content: stretch;">

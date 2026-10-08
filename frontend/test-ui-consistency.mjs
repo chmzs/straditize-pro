@@ -38,7 +38,9 @@ for (const primitive of [
   '.ui-btn--primary',
   '.ui-btn--secondary',
   '.ui-btn--quiet',
+  '.ui-btn--success',
   '.ui-btn--danger',
+  '.ui-btn--xs',
   '.ui-icon-btn',
   '.ui-field',
   '.ui-modal__header',
@@ -491,29 +493,47 @@ const GLOSS_BAN = [
     }
   }
   // 原语必须引用成对 token，而不是裸白字或装饰性 --accent-*
+  // 必须锚定「无主题前缀」的基础规则（行首 `selector {`）：`blocksOf(selector)[0]` 会先命中更早出现的
+  // `body.theme-light …` 重述规则，于是验的是那条浅色规则、放过基础规则的回归（负向对照实测过：
+  // `.ui-btn--success` 的基础规则被前面的浅色重述遮挡）。
+  const baseBodyOf = (selector) => {
+    const pattern = new RegExp(`(^|\\n)${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`);
+    const match = pattern.exec(css);
+    return match === null ? '' : match[2];
+  };
   for (const [selector, token] of [
     ['.ui-btn--primary', '--action-primary-bg'],
+    ['.ui-btn--success', '--action-success-bg'],
     ['.ui-btn--danger', '--action-danger-bg'],
     ['.workflow-action-bar__step', '--action-primary-bg'],
   ]) {
-    const body = blocksOf(selector)[0] ?? '';
+    const body = baseBodyOf(selector);
     check(body.includes(`var(${token})`), `对比度契约：${selector} 未使用成对 token var(${token})`);
     check(!/(^|[^-\w])color:\s*#fff/i.test(body), `对比度契约：${selector} 又直接写死白字（填充色一变就会掉出 AA）`);
   }
-  // 浅色主题通用 .tool-btn:hover:not(:disabled) 权重 (0,4,1)，会盖掉动作填充并把文字改回
-  // --accent-blue：主操作按钮必须同级后置显式覆盖，否则 hover 时身份与对比度一起丢失。
-  for (const selector of ['body.theme-light .tool-btn.action:hover', 'body.theme-light .tool-btn.export:hover']) {
-    check(css.includes(selector), `对比度契约：缺少 ${selector}（通用 .tool-btn:hover 会覆盖动作填充）`);
-  }
-  // 深色主题没有主题前缀，通用 .tool-btn:hover:not(:disabled) 是 (0,3,1)，照样压过 (0,2,1) 的动作填充：
-  // 基础 hover 规则必须自带 :not(:disabled) 把权重提到同级后置取胜（e2e/contrast.spec.ts 抓到过这条）。
-  for (const selector of ['.tool-btn.action:hover', '.tool-btn.export:hover']) {
+  // 浅色动作填充的防御性重述：任何后置的、权重更高的浅色通用悬停规则（历史事故：
+  // `body.theme-light .ui-btn--xs:hover:not(:disabled)` 为 (0,4,1)）会盖掉
+  // `.ui-btn--success` (0,3,0) 的填充并把文字改回 --accent-blue，hover 时身份与对比度一起丢失。
+  check(
+    css.includes('body.theme-light .ui-btn--success:hover:not(:disabled)'),
+    '对比度契约：缺少 body.theme-light .ui-btn--success:hover:not(:disabled)（浅色通用悬停会覆盖动作填充）',
+  );
+  // 深色主题没有主题前缀，通用 `.ui-btn:hover:not(:disabled)` 是 (0,3,0)：同级靠源码后置取胜，
+  // 基础 hover 规则必须自带 :not(:disabled) 并显式重述成对 token（e2e/contrast.spec.ts 抓到过这条）。
+  // 必须锚定「无主题前缀」的基础规则：`css.includes(selector + ':not(:disabled)')` 会被上面带
+  // `body.theme-light ` 前缀的防御性重述满足，`blocksOf(selector)[0]` 也会先命中那条浅色规则，
+  // 两处都会漏掉深色主题的真实回归（负向对照实测：去掉 :not(:disabled) 时门禁曾是绿的）。
+  {
+    const selector = '.ui-btn--success:hover';
+    const base = /(^|\n)\.ui-btn--success:hover:not\(:disabled\)\s*\{([^}]*)\}/.exec(css);
     check(
-      css.includes(`${selector}:not(:disabled)`),
-      `对比度契约：${selector} 缺少 :not(:disabled)，权重低于通用 .tool-btn:hover:not(:disabled)，深色主题下动作填充会被覆盖`,
+      base !== null,
+      `对比度契约：${selector} 缺少 :not(:disabled)，深色主题下动作填充会被通用 hover 覆盖`,
     );
-    const block = blocksOf(selector).find((b) => b.includes('var(--action-')) ?? '';
-    check(block !== '', `对比度契约：${selector} 未显式恢复成对 token（hover 会把文字改回装饰色）`);
+    check(
+      base !== null && base[2].includes('var(--action-'),
+      `对比度契约：${selector} 未显式恢复成对 token（hover 会把文字改回装饰色）`,
+    );
   }
   // 半透明叠加底上的白字：叠加后是小面积浅底，两种主题下都读不出来
   check(
@@ -523,6 +543,31 @@ const GLOSS_BAN = [
   check(
     !/\.open-file-btn:hover\s*\{[^}]*color:\s*#ffffff/i.test(css),
     '对比度契约：.open-file-btn:hover 又改回白字（底色是 25% 蓝色半透明叠加）',
+  );
+}
+
+// ---- 17. 遗留基类 .tool-btn 不得回流（已并入 .ui-btn，批次 G-c）----------------
+// 密集尺寸用 `ui-btn ui-btn--quiet ui-btn--xs`，图标钮用 `ui-btn ui-icon-btn`，
+// 动作填充用 `.ui-btn--success`。先去注释再查选择器——注释里会提到旧类名，不该算违规。
+{
+  const cssWithoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  check(
+    !/(^|[^-\w])\.tool-btn(?![\w-])/.test(cssWithoutComments),
+    '遗留基类回流：style.css 又出现 `.tool-btn` 选择器（已并入 `.ui-btn` 体系）',
+  );
+  const legacyClassHits = [];
+  walkSources('src', /\.tsx?$/, (file) => {
+    readFileSync(file, 'utf8')
+      .split(/\r?\n/)
+      .forEach((line, index) => {
+        for (const m of line.matchAll(/class="([^"]*)"/g)) {
+          if (/(^|\s)tool-btn(\s|$)/.test(m[1])) legacyClassHits.push(`${relative(ROOT, file)}:${index + 1}`);
+        }
+      });
+  });
+  check(
+    legacyClassHits.length === 0,
+    `源码又出现遗留 class \`tool-btn\`（改用 ui-btn / ui-btn--quiet ui-btn--xs / ui-btn ui-icon-btn / ui-btn--success）：${legacyClassHits.slice(0, 4).join('、')}${legacyClassHits.length > 4 ? ` 等 ${legacyClassHits.length} 处` : ''}`,
   );
 }
 

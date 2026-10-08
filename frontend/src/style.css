@@ -224,12 +224,6 @@ body.theme-light .btn-group {
   border-color: #e5e7eb;
 }
 
-body.theme-light .tool-btn:hover:not(:disabled) {
-  background: rgba(2, 132, 199, 0.10);
-  border-color: rgba(2, 132, 199, 0.35);
-  color: var(--accent-blue);
-}
-
 body.theme-light .btn-sidebar-action {
   background: var(--action-primary-bg);
   color: var(--action-primary-text);
@@ -260,7 +254,7 @@ body.theme-light .tip-card {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-body.theme-light .tool-btn.active-mode {
+body.theme-light .ui-btn.active-mode {
   background: rgba(2, 132, 199, 0.12) !important;
   color: #0284c7 !important;
   border-color: #0284c7 !important;
@@ -462,6 +456,13 @@ body.theme-light .step-num {
   min-width: 0;
 }
 
+/* 顶栏控件不参与收缩：旧 `.tool-btn` 自带 `flex-shrink: 0`，并入 `.ui-btn` 后由容器承接，
+   否则窄窗口下 `--sm` 与图标钮会被压扁、文案被截断。 */
+.app-toolbar .ui-btn,
+.app-toolbar .ui-icon-btn {
+  flex-shrink: 0;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -535,73 +536,6 @@ body.theme-light .brand-icon-rect {
   font-size: 12px;
 }
 
-.tool-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  padding: 4px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: all 0.15s ease;
-}
-
-.tool-btn:hover:not(:disabled) {
-  background: rgba(56, 189, 248, 0.12);
-  border-color: rgba(56, 189, 248, 0.35);
-  color: var(--accent-blue);
-}
-
-.tool-btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.tool-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.tool-btn.active-mode {
-  background: rgba(56, 189, 248, 0.25) !important;
-  color: var(--accent-blue) !important;
-  border: 1px solid rgba(56, 189, 248, 0.6) !important;
-  box-shadow: 0 0 8px rgba(56, 189, 248, 0.3) !important;
-}
-
-.tool-btn.highlight {
-  color: var(--accent-blue);
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  background: rgba(56, 189, 248, 0.1);
-}
-
-.tool-btn.highlight:hover {
-  background: rgba(56, 189, 248, 0.2);
-}
-
-.tool-btn.action {
-  background: var(--action-success-bg);
-  color: var(--action-success-text);
-  border: none;
-  font-weight: 600;
-}
-
-/* 通用 `.tool-btn:hover:not(:disabled)`（深色 (0,3,1)、浅色 (0,4,1)）会盖掉动作填充并把文字
-   改回 --accent-blue：深色下这里必须带上 `:not(:disabled)` 把权重提到 (0,3,1) 后置取胜，
-   浅色下另有 (0,4,1) 的同级覆盖（见文件后部浅色兼容规则）。 */
-.tool-btn.action:hover:not(:disabled) {
-  background: var(--action-success-bg);
-  border-color: var(--action-success-bg);
-  color: var(--action-success-text);
-  filter: brightness(1.08);
-  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
-}
-
 .zoom-badge {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -615,43 +549,13 @@ body.theme-light .brand-icon-rect {
   align-items: center;
 }
 
-.tool-btn.export {
-  background: var(--action-primary-bg);
-  color: var(--action-primary-text);
-  border-radius: 5px 0 0 5px;
-}
-
-.tool-btn.export:hover:not(:disabled) {
-  background: var(--action-primary-bg);
-  border-color: var(--action-primary-bg);
-  color: var(--action-primary-text);
-  filter: brightness(0.92);
-}
-
-/* 浅色主题下通用 `.tool-btn:hover:not(:disabled)` 的选择器权重为 (0,4,1)，同级压过上面的
-   (0,3,1) 动作填充并把文字改回 --accent-blue：主操作按钮必须同级后置覆盖，否则 hover 时
-   底色与对比度一起丢失。E2E `e2e/contrast.spec.ts` 在两种主题里都复算了实际渲染对比度。 */
-body.theme-light .tool-btn.action:hover {
+/* 浅色下的防御性重述：`.ui-btn--success:hover`（(0,3,0)）若被任何后置的、权重更高的浅色
+   通用悬停规则盖住，hover 时动作底色与对比度会一起丢失（历史事故：浅色 `.ui-btn--xs:hover`
+   (0,4,1) 曾盖掉它）。E2E `e2e/contrast.spec.ts` 在两种主题里都复算了实际渲染对比度。 */
+body.theme-light .ui-btn--success:hover:not(:disabled) {
   background: var(--action-success-bg);
   border-color: var(--action-success-bg);
   color: var(--action-success-text);
-}
-
-body.theme-light .tool-btn.export:hover {
-  background: var(--action-primary-bg);
-  border-color: var(--action-primary-bg);
-  color: var(--action-primary-text);
-}
-
-.tool-btn.export-sub {
-  background: #1d4ed8;
-  color: #dbeafe;
-  border-radius: 0 5px 5px 0;
-  border-left: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.tool-btn.export-sub:hover {
-  background: #1e40af;
 }
 
 .status-pill {
@@ -1633,7 +1537,7 @@ body.theme-light .icon-btn.panel-toggle {
   gap: 1px;
 }
 
-.canvas-view-bar .tool-btn {
+.canvas-view-bar .ui-btn--xs {
   padding: 3px 5px;
 }
 
@@ -1882,8 +1786,10 @@ input[type="text"]:focus, input[type="number"]:focus {
 
 
 /* ================= 面板级次要操作按钮 (清晰实体质感) ================= */
+/* 第二个选择器把实体质感提到 (0,2,0)：`.ui-btn` 基础块位于文件后部，同权重靠源码顺序会反压这一步。 */
 .btn-subaction,
-.inspector-section .tool-btn:not(.icon-btn) {
+.ui-btn--xs.btn-subaction,
+.inspector-section .ui-btn--xs:not(.icon-btn) {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
@@ -1895,7 +1801,8 @@ input[type="text"]:focus, input[type="number"]:focus {
 }
 
 .btn-subaction:hover:not(:disabled),
-.inspector-section .tool-btn:not(.icon-btn):hover:not(:disabled) {
+.ui-btn--xs.btn-subaction:hover:not(:disabled),
+.inspector-section .ui-btn--xs:not(.icon-btn):hover:not(:disabled) {
   background: rgba(56, 189, 248, 0.14);
   border-color: var(--accent-blue);
   color: var(--accent-blue);
@@ -1903,7 +1810,8 @@ input[type="text"]:focus, input[type="number"]:focus {
 }
 
 .btn-subaction:active:not(:disabled),
-.inspector-section .tool-btn:not(.icon-btn):active:not(:disabled) {
+.ui-btn--xs.btn-subaction:active:not(:disabled),
+.inspector-section .ui-btn--xs:not(.icon-btn):active:not(:disabled) {
   transform: scale(0.98);
 }
 
@@ -2046,15 +1954,6 @@ body.theme-light .reset-all-btn:hover {
 .sample-select option, .mode-select option {
   background: #0f172a;
   color: #f1f5f9;
-}
-
-/* ================= 滤镜操作与高亮透视 ================= */
-.tool-btn.active {
-  background: rgba(56, 189, 248, 0.25) !important;
-  color: var(--accent-blue) !important;
-  border: 1px solid rgba(56, 189, 248, 0.5) !important;
-  font-weight: 600;
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
 }
 
 /* ================= 拖拽文件进入画布覆盖层 ================= */
@@ -3209,6 +3108,25 @@ body.theme-light .ad-row-inversion td {
   color: var(--action-danger-text);
 }
 
+/* 成功/确认类动作填充（原 `.tool-btn.action`）。填充与填充文字成对取值，
+   见 `docs/UI_DESIGN_SYSTEM.md` §3。 */
+.ui-btn--success {
+  background: var(--action-success-bg);
+  border-color: var(--action-success-bg);
+  color: var(--action-success-text);
+  font-weight: 600;
+}
+
+/* 重述填充：将来若新增通用悬停规则改写底色，这里保证填充与对比度不被破坏。
+   E2E `e2e/contrast.spec.ts` 在两种主题下复算实际渲染对比度。 */
+.ui-btn--success:hover:not(:disabled) {
+  background: var(--action-success-bg);
+  border-color: var(--action-success-bg);
+  color: var(--action-success-text);
+  filter: brightness(1.08);
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
+}
+
 .ui-btn--sm {
   min-height: var(--control-h-sm);
   padding-inline: var(--space-2);
@@ -3218,6 +3136,51 @@ body.theme-light .ad-row-inversion td {
 .ui-btn--lg {
   min-height: var(--control-h-lg);
   padding-inline: var(--space-4);
+}
+
+/* 密集尺寸：工具条与面板内的高密度操作（原 `.tool-btn` 的度量）。
+   基础块是 32px / 600 / (0 12px) / line-height 1，这里逐项回到 4×6 与 normal，
+   否则每个密集控件的固有高度都会整体偏移。 */
+.ui-btn--xs {
+  min-height: auto;
+  padding: 4px 6px;   /* 旧 `.tool-btn` 度量：介于 --space-1 与 --space-2 之间，无对应 token */
+  border: none;
+  border-radius: var(--radius-sm);
+  gap: 3px;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  line-height: normal;
+  justify-content: normal;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+/* 密集控件悬停只换底色、不上移：抵消 `.ui-btn:hover:not(:disabled)` 的 translateY(-1px)。 */
+.ui-btn--xs:hover:not(:disabled) {
+  transform: none;
+}
+
+.ui-btn--xs:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* 选中态：模式切换（工具条 / 导出页签 / 快捷模式）与滤镜高亮（原 `.tool-btn.active-mode`、
+   `.tool-btn.active`）。限定 `--xs` 是因为 `.active` 在别处也用于 `.ad-tab-btn`（`--sm`），
+   裸 `.ui-btn.active` 会把这些页签一并改色。`box-shadow` 保持非 `!important`，
+   与旧规则一致：面板悬停阴影仍是更高权重的赢家。 */
+.ui-btn--xs.active-mode {
+  background: rgba(56, 189, 248, 0.25) !important;
+  color: var(--accent-blue) !important;
+  border: 1px solid rgba(56, 189, 248, 0.6) !important;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.3) !important;
+}
+
+.ui-btn--xs.active {
+  background: rgba(56, 189, 248, 0.25) !important;
+  color: var(--accent-blue) !important;
+  border: 1px solid rgba(56, 189, 248, 0.5) !important;
+  font-weight: 600;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
 }
 
 .ui-icon-btn {

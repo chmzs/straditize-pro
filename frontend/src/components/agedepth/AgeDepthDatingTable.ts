@@ -497,7 +497,7 @@ export class AgeDepthDatingTable {
         <td style="color: var(--text-muted); font-size: 10px;">${Math.round(width)}</td>
         <td style="color: var(--text-secondary); font-size: 10px;">${rateStr}</td>
         <td style="text-align: center;">
-          <button class="tool-btn ad-btn-del-full-row" data-idx="${i}" title="删除此行" style="padding: 1px 6px; font-size: 9.5px; color: var(--accent-red);">✕</button>
+          <button class="ui-btn ui-btn--quiet ui-btn--xs ad-btn-del-full-row" data-idx="${i}" title="删除此行" style="padding: 1px 6px; font-size: 9.5px; color: var(--accent-red);">✕</button>
         </td>
       `;
       tbody.appendChild(tr);

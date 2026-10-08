@@ -53,21 +53,21 @@ export function createAgeDepthModalHtml(): string {
                 <input type="range" id="ad-rng-opacity" min="0.1" max="1.0" step="0.05" value="0.65" style="width: 80px;" />
               </div>
               <div style="display: flex; align-items: center; gap: 4px;">
-                <button class="tool-btn" id="ad-btn-zoom-out" title="缩小 (滚轮)" style="padding: 1px 6px;">−</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-btn-zoom-out" title="缩小 (滚轮)" style="padding: 1px 6px;">−</button>
                 <span id="ad-zoom-label" style="font-family: var(--font-mono); min-width: 38px; text-align: center;">—</span>
-                <button class="tool-btn" id="ad-btn-zoom-in" title="放大 (滚轮)" style="padding: 1px 6px;">＋</button>
-                <button class="tool-btn" id="ad-btn-zoom-fit" title="适应窗口" style="padding: 1px 6px;">⛶适应</button>
-                <button class="tool-btn" id="ad-btn-zoom-100" title="原始尺寸 100%" style="padding: 1px 6px;">1:1</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-btn-zoom-in" title="放大 (滚轮)" style="padding: 1px 6px;">＋</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-btn-zoom-fit" title="适应窗口" style="padding: 1px 6px;">⛶适应</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-btn-zoom-100" title="原始尺寸 100%" style="padding: 1px 6px;">1:1</button>
               </div>
             </div>
 
             <div id="ad-canvas-container" style="flex: 1; min-height: 240px; position: relative; background: var(--bg-tertiary); border: 2px dashed var(--border-color); border-radius: 6px; overflow: hidden;">
               <!-- 画布左上角控制点与测年点交互工具条 -->
               <div id="ad-floating-toolbar">
-                <button class="tool-btn ad-fmode-btn active" data-fmode="adjust">微调 (V)</button>
-                <button class="tool-btn ad-fmode-btn" data-fmode="add">加点 (A)</button>
-                <button class="tool-btn ad-fmode-btn" data-fmode="delete">删点 (D)</button>
-                <button class="tool-btn ad-fmode-btn" data-fmode="pickDate" style="color: var(--accent-green);">拾取测年点 (P)</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs ad-fmode-btn active" data-fmode="adjust">微调 (V)</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs ad-fmode-btn" data-fmode="add">加点 (A)</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs ad-fmode-btn" data-fmode="delete">删点 (D)</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs ad-fmode-btn" data-fmode="pickDate" style="color: var(--accent-green);">拾取测年点 (P)</button>
               </div>
               <canvas id="ad-inspection-canvas" style="position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; display: none;"></canvas>
               <div id="ad-empty-drop-zone" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg-card); z-index: 10; padding: 24px; text-align: center;">
@@ -80,8 +80,8 @@ export function createAgeDepthModalHtml(): string {
                   选择本地年代图 (PNG/JPG)
                 </button>
                 <div style="display: flex; gap: 10px; align-items: center; font-size: 11px;">
-                  <button id="ad-btn-center-bacon" class="tool-btn" style="color: var(--accent-blue);">Hoya Bacon 范例</button>
-                  <button id="ad-btn-center-bchron" class="tool-btn" style="color: var(--accent-blue);">Bchron 阶梯范例</button>
+                  <button id="ad-btn-center-bacon" class="ui-btn ui-btn--quiet ui-btn--xs" style="color: var(--accent-blue);">Hoya Bacon 范例</button>
+                  <button id="ad-btn-center-bchron" class="ui-btn ui-btn--quiet ui-btn--xs" style="color: var(--accent-blue);">Bchron 阶梯范例</button>
                 </div>
               </div>
               <div id="ad-canvas-hud" style="position: absolute; bottom: 8px; left: 8px; background: var(--bg-hud); padding: 4px 8px; border-radius: 4px; font-size: 10.5px; font-family: var(--font-mono); color: var(--text-secondary); pointer-events: none; z-index: 15;">
@@ -110,7 +110,7 @@ export function createAgeDepthModalHtml(): string {
             <div class="form-group" style="margin: 0; padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                 <span style="font-size: 11px; font-weight: bold; color: var(--accent-blue);">① 坐标轴标定 (Calibration)</span>
-                <button class="tool-btn" id="ad-btn-calib-reset" style="font-size: 9.5px; padding: 1px 6px;">重置</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-btn-calib-reset" style="font-size: 9.5px; padding: 1px 6px;">重置</button>
               </div>
 
               <!-- 轴向翻转选择 (支持标准 Bacon 与深度为 X 的反向文献) -->
@@ -222,8 +222,8 @@ export function createAgeDepthModalHtml(): string {
                 <span id="ad-exclude-count" style="font-size: 9.5px; color: var(--text-muted);">0 个</span>
               </div>
               <div style="display: flex; gap: 6px; margin-top: 5px;">
-                <button class="tool-btn" id="ad-btn-exclude-add" style="flex: 1; font-size: 10px;">＋ 拖框添加</button>
-                <button class="tool-btn" id="ad-btn-exclude-clear" style="font-size: 10px;">清空</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-btn-exclude-add" style="flex: 1; font-size: 10px;">＋ 拖框添加</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-btn-exclude-clear" style="font-size: 10px;">清空</button>
               </div>
               <div style="font-size: 9.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;">
                 用于遮住图例、文字批注或测年点概率分布图；被遮区域不参与曲线识别。
@@ -235,8 +235,8 @@ export function createAgeDepthModalHtml(): string {
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                 <span style="font-size: 10.5px; font-weight: bold; color: var(--text-primary);">年代-深度提取值表:</span>
                 <div style="display: flex; gap: 4px; align-items: center;">
-                  <button class="tool-btn" id="ad-btn-toggle-side-table" style="font-size: 9px; padding: 1px 6px;" title="在全量提取模型与花粉样品层位之间切换">全量模型</button>
-                  <button class="tool-btn" id="ad-btn-expand-full-table" style="font-size: 9px; padding: 1px 6px; color: var(--accent-blue);" title="展开为全屏大表格进行批量编辑与导入导出">⛶ 展开大表</button>
+                  <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-btn-toggle-side-table" style="font-size: 9px; padding: 1px 6px;" title="在全量提取模型与花粉样品层位之间切换">全量模型</button>
+                  <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-btn-expand-full-table" style="font-size: 9px; padding: 1px 6px; color: var(--accent-blue);" title="展开为全屏大表格进行批量编辑与导入导出">⛶ 展开大表</button>
                 </div>
               </div>
 
@@ -298,13 +298,13 @@ export function createAgeDepthModalHtml(): string {
           <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-tertiary); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); flex-wrap: wrap; gap: 8px;">
             <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
               <span style="font-size: 11px; font-weight: 700; color: var(--accent-blue); margin-right: 4px;">数据视图:</span>
-              <button class="tool-btn ad-table-view-btn active" id="ad-tbl-view-model" style="font-size: 10.5px; padding: 3px 8px;">提取全量模型层位</button>
-              <button class="tool-btn ad-table-view-btn" id="ad-tbl-view-samples" style="font-size: 10.5px; padding: 3px 8px;">花粉样品采样层位</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs ad-table-view-btn active" id="ad-tbl-view-model" style="font-size: 10.5px; padding: 3px 8px;">提取全量模型层位</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs ad-table-view-btn" id="ad-tbl-view-samples" style="font-size: 10.5px; padding: 3px 8px;">花粉样品采样层位</button>
               <span style="border-left: 1px solid var(--border-color); height: 16px; margin: 0 4px;"></span>
-              <button class="tool-btn" id="ad-tbl-btn-add" style="font-size: 10.5px; padding: 3px 8px; color: var(--status-success);">添加层位</button>
-              <button class="tool-btn" id="ad-tbl-btn-sort" style="font-size: 10.5px; padding: 3px 8px;">按深度升序排序</button>
-              <button class="tool-btn" id="ad-tbl-btn-copy" style="font-size: 10.5px; padding: 3px 8px;">复制全部 (TSV)</button>
-              <button class="tool-btn" id="ad-tbl-btn-paste" style="font-size: 10.5px; padding: 3px 8px;">粘贴导入 (Excel/TSV)</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-tbl-btn-add" style="font-size: 10.5px; padding: 3px 8px; color: var(--status-success);">添加层位</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-tbl-btn-sort" style="font-size: 10.5px; padding: 3px 8px;">按深度升序排序</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-tbl-btn-copy" style="font-size: 10.5px; padding: 3px 8px;">复制全部 (TSV)</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-tbl-btn-paste" style="font-size: 10.5px; padding: 3px 8px;">粘贴导入 (Excel/TSV)</button>
               <button class="ui-btn ui-btn--primary" id="ad-tbl-btn-sync" style="font-size: 10.5px; padding: 3px 12px;">保存同步至模型</button>
             </div>
             <div id="ad-table-summary-badge" style="font-size: 10.5px; font-family: var(--font-mono); color: var(--text-secondary);">
@@ -347,7 +347,7 @@ export function createAgeDepthModalHtml(): string {
           <div style="flex: 1.2; display: flex; flex-direction: column; gap: 10px; background: var(--bg-tertiary); padding: 14px; border-radius: 6px; border: 1px solid var(--border-light);">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <strong style="font-size: 12px; color: var(--accent-blue);">1. 钻孔实测年代数据表 (Radiocarbon / Dating Table)</strong>
-              <button class="tool-btn" id="btn-ad-paste-dates" style="font-size: 10.5px; color: var(--status-success); border-color: rgba(16,185,129,0.3);">
+              <button class="ui-btn ui-btn--quiet ui-btn--xs" id="btn-ad-paste-dates" style="font-size: 10.5px; color: var(--status-success); border-color: rgba(16,185,129,0.3);">
                 从 Excel 粘贴测年序列 (Ctrl+V)
               </button>
             </div>
@@ -371,7 +371,7 @@ export function createAgeDepthModalHtml(): string {
 
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10.5px; color: var(--text-muted);">
               <span>* 支持 ¹⁴C、²¹⁰Pb、OSL 等多种年代类型；校正曲线 1=IntCal20, 2=Marine20, 0=非¹⁴C。</span>
-              <button class="tool-btn" id="btn-ad-add-date-row" style="padding: 2px 8px; font-size: 10px;">加一行</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs" id="btn-ad-add-date-row" style="padding: 2px 8px; font-size: 10px;">加一行</button>
             </div>
           </div>
 
@@ -448,9 +448,9 @@ export function createAgeDepthModalHtml(): string {
                 <span id="ad-val-thick" style="color: var(--accent-blue); font-weight: 700;">5 cm</span>
               </div>
               <div style="display: flex; gap: 6px;">
-                <button class="tool-btn ad-btn-thick" data-thick="2" style="flex: 1; font-size: 10px;">2 cm (高密)</button>
-                <button class="tool-btn ad-btn-thick active" data-thick="5" style="flex: 1; font-size: 10px; border-color: var(--accent-blue);">5 cm (标准)</button>
-                <button class="tool-btn ad-btn-thick" data-thick="10" style="flex: 1; font-size: 10px;">10 cm (长孔)</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs ad-btn-thick" data-thick="2" style="flex: 1; font-size: 10px;">2 cm (高密)</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs ad-btn-thick active" data-thick="5" style="flex: 1; font-size: 10px; border-color: var(--accent-blue);">5 cm (标准)</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs ad-btn-thick" data-thick="10" style="flex: 1; font-size: 10px;">10 cm (长孔)</button>
               </div>
             </div>
 
@@ -461,10 +461,10 @@ export function createAgeDepthModalHtml(): string {
                 <span id="ad-webr-comp-status" style="font-size: 9.5px; color: var(--accent-amber);">检查中...</span>
               </div>
               <div id="ad-webr-install-bar" style="display: flex; gap: 6px; margin-top: 5px;">
-                <button class="tool-btn" id="btn-ad-install-webr" style="flex: 1; font-size: 10px; color: var(--accent-blue); border-color: rgba(56,189,248,0.3);">
+                <button class="ui-btn ui-btn--quiet ui-btn--xs" id="btn-ad-install-webr" style="flex: 1; font-size: 10px; color: var(--accent-blue); border-color: rgba(56,189,248,0.3);">
                   下载组件 (~40 MB)
                 </button>
-                <button class="tool-btn" id="btn-ad-import-webr-zip" style="font-size: 10px; padding: 2px 6px;" title="离线环境手动导入已下载的 age-modeling.zip">
+                <button class="ui-btn ui-btn--quiet ui-btn--xs" id="btn-ad-import-webr-zip" style="font-size: 10px; padding: 2px 6px;" title="离线环境手动导入已下载的 age-modeling.zip">
                   离线导入
                 </button>
                 <input type="file" id="inp-ad-webr-zip" accept=".zip" style="display: none;" />
@@ -526,7 +526,7 @@ export function createAgeDepthModalHtml(): string {
               <span>覆盖替换现有全部数据 (取消则追加)</span>
             </label>
             <div style="display: flex; gap: 8px;">
-              <button class="tool-btn" id="ad-paste-cancel-btn">取消</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-paste-cancel-btn">取消</button>
               <button class="ui-btn ui-btn--primary" id="ad-paste-confirm-btn" style="padding: 4px 14px; font-size: 11.5px;">确认导入</button>
             </div>
           </div>

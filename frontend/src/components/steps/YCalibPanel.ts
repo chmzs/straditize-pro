@@ -36,7 +36,7 @@ export function render(data: DiagramData): string {
         <span style="font-size: 11px; font-weight: 700;">
           ${isCalibrated ? t('step3.active') : t('step3.inactive')}
         </span>
-        <button id="btn-repick-ycalib" class="tool-btn btn-subaction" style="font-size: 10.5px; padding: 3px 8px;">${t('step3.pickPoints')}</button>
+        <button id="btn-repick-ycalib" class="ui-btn ui-btn--quiet ui-btn--xs btn-subaction" style="font-size: 10.5px; padding: 3px 8px;">${t('step3.pickPoints')}</button>
       </div>
 
       <!-- 常驻两点标定输入表单 (100% 常驻侧栏，彻底告别弹窗) -->
