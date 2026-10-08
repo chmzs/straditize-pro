@@ -1,0 +1,132 @@
+/**
+ * 模态框原语（`.ui-modal__header` / `.ui-modal__footer`）的**运行时**契约：计算样式 + 主题作用域。
+ *
+ * ## 为什么静态门禁不够
+ *
+ * `test-ui-consistency.mjs` 第 15 组只做两件静态检查：同一处 `class="..."` 里不得混挂
+ * legacy `modal-header`/`modal-footer` 与 `ui-modal__*`；三处上下文选择器必须指向原语。
+ * 它证明的是"源码里没写错"，**证明不了层叠结果**：两套规则同时存在时谁生效、
+ * `body.theme-light .ocr-review-dialog .ui-modal__header` 到底找不找得到元素，只有渲染后才算数。
+ * 本文件就是那一层的运行时对照（静态门禁在 `src`，运行时证据在这里）。
+ *
+ * ## 主题取值（易错，实测钉住）
+ *
+ * `index.html` 的 `<body class="theme-light">` 加上 `main.ts:190` 的
+ * `savedTheme === 'dark' ? 移除 : 添加`，意味着**默认主题是浅色**——深色只在
+ * `localStorage['straditize-theme'] === 'dark'` 时出现。两种主题都要断言：
+ * 浅色是默认路径（用例 1/2），深色靠 `addInitScript` 显式进入（用例 3），
+ * 否则"浅色覆盖只在浅色生效"这条契约永远只有一半证据。
+ *
+ * 断言口径统一为 `toHaveCSS`（自动重试）+ 把 CSS 变量解析成计算后的颜色再比对，
+ * 避免把 token 的字面量（`#fff` / `rgba(...)`）抄进用例——token 改值时用例跟着变，
+ * 但"原语背景必须等于 `--bg-card`"这个关系不变。
+ */
+import { expect, test, type Page } from './fixtures';
+import { gotoStage, resetBaseline } from './helpers';
+
+/** 把某个 CSS 变量解析成计算后的颜色（`rgb()`/`rgba()`），用于和 `toHaveCSS` 同口径比对。 */
+async function tokenColor(page: Page, token: string): Promise<string> {
+  return page.evaluate((name: string) => {
+    const probe = document.createElement('div');
+    probe.style.background = `var(${name})`;
+    document.body.appendChild(probe);
+    const value = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return value;
+  }, token);
+}
+
+test.describe('模态框原语与主题契约', () => {
+  test('设置弹窗：header/footer 的计算样式来自 token，且不得混挂 legacy 类名', async ({ page }) => {
+    await resetBaseline(page);
+    expect(
+      await page.evaluate(() => document.body.classList.contains('theme-light')),
+      '默认主题为浅色（index.html 的 body.theme-light + main.ts:190 的 else 分支）',
+    ).toBe(true);
+
+    await page.locator('#btn-settings').click();
+    const dialog = page.locator('.settings-dialog');
+    await expect(dialog).toBeVisible();
+
+    const header = dialog.locator('.ui-modal__header');
+    const footer = dialog.locator('.ui-modal__footer');
+    await expect(header, '设置弹窗必须有唯一的原语 header').toHaveCount(1);
+    await expect(footer, '设置弹窗必须有唯一的原语 footer').toHaveCount(1);
+
+    // 静态门禁第 15 组的运行时对照：渲染出来的 class 里不得再挂 legacy 类名。
+    // 静态扫描只看 `class="..."` 字面量，JS 拼出来的类名它看不见，这里补上。
+    for (const [name, loc] of [
+      ['header', header],
+      ['footer', footer],
+    ] as const) {
+      const cls = (await loc.getAttribute('class')) ?? '';
+      const tokens = cls.split(/\s+/).filter((t) => t !== '');
+      expect(tokens, `${name} 不得混挂 legacy 类名：${cls}`).not.toContain('modal-header');
+      expect(tokens, `${name} 不得混挂 legacy 类名：${cls}`).not.toContain('modal-footer');
+    }
+
+    // 原语契约：padding 走 --space-3/--space-4，边框走 --border-color。
+    await expect(header).toHaveCSS('display', 'flex');
+    await expect(header).toHaveCSS('align-items', 'center');
+    await expect(header).toHaveCSS('justify-content', 'space-between');
+    await expect(header).toHaveCSS('padding-top', '12px');
+    await expect(header).toHaveCSS('padding-left', '16px');
+    await expect(header).toHaveCSS('border-bottom-width', '1px');
+    await expect(header).toHaveCSS('background-color', await tokenColor(page, '--bg-card'));
+
+    await expect(footer).toHaveCSS('display', 'flex');
+    await expect(footer).toHaveCSS('justify-content', 'flex-end');
+    await expect(footer).toHaveCSS('border-top-width', '1px');
+    await expect(footer).toHaveCSS('background-color', await tokenColor(page, '--bg-footer'));
+  });
+
+  test('浅色（默认）：OCR 复核弹窗的浅色覆盖确实命中原语元素', async ({ page }) => {
+    await resetBaseline(page);
+    await gotoStage(page, 5);
+    await page.locator('#btn-ocr-review-modal').click();
+    const ocr = page.locator('.ocr-review-dialog');
+    await expect(ocr).toBeVisible();
+
+    const header = ocr.locator('.ui-modal__header');
+    const footer = ocr.locator('.ui-modal__footer');
+    await expect(header).toHaveCount(1);
+    await expect(footer).toHaveCount(1);
+
+    // 判据说明：浅色覆盖把边框写成 #e2e8f0，而 token `--border-color` 是 #e5e7eb。
+    // 下面这条断言把两者的差异钉住——否则一旦有人把 token 改成同一个值，
+    // 后两条边框断言就会退化成"永远通过"，本用例的判别力会静默归零。
+    expect(
+      await tokenColor(page, '--border-color'),
+      'token --border-color 必须与浅色覆盖的 #e2e8f0 不同，否则本用例失去判别力',
+    ).toBe('rgb(229, 231, 235)');
+
+    // 背景在浅色下与 token 同值（#ffffff / #f8fafc），真正能抓到回归的是边框色：
+    // 若选择器退回 legacy 类名，这两条会变成 rgb(229, 231, 235)。
+    await expect(header).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(header).toHaveCSS('border-bottom-color', 'rgb(226, 232, 240)');
+    await expect(footer).toHaveCSS('background-color', 'rgb(248, 250, 252)');
+    await expect(footer).toHaveCSS('border-top-color', 'rgb(226, 232, 240)');
+  });
+
+  test('深色：浅色覆盖完全失效，原语回到深色 token', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('straditize-theme', 'dark'));
+    await resetBaseline(page);
+    expect(
+      await page.evaluate(() => document.body.classList.contains('theme-light')),
+      '显式选择深色时不得再带 theme-light（main.ts:191 的 remove 分支）',
+    ).toBe(false);
+
+    await gotoStage(page, 5);
+    await page.locator('#btn-ocr-review-modal').click();
+    const ocr = page.locator('.ocr-review-dialog');
+    await expect(ocr).toBeVisible();
+
+    const header = ocr.locator('.ui-modal__header');
+    const footer = ocr.locator('.ui-modal__footer');
+    // 浅色覆盖是 `body.theme-light` 作用域 → 深色下必须完全失效，取值回到 token。
+    await expect(header).toHaveCSS('background-color', await tokenColor(page, '--bg-card'));
+    await expect(header).toHaveCSS('border-bottom-color', await tokenColor(page, '--border-color'));
+    await expect(footer).toHaveCSS('background-color', await tokenColor(page, '--bg-footer'));
+    await expect(footer).toHaveCSS('border-top-color', await tokenColor(page, '--border-color'));
+  });
+});
