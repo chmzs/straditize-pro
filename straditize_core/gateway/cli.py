@@ -51,8 +51,8 @@ def check_single_instance(lock_file: str) -> int | None:
 
 def start_serve_mode(args: Any) -> None:
     """Runs Straditize in headless server mode."""
-    from .config import load_config
-    from .rpc_server import StraditizeRpcHttpServer
+    from ..config import load_config
+    from ..rpc_server import StraditizeRpcHttpServer
 
     cfg = load_config()
     bind_host = (
@@ -89,8 +89,8 @@ def start_desktop_mode(args: Any) -> None:
     """Runs Straditize in single-instance desktop mode."""
     import tempfile
     import webbrowser
-    from .config import load_config
-    from .rpc_server import StraditizeRpcHttpServer
+    from ..config import load_config
+    from ..rpc_server import StraditizeRpcHttpServer
 
     lock_file = os.path.join(tempfile.gettempdir(), "straditize_desktop.lock")
     existing_port = check_single_instance(lock_file)
@@ -153,7 +153,7 @@ def main() -> None:
         "extract",
         "run-project",
     ):
-        from .cli import main as cli_main
+        from ..cli import main as cli_main
 
         cli_main()
         return
@@ -189,7 +189,7 @@ def main() -> None:
         return
 
     if len(sys.argv) > 1 and sys.argv[1] == "stdio":
-        from .rpc_server import run_stdio_server
+        from ..rpc_server import run_stdio_server
 
         run_stdio_server()
         return
