@@ -1654,19 +1654,10 @@ body.theme-light .canvas-hud {
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-.modal-header {
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.modal-header h3 {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-heading);
-}
+/* 批次 G-e：遗留弹窗描边 `.modal-header` / `.modal-header h3` 已并入原语
+   `.ui-modal__header` / `.ui-modal__title`（4 个弹窗：Inspector 深度粘贴、Taxa 词汇表、
+   PropertyPanel 标定与 RPC 配置）。标题统一 16px（此前混用 14 / 13.5 / 13px 三种值），
+   内边距统一 12/16px（此前 14/18px）。 */
 
 /* 批次 G-a2 / G-d：遗留关闭钮与弹窗主体已并入原语体系
    - `.close-btn` → `.ui-icon-btn`（4 处：Inspector 深度表、Taxa 字典、PropertyPanel ×2）。
@@ -1759,15 +1750,7 @@ input[type="text"]:focus, input[type="number"]:focus {
   line-height: 1.5;
 }
 
-.modal-footer {
-  padding: 12px 18px;
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  background: var(--bg-footer);
-}
+/* 批次 G-e：`.modal-footer` 已并入原语 `.ui-modal__footer`（见上方 `.modal-header` 合并记录）。 */
 
 
 

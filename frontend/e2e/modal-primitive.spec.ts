@@ -129,4 +129,47 @@ test.describe('模态框原语与主题契约', () => {
     await expect(footer).toHaveCSS('background-color', await tokenColor(page, '--bg-footer'));
     await expect(footer).toHaveCSS('border-top-color', await tokenColor(page, '--border-color'));
   });
+
+  test('词汇表弹窗（批次 G-e 迁移）：header/footer/title 取自原语，内联旧值确实清除', async ({ page }) => {
+    await resetBaseline(page);
+    await gotoStage(page, 5);
+    await page.locator('#btn-ocr-review-modal').click();
+    await expect(page.locator('.ocr-review-dialog')).toBeVisible();
+    await page.locator('#btn-ocr-taxa-dict').click();
+
+    // 词汇表弹窗与 OCR 复核弹窗同为 .modal-backdrop，用关闭钮 id 唯一定位（弹窗本体无专属类名）。
+    const dict = page.locator('.modal-backdrop').filter({ has: page.locator('#dict-close-btn') });
+    await expect(dict, '词汇表弹窗必须能打开（open() 依赖 ocr.getTaxaDict，失败会提前 return）').toBeVisible();
+
+    const header = dict.locator('.ui-modal__header');
+    const footer = dict.locator('.ui-modal__footer');
+    await expect(header, '词汇表弹窗必须有唯一的原语 header').toHaveCount(1);
+    await expect(footer, '词汇表弹窗必须有唯一的原语 footer').toHaveCount(1);
+
+    for (const [name, loc] of [
+      ['header', header],
+      ['footer', footer],
+    ] as const) {
+      const cls = (await loc.getAttribute('class')) ?? '';
+      const tokens = cls.split(/\s+/).filter((t) => t !== '');
+      expect(tokens, `${name} 不得混挂 legacy 类名：${cls}`).not.toContain('modal-header');
+      expect(tokens, `${name} 不得混挂 legacy 类名：${cls}`).not.toContain('modal-footer');
+    }
+
+    // 迁移前 header 内联 `padding: 10px 16px`、footer 内联 `padding: 10px 16px` + `gap: 8px`。
+    // 断言原语取值（12px / 12px）即可证明内联旧值被移除——若内联还在，这里会是 10px / 8px。
+    await expect(header).toHaveCSS('padding-top', '12px');
+    await expect(header).toHaveCSS('padding-left', '16px');
+    await expect(header).toHaveCSS('justify-content', 'space-between');
+    await expect(footer).toHaveCSS('padding-top', '12px');
+    await expect(footer).toHaveCSS('padding-left', '16px');
+    await expect(footer).toHaveCSS('justify-content', 'flex-end');
+    await expect(footer).toHaveCSS('column-gap', '12px');
+
+    // 标题此前内联 `font-size: 13.5px; font-weight: 700`，原语统一 16px 且 margin: 0。
+    const title = header.locator('.ui-modal__title');
+    await expect(title, '标题必须挂原语 .ui-modal__title').toHaveCount(1);
+    await expect(title).toHaveCSS('font-size', '16px');
+    await expect(title).toHaveCSS('margin-top', '0px');
+  });
 });

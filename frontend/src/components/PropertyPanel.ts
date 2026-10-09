@@ -53,8 +53,8 @@ export class PropertyPanel {
 
     modal.innerHTML = `
       <div class="modal-dialog">
-        <div class="modal-header">
-          <h3>取数区域与层位网格设置 (ROI &amp; Grid)</h3>
+        <div class="ui-modal__header">
+          <h3 class="ui-modal__title">取数区域与层位网格设置 (ROI &amp; Grid)</h3>
           <button class="ui-icon-btn" aria-label="关闭" title="关闭" id="modal-close">&times;</button>
         </div>
         <div class="ui-modal__body">
@@ -107,7 +107,7 @@ export class PropertyPanel {
             <small style="margin-left: 24px;">贯穿所有属种列，确保数据直接锚定在这些固定的层位深度上</small>
           </div>
         </div>
-        <div class="modal-footer">
+        <div class="ui-modal__footer">
           <button class="ui-btn ui-btn--secondary" id="modal-cancel">取消</button>
           <button class="ui-btn ui-btn--primary" id="modal-save">保存设置</button>
         </div>
@@ -190,8 +190,8 @@ export class PropertyPanel {
 
     modal.innerHTML = `
       <div class="modal-dialog">
-        <div class="modal-header">
-          <h3>Agent 2 JSON-RPC 服务连接配置</h3>
+        <div class="ui-modal__header">
+          <h3 class="ui-modal__title">Agent 2 JSON-RPC 服务连接配置</h3>
           <button class="ui-icon-btn" aria-label="关闭" title="关闭" id="modal-close">&times;</button>
         </div>
         <div class="ui-modal__body">
@@ -210,7 +210,7 @@ export class PropertyPanel {
             </div>
           </div>
         </div>
-        <div class="modal-footer">
+        <div class="ui-modal__footer">
           <button class="ui-btn ui-btn--secondary" id="modal-close-btn">关闭</button>
           <button class="ui-btn ui-btn--primary" id="btn-probe">重新探测连接</button>
         </div>

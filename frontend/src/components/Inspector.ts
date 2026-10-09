@@ -819,13 +819,13 @@ export class Inspector {
     modal.className = 'modal-backdrop';
     modal.innerHTML = `
       <div class="modal-dialog" style="width: 440px; max-width: 95vw;">
-        <div class="modal-header">
+        <div class="ui-modal__header">
           <div style="display: flex; align-items: center; gap: 8px;">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
               <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
             </svg>
-            <h3 style="margin: 0; font-size: 13px;">从 Excel 粘贴钻孔真实样品层位序列</h3>
+            <h3 class="ui-modal__title">从 Excel 粘贴钻孔真实样品层位序列</h3>
           </div>
           <button class="ui-icon-btn" aria-label="关闭" title="关闭" id="modal-close-depths">&times;</button>
         </div>
@@ -838,7 +838,7 @@ export class Inspector {
             尚未录入数据
           </div>
         </div>
-        <div class="modal-footer" style="padding: 10px 14px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color);">
+        <div class="ui-modal__footer">
           <button class="ui-btn ui-btn--secondary" id="btn-cancel-depths">取消</button>
           <button class="ui-btn ui-btn--primary" id="btn-confirm-depths" disabled style="padding: 5px 14px; font-size: 11px;">
             确定应用真实层位

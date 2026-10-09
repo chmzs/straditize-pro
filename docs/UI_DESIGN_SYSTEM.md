@@ -70,8 +70,14 @@
     的 `flex-direction:column` 并存时按列排布——实测 body `scrollH 1540 / clientH 778`，右侧 270px 控制栏整体落到折叠线以下
     （`right.y 919` = footer 顶边）。现显式 `flex-direction: row`，实测 `scrollH == clientH == 778`，左表 880px 与右栏 270px 并列。
     该方向声明是**承重**的（若只补原语契约而不重排，原语的 `column` 会重新把两栏压成纵排）。
-  - 尚未迁移的纯 legacy 弹窗 **header/footer** 外壳：`Inspector.ts`、`ocr/TaxaDictionaryModal.ts`、`PropertyPanel.ts`、
-    `OcrReviewModal.ts`（4 个弹窗，body 已迁）；`.settings-modal-body` / `.metadata-modal-body` 仅作标签使用，无对应规则。
+  - 弹窗 **header/footer** 已于批次 G-e 并入 `.ui-modal__header` / `.ui-modal__footer` / `.ui-modal__title`：
+    DOM 8 处（4 个弹窗：`Inspector.ts` 深度粘贴、`ocr/TaxaDictionaryModal.ts` 词汇表、`PropertyPanel.ts` 标定与 RPC 配置）
+    删除 legacy 类与内联覆盖，CSS 侧 `.modal-header` / `.modal-header h3` / `.modal-footer` 三条规则净删。
+    此前标题混用 **14px（legacy 规则）/ 13.5px（Taxa 内联）/ 13px（Inspector 内联）** 三种值，现统一 `--font-size-xl` = 16px；
+    内边距由 `14px 18px` 收敛到原语的 `12px 16px`，`gap` 由内联 8px / legacy 10px 收敛到 `--space-3` = 12px。
+    第 15 组门禁由「禁混挂」升级为「禁出现」（DOM class 与 CSS 选择器两侧都拦），
+    `frontend/e2e/modal-primitive.spec.ts` 新增词汇表弹窗的真实浏览器断言（含负控：还原 legacy header 即失败）。
+    `.settings-modal-body` / `.metadata-modal-body` 仅作标签使用，无对应规则。
 - `.primary-btn` 已退役（第 14 组门禁拦回填）：4 条规则共 31 行、全仓零消费者、含 2 处硬编码渐变；
   已退役的 `.btn-primary` 从未做过 token 别名，两者都不要回填渐变。
 - 状态文本仍有直接取 `--accent-*` 的调用点（`--accent-green` 24 处 / `--accent-amber` 22 处，含画布侧 `AgeDepthCanvas.ts`），

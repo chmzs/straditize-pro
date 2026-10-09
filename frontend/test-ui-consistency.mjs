@@ -345,14 +345,15 @@ const GLOSS_BAN = [
   check(bareHex.length === 0, '内联 style 不得出现裸 hex 色值（不随主题切换，浅色主题必然失真）：' + bareHex.slice(0, 4).join('、'));
 }
 
-// 15. 模态框原语唯一化：同一元素不得同时挂 legacy 与 ui-modal 两套类名，上下文选择器必须指向原语
-// 注：本组只守卫 header/footer。`modal-body` 暂不在守卫范围——`.ui-modal__body` 目前不提供
-// display:flex/flex-direction/gap（堆叠契约），6 处 ui-modal__body 元素仍靠 legacy `.modal-body`
-// 提供 flex + gap:14px；而 `.wpd-modal-body`(2317) 自带 gap:16px 且位置在 `.ui-modal__body` 之前，
-// 若把堆叠契约直接加到 `.ui-modal__body` 会把 16px 覆盖成 14px。迁移 body 必须先重排规则顺序。
+// 15. 模态框原语唯一化：header/footer 只挂 ui-modal__* 原语，legacy 类名与选择器一律不得回流
+// 注（批次 G-e 后）：`modal-header` / `modal-footer` 已全部替换（4 个弹窗并入原语），本组由
+// 「禁混挂」升级为「禁出现」——DOM class 与 CSS 选择器两侧都守。弹窗主体（`modal-body` →
+// `.ui-modal__body`）由第 18 组守卫，本组不再重复。上下文选择器必须直接指向原语，
+// 否则 legacy 类名一改颜色就静默失效（三处：OCR 复核浅色覆盖 ×2、年代深度主体）。
 {
   const LEGACY_MODAL = new Set(['modal-header', 'modal-footer']);
   const mixed = [];
+  const legacyOnly = [];
   const LFCH = String.fromCharCode(10);
   const files = [];
   const stack = ['./src'];
@@ -387,14 +388,27 @@ const GLOSS_BAN = [
       const tokens = text.slice(start, endq).split(' ').filter((t) => t !== '');
       const hasUi = tokens.some((t) => t.startsWith('ui-modal__'));
       const legacy = tokens.filter((t) => LEGACY_MODAL.has(t));
-      if (hasUi && legacy.length) {
+      if (legacy.length) {
         const lineNo = text.slice(0, at).split(LFCH).length;
-        mixed.push(label + ':' + lineNo + '（' + legacy.join('/') + '）');
+        const hit = label + ':' + lineNo + '（' + legacy.join('/') + '）';
+        if (hasUi) mixed.push(hit);
+        else legacyOnly.push(hit);
       }
       cursor = endq + 1;
     }
   }
   check(mixed.length === 0, '同一元素不得混用两套模态框类名（legacy modal-header/footer 与 ui-modal__*）：' + mixed.slice(0, 4).join('、'));
+  check(legacyOnly.length === 0, 'legacy 弹窗类名 modal-header/modal-footer 不得再作为 DOM class 出现（批次 G-e 已全部并入 .ui-modal__header/.ui-modal__footer）：' + legacyOnly.slice(0, 4).join('、'));
+
+  // CSS 侧：legacy 选择器不得回填。行首锚定 + 必须紧跟 `{`，这样合并记录注释里
+  // 反引号包裹的 `.modal-header` 字样不会误伤（注释里没有 `{`）。
+  const LEGACY_SEL = [
+    [/^\.modal-header\s*\{/m, '.modal-header'],
+    [/^\.modal-header\s+h3\s*\{/m, '.modal-header h3'],
+    [/^\.modal-footer\s*\{/m, '.modal-footer'],
+  ];
+  const legacySel = LEGACY_SEL.filter(([re]) => re.test(css)).map(([, name]) => name);
+  check(legacySel.length === 0, 'legacy 弹窗选择器不得回填（应按原语取值）：' + legacySel.join('、'));
 
   const RETARGETED = [
     'body.theme-light .ocr-review-dialog .ui-modal__header',

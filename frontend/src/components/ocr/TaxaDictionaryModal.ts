@@ -51,9 +51,9 @@ export class TaxaDictionaryModal {
     dictModal.style.zIndex = '10000';
     dictModal.innerHTML = `
       <div class="modal-dialog" style="width: min(760px, 94vw); max-height: 88vh; display: flex; flex-direction: column;">
-        <div class="modal-header" style="padding: 10px 16px;">
+        <div class="ui-modal__header">
           <div style="display: flex; align-items: center; gap: 8px;">
-            <h3 style="font-size: 13.5px; font-weight: 700;">属种词汇表</h3>
+            <h3 class="ui-modal__title">属种词汇表</h3>
           </div>
           <button class="ui-icon-btn" aria-label="关闭" title="关闭" id="dict-close-btn">&times;</button>
         </div>
@@ -99,7 +99,7 @@ export class TaxaDictionaryModal {
           </div>
         </div>
 
-        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px;">
+        <div class="ui-modal__footer">
           <button class="ui-btn ui-btn--secondary" id="dict-cancel-btn">关闭</button>
           <button class="ui-btn ui-btn--primary" id="dict-save-btn">保存并应用</button>
         </div>
