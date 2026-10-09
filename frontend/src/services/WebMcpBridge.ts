@@ -82,7 +82,7 @@ export function registerWebMcpAndInspectionHandles(p: WebMcpBridgeParams): void 
 
   if (typeof EventSource !== 'undefined') {
     try {
-      const es = new EventSource('/events');
+      const es = new EventSource(p.rpcClient.signUrl('/events'));
       es.addEventListener('rpc_call', (ev: MessageEvent) => {
         if (inPageCallInFlight) return;
         try {

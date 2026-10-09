@@ -227,13 +227,20 @@ export class RpcClient {
             this.backendOnline = true;
             try {
               const statusUrl = url.replace(/\/rpc$/, '/status');
-              const sRes = await fetch(statusUrl);
+              const statusHeaders: Record<string, string> = {};
+              if (this.authToken) {
+                statusHeaders['X-Straditize-Auth'] = this.authToken;
+              }
+              const sRes = await fetch(this.signUrl(statusUrl), { headers: statusHeaders });
               if (sRes.ok) {
                 const sData = await sRes.json();
                 if (sData && typeof sData.is_desktop_mode === 'boolean') {
                   this.isDesktopMode = sData.is_desktop_mode;
                 }
                 if (sData && sData.auth_required) {
+                  if (this.authToken) {
+                    this.setAuthToken('');
+                  }
                   this.needsAuthentication = true;
                   this.triggerAuthRequired();
                 } else {
@@ -1006,7 +1013,15 @@ export class RpcClient {
 
     let res: Response;
     try {
-      res = await fetch(`${this.baseUrl()}/api/upload`, { method: 'POST', body: formData });
+      const headers: Record<string, string> = {};
+      if (this.authToken) {
+        headers['X-Straditize-Auth'] = this.authToken;
+      }
+      res = await fetch(this.signUrl(`${this.baseUrl()}/api/upload`), {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
     } catch (err) {
       this.raiseBackendLost('api.upload', err);
     }
@@ -1037,9 +1052,13 @@ export class RpcClient {
    */
   public async requestShutdown(): Promise<void> {
     try {
-      await fetch(`${this.baseUrl()}/shutdown`, {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (this.authToken) {
+        headers['X-Straditize-Auth'] = this.authToken;
+      }
+      await fetch(this.signUrl(`${this.baseUrl()}/shutdown`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ action: 'shutdown' }),
       });
     } catch {

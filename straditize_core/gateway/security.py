@@ -100,8 +100,12 @@ class SecurityMiddleware:
         if not expected_token:
             return True
 
-        # 1. Header X-Straditize-Auth
+        # 1. Header X-Straditize-Auth or Authorization: Bearer <token>
         token = self.headers.get("X-Straditize-Auth")
+        if not token:
+            auth_header = self.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:].strip()
         if token and secrets.compare_digest(token, expected_token):
             return True
 
@@ -113,6 +117,22 @@ class SecurityMiddleware:
                 return True
         except Exception:
             pass
+
+        # 3. Cookie header (straditize_auth_token=...)
+        cookie_header = self.headers.get("Cookie", "")
+        if cookie_header:
+            try:
+                import http.cookies
+
+                cookies = http.cookies.SimpleCookie()
+                cookies.load(cookie_header)
+                for cookie_key in ("straditize_auth_token", "auth_token"):
+                    if cookie_key in cookies:
+                        c_val = cookies[cookie_key].value
+                        if c_val and secrets.compare_digest(c_val, expected_token):
+                            return True
+            except Exception:
+                pass
 
         return False
 

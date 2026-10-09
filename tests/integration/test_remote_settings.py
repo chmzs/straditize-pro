@@ -336,6 +336,39 @@ def test_remote_password_protection_and_api_auth():
             res = json.loads(resp.read().decode("utf-8"))
             assert res.get("result", {}).get("pong") is True
 
+        # 8. Authenticated remote client with header reports auth_required is False on /status
+        req_auth_status_header = urllib.request.Request(
+            f"http://127.0.0.1:{port}/status",
+            headers={
+                "Host": f"192.168.1.50:{port}",
+                "X-Straditize-Auth": token,
+            },
+        )
+        with urllib.request.urlopen(req_auth_status_header, timeout=1.0) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            assert data["auth_required"] is False
+
+        # 9. Authenticated remote client with Cookie reports auth_required is False on /status
+        req_auth_status_cookie = urllib.request.Request(
+            f"http://127.0.0.1:{port}/status",
+            headers={
+                "Host": f"192.168.1.50:{port}",
+                "Cookie": f"straditize_auth_token={token}; other_cookie=123",
+            },
+        )
+        with urllib.request.urlopen(req_auth_status_cookie, timeout=1.0) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            assert data["auth_required"] is False
+
+        # 10. Authenticated remote client with ?auth= query param reports auth_required is False
+        req_auth_status_query = urllib.request.Request(
+            f"http://127.0.0.1:{port}/status?auth={token}",
+            headers={"Host": f"192.168.1.50:{port}"},
+        )
+        with urllib.request.urlopen(req_auth_status_query, timeout=1.0) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            assert data["auth_required"] is False
+
     finally:
         server.stop()
 

@@ -483,7 +483,7 @@ export class AgeDepthController {
         this.sseSource.close();
         this.sseSource = null;
       }
-      this.sseSource = new EventSource('/events');
+      this.sseSource = new EventSource(this.rpcClient.signUrl('/events'));
       this.sseSource.addEventListener('component.ready', (e: MessageEvent) => {
         try {
           const data = JSON.parse(e.data || '{}');
