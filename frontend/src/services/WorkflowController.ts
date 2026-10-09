@@ -194,18 +194,21 @@ export class WorkflowController {
     } else if (targetStage === STAGE.CALIBRATE_COLUMNS) {
       this.currentStage = STAGE.CALIBRATE_COLUMNS;
       this.callbacks.onStageChange?.(this.currentStage);
+      this.canvasComponent.setToolMode('select');
       this.updateWorkflowBar();
       this.getInspector()?.updateData(this.canvasComponent.data);
       this.callbacks.setHudNotice('已进入 Step 6 列标定！在侧边栏点击自动提取刻度齿，或双击端点手动标定。', 4500);
     } else if (targetStage === STAGE.SPEARS_AND_SAMPLES) {
       this.currentStage = STAGE.SPEARS_AND_SAMPLES;
       this.callbacks.onStageChange?.(this.currentStage);
+      this.canvasComponent.setToolMode('select');
       this.updateWorkflowBar();
       this.getInspector()?.updateData(this.canvasComponent.data);
       this.callbacks.setHudNotice('已进入 Step 7 采样层位！点击侧栏【提取采样共识】或从外部粘贴真实层位。', 4500);
     } else if (targetStage === STAGE.QA) {
       this.currentStage = STAGE.QA;
       this.callbacks.onStageChange?.(this.currentStage);
+      this.canvasComponent.setToolMode('select');
       this.updateWorkflowBar();
       this.getInspector()?.updateData(this.canvasComponent.data);
       this.callbacks.setHudNotice('已进入 Step 8 地学校验！正在核验组分总和 ≤100% 门禁与空层位排查。', 4000);

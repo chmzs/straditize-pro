@@ -42,6 +42,8 @@ export interface ToolContext {
   viewport: Viewport;
   /** 当前工作流步骤 (0~8) */
   workflowStage: number;
+  /** 当前工具模式 */
+  toolMode: ToolMode;
   /** 撤销/重做历史栈 */
   history: HistoryManager;
   /** 请求画布重绘 */

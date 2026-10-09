@@ -36,11 +36,10 @@ assert.equal(S.canPickYCalibMark(S.STAGE.Y_CALIB, 'ycalib'), true, '步骤3 Y �
 assert.equal(S.canPickYCalibMark(S.STAGE.Y_CALIB, 'select'), false, '步骤3 非 Y 标定模式不得拾取');
 assert.equal(S.canPickYCalibMark(S.STAGE.ROI, 'ycalib'), false, '步骤2 不得拾取 Y 标定点');
 assert.equal(S.showsYCalibMarks(S.STAGE.ROI), false, '步骤2 尚未进入标定，不该画标记');
+assert.equal(S.showsYCalibMarks(S.STAGE.CLEANUP), false, '步骤4 清理不绘制 Y1/Y2 拾取标记盒');
+assert.equal(S.showsYCalibMarks(S.STAGE.SPLIT), false, '步骤5 分列不绘制 Y1/Y2 拾取标记盒');
+assert.equal(S.showsYCalibMarks(S.STAGE.CALIBRATE_COLUMNS), false, '步骤6 标定列不绘制 Y1/Y2 拾取标记盒');
 
-// 本轮缺陷的形状：绘制守卫 >=4、拾取守卫 ===3 —— 结果是"点得上却看不见"。
-// 正确关系是单向的：**能拾取的地方必须画得出来**（否则点了毫无反馈），
-// 反过来不成立 —— 步骤 4 清理时已拾取的 Y1/Y2 要继续可见（标定信息不能凭空消失），
-// 但不该再允许点选新的（那一步在做去线，工具模式是 linefix 而非 ycalib）。
 for (let stage = 0; stage <= 8; stage++) {
   const pick = S.canPickYCalibMark(stage, 'select');
   const draw = S.showsYCalibMarks(stage);
@@ -51,9 +50,8 @@ for (let stage = 0; stage <= 8; stage++) {
     `步骤 ${stage}：ROI「看得见手柄」与「点得中手柄」必须同真同假`,
   );
 }
-// 步骤 4 的具体语义（本轮推敲后确定，别再改回"两态一致"）
 assert.equal(S.canPickYCalibMark(S.STAGE.CLEANUP, 'ycalib'), false, '步骤4 清理不允许再拾取 Y 点');
-assert.equal(S.showsYCalibMarks(S.STAGE.CLEANUP), true, '步骤4 仍须显示已拾取的 Y1/Y2');
+assert.equal(S.showsYCalibMarks(S.STAGE.CLEANUP), false, '步骤4 保持工作区干净，不绘制临时标定盒');
 console.log('✔ 「能点 ⟹ 能画」成立，且 ROI 手柄绘制/命中成对');
 
 // ---------------------------------------------------------------------------

@@ -53,13 +53,13 @@ export function canHitRoiHandle(stage: number): boolean {
 }
 
 /**
- * 步骤 3 起绘制 Y1/Y2 标定标记。
+ * 仅在步骤 3（Y 标定）绘制 Y1/Y2 两点标定临时交互标记。
  *
- * 与 canPickYCalibMark 必须同步：一个管"画不画"、一个管"点不点得上"，
- * 此前二者分别写成 `>= 4` 和 `=== 3`，导致步骤 3 点完两点毫无反馈。
+ * 后续步骤（4 清理 / 5 分列 / 6 刻度 / 7 拐点 / 8 校验）中，标定结果已作为
+ * 深度标尺与网格应用，不再常驻绘制 Y1/Y2 临时标记盒与虚线，保持工作区干净；若需调整点击步骤 3 回退。
  */
 export function showsYCalibMarks(stage: number): boolean {
-  return stage >= STAGE.Y_CALIB;
+  return stage === STAGE.Y_CALIB;
 }
 
 /** 是否处于「画布左键点击即拾取 Y1/Y2」的步骤。 */

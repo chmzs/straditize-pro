@@ -1,17 +1,18 @@
 import { Point2D, ToolMode } from '../../types/pollen';
-import { canPickYCalibMark } from '../WorkflowStage';
+import { canPickYCalibMark, STAGE } from '../WorkflowStage';
 import { ToolContext, ToolStrategy } from './ToolStrategy';
 
 export class YCalibToolStrategy implements ToolStrategy {
   public readonly mode: ToolMode = 'ycalib';
 
   public hasMarksOrHover(toolCtx: ToolContext): boolean {
+    if (toolCtx.workflowStage !== STAGE.Y_CALIB) return false;
     const cal = toolCtx.data.calibration;
     const marks = toolCtx.yCalibMarks;
     const y1Px = marks[0]?.y ?? (cal.top_px !== null && cal.top_px !== undefined ? Number(cal.top_px) : null);
     const y2Px = marks[1]?.y ?? (cal.bottom_px !== null && cal.bottom_px !== undefined ? Number(cal.bottom_px) : null);
     const hasItems = (y1Px !== null && !Number.isNaN(y1Px)) || (y2Px !== null && !Number.isNaN(y2Px));
-    const isYCalibMode = toolCtx.workflowStage === 3;
+    const isYCalibMode = toolCtx.toolMode === 'ycalib';
     return hasItems || (isYCalibMode && Boolean(toolCtx.hoverWorldPt));
   }
 
@@ -177,8 +178,8 @@ export class YCalibToolStrategy implements ToolStrategy {
       drawPill(label, item.x + 10 / scale, item.y, item.color, item.color, true);
     }
 
-    // 悬停指引线
-    if (toolCtx.hoverWorldPt) {
+    // 悬停指引线（仅在步骤 3 且处于 ycalib 拾取工具模式时显示）
+    if (toolCtx.workflowStage === STAGE.Y_CALIB && toolCtx.toolMode === 'ycalib' && toolCtx.hoverWorldPt) {
       const hy = Math.round(toolCtx.hoverWorldPt.y);
       ctx.beginPath();
       ctx.setLineDash([3 / scale, 3 / scale]);

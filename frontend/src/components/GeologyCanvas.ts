@@ -1031,6 +1031,7 @@ export class GeologyCanvas {
       data: this.data,
       viewport: this.viewport,
       workflowStage: this.workflowStage,
+      toolMode: this.toolModeManager.getMode(),
       history: this.history,
       requestRender: () => this.requestRender(),
       notifyNotice: (msg) => this.notifyNotice(msg),
