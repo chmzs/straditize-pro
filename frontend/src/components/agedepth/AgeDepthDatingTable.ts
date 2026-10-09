@@ -1,4 +1,4 @@
-import { notifyError } from '../../ui/feedback';
+import { notify, notifyError } from '../../ui/feedback';
 import {
   AgeDepthModelInspectionData,
   DatingPoint,
@@ -713,7 +713,7 @@ export class AgeDepthDatingTable {
 
   public async copyTableTsv(): Promise<void> {
     if (!this.inspectionData || this.inspectionData.depths.length === 0) {
-      notifyError('当前尚无年代-深度数据可复制！');
+      notify('当前尚无年代-深度数据可复制！', 'info');
       return;
     }
     const d = this.inspectionData.depths;

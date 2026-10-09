@@ -1,5 +1,5 @@
 import { RpcClient } from '../../services/RpcClient';
-import { notifyError } from '../../ui/feedback';
+import { notify, notifyError } from '../../ui/feedback';
 import {
   AgeDepthModelInspectionData,
   CalibMarker,
@@ -468,7 +468,7 @@ export class AgeDepthController {
 
       if (instRes && instRes.success) {
         this.onComponentReady(instRes);
-        notifyError('组件已就绪，年龄建模功能已激活！');
+        notify('组件已就绪，年龄建模功能已激活！', 'success');
         this.checkComponentStatus();
       }
     } catch (err: any) {
@@ -586,7 +586,7 @@ export class AgeDepthController {
           if (statusEl) {
             statusEl.innerHTML = `<strong>本地 R 建模完成</strong>: 原生 150 万次 MCMC 成功完成并生成 95% 置信带！`;
           }
-          notifyError('本地 Rscript 原生满血 Bacon 建模完成！已自动生成拟合中值线与 95% 置信区间。');
+          notify('本地 Rscript 原生满血 Bacon 建模完成！已自动生成拟合中值线与 95% 置信区间。', 'success');
           return;
         }
         if (res && res !== true && res.error) {

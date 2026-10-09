@@ -649,6 +649,29 @@ const GLOSS_BAN = [
   }
 }
 
+// ---- 19. 状态反馈级别：成功 / 无操作结果不得走 notifyError（danger 通道）------
+// notifyError 的语义是「操作失败」（level=danger → role=alert、停留 8s）。把「已成功」
+// 「无需合并」这类结果塞进 danger 通道，会同时污染语义、停留时长与读屏播报——
+// 同一个操作在不同位置给出不同级别，正是「状态反馈不一致」。级别判据见 §5 反馈通道。
+const SUCCESS_WORDS = ['已成功', '已就绪', '已激活', '已合并', '建模完成', '成功完成'];
+const NOOP_WORDS = ['无需', '未发现可', '尚无'];
+const levelMisuse = [];
+walkSources('src', /\.ts$/, (file) => {
+  if (file.endsWith(join('ui', 'feedback.ts'))) return;
+  const text = readFileSync(file, 'utf8');
+  const re = /notifyError\(\s*([`'"])([\s\S]{0,240}?)\1/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const msg = m[2];
+    const hit = SUCCESS_WORDS.find((w) => msg.includes(w)) ?? NOOP_WORDS.find((w) => msg.includes(w));
+    if (hit) levelMisuse.push(`${relative(ROOT, file)}: ${hit} → ${msg.replace(/\s+/g, ' ').slice(0, 40)}`);
+  }
+});
+check(
+  levelMisuse.length === 0,
+  `成功 / 无操作结果类提示必须走 notify(text, 'success' | 'info')，不得走 notifyError（danger 通道）：${levelMisuse.slice(0, 4).join('；')}`,
+);
+
 if (failures.length > 0) {
   console.error(`✘ UI 一致性门禁失败（${failures.length} 项）:`);
   for (const failure of failures) console.error(`  - ${failure}`);

@@ -1,7 +1,7 @@
 import { DiagramData, ColumnGroup } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
-import { notifyError } from '../../ui/feedback';
+import { notify, notifyError } from '../../ui/feedback';
 
 export const step = 6;
 export const title = '6. 标定列与 X 刻度';
@@ -190,7 +190,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   root.querySelector('#btn-merge-groups')?.addEventListener('click', async () => {
     const roi = activeRoi();
     if (!roi || !roi.x_groups || roi.x_groups.length <= 1 || !ctx.rpcClient) {
-      notifyError('当前 ROI 仅有 1 个或没有组，无需合并。');
+      notify('当前 ROI 仅有 1 个或没有组，无需合并。', 'info');
       return;
     }
 
@@ -224,10 +224,10 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         }
       }
       if (mergedCount > 0) {
-        notifyError(`已成功合并 ${mergedCount} 个标度相同的列组！`);
+        notify(`已成功合并 ${mergedCount} 个标度相同的列组！`, 'success');
         ctx.onDataChange?.();
       } else {
-        notifyError('当前 ROI 内所有列组的形态或标度各不相同，未发现可合并的同类组。');
+        notify('当前 ROI 内所有列组的形态或标度各不相同，未发现可合并的同类组。', 'info');
       }
     } catch (err) {
       notifyError(err instanceof Error ? err.message : String(err));
