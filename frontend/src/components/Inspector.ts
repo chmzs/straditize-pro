@@ -827,9 +827,9 @@ export class Inspector {
             </svg>
             <h3 style="margin: 0; font-size: 13px;">从 Excel 粘贴钻孔真实样品层位序列</h3>
           </div>
-          <button class="close-btn" id="modal-close-depths">&times;</button>
+          <button class="ui-icon-btn" aria-label="关闭" title="关闭" id="modal-close-depths">&times;</button>
         </div>
-        <div class="modal-body" style="padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+        <div class="ui-modal__body">
           <p style="font-size: 11px; color: var(--text-secondary); margin: 0; line-height: 1.5;">
             请在 Excel、Word 或纯文本中选中深度/年代列（允许非均匀/非等距采样），按 <strong>Ctrl+C</strong> 复制，然后直接在此处按 <strong>Ctrl+V</strong> 粘贴：
           </p>

@@ -55,9 +55,9 @@ export class PropertyPanel {
       <div class="modal-dialog">
         <div class="modal-header">
           <h3>取数区域与层位网格设置 (ROI &amp; Grid)</h3>
-          <button class="close-btn" id="modal-close">&times;</button>
+          <button class="ui-icon-btn" aria-label="关闭" title="关闭" id="modal-close">&times;</button>
         </div>
-        <div class="modal-body">
+        <div class="ui-modal__body">
           <div class="form-group">
             <label>数据取数区像素范围 (Data ROI):</label>
             <div class="input-row">
@@ -192,9 +192,9 @@ export class PropertyPanel {
       <div class="modal-dialog">
         <div class="modal-header">
           <h3>Agent 2 JSON-RPC 服务连接配置</h3>
-          <button class="close-btn" id="modal-close">&times;</button>
+          <button class="ui-icon-btn" aria-label="关闭" title="关闭" id="modal-close">&times;</button>
         </div>
-        <div class="modal-body">
+        <div class="ui-modal__body">
           <p style="color: var(--text-secondary); font-size: 13px; line-height: 1.5; margin-bottom: 16px;">
             前端自带高仿真 Mock 引擎，即使后端服务未启动也可完全自主交互、加点吸附、撤销重做和导出数据；
             当 Agent 2 的 JSON-RPC 服务启动时，可在此输入地址无缝直连。

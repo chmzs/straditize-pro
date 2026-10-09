@@ -70,7 +70,7 @@ export class OcrReviewModal {
           <button class="ui-icon-btn" id="ocr-close-btn" aria-label="关闭" title="关闭">&times;</button>
         </div>
 
-        <div class="modal-body" style="flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow: hidden;">
+        <div class="ui-modal__body" style="flex: 1; overflow: hidden;">
           <!-- 1. 全宽交互式框选视口 (全宽交互画布，支持 8 向手柄自由调整边框与平移缩放) -->
           <div class="ocr-crop-card">
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px;">

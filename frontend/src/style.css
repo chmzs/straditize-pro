@@ -1668,24 +1668,11 @@ body.theme-light .canvas-hud {
   color: var(--text-heading);
 }
 
-.close-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-size: 20px;
-  cursor: pointer;
-}
-
-.close-btn:hover {
-  color: var(--text-primary);
-}
-
-.modal-body {
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
+/* 批次 G-a2 / G-d：遗留关闭钮与弹窗主体已并入原语体系
+   - `.close-btn` → `.ui-icon-btn`（4 处：Inspector 深度表、Taxa 字典、PropertyPanel ×2）。
+     命中区从 ~20px 字形变为 32px 方框；颜色由 --text-muted 收敛到 --text-secondary。
+   - `.modal-body` → `.ui-modal__body`（堆叠契约 display/flex-direction/gap 补进原语）。
+     唯一例外 `.wpd-modal-body` 必须晚于原语声明，见文件后半原语区。 */
 
 .form-group {
   display: flex;
@@ -2220,14 +2207,9 @@ body.theme-light .reset-all-btn:hover {
   flex-direction: column;
 }
 
-.wpd-modal-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  gap: 16px;
-  padding: 16px;
-  box-sizing: border-box;
-}
+/* `.wpd-modal-body` 已下移至文件末尾 `.ui-modal__body` 之后（批次 G-d）。
+   该变体必须晚于原语声明，否则 gap:16px / padding:16px / flex-direction:row
+   会被原语的堆叠契约覆盖。 */
 
 .wpd-left-area {
   flex: 1;
@@ -3238,9 +3220,27 @@ body.theme-light .ad-row-inversion td {
 }
 
 .ui-modal__body {
+  /* 堆叠契约（批次 G-d）：弹窗主体默认纵向排列，统一 12px 间距。
+     特例由后代选择器或紧随其后的变体覆盖（本文件顺序敏感）。 */
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
   min-height: 0;
   overflow: auto;
   padding: var(--space-4);
+}
+
+/* WPD 导出弹窗主体：左侧表格区 + 右侧 270px 控制栏「并列排布」
+   （依据 ExportModal.ts 源码注释与 .wpd-right-controls 的定宽声明）。
+   必须晚于 .ui-modal__body，否则 gap/padding/flex-direction 会被原语覆盖。 */
+.wpd-modal-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  padding: 16px;
+  box-sizing: border-box;
 }
 
 .ui-modal__footer {

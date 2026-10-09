@@ -107,7 +107,7 @@ export function showDetailModal(title: string, detail: string, hint?: string): v
         <h3 class="ui-modal__title">${escapeHtml(title)}</h3>
         <button class="ui-icon-btn" data-ui-detail-close aria-label="关闭" title="关闭">&times;</button>
       </div>
-      <div class="modal-body ui-modal__body">
+      <div class="ui-modal__body">
         ${hint ? `<p class="ui-detail-hint">${escapeHtml(hint)}</p>` : ''}
         <pre class="ui-detail-text" data-ui-detail-text></pre>
       </div>

@@ -60,11 +60,18 @@
   保留为 `.ui-btn--xs.active(-mode)`（`!important` 维持旧优先级），`.action` → `.ui-btn--success`，`.export` / `.export-sub`
   / `.highlight` 随变体退役。等价性以 89 站点前后的计算样式快照逐项对齐（26 属性 × 常态/悬停 × 两主题；真实页面按 id 对齐 +
   类名×上下文探针），第 17 组门禁禁止选择器与源码 class 两侧回流。
-- `.modal-body` 尚未并入 `.ui-modal__body`：原语不提供堆叠契约（`display:flex; flex-direction:column; gap:14px`），
-  6 处元素仍靠 legacy 类拿这两个属性；而 `.wpd-modal-body` 自带 `gap:16px` 且位置在原语规则之前，
-  直接给 `.ui-modal__body` 补契约会把 16px 覆盖成 14px——迁移必须先重排规则顺序。
-  尚未迁移的纯 legacy 弹窗：`Inspector.ts`（3 处）、`ocr/TaxaDictionaryModal.ts`（3 处）、
-  `PropertyPanel.ts`（6 处）、`OcrReviewModal.ts` 的 body（header/footer 已迁）。
+- `.modal-body` / `.close-btn` 已于批次 G-a2 + G-d 并入 `.ui-modal__body` / `.ui-icon-btn`：原语补齐堆叠契约
+  （`display:flex; flex-direction:column; gap:var(--space-3)`，即 12px，替代 legacy 的 18/14px 双值），
+  DOM 13 处（10 文件）删除 legacy 类，CSS 5 条规则（`.close-btn`、`.close-btn:hover`、`.modal-body`、`.wpd-modal-body`）净删——
+  唯一例外 `.wpd-modal-body` 必须晚于原语声明（现位于原语之后），否则其 `gap:16px` / `padding:16px` / `flex-direction:row` 会被原语覆盖。
+  第 18 组门禁同时守选择器与源码 class 两侧回流，并校验原语契约与「变体晚于原语」的顺序前置条件。
+  - 关闭钮命中区从 ~11×22px 字形扩到 32px 方框（`--control-h-md`），颜色由 `--text-muted` 收敛到 `--text-secondary`。
+  - **导出弹窗方向修正（真实缺陷）**：`.wpd-modal-body` 此前只声明 `display:flex` 不声明方向，与 legacy `.modal-body`
+    的 `flex-direction:column` 并存时按列排布——实测 body `scrollH 1540 / clientH 778`，右侧 270px 控制栏整体落到折叠线以下
+    （`right.y 919` = footer 顶边）。现显式 `flex-direction: row`，实测 `scrollH == clientH == 778`，左表 880px 与右栏 270px 并列。
+    该方向声明是**承重**的（若只补原语契约而不重排，原语的 `column` 会重新把两栏压成纵排）。
+  - 尚未迁移的纯 legacy 弹窗 **header/footer** 外壳：`Inspector.ts`、`ocr/TaxaDictionaryModal.ts`、`PropertyPanel.ts`、
+    `OcrReviewModal.ts`（4 个弹窗，body 已迁）；`.settings-modal-body` / `.metadata-modal-body` 仅作标签使用，无对应规则。
 - `.primary-btn` 已退役（第 14 组门禁拦回填）：4 条规则共 31 行、全仓零消费者、含 2 处硬编码渐变；
   已退役的 `.btn-primary` 从未做过 token 别名，两者都不要回填渐变。
 - 状态文本仍有直接取 `--accent-*` 的调用点（`--accent-green` 24 处 / `--accent-amber` 22 处，含画布侧 `AgeDepthCanvas.ts`），
@@ -149,7 +156,7 @@
     <h3 class="ui-modal__title">标题</h3>
     <button class="ui-icon-btn" aria-label="关闭" title="关闭">&times;</button>
   </div>
-  <div class="modal-body ui-modal__body">…</div>
+  <div class="ui-modal__body">…</div>
   <div class="ui-modal__footer">
     <button class="ui-btn ui-btn--secondary ui-btn--sm">取消</button>
     <button class="ui-btn ui-btn--primary ui-btn--sm">保存</button>
@@ -166,7 +173,8 @@
 - Escape 关闭最上层弹窗；Tab 焦点不进入背景页面。
 - header/footer 只挂 `ui-modal__header|footer`，不得再带 legacy `modal-header|modal-footer`；上下文选择器
   （如浅色主题的 `.ocr-review-dialog` 规则）必须直接指向原语，否则类名一改颜色就静默失效——第 15 组门禁强制这两点。
-- `ui-modal__body` 目前仍与 legacy `modal-body` 并存，原因与迁移前置条件见 §3「遗留待并」。
+- `ui-modal__body` 已是唯一主体类（批次 G-a2/G-d）；变体（如 `.wpd-modal-body`、`.agedepth-dialog .ui-modal__body`）
+  必须声明在原语之后或提高特化度，见 §3「遗留待并」。
 
 ## 8. 响应式与密度
 

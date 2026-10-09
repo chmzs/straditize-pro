@@ -51,7 +51,7 @@ export class ExportModal {
           <button class="ui-icon-btn" id="modal-close" aria-label="关闭导出窗口" title="关闭">&times;</button>
         </div>
 
-        <div class="modal-body wpd-modal-body ui-modal__body">
+        <div class="wpd-modal-body ui-modal__body">
           <!-- 左侧：双模式（表格预览与交互编辑 / 原始代码）区域 -->
           <div class="wpd-left-area" style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; height: 100%;">
             <!-- 地层丰度百分比总和自检门禁 (Sum Check QA Gate) -->

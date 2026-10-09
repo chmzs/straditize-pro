@@ -190,7 +190,7 @@ export class MetadataModal {
           <button class="ui-icon-btn" id="meta-close-btn" aria-label="关闭元数据窗口" title="关闭">&times;</button>
         </div>
 
-        <div class="modal-body ui-modal__body metadata-modal-body">
+        <div class="ui-modal__body metadata-modal-body">
           <!-- 顶部快捷工具栏: DOI 索引 & PDF 解析 & LLM 配置 -->
           <div class="meta-quick-tools">
             <div style="font-size: 11px; font-weight: bold; color: var(--accent-blue); display: flex; justify-content: space-between; align-items: center;">

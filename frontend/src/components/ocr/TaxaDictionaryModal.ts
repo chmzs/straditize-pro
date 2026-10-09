@@ -55,10 +55,10 @@ export class TaxaDictionaryModal {
           <div style="display: flex; align-items: center; gap: 8px;">
             <h3 style="font-size: 13.5px; font-weight: 700;">属种词汇表</h3>
           </div>
-          <button class="close-btn" id="dict-close-btn">&times;</button>
+          <button class="ui-icon-btn" aria-label="关闭" title="关闭" id="dict-close-btn">&times;</button>
         </div>
 
-        <div class="modal-body" style="padding: 12px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;">
+        <div class="ui-modal__body">
           <div class="tip-card" style="margin: 0; padding: 8px 10px; border-left: 3px solid var(--accent-violet); background: rgba(124, 58, 237, 0.06);">
             <p style="font-size: 11px; line-height: 1.6; color: var(--text-primary); margin: 0;">
               <strong>内置词典:</strong>

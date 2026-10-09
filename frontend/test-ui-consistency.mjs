@@ -571,6 +571,70 @@ const GLOSS_BAN = [
   );
 }
 
+// ---- 18. 遗留弹窗类不得回流：`.close-btn` / `.modal-body`（批次 G-a2 / G-d）------
+// 两者已分别并入 `.ui-icon-btn` 与 `.ui-modal__body`。`.close-btn` 的 20px 字形
+// 命中区只有 ~11×22px；`.modal-body` 的 18/14px 堆叠值又与新原语契约冲突。
+// 这里同时守 CSS 选择器与源码 class，避免一边迁移一边漏回。
+{
+  const cssWithoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const [cls, replacement] of [
+    ['close-btn', '.ui-icon-btn'],
+    ['modal-body', '.ui-modal__body'],
+  ]) {
+    check(
+      !new RegExp(`(^|[^-\\w])\\.${cls}(?![\\w-])`).test(cssWithoutComments),
+      `遗留弹窗类回流：style.css 又出现 \`.${cls}\` 选择器（已并入 \`${replacement}\`）`,
+    );
+    const hits = [];
+    walkSources('src', /\.tsx?$/, (file) => {
+      readFileSync(file, 'utf8')
+        .split(/\r?\n/)
+        .forEach((line, index) => {
+          for (const m of line.matchAll(/class="([^"]*)"/g)) {
+            if (new RegExp(`(^|\\s)${cls}(\\s|$)`).test(m[1])) {
+              hits.push(`${relative(ROOT, file)}:${index + 1}`);
+            }
+          }
+        });
+    });
+    check(
+      hits.length === 0,
+      `源码又出现遗留 class \`${cls}\`（改用 \`${replacement}\`）：${hits.slice(0, 4).join('、')}${hits.length > 4 ? ` 等 ${hits.length} 处` : ''}`,
+    );
+  }
+
+  // 堆叠契约本身也要守：原语必须自己给出纵向排列与统一间距，
+  // 且变体 `.wpd-modal-body` 必须晚于原语声明，否则它的 gap / padding 会被吃掉。
+  const primitive = /(?:^|\n)\.ui-modal__body\s*\{/.exec(css);
+  check(Boolean(primitive), '弹窗主体契约：`.ui-modal__body` 原语规则消失');
+  if (primitive) {
+    const body = css.slice(primitive.index, css.indexOf('}', primitive.index));
+    for (const [prop, value] of [
+      ['display', 'flex'],
+      ['flex-direction', 'column'],
+      ['gap', 'var(--space-3)'],
+    ]) {
+      const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      check(
+        new RegExp(`(?<![-\\w])${prop}\\s*:\\s*${escaped}\\s*;`).test(body),
+        `弹窗主体契约：\`.ui-modal__body\` 缺少 ${prop}: ${value}（批次 G-d 堆叠契约）`,
+      );
+    }
+    const variant = /(?:^|\n)\.wpd-modal-body\s*\{/.exec(css);
+    check(
+      Boolean(variant && variant.index > primitive.index),
+      '弹窗主体契约：`.wpd-modal-body` 必须声明在 `.ui-modal__body` 之后（否则 gap / padding 被原语覆盖）',
+    );
+    // 方向为承重声明：只有 `display:flex` 而无方向时，原语的 column 会把左侧表格区与
+    // 右侧 270px 控制栏压成纵排（实测 right.y 落到 body 折叠线以下的 919px）。
+    const variantBody = variant ? css.slice(variant.index, css.indexOf('}', variant.index)) : '';
+    check(
+      /(?<![-\w])flex-direction\s*:\s*row\s*;/.test(variantBody),
+      '导出弹窗方向：`.wpd-modal-body` 必须显式 `flex-direction: row`（否则左表与右侧控制栏被压成纵排，控制栏掉到折叠线以下）',
+    );
+  }
+}
+
 if (failures.length > 0) {
   console.error(`✘ UI 一致性门禁失败（${failures.length} 项）:`);
   for (const failure of failures) console.error(`  - ${failure}`);

@@ -26,7 +26,7 @@ export function createAgeDepthModalHtml(): string {
         </button>
       </div>
 
-      <div class="modal-body ui-modal__body">
+      <div class="ui-modal__body">
         <!-- ================================================================= -->
         <!-- Tab 1: 视觉解译视口 (Visual Inspection) -->
         <!-- ================================================================= -->

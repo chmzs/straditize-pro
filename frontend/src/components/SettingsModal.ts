@@ -62,7 +62,7 @@ export class SettingsModal {
           <button class="ui-icon-btn" id="settings-close-btn" aria-label="${t('settings.cancel')}" title="${t('settings.cancel')}">&times;</button>
         </div>
 
-        <div class="modal-body settings-modal-body ui-modal__body">
+        <div class="ui-modal__body settings-modal-body">
           <!-- 一、通用偏好 -->
           <div class="settings-section" style="background: var(--bg-tertiary); border: 1px solid var(--border-light); border-radius: 8px; padding: 14px 16px;">
             <div style="font-weight: 700; font-size: 13px; color: var(--text-heading); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">

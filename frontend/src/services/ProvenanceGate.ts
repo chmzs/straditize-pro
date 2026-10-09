@@ -69,7 +69,7 @@ export function reportBackendFailure(actionLabel: string, err: unknown): void {
         <h3 class="ui-modal__title">${escapeHtml(actionLabel)}失败</h3>
         <button id="rpc-err-close-x" class="ui-icon-btn" aria-label="关闭" title="关闭">&times;</button>
       </div>
-      <div class="modal-body ui-modal__body">
+      <div class="ui-modal__body">
         <p class="ui-detail-hint">后端执行操作时报告了以下错误或状态异常：</p>
         <pre class="ui-detail-text">${escapeHtml(message)}</pre>
       </div>
