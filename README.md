@@ -28,7 +28,7 @@
   <a href="https://chmzs.github.io/straditize-pro/"><strong>🌐 官方主页与在线文档</strong></a> &nbsp;|&nbsp;
   <a href="https://github.com/chmzs/straditize-pro/releases/latest"><strong>🚀 下载 Windows 独立安装包 (.exe)</strong></a> &nbsp;|&nbsp;
   <a href="#-8-阶段科学解译工作流"><strong>📖 8 步解译工作流</strong></a> &nbsp;|&nbsp;
-  <a href="docs/tutorials/01_quickstart.md"><strong>📚 实战教程</strong></a>
+  <a href="https://chmzs.github.io/straditize-pro/tutorials/01_quickstart.html"><strong>📚 在线实战教程 (HTML)</strong></a>
 </p>
 
 ---
@@ -181,9 +181,9 @@ pixi run app
 
 ## 📖 实战教程
 
-- [📘 教程一：5 分钟快速上手古生态图谱数字化全流程](docs/tutorials/01_quickstart.md)
-- [📐 教程二：两点式物理刻度钉精细标定与对数（Log）曲线实战](docs/tutorials/02_twopoint_calibration.md)
-- [📊 教程三：数据导出规范、零 NA 矩阵与 R 语言 riojaPlot 一键成图](docs/tutorials/03_export_and_riojaplot.md)
+- [📘 教程一：5 分钟快速上手古生态图谱数字化全流程 (在线 HTML)](https://chmzs.github.io/straditize-pro/tutorials/01_quickstart.html) ｜ [本地 Markdown 源码](docs/tutorials/01_quickstart.md)
+- [📐 教程二：两点式物理刻度钉精细标定与对数（Log）曲线实战 (在线 HTML)](https://chmzs.github.io/straditize-pro/tutorials/02_twopoint_calibration.html) ｜ [本地 Markdown 源码](docs/tutorials/02_twopoint_calibration.md)
+- [📊 教程三：数据导出规范、零 NA 矩阵与 R 语言 riojaPlot 一键成图 (在线 HTML)](https://chmzs.github.io/straditize-pro/tutorials/03_export_and_riojaplot.html) ｜ [本地 Markdown 源码](docs/tutorials/03_export_and_riojaplot.md)
 
 ---
 
@@ -196,11 +196,41 @@ pixi run app
 
 ---
 
-## 📄 引用与开源许可
+## 📄 学术引用与开源许可 (Citation & License)
 
 本项目基于 **GNU General Public License v3.0 or later (GPL-3.0-or-later)** 开源。
 
-如在学术研究、学位论文、专著出版或科研项目中使用了 Straditize Pro，欢迎引用本项目及初始算法文献：
+如在学术论文、学位论文、古气候定量重建或科学专著中使用了 Straditize Pro，请按如下规范引用：
 
-- **Straditize Pro v2.0**: [https://github.com/chmzs/straditize-pro](https://github.com/chmzs/straditize-pro) (主要维护者: `chmzs`)
-- **基础理论文献**: Sommer, P. S. (2019). *Straditize: A Python package for digitizing pollen diagrams*. Journal of Open Source Software, 4(34), 1216. [doi:10.21105/joss.01216](https://doi.org/10.21105/joss.01216).
+### 第一引用（Primary Citation - 本软件系统）：
+- **中文格式**：  
+  陈鸿明, 向丽雄*, 王文佳, 欧阳瑶, 闫创子, 李鹏宇, 黄小忠*. (2026). *Straditize Pro: 专业地层花粉与古气候图表数字化科研解译系统 (v2.0)* [CP/OL]. 兰州大学资源环境学院. https://github.com/chmzs/straditize-pro (*通讯作者).
+- **英文格式**：  
+  Chen, H., Xiang, L.*, Wang, W., Ouyang, Y., Yan, C., Li, P., & Huang, X.* (2026). *Straditize Pro: Next-Generation Scientific Digitization System for Palynological & Stratigraphic Diagrams (v2.0)*. College of Earth and Environmental Sciences, Lanzhou University. https://github.com/chmzs/straditize-pro (*Corresponding authors).
+- **BibTeX 格式**：
+```bibtex
+@software{straditize_pro_2026,
+  author       = {Chen, Hongming and Xiang, Lixiong and Wang, Wenjia and Ouyang, Yao and Yan, Chuangzi and Li, Pengyu and Huang, Xiaozhong},
+  title        = {Straditize Pro: Next-Generation Scientific Digitization System for Palynological \& Stratigraphic Diagrams (v2.0)},
+  year         = {2026},
+  institution  = {College of Earth and Environmental Sciences, Lanzhou University},
+  url          = {https://github.com/chmzs/straditize-pro},
+  license      = {GPL-3.0-or-later},
+  note         = {*Corresponding authors: Lixiong Xiang (xianglx@lzu.edu.cn), Xiaozhong Huang (xzhuang@lzu.edu.cn)}
+}
+```
+
+### 第二引用（Secondary Citation - 基础理论与算法原型）：
+- Sommer, P. S. (2019). *Straditize: A Python package for digitizing pollen diagrams*. Journal of Open Source Software, 4(34), 1216. [doi:10.21105/joss.01216](https://doi.org/10.21105/joss.01216).
+```bibtex
+@article{sommer2019straditize,
+  author       = {Sommer, Philipp S.},
+  title        = {Straditize: A Python package for digitizing pollen diagrams},
+  journal      = {Journal of Open Source Software},
+  volume       = {4},
+  number       = {34},
+  pages        = {1216},
+  year         = {2019},
+  doi          = {10.21105/joss.01216}
+}
+```

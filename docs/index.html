@@ -673,7 +673,7 @@
       <a href="#why">科研痛点与对比</a>
       <a href="#features">核心突破</a>
       <a href="#workflow">8 步工作流</a>
-      <a href="./tutorials/01_quickstart.md">实战教程</a>
+      <a href="./tutorials/01_quickstart.html">实战教程</a>
       <a href="#download">下载获取</a>
       <a href="https://github.com/chmzs/straditize-pro" target="_blank" class="nav-btn">
         <span>GitHub 源码</span>
@@ -696,8 +696,8 @@
       <a href="https://github.com/chmzs/straditize-pro/releases/latest" class="btn-primary">
         <span>🚀 下载 Windows 一键安装包 (.exe)</span>
       </a>
-      <a href="./tutorials/01_quickstart.md" class="btn-secondary">
-        <span>📖 5 分钟上手实战教程</span>
+      <a href="./tutorials/01_quickstart.html" class="btn-secondary">
+        <span>📖 5 分钟上手实战教程 (HTML)</span>
         <span>&rarr;</span>
       </a>
       <a href="https://github.com/chmzs/straditize-pro" target="_blank" class="btn-secondary">
@@ -1149,19 +1149,55 @@
   <section id="citation" style="padding-top: 20px;">
     <div class="section-header" style="margin-bottom: 24px;">
       <span class="section-tag">Academic Citation</span>
-      <h2 class="section-title" style="font-size: 26px;">学术引用与开源许可</h2>
-      <p class="section-subtitle">Straditize Pro 基于 GNU GPL-3.0-or-later 协议完全开源，欢迎在论文与研究成果中引用</p>
+      <h2 class="section-title" style="font-size: 28px;">学术引用与开源许可</h2>
+      <p class="section-subtitle">Straditize Pro 基于 GNU GPL-3.0-or-later 协议完全开源。在科研论文、专著与学位论文中使用时，请按如下规范分别进行引用：</p>
     </div>
 
-    <div class="citation-card">
-@software{straditize_pro_2026,
-  author       = {chmzs and Sommer, Philipp S.},
-  title        = {Straditize Pro: Scientific Digitization System for Palynological \& Stratigraphic Diagrams (v2.0)},
-  year         = {2026},
-  url          = {https://github.com/chmzs/straditize-pro},
-  license      = {GPL-3.0-or-later}
-}
+    <div style="display: flex; flex-direction: column; gap: 24px; margin-top: 32px;">
+      <!-- 第一引用 -->
+      <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: var(--radius-lg); padding: 28px; box-shadow: 0 10px 30px rgba(0,0,0,0.4);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="background: rgba(56, 189, 248, 0.2); color: var(--accent-blue); font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 9999px;">第一引用 • PRIMARY CITATION</span>
+            <h3 style="font-size: 19px; font-weight: 700; color: #fff;">Straditize Pro 系统与现代科研解译方法</h3>
+          </div>
+          <span style="font-size: 13px; color: var(--accent-emerald);">兰州大学资源环境学院</span>
+        </div>
+        
+        <p style="font-size: 14px; color: #cbd5e1; line-height: 1.6; margin-bottom: 12px;">
+          <strong>作者团队：</strong>陈鸿明（Hongming Chen），向丽雄（Lixiong Xiang）*，王文佳（Wenjia Wang），欧阳瑶（Yao Ouyang），闫创子（Chuangzi Yan），李鹏宇（Pengyu Li），黄小忠（Xiaozhong Huang）* <br>
+          <em>* 通讯作者（Corresponding authors）</em> ｜ <strong>研究机构：</strong>兰州大学资源环境学院（College of Earth and Environmental Sciences, Lanzhou University）
+        </p>
 
+        <div style="font-size: 13.5px; background: rgba(0,0,0,0.3); padding: 12px 16px; border-radius: 6px; border-left: 3px solid var(--accent-blue); margin-bottom: 16px; color: #e2e8f0;">
+          Chen, H., Xiang, L.*, Wang, W., Ouyang, Y., Yan, C., Li, P., & Huang, X.* (2026). <em>Straditize Pro: Next-Generation Scientific Digitization System for Palynological & Stratigraphic Diagrams (v2.0)</em>. College of Earth and Environmental Sciences, Lanzhou University. https://github.com/chmzs/straditize-pro
+        </div>
+
+        <div class="citation-card" style="margin-top: 0;">
+@software{straditize_pro_2026,
+  author       = {Chen, Hongming and Xiang, Lixiong and Wang, Wenjia and Ouyang, Yao and Yan, Chuangzi and Li, Pengyu and Huang, Xiaozhong},
+  title        = {Straditize Pro: Next-Generation Scientific Digitization System for Palynological \& Stratigraphic Diagrams (v2.0)},
+  year         = {2026},
+  institution  = {College of Earth and Environmental Sciences, Lanzhou University},
+  url          = {https://github.com/chmzs/straditize-pro},
+  license      = {GPL-3.0-or-later},
+  note         = {*Corresponding authors: Lixiong Xiang (xianglx@lzu.edu.cn), Xiaozhong Huang (xzhuang@lzu.edu.cn)}
+}
+        </div>
+      </div>
+
+      <!-- 第二引用 -->
+      <div style="background: rgba(15, 23, 42, 0.5); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 24px;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+          <span style="background: rgba(148, 163, 184, 0.15); color: #94a3b8; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 9999px;">第二引用 • SECONDARY CITATION</span>
+          <h3 style="font-size: 17px; font-weight: 600; color: var(--text-main);">基础理论与算法原型 (Sommer 2019)</h3>
+        </div>
+
+        <p style="font-size: 13.5px; color: #94a3b8; line-height: 1.6; margin-bottom: 12px;">
+          Sommer, P. S. (2019). <em>Straditize: A Python package for digitizing pollen diagrams</em>. Journal of Open Source Software, 4(34), 1216. doi:10.21105/joss.01216
+        </p>
+
+        <div class="citation-card" style="margin-top: 0;">
 @article{sommer2019straditize,
   author       = {Sommer, Philipp S.},
   title        = {Straditize: A Python package for digitizing pollen diagrams},
@@ -1172,6 +1208,8 @@
   year         = {2019},
   doi          = {10.21105/joss.01216}
 }
+        </div>
+      </div>
     </div>
   </section>
 

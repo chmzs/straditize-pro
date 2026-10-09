@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>教程 2：两点式物理刻度钉标定与对数 (Log) 尺度实战 - Straditize Pro</title>
+  <meta name="description" content="Straditize Pro 两点式物理刻度钉标定与对数Log尺度数学硬约束保护实战教程。" />
+  <link rel="icon" type="image/svg+xml" href="../assets/logos/logo-icon.svg" />
+  <style>
+    :root {
+      --bg-base: #090d16;
+      --bg-surface: #0f172a;
+      --bg-card: rgba(15, 23, 42, 0.75);
+      --border-subtle: rgba(148, 163, 184, 0.14);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-blue: #38bdf8;
+      --accent-amber: #f59e0b;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg-base);
+      color: var(--text-main);
+      line-height: 1.7;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+      background: rgba(9, 13, 22, 0.88);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 32px;
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-main);
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 17px;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 14px;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover, .nav-links a.active { color: var(--accent-blue); }
+    .container {
+      max-width: 920px;
+      margin: 40px auto 80px;
+      padding: 0 24px;
+    }
+    .breadcrumb {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+    .breadcrumb a { color: var(--accent-blue); text-decoration: none; }
+    h1 {
+      font-size: clamp(28px, 4vw, 36px);
+      font-weight: 800;
+      line-height: 1.25;
+      margin-bottom: 16px;
+    }
+    .lead-text {
+      font-size: 16.5px;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+    }
+    .tutorial-media {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin: 32px 0;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.4);
+    }
+    .tutorial-media img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 40px 0 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--accent-blue);
+    }
+    h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin: 24px 0 10px;
+      color: var(--text-main);
+    }
+    p, ul, ol { margin-bottom: 16px; color: #cbd5e1; font-size: 15px; }
+    ul, ol { padding-left: 24px; }
+    li { margin-bottom: 8px; }
+    strong { color: #f1f5f9; }
+    code {
+      background: rgba(255, 255, 255, 0.08);
+      color: #38bdf8;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13.5px;
+      font-family: monospace;
+    }
+    .math-box {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      margin: 20px 0;
+      font-family: "Cascadia Code", Consolas, monospace;
+      color: #38bdf8;
+      font-size: 14px;
+      overflow-x: auto;
+    }
+    .callout {
+      background: rgba(245, 158, 11, 0.08);
+      border-left: 4px solid var(--accent-amber);
+      padding: 16px 20px;
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      margin: 24px 0;
+      font-size: 14.5px;
+    }
+    .pagination {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 60px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-subtle);
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .pag-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .pag-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: var(--accent-blue);
+    }
+    footer {
+      text-align: center;
+      padding: 40px 24px;
+      border-top: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a href="../index.html" class="nav-brand">
+      <img src="../assets/logos/logo-icon.svg" alt="Straditize Pro Icon" width="24" height="24" style="border-radius: 4px;" />
+      <span>Straditize Pro</span>
+    </a>
+    <nav class="nav-links">
+      <a href="../index.html">官网主页</a>
+      <a href="01_quickstart.html">教程 1：工作流上手</a>
+      <a href="02_twopoint_calibration.html" class="active">教程 2：两点刻度</a>
+      <a href="03_export_and_riojaplot.html">教程 3：R 语言成图</a>
+      <a href="https://github.com/chmzs/straditize-pro" target="_blank">GitHub</a>
+    </nav>
+  </header>
+
+  <div class="container">
+    <div class="breadcrumb">
+      <a href="../index.html">首页</a> / <a href="#">实战教程</a> / 教程 2：两点式物理刻度钉标定
+    </div>
+
+    <h1>教程 2：两点式物理刻度钉标定与对数 (Log) 尺度实战</h1>
+    <p class="lead-text">
+      在传统图表数字化软件中，通常假设每一列从 0 开始、以列宽作为 100% 相对刻度。然而在真实古生态学图谱中，往往存在完全不同的标尺形式：优势属种（100%）、微量属种（20% 或 5%）、跨越数个数量级的对数浓度（Log）或同位素负值区间。为此，Straditize Pro 提出了<strong>两点式物理刻度标定系统 (Two-Point Physical Tick Calibration)</strong>。
+    </p>
+
+    <div class="tutorial-media">
+      <img src="../assets/tutorials/02_twopoint_calibration.gif" alt="两点式物理标定与对数尺度保护动图演示" />
+    </div>
+
+    <h2>1. 物理标定原理</h2>
+    <p>每一列不再被假定为静态的相对宽度，而是由两个具有明确科学含义的<strong>物理锚点</strong>定义：</p>
+    <ul>
+      <li><strong>端点 1（基准原点 P₁）</strong>：
+        <ul>
+          <li>对应像素：列的基准线像素位置 X₀（Baseline）；</li>
+          <li>对应物理数值：startValue（通常花粉丰度为 <code>0%</code>，对数浓度为 <code>1</code> 或特定底数，同位素指标为起始数值）。</li>
+        </ul>
+      </li>
+      <li><strong>端点 2（物理刻度齿 P₂）</strong>：
+        <ul>
+          <li>对应像素：图谱上印刷刻度齿所在的像素位置 X₁（Tick End）；</li>
+          <li>对应物理数值：tickValue（用户肉眼在图谱上读出的刻度数字，如 <code>20</code>、<code>50</code>、<code>100</code> 等）。</li>
+        </ul>
+      </li>
+    </ul>
+
+    <h2>2. 线性刻度 (Linear Scale) 操作</h2>
+    <ol>
+      <li>选中目标属种列（如 <em>Quercus</em>）；</li>
+      <li>在右侧属性面板的 <strong>两点刻度标定</strong> 区域：
+        <ul>
+          <li>查看 <strong>端点 1</strong>：默认原点数值为 <code>0</code>；</li>
+          <li>查看 <strong>端点 2</strong>：在图谱标题或坐标轴上找到刻度齿标记（例如刻度标注为 20%）；</li>
+          <li>点击面板上的 <strong><code>[齿:20%]</code></strong> 快捷胶囊（或手动输入 <code>20</code>）；</li>
+          <li>在画布横轴上，直接用鼠标左右拖动<strong>橙色的刻度齿手柄</strong>，使其与图谱印刷的 20% 刻度标记完全重合。</li>
+        </ul>
+      </li>
+      <li>此时该列所有轮廓点自动按以下公式即时换算：</li>
+    </ol>
+    <div class="math-box">
+      val(x) = startVal + [(x - X₀) / (X₁ - X₀)] × (tickVal - startVal)
+    </div>
+
+    <h2>3. 对数刻度 (Log Scale) 操作与硬约束保护</h2>
+    <p>对于花粉浓度 (Pollen Concentration) 或微炭屑浓度指标，图谱常采用指数刻度。</p>
+    
+    <h3>切换步骤：</h3>
+    <ol>
+      <li>在右侧属性面板中，找到 <strong>刻度尺度 (Scale Type)</strong>；</li>
+      <li>确保端点 1 的数值严格大于 0（例如输入 <code>1</code>，因为 ln(0) 在实数域无定义）；</li>
+      <li>确保端点 2 的刻度值严格大于 0 且不等于起点值（例如输入 <code>1000</code>）；</li>
+      <li>点击 <strong><code>对数 (Log)</code></strong> 胶囊切换尺度；</li>
+      <li>此时曲线自动依照指数-对数双向映射进行数值变换：</li>
+    </ol>
+    <div class="math-box">
+      val(x) = exp( ln(startVal) + [(x - X₀) / (X₁ - X₀)] × (ln(tickVal) - ln(startVal)) )
+    </div>
+
+    <h3>科学安全防护机制：</h3>
+    <p>如果当前端点 1 的数值为 <code>0</code>，Straditize Pro 会立即<strong>将 Log 按钮禁用置灰</strong>，并在下方以醒目的黄色提示：</p>
+    <div class="callout">
+      ⚠️ <strong>数学约束拦截</strong>：对数刻度要求起点值 > 0（当前为 0，ln(0) 无定义）。杜绝因误触导致的数据非数 (NaN) 污染或计算死循环。
+    </div>
+
+    <div class="pagination">
+      <a href="01_quickstart.html" class="pag-btn">&larr; 上一篇：教程 1 快速上手</a>
+      <a href="03_export_and_riojaplot.html" class="pag-btn">下一篇：教程 3 R 语言成图 &rarr;</a>
+    </div>
+  </div>
+
+  <footer>
+    <p>Straditize Pro v2.0 • 兰州大学资源环境学院 • 基于 GNU General Public License v3.0 开源</p>
+  </footer>
+
+</body>
+</html>
