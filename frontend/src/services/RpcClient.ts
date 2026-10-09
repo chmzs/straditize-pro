@@ -186,7 +186,7 @@ export class RpcClient {
     for (const url of candidates) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1000);
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
 
         // 优先带上已有 authToken（如果有的话）
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };

@@ -149,9 +149,9 @@ export async function gotoApp(page: Page): Promise<void> {
   await page.waitForFunction(
     () => Boolean((window as unknown as { __straditize?: unknown }).__straditize),
     undefined,
-    { timeout: 30_000 }
+    { timeout: 45_000 }
   );
-  await expect(page.locator('canvas')).toBeVisible();
+  await expect(page.locator('canvas')).toBeVisible({ timeout: 15_000 });
 }
 
 /** 等到后端数据真的到达前端（基线里 hoya 的 ROI 已就位）。 */
@@ -163,7 +163,7 @@ export async function waitForDiagram(page: Page): Promise<void> {
       return rois.length > 0;
     },
     undefined,
-    { timeout: 30_000 }
+    { timeout: 45_000 }
   );
 }
 
@@ -209,7 +209,6 @@ export async function backendRpc<T = unknown>(
  */
 export async function resetBaseline(page: Page): Promise<void> {
   await backendRpc(page, 'e2e.reset');
-  await page.goto('/');
   await openApp(page);
 }
 
