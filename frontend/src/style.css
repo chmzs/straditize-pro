@@ -3501,8 +3501,8 @@ body.theme-light .ad-row-inversion td {
   transition: opacity 0.16s ease, transform 0.16s ease;
 }
 
-.ui-toast--success { border-left-color: var(--accent-green); }
-.ui-toast--warning { border-left-color: var(--accent-amber); }
+.ui-toast--success { border-left-color: var(--status-success); }
+.ui-toast--warning { border-left-color: var(--status-warning); }
 .ui-toast--danger { border-left-color: var(--accent-red); }
 .ui-toast--info { border-left-color: var(--accent-blue); }
 

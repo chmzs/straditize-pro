@@ -106,7 +106,7 @@ function renderColumnPeaksHtml(summary: QaSummary): string {
   return summary.per_column_max
     .map(
       (col) => `
-    <div style="display: flex; justify-content: space-between; padding: 2px 4px; border-bottom: 1px solid rgba(0,0,0,0.04); ${col.over ? 'color: var(--accent-amber); font-weight: 700;' : ''}">
+    <div style="display: flex; justify-content: space-between; padding: 2px 4px; border-bottom: 1px solid rgba(0,0,0,0.04); ${col.over ? 'color: var(--status-warning); font-weight: 700;' : ''}">
       <span>${col.name}</span>
       <span>峰值: ${col.peak} / 标度: ${col.calibrated === false ? '--' : col.declared_max} ${
         col.calibrated === false

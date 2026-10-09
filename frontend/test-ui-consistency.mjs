@@ -672,6 +672,42 @@ check(
   `成功 / 无操作结果类提示必须走 notify(text, 'success' | 'info')，不得走 notifyError（danger 通道）：${levelMisuse.slice(0, 4).join('；')}`,
 );
 
+// ---- 20. 状态色不得用装饰色顶替（--accent-* 只作装饰与数据序列）--------------
+// --accent-green/amber 是装饰色，浅色主题下小号文字仅 3.77:1 / 3.19:1，达不到 AA 4.5:1；
+// 状态色只有 --status-success / --status-warning（浅色 5.48:1 / 5.02:1）。下面用
+// 「计数上限」做棘轮：既有的装饰用法与数据序列配色可以留存，但状态文本不得再新增装饰色。
+const DECOR_CEILING = { 'accent-green': 13, 'accent-amber': 13, 'accent-orange': 3 };
+const DECOR_TOKENS = Object.keys(DECOR_CEILING).map((t) => 'var(--' + t + ')');
+// 用不含 # 的片段：同一个 id 在模板里写作 id="..."，在样式里写作 #...，两边都要能命中。
+const STATUS_SURFACES = ['ad-status-msg', 'ad-webr-comp-status', 'meta-extract-status',
+  'btn-parse-external-json', '.ui-toast--success', '.ui-toast--warning'];
+const decorCount = {};
+for (const t of Object.keys(DECOR_CEILING)) decorCount[t] = 0;
+const surfaceHits = [];
+walkSources('src', /[.](ts|css)$/, (file) => {
+  const text = readFileSync(file, 'utf8');
+  for (const t of Object.keys(DECOR_CEILING)) {
+    decorCount[t] += text.split('var(--' + t + ')').length - 1;
+  }
+  text.split(String.fromCharCode(10)).forEach((rawLine, i) => {
+    const line = rawLine.split(String.fromCharCode(13))[0];
+    if (!STATUS_SURFACES.some((s) => line.includes(s))) return;
+    const bad = DECOR_TOKENS.find((d) => line.includes(d));
+    if (bad) surfaceHits.push(`${relative(ROOT, file)}:${i + 1} ${bad}`);
+  });
+});
+for (const t of Object.keys(DECOR_CEILING)) {
+  check(
+    decorCount[t] <= DECOR_CEILING[t],
+    `状态色不得用装饰色顶替：--${t} 超出上限（当前 ${decorCount[t]} > ${DECOR_CEILING[t]}）；状态文本请用 --status-success / --status-warning`,
+  );
+}
+check(
+  surfaceHits.length === 0,
+  `状态指示元素不得使用装饰色 --accent-*：${surfaceHits.slice(0, 4).join('；')}`,
+);
+
+
 if (failures.length > 0) {
   console.error(`✘ UI 一致性门禁失败（${failures.length} 项）:`);
   for (const failure of failures) console.error(`  - ${failure}`);

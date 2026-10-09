@@ -133,7 +133,7 @@ export class TaxaDictionaryModal {
         try {
           const res = await this.rpcClient.parseTaxaText(text);
           if (res.count === 0) {
-            preview.innerHTML = '<span style="color: var(--accent-amber);">未解析出任何词汇，请检查格式</span>';
+            preview.innerHTML = '<span style="color: var(--status-warning);">未解析出任何词汇，请检查格式</span>';
             return;
           }
           const kind = res.format === 'figure_caption' ? '识别为期刊图版说明' : '识别为名单';

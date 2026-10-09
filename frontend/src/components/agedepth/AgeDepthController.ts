@@ -378,7 +378,7 @@ export class AgeDepthController {
       }
       if (res) {
         if (res.is_installed) {
-          if (statusEl) statusEl.innerHTML = `<strong style="color:var(--accent-green);">✓ 已安装 (${res.installed_version})</strong>`;
+          if (statusEl) statusEl.innerHTML = `<strong style="color:var(--status-success);">✓ 已安装 (${res.installed_version})</strong>`;
           if (installBtn) {
             installBtn.textContent = '✓ 组件已激活';
             installBtn.disabled = true;
@@ -387,7 +387,7 @@ export class AgeDepthController {
           if (statusEl) statusEl.innerHTML = `<strong style="color:var(--accent-blue);">下载中...</strong>`;
           this.pollDownloadProgress();
         } else {
-          if (statusEl) statusEl.innerHTML = `<span style="color:var(--accent-amber);">未安装 (需增量包)</span>`;
+          if (statusEl) statusEl.innerHTML = `<span style="color:var(--status-warning);">未安装 (需增量包)</span>`;
           if (installBtn) {
             installBtn.textContent = '下载组件 (~40 MB)';
             installBtn.disabled = false;
@@ -510,11 +510,11 @@ export class AgeDepthController {
     if (box) box.style.display = 'block';
     if (bar) bar.style.width = '100%';
     if (txt) {
-      txt.innerHTML = `<span style="color:var(--accent-green); font-weight: 700;">组件已就绪，年龄建模功能已激活！</span>`;
+      txt.innerHTML = `<span style="color:var(--status-success); font-weight: 700;">组件已就绪，年龄建模功能已激活！</span>`;
     }
     if (statusEl) {
       const ver = data?.version || '1.0.0';
-      statusEl.innerHTML = `<strong style="color:var(--accent-green);">✓ 已就绪 (${ver})</strong>`;
+      statusEl.innerHTML = `<strong style="color:var(--status-success);">✓ 已就绪 (${ver})</strong>`;
     }
     if (installBtn) {
       installBtn.textContent = '✓ 组件已激活';
@@ -522,7 +522,7 @@ export class AgeDepthController {
     }
     const hintEl = this.container.querySelector('#ad-local-r-status');
     if (hintEl) {
-      hintEl.innerHTML = `<strong style="color:var(--accent-green);">年龄建模组件已就绪</strong> · 随时可运行 Bacon 建模`;
+      hintEl.innerHTML = `<strong style="color:var(--status-success);">年龄建模组件已就绪</strong> · 随时可运行 Bacon 建模`;
     }
   }
 
@@ -622,7 +622,7 @@ export class AgeDepthController {
     const statusEl = this.container.querySelector('#ad-local-r-status');
     if (statusEl) {
       statusEl.innerHTML =
-        `<span style="color:var(--accent-amber);"><strong>WebR 引擎尚未接通</strong>: ` +
+        `<span style="color:var(--status-warning);"><strong>WebR 引擎尚未接通</strong>: ` +
         `组件资产已挂载，但浏览器端 rbacon 调用尚未实现，本路径不产出结果。</span>`;
     }
     notifyError(

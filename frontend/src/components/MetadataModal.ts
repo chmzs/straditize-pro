@@ -207,7 +207,7 @@ export class MetadataModal {
                 <button id="btn-upload-pdf" class="ui-btn ui-btn--secondary ui-btn--sm">从 PDF 提取</button>
                 <button id="btn-toggle-external-assistant" class="ui-btn ui-btn--quiet ui-btn--sm" title="导入外部工具生成的结构化结果">导入外部结果</button>
                 <button id="btn-toggle-llm-config" class="ui-btn ui-btn--quiet ui-btn--sm" title="配置模型接口与提取提示词">提取设置</button>
-                <span id="meta-extract-status" style="font-size: 11px; color: var(--accent-green);"></span>
+                <span id="meta-extract-status" style="font-size: 11px; color: var(--status-success);"></span>
               </div>
             </div>
 
@@ -230,7 +230,7 @@ export class MetadataModal {
                   <div style="display: flex; gap: 6px;">
                     <input type="file" id="meta-file-external-json" accept=".json,.txt,.md" style="display: none;" />
                     <button id="btn-upload-external-json" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 2px 8px;">从文件导入 (.json/.txt)</button>
-                    <button id="btn-parse-external-json" class="ui-btn ui-btn--primary" style="font-size: 10.5px; padding: 3px 12px; background: var(--status-success); border-color: var(--accent-green);">解析并填入表单</button>
+                    <button id="btn-parse-external-json" class="ui-btn ui-btn--primary" style="font-size: 10.5px; padding: 3px 12px; background: var(--status-success); border-color: var(--status-success);">解析并填入表单</button>
                   </div>
                 </div>
                 <textarea id="meta-external-paste-input" rows="5" placeholder="将 DeepSeek / ChatGPT / Kimi / Claude 生成的回复直接粘贴到这里（无需手动删掉前后的聊天文字或代码块标记，系统会自动剥离并识别）..." style="width: 100%; font-family: var(--font-mono); font-size: 10.5px; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); box-sizing: border-box;"></textarea>
@@ -312,7 +312,7 @@ export class MetadataModal {
                 <div class="form-group" style="margin: 0;">
                   <div style="display: flex; justify-content: space-between;">
                     <label style="font-size: 10.5px; color: var(--text-muted);">站点名称 (Site Name):</label>
-                    ${this.metadata.site.conflict ? '<span style="color: var(--accent-amber); font-size: 10px;">检测到冲突候选项</span>' : ''}
+                    ${this.metadata.site.conflict ? '<span style="color: var(--status-warning); font-size: 10px;">检测到冲突候选项</span>' : ''}
                   </div>
                   <input type="text" id="meta-site-name" value="${this.metadata.site.site_name || ''}" placeholder="未找到，请手动填写 (如 Hoya del Castillo)" style="width: 100%; font-size: 11px;" />
                 </div>

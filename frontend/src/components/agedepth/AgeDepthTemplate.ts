@@ -91,7 +91,7 @@ export function createAgeDepthModalHtml(): string {
 
             <div style="font-size: 10.5px; color: var(--text-muted); display: flex; justify-content: space-between;">
               <span>视觉检查标准：高亮蓝线应精确穿过深色脊线；琥珀色阴影应贴合灰色置信区间边缘。</span>
-              <span id="ad-status-msg" style="color: var(--accent-green);"></span>
+              <span id="ad-status-msg" style="color: var(--status-success);"></span>
             </div>
           </div>
 
@@ -458,7 +458,7 @@ export function createAgeDepthModalHtml(): string {
             <div class="form-group" style="margin: 0; background: var(--bg-card); padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
               <div style="display: flex; justify-content: space-between; align-items: center;">
                 <span style="font-size: 10.5px; font-weight: 600; color: var(--accent-blue);">WebR 浏览器纯内置算力包:</span>
-                <span id="ad-webr-comp-status" style="font-size: 9.5px; color: var(--accent-amber);">检查中...</span>
+                <span id="ad-webr-comp-status" style="font-size: 9.5px; color: var(--status-warning);">检查中...</span>
               </div>
               <div id="ad-webr-install-bar" style="display: flex; gap: 6px; margin-top: 5px;">
                 <button class="ui-btn ui-btn--quiet ui-btn--xs" id="btn-ad-install-webr" style="flex: 1; font-size: 10px; color: var(--accent-blue); border-color: rgba(56,189,248,0.3);">
