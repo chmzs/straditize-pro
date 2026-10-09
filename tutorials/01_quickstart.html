@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>教程 1：五分钟快速上手古生态图谱数字化全流程 - Straditize Pro</title>
+  <meta name="description" content="Straditize Pro 8阶段地学图谱解译工作流实战教程，从图片载入、网格去线、PP-OCRv6属种命名到rioja出版级成图。" />
+  <link rel="icon" type="image/svg+xml" href="../assets/logos/logo-icon.svg" />
+  <style>
+    :root {
+      --bg-base: #090d16;
+      --bg-surface: #0f172a;
+      --bg-card: rgba(15, 23, 42, 0.75);
+      --border-subtle: rgba(148, 163, 184, 0.14);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-blue: #38bdf8;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-gradient: linear-gradient(135deg, #0284c7 0%, #38bdf8 50%, #34d399 100%);
+      --radius-md: 10px;
+      --radius-lg: 14px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg-base);
+      color: var(--text-main);
+      line-height: 1.7;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+      background: rgba(9, 13, 22, 0.88);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 32px;
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-main);
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 17px;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 14px;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover, .nav-links a.active { color: var(--accent-blue); }
+    .container {
+      max-width: 920px;
+      margin: 40px auto 80px;
+      padding: 0 24px;
+    }
+    .breadcrumb {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+    .breadcrumb a { color: var(--accent-blue); text-decoration: none; }
+    h1 {
+      font-size: clamp(28px, 4vw, 38px);
+      font-weight: 800;
+      line-height: 1.25;
+      margin-bottom: 16px;
+      letter-spacing: -0.5px;
+    }
+    .lead-text {
+      font-size: 16.5px;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+    }
+    .tutorial-media {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin: 32px 0;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.4);
+    }
+    .tutorial-media img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 44px 0 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--accent-blue);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin: 24px 0 10px;
+      color: var(--text-main);
+    }
+    p, ul, ol { margin-bottom: 16px; color: #cbd5e1; font-size: 15px; }
+    ul, ol { padding-left: 24px; }
+    li { margin-bottom: 8px; }
+    strong { color: #f1f5f9; }
+    code {
+      background: rgba(255, 255, 255, 0.08);
+      color: #38bdf8;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13.5px;
+      font-family: monospace;
+    }
+    .callout {
+      background: rgba(56, 189, 248, 0.08);
+      border-left: 4px solid var(--accent-blue);
+      padding: 16px 20px;
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      margin: 24px 0;
+      font-size: 14.5px;
+    }
+    .callout-warn {
+      background: rgba(245, 158, 11, 0.08);
+      border-left-color: var(--accent-amber);
+    }
+    .pagination {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 60px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-subtle);
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .pag-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .pag-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: var(--accent-blue);
+    }
+    footer {
+      text-align: center;
+      padding: 40px 24px;
+      border-top: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a href="../index.html" class="nav-brand">
+      <img src="../assets/logos/logo-icon.svg" alt="Straditize Pro Icon" width="24" height="24" style="border-radius: 4px;" />
+      <span>Straditize Pro</span>
+    </a>
+    <nav class="nav-links">
+      <a href="../index.html">官网主页</a>
+      <a href="01_quickstart.html" class="active">教程 1：工作流上手</a>
+      <a href="02_twopoint_calibration.html">教程 2：两点刻度</a>
+      <a href="03_export_and_riojaplot.html">教程 3：R 语言成图</a>
+      <a href="https://github.com/chmzs/straditize-pro" target="_blank">GitHub</a>
+    </nav>
+  </header>
+
+  <div class="container">
+    <div class="breadcrumb">
+      <a href="../index.html">首页</a> / <a href="#">实战教程</a> / 教程 1：五分钟快速上手
+    </div>
+
+    <h1>教程 1：五分钟快速上手古生态图谱数字化全流程</h1>
+    <p class="lead-text">
+      本教程指导你如何利用 <strong>Straditize Pro v2.0</strong> 的 <strong>8 阶段地学图谱解译工作流</strong>，将一张地层花粉、微炭屑与古气候图谱扫描件解译为发表级的高保真科研数据矩阵。
+    </p>
+
+    <div class="tutorial-media">
+      <img src="../assets/tutorials/01_workflow_8steps.gif" alt="Straditize Pro 8步工作流真机动图演示" />
+    </div>
+
+    <h2>阶段概览：8 步科学解译工作流</h2>
+    <p>
+      顶部导航条提供 8 个状态胶囊，已完成标记为 <code>✓</code>，当前进行中为 <code>●</code>，未开始为 <code>○</code>：
+    </p>
+    <div class="callout">
+      <code>[1.载入] → [2.取数区] → [3.Y标定] → [4.去线] → [5.分列命名] → [6.X刻度] → [7.数字化] → [8.校验导出]</code>
+    </div>
+    <p>你可以随时点击已完成的步骤胶囊跳回修改，也可以通过右侧步骤面板底部的推进按钮顺序流转。</p>
+
+    <h2>步骤 1：载入图谱图片与大图安全保障</h2>
+    <ol>
+      <li><strong>载入方式</strong>：
+        <ul>
+          <li>点击顶栏 <strong>[📁 图谱]</strong> 按钮选择本地文件（支持 PNG / JPG / TIFF / WebP / 单页 PDF）；</li>
+          <li>或者直接将图片拖拽至中央画布虚线框释放；</li>
+          <li>快速体验：在顶栏 <strong>“📂 范例...”</strong> 下拉菜单中选择 <strong><code>Hoya</code></strong> 或 <strong><code>Beginner</code></strong> 剖面。</li>
+        </ul>
+      </li>
+      <li><strong>大图与微斜安全防护</strong>：
+        <ul>
+          <li><strong>尺寸预算</strong>：主力覆盖 A4/A3 600 DPI（约 5000×7000 至 7000×10000 px）。超过 8000×12000 px 时系统自动弹出安全拦截窗口，可一键选择 50% 降采样加载，内存严格受控在 1 GB 以内；</li>
+          <li><strong>智能微斜检测 (Radon Deskew)</strong>：载入后系统自动进行氡变换倾角检测。若检测到扫描存在 ≥ 0.3° 的微斜，右上角自动滑出提示横幅，点击 <strong>[旋转校正]</strong> 即可 1 秒恢复水平。</li>
+        </ul>
+      </li>
+      <li><strong>完成加载</strong>：图片自适应居中，进入步骤 2。</li>
+    </ol>
+
+    <h2>步骤 2：管理取数区 (Multi-ROI)</h2>
+    <ol>
+      <li>工具栏自动激活 <strong>ROI 模式</strong>（快捷键 <code>R</code>）；</li>
+      <li>画布上呈现 8 个方块控制手柄：
+        <ul>
+          <li>拖拽手柄对齐花粉数据区边界；</li>
+          <li><strong>地学规范</strong>：<strong>严格将左侧纵坐标轴线、右侧聚类分析树 (CONISS) 与底部刻度排除在框外</strong>；</li>
+          <li>边框标签只报<strong>像素范围</strong>（如 <code>ROI Y: 511px - 1311px</code>）——取数区不携带任何深度含义；</li>
+        </ul>
+      </li>
+      <li><strong>多取数区 (Multi-ROI) 支持</strong>：
+        <ul>
+          <li>如果图谱包含主花粉丰度区、炭屑浓度区或磁化率附图，可在右侧面板点击 <strong>[＋ 新建取数区]</strong> 分块管理；</li>
+          <li>每个取数区拥有独立的名称、分列集合与百分比组合属性（<code>composition=true/false</code>）；</li>
+        </ul>
+      </li>
+      <li>点击右侧面板 <strong>[👉 确认取数区，进入 Y 轴标定]</strong> 推进。</li>
+    </ol>
+
+    <h2>步骤 3：Y 轴两点标定（深度 / 年代轴）</h2>
+    <div class="callout callout-warn">
+      ⚠️ <strong>科学不变量</strong>：<strong>Y 轴标定与取数区 (ROI) 完全解耦</strong>。未标定时界面如实显示 <code>--</code>，系统绝不拿取数区边框冒充真实刻度。
+    </div>
+    <ol>
+      <li><strong>两点标定操作</strong>：
+        <ul>
+          <li>在图上找到 Y 轴两个已知刻度水平线（例如 <code>0 cm</code> 与 <code>150 cm</code> 所在行）；</li>
+          <li>在面板填入两点的像素行与真实物理数值及单位（<code>cm</code> / <code>m</code> / <code>cal yr BP</code> 等）；</li>
+          <li>支持向下递增（深度）与向上递增（年代）；</li>
+        </ul>
+      </li>
+      <li><strong>标定参考可视化</strong>：
+        <ul>
+          <li>画布呈现黄色半透明标定跨度带与两条 ⚑ 刻度基准线，超出该跨度的层位自动作为外推区标记；</li>
+        </ul>
+      </li>
+      <li>点击右侧面板 <strong>[👉 确认标定，进入去线清理]</strong> 推进。</li>
+    </ol>
+
+    <h2>步骤 4：去线与网格降噪 (Cleanup)</h2>
+    <ol>
+      <li>点击 <strong>[🔍 自动扫描候选线]</strong>，后端智能检测水平分带线与网格线；</li>
+      <li><strong>即时透视遮罩 (B 键)</strong>：
+        <ul>
+          <li>按下键盘 <strong><code>B</code></strong> 键，画布开启双色二值化透视遮罩：</li>
+          <li>⚪ <strong>白色</strong>：保留下来的花粉轮廓与墨迹；</li>
+          <li>🔴 <strong>红色</strong>：被识别并剔除的线像素（后端掩膜原样呈现，<strong>所见即数字化所用</strong>）；</li>
+        </ul>
+      </li>
+      <li><strong>排除框与画笔微调</strong>：
+        <ul>
+          <li>复杂图表可添加 <strong>排除区 (Exclusion Rect)</strong> 保护图注或特征区域；</li>
+          <li>使用修正画笔手工擦除误标或补标漏线，松手即刻触发后端增量重算；</li>
+        </ul>
+      </li>
+      <li>点击右侧面板 <strong>[👉 确认清理，进入分列与命名]</strong> 推进。</li>
+    </ol>
+
+    <h2>步骤 5：分列与属种命名 (Naming)</h2>
+    <ol>
+      <li>系统在纯数据区内自动探测属种垂直基线（虚线显示）；</li>
+      <li><strong>属种名单对齐与批量导入</strong>：
+        <ul>
+          <li>行内点击列标题快速重命名；</li>
+          <li>点击 <strong>[📋 批量导入]</strong>，直接粘贴来自文献表格的多行属种名单，自动从左到右匹配；</li>
+        </ul>
+      </li>
+      <li><strong>离线 PP-OCRv6 属种识别</strong>：
+        <ul>
+          <li>点击顶栏 <strong>[🔍 OCR 属种名识别]</strong>；</li>
+          <li>支持 0°/30°/45°/60° 旋转投影识别倾斜标签；</li>
+          <li>内置花粉、硅藻、微体古生物 (NPP) 权威中拉科学词典，支持自动模糊拼写纠错；</li>
+          <li>支持粘贴期刊图版说明（Plate caption）一键解析并保存自定义属种词条；</li>
+        </ul>
+      </li>
+      <li>点击右侧面板 <strong>[👉 确认列，进入刻度标定]</strong> 推进。</li>
+    </ol>
+
+    <h2>步骤 6：X 轴两点物理刻度标定与列组</h2>
+    <ol>
+      <li><strong>两点式物理标定 (Two-Point Tick Calibration)</strong>：
+        <ul>
+          <li><strong>端点 1 (P₁)</strong>：列基准原点，通常为 <code>0%</code>（对数尺度为起始正数）；</li>
+          <li><strong>端点 2 (P₂)</strong>：印刷刻度齿，在图上填入真实读数（如 <code>20%</code>、<code>50%</code>、<code>100%</code>），拖拽画布橙色刻度手柄对齐；</li>
+        </ul>
+      </li>
+      <li><strong>列组 (Column Groups) 统一管理</strong>：
+        <ul>
+          <li>同属一个刻度规范的属种列（如均为 0-20%）可归入同一列组，一次调参、全组自动应用；</li>
+        </ul>
+      </li>
+      <li><strong>尺度与对数保护</strong>：
+        <ul>
+          <li>炭屑或浓度指标可切换对数尺度 (Log Scale)；</li>
+          <li>若起点 ≤ 0，系统自动禁用 Log 选项并红字警示拦截，杜绝 ln(0) 产生异常；</li>
+        </ul>
+      </li>
+      <li>点击右侧面板 <strong>[👉 确认刻度，开始数字化提取]</strong> 推进。</li>
+    </ol>
+
+    <h2>步骤 7：数字化、曲线拐点与采样层位</h2>
+    <ol>
+      <li>系统自动提取轮廓边缘并压缩为高显著性拓扑拐点；</li>
+      <li><strong>层位共识提取</strong>：
+        <ul>
+          <li>点击 <strong>[🎯 自动提取共识层位]</strong>，系统分析所有属种波峰与基线相交位置，自动生成地层采样层位矩阵；</li>
+          <li>支持单行删除与层位深度微调；</li>
+        </ul>
+      </li>
+      <li><strong>年代-深度模型提取 (Age-Depth Modal)</strong>：
+        <ul>
+          <li>点击顶栏 <strong>[⏳ 年代模型]</strong>，载入图谱附带的 Bacon 或 Bchron 年代图；</li>
+          <li>自动追踪中位数年代曲线与 95% 置信包络区间；</li>
+          <li>基于贝叶斯先验生成 1000 条单调年代学集合实现，与花粉层位无缝映射；</li>
+        </ul>
+      </li>
+      <li>点击右侧面板 <strong>[👉 确认数据，进入校验与导出]</strong> 推进。</li>
+    </ol>
+
+    <h2>步骤 8：地学 QA 诊断与发表级成果导出</h2>
+    <ol>
+      <li><strong>地学质量把关 (QA Diagnostics)</strong>：
+        <ul>
+          <li><strong>百和检验 (∑% 门禁)</strong>：自动检验全剖面各层位百分比加和（默认容差 ±2.0%），直观标出超限与空层位；</li>
+          <li><strong>未标定列显式警示</strong>：若有属种列未标定刻度，明确提示 ⚠️ 状态，杜绝带病导出；</li>
+        </ul>
+      </li>
+      <li><strong>FAIR / LiPD v1.3 标准元数据录入</strong>：
+        <ul>
+          <li>点击顶栏 <strong>[📄 元数据]</strong>，录入文献 DOI、站点经纬度、水深、孔长、采集人与基金信息；</li>
+          <li>支持<strong>外部 AI 免 Token 导入助手</strong>：一键复制结构化 Prompt，粘贴外部网页 AI 解读结果即刻自动解析回填；</li>
+        </ul>
+      </li>
+      <li><strong>多格式科研成果一键导出</strong>：
+        <ul>
+          <li><strong><code>[💾 下载 CSV]</code></strong>：标准无 NA 地层百分比矩阵；</li>
+          <li><strong><code>[📊 导出多表 Excel]</code></strong>：每个取数区独立 Sheet，附带综合统计与元数据；</li>
+          <li><strong><code>[🌐 导出 LiPD]</code></strong>：国际古气候数据共享标准格式（含测量表与年代集合）；</li>
+          <li><strong><code>[📦 导出 TAR 包]</code></strong>：POSIX UStar 开放项目包，内嵌双原图、JSON 矢量模型与完整中间态，零依赖 100% 科学复现；</li>
+          <li><strong><code>[📈 R 脚本]</code></strong>：生成开箱即用的 <code>plot_strat.R</code>，直通 <code>rioja::strat.plot()</code> 出版级绘图！</li>
+        </ul>
+      </li>
+    </ol>
+
+    <div class="pagination">
+      <a href="../index.html" class="pag-btn">&larr; 返回官网主页</a>
+      <a href="02_twopoint_calibration.html" class="pag-btn">下一篇：教程 2 两点物理刻度钉 &rarr;</a>
+    </div>
+  </div>
+
+  <footer>
+    <p>Straditize Pro v2.0 • 兰州大学资源环境学院 • 基于 GNU General Public License v3.0 开源</p>
+  </footer>
+
+</body>
+</html>
