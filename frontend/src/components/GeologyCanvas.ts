@@ -2039,25 +2039,67 @@ export class GeologyCanvas {
         ctx.stroke();
       }
 
-      // 4. 绘制两点式物理刻度手柄 (Tick Pins) — 激活列显式绘制顶部定位把手
+      // 4. 绘制两点式物理刻度手柄 (Tick Pins) — 激活列显式绘制顶部与底部定位把手圆点
       if (isActive) {
-        const pinSize = 6 / scale;
-        // 原点齿 Pin (天青蓝方块)
-        ctx.fillStyle = '#38bdf8';
-        ctx.fillRect(sc.originX - pinSize / 2, topY - pinSize / 2, pinSize, pinSize);
+        const origColor = isOriginHovered ? '#f97316' : (isLight ? '#0284c7' : '#38bdf8');
+        const calibColor = isCalibHovered ? '#f97316' : '#10b981';
+        const pinR = (isOriginHovered ? 6 : 4.5) / scale;
+        const calR = (isCalibHovered ? 6 : 4.5) / scale;
 
-        // 刻度齿 Pin (橙红色实心菱形，可拖拽微调刻度齿位置)
-        ctx.fillStyle = isCalibHovered ? '#fbbf24' : '#f97316';
+        // 顶部圆点把手 (Top Pins)
         ctx.beginPath();
-        ctx.moveTo(sc.calibX, topY - pinSize);
-        ctx.lineTo(sc.calibX + pinSize, topY);
-        ctx.lineTo(sc.calibX, topY + pinSize);
-        ctx.lineTo(sc.calibX - pinSize, topY);
-        ctx.closePath();
+        ctx.arc(sc.originX, topY, pinR, 0, Math.PI * 2);
+        ctx.fillStyle = origColor;
         ctx.fill();
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1 / scale;
+        ctx.lineWidth = 1.5 / scale;
         ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(sc.calibX, topY, calR, 0, Math.PI * 2);
+        ctx.fillStyle = calibColor;
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5 / scale;
+        ctx.stroke();
+
+        // 底部刻度基线与圆点把手 (Bottom Pins & Ruler)
+        ctx.beginPath();
+        ctx.strokeStyle = isLight ? 'rgba(2, 132, 199, 0.8)' : 'rgba(56, 189, 248, 0.8)';
+        ctx.lineWidth = 2 / scale;
+        ctx.moveTo(sc.originX, bottomY);
+        ctx.lineTo(sc.calibX, bottomY);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(sc.originX, bottomY, pinR, 0, Math.PI * 2);
+        ctx.fillStyle = origColor;
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5 / scale;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(sc.calibX, bottomY, calR, 0, Math.PI * 2);
+        ctx.fillStyle = calibColor;
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5 / scale;
+        ctx.stroke();
+
+        // 底部刻度值标签 (Bottom value badges)
+        ctx.save();
+        const fontPx = Math.max(9, 10 / scale);
+        ctx.font = `600 ${fontPx}px monospace`;
+        ctx.fillStyle = origColor;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`${sc.originVal}${sc.unit || '%'}`, sc.originX, bottomY + 6 / scale);
+
+        ctx.fillStyle = calibColor;
+        ctx.textAlign = 'center';
+        ctx.fillText(`${sc.calibVal}${sc.unit || '%'}`, sc.calibX, bottomY + 6 / scale);
+        ctx.restore();
       }
 
       // 5. 属种名称与端点数值标签
