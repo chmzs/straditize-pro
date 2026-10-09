@@ -12,7 +12,7 @@ export function render(data: DiagramData): string {
   cachedData = data;
   const activeCol = data.columns.find((c) => c.id === data.activeTaxaId) || data.columns[0];
   const colName = activeCol ? activeCol.name : t('step6.unselected');
-  const hasTicks = activeCol && activeCol.x_ticks && activeCol.x_ticks.length === 2;
+  const hasTicks = Boolean(activeCol && activeCol.x_ticks && activeCol.x_ticks.length === 2);
 
   // Active ROI and group resolution (Design 2026-09-29 P3)
   const activeRoi =
@@ -22,97 +22,115 @@ export function render(data: DiagramData): string {
   const currentGroupId = activeCol?.x_group_id || activeRoi?.default_group_id || groups[0]?.id;
   const activeGroup = groups.find((g) => g.id === currentGroupId) || groups[0];
 
+  const px1 = activeCol?.startX ?? 0;
+  const px2 = activeCol?.tickEndX ?? activeCol?.endX ?? (px1 + 40);
+
   return `
     <div class="step-panel" data-step="6">
       <div class="step-title">${t('step6.title')}</div>
-      <div class="step-desc">
-        ${t('step6.activeCol')}<strong style="color: var(--accent-blue);">${colName}</strong>
+      <div class="step-desc" style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px;">
+        <div>
+          ${t('step6.activeCol')}<strong style="color: var(--accent-blue);">${colName}</strong>
+        </div>
+        <span style="font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: ${hasTicks ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)'}; color: ${hasTicks ? 'var(--status-success)' : 'var(--status-warning)'};">
+          ${hasTicks ? t('step6.calibrated') : t('step6.uncalibrated')}
+        </span>
       </div>
 
-      <!-- 列所属组与组管理 (Design 2026-09-29 P3) -->
-      <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border-color);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 11px; font-weight: 700;">所属组 (X-Group)</span>
-          <div style="display: flex; gap: 4px;">
-            <button id="btn-create-group" class="icon-btn" style="font-size: 10px; padding: 1px 5px;" title="在当前 ROI 内新建列组">+ 新组</button>
-            <button id="btn-merge-groups" class="icon-btn" style="font-size: 10px; padding: 1px 5px;" title="合并同 ROI 内标度相同的组">合并同类组</button>
-          </div>
+      <!-- 主区域：当前列 X 刻度标尺两点定标 -->
+      <div class="inspector-section" style="padding: 10px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 12px; border: 1px solid var(--border-color);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span style="font-size: 11.5px; font-weight: 700; color: var(--text-heading);">当前列刻度标尺</span>
+          ${hasTicks ? `<button id="btn-clear-col-ticks" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; color: var(--accent-red); padding: 1px 6px;" title="${t('step6.clearTicks')}">${t('step6.clearTicks')}</button>` : ''}
         </div>
 
-        <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 6px;">
-          <select id="sel-col-group" style="flex: 1; font-size: 11px; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
-            ${
-              groups.length > 0
-                ? groups
-                    .map(
-                      (g) =>
-                        `<option value="${g.id}" ${g.id === currentGroupId ? 'selected' : ''}>${g.name} (${g.unit} · ${g.plot_type})</option>`
-                    )
-                    .join('')
-                : '<option value="">默认组</option>'
-            }
-          </select>
-        </div>
-
-        ${
-          activeGroup
-            ? `
-          <div style="font-size: 10px; color: var(--text-muted); line-height: 1.4; padding: 4px 6px; background: rgba(0,0,0,0.03); border-radius: 4px;">
-            组形态: <strong>${activeGroup.plot_type}</strong> | 单位: <strong>${activeGroup.unit}</strong> | 尺度: <strong>${activeGroup.scale_type}</strong>
-            ${activeGroup.exaggeration_mult ? ` | 放大: <strong>${activeGroup.exaggeration_mult}×</strong>` : ''}
-          </div>
-        `
-            : ''
-        }
-      </div>
-
-      <!-- 自动刻度线几何检测 -->
-      <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border-color);">
-        <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">${t('step6.autoTicksTitle')}</div>
-        <p style="font-size: 10px; color: var(--text-muted); margin: 0 0 8px 0; line-height: 1.4;">
-          ${t('step6.autoTicksDesc')}
-        </p>
-        <button id="btn-detect-xticks" class="ui-btn ui-btn--secondary" style="width: 100%; font-size: 11px; padding: 5px;">
-          ${t('step6.autoTicksBtn')}
-        </button>
-      </div>
-
-      <!-- 当前列标度参数 (事实源: x_ticks / x_values) -->
-      <div class="inspector-section" style="margin-bottom: 12px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 11px; font-weight: 700;">${t('step6.ticksSource')}</span>
-          ${hasTicks ? `<button id="btn-clear-col-ticks" class="icon-btn btn-subaction" style="font-size: 10px; color: var(--accent-red); padding: 1px 4px;" title="${t('step6.clearTicks')}">${t('step6.clearTicks')}</button>` : ''}
-        </div>
-        <div class="info-kv-box">
-          <div>状态: <strong style="color: ${hasTicks ? 'var(--status-success)' : 'var(--status-warning)'}; font-weight: 700;">${hasTicks ? t('step6.calibrated') : t('step6.uncalibrated')}</strong></div>
-          ${
-            hasTicks && activeCol?.x_ticks
-              ? `
-            <div>① X1: <code>X=${activeCol.x_ticks[0].px}px</code> → <strong>${activeCol.x_ticks[0].value} ${activeCol.unit || '%'}</strong></div>
-            <div>② X2: <code>X=${activeCol.x_ticks[1].px}px</code> → <strong>${activeCol.x_ticks[1].value} ${activeCol.unit || '%'}</strong></div>
-          `
-              : `<div style="color: var(--text-muted); font-size: 10px;">${t('step6.uncalibrated')}</div>`
-          }
-        </div>
-
-        <!-- 重新输入两端点表单 -->
-        <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border-color);">
-          <div style="font-size: 10.5px; font-weight: 600; margin-bottom: 4px; color: var(--text-secondary);">${t('step6.reinput')}</div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
-            <div>
-              <label style="font-size: 9.5px; color: var(--text-muted);">值 1 (Origin):</label>
-              <input type="number" id="inp-manual-tick-val1" value="${hasTicks ? activeCol.x_ticks![0].value : (activeCol?.startValue ?? 0)}" style="width: 100%; font-size: 10.5px; padding: 2px 4px; box-sizing: border-box; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
-            </div>
-            <div>
-              <label style="font-size: 9.5px; color: var(--text-muted);">值 2 (Max):</label>
-              <input type="number" id="inp-manual-tick-val2" value="${hasTicks ? activeCol.x_ticks![1].value : (activeCol?.tickValue ?? 20)}" style="width: 100%; font-size: 10.5px; padding: 2px 4px; box-sizing: border-box; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
+        <!-- 刻度端点输入卡片 -->
+        <div style="display: flex; flex-direction: column; gap: 6px; background: var(--bg-card); padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 8px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <label for="inp-manual-tick-val1" style="font-size: 11px; color: var(--text-secondary); font-weight: 500; display: flex; align-items: center; gap: 5px;">
+              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-blue);"></span>
+              <span>左基线原点 (X1):</span>
+            </label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="inp-manual-tick-val1" value="${hasTicks ? activeCol.x_ticks![0].value : (activeCol?.startValue ?? 0)}" style="width: 64px; font-size: 11px; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
+              <span style="font-size: 10.5px; color: var(--text-muted); min-width: 16px;">${activeCol?.unit || '%'}</span>
             </div>
           </div>
-          <button id="btn-save-manual-ticks" class="ui-btn ui-btn--secondary" style="width: 100%; font-size: 10.5px; padding: 4px 6px; margin-top: 6px;">
+          <div style="font-size: 9.5px; color: var(--text-muted); padding-left: 13px;">
+            像素位置: <code>X = ${Math.round(px1)}px</code> (列左边界)
+          </div>
+
+          <div style="height: 1px; background: var(--border-color); opacity: 0.5; margin: 2px 0;"></div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <label for="inp-manual-tick-val2" style="font-size: 11px; color: var(--text-secondary); font-weight: 500; display: flex; align-items: center; gap: 5px;">
+              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--status-success);"></span>
+              <span>右刻度齿值 (X2):</span>
+            </label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="inp-manual-tick-val2" value="${hasTicks ? activeCol.x_ticks![1].value : (activeCol?.tickValue ?? 20)}" style="width: 64px; font-size: 11px; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
+              <span style="font-size: 10.5px; color: var(--text-muted); min-width: 16px;">${activeCol?.unit || '%'}</span>
+            </div>
+          </div>
+          <div style="font-size: 9.5px; color: var(--text-muted); padding-left: 13px;">
+            像素位置: <code>X = ${Math.round(px2)}px</code> (刻度齿位置，可在图上拖拽)
+          </div>
+        </div>
+
+        <div style="font-size: 10px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 8px; background: rgba(56, 189, 248, 0.06); padding: 5px 8px; border-radius: 4px; border-left: 2px solid var(--accent-blue);">
+          <strong>交互提示</strong>：画布底端已标注<strong>蓝色原点</strong>与<strong>绿色刻度齿</strong>圆点，可直接在图上左右拖拽对齐扫描件上的刻度齿。
+        </div>
+
+        <div style="display: flex; gap: 6px;">
+          <button id="btn-save-manual-ticks" class="ui-btn ui-btn--primary" style="flex: 1; font-size: 11px; padding: 6px 8px;">
             ${t('step6.saveTicks')}
+          </button>
+          <button id="btn-detect-xticks" class="ui-btn ui-btn--secondary" style="font-size: 11px; padding: 6px 10px;" title="基于图像分析自动识别全区刻度齿位置">
+            自动提取
           </button>
         </div>
       </div>
+
+      <!-- 次区域：属种绘图形态与多指标分组 (收敛为优雅折叠卡片) -->
+      <details class="inspector-section" style="padding: 8px 10px; background: var(--bg-card); border-radius: 8px; margin-bottom: 12px; border: 1px solid var(--border-color);">
+        <summary style="font-size: 11px; font-weight: 700; color: var(--text-heading); cursor: pointer; user-select: none;">
+          ▾ 属种属性与分组模板 (X-Group)
+        </summary>
+
+        <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+            <label for="sel-col-group" style="font-size: 10.5px; color: var(--text-secondary); white-space: nowrap;">所属列组:</label>
+            <select id="sel-col-group" style="flex: 1; font-size: 10.5px; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); max-width: 180px;">
+              ${
+                groups.length > 0
+                  ? groups
+                      .map(
+                        (g) =>
+                          `<option value="${g.id}" ${g.id === currentGroupId ? 'selected' : ''}>${g.name} (${g.unit} · ${g.plot_type})</option>`
+                      )
+                      .join('')
+                  : '<option value="">默认组</option>'
+              }
+            </select>
+          </div>
+
+          <div style="display: flex; gap: 4px; justify-content: flex-end;">
+            <button id="btn-create-group" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 2px 6px;">+ 新建组</button>
+            <button id="btn-merge-groups" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 2px 6px;">合并同类组</button>
+          </div>
+
+          ${
+            activeGroup
+              ? `
+            <div style="font-size: 10px; color: var(--text-muted); line-height: 1.4; padding: 4px 6px; background: var(--bg-tertiary); border-radius: 4px;">
+              组形态: <strong>${activeGroup.plot_type}</strong> | 单位: <strong>${activeGroup.unit}</strong> | 尺度: <strong>${activeGroup.scale_type}</strong>
+              ${activeGroup.exaggeration_mult ? ` | 放大: <strong>${activeGroup.exaggeration_mult}×</strong>` : ''}
+            </div>
+          `
+              : ''
+          }
+        </div>
+      </details>
 
       <!-- 阶段提交按钮 -->
       <button id="btn-apply-xticks-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
