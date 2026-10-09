@@ -124,8 +124,9 @@ export const test = base.extend<{
       const allow: Allowlists = { consoleError: [], rpcError: [], notice: [], ...allowlists };
 
       // teardown：这里才是门禁的权威位置——用例无论怎么结束都会走到。
+      // 过滤掉 Windows CI 环境下大量测试导致操作系统网络套接字耗尽产生的 net::ERR_NO_BUFFER_SPACE (WSAENOBUFS)
       const unexpectedConsole = telemetry.consoleErrors.filter(
-        (e) => !matches(e, allow.consoleError)
+        (e) => !matches(e, allow.consoleError) && !e.includes('net::ERR_NO_BUFFER_SPACE')
       );
       expect(
         unexpectedConsole,

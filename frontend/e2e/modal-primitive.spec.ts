@@ -172,4 +172,70 @@ test.describe('模态框原语与主题契约', () => {
     await expect(title).toHaveCSS('font-size', '16px');
     await expect(title).toHaveCSS('margin-top', '0px');
   });
+
+  test('关于弹窗：顶栏与设置入口均可呼出，符合原语契约且完整包含作者、单位、依赖与检查更新', async ({ page }) => {
+    await resetBaseline(page);
+
+    // 1. 从顶栏点击【关于】按钮呼出
+    const aboutBtn = page.locator('#btn-about');
+    await expect(aboutBtn).toBeVisible();
+    await aboutBtn.click();
+
+    const aboutDialog = page.locator('.about-dialog');
+    await expect(aboutDialog, '关于弹窗必须可见').toBeVisible();
+
+    const header = aboutDialog.locator('.ui-modal__header');
+    const footer = aboutDialog.locator('.ui-modal__footer');
+    await expect(header, '关于弹窗必须有唯一的原语 header').toHaveCount(1);
+    await expect(footer, '关于弹窗必须有唯一的原语 footer').toHaveCount(1);
+
+    // 验证原语类名纯净
+    for (const [name, loc] of [
+      ['header', header],
+      ['footer', footer],
+    ] as const) {
+      const cls = (await loc.getAttribute('class')) ?? '';
+      const tokens = cls.split(/\s+/).filter((t) => t !== '');
+      expect(tokens, `${name} 不得混挂 legacy 类名：${cls}`).not.toContain('modal-header');
+      expect(tokens, `${name} 不得混挂 legacy 类名：${cls}`).not.toContain('modal-footer');
+    }
+
+    // 验证标题
+    const title = header.locator('.ui-modal__title');
+    await expect(title).toHaveText('关于 Straditize Pro');
+    await expect(title).toHaveCSS('font-size', '16px');
+
+    // 验证核心内容字段
+    await expect(aboutDialog).toContainText('陈鸿明');
+    await expect(aboutDialog).toContainText('chmzs@outlook.com');
+    await expect(aboutDialog).toContainText('兰州大学资源环境学院 黄小忠课题组');
+    await expect(aboutDialog).toContainText('GPL-3.0-or-later');
+    await expect(aboutDialog).toContainText('Python 3.12+');
+
+    // 验证检查更新按钮存在
+    const checkUpdateBtn = aboutDialog.locator('#btn-check-update');
+    await expect(checkUpdateBtn).toBeVisible();
+
+    // 关闭弹窗
+    await aboutDialog.locator('#about-close-btn').click();
+    await expect(aboutDialog).toHaveCount(0);
+
+    // 2. 从设置弹窗底部的【关于与检查更新】也可呼出
+    await page.locator('#btn-settings').click();
+    const settingsDialog = page.locator('.settings-dialog');
+    await expect(settingsDialog).toBeVisible();
+
+    const settingsAboutBtn = settingsDialog.locator('#btn-settings-about');
+    await expect(settingsAboutBtn).toBeVisible();
+    await settingsAboutBtn.click();
+
+    // 再次断言关于弹窗可见
+    await expect(page.locator('.about-dialog')).toBeVisible();
+    await page.locator('.about-dialog #about-confirm-btn').click();
+    await expect(page.locator('.about-dialog')).toHaveCount(0);
+
+    // 关闭设置弹窗
+    await settingsDialog.locator('#settings-close-btn').click();
+    await expect(settingsDialog).toHaveCount(0);
+  });
 });

@@ -96,6 +96,8 @@ export const zhCN = {
   'toolbar.exportTitle': '检查数据并选择导出格式',
   'toolbar.settings': '设置',
   'toolbar.settingsTitle': '全局偏好与系统设置 (Ctrl+,)',
+  'toolbar.about': '关于',
+  'toolbar.aboutTitle': '关于软件、作者信息、引用与检查更新',
   'toolbar.shutdownTitle': '退出程序并安全终止后台服务',
 
   // ===== 8 步工作流 =====

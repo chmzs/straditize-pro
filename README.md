@@ -196,6 +196,18 @@ pixi run app
 
 ---
 
+## 👨‍💻 研发团队与联系方式 (Author & Contact)
+
+- **主要开发者 / 维护人**：**陈鸿明** (Hongming Chen)
+  - GitHub: [@chmzs](https://github.com/chmzs)
+  - 联系邮箱：[chmzs@outlook.com](mailto:chmzs@outlook.com)
+- **科研单位**：**兰州大学资源环境学院 黄小忠课题组** (College of Earth and Environmental Sciences, Lanzhou University, Huang Xiaozhong's Research Group)
+- **课题组学术指导与通讯作者**：
+  - 向丽雄 (Lixiong Xiang) &nbsp;|&nbsp; 邮箱：[xianglx@lzu.edu.cn](mailto:xianglx@lzu.edu.cn)
+  - 黄小忠 (Xiaozhong Huang) &nbsp;|&nbsp; 邮箱：[xzhuang@lzu.edu.cn](mailto:xzhuang@lzu.edu.cn)
+
+---
+
 ## 📄 学术引用与开源许可 (Citation & License)
 
 本项目基于 **GNU General Public License v3.0 or later (GPL-3.0-or-later)** 开源。
@@ -204,9 +216,9 @@ pixi run app
 
 ### 第一引用（Primary Citation - 本软件系统）：
 - **中文格式**：  
-  陈鸿明, 向丽雄*, 王文佳, 欧阳瑶, 闫创子, 李鹏宇, 黄小忠*. (2026). *Straditize Pro: 专业地层花粉与古气候图表数字化科研解译系统 (v2.0)* [CP/OL]. 兰州大学资源环境学院. https://github.com/chmzs/straditize-pro (*通讯作者).
+  陈鸿明, 向丽雄*, 王文佳, 欧阳瑶, 闫创子, 李鹏宇, 黄小忠*. (2026). *Straditize Pro: 专业地层花粉与古气候图表数字化科研解译系统 (v2.0)* [CP/OL]. 兰州大学资源环境学院 黄小忠课题组. https://github.com/chmzs/straditize-pro (*通讯作者).
 - **英文格式**：  
-  Chen, H., Xiang, L.*, Wang, W., Ouyang, Y., Yan, C., Li, P., & Huang, X.* (2026). *Straditize Pro: Next-Generation Scientific Digitization System for Palynological & Stratigraphic Diagrams (v2.0)*. College of Earth and Environmental Sciences, Lanzhou University. https://github.com/chmzs/straditize-pro (*Corresponding authors).
+  Chen, H., Xiang, L.*, Wang, W., Ouyang, Y., Yan, C., Li, P., & Huang, X.* (2026). *Straditize Pro: Next-Generation Scientific Digitization System for Palynological & Stratigraphic Diagrams (v2.0)*. College of Earth and Environmental Sciences, Lanzhou University (Huang Xiaozhong's Research Group). https://github.com/chmzs/straditize-pro (*Corresponding authors).
 - **BibTeX 格式**：
 ```bibtex
 @software{straditize_pro_2026,
@@ -216,7 +228,7 @@ pixi run app
   institution  = {College of Earth and Environmental Sciences, Lanzhou University},
   url          = {https://github.com/chmzs/straditize-pro},
   license      = {GPL-3.0-or-later},
-  note         = {*Corresponding authors: Lixiong Xiang (xianglx@lzu.edu.cn), Xiaozhong Huang (xzhuang@lzu.edu.cn)}
+  note         = {Huang Xiaozhong's Research Group. *Corresponding authors: Lixiong Xiang (xianglx@lzu.edu.cn), Xiaozhong Huang (xzhuang@lzu.edu.cn)}
 }
 ```
 

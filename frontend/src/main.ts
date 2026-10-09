@@ -13,6 +13,7 @@ import { AgeDepthModal } from './components/AgeDepthModal';
 import { MetadataModal } from './components/MetadataModal';
 import { OcrReviewModal } from './components/OcrReviewModal';
 import { SettingsModal } from './components/SettingsModal';
+import { AboutModal } from './components/AboutModal';
 import { AuthModal } from './components/AuthModal';
 import {
   DataRoi,
@@ -448,6 +449,8 @@ async function bootstrap() {
     }
   );
 
+  const aboutModal = new AboutModal(document.body);
+
   const onProjectLoad = (projectData: DiagramData) => {
     canvasComponent.loadNewDiagram(projectData);
     history.reset(projectData.columns, projectData.activeTaxaId, projectData.calibration, projectData.roi);
@@ -602,6 +605,7 @@ async function bootstrap() {
       metadataModal,
       ocrReviewModal,
       settingsModal,
+      aboutModal,
       cleanupManager,
       workflowController,
       fileLoader,

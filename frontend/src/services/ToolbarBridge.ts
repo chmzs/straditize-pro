@@ -10,6 +10,7 @@ import { AgeDepthModal } from '../components/AgeDepthModal';
 import { MetadataModal } from '../components/MetadataModal';
 import { OcrReviewModal } from '../components/OcrReviewModal';
 import { SettingsModal } from '../components/SettingsModal';
+import { AboutModal } from '../components/AboutModal';
 import { CleanupManager } from './CleanupManager';
 import { WorkflowController } from './WorkflowController';
 import { FileLoaderService } from './FileLoaderService';
@@ -30,6 +31,7 @@ export interface ToolbarBridgeParams {
   metadataModal: MetadataModal;
   ocrReviewModal: OcrReviewModal;
   settingsModal: SettingsModal;
+  aboutModal: AboutModal;
   cleanupManager: CleanupManager;
   workflowController: WorkflowController;
   fileLoader: FileLoaderService;
@@ -174,6 +176,9 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
     },
     onOpenSettings: () => {
       p.settingsModal.open();
+    },
+    onOpenAbout: () => {
+      p.aboutModal.open();
     },
     onToggleRpcConfig: () => {
       p.settingsModal.open();

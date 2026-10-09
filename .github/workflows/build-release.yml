@@ -134,7 +134,7 @@ jobs:
           cp -r dist/straditize/* pkg_root/opt/straditize/
           ln -s /opt/straditize/straditize pkg_root/usr/local/bin/straditize
           cp support/linux/straditize.desktop pkg_root/usr/share/applications/
-          cp assets/logos/logo-icon.svg pkg_root/usr/share/icons/hicolor/scalable/apps/straditize.svg
+          cp docs/assets/logos/logo-icon.svg pkg_root/usr/share/icons/hicolor/scalable/apps/straditize.svg
 
           # 2. Build Debian/Ubuntu (.deb)
           fpm -s dir -t deb \

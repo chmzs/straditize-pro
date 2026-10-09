@@ -1,5 +1,6 @@
 import { RpcClient, SystemConfig } from '../services/RpcClient';
 import { getLocale, setLocale, Locale, t } from '../i18n';
+import { AboutModal } from './AboutModal';
 
 export class SettingsModal {
   private container: HTMLElement;
@@ -199,8 +200,17 @@ export class SettingsModal {
         </div>
 
         <div class="ui-modal__footer">
-          <button class="ui-btn ui-btn--secondary" id="btn-settings-cancel">${t('settings.cancel')}</button>
-          <button class="ui-btn ui-btn--primary" id="btn-settings-save">${t('settings.save')}</button>
+          <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-settings-about" type="button" style="margin-right: auto;">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 16v-4M12 8h.01"/>
+            </svg>
+            <span>关于与检查更新</span>
+          </button>
+          <div style="display: flex; gap: var(--space-3);">
+            <button class="ui-btn ui-btn--secondary" id="btn-settings-cancel">${t('settings.cancel')}</button>
+            <button class="ui-btn ui-btn--primary" id="btn-settings-save">${t('settings.save')}</button>
+          </div>
         </div>
       </div>
     `;
@@ -303,6 +313,9 @@ export class SettingsModal {
 
     modal.querySelector('#settings-close-btn')?.addEventListener('click', closeModal);
     modal.querySelector('#btn-settings-cancel')?.addEventListener('click', closeModal);
+    modal.querySelector('#btn-settings-about')?.addEventListener('click', () => {
+      new AboutModal(this.container).open();
+    });
 
     // 主题即时渲染预览
     const lightRadio = modal.querySelector('#theme-light-radio') as HTMLInputElement;

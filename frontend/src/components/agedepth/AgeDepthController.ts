@@ -127,11 +127,11 @@ export class AgeDepthController {
   public loadSampleImage(sampleKey: string): void {
     void this.rpcClient
       .call<any, any>('agedepth.loadModelDiagram', { sample_key: sampleKey })
-      .catch((err) => {
-        this.showExtractError(`后端未能载入范例图谱 (${sampleKey}): ${err?.message || err}`);
-      })
       .then(() => {
         this.fetchAgeDepthPixels(`范例: ${sampleKey.toUpperCase()}`);
+      })
+      .catch((err) => {
+        this.showExtractError(`后端未能载入范例图谱 (${sampleKey}): ${err?.message || err}`);
       });
   }
 

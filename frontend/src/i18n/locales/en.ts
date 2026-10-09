@@ -95,6 +95,8 @@ export const en = {
   'toolbar.exportTitle': 'Review data and choose an export format',
   'toolbar.settings': 'Settings',
   'toolbar.settingsTitle': 'Preferences & System Settings (Ctrl+,)',
+  'toolbar.about': 'About',
+  'toolbar.aboutTitle': 'About software, authors, citations, and updates',
   'toolbar.shutdownTitle': 'Exit application and safely shut down backend service',
 
   // ===== 8-Step Workflow =====

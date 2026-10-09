@@ -29,6 +29,7 @@ export interface ToolbarCallbacks {
   onOpenMetadataModal?: () => void;
   onOpenOcrReviewModal?: () => void;
   onOpenSettings?: () => void;
+  onOpenAbout?: () => void;
   onToggleSidebar?: () => void;
   onToggleInspector?: () => void;
   onStepClick?: (step: number) => void;
@@ -353,6 +354,15 @@ export class Toolbar {
           <span>${t('toolbar.settings')}</span>
         </button>
 
+        <!-- [关于] 软件信息与更新检查 -->
+        <button id="btn-about" class="ui-btn ui-btn--quiet ui-btn--sm" title="${t('toolbar.aboutTitle')}">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4M12 8h.01"/>
+          </svg>
+          <span>${t('toolbar.about')}</span>
+        </button>
+
         ${this.isDesktopMode ? `
           <button id="btn-shutdown" class="ui-btn ui-icon-btn" aria-label="${t('toolbar.shutdownTitle')}" title="${t('toolbar.shutdownTitle')}">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
@@ -426,6 +436,7 @@ export class Toolbar {
     this.element.querySelector('#btn-export-csv')?.addEventListener('click', () => this.callbacks.onExport('csv'));
     this.element.querySelector('#btn-export-json')?.addEventListener('click', () => this.callbacks.onExport('json'));
     this.element.querySelector('#btn-settings')?.addEventListener('click', () => this.callbacks.onOpenSettings?.());
+    this.element.querySelector('#btn-about')?.addEventListener('click', () => this.callbacks.onOpenAbout?.());
 
     // 保存与打开项目文件
     this.element.querySelector('#btn-save-project')?.addEventListener('click', () => {
