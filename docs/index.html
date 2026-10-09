@@ -3,45 +3,72 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Straditize Pro v2.0 - 专业地层花粉与古气候图表数字化解译系统</title>
+  <title>Straditize Pro - 专业地层花粉与古气候图表数字化科研解译系统</title>
+  <meta name="description" content="专为第四纪古生态学、古气候学与沉积地层学打造的高精度多指标图表数字化科研系统。支持多列地质图谱并发解译、PP-OCRv6拉丁学名识别、两点物理标定、等深横截零NA矩阵与LiPD/FAIR国际元数据。" />
   <link rel="icon" type="image/svg+xml" href="./assets/logos/logo-icon.svg" />
   <style>
     :root {
-      --bg-base: #0a0e17;
-      --bg-surface: #111827;
-      --bg-card: rgba(17, 24, 39, 0.75);
-      --border-color: rgba(56, 189, 248, 0.18);
-      --text-main: #f1f5f9;
+      --bg-base: #090d16;
+      --bg-surface: #0f172a;
+      --bg-card: rgba(15, 23, 42, 0.75);
+      --bg-card-hover: rgba(30, 41, 59, 0.85);
+      --border-subtle: rgba(148, 163, 184, 0.12);
+      --border-focus: rgba(56, 189, 248, 0.35);
+      --text-main: #f8fafc;
       --text-muted: #94a3b8;
-      --accent-primary: #38bdf8;
-      --accent-secondary: #34d399;
+      --text-dim: #64748b;
+      --accent-blue: #38bdf8;
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-purple: #8b5cf6;
+      --accent-amber: #f59e0b;
       --accent-gradient: linear-gradient(135deg, #0284c7 0%, #38bdf8 50%, #34d399 100%);
+      --accent-glow: rgba(56, 189, 248, 0.15);
+      --radius-sm: 6px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: radial-gradient(circle at 50% 0%, #0f172a 0%, var(--bg-base) 70%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg-base);
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(2, 132, 199, 0.18) 0%, transparent 60%),
+        radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 15% 70%, rgba(139, 92, 246, 0.08) 0%, transparent 50%);
+      background-attachment: fixed;
       color: var(--text-main);
       line-height: 1.6;
       overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
     }
 
     /* 顶部导航 */
     header {
       position: sticky;
       top: 0;
-      z-index: 100;
-      backdrop-filter: blur(12px);
-      background: rgba(10, 14, 23, 0.82);
-      border-bottom: 1px solid var(--border-color);
+      z-index: 1000;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      background: rgba(9, 13, 22, 0.85);
+      border-bottom: 1px solid var(--border-subtle);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 14px 32px;
+      padding: 14px 40px;
     }
-    .logo {
-      font-size: 19px;
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text-main);
+    }
+    .logo-title {
+      font-size: 20px;
       font-weight: 800;
       letter-spacing: -0.5px;
       display: flex;
@@ -52,50 +79,67 @@
       background: var(--accent-gradient);
       color: #fff;
       font-size: 11px;
-      padding: 2px 7px;
-      border-radius: 4px;
+      padding: 2px 8px;
+      border-radius: 9999px;
       font-weight: 700;
       letter-spacing: 0.5px;
     }
     nav {
       display: flex;
       align-items: center;
-      gap: 20px;
+      gap: 28px;
     }
     nav a {
       color: var(--text-muted);
       text-decoration: none;
       font-size: 14px;
       font-weight: 500;
-      transition: color 0.2s;
+      transition: color 0.2s ease;
     }
-    nav a:hover { color: var(--accent-primary); }
-    /* Hero 区域 */
+    nav a:hover { color: var(--accent-blue); }
+    .nav-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-subtle);
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      color: var(--text-main) !important;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: var(--border-focus);
+    }
+
+    /* Hero 区 */
     .hero {
-      max-width: 1100px;
-      margin: 64px auto 40px;
+      max-width: 1200px;
+      margin: 70px auto 40px;
       text-align: center;
       padding: 0 24px;
     }
-    .hero-badge {
+    .hero-pill {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      background: rgba(56, 189, 248, 0.1);
+      background: rgba(56, 189, 248, 0.08);
       border: 1px solid rgba(56, 189, 248, 0.25);
-      padding: 4px 12px;
+      padding: 6px 16px;
       border-radius: 9999px;
-      color: var(--accent-primary);
+      color: var(--accent-blue);
       font-size: 13px;
       font-weight: 600;
       margin-bottom: 24px;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.1);
     }
     .hero h1 {
-      font-size: clamp(32px, 5vw, 54px);
+      font-size: clamp(34px, 5.2vw, 56px);
       font-weight: 900;
       letter-spacing: -1.5px;
       line-height: 1.15;
-      margin-bottom: 20px;
+      margin-bottom: 22px;
     }
     .gradient-text {
       background: var(--accent-gradient);
@@ -105,284 +149,783 @@
     .hero p {
       font-size: clamp(16px, 2vw, 19px);
       color: var(--text-muted);
-      max-width: 760px;
+      max-width: 820px;
       margin: 0 auto 36px;
+      line-height: 1.65;
     }
     .hero-actions {
       display: flex;
       justify-content: center;
+      align-items: center;
       gap: 16px;
       flex-wrap: wrap;
+      margin-bottom: 48px;
     }
     .btn-primary {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      background: var(--accent-gradient);
+      gap: 10px;
+      background: linear-gradient(135deg, #0284c7 0%, #059669 100%);
       color: #fff;
-      padding: 12px 28px;
-      border-radius: 8px;
+      padding: 14px 30px;
+      border-radius: var(--radius-md);
       font-size: 16px;
       font-weight: 700;
       text-decoration: none;
-      box-shadow: 0 8px 24px rgba(2, 132, 199, 0.4);
-      transition: all 0.2s;
+      box-shadow: 0 10px 25px rgba(2, 132, 199, 0.35);
+      transition: all 0.25s ease;
     }
     .btn-primary:hover {
       transform: translateY(-2px);
-      box-shadow: 0 12px 30px rgba(56, 189, 248, 0.55);
+      box-shadow: 0 14px 32px rgba(56, 189, 248, 0.5);
     }
     .btn-secondary {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.14);
       color: var(--text-main);
-      padding: 12px 24px;
-      border-radius: 8px;
+      padding: 14px 24px;
+      border-radius: var(--radius-md);
       font-size: 16px;
       font-weight: 600;
       text-decoration: none;
-      transition: all 0.2s;
+      transition: all 0.2s ease;
     }
     .btn-secondary:hover {
       background: rgba(255, 255, 255, 0.1);
       border-color: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+    }
+    .hero-badges {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 20px;
     }
 
-    /* 预览截图容器 */
+    /* 预览画廊容器 */
     .preview-container {
-      max-width: 1100px;
-      margin: 48px auto;
+      max-width: 1140px;
+      margin: 0 auto 80px;
       padding: 0 24px;
     }
-    .preview-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
+    .preview-window {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
       overflow: hidden;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 40px rgba(56, 189, 248, 0.08);
     }
-    .preview-card img {
+    .preview-header {
+      background: rgba(15, 23, 42, 0.9);
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .window-dots {
+      display: flex;
+      gap: 8px;
+    }
+    .window-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .dot-close { background: #ef4444; }
+    .dot-min { background: #f59e0b; }
+    .dot-max { background: #10b981; }
+    .window-title {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+    .preview-body img {
       width: 100%;
       height: auto;
       display: block;
     }
 
-    /* 特性网格 */
-    .section-title {
+    /* 章节通用样式 */
+    section {
+      padding: 70px 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .section-header {
       text-align: center;
-      font-size: 30px;
+      margin-bottom: 56px;
+    }
+    .section-tag {
+      color: var(--accent-blue);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      display: block;
+    }
+    .section-title {
+      font-size: clamp(28px, 3.8vw, 40px);
       font-weight: 800;
       letter-spacing: -0.5px;
-      margin: 80px 0 16px;
+      margin-bottom: 16px;
     }
     .section-subtitle {
-      text-align: center;
       color: var(--text-muted);
       font-size: 16px;
-      margin-bottom: 48px;
-    }
-    .features-grid {
-      max-width: 1100px;
+      max-width: 680px;
       margin: 0 auto;
-      padding: 0 24px;
+    }
+
+    /* 对比表格 (痛点 vs 解决方案) */
+    .comparison-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 28px;
+      margin-top: 40px;
+    }
+    .comp-card {
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      position: relative;
+      overflow: hidden;
+    }
+    .comp-card-traditional {
+      background: rgba(30, 41, 59, 0.4);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+    .comp-card-straditize {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      box-shadow: 0 10px 40px -10px rgba(16, 185, 129, 0.15);
+    }
+    .comp-badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      margin-bottom: 20px;
+    }
+    .comp-badge-red {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .comp-badge-green {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .comp-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+    .comp-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .comp-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 14.5px;
+      line-height: 1.55;
+    }
+    .comp-item-icon {
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .comp-card-traditional .comp-item { color: #cbd5e1; }
+    .comp-card-straditize .comp-item { color: #f1f5f9; }
+
+    /* 特性网格 */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
       gap: 24px;
     }
     .feature-card {
       background: var(--bg-card);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 10px;
-      padding: 28px;
-      transition: all 0.25s;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 30px;
+      transition: all 0.3s ease;
+      position: relative;
     }
     .feature-card:hover {
-      border-color: var(--border-color);
+      background: var(--bg-card-hover);
+      border-color: var(--border-focus);
       transform: translateY(-4px);
+      box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.5);
     }
-    .feature-icon {
-      font-size: 28px;
-      margin-bottom: 16px;
-      display: inline-block;
+    .feature-icon-box {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 20px;
+      color: var(--accent-blue);
     }
     .feature-card h3 {
-      font-size: 18px;
+      font-size: 19px;
       font-weight: 700;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
+      color: var(--text-main);
     }
     .feature-card p {
-      font-size: 14px;
+      font-size: 14.5px;
       color: var(--text-muted);
       line-height: 1.6;
     }
 
-    /* 终端示例 */
-    .terminal-section {
-      max-width: 800px;
-      margin: 70px auto 40px;
-      padding: 0 24px;
+    /* 工作流步骤条 */
+    .workflow-timeline {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-top: 40px;
     }
-    .terminal-window {
-      background: #06090e;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 10px;
-      overflow: hidden;
+    .workflow-step {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 22px 18px;
+      position: relative;
+      transition: all 0.25s ease;
     }
-    .terminal-header {
-      background: rgba(255, 255, 255, 0.04);
-      padding: 10px 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    .workflow-step:hover {
+      border-color: var(--border-focus);
+      transform: translateY(-2px);
     }
-    .dot { width: 11px; height: 11px; border-radius: 50%; }
-    .dot-red { background: #ef4444; }
-    .dot-yellow { background: #f59e0b; }
-    .dot-green { background: #10b981; }
-    .terminal-body {
-      padding: 20px;
-      font-family: "Cascadia Code", Consolas, Monaco, monospace;
+    .step-num {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--accent-cyan);
+      background: rgba(6, 182, 212, 0.1);
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+    .step-name {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .step-desc {
       font-size: 13px;
-      line-height: 1.7;
-      color: #38bdf8;
+      color: var(--text-muted);
+      line-height: 1.5;
     }
-    .terminal-body .comment { color: #64748b; }
-    .terminal-body .cmd { color: #f1f5f9; }
+
+    /* 生态集成 */
+    .ecosystem-section {
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 48px;
+      margin-top: 40px;
+    }
+    .eco-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 24px;
+      margin-top: 32px;
+      text-align: center;
+    }
+    .eco-item {
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+    }
+    .eco-item h4 {
+      font-size: 16px;
+      margin-bottom: 8px;
+      color: var(--accent-blue);
+    }
+    .eco-item p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* 下载区 */
+    .download-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      margin-top: 40px;
+    }
+    .dl-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: all 0.25s ease;
+    }
+    .dl-card-featured {
+      border-color: rgba(56, 189, 248, 0.4);
+      background: rgba(15, 23, 42, 0.9);
+      box-shadow: 0 10px 40px -10px rgba(56, 189, 248, 0.2);
+    }
+    .dl-badge {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent-emerald);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .dl-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .dl-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+    .dl-btn {
+      width: 100%;
+      text-align: center;
+      padding: 12px 20px;
+      border-radius: var(--radius-md);
+      font-weight: 700;
+      text-decoration: none;
+      display: inline-block;
+      transition: all 0.2s ease;
+    }
+    .dl-btn-primary {
+      background: linear-gradient(135deg, #0284c7 0%, #10b981 100%);
+      color: #fff;
+    }
+    .dl-btn-primary:hover {
+      box-shadow: 0 8px 24px rgba(2, 132, 199, 0.4);
+      transform: translateY(-2px);
+    }
+    .dl-btn-subtle {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text-main);
+    }
+    .dl-btn-subtle:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* 引用与学术说明 */
+    .citation-card {
+      background: #06090e;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      font-family: monospace;
+      font-size: 13px;
+      color: #38bdf8;
+      overflow-x: auto;
+      line-height: 1.6;
+      margin-top: 24px;
+    }
 
     /* 页脚 */
     footer {
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      border-top: 1px solid var(--border-subtle);
       text-align: center;
-      padding: 48px 24px;
-      color: var(--text-muted);
-      font-size: 13px;
+      padding: 60px 24px;
+      color: var(--text-dim);
+      font-size: 13.5px;
       margin-top: 80px;
     }
-    footer a { color: var(--accent-primary); text-decoration: none; }
+    footer a { color: var(--accent-blue); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    @media (max-width: 768px) {
+      header { padding: 14px 20px; }
+      nav { display: none; }
+      section { padding: 50px 16px; }
+      .hero { margin: 40px auto 20px; }
+      .ecosystem-section { padding: 24px; }
+    }
   </style>
 </head>
 <body>
 
-  <!-- 导航栏 -->
+  <!-- 顶部导航 -->
   <header>
-    <div class="logo">
-      <img src="./assets/logos/logo-icon.svg" alt="Straditize Pro Icon" width="28" height="28" style="vertical-align: middle; border-radius: 6px;" />
-      <span>Straditize</span>
-      <span class="logo-badge">PRO v2.0</span>
-    </div>
+    <a href="#" class="logo-container">
+      <img src="./assets/logos/logo-icon.svg" alt="Straditize Pro Icon" width="30" height="30" style="border-radius: 6px;" />
+      <div class="logo-title">
+        <span>Straditize Pro</span>
+        <span class="logo-badge">v2.0</span>
+      </div>
+    </a>
     <nav>
-      <a href="#features">核心特性</a>
-      <a href="./tutorials/01_quickstart.md">科研教程</a>
-      <a href="https://github.com/chmzs/straditize-pro" target="_blank">GitHub</a>
+      <a href="#why">科研痛点与对比</a>
+      <a href="#features">核心突破</a>
+      <a href="#workflow">8 步工作流</a>
+      <a href="./tutorials/01_quickstart.md">实战教程</a>
+      <a href="#download">下载获取</a>
+      <a href="https://github.com/chmzs/straditize-pro" target="_blank" class="nav-btn">
+        <span>GitHub 源码</span>
+      </a>
     </nav>
   </header>
 
   <!-- Hero 区 -->
-  <section class="hero">
-    <div class="hero-badge">
-      <span>✨ 2026 全新重构架构</span>
+  <div class="hero">
+    <div class="hero-pill">
+      <span>✨ 专为第四纪地质学与古气候学打造</span>
       <span>•</span>
-      <span>纯计算内核 + 120 FPS Web 视口</span>
+      <span>多列图谱并发解译系统</span>
     </div>
-    <h1>专业地层花粉与古气候图表<br><span class="gradient-text">数字化科研解译系统</span></h1>
+    <h1>让历史文献中的地层数据<br><span class="gradient-text">重获高精度数字化新生</span></h1>
     <p>
-      彻底告别传统 PyQt 桌面图形包卡顿与模糊。基于统一数学真相源、两点式物理标定、等深横向几何求交与 WPD 级多格式导出，专为第四纪古生态学与地质科学打造。
+      摆脱通用折线工具对多指标图谱的低效手工描点与“伪空值（Pseudo-NA）”困扰。融合计算机视觉、PP-OCRv6 拉丁学名识别、两点物理标定与贝叶斯年代学模型，一键提取出版级完整数据矩阵。
     </p>
     <div class="hero-actions">
-      <a href="https://github.com/chmzs/straditize-pro/releases/latest" class="btn-primary" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%);">
+      <a href="https://github.com/chmzs/straditize-pro/releases/latest" class="btn-primary">
         <span>🚀 下载 Windows 一键安装包 (.exe)</span>
       </a>
       <a href="./tutorials/01_quickstart.md" class="btn-secondary">
-        <span>📖 快速上手实战教程</span>
+        <span>📖 5 分钟上手实战教程</span>
         <span>&rarr;</span>
       </a>
       <a href="https://github.com/chmzs/straditize-pro" target="_blank" class="btn-secondary">
-        <span>⭐ 查看 GitHub 源码</span>
+        <span>⭐ GitHub 开源仓库</span>
       </a>
     </div>
-  </section>
-
-  <!-- 预览画廊 -->
-  <section class="preview-container">
-    <div class="preview-card">
-      <img src="./assets/tutorials/01_workflow_8steps.gif" alt="Straditize Pro 8步工作流真机录制动图演示" />
-    </div>
-  </section>
-
-  <!-- 核心特性网格 -->
-  <h2 class="section-title" id="features">六大科研级架构突破</h2>
-  <p class="section-subtitle">从算法底层到交互视口，重新定义地学图谱数字化行业基准</p>
-
-  <div class="features-grid">
-    <div class="feature-card">
-      <div class="feature-icon">📐</div>
-      <h3>两点物理刻度钉标定</h3>
-      <p>拒绝生硬的 0-100% 相对比例假设。端点 1 锚定基准线与任意起始物理值，端点 2 精准对齐图谱刻度齿，直观可控。</p>
-    </div>
-
-    <div class="feature-card">
-      <div class="feature-icon">📈</div>
-      <h3>Linear / Log 统一真相源</h3>
-      <p>单一模块集中维护 px ↔ cm ↔ value 变换。内置对数前置硬约束校验（start>0, tick>0），杜绝计算崩塌与静默降级。</p>
-    </div>
-
-    <div class="feature-card">
-      <div class="feature-icon">🧬</div>
-      <h3>等深层位求交与零 NA 规范</h3>
-      <p>以地层连续剖面深度横向截交全属种轮廓线。未出现属种严格输出真值 <code>0.0</code>（绝不输出破坏生态统计模型的伪 NA）。</p>
-    </div>
-
-    <div class="feature-card">
-      <div class="feature-icon">📊</div>
-      <h3>直通 rioja::strat.plot</h3>
-      <p>对齐 WebPlotDigitizer (WPD) 的专业导出器，一键生成配套 R 语言地层出图脚本，出版级花粉图谱开箱秒绘。</p>
-    </div>
-
-    <div class="feature-card">
-      <div class="feature-icon">📦</div>
-      <h3>POSIX UStar 开放项目包</h3>
-      <p>无专有加密格式。项目保存为纯正 <code>.tar</code> 归档包（含原图、straditize.json 矢量模型、矩阵数据与绘图脚本），同行评议 100% 还原。</p>
-    </div>
-
-    <div class="feature-card">
-      <div class="feature-icon">🔒</div>
-      <h3>双轨远程：局域网密码保护 + SSH 隧道</h3>
-      <p>局域网/Tailscale 内网支持设置独立访问密码/PIN码，iPad与跨设备一键解锁；公网服务器支持全链路 SSH 隧道零配置强加密。</p>
+    <div class="hero-badges">
+      <img src="https://img.shields.io/badge/Release-v2.0.0-059669.svg?style=flat-square" alt="Version 2.0" />
+      <img src="https://img.shields.io/badge/PP--OCRv6-500%2B%20Taxa%20Lexicon-7c3aed.svg?style=flat-square" alt="Taxa OCR" />
+      <img src="https://img.shields.io/badge/Data%20Matrix-Zero%20Pseudo--NA-38bdf8.svg?style=flat-square" alt="Zero NA Guarantee" />
+      <img src="https://img.shields.io/badge/Chronology-Bacon%20%7C%201000%20Ensembles-d97706.svg?style=flat-square" alt="Chronology" />
+      <img src="https://img.shields.io/badge/Downstream-rioja%20%7C%20vegan%20%7C%20LiPD-10b981.svg?style=flat-square" alt="Downstream" />
     </div>
   </div>
 
-  <!-- 终端启动指南 -->
-  <section class="terminal-section">
-    <div class="terminal-window">
-      <div class="terminal-header">
-        <div class="dot dot-red"></div>
-        <div class="dot dot-yellow"></div>
-        <div class="dot dot-green"></div>
-        <span style="margin-left: 8px; font-size: 12px; color: #94a3b8;">Terminal / SSH Remote Forward</span>
+  <!-- 演示画廊窗口 -->
+  <div class="preview-container">
+    <div class="preview-window">
+      <div class="preview-header">
+        <div class="window-dots">
+          <div class="window-dot dot-close"></div>
+          <div class="window-dot dot-min"></div>
+          <div class="window-dot dot-max"></div>
+        </div>
+        <div class="window-title">Straditize Pro — Hoya del Castillo Stratigraphic Diagram Workflow</div>
+        <div style="font-size: 11px; color: var(--accent-emerald);">● 实时计算服务就绪</div>
       </div>
-      <div class="terminal-body">
-        <div class="comment"># 1. 远程服务器前台启动服务 (只监听本地环回，杜绝未授权访问)</div>
-        <div class="cmd">$ straditize serve</div>
-        <div style="color: #34d399;">服务已启动：http://127.0.0.1:8765</div>
-        <br>
-        <div class="comment"># 2. 本地机器终端建立 SSH 本地端口转发</div>
-        <div class="cmd">$ ssh -L 8765:127.0.0.1:8765 user@remote-server</div>
-        <br>
-        <div class="comment"># 3. 本地浏览器免密直接秒开，享受极速 120 FPS 解译体验</div>
-        <div class="cmd">$ open http://127.0.0.1:8765</div>
+      <div class="preview-body">
+        <img src="./assets/tutorials/01_workflow_8steps.gif" alt="Straditize Pro 8步工作流真机实录演示" />
       </div>
+    </div>
+  </div>
+
+  <!-- 痛点与对比 -->
+  <section id="why">
+    <div class="section-header">
+      <span class="section-tag">Why Straditize Pro</span>
+      <h2 class="section-title">为什么通用数字化工具难以胜任地学图谱？</h2>
+      <p class="section-subtitle">从单曲线离散采集到多列并发地学解译，解决地层学与古生态学真正的研究痛点</p>
+    </div>
+
+    <div class="comparison-grid">
+      <div class="comp-card comp-card-traditional">
+        <span class="comp-badge comp-badge-red">传统通用工具 (WebPlotDigitizer 等)</span>
+        <h3 class="comp-title">面对多列地层图谱力不从心</h3>
+        <ul class="comp-list">
+          <li class="comp-item">
+            <span class="comp-item-icon">❌</span>
+            <div><strong>多列属种手工重复</strong>：面对数十个花粉属种/元素并列的综合图，需手动重复建数据集、反复标定几十次。</div>
+          </li>
+          <li class="comp-item">
+            <span class="comp-item-icon">❌</span>
+            <div><strong>矩阵充满“伪空值”</strong>：各列独立采点导致深度坐标不统一，拼接出的数据表充斥假 NA，破坏 R 语言 <code>rioja</code> 绘图与 <code>vegan</code> 分析。</div>
+          </li>
+          <li class="comp-item">
+            <span class="comp-item-icon">❌</span>
+            <div><strong>分带线与网格干扰</strong>：无法自动剥离水平地层界线、剖面网格和阴影填充，需繁重的手工擦除。</div>
+          </li>
+          <li class="comp-item">
+            <span class="comp-item-icon">❌</span>
+            <div><strong>属种学名盲打录入</strong>：几十个复杂的拉丁属种名称全靠手动盲打输入，拼写极易出错。</div>
+          </li>
+          <li class="comp-item">
+            <span class="comp-item-icon">❌</span>
+            <div><strong>年代学与元数据割裂</strong>：无法同时提取年代-深度模型及其 95% 置信区间，缺乏国际 FAIR 与 LiPD 规范支持。</div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="comp-card comp-card-straditize">
+        <span class="comp-badge comp-badge-green">Straditize Pro 专业科研方案</span>
+        <h3 class="comp-title">专为地学与古生态剖面量身打造</h3>
+        <ul class="comp-list">
+          <li class="comp-item">
+            <span class="comp-item-icon">✅</span>
+            <div><strong>全剖面多列并发解译</strong>：自动探测属种基线，一次性管理数十个属种列，支持局部与全局参数联动。</div>
+          </li>
+          <li class="comp-item">
+            <span class="comp-item-icon">✅</span>
+            <div><strong>等深横向几何截交与零 NA 保证</strong>：统一深度网格横切全部分类单元，未检出层位赋严格真值 <code>0.00</code>，直接对接生态学模型。</div>
+          </li>
+          <li class="comp-item">
+            <span class="comp-item-icon">✅</span>
+            <div><strong>智能去线与 B 键二值化透视</strong>：自适应滤除水平网格与分带线；按键盘 <code>B</code> 键实时切换红白掩膜，所见即所得。</div>
+          </li>
+          <li class="comp-item">
+            <span class="comp-item-icon">✅</span>
+            <div><strong>PP-OCRv6 离线识别与词库纠错</strong>：内置古生物学拉丁分类词典（500+ Taxa），倾斜文本自动吸附校正与模糊纠错。</div>
+          </li>
+          <li class="comp-item">
+            <span class="comp-item-icon">✅</span>
+            <div><strong>Bacon 贝叶斯年代学与 LiPD 打包</strong>：解译年代中位数曲线与 95% 置信包络，重构 1000 集合年代学并输出 LiPD v1.3 标准。</div>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 核心特性展厅 -->
+  <section id="features">
+    <div class="section-header">
+      <span class="section-tag">Key Features</span>
+      <h2 class="section-title">六大科研级专业核心功能</h2>
+      <p class="section-subtitle">兼具严谨的数学几何核心与现代极速交互视口，重新定义图谱数字化行业水准</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon-box">🏷️</div>
+        <h3>PP-OCRv6 古生物分类学识别</h3>
+        <p>集成离线 PP-OCRv6 视觉模型，支持 0°~60° 多角度旋转文本投影识别。内置 500+ 花粉、硅藻、微体古生物分类词库，自动纠正常见拼写错误。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-box">📐</div>
+        <h3>两点物理刻度钉标定</h3>
+        <p>坐标标定与取数裁剪框彻底物理解耦。原点锚定基线，刻度钉精确对齐任意印刷刻度齿，原生支持线性（Linear）与对数（Log）双尺度。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-box">🧬</div>
+        <h3>等深横截与“零伪 NA”保证</h3>
+        <p>沿地层共识采样深度横向截交全属种多边形轮廓。未检出层位赋予严格真值 <code>0.00</code>，产出规范完整的矩阵，彻底杜绝破坏统计模型的伪空值。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-box">📈</div>
+        <h3>Bacon 贝叶斯年代-深度提取</h3>
+        <p>从图谱中直接解译沉积年代模型的中位数与 95% 置信包络线；在速率空间利用高斯过程重构 1000 条单调年代学集合，实现不确定性无损传递。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-box">📊</div>
+        <h3>直通 R 语言 rioja 出版级成图</h3>
+        <p>对齐专业地层制图规范，一键导出清洗完备的 CSV/Excel 矩阵，并自动生成配套的 <code>rioja::strat.plot</code> 绘图脚本，开箱即得学术出版级图表。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-box">📦</div>
+        <h3>开放标准工程包与 LiPD 支持</h3>
+        <p>项目完整归档为 POSIX UStar 标准 <code>.tar</code> 开放工程包（含原图、矢量模型、矩阵与脚本），集成 LiPD v1.3 元数据，100% 满足学术评议复现要求。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 步工作流 -->
+  <section id="workflow">
+    <div class="section-header">
+      <span class="section-tag">Scientific Workflow</span>
+      <h2 class="section-title">严格遵循 8 阶段科学解译工作流</h2>
+      <p class="section-subtitle">状态机架构驱动，顶部胶囊清晰指示阶段进度，已完成步骤可随时自由回跳微调</p>
+    </div>
+
+    <div class="workflow-timeline">
+      <div class="workflow-step">
+        <span class="step-num">Step 01</span>
+        <h4 class="step-name">1. 载入与微倾矫正</h4>
+        <p class="step-desc">支持 PNG/JPG/TIFF 及单页 PDF；Radon 变换自动检测扫描微倾斜并完成水平校正。</p>
+      </div>
+
+      <div class="workflow-step">
+        <span class="step-num">Step 02</span>
+        <h4 class="step-name">2. 划分多取数区</h4>
+        <p class="step-desc">多 ROI 分组管理，将数据曲线区与图名、图例、深度标尺和聚类树彻底物理隔离。</p>
+      </div>
+
+      <div class="workflow-step">
+        <span class="step-num">Step 03</span>
+        <h4 class="step-name">3. Y 轴绝对标定</h4>
+        <p class="step-desc">两点式物理映射深度（或年代）坐标，配置单位（cm、m、cal yr BP），支持正反向递增。</p>
+      </div>
+
+      <div class="workflow-step">
+        <span class="step-num">Step 04</span>
+        <h4 class="step-name">4. 去线清理掩膜</h4>
+        <p class="step-desc">智能过滤水平网格线；按键盘 <code>B</code> 键开启二值化透视遮罩，受保护门禁避免截断花粉带。</p>
+      </div>
+
+      <div class="workflow-step">
+        <span class="step-num">Step 05</span>
+        <h4 class="step-name">5. 分列与属种命名</h4>
+        <p class="step-desc">自动探测列基线；调用 PP-OCRv6 离线识别拉丁学名，500+ 分类词典自动纠错吸附。</p>
+      </div>
+
+      <div class="workflow-step">
+        <span class="step-num">Step 06</span>
+        <h4 class="step-name">6. X 刻度精细对齐</h4>
+        <p class="step-desc">两点式刻度钉对准刻度齿；属种列组统一应用；内置对数（Log）尺度有效性拦截保护。</p>
+      </div>
+
+      <div class="workflow-step">
+        <span class="step-num">Step 07</span>
+        <h4 class="step-name">7. 拓扑数字化</h4>
+        <p class="step-desc">提取显著拐点多边形；提取共识采样层位；支持提取 Bacon 年代模型及 95% 置信区间。</p>
+      </div>
+
+      <div class="workflow-step">
+        <span class="step-num">Step 08</span>
+        <h4 class="step-name">8. 校验与矩阵导出</h4>
+        <p class="step-desc">执行 $\sum\% \approx 100\%$ 生态学自洽检验；一键导出无 NA 矩阵、LiPD 与 <code>riojaPlot</code> 脚本。</p>
+      </div>
+    </div>
+
+    <!-- 生态集成展示 -->
+    <div class="ecosystem-section">
+      <div style="text-align: center;">
+        <span class="section-tag">Downstream Ecosystem</span>
+        <h3 style="font-size: 24px; font-weight: 800; margin-bottom: 8px;">无缝衔接第四纪与古气候科研生态</h3>
+        <p style="color: var(--text-muted); font-size: 14.5px;">无需繁琐的数据转置与空值修补，导出成果直通主流科研工具</p>
+      </div>
+      <div class="eco-grid">
+        <div class="eco-item">
+          <h4>R • rioja / vegan</h4>
+          <p>开箱即用的 <code>strat.plot</code> 地层绘图、CONISS 约束聚类与 CCA/RDA 排序分析</p>
+        </div>
+        <div class="eco-item">
+          <h4>R • rbacon / Bchron</h4>
+          <p>年代学不确定性 1000 集合传递，深度剖面贝叶斯沉积速率连续建模</p>
+        </div>
+        <div class="eco-item">
+          <h4>LiPD • Linked PaleoData</h4>
+          <p>符合国际古气候数据库（Neotoma / NOAA）FAIR 原则的标准 JSON-LD 结构</p>
+        </div>
+        <div class="eco-item">
+          <h4>Excel & CSV 数据矩阵</h4>
+          <p>规范二维表格、首列固定深度、严谨无伪 NA，直接输入任意统计与机器学习管线</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 下载与获取 -->
+  <section id="download">
+    <div class="section-header">
+      <span class="section-tag">Get Started</span>
+      <h2 class="section-title">下载并开始使用 Straditize Pro</h2>
+      <p class="section-subtitle">提供开箱即用的 Windows 预编译安装包，亦支持全功能源码部署</p>
+    </div>
+
+    <div class="download-grid">
+      <div class="dl-card dl-card-featured">
+        <div>
+          <div class="dl-badge">科研用户首选 • 推荐</div>
+          <h3 class="dl-title">Windows 一键安装包</h3>
+          <p class="dl-desc">
+            内嵌独立 Python 计算环境、ONNX Runtime 推理引擎与 PP-OCRv6 离线权重。双击安装自动创建桌面快捷方式，电脑无需配置任何环境即可运行。
+          </p>
+        </div>
+        <a href="https://github.com/chmzs/straditize-pro/releases/latest" class="dl-btn dl-btn-primary">
+          🚀 下载 Setup.exe (GitHub Releases)
+        </a>
+      </div>
+
+      <div class="dl-card">
+        <div>
+          <div class="dl-badge" style="color: var(--accent-blue);">便携随身版</div>
+          <h3 class="dl-title">Windows 绿色免安装包</h3>
+          <p class="dl-desc">
+            解压即用，不修改系统注册表。适合存放于 U 盘随身携带，或在实验室公用计算机、无管理员权限的教学机房中直接运行。
+          </p>
+        </div>
+        <a href="https://github.com/chmzs/straditize-pro/releases/latest" class="dl-btn dl-btn-subtle">
+          📦 下载 Portable.zip
+        </a>
+      </div>
+
+      <div class="dl-card">
+        <div>
+          <div class="dl-badge" style="color: var(--accent-purple);">开发者与服务器模式</div>
+          <h3 class="dl-title">源码运行 / 跨平台</h3>
+          <p class="dl-desc">
+            通过 Git 克隆源码，基于 Pixi 或 Conda 一键管理环境。支持在无界面的 Linux 高性能计算节点后台运行并通过 SSH 隧道远程访问。
+          </p>
+        </div>
+        <a href="https://github.com/chmzs/straditize-pro#2-源码安装与开发者模式" class="dl-btn dl-btn-subtle">
+          ⚙️ 查看源码部署文档
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 引用与许可 -->
+  <section id="citation" style="padding-top: 20px;">
+    <div class="section-header" style="margin-bottom: 24px;">
+      <span class="section-tag">Academic Citation</span>
+      <h2 class="section-title" style="font-size: 26px;">学术引用与开源许可</h2>
+      <p class="section-subtitle">Straditize Pro 基于 GNU GPL-3.0-or-later 协议完全开源，欢迎在论文与研究成果中引用</p>
+    </div>
+
+    <div class="citation-card">
+@software{straditize_pro_2026,
+  author       = {chmzs and Sommer, Philipp S.},
+  title        = {Straditize Pro: Scientific Digitization System for Palynological \& Stratigraphic Diagrams (v2.0)},
+  year         = {2026},
+  url          = {https://github.com/chmzs/straditize-pro},
+  license      = {GPL-3.0-or-later}
+}
+
+@article{sommer2019straditize,
+  author       = {Sommer, Philipp S.},
+  title        = {Straditize: A Python package for digitizing pollen diagrams},
+  journal      = {Journal of Open Source Software},
+  volume       = {4},
+  number       = {34},
+  pages        = {1216},
+  year         = {2019},
+  doi          = {10.21105/joss.01216}
+}
     </div>
   </section>
 
   <!-- 页脚 -->
   <footer>
-    <p>Straditize Pro v2.0 • 基于 GNU General Public License v3.0 开源</p>
-    <p style="margin-top: 8px;">
-      GitHub 源码仓库: <a href="https://github.com/chmzs/straditize-pro" target="_blank">chmzs/straditize-pro</a>
-      • 在线文档部署于 GitHub Pages
+    <p>
+      Straditize Pro v2.0 • 专为地质学、古气候学与古生态学打造 • 基于 GNU General Public License v3.0 协议开源
+    </p>
+    <p style="margin-top: 10px;">
+      开源仓库: <a href="https://github.com/chmzs/straditize-pro" target="_blank">GitHub (chmzs/straditize-pro)</a>
+      • 文档托管于 GitHub Pages
     </p>
   </footer>
 

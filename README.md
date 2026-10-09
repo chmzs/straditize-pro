@@ -4,197 +4,173 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logos/logo-horizontal-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="docs/assets/logos/logo-horizontal-light.svg">
-    <img src="docs/assets/logos/logo-horizontal-light.svg" alt="Straditize Pro Logo" width="460" />
+    <img src="docs/assets/logos/logo-horizontal-light.svg" alt="Straditize Pro Logo" width="480" />
   </picture>
 </p>
 
 <p align="center">
-  <strong>下一代专业地质剖面、地层花粉与古气候图表数字化科研解译系统</strong><br>
-  <em>Next-Generation Scientific Digitization System for Palynological & Stratigraphic Diagrams</em>
+  <strong>专为第四纪古生态学、古气候学与沉积地层学打造的高精度多指标图表数字化科研系统</strong><br>
+  <em>Scientific Digitization System for Stratigraphic & Palynological Diagrams in Quaternary Geology & Paleoclimatology</em>
 </p>
 
 <p align="center">
   <a href="https://chmzs.github.io/straditize-pro/"><img src="https://img.shields.io/badge/Website-chmzs.github.io%2Fstraditize--pro-0284c7.svg?style=flat-square&logo=googlechrome&logoColor=white" alt="Official Website" /></a>
   <a href="https://github.com/chmzs/straditize-pro/releases/latest"><img src="https://img.shields.io/badge/Release-v2.0.0-059669.svg?style=flat-square" alt="Latest Release" /></a>
-  <img src="https://img.shields.io/badge/Windows-Setup.exe%20%7C%20Portable.zip-059669.svg?style=flat-square&logo=windows" alt="Windows Support" />
-  <img src="https://img.shields.io/badge/OCR-PP--OCRv6%20(Latin%20Script)-7c3aed.svg?style=flat-square" alt="PP-OCRv6" />
+  <img src="https://img.shields.io/badge/Platform-Windows%20(Setup%20%7C%20Portable)%20%7C%20Web-059669.svg?style=flat-square&logo=windows" alt="Platform Support" />
+  <img src="https://img.shields.io/badge/OCR-PP--OCRv6%20Taxa%20Engine-7c3aed.svg?style=flat-square" alt="PP-OCRv6" />
   <img src="https://img.shields.io/badge/Python-3.12%2B-blue.svg?style=flat-square&logo=python" alt="Python 3.12+" />
-  <img src="https://img.shields.io/badge/Frontend-TypeScript%20%7C%20120FPS%20Canvas-10b981.svg?style=flat-square&logo=typescript" alt="TypeScript Frontend" />
+  <img src="https://img.shields.io/badge/Frontend-TypeScript%20%7C%20HTML5%20Canvas%202D-10b981.svg?style=flat-square&logo=typescript" alt="TypeScript Frontend" />
   <img src="https://img.shields.io/badge/Metadata-LiPD%20v1.3%20%7C%20FAIR-d97706.svg?style=flat-square" alt="LiPD v1.3" />
-  <img src="https://img.shields.io/badge/License-GPL--3.0-lightgrey.svg?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/badge/License-GPL--3.0--or--later-lightgrey.svg?style=flat-square" alt="License" />
 </p>
 
 <p align="center">
-  <a href="https://chmzs.github.io/straditize-pro/"><strong>🌐 访问官方宣传主页与完整文档 (Official Website) &rarr;</strong></a><br>
-  <a href="https://github.com/chmzs/straditize-pro/releases/latest"><strong>🚀 下载 Windows 一键安装包 (.exe)</strong></a> &nbsp;|&nbsp;
-  <a href="#-8-阶段地学科学解译工作流"><strong>📖 8 步地学工作流快速上手</strong></a> &nbsp;|&nbsp;
+  <a href="https://chmzs.github.io/straditize-pro/"><strong>🌐 官方主页与在线文档</strong></a> &nbsp;|&nbsp;
+  <a href="https://github.com/chmzs/straditize-pro/releases/latest"><strong>🚀 下载 Windows 独立安装包 (.exe)</strong></a> &nbsp;|&nbsp;
+  <a href="#-8-阶段科学解译工作流"><strong>📖 8 步解译工作流</strong></a> &nbsp;|&nbsp;
   <a href="docs/tutorials/01_quickstart.md"><strong>📚 实战教程</strong></a>
 </p>
 
 ---
 
-## 💡 为什么选择 Straditize Pro？
+## 🎯 为什么需要 Straditize Pro？
 
-传统图表采集工具（如通用 Digitizer）受制于沉重的桌面图形库与相对像素假定，在地学场景中存在致命局限：
-- **相对比例失真**：强行假定每列宽代表 0-100%，无法处理次要属种小刻度（0-20%）、对数浓度（Log）或同位素负值区间；
-- **矩阵充满伪 `NA`**：因各列提取点位高低不一，拼接数据表充斥缺失值，直接破坏下游 R 语言 `rioja`、`vegan` 排序与 CONISS 聚类分析；
-- **缺乏年代学与元数据链**：年代-深度图谱与花粉图谱割裂，无法追溯 95% 置信包络不确定性，缺失 FAIR 国际数据标准。
+在地质学、第四纪环境演变、古生态学与湖泊/海洋沉积研究中，大量宝贵的数据仅以**图表形式（文献扫描件或光栅图）**保存在历史出版物中。研究人员在提取这些数据时面临突出的科研痛点：
 
-**Straditize Pro v2.0** 专为第四纪古生态学、古气候学、地层学与沉积学打造：
-- **纯 Python 高性能计算内核 (`straditize_core`)**：脱离桌面 GUI 负担，基于 NumPy / SciPy 提供微秒级横向等深求交与贝叶斯集合采样；
-- **120 FPS 视网膜级视口 (`frontend`)**：TypeScript + HTML5 Canvas 2D 架构，支持平滑漫游、视网膜 DPR 自适应与 B 键二值化实时透视；
-- **真实数据不变量**：**面向用户的数据只有唯一来源——后端真实数学计算**，彻底物理剔除伪造插值通路。
+### 传统数字化工具的局限
+1. **单曲线工具无法应对多列图谱（Polydiagrams）**  
+   地层花粉图谱和多指标综合图通常并列展示数十至上百个属种（Taxa）及地球化学曲线。使用通用数字化软件时，必须手动为每个属种重复建立数据集、多次手工标定坐标轴并逐字输入拉丁学名，费时耗力且极易出错。
+2. **非对齐采样产生“伪空值（Pseudo-NA）”**  
+   通用工具在各曲线上独立采点，导致不同属种的深度/层位坐标无法严格对齐。拼接出的数据矩阵充斥着大量虚假缺失值（`NA`），直接阻碍下游 R 语言 `rioja` 地层绘图、`vegan` 多元统计、CONISS 约束聚类以及古气候定量重建。
+3. **图层网格与背景噪声干扰**  
+   地质图谱中广泛存在水平沉积相分带线、岩性符号、剖面网格线以及曲线填充阴影，通用阈值算法容易将其误判为数据点，需要大量繁重的人工修剪。
+4. **年代学与元数据链条断裂**  
+   百分比数据与沉积剖面的年代-深度模型（Bacon / Bchron / 放射性碳测年）割裂，缺乏对 95% 年代不确定性包络的完整追踪，无法直接生成符合国际 FAIR 原则与 LiPD 格式的标准数据。
 
----
-
-## 🖥️ 界面实测预览 (Preview)
-
-![Straditize Pro 8步完整工作流实机录制动图演示](docs/assets/tutorials/01_workflow_8steps.gif)
-
-> 上图为真实浏览器中驱动 Straditize Pro 完成 8 步工作流解译经典图谱 *Hoya del Castillo* 并导出科学矩阵与 `riojaPlot` 脚本的实录演示。
+### Straditize Pro 的解决方案
+**Straditize Pro** 是专为解决上述地质学图表解译痛点而设计的专业科研系统。通过融合**计算机视觉、专属古生物 OCR、严密几何横截算法与贝叶斯年代学建模**，实现了从图谱光栅图像到出版级标准数据矩阵的全流程高效解译。
 
 ---
 
-## 📥 下载与安装 (Downloads)
+## ✨ 核心特性
 
-### 1. Windows 用户（推荐一键安装）
+### 1. 自动化地层视觉与专属古生物 OCR
+- **倾斜自动校正**：基于 Radon 变换自动检测扫描微倾斜并完成亚像素级水平校正。
+- **智能去线与二值化透视**：自适应滤除水平分带线与背景网格；提供实时二值化透视遮罩（快捷键 `B`），直观预览算法识别靶区。
+- **PP-OCRv6 属种名称提取**：内置离线拉丁学名识别引擎，支持多角度倾斜文字识别；内嵌 500+ 花粉、硅藻及微体古生物分类学词典，提供智能拼写纠错与模糊对齐。
 
-直接前往 [**GitHub Releases**](https://github.com/chmzs/straditize-pro/releases/latest) 下载打包好的 Windows 可执行程序：
+### 2. 两点式物理刻度与统一解析管道
+- **物理刻度标定**：刻度钉支持自由锚定基线原点与任意已知刻度齿，与图谱裁剪框物理解耦，精确适配主属种与微量属种的不同刻度跨度。
+- **Linear / Log 统一多尺度支持**：原生支持线性比例与对数比例，并在算法底层实施数值有效性前置验证，避免坐标变换偏差。
 
-| 版本类型 | 下载文件名 | 说明 |
+### 3. 等深横向几何求交与零 NA 规范
+- **全属种共识深度对齐**：沿连续地层剖面，以统一采样深度网格横向截交全部分类单元的轮廓多边形。
+- **真值保留保证**：对剖面中未检出或低于检出限的层位，算法严格赋予真值 `0.00`，绝不引入破坏生态学统计模型的虚假 `NA`，生成的矩阵可直接输入各类分析管线。
+
+### 4. 内置年代-深度模型提取与不确定性传递
+- **曲线中位数与包络自动提取**：从图谱中直接解译 Bacon 或 Bchron 沉积年代模型的中位数曲线及 95% 置信区间。
+- **1000 集合年代学重构**：基于速率空间高斯过程与单调先验，自动生成 1000 条年代学集合，完整打包进国际古气候标准 **LiPD v1.3** 格式。
+
+### 5. 现代化免安装运行与直通 R 语言生态
+- **开箱即用出图**：一键导出匹配 R 语言 `rioja::strat.plot` 的出版级脚本，实现数据解译到重新成图的无缝闭环。
+- **多格式导出与百分和校验**：支持导出 CSV、多表头 Excel、JSON、LiPD 及开放 POSIX UStar `.tar` 归档工程包；内置 $\sum\% \approx 100\%$ 生态学自洽性校验门禁。
+- **跨平台与轻量化架构**：Windows 提供打包独立执行程序，双击即用；底层核心与交互视口解耦，支持超大图谱流畅交互与移动设备局域网协同。
+
+---
+
+## 🖥️ 工作流演示
+
+![Straditize Pro 8步完整工作流实机演示](docs/assets/tutorials/01_workflow_8steps.gif)
+
+> *实测演示：在浏览器视口中完成经典地质图谱从扫描载入、网格去线、属种识别、物理标定到矩阵导出的完整解译流程。*
+
+---
+
+## 🧭 8 阶段科学解译工作流
+
+系统采用严格的状态机工作流驱动，每个步骤均提供直观的交互与反馈，已完成步骤可随时自由回溯微调：
+
+```
+[1. 载入] → [2. 取数区] → [3. Y标定] → [4. 去线] → [5. 分列命名] → [6. X刻度] → [7. 数字化] → [8. 校验导出]
+   📁           🔲           📏          🧹           🏷️            📐           📈           📊
+```
+
+| 步骤 | 阶段核心功能 | 解决的关键科学与技术问题 |
+| :---: | :--- | :--- |
+| **1. 载入** | 支持 PNG、JPG、TIFF、WebP 及单页 PDF 格式；Radon 变换自动矫正图像旋转角度。 | 纠正纸质文献扫描或翻拍引入的几何几何微倾斜。 |
+| **2. 取数区** | 多取数区（Multi-ROI）管理，将有效剖面与图名、图例、深度标尺和聚类分析树物理隔离。 | 避免外部文字和树状图干扰曲线识别；支持多剖面同图分块解译。 |
+| **3. Y 轴标定** | 两点式映射物理深度（或年代）坐标，配置度量单位（cm、m、cal yr BP），支持正反向递增。 | 消除选框边缘等于坐标极值的机械假设，实现高精度绝对物理定位。 |
+| **4. 去线清理** | 自动提取水平沉积边界线；键盘 `B` 键切换二值化透视遮罩；提供保护阈值防止截断实心花粉带。 | 清除网格线与分带线噪点，保留连续地层花粉轮廓完整性。 |
+| **5. 分列命名** | 自动识别属种列基线；集成 PP-OCRv6 离线识别与 500+ 古生物学分类词库模糊纠错。 | 消除手动逐列输入几十个拉丁分类单元名称的繁琐负担。 |
+| **6. X 轴刻度** | 两点式刻度钉标定；支持属种分组同步应用；内置对数（Log）尺度的数学有效性验证。 | 精准还原各属种独立变化幅度（如主成分 50% 与微量属种 5%）。 |
+| **7. 数字化** | 提取显著拓扑拐点与轮廓多边形；提取共识采样层位；支持提取 Bacon 年代-深度模型。 | 将光栅图像重构为连续矢量形态，完整保留 95% 年代置信区间。 |
+| **8. 校验导出** | 执行 $\sum\% \approx 100\%$ 生态学自洽性校验；导出无空值 CSV、Excel、LiPD 格式及 `rioja` 绘图脚本。 | 确保交付数据的科学严谨性，下游无缝衔接 R 统计分析与学术出版。 |
+
+---
+
+## 📥 下载与使用
+
+### 1. Windows 用户（推荐独立安装）
+
+前往 [**GitHub Releases**](https://github.com/chmzs/straditize-pro/releases/latest) 下载预打包的 Windows 版本：
+
+| 版本类型 | 文件名 | 说明 |
 | :--- | :--- | :--- |
-| **🚀 Windows 一键安装包（推荐）** | `Straditize-Pro-v2.0.0-Windows-x64-Setup.exe` | **普通用户首选**。直接双击运行，自动生成**桌面快捷方式**与**开始菜单图标**，双击桌面图标即可启动；自带完整卸载程序，无需管理员权限。 |
-| **📦 绿色便携免安装包** | `straditize-v2.0.0-windows-x64-portable.zip` | 解压至任意文件夹，双击运行 `straditize.exe` 即可使用，适合 U 盘携带或实验室无安装权限电脑。 |
+| **🚀 Windows 一键安装包（推荐）** | `Straditize-Pro-v2.0.0-Windows-x64-Setup.exe` | **科研人员首选**。双击即可安装，自动创建桌面快捷方式，内嵌完整离线模型与独立计算环境，开箱即用。 |
+| **📦 绿色免安装便携版** | `straditize-v2.0.0-windows-x64-portable.zip` | 解压至任意目录，双击 `straditize.exe` 即可运行，适合 U 盘随身携带或实验室公用电脑。 |
 
-*注：Windows 发行包已内嵌独立 Python 运行时、ONNX Runtime、最新 PP-OCRv6 离线识别权重与完整前端资源，电脑无需安装 Python 或 Node.js 即可直接运行。*
+*注：Windows 发行版已内嵌完整 Python 运行时、ONNX Runtime 视觉推理引擎与 PP-OCRv6 模型权重，计算机无需预装 Python 或 Node.js。*
 
 ---
 
-### 2. 源码部署与开发者模式 (From Source)
+### 2. 源码安装与开发者模式
 
-#### 环境要求
+#### 环境依赖
 - **Python**: `>= 3.12`
 - **Node.js**: `>= 20`
-- **环境工具**: 推荐使用 [Pixi](https://pixi.sh)（零冲突管理 C/C++ 与 Python 科学计算依赖）
+- **环境管理工具**: 推荐使用 [Pixi](https://pixi.sh) 或 Conda
 
-#### 快速启动三步法
+#### 快速启动
 ```bash
-# 1. 克隆代码仓库
+# 1. 获取项目代码
 git clone https://github.com/chmzs/straditize-pro.git
 cd straditize-pro
 
-# 2. 一键安装依赖并构建前端 SPA
+# 2. 安装依赖并构建前端
 pixi run install
 npm --prefix frontend install
 npm --prefix frontend run build
 
-# 3. 启动应用 (自动打开浏览器直达系统)
+# 3. 启动应用 (自动唤起默认浏览器)
 pixi run app
 ```
 
-*(Windows 开发者也可在根目录下双击 `start_straditize.bat` 一键启动)*
+*(Windows 开发者亦可在项目根目录双击 `start_straditize.bat` 脚本启动)*
 
 ---
 
-## 🧭 8 阶段地学科学解译工作流
+## 📖 实战教程
 
-Straditize Pro 严格遵循 8 步状态机架构，顶部胶囊高亮显示当前进度，已完成步骤可随时自由回跳：
-
-```
-[1.载入] → [2.取数区] → [3.Y标定] → [4.去线] → [5.分列与命名] → [6.X刻度与样式] → [7.数字化与层位] → [8.校验与导出]
-   ✓          ✓          ✓         ✓           ✓              ✓               ✓               ●
-```
-
-| 步骤 | 阶段核心功能 | 解决的地学与技术痛点 |
-| :---: | :--- | :--- |
-| **1. 载入** | 支持 PNG/JPG/TIFF/WebP 与**单页 PDF**；自带 Radon 氡变换检测扫描微斜（一键水平矫正）。 | 消除复印件、论文截图扫描歪斜导致的几何投影偏差。 |
-| **2. 取数区** | 多取数区 (**Multi-ROI**) 分组管理，将纯数据区与坐标轴、图注、CONISS 聚类树彻底物理隔离。 | 避免坐标轴线条被误算为花粉曲线；支持主花粉图与副图（炭屑、磁化率）同图分块解译。 |
-| **3. Y 轴标定** | **两点式标定物理轴线**（任意两已知深度行映射物理读数与单位），**与取数区完全解耦**。 | 杜绝传统软件“拿选框边界当刻度”的虚假假设；支持向下递增（深度）与向上递增（年代）。 |
-| **4. 去线清理** | 智能检测水平分带线与网格线；**按键盘 `B` 键开启双色二值化透视遮罩**（白=保留，红=剔除）。 | 所见即数字化所用；实心花粉轮廓被横线穿过处受厚度门禁保护，绝不被切断。 |
-| **5. 分列命名** | 自动探测属种基线；集成 **PP-OCRv6 离线识别**（支持 0°/30°/45°/60° 旋转投影与拉丁科属词典纠错）。 | 告别繁琐的手工逐列打字；内置 500+ 花粉、硅藻、微体古生物词库，单字容错自动吸附。 |
-| **6. X 轴刻度** | **两点式物理刻度钉**（基线原点 $P_1$ + 印刷刻度齿 $P_2$）；列组统一应用；**对数 (Log) 尺度硬约束拦截**。 | 支持各属种独立刻度（如 20%、50%）；对数起点 $\le 0$ 时自动拦截红字警示，根绝 $\ln(0)$ 崩塌。 |
-| **7. 数字化** | 高显著性拓扑拐点提取；**自动提取共识采样层位**；内嵌 **Bacon/Bchron 年代-深度模型提取**。 | 自动解译中位数年代曲线与 95% 置信包络，基于贝叶斯先验生成 1000 条单调年代学集合。 |
-| **8. 校验导出** | **$\sum\%$ 百和检验门禁**（标出偏离 100% 层位）；未标定列醒目标注；录入 **FAIR / LiPD v1.3 标准元数据**。 | 杜绝带病导出；提供免 Token 外部 AI 导入助手；一键导出无 NA CSV、多表 Excel、LiPD 与配套 R 绘图脚本。 |
+- [📘 教程一：5 分钟快速上手古生态图谱数字化全流程](docs/tutorials/01_quickstart.md)
+- [📐 教程二：两点式物理刻度钉精细标定与对数（Log）曲线实战](docs/tutorials/02_twopoint_calibration.md)
+- [📊 教程三：数据导出规范、零 NA 矩阵与 R 语言 riojaPlot 一键成图](docs/tutorials/03_export_and_riojaplot.md)
 
 ---
 
-## 🌟 核心科研技术突破
+## 🌐 远程协作与多设备支持
 
-### 1. 统一坐标真相源 (Single Source of Truth)
-- **两点式物理刻度标定**：
-  $$\text{线性标定: } \text{val}(x) = \text{startVal} + \frac{x - \text{startX}}{\text{tickEndX} - \text{startX}} \times (\text{tickVal} - \text{startVal})$$
-  $$\text{对数标定: } \text{val}(x) = \exp\left(\ln(\text{startVal}) + \frac{x - \text{startX}}{\text{tickEndX} - \text{startX}} \times (\ln(\text{tickVal}) - \ln(\text{startVal}))\right)$$
-- 导出与 QA 诊断严格共享唯一解析管道，彻底消除因计算分支不一致导致的数据漂移。
+系统支持灵活的运行部署架构，适应实验室不同硬件条件：
 
-### 2. 等深层位横向几何求交与“零 NA 原则”
-- 以地层连续剖面的深度层位横向截交全属种插值多边形；
-- 未检出或低于检出限层位**严格输出真值 `0.00`**，绝不产生使 R 语言 `vegan::cca()` 或 `rioja` 报错丢行的伪 `NA`；
-- 首列强制命名为 `depth`，无缝衔接各类多元统计分析管线。
-
-### 3. 年代-深度模型与 1000 集合不确定性追踪
-- 支持从图谱直接识别并提取 Bacon、Bchron 沉积模型的中位数与 95% 置信包络；
-- 在速率空间构造满足单调先验的 1000 条年代集合实现，并完整打包进国际古气候标准 **LiPD v1.3** 结构（`chronEnsembleTable`）。
-
-### 4. 开放标准工程包 (.tar)
-- 项目完全保存为符合 POSIX UStar 标准的开放 `.tar` 归档文件；
-- 包含原图、`straditize.json` 矢量模型、`data.csv`、`plot_strat.R` 及 LiPD 元数据，同行评议 100% 离线无损重现。
+- **平板与移动端局域网标注**：在主控机设置面板中开启“局域网连接”并配置访问 PIN 码，即可在同一 WiFi 下使用 iPad 或触摸平板进行高精度手写标注与图谱审查。
+- **远程服务器与算力中心部署**：通过原生命令行模式在服务器后台运行，配合 SSH 端口转发（`ssh -L 8765:127.0.0.1:8765 user@remote`），本地浏览器可获得端到端强加密的流畅交互体验。
 
 ---
 
-## 📚 详细图文教程
+## 📄 引用与开源许可
 
-- [📖 教程 1：五分钟快速上手古生态图谱数字化 (8 步全流程)](docs/tutorials/01_quickstart.md)
-- [📐 教程 2：两点式物理刻度钉标定与对数 (Log) 尺度实战](docs/tutorials/02_twopoint_calibration.md)
-- [📊 教程 3：数据导出规范、无 NA 原则与 riojaPlot 一键成图](docs/tutorials/03_export_and_riojaplot.md)
+本项目基于 **GNU General Public License v3.0 or later (GPL-3.0-or-later)** 开源。
 
----
+如在学术研究、学位论文、专著出版或科研项目中使用了 Straditize Pro，欢迎引用本项目及初始算法文献：
 
-## 🔒 远程与多设备协作 (Remote Access)
-
-Straditize Pro 针对不同的网络场景提供双轨远程方案，兼顾**便捷性**与**绝对安全性**：
-
-### 模式一：局域网 / Tailscale 直连 + 访问密码保护（推荐平板/跨设备）
-适合在实验室连同一 WiFi，或使用 iPad、笔记本躺在沙发上看图标注：
-1. 在宿主机右上角点击 **`⚙️ 设置`** $\to$ **`🌐 远程访问`**；
-2. 勾选 **“允许局域网远程连接”**，并在 **“远程访问保护密码”** 处输入你的专属 PIN 码或密码（留空则仅依赖 IP 白名单）；
-3. 在 iPad 或其他设备浏览器直接输入宿主机的局域网 IP（如 `http://192.168.1.100:8765`）；
-4. 页面弹出安全锁屏，输入设定密码后一键解锁，自动保持会话，**彻底摆脱路由器 DHCP 导致的 IP 白名单失效困扰**（宿主机本机访问永远免密）。
-
-### 模式二：公网云服务器 / 超算节点 + SSH 隧道（推荐公网/VPS）
-适合在无显示器的远程高性能服务器或租赁的云主机上运行：
-```bash
-# 1. 远程服务器启动服务 (默认绑定回环，外网扫描完全不可见)
-pixi run app --port 8765
-
-# 2. 本地电脑建立 SSH 端口转发
-ssh -L 8765:127.0.0.1:8765 username@server-ip
-
-# 3. 本地浏览器免密直接访问 (全链路端到端强加密)
-http://127.0.0.1:8765
-```
-
----
-
-## 🧪 自动化测试与质量门禁
-
-本项目建立了覆盖数学内核、RPC 通信协议与真实浏览器端到端行为的三层严密质量门禁：
-
-```bash
-pixi run lint             # 语法规范与跨文件一致性静态核对 (A~G 8项)
-npm --prefix frontend test# 前端模型、词汇表与状态自检测试
-pixi run test             # 后端全量测试套件 (核心算法/JSON-RPC/年代模型等)
-pixi run test-contract    # 真实浏览器 JSON-RPC 契约快速门禁 (Playwright)
-pixi run build-windows    # 构建独立可执行发行包 (PyInstaller)
-pixi run build-installer  # 构建 Windows 安装包 Setup.exe (NSIS)
-pixi run record-tutorials # 真实浏览器自动录制全流程教学动图
-```
-
----
-
-## 📄 引用与开源许可证 (Citation & License)
-
-本项目采用 **GNU General Public License v3.0 or later (GPL-3.0-or-later)** 开源。
-
-如在科研论文、学位论文、第四纪古环境重建或专著中使用了 Straditize Pro，欢迎引用本项目及原始文献：
-- **Straditize Pro v2.0**: [https://github.com/chmzs/straditize-pro](https://github.com/chmzs/straditize-pro) (主要开发者: `chmzs`)
-- **原始文献**: Sommer, P. S. (2019). *Straditize: A Python package for digitizing pollen diagrams*. Journal of Open Source Software, 4(34), 1216. [doi:10.21105/joss.01216](https://doi.org/10.21105/joss.01216).
+- **Straditize Pro v2.0**: [https://github.com/chmzs/straditize-pro](https://github.com/chmzs/straditize-pro) (主要维护者: `chmzs`)
+- **基础理论文献**: Sommer, P. S. (2019). *Straditize: A Python package for digitizing pollen diagrams*. Journal of Open Source Software, 4(34), 1216. [doi:10.21105/joss.01216](https://doi.org/10.21105/joss.01216).
