@@ -283,6 +283,97 @@
       margin: 0 auto;
     }
 
+    /* 主流工具详细对比表格与难题卡片 */
+    .table-wrapper {
+      margin-top: 50px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      overflow-x: auto;
+      box-shadow: var(--shadow-card);
+    }
+    .tools-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      text-align: left;
+    }
+    .tools-table th, .tools-table td {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-subtle);
+      vertical-align: middle;
+    }
+    .tools-table th {
+      background: rgba(15, 23, 42, 0.95);
+      color: var(--text-main);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tools-table td {
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .tools-table tr:last-child td {
+      border-bottom: none;
+    }
+    .tools-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .tools-table .highlight-col {
+      background: rgba(56, 189, 248, 0.04);
+      color: var(--text-main);
+      font-weight: 600;
+      border-left: 1px solid rgba(56, 189, 248, 0.2);
+      border-right: 1px solid rgba(56, 189, 248, 0.2);
+    }
+    .tools-table th.highlight-col {
+      background: rgba(2, 132, 199, 0.25);
+      color: var(--accent-blue);
+    }
+
+    /* 难题折叠/网格卡片 */
+    .challenges-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+      margin-top: 36px;
+    }
+    .challenge-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 22px;
+      transition: all 0.25s ease;
+    }
+    .challenge-card:hover {
+      border-color: rgba(239, 68, 68, 0.4);
+      transform: translateY(-2px);
+    }
+    .challenge-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .challenge-num {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+    .challenge-card h4 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .challenge-card p {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
     /* 对比表格 (痛点 vs 解决方案) */
     .comparison-grid {
       display: grid;
@@ -643,12 +734,64 @@
   <!-- 痛点与对比 -->
   <section id="why">
     <div class="section-header">
-      <span class="section-tag">Why Straditize Pro</span>
-      <h2 class="section-title">为什么通用数字化工具难以胜任地学图谱？</h2>
-      <p class="section-subtitle">从单曲线离散采集到多列并发地学解译，解决地层学与古生态学真正的研究痛点</p>
+      <span class="section-tag">Challenges & Comparison</span>
+      <h2 class="section-title">地学多指标图谱数字化的核心难题</h2>
+      <p class="section-subtitle">地层剖面与花粉图谱具有独特的领域复杂性，普通二维 X-Y 曲线工具无法满足科研实际需求</p>
     </div>
 
-    <div class="comparison-grid">
+    <!-- 难题网格 -->
+    <div class="challenges-grid">
+      <div class="challenge-card">
+        <div class="challenge-header">
+          <span class="challenge-num">难题 01</span>
+          <h4>高维多变量并列 (Polydiagrams)</h4>
+        </div>
+        <p>一份剖面常包含 30~80 个花粉属种、碳屑、同位素等多条曲线并列。通用工具按单图设计，需重复新建几十个数据集、逐一重复标定，耗费数天。</p>
+      </div>
+
+      <div class="challenge-card">
+        <div class="challenge-header">
+          <span class="challenge-num">难题 02</span>
+          <h4>采样错位导致“伪空值 (Pseudo-NA)”</h4>
+        </div>
+        <p>各曲线独立采点导致深度坐标无法对齐。汇总表充斥大量伪缺失值（NA），直接破坏 R 语言 <code>rioja::strat.plot</code> 与 <code>vegan</code> 排序模型。</p>
+      </div>
+
+      <div class="challenge-card">
+        <div class="challenge-header">
+          <span class="challenge-num">难题 03</span>
+          <h4>背景网格线与花粉轮廓粘连</h4>
+        </div>
+        <p>水平沉积相分带线、岩性图例和网格辅助线密集贯穿。普通二值化会将横线误判为数据，人工擦除又极易把纤细的花粉条带切断。</p>
+      </div>
+
+      <div class="challenge-card">
+        <div class="challenge-header">
+          <span class="challenge-num">难题 04</span>
+          <h4>复杂长拉丁学名盲打录入</h4>
+        </div>
+        <p>几十个倾斜排版的拉丁属种名称全靠手动盲打输入，不仅极度繁琐乏味，而且极易引入拼写差错，影响下游古生物学词库匹配。</p>
+      </div>
+
+      <div class="challenge-card">
+        <div class="challenge-header">
+          <span class="challenge-num">难题 05</span>
+          <h4>多尺度混排与非线性局部畸变</h4>
+        </div>
+        <p>优势属种（60%）、微量属种（5%）、夸大曲线（10×）以及对数（Log）轴混排。通用工具机械按选框映射导致小刻度严重失真。</p>
+      </div>
+
+      <div class="challenge-card">
+        <div class="challenge-header">
+          <span class="challenge-num">难题 06</span>
+          <h4>年代学不确定性断链丢失</h4>
+        </div>
+        <p>剖面自带放射性碳测年与 Bacon/Bchron 年代-深度模型。通用工具无法提取 95% 置信包络与 1000 集合，导致年代误差无法无损传递。</p>
+      </div>
+    </div>
+
+    <!-- 痛点卡片对比 -->
+    <div class="comparison-grid" style="margin-top: 48px;">
       <div class="comp-card comp-card-traditional">
         <span class="comp-badge comp-badge-red">传统通用工具 (WebPlotDigitizer 等)</span>
         <h3 class="comp-title">面对多列地层图谱力不从心</h3>
@@ -702,6 +845,120 @@
           </li>
         </ul>
       </div>
+    </div>
+
+    <!-- 主流工具横向对比表格 -->
+    <div style="margin-top: 56px; text-align: center;">
+      <h3 style="font-size: 22px; font-weight: 800; margin-bottom: 8px;">主流数值化提取工具优缺点客观对比</h3>
+      <p style="color: var(--text-muted); font-size: 14px;">横向评估不同数字化工具在处理复杂多指标地层图谱时的专业能力差异</p>
+    </div>
+
+    <div class="table-wrapper">
+      <table class="tools-table">
+        <thead>
+          <tr>
+            <th>对比维度</th>
+            <th>WebPlotDigitizer</th>
+            <th>Origin 内置 Digitizer</th>
+            <th>GetData Graph</th>
+            <th>Engauge Digitizer</th>
+            <th>Straditize 原版 (v1.x)</th>
+            <th class="highlight-col">Straditize Pro (v2.0)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>设计定位</strong></td>
+            <td>通用单图 X-Y 曲线/散点</td>
+            <td>OriginLab 科学绘图套件内置插件</td>
+            <td>通用工业与工程图表 (共享软件)</td>
+            <td>通用开源散点与曲线</td>
+            <td>地层花粉图谱初版原型 (Sommer 2019)</td>
+            <td class="highlight-col"><strong>专为地质地层与多指标打造的科研系统</strong></td>
+          </tr>
+          <tr>
+            <td><strong>多列图谱 (Polydiagrams)</strong></td>
+            <td>❌ 需手动重复建几十个数据集</td>
+            <td>❌ 仅限单坐标系，多列需建几十个图层</td>
+            <td>❌ 纯单图单轴思维，需按列分别截图</td>
+            <td>❌ 单曲线模式，不支持多列排版</td>
+            <td>⚠️ 支持分列，但多列时界面易卡顿</td>
+            <td class="highlight-col"><strong>✅ 全剖面多列并发管理，基线自动探测与拖拽联动</strong></td>
+          </tr>
+          <tr>
+            <td><strong>层位对齐机制</strong></td>
+            <td>❌ 各曲线独立采点，深度错位</td>
+            <td>❌ 沿点抓取，各列 Y 坐标完全不一致</td>
+            <td>❌ 离散散点输出，无层位概念</td>
+            <td>❌ 离散点位，无层位概念</td>
+            <td>⚠️ 依赖有限插值网格，存在漂移</td>
+            <td class="highlight-col"><strong>✅ 严密等深横向几何截交，自动提取全属种共识深度</strong></td>
+          </tr>
+          <tr>
+            <td><strong>数据矩阵质量</strong></td>
+            <td>❌ 充斥大量伪 NA，下游报错</td>
+            <td>❌ 导出各列长度不一，需手工对齐清洗</td>
+            <td>❌ 散乱坐标点，需在 Excel 重组拼表</td>
+            <td>❌ 无法导出标准二维地层表</td>
+            <td>⚠️ 部分层位可能遗漏</td>
+            <td class="highlight-col"><strong>✅ 严格零伪 NA（未检出层位赋真值 0.00，直通分析）</strong></td>
+          </tr>
+          <tr>
+            <td><strong>水平分带/网格去线</strong></td>
+            <td>❌ 仅普通二值化，易混淆杂线</td>
+            <td>❌ 无网格剔除算法，易抓取网格交点</td>
+            <td>❌ 纯手工点橡皮擦抹除，极耗时</td>
+            <td>❌ 仅简单色彩滤镜，横线依然粘连</td>
+            <td>⚠️ Python 后台批处理，缺乏交互透视</td>
+            <td class="highlight-col"><strong>✅ 智能去线算法 + B 键红白二值化实时透视遮罩</strong></td>
+          </tr>
+          <tr>
+            <td><strong>属种名称提取</strong></td>
+            <td>❌ 纯手工盲打输入每一个属名</td>
+            <td>❌ 无文字识别功能，纯手工键入</td>
+            <td>❌ 无文字识别功能</td>
+            <td>❌ 无文字识别功能</td>
+            <td>❌ 无属种 OCR 支持</td>
+            <td class="highlight-col"><strong>✅ PP-OCRv6 离线识别 + 500+ 拉丁古生物词典纠错</strong></td>
+          </tr>
+          <tr>
+            <td><strong>物理刻度标定</strong></td>
+            <td>⚠️ 依赖手动选框，每列重复点选</td>
+            <td>⚠️ 需手动定义 X1/X2/Y1/Y2 四点轴线</td>
+            <td>⚠️ 手工设置单轴极值</td>
+            <td>⚠️ 单一直角坐标系映射</td>
+            <td>⚠️ 相对比例标定，小刻度易失真</td>
+            <td class="highlight-col"><strong>✅ 两点物理刻度钉（原点+刻度齿）+ 对数 Log 校验</strong></td>
+          </tr>
+          <tr>
+            <td><strong>年代-深度模型提取</strong></td>
+            <td>❌ 完全不支持，仅作普通折线</td>
+            <td>❌ 不支持年代学不确定性建模</td>
+            <td>❌ 不支持</td>
+            <td>❌ 不支持</td>
+            <td>❌ 仅提取花粉曲线</td>
+            <td class="highlight-col"><strong>✅ 提取 Bacon 95% 置信包络并重构 1000 集合年代学</strong></td>
+          </tr>
+          <tr>
+            <td><strong>生态学下游闭环</strong></td>
+            <td>⚠️ 导出离散 CSV，需大量清洗</td>
+            <td>⚠️ 导出 Origin Worksheet，无标准化</td>
+            <td>⚠️ 纯文本坐标点，无生态学绑定</td>
+            <td>⚠️ 纯文本坐标点</td>
+            <td>⚠️ 需手动编写 R 脚本</td>
+            <td class="highlight-col"><strong>✅ 一键直通 R rioja::strat.plot 出版脚本 + LiPD</strong></td>
+          </tr>
+          <tr>
+            <td><strong>运行架构与部署</strong></td>
+            <td>Web 浏览器 / Electron 桌面</td>
+            <td>需商业授权购买完整 OriginLab 软件</td>
+            <td>Windows 商业闭源软件 (需注册码)</td>
+            <td>C++/Qt 本地安装</td>
+            <td>依赖复杂 Python+PyQt5 本地环境</td>
+            <td class="highlight-col"><strong>✅ Windows 一键 Setup / 便携版 / 极速 120 FPS 视口</strong></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </section>
 
