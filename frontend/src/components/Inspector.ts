@@ -123,6 +123,9 @@ export class Inspector {
   }
 
   public render(): void {
+    const bodyEl = this.element.querySelector<HTMLElement>('.inspector-body');
+    const prevScrollTop = bodyEl ? bodyEl.scrollTop : 0;
+
     const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
     const selected = this.data.selectedEntity;
     const cal = this.data.calibration;
@@ -165,6 +168,11 @@ export class Inspector {
     `;
 
     this.bindEvents();
+
+    const newBodyEl = this.element.querySelector<HTMLElement>('.inspector-body');
+    if (newBodyEl && prevScrollTop > 0) {
+      newBodyEl.scrollTop = prevScrollTop;
+    }
   }
 
   private renderStagePanel(activeCol: TaxaColumn | undefined, cal: DiagramCalibration): string {

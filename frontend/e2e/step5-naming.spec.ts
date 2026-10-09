@@ -219,4 +219,33 @@ test.describe('步骤 5 分列与命名', () => {
       expect(telemetry.notices, '按钮不该退化成一句"请使用顶栏按钮"的提示').toEqual([]);
     });
   });
+
+  test.describe('T6 侧栏属性列滚动位置保持', () => {
+    test('点击下方属性列后，列表必须保持在当前滚动位置，不得自动滚回顶部', async ({ page }) => {
+      await gotoStage(page, 5);
+
+      const listContainer = page.locator('#taxa-list-container');
+      await expect(listContainer).toBeVisible();
+
+      // 向下滚动 200px
+      await listContainer.evaluate((el) => {
+        el.scrollTop = 200;
+      });
+
+      const initialScroll = await listContainer.evaluate((el) => el.scrollTop);
+      expect(initialScroll, '初始应已向下滚动').toBeGreaterThan(100);
+
+      // 获取当前列表卡片并点击
+      const cards = listContainer.locator('.taxa-card');
+      const count = await cards.count();
+      expect(count, '应有多个属种列卡片').toBeGreaterThan(8);
+
+      // 点击第 8 个卡片
+      await cards.nth(7).click();
+
+      // 断言点击选中并触发 updateData 后，滚动位置未归零
+      const postScroll = await listContainer.evaluate((el) => el.scrollTop);
+      expect(postScroll, '点击列卡片后滚动条不得被重置回顶部 0').toBeGreaterThan(50);
+    });
+  });
 });

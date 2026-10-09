@@ -77,6 +77,9 @@ export class Sidebar {
    * 搬到新节点上：焦点、光标位置、以及"还没提交的值"。
    */
   private renderPreservingInlineEdit(): void {
+    const listEl = this.element.querySelector<HTMLElement>('#taxa-list-container');
+    const prevScrollTop = listEl ? listEl.scrollTop : 0;
+
     const active = document.activeElement;
     const snapshot =
       active instanceof HTMLInputElement &&
@@ -90,6 +93,11 @@ export class Sidebar {
         : null;
 
     this.render();
+
+    const newListEl = this.element.querySelector<HTMLElement>('#taxa-list-container');
+    if (newListEl && prevScrollTop > 0) {
+      newListEl.scrollTop = prevScrollTop;
+    }
 
     if (!snapshot?.colId) return;
     const again = this.element.querySelector<HTMLInputElement>(
@@ -109,6 +117,9 @@ export class Sidebar {
   }
 
   public render(): void {
+    const listEl = this.element.querySelector<HTMLElement>('#taxa-list-container');
+    const prevScrollTop = listEl ? listEl.scrollTop : 0;
+
     this.element.innerHTML = `
       <div class="sidebar-header">
         <div class="sidebar-title">
@@ -150,6 +161,11 @@ export class Sidebar {
     `;
 
     this.bindEvents();
+
+    const newListEl = this.element.querySelector<HTMLElement>('#taxa-list-container');
+    if (newListEl && prevScrollTop > 0) {
+      newListEl.scrollTop = prevScrollTop;
+    }
   }
 
   private renderColumnsList(): string {
