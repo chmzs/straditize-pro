@@ -40,6 +40,9 @@
 
 - **状态**用 `--status-warning` / `--status-success`（危险态沿用 `--accent-red`，与 `.ui-status--danger` 一致），
   **装饰性强调**用 `--accent-*`；`.ui-status--warning/--success::before` 已指向 `--status-*`，状态指示器只有一个来源。
+  批次 I 据此把 20 处状态文本与指示器上的 `--accent-green/amber/orange` 换成 `--status-success/warning`
+  （8 文件；浅色主题下由 3.77:1 / 3.19:1 升到 5.48:1 / 5.02:1）。第 20 组门禁按「每个装饰色 token 的计数上限」
+  做棘轮：既有装饰用法与数据序列配色可留存，状态文本不得再新增装饰色。
 - 状态色必须逐主题取值：深色 `--status-warning: #f59e0b`（8.92:1）、`--status-success: #10b981`（7.55:1）；
   浅色 `#b45309`（5.02:1）、`#047857`（5.48:1）。沿用深色值在浅色底只剩 **2.15:1 / 2.54:1**，不达标。
 - `--accent-violet` 同理：深色 `#a855f7`（4.84:1）→ 浅色 `#7c3aed`（5.70:1）；旧值 `#7c3aed` 在深色底仅 3.36:1。
@@ -146,6 +149,13 @@
 - **后端失败**走 `frontend/src/services/ProvenanceGate.ts` 的 `reportBackendFailure(action, err)`：弹窗保留
   「`action` 失败」标题、后端原文与「复制错误详情」，不自动消失——后端 detail 往往很长，toast 会截断并自动消失。
 - 两条通道都不得用原生 `alert()`（第 4 组门禁拦回填），也不得静默吞掉异常。
+
+级别选择（唯一判据）:
+- `notify(text, 'success')`——操作成功且有产物（已激活 / 已合并 / 建模完成）。
+- `notify(text, 'info')`——无操作结果或前置引导（「无需合并」「当前尚无数据可复制」）。
+- `notify(text, 'warning')`——校验不通过但可补救、或部分成功（「请输入有效的 DOI」）。
+- `notifyError(text)`——操作失败、后端错误、不可继续；文案不得含成功语义词。
+
 
 ## 6. 表单
 
