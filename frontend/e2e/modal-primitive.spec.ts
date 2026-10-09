@@ -238,4 +238,72 @@ test.describe('模态框原语与主题契约', () => {
     await settingsDialog.locator('#settings-close-btn').click();
     await expect(settingsDialog).toHaveCount(0);
   });
+
+  test('PropertyPanel 标定与 RPC 弹窗：已消灭重复 #modal-close，原语契约合规且全流程可达', async ({ page }) => {
+    await resetBaseline(page);
+
+    // 1. 验证 PropertyPanel.openCalibrationModal()
+    await page.evaluate(() => (window as any).__straditize.openCalibrationModal());
+    const calibDialog = page.locator('.calib-dialog');
+    await expect(calibDialog, '标定弹窗应成功打开').toBeVisible();
+
+    const calibHeader = calibDialog.locator('.ui-modal__header');
+    const calibFooter = calibDialog.locator('.ui-modal__footer');
+    await expect(calibHeader).toHaveCount(1);
+    await expect(calibFooter).toHaveCount(1);
+    await expect(calibHeader.locator('.ui-modal__title')).toContainText('取数区域与层位网格设置');
+
+    // 验证专属关闭与保存按钮 ID
+    const calibCloseBtn = calibDialog.locator('#calib-modal-close');
+    await expect(calibCloseBtn, '应使用专属 #calib-modal-close 而非重复 #modal-close').toHaveCount(1);
+    await expect(calibDialog.locator('#calib-modal-save')).toHaveCount(1);
+    await expect(calibDialog.locator('#calib-modal-cancel')).toHaveCount(1);
+
+    // 关闭标定弹窗
+    await calibCloseBtn.click();
+    await expect(calibDialog).toHaveCount(0);
+
+    // 2. 验证 PropertyPanel.openRpcConfigModal()
+    await page.evaluate(() => (window as any).__straditize.openRpcConfigModal());
+    const rpcDialog = page.locator('.rpc-config-dialog');
+    await expect(rpcDialog, 'RPC配置弹窗应成功打开').toBeVisible();
+
+    const rpcHeader = rpcDialog.locator('.ui-modal__header');
+    const rpcFooter = rpcDialog.locator('.ui-modal__footer');
+    await expect(rpcHeader).toHaveCount(1);
+    await expect(rpcFooter).toHaveCount(1);
+    await expect(rpcHeader.locator('.ui-modal__title')).toContainText('Agent 2 JSON-RPC 服务连接配置');
+
+    // 验证专属关闭按钮 ID
+    const rpcCloseBtn = rpcDialog.locator('#rpc-cfg-modal-close');
+    await expect(rpcCloseBtn, '应使用专属 #rpc-cfg-modal-close').toHaveCount(1);
+    await expect(rpcDialog.locator('#rpc-cfg-modal-close-btn')).toHaveCount(1);
+
+    // 关闭 RPC 弹窗
+    await rpcCloseBtn.click();
+    await expect(rpcDialog).toHaveCount(0);
+  });
+
+  test('ExportModal 导出弹窗：专属关闭 ID #export-modal-close 且尺寸严格收敛至 1180px', async ({ page }) => {
+    await resetBaseline(page);
+
+    await page.locator('#btn-export-csv').click();
+    const exportDialog = page.locator('.wpd-export-dialog');
+    await expect(exportDialog).toBeVisible();
+
+    // 验证专属关闭 ID
+    const closeBtn = exportDialog.locator('#export-modal-close');
+    await expect(closeBtn, '应使用专属 #export-modal-close').toHaveCount(1);
+
+    // 验证尺寸收敛：在 1680x1050 视口下，max-width 应为 1180px（消除历史 1200px 冲突）
+    const box = await exportDialog.boundingBox();
+    expect(box).not.toBeNull();
+    if (box) {
+      expect(Math.round(box.width), '导出弹窗容器宽度应严格等于 1180px').toBe(1180);
+    }
+
+    // 关闭弹窗
+    await closeBtn.click();
+    await expect(exportDialog).toHaveCount(0);
+  });
 });

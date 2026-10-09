@@ -741,6 +741,7 @@ async function bootstrap() {
     getInspector: () => inspector,
     getToolbar: () => toolbar,
     workflowController,
+    propertyPanel,
     updateFooter: () => updateFooter(),
     scheduleAutosave: () => scheduleAutosave(),
     setHudNotice,

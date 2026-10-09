@@ -48,7 +48,7 @@ export class ExportModal {
             <h3 class="ui-modal__title">检查并导出数据</h3>
             <span class="ui-status" id="export-readiness-status">正在检查导出条件</span>
           </div>
-          <button class="ui-icon-btn" id="modal-close" aria-label="关闭导出窗口" title="关闭">&times;</button>
+          <button class="ui-icon-btn" id="export-modal-close" aria-label="关闭导出窗口" title="关闭">&times;</button>
         </div>
 
         <div class="wpd-modal-body ui-modal__body">
@@ -208,7 +208,7 @@ export class ExportModal {
     this.container.appendChild(modal);
 
     const closeModal = () => modal.remove();
-    modal.querySelector('#modal-close')?.addEventListener('click', closeModal);
+    modal.querySelector('#export-modal-close')?.addEventListener('click', closeModal);
 
     const textarea = modal.querySelector('#wpd-data-textarea') as HTMLTextAreaElement;
     const datasetSelect = modal.querySelector('#wpd-dataset-select') as HTMLSelectElement;

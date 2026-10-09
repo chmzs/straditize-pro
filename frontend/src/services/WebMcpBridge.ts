@@ -3,6 +3,7 @@ import { GeologyCanvas } from '../components/GeologyCanvas';
 import { Sidebar } from '../components/Sidebar';
 import { Inspector } from '../components/Inspector';
 import { Toolbar } from '../components/Toolbar';
+import { PropertyPanel } from '../components/PropertyPanel';
 import { WorkflowController } from './WorkflowController';
 import { WorkflowStage } from '../types/workflow';
 import { visibleLayers } from '../core/WorkflowStage';
@@ -14,6 +15,7 @@ export interface WebMcpBridgeParams {
   getInspector: () => Inspector | undefined;
   getToolbar: () => Toolbar | undefined;
   workflowController: WorkflowController;
+  propertyPanel: PropertyPanel;
   updateFooter: () => void;
   scheduleAutosave: () => void;
   setHudNotice: (text: string, duration?: number) => void;
@@ -155,5 +157,8 @@ export function registerWebMcpAndInspectionHandles(p: WebMcpBridgeParams): void 
       p.getInspector()?.updateData(p.canvasComponent.data);
       p.getSidebar()?.updateData(p.canvasComponent.data);
     },
+    openCalibrationModal: () => p.propertyPanel.openCalibrationModal(),
+    openRpcConfigModal: (onRefresh?: () => void) =>
+      p.propertyPanel.openRpcConfigModal(onRefresh || (() => {})),
   };
 }

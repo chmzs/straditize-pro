@@ -1641,12 +1641,12 @@ body.theme-light .canvas-hud {
 }
 
 .modal-dialog.modal-large.wpd-export-dialog {
-  width: min(1200px, 95vw) !important;
-  max-width: 1200px !important;
-  height: 86vh !important;
-  max-height: 86vh !important;
-  display: flex !important;
-  flex-direction: column !important;
+  width: min(1180px, 95vw);
+  max-width: 1180px;
+  height: 86vh;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes modalEnter {

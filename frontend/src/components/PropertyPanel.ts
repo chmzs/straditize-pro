@@ -52,10 +52,10 @@ export class PropertyPanel {
     const bounds = CoordinateSystem.calibrationBounds(cal);
 
     modal.innerHTML = `
-      <div class="modal-dialog">
+      <div class="modal-dialog calib-dialog ui-modal">
         <div class="ui-modal__header">
           <h3 class="ui-modal__title">取数区域与层位网格设置 (ROI &amp; Grid)</h3>
-          <button class="ui-icon-btn" aria-label="关闭" title="关闭" id="modal-close">&times;</button>
+          <button class="ui-icon-btn" aria-label="关闭" title="关闭" id="calib-modal-close">&times;</button>
         </div>
         <div class="ui-modal__body">
           <div class="form-group">
@@ -108,8 +108,8 @@ export class PropertyPanel {
           </div>
         </div>
         <div class="ui-modal__footer">
-          <button class="ui-btn ui-btn--secondary" id="modal-cancel">取消</button>
-          <button class="ui-btn ui-btn--primary" id="modal-save">保存设置</button>
+          <button class="ui-btn ui-btn--secondary" id="calib-modal-cancel">取消</button>
+          <button class="ui-btn ui-btn--primary" id="calib-modal-save">保存设置</button>
         </div>
       </div>
     `;
@@ -117,10 +117,10 @@ export class PropertyPanel {
     this.container.appendChild(modal);
 
     const closeModal = () => modal.remove();
-    modal.querySelector('#modal-close')?.addEventListener('click', closeModal);
-    modal.querySelector('#modal-cancel')?.addEventListener('click', closeModal);
+    modal.querySelector('#calib-modal-close')?.addEventListener('click', closeModal);
+    modal.querySelector('#calib-modal-cancel')?.addEventListener('click', closeModal);
 
-    modal.querySelector('#modal-save')?.addEventListener('click', () => {
+    modal.querySelector('#calib-modal-save')?.addEventListener('click', () => {
       const num = (sel: string, fallback: number) => {
         const parsed = parseFloat((modal.querySelector(sel) as HTMLInputElement).value);
         return isNaN(parsed) ? fallback : parsed;
@@ -189,10 +189,10 @@ export class PropertyPanel {
     const status = this.rpcClient.getStatus();
 
     modal.innerHTML = `
-      <div class="modal-dialog">
+      <div class="modal-dialog rpc-config-dialog ui-modal">
         <div class="ui-modal__header">
           <h3 class="ui-modal__title">Agent 2 JSON-RPC 服务连接配置</h3>
-          <button class="ui-icon-btn" aria-label="关闭" title="关闭" id="modal-close">&times;</button>
+          <button class="ui-icon-btn" aria-label="关闭" title="关闭" id="rpc-cfg-modal-close">&times;</button>
         </div>
         <div class="ui-modal__body">
           <p style="color: var(--text-secondary); font-size: 13px; line-height: 1.5; margin-bottom: 16px;">
@@ -211,7 +211,7 @@ export class PropertyPanel {
           </div>
         </div>
         <div class="ui-modal__footer">
-          <button class="ui-btn ui-btn--secondary" id="modal-close-btn">关闭</button>
+          <button class="ui-btn ui-btn--secondary" id="rpc-cfg-modal-close-btn">关闭</button>
           <button class="ui-btn ui-btn--primary" id="btn-probe">重新探测连接</button>
         </div>
       </div>
@@ -220,8 +220,8 @@ export class PropertyPanel {
     this.container.appendChild(modal);
 
     const closeModal = () => modal.remove();
-    modal.querySelector('#modal-close')?.addEventListener('click', closeModal);
-    modal.querySelector('#modal-close-btn')?.addEventListener('click', closeModal);
+    modal.querySelector('#rpc-cfg-modal-close')?.addEventListener('click', closeModal);
+    modal.querySelector('#rpc-cfg-modal-close-btn')?.addEventListener('click', closeModal);
 
     const probeBtn = modal.querySelector('#btn-probe') as HTMLButtonElement;
     probeBtn?.addEventListener('click', async () => {
