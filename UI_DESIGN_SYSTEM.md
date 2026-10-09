@@ -47,21 +47,37 @@
 - **动作填充与填充文字成对取值**：`--action-primary-bg/-text`、`--action-success-bg/-text`、`--action-danger-bg/-text`，
   两主题各取一次（深色 `#38bdf8`/`#10b981`/`#ef4444` 配深字 `#0b0f19`；浅色 `#0369a1`/`#047857`/`#dc2626` 配白字）。
   禁止在按钮规则里再写死字色：改填充色时字色必须一起复算（第 16 组门禁按 WCAG 复算声明值，`e2e/contrast.spec.ts` 复算实际渲染值）。
-  悬停只调 `filter: brightness()`，且**必须与 token 同源**——通用 `.tool-btn:hover:not(:disabled)` 的权重是深色 (0,3,1)、浅色 (0,4,1)，
-  会盖掉 (0,2,x) 的动作填充并把文字改回 `--accent-blue`，动作按钮的 hover 规则要提到同级并后置。
+  悬停只调 `filter: brightness()`，且**必须与 token 同源**——通用悬停规则（深色 `.ui-btn:hover:not(:disabled)` 为 (0,3,0)；
+  浅色历史上有过 (0,4,1) 的 `.ui-btn--xs:hover`）会盖掉 (0,2,x) 的动作填充并把文字改回 `--accent-blue`：
+  动作按钮的 hover 规则必须同级后置，浅色 `.ui-btn--success:hover` 另加一条防御性重述，两处都由第 16 组门禁守住。
 - 以下四类**不随主题变**，不得当作主题色使用：导出就绪胶囊 `--pill-*-bg/text`（自带浅底深字）、
   画布掩膜契约色 `--overlay-*`（须与后端 `overlay_legend` 及 `src/styles/tokens.ts` 一致）、`--text-on-accent`、`--brand-gradient`。
 
 遗留待并（尚未完成）：
 
-- `.tool-btn`（历史基类，89 个 DOM 站点）尚未并入 `.ui-btn`——它的 `padding:4px 6px`、`font-size:11px`、
-  `:active{transform:scale(0.97)}`、`.active-mode` 三件套在 `.ui-btn` 内没有对应变体，需先补尺寸与激活态变体，
-  且波及面广（每个弹窗都要视觉复核），不可批量替换。
-- `.modal-body` 尚未并入 `.ui-modal__body`：原语不提供堆叠契约（`display:flex; flex-direction:column; gap:14px`），
-  6 处元素仍靠 legacy 类拿这两个属性；而 `.wpd-modal-body` 自带 `gap:16px` 且位置在原语规则之前，
-  直接给 `.ui-modal__body` 补契约会把 16px 覆盖成 14px——迁移必须先重排规则顺序。
-  尚未迁移的纯 legacy 弹窗：`Inspector.ts`（3 处）、`ocr/TaxaDictionaryModal.ts`（3 处）、
-  `PropertyPanel.ts`（6 处）、`OcrReviewModal.ts` 的 body（header/footer 已迁）。
+- `.tool-btn`（历史基类，89 个 DOM 站点）已于批次 G-c 并入 `.ui-btn`：密集工具 → `ui-btn ui-btn--quiet ui-btn--xs`（70 处）、
+  图标钮 → `ui-btn ui-icon-btn`（3 处）、本已带 `.ui-btn` 的原语按钮去掉 `tool-btn`（8 处去重）；`.active` / `.active-mode`
+  保留为 `.ui-btn--xs.active(-mode)`（`!important` 维持旧优先级），`.action` → `.ui-btn--success`，`.export` / `.export-sub`
+  / `.highlight` 随变体退役。等价性以 89 站点前后的计算样式快照逐项对齐（26 属性 × 常态/悬停 × 两主题；真实页面按 id 对齐 +
+  类名×上下文探针），第 17 组门禁禁止选择器与源码 class 两侧回流。
+- `.modal-body` / `.close-btn` 已于批次 G-a2 + G-d 并入 `.ui-modal__body` / `.ui-icon-btn`：原语补齐堆叠契约
+  （`display:flex; flex-direction:column; gap:var(--space-3)`，即 12px，替代 legacy 的 18/14px 双值），
+  DOM 13 处（10 文件）删除 legacy 类，CSS 5 条规则（`.close-btn`、`.close-btn:hover`、`.modal-body`、`.wpd-modal-body`）净删——
+  唯一例外 `.wpd-modal-body` 必须晚于原语声明（现位于原语之后），否则其 `gap:16px` / `padding:16px` / `flex-direction:row` 会被原语覆盖。
+  第 18 组门禁同时守选择器与源码 class 两侧回流，并校验原语契约与「变体晚于原语」的顺序前置条件。
+  - 关闭钮命中区从 ~11×22px 字形扩到 32px 方框（`--control-h-md`），颜色由 `--text-muted` 收敛到 `--text-secondary`。
+  - **导出弹窗方向修正（真实缺陷）**：`.wpd-modal-body` 此前只声明 `display:flex` 不声明方向，与 legacy `.modal-body`
+    的 `flex-direction:column` 并存时按列排布——实测 body `scrollH 1540 / clientH 778`，右侧 270px 控制栏整体落到折叠线以下
+    （`right.y 919` = footer 顶边）。现显式 `flex-direction: row`，实测 `scrollH == clientH == 778`，左表 880px 与右栏 270px 并列。
+    该方向声明是**承重**的（若只补原语契约而不重排，原语的 `column` 会重新把两栏压成纵排）。
+  - 弹窗 **header/footer** 已于批次 G-e 并入 `.ui-modal__header` / `.ui-modal__footer` / `.ui-modal__title`：
+    DOM 8 处（4 个弹窗：`Inspector.ts` 深度粘贴、`ocr/TaxaDictionaryModal.ts` 词汇表、`PropertyPanel.ts` 标定与 RPC 配置）
+    删除 legacy 类与内联覆盖，CSS 侧 `.modal-header` / `.modal-header h3` / `.modal-footer` 三条规则净删。
+    此前标题混用 **14px（legacy 规则）/ 13.5px（Taxa 内联）/ 13px（Inspector 内联）** 三种值，现统一 `--font-size-xl` = 16px；
+    内边距由 `14px 18px` 收敛到原语的 `12px 16px`，`gap` 由内联 8px / legacy 10px 收敛到 `--space-3` = 12px。
+    第 15 组门禁由「禁混挂」升级为「禁出现」（DOM class 与 CSS 选择器两侧都拦），
+    `frontend/e2e/modal-primitive.spec.ts` 新增词汇表弹窗的真实浏览器断言（含负控：还原 legacy header 即失败）。
+    `.settings-modal-body` / `.metadata-modal-body` 仅作标签使用，无对应规则。
 - `.primary-btn` 已退役（第 14 组门禁拦回填）：4 条规则共 31 行、全仓零消费者、含 2 处硬编码渐变；
   已退役的 `.btn-primary` 从未做过 token 别名，两者都不要回填渐变。
 - 状态文本仍有直接取 `--accent-*` 的调用点（`--accent-green` 24 处 / `--accent-amber` 22 处，含画布侧 `AgeDepthCanvas.ts`），
@@ -73,13 +89,17 @@
 | 动作填充 | 深色（字 `#0b0f19`） | 浅色（白字） | 悬停（`filter: brightness()` 同作用于底色与文字） |
 | --- | --- | --- | --- |
 | `.ui-btn--primary` | `#38bdf8` **8.94:1** | `#0369a1` **5.93:1** | 深 10.20（×1.08）/ 浅 5.26（×1.08） |
-| `.tool-btn.export` | `#38bdf8` **8.94:1** | `#0369a1` **5.93:1** | 深 7.64（×0.92）/ 浅 5.61（×0.92） |
-| `.tool-btn.action` | `#10b981` **7.55:1** | `#047857` **5.48:1** | 深 8.71 / 浅 4.84（×1.08） |
+| `.ui-btn--success` | `#10b981` **7.55:1** | `#047857` **5.48:1** | 深 8.71 / 浅 4.84（×1.08） |
 | `.ui-btn--danger` | `#ef4444` **5.09:1** | `#dc2626` **4.83:1** | 无 hover filter，比例不变 |
 
 旧写法（白字压在装饰色 `--accent-blue` 上，深色 2.14:1 / 浅色 `#0284c7` 4.10:1）已废弃：
 `--accent-*` 是装饰色，不是可承载文字的填充色——需要白字就得把底色压到亮度 ≤0.183，需要亮色底就得换深字。
 `.open-file-btn:hover` 仍是 25% 蓝半透明叠加 + `--text-primary`（不透明化后不可复算，只由 E2E 断言文字取色）。
+
+无填充变体的悬停语义：`.ui-btn--quiet` / `.ui-icon-btn` 用 `color-mix(in srgb, var(--accent-blue) 12%, transparent)` 底 +
+`--accent-blue` 字（深浅同构；Chromium 序列化为 `color(srgb …)`，与等值 `rgba()` 只差字符串）；
+`.ui-btn--secondary` 悬停**只上浮** `translateY(-1px)`、不叠色（3 个顶栏站点因此不再有旧 `.tool-btn:hover` 的蓝色叠加，属归一）。
+悬停一律不加边框环——底色与字色即全部信号。
 
 ## 4. 按钮
 
@@ -101,8 +121,14 @@
 - 语义变体负责外观：`background` / `border-color` / `color` 只在变体规则里定义，元素上不得再用内联 `style` 覆盖；
   内联覆盖会绕过禁用态与主题切换（第 12 组拦等值色值与硬编码渐变，第 14 组拦全部裸色值）。
 - 状态填充按钮用 `--status-*` 变体取色，文字色由 `--text-on-status` 给出，保证深浅主题都达 AA。
-- 悬停/激活态不得把文字改回装饰色：动作按钮的 hover 规则与通用 `.tool-btn:hover` 同级（见 §3 动作填充），
+- 悬停/激活态不得把文字改回装饰色：动作按钮的 hover 规则与通用 `.ui-btn:hover` 同级（见 §3 动作填充），
   且只用 `filter: brightness()` 微调亮度；改完必须在两种主题下复算文字与底色的对比度。
+- 尺寸变体：`--sm` 28px、`--xs` 密集（`padding:4px 6px`、`font-size:var(--font-size-sm)`、`:active{transform:scale(0.97)}`）、
+  `--lg` 36px、`--block` 满宽；`.ui-icon-btn` 固定 `width:var(--control-h-md)` 且不参与收缩。
+  顶栏 `.app-toolbar .ui-btn, .app-toolbar .ui-icon-btn` 设 `flex-shrink: 0`（旧 `.tool-btn` 自带该属性，改由容器承接），
+  窄窗口下顶栏按钮不收缩、由 `.toolbar-center` 横向滚动。
+- `.ui-btn` 用 `font: inherit` 继承应用字体（旧 `.tool-btn` 继承的是 UA 按钮字体），故并入后纯文字/数字按钮的行盒与字宽会变
+  （实测 `1:1` 按钮 26.61×18 → 22.98×20，右侧视口组整体左移 3.63px，属归一：按钮字体不再跳字体栈）。
 
 ## 5. 文案
 
@@ -136,7 +162,7 @@
     <h3 class="ui-modal__title">标题</h3>
     <button class="ui-icon-btn" aria-label="关闭" title="关闭">&times;</button>
   </div>
-  <div class="modal-body ui-modal__body">…</div>
+  <div class="ui-modal__body">…</div>
   <div class="ui-modal__footer">
     <button class="ui-btn ui-btn--secondary ui-btn--sm">取消</button>
     <button class="ui-btn ui-btn--primary ui-btn--sm">保存</button>
@@ -153,12 +179,13 @@
 - Escape 关闭最上层弹窗；Tab 焦点不进入背景页面。
 - header/footer 只挂 `ui-modal__header|footer`，不得再带 legacy `modal-header|modal-footer`；上下文选择器
   （如浅色主题的 `.ocr-review-dialog` 规则）必须直接指向原语，否则类名一改颜色就静默失效——第 15 组门禁强制这两点。
-- `ui-modal__body` 目前仍与 legacy `modal-body` 并存，原因与迁移前置条件见 §3「遗留待并」。
+- `ui-modal__body` 已是唯一主体类（批次 G-a2/G-d）；变体（如 `.wpd-modal-body`、`.agedepth-dialog .ui-modal__body`）
+  必须声明在原语之后或提高特化度，见 §3「遗留待并」。
 
 ## 8. 响应式与密度
 
 - 最低支持 1280×720，优先验收 1366×768 与 1920×1080。
-- 工具栏控件高 28px，普通表单 32px，主要动作 36px。
+- 工具栏控件高 28px（`--sm`），密集工具用 `--xs`（约 18–20px，视口栏与表格工具），普通表单 32px，主要动作 36px。
 - 复杂双栏弹窗在窄屏切为单列或 tab，不允许依赖裁切隐藏内容。
 
 ## 9. 可访问性
@@ -180,12 +207,14 @@ npm --prefix frontend run build
 STRADITIZE_E2E_PORT=22900 npm --prefix frontend run test:e2e
 ```
 
-- `npm --prefix frontend test` 里的 `test-ui-consistency.mjs` 是 16 组 UI 门禁：design tokens、语义控件、
-  内联色值/裸 hex、原生 `alert`、emoji、中英重复标题、模态框原语、动作填充对比度等；新增规则就加一组，别只写在文档里。
+- `npm --prefix frontend test` 里的 `test-ui-consistency.mjs` 是 17 组 UI 门禁：design tokens、语义控件、
+  内联色值/裸 hex、原生 `alert`、emoji、中英重复标题、模态框原语、动作填充对比度、遗留基类 `.tool-btn` 回流等；
+  新增规则就加一组，别只写在文档里。
 - `frontend/e2e/modal-primitive.spec.ts` 是弹窗原语的**运行时契约**：既断言 header/footer 不混 legacy 类，
   也用计算样式断言深浅主题下分隔线与底色真的落在原语作用域（单靠类名或计算样式任一维度都会被绕过）。
 - `frontend/e2e/contrast.spec.ts` 是动作填充的**运行时对比度契约**：把带真实类名的探针插进真实文档，
-  读 `getComputedStyle` 后按 WCAG 复算 4 类按钮 × 两主题 × 常态/悬停；探针继承真实层叠，
+  读 `getComputedStyle` 后按 WCAG 复算 3 类带填充动作按钮（主/危险/执行）× 两主题 × 常态/悬停，
+  并对「打开文件」按钮单独断言悬停取色；探针继承真实层叠，
   所以能抓到"静态声明达标但被通用 hover 规则盖掉"这类回归（编写时即抓到深色主题的这条）。
 - `frontend/e2e/ui-layout.spec.ts` 覆盖 1280×720 / 1366×768 / 1920×1080 三档顶栏两行不重叠。
 
