@@ -50,7 +50,10 @@
 - **动作填充与填充文字成对取值**：`--action-primary-bg/-text`、`--action-success-bg/-text`、`--action-danger-bg/-text`，
   两主题各取一次（深色 `#38bdf8`/`#10b981`/`#ef4444` 配深字 `#0b0f19`；浅色 `#0369a1`/`#047857`/`#dc2626` 配白字）。
   禁止在按钮规则里再写死字色：改填充色时字色必须一起复算（第 16 组门禁按 WCAG 复算声明值，`e2e/contrast.spec.ts` 复算实际渲染值）。
-  悬停只调 `filter: brightness()`，且**必须与 token 同源**——通用悬停规则（深色 `.ui-btn:hover:not(:disabled)` 为 (0,3,0)；
+  悬停与 token 同源；`filter: brightness()` 只用于**深字填充**（深色主题全部 + 浅色 `--primary` / `--success`）。
+  浅色 `--warning` / `--danger` 是白字填充，×1.08 实测把 5.02:1 / 4.83:1 压到 **4.41:1 / 4.22:1**，跌破 AA，
+  改用同级后置的成对 token 重述 + 同色光晕（第 21 组门禁：每个填充变体必须有独立 `:hover`，且 warning/danger 的 hover 禁 brightness）。
+  通用悬停规则（深色 `.ui-btn:hover:not(:disabled)` 为 (0,3,0)；
   浅色历史上有过 (0,4,1) 的 `.ui-btn--xs:hover`）会盖掉 (0,2,x) 的动作填充并把文字改回 `--accent-blue`：
   动作按钮的 hover 规则必须同级后置，浅色 `.ui-btn--success:hover` 另加一条防御性重述，两处都由第 16 组门禁守住。
 - 以下四类**不随主题变**，不得当作主题色使用：导出就绪胶囊 `--pill-*-bg/text`（自带浅底深字）、
@@ -93,7 +96,8 @@
 | --- | --- | --- | --- |
 | `.ui-btn--primary` | `#38bdf8` **8.94:1** | `#0369a1` **5.93:1** | 深 10.20（×1.08）/ 浅 5.26（×1.08） |
 | `.ui-btn--success` | `#10b981` **7.55:1** | `#047857` **5.48:1** | 深 8.71 / 浅 4.84（×1.08） |
-| `.ui-btn--danger` | `#ef4444` **5.09:1** | `#dc2626` **4.83:1** | 无 hover filter，比例不变 |
+| `.ui-btn--danger` | `#ef4444` **5.09:1** | `#dc2626` **4.83:1** | 无 hover filter（同色光晕），比例不变 |
+| `.ui-btn--warning`（状态填充） | `#f59e0b` **8.92:1** | `#b45309` **5.02:1** | 无 hover filter（同色光晕），比例不变 |
 
 旧写法（白字压在装饰色 `--accent-blue` 上，深色 2.14:1 / 浅色 `#0284c7` 4.10:1）已废弃：
 `--accent-*` 是装饰色，不是可承载文字的填充色——需要白字就得把底色压到亮度 ≤0.183，需要亮色底就得换深字。
@@ -101,7 +105,8 @@
 
 无填充变体的悬停语义：`.ui-btn--quiet` / `.ui-icon-btn` 用 `color-mix(in srgb, var(--accent-blue) 12%, transparent)` 底 +
 `--accent-blue` 字（深浅同构；Chromium 序列化为 `color(srgb …)`，与等值 `rgba()` 只差字符串）；
-`.ui-btn--secondary` 悬停**只上浮** `translateY(-1px)`、不叠色（3 个顶栏站点因此不再有旧 `.tool-btn:hover` 的蓝色叠加，属归一）。
+`.ui-btn--secondary` 悬停沿 `--text-primary` 换底色（`color-mix(in srgb, var(--bg-tertiary) 92%, var(--text-primary))`，
+浅色变深 / 深色变浅），不再只上浮（3 个顶栏站点仍无旧 `.tool-btn:hover` 的蓝色叠加，属归一，但保有可辨的悬停反馈）。
 悬停一律不加边框环——底色与字色即全部信号。
 
 ## 4. 按钮

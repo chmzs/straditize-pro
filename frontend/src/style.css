@@ -3049,6 +3049,13 @@ body.theme-light .ad-row-inversion td {
   color: var(--text-primary);
 }
 
+/* 中性填充也要有独立悬停态：与 `--quiet`/`.ui-icon-btn` 的 12% 着色对齐，
+   避免「越显眼的按钮悬停反馈越弱」的反向层级。方向沿 `--text-primary`，
+   浅色变深、深色变浅，无需第二个 token。 */
+.ui-btn--secondary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bg-tertiary) 92%, var(--text-primary));
+}
+
 .ui-btn--quiet {
   background: transparent;
   border-color: transparent;
@@ -3067,10 +3074,27 @@ body.theme-light .ad-row-inversion td {
   color: var(--text-on-status);
 }
 
+/* 悬停不得用 `filter: brightness()`：这两个填充在浅色主题是白字，
+   实测 1.08 倍会从 5.02:1 / 4.83:1 掉到 4.41:1 / 4.22:1，跌破 AA 4.5:1。
+   改为重述成对 token（防通用悬停改写底色）+ 同色光晕。见门禁第 21 组。 */
+.ui-btn--warning:hover:not(:disabled) {
+  background: var(--status-warning);
+  border-color: var(--status-warning);
+  color: var(--text-on-status);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--status-warning) 30%, transparent);
+}
+
 .ui-btn--danger {
   background: var(--action-danger-bg);
   border-color: var(--action-danger-bg);
   color: var(--action-danger-text);
+}
+
+.ui-btn--danger:hover:not(:disabled) {
+  background: var(--action-danger-bg);
+  border-color: var(--action-danger-bg);
+  color: var(--action-danger-text);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--action-danger-bg) 30%, transparent);
 }
 
 /* 成功/确认类动作填充（原 `.tool-btn.action`）。填充与填充文字成对取值，

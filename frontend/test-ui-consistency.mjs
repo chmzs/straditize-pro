@@ -708,6 +708,27 @@ check(
 );
 
 
+// ---- 21. 悬停层级：每个填充变体都要有独立悬停态，白字填充禁 brightness -------
+// 通用 `.ui-btn:hover:not(:disabled)` 只做 translateY(-1px)，填充变体必须另有独立悬停态，
+// 否则出现「越显眼的按钮悬停反馈越弱」的反向层级（--quiet 有 12% 着色、--secondary 只上浮）。
+// 浅色主题 `--warning` / `--danger` 是白字填充：1.08 倍 brightness 把 5.02:1 / 4.83:1
+// 压到 4.41:1 / 4.22:1，跌破 AA 4.5:1（实测复算，勿恢复 filter）。
+const HOVER_VARIANTS = ['primary', 'secondary', 'quiet', 'warning', 'danger', 'success'];
+for (const v of HOVER_VARIANTS) {
+  check(
+    css.includes('.ui-btn--' + v + ':hover:not(:disabled)'),
+    '悬停层级：.ui-btn--' + v + ' 缺少 :hover:not(:disabled) 独立悬停态（不得只靠通用上浮）',
+  );
+}
+for (const v of ['warning', 'danger']) {
+  const at = css.indexOf('.ui-btn--' + v + ':hover:not(:disabled)');
+  const body = at < 0 ? '' : css.slice(at, css.indexOf('}', at));
+  check(
+    !body.includes('brightness('),
+    '悬停层级：.ui-btn--' + v + ':hover 不得使用 brightness()（浅色白字填充会跌破 AA 4.5:1）',
+  );
+}
+
 if (failures.length > 0) {
   console.error(`✘ UI 一致性门禁失败（${failures.length} 项）:`);
   for (const failure of failures) console.error(`  - ${failure}`);
