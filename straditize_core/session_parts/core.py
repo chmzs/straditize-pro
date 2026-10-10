@@ -636,6 +636,8 @@ class CoreMixin:
             for idx, (s, e) in enumerate(bounds):
                 col_start = float(x0 + s)
                 col_end = float(x0 + e)
+                # 初始刻度齿位置与列间分界线 end 彻底解耦，不吸附列终点
+                init_tick_w = max(20.0, min((col_end - col_start) * 0.65, 80.0))
                 detected_cols.append(
                     {
                         "col_index": idx,
@@ -645,8 +647,8 @@ class CoreMixin:
                         "end": col_end,
                         "scale_type": "linear",
                         "startValue": 0.0,
-                        "tickValue": 100.0,
-                        "tickEndX": col_end,
+                        "tickValue": 20.0,
+                        "tickEndX": round(col_start + init_tick_w, 1),
                         "plot_type": "area",
                         "has_exaggeration": False,
                         "exaggeration_multiplier": 5.0,
@@ -659,6 +661,7 @@ class CoreMixin:
             for idx in range(num_cols):
                 c_start = float(x0 + idx * col_w)
                 c_end = float(x0 + (idx + 1) * col_w)
+                init_tick_w = max(20.0, min((c_end - c_start) * 0.65, 80.0))
                 detected_cols.append(
                     {
                         "col_index": idx,
@@ -668,8 +671,8 @@ class CoreMixin:
                         "end": c_end,
                         "scale_type": "linear",
                         "startValue": 0.0,
-                        "tickValue": 100.0,
-                        "tickEndX": c_end,
+                        "tickValue": 20.0,
+                        "tickEndX": round(c_start + init_tick_w, 1),
                     }
                 )
 

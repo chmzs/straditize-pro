@@ -127,16 +127,17 @@ export class CoordinateSystem {
       col.startValue !== undefined || col.tickValue !== undefined || col.tickEndX !== undefined;
     const sc = col.scaleCalib;
     const px0 = !hasExplicitLegacy && sc ? sc.originX : col.startX;
+    const defaultSpan = Math.max(20, Math.min((col.endX - col.startX) * 0.65, 80));
     const rawTickEnd =
       col.tickEndX !== undefined && col.tickEndX !== px0
         ? col.tickEndX
         : sc && sc.calibX !== px0
           ? sc.calibX
-          : col.endX;
-    const px1 = rawTickEnd !== px0 ? rawTickEnd : px0 + 100;
+          : px0 + defaultSpan;
+    const px1 = rawTickEnd !== px0 ? rawTickEnd : px0 + defaultSpan;
     const defaultVal0 = scaleType === 'log' ? 1 : 0;
     const val0 = col.startValue ?? sc?.originVal ?? defaultVal0;
-    const val1 = col.tickValue ?? sc?.calibVal ?? col.maxPercent ?? 100;
+    const val1 = col.tickValue ?? sc?.calibVal ?? col.maxPercent ?? 20;
 
     return {
       px0,
