@@ -344,8 +344,50 @@ export function createInspectorCallbacks(
       try {
         const activeRoi = canvasComponent.data.active_roi_id || canvasComponent.data.rois?.[0]?.id;
         const res = await rpcClient.call<any, any>('algorithm.detectXTicks', { roi_id: activeRoi });
-        if (res?.per_column) {
-          callbacks.setHudNotice(`已成功提取 ${res.per_column.length} 列刻度线齿`);
+        let successCount = 0;
+        if (res?.per_column && Array.isArray(res.per_column)) {
+          for (const item of res.per_column) {
+            const idx = item.column_index;
+            const col =
+              canvasComponent.data.columns[idx] ||
+              canvasComponent.data.columns.find((c) => c.col_index === idx);
+            if (col && Array.isArray(item.ticks) && item.ticks.length >= 2) {
+              const p1 = col.startX;
+              const p2 = item.ticks[item.ticks.length - 1];
+              const val1 = col.x_ticks?.[0]?.value ?? 0;
+              const val2 =
+                col.x_ticks?.[1]?.value ??
+                col.maxPercent ??
+                (item.ticks.length > 2 ? (item.ticks.length - 1) * 10 : 20);
+              const unit = col.unit || '%';
+              col.tickEndX = p2;
+              try {
+                const calibRes = await rpcClient.calibrateColumnXTicks(
+                  col.col_index ?? idx,
+                  [
+                    { px: p1, value: val1 },
+                    { px: p2, value: val2 },
+                  ],
+                  unit
+                );
+                col.x_ticks = calibRes.x_ticks;
+                successCount++;
+              } catch (calibErr) {
+                console.warn(`[onDetectXTicks] 标定列 ${col.name} 失败:`, calibErr);
+              }
+            }
+          }
+        }
+        canvasComponent.requestRender();
+        getSidebar()?.updateData(canvasComponent.data);
+        getInspector()?.updateData(canvasComponent.data);
+        getToolbar()?.updateHistoryState();
+        callbacks.updateFooter();
+        callbacks.scheduleAutosave();
+        if (successCount > 0) {
+          callbacks.setHudNotice(`自动检测完成：已成功识别并标定 ${successCount} 个属种列的刻度齿！`, 5000);
+        } else {
+          callbacks.setHudNotice('未检测到明显的刻度齿，您可直接在图上拖拽绿色圆点或在右侧输入数值标定。', 5000);
         }
       } catch (err) {
         callbacks.reportBackendFailure('自动提取刻度', err);
@@ -367,7 +409,13 @@ export function createInspectorCallbacks(
         return;
       }
       const px1 = col.startX;
-      const px2 = col.tickEndX ?? col.endX;
+      const px2 =
+        col.x_ticks && col.x_ticks.length >= 2 && col.x_ticks[1].px > col.startX
+          ? col.x_ticks[1].px
+          : col.tickEndX && col.tickEndX > col.startX
+          ? col.tickEndX
+          : col.startX + Math.max(20, Math.min((col.endX - col.startX) * 0.65, 80));
+      col.tickEndX = px2;
       const unit = col.unit || '%';
       try {
         const res = await rpcClient.calibrateColumnXTicks(
