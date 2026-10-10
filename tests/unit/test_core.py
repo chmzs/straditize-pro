@@ -217,6 +217,26 @@ class DigitizationTest(unittest.TestCase):
         profile = trace_area_profile(section)
         np.testing.assert_array_equal(profile, [3.0, 7.0, 0.0, 5.0, 1.0])
 
+    def test_trace_area_profile_keeps_genuine_spike(self):
+        # A row shooting far past both neighbours is real data, not a bridge to
+        # cleave away: the removed bottleneck pass replaced it with the neighbour
+        # average, which measured *worse* against the Aber ground truth.
+        section = np.zeros((12, 20), dtype=bool)
+        section[1:11, :4] = True
+        section[6, :18] = True  # genuine spike row
+        profile = trace_area_profile(section)
+        self.assertEqual(profile[6], 18.0)
+        self.assertEqual(profile[5], 4.0)
+        self.assertEqual(profile[7], 4.0)
+
+    def test_trace_area_profile_discards_foreign_island(self):
+        # Ink separated from the baseline segment by a gap is another panel's lobe.
+        section = np.zeros((4, 20), dtype=bool)
+        section[:, :5] = True
+        section[:, 12:15] = True
+        profile = trace_area_profile(section)
+        np.testing.assert_array_equal(profile, [5.0, 5.0, 5.0, 5.0])
+
     def test_trace_line_center(self):
         # A clean vertical line at x = 5
         section = np.zeros((20, 12), dtype=bool)
