@@ -1510,6 +1510,30 @@ export class GeologyCanvas {
     return null;
   }
 
+  public static getColumnCalibX(col: TaxaColumn): number {
+    if (col.x_ticks && col.x_ticks.length >= 2 && col.x_ticks[1].px > col.startX) {
+      return col.x_ticks[1].px;
+    }
+    if (col.tickEndX && col.tickEndX > col.startX) {
+      return col.tickEndX;
+    }
+    if (col.scaleCalib?.calibX && col.scaleCalib.calibX > col.startX) {
+      return col.scaleCalib.calibX;
+    }
+    const span = col.endX - col.startX;
+    return col.startX + Math.max(20, Math.min(span * 0.65, 80));
+  }
+
+  public static getColumnCalibVal(col: TaxaColumn): number {
+    if (col.x_ticks && col.x_ticks.length >= 2) {
+      return col.x_ticks[1].value;
+    }
+    if (col.scaleCalib?.calibVal !== undefined) {
+      return col.scaleCalib.calibVal;
+    }
+    return col.maxPercent ?? col.tickValue ?? 20;
+  }
+
   private findHitBoundary(
     screenPt: Point2D
   ): { taxaId: string; type: 'start' | 'tick' | 'end'; x: number } | null {
@@ -1523,15 +1547,15 @@ export class GeologyCanvas {
         return { taxaId: col.id, type: 'start', x: col.startX };
       }
 
-      // 2. 刻度终点 (N%)
-      const actualTickX = col.tickEndX && col.tickEndX > col.startX ? col.tickEndX : col.endX;
+      // 2. 刻度终点 (N%) - 独立于列右边界 endX
+      const actualTickX = GeologyCanvas.getColumnCalibX(col);
       const tickScreenX = this.viewport.worldToScreen({ x: actualTickX, y: 0 }).x;
       if (Math.abs(screenPt.x - tickScreenX) <= hitWidth) {
         return { taxaId: col.id, type: 'tick', x: actualTickX };
       }
 
       // 3. 列间隔离右界 / 相邻两列公共分界线
-      if (col.endX > actualTickX + 2) {
+      if (col.endX > actualTickX + 4) {
         const endScreenX = this.viewport.worldToScreen({ x: col.endX, y: 0 }).x;
         if (Math.abs(screenPt.x - endScreenX) <= hitWidth) {
           return { taxaId: col.id, type: 'end', x: col.endX };
@@ -1968,11 +1992,11 @@ export class GeologyCanvas {
       if (!col.visible) return;
 
       const isActive = col.id === this.data.activeTaxaId;
-      const sc = col.scaleCalib || {
-        originX: col.startX,
-        originVal: 0,
-        calibX: (col.tickEndX && col.tickEndX > col.startX) ? col.tickEndX : col.endX,
-        calibVal: col.maxPercent ?? 20,
+      const sc = {
+        originX: col.x_ticks?.[0]?.px ?? col.startX,
+        originVal: col.x_ticks?.[0]?.value ?? col.scaleCalib?.originVal ?? 0,
+        calibX: GeologyCanvas.getColumnCalibX(col),
+        calibVal: GeologyCanvas.getColumnCalibVal(col),
         unit: col.unit || '%',
       };
 
@@ -2087,18 +2111,18 @@ export class GeologyCanvas {
         ctx.lineWidth = 1.5 / scale;
         ctx.stroke();
 
-        // 底部刻度值标签 (Bottom value badges)
+        // 底部刻度值标签 (Bottom value badges: 直接展示纯数字，不带 % 符号)
         ctx.save();
         const fontPx = Math.max(9, 10 / scale);
         ctx.font = `600 ${fontPx}px monospace`;
         ctx.fillStyle = origColor;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        ctx.fillText(`${sc.originVal}${sc.unit || '%'}`, sc.originX, bottomY + 6 / scale);
+        ctx.fillText(`${sc.originVal}`, sc.originX, bottomY + 6 / scale);
 
         ctx.fillStyle = calibColor;
         ctx.textAlign = 'center';
-        ctx.fillText(`${sc.calibVal}${sc.unit || '%'}`, sc.calibX, bottomY + 6 / scale);
+        ctx.fillText(`${sc.calibVal}`, sc.calibX, bottomY + 6 / scale);
         ctx.restore();
       }
 
@@ -2131,15 +2155,15 @@ export class GeologyCanvas {
         ctx.fillText(col.name, centerX, topY - 16 / scale);
         ctx.restore();
 
-        // 仅在当前选中的激活列显示清晰端点刻度，防止几十列文字相互横向打架
+        // 仅在当前选中的激活列显示清晰端点刻度（直接展示纯数字），防止几十列文字相互横向打架
         ctx.font = `600 ${Math.max(8.5, 9.5 / scale)}px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif`;
         ctx.fillStyle = isLight ? '#0284c7' : '#38bdf8';
         ctx.textAlign = 'left';
-        ctx.fillText(`${sc.originVal}${sc.unit || '%'}`, sc.originX + 2 / scale, topY - 2 / scale);
+        ctx.fillText(`${sc.originVal}`, sc.originX + 2 / scale, topY - 2 / scale);
 
         ctx.fillStyle = isLight ? '#dc2626' : '#f87171';
         ctx.textAlign = 'right';
-        ctx.fillText(`${sc.calibVal}${sc.unit || '%'}`, sc.calibX - 2 / scale, topY - 2 / scale);
+        ctx.fillText(`${sc.calibVal}`, sc.calibX - 2 / scale, topY - 2 / scale);
       } else {
         // 未激活列：若列较窄（< 40px），名称以 45 度优雅斜角呈现，杜绝多列名称横向重叠！
         ctx.save();

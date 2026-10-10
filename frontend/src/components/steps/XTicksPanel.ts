@@ -8,6 +8,20 @@ export const title = '6. 标定列与 X 刻度';
 
 let cachedData: DiagramData | null = null;
 
+function getColCalibX(col: any): number {
+  if (col?.x_ticks && col.x_ticks.length >= 2 && col.x_ticks[1].px > col.startX) {
+    return col.x_ticks[1].px;
+  }
+  if (col?.tickEndX && col.tickEndX > col.startX) {
+    return col.tickEndX;
+  }
+  if (col?.scaleCalib?.calibX && col.scaleCalib.calibX > col.startX) {
+    return col.scaleCalib.calibX;
+  }
+  const span = (col?.endX ?? 100) - (col?.startX ?? 0);
+  return (col?.startX ?? 0) + Math.max(20, Math.min(span * 0.65, 80));
+}
+
 export function render(data: DiagramData): string {
   cachedData = data;
   const cols = data.columns || [];
@@ -45,7 +59,7 @@ export function render(data: DiagramData): string {
   const activeGroup = groups.find((g) => g.id === currentGroupId) || groups[0];
 
   const px1 = activeCol?.startX ?? 0;
-  const px2 = activeCol?.tickEndX ?? activeCol?.endX ?? (px1 + 40);
+  const px2 = getColCalibX(activeCol);
 
   return `
     <div class="step-panel" data-step="6">

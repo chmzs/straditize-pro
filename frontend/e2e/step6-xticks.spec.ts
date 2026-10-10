@@ -69,9 +69,14 @@ async function panelColumn(page: Page): Promise<BackendColumn> {
   return cols.find((c) => c.id === activeTaxaId) ?? cols[0];
 }
 
-/** 面板算出的一对像素端点（列左边界 → 标尺终点）。 */
+/** 面板算出的一对像素端点（列左边界 → 刻度齿位置，与列终点 endX 解耦）。 */
 function expectedPx(col: BackendColumn): [number, number] {
-  return [col.startX as number, (col.tickEndX ?? col.endX) as number];
+  const p1 = col.startX as number;
+  const p2 =
+    col.tickEndX && col.tickEndX > p1
+      ? (col.tickEndX as number)
+      : p1 + Math.max(20, Math.min(((col.endX as number) - p1) * 0.65, 80));
+  return [p1, p2];
 }
 
 /**
