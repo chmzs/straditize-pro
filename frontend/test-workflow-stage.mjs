@@ -86,11 +86,27 @@ assert.equal(S.showsColumnBoundaries(S.STAGE.SPLIT, 0), false, '没列就不画'
 console.log('✔ 列边界一旦存在持续可见');
 
 // ---------------------------------------------------------------------------
+// 4.5 去线清理标记：必须仅在步骤 4（清理）出现，后续步骤绝不常驻污染画布
+//     （用户反馈：「step4去除杂线这个标记在后续步骤一直显示？这有啥必要？」）
+// ---------------------------------------------------------------------------
+assert.equal(S.showsCleanupOverlay(S.STAGE.CLEANUP), true, '步骤4 清理必须绘制去线几何/排除区');
+assert.equal(S.showsCleanupOverlay(S.STAGE.SPLIT), false, '步骤5 分列不得绘制清理标记');
+assert.equal(S.showsCleanupOverlay(S.STAGE.CALIBRATE_COLUMNS), false, '步骤6 标定列不得绘制清理标记');
+assert.equal(S.showsCleanupOverlay(S.STAGE.SPEARS_AND_SAMPLES), false, '步骤7 采样层位不得绘制清理标记');
+assert.equal(S.showsCleanupOverlay(S.STAGE.QA), false, '步骤8 校验不得绘制清理标记');
+assert.equal(S.showsCleanupOverlay(S.STAGE.ROI), false, '步骤2 尚未清理不得绘制');
+console.log('✔ 去线清理标记仅在步骤 4 出现');
+
+// ---------------------------------------------------------------------------
 // 5. visibleLayers：给 e2e / 调试句柄用的权威能力清单
 // ---------------------------------------------------------------------------
+const layersAt4 = S.visibleLayers(S.STAGE.CLEANUP, { hasImage: true, columnCount: 0 });
+assert.ok(layersAt4.includes('cleanupOverlay'), '步骤4 应含 cleanupOverlay');
+
 const layersAt5 = S.visibleLayers(S.STAGE.SPLIT, { hasImage: true, columnCount: 9 });
 assert.ok(layersAt5.includes('background'), '步骤5 底图必须在');
 assert.ok(layersAt5.includes('roi'), '步骤5 ROI 必须在');
+assert.ok(!layersAt5.includes('cleanupOverlay'), '步骤5 不得含 cleanupOverlay');
 assert.ok(!layersAt5.includes('pollenCurves'), '步骤5 不得含 pollenCurves');
 assert.ok(!layersAt5.includes('anchors'), '步骤5 不得含 anchors');
 
