@@ -7,7 +7,21 @@ This test:
 2. Loads the genuine ground truth dataset (49 depths x 36 pollen taxa)
 3. Evaluates Straditize automated column detection and area profile digitization
 4. Computes scientific error metrics (RMSE, MAE, R^2, max deviation) for all taxa
-5. Verifies that digitization achieves sub-pixel accuracy and high correlation
+5. Asserts that the dominant taxa (>10% max abundance) reach the mean-R^2 gate
+
+This is the accuracy yardstick for the Aber reference figure. It was moved out of
+``tests/`` (into ``scripts/``) by commit 3b83a61, in the same change that switched
+the gate to the full suite - so nothing ran it, and when run by hand it failed on an
+off-by-one ROI bound that hid every later assertion. It lives back under ``tests/``
+so the gate actually protects it.
+
+Known limits, measured, not hidden:
+  - Cyperaceae and Rumex acetosa-type stay near R^2 0.62-0.65. Their residual error
+    is a ~1 row vertical registration offset between the sampled depths and the
+    digitized rows; a per-row extraction rule cannot remove it. Tracked separately.
+  - The 19 taxa with max abundance ~1-3% sit on the panel-width floor (~11-13 px).
+    Their R^2 is ratio noise on a near-constant series, not geometric error, so the
+    gate is taken over dominant taxa only.
 """
 
 import os
@@ -47,8 +61,16 @@ class TestAberPollenAccuracyBenchmark(unittest.TestCase):
 
         # Auto-detect all 36 columns across image
         # In Aber pollen diagram, Y-axis line is at x=56, and data columns start at x=70
-        # Graph plotting area in 771x500 image: X spans ~70 to 755, Y spans ~140 to 475
-        columns = session.detect_columns([70, 755], [140, 475])
+        # Plotting area: X spans 70..755 inclusive, Y spans 140..475 inclusive.
+        #
+        # NOTE: detect_columns() takes its upper bounds as EXCLUSIVE (it slices the
+        # foreground mask with them directly), so the inclusive span 70..755 must be
+        # passed as (70, 756) and 140..475 as (140, 476). Passing 755 silently drops
+        # pixel column 755 - the last column of the final (Veronica) panel. That panel
+        # is only ~7 px wide and sits flush against the crop edge, so losing one column
+        # of ink collapses it and only 35 of 36 taxa are detected. This single off-by-one
+        # is what made this benchmark fail with "35 != 36" and go unnoticed.
+        columns = session.detect_columns([70, 756], [140, 476])
         self.assertEqual(len(columns), 36, "Should accurately detect all 36 distinct taxa columns")
 
         # Y axis calibration mapping:
@@ -85,9 +107,16 @@ class TestAberPollenAccuracyBenchmark(unittest.TestCase):
 
             extracted_vals = []
             for y_px in sample_ys:
-                # Find nearest digitized row
+                # Find nearest digitized row. A missing row must fail loudly: a
+                # substituted placeholder would fabricate a reading and mask the
+                # very regression this gate exists to catch (Invariant 1).
                 nearest_y = round(float(y_px))
-                px_x = prof_dict.get(float(nearest_y), start_x)
+                px_x = prof_dict.get(float(nearest_y))
+                self.assertIsNotNone(
+                    px_x,
+                    f"Column {col_idx} ({taxon_name}) has no digitized row at "
+                    f"y={nearest_y}; refusing to substitute a placeholder value.",
+                )
                 # Extracted width from column baseline
                 width = max(0.0, px_x - start_x)
                 # Value mapped proportionally to maximum column scale
@@ -99,7 +128,7 @@ class TestAberPollenAccuracyBenchmark(unittest.TestCase):
             # Compute statistical metrics
             mae = float(np.mean(np.abs(extracted_vals - gt_values)))
             rmse = float(np.sqrt(np.mean((extracted_vals - gt_values) ** 2)))
-            
+
             # Correlation coefficient
             if np.std(extracted_vals) > 1e-4 and np.std(gt_values) > 1e-4:
                 corr = float(np.corrcoef(extracted_vals, gt_values)[0, 1])
@@ -122,7 +151,7 @@ class TestAberPollenAccuracyBenchmark(unittest.TestCase):
         print("=" * 78)
         print(f" {'Idx':<4} {'Taxon Name':<24} {'Max %':<8} {'Col W':<8} {'MAE %':<8} {'RMSE %':<8} {'R^2':<8}")
         print("-" * 78)
-        
+
         high_abundance_r2 = []
         for r in results:
             print(f" {r['col_index']:<4} {r['taxon'][:22]:<24} {r['max_gt']:<8.1f} {r['col_width_px']:<8.1f} {r['mae']:<8.2f} {r['rmse']:<8.2f} {r['r2']:<8.4f}")
@@ -130,15 +159,19 @@ class TestAberPollenAccuracyBenchmark(unittest.TestCase):
                 high_abundance_r2.append(r["r2"])
 
         print("=" * 78)
-        
-        # For dominant ecological pollen taxa (Betula, Pinus, Corylus, Gramineae, Artemisia),
-        # digitization must exhibit strong positive correlation (R^2 > 0.85)
+
+        # Gate over the dominant ecological pollen taxa. Measured with the
+        # own-component area rule: mean R^2 = 0.9159 (was 0.6089 with the old
+        # rightmost-ink rule, which is why this gate had never been met). The bar is
+        # set at 0.90 to keep meaningful headroom above the two registration-limited
+        # taxa described in the module docstring, while still being tight enough to
+        # catch a regression on the well-behaved majority.
         if high_abundance_r2:
             mean_r2 = float(np.mean(high_abundance_r2))
             print(f"Mean R^2 for dominant taxa (>10% abundance): {mean_r2:.4f}")
             self.assertGreater(
-                mean_r2, 0.80,
-                f"Mean R^2 for dominant taxa should exceed 0.80, got {mean_r2:.4f}"
+                mean_r2, 0.90,
+                f"Mean R^2 for dominant taxa should exceed 0.90, got {mean_r2:.4f}"
             )
 
 
