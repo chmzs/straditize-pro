@@ -33,20 +33,23 @@ def _fill_short_gaps(values: np.ndarray, max_gap: int = 4) -> np.ndarray:
     return values
 
 
-def trace_area_profile(section_mask: np.ndarray,
-                       cleave_neck: bool = True,
-                       neck_ratio_threshold: float = 0.25) -> np.ndarray:
-    """Return rightmost non-zero pixel position (+1) per row for area-like plots.
+def trace_area_profile(section_mask: np.ndarray) -> np.ndarray:
+    """Return each row's own ink width (+1), measured from the section baseline.
+
+    Ink is read as the contiguous segment starting at (or near) the baseline: when
+    a row's first ink touches the baseline and a later gap separates it from more
+    ink, only that baseline segment is measured, so a neighbouring panel's lobe
+    bleeding into the section is discarded. Rows whose first ink sits away from
+    the baseline keep the rightmost-ink reading.
+
+    The profile is deliberately not despiked: a spike in a real silhouette is data,
+    not noise, and replacing it with a neighbour average would fabricate a reading
+    (Invariant 1). Callers that want smoothing must do it explicitly on real values.
 
     Parameters
     ----------
     section_mask : np.ndarray
         2D boolean array (H x W) representing a column section.
-    cleave_neck : bool
-        If True, detects narrow neck connections (bottlenecks) caused by neighboring
-        overlapping/penetrating peaks from adjacent columns, and cleaves foreign lobes.
-    neck_ratio_threshold : float
-        Threshold ratio of neck width compared to maximum span to identify an artificial bridge.
 
     Returns
     -------
@@ -59,7 +62,7 @@ def trace_area_profile(section_mask: np.ndarray,
     height, width = section_mask.shape
     values = np.zeros(height, dtype=float)
 
-    # First pass: collect initial raw rightmost profile
+    # Collect the baseline-anchored width of every row
     for row in range(height):
         xs = np.where(section_mask[row])[0]
         if len(xs):
@@ -71,18 +74,6 @@ def trace_area_profile(section_mask: np.ndarray,
                 values[row] = float(xs[gap_idx[0]] + 1)
             else:
                 values[row] = float(xs.max() + 1)
-
-    # Second pass: cleave narrow neck bridges (Bottleneck Cleaving)
-    if cleave_neck and len(values) > 10:
-        max_val = np.max(values)
-        if max_val > 15:
-            for row in range(1, height - 1):
-                cur_v = values[row]
-                prev_v = values[row - 1]
-                next_v = values[row + 1]
-                # If an isolated single-pixel or narrow strip shoots out deep into neighbor territory
-                if cur_v > prev_v + 10 and cur_v > next_v + 10:
-                    values[row] = (prev_v + next_v) / 2.0
 
     return values
 
