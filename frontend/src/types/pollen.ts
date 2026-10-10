@@ -48,6 +48,9 @@ export interface Column {
   /** 标度的唯一事实源：两个真实刻度端点（像素 + 读数）。null = 未标定。 */
   x_ticks?: [Tick, Tick] | null;
 
+  /** 算法在列底端检测到的物理刻度齿像素 X 坐标列表，供磁吸与可视化使用 */
+  detected_ticks?: number[];
+
   /** 后端权威列序号：前端寻址列级 RPC 用它（不要用数组下标——列增删后不等价）。 */
   col_index?: number;
 

@@ -41,7 +41,39 @@ class XTicksMixin:
             if not target_roi_id or col.get("roi_id") == target_roi_id:
                 cols.append((col.get("startX", col.get("start", 0)), col.get("endX", col.get("end", 0))))
 
-        res = detect_xticks(gray, band=band, dark_threshold=dark_threshold, columns=cols if cols else None)
+        resolved_band = band
+        if resolved_band is None and target_roi_id and hasattr(self, "_get_roi"):
+            try:
+                target_roi = self._get_roi(target_roi_id)
+                ylim = target_roi.get("ylim") if target_roi else None
+                if ylim and len(ylim) == 2:
+                    from ..xticks import _strokes_in_band
+
+                    y_bottom = float(ylim[1])
+                    best_b = None
+                    best_score = 0
+                    for top in range(int(y_bottom) - 4, int(y_bottom) + 16):
+                        for bh in (6, 7, 8):
+                            b_ticks, _ = _strokes_in_band(
+                                gray, (top, top + bh), dark_threshold=dark_threshold
+                            )
+                            score = sum(
+                                1 for t in b_ticks if any(s <= t <= e for s, e in cols)
+                            )
+                            if score > best_score:
+                                best_score = score
+                                best_b = (top, top + bh)
+                    if best_b and best_score >= 3:
+                        resolved_band = best_b
+            except Exception:
+                pass
+
+        res = detect_xticks(
+            gray,
+            band=resolved_band,
+            dark_threshold=dark_threshold,
+            columns=cols if cols else None,
+        )
         if res.get("band"):
             self.tick_band = list(res["band"])
         return res

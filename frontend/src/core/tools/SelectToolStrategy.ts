@@ -98,8 +98,50 @@ export class SelectToolStrategy implements ToolStrategy {
       return true;
     }
 
-    // 4. 点击属种列区域
+    // 4. 点击属种列区域 (在步骤 6 时，底端刻度尺区域点击直接拾取/吸附 X2 刻度齿)
     const hitCol = ctx.findHitColumn(worldPt);
+    if (ctx.workflowStage === 6) {
+      const col = hitCol || ctx.getActiveColumn();
+      const bottomY = Math.min(ctx.data.imageHeight || 12000, ctx.data.roi.yMax + 30);
+      const isNearBottomRuler =
+        worldPt.y >= ctx.data.roi.yMax - 30 / ctx.viewport.scale &&
+        worldPt.y <= bottomY + 35 / ctx.viewport.scale;
+
+      if (col && isNearBottomRuler && worldPt.x >= col.startX - 5 && worldPt.x <= col.endX + 5) {
+        ctx.data.activeTaxaId = col.id;
+        ctx.data.selectedEntity = { type: 'column', id: col.id, part: 'tick' };
+        let targetX = Math.round(worldPt.x);
+        // 若附近 15px 内有算法检测到的锯齿，自动高精度磁吸对齐到锯齿中线
+        if (col.detected_ticks && col.detected_ticks.length > 0) {
+          const nearest = col.detected_ticks.reduce((prev, curr) =>
+            Math.abs(curr - targetX) < Math.abs(prev - targetX) ? curr : prev
+          );
+          if (Math.abs(nearest - targetX) <= 15 / ctx.viewport.scale) {
+            targetX = nearest;
+          }
+        }
+        targetX = Math.max(col.startX + 5, targetX);
+        col.tickEndX = targetX;
+        if (col.scaleCalib) {
+          col.scaleCalib.calibX = targetX;
+        }
+        if (col.x_ticks && col.x_ticks.length >= 2) {
+          col.x_ticks[1].px = targetX;
+        }
+        ctx.history.push(`Set Tick End for ${col.name}`, ctx.data.columns, ctx.data.activeTaxaId);
+        ctx.callbacks.onTaxaChange?.(col.id);
+        ctx.callbacks.onDataChange?.();
+
+        const inpVal2 = document.getElementById('inp-manual-tick-val2') as HTMLInputElement | null;
+        inpVal2?.focus();
+        inpVal2?.select();
+
+        ctx.notifyNotice(`已将 ${col.name} 的刻度端点 X2 吸附至 X=${targetX}px (请在右侧输入数值后按 Enter 保存)`);
+        ctx.requestRender();
+        return true;
+      }
+    }
+
     if (hitCol) {
       ctx.data.activeTaxaId = hitCol.id;
       ctx.data.selectedEntity = { type: 'column', id: hitCol.id };
@@ -249,9 +291,21 @@ export class SelectToolStrategy implements ToolStrategy {
             ctx.data.columns[colIndex - 1].endX = newX;
           }
         } else if (type === 'tick') {
-          targetCol.tickEndX = newX;
+          let targetX = newX;
+          if (targetCol.detected_ticks && targetCol.detected_ticks.length > 0) {
+            const nearest = targetCol.detected_ticks.reduce((prev, curr) =>
+              Math.abs(curr - newX) < Math.abs(prev - newX) ? curr : prev
+            );
+            if (Math.abs(nearest - newX) <= 10 / ctx.viewport.scale) {
+              targetX = nearest;
+            }
+          }
+          targetCol.tickEndX = Math.max(targetCol.startX + 5, targetX);
           if (targetCol.scaleCalib) {
-            targetCol.scaleCalib.calibX = newX;
+            targetCol.scaleCalib.calibX = targetCol.tickEndX;
+          }
+          if (targetCol.x_ticks && targetCol.x_ticks.length >= 2) {
+            targetCol.x_ticks[1].px = targetCol.tickEndX;
           }
         } else {
           targetCol.endX = newX;

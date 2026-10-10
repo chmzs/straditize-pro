@@ -351,29 +351,32 @@ export function createInspectorCallbacks(
             const col =
               canvasComponent.data.columns[idx] ||
               canvasComponent.data.columns.find((c) => c.col_index === idx);
-            if (col && Array.isArray(item.ticks) && item.ticks.length >= 2) {
-              const p1 = col.startX;
-              const p2 = item.ticks[item.ticks.length - 1];
-              const val1 = col.x_ticks?.[0]?.value ?? 0;
-              const val2 =
-                col.x_ticks?.[1]?.value ??
-                col.maxPercent ??
-                (item.ticks.length > 2 ? (item.ticks.length - 1) * 10 : 20);
-              const unit = col.unit || '%';
-              col.tickEndX = p2;
-              try {
-                const calibRes = await rpcClient.calibrateColumnXTicks(
-                  col.col_index ?? idx,
-                  [
-                    { px: p1, value: val1 },
-                    { px: p2, value: val2 },
-                  ],
-                  unit
-                );
-                col.x_ticks = calibRes.x_ticks;
-                successCount++;
-              } catch (calibErr) {
-                console.warn(`[onDetectXTicks] 标定列 ${col.name} 失败:`, calibErr);
+            if (col && Array.isArray(item.ticks)) {
+              col.detected_ticks = item.ticks;
+              if (item.ticks.length >= 2) {
+                const p1 = col.startX;
+                const p2 = item.ticks[item.ticks.length - 1];
+                const val1 = col.x_ticks?.[0]?.value ?? 0;
+                const val2 =
+                  col.x_ticks?.[1]?.value ??
+                  col.maxPercent ??
+                  (item.ticks.length > 2 ? (item.ticks.length - 1) * 10 : 20);
+                const unit = col.unit || '%';
+                col.tickEndX = p2;
+                try {
+                  const calibRes = await rpcClient.calibrateColumnXTicks(
+                    col.col_index ?? idx,
+                    [
+                      { px: p1, value: val1 },
+                      { px: p2, value: val2 },
+                    ],
+                    unit
+                  );
+                  col.x_ticks = calibRes.x_ticks;
+                  successCount++;
+                } catch (calibErr) {
+                  console.warn(`[onDetectXTicks] 标定列 ${col.name} 失败:`, calibErr);
+                }
               }
             }
           }

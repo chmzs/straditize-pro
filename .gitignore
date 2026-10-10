@@ -72,3 +72,9 @@ HANDOFF-archive/
 docs/plans/
 docs/TASK_SPEC_V2_FINAL.md
 
+# Competition materials & temporary test files (keep local only, do not track in git)
+competition_materials/
+competition_guide*
+test_render.*
+
+

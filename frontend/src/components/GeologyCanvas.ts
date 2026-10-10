@@ -2095,6 +2095,29 @@ export class GeologyCanvas {
         ctx.lineTo(sc.calibX, bottomY);
         ctx.stroke();
 
+        // 绘制检测到的刻度短锯齿 (Detected Tick Teeth)
+        const teeth = col.detected_ticks || [];
+        if (teeth.length > 0) {
+          ctx.save();
+          const toothH = 8 / scale;
+          for (const tx of teeth) {
+            const isChosen = Math.abs(tx - sc.calibX) <= 3;
+            ctx.beginPath();
+            ctx.strokeStyle = isChosen ? '#10b981' : (isLight ? '#f97316' : '#fbbf24');
+            ctx.lineWidth = (isChosen ? 2.5 : 1.5) / scale;
+            ctx.moveTo(tx, bottomY);
+            ctx.lineTo(tx, bottomY + toothH);
+            ctx.stroke();
+
+            // 小齿底端微型指示圆钉
+            ctx.beginPath();
+            ctx.arc(tx, bottomY + toothH, (isChosen ? 2.8 : 1.8) / scale, 0, Math.PI * 2);
+            ctx.fillStyle = isChosen ? '#10b981' : (isLight ? '#f97316' : '#fbbf24');
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+
         ctx.beginPath();
         ctx.arc(sc.originX, bottomY, pinR, 0, Math.PI * 2);
         ctx.fillStyle = origColor;
