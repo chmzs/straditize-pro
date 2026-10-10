@@ -329,4 +329,41 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
       }, { timeout: 10_000 })
       .toBe(5);
   });
+
+  test.describe('T7 批量应用与快捷键', () => {
+    test.use({ allowlists: { notice: [/已将刻度.*批量应用/] } });
+
+    test('T7 键盘 Enter 快捷保存与一键批量应用至同组列', async ({ page, telemetry }) => {
+      await gotoStage(page, 6);
+
+      // 1. 输入新数值并通过 Enter 键提交保存
+      await page.locator(VAL1).fill('0');
+      await page.locator(VAL2).fill('25');
+      await page.locator(VAL2).press('Enter');
+
+      await expect
+        .poll(async () => (await panelColumn(page)).x_ticks, { timeout: 10_000 })
+        .toEqual([
+          expect.objectContaining({ value: 0 }),
+          expect.objectContaining({ value: 25 }),
+        ]);
+
+      // 2. 点击【应用刻度至同组全部列】按钮
+      const applyToGroupBtn = page.locator('.step-panel[data-step="6"] #btn-apply-ticks-to-group');
+      await expect(applyToGroupBtn).toBeVisible();
+      await applyToGroupBtn.click();
+
+      // 验证同组的所有列都写入了 0~25 标度
+      await expect
+        .poll(async () => {
+          const allCols = await columns(page);
+          const col0 = allCols[0];
+          const sameGroup = allCols.filter((c) => (c as any).x_group_id === (col0 as any).x_group_id);
+          return sameGroup.every((c) => c.x_ticks && c.x_ticks[1]?.value === 25);
+        }, { timeout: 10_000 })
+        .toBe(true);
+
+      expect(telemetry.rpcErrors).toEqual([]);
+    });
+  });
 });

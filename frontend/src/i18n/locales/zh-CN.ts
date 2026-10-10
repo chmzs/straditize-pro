@@ -290,6 +290,10 @@ export const zhCN = {
   'step6.title': '6. 标定列与 X 轴刻度',
   'step6.activeCol': '当前编辑列：',
   'step6.unselected': '未选列',
+  'step6.noColsTitle': '尚未检测或划分属种列',
+  'step6.noColsDesc': '进行 X 轴刻度标定前，需要先在步骤 5 中完成属种列的自动切分或手动添加。',
+  'step6.gotoStep5': '前往步骤 5 进行分列检测',
+  'step6.progress': '标定进度：',
   'step6.autoTicksTitle': '几何刻度齿自动提取',
   'step6.autoTicksDesc': '基于 1-D 竖向绝对游程自动搜索各列刻度标尺齿，无需逐列手动拉点。',
   'step6.autoTicksBtn': '自动提取本区所有列刻度',
@@ -299,6 +303,9 @@ export const zhCN = {
   'step6.clearTicks': '清空本列标度',
   'step6.reinput': '重新输入两端点',
   'step6.saveTicks': '保存标度',
+  'step6.applyToGroup': '应用刻度至同组全部列',
+  'step6.applyToGroupSuccess': '已将刻度 ({val1} ~ {val2} {unit}) 批量应用到同组 {count} 个属种！',
+  'step6.applyToGroupEmpty': '当前组内无其他可用属种列。',
   'step6.next': '确认列刻度，提取拐点与采样层位 (步骤 7)',
 
   // ===== 步骤 7：采样层位面板 =====

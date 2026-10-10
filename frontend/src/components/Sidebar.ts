@@ -255,6 +255,13 @@ export class Sidebar {
             <input type="text" class="taxa-name-inline-input" data-col-id="${col.id}" data-action="inline-rename" value="${col.name}" style="font-size: 11px; font-weight: ${isActive ? '600' : '400'}; border: none; background: transparent; color: inherit; width: 100%; text-overflow: ellipsis; overflow: hidden; padding: 1px 2px;" title="点击直接改名，获得焦点时画布高亮该列" />
           </div>
           <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
+            <!-- X 刻度状态徽章 -->
+            ${
+              col.x_ticks && col.x_ticks.length === 2
+                ? `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(16, 185, 129, 0.15); color: var(--status-success); font-weight: 600;" title="X 刻度: ${col.x_ticks[0].value} ~ ${col.x_ticks[1].value} ${col.unit || '%'}">${col.x_ticks[1].value}${col.unit || '%'}</span>`
+                : `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(245, 158, 11, 0.15); color: var(--status-warning);" title="X 刻度尚未标定">未定标</span>`
+            }
+
             <!-- 最大实测峰值呈现 (一眼识别优势种) -->
             <span class="taxa-peak-badge" style="font-size: 9.5px; font-weight: 700; color: ${isActive ? 'var(--accent-blue)' : 'var(--text-secondary)'}; font-family: var(--font-mono); min-width: 34px; text-align: right;" title="实测最大丰度峰值: ${maxValStr}">
               ${maxValStr}
@@ -302,6 +309,14 @@ export class Sidebar {
           <div class="meta-item">
             <span>所属组:</span>
             <span class="badge" style="font-size: 9.5px; padding: 1px 4px;">${groupName}</span>
+          </div>
+          <div class="meta-item">
+            <span>X 刻度:</span>
+            ${
+              col.x_ticks && col.x_ticks.length === 2
+                ? `<span class="badge" style="font-size: 9.5px; padding: 1px 5px; background: rgba(16, 185, 129, 0.15); color: var(--status-success); font-weight: 600;">已标定 (${col.x_ticks[0].value} ~ ${col.x_ticks[1].value} ${col.unit || '%'})</span>`
+                : `<span class="badge" style="font-size: 9.5px; padding: 1px 5px; background: rgba(245, 158, 11, 0.15); color: var(--status-warning);">未标定</span>`
+            }
           </div>
           <div class="meta-item">
             <span>基线范围:</span>

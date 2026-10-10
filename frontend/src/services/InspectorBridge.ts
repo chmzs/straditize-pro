@@ -60,6 +60,7 @@ export function createInspectorCallbacks(
     onDataChange: () => {
       canvasComponent.requestRender();
       getSidebar()?.updateData(canvasComponent.data);
+      getInspector()?.updateData(canvasComponent.data);
       getToolbar()?.updateHistoryState();
       callbacks.updateFooter();
     },
