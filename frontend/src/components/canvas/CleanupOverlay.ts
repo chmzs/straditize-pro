@@ -1,5 +1,6 @@
 import { DiagramData } from '../../types/pollen';
 import { Viewport } from '../../core/Viewport';
+import { showsCleanupOverlay } from '../../core/WorkflowStage';
 
 export const id = 'cleanup-lines-and-exclusions';
 export const z = 20;
@@ -118,7 +119,10 @@ function drawHandles(ctx: CanvasRenderingContext2D, band: Band, axis: 'h' | 'v',
  * 世界坐标绘制（见 `_registry.ts` 的坐标契约）。任何"屏幕恒定"的尺寸都通过
  * `1 / vp.scale` 反算。
  */
-export function draw(ctx: CanvasRenderingContext2D, data: DiagramData, vp: Viewport): void {
+export function draw(ctx: CanvasRenderingContext2D, data: DiagramData, vp: Viewport, stage?: number): void {
+  if (stage !== undefined && !showsCleanupOverlay(stage)) {
+    return;
+  }
   const inv = 1 / (vp.scale || 1);
 
   // 1. 排除区：最高优先级，用灰色实心块表示"这块不是数据"。

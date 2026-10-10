@@ -68,6 +68,16 @@ export function canPickYCalibMark(stage: number, mode: string): boolean {
 }
 
 /**
+ * 仅在步骤 4（清理）绘制去线候选几何、排除区及其编辑手柄。
+ *
+ * 后续步骤（5 分列 / 6 刻度 / 7 拐点 / 8 校验）中，清理结果已作为网格线掩膜
+ * 应用于前景，不再常驻绘制橙色候选框与红色删除标记，保持工作区干净；若需调整点击步骤 4 回退。
+ */
+export function showsCleanupOverlay(stage: number): boolean {
+  return stage === STAGE.CLEANUP;
+}
+
+/**
  * 深度标尺网格：步骤 3 起可画，但 4 清理 / 5 分列 默认不画。
  *
  * 设计稿 §1.1：「把 Y 标定放前面是因为标定后深度标尺即可绘制，清理时有坐标系可定位」
@@ -112,6 +122,7 @@ export function visibleLayers(
   if (opts.hasImage) layers.push('background');
   if (showsRoiOverlay(stage)) layers.push('roi');
   if (showsYCalibMarks(stage)) layers.push('yCalibMarks');
+  if (showsCleanupOverlay(stage)) layers.push('cleanupOverlay');
   if (showsDepthGrid(stage)) layers.push('depthGrid');
   if (showsColumnBoundaries(stage, opts.columnCount)) layers.push('columnBoundaries');
   if (showsPollenCurves(stage, opts.columnCount)) {

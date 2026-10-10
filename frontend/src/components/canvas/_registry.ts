@@ -15,7 +15,7 @@ export interface OverlayModule {
    * 需要"屏幕上恒定"的线宽 / 手柄 / 字号时，用 `1 / vp.scale` 反算：
    * `ctx.lineWidth = 2 / vp.scale`。
    */
-  draw: (ctx: CanvasRenderingContext2D, data: DiagramData, vp: Viewport) => void;
+  draw: (ctx: CanvasRenderingContext2D, data: DiagramData, vp: Viewport, stage?: number) => void;
 }
 
 // 自动扫描 canvas 目录下的所有 *Overlay.ts

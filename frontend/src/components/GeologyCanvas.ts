@@ -15,6 +15,7 @@ import { CoordinateSystem } from '../core/CoordinateSystem';
 import {
   STAGE,
   canHitRoiHandle,
+  showsCleanupOverlay,
   showsColumnBoundaries,
   showsDepthGrid,
   showsPollenCurves,
@@ -1691,7 +1692,7 @@ export class GeologyCanvas {
     const overlays = getAllOverlays();
     for (const ov of overlays) {
       try {
-        ov.draw(ctx, this.data, this.viewport);
+        ov.draw(ctx, this.data, this.viewport, this.workflowStage);
         this.lastRenderedLayers.add(ov.id);
       } catch (error) {
         this.overlayErrors.set(ov.id, error);
@@ -2571,10 +2572,11 @@ export class GeologyCanvas {
     return null;
   }
 
-  /** 命中测试：返回鼠标下的 geometry id 与抓取的手柄。 */
+  /** 命中测试：返回鼠标下的 geometry id 与抓取的手柄。仅在 Step 4（清理）允许交互。 */
   private findHitGeometry(
     worldPt: Point2D
   ): { id: string; handle: 'move' | 'start' | 'end' | 'thick0' | 'thick1' } | null {
+    if (!showsCleanupOverlay(this.workflowStage)) return null;
     const inv = 1 / (this.viewport.scale || 1);
     const pad = this.GEOMETRY_HIT_PAD_SCREEN * inv;
     const handleR = (this.GEOMETRY_HANDLE_SIZE_SCREEN * inv) / 2 + 2 * inv;
