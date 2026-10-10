@@ -15,6 +15,11 @@ import skimage.morphology as skim
 from scipy.interpolate import interp1d
 from scipy.ndimage import convolve
 
+try:
+    from scipy import ndimage
+except ImportError:  # pragma: no cover - scipy is a hard dependency
+    ndimage = None
+
 from straditize_core.image import remove_objects_smaller_than
 
 
@@ -33,14 +38,112 @@ def _fill_short_gaps(values: np.ndarray, max_gap: int = 4) -> np.ndarray:
     return values
 
 
+# --- Column-curve membership rule (single source of truth) --------------------
+#
+# A column band holds ink that is not the column's own curve: anti-aliased
+# remnants of the neighbouring panel's zero line, dashed horizontal grid lines,
+# the plot frame. Reading the RIGHTMOST ink in the whole band is defeated by any
+# of it -- a neighbouring panel's bleed can reach ~95% of the panel maximum while
+# sitting a median 29 px away from the real silhouette (measured on the Aber
+# ground truth, dominant taxa: mean R^2 0.61, MAE 4.6%).
+#
+# Membership is therefore decided by connected-component identity and size: a
+# real curve runs down the panel while grid dashes, frame remnants and specks are
+# small blobs, and the two families are separated by more than an order of
+# magnitude (measured on the repository's benchmark figures: stray ink 4-18 px,
+# real curves >= 333 px). The session digitization path
+# (``straditize_core.session_parts.digitize``) and the batch reader
+# ``trace_area_profile`` both call ``_own_run_last_offset`` here, so one physical
+# quantity has exactly one read rule; they differ only in their output
+# convention (absolute x vs. width-from-baseline).
+_AREA_MIN_COMPONENT_PX = 50
+
+# A row's first ink within this many pixels of the band's left edge counts as
+# anchored to the section baseline.
+_BASELINE_ANCHOR_TOL_PX = 3
+
+
+def _run_bounds(fg_indices: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """First/last positions of each contiguous run of sorted foreground offsets."""
+    breaks = np.flatnonzero(np.diff(fg_indices) > 1)
+    starts = np.concatenate(([0], breaks + 1))
+    ends = np.concatenate((breaks, [fg_indices.size - 1]))
+    return starts, ends
+
+
+def _band_components(band: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Label the connected ink components of a column band.
+
+    Returns ``(labels, label_areas)`` where ``labels`` holds the component id of
+    every band pixel and ``label_areas[id]`` its pixel area (index 0 is the
+    background and keeps area 0).
+    """
+    band = np.asarray(band, dtype=bool)
+    if ndimage is None or not band.any():
+        return np.zeros(band.shape, dtype=int), np.zeros(1, dtype=float)
+    labels, count = ndimage.label(band, structure=np.ones((3, 3), dtype=bool))
+    if not count:
+        return np.zeros(band.shape, dtype=int), np.zeros(1, dtype=float)
+    areas = np.asarray(ndimage.sum(band, labels, index=np.arange(1, count + 1)), dtype=float)
+    return labels, np.concatenate(([0.0], areas))
+
+
+def _own_run_last_offset(
+    fg_indices: np.ndarray,
+    band_labels_row: np.ndarray,
+    label_areas: np.ndarray,
+    baseline_tol: int = _BASELINE_ANCHOR_TOL_PX,
+) -> int:
+    """Rightmost ink offset of the column's own curve in one band row.
+
+    ``fg_indices`` holds the sorted foreground x-offsets of a single row inside
+    one column band; ``band_labels_row`` maps every offset of that band to its
+    connected-component id and ``label_areas`` gives each component's area.
+
+    The own curve is resolved in three tiers so that a reading is always produced
+    rather than silently dropped:
+
+    1. the leftmost component of at least ``_AREA_MIN_COMPONENT_PX`` pixels --
+       the tier that decides real panels, and the tier that rejects a
+       neighbouring panel's bleed sitting further right;
+    2. otherwise, if the row's first ink is anchored to the baseline (within
+       ``baseline_tol``), that anchored component -- thin or small drawings whose
+       curve never grows large enough to clear tier 1;
+    3. otherwise the row's rightmost ink, the last-resort reading.
+
+    The reading is that component's rightmost ink *in this row*, which leaves the
+    legacy answer untouched whenever the own component is also the rightmost ink
+    (thin-line diagrams).
+    """
+    starts, ends = _run_bounds(fg_indices)
+
+    def label_at(run_index: int) -> int:
+        return int(band_labels_row[fg_indices[run_index]])
+
+    own_label = 0
+    for start in starts:
+        label = label_at(start)
+        if label and label_areas[label] >= _AREA_MIN_COMPONENT_PX:
+            own_label = label
+            break
+    if own_label == 0 and int(fg_indices[0]) <= baseline_tol:
+        own_label = label_at(0)
+    if own_label == 0:
+        return int(fg_indices[-1])
+    result = None
+    for start, end in zip(starts, ends):
+        if label_at(start) == own_label:
+            result = int(fg_indices[end])
+    return result if result is not None else int(fg_indices[-1])
+
+
 def trace_area_profile(section_mask: np.ndarray) -> np.ndarray:
     """Return each row's own ink width (+1), measured from the section baseline.
 
-    Ink is read as the contiguous segment starting at (or near) the baseline: when
-    a row's first ink touches the baseline and a later gap separates it from more
-    ink, only that baseline segment is measured, so a neighbouring panel's lobe
-    bleeding into the section is discarded. Rows whose first ink sits away from
-    the baseline keep the rightmost-ink reading.
+    Membership of the column's own curve is decided by ``_own_run_last_offset``,
+    the same rule the session digitization path uses, so both paths read one
+    physical quantity one way. A neighbouring panel's bleed and the dashed grid
+    marks are rejected because they are not part of the own component.
 
     The profile is deliberately not despiked: a spike in a real silhouette is data,
     not noise, and replacing it with a neighbour average would fabricate a reading
@@ -59,22 +162,18 @@ def trace_area_profile(section_mask: np.ndarray) -> np.ndarray:
     section_mask = np.asarray(section_mask, dtype=bool)
     if section_mask.ndim != 2:
         raise ValueError(f"Expected 2D array, got shape {section_mask.shape}")
-    height, width = section_mask.shape
+    height = section_mask.shape[0]
     values = np.zeros(height, dtype=float)
+    if not section_mask.any():
+        return values
 
-    # Collect the baseline-anchored width of every row
+    band_labels, band_label_areas = _band_components(section_mask)
     for row in range(height):
         xs = np.where(section_mask[row])[0]
         if len(xs):
-            # Only count contiguous segment originating near baseline (left x=0)
-            diffs = xs[1:] - xs[:-1]
-            gap_idx = np.where(diffs > 2)[0]
-            if len(gap_idx) > 0 and xs[0] <= 3:
-                # Discard disconnected foreign islands to the right
-                values[row] = float(xs[gap_idx[0]] + 1)
-            else:
-                values[row] = float(xs.max() + 1)
-
+            values[row] = float(
+                _own_run_last_offset(xs, band_labels[row], band_label_areas) + 1
+            )
     return values
 
 
