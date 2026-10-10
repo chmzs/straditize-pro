@@ -10,9 +10,31 @@ let cachedData: DiagramData | null = null;
 
 export function render(data: DiagramData): string {
   cachedData = data;
-  const activeCol = data.columns.find((c) => c.id === data.activeTaxaId) || data.columns[0];
+  const cols = data.columns || [];
+  if (cols.length === 0) {
+    return `
+      <div class="step-panel" data-step="6">
+        <div class="step-title">${t('step6.title')}</div>
+        <div class="inspector-section" style="padding: 24px 16px; background: var(--bg-tertiary); border-radius: 8px; text-align: center; border: 1px solid var(--border-color); margin-top: 12px;">
+          <div style="font-size: 13px; font-weight: 700; color: var(--text-heading); margin-bottom: 6px;">${t('step6.noColsTitle')}</div>
+          <p style="font-size: 11px; line-height: 1.6; color: var(--text-secondary); margin: 0 0 16px 0;">
+            ${t('step6.noColsDesc')}
+          </p>
+          <button id="btn-goto-step5-split" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+            ${t('step6.gotoStep5')}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  const activeCol = cols.find((c) => c.id === data.activeTaxaId) || cols[0];
   const colName = activeCol ? activeCol.name : t('step6.unselected');
   const hasTicks = Boolean(activeCol && activeCol.x_ticks && activeCol.x_ticks.length === 2);
+
+  const totalCols = cols.length;
+  const calibratedCols = cols.filter((c) => c.x_ticks && c.x_ticks.length === 2).length;
+  const pct = Math.round((calibratedCols / totalCols) * 100);
 
   // Active ROI and group resolution (Design 2026-09-29 P3)
   const activeRoi =
@@ -28,6 +50,15 @@ export function render(data: DiagramData): string {
   return `
     <div class="step-panel" data-step="6">
       <div class="step-title">${t('step6.title')}</div>
+
+      <!-- 全局标定进度指示 -->
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 10px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 8px; font-size: 11px;">
+        <span style="color: var(--text-secondary); font-weight: 500;">${t('step6.progress')}</span>
+        <span style="font-weight: 700; color: ${calibratedCols === totalCols ? 'var(--status-success)' : 'var(--accent-blue)'};">
+          ${calibratedCols} / ${totalCols} 列 (${pct}%)
+        </span>
+      </div>
+
       <div class="step-desc" style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px;">
         <div>
           ${t('step6.activeCol')}<strong style="color: var(--accent-blue);">${colName}</strong>
@@ -78,10 +109,10 @@ export function render(data: DiagramData): string {
         </div>
 
         <div style="font-size: 10px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 8px; background: rgba(56, 189, 248, 0.06); padding: 5px 8px; border-radius: 4px; border-left: 2px solid var(--accent-blue);">
-          <strong>交互提示</strong>：画布底端已标注<strong>蓝色原点</strong>与<strong>绿色刻度齿</strong>圆点，可直接在图上左右拖拽对齐扫描件上的刻度齿。
+          <strong>交互提示</strong>：画布底端已标注<strong>蓝色原点</strong>与<strong>绿色刻度齿</strong>圆点，可直接在图上左右拖拽对齐扫描件上的刻度齿；输入框按 <code>Enter</code> 可直接保存。
         </div>
 
-        <div style="display: flex; gap: 6px;">
+        <div style="display: flex; gap: 6px; margin-bottom: 6px;">
           <button id="btn-save-manual-ticks" class="ui-btn ui-btn--primary" style="flex: 1; font-size: 11px; padding: 6px 8px;">
             ${t('step6.saveTicks')}
           </button>
@@ -89,6 +120,10 @@ export function render(data: DiagramData): string {
             自动提取
           </button>
         </div>
+
+        <button id="btn-apply-ticks-to-group" class="ui-btn ui-btn--quiet ui-btn--xs" style="width: 100%; font-size: 10.5px; padding: 4px 6px; border: 1px dashed var(--border-color);" title="将当前输入的刻度值快速批量应用到同组所有属种">
+          ${t('step6.applyToGroup')}
+        </button>
       </div>
 
       <!-- 次区域：属种绘图形态与多指标分组 (收敛为优雅折叠卡片) -->
@@ -154,8 +189,91 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     );
   };
 
+  // 空状态前往步骤 5
+  root.querySelector('#btn-goto-step5-split')?.addEventListener('click', () => {
+    ctx.onAdvanceWorkflowStage?.(5);
+  });
+
   root.querySelector('#btn-detect-xticks')?.addEventListener('click', () => {
     ctx.onDetectXTicks?.();
+  });
+
+  // 回车快捷键直接触发保存
+  const val1Inp = root.querySelector('#inp-manual-tick-val1') as HTMLInputElement | null;
+  const val2Inp = root.querySelector('#inp-manual-tick-val2') as HTMLInputElement | null;
+  const handleEnterKey = (e: KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      (root.querySelector('#btn-save-manual-ticks') as HTMLButtonElement | null)?.click();
+    }
+  };
+  val1Inp?.addEventListener('keydown', handleEnterKey);
+  val2Inp?.addEventListener('keydown', handleEnterKey);
+
+  // 批量应用刻度至同组全部列
+  root.querySelector('#btn-apply-ticks-to-group')?.addEventListener('click', async () => {
+    const activeCol = activeColumn();
+    if (!activeCol || !cachedData || !ctx.rpcClient) return;
+
+    const val1Raw = (root.querySelector('#inp-manual-tick-val1') as HTMLInputElement)?.value ?? '';
+    const val2Raw = (root.querySelector('#inp-manual-tick-val2') as HTMLInputElement)?.value ?? '';
+    const val1 = Number.parseFloat(val1Raw);
+    const val2 = Number.parseFloat(val2Raw);
+    if (!Number.isFinite(val1) || !Number.isFinite(val2)) {
+      notifyError('两个端点读数都必须填有效数字。');
+      return;
+    }
+
+    const roi = activeRoi();
+    const targetGroupId = activeCol.x_group_id || roi?.default_group_id;
+    const targetRoiId = activeCol.roi_id || roi?.id;
+
+    const sameGroupCols = (cachedData.columns || []).filter((c) => {
+      const cGrp = c.x_group_id || roi?.default_group_id;
+      const cRoi = c.roi_id || roi?.id;
+      return cGrp === targetGroupId && cRoi === targetRoiId;
+    });
+
+    if (sameGroupCols.length === 0) {
+      notify(t('step6.applyToGroupEmpty'), 'info');
+      return;
+    }
+
+    let successCount = 0;
+    const unit = activeCol.unit || '%';
+    for (const col of sameGroupCols) {
+      const colIdx = columnIndex(col);
+      const p1 = col.startX;
+      const p2 = col.tickEndX ?? col.endX;
+      try {
+        const res = await ctx.rpcClient.calibrateColumnXTicks(
+          colIdx,
+          [
+            { px: p1, value: val1 },
+            { px: p2, value: val2 },
+          ],
+          unit
+        );
+        col.x_ticks = res.x_ticks;
+        col.maxPercent = val2;
+        successCount++;
+      } catch (err) {
+        console.warn(`[XTicksPanel] 批量标定列 ${col.name} 失败:`, err);
+      }
+    }
+
+    if (successCount > 0) {
+      notify(
+        t('step6.applyToGroupSuccess', {
+          val1: String(val1),
+          val2: String(val2),
+          unit,
+          count: String(successCount),
+        }),
+        'success'
+      );
+      ctx.onDataChange?.();
+    }
   });
 
   // 组归属变更

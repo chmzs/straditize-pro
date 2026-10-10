@@ -289,6 +289,10 @@ export const en = {
   'step6.title': '6. Column Scaling & X-Ticks',
   'step6.activeCol': 'Active Column:',
   'step6.unselected': 'None',
+  'step6.noColsTitle': 'No Taxa Columns Detected',
+  'step6.noColsDesc': 'Before calibrating X-axis scales, complete column detection or manual addition in Step 5.',
+  'step6.gotoStep5': 'Go to Step 5 (Columns)',
+  'step6.progress': 'Progress:',
   'step6.autoTicksTitle': 'Geometric Tick Detection',
   'step6.autoTicksDesc': 'Detect physical tick marks via 1-D vertical run-length profiling.',
   'step6.autoTicksBtn': 'Auto Extract All Column Ticks',
@@ -298,6 +302,9 @@ export const en = {
   'step6.clearTicks': 'Clear Scale',
   'step6.reinput': 'Re-enter Endpoints',
   'step6.saveTicks': 'Save Scale',
+  'step6.applyToGroup': 'Apply Scale to Entire Group',
+  'step6.applyToGroupSuccess': 'Applied scale ({val1} ~ {val2} {unit}) to {count} columns in this group!',
+  'step6.applyToGroupEmpty': 'No other columns found in this group.',
   'step6.next': 'Confirm Scales, Extract Points & Horizons (Step 7)',
 
   // ===== Step 7: Samples Panel =====
