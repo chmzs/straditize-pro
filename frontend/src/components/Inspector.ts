@@ -263,7 +263,7 @@ export class Inspector {
         <div class="form-group" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light);">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <label style="font-size: 11px; font-weight: bold; color: ${tokens.color.column.baseline};">两点式 X 轴物理刻度标定</label>
-            <span style="font-size: 9.5px; color: var(--text-muted);">斜率: ${CoordinateSystem.getScaleRatio(col).toFixed(3)} ${col.unit || '%'}/px</span>
+            <span style="font-size: 9.5px; color: var(--text-muted);">斜率: ${CoordinateSystem.getScaleRatio(col).toFixed(3)} ${col.unit || ''}/px</span>
           </div>
 
           <div style="display: flex; gap: 8px; margin-top: 6px;">
@@ -277,11 +277,11 @@ export class Inspector {
             </div>
           </div>
 
-          <!-- 物理数轴跨度指示器 (自适应主题配色) -->
+          <!-- 物理数轴跨度指示器 (纯数字显示，不带 %) -->
           <div class="scale-axis-indicator">
             <div class="scale-axis-header">
-              <span class="scale-axis-origin">基线: ${sc.originVal}${sc.unit || '%'} (X=${sc.originX})</span>
-              <span class="scale-axis-target">刻度: ${sc.calibVal}${sc.unit || '%'} (X=${sc.calibX})</span>
+              <span class="scale-axis-origin">基线: ${sc.originVal} (X=${sc.originX})</span>
+              <span class="scale-axis-target">刻度: ${sc.calibVal} (X=${sc.calibX})</span>
             </div>
             <div class="scale-axis-track">
               <div class="scale-axis-bar"></div>
@@ -298,17 +298,17 @@ export class Inspector {
               <label style="font-size: 10px; color: var(--accent-orange);">端点 2 刻度齿数值:</label>
               <div class="input-row">
                 <input type="number" id="inp-sc-calib-val" value="${sc.calibVal}" style="font-size: 11px; border-color: rgba(249,115,22,0.4);" />
-                <input type="text" id="inp-sc-unit" value="${sc.unit || '%'}" style="width: 45px; font-size: 11px;" />
+                <input type="text" id="inp-sc-unit" value="${sc.unit || ''}" style="width: 45px; font-size: 11px;" placeholder="单位" />
               </div>
             </div>
           </div>
 
-          <!-- 常用刻度快捷填入胶囊 -->
+          <!-- 常用刻度快捷填入胶囊 (纯数字) -->
           <div class="btn-group" style="margin-top: 8px; width: 100%; display: flex; gap: 4px;">
-            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-tick-val-btn" data-val="100" style="flex:1; font-size: 10px;">齿:100%</button>
-            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-tick-val-btn" data-val="50" style="flex:1; font-size: 10px;">齿:50%</button>
-            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-tick-val-btn" data-val="20" style="flex:1; font-size: 10px;">齿:20%</button>
-            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-tick-val-btn" data-val="10" style="flex:1; font-size: 10px;">齿:10%</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-tick-val-btn" data-val="100" style="flex:1; font-size: 10px;">100</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-tick-val-btn" data-val="50" style="flex:1; font-size: 10px;">50</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-tick-val-btn" data-val="20" style="flex:1; font-size: 10px;">20</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-tick-val-btn" data-val="10" style="flex:1; font-size: 10px;">10</button>
           </div>
         </div>
 
@@ -466,7 +466,7 @@ export class Inspector {
       const originValRaw = parseFloat((this.element.querySelector('#inp-sc-origin-val') as HTMLInputElement)?.value);
       const calibX = parseFloat((this.element.querySelector('#inp-sc-calib-x') as HTMLInputElement)?.value);
       const calibVal = parseFloat((this.element.querySelector('#inp-sc-calib-val') as HTMLInputElement)?.value);
-      const unit = (this.element.querySelector('#inp-sc-unit') as HTMLInputElement)?.value.trim() || '%';
+      const unit = (this.element.querySelector('#inp-sc-unit') as HTMLInputElement)?.value.trim() || activeCol.unit || '';
 
       if (!Number.isFinite(originX) || !Number.isFinite(calibX) || !Number.isFinite(calibVal) || calibX === originX) {
         return;
