@@ -4,6 +4,7 @@ import { CoordinateSystem } from '../core/CoordinateSystem';
 import { tokens } from '../styles/tokens';
 import { DeletePointCommand, ResizeRoiCommand } from '../core/Commands';
 import { getStepPanel } from './steps/_registry';
+import { renderActiveColumnSuspectNotice } from './steps/SuspectBlockNotice';
 import { t, onLocaleChange } from '../i18n';
 import { RpcClient } from '../services/RpcClient';
 import { notifyError } from '../ui/feedback';
@@ -254,6 +255,12 @@ export class Inspector {
             <button id="btn-back-to-step" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 1px 5px; color: var(--text-muted);" title="返回步骤面板">✕</button>
           </div>
         </div>
+
+        <!-- 该列被后端标记为「色块/填充带而非曲线」时，在用户能直接删列的这个面板里说清楚
+             （P1 suspect_block）。用户点选某一列时走的正是本面板，而【删除列】按钮也在这里，
+             所以提示必须落在这里才能指向真实可达的控件——放进步骤面板（XTicksPanel）时
+             用户根本看不到，那等于没提示。 -->
+        ${renderActiveColumnSuspectNotice(col)}
 
         <div class="form-group">
           <label>属种名称 (Taxa Name):</label>

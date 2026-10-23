@@ -1,4 +1,5 @@
 import { DiagramData } from '../../types/pollen';
+import { renderExportSuspectBlockRow } from './SuspectBlockNotice';
 
 export interface ExportReadinessState {
   sheets: string[];
@@ -76,6 +77,7 @@ export function renderExportReadiness(data: DiagramData): string {
         <div>• 属种刻度标定: <span id="lbl-export-calibration-status">${calibratedCount} 列已标定${uncalibratedCount > 0 ? ` / <strong style="color: var(--status-warning);">${uncalibratedCount} 列未标定</strong> (按列宽百分比估算)` : ' (全部已标定)'}</span></div>
         <div>• 未就绪清单 (READINESS_MISSING): <strong id="lbl-export-missing" style="color: ${state.readinessMissing.length > 0 ? 'var(--accent-red)' : 'var(--text-muted)'};">${missingStr}</strong></div>
       </div>
+      ${renderExportSuspectBlockRow(data)}
       ${
         state.readinessMissing.length > 0
           ? `<div style="margin-top: 6px; font-size: 10px; color: var(--status-warning); line-height: 1.4;">

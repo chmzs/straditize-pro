@@ -24,7 +24,7 @@
  * - 手框 `[330,1330]×[233,869]`：框底正好压住轴线 → 盖住，不得报漏。
  */
 import { expect, test } from './fixtures';
-import { openApp, rpc } from './helpers';
+import { openApp, resetBaseline, rpc } from './helpers';
 
 const FIG3 = 'output/han2026_ngamring/fig3_raw.jpeg';
 
@@ -74,6 +74,10 @@ async function backendAxisRow(page: import('@playwright/test').Page): Promise<nu
 }
 
 test.describe('P1-C 建议取数区漏底部数据必须在步骤 2 可见', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetBaseline(page);
+  });
+
   test('T1 真实图版的建议 ROI：界面必须报「未覆盖完整数据区」，且轴线行/缺口像素与后端真值相等', async ({
     page,
   }) => {

@@ -69,6 +69,31 @@ export interface XTicksDropped {
   band?: number[];
 }
 
+/**
+ * 后端判定「这一列不是曲线，而是填满整列的色块」时给出的证据。
+ *
+ * 两个结构量**同时**成立才命中（实测口径见 `docs/JSON_RPC_SPECIFICATION.md` §4.3）：
+ * - `cv`：逐行墨迹宽度的变异系数。真实曲线随层位变化（实测 ≥0.32），色块恒定
+ *   （实测 ≤0.008），两者相差约 39 倍。
+ * - `fill_ratio`：均值墨迹宽 / 列宽。色块填满整列（实测 ≥0.98），曲线有留白
+ *   （实测 ≤0.74）。
+ *
+ * 这两个数是**后端算好的证据**，前端只负责展示，不得自己重算或另立阈值——
+ * 那会变成两套口径，且前端拿不到灰度像素。
+ */
+export interface SuspectBlock {
+  /** 命中原因。目前只有 `fills_whole_column`；保留 string 以容纳将来新增。 */
+  reason?: string;
+  /** 逐行墨迹宽度的变异系数（越小越像色块）。 */
+  cv?: number;
+  /** 均值墨迹宽 / 列宽（越接近 1 越像填满整列）。 */
+  fill_ratio?: number;
+  /** 逐行墨迹宽度的均值，单位像素。 */
+  mean_ink_width?: number;
+  /** 该列宽度，单位像素。用于让用户看懂 `mean_ink_width` 的相对大小。 */
+  column_width?: number;
+}
+
 export interface ColumnGroup {
   id: string;
   name: string;
@@ -104,6 +129,20 @@ export interface Column {
    * 所以渲染端绝不能把它缓存进历史快照或自动存档后一直显示。
    */
   x_ticks_dropped?: XTicksDropped | null;
+
+  /**
+   * 后端判定「这一列不是曲线，而是填满整列的色块」时给出的证据（P1 suspect_block）。
+   *
+   * 与 `x_ticks_dropped` 一样：**未命中的列后端下发 `null`**（键存在、值为空），
+   * 所以判据必须写成"非空对象才算命中"，不能写成 `'suspect_block' in col`。
+   *
+   * 命中**不等于**该列已被剔除：后端按"绝不返回替代数据"原则照原样返回它的读数，
+   * 前端同样**不得**静默删除或隐藏该列——用户有权保留（有些色块本身就是他要的信息）。
+   * 前端唯一的职责是把这件事显示出来，让用户在导出前自己决定。
+   *
+   * 渲染见 `components/steps/SuspectBlockNotice.ts`。
+   */
+  suspect_block?: SuspectBlock | null;
 
   /** 算法在列底端检测到的物理刻度齿像素 X 坐标列表，供磁吸与可视化使用 */
   detected_ticks?: number[];
