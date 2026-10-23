@@ -152,6 +152,22 @@ def register(dispatcher: Any, session: Any) -> None:
                 # 只是"标定没了"，无从判断需不需要重新标定。值为 None 表示
                 # 该列没有发生丢弃（正常列不带噪音键值）。
                 "x_ticks_dropped": c.get("x_ticks_dropped"),
+                # task-21：该列被判定为"填满整列的色块/空框"时，把**完整证据**
+                # 透传给前端，让界面能提示用户确认。
+                #
+                # 必须传整个 dict 而不是压成布尔值：前端要 `reason` 才能给出准确
+                # 文案（"该列填满整列，可能是色块而非曲线"），也才能显示
+                # cv / fill_ratio 让用户自己判断。只传 true/false 等于让用户
+                # 面对一句无法核实的断言。
+                #
+                # 值只含不可变标量（reason/cv/fill_ratio/mean_ink_width/
+                # column_width），故透传层**原样转发、不新建嵌套容器**——撤销栈的
+                # 列快照是浅拷贝，任何新建的可变容器都会与历史共享引用（B-02 教训）。
+                #
+                # 这条键若被删，用户就看不到任何提示：列还在、数值照样污染 CSV。
+                # 判别力对照见 `tests/unit/test_column_block_detection.py`
+                # 的 `TestPayloadExposesSuspectBlock`。
+                "suspect_block": c.get("suspect_block"),
                 "startValue": scale.val0,
                 "tickValue": scale.val1,
                 # ---- 读数的来历（B-01 主线）----

@@ -18,6 +18,101 @@ from ..protocol import (
     JsonRpcError,
 )
 
+#: 「填满整列的色块/空框」的判据阈值（task-21）。
+#:
+#: ## 判据要解决什么
+#:
+#: `detect_column_bounds` 按"墨迹水平游程"切列，它无法区分「随层位变化的曲线」
+#: 与「整列恒定填充的色块/网纹/边框」。后者被当成数据列纳入后，导出的那一列
+#: 数值是**恒定满值**（实测 mean=30.19 / std=3.53，几乎钉在满量程 31），
+#: 直接污染科研数据。
+#:
+#: ## 两个量的物理依据
+#:
+#: - **CV（逐行墨迹宽度的变异系数）**：曲线的横向位置与宽度**随层位变化**，
+#:   故逐行宽度有大方差；色块/网纹/边框是**恒定宽度**，方差近零。
+#: - **ratio（均值墨迹宽 / 列宽）**：色块与边框**填满整列**，比值≈1；
+#:   真实曲线无论怎么变，横向总留有空白，比值明显小于 1。
+#:
+#: 两个条件**同时**成立才算色块——单看任一个都会误伤：
+#: 单看 CV 会把"平坦的曲线段"算进去；单看 ratio 会把"宽而实的 bar 列"算进去。
+#:
+#: ## 实测分离度（95 个真实列，跨 5 张图）
+#:
+#: | | 命中列 | 其余列 |
+#: |---|---|---|
+#: | CV | ≤ 0.0080 | 最低 0.3156（差 39 倍） |
+#: | ratio | ≥ 0.9796 | 最高 0.7355 |
+#:
+#: 阈值 0.1 / 0.95 落在两簇中间的宽裕位置，**不是拟合出来的精确边界**。
+#: 五张图命中且只命中 5 列：hoya col29（70px 空框）、beginner col4（227px 空框）、
+#: 三张 Pollen 基准图的 col21（126px 实心填充）。
+#:
+#: ## 为什么是「标记」而不是「剔除」
+#:
+#: 静默剔除同样是隐瞒——用户会奇怪"为什么列数变少了"，也无从判断被拿掉的是不是
+#: 他真要的数据。故保留该列、打 `suspect_block` 标记，由界面提示用户确认。
+#: 这符合项目铁律"绝不返回替代数据"：数据照原样给出，但**明确标注它不是曲线**。
+SUSPECT_BLOCK_CV_LIMIT = 0.1
+SUSPECT_BLOCK_FILL_RATIO = 0.95
+
+#: 参与判据的最少墨迹行数。行数太少时 CV 没有统计意义（例如只扫到 3 行）。
+_SUSPECT_MIN_INK_ROWS = 10
+
+#: 「墨迹」的灰度阈值。与 `scripts/product_journey/probe_column_cv.py` 同口径，
+#: 便于用同一个探针交叉复核判据。
+#:
+#: 不用 `foreground_mask` 的原因见调用处注释：Otsu 会把整行浅灰边框算成前景，
+#: 人为把某些行的墨迹宽度拉满列宽，从而把真实曲线误标成色块。
+_SUSPECT_DARK_THRESHOLD = 160
+
+
+def _row_ink_widths(
+    dark: np.ndarray, x0: int, x1: int, y0: int, y1: int
+) -> np.ndarray:
+    """该矩形内每行「最左墨迹到最右墨迹」的水平宽度（px）。
+
+    只统计**有墨迹的行**：空白行宽度恒为 0，会把 CV 稀释成无意义的小值。
+    """
+    widths: list[int] = []
+    for y in range(max(0, y0), min(dark.shape[0], y1)):
+        row = dark[y, max(0, x0) : max(0, x1)]
+        if not row.any():
+            continue
+        indices = np.where(row)[0]
+        widths.append(int(indices[-1] - indices[0] + 1))
+    return np.asarray(widths, dtype=float)
+
+
+def _detect_block_column(
+    dark: np.ndarray, x0: int, x1: int, y0: int, y1: int
+) -> dict[str, Any] | None:
+    """判定某列是否"填满整列的色块/空框"；是则返回证据，否则 ``None``。
+
+    返回的字典会原样挂到列对象的 ``suspect_block`` 上，因此只放**不可变标量**
+    （float / int / str）——撤销栈的列快照是浅拷贝，嵌套可变容器会被共享引用。
+    """
+    span = int(x1) - int(x0)
+    if span <= 0:
+        return None
+    widths = _row_ink_widths(dark, x0, x1, y0, y1)
+    if widths.size < _SUSPECT_MIN_INK_ROWS:
+        return None
+    mean_width = float(widths.mean())
+    if mean_width <= 0:
+        return None
+    cv = float(widths.std() / mean_width)
+    fill_ratio = mean_width / float(span)
+    if cv < SUSPECT_BLOCK_CV_LIMIT and fill_ratio > SUSPECT_BLOCK_FILL_RATIO:
+        return {
+            "reason": "fills_whole_column",
+            "cv": round(cv, 6),
+            "fill_ratio": round(fill_ratio, 6),
+            "mean_ink_width": round(mean_width, 2),
+            "column_width": span,
+        }
+    return None
+
 
 def _decode_diagram_source(
     image_path: str | None = None,
@@ -979,6 +1074,35 @@ class CoreMixin:
                         ),
                         "band": (col["start"], col["end"]),
                     }
+
+        # 「填满整列的色块/空框」标记（task-21）。
+        #
+        # 必须在 `self.columns = ...` **之前**做：判据要看这一列的像素内容，而
+        # 列坐标此刻刚定下来。放在构造之后、赋值之前，可以逐列算一次、只在命中
+        # 时写一个键，未命中的列不出现 `suspect_block`（不给前端制造噪音键）。
+        #
+        # 判定用**该列自己的** [start, end] × ROI 的 [y0, y1]：色块的定义就是
+        # "在这块列区域里每行的墨迹都填满横向"，换成别的区间测的就不是同一件事。
+        #
+        # **输入源必须是灰度阈值，不能用 `foreground_mask`**（实测教训）：
+        # 前景掩膜用的是 Otsu（本图 threshold=173），它会把图版顶/底边框那种
+        # 整行浅灰线也算成前景，于是某几行的"墨迹宽度"被人为拉满列宽，
+        # CV 被压到 0.007 —— 一条真实曲线（灰度口径 CV=0.4545）会被误标成色块。
+        # 灰度阈值（<160，与 `scripts/product_journey/probe_column_cv.py` 同口径）
+        # 只取真正的深色笔画，五张图 95 列实测分离度 39 倍。
+        if detected_cols:
+            gray_for_block = np.asarray(self.image.convert("L"))
+            block_mask = gray_for_block < _SUSPECT_DARK_THRESHOLD
+            for col in detected_cols:
+                evidence = _detect_block_column(
+                    block_mask,
+                    int(round(col["start"])),
+                    int(round(col["end"])),
+                    int(round(y0)),
+                    int(round(y1)),
+                )
+                if evidence is not None:
+                    col["suspect_block"] = evidence
 
         self.columns = before_cols + detected_cols + after_cols
         had_taxa_names = bool(self.taxa_names)
