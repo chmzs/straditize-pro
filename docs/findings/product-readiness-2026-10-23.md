@@ -255,6 +255,31 @@ xlsx 的 raw-bytes 断连（task-14 的 P1-A）在 `c088b42` 已修好，本次�
    内置对照实验证明：删掉 1 个重复锚点标签使 17→16 后，**16/16 列全部关联成功**。
    可行做法：保留"计数不等时不做 1:1 配对"的原意，但**至少输出位置归属**
    （哪个标签落在哪个列），而不是全部置 None 且无提示。
+
+   **根因已定位到具体一行（追加，见 `scripts/product_journey/probe_ocr_pairing.py`）**：
+   ```
+   straditize_core/session_parts/ocr.py:40
+       y0 = max(0, int(self.data_ylim[0] - 320))
+   本例 data_ylim[0] = 233  ->  233 - 320 = -87  ->  max(0, -87) = 0
+   ```
+   `max(0,·)` 把负值夹成 0，标签带从**图像最顶端**开始，于是把标签区上方的
+   图例文字 `Herbs`（anchor_y=57.9，比标签行低处 221.2 高出 163.3px）也扫进来，
+   多出第 17 个假标签 → 触发计数硬门 → 16 个真标签的关联被整体否决。
+
+   实测 y0 扫描（唯一变量 y0，x0/x1/y1 固定）：
+   ```
+   bbox=[330,  0,1330,230]  -> 17 标签  matched=False  assigned=0   （含 Herbs）
+   bbox=[330, 20,1330,230]  -> 16 标签  matched=True   assigned=16  （图例已排除）
+   bbox=[330,150,1330,230]  -> 16 标签  matched=True   assigned=16
+   ```
+   最小可用 y0=20，由扫描实测得出（非预设）。
+
+   ⚠️ 一条已证伪的旧假说，留档以免重犯：**"旋转标签 bbox 超列宽
+   （66-89px vs 37px）导致失败"不成立**。实测 bbox 横向跨度为
+   min 62.2 / 中位 118.8 / max 170.4（66.4 是 Abies、89.1 是 Picea，最窄的两个），
+   且把 bbox 压成一个点（跨度 0）后 `matched` 仍为 False、`assigned` 仍为 0
+   ——若宽度是原因，压点必须变绿。证伪实验见 `probe_ocr_pairing.py` 第 ③ 组。
+
 3. **`unrecognized` 标签的采纳**。5 个标签因置信度 0.50 被判 unrecognized，
    UI 默认不勾选，用户需手动勾。属种名文本其实是对的（Quercus (D)/(E)、
    Euphorbiaceae、Conc、Herbs），只是词典没匹配上中文名。
@@ -320,3 +345,51 @@ pixi run python scripts/product_journey/verify_pdf_to_data.py --json /tmp/run.js
 
 退出码语义见 §0 与脚本 docstring。**退出码 0 在真实图版上当前不可达**——
 这是有意的：只要还有已知缺陷，门禁就不该返绿。
+
+---
+
+## 追加：OCR 关联失败的真正根因（Lead 隔离实验，2026-10-23 修正）
+
+> 本节纠正本文档与提交 `6613edd` 中关于 OCR 关联失败根因的错误表述。
+
+### 之前两版说法都不成立
+
+| 版本 | 说法 | 为何错 |
+|---|---|---|
+| 第一版（Lead） | 「17 标签全部关联」 | 实际 `associated_column_id` 0/17 全 None |
+| 第二版（`6613edd`） | 「bbox 超列宽（66-89px vs 37px）导致失败」 | bbox 压成一个点后仍失败，机制不成立 |
+
+### 决定性隔离实验（只改一个变量）
+
+```
+bbox=[330, 0,   1330, 238]  angle=45  →  labels=17  matched=False  assigned=0
+bbox=[330, 80,  1330, 230]  angle=45  →  labels=16  matched=True   assigned=16
+bbox=[330, 80,  1330, 230]  angle=90  →  labels=3   matched=False  assigned=0
+bbox=[330, 80,  1330, 230]  angle=0   →  labels=6   matched=False  assigned=0
+```
+同一图像、同一引擎、同一列集，**唯一变量是 bbox 的 y0**：
+- `y0=0` → 17 个标签（多一个 `Herbs` 假标签），`can_pair` 因计数 17≠16 整体放弃
+- `y0=80` → 16 个标签，16/16 全部正确关联
+
+### 真正根因：默认 bbox 计算过宽
+
+`straditize_core/session_parts/ocr.py:40`：
+```python
+y0 = max(0, int(self.data_ylim[0] - 320))
+```
+本例 `data_ylim[0] = 233`，`233 - 320 = -87` → `y0 = max(0, -87) = 0`。
+即默认 bbox **从图像最顶端开始**，把标签区上方的图例文字（`Herbs`）也纳入识别范围，多出一个标签，进而触发 `can_pair` 的计数硬门整体否决。
+
+### 两个连带事实
+
+1. **OCR 是确定性的**：同一输入连续调用 5 次，全部 `labels=16 matched=True assigned=16`。不存在随机性。
+2. **`ambiguous` 不是 `can_pair` 的输入**：它是诊断输出。隔离实验中 ambiguous 从 15 变到 2 时 `matched` 仍为 False，证明二者无因果关系。
+
+### 正确修法方向（两层，缺一不可）
+
+1. **收紧默认 bbox**：不要用 `data_ylim[0] - 320` 这种固定大跨度。应基于图像内容定位标签行（例如从数据区上边界向上找第一条密集文字带），或至少限制跨度上限并排除图例区。
+2. **拆分「位置归属」与「1:1 配对」**：即使计数不等，也应给出每个标签的位置归属（落在哪一列），只在真正歧义（同列多标签 / 跨列）处标记需人工确认。当前"计数不等就整体静默放弃"的设计，会让 17 个正确识别结果一个都用不上。
+
+### 教训
+
+这是本轮第 6 次「判据没指向对象」：前五次是读错字段名/口径，这次是**把"相关"当成了"因果"**——`ambiguous=15` 与 `matched=False` 同时出现，就断定前者导致后者，而隔离实验证明二者无因果关系。**同时出现的两件事，不等于一件导致另一件。**
