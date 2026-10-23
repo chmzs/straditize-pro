@@ -23,6 +23,14 @@ cmd = "python -m pytest -q"
 # 用例一旦修好会以 XPASS 让本任务变红，强制把条目从隔离区删除。新增测试文件无需改这里。
 # 原命令带 `--ignore=tests/e2e`；e2e 已整体迁到 Playwright（见 test-e2e），该目录已不存在。
 
+[tasks.test-e2e-zero]
+description = "Build the SPA, then run the FROM-ZERO journey lane (zero-state backend, real file upload → 8 steps → export)"
+# 为什么单独一条 lane：这套用例要求**零状态**后端（`support/serve_zero_backend.py`：不预载图、
+# 不预跑分列），而 `test-e2e` 用的是 `serve_e2e_backend.py`——那里的 `e2e.reset` 会预载 hoya
+# 并预跑分列。两者不能共用一个后端，故 `playwright.config.ts` 用 `testIgnore` 把本 spec 排除，
+# 这里用 `playwright.zero.config.ts` 单独跑（端口硬性限制在 22920-22930）。
+cmd = "npm --prefix frontend run build && npm --prefix frontend run test:e2e:zero"
+
 [tasks.test-e2e]
 description = "Build the SPA, then run ALL Playwright end-to-end browser tests (real Edge via channel=msedge)"
 # 必须先 build：后端是通过 `find_frontend_dist()` 从 `frontend/dist` 托管 SPA 的
@@ -30,7 +38,11 @@ description = "Build the SPA, then run ALL Playwright end-to-end browser tests (
 # webServer cwd 就是仓库根。若跳过这一步，e2e 会对着**上一次构建的旧产物**跑：改了
 # `frontend/src` 却只跑 test-e2e，用例照样全绿——那等于没测真实代码。build 本身含
 # `tsc` 类型检查，代价约 2s，换取"测的就是当前源码"。
-cmd = "npm --prefix frontend run build && npm --prefix frontend run test:e2e"
+# `test:e2e:typecheck` 单独跑 `tsconfig.e2e.json`：`build` 的 tsc 只覆盖 `src/`，
+# 不覆盖 `e2e/`。历史债务：`from-zero-journey.spec.ts` 曾因两个未使用符号
+# （`active` / `activeColumn`）长期带着 TS6133，而没人跑这条脚本所以一直没被发现
+# ——门禁不执行 = 门禁不存在，故并入本任务链。
+cmd = "npm --prefix frontend run build && npm --prefix frontend run test:e2e:typecheck && npm --prefix frontend run test:e2e"
 # 迁移自 12 个 pytest 文件（1451 行）：旧套件的会话是 session 级共享的，
 # 测试间互相污染，全量跑 4 failed / 10 passed，单跑却通过；且其中多条断言
 # 恒为真（读错真值文件路径、读错层名词汇表、用 snake_case 读 camelCase 键）。

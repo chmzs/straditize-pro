@@ -35,7 +35,7 @@ export interface BackendStatus {
 }
 
 /**
- * Authoritative list of all 103 registered backend RPC methods.
+ * Authoritative list of all 105 registered backend RPC methods.
  * Strictly synchronized with straditize_core/protocol.py:ALL_RPC_METHODS
  * and verified via support/consistency_check.py.
  */
@@ -57,6 +57,7 @@ export type RpcMethod =
   | 'algorithm.detectColumns'
   | 'algorithm.detectLineCandidates'
   | 'algorithm.detectXTicks'
+  | 'algorithm.measureRuler'
   | 'algorithm.extractHorizonConsensus'
   | 'algorithm.extractTurningPoints'
   | 'algorithm.setGeometryStatus'
@@ -79,6 +80,7 @@ export type RpcMethod =
   | 'core.exportData'
   | 'core.extractForeground'
   | 'core.extractGridValues'
+  | 'core.getShadowLayer'
   | 'core.getStatus'
   | 'core.loadImage'
   | 'core.reset'

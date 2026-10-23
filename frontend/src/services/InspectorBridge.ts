@@ -344,7 +344,9 @@ export function createInspectorCallbacks(
       try {
         const activeRoi = canvasComponent.data.active_roi_id || canvasComponent.data.rois?.[0]?.id;
         const res = await rpcClient.call<any, any>('algorithm.detectXTicks', { roi_id: activeRoi });
-        let successCount = 0;
+        let detectedCount = 0;
+        let calibratedCount = 0;
+        let skippedNoReading = 0;
         if (res?.per_column && Array.isArray(res.per_column)) {
           for (const item of res.per_column) {
             const idx = item.column_index;
@@ -352,17 +354,31 @@ export function createInspectorCallbacks(
               canvasComponent.data.columns[idx] ||
               canvasComponent.data.columns.find((c) => c.col_index === idx);
             if (col && Array.isArray(item.ticks)) {
+              // 检测结果**只**记录齿位，不写标定（`Algorithm` 层是只读的）。
               col.detected_ticks = item.ticks;
               if (item.ticks.length >= 2) {
-                const p1 = col.startX;
+                detectedCount++;
+                // 注意：这里曾经用 `?? 0` / `?? 20` 兜底，等于**替用户编造读数**
+                // 再写进后端（违反 ARCHITECTURE §2：数据只能来自用户输入或真实计算）。
+                // 现在要求该列已有**真实存在的**读数（用户标定过，或来自列尺度），
+                // 否则只更新齿位、不动 x_ticks，并累计"待人工标定"。
+                const existingTicks = col.x_ticks;
+                const hasRealReading =
+                  Array.isArray(existingTicks) &&
+                  existingTicks.length === 2 &&
+                  Number.isFinite(existingTicks[0]?.value) &&
+                  Number.isFinite(existingTicks[1]?.value) &&
+                  existingTicks[0].value !== existingTicks[1].value;
                 const p2 = item.ticks[item.ticks.length - 1];
-                const val1 = col.x_ticks?.[0]?.value ?? 0;
-                const val2 =
-                  col.x_ticks?.[1]?.value ??
-                  col.maxPercent ??
-                  (item.ticks.length > 2 ? (item.ticks.length - 1) * 10 : 20);
-                const unit = col.unit || '%';
+                const p1 = col.startX;
                 col.tickEndX = p2;
+                if (!hasRealReading) {
+                  skippedNoReading++;
+                  continue; // 不编造读数：交给用户在步骤 6 填
+                }
+                const val1 = existingTicks![0].value;
+                const val2 = existingTicks![1].value;
+                const unit = col.unit || '%';
                 try {
                   const calibRes = await rpcClient.calibrateColumnXTicks(
                     col.col_index ?? idx,
@@ -373,7 +389,7 @@ export function createInspectorCallbacks(
                     unit
                   );
                   col.x_ticks = calibRes.x_ticks;
-                  successCount++;
+                  calibratedCount++;
                 } catch (calibErr) {
                   console.warn(`[onDetectXTicks] 标定列 ${col.name} 失败:`, calibErr);
                 }
@@ -387,8 +403,16 @@ export function createInspectorCallbacks(
         getToolbar()?.updateHistoryState();
         callbacks.updateFooter();
         callbacks.scheduleAutosave();
-        if (successCount > 0) {
-          callbacks.setHudNotice(`自动检测完成：已成功识别并标定 ${successCount} 个属种列的刻度齿！`, 5000);
+        if (detectedCount > 0) {
+          // 明确区分"检测到齿位"与"已标定"：前者是几何发现，后者需要真实读数。
+          callbacks.setHudNotice(
+            `已识别 ${detectedCount} 个属种列的刻度齿位置；` +
+              (calibratedCount > 0 ? `${calibratedCount} 列按既有读数更新标定。` : '') +
+              (skippedNoReading > 0
+                ? `另有 ${skippedNoReading} 列缺读数，请在下方填入真实刻度值后保存（不会替你填）。`
+                : ''),
+            7000
+          );
         } else {
           callbacks.setHudNotice('未检测到明显的刻度齿，您可直接在图上拖拽绿色圆点或在右侧输入数值标定。', 5000);
         }

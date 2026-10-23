@@ -1,0 +1,2 @@
+[2026-10-19 17:10:06,022] INFO [straditize_rpc]: Straditize JSON-RPC HTTP server started at http://127.0.0.1:23055/rpc
+[e2e] backend ready on http://127.0.0.1:23055/

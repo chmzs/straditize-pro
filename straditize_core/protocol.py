@@ -21,6 +21,7 @@ from dataclasses import dataclass
 import inspect
 import json
 import logging
+import threading
 import traceback
 from typing import Any
 
@@ -58,7 +59,7 @@ ERROR_MESSAGES = {
     FILE_ERROR: "File error",
 }
 
-#: Authoritative contract inventory of all registered backend RPC methods (103 methods).
+#: Authoritative contract inventory of all registered backend RPC methods (105 methods).
 ALL_RPC_METHODS: tuple[str, ...] = (
     "agedepth.checkREnvironment",
     "agedepth.extractAndInspect",
@@ -77,6 +78,7 @@ ALL_RPC_METHODS: tuple[str, ...] = (
     "algorithm.detectColumns",
     "algorithm.detectLineCandidates",
     "algorithm.detectXTicks",
+    "algorithm.measureRuler",
     "algorithm.extractHorizonConsensus",
     "algorithm.extractTurningPoints",
     "algorithm.setGeometryStatus",
@@ -99,6 +101,7 @@ ALL_RPC_METHODS: tuple[str, ...] = (
     "core.exportData",
     "core.extractForeground",
     "core.extractGridValues",
+    "core.getShadowLayer",
     "core.getStatus",
     "core.loadImage",
     "core.reset",
@@ -238,10 +241,43 @@ class JsonRpcRequest:
 
 
 class JsonRpcDispatcher:
-    """Manages method registration and handles execution of JSON-RPC 2.0 requests."""
+    """Manages method registration and handles execution of JSON-RPC 2.0 requests.
+
+    ## 为什么这里必须有一把锁（B-08）
+
+    服务端每请求一线程（`rpc_server.py` 的 `ThreadingHTTPServer`），而所有线程
+    共享**同一个** session 对象。session 的方法都是"读-改-写"多步：`load_image`
+    先写 `width/height`、再 `_init_rois()` 清空 `rois`、再 `roi_create()` 回填。
+    中间任何一刻被另一个线程读到，就是"有图宽、但 `rois: []`"的撕裂态——
+    实测两标签页并发稳定复现（8/8 轮，每轮 6~14 次），单标签页测不出
+    （前端把请求串行化了）。
+
+    ## 为什么是 RLock 而不是 Lock
+
+    dispatch **会重入**，不是理论上的可能性，是一条真实注册链：
+
+        tools/call  →  naming.py:mcp_tools_call
+                    →  StraditizeWebMcpServer.call_tool
+                    →  _call_rpc(web_rpc_url=None)
+                    →  dispatcher.handle_object(...)   ← 同一线程再进 execute_request
+
+    `webmcp.callTool` 同理。用 `threading.Lock` 会在第二个 `acquire()` 上自锁，
+    而且因为锁在请求线程里、`release` 永远到不了，整个服务端**永久挂死**。
+    RLock 允许同一线程重复获取，正是这条链需要的语义。
+
+    ## 粒度：整个请求一把锁
+
+    session 没有更细的锁边界（也没有事务），只在 `execute_request` 外层加锁是
+    唯一能保证"一个 RPC 对它看到的 session 状态是原子的"的位置。代价是并发度：
+    同一进程里的请求变成串行。这是有意的取舍——宁可慢，也不能让用户读到
+    撕裂态并据此做判断。
+    """
 
     def __init__(self):
         self._methods: dict[str, Callable[..., Any]] = {}
+        #: Serialises every request against the shared session. See class docstring:
+        #: reentrant because ``tools/call`` re-enters the dispatcher on the same thread.
+        self._request_lock = threading.RLock()
 
     def register_method(self, name: str, func: Callable[..., Any]) -> None:
         """Register a callable under a JSON-RPC method name."""
@@ -258,7 +294,14 @@ class JsonRpcDispatcher:
         return decorator
 
     def execute_request(self, request: JsonRpcRequest) -> dict[str, Any] | None:
-        """Executes a single validated request."""
+        """Executes a single validated request, serialised against the session."""
+        with self._request_lock:
+            return self._execute_request_locked(request)
+
+    def _execute_request_locked(
+        self, request: JsonRpcRequest
+    ) -> dict[str, Any] | None:
+        """The body of :meth:`execute_request`; caller already holds the lock."""
         if request.method not in self._methods:
             if request.is_notification:
                 return None

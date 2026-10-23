@@ -128,7 +128,32 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
     onOpenProjectFile: (file: File) => {
       p.projectManager.openProjectFile(file);
     },
-    onResetAll: () => {
+    /**
+     * 【重置全部操作】归零前端与后端。
+     *
+     * ## 为什么必须先 `await` 后端再动清理掩膜（B-07）
+     *
+     * 旧实现三步各自为政：`resetAllOperations()`（同步改前端）→
+     * `void resetProjectState()`（**未 await**，`project.new` 还在飞）→
+     * `void recomposeCleanupState(...)`（立刻用旧 roi id 去算掩膜）。
+     *
+     * `project.new` 会把后端 `rois` 清空（`session_parts/project.py:139`
+     * 之前调 `_init_rois()`），此时再拿 `roi_1` 调
+     * `algorithm.applyLineRemoval` 必定 `-32001 前置状态缺失：未找到 ROI 'roi_1'`
+     * ——已实测，是**必然**失败而非偶发竞态。红框里的因果关系完全是错位的：
+     * 用户以为重置失败，实际重置成功、错的是这条重建掩膜的调用。
+     *
+     * 修法不是 try/catch 吞掉（`docs/ARCHITECTURE.md` §2 禁止静默兜底），而是：
+     *
+     * 1. 后端归零**先**做并 await —— 失败即冒泡，绝不假装重置成功；
+     * 2. 归零后后端本就**没有 ROI**，此时不存在"该重算的清理掩膜"
+     *    （`project.new` 已清空 candidates / strokes / regions），
+     *    所以整条 `recomposeCleanupState` 调用**删掉**，而不是加守卫；
+     * 3. 前端画布的建议框写回后端（`roi.update` 在无 ROI 时会创建 pollen），
+     *    再用后端权威数据重建镜像 —— 否则 `data.rois` 会残留归零前的旧列表，
+     *    画布上照样画出已不存在的 ROI。
+     */
+    onResetAll: async () => {
       const confirmed = window.confirm(
         '确定要重置当前图谱的全部操作吗？\n\n' +
           '· 将清空：全部分列、控制点、刻度钉、深度标尺与 ROI 边界\n' +
@@ -138,14 +163,42 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
       );
       if (!confirmed) return;
 
+      // 1. 后端归零：这一步失败就没有"已重置"可言，冒泡并停住。
+      try {
+        await p.rpcClient.resetProjectState();
+      } catch (err) {
+        p.reportBackendFailure('重置全部操作', err);
+        return;
+      }
+
+      // 2. 前端画布复位（纯本地状态；此时后端已确认归零）
       p.canvasComponent.resetAllOperations();
-      void p.rpcClient.resetProjectState();
 
       p.clearAutosaveTimer();
       try {
         localStorage.removeItem(p.autosaveKey);
       } catch {
         // ignore
+      }
+
+      // 3. 把画布的建议框写回后端，并按后端权威状态重建镜像。
+      //    归零后 `getDiagramData` 的 `rois` 为空，若只改前端就会留下
+      //    "前端有 ROI、后端没有" 的分裂态（后续任何 roi_id 都会 -32001）。
+      if (p.canvasComponent.data.imageSrc) {
+        const box = p.canvasComponent.data.roi;
+        try {
+          await p.rpcClient.roiUpdate({
+            x0: box.xMin,
+            x1: box.xMax,
+            y0: box.yMin,
+            y1: box.yMax,
+          });
+          const fresh = await p.rpcClient.getDiagramData();
+          p.canvasComponent.loadNewDiagram(fresh);
+        } catch (err) {
+          p.reportBackendFailure('重建数据有效区', err);
+          return;
+        }
       }
 
       p.workflowController.setCurrentStage(1);
@@ -159,9 +212,9 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
         p.canvasComponent.viewport.showBinaryOverlay
       );
       p.updateFooter();
-      if (p.canvasComponent.data.imageSrc) {
-        void p.cleanupManager.recomposeCleanupState('归零后重算清理掩膜');
-      }
+      // 上面的 `loadNewDiagram` 会经 `onDataChange` 重新排一次自动存档，
+      // 刚清掉的草稿会在 1 秒后以"空草稿"回来 —— 再清一次定时器把它按住。
+      p.clearAutosaveTimer();
       p.setHudNotice('已重置：本图全部分列、控制点与标尺已清空，请从步骤 1 重新框选数据有效区。', 5000);
     },
     onOpenCalibrationModal: () => {

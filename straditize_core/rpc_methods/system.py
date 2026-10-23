@@ -147,8 +147,34 @@ def register(dispatcher: Any, session: Any) -> None:
                 # 标度的唯一事实源：两个真实刻度端点。null = 未标定。
                 # 删掉它整条链路就断（载荷剥字段 → 前端 hasTicks 恒 false → 标尺画不出来）。
                 "x_ticks": c.get("x_ticks"),
+                # B-02：该列此前的标定因取数区/列边界变动被守卫丢弃时，
+                # 这里必须**原样透传**丢的是什么、丢在哪个区间，否则用户看到的
+                # 只是"标定没了"，无从判断需不需要重新标定。值为 None 表示
+                # 该列没有发生丢弃（正常列不带噪音键值）。
+                "x_ticks_dropped": c.get("x_ticks_dropped"),
                 "startValue": scale.val0,
                 "tickValue": scale.val1,
+                # ---- 读数的来历（B-01 主线）----
+                #
+                # `startValue`/`tickValue`/`maxPercent` 都是**算出来的数字**，它们
+                # 不携带"这个数是谁给的"。同一个 20 可能来自用户量的刻度，也可能
+                # 来自 `detect_columns` 里硬编码的 `tickValue: 20.0`——前者是科研
+                # 读数，后者是程序默认值。下发前它们在载荷里长得一模一样。
+                #
+                # **不要**改成"移除 startValue/tickValue 来表达未标定"：prod-gate
+                # 实测过，移除后步骤 6 的显示毫无变化（前端多处
+                # `?? 20` / `|| 100` 会补上同样的数字），用户看不出任何区别，
+                # 缺陷反而藏得更深。正确做法是保留兼容字段，**另给** provenance。
+                #
+                # 判据直接复用 `resolve_column_scale` 的返回值（与导出、网格采样、
+                # QA 同一个解析入口），不在这里另造一套判定。
+                # source 取值：`x_ticks`（用户标定的两齿）| `x_scales`（旧式两点
+                # 标定）| `group`（ROI 内列组共享标度）| `legacy`（沿用旧字段，
+                # 如硬编码的 0/20）| `default`（连标度信息都没有）。
+                "scale_provenance": {
+                    "calibrated": scale.calibrated,
+                    "source": scale.source,
+                },
                 "scaleCalib": {
                     "originX": scale.abs_px0,
                     "originVal": scale.val0,

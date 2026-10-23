@@ -178,13 +178,49 @@ class TestExportReadinessAndOutputs(unittest.TestCase):
         self.session = _make_session()
 
     def test_get_export_readiness_ready_when_named_and_has_columns(self) -> None:
-        """规则一（见 get_export_readiness docstring）：用户命名 + 有列 -> 就绪。"""
+        """规则一：用户命名 + 有列 + **列已标定** -> 就绪。
+
+        第三个条件（标定）是 B-12 补上的。原用例只声明"命名 + 有列"，而 fixture
+        是零标定会话，于是它把"零标定也算就绪"钉成了规范——那是照着当时的实现写
+        的镜像测试，不承载业务意图：就绪清单对全部列未标定的会话报"已就绪"，等于
+        把"程序默认值"放行成"用户读数"。
+
+        改写而不是删除，让它继续守住命名与列数两条规则，同时不再为伪刻度背书。
+        """
         r = self.session.get_export_readiness()
         self.assertIn("sheets", r)
         self.assertIn("readiness_missing", r)
         self.assertEqual(r["primary_roi"], "pollen")
-        self.assertEqual(r["readiness_missing"], [])
-        self.assertTrue(r["ready"])
+        self.assertEqual(r["readiness_missing"], [], "命名与列数两条规则仍须满足")
+
+        # fixture 里一列都没标定 → 第三个条件不满足 → 不就绪
+        self.assertFalse(
+            r["ready"],
+            "零标定会话仍报 ready=True —— 就绪清单没有检查标定（B-12）",
+        )
+        self.assertEqual(r["calibrated_count"], 0)
+        self.assertEqual(r["column_count"], len(self.session.columns))
+        self.assertEqual(len(r["uncalibrated_columns"]), len(self.session.columns))
+        self.assertFalse(r["provenance"]["all_calibrated"])
+
+        # 把每一列都标定后，三个条件齐全 → 就绪
+        for index, column in enumerate(self.session.columns):
+            start = float(column["start"])
+            end = float(column["end"])
+            self.session.calibrate_column_xticks(
+                index,
+                ticks=[
+                    {"px": start + 20, "value": 0.0},
+                    {"px": end - 20, "value": 40.0},
+                ],
+                unit="%",
+            )
+
+        calibrated = self.session.get_export_readiness()
+        self.assertTrue(calibrated["ready"], "全部列标定后必须就绪")
+        self.assertEqual(calibrated["calibrated_count"], len(self.session.columns))
+        self.assertEqual(calibrated["uncalibrated_columns"], [])
+        self.assertTrue(calibrated["provenance"]["all_calibrated"])
 
     def test_get_export_readiness_flags_default_named_roi(self) -> None:
         """规则二：name_source 仍是 default 的 ROI 必须被拦在就绪清单外。"""

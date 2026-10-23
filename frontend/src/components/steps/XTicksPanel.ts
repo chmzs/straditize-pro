@@ -2,6 +2,12 @@ import { DiagramData, ColumnGroup } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
 import { notify, notifyError } from '../../ui/feedback';
+import {
+  callStepCallback,
+  renderActiveColumnLostNotice,
+  renderOtherLostColumnsSummary,
+  syncXTicksDroppedFromBackend,
+} from './XTicksDroppedNotice';
 
 export const step = 6;
 export const title = '6. 标定列与 X 刻度';
@@ -61,9 +67,18 @@ export function render(data: DiagramData): string {
   const px1 = activeCol?.startX ?? 0;
   const px2 = getColCalibX(activeCol);
 
+  // 本列（或同 ROI 其它列）的标定刚被后端丢弃时，必须在面板最上方说清楚。
+  // 纯函数渲染：每次 render 都按当前 data 重算，不缓存——后端一旦清键，
+  // 下一次重渲染提示就消失（见 XTicksDroppedNotice 顶部说明）。
+  const activeLostNotice = activeCol ? renderActiveColumnLostNotice(activeCol) : '';
+  const otherLostSummary = renderOtherLostColumnsSummary(cols, activeCol?.id);
+
   return `
     <div class="step-panel" data-step="6">
       <div class="step-title">${t('step6.title')}</div>
+
+      ${activeLostNotice}
+      ${otherLostSummary}
 
       <!-- 全局标定进度指示 -->
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 10px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 8px; font-size: 11px;">
@@ -287,6 +302,8 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         'success'
       );
       ctx.onDataChange?.();
+      // 批量标定同样会让后端清掉这些列的 x_ticks_dropped —— 提示必须同步消失。
+      await syncXTicksDroppedFromBackend(cachedData, ctx);
     }
   });
 
@@ -387,7 +404,13 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   // 清空本列标度
   root.querySelector('#btn-clear-col-ticks')?.addEventListener('click', () => {
     const activeCol = activeColumn();
-    if (activeCol) ctx.onClearXTicks?.(columnIndex(activeCol));
+    if (!activeCol) return;
+    void (async () => {
+      await callStepCallback(() => ctx.onClearXTicks?.(columnIndex(activeCol)));
+      // 后端在 clearXTicks 时会清掉 x_ticks_dropped；镜像里的旧键必须跟着消失，
+      // 否则用户手动清空后会被自己的操作"报"成"因取数区变动被清空"（提示复活）。
+      await syncXTicksDroppedFromBackend(cachedData, ctx);
+    })();
   });
 
   // 保存手动输入的两端点物理标度
@@ -396,7 +419,12 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     if (!activeCol) return;
     const val1Raw = (root.querySelector('#inp-manual-tick-val1') as HTMLInputElement)?.value ?? '';
     const val2Raw = (root.querySelector('#inp-manual-tick-val2') as HTMLInputElement)?.value ?? '';
-    ctx.onCalibrateXTicks?.(columnIndex(activeCol), val1Raw, val2Raw);
+    void (async () => {
+      await callStepCallback(() => ctx.onCalibrateXTicks?.(columnIndex(activeCol), val1Raw, val2Raw));
+      // 重新标定成功后后端会清掉 x_ticks_dropped —— 提示必须当次消失。
+      // InspectorBridge 已就地写了 x_ticks，这里再把丢弃键对齐成后端事实。
+      await syncXTicksDroppedFromBackend(cachedData, ctx);
+    })();
   });
 
   root.querySelector('#btn-apply-xticks-next')?.addEventListener('click', () => {

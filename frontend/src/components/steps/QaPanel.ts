@@ -41,6 +41,16 @@ export interface QaSummary {
 let latestSummary: QaSummary | null = null;
 let currentTolerance = 2.0;
 let cachedData: DiagramData | null = null;
+/**
+ * 上一次已通知外部的诊断摘要指纹。
+ *
+ * 用途只有一个：**打断重挂循环**。`mount()` 末尾会 `triggerSummarize()`，
+ * 若成功后再无条件 `onDataChange()`，外部会 `Inspector.render()` 整块重写 DOM，
+ * 于是本面板被重新 mount、再次 summarize、再次 onDataChange……
+ * 步骤 8 的按钮会以每帧一次的频率被替换（`element was detached from the DOM`），
+ * 用户根本点不中。指纹相同 = 数据没变 = 不通知。
+ */
+let lastSummaryKey: string | null = null;
 
 /** 红色 banner 的内联样式。正常路径与「后端失败」路径共用，避免两处各写一份。 */
 const BANNER_RED_STYLE =
@@ -297,7 +307,19 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         throw new Error('qa.summarize 未返回汇总对象（违反契约）');
       }
       updateDomWithSummary(summary);
-      ctx.onDataChange?.();
+      // 注意：这里**不能**无条件调 `ctx.onDataChange?.()`：
+      // 它会 `inspector.updateData()` → `Inspector.render()` 整块重写 `innerHTML`
+      // → 本面板被重新 `mount()` → 末尾再 `triggerSummarize()` → 又一次 onDataChange ……
+      // 形成**无限重挂循环**。实测后果：步骤 8 的「直通导出」按钮每 16ms 被换掉一次，
+      // 用户（与 Playwright）点上去永远命中 `element was detached from the DOM`，
+      // 导出入口实际上不可点（journey.spec.ts:185 因此超时）。
+      //
+      // 只有**诊断数值真的变了**才通知外部；没变就不打扰，循环自然终止。
+      const key = JSON.stringify(summary);
+      if (key !== lastSummaryKey) {
+        lastSummaryKey = key;
+        ctx.onDataChange?.();
+      }
     } catch (err) {
       reportFailure(err);
     }

@@ -1,0 +1,72 @@
+{
+  "trace": [
+    {
+      "at": "after_upload",
+      "stage": 1
+    },
+    {
+      "at": "next_1",
+      "btn": "框选数据有效区",
+      "stage": 2
+    },
+    {
+      "at": "next_2",
+      "btn": "标定 Y 轴",
+      "stage": 3
+    },
+    {
+      "at": "next_3",
+      "btn": "清理图谱",
+      "stage": 4
+    },
+    {
+      "at": "next_4",
+      "btn": "检测分列",
+      "stage": 5
+    },
+    {
+      "at": "next_5",
+      "btn": "标定列尺度",
+      "stage": 6
+    },
+    {
+      "at": "next_6",
+      "btn": "提取拐点与层位",
+      "stage": 7
+    },
+    {
+      "at": "next_7",
+      "btn": "运行质量检查",
+      "stage": 8
+    }
+  ],
+  "columns": 29,
+  "uncalibratedColumns": 21,
+  "calibrationIsCalibrated": false,
+  "readinessText": null,
+  "calibLabel": null,
+  "csvHeader": "depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16,col17,col18,col19,col20,col21,col22,col23,col24,col25,col26,col27,col28,col29\r",
+  "csvLineCount": 810,
+  "csvRow1Values": [
+    18.4795,
+    18.8444,
+    18.9552,
+    25.4902,
+    21.1538,
+    22,
+    22.1154,
+    21.1538,
+    21.1538,
+    21.1538
+  ],
+  "csvRow1Min": 17.1429,
+  "csvRow1Max": 30.3297,
+  "csvRow1NonZero": 29,
+  "strictExport": {
+    "ok": false,
+    "err": "page.evaluate: Error: core.exportData [-32003] Axes calibration is required when strict=True.\n    at eval (eval at evaluate (:311:30), <anonymous>:3:50)\n    at async <anonymous>:337:30"
+  },
+  "notices": [],
+  "dialogs": [],
+  "rpcErrors": []
+}

@@ -131,7 +131,7 @@
     "height": 1654,
     "format": "PNG",
     "mode": "RGB",
-    "image_path": "I:/software_dev/straditize/hoya-del-castillo.png",
+    "image_path": "E:/software_dev/straditize/hoya-del-castillo.png",
     "image_url": "/image/current",
     "suggested_roi": { "xMin": 281, "xMax": 2199, "yMin": 298, "yMax": 1456 },
     "rois": [],
@@ -187,6 +187,30 @@
     { "col_index": 2, "start": 580.0, "end": 710.0 }
   ]
   ```
+  顶层**始终是数组**（前端按 `Array.isArray` 消费，不得改成对象）。
+
+  若重分列导致某列原有的 `x_ticks` 标定失效，该列对象会额外带一个可选键
+  `x_ticks_dropped`（其余列不带该键），用于向用户显式报告"标定已被清空"：
+
+  ```json
+  {
+    "col_index": 0,
+    "start": 319.0,
+    "end": 497.0,
+    "x_ticks_dropped": {
+      "reason": "out_of_band",
+      "px": [339.0, 477.0],
+      "band": [309.0, 507.0]
+    }
+  }
+  ```
+
+  - `reason = "out_of_band"`：列数未变，但原刻度像素落在新列的允许区间（`band`，含左右各 10 px 放宽）之外。
+  - `reason = "column_layout_changed"`：列数改变，整块标定回填被跳过；此时 `band` 是该列的**真实物理边界**（不含放宽）。
+
+  该键在下述任一情况被移除：该列重新 `column.calibrateXTicks` 成功、
+  `column.clearXTicks`、下一次分列该列未被丢弃。它**不写入工程包**
+  （`project_save` 的列白名单不含此键）。
 
 ---
 
@@ -354,7 +378,7 @@
       { "depth": 0.0, "col_0": 0.0, "col_1": 15.2, "col_2": 3.4 },
       "..."
     ],
-    "file_path": "I:/software_dev/straditize/export.csv",
+    "file_path": "E:/software_dev/straditize/export.csv",
     "csv_content": null
   }
   ```
@@ -377,6 +401,40 @@
 - **`column.clearXTicks`**：
   - **参数 (params)**：`{"col_index": 0}`
   - **返回 (result)**：`{"col_index": 0, "x_ticks": null, "cleared": true}`
+
+---
+
+### 4.10b `straditize.getDiagramData` — 列的标度溯源 `scale_provenance`
+前端渲染工作区所读的权威状态。除既有字段外，每个列对象携带一个
+**可选**键 `scale_provenance`，回答"这一列的 X 标度数字是谁给的"：
+
+```json
+{
+  "col_index": 0,
+  "name": "Pinus",
+  "startX": 319, "endX": 497,
+  "x_ticks": null,
+  "startValue": 0.0, "tickValue": 20.0, "maxPercent": 20.0,
+  "scale_provenance": { "calibrated": false, "source": "legacy" }
+}
+```
+
+- `calibrated`：**唯一权威判据**。`false` 表示该列尚未由用户真实标定，
+  上面的 `startValue`/`tickValue` 是图版默认占位值，**不是量出来的读数**。
+- `source` 取值与 `resolve_column_scale` 的优先级链一致：
+  | source | 含义 |
+  | :--- | :--- |
+  | `x_ticks` | 用户标定的两个真实刻度端点（唯一可信来源） |
+  | `group` | 由所属 X 组的 `tick_layout` + 列的 `x_values` 推出 |
+  | `x_scales` | 会话级 `x_scales` 斜率/截距 |
+  | `legacy` | 遗留三件套字段（`startValue`/`tickValue`/`tickEndX`），未标定 |
+  | `default` | 完全无标度信息时的内置默认值 |
+
+> 为什么需要这个键：`getDiagramData` 始终会填上 `startValue`/`tickValue`
+> （历史契约与前端渲染都依赖它们存在）。因此"界面上显示 20"并不蕴含
+> "后端认为该列量程是 20%"。`scale_provenance` 把这一区别显式化，
+> 使前端可以把未标定列的数值渲染成"建议值（来源：图版默认）"而非裸数字。
+> 该键**不写入工程包**（`project_save` 的列白名单不含它）。
 
 ---
 

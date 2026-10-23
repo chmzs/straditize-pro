@@ -61,7 +61,9 @@ class StraditizeSession(
 
     def __init__(self) -> None:
         self.image_path: str | None = None
-        self.image: Image.Image | None = None
+        #: 真实存储位，只由 `image` 这一个 property 的 setter 写入。
+        self._image: Image.Image | None = None
+        self._image_fingerprint_cache: str | None = None
         self.image_array: np.ndarray | None = None
         self.width: int = 0
         self.height: int = 0
@@ -75,6 +77,16 @@ class StraditizeSession(
         self.foreground_mask: np.ndarray | None = None
         self.threshold: float | None = None
         self.segmentation_mode: str | None = None
+        #: Which pixels count as ink -- see ``CoreMixin.extract_foreground``.
+        #: Sticky: an implicit re-extraction (column detection, cleanup,
+        #: digitising) reuses it instead of silently reverting to Otsu.
+        self.extraction_mode: str = "standard"
+        #: Band grid used for per-column white points in the two-layer mode.
+        self.foreground_column_edges: list[int] | None = None
+        #: The exaggeration envelope of a two-layer figure. Never read as data.
+        self.shadow_mask: np.ndarray | None = None
+        #: Which exportable layers the last two-layer extraction produced.
+        self.solid_layers: dict[str, bool] | None = None
 
         # Grid-line removal (separate from the raw mask so column detection keeps
         # seeing the full ink, and so the removal stays inspectable/undoable).
@@ -179,3 +191,35 @@ class StraditizeSession(
         self.cached_pdf_data: bytes | None = None
         self.cached_pdf_path: str | None = None
         self.pdf_info: dict[str, Any] | None = None
+
+    @property
+    def image(self) -> Image.Image | None:
+        """当前底图。**所有赋值都必须走这个 property**（见 setter 的说明）。"""
+        return self._image
+
+    @image.setter
+    def image(self, value: Image.Image | None) -> None:
+        """设置底图，并**自动作废内容指纹缓存**。
+
+        为什么是 property 而不是"在设图处记得调 `_reset_image_fingerprint()`"：
+
+        `cleanup._geometry_scope()` 用 `_image_fingerprint()` 当图像身份，缓存
+        按"当前这张图"保存。一旦换图而缓存没清，scope 就会继续报告上一张图的
+        身份，于是 `_geometry_in_scope()` 对所有几何恒返回 True —— **B-03 的跨图
+        纵深防御被静默拆掉**（表现为旧图几何在新图上继续剔除墨迹）。
+
+        而"记得去清"正是本项目反复出事的模式：`load_image` 与 `project_new`
+        各维护一份手写清单，已经漏过 `line_candidates`（B-03）与 `samples`
+        （B-11）。`self.image = ...` 在全仓有 6 处赋值点（load_image 两个分支、
+        rotate_image、project_new 清空、project_load 的 tar 分支与 json 分支），
+        靠人肉清单必然再漏。
+
+        做成 property 后，**任何**赋值路径都无法绕过作废，包括将来新增的。
+        代价只是一次属性转发，可忽略。
+
+        注意：`value is None` 时同样作废缓存 —— 虽然 `_image_fingerprint()`
+        在 `image is None` 时会直接返回 None，但让缓存与 `_image` 始终同步，
+        才不依赖那个分支的返回值细节。
+        """
+        self._image = value
+        self._image_fingerprint_cache = None

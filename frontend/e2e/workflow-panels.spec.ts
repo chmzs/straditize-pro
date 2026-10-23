@@ -265,6 +265,28 @@ test.describe('步骤面板与阶段工具门禁', () => {
         timeout: 20_000,
       })
       .toBeGreaterThan(0);
+
+    // ===== 回归钉子：检测**不得**替用户编造读数 (bug-report B-01) =====
+    //
+    // 历史缺陷：`InspectorBridge.onDetectXTicks` 用 `?? 0` / `?? 20` 兜底，
+    // 在用户从未填过任何读数的前提下，把 `0` 与 `20` 当"用户读数"写进后端
+    // `column.x_ticks`，直接决定导出 CSV 的百分比（实测改变 6362 个数值格、
+    // 最大偏差 31.51 个百分点），违反 ARCHITECTURE §2「数据只能来自用户输入」。
+    //
+    // 修复后语义：检测只提供**齿位**（`detected_ticks` / `tickEndX`），不写
+    // `x_ticks`；读数必须由人给。这里用后端权威状态钉住这一点。
+    const afterDetect = await rpc<{ columns: { x_ticks?: unknown[] | null }[] }>(
+      page,
+      'straditize.getDiagramData'
+    );
+    const fabricated = afterDetect.columns.filter(
+      (c) => Array.isArray(c.x_ticks) && c.x_ticks!.length === 2
+    );
+    expect(
+      fabricated.length,
+      '点「自动提取刻度」后**不得**有任何列被自动写入 x_ticks（读数只能由人给；' +
+        '旧实现会拿硬编码 0/20 冒充用户读数，见 docs/findings/bug-report.md B-01）'
+    ).toBe(0);
   });
 
   test('步骤 7 采样：提取 → 清空的往返都能在后端看到', async ({ page }) => {
