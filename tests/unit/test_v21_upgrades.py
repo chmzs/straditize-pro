@@ -126,8 +126,14 @@ def test_module2_bacon_u1000_export(tmp_path, monkeypatch):
     xlsx_res = session.export_multi_xlsx()
     assert xlsx_res["success"] is True
 
+    import base64 as _b64
+
     import openpyxl
-    wb = openpyxl.load_workbook(xlsx_res["path"] if "path" in xlsx_res else io.BytesIO(xlsx_res["data"]))
+
+    # `data` / `base64` 自 P1-A 修复起是 **base64 字符串**（不再是原始 bytes）：
+    # bytes 无法被 JSON-RPC 的 json.dumps 序列化，会直接断连。解码后仍是真实
+    # xlsx 字节，断言强度不变。
+    wb = openpyxl.load_workbook(io.BytesIO(_b64.b64decode(xlsx_res["base64"])))
     sheet_names = wb.sheetnames
 
     assert any("Age_Uncertainty" in s or "ensemble" in s for s in sheet_names)

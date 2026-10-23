@@ -12,6 +12,7 @@ Covers:
 
 from __future__ import annotations
 
+import base64
 import io
 from pathlib import Path
 from typing import Any
@@ -228,8 +229,10 @@ def test_four_export_formats_and_grid_and_qa_produce_identical_values(
     df_parquet = captured_parquet_dfs[0]
 
     # 3. XLSX export (`export_multi_xlsx`)
+    #    `base64` 是 P1-A 修复后的权威字段（`data` 保留为同一 base64 串）。
+    #    旧实现返回原始 bytes，json.dumps 无法序列化 → RPC 断连。
     xlsx_res = session.export_multi_xlsx(include_meta_sheets=False, include_readme=False)
-    wb = openpyxl.load_workbook(io.BytesIO(xlsx_res["data"]))
+    wb = openpyxl.load_workbook(io.BytesIO(base64.b64decode(xlsx_res["base64"])))
     ws = wb["pollen"]
     rows = list(ws.iter_rows(values_only=True))
     headers = [str(h) for h in rows[0]]
