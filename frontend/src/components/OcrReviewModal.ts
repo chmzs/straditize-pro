@@ -1,6 +1,7 @@
 import { RpcClient } from '../services/RpcClient';
 import { DiagramData } from '../types/pollen';
 import { setLatestReconciliation } from './steps/NamingPanel';
+import { computeOcrMatchNotice, renderOcrMatchNotice, type OcrReconciliation } from './ocr/OcrMatchNotice';
 import { notifyError } from '../ui/feedback';
 import {
   OcrLabelEntry,
@@ -150,6 +151,9 @@ export class OcrReviewModal {
                   <button id="btn-ocr-skip-all" class="ui-btn ui-btn--quiet ui-btn--sm">全部跳过</button>
                 </div>
               </div>
+
+              <!-- 自动配对未完成的提示（P1-E）。识别完成后由 runOcrRecognition 填入。 -->
+              <div id="ocr-match-notice-slot"></div>
 
               <!-- 表格区 -->
               <div class="ocr-review-table-wrap">
@@ -347,6 +351,7 @@ export class OcrReviewModal {
         });
 
         this.reviewTable.setOcrResult(ocrResult);
+        this.renderMatchNotice(ocrResult);
       } else {
         throw new Error('未识别到有效标签数据');
       }
@@ -355,6 +360,29 @@ export class OcrReviewModal {
         tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--accent-red); padding: 24px;">识别失败: ${err.message || err}</td></tr>`;
       }
     }
+  }
+
+  /**
+   * P1-E：把「后端自动配对未完成」这件事变成用户可见的说明。
+   *
+   * 判定只用后端下发的 `reconciliation.matched`，不自己另算一套；"没有标签的列数"
+   * 则按表格真实呈现来数（`OcrReviewTable.countColumnsWithoutLabel`），保证提示里的
+   * 数字与用户在表里数到的行一致。
+   *
+   * 每次识别后都重写这个槽位：上一次识别留下的提示不能留到这一次（否则用户会把
+   * 上一轮的问题当成这一轮的）。
+   */
+  private renderMatchNotice(ocrResult: OcrRecognitionResult): void {
+    const slot = this.modalEl?.querySelector('#ocr-match-notice-slot');
+    if (!slot) return;
+    const labels = ocrResult.labels || [];
+    const withoutLabel = this.reviewTable?.countColumnsWithoutLabel() ?? 0;
+    const notice = computeOcrMatchNotice(
+      (ocrResult as unknown as { reconciliation?: OcrReconciliation }).reconciliation,
+      labels,
+      withoutLabel
+    );
+    slot.innerHTML = renderOcrMatchNotice(notice);
   }
 
   private async applyToDiagramColumns(): Promise<void> {
