@@ -409,6 +409,27 @@ class CoreMixin:
             x_min = (cumulative_bottom > max_vertical).any(axis=0).argmax()
             y_min = (cumulative_right > max_horizontal).any(axis=1).argmax()
 
+        # 候选集为空时上面两个 else 分支的表达式会退化：它们找的是"累计量首次超过
+        # 阈值"的位置，而累计量在密集图上从一开始就超过阈值，于是 x_min/x_max、
+        # y_min/y_max 全部塌缩到同一处，最后得到只有 2px 高的框。
+        #
+        # 实测（tests/data/figures/benchmark_types/Diatom_riojaPlotTestData.png，
+        # 1179×600，墨迹占比 40.9%）：right_candidates 与 left_candidates **都是 0**，
+        # 建议框退化为 xlim=[68,1061] ylim=[241,243]（高 2px），随后 detect_columns
+        # 直接抛 "Bounds is too small"，用户点【下一步】就崩。
+        #
+        # 修法：候选集为空（启发式失效）时，改用**墨迹包围盒**——它只依赖"哪里有墨"，
+        # 与累计量阈值无关，在任何墨迹分布下都成立。若包围盒本身也不合法，才退回
+        # 固定比例的 fallback。
+        if not right_candidates.size or not left_candidates.size:
+            rows_with_ink = np.where(mask.any(axis=1))[0]
+            cols_with_ink = np.where(mask.any(axis=0))[0]
+            if rows_with_ink.size and cols_with_ink.size:
+                x_min = int(cols_with_ink.min())
+                x_max = int(cols_with_ink.max())
+                y_min = int(rows_with_ink.min())
+                y_max = int(rows_with_ink.max())
+
         x_min, x_max = sorted((int(x_min), int(x_max)))
         y_min, y_max = sorted((int(y_min), int(y_max)))
         if y_min == y_max:
