@@ -407,6 +407,13 @@ def main() -> int:
             # 假对照自查：对照组必须真的改到被操纵的变量（标签数），
             # 且其余条件（列集合、anchor_x）不动。若对照组仍 matched=False，
             # 说明计数门不是原因，我的假设错。
+            #
+            # 计数为什么不等？根因在 session_parts/ocr.py:40 的默认 bbox：
+            #     y0 = max(0, int(data_ylim[0] - 320))
+            # 本例 data_ylim[0]=233 -> 233-320=-87 -> max(0,-87)=0，
+            # 标签带从图像最顶端开始，把标签区上方的图例文字 Herbs 也扫进来。
+            # 完整的 y0 扫描、以及「bbox 超列宽」假说的证伪（压点到跨度 0 仍失败），
+            # 见 scripts/product_journey/probe_ocr_pairing.py 的第 ③④ 组。
             print()
             print("  内置对照实验（证明原因，避免把'探针读错'误判成'产品坏'）：")
             outside = [
