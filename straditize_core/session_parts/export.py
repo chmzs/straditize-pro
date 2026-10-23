@@ -462,11 +462,37 @@ class ExportMixin:
             output_path=output_path,
         )
 
+        if output_path:
+            # 写盘模式：文件已落盘，返回路径即可，不回传内容（避免同一份数据
+            # 既写文件又塞进 JSON-RPC 响应）。
+            return {
+                "success": True,
+                "size_bytes": len(xlsx_bytes),
+                "output_path": os.path.abspath(output_path),
+                "base64": None,
+                "data": None,
+            }
+
+        # 浏览器下载模式：**必须** base64。
+        #
+        # 旧实现这里返回 `"data": xlsx_bytes`（原始 bytes）。JSON-RPC 的
+        # `json.dumps` 无法序列化 bytes，会抛
+        # `TypeError: Object of type bytes is not JSON serializable`，服务端
+        # 在写出响应前就崩掉并关闭连接，前端拿到 RemoteDisconnected —— 用户
+        # 点「导出 Excel」既没有文件也没有报错（实测复现，见
+        # docs/findings/production-gate-2026-10-23.md §7.3）。
+        #
+        # 字段名对齐同文件的 `export_multi_tar`（`tar_base64`）与
+        # `export_advanced_xlsx`（`base64`）：前端 `ExportModal.ts` 判的就是
+        # `res.base64`。`data` 保留为**同一个 base64 串**（而不是 bytes），
+        # 让历史上读 `res.data` 的调用方继续拿到可序列化的等价内容。
+        b64_xlsx = base64.b64encode(xlsx_bytes).decode("ascii")
         return {
             "success": True,
             "size_bytes": len(xlsx_bytes),
-            "output_path": os.path.abspath(output_path) if output_path else None,
-            "data": xlsx_bytes if not output_path else None,
+            "output_path": None,
+            "base64": b64_xlsx,
+            "data": b64_xlsx,
         }
 
     def export_multi_lipd(
