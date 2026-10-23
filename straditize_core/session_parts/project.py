@@ -6,6 +6,7 @@ import base64
 import copy
 import io
 import json
+import logging
 import os
 import tarfile
 import time
@@ -21,6 +22,32 @@ from ..protocol import (
     JsonRpcError,
 )
 from .xscale import resolve_column_scale
+
+logger = logging.getLogger("straditize_rpc")
+
+
+def _parse_schema_major(raw_version: Any) -> int | None:
+    """从工程包版本号里取出主版本整数；无法判定时返回 None。
+
+    工程包里同时存在两种写法（都是写盘侧产生的真实值）：
+    `"3.0.0"`（`version`）与 `"3.0"`（`schema_version`），故只取第一个点号
+    之前的部分。**不可解析一律返回 None 交给调用方放行**——这个函数只负责
+    判断"能不能确定版本更高"，不负责拒绝。乱码（`"banana"`、负数、空串、
+    非字符串非数字类型）都归到 None，绝不让门禁因为解析失败而把老包挡死。
+    """
+    if isinstance(raw_version, bool):
+        # bool 是 int 的子类，`True` 会被当成 1，那是误读而非版本号。
+        return None
+    if isinstance(raw_version, int):
+        return raw_version if raw_version >= 0 else None
+    if isinstance(raw_version, float):
+        return int(raw_version) if raw_version >= 0 else None
+    if not isinstance(raw_version, str):
+        return None
+    head = raw_version.strip().split(".", 1)[0].strip()
+    if not head.isdigit():
+        return None
+    return int(head)
 
 
 class ProjectSessionMixin:
@@ -196,6 +223,85 @@ class ProjectSessionMixin:
 
         return {"success": True, "status": "new_project_created"}
 
+    # 当前程序能完整解释的工程包主版本上限。
+    #
+    # 写盘侧有两套版本号（`project_save` 的 manifest 写 2.0.0 / schema 2.0，
+    # 而 straditize.json 正文写 3.0.0 / schema 3.0），载入侧真正解析的是
+    # straditize.json 正文，所以以 **3** 为界。manifest 里的 2.0 只是归档
+    # 元信息，不参与解析判定。
+    SUPPORTED_SCHEMA_MAJOR = 3
+
+    def _check_project_schema_version(self, project_data: dict[str, Any]) -> None:
+        """工程包版本门禁：**只挡未来版本，绝不挡老包**。
+
+        ## 为什么需要这道门（缺陷实测，不是假设）
+
+        旧实现完全不读 version：v1.0.0 / v2.0.0 / 删掉 version / "banana" /
+        v4.0.0 五种输入**全部放行**。前四种放行是对的（老包本来就没这些字段，
+        且实测能正确载回），但 v4.0.0 放行是错的——将来 v4 真加了不兼容字段，
+        用户拿到的是**被静默丢弃**的工程，字段丢了、语义错位，界面却完全正常。
+        按不变量「取不到就报错停在原地」，这里必须显式拒绝。
+
+        ## 放行策略（三档，逐档说明）
+
+        1. **主版本高于上限 → 抛 JsonRpcError**，附可操作提示。不降级解析。
+        2. **主版本不高于上限 → 放行**。v1 / v2 必须继续可用：已实测
+           `output/han2026_ngamring/*.project.json`（v3.0.0）与 v2 变体都能
+           正确载回列与标定。为了加门禁把老包挡死是反向破坏。
+        3. **缺失或不可解析（"banana" 之类）→ 放行 + warning**。老包没版本号
+           属正常；乱码版本号无法判断新旧，宁可放行也不要让用户打不开自己的
+           工程。这两档都只记日志，不改变返回结构（前端契约零变更）。
+
+        ## 调用点核查（加门禁前已确认，避免打断既有路径）
+
+        `project_load` 的 .tar 分支与 .json 分支都在 :266/:270 **递归回本函数**，
+        门禁放在递归之后、解析之前，所以两条路径共用同一道门。前端
+        `project.load` 的调用方有三处：`ProjectManager.openProjectFile`（真工程包，
+        带版本）、草稿恢复 `restoreDraft`（经 `draftToProjectPayload` 翻译，
+        **显式写死 version/schema_version = 3.0.0/3.0**，见
+        `frontend/src/core/ProjectManager.ts`）、以及测试直调 dict。
+        三者都不会被这道门误伤。
+        """
+        raw_version = project_data.get("schema_version")
+        source_key = "schema_version"
+        if raw_version in (None, ""):
+            raw_version = project_data.get("version")
+            source_key = "version"
+
+        if raw_version in (None, ""):
+            logger.warning(
+                "工程包未声明版本号（schema_version / version 均缺失），"
+                "按当前规则解析；若该包来自更新版本，部分字段可能已丢失。"
+            )
+            return
+
+        major = _parse_schema_major(raw_version)
+        if major is None:
+            logger.warning(
+                "工程包版本号不可解析（%s=%r），按当前规则解析；"
+                "无法判断其是否来自更新版本。",
+                source_key,
+                raw_version,
+            )
+            return
+
+        if major > self.SUPPORTED_SCHEMA_MAJOR:
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                f"该工程包由更新版本保存（{source_key}={raw_version}，"
+                f"本程序最高支持 {self.SUPPORTED_SCHEMA_MAJOR}.x）。"
+                f"请升级软件后再打开——为避免静默丢失字段，本程序不会用旧规则"
+                f"解析新版本工程包。",
+            )
+
+        if major < self.SUPPORTED_SCHEMA_MAJOR:
+            logger.info(
+                "载入旧版工程包（%s=%s，当前支持 %s.x），按兼容路径解析。",
+                source_key,
+                raw_version,
+                self.SUPPORTED_SCHEMA_MAJOR,
+            )
+
     def project_load(self, project_data: dict[str, Any] | str) -> dict[str, Any]:
         """Loads a project from a POSIX .tar archive, .json file, or dictionary."""
         if hasattr(self, "undo_stack") and self.undo_stack is not None:
@@ -268,6 +374,8 @@ class ProjectSessionMixin:
                 with open(path, "r", encoding="utf-8") as f:
                     parsed = json.load(f)
                 return self.project_load(parsed)
+
+        self._check_project_schema_version(project_data)
 
         cal = (
             project_data.get("depth_calibration")
