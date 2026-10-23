@@ -1,6 +1,7 @@
 import { DiagramData } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
+import { mountRoiCoverageProbe, renderRoiCoverageShell } from './RoiCoverageNotice';
 
 export const step = 2;
 export const title = '2. 数据有效区 (ROI)';
@@ -57,6 +58,7 @@ export function render(data: DiagramData): string {
       <!-- 当前选中 ROI 属性编辑 -->
       <div class="inspector-section" style="margin-bottom: 12px;">
         <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">${t('step2.currentRoi')}: ${activeRoi.name || activeRoi.id}</div>
+        ${renderRoiCoverageShell(data)}
         <div style="display: flex; flex-direction: column; gap: 6px; font-size: 11px;">
           <div>
             <label style="color: var(--text-muted); font-size: 10px;">${t('step2.roiName')}</label>
@@ -146,4 +148,8 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   root.querySelector('#btn-apply-roi-next')?.addEventListener('click', () => {
     ctx.onAdvanceWorkflowStage?.(3);
   });
+
+  // P1-C：核对「建议取数区是否盖住了横轴刻度线」。判定来自后端真实探测
+  // （`algorithm.detectXTicks` 的 band），不是前端猜的阈值。见 RoiCoverageNotice.ts。
+  mountRoiCoverageProbe(root, ctx);
 }

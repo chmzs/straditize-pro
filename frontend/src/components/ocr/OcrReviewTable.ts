@@ -27,6 +27,30 @@ export class OcrReviewTable {
     return this.ocrResult;
   }
 
+  /**
+   * 数「没有任何标签的列」——按**表格真实呈现**的口径。
+   *
+   * 判据与 `renderSummaryTable` 完全一致（先看 `associated_column_id` /
+   * `associated_column_index`，再按 `anchor_x` 落列兜底）。用它而不是后端的
+   * `reconciliation.columns_without_label`：后者只反映后端自己那套严格配对，
+   * 而用户看到的是表格；两者在真实图版上数字不同（后端说 1 列，表格实际 2 列）。
+   * 提示里报的数字必须与用户能数到的行数一致，否则提示本身就是新的误导。
+   */
+  public countColumnsWithoutLabel(): number {
+    const cols = this.diagramData.columns || [];
+    const labels = this.ocrResult ? this.ocrResult.labels : [];
+    if (labels.length === 0) return 0;
+    let count = 0;
+    cols.forEach((col, cIdx) => {
+      const colId = col.id || `taxa_${cIdx}`;
+      const matched =
+        labels.find((l) => l.associated_column_id === colId || l.associated_column_index === cIdx) ||
+        labels.find((l) => l.anchor_x >= col.startX && l.anchor_x < col.endX);
+      if (!matched) count += 1;
+    });
+    return count;
+  }
+
   public renderSummaryTable(): void {
     const tbody = this.container.querySelector('#ocr-summary-tbody');
     if (!tbody) return;
