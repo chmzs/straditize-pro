@@ -9,6 +9,196 @@ export interface ProjectManagerCallbacks {
   onProjectLoad?: (projectData: DiagramData) => void;
 }
 
+/**
+ * 把前端自动存档草稿（`DiagramData` 形状）翻译成后端 `project.load` 认的
+ * 工程包载荷（`straditize.json` / `project_save` 的形状）。
+ *
+ * ## 为什么必须翻译，而不是直接把 `draft.data` 丢给 `project.load`
+ *
+ * 两者是**两套契约**，字段名和嵌套结构都不同：
+ *
+ * | 语义 | 草稿 (DiagramData) | 工程包 (project_load) |
+ * | --- | --- | --- |
+ * | 取数区 | `rois[].xlim/ylim` + 平铺 `roi.xMin…` | `rois` + `roi{x,y,w,h}` |
+ * | 列横向范围 | `startX` / `endX` / `tickEndX` | `startX` / `endX`（`start`/`end` 亦读） |
+ * | 列标度 | `startValue` / `tickValue` + `x_ticks` | `x_group_id` + `x_values`（组管位置、列管数值） |
+ * | 深度标定 | `calibration{isCalibrated,…}` | `depth_calibration` / `calibration` 的 `top_px…` |
+ * | 底图 | `imageSrc`（可能是 `data:` URL） | `image.base64` |
+ *
+ * 尤其列标度：`project_load` **优先**用 `x_group_id` + `x_values` 定位标度
+ * （`session_parts/xscale.py` 的 Case A1）。只丢 `startX/endX/startValue/tickValue`
+ * 而不建组，会把相对位置换成 `tick_layout = [0,1]` 的满宽默认值 —— 用户标定过的
+ * 刻度位置被悄悄拉满整列（实测：28 列里 27 列 `tickEndX` 全变），属于典型的
+ * "看起来恢复了、数字全错"。所以这里为每列建一个专属 `x_group`，把标度端点
+ * 换算成 `tick_layout.rel` + `x_values` 一并下发。
+ *
+ * `x_ticks` 也原样带上：后端 `resolve_column_scale` 的 A2 分支同样认它，
+ * 两条路给出一致的端点与读数。
+ *
+ * ## 不能恢复的东西必须如实返回，不得假装恢复
+ *
+ * 返回值的 `unrestored` 列出草稿里有、工程包契约里**没有通道**的状态。
+ * 目前确认的只有一项：清理叠加层的**人工修正笔迹**（`line_strokes`）——
+ * `project_load` 不读这个键（grep `session_parts/project.py` 无命中），
+ * 只能经 `algorithm.applyLineRemoval{strokes}` 写入。调用方据此向用户明说。
+ */
+export interface DraftRestorePayload {
+  /** 直接交给 `project.load` 的 `project_data`。 */
+  projectData: Record<string, unknown>;
+  /** 草稿中存在、但工程包契约无法承载的状态（面向用户的原因列表）。 */
+  unrestored: string[];
+}
+
+export function draftToProjectPayload(draft: DiagramData): DraftRestorePayload {
+  const unrestored: string[] = [];
+
+  // —— 底图：草稿只存 imageSrc。data: URL 内嵌图可还原为 base64；
+  //    `/image/current` 这类后端 URL 说明图还在后端会话里，无需重发。
+  const image: Record<string, unknown> = {};
+  const src = draft.imageSrc || '';
+  const dataUrlMatch = /^data:[^;]+;base64,(.*)$/s.exec(src);
+  if (dataUrlMatch) {
+    image.base64 = dataUrlMatch[1];
+    image.width = draft.imageWidth;
+    image.height = draft.imageHeight;
+  } else if (draft.imageWidth && draft.imageHeight) {
+    image.width = draft.imageWidth;
+    image.height = draft.imageHeight;
+  }
+
+  // —— 取数区：rois 原样（已含 xlim/ylim），另补 `roi{x,y,w,h}` 兼容旧读法。
+  const rois = (draft.rois ?? []).map((r) => ({ ...r }));
+  const box = draft.roi;
+  const legacyRoi =
+    box && Number.isFinite(box.xMin) && Number.isFinite(box.xMax)
+      ? {
+          x: box.xMin,
+          y: box.yMin,
+          w: box.xMax - box.xMin,
+          h: box.yMax - box.yMin,
+        }
+      : undefined;
+
+  // —— 列：为每列建专属组，把标度端点换算成 rel + x_values。
+  const groupsByRoi: Record<string, Array<Record<string, unknown>>> = {};
+  const fallbackRoiId =
+    draft.active_roi_id || draft.primary_roi_id || rois[0]?.id || 'roi_1';
+  const columns = (draft.columns ?? []).map((c) => {
+    const start = Number(c.startX);
+    const end = Number(c.endX);
+    const span = Math.max(1e-9, end - start);
+    const roiId = c.roi_id || fallbackRoiId;
+
+    let rel0: number;
+    let rel1: number;
+    let xValues: [number, number];
+    if (Array.isArray(c.x_ticks) && c.x_ticks.length >= 2) {
+      // 标定过的列：端点就是两个真实刻度钉。
+      rel0 = (Number(c.x_ticks[0].px) - start) / span;
+      rel1 = (Number(c.x_ticks[1].px) - start) / span;
+      xValues = [Number(c.x_ticks[0].value), Number(c.x_ticks[1].value)];
+    } else {
+      // 未标定：起点在列左边界，终点取后端下发的 tickEndX
+      // （它已经是后端 `resolve_column_scale` 算出的绝对像素，不是自造值）。
+      const tickEndX = c.tickEndX ?? c.endX;
+      rel0 = 0;
+      rel1 = (Number(tickEndX) - start) / span;
+      xValues = [Number(c.startValue ?? 0), Number(c.tickValue ?? 100)];
+    }
+    if (!Number.isFinite(rel0) || !Number.isFinite(rel1)) {
+      // 端点算不出来就如实记下，绝不拿 0/1 顶上冒充。
+      unrestored.push(`列 ${c.name ?? c.id} 的标度端点像素非法，无法还原其刻度位置`);
+      rel0 = 0;
+      rel1 = 1;
+    }
+
+    const groupId = c.x_group_id || `${roiId}_grp_c${c.col_index ?? c.id}`;
+    if (!groupsByRoi[roiId]) groupsByRoi[roiId] = [];
+    if (!groupsByRoi[roiId].some((g) => g.id === groupId)) {
+      groupsByRoi[roiId].push({
+        id: groupId,
+        name: `${c.name ?? c.id}组`,
+        unit: c.unit || '%',
+        plot_type: c.plot_type || c.plotType || 'area',
+        scale_type: c.scale_type || 'linear',
+        exaggeration_mult: c.exaggeration_mult ?? null,
+        tick_layout: [{ rel: rel0 }, { rel: rel1 }],
+      });
+    }
+
+    return {
+      ...c,
+      roi_id: roiId,
+      x_group_id: groupId,
+      // `project_load` 用 x_values 当该列的数值端点（组管位置、列管数值）。
+      x_values: xValues,
+      x_ticks: c.x_ticks ?? null,
+    };
+  });
+
+  const roisWithGroups = rois.map((r) => {
+    const groups = groupsByRoi[r.id ?? ''] ?? [];
+    if (groups.length === 0) return r;
+    return {
+      ...r,
+      x_groups: groups,
+      default_group_id: groups[0].id,
+    };
+  });
+
+  // —— 清理几何：`project_load` 读 `line_candidates` / `selected_candidate_ids`。
+  if ((draft.line_strokes ?? []).length > 0) {
+    unrestored.push(
+      `清理掩膜的 ${draft.line_strokes.length} 条人工修正笔迹需经 algorithm.applyLineRemoval 单独提交，工程包不携带`
+    );
+  }
+  if ((draft.exclusion_regions ?? []).length > 0) {
+    unrestored.push(
+      `排除区（${draft.exclusion_regions.length} 处）同样只能经清理 RPC 写入，工程包不携带`
+    );
+  }
+
+  return {
+    projectData: {
+      version: '3.0.0',
+      schema_version: '3.0',
+      image,
+      roi: legacyRoi,
+      rois: roisWithGroups,
+      primary_roi_id: draft.primary_roi_id || fallbackRoiId,
+      active_roi_id: draft.active_roi_id || fallbackRoiId,
+      // 深度标定：`project_load` 同时认 `depth_calibration` 与 `calibration`。
+      depth_calibration: {
+        is_calibrated: !!draft.calibration?.isCalibrated,
+        top_px: draft.calibration?.top_px ?? null,
+        top_cm: draft.calibration?.top_cm ?? null,
+        bottom_px: draft.calibration?.bottom_px ?? null,
+        bottom_cm: draft.calibration?.bottom_cm ?? null,
+        unit: draft.calibration?.unit || 'cm',
+      },
+      calibration: {
+        isCalibrated: !!draft.calibration?.isCalibrated,
+        top_px: draft.calibration?.top_px ?? null,
+        top_cm: draft.calibration?.top_cm ?? null,
+        bottom_px: draft.calibration?.bottom_px ?? null,
+        bottom_cm: draft.calibration?.bottom_cm ?? null,
+        unit: draft.calibration?.unit || 'cm',
+      },
+      // 清理几何三个键：`project_load` 一律 `is not None` 判定，传 `[]` 等于
+      // **主动清空**后端。旧草稿（无这些键）不能因此把后端的候选线抹掉，
+      // 所以只在草稿真的带了数组时才下发。
+      ...(Array.isArray(draft.line_candidates) ? { line_candidates: draft.line_candidates } : {}),
+      ...(Array.isArray(draft.selected_candidate_ids)
+        ? { selected_candidate_ids: draft.selected_candidate_ids }
+        : {}),
+      // `samples` 同理（B-11 那类"上一张图的层位漏进新图"正是这个键失控导致）。
+      ...(Array.isArray(draft.samples) ? { samples: draft.samples } : {}),
+      columns,
+    },
+    unrestored,
+  };
+}
+
 export function uint8ToBase64(bytes: Uint8Array): string {
   let binary = '';
   const chunkSize = 0x8000;
@@ -338,6 +528,90 @@ message("Finished! Stratigraphic plot generated successfully.")
       columns || this.data.columns,
       unit || this.data.calibration.unit || 'cm'
     );
+  }
+
+  /**
+   * 把自动存档草稿**真正**恢复到后端（B-05）。
+   *
+   * 旧实现只做 `canvasComponent.loadNewDiagram(draft.data)` + `history.reset(...)`，
+   * **零个 RPC**：界面显示 28 列，后端仍是 0 列。之后任何列级 RPC 拿
+   * `col_index` 去寻址都会打空，而用户看到的是一次"成功恢复"
+   * （违反 `docs/ARCHITECTURE.md` §2：禁止静默兜底）。
+   *
+   * 现在走 `project.load`：草稿经 `draftToProjectPayload()` 翻译成工程包形状后下发，
+   * 再用后端权威数据重建前端镜像。`project.load` 失败即抛出 —— 由调用方冒泡，
+   * 绝不"前端恢复了就算恢复"。
+   */
+  public async restoreDraft(draft: DiagramData): Promise<{
+    /** 后端真的接受了这份草稿。 */
+    restored: boolean;
+    /** 草稿里有、但工程包契约承载不了的状态说明（调用方必须展示给用户）。 */
+    unrestored: string[];
+    /** 后端恢复后的**权威**图谱数据；调用方据此重建画布镜像。 */
+    data: DiagramData;
+  }> {
+    const { projectData, unrestored } = draftToProjectPayload(draft);
+
+    // ## 图像一致性前置校验：草稿必须属于后端当前这张图
+    //
+    // 草稿里存的是前端拿到的图谱元数据（`imageWidth` / `imageHeight`）。
+    // 若后端当前底图的尺寸与草稿不符 —— 用户换了图、或服务重启后载入了另一张 ——
+    // 把草稿 `project.load` 下去等于**把上一张图的列/标定写到新图上**：
+    // 列边界指向新图上不存在的位置，而界面显示"恢复成功"。这是比"只写前端"
+    // 更坏的静默错误（ARCHITECTURE §2），必须在落库**之前**拦下。
+    //
+    // 只比尺寸是刻意的：后端 `getDiagramData` 不暴露图像内容指纹（无 sha/来源字段），
+    // 同尺寸不同图在此无法区分 —— 该限制写在 `unrestored` 里如实告知，不假装严密。
+    const current = await this.rpcClient.getDiagramData();
+    const draftW = Number(draft.imageWidth ?? 0);
+    const draftH = Number(draft.imageHeight ?? 0);
+    const curW = Number(current.imageWidth ?? 0);
+    const curH = Number(current.imageHeight ?? 0);
+    if (draftW > 0 && draftH > 0 && (draftW !== curW || draftH !== curH)) {
+      throw new Error(
+        `草稿属于另一张图谱（草稿 ${draftW}×${draftH}，当前底图 ${curW}×${curH}），` +
+          '拒绝恢复：把上一张图的分列与标定写到当前图上会产生错误的科学数据。请重新载入草稿对应的图谱后再恢复。'
+      );
+    }
+    if (draftW > 0 && draftH > 0 && draftW === curW && draftH === curH && !draft.imageSrc?.startsWith('data:')) {
+      // 尺寸相同但也没有内嵌图可核对 —— 如实记下这条不确定性，不当成"已验证同一张图"。
+      unrestored.push(
+        '草稿未内嵌底图，只能按尺寸判定为同一张图，无法核对图像内容是否一致'
+      );
+    }
+
+    const res = await this.rpcClient.call<Record<string, unknown>, { success?: boolean; columns_count?: number }>(
+      'project.load',
+      { project_data: projectData }
+    );
+    if (!res || res.success !== true) {
+      // 后端没明确应答成功就不能算恢复。
+      throw new Error('project.load 未返回 success=true，草稿恢复中止');
+    }
+
+    // 镜像重建只认后端回来的状态：草稿是"请求"，后端是"事实"。
+    const fresh = await this.rpcClient.getDiagramData();
+    const expected = (draft.columns ?? []).length;
+    const got = (fresh.columns ?? []).length;
+    // 两种真实的"静默丢数据"必须当场拆穿，而不是把界面填上草稿就当成功：
+    // 1. 后端没有底图（服务重启过、草稿里存的是 `/image/current` 这类会话 URL）
+    //    —— `getDiagramData` 在 `image is None` 时一律返回零态，列全丢；
+    // 2. 列数对不上 —— 说明 `project_load` 没有按草稿重建（例如标度端点非法被跳过）。
+    if (!fresh.imageSrc) {
+      throw new Error(
+        '后端当前没有底图，草稿无法真正恢复（草稿只保存了指向后端会话的图片地址）。请重新载入该图谱后再从步骤 1 开始。'
+      );
+    }
+    if (expected > 0 && got !== expected) {
+      throw new Error(
+        `草稿恢复不完整：草稿有 ${expected} 列，后端只重建了 ${got} 列。已在后端留下不一致状态，请重新载入图谱后重试。`
+      );
+    }
+
+    // 刻意**不**复用 `onProjectLoad`：那条路径属于"打开项目包"，会把阶段拨到
+    // Y 标定并提示"成功载入科学项目包"，对"草稿恢复"是错的状态与错的文案。
+    // 镜像重建由调用方负责（它才知道该停在哪个阶段）。
+    return { restored: true, unrestored, data: fresh };
   }
 
   /**

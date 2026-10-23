@@ -2,7 +2,7 @@ import os
 import shutil
 import urllib.request
 
-target_dir = r"I:\software_dev\straditize\tests\data\figures\benchmark_types"
+target_dir = r"E:\software_dev\straditize\tests\data\figures\benchmark_types"
 os.makedirs(target_dir, exist_ok=True)
 
 headers = {"User-Agent": "Mozilla/5.0"}
@@ -57,17 +57,17 @@ for fname, url in downloads:
         print(f"  -> Failed to download {fname}: {e}")
 
 # Local docs assets for Type 4 (pure line) and Type 5 (small features / symbols)
-src_line = r"I:\software_dev\straditize\straditize\build\lib\straditize\widgets\docs\line-diagram.png"
+src_line = r"E:\software_dev\straditize\straditize\build\lib\straditize\widgets\docs\line-diagram.png"
 if not os.path.exists(src_line):
-    src_line = r"I:\software_dev\straditize\straditize\straditize\widgets\docs\line-diagram.png"
+    src_line = r"E:\software_dev\straditize\straditize\straditize\widgets\docs\line-diagram.png"
 if os.path.exists(src_line):
     dst_line = os.path.join(target_dir, "type4_pure_line_proxy.png")
     shutil.copyfile(src_line, dst_line)
     print(f"Copied {src_line} -> {dst_line}")
 
-src_feat = r"I:\software_dev\straditize\straditize\build\lib\straditize\widgets\docs\basic_diagram_small_features.png"
+src_feat = r"E:\software_dev\straditize\straditize\build\lib\straditize\widgets\docs\basic_diagram_small_features.png"
 if not os.path.exists(src_feat):
-    src_feat = r"I:\software_dev\straditize\straditize\straditize\widgets\docs\basic_diagram_small_features.png"
+    src_feat = r"E:\software_dev\straditize\straditize\straditize\widgets\docs\basic_diagram_small_features.png"
 if os.path.exists(src_feat):
     dst_feat = os.path.join(target_dir, "type5_presence_symbols.png")
     shutil.copyfile(src_feat, dst_feat)

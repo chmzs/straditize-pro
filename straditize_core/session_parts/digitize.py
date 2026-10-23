@@ -81,7 +81,7 @@ class DigitizeSessionMixin:
 
         if getattr(self, "foreground_mask", None) is None:
             if getattr(self, "image", None) is not None:
-                self.extract_foreground()
+                self._extract_foreground_from_settings()
             else:
                 raise JsonRpcError(STATE_ERROR, "No foreground mask or image loaded.")
 

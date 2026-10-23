@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import copy
 import io
 import json
 import os
@@ -25,23 +26,68 @@ from .xscale import resolve_column_scale
 class ProjectSessionMixin:
     """Session mixin for project lifecycle: new, load, save, undo, and redo."""
 
-    def _record_history(self, action_name: str) -> None:
-        """Records a snapshot of editable entities for undo/redo (max 500 steps, Section 七)."""
-        snapshot = {
-            "action": action_name,
-            "timestamp": time.time(),
-            "columns": [dict(c) for c in getattr(self, "columns", [])],
-            "control_points": {
-                k: dict(v) for k, v in getattr(self, "control_points", {}).items()
-            },
-            "data_xlim": list(self.data_xlim)
-            if getattr(self, "data_xlim", None)
-            else None,
-            "data_ylim": list(self.data_ylim)
-            if getattr(self, "data_ylim", None)
-            else None,
-            "taxa_names": list(getattr(self, "taxa_names", [])),
+    def _snapshot_editable_state(self) -> dict[str, Any]:
+        """Captures the undoable entities as a **self-contained** copy.
+
+        用深拷贝，不用 `[dict(c) for c in ...]`。
+
+        **诚实定性（2026-10-23 复核，含否决掉的初版说法）**：浅拷贝只复制列字典
+        的第一层，`x_ticks`（``list[dict]``）、`x_values`、`detected_ticks`、
+        `control_points` 这些嵌套容器会与快照**共享同一个对象**。对象层面的共享
+        已实测确认（原地改实时嵌套值会穿透到快照）。
+
+        但在**当前**产品代码里，`x_ticks` 只通过整体替换写入
+        （`xticks.py` 的 `col["x_ticks"] = [{...}, {...}]`，`core.py:919` 的
+        `col["x_ticks"] = t`），全仓 grep 没有任何一处原地改它的元素。整体替换
+        不触及旧对象，所以**当前不存在可触发的穿透路径**——用浅拷贝跑现有全量
+        测试也是绿的。
+
+        因此这里的定性是：**消除了一类潜在的状态共享（当前无触发路径，由深拷贝
+        预防）**，不是"修好了正在发生的写穿透"。真实存在过的 B-06 缺陷只有一条
+        ——记录时机（先改后记），见 `_record_history` 的 docstring。
+
+        保留深拷贝的理由是防未来：这个模块里已经有 `control_points[row] = x`
+        这类原地写（`digitize.py`），任何人给标定加一行
+        `col["x_ticks"][0]["value"] = ...`（这是很自然的写法）就会静默污染全部
+        历史。1ms 换掉这一类隐患划算。
+
+        代价实测（hoya 28 列 + 727 个控制点的真实负载）：
+        浅拷贝 0.02ms，`deepcopy(columns)` 0.34ms，两份合计 ~1.04ms/次。
+        撤销栈上限 500 格，用户单次操作最多多花 1ms。
+
+        **这条判据不能用探针"绿了"来证明**：`scripts/prod_gate/b06_undo_probe.py`
+        的 P4 就是这个坑——它比较的两个值都取自"标定前"那一格快照（两个
+        `null` 相等于恒真），用浅拷贝重跑同样 PASS。判据若无判别力，绿得再整齐
+        也不算证据。本文件对应的测试用**构造非空快照**的方式保证有判别力。
+        """
+        columns = getattr(self, "columns", []) or []
+        control_points = getattr(self, "control_points", {}) or {}
+        data_xlim = getattr(self, "data_xlim", None)
+        data_ylim = getattr(self, "data_ylim", None)
+        return {
+            "columns": copy.deepcopy(columns),
+            "control_points": copy.deepcopy(control_points),
+            "data_xlim": list(data_xlim) if data_xlim else None,
+            "data_ylim": list(data_ylim) if data_ylim else None,
+            "taxa_names": list(getattr(self, "taxa_names", []) or []),
+            # 采样层位（B-06b）。它此前完全不在撤销范围内：写入路径虽然调了
+            # `_record_history`，但快照里没有这个键，于是撤销后 samples 原样不动、
+            # 用户却以为撤回了。层位是步骤 7 的核心科研输入，必须可撤销。
+            #
+            # 同样深拷贝：`samples` 是 `list[dict]`，浅拷贝会让快照与实时共享
+            # 字典，任何原地改（如改某条的 depth）都会污染历史。
+            "samples": copy.deepcopy(getattr(self, "samples", []) or []),
         }
+
+    def _record_history(self, action_name: str) -> None:
+        """Records a snapshot of editable entities for undo/redo (max 500 steps, Section 七).
+
+        **必须在修改之前调用**（B-06）。快照记录的是"调用这一刻"的状态，若先改
+        再记，存进去的已经是新值，于是撤销只会把新值再回填一次——用户按 Ctrl+Z
+        看到状态不动，却白耗一格撤销栈。
+        """
+        snapshot = {"action": action_name, "timestamp": time.time()}
+        snapshot.update(self._snapshot_editable_state())
         undo_stack = getattr(self, "undo_stack", None)
         if undo_stack is None:
             self.undo_stack = []
@@ -58,57 +104,44 @@ class ProjectSessionMixin:
         undo_stack = getattr(self, "undo_stack", [])
         if not undo_stack:
             return {"success": False, "message": "Nothing to undo"}
-        current = {
-            "columns": [dict(c) for c in getattr(self, "columns", [])],
-            "control_points": {
-                k: dict(v) for k, v in getattr(self, "control_points", {}).items()
-            },
-            "data_xlim": list(self.data_xlim)
-            if getattr(self, "data_xlim", None)
-            else None,
-            "data_ylim": list(self.data_ylim)
-            if getattr(self, "data_ylim", None)
-            else None,
-            "taxa_names": list(getattr(self, "taxa_names", [])),
-        }
+        current = self._snapshot_editable_state()
         if not hasattr(self, "redo_stack") or self.redo_stack is None:
             self.redo_stack = []
         self.redo_stack.append(current)
         prev = undo_stack.pop()
-        self.columns = prev["columns"]
-        self.control_points = prev["control_points"]
-        self.data_xlim = prev["data_xlim"]
-        self.data_ylim = prev["data_ylim"]
-        self.taxa_names = prev["taxa_names"]
+        self._restore_editable_state(prev)
         return {"success": True, "action": prev.get("action", "undo")}
+
+    def _restore_editable_state(self, snapshot: dict[str, Any]) -> None:
+        """Applies a snapshot back onto the session.
+
+        再复制一遍是**刻意的**：快照一旦被回填成实时状态，两者就共享对象了，
+        用户下一步的编辑会顺手改掉历史。历史记录必须只读。
+        """
+        self.columns = copy.deepcopy(snapshot["columns"])
+        self.control_points = copy.deepcopy(snapshot["control_points"])
+        self.data_xlim = list(snapshot["data_xlim"]) if snapshot["data_xlim"] else None
+        self.data_ylim = list(snapshot["data_ylim"]) if snapshot["data_ylim"] else None
+        self.taxa_names = list(snapshot["taxa_names"])
+        # `samples` 用 `.get` 兜底：2026-10-23 之前压进栈的快照没有这个键，
+        # 而撤销栈是会话内存状态、不跨版本持久化，所以这里是"同一次会话里
+        # 旧代码新代码混用"才会遇到。缺键时保持当前 samples 不动，而不是清空
+        # —— 清空会让"回到一个本来就没有 samples 的状态"和"把用户数据洗掉"
+        # 变得无法区分。
+        if "samples" in snapshot:
+            self.samples = copy.deepcopy(snapshot["samples"])
 
     def history_redo(self) -> dict[str, Any]:
         """Redo last undone command."""
         redo_stack = getattr(self, "redo_stack", [])
         if not redo_stack:
             return {"success": False, "message": "Nothing to redo"}
-        current = {
-            "columns": [dict(c) for c in getattr(self, "columns", [])],
-            "control_points": {
-                k: dict(v) for k, v in getattr(self, "control_points", {}).items()
-            },
-            "data_xlim": list(self.data_xlim)
-            if getattr(self, "data_xlim", None)
-            else None,
-            "data_ylim": list(self.data_ylim)
-            if getattr(self, "data_ylim", None)
-            else None,
-            "taxa_names": list(getattr(self, "taxa_names", [])),
-        }
+        current = self._snapshot_editable_state()
         if not hasattr(self, "undo_stack") or self.undo_stack is None:
             self.undo_stack = []
         self.undo_stack.append(current)
         nxt = redo_stack.pop()
-        self.columns = nxt["columns"]
-        self.control_points = nxt["control_points"]
-        self.data_xlim = nxt["data_xlim"]
-        self.data_ylim = nxt["data_ylim"]
-        self.taxa_names = nxt["taxa_names"]
+        self._restore_editable_state(nxt)
         return {"success": True, "action": nxt.get("action", "redo")}
 
     def project_new(self, clear_image: bool = False) -> dict[str, Any]:
@@ -132,6 +165,13 @@ class ProjectSessionMixin:
         self.degrid_strength = None
         self.degrid_info = None
         self.line_corrections = []
+        # 与 `load_image()` 同样的理由（见那里的长注释）：新建项目必须清掉
+        # 属于上一个项目的清理几何，否则它们会在新图/新项目里继续剔除墨迹，
+        # 且因为 ROI 计数器归零后 id 重名（`roi_1`）而无法被 roi 过滤挡住。
+        self.line_candidates = []
+        self.exclusion_regions = []
+        self.line_strokes = []
+        self.selected_candidate_ids = set()
         self.taxa_names = []
         self.depth_grid = []
         self.samples = []
@@ -423,20 +463,54 @@ class ProjectSessionMixin:
             self.control_points[idx] = ctrls
 
         img_meta = project_data.get("image") or {}
-        if (
-            isinstance(img_meta, dict)
-            and img_meta.get("base64")
-            and getattr(self, "image", None) is None
-        ):
+        # 自带底图的 .json 工程包必须**无条件**换掉当前底图（C1d）。
+        #
+        # 旧实现这里还有 `and getattr(self, "image", None) is None`，于是
+        # "会话里已经有图"时整段被跳过：列 / 标定 / ROI 全换成包里的，底图却
+        # 还是上一张，之后所有读数都基于错图像素，而界面看起来完全正常
+        # （实测：会话 900x700 + 包 400x300 → 载入后仍是 900x700）。
+        #
+        # 那个守卫的**原始意图**（git 追到 af7ce98 的注释 "Restore embedded
+        # images (if loading from self-contained .json)"）是"从自包含 .json 里
+        # 恢复内嵌图"，说的是"没有图时才需要从包里恢复"，不是"要保护用户当前
+        # 的图"，也没有任何调用点依赖这个保护。所以正确语义是：
+        #   - payload **确实带** base64  → 无条件替换（包里的图才是工程的一部分）；
+        #   - payload **不带** base64    → 保持当前底图不动（不是清空）。
+        # 后者是有意行为：`.tar` 的 json 成员只写 `image.path`（图在 tar 里的
+        # 另一个成员中，由 `project_load` 的 tar 分支先解出来），此时无 base64
+        # 属正常，绝不能把刚解出来的图弄没。
+        #
+        # 位置说明（已实测，不是推断）：这段在 rois / columns 的读取**之后**。
+        # payload 的 ROI（实测 roi_1 xlim=[20,380]）与列（4 列）在设图后原样保留，
+        # 因为下面只清"由像素算出来"的状态，不碰 rois / columns / x_ticks。
+        # 反过来把设图提到读取之前会要求重跑 `_init_rois()`，那才会冲掉包里的 ROI。
+        if isinstance(img_meta, dict) and img_meta.get("base64"):
             raw_b64 = img_meta["base64"]
             if "," in raw_b64:
                 raw_b64 = raw_b64.split(",", 1)[1]
             img_obj = Image.open(io.BytesIO(base64.b64decode(raw_b64)))
             img_obj.load()
             self.image = img_obj
+            # 尺寸以**真实解码结果**为准：payload 里的 width/height 是保存时写下的
+            # 数字，可能与实际图不符（例如保存后被外部工具改过），信它就会让
+            # ROI / 列坐标整体错位。
             self.width, self.height = img_obj.size
             self.format = img_obj.format or "PNG"
             self.mode = img_obj.mode
+            # 换底图后，所有"由上一张图的像素算出来"的状态都必须失效，否则它们
+            # 以旧图尺寸参与新图计算：旧 `foreground_mask` (700,900) 与新图
+            # (300,400) 尺寸不符会在布尔运算里直接报错或被静默裁剪；
+            # 旧 `shadow_mask` / `solid_layers` 会把上一张图的像素计数报给用户；
+            # 旧 `image_array` 会被 `extract_foreground` 当作新图的像素源。
+            # 这些**不**由下面的 rois/columns 读取覆盖，必须在这里清。
+            self.image_array = None
+            self.foreground_mask = None
+            self.threshold = None
+            self.segmentation_mode = None
+            self.shadow_mask = None
+            self.solid_layers = None
+            self.foreground_column_edges = None
+            self.tick_band = None
 
         if project_data.get("paper_metadata"):
             self.metadata_update(project_data["paper_metadata"])

@@ -2,6 +2,7 @@ import { DiagramData } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
 import { notifyError } from '../../ui/feedback';
+import { renderSplitLostXTicksNotice } from './XTicksDroppedNotice';
 
 export const step = 5;
 export const title = '5. 自动分列与属种命名';
@@ -38,16 +39,23 @@ export function render(data: DiagramData): string {
   const withoutLabelGrammar = `[${(recon.columns_without_label || []).join(',')}]`;
   const withoutColumnGrammar = `[${(recon.labels_without_column || []).join(',')}]`;
 
+  // 分列正是把列边界改掉的那一步，所以「原来的标定被清空」必须在这里就报出来，
+  // 而不是等用户走到步骤 6 才发现读数不见了。纯函数渲染：没有丢弃列时是空串。
+  const lostTicksNotice = renderSplitLostXTicksNotice(columns);
+
   return `
     <div class="step-panel" data-step="5"
          data-label-assign="${assignPairs.join(',')}"
          data-without-label="${recon.columns_without_label.join(',')}"
          data-without-column="${recon.labels_without_column.join(',')}"
+         data-lost-x-ticks="${lostTicksNotice ? 'true' : 'false'}"
          data-highlight-col="${activeColId}">
       <div class="step-title">${t('step5.title')}</div>
       <div class="step-desc">
         ${t('step5.desc')}
       </div>
+
+      ${lostTicksNotice}
 
       <!-- OCR 属种识别区域 -->
       <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border-color);">

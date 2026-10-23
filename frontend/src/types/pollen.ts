@@ -24,6 +24,51 @@ export interface Tick {
   value: number;
 }
 
+/**
+ * 「本列的 X 刻度标定被后端丢弃」的显式记录（缺陷 B-02）。
+ *
+ * 后端 `core.detectColumns` / `straditize.getDiagramData` 的列对象上**只有被丢弃
+ * 标定的列**才带这个可选键。语义：该列原有的 `x_ticks` 两个刻度像素落在了新列带
+ * （`band`）之外，后端已把标定清空——用户必须知道这件事，否则他无从判断读数是
+ * 自己没填还是被系统清掉了（ARCHITECTURE §2：禁止静默）。
+ *
+ * 后端会在三种情况下清掉该键，前端因此**不得缓存**它：
+ *   1. 该列重新标定成功；
+ *   2. 该列 `clearXTicks`；
+ *   3. 下一次分列该列未被丢弃。
+ *
+ * 字段一律按 `number[]` 读：JSON 里 tuple 与 list 过桥后都是数组，前端不该假定长度
+ * （`px` 理论上恰好两个端点，`band` 恰好两个边界，但后端若只给一个也照实显示，
+ * 绝不补 0）。
+ */
+export interface XTicksDropped {
+  /**
+   * 丢弃原因。后端目前产生两种（2026-10-23 实测）：
+   *
+   * - `out_of_band`：列数没变，同一逻辑列还在原地，只是原刻度像素落到了
+   *   `[start-10, end+10]` 这个**守卫区间**之外。
+   * - `column_layout_changed`：列数变了（hoya 实测 28→27），索引 k 对应的物理列
+   *   未必还是原来那一列。
+   *
+   * 保留 string 以容纳将来新增的原因；未知原因走中性文案。
+   */
+  reason?: string;
+  /** 原标定的刻度像素 X 坐标，如 `[339.0, 477.0]`。 */
+  px?: number[];
+  /**
+   * 与丢弃判定相关的像素区间，**两种 reason 下语义不同**（后端已确认）：
+   *
+   * - `out_of_band` → 含 ±10 外扩的**守卫区间** `[start-10, end+10]`，即当时允许
+   *   刻度像素存在的范围；
+   * - `column_layout_changed` → 新列自己的**物理边界** `[start, end]`，不带外扩。
+   *
+   * 所以渲染端**不得**把它一律叫作"列带"：前者是"守卫允许范围"，后者才是
+   * "列范围"。列的真实边界另有权威来源（列自身的 `startX`/`endX`），
+   * 想给用户看"列到底在哪"应当用列几何，而不是这个字段。
+   */
+  band?: number[];
+}
+
 export interface ColumnGroup {
   id: string;
   name: string;
@@ -47,6 +92,18 @@ export interface Column {
 
   /** 标度的唯一事实源：两个真实刻度端点（像素 + 读数）。null = 未标定。 */
   x_ticks?: [Tick, Tick] | null;
+
+  /**
+   * 本列的标定刚刚被后端丢弃（B-02）。可选键，只有被丢弃标定的列才有。
+   *
+   * 后端对**正常列**下发的是 `null`（键存在、值为空），不是缺键——判据必须写成
+   * "非空对象才算有丢弃记录"，不能写成 `'x_ticks_dropped' in col`。
+   *
+   * 存在时必须向用户显示提示（见 `components/steps/XTicksDroppedNotice.ts`）。
+   * 后端会在「重新标定成功 / clearXTicks / 下次分列未被丢弃」时清掉它，
+   * 所以渲染端绝不能把它缓存进历史快照或自动存档后一直显示。
+   */
+  x_ticks_dropped?: XTicksDropped | null;
 
   /** 算法在列底端检测到的物理刻度齿像素 X 坐标列表，供磁吸与可视化使用 */
   detected_ticks?: number[];

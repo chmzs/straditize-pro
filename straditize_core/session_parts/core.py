@@ -244,6 +244,8 @@ class CoreMixin:
             self.image = img.convert("RGBA")
             self.image_array = np.array(self.image)
 
+        # 指纹缓存由 `StraditizeSession.image` 的 setter 自动作废（见那里），
+        # 这里不需要也不应该再手工清一次 —— 手写清单正是本轮反复漏项的地方。
         self.foreground_mask = None
         self.grid_line_mask = None
         self.candidate_line_mask = None
@@ -256,14 +258,59 @@ class CoreMixin:
         self.degrid_strength = None
         self.degrid_info = None
         self.line_corrections = []
+        # 换图必须清空"属于上一张图"的清理几何。
+        #
+        # 历史缺陷（B-03）：这三项从未被清过，而 `_init_rois()` 会把 ROI 计数器归零、
+        # 让新图 ROI 又叫 `roi_1` —— 与旧几何的 `roi_id` 同名，于是
+        # `_geometry_mask()` 里 `cand.get("roi_id") != roi_id` 的过滤完全失效，
+        # 旧图确认过的几何会在**新图**上继续剔除墨迹（实测 24 条残留 → 剔除 13454 px），
+        # 用户无从得知。`project_new()` 同样漏了这三项。
+        #
+        # 保留：`getattr` 兜底 —— 新建会话时 `_init_cleanup()` 尚未跑过，
+        # 这三个属性可能还不存在（它们由 `CleanupMixin._init_cleanup()` 创建）。
+        self.line_candidates = []
+        self.exclusion_regions = []
+        self.line_strokes = []
+        self.selected_candidate_ids = set()
         self.columns = []
         self.column_points = {}
         self.control_points = {}
+        self.reader_types = {}
         self.is_calibrated = False
         self.y_scale = None
+        self.x_scales = {}
         self.depth_calib = None
         self.taxa_names = []
         self.depth_grid = []
+        # 采样层位（B-11）。`export_data` 直接拿 `samples` 当输出网格的 depth 列，
+        # 所以它不清就等于把上一张图的深度写进新图的 CSV —— 实测换图后
+        # samples 2→2（列数已 29→4），hoya 的 5.0/15.0 出现在 beginner 的 depth 列。
+        # `project_new()` 的清单里一直有它，只有这里漏了。
+        self.samples = []
+        # 每列百分比的像素斜率（`x_scales`）与识别器类型（`reader_types`）都是
+        # **按 col_index 存的**：列一旦重建，旧索引指向的是别的列。不清它们，
+        # `resolve_column_scale` 的 legacy 分支会拿旧斜率换算新列。
+        # 两层提取（`shadow_mask`/`solid_layers`）与刻度带（`tick_band`）同理，
+        # 它们都是上一张图的**像素产物**：旧 `shadow_mask` 与新图尺寸不同，
+        # `mask_overlay_data_url` 直接 ValueError；旧 `solid_layers` 的像素计数
+        # 会被 `core.getShadowLayer` 当成本图的统计量报给用户。
+        self.foreground_column_edges = None
+        self.shadow_mask = None
+        self.solid_layers = None
+        self.tick_band = None
+        # 撤销栈存的是**上一张图**的 columns/control_points/data_ylim 快照。
+        # 换图后 columns 已清空，若栈还在，`history.undo()` 就能把旧图的列与取数区
+        # 复活到新图上（跨图伪造几何）。前端在载图时本就 `history.reset(...)`，
+        # 这里清空是让后端与前端语义一致，不是新增规则。
+        self.undo_stack = []
+        self.redo_stack = []
+        # 故意**不**清的项（它们不派生于这张图的像素，清了等于毁掉用户的既有工作）：
+        # - `age_depth_model` / `age_depth_image` / `ensemble_tables`：年代学来自
+        #   `agedepth.loadModelDiagram` 单独上传的模型示意图，按**深度值**对齐，
+        #   与图谱像素无关；一次 Bacon MCMC 可能要跑几分钟。`project_new()` 会清它们，
+        #   因为那是"新项目"；换图是"同一项目里换一张图"，语义不同。
+        # - `paper_metadata`：描述论文而非图，换图（含 PDF 换页）后仍然成立。
+        # - `cached_pdf_data` / `cached_pdf_path` / `pdf_info`：PDF 换页正靠它们。
         self.data_xlim = None
         self.data_ylim = None
         self._init_rois()
@@ -455,6 +502,10 @@ class CoreMixin:
         )
         self.width, self.height = self.image.size
         self.image_array = np.array(self.image)
+        # 旋转改变了每一个像素 → 指纹由 `image` 的 setter 自动作废，于是旧的
+        # 清理几何自动失效（几何坐标是旋转前的像素坐标，对新图没有意义）。
+        # 这正是指纹方案胜过 image_path 的地方：旋转后路径没变，路径方案完全
+        # 判不出"同一张图但像素变了"，指纹判得出。
         self.foreground_mask = None
         self.columns = []
         self.column_points = {}
@@ -471,14 +522,57 @@ class CoreMixin:
         self,
         threshold: float | None = None,
         mode: str = "otsu",
+        extraction_mode: str | None = None,
+        column_edges: list[int] | None = None,
     ) -> dict[str, Any]:
-        """Segments the foreground (curves/bars) from diagram background."""
+        """Segments the foreground (curves/bars) from diagram background.
+
+        ``mode`` selects how the *threshold* is chosen for the two grey-level
+        paths (``otsu`` / ``binary`` / ``adaptive``).
+
+        ``extraction_mode`` selects *what counts as ink* at all, and is what the
+        UI exposes:
+
+        * ``standard`` (default) —— 灰度阈值。对黑白线图足够，对双层彩色图
+          会把浅色阴影连同一半阴影算进读数，见 ``docs/ARCHITECTURE.md``。
+        * ``light-overlay-white`` / ``light-ink-dark`` / ``dark-ink-light`` ——
+          原有的单层彩色/反色分支。
+        * ``solid-over-shadow`` —— 双层图（实心 + 夸张包络）。只取实心层；
+          包络单独存进 ``shadow_mask`` 供目视，永不进入读数。
+
+        ``column_edges`` 只在双层模式使用：它给出各列的像素 x 边界，用来估计
+        每列自己的纸白（逐列白点）。缺省时改用整图白点。
+
+        无论选择哪种 ``extraction_mode``，``threshold`` 字段都仍是 Otsu/binary
+        的灰度阈值，切换模式时仍然可比——它不是双层模式的判定依据。
+        """
         if self.image is None:
             raise JsonRpcError(
                 STATE_ERROR, "No image loaded. Please call core.loadImage first."
             )
 
+        from ..image import (
+            build_foreground,
+            normalize_extraction_mode,
+            shadow_layers,
+            two_layer_consistency,
+            two_layer_split,
+        )
+
+        ext_mode = normalize_extraction_mode(extraction_mode)
         gray = np.array(self.image.convert("L"))
+        # 默认路径也必须走彩色/双轴分支。
+        #
+        # 历史断点：这里曾是 ``colour_path = ext_mode != "standard"``，而默认
+        # ``ext_mode`` 恰恰就是 ``"standard"`` —— 于是产品永远走下面的
+        # ``gray < actual_thresh`` 单阈值分支，``build_foreground()`` 里的
+        # 双轴分层**一次都没被调用过**。表现：灰度填充（如 ``(182,182,182)``，
+        # luminance 182 > Otsu 138）整列被判为背景丢掉，而合成图上同一套逻辑
+        # 却是 100% 正确 —— 因为测试直接调 ``build_foreground``，绕过了这个断点。
+        #
+        # 现在 ``standard`` 也走 ``build_foreground``；它内部的 ``two_axis``
+        # 对黑白图（内建教程图）退化为等价于原 Otsu 二值，故零回归。
+        colour_path = True
 
         if mode == "otsu":
             try:
@@ -510,47 +604,123 @@ class CoreMixin:
         elif mode == "binary":
             actual_thresh = float(threshold) if threshold is not None else 128.0
         elif mode == "adaptive":
-            try:
-                from skimage.filters import threshold_local
+            from skimage.filters import threshold_local
 
-                block_size = 35
-                local_thresh = threshold_local(gray, block_size, offset=10)
-                mask = gray < local_thresh
-                actual_thresh = float(np.mean(local_thresh))
-                self.foreground_mask = mask
-                self.threshold = actual_thresh
-                self.segmentation_mode = mode
-                fg_pixels = int(np.sum(mask))
-                fg_ratio = float(fg_pixels / gray.size)
-                return {
-                    "threshold": actual_thresh,
-                    "mode": mode,
-                    "foreground_pixels": fg_pixels,
-                    "foreground_ratio": fg_ratio,
-                    "shape": list(mask.shape),
-                }
-            except Exception:  # noqa: BLE001
-                actual_thresh = float(threshold) if threshold is not None else 128.0
+            block_size = 35
+            local_thresh = threshold_local(gray, block_size, offset=10)
+            mask = gray < local_thresh
+            actual_thresh = float(np.mean(local_thresh))
         else:
             raise JsonRpcError(
                 INVALID_PARAMS, f"Unknown foreground extraction mode: {mode}"
             )
 
-        mask = gray < actual_thresh
+        if not colour_path:
+            if mode != "adaptive":
+                mask = gray < actual_thresh
+        else:
+            # 彩色/双层路径：阈值不再决定"是不是墨"，只决定"哪些黑白像素算墨"。
+            # 彩色像素由 extraction_mode 单独判定，否则浅彩色实心会被灰度阈值
+            # 整列丢掉（这正是 Han et al. 2026 Fig.3 的失败模式）。
+            rgb = self.image_array[..., :3] if getattr(
+                self, "image_array", None) is not None else np.array(self.image)[..., :3]
+            mask = build_foreground(
+                np.dstack([rgb, np.full(rgb.shape[:2], 255, dtype=np.uint8)]),
+                threshold=actual_thresh * 3,
+                extraction_mode=ext_mode,
+                column_edges=column_edges,
+            )
+
         self.foreground_mask = mask
         self.threshold = actual_thresh
         self.segmentation_mode = mode
+        self.extraction_mode = ext_mode
+        self.foreground_column_edges = list(column_edges) if column_edges else None
+
+        # 「实心层 + 夸张包络」：包络单独留一份，供导出与目视核对，
+        # 但**永不**进入 foreground_mask —— 那是读数口径，不是视图。
+        self.shadow_mask = None
+        self.solid_layers = None
+        self.two_layer_report = None
+        if ext_mode == "solid-over-shadow":
+            rgb_full = (self.image_array[..., :3]
+                        if getattr(self, "image_array", None) is not None
+                        else np.array(self.image)[..., :3])
+            parts = two_layer_split(rgb_full, column_edges=column_edges)
+            verdict = two_layer_consistency(rgb_full, parts)
+            self.two_layer_report = verdict
+            if not verdict["consistent"]:
+                # 静默给错数 > 明确报错不可用：这里的掩膜会把某一种颜色的读数
+                # 放大整整一个夸张倍数，而界面上一切正常。宁可拒绝。
+                raise JsonRpcError(
+                    INVALID_PARAMS,
+                    "双层分离（solid-over-shadow）在当前图上不可信，已拒绝产出"
+                    "前景掩膜，以免读数被按颜色分别放大。\n\n"
+                    f"技术原因：{verdict['reason']}\n\n"
+                    "建议：改用 standard 并人工核对浅色层；或提交一张该图版的"
+                    "裁剪样本以便补足判据。",
+                )
+            layers = shadow_layers(rgb_full, column_edges=column_edges)
+            self.solid_layers = {k: int(v.sum()) for k, v in layers.items()}
+            self.shadow_mask = layers["shadow"]
 
         fg_pixels = int(np.sum(mask))
         fg_ratio = float(fg_pixels / gray.size)
 
-        return {
+        result = {
             "threshold": actual_thresh,
             "mode": mode,
+            "extraction_mode": ext_mode,
             "foreground_pixels": fg_pixels,
             "foreground_ratio": fg_ratio,
             "shape": list(mask.shape),
         }
+        if ext_mode == "solid-over-shadow":
+            result["shadow_pixels"] = int(self.shadow_mask.sum())
+            result["solid_pixels"] = fg_pixels
+            result["layers"] = self.solid_layers
+        return result
+
+    def _extract_foreground_from_settings(self) -> dict[str, Any]:
+        """Re-run extraction with the mode the user picked.
+
+        Every implicit call site (column detection, cleanup, digitising) goes
+        through here instead of calling :meth:`extract_foreground` bare: a bare
+        call silently drops back to Otsu, which is exactly how a user's chosen
+        ``solid-over-shadow`` would be undone the moment they clicked
+        "detect columns". One helper, one place to look when a mask comes out
+        in the wrong mode.
+        """
+        edges = getattr(self, "foreground_column_edges", None)
+        if edges is None:
+            edges = self._column_band_edges()
+        mode = getattr(self, "extraction_mode", None) or "standard"
+        return self.extract_foreground(extraction_mode=mode, column_edges=edges)
+
+    def _column_band_edges(self) -> list[int] | None:
+        """x boundaries of the columns, ascending; ``None`` when there are none.
+
+        Used as the band grid for per-column white points. Falls back to the
+        data ROI so that a two-layer figure still gets *some* band structure
+        before the user has drawn columns.
+        """
+        columns = getattr(self, "columns", None) or []
+        starts = sorted(int(round(c["start"])) for c in columns if "start" in c)
+        ends = sorted(int(round(c["end"])) for c in columns if "end" in c)
+        if len(starts) >= 2 and len(ends) >= 2:
+            edges: list[int] = []
+            for start, end in zip(starts, ends):
+                if not edges or start > edges[-1]:
+                    edges.append(start)
+                edges.append(max(start, end))
+            return edges if len(edges) >= 2 else None
+        roi = self._roi_box() if hasattr(self, "_roi_box") else None
+        if roi:
+            width = float(roi[2]) - float(roi[0])
+            if width > 0:
+                n = max(2, min(40, int(width // 40)))
+                return [int(roi[0] + width * i / n) for i in range(n + 1)]
+        return None
 
     def detect_columns(
         self,
@@ -614,7 +784,7 @@ class CoreMixin:
         self.degrid_info = None
 
         if self.foreground_mask is None:
-            self.extract_foreground()
+            self._extract_foreground_from_settings()
 
         ix0, ix1 = round(x0), round(x1)
         iy0, iy1 = round(y0), round(y1)
@@ -747,6 +917,21 @@ class CoreMixin:
                         and lo <= t[1].get("px", 0) <= hi
                     ):
                         col["x_ticks"] = t
+                    else:
+                        # B-02：守卫失败曾是**静默**丢弃——用户标定凭空消失、
+                        # 面板回到 0/N，没有任何提示。这里把"丢了什么、丢在哪"
+                        # 留在列上，`straditize.getDiagramData` 会原样透传，
+                        # 由步骤 5/6 面板告知用户需要重新标定。
+                        #
+                        # 值必须是**不可变**的：撤销栈的列快照是
+                        # `[dict(c) for c in self.columns]`（浅拷贝），嵌套容器
+                        # 会被快照与活动列共享引用。故 px/band 用 tuple；
+                        # 外层 dict 只整体赋值/整体 pop，任何地方都不就地改它。
+                        col["x_ticks_dropped"] = {
+                            "reason": "out_of_band",
+                            "px": tuple(tick.get("px", 0) for tick in t),
+                            "band": (lo, hi),
+                        }
                 if old_c.get("unit"):
                     col["unit"] = old_c["unit"]
                 if old_c.get("plot_type"):
@@ -758,6 +943,21 @@ class CoreMixin:
                     col["has_exaggeration"] = True
             else:
                 col["x_group_id"] = def_grp_id
+                # 列数变了（preserve_state=False）时整块状态回填都被跳过，旧标定
+                # 同样**静默消失**——这与区间守卫越界是同一个缺陷的两个分支，
+                # 只是幅度更大（实测 hoya 左边界右移 120px：28→27 列、标定 1→0、
+                # 无任何提示）。这里同样留下显式记录，但 reason 必须区分开：
+                # 越界是"同一列、刻度落在列外"，列数变化是"该索引对应的物理列
+                # 已经不是原来那一列"，用户要做的动作不同。
+                if k < len(old_roi_cols) and old_roi_cols[k].get("x_ticks"):
+                    col["x_ticks_dropped"] = {
+                        "reason": "column_layout_changed",
+                        "px": tuple(
+                            tick.get("px", 0)
+                            for tick in old_roi_cols[k].get("x_ticks") or []
+                        ),
+                        "band": (col["start"], col["end"]),
+                    }
 
         self.columns = before_cols + detected_cols + after_cols
         had_taxa_names = bool(self.taxa_names)
@@ -1111,7 +1311,7 @@ class CoreMixin:
             )
 
         if self.foreground_mask is None:
-            self.extract_foreground()
+            self._extract_foreground_from_settings()
 
         ink = self.foreground_mask
         horizontal, vertical, info = detect_grid_lines(

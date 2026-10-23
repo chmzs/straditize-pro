@@ -714,15 +714,62 @@ async function bootstrap() {
           </div>
         `;
         document.body.appendChild(banner);
+        // 【恢复草稿】必须真正落到后端（B-05）。
+        //
+        // 旧实现只 `loadNewDiagram(draft.data)` + `history.reset(...)`，**零个 RPC**：
+        // 界面显示 28 列而后端 0 列，用户对着一个后端并不存在的状态继续操作，
+        // 之后任何列级 RPC 都会打空（违反 ARCHITECTURE §2「禁止静默兜底」）。
+        // 现在把草稿翻译成工程包载荷下发 `project.load`，再用后端权威数据重建镜像；
+        // 失败就冒泡（后端失败 → 红框 + toast），绝不"前端填上就算恢复"。
         banner.querySelector('#btn-restore-draft')?.addEventListener('click', () => {
-          canvasComponent.loadNewDiagram(draft.data);
-          history.reset(draft.data.columns, draft.data.activeTaxaId);
-          sidebar?.updateData(canvasComponent.data);
-          inspector?.updateData(canvasComponent.data);
-          toolbar?.updateHistoryState();
-          updateFooter();
-          banner.remove();
-          setHudNotice(t('draft.restored'), 3500);
+          const btn = banner.querySelector('#btn-restore-draft') as HTMLButtonElement | null;
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = '正在恢复到后端...';
+          }
+          void projectManager
+            .restoreDraft(draft.data)
+            .then(({ data, unrestored }) => {
+              // 镜像与撤销基线都按**后端返回的权威数据**重建；
+              // 草稿只是"请求"，后端才是事实来源。
+              canvasComponent.loadNewDiagram(data);
+              history.reset(
+                data.columns,
+                data.activeTaxaId,
+                data.calibration,
+                data.roi,
+                data.rois,
+                data.primary_roi_id,
+                data.active_roi_id
+              );
+              // 草稿里存过清理叠层就先按后端重算一次掩膜（此时 ROI 确实存在，
+              // 不会再出现 B-07 那种"归零后拿旧 roi_id 重算"的必然失败）。
+              if ((data.line_candidates ?? []).length > 0) {
+                void cleanupManager.recomposeCleanupState('恢复草稿后重算清理掩膜');
+              }
+              sidebar?.updateData(canvasComponent.data);
+              inspector?.updateData(canvasComponent.data);
+              toolbar?.updateHistoryState();
+              updateFooter();
+              banner.remove();
+              if (unrestored.length > 0) {
+                // 恢复是成功的，但有部分状态工程包承载不了 —— 必须明说，
+                // 否则用户会以为清理笔迹/排除区也回来了。
+                setHudNotice(
+                  `${t('draft.restored')}；未随草稿恢复：${unrestored.join('；')}`,
+                  9000
+                );
+              } else {
+                setHudNotice(t('draft.restored'), 3500);
+              }
+            })
+            .catch((err: unknown) => {
+              if (btn) {
+                btn.disabled = false;
+                btn.textContent = t('draft.restore');
+              }
+              reportBackendFailure('恢复自动存档草稿', err);
+            });
         });
         banner.querySelector('#btn-discard-draft')?.addEventListener('click', () => {
           localStorage.removeItem(AUTOSAVE_KEY);

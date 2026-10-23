@@ -95,6 +95,22 @@ def register(dispatcher: Any, session: Any) -> None:
             col = columns[idx]
 
         clean_name = name.strip()
+        # **先记录，再改名**（B-06 的 RPC 层实例）。
+        #
+        # `_record_history` 记录的是调用那一刻的状态；放在改名之后，存进撤销栈的
+        # 已经是新名字，于是 Ctrl+Z 只会把新名字再回填一次——用户看到毫无变化，
+        # 却白耗一格撤销栈。实测修复前：改名 col01→RENAMED 后，栈顶快照的
+        # col0.name 也是 RENAMED，undo 之后仍是 RENAMED。
+        #
+        # 注意 `session_parts/core.py` 的 `column_update` **没有**这个问题
+        # （它本来就把记录放在修改之前），不要顺手一起改。
+        #
+        # 位置选在这里而不是更早：`validate_column_unique_name` 抛错时不该留下
+        # 撤销条目，否则一次失败的重命名会占掉一格"什么都不做"的历史。
+        record_history = getattr(session, "_record_history", None)
+        if record_history:
+            record_history(f"Rename column {col.get('id')} to {clean_name}")
+
         col["name"] = clean_name
         col["species"] = clean_name
         # `session.taxa_names` 是 `detect_columns` 重新分列时唯一的名字来源
@@ -117,10 +133,6 @@ def register(dispatcher: Any, session: Any) -> None:
                 or f"col{i + 1:02d}"
             )
         taxa_names[idx] = clean_name
-
-        record_history = getattr(session, "_record_history", None)
-        if record_history:
-            record_history(f"Rename column {col.get('id')} to {clean_name}")
 
         return {"success": True, "column": col}
 

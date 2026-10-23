@@ -35,6 +35,27 @@ from .agedepth import build_age_depth_frame
 from .xscale import resolve_column_scale
 
 
+def _normalize_negative_zero_depth(csv_string: str) -> str:
+    """把 CSV 行首（深度列）的 `-0.0` 规整成 `0.0`。
+
+    为什么需要：`pandas.DataFrame.to_csv` 对 `float(-0.0)` 一律渲染成 `-0.0`，
+    连 `round(x, 4) + 0.0` 也抹不掉符号位（实测确认）。而 `-0.0` 在 CSV 里是
+    一个**合法但不该出现**的深度：R 的 `read.csv` / Excel 会读成负深度，
+    严格校验的下游（rioja、LiPD 工具链）会直接报错——它实际就是 0。
+
+    只替换**每行第一个字段**（深度列），不碰其它数值列：列值里偶然出现
+    `-0.0` 的情况由 `px_to_value` 的 `ndigits` 规整，且不应在这里被改写。
+    """
+    if "-0.0" not in csv_string:
+        return csv_string
+    out = []
+    for i, line in enumerate(csv_string.split("\n")):
+        if i > 0 and line.startswith("-0.0,"):
+            line = "0.0," + line[len("-0.0,") :]
+        out.append(line)
+    return "\n".join(out)
+
+
 class ExportMixin:
     """Session mixin for multi-ROI chunked tabular exports (CSV/TSV/LiPD/XLSX/TAR)."""
 
@@ -148,7 +169,43 @@ class ExportMixin:
         return roi_dfs
 
     def get_export_readiness(self) -> dict[str, Any]:
-        """Compute the Export Readiness checklist for all ROIs."""
+        """Compute the Export Readiness checklist for all ROIs.
+
+        ## 标定检查（B-12）
+
+        就绪清单原本只查两件事——ROI 是否被用户命名、该 ROI 有没有列。它**从不看
+        列有没有标定**，于是对着 28 列全部未标定的会话报 `ready=True`。那是用户
+        导出前的最后一道门，却对"所有读数都是程序默认值"毫无反应。
+
+        现在逐列调用 `resolve_column_scale(...).calibrated` 作为**唯一**判据
+        （与导出、网格采样、QA 共用同一个解析入口，不另造第二套判定）。判据形状
+        也必须由它决定，不能去看 `startValue`/`tickValue` 是否存在——那两个字段
+        在 `detect_columns` 里被硬编码成 0.0/20.0，**存在不等于标定过**。
+
+        ## 为什么"放行 + 标 provenance"而不是"拒绝导出"
+
+        1. **用户可能真的想导原始读数**。未标定列导出的是像素几何百分比
+           （legacy 列宽归一），对"先看一眼形态"是有效输出。锁死等于替用户决定
+           他不能导出自己刚画的东西。
+        2. **拒绝无法表达"部分标定"**。28 列里标了 1 列时，一个布尔 `ready`
+           无论真假都是错的信息。
+
+        所以这里的判定是：**`ready` 反映"能不能不带保留地导出"，但导出动作本身不被
+        阻止**。未标定时 `ready=False` 且 `provenance` 说清哪些列是默认值、来源是
+        什么；前端据此可以"放行 + 显著标注"，也可以拦住用户。把"是否阻止"的决定
+        留给 UI，后端只负责**如实报告**。
+
+        两条边界（都有对应的反向哨兵）：
+        - 全部列已标定 → `ready=True`（防矫枉过正改成恒假）；
+        - 部分标定 → `ready=False`，但 `uncalibrated_columns` 精确列出缺哪几列
+          （一个布尔无法表达这个信息）。
+
+        既有字段名全部保留，`frontend/e2e/export.spec.ts` 的键集断言仍成立；
+        但 `ready` 的**判定条件**从两个变成三个（新增标定）。任务书第 4 条要求的
+        正是这一变更：让"零标定也算就绪"那条历史测试改为"命名 + 有列 + 已标定"。
+        `readiness_missing` 仍只记 ROI 级缺项（未命名 / 无列），**不**把"有未标定
+        列"算进去——否则同一个 ROI 名会重复出现，前端按名字展示会变成两条。
+        """
         rois = getattr(self, "rois", [])
         if not rois:
             rois = [{"id": "pollen", "name": "pollen", "name_source": "default"}]
@@ -172,13 +229,48 @@ class ExportMixin:
             if name_source == "default" or len(cols) == 0:
                 missing_rois.append(r_name)
 
+        # ---- 逐列标定审计 ----
+        uncalibrated_columns: list[dict[str, Any]] = []
+        source_counts: dict[str, int] = {}
+        for index, column in enumerate(all_columns):
+            scale = resolve_column_scale(self, column, index)
+            source_counts[scale.source] = source_counts.get(scale.source, 0) + 1
+            if not scale.calibrated:
+                uncalibrated_columns.append(
+                    {
+                        "col_index": index,
+                        "name": column.get("name")
+                        or column.get("species")
+                        or f"col{index + 1:02d}",
+                        "roi_id": column.get("roi_id"),
+                        # `source` 说明这个数是哪来的：legacy = 用旧字段/列宽归一
+                        # 换算，default = 连标度信息都没有。两者都不是用户读出来
+                        # 的刻度值。
+                        "source": scale.source,
+                    }
+                )
+
+        calibrated_count = len(all_columns) - len(uncalibrated_columns)
+        # 第三个就绪条件：列标定。三个条件一起决定 ready：
+        #   ROI 已命名  ∧  该 ROI 有列  ∧  所有列都已标定
+        fully_calibrated = bool(all_columns) and not uncalibrated_columns
         return {
             "sheets": sheets,
             "primary_roi": primary_roi_name,
             "primary_roi_id": primary_roi_id,
             "readiness_missing": missing_rois,
             "total_rois": len(rois),
-            "ready": len(missing_rois) == 0,
+            "ready": len(missing_rois) == 0 and fully_calibrated,
+            # 以下为新增的"读数来历"信息，供放行导出时标注来源使用。
+            "calibrated_count": calibrated_count,
+            "column_count": len(all_columns),
+            "uncalibrated_columns": uncalibrated_columns,
+            "provenance": {
+                "all_calibrated": fully_calibrated,
+                "calibrated_count": calibrated_count,
+                "column_count": len(all_columns),
+                "sources": source_counts,
+            },
         }
 
     def export_multi_tar(self, output_path: str | None = None) -> dict[str, Any]:
@@ -666,6 +758,12 @@ class ExportMixin:
 
         if fmt == "csv":
             csv_string = df.to_csv(index=False)
+            # `-0.0` 的符号位会被 pandas 原样渲染，CSV 里就成了字面量 `-0.0`
+            # （pandas 对 `float(-0.0)` 一律输出 `-0.0`，加 0.0 也抹不掉符号位）。
+            # 下游 R / Excel / 严格校验的读入器会把它当**负深度**，而它实际就是 0。
+            # 这里在**字符串层**把列首的 `-0.0` 规整成 `0.0`：
+            # 只替换行首（深度列）出现的 `-0.0`，不碰其它数值列。
+            csv_string = _normalize_negative_zero_depth(csv_string)
             if output_path:
                 out_dir = os.path.dirname(os.path.abspath(output_path))
                 os.makedirs(out_dir, exist_ok=True)
@@ -833,7 +931,10 @@ class ExportMixin:
 
         for d in clean_depths:
             row_vals = []
-            row_dict: dict[str, Any] = {"depth": round(d, 4)}
+            # `round(-1e-5, 4)` 得到 `-0.0`，写进 CSV 就是字面量 `-0.0`。
+            # 下游 R/Excel/pandas 会把它读成**负深度**（严格校验的读入器直接报错），
+            # 而它实际就是 0。加 0.0 把 `-0.0` 规整成 `0.0`。
+            row_dict: dict[str, Any] = {"depth": round(d, 4) + 0.0}
 
             if is_calib:
                 target_pixel_row = (d - iy) / sy

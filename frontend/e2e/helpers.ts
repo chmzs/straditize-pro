@@ -210,6 +210,33 @@ export async function backendRpc<T = unknown>(
 export async function resetBaseline(page: Page): Promise<void> {
   await backendRpc(page, 'e2e.reset');
   await openApp(page);
+  // 同时把**视口**复位到"适应屏幕"。
+  //
+  // 为什么必须在这里做：`openApp` 只保证应用与数据就绪，**不保证缩放/平移**。
+  // 而 `step-visibility.spec.ts` 的判据是画布像素差
+  // （`step3.ink - step1.ink > 50_000`），像素数直接随缩放变化。前面某个 spec
+  // 若留下放大到 300% 的视口，本用例的 step1 基线就会远大于 step3，断言得到**负数**
+  // （实测 Received: -392776），于是"单跑绿、全量红"。
+  // 这是测试基建的顺序依赖，不是产品缺陷；在复位点归零即可根治。
+  await resetViewport(page);
+}
+
+/**
+ * 触发「适应屏幕」把视口缩放/平移归到确定性起点。
+ *
+ * 实现约束（踩过）：
+ * - 必须在 `openApp()` **之后**调用。`resetBaseline` 里 `backendRpc` 走的是浏览器
+ *   context 的 request，此时页面可能尚未 goto；过早 `keyboard.press` 会直接抛
+ *   `Target page, context or browser has been closed`，把同文件所有用例一起带红。
+ * - 用 `F` 键而不是点击坐标：坐标点可能落在面板/工具栏上，产生副作用。
+ * - 键盘事件的目标必须是 body（焦点在输入框里时 `F` 会被当文本吞掉），故先失焦。
+ */
+async function resetViewport(page: Page): Promise<void> {
+  await expect(page.locator('#geology-canvas')).toBeVisible({ timeout: 20_000 });
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur?.());
+  await page.keyboard.press('f');
+  // 等一帧重绘落定：视口变化 → `requestRender()` → 下一帧才写画布。
+  await page.waitForTimeout(120);
 }
 
 /** 调后端 RPC，拿到 result。失败直接抛出应用的真实错误。 */

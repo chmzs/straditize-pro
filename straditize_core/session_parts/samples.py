@@ -61,11 +61,29 @@ class SamplesMixin:
 
         # Sort by row_px ascending
         valid_samples.sort(key=lambda item: item["row_px"])
-        self.samples = valid_samples
 
+        # **先记录，再修改，并把 samples 纳入快照**（B-06b / task-12）。
+        #
+        # 两层都要补，少一层都撤不回来：
+        # 1. 快照结构原本不含 `samples`（`_snapshot_editable_state()` 只管
+        #    columns/control_points/data_xlim/data_ylim/taxa_names），即便记了也恢复
+        #    不了；
+        # 2. 记录时机原本在赋值之后，即便快照含 samples，存进去的也是新值。
+        #
+        # ## 判断：samples **应当**参与撤销
+        #
+        # 层位是用户在步骤 7 显式输入（粘贴深度 / 手工添加 / 自动共识后人工确认），
+        # 与 columns 同为可编辑实体。粘错一批却撤不回来，用户会以为撤销生效而继续
+        # 往下走——这比"不支持撤销"更糟，属于**静默失效**。
+        #
+        # 粒度问题（整批只记一格）不构成反对理由：一次粘贴本就是**一个用户动作**，
+        # 撤销应当一次撤整批，而不是 158 次。这与文本编辑器里"一次 Ctrl+Z 撤掉整段
+        # 粘贴"是同一种语义。
         record_history = getattr(self, "_record_history", None)
         if callable(record_history):
-            record_history(f"Set {len(self.samples)} sample horizons")
+            record_history(f"Set {len(valid_samples)} sample horizons")
+
+        self.samples = valid_samples
 
         return {"samples": self.samples, "count": len(self.samples)}
 

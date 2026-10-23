@@ -35,6 +35,12 @@ const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
  */
 export default defineConfig({
   testDir: './e2e',
+  // 排除「从零旅程」这套 spec：它需要**零状态**后端（`support/serve_zero_backend.py`），
+  // 而本配置的 webServer 是 `serve_e2e_backend.py`——那里的 `e2e.reset` 会**预载 hoya
+  // 并预跑分列**。不排除的话本 lane 会把它也拉起来跑，而它的第一条断言
+  // （"零状态必须如实返回 imageSrc=null"）必然因基线已种图而假红（实测：单跑绿、全量红）。
+  // 该 spec 只应由 `playwright.zero.config.ts` 跑（见 `pixi run test-e2e-zero`）。
+  testIgnore: /from-zero-journey\.spec\.ts/,
   // 产物目录按端口隔离：两个会话同时跑时，共享 `test-results/` 会让 Playwright
   // 在收尾写 trace 时报 `browserContext.close: ENOENT ...recordingN.network`
   // ——测试体其实通过了，红的是产物记账（实测踩中）。端口取自环境变量，因而

@@ -151,23 +151,43 @@ export class WorkflowController {
         5000
       );
       try {
-        const rois = this.canvasComponent.data.rois || [];
-        if (rois.length > 0) {
-          for (const r of rois) {
-            const xMin = r.xMin ?? r.xlim?.[0] ?? this.canvasComponent.data.roi.xMin;
-            const xMax = r.xMax ?? r.xlim?.[1] ?? this.canvasComponent.data.roi.xMax;
-            const yMin = r.yMin ?? r.ylim?.[0] ?? this.canvasComponent.data.roi.yMin;
-            const yMax = r.yMax ?? r.ylim?.[1] ?? this.canvasComponent.data.roi.yMax;
-            await this.rpcClient.detectColumnsInRoi({
-              ...r,
-              xMin,
-              xMax,
-              yMin,
-              yMax,
-            });
+        // 分列参数必须取**后端权威 ROI**，不能用 `canvasComponent.data.rois`
+        // 这份前端镜像（B-04）。后端 `detect_columns` 收到 data_xlim/data_ylim 后
+        // 会覆写 `rois[].xlim`（`session_parts/core.py` 里 target_roi["xlim"] = …），
+        // 所以镜像一旦落后（另一标签页改了 ROI、Inspector 表单改了半径但
+        // commitRoi 尚未落库、撤销把 ROI 恢复成旧值……），这次分列就会把用户
+        // 刚被后端接受的新取数区**静默改回旧值**，而界面照样报"分列成功"。
+        //
+        // 先 getDiagramData 再构造参数，代价是一次往返，换掉一整类静默回滚。
+        // 注意 B-10：`loadImage` 先写 width/height、约 350ms 后才建 ROI，
+        // 但这里等的是**已完成的一次 getDiagramData 应答**，不是轮询尺寸，
+        // 所以不会读到"有图无 ROI"的中间态；rois 为空即如实报错停在原地。
+        const authoritative = await this.rpcClient.getDiagramData();
+        const rois = authoritative.rois ?? [];
+        // 只对仍有列的 ROI 重跑；`columns_stale` 为真的 ROI 提示分列已失效，
+        // 但重分列本身是幂等的，这里不据此跳过（跳过会让分区永远补不回来）。
+        const targets = rois.length > 0 ? rois : [];
+        if (targets.length === 0) {
+          throw new Error(
+            t('error.unknown') +
+              '：后端当前没有任何 ROI，无法分列。请回到步骤 2 先框定数据有效区。'
+          );
+        }
+        for (const r of targets) {
+          const xlim = r.xlim;
+          const ylim = r.ylim;
+          if (!xlim || !ylim) {
+            throw new Error(
+              `后端 ROI ${r.id ?? '(无 id)'} 缺少 xlim/ylim，无法分列。请回到步骤 2 重新框定该有效区。`
+            );
           }
-        } else {
-          await this.rpcClient.detectColumnsInRoi({ ...this.canvasComponent.data.roi });
+          await this.rpcClient.detectColumnsInRoi({
+            ...r,
+            xMin: xlim[0],
+            xMax: xlim[1],
+            yMin: ylim[0],
+            yMax: ylim[1],
+          });
         }
         const freshData = await this.rpcClient.getDiagramData();
         this.canvasComponent.loadNewDiagram(freshData);
