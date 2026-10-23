@@ -8,6 +8,7 @@ import {
   renderOtherLostColumnsSummary,
   syncXTicksDroppedFromBackend,
 } from './XTicksDroppedNotice';
+import { renderOtherSuspectColumnsSummary } from './SuspectBlockNotice';
 
 export const step = 6;
 export const title = '6. 标定列与 X 刻度';
@@ -73,11 +74,17 @@ export function render(data: DiagramData): string {
   const activeLostNotice = activeCol ? renderActiveColumnLostNotice(activeCol) : '';
   const otherLostSummary = renderOtherLostColumnsSummary(cols, activeCol?.id);
 
+  // 色块提示（P1 suspect_block）**不放这里**：本面板没有【删除列】按钮，用户看到提示
+  // 却找不到可操作的入口。该提示落在 `Inspector.renderColumnInspector`（用户点选列时
+  // 显示、且【删除列】就在那里）。此处只保留「其它列」的汇总点名。
+  const otherSuspectSummary = renderOtherSuspectColumnsSummary(cols, activeCol?.id);
+
   return `
     <div class="step-panel" data-step="6">
       <div class="step-title">${t('step6.title')}</div>
 
       ${activeLostNotice}
+      ${otherSuspectSummary}
       ${otherLostSummary}
 
       <!-- 全局标定进度指示 -->

@@ -21,7 +21,7 @@
  * 2 列完全没标签（表格里「OCR 原始读数」显示 `--`），正是本提示要解释的对象。
  */
 import { expect, test } from './fixtures';
-import { openApp, rpc } from './helpers';
+import { openApp, resetBaseline, rpc } from './helpers';
 
 const FIG3 = 'output/han2026_ngamring/fig3_raw.jpeg';
 
@@ -78,6 +78,10 @@ async function openOcrOnFig3(page: import('@playwright/test').Page): Promise<voi
 }
 
 test.describe('P1-E OCR 配对失败必须在界面上说清', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetBaseline(page);
+  });
+
   test('T1 真实图版：后端 matched=false 时提示出现，且标签数/无标签列数与表格真值相等', async ({
     page,
   }) => {

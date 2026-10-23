@@ -3,6 +3,7 @@ import { StepContext } from './_registry';
 import { t } from '../../i18n';
 import { notifyError } from '../../ui/feedback';
 import { renderSplitLostXTicksNotice } from './XTicksDroppedNotice';
+import { renderSplitSuspectNotice } from './SuspectBlockNotice';
 
 export const step = 5;
 export const title = '5. 自动分列与属种命名';
@@ -42,6 +43,8 @@ export function render(data: DiagramData): string {
   // 分列正是把列边界改掉的那一步，所以「原来的标定被清空」必须在这里就报出来，
   // 而不是等用户走到步骤 6 才发现读数不见了。纯函数渲染：没有丢弃列时是空串。
   const lostTicksNotice = renderSplitLostXTicksNotice(columns);
+  // 分列正是产生色块标记的那一步（P1 suspect_block），必须在这一步就报出来。
+  const suspectNotice = renderSplitSuspectNotice(columns);
 
   return `
     <div class="step-panel" data-step="5"
@@ -55,6 +58,7 @@ export function render(data: DiagramData): string {
         ${t('step5.desc')}
       </div>
 
+      ${suspectNotice}
       ${lostTicksNotice}
 
       <!-- OCR 属种识别区域 -->
