@@ -178,87 +178,93 @@ def detect_column_bounds(binary: np.ndarray,
     return bounds
 
 
-def measure_axis_right_edge(binary: np.ndarray,
+def measure_axis_right_edge(rgb: np.ndarray,
+                            binary: np.ndarray,
                             starts: Sequence[int],
                             solid_ratio: float = 0.9,
                             max_probe: int = 8,
                             max_axis_width: int = 8,
-                            axis_full_height_ratio: float = 0.95) -> list[int]:
-    """每个列起点处灰色 Y 轴线的右缘偏移量（相对起点，单位 px）。
+                            max_color_ratio: float = 0.15) -> list[int]:
+    """每个列起点处 Y 轴基线的右缘偏移量（相对起点，单位 px）。
 
-    ## 为什么需要这个量
+    ## 用途
 
-    `detect_column_bounds` 返回的 `start` 是轴线**左缘**（该处第一个暗像素）。
-    但在科研绘图软件（Origin / R / Python）里，X 轴刻度齿是从轴线**右缘**
-    开始向右生长的，曲线也从右缘起笔。若直接拿左缘当零点：
+    `detect_column_bounds` 返回的 `start` 是该列第一个墨迹像素 = 基线**左缘**。
+    科研绘图软件（Origin / R / Python / riojaPlot / Tilia）里，X 轴刻度齿从
+    基线**右缘**向右生长，曲线也从右缘起笔。拿左缘当零点会让每列系统性左偏
+    0~7px（fig3 实测），画布零点标记也与底图刻度齿对不齐。
 
-    1. 轴线自身会被当成"满值墨迹"读入（该列首几列暗占比 = 1.00），
-       造成**逐列不同的系统性左偏**；
-    2. 画布上的零点标记落在灰线左侧，与底图刻度齿对不齐。
+    ## 判据：只认「极窄 + 纯灰」的实心竖条
 
-    实测 fig3_raw.jpeg（2132×928，16 列）轴线宽：
-    `[2, 1, 2, 0, 2, 5, 1, 2, 0, 6, 6, 6, 0, 2, 1, 0]` px。
-    宽度逐列不同，所以必须**逐列**测量，不能用固定偏移。
+    1. 从 `start` 起连续实心（暗占比 > solid_ratio）的宽度 ∈ [1, max_axis_width]；
+    2. **起始像素不是彩色**（RGB 通道差 ≤ 30 的占比 > 1 - max_color_ratio）。
 
-    ## 判据（两个条件同时成立才算"轴线"）
+    第 2 条只取起始像素、不取整段：紧贴基线生长的曲线会把基线的右邻像素染色
+    （实测 fig3 col3：+0 纯灰 RGB(56,61,61) 彩色率 0.00，+1 红线彩色率 0.95）。
+    对整段取平均会让真基线被右邻曲线污染而误拒。
 
-    1. 从 `start` 起，连续「该列暗像素占比 > `solid_ratio`」的宽度不超过
-       `max_probe`（轴线是**细**线，实测 0~6px）；
-    2. 越过这段实心之后，必须能读到非实心像素（曲线或空白）。
+    ## 已知边界（实测记录，不要再试图用阈值解决）
 
-    **为什么需要第 1 条**：本图 col10/col11 起点处暗占比 0.98 一直延续
-    15px 以上——那不是灰轴线，而是**整块实心填充**（岩性柱/色块）。对这类列
-    没有细轴线可寻，强行把零点推进实心块内部会把整块填充读成偏移量，
-    反而更错。这种情况返回 0，零点保持在起点。
+    本函数**无法**区分「真基线」与「filled-silhouette 图的填充左缘」：
+
+    | | fig3 col3（真基线） | Aber col2（填充左缘） |
+    |:---|:---|:---|
+    | 宽度 | 2px | 2px |
+    | 暗占比 | 1.00 | 0.99 |
+    | 起始像素彩色率 | 0.00 | 0.00 |
+    | 右邻 | 深红曲线紧贴 | 深绿填充紧贴 |
+
+    放大并排比对后确认：两者在结构上**完全相同**——都是"细的纯灰竖条，
+    右侧紧贴彩色数据"。任何基于宽度/亮度/彩色/间隙的阈值都会在这两张图之间
+    来回摇摆（试过：亮度判据使两图区间重叠；「右侧须空白」使 fig3 只剩 2 列）。
+
+    因此本函数只保证"识别出像基线的竖条"，**是否启用由调用方按图决定**
+    （`anchor_zero_at_axis_right`）。Aber 这类图必须关闭该开关。
 
     Returns
     -------
     list of int
-        与 `starts` 等长的偏移量列表，每个元素 ∈ [0, max_probe]。
-        实心块列返回 0。
+        与 `starts` 等长的偏移量列表；不符合判据的列返回 0（零点保持起点）。
     """
-    arr = np.asarray(binary)
-    if arr.ndim != 2 or arr.size == 0:
+    rgb_arr = np.asarray(rgb)
+    bin_arr = np.asarray(binary)
+    if bin_arr.ndim != 2 or bin_arr.size == 0:
         return [0 for _ in starts]
+    if rgb_arr.ndim == 2:
+        rgb_arr = np.stack([rgb_arr] * 3, axis=-1)
 
-    height, width = arr.shape
+    height, width = bin_arr.shape
     if height == 0:
         return [0 for _ in starts]
 
     offsets: list[int] = []
     for start in starts:
         base = int(start)
+        if base < 0 or base >= width:
+            offsets.append(0)
+            continue
+
         offset = 0
-        still_solid = True
+        broke_out = False
         for probe in range(max_probe):
             x = base + probe
             if x < 0 or x >= width:
                 break
-            column = arr[:, x]
-            if column.mean() <= solid_ratio:
-                still_solid = False
+            if bin_arr[:, x].mean() <= solid_ratio:
+                broke_out = True
                 break
             offset = probe + 1
-        # 实心块（宽度达到上限仍未断开）：没有细轴线可寻，零点保持起点。
-        if still_solid and offset >= max_probe:
-            offset = 0
-        # 轴线必须**极窄**：实测真灰轴线宽 0~7px（fig3 最宽 7px）。
-        if offset > max_axis_width:
-            offset = 0
-        # 轴线必须**贯穿整列高度**：Y 轴线从图顶画到底，每一行都有它。
-        #
-        # 这条是区分「真轴线」与「填充轮廓左缘」的决定性判据。实测对比
-        # （同一 mask 口径、同一 solid_ratio）：
-        #   fig3_raw.jpeg col1  x=332,333 占比 1.00,1.00 → 贯穿，是轴线
-        #   type1_filled_silhouette_aber col6 x=157,158 占比 0.24,0.24 → 不贯穿，
-        #     是 filled-silhouette 曲线的左实心边缘（曲线只占部分高度）
-        # 两者的"是否实心"相同，只有"是否贯穿全高"不同。
-        if offset > 0:
-            axis_col = arr[:, base : base + offset]
-            covered = axis_col.any(axis=1).mean()
-            if covered < axis_full_height_ratio:
-                offset = 0
-        offsets.append(offset)
+
+        # 探到上限仍未断开 = 是大块实心填充，不是细基线。
+        # 这种情况必须返回 0：把整块填充读成偏移量会让零点落进色块内部。
+        if offset == 0 or offset > max_axis_width or not broke_out:
+            offsets.append(0)
+            continue
+
+        axis_first = rgb_arr[:, base].astype(np.int16)
+        colored = ((axis_first.max(axis=1) - axis_first.min(axis=1)) > 30).mean()
+        offsets.append(offset if colored <= max_color_ratio else 0)
+
     return offsets
 
 

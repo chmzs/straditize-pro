@@ -942,25 +942,33 @@ class CoreMixin:
 
         detected_cols = []
         if bounds:
-            # 零点锚定策略：默认用列起点（轴线左缘），**不自动右移**。
+            # 零点锚定策略：可推到 Y 轴基线**右缘**，默认**关闭**。
             #
-            # ## 为什么不能无条件推到轴线右缘（2026-10-24 实测否决）
+            # ## 为什么默认关闭（实测，不是保守）
             #
-            # 对 fig3_raw.jpeg 这类"细灰轴线"图，把零点推到轴线右缘确实更贴合
-            # 底图刻度齿（实测 16 列轴线宽 0~6px，逐列不等）。
+            # 对 fig3 这类"细灰基线 + 独立曲线"的图，推到右缘是对的：实测
+            # 16/16 列零点都精确落在基线右缘，画布标记与底图刻度齿对齐。
             #
-            # 但对 filled-silhouette 型图（tests/data/figures/benchmark_types/
-            # type1_filled_silhouette_aber.png），曲线的**左缘本身就是一条贯穿
-            # 全高的实心竖线**，实测占比 0.988~0.991、宽 2~3px —— 与真轴线在
-            # 「实心 / 窄 / 贯穿全高」三个维度上**完全同值**，无法区分。
-            # 无条件右移会把 Aber 36 列中的 28 列起点推后 1~2px，
-            # 实测数字化精度 Mean R² 从 **0.9866 掉到 0.8957**（越过 0.90 门禁）。
+            # 但 `measure_axis_right_edge` **无法**从结构上区分「真基线」与
+            # 「filled-silhouette 图的填充左缘」——放大并排比对确认两者完全同构：
+            #   fig3 col3：宽 2px / 暗 1.00 / 起始像素纯灰 / 右侧紧贴深红曲线
+            #   Aber col2：宽 2px / 暗 0.99 / 起始像素纯灰 / 右侧紧贴深绿填充
+            # 试过的三个额外判据全部失败：亮度（区间重叠）、右侧空白（fig3 只剩
+            # 2 列）、整段彩色率（被右邻曲线污染）。
             #
-            # 所以零点校正改为**显式可选**（`anchor_zero_at_axis_right`），
-            # 默认关闭。需要它的图（如 fig3）由调用方显式开启。
+            # 代价是可量化的：开启后 Aber 36 列中 26 列被推后 1~2px，
+            # 数字化精度 Mean R² 从 **0.9866 掉到 0.8959**（跌破 0.90 门禁）。
+            #
+            # 结论：默认关闭保护精度基准；用户在确认"本图基线是独立细线、
+            # 不是填充轮廓"后可显式开启。
             if getattr(self, "anchor_zero_at_axis_right", False):
+                # 彩色信息是区分"真基线"与"填充轮廓左缘"的决定性依据：
+                # 放大比对实测——真基线纯灰（彩色占比 0.00）、右侧立刻断开；
+                # filled-silhouette 的左缘带颜色（彩色占比 0.42）、右侧持续有内容。
+                # 两者在"暗占比/宽度/贯穿率"上完全同值，只有颜色能分开。
+                rgb_panel = np.asarray(self.image.convert("RGB"))[iy0:iy1, ix0:ix1]
                 axis_right_offsets = measure_axis_right_edge(
-                    cleaned_sub_mask, [s for s, _ in bounds]
+                    rgb_panel, cleaned_sub_mask, [s for s, _ in bounds]
                 )
             else:
                 axis_right_offsets = [0 for _ in bounds]
