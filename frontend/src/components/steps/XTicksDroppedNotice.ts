@@ -230,26 +230,28 @@ export function renderActiveColumnLostNotice(col: Column): string {
       JSON.stringify([Math.min(col.startX, col.endX), Math.max(col.startX, col.endX)]);
   return `
       <!-- 标定被清空的用户可见记录（B-02）。纯函数渲染，不做任何缓存。 -->
-      <div class="inspector-section x-ticks-lost-notice" role="alert"
+      <!-- 默认折叠成一行：常驻展开的三段长文会把下方标度输入框与属种表格挤出
+           视口（用户实测反馈"红色框出的部分太占地方""表格浏览留着这么小的空间"）。
+           一行摘要已足以说明"标定丢了、需要重标"，细节按需展开。 -->
+      <details class="x-ticks-lost-notice" role="alert"
            data-panel="step6" data-col-id="${col.id}" data-reason="${dropped.reason ?? ''}"
-           style="padding: 9px 10px; background: color-mix(in srgb, var(--status-warning) 8%, transparent); border: 1px solid var(--status-warning); border-left: 3px solid var(--status-warning); border-radius: 6px; margin-bottom: 10px;">
-        <div style="font-size: 11.5px; font-weight: 700; color: var(--status-warning); margin-bottom: 6px;">
-          ${cause.headline}
-        </div>
-        <div style="font-size: 10.5px; line-height: 1.55; color: var(--text-secondary);">
+           style="margin-bottom: 6px; background: color-mix(in srgb, var(--status-warning) 8%, transparent); border: 1px solid var(--status-warning); border-left: 3px solid var(--status-warning); border-radius: 4px; padding: 3px 8px;">
+        <summary style="font-size: 10px; font-weight: 600; color: var(--status-warning); cursor: pointer; list-style: none; display: flex; align-items: center; gap: 4px;">
+          <span style="flex-shrink: 0;">${cause.headline}</span>
+          <span style="color: var(--text-secondary); font-weight: 400;">（需重新标定）</span>
+        </summary>
+        <div style="font-size: 9.5px; line-height: 1.45; color: var(--text-secondary); padding: 4px 0 2px 0;">
           <div><strong>①</strong> ${cause.body}</div>
-          <div style="margin-top: 3px;"><strong>②</strong> 原刻度像素：<code>${formatOriginalPx(dropped)}</code>；该列现在的列范围：<code>${columnBand}</code>${allEndpointsOutsideBand(dropped) ? '（两个端点都落在允许区间之外）' : ''}。</div>
+          <div style="margin-top: 2px;"><strong>②</strong> 原刻度像素：<code>${formatOriginalPx(dropped)}</code>；该列现在范围：<code>${columnBand}</code>${allEndpointsOutsideBand(dropped) ? '（两端点都在允许区间外）' : ''}。</div>
           ${
             showGuardBand
-              ? `<div style="margin-top: 3px; color: var(--text-muted);">${bandLabel(dropped)}：<code>${formatNewBand(dropped)}</code>。</div>`
+              ? `<div style="margin-top: 2px; color: var(--text-muted);">${bandLabel(dropped)}：<code>${formatNewBand(dropped)}</code>。</div>`
               : ''
           }
-          <div style="margin-top: 3px;"><strong>③</strong> 需要你重新标定：把该列两个端点的真实读数填进下方输入框并点【保存标度】，或先在图上拖拽绿色刻度齿对齐后再保存。重新标定成功后本提示会自动消失。</div>
+          <div style="margin-top: 2px;"><strong>③</strong> 填两个端点的真实读数并点【保存标度】，或先在图上拖拽绿色刻度齿对齐。重标成功后本提示自动消失。</div>
+          <div style="margin-top: 3px; color: var(--text-muted);">刻度齿只是几何位置；【自动提取】只给齿位，读数必须由你填，系统不会替你填。</div>
         </div>
-        <div style="font-size: 10px; color: var(--text-muted); line-height: 1.45; margin-top: 5px;">
-          说明：画布上的刻度齿只是几何位置；【自动提取】只会给出齿位，标定必须由你填写真实读数，系统不会替你填。
-        </div>
-      </div>
+      </details>
     `;
 }
 
@@ -264,17 +266,19 @@ export function renderOtherLostColumnsSummary(
 ): string {
   const others = columnsWithLostXTicks(cols).filter((c) => c.id !== activeId);
   if (others.length === 0) return '';
+  const names = others.map((c) => c.name).join('、');
+  // 折叠成一行：常驻展开会挤占侧栏，把标度输入框与表格推下去。
   return `
-      <div class="inspector-section x-ticks-lost-summary" role="status"
-           style="padding: 7px 9px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-left: 3px solid var(--status-warning); border-radius: 6px; margin-bottom: 12px;">
-        <div style="font-size: 10.5px; font-weight: 700; color: var(--status-warning); margin-bottom: 4px;">
-          另有 ${others.length} 列同样丢了标定
-        </div>
-        <div style="font-size: 10px; line-height: 1.5; color: var(--text-secondary);">
+      <details class="x-ticks-lost-summary" role="status"
+           style="margin-bottom: 6px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-left: 3px solid var(--status-warning); border-radius: 4px; padding: 3px 8px;">
+        <summary style="font-size: 10px; font-weight: 600; color: var(--status-warning); cursor: pointer; list-style: none; display: flex; align-items: center; gap: 4px;">
+          <span style="flex-shrink: 0;">另有 ${others.length} 列同样丢了标定：</span>
+          <span style="color: var(--text-secondary); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${names}</span>
+        </summary>
+        <div style="font-size: 9.5px; line-height: 1.45; color: var(--text-secondary); padding: 4px 0 2px 0;">
           ${others.map((c) => describeLostColumn(c)).join('<br>')}
-          <div style="margin-top: 4px;">逐列重新标定后，各列的提示会各自消失。</div>
         </div>
-      </div>
+      </details>
     `;
 }
 

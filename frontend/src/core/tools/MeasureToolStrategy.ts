@@ -66,6 +66,18 @@ export class MeasureToolStrategy implements ToolStrategy {
       const dy = Math.abs(m.b.y - m.a.y);
       const dist = Math.hypot(dx, dy);
       const thin = dx > 0 && dy > 0 && Math.min(dx, dy) <= 12 && Math.max(dx, dy) > 12;
+
+      // 派发通用测距事件，供步骤 6 参考标尺等面板直接拾取物理跨度
+      try {
+        window.dispatchEvent(
+          new CustomEvent('straditize:measure-ruler', {
+            detail: { dx, dy, dist, a: m.a, b: m.b },
+          })
+        );
+      } catch {
+        // 无 window 环境（如 node 跑单测）安全忽略
+      }
+
       ctx.notifyNotice(
         `测量: Δx ${dx.toFixed(1)} · Δy ${dy.toFixed(1)} · 距离 ${dist.toFixed(1)} px` +
           (thin ? `（横跨方向的 ${Math.min(dx, dy).toFixed(1)}px 即线宽，可填入侧栏"统一厚度"）` : '')

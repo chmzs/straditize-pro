@@ -289,15 +289,37 @@ class XTicksMixin:
 
         col = columns[resolved]
 
-        # Check bounds: tick endpoints should fall reasonably near column boundaries
+        # 检查刻度端点物理合理性：
+        # 1. px0 作为起点基线，必须严格锚定在当前列起点附近（允许 ±15px 手抖误差）；
+        # 2. px1 作为满刻度端点，在花粉图中（如紧凑排版）完全可能超过狭窄列的右边界
+        #    （例如属种含量仅 2% 切出 14px 列宽，但标尺标准跨度为 40px=20%）。
+        #    因此 px1 必须位于 px0 右侧，并允许延伸至合理标尺跨度范围内（不超过图像边界）。
         c_start = float(col.get("startX", col.get("start", 0)))
         c_end = float(col.get("endX", col.get("end", 0)))
-        lo, hi = min(c_start, c_end) - 10, max(c_start, c_end) + 10
-        if not (lo <= px0 <= hi and lo <= px1 <= hi):
-            # Out of bounds warning / guard
+        c_min = min(c_start, c_end)
+        c_max = max(c_start, c_end)
+        max_img_w = float(getattr(self, "width", 0) or 100000.0)
+
+        lo = c_min - 15.0
+        # 允许标尺跨越狭窄列（例如含量 <2% 的 14px 窄列仍可接收 40px 的标准模数标尺）：
+        ref_span = 0.0
+        x_group_id = col.get("x_group_id")
+        if x_group_id:
+            for r_item in getattr(self, "rois", []):
+                for grp in r_item.get("x_groups", []):
+                    if grp.get("id") == x_group_id and grp.get("ref_span_px"):
+                        ref_span = max(ref_span, float(grp["ref_span_px"]))
+        max_span = max(c_max - c_min + 15.0, (ref_span + 15.0) if ref_span > 0 else 80.0)
+        hi = min(c_min + max_span, max_img_w)
+
+        p_left = min(px0, px1)
+        p_right = max(px0, px1)
+
+        if not (lo <= p_left <= c_max + 15.0 and c_min < p_right <= hi):
             raise JsonRpcError(
                 -32602,
-                f"参数范围越界：刻度点像素 ({px0}, {px1}) 超出该列物理范围 [{lo}, {hi}]。请在列边界内拾取有效标尺刻度。",
+                f"参数范围越界：刻度端点 ({px0}, {px1}) 超出有效范围。左端点 ({p_left}) 必须在该列基线附近 [{lo}, {c_max + 15.0}]，"
+                f"右端点 ({p_right}) 必须在有效范围内 (<= {hi})。",
             )
 
         # **先记录，再修改**（B-06）。
