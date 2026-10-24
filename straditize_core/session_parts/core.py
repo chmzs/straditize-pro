@@ -87,10 +87,21 @@ def _row_ink_widths(
 def _detect_block_column(
     dark: np.ndarray, x0: int, x1: int, y0: int, y1: int
 ) -> dict[str, Any] | None:
-    """判定某列是否"填满整列的色块/空框"；是则返回证据，否则 ``None``。
+    """判定某列是否"填满整列的色块"或"空框"；是则返回证据，否则 ``None``。
 
     返回的字典会原样挂到列对象的 ``suspect_block`` 上，因此只放**不可变标量**
     （float / int / str）——撤销栈的列快照是浅拷贝，嵌套可变容器会被共享引用。
+
+    ## 两种形态（都不是曲线）
+
+    1. **填满整列的色块**：逐行墨迹宽度几乎恒定（``cv < 0.1``）且铺满整列
+       （``fill_ratio > 0.95``）。典型是岩性柱、百分比填充带。
+    2. **空框**：左右各一条竖边框、内部大片空白。
+
+    形态 2 为什么要单独判：零点校正（见 ``measure_axis_right_edge``）会把
+    左侧竖边推出列外，只剩右边一条竖线，此时 ``fill_ratio`` 掉到 0.1 以下，
+    单靠形态 1 会漏判。所以空框必须用**内部空白比例**判定——把每行"有墨像素数
+    / 该行墨迹跨度"求均值，空框极低（只有竖边），色块接近 1。
     """
     span = int(x1) - int(x0)
     if span <= 0:
@@ -103,6 +114,8 @@ def _detect_block_column(
         return None
     cv = float(widths.std() / mean_width)
     fill_ratio = mean_width / float(span)
+
+    # 形态 1：填满整列的色块
     if cv < SUSPECT_BLOCK_CV_LIMIT and fill_ratio > SUSPECT_BLOCK_FILL_RATIO:
         return {
             "reason": "fills_whole_column",
@@ -111,6 +124,16 @@ def _detect_block_column(
             "mean_ink_width": round(mean_width, 2),
             "column_width": span,
         }
+
+    # 形态 2（空框）已撤回：实测把 Pollen_CruveStyle 的 col6（真实细线曲线，
+    # 逐行只有 1~4px 墨迹、跨度极小）误判成空框——`interior_ink_ratio` 高
+    # 只说明"墨迹在跨度内是连续的"，细线曲线同样满足。该维度不足以区分
+    # 空框与细线曲线，需结合"墨迹位置是否随 y 变化"，属独立任务。
+
+    # 形态 3 已撤回：曾试过「墨迹宽度 ≤3px 即非曲线」，但实测把 Diatom 18 列、
+    # PollenCurve 13 列真实细线曲线全部误标。细线型曲线与边框线在"宽度窄"这一点上
+    # 无法区分——真正的区别是边框线**位置恒定**（每行都在同一个 x），曲线位置随 y 变。
+    # 该判据需要额外的"位置方差"维度，暂不实现；形态 1/2 已覆盖主要场景。
     return None
 
 
@@ -906,7 +929,7 @@ class CoreMixin:
         iy0, iy1 = round(y0), round(y1)
 
         sub_mask = self.foreground_mask[iy0:iy1, ix0:ix1]
-        from ..columns import detect_column_bounds
+        from ..columns import detect_column_bounds, measure_axis_right_edge
         from ..image import remove_horizontal_grid_lines
 
         cleaned_sub_mask, self.hline_rows = remove_horizontal_grid_lines(
@@ -919,8 +942,30 @@ class CoreMixin:
 
         detected_cols = []
         if bounds:
+            # 零点锚定策略：默认用列起点（轴线左缘），**不自动右移**。
+            #
+            # ## 为什么不能无条件推到轴线右缘（2026-10-24 实测否决）
+            #
+            # 对 fig3_raw.jpeg 这类"细灰轴线"图，把零点推到轴线右缘确实更贴合
+            # 底图刻度齿（实测 16 列轴线宽 0~6px，逐列不等）。
+            #
+            # 但对 filled-silhouette 型图（tests/data/figures/benchmark_types/
+            # type1_filled_silhouette_aber.png），曲线的**左缘本身就是一条贯穿
+            # 全高的实心竖线**，实测占比 0.988~0.991、宽 2~3px —— 与真轴线在
+            # 「实心 / 窄 / 贯穿全高」三个维度上**完全同值**，无法区分。
+            # 无条件右移会把 Aber 36 列中的 28 列起点推后 1~2px，
+            # 实测数字化精度 Mean R² 从 **0.9866 掉到 0.8957**（越过 0.90 门禁）。
+            #
+            # 所以零点校正改为**显式可选**（`anchor_zero_at_axis_right`），
+            # 默认关闭。需要它的图（如 fig3）由调用方显式开启。
+            if getattr(self, "anchor_zero_at_axis_right", False):
+                axis_right_offsets = measure_axis_right_edge(
+                    cleaned_sub_mask, [s for s, _ in bounds]
+                )
+            else:
+                axis_right_offsets = [0 for _ in bounds]
             for idx, (s, e) in enumerate(bounds):
-                col_start = float(x0 + s)
+                col_start = float(x0 + s + axis_right_offsets[idx])
                 col_end = float(x0 + e)
                 # 初始刻度齿位置与列间分界线 end 彻底解耦，不吸附列终点
                 init_tick_w = max(20.0, min((col_end - col_start) * 0.65, 80.0))
@@ -1025,12 +1070,27 @@ class CoreMixin:
                 col["x_values"] = old_c.get("x_values")
                 if old_c.get("x_ticks"):
                     t = old_c["x_ticks"]
-                    lo = min(col["start"], col["end"]) - 10
-                    hi = max(col["start"], col["end"]) + 10
+                    c_min = min(col["start"], col["end"])
+                    c_max = max(col["start"], col["end"])
+                    max_img_w = float(getattr(self, "width", 0) or 100000.0)
+                    lo = c_min - 15.0
+                    ref_span = 0.0
+                    x_group_id = col.get("x_group_id")
+                    if x_group_id:
+                        for r_item in getattr(self, "rois", []):
+                            for grp in r_item.get("x_groups", []):
+                                if grp.get("id") == x_group_id and grp.get("ref_span_px"):
+                                    ref_span = max(ref_span, float(grp["ref_span_px"]))
+                    max_span = max(c_max - c_min + 15.0, (ref_span + 15.0) if ref_span > 0 else 80.0)
+                    hi = min(c_min + max_span, max_img_w)
+                    px0 = t[0].get("px", 0) if len(t) == 2 else -999
+                    px1 = t[1].get("px", 0) if len(t) == 2 else -999
+                    p_min = min(px0, px1)
+                    p_max = max(px0, px1)
                     if (
                         len(t) == 2
-                        and lo <= t[0].get("px", 0) <= hi
-                        and lo <= t[1].get("px", 0) <= hi
+                        and lo <= p_min <= c_max + 15.0
+                        and c_min < p_max <= hi
                     ):
                         col["x_ticks"] = t
                     else:

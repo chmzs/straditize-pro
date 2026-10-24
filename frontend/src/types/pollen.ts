@@ -102,6 +102,12 @@ export interface ColumnGroup {
   scale_type: 'linear' | 'log';
   exaggeration_mult?: number | null;
   tick_layout: Array<{ rel: number }>;
+  /** 组参考标尺物理跨度 (px)，例如 38.5px 对应 20% */
+  ref_span_px?: number;
+  /** 组参考标尺起始读数 (例如 0) */
+  ref_val_start?: number;
+  /** 组参考标尺终止读数 (例如 20) */
+  ref_val_end?: number;
 }
 
 export interface Column {

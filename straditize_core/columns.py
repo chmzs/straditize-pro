@@ -178,6 +178,90 @@ def detect_column_bounds(binary: np.ndarray,
     return bounds
 
 
+def measure_axis_right_edge(binary: np.ndarray,
+                            starts: Sequence[int],
+                            solid_ratio: float = 0.9,
+                            max_probe: int = 8,
+                            max_axis_width: int = 8,
+                            axis_full_height_ratio: float = 0.95) -> list[int]:
+    """每个列起点处灰色 Y 轴线的右缘偏移量（相对起点，单位 px）。
+
+    ## 为什么需要这个量
+
+    `detect_column_bounds` 返回的 `start` 是轴线**左缘**（该处第一个暗像素）。
+    但在科研绘图软件（Origin / R / Python）里，X 轴刻度齿是从轴线**右缘**
+    开始向右生长的，曲线也从右缘起笔。若直接拿左缘当零点：
+
+    1. 轴线自身会被当成"满值墨迹"读入（该列首几列暗占比 = 1.00），
+       造成**逐列不同的系统性左偏**；
+    2. 画布上的零点标记落在灰线左侧，与底图刻度齿对不齐。
+
+    实测 fig3_raw.jpeg（2132×928，16 列）轴线宽：
+    `[2, 1, 2, 0, 2, 5, 1, 2, 0, 6, 6, 6, 0, 2, 1, 0]` px。
+    宽度逐列不同，所以必须**逐列**测量，不能用固定偏移。
+
+    ## 判据（两个条件同时成立才算"轴线"）
+
+    1. 从 `start` 起，连续「该列暗像素占比 > `solid_ratio`」的宽度不超过
+       `max_probe`（轴线是**细**线，实测 0~6px）；
+    2. 越过这段实心之后，必须能读到非实心像素（曲线或空白）。
+
+    **为什么需要第 1 条**：本图 col10/col11 起点处暗占比 0.98 一直延续
+    15px 以上——那不是灰轴线，而是**整块实心填充**（岩性柱/色块）。对这类列
+    没有细轴线可寻，强行把零点推进实心块内部会把整块填充读成偏移量，
+    反而更错。这种情况返回 0，零点保持在起点。
+
+    Returns
+    -------
+    list of int
+        与 `starts` 等长的偏移量列表，每个元素 ∈ [0, max_probe]。
+        实心块列返回 0。
+    """
+    arr = np.asarray(binary)
+    if arr.ndim != 2 or arr.size == 0:
+        return [0 for _ in starts]
+
+    height, width = arr.shape
+    if height == 0:
+        return [0 for _ in starts]
+
+    offsets: list[int] = []
+    for start in starts:
+        base = int(start)
+        offset = 0
+        still_solid = True
+        for probe in range(max_probe):
+            x = base + probe
+            if x < 0 or x >= width:
+                break
+            column = arr[:, x]
+            if column.mean() <= solid_ratio:
+                still_solid = False
+                break
+            offset = probe + 1
+        # 实心块（宽度达到上限仍未断开）：没有细轴线可寻，零点保持起点。
+        if still_solid and offset >= max_probe:
+            offset = 0
+        # 轴线必须**极窄**：实测真灰轴线宽 0~7px（fig3 最宽 7px）。
+        if offset > max_axis_width:
+            offset = 0
+        # 轴线必须**贯穿整列高度**：Y 轴线从图顶画到底，每一行都有它。
+        #
+        # 这条是区分「真轴线」与「填充轮廓左缘」的决定性判据。实测对比
+        # （同一 mask 口径、同一 solid_ratio）：
+        #   fig3_raw.jpeg col1  x=332,333 占比 1.00,1.00 → 贯穿，是轴线
+        #   type1_filled_silhouette_aber col6 x=157,158 占比 0.24,0.24 → 不贯穿，
+        #     是 filled-silhouette 曲线的左实心边缘（曲线只占部分高度）
+        # 两者的"是否实心"相同，只有"是否贯穿全高"不同。
+        if offset > 0:
+            axis_col = arr[:, base : base + offset]
+            covered = axis_col.any(axis=1).mean()
+            if covered < axis_full_height_ratio:
+                offset = 0
+        offsets.append(offset)
+    return offsets
+
+
 def slice_columns(image_or_binary: np.ndarray,
                   bounds: Sequence[tuple[int, int]]) -> list[np.ndarray]:
     """Slice 2D or 3D array into column sections based on (start, end) bounds."""

@@ -164,17 +164,21 @@ export function renderOtherSuspectColumnsSummary(
 ): string {
   const others = columnsWithSuspectBlock(cols).filter((c) => c.id !== activeId);
   if (others.length === 0) return '';
+  const names = others.map((c) => c.name).join('、');
+  // 默认折叠成**一行**：侧栏的主要职责是让用户看到属种表格，常驻的多行警示
+  // 会把表格挤到只剩几行（用户实测反馈"表格浏览留着这么小的空间"）。
+  // 用 <details>：折叠时只占一行高度，展开才看逐列判据。
   return `
-      <div class="inspector-section suspect-block-summary" role="status"
-           style="padding: 7px 9px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-left: 3px solid var(--status-warning); border-radius: 6px; margin-bottom: 12px;">
-        <div style="font-size: 10.5px; font-weight: 700; color: var(--status-warning); margin-bottom: 4px;">
-          另有 ${others.length} 列同样被标记为可能是色块
-        </div>
-        <div style="font-size: 10px; line-height: 1.5; color: var(--text-secondary);">
+      <details class="suspect-block-summary" role="status"
+           style="margin-bottom: 6px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-left: 3px solid var(--status-warning); border-radius: 4px; padding: 3px 8px;">
+        <summary style="font-size: 10px; font-weight: 600; color: var(--status-warning); cursor: pointer; list-style: none; display: flex; align-items: center; gap: 4px;">
+          <span style="flex-shrink: 0;">另有 ${others.length} 列可能是色块：</span>
+          <span style="color: var(--text-secondary); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${names}</span>
+        </summary>
+        <div style="font-size: 9.5px; line-height: 1.45; color: var(--text-secondary); padding: 4px 0 2px 0;">
           ${others.map((c) => describeSuspectColumn(c)).join('<br>')}
-          <div style="margin-top: 4px;">逐列确认后，各列的提示会各自消失（若该列被重新分列后不再命中）。</div>
         </div>
-      </div>
+      </details>
     `;
 }
 
@@ -188,23 +192,25 @@ export function renderSplitSuspectNotice(cols: Column[]): string {
   if (suspect.length === 0) return '';
   const head =
     suspect.length === 1
-      ? '本次分列后有 1 列可能是色块/填充带，不是曲线'
-      : `本次分列后有 ${suspect.length} 列可能是色块/填充带，不是曲线`;
+      ? '分列后 1 列可能是色块（非曲线）'
+      : `分列后 ${suspect.length} 列可能是色块（非曲线）`;
+  const names = suspect.map((c) => c.name).join('、');
+  // 折叠成一行：这一行本身就是"提醒存在"，细节按需展开。
+  // 常驻展开会把下方属种表格压到只剩几行（用户实测反馈）。
   return `
       <!-- 分列产出的色块标记（P1 suspect_block）：在分列这一步就报出来。 -->
-      <div class="inspector-section suspect-block-notice" role="alert"
+      <details class="suspect-block-notice" role="alert"
            data-panel="step5" data-suspect-count="${suspect.length}"
-           style="padding: 9px 10px; background: color-mix(in srgb, var(--status-warning) 8%, transparent); border: 1px solid var(--status-warning); border-left: 3px solid var(--status-warning); border-radius: 6px; margin-bottom: 12px;">
-        <div style="font-size: 11.5px; font-weight: 700; color: var(--status-warning); margin-bottom: 6px;">
-          ${head}
-        </div>
-        <div style="font-size: 10.5px; line-height: 1.55; color: var(--text-secondary);">
+           style="margin-bottom: 6px; background: color-mix(in srgb, var(--status-warning) 8%, transparent); border: 1px solid var(--status-warning); border-left: 3px solid var(--status-warning); border-radius: 4px; padding: 3px 8px;">
+        <summary style="font-size: 10px; font-weight: 600; color: var(--status-warning); cursor: pointer; list-style: none; display: flex; align-items: center; gap: 4px;">
+          <span style="flex-shrink: 0;">${head}：</span>
+          <span style="color: var(--text-secondary); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${names}</span>
+        </summary>
+        <div style="font-size: 9.5px; line-height: 1.45; color: var(--text-secondary); padding: 4px 0 2px 0;">
           ${suspect.map((c) => describeSuspectColumn(c)).join('<br>')}
-          <div style="margin-top: 5px;">
-            这些列的墨迹填满整列、宽度几乎不随层位变化，更像色块而非曲线。它们的读数会照原样进入导出，系统不会自动剔除；请在步骤 6 逐列确认是否要保留。
-          </div>
+          <div style="margin-top: 4px;">读数照原样进入导出，系统不会自动剔除；请在步骤 6 逐列确认是否保留。</div>
         </div>
-      </div>
+      </details>
     `;
 }
 

@@ -61,36 +61,31 @@ export function render(data: DiagramData): string {
       ${suspectNotice}
       ${lostTicksNotice}
 
-      <!-- OCR 属种识别区域 -->
-      <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border-color);">
-        <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">${t('step5.ocrSection')}</div>
-        <p style="font-size: 10px; color: var(--text-muted); margin: 0 0 8px 0; line-height: 1.4;">
-          ${t('step5.ocrDesc')}
-        </p>
-        <button id="btn-trigger-ocr" class="ui-btn ui-btn--secondary" style="width: 100%; font-size: 11px; padding: 5px;">
+      <!-- OCR 属种识别：按钮常驻（主操作），说明文字收进 title，不再占版面 -->
+      <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+        <button id="btn-trigger-ocr" class="ui-btn ui-btn--secondary" style="flex: 1; font-size: 11px; padding: 5px;" title="${t('step5.ocrDesc')}">
           ${t('step5.ocrBtn')}
         </button>
       </div>
 
-      <!-- 区间归属与对账清单 (Ticket T11) -->
-      <div class="inspector-section" style="margin-bottom: 12px;">
-        <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">${t('step5.reconTitle')}</div>
-        <div id="naming-recon-box" class="info-kv-box" style="line-height: 1.6; font-family: monospace;">
+      <!-- 对账清单与逐列说明：默认折叠成一行摘要。
+           侧栏的主要职责是让用户浏览属种表格，这三个常驻区块会把表格挤到只剩
+           几行（用户实测反馈"表格浏览留着这么小的空间"）。 -->
+      <details class="inspector-section" style="margin-bottom: 6px; padding: 3px 8px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 4px;">
+        <summary style="font-size: 10px; font-weight: 600; color: var(--text-secondary); cursor: pointer; list-style: none; display: flex; align-items: center; gap: 4px;">
+          <span style="flex-shrink: 0;">${t('step5.reconTitle')}</span>
+          <span style="color: ${recon.columns_without_label.length > 0 || recon.labels_without_column.length > 0 ? 'var(--status-warning)' : 'var(--text-muted)'}; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            ${recon.columns_without_label.length > 0 || recon.labels_without_column.length > 0 ? '有未配对项，点击展开' : '全部已配对'}
+          </span>
+        </summary>
+        <div id="naming-recon-box" class="info-kv-box" style="line-height: 1.5; font-family: monospace; font-size: 9.5px; padding: 4px 0 2px 0;">
           <div>• 配对列表: <span id="lbl-assign" style="color: var(--accent-blue); font-weight: 600;">${assignGrammar}</span></div>
           <div>• 缺标签列: <span id="lbl-without-label" style="color: ${recon.columns_without_label.length > 0 ? 'var(--status-warning)' : 'inherit'}; font-weight: 600;">${withoutLabelGrammar}</span></div>
           <div>• 列外标签: <span id="lbl-without-column" style="color: ${recon.labels_without_column.length > 0 ? 'var(--accent-red)' : 'inherit'}; font-weight: 600;">${withoutColumnGrammar}</span></div>
           <div>• 跨界/歧义: <span>[${recon.ambiguous.join(',')}]</span></div>
+          <div style="margin-top: 4px; color: var(--text-muted);">${t('step5.sequentialTitle')} ${t('step5.selectedCol')} <strong id="naming-sequential-highlight" style="color: var(--accent-green);">${activeColId}</strong> — ${t('step5.sequentialDesc')}</div>
         </div>
-      </div>
-
-      <!-- 逐列点名模式说明 -->
-      <div class="info-callout" style="margin-bottom: 12px;">
-        <div style="font-size: 11px; font-weight: 700; color: var(--accent-blue); margin-bottom: 4px;">${t('step5.sequentialTitle')}</div>
-        <div style="font-size: 10px; line-height: 1.4;">
-          ${t('step5.selectedCol')} <strong id="naming-sequential-highlight" style="color: var(--accent-green);">${activeColId}</strong><br>
-          ${t('step5.sequentialDesc')}
-        </div>
-      </div>
+      </details>
 
       <!-- 阶段提交按钮 -->
       <button id="btn-apply-naming-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">

@@ -33,6 +33,10 @@ export function createInspectorCallbacks(
   callbacks: InspectorBridgeCallbacks
 ) {
   return {
+    onSetToolMode: (mode: any) => {
+      canvasComponent.setToolMode(mode);
+      getToolbar()?.setToolMode(mode);
+    },
     onToggleCollapse: (collapsed: boolean) => {
       callbacks.setInspectorCollapsed?.(collapsed);
     },

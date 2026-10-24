@@ -10,6 +10,8 @@ export interface StepContext {
   onCalibrateXTicks?: (colIndex: number, val1Raw: string, val2Raw: string) => void;
   /** 步骤 6：清空该列的 X 标度，回到「未标定」。 */
   onClearXTicks?: (colIndex: number) => void;
+  /** 切换画布工具模式（如切到 measure 测距工具） */
+  onSetToolMode?: (mode: any) => void;
   [key: string]: any;
 }
 
