@@ -180,11 +180,12 @@ def detect_column_bounds(binary: np.ndarray,
 
 def measure_axis_right_edge(rgb: np.ndarray,
                             binary: np.ndarray,
-                            starts: Sequence[int],
+                            bounds: Sequence[tuple[int, int]],
                             solid_ratio: float = 0.9,
                             max_probe: int = 8,
                             max_axis_width: int = 8,
-                            max_color_ratio: float = 0.15) -> list[int]:
+                            max_color_ratio: float = 0.15,
+                            max_offset_ratio: float = 0.10) -> list[int]:
     """每个列起点处 Y 轴基线的右缘偏移量（相对起点，单位 px）。
 
     ## 用途
@@ -229,17 +230,18 @@ def measure_axis_right_edge(rgb: np.ndarray,
     rgb_arr = np.asarray(rgb)
     bin_arr = np.asarray(binary)
     if bin_arr.ndim != 2 or bin_arr.size == 0:
-        return [0 for _ in starts]
+        return [0 for _ in bounds]
     if rgb_arr.ndim == 2:
         rgb_arr = np.stack([rgb_arr] * 3, axis=-1)
 
     height, width = bin_arr.shape
     if height == 0:
-        return [0 for _ in starts]
+        return [0 for _ in bounds]
 
     offsets: list[int] = []
-    for start in starts:
+    for start, end in bounds:
         base = int(start)
+        width_span = int(end) - int(start)
         if base < 0 or base >= width:
             offsets.append(0)
             continue
@@ -263,7 +265,25 @@ def measure_axis_right_edge(rgb: np.ndarray,
 
         axis_first = rgb_arr[:, base].astype(np.int16)
         colored = ((axis_first.max(axis=1) - axis_first.min(axis=1)) > 30).mean()
-        offsets.append(offset if colored <= max_color_ratio else 0)
+        if colored > max_color_ratio:
+            offsets.append(0)
+            continue
+
+        # 条件 3：右移量不得超过列宽的 `max_offset_ratio`。
+        #
+        # 这条是实测发现的真正约束（不是猜的）。比较两图的"右移占比"：
+        #   fig3（列宽 37-38px）：2.7%~7.9%
+        #   Aber 窄列（宽 12px）：**16.7%** —— 把可用量程压掉六分之一
+        # 同一张图里，宽列（56/65px）占比只有 0~3.1%，与 fig3 一致。
+        #
+        # 也就是说，问题不在"能不能认出基线"，而在"窄列有没有余量承受偏移"。
+        # Aber 有 26/36 列宽度 < 15px（最小 7px），右移 1~2px 等于压缩 7%~13%
+        # 量程，把原本就微弱的百分比值进一步压低，实测 Mean R² 掉到 0.8959。
+        # 限幅后窄列保持原点，宽列正常右移。
+        if width_span > 0 and offset / float(width_span) > max_offset_ratio:
+            offsets.append(0)
+            continue
+        offsets.append(offset)
 
     return offsets
 

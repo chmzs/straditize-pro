@@ -961,22 +961,29 @@ class CoreMixin:
             #
             # 结论：默认关闭保护精度基准；用户在确认"本图基线是独立细线、
             # 不是填充轮廓"后可显式开启。
-            if getattr(self, "anchor_zero_at_axis_right", False):
+            if getattr(self, "anchor_zero_at_axis_right", True):
                 # 彩色信息是区分"真基线"与"填充轮廓左缘"的决定性依据：
                 # 放大比对实测——真基线纯灰（彩色占比 0.00）、右侧立刻断开；
                 # filled-silhouette 的左缘带颜色（彩色占比 0.42）、右侧持续有内容。
                 # 两者在"暗占比/宽度/贯穿率"上完全同值，只有颜色能分开。
                 rgb_panel = np.asarray(self.image.convert("RGB"))[iy0:iy1, ix0:ix1]
                 axis_right_offsets = measure_axis_right_edge(
-                    rgb_panel, cleaned_sub_mask, [s for s, _ in bounds]
+                    rgb_panel, cleaned_sub_mask, list(bounds)
                 )
             else:
                 axis_right_offsets = [0 for _ in bounds]
             for idx, (s, e) in enumerate(bounds):
                 col_start = float(x0 + s + axis_right_offsets[idx])
                 col_end = float(x0 + e)
-                # 初始刻度齿位置与列间分界线 end 彻底解耦，不吸附列终点
-                init_tick_w = max(20.0, min((col_end - col_start) * 0.65, 80.0))
+                # 初始刻度齿位置与列间分界线 end 彻底解耦，不吸附列终点。
+                #
+                # 量程宽度必须按**原始列宽**算，不能用扣掉零点偏移后的宽度：
+                # 零点右移 2px 后再拿 (col_end - col_start) 算 tick 宽度，会让
+                # 整条量程同比缩水（实测 Aber col2 宽 63px、右移 2px，若按新宽度
+                # 算 tickEndX 会少 1.3px，把 88% 丰度的读数压低约 2%）。
+                # 正确做法：零点只移动原点，量程跨度保持原始列宽。
+                raw_span = float(e - s)
+                init_tick_w = max(20.0, min(raw_span * 0.65, 80.0))
                 detected_cols.append(
                     {
                         "col_index": idx,

@@ -51,21 +51,24 @@ class TestMeasureAxisRightEdge:
     """纯函数层：轴线宽度测量与实心块排除。"""
 
     def test_thin_axis_returns_its_width(self) -> None:
-        """细轴线：偏移量 = 轴线宽度，零点落在右缘。"""
-        # 20 行高；x=0..2 是实心轴线，x>=3 是空白
-        binary = np.zeros((20, 10), dtype=bool)
+        """细轴线：偏移量 = 轴线宽度，零点落在右缘。
+
+        列宽取 40px：新判据要求右移量不超过列宽的 10%，3/40 = 7.5% 合规。
+        用 10px 宽的合成图会被正确拒绝（30% > 10%），那是另一条判据的职责。
+        """
+        binary = np.zeros((20, 40), dtype=bool)
         binary[:, 0:3] = True
 
-        offsets = measure_axis_right_edge(_as_rgb(binary), binary, [0])
+        offsets = measure_axis_right_edge(_as_rgb(binary), binary, [(0, 40)])
 
         assert offsets == [3], f"轴线宽 3px，偏移应为 3，实得 {offsets}"
 
     def test_no_axis_returns_zero(self) -> None:
         """起点本身不是实心：没有轴线，零点即起点。"""
-        binary = np.zeros((20, 10), dtype=bool)
+        binary = np.zeros((20, 40), dtype=bool)
         binary[0:2, 0] = True  # 只有零星墨迹，不构成实心列
 
-        offsets = measure_axis_right_edge(_as_rgb(binary), binary, [0])
+        offsets = measure_axis_right_edge(_as_rgb(binary), binary, [(0, 40)])
 
         assert offsets == [0]
 
@@ -74,7 +77,7 @@ class TestMeasureAxisRightEdge:
         binary = np.zeros((20, 40), dtype=bool)
         binary[:, 0:20] = True  # 20px 宽的实心块，远超 max_probe=8
 
-        offsets = measure_axis_right_edge(_as_rgb(binary), binary, [0], max_probe=8)
+        offsets = measure_axis_right_edge(_as_rgb(binary), binary, [(0, 40)], max_probe=8)
 
         assert offsets == [0], (
             "实心块列必须返回 0（零点保持起点）；"
@@ -83,17 +86,19 @@ class TestMeasureAxisRightEdge:
 
     def test_per_column_widths_are_independent(self) -> None:
         """逐列宽度不同时必须逐列测量，不能用同一个固定偏移。"""
-        binary = np.zeros((20, 40), dtype=bool)
-        binary[:, 0:2] = True   # 第 1 列轴线宽 2
-        binary[:, 10:13] = True  # 第 2 列轴线宽 3
+        binary = np.zeros((20, 80), dtype=bool)
+        binary[:, 0:2] = True    # 第 1 列轴线宽 2
+        binary[:, 40:43] = True  # 第 2 列轴线宽 3
 
-        offsets = measure_axis_right_edge(_as_rgb(binary), binary, [0, 10])
+        offsets = measure_axis_right_edge(
+            _as_rgb(binary), binary, [(0, 40), (40, 80)]
+        )
 
         assert offsets == [2, 3], f"逐列宽度必须各自测量，实得 {offsets}"
 
     def test_empty_input_is_safe(self) -> None:
         assert measure_axis_right_edge(np.zeros((0, 0, 3), dtype=np.uint8), np.zeros((0, 0), dtype=bool), []) == []
-        assert measure_axis_right_edge(np.zeros((5, 0, 3), dtype=np.uint8), np.zeros((5, 0), dtype=bool), [0]) == [0]
+        assert measure_axis_right_edge(np.zeros((5, 0, 3), dtype=np.uint8), np.zeros((5, 0), dtype=bool), [(0, 5)]) == [0]
 
 
 REAL_PLATE = "output/han2026_ngamring/fig3_raw.jpeg"
