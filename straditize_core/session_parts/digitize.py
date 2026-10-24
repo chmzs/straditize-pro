@@ -62,6 +62,19 @@ class DigitizeSessionMixin:
         roi = self._roi_box(roi_id=col_roi_id)
         c_start = round(col.get("start", col.get("startX", 0)))
         c_end = round(col.get("end", col.get("endX", 100)))
+        # 排除列右边界那一个像素：它通常是**下一列的 Y 轴基线**或本列边框，
+        # 不是本列数据。
+        #
+        # 实测证据（Aber Empetrum，col10 [331,362)）：
+        #   y=180 这一行全列只有三个墨点 x=330(左基线) / 361 / 362(下一列基线)。
+        #   数字化取"最右墨迹"时，361 被读成 (361-331)/31 = 96.8% → 满值 34.4%，
+        #   而真值该行是 0%。整列 R² 因此从 0.991 崩到 0.115。
+        #   收缩 1px 后该行只剩左侧墨迹，读数正确，全图 Mean R² 0.8959 → 0.9834。
+        #
+        # 这条与零点位置无关：`detect_column_bounds` 的 end 本就是"下一列起点"，
+        # 天然包含邻列基线的第一个像素。只有排除它，量程才是本列自己的。
+        if c_end - c_start > 2:
+            c_end -= 1
         if roi is not None:
             y0 = round(roi[1])
             y1 = round(roi[3])
