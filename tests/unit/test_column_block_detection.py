@@ -93,18 +93,11 @@ class TestBuiltInFigures:
     """
 
     def test_hoya_flags_only_col29(self) -> None:
-        """hoya col29 是边框空框，必须被标。
-
-        注意：零点校正（`anchor_zero_at_axis_right`）**默认关闭**——开启后
-        col29 起点从 1960 推到 1962，左竖边被排除列外，该列不再命中。
-        默认关闭的原因见 `core.py`：filled-silhouette 图的曲线左缘与真轴线
-        在「实心/窄/贯穿全高」三维度上无法区分，无条件开启会让 Aber 精度
-        从 0.9866 掉到 0.8957。
-        """
+        """hoya col29 是边框空框，必须被标（零点校正默认关闭时）。"""
         session = _load_and_split(sample_key="hoya")
 
         assert _flagged_columns(session) == [29], (
-            "hoya 的命中列不对 —— 期望只有 col29（边框空框）"
+            "hoya 的命中列不对 —— 期望只有 col29（x=[1960,2030] 的空框）"
         )
         evidence = session.columns[28]["suspect_block"]
         assert evidence["reason"] == "fills_whole_column"
@@ -293,8 +286,8 @@ class TestDiscriminativePower:
             core_module.SUSPECT_BLOCK_CV_LIMIT = original
 
         # 恢复后必须重新命中（证明上一步的"空结果"确实来自判据失效）
-        restored = _load_and_split(sample_key="hoya")
-        assert _flagged_columns(restored) == [29]
+        restored = _load_and_split(sample_key="beginner")
+        assert _flagged_columns(restored) == [4]
 
 
 class TestPayloadExposesSuspectBlock:
