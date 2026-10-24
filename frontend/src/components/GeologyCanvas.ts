@@ -1573,6 +1573,8 @@ export class GeologyCanvas {
     const brScreen = this.viewport.worldToScreen({ x: roi.xMax, y: roi.yMax });
     const midX = (tlScreen.x + brScreen.x) / 2;
     const midY = (tlScreen.y + brScreen.y) / 2;
+    (window as any).__roiProbe = { tl: tlScreen, br: brScreen, mid: { x: midX, y: midY },
+      stage: this.workflowStage, roi: { xMin: roi.xMin, yMin: roi.yMin, xMax: roi.xMax, yMax: roi.yMax } };
 
     const handles: Record<RoiHandle, Point2D> = {
       tl: { x: tlScreen.x, y: tlScreen.y },
