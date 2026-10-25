@@ -968,7 +968,7 @@ class CoreMixin:
                 # 两者在"暗占比/宽度/贯穿率"上完全同值，只有颜色能分开。
                 rgb_panel = np.asarray(self.image.convert("RGB"))[iy0:iy1, ix0:ix1]
                 axis_right_offsets = measure_axis_right_edge(
-                    rgb_panel, cleaned_sub_mask, list(bounds)
+                    rgb_panel, cleaned_sub_mask, [s for s, _ in bounds]
                 )
             else:
                 axis_right_offsets = [0 for _ in bounds]
