@@ -100,6 +100,65 @@ def find_axis_row(
     return int(rows.max()) + lo
 
 
+def _find_axis_x(
+    gray: np.ndarray,
+    x0: float,
+    x1: float,
+    axis_row: int,
+    *,
+    dark_threshold: int = DARK_THRESHOLD,
+    min_frac: float = 0.85,
+) -> tuple[float | None, float | None]:
+    """该列轴线（spine）的 x，返回 ``(左缘, 右缘)``。
+
+    做法：在轴线上方的绘图主体里按行采样，取**贯穿 ≥min_frac 行数的最左暗列**——
+    轴线是唯一满足这一条的竖线（文字标签只是局部暗，填充则起点就在轴线上）。
+
+    **为什么不能直接用 ``col.start``**：列切分给的是列边界，实测它会落在轴线的左侧
+    （beginner 图 col0 差 1px）或右侧（col1 差 6px），22 列图上偏差可到 20px。
+    面积图的 0 点画在轴线上，所以锚点必须实测。
+
+    右缘 = 左缘 + 描边宽度 - 1；描边宽度按各行「从轴线起的连续暗 run」的**最小值**估计
+    （填充最薄那一行只剩描边），并夹到 1–6px。图上轴线描边普遍 1–3px，左/右缘之差
+    折算成读数不到半个单位。
+    """
+    h, w = gray.shape
+    top = max(0, int(axis_row * 0.15))
+    bottom = max(top + 1, int(axis_row) - 4)
+    step = max(1, (bottom - top) // 120)
+    rows = list(range(top, bottom, step))
+    lo = max(0, int(x0) - 8)
+    hi = min(w, int(x1))
+    if not rows or hi <= lo:
+        return None, None
+
+    counter = np.zeros(w, dtype=int)
+    for r in rows:
+        counter += (gray[r] < dark_threshold).astype(int)
+    need = len(rows) * min_frac
+
+    left: int | None = None
+    for x in range(lo, hi):
+        if counter[x] >= need:
+            left = x
+            break
+    if left is None:
+        return None, None
+
+    run_lengths: list[int] = []
+    for r in rows:
+        run = 0
+        for x in range(left, min(hi, left + 12)):
+            if gray[r, x] < dark_threshold:
+                run += 1
+            else:
+                break
+        if run > 0:
+            run_lengths.append(run)
+    stroke = int(np.clip(min(run_lengths) if run_lengths else 1, 1, 6))
+    return float(left), float(left + stroke - 1)
+
+
 def detect_ruler(
     gray: np.ndarray,
     x0: int,
@@ -130,12 +189,22 @@ def detect_ruler(
         "spacing_px": None,
         "regular": None,
         "column_width": int(x1 - x0),
+        # 面积/柱状图的 0 点画在轴线（spine）上；`col.start` 只是列切分给的边界代理，
+        # 实测可偏离轴线数个像素（22 列图上见过 6px）。故轴线位置单独实测。
+        "axis_x": None,
+        "axis_x_right": None,
     }
 
     axis = find_axis_row(gray, x0, x1, dark_threshold=dark_threshold)
     if axis is None:
         return result
     result["axis_row"] = axis
+
+    axis_x, axis_x_right = _find_axis_x(
+        gray, x0, x1, axis, dark_threshold=dark_threshold
+    )
+    result["axis_x"] = axis_x
+    result["axis_x_right"] = axis_x_right
 
     lo = axis + search_below[0]
     hi = min(h, axis + search_below[1])

@@ -4,11 +4,14 @@
  */
 export function createAgeDepthModalHtml(): string {
   return `
-    <div class="modal-dialog modal-large agedepth-dialog">
+    <div class="modal-dialog agedepth-dialog">
       <div class="ui-modal__header">
-        <div>
+        <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;">
           <h3 class="ui-modal__title">年代-深度模型</h3>
           <span class="ui-status">Bacon / geoChronR</span>
+          <!-- 当前图谱来源。原先挂在右侧「图谱数据源」块里，与中间空白区的上传按钮重复，
+               该块已删除；标签移到这里，既保留信息又不占一个操作位。 -->
+          <span id="ad-current-source-label" style="color: var(--accent-blue); font-size: var(--font-size-sm);">未载入</span>
         </div>
         <button class="ui-icon-btn" id="ad-close-btn" aria-label="关闭年代模型窗口" title="关闭">&times;</button>
       </div>
@@ -93,18 +96,22 @@ export function createAgeDepthModalHtml(): string {
               <span>视觉检查标准：高亮蓝线应精确穿过深色脊线；琥珀色阴影应贴合灰色置信区间边缘。</span>
               <span id="ad-status-msg" style="color: var(--status-success);"></span>
             </div>
+
+            <!-- 唯一的文件选择器：#ad-btn-center-browse 触发它；拖拽也走同一个 input。 -->
+            <input type="file" id="ad-file-input" accept="image/*" style="display: none;" />
           </div>
 
-          <!-- 右侧控制区 -->
-          <div class="ad-control-pane" style="width: 330px; flex-shrink: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; background: var(--bg-tertiary); padding: 12px; border-radius: 6px; border: 1px solid var(--border-light); overflow-y: auto;">
-            <div class="form-group" style="margin: 0; background: rgba(56, 189, 248, 0.05); padding: 8px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.2);">
-              <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; margin-bottom: 6px;">
-                <span>图谱数据源:</span>
-                <span id="ad-current-source-label" style="color: var(--accent-blue);">未载入</span>
-              </div>
-              <button class="ui-btn ui-btn--primary" id="ad-btn-upload-file" style="width: 100%; font-size: 11px; padding: 5px;">上传本地图谱</button>
-              <input type="file" id="ad-file-input" accept="image/*" style="display: none;" />
-            </div>
+          <!-- 分隔条：拖动改控制栏宽度，双击复位 -->
+          <div class="ad-pane-splitter" id="ad-pane-splitter" role="separator"
+               aria-orientation="vertical" tabindex="0"
+               title="拖动调节控制栏宽度（双击复位）"></div>
+
+          <!-- 右侧控制区：宽度由 --ad-pane-width 决定，不再写死 330px -->
+          <div class="ad-control-pane">
+            <!-- 原先这里有一个「图谱数据源 / 上传本地图谱」块，与画布空白区的
+                 「选择本地年代图」按钮指向同一个 fileInput.click()，属重复入口，已删除。
+                 上传只保留一个入口：画布中央 #ad-btn-center-browse；
+                 当前图谱名称移到标题栏 #ad-current-source-label。 -->
 
             <!-- ============ 步骤 1：坐标轴标定 ============ -->
             <div class="form-group" style="margin: 0; padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
@@ -161,6 +168,16 @@ export function createAgeDepthModalHtml(): string {
                     <span>深度轴 log 变换</span>
                   </label>
                 </div>
+                <!-- 年龄方向：由标定自动推出，用户可强制覆盖 -->
+                <div style="margin-top: 7px; display: grid; grid-template-columns: auto 1fr; gap: 5px 6px; align-items: center;">
+                  <label style="color: var(--text-secondary); font-size: 10px;">年代方向</label>
+                  <select id="ad-sel-age-direction" style="width: 100%; font-size: 10.5px;">
+                    <option value="auto" selected>自动（从标定推出）</option>
+                    <option value="downcore">强制：向下年代变老</option>
+                    <option value="upcore">强制：向下年代变新</option>
+                  </select>
+                </div>
+                <div id="ad-age-direction-readout" style="margin-top: 4px; font-size: 9.5px; color: var(--text-muted); line-height: 1.5;"></div>
                 <div id="ad-calib-readout" style="margin-top: 6px; font-size: 9.5px; color: var(--text-muted); font-family: var(--font-mono); line-height: 1.5;"></div>
               </div>
             </div>
@@ -187,12 +204,8 @@ export function createAgeDepthModalHtml(): string {
                 <label style="color: var(--text-muted);">最大</label>
                 <input type="number" id="ad-inp-range-max" value="450" style="width: 100%; font-size: 11px;" />
               </div>
-              <div style="display: grid; grid-template-columns: auto 1fr; gap: 5px; font-size: 10.5px; align-items: center; margin-top: 6px;">
-                <label style="color: var(--text-muted);">重采样步长</label>
-                <input type="number" id="ad-inp-resample" value="2" min="0" step="0.5" style="width: 100%; font-size: 11px;" />
-              </div>
               <div style="font-size: 9.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;">
-                范围可窄于标定区间：标定打在坐标轴末端，只提取实际分析段。步长留 0 则保留逐行原始采样。
+                范围可窄于标定区间：标定打在坐标轴末端，只提取实际分析段。
               </div>
             </div>
 
@@ -275,14 +288,19 @@ export function createAgeDepthModalHtml(): string {
                 <div style="display: flex; flex-direction: column; gap: 3px;">
                   <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
                     <input type="checkbox" id="ad-chk-rate-sr" checked />
-                    <span title="沉积速率（Sedimentation rate，单位如 cm/yr），厚度随时间累积的速度">沉积速率：<code>sed_rate (cm/yr)</code>（带 95% 区间）</span>
+                    <span title="逐点导数：曲线在该深度处的瞬时斜率取倒。反映局部变化，不带不确定度。">沉积速率：<code>sed_rate (cm/yr)</code>（逐点导数，无误差棒）</span>
                   </label>
                   <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
                     <input type="checkbox" id="ad-chk-rate-ar" checked />
-                    <span title="累积速率（Accumulation rate，单位如 yr/cm），单位深度所代表的历时">累积速率：<code>acc_rate (yr/cm)</code>（带 95% 区间）</span>
+                    <span title="逐点导数：单位深度所代表的历时。反映局部变化，不带不确定度。">累积速率：<code>acc_rate (yr/cm)</code>（逐点导数，无误差棒）</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="checkbox" id="ad-chk-rate-sr-win" />
+                    <span title="固定深度厚度窗口内对 age~depth 做最小二乘，斜率取倒。地质平均量，带标准误。学术引用请用这一列。"><b>分窗沉积速率</b>：<code>sed_rate_windowed (cm/yr)</code> + <code>_se</code>（<b>带标准误，推荐</b>）</span>
                   </label>
                 </div>
                 <div style="font-size: 8.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.4;">
+                  「逐点导数」两列是曲线局部斜率，不带不确定度，且在保序回归压平段上为未定义（导出为空）。<br>
                   质量累积速率 (MAR, g/cm²/yr) 需乘干样容重 (dry bulk density)，本工具不推算未测定的物理量。
                 </div>
               </div>
@@ -305,6 +323,20 @@ export function createAgeDepthModalHtml(): string {
               <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-tbl-btn-sort" style="font-size: 10.5px; padding: 3px 8px;">按深度升序排序</button>
               <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-tbl-btn-copy" style="font-size: 10.5px; padding: 3px 8px;">复制全部 (TSV)</button>
               <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-tbl-btn-paste" style="font-size: 10.5px; padding: 3px 8px;">粘贴导入 (Excel/TSV)</button>
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--text-muted);"
+                     title="只影响表格显示位数；数据本身、同步与导出仍是全精度原始值。悬停单元格可看原值。">
+                格式
+                <select id="ad-tbl-fmt-digits" class="sample-select" style="font-size: 10.5px; padding: 2px 4px;">
+                  <option value="" selected>原始值</option>
+                  <option value="0">0 位小数</option>
+                  <option value="1">1 位小数</option>
+                  <option value="2">2 位小数</option>
+                  <option value="3">3 位小数</option>
+                  <option value="4">4 位小数</option>
+                  <option value="6">6 位小数</option>
+                  <option value="8">8 位小数</option>
+                </select>
+              </label>
               <button class="ui-btn ui-btn--primary" id="ad-tbl-btn-sync" style="font-size: 10.5px; padding: 3px 12px;">保存同步至模型</button>
             </div>
             <div id="ad-table-summary-badge" style="font-size: 10.5px; font-family: var(--font-mono); color: var(--text-secondary);">
@@ -318,17 +350,18 @@ export function createAgeDepthModalHtml(): string {
               <thead>
                 <tr>
                   <th style="width: 45px; text-align: center;">#</th>
-                  <th style="width: 120px;">深度 (Depth, cm)</th>
-                  <th style="width: 130px;">年代 (Age, cal BP)</th>
-                  <th style="width: 120px;">95% 下界 (Min)</th>
-                  <th style="width: 120px;">95% 上界 (Max)</th>
-                  <th style="width: 100px;">区间宽度 (yr)</th>
-                  <th style="width: 100px;">沉积速率</th>
+                  <th class="ad-th-sortable" data-sort="depth" style="width: 110px; cursor: pointer;" title="点击按深度排序">深度 (cm) <span class="ad-sort-ind"></span></th>
+                  <th class="ad-th-sortable" data-sort="age" style="width: 130px; cursor: pointer;" title="点击按年代排序">年代 (cal BP) <span class="ad-sort-ind"></span></th>
+                  <th class="ad-th-sortable" data-sort="min" style="width: 110px; cursor: pointer;" title="点击按 95% 下界排序">95% 下界 <span class="ad-sort-ind"></span></th>
+                  <th class="ad-th-sortable" data-sort="max" style="width: 110px; cursor: pointer;" title="点击按 95% 上界排序">95% 上界 <span class="ad-sort-ind"></span></th>
+                  <th style="width: 90px;">95% 区间宽度</th>
+                  <th style="width: 110px;">沉积速率 (cm/yr)</th>
+                  <th style="width: 110px;" title="分窗回归速率的标准误，与速率同单位">速率 ±SE</th>
                   <th style="width: 55px; text-align: center;">操作</th>
                 </tr>
               </thead>
               <tbody id="ad-full-table-tbody">
-                <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">尚未执行识别提取或载入年代模型</td></tr>
+                <tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 30px;">尚未执行识别提取或载入年代模型</td></tr>
               </tbody>
             </table>
           </div>

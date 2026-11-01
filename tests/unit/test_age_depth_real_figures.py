@@ -58,7 +58,6 @@ class TestRealFigureExtraction(unittest.TestCase):
             img,
             _bacon_calibrator(),
             depth_range=(0.0, 160.0),
-            resample_step=2.0,
         )
         depths = np.asarray(model.depths, dtype=float)
         ages = np.asarray(model.ages, dtype=float)
@@ -88,7 +87,7 @@ class TestRealFigureExtraction(unittest.TestCase):
         """Ages increase downcore and the envelope stays a band, not the whole panel."""
         img = Image.open(FIGURE_DIR / "bacon_szek.png").convert("RGB")
         model = extract_age_depth_model(
-            img, _bacon_calibrator(), depth_range=(0.0, 160.0), resample_step=2.0
+            img, _bacon_calibrator(), depth_range=(0.0, 160.0)
         )
         ages = np.asarray(model.ages, dtype=float)
         lo = np.asarray(model.age_min, dtype=float)
@@ -106,7 +105,7 @@ class TestRealFigureExtraction(unittest.TestCase):
         """The age axis runs young -> old (left -> right); direction must be respected."""
         img = Image.open(FIGURE_DIR / "bchron_stepped.png").convert("RGB")
         model = extract_age_depth_model(
-            img, _bchron_calibrator(), depth_range=(0.0, 180.0), resample_step=2.0
+            img, _bchron_calibrator(), depth_range=(0.0, 180.0)
         )
         depths = np.asarray(model.depths, dtype=float)
         ages = np.asarray(model.ages, dtype=float)
@@ -120,7 +119,7 @@ class TestRealFigureExtraction(unittest.TestCase):
         """The stepped profile must survive: the trace cannot be smoothed into a ramp."""
         img = Image.open(FIGURE_DIR / "bchron_stepped.png").convert("RGB")
         model = extract_age_depth_model(
-            img, _bchron_calibrator(), depth_range=(0.0, 180.0), resample_step=2.0
+            img, _bchron_calibrator(), depth_range=(0.0, 180.0)
         )
         ages = np.asarray(model.ages, dtype=float)
         depths = np.asarray(model.depths, dtype=float)
@@ -152,7 +151,7 @@ class TestAgeDirectionConvention(unittest.TestCase):
             age_px=[110.0, 803.5], age_vals=[3000.0, 0.0],
         )
         m_bp = extract_age_depth_model(
-            img, bp, depth_range=(0.0, 160.0), resample_step=2.0,
+            img, bp, depth_range=(0.0, 160.0),
             age_increases_downcore=True,
         )
         ages_bp = np.asarray(m_bp.ages, dtype=float)
@@ -165,7 +164,7 @@ class TestAgeDirectionConvention(unittest.TestCase):
             age_px=[110.0, 803.5], age_vals=[0.0, 3000.0],
         )
         m_ad = extract_age_depth_model(
-            img, ad, depth_range=(0.0, 160.0), resample_step=2.0,
+            img, ad, depth_range=(0.0, 160.0),
             age_increases_downcore=False,
         )
         ages_ad = np.asarray(m_ad.ages, dtype=float)
@@ -181,10 +180,15 @@ class TestAgeDirectionConvention(unittest.TestCase):
         )
         with self.assertRaises(ValueError) as ctx:
             extract_age_depth_model(
-                img, ad, depth_range=(0.0, 160.0), resample_step=2.0,
+                img, ad, depth_range=(0.0, 160.0),
                 age_increases_downcore=True,
             )
-        self.assertIn("contradicts the figure", str(ctx.exception))
+        message = str(ctx.exception)
+        # The refusal must name the contradiction and the evidence behind it, so a user can
+        # tell a mislabelled axis from a trace that locked onto the wrong stroke.
+        self.assertIn("contradicts the age direction", message)
+        self.assertIn("forced by the caller", message)
+        self.assertIn("median pairwise slope", message)
 
 
 class TestSedimentationRate(unittest.TestCase):
@@ -194,7 +198,7 @@ class TestSedimentationRate(unittest.TestCase):
             depth_px=[32.0, 668.0], depth_vals=[0.0, 150.0],
             age_px=[110.0, 803.5], age_vals=[3000.0, 0.0],
         )
-        model = extract_age_depth_model(img, cal, depth_range=(0.0, 160.0), resample_step=2.0)
+        model = extract_age_depth_model(img, cal, depth_range=(0.0, 160.0),)
         pred = model.predict_age(model.depths)
 
         acc = np.asarray(
@@ -206,10 +210,76 @@ class TestSedimentationRate(unittest.TestCase):
         self.assertGreater(float(np.nanmin(acc)), -1e-9, "accumulation rate cannot be negative")
         self.assertGreater(float((acc > 0).mean()), 0.5, "most horizons should accumulate")
         # A rate is reported as a magnitude, so reciprocals must agree where both are
-        # finite. Tolerance covers the 4-decimal rounding applied for JSON transport.
+        # finite. The tolerance used to be 5e-3, documented as "covers the 4-decimal
+        # rounding" -- which is exactly how a real defect stayed hidden: the worst error was
+        # 5.3%, so the check sat right at its own blind spot. Serialisation now keeps six
+        # SIGNIFICANT digits, so the identity holds to a hundredth of a percent.
         finite = np.isfinite(acc) & np.isfinite(sed) & (acc > 0) & (sed > 0)
-        self.assertTrue(np.allclose(acc[finite] * sed[finite], 1.0, rtol=5e-3))
+        self.assertTrue(np.allclose(acc[finite] * sed[finite], 1.0, rtol=1e-4))
         self.assertEqual(pred["rate_units"]["sed_rate"], "cm per year")
+
+    def test_undefined_rate_is_null_not_zero(self):
+        """An undefined rate must not be serialised as 0, which means "no deposition".
+
+        At a horizon where PCHIP's derivative is exactly zero the accumulation rate is
+        undefined, and so is its reciprocal. The reciprocal used to be written as 0.0, so
+        the table showed "0.00 cm/yr" -- a positive claim that nothing is being deposited,
+        when the honest answer is that the rate cannot be stated there. This is the project's
+        no-substitute-data invariant applied to a reciprocal.
+        """
+        img = Image.open(FIGURE_DIR / "bacon_lithology.jpg").convert("RGB")
+        cal = AgeDepthAxisCalibrator(
+            depth_px=[100.0, 865.0], depth_vals=[0.0, 150.0],
+            age_px=[142.0, 731.5], age_vals=[0.0, 9.0],
+        )
+        model = extract_age_depth_model(img, cal, depth_range=(0.0, 160.0),)
+        pred = model.predict_age(model.depths)
+
+        acc = pred["acc_rate_yr_per_depth"]
+        sed = pred["sed_rate_depth_per_yr"]
+        # Wherever one is undefined the other must be too: they are reciprocals.
+        for i, (a, s) in enumerate(zip(acc, sed)):
+            if a is None:
+                self.assertIsNone(
+                    s,
+                    f"horizon {i}: accumulation undefined but sedimentation reported as {s}",
+                )
+            if s is None:
+                self.assertIsNone(a, f"horizon {i}: sedimentation undefined but acc is {a}")
+        # The top of this particular core genuinely has a zero derivative, so the guard must
+        # actually be exercised rather than pass vacuously.
+        self.assertIn(None, acc, "expected at least one undefined rate on this figure")
+        self.assertEqual(
+            sum(1 for v in sed if v == 0.0), 0,
+            "an undefined rate was serialised as 0.0 (i.e. 'no deposition')",
+        )
+
+    def test_interval_rates_are_reciprocal_too(self):
+        """The interval arrays share the serialisation path, so they share the hazard."""
+        img = Image.open(FIGURE_DIR / "bacon_lithology.jpg").convert("RGB")
+        cal = AgeDepthAxisCalibrator(
+            depth_px=[100.0, 865.0], depth_vals=[0.0, 150.0],
+            age_px=[142.0, 731.5], age_vals=[0.0, 9.0],
+        )
+        model = extract_age_depth_model(img, cal, depth_range=(0.0, 160.0),)
+        pred = model.predict_age(model.depths)
+
+        iacc = np.asarray(
+            [v if v is not None else np.nan
+             for v in pred["interval_acc_rate_yr_per_depth"]], dtype=float
+        )
+        ised = np.asarray(
+            [v if v is not None else np.nan
+             for v in pred["interval_sed_rate_depth_per_yr"]], dtype=float
+        )
+        finite = np.isfinite(iacc) & np.isfinite(ised) & (iacc > 0) & (ised > 0)
+        self.assertGreater(int(finite.sum()), 20, "not enough finite intervals to judge")
+        worst = float(np.max(np.abs(iacc[finite] * ised[finite] - 1.0)))
+        self.assertLess(
+            worst, 1e-4,
+            f"interval rates stop being reciprocals (worst error {worst:.2%}); "
+            f"before the significant-digit fix 21 of 32 horizons failed here",
+        )
 
     def test_legacy_key_preserved(self):
         """The old sed_rate_yr_per_cm key must keep its original meaning."""
@@ -218,7 +288,7 @@ class TestSedimentationRate(unittest.TestCase):
             depth_px=[32.0, 668.0], depth_vals=[0.0, 150.0],
             age_px=[110.0, 803.5], age_vals=[3000.0, 0.0],
         )
-        model = extract_age_depth_model(img, cal, depth_range=(0.0, 160.0), resample_step=2.0)
+        model = extract_age_depth_model(img, cal, depth_range=(0.0, 160.0),)
         pred = model.predict_age(model.depths)
         self.assertEqual(
             pred["sed_rate_yr_per_cm"], pred["acc_rate_yr_per_depth"]
@@ -230,7 +300,7 @@ class TestSedimentationRate(unittest.TestCase):
             depth_px=[32.0, 668.0], depth_vals=[0.0, 150.0],
             age_px=[110.0, 803.5], age_vals=[3000.0, 0.0],
         )
-        model = extract_age_depth_model(img, cal, depth_range=(0.0, 160.0), resample_step=2.0)
+        model = extract_age_depth_model(img, cal, depth_range=(0.0, 160.0),)
         pred = model.predict_age(model.depths)
         interval = np.asarray(
             [v if v is not None else np.nan for v in pred["interval_acc_rate_yr_per_depth"]],
@@ -246,7 +316,7 @@ class TestSedimentationRate(unittest.TestCase):
             depth_px=[32.0, 668.0], depth_vals=[0.0, 150.0],
             age_px=[110.0, 803.5], age_vals=[3000.0, 0.0],
         )
-        model = extract_age_depth_model(img, cal, depth_range=(0.0, 160.0), resample_step=2.0)
+        model = extract_age_depth_model(img, cal, depth_range=(0.0, 160.0),)
         depths = np.asarray(model.depths, dtype=float)
         ens = model.generate_age_ensemble(
             depths, n_ensembles=400, name="t", return_diagnostics=True
@@ -279,7 +349,7 @@ class TestAgeDepthExportColumns(unittest.TestCase):
             depth_px=[32.0, 668.0], depth_vals=[0.0, 150.0],
             age_px=[110.0, 803.5], age_vals=[3000.0, 0.0],
         )
-        model = extract_age_depth_model(img, cal, depth_range=(0.0, 160.0), resample_step=2.0)
+        model = extract_age_depth_model(img, cal, depth_range=(0.0, 160.0),)
         return model.predict_age([0.0, 2.0, 4.0])
 
     def test_nothing_selected_still_exports_ages(self):
@@ -295,13 +365,67 @@ class TestAgeDepthExportColumns(unittest.TestCase):
             self._pred(), ["volume_ar_cm_per_yr", "acc_rate_yr_per_depth"], "cal BP", "cm"
         )
         cols = list(df.columns)
-        self.assertIn("acc_rate (cal BP per cm)", cols)
+        # The rate is per REAL YEAR, so the header says year -- not the age-axis label.
+        # Templating {age_unit} in produced "acc_rate (cal BP per cm)" over a number that was
+        # actually years per cm, which read as "3000 cal BP of age per centimetre".
+        self.assertIn("acc_rate (yr per cm)", cols)
         self.assertIn("volume_ar (cm per yr; = cm3 cm-2 yr-1)", cols)
         # The unit-less legacy alias must not leak in as a duplicate of acc_rate.
         self.assertNotIn("sed_rate_yr_per_cm", cols)
         self.assertNotIn("rate_units", [c for c in cols if c == "depths"])
         self.assertIn("rate_units", cols)
-        self.assertIn("cal BP per cm", str(df["rate_units"].iloc[0]))
+        self.assertIn("year per cm", str(df["rate_units"].iloc[0]))
+
+    def test_rates_are_per_real_year_on_a_ka_axis(self):
+        """A "0..9 ka BP" axis must not make the exported rate 1000x too large.
+
+        The extracted ages carry whatever magnitude the user calibrated against, but
+        ``age_unit`` is a label supplied at extraction time and reads "cal BP" for both a
+        0..9000 axis and a 0..9 one. Inverting the ka/cm slope therefore produced a number
+        1000x too large under a "cm per year" heading. Measured on bacon_lithology.jpg before
+        the fix: the exported sed_rate column read 960.5 where the truth was 0.96.
+
+        The check is a magnitude test, not an exact-value test: the point is that the column
+        lands in cm/yr, and the whole-core mean is the independent reference.
+        """
+        img = Image.open(FIGURE_DIR / "bacon_lithology.jpg").convert("RGB")
+        # Age values 0..9, i.e. a kiloyear axis.
+        cal = AgeDepthAxisCalibrator(
+            depth_px=[100.0, 865.0], depth_vals=[0.0, 150.0],
+            age_px=[142.0, 731.5], age_vals=[0.0, 9.0],
+        )
+        model = extract_age_depth_model(img, cal, depth_range=(0.0, 160.0),)
+
+        from straditize_core.session import build_age_depth_frame
+
+        depths = [float(d) for d in model.analysis_depths[::80]]
+        pred = model.predict_age(depths)
+        self.assertIn(
+            "years_per_age_unit", pred,
+            "the payload must expose the age-scale factor so a caller can audit it",
+        )
+        self.assertEqual(pred["years_per_age_unit"], 1000.0)
+
+        frame = build_age_depth_frame(
+            pred, ["sed_rate_depth_per_yr"], model.age_unit, model.depth_unit
+        )
+        column = "sed_rate (cm per yr)"
+        self.assertIn(column, frame.columns)
+        values = [v for v in frame[column].tolist() if isinstance(v, float) and v == v]
+        self.assertGreater(len(values), 0, "no finite rate was exported")
+
+        # Whole-core reference: span_depth / span_age, computed from the model directly.
+        span_depth = float(model.analysis_depths.max() - model.analysis_depths.min())
+        span_years = float(
+            model.analysis_ages.max() - model.analysis_ages.min()
+        ) * 1000.0
+        reference = span_depth / span_years
+        median_exported = float(np.median(values))
+        self.assertLess(
+            abs(median_exported / reference - 1.0), 0.8,
+            f"exported median {median_exported:.4f} cm/yr vs whole-core {reference:.4f}; "
+            f"a factor of 1000 off means the ka->yr conversion went missing",
+        )
 
     def test_unselected_rate_is_dropped(self):
         from straditize_core.session import build_age_depth_frame
@@ -367,7 +491,7 @@ class TestUploadedFigureReachesBackend(unittest.TestCase):
         session.calibrate_and_extract_age_depth(
             depth_px=[32.0, 668.0], depth_vals=[0.0, 150.0],
             age_px=[110.0, 803.5], age_vals=[3000.0, 0.0],
-            depth_range=[0.0, 160.0], resample_step=2.0,
+            depth_range=[0.0, 160.0],
         )
         before = len(session.age_depth_model.depths)
 
@@ -378,7 +502,7 @@ class TestUploadedFigureReachesBackend(unittest.TestCase):
         session.calibrate_and_extract_age_depth(
             depth_px=[100.0, 865.0], depth_vals=[0.0, 150.0],
             age_px=[148.0, 733.0], age_vals=[0.0, 9000.0],
-            depth_range=[0.0, 160.0], resample_step=2.0,
+            depth_range=[0.0, 160.0],
         )
         after = session.age_depth_model
         # Pixel tracks must live in the NEW image's coordinate space. The old figure was
@@ -420,8 +544,10 @@ class TestChromaticMedianLine(unittest.TestCase):
             "chroma",
             f"fell back to darkness: {model.curve_channel_reason}",
         )
-        # The diagnostic must also survive resampling, not silently reset to the default.
-        self.assertEqual(self._model(resample_step=2.0).curve_channel, "chroma")
+        # The diagnostic must survive serialisation, not silently reset to the default.
+        self.assertEqual(
+            model.to_inspection_data()["metadata"]["curve_channel"], "chroma"
+        )
 
     def test_greyscale_figures_stay_on_darkness(self):
         """Figures without a coloured stroke must not switch channels."""
@@ -626,6 +752,214 @@ class TestChannelOverride(unittest.TestCase):
         message = str(ctx.exception)
         self.assertIn("only observed", message)
         self.assertIn("interpolated rather than traced", message)
+
+
+class TestAgeDirectionIsReadFromTheCurve(unittest.TestCase):
+    """The age direction must come from the traced curve, not from the axis signs.
+
+    The four calibration points say what a pixel *means* on each axis. They cannot say which
+    way the age runs downcore, because along a curve ``d(age)/dy = (d(age)/dx) * (dx/dy)``
+    and ``dx/dy`` belongs to the curve.
+
+    Two bundled figures prove the point -- they have OPPOSITE axis conventions yet the same
+    physical direction in depth-age space:
+
+    * ``bacon_lithology.jpg``: top axis runs 0 -> 9 ka BP left to right (age grows
+      rightwards); the curve runs left to right as it deepens, so age INCREASES downcore.
+    * ``bacon_szek.png``: age axis runs 3000 -> 0 left to right (age grows leftwards); the
+      curve runs right to left as it deepens, so age STILL INCREASES downcore.
+
+    A rule based on axis signs alone answers "decreases downcore" for the second figure and
+    refuses to extract it. That was the shipped behaviour: the caller hard-coded ``True``,
+    which happened to suit the BP-style figures and made every upcore-increasing axis fail
+    with "Declared age direction contradicts the figure".
+    """
+
+    def _extract(self, name, cal_kwargs, **kw):
+        img = Image.open(FIGURE_DIR / name).convert("RGB")
+        cal = AgeDepthAxisCalibrator(**cal_kwargs)
+        return extract_age_depth_model(img, cal, depth_range=(0.0, 180.0), **kw)
+
+    def test_axis_opposed_figures_agree_in_depth_age_space(self):
+        lithology = self._extract(
+            "bacon_lithology.jpg",
+            dict(depth_px=[100.0, 865.0], depth_vals=[0.0, 150.0],
+                 age_px=[142.0, 731.5], age_vals=[0.0, 9.0]),
+        )
+        szek = self._extract(
+            "bacon_szek.png",
+            dict(depth_px=[32.0, 668.0], depth_vals=[0.0, 150.0],
+                 age_px=[110.0, 803.5], age_vals=[3000.0, 0.0]),
+        )
+        for label, model in (("bacon_lithology", lithology), ("bacon_szek", szek)):
+            self.assertTrue(
+                model.age_increases_downcore,
+                f"{label}: age direction should be 'increases downcore'",
+            )
+            ages = np.asarray(model.ages, dtype=float)
+            self.assertTrue(
+                np.all(np.diff(ages) >= -1e-6),
+                f"{label}: ages must rise downcore once the direction is right",
+            )
+
+    def test_the_verdict_is_auditable(self):
+        """A deduction the user cannot inspect is indistinguishable from a guess."""
+        model = self._extract(
+            "bacon_lithology.jpg",
+            dict(depth_px=[100.0, 865.0], depth_vals=[0.0, 150.0],
+                 age_px=[142.0, 731.5], age_vals=[0.0, 9.0]),
+        )
+        self.assertIn("traced curve", model.age_direction_reason)
+        self.assertIn("median pairwise slope", model.age_direction_reason)
+        # And it must survive serialisation, or the UI has nothing to show.
+        meta = model.to_inspection_data()["metadata"]
+        self.assertIs(meta["age_increases_downcore"], True)
+        self.assertIn("traced curve", meta["age_direction_reason"])
+
+    def test_caller_can_still_force_a_direction(self):
+        """An unusual figure must remain extractable by overriding the deduction."""
+        cal_kwargs = dict(depth_px=[100.0, 865.0], depth_vals=[0.0, 150.0],
+                          age_px=[142.0, 731.5], age_vals=[0.0, 9.0])
+        agreed = self._extract("bacon_lithology.jpg", cal_kwargs,
+                               age_increases_downcore=True)
+        self.assertIn("agreeing with the traced curve", agreed.age_direction_reason)
+
+        with self.assertRaises(ValueError) as ctx:
+            self._extract("bacon_lithology.jpg", cal_kwargs,
+                          age_increases_downcore=False)
+        message = str(ctx.exception)
+        self.assertIn("against the traced curve", message)
+        self.assertIn("median pairwise slope", message)
+
+
+class TestMedianIntegerAgesWouldStaircase(unittest.TestCase):
+    """Regression guard for the staircase the UI drew on steep, coarse age axes.
+
+    ``AgeDepthCanvas.refitCurveFromControlPoints`` used to write
+    ``Math.round(ad.age)`` back into the inspection payload. On the bundled figure the age
+    axis spans 0..9 ka over 589.5 px, so ONE integer kiloyear is 65.5 px: rounding collapsed
+    381 distinct curve columns onto 8, shifting 93% of rows by more than a pixel. The client
+    fix removed the rounding; this test pins the underlying arithmetic so the magnitude of
+    the hazard is not forgotten, and fails if the age axis in the fixture ever changes
+    without the test being reconsidered.
+    """
+
+    def test_one_integer_age_step_is_many_pixels(self):
+        cal = AgeDepthAxisCalibrator(
+            depth_px=[100.0, 865.0], depth_vals=[0.0, 150.0],
+            age_px=[142.0, 731.5], age_vals=[0.0, 9.0],
+        )
+        px_per_ka = abs(float(cal.age2px(1.0)) - float(cal.age2px(0.0)))
+        self.assertGreater(
+            px_per_ka, 20.0,
+            "if one age unit is only a few pixels, integer rounding is harmless and this "
+            "guard no longer describes the hazard it was written for",
+        )
+
+        img = Image.open(FIGURE_DIR / "bacon_lithology.jpg").convert("RGB")
+        model = extract_age_depth_model(img, cal, depth_range=(0.0, 160.0))
+        payload = model.to_inspection_data()
+        ages = np.asarray(payload["ages"], dtype=float)
+        true_x = np.asarray(payload["px_points"]["x_curve"], dtype=float)
+
+        rounded_x = np.asarray(cal.age2px(np.round(ages)), dtype=float)
+        shift = np.abs(rounded_x - true_x)
+
+        self.assertGreater(
+            len(np.unique(np.round(true_x, 1))), 100,
+            "the traced curve should span many columns, not a handful",
+        )
+        self.assertGreater(
+            float(np.median(shift)), 2.0,
+            "rounding ages to integers should visibly displace the curve on this axis",
+        )
+        self.assertLess(
+            len(np.unique(np.round(rounded_x, 1))), 30,
+            "rounding should collapse the curve onto few columns -- this is the staircase",
+        )
+
+
+class TestReportedPrecision(unittest.TestCase):
+    """Serialisation must emit the computed number, not a rounded stand-in.
+
+    The inspection payload used ``round(value, 2)`` for ages and the table used
+    ``toFixed(1)`` for rates. On a 0..9 ka axis three consecutive horizons all showed 0.37,
+    interval widths collapsed to a couple of integers, and a genuine 0.04 ka/cm rate printed
+    as "0.0 yr/cm" -- the export looked fabricated even though the curve was fine.
+
+    Any intermediate rounding rule was a lossy guess, so values are now emitted exactly as
+    computed. The thresholds below are measured on this figure and record what the broken
+    two-decimal version produced, so the guard's discriminating power is visible:
+
+    ==========================  ============  ==============
+    quantity                    raw            2 decimals
+    ==========================  ============  ==============
+    distinct ages               399           356
+    distinct interval widths    317            97
+    ages with >= 5 decimals     367             0
+    ==========================  ============  ==============
+    """
+
+    def _model(self):
+        img = Image.open(FIGURE_DIR / "bacon_lithology.jpg").convert("RGB")
+        cal = AgeDepthAxisCalibrator(
+            depth_px=[100.0, 865.0], depth_vals=[0.0, 150.0],
+            age_px=[142.0, 731.5], age_vals=[0.0, 9.0],
+        )
+        # Native sampling: a 5 cm resample grid is coarse enough that two decimals survive,
+        # which would let the defect through.
+        return extract_age_depth_model(img, cal, depth_range=(0.0, 160.0))
+
+    def test_consecutive_ages_are_not_collapsed(self):
+        model = self._model()
+        ages = model.to_inspection_data()["ages"]
+        distinct = len(set(ages))
+        self.assertGreater(
+            distinct, 390,
+            f"only {distinct} distinct ages over {len(ages)} horizons; two-decimal rounding "
+            f"collapses this figure to 356",
+        )
+        # And the first horizons must differ from each other, which is what the user saw as
+        # "0.37, 0.37, 0.37".
+        head = ages[4:12]
+        self.assertEqual(len(set(head)), len(head), f"horizons collapsed: {head}")
+
+    def test_interval_widths_are_not_quantised(self):
+        """Widths are the sharpest tell: 317 distinct values become 97 under two decimals."""
+        model = self._model()
+        insp = model.to_inspection_data()
+        widths = [abs(hi - lo) for hi, lo in zip(insp["age_max"], insp["age_min"])]
+        distinct = len({round(w, 6) for w in widths})
+        self.assertGreater(
+            distinct, 200,
+            f"only {distinct} distinct interval widths; two-decimal rounding reduces this "
+            f"figure to 97, and the table then shows a coarse, obviously-quantised column",
+        )
+
+    def test_most_ages_carry_five_or_more_decimals(self):
+        """367 of 405 ages carry >= 5 decimals at full precision, and 0 do at two decimals."""
+        model = self._model()
+        ages = model.to_inspection_data()["ages"]
+        got = sum(
+            1 for a in ages if "." in str(a) and len(str(a).split(".")[1]) >= 5
+        )
+        self.assertGreater(
+            got, 300,
+            f"only {got} ages carry >=5 decimals; two-decimal rounding leaves none, which is "
+            f"why the column read as a made-up number",
+        )
+
+    def test_predict_age_does_not_use_fixed_decimals(self):
+        """Over the 810 native horizons: 795 distinct ages, but only 545 under two decimals."""
+        model = self._model()
+        pred = model.predict_age([float(d) for d in model.analysis_depths])
+        ages = pred["age_est"]
+        distinct = len(set(ages))
+        self.assertGreater(
+            distinct, 700,
+            f"predict_age returned only {distinct} distinct ages over {len(ages)} horizons; "
+            f"two-decimal rounding gives 545",
+        )
 
 
 if __name__ == "__main__":

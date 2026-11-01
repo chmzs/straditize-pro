@@ -3,6 +3,16 @@ export interface AgeDepthModelInspectionData {
   ages: number[];
   age_min: number[];
   age_max: number[];
+  /**
+   * Windowed-regression sedimentation rate (depth_unit per year) and its standard error,
+   * ALREADY decimated to the same rows as `depths` by the backend. Null = undefined at
+   * that horizon (e.g. non-positive slope). Absent on payloads built before the field
+   * existed, and after manual table edits that invalidated alignment -- render as "—".
+   */
+  sed_rate?: (number | null)[];
+  sed_rate_se?: (number | null)[];
+  /** Window thickness (depth_unit) the rates were regressed over. */
+  sed_window_depth?: number | null;
   px_points?: {
     y: number[];
     x_curve: number[];
@@ -18,6 +28,9 @@ export interface AgeDepthModelInspectionData {
     notes?: string;
     curve_channel?: string;
     curve_channel_reason?: string;
+    /** Resolved age direction, deducted from the calibration unless the user forced one. */
+    age_increases_downcore?: boolean;
+    age_direction_reason?: string;
   };
 }
 
@@ -60,6 +73,29 @@ export interface MappedSamplesData {
     acc_rate_yr_per_depth_max: (number | null)[];
     sed_rate_depth_per_yr: (number | null)[];
     units?: { acc_rate: string; sed_rate: string };
+  };
+  /**
+   * Windowed-regression rate with an analytic standard error, from
+   * `AgeDepthModel.estimate_sedimentation_rate`. This is the reportable value; `rate` above
+   * is the pointwise curve derivative (no error bar, undefined where isotonic pooling
+   * flattened the curve).
+   */
+  sedimentation?: {
+    depths: number[];
+    sed_rate: (number | null)[];
+    sed_rate_se: (number | null)[];
+    acc_rate: (number | null)[];
+    acc_rate_se: (number | null)[];
+    status: string[];
+    window_used: number;
+    window_per_horizon: number[];
+    horizons_available: number;
+    age_scale_inferred: string;
+    years_per_age_unit: number;
+    rate_units: { sed_rate: string; acc_rate: string };
+    method: string;
+    /** Present only when the estimate was refused outright. */
+    error?: string;
   };
 }
 

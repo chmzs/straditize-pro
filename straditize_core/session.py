@@ -125,6 +125,12 @@ class StraditizeSession(
         self.x_scales: dict[int, dict[str, float]] = {}  # col_index -> slope, intercept
         self.depth_calib: dict[str, Any] | None = None
         self.depth_unit: str = "cm"
+        # What the Y axis MEASURES -- "depth" (the usual pollen diagram) or "age" (a
+        # diagram plotted against a timescale). Declared, never inferred from
+        # ``depth_unit``: the unit string is only a display label, and guessing from it
+        # fails on every non-standard unit ("m", "kyr", "ka") and silently mis-maps a
+        # whole core when it guesses wrong. See ``_primary_axis_readings``.
+        self.primary_axis: str = "depth"
 
         # Taxa names and Depth Grid
         self.taxa_names: list[str] = []

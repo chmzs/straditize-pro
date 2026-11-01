@@ -2,6 +2,7 @@ import { BackendStatus, JsonRpcRequest, JsonRpcResponse } from '../types/rpc';
 import { tError } from '../i18n/errorCodes';
 import { t } from '../i18n';
 import { Column, ColumnGroup, ControlPoint, CleanupResult, DataRoi, DepthCalibration, DiagramData, LineMaskStroke, Tick } from '../types/pollen';
+import { RulerGeometry } from '../types/ruler';
 import { PollenGlossary } from '../core/PollenGlossary';
 
 /** 后端 ocr.getTaxaDict 的返回结构 */
@@ -546,6 +547,26 @@ export class RpcClient {
   }
 
   /**
+   * 只读：测量本 ROI 每列的**刻度尺几何**（轴线 / 刻线 / 格数 / 刻距 / 规则性）。
+   *
+   * 后端 `session_parts/xticks.py::measure_ruler_geometry` 明确**不产出任何读数**：
+   * 每格代表多少是作图书版的设定，跨列外推实测误差 84%–151%，故返回值里没有、
+   * 也不会有"建议量程"。前端只能把它当几何事实展示，绝不能拿齿数比例去猜 %。
+   *
+   * 失败（未载图 / 该 ROI 没有列）由 `call` 直接抛出后端原文，调用方必须冒泡给用户。
+   */
+  public async measureRuler(roiId?: string): Promise<RulerGeometry> {
+    const res = await this.call<Record<string, unknown>, RulerGeometry>(
+      'algorithm.measureRuler',
+      roiId ? { roi_id: roiId } : {}
+    );
+    if (!res || !Array.isArray(res.per_column)) {
+      throw new Error(tError(-32603, 'algorithm.measureRuler returned no per_column'));
+    }
+    return res;
+  }
+
+  /**
    * 两点式 Y 轴标定：用户在画布上点选的两个参考点 + 其真实值。
    *
    * 返回后端建立的像素↔数值映射；前端据此填充 `data.calibration`。
@@ -553,14 +574,16 @@ export class RpcClient {
    */
   public async calibrateDepthAxis(
     marks: Array<{ pixel: number; value: number }>,
-    unit: string
+    unit: string,
+    primaryAxis: 'depth' | 'age' = 'depth'
   ): Promise<{ canvas: DepthCalibration }> {
     const res = await this.call<
-      { y_marks: Array<{ pixel: number; val: number }>; unit: string },
-      { status: string; y_scale: { slope: number; intercept: number } }
+      { y_marks: Array<{ pixel: number; val: number }>; unit: string; primary_axis: string },
+      { status: string; y_scale: { slope: number; intercept: number }; primary_axis?: string }
     >('core.calibrateAxes', {
       y_marks: marks.map((m) => ({ pixel: m.pixel, val: m.value })),
       unit,
+      primary_axis: primaryAxis,
     });
     if (!res?.y_scale) {
       throw new Error(tError(-32603, 'core.calibrateAxes returned no y_scale'));
@@ -574,6 +597,9 @@ export class RpcClient {
         bottom_px: ordered[ordered.length - 1].pixel,
         bottom_cm: ordered[ordered.length - 1].value,
         unit,
+        // Trust the backend's echo, not our own request: a rejected override must not be
+        // displayed as if it had been accepted.
+        primaryAxis: res.primary_axis === 'age' ? 'age' : 'depth',
       },
     };
   }

@@ -1,7 +1,15 @@
 import { DiagramData, ColumnGroup } from '../../types/pollen';
+import type { RulerGeometry } from '../../types/ruler';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
-import { notify, notifyError } from '../../ui/feedback';
+import { notify, notifyError, describeError } from '../../ui/feedback';
+import { columnPick, beginColumnPick, resetColumnPick } from './columnPick';
+import {
+  detectedSpans,
+  describeRulerDetection,
+  maxDetectedSpan,
+  type DetectedSpan,
+} from './rulerSpan';
 import {
   callStepCallback,
   renderActiveColumnLostNotice,
@@ -17,6 +25,28 @@ let cachedData: DiagramData | null = null;
 let selectedGroupId: string | null = null;
 let isBatchAssignOpen = false;
 
+/**
+ * 最近一次 `algorithm.measureRuler` 的结果。
+ *
+ * 缓存键 `rulerGeoKey` 由「ROI + 图片 + 列几何」组成：数据变了（重新分列、换图、
+ * 换 ROI）就必须重测，否则面板会拿着上一张图的刻距当默认值 —— 那正是"默认值
+ * 与真实刻距无关"这类缺陷最容易复发的地方。同一张图上重复渲染（切组、改名）
+ * 键不变，直接复用，不会每次都打后端。
+ */
+let rulerGeo: RulerGeometry | null = null;
+let rulerGeoError: string | null = null;
+let rulerGeoKey: string | null = null;
+let rulerGeoPending = false;
+/** `render` 算出的逐列检测跨度，供按钮应用时复用（同一帧内有效）。 */
+let lastSpans: DetectedSpan[] = [];
+/**
+ * 「末齿读数」输入草稿（按组 id）。
+ *
+ * 面板会被后台刷新重渲染（几何检测回包、自动存档、画布交互都会走 `onDataChange`），
+ * 输入值只活 DOM 里就会被清空——用户填了数、界面自己擦掉，是最难察觉的一类数据丢失。
+ */
+const refDrafts = new Map<string, string>();
+
 function getColCalibX(col: any): number {
   if (col?.x_ticks && col.x_ticks.length >= 2 && col.x_ticks[1].px > col.startX) {
     return col.x_ticks[1].px;
@@ -29,6 +59,107 @@ function getColCalibX(col: any): number {
   }
   const span = (col?.endX ?? 100) - (col?.startX ?? 0);
   return (col?.startX ?? 0) + Math.max(20, Math.min(span * 0.65, 80));
+}
+
+/**
+ * 几何检测的缓存键：ROI + 图片 + 本 ROI 内每列的像素范围。
+ *
+ * 任何一项变了都必须重测。列几何用整数像素，避免浮点抖动造成假失效。
+ */
+function rulerGeoKeyFor(data: DiagramData, roiId: string | null): string {
+  const cols = (data.columns || []).filter((c) => !roiId || !c.roi_id || c.roi_id === roiId);
+  const geom = cols
+    .map((c) => `${c.col_index ?? '?'}:${Math.round(c.startX)}:${Math.round(c.endX)}`)
+    .join('|');
+  return `${roiId ?? ''}#${data.imageWidth}x${data.imageHeight}#${(data.imageSrc || '').length}#${geom}`;
+}
+
+/**
+ * 拉取本 ROI 的刻线几何（`algorithm.measureRuler`，只读）。
+ *
+ * 三条纪律：
+ * 1. **失败必须冒泡**：`notifyError` + 面板显示错误原文，绝不把"检测失败"演成
+ *    "检测到 0 条刻线"；ΔX 退回占位值时文案也明说"必须手工校准"。
+ * 2. **结果按数据签名缓存**：同一张图重复渲染不重复打后端；换图/重分列/换 ROI
+ *    即失效重测（否则会拿着上一张图的刻距当默认值）。
+ * 3. **失败也缓存**，避免"错误 → onDataChange → 再请求 → 再错误"的死循环；
+ *    用户在错误框里点【重新检测】才清缓存重试。
+ */
+/**
+ * 把检测结果**就地**写进已渲染的两行，而不是整块重渲染。
+ *
+ * 为什么：`ensureRulerGeometry` 是异步的，用户在它返回前可能已经开始填写
+ * 「每根齿单位数」或单列刻度；整块重渲染会把 `innerHTML` 换掉，未提交的输入当场消失
+ * （step3 的同类问题已记录在 `docs/testing-strategy.md` §9）。实测后果：
+ * `step6-xticks T7` 偶发红——填完值、检测返回、输入被冲掉，保存写的是旧值。
+ */
+function patchRulerDom(root: HTMLElement): void {
+  const geo = rulerGeo;
+  const line = root.querySelector('[data-role="ruler-detect"]') as HTMLElement | null;
+  const spanEl = root.querySelector('[data-role="ruler-span"]') as HTMLElement | null;
+
+  const spans = detectedSpans(cachedData?.columns ?? [], geo);
+  lastSpans = spans;
+  const rigidSpan = maxDetectedSpan(spans);
+
+  if (line) {
+    line.textContent = describeRulerDetection(geo, rulerGeoError, rulerGeoPending);
+    line.setAttribute('data-detected-columns', String((geo?.per_column ?? []).length));
+    line.setAttribute(
+      'data-spacing',
+      geo?.median_spacing_px != null ? String(geo.median_spacing_px) : ''
+    );
+    line.setAttribute(
+      'data-regular',
+      geo?.all_regular === null || geo?.all_regular === undefined
+        ? ''
+        : String(geo.all_regular)
+    );
+    line.setAttribute('data-span', rigidSpan == null ? '' : String(rigidSpan));
+    line.style.color = rulerGeoError ? 'var(--accent-red)' : 'var(--text-secondary)';
+  }
+  if (spanEl) {
+    spanEl.textContent =
+      rigidSpan == null
+        ? '刻距 —（需先检测到刻度尺）'
+        : `刻距 ${geo?.median_spacing_px ?? '—'}px（自动检测）`;
+    spanEl.setAttribute('data-span', rigidSpan == null ? '' : String(rigidSpan));
+  }
+}
+
+async function ensureRulerGeometry(ctx: StepContext, root: HTMLElement): Promise<void> {
+  const data = cachedData;
+  if (!data) return;
+  const roiId = data.active_roi_id || data.rois?.[0]?.id || null;
+  const key = rulerGeoKeyFor(data, roiId);
+  if (rulerGeoPending) return;
+  if (rulerGeoKey === key && (rulerGeo != null || rulerGeoError != null)) return;
+
+  const client = ctx.rpcClient as
+    | { measureRuler?: (roiId?: string) => Promise<RulerGeometry> }
+    | undefined;
+  if (!client?.measureRuler) {
+    rulerGeo = null;
+    rulerGeoError = '前端 RpcClient 缺少 measureRuler：前后端契约不一致';
+    rulerGeoKey = key;
+    notifyError(`刻度几何检测失败：${rulerGeoError}`);
+    patchRulerDom(root);
+    return;
+  }
+
+  rulerGeoPending = true;
+  try {
+    rulerGeo = await client.measureRuler(roiId ?? undefined);
+    rulerGeoError = null;
+  } catch (err) {
+    rulerGeo = null;
+    rulerGeoError = describeError(err);
+    notifyError(`刻度几何检测失败：${rulerGeoError}`);
+  } finally {
+    rulerGeoPending = false;
+    rulerGeoKey = key;
+  }
+  patchRulerDom(root);
 }
 
 export function render(data: DiagramData): string {
@@ -76,9 +207,9 @@ export function render(data: DiagramData): string {
         scale_type: 'linear',
         exaggeration_mult: null,
         tick_layout: [{ rel: 0.0 }, { rel: 1.0 }],
-        ref_span_px: 40.0,
-        ref_val_start: 0,
-        ref_val_end: 20,
+        // 故意**不**预置 ref_span_px：这里曾写死 40.0，于是"组默认模数"永远压过
+        // 真实检测值，面板显示 40px 而图上刻距是 124.5px。留空才能让检测值生效。
+        // 同理不预置 ref_val_start/end（旧值是 0/20）：读数只能由用户从图上读出。
       },
     ];
     activeRoi.default_group_id = defGrpId;
@@ -96,22 +227,23 @@ export function render(data: DiagramData): string {
 
   // 统计各组包含的列
   const groupCols = cols.filter((c) => (c.x_group_id || activeRoi?.default_group_id) === currentGroupId);
-  const groupCalibratedCols = groupCols.filter((c) => c.x_ticks && c.x_ticks.length === 2).length;
 
-  // 提取该组的参考标尺跨度
-  let refSpan = currentGroup?.ref_span_px;
-  if (!refSpan || refSpan <= 0) {
-    // 尝试从该组内已有标定列推导
-    const firstCal = groupCols.find((c) => c.x_ticks && c.x_ticks.length === 2);
-    if (firstCal && firstCal.x_ticks) {
-      refSpan = Math.round(Math.abs(firstCal.x_ticks[1].px - firstCal.x_ticks[0].px) * 10) / 10;
-    } else {
-      refSpan = 40.0;
-    }
-  }
-  const refVal1 = currentGroup?.ref_val_start ?? 0;
-  const refVal2 = currentGroup?.ref_val_end ?? 20;
+  // 刻线几何：只对**本 ROI** 的列测（后端按 roi_id 过滤，这里必须同口径，否则错位）。
+  const roiCols = cols.filter((c) => !activeRoi?.id || !c.roi_id || c.roi_id === activeRoi.id);
+  const geoKey = rulerGeoKeyFor(data, activeRoi?.id ?? null);
+  const geo = rulerGeoKey === geoKey ? rulerGeo : null;
+  const geoError = rulerGeoKey === geoKey ? rulerGeoError : null;
+  const geoPending = rulerGeoPending || (!geo && !geoError);
+  const spans = detectedSpans(roiCols, geo);
+  lastSpans = spans;
+  const rigidSpan = maxDetectedSpan(spans);
   const groupUnit = currentGroup?.unit || '%';
+  const unitsPerCellText = refDrafts.get(currentGroupId) ?? '';
+  const rulerLine = describeRulerDetection(geo, geoError, geoPending);
+  const spanText =
+    rigidSpan == null
+      ? '刻距 —（需先检测到刻度尺）'
+      : `刻距 ${geo?.median_spacing_px ?? '—'}px（自动检测）`;
 
   const px1 = activeCol?.startX ?? 0;
   const px2 = getColCalibX(activeCol);
@@ -141,7 +273,8 @@ export function render(data: DiagramData): string {
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
           <span style="font-size: 11.5px; font-weight: 700; color: var(--text-heading);">列组看板 (按单位/量程分治)</span>
           <div style="display: flex; gap: 4px;">
-            <button id="btn-create-new-group" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 1px 6px; color: var(--accent-blue);" title="新建一个独立的列组（如炭屑浓度、优势种单列）">+ 新建组</button>
+            <button id="btn-create-new-group" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 1px 6px; color: var(--accent-blue);" title="新建一个列组：点它之后在图上点选属于该组的属种列（Shift 连选），其余列自动留在默认组">+ 分组</button>
+            ${groups.length > 1 && currentGroupId !== activeRoi?.default_group_id ? `<button id="btn-delete-group" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 1px 6px; color: var(--accent-red);" title="删除当前列组：组内列自动回到默认组">删除本组</button>` : ''}
             ${groups.length > 1 ? `<button id="btn-merge-groups" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 1px 6px;" title="合并形态标度完全一致的组">合并同类组</button>` : ''}
           </div>
         </div>
@@ -182,6 +315,17 @@ export function render(data: DiagramData): string {
           </div>
 
           <!-- 组内属种与批量划组管理 -->
+          ${
+            columnPick.active
+              ? `
+          <div id="column-pick-bar" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; margin-bottom: 6px; border: 1px solid var(--accent-blue); border-radius: 4px; background: var(--bg-tertiary);">
+            <span style="flex: 1 1 100%; font-size: 10px; color: var(--accent-blue); font-weight: 600;">在图上点击属种列（Shift 连选）</span>
+            <span style="font-size: 10px; color: var(--text-secondary);">已选 ${columnPick.ids.length} 列</span>
+            <button type="button" id="btn-confirm-column-pick" class="ui-btn ui-btn--primary ui-btn--xs" style="font-size: 10px; padding: 2px 10px; margin-left: auto;" ${columnPick.ids.length === 0 ? 'disabled' : ''}>确认成组</button>
+            <button type="button" id="btn-cancel-column-pick" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 2px 10px;">取消</button>
+          </div>`
+              : ''
+          }
           <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 6px;">
             <span style="font-size: 10px; color: var(--text-secondary);">包含 ${groupCols.length} 个属种列:</span>
             <button id="btn-toggle-batch-assign" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 1px 6px;">
@@ -194,24 +338,30 @@ export function render(data: DiagramData): string {
             isBatchAssignOpen
               ? `
             <div id="drawer-batch-assign" style="background: var(--bg-tertiary); border: 1px dashed var(--border-color); border-radius: 4px; padding: 6px 8px; margin-bottom: 8px;">
-              <div style="font-size: 9.5px; color: var(--text-muted); margin-bottom: 5px;">点击属种快速加入或移出当前组【${currentGroup?.name}】：</div>
-              <div style="display: flex; flex-wrap: wrap; gap: 3px; max-height: 120px; overflow-y: auto;">
+              <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
+                <span style="font-size: 9.5px; color: var(--text-muted);">勾选属种，Shift+点击可连选：</span>
+                <button type="button" id="btn-group-select-all" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9px; padding: 0 5px; margin-left: auto;">全选</button>
+                <button type="button" id="btn-group-select-none" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9px; padding: 0 5px;">全不选</button>
+              </div>
+              <div id="group-col-checklist" style="max-height: 140px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 3px; background: var(--bg-card);">
                 ${cols
-                  .map((c) => {
-                    const inThis = (c.x_group_id || activeRoi?.default_group_id) === currentGroupId;
+                  .map((c, i) => {
+                    const gid = c.x_group_id || activeRoi?.default_group_id;
+                    const inThis = gid === currentGroupId;
+                    const gname = (groups.find((g) => g.id === gid)?.name) || '默认组';
                     return `
-                      <button
-                        type="button"
-                        class="btn-toggle-col-group-membership ui-btn ${inThis ? 'ui-btn--primary' : 'ui-btn--quiet'}"
-                        data-col-id="${c.id}"
-                        style="font-size: 9.5px; padding: 1px 5px; border-radius: 3px; border: 1px solid var(--border-color);"
-                        title="${inThis ? '点击移出当前组' : '点击划入当前组'}"
-                      >
-                        ${inThis ? '[已选] ' : ''}${c.name}
-                      </button>
+                      <label class="group-col-row" style="display: flex; align-items: center; gap: 5px; padding: 2px 5px; font-size: 10px; cursor: pointer; border-bottom: 1px solid var(--border-color);">
+                        <input type="checkbox" class="group-col-check" data-col-id="${c.id}" data-idx="${i}" ${inThis ? 'checked' : ''} style="margin: 0;" />
+                        <span style="flex: 1; color: var(--text-primary);">${c.name}</span>
+                        <span style="font-size: 9px; color: ${inThis ? 'var(--status-success)' : 'var(--text-muted)'};">${gname}</span>
+                      </label>
                     `;
                   })
                   .join('')}
+              </div>
+              <div style="display: flex; gap: 5px; margin-top: 5px;">
+                <button type="button" id="btn-assign-selected-to-group" class="ui-btn ui-btn--primary ui-btn--xs" style="flex: 1; font-size: 10px; padding: 4px;">划入【${currentGroup?.name}】</button>
+                <button type="button" id="btn-remove-selected-from-group" class="ui-btn ui-btn--quiet ui-btn--xs" style="flex: 1; font-size: 10px; padding: 4px;">移回默认组</button>
               </div>
             </div>
           `
@@ -219,54 +369,29 @@ export function render(data: DiagramData): string {
           }
         </div>
 
-        <!-- 核心武器：组参考标尺模数设定与应用 -->
-        <div style="background: var(--bg-card); padding: 8px 10px; border-radius: 6px; border: 1px solid var(--accent-blue); box-shadow: 0 0 0 1px rgba(56,189,248,0.15); margin-bottom: 6px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-            <span style="font-size: 11px; font-weight: 700; color: var(--accent-blue); display: flex; align-items: center; gap: 4px;">
-              <span>参考标尺模数 (Reference Scale)</span>
-            </span>
-            <span style="font-size: 9.5px; color: ${groupCalibratedCols === groupCols.length && groupCols.length > 0 ? 'var(--status-success)' : 'var(--text-muted)'}; font-weight: 600;">
-              已标定 ${groupCalibratedCols}/${groupCols.length} 列
-            </span>
+        <!-- 参考标尺：一行检测结果 + 一个读数 + 一个按钮 -->
+        <div style="background: var(--bg-card); padding: 8px 10px; border-radius: 6px; border: 1px solid var(--accent-blue); margin-bottom: 6px;">
+          <div data-role="ruler-detect" data-detected-columns="${(geo?.per_column ?? []).length}"
+               data-spacing="${geo?.median_spacing_px ?? ''}"
+               data-regular="${geo?.all_regular === null || geo?.all_regular === undefined ? '' : String(geo?.all_regular)}"
+               data-span="${rigidSpan ?? ''}"
+               style="font-size: 10.5px; line-height: 1.5; margin-bottom: 6px; color: ${geoError ? 'var(--accent-red)' : 'var(--text-secondary)'};">
+            ${rulerLine}
           </div>
 
-          <div style="font-size: 10px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 6px;">
-            在图版任意清晰刻度尺上测量两点物理距离，以各列自身左基线为锚点<strong>一键刚体平移</strong>对齐全组，杜绝窄列压缩与全体偏差！
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label for="inp-ref-units-per-cell" style="font-size: 10.5px; color: var(--text-muted);">每根齿单位数:</label>
+            <input type="number" id="inp-ref-units-per-cell" value="${unitsPerCellText}" placeholder="如 20"
+                   title="相邻两条刻线之间代表多少单位：通常就是图上相邻两个数字标签之差（例如 20）；若标签隔一根齿才标数字，取该差值的一半。这是组的属性，全组共用这一个数。"
+                   style="width: 66px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
+            <span style="font-size: 10px; color: var(--text-muted);">${groupUnit}</span>
+            <span data-role="ruler-span" data-span="${rigidSpan ?? ''}" style="font-size: 9.5px; color: var(--text-muted); margin-left: auto;">${spanText}</span>
           </div>
 
-          <!-- 物理跨度与刻度读数参数框 -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
-            <div style="background: var(--bg-tertiary); padding: 5px 6px; border-radius: 4px; border: 1px solid var(--border-color);">
-              <label for="inp-ref-ruler-span" style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">物理跨度 (ΔX):</label>
-              <div style="display: flex; align-items: center; gap: 3px;">
-                <input type="number" id="inp-ref-ruler-span" step="0.5" value="${refSpan}" style="width: 100%; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); text-align: right;" />
-                <span style="font-size: 10px; color: var(--text-muted);">px</span>
-              </div>
-            </div>
-
-            <div style="background: var(--bg-tertiary); padding: 5px 6px; border-radius: 4px; border: 1px solid var(--border-color);">
-              <label for="inp-ref-val2" style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">对应量程数值:</label>
-              <div style="display: flex; align-items: center; gap: 2px;">
-                <input type="number" id="inp-ref-val1" value="${refVal1}" style="width: 32px; font-size: 11px; padding: 2px 3px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); text-align: right;" title="起点读数 (通常为 0)" />
-                <span style="font-size: 9px; color: var(--text-muted);">~</span>
-                <input type="number" id="inp-ref-val2" value="${refVal2}" style="width: 44px; font-size: 11px; padding: 2px 3px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); text-align: right;" title="刻度终点读数 (如 20 或 50)" />
-                <span style="font-size: 10px; color: var(--text-muted);">${groupUnit}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 测距拾取提示浮层 (监听 measure 事件自动更新) -->
-          <div id="notice-ruler-measured" style="display: none; font-size: 10px; color: var(--status-success); background: rgba(16,185,129,0.1); border: 1px solid var(--status-success); padding: 4px 6px; border-radius: 4px; margin-bottom: 6px;"></div>
-
-          <!-- 标尺操作按钮群 -->
-          <div style="display: flex; gap: 6px;">
-            <button id="btn-measure-ruler-on-canvas" class="ui-btn ui-btn--secondary ui-btn--xs" style="flex: 1; font-size: 10.5px; padding: 5px 6px;" title="激活测距工具，在图版底图标尺两端按下拖拽拉线即可自动拾取跨度">
-              [拉尺测距] 在底图标尺拉线
-            </button>
-            <button id="btn-apply-group-scale" class="ui-btn ui-btn--primary ui-btn--xs" style="flex: 1.3; font-size: 10.5px; padding: 5px 6px;" title="将上述标尺跨度作为绝对刚体模数应用到属于本组的所有属种列">
-              [对齐标尺] 刚体应用到本组 (${groupCols.length}列)
-            </button>
-          </div>
+          <button id="btn-apply-group-scale" class="ui-btn ui-btn--primary" style="width: 100%; font-size: 11px; padding: 5px 6px;"
+                  title="以各列基线为 0 点、用同一个自动检测到的跨度对齐全组（斜率一致）">
+            对齐本组 (${groupCols.length}列)
+          </button>
         </div>
       </div>
 
@@ -321,7 +446,7 @@ export function render(data: DiagramData): string {
               <span>右刻度齿点 (X2):</span>
             </label>
             <div style="display: flex; align-items: center; gap: 4px;">
-              <input type="number" id="inp-manual-tick-val2" value="${hasTicks ? activeCol.x_ticks![1].value : (activeCol?.tickValue ?? refVal2)}" style="width: 60px; font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
+              <input type="number" id="inp-manual-tick-val2" value="${hasTicks ? activeCol.x_ticks![1].value : (activeCol?.tickValue ?? '')}" style="width: 60px; font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
               <span style="font-size: 10.5px; color: var(--text-muted); min-width: 16px;">${activeCol?.unit || groupUnit}</span>
             </div>
           </div>
@@ -369,6 +494,15 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onDetectXTicks?.();
   });
 
+  // 0. 刻线几何检测：进入本步（以及数据变化后）自动拉一次，只读、不写任何标定。
+  void ensureRulerGeometry(ctx, root);
+
+  // 0b. 「末齿读数」草稿：后台刷新重渲染后用户填的数必须还在。
+  root.querySelector('#inp-ref-units-per-cell')?.addEventListener('input', (e) => {
+    const gid = selectedGroupId;
+    if (gid) refDrafts.set(gid, (e.target as HTMLInputElement).value);
+  });
+
   // 1. 组 Tab 切换
   root.querySelectorAll('.btn-switch-group-tab').forEach((el) => {
     el.addEventListener('click', () => {
@@ -386,26 +520,84 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onDataChange?.();
   });
 
-  // 3. 批量归组中点击属种标签即时转移
-  root.querySelectorAll('.btn-toggle-col-group-membership').forEach((el) => {
-    el.addEventListener('click', async () => {
-      const colId = (el as HTMLElement).dataset.colId;
-      const roi = activeRoi();
-      const col = cachedData?.columns.find((c) => c.id === colId);
-      if (!col || !roi || !selectedGroupId || !ctx.rpcClient) return;
-
-      const currentG = col.x_group_id || roi.default_group_id;
-      // 若已在当前组，移回默认组；否则移入当前选中的组
-      const newGroupId = currentG === selectedGroupId ? roi.default_group_id : selectedGroupId;
-
-      try {
-        await ctx.rpcClient.updateColumn(columnIndex(col), { x_group_id: newGroupId } as any);
-        col.x_group_id = newGroupId;
-        ctx.onDataChange?.();
-      } catch (err) {
-        notifyError(err instanceof Error ? err.message : String(err));
+  // 3. 批量归组：勾选（Shift 连选）+ 一次性划入/移出
+  //
+  // 旧实现是「点一个 chip 就立刻转移一个」，22 列要点 22 次，且转移方向是隐式的
+  //（在组内→移出到默认组，不在→移入），用户看不出结果。改为先勾选再执行：
+  // 一次操作覆盖任意多列，目标明确写在按钮上。
+  const checks = Array.from(
+    root.querySelectorAll<HTMLInputElement>('.group-col-check')
+  );
+  let lastCheckedIdx: number | null = null;
+  checks.forEach((el) => {
+    el.addEventListener('click', (ev) => {
+      const idx = Number(el.dataset.idx);
+      const shift = (ev as MouseEvent).shiftKey;
+      if (shift && lastCheckedIdx != null) {
+        const lo = Math.min(lastCheckedIdx, idx);
+        const hi = Math.max(lastCheckedIdx, idx);
+        const wanted = el.checked;
+        for (let k = lo; k <= hi; k++) {
+          if (checks[k]) checks[k].checked = wanted;
+        }
       }
+      lastCheckedIdx = idx;
     });
+  });
+  root.querySelector('#btn-group-select-all')?.addEventListener('click', () => {
+    checks.forEach((el) => {
+      el.checked = true;
+    });
+  });
+  root.querySelector('#btn-group-select-none')?.addEventListener('click', () => {
+    checks.forEach((el) => {
+      el.checked = false;
+    });
+  });
+
+  const moveCheckedTo = async (destinationGroupId: string | null): Promise<void> => {
+    const roi = activeRoi();
+    if (!roi || !ctx.rpcClient) return;
+    const picked = checks
+      .filter((el) => el.checked)
+      .map((el) => el.dataset.colId)
+      .filter((v): v is string => Boolean(v));
+    if (picked.length === 0) {
+      notify('请先勾选要调整的属种列。', 'info');
+      return;
+    }
+    const dest = destinationGroupId || roi.default_group_id;
+    const failures: string[] = [];
+    let moved = 0;
+    for (const colId of picked) {
+      const col = cachedData?.columns.find((c) => c.id === colId);
+      if (!col) continue;
+      if ((col.x_group_id || roi.default_group_id) === dest) continue; // 已经在该组，跳过
+      try {
+        await ctx.rpcClient.updateColumn(columnIndex(col), { x_group_id: dest } as any);
+        col.x_group_id = dest;
+        moved++;
+      } catch (err) {
+        failures.push(`${col.name}：${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    if (failures.length > 0) {
+      notifyError(`${failures.length} 列未调整成功：${failures.join('；')}`);
+    }
+    if (moved > 0) {
+      notify(`已把 ${moved} 个属种列调整到目标组。`, 'success');
+      ctx.onDataChange?.();
+    } else if (failures.length === 0) {
+      notify('所选属种都已在目标组，无需调整。', 'info');
+    }
+  };
+
+  root.querySelector('#btn-assign-selected-to-group')?.addEventListener('click', () => {
+    if (!selectedGroupId) return;
+    void moveCheckedTo(selectedGroupId);
+  });
+  root.querySelector('#btn-remove-selected-from-group')?.addEventListener('click', () => {
+    void moveCheckedTo(null);
   });
 
   // 4. 活动列所属组单列快速切换
@@ -425,134 +617,166 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   });
 
   // 5. 新建组
-  root.querySelector('#btn-create-new-group')?.addEventListener('click', async () => {
+  // 选列集变化 → 面板重渲染（「已选 N 列」与确认按钮的可用性都依赖它）
+  columnPick.onChanged = () => ctx.onDataChange?.();
+
+  // 「+ 分组」：不再弹原生 prompt。先让用户在**图上**选出属于新组的列，
+  // 再建组并划入；没选中的列自动留在默认组，不需要显式移出。
+  root.querySelector('#btn-create-new-group')?.addEventListener('click', () => {
+    beginColumnPick();
+  });
+
+  root.querySelector('#btn-cancel-column-pick')?.addEventListener('click', () => {
+    resetColumnPick();
+  });
+
+  root.querySelector('#btn-confirm-column-pick')?.addEventListener('click', async () => {
     const roi = activeRoi();
-    const activeCol = activeColumn();
     if (!roi || !ctx.rpcClient) return;
-
-    const grpName = prompt('请输入新列组名称（例如：优势种100%组、炭屑浓度组）：', `组 ${(roi.x_groups?.length || 0) + 1}`);
-    if (!grpName || !grpName.trim()) return;
-
+    const picked = [...columnPick.ids];
+    if (picked.length === 0) return;
+    const activeCol = activeColumn();
+    const name = `组 ${(roi.x_groups?.length || 0) + 1}`;
     try {
+      // 先建组：组名可在组 Tab 上再改，不在这一步卡住用户。
       const res = await ctx.rpcClient.roiGroupCreate(roi.id, {
-        name: grpName.trim(),
+        name,
         unit: activeCol?.unit || '%',
         plot_type: activeCol?.plot_type || activeCol?.plotType || 'area',
         scale_type: activeCol?.scale_type || 'linear',
       });
       roi.x_groups = roi.x_groups || [];
       roi.x_groups.push(res.group);
+      let moved = 0;
+      for (const colId of picked) {
+        const col = cachedData?.columns.find((c) => c.id === colId);
+        if (!col) continue;
+        await ctx.rpcClient.updateColumn(columnIndex(col), {
+          x_group_id: res.group.id,
+        } as any);
+        col.x_group_id = res.group.id;
+        moved++;
+      }
       selectedGroupId = res.group.id;
+      resetColumnPick();
+      notify(
+        `已新建【${res.group.name}】并划入 ${moved} 列；其余列留在默认组。`,
+        'success'
+      );
       ctx.onDataChange?.();
-      notify(`已创建新列组【${res.group.name}】，可点选属种划入本组。`, 'success');
     } catch (err) {
       notifyError(err instanceof Error ? err.message : String(err));
     }
   });
 
-  // 6. 激活图上拉线测标尺模式
-  root.querySelector('#btn-measure-ruler-on-canvas')?.addEventListener('click', () => {
-    if (ctx.onSetToolMode) {
-      ctx.onSetToolMode('measure');
-      notify('已激活标尺测距：请在底图任意清晰的刻度尺两端拖拽拉线，像素距离将自动填入！', 'info');
-    } else {
-      notify('请直接在画布上使用【测量工具】拉取已知标尺的两端点。', 'info');
+  // 删除当前组：组内列自动回默认组（后端 roi_group_remove 负责 fallback）。
+  root.querySelector('#btn-delete-group')?.addEventListener('click', async () => {
+    const roi = activeRoi();
+    if (!roi || !ctx.rpcClient || !selectedGroupId) return;
+    if (selectedGroupId === roi.default_group_id) {
+      notifyError('默认组不能删除：其余列都归它。');
+      return;
+    }
+    try {
+      await ctx.rpcClient.roiGroupRemove(roi.id, selectedGroupId);
+      roi.x_groups = (roi.x_groups || []).filter((g) => g.id !== selectedGroupId);
+      selectedGroupId = roi.default_group_id ?? null;
+      notify('已删除该列组，组内列已回到默认组。', 'success');
+      ctx.onDataChange?.();
+    } catch (err) {
+      notifyError(err instanceof Error ? err.message : String(err));
     }
   });
 
-  // 监听测距完成事件，自动回填测量像素
-  const onRulerMeasured = (e: Event) => {
-    const custom = e as CustomEvent<{ dx: number; dy: number; dist: number }>;
-    if (!custom.detail || typeof custom.detail.dx !== 'number') return;
-    const dx = Math.round(custom.detail.dx * 10) / 10;
-    const spanInput = root.querySelector('#inp-ref-ruler-span') as HTMLInputElement | null;
-    if (spanInput) {
-      spanInput.value = String(dx);
-      // 显示直观高亮通知
-      const noticeBox = root.querySelector('#notice-ruler-measured') as HTMLElement | null;
-      if (noticeBox) {
-        noticeBox.style.display = 'block';
-        noticeBox.innerHTML = `已从底图标尺拾取物理跨度: <strong>${dx} px</strong>！确认数值后点击下方按钮即可全组对齐。`;
-      }
-    }
-  };
-  window.addEventListener('straditize:measure-ruler', onRulerMeasured, { once: true });
-
-  // 7. 一键应用本组参考标尺到所有组内列 (核心刚体平移对齐)
+  // 6. 对齐本组：跨度自动取自检测（各列实测轴线→末齿），用户只填「每格单位数」。
   root.querySelector('#btn-apply-group-scale')?.addEventListener('click', async () => {
     const roi = activeRoi();
     if (!cachedData || !roi || !ctx.rpcClient) return;
 
-    const spanRaw = (root.querySelector('#inp-ref-ruler-span') as HTMLInputElement)?.value ?? '';
-    const val1Raw = (root.querySelector('#inp-ref-val1') as HTMLInputElement)?.value ?? '0';
-    const val2Raw = (root.querySelector('#inp-ref-val2') as HTMLInputElement)?.value ?? '20';
-
-    const spanPx = Number.parseFloat(spanRaw);
-    const val1 = Number.parseFloat(val1Raw);
-    const val2 = Number.parseFloat(val2Raw);
-
-    if (!Number.isFinite(spanPx) || spanPx <= 0) {
-      notifyError('标尺像素跨度必须是大于 0 的有效数值。');
+    const spanPx = maxDetectedSpan(lastSpans);
+    if (spanPx == null) {
+      notifyError('未检测到刻度尺，无法取跨度：请在图上确认图版下方有刻度尺后重试。');
       return;
     }
-    if (!Number.isFinite(val1) || !Number.isFinite(val2) || val1 === val2) {
-      notifyError('刻度起始值与终止值必须是有效且不相等的数字。');
+    const spacing = rulerGeo?.median_spacing_px;
+    if (!spacing || spacing <= 0) {
+      notifyError('未检测到刻距，无法把「每根齿单位数」换算成像素：请确认图版下方有刻度尺后重试。');
+      return;
+    }
+
+    // 「每格单位数」是**组**的属性（同组共用同一把刻度尺），不是某列末齿的读数：
+    // 后者在多列图上会歧义——各列末齿对应的读数并不相同（20 / 50 / 100 都有）。
+    const raw = (root.querySelector('#inp-ref-units-per-cell') as HTMLInputElement | null)?.value ?? '';
+    const unitsPerCell = Number.parseFloat(raw);
+    if (!Number.isFinite(unitsPerCell) || unitsPerCell <= 0) {
+      notifyError('每根齿单位数必须填：看相邻两条刻线之间代表多少单位（通常是相邻两个数字标签之差；标签隔齿标注时取一半）。不会替你预填。');
       return;
     }
 
     const currentG = (roi.x_groups || []).find((g) => g.id === selectedGroupId) || (roi.x_groups || [])[0];
     const targetGroupId = currentG?.id || roi.default_group_id;
     const targetRoiId = roi.id;
-
-    // 筛选归属于本组的所有列
     const targetCols = (cachedData.columns || []).filter((c) => {
       const cGrp = c.x_group_id || roi.default_group_id;
       const cRoi = c.roi_id || roi.id;
       return cGrp === targetGroupId && cRoi === targetRoiId;
     });
-
     if (targetCols.length === 0) {
       notify(`当前组【${currentG?.name || '默认组'}】内尚无任何属种列，请先添加属种归组。`, 'info');
       return;
     }
 
     const unit = currentG?.unit || '%';
-
-    // 记录组级标尺模数
-    if (currentG) {
-      currentG.ref_span_px = spanPx;
-      currentG.ref_val_start = val1;
-      currentG.ref_val_end = val2;
-    }
-
+    // 换算依据仍是「水平距离 ÷ 数值差」这一个比值，只是分子取**检测到的刻距**：
+    // 每格 unitsPerCell 个单位 ↔ spacing 像素。同组各列共用它，斜率天然相等。
+    const pxPerUnit = spacing / unitsPerCell;
+    const failures: string[] = [];
+    const skipped: string[] = [];
     let successCount = 0;
     for (const col of targetCols) {
-      const colIdx = columnIndex(col);
-      // 刚体对齐：以该列自身左基线 startX 为零点，严格加上物理跨度 spanPx！
-      const p1 = col.startX;
-      const p2 = col.startX + spanPx;
-
+      const idx = columnIndex(col);
+      const span = lastSpans.find((s) => s.colIndex === idx);
+      if (!span || span.span == null || span.span <= 0) {
+        // 没有检测到刻线 = 没有可信的水平距离。绝不拿别列的距离顶替。
+        skipped.push(col.name);
+        continue;
+      }
+      // 第二端点就用该列**自己**检测到的末齿：跨度天然落在列内，无需夹取；
+      // 读数按同一 px/单位折算，所以四列 px/单位严格相等。
+      // 0 点取实测轴线（span.axisX），不是 col.startX —— 后者只是列边界代理。
+      const px1 = span.axisX + span.span;
+      const v2 = span.span / pxPerUnit;
       try {
         const res = await ctx.rpcClient.calibrateColumnXTicks(
-          colIdx,
+          idx,
           [
-            { px: p1, value: val1 },
-            { px: p2, value: val2 },
+            { px: span.axisX, value: 0 },
+            { px: px1, value: v2 },
           ],
           unit
         );
         col.x_ticks = res.x_ticks;
-        col.tickEndX = p2;
-        col.maxPercent = val2;
+        col.tickEndX = px1;
+        col.maxPercent = v2;
         successCount++;
       } catch (err) {
-        console.warn(`[XTicksPanel] 标定列 ${col.name} 失败:`, err);
+        failures.push(`${col.name}：${describeError(err)}`);
       }
     }
 
+    if (skipped.length > 0) {
+      notifyError(
+        `${skipped.length} 列未检测到刻度尺，已跳过（不拿别列的距离顶替）：${skipped.join('、')}`
+      );
+    }
+    if (failures.length > 0) {
+      notifyError(`对齐失败 ${failures.length}/${targetCols.length} 列：${failures.join('；')}`);
+    }
     if (successCount > 0) {
+      refDrafts.delete(currentG?.id || '');
+      const k = Math.round(pxPerUnit * 100) / 100;
       notify(
-        `成功将标尺模数 (${spanPx}px = ${val1}~${val2}${unit}) 严格刚体对齐应用到【${currentG?.name || '默认组'}】全部 ${successCount} 个属种！`,
+        `已对齐 ${successCount} 列：每根齿 ${unitsPerCell}${unit}，刻距 ${Math.round(spacing * 10) / 10}px → ${k} px/单位`,
         'success'
       );
       ctx.onDataChange?.();

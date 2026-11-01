@@ -17,6 +17,10 @@ export function render(data: DiagramData): string {
   const botPx = bounds ? bounds.bottomPx : (cal.bottom_px ?? '');
   const botVal = bounds ? bounds.bottomValue : (cal.bottom_cm ?? '');
   const unit = cal.unit || 'cm';
+  // What the Y axis MEASURES. Declared, never inferred from `unit`: "cm"/"m" imply depth
+  // and "cal BP"/"ka" imply age only for conventional spellings, and a wrong guess moves
+  // every sample in the core to a plausible-but-wrong position with no error to notice.
+  const primaryAxis = cal.primaryAxis === 'age' ? 'age' : 'depth';
 
   let ratioStr = '--';
   if (bounds && Math.abs(bounds.bottomPx - bounds.topPx) > 0) {
@@ -90,6 +94,19 @@ export function render(data: DiagramData): string {
           </div>
         </div>
 
+        <!-- 主轴语义：显式声明 Y 轴测的是什么 -->
+        <div style="display: flex; align-items: center; gap: 5px; padding: 4px 2px; font-size: 10.5px;"
+             title="声明 Y 轴读数的含义。Y=深度（常规花粉图谱）；Y=年代时，样品深度由年代-深度模型反查得出。单位只作显示标签，不参与判断。">
+          <label style="color: var(--text-muted);">主轴:</label>
+          <select id="ycal-sel-primary-axis" class="sample-select" style="font-size: 10.5px; padding: 2px 4px;">
+            <option value="depth"${primaryAxis === 'depth' ? ' selected' : ''}>Y = 深度（默认）</option>
+            <option value="age"${primaryAxis === 'age' ? ' selected' : ''}>Y = 年代</option>
+          </select>
+          <span id="lbl-ycal-axis-hint" style="color: var(--text-muted); font-size: 9.5px;">
+            ${primaryAxis === 'age' ? '样品深度将由 A/D 模型反查' : ''}
+          </span>
+        </div>
+
         <button id="btn-apply-ycalib" class="ui-btn ui-btn--secondary" style="width: 100%; font-size: 11px; padding: 5px; margin-top: 6px;">
           ${t('step3.apply')}
         </button>
@@ -110,6 +127,8 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     const botPx = parseFloat((root.querySelector('#ycal-inp-bot-px') as HTMLInputElement)?.value || '');
     const botVal = parseFloat((root.querySelector('#ycal-inp-bot-val') as HTMLInputElement)?.value || '');
     const unit = (root.querySelector('#ycal-inp-unit') as HTMLInputElement)?.value.trim() || 'cm';
+    const axisRaw = (root.querySelector('#ycal-sel-primary-axis') as HTMLSelectElement)?.value;
+    const primaryAxis: 'depth' | 'age' = axisRaw === 'age' ? 'age' : 'depth';
 
     // 即使真实数值尚未填齐，也实时同步 Y1/Y2 像素位置到画布预览
     if (ctx.onPreviewYCalibrationPx) {
@@ -128,7 +147,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     }
 
     if (ctx.onSubmitYCalibration) {
-      ctx.onSubmitYCalibration(topPx, topVal, botPx, botVal, unit);
+      ctx.onSubmitYCalibration(topPx, topVal, botPx, botVal, unit, primaryAxis);
     }
   };
 
@@ -141,7 +160,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     });
   });
 
-  root.querySelectorAll('#ycal-inp-top-px, #ycal-inp-top-val, #ycal-inp-bot-px, #ycal-inp-bot-val, #ycal-inp-unit').forEach((inp) => {
+  root.querySelectorAll('#ycal-inp-top-px, #ycal-inp-top-val, #ycal-inp-bot-px, #ycal-inp-bot-val, #ycal-inp-unit, #ycal-sel-primary-axis').forEach((inp) => {
     inp.addEventListener('change', commitCalibration);
   });
 

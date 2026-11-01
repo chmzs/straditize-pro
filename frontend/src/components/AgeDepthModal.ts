@@ -351,7 +351,7 @@ export class AgeDepthModal {
     modal.querySelector('#ad-btn-exclude-clear')?.addEventListener('click', () => this.canvasComp?.clearExcludeBoxes());
 
     // 速率列勾选
-    (['ad-chk-rate-sr', 'ad-chk-rate-ar'] as const).forEach((id) =>
+    (['ad-chk-rate-sr', 'ad-chk-rate-ar', 'ad-chk-rate-sr-win'] as const).forEach((id) =>
       modal.querySelector(`#${id}`)?.addEventListener('change', () => this.controller?.renderRateOptionsNote())
     );
 
@@ -361,14 +361,51 @@ export class AgeDepthModal {
     modal.querySelector('#ad-btn-load-bchron')?.addEventListener('click', () => this.controller?.loadSampleImage('bchron'));
     modal.querySelector('#ad-btn-center-bchron')?.addEventListener('click', () => this.controller?.loadSampleImage('bchron'));
 
-    // 本地文件上传
+    // 本地文件上传：唯一入口是画布中央的 #ad-btn-center-browse。
+    // 右侧控制栏原有一个「上传本地图谱」按钮指向同一个 input，与它完全重复，已随该块删除；
+    // 这里不再监听 #ad-btn-upload-file（元素已不存在，监听只会变成死代码）。
     const fileInput = modal.querySelector('#ad-file-input') as HTMLInputElement | null;
-    modal.querySelector('#ad-btn-upload-file')?.addEventListener('click', () => fileInput?.click());
     modal.querySelector('#ad-btn-center-browse')?.addEventListener('click', () => fileInput?.click());
     fileInput?.addEventListener('change', () => {
       const file = fileInput.files?.[0];
       if (file) this.controller?.handleCustomImageFile(file);
     });
+
+    // 拖拽载图。空白区文案一直写着「直接将 … 年代图拖拽至此处」，但这里从未有过
+    // dragover/drop 监听——拖进来毫无反应，文案在说谎。挂在容器而不是空白区上：
+    // 空白区在图载入后就 display:none 了，挂它等于只在首次可用；挂容器则任何时候
+    // 都能拖入替换，与主画布 GeologyCanvas.initDragDrop 的行为一致。
+    const dropHost = modal.querySelector('#ad-canvas-container') as HTMLElement | null;
+    if (dropHost) {
+      // dragover 必须 preventDefault，否则浏览器不会派发 drop（默认行为是拒绝投放）。
+      const allowDrop = (e: DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+        dropHost.style.borderColor = 'var(--accent-blue)';
+      };
+      dropHost.addEventListener('dragenter', allowDrop);
+      dropHost.addEventListener('dragover', allowDrop);
+      dropHost.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // 只有真正离开容器才复位；在子元素间移动会连续触发 dragleave。
+        if (e.target === dropHost) dropHost.style.borderColor = '';
+      });
+      dropHost.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropHost.style.borderColor = '';
+        const file = e.dataTransfer?.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+          // 如实拒绝，不静默吞掉：用户拖错了文件必须知道为什么没反应。
+          notifyError(`「${file.name}」不是图片文件，请拖入 PNG / JPG / WebP 年代图。`);
+          return;
+        }
+        this.controller?.handleCustomImageFile(file);
+      });
+    }
 
     // 运行视觉提取
     modal.querySelector('#ad-btn-extract')?.addEventListener('click', () => {

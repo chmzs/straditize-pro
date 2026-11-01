@@ -338,7 +338,7 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
   test.describe('T7 批量应用与快捷键', () => {
     test.use({ allowlists: { notice: [/已将刻度.*批量应用/] } });
 
-    test('T7 键盘 Enter 快捷保存与一键批量应用至同组列', async ({ page, telemetry }) => {
+    test('T7 键盘 Enter 快捷保存单列刻度', async ({ page, telemetry }) => {
       await gotoStage(page, 6);
 
       // 1. 输入新数值并通过 Enter 键提交保存
@@ -353,21 +353,11 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
           expect.objectContaining({ value: 25 }),
         ]);
 
-      // 2. 点击【应用刻度至同组全部列】按钮
-      const applyToGroupBtn = page.locator('.step-panel[data-step="6"] #btn-apply-ticks-to-group');
-      await expect(applyToGroupBtn).toBeVisible();
-      await applyToGroupBtn.click();
-
-      // 验证同组的所有列都写入了 0~25 标度
-      await expect
-        .poll(async () => {
-          const allCols = await columns(page);
-          const col0 = allCols[0];
-          const sameGroup = allCols.filter((c) => (c as any).x_group_id === (col0 as any).x_group_id);
-          return sameGroup.every((c) => c.x_ticks && c.x_ticks[1]?.value === 25);
-        }, { timeout: 10_000 })
-        .toBe(true);
-
+      // 注：原用例后半段点 `#btn-apply-ticks-to-group`，该按钮已在 d3ff653
+      //（"group scale ruler"）被 `#btn-apply-group-scale` 取代，测试没跟着改，从此恒红。
+      // 批量应用现在需要检测到刻度尺，而本用例的 hoya 基线图没有刻度尺
+      //（`group-scale-ruler.spec.ts` 专门守这条），故那段断言已由
+      // `step6-ruler-geometry.spec.ts` T3 覆盖（beginner 图，实测 4 列全规则）。
       expect(telemetry.rpcErrors).toEqual([]);
     });
   });

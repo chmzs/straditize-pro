@@ -122,7 +122,7 @@ class TestNoPlaceholderNumbers(unittest.TestCase):
         session.calibrate_and_extract_age_depth(
             depth_px=[32.0, 668.0], depth_vals=[0.0, 150.0],
             age_px=[110.0, 803.5], age_vals=[3000.0, 0.0],
-            depth_range=[0.0, 160.0], resample_step=2.0,
+            depth_range=[0.0, 160.0],
         )
         lo, hi = session.age_depth_model.depths.min(), session.age_depth_model.depths.max()
         probe = [float(lo) - 40.0, float((lo + hi) / 2), float(hi) + 40.0]
@@ -144,7 +144,7 @@ class TestNoPlaceholderNumbers(unittest.TestCase):
         session.calibrate_and_extract_age_depth(
             depth_px=[32.0, 668.0], depth_vals=[0.0, 150.0],
             age_px=[110.0, 803.5], age_vals=[3000.0, 0.0],
-            depth_range=[0.0, 160.0], resample_step=2.0,
+            depth_range=[0.0, 160.0],
         )
         model = session.age_depth_model
         inside = [float(d) for d in model.depths[::10]]

@@ -87,6 +87,7 @@ def register(dispatcher: Any, session: Any) -> None:
                     "bottom_px": None,
                     "bottom_cm": None,
                     "unit": getattr(session, "depth_unit", "cm"),
+                    "primaryAxis": getattr(session, "primary_axis", "depth"),
                     "depthInterval": 2,
                     "depthGridEnabled": True,
                 },
@@ -147,6 +148,10 @@ def register(dispatcher: Any, session: Any) -> None:
                 # 标度的唯一事实源：两个真实刻度端点。null = 未标定。
                 # 删掉它整条链路就断（载荷剥字段 → 前端 hasTicks 恒 false → 标尺画不出来）。
                 "x_ticks": c.get("x_ticks"),
+                # 该列所属组。此前**整个列载荷没有这个字段**，于是前端读到 undefined，
+                # 只能把每一列都当成"默认组"——分组界面永远显示错误的归属，
+                # 用户无法判断哪列在哪组（这就是"分组操作不好用"的根因之一）。
+                "x_group_id": c.get("x_group_id"),
                 # B-02：该列此前的标定因取数区/列边界变动被守卫丢弃时，
                 # 这里必须**原样透传**丢的是什么、丢在哪个区间，否则用户看到的
                 # 只是"标定没了"，无从判断需不需要重新标定。值为 None 表示
@@ -234,6 +239,8 @@ def register(dispatcher: Any, session: Any) -> None:
                 "bottom_px": depth_calib.get("bottom_px"),
                 "bottom_cm": depth_calib.get("bottom_cm"),
                 "unit": session.depth_unit,
+                # 键名跟随同字典的 isCalibrated / depthInterval 用 camelCase。
+                "primaryAxis": getattr(session, "primary_axis", "depth"),
                 "depthInterval": 2,
                 "depthGridEnabled": True,
             },

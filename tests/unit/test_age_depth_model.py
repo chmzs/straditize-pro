@@ -145,5 +145,158 @@ class AgeDepthModelRecognitionTest(unittest.TestCase):
         self.assertIn("C14_1,850,30,25.0,1", r_code)
 
 
+class TestSedimentationRateEstimate(unittest.TestCase):
+    """The rate must be a windowed regression with an error bar, not a point derivative.
+
+    A digitised trace carries ~1 px of age error per row. Differentiating the fitted curve
+    point by point turns that noise straight into the rate, attaches no uncertainty, and
+    lapses to "undefined" wherever isotonic pooling flattened the curve. These tests pin the
+    replacement: least squares over a window, slope inverted to depth per year, with the
+    slope's standard error propagated through the inversion.
+    """
+
+    @staticmethod
+    def _constant_core(scale: float = 1.0, noise_sd: float = 12.0):
+        """41 horizons, 5 cm apart, a true 25 yr/cm, plus optional per-horizon noise."""
+        depths = np.arange(0.0, 201.0, 5.0)
+        clean = depths * 25.0
+        noisy = clean + np.random.default_rng(0).normal(0, noise_sd, depths.size)
+        model = AgeDepthModel(
+            depths=depths,
+            ages=noisy / scale,
+            age_min=(noisy - 40) / scale,
+            age_max=(noisy + 40) / scale,
+        )
+        return model, depths
+
+    def test_recovers_a_known_constant_rate(self):
+        model, depths = self._constant_core()
+        res = model.estimate_sedimentation_rate(depths)
+        sed = np.asarray([v for v in res["sed_rate"] if v is not None])
+        self.assertEqual(sed.size, depths.size, "every horizon should be defined here")
+        # truth: 25 yr/cm -> 1/25 = 0.04 cm/yr
+        self.assertAlmostEqual(float(np.median(sed)), 0.04, delta=0.002)
+        # and it must be stable across the core, since the truth is constant
+        self.assertLess(float(np.percentile(sed, 95) - np.percentile(sed, 5)), 0.01)
+
+    def test_reports_a_standard_error(self):
+        model, depths = self._constant_core()
+        res = model.estimate_sedimentation_rate(depths)
+        se = [v for v in res["sed_rate_se"] if v is not None]
+        self.assertEqual(len(se), depths.size)
+        self.assertTrue(all(v > 0 for v in se), "a rate without an error bar is unusable")
+        rel = np.asarray(se) / np.asarray([v for v in res["sed_rate"] if v is not None])
+        # The synthetic core carries a +/-40 yr envelope, so the envelope-derived relative
+        # standard error bottoms out near 57/40/25 = 5.7% no matter how wide the window gets.
+        # That is the fixture's floor, not a defect; the point of the assertion is that the
+        # error bar exists, is finite, and is the right order of magnitude.
+        self.assertLess(float(np.median(rel)), 0.10)
+        self.assertGreater(float(np.median(rel)), 0.0)
+        # And it must be reported separately from the OLS-only figure, so a caller can see
+        # that the OLS number is optimistic on an interpolated curve.
+        self.assertIn("sed_rate_se_ols", res)
+        ols = [v for v in res["sed_rate_se_ols"] if v is not None]
+        self.assertGreater(len(ols), 0)
+        self.assertGreater(
+            float(np.median(se)), float(np.median(ols)),
+            "the reported error must not be the optimistic OLS-only figure",
+        )
+
+    def test_the_age_axis_scale_cancels_out(self):
+        """A 0..9 ka axis and a 0..9000 yr axis describe one core; the rate must not differ.
+
+        This is the factor-of-1000 trap: both axes can be labelled "cal BP", so the scale is
+        inferred from the magnitudes and reported, rather than trusted from a unit string.
+        """
+        years_model, depths = self._constant_core(scale=1.0)
+        ka_model, _ = self._constant_core(scale=1000.0)
+
+        years_res = years_model.estimate_sedimentation_rate(depths)
+        ka_res = ka_model.estimate_sedimentation_rate(depths)
+
+        self.assertEqual(years_res["years_per_age_unit"], 1.0)
+        self.assertEqual(ka_res["years_per_age_unit"], 1000.0)
+        self.assertIn("ka", ka_res["age_scale_inferred"])
+
+        first = np.median([v for v in years_res["sed_rate"] if v is not None])
+        second = np.median([v for v in ka_res["sed_rate"] if v is not None])
+        self.assertAlmostEqual(float(first), float(second), delta=0.002)
+
+    def test_a_reversal_yields_null_not_a_number(self):
+        """Where age does not advance with depth there is no rate, and it must say so.
+
+        The reversal has to be a NEGATIVE SLOPE, not a downward shift: shifting a block of
+        ages down by a constant leaves the within-window slope at +25 yr/cm, so a windowed
+        estimator rightly still reports a rate there. Inverting the deeper half makes the
+        slope negative, which is the case that has no rate at all.
+        """
+        depths = np.arange(0.0, 201.0, 5.0)
+        ages = depths * 25.0
+        # Deeper half runs backwards at the same magnitude: slope -25 yr/cm.
+        ages[20:] = ages[19] - (depths[20:] - depths[19]) * 25.0 - 30.0
+        model = AgeDepthModel(
+            depths=depths, ages=ages, age_min=ages - 40, age_max=ages + 40
+        )
+        res = model.estimate_sedimentation_rate(depths)
+        bad = [
+            (d, s)
+            for d, s, st in zip(res["depths"], res["sed_rate"], res["status"])
+            if st == "non_positive_slope"
+        ]
+        self.assertGreater(len(bad), 0, "the reversal must be detected")
+        for depth, rate in bad:
+            self.assertIsNone(
+                rate, f"depth {depth}: a reversed interval was given a numeric rate"
+            )
+
+    def test_a_shifted_block_is_not_mistaken_for_a_reversal(self):
+        """A constant downward shift keeps a positive slope, so a rate is still defined.
+
+        This guards the opposite error: flagging every age decrease as a reversal when the
+        window still sees a coherent, if offset, chronology.
+        """
+        depths = np.arange(0.0, 201.0, 5.0)
+        ages = depths * 25.0
+        ages[20:] -= 300.0          # offset, but still rising at 25 yr/cm
+        model = AgeDepthModel(
+            depths=depths, ages=ages, age_min=ages - 40, age_max=ages + 40
+        )
+        res = model.estimate_sedimentation_rate(depths)
+        n_ok = sum(1 for st in res["status"] if st == "ok")
+        self.assertGreater(
+            n_ok, len(depths) // 2,
+            "an offset horizon sequence still has a positive slope and a valid rate",
+        )
+
+    def test_too_few_horizons_is_refused(self):
+        model = AgeDepthModel(depths=np.array([0.0, 10.0]), ages=np.array([0.0, 250.0]))
+        with self.assertRaises(ValueError) as ctx:
+            model.estimate_sedimentation_rate([0.0, 10.0])
+        self.assertIn("at least three horizons", str(ctx.exception))
+
+    def test_window_is_chosen_not_imposed(self):
+        """The smoothing length is a DEPTH THICKNESS, reported, and bounded by the cap.
+
+        Counting horizons instead would make the smoothing length depend on the resampling
+        grid rather than on the data: the native trace carries one row every 0.2 cm, so
+        "20 horizons" meant 4 cm -- thin enough that the fitted curve is locally linear and
+        the OLS residual collapsed to a fake confidence of se = 0.
+        """
+        model, depths = self._constant_core()
+        res = model.estimate_sedimentation_rate(depths)
+        self.assertIn("window_depth", res)
+        thickness = res["window_depth"]
+        self.assertIsNotNone(thickness)
+        self.assertGreater(thickness, 0)
+        # Bounded by max_window_fraction (20%) of the observed depth span.
+        span = float(np.max(model.analysis_depths) - np.min(model.analysis_depths))
+        self.assertLessEqual(thickness, span * 0.2 + 1e-6)
+        # A wider thickness must actually be used by more horizons.
+        self.assertGreater(max(res["window_per_horizon"]), 3)
+        # And an explicit thickness must be honoured rather than searched over.
+        fixed = model.estimate_sedimentation_rate(depths, window=20.0)
+        self.assertAlmostEqual(fixed["window_depth"], 20.0)
+
+
 if __name__ == "__main__":
     unittest.main()

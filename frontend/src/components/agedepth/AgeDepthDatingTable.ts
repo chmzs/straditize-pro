@@ -12,6 +12,33 @@ export interface AgeDepthDatingTableCallbacks {
   onSwitchTab?: (tab: 'visual' | 'table' | 'modeling') => void;
 }
 
+/**
+ * Renders a number. By default **exactly as computed** (full precision): every fixed
+ * rounding scheme here has burned a user at some point (`Math.round(age)` collapsed a
+ * smooth curve onto ~10 columns; `toFixed(1)` printed a real 0.04 ka/cm rate as
+ * "0.0 yr/cm", which reads as "no deposition").
+ *
+ * But full precision is unreadable in a status line or a 17-digit CI, so the table now
+ * exposes a display-precision control (the Format button). It is DISPLAY-ONLY: the
+ * underlying values, the sync to the backend and the exports keep full precision; only
+ * the rendered text is rounded. `null` means "raw value" (the default).
+ */
+let displayDecimals: number | null = null;
+
+export function getDisplayDecimals(): number | null {
+  return displayDecimals;
+}
+
+export function setDisplayDecimals(n: number | null): void {
+  displayDecimals = n;
+}
+
+export function formatNumber(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '';
+  if (displayDecimals === null) return String(value);
+  return value.toFixed(displayDecimals);
+}
+
 export class AgeDepthDatingTable {
   private container: HTMLElement;
   private callbacks: AgeDepthDatingTableCallbacks;
@@ -20,6 +47,9 @@ export class AgeDepthDatingTable {
   private inspectionData: AgeDepthModelInspectionData | null = null;
   private mappedSamples: MappedSamplesData | null = null;
   private datingPoints: DatingPoint[] = [];
+  /** Column currently driving the header sort; null = source order. */
+  private sortKey: 'depth' | 'age' | 'min' | 'max' | null = null;
+  private sortAsc = true;
 
   constructor(container: HTMLElement, callbacks: AgeDepthDatingTableCallbacks = {}) {
     this.container = container;
@@ -238,8 +268,10 @@ export class AgeDepthDatingTable {
     const accMid = rates?.acc_rate_yr_per_depth;
     const accLo = rates?.acc_rate_yr_per_depth_min;
     const accHi = rates?.acc_rate_yr_per_depth_max;
+    // Significant digits, not fixed decimals: rates run from 0.008 to 1200 on real figures,
+    // so `toFixed(2)` printed "0.01" and "1200.00" for values that are precise to six digits.
     const fmt = (v: number | null | undefined): string =>
-      v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toFixed(2);
+      v === null || v === undefined || !Number.isFinite(v) ? '—' : formatNumber(v);
     const rateCell = (i: number): string => {
       const mid = accMid?.[i];
       if (mid === undefined) {
@@ -263,13 +295,13 @@ export class AgeDepthDatingTable {
         tr.innerHTML = `
           <td style="font-weight: 600; color: var(--accent-blue); padding: 1px 2px;">${ms.depths[i]} cm</td>
           <td style="padding: 1px 2px;">
-            <input type="number" step="any" class="ad-tbl-input ad-input-side-sample-age" data-idx="${i}" value="${Math.round(ms.age_est[i])}" style="font-size: 10px; font-weight: 600;" />
+            <input type="number" step="any" class="ad-tbl-input ad-input-side-sample-age" data-idx="${i}" value="${formatNumber(ms.age_est[i])}" style="font-size: 10px; font-weight: 600;" />
           </td>
           <td style="padding: 1px 2px;">
             <div style="display: flex; gap: 2px; align-items: center;">
-              <input type="number" step="any" class="ad-tbl-input ad-input-side-sample-min" data-idx="${i}" value="${Math.round(minVal)}" style="font-size: 9px;" />
+              <input type="number" step="any" class="ad-tbl-input ad-input-side-sample-min" data-idx="${i}" value="${formatNumber(minVal)}" style="font-size: 9px;" />
               <span style="color: var(--text-muted); font-size: 9px;">~</span>
-              <input type="number" step="any" class="ad-tbl-input ad-input-side-sample-max" data-idx="${i}" value="${Math.round(maxVal)}" style="font-size: 9px;" />
+              <input type="number" step="any" class="ad-tbl-input ad-input-side-sample-max" data-idx="${i}" value="${formatNumber(maxVal)}" style="font-size: 9px;" />
             </div>
           </td>
           ${rateCell(i)}
@@ -328,7 +360,8 @@ export class AgeDepthDatingTable {
       if (i > 0 && d[i] !== d[i - 1]) {
         const da = Math.abs(a[i] - a[i - 1]);
         const dd = Math.abs(d[i] - d[i - 1]);
-        rateStr = (da / Math.max(1e-4, dd)).toFixed(1);
+        // Significant digits, not toFixed(1): a 0.04 ka/cm rate printed as "0.0".
+        rateStr = formatNumber(da / Math.max(1e-12, dd));
       }
 
       tr.innerHTML = `
@@ -336,13 +369,13 @@ export class AgeDepthDatingTable {
           <input type="number" step="any" class="ad-tbl-input ad-input-side-depth" data-idx="${i}" value="${d[i]}" style="font-size: 10px;" />
         </td>
         <td style="padding: 1px 2px;">
-          <input type="number" step="any" class="ad-tbl-input ad-input-side-age" data-idx="${i}" value="${Math.round(a[i])}" style="font-size: 10px; font-weight: 600;" />
+          <input type="number" step="any" class="ad-tbl-input ad-input-side-age" data-idx="${i}" value="${formatNumber(a[i])}" style="font-size: 10px; font-weight: 600;" />
         </td>
         <td style="padding: 1px 2px;">
           <div style="display: flex; gap: 2px; align-items: center;">
-            <input type="number" step="any" class="ad-tbl-input ad-input-side-min" data-idx="${i}" value="${Math.round(mi[i])}" style="font-size: 9px;" />
+            <input type="number" step="any" class="ad-tbl-input ad-input-side-min" data-idx="${i}" value="${formatNumber(mi[i])}" style="font-size: 9px;" />
             <span style="color: var(--text-muted); font-size: 9px;">~</span>
-            <input type="number" step="any" class="ad-tbl-input ad-input-side-max" data-idx="${i}" value="${Math.round(ma[i])}" style="font-size: 9px;" />
+            <input type="number" step="any" class="ad-tbl-input ad-input-side-max" data-idx="${i}" value="${formatNumber(ma[i])}" style="font-size: 9px;" />
           </div>
         </td>
         <td style="color: var(--text-secondary); font-size: 9px;">${rateStr}</td>
@@ -400,6 +433,7 @@ export class AgeDepthDatingTable {
     if (this.tableMode === 'samples' && this.mappedSamples?.depths?.length) {
       const ms = this.mappedSamples;
       if (badge) badge.textContent = `花粉样品层位: 共 ${ms.depths.length} 个样品`;
+      const sed = ms.sedimentation;
       for (let i = 0; i < ms.depths.length; i++) {
         const tr = document.createElement('tr');
         const d = ms.depths[i];
@@ -407,21 +441,39 @@ export class AgeDepthDatingTable {
         const mi = ms.age_min ? ms.age_min[i] : Math.max(0, a - 100);
         const ma = ms.age_max ? ms.age_max[i] : a + 100;
         const width = Math.abs(ma - mi);
-        const acc = ms.rate?.acc_rate_yr_per_depth?.[i];
-        const rate = (acc !== undefined && acc !== null && Number.isFinite(acc))
-          ? `${acc.toFixed(2)} yr/cm`
-          : '—';
+        // Windowed rate (cm/yr) + its standard error in separate cells, mirroring the
+        // model table. The pointwise finite-difference fallback below is yr/cm, so its
+        // unit label is stated inline to keep the two apart.
+        let rateHtml = '—';
+        let seHtml = '—';
+        if (sed && Array.isArray(sed.sed_rate) && i < sed.sed_rate.length) {
+          const mid = sed.sed_rate[i];
+          if (mid === null || mid === undefined || !Number.isFinite(mid)) {
+            const why = sed.status?.[i] || '';
+            rateHtml = `<span style="color:var(--status-warning);" title="该层位速率未定义（${why}）">—</span>`;
+          } else {
+            rateHtml = `${formatNumber(mid)} <span style="color:var(--text-muted);font-size:9px;">cm/yr</span>`;
+            const se = sed.sed_rate_se?.[i];
+            seHtml = se !== null && se !== undefined && Number.isFinite(se)
+              ? `± ${formatNumber(se)}`
+              : '—';
+          }
+        } else if (i > 0 && d !== ms.depths[i - 1]) {
+          const acc = Math.abs(a - ms.age_est[i - 1]) / Math.abs(d - ms.depths[i - 1]);
+          rateHtml = `${formatNumber(acc)} <span style="color:var(--text-muted);font-size:9px;">yr/cm</span>`;
+        }
         const isInverted = i > 0 && a < ms.age_est[i - 1];
         if (isInverted) tr.classList.add('ad-row-inversion');
 
         tr.innerHTML = `
           <td style="text-align: center; color: var(--text-muted);">${i + 1}</td>
-          <td style="font-weight: 600; color: var(--accent-blue);">${d} cm</td>
-          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-age" data-idx="${i}" value="${Math.round(a)}" /></td>
-          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-min" data-idx="${i}" value="${Math.round(mi)}" /></td>
-          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-max" data-idx="${i}" value="${Math.round(ma)}" /></td>
-          <td style="color: var(--text-muted); font-size: 10px;">${Math.round(width)}</td>
-          <td style="color: var(--text-secondary); font-size: 10px;">${rate}</td>
+          <td style="font-weight: 600; color: var(--accent-blue);">${formatNumber(d)} cm</td>
+          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-age" data-idx="${i}" value="${formatNumber(a)}" /></td>
+          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-min" data-idx="${i}" value="${formatNumber(mi)}" /></td>
+          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-max" data-idx="${i}" value="${formatNumber(ma)}" /></td>
+          <td style="color: var(--text-muted); font-size: 10px;">${formatNumber(width)}</td>
+          <td style="color: var(--text-secondary); font-size: 10px;">${rateHtml}</td>
+          <td style="color: var(--text-muted); font-size: 9.5px;">${seHtml}</td>
           <td style="text-align: center; color: var(--text-muted); font-size: 9px;">样品层位</td>
         `;
         tbody.appendChild(tr);
@@ -466,36 +518,71 @@ export class AgeDepthDatingTable {
     const a = this.inspectionData.ages;
     const mi = this.inspectionData.age_min || a;
     const ma = this.inspectionData.age_max || a;
+    // Row-aligned windowed rates from the backend (already decimated to THESE rows).
+    // Length guard: add/delete rows invalidate the alignment; edits clear the arrays in
+    // onModelPointEdited. When absent, the rate cells fall back to a neighbour difference
+    // and the SE cells stay empty -- never a misaligned number from another horizon.
+    const hasAlignedRates =
+      Array.isArray(this.inspectionData.sed_rate) &&
+      this.inspectionData.sed_rate.length === d.length;
+    const sedRate = hasAlignedRates ? this.inspectionData!.sed_rate! : null;
+    const sedSe = hasAlignedRates ? this.inspectionData!.sed_rate_se || null : null;
 
     if (badge) {
-      badge.textContent = `共 ${d.length} 个层位 ｜ 深度 ${d[0]?.toFixed(1) || 0} ~ ${d[d.length - 1]?.toFixed(1) || 0} cm ｜ 年代 ${Math.round(a[0] || 0)} ~ ${Math.round(a[a.length - 1] || 0)} cal BP`;
+      badge.textContent = `共 ${d.length} 个层位 ｜ 深度 ${formatNumber(d[0]) || 0} ~ ${formatNumber(d[d.length - 1]) || 0} cm ｜ 年代 ${formatNumber(a[0]) || 0} ~ ${formatNumber(a[a.length - 1]) || 0} cal BP`;
     }
 
-    for (let i = 0; i < d.length; i++) {
+    // Header sort is a DISPLAY permutation only: the model arrays stay in their original
+    // order, data-idx keeps pointing at the original row, and sync/export never see the
+    // sort. (The toolbar's 按深度升序 button remains a genuine data-normalising action.)
+    const order = this.displayOrder(d, a, mi, ma);
+
+    for (let pos = 0; pos < order.length; pos++) {
+      const i = order[pos];
       const tr = document.createElement('tr');
       const depth = d[i];
       const age = a[i];
       const minVal = mi[i] !== undefined ? mi[i] : Math.max(0, age - 100);
       const maxVal = ma[i] !== undefined ? ma[i] : age + 100;
       const width = Math.abs(maxVal - minVal);
+      // Inversion is a property of the chronology (deeper = older), so it is evaluated
+      // against the original-order neighbour, never the display neighbour.
       const isInverted = i > 0 && age < a[i - 1];
       if (isInverted) tr.classList.add('ad-row-inversion');
 
-      let rateStr = '—';
-      if (i > 0 && depth !== d[i - 1]) {
-        const da = Math.abs(age - a[i - 1]);
-        const dd = Math.abs(depth - d[i - 1]);
-        rateStr = (da / Math.max(1e-4, dd)).toFixed(1) + ' yr/cm';
+      let rateHtml: string;
+      let seHtml: string;
+      if (sedRate) {
+        const mid = sedRate[i];
+        if (mid === null || mid === undefined || !Number.isFinite(mid)) {
+          rateHtml = '<span style="color:var(--status-warning);" title="该层位速率未定义（窗口内年代不倒进）">—</span>';
+          seHtml = '—';
+        } else {
+          rateHtml = formatNumber(mid);
+          const se = sedSe ? sedSe[i] : null;
+          seHtml = se !== null && se !== undefined && Number.isFinite(se)
+            ? `± ${formatNumber(se)}`
+            : '—';
+        }
+      } else if (i > 0 && depth !== d[i - 1]) {
+        // Fallback finite difference against the ORIGINAL-order neighbour (not display).
+        const acc = Math.abs(age - a[i - 1]) / Math.abs(depth - d[i - 1]);
+        rateHtml = `${formatNumber(acc)} <span style="color:var(--text-muted);font-size:9px;">yr/cm</span>`;
+        seHtml = '—';
+      } else {
+        rateHtml = '—';
+        seHtml = '—';
       }
 
       tr.innerHTML = `
-        <td style="text-align: center; color: var(--text-muted);">${i + 1}</td>
-        <td><input type="number" step="any" class="ad-tbl-input ad-input-full-depth" data-idx="${i}" value="${depth}" /></td>
-        <td><input type="number" step="any" class="ad-tbl-input ad-input-full-age" data-idx="${i}" value="${Math.round(age)}" /></td>
-        <td><input type="number" step="any" class="ad-tbl-input ad-input-full-min" data-idx="${i}" value="${Math.round(minVal)}" /></td>
-        <td><input type="number" step="any" class="ad-tbl-input ad-input-full-max" data-idx="${i}" value="${Math.round(maxVal)}" /></td>
-        <td style="color: var(--text-muted); font-size: 10px;">${Math.round(width)}</td>
-        <td style="color: var(--text-secondary); font-size: 10px;">${rateStr}</td>
+        <td style="text-align: center; color: var(--text-muted);">${pos + 1}</td>
+        <td><input type="number" step="any" class="ad-tbl-input ad-input-full-depth" data-idx="${i}" value="${formatNumber(depth)}" /></td>
+        <td><input type="number" step="any" class="ad-tbl-input ad-input-full-age" data-idx="${i}" value="${formatNumber(age)}" /></td>
+        <td><input type="number" step="any" class="ad-tbl-input ad-input-full-min" data-idx="${i}" value="${formatNumber(minVal)}" /></td>
+        <td><input type="number" step="any" class="ad-tbl-input ad-input-full-max" data-idx="${i}" value="${formatNumber(maxVal)}" /></td>
+        <td style="color: var(--text-muted); font-size: 10px;">${formatNumber(width)}</td>
+        <td style="color: var(--text-secondary); font-size: 10px;">${rateHtml}</td>
+        <td style="color: var(--text-muted); font-size: 9.5px;">${seHtml}</td>
         <td style="text-align: center;">
           <button class="ui-btn ui-btn--quiet ui-btn--xs ad-btn-del-full-row" data-idx="${i}" title="删除此行" style="padding: 1px 6px; font-size: 9.5px; color: var(--accent-red);">✕</button>
         </td>
@@ -551,8 +638,78 @@ export class AgeDepthDatingTable {
     });
   }
 
-  // --- Quality Audit Card ---
+  /**
+   * Display permutation for the model table. The arrays themselves are never reordered
+   * by a header click -- `data-idx`, the canvas overlay and the synced model all keep
+   * working in original order; only the row sequence changes. Null sort key = source order.
+   */
+  private displayOrder(
+    d: number[],
+    a: number[],
+    mi: number[],
+    ma: number[]
+  ): number[] {
+    const idx = d.map((_, i) => i);
+    if (this.sortKey === null) return idx;
+    const col =
+      this.sortKey === 'depth' ? d :
+      this.sortKey === 'age' ? a :
+      this.sortKey === 'min' ? mi : ma;
+    const dir = this.sortAsc ? 1 : -1;
+    idx.sort((x, y) => {
+      const vx = col[x];
+      const vy = col[y];
+      // Non-finite (null rates serialise to null, never for depths, but be safe) sinks.
+      const fx = Number.isFinite(vx) ? vx : Infinity;
+      const fy = Number.isFinite(vy) ? vy : Infinity;
+      return fx === fy ? x - y : (fx < fy ? -1 : 1) * dir;
+    });
+    return idx;
+  }
 
+  /** Header click: toggle direction on the same column, or switch columns ascending. */
+  public sortByColumn(key: 'depth' | 'age' | 'min' | 'max'): void {
+    if (this.sortKey === key) {
+      this.sortAsc = !this.sortAsc;
+    } else {
+      this.sortKey = key;
+      this.sortAsc = true;
+    }
+    this.renderFullDataTable();
+    this.updateSortIndicators();
+  }
+
+  private updateSortIndicators(): void {
+    this.container.querySelectorAll<HTMLElement>('.ad-th-sortable').forEach((th) => {
+      const ind = th.querySelector('.ad-sort-ind');
+      if (!ind) return;
+      const key = th.getAttribute('data-sort');
+      ind.textContent =
+        key && key === this.sortKey ? (this.sortAsc ? '▲' : '▼') : '';
+    });
+  }
+
+  /**
+   * Display precision for every number in this dialog (Format button). Display-only:
+   * the underlying arrays, the sync to the backend, and exports keep the raw values.
+   * Empty selection = raw values (default).
+   */
+  public applyDisplayPrecision(raw: string): void {
+    if (raw === '') {
+      setDisplayDecimals(null);
+    } else {
+      const n = Number.parseInt(raw, 10);
+      if (!Number.isFinite(n) || n < 0 || n > 12) {
+        notifyError('格式位数须为 0–12 的整数。');
+        return;
+      }
+      setDisplayDecimals(n);
+    }
+    this.renderFullDataTable();
+    this.updateMappingTable();
+  }
+
+  // --- Quality Audit Card ---
   public updateQualityAuditCard(): void {
     const card = this.container.querySelector('#ad-quality-card') as HTMLElement | null;
     const badge = this.container.querySelector('#ad-qc-badge') as HTMLElement | null;
@@ -589,26 +746,29 @@ export class AgeDepthDatingTable {
         validSpanCount++;
       }
     }
-    const avgSpan = validSpanCount > 0 ? (totalSpan / validSpanCount).toFixed(0) : '—';
-    const depthSpan = Math.abs(d[d.length - 1] - d[0]).toFixed(1);
+    const avgSpan =
+      validSpanCount > 0 ? formatNumber(totalSpan / validSpanCount) : '—';
+    const depthSpan = formatNumber(Math.abs(d[d.length - 1] - d[0]));
 
     card.style.display = 'block';
 
     if (inversions === 0) {
       badge.textContent = '质量优良 (单调)';
-      badge.style.background = 'rgba(16, 185, 129, 0.15)';
-      badge.style.color = '#10b981';
-      badge.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+      // 用状态 token，不写死 hex。裸 `#10b981` 是深色主题的绿，浅色主题下
+      // 官方值是 `#047857`（5.48:1），硬编码的绿在浅色底上对比度不足，看起来"不协调"。
+      badge.style.background = 'color-mix(in srgb, var(--status-success) 15%, transparent)';
+      badge.style.color = 'var(--status-success)';
+      badge.style.border = '1px solid color-mix(in srgb, var(--status-success) 40%, transparent)';
     } else {
       badge.textContent = `发现 ${inversions} 处年代倒置`;
-      badge.style.background = 'rgba(239, 68, 68, 0.15)';
-      badge.style.color = '#ef4444';
-      badge.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+      badge.style.background = 'color-mix(in srgb, var(--accent-red) 15%, transparent)';
+      badge.style.color = 'var(--accent-red)';
+      badge.style.border = '1px solid color-mix(in srgb, var(--accent-red) 40%, transparent)';
     }
 
     details.innerHTML = `
-      <div>• 深度跨度: <b>${d[0].toFixed(1)} ~ ${d[d.length - 1].toFixed(1)} cm</b> (跨 ${depthSpan} cm, ${d.length} 个点位)</div>
-      <div>• 年代跨度: <b>${Math.round(a[0])} ~ ${Math.round(a[a.length - 1])} cal BP</b> (平均 95% CI 宽度: ±${avgSpan} yr)</div>
+      <div>• 深度跨度: <b>${formatNumber(d[0])} ~ ${formatNumber(d[d.length - 1])} cm</b> (跨 ${depthSpan} cm, ${d.length} 个点位)</div>
+      <div>• 年代跨度: <b>${formatNumber(a[0])} ~ ${formatNumber(a[a.length - 1])} cal BP</b> (平均 95% CI 宽度: ±${avgSpan} yr)</div>
       ${inversions > 0 ? '<div style="color:var(--accent-red);">• 提示: 存在年代倒置，建议在倒置深度处修改表格数值、使用【微调 (V)】或拖框排除杂斑。</div>' : '<div style="color:var(--status-success);">• 年代单调递增，无层位倒置，拟合曲线连续平滑。</div>'}
     `;
   }
@@ -632,15 +792,39 @@ export class AgeDepthDatingTable {
       if (!this.inspectionData.age_max) this.inspectionData.age_max = [...this.inspectionData.ages];
       this.inspectionData.age_max[idx] = value;
     }
+    // Any edited row makes the attached windowed rates stale (they were fitted to the
+    // pre-edit curve). Drop them; the table falls back to a finite difference recomputed
+    // from the CURRENT values, which cannot display a stale number as a live one.
+    this.invalidateWindowedRates();
 
     this.updateQualityAuditCard();
     this.callbacks.onModelModified?.();
+  }
+
+  /** Drop the attached windowed rates; see onModelPointEdited for why. */
+  private invalidateWindowedRates(): void {
+    if (!this.inspectionData) return;
+    this.inspectionData.sed_rate = undefined;
+    this.inspectionData.sed_rate_se = undefined;
+    this.inspectionData.sed_window_depth = undefined;
   }
 
   public addTableRow(): void {
     if (!this.inspectionData) {
       notifyError('请先运行提取或载入年代模型！');
       return;
+    }
+    // The samples view renders mappedSamples (depths inherited from the pollen diagram's
+    // columns); this button appends to the MODEL arrays, so in that view it genuinely did
+    // nothing the user could see -- a silent no-op, one of the reported symptoms. Say so
+    // and switch to the view where the new row actually appears.
+    if (this.tableMode === 'samples') {
+      this.tableMode = 'model';
+      this.container.querySelector('#ad-tbl-view-model')?.classList.add('active');
+      this.container.querySelector('#ad-tbl-view-samples')?.classList.remove('active');
+      const sideBtn = this.container.querySelector('#ad-btn-toggle-side-table') as HTMLElement | null;
+      if (sideBtn) sideBtn.textContent = '全量模型';
+      notify('已切换到「提取全量模型层位」视图：添加层位作用于模型数组，样品视图只显示花粉采样层位。', 'info');
     }
     const d = this.inspectionData.depths;
     const a = this.inspectionData.ages;
@@ -668,6 +852,10 @@ export class AgeDepthDatingTable {
     ma.push(newMax);
     this.inspectionData.age_min = mi;
     this.inspectionData.age_max = ma;
+    // Row count changed: attached rates are misaligned even though the length guard in
+    // the renderer would also catch it (add+delete restores the length with shifted
+    // content, which a length check cannot see).
+    this.invalidateWindowedRates();
 
     this.renderFullDataTable();
     this.updateMappingTable();
@@ -684,6 +872,7 @@ export class AgeDepthDatingTable {
     this.inspectionData.ages.splice(idx, 1);
     if (this.inspectionData.age_min) this.inspectionData.age_min.splice(idx, 1);
     if (this.inspectionData.age_max) this.inspectionData.age_max.splice(idx, 1);
+    this.invalidateWindowedRates();
 
     this.updateQualityAuditCard();
     this.renderFullDataTable();
@@ -704,6 +893,16 @@ export class AgeDepthDatingTable {
     if (this.inspectionData.age_max) {
       this.inspectionData.age_max = indices.map((i) => this.inspectionData!.age_max[i]);
     }
+    // This sort permutes the arrays themselves, so the attached windowed rates must be
+    // permuted identically or they would describe the wrong horizons. (They are also
+    // refitted against a depth-sorted curve on the next sync, which is why this stays
+    // valid rather than merely cosmetically aligned.)
+    if (this.inspectionData.sed_rate) {
+      this.inspectionData.sed_rate = indices.map((i) => this.inspectionData!.sed_rate![i]);
+    }
+    if (this.inspectionData.sed_rate_se) {
+      this.inspectionData.sed_rate_se = indices.map((i) => this.inspectionData!.sed_rate_se![i]);
+    }
 
     this.updateQualityAuditCard();
     this.renderFullDataTable();
@@ -721,9 +920,17 @@ export class AgeDepthDatingTable {
     const mi = this.inspectionData.age_min || a;
     const ma = this.inspectionData.age_max || a;
 
-    let tsv = 'Depth_cm\tAge_calBP\tAge_Min_calBP\tAge_Max_calBP\n';
+    const sedRate = this.inspectionData.sed_rate || null;
+    const sedSe = this.inspectionData.sed_rate_se || null;
+    const hasRates = Boolean(sedRate && sedRate.length === d.length);
+    // Header names carry the units; TSV pasted into a spreadsheet must stay interpretable.
+    let tsv = hasRates
+      ? 'Depth_cm\tAge_calBP\tAge_Min_calBP\tAge_Max_calBP\tSed_rate_cm_per_yr\tSed_rate_se_cm_per_yr\n'
+      : 'Depth_cm\tAge_calBP\tAge_Min_calBP\tAge_Max_calBP\n';
     for (let i = 0; i < d.length; i++) {
-      tsv += `${d[i]}\t${a[i]}\t${mi[i]}\t${ma[i]}\n`;
+      tsv += hasRates
+        ? `${d[i]}\t${a[i]}\t${mi[i]}\t${ma[i]}\t${sedRate![i] ?? ''}\t${sedSe?.[i] ?? ''}\n`
+        : `${d[i]}\t${a[i]}\t${mi[i]}\t${ma[i]}\n`;
     }
 
     try {
@@ -810,6 +1017,9 @@ export class AgeDepthDatingTable {
       if (!this.inspectionData.age_max) this.inspectionData.age_max = [...this.inspectionData.ages];
       this.inspectionData.age_min.push(...newMin);
       this.inspectionData.age_max.push(...newMax);
+      // Appended rows have no fitted rate; drop the stale attached arrays wholesale
+      // rather than rely on the renderer's length guard alone.
+      this.invalidateWindowedRates();
     }
 
     this.sortTableByDepth();
@@ -858,6 +1068,20 @@ export class AgeDepthDatingTable {
     this.container.querySelector('#ad-tbl-btn-paste')?.addEventListener('click', () => this.openPasteDataModal());
     this.container.querySelector('#ad-tbl-btn-sync')?.addEventListener('click', () => {
       void this.callbacks.onRequestSyncModel?.();
+    });
+
+    // 表头点击排序：these <th> live in the static template (only tbody is rebuilt by
+    // renderFullDataTable), so binding once in the constructor is correct.
+    this.container.querySelectorAll<HTMLElement>('.ad-th-sortable').forEach((th) => {
+      th.addEventListener('click', () => {
+        const key = th.getAttribute('data-sort') as 'depth' | 'age' | 'min' | 'max' | null;
+        if (key) this.sortByColumn(key);
+      });
+    });
+
+    // 格式：显示位数下拉。Display-only; the data and any sync keep the raw values.
+    this.container.querySelector('#ad-tbl-fmt-digits')?.addEventListener('change', (e) => {
+      this.applyDisplayPrecision((e.target as HTMLSelectElement).value);
     });
 
     // 粘贴导入弹窗控制

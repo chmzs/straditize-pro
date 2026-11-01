@@ -30,7 +30,7 @@ export interface InspectorCallbacks {
   /** 启动 Y 轴两点标定（由画布收点，再弹窗收真实值）。 */
   onStartYCalibration?: () => void;
   /** 手动输入两点数值重新标定（兜底：不使用画布点选）。 */
-  onSubmitYCalibration?: (top_px: number, topValue: number, bottom_px: number, bottomValue: number, unit: string) => void;
+  onSubmitYCalibration?: (top_px: number, topValue: number, bottom_px: number, bottomValue: number, unit: string, primaryAxis?: 'depth' | 'age') => void;
   /** 实时预览侧栏输入的 Y1 / Y2 像素位置。 */
   onPreviewYCalibrationPx?: (topPx: number | null, bottomPx: number | null) => void;
   /** ROI 输入框提交，需要同步后端并重算线掩膜。 */
@@ -833,7 +833,7 @@ export class Inspector {
     const modal = document.createElement('div');
     modal.className = 'modal-backdrop';
     modal.innerHTML = `
-      <div class="modal-dialog" style="width: 440px; max-width: 95vw;">
+      <div class="modal-dialog" style="--modal-width: 440px;">
         <div class="ui-modal__header">
           <div style="display: flex; align-items: center; gap: 8px;">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">

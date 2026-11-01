@@ -15,7 +15,7 @@ export interface InspectorBridgeCallbacks {
   reportBackendFailure: (action: string, error: unknown) => void;
   updateFooter: () => void;
   scheduleAutosave: () => void;
-  applyDepthCalibration: (marks: Point2D[], values: number[], unit: string) => Promise<void>;
+  applyDepthCalibration: (marks: Point2D[], values: number[], unit: string, primaryAxis?: 'depth' | 'age') => Promise<void>;
   startYCalibration: () => void;
   setInspectorCollapsed?: (collapsed: boolean) => void;
 }
@@ -549,7 +549,7 @@ export function createInspectorCallbacks(
       }
       canvasComponent.setYCalibMarks(nextMarks);
     },
-    onSubmitYCalibration: (topPx: number, topValue: number, bottomPx: number, bottomValue: number, unit: string) => {
+    onSubmitYCalibration: (topPx: number, topValue: number, bottomPx: number, bottomValue: number, unit: string, primaryAxis?: 'depth' | 'age') => {
       const existingMarks = canvasComponent.getYCalibMarks();
       const railX = Math.max(20, canvasComponent.data.roi.xMin - 24);
       void callbacks.applyDepthCalibration(
@@ -558,7 +558,8 @@ export function createInspectorCallbacks(
           { x: existingMarks[1]?.x ?? railX, y: bottomPx },
         ],
         [topValue, bottomValue],
-        unit
+        unit,
+        primaryAxis
       );
     },
     onRoiCommitted: (roi: DataRoi) => {
