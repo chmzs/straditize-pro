@@ -514,9 +514,27 @@ export class RpcClient {
    * 落在这列的物理范围内」三道校验，越界或同像素都返回 -32602。
    * 列寻址用后端权威序号 `col_index`（也接受列 id）。
    */
+  /**
+   * 标度类变更（标定 / 清空）落库后的全局通知。
+   *
+   * 前端**不推导标度**：`scale_provenance` 与 `scaleCalib` 都由后端
+   * `resolve_column_scale` 算好后整包下发（见 `CoordinateSystem.resolveColumnScale`）。
+   * 本地只改 `x_ticks` 之后若不重拉，取值器读到的仍是旧 provenance——
+   * 表现为"刚标定完却显示未标定"或反之。所以这里发通知，由 `main.ts` 重拉。
+   */
+  public onScaleMutated?: () => void;
+
+  private notifyScaleMutated(): void {
+    try {
+      this.onScaleMutated?.();
+    } catch {
+      // 通知失败不得影响 RPC 结果
+    }
+  }
+
   public async calibrateColumnXTicks(
     colIndex: number | string,
-    ticks: [Tick, Tick] | Tick[],
+    ticks: Array<{ px?: number; value: number }>,
     unit?: string,
     plotType?: string,
     scaleType?: string,
@@ -535,15 +553,18 @@ export class RpcClient {
     if (!res?.x_ticks) {
       throw new Error(tError(-32603, 'column.calibrateXTicks returned no x_ticks'));
     }
+    this.notifyScaleMutated();
     return res;
   }
 
   /** 清空某列的 X 标度，回到「未标定」。后端对未标定列是幂等空操作。 */
   public async clearColumnXTicks(colIndex: number): Promise<{ cleared: boolean }> {
-    return this.call<
+    const res = await this.call<
       { col_index: number },
       { col_index: number; x_ticks: null; cleared: boolean }
     >('column.clearXTicks', { col_index: colIndex });
+    this.notifyScaleMutated();
+    return res;
   }
 
   /**
@@ -555,10 +576,20 @@ export class RpcClient {
    *
    * 失败（未载图 / 该 ROI 没有列）由 `call` 直接抛出后端原文，调用方必须冒泡给用户。
    */
-  public async measureRuler(roiId?: string): Promise<RulerGeometry> {
+  public async measureRuler(
+    roiId?: string,
+    axisStroke?: number | null
+  ): Promise<RulerGeometry> {
+    const params: Record<string, unknown> = {};
+    if (roiId) params.roi_id = roiId;
+    // 用户显式量出的轴线粗细：给了就让后端直接算右缘（不再从像素里猜，
+    // 也不受自动估计那套 1–6px 的夹取上限限制）。
+    if (axisStroke != null && Number.isFinite(axisStroke)) {
+      params.axis_stroke = axisStroke;
+    }
     const res = await this.call<Record<string, unknown>, RulerGeometry>(
       'algorithm.measureRuler',
-      roiId ? { roi_id: roiId } : {}
+      params
     );
     if (!res || !Array.isArray(res.per_column)) {
       throw new Error(tError(-32603, 'algorithm.measureRuler returned no per_column'));

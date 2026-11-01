@@ -116,8 +116,17 @@ assert.deepStrictEqual(
   '未标定不得产出任何层位数据行'
 );
 
-// 10. 列 X 标度唯一解析入口：x_ticks 优先于 legacy 三件套，CoordinateSystem 与 SplineInterpolator 数值一致
-const colWithTicks = {
+// 10. 列 X 标度唯一读取入口：**只读后端下发的 scale_provenance + scaleCalib**。
+//
+// 两条判据对应两类真实不一致：
+//   A. 载入工程后后端把 x_ticks 改写成 group + x_values + tick_layout
+//      （project.py 自动建组），此时 x_ticks 可能为空但后端判 calibrated=true，
+//      前端必须跟着说"已标定"——否则界面「未标定」而导出有数。
+//   B. 分列期载荷里带着猜测端点（tickEndX / maxPercent），但 provenance 判
+//      calibrated=false，前端必须判未标定、不读那些数字。
+
+// A. group 形态（x_ticks 为空）+ 后端说已标定
+const colGroupCalibrated = {
   id: 'roi_1_col01',
   name: 'Pinus',
   startX: 100,
@@ -125,35 +134,73 @@ const colWithTicks = {
   visible: true,
   color: '#0284c7',
   unit: '粒',
-  x_ticks: [
-    { px: 100, value: 0 },
-    { px: 200, value: 40 },
-  ],
-  startValue: 0,
-  tickValue: 100,
-  tickEndX: 200,
-  maxPercent: 100,
+  x_ticks: null,
+  x_values: [0, 40],
+  x_group_id: 'roi_1_grp_1',
+  scale_provenance: { calibrated: true, source: 'group' },
+  scaleCalib: { originX: 100, originVal: 0, calibX: 200, calibVal: 40, unit: '粒' },
   exaggeration_mult: 5,
   controlPoints: [
     { id: 'p1', x: 150, y: 500 },
     { id: 'p2', x: 150, y: 600 },
   ],
 };
-const resolvedScale = CoordinateSystem.resolveColumnScale(colWithTicks);
-assert.strictEqual(resolvedScale.calibrated, true, '有 x_ticks 时 calibrated=true');
-assert.strictEqual(resolvedScale.source, 'x_ticks', '有 x_ticks 时 source=x_ticks');
-assert.strictEqual(resolvedScale.val1, 40, 'x_ticks 优先于 legacy tickValue=100');
-assert.strictEqual(resolvedScale.exaggerationMult, 5, '读取 exaggeration_mult');
-assert.strictEqual(CoordinateSystem.imageXToValue(150, colWithTicks), 20, 'x=150 按 0..40 换算为 20');
+const resolvedScale = CoordinateSystem.resolveColumnScale(colGroupCalibrated);
 assert.strictEqual(
-  SplineInterpolator.interpolatePercentAtY(colWithTicks, 550),
+  resolvedScale.calibrated,
+  true,
+  'x_ticks 为空但后端判 group 已标定时，前端必须跟着判已标定（否则界面说未标定、导出有数）'
+);
+assert.strictEqual(resolvedScale.source, 'group', 'source 沿用后端判定，前端不自己推断');
+assert.strictEqual(resolvedScale.val1, 40, '端点取后端下发的 scaleCalib，不自己解析');
+assert.strictEqual(resolvedScale.exaggerationMult, 5, '读取 exaggeration_mult');
+assert.strictEqual(
+  CoordinateSystem.imageXToValue(150, colGroupCalibrated),
   20,
-  'SplineInterpolator 与 CoordinateSystem 使用同一标度入口'
+  'x=150 按后端下发的 0..40 换算为 20'
+);
+assert.strictEqual(
+  SplineInterpolator.interpolatePercentAtY(colGroupCalibrated, 550),
+  20,
+  'SplineInterpolator 与 CoordinateSystem 使用同一读取入口'
+);
+
+// B. 未标定但载荷里带着猜测端点：必须判未标定，且换算不出数字
+const colGuessOnly = {
+  id: 'roi_1_col02',
+  name: 'Abies',
+  startX: 300,
+  endX: 400,
+  visible: true,
+  color: '#0284c7',
+  x_ticks: null,
+  tickEndX: 365,
+  maxPercent: 20,
+  startValue: 0,
+  tickValue: 20,
+  scale_provenance: { calibrated: false, source: 'legacy' },
+  scaleCalib: { originX: 300, originVal: 0, calibX: 365, calibVal: 20, unit: '%' },
+  controlPoints: [{ id: 'p3', x: 340, y: 700 }],
+};
+assert.strictEqual(
+  CoordinateSystem.resolveColumnScale(colGuessOnly).calibrated,
+  false,
+  'provenance.calibrated=false 时，即使载荷带 tickEndX/maxPercent 也判未标定'
+);
+assert.strictEqual(
+  CoordinateSystem.imageXToPercent(340, colGuessOnly),
+  undefined,
+  '未标定列换算不出百分比（不拿猜测端点凑数）'
+);
+assert.strictEqual(
+  SplineInterpolator.interpolatePercentAtY(colGuessOnly, 700),
+  undefined,
+  '未标定列的曲线取值同样是 undefined'
 );
 
 console.log('✔ 未标定 → 深度一律 undefined，绝不回落 ROI 边界');
 console.log('✔ 标定结构不含 ROI 字段，深度换算与取数区完全解耦');
 console.log('✔ 支持深度向下递增与年代向上递增两种方向');
 console.log('✔ 层位标尺铺在标定跨度上；未标定时为空');
-console.log('✔ 列 X 标度唯一解析入口：x_ticks 优先且 CoordinateSystem/SplineInterpolator 一致');
+console.log('✔ 列 X 标度只读后端判定：group 形态判已标定、猜测端点判未标定');
 console.log('\n🎉 ROI 与 Y 轴标定解耦 真实模块测试通过！');

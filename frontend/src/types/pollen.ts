@@ -104,6 +104,13 @@ export interface ColumnGroup {
   tick_layout: Array<{ rel: number }>;
   /** 组参考标尺物理跨度 (px)，例如 38.5px 对应 20% */
   ref_span_px?: number;
+  /**
+   * 用户填的「每根齿单位数」——**输入量**，不是派生量。
+   *
+   * 单独存它而不是从 `ref_val_end / 格数` 反算：格数来自检测，换检测结果就会失真。
+   * 存进组里是为了刷新页面后不丢（此前只活在内存 `refDrafts`）。
+   */
+  ref_units_per_cell?: number;
   /** 组参考标尺起始读数 (例如 0) */
   ref_val_start?: number;
   /** 组参考标尺终止读数 (例如 20) */
@@ -184,6 +191,12 @@ export interface Column {
     calibVal: number;
     unit: string;
   };
+  /**
+   * 后端 `resolve_column_scale` 给出的判定：这一列的标度是哪来的、算不算已标定。
+   * 前端不得自己重新推导（x_ticks / x_values+tick_layout / x_scales 的优先级
+   * 只存在于后端一处），否则载入工程后会出现"后端已标定、前端未标定"。
+   */
+  scale_provenance?: { calibrated: boolean; source: string } | null;
   points?: Point[];
   symbolType?: 'continuous' | 'presence_absence' | 'count';
 }

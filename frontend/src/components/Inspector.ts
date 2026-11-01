@@ -19,7 +19,12 @@ export interface InspectorCallbacks {
   /** 打开 OCR 复核模态；由步骤 5 面板的【自动识别属种名】按钮调用。 */
   onOpenOcrReviewModal?: () => void;
   /** 步骤 6：两点式 X 轴（列标度）标定；像素取自列几何，用户只填两个读数（原始字符串）。 */
-  onCalibrateXTicks?: (colIndex: number, val1Raw: string, val2Raw: string) => void;
+  onCalibrateXTicks?: (
+    colIndex: number,
+    val1Raw: string,
+    val2Raw: string,
+    measuredEndPx?: number | null
+  ) => void;
   /** 步骤 6：清空该列的 X 标度，回到「未标定」。 */
   onClearXTicks?: (colIndex: number) => void;
   onToggleLayerVisibility?: (layer: string, visible: boolean) => void;
@@ -231,11 +236,14 @@ export class Inspector {
 
   private renderColumnInspector(col: TaxaColumn): string {
     const resolved = CoordinateSystem.resolveColumnScale(col);
+    // 面板预填：已标定才填真实端点；未标定时端点为**空**，由用户填或不填。
+    // 历史上这里回落到 tickEndX（分列期猜测），于是"点一下快捷刻度齿"就把
+    // 猜测像素当用户读数写进后端——本仓库最后一条这样的路径。
     const sc = {
       originX: resolved.px0,
-      originVal: resolved.val0,
-      calibX: resolved.px1,
-      calibVal: resolved.val1,
+      originVal: resolved.calibrated ? resolved.val0 : '',
+      calibX: resolved.calibrated ? resolved.px1 : '',
+      calibVal: resolved.calibrated ? resolved.val1 : '',
       unit: resolved.unit,
     };
 
@@ -270,7 +278,10 @@ export class Inspector {
         <div class="form-group" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light);">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <label style="font-size: 11px; font-weight: bold; color: ${tokens.color.column.baseline};">两点式 X 轴物理刻度标定</label>
-            <span style="font-size: 9.5px; color: var(--text-muted);">斜率: ${CoordinateSystem.getScaleRatio(col).toFixed(3)} ${col.unit || ''}/px</span>
+            <span style="font-size: 9.5px; color: var(--text-muted);">斜率: ${(() => {
+              const ratio = CoordinateSystem.getScaleRatio(col);
+              return ratio === undefined ? '未标定' : `${ratio.toFixed(3)} ${col.unit || ''}/px`;
+            })()}</span>
           </div>
 
           <div style="display: flex; gap: 8px; margin-top: 6px;">
@@ -386,7 +397,10 @@ export class Inspector {
 
   private renderPointInspector(col: TaxaColumn, pt: ControlPoint): string {
     const depth = CoordinateSystem.imageYToDepth(pt.y, this.data.calibration);
-    const percent = CoordinateSystem.imageXToPercent(pt.x, col);
+    // 未标定列不给数：模板里 percent === undefined 显示 '--'（与深度缺标定同一通道）。
+    const percent = CoordinateSystem.hasRealCalibration(col)
+      ? CoordinateSystem.imageXToPercent(pt.x, col)
+      : undefined;
 
     const typeLabels: Record<string, { text: string; color: string }> = {
       peak: { text: '物理极大值 (波峰)', color: '#fbbf24' },
@@ -475,7 +489,24 @@ export class Inspector {
       const calibVal = parseFloat((this.element.querySelector('#inp-sc-calib-val') as HTMLInputElement)?.value);
       const unit = (this.element.querySelector('#inp-sc-unit') as HTMLInputElement)?.value.trim() || activeCol.unit || '';
 
-      if (!Number.isFinite(originX) || !Number.isFinite(calibX) || !Number.isFinite(calibVal) || calibX === originX) {
+      // 分项报错，不再静默 return：静默 return 让"点了按钮什么都没发生"成为
+      // 最常见的用户困惑，也让缺陷藏起来。
+      if (!Number.isFinite(originX)) {
+        notifyError('端点 1 的像素 X 必须是数字。');
+        return;
+      }
+      if (!Number.isFinite(calibX)) {
+        notifyError(
+          '端点 2 的像素 X 还没确定：请在图上量出刻度位置后填进来。未标定的列没有第二端点，程序不会替你猜一个。'
+        );
+        return;
+      }
+      if (calibX === originX) {
+        notifyError('两个端点不能落在同一像素位置。');
+        return;
+      }
+      if (!Number.isFinite(calibVal)) {
+        notifyError('端点 2 的对应数值必须是数字。');
         return;
       }
       const originVal = Number.isFinite(originValRaw) ? originValRaw : 0;
@@ -514,6 +545,10 @@ export class Inspector {
       activeCol.tickValue = calibVal;
       activeCol.tickEndX = calibX;
       activeCol.isLocked = true;
+      // 就地同步后端派生字段：取值器只读 `scale_provenance` + `scaleCalib`
+      // （见 CoordinateSystem.resolveColumnScale），不同步的话标定完界面仍显示"未标定"。
+      // 这些值来自 RPC 返回的 x_ticks 与用户输入，是确定性结果，不是猜测。
+      activeCol.scale_provenance = { calibrated: true, source: 'x_ticks' };
 
       if (activeCol.scale_type === 'log') {
         const check = CoordinateSystem.validateLogScale(activeCol);
@@ -531,7 +566,10 @@ export class Inspector {
 
       if (activeCol.controlPoints) {
         activeCol.controlPoints.forEach((p) => {
-          p.value = CoordinateSystem.imageXToValue(p.x, activeCol);
+          const value = CoordinateSystem.imageXToValue(p.x, activeCol);
+          // 未标定时 imageXToValue 返回 undefined：保留控制点原值，不写入 undefined
+          // （写进去会让 updateColumn 载荷出现 undefined 字段，后端整条更新失败）。
+          if (value !== undefined) p.value = value;
         });
       }
 
@@ -580,7 +618,10 @@ export class Inspector {
           activeCol.scale_type = sType;
           if (activeCol.controlPoints) {
             activeCol.controlPoints.forEach((p) => {
-              p.value = CoordinateSystem.imageXToValue(p.x, activeCol);
+              const value = CoordinateSystem.imageXToValue(p.x, activeCol);
+          // 未标定时 imageXToValue 返回 undefined：保留控制点原值，不写入 undefined
+          // （写进去会让 updateColumn 载荷出现 undefined 字段，后端整条更新失败）。
+          if (value !== undefined) p.value = value;
             });
           }
           this.history.push(

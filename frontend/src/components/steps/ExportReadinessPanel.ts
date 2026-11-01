@@ -74,7 +74,7 @@ export function renderExportReadiness(data: DiagramData): string {
         <div>• 导出分表 (SHEETS): <strong id="lbl-export-sheets" style="color: var(--accent-blue);">${sheetsStr}</strong></div>
         <div>• 主工作区 (PRIMARY_ROI): <strong id="lbl-export-primary" style="color: var(--accent-green);">${state.primaryRoi}</strong> (对应归档 <code>data.csv</code>)</div>
         <div>• 根数据归属: <span id="lbl-export-data-csv-primary">DATA_CSV_EQUALS_PRIMARY=true</span></div>
-        <div>• 属种刻度标定: <span id="lbl-export-calibration-status">${calibratedCount} 列已标定${uncalibratedCount > 0 ? ` / <strong style="color: var(--status-warning);">${uncalibratedCount} 列未标定</strong> (按列宽百分比估算)` : ' (全部已标定)'}</span></div>
+        <div>• 属种刻度标定: <span id="lbl-export-calibration-status">${calibratedCount} 列已标定${uncalibratedCount > 0 ? ` / <strong style="color: var(--status-warning);">${uncalibratedCount} 列未标定</strong> (未标定列不出数，导出记为空)` : ' (全部已标定)'}</span></div>
         <div>• 未就绪清单 (READINESS_MISSING): <strong id="lbl-export-missing" style="color: ${state.readinessMissing.length > 0 ? 'var(--accent-red)' : 'var(--text-muted)'};">${missingStr}</strong></div>
       </div>
       ${renderExportSuspectBlockRow(data)}

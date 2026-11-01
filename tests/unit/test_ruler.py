@@ -160,3 +160,78 @@ class TestNoCrossColumnInference:
         got = suggest_scales(per_column, anchor_col_index=0, anchor_full_scale=10.0)
         assert got[0]["n_cells"] == 7
         assert got[0]["spacing_px"] == 12.5
+
+
+def _synthetic_spine_column(
+    *,
+    width: int = 200,
+    height: int = 200,
+    spine_x: int = 20,
+    spine_w: int = 4,
+    axis_y: int = 150,
+) -> np.ndarray:
+    """合成一列「竖直轴线 + 面积填充」。
+
+    填充宽度随行变化（多数行 30px、每 17 行只剩 2px），既能测出轴线本体宽度，
+    又让**整个列区间几乎都满足「85% 行都暗」**——这正是错位扫描最容易骗到的地方。
+    """
+    gray = np.full((height, width), 255, dtype=np.uint8)
+    gray[axis_y, :] = 0  # 底部横轴，供 find_axis_row 定位
+    gray[0:axis_y, spine_x : spine_x + spine_w] = 0  # 竖直轴线
+    for y in range(0, axis_y):
+        # 每 17 行有一层完全没有花粉：这是面积图的常态，也是 `min(run)` 能测出
+        # 轴线本体的前提。若整列每层都有花粉，`min(run)` 必然高估——那条限制由
+        # 「用户给轴线粗细」覆盖，不在这里断言。
+        run = 0 if y % 17 == 0 else 30
+        if run:
+            gray[y, spine_x + spine_w : spine_x + spine_w + run] = 0
+    return gray
+
+
+class TestAxisAnchorIsImmuneToColumnStart:
+    """列切分的 start 偏移不得传导到轴线位置。
+
+    实测事故：`_find_axis_x` 的搜索窗口曾是固定的 `startX - 8`，而 22 列图上
+    列切分的 start 可偏右 20px。偏右 12px 时扫描从填充区内部起步，面积填充同样
+    「85% 行都暗」，于是返回一个错位的 x，**且不报错**——beginner col0 真左缘 259，
+    实测在 start 偏 12 / 20 / 30px 时得到 263 / 271 / 281。
+    """
+
+    @pytest.mark.parametrize("shift", [0, 9, 20, 30])
+    def test_axis_x_constant_under_start_offset(self, shift: int) -> None:
+        gray = _synthetic_spine_column()
+        geo = detect_ruler(gray, 20 + shift, 199)
+        assert geo["axis_x"] == pytest.approx(20, abs=1), (
+            f"start 偏右 {shift}px 时轴线被判到 {geo['axis_x']}（真值 20）——"
+            "搜索窗口必须容纳列切分偏移，否则是静默错位而不是识别失败"
+        )
+        assert geo["axis_x_right"] == pytest.approx(23, abs=1)
+
+
+class TestAxisStrokeOverride:
+    """用户显式给的轴线粗细必须优先于 `min(run)` 估计。
+
+    为什么需要：`min(run)` 在「整列每层都有花粉」的列上必然高估（最薄行仍带
+    基部填充），而 1–6px 的夹取会截断高 DPI 图的粗轴（600 dpi 的 1 pt 线 ≈ 8px）。
+    实测 beginner：col01 轴线本体 4px、col02–04 是 6px，同一张图内就不一致。
+    """
+
+    @pytest.mark.parametrize(
+        ("stroke", "expected_right"),
+        [(4, 23), (6, 25), (10, 29), (12, 31)],
+    )
+    def test_explicit_stroke_sets_right_edge(self, stroke: int, expected_right: int) -> None:
+        gray = _synthetic_spine_column()
+        geo = detect_ruler(gray, 20, 199, axis_stroke=stroke)
+        assert geo["axis_x"] == pytest.approx(20, abs=1)
+        assert geo["axis_x_right"] == pytest.approx(
+            20 + stroke - 1, abs=0.01
+        ), f"显式粗细 {stroke}px 应得右缘 {20 + stroke - 1}，实际 {geo['axis_x_right']}"
+
+    def test_stroke_override_beats_run_estimate(self) -> None:
+        """显式值必须完全无视 run 估计（10px 已超过 1–6px 的夹取上限）。"""
+        gray = _synthetic_spine_column()
+        auto = detect_ruler(gray, 20, 199)
+        forced = detect_ruler(gray, 20, 199, axis_stroke=10)
+        assert auto["axis_x_right"] != forced["axis_x_right"], "显式粗细必须覆盖自动估计"
+        assert forced["axis_x_right"] == pytest.approx(29, abs=0.01)

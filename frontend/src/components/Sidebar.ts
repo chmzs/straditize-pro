@@ -1,6 +1,13 @@
 import { DiagramData, TaxaColumn } from '../types/pollen';
+import { CoordinateSystem } from '../core/CoordinateSystem';
 import { t, onLocaleChange } from '../i18n';
 import { notifyError } from '../ui/feedback';
+
+/** 标度值显示：整数原样，非整数保留 1 位小数。
+ *  实测几何算出来的满刻度常是 49.799196787148595 这种，直接显示等于把浮点误差当读数。 */
+function formatScaleValue(v: number): string {
+  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+}
 
 export interface SidebarCallbacks {
   onSelectTaxa: (taxaId: string) => void;
@@ -231,17 +238,23 @@ export class Sidebar {
     };
     const typeLabel = typeLabels[pType] || typeLabels.area;
 
-    // 计算实测最大峰值 (若已标定且有控制点)
-    let maxValStr = `${col.maxPercent}%`;
-    if (col.controlPoints && col.controlPoints.length > 0) {
+    // 实测峰值与满刻度只在**真标定**后才有意义。判据与画布同源（x_ticks），
+    // 标度解析走 CoordinateSystem.resolveColumnScale（唯一入口，优先 x_ticks）。
+    // 未标定时 tickEndX / maxPercent 都是分列期写入的猜测值，
+    // 把它们显示成数字，等于在界面上编造读数。
+    const resolved = CoordinateSystem.resolveColumnScale(col);
+    // 判别式用解析结果自己的 `calibrated`（与画布同源）；不要在这里另判一次 x_ticks，
+    // 两处判据分叉正是这一类缺陷的起点。
+    const scale = resolved.calibrated ? resolved : null;
+    let maxValStr = scale ? `${formatScaleValue(scale.val1)}${scale.unit}` : '未标定';
+    if (scale && col.controlPoints && col.controlPoints.length > 0) {
       const maxX = Math.max(...col.controlPoints.map((p) => p.x));
-      const originX = col.scaleCalib ? col.scaleCalib.originX : col.startX;
-      const calibX = col.scaleCalib ? col.scaleCalib.calibX : col.tickEndX || col.endX;
-      const originVal = col.scaleCalib ? col.scaleCalib.originVal : 0;
-      const calibVal = col.scaleCalib ? col.scaleCalib.calibVal : col.maxPercent || 100;
-      const span = Math.max(1, calibX - originX);
-      const measuredMax = Math.max(0, originVal + ((maxX - originX) / span) * (calibVal - originVal));
-      maxValStr = `${measuredMax.toFixed(1)}%`;
+      const span = Math.max(1, scale.px1 - scale.px0);
+      const measuredMax = Math.max(
+        0,
+        scale.val0 + ((maxX - scale.px0) / span) * (scale.val1 - scale.val0)
+      );
+      maxValStr = `${measuredMax.toFixed(1)}${scale.unit}`;
     }
 
     const roi = this.data.rois?.find((r) => r.id === col.roi_id) || this.data.rois?.[0];
@@ -257,8 +270,8 @@ export class Sidebar {
           <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
             <!-- X 刻度状态徽章 -->
             ${
-              col.x_ticks && col.x_ticks.length === 2
-                ? `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(16, 185, 129, 0.15); color: var(--status-success); font-weight: 600;" title="X 刻度: ${col.x_ticks[0].value} ~ ${col.x_ticks[1].value} ${col.unit || '%'}">${col.x_ticks[1].value}${col.unit || '%'}</span>`
+              scale
+                ? `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(16, 185, 129, 0.15); color: var(--status-success); font-weight: 600;" title="X 刻度: ${formatScaleValue(scale.val0)} ~ ${formatScaleValue(scale.val1)} ${scale.unit}">${formatScaleValue(scale.val1)}${scale.unit}</span>`
                 : `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(245, 158, 11, 0.15); color: var(--status-warning);" title="X 刻度尚未标定">未定标</span>`
             }
 
@@ -313,8 +326,8 @@ export class Sidebar {
           <div class="meta-item">
             <span>X 刻度:</span>
             ${
-              col.x_ticks && col.x_ticks.length === 2
-                ? `<span class="badge" style="font-size: 9.5px; padding: 1px 5px; background: rgba(16, 185, 129, 0.15); color: var(--status-success); font-weight: 600;">已标定 (${col.x_ticks[0].value} ~ ${col.x_ticks[1].value} ${col.unit || '%'})</span>`
+              scale
+                ? `<span class="badge" style="font-size: 9.5px; padding: 1px 5px; background: rgba(16, 185, 129, 0.15); color: var(--status-success); font-weight: 600;">已标定 (${formatScaleValue(scale.val0)} ~ ${formatScaleValue(scale.val1)} ${scale.unit})</span>`
                 : `<span class="badge" style="font-size: 9.5px; padding: 1px 5px; background: rgba(245, 158, 11, 0.15); color: var(--status-warning);">未标定</span>`
             }
           </div>
@@ -324,7 +337,7 @@ export class Sidebar {
           </div>
           <div class="meta-item">
             <span>实测峰值 / 满刻度:</span>
-            <code><strong>${maxValStr}</strong> / ${col.maxPercent}%</code>
+            <code>${scale ? `<strong>${maxValStr}</strong> / ${scale.val1}${scale.unit}` : '未标定（X 轴刻度未设定）'}</code>
           </div>
           <div class="meta-item">
             <span>锚点总数:</span>

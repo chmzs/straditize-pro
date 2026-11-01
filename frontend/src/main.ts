@@ -783,6 +783,43 @@ async function bootstrap() {
     // ignore
   }
 
+  // 标度变更：**只局部同步标度字段**，不重建整棵数据。
+  //
+  // 试过整表 `loadNewDiagram(fresh)`：代价是选中列被清空（`activeTaxaId` 重置），
+  // 而标定后面板正依赖选中列；批量标定还会在循环中途打断步骤 6 面板的检测缓存
+  // （实测 col03/col04 被判"未检测到刻度尺"）。
+  // 这里只把后端算好的 `x_ticks` / `scaleCalib` / `scale_provenance` 填回同名列对象，
+  // 前端不推导、也不重建。
+  let scaleSyncTimer: number | undefined;
+  rpcClient.onScaleMutated = () => {
+    if (scaleSyncTimer !== undefined) window.clearTimeout(scaleSyncTimer);
+    scaleSyncTimer = window.setTimeout(() => {
+      scaleSyncTimer = undefined;
+      void (async () => {
+        try {
+          const fresh = await rpcClient.getDiagramData();
+          const freshCols: Array<Record<string, unknown>> = (fresh as any).columns ?? [];
+          for (const freshCol of freshCols) {
+            const target = canvasComponent.data.columns.find((c) => c.id === freshCol.id);
+            if (!target) continue;
+            target.x_ticks = freshCol.x_ticks as typeof target.x_ticks;
+            target.scaleCalib = freshCol.scaleCalib as typeof target.scaleCalib;
+            target.scale_provenance = freshCol.scale_provenance as typeof target.scale_provenance;
+          }
+          canvasComponent.requestRender();
+          inspector?.updateData(canvasComponent.data);
+          sidebar?.updateData(canvasComponent.data);
+          updateFooter();
+        } catch (err) {
+          setHudNotice(
+            `标度已写入，但界面同步失败：${err instanceof Error ? err.message : String(err)}`,
+            6000
+          );
+        }
+      })();
+    }, 120);
+  };
+
   registerWebMcpAndInspectionHandles({
     rpcClient,
     canvasComponent,

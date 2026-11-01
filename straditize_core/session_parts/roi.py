@@ -450,6 +450,13 @@ class RoiMixin:
             "scale_type",
             "exaggeration_mult",
             "tick_layout",
+            # 组标度记忆：用户填的「每根齿单位数」是**输入量**、不是派生量，
+            # 所以单独存一个字段（`ref_val_*` 是它乘格数后的派生值，反算会失真）。
+            # 另外两个 ref_* 一并放行，避免以后再"写了被静默丢弃"。
+            "ref_units_per_cell",
+            "ref_span_px",
+            "ref_val_start",
+            "ref_val_end",
         )
         for field in allowed_fields:
             if field in updates:

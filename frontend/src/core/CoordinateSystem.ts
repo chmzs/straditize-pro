@@ -9,6 +9,45 @@ export interface ViewportTransform {
   dpr: number;
 }
 
+/**
+ * `resolveColumnScale` 的结果。
+ *
+ * `calibrated: false` 时 `px1`/`val0`/`val1` 一律为 `null`：**未标定就不存在标度**，
+ * 没有"用默认值顶一下"的第三态。写成联合类型是为了让 TypeScript 把每个漏判
+ * `calibrated` 的消费点直接报出来，而不是靠在测试里补断言。
+ *
+ * 历史：这里曾用 `startX + max(20, min(0.65×列宽, 80))` 与 `?? 20` 填空，
+ * 于是「未标定」在数据流里变成一个猜出来的标度，任何不看 `calibrated`
+ * 的调用点都会把它当读数算出去（侧栏峰值、悬停丰度、导出 Value 列都中过招）。
+ */
+export type ScaleSource = 'x_ticks' | 'group' | 'x_scales' | 'legacy' | 'default';
+
+export type ResolvedColumnScale =
+  | {
+      calibrated: true;
+      px0: number;
+      px1: number;
+      val0: number;
+      val1: number;
+      unit: string;
+      plotType: 'area' | 'bar' | 'line' | 'symbol';
+      scaleType: 'linear' | 'log';
+      exaggerationMult: number | null;
+      source: ScaleSource;
+    }
+  | {
+      calibrated: false;
+      px0: number;
+      px1: null;
+      val0: null;
+      val1: null;
+      unit: string;
+      plotType: 'area' | 'bar' | 'line' | 'symbol';
+      scaleType: 'linear' | 'log';
+      exaggerationMult: number | null;
+      source: ScaleSource;
+    };
+
 export class CoordinateSystem {
   /**
    * 1. 视口变换：屏幕坐标 -> 图像物理世界坐标
@@ -80,23 +119,33 @@ export class CoordinateSystem {
   }
 
   /**
-   * 4.0 唯一列标度解析入口（与后端 resolve_column_scale 对齐）：
-   * 优先级：x_ticks（两真实刻度端点） -> legacy 三件套 / scaleCalib 兜底。
+   * 列是否真的标定过 —— 直接取 `resolveColumnScale(...).calibrated`。
+   *
+   * 不要再写 `Array.isArray(col.x_ticks)` 之类的本地判据：载入工程后后端会把
+   * 标度表达成 `group + x_values + tick_layout`（`project.py` 载入时自动建组），
+   * 此时 `x_ticks` 可能为空但标度有效。判据只有一个，在 `resolveColumnScale` 里。
    */
-  public static resolveColumnScale(col: Column): {
-    px0: number;
-    val0: number;
-    px1: number;
-    val1: number;
-    unit: string;
-    plotType: 'area' | 'bar' | 'line' | 'symbol';
-    scaleType: 'linear' | 'log';
-    exaggerationMult: number | null;
-    calibrated: boolean;
-    source: 'x_ticks' | 'legacy' | 'default';
-  } {
+  public static hasRealCalibration(col: Column): boolean {
+    return CoordinateSystem.resolveColumnScale(col).calibrated;
+  }
+
+  /**
+   * 4.0 列标度唯一读取入口：**读后端解析结果，不自己解析**。
+   *
+   * `scale_provenance` 与 `scaleCalib` 由 `rpc_methods/system.py` 调后端
+   * `resolve_column_scale` 算好后整包下发。前端曾自己实现同一套优先级
+   * （x_ticks → x_values/tick_layout → x_scales → legacy），支持面比后端窄：
+   * 载入工程时后端会把 x_ticks 改写成 `group + x_values + tick_layout`
+   * （`project.py` 自动建组），此后后端 `calibrated=true`、前端仍只看 x_ticks
+   * 判成未标定 —— 界面显示「未标定」，导出却有数。
+   *
+   * 现在只读不算：标度语义只存在于后端一处。本地兜底只服务"尚未从后端取到
+   * 列对象的场景"（没有 provenance 时退回 x_ticks 判定），不参与任何正常路径。
+   */
+  public static resolveColumnScale(col: Column): ResolvedColumnScale {
     const scaleType: 'linear' | 'log' = col.scale_type === 'log' ? 'log' : 'linear';
-    const unit = col.unit || col.scaleCalib?.unit || '%';
+    const sc = col.scaleCalib;
+    const unit = col.unit || sc?.unit || '%';
     const plotType = col.plot_type || col.plotType || 'area';
 
     let exaggerationMult: number | null = null;
@@ -106,58 +155,49 @@ export class CoordinateSystem {
       exaggerationMult = col.exaggerationMult;
     }
 
-    if (Array.isArray(col.x_ticks) && col.x_ticks.length >= 2) {
-      const t0 = col.x_ticks[0];
-      const t1 = col.x_ticks[1];
+    const provenance = col.scale_provenance;
+    // 后端说标定了就标定了（x_ticks / group / x_scales）；它说没标定就一律不给端点。
+    const calibrated = provenance
+      ? provenance.calibrated === true
+      : Array.isArray(col.x_ticks) && col.x_ticks.length >= 2;
+
+    if (calibrated && sc) {
       return {
-        px0: Number(t0.px),
-        val0: Number(t0.value),
-        px1: Number(t1.px),
-        val1: Number(t1.value),
+        px0: Number(sc.originX),
+        val0: Number(sc.originVal),
+        px1: Number(sc.calibX),
+        val1: Number(sc.calibVal),
         unit,
         plotType,
         scaleType,
         exaggerationMult,
         calibrated: true,
-        source: 'x_ticks',
+        source: (provenance?.source as ScaleSource) ?? 'x_ticks',
       };
     }
 
-    const hasExplicitLegacy =
-      col.startValue !== undefined || col.tickValue !== undefined || col.tickEndX !== undefined;
-    const sc = col.scaleCalib;
-    const px0 = !hasExplicitLegacy && sc ? sc.originX : col.startX;
-    const defaultSpan = Math.max(20, Math.min((col.endX - col.startX) * 0.65, 80));
-    const rawTickEnd =
-      col.tickEndX !== undefined && col.tickEndX !== px0
-        ? col.tickEndX
-        : sc && sc.calibX !== px0
-          ? sc.calibX
-          : px0 + defaultSpan;
-    const px1 = rawTickEnd !== px0 ? rawTickEnd : px0 + defaultSpan;
-    const defaultVal0 = scaleType === 'log' ? 1 : 0;
-    const val0 = col.startValue ?? sc?.originVal ?? defaultVal0;
-    const val1 = col.tickValue ?? sc?.calibVal ?? col.maxPercent ?? 20;
-
+    // 未标定：不编造第二端点与满量程（历史教训见后端 system.py 同名注释：
+    // 单删后端字段没用，前端一旦用 `?? 20` 补上，用户看不出区别、缺陷反而更深）。
     return {
-      px0,
-      val0,
-      px1,
-      val1,
+      px0: sc ? Number(sc.originX) : col.startX,
+      px1: null,
+      val0: null,
+      val1: null,
       unit,
       plotType,
       scaleType,
       exaggerationMult,
       calibrated: false,
-      source: hasExplicitLegacy || sc ? 'legacy' : 'default',
+      source: 'legacy',
     };
   }
 
   /**
    * 4.1 获取列标定斜率 (单位物理值 / 像素)
    */
-  public static getScaleRatio(col: Column): number {
+  public static getScaleRatio(col: Column): number | undefined {
     const scale = this.resolveColumnScale(col);
+    if (!scale.calibrated) return undefined;
     const spanPx = Math.max(1, Math.abs(scale.px1 - scale.px0));
     return Math.abs(scale.val1 - scale.val0) / spanPx;
   }
@@ -167,6 +207,9 @@ export class CoordinateSystem {
    */
   public static validateLogScale(col: Column): { valid: boolean; reason?: string } {
     const scale = this.resolveColumnScale(col);
+    if (!scale.calibrated) {
+      return { valid: false, reason: '该列尚未标定 X 轴刻度（未标定时对数约束无从谈起）' };
+    }
     const startVal = scale.val0;
     const tickVal = scale.val1;
     const startX = scale.px0;
@@ -196,8 +239,9 @@ export class CoordinateSystem {
    * Log 映射公式:
    *   value(x) = exp( ln(startValue) + (x - startX) / (tickEndX - startX) * (ln(tickValue) - ln(startValue)) )
    */
-  public static imageXToValue(x: number, col: Column): number {
+  public static imageXToValue(x: number, col: Column): number | undefined {
     const scale = this.resolveColumnScale(col);
+    if (!scale.calibrated) return undefined;
     const startX = scale.px0;
     const tickEndX = scale.px1;
     const spanPx = tickEndX - startX;
@@ -229,15 +273,16 @@ export class CoordinateSystem {
   /**
    * 兼容别名方法
    */
-  public static imageXToPercent(x: number, col: Column): number {
+  public static imageXToPercent(x: number, col: Column): number | undefined {
     return this.imageXToValue(x, col);
   }
 
   /**
    * 7. 物理数值 (百分比 / 浓度) -> 图像物理 X 像素
    */
-  public static valueToImageX(value: number, col: Column): number {
+  public static valueToImageX(value: number, col: Column): number | undefined {
     const scale = this.resolveColumnScale(col);
+    if (!scale.calibrated) return undefined;
     const startX = scale.px0;
     const tickEndX = scale.px1;
     const spanPx = tickEndX - startX;
@@ -267,7 +312,7 @@ export class CoordinateSystem {
   /**
    * 兼容别名方法
    */
-  public static percentToImageX(percent: number, col: Column): number {
+  public static percentToImageX(percent: number, col: Column): number | undefined {
     return this.valueToImageX(percent, col);
   }
 

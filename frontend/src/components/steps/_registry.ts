@@ -7,7 +7,12 @@ export interface StepContext {
   onOpenOcrReviewModal?: () => void;
   /** 步骤 6：两点式 X 轴（列标度）标定。像素取自列几何，用户只填两个读数。
    *  传原始字符串而非已解析数字：解析与报错统一在 main.ts（唯一错误出口）。 */
-  onCalibrateXTicks?: (colIndex: number, val1Raw: string, val2Raw: string) => void;
+  onCalibrateXTicks?: (
+    colIndex: number,
+    val1Raw: string,
+    val2Raw: string,
+    measuredEndPx?: number | null
+  ) => void;
   /** 步骤 6：清空该列的 X 标度，回到「未标定」。 */
   onClearXTicks?: (colIndex: number) => void;
   /** 切换画布工具模式（如切到 measure 测距工具） */

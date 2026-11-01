@@ -108,6 +108,7 @@ def _find_axis_x(
     *,
     dark_threshold: int = DARK_THRESHOLD,
     min_frac: float = 0.85,
+    axis_stroke: float | None = None,
 ) -> tuple[float | None, float | None]:
     """该列轴线（spine）的 x，返回 ``(左缘, 右缘)``。
 
@@ -127,7 +128,13 @@ def _find_axis_x(
     bottom = max(top + 1, int(axis_row) - 4)
     step = max(1, (bottom - top) // 120)
     rows = list(range(top, bottom, step))
-    lo = max(0, int(x0) - 8)
+    # 搜索窗口必须容纳「列切分 start 相对轴线的偏移」。实测 22 列图上 start 可偏右
+    # 20px；窗口只往回让 8px 时，扫描会从**填充区内部**起步——面积填充同样满足
+    # 「85% 的行都暗」，于是一个错位的 x 被当成轴线返回，**且不报错**。
+    # 实测（beginner col0，真左缘 259）：start 偏 12px → axis 263，偏 30px → 281。
+    # 按列宽给窗口，并用 0.25×列宽封顶，避免越界到邻列（22 列图列宽约 95px）。
+    back = max(8.0, min(0.25 * (x1 - x0), 40.0))
+    lo = max(0, int(x0 - back))
     hi = min(w, int(x1))
     if not rows or hi <= lo:
         return None, None
@@ -144,6 +151,13 @@ def _find_axis_x(
             break
     if left is None:
         return None, None
+
+    # 用户显式给了轴线粗细就用它，不再从运行长度里猜：
+    # `min(run)` 在「整列每层都有花粉」的列上必然高估（最薄行仍带基部填充），
+    # 而 1–6px 的夹取会截断高 DPI 图的粗轴（600dpi 的 1pt 线 ≈ 8px）。
+    if axis_stroke is not None:
+        stroke_px = float(np.clip(float(axis_stroke), 1.0, 20.0))
+        return float(left), float(left) + stroke_px - 1.0
 
     run_lengths: list[int] = []
     for r in rows:
@@ -167,6 +181,7 @@ def detect_ruler(
     dark_threshold: int = DARK_THRESHOLD,
     min_tick_height: int = MIN_TICK_HEIGHT,
     search_below: tuple[int, int] = TICK_SEARCH_BELOW,
+    axis_stroke: float | None = None,
 ) -> dict[str, Any]:
     """Detect one column's tick ruler geometry.
 
@@ -201,7 +216,7 @@ def detect_ruler(
     result["axis_row"] = axis
 
     axis_x, axis_x_right = _find_axis_x(
-        gray, x0, x1, axis, dark_threshold=dark_threshold
+        gray, x0, x1, axis, dark_threshold=dark_threshold, axis_stroke=axis_stroke
     )
     result["axis_x"] = axis_x
     result["axis_x_right"] = axis_x_right
@@ -232,6 +247,7 @@ def detect_ruler_for_columns(
     columns: Sequence[dict[str, Any]],
     *,
     dark_threshold: int = DARK_THRESHOLD,
+    axis_stroke: float | None = None,
 ) -> dict[str, Any]:
     """Run :func:`detect_ruler` over a column list.
 
@@ -243,7 +259,9 @@ def detect_ruler_for_columns(
     for col in columns:
         x0 = float(col.get("start", col.get("startX", 0)))
         x1 = float(col.get("end", col.get("endX", 0)))
-        geo = detect_ruler(gray, int(x0), int(x1), dark_threshold=dark_threshold)
+        geo = detect_ruler(
+            gray, int(x0), int(x1), dark_threshold=dark_threshold, axis_stroke=axis_stroke
+        )
         geo["col_index"] = col.get("col_index")
         geo["name"] = col.get("name")
         per_column.append(geo)
