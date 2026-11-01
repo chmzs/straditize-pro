@@ -341,13 +341,24 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
     test('T7 键盘 Enter 快捷保存单列刻度', async ({ page, telemetry }) => {
       await gotoStage(page, 6);
 
+      // 钉住"被写入的那一列"：面板改写的是它 mount 那一刻的 active 列，
+      // 而 activeTaxaId 会在重渲染后变化。每次都重新取 activeTaxaId 再断言，
+      // 就会在"写的是 A、读的是 B"时得到 null（实测踩过）。
+      const target = await panelColumn(page);
+
       // 1. 输入新数值并通过 Enter 键提交保存
       await page.locator(VAL1).fill('0');
       await page.locator(VAL2).fill('25');
       await page.locator(VAL2).press('Enter');
 
       await expect
-        .poll(async () => (await panelColumn(page)).x_ticks, { timeout: 10_000 })
+        .poll(
+          async () => {
+            const all = await columns(page);
+            return all.find((c) => c.id === target.id)?.x_ticks ?? null;
+          },
+          { timeout: 10_000, message: `列 ${target.name} 必须被写入 0~25` }
+        )
         .toEqual([
           expect.objectContaining({ value: 0 }),
           expect.objectContaining({ value: 25 }),

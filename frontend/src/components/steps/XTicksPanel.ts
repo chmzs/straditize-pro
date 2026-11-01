@@ -47,18 +47,15 @@ let lastSpans: DetectedSpan[] = [];
  */
 const refDrafts = new Map<string, string>();
 
-function getColCalibX(col: any): number {
+function getColCalibX(col: any): number | null {
+  // **只有用户确认过的两点标定（x_ticks）才算刻度。**
+  // `tickEndX` / `scaleCalib.calibX` 在分列时会由后端写入
+  // `startX + max(20, min(0.65×列宽, 80))` 这个**猜测值**（beginner 实测四列全是
+  // startX+80），把它当刻度显示等于把假数据画成"已标定"。宁可不显示，也不显示猜的。
   if (col?.x_ticks && col.x_ticks.length >= 2 && col.x_ticks[1].px > col.startX) {
     return col.x_ticks[1].px;
   }
-  if (col?.tickEndX && col.tickEndX > col.startX) {
-    return col.tickEndX;
-  }
-  if (col?.scaleCalib?.calibX && col.scaleCalib.calibX > col.startX) {
-    return col.scaleCalib.calibX;
-  }
-  const span = (col?.endX ?? 100) - (col?.startX ?? 0);
-  return (col?.startX ?? 0) + Math.max(20, Math.min(span * 0.65, 80));
+  return null;
 }
 
 /**
@@ -446,12 +443,16 @@ export function render(data: DiagramData): string {
               <span>右刻度齿点 (X2):</span>
             </label>
             <div style="display: flex; align-items: center; gap: 4px;">
-              <input type="number" id="inp-manual-tick-val2" value="${hasTicks ? activeCol.x_ticks![1].value : (activeCol?.tickValue ?? '')}" style="width: 60px; font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
+              <input type="number" id="inp-manual-tick-val2" value="${hasTicks ? activeCol.x_ticks![1].value : ''}" style="width: 60px; font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
               <span style="font-size: 10.5px; color: var(--text-muted); min-width: 16px;">${activeCol?.unit || groupUnit}</span>
             </div>
           </div>
           <div style="font-size: 9.5px; color: var(--text-muted); padding-left: 13px;">
-            像素位置: <code>X = ${Math.round(px2)}px</code> (跨度 ${(px2 - px1).toFixed(1)}px)
+            ${
+              px2 == null
+                ? '<span style="color: var(--status-warning);">未标定：图上的刻度参考线不画猜测值。用「对齐本组」，或填入 X2 数值后保存。</span>'
+                : `像素位置: <code>X = ${Math.round(px2)}px</code> (跨度 ${(px2 - px1).toFixed(1)}px)`
+            }
           </div>
         </div>
 
