@@ -80,3 +80,7 @@ competition_guide*
 test_render.*
 
 
+
+# 本地临时诊断产物（不进库）
+.scratch/
+frontend/.scratch/
