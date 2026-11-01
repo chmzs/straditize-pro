@@ -1188,7 +1188,9 @@ export class GeologyCanvas {
       const activeCol = this.getActiveColumn();
       let percent: number | undefined;
 
-      if (activeCol) {
+      if (activeCol && CoordinateSystem.hasRealCalibration(activeCol)) {
+        // 未标定列的换算只会给出猜测标度下的数字（tickEndX / maxPercent 来自分列期），
+        // 状态栏如实留空显示 `--`，不显示编造的丰度。
         percent = CoordinateSystem.imageXToPercent(worldPt.x, activeCol);
       }
 
@@ -1550,7 +1552,9 @@ export class GeologyCanvas {
    * 的猜测值，拿它画刻度等于把假数据画成"已标定"。
    */
   public static hasRealCalibration(col: TaxaColumn): boolean {
-    return Array.isArray(col.x_ticks) && col.x_ticks.length >= 2;
+    // 判据单一源在 CoordinateSystem.hasRealCalibration：画布与侧栏必须读同一个事实，
+    // 否则未标定列会在一边显示「未标定」、另一边显示猜测的 20%。
+    return CoordinateSystem.hasRealCalibration(col);
   }
 
   public static getColumnCalibX(col: TaxaColumn): number {

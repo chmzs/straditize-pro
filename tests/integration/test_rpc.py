@@ -509,7 +509,10 @@ class TestStraditizeRpcProtocol(unittest.TestCase):
         self.assertEqual(len(res["matrix"][0]), 2)
         self.assertIn("Pinus", res["data"][0])
         self.assertIn("Quercus", res["data"][0])
-        self.assertIsInstance(res["data"][0]["Pinus"], (int, float))
+        # 未标定列不得给数：整列必须是 None（导出记 NA），
+        # 不能拿列宽归一估算出来的百分比冒充读数。
+        self.assertIsNone(res["data"][0]["Pinus"], "未标定列必须返回 None，不得编造数值")
+        self.assertIsNone(res["data"][0]["Quercus"], "未标定列必须返回 None")
 
 
 class TestStraditizeStdioTransport(unittest.TestCase):

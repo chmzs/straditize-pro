@@ -270,14 +270,10 @@ class XTicksMixin:
             )
 
         t0, t1 = ticks[0], ticks[1]
-        px0, val0 = float(t0.get("px", t0.get("pixel", 0))), float(t0.get("value", t0.get("val", 0)))
-        px1, val1 = float(t1.get("px", t1.get("pixel", 0))), float(t1.get("value", t1.get("val", 0)))
-
-        if px0 == px1:
-            raise JsonRpcError(
-                -32602,
-                "参数格式不合规：两个标定刻度齿的像素 X 坐标不能相同。请重新拾取相隔一定距离的刻度线齿。",
-            )
+        px0_raw = t0.get("px", t0.get("pixel"))
+        px1_raw = t1.get("px", t1.get("pixel"))
+        val0 = float(t0.get("value", t0.get("val", 0)))
+        val1 = float(t1.get("value", t1.get("val", 0)))
 
         resolved = self._resolve_col_index(col_index)
         columns = getattr(self, "columns", [])
@@ -288,6 +284,47 @@ class XTicksMixin:
             )
 
         col = columns[resolved]
+
+        # 端点像素**可省略**：省略即由后端自检（几何只在后端命中）。
+        # 这是保证「不拿猜测位置当用户读数」的唯一做法——前端没有几何，
+        # 让它凑一个 px，就是把分列期写入的 `startX + max(20, 0.65×列宽)` 落库成标定。
+        if px0_raw is None or px1_raw is None:
+            if getattr(self, "image", None) is None:
+                raise JsonRpcError(STATE_ERROR, "未载入图像，无法确定刻度端点。")
+            from ..ruler import detect_ruler
+
+            _img = self.image
+            _x0 = int(float(col.get("startX", col.get("start", 0))))
+            _x1 = int(float(col.get("endX", col.get("end", 0))))
+            probe = detect_ruler(np.array(_img.convert("L")), _x0, _x1)
+            if px0_raw is None:
+                axis_right = probe.get("axis_x_right")
+                if axis_right is None:
+                    raise JsonRpcError(
+                        STATE_ERROR,
+                        "这一列的轴线未识别，无法确定 0 点。请先用「对齐本组」，或手动填入端点像素。",
+                    )
+                px0 = float(axis_right)
+            else:
+                px0 = float(px0_raw)
+            if px1_raw is None:
+                detected_ticks = probe.get("ticks") or []
+                if not detected_ticks:
+                    raise JsonRpcError(
+                        STATE_ERROR,
+                        "这一列没有检测到刻度齿，无法确定第二端点。请用「对齐本组」，或手动填入端点像素。",
+                    )
+                px1 = float(detected_ticks[-1])
+            else:
+                px1 = float(px1_raw)
+        else:
+            px0, px1 = float(px0_raw), float(px1_raw)
+
+        if px0 == px1:
+            raise JsonRpcError(
+                -32602,
+                "参数格式不合规：两个标定刻度齿的像素 X 坐标不能相同。请重新拾取相隔一定距离的刻度线齿。",
+            )
 
         # 检查刻度端点物理合理性：
         # 1. px0 作为起点基线，必须严格锚定在当前列起点附近（允许 ±15px 手抖误差）；
@@ -400,7 +437,9 @@ class XTicksMixin:
 
         return {"col_index": resolved, "x_ticks": None, "cleared": had_ticks}
 
-    def measure_ruler_geometry(self, roi_id: str | None = None) -> dict[str, Any]:
+    def measure_ruler_geometry(
+        self, roi_id: str | None = None, axis_stroke: float | None = None
+    ) -> dict[str, Any]:
         """Measure each column's **tick-ruler geometry** (read-only, no side effects).
 
         Returns, per column: the axis row, tick x-positions, cell count, cell
@@ -442,7 +481,7 @@ class XTicksMixin:
             )
 
         gray = np.array(self.image.convert("L"))
-        result = detect_ruler_for_columns(gray, columns)
+        result = detect_ruler_for_columns(gray, columns, axis_stroke=axis_stroke)
         result["roi_id"] = target_roi_id
         # 明确声明：本接口不产出任何读数。
         result["calibration_suggestions"] = []

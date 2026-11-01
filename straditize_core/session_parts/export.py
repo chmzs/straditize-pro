@@ -152,15 +152,20 @@ class ExportMixin:
                 p_dict = {p["row"]: p["x"] for p in pts}
                 c_start_px = float(col.get("startX", col.get("start", scale.abs_px0)))
 
-                vals = [
-                    scale.px_to_value(
-                        p_dict.get(r, c_start_px),
-                        baseline_px=c_start_px,
-                        col_name=col_name,
-                        ndigits=4,
-                    )
-                    for r in row_list
-                ]
+                if scale.calibrated:
+                    vals = [
+                        scale.px_to_value(
+                            p_dict.get(r, c_start_px),
+                            baseline_px=c_start_px,
+                            col_name=col_name,
+                            ndigits=4,
+                        )
+                        for r in row_list
+                    ]
+                else:
+                    # 未标定列整列不给数（与界面、与 extract_grid_values 同源）：
+                    # 用列宽归一估算出来的百分比会被下游当成真实丰度。
+                    vals = [None] * len(row_list)
 
                 data_dict[col_name] = vals
 
@@ -325,7 +330,10 @@ class ExportMixin:
             ]
 
             for roi_name, df in roi_dfs.items():
-                csv_str = df.to_csv(index=False)
+                # 未标定列整列不给数：写 CSV 时用显式 `NA`，不要留空。
+                # 空单元格在下游读入器里既可能是缺失也可能是 0，`NA` 是无歧义的
+                # "没有这个数"（避免虚假数据）。
+                csv_str = df.to_csv(index=False, na_rep="NA")
                 csv_bytes = csv_str.encode("utf-8")
 
                 csv_filename = f"data/{roi_name}.csv"
@@ -351,7 +359,9 @@ class ExportMixin:
 
             if not primary_csv_bytes and roi_dfs:
                 primary_csv_bytes = (
-                    list(roi_dfs.values())[0].to_csv(index=False).encode("utf-8")
+                    list(roi_dfs.values())[0]
+                    .to_csv(index=False, na_rep="NA")
+                    .encode("utf-8")
                 )
 
             ti_data_csv = tarfile.TarInfo(name="data.csv")
@@ -1006,11 +1016,18 @@ class ExportMixin:
                 col_def = columns[c_idx] if c_idx < len(columns) else {}
                 c_start_px = float(col_def.get("startX", col_def.get("start", 0.0)))
                 scale = resolve_column_scale(self, col_def, c_idx)
-                val = scale.px_to_value(
-                    interp_x,
-                    baseline_px=c_start_px,
-                    col_name=taxon,
-                    ndigits=4,
+                # 未标定列不出数。`px_to_value` 在 legacy/default 分支会用列宽归一
+                # 估算一个百分比——那是程序默认值，不是读数（界面按同一判据显示「未标定」）。
+                # 导出与界面必须同源，否则同一列一边说未标定、一边报 1.93%。
+                val = (
+                    scale.px_to_value(
+                        interp_x,
+                        baseline_px=c_start_px,
+                        col_name=taxon,
+                        ndigits=4,
+                    )
+                    if scale.calibrated
+                    else None
                 )
 
                 row_vals.append(val)

@@ -424,7 +424,11 @@ export function createInspectorCallbacks(
         callbacks.reportBackendFailure('自动提取刻度', err);
       }
     },
-    onCalibrateXTicks: async (colIndex: number, val1Raw: string, val2Raw: string) => {
+    onCalibrateXTicks: async (
+      colIndex: number,
+      val1Raw: string,
+      val2Raw: string
+    ) => {
       const col = canvasComponent.data.columns.find((c) => c.col_index === colIndex);
       if (!col) {
         callbacks.reportBackendFailure('标定列 X 刻度', new Error(`载荷里找不到列 ${colIndex}`));
@@ -439,25 +443,27 @@ export function createInspectorCallbacks(
         );
         return;
       }
-      const px1 = col.startX;
-      const px2 =
-        col.x_ticks && col.x_ticks.length >= 2 && col.x_ticks[1].px > col.startX
-          ? col.x_ticks[1].px
-          : col.tickEndX && col.tickEndX > col.startX
-          ? col.tickEndX
-          : col.startX + Math.max(20, Math.min((col.endX - col.startX) * 0.65, 80));
-      col.tickEndX = px2;
+      // 端点像素**不传**：由后端自检（轴线右缘 + 检测末齿）。
+      // 读数语义在前端、端点几何在后端——各管一段，谁都不替对方编。
       const unit = col.unit || '%';
       try {
         const res = await rpcClient.calibrateColumnXTicks(
           colIndex,
-          [
-            { px: px1, value: val1 },
-            { px: px2, value: val2 },
-          ],
+          [{ value: val1 }, { value: val2 }],
           unit
         );
         col.x_ticks = res.x_ticks;
+        // 就地同步后端派生字段（取值器只读这两个，见 CoordinateSystem.resolveColumnScale）。
+        // 端点用**后端返回值**里的 x_ticks：前端已经没有端点可猜了。
+        const [rt0, rt1] = res.x_ticks;
+        col.scaleCalib = {
+          originX: Number(rt0.px),
+          originVal: Number(rt0.value),
+          calibX: Number(rt1.px),
+          calibVal: Number(rt1.value),
+          unit,
+        };
+        col.scale_provenance = { calibrated: true, source: 'x_ticks' };
         canvasComponent.history.push(
           `Calibrate X-Ticks ${col.name}`,
           canvasComponent.data.columns,

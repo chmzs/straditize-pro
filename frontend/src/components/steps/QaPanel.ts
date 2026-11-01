@@ -68,7 +68,7 @@ function computeBannerMeta(summary: QaSummary) {
     bannerText = `单列峰值超刻度警告 (发现 ${overCount} 列峰值超出声明满刻度)`;
   } else if (summary.uncalibrated_columns && summary.uncalibrated_columns.length > 0) {
     bannerLevel = 'yellow';
-    bannerText = `存在未标定列 (发现 ${summary.uncalibrated_columns.length} 列未在步骤 6 标定 X 刻度，当前按列宽百分比估算)`;
+    bannerText = `存在未标定列 (发现 ${summary.uncalibrated_columns.length} 列未在步骤 6 标定 X 刻度，这些列不出数、导出记为空)`;
   }
 
   const bannerColor =

@@ -431,12 +431,14 @@ export class ProjectManager {
         if (v !== undefined && !isNaN(v)) {
           // 统一经 CoordinateSystem.resolveColumnScale 读取放大倍数（兼容 exaggeration_mult 与 legacy 字段）
           const scale = CoordinateSystem.resolveColumnScale(col);
-          if (scale.exaggerationMult && scale.exaggerationMult > 1) {
+          if (scale.calibrated && scale.exaggerationMult && scale.exaggerationMult > 1) {
             v = v / scale.exaggerationMult;
           }
           rowVals.push(v.toFixed(2));
         } else {
-          rowVals.push('0.00');
+          // 未标定 / 无控制点不给数：以前这里写 '0.00'，等于把"没数字化"
+          // 报成"该层确实 0%"，导出表上两者无法区分。
+          rowVals.push('NA');
         }
       }
       rows.push(rowVals.join(','));

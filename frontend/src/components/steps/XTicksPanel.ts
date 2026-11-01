@@ -47,6 +47,16 @@ let lastSpans: DetectedSpan[] = [];
  */
 const refDrafts = new Map<string, string>();
 
+/**
+ * 用户显式给的轴线粗细（px，图级）。`null` = 让后端自动估。
+ *
+ * 为什么需要这个覆盖：后端自动估计取「每行从轴线起连续暗 run 的最小值」，
+ * 在「整列每层都有花粉」的列上必然高估（最薄行仍带基部填充），而它把结果夹在
+ * 1–6px，高 DPI 图的粗轴会被截断（600 dpi 的 1 pt 线 ≈ 8px）。
+ * 实测 beginner 同一张图四列就估出 4/6/6/6 两种值。
+ */
+let axisStrokeOverride: number | null = null;
+
 function getColCalibX(col: any): number | null {
   // **只有用户确认过的两点标定（x_ticks）才算刻度。**
   // `tickEndX` / `scaleCalib.calibX` 在分列时会由后端写入
@@ -68,7 +78,7 @@ function rulerGeoKeyFor(data: DiagramData, roiId: string | null): string {
   const geom = cols
     .map((c) => `${c.col_index ?? '?'}:${Math.round(c.startX)}:${Math.round(c.endX)}`)
     .join('|');
-  return `${roiId ?? ''}#${data.imageWidth}x${data.imageHeight}#${(data.imageSrc || '').length}#${geom}`;
+  return `${roiId ?? ''}#${data.imageWidth}x${data.imageHeight}#${(data.imageSrc || '').length}#${geom}#stroke${axisStrokeOverride ?? ''}`;
 }
 
 /**
@@ -133,7 +143,12 @@ async function ensureRulerGeometry(ctx: StepContext, root: HTMLElement): Promise
   if (rulerGeoKey === key && (rulerGeo != null || rulerGeoError != null)) return;
 
   const client = ctx.rpcClient as
-    | { measureRuler?: (roiId?: string) => Promise<RulerGeometry> }
+    | {
+        measureRuler?: (
+          roiId?: string,
+          axisStroke?: number | null
+        ) => Promise<RulerGeometry>;
+      }
     | undefined;
   if (!client?.measureRuler) {
     rulerGeo = null;
@@ -146,7 +161,7 @@ async function ensureRulerGeometry(ctx: StepContext, root: HTMLElement): Promise
 
   rulerGeoPending = true;
   try {
-    rulerGeo = await client.measureRuler(roiId ?? undefined);
+    rulerGeo = await client.measureRuler(roiId ?? undefined, axisStrokeOverride);
     rulerGeoError = null;
   } catch (err) {
     rulerGeo = null;
@@ -235,14 +250,24 @@ export function render(data: DiagramData): string {
   lastSpans = spans;
   const rigidSpan = maxDetectedSpan(spans);
   const groupUnit = currentGroup?.unit || '%';
-  const unitsPerCellText = refDrafts.get(currentGroupId) ?? '';
+  const unitsPerCellText =
+    refDrafts.get(currentGroupId) ??
+    (currentGroup?.ref_units_per_cell != null
+      ? String(currentGroup.ref_units_per_cell)
+      : '');
   const rulerLine = describeRulerDetection(geo, geoError, geoPending);
   const spanText =
     rigidSpan == null
       ? '刻距 —（需先检测到刻度尺）'
       : `刻距 ${geo?.median_spacing_px ?? '—'}px（自动检测）`;
 
-  const px1 = activeCol?.startX ?? 0;
+  const spanForActive = lastSpans.find(
+    (s) => s.colIndex === (activeCol?.col_index ?? -1)
+  );
+  // 0 点是**实测轴线右缘**，不是列切分给的 startX：后者实测可偏离轴线 6–20px。
+  // 面板显示的像素必须与实际标定用的是同一个数，否则用户照着它校正会自造偏差。
+  const px1Measured = spanForActive?.axisX != null;
+  const px1 = spanForActive?.axisX ?? activeCol?.startX ?? 0;
   const px2 = getColCalibX(activeCol);
 
   const activeLostNotice = activeCol ? renderActiveColumnLostNotice(activeCol) : '';
@@ -385,6 +410,14 @@ export function render(data: DiagramData): string {
             <span data-role="ruler-span" data-span="${rigidSpan ?? ''}" style="font-size: 9.5px; color: var(--text-muted); margin-left: auto;">${spanText}</span>
           </div>
 
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label for="inp-axis-stroke" style="font-size: 10.5px; color: var(--text-muted);">轴线粗细:</label>
+            <input type="number" id="inp-axis-stroke" value="${axisStrokeOverride ?? ''}" placeholder="自动" min="1" max="20" step="1"
+                   title="Y 轴轴线（spine）的描边宽度，单位像素。填了它，0 点 = 轴线左缘 + 粗细 − 1，程序不再从像素里猜；留空则自动估计（夹在 1–6px，高 DPI 图的粗轴会被截断）。"
+                   style="width: 66px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
+            <span style="font-size: 9.5px; color: var(--text-muted);">px（留空 = 自动估计）</span>
+          </div>
+
           <button id="btn-apply-group-scale" class="ui-btn ui-btn--primary" style="width: 100%; font-size: 11px; padding: 5px 6px;"
                   title="以各列基线为 0 点、用同一个自动检测到的跨度对齐全组（斜率一致）">
             对齐本组 (${groupCols.length}列)
@@ -432,7 +465,7 @@ export function render(data: DiagramData): string {
             </div>
           </div>
           <div style="font-size: 9.5px; color: var(--text-muted); padding-left: 13px;">
-            像素位置: <code>X = ${Math.round(px1)}px</code> (基线原点)
+            像素位置: <code>X = ${Math.round(px1)}px</code> (${px1Measured ? '轴线右缘 = 0 点' : '轴线未识别，退回列边界'})
           </div>
 
           <div style="height: 1px; background: var(--border-color); opacity: 0.5; margin: 1px 0;"></div>
@@ -495,6 +528,26 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onDetectXTicks?.();
   });
 
+  // 轴线粗细覆盖：用户量一次、全图共用。填了就让后端用「左缘 + 粗细 − 1」定 0 点，
+  // 不再从像素里猜（也不受自动估计那套 1–6px 夹取上限的限制）。
+  root.querySelector('#inp-axis-stroke')?.addEventListener('change', (e) => {
+    const raw = (e.target as HTMLInputElement).value.trim();
+    const parsed = raw === '' ? null : Number.parseFloat(raw);
+    axisStrokeOverride =
+      parsed != null && Number.isFinite(parsed) && parsed > 0
+        ? Math.min(parsed, 20)
+        : null;
+    // 缓存键里含粗细；清空这三项才会真的重测。
+    rulerGeo = null;
+    rulerGeoError = null;
+    rulerGeoKey = null;
+    // 重测完成后必须整块重渲染：0 点像素是**渲染时**写进模板的（`px1`），
+    // `patchRulerDom` 只就地更新检测那两行，不会更新「像素位置」。
+    void ensureRulerGeometry(ctx, root).then(() => {
+      ctx.onDataChange?.();
+    });
+  });
+
   // 0. 刻线几何检测：进入本步（以及数据变化后）自动拉一次，只读、不写任何标定。
   void ensureRulerGeometry(ctx, root);
 
@@ -502,6 +555,27 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   root.querySelector('#inp-ref-units-per-cell')?.addEventListener('input', (e) => {
     const gid = selectedGroupId;
     if (gid) refDrafts.set(gid, (e.target as HTMLInputElement).value);
+  });
+
+  // 组标度记忆落库：`input` 每键一次太频，用 `change`（失焦/回车）写一次。
+  // 「每根齿单位数」是用户输入的一等量，刷新后不该丢——存它本身，不存派生值。
+  root.querySelector('#inp-ref-units-per-cell')?.addEventListener('change', (e) => {
+    const gid = selectedGroupId;
+    const roiId = activeRoi()?.id;
+    const raw = (e.target as HTMLInputElement).value.trim();
+    const parsed = raw === '' ? null : Number.parseFloat(raw);
+    if (!gid || !roiId || parsed == null || !Number.isFinite(parsed) || parsed <= 0) return;
+    const client = ctx.rpcClient as
+      | {
+          roiGroupUpdate?: (
+            roiId: string,
+            groupId: string,
+            updates: Record<string, unknown>
+          ) => Promise<unknown>;
+        }
+      | undefined;
+    if (!client?.roiGroupUpdate) return;
+    void client.roiGroupUpdate(roiId, gid, { ref_units_per_cell: parsed });
   });
 
   // 1. 组 Tab 切换
@@ -792,7 +866,9 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     const val1Raw = (root.querySelector('#inp-manual-tick-val1') as HTMLInputElement)?.value ?? '';
     const val2Raw = (root.querySelector('#inp-manual-tick-val2') as HTMLInputElement)?.value ?? '';
     void (async () => {
-      await callStepCallback(() => ctx.onCalibrateXTicks?.(columnIndex(activeCol), val1Raw, val2Raw));
+      await callStepCallback(() =>
+        ctx.onCalibrateXTicks?.(columnIndex(activeCol), val1Raw, val2Raw)
+      );
       await syncXTicksDroppedFromBackend(cachedData, ctx);
     })();
   });

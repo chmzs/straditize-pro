@@ -17,7 +17,7 @@
  * 把锚点退回 col.startX，col1/col2/col3 的方向断言会变红。
  */
 import { expect, test } from './fixtures';
-import { backendRpc, canvasColorPixels, clickCanvas, diagramData, gotoStage, resetBaseline } from './helpers';
+import { backendRpc, canvasBox, canvasColorPixels, clickCanvas, diagramData, gotoStage, resetBaseline } from './helpers';
 import type { Page } from '@playwright/test';
 
 interface Tick {
@@ -351,6 +351,61 @@ test.describe('步骤 6 对齐本组（自动跨度）', () => {
       await expect
         .poll(async () => canvasColorPixels(page, [239, 68, 68], 40), { timeout: 15_000 })
         .toBeGreaterThan(500);
+    });
+  });
+
+  test.describe('T8 未标定列不给丰度数（悬停）', () => {
+    test.use({ allowlists: { notice: [/已对齐 \d+ 列/] } });
+
+    test('T8 未标定：悬停丰度必须是 --；标定后必须给出数字', async ({ page }) => {
+      await openBeginnerStep6(page);
+
+      // 前置：必须有一列处于选中态。`onHoverInfo` 只在有 active 列时才去算丰度，
+      // 没有 active 列时「丰度是 --」恒成立，那条断言就失去了判别力。
+      const first = page.locator('.taxa-card').first();
+      if ((await first.count()) > 0) await first.click();
+      const { activeTaxaId } = await diagramData<{ activeTaxaId: string }>(page);
+      expect(activeTaxaId, '前置：必须有一列处于选中状态').toBeTruthy();
+
+      const box = await canvasBox(page);
+      const cy = box.y + box.height * 0.5;
+      const cx = box.x + box.width * 0.5;
+      await page.mouse.move(cx, cy);
+      await page.mouse.move(cx + 5, cy + 5);
+
+      // 先证 `onHoverInfo` 真的在跑，否则「丰度是 --」可能只是根本没触发悬停。
+      await expect
+        .poll(async () => page.locator('#footer-cursor').innerText(), { timeout: 10_000 })
+        .toContain('X:');
+
+      await expect(
+        page.locator('#footer-pollen'),
+        '未标定列的换算只会给出猜测标度下的数字（tickEndX / maxPercent 来自分列期），必须如实留空'
+      ).toContainText('--');
+
+      // 反向对照：标定之后必须给数。否则上面那条只是靠「丰度永远为空」换来的。
+      await page.locator(`${PANEL} #inp-ref-units-per-cell`).fill('20');
+      await page.locator(`${PANEL} #btn-apply-group-scale`).click();
+      // 标定是异步 RPC：等它真的落到后端，再悬停（悬停只读取当下数据，不会重算）。
+      await expect
+        .poll(
+          async () => (await columns(page)).filter((c) => (c.x_ticks ?? null) !== null).length,
+          { timeout: 15_000, message: '对齐本组必须真的写入 x_ticks' }
+        )
+        .toBeGreaterThan(0);
+
+      // 悬停在画布靠右处：换算值明显非零，避开「0 被当 falsy → 仍显示 --」的边界。
+      // 每轮都重新 move：hover 不会自己重算，一次 move 在标度生效前发生就会永远停在 `--`。
+      await expect
+        .poll(
+          async () => {
+            await page.mouse.move(box.x + box.width * 0.8, cy);
+            await page.mouse.move(box.x + box.width * 0.8 + 3, cy + 3);
+            return (await page.locator('#footer-pollen').innerText()).includes('--');
+          },
+          { timeout: 15_000 }
+        )
+        .toBe(false);
     });
   });
 });

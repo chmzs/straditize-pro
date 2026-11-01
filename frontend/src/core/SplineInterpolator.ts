@@ -91,10 +91,12 @@ export class SplineInterpolator {
    * 高精度计算指定 Taxa 属种曲线在特定 Y 像素位置处的花粉百分比丰度
    * 支持折线与三次贝塞尔样条平滑求值，并约束于合法百分比范围
    */
-  public static interpolatePercentAtY(col: TaxaColumn, y: number): number {
+  public static interpolatePercentAtY(col: TaxaColumn, y: number): number | undefined {
     const pts = col.controlPoints;
     const colWidth = col.endX - col.startX;
-    if (pts.length === 0 || colWidth <= 0) return 0;
+    // 没有控制点 = 没有读数，不是 0%。0 表示"这一层该属种确实没有花粉"，
+    // 与"还没数字化"是两件事，混用会让导出表出现看着正常的假零。
+    if (pts.length === 0 || colWidth <= 0) return undefined;
 
     const sorted = [...pts].sort((a, b) => a.y - b.y);
     let curX: number;
@@ -118,8 +120,9 @@ export class SplineInterpolator {
       curX = p1.x + (p2.x - p1.x) * clampedT;
     }
 
-    // 统一走 CoordinateSystem.imageXToValue（x_ticks 优先、legacy/scaleCalib 兜底）
+    // 统一走 CoordinateSystem.imageXToValue（唯一解析入口；未标定返回 undefined）
     const val = CoordinateSystem.imageXToValue(curX, col);
+    if (val === undefined) return undefined;
     return Number(Math.max(0, val).toFixed(2));
   }
 
@@ -247,7 +250,10 @@ export class SplineInterpolator {
       const values: Record<string, number> = {};
 
       for (const col of activeColumns) {
-        values[col.name] = this.interpolatePercentAtY(col, y);
+        // 未标定 / 无控制点的列不出现在记录里（不写 0，不写 null）：
+        // 下游要区分"该层 0 花粉"与"该层没数字化"，只能靠 key 是否出现。
+        const value = this.interpolatePercentAtY(col, y);
+        if (value !== undefined) values[col.name] = value;
       }
 
       return {

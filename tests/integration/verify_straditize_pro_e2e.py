@@ -281,21 +281,40 @@ class TestStraditizeProFullE2E(unittest.TestCase):
         session.batch_set_taxa(taxa)
         self.assertEqual(session.taxa_names[:3], ["Pinus canariensis", "Juniperus", "Quercus"])
 
+        # 4a. X 轴标定：未标定列不再给数（导出记 NA），所以先标定第 0 列。
+        col0 = session.columns[0]
+        c_start = float(col0.get("startX", col0.get("start")))
+        c_end = float(col0.get("endX", col0.get("end")))
+        session.calibrate_column_xticks(
+            0,
+            [
+                {"px": c_start, "value": 0.0},
+                {"px": c_start + (c_end - c_start) * 0.8, "value": 50.0},
+            ],
+            "%",
+        )
+
         # 4. Apply depth grid & extract values
         session.apply_depth_grid(start_depth=0, end_depth=100, step=5)
         extracted = session.extract_grid_values()
         self.assertEqual(extracted["rows_count"], 21)
         self.assertIn("data", extracted)
 
-        # 5. Core requirement: Unobserved taxa must be strictly 0.0, never NA
+        # 5. 已标定列必须给有限数字；未标定列必须是 None（导出记 NA，不编造 0.0）。
+        #    旧版这里断言"一律非 None"，等于要求程序替未标定列编数 —— 已废弃。
+        calibrated_taxon = "Pinus canariensis"
         records = extracted["data"]
         for r in records:
             self.assertIn("depth", r)
             for k, val in r.items():
-                if k != "depth":
-                    self.assertIsNotNone(val)
+                if k == "depth":
+                    continue
+                if k == calibrated_taxon:
+                    self.assertIsNotNone(val, "已标定列必须给数")
                     self.assertFalse(math.isnan(val))
                     self.assertIsInstance(val, (int, float))
+                else:
+                    self.assertIsNone(val, f"未标定列 {k} 必须为 None，不得编造读数")
 
         # 6. Calibrate axes and export to CSV
         session.calibrate_axes([{"pixel": 511, "val": 0}, {"pixel": 1311, "val": 150}])

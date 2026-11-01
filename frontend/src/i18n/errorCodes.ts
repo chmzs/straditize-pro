@@ -23,9 +23,14 @@ export function tError(code: number | string, detail?: string): string {
   const numeric = Number(code);
   const key = RPC_ERROR_KEYS[numeric];
   const base = key ? t(key) : t('error.unknown');
-  if (detail) {
-    console.warn(`[RPC ${code}] ${detail}`);
-    return `${base} (code ${code})\n\n 修复引导: ${detail}`;
+  const original = (detail ?? '').trim();
+  if (!original) {
+    return `${base} (code ${numeric})`;
   }
-  return `${base} (code ${code})`;
+  // 后端的 `message` 是**一手信息**：具体到哪一列、哪个像素、缺了哪个前置条件。
+  // 拿通用文案去覆盖它，用户只会看到"前置状态未就绪"这种无从下手的提示，
+  // 开发者也只能靠猜（实测为此多花三轮才定位到列坐标错配）。
+  // 所以：原文放首位，通用文案退化为括号里的类别标注。
+  console.warn(`[RPC ${numeric}] ${original}`);
+  return `${original}（${base}，code ${numeric}）`;
 }

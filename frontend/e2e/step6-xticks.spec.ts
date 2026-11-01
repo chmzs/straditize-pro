@@ -31,7 +31,7 @@
  * 换图后变成假绿。
  */
 import { expect, test } from './fixtures';
-import { diagramData, getState, gotoStage, openApp, resetBaseline } from './helpers';
+import { backendRpc, diagramData, getState, gotoStage, openApp, resetBaseline } from './helpers';
 import type { Page } from '@playwright/test';
 
 interface Tick {
@@ -69,14 +69,79 @@ async function panelColumn(page: Page): Promise<BackendColumn> {
   return cols.find((c) => c.id === activeTaxaId) ?? cols[0];
 }
 
-/** 面板算出的一对像素端点（列左边界 → 刻度齿位置，与列终点 endX 解耦）。 */
-function expectedPx(col: BackendColumn): [number, number] {
-  const p1 = col.startX as number;
-  const p2 =
-    col.tickEndX && col.tickEndX > p1
-      ? (col.tickEndX as number)
-      : p1 + Math.max(20, Math.min(((col.endX as number) - p1) * 0.65, 80));
-  return [p1, p2];
+/** 面板算出的一对像素端点（列左边界 → 刻度齿位置，与列终点 endX 解耦）。
+ *
+ * **已废弃**：端点现在由后端实测（轴线右缘 + 检测末齿），测试若继续预设 px，
+ * 就变成"用猜测值锁住猜测值"。断言统一走 `expectCalibrated`。
+ */
+
+/**
+ * 载入「沉积图谱」（beginner）并走到步骤 6。
+ *
+ * **为什么这些用例必须换基线**：单列标定的端点现在由**后端**实测
+ * （轴线右缘 + 检测末齿），而 hoya 基线图上没有刻度尺
+ * （`per_column` 全空、`median_spacing_px = null`）。
+ * 在 hoya 上"填两个读数就能标定成功"只可能靠猜端点 —— 那正是本文件要钉死的缺陷。
+ */
+async function openBeginnerStep6(page: Page): Promise<void> {
+  await resetBaseline(page);
+  await page.selectOption('#select-sample-diagram', 'beginner');
+  await expect
+    .poll(
+      async () => {
+        const d = await diagramData<{ imageWidth: number; imageHeight: number }>(page);
+        return [d.imageWidth, d.imageHeight];
+      },
+      { timeout: 30_000, message: '范例下拉必须真的把后端切到 beginner-tutorial.png' }
+    )
+    .toEqual([1923, 1796]);
+
+  await gotoStage(page, 5);
+  expect((await columns(page)).length, 'beginner 图应切出 4 列').toBe(4);
+  const n = (await columns(page)).length;
+  for (let i = 0; i < n; i++) {
+    await backendRpc(page, 'column.clearXTicks', { col_index: i });
+  }
+  await gotoStage(page, 6);
+  await expect
+    .poll(
+      async () =>
+        page
+          .locator('.step-panel[data-step="6"] [data-role="ruler-detect"]')
+          .getAttribute('data-spacing'),
+      { timeout: 20_000 }
+    )
+    .not.toBe('');
+}
+
+/**
+ * 断言某列真的被标定，且端点是**后端实测**的。
+ *
+ * 不再写死像素期望值：端点由后端从图上量（轴线右缘 + 末齿），测试预设它
+ * 就变成"用猜测值锁住猜测值"。这里只钉三件事——读数对、0 点落在轴线附近、
+ * 第二端点在右侧。
+ */
+async function expectCalibrated(
+  page: Page,
+  colId: string,
+  v0: number,
+  v1: number
+): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        ((await columns(page)).find((c) => c.id === colId)?.x_ticks ?? []).length,
+      { timeout: 10_000, message: `列 ${colId} 必须被写入 ${v0}~${v1}` }
+    )
+    .toBe(2);
+  const col = (await columns(page)).find((c) => c.id === colId)!;
+  const ticks = (col.x_ticks ?? []) as Tick[];
+  expect(ticks[0].value, '0 点读数').toBe(v0);
+  expect(ticks[1].value, '第二端点读数').toBe(v1);
+  expect(ticks[0].px, '0 点必须落在轴线附近（列左界 ±15px 内）').toBeGreaterThanOrEqual(
+    (col.startX as number) - 15
+  );
+  expect(ticks[1].px, '第二端点必须在 0 点右侧').toBeGreaterThan(ticks[0].px);
 }
 
 /**
@@ -140,23 +205,14 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
     page,
     telemetry,
   }) => {
-    await gotoStage(page, 6);
+    await openBeginnerStep6(page);
     const col = await panelColumn(page);
-    const [px1, px2] = expectedPx(col);
     expect(col.x_ticks ?? null, '前置条件：该列初始必须是未标定').toBeNull();
 
     const methods = watchRpc(page);
     await calibrateViaUI(page, '0', '40');
 
-    await expect
-      .poll(async () => (await panelColumn(page)).x_ticks, {
-        message: '【保存】必须把标定写进后端列对象（此前后端字段纹丝不动）',
-        timeout: 10_000,
-      })
-      .toEqual([
-        { px: px1, value: 0 },
-        { px: px2, value: 40 },
-      ]);
+    await expectCalibrated(page, col.id, 0, 40);
 
     expect(
       methods,
@@ -170,20 +226,14 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
     page,
     telemetry,
   }) => {
-    await gotoStage(page, 6);
+    await openBeginnerStep6(page);
     const col = await panelColumn(page);
-    const [px1, px2] = expectedPx(col);
 
     // 缺陷 ② 的前置断言：未标定时按钮本来就不该在。
     await expect(page.locator(CLEAR_BTN), '未标定时不该出现【清空】').toHaveCount(0);
 
     await calibrateViaUI(page, '0', '40');
-    await expect
-      .poll(async () => (await panelColumn(page)).x_ticks, { timeout: 10_000 })
-      .toEqual([
-        { px: px1, value: 0 },
-        { px: px2, value: 40 },
-      ]);
+    await expectCalibrated(page, col.id, 0, 40);
 
     // 关键：让面板**按后端载荷重新渲染**一次。缺陷 ② 的特征就是载荷缺 x_ticks，
     // 于是无论重渲染多少次 `hasTicks` 都恒为 false（改前实测出现次数为 0）。
@@ -239,17 +289,11 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
   });
 
   test('T4 真实重载页面后标定仍在（证伪"只活在浏览器内存里"）', async ({ page, telemetry }) => {
-    await gotoStage(page, 6);
+    await openBeginnerStep6(page);
     const col = await panelColumn(page);
-    const [px1, px2] = expectedPx(col);
 
     await calibrateViaUI(page, '5', '25');
-    await expect
-      .poll(async () => (await panelColumn(page)).x_ticks, { timeout: 10_000 })
-      .toEqual([
-        { px: px1, value: 5 },
-        { px: px2, value: 25 },
-      ]);
+    await expectCalibrated(page, col.id, 5, 25);
 
     // 重载 = 前端内存全清，`x_ticks` 还在就只能是因为它真的写进了后端会话。
     await reloadFresh(page);
@@ -260,13 +304,7 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
       '重载后读数必须从后端种子回填（能存活就证明标定在后端会话里）'
     ).toHaveValue('5');
     await expect(page.locator(VAL2)).toHaveValue('25');
-    expect(
-      (await panelColumn(page)).x_ticks,
-      '重载后后端标定必须原样存在'
-    ).toEqual([
-      { px: px1, value: 5 },
-      { px: px2, value: 25 },
-    ]);
+    await expectCalibrated(page, col.id, 5, 25);
     expect(telemetry.notices).toEqual([]);
   });
 
@@ -291,7 +329,10 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
     expect(typeof st.columns[0].col_index).toBe('number');
   });
 
-  test('T6 属种列属性面板 (Inspector) 标定与形态修改必须真发 RPC 并落后端（缺陷 #23 回归）', async ({ page }) => {
+  test.describe('T6 属性面板标定（缺陷 #23 回归）', () => {
+    test.use({ allowlists: { notice: [/端点 2 的像素 X/] } });
+
+    test('T6 属种列属性面板 (Inspector) 标定与形态修改必须真发 RPC 并落后端（缺陷 #23 回归）', async ({ page, telemetry }) => {
     await gotoStage(page, 6);
     const rpcmethods = watchRpc(page);
 
@@ -305,7 +346,24 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
     const inspector = page.locator('.app-inspector');
     await expect(inspector.locator('#inp-sc-calib-val')).toBeVisible();
 
-    // 1. 点击快捷刻度齿 50%
+    // 1. 端点像素为空时点快捷刻度齿：必须当场报错、一列都不写。
+    //    旧实现拿 `tickEndX`（分列期猜测）当第二端点，于是"点一下 50%"就把
+    //    猜测像素当用户读数写进后端——本仓库最后一条这样的路径。
+    await inspector.locator('.quick-tick-val-btn[data-val="50"]').click();
+    await expect
+      .poll(() => telemetry.notices.some((n) => n.includes('端点 2 的像素 X')), {
+        timeout: 5_000,
+      })
+      .toBe(true);
+    expect(
+      (await panelColumn(page)).x_ticks ?? null,
+      '端点像素未确定时不得凭空标定'
+    ).toBeNull();
+
+    // 2. 用户填进实测像素端点后再点：必须真发 RPC 并落后端。
+    const target = await panelColumn(page);
+    const px2 = (target.tickEndX as number) ?? (target.startX as number) + 60;
+    await inspector.locator('#inp-sc-calib-x').fill(String(px2));
     await inspector.locator('.quick-tick-val-btn[data-val="50"]').click();
     await expect
       .poll(async () => (await panelColumn(page)).x_ticks, { timeout: 10_000 })
@@ -333,13 +391,14 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
         return (c as any).exaggeration_mult ?? (c as any).exaggerationMult;
       }, { timeout: 10_000 })
       .toBe(5);
+    });
   });
 
   test.describe('T7 批量应用与快捷键', () => {
     test.use({ allowlists: { notice: [/已将刻度.*批量应用/] } });
 
     test('T7 键盘 Enter 快捷保存单列刻度', async ({ page, telemetry }) => {
-      await gotoStage(page, 6);
+      await openBeginnerStep6(page);
 
       // 钉住"被写入的那一列"：面板改写的是它 mount 那一刻的 active 列，
       // 而 activeTaxaId 会在重渲染后变化。每次都重新取 activeTaxaId 再断言，
@@ -351,18 +410,7 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
       await page.locator(VAL2).fill('25');
       await page.locator(VAL2).press('Enter');
 
-      await expect
-        .poll(
-          async () => {
-            const all = await columns(page);
-            return all.find((c) => c.id === target.id)?.x_ticks ?? null;
-          },
-          { timeout: 10_000, message: `列 ${target.name} 必须被写入 0~25` }
-        )
-        .toEqual([
-          expect.objectContaining({ value: 0 }),
-          expect.objectContaining({ value: 25 }),
-        ]);
+      await expectCalibrated(page, target.id, 0, 25);
 
       // 注：原用例后半段点 `#btn-apply-ticks-to-group`，该按钮已在 d3ff653
       //（"group scale ruler"）被 `#btn-apply-group-scale` 取代，测试没跟着改，从此恒红。

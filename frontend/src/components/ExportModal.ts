@@ -251,6 +251,11 @@ export class ExportModal {
       const dataset = datasetSelect.value;
       const digits = parseInt(digitsInp.value, 10) || 2;
       const naStr = naFillSelect.value;
+      // 未标定列与「个别层位缺测」是两件事，不能合并：
+      //   - 缺测（列已标定，但该层没数据）：按用户选的 naFill 填（默认 0.0，地学惯例）；
+      //   - 未标定（整列没有标度）：整列写 NA，绝不混进 0.0 —— 那会被读成
+      //     "该层确实 0% 花粉"，是编造读数。
+      const UNCALIBRATED_NA = 'NA';
       const isDesc = sortOrderSelect.value === 'desc';
 
       const cal = this.data.calibration;
@@ -265,12 +270,14 @@ export class ExportModal {
           const pts = [...col.controlPoints].sort((a, b) => (isDesc ? b.y - a.y : a.y - b.y));
           pts.forEach((pt) => {
             const depth = CoordinateSystem.imageYToDepth(pt.y, cal);
-            const val = CoordinateSystem.imageXToPercent(pt.x, col);
+            // 未标定列不出数：naStr 是既有占位通道（与深度缺标定一致）。
+            const calibrated = CoordinateSystem.hasRealCalibration(col);
+            const val = calibrated ? CoordinateSystem.imageXToPercent(pt.x, col) : undefined;
             matrix.push([
               col.name,
               pt.type || 'transition',
               depth !== undefined ? depth.toFixed(digits) : naStr,
-              val !== undefined ? val.toFixed(digits) : naStr,
+              val !== undefined ? val.toFixed(digits) : calibrated ? naStr : UNCALIBRATED_NA,
               String(pt.x),
               String(pt.y),
             ]);
@@ -294,7 +301,14 @@ export class ExportModal {
           const rowVals: string[] = [depth !== undefined ? depth.toFixed(digits) : naStr];
           for (const col of visibleCols) {
             const v = SplineInterpolator.interpolatePercentAtY(col, y);
-            rowVals.push(v !== undefined && !isNaN(v) ? v.toFixed(digits) : naStr);
+            const calibrated = CoordinateSystem.hasRealCalibration(col);
+            rowVals.push(
+              calibrated
+                ? v !== undefined && !isNaN(v)
+                  ? v.toFixed(digits)
+                  : naStr
+                : UNCALIBRATED_NA
+            );
           }
           matrix.push(rowVals);
         }
@@ -317,7 +331,10 @@ export class ExportModal {
 
         for (const col of visibleCols) {
           const v = SplineInterpolator.interpolatePercentAtY(col, y);
-          if (v !== undefined && !isNaN(v)) {
+          const calibrated = CoordinateSystem.hasRealCalibration(col);
+          if (!calibrated) {
+            rowVals.push(UNCALIBRATED_NA);
+          } else if (v !== undefined && !isNaN(v)) {
             rowVals.push(v.toFixed(digits));
           } else {
             rowVals.push(naStr);
