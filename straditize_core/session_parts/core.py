@@ -461,8 +461,104 @@ class CoreMixin:
         """Switch to a specific 1-based page of the currently loaded PDF."""
         return self.load_image(page_number=page_number)
 
+    def _axis_spine_region(self, mask: np.ndarray) -> dict[str, float] | None:
+        """用面板竖直轴线定数据区；检测不到返回 None（交给密度启发式）。
+
+        判据是**结构**不是密度：轴线是贯穿数据区全高的直线，它自己就标出了
+        「数据区从哪一行到哪一行」。面积填充图的填充也贯穿，一并算进来不害事——
+        横向取最外侧的贯穿列，纵向取这些列上墨迹的上下界。
+
+        断续竖线（聚类树分支、表格边框）被 ``min_run`` 挡掉：它们的最长连续段
+        远小于数据区高度。
+        """
+        height, width = mask.shape
+        if height < 40 or width < 40:
+            return None
+        min_run = max(20, int(0.6 * height))
+        longest = np.zeros(width, dtype=np.int32)
+        pad = np.zeros(1, np.int8)
+        for x in range(width):
+            column = mask[:, x]
+            if not column.any():
+                continue
+            edges = np.diff(
+                np.concatenate((pad, column.view(np.int8), pad))
+            )
+            starts = np.flatnonzero(edges == 1)
+            if starts.size:
+                ends = np.flatnonzero(edges == -1)
+                longest[x] = int((ends - starts).max())
+        axis_cols = np.flatnonzero(longest >= max(30, int(0.3 * height)))
+        if axis_cols.size < 3:
+            return None
+        # 只保留「run 长度接近同组中位数」的列：面板轴线长度都等于数据区高度，
+        # 而页面边框/表格竖线贯穿整图、Y 轴引线只覆盖局部——它们会被这一步筛掉。
+        runs = longest[axis_cols].astype(float)
+        median_run = float(np.median(runs))
+        core_cols = axis_cols[(runs >= 0.9 * median_run) & (runs <= 1.1 * median_run)]
+        if core_cols.size < 3:
+            return None
+        # 纵向：**这些轴线同时都落墨**的行。标题区里轴线还没开始、轴标签区已经结束，
+        # 所以这一条同时给出数据区的上沿与下沿，不依赖墨迹密度。
+        row_frac = mask[:, core_cols].mean(axis=1)
+        rows = np.flatnonzero(row_frac >= 0.8)
+        if rows.size < 0.1 * height:
+            return None
+        y_min, y_max = int(rows.min()), int(rows.max())
+
+        # 横向用数据区内墨迹的包围盒（宁宽不窄：宽了用户能裁，窄了直接丢数据）。
+        # 精确的左右界（排除 Age 轴文字区、右侧聚类树/图例）留给分列阶段识别空列，
+        # 不在"建议框"这一层猜 —— 实测同一张图换个判据就在 41/68/112 之间跳。
+        band = mask[y_min : y_max + 1, :]
+        band_ink = band.any(axis=0)
+        ink_cols = np.flatnonzero(band_ink)
+        if ink_cols.size == 0:
+            return None
+        # 横向边界锚在「贯穿列 **且右侧紧接连续墨迹**」上：面板轴线的右边就是本面板的
+        # 填充/柱，而 Y 轴标签、图例边框、聚类树的右侧是断续文字。
+        # 只判「贯穿」不够——实测图例边框也 95% 贯穿，会把 xMax 拉到图像右缘 1179。
+        full_cols = np.flatnonzero(band.mean(axis=0) >= 0.95)
+        solid = [
+            int(x)
+            for x in full_cols
+            if x + 5 <= width and bool(band_ink[x + 1 : x + 6].all())
+        ]
+        if not solid:
+            return None
+        x_min = min(solid)
+        x_max = max(solid)
+        # 末列可能是**空心列**（只有轴线、没有填充），`solid` 会漏掉它 ——
+        # hoya 实测因此从 29 列掉到 28 列（xMax 1962 vs 2030）。补上「数据区内仍有
+        # 长竖结构」的最后一列；图例色块没有竖结构，不会被补进来。
+        band_run = np.zeros(width, dtype=np.int32)
+        for x in range(width):
+            col = band[:, x]
+            if not col.any():
+                continue
+            e = np.diff(np.concatenate((pad, col.view(np.int8), pad)))
+            st = np.flatnonzero(e == 1)
+            if st.size:
+                band_run[x] = int((np.flatnonzero(e == -1) - st).max())
+        tall = np.flatnonzero(band_run >= max(20, int(0.6 * (y_max - y_min + 1))))
+        if tall.size:
+            x_max = max(x_max, int(tall.max()))
+        # 向右延伸到本面板的填充右界：用「行覆盖 ≥12%」判"这里还是数据"，
+        # 而不是「有任何一个像素」——图例文字与聚类树分支每列都沾到墨，
+        # 但覆盖率远低于填充。
+        dense = band.mean(axis=0) >= 0.12
+        while x_max + 1 < width and dense[x_max + 1]:
+            x_max += 1
+        if x_max - x_min < 0.1 * width or y_max - y_min < 0.1 * height:
+            return None
+        return {
+            "xMin": float(x_min),
+            "xMax": float(x_max + 1),
+            "yMin": float(y_min),
+            "yMax": float(y_max + 1),
+        }
+
     def suggest_data_region(self, fraction: float = 0.7) -> dict[str, float]:
-        """Suggest the main diagram rectangle using the legacy ROI heuristic."""
+        """Suggest the main diagram rectangle: 轴线结构优先，墨迹密度兜底。"""
         if self.image is None:
             raise JsonRpcError(STATE_ERROR, "No image loaded in session.")
         if not 0 < fraction <= 1:
@@ -482,7 +578,17 @@ class CoreMixin:
 
         mask = np.asarray(to_binary(self.image), dtype=bool)
         if not mask.any():
-            return fallback
+            return {**fallback, "confidence": "low", "method": "fallback_ratio"}
+
+        # 结构判据优先：面板竖直轴线定数据区。
+        # 实测 rioja pollen 图顶部约 100px 是标题 + 斜排属种名（墨迹稀疏），
+        # 下面的密度启发式会直接跳过它：pollen 三图 yMin 被判到 188–197，
+        # 而数据区实从 82–93 开始 —— 一次丢 15/49 层（30.6%），
+        # 且 digitize 只在 ROI 内取数、不报警。轴线是贯穿全高的直线，
+        # 它的纵向跨度就是数据区，与墨迹密度无关。
+        spine = self._axis_spine_region(mask)
+        if spine is not None:
+            return {**spine, "confidence": "high", "method": "axis_spine"}
 
         max_horizontal = fraction * float(mask.sum(axis=1).max())
         max_vertical = fraction * float(mask.sum(axis=0).max())
@@ -566,12 +672,14 @@ class CoreMixin:
                     x_max = max(x_max, int(component_cols.max()))
 
         if x_max <= x_min or y_max <= y_min:
-            return fallback
+            return {**fallback, "confidence": "low", "method": "fallback_ratio"}
         return {
             "xMin": float(x_min),
             "xMax": float(x_max + 1),
             "yMin": float(y_min),
             "yMax": float(y_max + 1),
+            "confidence": "medium",
+            "method": "ink_density",
         }
 
     def get_image_slice(

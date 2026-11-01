@@ -142,11 +142,13 @@ class TestRealBenchmark:
             f"Diatom 基准图只分出 {len(session.columns)} 列"
         )
 
-    def test_pollen_benchmark_roi_unchanged(self) -> None:
-        """反向哨兵：Pollen 图走正常启发式分支，修复不得改动它。
+    def test_pollen_benchmark_roi_matches_axis_spine(self) -> None:
+        """Pollen 图的建议框必须落在**真实数据区**（轴线跨度）上。
 
-        修复前实测 `xlim=[112,1055] ylim=[197,568]`；若有人把整个函数改成
-        "永远用墨迹包围盒"，这条会红。
+        这条是 P-03 的钉子：旧启发式（墨迹密度 70%）把 yMin 判到 **197**，
+        而数据区实从 **93** 开始 —— `digitize` 只在 ROI 内取数，一次丢 15/49 层
+        （30.6%）且不报警。所以这里断言的是**像素真值**（填充色分段与轴线检测
+        两条路径互验，误差 ≤1px），不是"与上一版相同"。
         """
         session = StraditizeSession()
         session._init_cleanup()
@@ -154,11 +156,15 @@ class TestRealBenchmark:
 
         sug = _suggested(session)
 
-        assert sug["xMin"] == 112 and sug["xMax"] == 1055, (
-            f"Pollen 建议框 x 范围变为 [{sug['xMin']}, {sug['xMax']}]，"
-            "预期 [112, 1055]——启发式分支被整体替换了"
+        assert sug.get("method") == "axis_spine", (
+            f"应走轴线结构判据，实际 {sug.get('method')} —— "
+            "密度启发式会跳过顶部图名区，丢数据且不报警"
         )
-        assert sug["yMin"] == 197 and sug["yMax"] == 568, (
-            f"Pollen 建议框 y 范围变为 [{sug['yMin']}, {sug['yMax']}]，"
-            "预期 [197, 568]"
+        assert abs(sug["yMin"] - 93) <= 3, (
+            f"数据区上沿 {sug['yMin']}，真值 93（旧值 197 是缺陷，丢掉顶部 15/49 层）"
         )
+        assert abs(sug["yMax"] - 568) <= 3, f"数据区下沿 {sug['yMax']}，真值 568"
+        # 横向只钉「不得裁掉数据」：右界允许比 1055 宽（把图例/聚类树包进来是
+        # 多一列假列，由分列层的空列识别处理；裁窄则会直接丢数据）。
+        assert abs(sug["xMin"] - 112) <= 3, f"左界 {sug['xMin']}，真值 112"
+        assert sug["xMax"] >= 1055 - 3, f"右界 {sug['xMax']} 裁掉了数据（真值 1055）"

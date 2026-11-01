@@ -51,7 +51,10 @@ def test_suggest_data_region_tracks_connected_diagram_bounds():
     session.image = image
     session.width, session.height = image.size
 
-    assert session.suggest_data_region() == {
+    # 只比较几何四键：返回值现在还带 `confidence` / `method`（判据来源，
+    # 供前端提示"自动数据区是否可靠"），它们不是几何的一部分。
+    sug = session.suggest_data_region()
+    assert {k: sug[k] for k in ("xMin", "xMax", "yMin", "yMax")} == {
         "xMin": 150.0,
         "xMax": 851.0,
         "yMin": 120.0,
