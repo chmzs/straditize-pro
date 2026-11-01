@@ -17,7 +17,7 @@
  * 把锚点退回 col.startX，col1/col2/col3 的方向断言会变红。
  */
 import { expect, test } from './fixtures';
-import { backendRpc, clickCanvas, diagramData, gotoStage, resetBaseline } from './helpers';
+import { backendRpc, canvasColorPixels, clickCanvas, diagramData, gotoStage, resetBaseline } from './helpers';
 import type { Page } from '@playwright/test';
 
 interface Tick {
@@ -71,6 +71,18 @@ async function openBeginnerStep6(page: Page): Promise<void> {
 
   await gotoStage(page, 5);
   expect((await columns(page)).length, 'beginner 图应切出 4 列').toBe(4);
+
+  // 显式清空标定，保证"未标定"这个前提是真的。
+  // `resetBaseline` 不清 x_ticks：同一 worker 里先跑的用例会留下已标定列，
+  // 于是 T6 单跑绿、批量跑红（实测）。用例之间不该靠执行顺序成立。
+  const n = (await columns(page)).length;
+  for (let i = 0; i < n; i++) {
+    await backendRpc(page, 'column.clearXTicks', { col_index: i });
+  }
+  expect(
+    (await columns(page)).every((c) => (c.x_ticks ?? null) === null),
+    '前置条件：所有列必须处于未标定状态'
+  ).toBe(true);
 
   await gotoStage(page, 6);
   // 几何检测是 mount 里的异步 RPC，等它把数字填进检测行再断言。
@@ -311,6 +323,34 @@ test.describe('步骤 6 对齐本组（自动跨度）', () => {
           { timeout: 15_000, message: '删组后应只剩一个组' }
         )
         .toBe(1);
+    });
+  });
+  test.describe('T6 未标定不画猜测刻度（放行成功通知）', () => {
+    test.use({ allowlists: { notice: [/已对齐 \d+ 列/] } });
+
+    test('T6 未标定：无红色刻度线 + X2 为空 + 显示「未标定」；标定后红线必须出现', async ({
+      page,
+    }) => {
+      await openBeginnerStep6(page);
+
+      // 未标定时，分列期写入的 `startX + max(20, min(0.65×列宽, 80))` 只是猜测值。
+      // 它不得被画成刻度参考线：实测噪声 22 个红像素，真正四条虚线是 1405 个。
+      const redBefore = await canvasColorPixels(page, [239, 68, 68], 40);
+      expect(
+        redBefore,
+        `未标定的列不应画出红色刻度参考线（实测噪声约 22；若接近 1400 说明又在画猜测值）`
+      ).toBeLessThan(100);
+
+      await expect(page.locator('#inp-manual-tick-val2'), 'X2 不得预填猜测读数').toHaveValue('');
+      await expect(page.locator(PANEL)).toContainText('未标定');
+
+      // 反向对照：真标定之后，四条刻度线必须出现——否则上面那条「没有红线」是靠
+      // 把整层画崩换来的，不是靠判定。
+      await page.locator(`${PANEL} #inp-ref-units-per-cell`).fill('20');
+      await page.locator(`${PANEL} #btn-apply-group-scale`).click();
+      await expect
+        .poll(async () => canvasColorPixels(page, [239, 68, 68], 40), { timeout: 15_000 })
+        .toBeGreaterThan(500);
     });
   });
 });

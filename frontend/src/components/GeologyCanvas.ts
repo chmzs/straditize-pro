@@ -1544,6 +1544,15 @@ export class GeologyCanvas {
     return null;
   }
 
+  /**
+   * 该列是否有**用户确认过的**两点标定。只有 `x_ticks` 算数：
+   * `tickEndX` / `scaleCalib.calibX` 在分列时就被写成 `startX + max(20, min(0.65×列宽, 80))`
+   * 的猜测值，拿它画刻度等于把假数据画成"已标定"。
+   */
+  public static hasRealCalibration(col: TaxaColumn): boolean {
+    return Array.isArray(col.x_ticks) && col.x_ticks.length >= 2;
+  }
+
   public static getColumnCalibX(col: TaxaColumn): number {
     if (col.x_ticks && col.x_ticks.length >= 2 && col.x_ticks[1].px > col.startX) {
       return col.x_ticks[1].px;
@@ -2095,20 +2104,24 @@ export class GeologyCanvas {
       ctx.stroke();
 
       // 2. 端点 2 真实物理刻度齿垂直线 (sc.calibX - 对应数值 sc.calibVal)
-      ctx.beginPath();
-      ctx.moveTo(sc.calibX, topY);
-      ctx.lineTo(sc.calibX, bottomY);
+      //    只有真标定过才画：未标定时 sc.calibX 是分列期的猜测值（startX+80），
+      //    画出来会被当成"已标定"的刻度。
+      if (GeologyCanvas.hasRealCalibration(col)) {
+        ctx.beginPath();
+        ctx.moveTo(sc.calibX, topY);
+        ctx.lineTo(sc.calibX, bottomY);
 
-      if (isCalibHovered) {
-        ctx.strokeStyle = '#f97316';
-        ctx.lineWidth = 3 / scale;
-        ctx.setLineDash([]);
-      } else {
-        ctx.strokeStyle = isLight ? 'rgba(220, 38, 38, 0.85)' : 'rgba(239, 68, 68, 0.8)';
-        ctx.lineWidth = 1.6 / scale;
-        ctx.setLineDash([5 / scale, 3 / scale]);
+        if (isCalibHovered) {
+          ctx.strokeStyle = '#f97316';
+          ctx.lineWidth = 3 / scale;
+          ctx.setLineDash([]);
+        } else {
+          ctx.strokeStyle = isLight ? 'rgba(220, 38, 38, 0.85)' : 'rgba(239, 68, 68, 0.8)';
+          ctx.lineWidth = 1.6 / scale;
+          ctx.setLineDash([5 / scale, 3 / scale]);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
 
       // 3. 列间空白隔离边界线 (endX - 仅当 endX 明显大于刻度齿时显示淡色隔离虚线)
       if (col.endX > sc.calibX + 4) {
@@ -2129,7 +2142,8 @@ export class GeologyCanvas {
       }
 
       // 4. 绘制两点式物理刻度手柄 (Tick Pins) — 激活列显式绘制顶部与底部定位把手圆点
-      if (isActive) {
+      //    未标定列同样不画：把手位置来自 sc.calibX（猜测值），画出来在视觉上等于承认它。
+      if (isActive && GeologyCanvas.hasRealCalibration(col)) {
         const origColor = isOriginHovered ? '#f97316' : (isLight ? '#0284c7' : '#38bdf8');
         const calibColor = isCalibHovered ? '#f97316' : '#10b981';
         const pinR = (isOriginHovered ? 6 : 4.5) / scale;

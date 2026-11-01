@@ -26,6 +26,7 @@ cd frontend && npx playwright test step6-ruler-geometry.spec.ts step6-xticks.spe
 | 0 点 = 实测轴线右缘 | `ruler.py::_find_axis_x()` → `axis_x`/`axis_x_right`；前端 `DetectedSpan.axisX` 用它，识别不到才退回 `col.startX` |
 | 标度由「每根齿单位数」给出 | `px/单位 = 检测刻距 ÷ 每根齿单位数`；每列用**自己**检测到的末齿当第二端点（端点必落在列内，无需夹取） |
 | 分组 | 侧栏复选框批量（Shift 连选）+ **画布点选成组**（`+ 分组` → 图上点列 → 确认）+ 删除本组；`getDiagramData().columns` 已带 `x_group_id` |
+| 未标定列不画假刻度 | `hasRealCalibration` 只认 `x_ticks`；红虚线与刻度手柄仅标定后出现，面板 X2 不再预填猜测值 |
 
 **判据可证伪（已实测）**：把锚点退回 `col.startX` → T3 变红；把命中测试坐标挪出画布 → T5 在「已选 1 列」变红；把跨度写死 40 → T3 得 0.44 px/单位变红。
 
@@ -37,27 +38,31 @@ cd frontend && npx playwright test step6-ruler-geometry.spec.ts step6-xticks.spe
 4. **选列提示条被插进 flex 行**：成了「包含 N 个属种列 + 批量调整」那一行的第三个 flex item，被挤成 173px、文字折 5 行。已移出该行并重排；新增**布局门禁**（提示条宽度须 > 面板 80%）。
 5. **`step6-xticks T7` 恒红**：它点的 `#btn-apply-ticks-to-group` 已在 `d3ff653` 被 `#btn-apply-group-scale` 取代（`git log -S` 可查），全仓无此元素。已把该用例收敛到仍有效的 Enter 保存断言。
 
+6. **`step6` 用例依赖执行顺序（两处，已修）**：
+   - `resetBaseline` 不清 `x_ticks`，同 worker 先跑的用例会留下已标定列 → `T6` 单跑绿、批量红。已在 `openBeginnerStep6` 里对全部列显式 `column.clearXTicks`，并断言"前置：全部未标定"。
+   - `T7` 每次重新读 `activeTaxaId` 去断言"被写入的那一列"，而面板写的是它 mount 那一刻的 active 列 → 写 A 读 B，得到 `null`。已改为先取 `target` 列再用列 id 钉住断言。
+   - 教训：用例必须自带前置条件，不靠执行顺序成立。
+
+
 ## 3. 未完成（按优先级）
 
-### P0 — 分列期就写入猜测刻度（**决定未定，见 A/B**）
+### P0 — 分列期写入的猜测刻度：**已按 A 落地（2026-11-01）**
 
-现象：列一生成就带
+现象（备查）：列一生成就带 `tickEndX = startX + max(20, min(0.65 × 列宽, 80))`、同值 `scaleCalib.calibX`、`maxPercent: 20`；beginner 四列实测 `339 / 1034 / 1432 / 1656`。
 
-```
-tickEndX      = startX + max(20, min(0.65 × 列宽, 80))
-scaleCalib.calibX = 同值
-maxPercent    = 20
-```
+已做（A：检测/标定到才画，否则不画）：
 
-beginner 四列实测 `339 / 1034 / 1432 / 1656`（全部 = `startX + 80`）。
+- **画布**：新增 `GeologyCanvas.hasRealCalibration(col)` —— **只有 `x_ticks` 存在才算已标定**。刻度参考线（红虚线）与刻度手柄只在已标定时绘制；基线（蓝实线）与列右边界不受影响。
+- **面板**：`XTicksPanel.getColCalibX` 不再回落 `tickEndX` / `scaleCalib.calibX` / 65% 猜测，未标定返回 `null` → X2 输入框为空、跨度行显示「未标定：图上的刻度参考线不画猜测值」。
+- **门禁 `T6`**（`e2e/step6-ruler-geometry.spec.ts`）：未标定时画布红色像素 `< 100`（实测噪声 22）；标定后 `> 500`（实测 1405 = 四条虚线）。把 `hasRealCalibration` 改成恒真 → T6 当场变红（已实测）。
 
-危害：界面据此画出**看着像已标定的红虚线**；`scale_provenance.calibrated=false` 只是旁证，用户看到的是假刻度。粘贴导入路径还有硬编码 `maxPercent: 40`（`GeologyCanvas.ts:573` 邻近）。
+### P0-b — 猜测值仍活在**数值换算**里（未做，有风险）
 
-落点：`XTicksPanel.ts::getColCalibX`（约 50-62）、`GeologyCanvas.ts` 内同构函数（约 1545-1558）、上述 `tickEndX` 赋值处。
+`CoordinateSystem.ts:130-140` 与 `GeologyCanvas.ts::getColumnCalibX/getColumnCalibVal` 仍以 `tickEndX` / `maxPercent` 兜底，所以未标定列的**百分比数值**依旧来自猜测（侧栏 `Sidebar.ts:235` 会显示 `${col.maxPercent}%`）。
 
-两种改法（**需产品决定**）：
-- **A**（推荐）检测到才画，检测不到**不画**；顺带清掉 `maxPercent` 默认值。代价：未标定列在步骤 5 会"空"一些。
-- **B** 保持现状，只在步骤 6 用检测。
+风险：这条链被曲线取值与导出共用，直接删会改变未标定列的数值，可能牵动 `tests/integration/test_no_fabrication.py` 的口径。
+
+建议顺序：① 先让所有 UI 对未标定列显示「未标定」而不是数字（侧栏、属性面板）；② 再逐处下线 `?? 20` / `?? 40` 默认值，每处都补一条"未标定不给数"的断言。
 
 ### P1 — 步骤 5 完全不接检测
 
