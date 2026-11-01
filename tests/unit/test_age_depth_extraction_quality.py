@@ -199,21 +199,6 @@ class TestAgeDepthExtractionQuality(unittest.TestCase):
         self.assertGreaterEqual(float(np.min(clipped.depths)), 98.0)
         self.assertLessEqual(float(np.max(clipped.depths)), 302.0)
 
-    def test_06_resample_regular_grid(self):
-        """resample_step yields an evenly spaced depth grid."""
-        model = extract_age_depth_model(
-            _render_cloud_diagram(),
-            self.calibrator,
-            depth_range=(0.0, 500.0),
-            resample_step=5.0,
-        )
-        depths = np.asarray(model.depths, dtype=float)
-        diffs = np.diff(depths)
-        self.assertGreater(len(depths), 50)
-        self.assertAlmostEqual(float(diffs.mean()), 5.0, places=4)
-        self.assertLess(float(diffs.std()), 1e-6)
-        self._assert_close_to_truth(model)
-
     def test_07_exclude_mask_erases_interference(self):
         """An exclude mask suppresses an interfering region (eraser-brush semantics)."""
         img = _render_cloud_diagram(inline_label=True)
@@ -263,13 +248,18 @@ class TestAgeDepthExtractionQuality(unittest.TestCase):
         for key in ("x_curve", "x_min", "x_max"):
             self.assertEqual(len(px[key]), n, f"px_points.{key} length differs from px_points.y")
 
-    def test_09b_resampled_arrays_are_aligned(self):
-        """Resampling must keep the pixel tracks the same length as the depth grid."""
+    def test_09b_tracks_align_with_depths(self):
+        """Pixel tracks keep the same length as the depth array, and map back to it.
+
+        This used to guard the resampling path; resampling is gone (the extractor always
+        emits native per-row sampling), so the same alignment now guards the native path:
+        a consumer that indexes `px_points` alongside `depths` must not read across by a
+        stride factor.
+        """
         model = extract_age_depth_model(
             _render_cloud_diagram(),
             self.calibrator,
             depth_range=(0.0, 500.0),
-            resample_step=5.0,
         )
         payload = model.to_inspection_data()
         px = payload["px_points"]
@@ -278,13 +268,13 @@ class TestAgeDepthExtractionQuality(unittest.TestCase):
         self.assertEqual(len(model.px_x_curve), len(model.depths))
         self.assertEqual(len(px["y"]), len(payload["depths"]))
 
-        # The resampled pixel rows must correspond to the resampled depths.
+        # The pixel rows must correspond to the reported depths.
         depths = np.asarray(payload["depths"], dtype=float)
         rows = np.asarray(px["y"], dtype=float)
         recovered = np.asarray(self.calibrator.px2depth(rows), dtype=float)
         self.assertTrue(
             np.allclose(recovered, depths, atol=0.2),
-            "resampled pixel rows no longer map back to their depth grid",
+            "pixel rows no longer map back to their depth grid",
         )
 
     def test_10_degenerate_input_raises(self):

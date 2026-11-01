@@ -226,4 +226,188 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
     await dialog.locator('#ad-btn-apply').click();
     await expect(dialog).toHaveCount(0);
   });
+
+  test('T5 表格：速率±SE 两列、格式位数、表头排序只重排显示', async ({ page }) => {
+    await gotoStage(page, 3);
+    await page.locator('#btn-age-depth-modal').click();
+    const dialog = page.locator('.agedepth-dialog');
+    await expect(dialog).toBeVisible();
+
+    await dialog.locator('#ad-btn-center-bacon').click();
+    await expect(dialog.locator('#ad-current-source-label')).toHaveText('范例: BACON', {
+      timeout: 10_000,
+    });
+    await dialog.locator('#ad-btn-extract').click();
+    await expect(dialog.locator('#ad-status-msg')).toContainText('识别成功', {
+      timeout: 20_000,
+    });
+
+    await dialog.locator('#ad-tab-btn-table').click();
+    const panel = dialog.locator('#ad-tab-panel-table');
+    await expect(panel).toBeVisible();
+    const rows = panel.locator('#ad-full-table-tbody tr');
+    const rowCount = await rows.count();
+    expect(rowCount).toBeGreaterThan(10);
+
+    // ① 速率与标准误是两列，且 ±SE 有值（后端行对齐的分窗回归）
+    expect(await panel.locator('thead th').count()).toBe(9);
+    const seTexts = await panel
+      .locator('#ad-full-table-tbody tr td:nth-child(8)')
+      .allTextContents();
+    const seWithNumbers = seTexts.filter((t) => /±\s*[\d.]+/.test(t)).length;
+    expect(
+      seWithNumbers,
+      `±SE 列应大多有数值，实际 ${seWithNumbers}/${seTexts.length}：${seTexts.slice(0, 3)}`,
+    ).toBeGreaterThan(rowCount * 0.5);
+    const rateTexts = await panel
+      .locator('#ad-full-table-tbody tr td:nth-child(7)')
+      .allTextContents();
+    expect(rateTexts.filter((t) => /[\d.]/.test(t)).length).toBeGreaterThan(rowCount * 0.5);
+
+    // ② 格式下拉：选 2 位小数后深度输入框必须正好 2 位小数；回到原始值则不再统一
+    await panel.locator('#ad-tbl-fmt-digits').selectOption('2');
+    const two = await panel
+      .locator('.ad-input-full-depth')
+      .evaluateAll((els) => els.map((el) => (el as HTMLInputElement).value).slice(0, 5));
+    for (const v of two) {
+      expect(v, `深度显示应为 2 位小数，实际 "${v}"`).toMatch(/^-?\d+\.\d{2}$/);
+    }
+    await panel.locator('#ad-tbl-fmt-digits').selectOption('');
+    const raw = await panel
+      .locator('.ad-input-full-depth')
+      .evaluateAll((els) => els.map((el) => (el as HTMLInputElement).value).slice(0, 5));
+    expect(
+      raw.some((v) => !/^-?\d+\.\d{2}$/.test(v)),
+      `原始值模式不应统一成 2 位小数：${raw}`,
+    ).toBe(true);
+
+    // ③ 表头排序只重排显示：data-idx 仍是 0..n-1 的排列，且方向可切换
+    const idxOf = () =>
+      panel
+        .locator('.ad-input-full-depth')
+        .evaluateAll((els) => els.map((el) => Number(el.getAttribute('data-idx'))));
+    const before = await idxOf();
+    expect(before).toEqual([...before].sort((a, b) => a - b));
+
+    await panel.locator('th[data-sort="age"]').click();
+    const asc = await idxOf();
+    // 年龄随深度单调递增，升序排一遍结果与源序相同 —— 这里只断言"仍是同一排列"，
+    // 不强求变化（强求变化就等于假定数据本身不是升序，那是把数据当成了代码的性质）。
+    expect(
+      [...asc].sort((a, b) => a - b),
+      '排序只是显示置换：data-idx 必须仍是 0..n-1 的排列',
+    ).toEqual(before);
+    // 显示值必须非递减（这才是排序该保证的东西）
+    const agesOf = () =>
+      panel
+        .locator('.ad-input-full-age')
+        .evaluateAll((els) => els.map((el) => Number((el as HTMLInputElement).value)));
+    const ascAges = await agesOf();
+    for (let i = 1; i < ascAges.length; i++) {
+      expect(ascAges[i], `升序：第 ${i} 行不应小于上一行`).toBeGreaterThanOrEqual(ascAges[i - 1]);
+    }
+
+    await panel.locator('th[data-sort="age"]').click();
+    const descAges = await agesOf();
+    // 相等值在稳定排序下不翻面，所以不能断言"降序=升序的逆"；断言单调性即可。
+    for (let i = 1; i < descAges.length; i++) {
+      expect(descAges[i], `降序：第 ${i} 行不应大于上一行`).toBeLessThanOrEqual(descAges[i - 1]);
+    }
+    expect(descAges, '降序显示值必须与升序不同（否则方向没切换）').not.toEqual(ascAges);
+    expect(
+      [...(await idxOf())].sort((a, b) => a - b),
+      '降序后 data-idx 仍是 0..n-1 的排列',
+    ).toEqual(before);
+    await expect(panel.locator('th[data-sort="age"] .ad-sort-ind')).toHaveText('▼');
+
+    // ④ 排序后同步仍成功（显示顺序不改变数据语义）
+    await panel.locator('#ad-tbl-btn-sync').click();
+    await expect(panel.locator('#ad-table-sync-status')).toContainText(
+      '已成功将修改后的年代-深度数据同步',
+      { timeout: 10_000 },
+    );
+
+    await dialog.locator('#ad-btn-apply').click();
+    await expect(dialog).toHaveCount(0);
+  });
+
+  test.describe('T6 拖拽载图（放行"非图片"拒绝提示）', () => {
+    // 非图片被拒绝时控制器会 notifyError，这是**故意**触发的用户可见报错，
+    // 按 fixtures.ts 的约定在此声明豁免，而不是把断言删掉。
+    test.use({ allowlists: { notice: [/不是图片文件/] } });
+
+    test('T6 空白区文案承诺的拖拽必须真的能载图', async ({ page }) => {
+    // 空白区一直写着「直接将 Bacon / Bchron / OxCal 年代图拖拽至此处」，但代码里
+    // 从未有 dragover/drop 监听 —— 拖进来毫无反应。本用例钉住"文案成真"。
+    // 判别力：修复前拖拽完全不触发 onImageLoaded，来源标签会停在「未载入」。
+    await gotoStage(page, 3);
+    await page.locator('#btn-age-depth-modal').click();
+    const dialog = page.locator('.agedepth-dialog');
+    await expect(dialog).toBeVisible();
+
+    const label = dialog.locator('#ad-current-source-label');
+    await expect(label).toHaveText('未载入');
+
+    const W = 257;
+    const H = 199;
+    const dataTransfer = await page.evaluateHandle(
+      ([w, h]) =>
+        new Promise<DataTransfer>((resolve) => {
+          const c = document.createElement('canvas');
+          c.width = w as number;
+          c.height = h as number;
+          const g = c.getContext('2d')!;
+          g.fillStyle = '#fff';
+          g.fillRect(0, 0, c.width, c.height);
+          g.fillStyle = '#000';
+          for (let i = 0; i < 25; i++) g.fillRect(6 + i * 9, 12, 4, 150);
+          c.toBlob((blob) => {
+            const file = new File([blob!], 'probe-agedepth-257x199.png', {
+              type: 'image/png',
+            });
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            resolve(dt);
+          }, 'image/png');
+        }),
+      [W, H]
+    );
+
+    // 监听器挂在 #ad-canvas-container 上，空白区是它的子元素，事件会冒泡上去。
+    await dialog.locator('#ad-empty-drop-zone').dispatchEvent('drop', { dataTransfer });
+
+    // 来源标签必须变成文件名 —— 这是"拖拽真的走到了 handleCustomImageFile"的证据。
+    await expect(label, '拖拽后来源标签应显示文件名').toHaveText(
+      'probe-agedepth-257x199.png',
+      { timeout: 10_000 }
+    );
+    // 空白区应让位给画布
+    await expect(dialog.locator('#ad-empty-drop-zone')).toBeHidden();
+    // 拖拽时的高亮必须复位（否则边框停在强调色上，像一直处于拖拽态）
+    await expect
+      .poll(async () =>
+        dialog
+          .locator('#ad-canvas-container')
+          .evaluate((el) => (el as HTMLElement).style.borderColor)
+      )
+      .toBe('');
+
+    // 非图片必须如实拒绝并保持原图不变（不静默吞掉）
+    const badTransfer = await page.evaluateHandle(() => {
+      const dt = new DataTransfer();
+      dt.items.add(new File(['not an image'], 'notes.txt', { type: 'text/plain' }));
+      return dt;
+    });
+    await dialog.locator('#ad-canvas-container').dispatchEvent('drop', {
+      dataTransfer: badTransfer,
+    });
+    await expect(label, '非图片不得替换当前图谱').toHaveText(
+      'probe-agedepth-257x199.png'
+    );
+
+    // 硬关闭弹窗（本用例没跑提取，应用按钮无意义）
+    await dialog.locator('#ad-close-btn').click();
+    await expect(dialog).toHaveCount(0);
+    });
+  });
 });

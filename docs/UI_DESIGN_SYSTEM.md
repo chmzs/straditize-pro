@@ -197,6 +197,62 @@
 - `ui-modal__body` 已是唯一主体类（批次 G-a2/G-d）；变体（如 `.wpd-modal-body`、`.agedepth-dialog .ui-modal__body`）
   必须声明在原语之后或提高特化度，见 §3「遗留待并」。
 
+### 7.1 弹窗宽度：只走 `--modal-width`
+
+基线的宽度**只**由变量决定，每个弹窗设一个值，不存在选择器优先级竞争：
+
+```css
+.modal-dialog {
+  width: min(var(--modal-width, 440px), calc(100vw - 32px));
+}
+```
+
+```html
+<div class="modal-dialog metadata-dialog ui-modal" style="--modal-width: 980px;">
+<!-- 或写在 CSS 里： .ocr-review-dialog { --modal-width: 1560px; } -->
+```
+
+| 弹窗 | `--modal-width` |
+| :--- | ---: |
+| 年月日无关的普通弹窗（基线兜底） | 440 |
+| AuthModal | 420 |
+| ProvenanceGate / 反馈详情 | 560 / 520 |
+| Settings | 640 |
+| About | 680 |
+| PropertyPanel（`ui-modal` 默认） | 720 |
+| TaxaDictionary | 760 |
+| Metadata | 980 |
+| Export | 1180 |
+| OCR 审核 | 1560 |
+| 年代-深度模型 | 1760 |
+
+**禁止的两件事**（两者都会静默改掉别人的宽度）：
+
+1. **不要再引入尺寸别名**（曾用 `.modal-dialog.modal-large { width: 720px }`）。它是 (0,2,0) 的两类
+   选择器，会压过任何单类变体规则；OCR 弹窗因此写了 1560px 却一直渲染 980px（靠 `min-width`
+   兜底，一个没人选择过的值）。
+2. **模板里不要内联写 `width:`**，一律写 `--modal-width`。内联样式压过所有类规则。
+
+**这条规则是踩了两次坑换来的**：
+
+| 轮次 | 做法 | 结果 |
+| :--- | :--- | :--- |
+| 1 | 把 `.agedepth-dialog` 改成 1560px | 规则文本对了，但被 `.modal-dialog.modal-large{720px}` 压掉，**完全没生效** |
+| 2 | 选择器升成 `.modal-dialog.agedepth-dialog` | 能赢，但仍是指纹式修补；同一模式在 OCR 弹窗里也中招 |
+| 3 | 宽度走 `--modal-width`，删掉 `modal-large` | 实测六种弹窗全部落在预期值，1366px 视口无溢出 |
+
+门禁：`frontend/test-agedepth-sync.mjs` 第 7 组断言基线用变量、`modal-large` 规则不存在、
+年代-深度只设变量且 ≥1600px、所有模板不带 `modal-large` 且不内联 `width`。三条回归路径都实测可红。
+
+**后续优化（未做）**：`style.css` 现有 187 处 `!important`，根源是全局单一样式表 + 290 处内联样式。
+收益最大的下一步是引入 cascade layers：
+
+```css
+@layer base, components, utilities;
+```
+
+层与层之间的优先级天然有序，`!important` 可以降到接近 0。它属于独立治理任务，不要在修具体 bug 时顺手做。
+
 ## 8. 响应式与密度
 
 - 最低支持 1280×720，优先验收 1366×768 与 1920×1080。

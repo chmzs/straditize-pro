@@ -29,21 +29,67 @@ from ..protocol import (
 )
 
 #: Rate columns an age-depth export may carry, keyed by the ``predict_age`` field name.
-#: The value is a template whose ``{age_unit}`` / ``{depth_unit}`` placeholders are filled
-#: at export time, so the unit travels *inside the column name* rather than only in a
-#: side-channel that a spreadsheet would drop.
+#: The value is the column name written into the dataset. Units live INSIDE the name so a
+#: spreadsheet cannot drop them.
+#:
+#: Every rate is expressed per REAL YEAR, whatever scale the age axis uses: ``predict_age``
+#: converts the extracted age magnitude (0..9 on a "ka BP" axis) to years before inverting,
+#: and reports the factor as ``years_per_age_unit``. The names below therefore say "year",
+#: not ``{age_unit}`` -- an earlier version templated the age label in, which produced
+#: "acc_rate (cal BP per cm)" over a number that was actually years per cm.
 AGE_DEPTH_RATE_COLUMNS: dict[str, str] = {
     "volume_ar_cm_per_yr": "volume_ar (cm per yr; = cm3 cm-2 yr-1)",
     "sed_rate_depth_per_yr": "sed_rate ({depth_unit} per yr)",
-    "acc_rate_yr_per_depth": "acc_rate ({age_unit} per {depth_unit})",
-    "interval_acc_rate_yr_per_depth": "interval_acc_rate ({age_unit} per {depth_unit})",
+    "acc_rate_yr_per_depth": "acc_rate (yr per {depth_unit})",
+    "interval_acc_rate_yr_per_depth": "interval_acc_rate (yr per {depth_unit})",
     "interval_sed_rate_depth_per_yr": "interval_sed_rate ({depth_unit} per yr)",
+    # Windowed regression over a fixed depth thickness, with its error bar. These are the
+    # reportable values: the pointwise columns above are the curve's local derivative, which
+    # carries no uncertainty and goes undefined wherever isotonic pooling flattened the curve.
+    "windowed_sed_rate": "sed_rate_windowed ({depth_unit} per yr)",
+    "windowed_sed_rate_se": "sed_rate_windowed_se ({depth_unit} per yr)",
+    "windowed_acc_rate": "acc_rate_windowed (yr per {depth_unit})",
 }
 
 #: Non-rate columns an age-depth export always carries. Everything not listed here and not
 #: in AGE_DEPTH_RATE_COLUMNS is dropped, so a unit-less legacy alias such as
 #: ``sed_rate_yr_per_cm`` cannot slip into the dataset as a duplicate of ``acc_rate``.
 AGE_DEPTH_BASE_COLUMNS: tuple[str, ...] = ("depths", "age_est", "age_min", "age_max")
+
+
+def attach_windowed_rates(
+    pred: dict[str, Any],
+    model: Any,
+    rate_columns: list[str] | None,
+) -> dict[str, Any]:
+    """Adds the windowed-regression rate columns to a ``predict_age`` payload.
+
+    Only computed when the caller actually asked for one of them: it regresses over a depth
+    window for every requested horizon, which is pointless work for an export that carries no
+    rate at all. A refusal (fewer than three horizons) leaves the columns absent rather than
+    filling them with placeholder numbers.
+    """
+    wanted = {
+        "windowed_sed_rate",
+        "windowed_sed_rate_se",
+        "windowed_acc_rate",
+    } & set(rate_columns or [])
+    if not wanted or model is None:
+        return pred
+    depths = pred.get("depths") or []
+    if not depths:
+        return pred
+    try:
+        est = model.estimate_sedimentation_rate(depths)
+    except ValueError:
+        # Too few horizons to regress on. The export proceeds with the pointwise columns and
+        # without the windowed ones -- an absent column is honest, a fabricated one is not.
+        return pred
+    merged = dict(pred)
+    merged["windowed_sed_rate"] = est["sed_rate"]
+    merged["windowed_sed_rate_se"] = est["sed_rate_se"]
+    merged["windowed_acc_rate"] = est["acc_rate"]
+    return merged
 
 
 def build_age_depth_frame(
@@ -85,6 +131,63 @@ def build_age_depth_frame(
 
 class AgeDepthSessionMixin:
     """Age-depth model diagram loading, calibration, extraction, and Bacon modeling."""
+
+    def sample_depths_for_model(
+        self, model: Any
+    ) -> tuple[list[float], dict[str, Any]]:
+        """Depths of the pollen samples, plus how they were obtained.
+
+        Three sources in priority order: the pollen diagram's Y readings, an explicit
+        depth grid, then a thinned sample of the model's own horizons.
+
+        The Y readings are only *depths* when the diagram's Y axis measures depth. When
+        the user declared ``primary_axis = "age"`` the readings are ages, so their depths
+        must be recovered by inverting the age-depth model. Treating them as depths anyway
+        would place every sample at a wrong-but-plausible position with no error to notice
+        -- which is exactly why the axis has to be declared rather than guessed from the
+        unit string.
+        """
+        model_depths = getattr(model, "depths", None) if model is not None else None
+
+        if self.column_points and self.is_calibrated and self.y_scale:
+            rows = sorted({p["row"] for pts in self.column_points.values() for p in pts})
+            sy = self.y_scale["slope"]
+            iy = self.y_scale["intercept"]
+            readings = [sy * r + iy for r in rows]
+            axis = getattr(self, "primary_axis", "depth") or "depth"
+            if axis == "age":
+                if model is None:
+                    raise JsonRpcError(
+                        STATE_ERROR,
+                        "The diagram's Y axis is declared as age, but no age-depth model "
+                        "is loaded to invert, so sample depths cannot be recovered.",
+                    )
+                inverse = model.predict_depth(readings)
+                return [round(float(d), 2) for d in inverse["depth_est"]], {
+                    "primary_axis": "age",
+                    "depth_source": "Y axis read as age; depths inverted from the model",
+                    "inverse_extrapolated_count": int(sum(inverse["extrapolated"])),
+                    "observed_age_range": inverse["observed_age_range"],
+                }
+            return [round(float(v), 2) for v in readings], {
+                "primary_axis": "depth",
+                "depth_source": "Y axis read as depth",
+            }
+
+        if self.depth_grid:
+            return [round(float(d), 2) for d in self.depth_grid], {
+                "primary_axis": "depth",
+                "depth_source": "explicit depth grid",
+            }
+
+        if model_depths is not None and len(model_depths) > 0:
+            step_stride = max(1, len(model_depths) // 30)
+            return [round(float(d), 2) for d in model_depths[::step_stride]], {
+                "primary_axis": "depth",
+                "depth_source": "thinned model horizons",
+            }
+
+        return [], {"primary_axis": "depth", "depth_source": "none"}
 
     def load_age_depth_diagram(
         self,
@@ -139,11 +242,10 @@ class AgeDepthSessionMixin:
         cal_curve: str = "IntCal20",
         notes: str = "",
         depth_range: list[float] | tuple[float, float] | None = None,
-        resample_step: float | None = None,
         depth_log: bool = False,
         age_log: bool = False,
         exclude_boxes: list[list[float]] | None = None,
-        age_increases_downcore: bool = True,
+        age_increases_downcore: bool | None = None,
         age_is_calendar_year: bool = True,
         rate_columns: list[str] | None = None,
         curve_channel: str = "auto",
@@ -190,7 +292,6 @@ class AgeDepthSessionMixin:
             cal_curve=cal_curve,
             notes=notes,
             depth_range=depth_range,
-            resample_step=resample_step,
             exclude_mask=exclude_mask,
             age_increases_downcore=age_increases_downcore,
             curve_channel=curve_channel,
@@ -206,9 +307,6 @@ class AgeDepthSessionMixin:
             "age_unit": age_unit,
             "cal_curve": cal_curve,
             "depth_range": list(depth_range) if depth_range else None,
-            "resample_step": float(resample_step)
-            if resample_step is not None
-            else None,
             "depth_log": bool(depth_log),
             "age_log": bool(age_log),
             "exclude_boxes": [list(b) for b in (exclude_boxes or [])],
@@ -221,22 +319,13 @@ class AgeDepthSessionMixin:
             c for c in (rate_columns or []) if c in AGE_DEPTH_RATE_COLUMNS
         ]
 
-        # Harmonize with current pollen sample depths if available
-        sample_depths = []
-        if self.column_points and self.is_calibrated and self.y_scale:
-            all_r = sorted(
-                {p["row"] for pts in self.column_points.values() for p in pts}
-            )
-            sy = self.y_scale["slope"]
-            iy = self.y_scale["intercept"]
-            sample_depths = [round(sy * r + iy, 2) for r in all_r]
-        elif self.depth_grid:
-            sample_depths = [round(float(d), 2) for d in self.depth_grid]
-        elif len(model.depths) > 0:
-            step_stride = max(1, len(model.depths) // 30)
-            sample_depths = [round(float(d), 2) for d in model.depths[::step_stride]]
-
+        # Harmonize with current pollen sample depths if available. When the diagram's Y
+        # axis is declared as age, this is also where the model is inverted to recover
+        # those samples' depths.
+        sample_depths, depth_provenance = self.sample_depths_for_model(model)
         mapped_samples = model.predict_age(sample_depths) if sample_depths else None
+        if mapped_samples:
+            mapped_samples["depth_provenance"] = depth_provenance
 
         ensemble_info = None
         if sample_depths and not age_is_calendar_year:
@@ -286,6 +375,21 @@ class AgeDepthSessionMixin:
             mapped_samples["px_x_curve"] = [
                 round(float(calibrator.age2px(a)), 1) for a in calib_year_ages
             ]
+            # Attach the windowed regression rate with its standard error. The pointwise
+            # derivative already present in ``rate`` has no uncertainty and lapses to null
+            # wherever isotonic pooling flattened the curve; this is the estimate a user can
+            # actually report. Failure is surfaced, not silently skipped: a missing error bar
+            # is a different claim from "the error bar is zero".
+            try:
+                mapped_samples["sedimentation"] = model.estimate_sedimentation_rate(
+                    mapped_samples["depths"]
+                )
+            except ValueError as exc:
+                mapped_samples["sedimentation"] = {
+                    "error": str(exc),
+                    "sed_rate": [],
+                    "sed_rate_se": [],
+                }
 
         return {
             "status": "extracted",
@@ -419,21 +523,10 @@ class AgeDepthSessionMixin:
 
         self.age_depth_model = model
 
-        sample_depths = []
-        if self.column_points and self.is_calibrated and self.y_scale:
-            all_r = sorted(
-                {p["row"] for pts in self.column_points.values() for p in pts}
-            )
-            sy = self.y_scale["slope"]
-            iy = self.y_scale["intercept"]
-            sample_depths = [round(sy * r + iy, 2) for r in all_r]
-        elif self.depth_grid:
-            sample_depths = [round(float(d), 2) for d in self.depth_grid]
-        elif len(model.depths) > 0:
-            step_stride = max(1, len(model.depths) // 30)
-            sample_depths = [round(float(d), 2) for d in model.depths[::step_stride]]
-
+        sample_depths, depth_provenance = self.sample_depths_for_model(model)
         mapped_samples = model.predict_age(sample_depths) if sample_depths else None
+        if mapped_samples:
+            mapped_samples["depth_provenance"] = depth_provenance
 
         if sample_depths and getattr(self, "age_depth_is_calendar_year", True):
             ensemble_table = model.generate_age_ensemble(
@@ -502,18 +595,24 @@ class AgeDepthSessionMixin:
             )
             self.age_depth_model = model
 
-            sample_depths = []
+            # This path keeps its historical priority (explicit depth grid first) rather
+            # than unifying with the extraction path: changing it would silently alter
+            # which horizons a Bacon run reports, which is outside this change.
+            depth_provenance: dict[str, Any] = {
+                "primary_axis": "depth",
+                "depth_source": "explicit depth grid" if self.depth_grid else "none",
+            }
+            sample_depths: list[float] = []
             if self.depth_grid:
                 sample_depths = [round(float(d), 2) for d in self.depth_grid]
             elif self.column_points and self.is_calibrated and self.y_scale:
-                all_r = sorted(
-                    {p["row"] for pts in self.column_points.values() for p in pts}
-                )
-                sy = self.y_scale["slope"]
-                iy = self.y_scale["intercept"]
-                sample_depths = [round(sy * r + iy, 2) for r in all_r]
+                # Same Y-axis semantics as the extraction path: with the axis declared as
+                # age, the model is inverted to recover the samples' depths.
+                sample_depths, depth_provenance = self.sample_depths_for_model(model)
 
             mapped_samples = model.predict_age(sample_depths) if sample_depths else None
+            if mapped_samples:
+                mapped_samples["depth_provenance"] = depth_provenance
             res["inspection"] = model.to_inspection_data()
             res["mapped_samples"] = mapped_samples
 
@@ -603,14 +702,12 @@ class AgeDepthSessionMixin:
                 CALIBRATION_ERROR, "No age-depth model extracted in current session."
             )
 
-        sample_depths = []
+        # The fallback here stays "every model horizon" (not the thinned sample used by
+        # extraction): an explicit ensemble request should cover the whole curve.
         if self.column_points and self.is_calibrated and self.y_scale:
-            all_r = sorted(
-                {p["row"] for pts in self.column_points.values() for p in pts}
+            sample_depths, _depth_provenance = self.sample_depths_for_model(
+                self.age_depth_model
             )
-            sy = self.y_scale["slope"]
-            iy = self.y_scale["intercept"]
-            sample_depths = [round(sy * r + iy, 2) for r in all_r]
         elif self.depth_grid:
             sample_depths = self.depth_grid
         else:

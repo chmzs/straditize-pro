@@ -31,7 +31,7 @@ from ..protocol import (
     STATE_ERROR,
     JsonRpcError,
 )
-from .agedepth import build_age_depth_frame
+from .agedepth import attach_windowed_rates, build_age_depth_frame
 from .xscale import resolve_column_scale
 
 
@@ -569,13 +569,33 @@ class ExportMixin:
         y_marks: list[dict[str, float]],
         x_marks: list[dict[str, float]] | None = None,
         unit: str | None = None,
+        primary_axis: str | None = None,
     ) -> dict[str, Any]:
-        """Calibrates pixel coordinates into scientific depth/age and percentage units."""
+        """Calibrates pixel coordinates into scientific depth/age and percentage units.
+
+        ``primary_axis`` declares what the Y axis MEASURES, because that is not derivable
+        from ``unit``: "cm"/"m" imply depth and "cal BP"/"ka" imply age only for the
+        conventional spellings, and a wrong guess silently mis-maps every sample in the
+        core. ``"depth"`` (default) keeps the existing behaviour untouched; ``"age"``
+        makes the age-depth pipeline read sample ages off the Y axis and invert the
+        age-depth model to recover their depths.
+        """
         if not y_marks or len(y_marks) < 2:
             raise JsonRpcError(
                 INVALID_PARAMS,
                 "y_marks must contain at least 2 calibration points: [{'pixel': p, 'val': v}, ...]",
             )
+
+        if primary_axis is None:
+            resolved_axis = self.primary_axis
+        else:
+            candidate = str(primary_axis).strip().lower()
+            if candidate not in ("depth", "age"):
+                raise JsonRpcError(
+                    INVALID_PARAMS,
+                    f"primary_axis must be 'depth' or 'age' (got {primary_axis!r}).",
+                )
+            resolved_axis = candidate
 
         y_pixels = np.array(
             [m.get("pixel") if "pixel" in m else m.get("px") for m in y_marks],
@@ -644,10 +664,16 @@ class ExportMixin:
                 self.x_scales[c_idx] = {"slope": float(sx), "intercept": float(ix)}
 
         self.is_calibrated = True
+        self.primary_axis = resolved_axis
+        if self.depth_calib is not None:
+            self.depth_calib["primary_axis"] = resolved_axis
         return {
             "status": "calibrated",
             "y_scale": self.y_scale,
             "x_scales": {str(k): v for k, v in self.x_scales.items()},
+            # Echoed so the caller can confirm what the axis will be read as, instead of
+            # trusting that its request was accepted.
+            "primary_axis": resolved_axis,
         }
 
     def export_data(
@@ -1077,6 +1103,9 @@ class ExportMixin:
         ):
             depths = pollen_df["depth"].tolist()
             pred = self.age_depth_model.predict_age(depths)
+            pred = attach_windowed_rates(
+                pred, self.age_depth_model, getattr(self, "age_depth_rate_columns", [])
+            )
             age_depth_df = build_age_depth_frame(
                 pred,
                 getattr(self, "age_depth_rate_columns", []),
@@ -1130,6 +1159,9 @@ class ExportMixin:
         ):
             depths = pollen_df["depth"].tolist()
             pred = self.age_depth_model.predict_age(depths)
+            pred = attach_windowed_rates(
+                pred, self.age_depth_model, getattr(self, "age_depth_rate_columns", [])
+            )
             age_depth_df = build_age_depth_frame(
                 pred,
                 getattr(self, "age_depth_rate_columns", []),

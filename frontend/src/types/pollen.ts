@@ -230,6 +230,13 @@ export interface DepthCalibration {
   bottom_px: number | null; // 下方参考点的图像像素 Y
   bottom_cm: number | null; // 下方参考点的真实值
   unit: string;
+  /**
+   * What the Y axis MEASURES. Declared by the user, never inferred from `unit`:
+   * "cm"/"m" imply depth and "cal BP"/"ka" imply age only for the conventional
+   * spellings, and a wrong guess moves every sample to a plausible-but-wrong position.
+   * `"age"` means sample depths are recovered by inverting the age-depth model.
+   */
+  primaryAxis?: 'depth' | 'age';
   depthInterval?: number;
   depthGridEnabled?: boolean;
   customDepths?: number[]; // 用户从 Excel 粘贴的真实非等距深度层位序列

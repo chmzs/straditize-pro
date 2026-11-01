@@ -53,8 +53,47 @@ def _synthetic_column(
     return gray
 
 
+def _column_with_spine(
+    *,
+    width: int = 80,
+    height: int = 140,
+    axis_y: int = 110,
+    spine_x: int = 12,
+    stroke: int = 3,
+    ticks: tuple[int, ...] = (30, 50, 70),
+) -> np.ndarray:
+    """白色底 + 横轴 + **贯穿全高的竖向轴线（spine）** + 轴下刻线。
+
+    用于验证「数据 0 点 = 轴线」这一条：面积/柱状图的填充从轴线起画，
+    所以轴线位置必须实测，不能拿列切分给的 ``start`` 当 0 点。
+    """
+    gray = np.full((height, width), 255, dtype=np.uint8)
+    gray[axis_y, :] = 0
+    gray[:, spine_x : spine_x + stroke] = 0
+    below = TICK_SEARCH_BELOW
+    for x in ticks:
+        if x < width:
+            for dy in range(below[0], below[1]):
+                gray[axis_y + dy, x] = 0
+    return gray
+
+
 class TestGeometryOnSynthetic:
     """几何检测在真值已知的合成图上必须精确。"""
+
+    def test_axis_x_is_measured_not_guessed(self) -> None:
+        """数据 0 点必须是实测轴线右缘，而不是列切分给的 start。"""
+        gray = _column_with_spine(spine_x=12, stroke=3, ticks=(30, 50, 70))
+        got = detect_ruler(gray, 4, 76)
+        assert got["axis_x"] == 12, f"轴线左缘应为 12，实际 {got['axis_x']}"
+        assert got["axis_x_right"] == 14, f"轴线右缘应为 14（12+3-1），实际 {got['axis_x_right']}"
+
+    def test_axis_x_none_when_no_vertical_spine(self) -> None:
+        """只有横向轴、没有竖向轴线时必须返回 None —— 调用方据此退回 startX。"""
+        gray = _synthetic_column(ticks=(5, 17, 29, 42))
+        got = detect_ruler(gray, 0, 60)
+        assert got["axis_x"] is None
+        assert got["axis_x_right"] is None
 
     def test_cells_and_spacing_exact(self) -> None:
         gray = _synthetic_column(ticks=(5, 17, 29, 42), major_every=2)

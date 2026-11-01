@@ -53,6 +53,66 @@ def _contiguous_runs(mask: np.ndarray) -> list[tuple[int, int]]:
     return [(int(idx[s]), int(idx[e])) for s, e in zip(starts, ends)]
 
 
+def _observed_age_direction(
+    depths: np.ndarray, ages: np.ndarray, max_pairs: int = 4000
+) -> tuple[bool, str]:
+    """Reads which way age moves with depth, from the traced curve itself.
+
+    The direction is a property of the drawn curve, not of the axes. The calibration points
+    only say what a pixel *means* on each axis; along a curve the age changes as
+    ``d(age)/dy = (d(age)/dx) * (dx/dy)``, and ``dx/dy`` belongs to the curve. Deciding from
+    the axis signs alone therefore misfires on real figures: ``bacon_szek.png`` calibrates to
+    "age grows leftwards" and "depth grows downwards", which reads as age decreasing
+    downcore, yet its curve runs from x=803 at the surface to x=110 at 150 cm, so age
+    increases downcore with 680 rows of support.
+
+    The estimator is the median of pairwise slopes, which is robust to the two things that
+    break a naive endpoint comparison:
+
+    * local inversions from tracer jitter and from the isotonic fit that has not run yet;
+    * long flat segments where the trace held a single column (a plateau has slope zero and
+      would otherwise drag an endpoint sign towards noise).
+
+    Returns
+    -------
+    (increases_downcore, reason)
+        ``reason`` quotes the median slope and the fraction of pairs agreeing, so an
+        unexpected verdict can be audited instead of taken on faith.
+    """
+    dep = np.asarray(depths, dtype=float)
+    age = np.asarray(ages, dtype=float)
+    finite = np.isfinite(dep) & np.isfinite(age)
+    dep, age = dep[finite], age[finite]
+    if dep.size < 3:
+        return True, "assumed to increase downcore: too few finite points to judge"
+
+    # Sample pairs rather than all O(n^2), deterministically, so a long trace stays cheap.
+    n = dep.size
+    stride = max(1, n // 64)
+    anchor_idx = np.arange(0, n, stride)
+    other_idx = np.arange(0, n, max(1, stride // 2))
+    di = anchor_idx[:, None] - other_idx[None, :]
+    ai = age[anchor_idx][:, None] - age[other_idx][None, :]
+    keep = np.abs(di) > 1e-9
+    if not keep.any():
+        return True, "assumed to increase downcore: every sampled pair shares a depth"
+    slopes = ai[keep] / di[keep]
+    if slopes.size > max_pairs:
+        pick = np.linspace(0, slopes.size - 1, max_pairs).astype(int)
+        slopes = slopes[pick]
+
+    median_slope = float(np.median(slopes))
+    rising = slopes > 0
+    agreement = float(rising.mean()) if median_slope >= 0 else float((~rising).mean())
+    increases = median_slope >= 0
+    reason = (
+        f"read from the traced curve: median pairwise slope {median_slope:+.4g} "
+        f"({'age rises' if increases else 'age falls'} as depth grows, "
+        f"{agreement:.0%} of sampled pairs agree)"
+    )
+    return increases, reason
+
+
 def _otsu_threshold(values: np.ndarray, nbins: int = 128) -> float:
     """Otsu's between-class variance maximisation on a 1-D sample."""
     if values.size == 0:
@@ -157,12 +217,11 @@ def extract_age_depth_model(
     cal_curve: str = "IntCal20",
     notes: str = "",
     depth_range: tuple[float, float] | list[float] | None = None,
-    resample_step: float | None = None,
     exclude_mask: np.ndarray | None = None,
     dark_threshold: float | None = None,
     loose_threshold: float = 240.0,
     enforce_monotonic: bool = True,
-    age_increases_downcore: bool = True,
+    age_increases_downcore: bool | None = None,
     curve_channel: str = "auto",
     retain_frac: float = 0.30,
 ) -> AgeDepthModel:
@@ -206,8 +265,6 @@ def extract_age_depth_model(
         Optional (min_depth, max_depth) clip applied *in scientific depth units*,
         independent of the calibration points, so a user may calibrate against the full
         axis while extracting only the analysed section.
-    resample_step:
-        Optional regular depth grid spacing. ``None`` keeps the native per-row sampling.
     exclude_mask:
         Optional boolean array shaped like the image; ``True`` marks pixels to ignore
         (equivalent to an eraser brush over labels, legends or dating-point panels).
@@ -220,9 +277,14 @@ def extract_age_depth_model(
     age_increases_downcore:
         Direction of that monotonicity. ``True`` for BP-style axes ("cal yr BP", "ka BP",
         "yr b2k"), which increase downcore; ``False`` for AD/CE-style axes, which increase
-        upcore so age decreases downcore. Getting this wrong applies the prior backwards
-        and flattens a valid chronology, so it is declared rather than guessed from the
-        unit label.
+        upcore so age decreases downcore.
+
+        ``None`` (default) deduces it from the four calibration points, which already fix
+        the sign of d(age)/d(depth) -- see
+        ``AgeDepthAxisCalibrator.infer_age_increases_downcore``. A caller may still force
+        either direction to override the deduction on an unusual figure. The resolved value
+        and the reasoning are reported on the returned model via
+        ``age_increases_downcore`` / ``age_direction_reason``.
     curve_channel:
         Which response locates the median line.
 
@@ -706,21 +768,45 @@ def extract_age_depth_model(
     min_sorted = true_min[order]
     max_sorted = true_max[order]
 
-    # The prior is "age moves monotonically with depth", but *which way* depends on the age
-    # convention, not just on the depth axis. A BP-style axis ("cal yr BP", "ka BP", "b2k")
-    # increases downcore; an AD/CE-style axis increases upcore, so age decreases downcore.
-    # Assuming BP for an AD figure would apply isotonic regression in the wrong direction
-    # and flatten a valid chronology into a ramp, so the caller declares the convention.
+    # The prior is "age moves monotonically with depth". Which way it moves is a property of
+    # the traced curve, NOT of the axes: the calibration only says what a pixel means, while
+    # the direction in depth-age space comes from which way the drawn curve runs. Two figures
+    # with identical axis directions can trace opposite directions. So the default reads the
+    # curve itself -- robustly, by the sign of the median pairwise slope over the whole trace
+    # -- and the caller may force either direction or let the curve decide (the default).
     depth_increases_downward = calibrator.depth_cal.px2data(
         1.0
     ) >= calibrator.depth_cal.px2data(0.0)
-    ascending = depth_increases_downward == bool(age_increases_downcore)
+
+    # Median of pairwise slopes over a subsample: insensitive to local wiggles and to the
+    # flat segments an envelope-boundary trace leaves behind, unlike a bare endpoint sign.
+    observed_direction, observed_reason = _observed_age_direction(
+        depths_sorted, ages_sorted
+    )
+
+    if age_increases_downcore is None:
+        resolved_direction = observed_direction
+        direction_reason = observed_reason
+    else:
+        resolved_direction = bool(age_increases_downcore)
+        if observed_direction == resolved_direction:
+            direction_reason = (
+                f"forced by the caller, agreeing with the traced curve ({observed_reason})"
+            )
+        else:
+            direction_reason = (
+                f"forced by the caller against the traced curve, which "
+                f"{'increases' if observed_direction else 'decreases'} downcore "
+                f"({observed_reason})"
+            )
+
+    ascending = depth_increases_downward == resolved_direction
 
     if enforce_monotonic and ages_sorted.size >= 3:
         # Guard against a misdeclared age direction. Isotonic regression happily "fixes"
         # data that runs the other way by flattening it, which would return a degenerate
         # constant chronology with no signal that anything was wrong. Check the raw trend
-        # against the declaration first and refuse instead.
+        # against the direction first and refuse instead.
         raw_diffs = np.diff(ages_sorted)
         agreement = (
             float((raw_diffs >= 0).mean())
@@ -728,16 +814,17 @@ def extract_age_depth_model(
             else float((raw_diffs <= 0).mean())
         )
         if agreement < 0.55:
-            declared = "increases" if age_increases_downcore else "decreases"
+            declared = "increases" if resolved_direction else "decreases"
             observed = (
                 "decreases" if float((raw_diffs >= 0).mean()) < 0.5 else "increases"
             )
             raise ValueError(
-                f"Declared age direction contradicts the figure: the calibration says age "
-                f"{declared} downcore, but the extracted curve {observed} downcore "
-                f"({agreement:.0%} of adjacent horizons agree). Check whether the age axis "
-                f"is BP-style (increasing downcore) or AD/CE-style (increasing upcore), or "
-                f"whether the two age calibration points are swapped."
+                f"The curve contradicts the age direction ({direction_reason}): the "
+                f"calibration says age {declared} downcore, but the extracted curve "
+                f"{observed} downcore ({agreement:.0%} of adjacent horizons agree). Either "
+                f"the two age calibration points are on the wrong ticks, or the trace "
+                f"locked onto the wrong stroke -- check the channel diagnostic, and force "
+                f"the direction explicitly if the figure really runs the other way."
             )
 
         target = ages_sorted if ascending else ages_sorted[::-1]
@@ -791,59 +878,10 @@ def extract_age_depth_model(
     model.observed_row_fraction = round(float(observed_fraction), 4)
     #: How the search region was derived, so a fallback to the weaker basis is visible.
     model.roi_source = roi_source
+    #: The resolved age direction and why, so a deduction is auditable in the UI instead of
+    #: being an invisible default. The UI shows this and offers it as a manual override.
+    model.age_increases_downcore = bool(resolved_direction)
+    model.age_direction_reason = direction_reason
 
-    # ---- 13. Optional regular depth grid -----------------------------------
-    if resample_step is not None and float(resample_step) > 0:
-        step = float(resample_step)
-        if depth_range is not None and len(depth_range) == 2:
-            d_lo, d_hi = sorted(float(v) for v in depth_range)
-        else:
-            d_lo = float(np.min(model.depths))
-            d_hi = float(np.max(model.depths))
-
-        # Never resample outside the depth range actually traced: the pixel tracks cannot
-        # be interpolated beyond the rows the curve occupies.
-        traced_lo = float(np.min(model.depths))
-        traced_hi = float(np.max(model.depths))
-        d_lo = max(d_lo, traced_lo)
-        d_hi = min(d_hi, traced_hi)
-
-        n_pts = int(np.floor((d_hi - d_lo) / step)) + 1
-        if n_pts >= 2:
-            grid = d_lo + step * np.arange(n_pts, dtype=float)
-            pred = model.predict_age(grid)
-            resampled = AgeDepthModel(
-                depths=grid,
-                ages=np.asarray(pred["age_est"], dtype=float),
-                age_min=np.asarray(pred["age_min"], dtype=float),
-                age_max=np.asarray(pred["age_max"], dtype=float),
-                curve_type=curve_type,
-                envelope_type=envelope_type,
-                depth_unit=calibrator.depth_unit,
-                age_unit=calibrator.age_unit,
-                cal_curve=cal_curve,
-                notes=notes,
-                # Keep the figure's native sampling for interpolation and ensemble fitting:
-                # the requested step is an output format, not a property of the diagram.
-                analysis_depths=model.depths,
-                analysis_ages=model.ages,
-                analysis_age_min=model.age_min,
-                analysis_age_max=model.age_max,
-            )
-            # Resample the pixel tracks onto the SAME grid. Keeping the native-resolution
-            # tracks here would leave px_points and depths at different lengths, and a
-            # consumer indexing one with the other's position would silently mis-read.
-            grid_rows = np.asarray(calibrator.depth2px(grid), dtype=float)
-            resampled.px_y = grid_rows
-            resampled.px_x_curve = np.interp(grid_rows, model.px_y, model.px_x_curve)
-            resampled.px_x_min = np.interp(grid_rows, model.px_y, model.px_x_min)
-            resampled.px_x_max = np.interp(grid_rows, model.px_y, model.px_x_max)
-            # Diagnostics must survive resampling too, otherwise a caller reading
-            # `curve_channel` off a resampled model silently gets the class default.
-            resampled.curve_channel = model.curve_channel
-            resampled.curve_channel_reason = model.curve_channel_reason
-            resampled.observed_row_fraction = model.observed_row_fraction
-            resampled.roi_source = model.roi_source
-            return resampled
 
     return model

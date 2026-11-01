@@ -345,6 +345,123 @@ const GLOSS_BAN = [
   check(bareHex.length === 0, '内联 style 不得出现裸 hex 色值（不随主题切换，浅色主题必然失真）：' + bareHex.slice(0, 4).join('、'));
 }
 
+// ---- 14b. JS 里 element.style.* 写色同样不得出现裸 hex ----------------------
+// 第 14 组只扫 `style="..."` 这种文本形式，扫不到 `el.style.color = '#10b981'`。
+// 这正是「前面没统一好」的漏洞：徽章状态色、安装引导描边都写成裸 hex，
+// 浅色主题下它们是深色主题的值（#10b981 应为 #047857、#38bdf8 应为 #0284c7），
+// 在浅底上对比度不足，看起来"不协调"。
+//
+// 豁免与项目既有规则一致：**canvas 叠加层例外**——ctx.fillStyle / ctx.strokeStyle
+// 画在图上方而非页面底色上，必须固定高对比色，不参与主题切换。
+{
+  const DOM_STYLE_PROPS =
+    /\.style\.(color|background|backgroundColor|border|borderColor|borderTopColor|borderBottomColor|outline|outlineColor|fill|stroke|boxShadow)\s*=\s*(['"`])([^'"`]*)\2/g;
+  const HEXCHARS = '0123456789abcdefABCDEF';
+  // 唯一豁免：离线横幅（services/ProvenanceGate.ts）的 #b91c1c / #fff。
+  // 它盖在最上层提示"后端已断开"，必须与任何主题都保持同一对固定高对比色，且
+  // #b91c1c 没有等值 token，只 token 化一半会更糟——这是 HANDOFF 黑名单里记录过的
+  // 决定，不是贪方便。除这两个精确值外不接受任何豁免。
+  const ALLOWED_OFFLINE_BANNER = new Set([
+    'src/services/ProvenanceGate.ts|#b91c1c',
+    'src/services/ProvenanceGate.ts|#fff',
+  ]);
+  const jsHexOffenders = [];
+  const scanJsStyleHex = (label, text) => {
+    let m;
+    while ((m = DOM_STYLE_PROPS.exec(text)) !== null) {
+      // var(--token, #fallback) 里的 hex 是 token 兜底，允许。
+      const cleaned = m[3].replace(/var\([^)]*\)/g, '');
+      let i = 0;
+      while (i < cleaned.length) {
+        if (cleaned[i] !== '#') { i++; continue; }
+        let j = i + 1;
+        while (j < cleaned.length && HEXCHARS.indexOf(cleaned[j]) !== -1) j++;
+        const size = j - i - 1;
+        if (size === 3 || size === 4 || size === 6 || size === 8) {
+          const hex = cleaned.slice(i, j);
+          const key = label.split(String.fromCharCode(92)).join('/') + '|' + hex;
+          if (!ALLOWED_OFFLINE_BANNER.has(key)) {
+            const lineNo = text.slice(0, m.index).split(String.fromCharCode(10)).length;
+            jsHexOffenders.push(
+              label + ':' + lineNo + ' document.style 写死 ' + hex + '，请改用 var(--token)'
+            );
+          }
+        }
+        i = j;
+      }
+    }
+  };
+  const jsStack = ['./src'];
+  while (jsStack.length > 0) {
+    const dir = jsStack.pop();
+    for (const name of readdirSync(dir)) {
+      const full = dir + '/' + name;
+      if (statSync(full).isDirectory()) { if (name !== 'node_modules') jsStack.push(full); continue; }
+      if (!name.endsWith('.ts')) continue;
+      scanJsStyleHex(relative(ROOT, full), readFileSync(full, 'utf8'));
+    }
+  }
+  check(
+    jsHexOffenders.length === 0,
+    'element.style.* 不得写死 hex（不随主题切换；canvas 的 ctx.fillStyle/strokeStyle 属叠加层例外，不在本检查内）：' + jsHexOffenders.slice(0, 4).join('、'),
+  );
+}
+
+
+// ---- 14c. 必须声明 color-scheme，否则原生控件跟随操作系统而非应用主题 ---------
+// 用户截图：浅色主题下工具栏「示例」下拉弹出**深色导航蓝列表**。根因不是某个色值写错，
+// 而是全站没有 color-scheme —— 那时 <select> 弹层、滚动条、复选框、日期选择器都由
+// 操作系统绘制，系统深色 + 应用浅色就必然错位。选项自身的背景另需 token（见 14b 的
+// 姊妹规则：.sample-select option 曾写死 #0f172a 且无浅色覆盖，已改 var(--bg-secondary)）。
+{
+  const css = read('./src/style.css');
+  const rootBlock = css.match(/:root\s*\{([\s\S]*?)\n\}/);
+  const lightBlock = css.match(/body\.theme-light\s*\{([\s\S]*?)\n\}/);
+  check(
+    Boolean(rootBlock) && /color-scheme:\s*dark/.test(rootBlock[1]),
+    ':root 必须声明 color-scheme: dark，否则原生下拉弹层/滚动条跟随操作系统',
+  );
+  check(
+    Boolean(lightBlock) && /color-scheme:\s*light/.test(lightBlock[1]),
+    'body.theme-light 必须声明 color-scheme: light，否则浅色主题下原生控件仍是深色',
+  );
+  // 选项背景不得写死深色：浅色主题下会得到深色菜单项
+  check(
+    !/\.sample-select option[^{]*\{[^}]*background:\s*#0f172a/.test(css),
+    '.sample-select option 不得写死 #0f172a 背景，请用 var(--bg-secondary)',
+  );
+}
+
+// ---- 14d. 级联层声明 + `!important` 棘轮（只减不增）-------------------------
+// `style.css` 引入 @layer 之前有 190 处 !important，全部是因为"没有层，只能靠
+// !important 抢优先级"。分层之后新规则应放进 @layer utilities 天然覆盖组件规则，
+// 不再需要 !important。
+//
+// 这里不做"清零"（那是 3636 行的独立治理任务，且分层后 !important 的跨层优先级是
+// **反的**——低层 important 胜高层 important，批量删会静默改掉渲染），只做棘轮：
+// 每真正减少一批，就把 CEILING 手动调低，从此不许回涨。
+{
+  const css = read('./src/style.css');
+  const CEILING = 190;
+
+  check(
+    /@layer base, components, utilities;/.test(css),
+    'style.css 顶部必须声明 `@layer base, components, utilities;`，否则不存在 utilities 层可放新规则',
+  );
+
+  const layerCount = (css.match(/@layer /g) || []).length;
+  check(
+    layerCount >= 3,
+    `至少要声明并包裹三层（当前 @layer 出现 ${layerCount} 次）：tokens→base、现有规则→components，utilities 留给新规则`,
+  );
+
+  const count = (css.match(/!important/g) || []).length;
+  check(
+    count <= CEILING,
+    `!important 只减不增（当前 ${count} > 上限 ${CEILING}）。新规则请放进 @layer utilities，不要再用 !important`,
+  );
+}
+
 // 15. 模态框原语唯一化：header/footer 只挂 ui-modal__* 原语，legacy 类名与选择器一律不得回流
 // 注（批次 G-e 后）：`modal-header` / `modal-footer` 已全部替换（4 个弹窗并入原语），本组由
 // 「禁混挂」升级为「禁出现」——DOM class 与 CSS 选择器两侧都守。弹窗主体（`modal-body` →
@@ -446,16 +563,20 @@ const GLOSS_BAN = [
     const [hi, lo] = [relLum(a), relLum(b)].sort((m, n) => n - m);
     return (hi + 0.05) / (lo + 0.05);
   };
-  // 取选择器后面的第一个平铺声明块（token 块都是平铺的，无嵌套）
+  // 取选择器后面的第一个平铺声明块（token 块都是平铺的，无嵌套）。
+  // 必须先剥掉注释：`style.css` 顶部的分层说明里就写着 `:root` / `body.theme-light`，
+  // 直接扫原文会命中注释里的字样，取到的"浅色块"实际是紧随其后的深色 token 块，
+  // 于是三条对比度断言报"浅色未按主题重定义"——假红，且原因与被测对象无关。
+  const cssForBlocks = css.replace(/\/\*[\s\S]*?\*\//g, '');
   const blocksOf = (selector) => {
     const out = [];
-    let at = css.indexOf(selector);
+    let at = cssForBlocks.indexOf(selector);
     while (at >= 0) {
-      const open = css.indexOf('{', at);
-      const close = css.indexOf('}', open);
+      const open = cssForBlocks.indexOf('{', at);
+      const close = cssForBlocks.indexOf('}', open);
       if (open < 0 || close < 0) break;
-      out.push(css.slice(open + 1, close));
-      at = css.indexOf(selector, close);
+      out.push(cssForBlocks.slice(open + 1, close));
+      at = cssForBlocks.indexOf(selector, close);
     }
     return out;
   };

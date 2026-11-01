@@ -525,7 +525,8 @@ async function bootstrap() {
   async function applyDepthCalibration(
     marks: Point2D[],
     values: number[],
-    unit: string
+    unit: string,
+    primaryAxis: 'depth' | 'age' = 'depth'
   ): Promise<void> {
     const cal = canvasComponent.data.calibration;
     try {
@@ -534,7 +535,8 @@ async function bootstrap() {
           { pixel: marks[0].y, value: values[0] },
           { pixel: marks[1].y, value: values[1] },
         ],
-        unit
+        unit,
+        primaryAxis
       );
       const previous = { ...cal };
       canvasComponent.data.calibration = { ...res.canvas, depthInterval: cal.depthInterval, depthGridEnabled: cal.depthGridEnabled };

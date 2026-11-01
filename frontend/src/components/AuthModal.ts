@@ -24,7 +24,7 @@ export class AuthModal {
       (isLight ? 'rgba(241,245,249,0.92)' : 'rgba(15,23,42,0.93)') + ';';
 
     overlay.innerHTML = `
-      <div class="modal-dialog auth-dialog" style="width: min(420px, 92vw); padding: 28px 24px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--border-color); box-shadow: 0 20px 40px rgba(0,0,0,0.4); text-align: center; display: flex; flex-direction: column; gap: 16px;">
+      <div class="modal-dialog auth-dialog" style="--modal-width: 420px; padding: 28px 24px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--border-color); box-shadow: 0 20px 40px rgba(0,0,0,0.4); text-align: center; display: flex; flex-direction: column; gap: 16px;">
         <div>
           <h3 style="margin: 0 0 6px; font-size: 16px; font-weight: 700; color: var(--text-heading);">${t('auth.title')}</h3>
           <p style="margin: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.5;">${t('auth.desc')}</p>

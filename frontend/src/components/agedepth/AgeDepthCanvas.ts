@@ -72,6 +72,103 @@ export class AgeDepthCanvas {
     this.callbacks = callbacks;
 
     this.bindInteractions();
+    this.bindPaneSplitter();
+  }
+
+  /**
+   * Lets the user drag the divider to re-balance the image pane against the control column.
+   *
+   * The control column used to be a fixed 330px, which on a 1920px display left the image
+   * pane narrower than half the screen -- the figure being digitised is the thing that needs
+   * room, and its aspect ratio is not knowable in advance, so a fixed split is always wrong
+   * for somebody. The chosen width is persisted per browser so it survives reopening the
+   * dialog, and double-clicking the divider restores the default.
+   */
+  private bindPaneSplitter(): void {
+    const splitter = this.container.querySelector('#ad-pane-splitter') as HTMLElement | null;
+    const pane = this.container.querySelector('.ad-control-pane') as HTMLElement | null;
+    const shell = this.container.querySelector('.agedepth-dialog') as HTMLElement | null;
+    if (!splitter || !pane || !shell) return;
+
+    const STORAGE_KEY = 'straditize.agedepth.paneWidth';
+    const DEFAULT_PX = 330;
+    const MIN_PANE = 260;
+    // Never let the control column eat the image pane: cap it at 60% of the dialog.
+    const maxPane = () => Math.max(MIN_PANE, shell.clientWidth * 0.6);
+
+    const apply = (px: number) => {
+      const clamped = Math.round(Math.min(maxPane(), Math.max(MIN_PANE, px)));
+      pane.style.setProperty('--ad-pane-width', `${clamped}px`);
+      return clamped;
+    };
+
+    const stored = Number(window.localStorage.getItem(STORAGE_KEY));
+    if (Number.isFinite(stored) && stored >= MIN_PANE) apply(stored);
+
+    let dragging = false;
+    const onMove = (e: MouseEvent) => {
+      if (!dragging) return;
+      // Width is measured from the dialog's right edge, since the pane is the last column.
+      const rect = shell.getBoundingClientRect();
+      apply(rect.right - e.clientX);
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      splitter.classList.remove('is-dragging');
+      document.body.classList.remove('ad-pane-resizing');
+      const current = Number.parseFloat(
+        pane.style.getPropertyValue('--ad-pane-width') || ''
+      );
+      if (Number.isFinite(current)) {
+        window.localStorage.setItem(STORAGE_KEY, String(Math.round(current)));
+      }
+      // The canvas backing store follows the container size, so re-measure after the drag.
+      this.renderCanvas();
+    };
+
+    splitter.addEventListener('mousedown', (e) => {
+      dragging = true;
+      splitter.classList.add('is-dragging');
+      document.body.classList.add('ad-pane-resizing');
+      e.preventDefault();
+    });
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+
+    splitter.addEventListener('dblclick', () => {
+      window.localStorage.removeItem(STORAGE_KEY);
+      apply(DEFAULT_PX);
+      this.renderCanvas();
+    });
+
+    // Keyboard access: 8px of pointer target is not the only way in.
+    splitter.addEventListener('keydown', (e) => {
+      const current = Number.parseFloat(
+        pane.style.getPropertyValue('--ad-pane-width') || ''
+      ) || DEFAULT_PX;
+      if (e.key === 'ArrowLeft') {
+        apply(current + 24);
+        e.preventDefault();
+      } else if (e.key === 'ArrowRight') {
+        apply(current - 24);
+        e.preventDefault();
+      } else if (e.key === 'Home') {
+        apply(DEFAULT_PX);
+        e.preventDefault();
+      }
+    });
+
+    // Shrinking the dialog must not leave the control column holding 60% of it: the stored
+    // absolute width has to be re-clamped against the new cap.
+    const onResize = () => {
+      const current = Number.parseFloat(
+        pane.style.getPropertyValue('--ad-pane-width') || ''
+      );
+      if (Number.isFinite(current)) apply(current);
+      this.renderCanvas();
+    };
+    window.addEventListener('resize', onResize);
   }
 
   // --- Getters & Setters ---
@@ -96,11 +193,22 @@ export class AgeDepthCanvas {
   }
 
   public setInspectionData(data: AgeDepthModelInspectionData | null): void {
+    // Control points are the user's manual edits. Rebuilding them from ``px_points`` on
+    // every assignment silently discards a drag: the refit callback round-trips through the
+    // dating table, which re-assigns this same payload, so each drag point was snapped back
+    // to the traced curve it was being edited away from.
+    //
+    // Rebuild only when the payload is genuinely a different model. A fresh extraction
+    // carries a new object identity; a round-trip of the model under edit carries the same
+    // reference we already hold.
+    const isNewModel = data !== this.inspectionData;
     this.inspectionData = data;
-    if (data?.px_points?.x_curve) {
-      this.initControlPointsFromPx(data.px_points);
-    } else {
-      this.controlPoints = [];
+    if (isNewModel) {
+      if (data?.px_points?.x_curve) {
+        this.initControlPointsFromPx(data.px_points);
+      } else {
+        this.controlPoints = [];
+      }
     }
   }
 
@@ -380,9 +488,20 @@ export class AgeDepthCanvas {
       }
       const ad = this.pxToAgeDepth(px.x_curve[i], cy);
       if (ad && this.inspectionData.ages[i] !== undefined) {
-        this.inspectionData.ages[i] = Math.round(ad.age);
+        // Do NOT round here. On a "0 -> 9 ka BP" axis one integer age is 65.5 px, so
+        // rounding collapses a smooth curve onto a handful of discrete columns and draws
+        // it as a staircase (measured: 381 distinct x down to 8, median 15.5 px shift on
+        // 93% of rows). The displayed precision is a formatting concern, not a data one.
+        this.inspectionData.ages[i] = ad.age;
       }
     }
+    // The curve the table's attached windowed rates were fitted to just changed shape;
+    // those numbers now describe the pre-drag fit. Drop them -- the table falls back to a
+    // finite difference recomputed from the CURRENT values, which cannot show a stale
+    // number as a live one.
+    this.inspectionData.sed_rate = undefined;
+    this.inspectionData.sed_rate_se = undefined;
+    this.inspectionData.sed_window_depth = undefined;
     this.callbacks.onModelRefitted?.();
   }
 
@@ -511,11 +630,17 @@ export class AgeDepthCanvas {
     const parts: string[] = [];
     if (ageVals[0] !== null && ageVals[1] !== null && agePxSpan > 1e-6) {
       const perPx = Math.abs(ageVals[1] - ageVals[0]) / agePxSpan;
-      parts.push(`年龄: ${agePxSpan.toFixed(0)} px = ${Math.abs(ageVals[1] - ageVals[0]).toFixed(0)} → ${perPx.toFixed(3)}/px`);
+      // Raw span and raw scale. `toFixed(0)` on the span turned a 0.062..1.482 calibration
+      // into "= 1", and the rounded scale then disagreed with the two numbers beside it.
+      parts.push(
+        `年龄: ${agePxSpan} px = ${Math.abs(ageVals[1] - ageVals[0])} → ${perPx}/px`,
+      );
     }
     if (depthVals[0] !== null && depthVals[1] !== null && depthPxSpan > 1e-6) {
       const perPx = Math.abs(depthVals[1] - depthVals[0]) / depthPxSpan;
-      parts.push(`深度: ${depthPxSpan.toFixed(0)} px = ${Math.abs(depthVals[1] - depthVals[0]).toFixed(0)} → ${perPx.toFixed(3)}/px`);
+      parts.push(
+        `深度: ${depthPxSpan} px = ${Math.abs(depthVals[1] - depthVals[0])} → ${perPx}/px`,
+      );
     }
     out.textContent = parts.join(' ｜ ');
   }
@@ -600,12 +725,11 @@ export class AgeDepthCanvas {
       const ry0 = Math.min(m.depthA.y, m.depthB.y);
       const ry1 = Math.max(m.depthA.y, m.depthB.y);
 
-      ctx.save();
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([8, 5]);
-      ctx.strokeRect(rx0, ry0, rx1 - rx0, ry1 - ry0);
-      ctx.restore();
+      // 这里曾用 `rgba(56,189,248,.75)` + setLineDash([8,5]) 画一个虚线矩形，表示"四点标定
+      // 的外包框"。已删除：全仓没有任何文档解释它，界面上也没有文案，用户唯一能读到的含义
+      // 是"这是个选择框"——而它既不能选也不能拖，还容易被误当成提取范围（真正的搜索窗来自
+      // 坐标轴框线，与标定点无关，见 TestSearchRegionIndependentOfCalibration）。
+      // 下面这组淡十字线保留：它们穿过四个标定点，拖点时有位置参照，本身不围成方块。
 
       ctx.save();
       ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
@@ -785,7 +909,11 @@ export class AgeDepthCanvas {
     const mi = this.inspectionData.age_min[bestIdx];
     const ma = this.inspectionData.age_max[bestIdx];
 
-    hud.innerHTML = `深度: <strong style="color:var(--accent-blue);">${d.toFixed(1)} cm</strong> ➔ 年代: <strong style="color:var(--text-heading);">${Math.round(a)} cal BP</strong> (95% CI: <span style="color:var(--accent-amber);">${Math.round(mi)} ~ ${Math.round(ma)}</span>)`;
+    // 悬停读数固定 3 位小数。数据本身仍是全精度（表格那边要原样值），这里只是面板显示：
+    // 不格式化的直接后果是 `95% CI: 42567.04976038421 ~ 47696.07802908495`，17 位数字在
+    // 一行小字里既读不出来也放不下。3 位与图上刻度分辨率相当。
+    const hudNum = (v: number): string => (Number.isFinite(v) ? v.toFixed(3) : '—');
+    hud.innerHTML = `深度: <strong style="color:var(--accent-blue);">${hudNum(d)} cm</strong> ➔ 年代: <strong style="color:var(--text-heading);">${hudNum(a)} cal BP</strong> (95% CI: <span style="color:var(--accent-amber);">${hudNum(mi)} ~ ${hudNum(ma)}</span>)`;
   }
 
   // --- Interaction Listeners ---

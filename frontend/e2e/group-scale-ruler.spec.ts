@@ -1,85 +1,56 @@
 /**
- * 测试【列组参考标尺模数定标】与【多组管理】：
- * 1. 组参考标尺以各列自身左基线为锚点，刚体平移全组对齐，彻底终结按列宽压缩的全体偏差；
- * 2. 多组独立持有不同量程与单位（如花粉 20% vs 优势种 100%），互不干扰；
- * 3. 产出真实页面截图用于视觉自证与判据核实。
+ * 步骤 6【对齐本组】：没有检测到刻度尺时的行为。
+ *
+ * ## 为什么这份只剩一条用例
+ *
+ * 面板已收敛成「一行检测结果 + 一个读数 + 一个按钮」，跨度不再让用户填，
+ * 而是**自动取自 `algorithm.measureRuler`**（基线→末齿）。正向路径
+ * （沉积图谱：566px = 0~90%，四列共用 6.29 px/单位）在
+ * `step6-ruler-geometry.spec.ts` 里钉住；本文件只守反面：
+ *
+ * 基线图（hoya）的图版里**没有可检测的刻度尺**（实测 `per_column` 全为空、
+ * `median_spacing_px = null`）。此时点【对齐本组】必须如实报错并一列都不写——
+ * 旧实现会默默用写死的 40px 把这 29 列全部标定上，等于替用户编造刻度。
  */
 import { expect, test } from './fixtures';
-import { gotoStage, resetBaseline, rpc } from './helpers';
+import { diagramData, gotoStage, resetBaseline } from './helpers';
 
-test.describe('列组参考标尺与分组标定 (Group Reference Ruler)', () => {
-  test.use({ allowlists: { notice: [/成功将标尺模数/] } });
+interface BackendColumn {
+  id: string;
+  x_ticks?: Array<{ px: number; value: number }> | null;
+}
 
-  test.beforeEach(async ({ page }) => {
+test.describe('对齐本组：无刻度尺时必须停手', () => {
+  test.use({ allowlists: { notice: [/未检测到刻度尺/] } });
+
+  test('没有检测到刻度尺时，【对齐本组】如实报错且不写任何列', async ({ page, telemetry }) => {
     await resetBaseline(page);
-  });
-
-  test('T1: 组参考标尺一键刚体平移，全组所有列标尺跨度绝对相等', async ({ page }) => {
-    // 前往步骤 6
     await gotoStage(page, 6);
-    await expect(page.locator('.step-panel[data-step="6"]')).toBeVisible({ timeout: 10000 });
 
-    // 检查列组看板已展示
-    const groupTabs = page.locator('.btn-switch-group-tab');
-    await expect(groupTabs.first()).toBeVisible();
+    const line = page.locator('.step-panel[data-step="6"] [data-role="ruler-detect"]');
+    await expect(line).toBeVisible({ timeout: 15_000 });
+    await expect
+      .poll(async () => line.innerText(), { timeout: 20_000 })
+      .toContain('未找到刻度尺');
 
-    // 在参考标尺跨度框输入标准物理模数: 48.0 px，量程 0 到 20 %
-    const spanInput = page.locator('#inp-ref-ruler-span');
-    await spanInput.fill('48.0');
-    const val1Input = page.locator('#inp-ref-val1');
-    await val1Input.fill('0');
-    const val2Input = page.locator('#inp-ref-val2');
-    await val2Input.fill('20');
+    // 检测不到就取不到跨度：输入框照旧要用户读图填，但点下去必须先拒绝取跨度
+    const before = (
+      await diagramData<{ columns: BackendColumn[] }>(page)
+    ).columns;
+    expect(before.length).toBeGreaterThan(10);
+    expect(before.every((c) => (c.x_ticks ?? null) === null), '前置条件：全部未标定').toBe(true);
 
-    // 点击【对齐标尺：刚体应用到本组】
-    const applyBtn = page.locator('#btn-apply-group-scale');
-    await applyBtn.click();
+    await page.locator('.step-panel[data-step="6"] #inp-ref-units-per-cell').fill('20');
+    await page.locator('.step-panel[data-step="6"] #btn-apply-group-scale').click();
 
-    // 等待通知成功浮出
-    const toast = page.locator('.ui-toast--success');
-    await expect(toast).toBeVisible({ timeout: 10000 });
-    await expect(toast).toContainText('48px = 0~20%');
-
-    // 从后端核查真实数据载荷：组内所有列的 x_ticks 跨度必须严格等于 48.0 px！
-    const res = await rpc<{ columns: Array<{ name: string; startX: number; x_ticks: Array<{ px: number; value: number }> }> }>(
-      page,
-      'straditize.getDiagramData'
-    );
-    const cols = res.columns;
-    expect(cols.length).toBeGreaterThanOrEqual(10);
-
-    for (let i = 0; i < Math.min(10, cols.length); i++) {
-      const col = cols[i];
-      expect(col.x_ticks).toBeDefined();
-      expect(col.x_ticks.length).toBe(2);
-      expect(col.x_ticks[0].value).toBe(0);
-      expect(col.x_ticks[1].value).toBe(20);
-      // 关键判据：跨度绝对等于 48.0 px，不再随列宽忽大忽小！
-      const actualSpan = col.x_ticks[1].px - col.x_ticks[0].px;
-      expect(Math.abs(actualSpan - 48.0)).toBeLessThan(0.01);
-    }
-
-    // 截屏留存证据
-    await page.screenshot({ path: 'output/test_group_scale_ruler_ui.png', fullPage: true });
-  });
-
-  test('T2: 多组管理与独立标尺：不同组持有不同量程，互不干扰', async ({ page }) => {
-    await gotoStage(page, 6);
-    await expect(page.locator('.step-panel[data-step="6"]')).toBeVisible({ timeout: 10000 });
-
-    // 先为默认组设置 40px = 20%
-    await page.locator('#inp-ref-ruler-span').fill('40.0');
-    await page.locator('#inp-ref-val1').fill('0');
-    await page.locator('#inp-ref-val2').fill('20');
-    await page.locator('#btn-apply-group-scale').click();
-    await expect(page.locator('.ui-toast--success')).toBeVisible({ timeout: 10000 });
-
-    // 打开批量归组抽屉
-    const toggleBatchBtn = page.locator('#btn-toggle-batch-assign');
-    await toggleBatchBtn.click();
-    await expect(page.locator('#drawer-batch-assign')).toBeVisible();
-
-    // 截屏留存抽屉展开状态
-    await page.screenshot({ path: 'output/test_group_drawer_ui.png', fullPage: true });
+    await expect
+      .poll(() => telemetry.notices.some((n) => n.includes('未检测到刻度尺')), { timeout: 10_000 })
+      .toBe(true);
+    const after = (await diagramData<{ columns: BackendColumn[] }>(page)).columns;
+    expect(
+      after.every((c) => (c.x_ticks ?? null) === null),
+      '取不到跨度时不得回退到任何写死的默认值（旧实现会套用 40px）'
+    ).toBe(true);
+    expect(telemetry.rpcErrors).toEqual([]);
   });
 });

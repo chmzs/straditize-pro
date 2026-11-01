@@ -181,7 +181,7 @@ export class MetadataModal {
     const modal = document.createElement('div');
     modal.className = 'modal-backdrop';
     modal.innerHTML = `
-      <div class="modal-dialog modal-large metadata-dialog ui-modal" style="--modal-width: 980px;">
+      <div class="modal-dialog metadata-dialog ui-modal" style="--modal-width: 980px;">
         <div class="ui-modal__header">
           <div>
             <h3 class="ui-modal__title">论文与站点元数据</h3>

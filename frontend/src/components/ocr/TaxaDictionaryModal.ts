@@ -50,7 +50,7 @@ export class TaxaDictionaryModal {
     dictModal.className = 'modal-backdrop';
     dictModal.style.zIndex = '10000';
     dictModal.innerHTML = `
-      <div class="modal-dialog" style="width: min(760px, 94vw); max-height: 88vh; display: flex; flex-direction: column;">
+      <div class="modal-dialog" style="--modal-width: 760px; max-height: 88vh; display: flex; flex-direction: column;">
         <div class="ui-modal__header">
           <div style="display: flex; align-items: center; gap: 8px;">
             <h3 class="ui-modal__title">属种词汇表</h3>

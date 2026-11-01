@@ -38,7 +38,7 @@ export class ExportModal {
     const readiness = computeExportReadiness(this.data);
 
     modal.innerHTML = `
-      <div class="modal-dialog modal-large wpd-export-dialog ui-modal" style="--modal-width: 1180px;"
+      <div class="modal-dialog wpd-export-dialog ui-modal" style="--modal-width: 1180px;"
            data-sheets="${readiness.sheets.join(',')}"
            data-primary="${readiness.primaryRoi}"
            data-data-csv-equals-primary="true"

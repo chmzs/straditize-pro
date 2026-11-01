@@ -88,8 +88,15 @@ export class AgeDepthController {
 
   public selectedRateColumns(): string[] {
     const cols: string[] = [];
-    if (this.readChecked('ad-chk-rate-sr')) cols.push('volume_ar_cm_per_yr');
+    // The checkbox labels name specific columns, so the request must be for those columns.
+    // This used to push `volume_ar_cm_per_yr` for the "sed_rate (cm/yr)" box: numerically
+    // the same quantity, but the exported header then said volume_ar while the user had
+    // ticked sed_rate. Ask for what the label says.
+    if (this.readChecked('ad-chk-rate-sr')) cols.push('sed_rate_depth_per_yr');
     if (this.readChecked('ad-chk-rate-ar')) cols.push('acc_rate_yr_per_depth');
+    if (this.readChecked('ad-chk-rate-sr-win')) {
+      cols.push('windowed_sed_rate', 'windowed_sed_rate_se');
+    }
     return cols;
   }
 
@@ -231,9 +238,18 @@ export class AgeDepthController {
     const depthPx = [m.depthA.y, m.depthB.y];
     const agePx = [m.ageA.x, m.ageB.x];
 
+    // The age direction is read off the calibration by the backend unless the user forces
+    // it. Sending `true` here (the old behaviour) asserted "BP-style, increasing downcore"
+    // for every figure, which made any axis increasing upcore -- every 0..9 ka BP Bacon
+    // layout -- fail with "declared age direction contradicts the figure".
+    const directionMode = (
+      this.container.querySelector('#ad-sel-age-direction') as HTMLSelectElement | null
+    )?.value || 'auto';
+    const ageIncreasesDowncore =
+      directionMode === 'downcore' ? true : directionMode === 'upcore' ? false : null;
+
     const rangeMin = this.readNumber('ad-inp-range-min');
     const rangeMax = this.readNumber('ad-inp-range-max');
-    const step = this.readNumber('ad-inp-resample');
 
     const btn = this.container.querySelector('#ad-btn-extract') as HTMLButtonElement | null;
     const prevLabel = btn?.textContent || '';
@@ -249,7 +265,6 @@ export class AgeDepthController {
         age_px: agePx,
         age_vals: ageVals,
         depth_range: rangeMin !== null && rangeMax !== null ? [rangeMin, rangeMax] : null,
-        resample_step: step !== null && step > 0 ? step : null,
         depth_log: depthLog,
         age_log: ageLog,
         exclude_boxes: params.excludeBoxes,
@@ -258,7 +273,7 @@ export class AgeDepthController {
         depth_unit: 'cm',
         age_unit: 'cal BP',
         cal_curve: 'IntCal20',
-        age_increases_downcore: true,
+        age_increases_downcore: ageIncreasesDowncore,
         age_is_calendar_year: true,
         rate_columns: this.selectedRateColumns(),
         curve_channel: (this.container.querySelector('#ad-sel-channel') as HTMLSelectElement | null)?.value || 'auto',
@@ -288,6 +303,14 @@ export class AgeDepthController {
           reasonEl.textContent = `通道: ${channel}${reason ? ' — ' + reason : ''}`;
           reasonEl.style.color =
             meta.curve_channel === 'chroma' ? 'var(--accent-green)' : 'var(--text-muted)';
+        }
+        // Show the resolved age direction so a deduction is visible rather than implicit.
+        const dirEl = this.container.querySelector('#ad-age-direction-readout') as HTMLElement | null;
+        if (dirEl && meta.age_direction_reason) {
+          const downcore = meta.age_increases_downcore !== false;
+          dirEl.textContent =
+            `年代方向: ${downcore ? '向下变老' : '向下变新'} — ${meta.age_direction_reason}`;
+          dirEl.style.color = 'var(--text-secondary)';
         }
       } else {
         this.showExtractError(
@@ -641,7 +664,8 @@ export class AgeDepthController {
     const installBar = this.container.querySelector('#ad-webr-install-bar') as HTMLElement | null;
     if (installBar) {
       installBar.scrollIntoView({ behavior: 'smooth' });
-      installBar.style.outline = '2px solid #38bdf8';
+      // 走 token：`#38bdf8` 是深色主题的强调蓝，浅色主题该用 `#0284c7`。
+      installBar.style.outline = '2px solid var(--accent-blue)';
       installBar.style.borderRadius = '4px';
       setTimeout(() => {
         if (installBar) installBar.style.outline = '';

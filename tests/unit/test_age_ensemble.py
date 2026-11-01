@@ -38,7 +38,7 @@ def _bacon():
         age_vals=[3000.0, 0.0],
     )
     return extract_age_depth_model(
-        img, cal, depth_range=(0.0, 160.0), resample_step=2.0
+        img, cal, depth_range=(0.0, 160.0)
     )
 
 
@@ -86,21 +86,22 @@ class TestAgeEnsemble(unittest.TestCase):
         )
 
     def test_04_invariant_to_output_sampling_step(self):
-        """Resampling the output must not change the fitted correlation length."""
-        img = Image.open(FIGURE_DIR / "bacon_szek.png").convert("RGB")
-        cal = AgeDepthAxisCalibrator(
-            depth_px=[32.0, 668.0],
-            depth_vals=[0.0, 150.0],
-            age_px=[110.0, 803.5],
-            age_vals=[3000.0, 0.0],
-        )
+        """Fitting the ensemble on a coarser output grid must not change the model.
+
+        The extractor's `resample_step` was removed (it only thinned the output; rates
+        and interpolants always kept the native per-row sampling). The invariant this
+        test guards still lives where it matters: sample_depths is a free argument of
+        generate_age_ensemble, and the earlier index-space AR(1) made the fitted
+        correlation length drift when the grid spacing changed. Feeding 2/5/10 cm
+        grids directly exercises exactly that path.
+        """
+        model = _bacon()
+        native = np.asarray(model.depths, dtype=float)
         lengths = []
         crossing = []
         for step in (2.0, 5.0, 10.0):
-            model = extract_age_depth_model(
-                img, cal, depth_range=(0.0, 160.0), resample_step=step
-            )
-            depths = np.asarray(model.depths, dtype=float)
+            lo, hi = float(native.min()), float(native.max())
+            depths = np.arange(lo, hi, step)
             ens = model.generate_age_ensemble(
                 depths, n_ensembles=600, name="t", return_diagnostics=True
             )

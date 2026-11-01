@@ -12,6 +12,7 @@ import { SplineInterpolator } from '../core/SplineInterpolator';
 import { HistoryManager } from '../core/HistoryManager';
 import { ToolModeManager } from '../core/ToolModeManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
+import { columnPick, setPickedColumnIds } from './steps/columnPick';
 import {
   STAGE,
   canHitRoiHandle,
@@ -153,6 +154,9 @@ export class GeologyCanvas {
     this.callbacks = callbacks;
     this.toolModeManager = new ToolModeManager('select');
     this.toolStrategies = createToolStrategies();
+    // 步骤 6「在图上选列」需要画布重画高亮：把重绘钩子交给共享状态，
+    // 面板改选中集时直接调它，不必再穿一层 callback。
+    columnPick.requestRedraw = () => this.requestRender();
 
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'geology-canvas';
@@ -1066,6 +1070,35 @@ export class GeologyCanvas {
 
     const mode = this.toolModeManager.getMode();
 
+    // 选列模式（步骤 6 的「+ 分组」）：左键点列 = 选中/取消，Shift+左键 = 取两次点击之间的
+    // 连续段。必须**优先于**工具策略与 pan 模式，否则当前工具（测量/清理）会把这个点击吃掉，
+    // 用户点了没反应。点在空白处不清空已选，避免手抖丢掉整批。
+    if (e.button === 0 && columnPick.active && !this.isSpaceDown) {
+      const worldPt = this.viewport.screenToWorld(screenPt);
+      const hit = this.findHitColumn(worldPt);
+      if (hit) {
+        const order = this.data.columns.filter((c) => c.visible).map((c) => c.id);
+        const idx = order.indexOf(hit.id);
+        if (e.shiftKey && columnPick.ids.length > 0 && idx >= 0) {
+          const lastIdx = order.indexOf(columnPick.ids[columnPick.ids.length - 1]);
+          if (lastIdx >= 0) {
+            const lo = Math.min(lastIdx, idx);
+            const hi = Math.max(lastIdx, idx);
+            setPickedColumnIds([
+              ...new Set([...columnPick.ids, ...order.slice(lo, hi + 1)]),
+            ]);
+            return;
+          }
+        }
+        setPickedColumnIds(
+          columnPick.ids.includes(hit.id)
+            ? columnPick.ids.filter((x) => x !== hit.id)
+            : [...columnPick.ids, hit.id]
+        );
+        return;
+      }
+    }
+
     // 鼠标右键 (2)、鼠标中键 (1)、空格键按住、或处于 pan 抓手模式：一律进入视口平移
     if (e.button === 2 || e.button === 1 || (e.button === 0 && (this.isSpaceDown || mode === 'pan'))) {
       this.isPanning = true;
@@ -1656,6 +1689,8 @@ export class GeologyCanvas {
       this.drawColumnBoundaries(ctx, isLight);
       this.lastRenderedLayers.add('columnBoundaries');
     }
+    // 选列高亮画在列边界之后：整列盖一层半透明色，让"哪些列已选"一眼可见。
+    this.drawColumnPickOverlay(ctx);
 
     // 5. 花粉轮廓面积图与曲线 + 控制锚点 + 质检比对层
     if (showsPollenCurves(this.workflowStage, this.data.columns.length)) {
@@ -1979,6 +2014,33 @@ export class GeologyCanvas {
     ctx.fillText(`ROI Y: ${Math.round(roi.yMin)}px`, roi.xMin - 8 / scale, roi.yMin + 4 / scale);
     ctx.fillText(`ROI Y: ${Math.round(roi.yMax)}px`, roi.xMin - 8 / scale, roi.yMax + 4 / scale);
 
+    ctx.restore();
+  }
+
+  /**
+   * 选列模式：给已选列整列盖一层高亮（含上方标签区，便于在标签区也能看出选中）。
+   * 画布叠色豁免主题门禁（`docs/UI_DESIGN_SYSTEM.md`），但颜色仍取自强调色的同色系。
+   */
+  private drawColumnPickOverlay(ctx: CanvasRenderingContext2D): void {
+    if (!columnPick.active || columnPick.ids.length === 0) return;
+    const roi = this.data.roi;
+    const yTop = this.viewport.worldToScreen({ x: 0, y: roi.yMin - 40 }).y;
+    const yBot = this.viewport.worldToScreen({ x: 0, y: roi.yMax }).y;
+    const top = Math.min(yTop, yBot);
+    const h = Math.abs(yBot - yTop);
+    ctx.save();
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.20)';
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
+    ctx.lineWidth = 1.5;
+    for (const col of this.data.columns) {
+      if (!columnPick.ids.includes(col.id)) continue;
+      const sx0 = this.viewport.worldToScreen({ x: col.startX, y: 0 }).x;
+      const sx1 = this.viewport.worldToScreen({ x: col.endX, y: 0 }).x;
+      const left = Math.min(sx0, sx1);
+      const w = Math.max(2, Math.abs(sx1 - sx0));
+      ctx.fillRect(left, top, w, h);
+      ctx.strokeRect(left, top, w, h);
+    }
     ctx.restore();
   }
 

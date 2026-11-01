@@ -35,6 +35,7 @@ interface WireCalibration {
   bottom_px: number | null;
   bottom_cm: number | null;
   unit: string | null;
+  primaryAxis?: 'depth' | 'age';
 }
 
 /** 前端镜像 `__straditize.getState().calibration`——只暴露三个字段（`main.ts:2289-2293`）。 */
@@ -59,6 +60,7 @@ interface YCalibInput {
   botPx: number;
   botVal: number;
   unit: string;
+  primaryAxis?: 'depth' | 'age';
 }
 
 /**
@@ -100,10 +102,12 @@ async function commitYCalib(page: Page, v: YCalibInput): Promise<void> {
     ['#ycal-inp-top-val', String(v.topVal)],
     ['#ycal-inp-bot-val', String(v.botVal)],
   ];
+  // 主轴同样只赋值不派发 change，这样它也搭同一次提交（否则会被 change 监听单独发一发）。
+  if (v.primaryAxis) fields.push(['#ycal-sel-primary-axis', v.primaryAxis]);
   await page.evaluate((pairs: Array<[string, string]>) => {
     for (const [sel, value] of pairs) {
       const el = document.querySelector(sel) as HTMLInputElement | null;
-      if (!el) throw new Error(`标定面板缺少输入框 ${sel}`);
+      if (!el) throw new Error(`标定面板缺少控件 ${sel}`);
       el.value = value; // 只赋值、不派发 change ⇒ 不会触发中途提交
     }
     (document.querySelector('#btn-apply-ycalib') as HTMLButtonElement | null)?.click();
@@ -119,6 +123,59 @@ const waitForTopPx = (page: Page, expected: number, message: string): Promise<vo
 test.describe('步骤 3 Y 轴标定：成功路径、覆盖语义与后端防线', () => {
   test.beforeEach(async ({ page }) => {
     await resetBaseline(page);
+  });
+
+  test('主轴语义：声明 Y=年代 必须落到后端，并经面板重挂后回读', async ({ page }) => {
+    await gotoStage(page, 3);
+
+    // 默认必须是 depth：老图谱不受影响，且用户不选时不会静默改变语义
+    expect(
+      (await backendCal(page)).primaryAxis ?? 'depth',
+      '未声明时主轴必须是 depth'
+    ).toBe('depth');
+
+    await commitYCalib(page, {
+      topPx: 611,
+      topVal: 7.5,
+      botPx: 1198,
+      botVal: 42.5,
+      unit: 'm',
+      primaryAxis: 'age',
+    });
+    await waitForTopPx(page, 611, '后端 top_px 必须等于用户填的像素');
+
+    // 后端生效值必须是 age —— 断言的是后端回读，不是前端自己的 state
+    expect(
+      (await backendCal(page)).primaryAxis,
+      '提交 primaryAxis=age 后，后端 getDiagramData 必须回读 age'
+    ).toBe('age');
+
+    // 标定成功后 Inspector 会整块重挂（Inspector.ts:142），面板按后端值重建。
+    // 于是下拉框显示 age 就证明：值真的走了 后端 → 镜像 → 面板 这条往返，
+    // 而不是只停在 DOM 里。
+    await expect
+      .poll(
+        async () =>
+          page.locator('#ycal-sel-primary-axis').evaluate((el) => (el as HTMLSelectElement).value),
+        { message: '面板重挂后主轴下拉必须回读为 age', timeout: 10_000 }
+      )
+      .toBe('age');
+
+    // 切回 depth 也必须被后端接受（双向，不是单向开关）
+    await commitYCalib(page, {
+      topPx: 611,
+      topVal: 7.5,
+      botPx: 1198,
+      botVal: 42.5,
+      unit: 'm',
+      primaryAxis: 'depth',
+    });
+    await expect
+      .poll(async () => (await backendCal(page)).primaryAxis, {
+        message: '切回 depth 后后端必须回读 depth',
+        timeout: 10_000,
+      })
+      .toBe('depth');
   });
 
   test('成功路径：四个数 + 单位提交后，后端 calibration 必须逐字段等于用户输入', async ({

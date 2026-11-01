@@ -61,7 +61,7 @@ export class OcrReviewModal {
     const modal = document.createElement('div');
     modal.className = 'modal-backdrop';
     modal.innerHTML = `
-      <div class="modal-dialog modal-large ocr-review-dialog">
+      <div class="modal-dialog ocr-review-dialog">
         <div class="ui-modal__header">
           <div class="ocr-modal-header__lead">
             <h3 class="ui-modal__title">花粉属种名 OCR 识别与审核</h3>

@@ -241,8 +241,10 @@ export class SettingsModal {
         if (remoteCfg.has_remote_password) {
           if (pwdBadge) {
             pwdBadge.textContent = '[已设密码]';
-            pwdBadge.style.color = '#10b981';
-            pwdBadge.style.background = 'rgba(34, 197, 94, 0.15)';
+            // 走状态 token：写死的 #10b981 是深色主题的绿，浅色主题应为 #047857。
+            pwdBadge.style.color = 'var(--status-success)';
+            pwdBadge.style.background =
+              'color-mix(in srgb, var(--status-success) 15%, transparent)';
           }
           if (pwdInput) {
             pwdInput.placeholder = '留空保持原密码；输入新密码修改';
@@ -286,8 +288,9 @@ export class SettingsModal {
       const pwdBadge = modal.querySelector('#remote-pwd-status-badge') as HTMLElement;
       if (pwdBadge) {
         pwdBadge.textContent = '[待清除]';
-        pwdBadge.style.color = '#ef4444';
-        pwdBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+        pwdBadge.style.color = 'var(--accent-red)';
+        pwdBadge.style.background =
+          'color-mix(in srgb, var(--accent-red) 15%, transparent)';
       }
       if (btnClearPwd) {
         btnClearPwd.style.display = 'none';

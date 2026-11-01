@@ -13,6 +13,23 @@ from scipy.ndimage import median_filter
 from .calibration import LinearCalibration, LogCalibration
 
 
+def _report(value: float) -> float | None:
+    """Serialises a number AS COMPUTED, or ``None`` when it is not finite.
+
+    No rounding. Every rounding scheme is a lossy guess about how much precision the reader
+    wants, and picking the wrong one is indistinguishable from a bug: two decimals turned
+    three consecutive horizons into an identical ``0.37``, ``toFixed(1)`` printed a 0.04
+    ka/cm rate as ``0.0`` ("no deposition"), and even a six-significant-digit rule quietly
+    dropped digits the user had asked to see. The computed value is emitted unchanged.
+    """
+    v = float(value)
+    return v if np.isfinite(v) else None
+
+
+def _report_list(values: Any) -> list[float | None]:
+    return [_report(v) for v in values]
+
+
 class AgeDepthAxisCalibrator:
     """Bi-directional coordinate calibration for age-depth model diagrams."""
 
@@ -61,6 +78,29 @@ class AgeDepthAxisCalibrator:
 
     def age2px(self, age: float | np.ndarray) -> float | np.ndarray:
         return self.age_cal.data2px(age)
+
+    def infer_age_increases_downcore(self) -> tuple[bool, str]:
+        """Deprecated. The calibration cannot determine this; the traced curve can.
+
+        Kept only so an out-of-tree caller fails softly instead of with ``AttributeError``.
+        It always answers ``True`` with a note directing the caller to
+        ``extract_age_depth_model``, which resolves the direction from the traced curve.
+
+        Why the two calibration points are not enough: they fix what a pixel *means* on each
+        axis independently. Along a drawn curve the age changes with depth as
+        ``d(age)/dy = (d(age)/dx) * (dx/dy)``, and ``dx/dy`` is a property of the curve, not
+        of the axes. Two figures can share identical axis directions and trace opposite
+        directions in depth-age space. Measured counter-example: ``bacon_szek.png`` calibrates
+        to "age grows leftwards, depth grows downwards", which reads as "age decreases
+        downcore" from the axis signs alone -- yet its curve runs from x=803 at the surface to
+        x=110 at 150 cm, so age actually *increases* downcore. Deciding from the axes deleted
+        that figure's extractability.
+        """
+        return True, (
+            "not derivable from the calibration alone: the direction depends on which way "
+            "the traced curve runs, so it is resolved from the curve by "
+            "extract_age_depth_model"
+        )
 
 
 class AgeDepthModel:
@@ -136,6 +176,11 @@ class AgeDepthModel:
         self.observed_row_fraction: float = 0.0
         #: How the extraction search region was derived.
         self.roi_source: str = ""
+        #: Resolved age direction and why it was chosen. Deduced from the calibration by
+        #: default; a caller override is recorded in the reason string so the UI can show
+        #: that the direction was forced rather than read off the figure.
+        self.age_increases_downcore: bool = True
+        self.age_direction_reason: str = ""
         #: False when the model was built without an envelope, so its band is unknown
         #: rather than zero-width. Set where the envelope arguments are consumed above --
         #: assigning a default here would overwrite the computed value.
@@ -182,17 +227,37 @@ class AgeDepthModel:
         px_dict = None
         if self.px_y is not None and len(self.px_y) > 0:
             px_dict = {
-                "y": [round(float(v), 1) for v in self.px_y[::step]],
-                "x_curve": [round(float(v), 1) for v in self.px_x_curve[::step]],
-                "x_min": [round(float(v), 1) for v in self.px_x_min[::step]],
-                "x_max": [round(float(v), 1) for v in self.px_x_max[::step]],
+                "y": _report_list(self.px_y[::step]),
+                "x_curve": _report_list(self.px_x_curve[::step]),
+                "x_min": _report_list(self.px_x_min[::step]),
+                "x_max": _report_list(self.px_x_max[::step]),
             }
 
+        # Attach the windowed rate + its error bar to THIS row set, decimated with the same
+        # stride as every other parallel array. Without this the frontend read the rate from
+        # the pollen-sample payload while indexing model rows -- two different depth grids --
+        # so each row showed another horizon's rate.
+        sed_rate: list[float | None] = []
+        sed_rate_se: list[float | None] = []
+        sed_window_depth: float | None = None
+        try:
+            est = self.estimate_sedimentation_rate(self.depths)
+            sed_rate = est["sed_rate"][::step]
+            sed_rate_se = est["sed_rate_se"][::step]
+            sed_window_depth = est["window_depth"]
+        except ValueError:
+            # Fewer than three horizons to regress on: attach nothing rather than
+            # placeholder numbers; the frontend renders the columns as "—".
+            sed_rate, sed_rate_se = [], []
+
         return {
-            "depths": [round(float(d), 2) for d in self.depths[::step]],
-            "ages": [round(float(a), 2) for a in self.ages[::step]],
-            "age_min": [round(float(a), 2) for a in self.age_min[::step]],
-            "age_max": [round(float(a), 2) for a in self.age_max[::step]],
+            "depths": _report_list(self.depths[::step]),
+            "ages": _report_list(self.ages[::step]),
+            "age_min": _report_list(self.age_min[::step]),
+            "age_max": _report_list(self.age_max[::step]),
+            "sed_rate": sed_rate,
+            "sed_rate_se": sed_rate_se,
+            "sed_window_depth": sed_window_depth,
             "px_points": px_dict,
             "decimation_step": step,
             "metadata": {
@@ -206,8 +271,280 @@ class AgeDepthModel:
                 "curve_channel_reason": self.curve_channel_reason,
                 "observed_row_fraction": self.observed_row_fraction,
                 "roi_source": self.roi_source,
+                "age_increases_downcore": self.age_increases_downcore,
+                "age_direction_reason": self.age_direction_reason,
             },
         }
+
+    def estimate_sedimentation_rate(
+        self,
+        depths: list[float] | np.ndarray,
+        window: float | None = None,
+        required_relative_se: float = 0.05,
+        max_window_fraction: float = 0.2,
+    ) -> dict[str, Any]:
+        """Estimates sedimentation rate in ``depth_unit`` per year with an error bar.
+
+        Why not differentiate the curve point by point
+        ----------------------------------------------
+        ``predict_age`` reports the analytic derivative of the PCHIP interpolant. That is the
+        exact slope of the fitted curve, but the curve is fitted to a *digitised* trace whose
+        per-row age error is on the order of a pixel, so:
+
+        * the derivative is a purely local quantity and inherits all of that noise;
+        * the resulting rate has no uncertainty attached, and a rate's uncertainty is
+          routinely larger than the age uncertainty it came from;
+        * PAVA pooling produces exactly-zero slopes, whose reciprocal is undefined, so the
+          reported rate lapses to "cannot be stated" over genuinely deposited intervals.
+
+        A rate is a geological average over a thickness, not an instantaneous derivative, so
+        this method fits a line through every horizon inside a window:
+
+        .. math::  \\text{age} = a + b \\cdot \\text{depth}
+
+        The slope ``b`` is the accumulation rate (age per depth) and the sedimentation rate is
+        ``1 / b``.
+
+        The error bar is the larger of two estimates
+        --------------------------------------------
+        * the OLS slope standard error, propagated through ``1/b`` as ``se(b) / b**2``;
+        * an envelope-derived figure: the 95% band's half-widths at the two ends of the
+          window, added in quadrature and divided by the window thickness.
+
+        The OLS figure alone would be dishonest. The curve is a *smooth interpolant* through
+        the digitised points, so residuals inside a thin window collapse toward zero and the
+        OLS standard error goes with them -- on a 4 cm window it reported exactly ``0.0``,
+        which reads as infinite confidence. The envelope is the model's own statement of how
+        uncertain the age is, so it is the figure that reflects the extraction, not the fit.
+
+        Parameters
+        ----------
+        depths:
+            Horizons at which to report the rate, in ``depth_unit``.
+        window:
+            Window THICKNESS in ``depth_unit`` (not a horizon count: horizon density is an
+            artefact of resampling, so counting rows makes the smoothing length depend on the
+            output grid rather than on the data). ``None`` grows the thickness until the OLS
+            relative standard error meets ``required_relative_se``, capped by
+            ``max_window_fraction``.
+        required_relative_se:
+            Target ``se(b) / b`` for the automatic thickness search.
+        max_window_fraction:
+            Cap on the automatic thickness, as a fraction of the observed depth span. Without
+            a cap the search could swallow the whole core and report one global average.
+
+        Returns
+        -------
+        dict
+            ``sed_rate`` / ``acc_rate`` plus ``sed_rate_se`` / ``acc_rate_se``, a ``status``
+            per horizon explaining any undefined value, and the thickness actually used.
+            Undefined values are ``None`` with a reason -- never a number that looks like a
+            measurement.
+
+        Notes
+        -----
+        ``sed_rate`` is always ``depth_unit`` per REAL YEAR, whatever scale the age axis uses.
+        The extracted ages carry the magnitude the user calibrated against -- a ``0..9`` axis
+        yields ages in thousands of years -- but ``age_unit`` is a label passed in at
+        extraction time, so the magnitude cannot be inferred from it. The scale is read from
+        the ages and reported in ``age_scale_inferred``. Mixing this up is a factor-of-1000
+        error, which is why it is inferred explicitly rather than assumed.
+        """
+        horizons = np.asarray(self.analysis_depths, dtype=float)
+        ages = np.asarray(self.analysis_ages, dtype=float)
+        order = np.argsort(horizons)
+        horizons = horizons[order]
+        ages = ages[order]
+        if horizons.size < 3:
+            raise ValueError(
+                "Sedimentation rate needs at least three horizons to regress on; this model "
+                "holds fewer. Refusing rather than returning a number without a window."
+            )
+
+        # How many years does one unit of the age axis represent?
+        # A 0..9000 cal BP axis and a 0..9 ka axis can both be labelled "cal BP", so the
+        # label cannot decide this; the span is what distinguishes them.
+        age_span = float(ages.max() - ages.min())
+        depth_span = float(horizons.max() - horizons.min())
+        if age_span <= 0:
+            raise ValueError(
+                "The extracted ages do not advance with depth, so no age scale exists and no "
+                "rate can be stated."
+            )
+        years_per_age_unit = 1.0
+        age_scale_inferred = "years"
+        if depth_span > 0:
+            # Mean accumulation rate in age-units per cm. A Holocene core is order 10-100
+            # yr/cm; anything an order of magnitude below that means the axis is in ka.
+            age_per_depth = age_span / depth_span
+            if age_per_depth < 0.35:
+                years_per_age_unit = 1000.0
+                age_scale_inferred = "ka (inferred from magnitude)"
+
+        targets = np.asarray(depths, dtype=float)
+        n_total = horizons.size
+        observed_lo = float(horizons.min())
+        observed_hi = float(horizons.max())
+
+        # ---- the window is a DEPTH THICKNESS, not a horizon count -------------------
+        # Counting horizons is wrong because horizon density is an artefact of resampling,
+        # not of information content. The native trace carries one row every ~0.2 cm, so a
+        # 20-horizon window spans 4 cm -- far too thin to be a geological average, and thin
+        # enough that the PCHIP curve is locally linear, which drove the OLS residual to
+        # exactly zero and reported a fake `se = 0.0`. A rate is a property of a thickness,
+        # so the thickness is what the caller (and the search) controls.
+        uniq = np.diff(np.unique(horizons))
+        typical_spacing = float(np.median(uniq)) if uniq.size else depth_span
+        min_thickness = 3.0 * typical_spacing
+        max_thickness = max(min_thickness, depth_span * max_window_fraction)
+
+        def fit_at(centre: float, thickness: float):
+            """Least-squares slope, OLS se, envelope se, and status for one window."""
+            half = thickness / 2.0
+            mask = (horizons >= centre - half) & (horizons <= centre + half)
+            x = horizons[mask]
+            y = ages[mask]
+            if x.size < 3:
+                return float("nan"), float("nan"), float("nan"), x.size, "too_few_horizons"
+            x_mean = float(x.mean())
+            sxx = float(((x - x_mean) ** 2).sum())
+            if sxx <= 1e-12:
+                return float("nan"), float("nan"), float("nan"), x.size, "zero_depth_spread"
+            y_mean = float(y.mean())
+            slope = float(((x - x_mean) * (y - y_mean)).sum() / sxx)
+            if slope <= 0:
+                # Age does not increase downcore in this window: a genuine reversal, or the
+                # trace locked onto the wrong stroke. A rate has no meaning here.
+                return slope, float("nan"), float("nan"), x.size, "non_positive_slope"
+            residual = y - (y_mean + slope * (x - x_mean))
+            dof = x.size - 2
+            sse = float((residual**2).sum())
+            # Zero residual means "perfectly collinear", which the interpolant guarantees on
+            # a thin window. It is not evidence of zero uncertainty, so it is reported as an
+            # absent number rather than a confidence-inspiring 0.0.
+            se_ols = (
+                float(np.sqrt(sse / dof / sxx)) if dof > 0 and sse > 1e-18 else float("nan")
+            )
+            # The physically meaningful error bar comes from the extracted 95% envelope:
+            # the age difference across the window is uncertain by roughly the half-widths
+            # at its two ends added in quadrature.
+            if self.analysis_age_max is not None and self.analysis_age_min is not None:
+                half_w = (np.asarray(self.analysis_age_max)[mask]
+                          - np.asarray(self.analysis_age_min)[mask]) / 2.0
+                half_w = half_w[np.isfinite(half_w)]
+                if half_w.size:
+                    u_ends = float(np.sqrt(half_w[0] ** 2 + half_w[-1] ** 2))
+                    se_env = u_ends / max(thickness, 1e-9)
+                else:
+                    se_env = float("nan")
+            else:
+                se_env = float("nan")
+            return slope, se_ols, se_env, x.size, "ok"
+
+        chosen_thickness = window
+        if chosen_thickness is None:
+            # Grow the thickness until the rate's RELATIVE uncertainty meets the target, then
+            # stop -- wider windows are blurrier. The criterion uses the envelope-derived
+            # error, not the OLS one: on a smooth interpolant the OLS residual is near zero at
+            # any thickness, so it can never govern the choice (it breaks immediately and
+            # leaves the window at its floor). The envelope says how uncertain the extracted
+            # age really is, so it is the quantity worth driving to a target.
+            chosen_thickness = max_thickness
+            probe = float(np.median(targets))
+            step = min_thickness
+            while step <= max_thickness:
+                slope, se_ols, se_env, _n, status = fit_at(probe, step)
+                if status == "ok" and slope > 0:
+                    rel = None
+                    for candidate in (se_env, se_ols):
+                        if candidate is not None and np.isfinite(candidate):
+                            rel = candidate / slope
+                            break
+                    if rel is not None and rel <= required_relative_se:
+                        chosen_thickness = step
+                        break
+                step *= 1.5
+            else:
+                chosen_thickness = max_thickness
+
+        sed_out: list[float | None] = []
+        sed_se_out: list[float | None] = []
+        sed_se_ols_out: list[float | None] = []
+        acc_out: list[float | None] = []
+        acc_se_out: list[float | None] = []
+        status_out: list[str] = []
+        window_out: list[int] = []
+
+        for target in targets:
+            slope, se_ols, se_env, n_used, status = fit_at(
+                float(target), chosen_thickness
+            )
+            window_out.append(n_used)
+            if status != "ok" or not np.isfinite(slope) or slope <= 0:
+                status_out.append(status)
+                sed_out.append(None)
+                sed_se_out.append(None)
+                sed_se_ols_out.append(None)
+                acc_out.append(None)
+                acc_se_out.append(None)
+                continue
+            if target < observed_lo or target > observed_hi:
+                status = "extrapolated"
+            # Convert the slope from age-units/cm to years/cm before inverting, so the rate
+            # comes out in real years no matter which scale the age axis used.
+            slope_years = slope * years_per_age_unit
+            sed = 1.0 / slope_years
+            # delta(1/b) = se(b) / b**2, carried through the same unit scaling.
+            se_ols_sed = (
+                (se_ols * years_per_age_unit) / (slope_years**2)
+                if np.isfinite(se_ols) else None
+            )
+            se_env_sed = (
+                (se_env * years_per_age_unit) / (slope_years**2)
+                if np.isfinite(se_env) else None
+            )
+            # Report the larger of the two: the OLS figure is a lower bound because the
+            # curve is an interpolant, so the envelope-derived figure is the honest one
+            # wherever both exist.
+            candidates = [v for v in (se_ols_sed, se_env_sed) if v is not None]
+            status_out.append(status)
+            acc_out.append(float(slope_years) if np.isfinite(slope_years) else None)
+            acc_se_out.append(
+                float(max(candidates)) if candidates else None
+            )
+            sed_out.append(float(sed))
+            sed_se_out.append(float(max(candidates)) if candidates else None)
+            sed_se_ols_out.append(
+                float(se_ols_sed) if se_ols_sed is not None else None
+            )
+
+        return {
+            "depths": _report_list(targets),
+            "sed_rate": sed_out,
+            "sed_rate_se": sed_se_out,
+            "sed_rate_se_ols": sed_se_ols_out,
+            "acc_rate": acc_out,
+            "acc_rate_se": acc_se_out,
+            "status": status_out,
+            "window_depth": float(chosen_thickness),
+            "window_per_horizon": window_out,
+            "horizons_available": n_total,
+            "age_scale_inferred": age_scale_inferred,
+            "years_per_age_unit": years_per_age_unit,
+            "rate_units": {
+                "sed_rate": f"{self.depth_unit} per year",
+                "acc_rate": f"year per {self.depth_unit}",
+            },
+            "method": (
+                "ordinary least squares of age on depth over a sliding window of fixed "
+                f"DEPTH THICKNESS {chosen_thickness:.2f} {self.depth_unit} "
+                f"({n_total} horizons available, median spacing {typical_spacing:.3f}); "
+                "sed_rate_se is the larger of the OLS slope error and the envelope-derived "
+                "error, because the fitted curve is an interpolant and its residuals "
+                "understate the digitisation uncertainty"
+            ),
+        }
+
 
     def _median_rate(self, grid: np.ndarray) -> np.ndarray:
         """Median accumulation rate da/ddepth on ``grid``, floored strictly positive."""
@@ -845,7 +1182,27 @@ class AgeDepthModel:
         # absolute rate rather than leaking that convention into the units.
         slope = np.abs(slope)
         slope = np.where(slope < 1e-12, np.nan, slope)
-        sed = np.where(np.isnan(slope), 0.0, 1.0 / slope)
+
+        # The rate columns are LABELLED per year, so they must be per year. The extracted
+        # ages carry the magnitude the user calibrated against: a "0..9 ka BP" axis yields
+        # ages of 0..9, while ``age_unit`` is a label passed in at extraction time and reads
+        # "cal BP" either way. Inverting a ka/cm slope therefore produced a number 1000x too
+        # large under a "cm per year" heading -- measured on the bundled Bacon figure: the
+        # exported sed_rate column read 960.5 where the truth was 0.96. The scale is read
+        # from the ages themselves and reported, never assumed from the unit string.
+        age_span = float(np.nanmax(self.analysis_ages) - np.nanmin(self.analysis_ages))
+        depth_span = float(np.nanmax(self.analysis_depths) - np.nanmin(self.analysis_depths))
+        years_per_age_unit = 1.0
+        if age_span > 0 and depth_span > 0 and age_span / depth_span < 0.35:
+            years_per_age_unit = 1000.0
+        slope = slope * years_per_age_unit
+
+        # An undefined accumulation rate has an undefined reciprocal too. This used to emit
+        # 0.0 here, and 0 cm/yr reads as "nothing is being deposited" -- the exact opposite
+        # of "the rate cannot be stated at this horizon". NaN propagates to a null in the
+        # serialisation below, which is the honest value.
+        with np.errstate(divide="ignore", invalid="ignore"):
+            sed = np.where(np.isnan(slope), np.nan, 1.0 / slope)
 
         order = np.argsort(d_arr)
         d_sorted = d_arr[order]
@@ -854,7 +1211,9 @@ class AgeDepthModel:
         a_delta = np.diff(a_sorted)
         with np.errstate(divide="ignore", invalid="ignore"):
             interval = np.where(np.abs(d_delta) > 1e-12, a_delta / d_delta, np.nan)
-        interval = np.abs(interval)
+        # Same scale conversion as the analytic slope above, so both families of rate column
+        # are per year and stay consistent with each other.
+        interval = np.abs(interval) * years_per_age_unit
         # Broadcast each interval onto its two bounding horizons (forward difference).
         interval_full = np.empty(len(d_arr), dtype=float)
         interval_full[:-1] = interval
@@ -874,20 +1233,31 @@ class AgeDepthModel:
         inv_interval_full = inv_interval_sorted[inv_order]
 
         def _clean(values: np.ndarray) -> list[float | None]:
-            """Serialises rates, using ``None`` where a rate is undefined.
+            """Serialises rates as computed, using ``None`` where a rate is undefined.
 
             Isotonic regression can pool horizons into a flat age segment, which means an
             instantaneous deposit: the accumulation rate is genuinely zero and its
             reciprocal is undefined. Reporting ``0.0`` there would claim "no deposition",
             the exact opposite, so undefined is emitted as ``null``.
+
+            No rounding. Rounding to four decimals used to break the reciprocal identity
+            between ``acc_rate`` and ``sed_rate`` below ~0.01 (worst 5.3% error, 21 of 32
+            horizons); emitting the computed value makes ``acc * sed == 1`` exact.
             """
-            return [round(float(v), 4) if np.isfinite(v) else None for v in values]
+            out: list[float | None] = []
+            for v in values:
+                v = float(v)
+                if not np.isfinite(v):
+                    out.append(None)
+                else:
+                    out.append(v)
+            return out
 
         return {
-            "depths": [round(float(d), 2) for d in d_arr],
-            "age_est": [round(float(a), 2) for a in age_est],
-            "age_min": [round(float(a), 2) for a in age_min],
-            "age_max": [round(float(a), 2) for a in age_max],
+            "depths": _report_list(d_arr),
+            "age_est": _report_list(age_est),
+            "age_min": _report_list(age_min),
+            "age_max": _report_list(age_max),
             "acc_rate_yr_per_depth": _clean(slope),
             "sed_rate_depth_per_yr": _clean(sed),
             # Volume accumulation rate per unit area: dimensionally the same as the
@@ -898,10 +1268,13 @@ class AgeDepthModel:
             # Legacy key: same convention as acc_rate_yr_per_depth.
             "sed_rate_yr_per_cm": _clean(slope),
             "rate_units": {
-                "acc_rate": f"{self.age_unit} per {self.depth_unit}",
+                "acc_rate": f"year per {self.depth_unit}",
                 "sed_rate": f"{self.depth_unit} per year",
                 "volume_ar": "cm per year (cm3 cm-2 yr-1)",
             },
+            # Which scale the age axis turned out to use, so a caller can audit the factor of
+            # 1000 instead of trusting the age_unit label.
+            "years_per_age_unit": years_per_age_unit,
             # Horizons outside the observed range are extrapolated from the end slope, not
             # measured. Flagged per row so a consumer can drop or mark them.
             "extrapolated": [bool(v) for v in extrapolated],
@@ -969,8 +1342,8 @@ class AgeDepthModel:
         extrapolated = (a_arr < observed_min_a) | (a_arr > observed_max_a)
 
         return {
-            "ages": [round(float(a), 2) for a in a_arr],
-            "depth_est": [round(float(d), 2) for d in pred_d],
+            "ages": _report_list(a_arr),
+            "depth_est": _report_list(pred_d),
             "extrapolated": [bool(ex) for ex in extrapolated],
             "observed_age_range": [round(observed_min_a, 2), round(observed_max_a, 2)],
         }
