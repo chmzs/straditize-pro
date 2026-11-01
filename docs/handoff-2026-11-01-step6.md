@@ -56,13 +56,18 @@ cd frontend && npx playwright test step6-ruler-geometry.spec.ts step6-xticks.spe
 - **面板**：`XTicksPanel.getColCalibX` 不再回落 `tickEndX` / `scaleCalib.calibX` / 65% 猜测，未标定返回 `null` → X2 输入框为空、跨度行显示「未标定：图上的刻度参考线不画猜测值」。
 - **门禁 `T6`**（`e2e/step6-ruler-geometry.spec.ts`）：未标定时画布红色像素 `< 100`（实测噪声 22）；标定后 `> 500`（实测 1405 = 四条虚线）。把 `hasRealCalibration` 改成恒真 → T6 当场变红（已实测）。
 
-### P0-b — 猜测值仍活在**数值换算**里（未做，有风险）
+### P0-b — 猜测值仍活在**数值换算**里：**已收口（2026-11-01）**
 
-`CoordinateSystem.ts:130-140` 与 `GeologyCanvas.ts::getColumnCalibX/getColumnCalibVal` 仍以 `tickEndX` / `maxPercent` 兜底，所以未标定列的**百分比数值**依旧来自猜测（侧栏 `Sidebar.ts:235` 会显示 `${col.maxPercent}%`）。
+数值链已按「标度只读后端」收口，不再有 `?? 20` / `?? 40` 兜底：
 
-风险：这条链被曲线取值与导出共用，直接删会改变未标定列的数值，可能牵动 `tests/integration/test_no_fabrication.py` 的口径。
+- `CoordinateSystem.resolveColumnScale` 改为**只读取**后端下发的 `scale_provenance.calibrated` + `scaleCalib`，本地解析分支整体删除；未标定时 `px1/val0/val1 = null`。
+- `imageXToValue/Percent`、`valueToImageX/Percent`、`getScaleRatio` 未标定返回 `undefined`；`SplineInterpolator.interpolatePercentAtY` 同步（无控制点也不给 0）。
+- 导出：`export_data` 与 `extract_grid_values` 对未标定列返回 `None`，CSV 用 `na_rep="NA"`；前端 `ExportModal` 区分「未标定（整列 NA）」与「个别层位缺测（按 naFill，默认 0.0）」。
+- 单列标定：`column.calibrateXTicks` 允许省略 `px`，由后端自检「轴线右缘 + 检测末齿」；前端不再传任何猜测端点（原先 `tickEndX` 兜底已删）。
+- 组标度记忆：`roi.group_update` 放行 `ref_units_per_cell`（输入量，非派生），刷新后回填。
+- 判据：`frontend/test-calibration-display.mjs`（4 组）+ `step6-xticks` T1/T2/T4/T7 改用 beginner 基线并只校验「读数 + 0 点在轴线附近 + 第二端点在右」。
 
-建议顺序：① 先让所有 UI 对未标定列显示「未标定」而不是数字（侧栏、属性面板）；② 再逐处下线 `?? 20` / `?? 40` 默认值，每处都补一条"未标定不给数"的断言。
+**注意**：`hoya` 基线图**没有刻度尺**（`per_column` 全空、`median_spacing_px=null`），所以在它上面「填两个读数就能标定」只能靠猜端点——相关用例必须用 beginner 基线，这是本轮踩过的坑（多花三轮定位）。
 
 ### P1 — 步骤 5 完全不接检测
 
