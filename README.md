@@ -216,9 +216,9 @@ pixi run app
 
 ### 第一引用（Primary Citation - 本软件系统）：
 - **中文格式**：  
-  陈鸿明, 向丽雄*, 王文佳, 欧阳瑶, 闫创子, 李鹏宇, 黄小忠*. (2026). *Straditize Pro: 专业地层花粉与古气候图表数字化科研解译系统 (v2.0)* [CP/OL]. 兰州大学资源环境学院 黄小忠课题组. https://github.com/chmzs/straditize-pro (*通讯作者).
+  陈鸿明, 向丽雄\*, 王文佳, 欧阳瑶, 闫创子, 李鹏宇, 黄小忠\*. (2026). *Straditize Pro: 专业地层花粉与古气候图表数字化科研解译系统 (v2.0)* [CP/OL]. 兰州大学资源环境学院 黄小忠课题组. https://github.com/chmzs/straditize-pro (*通讯作者).
 - **英文格式**：  
-  Chen, H., Xiang, L.*, Wang, W., Ouyang, Y., Yan, C., Li, P., & Huang, X.* (2026). *Straditize Pro: Next-Generation Scientific Digitization System for Palynological & Stratigraphic Diagrams (v2.0)*. College of Earth and Environmental Sciences, Lanzhou University (Huang Xiaozhong's Research Group). https://github.com/chmzs/straditize-pro (*Corresponding authors).
+  Chen, H., Xiang, L.\*, Wang, W., Ouyang, Y., Yan, C., Li, P., & Huang, X.\* (2026). *Straditize Pro: Next-Generation Scientific Digitization System for Palynological & Stratigraphic Diagrams (v2.0)*. College of Earth and Environmental Sciences, Lanzhou University (Huang Xiaozhong's Research Group). https://github.com/chmzs/straditize-pro (*Corresponding authors).
 - **BibTeX 格式**：
 ```bibtex
 @software{straditize_pro_2026,
