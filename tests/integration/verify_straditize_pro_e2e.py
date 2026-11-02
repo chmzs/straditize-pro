@@ -186,6 +186,12 @@ class TestStraditizeProFullE2E(unittest.TestCase):
         test_session.point_add(0, y=50.0, x=200.0)
         test_session.is_calibrated = True
         test_session.y_scale = {"slope": 1.0, "intercept": 0.0}
+        # 未标定列不再产出读数（legacy 的 px/单位来自分列期猜测，D-03），
+        # 所以这里给出**用户确认的两个端点**：100px→1.0，300px→100.0。
+        test_session.calibrate_column_xticks(
+            0,
+            [{"px": 100.0, "value": 1.0}, {"px": 300.0, "value": 100.0}],
+        )
 
         exp_result = test_session.export_data(format="csv")
         csv_text = exp_result.get("csv") or exp_result.get("csv_content") or ""
@@ -193,8 +199,10 @@ class TestStraditizeProFullE2E(unittest.TestCase):
         # 200.0 px must convert to 10.0
         self.assertIn("10.0", csv_text)
 
-        # Strict export with invalid log startValue must raise JsonRpcError
-        test_session.columns[0]["startValue"] = 0.0
+        # Strict export with invalid log startValue must raise JsonRpcError.
+        # 该列已标定，端点取自 x_ticks（legacy 的 startValue 不再参与），
+        # 所以把非法值写进 x_ticks 的 0 点。
+        test_session.columns[0]["x_ticks"][0]["value"] = 0.0
         with self.assertRaises(JsonRpcError):
             test_session.export_data(format="csv", strict=True)
 

@@ -61,6 +61,7 @@ class ColumnScale:
         apply_exaggeration: bool = True,
         col_name: str = "column",
         ndigits: int | None = 4,
+        require_calibrated: bool = True,
     ) -> float:
         """Convert an image X pixel coordinate to scientific abundance/value.
 
@@ -68,7 +69,18 @@ class ColumnScale:
         - Applies Zero-Abundance rule (``0.0``) when ``raw_x`` sits on ``baseline_px``;
         - Uses ``LogCalibration`` for ``scale_type == 'log'`` and ``LinearCalibration`` otherwise;
         - Divides by ``exaggeration_mult`` when ``apply_exaggeration=True`` and ``exaggeration_mult > 1``.
+
+        **未标定时默认抛错**（``require_calibrated=True``）：没有用户确认的两个端点，
+        这个换算只会把分列期写入的 `clamp(0.65×列宽,20,80)` 当成满量程算出一个
+        看起来正常的数。实测 diatom benchmark：用这套默认值，全表 MAE 从 0.204
+        涨到 4.059（19.9 倍，见 docs/findings/bench-issues/bench-diatom.md D-03）。
+        调用方若确实要一个"仅供参考"的粗值，必须显式传 False 并自行标注未标定。
         """
+        if require_calibrated and not self.calibrated:
+            raise ValueError(
+                f"列 {col_name!r} 尚未标定 X 轴刻度（scale source={self.source}），"
+                "不能把像素换算成读数。请先在步骤 6 标定该列的刻度端点。"
+            )
         span = self.abs_px1 - self.abs_px0
 
         if self.scale_type == "log":
