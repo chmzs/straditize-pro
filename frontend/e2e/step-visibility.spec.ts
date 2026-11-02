@@ -239,18 +239,22 @@ test.describe('步骤 → 画布可见层', () => {
     expect(await canvasColorPixels(page, ROI_BLUE), '步骤 1 无 ROI，不应有 ROI 特征色').toBe(0);
 
     await gotoStage(page, 3);
-    const step3 = await canvasInk(page);
-    expect(
-      await canvasColorPixels(page, ROI_BLUE),
-      '步骤 3 已有 ROI，ROI 特征色应真的上屏（阶段级信号）'
-    ).toBeGreaterThan(1000);
-    // 下面这条才是"层真的落了墨"的载荷断言，且灵敏度已用金丝雀验证：
-    // 让 `drawRoiOverlay` 无条件提前 return（层名照样进 renderedLayers、
-    // 上面三条结构断言全绿）后，本差值从 ~193600 掉到 ~13395，用例变红。
-    expect(
-      step3.ink - step1.ink,
-      '步骤 3 应比步骤 1 多出 ROI / 列边界 / 深度网格的墨迹'
-    ).toBeGreaterThan(50_000);
+    // 两条都改成 poll：CI 上重绘比本地慢一档，单次读像素会在 rAF 完成前拿到
+    // 偏小的值（实测 GitHub Actions windows-latest 连续两次红在下面这条）。
+    // 判据强度不变——真没画就永远达不到：把 `drawRoiOverlay` 无条件提前 return 后，
+    // 墨迹差值从 ~193600 掉到 ~13395（金丝雀已验证灵敏度）。
+    await expect
+      .poll(async () => canvasColorPixels(page, ROI_BLUE), {
+        timeout: 20_000,
+        message: '步骤 3 已有 ROI，ROI 特征色应真的上屏（阶段级信号）',
+      })
+      .toBeGreaterThan(1000);
+    await expect
+      .poll(async () => (await canvasInk(page)).ink - step1.ink, {
+        timeout: 15_000,
+        message: '步骤 3 应比步骤 1 多出 ROI / 列边界 / 深度网格的墨迹',
+      })
+      .toBeGreaterThan(50_000);
 
     // Y 标定记号：步骤 3 上能画出琥珀色的只有 `drawYAxisCalibration`（`drawAnchors`
     // 也用 #f59e0b，但那个层只在步骤 7 出现），所以这条是**层专属**探针。
