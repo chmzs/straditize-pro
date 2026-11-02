@@ -11,12 +11,37 @@ from dataclasses import dataclass
 from typing import Any, Iterator
 
 from ..calibration import LinearCalibration, LogCalibration
-from ..protocol import CALIBRATION_ERROR, JsonRpcError
+from ..protocol import CALIBRATION_ERROR, INVALID_PARAMS, JsonRpcError
 
 __all__ = [
+    "SCALE_TYPES",
     "ColumnScale",
+    "normalize_scale_type",
     "resolve_column_scale",
 ]
+
+#: The only two X-scale types.
+#:
+#: 历史断点：``scale_type`` 在写入端（``session_parts/xticks.py``）原样落盘，而这里只判
+#: ``== "log"``，因此 ``"LOG"`` / ``"log10"`` / ``"sqrt"`` 一律落进线性桶 —— 表面上是
+#: 一条正常的读数，实际换了公式，下游无法分辨（与 P-04 同一种失效型，只低一层）。
+SCALE_TYPES: tuple[str, str] = ("linear", "log")
+
+
+def normalize_scale_type(scale_type: Any) -> str:
+    """Validate and canonicalise an X-scale type.
+
+    Case and surrounding whitespace are normalised（``" LOG "`` → ``"log"``，无歧义）；
+    未知取值抛 ``INVALID_PARAMS``，**不静默当线性**：两个分支用同一批像素算出不同的数，
+    界面上却看不出区别，静默兜底等于交付一个没人能察觉的错值。
+    """
+    key = str(scale_type or "linear").strip().lower()
+    if key not in SCALE_TYPES:
+        raise JsonRpcError(
+            INVALID_PARAMS,
+            f"未知的 X 轴标度类型 {scale_type!r}：只支持 {' / '.join(SCALE_TYPES)}。",
+        )
+    return key
 
 
 @dataclass(frozen=True)
@@ -33,6 +58,14 @@ class ColumnScale:
     exaggeration_mult: float | None
     calibrated: bool
     source: str  # "x_ticks" | "legacy" | "x_scales" | "default"
+
+    def __post_init__(self) -> None:
+        """构造时一次性归一化，使下游只需面对两个已知取值。
+
+        `ColumnScale` 是冻结的，所以用 ``object.__setattr__`` 写回；这样
+        ``px_to_value`` 里的 ``else`` 分支恒等于线性，不再可能悄悄兜住第三个值。
+        """
+        object.__setattr__(self, "scale_type", normalize_scale_type(self.scale_type))
 
     def __iter__(self) -> Iterator[Any]:
         """Support tuple unpacking per design §3.3."""

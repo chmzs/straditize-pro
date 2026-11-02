@@ -7,6 +7,7 @@ import numpy as np
 
 from ..protocol import STATE_ERROR, JsonRpcError
 from ..xticks import detect_xticks
+from .xscale import normalize_scale_type
 
 #: 横轴线的判定门限：该行暗像素占全图宽度的比例。
 #:
@@ -284,6 +285,14 @@ class XTicksMixin:
             )
 
         col = columns[resolved]
+
+        # `scale_type` 在**写入端**就校验（审计 D-1 的另一半）。
+        #
+        # 此前它原样落盘，非法值要等到下一次读（`resolve_column_scale`）才报 -32602 ——
+        # 用户得到的反馈是"保存成功"，之后界面才炸。那比不校验更糟：他以为存住了。
+        # 放在所有几何校验与状态变更**之前**，非法值不该留下撤销条目或半写的列。
+        if scale_type is not None:
+            scale_type = normalize_scale_type(scale_type)
 
         # 端点像素**可省略**：省略即由后端自检（几何只在后端命中）。
         # 这是保证「不拿猜测位置当用户读数」的唯一做法——前端没有几何，

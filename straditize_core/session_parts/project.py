@@ -417,7 +417,18 @@ class ProjectSessionMixin:
         self.degrid_strength = line_removal.get("strength") or None
         self.degrid_remove_vertical = bool(line_removal.get("remove_vertical", True))
         corrections = line_removal.get("corrections") or []
-        self.line_corrections = [c for c in corrections if isinstance(c, dict)]
+        self.line_corrections = [
+            # 旧工程（`mode` 字段出现之前的版本）里笔迹没有 mode，旧代码一律按 erase
+            # 处理。载入时补同一个值，让旧包打开后的渲染与当初一致，也不会在第一次
+            # 应用去线掩膜时被 `normalize_stroke_mode` 挡住（那条报错是留给"真写错了"
+            # 的取值的，比如 "restroe"）。
+            #
+            # **只补 `mode` 这一个键**：其它缺失字段一律照旧留空——补了就等于替用户
+            # 声称"数据本来就在"。新数据由 `rasterize_strokes` 校验后才写入，永不带缺键。
+            c if "mode" in c else {**c, "mode": "erase"}
+            for c in corrections
+            if isinstance(c, dict)
+        ]
         if unit := cal.get("unit"):
             self.depth_unit = str(unit)
 

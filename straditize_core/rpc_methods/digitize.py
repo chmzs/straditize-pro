@@ -12,22 +12,23 @@ def register(dispatcher: Any, session: Any) -> None:
 
     def core_extract_foreground(
         threshold: float | None = None,
-        mode: str = "otsu",
+        mode: str | None = None,
         extraction_mode: str | None = None,
     ) -> dict[str, Any]:
-        """Segment ink from the background, with an explicit extraction mode.
+        """Segment ink from the background.
 
-        ``extraction_mode`` decides **what counts as ink**:
+        ``mode`` 选阈值算法（``otsu`` / ``binary`` / ``adaptive``），``extraction_mode``
+        决定**哪些像素算墨迹**——两层不同的事，别混。
 
-        * ``standard`` (default) —— 灰度阈值；对黑白线图足够。
-        * ``solid-over-shadow`` —— 双层图（实心 + 夸张包络）。只取实心层；
-          包络单独存放，可由 ``core.getShadowLayer`` 单独取回。
+        ``mode`` 的默认值**只由 session 层声明**（``session.extract_foreground``）。
+        本层此前写死了一份副本 ``"otsu"``：两处任一处单独改动都会变成"省略该参数时
+        行为取决于走哪条通路"的幽灵默认值，而默认值恰恰是没人会去测的那一侧。所以这里
+        ``None`` 表示"未传"，交给 session 用自己的默认值。
 
-        Omitting it keeps the session's current mode, so a client that never
-        sets anything behaves exactly as before (Otsu). An unknown mode is
-        rejected with ``INVALID_PARAMS`` rather than silently falling back —
-        a silent fallback would hand the user a reading taken from the wrong
-        layer, which is the one failure this mode exists to prevent.
+        ``extraction_mode`` 省略时**不是**"沿用会话当前值"，而是按 ``standard``（Otsu）
+        重算；只有隐式重算路径（``_extract_foreground_from_settings``）才沿用会话值。
+        未知取值返回 ``INVALID_PARAMS``，不静默回退——静默回退会让用户拿到错层取的读数，
+        而返回体里的 ``extraction_mode`` 仍回显他传的名字。
         """
         from ..image import normalize_extraction_mode
 
@@ -37,11 +38,14 @@ def register(dispatcher: Any, session: Any) -> None:
             except ValueError as exc:
                 raise JsonRpcError(INVALID_PARAMS, str(exc)) from exc
         edges = session._column_band_edges()
+        # 只在真正传了 mode 时才转发：否则会把 None 灌进 session，
+        # 落进它"未知模式 → INVALID_PARAMS"的分支，默认值就失效了。
+        forwarded: dict[str, Any] = {} if mode is None else {"mode": mode}
         return session.extract_foreground(
             threshold=threshold,
-            mode=mode,
             extraction_mode=extraction_mode,
             column_edges=edges,
+            **forwarded,
         )
 
     def core_get_shadow_layer() -> dict[str, Any]:

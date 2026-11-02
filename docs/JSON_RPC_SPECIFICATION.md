@@ -167,6 +167,13 @@
 - **参数 (params)**：
   - `threshold` (number, 可选): 二值化阈值。如果不传，则根据 `mode` 自动计算。
   - `mode` (string, 可选, 默认 `"otsu"`): 分割模式，支持 `"otsu"`、`"binary"`、`"adaptive"`。
+  - `extraction_mode` (string, 可选, 默认 `"standard"`): 决定**哪些像素算墨迹**（`mode` 选的是阈值算法，两层不同的事），规范值 5 个：`"standard"` / `"light-overlay-white"` / `"dark-ink-light"` / `"light-ink-dark"` / `"solid-over-shadow"`。
+    别名（`light overlay on white background` / `dark ink on light background` / `light ink on dark background` /
+    `solid over shadow` / `双层`）在入口归一化，见 `image.py::EXTRACTION_MODES`；未知值返回 `-32602`，
+    **不静默回退**——回退会让人拿到错层取的读数，而返回体里的 `extraction_mode` 仍回显他传的名字。
+    省略时按 `"standard"`（Otsu）重算，**不是**沿用会话当前模式；只有隐式重算路径
+    （`_extract_foreground_from_settings`）才沿用会话值。`solid-over-shadow` 只取实心层，
+    夸张包络单独存于 `shadow_mask`，由 `core.getShadowLayer` 取回、永不进入读数。
 - **返回 (result)**：
   ```json
   {
@@ -449,8 +456,11 @@
     - `col_index` (int | str, 必填): 目标列全局序号或列 id（如 `"roi_1_col01"`）。
     - `ticks` (array of `{px: float, value: float}`, 必填): 恰好 2 个端点刻度齿。
     - `unit` (string, 可选): 单位（未传保持原值）。
-    - `plot_type` (string, 可选): 图表形态（未传保持原值）。
-    - `scale_type` (string, 可选): `"linear"` 或 `"log"`（未传保持原值）。
+    - `plot_type` (string, 可选): 图表形态，取值 `"area"` / `"line"` / `"bar"`（与 §4.4 的 `READER_TYPES` 共用同一套**单数**命名）。未传保持原值。
+      当前实现**不校验**该值：未知字符串会被原样存储，也不参与任何计算分支（数值化分支看 §4.4 的 `reader_type`），
+      见 `docs/findings/spec-enum-audit.md` D-4。
+    - `scale_type` (string, 可选): `"linear"` 或 `"log"`（未传保持原值）。大小写与首尾空白会被归一化（`LOG` 与 `log` 等价）；
+      其它取值返回 `-32602`，**不静默按线性换算**（见 `xscale.py::normalize_scale_type`）。
     - `exaggeration_mult` (float | null, 可选): 局部放大倍数。
   - **返回 (result)**：`{"col_index": 0, "x_ticks": [...], "px_per_unit": 2.5, "column": {...}}`
 
@@ -758,7 +768,9 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
 - **参数 (params)**：`{"dates": [...], "core_name": "MyCore", "thickness": 5.0, "cc": 1, "hiatus_depths": null, "slumps": null, "d_r": null, "d_std": null, "acc_mean": null, "mem_mean": 0.7}`
 - **返回 (result)**：**纯字符串**（R 脚本全文），不是对象
 - `dates` 元素形如 `{"depth": 10.0, "age": 1200, "error": 30}`
-- `cc`：`1` = IntCal20，`2` = Marine20，`3` = SHCal20
+- `cc`：`0` = Non-14C（不做 ¹⁴C 校正），`1` = IntCal20，`2` = Marine20，`3` = SHCal20。
+  **Python 侧不校验该值**：它原样写进生成的 rbacon 脚本（`Bacon(..., cc=N, ...)`，见
+  `age_depth_model.py:1483`），其余整数的含义以 rbacon 文档为准——本层只保证透传，不替 rbacon 解释语义。
 
 ### 4A.7 `agedepth.generateGeoChronRScript`
 

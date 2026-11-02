@@ -17,6 +17,8 @@ import skimage.morphology as skim
 from PIL import Image
 from skimage.filters import threshold_otsu
 
+from .protocol import INVALID_PARAMS, JsonRpcError
+
 EXTRACTION_MODES: dict[str, str] = {
     'standard': 'standard',
     'light-overlay-white': 'light-overlay-white',
@@ -416,6 +418,36 @@ def remove_horizontal_grid_lines(
     return cleaned, hline_rows
 
 
+#: 笔迹修正的两种模式。``restore`` 把被误删的墨迹补回，``erase`` 擦掉误标。
+#:
+#: 历史断点：``rasterize_strokes`` 只判 ``== 'restore'``，其余一律进 erase 桶。
+#: 于是把 ``'restore'`` 拼错的用户会**得到擦除**——方向相反的静默兜底，
+#: 损坏的是已有掩膜，不会有任何报错提示他刚才做的事和想做的事正好相反。
+STROKE_MODES: tuple[str, str] = ('erase', 'restore')
+
+
+def normalize_stroke_mode(mode: Any, *, index: int | None = None) -> str:
+    """校验并归一化笔迹模式（大小写/空白无关）。
+
+    未知取值抛 ``INVALID_PARAMS``，**不默认取 erase**：两种模式作用方向相反，
+    静默兜底会把"补回"变成"擦除"。
+
+    ``index`` 是笔迹在列表中的 0 基下标，只用来让报错点名"第几笔"——旧工程
+    （写入端还没有 `mode` 字段的年代）缺失该键时会命中这里，用户得知道改哪一条。
+    """
+    key = str(mode).strip().lower()
+    if key not in STROKE_MODES:
+        which = f"第 {index + 1} 笔" if index is not None else "这笔"
+        raise JsonRpcError(
+            INVALID_PARAMS,
+            f"{which}的笔迹模式 {mode!r} 未知：只支持 {' / '.join(STROKE_MODES)}。"
+            " 若该工程由旧版本保存（笔迹里没有 mode 字段），请为该笔补上 "
+            'mode: "erase"（擦除误标）或 mode: "restore"（补回误删的墨迹）后重试；'
+            " 两者方向相反，静默取一个默认值会把「补回」做成「擦除」。",
+        )
+    return key
+
+
 def rasterize_strokes(
     shape: tuple[int, int],
     strokes: Iterable[dict[str, Any]] | None,
@@ -429,9 +461,16 @@ def rasterize_strokes(
     """
     restore = np.zeros(shape, dtype=bool)
     erase = np.zeros(shape, dtype=bool)
-    for stroke in strokes or ():
+    for index, stroke in enumerate(strokes or ()):
         if not isinstance(stroke, dict):
             continue
+        # **每一条字典笔迹都校验，哪怕它没有点**。
+        #
+        # `algorithm.degrid` 在 `rasterize_strokes` 返回后把**整份传入列表**存进
+        # `line_corrections`，`project_save` 再把它写进工程包。若只校验"可画"的笔迹，
+        # 一条没有点的、缺 `mode` 的笔迹就会绕过校验落盘，成为下一个"缺 mode 的
+        # corrections"来源——那种数据本该只有旧工程才有。index 用于报错点名第几笔。
+        mode = normalize_stroke_mode(stroke.get('mode'), index=index)
         points: list[tuple[float, float]] = []
         for point in stroke.get('points') or ():
             if not isinstance(point, (list, tuple)) or len(point) < 2:
@@ -444,7 +483,7 @@ def rasterize_strokes(
                 continue
         if not points:
             continue
-        target = restore if str(stroke.get('mode')) == 'restore' else erase
+        target = restore if mode == 'restore' else erase
         radius = max(1.0, float(stroke.get('radius', 4)))
         _draw_polyline(target, points, radius)
     return restore, erase

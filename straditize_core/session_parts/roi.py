@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from ..protocol import JsonRpcError
+from .xscale import normalize_scale_type
 
 ROI_NAME_PATTERN = re.compile(r"^[\w\u4e00-\u9fa5-]{1,31}$")
 
@@ -407,6 +408,10 @@ class RoiMixin:
         tick_layout: list[dict[str, float]] | None = None,
     ) -> dict[str, Any]:
         """Create a new column group within an ROI (Invariant 1: 组在 ROI 内)."""
+        # 组的 `scale_type` 和列的一样会被 `resolve_column_scale` 解析，所以同样要在
+        # 写入端校验（审计 D-1）：否则一个拼错的组标度会先"创建成功"，等到某列回落到
+        # 该组时才在读取端报 -32602。
+        scale_type = normalize_scale_type(scale_type)
         roi = self._get_roi(roi_id)
         groups = roi.setdefault("x_groups", [])
         grp_num = len(groups) + 1
@@ -459,8 +464,14 @@ class RoiMixin:
             "ref_val_end",
         )
         for field in allowed_fields:
-            if field in updates:
-                target[field] = updates[field]
+            if field not in updates:
+                continue
+            value = updates[field]
+            if field == "scale_type":
+                # 同 `roi_group_create`：写入端校验，别让错拼的标度先存住、
+                # 等到某列回落到该组时才在读取端报 -32602（审计 D-1）。
+                value = normalize_scale_type(value)
+            target[field] = value
 
         return {"roi_id": roi_id, "group": target}
 
