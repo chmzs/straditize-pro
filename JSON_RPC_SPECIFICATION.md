@@ -257,7 +257,13 @@
 
 - **参数 (params)**：
   - `col_index` (integer, 必填): 目标列索引。
-  - `reader_type` (string, 可选, 默认 `"line"`): 数值化识别器类型，支持 `"line"`、`"area"`、`"bars"`。
+  - `reader_type` (string, 可选, 默认 `"area"`): 数值化识别器类型。
+    **规范名只有三个单数**：`"area"` / `"line"` / `"bar"`，与 `plot_type`、
+    `digitize_column` 共用同一套命名。历史别名 `"bars"` 只在入口归一化为 `"bar"`
+    （见 `session_parts/digitize.py::normalize_reader_type`），不得成为第四条分支。
+    未知值返回 `-32602` —— **不静默退化为均值**：那会让柱状图读数只有真值一半，
+    而返回体里的 `reader_type` 仍回显用户传的名字（元数据说谎，详见
+    `docs/findings/bench-issues/bench-pollen.md` P-04）。
 - **返回 (result)**：
   ```json
   {
