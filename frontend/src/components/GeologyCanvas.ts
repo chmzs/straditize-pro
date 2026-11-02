@@ -87,6 +87,7 @@ export class GeologyCanvas {
   private dropOverlay: HTMLElement | null = null;
   private emptyStateOverlay: HTMLElement | null = null;
   private floatingToolbar: HTMLElement | null = null;
+  private canvasLegend: HTMLElement | null = null;
 
   public viewport: Viewport;
   public history: HistoryManager;
@@ -282,6 +283,21 @@ export class GeologyCanvas {
     `;
     this.container.appendChild(palette);
     this.floatingToolbar = palette;
+
+    // 画布图例：步骤 6 起会同时出现「蓝实线（基线 0 点）」与「红虚线（端点 2 刻度齿）」，
+    // 而界面上从未说明过它们是什么 —— 用户看到的是"乱七八糟、颜色也不区分"的线。
+    // 用 DOM 元素而不是 canvas 绘制：不改变任何像素，因此不影响 e2e 的墨迹差值断言。
+    if (!this.container.querySelector('.canvas-legend')) {
+      const legend = document.createElement('div');
+      legend.className = 'canvas-legend';
+      legend.innerHTML = `
+        <div class="canvas-legend-row"><span class="legend-sw legend-sw-baseline"></span>基线（0 点）</div>
+        <div class="canvas-legend-row"><span class="legend-sw legend-sw-tick2"></span>端点 2 刻度齿</div>
+        <div class="canvas-legend-row"><span class="legend-sw legend-sw-native"></span>底图原有线（放大后变粗）</div>
+      `;
+      this.container.appendChild(legend);
+      this.canvasLegend = legend;
+    }
     this.updateFloatingToolbarForStage(this.workflowStage);
 
     palette.querySelector('#btn-palette-help')?.addEventListener('click', () => {
@@ -2078,6 +2094,35 @@ export class GeologyCanvas {
         unit: col.unit || '%',
       };
 
+      // ── 列的四条线（语义由领域确定，不要凭感觉调色）────────────────────────
+      //   红实线 = y 轴**左缘** = 列切分线（= 上一列的结束位置，所以不另画 endX）
+      //   绿实线 = y 轴**右缘** = 该列数据的 0 点（左缘 + 轴线粗，默认 5px，可手工改）
+      //   蓝实线 = 单位刻度齿位置（该刻度代表多少单位由用户填）
+      //   深度网格线已默认关闭：它铺满画布却不承载任何判定信息，是纯视觉噪声。
+      // 轴线粗是**组**的属性（ColumnGroup.ref_span_px，默认 5px，可手工测量改）：
+      // y 轴右缘 = 左缘 + 轴线粗，这一条线才是该列数据的 0 点。
+      const groupOfCol = this.data.roi.x_groups?.find((g) => g.id === col.x_group_id);
+      const axisStrokePx =
+        Number(groupOfCol?.ref_span_px) > 0 ? Number(groupOfCol?.ref_span_px) : 5;
+      const leftEdgeX = col.startX;
+      const zeroX = col.startX + axisStrokePx;
+
+      ctx.beginPath();
+      ctx.moveTo(leftEdgeX, topY);
+      ctx.lineTo(leftEdgeX, bottomY);
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = (isActive ? 1.8 : 1.2) / scale;
+      ctx.setLineDash([]);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(zeroX, topY);
+      ctx.lineTo(zeroX, bottomY);
+      ctx.strokeStyle = '#22c55e';
+      ctx.lineWidth = (isActive ? 1.8 : 1.2) / scale;
+      ctx.setLineDash([]);
+      ctx.stroke();
+
       const dragBoundary = (this.toolStrategies.get('select') as SelectToolStrategy | undefined)?.getDraggingBoundary();
       const isOriginHovered =
         (this.hoveredBoundary?.taxaId === col.id && this.hoveredBoundary.type === 'start') ||
@@ -2120,15 +2165,16 @@ export class GeologyCanvas {
           ctx.lineWidth = 3 / scale;
           ctx.setLineDash([]);
         } else {
-          ctx.strokeStyle = isLight ? 'rgba(220, 38, 38, 0.85)' : 'rgba(239, 68, 68, 0.8)';
+          // 单位刻度 = 蓝实线（原来错画成红虚线，与"列左缘"混淆）
+          ctx.strokeStyle = isLight ? 'rgba(37, 99, 235, 0.9)' : 'rgba(96, 165, 250, 0.95)';
           ctx.lineWidth = 1.6 / scale;
-          ctx.setLineDash([5 / scale, 3 / scale]);
+          ctx.setLineDash([]);
         }
         ctx.stroke();
       }
 
       // 3. 列间空白隔离边界线 (endX - 仅当 endX 明显大于刻度齿时显示淡色隔离虚线)
-      if (col.endX > sc.calibX + 4) {
+      if (isEndHovered && col.endX > leftEdgeX + 4) {
         ctx.beginPath();
         ctx.moveTo(col.endX, topY);
         ctx.lineTo(col.endX, bottomY);
@@ -2138,7 +2184,9 @@ export class GeologyCanvas {
           ctx.lineWidth = 2.5 / scale;
           ctx.setLineDash([]);
         } else {
-          ctx.strokeStyle = isLight ? 'rgba(148, 163, 184, 0.5)' : 'rgba(148, 163, 184, 0.35)';
+          // 列结束位置 = 下一列的左缘线，不再单独画一条；
+          // 只在鼠标悬停到该边界时高亮一下，方便拖动改列宽。
+          ctx.strokeStyle = isLight ? 'rgba(148, 163, 184, 0.55)' : 'rgba(148, 163, 184, 0.45)';
           ctx.lineWidth = 1.0 / scale;
           ctx.setLineDash([2 / scale, 4 / scale]);
         }
@@ -2475,7 +2523,7 @@ export class GeologyCanvas {
       bottom_cm: null,
       unit: 'cm',
       depthInterval: 2,
-      depthGridEnabled: true,
+      depthGridEnabled: false,
     };
     this.data.line_strokes = [];
 
@@ -2567,6 +2615,8 @@ export class GeologyCanvas {
 
   private updateFloatingToolbarForStage(stage: number): void {
     if (!this.floatingToolbar) return;
+    // 图例从步骤 6 起才显示：那一步才开始画基线 / 端点 2 两条竖线。
+    this.canvasLegend?.classList.toggle('is-visible', stage >= 6);
     const allowed = this.getAllowedTools(stage);
     this.floatingToolbar.querySelectorAll('[data-fmode]').forEach((btn) => {
       const mode = btn.getAttribute('data-fmode') as ToolMode;

@@ -1,7 +1,6 @@
 import { DataRoi, DiagramData, TaxaColumn, ControlPoint, DiagramCalibration } from '../types/pollen';
 import { HistoryManager } from '../core/HistoryManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
-import { tokens } from '../styles/tokens';
 import { DeletePointCommand, ResizeRoiCommand } from '../core/Commands';
 import { getStepPanel } from './steps/_registry';
 import { renderActiveColumnSuspectNotice } from './steps/SuspectBlockNotice';
@@ -247,12 +246,9 @@ export class Inspector {
       unit: resolved.unit,
     };
 
-    const currentScaleType = resolved.scaleType;
     const currentPlotType = resolved.plotType;
     const hasExag = resolved.exaggerationMult !== null;
     const exagMult = resolved.exaggerationMult ?? col.exaggerationMult ?? 5;
-    const logCheck = CoordinateSystem.validateLogScale(col);
-    const isLogValid = logCheck.valid;
 
     return `
       <div class="inspector-section">
@@ -275,89 +271,14 @@ export class Inspector {
           <input type="text" id="inp-col-name" value="${col.name}" class="text-input" />
         </div>
 
-        <div class="form-group" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light);">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <label style="font-size: 11px; font-weight: bold; color: ${tokens.color.column.baseline};">两点式 X 轴物理刻度标定</label>
-            <span style="font-size: 9.5px; color: var(--text-muted);">斜率: ${(() => {
-              const ratio = CoordinateSystem.getScaleRatio(col);
-              return ratio === undefined ? '未标定' : `${ratio.toFixed(3)} ${col.unit || ''}/px`;
-            })()}</span>
-          </div>
-
-          <div style="display: flex; gap: 8px; margin-top: 6px;">
-            <div style="flex: 1;">
-              <label style="font-size: 10px; color: var(--text-muted);">端点 1 (原点像素 X):</label>
-              <input type="number" id="inp-sc-origin-x" value="${sc.originX}" style="font-size: 11px;" />
-            </div>
-            <div style="flex: 1;">
-              <label style="font-size: 10px; color: var(--text-muted);">端点 1 对应数值:</label>
-              <input type="number" id="inp-sc-origin-val" value="${sc.originVal}" style="font-size: 11px;" />
-            </div>
-          </div>
-
-          <!-- 物理数轴跨度指示器 (纯数字显示，不带 %) -->
-          <div class="scale-axis-indicator">
-            <div class="scale-axis-header">
-              <span class="scale-axis-origin">基线: ${sc.originVal} (X=${sc.originX})</span>
-              <span class="scale-axis-target">刻度: ${sc.calibVal} (X=${sc.calibX})</span>
-            </div>
-            <div class="scale-axis-track">
-              <div class="scale-axis-bar"></div>
-            </div>
-          </div>
-
-          <!-- 端点 2: 真实刻度齿 -->
-          <div style="display: flex; gap: 8px;">
-            <div style="flex: 1;">
-              <label style="font-size: 10px; color: var(--accent-orange);">端点 2 (刻度齿像素 X):</label>
-              <input type="number" id="inp-sc-calib-x" value="${sc.calibX}" style="font-size: 11px; border-color: rgba(249,115,22,0.4);" />
-            </div>
-            <div style="flex: 1;">
-              <label style="font-size: 10px; color: var(--accent-orange);">端点 2 刻度齿数值:</label>
-              <div class="input-row">
-                <input type="number" id="inp-sc-calib-val" value="${sc.calibVal}" style="font-size: 11px; border-color: rgba(249,115,22,0.4);" />
-                <input type="text" id="inp-sc-unit" value="${sc.unit || ''}" style="width: 45px; font-size: 11px;" placeholder="单位" />
-              </div>
-            </div>
-          </div>
-
-          <!-- 常用刻度快捷填入胶囊 (纯数字) -->
-          <div class="btn-group" style="margin-top: 8px; width: 100%; display: flex; gap: 4px;">
-            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-tick-val-btn" data-val="100" style="flex:1; font-size: 10px;">100</button>
-            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-tick-val-btn" data-val="50" style="flex:1; font-size: 10px;">50</button>
-            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-tick-val-btn" data-val="20" style="flex:1; font-size: 10px;">20</button>
-            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-tick-val-btn" data-val="10" style="flex:1; font-size: 10px;">10</button>
-          </div>
-        </div>
-
-        <!-- 刻度尺度模式 (线性 Linear / 对数 Log) -->
-        <div class="form-group" style="margin-top: 8px;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <label style="font-size: 11px;">刻度尺度 (Scale Type):</label>
-            <span style="font-size: 10px; color: ${currentScaleType === 'log' ? 'var(--status-warning)' : 'var(--accent-blue)'}; font-weight: 600;">${currentScaleType.toUpperCase()}</span>
-          </div>
-          <div class="btn-group" style="display: flex; gap: 4px; width: 100%; margin-top: 4px;">
-            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-scaletype-btn ${currentScaleType === 'linear' ? 'active-mode' : ''}" data-scale="linear" style="flex: 1; font-size: 10px;">线性 (Linear)</button>
-            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-scaletype-btn ${currentScaleType === 'log' ? 'active-mode' : ''}" data-scale="log" ${!isLogValid ? 'disabled title="对数刻度要求: 起点值 > 0 且 刻度值 > 0" style="flex: 1; font-size: 10px; opacity: 0.45; cursor: not-allowed;"' : 'style="flex: 1; font-size: 10px;"'}>对数 (Log)</button>
-          </div>
-          ${!isLogValid ? `
-            <div id="log-scale-err" style="color: var(--accent-red); font-size: 10px; margin-top: 4px; line-height: 1.3;">
-              ${logCheck.reason}
-            </div>
-          ` : ''}
-        </div>
-
-        <!-- 图表形态选择 (面积图 / 柱状图 / 纯折线 / 散点符号) -->
-        <div class="form-group" style="margin-top: 8px;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <label style="font-size: 11px;">图表形态类型 (Plot Type):</label>
-            <button id="btn-apply-type-all" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 1px 5px; color: var(--text-muted);" title="将当前形态应用至全部属种列">应用至全列</button>
-          </div>
-          <div class="btn-group" style="display: flex; gap: 3px; width: 100%; margin-top: 4px;">
-            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-plottype-btn ${currentPlotType === 'area' ? 'active-mode' : ''}" data-type="area" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">面积</button>
-            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-plottype-btn ${currentPlotType === 'bar' ? 'active-mode' : ''}" data-type="bar" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">柱状</button>
-            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-plottype-btn ${currentPlotType === 'line' ? 'active-mode' : ''}" data-type="line" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">折线</button>
-            <button class="ui-btn ui-btn--quiet ui-btn--xs quick-plottype-btn ${currentPlotType === 'symbol' ? 'active-mode' : ''}" data-type="symbol" style="flex: 1; font-size: 10.5px; padding: 4px 2px;">符号</button>
+        <!-- 几何只读展示：标定/形态/尺度都是**组级**属性（见步骤 6 面板），
+             本面板不再重复提供输入框 —— 之前同一组读数在两处各有一个输入框，
+             改一处另一处不知道，属于会写错数据的设计缺陷。 -->
+        <div class="form-group" style="padding: 6px 8px; background: var(--bg-tertiary); border-radius: 6px;">
+          <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 3px;">几何（只读）：标定在步骤 6 的组参数里改</div>
+          <div style="font-size: 10.5px; line-height: 1.5; color: var(--text-secondary);">
+            左缘 ${col.startX.toFixed(0)}px → 0 点 ${sc.originX.toFixed(0)}px
+            ${sc.calibX === '' ? '　|　刻度：未标定' : `→ 刻度 ${Number(sc.calibX).toFixed(0)}px（${sc.calibVal} ${sc.unit}）`}
           </div>
         </div>
 

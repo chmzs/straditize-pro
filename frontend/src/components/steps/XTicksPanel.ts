@@ -272,10 +272,17 @@ export function render(data: DiagramData): string {
       ? String(currentGroup.ref_units_per_cell)
       : '');
   const rulerLine = describeRulerDetection(geo, geoError, geoPending);
+  // 刻距只说明"一格多少像素"，用户真正要填的是"一格多少单位"——那个数只在图上。
+  // 所以填完立刻把换算结果回显给他核对：px/单位 若与肉眼估计差一个数量级，就是填错了。
+  const unitsPerCellNum = Number.parseFloat(unitsPerCellText);
+  const perUnitText =
+    Number.isFinite(unitsPerCellNum) && unitsPerCellNum > 0 && geo?.median_spacing_px
+      ? ` → ${(geo.median_spacing_px / unitsPerCellNum).toFixed(2)} px/${groupUnit}`
+      : '';
   const spanText =
     rigidSpan == null
       ? '刻距 —（需先检测到刻度尺）'
-      : `刻距 ${geo?.median_spacing_px ?? '—'}px（自动检测）`;
+      : `刻距 ${geo?.median_spacing_px ?? '—'}px（自动检测）${perUnitText}`;
 
   const spanForActive = lastSpans.find(
     (s) => s.colIndex === (activeCol?.col_index ?? -1)
@@ -348,8 +355,35 @@ export function render(data: DiagramData): string {
               当前组: <span style="color: var(--accent-blue);">${currentGroup?.name}</span>
             </div>
             <div style="font-size: 10px; color: var(--text-muted);">
-              形态: <strong>${currentGroup?.plot_type}</strong> | 单位: <strong>${groupUnit}</strong>
+              单位: <strong>${groupUnit}</strong>
             </div>
+          </div>
+
+          <!-- 组级参数：图形形态与尺度类型都是**组**的属性（同一组的列共用），
+               所以编辑入口只在这里，列属性面板不再重复。 -->
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 6px; font-size: 10px;">
+            <span style="color: var(--text-muted);">形态:</span>
+            ${(['area', 'bar', 'line', 'symbol'] as const)
+              .map(
+                (t) =>
+                  `<button class="ui-btn ui-btn--quiet ui-btn--xs grp-plottype-btn ${
+                    currentGroup?.plot_type === t ? 'active-mode' : ''
+                  }" data-plottype="${t}" style="padding: 1px 7px; font-size: 9.5px;">${
+                    t === 'area' ? '面积' : t === 'bar' ? '柱状' : t === 'line' ? '折线' : '符号'
+                  }</button>`
+              )
+              .join('')}
+            <span style="color: var(--text-muted); margin-left: 6px;">尺度:</span>
+            ${(['linear', 'log'] as const)
+              .map(
+                (t) =>
+                  `<button class="ui-btn ui-btn--quiet ui-btn--xs grp-scaletype-btn ${
+                    currentGroup?.scale_type === t ? 'active-mode' : ''
+                  }" data-scaletype="${t}" style="padding: 1px 7px; font-size: 9.5px;">${
+                    t === 'linear' ? '线性' : '对数'
+                  }</button>`
+              )
+              .join('')}
           </div>
 
           <!-- 组内属种与批量划组管理 -->
@@ -417,6 +451,18 @@ export function render(data: DiagramData): string {
             ${rulerLine}
           </div>
 
+          <div data-role="units-per-cell-hint" style="font-size: 9.5px; line-height: 1.4; color: var(--text-muted); margin-bottom: 4px;">
+            这个数只能从图上读：<strong>相邻两个数字标签之差</strong>（如标签 10 / 30 → 填 20）。
+            标签隔一根齿才标数字时，取差值的一半。软件不替你猜——填错会让全组读数按同一比例偏掉。
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+            <button id="btn-measure-spacing" class="ui-btn ui-btn--secondary"
+                    style="font-size: 10px; padding: 2px 8px;"
+                    title="切到画布测距工具：点两个相邻刻度齿，画布上会显示 Δx 与像素距离。用它核对上面的自动检测刻距，量到的值与自动值不一致时以你量的为准。">
+              量刻距（测距 S）
+            </button>
+            <span style="font-size: 9.5px; color: var(--text-muted);">点两个相邻刻度齿，看 Δx</span>
+          </div>
           <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
             <label for="inp-ref-units-per-cell" style="font-size: 10.5px; color: var(--text-muted);">每根齿单位数:</label>
             <input type="number" id="inp-ref-units-per-cell" value="${unitsPerCellText}" placeholder="如 20"
@@ -528,6 +574,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     cachedData?.columns.find((c) => c.id === cachedData?.activeTaxaId) || cachedData?.columns[0];
   const columnIndex = (col: NonNullable<ReturnType<typeof activeColumn>>) =>
     col.col_index ?? cachedData?.columns.indexOf(col) ?? 0;
+
   const activeRoi = () => {
     const col = activeColumn();
     return (
@@ -561,6 +608,32 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     // `patchRulerDom` 只就地更新检测那两行，不会更新「像素位置」。
     void ensureRulerGeometry(ctx, root).then(() => {
       ctx.onDataChange?.();
+    });
+  });
+
+  // 组级形态 / 尺度：与「每根齿单位数」走同一条写入通路，都是组的属性。
+  const patchGroup = (field: Record<string, string>) => {
+    const gid = selectedGroupId;
+    const roiId = activeRoi()?.id;
+    const client = ctx.rpcClient as
+      | { roiGroupUpdate?: (r: string, g: string, p: Record<string, unknown>) => Promise<unknown> }
+      | undefined;
+    (window as unknown as Record<string, unknown>).__patchTrace = {
+      gid, roiId, hasClient: Boolean(client?.roiGroupUpdate), field,
+    };
+    if (!gid || !roiId || !client?.roiGroupUpdate) return;
+    void client.roiGroupUpdate(roiId, gid, field).then(() => ctx.onDataChange?.());
+  };
+  root.querySelectorAll('.grp-plottype-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const t = btn.getAttribute('data-plottype');
+      if (t) patchGroup({ plot_type: t });
+    });
+  });
+  root.querySelectorAll('.grp-scaletype-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const t = btn.getAttribute('data-scaletype');
+      if (t) patchGroup({ scale_type: t });
     });
   });
 
@@ -892,6 +965,12 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   root
     .querySelector('#inp-manual-tick-val2')
     ?.addEventListener('input', rememberDraft('v2'));
+
+  // 「量刻距」不是新功能：画布早就有测距工具（Δx / Δy / px），
+  // 用户缺的是在步骤 6 里被指出"该量什么、跟什么对照"。点这里直接切过去。
+  root.querySelector('#btn-measure-spacing')?.addEventListener('click', () => {
+    ctx.onSetToolMode?.('measure');
+  });
 
   root.querySelector('#btn-save-manual-ticks')?.addEventListener('click', () => {
     const activeCol = activeColumn();

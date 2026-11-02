@@ -3665,3 +3665,29 @@ body.theme-light .ad-pane-splitter {
 
 
 }
+
+
+/* 画布图例（步骤 6+ 才有意义）：说明蓝实线 / 红虚线 / 底图原有线分别是什么。 */
+.canvas-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 68px;
+  z-index: 6;
+  display: none;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 9px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  border: 1px solid var(--border-color);
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+.canvas-legend.is-visible { display: flex; }
+.canvas-legend-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.legend-sw { display: inline-block; width: 18px; height: 0; border-top-width: 2px; border-top-style: solid; }
+.legend-sw-baseline { border-top-color: rgba(56, 189, 248, 0.85); }
+.legend-sw-tick2 { border-top-color: rgba(239, 68, 68, 0.8); border-top-style: dashed; }
+.legend-sw-native { border-top-color: rgba(120, 120, 120, 0.9); }

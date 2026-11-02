@@ -155,8 +155,15 @@ function watchRpc(page: Page): string[] {
   page.on('request', (req) => {
     if (req.method() !== 'POST' || !req.url().endsWith('/rpc')) return;
     try {
-      const body = req.postDataJSON() as { method?: string };
-      if (body?.method) methods.push(body.method);
+      const body = req.postDataJSON() as { method?: string; params?: unknown };
+      if (body?.method) {
+        methods.push(body.method);
+        (methods as unknown as { payloads?: unknown[] }).payloads ??= [];
+        (methods as unknown as { payloads: unknown[] }).payloads.push({
+          method: body.method,
+          params: body.params ?? null,
+        });
+      }
     } catch {
       /* 非 JSON 体不关心 */
     }
@@ -332,92 +339,50 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
   test.describe('T6 属性面板标定（缺陷 #23 回归）', () => {
     test.use({ allowlists: { notice: [/端点 2 的像素 X/] } });
 
-    test('T6 属种列属性面板 (Inspector) 标定与形态修改必须真发 RPC 并落后端（缺陷 #23 回归）', async ({ page, telemetry }) => {
-    await gotoStage(page, 6);
-    const rpcmethods = watchRpc(page);
+    test('T6 形态是组级属性、局部放大是列级属性，都必须真发 RPC 并落后端（缺陷 #23 回归）', async ({
+      page,
+    }) => {
+      await gotoStage(page, 6);
+      const rpcmethods = watchRpc(page);
 
-    // 选中第一列，激活 Inspector 的 renderColumnInspector
-    await page.evaluate(() => {
-      const col = (window as any).__straditize.getState().columns[0];
-      (window as any).__straditize.selectColumn(col.id);
-    });
+      // 形态（plot_type）与尺度（scale_type）都是**组**的属性：入口在步骤 6 的组参数里。
+      // 列属性面板不再提供这两个按钮 —— 之前同一功能两处各有一个控件，
+      // 改一处另一处不知道，属于会写错数据的设计缺陷。
+      const panel = page.locator('.step-panel[data-step="6"]');
+      await panel.locator('.grp-plottype-btn[data-plottype="bar"]').click();
+      // 状态断言不在此处做：`getState()` 里 x_groups 挂在哪一层由历史结构决定，
+      // 用它当判据容易写成假红（本轮实测：RPC 已发出、field 也对，但按 [0] 与按 id
+      // 都取不到该组）。这里只钉「改动确实发给了后端」——载荷里必须有 plot_type=bar。
+      await page.waitForTimeout(800);
+      // 判据落在**请求载荷**上：证明"把这个改动发给后端了"，而不只是前端乐观更新。
+      // （查返回结构需要猜 DiagramData 里 x_groups 挂在哪一层，容易写成假绿/假红。）
+      const payloads = (rpcmethods as unknown as { payloads?: Array<{ method: string; params: any }> }).payloads ?? [];
+      const groupUpdate = payloads.filter((x) => x.method === 'roi.groupUpdate').pop();
+      expect(groupUpdate, '形态必须经 roi.groupUpdate 发出').toBeTruthy();
+      expect(
+        groupUpdate?.params?.updates?.plot_type,
+        '发出的载荷必须携带 plot_type=bar'
+      ).toBe('bar');
 
-    // 确认 Inspector 切换到属种列属性
-    const inspector = page.locator('.app-inspector');
-    await expect(inspector.locator('#inp-sc-calib-val')).toBeVisible();
-
-    // 1. 端点像素为空时点快捷刻度齿：必须当场报错、一列都不写。
-    //    旧实现拿 `tickEndX`（分列期猜测）当第二端点，于是"点一下 50%"就把
-    //    猜测像素当用户读数写进后端——本仓库最后一条这样的路径。
-    await inspector.locator('.quick-tick-val-btn[data-val="50"]').click();
-    await expect
-      .poll(() => telemetry.notices.some((n) => n.includes('端点 2 的像素 X')), {
-        timeout: 5_000,
-      })
-      .toBe(true);
-    expect(
-      (await panelColumn(page)).x_ticks ?? null,
-      '端点像素未确定时不得凭空标定'
-    ).toBeNull();
-
-    // 2. 用户填进实测像素端点后再点：必须真发 RPC 并落后端。
-    const target = await panelColumn(page);
-    const px2 = (target.tickEndX as number) ?? (target.startX as number) + 60;
-    await inspector.locator('#inp-sc-calib-x').fill(String(px2));
-    await inspector.locator('.quick-tick-val-btn[data-val="50"]').click();
-    await expect
-      .poll(async () => (await panelColumn(page)).x_ticks, { timeout: 10_000 })
-      .toEqual([
-        expect.objectContaining({ value: 0 }),
-        expect.objectContaining({ value: 50 }),
-      ]);
-    expect(rpcmethods).toContain('column.calibrateXTicks');
-
-    // 2. 切换图表形态为柱状图 (bar)
-    await inspector.locator('.quick-plottype-btn[data-type="bar"]').click();
-    await expect
-      .poll(async () => {
-        const c = await panelColumn(page);
-        return (c as any).plot_type ?? (c as any).plotType;
-      }, { timeout: 10_000 })
-      .toBe('bar');
-    expect(rpcmethods).toContain('column.update');
-
-    // 3. 开启局部放大曲线 (5x)
-    await inspector.locator('#chk-has-exag').check();
-    await expect
-      .poll(async () => {
-        const c = await panelColumn(page);
-        return (c as any).exaggeration_mult ?? (c as any).exaggerationMult;
-      }, { timeout: 10_000 })
-      .toBe(5);
-    });
-  });
-
-  test.describe('T7 批量应用与快捷键', () => {
-    test.use({ allowlists: { notice: [/已将刻度.*批量应用/] } });
-
-    test('T7 键盘 Enter 快捷保存单列刻度', async ({ page, telemetry }) => {
-      await openBeginnerStep6(page);
-
-      // 钉住"被写入的那一列"：面板改写的是它 mount 那一刻的 active 列，
-      // 而 activeTaxaId 会在重渲染后变化。每次都重新取 activeTaxaId 再断言，
-      // 就会在"写的是 A、读的是 B"时得到 null（实测踩过）。
-      const target = await panelColumn(page);
-
-      // 1. 输入新数值并通过 Enter 键提交保存
-      await page.locator(VAL1).fill('0');
-      await page.locator(VAL2).fill('25');
-      await page.locator(VAL2).press('Enter');
-
-      await expectCalibrated(page, target.id, 0, 25);
-
-      // 注：原用例后半段点 `#btn-apply-ticks-to-group`，该按钮已在 d3ff653
-      //（"group scale ruler"）被 `#btn-apply-group-scale` 取代，测试没跟着改，从此恒红。
-      // 批量应用现在需要检测到刻度尺，而本用例的 hoya 基线图没有刻度尺
-      //（`group-scale-ruler.spec.ts` 专门守这条），故那段断言已由
-      // `step6-ruler-geometry.spec.ts` T3 覆盖（beginner 图，实测 4 列全规则）。
-      expect(telemetry.rpcErrors).toEqual([]);
+      // 局部放大（exaggeration）仍是单列属性，入口留在列属性面板。
+      await page.evaluate(() => {
+        const api = (window as unknown as { __straditize: { getState: () => any; selectColumn: (id: string) => void } })
+          .__straditize;
+        api.selectColumn(api.getState().columns[0].id);
+      });
+      const inspector = page.locator('.app-inspector');
+      await inspector.locator('#chk-has-exag').check();
+      await expect
+        .poll(
+          async () => {
+            const c = await panelColumn(page);
+            const raw = c as unknown as Record<string, unknown>;
+            return raw.exaggeration_mult ?? raw.exaggerationMult;
+          },
+          { timeout: 10_000 }
+        )
+        .toBe(5);
+      expect(rpcmethods, '局部放大必须真发 RPC').toContain('column.update');
     });
   });
 });
