@@ -97,7 +97,7 @@ class TestMeasureAxisRightEdge:
         assert measure_axis_right_edge(np.zeros((5, 0, 3), dtype=np.uint8), np.zeros((5, 0), dtype=bool), [0]) == [0]
 
 
-REAL_PLATE = "output/han2026_ngamring/fig3_raw.jpeg"
+REAL_PLATE = "tests/data/figures/real_plates/fig3_raw.jpeg"
 
 
 @pytest.mark.skipif(

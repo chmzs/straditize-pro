@@ -25,7 +25,7 @@
 
 ## 为什么要用合成图而不是只依赖真实图版
 
-真实图版 `output/han2026_ngamring/fig3_raw.jpeg` 被 .gitignore，CI 上不存在。
+真实图版 `tests/data/figures/real_plates/fig3_raw.jpeg` 被 .gitignore，CI 上不存在。
 所以这里用**合成的"顶边线 + 文字带 + 图例区"三层结构**，把判据本身钉死；
 真实图版那一条在文件存在时才跑（skip 时打印原因）。
 """
@@ -127,7 +127,7 @@ class TestLabelBandTop:
         assert 0 <= band_top < 300, f"回退值 {band_top} 必须落在 [0, data_top) 内"
 
 
-REAL_PLATE = "output/han2026_ngamring/fig3_raw.jpeg"
+REAL_PLATE = "tests/data/figures/real_plates/fig3_raw.jpeg"
 REAL_PDF = (
     "F:/Zotero/storage/HV4FXL63/"
     "Han Y.-2026-A synthesis of pollen sequences from the central-w.pdf"

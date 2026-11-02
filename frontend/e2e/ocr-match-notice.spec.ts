@@ -23,7 +23,7 @@
 import { expect, test } from './fixtures';
 import { openApp, resetBaseline, rpc } from './helpers';
 
-const FIG3 = 'output/han2026_ngamring/fig3_raw.jpeg';
+const FIG3 = 'tests/data/figures/real_plates/fig3_raw.jpeg';
 
 interface Recon {
   matched?: boolean;

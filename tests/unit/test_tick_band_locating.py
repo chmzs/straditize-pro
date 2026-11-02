@@ -51,7 +51,7 @@ from straditize_core.session import StraditizeSession
 HOYA_X, HOYA_Y = [315, 1946], [511, 1311]
 
 #: 真实图版：被 `.gitignore` 的 `output/` 覆盖，全新克隆拿不到 → 缺失时 skip。
-FIG3_PATH = Path("output/han2026_ngamring/fig3_raw.jpeg")
+FIG3_PATH = Path("tests/data/figures/real_plates/fig3_raw.jpeg")
 
 #: 真尺的物理位置：横轴 y=869，齿 870-875。验收区间放宽到 [868, 878]。
 EXPECTED_BAND_LOW = 868
@@ -68,7 +68,7 @@ class TestRealFigureFindsItsRuler:
     @pytest.mark.skipif(
         not FIG3_PATH.exists(),
         reason=(
-            "真实图版 output/han2026_ngamring/fig3_raw.jpeg 不存在"
+            "真实图版 tests/data/figures/real_plates/fig3_raw.jpeg 不存在"
             "（output/ 被 .gitignore 覆盖，全新克隆拿不到）。"
             "该用例只在具备该样本的机器上跑。"
         ),
