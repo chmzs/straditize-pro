@@ -48,6 +48,22 @@ let lastSpans: DetectedSpan[] = [];
 const refDrafts = new Map<string, string>();
 
 /**
+ * 两个手动读数输入框的草稿（按列 id）。
+ *
+ * 与 `refDrafts` 同一个坑：面板会被后台刷新重渲染（几何检测回包、自动存档、
+ * 画布交互都会走 `onDataChange`），而 Playwright/真实用户的 click 会先
+ * scroll/hover 触发这些刷新 —— 实测「填完 VAL2=40、toHaveValue 通过、点保存」
+ * 三步之间值就被冲成空，后端收到「0」「」并拒绝（issue #5）。
+ *
+ * 标定成功后 `x_ticks` 优先于草稿，所以不必手动清理，残留只会被忽略。
+ */
+const manualTickDrafts = new Map<string, { v1: string; v2: string }>();
+
+function draftFor(colId: string | undefined): { v1: string; v2: string } | undefined {
+  return colId ? manualTickDrafts.get(colId) : undefined;
+}
+
+/**
  * 用户显式给的轴线粗细（px，图级）。`null` = 让后端自动估。
  *
  * 为什么需要这个覆盖：后端自动估计取「每行从轴线起连续暗 run 的最小值」，
@@ -460,7 +476,7 @@ export function render(data: DiagramData): string {
               <span>左基线原点 (X1):</span>
             </label>
             <div style="display: flex; align-items: center; gap: 4px;">
-              <input type="number" id="inp-manual-tick-val1" value="${hasTicks ? activeCol.x_ticks![0].value : (activeCol?.startValue ?? 0)}" style="width: 60px; font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
+              <input type="number" id="inp-manual-tick-val1" value="${hasTicks ? activeCol.x_ticks![0].value : (draftFor(activeCol?.id)?.v1 ?? activeCol?.startValue ?? 0)}" style="width: 60px; font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
               <span style="font-size: 10.5px; color: var(--text-muted); min-width: 16px;">${activeCol?.unit || groupUnit}</span>
             </div>
           </div>
@@ -476,7 +492,7 @@ export function render(data: DiagramData): string {
               <span>右刻度齿点 (X2):</span>
             </label>
             <div style="display: flex; align-items: center; gap: 4px;">
-              <input type="number" id="inp-manual-tick-val2" value="${hasTicks ? activeCol.x_ticks![1].value : ''}" style="width: 60px; font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
+              <input type="number" id="inp-manual-tick-val2" value="${hasTicks ? activeCol.x_ticks![1].value : (draftFor(activeCol?.id)?.v2 ?? '')}" style="width: 60px; font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
               <span style="font-size: 10.5px; color: var(--text-muted); min-width: 16px;">${activeCol?.unit || groupUnit}</span>
             </div>
           </div>
@@ -860,6 +876,23 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   });
 
   // 8. 单列微调保存
+  // 记录两个读数框的编辑内容，供重渲染后回填（见 `manualTickDrafts` 的说明）。
+  const rememberDraft = (key: 'v1' | 'v2') => (e: Event) => {
+    const col = activeColumn();
+    if (!col?.id) return;
+    const cur = manualTickDrafts.get(col.id) ?? { v1: '', v2: '' };
+    manualTickDrafts.set(col.id, {
+      ...cur,
+      [key]: (e.target as HTMLInputElement).value,
+    });
+  };
+  root
+    .querySelector('#inp-manual-tick-val1')
+    ?.addEventListener('input', rememberDraft('v1'));
+  root
+    .querySelector('#inp-manual-tick-val2')
+    ?.addEventListener('input', rememberDraft('v2'));
+
   root.querySelector('#btn-save-manual-ticks')?.addEventListener('click', () => {
     const activeCol = activeColumn();
     if (!activeCol) return;
