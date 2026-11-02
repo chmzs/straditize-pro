@@ -1,0 +1,181 @@
+{
+  "generatedAt": "2026-10-19T09:58:18.066Z",
+  "spec": "frontend/e2e/from-zero-journey.spec.ts",
+  "startedFrom": "zero-state (no image, no columns, no ROI)",
+  "sourceImage": "straditize_core/assets/tutorials/hoya-del-castillo.png",
+  "steps": [
+    {
+      "step": 0,
+      "label": "零状态启动",
+      "humanAction": "双击打开软件（后端空会话，未载入任何图）",
+      "uiResponse": "页面完成 boot，停在第 1 步，提示\"尚未载入剖面图…\"",
+      "backend": {
+        "imageSrc": null,
+        "imageWidth": 0,
+        "imageHeight": 0,
+        "rois": 0,
+        "columns": 0
+      },
+      "judgement": "零状态可用：__straditize 句柄就绪、画布已挂载、后端如实返回 null/[] 而非回落范例。"
+    },
+    {
+      "step": 1,
+      "label": "上传真实花粉图",
+      "humanAction": "点击顶栏「打开文件」，在系统文件对话框里选中 hoya-del-castillo.png（真实文件选择器（#btn-open-file → filechooser））",
+      "uiResponse": "载入进度提示 → 画布出现整幅剖面图，自动出现一个 pollen 数据有效区",
+      "backend": {
+        "imageWidth": 2339,
+        "imageHeight": 1654,
+        "imageSrc": "data:…/image/current",
+        "rois": [
+          {
+            "id": "roi_1",
+            "name": "pollen",
+            "composition": true
+          }
+        ],
+        "columns": 0,
+        "autoDetectedColumns": false
+      },
+      "judgement": "上传走的是真实 UI 链路（filechooser → input.change → FileReader → core.loadImage）。后端尺寸等于真值，且**没有**偷偷预跑分列。"
+    },
+    {
+      "step": 2,
+      "label": "界定数据有效区 (ROI)",
+      "humanAction": "按 F 适应屏幕，拖动 pollen ROI 的右下角手柄到 (1946, 1311)",
+      "uiResponse": "ROI 框跟随手柄缩小/放大，面板的像素范围读数实时更新",
+      "backend": {
+        "roi": {
+          "id": "roi_1",
+          "name": "pollen",
+          "xlim": [
+            309,
+            1945
+          ],
+          "ylim": [
+            507,
+            1310
+          ]
+        },
+        "roisCount": 1
+      },
+      "judgement": "ROI 通过真实拖拽写入后端（`roi.update`），且 id 未被换掉。取数区与标定互不派生这条不变量在这一步没有被破坏。"
+    },
+    {
+      "step": 3,
+      "label": "Y 轴两点标定",
+      "humanAction": "在面板填 top=511px→0、bottom=1311px→1300，单位 cm，点「应用标定」",
+      "uiResponse": "面板显示比例 0.1601 cm/px，HUD 提示\"已标定\"",
+      "backend": {
+        "calibration": {
+          "isCalibrated": true,
+          "top_px": 511,
+          "top_cm": 0,
+          "bottom_px": 1311,
+          "bottom_cm": 1300,
+          "unit": "cm",
+          "depthInterval": 2,
+          "depthGridEnabled": true
+        },
+        "roiUnchanged": true
+      },
+      "judgement": "两点式标定真的写进后端 depth_calib，且**没有**顺手改动 ROI（两条独立的换算链）。"
+    },
+    {
+      "step": 4,
+      "label": "清理干扰线（检测候选）",
+      "humanAction": "进入步骤 4，等「检测候选几何」跑完",
+      "uiResponse": "侧栏列出候选横/竖线，橙色（未确认）",
+      "backend": {
+        "candidates": 20,
+        "allCandidate": true,
+        "exclusionRegions": 0,
+        "strokes": 0
+      },
+      "judgement": "检测与删除解耦：检测只产几何不动像素。候选数量因图而异，故不断言具体条数，只断言\"状态全是候选\"这条因果。"
+    },
+    {
+      "step": 5,
+      "label": "分列与命名",
+      "humanAction": "进入步骤 5（自动分列），在侧栏把列 1 改名为「JourneyTaxon」并回车",
+      "uiResponse": "画布画出各列垂直基线；侧栏列名即时更新",
+      "backend": {
+        "columns": 28,
+        "allBelongToRoi": true,
+        "renamedColumn": "JourneyTaxon"
+      },
+      "judgement": "分列产出真实列并全部归属本 ROI；改名走真实键盘并落后端。"
+    },
+    {
+      "step": 6,
+      "label": "标定列 X 刻度",
+      "humanAction": "进入步骤 6，等「自动提取刻度」跑完（识别底端刻度齿并写入两点标度）",
+      "uiResponse": "面板显示两点的像素与读数，画布底部出现刻度标记",
+      "backend": {
+        "activeColumn": "roi_1_col01",
+        "xTicks": [
+          {
+            "px": 322,
+            "value": 0
+          },
+          {
+            "px": 480,
+            "value": 20
+          }
+        ],
+        "calibratedColumns": 8,
+        "totalColumns": 28
+      },
+      "judgement": "X 标度真的写进后端 x_ticks（唯一解析入口，导出与 QA 共用），且两点方向正确。"
+    },
+    {
+      "step": 7,
+      "label": "拐点与采样层位",
+      "humanAction": "点「自动提取共识层位」",
+      "uiResponse": "侧栏列出识别出的层位行及其深度",
+      "backend": {
+        "horizons": 111,
+        "depthRange": [
+          3.25,
+          1295.125
+        ],
+        "calibrationUsed": true
+      },
+      "judgement": "层位真的落后端，且深度由用户标定换算而来（落在 0-1300 cm 内且全部有限）。"
+    },
+    {
+      "step": 8,
+      "label": "校验与导出",
+      "humanAction": "进入步骤 8 等 QA 跑完，点「导出」/ 直接取归档",
+      "uiResponse": "QA 横幅给出层位数与组分和门禁结论",
+      "backend": {
+        "qa": {
+          "n_horizons": 111,
+          "n_horizons_empty": 0
+        },
+        "readiness": {
+          "sheets": [
+            "pollen"
+          ],
+          "primary_roi": "pollen",
+          "total_rois": 1
+        },
+        "tar": {
+          "members": [
+            "README.txt",
+            "data.csv",
+            "data/pollen.csv",
+            "image/original.png",
+            "manifest.json",
+            "plot_strat.R"
+          ],
+          "size": 122880,
+          "dataCsvRows": 111,
+          "maxCell": 28.9593,
+          "dataCsvEqualsPrimary": true
+        }
+      },
+      "judgement": "导出真的有数据行、有非零读数，且 data.csv 与主 ROI 分表逐字节相同——不是只有表头的空壳。"
+    }
+  ]
+}
