@@ -613,7 +613,20 @@ def test_documented_cc_values_match_code() -> None:
 # 五、写入端：非法值必须在**保存时**就报错，而不是读的第一刻
 # --------------------------------------------------------------------------- #
 #: 一列上合法的两个刻度端点（实测落在内置 hoya 图 col0 的允许区间内）。
-TICKS = [{"px": 300.0, "value": 0.0}, {"px": 400.0, "value": 100.0}]
+def _ticks(session: StraditizeSession) -> list[dict[str, float]]:
+    """按**该列真实几何**造两个端点，别硬编码像素。
+
+    教训：此处原写死 `px=300/400`，而 hoya 的 ROI 左界一旦变动（D-04 把它从
+    309 移到 319），左端点就落到"基线附近 ±15px"的守卫之外，整组用例连带变红 ——
+    测的是 scale_type 归一化，却因为坐标写死而失败。
+    """
+    col = session.columns[0]
+    x0 = float(col.get("start", col.get("startX", 0)))
+    x1 = float(col.get("end", col.get("endX", x0 + 120)))
+    return [
+        {"px": x0 + 1.0, "value": 0.0},
+        {"px": min(x1 - 1.0, x0 + 100.0), "value": 100.0},
+    ]
 
 
 def _session_with_column() -> StraditizeSession:
@@ -633,7 +646,7 @@ def test_invalid_scale_type_is_rejected_at_save_time() -> None:
     session = _session_with_column()
     before = dict(session.columns[0])
     with pytest.raises(JsonRpcError) as excinfo:
-        session.calibrate_column_xticks(0, TICKS, scale_type="logarithmic")
+        session.calibrate_column_xticks(0, _ticks(session), scale_type="logarithmic")
     assert excinfo.value.code == INVALID_PARAMS == -32602
     assert "logarithmic" in str(excinfo.value)
     after = session.columns[0]
@@ -648,7 +661,7 @@ def test_invalid_scale_type_is_rejected_at_save_time() -> None:
 def test_scale_type_is_canonicalised_when_saved() -> None:
     """归一化不是拒绝：`" LOG "` 是明确无歧义的写法，存进去应是 `"log"`。"""
     session = _session_with_column()
-    session.calibrate_column_xticks(0, TICKS, scale_type=" LOG ")
+    session.calibrate_column_xticks(0, _ticks(session), scale_type=" LOG ")
     assert session.columns[0]["scale_type"] == "log"
 
 

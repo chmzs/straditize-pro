@@ -268,9 +268,66 @@ def detect_ruler_for_columns(
         if geo["spacing_px"]:
             spacings.append(float(geo["spacing_px"]))
 
+    median_spacing = round(float(np.median(spacings)), 2) if spacings else None
+
+    # 「无横轴列」：图上只画了一个刻度齿，看着只剩一根短竖线 —— 因为它**恰好
+    # 一格宽**，没有第二个齿可画。这类列的列宽本身就是「1 个单位刻度」。
+    # 判据用同图已测出的中位刻距做交叉验证（列宽 ≈ 中位刻距 ±15%）：
+    # 标定必须与同图其他列同尺度，凭"宽度看起来像"就补会造成系统性错标。
+    # 实测 pollen：12–13px 的零格列 vs 中位 12.5px → 命中；
+    # diatom：26px 的零格列 vs 中位 38px（差 32%）→ 不命中（那里确实没有刻度尺）。
+    if median_spacing:
+        tolerance = 0.15 * median_spacing
+        for geo in per_column:
+            if geo.get("n_cells") != 0 or geo.get("spacing_px") is not None:
+                continue
+            width = float(geo.get("column_width") or 0)
+            if width > 0 and abs(width - median_spacing) <= tolerance:
+                geo["spacing_px"] = round(width, 2)
+                geo["n_cells"] = 1
+                geo["source"] = "column_width_as_unit"
+                geo["ticks"] = (geo.get("ticks") or [])[:1]
+                geo["note"] = (
+                    "该列只画了一个刻度齿：rioja 的 `strat.plot` 对每列按 "
+                    "`colM = floor((max+5)/5)*5`、不足 `min.width`(默认5) 抬到 5 取满量程，"
+                    "而刻度增量 `x.pc.inc` 默认 10 —— 满量程小于增量时 "
+                    "`seq(0, colM, by=10)` 只有一个 0 刻度，画不出第二个齿。"
+                    "列宽 ∝ colM，所以**列宽对应的是该列满量程（通常 5），不是 10**。"
+                )
+
+    # 第二类：**完全没有横轴**的列（diatom 那种 —— 连刻度齿都没有）。
+    # 它们无法自测刻距，但同一图版的所有面板共用一套刻度（diatom 实测 25 个面板
+    # 共用 3.80 px/单位，10 个带印刷数字的面板一致）。所以按同图刻距折算：
+    #   spacing_px = 共用刻距；cells_estimate = 列宽 / 共用刻距（可为小数，
+    #   例如 26px / 38.25px = 0.68 格 ⇒ 该列满量程约 6.8 单位）。
+    # 前提是「同图共用」成立才折算 —— 用「≥3 列测出刻距且变异系数 <5%」判定，
+    # 不成立就不折算（跨列外推曾造成 −84%/+151% 的事故，见 suggest_scales 文档）。
+    shared_ok = False
+    if len(spacings) >= 3 and median_spacing:
+        # 用「与中位数的偏差 ≤5% 的列占多数」而不是 CV：CV 会被单个伪刻线拉爆
+        # （diatom 实测 spacings=[39.0,38.5,38.0,39.0,22.5,38.0]，CV=16.7%，
+        # 而 5/6 列其实高度一致；那个 22.5 是伪刻线，不是"刻度不共用"）。
+        close = [v for v in spacings if abs(v - median_spacing) <= 0.05 * median_spacing]
+        shared_ok = len(close) >= 3 and len(close) >= 0.6 * len(spacings)
+    if shared_ok:
+        for geo in per_column:
+            if geo.get("spacing_px") is not None:
+                continue
+            width = float(geo.get("column_width") or 0)
+            if width <= 0:
+                continue
+            geo["spacing_px"] = median_spacing
+            geo["cells_estimate"] = round(width / median_spacing, 2)
+            geo["source"] = "shared_scale"
+            geo["note"] = (
+                f"该列没有画横轴（rioja 的 `x.axis[i]` 为 FALSE）。但 `inc` 是全图统一的"
+                f"（`inc = 可用宽度 / sum(colM)`，列宽 ∝ colM），所以 px/单位 与同图其他列相同："
+                f"按共用刻距 {median_spacing}px 折算，满量程约 {geo['cells_estimate']} 格。"
+            )
+
     return {
         "per_column": per_column,
-        "median_spacing_px": round(float(np.median(spacings)), 2) if spacings else None,
+        "median_spacing_px": median_spacing,
         "all_regular": (
             all(g["regular"] for g in per_column if g["regular"] is not None)
             if any(g["regular"] is not None for g in per_column)
