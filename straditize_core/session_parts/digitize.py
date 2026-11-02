@@ -129,10 +129,19 @@ class DigitizeSessionMixin:
                         )
                     else:
                         feat_x = float(c_start + np.mean(fg_indices))
-                elif reader_type == "bars":
+                elif reader_type in ("bars", "bar"):
+                    # 柱状 / 条带画法：读**柱子右缘**（该行最右墨迹），不是柱内均值。
+                    # 均值落在柱体中心，读数系统性只有真值一半：benchmark 实测
+                    # Betula@430cm 真值 73.91 → bar 36.44（全表 MAE 3.087 vs area 1.312）。
+                    # 单数 `bar` 是底层 `digitize_column` 的写法，复数 `bars` 是历史别名，
+                    # 两层契约曾因此错位：`bar` 静默落到 else 走 mean（issue P-04）。
                     feat_x = float(c_start + np.max(fg_indices))
                 else:
-                    feat_x = float(c_start + np.mean(fg_indices))
+                    raise JsonRpcError(
+                        INVALID_PARAMS,
+                        f"未知的读取方式 {reader_type!r}：只支持 area / line / bar(s)。"
+                        "静默退化到均值会把柱状图读数压成一半，且返回的 reader_type 会说谎。",
+                    )
             else:
                 feat_x = float(c_start)
 
