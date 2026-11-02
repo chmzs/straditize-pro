@@ -29,20 +29,38 @@ def _column_points(reader: str) -> dict[int, float]:
     return {int(p["row"]): float(p["x"]) for p in session.digitize(0, reader)["points"]}
 
 
-def test_bar_reader_is_not_mean_of_column() -> None:
-    """`bar` 必须读柱右缘，不得与 `line`（柱心均值）逐点相同。"""
-    bar = _column_points("bar")
-    line = _column_points("line")
-    assert bar, "基准图上应能读出点"
-    assert bar.keys() == line.keys()
-    differing = [row for row in bar if bar[row] != line[row]]
-    assert differing, (
-        "bar 与 line 逐点完全相同 —— bar 已退化为柱内均值（P-04 复发）"
-    )
-    # 柱状图上柱右缘一定在柱心右侧（除非该行无墨，两者都取基线）。
-    right_of_center = [row for row in differing if bar[row] > line[row]]
-    assert len(right_of_center) > 0.8 * len(differing), (
-        "bar 应读柱右缘（大于柱心），实测多数点并不在右侧"
+def test_bar_reader_agrees_with_area_not_half_of_it() -> None:
+    """柱状图上 `bar` 与 `area` 都读填充顶边，比值应 ≈1；退化到柱内均值时 ≈0.5。
+
+    判据演进史（前两版都是判据本身的错，产品是对的）：
+    1. 「bar 与 line 逐点不同」—— D-08 把 line 修成"填充读顶边"后两者本就同值，代理失效；
+    2. 「bar 等于该行最右墨迹」—— 用的是 `session.foreground_mask`，而 `digitize`
+       内部还叠了 `~grid_line_mask & roi_mask`，两份 mask 不同（实测只 26/113 行相等）。
+    最终用**同源参照**：area 与 bar 出自同一个 digitize，P-04 时 bar=柱心≈area 的一半，
+    修好后两者同值。这个比值能可靠区分 0.5 与 1.0，且不依赖我猜 mask 的构成。
+    """
+    session = StraditizeSession()
+    session.load_image(image_path=str(BARS))
+    session.detect_columns()
+    session.roi_update(y0=82.0, y1=563.0)
+    session.detect_columns()
+
+    bar = {int(p["row"]): float(p["x"]) for p in session.digitize(0, "bar")["points"]}
+    area = {int(p["row"]): float(p["x"]) for p in session.digitize(0, "area")["points"]}
+
+    baseline = float(session.columns[0]["start"])
+    ratios = []
+    for row in sorted(bar):
+        height = area[row] - baseline
+        if height < 10:  # 只比"真有柱高"的行，避免基线附近的除零噪声
+            continue
+        ratios.append((bar[row] - baseline) / height)
+    assert len(ratios) > 50, f"可比行太少（{len(ratios)}）"
+    ratios.sort()
+    median = ratios[len(ratios) // 2]
+    assert 0.9 <= median <= 1.1, (
+        f"bar/area 比值中位数 {median:.3f}（期望 ≈1.0）。"
+        f"≈0.5 说明 bar 退化成柱内均值（P-04 复发）"
     )
 
 
