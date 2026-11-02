@@ -24,6 +24,29 @@ from ..protocol import (
     JsonRpcError,
 )
 
+#: 唯一支持的读取器类型。与 `plot_type`、底层 `digitize_column` 共用同一套**单数**命名。
+READER_TYPES: tuple[str, ...] = ("area", "line", "bar")
+
+#: 历史别名 → 规范名。只在此处出现一次：让别名集中在一个入口被消解，
+#: 而不是散进每个分支判断（那样 `bar` 曾静默落到 else 走均值，P-04）。
+_READER_ALIASES: dict[str, str] = {"bars": "bar"}
+
+
+def normalize_reader_type(value: str | None) -> str:
+    """把读取器类型归一化成 :data:`READER_TYPES` 里的规范名。
+
+    未知值**直接报错**：静默退化到均值会让柱状图读数只有真值一半，
+    而返回值里的 `reader_type` 仍回显用户传的名字（元数据说谎）。
+    """
+    key = str(value or "").strip().lower()
+    key = _READER_ALIASES.get(key, key)
+    if key not in READER_TYPES:
+        raise JsonRpcError(
+            INVALID_PARAMS,
+            f"未知的读取方式 {value!r}：只支持 {' / '.join(READER_TYPES)}。",
+        )
+    return key
+
 # The column-curve membership rule (connected-component identity + size) lives in
 # ``straditize_core.digitize`` together with its measured rationale, so that this
 # path and the batch ``trace_area_profile`` reader cannot drift apart.
@@ -44,6 +67,8 @@ class DigitizeSessionMixin:
             reader_type = method
         elif mode is not None:
             reader_type = mode
+        # 归一化一次，后面所有分支只面对规范名单数名。
+        reader_type = normalize_reader_type(reader_type)
         if not getattr(self, "columns", None):
             raise JsonRpcError(
                 STATE_ERROR,
@@ -129,18 +154,16 @@ class DigitizeSessionMixin:
                         )
                     else:
                         feat_x = float(c_start + np.mean(fg_indices))
-                elif reader_type in ("bars", "bar"):
+                elif reader_type == "bar":
                     # 柱状 / 条带画法：读**柱子右缘**（该行最右墨迹），不是柱内均值。
                     # 均值落在柱体中心，读数系统性只有真值一半：benchmark 实测
                     # Betula@430cm 真值 73.91 → bar 36.44（全表 MAE 3.087 vs area 1.312）。
                     # 单数 `bar` 是底层 `digitize_column` 的写法，复数 `bars` 是历史别名，
                     # 两层契约曾因此错位：`bar` 静默落到 else 走 mean（issue P-04）。
                     feat_x = float(c_start + np.max(fg_indices))
-                else:
+                else:  # pragma: no cover - normalize_reader_type 已排除其余取值
                     raise JsonRpcError(
-                        INVALID_PARAMS,
-                        f"未知的读取方式 {reader_type!r}：只支持 area / line / bar(s)。"
-                        "静默退化到均值会把柱状图读数压成一半，且返回的 reader_type 会说谎。",
+                        INVALID_PARAMS, f"未实现的读取方式 {reader_type!r}"
                     )
             else:
                 feat_x = float(c_start)

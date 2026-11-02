@@ -54,3 +54,22 @@ def test_unknown_reader_type_is_rejected() -> None:
     with pytest.raises(Exception) as err:
         session.digitize(0, "definitely-not-a-reader")
     assert "读取方式" in str(err.value) or "reader" in str(err.value).lower()
+
+
+def test_reader_types_are_single_named_and_aliases_normalized() -> None:
+    """读取器类型只有一套单数名；`bars` 是别名，必须在入口被消解。
+
+    这条守的是"命名不许分叉"：别名一旦散进分支判断，就会出现
+    `bar` 走一条路、`bars` 走另一条路，而 `plot_type` 与底层
+    `digitize_column` 只会用其中一种（P-04 的成因）。
+    """
+    from straditize_core.session_parts.digitize import (
+        READER_TYPES,
+        normalize_reader_type,
+    )
+
+    assert READER_TYPES == ("area", "line", "bar")
+    for alias in ("bars", "BARS", " Bar "):
+        assert normalize_reader_type(alias) == "bar"
+    for canonical in READER_TYPES:
+        assert normalize_reader_type(canonical) == canonical
