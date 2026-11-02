@@ -118,11 +118,46 @@ def detect_column_starts(binary: np.ndarray,
         candidates = np.array([valid_indices[0]], dtype=int)
 
     # A candidate is useful only when the following column span is wide enough
-    # to represent a real column. The legacy code applies this to the gap to
-    # the next candidate, including the image's right edge for the last one.
+    # to represent a real column, and two candidates that sit closer than
+    # ``min_diff`` belong to ONE panel: the winner is the one that spans the
+    # panel's full height.
+    #
+    # Benchmark P-01 (`Pollen_CruveStyle_riojaPlotTestData.png`): the curve
+    # drawing puts a candidate 4-8 px right of three real axes, and the legacy
+    # rule — keep a candidate when its gap to the NEXT candidate is wide enough —
+    # kept that follower instead, so Empetrum's band ran to 609 and read
+    # Gramineae's axis (MAE 34.05). Measured vertical coverage at those pairs
+    # (fraction of the data region's rows carrying ink at that x):
+    #
+    #     601 -> 1.000   vs   609 -> 0.094     (real axis vs curve's first ink)
+    #     652 -> 1.000   vs   658 -> 0.073
+    #     839 -> 1.000   vs   843 -> 0.098
+    #     691 -> 1.000   vs   690 -> 0.015     (diatom-like 1-px antialias speck)
+    #      76 -> 0.865   vs    73 -> 0.010     (Diatom_riojaPlotTestData.png)
+    #
+    # A panel axis runs the whole height; a curve's first ink, a tick or an
+    # antialias speck does not. So a close pair is resolved by coverage (higher
+    # wins; equal coverage keeps the earlier x), which restores 601/652/839
+    # without lowering the threshold — 0.005 also drags in the fake 609/658/843
+    # candidates, and a plain "keep the earlier one" rule would move 21 real
+    # axes of the diatom figure 1-3 px left onto those specks.
     min_diff = max(1.0, float(min_col_width_ratio) * width)
-    gaps = np.r_[candidates[1:], width] - candidates
-    return candidates[gaps > min_diff].astype(int)
+    coverage = summed / float(height)
+    keep: list[int] = []
+    cluster: list[int] = [int(candidates[0])]
+    for candidate in candidates[1:]:
+        candidate = int(candidate)
+        if candidate - cluster[-1] <= min_diff:
+            cluster.append(candidate)
+            continue
+        keep.append(cluster[int(np.argmax([coverage[c] for c in cluster]))])
+        cluster = [candidate]
+    keep.append(cluster[int(np.argmax([coverage[c] for c in cluster]))])
+    # Mirror the legacy right-edge rule: the last start needs room up to the
+    # image edge, otherwise it is a mark inside the last column, not a column.
+    if len(keep) > 1 and (width - keep[-1]) <= min_diff:
+        keep.pop()
+    return np.asarray(keep, dtype=int)
 
 
 def detect_column_bounds(binary: np.ndarray,

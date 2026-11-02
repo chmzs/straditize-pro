@@ -17,7 +17,15 @@ except ImportError:
     find_peaks = None
 
 from ..curve import detect_stratigraphic_turning_points
-from ..digitize import _band_components, _own_run_last_offset, interpolate_hlines
+from ..digitize import (
+    _axis_ink_offsets,
+    _band_components,
+    _band_is_filled,
+    _line_own_offset,
+    _own_run_last_offset,
+    _without_axis_ink,
+    interpolate_hlines,
+)
 from ..protocol import (
     INVALID_PARAMS,
     STATE_ERROR,
@@ -133,27 +141,60 @@ class DigitizeSessionMixin:
         # labelling is built once for the whole band rather than per row.
         band = mask[y0 : y1 + 1, c_start:c_end]
         band_labels, band_label_areas = _band_components(band)
+        # 面板自身的 Y 轴线不是数据（benchmark P-02）：曲线画法下它与曲线不相连，
+        # 且是整个 band 里最大的分量（Empetrum 1303/1606 px、贯穿 481/482 行），
+        # 不排除就会让整列读数压在轴上（该列 13/48 层读成 0，占其绝对误差 82%）。
+        band_axis_offsets = _axis_ink_offsets(band)
+        # `line` 读取器要先判画法：填充型剖面读填充顶边，细线画读墨迹中心。
+        # 判定按整列做一次（见 `_band_is_filled`），不逐行翻转。
+        band_is_filled = (
+            _band_is_filled(band, band_axis_offsets) if reader_type == "line" else False
+        )
 
         for row_y in range(y0, y1 + 1):
             if row_y >= self.height:
                 break
             row_pixels = mask[row_y, c_start:c_end]
             fg_indices = np.where(row_pixels)[0]
+            # 本行除轴线以外的墨迹（= 数据）。若整行只有轴线（曲线/填充值≈0），
+            # 就不再剔除：那几列此时是数据本身，剔除会把 2px 的读数抹成 0
+            # （填空型图实测因此多出 0.008 的全表 MAE）。
+            data_indices = _without_axis_ink(fg_indices, band_axis_offsets)
+            if not len(data_indices):
+                data_indices = fg_indices
 
             if len(fg_indices) > 0:
                 if reader_type in ("line", "area"):
+                    # 本行在整块 label 图里的行号（区域外则退化为全 0 = 无分量）。
+                    local_y = row_y - y0
+                    if 0 <= local_y < band_labels.shape[0]:
+                        row_labels = band_labels[local_y]
+                    else:
+                        row_labels = np.zeros(c_end - c_start, dtype=int)
                     if reader_type == "area":
-                        local_y = row_y - y0
-                        if 0 <= local_y < band_labels.shape[0]:
-                            row_labels = band_labels[local_y]
-                        else:
-                            row_labels = np.zeros(c_end - c_start, dtype=int)
                         feat_x = float(
                             c_start
-                            + _own_run_last_offset(fg_indices, row_labels, band_label_areas)
+                            + _own_run_last_offset(
+                                data_indices,
+                                row_labels,
+                                band_label_areas,
+                            )
                         )
                     else:
-                        feat_x = float(c_start + np.mean(fg_indices))
+                        # `line` 读取器：填充型剖面下"曲线"是填充的**顶边**，不是柱内
+                        # 均值。均值落在填充中点，读数恒为真值一半（benchmark D-08：
+                        # Diatom 填充剖面 P03 7.11 vs area 14.21、P09 8.42 vs 16.84、
+                        # P22 3.16 vs 6.32，比值精确 0.500）。判据与实现见
+                        # `straditize_core.digitize._line_own_offset`（单一事实源）。
+                        feat_x = float(
+                            c_start
+                            + _line_own_offset(
+                                data_indices,
+                                row_labels,
+                                band_label_areas,
+                                filled=band_is_filled,
+                            )
+                        )
                 elif reader_type == "bar":
                     # 柱状 / 条带画法：读**柱子右缘**（该行最右墨迹），不是柱内均值。
                     # 均值落在柱体中心，读数系统性只有真值一半：benchmark 实测
