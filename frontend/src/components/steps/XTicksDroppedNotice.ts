@@ -242,13 +242,13 @@ export function renderActiveColumnLostNotice(col: Column): string {
         </summary>
         <div style="font-size: 9.5px; line-height: 1.45; color: var(--text-secondary); padding: 4px 0 2px 0;">
           <div><strong>①</strong> ${cause.body}</div>
-          <div style="margin-top: 2px;"><strong>②</strong> 原刻度像素：<code>${formatOriginalPx(dropped)}</code>；该列现在范围：<code>${columnBand}</code>${allEndpointsOutsideBand(dropped) ? '（两端点都在允许区间外）' : ''}。</div>
+          <div style="margin-top: 2px;"><strong>②</strong> 原刻度像素：<code>${formatOriginalPx(dropped)}</code>；该列现在的列范围：<code>${columnBand}</code>${allEndpointsOutsideBand(dropped) ? '（两端点都在允许区间外）' : ''}。</div>
           ${
             showGuardBand
               ? `<div style="margin-top: 2px; color: var(--text-muted);">${bandLabel(dropped)}：<code>${formatNewBand(dropped)}</code>。</div>`
               : ''
           }
-          <div style="margin-top: 2px;"><strong>③</strong> 填两个端点的真实读数并点【保存标度】，或先在图上拖拽绿色刻度齿对齐。重标成功后本提示自动消失。</div>
+          <div style="margin-top: 2px;"><strong>③</strong> 需要你重新标定：填两个端点的真实读数并点【保存标度】，或先在图上拖拽绿色刻度齿对齐。重标成功后本提示自动消失。</div>
           <div style="margin-top: 3px; color: var(--text-muted);">刻度齿只是几何位置；【自动提取】只给齿位，读数必须由你填，系统不会替你填。</div>
         </div>
       </details>

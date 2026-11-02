@@ -134,7 +134,12 @@ test.describe('Step 5 分列与属种命名', () => {
 
     // 旧测试只钉了 id 形态（多 ROI 之后由 col_7 变成 roi_3_col01）。这里加强：
     // 高亮值必须真的出现在后端当前列集合里，"指向一个已不存在的列"也要能被抓到。
-    const highlight = (await page.locator('#naming-sequential-highlight').innerText()).trim();
+    // 用 textContent 而不是 innerText：该元素在折叠的 `<details>` 里，Chrome 的
+    // innerText 对它返回空串（实测 textContent="roi_1_col01" / innerText="" /
+    // 祖先 details h=30）。判据不看"此刻是否可见"——那是另一条断言的事。
+    const highlight = (
+      (await page.locator('#naming-sequential-highlight').textContent()) ?? ''
+    ).trim();
     expect(
       data.columns.map((c) => c.id),
       `逐列点名高亮 ${highlight} 必须存在于后端列集合`

@@ -44,18 +44,29 @@ interface WireData {
   columns: WireColumn[];
 }
 
-/** 走产品路径把 hoya 载入并按**建议 ROI** 分列，返回带标记的列。 */
-async function loadHoyaProductPath(
+/**
+ * 走产品路径载入 **benchmark 图**并按建议 ROI 分列，返回带标记的列。
+ *
+ * 为什么不用 hoya：hoya 图上没有「填满整列的色块」—— 实测 29 列的
+ * `fill_ratio` 最高只有 **0.735**（阈值 0.95），`_detect_block_column` 判 0 列
+ * 是**正确行为**。用一张不含该特征的图去测「色块列必须被点名」，等于用一个
+ * 不可能发生的场景测功能，判据永远不可能真绿。
+ * Pollen benchmark 的合成列 `fill=0.982 / cv=0.008`，才是这条判据该测的对象。
+ *
+ * 另：`core.detectColumns` 的参数名是 `data_xlim` / `data_ylim`，
+ * 原写法 `x_bounds` / `y_bounds` 会被静默忽略（AGENTS.md 记载的历史事故）。
+ */
+async function loadBenchmarkProductPath(
   page: import('@playwright/test').Page
 ): Promise<WireColumn[]> {
   await openApp(page);
   const load = await rpc<{ suggested_roi: Record<string, number> }>(page, 'core.loadImage', {
-    sample_key: 'hoya',
+    image_path: 'tests/data/figures/benchmark_types/Pollen_riojaPlotTestData.png',
   });
   const sug = load.suggested_roi;
   await rpc(page, 'core.detectColumns', {
-    x_bounds: [sug.xMin, sug.xMax],
-    y_bounds: [sug.yMin, sug.yMax],
+    data_xlim: [sug.xMin, sug.xMax],
+    data_ylim: [sug.yMin, sug.yMax],
   });
   // 绕过 UI 的 RPC 不刷新前端镜像，重载后前端才拿到新列
   await page.reload();
@@ -86,7 +97,7 @@ test.describe('P1 suspect_block 色块列必须在界面上可见', () => {
   test('T1 真实图版：带标记的列在步骤 5 / 步骤 6 / 导出就绪清单三处都被点名', async ({
     page,
   }) => {
-    const flagged = await loadHoyaProductPath(page);
+    const flagged = await loadBenchmarkProductPath(page);
     // 前提：产品路径上必须确有命中，否则本用例测不到该场景
     expect(flagged.length, '产品路径上应有列被标记为色块').toBeGreaterThan(0);
     expect(flagged.length, '实测每张图只命中 1 列——若变多，文案口径需复核').toBe(1);
@@ -102,7 +113,9 @@ test.describe('P1 suspect_block 色块列必须在界面上可见', () => {
     const step5 = page.locator('[data-panel="step5"][data-suspect-count]');
     await expect(step5).toBeVisible({ timeout: 20_000 });
     await expect(step5).toHaveAttribute('data-suspect-count', String(flagged.length));
-    const step5Text = (await step5.innerText()).replace(/\s+/g, ' ');
+    // textContent 而非 innerText：这句「系统不会自动剔除」在折叠的 `<details>`
+    // 内容里，Chrome 的 innerText 对折叠内容返回空串（与 naming.spec 同一个陷阱）。
+    const step5Text = (((await step5.textContent()) ?? '')).replace(/\s+/g, ' ');
     expect(step5Text, '步骤 5 提示必须点名该列').toContain(colName);
     expect(step5Text).toContain('色块');
     expect(step5Text, '必须说明系统不会自动剔除').toMatch(/不会自动剔除|不会自动删除/);
@@ -140,7 +153,7 @@ test.describe('P1 suspect_block 色块列必须在界面上可见', () => {
   });
 
   test('T2 不得自动剔除：带标记的列仍留在载荷里，读数与列数不被前端改动', async ({ page }) => {
-    const flagged = await loadHoyaProductPath(page);
+    const flagged = await loadBenchmarkProductPath(page);
     expect(flagged.length).toBeGreaterThan(0);
     const col = flagged[0];
 
@@ -168,7 +181,7 @@ test.describe('P1 suspect_block 色块列必须在界面上可见', () => {
   });
 
   test('T3 反向哨兵：未被标记的列点选后不得出现该提示', async ({ page }) => {
-    const flagged = await loadHoyaProductPath(page);
+    const flagged = await loadBenchmarkProductPath(page);
     expect(flagged.length).toBeGreaterThan(0);
     const clean = (await rpc<WireData>(page, 'straditize.getDiagramData', {})).columns.find(
       (c) => !c.suspect_block

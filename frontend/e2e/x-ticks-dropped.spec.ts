@@ -162,7 +162,9 @@ test.describe('B-02 丢失的 X 刻度标定必须在界面上可见', () => {
       timeout: 10_000,
     });
 
-    const text = (await notice.innerText()).replace(/\s+/g, ' ');
+    // textContent 而非 innerText：这些提示渲染在折叠的 `<details>` 里，
+    // Chrome 的 innerText 对折叠内容返回空串（naming / suspect-block 同一个陷阱）。
+    const text = ((await notice.textContent()) ?? '').replace(/\s+/g, ' ');
     // ① 说清"标定已被清空"，而不是含糊的"未标定"。
     expect(text, '必须明确说出标定已被清空，用户才知道不是自己漏填').toContain(
       '标定已被清空'
@@ -215,6 +217,19 @@ test.describe('B-02 丢失的 X 刻度标定必须在界面上可见', () => {
   test('T3 该列重新标定成功后提示当次消失（后端清键 + 前端重渲染，不缓存旧显示）', async ({
     page,
   }) => {
+    // 换 beginner 基线：hoya 图上没有刻度尺（实测 29 列全部 axis_x=None、ticks=0），
+    // 后端「自检端点」必然拒绝（D-03 之后的正确行为）。本用例要测的是
+    // 「重标成功后提示当次消失」，不是「无几何也能标定」，所以要在有刻齿的图上跑。
+    await openApp(page);
+    await page.selectOption('#select-sample-diagram', 'beginner');
+    await expect
+      .poll(async () => (await diagramData<{ imageWidth: number }>(page)).imageWidth, {
+        timeout: 30_000,
+        message: '范例下拉必须真的把后端切到 beginner-tutorial.png',
+      })
+      .toBe(1923);
+    await rpc(page, 'core.detectColumns', {});
+
     await stubDroppedKey(page);
     await reloadFresh(page);
     await gotoStage(page, 6);
@@ -224,6 +239,10 @@ test.describe('B-02 丢失的 X 刻度标定必须在界面上可见', () => {
     // 标定会真的打后端 `column.calibrateXTicks`，成功后前端不该再显示"标定被清空"。
     await page.locator(VAL1).fill('0');
     await page.locator(VAL2).fill('40');
+    // 面板会被后台刷新重渲染，输入值只活 DOM 时会被冲掉（项目已知坑）。
+    // 保存前确认两个框都还在，否则后端会收到「0」「」而拒绝。
+    await expect(page.locator(VAL1)).toHaveValue('0');
+    await expect(page.locator(VAL2)).toHaveValue('40');
     await page.locator(SAVE_BTN).click();
 
     await expect
@@ -248,7 +267,9 @@ test.describe('B-02 丢失的 X 刻度标定必须在界面上可见', () => {
 
     const notice = page.locator(LOST5);
     await expect(notice, '步骤 5 面板必须报出标定丢失').toBeVisible({ timeout: 10_000 });
-    const text = (await notice.innerText()).replace(/\s+/g, ' ');
+    // textContent 而非 innerText：这些提示渲染在折叠的 `<details>` 里，
+    // Chrome 的 innerText 对折叠内容返回空串（naming / suspect-block 同一个陷阱）。
+    const text = ((await notice.textContent()) ?? '').replace(/\s+/g, ' ');
     expect(text).toContain('X 刻度标定已因');
     expect(text).toContain('本次重新分列后');
     for (const px of CONTRACT_EXAMPLE.px) {
@@ -316,7 +337,9 @@ test.describe('B-02 丢失的 X 刻度标定必须在界面上可见', () => {
 
     const notice = page.locator(LOST6);
     await expect(notice).toBeVisible({ timeout: 10_000 });
-    const text = (await notice.innerText()).replace(/\s+/g, ' ');
+    // textContent 而非 innerText：这些提示渲染在折叠的 `<details>` 里，
+    // Chrome 的 innerText 对折叠内容返回空串（naming / suspect-block 同一个陷阱）。
+    const text = ((await notice.textContent()) ?? '').replace(/\s+/g, ' ');
     await expect(notice).toHaveAttribute('data-reason', 'column_layout_changed');
     expect(text, '必须点明是列布局变动导致的，而不是"刻度落在列带外"').toContain('列布局已变动');
     expect(text, '必须说清该索引已不是原来那一列').toContain('已经不是原来那块列带');
@@ -405,7 +428,9 @@ test.describe('B-02 丢失的 X 刻度标定必须在界面上可见', () => {
       timeout: 10_000,
     });
     // 提示里的数字必须逐字来自后端（不许前端自己算一版）。
-    const text = (await notice.innerText()).replace(/\s+/g, ' ');
+    // textContent 而非 innerText：这些提示渲染在折叠的 `<details>` 里，
+    // Chrome 的 innerText 对折叠内容返回空串（naming / suspect-block 同一个陷阱）。
+    const text = ((await notice.textContent()) ?? '').replace(/\s+/g, ' ');
     for (const px of dropped.px ?? []) {
       expect(text, `提示必须复用后端下发的原刻度像素 ${px}`).toContain(`X = ${px} px`);
     }
