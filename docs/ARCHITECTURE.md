@@ -197,6 +197,53 @@ calibration: { isCalibrated, top_px, top_cm,
 
 ---
 
+### 6.2 标度的可测边界：几何可测，读数是作图书版设定
+
+| 量 | 可测性 | 来源 |
+|---|---|---|
+| 轴线位置（0 点） | **可测** | `ruler._find_axis_x`（右缘才是 0 点，不是列切分边界） |
+| 刻距（一格多少像素） | **可测** | `detect_ruler` 的 tick 间距 |
+| 列宽 | **可测** | 分列结果 |
+| 一格代表多少物理值 | **不可测** | 只能人读图上印刷数字 |
+
+**禁止跨列外推满量程**：实测按"格数比例"外推误差达 −84%/+151%
+（`suggest_scales` 因此默认返回不可信标记，见其文档）。
+
+**未标定列一律不给数，三处同源**：
+1. 后端 `ColumnScale.px_to_value` 默认 `require_calibrated=True` → 抛错；
+2. 导出（`export_data` / `extract_grid_values`）写 `NA`，且与「个别层位缺测按 naFill」
+   分开 —— 前者是"没有这个数"，后者是地学惯例的 0；
+3. 界面（侧栏 / 悬停 / 导出预览）显示「未标定」或 `--`。
+
+### 6.3 无横轴列：两种制图约定与各自的折算
+
+测试图由 rioja 1.0.7 `strat.plot` 生成，源码三条参数共同决定"这一列画不画横轴"：
+
+```r
+colM <- floor((apply(d, 2, max, na.rm = TRUE) + 5)/5) * 5   # 满量程，取整到 5 的倍数
+colM[colM < min.width] <- min.width                          # 不足 min.width(默认 5) 抬到 5
+xlabb <- seq(0, colM[i], by = x.pc.inc[i])                   # 刻度增量，默认 10
+if (x.axis[i]) axis(side = 1, at = xlabb, labels = xlabbt, ...)   # 逐列可关
+```
+
+由此产生两类，`measure_ruler_geometry` 用 `source` 区分：
+
+| 情形 | 判据 | 折算 | `source` |
+|---|---|---|---|
+| **一格宽列**（满量程 < 刻度增量） | 列宽 ≈ 同图刻距（±15%） | `spacing_px = 列宽`、`n_cells = 1`；**该列满量程是 `min.width`（通常 5），不是增量 10** | `column_width_as_unit` |
+| **完全未画轴**（`x.axis=FALSE`） | 无 `axis_row` 且无 tick | 沿用同图共用刻距，`cells_estimate = 列宽 ÷ 刻距` | `shared_scale` |
+
+**「同图共用」的判据必须对离群稳健**：用「与中位刻距偏差 ≤5% 的列占多数」，
+**不能用变异系数**。实测 diatom 为 `[39.0, 38.5, 38.0, 39.0, 22.5, 38.0]`，
+CV=16.7%（那个 22.5 是伪刻线），但 5/6 列高度一致；用 CV 会让 19 个无轴列
+全部拿不到刻度，用户无法标定。
+
+**与 Tilia 3.2.1 的对照（实测）**：Tilia 对最小的列也会画出完整轴，其最小单位刻度
+就是 **5%** —— 与 rioja 的 `min.width=5` 同值。两者语义一致，差别只在"画不画那 1 个齿"。
+本节的折算规则同时覆盖两种制图约定。
+
+---
+
 ## 7. 分列 → 数字化的数据流
 
 ```text
@@ -345,3 +392,13 @@ digitize 用 ink & ~grid_line_mask & roi_mask
     历史事故：`CleanupOverlay` / `XTickOverlay` / `SampleOverlay` 三个叠加层都犯过此错，
     表现为"检测到了但前端什么都看不到"。
 13. 叠加层异常**逐个**上报，禁止整体 `catch {}` 吞掉：静默吞异常与"没检测到"无法区分。
+14. **标度只有一个真相源**：后端 `resolve_column_scale` + `scale_provenance`；
+    前端禁止自行解析 `x_ticks` / `x_values` / `x_scales`（`CoordinateSystem.resolveColumnScale`
+    是纯取值器，只读后端结论）。
+15. **未标定列一律不给数**，三处同源：`px_to_value` 默认抛错、导出写 `NA`、界面「未标定」。
+16. **单列标定的端点由后端自检**（轴线右缘 + 检测到的末齿），前端不得传猜测像素；
+    分列期写入的 `tickEndX` 不得参与任何标定。
+17. **无横轴列按 `source` 折算**（`column_width_as_unit` / `shared_scale`），
+    禁止跨列外推物理量程（见 §6.2、§6.3）。
+18. **RPC 枚举参数必须单一命名 + 白名单校验**；文档声明的取值与代码常量绑成测试
+    （`tests/unit/test_rpc_spec_enums.py`）。静默退化到默认分支 = 静默错数。

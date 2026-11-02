@@ -523,7 +523,19 @@
     { "col_index": 0, "name": "col01", "axis_row": 1664,
       "axis_x": 259, "axis_x_right": 262,
       "ticks": [323, 449, 573, 699, 825],
-      "n_cells": 4, "spacing_px": 126.0, "regular": true, "column_width": 688 }
+      "n_cells": 4, "spacing_px": 126.0, "regular": true, "column_width": 688 },
+
+    { "col_index": 2, "name": "col03", "axis_row": 487,
+      "axis_x": 332, "axis_x_right": 332,
+      "ticks": [332], "n_cells": 1, "spacing_px": 13.0, "regular": null,
+      "column_width": 13, "source": "column_width_as_unit",
+      "note": "该列只画了一个刻度齿（满量程 < 刻度增量），按列宽 = 1 个单位刻度处理" },
+
+    { "col_index": 0, "name": "col01", "axis_row": null,
+      "axis_x": null, "axis_x_right": null,
+      "ticks": [], "n_cells": 0, "spacing_px": 38.25, "regular": null,
+      "column_width": 26, "source": "shared_scale", "cells_estimate": 0.68,
+      "note": "该列没有画横轴（x.axis=FALSE），按同图共用刻距折算" }
   ],
   "median_spacing_px": 124.5,
   "all_regular": true,
@@ -531,6 +543,16 @@
   "note": "仅测量刻线几何（轴线/刻线/格数/刻距）。不产出任何满量程读数：…"
 }
 ```
+
+- **`source` 字段**（三种取值，见 `docs/ARCHITECTURE.md` §6.3）：
+  - 缺省/`None` —— 本列直接测出了刻距；
+  - `column_width_as_unit` —— **一格宽列**：图上只画了一个齿（满量程 < 刻度增量），
+    `spacing_px` 取列宽，且**该列满量程是绘图器的最小量程（rioja `min.width` 默认 5），
+    不是刻度增量 10**；
+  - `shared_scale` —— **完全未画横轴**：`spacing_px` 沿用同图共用刻距，
+    另给 `cells_estimate = 列宽 ÷ 刻距`（可为小数）。
+- 「同图共用」只在「≥3 列测出刻距且多数与中位刻距偏差 ≤5%」时成立。
+  判据刻意**不用变异系数**：单个伪刻线就会让 CV 超阈值，导致整批无轴列拿不到刻度。
 
 | 字段 | 语义 |
 | :--- | :--- |
