@@ -203,8 +203,8 @@ pixi run app
   - 联系邮箱：[chmzs@outlook.com](mailto:chmzs@outlook.com)
 - **科研单位**：**兰州大学资源环境学院 黄小忠课题组** (College of Earth and Environmental Sciences, Lanzhou University, Huang Xiaozhong's Research Group)
 - **课题组学术指导与通讯作者**：
-  - 向丽雄 (Lixiong Xiang) &nbsp;|&nbsp; 邮箱：[xianglx@lzu.edu.cn](mailto:xianglx@lzu.edu.cn)
   - 黄小忠 (Xiaozhong Huang) &nbsp;|&nbsp; 邮箱：[xzhuang@lzu.edu.cn](mailto:xzhuang@lzu.edu.cn)
+  - 向丽雄 (Lixiong Xiang) &nbsp;|&nbsp; 邮箱：[xianglx@lzu.edu.cn](mailto:xianglx@lzu.edu.cn)
 
 ---
 
