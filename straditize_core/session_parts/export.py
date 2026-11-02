@@ -802,16 +802,21 @@ class ExportMixin:
             raw_x = [p_dict.get(r, default_start) for r in all_rows]
 
             scale = resolve_column_scale(self, col_def, c_idx)
-            data_dict[col_name] = [
-                scale.px_to_value(
-                    x,
-                    baseline_px=default_start,
-                    strict=strict,
-                    col_name=col_name,
-                    ndigits=4,
-                )
-                for x in raw_x
-            ]
+            # 未标定列整列不给数：与 export_data / extract_grid_values 同源。
+            data_dict[col_name] = (
+                [
+                    scale.px_to_value(
+                        x,
+                        baseline_px=default_start,
+                        strict=strict,
+                        col_name=col_name,
+                        ndigits=4,
+                    )
+                    for x in raw_x
+                ]
+                if scale.calibrated
+                else [None] * len(raw_x)
+            )
 
         df = pd.DataFrame(data_dict)
 

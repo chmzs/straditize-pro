@@ -147,6 +147,10 @@ class QaMixin:
                     baseline_px=col_start_px,
                     col_name=c_name,
                     ndigits=None,
+                    # QA 这里保留旧行为：未标定列按 legacy 粗算，用来**触发**
+                    # "该列没标定/总和偏离"的提醒；它不进入导出，也不代表读数。
+                    # 导出路径（export.py）对未标定列一律给 None。
+                    require_calibrated=False,
                 )
                 for r in horizon_rows
             ]

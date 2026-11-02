@@ -106,7 +106,15 @@ def test_resolve_column_scale_legacy_fallback_marks_uncalibrated() -> None:
     assert scale.exaggeration_mult == 4.0
     assert scale.declared_max == 0.0
     # At x=200 (midpoint of 100..300), raw linear value is 25.0; divided by 4x exaggeration -> 6.25
-    assert scale.px_to_value(200.0, baseline_px=100.0) == 6.25
+    # 未标定**不得产出读数**：legacy 的 px/单位来自分列期写入的
+    # `clamp(0.65×列宽, 20, 80)` 猜测值。实测 diatom benchmark 用这套默认值，
+    # 全表 MAE 从 0.204 变 4.059（19.9 倍，docs/findings/bench-issues/bench-diatom.md D-03）。
+    import pytest as _pytest
+
+    with _pytest.raises(ValueError, match="尚未标定"):
+        scale.px_to_value(200.0, baseline_px=100.0)
+    # 显式声明"仅供参考"时才允许算，调用方必须自行标注未标定。
+    assert scale.px_to_value(200.0, baseline_px=100.0, require_calibrated=False) == 6.25
 
 
 def test_four_export_formats_and_grid_and_qa_produce_identical_values(
