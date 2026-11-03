@@ -142,7 +142,7 @@ test.describe('步骤 6 对齐本组（自动跨度）', () => {
     // （`source="group_slope"`）派生。本用例仍在断言旧的 `x_ticks` 实体，
     // 需按新契约改写（查派生值而非列上字段）。在此之前用 fixme 显式标记，
     // 不静默跳过。
-    test.fixme(true, '契约已变：标定改由 group_slope 派生，x_ticks 不再承载标定');
+    test.fixme(true, '已被 step6-group-slope.spec.ts 覆盖（组斜率 ①②③ 三条约束）；本用例断言的是已删除的单列两点标定控件，保留作历史参考');
     test('T3 填 90 应用后：锚点=实测轴线，px/单位落在 6.2~6.4（真值 563/90≈6.26）', async ({
       page,
       telemetry,
@@ -334,7 +334,7 @@ test.describe('步骤 6 对齐本组（自动跨度）', () => {
     // （`source="group_slope"`）派生。本用例仍在断言旧的 `x_ticks` 实体，
     // 需按新契约改写（查派生值而非列上字段）。在此之前用 fixme 显式标记，
     // 不静默跳过。
-    test.fixme(true, '契约已变：标定改由 group_slope 派生，x_ticks 不再承载标定');
+    test.fixme(true, '已被 step6-group-slope.spec.ts 覆盖（组斜率 ①②③ 三条约束）；本用例断言的是已删除的单列两点标定控件，保留作历史参考');
     test('T6 未标定：无红色刻度线 + X2 为空 + 显示「未标定」；标定后红线必须出现', async ({
       page,
     }) => {
@@ -370,7 +370,7 @@ test.describe('步骤 6 对齐本组（自动跨度）', () => {
     // （`source="group_slope"`）派生。本用例仍在断言旧的 `x_ticks` 实体，
     // 需按新契约改写（查派生值而非列上字段）。在此之前用 fixme 显式标记，
     // 不静默跳过。
-    test.fixme(true, '契约已变：标定改由 group_slope 派生，x_ticks 不再承载标定');
+    test.fixme(true, '已被 step6-group-slope.spec.ts 覆盖（组斜率 ①②③ 三条约束）；本用例断言的是已删除的单列两点标定控件，保留作历史参考');
     test('T8 未标定：悬停丰度必须是 --；标定后必须给出数字', async ({ page }) => {
       await openBeginnerStep6(page);
 

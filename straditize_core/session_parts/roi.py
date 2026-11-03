@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import math
+
 import re
 from typing import Any
 
-from ..protocol import JsonRpcError
+from ..protocol import INVALID_PARAMS, JsonRpcError
 from .xscale import normalize_scale_type
 
 ROI_NAME_PATTERN = re.compile(r"^[\w\u4e00-\u9fa5-]{1,31}$")
@@ -480,6 +482,23 @@ class RoiMixin:
             if field not in updates:
                 continue
             value = updates[field]
+            if field == "value_per_px":
+                # 组斜率是标定的一等输入，非法值必须**当场拒绝**：
+                # 0 会让整列读数恒为 0（看着像"数据全缺失"），NaN/inf 会污染
+                # 后续所有换算。这条与 scale_type 的白名单同一性质。
+                try:
+                    _v = float(value)  # type: ignore[arg-type]
+                except (TypeError, ValueError):
+                    raise JsonRpcError(
+                        INVALID_PARAMS, f"value_per_px 必须是数字，收到 {value!r}"
+                    ) from None
+                if not math.isfinite(_v) or _v == 0:
+                    raise JsonRpcError(
+                        INVALID_PARAMS,
+                        f"value_per_px 必须是有限非零数（收到 {_v!r}）："
+                        "0 会让整列读数恒为 0，inf/NaN 会污染全部换算。",
+                    )
+                value = _v
             if field == "scale_type":
                 # 同 `roi_group_create`：写入端校验，别让错拼的标度先存住、
                 # 等到某列回落到该组时才在读取端报 -32602（审计 D-1）。

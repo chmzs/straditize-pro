@@ -31,7 +31,7 @@ test.describe('对齐本组：无刻度尺时必须停手', () => {
     //   ② 重载页面后标定仍在
     //   ③ 空读数/非法输入必须当场拦下，绝不悄悄兜底成 0
     // 需按新契约（查 `resolve_column_scale` 的派生值而非 `col.x_ticks`）重写。
-    test.fixme(true, '单列两点标定已由组级点齿标定取代；约束 ①②③ 需按新契约重写');
+    test.fixme(true, '已被 step6-group-slope.spec.ts 覆盖（组斜率 ①②③ 三条约束）；本用例断言的是已删除的单列两点标定控件，保留作历史参考');
   test('没有检测到刻度尺时，【对齐本组】如实报错且不写任何列', async ({ page, telemetry }) => {
     await resetBaseline(page);
     await gotoStage(page, 6);

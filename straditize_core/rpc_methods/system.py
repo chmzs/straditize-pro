@@ -189,9 +189,11 @@ def register(dispatcher: Any, session: Any) -> None:
                 #
                 # 判据直接复用 `resolve_column_scale` 的返回值（与导出、网格采样、
                 # QA 同一个解析入口），不在这里另造一套判定。
-                # source 取值：`x_ticks`（用户标定的两齿）| `x_scales`（旧式两点
-                # 标定）| `group`（ROI 内列组共享标度）| `legacy`（沿用旧字段，
-                # 如硬编码的 0/20）| `default`（连标度信息都没有）。
+                # source 取值：`group_slope`（组级点齿标定，ARCHITECTURE §6.4，
+                # 当前主路径）| `x_ticks`（列级两齿）| `x_scales`（旧式两点）|
+                # `legacy`（沿用旧字段，如硬编码的 0/20）| `default`（无标度信息）。
+                # **判"是否已标定"要看 calibrated，不要看 x_ticks 是否存在** ——
+                # group_slope 生效时 x_ticks 会被清空。
                 "scale_provenance": {
                     "calibrated": scale.calibrated,
                     "source": scale.source,

@@ -216,7 +216,7 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
     //   ② 重载页面后标定仍在
     //   ③ 空读数/非法输入必须当场拦下，绝不悄悄兜底成 0
     // 需按新契约（查 `resolve_column_scale` 的派生值而非 `col.x_ticks`）重写。
-    test.fixme(true, '单列两点标定已由组级点齿标定取代；约束 ①②③ 需按新契约重写');
+    test.fixme(true, '已被 step6-group-slope.spec.ts 覆盖（组斜率 ①②③ 三条约束）；本用例断言的是已删除的单列两点标定控件，保留作历史参考');
   test('T1 【保存】真的发 RPC 并把 x_ticks 写进后端（此前一个请求都不发）', async ({
     page,
     telemetry,
@@ -246,7 +246,7 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
     //   ② 重载页面后标定仍在
     //   ③ 空读数/非法输入必须当场拦下，绝不悄悄兜底成 0
     // 需按新契约（查 `resolve_column_scale` 的派生值而非 `col.x_ticks`）重写。
-    test.fixme(true, '单列两点标定已由组级点齿标定取代；约束 ①②③ 需按新契约重写');
+    test.fixme(true, '已被 step6-group-slope.spec.ts 覆盖（组斜率 ①②③ 三条约束）；本用例断言的是已删除的单列两点标定控件，保留作历史参考');
   test('T2 标定后【清空】按钮出现，点击后后端回到未标定（此前该按钮恒不渲染）', async ({
     page,
     telemetry,
@@ -295,7 +295,7 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
     //   ② 重载页面后标定仍在
     //   ③ 空读数/非法输入必须当场拦下，绝不悄悄兜底成 0
     // 需按新契约（查 `resolve_column_scale` 的派生值而非 `col.x_ticks`）重写。
-    test.fixme(true, '单列两点标定已由组级点齿标定取代；约束 ①②③ 需按新契约重写');
+    test.fixme(true, '已被 step6-group-slope.spec.ts 覆盖（组斜率 ①②③ 三条约束）；本用例断言的是已删除的单列两点标定控件，保留作历史参考');
     test('T3 空读数当场拦下：弹错误、不发 RPC、后端不变（绝不悄悄兜底成 0）', async ({
       page,
       telemetry,
@@ -330,7 +330,7 @@ test.describe('步骤 6 标定列与 X 刻度', () => {
     //   ② 重载页面后标定仍在
     //   ③ 空读数/非法输入必须当场拦下，绝不悄悄兜底成 0
     // 需按新契约（查 `resolve_column_scale` 的派生值而非 `col.x_ticks`）重写。
-    test.fixme(true, '单列两点标定已由组级点齿标定取代；约束 ①②③ 需按新契约重写');
+    test.fixme(true, '已被 step6-group-slope.spec.ts 覆盖（组斜率 ①②③ 三条约束）；本用例断言的是已删除的单列两点标定控件，保留作历史参考');
   test('T4 真实重载页面后标定仍在（证伪"只活在浏览器内存里"）', async ({ page, telemetry }) => {
     await openBeginnerStep6(page);
     const col = await panelColumn(page);

@@ -240,6 +240,43 @@ async function resetViewport(page: Page): Promise<void> {
 }
 
 /** 调后端 RPC，拿到 result。失败直接抛出应用的真实错误。 */
+/** 一列的标度快照（来自后端 `scale_provenance` / `scaleCalib`，与导出口径一致）。 */
+export interface ColumnScaleSnapshot {
+  calibrated: boolean;
+  /** `group_slope` | `x_ticks` | `x_scales` | `legacy` | `default` */
+  source: string;
+  px0: number;
+  val0: number;
+  px1: number;
+  val1: number;
+}
+
+/**
+ * 读某列的标度快照。
+ *
+ * **不要用 `col.x_ticks` 判断是否已标定**：组级点齿标定（`value_per_px`）生效时，
+ * 后端会清空各列的 `x_ticks`，标定由 `resolve_column_scale` 派生。
+ * 判据一律走 `scale_provenance.calibrated` + `source`。
+ */
+export async function readColumnScale(page: Page, colIndex = 0): Promise<ColumnScaleSnapshot> {
+  const data = await diagramData<{
+    columns: Array<{
+      scale_provenance?: { calibrated?: boolean; source?: string };
+      scaleCalib?: { originX?: number; originVal?: number; calibX?: number; calibVal?: number };
+    }>;
+  }>(page);
+  const col = data.columns[colIndex] ?? {};
+  const calib = col.scaleCalib ?? {};
+  return {
+    calibrated: Boolean(col.scale_provenance?.calibrated),
+    source: String(col.scale_provenance?.source ?? "default"),
+    px0: Number(calib.originX ?? 0),
+    val0: Number(calib.originVal ?? 0),
+    px1: Number(calib.calibX ?? 0),
+    val1: Number(calib.calibVal ?? 0),
+  };
+}
+
 export async function rpc<T = unknown>(
   page: Page,
   method: string,
