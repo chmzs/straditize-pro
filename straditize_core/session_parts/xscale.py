@@ -68,7 +68,7 @@ class ColumnScale:
         object.__setattr__(self, "scale_type", normalize_scale_type(self.scale_type))
 
     def __iter__(self) -> Iterator[Any]:
-        """Support tuple unpacking per design §3.3."""
+        """Support tuple unpacking; field order is the yield order below."""
         yield self.abs_px0
         yield self.val0
         yield self.abs_px1

@@ -1,6 +1,6 @@
 """X-ticks 契约回归门禁（步骤 6）。
 
-背景（e2e 探针实测，见 ``docs/plans/2026-09-29-per-step-usage-audit.md`` §4 第 10、20 条）：
+背景（e2e 探针实测）：
 ``x_ticks`` 曾是**只写不读**字段——``column.calibrateXTicks`` 写得进去，但
 ``getDiagramData`` 的列载荷白名单把它剥掉，于是前端 ``hasTicks`` 恒为 false：
 面板永远显示「未标定」、标尺叠加层画不出来、``#btn-clear-col-ticks`` 永不渲染。

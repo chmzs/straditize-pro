@@ -1,6 +1,6 @@
 """Cleanup session mixin: geometry-based artifact removal.
 
-Design (see ``docs/plans/2026-09-28-step4-cleanup-redesign.md``):
+Design invariants:
 
 * A disturbance line is a **vector rectangle geometry** inside the ROI.
 * The geometry is rasterised into a mask, and *only inside that mask* are

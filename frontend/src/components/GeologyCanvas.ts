@@ -2685,7 +2685,7 @@ export class GeologyCanvas {
       const mode = btn.getAttribute('data-fmode') as ToolMode;
       const btnEl = btn as HTMLButtonElement;
       const isAllowed = allowed.includes(mode);
-      // 严格遵循设计稿 §7：浮动工具条只显示当前步骤可用的工具，不把无关按钮长期置灰
+      // 浮动工具条只显示当前步骤可用的工具，不把无关按钮长期置灰
       btnEl.style.display = isAllowed ? '' : 'none';
       btnEl.style.opacity = '1';
       btnEl.style.pointerEvents = 'auto';

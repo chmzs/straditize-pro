@@ -2,7 +2,8 @@
 
 Covers:
 1. Priority order (`x_ticks` > legacy > `x_scales` > default) and `calibrated`/`source` flags;
-2. Tuple unpacking contract per `docs/plans/2026-09-29-column-groups-design.md` §3.3;
+2. Tuple unpacking contract: unpacking a `ColumnScale` yields, in order,
+   `(abs_px0, val0, abs_px1, val1, unit, plot_type, scale_type, exaggeration_mult, calibrated, source)`;
 3. Exaggeration multiplier unification (`exaggeration_mult` vs `has_exaggeration` + `exaggeration_multiplier`);
 4. Highest-value invariant: identical numerical values across CSV, Parquet, XLSX, and LiPD exports
    for the same column and same calibration (linear, exaggerated, and logarithmic columns);
@@ -58,7 +59,7 @@ def test_resolve_column_scale_prefers_x_ticks_over_legacy() -> None:
     assert scale.exaggeration_mult == 5.0
     assert scale.declared_max == 45.0
 
-    # Tuple unpacking per design §3.3
+    # Tuple unpacking (field order is the unpack order below)
     (
         abs_px0,
         val0,
