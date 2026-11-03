@@ -2,6 +2,7 @@ import './style.css';
 import { RpcClient } from './services/RpcClient';
 import { HistoryManager } from './core/HistoryManager';
 import { GeologyCanvas } from './components/GeologyCanvas';
+import { handleTickPicked } from './components/steps/XTicksPanel';
 import { Toolbar } from './components/Toolbar';
 import { Sidebar } from './components/Sidebar';
 import { PropertyPanel } from './components/PropertyPanel';
@@ -273,6 +274,8 @@ async function bootstrap() {
     onRoiCommitted: (roi) => {
       void cleanupManager.enqueueRoiCommit(roi);
     },
+    // 步骤 6：画布点了刻度齿 → 交给步骤 6 面板判定"距 0 点多少"。
+    onTickPicked: (pt) => handleTickPicked(pt),
     onYCalibPicked: (marks) => {
       const cal = canvasComponent.data.calibration;
       if (marks.length === 1) {

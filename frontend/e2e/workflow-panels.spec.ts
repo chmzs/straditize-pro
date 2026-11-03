@@ -234,7 +234,9 @@ test.describe('步骤面板与阶段工具门禁', () => {
   test('步骤 6 刻度：检测接口可用，且对本样本不假报刻度', async ({ page }) => {
     await gotoStage(page, 6);
     await expect(page.locator('.step-panel[data-step="6"]')).toBeVisible();
-    await expect(page.locator('#btn-detect-xticks')).toBeVisible();
+    // 「自动提取」随模块 2（单列两点标定）一起删除；步骤 6 的标定入口现在是
+    // 「点一个刻度齿」+ 阶段提交按钮。
+    await expect(page.locator('#btn-pick-tick')).toBeVisible();
     await expect(page.locator('#btn-apply-xticks-next')).toBeVisible();
 
     const data = await rpc<{ rois: { id: string }[] }>(page, 'straditize.getDiagramData');
@@ -255,16 +257,9 @@ test.describe('步骤面板与阶段工具门禁', () => {
       'hoya 无刻度尺，不应检出任何齿位（真值 has_tick_ruler=false）'
     ).toBe(0);
 
-    // 按钮接线：点下去必须把结果冒泡到用户可见的 HUD
-    // （检测是只读的 {band, per_column}；落到 column.x_ticks 需要用户随后做两点标定，
-    //   那是另一条路径，不在本测试范围内。）
-    await page.click('#btn-detect-xticks');
-    await expect
-      .poll(async () => (await page.locator('#hud-text').innerText()).trim().length, {
-        message: '点击后应给出可见提示',
-        timeout: 20_000,
-      })
-      .toBeGreaterThan(0);
+    // 「自动提取」按钮已随模块 2 删除：刻度检测现在由 `ensureRulerGeometry`
+    // **进入步骤 6 时自动触发**（只读，不写任何标定），所以这里不再有点击动作。
+    // 下面那条「检测不得替用户编造读数」的钉子反而更硬了 —— 检测完全不碰 x_ticks。
 
     // ===== 回归钉子：检测**不得**替用户编造读数 (bug-report B-01) =====
     //

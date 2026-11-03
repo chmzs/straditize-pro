@@ -10,6 +10,7 @@ import { YCalibToolStrategy } from './YCalibToolStrategy';
 import { LineFixToolStrategy } from './LineFixToolStrategy';
 import { MeasureToolStrategy } from './MeasureToolStrategy';
 import { DrawLineToolStrategy } from './DrawLineToolStrategy';
+import { PickTickToolStrategy } from './PickTickToolStrategy';
 
 export * from './ToolStrategy';
 export * from './SelectToolStrategy';
@@ -22,6 +23,7 @@ export * from './YCalibToolStrategy';
 export * from './LineFixToolStrategy';
 export * from './MeasureToolStrategy';
 export * from './DrawLineToolStrategy';
+export * from './PickTickToolStrategy';
 
 /**
  * 创建全量工具策略注册表映射。
@@ -39,6 +41,7 @@ export function createToolStrategies(): Map<ToolMode, ToolStrategy> {
     new YCalibToolStrategy(),
     new LineFixToolStrategy(),
     new MeasureToolStrategy(),
+    new PickTickToolStrategy(),
     new DrawLineToolStrategy('drawLineH'),
     new DrawLineToolStrategy('drawLineV'),
   ];

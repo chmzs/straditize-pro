@@ -56,6 +56,8 @@ export interface CanvasEventCallbacks {
   onRoiCommitted?: (roi: DataRoi) => void;
   /** Y 轴两点标定选点完成（按像素 Y 升序），调用方负责弹窗收真实值。 */
   onYCalibPicked?: (marks: Point2D[]) => void;
+  /** 步骤 6：点选 X 轴刻度齿的回调（世界坐标）。 */
+  onTickPicked?: (pt: Point2D) => void;
   /** 线掩膜人工修正笔迹结束，调用方负责提交后端并回灌新叠加层。 */
   onLineFixStroke?: (stroke: LineMaskStroke) => void;
   /** Step 4：一条 geometry 被拖动/缩放/新建完成，调用方提交后端。 */
@@ -2574,7 +2576,9 @@ export class GeologyCanvas {
     // 不该抢默认。新建几何走 drawLineH/drawLineV，由侧栏按钮触发，不占按钮位。
     if (stage === STAGE.CLEANUP) return ['select', 'measure', 'linefix', 'pan'];
     if (stage === STAGE.SPLIT) return ['addCol', 'eraser', 'select', 'pan'];
-    if (stage === STAGE.CALIBRATE_COLUMNS) return ['select', 'addCol', 'eraser', 'pan'];
+    // pickTick：步骤 6 的组级标定要能点选画布上的刻度齿。select 仍放首位（默认工具）。
+    if (stage === STAGE.CALIBRATE_COLUMNS)
+      return ['select', 'pickTick', 'addCol', 'eraser', 'pan'];
     return ['select', 'addPoint', 'eraser', 'pan'];
   }
 
@@ -2591,6 +2595,7 @@ export class GeologyCanvas {
     eraser: '提示: 删除操作在步骤 5 起启用',
     ycalib: '提示: Y 轴两点标定在步骤 3 (Y标定) 启用',
     linefix: '提示: 线掩膜人工修正在步骤 4 (清理) 启用',
+    pickTick: '提示: 点选刻度齿在步骤 6 (标定列) 启用',
   };
 
   /** 统一门禁：不允许时给出阶段提示并返回 false，允许时返回 true */

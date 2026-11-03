@@ -25,6 +25,8 @@ export interface GeologyCanvasCallbacks {
   onZoomChange?: (scale: number) => void;
   onDropImage?: (file: File) => void;
   onYCalibPicked?: (marks: Point2D[]) => void;
+  /** 步骤 6：用户点了一个 X 轴刻度齿（世界坐标）。判定与吸附在面板侧。 */
+  onTickPicked?: (pt: Point2D) => void;
   onRoiCommitted?: (roi: { xMin: number; xMax: number; yMin: number; yMax: number }) => void;
   onLineFixStroke?: (stroke: LineMaskStroke) => void;
   onGeometryChanged?: () => void;

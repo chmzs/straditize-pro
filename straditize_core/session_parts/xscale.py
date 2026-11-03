@@ -57,7 +57,7 @@ class ColumnScale:
     scale_type: str
     exaggeration_mult: float | None
     calibrated: bool
-    source: str  # "x_ticks" | "legacy" | "x_scales" | "default"
+    source: str  # "group_slope" | "x_ticks" | "legacy" | "x_scales" | "default"
 
     def __post_init__(self) -> None:
         """构造时一次性归一化，使下游只需面对两个已知取值。
@@ -276,6 +276,35 @@ def resolve_column_scale(
             exaggeration_mult=exaggeration_mult,
             calibrated=True,
             source="group",
+        )
+
+    # Case A1: 组级斜率（点齿标定的结果，ARCHITECTURE §6.4）
+    #
+    # 用户点一个刻度齿 + 填它的数字 → slope = 数字 / (该齿px − 0点px)。
+    # 组内所有列共用这个斜率（同量程），每列的 0 点各自算 = 左缘 + 轴线粗。
+    # 优先于 x_ticks：组标定是用户的显式动作，旧的两点视为过期
+    # （写入组标定时会清掉组内各列的 x_ticks，保证单一事实源）。
+    _slope_raw = group_obj.get("value_per_px") if group_obj else None
+    _slope: float | None
+    try:
+        _slope = float(_slope_raw) if _slope_raw is not None else None
+    except (TypeError, ValueError):
+        _slope = None
+    if _slope is not None and _slope != 0:
+        _group = group_obj or {}
+        _stroke = float(_group.get("axis_stroke_px") or 5.0)
+        _zero = c_start + _stroke
+        return ColumnScale(
+            abs_px0=_zero,
+            val0=0.0,
+            abs_px1=_zero + 1.0,
+            val1=_slope,
+            unit=str(_group.get("unit") or col_dict.get("unit") or "%"),
+            plot_type=str(_group.get("plot_type") or col_dict.get("plot_type") or "area"),
+            scale_type=str(_group.get("scale_type") or "linear"),
+            exaggeration_mult=_group.get("exaggeration_mult"),
+            calibrated=True,
+            source="group_slope",
         )
 
     # Case A2: Explicit x_ticks (transition SSOT)

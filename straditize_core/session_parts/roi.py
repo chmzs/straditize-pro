@@ -458,14 +458,24 @@ class RoiMixin:
             # 组标度记忆：用户填的「每根齿单位数」是**输入量**、不是派生量，
             # 所以单独存一个字段（`ref_val_*` 是它乘格数后的派生值，反算会失真）。
             # 另外两个 ref_* 一并放行，避免以后再"写了被静默丢弃"。
-            "ref_units_per_cell",
             "ref_span_px",
             # 轴线粗：决定「0 点 = 左缘 + 轴线粗」这条绿线画在哪。
             # 此前只存在于前端内存变量 `axisStrokeOverride`，刷新即丢。
             "axis_stroke_px",
-            "ref_val_start",
-            "ref_val_end",
+            # 组级斜率（值/px）：点齿标定的结果。组内各列共用它，
+            # 每列的 0 点各自算 = 左缘 + 轴线粗（见 ARCHITECTURE §6.4）。
+            "value_per_px",
         )
+        # 组级斜率一旦写入，组内各列的 `x_ticks` 必须清掉：它们是旧的"每列两点"，
+        # 与"组标定"是两个事实源，留着会让 resolve_column_scale 出现两种答案。
+        if "value_per_px" in updates:
+            for col in getattr(self, "columns", []) or []:
+                if col.get("x_group_id") == group_id:
+                    col["x_ticks"] = None
+                    # 标定已由组斜率恢复，"标定被丢弃"的提示必须同批失效，
+                    # 否则用户会看到"标定丢了"却实际已经能读数（自相矛盾）。
+                    col["x_ticks_dropped"] = None
+
         for field in allowed_fields:
             if field not in updates:
                 continue

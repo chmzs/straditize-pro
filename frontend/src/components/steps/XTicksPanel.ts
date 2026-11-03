@@ -8,7 +8,6 @@ import {
   detectedSpans,
   describeRulerDetection,
   maxDetectedSpan,
-  type DetectedSpan,
 } from './rulerSpan';
 import {
   callStepCallback,
@@ -23,6 +22,23 @@ export const title = '6. 标定列与 X 刻度';
 
 let cachedData: DiagramData | null = null;
 let selectedGroupId: string | null = null;
+
+/** 标定态下画布点选的齿：像素 + 它距该列 0 点的距离。null = 尚未选。 */
+let pendingTick: { px: number; dist: number } | null = null;
+
+/** 画布点选刻度齿的回调（main.ts 注册）。判定"距 0 点多少"在这里做，
+ *  因为 0 点依赖当前列的几何，画布不该知道这些。 */
+let onTickPickedExternal: ((pt: { x: number; y: number }) => void) | null = null;
+export function setTickPickedHandler(
+  fn: ((pt: { x: number; y: number }) => void) | null
+): void {
+  onTickPickedExternal = fn;
+}
+
+/** 画布点选刻度齿时由 main.ts 调用。 */
+export function handleTickPicked(pt: { x: number; y: number }): void {
+  onTickPickedExternal?.(pt);
+}
 let isBatchAssignOpen = false;
 
 /**
@@ -38,30 +54,14 @@ let rulerGeoError: string | null = null;
 let rulerGeoKey: string | null = null;
 let rulerGeoPending = false;
 /** `render` 算出的逐列检测跨度，供按钮应用时复用（同一帧内有效）。 */
-let lastSpans: DetectedSpan[] = [];
 /**
  * 「末齿读数」输入草稿（按组 id）。
  *
  * 面板会被后台刷新重渲染（几何检测回包、自动存档、画布交互都会走 `onDataChange`），
  * 输入值只活 DOM 里就会被清空——用户填了数、界面自己擦掉，是最难察觉的一类数据丢失。
- */
-const refDrafts = new Map<string, string>();
 
-/**
- * 两个手动读数输入框的草稿（按列 id）。
- *
- * 与 `refDrafts` 同一个坑：面板会被后台刷新重渲染（几何检测回包、自动存档、
- * 画布交互都会走 `onDataChange`），而 Playwright/真实用户的 click 会先
- * scroll/hover 触发这些刷新 —— 实测「填完 VAL2=40、toHaveValue 通过、点保存」
- * 三步之间值就被冲成空，后端收到「0」「」并拒绝（issue #5）。
- *
- * 标定成功后 `x_ticks` 优先于草稿，所以不必手动清理，残留只会被忽略。
- */
 const manualTickDrafts = new Map<string, { v1: string; v2: string }>();
 
-function draftFor(colId: string | undefined): { v1: string; v2: string } | undefined {
-  return colId ? manualTickDrafts.get(colId) : undefined;
-}
 
 /**
  * 用户显式给的轴线粗细（px，图级）。`null` = 让后端自动估。
@@ -73,16 +73,6 @@ function draftFor(colId: string | undefined): { v1: string; v2: string } | undef
  */
 let axisStrokeOverride: number | null = null;
 
-function getColCalibX(col: any): number | null {
-  // **只有用户确认过的两点标定（x_ticks）才算刻度。**
-  // `tickEndX` / `scaleCalib.calibX` 在分列时会由后端写入
-  // `startX + max(20, min(0.65×列宽, 80))` 这个**猜测值**（beginner 实测四列全是
-  // startX+80），把它当刻度显示等于把假数据画成"已标定"。宁可不显示，也不显示猜的。
-  if (col?.x_ticks && col.x_ticks.length >= 2 && col.x_ticks[1].px > col.startX) {
-    return col.x_ticks[1].px;
-  }
-  return null;
-}
 
 /**
  * 几何检测的缓存键：ROI + 图片 + 本 ROI 内每列的像素范围。
@@ -122,7 +112,6 @@ function patchRulerDom(root: HTMLElement): void {
   const spanEl = root.querySelector('[data-role="ruler-span"]') as HTMLElement | null;
 
   const spans = detectedSpans(cachedData?.columns ?? [], geo);
-  lastSpans = spans;
   const rigidSpan = maxDetectedSpan(spans);
 
   if (line) {
@@ -211,8 +200,6 @@ export function render(data: DiagramData): string {
   }
 
   const activeCol = cols.find((c) => c.id === data.activeTaxaId) || cols[0];
-  const colName = activeCol ? activeCol.name : t('step6.unselected');
-  const hasTicks = Boolean(activeCol && activeCol.x_ticks && activeCol.x_ticks.length === 2);
 
   const totalCols = cols.length;
   const calibratedCols = cols.filter((c) => c.x_ticks && c.x_ticks.length === 2).length;
@@ -263,41 +250,11 @@ export function render(data: DiagramData): string {
   const geoError = rulerGeoKey === geoKey ? rulerGeoError : null;
   const geoPending = rulerGeoPending || (!geo && !geoError);
   const spans = detectedSpans(roiCols, geo);
-  lastSpans = spans;
   const rigidSpan = maxDetectedSpan(spans);
   const groupUnit = currentGroup?.unit || '%';
-  // 一个单位刻度的像素长度（CellGroup.ref_span_px）。它是标定的几何锚点：
-  // 刻度位置 = 0 点 + k × 它，与检测到几个齿无关（见 ARCHITECTURE §6.4）。
-  const cellPxText =
-    currentGroup && Number(currentGroup.ref_span_px) > 0
-      ? String(Number(currentGroup.ref_span_px))
-      : '';
-  const unitsPerCellText =
-    refDrafts.get(currentGroupId) ??
-    (currentGroup?.ref_units_per_cell != null
-      ? String(currentGroup.ref_units_per_cell)
-      : '');
   const rulerLine = describeRulerDetection(geo, geoError, geoPending);
-  // 刻距只说明"一格多少像素"，用户真正要填的是"一格多少单位"——那个数只在图上。
-  // 所以填完立刻把换算结果回显给他核对：px/单位 若与肉眼估计差一个数量级，就是填错了。
-  const unitsPerCellNum = Number.parseFloat(unitsPerCellText);
-  const perUnitText =
-    Number.isFinite(unitsPerCellNum) && unitsPerCellNum > 0 && geo?.median_spacing_px
-      ? ` → ${(geo.median_spacing_px / unitsPerCellNum).toFixed(2)} px/${groupUnit}`
-      : '';
-  const spanText =
-    rigidSpan == null
-      ? '刻距 —（需先检测到刻度尺）'
-      : `刻距 ${geo?.median_spacing_px ?? '—'}px（自动检测）${perUnitText}`;
-
-  const spanForActive = lastSpans.find(
-    (s) => s.colIndex === (activeCol?.col_index ?? -1)
-  );
   // 0 点是**实测轴线右缘**，不是列切分给的 startX：后者实测可偏离轴线 6–20px。
   // 面板显示的像素必须与实际标定用的是同一个数，否则用户照着它校正会自造偏差。
-  const px1Measured = spanForActive?.axisX != null;
-  const px1 = spanForActive?.axisX ?? activeCol?.startX ?? 0;
-  const px2 = getColCalibX(activeCol);
 
   const activeLostNotice = activeCol ? renderActiveColumnLostNotice(activeCol) : '';
   const otherLostSummary = renderOtherLostColumnsSummary(cols, activeCol?.id);
@@ -461,46 +418,59 @@ export function render(data: DiagramData): string {
             这个数只能从图上读：<strong>相邻两个数字标签之差</strong>（如标签 10 / 30 → 填 20）。
             标签隔一根齿才标数字时，取差值的一半。软件不替你猜——填错会让全组读数按同一比例偏掉。
           </div>
-          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
-            <button id="btn-measure-spacing" class="ui-btn ui-btn--secondary"
-                    style="font-size: 10px; padding: 2px 8px;"
-                    title="切到画布测距工具：点两个相邻刻度齿，画布上会显示 Δx 与像素距离。用它核对上面的自动检测刻距，量到的值与自动值不一致时以你量的为准。">
-              量刻距（测距 S）
-            </button>
-            <span style="font-size: 9.5px; color: var(--text-muted);">点两个相邻刻度齿，看 Δx</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-            <label for="inp-ref-units-per-cell" style="font-size: 10.5px; color: var(--text-muted);">每根齿单位数:</label>
-            <input type="number" id="inp-ref-units-per-cell" value="${unitsPerCellText}" placeholder="如 20"
-                   title="相邻两条刻线之间代表多少单位：通常就是图上相邻两个数字标签之差（例如 20）；若标签隔一根齿才标数字，取该差值的一半。这是组的属性，全组共用这一个数。"
-                   style="width: 66px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
-            <span style="font-size: 10px; color: var(--text-muted);">${groupUnit}</span>
-            <span data-role="ruler-span" data-span="${rigidSpan ?? ''}" style="font-size: 9.5px; color: var(--text-muted); margin-left: auto;">${spanText}</span>
-          </div>
-
-          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-            <label for="inp-cell-px" style="font-size: 10.5px; color: var(--text-muted);">单位刻度长度:</label>
-            <input type="number" id="inp-cell-px" value="${cellPxText}" placeholder="如 125" min="1" step="0.5"
-                   title="一个单位刻度在图上占多少像素（= 相邻两个刻度齿的距离）。用【测距 S】量一格得到 Δx，或点右侧【取检测值】用检测刻距的中位数。刻度位置按 0 点 + k×它 等距外推，所以这个数一旦定了，整列刻度位置就是确定的。"
-                   style="width: 66px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
-            <span style="font-size: 10px; color: var(--text-muted);">px/格</span>
-            <button id="btn-use-detected-span" class="ui-btn ui-btn--quiet ui-btn--xs"
-                    title="用本图检测到的刻距中位数填入（diatom 实测 38.25、beginner 124.5）"
-                    style="font-size: 9.5px; padding: 1px 6px; margin-left: auto;">取检测值</button>
-          </div>
-
+          <!-- 轴线粗：只影响「0 点 = 左缘 + 轴线粗」这条绿线的位置，与刻度无关 -->
           <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
             <label for="inp-axis-stroke" style="font-size: 10.5px; color: var(--text-muted);">轴线粗细:</label>
             <input type="number" id="inp-axis-stroke" value="${currentGroup && Number(currentGroup.axis_stroke_px) > 0 ? String(Number(currentGroup.axis_stroke_px)) : ''}" placeholder="5" min="1" max="20" step="1"
-                   title="Y 轴轴线（spine）的描边宽度，单位像素。填了它，0 点 = 轴线左缘 + 粗细 − 1，程序不再从像素里猜；留空则自动估计（夹在 1–6px，高 DPI 图的粗轴会被截断）。"
+                   title="Y 轴轴线的描边宽度（像素）。0 点 = 左缘 + 它。填了就不再从像素里猜。"
                    style="width: 66px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
-            <span style="font-size: 9.5px; color: var(--text-muted);">px（留空 = 自动估计）</span>
+            <span style="font-size: 9.5px; color: var(--text-muted);">px（0 点 = 左缘 + 它）</span>
           </div>
 
-          <button id="btn-apply-group-scale" class="ui-btn ui-btn--primary" style="width: 100%; font-size: 11px; padding: 5px 6px;"
-                  title="以各列基线为 0 点、用同一个自动检测到的跨度对齐全组（斜率一致）">
-            对齐本组 (${groupCols.length}列)
-          </button>
+          <!-- ── X 轴标定（组级）────────────────────────────────────────
+               一次动作定整组：点一个刻度齿 + 填它旁边的数字
+               → 斜率 = 数字 / 距0点px。组内所有列共用斜率，每列 0 点各自算。
+               不依赖"检测到几个齿"，所以漏齿、齿数不一致都不影响。 -->
+          <div data-role="tick-calib" style="border-top: 1px dashed var(--border-color); margin-top: 8px; padding-top: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px;">
+              <span style="font-size: 10.5px; font-weight: 600; color: var(--text-secondary);">X 轴标定（本组共用）</span>
+              ${
+                currentGroup?.value_per_px != null && Number(currentGroup.value_per_px) !== 0
+                  ? `<span data-role="slope-readout" style="font-size: 9.5px; color: var(--status-success);">已标定 · ${Number(currentGroup.value_per_px).toFixed(4)} ${groupUnit}/px</span>`
+                  : '<span style="font-size: 9.5px; color: var(--status-warning);">未标定</span>'
+              }
+            </div>
+            ${
+              pendingTick
+                ? `
+            <div data-role="pending-tick" style="font-size: 10.5px; line-height: 1.6; margin-bottom: 6px; padding: 6px 8px; background: var(--bg-tertiary); border-radius: 4px;">
+              已选齿：<code style="color: var(--accent-blue);">x = ${pendingTick.px}px</code>
+              · 距 0 点 <strong>${pendingTick.dist.toFixed(0)}px</strong>
+              ${
+                pendingTick.dist < 20
+                  ? '<div style="color: var(--status-warning); margin-top: 3px;">⚠ 离 0 点太近，±1px 就会让斜率偏几个百分点，建议点更远的齿。</div>'
+                  : ''
+              }
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+              <label for="inp-tick-value" style="font-size: 10.5px; color: var(--text-muted);">这个齿的数字:</label>
+              <input type="number" id="inp-tick-value" placeholder="如 10"
+                     style="width: 72px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
+              <span style="font-size: 10px; color: var(--text-muted);">${groupUnit}</span>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button id="btn-apply-tick-calib" class="ui-btn ui-btn--primary" style="flex: 1; font-size: 11px; padding: 5px 6px;">应用</button>
+              <button id="btn-cancel-tick-calib" class="ui-btn ui-btn--quiet" style="font-size: 10px; padding: 5px 8px;">取消</button>
+            </div>`
+                : `
+            <button id="btn-pick-tick" class="ui-btn ui-btn--primary" style="width: 100%; font-size: 11px; padding: 6px;">
+              点一个刻度齿
+            </button>
+            <div style="font-size: 9.5px; line-height: 1.45; color: var(--text-muted); margin-top: 4px;">
+              点<strong>离绿线（0 点）最远</strong>的那个带标签的齿更准；点完输入它旁边的数字即可。
+            </div>`
+            }
+          </div>
         </div>
       </div>
 
@@ -521,79 +491,6 @@ export function render(data: DiagramData): string {
           : ''
       }
 
-      <!-- 模块 2：当前点选列详情与微调 (Active Column Details) -->
-      <div class="inspector-section" style="padding: 10px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 12px; border: 1px solid var(--border-color);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <div>
-            ${t('step6.activeCol')}<strong style="color: var(--accent-blue);">${colName}</strong>
-          </div>
-          <div style="display: flex; align-items: center; gap: 4px;">
-            <span style="font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: ${hasTicks ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)'}; color: ${hasTicks ? 'var(--status-success)' : 'var(--status-warning)'};">
-              ${hasTicks ? t('step6.calibrated') : t('step6.uncalibrated')}
-            </span>
-            ${hasTicks ? `<button id="btn-clear-col-ticks" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; color: var(--accent-red); padding: 1px 6px;" title="${t('step6.clearTicks')}">${t('step6.clearTicks')}</button>` : ''}
-          </div>
-        </div>
-
-        <!-- 所属组快速切换 -->
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; background: var(--bg-card); padding: 5px 8px; border-radius: 4px; border: 1px solid var(--border-color);">
-          <label for="sel-col-group-quick" style="font-size: 10.5px; color: var(--text-secondary);">所属列组:</label>
-          <select id="sel-col-group-quick" style="flex: 1; max-width: 170px; font-size: 10.5px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);">
-            ${groups
-              .map(
-                (g) =>
-                  `<option value="${g.id}" ${(activeCol?.x_group_id || activeRoi?.default_group_id) === g.id ? 'selected' : ''}>${g.name} (${g.unit})</option>`
-              )
-              .join('')}
-          </select>
-        </div>
-
-        <!-- 端点数值卡片 -->
-        <div style="display: flex; flex-direction: column; gap: 6px; background: var(--bg-card); padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 8px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-            <label for="inp-manual-tick-val1" style="font-size: 11px; color: var(--text-secondary); font-weight: 500; display: flex; align-items: center; gap: 5px;">
-              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-blue);"></span>
-              <span>左基线原点 (X1):</span>
-            </label>
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <input type="number" id="inp-manual-tick-val1" value="${hasTicks ? activeCol.x_ticks![0].value : (draftFor(activeCol?.id)?.v1 ?? activeCol?.startValue ?? 0)}" style="width: 60px; font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
-              <span style="font-size: 10.5px; color: var(--text-muted); min-width: 16px;">${activeCol?.unit || groupUnit}</span>
-            </div>
-          </div>
-          <div style="font-size: 9.5px; color: var(--text-muted); padding-left: 13px;">
-            像素位置: <code>X = ${Math.round(px1)}px</code> (${px1Measured ? '轴线右缘 = 0 点' : '轴线未识别，退回列边界'})
-          </div>
-
-          <div style="height: 1px; background: var(--border-color); opacity: 0.5; margin: 1px 0;"></div>
-
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-            <label for="inp-manual-tick-val2" style="font-size: 11px; color: var(--text-secondary); font-weight: 500; display: flex; align-items: center; gap: 5px;">
-              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--status-success);"></span>
-              <span>右刻度齿点 (X2):</span>
-            </label>
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <input type="number" id="inp-manual-tick-val2" value="${hasTicks ? activeCol.x_ticks![1].value : (draftFor(activeCol?.id)?.v2 ?? '')}" style="width: 60px; font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
-              <span style="font-size: 10.5px; color: var(--text-muted); min-width: 16px;">${activeCol?.unit || groupUnit}</span>
-            </div>
-          </div>
-          <div style="font-size: 9.5px; color: var(--text-muted); padding-left: 13px;">
-            ${
-              px2 == null
-                ? '<span style="color: var(--status-warning);">未标定：图上的刻度参考线不画猜测值。用「对齐本组」，或填入 X2 数值后保存。</span>'
-                : `像素位置: <code>X = ${Math.round(px2)}px</code> (跨度 ${(px2 - px1).toFixed(1)}px)`
-            }
-          </div>
-        </div>
-
-        <div style="display: flex; gap: 6px;">
-          <button id="btn-save-manual-ticks" class="ui-btn ui-btn--primary" style="flex: 1; font-size: 11px; padding: 5px 8px;">
-            ${t('step6.saveTicks')}
-          </button>
-          <button id="btn-detect-xticks" class="ui-btn ui-btn--secondary" style="font-size: 11px; padding: 5px 8px;" title="基于图像分析自动识别全区刻度齿位置">
-            自动提取
-          </button>
-        </div>
-      </div>
 
       <!-- 阶段提交按钮 -->
       <button id="btn-apply-xticks-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
@@ -628,6 +525,41 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     if (!gid || !roiId || !client?.roiGroupUpdate) return;
     void client.roiGroupUpdate(roiId, gid, field).then(() => ctx.onDataChange?.());
   };
+
+  // 画布点选齿 → 记录"距本列 0 点多少"。判定在面板侧，画布只报坐标。
+  setTickPickedHandler((pt) => {
+    const col = activeColumn();
+    if (!col) return;
+    const roi = cachedData?.rois?.find((r) => r.id === (col.roi_id ?? cachedData?.active_roi_id));
+    const g = roi?.x_groups?.find((x) => x.id === col.x_group_id) ?? roi?.x_groups?.[0];
+    const stroke = Number(g?.axis_stroke_px) > 0 ? Number(g?.axis_stroke_px) : 5;
+    const start = Number(
+      (col as unknown as Record<string, number>).startX ??
+        (col as unknown as Record<string, number>).start ??
+        0
+    );
+    const zero = start + stroke;
+
+    // **必须吸附到检测到的刻度齿**：否则用户可以点任意位置，等于绕过了
+    // "图上没有刻度尺就不许标定"这条约束（旧「对齐本组」靠"取不到跨度就拒绝"
+    // 守的就是它）。吸附容差 6px —— 齿宽 1–2px，6px 足够容人手抖而不误吸邻齿。
+    const idx = col.col_index ?? cachedData?.columns.indexOf(col) ?? 0;
+    const colGeo = rulerGeo?.per_column?.find((c) => c.col_index === idx);
+    const ticks = (colGeo?.ticks ?? []) as number[];
+    const SNAP_TOL = 6;
+    let nearest: number | null = null;
+    for (const t of ticks) {
+      if (nearest === null || Math.abs(t - pt.x) < Math.abs(nearest - pt.x)) nearest = t;
+    }
+    if (nearest === null || Math.abs(nearest - pt.x) > SNAP_TOL) {
+      notifyError(
+        '此处没有检测到刻度齿。请点在齿上（放大后更准）；若整张图都没有刻度尺，说明该图无法用刻度标定。'
+      );
+      return;
+    }
+    pendingTick = { px: Math.round(nearest), dist: nearest - zero };
+    ctx.onDataChange?.();
+  });
 
   root.querySelector('#btn-goto-step5-split')?.addEventListener('click', () => {
     ctx.onAdvanceWorkflowStage?.(5);
@@ -675,6 +607,36 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     patchGroup({ ref_span_px: px });
   });
 
+  // ── X 轴标定（组级）──────────────────────────────────────────────
+  // 一次动作定整组：点一个刻度齿 + 填它旁边的数字 → 斜率 = 数字 / 距0点px。
+  root.querySelector('#btn-pick-tick')?.addEventListener('click', () => {
+    pendingTick = null;
+    ctx.onSetToolMode?.('pickTick');
+    notify('请在画布上点一个刻度齿（离绿线越远越准）', 'info');
+  });
+  root.querySelector('#btn-cancel-tick-calib')?.addEventListener('click', () => {
+    pendingTick = null;
+    ctx.onDataChange?.();
+  });
+  root.querySelector('#btn-apply-tick-calib')?.addEventListener('click', () => {
+    const raw = (root.querySelector('#inp-tick-value') as HTMLInputElement | null)?.value ?? '';
+    const value = Number.parseFloat(raw);
+    if (!Number.isFinite(value)) {
+      notifyError('请填写这个齿代表的数字（图上标签，如 10）。');
+      return;
+    }
+    if (!pendingTick || pendingTick.dist <= 0) {
+      notifyError('请先在画布上点一个位于 0 点右侧的刻度齿。');
+      return;
+    }
+    // 斜率 = 值 / 距 0 点像素。0 点 = 左缘 + 轴线粗（见 ARCHITECTURE §6.4）。
+    const pickedDist = pendingTick.dist;
+    const slope = value / pickedDist;
+    patchGroup({ value_per_px: slope });
+    pendingTick = null;
+    notify(`已按「${value} 对应 ${pickedDist.toFixed(0)}px」标定本组：斜率 ${slope.toFixed(4)}`, 'info');
+  });
+
   root.querySelectorAll('.grp-plottype-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const t = btn.getAttribute('data-plottype');
@@ -691,32 +653,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   // 0. 刻线几何检测：进入本步（以及数据变化后）自动拉一次，只读、不写任何标定。
   void ensureRulerGeometry(ctx, root);
 
-  // 0b. 「末齿读数」草稿：后台刷新重渲染后用户填的数必须还在。
-  root.querySelector('#inp-ref-units-per-cell')?.addEventListener('input', (e) => {
-    const gid = selectedGroupId;
-    if (gid) refDrafts.set(gid, (e.target as HTMLInputElement).value);
-  });
 
-  // 组标度记忆落库：`input` 每键一次太频，用 `change`（失焦/回车）写一次。
-  // 「每根齿单位数」是用户输入的一等量，刷新后不该丢——存它本身，不存派生值。
-  root.querySelector('#inp-ref-units-per-cell')?.addEventListener('change', (e) => {
-    const gid = selectedGroupId;
-    const roiId = activeRoi()?.id;
-    const raw = (e.target as HTMLInputElement).value.trim();
-    const parsed = raw === '' ? null : Number.parseFloat(raw);
-    if (!gid || !roiId || parsed == null || !Number.isFinite(parsed) || parsed <= 0) return;
-    const client = ctx.rpcClient as
-      | {
-          roiGroupUpdate?: (
-            roiId: string,
-            groupId: string,
-            updates: Record<string, unknown>
-          ) => Promise<unknown>;
-        }
-      | undefined;
-    if (!client?.roiGroupUpdate) return;
-    void client.roiGroupUpdate(roiId, gid, { ref_units_per_cell: parsed });
-  });
 
   // 1. 组 Tab 切换
   root.querySelectorAll('.btn-switch-group-tab').forEach((el) => {
@@ -903,138 +840,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     }
   });
 
-  // 6. 对齐本组：跨度自动取自检测（各列实测轴线→末齿），用户只填「每格单位数」。
-  root.querySelector('#btn-apply-group-scale')?.addEventListener('click', async () => {
-    const roi = activeRoi();
-    if (!cachedData || !roi || !ctx.rpcClient) return;
 
-    const spanPx = maxDetectedSpan(lastSpans);
-    if (spanPx == null) {
-      notifyError('未检测到刻度尺，无法取跨度：请在图上确认图版下方有刻度尺后重试。');
-      return;
-    }
-    const spacing = rulerGeo?.median_spacing_px;
-    if (!spacing || spacing <= 0) {
-      notifyError('未检测到刻距，无法把「每根齿单位数」换算成像素：请确认图版下方有刻度尺后重试。');
-      return;
-    }
-
-    // 「每格单位数」是**组**的属性（同组共用同一把刻度尺），不是某列末齿的读数：
-    // 后者在多列图上会歧义——各列末齿对应的读数并不相同（20 / 50 / 100 都有）。
-    const raw = (root.querySelector('#inp-ref-units-per-cell') as HTMLInputElement | null)?.value ?? '';
-    const unitsPerCell = Number.parseFloat(raw);
-    if (!Number.isFinite(unitsPerCell) || unitsPerCell <= 0) {
-      notifyError('每根齿单位数必须填：看相邻两条刻线之间代表多少单位（通常是相邻两个数字标签之差；标签隔齿标注时取一半）。不会替你预填。');
-      return;
-    }
-
-    const currentG = (roi.x_groups || []).find((g) => g.id === selectedGroupId) || (roi.x_groups || [])[0];
-    const targetGroupId = currentG?.id || roi.default_group_id;
-    const targetRoiId = roi.id;
-    const targetCols = (cachedData.columns || []).filter((c) => {
-      const cGrp = c.x_group_id || roi.default_group_id;
-      const cRoi = c.roi_id || roi.id;
-      return cGrp === targetGroupId && cRoi === targetRoiId;
-    });
-    if (targetCols.length === 0) {
-      notify(`当前组【${currentG?.name || '默认组'}】内尚无任何属种列，请先添加属种归组。`, 'info');
-      return;
-    }
-
-    const unit = currentG?.unit || '%';
-    // 换算依据仍是「水平距离 ÷ 数值差」这一个比值，只是分子取**检测到的刻距**：
-    // 每格 unitsPerCell 个单位 ↔ spacing 像素。同组各列共用它，斜率天然相等。
-    const pxPerUnit = spacing / unitsPerCell;
-    const failures: string[] = [];
-    const skipped: string[] = [];
-    let successCount = 0;
-    for (const col of targetCols) {
-      const idx = columnIndex(col);
-      const span = lastSpans.find((s) => s.colIndex === idx);
-      if (!span || span.span == null || span.span <= 0) {
-        // 没有检测到刻线 = 没有可信的水平距离。绝不拿别列的距离顶替。
-        skipped.push(col.name);
-        continue;
-      }
-      // 第二端点就用该列**自己**检测到的末齿：跨度天然落在列内，无需夹取；
-      // 读数按同一 px/单位折算，所以四列 px/单位严格相等。
-      // 0 点取实测轴线（span.axisX），不是 col.startX —— 后者只是列边界代理。
-      const px1 = span.axisX + span.span;
-      const v2 = span.span / pxPerUnit;
-      try {
-        const res = await ctx.rpcClient.calibrateColumnXTicks(
-          idx,
-          [
-            { px: span.axisX, value: 0 },
-            { px: px1, value: v2 },
-          ],
-          unit
-        );
-        col.x_ticks = res.x_ticks;
-        col.tickEndX = px1;
-        col.maxPercent = v2;
-        successCount++;
-      } catch (err) {
-        failures.push(`${col.name}：${describeError(err)}`);
-      }
-    }
-
-    if (skipped.length > 0) {
-      notifyError(
-        `${skipped.length} 列未检测到刻度尺，已跳过（不拿别列的距离顶替）：${skipped.join('、')}`
-      );
-    }
-    if (failures.length > 0) {
-      notifyError(`对齐失败 ${failures.length}/${targetCols.length} 列：${failures.join('；')}`);
-    }
-    if (successCount > 0) {
-      refDrafts.delete(currentG?.id || '');
-      const k = Math.round(pxPerUnit * 100) / 100;
-      notify(
-        `已对齐 ${successCount} 列：每根齿 ${unitsPerCell}${unit}，刻距 ${Math.round(spacing * 10) / 10}px → ${k} px/单位`,
-        'success'
-      );
-      ctx.onDataChange?.();
-      await syncXTicksDroppedFromBackend(cachedData, ctx);
-    }
-  });
-
-  // 8. 单列微调保存
-  // 记录两个读数框的编辑内容，供重渲染后回填（见 `manualTickDrafts` 的说明）。
-  const rememberDraft = (key: 'v1' | 'v2') => (e: Event) => {
-    const col = activeColumn();
-    if (!col?.id) return;
-    const cur = manualTickDrafts.get(col.id) ?? { v1: '', v2: '' };
-    manualTickDrafts.set(col.id, {
-      ...cur,
-      [key]: (e.target as HTMLInputElement).value,
-    });
-  };
-  root
-    .querySelector('#inp-manual-tick-val1')
-    ?.addEventListener('input', rememberDraft('v1'));
-  root
-    .querySelector('#inp-manual-tick-val2')
-    ?.addEventListener('input', rememberDraft('v2'));
-
-  // 「量刻距」不是新功能：画布早就有测距工具（Δx / Δy / px），
-  // 用户缺的是在步骤 6 里被指出"该量什么、跟什么对照"。点这里直接切过去。
-  root.querySelector('#btn-measure-spacing')?.addEventListener('click', () => {
-    ctx.onSetToolMode?.('measure');
-  });
-
-  root.querySelector('#btn-save-manual-ticks')?.addEventListener('click', () => {
-    const activeCol = activeColumn();
-    if (!activeCol) return;
-    const val1Raw = (root.querySelector('#inp-manual-tick-val1') as HTMLInputElement)?.value ?? '';
-    const val2Raw = (root.querySelector('#inp-manual-tick-val2') as HTMLInputElement)?.value ?? '';
-    void (async () => {
-      await callStepCallback(() =>
-        ctx.onCalibrateXTicks?.(columnIndex(activeCol), val1Raw, val2Raw)
-      );
-      await syncXTicksDroppedFromBackend(cachedData, ctx);
-    })();
-  });
 
   // 9. 单列清空
   root.querySelector('#btn-clear-col-ticks')?.addEventListener('click', () => {

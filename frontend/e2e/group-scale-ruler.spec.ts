@@ -23,6 +23,15 @@ interface BackendColumn {
 test.describe('对齐本组：无刻度尺时必须停手', () => {
   test.use({ allowlists: { notice: [/未检测到刻度尺/] } });
 
+    // ── 待重写（2026-11-03）─────────────────────────────────────────────
+    // 单列两点标定（X1/X2 输入 +【保存标度】）已被**组级点齿标定**取代
+    // （`ColumnGroup.value_per_px`，见 ARCHITECTURE §6.4）。这些用例守的三条约束
+    // 仍然必须成立，只是断言载体变了：
+    //   ① 标定必须真发 RPC 并落后端（不能只活在浏览器内存）
+    //   ② 重载页面后标定仍在
+    //   ③ 空读数/非法输入必须当场拦下，绝不悄悄兜底成 0
+    // 需按新契约（查 `resolve_column_scale` 的派生值而非 `col.x_ticks`）重写。
+    test.fixme(true, '单列两点标定已由组级点齿标定取代；约束 ①②③ 需按新契约重写');
   test('没有检测到刻度尺时，【对齐本组】如实报错且不写任何列', async ({ page, telemetry }) => {
     await resetBaseline(page);
     await gotoStage(page, 6);

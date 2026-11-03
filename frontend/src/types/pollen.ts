@@ -110,6 +110,14 @@ export interface ColumnGroup {
    */
   axis_stroke_px?: number;
   /**
+   * 组级斜率（值/px）——**点齿标定**的结果（ARCHITECTURE §6.4）。
+   *
+   * 用户点一个刻度齿 + 填它旁边的数字 → `slope = 数字 / 距0点px`。
+   * 组内所有列共用它，每列的 0 点各自算。写入时后端会清掉组内各列的
+   * `x_ticks`，保证单一事实源。`resolve_column_scale` 的 source 记为 `group_slope`。
+   */
+  value_per_px?: number;
+  /**
    * 用户填的「每根齿单位数」——**输入量**，不是派生量。
    *
    * 单独存它而不是从 `ref_val_end / 格数` 反算：格数来自检测，换检测结果就会失真。
@@ -353,6 +361,7 @@ export type ToolMode =
   | 'ycalib' // Y 轴两点标定 (Y)
   | 'linefix' // 线掩膜人工修正笔刷 (K)
   | 'measure' // 像素测量尺 (M)，步骤 4
+  | 'pickTick' // 点选 X 轴刻度齿（步骤 6 组级标定）
   | 'drawLineH' // 拖拽新建横向干扰线 geometry
   | 'drawLineV'; // 拖拽新建竖向干扰线 geometry
 
