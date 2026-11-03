@@ -94,13 +94,41 @@ export class ToolModeManager {
           hint: t('tool.measureHint'),
           cursor: 'crosshair',
         };
-      default:
+      case 'pickTick':
         return {
-          name: t('tool.selectName'),
-          shortcut: 'V',
-          hint: t('tool.selectHint'),
+          name: t('tool.pickTickName'),
+          shortcut: t('tool.pickTickShortcut'),
+          hint: t('tool.pickTickHint'),
+          cursor: 'crosshair',
+        };
+      case 'drawLineH':
+        return {
+          name: t('tool.drawLineHName'),
+          shortcut: t('tool.drawLineHShortcut'),
+          hint: t('tool.drawLineHHint'),
+          cursor: 'crosshair',
+        };
+      case 'drawLineV':
+        return {
+          name: t('tool.drawLineVName'),
+          shortcut: t('tool.drawLineVShortcut'),
+          hint: t('tool.drawLineVHint'),
+          cursor: 'crosshair',
+        };
+      default: {
+        // 兜底分支以前直接返回「选择与微调 (V)」，于是任何漏写的模式（`pickTick`
+        // 就是这么被漏掉的）都会让页脚宣称用户在 select 模式 —— 指令与状态相反。
+        // 改成编译期强制：新增 ToolMode 却没写描述时 `mode` 不是 never，这里过不了
+        // 类型检查（`npm --prefix frontend run build` 即报错）；万一运行期真的走到，
+        // 也如实报出模式名而不是冒充 select。
+        const unhandled: never = mode;
+        return {
+          name: String(unhandled),
+          shortcut: '?',
+          hint: '',
           cursor: 'default',
         };
+      }
     }
   }
 }

@@ -17,23 +17,27 @@
  * ## 工具模式的唯一可读来源是画布光标（页脚会说谎）
  *
  * 实测（2026-11-03）：`pickTick` **在浮动工具条里没有按钮**，所以
- * `paletteActiveTool()` 切到该模式后返回 `null`（没有任何按钮带 `active-mode`）；
- * 页脚用的是 `ToolModeManager.getToolDescription()`，它的 `switch` 没有 `pickTick`
- * 分支、落进 `default`，于是页面显示「模式: 选择与微调 (V)」——**页脚是错的**。
- * 两者都不能当判据；只有 `syncToolModeUi()` 同时驱动的画布光标是如实的
- * （`PickTickToolStrategy.getCursor() === 'crosshair'`，select 是 `default`）。
+ * `paletteActiveTool()` 切到该模式后返回 `null`（没有任何按钮带 `active-mode`）。
+ * 页脚当时是错的：`ToolModeManager.getToolDescription()` 的 `switch` 没有
+ * `pickTick` 分支、落进 `default`，于是页面显示「模式: 选择与微调 (V)」。
+ * **该缺陷已修**（issue #9：补齐 `pickTick` / `drawLineH` / `drawLineV` 三条描述，
+ * `default` 改成编译期穷尽检查，页脚现在会如实显示「点选刻度齿（X 轴标定） (T)」；
+ * 判据见 `issue9-tool-description.spec.ts`）。本文件的判据仍然一律用画布光标而不是
+ * 页脚：光标是"策略真的激活了"的直证，页脚只是它的文案投影，两者不该互为替身。
  *
  * ## 为什么点齿坐标必须**实测**，不能按 `Viewport.fitToScreen` 复刻
  *
- * `window.__straditize` 不暴露 viewport 的 scale/pan。按公式
- * `scale = min((w-120)/imgW, (h-120)/imgH, 1.5)` 复刻会算错：实测进入步骤 6 后
- * 画布容器已从 ~954×914 长到 1140×943，viewport 却是第一次适应屏幕时的旧值
- * （实测画出来的是 scale≈0.436 / panX≈62，按当前容器算却是 0.4582 / 129.4；
- * 按【适应屏幕】按钮与 F 键都不改变它）。照公式算出来的点会偏约 80px，必然点空。
+ * 初版理由是"`window.__straditize` 不暴露 viewport 的 scale/pan，按公式复刻会算错"，
+ * 并把偏差记在"容器从 954×914 长到 1140×943、视口停在旧值"上。**该归因已被实测
+ * 推翻**（2026-11-03，issue #8 排查）：容器在步骤 5→6 之间并没有变；0.436/60 是
+ * `fitToScreen` 对**当时真正在画的 hoya 图（2339×1654）**在 1140×943 下算出的正确值，
+ * 而 0.4582/129.4 是 beginner 范例（1923×1796）的同一公式值 —— 两者相差 80px 的原因是
+ * **期望值用错了图像尺寸**，不是视口没重算。现在 `getState().viewport` 已暴露
+ * scale/panX/panY（见 `issue8-fit-to-screen.spec.ts`）。
  *
- * 本文件因此量**画出来的分列竖线**（列边界的世界坐标是权威的）反解换算，
- * 再在 ±10px 内把目标齿的吸附窗口实测到亚像素 —— 点击落点与用户看到的一致，
- * 也不依赖任何未公开的内部状态。
+ * 即便如此，本文件仍坚持量**画出来的分列竖线**（列边界的世界坐标是权威的）反解换算：
+ * 反解不依赖任何内部字段，产品哪天又改了取景策略也不会假绿。再在 ±10px 内把目标齿的
+ * 吸附窗口实测到亚像素 —— 点击落点与用户看到的一致。
  *
  * ## 判据一律读后端权威值
  *

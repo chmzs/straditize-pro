@@ -130,6 +130,11 @@ export class GeologyCanvas {
   private selectedGeometryId: string | null = null;
 
   private renderPending: boolean = false;
+  /** 上一次 `handleResize` 见到的容器尺寸（CSS 像素），用于判定"尺寸真的变了"。 */
+  private lastContainerW: number = 0;
+  private lastContainerH: number = 0;
+  /** 观察容器尺寸：窗口 resize 事件抓不到抽屉折叠 / 面板换内容引起的尺寸变化。 */
+  private resizeObserver: ResizeObserver | null = null;
   private lastRenderedLayers: Set<string> = new Set();
   /** 上一次渲染中失败的叠加层：暴露出来供验收句柄与状态栏读取。 */
   private overlayErrors: Map<string, unknown> = new Map();
@@ -485,8 +490,37 @@ export class GeologyCanvas {
     this.requestRender();
   }
 
+  /**
+   * 同步画布后备缓冲尺寸到当前容器，并在「视口仍是适应屏幕取景」时重新适配。
+   *
+   * ## 为什么必须在这里重新适配（Issue #8）
+   *
+   * `fitToScreen` 只在三处被主动调用：底图 onload、F 键/双击/【适应屏幕】按钮、
+   * 重置全部。容器的宽度由左右抽屉决定、高度由 `100vh` 决定，抽屉折叠、窗口缩放
+   * 都会让它变——而尺寸一变，旧 `scale`/`panX` 就不再让图居中：实测 860×793 时
+   * 适配得到 scale=0.3164、panX=60，把容器长回 1140×943 后仍停在 0.3164，
+   * 图宽只剩 739px，居中应有的 panX 是 200px，于是整幅图偏左 140px。
+   * 所以尺寸变化必须重算，否则"图不再居中"是必然结果而不是偶发。
+   *
+   * ## 为什么不能无条件重算（会冲掉用户手动缩放的成果）
+   *
+   * 用户滚到 300% 精修某个控制点时，折叠一次抽屉（容器变宽）就把他打回 fit 比例，
+   * 等于在干活中途抢走视口。因此自动重算的条件是**两条同时成立**：
+   * ① 容器尺寸确实变了（`sizeChanged`，不是每次 resize 事件都重算，避免抖动）；
+   * ② 视口仍停在适应屏幕的取景上（`viewport.fittedToScreen`，任何手动缩放/平移
+   *    都会把它置 false）。用户一旦动过手，就由他自己按 F 决定何时回到适配。
+   *
+   * 这两条也覆盖了「步骤切换导致容器尺寸变化」：步骤面板换内容可能改变容器尺寸，
+   * `ResizeObserver` 只看尺寸、不看谁引起的，因而一视同仁。
+   */
   public handleResize(): void {
     const rect = this.container.getBoundingClientRect();
+    const sizeChanged =
+      Math.abs(rect.width - this.lastContainerW) > 0.5 ||
+      Math.abs(rect.height - this.lastContainerH) > 0.5;
+    this.lastContainerW = rect.width;
+    this.lastContainerH = rect.height;
+
     this.viewport.updateDpr();
     const dpr = this.viewport.dpr;
 
@@ -495,7 +529,20 @@ export class GeologyCanvas {
     this.canvas.style.width = `${rect.width}px`;
     this.canvas.style.height = `${rect.height}px`;
 
+    if (sizeChanged && this.viewport.fittedToScreen) {
+      // 只改 viewport 的 scale/pan 与画布尺寸，不触发第二条 resize 路径。
+      const w = this.data.imageWidth || 1600;
+      const h = this.data.imageHeight || 1000;
+      this.viewport.fitToScreen(rect.width, rect.height, w, h, 60);
+    }
+
     this.requestRender();
+  }
+
+  /** 释放本组件持有的全局资源。SPA 里画布随会话存活，目前仅在切换工程时可调用。 */
+  public dispose(): void {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
   }
 
   public requestRender(): void {
@@ -633,6 +680,15 @@ export class GeologyCanvas {
 
   private initEventListeners(): void {
     window.addEventListener('resize', () => this.handleResize());
+
+    // 容器尺寸变化的**权威来源**：窗口 resize 事件只在窗口尺寸变化时触发，
+    // 而左右抽屉折叠、步骤面板换内容都会改容器大小却不触发它（实测：折叠左栏后
+    // 容器从 1140 变到 1330，视口仍停在旧 fit 值）。ResizeObserver 观察的是容器
+    // 本身的盒尺寸，与谁引起的无关，因而两种情形一并覆盖。
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => this.handleResize());
+      this.resizeObserver.observe(this.container);
+    }
 
     window.addEventListener('keydown', (e) => this.onKeyDown(e));
     window.addEventListener('keyup', (e) => this.onKeyUp(e));
@@ -858,6 +914,20 @@ export class GeologyCanvas {
         this.clearYCalibMarks();
         this.setToolMode('ycalib');
         this.notifyNotice('切换工具: Y 轴两点标定 (Y) —— 依次点击 Y 轴上两个已知刻度所在的行');
+        return;
+      }
+      // T: 点选 X 轴刻度齿（步骤 6 组级标定）。与 M 一样是"再按一次退出"，
+      //    因为点齿动作靠点触发器触发，没有持续拖拽状态，按住不放没有意义。
+      if (e.code === 'KeyT') {
+        e.preventDefault();
+        if (!this.guardTool('pickTick')) return;
+        if (this.toolModeManager.getMode() === 'pickTick') {
+          this.setToolMode('select');
+          this.notifyNotice('已退出点选刻度齿');
+          return;
+        }
+        this.setToolMode('pickTick');
+        this.notifyNotice('点选刻度齿 (T): 在画布上点一个 X 轴刻度齿，再填它的真实数值');
         return;
       }
       if (e.code === 'Escape') {

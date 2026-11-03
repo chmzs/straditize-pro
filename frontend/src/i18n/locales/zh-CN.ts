@@ -227,6 +227,18 @@ export const zhCN = {
   'tool.measureName': '像素测量尺',
   'tool.measureShortcut': 'M',
   'tool.measureHint': '按住左键在图上拖一条线，读出 Δx / Δy / 直线距离（单位：图像像素）；量竖直线段的 Δx 即线宽',
+  'tool.pickTick': '点齿 (T)',
+  'tool.pickTickName': '点选刻度齿（X 轴标定）',
+  'tool.pickTickShortcut': 'T',
+  'tool.pickTickHint': '在画布上点一个 X 轴刻度齿，再填它的真实数值；一个齿就定下整组的深度-像素斜率',
+  'tool.drawLineH': '横线',
+  'tool.drawLineHName': '画横向干扰线',
+  'tool.drawLineHShortcut': '拖拽',
+  'tool.drawLineHHint': '在画布上拖一条横向矩形，提交为干扰线几何（步骤 4）',
+  'tool.drawLineV': '竖线',
+  'tool.drawLineVName': '画竖向干扰线',
+  'tool.drawLineVShortcut': '拖拽',
+  'tool.drawLineVHint': '在画布上拖一条竖向矩形，提交为干扰线几何（步骤 4）',
 
   // ===== 步骤 2：ROI 面板 =====
   'step2.title': '2. 数据有效区界定 (ROI)',

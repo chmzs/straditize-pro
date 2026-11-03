@@ -12,6 +12,16 @@ export class Viewport {
   public minScale: number = 0.1;  // 10%
   public maxScale: number = 10.0; // 1000%
 
+  /**
+   * 当前取景是否仍等于「适应屏幕」算出来的那一套（此后没有任何手动缩放/平移）。
+   *
+   * 唯一消费者是 `GeologyCanvas.handleResize()`：容器尺寸变了要不要自动重新适配，
+   * 取决于用户有没有动手调过视口。判据写在本类内部而非画面层，是因为本类是全部
+   * 视口写入的唯一入口（画面层只读 scale/panX，见 `grep viewport.scale`），
+   * 散在调用点上必然漏掉某条缩放路径。
+   */
+  public fittedToScreen: boolean = false;
+
   // 图像高保真滤镜与透视遮罩模式
   public imageMode: ImageDisplayMode = 'normal';
   public showBinaryOverlay: boolean = false; // B 键快速透视遮罩
@@ -70,6 +80,7 @@ export class Viewport {
   public panBy(deltaScreenX: number, deltaScreenY: number): void {
     this.panX += deltaScreenX;
     this.panY += deltaScreenY;
+    if (deltaScreenX !== 0 || deltaScreenY !== 0) this.fittedToScreen = false;
   }
 
   /**
@@ -85,6 +96,7 @@ export class Viewport {
     this.scale = newScale;
     this.panX = screenPt.x - worldPt.x * newScale;
     this.panY = screenPt.y - worldPt.y * newScale;
+    this.fittedToScreen = false;
   }
 
   /**
@@ -119,6 +131,7 @@ export class Viewport {
     this.scale = newScale;
     this.panX = screenPt.x - worldPt.x * newScale;
     this.panY = screenPt.y - worldPt.y * newScale;
+    this.fittedToScreen = false;
   }
 
   /**
@@ -136,6 +149,7 @@ export class Viewport {
 
     this.panX = (canvasW - imageW * this.scale) / 2;
     this.panY = (canvasH - imageH * this.scale) / 2;
+    this.fittedToScreen = true;
   }
 
   /**
@@ -145,6 +159,8 @@ export class Viewport {
     this.scale = 1.0;
     this.panX = (canvasW - imageW) / 2;
     this.panY = (canvasH - imageH) / 2;
+    // 1:1 是用户显式要求的取景，不是「适应屏幕」，容器再变也不该被悄悄改回适配值。
+    this.fittedToScreen = false;
   }
 
   /**

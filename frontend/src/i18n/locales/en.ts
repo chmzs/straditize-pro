@@ -226,6 +226,18 @@ export const en = {
   'tool.measureName': 'Pixel Ruler (Measure)',
   'tool.measureShortcut': 'M',
   'tool.measureHint': 'Drag a line on the canvas to read Δx / Δy / distance in image pixels; Δx across a vertical line is its width',
+  'tool.pickTick': 'Tick (T)',
+  'tool.pickTickName': 'Pick a Tick (X-Axis Calibration)',
+  'tool.pickTickShortcut': 'T',
+  'tool.pickTickHint': 'Click one X-axis ruler tick on the canvas, then type its real value; a single tick fixes the whole group slope',
+  'tool.drawLineH': 'H-Line',
+  'tool.drawLineHName': 'Draw Horizontal Interference Line',
+  'tool.drawLineHShortcut': 'drag',
+  'tool.drawLineHHint': 'Drag a horizontal rectangle on the canvas to commit an interference-line geometry (step 4)',
+  'tool.drawLineV': 'V-Line',
+  'tool.drawLineVName': 'Draw Vertical Interference Line',
+  'tool.drawLineVShortcut': 'drag',
+  'tool.drawLineVHint': 'Drag a vertical rectangle on the canvas to commit an interference-line geometry (step 4)',
 
   // ===== Step 2: ROI Panel =====
   'step2.title': '2. Data ROI Definition',

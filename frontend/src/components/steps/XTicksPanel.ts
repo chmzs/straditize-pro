@@ -448,7 +448,7 @@ export function render(data: DiagramData): string {
               · 距 0 点 <strong>${pendingTick.dist.toFixed(0)}px</strong>
               ${
                 pendingTick.dist < 20
-                  ? '<div style="color: var(--status-warning); margin-top: 3px;">⚠ 离 0 点太近，±1px 就会让斜率偏几个百分点，建议点更远的齿。</div>'
+                  ? '<div style="color: var(--status-warning); margin-top: 3px;"><strong>注意：</strong>离 0 点太近，±1px 就会让斜率偏几个百分点，建议点更远的齿。</div>'
                   : ''
               }
             </div>
@@ -480,7 +480,7 @@ export function render(data: DiagramData): string {
       <div class="inspector-section" data-role="zero-point-warning"
            style="padding: 8px 10px; background: rgba(245, 158, 11, 0.12); border: 1px solid var(--status-warning); border-radius: 6px; margin-bottom: 10px;">
         <div style="font-size: 11px; font-weight: 700; color: var(--status-warning); margin-bottom: 3px;">
-          ⚠ 该列 0 点不可自动测量
+          注意：该列 0 点不可自动测量
         </div>
         <div style="font-size: 10px; line-height: 1.45; color: var(--text-secondary);">
           这一列左缘没有贯穿整列的竖轴（可能不是真正的面板，或轴太淡）。

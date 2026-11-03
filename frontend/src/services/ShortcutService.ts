@@ -93,6 +93,7 @@ export class ShortcutService {
             <div class="help-row"><span class="help-key">R</span><span class="help-desc">Data ROI Bounding Box</span></div>
             <div class="help-row"><span class="help-key">K</span><span class="help-desc">Line Mask Correction Brush</span></div>
             <div class="help-row"><span class="help-key">Y</span><span class="help-desc">Y-Axis Two-Point Calibration</span></div>
+            <div class="help-row"><span class="help-key">T</span><span class="help-desc">Pick an X-Axis Ruler Tick (step 6 group calibration)</span></div>
             <div class="help-row"><span class="help-key">Esc</span><span class="help-desc">Return to Adjust (S) / Deselect</span></div>
           </div>
         </div>
@@ -150,6 +151,7 @@ export class ShortcutService {
             <div class="help-row"><span class="help-key">R</span><span class="help-desc">ROI 矩形取数区模式（只框定取数范围，与深度无关）</span></div>
             <div class="help-row"><span class="help-key">K</span><span class="help-desc">线掩膜人工修正笔刷（涂抹擦掉误标 / 补回漏标）</span></div>
             <div class="help-row"><span class="help-key">Y</span><span class="help-desc">Y 轴两点标定（点两个已知刻度所在的行，再填真实值）</span></div>
+            <div class="help-row"><span class="help-key">T</span><span class="help-desc">点选 X 轴刻度齿（步骤 6 组级标定：点一个齿，再填它的数字）</span></div>
             <div class="help-row"><span class="help-key">Esc</span><span class="help-desc">退出当前工具返回微调 (S) / 取消选中</span></div>
           </div>
         </div>

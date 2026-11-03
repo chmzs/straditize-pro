@@ -110,6 +110,18 @@ export function registerWebMcpAndInspectionHandles(p: WebMcpBridgeParams): void 
       return {
         stage: p.workflowController.getCurrentStage(),
         image: { src: data.imageSrc || null, width: data.imageWidth, height: data.imageHeight },
+        // 视口变换（`screenX = worldX * scale + panX`）。
+        //
+        // 暴露给 e2e / WebMCP 的理由：判「整幅图是否居中适应屏幕」只能靠这三个数。
+        // 曾经的替代做法是用画出来的分列竖线位置反解 scale/panX（见
+        // `e2e/step6-picktick.spec.ts` 的网格搜索），那既要世界坐标又要拟合，
+        // 误差全进判据里；viewport 是唯一真值源，直接读它才能把判据钉成
+        // 「scale 与 fitToScreen 公式一致、panX 使图居中」这种可证伪形式。
+        viewport: {
+          scale: p.canvasComponent.viewport.scale,
+          panX: p.canvasComponent.viewport.panX,
+          panY: p.canvasComponent.viewport.panY,
+        },
         rois: (data.rois ?? []).map((r) => ({
           id: r.id,
           name: r.name,
