@@ -337,7 +337,10 @@ class TestStandardPathRegressions(unittest.TestCase):
 class TestRealFigureAcceptance(unittest.TestCase):
     """真实验收：Han et al. 2026 Fig.3 的中灰填充 0.0% → 100%。"""
 
-    FIGURE = 'output/han2026_ngamring/fig3_raw.jpeg'
+    # 指向**已入库**的那张。原路径 output/han2026_ngamring/fig3_raw.jpeg 被
+    # .gitignore:68 的 `output/` 排除，CI 上不存在 → 本类三条验收一直静默 skip。
+    # 两张图 sha256 完全相同（927231034b9865bb…），换路径不改判据。
+    FIGURE = 'tests/data/figures/real_plates/fig3_raw.jpeg'
 
     def _load(self):
         from pathlib import Path

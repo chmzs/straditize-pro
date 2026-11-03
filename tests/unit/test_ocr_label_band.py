@@ -25,9 +25,10 @@
 
 ## 为什么要用合成图而不是只依赖真实图版
 
-真实图版 `tests/data/figures/real_plates/fig3_raw.jpeg` 被 .gitignore，CI 上不存在。
+真实论文 PDF 有版权、不入库，任何非本机环境都拿不到原图。
 所以这里用**合成的"顶边线 + 文字带 + 图例区"三层结构**，把判据本身钉死；
-真实图版那一条在文件存在时才跑（skip 时打印原因）。
+`TestRealPlatePairing` 需要那份 PDF，缺文件时按"环境缺文件"显式 skip（见下方
+_REAL_PDF_SKIP_REASON）。
 """
 
 from __future__ import annotations
@@ -134,17 +135,25 @@ REAL_PDF = (
 )
 
 
-@pytest.mark.skipif(
-    not os.path.exists(REAL_PDF),
-    reason=(
-        "真实论文 PDF 不在本机（位于 Zotero 存储目录，不入库）。"
-        "此用例钉的是「默认调用应得与列数相等的标签且全部配对」，需真实图版才能验。"
-    ),
+_HAS_REAL_PDF = os.path.exists(REAL_PDF)
+
+#: skip 文案的唯一事实源：说清「为什么跳、在哪补、怎么补」。
+#: 带 `-rs` 跑 pytest 时这段会原样出现在 SKIPPED 行里，可直接区分
+#: 「环境缺文件」与「我漏跑了」。
+_REAL_PDF_SKIP_REASON = (
+    "环境缺文件（不是漏跑）：本用例需本机 Zotero 里的 Han2026 论文 PDF，"
+    "该 PDF 有版权、不入库，任何非本机环境都拿不到。"
+    f"本机期望路径：{REAL_PDF}（当前不存在）。"
+    "补法：把该 PDF 放回上述路径，或改本文件顶部的 REAL_PDF 指向本地副本。"
 )
+
+
 class TestRealPlatePairing:
     """真实图版上，默认调用必须让全部列拿到属种名。"""
 
     def test_default_call_pairs_every_column(self) -> None:
+        if not _HAS_REAL_PDF:
+            pytest.skip(_REAL_PDF_SKIP_REASON)
         session = StraditizeSession()
         session._init_cleanup()
         session.load_image(image_path=REAL_PDF, page_number=5)
