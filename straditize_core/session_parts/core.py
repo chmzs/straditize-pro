@@ -1037,7 +1037,11 @@ class CoreMixin:
         iy0, iy1 = round(y0), round(y1)
 
         sub_mask = self.foreground_mask[iy0:iy1, ix0:ix1]
-        from ..columns import detect_column_bounds, measure_axis_right_edge
+        from ..columns import (
+            detect_column_bounds,
+            has_measurable_axis,
+            measure_axis_right_edge,
+        )
         from ..image import remove_horizontal_grid_lines
 
         cleaned_sub_mask, self.hline_rows = remove_horizontal_grid_lines(
@@ -1099,6 +1103,14 @@ class CoreMixin:
                         "roi_id": target_roi_id,
                         "start": col_start,
                         "end": col_end,
+                        # 该列左缘处是否真有**贯穿列高的竖轴**。false 表示 0 点
+                        # 不可测（无轴列 / 假列），必须由用户手动指定 —— 绝不静默
+                        # 按"轴线粗 = 0"处理，那会让整列读数系统偏 1–5px。
+                        "zero_point_measurable": bool(
+                            has_measurable_axis(
+                                cleaned_sub_mask, int(s), 0, cleaned_sub_mask.shape[0]
+                            )
+                        ),
                         "scale_type": "linear",
                         "startValue": 0.0,
                         "tickValue": 20.0,

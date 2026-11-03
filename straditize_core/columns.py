@@ -213,6 +213,64 @@ def detect_column_bounds(binary: np.ndarray,
     return bounds
 
 
+def has_measurable_axis(
+    binary: np.ndarray,
+    start: int,
+    y0: int | None = None,
+    y1: int | None = None,
+    *,
+    solid_ratio: float = 0.85,
+    max_width: int = 8,
+) -> bool:
+    """该列起点处是否存在一条**可测的竖轴**（贯穿列高的连续实心窄带）。
+
+    ## 为什么必须单独判
+
+    `0 点 = 左缘 + 轴线粗` 这条公式的前提是"左缘处确实有一条竖轴"。
+    有些面板根本没有左边框（无轴列），此时 0 点**不可测量**。
+    若静默按"轴线粗 = 0"处理，整列读数会系统偏 1–5px，且用户看不出来 ——
+    必须由调用方把这个事实**显式标出来**，请用户手动指定 0 点。
+
+    判据与 `measure_axis_right_edge` 同源（连续实心 + 宽度上限），
+    但这里要回答的是**有没有**，不是"右缘在第几像素"。
+    """
+    bin_arr = np.asarray(binary)
+    if bin_arr.ndim != 2 or bin_arr.size == 0:
+        return False
+    height, width = bin_arr.shape
+    if height == 0:
+        return False
+    base = int(start)
+    if base < 0 or base >= width:
+        return False
+
+    # 只在**数据区**的 y 范围内判：图顶部是标题、底部是留白，
+    # 用整列高度算覆盖率永远达不到阈值（实测 beginner 4 列全被判"无轴"）。
+    lo = 0 if y0 is None else max(0, int(y0))
+    hi = height if y1 is None else min(height, int(y1))
+    if hi - lo < 10:
+        return False
+    band = bin_arr[lo:hi, :]
+
+    # 从 start-2 起扫：列切分给的是"第一个墨迹像素"，轴线可能落在它左侧
+    # 1–2px（面板左边框与上一列共享）或右侧（抗锯齿）。
+    for shift in (-2, -1, 0, 1, 2):
+        x_at = base + shift
+        if x_at < 0 or x_at >= width:
+            continue
+        width_found = 0
+        for probe in range(max_width):
+            x = x_at + probe
+            if x < 0 or x >= width:
+                break
+            if band[:, x].mean() <= solid_ratio:
+                break
+            width_found = probe + 1
+        if width_found >= 1:
+            return True
+    return False
+
+
 def measure_axis_right_edge(rgb: np.ndarray,
                             binary: np.ndarray,
                             starts: Sequence[int],

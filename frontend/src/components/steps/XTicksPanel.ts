@@ -504,6 +504,23 @@ export function render(data: DiagramData): string {
         </div>
       </div>
 
+      ${
+        activeCol?.zero_point_measurable === false
+          ? `
+      <div class="inspector-section" data-role="zero-point-warning"
+           style="padding: 8px 10px; background: rgba(245, 158, 11, 0.12); border: 1px solid var(--status-warning); border-radius: 6px; margin-bottom: 10px;">
+        <div style="font-size: 11px; font-weight: 700; color: var(--status-warning); margin-bottom: 3px;">
+          ⚠ 该列 0 点不可自动测量
+        </div>
+        <div style="font-size: 10px; line-height: 1.45; color: var(--text-secondary);">
+          这一列左缘没有贯穿整列的竖轴（可能不是真正的面板，或轴太淡）。
+          <strong>0 点 = 左缘 + 轴线粗</strong> 这个公式在这里不成立，所以本列
+          <strong>不给数</strong>（导出记 NA）—— 请在下方手动填入 0 点像素，或确认该列是否应删除。
+        </div>
+      </div>`
+          : ''
+      }
+
       <!-- 模块 2：当前点选列详情与微调 (Active Column Details) -->
       <div class="inspector-section" style="padding: 10px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 12px; border: 1px solid var(--border-color);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
