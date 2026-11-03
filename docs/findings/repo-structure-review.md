@@ -65,8 +65,8 @@ REAL_PDF = ("F:/Zotero/storage/HV4FXL63/"
 
 `TestRealPlatePairing` 用 `@pytest.mark.skipif(not os.path.exists(REAL_PDF))` 包着。
 后果不只"CI 上不跑"：**任何非本机环境都不跑**，包括换一台机器、换一个 Zotero storage key 之后。
-这是入库测试里唯一一处机器绝对路径（`git grep -E "[\"'][A-Za-z]:[/\\\\]" -- tests/` 的其余两条
-`I:/does_not_exist/…`、`E:/someone-elses/hoya.png` 是故意的负向 fixture）。
+这是入库测试里唯一一处机器绝对路径 —— 同一轮 `git grep` 在 `tests/` 下只命中 3 条，
+另外 2 条（`I:/does_not_exist/random_image.png`、`E:/someone-elses/hoya.png`）是故意的负向 fixture。
 
 → **改法**：该 PDF 有版权、不能入库，所以不是"补文件"能解决的。二选一：
 (a) 改为显式 `@pytest.mark.skip(reason="需本地 Han2026 PDF（版权限制不入库）")` + 在 `docs/testing-strategy.md`
@@ -194,16 +194,18 @@ AUDIT SCRATCH — 只读审计用，不属于产品代码。放在 /tmp 下，�
 
 即：副本既不可移植，又丢掉了活版本后来补的 fail-fast 复位。**删掉副本，不需要任何迁移。**
 
-### B-4 40 个入库文件含硬编码绝对路径（不可移植）
+### B-4 38 个入库文件含硬编码绝对路径（不可移植）
 
 ```
-$ git grep -n -E "[\"'][A-Za-z]:[/\\\\]" -- '*.py' '*.ts' '*.mjs' '*.cjs'
+$ git grep -lE "\"[A-Za-z]:[/\\\\]|'[A-Za-z]:[/\\\\]" -- '*.py' '*.ts' '*.mjs' | wc -l
+38           # 53 处匹配；其中 34 个文件在 scripts/ 下
 ```
 
-`E:/software_dev/straditize` 出现 20 余次（`scripts/static_audit/exp{2,3,…,18}.py` 每个文件顶部都写一遍）、
-`F:/Zotero/storage/HV4FXL63/…` 出现 10 次（`scripts/prod_gate/*.py`、`scripts/product_journey/*.py`）。
-产品代码 `straditize_core/` 与 `frontend/src/` 只有 `age_depth_model.py:1546-1552` 的 Rscript 候选路径，
-那是合理兜底，不算问题。
+`E:/software_dev/straditize` 在 `scripts/static_audit/exp{2,3,…,18}.py` 每个文件顶部都写一遍、
+`F:/Zotero/storage/HV4FXL63/…` 在 `scripts/prod_gate/*.py`、`scripts/product_journey/*.py` 共 10 处。
+`scripts/` 之外的只有 4 个文件：`straditize_core/age_depth_model.py`（Rscript 候选路径，合理兜底）、
+`tests/integration/test_rpc.py:161` 与 `tests/unit/test_geometry_scope_content_identity.py:406`（负向 fixture）、
+`tests/unit/test_ocr_label_band.py:132`（见 A-2）。**产品代码基本干净**。
 
 → 与 B-1/B-2 同一处置：这些文件本就不该入库，删了路径问题自动消失。
 
@@ -242,6 +244,12 @@ f94196e6a816  straditize_core/assets/tutorials/hoya-del-castillo.png
 `straditize_core/assets/tutorials/…`，见 `frontend/e2e/from-zero-journey.spec.ts:54,197`）。
 
 → 直接删本地副本。**它们现在还没入库，是最便宜的时候。**
+
+> **2026-11-03 23:0x 更新（这条风险已经兑现）**：本轮审视进行期间，并发的提交 `866c50a`
+> 用 `git add -A` 把这两个文件一起提交了（`.../benchmark_types/beginner-tutorial.png` 181795 B、
+> `hoya-del-castillo.png` 71455 B，均在 `git show --stat 866c50a` 里）。现在处置方式是：
+> `git rm --cached` 这两个路径 + 加进 `.gitignore`，否则它们会长期以"死图"身份占着版本库。
+> 同一提交也顺带带上了本报告（`docs/findings/repo-structure-review.md`）与两个进行中的 e2e spec。
 
 ### B-7 两个入口的批处理，README 只认一个
 
@@ -522,11 +530,16 @@ const expectations: Record<number, { visible: string[]; active: string | null }>
 这与用户已知的历史事故（`output/han2026_ngamring/fig3_raw.jpeg` 未入库导致 CI 必红，后修）
 是同一类问题的**漏网者** —— 那次修了 3 个测试文件，漏了这 1 个。
 
-### 第 1 步：清理本地未跟踪垃圾（B-6，1 分钟）
+### 第 1 步：清掉两个误入库的重复图片（B-6，已从"本地"升级为"已入库"）
 
-改动：删除 `tests/data/figures/benchmark_types/beginner-tutorial.png` 与 `hoya-del-castillo.png`。
-影响面：零（引用数 0，权威副本在 `straditize_core/assets/tutorials/`）。
-风险：零。唯一注意点是**不要用 `git add -A` 误提交**它们。
+改动：`git rm --cached tests/data/figures/benchmark_types/{beginner-tutorial,hoya-del-castillo}.png`
+（保留工作区文件或直接删），并把这两个路径写进 `.gitignore`。
+影响面：零引用（权威副本在 `straditize_core/assets/tutorials/`，逐字节相同），
+唯一副作用是本次会多一条删除记录。
+风险：低，但**这是 git 写操作，需用户明确同意**。
+
+> 状态更新：本条原本是"本地未跟踪文件，删了就行"，本次审视期间并发提交 `866c50a` 已把它们提交入库 ——
+> 详见 B-6 的更新段。所以现在不是"别误提交"，而是"已经被误提交了，要撤"。
 
 ### 第 2 步：删 B-3 / E-1 / B-7 三个死入口
 
@@ -596,11 +609,15 @@ git ls-files | wc -l                                    # 664
 git ls-files scripts | wc -l                            # 223
 git ls-files scripts | grep -cE '\.(png|json|log|txt|csv)$'   # 45
 git ls-files | awk -F/ '{print $1}' | sort | uniq -c | sort -rn
-git grep -n -E "[\"'][A-Za-z]:[/\\\\]" -- '*.py' '*.ts' '*.mjs'   # 40 处硬编码绝对路径
+git grep -lE "\"[A-Za-z]:[/\\\\]|'[A-Za-z]:[/\\\\]" -- '*.py' '*.ts' '*.mjs'  # 38 文件 / 53 处
 git grep -n "docs/plans"                                # 6 处，文件均已不存在
 git grep -n "twolayer"                                  # 仅 1 处，且是 hash 清单
 git grep -n "exaggeration_layers"                       # 仅 1 处，且是写入
 grep -rl <script> pixi.toml pyproject.toml .github/workflows/  # 判"活/死"脚本
 ```
 
-本次未执行：任何测试（`pixi run test` / `test-e2e`）、任何写操作（除本文件）。
+本次未执行：pytest / e2e（含 `pixi run test`、`test-e2e`、`test-contract`）、任何 git 写操作、
+任何文件移动或删除。唯一的写操作是本文件本身。
+
+取证时用 `.pixi/envs/default/python.exe` 做了 3 次只读计算（图版 sha256 比对、A-1 三条断言的预演、
+重复图片 sha256 比对），均属手算预演，不等于测试通过。
