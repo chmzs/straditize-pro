@@ -806,6 +806,10 @@ async function bootstrap() {
             const target = canvasComponent.data.columns.find((c) => c.id === freshCol.id);
             if (!target) continue;
             target.x_ticks = freshCol.x_ticks as typeof target.x_ticks;
+            // 「标定已被清空」的提示必须**同批**失效：后端在写组斜率时已清掉该键
+            // （roi.py 的 value_per_px 分支），前端若只回填 x_ticks，屏幕上会继续
+            // 挂着"需要你重新标定"，与"其实已经能读数"自相矛盾。
+            target.x_ticks_dropped = freshCol.x_ticks_dropped as typeof target.x_ticks_dropped;
             target.scaleCalib = freshCol.scaleCalib as typeof target.scaleCalib;
             target.scale_provenance = freshCol.scale_provenance as typeof target.scale_provenance;
           }

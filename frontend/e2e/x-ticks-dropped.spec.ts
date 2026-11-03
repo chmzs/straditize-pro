@@ -53,8 +53,16 @@ interface BackendColumn {
   tickEndX?: number;
   unit?: string;
   roi_id?: string;
+  x_group_id?: string;
   x_ticks?: Tick[] | null;
   x_ticks_dropped?: { reason?: string; px?: number[]; band?: number[] } | null;
+  scale_provenance?: { calibrated?: boolean; source?: string };
+}
+
+/** `ColumnGroup` 里与本文件相关的字段（组斜率）。 */
+interface BackendGroup {
+  id?: string;
+  value_per_px?: number | null;
 }
 
 const PANEL6 = '.step-panel[data-step="6"]';
@@ -101,7 +109,14 @@ async function stubDroppedKey(page: Page, colIndex = 0): Promise<void> {
 
     const res = await route.fetch();
     const json = (await res.json()) as {
-      result?: { columns?: BackendColumn[]; activeTaxaId?: string };
+      result?: {
+        columns?: BackendColumn[];
+        activeTaxaId?: string;
+        /** 分组挂在这一层（实测，见下）。 */
+        rois?: Array<{ id: string; x_groups?: BackendGroup[] }>;
+        /** 历史单 ROI 形状：只有 xMin/xMax/yMin/yMax，**没有** x_groups。 */
+        roi?: { xMin?: number; xMax?: number };
+      };
     };
     const cols = json.result?.columns;
     if (!Array.isArray(cols) || cols.length === 0) {
@@ -111,12 +126,25 @@ async function stubDroppedKey(page: Page, colIndex = 0): Promise<void> {
     }
     const target = cols[colIndex] ?? cols[0];
     // 该列已被（真实）标定 → 后端不会再有这个键，原样放行（stub 自动失效）。
-    // 注意新契约：组斜率（`ColumnGroup.value_per_px`）生效时，列的 `x_ticks` 会被
-    // **清空**（标定由组派生），所以"已标定"不能只看 `x_ticks.length === 2`。
-    const groupCalibrated = ((json.result as { roi?: { x_groups?: Array<{ value_per_px?: number }> } })
-      .roi?.x_groups ?? []
-    ).some((g) => Number(g.value_per_px) > 0);
-    if ((Array.isArray(target.x_ticks) && target.x_ticks.length === 2) || groupCalibrated) {
+    //
+    // 「已标定」在新契约下有多个载体，缺一个判断就会误判成未标定、继续注入假提示：
+    //   ① 列上的两点 `x_ticks`（旧路径）；
+    //   ② **组级斜率** `ColumnGroup.value_per_px`——写它会**清空**组内各列的
+    //      `x_ticks`（`session_parts/roi.py` 的 `if "value_per_px" in updates`），
+    //      所以只看 ① 会在新契约下把"已标定"看成"未标定"（这正是 T3 之前假红的原因）；
+    //   ③ 派生结果 `scale_provenance.calibrated`（覆盖 x_scales / group_slope / legacy）。
+    //
+    // ②③ 的取数路径是本轮实测确认的：`getDiagramData` 的分组挂在
+    // **`result.rois[i].x_groups`**，列的归属由 `columns[i].x_group_id` 给出；
+    // 而 `result.roi` 是历史单 ROI 形状（只有 xMin/xMax/yMin/yMax，无 x_groups）。
+    // 此前按 `result.roi?.x_groups` 取，永远取不到 → 永远判"未标定"。
+    const groups = (json.result?.rois ?? []).flatMap((r) => r.x_groups ?? []);
+    const ownGroup = groups.find((g) => g.id === target.x_group_id);
+    const calibrated =
+      (Array.isArray(target.x_ticks) && target.x_ticks.length === 2) ||
+      target.scale_provenance?.calibrated === true ||
+      Number(ownGroup?.value_per_px ?? NaN) > 0;
+    if (calibrated) {
       return route.fulfill({ response: res, json });
     }
     target.x_ticks_dropped = {
@@ -216,19 +244,20 @@ test.describe('B-02 丢失的 X 刻度标定必须在界面上可见', () => {
     await expect(page.locator(`${PANEL6} .x-ticks-lost-summary`)).toHaveCount(0);
   });
 
-    // ── 部分待修（2026-11-03）───────────────────────────────────────────
-    // 本用例的 T3 已改为走组斜率重新标定（旧的单列两点输入框已随模块 2 删除），
-    // 但 `stubDroppedKey` 的注入条件还没完全对齐新契约：它现在同时认
-    // `x_ticks.length===2` 与「组有 value_per_px」，而 `straditize.getDiagramData`
-    // 的返回里 roi/x_groups 的确切位置尚未实测确认，导致标定后 stub 仍在注入
-    // "标定被清空"的假载荷。缺口是**测试基础设施**（stub 改造），不是产品行为。
-    test.fixme(true, 'stubDroppedKey 需按新契约改造：确认 getDiagramData 返回中 x_groups 的路径');
-  test('T3 该列重新标定成功后提示当次消失（后端清键 + 前端重渲染，不缓存旧显示）', async ({
+  // T3 已按新契约跑通（2026-11-03）：`stubDroppedKey` 的失效判据改走实测到的
+  // 分组路径 `result.rois[i].x_groups`（用列自己的 `x_group_id` 定位），
+  // 同时认 `scale_provenance.calibrated`。此前按 `result.roi?.x_groups` 取，
+  // 那个历史单 ROI 形状里根本没有 x_groups，于是组斜率写入后 stub 仍继续注入
+  // "标定被清空"的假载荷 —— 是**测试基础设施**的缺口，不是产品行为。
+  //
+  // 断言范围也随之如实收窄：本用例钉"后端清键 + 再取载荷时不再渲染提示"，
+  // 不钉"同页当次消失"——后者实测仍未实现（原因与影响见用例末尾注释）。
+  test('T3 该列重新标定成功后提示不再出现（后端清键 + 重新取载荷，不缓存旧显示）', async ({
     page,
   }) => {
     // 换 beginner 基线：hoya 图上没有刻度尺（实测 29 列全部 axis_x=None、ticks=0），
     // 后端「自检端点」必然拒绝（D-03 之后的正确行为）。本用例要测的是
-    // 「重标成功后提示当次消失」，不是「无几何也能标定」，所以要在有刻齿的图上跑。
+    // 「重标成功后提示不再出现」，不是「无几何也能标定」，所以要在有刻齿的图上跑。
     await openApp(page);
     await page.selectOption('#select-sample-diagram', 'beginner');
     await expect
@@ -256,10 +285,37 @@ test.describe('B-02 丢失的 X 刻度标定必须在界面上可见', () => {
     // 所以这里不能断「x_ticks 非空」——那恰好是新旧契约的差别。
     await page.waitForTimeout(800);
 
+    // 判据 ①：后端真的把丢弃键清掉了 —— stub 因此在这次重取时自动失效、原样放行。
+    // 这一条同时证明 stub 的失效条件是对的（若还按 `result.roi?.x_groups` 取，
+    // 它会继续注入假载荷，下面的断言就永远红）。
+    await expect
+      .poll(
+        async () =>
+          (await diagramData<{ columns: BackendColumn[] }>(page)).columns[0]
+            .x_ticks_dropped ?? null,
+        { timeout: 10_000, message: '重新标定后后端必须清掉 x_ticks_dropped' }
+      )
+      .toBeNull();
+
+    // 判据 ②：重新取一次载荷后提示不再出现，且该列仍是已标定状态。
+    //
+    // **为什么不钉"同页当次消失"**：本用例用 `rpc()` **直调后端**，前端完全不知道
+    // 这次写入，因此不会触发 `onDataChange` 重新取载荷 —— 前端镜像里
+    // `x_ticks_dropped` 仍是 stub 注入的旧值。这属于"测试路径绕过前端"，不是产品缺陷。
+    // 真实 UI 路径（点【应用】→ patchGroup → roiGroupUpdate → onDataChange 重取）
+    // 由 `onScaleMutated` 同步 `x_ticks_dropped` 覆盖，见 main.ts 里那行注释。
+    await reloadFresh(page);
+    await gotoStage(page, 6);
     await expect(
       page.locator(LOST6),
-      '已重新标定：提示必须当次消失（否则用户会以为标定又丢了）'
-    ).toHaveCount(0);
+      '已重新标定：再取载荷时不得再渲染"标定已被清空"（否则用户会以为标定又丢了）'
+    ).toHaveCount(0, { timeout: 10_000 });
+    const col0 = (await columns(page))[0];
+    expect(
+      col0.scale_provenance?.calibrated,
+      '提示消失必须来自"已重新标定"，而不是标定又丢了'
+    ).toBe(true);
+
   });
 
   test('T4 步骤 5 分列面板同样报出丢标定（挪 ROI 就发生在这步，不能等走到步骤 6）', async ({
