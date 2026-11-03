@@ -460,6 +460,9 @@ class RoiMixin:
             # 另外两个 ref_* 一并放行，避免以后再"写了被静默丢弃"。
             "ref_units_per_cell",
             "ref_span_px",
+            # 轴线粗：决定「0 点 = 左缘 + 轴线粗」这条绿线画在哪。
+            # 此前只存在于前端内存变量 `axisStrokeOverride`，刷新即丢。
+            "axis_stroke_px",
             "ref_val_start",
             "ref_val_end",
         )

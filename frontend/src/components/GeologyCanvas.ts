@@ -2099,11 +2099,14 @@ export class GeologyCanvas {
       //   绿实线 = y 轴**右缘** = 该列数据的 0 点（左缘 + 轴线粗，默认 5px，可手工改）
       //   蓝实线 = 单位刻度齿位置（该刻度代表多少单位由用户填）
       //   深度网格线已默认关闭：它铺满画布却不承载任何判定信息，是纯视觉噪声。
-      // 轴线粗是**组**的属性（ColumnGroup.ref_span_px，默认 5px，可手工测量改）：
-      // y 轴右缘 = 左缘 + 轴线粗，这一条线才是该列数据的 0 点。
+      // 轴线粗 = ColumnGroup.axis_stroke_px（默认 5px，已持久化）。
+      // 注意别与 `ref_span_px` 混：后者是**一个刻度的长度**（cell_px），两个不同的量。
       const groupOfCol = this.data.roi.x_groups?.find((g) => g.id === col.x_group_id);
       const axisStrokePx =
-        Number(groupOfCol?.ref_span_px) > 0 ? Number(groupOfCol?.ref_span_px) : 5;
+        Number(groupOfCol?.axis_stroke_px) > 0 ? Number(groupOfCol?.axis_stroke_px) : 5;
+      // 一个单位刻度的像素长度（组级）。有它就按等距外推画刻度，
+      // 不再依赖检测齿 —— 检测会漏、会多、会偏 1-2px（实测一列是第 2 个齿、另一列是第 3 个）。
+      const cellPx = Number(groupOfCol?.ref_span_px) > 0 ? Number(groupOfCol?.ref_span_px) : null;
       const leftEdgeX = col.startX;
       const zeroX = col.startX + axisStrokePx;
 
@@ -2136,41 +2139,26 @@ export class GeologyCanvas {
         (this.hoveredBoundary?.taxaId === col.id && this.hoveredBoundary.type === 'end') ||
         (dragBoundary?.taxaId === col.id && dragBoundary.type === 'end');
 
-      // 1. 端点 1 垂直基准线 (sc.originX - 对应数值 sc.originVal)
-      ctx.beginPath();
-      ctx.moveTo(sc.originX, topY);
-      ctx.lineTo(sc.originX, bottomY);
-
-      if (isOriginHovered) {
-        ctx.strokeStyle = '#f97316';
-        ctx.lineWidth = 3 / scale;
-        ctx.setLineDash([]);
-      } else {
-        ctx.strokeStyle = isLight ? 'rgba(2, 132, 199, 0.9)' : 'rgba(56, 189, 248, 0.85)';
-        ctx.lineWidth = (isActive ? 2.0 : 1.5) / scale;
-        ctx.setLineDash([]);
-      }
-      ctx.stroke();
-
-      // 2. 端点 2 真实物理刻度齿垂直线 (sc.calibX - 对应数值 sc.calibVal)
-      //    只有真标定过才画：未标定时 sc.calibX 是分列期的猜测值（startX+80），
-      //    画出来会被当成"已标定"的刻度。
-      if (GeologyCanvas.hasRealCalibration(col)) {
-        ctx.beginPath();
-        ctx.moveTo(sc.calibX, topY);
-        ctx.lineTo(sc.calibX, bottomY);
-
-        if (isCalibHovered) {
-          ctx.strokeStyle = '#f97316';
-          ctx.lineWidth = 3 / scale;
+      // 刻度 = 蓝实线，按组级 `cell_px` **等距外推**（0 点已经用绿线画好，不重复画）。
+      // k=0 落 0 点、k=1 是第二个刻度……与检测齿的数量/位置无关。
+      if (cellPx && cellPx > 2) {
+        const kMax = Math.floor((col.endX - zeroX) / cellPx);
+        for (let k = 1; k <= kMax; k += 1) {
+          const tickX = zeroX + k * cellPx;
+          if (tickX > col.endX + 0.5) break;
+          ctx.beginPath();
+          ctx.moveTo(tickX, topY);
+          ctx.lineTo(tickX, bottomY);
+          const highlight = isCalibHovered && k === 1;
+          ctx.strokeStyle = highlight
+            ? '#f97316'
+            : isLight
+              ? 'rgba(37, 99, 235, 0.55)'
+              : 'rgba(96, 165, 250, 0.65)';
+          ctx.lineWidth = (highlight ? 2.4 : 1.0) / scale;
           ctx.setLineDash([]);
-        } else {
-          // 单位刻度 = 蓝实线（原来错画成红虚线，与"列左缘"混淆）
-          ctx.strokeStyle = isLight ? 'rgba(37, 99, 235, 0.9)' : 'rgba(96, 165, 250, 0.95)';
-          ctx.lineWidth = 1.6 / scale;
-          ctx.setLineDash([]);
+          ctx.stroke();
         }
-        ctx.stroke();
       }
 
       // 3. 列间空白隔离边界线 (endX - 仅当 endX 明显大于刻度齿时显示淡色隔离虚线)

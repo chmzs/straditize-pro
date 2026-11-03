@@ -243,12 +243,16 @@ test.describe('步骤 → 画布可见层', () => {
     // 偏小的值（实测 GitHub Actions windows-latest 连续两次红在下面这条）。
     // 判据强度不变——真没画就永远达不到：把 `drawRoiOverlay` 无条件提前 return 后，
     // 墨迹差值从 ~193600 掉到 ~13395（金丝雀已验证灵敏度）。
+    // 阈值从 1000 降到 400：这个蓝色原本混了**两个**层 —— ROI 边框
+    // （`RoiOverlay`）与「端点 1 基准线」（`GeologyCanvas` 的 originX 线）。
+    // 后者已按 ARCHITECTURE §6.4 被绿线取代并删除，特征像素实测 792（原 >1000）。
+    // 判据仍是"ROI 特征色真的上屏"，不是"某个绘制层画了东西"。
     await expect
       .poll(async () => canvasColorPixels(page, ROI_BLUE), {
         timeout: 20_000,
         message: '步骤 3 已有 ROI，ROI 特征色应真的上屏（阶段级信号）',
       })
-      .toBeGreaterThan(1000);
+      .toBeGreaterThan(400);
     await expect
       .poll(async () => (await canvasInk(page)).ink - step1.ink, {
         timeout: 15_000,

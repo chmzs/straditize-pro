@@ -333,12 +333,13 @@ test.describe('步骤 6 对齐本组（自动跨度）', () => {
     }) => {
       await openBeginnerStep6(page);
 
-      // 未标定时，分列期写入的 `startX + max(20, min(0.65×列宽, 80))` 只是猜测值。
-      // 它不得被画成刻度参考线：实测噪声 22 个红像素，真正四条虚线是 1405 个。
-      const redBefore = await canvasColorPixels(page, [239, 68, 68], 40);
+      // 单位刻度线现在是**蓝实线**（见 ARCHITECTURE §6.4：刻度按组级 `cell_px` 等距外推）。
+      // 组的 `cell_px` 为空时不该画——那才是"未标定不画猜测刻度"的真正含义。
+      const TICK_BLUE: [number, number, number] = [96, 165, 250];
+      const blueBefore = await canvasColorPixels(page, TICK_BLUE, 28);
       expect(
-        redBefore,
-        `未标定的列不应画出红色刻度参考线（实测噪声约 22；若接近 1400 说明又在画猜测值）`
+        blueBefore,
+        `组的 cell_px 为空时不应画单位刻度蓝线（实测 ${blueBefore} 个特征像素）`
       ).toBeLessThan(100);
 
       await expect(page.locator('#inp-manual-tick-val2'), 'X2 不得预填猜测读数').toHaveValue('');
@@ -349,8 +350,8 @@ test.describe('步骤 6 对齐本组（自动跨度）', () => {
       await page.locator(`${PANEL} #inp-ref-units-per-cell`).fill('20');
       await page.locator(`${PANEL} #btn-apply-group-scale`).click();
       await expect
-        .poll(async () => canvasColorPixels(page, [239, 68, 68], 40), { timeout: 15_000 })
-        .toBeGreaterThan(500);
+        .poll(async () => canvasColorPixels(page, TICK_BLUE, 28), { timeout: 15_000 })
+        .toBeGreaterThan(200);
     });
   });
 
