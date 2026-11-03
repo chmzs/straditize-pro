@@ -1037,6 +1037,9 @@ class CoreMixin:
         iy0, iy1 = round(y0), round(y1)
 
         sub_mask = self.foreground_mask[iy0:iy1, ix0:ix1]
+        # 0 点可测性判定用**灰度**而不是二值 mask：轴的有无是结构问题
+        # （沿 y 是否恒定 + 与纸白是否有差），二值化会因图版深浅整批失效。
+        gray_sub = np.asarray(self.image.convert("L"))[iy0:iy1, ix0:ix1]
         from ..columns import (
             detect_column_bounds,
             has_measurable_axis,
@@ -1107,9 +1110,7 @@ class CoreMixin:
                         # 不可测（无轴列 / 假列），必须由用户手动指定 —— 绝不静默
                         # 按"轴线粗 = 0"处理，那会让整列读数系统偏 1–5px。
                         "zero_point_measurable": bool(
-                            has_measurable_axis(
-                                cleaned_sub_mask, int(s), 0, cleaned_sub_mask.shape[0]
-                            )
+                            has_measurable_axis(gray_sub, int(s), 0, gray_sub.shape[0])
                         ),
                         "scale_type": "linear",
                         "startValue": 0.0,

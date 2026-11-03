@@ -214,60 +214,65 @@ def detect_column_bounds(binary: np.ndarray,
 
 
 def has_measurable_axis(
-    binary: np.ndarray,
+    gray: np.ndarray,
     start: int,
     y0: int | None = None,
     y1: int | None = None,
     *,
-    solid_ratio: float = 0.85,
-    max_width: int = 8,
+    max_width: int = 10,
+    # 阈值由实测分布定，不是拍的：轴沿 y 恒定（std ≤ 18，含 diatom 的浅灰轴 17.7），
+    # 曲线/文字沿 y 起伏（std ≥ 59）。取 30 落在两簇中间，两侧都有 1.5 倍余量。
+    std_limit: float = 30.0,
+    # 与纸白的亮度差：diatom 浅灰轴 48，纸面 0。取 25。
+    contrast_min: float = 25.0,
 ) -> bool:
-    """该列起点处是否存在一条**可测的竖轴**（贯穿列高的连续实心窄带）。
+    """该列起点处是否存在一条**贯穿列高的竖轴**。
 
-    ## 为什么必须单独判
+    ## 为什么**不经二值化**
 
-    `0 点 = 左缘 + 轴线粗` 这条公式的前提是"左缘处确实有一条竖轴"。
-    有些面板根本没有左边框（无轴列），此时 0 点**不可测量**。
-    若静默按"轴线粗 = 0"处理，整列读数会系统偏 1–5px，且用户看不出来 ——
-    必须由调用方把这个事实**显式标出来**，请用户手动指定 0 点。
+    有没有轴是**结构问题**（"这一列像素沿 y 方向是否恒定、且与背景有亮度差"），
+    不是"够不够暗"的问题。二值化对图版高度敏感：
 
-    判据与 `measure_axis_right_edge` 同源（连续实心 + 宽度上限），
-    但这里要回答的是**有没有**，不是"右缘在第几像素"。
+    - diatom 的轴是浅灰 (224,224,224)，任何偏低阈值都会把它整批丢成背景
+      （实测硬阈值 `gray<128` 让 25 列**全部**被判无轴，而它们每列都有轴）；
+    - 反色图（深底浅线）的轴比背景**亮**，`< threshold` 方向整个反掉；
+    - 彩色底图还会引入色相，灰度化后再阈值更不可靠。
+
+    所以判据只用两条**连续量**，与"墨"的定义解耦：
+
+    1. 该 x 列在数据区沿 y 方向的**灰度标准差**很小 —— 一条均匀的直线；
+    2. 该列均值与**纸白（背景中位数）**有足够亮度差 —— 它确实是"线"而非纸面。
+
+    第 2 条用"与背景的差"而不是绝对暗度，因此浅灰轴、深底浅轴都能命中。
     """
-    bin_arr = np.asarray(binary)
-    if bin_arr.ndim != 2 or bin_arr.size == 0:
+    arr = np.asarray(gray)
+    if arr.ndim != 2 or arr.size == 0:
         return False
-    height, width = bin_arr.shape
+    height, width = arr.shape
     if height == 0:
         return False
     base = int(start)
     if base < 0 or base >= width:
         return False
 
-    # 只在**数据区**的 y 范围内判：图顶部是标题、底部是留白，
-    # 用整列高度算覆盖率永远达不到阈值（实测 beginner 4 列全被判"无轴"）。
+    # 只在**数据区**判：图顶部是标题、底部是留白，整列统计会被稀释。
     lo = 0 if y0 is None else max(0, int(y0))
     hi = height if y1 is None else min(height, int(y1))
     if hi - lo < 10:
         return False
-    band = bin_arr[lo:hi, :]
+    band = arr[lo:hi, :].astype(float)
+    paper = float(np.median(band))
 
-    # 从 start-2 起扫：列切分给的是"第一个墨迹像素"，轴线可能落在它左侧
-    # 1–2px（面板左边框与上一列共享）或右侧（抗锯齿）。
     for shift in (-2, -1, 0, 1, 2):
         x_at = base + shift
         if x_at < 0 or x_at >= width:
             continue
-        width_found = 0
-        for probe in range(max_width):
-            x = x_at + probe
-            if x < 0 or x >= width:
-                break
-            if band[:, x].mean() <= solid_ratio:
-                break
-            width_found = probe + 1
-        if width_found >= 1:
-            return True
+        col = band[:, x_at]
+        if float(col.std()) > std_limit:
+            continue          # 沿 y 起伏大 → 是曲线/纹理，不是均匀直线
+        if abs(float(col.mean()) - paper) < contrast_min:
+            continue          # 与纸白无差 → 就是纸面
+        return True
     return False
 
 
