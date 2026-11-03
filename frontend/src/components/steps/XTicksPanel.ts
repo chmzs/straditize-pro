@@ -266,6 +266,12 @@ export function render(data: DiagramData): string {
   lastSpans = spans;
   const rigidSpan = maxDetectedSpan(spans);
   const groupUnit = currentGroup?.unit || '%';
+  // 一个单位刻度的像素长度（CellGroup.ref_span_px）。它是标定的几何锚点：
+  // 刻度位置 = 0 点 + k × 它，与检测到几个齿无关（见 ARCHITECTURE §6.4）。
+  const cellPxText =
+    currentGroup && Number(currentGroup.ref_span_px) > 0
+      ? String(Number(currentGroup.ref_span_px))
+      : '';
   const unitsPerCellText =
     refDrafts.get(currentGroupId) ??
     (currentGroup?.ref_units_per_cell != null
@@ -473,8 +479,19 @@ export function render(data: DiagramData): string {
           </div>
 
           <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <label for="inp-cell-px" style="font-size: 10.5px; color: var(--text-muted);">单位刻度长度:</label>
+            <input type="number" id="inp-cell-px" value="${cellPxText}" placeholder="如 125" min="1" step="0.5"
+                   title="一个单位刻度在图上占多少像素（= 相邻两个刻度齿的距离）。用【测距 S】量一格得到 Δx，或点右侧【取检测值】用检测刻距的中位数。刻度位置按 0 点 + k×它 等距外推，所以这个数一旦定了，整列刻度位置就是确定的。"
+                   style="width: 66px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
+            <span style="font-size: 10px; color: var(--text-muted);">px/格</span>
+            <button id="btn-use-detected-span" class="ui-btn ui-btn--quiet ui-btn--xs"
+                    title="用本图检测到的刻距中位数填入（diatom 实测 38.25、beginner 124.5）"
+                    style="font-size: 9.5px; padding: 1px 6px; margin-left: auto;">取检测值</button>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
             <label for="inp-axis-stroke" style="font-size: 10.5px; color: var(--text-muted);">轴线粗细:</label>
-            <input type="number" id="inp-axis-stroke" value="${axisStrokeOverride ?? ''}" placeholder="自动" min="1" max="20" step="1"
+            <input type="number" id="inp-axis-stroke" value="${currentGroup && Number(currentGroup.axis_stroke_px) > 0 ? String(Number(currentGroup.axis_stroke_px)) : ''}" placeholder="5" min="1" max="20" step="1"
                    title="Y 轴轴线（spine）的描边宽度，单位像素。填了它，0 点 = 轴线左缘 + 粗细 − 1，程序不再从像素里猜；留空则自动估计（夹在 1–6px，高 DPI 图的粗轴会被截断）。"
                    style="width: 66px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
             <span style="font-size: 9.5px; color: var(--text-muted);">px（留空 = 自动估计）</span>
@@ -583,6 +600,18 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     );
   };
 
+  // 组级写入的唯一通路：形态 / 尺度 / 单位刻度长度 / 轴线粗 都是组的属性。
+  // **放在所有使用点之前** —— 之前它在 axis-stroke 的 handler 之后，直接引用会撞 TDZ。
+  const patchGroup = (field: Record<string, unknown>) => {
+    const gid = selectedGroupId;
+    const roiId = activeRoi()?.id;
+    const client = ctx.rpcClient as
+      | { roiGroupUpdate?: (r: string, g: string, p: Record<string, unknown>) => Promise<unknown> }
+      | undefined;
+    if (!gid || !roiId || !client?.roiGroupUpdate) return;
+    void client.roiGroupUpdate(roiId, gid, field).then(() => ctx.onDataChange?.());
+  };
+
   root.querySelector('#btn-goto-step5-split')?.addEventListener('click', () => {
     ctx.onAdvanceWorkflowStage?.(5);
   });
@@ -600,6 +629,8 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       parsed != null && Number.isFinite(parsed) && parsed > 0
         ? Math.min(parsed, 20)
         : null;
+    // 同时落库：绿线「0 点 = 左缘 + 轴线粗」靠它，而 `axisStrokeOverride` 只是前端内存。
+    patchGroup({ axis_stroke_px: axisStrokeOverride });
     // 缓存键里含粗细；清空这三项才会真的重测。
     rulerGeo = null;
     rulerGeoError = null;
@@ -611,19 +642,22 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     });
   });
 
-  // 组级形态 / 尺度：与「每根齿单位数」走同一条写入通路，都是组的属性。
-  const patchGroup = (field: Record<string, string>) => {
-    const gid = selectedGroupId;
-    const roiId = activeRoi()?.id;
-    const client = ctx.rpcClient as
-      | { roiGroupUpdate?: (r: string, g: string, p: Record<string, unknown>) => Promise<unknown> }
-      | undefined;
-    (window as unknown as Record<string, unknown>).__patchTrace = {
-      gid, roiId, hasClient: Boolean(client?.roiGroupUpdate), field,
-    };
-    if (!gid || !roiId || !client?.roiGroupUpdate) return;
-    void client.roiGroupUpdate(roiId, gid, field).then(() => ctx.onDataChange?.());
-  };
+  // 单位刻度长度（cell_px）：标定的几何锚点。刻度位置 = 0 点 + k × 它。
+  root.querySelector('#inp-cell-px')?.addEventListener('change', (e) => {
+    const raw = (e.target as HTMLInputElement).value.trim();
+    const px = raw === '' ? null : Number.parseFloat(raw);
+    if (px != null && (!Number.isFinite(px) || px <= 0)) return;
+    patchGroup({ ref_span_px: px });
+  });
+  root.querySelector('#btn-use-detected-span')?.addEventListener('click', () => {
+    const px = Number(rulerGeo?.median_spacing_px);
+    if (!Number.isFinite(px) || px <= 0) {
+      notifyError('还没有检测到刻距，无法填入：请确认图版下方有刻度尺后重试。');
+      return;
+    }
+    patchGroup({ ref_span_px: px });
+  });
+
   root.querySelectorAll('.grp-plottype-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const t = btn.getAttribute('data-plottype');
