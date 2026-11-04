@@ -25,7 +25,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const SRC = fileURLToPath(new URL('../src/', import.meta.url));
-const CANVAS_SRC = readFileSync(`${SRC}components/GeologyCanvas.ts`, 'utf8');
+// 三条线的绘制代码已抽到 components/canvas/columnBoundaries.ts（2026-11-04）。
+// 判据跟着实现走：读旧文件会"找不到锚点"并直接抛错——宁可红，也不要静默假绿。
+const CANVAS_SRC = readFileSync(`${SRC}components/canvas/columnBoundaries.ts`, 'utf8');
 const CSS = readFileSync(`${SRC}style.css`, 'utf8');
 
 /**
