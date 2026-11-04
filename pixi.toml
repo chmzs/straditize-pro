@@ -15,6 +15,14 @@ extra-index-urls = ["https://pypi.org/simple"]
 app = "python -m straditize_core.rpc_server"                                   # 启动现代版应用 (浏览器 + JSON-RPC + WebMCP + 退出)
 frontend-dev = "npm --prefix frontend run dev"                            # 启动现代版前端开发服务器
 record-tutorials = "python scripts/record_tutorials.py"                   # 自动录制 8 步工作流与三大模态框真机动图与视频
+# ── 复跑入口（#11 治理：要长期复跑的脚本升为正式任务，升级即入库）────────────
+# 这些曾散落在 docs/findings/README.md §2 里靠手敲命令；升为任务后
+# 「用户如何自证没有偷懒」不再依赖人记得住路径。探针索引见 docs/findings/probe-index.md。
+serve-zero = "python scripts/lead_probe/serve_zero.py"                    # 零态后端（verify-f01/f1/f2 的前置）
+verify-f01 = "node scripts/lead_probe/verify_f01_fabricated_ticks.mjs"    # 复跑 F-01：检测不得替用户编造读数
+verify-f1 = "python scripts/lead_probe/verify_f1_roi_rollback.py"         # 复跑 F-1：ROI 回滚
+verify-f2 = "python scripts/lead_probe/verify_f2_cross_image.py"          # 复跑 F-2：跨图几何残留
+bench-two-axis = "python scripts/benchmark_two_axis.py"                   # benchmark 图逐列精度基准
 
 [tasks.test]
 description = "Run the FULL backend test suite (was: a hand-picked 16-file whitelist)"
