@@ -639,103 +639,118 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onDetectXTicks?.();
   });
 
-  // 轴线粗细覆盖：用户量一次、全图共用。它决定绿线「0 点 = 左缘 + 轴粗」的位置，
-  // 同时作为刻度检测时 `_find_axis_x` 的右缘判据。
-  root.querySelector('#inp-axis-stroke')?.addEventListener('change', (e) => {
-    const raw = (e.target as HTMLInputElement).value.trim();
-    const parsed = raw === '' ? null : Number.parseFloat(raw);
-    state.axisStrokeOverride =
-      parsed != null && Number.isFinite(parsed) && parsed > 0
-        ? Math.min(parsed, 20)
-        : null;
-    // 同时落库：绿线「0 点 = 左缘 + 轴线粗」靠它，而 `state.axisStrokeOverride` 只是前端内存。
-    patchGroup({ axis_stroke_px: state.axisStrokeOverride });
-    // 缓存键里含粗细；清空这三项才会真的重测。
-    state.rulerGeo = null;
-    state.rulerGeoError = null;
-    state.rulerGeoKey = null;
-    // 重测完成后必须整块重渲染：0 点像素是**渲染时**写进模板的（`px1`），
-    // `patchRulerDom` 只就地更新检测那两行，不会更新「像素位置」。
-    void ensureRulerGeometry(ctx, root).then(() => {
+  // 标尺输入：轴线粗（组/列）、单位刻度长度、检测刻距
+  const wireRulerInputs = (): void => {
+    // 轴线粗细覆盖：用户量一次、全图共用。它决定绿线「0 点 = 左缘 + 轴粗」的位置，
+    // 同时作为刻度检测时 `_find_axis_x` 的右缘判据。
+    root.querySelector('#inp-axis-stroke')?.addEventListener('change', (e) => {
+      const raw = (e.target as HTMLInputElement).value.trim();
+      const parsed = raw === '' ? null : Number.parseFloat(raw);
+      state.axisStrokeOverride =
+        parsed != null && Number.isFinite(parsed) && parsed > 0
+          ? Math.min(parsed, 20)
+          : null;
+      // 同时落库：绿线「0 点 = 左缘 + 轴线粗」靠它，而 `state.axisStrokeOverride` 只是前端内存。
+      patchGroup({ axis_stroke_px: state.axisStrokeOverride });
+      // 缓存键里含粗细；清空这三项才会真的重测。
+      state.rulerGeo = null;
+      state.rulerGeoError = null;
+      state.rulerGeoKey = null;
+      // 重测完成后必须整块重渲染：0 点像素是**渲染时**写进模板的（`px1`），
+      // `patchRulerDom` 只就地更新检测那两行，不会更新「像素位置」。
+      void ensureRulerGeometry(ctx, root).then(() => {
+        ctx.onDataChange?.();
+      });
+    });
+
+    // 单列覆盖：只改当前列的 0 点位置（组值仍是初值）。留空 = 清掉覆盖、回到组值。
+    // 列级字段分列时不会写，所以这里写的值跨会话保留；改完必须整块重渲染——
+    // 0 点像素是渲染时写进模板的（与上面组输入框同理）。
+    root.querySelector('#inp-col-axis-stroke')?.addEventListener('change', (e) => {
+      const raw = (e.target as HTMLInputElement).value.trim();
+      const parsed = raw === '' ? null : Number.parseFloat(raw);
+      if (parsed != null && (!Number.isFinite(parsed) || parsed <= 0 || parsed > 20)) {
+        notifyError('单列轴线粗必须是 1–20 之间的正数；要清除覆盖请留空。');
+        return;
+      }
+      const col = activeColumn();
+      if (!col) return;
+      void ctx.rpcClient
+        .updateColumn(columnIndex(col), { axis_stroke_px: parsed })
+        .then(() => ctx.onDataChange?.());
+    });
+
+    // 单位刻度长度（cell_px）：标定的几何锚点。刻度位置 = 0 点 + k × 它。
+    root.querySelector('#inp-cell-px')?.addEventListener('change', (e) => {
+      const raw = (e.target as HTMLInputElement).value.trim();
+      const px = raw === '' ? null : Number.parseFloat(raw);
+      if (px != null && (!Number.isFinite(px) || px <= 0)) return;
+      patchGroup({ ref_span_px: px });
+    });
+    root.querySelector('#btn-use-detected-span')?.addEventListener('click', () => {
+      const px = Number(state.rulerGeo?.median_spacing_px);
+      if (!Number.isFinite(px) || px <= 0) {
+        notifyError('还没有检测到刻距，无法填入：请确认图版下方有刻度尺后重试。');
+        return;
+      }
+      patchGroup({ ref_span_px: px });
+    });
+  };
+  wireRulerInputs();
+
+
+  // X 轴标定（点齿 + 填数字）
+  const wireTickCalibration = (): void => {
+    // ── X 轴标定（组级）──────────────────────────────────────────────
+    // 一次动作定整组：点一个刻度齿 + 填它旁边的数字 → 斜率 = 数字 / 距0点px。
+    root.querySelector('#btn-pick-tick')?.addEventListener('click', () => {
+      state.pendingTick = null;
+      ctx.onSetToolMode?.('pickTick');
+      notify('请在画布上点一个刻度齿（离绿线越远越准）', 'info');
+    });
+    root.querySelector('#btn-cancel-tick-calib')?.addEventListener('click', () => {
+      state.pendingTick = null;
       ctx.onDataChange?.();
     });
-  });
-
-  // 单列覆盖：只改当前列的 0 点位置（组值仍是初值）。留空 = 清掉覆盖、回到组值。
-  // 列级字段分列时不会写，所以这里写的值跨会话保留；改完必须整块重渲染——
-  // 0 点像素是渲染时写进模板的（与上面组输入框同理）。
-  root.querySelector('#inp-col-axis-stroke')?.addEventListener('change', (e) => {
-    const raw = (e.target as HTMLInputElement).value.trim();
-    const parsed = raw === '' ? null : Number.parseFloat(raw);
-    if (parsed != null && (!Number.isFinite(parsed) || parsed <= 0 || parsed > 20)) {
-      notifyError('单列轴线粗必须是 1–20 之间的正数；要清除覆盖请留空。');
-      return;
-    }
-    const col = activeColumn();
-    if (!col) return;
-    void ctx.rpcClient
-      .updateColumn(columnIndex(col), { axis_stroke_px: parsed })
-      .then(() => ctx.onDataChange?.());
-  });
-
-  // 单位刻度长度（cell_px）：标定的几何锚点。刻度位置 = 0 点 + k × 它。
-  root.querySelector('#inp-cell-px')?.addEventListener('change', (e) => {
-    const raw = (e.target as HTMLInputElement).value.trim();
-    const px = raw === '' ? null : Number.parseFloat(raw);
-    if (px != null && (!Number.isFinite(px) || px <= 0)) return;
-    patchGroup({ ref_span_px: px });
-  });
-  root.querySelector('#btn-use-detected-span')?.addEventListener('click', () => {
-    const px = Number(state.rulerGeo?.median_spacing_px);
-    if (!Number.isFinite(px) || px <= 0) {
-      notifyError('还没有检测到刻距，无法填入：请确认图版下方有刻度尺后重试。');
-      return;
-    }
-    patchGroup({ ref_span_px: px });
-  });
-
-  // ── X 轴标定（组级）──────────────────────────────────────────────
-  // 一次动作定整组：点一个刻度齿 + 填它旁边的数字 → 斜率 = 数字 / 距0点px。
-  root.querySelector('#btn-pick-tick')?.addEventListener('click', () => {
-    state.pendingTick = null;
-    ctx.onSetToolMode?.('pickTick');
-    notify('请在画布上点一个刻度齿（离绿线越远越准）', 'info');
-  });
-  root.querySelector('#btn-cancel-tick-calib')?.addEventListener('click', () => {
-    state.pendingTick = null;
-    ctx.onDataChange?.();
-  });
-  root.querySelector('#btn-apply-tick-calib')?.addEventListener('click', () => {
-    const raw = (root.querySelector('#inp-tick-value') as HTMLInputElement | null)?.value ?? '';
-    const value = Number.parseFloat(raw);
-    if (!Number.isFinite(value)) {
-      notifyError('请填写这个齿代表的数字（图上标签，如 10）。');
-      return;
-    }
-    if (!state.pendingTick || state.pendingTick.dist <= 0) {
-      notifyError('请先在画布上点一个位于 0 点右侧的刻度齿。');
-      return;
-    }
-    // 斜率 = 值 / 距 0 点像素。0 点 = 左缘 + 轴线粗（见 ARCHITECTURE §6.4）。
-    const pickedDist = state.pendingTick.dist;
-    const slope = value / pickedDist;
-    patchGroup({ value_per_px: slope });
-    state.pendingTick = null;
-    notify(`已按「${value} 对应 ${pickedDist.toFixed(0)}px」标定本组：斜率 ${slope.toFixed(4)}`, 'info');
-  });
-
-  root.querySelectorAll('.grp-plottype-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const t = btn.getAttribute('data-plottype');
-      if (t) patchGroup({ plot_type: t });
+    root.querySelector('#btn-apply-tick-calib')?.addEventListener('click', () => {
+      const raw = (root.querySelector('#inp-tick-value') as HTMLInputElement | null)?.value ?? '';
+      const value = Number.parseFloat(raw);
+      if (!Number.isFinite(value)) {
+        notifyError('请填写这个齿代表的数字（图上标签，如 10）。');
+        return;
+      }
+      if (!state.pendingTick || state.pendingTick.dist <= 0) {
+        notifyError('请先在画布上点一个位于 0 点右侧的刻度齿。');
+        return;
+      }
+      // 斜率 = 值 / 距 0 点像素。0 点 = 左缘 + 轴线粗（见 ARCHITECTURE §6.4）。
+      const pickedDist = state.pendingTick.dist;
+      const slope = value / pickedDist;
+      patchGroup({ value_per_px: slope });
+      state.pendingTick = null;
+      notify(`已按「${value} 对应 ${pickedDist.toFixed(0)}px」标定本组：斜率 ${slope.toFixed(4)}`, 'info');
     });
-  });
-  root.querySelectorAll('.grp-scaletype-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const t = btn.getAttribute('data-scaletype');
-      if (t) patchGroup({ scale_type: t });
+  };
+  wireTickCalibration();
+
+
+  // 组属性：形态 / 尺度
+  const wireGroupAttributes = (): void => {
+    root.querySelectorAll('.grp-plottype-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const t = btn.getAttribute('data-plottype');
+        if (t) patchGroup({ plot_type: t });
+      });
     });
-  });
+    root.querySelectorAll('.grp-scaletype-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const t = btn.getAttribute('data-scaletype');
+        if (t) patchGroup({ scale_type: t });
+      });
+    });
+  };
+  wireGroupAttributes();
+
 
   // 0. 刻线几何检测：进入本步（以及数据变化后）自动拉一次，只读、不写任何标定。
   void ensureRulerGeometry(ctx, root);
@@ -743,259 +758,279 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
 
 
   // 1. 组 Tab 切换
-  root.querySelectorAll('.btn-switch-group-tab').forEach((el) => {
-    el.addEventListener('click', () => {
-      const gId = (el as HTMLElement).dataset.groupId;
-      if (gId) {
-        state.selectedGroupId = gId;
-        ctx.onDataChange?.();
-      }
-    });
-  });
-
-  // 2. 展开/收起批量归组抽屉
-  root.querySelector('#btn-toggle-batch-assign')?.addEventListener('click', () => {
-    state.isBatchAssignOpen = !state.isBatchAssignOpen;
-    ctx.onDataChange?.();
-  });
-
-  // 3. 批量归组：勾选（Shift 连选）+ 一次性划入/移出
-  //
-  // 旧实现是「点一个 chip 就立刻转移一个」，22 列要点 22 次，且转移方向是隐式的
-  //（在组内→移出到默认组，不在→移入），用户看不出结果。改为先勾选再执行：
-  // 一次操作覆盖任意多列，目标明确写在按钮上。
-  const checks = Array.from(
-    root.querySelectorAll<HTMLInputElement>('.group-col-check')
-  );
-  let lastCheckedIdx: number | null = null;
-  checks.forEach((el) => {
-    el.addEventListener('click', (ev) => {
-      const idx = Number(el.dataset.idx);
-      const shift = (ev as MouseEvent).shiftKey;
-      if (shift && lastCheckedIdx != null) {
-        const lo = Math.min(lastCheckedIdx, idx);
-        const hi = Math.max(lastCheckedIdx, idx);
-        const wanted = el.checked;
-        for (let k = lo; k <= hi; k++) {
-          if (checks[k]) checks[k].checked = wanted;
+  // 组 Tab 切换
+  const wireGroupTabs = (): void => {
+    root.querySelectorAll('.btn-switch-group-tab').forEach((el) => {
+      el.addEventListener('click', () => {
+        const gId = (el as HTMLElement).dataset.groupId;
+        if (gId) {
+          state.selectedGroupId = gId;
+          ctx.onDataChange?.();
         }
-      }
-      lastCheckedIdx = idx;
-    });
-  });
-  root.querySelector('#btn-group-select-all')?.addEventListener('click', () => {
-    checks.forEach((el) => {
-      el.checked = true;
-    });
-  });
-  root.querySelector('#btn-group-select-none')?.addEventListener('click', () => {
-    checks.forEach((el) => {
-      el.checked = false;
-    });
-  });
-
-  const moveCheckedTo = async (destinationGroupId: string | null): Promise<void> => {
-    const roi = activeRoi();
-    if (!roi || !ctx.rpcClient) return;
-    const picked = checks
-      .filter((el) => el.checked)
-      .map((el) => el.dataset.colId)
-      .filter((v): v is string => Boolean(v));
-    if (picked.length === 0) {
-      notify('请先勾选要调整的属种列。', 'info');
-      return;
-    }
-    const dest = destinationGroupId || roi.default_group_id;
-    const failures: string[] = [];
-    let moved = 0;
-    for (const colId of picked) {
-      const col = state.cachedData?.columns.find((c) => c.id === colId);
-      if (!col) continue;
-      if ((col.x_group_id || roi.default_group_id) === dest) continue; // 已经在该组，跳过
-      try {
-        await ctx.rpcClient.updateColumn(columnIndex(col), { x_group_id: dest } as any);
-        col.x_group_id = dest;
-        moved++;
-      } catch (err) {
-        failures.push(`${col.name}：${err instanceof Error ? err.message : String(err)}`);
-      }
-    }
-    if (failures.length > 0) {
-      notifyError(`${failures.length} 列未调整成功：${failures.join('；')}`);
-    }
-    if (moved > 0) {
-      notify(`已把 ${moved} 个属种列调整到目标组。`, 'success');
-      ctx.onDataChange?.();
-    } else if (failures.length === 0) {
-      notify('所选属种都已在目标组，无需调整。', 'info');
-    }
-  };
-
-  root.querySelector('#btn-assign-selected-to-group')?.addEventListener('click', () => {
-    if (!state.selectedGroupId) return;
-    void moveCheckedTo(state.selectedGroupId);
-  });
-  root.querySelector('#btn-remove-selected-from-group')?.addEventListener('click', () => {
-    void moveCheckedTo(null);
-  });
-
-  // 4. 活动列所属组单列快速切换
-  root.querySelector('#sel-col-group-quick')?.addEventListener('change', async (e) => {
-    const activeCol = activeColumn();
-    const newGrpId = (e.target as HTMLSelectElement).value;
-    if (activeCol && newGrpId && ctx.rpcClient) {
-      try {
-        await ctx.rpcClient.updateColumn(columnIndex(activeCol), { x_group_id: newGrpId } as any);
-        activeCol.x_group_id = newGrpId;
-        state.selectedGroupId = newGrpId;
-        ctx.onDataChange?.();
-      } catch (err) {
-        notifyError(err instanceof Error ? err.message : String(err));
-      }
-    }
-  });
-
-  // 5. 新建组
-  // 选列集变化 → 面板重渲染（「已选 N 列」与确认按钮的可用性都依赖它）
-  columnPick.onChanged = () => ctx.onDataChange?.();
-
-  // 「+ 分组」：不再弹原生 prompt。先让用户在**图上**选出属于新组的列，
-  // 再建组并划入；没选中的列自动留在默认组，不需要显式移出。
-  root.querySelector('#btn-create-new-group')?.addEventListener('click', () => {
-    beginColumnPick();
-  });
-
-  root.querySelector('#btn-cancel-column-pick')?.addEventListener('click', () => {
-    resetColumnPick();
-  });
-
-  root.querySelector('#btn-confirm-column-pick')?.addEventListener('click', async () => {
-    const roi = activeRoi();
-    if (!roi || !ctx.rpcClient) return;
-    const picked = [...columnPick.ids];
-    if (picked.length === 0) return;
-    const activeCol = activeColumn();
-    const name = `组 ${(roi.x_groups?.length || 0) + 1}`;
-    try {
-      // 先建组：组名可在组 Tab 上再改，不在这一步卡住用户。
-      const res = await ctx.rpcClient.roiGroupCreate(roi.id, {
-        name,
-        unit: activeCol?.unit || '%',
-        plot_type: activeCol?.plot_type || activeCol?.plotType || 'area',
-        scale_type: activeCol?.scale_type || 'linear',
       });
-      roi.x_groups = roi.x_groups || [];
-      roi.x_groups.push(res.group);
+    });
+  };
+  wireGroupTabs();
+
+
+  // 批量归组 + 单列清空
+  const wireBatchGrouping = (): void => {
+    // 2. 展开/收起批量归组抽屉
+    root.querySelector('#btn-toggle-batch-assign')?.addEventListener('click', () => {
+      state.isBatchAssignOpen = !state.isBatchAssignOpen;
+      ctx.onDataChange?.();
+    });
+
+    // 3. 批量归组：勾选（Shift 连选）+ 一次性划入/移出
+    //
+    // 旧实现是「点一个 chip 就立刻转移一个」，22 列要点 22 次，且转移方向是隐式的
+    //（在组内→移出到默认组，不在→移入），用户看不出结果。改为先勾选再执行：
+    // 一次操作覆盖任意多列，目标明确写在按钮上。
+    const checks = Array.from(
+      root.querySelectorAll<HTMLInputElement>('.group-col-check')
+    );
+    let lastCheckedIdx: number | null = null;
+    checks.forEach((el) => {
+      el.addEventListener('click', (ev) => {
+        const idx = Number(el.dataset.idx);
+        const shift = (ev as MouseEvent).shiftKey;
+        if (shift && lastCheckedIdx != null) {
+          const lo = Math.min(lastCheckedIdx, idx);
+          const hi = Math.max(lastCheckedIdx, idx);
+          const wanted = el.checked;
+          for (let k = lo; k <= hi; k++) {
+            if (checks[k]) checks[k].checked = wanted;
+          }
+        }
+        lastCheckedIdx = idx;
+      });
+    });
+    root.querySelector('#btn-group-select-all')?.addEventListener('click', () => {
+      checks.forEach((el) => {
+        el.checked = true;
+      });
+    });
+    root.querySelector('#btn-group-select-none')?.addEventListener('click', () => {
+      checks.forEach((el) => {
+        el.checked = false;
+      });
+    });
+
+    const moveCheckedTo = async (destinationGroupId: string | null): Promise<void> => {
+      const roi = activeRoi();
+      if (!roi || !ctx.rpcClient) return;
+      const picked = checks
+        .filter((el) => el.checked)
+        .map((el) => el.dataset.colId)
+        .filter((v): v is string => Boolean(v));
+      if (picked.length === 0) {
+        notify('请先勾选要调整的属种列。', 'info');
+        return;
+      }
+      const dest = destinationGroupId || roi.default_group_id;
+      const failures: string[] = [];
       let moved = 0;
       for (const colId of picked) {
         const col = state.cachedData?.columns.find((c) => c.id === colId);
         if (!col) continue;
-        await ctx.rpcClient.updateColumn(columnIndex(col), {
-          x_group_id: res.group.id,
-        } as any);
-        col.x_group_id = res.group.id;
-        moved++;
-      }
-      state.selectedGroupId = res.group.id;
-      resetColumnPick();
-      notify(
-        `已新建【${res.group.name}】并划入 ${moved} 列；其余列留在默认组。`,
-        'success'
-      );
-      ctx.onDataChange?.();
-    } catch (err) {
-      notifyError(err instanceof Error ? err.message : String(err));
-    }
-  });
-
-  // 删除当前组：组内列自动回默认组（后端 roi_group_remove 负责 fallback）。
-  root.querySelector('#btn-delete-group')?.addEventListener('click', async () => {
-    const roi = activeRoi();
-    if (!roi || !ctx.rpcClient || !state.selectedGroupId) return;
-    if (state.selectedGroupId === roi.default_group_id) {
-      notifyError('默认组不能删除：其余列都归它。');
-      return;
-    }
-    try {
-      await ctx.rpcClient.roiGroupRemove(roi.id, state.selectedGroupId);
-      roi.x_groups = (roi.x_groups || []).filter((g) => g.id !== state.selectedGroupId);
-      state.selectedGroupId = roi.default_group_id ?? null;
-      notify('已删除该列组，组内列已回到默认组。', 'success');
-      ctx.onDataChange?.();
-    } catch (err) {
-      notifyError(err instanceof Error ? err.message : String(err));
-    }
-  });
-
-
-
-  // 9. 单列清空
-  root.querySelector('#btn-clear-col-ticks')?.addEventListener('click', () => {
-    const activeCol = activeColumn();
-    if (!activeCol) return;
-    void (async () => {
-      await callStepCallback(() => ctx.onClearXTicks?.(columnIndex(activeCol)));
-      await syncXTicksDroppedFromBackend(state.cachedData, ctx);
-    })();
-  });
-
-  // 10. 合并同类组
-  root.querySelector('#btn-merge-groups')?.addEventListener('click', async () => {
-    const roi = activeRoi();
-    if (!roi || !roi.x_groups || roi.x_groups.length <= 1 || !ctx.rpcClient) {
-      notify('当前 ROI 仅有 1 个或没有组，无需合并。', 'info');
-      return;
-    }
-    const keyMap = new Map<string, ColumnGroup[]>();
-    for (const g of roi.x_groups) {
-      const key = `${g.unit}|${g.plot_type}|${g.scale_type}|${g.exaggeration_mult ?? 'none'}`;
-      if (!keyMap.has(key)) keyMap.set(key, []);
-      keyMap.get(key)!.push(g);
-    }
-
-    let mergedCount = 0;
-    try {
-      for (const [, grps] of keyMap.entries()) {
-        if (grps.length > 1) {
-          const keepGroup = grps[0];
-          for (let i = 1; i < grps.length; i++) {
-            const dupGroup = grps[i];
-            const cols = (state.cachedData?.columns || []).filter(
-              (c) => c.roi_id === roi.id && c.x_group_id === dupGroup.id
-            );
-            for (const c of cols) {
-              await ctx.rpcClient.updateColumn(columnIndex(c), { x_group_id: keepGroup.id } as any);
-              c.x_group_id = keepGroup.id;
-            }
-            await ctx.rpcClient.roiGroupRemove(roi.id, dupGroup.id);
-            roi.x_groups = roi.x_groups.filter((g) => g.id !== dupGroup.id);
-            mergedCount++;
-          }
+        if ((col.x_group_id || roi.default_group_id) === dest) continue; // 已经在该组，跳过
+        try {
+          await ctx.rpcClient.updateColumn(columnIndex(col), { x_group_id: dest } as any);
+          col.x_group_id = dest;
+          moved++;
+        } catch (err) {
+          failures.push(`${col.name}：${err instanceof Error ? err.message : String(err)}`);
         }
       }
-      if (mergedCount > 0) {
-        state.selectedGroupId = roi.x_groups[0].id;
-        notify(`已成功合并 ${mergedCount} 个标度相同的列组！`, 'success');
-        ctx.onDataChange?.();
-      } else {
-        notify('当前 ROI 内所有列组形态或标度各不相同，未发现可合并的同类组。', 'info');
+      if (failures.length > 0) {
+        notifyError(`${failures.length} 列未调整成功：${failures.join('；')}`);
       }
-    } catch (err) {
-      notifyError(err instanceof Error ? err.message : String(err));
-    }
-  });
+      if (moved > 0) {
+        notify(`已把 ${moved} 个属种列调整到目标组。`, 'success');
+        ctx.onDataChange?.();
+      } else if (failures.length === 0) {
+        notify('所选属种都已在目标组，无需调整。', 'info');
+      }
+    };
 
-  // 回车保存单列
-  const val1Inp = root.querySelector('#inp-manual-tick-val1') as HTMLInputElement | null;
-  const val2Inp = root.querySelector('#inp-manual-tick-val2') as HTMLInputElement | null;
-  const handleEnterKey = (e: KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      (root.querySelector('#btn-save-manual-ticks') as HTMLButtonElement | null)?.click();
-    }
+    root.querySelector('#btn-assign-selected-to-group')?.addEventListener('click', () => {
+      if (!state.selectedGroupId) return;
+      void moveCheckedTo(state.selectedGroupId);
+    });
+    root.querySelector('#btn-remove-selected-from-group')?.addEventListener('click', () => {
+      void moveCheckedTo(null);
+    });
+
+    // 4. 活动列所属组单列快速切换
+    root.querySelector('#sel-col-group-quick')?.addEventListener('change', async (e) => {
+      const activeCol = activeColumn();
+      const newGrpId = (e.target as HTMLSelectElement).value;
+      if (activeCol && newGrpId && ctx.rpcClient) {
+        try {
+          await ctx.rpcClient.updateColumn(columnIndex(activeCol), { x_group_id: newGrpId } as any);
+          activeCol.x_group_id = newGrpId;
+          state.selectedGroupId = newGrpId;
+          ctx.onDataChange?.();
+        } catch (err) {
+          notifyError(err instanceof Error ? err.message : String(err));
+        }
+      }
+    });
+
+    // 5. 新建组
+    // 选列集变化 → 面板重渲染（「已选 N 列」与确认按钮的可用性都依赖它）
+    columnPick.onChanged = () => ctx.onDataChange?.();
+
+    // 「+ 分组」：不再弹原生 prompt。先让用户在**图上**选出属于新组的列，
+    // 再建组并划入；没选中的列自动留在默认组，不需要显式移出。
+    root.querySelector('#btn-create-new-group')?.addEventListener('click', () => {
+      beginColumnPick();
+    });
+
+    root.querySelector('#btn-cancel-column-pick')?.addEventListener('click', () => {
+      resetColumnPick();
+    });
+
+    root.querySelector('#btn-confirm-column-pick')?.addEventListener('click', async () => {
+      const roi = activeRoi();
+      if (!roi || !ctx.rpcClient) return;
+      const picked = [...columnPick.ids];
+      if (picked.length === 0) return;
+      const activeCol = activeColumn();
+      const name = `组 ${(roi.x_groups?.length || 0) + 1}`;
+      try {
+        // 先建组：组名可在组 Tab 上再改，不在这一步卡住用户。
+        const res = await ctx.rpcClient.roiGroupCreate(roi.id, {
+          name,
+          unit: activeCol?.unit || '%',
+          plot_type: activeCol?.plot_type || activeCol?.plotType || 'area',
+          scale_type: activeCol?.scale_type || 'linear',
+        });
+        roi.x_groups = roi.x_groups || [];
+        roi.x_groups.push(res.group);
+        let moved = 0;
+        for (const colId of picked) {
+          const col = state.cachedData?.columns.find((c) => c.id === colId);
+          if (!col) continue;
+          await ctx.rpcClient.updateColumn(columnIndex(col), {
+            x_group_id: res.group.id,
+          } as any);
+          col.x_group_id = res.group.id;
+          moved++;
+        }
+        state.selectedGroupId = res.group.id;
+        resetColumnPick();
+        notify(
+          `已新建【${res.group.name}】并划入 ${moved} 列；其余列留在默认组。`,
+          'success'
+        );
+        ctx.onDataChange?.();
+      } catch (err) {
+        notifyError(err instanceof Error ? err.message : String(err));
+      }
+    });
+
+    // 删除当前组：组内列自动回默认组（后端 roi_group_remove 负责 fallback）。
+    root.querySelector('#btn-delete-group')?.addEventListener('click', async () => {
+      const roi = activeRoi();
+      if (!roi || !ctx.rpcClient || !state.selectedGroupId) return;
+      if (state.selectedGroupId === roi.default_group_id) {
+        notifyError('默认组不能删除：其余列都归它。');
+        return;
+      }
+      try {
+        await ctx.rpcClient.roiGroupRemove(roi.id, state.selectedGroupId);
+        roi.x_groups = (roi.x_groups || []).filter((g) => g.id !== state.selectedGroupId);
+        state.selectedGroupId = roi.default_group_id ?? null;
+        notify('已删除该列组，组内列已回到默认组。', 'success');
+        ctx.onDataChange?.();
+      } catch (err) {
+        notifyError(err instanceof Error ? err.message : String(err));
+      }
+    });
+
+
+
+    // 9. 单列清空
+    root.querySelector('#btn-clear-col-ticks')?.addEventListener('click', () => {
+      const activeCol = activeColumn();
+      if (!activeCol) return;
+      void (async () => {
+        await callStepCallback(() => ctx.onClearXTicks?.(columnIndex(activeCol)));
+        await syncXTicksDroppedFromBackend(state.cachedData, ctx);
+      })();
+    });
   };
-  val1Inp?.addEventListener('keydown', handleEnterKey);
-  val2Inp?.addEventListener('keydown', handleEnterKey);
+  wireBatchGrouping();
+
+
+  // 合并同类组（同 unit/plot/scale/exag）
+  const wireMergeGroups = (): void => {
+    // 10. 合并同类组
+    root.querySelector('#btn-merge-groups')?.addEventListener('click', async () => {
+      const roi = activeRoi();
+      if (!roi || !roi.x_groups || roi.x_groups.length <= 1 || !ctx.rpcClient) {
+        notify('当前 ROI 仅有 1 个或没有组，无需合并。', 'info');
+        return;
+      }
+      const keyMap = new Map<string, ColumnGroup[]>();
+      for (const g of roi.x_groups) {
+        const key = `${g.unit}|${g.plot_type}|${g.scale_type}|${g.exaggeration_mult ?? 'none'}`;
+        if (!keyMap.has(key)) keyMap.set(key, []);
+        keyMap.get(key)!.push(g);
+      }
+
+      let mergedCount = 0;
+      try {
+        for (const [, grps] of keyMap.entries()) {
+          if (grps.length > 1) {
+            const keepGroup = grps[0];
+            for (let i = 1; i < grps.length; i++) {
+              const dupGroup = grps[i];
+              const cols = (state.cachedData?.columns || []).filter(
+                (c) => c.roi_id === roi.id && c.x_group_id === dupGroup.id
+              );
+              for (const c of cols) {
+                await ctx.rpcClient.updateColumn(columnIndex(c), { x_group_id: keepGroup.id } as any);
+                c.x_group_id = keepGroup.id;
+              }
+              await ctx.rpcClient.roiGroupRemove(roi.id, dupGroup.id);
+              roi.x_groups = roi.x_groups.filter((g) => g.id !== dupGroup.id);
+              mergedCount++;
+            }
+          }
+        }
+        if (mergedCount > 0) {
+          state.selectedGroupId = roi.x_groups[0].id;
+          notify(`已成功合并 ${mergedCount} 个标度相同的列组！`, 'success');
+          ctx.onDataChange?.();
+        } else {
+          notify('当前 ROI 内所有列组形态或标度各不相同，未发现可合并的同类组。', 'info');
+        }
+      } catch (err) {
+        notifyError(err instanceof Error ? err.message : String(err));
+      }
+    });
+  };
+  wireMergeGroups();
+
+
+  // 回车保存单列（两输入框共用）
+  const wireManualTickEnter = (): void => {
+    // 回车保存单列
+    const val1Inp = root.querySelector('#inp-manual-tick-val1') as HTMLInputElement | null;
+    const val2Inp = root.querySelector('#inp-manual-tick-val2') as HTMLInputElement | null;
+    const handleEnterKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        (root.querySelector('#btn-save-manual-ticks') as HTMLButtonElement | null)?.click();
+      }
+    };
+    val1Inp?.addEventListener('keydown', handleEnterKey);
+    val2Inp?.addEventListener('keydown', handleEnterKey);
+  };
+  wireManualTickEnter();
+
 
   root.querySelector('#btn-apply-xticks-next')?.addEventListener('click', () => {
     ctx.onAdvanceWorkflowStage?.(7);
