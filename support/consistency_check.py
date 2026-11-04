@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import ast
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -484,6 +485,56 @@ def check_dependency_reconciliation() -> list[str]:
     return problems
 
 
+# ── 探针预算 ───────────────────────────────────────────────────────────────
+#
+# 背景（issue #11，2026-11-04）：`scripts/` 曾累积 223 个一次性验证脚本，其中 211 个
+# 已从工作树移出、完整快照留在 tag `audit-2026-11-04`（索引见 `docs/findings/probe-index.md`）。
+#
+# **只删不立规，下月会长回来** —— 同一批 agent、同一套指令、动机未变。
+# 所以把「未被 pixi/CI 引用的文件数」钉成预算：超了就必须二选一 ——
+#   · 升级成 pixi 任务（长期件，入库）；
+#   · 移进 `scripts/probes/`（默认不入库的一次性通道，结论另写 findings）。
+#
+# 预算值 = 2026-11-04 精简后剩余的未引用文件数。改动它等同于放宽门禁，需显式说明理由。
+PROBE_BUDGET = 10
+
+
+def check_probe_budget() -> list[str]:
+    """`scripts/` 下未被 pixi/CI 引用的文件数不得超预算（防探针复发膨胀）。"""
+    root = Path(__file__).resolve().parents[1]
+    scripts_dir = root / "scripts"
+    if not scripts_dir.is_dir():
+        return []
+
+    refs: set[str] = set()
+    sources = [root / "pixi.toml", *sorted((root / ".github" / "workflows").glob("*.yml"))]
+    for f in sources:
+        if not f.is_file():
+            continue
+        text = f.read_text(encoding="utf-8", errors="ignore")
+        refs.update(re.findall(r"scripts/[A-Za-z0-9_./-]+", text))
+
+    tracked = subprocess.run(
+        ["git", "ls-files", "scripts/"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.splitlines()
+    unreferenced = [p for p in tracked if p not in refs]
+    if len(unreferenced) <= PROBE_BUDGET:
+        return []
+
+    extra = unreferenced[PROBE_BUDGET:]
+    head = "、".join(extra[:5]) + (" …" if len(extra) > 5 else "")
+    return [
+        f"{len(unreferenced)} 个未被 pixi/CI 引用的文件，超过预算 {PROBE_BUDGET}。",
+        f"超标：{head}",
+        "处置：升级为 pixi 任务（长期件）或移入 scripts/probes/（默认不入库）；"
+        "见 docs/findings/probe-index.md。",
+    ]
+
+
 def main() -> int:
     strict = "--strict" in sys.argv
     sigs, signature_parse_errors = collect_signatures()
@@ -499,6 +550,7 @@ def main() -> int:
         ("H. 协议层 ALL_RPC_METHODS ↔ 后端注册表", check_protocol_rpc_inventory()),
         ("I. 前端 RpcMethod 类型 ↔ 后端注册表", check_frontend_rpc_type_inventory()),
         ("J. pyproject.toml 依赖对账", check_dependency_reconciliation()),
+        ("K. 探针预算（scripts/ 未引用文件数）", check_probe_budget()),
     ]
     warnings = [("F. 注释残留旧 7 步编号", check_stale_comments())]
 

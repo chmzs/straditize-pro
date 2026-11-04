@@ -28,7 +28,8 @@ dispatch **真的会重入**，不是理论可能：
 断言该对照**确实**能观测到撕裂，再断言加锁后为 0。两者缺一，这条钉子就是假的。
 
 （HTTP 层的完整压测（含重入与并发写）在
-`scripts/lock_probe/probe_b08_dispatcher_lock.py`，那是投产验收用的独立脚本。）
+`scripts/lock_probe/probe_b08_dispatcher_lock.py`（2026-11-04 已归档，见 tag `audit-2026-11-04`），
+那是投产验收用的独立脚本。）
 """
 from __future__ import annotations
 

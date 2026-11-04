@@ -84,3 +84,8 @@ test_render.*
 # 本地临时诊断产物（不进库）
 .scratch/
 frontend/.scratch/
+
+# 探针通道：一次性验证脚本的生长位（默认不入库）。
+# 结论必须落成测试断言或在 docs/findings/ 里写「判据 + 实测值」，否则算未完成。
+# 要长期复跑的，升级为 pixi 任务（升级即入库）。见 docs/findings/probe-index.md。
+scripts/probes/
