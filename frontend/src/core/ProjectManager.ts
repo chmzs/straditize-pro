@@ -1,4 +1,4 @@
-import { Column, ControlPoint, DataRoi, DiagramCalibration, DiagramData } from '../types/pollen';
+import { Column, ControlPoint, DataRoi, DiagramCalibration, DiagramData, LEGACY_FULL_SCALE } from '../types/pollen';
 import { RpcClient } from '../services/RpcClient';
 import { SplineInterpolator } from './SplineInterpolator';
 import { CoordinateSystem } from './CoordinateSystem';
@@ -103,7 +103,10 @@ export function draftToProjectPayload(draft: DiagramData): DraftRestorePayload {
       const tickEndX = c.tickEndX ?? c.endX;
       rel0 = 0;
       rel1 = (Number(tickEndX) - start) / span;
-      xValues = [Number(c.startValue ?? 0), Number(c.tickValue ?? 100)];
+      // legacy 契约（0–100% 占位）不是读数：真正的标度一律经后端
+      // `resolve_column_scale`，未标定列在后端就不给数。这里只是让旧工程包
+      // 能还原出"当初画的量程"，数值来源仍是后端下发的字段。
+      xValues = [Number(c.startValue ?? 0), Number(c.tickValue ?? LEGACY_FULL_SCALE)];
     }
     if (!Number.isFinite(rel0) || !Number.isFinite(rel1)) {
       // 端点算不出来就如实记下，绝不拿 0/1 顶上冒充。
@@ -264,7 +267,7 @@ export function normalizeProject(
     const tickEndX = c.tickEndX ?? (c.scaleCalib?.calibX ?? c.endX ?? c.end ?? startX + 50);
     const endX = c.endX ?? (c.end ?? tickEndX);
     const startVal = c.startValue ?? (c.scaleCalib?.originVal ?? 0);
-    const tickVal = c.tickValue ?? (c.scaleCalib?.calibVal ?? c.maxPercent ?? 100);
+    const tickVal = c.tickValue ?? (c.scaleCalib?.calibVal ?? c.maxPercent ?? LEGACY_FULL_SCALE);
     const rawPts = c.controlPoints || c.points || [];
 
     const pts: ControlPoint[] = rawPts.map((p: any, pIdx: number) => ({

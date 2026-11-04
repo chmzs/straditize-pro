@@ -450,3 +450,16 @@ export interface QaSummary {
 export type ControlPoint = Point;
 export type TaxaColumn = Column;
 export type DiagramCalibration = DepthCalibration;
+
+
+/**
+ * legacy 满量程缺省（0–100%）。
+ *
+ * **这不是读数**：`startValue` / `tickValue` 是分列期写入的占位契约，真正的标度一律经
+ * 后端 `resolve_column_scale`（未标定列在后端直接不给数，见 ARCHITECTURE 不变量 15）。
+ *
+ * 放在 types 层而不是某个 service 里，是因为 `ProjectManager` 与 `RpcClient` 都要用，
+ * 而这两者互相 import——常量放任一侧都会造出循环依赖。
+ */
+export const LEGACY_FULL_SCALE = 100;
+

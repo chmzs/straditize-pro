@@ -1,7 +1,7 @@
 import { BackendStatus, JsonRpcRequest, JsonRpcResponse } from '../types/rpc';
 import { tError } from '../i18n/errorCodes';
 import { t } from '../i18n';
-import { Column, ColumnGroup, ControlPoint, CleanupResult, DataRoi, DepthCalibration, DiagramData, LineMaskStroke, Tick } from '../types/pollen';
+import { Column, ColumnGroup, ControlPoint, CleanupResult, DataRoi, DepthCalibration, DiagramData, LEGACY_FULL_SCALE, LineMaskStroke, Tick } from '../types/pollen';
 import { RulerGeometry } from '../types/ruler';
 import { PollenGlossary } from '../core/PollenGlossary';
 
@@ -892,7 +892,8 @@ export class RpcClient {
             controlPoints: [],
             scale_type: c.scale_type || 'linear',
             startValue: c.startValue || 0,
-            tickValue: c.tickValue || 100,
+            // legacy 占位（不是读数）：见 LEGACY_FULL_SCALE 的注释。
+            tickValue: c.tickValue || LEGACY_FULL_SCALE,
             plotType: c.plot_type || 'area',
             hasExaggeration: c.has_exaggeration || false,
             exaggerationMult: c.exaggeration_multiplier || 5,

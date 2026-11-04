@@ -36,6 +36,8 @@ import { registerWebMcpAndInspectionHandles } from './services/WebMcpBridge';
 import { applyTheme, createFooterDom, createHudDom, createWorkspaceDom } from './app/dom';
 import { createFooterUpdater } from './app/footer';
 import { setupDraftRecovery } from './app/draftRecovery';
+import { setupScaleSync } from './app/scaleSync';
+import { installBeforeUnloadGuard } from './app/lifecycle';
 import {
   showProvenanceGate,
   reportBackendFailure,
@@ -109,18 +111,7 @@ async function bootstrap() {
     }, 1000);
   }
 
-  let isShuttingDown = false;
-  (window as any).__straditize_suppress_beforeunload = () => {
-    isShuttingDown = true;
-  };
-
-  window.addEventListener('beforeunload', (e) => {
-    if (isShuttingDown) return;
-    if (history.canUndo()) {
-      e.preventDefault();
-      e.returnValue = '您有未保存的地学数字化工程修改，确定离开吗？';
-    }
-  });
+  installBeforeUnloadGuard(history);
 
   let sidebar: any = null;
   let inspector: any = null;
@@ -647,39 +638,14 @@ async function bootstrap() {
   // （实测 col03/col04 被判"未检测到刻度尺"）。
   // 这里只把后端算好的 `x_ticks` / `scaleCalib` / `scale_provenance` 填回同名列对象，
   // 前端不推导、也不重建。
-  let scaleSyncTimer: number | undefined;
-  rpcClient.onScaleMutated = () => {
-    if (scaleSyncTimer !== undefined) window.clearTimeout(scaleSyncTimer);
-    scaleSyncTimer = window.setTimeout(() => {
-      scaleSyncTimer = undefined;
-      void (async () => {
-        try {
-          const fresh = await rpcClient.getDiagramData();
-          const freshCols: Array<Record<string, unknown>> = (fresh as any).columns ?? [];
-          for (const freshCol of freshCols) {
-            const target = canvasComponent.data.columns.find((c) => c.id === freshCol.id);
-            if (!target) continue;
-            target.x_ticks = freshCol.x_ticks as typeof target.x_ticks;
-            // 「标定已被清空」的提示必须**同批**失效：后端在写组斜率时已清掉该键
-            // （roi.py 的 value_per_px 分支），前端若只回填 x_ticks，屏幕上会继续
-            // 挂着"需要你重新标定"，与"其实已经能读数"自相矛盾。
-            target.x_ticks_dropped = freshCol.x_ticks_dropped as typeof target.x_ticks_dropped;
-            target.scaleCalib = freshCol.scaleCalib as typeof target.scaleCalib;
-            target.scale_provenance = freshCol.scale_provenance as typeof target.scale_provenance;
-          }
-          canvasComponent.requestRender();
-          inspector?.updateData(canvasComponent.data);
-          sidebar?.updateData(canvasComponent.data);
-          updateFooter();
-        } catch (err) {
-          setHudNotice(
-            `标度已写入，但界面同步失败：${err instanceof Error ? err.message : String(err)}`,
-            6000
-          );
-        }
-      })();
-    }, 120);
-  };
+  setupScaleSync({
+    rpcClient,
+    getCanvas: () => canvasComponent,
+    getSidebar: () => sidebar,
+    getInspector: () => inspector,
+    updateFooter,
+    setHudNotice,
+  });
 
   registerWebMcpAndInspectionHandles({
     rpcClient,
