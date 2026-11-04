@@ -370,6 +370,118 @@ def measure_axis_right_edge(rgb: np.ndarray,
     return offsets
 
 
+def measure_axis_stroke(gray: np.ndarray,
+                        starts: Sequence[int],
+                        max_width: int = 24,
+                        level_tol: float = 25.0,
+                        std_limit: float = 30.0,
+                        contrast_min: float = 25.0) -> list[int]:
+    """每列左缘处**竖直轴线本身的粗细**（px），测不出返回 0。
+
+    ## 要解决什么
+
+    0 点 = 列左缘 + 轴线粗（ARCHITECTURE §6.4）。左缘由 `detect_column_bounds`
+    给出；轴线粗此前是**写死的 5**（`xscale.py` / 画布同值），而各图轴线粗不同
+    （实测 beginner 4~6px，用户两张放大截图里绿线相对黑轴线的位置对不齐就是这个
+    原因）。本函数把粗细从像素里量出来，让 0 点落在轴线**右缘**上。
+
+    ## 为什么不能用 `measure_axis_right_edge` 的二值判据
+
+    那个函数判"从 start 起连续多少像素是实心墨迹"（`binary[:, x].mean() > 0.9`）。
+    在**填充型（area）**剖面上这个判据必然失效：轴线右侧紧贴的是填充区，它在二值
+    掩膜里**同样是"实心"**（实测 beginner：轴线暗占比 1.00、填充 0.97），于是
+    8px 探针内根本不"断开"。实测 beginner 4 列返回 `[0, 7, 0, 0]`：
+    3 列判成"无轴"、1 列报的 7 其实是"轴线 6px + 1px 填充" —— 不是 0 就是错的。
+
+    ## 本函数的判据：灰度层次，而不是墨迹密度
+
+    轴线是**同一个灰度层**的实心条，填充/曲线是另一个灰度层。实测 beginner：
+
+    | | 轴线列 | 紧邻的填充列 |
+    |:---|:---|:---|
+    | 灰度均值 | 0.1 ~ 0.3 | 104 ~ 106 |
+    | 沿 y 标准差 | 2.8 ~ 6.6 | 27 ~ 30 |
+    | RGB | (0,0,0) | (38,122,181) |
+
+    所以从 `start` 起，只要**灰度均值与首列相差 ≤ level_tol 且沿 y 足够均匀**就还在
+    轴线上，第一次跳层即轴线结束。101 级的跳变远大于容差，与阈值松紧无关。
+
+    ## 返回值的语义
+
+    返回的是「`start` → 轴线右缘」的距离，不是"轴线条数"：轴线若从 `start+1` 起
+    （左缘带一列抗锯齿过渡），返回值仍然让 `start + 返回值` 落在右缘上，正是 0 点
+    需要的位置。
+
+    ## 什么时候返回 0（= 无法自动测量，调用方必须告知用户）
+
+    1. `start` 附近 ±2px 内没有"沿 y 均匀且与纸白有差"的列 → 这一列左边根本不是轴；
+    2. 灰度跳变前的连续段宽度 > `max_width`（24px）→ 那是一整块填充，不是轴线，
+       继续往下量只会把 0 点推进色块内部。
+
+    Returns
+    -------
+    list of int
+        与 `starts` 等长；测不出的列返回 0。
+    """
+    arr = np.asarray(gray)
+    if arr.ndim != 2 or arr.size == 0:
+        return [0 for _ in starts]
+    height, width = arr.shape
+    if height == 0:
+        return [0 for _ in starts]
+
+    band = arr.astype(float)
+    paper = float(np.median(band))
+    widths: list[int] = []
+
+    for start in starts:
+        base = int(start)
+        if base < 0 or base >= width:
+            widths.append(0)
+            continue
+
+        # 轴线起点：容忍 ±2px 对齐误差，与 `has_measurable_axis` 同口径。
+        axis_x: int | None = None
+        for shift in (0, 1, 2, -1, -2):
+            x = base + shift
+            if x < 0 or x >= width:
+                continue
+            col = band[:, x]
+            if float(col.std()) > std_limit:
+                continue
+            if paper - float(col.mean()) < contrast_min:
+                continue
+            axis_x = x
+            break
+        if axis_x is None:
+            widths.append(0)
+            continue
+
+        level = float(band[:, axis_x].mean())
+        run_end = axis_x
+        hit_cap = False
+        while run_end + 1 < width and (run_end + 1 - base) < max_width:
+            nxt = band[:, run_end + 1]
+            if float(nxt.std()) > std_limit:
+                break
+            if abs(float(nxt.mean()) - level) > level_tol:
+                break
+            if paper - float(nxt.mean()) < contrast_min:
+                break
+            run_end += 1
+            if (run_end - base) + 1 >= max_width:
+                hit_cap = True
+                break
+
+        width_px = run_end - base + 1
+        if hit_cap or width_px <= 0 or width_px > max_width:
+            widths.append(0)
+            continue
+        widths.append(int(width_px))
+
+    return widths
+
+
 def slice_columns(image_or_binary: np.ndarray,
                   bounds: Sequence[tuple[int, int]]) -> list[np.ndarray]:
     """Slice 2D or 3D array into column sections based on (start, end) bounds."""

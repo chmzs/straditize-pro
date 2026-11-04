@@ -150,7 +150,8 @@ class ExportMixin:
                 scale = resolve_column_scale(self, col, c_idx)
                 pts = column_points.get(c_idx, [])
                 p_dict = {p["row"]: p["x"] for p in pts}
-                c_start_px = float(col.get("startX", col.get("start", scale.abs_px0)))
+                # 0 点（= 左缘 + 轴线粗），与画布绿线、与 px_to_value 的换算基准同源。
+                c_start_px = float(scale.abs_px0)
 
                 if scale.calibrated:
                     vals = [
@@ -798,10 +799,11 @@ class ExportMixin:
 
             pts = self.column_points[c_idx]
             p_dict = {p["row"]: p["x"] for p in pts}
-            default_start = float(col_def.get("startX", col_def.get("start", 0.0)))
-            raw_x = [p_dict.get(r, default_start) for r in all_rows]
-
             scale = resolve_column_scale(self, col_def, c_idx)
+            # 缺控制点的行填 **0 点**（= 列左缘 + 轴线粗，ARCHITECTURE §6.4），不是列左缘：
+            # 画布绿线画在 0 点，基线与换算必须同源，否则这批行会落进轴内算出负值再被 clamp。
+            default_start = float(scale.abs_px0)
+            raw_x = [p_dict.get(r, default_start) for r in all_rows]
             # 未标定列整列不给数：与 export_data / extract_grid_values 同源。
             data_dict[col_name] = (
                 [
@@ -1019,8 +1021,9 @@ class ExportMixin:
                 )
 
                 col_def = columns[c_idx] if c_idx < len(columns) else {}
-                c_start_px = float(col_def.get("startX", col_def.get("start", 0.0)))
                 scale = resolve_column_scale(self, col_def, c_idx)
+                # 0 点（= 左缘 + 轴线粗），与画布绿线、与 px_to_value 的换算基准同源。
+                c_start_px = float(scale.abs_px0)
                 # 未标定列不出数。`px_to_value` 在 legacy/default 分支会用列宽归一
                 # 估算一个百分比——那是程序默认值，不是读数（界面按同一判据显示「未标定」）。
                 # 导出与界面必须同源，否则同一列一边说未标定、一边报 1.93%。

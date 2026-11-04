@@ -271,3 +271,51 @@ class TestRoiListShape(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestColumnAxisStrokeOverride(unittest.TestCase):
+    """列级轴粗覆盖（ARCHITECTURE §6.4）：合法值生效、None 清除、非法值当场 -32602。
+
+    为什么不能靠软回落：`resolve_axis_stroke` 会把 0/负数/非数当"未覆盖"退回组值，
+    于是用户改完看到的是"成功了"，实际绿线一动不动且没有任何报错。
+    """
+
+    def setUp(self) -> None:
+        self.session = _make_session()
+        self.idx = int(self.session.columns[0]["col_index"])
+        group = self.session.rois[0]["x_groups"][0]
+        self.session.columns[self.idx]["x_group_id"] = group["id"]
+        group["value_per_px"] = 0.5
+        group["axis_stroke_px"] = 7.0
+        self.group = group
+
+    def _zero(self) -> float:
+        from straditize_core.session_parts.xscale import resolve_column_scale
+
+        return resolve_column_scale(self.session, self.session.columns[self.idx]).abs_px0
+
+    def test_valid_override_moves_zero_point(self) -> None:
+        start = float(self.session.columns[self.idx]["start"])
+        self.assertAlmostEqual(self._zero(), start + 7.0, places=6)
+        self.session.column_update(self.idx, {"axis_stroke_px": 9})
+        self.assertAlmostEqual(self._zero(), start + 9.0, places=6)
+
+    def test_none_clears_override(self) -> None:
+        start = float(self.session.columns[self.idx]["start"])
+        self.session.column_update(self.idx, {"axis_stroke_px": 9})
+        self.assertIn("axis_stroke_px", self.session.columns[self.idx])
+        self.session.column_update(self.idx, {"axis_stroke_px": None})
+        self.assertNotIn("axis_stroke_px", self.session.columns[self.idx])
+        self.assertAlmostEqual(self._zero(), start + 7.0, places=6)
+
+    def test_out_of_range_or_non_numeric_is_rejected(self) -> None:
+        for bad in (0, -3, 25, "abc"):
+            with self.assertRaises(JsonRpcError) as ctx:
+                self.session.column_update(self.idx, {"axis_stroke_px": bad})
+            self.assertEqual(ctx.exception.code, -32602, f"{bad!r} 必须当场拒绝")
+            self.assertNotIn(
+                "axis_stroke_px",
+                self.session.columns[self.idx],
+                f"{bad!r} 不得静默落库",
+            )
+

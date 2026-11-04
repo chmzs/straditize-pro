@@ -321,3 +321,84 @@ def test_diagram_payload_projects_scale_from_resolve_column_scale() -> None:
         "calibVal": 40.0,
         "unit": "粒/cm³",
     }
+
+
+def test_group_slope_zero_point_is_start_plus_axis_stroke() -> None:
+    """组级斜率标定下的 0 点 = `列左缘 + 轴线粗`（ARCHITECTURE §6.4）。
+
+    红线是 `col.startX`（轴线左缘 = 列切分线），绿线是 0 点（轴线右缘），
+    两者相差一个轴线粗。轴粗来自组参数，不可省 —— 省掉绿线就压在轴线上，
+    整列读数系统性偏小一个轴粗的量。
+
+    反面前提由 `test_column_start_stays_at_axis_left_edge` 守着：若分列把 start
+    推到轴右缘，本公式就会双偏移。
+    """
+    session = StraditizeSession()
+    roi = session.roi_create(name="pollen", composition=True)["roi"]
+    group = session.rois[0]["x_groups"][0]
+    group["value_per_px"] = 0.5
+    group["axis_stroke_px"] = 7.0
+    col = {
+        "col_index": 0,
+        "start": 140.0,
+        "end": 300.0,
+        "roi_id": roi["id"],
+        "x_group_id": group["id"],
+    }
+
+    scale = resolve_column_scale(session, col)
+
+    assert scale.source == "group_slope"
+    assert scale.abs_px0 == 147.0, (
+        f"0 点必须是 140 + 7 = 147（左缘 + 轴粗），实得 {scale.abs_px0}："
+        "漏加轴粗会让绿线压在轴线上、读数偏小"
+    )
+    assert (scale.abs_px1, scale.val1) == (148.0, 0.5)
+
+
+
+def _make_group_session(value_per_px, group_stroke):
+    session = StraditizeSession()
+    roi = session.roi_create(name="pollen", composition=True)["roi"]
+    group = session.rois[0]["x_groups"][0]
+    group["value_per_px"] = value_per_px
+    if group_stroke is not None:
+        group["axis_stroke_px"] = group_stroke
+    col = {
+        "col_index": 0,
+        "start": 140.0,
+        "end": 300.0,
+        "roi_id": roi["id"],
+        "x_group_id": group["id"],
+    }
+    return session, group, col
+
+
+def test_column_axis_stroke_overrides_group() -> None:
+    """列级轴粗优先于组级：组值是初值，单列可覆盖（ARCHITECTURE §6.4）。
+
+    逐列差异是真实存在的（实测 beginner 3/5/5/5），组级单值会让少数列的 0 点偏 1~2px。
+    """
+    session, _group, col = _make_group_session(0.5, 7.0)
+    col["axis_stroke_px"] = 3.0
+
+    scale = resolve_column_scale(session, col)
+
+    assert scale.abs_px0 == 143.0, (
+        "0 点必须是 140 + 3（列级覆盖），实得 %s：列值没有赢过组值" % (scale.abs_px0,)
+    )
+
+
+def test_invalid_column_axis_stroke_falls_back_to_group() -> None:
+    """列级值非法（0 / 负数 / 非数值 / None）一律回落组值，绝不静默取 0。
+
+    取 0 会把绿线压到列左缘上，读数整体偏小一个轴粗 —— 而且用户看不出来。
+    """
+    for bad in (0, -2, "abc", None):
+        session, _group, col = _make_group_session(0.5, 7.0)
+        col["axis_stroke_px"] = bad
+        scale = resolve_column_scale(session, col)
+        assert scale.abs_px0 == 147.0, (
+            "列级值 %r 必须回落组值 7（0 点 147），实得 %s" % (bad, scale.abs_px0)
+        )
+

@@ -39,6 +39,7 @@ import numpy as np
 import pytest
 
 from straditize_core.columns import measure_axis_right_edge
+from straditize_core.ruler import detect_ruler_for_columns
 
 
 def _as_rgb(binary: np.ndarray) -> np.ndarray:
@@ -112,8 +113,8 @@ class TestRealPlateZeroPoint:
 
         session = StraditizeSession()
         session._init_cleanup()
-        # 显式开启零点右缘锚定（默认关闭，见 core.py 的说明：filled-silhouette
-        # 图无法与真轴线区分，无条件开启会让 Aber 精度从 0.9866 掉到 0.8957）。
+        # 显式开启零点右缘锚定：本用例验证的是"开启时零点确实落在右缘"这条可选语义。
+        # 产品默认**关闭**（start 保持左缘，0 点 = start + axis_stroke，见 ARCHITECTURE §6.4）。
         session.anchor_zero_at_axis_right = True
         session.load_image(image_path=REAL_PLATE)
         session._init_rois()
@@ -165,3 +166,42 @@ class TestRealPlateZeroPoint:
             f"零点仍落在细灰线内部（未推到右缘）：{hard_offenders}。"
             "这会让每列系统性左偏 0~6px，且画布零点与底图刻度齿对不齐。"
         )
+
+
+def test_column_start_stays_at_axis_left_edge() -> None:
+    """分列给出的 `start` 必须仍是轴线**左缘**（列切分线）。
+
+    0 点由下游算成 `start + axis_stroke_px`（ARCHITECTURE §6.4）。若分列自己把 start
+    推到轴右缘（`anchor_zero_at_axis_right` 默认开启），下游再加轴粗就是双偏移 ——
+    画布绿线离开轴线、`abs_px0` 整体右移（fig3 刻距 13px 的列上约 0.38 个刻度）。
+    """
+    from straditize_core.session import StraditizeSession
+
+    session = StraditizeSession()
+    session._init_cleanup()
+    session.load_image(image_path=REAL_PLATE)
+    session._init_rois()
+    session.roi_create(name="pollen", x0=330, x1=1330, y0=233, y1=869, composition=True)
+    session.detect_columns(data_xlim=[330, 1330], data_ylim=[233, 869])
+
+    gray = np.asarray(session.image.convert("L"))
+    geo = {
+        g["col_index"]: g
+        for g in detect_ruler_for_columns(gray, session.columns)["per_column"]
+    }
+    offenders = []
+    for index, col in enumerate(session.columns):
+        info = geo.get(col.get("col_index", index), {})
+        axis_x, axis_right = info.get("axis_x"), info.get("axis_x_right")
+        if axis_x is None or axis_right is None or axis_right <= axis_x:
+            continue  # 无轴列 / 实心块列：不在本判据范围
+        start = float(col["start"])
+        if not (axis_x - 1 <= start <= axis_x + 1):
+            offenders.append(
+                {"col": index, "start": start, "axis_x": axis_x, "axis_x_right": axis_right}
+            )
+    assert offenders == [], (
+        "列起点不在轴线左缘（多半是 anchor_zero_at_axis_right 把 start 推到右缘了，"
+        f"下游再加轴粗即双偏移）：{offenders}"
+    )
+

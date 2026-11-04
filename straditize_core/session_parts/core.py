@@ -1044,6 +1044,7 @@ class CoreMixin:
             detect_column_bounds,
             has_measurable_axis,
             measure_axis_right_edge,
+            measure_axis_stroke,
         )
         from ..image import remove_horizontal_grid_lines
 
@@ -1057,26 +1058,21 @@ class CoreMixin:
 
         detected_cols = []
         if bounds:
-            # 零点锚定策略：可推到 Y 轴基线**右缘**，默认**关闭**。
+            # `start` 的语义唯一：**轴线左缘 = 列切分线**。
             #
-            # ## 为什么默认关闭（实测，不是保守）
+            # 0 点不由这里决定，而由下游统一算：`zero = start + axis_stroke_px`
+            # （ARCHITECTURE §6.4）。若这里把 start 推到轴线右缘，下游再加一次轴粗
+            # 就是**重复偏移**——实测事故（2026-11-04）：fig3 16 列里
+            # `start − 实测轴右缘` = 1/2/5/6px 逐列不同，固定 5px 既不对齐轴线，
+            # 也让 `abs_px0` 右移（刻距 13px 的列上约 0.38 个刻度，读数系统性偏大）。
             #
-            # 对 fig3 这类"细灰基线 + 独立曲线"的图，推到右缘是对的：实测
-            # 16/16 列零点都精确落在基线右缘，画布标记与底图刻度齿对齐。
-            #
-            # 但 `measure_axis_right_edge` **无法**从结构上区分「真基线」与
-            # 「filled-silhouette 图的填充左缘」——放大并排比对确认两者完全同构：
-            #   fig3 col3：宽 2px / 暗 1.00 / 起始像素纯灰 / 右侧紧贴深红曲线
-            #   Aber col2：宽 2px / 暗 0.99 / 起始像素纯灰 / 右侧紧贴深绿填充
-            # 试过的三个额外判据全部失败：亮度（区间重叠）、右侧空白（fig3 只剩
-            # 2 列）、整段彩色率（被右邻曲线污染）。
-            #
-            # 代价是可量化的：开启后 Aber 36 列中 26 列被推后 1~2px，
-            # 数字化精度 Mean R² 从 **0.9866 掉到 0.8959**（跌破 0.90 门禁）。
-            #
-            # 结论：默认关闭保护精度基准；用户在确认"本图基线是独立细线、
-            # 不是填充轮廓"后可显式开启。
-            if getattr(self, "anchor_zero_at_axis_right", True):
+            # 右缘锚定保留为可选开关（`anchor_zero_at_axis_right = True`）：它把 start
+            # 直接当 0 点用，适合"细灰基线 + 独立曲线"图；但 `measure_axis_right_edge`
+            # 无法从结构上区分「真基线」与「filled-silhouette 填充左缘」（fig3 col3 与
+            # Aber col2 完全同构，亮度/右侧空白/彩色率三个判据全部失败）。实测代价：
+            # 开启后 Aber 36 列中 26 列被推后 1~2px，Mean R² 由 0.9866 掉到 0.8959。
+            # 故默认关闭；开启者必须同时把 `axis_stroke_px` 视为 0，否则双偏移。
+            if getattr(self, "anchor_zero_at_axis_right", False):
                 # 彩色信息是区分"真基线"与"填充轮廓左缘"的决定性依据：
                 # 放大比对实测——真基线纯灰（彩色占比 0.00）、右侧立刻断开；
                 # filled-silhouette 的左缘带颜色（彩色占比 0.42）、右侧持续有内容。
@@ -1271,6 +1267,36 @@ class CoreMixin:
                         "band": (col["start"], col["end"]),
                     }
 
+        # 轴线粗自动实测（ARCHITECTURE §6.4：0 点 = 列左缘 + 轴线粗）。
+        #
+        # 写进**组**而不是列：一个列组共用一条斜率、一个轴粗（组是标定单位）。
+        # 逐列实测值只用于取中位数 —— 同一张图各列的框线粗细会差 1~2px
+        # （实测 beginner 4/6/6/6），存逐列值等于把组语义拆散。
+        #
+        # 两条写入纪律：
+        # ① 组上已经有正数就不覆盖 —— 用户手填的粗细必须赢过自动值，否则每次
+        #    重新分列都会把他调好的绿线位置冲掉；
+        # ② 测不出就**什么都不写**（字段保持缺省）。前端以"缺省 = 未实测"为准，
+        #    显示「按 5px 估算，可手工调整」；绝不在这里静默写 5 假装测出来了。
+        #
+        # ③ 只在**过半数列**测得出时才写。组参数会施加到组内每一列，少数列的测量值
+        #    代表不了其余列：实测 hoya 29 列里只有 8 列（28%）左缘是灰度均匀的轴线，
+        #    中位数算出来是 2，照写会让另外 21 列的 0 点整体左移 3px —— 那是拿
+        #    "部分列的猜测"冒充"全组的实测"。宁可留给用户填。
+        if detected_cols:
+            axis_widths = measure_axis_stroke(gray_sub, [s for s, _ in bounds])
+            measured_widths = [w for w in axis_widths if w > 0]
+            coverage = len(measured_widths) / max(1, len(axis_widths))
+            if measured_widths and coverage >= 0.5 and def_grp_id:
+                for grp in (target_roi or {}).get("x_groups") or []:
+                    if grp.get("id") != def_grp_id:
+                        continue
+                    if float(grp.get("axis_stroke_px") or 0) <= 0:
+                        grp["axis_stroke_px"] = int(
+                            round(float(np.median(measured_widths)))
+                        )
+                    break
+
         # 「填满整列的色块/空框」标记（task-21）。
         #
         # 必须在 `self.columns = ...` **之前**做：判据要看这一列的像素内容，而
@@ -1289,10 +1315,34 @@ class CoreMixin:
         if detected_cols:
             gray_for_block = np.asarray(self.image.convert("L"))
             block_mask = gray_for_block < _SUSPECT_DARK_THRESHOLD
+            # 统计起点落在 **0 点**（轴线右缘 = start + 轴线粗），不是列左缘：
+            # 轴线与紧贴它的左竖边不是数据墨迹。旧实现从 start 起算，一旦 start
+            # 保持左缘语义，空框的左竖边就会被算进"每行墨迹跨度"，fill_ratio 冲到 1
+            # → 误标成"填满整列的色块"（实测 hoya col29，见 test_column_block_detection）。
+            #
+            # ## 为什么这里**不**跟随组上的自动实测值（2026-11-04 实测）
+            #
+            # 组里的 `axis_stroke_px` 现在由 `measure_axis_stroke` 自动实测（beginner=6）。
+            # 把这个值喂给本窗口会让 beginner 第 4 列的空框**不再被标记**：
+            #
+            # | 窗口起点 | mean_ink_width | cv | fill_ratio | 形态 1（cv<0.1） |
+            # |:---|:---|:---|:---|:---|
+            # | start+5 | 221.0 | 0.0004 | 0.9955 | 命中 |
+            # | start+6 | 207.1 | 0.2470 | 0.9372 | 不命中 |
+            #
+            # 差别全部来自那 1px：`start+5` 恰好把空框的**左竖边**留在窗口内，于是
+            # 每行的墨迹跨度都被拉满、cv 压到 0；按正确的 0 点心（start+6）切掉左竖边
+            # 后只剩右竖边，形态 1 就判不出来了。换言之"空框能被识别"目前**依赖这 1px
+            # 溢出**，而真正的替代判据（墨迹位置是否随 y 变化）是三试三败的独立任务
+            # （见 `_detect_block_column` 的形态 2/3 注释）。
+            #
+            # 所以本窗口继续用历史口径 5px，与 0 点解耦：修 0 点不该顺手把空框检测打哑。
+            # 只报不改 —— 这个耦合本身是技术债，见 HANDOFF 记录。
+            _BLOCK_STAT_STROKE_PX = 5.0
             for col in detected_cols:
                 evidence = _detect_block_column(
                     block_mask,
-                    int(round(col["start"])),
+                    int(round(col["start"] + _BLOCK_STAT_STROKE_PX)),
                     int(round(col["end"])),
                     int(round(y0)),
                     int(round(y1)),
@@ -1502,6 +1552,27 @@ class CoreMixin:
                     if not has_ex:
                         col["exaggeration_mult"] = None
                         col["mult_source"] = None
+                elif k == "axis_stroke_px":
+                    # 列级轴粗覆盖（ARCHITECTURE §6.4）：只放用户显式值，必须**当场校验**。
+                    # 不能靠 `resolve_axis_stroke` 的软回落吞掉非法值：那样用户改完
+                    # 看到的是"改成功了"，实际仍是组值，绿线一动不动而没有任何报错。
+                    # `None` = 清除覆盖、回到组值。
+                    if v is None:
+                        col.pop("axis_stroke_px", None)
+                    else:
+                        try:
+                            stroke = float(v)
+                        except (TypeError, ValueError):
+                            raise JsonRpcError(
+                                INVALID_PARAMS,
+                                f"轴线粗必须是 1–20 之间的数值，收到 {v!r}。",
+                            )
+                        if not (1.0 <= stroke <= 20.0):
+                            raise JsonRpcError(
+                                INVALID_PARAMS,
+                                f"轴线粗必须在 1–20px 之间，收到 {stroke}。",
+                            )
+                        col["axis_stroke_px"] = stroke
                 else:
                     col[k] = v
             return {"success": True, "column": col}

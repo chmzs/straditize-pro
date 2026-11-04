@@ -137,9 +137,8 @@ class QaMixin:
             )
             p_dict = {p["row"]: p["x"] for p in pts}
 
-            col_start_px = float(
-                col.get("startX", col.get("start", scale.abs_px0))
-            )
+            # 0 点（= 左缘 + 轴线粗），与画布绿线、与 px_to_value 的换算基准同源。
+            col_start_px = float(scale.abs_px0)
 
             c_vals = [
                 scale.px_to_value(

@@ -28,6 +28,34 @@ __all__ = [
 SCALE_TYPES: tuple[str, str] = ("linear", "log")
 
 
+def resolve_axis_stroke(col: dict[str, Any] | None, group: dict[str, Any] | None) -> float:
+    """轴线粗解析：**列级覆盖 > 组级初值 > 缺省 5**（ARCHITECTURE §6.4）。
+
+    组的 `axis_stroke_px` 是初值（分列时 `measure_axis_stroke` 实测中位数，或用户在手填）；
+    列的 `axis_stroke_px` 只放**用户显式覆盖** —— 分列从不写它，所以它一旦存在就是人填的值，
+    重新分列也不会被冲掉。逐列差异是真实存在的（实测 beginner 3/5/5/5、fig3 1~2px），
+    组级单值会让少数列的 0 点偏 1~2px。
+
+    非法值（0 / 负数 / 非数值）一律视为"未覆盖"，回落组值，绝不静默取 0：
+    那会把绿线压到列左缘上，读数整体偏小一个轴粗。
+    """
+    raw_col = (col or {}).get("axis_stroke_px")
+    try:
+        col_stroke = float(raw_col) if raw_col is not None else None
+    except (TypeError, ValueError):
+        col_stroke = None
+    if col_stroke is not None and col_stroke > 0:
+        return col_stroke
+    raw_group = (group or {}).get("axis_stroke_px")
+    try:
+        group_stroke = float(raw_group) if raw_group is not None else None
+    except (TypeError, ValueError):
+        group_stroke = None
+    if group_stroke is not None and group_stroke > 0:
+        return group_stroke
+    return 5.0
+
+
 def normalize_scale_type(scale_type: Any) -> str:
     """Validate and canonicalise an X-scale type.
 
@@ -292,7 +320,15 @@ def resolve_column_scale(
         _slope = None
     if _slope is not None and _slope != 0:
         _group = group_obj or {}
-        _stroke = float(_group.get("axis_stroke_px") or 5.0)
+        # 0 点 = 列左缘 + 轴线粗（ARCHITECTURE §6.4）。
+        #
+        # `c_start` 是 `detect_column_bounds` 给的**轴线左缘**（列切分线）；面积图的
+        # 0 点画在轴线右缘，所以必须再加 `axis_stroke_px`。两者分工是硬的：
+        # 红线 = start（列切分线，也是上一列的结束线），绿线 = start + 轴粗（0 点）。
+        #
+        # `detect_columns` 里的右缘锚定（`anchor_zero_at_axis_right`）默认关闭，
+        # 就是为了保住这条分工；一旦开启，start 变成右缘，这里再加轴粗即双偏移。
+        _stroke = resolve_axis_stroke(col_dict, _group)
         _zero = c_start + _stroke
         return ColumnScale(
             abs_px0=_zero,
