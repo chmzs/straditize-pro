@@ -42,6 +42,8 @@ import { t, onLocaleChange } from '../i18n';
 
 import { bandOf } from './canvas/CleanupOverlay';
 import { resolveAxisStroke } from '../core/axisStroke';
+import { ensureCanvasLegend } from './canvas/legend';
+import { drawDepthGridOverlay } from './canvas/depthGrid';
 export interface CanvasEventCallbacks {
   onTaxaChange?: (taxaId: string) => void;
   onDataChange?: () => void;
@@ -299,17 +301,7 @@ export class GeologyCanvas {
     // 用户会按错的颜色理解图。样式类名见 style.css 的 .legend-sw-*，
     // 两边必须同名，否则色块退化成 currentColor（灰）。
     // 用 DOM 元素而不是 canvas 绘制：不改变任何像素，不影响 e2e 的墨迹差值断言。
-    if (!this.container.querySelector('.canvas-legend')) {
-      const legend = document.createElement('div');
-      legend.className = 'canvas-legend';
-      legend.innerHTML = `
-        <div class="canvas-legend-row"><span class="legend-sw legend-sw-column"></span>红：列切分线（轴线左缘）</div>
-        <div class="canvas-legend-row"><span class="legend-sw legend-sw-zero"></span>绿：0 点（红线 + 轴线粗）</div>
-        <div class="canvas-legend-row"><span class="legend-sw legend-sw-tick"></span>蓝：单位刻度（按像素长度等距外推）</div>
-      `;
-      this.container.appendChild(legend);
-      this.canvasLegend = legend;
-    }
+    this.canvasLegend = ensureCanvasLegend(this.container);
     this.updateFloatingToolbarForStage(this.workflowStage);
 
     palette.querySelector('#btn-palette-help')?.addEventListener('click', () => {
@@ -1947,112 +1939,22 @@ export class GeologyCanvas {
    * 未完成两点标定时整段不画：没有标定就没有"深度"这回事，画一组 0/50/100
    * 的假刻度会让人以为深度轴已经生效（旧实现正是拿 ROI 边界冒充刻度）。
    */
+  /**
+   * 深度网格：实现见 canvas/depthGrid.ts（纯绘制，只读标定 / ROI / 列）。
+   *
+   * 这里只做适配：private 状态打包成 env，阶段门控在 render 的 showsDepthGrid 已判过。
+   */
   private drawDepthGrid(ctx: CanvasRenderingContext2D, isLight: boolean): boolean {
-    const cal = this.data.calibration;
-    const roi = this.data.roi;
-    const bounds = CoordinateSystem.calibrationBounds(cal);
-    // 默认**关**：`=== false` 才关的写法让 `undefined`（旧项目/后端不回该字段）照画，
-    // 表现为"明明关了属性面板里的勾，网格还在"。只有显式 true 才画。
-    if (!bounds || cal.depthGridEnabled !== true) return false;
-
-    // 网格线仅在 Step 7（采样层位）或 Step 3（物理标定）等需要时显示，
-    // Step 4 (干扰清理) 和 Step 5 (自动分列) 默认不绘制网格线，彻底消除抹黑图谱的灾难
-    if (this.workflowStage === STAGE.CLEANUP || this.workflowStage === STAGE.SPLIT) {
-      return false;
-    }
-
-    const totalSpan = Math.abs(bounds.bottomValue - bounds.topValue);
-    let interval = cal.depthInterval && cal.depthInterval > 0 ? cal.depthInterval : 2;
-    if (cal.depthInterval === undefined || (cal.depthInterval === 2 && totalSpan > 200)) {
-      if (totalSpan > 5000) interval = 500;
-      else if (totalSpan > 2000) interval = 200;
-      else if (totalSpan > 1000) interval = 100;
-      else if (totalSpan > 500) interval = 50;
-      else if (totalSpan > 200) interval = 20;
-    }
-    const { depths, yPositions } = SplineInterpolator.getStandardDepthHorizons(cal, roi);
-    if (depths.length === 0) return false;
-
-    const scale = this.viewport.scale;
-    const totalCols = this.data.columns;
-    const gridStartX = Math.max(0, roi.xMin - 50);
-    const gridEndX = totalCols.length > 0
-      ? Math.max(roi.xMax, totalCols[totalCols.length - 1].endX + 30)
-      : roi.xMax + 60;
-
-    ctx.save();
-
-    // 步进标签显示频率计算，防止过度拥挤
-    const labelStep = depths.length > 60 ? Math.ceil(depths.length / 30) : 1;
-
-    for (let i = 0; i < depths.length; i++) {
-      const d = depths[i];
-      const y = yPositions[i];
-      const isMajor = i % 5 === 0;
-      const isHovered =
-        this.hoveredDepthHorizon !== null &&
-        Math.abs(this.hoveredDepthHorizon - d) <= interval * 0.45;
-
-      // 1. 贯穿所有属种列的水平层位标线 (Depth Grid Line)
-      ctx.beginPath();
-      ctx.moveTo(gridStartX, y);
-      ctx.lineTo(gridEndX, y);
-
-      if (isHovered) {
-        ctx.strokeStyle = isLight ? '#0284c7' : '#38bdf8';
-        ctx.lineWidth = 2.2 / scale;
-        ctx.setLineDash([]);
-      } else if (isMajor) {
-        ctx.strokeStyle = isLight ? 'rgba(2, 132, 199, 0.65)' : 'rgba(56, 189, 248, 0.45)';
-        ctx.lineWidth = 1.3 / scale;
-        ctx.setLineDash([5 / scale, 4 / scale]);
-      } else {
-        ctx.strokeStyle = isLight ? 'rgba(2, 132, 199, 0.35)' : 'rgba(125, 211, 252, 0.22)';
-        ctx.lineWidth = 0.95 / scale;
-        ctx.setLineDash([3 / scale, 3.5 / scale]);
-      }
-      ctx.stroke();
-
-      // 2. 左侧标尺深度数值
-      if (i % labelStep === 0 || isHovered) {
-        ctx.fillStyle = isHovered
-          ? (isLight ? '#0284c7' : '#38bdf8')
-          : isMajor
-          ? (isLight ? '#0369a1' : '#7dd3fc')
-          : (isLight ? '#64748b' : 'rgba(125, 211, 252, 0.7)');
-        ctx.font = `${isMajor || isHovered ? 'bold ' : ''}${Math.max(9, 11 / scale)}px 'JetBrains Mono', monospace`;
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(`${d}`, gridStartX - 8, y);
-      }
-    }
-
-    // 3. 绘制左侧垂直深度标尺主轴：贯穿整个数据有效区
-    ctx.beginPath();
-    ctx.moveTo(gridStartX - 4, roi.yMin);
-    ctx.lineTo(gridStartX - 4, roi.yMax);
-    ctx.strokeStyle = isLight ? 'rgba(2, 132, 199, 0.7)' : 'rgba(56, 189, 248, 0.6)';
-    ctx.lineWidth = 1.5 / scale;
-    ctx.setLineDash([]);
-    ctx.stroke();
-
-    // 4. 绘制深度标尺顶部单位与层位间隔 Badge
-    const badgeX = gridStartX - 8;
-    const badgeY = bounds.topPx - 16;
-    ctx.font = `bold ${Math.max(10, 11.5 / scale)}px 'JetBrains Mono', monospace`;
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-
-    if (this.isHoveringDepthRulerBadge) {
-      ctx.fillStyle = isLight ? '#0284c7' : '#38bdf8';
-      ctx.fillText(`标尺: ${interval}${cal.unit} [点击修改]`, badgeX, badgeY);
-    } else {
-      ctx.fillStyle = isLight ? 'rgba(2, 132, 199, 0.9)' : 'rgba(56, 189, 248, 0.85)';
-      ctx.fillText(`Depth (${cal.unit}) [Δ=${interval}]`, badgeX, badgeY);
-    }
-
-    ctx.restore();
-    return true;
+    return drawDepthGridOverlay({
+      ctx,
+      isLight,
+      calibration: this.data.calibration,
+      roi: this.data.roi,
+      columns: this.data.columns,
+      scale: this.viewport.scale,
+      hoveredDepthHorizon: this.hoveredDepthHorizon,
+      hoveringRulerBadge: this.isHoveringDepthRulerBadge,
+    });
   }
 
   /**
