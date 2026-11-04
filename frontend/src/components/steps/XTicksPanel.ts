@@ -16,6 +16,7 @@ import {
   syncXTicksDroppedFromBackend,
 } from './XTicksDroppedNotice';
 import { renderOtherSuspectColumnsSummary } from './SuspectBlockNotice';
+import { resolveAxisStroke } from '../../core/axisStroke';
 
 export const step = 6;
 export const title = '6. 标定列与 X 刻度';
@@ -33,6 +34,17 @@ export function setTickPickedHandler(
   fn: ((pt: { x: number; y: number }) => void) | null
 ): void {
   onTickPickedExternal = fn;
+}
+
+/** 单列 0 点 = 列左缘 + 轴粗（与画布绿线、后端 `resolve_column_scale` 同源）。 */
+function zeroXOfColumn(
+  col: { startX: number; axis_stroke_px?: number | null; roi_id?: string; x_group_id?: string },
+  data: DiagramData | null
+): number {
+  const roi =
+    data?.rois?.find((r) => r.id === (col.roi_id ?? data?.active_roi_id)) ?? data?.rois?.[0];
+  const group = roi?.x_groups?.find((g) => g.id === col.x_group_id) ?? roi?.x_groups?.[0];
+  return Number(col.startX) + resolveAxisStroke(col, group);
 }
 
 /** 画布点选刻度齿时由 main.ts 调用。 */
@@ -111,7 +123,7 @@ function patchRulerDom(root: HTMLElement): void {
   const line = root.querySelector('[data-role="ruler-detect"]') as HTMLElement | null;
   const spanEl = root.querySelector('[data-role="ruler-span"]') as HTMLElement | null;
 
-  const spans = detectedSpans(cachedData?.columns ?? [], geo);
+  const spans = detectedSpans(cachedData?.columns ?? [], geo, (c) => zeroXOfColumn(c, cachedData));
   const rigidSpan = maxDetectedSpan(spans);
 
   if (line) {
@@ -243,13 +255,22 @@ export function render(data: DiagramData): string {
   // 统计各组包含的列
   const groupCols = cols.filter((c) => (c.x_group_id || activeRoi?.default_group_id) === currentGroupId);
 
+  // 轴线粗的生效值：**列级覆盖 > 组级初值 > 缺省 5**（ARCHITECTURE §6.4）。
+  // 组上的正数来自分列实测（`measure_axis_stroke`）或用户手填；列上的正数只可能是
+  // 用户显式覆盖。两者都必须让用户看得见——静默用一个猜的值会让绿线（0 点）偏掉几像素。
+  const axisStrokeColOverride =
+    Number(activeCol?.axis_stroke_px) > 0 ? Number(activeCol?.axis_stroke_px) : null;
+  const axisStrokePx = resolveAxisStroke(activeCol, currentGroup);
+  const axisStrokeMeasured =
+    Number(currentGroup?.axis_stroke_px) > 0 || axisStrokeColOverride != null;
+
   // 刻线几何：只对**本 ROI** 的列测（后端按 roi_id 过滤，这里必须同口径，否则错位）。
   const roiCols = cols.filter((c) => !activeRoi?.id || !c.roi_id || c.roi_id === activeRoi.id);
   const geoKey = rulerGeoKeyFor(data, activeRoi?.id ?? null);
   const geo = rulerGeoKey === geoKey ? rulerGeo : null;
   const geoError = rulerGeoKey === geoKey ? rulerGeoError : null;
   const geoPending = rulerGeoPending || (!geo && !geoError);
-  const spans = detectedSpans(roiCols, geo);
+  const spans = detectedSpans(roiCols, geo, (c) => zeroXOfColumn(c, data));
   const rigidSpan = maxDetectedSpan(spans);
   const groupUnit = currentGroup?.unit || '%';
   const rulerLine = describeRulerDetection(geo, geoError, geoPending);
@@ -418,13 +439,35 @@ export function render(data: DiagramData): string {
             这个数只能从图上读：<strong>相邻两个数字标签之差</strong>（如标签 10 / 30 → 填 20）。
             标签隔一根齿才标数字时，取差值的一半。软件不替你猜——填错会让全组读数按同一比例偏掉。
           </div>
-          <!-- 轴线粗：只影响「0 点 = 左缘 + 轴线粗」这条绿线的位置，与刻度无关 -->
-          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+          <!-- 轴线粗：决定绿线「0 点 = 左缘 + 轴粗」的位置，同时给刻度检测定轴右缘。 -->
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px;">
             <label for="inp-axis-stroke" style="font-size: 10.5px; color: var(--text-muted);">轴线粗细:</label>
             <input type="number" id="inp-axis-stroke" value="${currentGroup && Number(currentGroup.axis_stroke_px) > 0 ? String(Number(currentGroup.axis_stroke_px)) : ''}" placeholder="5" min="1" max="20" step="1"
                    title="Y 轴轴线的描边宽度（像素）。0 点 = 左缘 + 它。填了就不再从像素里猜。"
                    style="width: 66px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
             <span style="font-size: 9.5px; color: var(--text-muted);">px（0 点 = 左缘 + 它）</span>
+           <!-- 单列覆盖：组值是初值，逐列差异真实存在（实测 beginner 3/5/5/5），
+                只调某列时不该把整组一起改。留空 = 跟随组。 -->
+           <div style="display: flex; align-items: center; gap: 6px; width: 100%; margin-bottom: 6px;">
+             <label for="inp-col-axis-stroke" style="font-size: 10.5px; color: var(--text-muted);">仅本列:</label>
+             <input type="number" id="inp-col-axis-stroke" value="${axisStrokeColOverride != null ? String(axisStrokeColOverride) : ''}" placeholder="${Number(currentGroup?.axis_stroke_px) > 0 ? String(Number(currentGroup?.axis_stroke_px)) : '5'}" min="1" max="20" step="1"
+                    title="只改当前这一列的 0 点位置。留空 = 跟随组值。"
+                    style="width: 66px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
+             <span style="font-size: 9.5px; color: var(--text-muted);">px（留空 = 跟随组）</span>
+           </div>
+          </div>
+          <!-- 轴线粗的来源必须明示（用户原话：「y 轴轴线粗细不需要我提供，就自动给出绿色线吗？」）：
+               分列时按灰度层次实测（columns.measure_axis_stroke），测得出就直接用；
+               测不出就说清楚是估算，不要静默拿 5px 冒充实测值。 -->
+          <div data-role="axis-stroke-source" data-measured="${axisStrokeMeasured ? '1' : '0'}"
+               style="font-size: 9.5px; line-height: 1.45; margin: -2px 0 6px 0; color: ${axisStrokeMeasured ? 'var(--text-muted)' : 'var(--status-warning)'};">
+            ${
+              axisStrokeColOverride != null
+                ? `本列已单独覆盖：<strong>${axisStrokeColOverride}px</strong>（组值 ${Number(currentGroup?.axis_stroke_px) > 0 ? `${Number(currentGroup?.axis_stroke_px)}px` : "未实测/缺省 5px"}）；绿线 0 点 = 列左缘 + ${axisStrokePx}`
+                : Number(currentGroup?.axis_stroke_px) > 0
+                  ? `轴线粗已从像素实测：<strong>${axisStrokePx}px</strong>（绿线 0 点 = 列左缘 + ${axisStrokePx}）`
+                  : '轴线粗<strong>无法自动测量</strong>（这几列的左边不是灰度均匀的竖轴），当前按 <strong>5px</strong> 估算 —— 绿线可能偏，请量一下实际粗细后填入上面的输入框'
+            }
           </div>
 
           <!-- ── X 轴标定（组级）────────────────────────────────────────
@@ -532,7 +575,9 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     if (!col) return;
     const roi = cachedData?.rois?.find((r) => r.id === (col.roi_id ?? cachedData?.active_roi_id));
     const g = roi?.x_groups?.find((x) => x.id === col.x_group_id) ?? roi?.x_groups?.[0];
-    const stroke = Number(g?.axis_stroke_px) > 0 ? Number(g?.axis_stroke_px) : 5;
+    // 0 点 = 列左缘 + 轴线粗（与画布绿线同源，见 ARCHITECTURE §6.4）。
+    // `start` 是轴线左缘（列切分线），轴粗取组参数，缺省 5。
+    const stroke = resolveAxisStroke(col, g);
     const start = Number(
       (col as unknown as Record<string, number>).startX ??
         (col as unknown as Record<string, number>).start ??
@@ -569,8 +614,8 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onDetectXTicks?.();
   });
 
-  // 轴线粗细覆盖：用户量一次、全图共用。填了就让后端用「左缘 + 粗细 − 1」定 0 点，
-  // 不再从像素里猜（也不受自动估计那套 1–6px 夹取上限的限制）。
+  // 轴线粗细覆盖：用户量一次、全图共用。它决定绿线「0 点 = 左缘 + 轴粗」的位置，
+  // 同时作为刻度检测时 `_find_axis_x` 的右缘判据。
   root.querySelector('#inp-axis-stroke')?.addEventListener('change', (e) => {
     const raw = (e.target as HTMLInputElement).value.trim();
     const parsed = raw === '' ? null : Number.parseFloat(raw);
@@ -589,6 +634,23 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     void ensureRulerGeometry(ctx, root).then(() => {
       ctx.onDataChange?.();
     });
+  });
+
+  // 单列覆盖：只改当前列的 0 点位置（组值仍是初值）。留空 = 清掉覆盖、回到组值。
+  // 列级字段分列时不会写，所以这里写的值跨会话保留；改完必须整块重渲染——
+  // 0 点像素是渲染时写进模板的（与上面组输入框同理）。
+  root.querySelector('#inp-col-axis-stroke')?.addEventListener('change', (e) => {
+    const raw = (e.target as HTMLInputElement).value.trim();
+    const parsed = raw === '' ? null : Number.parseFloat(raw);
+    if (parsed != null && (!Number.isFinite(parsed) || parsed <= 0 || parsed > 20)) {
+      notifyError('单列轴线粗必须是 1–20 之间的正数；要清除覆盖请留空。');
+      return;
+    }
+    const col = activeColumn();
+    if (!col) return;
+    void ctx.rpcClient
+      .updateColumn(columnIndex(col), { axis_stroke_px: parsed })
+      .then(() => ctx.onDataChange?.());
   });
 
   // 单位刻度长度（cell_px）：标定的几何锚点。刻度位置 = 0 点 + k × 它。

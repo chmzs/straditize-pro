@@ -251,7 +251,10 @@ export function normalizeProject(
     bottom_cm: cal.bottom_cm ?? null,
     unit: cal.unit || 'cm',
     depthInterval: cal.depthInterval ?? cal.depth_interval ?? 2,
-    depthGridEnabled: cal.depthGridEnabled ?? cal.depth_grid_enabled ?? true,
+    // 默认**关**：这条浅色网格线不承载任何判定信息，是纯视觉噪声（用户明确要求删）。
+    // 之前这里写 `?? true`，与 `GeologyCanvas` 的初始值 `depthGridEnabled: false` 打架 ——
+    // 每次加载项目都被重新打开，表现为"网格线怎么清不掉"。
+    depthGridEnabled: cal.depthGridEnabled ?? cal.depth_grid_enabled ?? false,
     customDepths: cal.customDepths ?? cal.custom_depths ?? [],
   };
 

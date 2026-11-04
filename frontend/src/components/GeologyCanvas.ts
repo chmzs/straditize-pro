@@ -41,6 +41,7 @@ import {
 import { t, onLocaleChange } from '../i18n';
 
 import { bandOf } from './canvas/CleanupOverlay';
+import { resolveAxisStroke } from '../core/axisStroke';
 export interface CanvasEventCallbacks {
   onTaxaChange?: (taxaId: string) => void;
   onDataChange?: () => void;
@@ -291,16 +292,20 @@ export class GeologyCanvas {
     this.container.appendChild(palette);
     this.floatingToolbar = palette;
 
-    // 画布图例：步骤 6 起会同时出现「蓝实线（基线 0 点）」与「红虚线（端点 2 刻度齿）」，
-    // 而界面上从未说明过它们是什么 —— 用户看到的是"乱七八糟、颜色也不区分"的线。
-    // 用 DOM 元素而不是 canvas 绘制：不改变任何像素，因此不影响 e2e 的墨迹差值断言。
+    // 画布图例：说明列上那几条线的**实际**含义（与 ARCHITECTURE §6.4 的四条线一一对应）。
+    //
+    // 文案曾长期停留在旧的三条（「基线（0点）/ 端点 2 刻度齿 / 底图原有线」），而画法
+    // 是「红=列切分线、绿=0 点、蓝=单位刻度」——图例与实际对不上比没有图例更坏：
+    // 用户会按错的颜色理解图。样式类名见 style.css 的 .legend-sw-*，
+    // 两边必须同名，否则色块退化成 currentColor（灰）。
+    // 用 DOM 元素而不是 canvas 绘制：不改变任何像素，不影响 e2e 的墨迹差值断言。
     if (!this.container.querySelector('.canvas-legend')) {
       const legend = document.createElement('div');
       legend.className = 'canvas-legend';
       legend.innerHTML = `
-        <div class="canvas-legend-row"><span class="legend-sw legend-sw-baseline"></span>基线（0 点）</div>
-        <div class="canvas-legend-row"><span class="legend-sw legend-sw-tick2"></span>端点 2 刻度齿</div>
-        <div class="canvas-legend-row"><span class="legend-sw legend-sw-native"></span>底图原有线（放大后变粗）</div>
+        <div class="canvas-legend-row"><span class="legend-sw legend-sw-column"></span>红：列切分线（轴线左缘）</div>
+        <div class="canvas-legend-row"><span class="legend-sw legend-sw-zero"></span>绿：0 点（红线 + 轴线粗）</div>
+        <div class="canvas-legend-row"><span class="legend-sw legend-sw-tick"></span>蓝：单位刻度（按像素长度等距外推）</div>
       `;
       this.container.appendChild(legend);
       this.canvasLegend = legend;
@@ -1946,7 +1951,9 @@ export class GeologyCanvas {
     const cal = this.data.calibration;
     const roi = this.data.roi;
     const bounds = CoordinateSystem.calibrationBounds(cal);
-    if (!bounds || cal.depthGridEnabled === false) return false;
+    // 默认**关**：`=== false` 才关的写法让 `undefined`（旧项目/后端不回该字段）照画，
+    // 表现为"明明关了属性面板里的勾，网格还在"。只有显式 true 才画。
+    if (!bounds || cal.depthGridEnabled !== true) return false;
 
     // 网格线仅在 Step 7（采样层位）或 Step 3（物理标定）等需要时显示，
     // Step 4 (干扰清理) 和 Step 5 (自动分列) 默认不绘制网格线，彻底消除抹黑图谱的灾难
@@ -2167,21 +2174,26 @@ export class GeologyCanvas {
       };
 
       // ── 列的四条线（语义由领域确定，不要凭感觉调色）────────────────────────
-      //   红实线 = y 轴**左缘** = 列切分线（= 上一列的结束位置，所以不另画 endX）
-      //   绿实线 = y 轴**右缘** = 该列数据的 0 点（左缘 + 轴线粗，默认 5px，可手工改）
+      //   红实线 = `col.startX` = 轴线**左缘** = 列切分线（也是上一列的结束位置）
+      //   绿实线 = `startX + axis_stroke_px` = 该列数据的 **0 点**（轴线右缘）
       //   蓝实线 = 单位刻度齿位置（该刻度代表多少单位由用户填）
-      //   深度网格线已默认关闭：它铺满画布却不承载任何判定信息，是纯视觉噪声。
-      // 轴线粗 = ColumnGroup.axis_stroke_px（默认 5px，已持久化）。
-      // 注意别与 `ref_span_px` 混：后者是**一个刻度的长度**（cell_px），两个不同的量。
+      //   深度网格线默认关闭：它铺满画布却不承载任何判定信息，是纯视觉噪声。
+      //
+      // 红绿是**两条不同的线**，不能合并：列切分线由分列算法给出，0 点还要加上
+      // 轴线自身的描边宽度（轴上没有墨迹可量，粗细只能来自组参数，默认 5 可改）。
+      // 前提是 `col.startX` 保持"轴线左缘"语义——`detect_columns` 的右缘锚定
+      // （`anchor_zero_at_axis_right`）默认关闭就是为了这个；一旦开启，start 变成
+      // 右缘，这里再加轴粗即双偏移（实测事故见 ARCHITECTURE §6.4）。
       const groupOfCol = this.data.roi.x_groups?.find((g) => g.id === col.x_group_id);
-      const axisStrokePx =
-        Number(groupOfCol?.axis_stroke_px) > 0 ? Number(groupOfCol?.axis_stroke_px) : 5;
       // 一个单位刻度的像素长度（组级）。有它就按等距外推画刻度，
       // 不再依赖检测齿 —— 检测会漏、会多、会偏 1-2px（实测一列是第 2 个齿、另一列是第 3 个）。
       const cellPx = Number(groupOfCol?.ref_span_px) > 0 ? Number(groupOfCol?.ref_span_px) : null;
+      // 列级覆盖 > 组级初值 > 缺省 5（与后端 xscale.resolve_axis_stroke 同语义）。
+      const axisStrokePx = resolveAxisStroke(col, groupOfCol);
       const leftEdgeX = col.startX;
-      const zeroX = col.startX + axisStrokePx;
+      const zeroX = leftEdgeX + axisStrokePx;
 
+      // 红：列切分线（= 轴线左缘）
       ctx.beginPath();
       ctx.moveTo(leftEdgeX, topY);
       ctx.lineTo(leftEdgeX, bottomY);
@@ -2190,6 +2202,7 @@ export class GeologyCanvas {
       ctx.setLineDash([]);
       ctx.stroke();
 
+      // 绿：0 点（= 轴线右缘 = 红线 + 轴线粗）
       ctx.beginPath();
       ctx.moveTo(zeroX, topY);
       ctx.lineTo(zeroX, bottomY);
@@ -2197,6 +2210,7 @@ export class GeologyCanvas {
       ctx.lineWidth = (isActive ? 1.8 : 1.2) / scale;
       ctx.setLineDash([]);
       ctx.stroke();
+
 
       const dragBoundary = (this.toolStrategies.get('select') as SelectToolStrategy | undefined)?.getDraggingBoundary();
       const isOriginHovered =
@@ -2233,23 +2247,17 @@ export class GeologyCanvas {
         }
       }
 
-      // 3. 列间空白隔离边界线 (endX - 仅当 endX 明显大于刻度齿时显示淡色隔离虚线)
+      // 3. 列结束位置**不常驻画**：rioja / Tilia 的列首尾相接（inc2 = inc × colM），
+      //    `endX` 恒等于下一列的 `startX` —— 那条红线已经画了，再画一条会让用户
+      //    无法判断哪条才是真正的分界（历史反馈：「把该列 area 拦腰截断」）。
+      //    只在鼠标悬停到该边界时高亮，方便拖动改列宽。
       if (isEndHovered && col.endX > leftEdgeX + 4) {
         ctx.beginPath();
         ctx.moveTo(col.endX, topY);
         ctx.lineTo(col.endX, bottomY);
-
-        if (isEndHovered) {
-          ctx.strokeStyle = '#f97316';
-          ctx.lineWidth = 2.5 / scale;
-          ctx.setLineDash([]);
-        } else {
-          // 列结束位置 = 下一列的左缘线，不再单独画一条；
-          // 只在鼠标悬停到该边界时高亮一下，方便拖动改列宽。
-          ctx.strokeStyle = isLight ? 'rgba(148, 163, 184, 0.55)' : 'rgba(148, 163, 184, 0.45)';
-          ctx.lineWidth = 1.0 / scale;
-          ctx.setLineDash([2 / scale, 4 / scale]);
-        }
+        ctx.strokeStyle = '#f97316';
+        ctx.lineWidth = 2.5 / scale;
+        ctx.setLineDash([]);
         ctx.stroke();
       }
 
@@ -2679,7 +2687,9 @@ export class GeologyCanvas {
   private updateFloatingToolbarForStage(stage: number): void {
     if (!this.floatingToolbar) return;
     // 图例从步骤 6 起才显示：那一步才开始画基线 / 端点 2 两条竖线。
-    this.canvasLegend?.classList.toggle('is-visible', stage >= 6);
+    // 列边界线从**分列（步骤 5）**起就画（drawColumnBoundaries 无 stage 门槛），
+    // 图例若只在 6 起显示，就会出现「step 5 有彩色线但没有图例」——图例必须同步。
+    this.canvasLegend?.classList.toggle('is-visible', stage >= STAGE.SPLIT);
     const allowed = this.getAllowedTools(stage);
     this.floatingToolbar.querySelectorAll('[data-fmode]').forEach((btn) => {
       const mode = btn.getAttribute('data-fmode') as ToolMode;

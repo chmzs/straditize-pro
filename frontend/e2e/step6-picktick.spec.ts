@@ -77,6 +77,8 @@ interface BackendColumn {
   endX?: number;
   x_group_id?: string;
   x_ticks?: Array<{ px: number; value: number }> | null;
+  /** 本列用户覆盖的轴粗（null/缺省 = 跟随组值）。 */
+  axis_stroke_px?: number | null;
   scale_provenance?: { calibrated?: boolean; source?: string };
 }
 
@@ -122,13 +124,20 @@ async function groupOf(page: Page, col: BackendColumn): Promise<BackendGroup | u
 }
 
 /**
- * 面板算「距 0 点多少」用的 0 点：`列左缘 + 轴线粗`，轴线粗缺省 5。
+ * 面板算「距 0 点多少」用的 0 点：`列左缘 + 轴线粗`。
  *
- * 后端实测口径一致（写 0.0971 后 `scaleCalib.originX = 264 = startX 259 + 5`），
- * 所以这个 5 是两端共用的缺省，不是测试自己编的。
+ * 这是产品定义（ARCHITECTURE §6.4）：`col.startX` 是轴线左缘 = 列切分线，
+ * 0 点在轴线右缘，所以必须再加轴粗。轴粗生效顺序 **列级覆盖 > 组级初值 > 缺省 5**，
+ * 后端 `xscale.resolve_axis_stroke` 同语义；测试照抄这个定义，不自己编。
  */
 function zeroPointOf(col: BackendColumn, group?: BackendGroup): number {
-  const stroke = Number(group?.axis_stroke_px) > 0 ? Number(group?.axis_stroke_px) : 5;
+  const colStroke = Number(col.axis_stroke_px);
+  const stroke =
+    Number.isFinite(colStroke) && colStroke > 0
+      ? colStroke
+      : Number(group?.axis_stroke_px) > 0
+        ? Number(group?.axis_stroke_px)
+        : 5;
   return Number(col.startX) + stroke;
 }
 
@@ -210,12 +219,20 @@ async function rearm(page: Page): Promise<void> {
 }
 
 /**
- * 从**画布像素**反解「画布 x → 世界 x」。
+ * 求「画布 x → 世界 x」的换算：取产品视口参数，再用画布像素交叉校验。
  *
- * 做法：分列竖线贯穿列高，暗像素数远高于普通像素列；它们的 x 能精确量出来，
- * 而对应列边界的世界坐标是权威的（`col.startX / endX`）。于是对 scale 做网格搜索、
- * 每个候选用「竖线↔列边界」匹配投票，取匹配最多且残差最小的那一组。
- * 整幅图只扫一次，不点任何东西。
+ * ## 为什么不再从像素反解 scale（2026-11-04 实测推翻原假设）
+ *
+ * 原实现用「贯穿列高的暗竖线 ↔ 列边界」网格搜索 scale/panX，理由是"不依赖内部
+ * 字段，产品改了取景策略也不会假绿"。但它的暗判据 `r+g+b < 430` 把**蓝色面积填充**
+ * （37+99+235=371）也算成暗 —— beginner 图里面积图的竖直边缘本身就构成十几条
+ * "贯穿列高的暗竖线"。实测 detected 16 条，反解出 scale=0.6545 / panX=29.2，
+ * 而产品真实视口是 scale=0.4361 / panX=60：预测落点偏 ~100px，每次点击都落在
+ * 6px 吸附窗口之外。也就是说那套反解一直在错误匹配上侥幸取最大值。
+ *
+ * 现在直接读 `window.__straditize.getState().viewport`（产品渲染用的同一组参数），
+ * 再用**画布像素**交叉校验：视口换算后的列边界必须真的压在检测到的竖线上。
+ * 状态与渲染不同步时这条断言会红，判别力不减。
  */
 async function estimateCanvasMapping(page: Page, worldEdges: number[]): Promise<CanvasMapping> {
   const detected: number[] = await page.evaluate(() => {
@@ -252,40 +269,31 @@ async function estimateCanvasMapping(page: Page, worldEdges: number[]): Promise<
     '画布上必须能找到贯穿列高的分列竖线：找不到就说明列没画出来，后续点击无从谈起'
   ).toBeGreaterThanOrEqual(2);
 
-  let best = { scale: NaN, panX: NaN, matched: -1, residual: Infinity };
-  for (let s = 0.25; s <= 0.7; s += 0.0005) {
-    const cands: number[] = [];
-    for (const cx of detected) for (const w of worldEdges) cands.push(cx - s * w);
-    for (const panX of cands) {
-      let matched = 0;
-      let resid = 0;
-      for (const cx of detected) {
-        let nearest = Infinity;
-        for (const w of worldEdges) nearest = Math.min(nearest, Math.abs(cx - (s * w + panX)));
-        if (nearest <= 4) {
-          matched += 1;
-          resid += nearest;
-        }
+  const viewport = await page.evaluate(() => {
+    const api = (
+      window as unknown as {
+        __straditize?: { getState: () => { viewport?: { scale: number; panX: number } } };
       }
-      const better =
-        matched > best.matched ||
-        (matched === best.matched && matched > 0 && resid / matched < best.residual);
-      if (better) best = { scale: s, panX, matched, residual: matched ? resid / matched : Infinity };
-    }
-  }
+    ).__straditize;
+    return api?.getState().viewport ?? null;
+  });
+  expect(viewport, '产品必须暴露 getState().viewport（取景策略改动后请同步本用例）').not.toBeNull();
+  const scale = Number(viewport!.scale);
+  const panX = Number(viewport!.panX);
+  expect(scale, `视口 scale 必须为正（实得 ${scale}）`).toBeGreaterThan(0);
 
+  // 交叉校验：视口换算后的列边界必须真的压在画布竖线上。
+  const edges = Array.from(new Set(worldEdges.map((w) => Math.round(w * 100) / 100)));
+  const onCanvas = edges.filter((w) =>
+    detected.some((x) => Math.abs(x - (scale * w + panX)) <= 3)
+  );
   expect(
-    best.matched,
-    `画布竖线必须能与列边界对上（实测竖线 ${JSON.stringify(detected.map((x) => Math.round(x)))}，`
-      + `列边界 ${JSON.stringify(worldEdges)}，最佳只对上 ${best.matched} 条）`
-  ).toBeGreaterThanOrEqual(3);
-  expect(
-    best.residual,
-    `换算残差必须足够小（实测 ${best.residual.toFixed(2)}px，scale=${best.scale.toFixed(4)}，panX=${best.panX.toFixed(1)}）：`
-      + '残差大说明画的是另一套变换，或竖线不是列边界'
-  ).toBeLessThan(2.5);
+    onCanvas.length,
+    `视口换算必须与画布像素一致：scale=${scale.toFixed(4)} panX=${panX.toFixed(1)} 下，`
+      + `列边界 ${JSON.stringify(edges)} 中只有 ${JSON.stringify(onCanvas)} 压在检测到的竖线上`
+  ).toBeGreaterThanOrEqual(2);
 
-  return { scale: best.scale, panX: best.panX };
+  return { scale, panX };
 }
 
 /**

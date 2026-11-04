@@ -105,8 +105,9 @@ export interface ColumnGroup {
   /** 组参考标尺物理跨度 (px)，例如 38.5px 对应 20% */
   ref_span_px?: number;
   /**
-   * 轴线粗（px，默认 5）。决定 0 点绿线的位置：`0 点 = 列左缘 + 轴线粗`。
-   * 与 `ref_span_px`（一个刻度的长度）是两个不同的量，别混用。
+   * 轴线粗（px，组级**初值**）。决定 0 点绿线的位置：`0 点 = 列左缘 + 轴线粗`。
+   * 分列时由 `measure_axis_stroke` 实测中位数写入（覆盖率 <50% 不写，保持缺省 5）；
+   * 单列可覆盖，见 `TaxaColumn.axis_stroke_px`。与 `ref_span_px`（一个刻度的长度）不同量。
    */
   axis_stroke_px?: number;
   /**
@@ -152,6 +153,13 @@ export interface Column {
    * 看不出来。后端下发 false 时，界面必须提示用户手动指定 0 点，导出记 NA。
    */
   zero_point_measurable?: boolean;
+
+  /**
+   * 本列**用户显式覆盖**的轴线粗（px）。null/缺省 = 跟随组值（ARCHITECTURE §6.4）。
+   * 分列不写它，所以它一旦存在就是人填的值；重新分列不会冲掉。
+   * 生效顺序：列值 > 组值 > 缺省 5（后端 `xscale.resolve_axis_stroke` 同语义）。
+   */
+  axis_stroke_px?: number | null;
 
   /**
    * 本列的标定刚刚被后端丢弃（B-02）。可选键，只有被丢弃标定的列才有。

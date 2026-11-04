@@ -99,7 +99,7 @@ export class PropertyPanel {
 
           <div class="form-group">
             <div class="checkbox-row" style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
-              <input type="checkbox" id="cal-depth-grid" ${cal.depthGridEnabled !== false ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: var(--accent-blue); cursor: pointer;" />
+              <input type="checkbox" id="cal-depth-grid" ${cal.depthGridEnabled === true ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: var(--accent-blue); cursor: pointer;" />
               <label for="cal-depth-grid" style="cursor: pointer; color: var(--text-primary); font-size: 12.5px; font-weight: 500;">
                 在画布上显示水平淡蓝色层位标线 (Depth Grid Lines)
               </label>

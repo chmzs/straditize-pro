@@ -3663,11 +3663,9 @@ body.theme-light .ad-pane-splitter {
   user-select: text;
 }
 
-
-}
-
-
-/* 画布图例（步骤 6+ 才有意义）：说明蓝实线 / 红虚线 / 底图原有线分别是什么。 */
+/* 画布图例（步骤 5 分列起显示）：说明画布上那两条线的实际含义。
+ * 类名必须与 GeologyCanvas 里的 innerHTML 一致——旧类名（baseline/tick2/native）
+ * 在源码换文案后没有同步，三条色块全部退化成 currentColor（灰），图例等于没写。 */
 .canvas-legend {
   position: absolute;
   left: 12px;
@@ -3688,6 +3686,15 @@ body.theme-light .ad-pane-splitter {
 .canvas-legend.is-visible { display: flex; }
 .canvas-legend-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .legend-sw { display: inline-block; width: 18px; height: 0; border-top-width: 2px; border-top-style: solid; }
-.legend-sw-baseline { border-top-color: rgba(56, 189, 248, 0.85); }
-.legend-sw-tick2 { border-top-color: rgba(239, 68, 68, 0.8); border-top-style: dashed; }
-.legend-sw-native { border-top-color: rgba(120, 120, 120, 0.9); }
+/* 三条色块的颜色**逐字取自** `GeologyCanvas.drawColumnBoundaries` 的 strokeStyle，
+ * 不是另调一套好看的色：图例的用途是"看到画布上那条线时知道它是什么"，色差一大
+ * 就等于指向另一条线。e2e 断言见 `frontend/e2e/legend-and-axis-stroke.spec.ts`，
+ * 它同时核对本文件与绘制代码里的字面量。 */
+/* 红 = 列切分线（`col.startX`，轴线左缘），绘制处 `ctx.strokeStyle = '#ef4444'`。 */
+.legend-sw-column { border-top-color: #ef4444; }
+/* 绿 = 0 点（红线 + 轴线粗），绘制处 `ctx.strokeStyle = '#22c55e'`。 */
+.legend-sw-zero { border-top-color: #22c55e; }
+/* 蓝 = 单位刻度线，绘制处按主题两档：深色 rgba(96,165,250,0.65) / 浅色 rgba(37,99,235,0.55)。
+ * 色块必须跟着换档，否则浅色主题下图例是浅蓝、画布上是深蓝。 */
+.legend-sw-tick { border-top-color: rgba(96, 165, 250, 0.65); }
+body.theme-light .legend-sw-tick { border-top-color: rgba(37, 99, 235, 0.55); }
