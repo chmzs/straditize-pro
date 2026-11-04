@@ -45,6 +45,7 @@ import { bandOf } from './canvas/CleanupOverlay';
 import { ensureCanvasLegend } from './canvas/legend';
 import { drawDepthGridOverlay } from './canvas/depthGrid';
 import { drawColumnBoundariesOverlay, getColumnCalibX } from './canvas/columnBoundaries';
+import { drawAnchorsOverlay, drawPollenCurvesOverlay } from './canvas/pollenCurves';
 export interface CanvasEventCallbacks {
   onTaxaChange?: (taxaId: string) => void;
   onDataChange?: () => void;
@@ -2052,124 +2053,29 @@ export class GeologyCanvas {
     });
   }
 
+  /** 花粉曲线：实现见 canvas/pollenCurves.ts（只读 columns / activeTaxaId / scale）。 */
   private drawPollenCurves(ctx: CanvasRenderingContext2D): void {
-    ctx.save();
-    const scale = this.viewport.scale;
-
-    this.data.columns.forEach((col) => {
-      if (!col.visible || col.controlPoints.length === 0) return;
-
-      const isActive = col.id === this.data.activeTaxaId;
-      const sortedPoints = [...col.controlPoints].sort((a, b) => a.y - b.y);
-      const pType = col.plotType || 'area';
-
-      if (pType === 'bar') {
-        // 柱状图 (Bars): 从 startX 向右延伸水平柱条
-        ctx.fillStyle = col.color;
-        ctx.strokeStyle = col.color;
-        const barThickness = Math.max(1.5, 3.0 / scale);
-
-        sortedPoints.forEach((pt) => {
-          const barWidth = Math.max(0, pt.x - col.startX);
-          ctx.fillRect(col.startX, pt.y - barThickness / 2, barWidth, barThickness);
-        });
-      } else if (pType === 'symbol') {
-        // 散点符号标记图 (Presence / Symbols)
-        ctx.strokeStyle = col.color;
-        ctx.lineWidth = 1.5 / scale;
-        const symR = 4 / scale;
-        sortedPoints.forEach((pt) => {
-          if (pt.x > col.startX + 0.5) {
-            ctx.beginPath();
-            ctx.arc(pt.x, pt.y, symR, 0, Math.PI * 2);
-            ctx.fillStyle = isActive ? col.color : `${col.color}88`;
-            ctx.fill();
-            ctx.stroke();
-          }
-        });
-      } else {
-        // 面积图 (Area) 或 纯折线图 (Line)
-        if (pType === 'area') {
-          const areaPath = SplineInterpolator.buildAreaPath(sortedPoints, col.startX);
-          ctx.fillStyle = isActive ? `${col.color}44` : `${col.color}1a`;
-          ctx.fill(areaPath);
-        }
-
-        const curvePath = SplineInterpolator.buildPath(sortedPoints);
-        ctx.strokeStyle = col.color;
-        ctx.lineWidth = (isActive ? 2.5 : 1.4) / scale;
-        ctx.setLineDash([]);
-        ctx.stroke(curvePath);
-      }
+    drawPollenCurvesOverlay({
+      ctx,
+      scale: this.viewport.scale,
+      columns: this.data.columns,
+      activeTaxaId: this.data.activeTaxaId ?? null,
     });
-
-    ctx.restore();
   }
 
+  /** 控制锚点：实现见 canvas/pollenCurves.ts（拖拽态在此取，纯函数不碰工具策略）。 */
   private drawAnchors(ctx: CanvasRenderingContext2D): void {
-    const scale = this.viewport.scale;
-    const activeCol = this.getActiveColumn();
-    if (!activeCol || !activeCol.visible) return;
-
-    ctx.save();
-
+    const selectStrategy = this.toolStrategies.get('select') as SelectToolStrategy | undefined;
+    const addPointStrategy = this.toolStrategies.get('addPoint') as AddPointToolStrategy | undefined;
     const dragAnchor =
-      (this.toolStrategies.get('select') as SelectToolStrategy | undefined)?.getDraggingAnchor() ||
-      (this.toolStrategies.get('addPoint') as AddPointToolStrategy | undefined)?.getDraggingAnchor();
-
-    activeCol.controlPoints.forEach((pt) => {
-      const isHovered = this.hoveredAnchor?.pointId === pt.id;
-      const isDragging = dragAnchor?.pointId === pt.id;
-
-      // 手柄半径屏幕恒定
-      const baseRadius = pt.type === 'peak' || pt.type === 'trough' ? 6.0 : pt.type === 'manual' || pt.isManual ? 5.5 : 4.0;
-      const radius = (isDragging ? baseRadius * 1.35 : isHovered ? baseRadius * 1.25 : baseRadius) / scale;
-
-      // 悬停/拖动时光晕
-      if (isHovered || isDragging) {
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, radius + 3.5 / scale, 0, Math.PI * 2);
-        ctx.fillStyle = isDragging
-          ? 'rgba(249, 115, 22, 0.4)'
-          : 'rgba(56, 189, 248, 0.35)';
-        ctx.fill();
-      }
-
-      ctx.beginPath();
-      ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
-
-      if (pt.type === 'peak') {
-        // 一级物理极大值（峰顶）：实心金黄色
-        ctx.fillStyle = isDragging ? '#f97316' : '#fbbf24';
-        ctx.fill();
-        ctx.strokeStyle = '#111827';
-        ctx.lineWidth = 1.8 / scale;
-        ctx.stroke();
-      } else if (pt.type === 'trough') {
-        // 一级物理极小值（谷底/基线）：实心琥珀色
-        ctx.fillStyle = isDragging ? '#f97316' : '#f59e0b';
-        ctx.fill();
-        ctx.strokeStyle = '#111827';
-        ctx.lineWidth = 1.8 / scale;
-        ctx.stroke();
-      } else if (pt.type === 'manual' || pt.isManual) {
-        // 手工强控制锚点：实心亮青色
-        ctx.fillStyle = isDragging ? '#f97316' : '#38bdf8';
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.8 / scale;
-        ctx.stroke();
-      } else {
-        // 二级平缓过渡点：空心白圈
-        ctx.fillStyle = 'rgba(17, 24, 39, 0.75)';
-        ctx.fill();
-        ctx.strokeStyle = activeCol.color || '#ffffff';
-        ctx.lineWidth = 1.6 / scale;
-        ctx.stroke();
-      }
+      selectStrategy?.getDraggingAnchor() ?? addPointStrategy?.getDraggingAnchor() ?? null;
+    drawAnchorsOverlay({
+      ctx,
+      scale: this.viewport.scale,
+      activeColumn: this.getActiveColumn() ?? null,
+      hoveredPointId: this.hoveredAnchor?.pointId ?? null,
+      draggingPointId: dragAnchor?.pointId ?? null,
     });
-
-    ctx.restore();
   }
 
   public setWorkflowStage(stage: number): void {
