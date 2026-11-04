@@ -15,7 +15,7 @@
  * 而 broken-image 那条历史缺陷恰恰只在"图没加载好"时触发。
  */
 import { expect, test } from './fixtures';
-import { backendRpc, openApp } from './helpers';
+import { backendRpc, resetBaseline } from './helpers';
 
 function report(errors: string[]): string {
   return `页面加载后出现 ${errors.length} 条控制台 error（headless 测试抓不到这类问题）：\n` +
@@ -24,7 +24,11 @@ function report(errors: string[]): string {
 
 test.describe('控制台洁净度', () => {
   test('有图状态：基线加载后零 error、零页面异常、零用户通知', async ({ page, telemetry }) => {
-    await openApp(page);
+    // 必须显式复位（`e2e.reset` + 重载 + 视口归零）。旧写法只 `openApp(page)`，
+    // 于是本用例**依赖上一个 spec 收尾时后端还剩什么**：前面某个 spec 若清了图，
+    // 这里就会静默超时在 `waitForDiagram`（等 `rois.length > 0`）。
+    // 测试之间不许共享后端状态——这是顺序依赖，不是产品缺陷。
+    await resetBaseline(page);
 
     // 等渲染管线真正跑过一帧再下结论，否则只是"还没跑到"
     await page.waitForFunction(() => {

@@ -33,6 +33,9 @@ import { createInspectorCallbacks } from './services/InspectorBridge';
 import { createToolbarCallbacks } from './services/ToolbarBridge';
 import { createSidebarCallbacks } from './services/SidebarBridge';
 import { registerWebMcpAndInspectionHandles } from './services/WebMcpBridge';
+import { applyTheme, createFooterDom, createHudDom, createWorkspaceDom } from './app/dom';
+import { createFooterUpdater } from './app/footer';
+import { setupDraftRecovery } from './app/draftRecovery';
 import {
   showProvenanceGate,
   reportBackendFailure,
@@ -47,12 +50,7 @@ async function bootstrap() {
 
   applyLocaleToDocument();
 
-  const savedTheme = localStorage.getItem('straditize-theme');
-  if (savedTheme === 'dark') {
-    document.body.classList.remove('theme-light');
-  } else {
-    document.body.classList.add('theme-light');
-  }
+  applyTheme();
 
   const rpcClient = new RpcClient();
   let authModalInstance: AuthModal | null = null;
@@ -128,29 +126,8 @@ async function bootstrap() {
   let inspector: any = null;
   let toolbar: any = null;
 
-  const workspace = document.createElement('main');
-  workspace.className = 'app-workspace';
-
-  const canvasWrapper = document.createElement('div');
-  canvasWrapper.className = 'canvas-wrapper';
-
-  const leftDrawerTab = document.createElement('div');
-  leftDrawerTab.className = 'drawer-toggle-tab left-tab';
-  leftDrawerTab.style.display = 'none';
-  workspace.appendChild(leftDrawerTab);
-
-  const rightDrawerTab = document.createElement('div');
-  rightDrawerTab.className = 'drawer-toggle-tab right-tab';
-  rightDrawerTab.style.display = 'none';
-  workspace.appendChild(rightDrawerTab);
-
-  function updateDrawers() {
-    leftDrawerTab.title = t('drawer.taxaTitle');
-    leftDrawerTab.innerHTML = `<span>›</span><span>${t('drawer.taxa')}</span>`;
-    rightDrawerTab.title = t('drawer.inspectorTitle');
-    rightDrawerTab.innerHTML = `<span>‹</span><span>${t('drawer.inspector')}</span>`;
-  }
-  updateDrawers();
+  const { workspace, canvasWrapper, leftDrawerTab, rightDrawerTab, updateDrawers } =
+    createWorkspaceDom();
 
   const SIDEBAR_COLLAPSED_KEY = 'straditize_sidebar_collapsed';
   const INSPECTOR_COLLAPSED_KEY = 'straditize_inspector_collapsed';
@@ -187,12 +164,7 @@ async function bootstrap() {
   leftDrawerTab.addEventListener('click', () => setSidebarCollapsed(false));
   rightDrawerTab.addEventListener('click', () => setInspectorCollapsed(false));
 
-  const hud = document.createElement('div');
-  hud.id = 'canvas-hud';
-  hud.className = 'canvas-hud';
-  hud.innerHTML = `
-    <span id="hud-text">${t('hud.default')}</span>
-  `;
+  const hud = createHudDom();
   canvasWrapper.appendChild(hud);
 
   let hudTimer: number | null = null;
@@ -211,28 +183,7 @@ async function bootstrap() {
     }, duration);
   }
 
-  const footer = document.createElement('footer');
-  footer.className = 'app-footer';
-  footer.innerHTML = `
-    <div class="footer-left" style="display: flex; align-items: center; gap: 8px;">
-      <div class="footer-item" id="footer-dimensions">${t('footer.image')}: <code>${initialData.imageWidth}×${initialData.imageHeight}</code></div>
-      <span style="color: var(--border-color); opacity: 0.8;">│</span>
-      <div class="footer-item" id="footer-zoom">${t('footer.zoom')}: <code>100%</code></div>
-      <span style="color: var(--border-color); opacity: 0.8;">│</span>
-      <div class="footer-item" id="footer-cursor">${t('footer.cursor')}: <code>--</code></div>
-      <span style="color: var(--border-color); opacity: 0.8;">│</span>
-      <div class="footer-item" id="footer-depth">${t('footer.depth')}: <strong style="font-size: 11.5px; color: var(--text-primary);">--</strong></div>
-      <span style="color: var(--border-color); opacity: 0.8;">│</span>
-      <div class="footer-item" id="footer-pollen">${t('footer.abundance')}: <strong style="font-size: 11.5px; color: var(--accent-blue);">--</strong></div>
-      <span style="color: var(--border-color); opacity: 0.8;">│</span>
-      <div class="footer-item" id="footer-tool-mode">${t('footer.mode')}: <strong>${t('footer.modeSelect')}</strong></div>
-    </div>
-    <div class="footer-right" style="display: flex; align-items: center; gap: 8px;">
-      <div class="footer-item" id="footer-active-taxa">${t('footer.activeTaxa')}: <strong>--</strong></div>
-      <span style="color: var(--border-color); opacity: 0.8;">│</span>
-      <div class="footer-item" id="footer-anchors">${t('footer.anchors')}: <code>--</code></div>
-    </div>
-  `;
+  const footer = createFooterDom(initialData);
 
   const cleanupManager = new CleanupManager(
     rpcClient,
@@ -654,33 +605,8 @@ async function bootstrap() {
 
   workflowController.updateWorkflowBar();
 
-  function updateFooter() {
-    const col = canvasComponent.getActiveColumn();
-    const activeEl = document.getElementById('footer-active-taxa');
-    const anchorsEl = document.getElementById('footer-anchors');
-    const dimEl = document.getElementById('footer-dimensions');
-    const zoomEl = document.getElementById('footer-zoom');
-
-    if (dimEl) {
-      dimEl.innerHTML = `${t('footer.image')}: <code>${canvasComponent.data.imageWidth}×${canvasComponent.data.imageHeight}</code>`;
-    }
-    if (zoomEl) {
-      zoomEl.innerHTML = `${t('footer.zoom')}: <code>${Math.round(canvasComponent.viewport.scale * 100)}%</code>`;
-    }
-    if (activeEl) {
-      activeEl.innerHTML = col
-        ? `${t('footer.activeTaxa')}: <span style="color: ${col.color};">●</span> <strong>${col.name}</strong>`
-        : `${t('footer.activeTaxa')}: <strong>--</strong>`;
-    }
-    if (anchorsEl) {
-      if (col) {
-        const manual = col.controlPoints.filter((p) => p.isManual).length;
-        anchorsEl.innerHTML = `${t('footer.anchors')}: <code>${manual} ${t('footer.manual')} / ${col.controlPoints.length} ${t('footer.total')}</code>`;
-      } else {
-        anchorsEl.innerHTML = `${t('footer.anchors')}: <code>--</code>`;
-      }
-    }
-  }
+  // 页脚刷新：实现移到 app/footer.ts（纯读，12 处回调共用）。
+  const updateFooter = createFooterUpdater({ getCanvas: () => canvasComponent });
 
   canvasComponent.canvas.addEventListener('wheel', () => {
     toolbar?.updateScale(canvasComponent.viewport.scale);
@@ -700,91 +626,19 @@ async function bootstrap() {
   toolbar?.updateScale(canvasComponent.viewport.scale);
   toolbar?.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
 
-  try {
-    const saved = localStorage.getItem(AUTOSAVE_KEY);
-    if (saved) {
-      const draft = JSON.parse(saved);
-      if (draft && draft.data && Array.isArray(draft.data.columns) && draft.data.columns.length > 0 && (Date.now() - draft.timestamp < 7 * 86400 * 1000)) {
-        const draftTime = new Date(draft.timestamp).toLocaleTimeString();
-        const banner = document.createElement('div');
-        banner.className = 'draft-recovery-banner';
-        banner.style.cssText = 'position: fixed; top: 48px; left: 50%; transform: translateX(-50%); z-index: 9999;';
-        banner.innerHTML = `
-          <div class="app-toast-badge" style="border: 1px solid var(--accent-blue);">
-            <span>${t('draft.found', { time: draftTime, count: draft.data.columns.length })}</span>
-            <div style="display: flex; gap: 6px;">
-              <button id="btn-restore-draft" class="ui-btn ui-btn--primary" style="padding: 2px 8px; font-size: 10px;">${t('draft.restore')}</button>
-              <button id="btn-discard-draft" class="ui-btn ui-btn--secondary" style="padding: 2px 8px; font-size: 10px;">${t('draft.ignore')}</button>
-            </div>
-          </div>
-        `;
-        document.body.appendChild(banner);
-        // 【恢复草稿】必须真正落到后端（B-05）。
-        //
-        // 旧实现只 `loadNewDiagram(draft.data)` + `history.reset(...)`，**零个 RPC**：
-        // 界面显示 28 列而后端 0 列，用户对着一个后端并不存在的状态继续操作，
-        // 之后任何列级 RPC 都会打空（违反 ARCHITECTURE §2「禁止静默兜底」）。
-        // 现在把草稿翻译成工程包载荷下发 `project.load`，再用后端权威数据重建镜像；
-        // 失败就冒泡（后端失败 → 红框 + toast），绝不"前端填上就算恢复"。
-        banner.querySelector('#btn-restore-draft')?.addEventListener('click', () => {
-          const btn = banner.querySelector('#btn-restore-draft') as HTMLButtonElement | null;
-          if (btn) {
-            btn.disabled = true;
-            btn.textContent = '正在恢复到后端...';
-          }
-          void projectManager
-            .restoreDraft(draft.data)
-            .then(({ data, unrestored }) => {
-              // 镜像与撤销基线都按**后端返回的权威数据**重建；
-              // 草稿只是"请求"，后端才是事实来源。
-              canvasComponent.loadNewDiagram(data);
-              history.reset(
-                data.columns,
-                data.activeTaxaId,
-                data.calibration,
-                data.roi,
-                data.rois,
-                data.primary_roi_id,
-                data.active_roi_id
-              );
-              // 草稿里存过清理叠层就先按后端重算一次掩膜（此时 ROI 确实存在，
-              // 不会再出现 B-07 那种"归零后拿旧 roi_id 重算"的必然失败）。
-              if ((data.line_candidates ?? []).length > 0) {
-                void cleanupManager.recomposeCleanupState('恢复草稿后重算清理掩膜');
-              }
-              sidebar?.updateData(canvasComponent.data);
-              inspector?.updateData(canvasComponent.data);
-              toolbar?.updateHistoryState();
-              updateFooter();
-              banner.remove();
-              if (unrestored.length > 0) {
-                // 恢复是成功的，但有部分状态工程包承载不了 —— 必须明说，
-                // 否则用户会以为清理笔迹/排除区也回来了。
-                setHudNotice(
-                  `${t('draft.restored')}；未随草稿恢复：${unrestored.join('；')}`,
-                  9000
-                );
-              } else {
-                setHudNotice(t('draft.restored'), 3500);
-              }
-            })
-            .catch((err: unknown) => {
-              if (btn) {
-                btn.disabled = false;
-                btn.textContent = t('draft.restore');
-              }
-              reportBackendFailure('恢复自动存档草稿', err);
-            });
-        });
-        banner.querySelector('#btn-discard-draft')?.addEventListener('click', () => {
-          localStorage.removeItem(AUTOSAVE_KEY);
-          banner.remove();
-        });
-      }
-    }
-  } catch {
-    // ignore
-  }
+  setupDraftRecovery({
+    projectManager,
+    history,
+    getCanvas: () => canvasComponent,
+    cleanupManager,
+    getSidebar: () => sidebar,
+    getInspector: () => inspector,
+    getToolbar: () => toolbar,
+    updateFooter,
+    setHudNotice,
+    reportBackendFailure,
+    autosaveKey: AUTOSAVE_KEY,
+  });
 
   // 标度变更：**只局部同步标度字段**，不重建整棵数据。
   //

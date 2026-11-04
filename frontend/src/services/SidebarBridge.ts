@@ -3,7 +3,10 @@ import { GeologyCanvas } from '../components/GeologyCanvas';
 import { Sidebar } from '../components/Sidebar';
 import { Inspector } from '../components/Inspector';
 import { Toolbar } from '../components/Toolbar';
-import { reportBackendFailure } from '../main';
+// 直接取定义处，别从 `../main` 借道：那会让 main ↔ SidebarBridge 形成循环依赖
+// （main 装配它、它又反过来 import main 的 re-export），运行时顺序一变就抛
+// "Cannot access before initialization"。定义在 ProvenanceGate，main 只是转发。
+import { reportBackendFailure } from './ProvenanceGate';
 
 export interface SidebarBridgeParams {
   rpcClient: RpcClient;
