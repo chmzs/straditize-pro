@@ -135,11 +135,11 @@ STRADITIZE_E2E_PORT=22901 pixi run test-contract        # 5 passed（真实 Edge
 
 ```bash
 # Critical：进入步骤 6 时前端自己写入从未有人读过的刻度值
-STRADITIZE_ZERO_PORT=22915 pixi run python scripts/lead_probe/serve_zero.py &
-STRADITIZE_ZERO_PORT=22915 node scripts/lead_probe/verify_f01_fabricated_ticks.mjs
+STRADITIZE_ZERO_PORT=22915 pixi run serve-zero &            # 零态后端（pixi 任务 serve-zero）
+STRADITIZE_ZERO_PORT=22915 pixi run verify-f01              # 复跑 F-01（pixi 任务 verify-f01）
 
 # P1：重分列抹掉 x_ticks 的触发条件表（判据是"列数是否变化"）
-pixi run python scripts/lead_probe/xticks_wipe_threshold.py
+pixi run python scripts/lead_probe/xticks_wipe_threshold.py   # 阈值探针（三态输出，见 probe-index.md）
 
 # P1：换图后旧几何在新图上继续剔除墨迹
 pixi run python scripts/lead_probe/verify_f2_cross_image.py
@@ -239,7 +239,7 @@ session.detect_columns(HOYA_X_BOUNDS, HOYA_Y_BOUNDS)  # 预跑分列
 | 3 | `pixi run test` | `512 passed, 3 skipped, 92 subtests`（Lead 实测 2026-10-23 03:4x） | 既有后端测试无回归。⚠️ 原写 `317`（10-19 基线）→ `398`（10-23 00:0x）→ `512`（10-23 03:4x 收口） |
 | 4 | `cd frontend && STRADITIZE_ZERO_PORT=22920 npx playwright test --config=playwright.zero.config.ts` | `2 passed`，exit 0 | 从零旅程可复跑 |
 | 5 | `python -c "import json;d=json.load(open('docs/findings/journey-trace.json',encoding='utf-8'));print(len(d['steps']), d['steps'][8]['backend']['tar']['dataCsvRows'])"` | `9 111` | 9 步快照齐全；导出真有 111 行数据（不是空壳） |
-| 6 | `pixi run python scripts/lead_probe/verify_f01_fabricated_ticks.mjs`（先起 `serve_zero.py`） | `"calibrateXTicks_请求数": 8` 且请求体里 `value` 恰为 `0` 与 `20` | 独立复现最严重的缺陷 |
+| 6 | `pixi run verify-f01`（先 `pixi run serve-zero &`） | `"calibrateXTicks_请求数": 8` 且请求体里 `value` 恰为 `0` 与 `20` | 独立复现最严重的缺陷 |
 
 **自查清单**（回答"这些是不是编的"）：
 

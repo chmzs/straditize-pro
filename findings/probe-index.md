@@ -34,13 +34,13 @@
 
 | 文件 | 用途 | 入口 |
 |---|---|---|
-| `check_rpc_spec_drift.py` | RPC 文档 ↔ 代码漂移检查 | `pixi run lint` |
-| `record_tutorials.py` | 教程截图录制 | pixi 任务 |
-| `benchmark_two_axis.py` | benchmark 图的逐列精度基准 | `pixi run bench-two-axis` |
+| `check_rpc_spec_drift.py` | RPC 文档 ↔ 代码漂移检查 | **pixi 任务**：`lint-rpc-doc`（`pixi run lint` 的一部分） |
+| `record_tutorials.py` | 教程截图录制 | **pixi 任务**：`record-tutorials` |
+| `benchmark_two_axis.py` | benchmark 图的逐列精度基准 | **pixi 任务**：`bench-two-axis` |
 | `bench_golden.py`、`truth/` 中的结构性判据脚本 | 真值/基准生成 | 手动（结论进 `tests/data/`） |
 | `prod_gate/probe_sensitivity_check.py`、`probe_self_evidence.py` | 门禁自证：证明对照组真改到了被操纵的变量 | 手动 |
-| `lead_probe/serve_zero.py` | 零态后端（供 verify 脚本用） | 手动 |
-| `lead_probe/verify_f01_fabricated_ticks.mjs`、`verify_f1_roi_rollback.py`、`verify_f2_cross_image.py` | 三条缺陷的复跑入口 | 手动，见 `docs/findings/README.md` §2 |
+| `lead_probe/serve_zero.py` | 零态后端（供 verify 脚本用） | **pixi 任务**：`serve-zero` |
+| `lead_probe/verify_f01_fabricated_ticks.mjs`、`verify_f1_roi_rollback.py`、`verify_f2_cross_image.py` | 三条缺陷的复跑入口 | **pixi 任务**：`verify-f01` / `verify-f1` / `verify-f2`（前置 `serve-zero`） |
 
 ## 已知坏件（已修，留作教训）
 
