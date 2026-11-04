@@ -12,7 +12,7 @@
  * 断言只依赖几何，不依赖 grid-area 命名，重构顶栏内部类名不会误报。
  */
 import { expect, test } from './fixtures';
-import { openApp } from './helpers';
+import { resetBaseline } from './helpers';
 
 const SIZES = [
   { label: '1366×768', width: 1366, height: 768 },
@@ -24,7 +24,7 @@ test.describe('应用外壳布局：顶栏两行与尺寸下限', () => {
   for (const size of SIZES) {
     test(`${size.label}：顶栏两行不重叠，导出/设置/步骤按钮完整可见`, async ({ page }) => {
       await page.setViewportSize({ width: size.width, height: size.height });
-      await openApp(page);
+      await resetBaseline(page);
 
       const boxes = await page.evaluate(() => {
         const rect = (sel: string) => {

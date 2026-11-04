@@ -22,7 +22,7 @@
  * 分列竖线反解——反解要世界坐标 + 网格搜索，误差全进判据里。
  */
 import { expect, test } from './fixtures';
-import { openApp } from './helpers';
+import { resetBaseline } from './helpers';
 import type { Page } from '@playwright/test';
 
 /** 与 `Viewport.fitToScreen` 同一条公式（padding 60 由 `GeologyCanvas.fitToScreen` 传入）。 */
@@ -117,7 +117,7 @@ test.describe('Issue #8：适应屏幕与容器尺寸', () => {
     // 1680×1050 的窗口下 `.canvas-wrapper` 实测为 1140×943（左右抽屉各占固定宽度，
     // 顶栏 79px + 底栏 28px），正是 issue 里点名的容器尺寸。
     await resizeWindow(page, 1680, 1050);
-    await openApp(page);
+    await resetBaseline(page);
     await pressFit(page);
 
     const m = await expectFittedToCurrentContainer(page, 'C1');
@@ -142,7 +142,7 @@ test.describe('Issue #8：适应屏幕与容器尺寸', () => {
     //（"视口停留在首次适应屏幕时的布局"）。旧实现里 `handleResize()` 只改画布
     // 后备缓冲，视口一个字节都不动，于是图像按旧比例绘制，偏出中心。
     await resizeWindow(page, 1440, 960);
-    await openApp(page);
+    await resetBaseline(page);
     await pressFit(page);
     const small = await expectFittedToCurrentContainer(page, 'C2 前置（小容器）');
     expect(small.containerW, '前置：小窗口下容器应明显更窄').toBeLessThan(1100);
@@ -157,7 +157,7 @@ test.describe('Issue #8：适应屏幕与容器尺寸', () => {
     // 没有 ResizeObserver 时这类变化完全没有信号：`window.resize` 不会触发，
     // 只有 `setSidebarCollapsed()` 顺带调一次 `handleResize()`。
     await resizeWindow(page, 1680, 1050);
-    await openApp(page);
+    await resetBaseline(page);
     await pressFit(page);
     const before = await expectFittedToCurrentContainer(page, 'C3 前置');
 
@@ -173,7 +173,7 @@ test.describe('Issue #8：适应屏幕与容器尺寸', () => {
 
   test('C4 用户手动缩放后，容器变化不得把视口打回 fit', async ({ page }) => {
     await resizeWindow(page, 1680, 1050);
-    await openApp(page);
+    await resetBaseline(page);
     await pressFit(page);
 
     // 手动放大两档（`=` 键走 `Viewport.zoomStepAt`，与滚轮同一条路径）。

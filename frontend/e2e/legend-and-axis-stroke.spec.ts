@@ -205,7 +205,7 @@ test.describe('图例色块与画布实际绘制同源（任务 1）', () => {
   });
 
   test('L3 浏览器里三个色块的计算色都解析出了真实颜色（不是 currentColor）', async ({ page }) => {
-    await openApp(page);
+    await resetBaseline(page);
     const sec = await page.evaluate(() =>
       getComputedStyle(document.body).getPropertyValue('color')
     );
@@ -274,6 +274,8 @@ test.describe('轴线粗自动实测（任务 2）', () => {
       group_id: defaultId ?? groups[0].id,
       updates: { axis_stroke_px: stroke + 3 },
     });
+    // 这里必须是 openApp（只重载，不 reset）：后端刚写进去的 axis_stroke_px 要保留。
+    // 用 resetBaseline 会 e2e.reset 掉这次写入，位移永远是 0。
     await openApp(page);
     await gotoStage(page, 6);
     await toHundred();

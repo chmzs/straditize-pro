@@ -14,7 +14,7 @@
  * ③ **非法斜率当场拒绝**（0 会让整列恒为 0、NaN/inf 会污染全部换算）。
  */
 import { expect, test } from './fixtures';
-import { backendRpc, gotoStage, openApp, readColumnScale } from './helpers';
+import { backendRpc, gotoStage, readColumnScale, resetBaseline } from './helpers';
 
 const RID = 'roi_1';
 const GID = 'roi_1_grp1';
@@ -36,7 +36,7 @@ test.describe('步骤 6 组斜率标定（点齿模型的硬约束）', () => {
     page,
     telemetry,
   }) => {
-    await openApp(page);
+    await resetBaseline(page);
     await gotoStage(page, 6);
 
     const before = await readColumnScale(page, 0);
@@ -61,7 +61,7 @@ test.describe('步骤 6 组斜率标定（点齿模型的硬约束）', () => {
   });
 
   test('② 重载页面后标定仍在（证伪"只活在浏览器内存里"）', async ({ page }) => {
-    await openApp(page);
+    await resetBaseline(page);
     await gotoStage(page, 6);
     await applyGroupSlope(page, 0.08);
 
@@ -82,7 +82,7 @@ test.describe('步骤 6 组斜率标定（点齿模型的硬约束）', () => {
   });
 
   test('③ 非法斜率必须当场拒绝，且不改变后端状态', async ({ page }) => {
-    await openApp(page);
+    await resetBaseline(page);
     await gotoStage(page, 6);
 
     // 前置：先有一个合法标定，用来验证"非法写入没有把它冲掉"。
