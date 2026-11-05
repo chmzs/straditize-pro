@@ -121,6 +121,10 @@ export function registerWebMcpAndInspectionHandles(p: WebMcpBridgeParams): void 
           scale: p.canvasComponent.viewport.scale,
           panX: p.canvasComponent.viewport.panX,
           panY: p.canvasComponent.viewport.panY,
+          // 底图滤镜与透视遮罩也属于视口状态，且是「有没有生效」的唯一可读证据：
+          // 高对比度曾因模板里没有 #select-image-mode 而整条链失效，靠像素差很难判。
+          imageMode: p.canvasComponent.viewport.imageMode,
+          showBinaryOverlay: p.canvasComponent.viewport.showBinaryOverlay,
         },
         rois: (data.rois ?? []).map((r) => ({
           id: r.id,

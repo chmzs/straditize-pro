@@ -313,6 +313,18 @@ export class Toolbar {
 
         <!-- 滤镜与二值透视：运行时被搬到底部画布视口栏 -->
         <div class="btn-group" id="tb-binary-group" style="display: flex; align-items: center; gap: 3px;">
+          <!--
+            底图滤镜下拉：normal / invert / contrast。
+            #select-image-mode 曾被 Toolbar 反复 querySelector 取值、绑 change，
+            但模板里从来没有这个元素——于是 high-contrast 既无快捷键（KeyC 那条不可达），
+            也无 UI 入口，等于功能不存在。这里补齐元素，已有的 handler 立即生效。
+            不含 binary：二值化是「透视遮罩」开关（旁边那个按钮 / 快捷键 B），语义不同。
+          -->
+          <select id="select-image-mode" class="ui-btn ui-btn--quiet ui-btn--xs" title="${t('toolbar.filterTitle')}" style="padding: 2px 4px; font-size: 10.5px; cursor: pointer;">
+            <option value="normal">${t('toolbar.filterNormal')}</option>
+            <option value="invert">${t('toolbar.filterInvert')}</option>
+            <option value="contrast">${t('toolbar.filterContrast')}</option>
+          </select>
           <button id="btn-toggle-binary" class="ui-btn ui-btn--quiet ui-btn--xs ${this.isBinaryOverlayActive ? 'active' : ''}" title="${t('toolbar.binaryTitle')}" style="padding: 3px 6px; font-size: 10.5px;">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="9"/>

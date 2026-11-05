@@ -108,3 +108,27 @@ test.describe('应用外壳布局：顶栏两行与尺寸下限', () => {
     });
   }
 });
+
+test.describe('底图滤镜入口（#select-image-mode）', () => {
+  test('下拉真的存在，选「高对比」后视口 imageMode 变 contrast', async ({ page }) => {
+    await resetBaseline(page);
+    const sel = page.locator('#select-image-mode');
+    await expect(
+      sel,
+      '#select-image-mode 必须存在于工具栏：历史上只 querySelector 取值、模板里却没有元素，于是高对比度整条链从未生效'
+    ).toBeVisible();
+
+    const readMode = () =>
+      page.evaluate(() => {
+        const api = (window as unknown as { __straditize?: { getState: () => { viewport?: { imageMode?: string } } } })
+          .__straditize;
+        return api?.getState().viewport?.imageMode ?? null;
+      });
+
+    await sel.selectOption('contrast');
+    await expect.poll(readMode, { timeout: 5_000 }).toBe('contrast');
+
+    await sel.selectOption('normal');
+    await expect.poll(readMode, { timeout: 5_000 }).toBe('normal');
+  });
+});
