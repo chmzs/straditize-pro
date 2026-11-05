@@ -43,71 +43,20 @@ def export_scientific_xlsx(
             _write_meta_sheet(writer, meta_info)
 
         # ====================================================================
-        # 2. ROI Sheets: One sheet per ROI, sheet name = ROI name (Contract §4.2)
-        # ====================================================================
-        if roi_dfs:
-            for roi_name, df in roi_dfs.items():
-                clean_sheet_name = str(roi_name)[:31]
-                df.to_excel(writer, sheet_name=clean_sheet_name, index=False)
-        elif pollen_df is not None:
-            pollen_df.to_excel(writer, sheet_name="pollen", index=False)
-
-        # ====================================================================
-        # 3. age-depth Sheet (Optional)
-        # ====================================================================
-        if include_meta_sheets and age_depth_df is not None and not age_depth_df.empty:
-            age_depth_df.to_excel(writer, sheet_name="age-depth", index=False)
-
-        # ====================================================================
-        # 4. ensemble tables (Section 9, Optional)
-        # ====================================================================
-        if include_meta_sheets and ensemble_tables:
-            if len(ensemble_tables) == 1:
-                t0 = ensemble_tables[0]
-                sheet_label = str(t0.get("name") or "Age_Uncertainty_U1000")[:31]
-                df_ens = pd.DataFrame(t0.get("data", []), columns=t0.get("columns"))
-                df_ens.to_excel(writer, sheet_name=sheet_label, index=False)
-            else:
-                for idx, t in enumerate(ensemble_tables):
-                    sheet_label = str(t.get("name") or f"ensemble_{idx + 1}")[:31]
-                    df_ens = pd.DataFrame(t.get("data", []), columns=t.get("columns"))
-                    df_ens.to_excel(writer, sheet_name=sheet_label, index=False)
-
-        # ====================================================================
-        # 5. qc_notes Sheet (Optional)
-        # ====================================================================
-        if include_meta_sheets and qc_notes:
-            df_qc = pd.DataFrame(qc_notes)
-            df_qc.to_excel(writer, sheet_name="qc_notes", index=False)
-
-        # ====================================================================
-        # 6. readme Sheet (Optional)
-        # ====================================================================
-        if include_meta_sheets and include_readme:
-            readme_data = [
-                {
-                    "Item": "Software",
-                    "Description": "Straditize Pro v2.0 (Modern Geological Stratigraphic Digitizer)",
-                },
-                {
-                    "Item": "Export Timestamp",
-                    "Description": datetime.now(timezone.utc).isoformat(),
-                },
-                {
-                    "Item": "Pollen Matrix Standard",
-                    "Description": "Depths in 1st column. Unobserved taxa strictly filled as 0.00 (never NA).",
-                },
-                {
-                    "Item": "LiPD Compatibility",
-                    "Description": "Conforms to Linked Paleo Data (LiPD) & PaCTS community standards.",
-                },
-                {
-                    "Item": "R Ecosystem",
-                    "Description": "Compatible with rioja::strat.plot, vegan, and geoChronR.",
-                },
-            ]
-            df_readme = pd.DataFrame(readme_data)
-            df_readme.to_excel(writer, sheet_name="readme", index=False)
+        _write_data_sheets(
+            writer,
+            roi_dfs=roi_dfs,
+            pollen_df=pollen_df,
+            include_meta_sheets=include_meta_sheets,
+            age_depth_df=age_depth_df,
+            ensemble_tables=ensemble_tables,
+        )
+        _write_doc_sheets(
+            writer,
+            include_meta_sheets=include_meta_sheets,
+            qc_notes=qc_notes,
+            include_readme=include_readme,
+        )
 
     # Styling pass with openpyxl
     bio.seek(0)
@@ -417,3 +366,94 @@ def _serialize_workbook(wb: openpyxl.Workbook, output_path: str | None) -> bytes
         with open(output_path, "wb") as f:
             f.write(xlsx_bytes)
     return xlsx_bytes
+
+
+def _write_data_sheets(
+    writer: pd.ExcelWriter,
+    *,
+    roi_dfs: dict[str, pd.DataFrame] | None,
+    pollen_df: pd.DataFrame | None,
+    include_meta_sheets: bool,
+    age_depth_df: pd.DataFrame | None,
+    ensemble_tables: list[dict[str, Any]] | None,
+) -> None:
+    """数据类 sheet：每 ROI 一张（§4.2，无 ROI 时退回单张 pollen）。
+
+    ROI 优先于 pollen：多 ROI 工程里 pollen 只是其中一张，单独再写会重复。
+    sheet 名截断到 31 字符（Excel 硬限制），超出会被 openpyxl 拒绝。
+    """
+    # 2. ROI Sheets: One sheet per ROI, sheet name = ROI name (Contract §4.2)
+    # ====================================================================
+    if roi_dfs:
+        for roi_name, df in roi_dfs.items():
+            clean_sheet_name = str(roi_name)[:31]
+            df.to_excel(writer, sheet_name=clean_sheet_name, index=False)
+    elif pollen_df is not None:
+        pollen_df.to_excel(writer, sheet_name="pollen", index=False)
+
+    # ====================================================================
+    # 3. age-depth Sheet (Optional)
+    # ====================================================================
+    if include_meta_sheets and age_depth_df is not None and not age_depth_df.empty:
+        age_depth_df.to_excel(writer, sheet_name="age-depth", index=False)
+
+    # ====================================================================
+    # 4. ensemble tables (Section 9, Optional)
+    # ====================================================================
+    if include_meta_sheets and ensemble_tables:
+        if len(ensemble_tables) == 1:
+            t0 = ensemble_tables[0]
+            sheet_label = str(t0.get("name") or "Age_Uncertainty_U1000")[:31]
+            df_ens = pd.DataFrame(t0.get("data", []), columns=t0.get("columns"))
+            df_ens.to_excel(writer, sheet_name=sheet_label, index=False)
+        else:
+            for idx, t in enumerate(ensemble_tables):
+                sheet_label = str(t.get("name") or f"ensemble_{idx + 1}")[:31]
+                df_ens = pd.DataFrame(t.get("data", []), columns=t.get("columns"))
+                df_ens.to_excel(writer, sheet_name=sheet_label, index=False)
+
+    # ====================================================================
+
+
+def _write_doc_sheets(
+    writer: pd.ExcelWriter,
+    *,
+    include_meta_sheets: bool,
+    qc_notes: list[dict[str, Any]] | None,
+    include_readme: bool,
+) -> None:
+    """说明类 sheet：qc_notes 与 readme（软件版本、导出时间、数据标准、R 生态兼容）。"""
+    # 5. qc_notes Sheet (Optional)
+    # ====================================================================
+    if include_meta_sheets and qc_notes:
+        df_qc = pd.DataFrame(qc_notes)
+        df_qc.to_excel(writer, sheet_name="qc_notes", index=False)
+
+    # ====================================================================
+    # 6. readme Sheet (Optional)
+    # ====================================================================
+    if include_meta_sheets and include_readme:
+        readme_data = [
+            {
+                "Item": "Software",
+                "Description": "Straditize Pro v2.0 (Modern Geological Stratigraphic Digitizer)",
+            },
+            {
+                "Item": "Export Timestamp",
+                "Description": datetime.now(timezone.utc).isoformat(),
+            },
+            {
+                "Item": "Pollen Matrix Standard",
+                "Description": "Depths in 1st column. Unobserved taxa strictly filled as 0.00 (never NA).",
+            },
+            {
+                "Item": "LiPD Compatibility",
+                "Description": "Conforms to Linked Paleo Data (LiPD) & PaCTS community standards.",
+            },
+            {
+                "Item": "R Ecosystem",
+                "Description": "Compatible with rioja::strat.plot, vegan, and geoChronR.",
+            },
+        ]
+        df_readme = pd.DataFrame(readme_data)
+        df_readme.to_excel(writer, sheet_name="readme", index=False)
