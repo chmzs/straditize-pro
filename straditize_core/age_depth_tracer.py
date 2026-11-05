@@ -332,6 +332,175 @@ def _prepare_search_window(
     )
 
 
+@dataclass(frozen=True)
+class _Response:
+    """两幅响应图（原始 / 平滑）与「用哪个通道定位中值」的判定。"""
+
+    dark: np.ndarray
+    chroma: np.ndarray
+    smoothed: np.ndarray
+    chroma_smoothed: np.ndarray
+    use_chroma: bool
+    chroma_mode_reason: str
+    chroma_available: bool
+
+
+def _build_response_channels(
+    window: _SearchWindow,
+    exclude_mask: np.ndarray | None,
+) -> _Response:
+    """段 3-6：双响应 → 擦规则线 → 垂向平滑 → 通道选择候选。
+
+    darkness 与 chroma 必须一起算：中值由 chroma 定位、包络由 darkness 测量，
+    两者共享同一套「擦规则线 / 平滑」几何；拆开会让两幅图落在不同的像素基础上。
+    """
+    img_arr = window.img_arr
+    gray_full = window.gray_full
+    rx0, ry0, rx1, ry1 = window.rx0, window.ry0, window.rx1, window.ry1
+    h, w = img_arr.shape[:2]
+    # ---- 3. Two response channels: darkness and chromatic ink ----------------
+    dark = (255.0 - gray_full[ry0:ry1, rx0:rx1]).astype(np.float32)
+    # Published age-depth figures very often draw the median as a *coloured* dashed line
+    # (red is common) over a grey ensemble cloud whose outline is black-dashed. Collapsing
+    # to greyscale throws away the only signal that separates them: red (255,0,0) is grey 76
+    # while black is 0, so a darkness-only tracker locks onto the envelope outline and
+    # traces a boundary instead of the median.
+    #
+    # The response is a projection onto the figure's own dominant chromatic direction, not
+    # HSV chroma. Measured on a red-dashed figure: chroma along the line swings between 0
+    # and 114 row to row (the dashes and the blend into the grey cloud both shrink it),
+    # whereas R - mean(G,B) stays well separated from grey and recovers 777 of 843 rows at
+    # a threshold of 12. Projecting rather than taking a magnitude keeps this hue-agnostic:
+    # a blue or green median projects just as cleanly.
+    if img_arr.ndim == 3:
+        rgb = img_arr[..., :3].astype(np.int16)
+        centred = rgb - rgb.mean(axis=2, keepdims=True)
+        ink_mask = (rgb.max(axis=2) - rgb.min(axis=2)) > 25
+        if ink_mask.sum() >= 50:
+            direction = centred[ink_mask].mean(axis=0).astype(np.float32)
+            norm = float(np.linalg.norm(direction))
+            if norm > 1e-6:
+                projected = centred.astype(np.float32) @ (direction / norm)
+                chroma = np.clip(projected[ry0:ry1, rx0:rx1], 0.0, None)
+            else:
+                chroma = np.zeros_like(dark)
+        else:
+            chroma = np.zeros_like(dark)
+    else:
+        chroma = np.zeros_like(dark)
+
+    # ---- 4. Exclusion mask (user eraser brush) ------------------------------
+    if exclude_mask is not None:
+        em = np.asarray(exclude_mask, dtype=bool)
+        if em.shape[:2] == (h, w):
+            dark[em[ry0:ry1, rx0:rx1]] = 0.0
+            chroma[em[ry0:ry1, rx0:rx1]] = 0.0
+
+    rh, rw = dark.shape
+    if rh < 3 or rw < 3:
+        raise ValueError(
+            "Search window is degenerate; recalibrate or widen the depth range."
+        )
+
+    # ---- 5. Erase long straight rules (plot frame, axis lines, grid lines) ---
+    # A vertical rule spans nearly the full window height; a horizontal grid line spans
+    # nearly the full width. The age-depth curve itself is never straight across the
+    # whole panel, so both are safe to delete. Erased rows are recovered by interpolation.
+    col_dark_frac = (dark > 60.0).mean(axis=0)
+    long_v = col_dark_frac > 0.55
+    if long_v.any():
+        # Dilate by one column so the rule's anti-aliased shoulders go with it.
+        widened = long_v.copy()
+        widened[1:] |= long_v[:-1]
+        widened[:-1] |= long_v[1:]
+        dark[:, widened] = 0.0
+        chroma[:, widened] = 0.0
+
+    row_dark_frac = (dark > 60.0).mean(axis=1)
+    long_h = row_dark_frac > 0.75
+    if long_h.any():
+        dark[long_h, :] = 0.0
+        chroma[long_h, :] = 0.0
+
+    # ---- 6. Vertical smoothing bridges dashed strokes -----------------------
+    if rh >= 5:
+        smoothed = gaussian_filter(dark, sigma=(1.6, 0.8))
+        chroma_smoothed = gaussian_filter(chroma, sigma=(1.6, 0.8))
+    else:
+        smoothed = dark
+        chroma_smoothed = chroma
+
+    # Decide which channel locates the median line. Chroma is preferred when the figure
+    # actually carries a chromatic stroke, which is detected as *narrow* high-chroma runs:
+    # a plotted curve is a few pixels wide, whereas a colour key or lithology swatch is a
+    # solid block. Without that width test, a figure with a big colour fill (a map, a
+    # legend-heavy layout) would hand the tracker a meaningless chroma profile.
+    use_chroma = False
+    chroma_mode_reason = "figure carries no chromatic stroke"
+    chroma_available = float(chroma.max()) > 60.0
+
+    return _Response(
+        dark=dark,
+        chroma=chroma,
+        smoothed=smoothed,
+        chroma_smoothed=chroma_smoothed,
+        use_chroma=use_chroma,
+        chroma_mode_reason=chroma_mode_reason,
+        chroma_available=chroma_available,
+    )
+
+
+@dataclass(frozen=True)
+class _Thresholds:
+    """曲线选取阈值：darkness / chroma 各一套（两者量纲不同）。"""
+
+    dark_threshold: float
+    thr_dark: float
+    thr_loose: float
+    thr_chroma: float
+
+
+def _resolve_thresholds(
+    response: _Response,
+    dark_threshold: float | None,
+    loose_threshold: float,
+) -> _Thresholds:
+    """段 7：Otsu 自适应阈值 + 区间夹取 + chroma 独立阈值。"""
+    smoothed = response.smoothed
+    chroma_smoothed = response.chroma_smoothed
+    chroma_available = response.chroma_available
+
+    # ---- 7. Thresholds -----------------------------------------------------
+    if dark_threshold is None:
+        sample = smoothed[smoothed > 12.0]
+        dark_threshold = _otsu_threshold(sample) if sample.size else 90.0
+        # Otsu on a mostly-empty profile tends to land too low; keep it in a sane band.
+        dark_threshold = float(np.clip(dark_threshold, 45.0, 170.0))
+    thr_dark = float(dark_threshold)
+    thr_loose = float(255.0 - loose_threshold)
+    if thr_loose >= thr_dark:
+        thr_loose = max(8.0, thr_dark * 0.35)
+
+    # The curve-selection threshold applies to whichever channel locates the median.
+    # Chroma and darkness have different scales, so the darkness threshold must not be
+    # reused for a chroma profile.
+    if chroma_available:
+        chromatic_sample = chroma_smoothed[chroma_smoothed > 20.0]
+        thr_chroma = (
+            float(np.clip(_otsu_threshold(chromatic_sample), 45.0, 190.0))
+            if chromatic_sample.size
+            else 60.0
+        )
+    else:
+        thr_chroma = thr_dark
+    return _Thresholds(
+        dark_threshold=float(dark_threshold),
+        thr_dark=thr_dark,
+        thr_loose=thr_loose,
+        thr_chroma=thr_chroma,
+    )
+
+
 def extract_age_depth_model(
     image: Image.Image | np.ndarray,
     calibrator: AgeDepthAxisCalibrator,
@@ -431,110 +600,21 @@ def extract_age_depth_model(
     rx0, ry0, rx1, ry1 = window.rx0, window.ry0, window.rx1, window.ry1
     roi_source = window.roi_source
     h, w = img_arr.shape[:2]
-    # ---- 3. Two response channels: darkness and chromatic ink ----------------
-    dark = (255.0 - gray_full[ry0:ry1, rx0:rx1]).astype(np.float32)
-    # Published age-depth figures very often draw the median as a *coloured* dashed line
-    # (red is common) over a grey ensemble cloud whose outline is black-dashed. Collapsing
-    # to greyscale throws away the only signal that separates them: red (255,0,0) is grey 76
-    # while black is 0, so a darkness-only tracker locks onto the envelope outline and
-    # traces a boundary instead of the median.
-    #
-    # The response is a projection onto the figure's own dominant chromatic direction, not
-    # HSV chroma. Measured on a red-dashed figure: chroma along the line swings between 0
-    # and 114 row to row (the dashes and the blend into the grey cloud both shrink it),
-    # whereas R - mean(G,B) stays well separated from grey and recovers 777 of 843 rows at
-    # a threshold of 12. Projecting rather than taking a magnitude keeps this hue-agnostic:
-    # a blue or green median projects just as cleanly.
-    if img_arr.ndim == 3:
-        rgb = img_arr[..., :3].astype(np.int16)
-        centred = rgb - rgb.mean(axis=2, keepdims=True)
-        ink_mask = (rgb.max(axis=2) - rgb.min(axis=2)) > 25
-        if ink_mask.sum() >= 50:
-            direction = centred[ink_mask].mean(axis=0).astype(np.float32)
-            norm = float(np.linalg.norm(direction))
-            if norm > 1e-6:
-                projected = centred.astype(np.float32) @ (direction / norm)
-                chroma = np.clip(projected[ry0:ry1, rx0:rx1], 0.0, None)
-            else:
-                chroma = np.zeros_like(dark)
-        else:
-            chroma = np.zeros_like(dark)
-    else:
-        chroma = np.zeros_like(dark)
+    response = _build_response_channels(window, exclude_mask)
+    dark = response.dark
+    chroma = response.chroma
+    smoothed = response.smoothed
+    chroma_smoothed = response.chroma_smoothed
+    use_chroma = response.use_chroma
+    chroma_mode_reason = response.chroma_mode_reason
+    chroma_available = response.chroma_available
+    rh, rw = smoothed.shape
 
-    # ---- 4. Exclusion mask (user eraser brush) ------------------------------
-    if exclude_mask is not None:
-        em = np.asarray(exclude_mask, dtype=bool)
-        if em.shape[:2] == (h, w):
-            dark[em[ry0:ry1, rx0:rx1]] = 0.0
-            chroma[em[ry0:ry1, rx0:rx1]] = 0.0
-
-    rh, rw = dark.shape
-    if rh < 3 or rw < 3:
-        raise ValueError(
-            "Search window is degenerate; recalibrate or widen the depth range."
-        )
-
-    # ---- 5. Erase long straight rules (plot frame, axis lines, grid lines) ---
-    # A vertical rule spans nearly the full window height; a horizontal grid line spans
-    # nearly the full width. The age-depth curve itself is never straight across the
-    # whole panel, so both are safe to delete. Erased rows are recovered by interpolation.
-    col_dark_frac = (dark > 60.0).mean(axis=0)
-    long_v = col_dark_frac > 0.55
-    if long_v.any():
-        # Dilate by one column so the rule's anti-aliased shoulders go with it.
-        widened = long_v.copy()
-        widened[1:] |= long_v[:-1]
-        widened[:-1] |= long_v[1:]
-        dark[:, widened] = 0.0
-        chroma[:, widened] = 0.0
-
-    row_dark_frac = (dark > 60.0).mean(axis=1)
-    long_h = row_dark_frac > 0.75
-    if long_h.any():
-        dark[long_h, :] = 0.0
-        chroma[long_h, :] = 0.0
-
-    # ---- 6. Vertical smoothing bridges dashed strokes -----------------------
-    if rh >= 5:
-        smoothed = gaussian_filter(dark, sigma=(1.6, 0.8))
-        chroma_smoothed = gaussian_filter(chroma, sigma=(1.6, 0.8))
-    else:
-        smoothed = dark
-        chroma_smoothed = chroma
-
-    # Decide which channel locates the median line. Chroma is preferred when the figure
-    # actually carries a chromatic stroke, which is detected as *narrow* high-chroma runs:
-    # a plotted curve is a few pixels wide, whereas a colour key or lithology swatch is a
-    # solid block. Without that width test, a figure with a big colour fill (a map, a
-    # legend-heavy layout) would hand the tracker a meaningless chroma profile.
-    use_chroma = False
-    chroma_mode_reason = "figure carries no chromatic stroke"
-    chroma_available = float(chroma.max()) > 60.0
-
-    # ---- 7. Thresholds -----------------------------------------------------
-    if dark_threshold is None:
-        sample = smoothed[smoothed > 12.0]
-        dark_threshold = _otsu_threshold(sample) if sample.size else 90.0
-        # Otsu on a mostly-empty profile tends to land too low; keep it in a sane band.
-        dark_threshold = float(np.clip(dark_threshold, 45.0, 170.0))
-    thr_dark = float(dark_threshold)
-    thr_loose = float(255.0 - loose_threshold)
-    if thr_loose >= thr_dark:
-        thr_loose = max(8.0, thr_dark * 0.35)
-
-    # The curve-selection threshold applies to whichever channel locates the median.
-    # Chroma and darkness have different scales, so the darkness threshold must not be
-    # reused for a chroma profile.
-    if chroma_available:
-        chromatic_sample = chroma_smoothed[chroma_smoothed > 20.0]
-        thr_chroma = (
-            float(np.clip(_otsu_threshold(chromatic_sample), 45.0, 190.0))
-            if chromatic_sample.size
-            else 60.0
-        )
-    else:
-        thr_chroma = thr_dark
+    thresholds = _resolve_thresholds(response, dark_threshold, loose_threshold)
+    dark_threshold = thresholds.dark_threshold
+    thr_dark = thresholds.thr_dark
+    thr_loose = thresholds.thr_loose
+    thr_chroma = thresholds.thr_chroma
 
     # ---- 8. Per-row profile extraction --------------------------------------
     def trace_curve(
