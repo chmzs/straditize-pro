@@ -752,136 +752,32 @@ def _select_curve_channel(
     )
 
 
-def extract_age_depth_model(
-    image: Image.Image | np.ndarray,
+def _rows_to_model(
+    row_idx: list[int],
+    x_curve: list[float],
+    x_min: list[float],
+    x_max: list[float],
+    *,
+    rw: int,
+    ry0: int,
+    rx0: int,
     calibrator: AgeDepthAxisCalibrator,
-    roi_box: tuple[int, int, int, int] | list[int] | None = None,
-    curve_type: str = "median",
-    envelope_type: str = "95_hpd",
-    cal_curve: str = "IntCal20",
-    notes: str = "",
-    depth_range: tuple[float, float] | list[float] | None = None,
-    exclude_mask: np.ndarray | None = None,
-    dark_threshold: float | None = None,
-    loose_threshold: float = 240.0,
-    enforce_monotonic: bool = True,
-    age_increases_downcore: bool | None = None,
-    curve_channel: str = "auto",
-    retain_frac: float = 0.30,
+    selection: _CurveSelection,
+    enforce_monotonic: bool,
+    age_increases_downcore: bool | None,
+    curve_type: str,
+    envelope_type: str,
+    cal_curve: str,
+    notes: str,
+    roi_source: str,
 ) -> AgeDepthModel:
-    """Extracts the central best-fit line and the uncertainty envelope from an age-depth diagram.
+    """段 9-12：离群剔除 → 插值 → 单位换算 → 单调化，并组装 AgeDepthModel。
 
-    An age-depth curve is a single-valued function of depth (one x per row) and is
-    physically monotonic (age never decreases downcore). The extractor therefore works
-    row by row instead of relying on global connected components, which collapse on
-    every common Bacon / Bchron rendering:
-
-    * a filled grey MCMC cloud fuses into one blob whose darker outline defeats a
-      "darkest pixel per row" median estimator;
-    * a Bchron-style plot drawn as many thin grey lines is not connected at all, so the
-      largest component is an arbitrary single realisation;
-    * a solid plot frame merges with the envelope and turns the per-row extent into the
-      frame edges.
-
-    The pipeline is:
-
-    1. Clip the search window to the calibration rectangle, the depth range, and any
-       caller-supplied exclusion mask.
-    2. Erase long axis / grid lines detected as columns that are dark over most of the
-       window height.
-    3. Smooth vertically to bridge dashed envelope outlines.
-    4. Per row, pick the contiguous run with the greatest integrated darkness under a
-       dark threshold (the median line) and expand it under a loose threshold to obtain
-       the envelope extent.
-    5. Reject outliers against a running median, interpolate gaps (hiatuses), and apply
-       isotonic regression so age is non-decreasing in depth.
-    6. Optionally resample onto a regular depth grid.
-
-    Parameters
-    ----------
-    image:
-        Diagram PIL Image or NumPy RGB / greyscale array.
-    calibrator:
-        AgeDepthAxisCalibrator providing pixel-to-scientific conversions.
-    roi_box:
-        Optional (x0, y0, x1, y1) search window. Defaults to the calibration rectangle.
-    depth_range:
-        Optional (min_depth, max_depth) clip applied *in scientific depth units*,
-        independent of the calibration points, so a user may calibrate against the full
-        axis while extracting only the analysed section.
-    exclude_mask:
-        Optional boolean array shaped like the image; ``True`` marks pixels to ignore
-        (equivalent to an eraser brush over labels, legends or dating-point panels).
-    dark_threshold:
-        Darkness floor (0-255) selecting the median line. Auto-detected via Otsu if omitted.
-    loose_threshold:
-        Greyscale ceiling (0-255) used to bound the envelope extent.
-    enforce_monotonic:
-        Apply isotonic regression so extracted age is monotonic in depth.
-    age_increases_downcore:
-        Direction of that monotonicity. ``True`` for BP-style axes ("cal yr BP", "ka BP",
-        "yr b2k"), which increase downcore; ``False`` for AD/CE-style axes, which increase
-        upcore so age decreases downcore.
-
-        ``None`` (default) deduces it from the four calibration points, which already fix
-        the sign of d(age)/d(depth) -- see
-        ``AgeDepthAxisCalibrator.infer_age_increases_downcore``. A caller may still force
-        either direction to override the deduction on an unusual figure. The resolved value
-        and the reasoning are reported on the returned model via
-        ``age_increases_downcore`` / ``age_direction_reason``.
-    curve_channel:
-        Which response locates the median line.
-
-        ``"auto"`` (default) traces both the darkness and the chromatic channel and picks
-        whichever covers more of the panel height, which is the right answer for the
-        rendering styles seen so far. ``"chroma"`` / ``"darkness"`` force one channel, as a
-        manual override for a figure where the automatic comparison picks wrong -- the
-        chosen channel and the reason are reported on the returned model via
-        ``curve_channel`` / ``curve_channel_reason``.
-    retain_frac:
-        Margin applied when the axis rules cannot be used, as a fraction of each calibrated
-        span. Only a fallback: the primary search region comes from the axis rule extents
-        and is deliberately independent of the calibration points.
+    两处「宁可报错也不猜」的判据也在这里：
+    - 观测行占比 < 35% 就拒绝：否则整条曲线主要是插值编出来的，下游看不出来；
+    - 相邻层位与声明方向的一致性 < 55% 就拒绝：isotonic 会把它压成一条常数线，
+      反而把「方向声明错了」这件事藏起来。
     """
-    window = _prepare_search_window(
-        image, calibrator, roi_box, depth_range, retain_frac
-    )
-    img_arr = window.img_arr
-    gray_full = window.gray_full
-    rx0, ry0, rx1, ry1 = window.rx0, window.ry0, window.rx1, window.ry1
-    roi_source = window.roi_source
-    h, w = img_arr.shape[:2]
-    response = _build_response_channels(window, exclude_mask)
-    dark = response.dark
-    chroma = response.chroma
-    smoothed = response.smoothed
-    chroma_smoothed = response.chroma_smoothed
-    use_chroma = response.use_chroma
-    chroma_mode_reason = response.chroma_mode_reason
-    chroma_available = response.chroma_available
-    rh, rw = smoothed.shape
-
-    thresholds = _resolve_thresholds(response, dark_threshold, loose_threshold)
-    dark_threshold = thresholds.dark_threshold
-    thr_dark = thresholds.thr_dark
-    thr_loose = thresholds.thr_loose
-    thr_chroma = thresholds.thr_chroma
-
-    # ---- 8. Per-row profile extraction --------------------------------------
-
-    selection = _select_curve_channel(
-        smoothed,
-        chroma_smoothed,
-        thr_dark,
-        thr_chroma,
-        thr_loose,
-        chroma_available,
-        curve_channel,
-    )
-    row_idx = selection.row_idx
-    x_curve = selection.x_curve
-    x_min = selection.x_min
-    x_max = selection.x_max
     use_chroma = selection.use_chroma
     chroma_mode_reason = selection.chroma_mode_reason
     # ---- 9. Outlier rejection against a running median ----------------------
@@ -1069,3 +965,155 @@ def extract_age_depth_model(
     model.age_direction_reason = direction_reason
 
     return model
+
+
+def extract_age_depth_model(
+    image: Image.Image | np.ndarray,
+    calibrator: AgeDepthAxisCalibrator,
+    roi_box: tuple[int, int, int, int] | list[int] | None = None,
+    curve_type: str = "median",
+    envelope_type: str = "95_hpd",
+    cal_curve: str = "IntCal20",
+    notes: str = "",
+    depth_range: tuple[float, float] | list[float] | None = None,
+    exclude_mask: np.ndarray | None = None,
+    dark_threshold: float | None = None,
+    loose_threshold: float = 240.0,
+    enforce_monotonic: bool = True,
+    age_increases_downcore: bool | None = None,
+    curve_channel: str = "auto",
+    retain_frac: float = 0.30,
+) -> AgeDepthModel:
+    """Extracts the central best-fit line and the uncertainty envelope from an age-depth diagram.
+
+    An age-depth curve is a single-valued function of depth (one x per row) and is
+    physically monotonic (age never decreases downcore). The extractor therefore works
+    row by row instead of relying on global connected components, which collapse on
+    every common Bacon / Bchron rendering:
+
+    * a filled grey MCMC cloud fuses into one blob whose darker outline defeats a
+      "darkest pixel per row" median estimator;
+    * a Bchron-style plot drawn as many thin grey lines is not connected at all, so the
+      largest component is an arbitrary single realisation;
+    * a solid plot frame merges with the envelope and turns the per-row extent into the
+      frame edges.
+
+    The pipeline is:
+
+    1. Clip the search window to the calibration rectangle, the depth range, and any
+       caller-supplied exclusion mask.
+    2. Erase long axis / grid lines detected as columns that are dark over most of the
+       window height.
+    3. Smooth vertically to bridge dashed envelope outlines.
+    4. Per row, pick the contiguous run with the greatest integrated darkness under a
+       dark threshold (the median line) and expand it under a loose threshold to obtain
+       the envelope extent.
+    5. Reject outliers against a running median, interpolate gaps (hiatuses), and apply
+       isotonic regression so age is non-decreasing in depth.
+    6. Optionally resample onto a regular depth grid.
+
+    Parameters
+    ----------
+    image:
+        Diagram PIL Image or NumPy RGB / greyscale array.
+    calibrator:
+        AgeDepthAxisCalibrator providing pixel-to-scientific conversions.
+    roi_box:
+        Optional (x0, y0, x1, y1) search window. Defaults to the calibration rectangle.
+    depth_range:
+        Optional (min_depth, max_depth) clip applied *in scientific depth units*,
+        independent of the calibration points, so a user may calibrate against the full
+        axis while extracting only the analysed section.
+    exclude_mask:
+        Optional boolean array shaped like the image; ``True`` marks pixels to ignore
+        (equivalent to an eraser brush over labels, legends or dating-point panels).
+    dark_threshold:
+        Darkness floor (0-255) selecting the median line. Auto-detected via Otsu if omitted.
+    loose_threshold:
+        Greyscale ceiling (0-255) used to bound the envelope extent.
+    enforce_monotonic:
+        Apply isotonic regression so extracted age is monotonic in depth.
+    age_increases_downcore:
+        Direction of that monotonicity. ``True`` for BP-style axes ("cal yr BP", "ka BP",
+        "yr b2k"), which increase downcore; ``False`` for AD/CE-style axes, which increase
+        upcore so age decreases downcore.
+
+        ``None`` (default) deduces it from the four calibration points, which already fix
+        the sign of d(age)/d(depth) -- see
+        ``AgeDepthAxisCalibrator.infer_age_increases_downcore``. A caller may still force
+        either direction to override the deduction on an unusual figure. The resolved value
+        and the reasoning are reported on the returned model via
+        ``age_increases_downcore`` / ``age_direction_reason``.
+    curve_channel:
+        Which response locates the median line.
+
+        ``"auto"`` (default) traces both the darkness and the chromatic channel and picks
+        whichever covers more of the panel height, which is the right answer for the
+        rendering styles seen so far. ``"chroma"`` / ``"darkness"`` force one channel, as a
+        manual override for a figure where the automatic comparison picks wrong -- the
+        chosen channel and the reason are reported on the returned model via
+        ``curve_channel`` / ``curve_channel_reason``.
+    retain_frac:
+        Margin applied when the axis rules cannot be used, as a fraction of each calibrated
+        span. Only a fallback: the primary search region comes from the axis rule extents
+        and is deliberately independent of the calibration points.
+    """
+    window = _prepare_search_window(
+        image, calibrator, roi_box, depth_range, retain_frac
+    )
+    img_arr = window.img_arr
+    gray_full = window.gray_full
+    rx0, ry0, rx1, ry1 = window.rx0, window.ry0, window.rx1, window.ry1
+    roi_source = window.roi_source
+    h, w = img_arr.shape[:2]
+    response = _build_response_channels(window, exclude_mask)
+    dark = response.dark
+    chroma = response.chroma
+    smoothed = response.smoothed
+    chroma_smoothed = response.chroma_smoothed
+    use_chroma = response.use_chroma
+    chroma_mode_reason = response.chroma_mode_reason
+    chroma_available = response.chroma_available
+    rh, rw = smoothed.shape
+
+    thresholds = _resolve_thresholds(response, dark_threshold, loose_threshold)
+    dark_threshold = thresholds.dark_threshold
+    thr_dark = thresholds.thr_dark
+    thr_loose = thresholds.thr_loose
+    thr_chroma = thresholds.thr_chroma
+
+    # ---- 8. Per-row profile extraction --------------------------------------
+
+    selection = _select_curve_channel(
+        smoothed,
+        chroma_smoothed,
+        thr_dark,
+        thr_chroma,
+        thr_loose,
+        chroma_available,
+        curve_channel,
+    )
+    row_idx = selection.row_idx
+    x_curve = selection.x_curve
+    x_min = selection.x_min
+    x_max = selection.x_max
+    use_chroma = selection.use_chroma
+    chroma_mode_reason = selection.chroma_mode_reason
+    return _rows_to_model(
+        row_idx,
+        x_curve,
+        x_min,
+        x_max,
+        rw=rw,
+        ry0=ry0,
+        rx0=rx0,
+        calibrator=calibrator,
+        selection=selection,
+        enforce_monotonic=enforce_monotonic,
+        age_increases_downcore=age_increases_downcore,
+        curve_type=curve_type,
+        envelope_type=envelope_type,
+        cal_curve=cal_curve,
+        notes=notes,
+        roi_source=roi_source,
+    )
