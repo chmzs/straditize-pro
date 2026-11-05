@@ -1,0 +1,930 @@
+{
+ "legacy_roi": {
+  "active_roi_id": "roi_1",
+  "age_depth_calib_state": {
+   "depth_unit": "cm",
+   "top": [
+    20.0,
+    0.0
+   ]
+  },
+  "age_depth_image": {
+   "digest": "bdddd03a81fa",
+   "size": [
+    120,
+    90
+   ]
+  },
+  "age_depth_image_path": "archive://image/age_depth.png",
+  "age_depth_model": {
+   "age_unit": "cal BP",
+   "ages": [
+    0.0,
+    500.0,
+    1000.0
+   ],
+   "cal_curve": "IntCal20",
+   "curve_type": "median",
+   "depth_unit": "cm",
+   "depths": [
+    0.0,
+    10.0,
+    20.0
+   ],
+   "envelope_type": "95_hpd",
+   "px_x_curve": [
+    100.0,
+    120.0,
+    140.0
+   ],
+   "px_y": [
+    20.0,
+    150.0,
+    280.0
+   ]
+  },
+  "column_count": 3,
+  "columns": [
+   {
+    "col_index": 0,
+    "end": 60.0,
+    "endX": 60.0,
+    "exaggeration_mult": null,
+    "id": "col_a",
+    "name": "Pinus",
+    "plot_type": "area",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "species": "Pinus",
+    "start": 10.0,
+    "startValue": 0,
+    "startX": 10.0,
+    "tickEndX": 60.0,
+    "tickValue": 100,
+    "unit": "%",
+    "x_group_id": "roi_1_grp_1",
+    "x_ticks": [
+     {
+      "px": 10.0,
+      "value": 0.0
+     },
+     {
+      "px": 60.0,
+      "value": 100.0
+     }
+    ],
+    "x_values": [
+     0.0,
+     100.0
+    ]
+   },
+   {
+    "col_index": 1,
+    "end": 120.0,
+    "endX": 120.0,
+    "exaggeration_mult": null,
+    "id": "col_b",
+    "name": "Betula",
+    "plot_type": "line",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "species": "Betula",
+    "start": 70.0,
+    "startValue": 5.0,
+    "startX": 70.0,
+    "tickEndX": 120.0,
+    "tickValue": 55.0,
+    "unit": "%",
+    "x_group_id": "roi_1_grp_2",
+    "x_ticks": null,
+    "x_values": [
+     5.0,
+     55.0
+    ]
+   },
+   {
+    "col_index": 2,
+    "end": 180.0,
+    "endX": 180.0,
+    "exaggeration_mult": null,
+    "id": "col_c",
+    "name": "Quercus",
+    "plot_type": "area",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "species": "Quercus",
+    "start": 130.0,
+    "startValue": 0,
+    "startX": 130.0,
+    "tickEndX": 180.0,
+    "tickValue": 100,
+    "unit": "%",
+    "x_group_id": "roi_1_grp_9",
+    "x_ticks": null,
+    "x_values": [
+     0.0,
+     10.0
+    ]
+   }
+  ],
+  "control_points": {
+   "0": {
+    "20": 11.5,
+    "41": 12.25
+   },
+   "1": {},
+   "2": {
+    "22": 131.0
+   }
+  },
+  "data_xlim": [
+   0.0,
+   400.0
+  ],
+  "data_ylim": [
+   0.0,
+   300.0
+  ],
+  "degrid_remove_vertical": false,
+  "degrid_strength": 0.6,
+  "depth_calib": {
+   "bottom_cm": 130.0,
+   "bottom_px": 280.0,
+   "primary_axis": "depth",
+   "top_cm": 0.0,
+   "top_px": 20.0,
+   "unit": "cm"
+  },
+  "depth_unit": "cm",
+  "ensemble_tables": [
+   {
+    "name": "bacon",
+    "rows": 2
+   }
+  ],
+  "image": {
+   "digest": "5621b1b4ad55",
+   "format": "PNG",
+   "height": 300,
+   "mode": "RGB",
+   "size": [
+    400,
+    300
+   ],
+   "width": 400
+  },
+  "is_calibrated": true,
+  "line_candidates": [
+   {
+    "id": "c1",
+    "status": "candidate",
+    "x": 1.0
+   },
+   {
+    "id": "c2",
+    "status": "removed",
+    "x": 2.0
+   }
+  ],
+  "line_corrections": [
+   {
+    "mode": "erase",
+    "points": [
+     [
+      1,
+      2
+     ],
+     [
+      3,
+      4
+     ]
+    ]
+   },
+   {
+    "mode": "restore",
+    "points": [
+     [
+      5,
+      6
+     ]
+    ]
+   }
+  ],
+  "paper_metadata": {
+   "chronology": {
+    "age_model": "",
+    "age_range": "",
+    "cal_curve": "IntCal20",
+    "dating_method": "14C"
+   },
+   "publication": {
+    "authors": [],
+    "doi": "",
+    "funding_agency": "",
+    "funding_grant": "",
+    "journal": "",
+    "title": "Test pack",
+    "year": null
+   },
+   "quality": {
+    "dataset_version": "1.0.0",
+    "original_data_url": "",
+    "quality_notes": ""
+   },
+   "site": {
+    "archive_type": "lake sediment",
+    "collection_date": "",
+    "core_length_m": "",
+    "country": "",
+    "elevation_m": "",
+    "latitude": "",
+    "longitude": "",
+    "name": "Ngamring",
+    "site_name": "",
+    "water_depth_m": ""
+   },
+   "technical": {
+    "affiliation": "",
+    "digitization_date": "",
+    "digitizer": "",
+    "investigators": "",
+    "laboratory": "",
+    "pollen_extraction_method": "",
+    "sampling_interval_cm": ""
+   }
+  },
+  "pixel_derived_after_load": {
+   "candidate_line_mask": null,
+   "degrid_line_mask": null,
+   "exclusion_mask": null,
+   "foreground_column_edges": null,
+   "foreground_mask": null,
+   "grid_line_mask": null,
+   "image_array": null,
+   "manual_erase_mask": null,
+   "manual_restore_mask": null,
+   "segmentation_mode": null,
+   "shadow_mask": null,
+   "solid_layers": null,
+   "threshold": null,
+   "tick_band": null
+  },
+  "primary_roi_id": "roi_1",
+  "result": {
+   "columns_count": 3,
+   "has_age_depth_image": true,
+   "has_age_depth_model": true,
+   "is_calibrated": true,
+   "success": true,
+   "taxa": [
+    "Pinus",
+    "Betula",
+    "Quercus"
+   ]
+  },
+  "roi_count": 1,
+  "rois": [
+   {
+    "default_group_id": "roi_1_grp1",
+    "id": "roi_1",
+    "x_groups": [
+     {
+      "exaggeration_mult": null,
+      "id": "roi_1_grp1",
+      "name": "默认组",
+      "plot_type": "area",
+      "scale_type": "linear",
+      "tick_layout": [
+       {
+        "rel": 0.0
+       },
+       {
+        "rel": 1.0
+       }
+      ],
+      "unit": "%"
+     },
+     {
+      "exaggeration_mult": null,
+      "id": "roi_1_grp_1",
+      "name": "Pinus组",
+      "plot_type": "area",
+      "scale_type": "linear",
+      "tick_layout": [
+       {
+        "rel": 0.0
+       },
+       {
+        "rel": 1.0
+       }
+      ],
+      "unit": "%"
+     },
+     {
+      "exaggeration_mult": null,
+      "id": "roi_1_grp_2",
+      "name": "Betula组",
+      "plot_type": "line",
+      "scale_type": "linear",
+      "tick_layout": [
+       {
+        "rel": 0.0
+       },
+       {
+        "rel": 1.0
+       }
+      ],
+      "unit": "%"
+     }
+    ],
+    "xlim": [
+     0.0,
+     400.0
+    ],
+    "ylim": [
+     0.0,
+     300.0
+    ]
+   }
+  ],
+  "samples": [
+   {
+    "depth": 10.0,
+    "row_px": 50
+   },
+   {
+    "depth": 60.0,
+    "row_px": 150
+   }
+  ],
+  "selected_candidate_ids": [
+   "c2"
+  ],
+  "taxa_names": [
+   "Pinus",
+   "Betula",
+   "Quercus"
+  ],
+  "y_scale": {
+   "intercept": -10.0,
+   "slope": 0.5
+  }
+ },
+ "saved_rois": {
+  "active_roi_id": "roi_7",
+  "age_depth_calib_state": "<absent>",
+  "age_depth_image": {
+   "digest": null,
+   "size": null
+  },
+  "age_depth_image_path": null,
+  "age_depth_model": null,
+  "column_count": 1,
+  "columns": [
+   {
+    "col_index": 0,
+    "end": 55.0,
+    "endX": 55.0,
+    "exaggeration_mult": null,
+    "id": "c1",
+    "name": "Picea",
+    "plot_type": "area",
+    "roi_id": "roi_8",
+    "scale_type": "linear",
+    "species": "Picea",
+    "start": 5.0,
+    "startValue": 0,
+    "startX": 5.0,
+    "tickEndX": 55.0,
+    "tickValue": 100,
+    "unit": "%",
+    "x_group_id": "roi_8_grp_1",
+    "x_ticks": [
+     {
+      "px": 5.0,
+      "value": 0.0
+     },
+     {
+      "px": 55.0,
+      "value": 100.0
+     }
+    ],
+    "x_values": [
+     0.0,
+     100.0
+    ]
+   }
+  ],
+  "control_points": {
+   "0": {}
+  },
+  "data_xlim": null,
+  "data_ylim": null,
+  "degrid_remove_vertical": true,
+  "degrid_strength": null,
+  "depth_calib": null,
+  "depth_unit": "cm",
+  "ensemble_tables": [],
+  "image": {
+   "digest": null,
+   "format": null,
+   "height": 0,
+   "mode": null,
+   "size": null,
+   "width": 0
+  },
+  "is_calibrated": false,
+  "line_candidates": [],
+  "line_corrections": [],
+  "paper_metadata": {
+   "chronology": {
+    "age_model": "",
+    "age_range": "",
+    "cal_curve": "IntCal20",
+    "dating_method": "14C"
+   },
+   "publication": {
+    "authors": [],
+    "doi": "",
+    "funding_agency": "",
+    "funding_grant": "",
+    "journal": "",
+    "title": "",
+    "year": null
+   },
+   "quality": {
+    "dataset_version": "1.0.0",
+    "original_data_url": "",
+    "quality_notes": ""
+   },
+   "site": {
+    "archive_type": "lake sediment",
+    "collection_date": "",
+    "core_length_m": "",
+    "country": "",
+    "elevation_m": "",
+    "latitude": "",
+    "longitude": "",
+    "site_name": "",
+    "water_depth_m": ""
+   },
+   "technical": {
+    "affiliation": "",
+    "digitization_date": "",
+    "digitizer": "",
+    "investigators": "",
+    "laboratory": "",
+    "pollen_extraction_method": "",
+    "sampling_interval_cm": ""
+   }
+  },
+  "pixel_derived_after_load": {
+   "candidate_line_mask": null,
+   "degrid_line_mask": null,
+   "exclusion_mask": null,
+   "foreground_column_edges": null,
+   "foreground_mask": null,
+   "grid_line_mask": null,
+   "image_array": null,
+   "manual_erase_mask": null,
+   "manual_restore_mask": null,
+   "segmentation_mode": null,
+   "shadow_mask": null,
+   "solid_layers": null,
+   "threshold": null,
+   "tick_band": "<absent>"
+  },
+  "primary_roi_id": "roi_8",
+  "result": {
+   "columns_count": 1,
+   "has_age_depth_image": false,
+   "has_age_depth_model": false,
+   "is_calibrated": false,
+   "success": true,
+   "taxa": [
+    "Picea"
+   ]
+  },
+  "roi_count": 2,
+  "rois": [
+   {
+    "default_group_id": "roi_7_grp1",
+    "id": "roi_7",
+    "x_groups": [
+     {
+      "exaggeration_mult": null,
+      "id": "roi_7_grp1",
+      "name": "默认组",
+      "plot_type": "area",
+      "scale_type": "linear",
+      "tick_layout": [
+       {
+        "rel": 0.0
+       },
+       {
+        "rel": 1.0
+       }
+      ],
+      "unit": "%"
+     }
+    ],
+    "xlim": [
+     0.0,
+     400.0
+    ],
+    "ylim": [
+     0.0,
+     300.0
+    ]
+   },
+   {
+    "default_group_id": "g1",
+    "id": "roi_8",
+    "x_groups": [
+     {
+      "exaggeration_mult": null,
+      "id": "g1",
+      "name": "甲组",
+      "plot_type": "area",
+      "scale_type": "linear",
+      "tick_layout": [
+       {
+        "rel": 0.0
+       },
+       {
+        "rel": 1.0
+       }
+      ],
+      "unit": "%"
+     },
+     {
+      "exaggeration_mult": null,
+      "id": "roi_8_grp_1",
+      "name": "Picea组",
+      "plot_type": "area",
+      "scale_type": "linear",
+      "tick_layout": [
+       {
+        "rel": 0.0
+       },
+       {
+        "rel": 1.0
+       }
+      ],
+      "unit": "%"
+     }
+    ],
+    "xlim": [
+     0.0,
+     200.0
+    ],
+    "ylim": [
+     0.0,
+     300.0
+    ]
+   }
+  ],
+  "samples": "<absent>",
+  "selected_candidate_ids": [],
+  "taxa_names": [
+   "Picea"
+  ],
+  "y_scale": null
+ },
+ "tar_pack": {
+  "active_roi_id": "roi_1",
+  "age_depth_calib_state": "<absent>",
+  "age_depth_image": {
+   "digest": null,
+   "size": null
+  },
+  "age_depth_image_path": null,
+  "age_depth_model": null,
+  "column_count": 3,
+  "columns": [
+   {
+    "col_index": 0,
+    "end": 60.0,
+    "endX": 60.0,
+    "exaggeration_mult": null,
+    "id": "col_a",
+    "name": "Pinus",
+    "plot_type": "area",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "species": "Pinus",
+    "start": 10.0,
+    "startValue": 0,
+    "startX": 10.0,
+    "tickEndX": 60.0,
+    "tickValue": 100,
+    "unit": "%",
+    "x_group_id": "roi_1_grp_1",
+    "x_ticks": [
+     {
+      "px": 10.0,
+      "value": 0.0
+     },
+     {
+      "px": 60.0,
+      "value": 100.0
+     }
+    ],
+    "x_values": [
+     0.0,
+     100.0
+    ]
+   },
+   {
+    "col_index": 1,
+    "end": 120.0,
+    "endX": 120.0,
+    "exaggeration_mult": null,
+    "id": "col_b",
+    "name": "Betula",
+    "plot_type": "line",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "species": "Betula",
+    "start": 70.0,
+    "startValue": 5.0,
+    "startX": 70.0,
+    "tickEndX": 120.0,
+    "tickValue": 55.0,
+    "unit": "%",
+    "x_group_id": "roi_1_grp_2",
+    "x_ticks": null,
+    "x_values": [
+     5.0,
+     55.0
+    ]
+   },
+   {
+    "col_index": 2,
+    "end": 180.0,
+    "endX": 180.0,
+    "exaggeration_mult": null,
+    "id": "col_c",
+    "name": "Quercus",
+    "plot_type": "area",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "species": "Quercus",
+    "start": 130.0,
+    "startValue": 0,
+    "startX": 130.0,
+    "tickEndX": 180.0,
+    "tickValue": 100,
+    "unit": "%",
+    "x_group_id": "roi_1_grp_9",
+    "x_ticks": null,
+    "x_values": [
+     0.0,
+     10.0
+    ]
+   }
+  ],
+  "control_points": {
+   "0": {
+    "20": 11.5,
+    "41": 12.25
+   },
+   "1": {},
+   "2": {
+    "22": 131.0
+   }
+  },
+  "data_xlim": [
+   0.0,
+   400.0
+  ],
+  "data_ylim": [
+   0.0,
+   300.0
+  ],
+  "degrid_remove_vertical": false,
+  "degrid_strength": 0.6,
+  "depth_calib": {
+   "bottom_cm": 130.0,
+   "bottom_px": 280.0,
+   "primary_axis": "depth",
+   "top_cm": 0.0,
+   "top_px": 20.0,
+   "unit": "cm"
+  },
+  "depth_unit": "cm",
+  "ensemble_tables": [
+   {
+    "name": "bacon",
+    "rows": 2
+   }
+  ],
+  "image": {
+   "digest": "d78161bc21e9",
+   "format": "PNG",
+   "height": 300,
+   "mode": "RGB",
+   "size": [
+    400,
+    300
+   ],
+   "width": 400
+  },
+  "is_calibrated": true,
+  "line_candidates": [
+   {
+    "id": "c1",
+    "status": "candidate",
+    "x": 1.0
+   },
+   {
+    "id": "c2",
+    "status": "removed",
+    "x": 2.0
+   }
+  ],
+  "line_corrections": [
+   {
+    "mode": "erase",
+    "points": [
+     [
+      1,
+      2
+     ],
+     [
+      3,
+      4
+     ]
+    ]
+   },
+   {
+    "mode": "restore",
+    "points": [
+     [
+      5,
+      6
+     ]
+    ]
+   }
+  ],
+  "paper_metadata": {
+   "chronology": {
+    "age_model": "",
+    "age_range": "",
+    "cal_curve": "IntCal20",
+    "dating_method": "14C"
+   },
+   "publication": {
+    "authors": [],
+    "doi": "",
+    "funding_agency": "",
+    "funding_grant": "",
+    "journal": "",
+    "title": "Test pack",
+    "year": null
+   },
+   "quality": {
+    "dataset_version": "1.0.0",
+    "original_data_url": "",
+    "quality_notes": ""
+   },
+   "site": {
+    "archive_type": "lake sediment",
+    "collection_date": "",
+    "core_length_m": "",
+    "country": "",
+    "elevation_m": "",
+    "latitude": "",
+    "longitude": "",
+    "name": "Ngamring",
+    "site_name": "",
+    "water_depth_m": ""
+   },
+   "technical": {
+    "affiliation": "",
+    "digitization_date": "",
+    "digitizer": "",
+    "investigators": "",
+    "laboratory": "",
+    "pollen_extraction_method": "",
+    "sampling_interval_cm": ""
+   }
+  },
+  "pixel_derived_after_load": {
+   "candidate_line_mask": null,
+   "degrid_line_mask": null,
+   "exclusion_mask": null,
+   "foreground_column_edges": null,
+   "foreground_mask": null,
+   "grid_line_mask": null,
+   "image_array": null,
+   "manual_erase_mask": null,
+   "manual_restore_mask": null,
+   "segmentation_mode": null,
+   "shadow_mask": null,
+   "solid_layers": null,
+   "threshold": null,
+   "tick_band": "<absent>"
+  },
+  "primary_roi_id": "roi_1",
+  "result": {
+   "columns_count": 3,
+   "has_age_depth_image": false,
+   "has_age_depth_model": false,
+   "is_calibrated": true,
+   "success": true,
+   "taxa": [
+    "Pinus",
+    "Betula",
+    "Quercus"
+   ]
+  },
+  "roi_count": 1,
+  "rois": [
+   {
+    "default_group_id": "roi_1_grp1",
+    "id": "roi_1",
+    "x_groups": [
+     {
+      "exaggeration_mult": null,
+      "id": "roi_1_grp1",
+      "name": "默认组",
+      "plot_type": "area",
+      "scale_type": "linear",
+      "tick_layout": [
+       {
+        "rel": 0.0
+       },
+       {
+        "rel": 1.0
+       }
+      ],
+      "unit": "%"
+     },
+     {
+      "exaggeration_mult": null,
+      "id": "roi_1_grp_1",
+      "name": "Pinus组",
+      "plot_type": "area",
+      "scale_type": "linear",
+      "tick_layout": [
+       {
+        "rel": 0.0
+       },
+       {
+        "rel": 1.0
+       }
+      ],
+      "unit": "%"
+     },
+     {
+      "exaggeration_mult": null,
+      "id": "roi_1_grp_2",
+      "name": "Betula组",
+      "plot_type": "line",
+      "scale_type": "linear",
+      "tick_layout": [
+       {
+        "rel": 0.0
+       },
+       {
+        "rel": 1.0
+       }
+      ],
+      "unit": "%"
+     }
+    ],
+    "xlim": [
+     0.0,
+     400.0
+    ],
+    "ylim": [
+     0.0,
+     300.0
+    ]
+   }
+  ],
+  "samples": [
+   {
+    "depth": 10.0,
+    "row_px": 50
+   },
+   {
+    "depth": 60.0,
+    "row_px": 150
+   }
+  ],
+  "selected_candidate_ids": [
+   "c2"
+  ],
+  "taxa_names": [
+   "Pinus",
+   "Betula",
+   "Quercus"
+  ],
+  "y_scale": {
+   "intercept": -10.0,
+   "slope": 0.5
+  }
+ }
+}
