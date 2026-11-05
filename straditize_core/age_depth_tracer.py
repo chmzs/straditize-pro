@@ -501,6 +501,134 @@ def _resolve_thresholds(
     )
 
 
+def _trace_curve(
+    channel: np.ndarray,
+    smoothed: np.ndarray,
+    thr: float,
+    thr_loose: float,
+    half_window: int,
+) -> tuple[list[int], list[float], list[float], list[float]]:
+    """逐行追踪中值线，并测量其周围的包络。
+
+    一行上的候选段先按强度筛选（只有接近该行最强特征的段才算），再选离上一行
+    接受位置最近的那一段。用「追踪连续性」而不是「最大积分响应」，是为了在曲线
+    陡峭、单行横跨多列的地方仍然咬住中值线。
+
+    channel / thr 决定用哪个响应定位中值；包络**始终**从 smoothed（darkness）测量，
+    因为 MCMC 云与其轮廓是灰色的，在 chroma 里贡献为零。
+    """
+    rh, rw = smoothed.shape
+    # Collect candidate runs per row from the curve channel.
+    candidates: dict[int, list[tuple[float, float, int, int]]] = {}
+    row_peaks = np.zeros(rh, dtype=float)
+    for row in range(rh):
+        prof = channel[row]
+        row_peak = float(prof.max())
+        row_peaks[row] = row_peak
+        if row_peak < max(20.0, thr * 0.55):
+            # Nothing strong enough: a genuine gap (hiatus) or blank margin.
+            continue
+        runs = _contiguous_runs(prof >= thr)
+        keep: list[tuple[float, float, int, int]] = []
+        for r0, r1 in runs:
+            seg = prof[r0 : r1 + 1]
+            peak = float(seg.max())
+            if peak < 0.8 * row_peak:
+                continue
+            weights = np.maximum(seg - thr * 0.5, 0.0)
+            if weights.sum() <= 0:
+                centroid = (r0 + r1) / 2.0
+            else:
+                centroid = float(
+                    r0 + (weights * np.arange(seg.size)).sum() / weights.sum()
+                )
+            keep.append((centroid, peak, r0, r1))
+        if keep:
+            candidates[row] = keep
+
+    if not candidates:
+        return [], [], [], []
+
+    # Bootstrap on the candidate with the greatest vertical support. The age-depth
+    # curve spans the plot height, whereas an inline title or legend is a few rows
+    # tall, so support cleanly separates them; darkness alone would happily lock onto
+    # a bold text label sitting near the top of the panel.
+    support_window = int(np.clip(rh // 8, 12, 45))
+    reach_tol = max(8.0, rw * 0.05)
+
+    def vertical_support(row: int, centroid: float) -> int:
+        count = 0
+        lo = max(0, row - support_window)
+        hi = min(rh - 1, row + support_window)
+        for other in range(lo, hi + 1):
+            if other == row:
+                continue
+            reach = reach_tol + 0.6 * abs(other - row)
+            for cand in candidates.get(other, ()):
+                if abs(cand[0] - centroid) <= reach:
+                    count += 1
+                    break
+        return count
+
+    best_start: tuple[int, float] | None = None
+    best_score: tuple[int, float] = (-1, -1.0)
+    for row, cands in candidates.items():
+        for cand in cands:
+            score = (vertical_support(row, cand[0]), cand[1])
+            if score > best_score:
+                best_score = score
+                best_start = (row, cand[0])
+
+    if best_start is None:
+        return [], [], [], []
+    start, start_centroid = best_start
+    chosen: dict[int, float] = {start: start_centroid}
+
+    max_jump = max(6.0, rw * 0.05)
+    for direction in (1, -1):
+        anchor = chosen[start]
+        last_row = start
+        stop = rh if direction > 0 else -1
+        for row in range(start + direction, stop, direction):
+            if row not in candidates:
+                continue
+            nearest = min(candidates[row], key=lambda c: abs(c[0] - anchor))
+            span = max(1, abs(row - last_row))
+            if abs(nearest[0] - anchor) > max_jump * span:
+                # Too far from the established track: hold position and keep scanning.
+                continue
+            chosen[row] = nearest[0]
+            anchor = nearest[0]
+            last_row = row
+
+    # Measure the envelope around each accepted row.
+    # Deliberately reads the DARKNESS channel even in chroma mode: the MCMC cloud and
+    # its outline are grey, so they contribute nothing to chroma and would give a
+    # zero-width band. Chroma locates the median; darkness measures the spread.
+    rows_out: list[int] = []
+    curve_out: list[float] = []
+    min_out: list[float] = []
+    max_out: list[float] = []
+    for row in sorted(chosen):
+        centroid = chosen[row]
+        prof = smoothed[row]
+        mid_lo = int(np.floor(centroid))
+        mid_hi = int(np.ceil(centroid))
+        lo = max(0, mid_lo - half_window)
+        hi = min(rw - 1, mid_hi + half_window)
+        left = np.flatnonzero(prof[lo : mid_lo + 1] >= thr_loose)
+        right = np.flatnonzero(prof[mid_hi : hi + 1] >= thr_loose)
+        env_min = float(lo + left[0]) if left.size else centroid
+        env_max = float(mid_hi + right[-1]) if right.size else centroid
+
+        rows_out.append(row)
+        curve_out.append(centroid)
+        min_out.append(min(env_min, centroid))
+        max_out.append(max(env_max, centroid))
+
+    return rows_out, curve_out, min_out, max_out
+
+
 def extract_age_depth_model(
     image: Image.Image | np.ndarray,
     calibrator: AgeDepthAxisCalibrator,
@@ -617,130 +745,6 @@ def extract_age_depth_model(
     thr_chroma = thresholds.thr_chroma
 
     # ---- 8. Per-row profile extraction --------------------------------------
-    def trace_curve(
-        channel: np.ndarray, thr: float, half_window: int
-    ) -> tuple[list[int], list[float], list[float], list[float]]:
-        """Traces the median line row by row, then measures the envelope around it.
-
-        Candidate runs on a row are restricted to those nearly as strong as the strongest
-        feature on that row; among them the tracker follows the run closest to the previous
-        accepted position. Tracking continuity (rather than maximising integrated response)
-        is what keeps the trace on the median line where the curve runs steeply and a single
-        row crosses many columns.
-
-        ``channel``/``thr`` select which response locates the median. The envelope is always
-        measured from ``smoothed`` (darkness), because the MCMC cloud and its outline are
-        grey and contribute nothing to chroma.
-        """
-        # Collect candidate runs per row from the curve channel.
-        candidates: dict[int, list[tuple[float, float, int, int]]] = {}
-        row_peaks = np.zeros(rh, dtype=float)
-        for row in range(rh):
-            prof = channel[row]
-            row_peak = float(prof.max())
-            row_peaks[row] = row_peak
-            if row_peak < max(20.0, thr * 0.55):
-                # Nothing strong enough: a genuine gap (hiatus) or blank margin.
-                continue
-            runs = _contiguous_runs(prof >= thr)
-            keep: list[tuple[float, float, int, int]] = []
-            for r0, r1 in runs:
-                seg = prof[r0 : r1 + 1]
-                peak = float(seg.max())
-                if peak < 0.8 * row_peak:
-                    continue
-                weights = np.maximum(seg - thr * 0.5, 0.0)
-                if weights.sum() <= 0:
-                    centroid = (r0 + r1) / 2.0
-                else:
-                    centroid = float(
-                        r0 + (weights * np.arange(seg.size)).sum() / weights.sum()
-                    )
-                keep.append((centroid, peak, r0, r1))
-            if keep:
-                candidates[row] = keep
-
-        if not candidates:
-            return [], [], [], []
-
-        # Bootstrap on the candidate with the greatest vertical support. The age-depth
-        # curve spans the plot height, whereas an inline title or legend is a few rows
-        # tall, so support cleanly separates them; darkness alone would happily lock onto
-        # a bold text label sitting near the top of the panel.
-        support_window = int(np.clip(rh // 8, 12, 45))
-        reach_tol = max(8.0, rw * 0.05)
-
-        def vertical_support(row: int, centroid: float) -> int:
-            count = 0
-            lo = max(0, row - support_window)
-            hi = min(rh - 1, row + support_window)
-            for other in range(lo, hi + 1):
-                if other == row:
-                    continue
-                reach = reach_tol + 0.6 * abs(other - row)
-                for cand in candidates.get(other, ()):
-                    if abs(cand[0] - centroid) <= reach:
-                        count += 1
-                        break
-            return count
-
-        best_start: tuple[int, float] | None = None
-        best_score: tuple[int, float] = (-1, -1.0)
-        for row, cands in candidates.items():
-            for cand in cands:
-                score = (vertical_support(row, cand[0]), cand[1])
-                if score > best_score:
-                    best_score = score
-                    best_start = (row, cand[0])
-
-        if best_start is None:
-            return [], [], [], []
-        start, start_centroid = best_start
-        chosen: dict[int, float] = {start: start_centroid}
-
-        max_jump = max(6.0, rw * 0.05)
-        for direction in (1, -1):
-            anchor = chosen[start]
-            last_row = start
-            stop = rh if direction > 0 else -1
-            for row in range(start + direction, stop, direction):
-                if row not in candidates:
-                    continue
-                nearest = min(candidates[row], key=lambda c: abs(c[0] - anchor))
-                span = max(1, abs(row - last_row))
-                if abs(nearest[0] - anchor) > max_jump * span:
-                    # Too far from the established track: hold position and keep scanning.
-                    continue
-                chosen[row] = nearest[0]
-                anchor = nearest[0]
-                last_row = row
-
-        # Measure the envelope around each accepted row.
-        # Deliberately reads the DARKNESS channel even in chroma mode: the MCMC cloud and
-        # its outline are grey, so they contribute nothing to chroma and would give a
-        # zero-width band. Chroma locates the median; darkness measures the spread.
-        rows_out: list[int] = []
-        curve_out: list[float] = []
-        min_out: list[float] = []
-        max_out: list[float] = []
-        for row in sorted(chosen):
-            centroid = chosen[row]
-            prof = smoothed[row]
-            mid_lo = int(np.floor(centroid))
-            mid_hi = int(np.ceil(centroid))
-            lo = max(0, mid_lo - half_window)
-            hi = min(rw - 1, mid_hi + half_window)
-            left = np.flatnonzero(prof[lo : mid_lo + 1] >= thr_loose)
-            right = np.flatnonzero(prof[mid_hi : hi + 1] >= thr_loose)
-            env_min = float(lo + left[0]) if left.size else centroid
-            env_max = float(mid_hi + right[-1]) if right.size else centroid
-
-            rows_out.append(row)
-            curve_out.append(centroid)
-            min_out.append(min(env_min, centroid))
-            max_out.append(max(env_max, centroid))
-
-        return rows_out, curve_out, min_out, max_out
 
     # Decide which response locates the median by *measuring* both, not by thresholding
     # proxy statistics. A chromatic stroke can be either the plotted curve or a set of
@@ -753,7 +757,9 @@ def extract_age_depth_model(
     # cut sits at 0.55 with margin on both sides. A heuristic thickness test alone picked
     # chroma for the dating-bar figure and dragged the trace along the wrong feature.
     generous = max(2, int(round(rw * 0.45)))
-    row_idx, x_curve, x_min, x_max = trace_curve(smoothed, thr_dark, generous)
+    row_idx, x_curve, x_min, x_max = _trace_curve(
+        smoothed, smoothed, thr_dark, thr_loose, generous
+    )
     use_chroma = False
     chroma_mode_reason = "figure carries no chromatic stroke"
 
@@ -769,8 +775,8 @@ def extract_age_depth_model(
         )
 
     if chroma_available:
-        c_rows, c_curve, c_min, c_max = trace_curve(
-            chroma_smoothed, thr_chroma, generous
+        c_rows, c_curve, c_min, c_max = _trace_curve(
+            chroma_smoothed, smoothed, thr_chroma, thr_loose, generous
         )
         span_ratio = len(c_rows) / max(1, len(row_idx))
         auto_prefers_chroma = len(c_rows) >= 5 and span_ratio >= 0.55
@@ -813,7 +819,9 @@ def extract_age_depth_model(
             tightened = int(np.clip(np.ceil(typical * 3.0) + 4, 6, max(6, generous)))
             ch = chroma_smoothed if use_chroma else smoothed
             th = thr_chroma if use_chroma else thr_dark
-            row2, curve2, min2, max2 = trace_curve(ch, th, tightened)
+            row2, curve2, min2, max2 = _trace_curve(
+                ch, smoothed, th, thr_loose, tightened
+            )
             if len(row2) >= 5:
                 row_idx, x_curve, x_min, x_max = row2, curve2, min2, max2
 
