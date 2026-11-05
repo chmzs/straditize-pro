@@ -1,0 +1,325 @@
+{
+ "narrow": {
+  "columns": [
+   {
+    "col_index": 0,
+    "end": 444.0,
+    "id": "roi_1_col01",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 407.0,
+    "tickEndX": 431.1,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 1,
+    "end": 482.0,
+    "id": "roi_1_col02",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 444.0,
+    "tickEndX": 468.7,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 2,
+    "end": 519.0,
+    "id": "roi_1_col03",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 482.0,
+    "tickEndX": 506.1,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 3,
+    "end": 582.0,
+    "id": "roi_1_col04",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 519.0,
+    "tickEndX": 560.0,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 4,
+    "end": 619.0,
+    "id": "roi_1_col05",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 582.0,
+    "tickEndX": 606.0,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 5,
+    "end": 656.0,
+    "id": "roi_1_col06",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 619.0,
+    "tickEndX": 643.0,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 6,
+    "end": 694.0,
+    "id": "roi_1_col07",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 656.0,
+    "tickEndX": 680.7,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 7,
+    "end": 906.0,
+    "id": "roi_1_col08",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 694.0,
+    "tickEndX": 774.0,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 8,
+    "end": 1093.0,
+    "id": "roi_1_col09",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 906.0,
+    "tickEndX": 986.0,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 9,
+    "end": 1130.0,
+    "id": "roi_1_col10",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 1093.0,
+    "tickEndX": 1117.0,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 10,
+    "end": 1200.0,
+    "id": "roi_1_col11",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 1130.0,
+    "tickEndX": 1175.5,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   }
+  ],
+  "count": 11,
+  "data_xlim": [
+   400.0,
+   1200.0
+  ],
+  "data_ylim": [
+   300.0,
+   800.0
+  ]
+ },
+ "roi_full": {
+  "columns": [
+   {
+    "col_index": 0,
+    "end": 370.0,
+    "id": "roi_1_col01",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 332.0,
+    "tickEndX": 356.7,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 1,
+    "end": 407.0,
+    "id": "roi_1_col02",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 370.0,
+    "tickEndX": 394.1,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 2,
+    "end": 444.0,
+    "id": "roi_1_col03",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 407.0,
+    "tickEndX": 431.1,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 3,
+    "end": 482.0,
+    "id": "roi_1_col04",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 444.0,
+    "tickEndX": 468.7,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 4,
+    "end": 519.0,
+    "id": "roi_1_col05",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 482.0,
+    "tickEndX": 506.1,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 5,
+    "end": 582.0,
+    "id": "roi_1_col06",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 519.0,
+    "tickEndX": 560.0,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 6,
+    "end": 619.0,
+    "id": "roi_1_col07",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 582.0,
+    "tickEndX": 606.0,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 7,
+    "end": 656.0,
+    "id": "roi_1_col08",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 619.0,
+    "tickEndX": 643.0,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 8,
+    "end": 694.0,
+    "id": "roi_1_col09",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 656.0,
+    "tickEndX": 680.7,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 9,
+    "end": 906.0,
+    "id": "roi_1_col10",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 694.0,
+    "tickEndX": 774.0,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 10,
+    "end": 1093.0,
+    "id": "roi_1_col11",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 906.0,
+    "tickEndX": 986.0,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 11,
+    "end": 1130.0,
+    "id": "roi_1_col12",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 1093.0,
+    "tickEndX": 1117.0,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 12,
+    "end": 1193.0,
+    "id": "roi_1_col13",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 1130.0,
+    "tickEndX": 1171.0,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 13,
+    "end": 1231.0,
+    "id": "roi_1_col14",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 1193.0,
+    "tickEndX": 1217.7,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 14,
+    "end": 1279.0,
+    "id": "roi_1_col15",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 1231.0,
+    "tickEndX": 1262.2,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   },
+   {
+    "col_index": 15,
+    "end": 1330.0,
+    "id": "roi_1_col16",
+    "roi_id": "roi_1",
+    "scale_type": "linear",
+    "start": 1279.0,
+    "tickEndX": 1312.2,
+    "tickValue": 20.0,
+    "zero_point_measurable": true
+   }
+  ],
+  "count": 16,
+  "data_xlim": [
+   330.0,
+   1330.0
+  ],
+  "data_ylim": [
+   233.0,
+   869.0
+  ]
+ }
+}
