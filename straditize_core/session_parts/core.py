@@ -1202,9 +1202,47 @@ class CoreMixin:
         （preserve_state），否则当作重新分列、只保留组归属；before/after 依 first_roi_pos
         切分，最后整体 _reindex_columns 并补回超出的 taxa_names 尾巴。
         """
-        from ..columns import measure_axis_stroke
-
         existing_cols = getattr(self, "columns", [])
+        before_cols, after_cols, old_roi_cols = self._split_columns_by_roi(
+            existing_cols, target_roi_id
+        )
+        offset = len(before_cols)
+        preserve_state = len(old_roi_cols) == len(detected_cols)
+        def_grp_id = target_roi.get("default_group_id") if target_roi else None
+
+        for k, col in enumerate(detected_cols):
+            col["_is_new_col"] = True
+            col_code = f"col{k + 1:02d}"
+            old_c_for_name = old_roi_cols[k] if k < len(old_roi_cols) else None
+            resolved_name = self._merged_column_name(
+                col_code, old_c_for_name, offset=offset, k=k
+            )
+            col["name"] = resolved_name
+            col["species"] = resolved_name
+
+            if preserve_state:
+                self._inherit_column_state(col, old_roi_cols[k], def_grp_id)
+            else:
+                self._reset_column_group_after_relayout(
+                    col, old_c_for_name, def_grp_id
+                )
+
+        self._apply_measured_axis_stroke(
+            gray_sub, bounds, detected_cols, def_grp_id, target_roi
+        )
+        self._mark_suspect_block_columns(detected_cols, y0, y1)
+        self._splice_columns(before_cols, detected_cols, after_cols, target_roi)
+
+        return detected_cols
+
+    # ---- _merge_with_existing_columns 的分段实现 ----
+
+    def _split_columns_by_roi(
+        self,
+        existing_cols: list[dict[str, Any]],
+        target_roi_id: str,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+        """按目标 ROI 把既有列切成「之前 / 该 ROI / 之后」三段（保持原顺序）。"""
         first_roi_pos = next(
             (
                 i
@@ -1223,119 +1261,148 @@ class CoreMixin:
             for i, c in enumerate(existing_cols)
             if i >= first_roi_pos and c.get("roi_id") != target_roi_id
         ]
-        offset = len(before_cols)
 
         old_roi_cols = [c for c in existing_cols if c.get("roi_id") == target_roi_id]
-        preserve_state = len(old_roi_cols) == len(detected_cols)
-        def_grp_id = target_roi.get("default_group_id") if target_roi else None
+        return before_cols, after_cols, old_roi_cols
 
-        for k, col in enumerate(detected_cols):
-            col["_is_new_col"] = True
-            col_code = f"col{k + 1:02d}"
-            old_c_for_name = old_roi_cols[k] if k < len(old_roi_cols) else None
-            gi = (
-                old_c_for_name.get("col_index", offset + k)
-                if old_c_for_name is not None
-                else (offset + k)
-            )
-            taxa_cand = (
-                self.taxa_names[gi]
-                if (self.taxa_names and 0 <= gi < len(self.taxa_names))
-                else None
-            )
-            old_name = (
-                old_c_for_name.get("name") or old_c_for_name.get("species")
-                if old_c_for_name is not None
-                else None
-            )
-            if taxa_cand and taxa_cand != col_code:
-                resolved_name = taxa_cand
-            elif old_name and old_name != col_code:
-                resolved_name = old_name
-            elif taxa_cand:
-                resolved_name = taxa_cand
-            elif old_name:
-                resolved_name = old_name
-            else:
-                resolved_name = col_code
-            col["name"] = resolved_name
-            col["species"] = resolved_name
+    def _merged_column_name(
+        self,
+        col_code: str,
+        old_c_for_name: dict[str, Any] | None,
+        *,
+        offset: int,
+        k: int,
+    ) -> str:
+        """合并后的列名：既有 taxa 名 / 既有列名 > 占位编号（占位名不算名字）。"""
+        gi = (
+            old_c_for_name.get("col_index", offset + k)
+            if old_c_for_name is not None
+            else (offset + k)
+        )
+        taxa_cand = (
+            self.taxa_names[gi]
+            if (self.taxa_names and 0 <= gi < len(self.taxa_names))
+            else None
+        )
+        old_name = (
+            old_c_for_name.get("name") or old_c_for_name.get("species")
+            if old_c_for_name is not None
+            else None
+        )
+        if taxa_cand and taxa_cand != col_code:
+            resolved_name = taxa_cand
+        elif old_name and old_name != col_code:
+            resolved_name = old_name
+        elif taxa_cand:
+            resolved_name = taxa_cand
+        elif old_name:
+            resolved_name = old_name
+        else:
+            resolved_name = col_code
+        return resolved_name
 
-            if preserve_state:
-                old_c = old_roi_cols[k]
-                col["x_group_id"] = old_c.get("x_group_id") or def_grp_id
-                col["x_values"] = old_c.get("x_values")
-                if old_c.get("x_ticks"):
-                    t = old_c["x_ticks"]
-                    c_min = min(col["start"], col["end"])
-                    c_max = max(col["start"], col["end"])
-                    max_img_w = float(getattr(self, "width", 0) or 100000.0)
-                    lo = c_min - 15.0
-                    ref_span = 0.0
-                    x_group_id = col.get("x_group_id")
-                    if x_group_id:
-                        for r_item in getattr(self, "rois", []):
-                            for grp in r_item.get("x_groups", []):
-                                if grp.get("id") == x_group_id and grp.get(
-                                    "ref_span_px"
-                                ):
-                                    ref_span = max(ref_span, float(grp["ref_span_px"]))
-                    max_span = max(
-                        c_max - c_min + 15.0,
-                        (ref_span + 15.0) if ref_span > 0 else 80.0,
-                    )
-                    hi = min(c_min + max_span, max_img_w)
-                    px0 = t[0].get("px", 0) if len(t) == 2 else -999
-                    px1 = t[1].get("px", 0) if len(t) == 2 else -999
-                    p_min = min(px0, px1)
-                    p_max = max(px0, px1)
-                    if (
-                        len(t) == 2
-                        and lo <= p_min <= c_max + 15.0
-                        and c_min < p_max <= hi
-                    ):
-                        col["x_ticks"] = t
-                    else:
-                        # B-02：守卫失败曾是**静默**丢弃——用户标定凭空消失、
-                        # 面板回到 0/N，没有任何提示。这里把"丢了什么、丢在哪"
-                        # 留在列上，`straditize.getDiagramData` 会原样透传，
-                        # 由步骤 5/6 面板告知用户需要重新标定。
-                        #
-                        # 值必须是**不可变**的：撤销栈的列快照是
-                        # `[dict(c) for c in self.columns]`（浅拷贝），嵌套容器
-                        # 会被快照与活动列共享引用。故 px/band 用 tuple；
-                        # 外层 dict 只整体赋值/整体 pop，任何地方都不就地改它。
-                        col["x_ticks_dropped"] = {
-                            "reason": "out_of_band",
-                            "px": tuple(tick.get("px", 0) for tick in t),
-                            "band": (lo, hi),
-                        }
-                if old_c.get("unit"):
-                    col["unit"] = old_c["unit"]
-                if old_c.get("plot_type"):
-                    col["plot_type"] = old_c["plot_type"]
-                if old_c.get("scale_type"):
-                    col["scale_type"] = old_c["scale_type"]
-                if old_c.get("exaggeration_mult") is not None:
-                    col["exaggeration_mult"] = old_c["exaggeration_mult"]
-                    col["has_exaggeration"] = True
+    def _inherit_column_state(
+        self,
+        col: dict[str, Any],
+        old_c: dict[str, Any],
+        def_grp_id: str | None,
+    ) -> None:
+        """列数没变：沿用同索引旧列的组归属、标定、单位与绘图类型。
+
+        x 刻度要先过区间守卫：落在列带外的整对标定必须被拒绝并留痕（B-02），
+        不能静默丢弃——用户看不到标定已经没了，只会觉得读数不对。
+        """
+        col["x_group_id"] = old_c.get("x_group_id") or def_grp_id
+        col["x_values"] = old_c.get("x_values")
+        if old_c.get("x_ticks"):
+            t = old_c["x_ticks"]
+            c_min = min(col["start"], col["end"])
+            c_max = max(col["start"], col["end"])
+            max_img_w = float(getattr(self, "width", 0) or 100000.0)
+            lo = c_min - 15.0
+            ref_span = 0.0
+            x_group_id = col.get("x_group_id")
+            if x_group_id:
+                for r_item in getattr(self, "rois", []):
+                    for grp in r_item.get("x_groups", []):
+                        if grp.get("id") == x_group_id and grp.get(
+                            "ref_span_px"
+                        ):
+                            ref_span = max(ref_span, float(grp["ref_span_px"]))
+            max_span = max(
+                c_max - c_min + 15.0,
+                (ref_span + 15.0) if ref_span > 0 else 80.0,
+            )
+            hi = min(c_min + max_span, max_img_w)
+            px0 = t[0].get("px", 0) if len(t) == 2 else -999
+            px1 = t[1].get("px", 0) if len(t) == 2 else -999
+            p_min = min(px0, px1)
+            p_max = max(px0, px1)
+            if (
+                len(t) == 2
+                and lo <= p_min <= c_max + 15.0
+                and c_min < p_max <= hi
+            ):
+                col["x_ticks"] = t
             else:
-                col["x_group_id"] = def_grp_id
-                # 列数变了（preserve_state=False）时整块状态回填都被跳过，旧标定
-                # 同样**静默消失**——这与区间守卫越界是同一个缺陷的两个分支，
-                # 只是幅度更大（实测 hoya 左边界右移 120px：28→27 列、标定 1→0、
-                # 无任何提示）。这里同样留下显式记录，但 reason 必须区分开：
-                # 越界是"同一列、刻度落在列外"，列数变化是"该索引对应的物理列
-                # 已经不是原来那一列"，用户要做的动作不同。
-                if k < len(old_roi_cols) and old_roi_cols[k].get("x_ticks"):
-                    col["x_ticks_dropped"] = {
-                        "reason": "column_layout_changed",
-                        "px": tuple(
-                            tick.get("px", 0)
-                            for tick in old_roi_cols[k].get("x_ticks") or []
-                        ),
-                        "band": (col["start"], col["end"]),
-                    }
+                # B-02：守卫失败曾是**静默**丢弃——用户标定凭空消失、
+                # 面板回到 0/N，没有任何提示。这里把"丢了什么、丢在哪"
+                # 留在列上，`straditize.getDiagramData` 会原样透传，
+                # 由步骤 5/6 面板告知用户需要重新标定。
+                #
+                # 值必须是**不可变**的：撤销栈的列快照是
+                # `[dict(c) for c in self.columns]`（浅拷贝），嵌套容器
+                # 会被快照与活动列共享引用。故 px/band 用 tuple；
+                # 外层 dict 只整体赋值/整体 pop，任何地方都不就地改它。
+                col["x_ticks_dropped"] = {
+                    "reason": "out_of_band",
+                    "px": tuple(tick.get("px", 0) for tick in t),
+                    "band": (lo, hi),
+                }
+        if old_c.get("unit"):
+            col["unit"] = old_c["unit"]
+        if old_c.get("plot_type"):
+            col["plot_type"] = old_c["plot_type"]
+        if old_c.get("scale_type"):
+            col["scale_type"] = old_c["scale_type"]
+        if old_c.get("exaggeration_mult") is not None:
+            col["exaggeration_mult"] = old_c["exaggeration_mult"]
+            col["has_exaggeration"] = True
+
+    def _reset_column_group_after_relayout(
+        self,
+        col: dict[str, Any],
+        old_c: dict[str, Any] | None,
+        def_grp_id: str | None,
+    ) -> None:
+        """列数变了：只保留组归属，旧标定记为 column_layout_changed（与越界区分）。"""
+        col["x_group_id"] = def_grp_id
+        # 列数变了（preserve_state=False）时整块状态回填都被跳过，旧标定
+        # 同样**静默消失**——这与区间守卫越界是同一个缺陷的两个分支，
+        # 只是幅度更大（实测 hoya 左边界右移 120px：28→27 列、标定 1→0、
+        # 无任何提示）。这里同样留下显式记录，但 reason 必须区分开：
+        # 越界是"同一列、刻度落在列外"，列数变化是"该索引对应的物理列
+        # 已经不是原来那一列"，用户要做的动作不同。
+        if old_c is not None and old_c.get("x_ticks"):
+            col["x_ticks_dropped"] = {
+                "reason": "column_layout_changed",
+                "px": tuple(
+                    tick.get("px", 0)
+                    for tick in old_c.get("x_ticks") or []
+                ),
+                "band": (col["start"], col["end"]),
+            }
+
+    def _apply_measured_axis_stroke(
+        self,
+        gray_sub: "np.ndarray",
+        bounds: list,
+        detected_cols: list[dict[str, Any]],
+        def_grp_id: str | None,
+        target_roi: dict[str, Any] | None,
+    ) -> None:
+        """轴线粗自动实测并写到**组**上（0 点 = 列左缘 + 轴线粗，ARCHITECTURE §6.4）。"""
+        from ..columns import measure_axis_stroke
 
         # 轴线粗自动实测（ARCHITECTURE §6.4：0 点 = 列左缘 + 轴线粗）。
         #
@@ -1367,6 +1434,13 @@ class CoreMixin:
                         )
                     break
 
+    def _mark_suspect_block_columns(
+        self,
+        detected_cols: list[dict[str, Any]],
+        y0: float,
+        y1: float,
+    ) -> None:
+        """给「填满整列的色块 / 空框」打 suspect_block 证据（task-21）。"""
         # 「填满整列的色块/空框」标记（task-21）。
         #
         # 必须在 `self.columns = ...` **之前**做：判据要看这一列的像素内容，而
@@ -1420,6 +1494,14 @@ class CoreMixin:
                 if evidence is not None:
                     col["suspect_block"] = evidence
 
+    def _splice_columns(
+        self,
+        before_cols: list[dict[str, Any]],
+        detected_cols: list[dict[str, Any]],
+        after_cols: list[dict[str, Any]],
+        target_roi: dict[str, Any] | None,
+    ) -> None:
+        """把新列接回原位，重排 col_index 并补回超出的 taxa 尾巴。"""
         self.columns = before_cols + detected_cols + after_cols
         had_taxa_names = bool(self.taxa_names)
         extra_tail = (
@@ -1433,8 +1515,6 @@ class CoreMixin:
 
         if target_roi:
             target_roi["columns_stale"] = False
-
-        return detected_cols
 
     def detect_columns(
         self,
