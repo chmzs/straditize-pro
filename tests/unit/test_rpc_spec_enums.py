@@ -217,7 +217,7 @@ CLOSED_SET_CASES = [
         "### 4A.3",
         "curve_channel",
         "straditize_core/age_depth_tracer.py",
-        "extract_age_depth_model",
+        "_select_curve_channel",
         "forced",
         False,
         id="curve_channel",

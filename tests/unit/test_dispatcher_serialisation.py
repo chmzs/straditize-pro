@@ -27,6 +27,20 @@ dispatch **真的会重入**，不是理论可能：
 它恒绿且零信息量。故本文件先跑一次**无锁对照**（把 `_request_lock` 换成空实现），
 断言该对照**确实**能观测到撕裂，再断言加锁后为 0。两者缺一，这条钉子就是假的。
 
+## 无锁对照跑在什么载体上（2026-11-05 修正）
+
+`_SlowFakeSession`：纯 Python 的假 session，只暴露 `width / rois / primary_roi_id`，
+`load_image` 人为分两步并睡 2 ms。**不用真实 session** 的理由是实测出来的：真实
+`load_image` 在 numpy/PIL 里重建图像数组，无锁并发会把原生内存打坏（Windows 上
+`access violation`：faulthandler 抓到线程分别停在 `protocol.py:337` / `protocol.py:299` /
+`session_parts/core.py:485`），且 reader 无限速读、两轮 `join(timeout=90)` 走满。
+实测子进程能跑完但要 3~5 分钟（reads 1721 万 / torn 1714 万 / stuck 0）——不是挂死，
+但单条用例耗数分钟同样不可接受。而这条测试要证明的是「无锁窗口里判据能看见撕裂」，
+不是「真实 session 会被打坏」；前者用假对象就能严格证明，且不会把解释器搞坏。
+
+真实 session 上同一件事保留为手动探针：`tests/unit/_dispatcher_race_probe.py`
+（会挂几分钟，只在需要复核原生损坏时人工跑）。
+
 （HTTP 层的完整压测（含重入与并发写）在
 `scripts/lock_probe/probe_b08_dispatcher_lock.py`（2026-11-04 已归档，见 tag `audit-2026-11-04`），
 那是投产验收用的独立脚本。）
@@ -35,6 +49,7 @@ from __future__ import annotations
 
 import contextlib
 import threading
+import time
 
 import pytest
 
@@ -55,6 +70,29 @@ def _is_torn(snapshot: dict) -> bool:
     return bool(snapshot["imageWidth"]) and (
         snapshot["rois"] == 0 or snapshot["primaryRoiId"] is None
     )
+
+
+class _SlowFakeSession:
+    """纯 Python 的假 session：只暴露 _torn_snapshot 用到的三个字段。
+
+    load_image 人为分两步（先改宽度、睡 2 ms、再建 ROI），把真实代码里
+    「先写 width、再 _init_rois、再 roi_create」的多步写窗口显式化。
+    它不碰 numpy/PIL，因此无锁并发不会打坏原生内存——这正是它可以进自动测试、
+    而真实 session 不行的原因。
+    """
+
+    def __init__(self) -> None:
+        self.width = 0
+        self.rois: list = []
+        self.primary_roi_id = None
+
+    def load_image(self) -> None:
+        self.width = 1923  # 第一步：宽度已改
+        self.rois = []
+        self.primary_roi_id = None
+        time.sleep(0.002)  # 换图进行中（真实代码里这里是数百毫秒的重建）
+        self.rois = [{"id": "roi_1"}]
+        self.primary_roi_id = "roi_1"
 
 
 @contextlib.contextmanager
@@ -141,17 +179,42 @@ def _race_reads_during_image_switch(
 
 class TestRequestSerialisation:
     def test_unlocked_control_can_observe_tearing(self) -> None:
-        """灵敏度证明：无锁时本测试**必须**能观测到撕裂，否则下面那条是假绿。"""
-        session = StraditizeSession()
-        session._init_cleanup()
-        dispatcher = create_rpc_dispatcher(session)
+        """灵敏度证明：无锁时本判据**必须**能观测到撕裂，否则下面那条是假绿。
 
-        with _unlocked_control(dispatcher):
-            outcome = _race_reads_during_image_switch(dispatcher, session)
+        载体是 _SlowFakeSession 而不是真实 session：真实 load_image 在 numpy/PIL 里
+        重建图像数组，无锁并发会打坏原生内存（实测 Windows access violation，且两轮
+        join(timeout=90) 走满，实测需 3~5 分钟）。这条要证明的是「窗口内判据能看见
+        撕裂」，假对象足以严格证明；真实 session 上的同一件事保留为手动探针
+        _dispatcher_race_probe.py（会跑 3~5 分钟，不在常规套件里）。
+        """
+        session = _SlowFakeSession()
+        observed: list[dict] = []
+        stop = threading.Event()
 
-        assert outcome["torn"] > 0, (
-            "无锁对照没有观测到撕裂 —— 本文件对 B-08 不敏感，"
-            "'加锁后 0 撕裂' 将毫无信息量（压测压不到窗口）"
+        def writer() -> None:
+            try:
+                for _ in range(40):
+                    session.load_image()
+            finally:
+                stop.set()
+
+        def reader() -> None:
+            while not stop.is_set() or len(observed) < 200:
+                observed.append(_torn_snapshot(session))
+
+        threads = [threading.Thread(target=writer)] + [
+            threading.Thread(target=reader) for _ in range(2)
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=20)
+        assert not any(t.is_alive() for t in threads), "无锁对照的线程未在 20s 内结束"
+
+        torn = sum(1 for snapshot in observed if _is_torn(snapshot))
+        assert torn > 0, (
+            f"无锁对照没有观测到撕裂（{torn}/{len(observed)}）—— 本文件对 B-08 不敏感，"
+            "加锁后 0 撕裂将毫无信息量（压测压不到窗口）"
         )
 
     def test_locked_dispatcher_shows_no_tearing(self) -> None:
