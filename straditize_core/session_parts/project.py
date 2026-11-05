@@ -759,6 +759,35 @@ class ProjectSessionMixin:
             "schema_version": "2.0",
         }
 
+        calib = self._build_depth_calibration_export()
+        roi = self._build_roi_export()
+        columns = getattr(self, "columns", [])
+        taxa_names = getattr(self, "taxa_names", [])
+        cols_export = self._build_columns_export(columns, taxa_names)
+        ad_export = self._build_age_depth_export()
+        project_json = self._build_project_json(calib, roi, cols_export, ad_export)
+
+        if format.lower() == "json":
+            return self._save_project_json(project_json, ad_export, output_path)
+
+        tar_bytes = self._build_project_tar(project_json, manifest, columns)
+        if output_path:
+            with open(output_path, "wb") as f:
+                f.write(tar_bytes)
+            return {"path": output_path, "size": len(tar_bytes), "success": True}
+
+        return {
+            "tar_base64": base64.b64encode(tar_bytes).decode("ascii"),
+            "size": len(tar_bytes),
+            "success": True,
+        }
+
+    save_project = project_save
+
+    # ---- project_save 的分段实现（顺序即工程格式的组装顺序）----
+
+    def _build_depth_calibration_export(self) -> dict[str, Any]:
+        """标定段：有 depth_calib 就写完整端点，否则只写 is_calibrated=False + 单位。"""
         if getattr(self, "depth_calib", None):
             calib = {
                 "is_calibrated": True,
@@ -770,7 +799,10 @@ class ProjectSessionMixin:
             }
         else:
             calib = {"is_calibrated": False, "unit": getattr(self, "depth_unit", "cm")}
+        return calib
 
+    def _build_roi_export(self) -> dict[str, Any] | None:
+        """旧字段 roi：由 data_xlim / data_ylim 折成 x/y/w/h（无 bounds 时为 None）。"""
         roi = (
             {
                 "x": self.data_xlim[0],
@@ -781,10 +813,15 @@ class ProjectSessionMixin:
             if getattr(self, "data_xlim", None) and getattr(self, "data_ylim", None)
             else None
         )
+        return roi
 
+    def _build_columns_export(
+        self,
+        columns: list[dict[str, Any]],
+        taxa_names: list[str],
+    ) -> list[dict[str, Any]]:
+        """列段：名字/标度/控制点/刻度一起写全（含 legacy startX/endX 兼容字段）。"""
         cols_export = []
-        columns = getattr(self, "columns", [])
-        taxa_names = getattr(self, "taxa_names", [])
         for idx, col in enumerate(columns):
             c_idx = col.get("col_index", idx)
             name = (
@@ -833,7 +870,10 @@ class ProjectSessionMixin:
                     "points": pts,
                 }
             )
+        return cols_export
 
+    def _build_age_depth_export(self) -> dict[str, Any] | None:
+        """年代-深度段：底图尺寸 + 标定状态 + 模型 inspection（两者都没有时为 None）。"""
         ad_export: dict[str, Any] | None = None
         if (
             getattr(self, "age_depth_image", None) is not None
@@ -856,7 +896,16 @@ class ProjectSessionMixin:
                     else None
                 ),
             }
+        return ad_export
 
+    def _build_project_json(
+        self,
+        calib: dict[str, Any],
+        roi: dict[str, Any] | None,
+        cols_export: list[dict[str, Any]],
+        ad_export: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """把各段拼成一份 project.json（键集即工程格式契约）。"""
         project_json: dict[str, Any] = {
             "version": "3.0.0",
             "schema_version": "3.0",
@@ -885,31 +934,81 @@ class ProjectSessionMixin:
             "ensemble_tables": getattr(self, "ensemble_tables", []),
             "columns": cols_export,
         }
+        return project_json
 
-        if format.lower() == "json":
-            if output_path:
-                if getattr(self, "image", None) is not None:
-                    ib = io.BytesIO()
-                    self.image.save(ib, format="PNG")
-                    project_json["image"]["base64"] = base64.b64encode(
-                        ib.getvalue()
-                    ).decode("ascii")
-                if (
-                    ad_export is not None
-                    and getattr(self, "age_depth_image", None) is not None
-                ):
-                    ab = io.BytesIO()
-                    self.age_depth_image.save(ab, format="PNG")
-                    ad_export["image_base64"] = base64.b64encode(ab.getvalue()).decode(
-                        "ascii"
-                    )
-            json_str = json.dumps(project_json, indent=2, ensure_ascii=False)
-            if output_path:
-                with open(output_path, "w", encoding="utf-8") as f:
-                    f.write(json_str)
-                return {"path": output_path, "success": True}
-            return {"data": project_json, "success": True}
+    def _save_project_json(
+        self,
+        project_json: dict[str, Any],
+        ad_export: dict[str, Any] | None,
+        output_path: str | None,
+    ) -> dict[str, Any]:
+        """json 分支：带路径时把底图/年代-深度图内嵌成 base64 再落盘。"""
+        if output_path:
+            if getattr(self, "image", None) is not None:
+                ib = io.BytesIO()
+                self.image.save(ib, format="PNG")
+                project_json["image"]["base64"] = base64.b64encode(
+                    ib.getvalue()
+                ).decode("ascii")
+            if (
+                ad_export is not None
+                and getattr(self, "age_depth_image", None) is not None
+            ):
+                ab = io.BytesIO()
+                self.age_depth_image.save(ab, format="PNG")
+                ad_export["image_base64"] = base64.b64encode(ab.getvalue()).decode(
+                    "ascii"
+                )
+        json_str = json.dumps(project_json, indent=2, ensure_ascii=False)
+        if output_path:
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(json_str)
+            return {"path": output_path, "success": True}
+        return {"data": project_json, "success": True}
 
+    def _export_csv_or_placeholder(self, columns: list[dict[str, Any]]) -> bytes:
+        """出 data.csv：先走真实数字化，失败才退占位表（首列 depth，未观测列填 0.00）。
+
+        占位表是**保底不报错**的老行为：真实 csv 导出失败时若抛错，用户拿不到整个 tar。
+        这条兜底是否该保留另议，但它的触发条件必须由基线钉住。
+        """
+        try:
+            if not getattr(self, "column_points", None) and columns:
+                for col in columns:
+                    self.digitize(col["col_index"])
+            res = self.export_data("csv")
+            csv_str = (
+                (res.get("csv") or res.get("csv_content") or "")
+                if isinstance(res, dict)
+                else str(res)
+            )
+            if not csv_str.strip():
+                raise ValueError("empty csv")
+            csv_data = csv_str.encode("utf-8")
+        except (ValueError, KeyError, RuntimeError, JsonRpcError):
+            headers = ["depth"] + [
+                c.get("species") or c.get("name") or f"col_{idx}"
+                for idx, c in enumerate(columns)
+            ]
+            lines = [",".join(headers)]
+            depth_vals = getattr(self, "depth_grid", None) or [
+                0.0,
+                50.0,
+                100.0,
+                150.0,
+            ]
+            for d in depth_vals:
+                lines.append(",".join([str(round(d, 2))] + ["0.00"] * len(columns)))
+            csv_data = "\n".join(lines).encode("utf-8")
+        return csv_data
+
+    def _build_project_tar(
+        self,
+        project_json: dict[str, Any],
+        manifest: dict[str, Any],
+        columns: list[dict[str, Any]],
+    ) -> bytes:
+        """tar 分支：manifest / straditize.json / 两张图 / data.csv / plot_strat.R / README。"""
         tar_bio = io.BytesIO()
         with tarfile.open(fileobj=tar_bio, mode="w") as tf:
             # 1. manifest.json
@@ -949,34 +1048,7 @@ class ProjectSessionMixin:
                 tf.addfile(ti_ad, io.BytesIO(ad_data))
 
             # 4. data.csv
-            try:
-                if not getattr(self, "column_points", None) and columns:
-                    for col in columns:
-                        self.digitize(col["col_index"])
-                res = self.export_data("csv")
-                csv_str = (
-                    (res.get("csv") or res.get("csv_content") or "")
-                    if isinstance(res, dict)
-                    else str(res)
-                )
-                if not csv_str.strip():
-                    raise ValueError("empty csv")
-                csv_data = csv_str.encode("utf-8")
-            except (ValueError, KeyError, RuntimeError, JsonRpcError):
-                headers = ["depth"] + [
-                    c.get("species") or c.get("name") or f"col_{idx}"
-                    for idx, c in enumerate(columns)
-                ]
-                lines = [",".join(headers)]
-                depth_vals = getattr(self, "depth_grid", None) or [
-                    0.0,
-                    50.0,
-                    100.0,
-                    150.0,
-                ]
-                for d in depth_vals:
-                    lines.append(",".join([str(round(d, 2))] + ["0.00"] * len(columns)))
-                csv_data = "\n".join(lines).encode("utf-8")
+            csv_data = self._export_csv_or_placeholder(columns)
 
             ti_csv = tarfile.TarInfo(name="data.csv")
             ti_csv.size = len(csv_data)
@@ -1016,20 +1088,7 @@ class ProjectSessionMixin:
             ti_readme.size = len(readme)
             ti_readme.mtime = int(time.time())
             tf.addfile(ti_readme, io.BytesIO(readme))
-
-        tar_bytes = tar_bio.getvalue()
-        if output_path:
-            with open(output_path, "wb") as f:
-                f.write(tar_bytes)
-            return {"path": output_path, "size": len(tar_bytes), "success": True}
-
-        return {
-            "tar_base64": base64.b64encode(tar_bytes).decode("ascii"),
-            "size": len(tar_bytes),
-            "success": True,
-        }
-
-    save_project = project_save
+        return tar_bio.getvalue()
 
 
 ProjectMixin = ProjectSessionMixin
