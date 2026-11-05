@@ -49,6 +49,8 @@ import { drawColumnBoundariesOverlay } from './canvas/columnBoundaries';
 import { drawAnchorsOverlay, drawPollenCurvesOverlay } from './canvas/pollenCurves';
 import { resolveCanvasCursor } from './canvas/cursor';
 import { findHitAnchorAt, findHitBoundaryAt, findHitRoiHandleAt } from './canvas/hitTest';
+import { drawBackgroundDiagramOverlay } from './canvas/backgroundDiagram';
+import { drawRoiOverlay as drawRoiOverlayIntoContext } from './canvas/roiRegion';
 import type { AnchorHit, BoundaryHit, HitTestEnv } from './canvas/hitTest';
 /**
  * 指针悬停态（每次 mousemove 重算一次）。
@@ -1789,81 +1791,22 @@ private pointer: PointerState = {
     ctx.restore();
   }
 
+  /** 底图：实现见 canvas/backgroundDiagram.ts（含 broken 短路与 B 键遮罩）。 */
   private drawBackgroundDiagram(ctx: CanvasRenderingContext2D, isLight: boolean): void {
-    // naturalWidth === 0 表示图片 broken（加载失败/未完成）；此时 drawImage 会抛
-    // InvalidStateError。isImageLoaded 只是第一道闸，这里必须再兜一次。
-    if (this.diagramImage && this.isImageLoaded && this.diagramImage.naturalWidth > 0) {
-      const mode = this.viewport.imageMode;
-      const w = this.diagramImage.naturalWidth;
-      const h = this.diagramImage.naturalHeight;
-
-      // 日间模式下给图谱底纸增加柔和投影立体感
-      if (isLight) {
-        ctx.save();
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
-        ctx.shadowBlur = 16 / this.viewport.scale;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 4 / this.viewport.scale;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, w, h);
-        ctx.restore();
-      }
-
-      ctx.save();
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-
-      // 纯二值化模式：直接用后端掩膜层（白=保留墨迹）铺在深色画板上
-      if (mode === 'binary' && this.lineOverlayImage) {
-        ctx.fillStyle = '#090f19';
-        ctx.fillRect(0, 0, w, h);
-        ctx.drawImage(this.lineOverlayImage, 0, 0, w, h);
-      } else {
-        // CSS Canvas 滤镜
-        if (mode === 'invert') {
-          ctx.filter = 'invert(1) hue-rotate(180deg) brightness(105%) contrast(120%)';
-        } else if (mode === 'contrast') {
-          ctx.filter = 'contrast(240%) brightness(105%)';
-        }
-
-        // 视口裁剪渲染：针对超大图谱仅光栅化可见视口切片，极大幅度降低 GPU 显存与重绘负荷
-        const rect = this.canvas.getBoundingClientRect();
-        const minW = this.viewport.screenToWorld({ x: 0, y: 0 });
-        const maxW = this.viewport.screenToWorld({ x: rect.width, y: rect.height });
-
-        const sx = Math.max(0, Math.floor(minW.x));
-        const sy = Math.max(0, Math.floor(minW.y));
-        const sw = Math.min(w - sx, Math.ceil(maxW.x - minW.x) + 2);
-        const sh = Math.min(h - sy, Math.ceil(maxW.y - minW.y) + 2);
-
-        if (sw > 0 && sh > 0 && sx < w && sy < h) {
-          ctx.drawImage(this.diagramImage, sx, sy, sw, sh, sx, sy, sw, sh);
-        } else {
-          ctx.drawImage(this.diagramImage, 0, 0);
-        }
-        ctx.filter = 'none';
-      }
-      ctx.restore();
-
-      // B 键去线透视遮罩：画的就是后端掩膜（白=保留墨迹，红=实际剔除像素）。
-      // 所见即数字化实际所用，前后端不可能再各画一套而互相矛盾。
-      if (this.viewport.showBinaryOverlay && this.lineOverlayImage) {
-        ctx.save();
-        ctx.globalAlpha = 0.85;
-        ctx.drawImage(this.lineOverlayImage, 0, 0, w, h);
-        ctx.restore();
-      }
-    } else if (this.data.imageSrc) {
-      // 仅在已声明图谱路径但尚未完成解码的短暂瞬间展示加载占位；
-      // 未载入任何图片时（S0/S1 空态）绝不画任何假框或'正在载入'文字，由 emptyStateOverlay 接管引导。
-      ctx.save();
-      ctx.fillStyle = isLight ? '#f8fafc' : '#1e293b';
-      ctx.fillRect(0, 0, this.data.imageWidth || 1600, this.data.imageHeight || 1000);
-      ctx.fillStyle = isLight ? '#64748b' : '#94a3b8';
-      ctx.font = '16px sans-serif';
-      ctx.fillText('正在解码地质图谱...', 40, 60);
-      ctx.restore();
-    }
+    const rect = this.canvas.getBoundingClientRect();
+    drawBackgroundDiagramOverlay({
+      ctx,
+      isLight,
+      image: this.diagramImage,
+      imageLoaded: this.isImageLoaded,
+      overlayImage: this.lineOverlayImage,
+      imageMode: this.viewport.imageMode,
+      showBinaryOverlay: this.viewport.showBinaryOverlay,
+      scale: this.viewport.scale,
+      viewportSize: { x: rect.width, y: rect.height },
+      screenToWorld: (pt) => this.viewport.screenToWorld(pt),
+      data: this.data,
+    });
   }
 
   /**
@@ -1896,68 +1839,19 @@ private pointer: PointerState = {
    * 标签只报像素范围 —— 这个框不代表任何深度值。深度轴由 S4 的两点标定决定，
    * 由 drawYAxisCalibration 单独呈现。
    */
+  /** ROI 叠层：实现见 canvas/roiOverlay.ts（手柄屏幕像素恒定）。 */
   private drawRoiOverlay(ctx: CanvasRenderingContext2D, isLight: boolean): void {
-    const roi = this.data.roi;
-    const scale = this.viewport.scale;
-    const isRoiMode = this.toolModeManager.getMode() === 'roi';
-
-    ctx.save();
-
-    // 1. 半透明取数区遮罩框
-    const boxW = roi.xMax - roi.xMin;
-    const boxH = roi.yMax - roi.yMin;
-
-    ctx.fillStyle = isLight
-      ? (isRoiMode ? 'rgba(2, 132, 199, 0.08)' : 'rgba(2, 132, 199, 0.03)')
-      : (isRoiMode ? 'rgba(56, 189, 248, 0.08)' : 'rgba(56, 189, 248, 0.03)');
-    ctx.fillRect(roi.xMin, roi.yMin, boxW, boxH);
-
-    // 2. 数据有效区外边框 (ROI Bounding Box)
-    ctx.strokeStyle = isLight
-      ? (isRoiMode ? '#0284c7' : 'rgba(2, 132, 199, 0.7)')
-      : (isRoiMode ? '#38bdf8' : 'rgba(56, 189, 248, 0.7)');
-    ctx.lineWidth = (isRoiMode ? 2.2 : 1.5) / scale;
-    ctx.setLineDash(isRoiMode ? [] : [6 / scale, 4 / scale]);
-    ctx.strokeRect(roi.xMin, roi.yMin, boxW, boxH);
-
-    // 3. 绘制 8 个屏幕像素恒定的手柄 (Square Handles)
-    const handleImgSize = this.ROI_HANDLE_SIZE_SCREEN / scale;
-    const midX = (roi.xMin + roi.xMax) / 2;
-    const midY = (roi.yMin + roi.yMax) / 2;
-
-    const handles: Record<string, Point2D> = {
-      tl: { x: roi.xMin, y: roi.yMin },
-      tr: { x: roi.xMax, y: roi.yMin },
-      bl: { x: roi.xMin, y: roi.yMax },
-      br: { x: roi.xMax, y: roi.yMax },
-      t: { x: midX, y: roi.yMin },
-      b: { x: midX, y: roi.yMax },
-      l: { x: roi.xMin, y: midY },
-      r: { x: roi.xMax, y: midY },
-    };
-
-    ctx.setLineDash([]);
-    const draggingRoi = (this.toolStrategies.get('roi') as RoiToolStrategy | undefined)?.getDraggingHandle();
-    for (const [key, pt] of Object.entries(handles)) {
-      const isHovered = this.pointer.roiHandle === key || draggingRoi === key;
-      const hSize = isHovered ? handleImgSize * 1.3 : handleImgSize;
-
-      ctx.fillStyle = isHovered ? '#f97316' : '#ffffff';
-      ctx.strokeStyle = isLight ? '#0f172a' : '#0b0f19';
-      ctx.lineWidth = 1.5 / scale;
-
-      ctx.fillRect(pt.x - hSize / 2, pt.y - hSize / 2, hSize, hSize);
-      ctx.strokeRect(pt.x - hSize / 2, pt.y - hSize / 2, hSize, hSize);
-    }
-
-    // 4. 标签只报像素范围（ROI 不是刻度）
-    ctx.fillStyle = isLight ? '#0284c7' : '#7dd3fc';
-    ctx.font = `bold ${Math.max(10, 11 / scale)}px 'JetBrains Mono', monospace`;
-    ctx.textAlign = 'right';
-    ctx.fillText(`ROI Y: ${Math.round(roi.yMin)}px`, roi.xMin - 8 / scale, roi.yMin + 4 / scale);
-    ctx.fillText(`ROI Y: ${Math.round(roi.yMax)}px`, roi.xMin - 8 / scale, roi.yMax + 4 / scale);
-
-    ctx.restore();
+    const roiStrat = this.toolStrategies.get('roi') as RoiToolStrategy | undefined;
+    drawRoiOverlayIntoContext({
+      ctx,
+      isLight,
+      roi: this.data.roi,
+      scale: this.viewport.scale,
+      isRoiMode: this.toolModeManager.getMode() === 'roi',
+      handleSizeScreen: this.ROI_HANDLE_SIZE_SCREEN,
+      hoveredHandle: this.pointer.roiHandle,
+      draggingHandle: roiStrat?.getDraggingHandle() ?? null,
+    });
   }
 
   /**
