@@ -1,0 +1,365 @@
+{
+ "full": {
+  "cells": {
+   "Age_Uncertainty": [
+    [
+     "depth_cm",
+     "age"
+    ],
+    [
+     "1",
+     "120"
+    ],
+    [
+     "2",
+     "220"
+    ]
+   ],
+   "age-depth": [
+    [
+     "depth_cm",
+     "age_cal_bp"
+    ],
+    [
+     "1",
+     "100"
+    ],
+    [
+     "2",
+     "200"
+    ]
+   ],
+   "charcoal": [
+    [
+     "depth_cm",
+     "charcoal"
+    ],
+    [
+     "1",
+     "3"
+    ],
+    [
+     "2",
+     "4"
+    ]
+   ],
+   "meta_info": [
+    [
+     "Category",
+     "Field",
+     "Value",
+     "Source",
+     "Confidence"
+    ],
+    [
+     "Publication",
+     "DOI",
+     "10.1016/j.quascirev.2020.106000",
+     "DOI",
+     "high"
+    ],
+    [
+     "Publication",
+     "Title",
+     "Holocene vegetation of Lake X",
+     "DOI",
+     "high"
+    ],
+    [
+     "Publication",
+     "Authors",
+     "A. One, B. Two",
+     "DOI",
+     "high"
+    ],
+    [
+     "Publication",
+     "Journal",
+     "Quaternary Science Reviews",
+     "DOI",
+     "high"
+    ],
+    [
+     "Publication",
+     "Year",
+     "2020",
+     "DOI",
+     "high"
+    ],
+    [
+     "Publication",
+     "Funding Agency",
+     "NSFC",
+     "DOI",
+     "high"
+    ],
+    [
+     "Publication",
+     "Funding Grant",
+     "42001000",
+     "DOI",
+     "high"
+    ],
+    [
+     "Site Location",
+     "Site Name",
+     "Lake X",
+     "User",
+     "high"
+    ],
+    [
+     "Site Location",
+     "Latitude (\u00b0N)",
+     43.1,
+     "User",
+     "high"
+    ],
+    [
+     "Site Location",
+     "Longitude (\u00b0E)",
+     87.2,
+     "User",
+     "high"
+    ],
+    [
+     "Site Location",
+     "Elevation (m a.s.l.)",
+     "1500",
+     "User",
+     "high"
+    ],
+    [
+     "Site Location",
+     "Archive Type",
+     "lake sediment",
+     "User",
+     "high"
+    ],
+    [
+     "Site Location",
+     "Country / Region",
+     "China",
+     "User",
+     "high"
+    ],
+    [
+     "Site Location",
+     "Water Depth (m)",
+     2.5,
+     "User",
+     "high"
+    ],
+    [
+     "Site Location",
+     "Core Length (m)",
+     1.2,
+     "User",
+     "high"
+    ],
+    [
+     "Site Location",
+     "Collection Date",
+     "2019-07",
+     "User",
+     "high"
+    ],
+    [
+     "Chronology",
+     "Age Model",
+     "CRS",
+     "User",
+     "high"
+    ],
+    [
+     "Chronology",
+     "Age Range",
+     "0-150 cal BP",
+     "User",
+     "high"
+    ],
+    [
+     "Chronology",
+     "Dating Method",
+     "210Pb",
+     "User",
+     "high"
+    ],
+    [
+     "Chronology",
+     "Calibration Curve",
+     "IntCal20",
+     "User",
+     "high"
+    ],
+    [
+     "Technical",
+     "Pollen Extraction Method",
+     "HF digestion / sieving",
+     "User",
+     "high"
+    ],
+    [
+     "Technical",
+     "Laboratory",
+     "Lab Z",
+     "User",
+     "high"
+    ],
+    [
+     "Technical",
+     "Sampling Interval (cm)",
+     "1",
+     "User",
+     "high"
+    ],
+    [
+     "Technical",
+     "Investigators / Collectors",
+     "C. Three",
+     "User",
+     "high"
+    ],
+    [
+     "Technical",
+     "Digitizer / Curator",
+     "D. Four",
+     "User",
+     "high"
+    ],
+    [
+     "Technical",
+     "Affiliation / Institution",
+     "Institute Y",
+     "User",
+     "high"
+    ],
+    [
+     "Technical",
+     "Digitization Date",
+     "2024-01",
+     "User",
+     "high"
+    ],
+    [
+     "Quality & Remarks",
+     "Quality Notes",
+     "Unobserved taxa filled as 0.00",
+     "User",
+     "high"
+    ],
+    [
+     "Quality & Remarks",
+     "Dataset Version",
+     "v1.2",
+     "User",
+     "high"
+    ],
+    [
+     "Quality & Remarks",
+     "Original Data URL",
+     "https://example.org/data",
+     "User",
+     "high"
+    ]
+   ],
+   "pollen": [
+    [
+     "depth_cm",
+     "Pinus",
+     "Betula"
+    ],
+    [
+     "1",
+     "10",
+     "5"
+    ],
+    [
+     "2",
+     "20",
+     "6"
+    ],
+    [
+     "3",
+     "30",
+     "7"
+    ]
+   ],
+   "qc_notes": [
+    [
+     "Item",
+     "Value",
+     "Detail"
+    ],
+    [
+     "sum_check",
+     "pass",
+     "ok"
+    ]
+   ],
+   "readme": [
+    [
+     "Item",
+     "Description"
+    ],
+    [
+     "Software",
+     "Straditize Pro v2.0 (Modern Geological Stratigraphic Digitizer)"
+    ],
+    [
+     "Export Timestamp",
+     "<timestamp>"
+    ],
+    [
+     "Pollen Matrix Standard",
+     "Depths in 1st column. Unobserved taxa strictly filled as 0.00 (never NA)."
+    ],
+    [
+     "LiPD Compatibility",
+     "Conforms to Linked Paleo Data (LiPD) & PaCTS community standards."
+    ],
+    [
+     "R Ecosystem",
+     "Compatible with rioja::strat.plot, vegan, and geoChronR."
+    ]
+   ]
+  },
+  "sheets": [
+   "meta_info",
+   "pollen",
+   "charcoal",
+   "age-depth",
+   "Age_Uncertainty",
+   "qc_notes",
+   "readme"
+  ]
+ },
+ "minimal": {
+  "cells": {
+   "pollen": [
+    [
+     "depth_cm",
+     "Pinus",
+     "Betula"
+    ],
+    [
+     "1",
+     "10",
+     "5"
+    ],
+    [
+     "2",
+     "20",
+     "6"
+    ],
+    [
+     "3",
+     "30",
+     "7"
+    ]
+   ]
+  },
+  "sheets": [
+   "pollen"
+  ]
+ }
+}
