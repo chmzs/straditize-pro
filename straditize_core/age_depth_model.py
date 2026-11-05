@@ -371,15 +371,9 @@ class AgeDepthModel:
                 "The extracted ages do not advance with depth, so no age scale exists and no "
                 "rate can be stated."
             )
-        years_per_age_unit = 1.0
-        age_scale_inferred = "years"
-        if depth_span > 0:
-            # Mean accumulation rate in age-units per cm. A Holocene core is order 10-100
-            # yr/cm; anything an order of magnitude below that means the axis is in ka.
-            age_per_depth = age_span / depth_span
-            if age_per_depth < 0.35:
-                years_per_age_unit = 1000.0
-                age_scale_inferred = "ka (inferred from magnitude)"
+        years_per_age_unit, age_scale_inferred = self._infer_age_scale(
+            age_span, depth_span
+        )
 
         targets = np.asarray(depths, dtype=float)
         n_total = horizons.size
@@ -398,49 +392,146 @@ class AgeDepthModel:
         min_thickness = 3.0 * typical_spacing
         max_thickness = max(min_thickness, depth_span * max_window_fraction)
 
-        def fit_at(centre: float, thickness: float):
-            """Least-squares slope, OLS se, envelope se, and status for one window."""
-            half = thickness / 2.0
-            mask = (horizons >= centre - half) & (horizons <= centre + half)
-            x = horizons[mask]
-            y = ages[mask]
-            if x.size < 3:
-                return float("nan"), float("nan"), float("nan"), x.size, "too_few_horizons"
-            x_mean = float(x.mean())
-            sxx = float(((x - x_mean) ** 2).sum())
-            if sxx <= 1e-12:
-                return float("nan"), float("nan"), float("nan"), x.size, "zero_depth_spread"
-            y_mean = float(y.mean())
-            slope = float(((x - x_mean) * (y - y_mean)).sum() / sxx)
-            if slope <= 0:
-                # Age does not increase downcore in this window: a genuine reversal, or the
-                # trace locked onto the wrong stroke. A rate has no meaning here.
-                return slope, float("nan"), float("nan"), x.size, "non_positive_slope"
-            residual = y - (y_mean + slope * (x - x_mean))
-            dof = x.size - 2
-            sse = float((residual**2).sum())
-            # Zero residual means "perfectly collinear", which the interpolant guarantees on
-            # a thin window. It is not evidence of zero uncertainty, so it is reported as an
-            # absent number rather than a confidence-inspiring 0.0.
-            se_ols = (
-                float(np.sqrt(sse / dof / sxx)) if dof > 0 and sse > 1e-18 else float("nan")
-            )
-            # The physically meaningful error bar comes from the extracted 95% envelope:
-            # the age difference across the window is uncertain by roughly the half-widths
-            # at its two ends added in quadrature.
-            if self.analysis_age_max is not None and self.analysis_age_min is not None:
-                half_w = (np.asarray(self.analysis_age_max)[mask]
-                          - np.asarray(self.analysis_age_min)[mask]) / 2.0
-                half_w = half_w[np.isfinite(half_w)]
-                if half_w.size:
-                    u_ends = float(np.sqrt(half_w[0] ** 2 + half_w[-1] ** 2))
-                    se_env = u_ends / max(thickness, 1e-9)
-                else:
-                    se_env = float("nan")
+        chosen_thickness = self._search_sed_rate_thickness(
+            horizons,
+            ages,
+            targets,
+            min_thickness,
+            max_thickness,
+            required_relative_se,
+            window,
+        )
+
+        (
+            sed_out,
+            sed_se_out,
+            sed_se_ols_out,
+            acc_out,
+            acc_se_out,
+            status_out,
+            window_out,
+        ) = self._sed_rate_series(
+            targets,
+            chosen_thickness,
+            horizons,
+            ages,
+            observed_lo=observed_lo,
+            observed_hi=observed_hi,
+            years_per_age_unit=years_per_age_unit,
+        )
+
+        return {
+            "depths": _report_list(targets),
+            "sed_rate": sed_out,
+            "sed_rate_se": sed_se_out,
+            "sed_rate_se_ols": sed_se_ols_out,
+            "acc_rate": acc_out,
+            "acc_rate_se": acc_se_out,
+            "status": status_out,
+            "window_depth": float(chosen_thickness),
+            "window_per_horizon": window_out,
+            "horizons_available": n_total,
+            "age_scale_inferred": age_scale_inferred,
+            "years_per_age_unit": years_per_age_unit,
+            "rate_units": {
+                "sed_rate": f"{self.depth_unit} per year",
+                "acc_rate": f"year per {self.depth_unit}",
+            },
+            "method": (
+                "ordinary least squares of age on depth over a sliding window of fixed "
+                f"DEPTH THICKNESS {chosen_thickness:.2f} {self.depth_unit} "
+                f"({n_total} horizons available, median spacing {typical_spacing:.3f}); "
+                "sed_rate_se is the larger of the OLS slope error and the envelope-derived "
+                "error, because the fitted curve is an interpolant and its residuals "
+                "understate the digitisation uncertainty"
+            ),
+        }
+
+    # ---- estimate_sedimentation_rate 的分段实现 ----
+
+    def _infer_age_scale(
+        self, age_span: float, depth_span: float
+    ) -> tuple[float, str]:
+        """由量级推断一个年龄单位代表多少真实年（0..9 的轴是 ka，0..9000 才是 a）。
+
+        标签不可靠：0..9000 cal BP 与 0..9 ka 都可能被标成 cal BP，只有跨度能区分。
+        判错就是 1000 倍误差，所以这里显式推断并随结果返回 `age_scale_inferred`。
+        """
+        years_per_age_unit = 1.0
+        age_scale_inferred = "years"
+        if depth_span > 0:
+            # Mean accumulation rate in age-units per cm. A Holocene core is order 10-100
+            # yr/cm; anything an order of magnitude below that means the axis is in ka.
+            age_per_depth = age_span / depth_span
+            if age_per_depth < 0.35:
+                years_per_age_unit = 1000.0
+                age_scale_inferred = "ka (inferred from magnitude)"
+        return years_per_age_unit, age_scale_inferred
+
+    def _fit_sed_rate_window(
+        self,
+        horizons: np.ndarray,
+        ages: np.ndarray,
+        centre: float,
+        thickness: float,
+    ) -> tuple[float, float, float, int, str]:
+        """单个深度窗口内的最小二乘：斜率、OLS 标准误、包络标准误、层位数、状态码。
+
+        三种算不出来的情况都返回 NaN + 明确状态（层位太少 / 深度无展布 / 斜率为非正），
+        绝不给一个看起来像测量值的数字。
+        """
+        half = thickness / 2.0
+        mask = (horizons >= centre - half) & (horizons <= centre + half)
+        x = horizons[mask]
+        y = ages[mask]
+        if x.size < 3:
+            return float("nan"), float("nan"), float("nan"), x.size, "too_few_horizons"
+        x_mean = float(x.mean())
+        sxx = float(((x - x_mean) ** 2).sum())
+        if sxx <= 1e-12:
+            return float("nan"), float("nan"), float("nan"), x.size, "zero_depth_spread"
+        y_mean = float(y.mean())
+        slope = float(((x - x_mean) * (y - y_mean)).sum() / sxx)
+        if slope <= 0:
+            # Age does not increase downcore in this window: a genuine reversal, or the
+            # trace locked onto the wrong stroke. A rate has no meaning here.
+            return slope, float("nan"), float("nan"), x.size, "non_positive_slope"
+        residual = y - (y_mean + slope * (x - x_mean))
+        dof = x.size - 2
+        sse = float((residual**2).sum())
+        # Zero residual means "perfectly collinear", which the interpolant guarantees on
+        # a thin window. It is not evidence of zero uncertainty, so it is reported as an
+        # absent number rather than a confidence-inspiring 0.0.
+        se_ols = (
+            float(np.sqrt(sse / dof / sxx)) if dof > 0 and sse > 1e-18 else float("nan")
+        )
+        # The physically meaningful error bar comes from the extracted 95% envelope:
+        # the age difference across the window is uncertain by roughly the half-widths
+        # at its two ends added in quadrature.
+        if self.analysis_age_max is not None and self.analysis_age_min is not None:
+            half_w = (np.asarray(self.analysis_age_max)[mask]
+                      - np.asarray(self.analysis_age_min)[mask]) / 2.0
+            half_w = half_w[np.isfinite(half_w)]
+            if half_w.size:
+                u_ends = float(np.sqrt(half_w[0] ** 2 + half_w[-1] ** 2))
+                se_env = u_ends / max(thickness, 1e-9)
             else:
                 se_env = float("nan")
-            return slope, se_ols, se_env, x.size, "ok"
+        else:
+            se_env = float("nan")
+        return slope, se_ols, se_env, x.size, "ok"
 
+    def _search_sed_rate_thickness(
+        self,
+        horizons: np.ndarray,
+        ages: np.ndarray,
+        targets: np.ndarray,
+        min_thickness: float,
+        max_thickness: float,
+        required_relative_se: float,
+        window: float | None,
+    ) -> float:
+        """显式给了厚度就用它；否则从下限按 1.5 倍逐级放大，直到相对不确定度达标（上限兜底）。"""
         chosen_thickness = window
         if chosen_thickness is None:
             # Grow the thickness until the rate's RELATIVE uncertainty meets the target, then
@@ -453,7 +544,9 @@ class AgeDepthModel:
             probe = float(np.median(targets))
             step = min_thickness
             while step <= max_thickness:
-                slope, se_ols, se_env, _n, status = fit_at(probe, step)
+                slope, se_ols, se_env, _n, status = self._fit_sed_rate_window(
+                    horizons, ages, probe, step
+                )
                 if status == "ok" and slope > 0:
                     rel = None
                     for candidate in (se_env, se_ols):
@@ -466,7 +559,28 @@ class AgeDepthModel:
                 step *= 1.5
             else:
                 chosen_thickness = max_thickness
+        return chosen_thickness
 
+    def _sed_rate_series(
+        self,
+        targets: np.ndarray,
+        chosen_thickness: float,
+        horizons: np.ndarray,
+        ages: np.ndarray,
+        *,
+        observed_lo: float,
+        observed_hi: float,
+        years_per_age_unit: float,
+    ) -> tuple[
+        list[float | None],
+        list[float | None],
+        list[float | None],
+        list[float | None],
+        list[float | None],
+        list[str],
+        list[int],
+    ]:
+        """逐目标深度算速率序列：斜率换算成年再取倒数得沉积速率，误差取 OLS 与包络两者较大值。"""
         sed_out: list[float | None] = []
         sed_se_out: list[float | None] = []
         sed_se_ols_out: list[float | None] = []
@@ -476,8 +590,8 @@ class AgeDepthModel:
         window_out: list[int] = []
 
         for target in targets:
-            slope, se_ols, se_env, n_used, status = fit_at(
-                float(target), chosen_thickness
+            slope, se_ols, se_env, n_used, status = self._fit_sed_rate_window(
+                horizons, ages, float(target), chosen_thickness
             )
             window_out.append(n_used)
             if status != "ok" or not np.isfinite(slope) or slope <= 0:
@@ -518,32 +632,15 @@ class AgeDepthModel:
                 float(se_ols_sed) if se_ols_sed is not None else None
             )
 
-        return {
-            "depths": _report_list(targets),
-            "sed_rate": sed_out,
-            "sed_rate_se": sed_se_out,
-            "sed_rate_se_ols": sed_se_ols_out,
-            "acc_rate": acc_out,
-            "acc_rate_se": acc_se_out,
-            "status": status_out,
-            "window_depth": float(chosen_thickness),
-            "window_per_horizon": window_out,
-            "horizons_available": n_total,
-            "age_scale_inferred": age_scale_inferred,
-            "years_per_age_unit": years_per_age_unit,
-            "rate_units": {
-                "sed_rate": f"{self.depth_unit} per year",
-                "acc_rate": f"year per {self.depth_unit}",
-            },
-            "method": (
-                "ordinary least squares of age on depth over a sliding window of fixed "
-                f"DEPTH THICKNESS {chosen_thickness:.2f} {self.depth_unit} "
-                f"({n_total} horizons available, median spacing {typical_spacing:.3f}); "
-                "sed_rate_se is the larger of the OLS slope error and the envelope-derived "
-                "error, because the fitted curve is an interpolant and its residuals "
-                "understate the digitisation uncertainty"
-            ),
-        }
+        return (
+            sed_out,
+            sed_se_out,
+            sed_se_ols_out,
+            acc_out,
+            acc_se_out,
+            status_out,
+            window_out,
+        )
 
 
     def _median_rate(self, grid: np.ndarray) -> np.ndarray:
