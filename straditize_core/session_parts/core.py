@@ -970,6 +970,118 @@ class CoreMixin:
                 return [int(roi[0] + width * i / n) for i in range(n + 1)]
         return None
 
+    def _build_detected_columns(
+        self,
+        bounds: list,
+        *,
+        x0: float,
+        target_roi_id: str,
+        gray_sub: "np.ndarray",
+        cleaned_sub_mask: "np.ndarray",
+        ix0: int,
+        ix1: int,
+        iy0: int,
+        iy1: int,
+    ) -> list[dict[str, Any]]:
+        """由列边界构造列对象（无 bounds 时按宽度均分兜底）。
+
+        三条语义写在这里，改之前先读：
+        1. start 是**轴线左缘 = 列切分线**，不是 0 点；0 点由下游统一算
+           zero = start + axis_stroke_px（ARCHITECTURE §6.4）。把 start 推到
+           轴线右缘会让下游再加一次轴粗，形成重复偏移。
+        2. anchor_zero_at_axis_right 是可选的**旧语义开关**：它把 start 直接当 0 点，
+           代价是 Aber 36 列里 26 列被推后 1~2 px（Mean R² 0.9866 -> 0.8959）。
+           默认关闭；开启者必须把 axis_stroke_px 视为 0，否则双偏移。
+        3. tickEndX 的初始宽度按**原始列宽**算，不用扣掉零点偏移后的宽度——
+           否则整条量程同比缩水，读数系统性偏低。
+        """
+        from ..columns import has_measurable_axis, measure_axis_right_edge
+
+        detected_cols = []
+        if bounds:
+            # `start` 的语义唯一：**轴线左缘 = 列切分线**。
+            #
+            # 0 点不由这里决定，而由下游统一算：`zero = start + axis_stroke_px`
+            # （ARCHITECTURE §6.4）。若这里把 start 推到轴线右缘，下游再加一次轴粗
+            # 就是**重复偏移**——实测事故（2026-11-04）：fig3 16 列里
+            # `start − 实测轴右缘` = 1/2/5/6px 逐列不同，固定 5px 既不对齐轴线，
+            # 也让 `abs_px0` 右移（刻距 13px 的列上约 0.38 个刻度，读数系统性偏大）。
+            #
+            # 右缘锚定保留为可选开关（`anchor_zero_at_axis_right = True`）：它把 start
+            # 直接当 0 点用，适合"细灰基线 + 独立曲线"图；但 `measure_axis_right_edge`
+            # 无法从结构上区分「真基线」与「filled-silhouette 填充左缘」（fig3 col3 与
+            # Aber col2 完全同构，亮度/右侧空白/彩色率三个判据全部失败）。实测代价：
+            # 开启后 Aber 36 列中 26 列被推后 1~2px，Mean R² 由 0.9866 掉到 0.8959。
+            # 故默认关闭；开启者必须同时把 `axis_stroke_px` 视为 0，否则双偏移。
+            if getattr(self, "anchor_zero_at_axis_right", False):
+                # 彩色信息是区分"真基线"与"填充轮廓左缘"的决定性依据：
+                # 放大比对实测——真基线纯灰（彩色占比 0.00）、右侧立刻断开；
+                # filled-silhouette 的左缘带颜色（彩色占比 0.42）、右侧持续有内容。
+                # 两者在"暗占比/宽度/贯穿率"上完全同值，只有颜色能分开。
+                rgb_panel = np.asarray(self.image.convert("RGB"))[iy0:iy1, ix0:ix1]
+                axis_right_offsets = measure_axis_right_edge(
+                    rgb_panel, cleaned_sub_mask, [s for s, _ in bounds]
+                )
+            else:
+                axis_right_offsets = [0 for _ in bounds]
+            for idx, (s, e) in enumerate(bounds):
+                col_start = float(x0 + s + axis_right_offsets[idx])
+                col_end = float(x0 + e)
+                # 初始刻度齿位置与列间分界线 end 彻底解耦，不吸附列终点。
+                #
+                # 量程宽度必须按**原始列宽**算，不能用扣掉零点偏移后的宽度：
+                # 零点右移 2px 后再拿 (col_end - col_start) 算 tick 宽度，会让
+                # 整条量程同比缩水（实测 Aber col2 宽 63px、右移 2px，若按新宽度
+                # 算 tickEndX 会少 1.3px，把 88% 丰度的读数压低约 2%）。
+                # 正确做法：零点只移动原点，量程跨度保持原始列宽。
+                raw_span = float(e - s)
+                init_tick_w = max(20.0, min(raw_span * 0.65, 80.0))
+                detected_cols.append(
+                    {
+                        "col_index": idx,
+                        "id": f"{target_roi_id}_col{idx + 1:02d}",
+                        "roi_id": target_roi_id,
+                        "start": col_start,
+                        "end": col_end,
+                        # 该列左缘处是否真有**贯穿列高的竖轴**。false 表示 0 点
+                        # 不可测（无轴列 / 假列），必须由用户手动指定 —— 绝不静默
+                        # 按"轴线粗 = 0"处理，那会让整列读数系统偏 1–5px。
+                        "zero_point_measurable": bool(
+                            has_measurable_axis(gray_sub, int(s), 0, gray_sub.shape[0])
+                        ),
+                        "scale_type": "linear",
+                        "startValue": 0.0,
+                        "tickValue": 20.0,
+                        "tickEndX": round(col_start + init_tick_w, 1),
+                        "plot_type": "area",
+                        "has_exaggeration": False,
+                        "exaggeration_multiplier": 5.0,
+                    }
+                )
+        else:
+            width_px = ix1 - ix0
+            num_cols = max(1, min(5, width_px // 80))
+            col_w = width_px / num_cols
+            for idx in range(num_cols):
+                c_start = float(x0 + idx * col_w)
+                c_end = float(x0 + (idx + 1) * col_w)
+                init_tick_w = max(20.0, min((c_end - c_start) * 0.65, 80.0))
+                detected_cols.append(
+                    {
+                        "col_index": idx,
+                        "id": f"{target_roi_id}_col{idx + 1:02d}",
+                        "roi_id": target_roi_id,
+                        "start": c_start,
+                        "end": c_end,
+                        "scale_type": "linear",
+                        "startValue": 0.0,
+                        "tickValue": 20.0,
+                        "tickEndX": round(c_start + init_tick_w, 1),
+                    }
+                )
+
+        return detected_cols
+
     def _prepare_detection_masks(
         self,
         x0: float,
@@ -1093,94 +1205,19 @@ class CoreMixin:
             bounds,
         ) = self._prepare_detection_masks(x0, x1, y0, y1)
 
-        from ..columns import (
-            has_measurable_axis,
-            measure_axis_right_edge,
-            measure_axis_stroke,
-        )
+        from ..columns import measure_axis_stroke
 
-        detected_cols = []
-        if bounds:
-            # `start` 的语义唯一：**轴线左缘 = 列切分线**。
-            #
-            # 0 点不由这里决定，而由下游统一算：`zero = start + axis_stroke_px`
-            # （ARCHITECTURE §6.4）。若这里把 start 推到轴线右缘，下游再加一次轴粗
-            # 就是**重复偏移**——实测事故（2026-11-04）：fig3 16 列里
-            # `start − 实测轴右缘` = 1/2/5/6px 逐列不同，固定 5px 既不对齐轴线，
-            # 也让 `abs_px0` 右移（刻距 13px 的列上约 0.38 个刻度，读数系统性偏大）。
-            #
-            # 右缘锚定保留为可选开关（`anchor_zero_at_axis_right = True`）：它把 start
-            # 直接当 0 点用，适合"细灰基线 + 独立曲线"图；但 `measure_axis_right_edge`
-            # 无法从结构上区分「真基线」与「filled-silhouette 填充左缘」（fig3 col3 与
-            # Aber col2 完全同构，亮度/右侧空白/彩色率三个判据全部失败）。实测代价：
-            # 开启后 Aber 36 列中 26 列被推后 1~2px，Mean R² 由 0.9866 掉到 0.8959。
-            # 故默认关闭；开启者必须同时把 `axis_stroke_px` 视为 0，否则双偏移。
-            if getattr(self, "anchor_zero_at_axis_right", False):
-                # 彩色信息是区分"真基线"与"填充轮廓左缘"的决定性依据：
-                # 放大比对实测——真基线纯灰（彩色占比 0.00）、右侧立刻断开；
-                # filled-silhouette 的左缘带颜色（彩色占比 0.42）、右侧持续有内容。
-                # 两者在"暗占比/宽度/贯穿率"上完全同值，只有颜色能分开。
-                rgb_panel = np.asarray(self.image.convert("RGB"))[iy0:iy1, ix0:ix1]
-                axis_right_offsets = measure_axis_right_edge(
-                    rgb_panel, cleaned_sub_mask, [s for s, _ in bounds]
-                )
-            else:
-                axis_right_offsets = [0 for _ in bounds]
-            for idx, (s, e) in enumerate(bounds):
-                col_start = float(x0 + s + axis_right_offsets[idx])
-                col_end = float(x0 + e)
-                # 初始刻度齿位置与列间分界线 end 彻底解耦，不吸附列终点。
-                #
-                # 量程宽度必须按**原始列宽**算，不能用扣掉零点偏移后的宽度：
-                # 零点右移 2px 后再拿 (col_end - col_start) 算 tick 宽度，会让
-                # 整条量程同比缩水（实测 Aber col2 宽 63px、右移 2px，若按新宽度
-                # 算 tickEndX 会少 1.3px，把 88% 丰度的读数压低约 2%）。
-                # 正确做法：零点只移动原点，量程跨度保持原始列宽。
-                raw_span = float(e - s)
-                init_tick_w = max(20.0, min(raw_span * 0.65, 80.0))
-                detected_cols.append(
-                    {
-                        "col_index": idx,
-                        "id": f"{target_roi_id}_col{idx + 1:02d}",
-                        "roi_id": target_roi_id,
-                        "start": col_start,
-                        "end": col_end,
-                        # 该列左缘处是否真有**贯穿列高的竖轴**。false 表示 0 点
-                        # 不可测（无轴列 / 假列），必须由用户手动指定 —— 绝不静默
-                        # 按"轴线粗 = 0"处理，那会让整列读数系统偏 1–5px。
-                        "zero_point_measurable": bool(
-                            has_measurable_axis(gray_sub, int(s), 0, gray_sub.shape[0])
-                        ),
-                        "scale_type": "linear",
-                        "startValue": 0.0,
-                        "tickValue": 20.0,
-                        "tickEndX": round(col_start + init_tick_w, 1),
-                        "plot_type": "area",
-                        "has_exaggeration": False,
-                        "exaggeration_multiplier": 5.0,
-                    }
-                )
-        else:
-            width_px = ix1 - ix0
-            num_cols = max(1, min(5, width_px // 80))
-            col_w = width_px / num_cols
-            for idx in range(num_cols):
-                c_start = float(x0 + idx * col_w)
-                c_end = float(x0 + (idx + 1) * col_w)
-                init_tick_w = max(20.0, min((c_end - c_start) * 0.65, 80.0))
-                detected_cols.append(
-                    {
-                        "col_index": idx,
-                        "id": f"{target_roi_id}_col{idx + 1:02d}",
-                        "roi_id": target_roi_id,
-                        "start": c_start,
-                        "end": c_end,
-                        "scale_type": "linear",
-                        "startValue": 0.0,
-                        "tickValue": 20.0,
-                        "tickEndX": round(c_start + init_tick_w, 1),
-                    }
-                )
+        detected_cols = self._build_detected_columns(
+            bounds,
+            x0=x0,
+            target_roi_id=target_roi_id,
+            gray_sub=gray_sub,
+            cleaned_sub_mask=cleaned_sub_mask,
+            ix0=ix0,
+            ix1=ix1,
+            iy0=iy0,
+            iy1=iy1,
+        )
 
         existing_cols = getattr(self, "columns", [])
         first_roi_pos = next(
