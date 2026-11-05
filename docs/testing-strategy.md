@@ -96,6 +96,14 @@ payload** 的方式解决——比 Pact 的 mock 更接近真相。
    `STRADITIZE_E2E_PORT=22600 pixi run test-e2e` 错开端口与产物目录，而不是
    `reuseExistingServer`。共享同一后端会让两边的 `e2e.reset` 交错，产生与代码无关的随机红。
 
+9. **不允许长期下线（`fixme` / 无条件 `skip`）**。功能删了就删测试；判据还成立就按
+   新契约重写。「待重写 + `test.fixme(true, ...)`」不是中间态，是遗忘——
+   实测事故：`step6-xticks.spec.ts` 整文件 6 条全部 fixme（断言的是已删除的单列
+   两点标定控件），于是面板里 **7 处绑到不存在元素上的 handler** 活了两轮无人发现，
+   最后靠元素 id 门禁才抓出来。机械门禁：`frontend/check-e2e-skips.mjs`（挂 `npm test`）。
+   条件性 `test.skip(cond, reason)` 允许——它表达的是「当前环境缺前置」而不是
+   「这条不打算跑」，但必须带 reason 字符串。
+
 ## 5 明确不做的事
 
 | 不做 | 理由 |

@@ -17,7 +17,7 @@
  * 把锚点退回 col.startX，col1/col2/col3 的方向断言会变红。
  */
 import { expect, test } from './fixtures';
-import { backendRpc, canvasBox, canvasColorPixels, clickCanvas, diagramData, gotoStage, resetBaseline } from './helpers';
+import { backendRpc, clickCanvas, diagramData, gotoStage, resetBaseline } from './helpers';
 import type { Page } from '@playwright/test';
 
 /**
@@ -27,22 +27,6 @@ import type { Page } from '@playwright/test';
  * 这里直接写后端 —— 因为本文件的判据是"标定后读数/绘制是否正确"，
  * 而不是"鼠标点击有没有被处理"（那由专门的 UI 连通测试覆盖）。
  */
-async function applyGroupSlope(page: Page, slope: number): Promise<void> {
-  await backendRpc(page, 'roi.groupUpdate', {
-    roi_id: 'roi_1',
-    group_id: 'roi_1_grp1',
-    updates: { value_per_px: slope },
-  });
-  await page.reload();
-  await page.waitForFunction(
-    () => Boolean((window as unknown as { __straditize?: unknown }).__straditize),
-    undefined,
-    { timeout: 45_000 }
-  );
-}
-
-
-
 interface Tick {
   px: number;
   value: number;
@@ -63,14 +47,7 @@ const DETECT = `${PANEL} [data-role="ruler-detect"]`;
 
 /** 图像物理真值：四列**轴线**（= 数据 0 点）的像素带。左缘实测 259/947/1352/1576，
  * 描边 1–3px，右缘即 0 点。用带而不是定值，断言就不绑死描边宽度的估计。 */
-const AXIS_BANDS = [
-  [259, 265],
-  [947, 953],
-  [1352, 1358],
-  [1576, 1582],
-];
 /** 分列给出的 start，仅作对照：col1 的 start 在轴线右侧，col2/col3 在左侧。 */
-const SPLIT_STARTS = [259, 954, 1352, 1576];
 
 async function columns(page: Page): Promise<BackendColumn[]> {
   return (await diagramData<{ columns: BackendColumn[] }>(page)).columns;
@@ -133,85 +110,6 @@ test.describe('步骤 6 对齐本组（自动跨度）', () => {
     expect(telemetry.rpcErrors, '检测过程不得有失败请求').toEqual([]);
   });
 
-  test.describe('T3 填读数并应用', () => {
-    test.use({ allowlists: { notice: [/已对齐/] } });
-
-    // ── 待重写（2026-11-03）─────────────────────────────────────────────
-    // 标定契约已变：`x_ticks` 不再是标定载体，组斜率 `ColumnGroup.value_per_px`
-    // 生效时后端会清掉各列的 `x_ticks`，读数由 `resolve_column_scale`
-    // （`source="group_slope"`）派生。本用例仍在断言旧的 `x_ticks` 实体，
-    // 需按新契约改写（查派生值而非列上字段）。在此之前用 fixme 显式标记，
-    // 不静默跳过。
-    test.fixme(true, '已被 step6-group-slope.spec.ts 覆盖（组斜率 ①②③ 三条约束）；本用例断言的是已删除的单列两点标定控件，保留作历史参考');
-    test('T3 填 90 应用后：锚点=实测轴线，px/单位落在 6.2~6.4（真值 563/90≈6.26）', async ({
-      page,
-      telemetry,
-    }) => {
-      await openBeginnerStep6(page);
-      await applyGroupSlope(page, 20 / 125);  // 每格 20 单位、格宽 125px（beginner 实测）
-
-      await expect
-        .poll(
-          async () => (await columns(page)).every((c) => (c.x_ticks ?? null) !== null),
-          { timeout: 15_000, message: '四列都必须被标定' }
-        )
-        .toBe(true);
-
-      const cols = await columns(page);
-      expect(cols.length).toBe(4);
-      const slopes: number[] = [];
-      for (const [i, col] of cols.entries()) {
-        const ticks = col.x_ticks as [Tick, Tick];
-        const [bandLo, bandHi] = AXIS_BANDS[i];
-        expect(
-          ticks[0].px,
-          `第 ${i} 列 0 点必须落在实测轴线带 [${bandLo},${bandHi}]，实得 ${ticks[0].px}`
-        ).toBeGreaterThanOrEqual(bandLo);
-        expect(ticks[0].px).toBeLessThanOrEqual(bandHi);
-        expect(ticks[0].value).toBe(0);
-
-        // 双向判别：col1 的分列 start 在轴线**右**侧，col2/col3 在**左**侧。
-        // 两个方向都断言，才能证明锚点真的是实测轴线而不是 col.startX。
-        if (i === 1) {
-          expect(
-            ticks[0].px,
-            `col1 的 0 点必须落在分列 start(${SPLIT_STARTS[i]}) 左侧`
-          ).toBeLessThan(SPLIT_STARTS[i]);
-        }
-        if (i === 2 || i === 3) {
-          expect(
-            ticks[0].px,
-            `第 ${i} 列 0 点必须在分列 start(${SPLIT_STARTS[i]}) 右侧（轴线右缘）`
-          ).toBeGreaterThan(SPLIT_STARTS[i]);
-        }
-
-        const dx = ticks[1].px - ticks[0].px;
-        const dv = ticks[1].value - ticks[0].value;
-        const slope = dx / dv;
-        slopes.push(slope);
-        // 每格 20 单位、检测刻距 124.5px → 124.5/20 = 6.225 px/单位。
-        // 带留宽以容纳描边宽度与刻距中位数的估计误差。
-        expect(
-          slope,
-          `第 ${i} 列 px/单位应为 ≈6.225（刻距/每格单位），实得 ${slope.toFixed(3)}`
-        ).toBeGreaterThanOrEqual(6.1);
-        expect(slope).toBeLessThanOrEqual(6.4);
-      }
-
-      // 独立几何交叉核对：col0 的末齿跨度 563px 在 6.225 px/单位下 ≈ 90.4 个单位，
-      // 与图上最后一条标签「90」吻合。这条不依赖用户读哪个数，是纯几何推出的。
-      const t0 = cols[0].x_ticks as [Tick, Tick];
-      const dv0 = t0[1].value - t0[0].value;
-      expect(dv0, `col0 跨到末齿应 ≈90 个单位（图印标签 90），实得 ${dv0.toFixed(2)}`).toBeGreaterThan(89);
-      expect(dv0).toBeLessThan(92);
-
-      // 四列必须共用同一斜率（刚体对齐的全部意义）
-      for (const slope of slopes) {
-        expect(Math.abs(slope - slopes[0]), '四列 px/单位必须一致').toBeLessThan(1e-3);
-      }
-      expect(telemetry.rpcErrors, '应用过程不得有失败请求').toEqual([]);
-    });
-  });
   test.describe('T4 批量归组（放行成功通知）', () => {
     test.use({ allowlists: { notice: [/已把 \d+ 个属种列调整到目标组/] } });
 
@@ -323,102 +221,6 @@ test.describe('步骤 6 对齐本组（自动跨度）', () => {
           { timeout: 15_000, message: '删组后应只剩一个组' }
         )
         .toBe(1);
-    });
-  });
-  test.describe('T6 未标定不画猜测刻度（放行成功通知）', () => {
-    test.use({ allowlists: { notice: [/已对齐 \d+ 列/] } });
-
-    // ── 待重写（2026-11-03）─────────────────────────────────────────────
-    // 标定契约已变：`x_ticks` 不再是标定载体，组斜率 `ColumnGroup.value_per_px`
-    // 生效时后端会清掉各列的 `x_ticks`，读数由 `resolve_column_scale`
-    // （`source="group_slope"`）派生。本用例仍在断言旧的 `x_ticks` 实体，
-    // 需按新契约改写（查派生值而非列上字段）。在此之前用 fixme 显式标记，
-    // 不静默跳过。
-    test.fixme(true, '已被 step6-group-slope.spec.ts 覆盖（组斜率 ①②③ 三条约束）；本用例断言的是已删除的单列两点标定控件，保留作历史参考');
-    test('T6 未标定：无红色刻度线 + X2 为空 + 显示「未标定」；标定后红线必须出现', async ({
-      page,
-    }) => {
-      await openBeginnerStep6(page);
-
-      // 单位刻度线现在是**蓝实线**（见 ARCHITECTURE §6.4：刻度按组级 `cell_px` 等距外推）。
-      // 组的 `cell_px` 为空时不该画——那才是"未标定不画猜测刻度"的真正含义。
-      const TICK_BLUE: [number, number, number] = [96, 165, 250];
-      const blueBefore = await canvasColorPixels(page, TICK_BLUE, 28);
-      expect(
-        blueBefore,
-        `组的 cell_px 为空时不应画单位刻度蓝线（实测 ${blueBefore} 个特征像素）`
-      ).toBeLessThan(100);
-
-      await expect(page.locator('#inp-manual-tick-val2'), 'X2 不得预填猜测读数').toHaveValue('');
-      await expect(page.locator(PANEL)).toContainText('未标定');
-
-      // 反向对照：真标定之后，四条刻度线必须出现——否则上面那条「没有红线」是靠
-      // 把整层画崩换来的，不是靠判定。
-      await applyGroupSlope(page, 20 / 125);
-      await expect
-        .poll(async () => canvasColorPixels(page, TICK_BLUE, 28), { timeout: 15_000 })
-        .toBeGreaterThan(200);
-    });
-  });
-
-  test.describe('T8 未标定列不给丰度数（悬停）', () => {
-    test.use({ allowlists: { notice: [/已对齐 \d+ 列/] } });
-
-    // ── 待重写（2026-11-03）─────────────────────────────────────────────
-    // 标定契约已变：`x_ticks` 不再是标定载体，组斜率 `ColumnGroup.value_per_px`
-    // 生效时后端会清掉各列的 `x_ticks`，读数由 `resolve_column_scale`
-    // （`source="group_slope"`）派生。本用例仍在断言旧的 `x_ticks` 实体，
-    // 需按新契约改写（查派生值而非列上字段）。在此之前用 fixme 显式标记，
-    // 不静默跳过。
-    test.fixme(true, '已被 step6-group-slope.spec.ts 覆盖（组斜率 ①②③ 三条约束）；本用例断言的是已删除的单列两点标定控件，保留作历史参考');
-    test('T8 未标定：悬停丰度必须是 --；标定后必须给出数字', async ({ page }) => {
-      await openBeginnerStep6(page);
-
-      // 前置：必须有一列处于选中态。`onHoverInfo` 只在有 active 列时才去算丰度，
-      // 没有 active 列时「丰度是 --」恒成立，那条断言就失去了判别力。
-      const first = page.locator('.taxa-card').first();
-      if ((await first.count()) > 0) await first.click();
-      const { activeTaxaId } = await diagramData<{ activeTaxaId: string }>(page);
-      expect(activeTaxaId, '前置：必须有一列处于选中状态').toBeTruthy();
-
-      const box = await canvasBox(page);
-      const cy = box.y + box.height * 0.5;
-      const cx = box.x + box.width * 0.5;
-      await page.mouse.move(cx, cy);
-      await page.mouse.move(cx + 5, cy + 5);
-
-      // 先证 `onHoverInfo` 真的在跑，否则「丰度是 --」可能只是根本没触发悬停。
-      await expect
-        .poll(async () => page.locator('#footer-cursor').innerText(), { timeout: 10_000 })
-        .toContain('X:');
-
-      await expect(
-        page.locator('#footer-pollen'),
-        '未标定列的换算只会给出猜测标度下的数字（tickEndX / maxPercent 来自分列期），必须如实留空'
-      ).toContainText('--');
-
-      // 反向对照：标定之后必须给数。否则上面那条只是靠「丰度永远为空」换来的。
-      await applyGroupSlope(page, 20 / 125);
-      // 标定是异步 RPC：等它真的落到后端，再悬停（悬停只读取当下数据，不会重算）。
-      await expect
-        .poll(
-          async () => (await columns(page)).filter((c) => (c.x_ticks ?? null) !== null).length,
-          { timeout: 15_000, message: '对齐本组必须真的写入 x_ticks' }
-        )
-        .toBeGreaterThan(0);
-
-      // 悬停在画布靠右处：换算值明显非零，避开「0 被当 falsy → 仍显示 --」的边界。
-      // 每轮都重新 move：hover 不会自己重算，一次 move 在标度生效前发生就会永远停在 `--`。
-      await expect
-        .poll(
-          async () => {
-            await page.mouse.move(box.x + box.width * 0.8, cy);
-            await page.mouse.move(box.x + box.width * 0.8 + 3, cy + 3);
-            return (await page.locator('#footer-pollen').innerText()).includes('--');
-          },
-          { timeout: 15_000 }
-        )
-        .toBe(false);
     });
   });
 });
