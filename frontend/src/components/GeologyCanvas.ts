@@ -40,7 +40,7 @@ import {
 } from '../core/tools';
 import { t, onLocaleChange } from '../i18n';
 
-import { bandOf } from './canvas/CleanupOverlay';
+// bandOf 随几何命中测试搬到 canvas/geometryHitTest.ts，画布类已不再直接用。
 // （resolveAxisStroke 随 drawColumnBoundaries 搬到 canvas/columnBoundaries.ts）
 import { ensureCanvasLegend } from './canvas/legend';
 import { drawDepthGridOverlay } from './canvas/depthGrid';
@@ -51,6 +51,8 @@ import { resolveCanvasCursor } from './canvas/cursor';
 import { assertNoDuplicateBindings, matchesKeyBinding } from './canvas/keyBindings';
 import type { KeyBinding } from './canvas/keyBindings';
 import { findHitAnchorAt, findHitBoundaryAt, findHitRoiHandleAt } from './canvas/hitTest';
+import { findHitGeometryAt } from './canvas/geometryHitTest';
+import type { GeometryCandidate, GeometryHit } from './canvas/geometryHitTest';
 import { drawBackgroundDiagramOverlay } from './canvas/backgroundDiagram';
 import { drawRoiOverlay as drawRoiOverlayIntoContext } from './canvas/roiRegion';
 import type { AnchorHit, BoundaryHit, HitTestEnv } from './canvas/hitTest';
@@ -2224,68 +2226,17 @@ private pointer: PointerState = {
     return null;
   }
 
-  /** 命中测试：返回鼠标下的 geometry id 与抓取的手柄。仅在 Step 4（清理）允许交互。 */
-  private findHitGeometry(
-    worldPt: Point2D
-  ): { id: string; handle: 'move' | 'start' | 'end' | 'thick0' | 'thick1' } | null {
+  /** 命中测试：几何体 id 与抓取的手柄（实现见 canvas/geometryHitTest.ts）。仅在步骤 4 允许。 */
+  private findHitGeometry(worldPt: Point2D): GeometryHit | null {
     if (!showsCleanupOverlay(this.workflowStage)) return null;
-    const inv = 1 / (this.viewport.scale || 1);
-    const pad = this.GEOMETRY_HIT_PAD_SCREEN * inv;
-    const handleR = (this.GEOMETRY_HANDLE_SIZE_SCREEN * inv) / 2 + 2 * inv;
-    const cands = this.data.line_candidates || [];
-
-    // 从后往前：后加入的 geometry 视觉上在上层，应优先命中。
-    for (let i = cands.length - 1; i >= 0; i--) {
-      const c = cands[i];
-      const g = c.geometry;
-      if (!g) continue;
-      const x0 = Math.min(g.x0, g.x1);
-      const x1 = Math.max(g.x0, g.x1);
-      const y0 = Math.min(g.y0, g.y1);
-      const y1 = Math.max(g.y0, g.y1);
-      const midX = (x0 + x1) / 2;
-      const midY = (y0 + y1) / 2;
-
-      // 已选中的 geometry 先判手柄，否则细线端点永远抓不住。
-      if (c.id === this.selectedGeometryId) {
-        // 手柄必须落在 CleanupOverlay 实际画出来的位置：薄线真实只有 2px、
-        // 显示被撑到 8px，若按真实矩形做命中就会"看着抓到、实际抓空"。
-        const band = bandOf(g, inv);
-        const bMidX = band.x + band.w / 2;
-        const bMidY = band.y + band.h / 2;
-        const handles: Array<['start' | 'end' | 'thick0' | 'thick1', Point2D]> =
-          c.axis === 'h'
-            ? [
-                // 端点：改长度
-                ['start', { x: x0, y: midY }],
-                ['end', { x: x1, y: midY }],
-                // 长边中点：改厚度
-                ['thick0', { x: bMidX, y: band.y }],
-                ['thick1', { x: bMidX, y: band.y + band.h }],
-              ]
-            : [
-                ['start', { x: midX, y: y0 }],
-                ['end', { x: midX, y: y1 }],
-                ['thick0', { x: band.x, y: bMidY }],
-                ['thick1', { x: band.x + band.w, y: bMidY }],
-              ];
-        for (const [key, pt] of handles) {
-          if (Math.hypot(worldPt.x - pt.x, worldPt.y - pt.y) <= handleR) {
-            return { id: c.id, handle: key };
-          }
-        }
-      }
-
-      if (
-        worldPt.x >= x0 - pad &&
-        worldPt.x <= x1 + pad &&
-        worldPt.y >= y0 - pad &&
-        worldPt.y <= y1 + pad
-      ) {
-        return { id: c.id, handle: 'move' };
-      }
-    }
-    return null;
+    return findHitGeometryAt({
+      worldPt,
+      invScale: 1 / (this.viewport.scale || 1),
+      padScreen: this.GEOMETRY_HIT_PAD_SCREEN,
+      handleSizeScreen: this.GEOMETRY_HANDLE_SIZE_SCREEN,
+      selectedId: this.selectedGeometryId,
+      candidates: (this.data.line_candidates || []) as GeometryCandidate[],
+    });
   }
 
   /** 拖拽新建 geometry 时的实时预览（世界坐标，跟随鼠标）。 */
