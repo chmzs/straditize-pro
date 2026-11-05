@@ -1,0 +1,270 @@
+{
+ "tight_auto": {
+  "acc_rate": [
+   6.508,
+   6.524,
+   6.54,
+   6.556,
+   6.572
+  ],
+  "acc_rate_se": [
+   0.0055650447,
+   0.0055377818,
+   0.0055107188,
+   0.0054838537,
+   0.0054571845
+  ],
+  "age_scale_inferred": "years",
+  "depths": [
+   10.0,
+   30.0,
+   50.0,
+   70.0,
+   90.0
+  ],
+  "horizons_available": 51,
+  "method": "ordinary least squares of age on depth over a sliding window of fixed DEPTH THICKNESS 6.00 cm (51 horizons available, median spacing 2.000); sed_rate_se is the larger of the OLS slope error and the envelope-derived error, because the fitted curve is an interpolant and its residuals understate the digitisation uncertainty",
+  "rate_units": {
+   "acc_rate": "year per cm",
+   "sed_rate": "cm per year"
+  },
+  "sed_rate": [
+   0.1536570375,
+   0.1532801962,
+   0.1529051988,
+   0.1525320317,
+   0.1521606817
+  ],
+  "sed_rate_se": [
+   0.0055650447,
+   0.0055377818,
+   0.0055107188,
+   0.0054838537,
+   0.0054571845
+  ],
+  "sed_rate_se_ols": [
+   1.09052e-05,
+   1.08518e-05,
+   1.07988e-05,
+   1.07461e-05,
+   1.06939e-05
+  ],
+  "status": [
+   "ok",
+   "ok",
+   "ok",
+   "ok",
+   "ok"
+  ],
+  "window_depth": 6.0,
+  "window_per_horizon": [
+   3,
+   3,
+   3,
+   3,
+   3
+  ],
+  "years_per_age_unit": 1.0
+ },
+ "tight_fixed": {
+  "acc_rate": [
+   6.508,
+   6.524,
+   6.54,
+   6.556,
+   6.572
+  ],
+  "acc_rate_se": [
+   0.0022260179,
+   0.0022151127,
+   0.0022042875,
+   0.0021935415,
+   0.0021828738
+  ],
+  "age_scale_inferred": "years",
+  "depths": [
+   10.0,
+   30.0,
+   50.0,
+   70.0,
+   90.0
+  ],
+  "horizons_available": 51,
+  "method": "ordinary least squares of age on depth over a sliding window of fixed DEPTH THICKNESS 15.00 cm (51 horizons available, median spacing 2.000); sed_rate_se is the larger of the OLS slope error and the envelope-derived error, because the fitted curve is an interpolant and its residuals understate the digitisation uncertainty",
+  "rate_units": {
+   "acc_rate": "year per cm",
+   "sed_rate": "cm per year"
+  },
+  "sed_rate": [
+   0.1536570375,
+   0.1532801962,
+   0.1529051988,
+   0.1525320317,
+   0.1521606817
+  ],
+  "sed_rate_se": [
+   0.0022260179,
+   0.0022151127,
+   0.0022042875,
+   0.0021935415,
+   0.0021828738
+  ],
+  "sed_rate_se_ols": [
+   1.46309e-05,
+   1.45592e-05,
+   1.44881e-05,
+   1.44174e-05,
+   1.43473e-05
+  ],
+  "status": [
+   "ok",
+   "ok",
+   "ok",
+   "ok",
+   "ok"
+  ],
+  "window_depth": 15.0,
+  "window_per_horizon": [
+   7,
+   7,
+   7,
+   7,
+   7
+  ],
+  "years_per_age_unit": 1.0
+ },
+ "wide_auto": {
+  "acc_rate": [
+   6.508,
+   6.524,
+   6.54,
+   6.556,
+   6.572
+  ],
+  "acc_rate_se": [
+   0.0691791245,
+   0.0886131618,
+   0.1079158591,
+   0.1270610197,
+   0.1460375612
+  ],
+  "age_scale_inferred": "years",
+  "depths": [
+   10.0,
+   30.0,
+   50.0,
+   70.0,
+   90.0
+  ],
+  "horizons_available": 51,
+  "method": "ordinary least squares of age on depth over a sliding window of fixed DEPTH THICKNESS 20.00 cm (51 horizons available, median spacing 2.000); sed_rate_se is the larger of the OLS slope error and the envelope-derived error, because the fitted curve is an interpolant and its residuals understate the digitisation uncertainty",
+  "rate_units": {
+   "acc_rate": "year per cm",
+   "sed_rate": "cm per year"
+  },
+  "sed_rate": [
+   0.1536570375,
+   0.1532801962,
+   0.1529051988,
+   0.1525320317,
+   0.1521606817
+  ],
+  "sed_rate_se": [
+   0.0691791245,
+   0.0886131618,
+   0.1079158591,
+   0.1270610197,
+   0.1460375612
+  ],
+  "sed_rate_se_ols": [
+   1.75841e-05,
+   1.7498e-05,
+   1.74125e-05,
+   1.73276e-05,
+   1.72433e-05
+  ],
+  "status": [
+   "ok",
+   "ok",
+   "ok",
+   "ok",
+   "ok"
+  ],
+  "window_depth": 20.0,
+  "window_per_horizon": [
+   11,
+   11,
+   11,
+   11,
+   11
+  ],
+  "years_per_age_unit": 1.0
+ },
+ "wide_fixed": {
+  "acc_rate": [
+   6.508,
+   6.524,
+   6.54,
+   6.556,
+   6.572
+  ],
+  "acc_rate_se": [
+   0.0916178774,
+   0.1176714922,
+   0.1434982712,
+   0.1690871916,
+   0.1944346365
+  ],
+  "age_scale_inferred": "years",
+  "depths": [
+   10.0,
+   30.0,
+   50.0,
+   70.0,
+   90.0
+  ],
+  "horizons_available": 51,
+  "method": "ordinary least squares of age on depth over a sliding window of fixed DEPTH THICKNESS 15.00 cm (51 horizons available, median spacing 2.000); sed_rate_se is the larger of the OLS slope error and the envelope-derived error, because the fitted curve is an interpolant and its residuals understate the digitisation uncertainty",
+  "rate_units": {
+   "acc_rate": "year per cm",
+   "sed_rate": "cm per year"
+  },
+  "sed_rate": [
+   0.1536570375,
+   0.1532801962,
+   0.1529051988,
+   0.1525320317,
+   0.1521606817
+  ],
+  "sed_rate_se": [
+   0.0916178774,
+   0.1176714922,
+   0.1434982712,
+   0.1690871916,
+   0.1944346365
+  ],
+  "sed_rate_se_ols": [
+   1.46309e-05,
+   1.45592e-05,
+   1.44881e-05,
+   1.44174e-05,
+   1.43473e-05
+  ],
+  "status": [
+   "ok",
+   "ok",
+   "ok",
+   "ok",
+   "ok"
+  ],
+  "window_depth": 15.0,
+  "window_per_horizon": [
+   7,
+   7,
+   7,
+   7,
+   7
+  ],
+  "years_per_age_unit": 1.0
+ }
+}
