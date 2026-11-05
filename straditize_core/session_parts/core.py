@@ -67,9 +67,7 @@ _SUSPECT_MIN_INK_ROWS = 10
 _SUSPECT_DARK_THRESHOLD = 160
 
 
-def _row_ink_widths(
-    dark: np.ndarray, x0: int, x1: int, y0: int, y1: int
-) -> np.ndarray:
+def _row_ink_widths(dark: np.ndarray, x0: int, x1: int, y0: int, y1: int) -> np.ndarray:
     """该矩形内每行「最左墨迹到最右墨迹」的水平宽度（px）。
 
     只统计**有墨迹的行**：空白行宽度恒为 0，会把 CV 稀释成无意义的小值。
@@ -481,9 +479,7 @@ class CoreMixin:
             column = mask[:, x]
             if not column.any():
                 continue
-            edges = np.diff(
-                np.concatenate((pad, column.view(np.int8), pad))
-            )
+            edges = np.diff(np.concatenate((pad, column.view(np.int8), pad)))
             starts = np.flatnonzero(edges == 1)
             if starts.size:
                 ends = np.flatnonzero(edges == -1)
@@ -869,8 +865,11 @@ class CoreMixin:
             # 彩色/双层路径：阈值不再决定"是不是墨"，只决定"哪些黑白像素算墨"。
             # 彩色像素由 extraction_mode 单独判定，否则浅彩色实心会被灰度阈值
             # 整列丢掉（这正是 Han et al. 2026 Fig.3 的失败模式）。
-            rgb = self.image_array[..., :3] if getattr(
-                self, "image_array", None) is not None else np.array(self.image)[..., :3]
+            rgb = (
+                self.image_array[..., :3]
+                if getattr(self, "image_array", None) is not None
+                else np.array(self.image)[..., :3]
+            )
             mask = build_foreground(
                 np.dstack([rgb, np.full(rgb.shape[:2], 255, dtype=np.uint8)]),
                 threshold=actual_thresh * 3,
@@ -890,9 +889,11 @@ class CoreMixin:
         self.solid_layers = None
         self.two_layer_report = None
         if ext_mode == "solid-over-shadow":
-            rgb_full = (self.image_array[..., :3]
-                        if getattr(self, "image_array", None) is not None
-                        else np.array(self.image)[..., :3])
+            rgb_full = (
+                self.image_array[..., :3]
+                if getattr(self, "image_array", None) is not None
+                else np.array(self.image)[..., :3]
+            )
             parts = two_layer_split(rgb_full, column_edges=column_edges)
             verdict = two_layer_consistency(rgb_full, parts)
             self.two_layer_report = verdict
@@ -969,13 +970,18 @@ class CoreMixin:
                 return [int(roi[0] + width * i / n) for i in range(n + 1)]
         return None
 
-    def detect_columns(
+    def _resolve_column_bounds(
         self,
-        data_xlim: list[float] | None = None,
-        data_ylim: list[float] | None = None,
-        roi_id: str | None = None,
-    ) -> list[dict[str, Any]]:
-        """Detects or divides diagram data columns within provided diagram bounds."""
+        data_xlim: list[float] | None,
+        data_ylim: list[float] | None,
+        roi_id: str | None,
+    ) -> tuple[float, float, float, float, dict[str, Any] | None, str]:
+        """解析目标 ROI、校验并夹取搜索边界，并把结果回写到会话。
+
+        回写四样东西，都是下游默认会读的：data_xlim / data_ylim（本次搜索范围）、
+        target_roi 的 xlim / ylim（ROI 跟着走）、grid_line_mask / degrid_info 清空
+        （换了范围，上一轮的掩膜不再对应当前范围）。
+        """
         if self.image is None:
             raise JsonRpcError(STATE_ERROR, "No image loaded.")
 
@@ -1029,6 +1035,18 @@ class CoreMixin:
             target_roi["ylim"] = [y0, y1]
         self.grid_line_mask = None
         self.degrid_info = None
+        return x0, x1, y0, y1, target_roi, target_roi_id
+
+    def detect_columns(
+        self,
+        data_xlim: list[float] | None = None,
+        data_ylim: list[float] | None = None,
+        roi_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Detects or divides diagram data columns within provided diagram bounds."""
+        x0, x1, y0, y1, target_roi, target_roi_id = self._resolve_column_bounds(
+            data_xlim, data_ylim, roi_id
+        )
 
         if self.foreground_mask is None:
             self._extract_foreground_from_settings()
@@ -1211,9 +1229,14 @@ class CoreMixin:
                     if x_group_id:
                         for r_item in getattr(self, "rois", []):
                             for grp in r_item.get("x_groups", []):
-                                if grp.get("id") == x_group_id and grp.get("ref_span_px"):
+                                if grp.get("id") == x_group_id and grp.get(
+                                    "ref_span_px"
+                                ):
                                     ref_span = max(ref_span, float(grp["ref_span_px"]))
-                    max_span = max(c_max - c_min + 15.0, (ref_span + 15.0) if ref_span > 0 else 80.0)
+                    max_span = max(
+                        c_max - c_min + 15.0,
+                        (ref_span + 15.0) if ref_span > 0 else 80.0,
+                    )
                     hi = min(c_min + max_span, max_img_w)
                     px0 = t[0].get("px", 0) if len(t) == 2 else -999
                     px1 = t[1].get("px", 0) if len(t) == 2 else -999
