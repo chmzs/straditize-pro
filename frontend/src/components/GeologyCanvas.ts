@@ -52,6 +52,7 @@ import { assertNoDuplicateBindings, matchesKeyBinding } from './canvas/keyBindin
 import type { KeyBinding } from './canvas/keyBindings';
 import { findHitAnchorAt, findHitBoundaryAt, findHitRoiHandleAt } from './canvas/hitTest';
 import { findHitGeometryAt } from './canvas/geometryHitTest';
+import { probeHover } from './canvas/hoverProbe';
 import type { GeometryCandidate, GeometryHit } from './canvas/geometryHitTest';
 import { drawBackgroundDiagramOverlay } from './canvas/backgroundDiagram';
 import { drawRoiOverlay as drawRoiOverlayIntoContext } from './canvas/roiRegion';
@@ -1302,70 +1303,24 @@ private pointer: PointerState = {
       if (handled) return;
     }
 
-    // 探测当前是否悬停在特定标准地层层位附近
-    const cal = this.data.calibration;
-    const roi = this.data.roi;
-    const calib = CoordinateSystem.calibrationBounds(cal);
-    const interval = cal.depthInterval && cal.depthInterval > 0 ? cal.depthInterval : 2;
+    const probe = probeHover({
+      worldPt,
+      calibration: this.data.calibration,
+      roi: this.data.roi,
+      scale: this.viewport.scale,
+      activeColumn: this.getActiveColumn() ?? null,
+    });
+    this.pointer.depthHorizon = probe.horizon;
 
-    let depth: number | undefined;
-    if (calib) {
-      const totalPx = calib.bottomPx - calib.topPx;
-      depth =
-        calib.topValue +
-        ((worldPt.y - calib.topPx) / totalPx) * (calib.bottomValue - calib.topValue);
-
-      if (worldPt.y >= calib.topPx - 15 && worldPt.y <= calib.bottomPx + 15) {
-        const nearestHorizon = Math.round(depth / interval) * interval;
-        const nearestHorizonY =
-          calib.topPx +
-          ((nearestHorizon - calib.topValue) / (calib.bottomValue - calib.topValue || 1)) *
-            totalPx;
-        if (Math.abs(worldPt.y - nearestHorizonY) <= 8 / this.viewport.scale) {
-          this.pointer.depthHorizon = Number(nearestHorizon.toFixed(2));
-        } else {
-          this.pointer.depthHorizon = null;
-        }
-      } else {
-        this.pointer.depthHorizon = null;
-      }
-    } else {
-      this.pointer.depthHorizon = null;
-    }
-
-    // 探测是否悬停在左侧标尺顶部设定按钮
-    const gridStartX = Math.max(0, roi.xMin - 50);
+    // 标尺徽标 hover 变化才重绘：这是高频路径，不能每次都 requestRender。
     const wasHoveringBadge = this.pointer.rulerBadge;
-    this.pointer.rulerBadge =
-      worldPt.x <= gridStartX &&
-      worldPt.x >= gridStartX - 160 &&
-      worldPt.y >= roi.yMin - 35 &&
-      worldPt.y <= roi.yMin + 5;
-
+    this.pointer.rulerBadge = probe.overRulerBadge;
     if (wasHoveringBadge !== this.pointer.rulerBadge) {
       this.updateCursor();
       this.requestRender();
     }
 
-    // 悬停信息回调
-    if (this.callbacks.onHoverInfo) {
-      const activeCol = this.getActiveColumn();
-      let percent: number | undefined;
-
-      if (activeCol && CoordinateSystem.hasRealCalibration(activeCol)) {
-        // 未标定列的换算只会给出猜测标度下的数字（tickEndX / maxPercent 来自分列期），
-        // 状态栏如实留空显示 `--`，不显示编造的丰度。
-        percent = CoordinateSystem.imageXToPercent(worldPt.x, activeCol);
-      }
-
-      this.callbacks.onHoverInfo({
-        worldX: Math.round(worldPt.x),
-        worldY: Math.round(worldPt.y),
-        depth: depth ? Number(depth.toFixed(2)) : undefined,
-        percent: percent ? Number(Math.max(0, percent).toFixed(1)) : undefined,
-        horizonDepth: this.pointer.depthHorizon,
-      });
-    }
+    this.callbacks.onHoverInfo?.(probe.info);
 
     // 普通悬停探测
     const prevHoverAnchor = this.pointer.anchor;
