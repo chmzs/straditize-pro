@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 from PIL import Image
 from scipy.ndimage import gaussian_filter, median_filter
@@ -208,6 +210,128 @@ def _rule_box_holds_calibration(
     return True
 
 
+@dataclass(frozen=True)
+class _SearchWindow:
+    """读图范围与两幅预处理图：原三通道 + 灰度。"""
+
+    img_arr: np.ndarray
+    gray_full: np.ndarray
+    rx0: int
+    ry0: int
+    rx1: int
+    ry1: int
+    roi_source: str
+
+
+def _prepare_search_window(
+    image: Image.Image | np.ndarray,
+    calibrator: AgeDepthAxisCalibrator,
+    roi_box: tuple[int, int, int, int] | list[int] | None,
+    depth_range: tuple[float, float] | list[float] | None,
+    retain_frac: float,
+) -> _SearchWindow:
+    """决定读哪块像素：灰度化 → 搜索窗 → 按深度范围裁剪。
+
+    三段必须一起搬：灰度图是搜索窗检测（_detect_axis_rule_box）的输入，
+    而搜索窗的 y 范围又被 depth_range 收紧——任何一段单独存在都没有意义。
+    """
+
+    if isinstance(image, Image.Image):
+        img_arr = np.array(image.convert("RGB"))
+    else:
+        img_arr = np.asarray(image)
+
+    h, w = img_arr.shape[:2]
+
+    # ---- 0. Greyscale (needed before the search window can be derived) -------
+    if img_arr.ndim == 3:
+        gray_full = np.dot(img_arr[..., :3], [0.299, 0.587, 0.114]).astype(np.float32)
+    else:
+        gray_full = img_arr.astype(np.float32)
+
+    # ---- 1. Determine the search window -------------------------------------
+    px_ages = sorted(
+        (float(calibrator.age_cal.px_points[0]), float(calibrator.age_cal.px_points[1]))
+    )
+    px_depths = sorted(
+        (
+            float(calibrator.depth_cal.px_points[0]),
+            float(calibrator.depth_cal.px_points[1]),
+        )
+    )
+
+    if roi_box is not None:
+        rx0, ry0, rx1, ry1 = (int(round(v)) for v in roi_box)
+        roi_source = "caller-supplied roi_box"
+    else:
+        # The search region is the plot's own data area, derived from the axis rules and
+        # INDEPENDENT of where the calibration points sit.
+        #
+        # This used to clamp the rule extent to at most `retain_frac` beyond the
+        # calibration rectangle. That coupling is unjustified: the two calibration points
+        # say what the pixels MEAN, not which part of the panel to read. It also failed
+        # silently on the bundled Bacon figure, because a user picks two legible ticks
+        # rather than the outermost ones:
+        #
+        #   ticks 3000/0     -> depth   0.0 .. 160.1,  age  -30 .. 2871   (full curve)
+        #   ticks 2000/1000  -> depth  64.6 .. 148.8,  age  734 .. 2242   (upper 65 cm lost)
+        #   ticks 1500/500   -> depth  25.7 .. 140.3,  age  208 .. 1791
+        #
+        # The truncation was horizontal, so rows whose curve fell outside the clamped
+        # x-window found no candidates at all and dropped out vertically too; a generous
+        # depth_range could not recover them.
+        span_x = max(1.0, px_ages[1] - px_ages[0])
+        span_y = max(1.0, px_depths[1] - px_depths[0])
+        rule_box = _detect_axis_rule_box(gray_full)
+        if rule_box is not None and _rule_box_holds_calibration(
+            rule_box, px_ages, px_depths, w, h
+        ):
+            rx0, ry0, rx1, ry1 = rule_box
+            roi_source = f"axis rule extents {rule_box}"
+        else:
+            # No usable rule box (a frame-less or very light rendering, or the detected
+            # rules are something else on the figure): fall back to the calibration
+            # rectangle plus a margin, and record that this weaker basis was used.
+            margin_x = retain_frac * span_x
+            margin_y = retain_frac * span_y
+            rx0 = int(px_ages[0] - margin_x)
+            rx1 = int(px_ages[1] + margin_x) + 1
+            ry0 = int(px_depths[0] - margin_y)
+            ry1 = int(px_depths[1] + margin_y) + 1
+            roi_source = (
+                "calibration rectangle + "
+                f"{retain_frac:.0%} margin (no usable axis rules detected)"
+            )
+
+    rx0 = max(0, min(w - 1, rx0))
+    rx1 = max(rx0 + 1, min(w, rx1))
+    ry0 = max(0, min(h - 1, ry0))
+    ry1 = max(ry0 + 1, min(h, ry1))
+
+    # ---- 2. Clip vertically to the requested depth range --------------------
+    if depth_range is not None and len(depth_range) == 2:
+        d_lo, d_hi = sorted(float(v) for v in depth_range)
+        py_a = float(calibrator.depth2px(d_lo))
+        py_b = float(calibrator.depth2px(d_hi))
+        ry0 = max(ry0, int(np.floor(min(py_a, py_b))))
+        ry1 = min(ry1, int(np.ceil(max(py_a, py_b))) + 1)
+        if ry1 - ry0 < 2:
+            raise ValueError(
+                f"Depth range {depth_range} maps to fewer than 2 pixel rows inside the "
+                f"search window; check the depth calibration."
+            )
+
+    return _SearchWindow(
+        img_arr=img_arr,
+        gray_full=gray_full,
+        rx0=rx0,
+        ry0=ry0,
+        rx1=rx1,
+        ry1=ry1,
+        roi_source=roi_source,
+    )
+
+
 def extract_age_depth_model(
     image: Image.Image | np.ndarray,
     calibrator: AgeDepthAxisCalibrator,
@@ -299,91 +423,14 @@ def extract_age_depth_model(
         span. Only a fallback: the primary search region comes from the axis rule extents
         and is deliberately independent of the calibration points.
     """
-    if isinstance(image, Image.Image):
-        img_arr = np.array(image.convert("RGB"))
-    else:
-        img_arr = np.asarray(image)
-
+    window = _prepare_search_window(
+        image, calibrator, roi_box, depth_range, retain_frac
+    )
+    img_arr = window.img_arr
+    gray_full = window.gray_full
+    rx0, ry0, rx1, ry1 = window.rx0, window.ry0, window.rx1, window.ry1
+    roi_source = window.roi_source
     h, w = img_arr.shape[:2]
-
-    # ---- 0. Greyscale (needed before the search window can be derived) -------
-    if img_arr.ndim == 3:
-        gray_full = np.dot(img_arr[..., :3], [0.299, 0.587, 0.114]).astype(np.float32)
-    else:
-        gray_full = img_arr.astype(np.float32)
-
-    # ---- 1. Determine the search window -------------------------------------
-    px_ages = sorted(
-        (float(calibrator.age_cal.px_points[0]), float(calibrator.age_cal.px_points[1]))
-    )
-    px_depths = sorted(
-        (
-            float(calibrator.depth_cal.px_points[0]),
-            float(calibrator.depth_cal.px_points[1]),
-        )
-    )
-
-    if roi_box is not None:
-        rx0, ry0, rx1, ry1 = (int(round(v)) for v in roi_box)
-        roi_source = "caller-supplied roi_box"
-    else:
-        # The search region is the plot's own data area, derived from the axis rules and
-        # INDEPENDENT of where the calibration points sit.
-        #
-        # This used to clamp the rule extent to at most `retain_frac` beyond the
-        # calibration rectangle. That coupling is unjustified: the two calibration points
-        # say what the pixels MEAN, not which part of the panel to read. It also failed
-        # silently on the bundled Bacon figure, because a user picks two legible ticks
-        # rather than the outermost ones:
-        #
-        #   ticks 3000/0     -> depth   0.0 .. 160.1,  age  -30 .. 2871   (full curve)
-        #   ticks 2000/1000  -> depth  64.6 .. 148.8,  age  734 .. 2242   (upper 65 cm lost)
-        #   ticks 1500/500   -> depth  25.7 .. 140.3,  age  208 .. 1791
-        #
-        # The truncation was horizontal, so rows whose curve fell outside the clamped
-        # x-window found no candidates at all and dropped out vertically too; a generous
-        # depth_range could not recover them.
-        span_x = max(1.0, px_ages[1] - px_ages[0])
-        span_y = max(1.0, px_depths[1] - px_depths[0])
-        rule_box = _detect_axis_rule_box(gray_full)
-        if rule_box is not None and _rule_box_holds_calibration(
-            rule_box, px_ages, px_depths, w, h
-        ):
-            rx0, ry0, rx1, ry1 = rule_box
-            roi_source = f"axis rule extents {rule_box}"
-        else:
-            # No usable rule box (a frame-less or very light rendering, or the detected
-            # rules are something else on the figure): fall back to the calibration
-            # rectangle plus a margin, and record that this weaker basis was used.
-            margin_x = retain_frac * span_x
-            margin_y = retain_frac * span_y
-            rx0 = int(px_ages[0] - margin_x)
-            rx1 = int(px_ages[1] + margin_x) + 1
-            ry0 = int(px_depths[0] - margin_y)
-            ry1 = int(px_depths[1] + margin_y) + 1
-            roi_source = (
-                "calibration rectangle + "
-                f"{retain_frac:.0%} margin (no usable axis rules detected)"
-            )
-
-    rx0 = max(0, min(w - 1, rx0))
-    rx1 = max(rx0 + 1, min(w, rx1))
-    ry0 = max(0, min(h - 1, ry0))
-    ry1 = max(ry0 + 1, min(h, ry1))
-
-    # ---- 2. Clip vertically to the requested depth range --------------------
-    if depth_range is not None and len(depth_range) == 2:
-        d_lo, d_hi = sorted(float(v) for v in depth_range)
-        py_a = float(calibrator.depth2px(d_lo))
-        py_b = float(calibrator.depth2px(d_hi))
-        ry0 = max(ry0, int(np.floor(min(py_a, py_b))))
-        ry1 = min(ry1, int(np.ceil(max(py_a, py_b))) + 1)
-        if ry1 - ry0 < 2:
-            raise ValueError(
-                f"Depth range {depth_range} maps to fewer than 2 pixel rows inside the "
-                f"search window; check the depth calibration."
-            )
-
     # ---- 3. Two response channels: darkness and chromatic ink ----------------
     dark = (255.0 - gray_full[ry0:ry1, rx0:rx1]).astype(np.float32)
     # Published age-depth figures very often draw the median as a *coloured* dashed line
@@ -790,9 +837,7 @@ def extract_age_depth_model(
     else:
         resolved_direction = bool(age_increases_downcore)
         if observed_direction == resolved_direction:
-            direction_reason = (
-                f"forced by the caller, agreeing with the traced curve ({observed_reason})"
-            )
+            direction_reason = f"forced by the caller, agreeing with the traced curve ({observed_reason})"
         else:
             direction_reason = (
                 f"forced by the caller against the traced curve, which "
@@ -882,6 +927,5 @@ def extract_age_depth_model(
     #: being an invisible default. The UI shows this and offers it as a manual override.
     model.age_increases_downcore = bool(resolved_direction)
     model.age_direction_reason = direction_reason
-
 
     return model
