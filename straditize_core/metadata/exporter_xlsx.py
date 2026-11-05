@@ -39,317 +39,7 @@ def export_scientific_xlsx(
         # 1. meta_info Sheet (Optional)
         # ====================================================================
         if include_meta_sheets and meta_info:
-            meta_rows = []
-
-            # Group 1: Publication
-            pub = meta_info.get("publication", {})
-            meta_rows.append(
-                {
-                    "Category": "Publication",
-                    "Field": "DOI",
-                    "Value": pub.get("doi", ""),
-                    "Source": pub.get("source", "DOI"),
-                    "Confidence": "high",
-                }
-            )
-            meta_rows.append(
-                {
-                    "Category": "Publication",
-                    "Field": "Title",
-                    "Value": pub.get("title", ""),
-                    "Source": pub.get("source", "DOI"),
-                    "Confidence": "high",
-                }
-            )
-            authors_val = (
-                ", ".join(pub.get("authors", []))
-                if isinstance(pub.get("authors"), list)
-                else str(pub.get("authors", ""))
-            )
-            meta_rows.append(
-                {
-                    "Category": "Publication",
-                    "Field": "Authors",
-                    "Value": authors_val,
-                    "Source": pub.get("source", "DOI"),
-                    "Confidence": "high",
-                }
-            )
-            meta_rows.append(
-                {
-                    "Category": "Publication",
-                    "Field": "Journal",
-                    "Value": pub.get("journal", ""),
-                    "Source": pub.get("source", "DOI"),
-                    "Confidence": "high",
-                }
-            )
-            meta_rows.append(
-                {
-                    "Category": "Publication",
-                    "Field": "Year",
-                    "Value": pub.get("year", ""),
-                    "Source": pub.get("source", "DOI"),
-                    "Confidence": "high",
-                }
-            )
-            if pub.get("funding_agency"):
-                meta_rows.append(
-                    {
-                        "Category": "Publication",
-                        "Field": "Funding Agency",
-                        "Value": pub.get("funding_agency", ""),
-                        "Source": pub.get("source", "User"),
-                        "Confidence": "high",
-                    }
-                )
-            if pub.get("funding_grant"):
-                meta_rows.append(
-                    {
-                        "Category": "Publication",
-                        "Field": "Funding Grant",
-                        "Value": pub.get("funding_grant", ""),
-                        "Source": pub.get("source", "User"),
-                        "Confidence": "high",
-                    }
-                )
-
-            # Group 2: Site Location
-            site = meta_info.get("site", {})
-            meta_rows.append(
-                {
-                    "Category": "Site Location",
-                    "Field": "Site Name",
-                    "Value": site.get("site_name", ""),
-                    "Source": site.get("source", "LLM"),
-                    "Confidence": site.get("confidence", "medium"),
-                }
-            )
-            meta_rows.append(
-                {
-                    "Category": "Site Location",
-                    "Field": "Latitude (°N)",
-                    "Value": site.get("latitude", ""),
-                    "Source": site.get("source", "LLM"),
-                    "Confidence": site.get("confidence", "medium"),
-                }
-            )
-            meta_rows.append(
-                {
-                    "Category": "Site Location",
-                    "Field": "Longitude (°E)",
-                    "Value": site.get("longitude", ""),
-                    "Source": site.get("source", "LLM"),
-                    "Confidence": site.get("confidence", "medium"),
-                }
-            )
-            meta_rows.append(
-                {
-                    "Category": "Site Location",
-                    "Field": "Elevation (m a.s.l.)",
-                    "Value": site.get("elevation_m", ""),
-                    "Source": site.get("source", "LLM"),
-                    "Confidence": site.get("confidence", "medium"),
-                }
-            )
-            meta_rows.append(
-                {
-                    "Category": "Site Location",
-                    "Field": "Archive Type",
-                    "Value": site.get("archive_type", "lake sediment"),
-                    "Source": site.get("source", "LLM"),
-                    "Confidence": site.get("confidence", "medium"),
-                }
-            )
-            if site.get("country"):
-                meta_rows.append(
-                    {
-                        "Category": "Site Location",
-                        "Field": "Country / Region",
-                        "Value": site.get("country", ""),
-                        "Source": site.get("source", "User"),
-                        "Confidence": "high",
-                    }
-                )
-            if site.get("water_depth_m"):
-                meta_rows.append(
-                    {
-                        "Category": "Site Location",
-                        "Field": "Water Depth (m)",
-                        "Value": site.get("water_depth_m", ""),
-                        "Source": site.get("source", "User"),
-                        "Confidence": "high",
-                    }
-                )
-            if site.get("core_length_m"):
-                meta_rows.append(
-                    {
-                        "Category": "Site Location",
-                        "Field": "Core Length (m)",
-                        "Value": site.get("core_length_m", ""),
-                        "Source": site.get("source", "User"),
-                        "Confidence": "high",
-                    }
-                )
-            if site.get("collection_date"):
-                meta_rows.append(
-                    {
-                        "Category": "Site Location",
-                        "Field": "Collection Date",
-                        "Value": site.get("collection_date", ""),
-                        "Source": site.get("source", "User"),
-                        "Confidence": "high",
-                    }
-                )
-
-            # Group 3: Chronology
-            chron = meta_info.get("chronology", {})
-            meta_rows.append(
-                {
-                    "Category": "Chronology",
-                    "Field": "Age Model",
-                    "Value": chron.get("age_model", "Bacon"),
-                    "Source": chron.get("source", "LLM"),
-                    "Confidence": chron.get("confidence", "medium"),
-                }
-            )
-            meta_rows.append(
-                {
-                    "Category": "Chronology",
-                    "Field": "Age Range",
-                    "Value": chron.get("age_range", ""),
-                    "Source": chron.get("source", "LLM"),
-                    "Confidence": chron.get("confidence", "medium"),
-                }
-            )
-            meta_rows.append(
-                {
-                    "Category": "Chronology",
-                    "Field": "Dating Method",
-                    "Value": chron.get("dating_method", "14C"),
-                    "Source": chron.get("source", "LLM"),
-                    "Confidence": chron.get("confidence", "medium"),
-                }
-            )
-            meta_rows.append(
-                {
-                    "Category": "Chronology",
-                    "Field": "Calibration Curve",
-                    "Value": chron.get("cal_curve", "IntCal20"),
-                    "Source": "User",
-                    "Confidence": "high",
-                }
-            )
-
-            # Group 4: Technical & Laboratory
-            tech = meta_info.get("technical", {})
-            meta_rows.append(
-                {
-                    "Category": "Technical",
-                    "Field": "Pollen Extraction Method",
-                    "Value": tech.get(
-                        "pollen_extraction_method", "HF digestion / sieving"
-                    ),
-                    "Source": tech.get("source", "LLM"),
-                    "Confidence": tech.get("confidence", "medium"),
-                }
-            )
-            meta_rows.append(
-                {
-                    "Category": "Technical",
-                    "Field": "Laboratory",
-                    "Value": tech.get("laboratory", ""),
-                    "Source": tech.get("source", "LLM"),
-                    "Confidence": tech.get("confidence", "medium"),
-                }
-            )
-            meta_rows.append(
-                {
-                    "Category": "Technical",
-                    "Field": "Sampling Interval (cm)",
-                    "Value": tech.get("sampling_interval_cm", ""),
-                    "Source": tech.get("source", "LLM"),
-                    "Confidence": tech.get("confidence", "medium"),
-                }
-            )
-            if tech.get("investigators"):
-                meta_rows.append(
-                    {
-                        "Category": "Technical",
-                        "Field": "Investigators / Collectors",
-                        "Value": tech.get("investigators", ""),
-                        "Source": tech.get("source", "User"),
-                        "Confidence": "high",
-                    }
-                )
-            if tech.get("digitizer"):
-                meta_rows.append(
-                    {
-                        "Category": "Technical",
-                        "Field": "Digitizer / Curator",
-                        "Value": tech.get("digitizer", ""),
-                        "Source": tech.get("source", "User"),
-                        "Confidence": "high",
-                    }
-                )
-            if tech.get("affiliation"):
-                meta_rows.append(
-                    {
-                        "Category": "Technical",
-                        "Field": "Affiliation / Institution",
-                        "Value": tech.get("affiliation", ""),
-                        "Source": tech.get("source", "User"),
-                        "Confidence": "high",
-                    }
-                )
-            if tech.get("digitization_date"):
-                meta_rows.append(
-                    {
-                        "Category": "Technical",
-                        "Field": "Digitization Date",
-                        "Value": tech.get("digitization_date", ""),
-                        "Source": tech.get("source", "User"),
-                        "Confidence": "high",
-                    }
-                )
-
-            # Group 5: Quality Remarks
-            qual = meta_info.get("quality", {})
-            meta_rows.append(
-                {
-                    "Category": "Quality & Remarks",
-                    "Field": "Quality Notes",
-                    "Value": qual.get(
-                        "quality_notes",
-                        "Unobserved taxa strictly filled as 0.00 (Zero-Abundance standard).",
-                    ),
-                    "Source": qual.get("source", "User"),
-                    "Confidence": "high",
-                }
-            )
-            if qual.get("dataset_version"):
-                meta_rows.append(
-                    {
-                        "Category": "Quality & Remarks",
-                        "Field": "Dataset Version",
-                        "Value": qual.get("dataset_version", ""),
-                        "Source": qual.get("source", "User"),
-                        "Confidence": "high",
-                    }
-                )
-            if qual.get("original_data_url"):
-                meta_rows.append(
-                    {
-                        "Category": "Quality & Remarks",
-                        "Field": "Original Data URL",
-                        "Value": qual.get("original_data_url", ""),
-                        "Source": qual.get("source", "User"),
-                        "Confidence": "high",
-                    }
-                )
-
-            df_meta = pd.DataFrame(meta_rows)
-            df_meta.to_excel(writer, sheet_name="meta_info", index=False)
+            _write_meta_sheet(writer, meta_info)
 
         # ====================================================================
         # 2. ROI Sheets: One sheet per ROI, sheet name = ROI name (Contract §4.2)
@@ -457,3 +147,320 @@ def export_scientific_xlsx(
             f.write(xlsx_bytes)
 
     return xlsx_bytes
+
+
+def _write_meta_sheet(writer: pd.ExcelWriter, meta_info: dict[str, Any]) -> None:
+    """把 meta_info 摊平成一行一条（Category / Field / Value / Source / Confidence）。
+
+    五组（Publication / Site / Chronology / Technical / Quality）各自先写必填项、再写「有值才出现」
+    的可选项。可选字段的增减由 golden 逐格快照钉住——少一行会红，不是靠肉眼。
+    """
+    meta_rows = []
+
+    # Group 1: Publication
+    pub = meta_info.get("publication", {})
+    meta_rows.append(
+        {
+            "Category": "Publication",
+            "Field": "DOI",
+            "Value": pub.get("doi", ""),
+            "Source": pub.get("source", "DOI"),
+            "Confidence": "high",
+        }
+    )
+    meta_rows.append(
+        {
+            "Category": "Publication",
+            "Field": "Title",
+            "Value": pub.get("title", ""),
+            "Source": pub.get("source", "DOI"),
+            "Confidence": "high",
+        }
+    )
+    authors_val = (
+        ", ".join(pub.get("authors", []))
+        if isinstance(pub.get("authors"), list)
+        else str(pub.get("authors", ""))
+    )
+    meta_rows.append(
+        {
+            "Category": "Publication",
+            "Field": "Authors",
+            "Value": authors_val,
+            "Source": pub.get("source", "DOI"),
+            "Confidence": "high",
+        }
+    )
+    meta_rows.append(
+        {
+            "Category": "Publication",
+            "Field": "Journal",
+            "Value": pub.get("journal", ""),
+            "Source": pub.get("source", "DOI"),
+            "Confidence": "high",
+        }
+    )
+    meta_rows.append(
+        {
+            "Category": "Publication",
+            "Field": "Year",
+            "Value": pub.get("year", ""),
+            "Source": pub.get("source", "DOI"),
+            "Confidence": "high",
+        }
+    )
+    if pub.get("funding_agency"):
+        meta_rows.append(
+            {
+                "Category": "Publication",
+                "Field": "Funding Agency",
+                "Value": pub.get("funding_agency", ""),
+                "Source": pub.get("source", "User"),
+                "Confidence": "high",
+            }
+        )
+    if pub.get("funding_grant"):
+        meta_rows.append(
+            {
+                "Category": "Publication",
+                "Field": "Funding Grant",
+                "Value": pub.get("funding_grant", ""),
+                "Source": pub.get("source", "User"),
+                "Confidence": "high",
+            }
+        )
+
+    # Group 2: Site Location
+    site = meta_info.get("site", {})
+    meta_rows.append(
+        {
+            "Category": "Site Location",
+            "Field": "Site Name",
+            "Value": site.get("site_name", ""),
+            "Source": site.get("source", "LLM"),
+            "Confidence": site.get("confidence", "medium"),
+        }
+    )
+    meta_rows.append(
+        {
+            "Category": "Site Location",
+            "Field": "Latitude (°N)",
+            "Value": site.get("latitude", ""),
+            "Source": site.get("source", "LLM"),
+            "Confidence": site.get("confidence", "medium"),
+        }
+    )
+    meta_rows.append(
+        {
+            "Category": "Site Location",
+            "Field": "Longitude (°E)",
+            "Value": site.get("longitude", ""),
+            "Source": site.get("source", "LLM"),
+            "Confidence": site.get("confidence", "medium"),
+        }
+    )
+    meta_rows.append(
+        {
+            "Category": "Site Location",
+            "Field": "Elevation (m a.s.l.)",
+            "Value": site.get("elevation_m", ""),
+            "Source": site.get("source", "LLM"),
+            "Confidence": site.get("confidence", "medium"),
+        }
+    )
+    meta_rows.append(
+        {
+            "Category": "Site Location",
+            "Field": "Archive Type",
+            "Value": site.get("archive_type", "lake sediment"),
+            "Source": site.get("source", "LLM"),
+            "Confidence": site.get("confidence", "medium"),
+        }
+    )
+    if site.get("country"):
+        meta_rows.append(
+            {
+                "Category": "Site Location",
+                "Field": "Country / Region",
+                "Value": site.get("country", ""),
+                "Source": site.get("source", "User"),
+                "Confidence": "high",
+            }
+        )
+    if site.get("water_depth_m"):
+        meta_rows.append(
+            {
+                "Category": "Site Location",
+                "Field": "Water Depth (m)",
+                "Value": site.get("water_depth_m", ""),
+                "Source": site.get("source", "User"),
+                "Confidence": "high",
+            }
+        )
+    if site.get("core_length_m"):
+        meta_rows.append(
+            {
+                "Category": "Site Location",
+                "Field": "Core Length (m)",
+                "Value": site.get("core_length_m", ""),
+                "Source": site.get("source", "User"),
+                "Confidence": "high",
+            }
+        )
+    if site.get("collection_date"):
+        meta_rows.append(
+            {
+                "Category": "Site Location",
+                "Field": "Collection Date",
+                "Value": site.get("collection_date", ""),
+                "Source": site.get("source", "User"),
+                "Confidence": "high",
+            }
+        )
+
+    # Group 3: Chronology
+    chron = meta_info.get("chronology", {})
+    meta_rows.append(
+        {
+            "Category": "Chronology",
+            "Field": "Age Model",
+            "Value": chron.get("age_model", "Bacon"),
+            "Source": chron.get("source", "LLM"),
+            "Confidence": chron.get("confidence", "medium"),
+        }
+    )
+    meta_rows.append(
+        {
+            "Category": "Chronology",
+            "Field": "Age Range",
+            "Value": chron.get("age_range", ""),
+            "Source": chron.get("source", "LLM"),
+            "Confidence": chron.get("confidence", "medium"),
+        }
+    )
+    meta_rows.append(
+        {
+            "Category": "Chronology",
+            "Field": "Dating Method",
+            "Value": chron.get("dating_method", "14C"),
+            "Source": chron.get("source", "LLM"),
+            "Confidence": chron.get("confidence", "medium"),
+        }
+    )
+    meta_rows.append(
+        {
+            "Category": "Chronology",
+            "Field": "Calibration Curve",
+            "Value": chron.get("cal_curve", "IntCal20"),
+            "Source": "User",
+            "Confidence": "high",
+        }
+    )
+
+    # Group 4: Technical & Laboratory
+    tech = meta_info.get("technical", {})
+    meta_rows.append(
+        {
+            "Category": "Technical",
+            "Field": "Pollen Extraction Method",
+            "Value": tech.get("pollen_extraction_method", "HF digestion / sieving"),
+            "Source": tech.get("source", "LLM"),
+            "Confidence": tech.get("confidence", "medium"),
+        }
+    )
+    meta_rows.append(
+        {
+            "Category": "Technical",
+            "Field": "Laboratory",
+            "Value": tech.get("laboratory", ""),
+            "Source": tech.get("source", "LLM"),
+            "Confidence": tech.get("confidence", "medium"),
+        }
+    )
+    meta_rows.append(
+        {
+            "Category": "Technical",
+            "Field": "Sampling Interval (cm)",
+            "Value": tech.get("sampling_interval_cm", ""),
+            "Source": tech.get("source", "LLM"),
+            "Confidence": tech.get("confidence", "medium"),
+        }
+    )
+    if tech.get("investigators"):
+        meta_rows.append(
+            {
+                "Category": "Technical",
+                "Field": "Investigators / Collectors",
+                "Value": tech.get("investigators", ""),
+                "Source": tech.get("source", "User"),
+                "Confidence": "high",
+            }
+        )
+    if tech.get("digitizer"):
+        meta_rows.append(
+            {
+                "Category": "Technical",
+                "Field": "Digitizer / Curator",
+                "Value": tech.get("digitizer", ""),
+                "Source": tech.get("source", "User"),
+                "Confidence": "high",
+            }
+        )
+    if tech.get("affiliation"):
+        meta_rows.append(
+            {
+                "Category": "Technical",
+                "Field": "Affiliation / Institution",
+                "Value": tech.get("affiliation", ""),
+                "Source": tech.get("source", "User"),
+                "Confidence": "high",
+            }
+        )
+    if tech.get("digitization_date"):
+        meta_rows.append(
+            {
+                "Category": "Technical",
+                "Field": "Digitization Date",
+                "Value": tech.get("digitization_date", ""),
+                "Source": tech.get("source", "User"),
+                "Confidence": "high",
+            }
+        )
+
+    # Group 5: Quality Remarks
+    qual = meta_info.get("quality", {})
+    meta_rows.append(
+        {
+            "Category": "Quality & Remarks",
+            "Field": "Quality Notes",
+            "Value": qual.get(
+                "quality_notes",
+                "Unobserved taxa strictly filled as 0.00 (Zero-Abundance standard).",
+            ),
+            "Source": qual.get("source", "User"),
+            "Confidence": "high",
+        }
+    )
+    if qual.get("dataset_version"):
+        meta_rows.append(
+            {
+                "Category": "Quality & Remarks",
+                "Field": "Dataset Version",
+                "Value": qual.get("dataset_version", ""),
+                "Source": qual.get("source", "User"),
+                "Confidence": "high",
+            }
+        )
+    if qual.get("original_data_url"):
+        meta_rows.append(
+            {
+                "Category": "Quality & Remarks",
+                "Field": "Original Data URL",
+                "Value": qual.get("original_data_url", ""),
+                "Source": qual.get("source", "User"),
+                "Confidence": "high",
+            }
+        )
+
+    df_meta = pd.DataFrame(meta_rows)
+    df_meta.to_excel(writer, sheet_name="meta_info", index=False)
