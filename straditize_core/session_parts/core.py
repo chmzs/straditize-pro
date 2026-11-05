@@ -1184,40 +1184,25 @@ class CoreMixin:
         self.degrid_info = None
         return x0, x1, y0, y1, target_roi, target_roi_id
 
-    def detect_columns(
+    def _merge_with_existing_columns(
         self,
-        data_xlim: list[float] | None = None,
-        data_ylim: list[float] | None = None,
-        roi_id: str | None = None,
+        detected_cols: list[dict[str, Any]],
+        *,
+        bounds: list,
+        gray_sub: "np.ndarray",
+        target_roi: dict[str, Any] | None,
+        target_roi_id: str,
+        x0: float,
+        y0: float,
+        y1: float,
     ) -> list[dict[str, Any]]:
-        """Detects or divides diagram data columns within provided diagram bounds."""
-        x0, x1, y0, y1, target_roi, target_roi_id = self._resolve_column_bounds(
-            data_xlim, data_ylim, roi_id
-        )
+        """把新检出的列并进 self.columns：保留其它 ROI 的列、沿用同名列的既有状态。
 
-        (
-            ix0,
-            ix1,
-            iy0,
-            iy1,
-            gray_sub,
-            cleaned_sub_mask,
-            bounds,
-        ) = self._prepare_detection_masks(x0, x1, y0, y1)
-
+        复杂度全在「什么该继承」上：old_roi_cols 与 detected_cols 数量相同时沿用旧状态
+        （preserve_state），否则当作重新分列、只保留组归属；before/after 依 first_roi_pos
+        切分，最后整体 _reindex_columns 并补回超出的 taxa_names 尾巴。
+        """
         from ..columns import measure_axis_stroke
-
-        detected_cols = self._build_detected_columns(
-            bounds,
-            x0=x0,
-            target_roi_id=target_roi_id,
-            gray_sub=gray_sub,
-            cleaned_sub_mask=cleaned_sub_mask,
-            ix0=ix0,
-            ix1=ix1,
-            iy0=iy0,
-            iy1=iy1,
-        )
 
         existing_cols = getattr(self, "columns", [])
         first_roi_pos = next(
@@ -1450,6 +1435,50 @@ class CoreMixin:
             target_roi["columns_stale"] = False
 
         return detected_cols
+
+    def detect_columns(
+        self,
+        data_xlim: list[float] | None = None,
+        data_ylim: list[float] | None = None,
+        roi_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Detects or divides diagram data columns within provided diagram bounds."""
+        x0, x1, y0, y1, target_roi, target_roi_id = self._resolve_column_bounds(
+            data_xlim, data_ylim, roi_id
+        )
+
+        (
+            ix0,
+            ix1,
+            iy0,
+            iy1,
+            gray_sub,
+            cleaned_sub_mask,
+            bounds,
+        ) = self._prepare_detection_masks(x0, x1, y0, y1)
+
+        detected_cols = self._build_detected_columns(
+            bounds,
+            x0=x0,
+            target_roi_id=target_roi_id,
+            gray_sub=gray_sub,
+            cleaned_sub_mask=cleaned_sub_mask,
+            ix0=ix0,
+            ix1=ix1,
+            iy0=iy0,
+            iy1=iy1,
+        )
+
+        return self._merge_with_existing_columns(
+            detected_cols,
+            bounds=bounds,
+            gray_sub=gray_sub,
+            target_roi=target_roi,
+            target_roi_id=target_roi_id,
+            x0=x0,
+            y0=y0,
+            y1=y1,
+        )
 
     def _roi_box(
         self, roi_id: str | None = None
