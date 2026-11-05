@@ -331,7 +331,267 @@
    "Age_Uncertainty",
    "qc_notes",
    "readme"
-  ]
+  ],
+  "styles": {
+   "Age_Uncertainty": {
+    "grid": true,
+    "header": [
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ],
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ]
+    ],
+    "widths": {
+     "A": 12.0,
+     "B": 12.0
+    }
+   },
+   "age-depth": {
+    "grid": true,
+    "header": [
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ],
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ]
+    ],
+    "widths": {
+     "A": 12.0,
+     "B": 13.0
+    }
+   },
+   "charcoal": {
+    "grid": true,
+    "header": [
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ],
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ]
+    ],
+    "widths": {
+     "A": 12.0,
+     "B": 12.0
+    }
+   },
+   "meta_info": {
+    "grid": true,
+    "header": [
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ],
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ],
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ],
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ],
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ]
+    ],
+    "widths": {
+     "A": 20.0,
+     "B": 29.0,
+     "C": 34.0,
+     "D": 12.0,
+     "E": 13.0
+    }
+   },
+   "pollen": {
+    "grid": true,
+    "header": [
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ],
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ],
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ]
+    ],
+    "widths": {
+     "A": 12.0,
+     "B": 12.0,
+     "C": 12.0
+    }
+   },
+   "qc_notes": {
+    "grid": true,
+    "header": [
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ],
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ],
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ]
+    ],
+    "widths": {
+     "A": 12.0,
+     "B": 12.0,
+     "C": 12.0
+    }
+   },
+   "readme": {
+    "grid": true,
+    "header": [
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ],
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ]
+    ],
+    "widths": {
+     "A": 25.0,
+     "B": 45.0
+    }
+   }
+  }
  },
  "minimal": {
   "cells": {
@@ -360,6 +620,48 @@
   },
   "sheets": [
    "pollen"
-  ]
+  ],
+  "styles": {
+   "pollen": {
+    "grid": true,
+    "header": [
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ],
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ],
+     [
+      "Segoe UI",
+      11.0,
+      true,
+      "00FFFFFF",
+      "solid",
+      "000F172A",
+      "center",
+      "center"
+     ]
+    ],
+    "widths": {
+     "A": 12.0,
+     "B": 12.0,
+     "C": 12.0
+    }
+   }
+  }
  }
 }

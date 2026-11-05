@@ -112,42 +112,8 @@ def export_scientific_xlsx(
     # Styling pass with openpyxl
     bio.seek(0)
     wb = openpyxl.load_workbook(bio)
-
-    header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
-    header_fill = PatternFill(
-        start_color="0F172A", end_color="0F172A", fill_type="solid"
-    )
-    border_thin = Side(border_style="thin", color="CBD5E1")
-    grid_border = Border(
-        left=border_thin, right=border_thin, top=border_thin, bottom=border_thin
-    )
-
-    for sheetname in wb.sheetnames:
-        ws = wb[sheetname]
-        ws.views.sheetView[0].showGridLines = True
-        # Style header row
-        for cell in ws[1]:
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-
-        # Auto-adjust column widths
-        for col in ws.columns:
-            max_len = max(len(str(cell.value or "")) for cell in col)
-            col_letter = openpyxl.utils.get_column_letter(col[0].column)
-            ws.column_dimensions[col_letter].width = min(45, max(12, max_len + 3))
-
-    out_bio = io.BytesIO()
-    wb.save(out_bio)
-    xlsx_bytes = out_bio.getvalue()
-
-    if output_path:
-        out_dir = os.path.dirname(os.path.abspath(output_path))
-        os.makedirs(out_dir, exist_ok=True)
-        with open(output_path, "wb") as f:
-            f.write(xlsx_bytes)
-
-    return xlsx_bytes
+    _style_workbook(wb)
+    return _serialize_workbook(wb, output_path)
 
 
 def _format_authors(raw: Any) -> str:
@@ -410,3 +376,44 @@ def _write_meta_sheet(writer: pd.ExcelWriter, meta_info: dict[str, Any]) -> None
             }
         )
     pd.DataFrame(rows).to_excel(writer, sheet_name="meta_info", index=False)
+
+
+def _style_workbook(wb: openpyxl.Workbook) -> None:
+    """统一所有 sheet 的表头样式（Segoe UI 11 粗体白字 / 深色实底 / 居中）与列宽。
+
+    列宽按内容长度自适应并夹在 [12, 45]：太窄看不清、太宽在窄屏上横向滚动。
+    """
+    header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(
+        start_color="0F172A", end_color="0F172A", fill_type="solid"
+    )
+    border_thin = Side(border_style="thin", color="CBD5E1")
+    grid_border = Border(
+        left=border_thin, right=border_thin, top=border_thin, bottom=border_thin
+    )
+    for sheetname in wb.sheetnames:
+        ws = wb[sheetname]
+        ws.views.sheetView[0].showGridLines = True
+        # Style header row
+        for cell in ws[1]:
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        # Auto-adjust column widths
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or "")) for cell in col)
+            col_letter = openpyxl.utils.get_column_letter(col[0].column)
+            ws.column_dimensions[col_letter].width = min(45, max(12, max_len + 3))
+
+
+def _serialize_workbook(wb: openpyxl.Workbook, output_path: str | None) -> bytes:
+    """序列化为 bytes；给了 output_path 就顺带落盘（目录不存在则创建）。"""
+    out_bio = io.BytesIO()
+    wb.save(out_bio)
+    xlsx_bytes = out_bio.getvalue()
+    if output_path:
+        out_dir = os.path.dirname(os.path.abspath(output_path))
+        os.makedirs(out_dir, exist_ok=True)
+        with open(output_path, "wb") as f:
+            f.write(xlsx_bytes)
+    return xlsx_bytes

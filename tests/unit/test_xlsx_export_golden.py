@@ -98,6 +98,7 @@ def _pollen() -> pd.DataFrame:
 def _snapshot(payload: bytes) -> dict:
     wb = openpyxl.load_workbook(io.BytesIO(payload))
     cells: dict[str, list[list]] = {}
+    styles: dict[str, dict] = {}
     for name in wb.sheetnames:
         rows: list[list] = []
         for row in wb[name].iter_rows(values_only=True):
@@ -115,7 +116,29 @@ def _snapshot(payload: bytes) -> dict:
                 if r and r[0] == "Export Timestamp" and len(r) > 1:
                     r[1] = "<timestamp>"
         cells[name] = rows
-    return {"sheets": list(wb.sheetnames), "cells": cells}
+
+        # 样式也一起钉：golden 只比单元格值的话，改坏表头字体/填充/列宽是抓不到的。
+        header_style = []
+        for cell in wb[name][1]:
+            color = cell.font.color.rgb if cell.font.color is not None else None
+            header_style.append(
+                [
+                    cell.font.name,
+                    cell.font.size,
+                    bool(cell.font.bold),
+                    color,
+                    cell.fill.patternType,
+                    cell.fill.fgColor.rgb,
+                    cell.alignment.horizontal,
+                    cell.alignment.vertical,
+                ]
+            )
+        styles[name] = {
+            "header": header_style,
+            "widths": {k: v.width for k, v in wb[name].column_dimensions.items()},
+            "grid": wb[name].views.sheetView[0].showGridLines,
+        }
+    return {"sheets": list(wb.sheetnames), "cells": cells, "styles": styles}
 
 
 def _collect() -> dict:
@@ -174,6 +197,11 @@ def test_export_snapshot_is_stable() -> None:
         assert snapshot[case]["sheets"] == expected[case]["sheets"], (
             f"{case} 的 sheet 列表变了：{snapshot[case]['sheets']} vs {expected[case]['sheets']}"
         )
+        for sheet, want_style in expected[case]["styles"].items():
+            assert snapshot[case]["styles"][sheet] == want_style, (
+                f"{case}/{sheet} 的表头样式或列宽变了："
+                f"{snapshot[case]['styles'][sheet]!r} vs {want_style!r}"
+            )
         for sheet, want_rows in expected[case]["cells"].items():
             got_rows = snapshot[case]["cells"][sheet]
             assert len(got_rows) == len(want_rows), (
