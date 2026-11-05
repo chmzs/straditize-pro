@@ -884,7 +884,148 @@ class AgeDepthModel:
             candidates = [float(correlation_length)]
         else:
             seed = self.infer_correlation_length(grid)
-            span = model_hi - model_lo
+        candidates = self._ensemble_correlation_candidates(
+            grid, correlation_length, span=model_hi - model_lo
+        )
+
+        selection = self._fit_ensemble_selection(
+            grid,
+            target_median,
+            target_width,
+            candidates,
+            n_fit_members,
+            fit_iterations,
+            random_seed,
+        )
+        if selection is None:
+            return {"name": name, "columns": ["depth"], "data": []}
+        best_L, best_sigma, best_rate, best_mismatch = selection
+
+        best_sigma, best_rate, best_mismatch, s_shift = self._fit_shared_offset(
+            grid,
+            target_median,
+            target_width,
+            best_L,
+            best_sigma,
+            best_rate,
+            best_mismatch,
+            n_fit_members,
+            fit_iterations,
+            random_seed,
+            rng,
+        )
+
+        columns, rows, sample_matrix, reversal_rate, ages_grid = (
+            self._format_ensemble_result(
+                grid,
+                target_median,
+                d_arr,
+                n_ensembles,
+                best_L,
+                best_sigma,
+                best_rate,
+                s_shift,
+                rng,
+            )
+        )
+
+        rate_stats = None
+        if return_diagnostics:
+            rate_stats = self._rate_posterior_stats(
+                ages_grid, grid, d_arr, n_ensembles
+            )
+
+        result: dict[str, Any] = {"name": name, "columns": columns, "data": rows}
+        if return_diagnostics:
+            result["diagnostics"] = self._build_ensemble_diagnostics(
+                ages_grid=ages_grid,
+                grid=grid,
+                target_median=target_median,
+                target_width=target_width,
+                d_arr=d_arr,
+                best_L=best_L,
+                best_mismatch=best_mismatch,
+                s_shift=s_shift,
+                reversal_rate=reversal_rate,
+                correlation_length=correlation_length,
+                rate_stats=rate_stats,
+            )
+        return result
+
+    def _build_ensemble_diagnostics(
+        self,
+        *,
+        ages_grid: np.ndarray,
+        grid: np.ndarray,
+        target_median: np.ndarray,
+        target_width: np.ndarray,
+        d_arr: np.ndarray,
+        best_L: float,
+        best_mismatch: float,
+        s_shift: float,
+        reversal_rate: float,
+        correlation_length: float | None,
+        rate_stats: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """诊断块：拟合出的相关长度、模拟包络与目标包络的失配、共享偏移、反转率、中位曲线偏差。"""
+        simulated_width = np.percentile(ages_grid, 97.5, axis=1) - np.percentile(
+            ages_grid, 2.5, axis=1
+        )
+        scale = max(float(np.median(target_width)), 1e-9)
+        # Versus the raw extracted envelope. This is deliberately large wherever the
+        # figure's envelope narrows after a dated horizon: an un-pinned accumulation
+        # process cannot shed variance, so those sections are reported conservatively
+        # wide instead. The fitted figure is therefore the clamped (monotone) target,
+        # and `envelope_mismatch` above measures agreement with *that*.
+        raw_mismatch = float(
+            np.sqrt(np.mean(((simulated_width - target_width) / scale) ** 2))
+        )
+        diagnostics: dict[str, Any] = {
+            "correlation_length": round(float(best_L), 3),
+            "correlation_length_fitted": correlation_length is None,
+            "envelope_mismatch": round(float(best_mismatch), 4),
+            "envelope_mismatch_vs_extracted": round(raw_mismatch, 4),
+            "shared_offset_sigma": round(float(s_shift), 3),
+            "age_reversal_rate": reversal_rate,
+            "simulated_envelope_median": round(
+                float(np.median(simulated_width)), 2
+            ),
+            "target_envelope_median": round(float(np.median(target_width)), 2),
+            "median_curve_max_deviation": round(
+                float(
+                    np.max(
+                        np.abs(
+                            np.interp(d_arr, grid, np.median(ages_grid, axis=1))
+                            - np.interp(d_arr, grid, target_median)
+                        )
+                    )
+                ),
+                2,
+            ),
+        }
+        if rate_stats is not None:
+            diagnostics["rate"] = rate_stats
+
+        return diagnostics
+
+    # ---- generate_age_ensemble 的分段实现 ----
+
+    def _ensemble_correlation_candidates(
+        self,
+        grid: np.ndarray,
+        correlation_length: float | None,
+        *,
+        span: float,
+    ) -> list[float]:
+        """相关长度候选梯度：显式给定就只试它，否则由种子 + 若干比例兜底。
+
+        种子是启发式，拟合才是裁判；梯度同时括住种子与其几倍、以及剖面的若干分数，
+        坏种子困不住搜索。
+        """
+        if correlation_length is not None and correlation_length > 0:
+            candidates = [float(correlation_length)]
+        else:
+            seed = self.infer_correlation_length(grid)
             # The seed is a heuristic; the fit decides. The ladder brackets both the seed and
             # a few fractions of the profile so a bad seed cannot trap the search.
             candidates = sorted(
@@ -903,7 +1044,19 @@ class AgeDepthModel:
                     )
                 }
             )
+        return candidates
 
+    def _fit_ensemble_selection(
+        self,
+        grid: np.ndarray,
+        target_median: np.ndarray,
+        target_width: np.ndarray,
+        candidates: list[float],
+        n_fit_members: int,
+        fit_iterations: int,
+        random_seed: int,
+    ) -> tuple[float, np.ndarray, np.ndarray, float] | None:
+        """逐候选拟合，按「形状失配 + 量级失配」选优；全部失败返回 None。"""
         best_L = candidates[0]
         best_sigma: np.ndarray | None = None
         best_rate: np.ndarray | None = None
@@ -935,31 +1088,63 @@ class AgeDepthModel:
                 best_band = band_c
 
         if best_sigma is None or best_rate is None:
-            return {"name": name, "columns": ["depth"], "data": []}
+            return None
+        return best_L, best_sigma, best_rate, best_mismatch
 
+    def _draw_ensemble_members(
+        self,
+        grid: np.ndarray,
+        n: int,
+        L: float,
+        sigma: np.ndarray,
+        rate_base: np.ndarray,
+        shift: float,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        """按 GP 相关矩阵抽 n 条累积速率轨迹（Bacon 口径：速率空间 + 共享偏移）。"""
+        dist_m = np.abs(grid[:, None] - grid[None, :])
+        corr_m = np.exp(-dist_m / max(L, 1e-9))
+        kern = corr_m * sigma[:, None] * sigma[None, :] + np.eye(grid.size) * 1e-10
+        eta_m = np.clip(
+            np.linalg.cholesky(kern) @ rng.standard_normal((grid.size, n)),
+            -25.0,
+            25.0,
+        )
+        ages_m = _cumulative_trapezoid(rate_base[:, None] * np.exp(eta_m), grid)
+        if shift > 0:
+            ages_m = ages_m + rng.standard_normal(n)[None, :] * shift
+        return ages_m
+
+    def _fit_shared_offset(
+        self,
+        grid: np.ndarray,
+        target_median: np.ndarray,
+        target_width: np.ndarray,
+        best_L: float,
+        best_sigma: np.ndarray,
+        best_rate: np.ndarray,
+        best_mismatch: float,
+        n_fit_members: int,
+        fit_iterations: int,
+        random_seed: int,
+        rng: np.random.Generator,
+    ) -> tuple[np.ndarray, np.ndarray, float, float]:
+        """补整条曲线共享的偏移分量（岩芯顶龄/库效应/校正平移），再把振幅拟合一次。"""
         # ---- Shared whole-curve offset ----------------------------------------
         # Integration starts at the shallowest grid node, so the local rate process alone
         # cannot produce any spread there even though the extracted envelope has some.
         # The missing variance at that node is attributed to a systematic offset shared by
         # every depth (core-top age, reservoir effect, calibration shift) and the fit is
         # re-run with it in place so the amplitude accounts for it.
-        def _draw(
-            n: int, L: float, sigma: np.ndarray, rate_base: np.ndarray, shift: float
-        ):
-            dist_m = np.abs(grid[:, None] - grid[None, :])
-            corr_m = np.exp(-dist_m / max(L, 1e-9))
-            kern = corr_m * sigma[:, None] * sigma[None, :] + np.eye(grid.size) * 1e-10
-            eta_m = np.clip(
-                np.linalg.cholesky(kern) @ rng.standard_normal((grid.size, n)),
-                -25.0,
-                25.0,
-            )
-            ages_m = _cumulative_trapezoid(rate_base[:, None] * np.exp(eta_m), grid)
-            if shift > 0:
-                ages_m = ages_m + rng.standard_normal(n)[None, :] * shift
-            return ages_m
-
-        probe = _draw(n_fit_members, best_L, best_sigma, best_rate, 0.0)
+        probe = self._draw_ensemble_members(
+            grid,
+            n_fit_members,
+            best_L,
+            best_sigma,
+            best_rate,
+            0.0,
+            rng,
+        )
         probe_w0 = float(np.percentile(probe[0], 97.5) - np.percentile(probe[0], 2.5))
         target_w0 = float(target_width[0])
         s_shift = float(
@@ -982,8 +1167,25 @@ class AgeDepthModel:
                 best_sigma = sigma_c
                 best_rate = rate_c
 
+        return best_sigma, best_rate, best_mismatch, s_shift
+
+    def _format_ensemble_result(
+        self,
+        grid: np.ndarray,
+        target_median: np.ndarray,
+        d_arr: np.ndarray,
+        n_ensembles: int,
+        best_L: float,
+        best_sigma: np.ndarray,
+        best_rate: np.ndarray,
+        s_shift: float,
+        rng: np.random.Generator,
+    ) -> tuple[list[str], list[list[float]], np.ndarray, float, np.ndarray]:
+        """最终抽样 + 锚定中位曲线 + 插值到采样深度 → 列名/行/矩阵/反转率/网格年龄。"""
         # ---- Final draw at the requested ensemble size ------------------------
-        ages_grid = _draw(int(n_ensembles), best_L, best_sigma, best_rate, s_shift)
+        ages_grid = self._draw_ensemble_members(
+            grid, int(n_ensembles), best_L, best_sigma, best_rate, s_shift, rng
+        )
 
         # Anchor so the ensemble median reproduces the extracted median curve.
         # (The offset is symmetric, so the median of ages_grid[0] equals the anchor.)
@@ -1003,100 +1205,68 @@ class AgeDepthModel:
             for i, d in enumerate(d_arr)
         ]
 
+        return columns, rows, sample_matrix, reversal_rate, ages_grid
+
+    def _rate_posterior_stats(
+        self,
+        ages_grid: np.ndarray,
+        grid: np.ndarray,
+        d_arr: np.ndarray,
+        n_ensembles: int,
+    ) -> dict[str, Any]:
+        """逐采样深度的速率后验：由集成成员自身求导得到，而不是从中位曲线点估。"""
         # Per-sample rate posterior. The ensemble already lives in rate space, so the
         # member rates are free: differentiating each member's curve amplifies noise, which
         # is exactly why the rate is typically more uncertain than the age and why a point
         # estimate from the median curve should not be reported on its own.
-        rate_stats = None
-        if return_diagnostics:
-            grid_rate = ages_grid.copy()
-            # Member-wise interval rate over the grid, then resampled to the samples.
-            d_grid = np.diff(grid)
-            a_grid = np.diff(grid_rate, axis=0)
-            with np.errstate(divide="ignore", invalid="ignore"):
-                grid_acc = np.where(
-                    np.abs(d_grid)[:, None] > 1e-12, a_grid / d_grid[:, None], np.nan
-                )
-            # A rate is a magnitude. Isotonic regression upstream fixes the sign
-            # consistently (positive for BP axes, negative for AD axes), so take the
-            # absolute value rather than leaking the age convention into the units.
-            grid_acc = np.abs(grid_acc)
-            member_acc = np.empty((d_arr.size, int(n_ensembles)), dtype=float)
-            for j in range(int(n_ensembles)):
-                col = grid_acc[:, j]
-                member_acc[:, j] = np.interp(
-                    d_arr, 0.5 * (grid[:-1] + grid[1:]), col, left=col[0], right=col[-1]
-                )
-            acc_lo = np.percentile(member_acc, 2.5, axis=1)
-            acc_mid = np.median(member_acc, axis=1)
-            acc_hi = np.percentile(member_acc, 97.5, axis=1)
-            with np.errstate(divide="ignore", invalid="ignore"):
-                sed_lo = np.where(acc_hi > 0, 1.0 / acc_hi, np.nan)
-                sed_mid = np.where(acc_mid > 0, 1.0 / acc_mid, np.nan)
-                sed_hi = np.where(acc_lo > 0, 1.0 / acc_lo, np.nan)
-
-            def _c(v: np.ndarray) -> list[float | None]:
-                # See predict_age._clean: an undefined rate is null, not zero.
-                return [round(float(x), 4) if np.isfinite(x) else None for x in v]
-
-            rate_stats = {
-                "acc_rate_yr_per_depth": _c(acc_mid),
-                "acc_rate_yr_per_depth_min": _c(acc_lo),
-                "acc_rate_yr_per_depth_max": _c(acc_hi),
-                "sed_rate_depth_per_yr": _c(sed_mid),
-                "sed_rate_depth_per_yr_min": _c(sed_lo),
-                "sed_rate_depth_per_yr_max": _c(sed_hi),
-                # Volume accumulation rate per unit area (dimensionally the linear rate).
-                "volume_ar_cm_per_yr": _c(sed_mid),
-                "volume_ar_cm_per_yr_min": _c(sed_lo),
-                "volume_ar_cm_per_yr_max": _c(sed_hi),
-                "units": {
-                    "acc_rate": f"{self.age_unit} per {self.depth_unit}",
-                    "sed_rate": f"{self.depth_unit} per year",
-                    "volume_ar": "cm per year (cm3 cm-2 yr-1)",
-                },
-            }
-
-        result: dict[str, Any] = {"name": name, "columns": columns, "data": rows}
-        if return_diagnostics:
-            simulated_width = np.percentile(ages_grid, 97.5, axis=1) - np.percentile(
-                ages_grid, 2.5, axis=1
+        grid_rate = ages_grid.copy()
+        # Member-wise interval rate over the grid, then resampled to the samples.
+        d_grid = np.diff(grid)
+        a_grid = np.diff(grid_rate, axis=0)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            grid_acc = np.where(
+                np.abs(d_grid)[:, None] > 1e-12, a_grid / d_grid[:, None], np.nan
             )
-            scale = max(float(np.median(target_width)), 1e-9)
-            # Versus the raw extracted envelope. This is deliberately large wherever the
-            # figure's envelope narrows after a dated horizon: an un-pinned accumulation
-            # process cannot shed variance, so those sections are reported conservatively
-            # wide instead. The fitted figure is therefore the clamped (monotone) target,
-            # and `envelope_mismatch` above measures agreement with *that*.
-            raw_mismatch = float(
-                np.sqrt(np.mean(((simulated_width - target_width) / scale) ** 2))
+        # A rate is a magnitude. Isotonic regression upstream fixes the sign
+        # consistently (positive for BP axes, negative for AD axes), so take the
+        # absolute value rather than leaking the age convention into the units.
+        grid_acc = np.abs(grid_acc)
+        member_acc = np.empty((d_arr.size, int(n_ensembles)), dtype=float)
+        for j in range(int(n_ensembles)):
+            col = grid_acc[:, j]
+            member_acc[:, j] = np.interp(
+                d_arr, 0.5 * (grid[:-1] + grid[1:]), col, left=col[0], right=col[-1]
             )
-            result["diagnostics"] = {
-                "correlation_length": round(float(best_L), 3),
-                "correlation_length_fitted": correlation_length is None,
-                "envelope_mismatch": round(float(best_mismatch), 4),
-                "envelope_mismatch_vs_extracted": round(raw_mismatch, 4),
-                "shared_offset_sigma": round(float(s_shift), 3),
-                "age_reversal_rate": reversal_rate,
-                "simulated_envelope_median": round(
-                    float(np.median(simulated_width)), 2
-                ),
-                "target_envelope_median": round(float(np.median(target_width)), 2),
-                "median_curve_max_deviation": round(
-                    float(
-                        np.max(
-                            np.abs(
-                                np.interp(d_arr, grid, np.median(ages_grid, axis=1))
-                                - np.interp(d_arr, grid, target_median)
-                            )
-                        )
-                    ),
-                    2,
-                ),
-            }
-            if rate_stats is not None:
-                result["diagnostics"]["rate"] = rate_stats
-        return result
+        acc_lo = np.percentile(member_acc, 2.5, axis=1)
+        acc_mid = np.median(member_acc, axis=1)
+        acc_hi = np.percentile(member_acc, 97.5, axis=1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            sed_lo = np.where(acc_hi > 0, 1.0 / acc_hi, np.nan)
+            sed_mid = np.where(acc_mid > 0, 1.0 / acc_mid, np.nan)
+            sed_hi = np.where(acc_lo > 0, 1.0 / acc_lo, np.nan)
+
+        def _c(v: np.ndarray) -> list[float | None]:
+            # See predict_age._clean: an undefined rate is null, not zero.
+            return [round(float(x), 4) if np.isfinite(x) else None for x in v]
+
+        rate_stats = {
+            "acc_rate_yr_per_depth": _c(acc_mid),
+            "acc_rate_yr_per_depth_min": _c(acc_lo),
+            "acc_rate_yr_per_depth_max": _c(acc_hi),
+            "sed_rate_depth_per_yr": _c(sed_mid),
+            "sed_rate_depth_per_yr_min": _c(sed_lo),
+            "sed_rate_depth_per_yr_max": _c(sed_hi),
+            # Volume accumulation rate per unit area (dimensionally the linear rate).
+            "volume_ar_cm_per_yr": _c(sed_mid),
+            "volume_ar_cm_per_yr_min": _c(sed_lo),
+            "volume_ar_cm_per_yr_max": _c(sed_hi),
+            "units": {
+                "acc_rate": f"{self.age_unit} per {self.depth_unit}",
+                "sed_rate": f"{self.depth_unit} per year",
+                "volume_ar": "cm per year (cm3 cm-2 yr-1)",
+            },
+        }
+        return rate_stats
 
     def observed_depth_range(self) -> tuple[float, float]:
         """The depth span the curve was actually traced over, in ``depth_unit``.
