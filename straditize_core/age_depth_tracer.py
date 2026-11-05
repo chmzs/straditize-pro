@@ -629,6 +629,129 @@ def _trace_curve(
     return rows_out, curve_out, min_out, max_out
 
 
+@dataclass(frozen=True)
+class _CurveSelection:
+    """选定的中值追踪结果（四元组）与选它的理由。"""
+
+    row_idx: list[int]
+    x_curve: list[float]
+    x_min: list[float]
+    x_max: list[float]
+    use_chroma: bool
+    chroma_mode_reason: str
+
+
+def _select_curve_channel(
+    smoothed: np.ndarray,
+    chroma_smoothed: np.ndarray,
+    thr_dark: float,
+    thr_chroma: float,
+    thr_loose: float,
+    chroma_available: bool,
+    curve_channel: str,
+) -> _CurveSelection:
+    """段 8 的后半：两通道各追一遍 → 按行覆盖率决定用哪个定位中值 → 收紧包络窗口。
+
+    判据是「实测两通道各覆盖多少行」，不是阈值化代理统计：色笔既可能是中值线、
+    也可能是测年概率条，两者都很细，能分开它们的只有各自占了多少面板高度。
+    「低于 5 行即报错」也在这里，因为那是选择结果的合法性判据。
+    """
+    rw = smoothed.shape[1]
+    # Decide which response locates the median by *measuring* both, not by thresholding
+    # proxy statistics. A chromatic stroke can be either the plotted curve or a set of
+    # dating-point probability bars, and both are thin; what separates them is how much of
+    # the panel height each one spans. Tracing both channels with a generous window and
+    # comparing how many rows each covers decides it directly.
+    #
+    # Measured on the bundled figures: a red dashed median covers 70% as many rows as the
+    # darkness trace, while blue dating-point bars reach only 23% -- a 3x separation, so the
+    # cut sits at 0.55 with margin on both sides. A heuristic thickness test alone picked
+    # chroma for the dating-bar figure and dragged the trace along the wrong feature.
+    generous = max(2, int(round(rw * 0.45)))
+    row_idx, x_curve, x_min, x_max = _trace_curve(
+        smoothed, smoothed, thr_dark, thr_loose, generous
+    )
+    use_chroma = False
+    chroma_mode_reason = "figure carries no chromatic stroke"
+
+    forced = str(curve_channel or "auto").lower()
+    if forced not in ("auto", "chroma", "darkness"):
+        raise ValueError(
+            f"curve_channel must be 'auto', 'chroma' or 'darkness' (got {curve_channel!r})."
+        )
+    if forced == "chroma" and not chroma_available:
+        raise ValueError(
+            "curve_channel='chroma' was requested, but this figure carries no chromatic "
+            "stroke (no pixel deviates enough from grey). Use 'auto' or 'darkness'."
+        )
+
+    if chroma_available:
+        c_rows, c_curve, c_min, c_max = _trace_curve(
+            chroma_smoothed, smoothed, thr_chroma, thr_loose, generous
+        )
+        span_ratio = len(c_rows) / max(1, len(row_idx))
+        auto_prefers_chroma = len(c_rows) >= 5 and span_ratio >= 0.55
+
+        if forced == "chroma":
+            if len(c_rows) < 5:
+                raise ValueError(
+                    f"curve_channel='chroma' was requested, but the chromatic trace found "
+                    f"only {len(c_rows)} usable rows. Try 'auto' or 'darkness'."
+                )
+            row_idx, x_curve, x_min, x_max = c_rows, c_curve, c_min, c_max
+            use_chroma = True
+            chroma_mode_reason = (
+                f"forced to chroma by the caller; automatic selection would have "
+                f"{'chosen it' if auto_prefers_chroma else f'rejected it (row ratio {span_ratio:.2f})'}"
+            )
+        elif forced == "darkness":
+            chroma_mode_reason = (
+                "forced to darkness by the caller; automatic selection would have "
+                f"{'chosen chroma (row ratio ' + format(span_ratio, '.2f') + ')' if auto_prefers_chroma else f'rejected chroma (row ratio {span_ratio:.2f})'}"
+            )
+        elif auto_prefers_chroma:
+            row_idx, x_curve, x_min, x_max = c_rows, c_curve, c_min, c_max
+            use_chroma = True
+            chroma_mode_reason = f"chromatic stroke spans {len(c_rows)} rows vs {len(row_idx)} for darkness"
+        else:
+            chroma_mode_reason = (
+                f"chromatic strokes span only {len(c_rows)} rows vs {len(row_idx)} for "
+                f"darkness (ratio {span_ratio:.2f}); chromatic pixels are probably dating "
+                f"distributions or a legend, not the median line"
+            )
+    elif forced == "darkness":
+        chroma_mode_reason = "forced to darkness by the caller"
+
+    # Tighten the envelope window once the median channel is settled.
+    if len(row_idx) >= 5:
+        observed = 0.5 * (np.asarray(x_max) - np.asarray(x_min))
+        typical = float(np.median(observed))
+        if typical > 0:
+            tightened = int(np.clip(np.ceil(typical * 3.0) + 4, 6, max(6, generous)))
+            ch = chroma_smoothed if use_chroma else smoothed
+            th = thr_chroma if use_chroma else thr_dark
+            row2, curve2, min2, max2 = _trace_curve(
+                ch, smoothed, th, thr_loose, tightened
+            )
+            if len(row2) >= 5:
+                row_idx, x_curve, x_min, x_max = row2, curve2, min2, max2
+
+    if len(row_idx) < 5:
+        raise ValueError(
+            "Age-depth extraction found fewer than 5 usable rows. Verify the four "
+            "calibration points sit on the plot axes and that the depth range overlaps "
+            "the drawn curve."
+        )
+    return _CurveSelection(
+        row_idx=row_idx,
+        x_curve=x_curve,
+        x_min=x_min,
+        x_max=x_max,
+        use_chroma=use_chroma,
+        chroma_mode_reason=chroma_mode_reason,
+    )
+
+
 def extract_age_depth_model(
     image: Image.Image | np.ndarray,
     calibrator: AgeDepthAxisCalibrator,
@@ -746,92 +869,21 @@ def extract_age_depth_model(
 
     # ---- 8. Per-row profile extraction --------------------------------------
 
-    # Decide which response locates the median by *measuring* both, not by thresholding
-    # proxy statistics. A chromatic stroke can be either the plotted curve or a set of
-    # dating-point probability bars, and both are thin; what separates them is how much of
-    # the panel height each one spans. Tracing both channels with a generous window and
-    # comparing how many rows each covers decides it directly.
-    #
-    # Measured on the bundled figures: a red dashed median covers 70% as many rows as the
-    # darkness trace, while blue dating-point bars reach only 23% -- a 3x separation, so the
-    # cut sits at 0.55 with margin on both sides. A heuristic thickness test alone picked
-    # chroma for the dating-bar figure and dragged the trace along the wrong feature.
-    generous = max(2, int(round(rw * 0.45)))
-    row_idx, x_curve, x_min, x_max = _trace_curve(
-        smoothed, smoothed, thr_dark, thr_loose, generous
+    selection = _select_curve_channel(
+        smoothed,
+        chroma_smoothed,
+        thr_dark,
+        thr_chroma,
+        thr_loose,
+        chroma_available,
+        curve_channel,
     )
-    use_chroma = False
-    chroma_mode_reason = "figure carries no chromatic stroke"
-
-    forced = str(curve_channel or "auto").lower()
-    if forced not in ("auto", "chroma", "darkness"):
-        raise ValueError(
-            f"curve_channel must be 'auto', 'chroma' or 'darkness' (got {curve_channel!r})."
-        )
-    if forced == "chroma" and not chroma_available:
-        raise ValueError(
-            "curve_channel='chroma' was requested, but this figure carries no chromatic "
-            "stroke (no pixel deviates enough from grey). Use 'auto' or 'darkness'."
-        )
-
-    if chroma_available:
-        c_rows, c_curve, c_min, c_max = _trace_curve(
-            chroma_smoothed, smoothed, thr_chroma, thr_loose, generous
-        )
-        span_ratio = len(c_rows) / max(1, len(row_idx))
-        auto_prefers_chroma = len(c_rows) >= 5 and span_ratio >= 0.55
-
-        if forced == "chroma":
-            if len(c_rows) < 5:
-                raise ValueError(
-                    f"curve_channel='chroma' was requested, but the chromatic trace found "
-                    f"only {len(c_rows)} usable rows. Try 'auto' or 'darkness'."
-                )
-            row_idx, x_curve, x_min, x_max = c_rows, c_curve, c_min, c_max
-            use_chroma = True
-            chroma_mode_reason = (
-                f"forced to chroma by the caller; automatic selection would have "
-                f"{'chosen it' if auto_prefers_chroma else f'rejected it (row ratio {span_ratio:.2f})'}"
-            )
-        elif forced == "darkness":
-            chroma_mode_reason = (
-                "forced to darkness by the caller; automatic selection would have "
-                f"{'chosen chroma (row ratio ' + format(span_ratio, '.2f') + ')' if auto_prefers_chroma else f'rejected chroma (row ratio {span_ratio:.2f})'}"
-            )
-        elif auto_prefers_chroma:
-            row_idx, x_curve, x_min, x_max = c_rows, c_curve, c_min, c_max
-            use_chroma = True
-            chroma_mode_reason = f"chromatic stroke spans {len(c_rows)} rows vs {len(row_idx)} for darkness"
-        else:
-            chroma_mode_reason = (
-                f"chromatic strokes span only {len(c_rows)} rows vs {len(row_idx)} for "
-                f"darkness (ratio {span_ratio:.2f}); chromatic pixels are probably dating "
-                f"distributions or a legend, not the median line"
-            )
-    elif forced == "darkness":
-        chroma_mode_reason = "forced to darkness by the caller"
-
-    # Tighten the envelope window once the median channel is settled.
-    if len(row_idx) >= 5:
-        observed = 0.5 * (np.asarray(x_max) - np.asarray(x_min))
-        typical = float(np.median(observed))
-        if typical > 0:
-            tightened = int(np.clip(np.ceil(typical * 3.0) + 4, 6, max(6, generous)))
-            ch = chroma_smoothed if use_chroma else smoothed
-            th = thr_chroma if use_chroma else thr_dark
-            row2, curve2, min2, max2 = _trace_curve(
-                ch, smoothed, th, thr_loose, tightened
-            )
-            if len(row2) >= 5:
-                row_idx, x_curve, x_min, x_max = row2, curve2, min2, max2
-
-    if len(row_idx) < 5:
-        raise ValueError(
-            "Age-depth extraction found fewer than 5 usable rows. Verify the four "
-            "calibration points sit on the plot axes and that the depth range overlaps "
-            "the drawn curve."
-        )
-
+    row_idx = selection.row_idx
+    x_curve = selection.x_curve
+    x_min = selection.x_min
+    x_max = selection.x_max
+    use_chroma = selection.use_chroma
+    chroma_mode_reason = selection.chroma_mode_reason
     # ---- 9. Outlier rejection against a running median ----------------------
     rows_arr = np.asarray(row_idx, dtype=float)
     curve_arr = np.asarray(x_curve, dtype=float)
