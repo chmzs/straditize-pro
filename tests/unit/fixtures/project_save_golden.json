@@ -1,0 +1,890 @@
+{
+ "json_file": {
+  "file": {
+   "active_roi_id": "roi_1",
+   "age_depth": {
+    "calib_state": {
+     "depth_unit": "cm",
+     "top": [
+      20.0,
+      0.0
+     ]
+    },
+    "height": 90,
+    "image_base64": "<b64:32cbcf8312fd:376>",
+    "image_path": "image/age_depth.png",
+    "inspection": {
+     "age_max": [
+      10.0,
+      550.0,
+      1050.0
+     ],
+     "age_min": [
+      0.0,
+      450.0,
+      950.0
+     ],
+     "ages": [
+      0.0,
+      500.0,
+      1000.0
+     ],
+     "decimation_step": 1,
+     "depths": [
+      0.0,
+      10.0,
+      20.0
+     ],
+     "metadata": {
+      "age_direction_reason": "",
+      "age_increases_downcore": true,
+      "age_unit": "cal BP",
+      "calibration_curve": "IntCal20",
+      "curve_channel": "darkness",
+      "curve_channel_reason": "",
+      "curve_type": "median",
+      "depth_unit": "cm",
+      "envelope_type": "95_hpd",
+      "notes": "",
+      "observed_row_fraction": 0.0,
+      "roi_source": ""
+     },
+     "px_points": {
+      "x_curve": [
+       100.0,
+       120.0,
+       140.0
+      ],
+      "x_max": [
+       110.0,
+       130.0,
+       150.0
+      ],
+      "x_min": [
+       90.0,
+       110.0,
+       130.0
+      ],
+      "y": [
+       20.0,
+       150.0,
+       280.0
+      ]
+     },
+     "sed_rate": [
+      null,
+      0.02,
+      null
+     ],
+     "sed_rate_se": [
+      null,
+      0.00067,
+      null
+     ],
+     "sed_window_depth": 30.0
+    },
+    "width": 120
+   },
+   "columns": [
+    {
+     "col_index": 0,
+     "color": "#38bdf8",
+     "end": 60.0,
+     "endX": 60.0,
+     "exaggeration_mult": null,
+     "has_exaggeration": false,
+     "id": "col_a",
+     "name": "Pinus",
+     "plot_type": "area",
+     "points": [
+      {
+       "kind": "peak",
+       "valid_segment": true,
+       "value": 11.5,
+       "x": 11.5,
+       "y": 20
+      },
+      {
+       "kind": "peak",
+       "valid_segment": true,
+       "value": 12.25,
+       "x": 12.25,
+       "y": 41
+      }
+     ],
+     "roi_id": "roi_1",
+     "scale_type": "linear",
+     "species": "Pinus",
+     "start": 10.0,
+     "startValue": 0.0,
+     "startX": 10.0,
+     "tickEndX": 60.0,
+     "tickValue": 100.0,
+     "unit": "%",
+     "visible": true,
+     "x_group_id": "roi_1_grp_1",
+     "x_ticks": [
+      {
+       "px": 10.0,
+       "value": 0.0
+      },
+      {
+       "px": 60.0,
+       "value": 100.0
+      }
+     ],
+     "x_values": [
+      0.0,
+      100.0
+     ]
+    },
+    {
+     "col_index": 1,
+     "color": "#38bdf8",
+     "end": 120.0,
+     "endX": 120.0,
+     "exaggeration_mult": null,
+     "has_exaggeration": false,
+     "id": "col_b",
+     "name": "Betula",
+     "plot_type": "line",
+     "points": [],
+     "roi_id": "roi_1",
+     "scale_type": "linear",
+     "species": "Betula",
+     "start": 70.0,
+     "startValue": 5.0,
+     "startX": 70.0,
+     "tickEndX": 120.0,
+     "tickValue": 55.0,
+     "unit": "%",
+     "visible": true,
+     "x_group_id": "roi_1_grp_2",
+     "x_ticks": null,
+     "x_values": [
+      5.0,
+      55.0
+     ]
+    },
+    {
+     "col_index": 2,
+     "color": "#38bdf8",
+     "end": 180.0,
+     "endX": 180.0,
+     "exaggeration_mult": null,
+     "has_exaggeration": false,
+     "id": "col_c",
+     "name": "Quercus",
+     "plot_type": "area",
+     "points": [
+      {
+       "kind": "peak",
+       "valid_segment": true,
+       "value": 131.0,
+       "x": 131.0,
+       "y": 22
+      }
+     ],
+     "roi_id": "roi_1",
+     "scale_type": "linear",
+     "species": "Quercus",
+     "start": 130.0,
+     "startValue": 0.0,
+     "startX": 130.0,
+     "tickEndX": 180.0,
+     "tickValue": 10.0,
+     "unit": "%",
+     "visible": true,
+     "x_group_id": "roi_1_grp_9",
+     "x_ticks": null,
+     "x_values": [
+      0.0,
+      10.0
+     ]
+    }
+   ],
+   "depth_calibration": {
+    "bottom_cm": 130.0,
+    "bottom_px": 280.0,
+    "is_calibrated": true,
+    "top_cm": 0.0,
+    "top_px": 20.0,
+    "unit": "cm"
+   },
+   "ensemble_tables": [
+    {
+     "name": "bacon",
+     "rows": 2
+    }
+   ],
+   "image": {
+    "base64": "<b64:4ea8ebf9955d:1416>",
+    "height": 300,
+    "path": "image/original.png",
+    "width": 400
+   },
+   "line_candidates": [
+    {
+     "id": "c1",
+     "status": "candidate",
+     "x": 1.0
+    },
+    {
+     "id": "c2",
+     "status": "removed",
+     "x": 2.0
+    }
+   ],
+   "line_removal": {
+    "corrections": [
+     {
+      "mode": "erase",
+      "points": [
+       [
+        1,
+        2
+       ],
+       [
+        3,
+        4
+       ]
+      ]
+     },
+     {
+      "mode": "restore",
+      "points": [
+       [
+        5,
+        6
+       ]
+      ]
+     }
+    ],
+    "remove_vertical": false,
+    "strength": 0.6
+   },
+   "paper_metadata": {
+    "chronology": {
+     "age_model": "",
+     "age_range": "",
+     "cal_curve": "IntCal20",
+     "dating_method": "14C"
+    },
+    "publication": {
+     "authors": [],
+     "doi": "",
+     "funding_agency": "",
+     "funding_grant": "",
+     "journal": "",
+     "title": "Test pack",
+     "year": null
+    },
+    "quality": {
+     "dataset_version": "1.0.0",
+     "original_data_url": "",
+     "quality_notes": ""
+    },
+    "site": {
+     "archive_type": "lake sediment",
+     "collection_date": "",
+     "core_length_m": "",
+     "country": "",
+     "elevation_m": "",
+     "latitude": "",
+     "longitude": "",
+     "name": "Ngamring",
+     "site_name": "",
+     "water_depth_m": ""
+    },
+    "technical": {
+     "affiliation": "",
+     "digitization_date": "",
+     "digitizer": "",
+     "investigators": "",
+     "laboratory": "",
+     "pollen_extraction_method": "",
+     "sampling_interval_cm": ""
+    }
+   },
+   "primary_roi_id": "roi_1",
+   "roi": {
+    "h": 300.0,
+    "w": 400.0,
+    "x": 0.0,
+    "y": 0.0
+   },
+   "rois": [
+    {
+     "columns_stale": false,
+     "composition": true,
+     "default_group_id": "roi_1_grp1",
+     "form_defaults": null,
+     "id": "roi_1",
+     "name": "pollen",
+     "name_source": "user",
+     "visible": true,
+     "x_groups": [
+      {
+       "exaggeration_mult": null,
+       "id": "roi_1_grp1",
+       "name": "默认组",
+       "plot_type": "area",
+       "scale_type": "linear",
+       "tick_layout": [
+        {
+         "rel": 0.0
+        },
+        {
+         "rel": 1.0
+        }
+       ],
+       "unit": "%"
+      },
+      {
+       "exaggeration_mult": null,
+       "id": "roi_1_grp_1",
+       "name": "Pinus组",
+       "plot_type": "area",
+       "scale_type": "linear",
+       "tick_layout": [
+        {
+         "rel": 0.0
+        },
+        {
+         "rel": 1.0
+        }
+       ],
+       "unit": "%"
+      },
+      {
+       "exaggeration_mult": null,
+       "id": "roi_1_grp_2",
+       "name": "Betula组",
+       "plot_type": "line",
+       "scale_type": "linear",
+       "tick_layout": [
+        {
+         "rel": 0.0
+        },
+        {
+         "rel": 1.0
+        }
+       ],
+       "unit": "%"
+      }
+     ],
+     "xlim": [
+      0.0,
+      400.0
+     ],
+     "ylim": [
+      0.0,
+      300.0
+     ]
+    }
+   ],
+   "samples": [
+    {
+     "depth": 10.0,
+     "row_px": 50
+    },
+    {
+     "depth": 60.0,
+     "row_px": 150
+    }
+   ],
+   "schema_version": "3.0",
+   "selected_candidate_ids": [
+    "c2"
+   ],
+   "version": "3.0.0"
+  },
+  "file_embeds_age_depth_png": true,
+  "file_embeds_png": true,
+  "result_keys": [
+   "path",
+   "success"
+  ],
+  "result_success": true,
+  "stripped_equals_inline_data": true
+ },
+ "json_inline": {
+  "data": {
+   "active_roi_id": "roi_1",
+   "age_depth": {
+    "calib_state": {
+     "depth_unit": "cm",
+     "top": [
+      20.0,
+      0.0
+     ]
+    },
+    "height": 90,
+    "image_path": "image/age_depth.png",
+    "inspection": {
+     "age_max": [
+      10.0,
+      550.0,
+      1050.0
+     ],
+     "age_min": [
+      0.0,
+      450.0,
+      950.0
+     ],
+     "ages": [
+      0.0,
+      500.0,
+      1000.0
+     ],
+     "decimation_step": 1,
+     "depths": [
+      0.0,
+      10.0,
+      20.0
+     ],
+     "metadata": {
+      "age_direction_reason": "",
+      "age_increases_downcore": true,
+      "age_unit": "cal BP",
+      "calibration_curve": "IntCal20",
+      "curve_channel": "darkness",
+      "curve_channel_reason": "",
+      "curve_type": "median",
+      "depth_unit": "cm",
+      "envelope_type": "95_hpd",
+      "notes": "",
+      "observed_row_fraction": 0.0,
+      "roi_source": ""
+     },
+     "px_points": {
+      "x_curve": [
+       100.0,
+       120.0,
+       140.0
+      ],
+      "x_max": [
+       110.0,
+       130.0,
+       150.0
+      ],
+      "x_min": [
+       90.0,
+       110.0,
+       130.0
+      ],
+      "y": [
+       20.0,
+       150.0,
+       280.0
+      ]
+     },
+     "sed_rate": [
+      null,
+      0.02,
+      null
+     ],
+     "sed_rate_se": [
+      null,
+      0.00067,
+      null
+     ],
+     "sed_window_depth": 30.0
+    },
+    "width": 120
+   },
+   "columns": [
+    {
+     "col_index": 0,
+     "color": "#38bdf8",
+     "end": 60.0,
+     "endX": 60.0,
+     "exaggeration_mult": null,
+     "has_exaggeration": false,
+     "id": "col_a",
+     "name": "Pinus",
+     "plot_type": "area",
+     "points": [
+      {
+       "kind": "peak",
+       "valid_segment": true,
+       "value": 11.5,
+       "x": 11.5,
+       "y": 20
+      },
+      {
+       "kind": "peak",
+       "valid_segment": true,
+       "value": 12.25,
+       "x": 12.25,
+       "y": 41
+      }
+     ],
+     "roi_id": "roi_1",
+     "scale_type": "linear",
+     "species": "Pinus",
+     "start": 10.0,
+     "startValue": 0.0,
+     "startX": 10.0,
+     "tickEndX": 60.0,
+     "tickValue": 100.0,
+     "unit": "%",
+     "visible": true,
+     "x_group_id": "roi_1_grp_1",
+     "x_ticks": [
+      {
+       "px": 10.0,
+       "value": 0.0
+      },
+      {
+       "px": 60.0,
+       "value": 100.0
+      }
+     ],
+     "x_values": [
+      0.0,
+      100.0
+     ]
+    },
+    {
+     "col_index": 1,
+     "color": "#38bdf8",
+     "end": 120.0,
+     "endX": 120.0,
+     "exaggeration_mult": null,
+     "has_exaggeration": false,
+     "id": "col_b",
+     "name": "Betula",
+     "plot_type": "line",
+     "points": [],
+     "roi_id": "roi_1",
+     "scale_type": "linear",
+     "species": "Betula",
+     "start": 70.0,
+     "startValue": 5.0,
+     "startX": 70.0,
+     "tickEndX": 120.0,
+     "tickValue": 55.0,
+     "unit": "%",
+     "visible": true,
+     "x_group_id": "roi_1_grp_2",
+     "x_ticks": null,
+     "x_values": [
+      5.0,
+      55.0
+     ]
+    },
+    {
+     "col_index": 2,
+     "color": "#38bdf8",
+     "end": 180.0,
+     "endX": 180.0,
+     "exaggeration_mult": null,
+     "has_exaggeration": false,
+     "id": "col_c",
+     "name": "Quercus",
+     "plot_type": "area",
+     "points": [
+      {
+       "kind": "peak",
+       "valid_segment": true,
+       "value": 131.0,
+       "x": 131.0,
+       "y": 22
+      }
+     ],
+     "roi_id": "roi_1",
+     "scale_type": "linear",
+     "species": "Quercus",
+     "start": 130.0,
+     "startValue": 0.0,
+     "startX": 130.0,
+     "tickEndX": 180.0,
+     "tickValue": 10.0,
+     "unit": "%",
+     "visible": true,
+     "x_group_id": "roi_1_grp_9",
+     "x_ticks": null,
+     "x_values": [
+      0.0,
+      10.0
+     ]
+    }
+   ],
+   "depth_calibration": {
+    "bottom_cm": 130.0,
+    "bottom_px": 280.0,
+    "is_calibrated": true,
+    "top_cm": 0.0,
+    "top_px": 20.0,
+    "unit": "cm"
+   },
+   "ensemble_tables": [
+    {
+     "name": "bacon",
+     "rows": 2
+    }
+   ],
+   "image": {
+    "height": 300,
+    "path": "image/original.png",
+    "width": 400
+   },
+   "line_candidates": [
+    {
+     "id": "c1",
+     "status": "candidate",
+     "x": 1.0
+    },
+    {
+     "id": "c2",
+     "status": "removed",
+     "x": 2.0
+    }
+   ],
+   "line_removal": {
+    "corrections": [
+     {
+      "mode": "erase",
+      "points": [
+       [
+        1,
+        2
+       ],
+       [
+        3,
+        4
+       ]
+      ]
+     },
+     {
+      "mode": "restore",
+      "points": [
+       [
+        5,
+        6
+       ]
+      ]
+     }
+    ],
+    "remove_vertical": false,
+    "strength": 0.6
+   },
+   "paper_metadata": {
+    "chronology": {
+     "age_model": "",
+     "age_range": "",
+     "cal_curve": "IntCal20",
+     "dating_method": "14C"
+    },
+    "publication": {
+     "authors": [],
+     "doi": "",
+     "funding_agency": "",
+     "funding_grant": "",
+     "journal": "",
+     "title": "Test pack",
+     "year": null
+    },
+    "quality": {
+     "dataset_version": "1.0.0",
+     "original_data_url": "",
+     "quality_notes": ""
+    },
+    "site": {
+     "archive_type": "lake sediment",
+     "collection_date": "",
+     "core_length_m": "",
+     "country": "",
+     "elevation_m": "",
+     "latitude": "",
+     "longitude": "",
+     "name": "Ngamring",
+     "site_name": "",
+     "water_depth_m": ""
+    },
+    "technical": {
+     "affiliation": "",
+     "digitization_date": "",
+     "digitizer": "",
+     "investigators": "",
+     "laboratory": "",
+     "pollen_extraction_method": "",
+     "sampling_interval_cm": ""
+    }
+   },
+   "primary_roi_id": "roi_1",
+   "roi": {
+    "h": 300.0,
+    "w": 400.0,
+    "x": 0.0,
+    "y": 0.0
+   },
+   "rois": [
+    {
+     "columns_stale": false,
+     "composition": true,
+     "default_group_id": "roi_1_grp1",
+     "form_defaults": null,
+     "id": "roi_1",
+     "name": "pollen",
+     "name_source": "user",
+     "visible": true,
+     "x_groups": [
+      {
+       "exaggeration_mult": null,
+       "id": "roi_1_grp1",
+       "name": "默认组",
+       "plot_type": "area",
+       "scale_type": "linear",
+       "tick_layout": [
+        {
+         "rel": 0.0
+        },
+        {
+         "rel": 1.0
+        }
+       ],
+       "unit": "%"
+      },
+      {
+       "exaggeration_mult": null,
+       "id": "roi_1_grp_1",
+       "name": "Pinus组",
+       "plot_type": "area",
+       "scale_type": "linear",
+       "tick_layout": [
+        {
+         "rel": 0.0
+        },
+        {
+         "rel": 1.0
+        }
+       ],
+       "unit": "%"
+      },
+      {
+       "exaggeration_mult": null,
+       "id": "roi_1_grp_2",
+       "name": "Betula组",
+       "plot_type": "line",
+       "scale_type": "linear",
+       "tick_layout": [
+        {
+         "rel": 0.0
+        },
+        {
+         "rel": 1.0
+        }
+       ],
+       "unit": "%"
+      }
+     ],
+     "xlim": [
+      0.0,
+      400.0
+     ],
+     "ylim": [
+      0.0,
+      300.0
+     ]
+    }
+   ],
+   "samples": [
+    {
+     "depth": 10.0,
+     "row_px": 50
+    },
+    {
+     "depth": 60.0,
+     "row_px": 150
+    }
+   ],
+   "schema_version": "3.0",
+   "selected_candidate_ids": [
+    "c2"
+   ],
+   "version": "3.0.0"
+  },
+  "result_keys": [
+   "data",
+   "success"
+  ]
+ },
+ "tar_base64": {
+  "member_names": [
+   "manifest.json",
+   "straditize.json",
+   "image/original.png",
+   "image/age_depth.png",
+   "data.csv",
+   "plot_strat.R",
+   "README.txt"
+  ],
+  "result_keys": [
+   "size",
+   "success",
+   "tar_base64"
+  ]
+ },
+ "tar_csv_branch": {
+  "data_csv": {
+   "digest": "8af8d7aa8e95",
+   "size": 107
+  },
+  "data_csv_head": [
+   "depth,Pinus,Betula,Quercus",
+   "0.0,0.00,0.00,0.00",
+   "50.0,0.00,0.00,0.00"
+  ],
+  "digitized": false
+ },
+ "tar_members": {
+  "members": [
+   {
+    "manifest_without_timestamp": {
+     "schema_version": "2.0",
+     "tool": "straditize pro",
+     "version": "2.0.0"
+    },
+    "name": "manifest.json"
+   },
+   {
+    "digest": "78432a237cfe",
+    "name": "straditize.json",
+    "size": 7623
+   },
+   {
+    "digest": "36238134d819",
+    "name": "image/original.png",
+    "size": 1062
+   },
+   {
+    "digest": "6cee3fac807d",
+    "name": "image/age_depth.png",
+    "size": 280
+   },
+   {
+    "digest": "8af8d7aa8e95",
+    "name": "data.csv",
+    "size": 107
+   },
+   {
+    "digest": "4cad30896ad0",
+    "name": "plot_strat.R",
+    "size": 406
+   },
+   {
+    "digest": "e82ed47c549d",
+    "name": "README.txt",
+    "size": 575
+   }
+  ],
+  "result_keys": [
+   "path",
+   "size",
+   "success"
+  ],
+  "result_size_matches_file": true
+ }
+}
