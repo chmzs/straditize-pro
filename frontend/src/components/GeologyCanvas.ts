@@ -44,8 +44,26 @@ import { bandOf } from './canvas/CleanupOverlay';
 // （resolveAxisStroke 随 drawColumnBoundaries 搬到 canvas/columnBoundaries.ts）
 import { ensureCanvasLegend } from './canvas/legend';
 import { drawDepthGridOverlay } from './canvas/depthGrid';
-import { drawColumnBoundariesOverlay, getColumnCalibX } from './canvas/columnBoundaries';
+// getColumnCalibX 随命中测试与列边界绘制一起搬到 canvas/ 下，画布类已不再直接用它。
+import { drawColumnBoundariesOverlay } from './canvas/columnBoundaries';
 import { drawAnchorsOverlay, drawPollenCurvesOverlay } from './canvas/pollenCurves';
+import { resolveCanvasCursor } from './canvas/cursor';
+import { findHitAnchorAt, findHitBoundaryAt, findHitRoiHandleAt } from './canvas/hitTest';
+import type { AnchorHit, BoundaryHit, HitTestEnv } from './canvas/hitTest';
+/**
+ * 指针悬停态（每次 mousemove 重算一次）。
+ *
+ * 为什么收成一个对象：这五项以前是五个独立字段，各自在不同分支里置空——
+ * 漏掉一个就会出现「光标变了但高亮还在」这类幽灵态。合并后一次性赋值，
+ * 读的地方只有 this.pointer.xxx，谁改的、改哪一个一眼可见。
+ */
+interface PointerState {
+  anchor: { taxaId: string; pointId: string } | null;
+  boundary: { taxaId: string; type: 'start' | 'tick' | 'end'; x: number } | null;
+  roiHandle: RoiHandle | null;
+  depthHorizon: number | null;
+  rulerBadge: boolean;
+}
 export interface CanvasEventCallbacks {
   onTaxaChange?: (taxaId: string) => void;
   onDataChange?: () => void;
@@ -119,11 +137,14 @@ export class GeologyCanvas {
   private toolStrategies: Map<ToolMode, ToolStrategy>;
 
   // 悬停状态
-  private hoveredAnchor: { taxaId: string; pointId: string } | null = null;
-  private hoveredBoundary: { taxaId: string; type: 'start' | 'tick' | 'end'; x: number } | null = null;
-  private hoveredRoiHandle: RoiHandle | null = null; // 'tl','tr','bl','br','t','b','l','r'
-  private hoveredDepthHorizon: number | null = null;
-  private isHoveringDepthRulerBadge: boolean = false;
+/** 鼠标悬停态。五项一起更新：命中的边界 / 锚点 / ROI 手柄 / 深度层位 / 标尺徽标。 */
+private pointer: PointerState = {
+  anchor: null,
+  boundary: null,
+  roiHandle: null,
+  depthHorizon: null,
+  rulerBadge: false,
+};
 
   // Y 轴两点标定：用户在图上点选的参考点（最多两个）
   private yCalibMarks: Point2D[] = [];
@@ -1141,7 +1162,7 @@ export class GeologyCanvas {
       getSelectedGeometryId: () => this.selectedGeometryId,
       setSelectedGeometryId: (id) => this.setSelectedGeometryId(id),
       commitGeometry: (id, axis, r) => this.commitGeometry(id, axis, r),
-      hoveredDepthHorizon: this.hoveredDepthHorizon,
+      hoveredDepthHorizon: this.pointer.depthHorizon,
       hoverWorldPt: this.hoverWorldPt,
       lineFixMode: this.lineFixMode,
       yCalibMarks: this.yCalibMarks,
@@ -1245,27 +1266,27 @@ export class GeologyCanvas {
           ((nearestHorizon - calib.topValue) / (calib.bottomValue - calib.topValue || 1)) *
             totalPx;
         if (Math.abs(worldPt.y - nearestHorizonY) <= 8 / this.viewport.scale) {
-          this.hoveredDepthHorizon = Number(nearestHorizon.toFixed(2));
+          this.pointer.depthHorizon = Number(nearestHorizon.toFixed(2));
         } else {
-          this.hoveredDepthHorizon = null;
+          this.pointer.depthHorizon = null;
         }
       } else {
-        this.hoveredDepthHorizon = null;
+        this.pointer.depthHorizon = null;
       }
     } else {
-      this.hoveredDepthHorizon = null;
+      this.pointer.depthHorizon = null;
     }
 
     // 探测是否悬停在左侧标尺顶部设定按钮
     const gridStartX = Math.max(0, roi.xMin - 50);
-    const wasHoveringBadge = this.isHoveringDepthRulerBadge;
-    this.isHoveringDepthRulerBadge =
+    const wasHoveringBadge = this.pointer.rulerBadge;
+    this.pointer.rulerBadge =
       worldPt.x <= gridStartX &&
       worldPt.x >= gridStartX - 160 &&
       worldPt.y >= roi.yMin - 35 &&
       worldPt.y <= roi.yMin + 5;
 
-    if (wasHoveringBadge !== this.isHoveringDepthRulerBadge) {
+    if (wasHoveringBadge !== this.pointer.rulerBadge) {
       this.updateCursor();
       this.requestRender();
     }
@@ -1286,24 +1307,24 @@ export class GeologyCanvas {
         worldY: Math.round(worldPt.y),
         depth: depth ? Number(depth.toFixed(2)) : undefined,
         percent: percent ? Number(Math.max(0, percent).toFixed(1)) : undefined,
-        horizonDepth: this.hoveredDepthHorizon,
+        horizonDepth: this.pointer.depthHorizon,
       });
     }
 
     // 普通悬停探测
-    const prevHoverAnchor = this.hoveredAnchor;
-    const prevHoverBoundary = this.hoveredBoundary;
-    const prevHoverRoi = this.hoveredRoiHandle;
+    const prevHoverAnchor = this.pointer.anchor;
+    const prevHoverBoundary = this.pointer.boundary;
+    const prevHoverRoi = this.pointer.roiHandle;
 
-    this.hoveredRoiHandle = canHitRoiHandle(this.workflowStage) ? this.findHitRoiHandle(screenPt) : null;
-    this.hoveredAnchor = this.findHitAnchor(screenPt);
-    this.hoveredBoundary = !this.hoveredAnchor ? this.findHitBoundary(screenPt) : null;
+    this.pointer.roiHandle = canHitRoiHandle(this.workflowStage) ? this.findHitRoiHandle(screenPt) : null;
+    this.pointer.anchor = this.findHitAnchor(screenPt);
+    this.pointer.boundary = !this.pointer.anchor ? this.findHitBoundary(screenPt) : null;
 
     if (
-      prevHoverAnchor?.pointId !== this.hoveredAnchor?.pointId ||
-      prevHoverBoundary?.taxaId !== this.hoveredBoundary?.taxaId ||
-      prevHoverBoundary?.type !== this.hoveredBoundary?.type ||
-      prevHoverRoi !== this.hoveredRoiHandle
+      prevHoverAnchor?.pointId !== this.pointer.anchor?.pointId ||
+      prevHoverBoundary?.taxaId !== this.pointer.boundary?.taxaId ||
+      prevHoverBoundary?.type !== this.pointer.boundary?.type ||
+      prevHoverRoi !== this.pointer.roiHandle
     ) {
       this.updateCursor();
       this.requestRender();
@@ -1529,7 +1550,7 @@ export class GeologyCanvas {
         col.controlPoints = col.controlPoints.filter((p) => p.id !== pointId);
         this.history.push(`Delete Anchor from ${col.name}`, this.data.columns, this.data.activeTaxaId);
         this.data.selectedEntity = null;
-        this.hoveredAnchor = null;
+        this.pointer.anchor = null;
         this.updateCursor();
         this.requestRender();
         this.callbacks.onDataChange?.();
@@ -1543,7 +1564,7 @@ export class GeologyCanvas {
         this.data.selectedEntity = null;
         this.data.activeTaxaId = this.data.columns[Math.max(0, colIdx - 1)].id;
         this.history.push(`Delete Column ${deleted.name}`, this.data.columns, this.data.activeTaxaId);
-        this.hoveredBoundary = null;
+        this.pointer.boundary = null;
         this.updateCursor();
         this.requestRender();
         this.callbacks.onDataChange?.();
@@ -1553,33 +1574,27 @@ export class GeologyCanvas {
     }
   }
 
+  /**
+   * 光标决策：规则见 canvas/cursor.ts（纯函数）。这里只收集状态。
+   *
+   * 平移态**不**调用策略的 getCursor，与原实现一致：拖图时不该唤醒工具策略。
+   */
   private updateCursor(): void {
-    if (this.isPanning || this.isSpaceDown || this.toolModeManager.getMode() === 'pan') {
-      this.canvas.style.cursor = this.isMouseDown ? 'grabbing' : 'grab';
-      return;
-    }
     const mode = this.toolModeManager.getMode();
     const strategy = this.toolStrategies.get(mode);
-    const customCursor = strategy?.getCursor?.(this.getToolContext());
-
+    const isPanMode = this.isPanning || this.isSpaceDown || mode === 'pan';
     const roiStrat = strategy instanceof RoiToolStrategy ? strategy : undefined;
-    const activeRoiHandle = roiStrat?.getDraggingHandle() || this.hoveredRoiHandle;
-
-    if (activeRoiHandle) {
-      const h = activeRoiHandle;
-      if (h === 'tl' || h === 'br') this.canvas.style.cursor = 'nwse-resize';
-      else if (h === 'tr' || h === 'bl') this.canvas.style.cursor = 'nesw-resize';
-      else if (h === 't' || h === 'b') this.canvas.style.cursor = 'ns-resize';
-      else if (h === 'l' || h === 'r') this.canvas.style.cursor = 'ew-resize';
-    } else if (this.hoveredAnchor || customCursor === 'move') {
-      this.canvas.style.cursor = 'move';
-    } else if (this.hoveredBoundary || customCursor === 'col-resize') {
-      this.canvas.style.cursor = 'col-resize';
-    } else if (customCursor) {
-      this.canvas.style.cursor = customCursor;
-    } else {
-      this.canvas.style.cursor = this.toolModeManager.getToolDescription(mode).cursor;
-    }
+    this.canvas.style.cursor = resolveCanvasCursor({
+      defaultCursor: this.toolModeManager.getToolDescription(mode).cursor,
+      strategyCursor: isPanMode ? null : strategy?.getCursor?.(this.getToolContext()),
+      roiHandle: isPanMode ? null : roiStrat?.getDraggingHandle() || this.pointer.roiHandle,
+      hasAnchor: Boolean(this.pointer.anchor),
+      hasBoundary: Boolean(this.pointer.boundary),
+      isPanning: this.isPanning,
+      isSpaceDown: this.isSpaceDown,
+      modeIsPan: mode === 'pan',
+      isMouseDown: this.isMouseDown,
+    });
   }
 
   private findHitColumn(worldPt: Point2D): TaxaColumn | null {
@@ -1606,31 +1621,22 @@ export class GeologyCanvas {
     return worldPt.y >= roi.yMin - 50 && worldPt.y <= roi.yMax + 50;
   }
 
-  private findHitAnchor(screenPt: Point2D): { taxaId: string; pointId: string } | null {
-    const hitRadius = this.ANCHOR_HIT_RADIUS_SCREEN;
-    const activeCol = this.getActiveColumn();
-    if (activeCol && activeCol.visible) {
-      for (const pt of activeCol.controlPoints) {
-        const ptScreen = this.viewport.worldToScreen(pt);
-        const dist = Math.hypot(ptScreen.x - screenPt.x, ptScreen.y - screenPt.y);
-        if (dist <= hitRadius) {
-          return { taxaId: activeCol.id, pointId: pt.id };
-        }
-      }
-    }
+  private findHitAnchor(screenPt: Point2D): AnchorHit | null {
+    return findHitAnchorAt(this.hitTestEnv(screenPt));
+  }
 
-    for (const col of this.data.columns) {
-      if (col.id === this.data.activeTaxaId || !col.visible) continue;
-      for (const pt of col.controlPoints) {
-        const ptScreen = this.viewport.worldToScreen(pt);
-        const dist = Math.hypot(ptScreen.x - screenPt.x, ptScreen.y - screenPt.y);
-        if (dist <= hitRadius) {
-          return { taxaId: col.id, pointId: pt.id };
-        }
-      }
-    }
-
-    return null;
+  /** 命中测试的公共入参（纯函数见 canvas/hitTest.ts）。 */
+  private hitTestEnv(screenPt: Point2D): HitTestEnv {
+    return {
+      screenPt,
+      viewport: this.viewport,
+      columns: this.data.columns,
+      activeTaxaId: this.data.activeTaxaId ?? null,
+      roi: this.data.roi,
+      anchorHitRadius: this.ANCHOR_HIT_RADIUS_SCREEN,
+      boundaryHitWidth: this.BOUNDARY_HIT_WIDTH_SCREEN,
+      roiHandleHitDist: this.ROI_HANDLE_SIZE_SCREEN + 2.0,
+    };
   }
 
   /**
@@ -1644,65 +1650,14 @@ export class GeologyCanvas {
     return CoordinateSystem.hasRealCalibration(col);
   }
 
-  private findHitBoundary(
-    screenPt: Point2D
-  ): { taxaId: string; type: 'start' | 'tick' | 'end'; x: number } | null {
-    const hitWidth = this.BOUNDARY_HIT_WIDTH_SCREEN;
-    for (const col of this.data.columns) {
-      if (!col.visible) continue;
-
-      // 1. 基线 (0%)
-      const startScreenX = this.viewport.worldToScreen({ x: col.startX, y: 0 }).x;
-      if (Math.abs(screenPt.x - startScreenX) <= hitWidth) {
-        return { taxaId: col.id, type: 'start', x: col.startX };
-      }
-
-      // 2. 刻度终点 (N%) - 独立于列右边界 endX
-      const actualTickX = getColumnCalibX(col);
-      const tickScreenX = this.viewport.worldToScreen({ x: actualTickX, y: 0 }).x;
-      if (Math.abs(screenPt.x - tickScreenX) <= hitWidth) {
-        return { taxaId: col.id, type: 'tick', x: actualTickX };
-      }
-
-      // 3. 列间隔离右界 / 相邻两列公共分界线
-      if (col.endX > actualTickX + 4) {
-        const endScreenX = this.viewport.worldToScreen({ x: col.endX, y: 0 }).x;
-        if (Math.abs(screenPt.x - endScreenX) <= hitWidth) {
-          return { taxaId: col.id, type: 'end', x: col.endX };
-        }
-      }
-    }
-    return null;
+  private findHitBoundary(screenPt: Point2D): BoundaryHit | null {
+    return findHitBoundaryAt(this.hitTestEnv(screenPt));
   }
 
   private findHitRoiHandle(screenPt: Point2D): RoiHandle | null {
+    // workflowStage 门控：只有 ROI 步骤才允许抓手柄（命中逻辑本身与阶段无关）。
     if (!canHitRoiHandle(this.workflowStage)) return null;
-    const roi = this.data.roi;
-    const tlScreen = this.viewport.worldToScreen({ x: roi.xMin, y: roi.yMin });
-    const brScreen = this.viewport.worldToScreen({ x: roi.xMax, y: roi.yMax });
-    const midX = (tlScreen.x + brScreen.x) / 2;
-    const midY = (tlScreen.y + brScreen.y) / 2;
-    (window as any).__roiProbe = { tl: tlScreen, br: brScreen, mid: { x: midX, y: midY },
-      stage: this.workflowStage, roi: { xMin: roi.xMin, yMin: roi.yMin, xMax: roi.xMax, yMax: roi.yMax } };
-
-    const handles: Record<RoiHandle, Point2D> = {
-      tl: { x: tlScreen.x, y: tlScreen.y },
-      tr: { x: brScreen.x, y: tlScreen.y },
-      bl: { x: tlScreen.x, y: brScreen.y },
-      br: { x: brScreen.x, y: brScreen.y },
-      t: { x: midX, y: tlScreen.y },
-      b: { x: midX, y: brScreen.y },
-      l: { x: tlScreen.x, y: midY },
-      r: { x: brScreen.x, y: midY },
-    };
-
-    const hitDist = this.ROI_HANDLE_SIZE_SCREEN + 2.0;
-    for (const [key, pt] of Object.entries(handles) as [RoiHandle, Point2D][]) {
-      if (Math.hypot(screenPt.x - pt.x, screenPt.y - pt.y) <= hitDist) {
-        return key;
-      }
-    }
-    return null;
+    return findHitRoiHandleAt(this.hitTestEnv(screenPt));
   }
 
   // ===================== 核心高保真渲染管线 =====================
@@ -1930,8 +1885,8 @@ export class GeologyCanvas {
       roi: this.data.roi,
       columns: this.data.columns,
       scale: this.viewport.scale,
-      hoveredDepthHorizon: this.hoveredDepthHorizon,
-      hoveringRulerBadge: this.isHoveringDepthRulerBadge,
+      hoveredDepthHorizon: this.pointer.depthHorizon,
+      hoveringRulerBadge: this.pointer.rulerBadge,
     });
   }
 
@@ -1984,7 +1939,7 @@ export class GeologyCanvas {
     ctx.setLineDash([]);
     const draggingRoi = (this.toolStrategies.get('roi') as RoiToolStrategy | undefined)?.getDraggingHandle();
     for (const [key, pt] of Object.entries(handles)) {
-      const isHovered = this.hoveredRoiHandle === key || draggingRoi === key;
+      const isHovered = this.pointer.roiHandle === key || draggingRoi === key;
       const hSize = isHovered ? handleImgSize * 1.3 : handleImgSize;
 
       ctx.fillStyle = isHovered ? '#f97316' : '#ffffff';
@@ -2048,7 +2003,7 @@ export class GeologyCanvas {
       imageHeight: this.data.imageHeight || 12000,
       scale: this.viewport.scale,
       activeTaxaId: this.data.activeTaxaId ?? null,
-      hovered: this.hoveredBoundary,
+      hovered: this.pointer.boundary,
       dragging: selectStrategy?.getDraggingBoundary() ?? null,
     });
   }
@@ -2073,7 +2028,7 @@ export class GeologyCanvas {
       ctx,
       scale: this.viewport.scale,
       activeColumn: this.getActiveColumn() ?? null,
-      hoveredPointId: this.hoveredAnchor?.pointId ?? null,
+      hoveredPointId: this.pointer.anchor?.pointId ?? null,
       draggingPointId: dragAnchor?.pointId ?? null,
     });
   }
@@ -2142,11 +2097,11 @@ export class GeologyCanvas {
     this.data.line_strokes = [];
 
     // 3. 复位所有悬停 / 拖拽 / 平移交互状态，防止残留手势锁死
-    this.hoveredAnchor = null;
-    this.hoveredBoundary = null;
-    this.hoveredRoiHandle = null;
-    this.hoveredDepthHorizon = null;
-    this.isHoveringDepthRulerBadge = false;
+    this.pointer.anchor = null;
+    this.pointer.boundary = null;
+    this.pointer.roiHandle = null;
+    this.pointer.depthHorizon = null;
+    this.pointer.rulerBadge = false;
     this.isPanning = false;
     this.isMouseDown = false;
     this.yCalibMarks = [];
