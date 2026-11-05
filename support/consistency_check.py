@@ -22,7 +22,7 @@
     A 函数签名 ↔ 调用点（位置/关键字参数个数与名称）
     B `int | str` 类标注的实现必须真的处理 str
     C package-data 声明的 glob 必须至少命中一个真实文件
-    D pytest python_files 声明覆盖不到的测试文件
+    D pytest python_files 声明覆盖不到的测试文件（`_` 前缀手动探针除外）
     E GeologyCanvas 中残留的裸 workflowStage 数字比较
     F 注释中残留的旧 7 步编号措辞（warning，不阻断）
     G 前端 RpcClient 调用的 RPC 方法名 ⊆ 后端注册表
@@ -253,6 +253,12 @@ def check_test_discovery() -> list[str]:
         return problems
     for p in sorted(tests_dir.rglob("*.py")):
         if p.name == "conftest.py":
+            continue
+        # `_` 前缀 = 手动探针 / 私有模块，刻意不进 pytest 收集。例：
+        # tests/unit/_dispatcher_race_probe.py —— 无锁对照跑一次 3~5 分钟、CPU 打满，
+        # 且真会打坏 numpy 原生内存（access violation），只能是手动跑的探针。
+        # 本检查抓的是"是测试却收集不到"，不是"tests/ 下每个 .py 都必须被收集"。
+        if p.name.startswith("_"):
             continue
         if not any(p.match(pat) or p.name == pat for pat in patterns):
             problems.append(
