@@ -1,7 +1,7 @@
 import { DataRoi, DiagramData, TaxaColumn, ControlPoint, DiagramCalibration } from '../types/pollen';
 import { HistoryManager } from '../core/HistoryManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
-import { DeletePointCommand, ResizeRoiCommand } from '../core/Commands';
+import { DeletePointCommand } from '../core/Commands';
 import { getStepPanel } from './steps/_registry';
 import { renderActiveColumnSuspectNotice } from './steps/SuspectBlockNotice';
 import { t, onLocaleChange } from '../i18n';
@@ -399,122 +399,7 @@ export class Inspector {
       this.callbacks.onDataChange();
     });
 
-    // 刻度更新（同步后端 column.calibrateXTicks —— 修复缺陷 #23：左栏五个标定框从不落库）
-    const updateScaleCalib = async () => {
-      const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
-      if (!activeCol) return;
 
-      const originX = parseFloat((this.element.querySelector('#inp-sc-origin-x') as HTMLInputElement)?.value);
-      const originValRaw = parseFloat((this.element.querySelector('#inp-sc-origin-val') as HTMLInputElement)?.value);
-      const calibX = parseFloat((this.element.querySelector('#inp-sc-calib-x') as HTMLInputElement)?.value);
-      const calibVal = parseFloat((this.element.querySelector('#inp-sc-calib-val') as HTMLInputElement)?.value);
-      const unit = (this.element.querySelector('#inp-sc-unit') as HTMLInputElement)?.value.trim() || activeCol.unit || '';
-
-      // 分项报错，不再静默 return：静默 return 让"点了按钮什么都没发生"成为
-      // 最常见的用户困惑，也让缺陷藏起来。
-      if (!Number.isFinite(originX)) {
-        notifyError('端点 1 的像素 X 必须是数字。');
-        return;
-      }
-      if (!Number.isFinite(calibX)) {
-        notifyError(
-          '端点 2 的像素 X 还没确定：请在图上量出刻度位置后填进来。未标定的列没有第二端点，程序不会替你猜一个。'
-        );
-        return;
-      }
-      if (calibX === originX) {
-        notifyError('两个端点不能落在同一像素位置。');
-        return;
-      }
-      if (!Number.isFinite(calibVal)) {
-        notifyError('端点 2 的对应数值必须是数字。');
-        return;
-      }
-      const originVal = Number.isFinite(originValRaw) ? originValRaw : 0;
-      const ticks: [{ px: number; value: number }, { px: number; value: number }] = [
-        { px: originX, value: originVal },
-        { px: calibX, value: calibVal },
-      ];
-
-      if (this.callbacks.rpcClient) {
-        try {
-          const res = await this.callbacks.rpcClient.calibrateColumnXTicks(
-            getColIdx(activeCol),
-            ticks,
-            unit
-          );
-          activeCol.x_ticks = res.x_ticks;
-        } catch (err) {
-          notifyError(err instanceof Error ? err.message : String(err));
-          this.render();
-          return;
-        }
-      } else {
-        activeCol.x_ticks = ticks;
-      }
-
-      activeCol.scaleCalib = {
-        originX,
-        originVal,
-        calibX,
-        calibVal,
-        unit,
-      };
-      activeCol.startValue = originVal;
-      activeCol.unit = unit;
-      activeCol.maxPercent = calibVal;
-      activeCol.tickValue = calibVal;
-      activeCol.tickEndX = calibX;
-      activeCol.isLocked = true;
-      // 就地同步后端派生字段：取值器只读 `scale_provenance` + `scaleCalib`
-      // （见 CoordinateSystem.resolveColumnScale），不同步的话标定完界面仍显示"未标定"。
-      // 这些值来自 RPC 返回的 x_ticks 与用户输入，是确定性结果，不是猜测。
-      activeCol.scale_provenance = { calibrated: true, source: 'x_ticks' };
-
-      if (activeCol.scale_type === 'log') {
-        const check = CoordinateSystem.validateLogScale(activeCol);
-        if (!check.valid) {
-          activeCol.scale_type = 'linear';
-          if (this.callbacks.rpcClient) {
-            try {
-              await this.callbacks.rpcClient.updateColumn(getColIdx(activeCol), { scale_type: 'linear' });
-            } catch {
-              // 已在本地回退 linear
-            }
-          }
-        }
-      }
-
-      if (activeCol.controlPoints) {
-        activeCol.controlPoints.forEach((p) => {
-          const value = CoordinateSystem.imageXToValue(p.x, activeCol);
-          // 未标定时 imageXToValue 返回 undefined：保留控制点原值，不写入 undefined
-          // （写进去会让 updateColumn 载荷出现 undefined 字段，后端整条更新失败）。
-          if (value !== undefined) p.value = value;
-        });
-      }
-
-      this.history.push(`Update Tick Calibration for ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
-      this.render();
-      this.callbacks.onDataChange();
-    };
-
-    this.element.querySelector('#inp-sc-origin-x')?.addEventListener('change', () => void updateScaleCalib());
-    this.element.querySelector('#inp-sc-origin-val')?.addEventListener('change', () => void updateScaleCalib());
-    this.element.querySelector('#inp-sc-calib-x')?.addEventListener('change', () => void updateScaleCalib());
-    this.element.querySelector('#inp-sc-calib-val')?.addEventListener('change', () => void updateScaleCalib());
-    this.element.querySelector('#inp-sc-unit')?.addEventListener('change', () => void updateScaleCalib());
-
-    this.element.querySelectorAll('.quick-tick-val-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const val = parseFloat(btn.getAttribute('data-val') || '20');
-        const calibValInp = this.element.querySelector('#inp-sc-calib-val') as HTMLInputElement;
-        if (calibValInp && !isNaN(val)) {
-          calibValInp.value = String(val);
-          void updateScaleCalib();
-        }
-      });
-    });
 
     this.element.querySelectorAll('.quick-scaletype-btn').forEach((btn) => {
       btn.addEventListener('click', async () => {
@@ -578,42 +463,9 @@ export class Inspector {
       });
     });
 
-    this.element.querySelector('#btn-apply-type-all')?.addEventListener('click', async () => {
-      const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
-      if (activeCol) {
-        const pType = activeCol.plot_type || activeCol.plotType || 'area';
-        if (this.callbacks.rpcClient) {
-          try {
-            for (const c of this.data.columns) {
-              await this.callbacks.rpcClient.updateColumn(getColIdx(c), { plot_type: pType });
-            }
-          } catch (err) {
-            notifyError(err instanceof Error ? err.message : String(err));
-            return;
-          }
-        }
-        this.data.columns.forEach((c) => {
-          c.plot_type = pType;
-          c.plotType = pType;
-        });
-        this.history.push(`Apply Plot Type ${pType} to All Columns`, this.data.columns, this.data.activeTaxaId);
-        this.render();
-        this.callbacks.onDataChange();
-      }
-    });
 
     // 粘贴真实钻孔深度序列
-    this.element.querySelector('#btn-open-paste-depths')?.addEventListener('click', () => {
-      this.openPasteDepthsModal();
-    });
 
-    this.element.querySelector('#btn-clear-custom-depths')?.addEventListener('click', () => {
-      // 只清层位序列，不动标定端点（旧实现把两者写在一起，清理层位会顺手改刻度）。
-      delete this.data.calibration.customDepths;
-      this.history.push('Clear Custom Depths', this.data.columns, this.data.activeTaxaId, this.data.calibration, this.data.roi);
-      this.render();
-      this.callbacks.onDataChange();
-    });
 
     // 局部放大曲线勾选与倍数（同步后端 column.update）
     this.element.querySelector('#chk-has-exag')?.addEventListener('change', async (e) => {
@@ -743,38 +595,10 @@ export class Inspector {
     });
 
     // 应用有效区：只改 ROI。深度标定由 S4 的两点标定负责，绝不在这里顺带改写。
-    this.element.querySelector('#btn-apply-roi')?.addEventListener('click', () => {
-      const x0 = parseInt((this.element.querySelector('#inp-roi-xmin') as HTMLInputElement).value, 10);
-      const x1 = parseInt((this.element.querySelector('#inp-roi-xmax') as HTMLInputElement).value, 10);
-      const y0 = parseInt((this.element.querySelector('#inp-roi-ymin') as HTMLInputElement).value, 10);
-      const y1 = parseInt((this.element.querySelector('#inp-roi-ymax') as HTMLInputElement).value, 10);
-
-      const prev = { ...this.data.roi };
-      const next: DataRoi = {
-        xMin: isNaN(x0) ? prev.xMin : x0,
-        xMax: isNaN(x1) ? prev.xMax : x1,
-        yMin: isNaN(y0) ? prev.yMin : y0,
-        yMax: isNaN(y1) ? prev.yMax : y1,
-      };
-
-      new ResizeRoiCommand(prev, next).execute(this.data);
-      this.history.push('Update ROI', this.data.columns, this.data.activeTaxaId, this.data.calibration, next);
-      this.callbacks.onRoiCommitted?.(next);
-      this.callbacks.onDataChange();
-    });
 
     // 图层显隐控制 (S6)
-    this.element.querySelector('#layer-chk-ghost')?.addEventListener('change', (e) => {
-      this.callbacks.onToggleLayerVisibility?.('ghost', (e.target as HTMLInputElement).checked);
-    });
 
-    this.element.querySelector('#btn-inspector-open-table')?.addEventListener('click', () => {
-      this.callbacks.onOpenDataViewer?.();
-    });
 
-    this.element.querySelector('#btn-inspector-open-export')?.addEventListener('click', () => {
-      this.callbacks.onOpenDataViewer?.();
-    });
 
     // 挂载当前步骤 Panel 的事件监听 (Step Registry)
     const registered = getStepPanel(this.currentStage);

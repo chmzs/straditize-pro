@@ -132,9 +132,6 @@ export class SelectToolStrategy implements ToolStrategy {
         ctx.callbacks.onTaxaChange?.(col.id);
         ctx.callbacks.onDataChange?.();
 
-        const inpVal2 = document.getElementById('inp-manual-tick-val2') as HTMLInputElement | null;
-        inpVal2?.focus();
-        inpVal2?.select();
 
         ctx.notifyNotice(`已将 ${col.name} 的刻度端点 X2 吸附至 X=${targetX}px (请在右侧输入数值后按 Enter 保存)`);
         ctx.requestRender();

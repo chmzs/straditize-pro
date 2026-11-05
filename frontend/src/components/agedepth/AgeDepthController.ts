@@ -101,11 +101,7 @@ export class AgeDepthController {
   }
 
   public renderRateOptionsNote(): void {
-    const el = this.container.querySelector('#ad-rate-units') as HTMLElement | null;
-    if (el) {
-      const sel = this.selectedRateColumns();
-      el.textContent = sel.length ? `${sel.length} 列速率将写入数据集（含单位）` : '不导出速率列';
-    }
+    // #ad-rate-units 这个提示元素已从模板移除；方法只保留回调，供速率列选择变化时通知外部。
     this.callbacks.onRateSelectionChanged?.();
   }
 

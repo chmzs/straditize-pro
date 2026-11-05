@@ -127,20 +127,6 @@ export class Toolbar {
       this.render();
       return;
     }
-    const rpcPill = this.element.querySelector('#rpc-status-pill');
-    if (rpcPill) {
-      // 两种状态：RPC（真实后端）/ 离线（后端断开，不产出任何数据）。不存在第三种数据来源。
-      rpcPill.className = `status-pill ${status.connected ? 'online' : 'mock'}`;
-      const dot = rpcPill.querySelector('.status-dot');
-      const text = rpcPill.querySelector('.status-text');
-      if (text) {
-        text.textContent = status.connected ? 'RPC: Online' : t('lang.badge') === 'EN' ? 'Offline' : '离线';
-      }
-      if (dot) {
-        (dot as HTMLElement).style.boxShadow = status.connected ? '0 0 8px #10b981' : '0 0 8px #b91c1c';
-      }
-      rpcPill.setAttribute('title', status.connected ? 'JSON-RPC' : t('banner.backendLost'));
-    }
   }
 
   public updateScale(scale: number): void {
@@ -440,13 +426,10 @@ export class Toolbar {
     this.element.querySelector('#btn-zoom-out')?.addEventListener('click', () => this.callbacks.onZoomOut());
     this.element.querySelector('#btn-undo')?.addEventListener('click', () => this.callbacks.onUndo());
     this.element.querySelector('#btn-redo')?.addEventListener('click', () => this.callbacks.onRedo());
-    this.element.querySelector('#btn-digitize')?.addEventListener('click', () => this.callbacks.onDigitize());
-    this.element.querySelector('#btn-calibrate')?.addEventListener('click', () => this.callbacks.onOpenCalibrationModal());
     this.element.querySelector('#btn-metadata-modal')?.addEventListener('click', () => this.callbacks.onOpenMetadataModal?.());
     this.element.querySelector('#btn-ocr-review-modal')?.addEventListener('click', () => this.callbacks.onOpenOcrReviewModal?.());
     this.element.querySelector('#btn-age-depth-modal')?.addEventListener('click', () => this.callbacks.onOpenAgeDepthModal?.());
     this.element.querySelector('#btn-export-csv')?.addEventListener('click', () => this.callbacks.onExport('csv'));
-    this.element.querySelector('#btn-export-json')?.addEventListener('click', () => this.callbacks.onExport('json'));
     this.element.querySelector('#btn-settings')?.addEventListener('click', () => this.callbacks.onOpenSettings?.());
     this.element.querySelector('#btn-about')?.addEventListener('click', () => this.callbacks.onOpenAbout?.());
 

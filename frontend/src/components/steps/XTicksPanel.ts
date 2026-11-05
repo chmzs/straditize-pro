@@ -10,10 +10,8 @@ import {
   maxDetectedSpan,
 } from './rulerSpan';
 import {
-  callStepCallback,
   renderActiveColumnLostNotice,
   renderOtherLostColumnsSummary,
-  syncXTicksDroppedFromBackend,
 } from './XTicksDroppedNotice';
 import { renderOtherSuspectColumnsSummary } from './SuspectBlockNotice';
 import { resolveAxisStroke } from '../../core/axisStroke';
@@ -635,9 +633,6 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onAdvanceWorkflowStage?.(5);
   });
 
-  root.querySelector('#btn-detect-xticks')?.addEventListener('click', () => {
-    ctx.onDetectXTicks?.();
-  });
 
   // 标尺输入：轴线粗（组/列）、单位刻度长度、检测刻距
   const wireRulerInputs = (): void => {
@@ -681,20 +676,6 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     });
 
     // 单位刻度长度（cell_px）：标定的几何锚点。刻度位置 = 0 点 + k × 它。
-    root.querySelector('#inp-cell-px')?.addEventListener('change', (e) => {
-      const raw = (e.target as HTMLInputElement).value.trim();
-      const px = raw === '' ? null : Number.parseFloat(raw);
-      if (px != null && (!Number.isFinite(px) || px <= 0)) return;
-      patchGroup({ ref_span_px: px });
-    });
-    root.querySelector('#btn-use-detected-span')?.addEventListener('click', () => {
-      const px = Number(state.rulerGeo?.median_spacing_px);
-      if (!Number.isFinite(px) || px <= 0) {
-        notifyError('还没有检测到刻距，无法填入：请确认图版下方有刻度尺后重试。');
-        return;
-      }
-      patchGroup({ ref_span_px: px });
-    });
   };
   wireRulerInputs();
 
@@ -862,20 +843,6 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     });
 
     // 4. 活动列所属组单列快速切换
-    root.querySelector('#sel-col-group-quick')?.addEventListener('change', async (e) => {
-      const activeCol = activeColumn();
-      const newGrpId = (e.target as HTMLSelectElement).value;
-      if (activeCol && newGrpId && ctx.rpcClient) {
-        try {
-          await ctx.rpcClient.updateColumn(columnIndex(activeCol), { x_group_id: newGrpId } as any);
-          activeCol.x_group_id = newGrpId;
-          state.selectedGroupId = newGrpId;
-          ctx.onDataChange?.();
-        } catch (err) {
-          notifyError(err instanceof Error ? err.message : String(err));
-        }
-      }
-    });
 
     // 5. 新建组
     // 选列集变化 → 面板重渲染（「已选 N 列」与确认按钮的可用性都依赖它）
@@ -952,14 +919,6 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
 
 
     // 9. 单列清空
-    root.querySelector('#btn-clear-col-ticks')?.addEventListener('click', () => {
-      const activeCol = activeColumn();
-      if (!activeCol) return;
-      void (async () => {
-        await callStepCallback(() => ctx.onClearXTicks?.(columnIndex(activeCol)));
-        await syncXTicksDroppedFromBackend(state.cachedData, ctx);
-      })();
-    });
   };
   wireBatchGrouping();
 
@@ -1015,21 +974,6 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   wireMergeGroups();
 
 
-  // 回车保存单列（两输入框共用）
-  const wireManualTickEnter = (): void => {
-    // 回车保存单列
-    const val1Inp = root.querySelector('#inp-manual-tick-val1') as HTMLInputElement | null;
-    const val2Inp = root.querySelector('#inp-manual-tick-val2') as HTMLInputElement | null;
-    const handleEnterKey = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        (root.querySelector('#btn-save-manual-ticks') as HTMLButtonElement | null)?.click();
-      }
-    };
-    val1Inp?.addEventListener('keydown', handleEnterKey);
-    val2Inp?.addEventListener('keydown', handleEnterKey);
-  };
-  wireManualTickEnter();
 
 
   root.querySelector('#btn-apply-xticks-next')?.addEventListener('click', () => {

@@ -356,9 +356,7 @@ export class AgeDepthModal {
     );
 
     // 载入范例
-    modal.querySelector('#ad-btn-load-bacon')?.addEventListener('click', () => this.controller?.loadSampleImage('bacon'));
     modal.querySelector('#ad-btn-center-bacon')?.addEventListener('click', () => this.controller?.loadSampleImage('bacon'));
-    modal.querySelector('#ad-btn-load-bchron')?.addEventListener('click', () => this.controller?.loadSampleImage('bchron'));
     modal.querySelector('#ad-btn-center-bchron')?.addEventListener('click', () => this.controller?.loadSampleImage('bchron'));
 
     // 本地文件上传：唯一入口是画布中央的 #ad-btn-center-browse。

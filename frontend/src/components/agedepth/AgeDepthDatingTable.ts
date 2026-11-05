@@ -261,10 +261,6 @@ export class AgeDepthDatingTable {
     }
 
     const rates = this.mappedSamples?.rate;
-    const unitsEl = this.container.querySelector('#ad-rate-units');
-    if (unitsEl) {
-      unitsEl.textContent = rates?.units?.acc_rate ? `${rates.units.acc_rate}` : '';
-    }
     const accMid = rates?.acc_rate_yr_per_depth;
     const accLo = rates?.acc_rate_yr_per_depth_min;
     const accHi = rates?.acc_rate_yr_per_depth_max;

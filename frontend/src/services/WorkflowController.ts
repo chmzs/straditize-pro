@@ -218,12 +218,6 @@ export class WorkflowController {
       this.updateWorkflowBar();
       this.getInspector()?.updateData(this.canvasComponent.data);
       this.callbacks.setHudNotice('已进入 Step 6 列标定！在底端刻度尺直接点击锯齿即可吸附 X2 刻度点。', 4500);
-      const hasAnyTeeth = this.canvasComponent.data.columns.some((c) => c.detected_ticks && c.detected_ticks.length > 0);
-      if (!hasAnyTeeth) {
-        queueMicrotask(() => {
-          (document.querySelector('#btn-detect-xticks') as HTMLButtonElement | null)?.click();
-        });
-      }
     } else if (targetStage === STAGE.SPEARS_AND_SAMPLES) {
       this.currentStage = STAGE.SPEARS_AND_SAMPLES;
       this.callbacks.onStageChange?.(this.currentStage);
