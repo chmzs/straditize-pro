@@ -1,6 +1,5 @@
 import {
   Point2D,
-  ControlPoint,
   TaxaColumn,
   DiagramData,
   DataRoi,
@@ -594,115 +593,6 @@ private pointer: PointerState = {
 
   public getActiveColumn(): TaxaColumn | undefined {
     return this.data.columns.find((c) => c.id === this.data.activeTaxaId);
-  }
-
-  /**
-   * 批量导入并重命名属种列（若属种数超出当前列数，则自动根据列间距拓展分列）
-   */
-  public batchUpdateTaxa(taxaNames: string[]): void {
-    if (!taxaNames || taxaNames.length === 0) return;
-
-    // 1. 按从左到右 (startX 升序) 排序现有列
-    const sortedCols = [...this.data.columns].sort((a, b) => a.startX - b.startX);
-    const existingCount = sortedCols.length;
-    const inputCount = taxaNames.length;
-
-    // 2. 依次按顺序重命名当前全部已有 Taxa 列
-    const renameLimit = Math.min(existingCount, inputCount);
-    for (let i = 0; i < renameLimit; i++) {
-      sortedCols[i].name = taxaNames[i];
-    }
-
-    // 3. 如果输入的属种数量大于当前列数，自动根据列间距拓展分列
-    if (inputCount > existingCount) {
-      let colWidth = 100;
-      if (existingCount >= 2) {
-        const span = sortedCols[existingCount - 1].startX - sortedCols[0].startX;
-        const avgStep = span / (existingCount - 1);
-        colWidth = Math.max(40, Math.round(avgStep));
-      } else if (existingCount === 1) {
-        colWidth = Math.max(40, sortedCols[0].endX - sortedCols[0].startX);
-      }
-
-      const lastCol = sortedCols[existingCount - 1];
-      let curStartX = lastCol ? lastCol.endX : this.data.roi.xMin;
-
-      const palette = [
-        '#38bdf8', '#34d399', '#fbbf24', '#a78bfa',
-        '#f472b6', '#fb7185', '#2dd4bf', '#818cf8',
-        '#e879f9', '#38ef7d', '#11998e', '#f5af19'
-      ];
-
-      const roi = this.data.roi;
-      const yMin = roi.yMin;
-      const yMax = roi.yMax;
-      const stepY = (yMax - yMin) / 12;
-
-      for (let i = existingCount; i < inputCount; i++) {
-        const newStartX = curStartX;
-        const newEndX = newStartX + colWidth;
-        const name = taxaNames[i];
-        const color = palette[i % palette.length];
-
-        const points: ControlPoint[] = [];
-        for (let s = 0; s <= 12; s++) {
-          const y = Math.round(yMin + s * stepY);
-          const x = Math.round(newStartX + colWidth * 0.12);
-          points.push({
-            id: `pt_${Date.now()}_${i}_${s}`,
-            x,
-            y,
-            type: s % 4 === 0 ? 'manual' : 'transition',
-            isManual: s % 4 === 0,
-            createdAt: Date.now() + s,
-          });
-        }
-
-        const newCol: TaxaColumn = {
-          id: `taxa_paste_${Date.now()}_${i}`,
-          name,
-          color,
-          startX: newStartX,
-          endX: newEndX,
-          tickEndX: newEndX,
-          maxPercent: 40,
-          unit: '%',
-          curveType: 'linear',
-          visible: true,
-          isLocked: false,
-          controlPoints: points,
-        };
-
-        sortedCols.push(newCol);
-        curStartX = newEndX;
-
-        // 自动扩展取数区域以容纳新列；严格钳位在图谱物理宽度内
-        const maxW = this.data.imageWidth || 8000;
-        if (newEndX > this.data.roi.xMax) {
-          this.data.roi.xMax = Math.min(maxW, newEndX + 30);
-        }
-      }
-    }
-
-    this.data.columns = sortedCols;
-    if (!sortedCols.some((c) => c.id === this.data.activeTaxaId) && sortedCols[0]) {
-      this.data.activeTaxaId = sortedCols[0].id;
-    }
-
-    // 记录撤销重做历史快照
-    this.history.push(
-      `批量导入属种名单 (${taxaNames.length} 属种)`,
-      this.data.columns,
-      this.data.activeTaxaId,
-      this.data.calibration
-    );
-
-    this.notifyNotice(`已成功批量导入 ${taxaNames.length} 个属种并更新分列！`);
-    this.requestRender();
-
-    if (this.callbacks.onDataChange) {
-      this.callbacks.onDataChange();
-    }
   }
 
   // ===================== 事件监听与交互 =====================
