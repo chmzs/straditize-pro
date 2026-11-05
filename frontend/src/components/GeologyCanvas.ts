@@ -48,6 +48,8 @@ import { drawDepthGridOverlay } from './canvas/depthGrid';
 import { drawColumnBoundariesOverlay } from './canvas/columnBoundaries';
 import { drawAnchorsOverlay, drawPollenCurvesOverlay } from './canvas/pollenCurves';
 import { resolveCanvasCursor } from './canvas/cursor';
+import { assertNoDuplicateBindings, matchesKeyBinding } from './canvas/keyBindings';
+import type { KeyBinding } from './canvas/keyBindings';
 import { findHitAnchorAt, findHitBoundaryAt, findHitRoiHandleAt } from './canvas/hitTest';
 import { drawBackgroundDiagramOverlay } from './canvas/backgroundDiagram';
 import { drawRoiOverlay as drawRoiOverlayIntoContext } from './canvas/roiRegion';
@@ -190,6 +192,8 @@ private pointer: PointerState = {
     this.callbacks = callbacks;
     this.toolModeManager = new ToolModeManager('select');
     this.toolStrategies = createToolStrategies();
+    // 键位表查重：重复绑定会让「后加的功能静默失效」，必须加载期就炸出来。
+    assertNoDuplicateBindings(this.keyBindings);
     // 步骤 6「在图上选列」需要画布重画高亮：把重绘钩子交给共享状态，
     // 面板改选中集时直接调它，不必再穿一层 callback。
     columnPick.requestRedraw = () => this.requestRender();
@@ -812,25 +816,23 @@ private pointer: PointerState = {
     };
   }
 
-  private onKeyDown(e: KeyboardEvent): void {
-    const targetTag = (e.target as HTMLElement)?.tagName;
-    if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT') {
-      return;
-    }
-
-    // 1. 方向键微调选中项 (Arrow Keys Nudge: 1px / Shift: 10px)
-    if (
-      e.code === 'ArrowUp' ||
-      e.code === 'ArrowDown' ||
-      e.code === 'ArrowLeft' ||
-      e.code === 'ArrowRight'
-    ) {
-      // 步骤 4 的 geometry 选中也要能用方向键精调 —— tooltip 早就承诺了
-      // "方向键 1px 精调"，但入口此前只认 selectedEntity（控制点/列），几何被挡在外面。
-      const geoNudge =
-        this.workflowStage === STAGE.CLEANUP && !!this.selectedGeometryId && !this.data.selectedEntity;
-      if (this.data.selectedEntity || geoNudge) {
-        e.preventDefault();
+  /**
+   * 键盘绑定表。**顺序即优先级**，第一命中即执行并终止。
+   *
+   * 为什么用表而不是顺序 if 链：KeyC 曾同时绑「添加属种列」与「高对比度」，
+   * 前者先 return，后者从加进去那天起就不可达——顺序链没有任何机制能暴露重复。
+   * 现在表在初始化时查重（assertNoDuplicateBindings），重复直接抛错。
+   *
+   * 修饰键语义：plain = 无 Ctrl/Meta/Alt；ctrl = 有 Ctrl 或 Meta；都不设 = 不限。
+   */
+  private readonly keyBindings: KeyBinding[] = [
+    // 1. 方向键微调（无选中目标时不拦截，交给浏览器）
+    {
+      codes: ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'],
+      when: () =>
+        Boolean(this.data.selectedEntity) ||
+        (this.workflowStage === STAGE.CLEANUP && Boolean(this.selectedGeometryId)),
+      run: (e) => {
         const step = e.shiftKey ? 10 : 1;
         let dx = 0;
         let dy = 0;
@@ -838,52 +840,69 @@ private pointer: PointerState = {
         if (e.code === 'ArrowRight') dx = step;
         if (e.code === 'ArrowUp') dy = -step;
         if (e.code === 'ArrowDown') dy = step;
-        if (geoNudge) {
+        // 步骤 4 的几何选中也走这里：tooltip 早就承诺「方向键 1px 精调」。
+        if (this.selectedGeometryId && !this.data.selectedEntity) {
           this.nudgeSelectedGeometry(dx, dy);
         } else {
           this.nudgeSelectedEntity(dx, dy);
         }
-        return;
-      }
-    }
-
-    // 1b. 删除选中的 Step 4 geometry（Delete / Backspace）
-    if ((e.code === 'Delete' || e.code === 'Backspace') && this.selectedGeometryId) {
-      e.preventDefault();
-      void this.deleteSelectedGeometry();
-      return;
-    }
-
-    // 2. 模式快捷键切换 (A: 加点, S: 微调, D: 删点, C: 加列, H: 平移, R: ROI)
-    if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-      // S / V: 微调与选择模式 (Adjust Point)
-      if (e.code === 'KeyS' || e.code === 'KeyV') {
-        e.preventDefault();
+      },
+      label: '方向键微调',
+    },
+    // 2. 删除：几何优先（步骤 4 无「删点」工具，不该被 eraser 门禁吞掉）
+    {
+      codes: ['Delete'],
+      when: () => Boolean(this.selectedGeometryId) || Boolean(this.data.selectedEntity),
+      run: () => {
+        if (this.selectedGeometryId) {
+          void this.deleteSelectedGeometry();
+          return;
+        }
+        if (!this.guardTool('eraser')) return;
+        this.deleteSelectedEntity();
+      },
+      label: 'Delete 删除选中',
+    },
+    {
+      codes: ['Backspace'],
+      when: () => Boolean(this.selectedGeometryId),
+      run: () => void this.deleteSelectedGeometry(),
+      label: 'Backspace 删除几何',
+    },
+    // 3. 工具切换（步骤门禁由 guardTool 负责）
+    {
+      codes: ['KeyS', 'KeyV'],
+      plain: true,
+      run: () => {
         this.setToolMode('select');
         this.notifyNotice('切换工具: 微调与选择 (S) - 拖动锚点或方向键精调');
-        return;
-      }
-      // A: 添加控制点模式 (Add Point)
-      if (e.code === 'KeyA') {
-        e.preventDefault();
+      },
+      label: 'S/V 微调与选择',
+    },
+    {
+      codes: ['KeyA'],
+      plain: true,
+      run: () => {
         if (!this.guardTool('addPoint')) return;
         this.setToolMode('addPoint');
         this.notifyNotice('切换工具: 添加控制点 (A) - 点击左键插入锚点');
-        return;
-      }
-      // D: 步骤 4 已选中几何时 = 删除该几何（与 Delete 键等价）；
-      //    其余情况仍是"删除控制点"工具（步骤 5 起可用）。
-      //    步骤 4 没有"删点"工具，所以 D 在这里不该被 eraser 门禁吞掉。
-      if (e.code === 'KeyD') {
-        e.preventDefault();
+      },
+      label: 'A 添加控制点',
+    },
+    {
+      codes: ['KeyD'],
+      plain: true,
+      run: () => {
         if (!this.guardTool('eraser')) return;
         this.setToolMode('eraser');
         this.notifyNotice('切换工具: 删除控制点 (D) - 点击左键删除锚点或列');
-        return;
-      }
-      // M: 像素测量尺 —— 量干扰线实际有多粗，再把数字填进侧栏"统一厚度"
-      if (e.code === 'KeyM') {
-        e.preventDefault();
+      },
+      label: 'D 删除控制点',
+    },
+    {
+      codes: ['KeyM'],
+      plain: true,
+      run: () => {
         if (!this.guardTool('measure')) return;
         if (this.toolModeManager.getMode() === 'measure') {
           this.setToolMode('select');
@@ -892,68 +911,85 @@ private pointer: PointerState = {
         }
         this.setToolMode('measure');
         this.notifyNotice('测量尺 (M): 在图上按住左键拖一条线，读出 Δx / Δy / 距离 (px)');
-        return;
-      }
-      // C: 添加属种列 (Column)
-      if (e.code === 'KeyC') {
-        e.preventDefault();
+      },
+      label: 'M 测量尺',
+    },
+    {
+      codes: ['KeyC'],
+      plain: true,
+      run: () => {
         if (!this.guardTool('addCol')) return;
         this.setToolMode('addCol');
         this.notifyNotice('切换工具: 添加属种列 (C) - 点击图表插入垂直基线');
-        return;
-      }
-      // H: 抓手平移模式 (Pan)
-      if (e.code === 'KeyH') {
-        e.preventDefault();
+      },
+      label: 'C 添加属种列',
+    },
+    {
+      codes: ['KeyH'],
+      plain: true,
+      run: () => {
         this.setToolMode('pan');
         this.notifyNotice('切换工具: 抓手平移模式 (H) [提示: 右键直接拖拽也可平移]');
-        return;
-      }
-      // R: ROI 矩形数据区
-      if (e.code === 'KeyR') {
-        e.preventDefault();
+      },
+      label: 'H 抓手平移',
+    },
+    {
+      codes: ['KeyR'],
+      plain: true,
+      run: () => {
         if (!this.guardTool('roi')) return;
         this.setToolMode('roi');
         this.notifyNotice('切换工具: 数据取数区 ROI 模式 (R)');
-        return;
-      }
-      // K: 线掩膜人工修正笔刷
-      if (e.code === 'KeyK') {
-        e.preventDefault();
+      },
+      label: 'R ROI 模式',
+    },
+    {
+      codes: ['KeyK'],
+      plain: true,
+      run: () => {
         if (!this.guardTool('linefix')) return;
         // 修正时必须能看见掩膜，否则等于闭眼涂改
         this.viewport.showBinaryOverlay = true;
         this.setToolMode('linefix');
         this.notifyNotice(
-          `切换工具: 线掩膜修正 (K) —— 当前为${this.lineFixMode === 'erase' ? '擦除误标' : '补回漏标'}笔，按 B 可切换叠加层显隐`
+          '切换工具: 线掩膜修正 (K) —— 当前为' +
+            (this.lineFixMode === 'erase' ? '擦除误标' : '补回漏标') +
+            '笔，按 B 可切换叠加层显隐'
         );
-        return;
-      }
-      // Y: Y 轴两点标定
-      if (e.code === 'KeyY') {
-        e.preventDefault();
+      },
+      label: 'K 线掩膜修正',
+    },
+    {
+      codes: ['KeyY'],
+      plain: true,
+      run: () => {
         if (!this.guardTool('ycalib')) return;
         this.clearYCalibMarks();
         this.setToolMode('ycalib');
         this.notifyNotice('切换工具: Y 轴两点标定 (Y) —— 依次点击 Y 轴上两个已知刻度所在的行');
-        return;
-      }
-      // T: 点选 X 轴刻度齿（步骤 6 组级标定）。与 M 一样是"再按一次退出"，
-      //    因为点齿动作靠点触发器触发，没有持续拖拽状态，按住不放没有意义。
-      if (e.code === 'KeyT') {
-        e.preventDefault();
+      },
+      label: 'Y Y 轴标定',
+    },
+    {
+      codes: ['KeyT'],
+      plain: true,
+      run: () => {
         if (!this.guardTool('pickTick')) return;
         if (this.toolModeManager.getMode() === 'pickTick') {
-          this.setToolMode('select');
+        this.setToolMode('select');
           this.notifyNotice('已退出点选刻度齿');
           return;
         }
         this.setToolMode('pickTick');
         this.notifyNotice('点选刻度齿 (T): 在画布上点一个 X 轴刻度齿，再填它的真实数值');
-        return;
-      }
-      if (e.code === 'Escape') {
-        e.preventDefault();
+      },
+      label: 'T 点选刻度齿',
+    },
+    // 4. 视图与状态键
+    {
+      codes: ['Escape'],
+      plain: true,
+      run: () => {
         if (this.toolModeManager.getMode() !== 'select') {
           this.setToolMode('select');
           this.notifyNotice('已返回微调与选择模式 (S)');
@@ -962,131 +998,147 @@ private pointer: PointerState = {
           this.requestRender();
           this.notifyNotice('已取消选中');
         }
-        return;
-      }
-      if (e.code === 'KeyF') {
-        e.preventDefault();
+      },
+      label: 'Esc 取消/回选择',
+    },
+    {
+      codes: ['KeyF'],
+      plain: true,
+      run: () => {
         this.fitToScreen();
         this.notifyNotice('视图: 适应屏幕居中 (F)');
-        return;
-      }
-      // Delete: 唯一的规范删除键（F1 帮助由全局统一处理，此处不再重复绑定）
-      if (e.code === 'Delete') {
-        if (this.data.selectedEntity) {
-          e.preventDefault();
-          if (!this.guardTool('eraser')) return;
-          this.deleteSelectedEntity();
-          return;
-        }
-      }
-      if (e.key === '=' || e.key === '+') {
-        e.preventDefault();
+      },
+      label: 'F 适应屏幕',
+    },
+    {
+      keys: ['=', '+'],
+      plain: true,
+      run: () => {
         const rect = this.canvas.getBoundingClientRect();
         this.viewport.zoomStepAt({ x: rect.width / 2, y: rect.height / 2 }, true);
         this.requestRender();
-        this.notifyNotice(`视图放大: ${Math.round(this.viewport.scale * 100)}%`);
-        return;
-      }
-      if (e.key === '-' || e.key === '_') {
-        e.preventDefault();
+        this.notifyNotice('视图放大: ' + Math.round(this.viewport.scale * 100) + '%');
+      },
+      label: '= 放大',
+    },
+    {
+      keys: ['-', '_'],
+      plain: true,
+      run: () => {
         const rect = this.canvas.getBoundingClientRect();
         this.viewport.zoomStepAt({ x: rect.width / 2, y: rect.height / 2 }, false);
         this.requestRender();
-        this.notifyNotice(`视图缩小: ${Math.round(this.viewport.scale * 100)}%`);
-        return;
-      }
-    }
-
-    // 2. 空格键平移视口
-    if (e.code === 'Space' && !this.isSpaceDown) {
-      this.isSpaceDown = true;
-      this.updateCursor();
-      e.preventDefault();
-      return;
-    }
-
-    // 3. 按 B 键：即时透视二值化前景色/背景遮罩
-    if (e.code === 'KeyB') {
-      e.preventDefault();
-      const isActive = this.viewport.toggleBinaryOverlay();
-      this.notifyNotice(
-        isActive
-          ? '透视遮罩: 二值化墨迹高亮模式 [已开启] (按 B 键关闭)'
-          : '透视遮罩: 二值化墨迹高亮模式 [已关闭] (按 B 键开启)'
-      );
-      this.callbacks.onFilterChange?.(this.viewport.imageMode, this.viewport.showBinaryOverlay);
-      this.requestRender();
-      return;
-    }
-
-    // 4. 按 I 键：切换底图反相 (Invert) 模式
-    if (e.code === 'KeyI' && !e.ctrlKey && !e.metaKey) {
-      e.preventDefault();
-      this.viewport.imageMode = this.viewport.imageMode === 'invert' ? 'normal' : 'invert';
-      this.notifyNotice(`底图滤镜: ${this.viewport.imageMode === 'invert' ? '反相负片 (Invert)' : '原图 (Normal)'}`);
-      this.callbacks.onFilterChange?.(this.viewport.imageMode, this.viewport.showBinaryOverlay);
-      this.requestRender();
-      return;
-    }
-
-    // 5. 按 C 键：切换高对比度 (High Contrast) 模式
-    if (e.code === 'KeyC' && !e.ctrlKey && !e.metaKey) {
-      e.preventDefault();
-      this.viewport.imageMode = this.viewport.imageMode === 'contrast' ? 'normal' : 'contrast';
-      this.notifyNotice(`底图滤镜: ${this.viewport.imageMode === 'contrast' ? '高对比度 (Contrast)' : '原图 (Normal)'}`);
-      this.callbacks.onFilterChange?.(this.viewport.imageMode, this.viewport.showBinaryOverlay);
-      this.requestRender();
-      return;
-    }
-
-    // Ctrl+1 原始尺寸 100%
-    if ((e.ctrlKey || e.metaKey) && e.code === 'Digit1') {
-      e.preventDefault();
-      this.resetZoom100();
-      this.notifyNotice('视图: 1:1 原始尺寸 (Ctrl+1)');
-      return;
-    }
-
-    // Ctrl + + / = 放大
-    if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
-      e.preventDefault();
-      const rect = this.canvas.getBoundingClientRect();
-      this.viewport.zoomStepAt({ x: rect.width / 2, y: rect.height / 2 }, true, true);
-      this.requestRender();
-      this.notifyNotice(`视图放大: ${Math.round(this.viewport.scale * 100)}%`);
-      return;
-    }
-
-    // Ctrl + - / _ 缩小
-    if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_')) {
-      e.preventDefault();
-      const rect = this.canvas.getBoundingClientRect();
-      this.viewport.zoomStepAt({ x: rect.width / 2, y: rect.height / 2 }, false, true);
-      this.requestRender();
-      this.notifyNotice(`视图缩小: ${Math.round(this.viewport.scale * 100)}%`);
-      return;
-    }
-
-    // Ctrl+Z 撤销
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
-      e.preventDefault();
-      const prev = this.history.undo();
-      if (prev) {
+        this.notifyNotice('视图缩小: ' + Math.round(this.viewport.scale * 100) + '%');
+      },
+      label: '- 缩小',
+    },
+    {
+      codes: ['Space'],
+      when: () => !this.isSpaceDown,
+      run: () => {
+        this.isSpaceDown = true;
+        this.updateCursor();
+      },
+      label: '空格临时平移',
+    },
+    {
+      codes: ['KeyB'],
+      run: () => {
+        const isActive = this.viewport.toggleBinaryOverlay();
+        this.notifyNotice(
+          isActive
+            ? '透视遮罩: 二值化墨迹高亮模式 [已开启] (按 B 键关闭)'
+            : '透视遮罩: 二值化墨迹高亮模式 [已关闭] (按 B 键开启)'
+        );
+        this.callbacks.onFilterChange?.(this.viewport.imageMode, this.viewport.showBinaryOverlay);
+        this.requestRender();
+      },
+      label: 'B 透视遮罩',
+    },
+    {
+      codes: ['KeyI'],
+      plain: true,
+      run: () => {
+        this.viewport.imageMode = this.viewport.imageMode === 'invert' ? 'normal' : 'invert';
+        this.notifyNotice(
+          '底图滤镜: ' + (this.viewport.imageMode === 'invert' ? '反相负片 (Invert)' : '原图 (Normal)')
+        );
+        this.callbacks.onFilterChange?.(this.viewport.imageMode, this.viewport.showBinaryOverlay);
+        this.requestRender();
+      },
+      label: 'I 反相',
+    },
+    // 5. Ctrl 组合
+    {
+      codes: ['Digit1'],
+      ctrl: true,
+      run: () => {
+        this.resetZoom100();
+        this.notifyNotice('视图: 1:1 原始尺寸 (Ctrl+1)');
+      },
+      label: 'Ctrl+1 原始尺寸',
+    },
+    {
+      keys: ['=', '+'],
+      ctrl: true,
+      run: () => {
+        const rect = this.canvas.getBoundingClientRect();
+        this.viewport.zoomStepAt({ x: rect.width / 2, y: rect.height / 2 }, true, true);
+        this.requestRender();
+        this.notifyNotice('视图放大: ' + Math.round(this.viewport.scale * 100) + '%');
+      },
+      label: 'Ctrl+= 放大',
+    },
+    {
+      keys: ['-', '_'],
+      ctrl: true,
+      run: () => {
+        const rect = this.canvas.getBoundingClientRect();
+        this.viewport.zoomStepAt({ x: rect.width / 2, y: rect.height / 2 }, false, true);
+        this.requestRender();
+        this.notifyNotice('视图缩小: ' + Math.round(this.viewport.scale * 100) + '%');
+      },
+      label: 'Ctrl+- 缩小',
+    },
+    {
+      keys: ['z'],
+      ctrl: true,
+      when: (e) => !e.shiftKey,
+      run: () => {
+        const prev = this.history.undo();
+        if (!prev) return;
         this.data.columns = prev.columns;
         this.data.activeTaxaId = prev.activeTaxaId;
         this.requestRender();
-      }
-    }
-
-    // Ctrl+Y 重做（唯一的重做规范键）
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
-      e.preventDefault();
-      const next = this.history.redo();
-      if (next) {
+      },
+      label: 'Ctrl+Z 撤销',
+    },
+    {
+      keys: ['y'],
+      ctrl: true,
+      run: () => {
+        const next = this.history.redo();
+        if (!next) return;
         this.data.columns = next.columns;
         this.data.activeTaxaId = next.activeTaxaId;
         this.requestRender();
-      }
+      },
+      label: 'Ctrl+Y 重做',
+    },
+  ];
+
+  private onKeyDown(e: KeyboardEvent): void {
+    const targetTag = (e.target as HTMLElement)?.tagName;
+    if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT') {
+      return;
+    }
+
+    for (const binding of this.keyBindings) {
+      if (!matchesKeyBinding(binding, e)) continue;
+      if (binding.when && !binding.when(e)) continue;
+      if (binding.preventDefault !== false) e.preventDefault();
+      binding.run(e);
+      return;
     }
   }
 
