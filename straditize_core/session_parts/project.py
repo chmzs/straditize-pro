@@ -310,70 +310,7 @@ class ProjectSessionMixin:
             self.redo_stack.clear()
 
         if isinstance(project_data, str):
-            path = os.path.abspath(project_data)
-            if not os.path.exists(path):
-                raise JsonRpcError(
-                    FILE_NOT_FOUND_ERROR, f"Project file not found: {path}"
-                )
-
-            if path.endswith(".tar") or tarfile.is_tarfile(path):
-                with tarfile.open(path, "r") as tf:
-                    json_member = None
-                    img_member = None
-                    ad_img_member = None
-                    for m in tf.getmembers():
-                        nl = m.name.lower()
-                        if nl.endswith("straditize.json") or (
-                            nl.endswith(".json")
-                            and "manifest" not in nl
-                            and "info" not in nl
-                        ):
-                            json_member = m
-                        elif "age_depth" in nl and nl.endswith(
-                            (".png", ".jpg", ".jpeg")
-                        ):
-                            ad_img_member = m
-                        elif nl.endswith((".png", ".jpg", ".jpeg")):
-                            img_member = m
-
-                    if not json_member:
-                        raise JsonRpcError(
-                            INVALID_PARAMS, "No straditize.json found in .tar archive."
-                        )
-
-                    f_json = tf.extractfile(json_member)
-                    if not f_json:
-                        raise JsonRpcError(
-                            INVALID_PARAMS,
-                            "Could not extract straditize.json from archive.",
-                        )
-                    parsed = json.loads(f_json.read().decode("utf-8"))
-
-                    if img_member:
-                        f_img = tf.extractfile(img_member)
-                        if f_img:
-                            img_bytes = f_img.read()
-                            img_obj = Image.open(io.BytesIO(img_bytes))
-                            img_obj.load()
-                            self.image = img_obj
-                            self.width, self.height = img_obj.size
-                            self.format = img_obj.format or "PNG"
-                            self.mode = img_obj.mode
-
-                    if ad_img_member:
-                        f_ad = tf.extractfile(ad_img_member)
-                        if f_ad:
-                            ad_bytes = f_ad.read()
-                            ad_obj = Image.open(io.BytesIO(ad_bytes))
-                            ad_obj.load()
-                            self.age_depth_image = ad_obj
-                            self.age_depth_image_path = "archive://image/age_depth.png"
-
-                    return self.project_load(parsed)
-            else:
-                with open(path, "r", encoding="utf-8") as f:
-                    parsed = json.load(f)
-                return self.project_load(parsed)
+            return self.project_load(self._decode_project_file(project_data))
 
         self._check_project_schema_version(project_data)
 
@@ -384,6 +321,106 @@ class ProjectSessionMixin:
         )
         roi = project_data.get("roi") or {}
 
+        self._reset_loaded_state(roi)
+        self._reset_line_removal(project_data)
+        self._apply_depth_calibration(cal)
+
+        raw_cols = project_data.get("columns", [])
+        self._reset_columns()
+        primary_roi = self._restore_rois(project_data)
+        self._restore_columns(raw_cols, primary_roi)
+        self._restore_embedded_image(project_data)
+        self._restore_aux_fields(project_data)
+        self._restore_age_depth(project_data)
+
+        return {
+            "success": True,
+            "columns_count": len(self.columns),
+            "taxa": self.taxa_names,
+            "is_calibrated": self.is_calibrated,
+            "has_age_depth_image": getattr(self, "age_depth_image", None) is not None,
+            "has_age_depth_model": self.age_depth_model is not None,
+        }
+
+    load_project = project_load
+
+    # ---- project_load 的分段实现（调用顺序即载荷顺序，不可重排）----
+
+    def _decode_project_file(self, project_data: str) -> dict[str, Any]:
+        """把工程文件（.json / .tar）读成 payload 字典，tar 里的图顺手挂进会话。
+
+        `.tar` 的 json 成员只写 `image.path`（图在 tar 的另一个成员里），所以解包这一步
+        必须先把内嵌图挂到 `self.image` / `self.age_depth_image` 上，再由
+        `_restore_embedded_image` 处理 payload 里的 base64。顺序反过来，那条
+        "payload 无 base64 就保持当前底图" 的有意行为会把刚解出来的图弄没。
+        """
+        path = os.path.abspath(project_data)
+        if not os.path.exists(path):
+            raise JsonRpcError(
+                FILE_NOT_FOUND_ERROR, f"Project file not found: {path}"
+            )
+
+        if path.endswith(".tar") or tarfile.is_tarfile(path):
+            with tarfile.open(path, "r") as tf:
+                json_member = None
+                img_member = None
+                ad_img_member = None
+                for m in tf.getmembers():
+                    nl = m.name.lower()
+                    if nl.endswith("straditize.json") or (
+                        nl.endswith(".json")
+                        and "manifest" not in nl
+                        and "info" not in nl
+                    ):
+                        json_member = m
+                    elif "age_depth" in nl and nl.endswith(
+                        (".png", ".jpg", ".jpeg")
+                    ):
+                        ad_img_member = m
+                    elif nl.endswith((".png", ".jpg", ".jpeg")):
+                        img_member = m
+
+                if not json_member:
+                    raise JsonRpcError(
+                        INVALID_PARAMS, "No straditize.json found in .tar archive."
+                    )
+
+                f_json = tf.extractfile(json_member)
+                if not f_json:
+                    raise JsonRpcError(
+                        INVALID_PARAMS,
+                        "Could not extract straditize.json from archive.",
+                    )
+                parsed = json.loads(f_json.read().decode("utf-8"))
+
+                if img_member:
+                    f_img = tf.extractfile(img_member)
+                    if f_img:
+                        img_bytes = f_img.read()
+                        img_obj = Image.open(io.BytesIO(img_bytes))
+                        img_obj.load()
+                        self.image = img_obj
+                        self.width, self.height = img_obj.size
+                        self.format = img_obj.format or "PNG"
+                        self.mode = img_obj.mode
+
+                if ad_img_member:
+                    f_ad = tf.extractfile(ad_img_member)
+                    if f_ad:
+                        ad_bytes = f_ad.read()
+                        ad_obj = Image.open(io.BytesIO(ad_bytes))
+                        ad_obj.load()
+                        self.age_depth_image = ad_obj
+                        self.age_depth_image_path = "archive://image/age_depth.png"
+
+                return parsed
+        else:
+            with open(path, "r", encoding="utf-8") as f:
+                parsed = json.load(f)
+            return parsed
+
+    def _reset_loaded_state(self, roi: dict[str, Any]) -> None:
+        """按 payload 的 roi 重算 data 范围，并清掉上一份工程留下的标度/掩膜状态。"""
         self.data_xlim = None
         self.data_ylim = None
         if "w" in roi and "h" in roi:
@@ -413,6 +450,9 @@ class ProjectSessionMixin:
         self.cleanup_stats = {}
         self.cleanup_overlay_png = None
         self.degrid_info = None
+
+    def _reset_line_removal(self, project_data: dict[str, Any]) -> None:
+        """恢复去线强度/竖线开关与笔迹，并把旧包缺 `mode` 的笔迹补成 erase。"""
         line_removal = project_data.get("line_removal") or {}
         self.degrid_strength = line_removal.get("strength") or None
         self.degrid_remove_vertical = bool(line_removal.get("remove_vertical", True))
@@ -429,6 +469,9 @@ class ProjectSessionMixin:
             for c in corrections
             if isinstance(c, dict)
         ]
+
+    def _apply_depth_calibration(self, cal: dict[str, Any]) -> None:
+        """payload 带完整标定端点时直接重算 y 轴标度。"""
         if unit := cal.get("unit"):
             self.depth_unit = str(unit)
 
@@ -446,11 +489,18 @@ class ProjectSessionMixin:
                 unit=self.depth_unit,
             )
 
-        raw_cols = project_data.get("columns", [])
+    def _reset_columns(self) -> None:
+        """清空列/控制点/物种名，准备按 payload 逐列重建。"""
         self.columns = []
         self.control_points = {}
         self.taxa_names = []
 
+    def _restore_rois(self, project_data: dict[str, Any]) -> dict[str, Any] | None:
+        """恢复 ROI 列表（缺 x_groups 的补默认组），返回主 ROI。
+
+        老包只有 `roi` 字典时按它 `roi_create` 出一个默认 ROI —— 这条分支是
+        **唯一**给老工程包兜底的地方，删掉会让老包载入后没有 ROI。
+        """
         self._init_rois()
         saved_rois = project_data.get("rois")
         if saved_rois and isinstance(saved_rois, list):
@@ -496,7 +546,14 @@ class ProjectSessionMixin:
             if self.primary_roi_id
             else (self.rois[0] if self.rois else None)
         )
+        return primary_roi
 
+    def _restore_columns(
+        self,
+        raw_cols: list[dict[str, Any]],
+        primary_roi: dict[str, Any] | None,
+    ) -> None:
+        """逐列重建：缺 x_ticks 时从起点/刻度值推 x_values，需要时补 x 组。"""
         for idx, c in enumerate(raw_cols):
             name = c.get("species") or c.get("name") or f"Col {idx}"
             self.taxa_names.append(name)
@@ -581,6 +638,8 @@ class ProjectSessionMixin:
                 ctrls[y_val] = x_val
             self.control_points[idx] = ctrls
 
+    def _restore_embedded_image(self, project_data: dict[str, Any]) -> None:
+        """payload 自带 base64 时无条件替换底图，并作废由旧像素算出来的状态。"""
         img_meta = project_data.get("image") or {}
         # 自带底图的 .json 工程包必须**无条件**换掉当前底图（C1d）。
         #
@@ -631,6 +690,8 @@ class ProjectSessionMixin:
             self.foreground_column_edges = None
             self.tick_band = None
 
+    def _restore_aux_fields(self, project_data: dict[str, Any]) -> None:
+        """回填论文元数据、样本、候选线（含 status 兼容视图）、集合表。"""
         if project_data.get("paper_metadata"):
             self.metadata_update(project_data["paper_metadata"])
         if project_data.get("samples") is not None:
@@ -642,6 +703,9 @@ class ProjectSessionMixin:
         if project_data.get("ensemble_tables") is not None:
             self.ensemble_tables = list(project_data["ensemble_tables"])
 
+    def _restore_age_depth(self, project_data: dict[str, Any]) -> None:
+        """恢复年代-深度底图、标定状态与模型（含像素点轨迹）。"""
+        ad_data = project_data.get("age_depth")
         ad_data = project_data.get("age_depth")
         if isinstance(ad_data, dict):
             if (
@@ -681,17 +745,6 @@ class ProjectSessionMixin:
                     model.px_x_min = np.asarray(px_pts.get("x_min", []), dtype=float)
                     model.px_x_max = np.asarray(px_pts.get("x_max", []), dtype=float)
                 self.age_depth_model = model
-
-        return {
-            "success": True,
-            "columns_count": len(self.columns),
-            "taxa": self.taxa_names,
-            "is_calibrated": self.is_calibrated,
-            "has_age_depth_image": getattr(self, "age_depth_image", None) is not None,
-            "has_age_depth_model": self.age_depth_model is not None,
-        }
-
-    load_project = project_load
 
     def project_save(
         self,
