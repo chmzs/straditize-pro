@@ -970,6 +970,41 @@ class CoreMixin:
                 return [int(roi[0] + width * i / n) for i in range(n + 1)]
         return None
 
+    def _prepare_detection_masks(
+        self,
+        x0: float,
+        x1: float,
+        y0: float,
+        y1: float,
+    ) -> tuple[int, int, int, int, "np.ndarray", "np.ndarray", list]:
+        """取搜索窗口内的掩膜与灰度，去掉横线后检测列边界。
+
+        为什么两幅图都要：列边界与 0 点可测性判定用**灰度**（轴的有无是结构问题：
+        沿 y 恒定且与纸白有差，二值化会因图版深浅整批失效）；列分割用二值掩膜。
+        """
+        if self.foreground_mask is None:
+            self._extract_foreground_from_settings()
+
+        ix0, ix1 = round(x0), round(x1)
+        iy0, iy1 = round(y0), round(y1)
+
+        sub_mask = self.foreground_mask[iy0:iy1, ix0:ix1]
+        # 0 点可测性判定用**灰度**而不是二值 mask：轴的有无是结构问题
+        # （沿 y 是否恒定 + 与纸白是否有差），二值化会因图版深浅整批失效。
+        gray_sub = np.asarray(self.image.convert("L"))[iy0:iy1, ix0:ix1]
+        from ..columns import detect_column_bounds
+        from ..image import remove_horizontal_grid_lines
+
+        cleaned_sub_mask, self.hline_rows = remove_horizontal_grid_lines(
+            sub_mask, min_length=35, min_row_occupancy_ratio=0.30
+        )
+
+        bounds = detect_column_bounds(
+            cleaned_sub_mask, threshold=0.10, min_col_width_ratio=0.01
+        )
+
+        return ix0, ix1, iy0, iy1, gray_sub, cleaned_sub_mask, bounds
+
     def _resolve_column_bounds(
         self,
         data_xlim: list[float] | None,
@@ -1048,30 +1083,20 @@ class CoreMixin:
             data_xlim, data_ylim, roi_id
         )
 
-        if self.foreground_mask is None:
-            self._extract_foreground_from_settings()
+        (
+            ix0,
+            ix1,
+            iy0,
+            iy1,
+            gray_sub,
+            cleaned_sub_mask,
+            bounds,
+        ) = self._prepare_detection_masks(x0, x1, y0, y1)
 
-        ix0, ix1 = round(x0), round(x1)
-        iy0, iy1 = round(y0), round(y1)
-
-        sub_mask = self.foreground_mask[iy0:iy1, ix0:ix1]
-        # 0 点可测性判定用**灰度**而不是二值 mask：轴的有无是结构问题
-        # （沿 y 是否恒定 + 与纸白是否有差），二值化会因图版深浅整批失效。
-        gray_sub = np.asarray(self.image.convert("L"))[iy0:iy1, ix0:ix1]
         from ..columns import (
-            detect_column_bounds,
             has_measurable_axis,
             measure_axis_right_edge,
             measure_axis_stroke,
-        )
-        from ..image import remove_horizontal_grid_lines
-
-        cleaned_sub_mask, self.hline_rows = remove_horizontal_grid_lines(
-            sub_mask, min_length=35, min_row_occupancy_ratio=0.30
-        )
-
-        bounds = detect_column_bounds(
-            cleaned_sub_mask, threshold=0.10, min_col_width_ratio=0.01
         )
 
         detected_cols = []
