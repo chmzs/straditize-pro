@@ -1,0 +1,346 @@
+{
+ "linear_100": {
+  "columns": [
+   "depth",
+   "iter_1",
+   "iter_2",
+   "iter_3",
+   "iter_4",
+   "iter_5",
+   "iter_6",
+   "iter_7",
+   "iter_8",
+   "iter_9",
+   "iter_10",
+   "iter_11",
+   "iter_12",
+   "iter_13",
+   "iter_14",
+   "iter_15",
+   "iter_16",
+   "iter_17",
+   "iter_18",
+   "iter_19",
+   "iter_20",
+   "iter_21",
+   "iter_22",
+   "iter_23",
+   "iter_24",
+   "iter_25",
+   "iter_26",
+   "iter_27",
+   "iter_28",
+   "iter_29",
+   "iter_30",
+   "iter_31",
+   "iter_32",
+   "iter_33",
+   "iter_34",
+   "iter_35",
+   "iter_36",
+   "iter_37",
+   "iter_38",
+   "iter_39",
+   "iter_40",
+   "iter_41",
+   "iter_42",
+   "iter_43",
+   "iter_44",
+   "iter_45",
+   "iter_46",
+   "iter_47",
+   "iter_48",
+   "iter_49",
+   "iter_50",
+   "iter_51",
+   "iter_52",
+   "iter_53",
+   "iter_54",
+   "iter_55",
+   "iter_56",
+   "iter_57",
+   "iter_58",
+   "iter_59",
+   "iter_60",
+   "iter_61",
+   "iter_62",
+   "iter_63",
+   "iter_64"
+  ],
+  "depths_first_col": [
+   10.0,
+   30.0,
+   50.0,
+   70.0,
+   90.0
+  ],
+  "diagnostics": {
+   "age_reversal_rate": 0.0,
+   "correlation_length": 2.5,
+   "correlation_length_fitted": true,
+   "envelope_mismatch": 0.1993,
+   "envelope_mismatch_vs_extracted": 0.5475,
+   "median_curve_max_deviation": 52.37,
+   "rate": {
+    "acc_rate_yr_per_depth": [
+     12.4651,
+     12.2878,
+     12.3146,
+     8.7176,
+     9.2382
+    ],
+    "acc_rate_yr_per_depth_max": [
+     29.2918,
+     16.2097,
+     14.8989,
+     10.1841,
+     10.3729
+    ],
+    "acc_rate_yr_per_depth_min": [
+     5.4544,
+     9.3281,
+     10.2254,
+     7.4524,
+     7.9327
+    ],
+    "sed_rate_depth_per_yr": [
+     0.0802,
+     0.0814,
+     0.0812,
+     0.1147,
+     0.1082
+    ],
+    "sed_rate_depth_per_yr_max": [
+     0.1833,
+     0.1072,
+     0.0978,
+     0.1342,
+     0.1261
+    ],
+    "sed_rate_depth_per_yr_min": [
+     0.0341,
+     0.0617,
+     0.0671,
+     0.0982,
+     0.0964
+    ],
+    "units": {
+     "acc_rate": "cal BP per cm",
+     "sed_rate": "cm per year",
+     "volume_ar": "cm per year (cm3 cm-2 yr-1)"
+    },
+    "volume_ar_cm_per_yr": [
+     0.0802,
+     0.0814,
+     0.0812,
+     0.1147,
+     0.1082
+    ],
+    "volume_ar_cm_per_yr_max": [
+     0.1833,
+     0.1072,
+     0.0978,
+     0.1342,
+     0.1261
+    ],
+    "volume_ar_cm_per_yr_min": [
+     0.0341,
+     0.0617,
+     0.0671,
+     0.0982,
+     0.0964
+    ]
+   },
+   "shared_offset_sigma": 0.0,
+   "simulated_envelope_median": 193.05,
+   "target_envelope_median": 120.0
+  },
+  "matrix_digest": "dfb33de603913b83",
+  "matrix_head": [
+   121.61,
+   119.45,
+   45.48,
+   61.03
+  ],
+  "matrix_tail": [
+   967.71,
+   1003.69,
+   958.34,
+   930.32
+  ],
+  "member_count": 64,
+  "row_count": 5
+ },
+ "long_300": {
+  "columns": [
+   "depth",
+   "iter_1",
+   "iter_2",
+   "iter_3",
+   "iter_4",
+   "iter_5",
+   "iter_6",
+   "iter_7",
+   "iter_8",
+   "iter_9",
+   "iter_10",
+   "iter_11",
+   "iter_12",
+   "iter_13",
+   "iter_14",
+   "iter_15",
+   "iter_16",
+   "iter_17",
+   "iter_18",
+   "iter_19",
+   "iter_20",
+   "iter_21",
+   "iter_22",
+   "iter_23",
+   "iter_24",
+   "iter_25",
+   "iter_26",
+   "iter_27",
+   "iter_28",
+   "iter_29",
+   "iter_30",
+   "iter_31",
+   "iter_32",
+   "iter_33",
+   "iter_34",
+   "iter_35",
+   "iter_36",
+   "iter_37",
+   "iter_38",
+   "iter_39",
+   "iter_40",
+   "iter_41",
+   "iter_42",
+   "iter_43",
+   "iter_44",
+   "iter_45",
+   "iter_46",
+   "iter_47",
+   "iter_48",
+   "iter_49",
+   "iter_50",
+   "iter_51",
+   "iter_52",
+   "iter_53",
+   "iter_54",
+   "iter_55",
+   "iter_56",
+   "iter_57",
+   "iter_58",
+   "iter_59",
+   "iter_60",
+   "iter_61",
+   "iter_62",
+   "iter_63",
+   "iter_64"
+  ],
+  "depths_first_col": [
+   30.0,
+   90.0,
+   150.0,
+   210.0,
+   270.0
+  ],
+  "diagnostics": {
+   "age_reversal_rate": 0.0,
+   "correlation_length": 15.0,
+   "correlation_length_fitted": true,
+   "envelope_mismatch": 0.2932,
+   "envelope_mismatch_vs_extracted": 0.737,
+   "median_curve_max_deviation": 76.41,
+   "rate": {
+    "acc_rate_yr_per_depth": [
+     9.3973,
+     10.9909,
+     12.0361,
+     10.5721,
+     10.0123
+    ],
+    "acc_rate_yr_per_depth_max": [
+     14.8879,
+     12.8988,
+     13.6062,
+     11.6769,
+     10.765
+    ],
+    "acc_rate_yr_per_depth_min": [
+     5.2188,
+     9.2177,
+     10.8834,
+     9.539,
+     9.1378
+    ],
+    "sed_rate_depth_per_yr": [
+     0.1064,
+     0.091,
+     0.0831,
+     0.0946,
+     0.0999
+    ],
+    "sed_rate_depth_per_yr_max": [
+     0.1916,
+     0.1085,
+     0.0919,
+     0.1048,
+     0.1094
+    ],
+    "sed_rate_depth_per_yr_min": [
+     0.0672,
+     0.0775,
+     0.0735,
+     0.0856,
+     0.0929
+    ],
+    "units": {
+     "acc_rate": "cal BP per cm",
+     "sed_rate": "cm per year",
+     "volume_ar": "cm per year (cm3 cm-2 yr-1)"
+    },
+    "volume_ar_cm_per_yr": [
+     0.1064,
+     0.091,
+     0.0831,
+     0.0946,
+     0.0999
+    ],
+    "volume_ar_cm_per_yr_max": [
+     0.1916,
+     0.1085,
+     0.0919,
+     0.1048,
+     0.1094
+    ],
+    "volume_ar_cm_per_yr_min": [
+     0.0672,
+     0.0775,
+     0.0735,
+     0.0856,
+     0.0929
+    ]
+   },
+   "shared_offset_sigma": 0.0,
+   "simulated_envelope_median": 440.09,
+   "target_envelope_median": 240.0
+  },
+  "matrix_digest": "765c40562b2be502",
+  "matrix_head": [
+   299.3,
+   332.03,
+   141.58,
+   177.82
+  ],
+  "matrix_tail": [
+   2926.48,
+   2968.87,
+   2858.83,
+   2808.04
+  ],
+  "member_count": 64,
+  "row_count": 5
+ }
+}
