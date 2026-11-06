@@ -1,0 +1,559 @@
+{
+ "bad_geo_values": {
+  "@context": "https://linkedearth.github.io/schema/context.json",
+  "affiliation": "Some Lab",
+  "archiveType": "LakeSediment",
+  "chronData": [
+   {
+    "chronMeasurementTable": [
+     {
+      "columns": [],
+      "tableName": "chron_model"
+     }
+    ]
+   }
+  ],
+  "collectionDate": "2023-08",
+  "createdBy": "DSH",
+  "dataSetName": "Ngamring_Smith_2024",
+  "datasetVersion": "1.0.0",
+  "digitizationDate": "2026-01-02",
+  "funding": [
+   {
+    "fundingAgency": "NSFC",
+    "fundingGrant": "42000000"
+   }
+  ],
+  "geo": {
+   "collectionDate": "2023-08",
+   "coreLength": "long",
+   "country": "China",
+   "elevation": null,
+   "latitude": null,
+   "longitude": null,
+   "siteName": "Ngamring",
+   "waterDepth": "deep"
+  },
+  "investigators": [
+   "Carol Lin"
+  ],
+  "laboratory": "Palaeo Lab",
+  "notes": "reviewed",
+  "originalDataUrl": "https://example.org/data",
+  "paleoData": [
+   {
+    "paleoMeasurementTable": [
+     {
+      "columns": [
+       {
+        "dataType": "float",
+        "description": "Core composite depth",
+        "proxy": null,
+        "units": "cm",
+        "values": [
+         0.0,
+         10.0
+        ],
+        "variableName": "Depth (cm)",
+        "variableType": "depth"
+       },
+       {
+        "dataType": "float",
+        "description": "Digitized Pinus (%)",
+        "proxy": "pollen",
+        "units": "%",
+        "values": [
+         12.5,
+         null
+        ],
+        "variableName": "Pinus",
+        "variableType": "measured"
+       },
+       {
+        "dataType": "float",
+        "description": "Digitized Betula (%)",
+        "proxy": "pollen",
+        "units": "%",
+        "values": [
+         null,
+         3.25
+        ],
+        "variableName": "Betula",
+        "variableType": "measured"
+       }
+      ],
+      "tableName": "pollen_a"
+     },
+     {
+      "columns": [
+       {
+        "dataType": "float",
+        "description": "Core composite depth",
+        "proxy": null,
+        "units": "cm",
+        "values": [
+         0.0,
+         5.0
+        ],
+        "variableName": "Depth (cm)",
+        "variableType": "depth"
+       },
+       {
+        "dataType": "float",
+        "description": "Digitized Quercus (%)",
+        "proxy": "pollen",
+        "units": "%",
+        "values": [
+         7.0,
+         8.5
+        ],
+        "variableName": "Quercus",
+        "variableType": "measured"
+       }
+      ],
+      "tableName": "pollen_b"
+     }
+    ]
+   }
+  ],
+  "pub": [
+   {
+    "author": [
+     "Alice Smith",
+     "Bob Jones"
+    ],
+    "doi": "10.1000/xyz",
+    "journal": "Test Journal",
+    "title": "Test core",
+    "type": "primary",
+    "year": 2024
+   }
+  ]
+ },
+ "full_roi": {
+  "@context": "https://linkedearth.github.io/schema/context.json",
+  "affiliation": "Some Lab",
+  "archiveType": "LakeSediment",
+  "chronData": [
+   {
+    "chronEnsembleTable": [
+     {
+      "columns": [
+       {
+        "dataType": "float",
+        "units": "cm",
+        "values": [
+         0.0,
+         10.0
+        ],
+        "variableName": "depth"
+       },
+       {
+        "dataType": "float",
+        "units": "yr BP",
+        "values": [
+         0.0,
+         480.0
+        ],
+        "variableName": "age_iter1"
+       },
+       {
+        "dataType": "float",
+        "units": "yr BP",
+        "values": [
+         5.0,
+         512.0
+        ],
+        "variableName": "age_iter2"
+       }
+      ],
+      "tableName": "bacon"
+     }
+    ],
+    "chronMeasurementTable": [
+     {
+      "columns": [
+       {
+        "dataType": "float",
+        "description": "Modeled Depth (cm) parameter",
+        "units": "cm",
+        "values": [
+         0.0,
+         10.0,
+         20.0
+        ],
+        "variableName": "Depth (cm)",
+        "variableType": "depth"
+       },
+       {
+        "dataType": "float",
+        "description": "Modeled Age (yr BP) parameter",
+        "units": "yr BP",
+        "values": [
+         0.0,
+         500.0,
+         1000.0
+        ],
+        "variableName": "Age (yr BP)",
+        "variableType": "chronology"
+       }
+      ],
+      "tableName": "chron_model"
+     }
+    ]
+   }
+  ],
+  "collectionDate": "2023-08",
+  "createdBy": "DSH",
+  "dataSetName": "Ngamring_Smith_2024",
+  "datasetVersion": "1.0.0",
+  "digitizationDate": "2026-01-02",
+  "funding": [
+   {
+    "fundingAgency": "NSFC",
+    "fundingGrant": "42000000"
+   }
+  ],
+  "geo": {
+   "collectionDate": "2023-08",
+   "coreLength": 320.0,
+   "country": "China",
+   "elevation": 4720.0,
+   "latitude": 29.5,
+   "longitude": 85.25,
+   "siteName": "Ngamring",
+   "waterDepth": 12.5
+  },
+  "investigators": [
+   "Carol Lin"
+  ],
+  "laboratory": "Palaeo Lab",
+  "notes": "reviewed",
+  "originalDataUrl": "https://example.org/data",
+  "paleoData": [
+   {
+    "paleoMeasurementTable": [
+     {
+      "columns": [
+       {
+        "dataType": "float",
+        "description": "Core composite depth",
+        "proxy": null,
+        "units": "cm",
+        "values": [
+         0.0,
+         10.0
+        ],
+        "variableName": "Depth (cm)",
+        "variableType": "depth"
+       },
+       {
+        "dataType": "float",
+        "description": "Digitized Pinus (%)",
+        "proxy": "pollen",
+        "units": "%",
+        "values": [
+         12.5,
+         null
+        ],
+        "variableName": "Pinus",
+        "variableType": "measured"
+       },
+       {
+        "dataType": "float",
+        "description": "Digitized Betula (%)",
+        "proxy": "pollen",
+        "units": "%",
+        "values": [
+         null,
+         3.25
+        ],
+        "variableName": "Betula",
+        "variableType": "measured"
+       }
+      ],
+      "tableName": "pollen_a"
+     },
+     {
+      "columns": [
+       {
+        "dataType": "float",
+        "description": "Core composite depth",
+        "proxy": null,
+        "units": "cm",
+        "values": [
+         0.0,
+         5.0
+        ],
+        "variableName": "Depth (cm)",
+        "variableType": "depth"
+       },
+       {
+        "dataType": "float",
+        "description": "Digitized Quercus (%)",
+        "proxy": "pollen",
+        "units": "%",
+        "values": [
+         7.0,
+         8.5
+        ],
+        "variableName": "Quercus",
+        "variableType": "measured"
+       }
+      ],
+      "tableName": "pollen_b"
+     }
+    ]
+   }
+  ],
+  "pub": [
+   {
+    "author": [
+     "Alice Smith",
+     "Bob Jones"
+    ],
+    "doi": "10.1000/xyz",
+    "journal": "Test Journal",
+    "title": "Test core",
+    "type": "primary",
+    "year": 2024
+   }
+  ]
+ },
+ "investigator_string": {
+  "@context": "https://linkedearth.github.io/schema/context.json",
+  "affiliation": "Some Lab",
+  "archiveType": "LakeSediment",
+  "chronData": [
+   {
+    "chronMeasurementTable": [
+     {
+      "columns": [],
+      "tableName": "chron_model"
+     }
+    ]
+   }
+  ],
+  "collectionDate": "2023-08",
+  "createdBy": "DSH",
+  "dataSetName": "Ngamring_Smith_2024",
+  "datasetVersion": "1.0.0",
+  "digitizationDate": "2026-01-02",
+  "funding": [
+   {
+    "fundingAgency": "NSFC",
+    "fundingGrant": "42000000"
+   }
+  ],
+  "geo": {
+   "collectionDate": "2023-08",
+   "coreLength": 320.0,
+   "country": "China",
+   "elevation": 4720.0,
+   "latitude": 29.5,
+   "longitude": 85.25,
+   "siteName": "Ngamring",
+   "waterDepth": 12.5
+  },
+  "investigators": [
+   "Ada Liu",
+   "Ben Wu"
+  ],
+  "laboratory": "Palaeo Lab",
+  "notes": "reviewed",
+  "originalDataUrl": "https://example.org/data",
+  "paleoData": [
+   {
+    "paleoMeasurementTable": [
+     {
+      "columns": [
+       {
+        "dataType": "float",
+        "description": "Core composite depth",
+        "proxy": null,
+        "units": "cm",
+        "values": [
+         0.0,
+         10.0
+        ],
+        "variableName": "Depth (cm)",
+        "variableType": "depth"
+       },
+       {
+        "dataType": "float",
+        "description": "Digitized Pinus (%)",
+        "proxy": "pollen",
+        "units": "%",
+        "values": [
+         12.5,
+         null
+        ],
+        "variableName": "Pinus",
+        "variableType": "measured"
+       },
+       {
+        "dataType": "float",
+        "description": "Digitized Betula (%)",
+        "proxy": "pollen",
+        "units": "%",
+        "values": [
+         null,
+         3.25
+        ],
+        "variableName": "Betula",
+        "variableType": "measured"
+       }
+      ],
+      "tableName": "pollen_a"
+     },
+     {
+      "columns": [
+       {
+        "dataType": "float",
+        "description": "Core composite depth",
+        "proxy": null,
+        "units": "cm",
+        "values": [
+         0.0,
+         5.0
+        ],
+        "variableName": "Depth (cm)",
+        "variableType": "depth"
+       },
+       {
+        "dataType": "float",
+        "description": "Digitized Quercus (%)",
+        "proxy": "pollen",
+        "units": "%",
+        "values": [
+         7.0,
+         8.5
+        ],
+        "variableName": "Quercus",
+        "variableType": "measured"
+       }
+      ],
+      "tableName": "pollen_b"
+     }
+    ]
+   }
+  ],
+  "pub": [
+   {
+    "author": [
+     "Alice Smith",
+     "Bob Jones"
+    ],
+    "doi": "10.1000/xyz",
+    "journal": "Test Journal",
+    "title": "Test core",
+    "type": "primary",
+    "year": 2024
+   }
+  ]
+ },
+ "minimal_pollen": {
+  "@context": "https://linkedearth.github.io/schema/context.json",
+  "archiveType": "LakeSediment",
+  "chronData": [
+   {
+    "chronMeasurementTable": [
+     {
+      "columns": [],
+      "tableName": "chron_model"
+     }
+    ]
+   }
+  ],
+  "dataSetName": "Unnamed_Site_Author_2026",
+  "geo": {
+   "elevation": 0.0,
+   "latitude": 0.0,
+   "longitude": 0.0,
+   "siteName": "Unnamed_Site"
+  },
+  "investigators": [],
+  "paleoData": [
+   {
+    "paleoMeasurementTable": [
+     {
+      "columns": [
+       {
+        "dataType": "float",
+        "description": "Core composite depth",
+        "proxy": null,
+        "units": "cm",
+        "values": [
+         0.0,
+         10.0
+        ],
+        "variableName": "Depth (cm)",
+        "variableType": "depth"
+       },
+       {
+        "dataType": "float",
+        "description": "Digitized Picea (%)",
+        "proxy": "pollen",
+        "units": "%",
+        "values": [
+         1.0,
+         2.0
+        ],
+        "variableName": "Picea",
+        "variableType": "measured"
+       }
+      ],
+      "tableName": "pollen_data"
+     }
+    ]
+   }
+  ],
+  "pub": [
+   {
+    "author": [],
+    "doi": "",
+    "journal": "",
+    "title": "",
+    "type": "primary",
+    "year": null
+   }
+  ]
+ },
+ "no_optional": {
+  "@context": "https://linkedearth.github.io/schema/context.json",
+  "archiveType": "LakeSediment",
+  "chronData": [
+   {
+    "chronMeasurementTable": [
+     {
+      "columns": [],
+      "tableName": "chron_model"
+     }
+    ]
+   }
+  ],
+  "dataSetName": "Unnamed_Site_Author_2026",
+  "geo": {
+   "elevation": 0.0,
+   "latitude": 0.0,
+   "longitude": 0.0,
+   "siteName": "Unnamed_Site"
+  },
+  "investigators": [],
+  "paleoData": [
+   {
+    "paleoMeasurementTable": []
+   }
+  ],
+  "pub": [
+   {
+    "author": [],
+    "doi": "",
+    "journal": "",
+    "title": "",
+    "type": "primary",
+    "year": null
+   }
+  ]
+ }
+}
