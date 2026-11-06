@@ -789,7 +789,8 @@ test.describe('从零开始：真实上传一张花粉图 → 八步 → 导出'
           size: tar.size,
           dataCsvRows: lines.length - 1,
           maxCell,
-          dataCsvEqualsPrimary: true,
+          // 记录的是上面那条 expect 的**实际比对结果**，不是常量。
+          dataCsvEqualsPrimary: dataCsv.equals(primaryCsv),
         },
       },
       judgement:

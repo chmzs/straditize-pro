@@ -41,7 +41,6 @@ export class ExportModal {
       <div class="modal-dialog wpd-export-dialog ui-modal" style="--modal-width: 1180px;"
            data-sheets="${readiness.sheets.join(',')}"
            data-primary="${readiness.primaryRoi}"
-           data-data-csv-equals-primary="true"
            data-readiness-missing="${readiness.readinessMissing.join(',')}">
         <div class="ui-modal__header">
           <div>

@@ -5,7 +5,6 @@ export interface ExportReadinessState {
   sheets: string[];
   primaryRoi: string;
   primaryRoiId: string;
-  dataCsvEqualsPrimary: boolean;
   readinessMissing: string[];
   allReady: boolean;
 }
@@ -39,7 +38,6 @@ export function computeExportReadiness(data: DiagramData): ExportReadinessState 
     sheets,
     primaryRoi,
     primaryRoiId,
-    dataCsvEqualsPrimary: true,
     readinessMissing,
     allReady: readinessMissing.length === 0,
   };
@@ -60,7 +58,6 @@ export function renderExportReadiness(data: DiagramData): string {
     <div id="export-readiness-container" class="export-readiness-box"
          data-sheets="${state.sheets.join(',')}"
          data-primary="${state.primaryRoi}"
-         data-data-csv-equals-primary="true"
          data-readiness-missing="${state.readinessMissing.join(',')}"
          style="padding: 10px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light); margin-bottom: 12px; font-size: 11px;">
       <div style="font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
@@ -73,7 +70,7 @@ export function renderExportReadiness(data: DiagramData): string {
       <div style="line-height: 1.6; font-size: 10.5px;">
         <div>• 导出分表 (SHEETS): <strong id="lbl-export-sheets" style="color: var(--accent-blue);">${sheetsStr}</strong></div>
         <div>• 主工作区 (PRIMARY_ROI): <strong id="lbl-export-primary" style="color: var(--accent-green);">${state.primaryRoi}</strong> (对应归档 <code>data.csv</code>)</div>
-        <div>• 根数据归属: <span id="lbl-export-data-csv-primary">DATA_CSV_EQUALS_PRIMARY=true</span></div>
+        <div>• 根数据归属: <span id="lbl-export-data-csv-owner">data.csv ← 主 ROI（由后端生成，导出时逐字节校验）</span></div>
         <div>• 属种刻度标定: <span id="lbl-export-calibration-status">${calibratedCount} 列已标定${uncalibratedCount > 0 ? ` / <strong style="color: var(--status-warning);">${uncalibratedCount} 列未标定</strong> (未标定列不出数，导出记为空)` : ' (全部已标定)'}</span></div>
         <div>• 未就绪清单 (READINESS_MISSING): <strong id="lbl-export-missing" style="color: ${state.readinessMissing.length > 0 ? 'var(--accent-red)' : 'var(--text-muted)'};">${missingStr}</strong></div>
       </div>

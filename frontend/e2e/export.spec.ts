@@ -7,6 +7,10 @@
  * 常量**（ExportReadinessPanel.ts:41 与 :56 都是字面量 `true`，连 :69 的文案
  * "DATA_CSV_EQUALS_PRIMARY=true" 也是写死的），断言它等于 true 不含任何信息。
  *
+ * **2026-11-06 已修**：那个属性连同 `ExportReadinessState.dataCsvEqualsPrimary` 与
+ * 文案 "DATA_CSV_EQUALS_PRIMARY=true" 一起删除了（它无法被证伪，属 §9 的「字段硬编码」），
+ * 并在本文件末尾加了一条反向钉子——属性与文案都不得再出现，防止有人重新挂个假指标。
+ *
  * 因此这里把"data.csv 必须等于主 ROI 的数据"这条真正的不变式下沉到 .tar 归档里去验证：
  * 解包 tar，比较 `data.csv` 与 `data/<主 ROI 名>.csv` 的字节，并**切换主 ROI 再导出一次**，
  * 证明 data.csv 跟的是 primary_roi_id 而不是 ROI 的创建顺序。
@@ -259,5 +263,17 @@ test.describe('导出就绪清单与 .tar 归档', () => {
     await expect(readinessBox).toHaveAttribute('data-primary', 'pollen');
     await expect(readinessBox).toHaveAttribute('data-readiness-missing', unnamed.name);
 
+    // §9「就绪清单字段硬编码」的回归钉子：面板**不得**再输出一个恒定真值。
+    // `data-data-csv-equals-primary` 曾与 data-sheets/data-primary 并列写死成字面量
+    // `"true"`，断言它等于没断言——真实不变式（data.csv 逐字节等于主 ROI 分表）
+    // 已在上面的 tar 段落里验证过，这里守的是「别再挂一个假指标」。
+    expect(
+      await readinessBox.getAttribute('data-data-csv-equals-primary'),
+      '面板不得再输出 data-data-csv-equals-primary：它是前端常量，无法被证伪'
+    ).toBeNull();
+    expect(
+      await page.locator('#lbl-export-data-csv-primary').count(),
+      '文案也不得再声称 DATA_CSV_EQUALS_PRIMARY=true'
+    ).toBe(0);
   });
 });
