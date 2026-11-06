@@ -461,7 +461,9 @@
       见 `docs/findings/spec-enum-audit.md` D-4。
     - `scale_type` (string, 可选): `"linear"` 或 `"log"`（未传保持原值）。大小写与首尾空白会被归一化（`LOG` 与 `log` 等价）；
       其它取值返回 `-32602`，**不静默按线性换算**（见 `xscale.py::normalize_scale_type`）。
-    - `exaggeration_mult` (float | null, 可选): 局部放大倍数。
+    - `exaggeration_mult` (float | null, 可选): 局部放大倍数。**唯一的键**——`exaggerationMult` /
+      `exaggeration_multiplier` 作为入参别名仍被接受并立刻归一，`has_exaggeration` 与 `mult_source`
+      已删除（布尔由「是否为 null」推出）。<=1 或非数值一律视为未放大。见 `xscale.store_exaggeration`。
   - **返回 (result)**：`{"col_index": 0, "x_ticks": [...], "px_per_unit": 2.5, "column": {...}}`
 
 - **`column.clearXTicks`**：
