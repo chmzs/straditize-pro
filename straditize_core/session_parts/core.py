@@ -1672,10 +1672,10 @@ class CoreMixin:
         from ..image import is_supported_grid_line_strength
 
         mask = self.foreground_mask
-        # 去线强度只接受预设名。这不是多余的校验：`degrid_strength` 除了 RPC 之外还能从
-        # 工程包载入（历史包存过数字），历史上的 `line_removal.strength=0.6` 会一路走到
-        # `algorithm_degrid` 抛 ValueError，再被导出侧的保底逻辑吞成一份全 0 的占位 CSV。
-        # 载入侧已经丢弃非法值并告警；这里再挡一次，保证任何入口都炸不到取数。
+        # 去线强度是枚举（weak/medium/strong），这里只接受预设名。这不是多余的校验：
+        # `degrid_strength` 除了 RPC 之外还能被工程包载入、被外部客户端写入，非法值会一路
+        # 走到 `algorithm_degrid` 抛 ValueError，再被导出侧的保底逻辑吞成一份全 0 的占位 CSV。
+        # 读写两个边界都会把非法值收敛成 None 并告警；这里再挡一次，保证任何入口都炸不到取数。
         degrid_strength = getattr(self, "degrid_strength", None)
         if (
             getattr(self, "grid_line_mask", None) is None

@@ -27,25 +27,31 @@ from .xscale import resolve_column_scale
 logger = logging.getLogger("straditize_rpc")
 
 
-def _validated_degrid_strength(raw: Any) -> str | None:
-    """工程包里的去线强度：空 → None；合法预设 → 规范名；其余 → None + 告警。
+def _canonical_degrid_strength(raw: Any, *, origin: str) -> str | None:
+    """把去线强度收敛到唯一合法域：{weak, medium, strong} ∪ {None}。
 
-    为什么不抛错：老工程包必须能载入（与版本门禁同一取舍）。但非法值也**绝不能**
-    带进运行时——它会一路走到 `algorithm_degrid` 里抛 ValueError，而 project_save 的
-    保底逻辑再把这条错误吞成一份全 0 的占位 CSV（实测 strength=0.6 就是这么消失的：
-    用户以为「没数字化」，实际是去线强度不合法）。
+    这个字段是**枚举**，而工程包是用户可手改的文本、会话状态也可能被别的入口写入，
+    所以写入侧与读取侧都过这一道：空 → None；合法预设 → 规范名（大小写不敏感）；
+    其余 → None + 告警。不做"数字 → 预设"的映射：0.6 究竟算 weak 还是 medium 没有
+    任何可靠依据，猜一个比不设更危险。
+
+    为什么不抛错：它是外观设置，不该把整份工程挡在门外——这与 `_parse_schema_major`
+    对乱码版本号的处理是同一取舍（那个决定的是"要不要拒绝版本"，不是"允许非法值"）。
+    但非法值**绝不能**进运行时：它会一路走到 `algorithm_degrid` 抛 ValueError，再被
+    project_save 的保底逻辑吞成一份全 0 的占位 CSV（用户会以为是自己没数字化）。
     """
     if raw is None or (isinstance(raw, str) and not raw.strip()):
         return None
     if is_supported_grid_line_strength(raw):
         return str(raw).strip().lower()
     logger.warning(
-        "工程包里的 line_removal.strength=%r 不是当前支持的预设（%s），已忽略；"
-        "去线强度需要用户重新设置。",
+        "%s的去线强度=%r 不是合法预设（%s），已按未设置处理。",
+        origin,
         raw,
         " / ".join(sorted(GRID_LINE_PRESETS)),
     )
     return None
+
 
 def _parse_schema_major(raw_version: Any) -> int | None:
     """从工程包版本号里取出主版本整数；无法判定时返回 None。
@@ -471,7 +477,9 @@ class ProjectSessionMixin:
     def _reset_line_removal(self, project_data: dict[str, Any]) -> None:
         """恢复去线强度/竖线开关与笔迹，并把旧包缺 `mode` 的笔迹补成 erase。"""
         line_removal = project_data.get("line_removal") or {}
-        self.degrid_strength = _validated_degrid_strength(line_removal.get("strength"))
+        self.degrid_strength = _canonical_degrid_strength(
+            line_removal.get("strength"), origin="工程包"
+        )
         self.degrid_remove_vertical = bool(line_removal.get("remove_vertical", True))
         corrections = line_removal.get("corrections") or []
         self.line_corrections = [
@@ -947,7 +955,9 @@ class ProjectSessionMixin:
             "primary_roi_id": getattr(self, "primary_roi_id", None),
             "active_roi_id": getattr(self, "active_roi_id", None),
             "line_removal": {
-                "strength": getattr(self, "degrid_strength", None),
+                "strength": _canonical_degrid_strength(
+                    getattr(self, "degrid_strength", None), origin="会话"
+                ),
                 "remove_vertical": getattr(self, "degrid_remove_vertical", True),
                 "corrections": getattr(self, "line_corrections", []),
             },

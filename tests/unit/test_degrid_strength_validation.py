@@ -1,27 +1,31 @@
 # -*- coding: utf-8 -*-
-"""去线强度跨版本兼容：非法值必须在边界被丢掉，而不是带进运行时炸取数。
+"""去线强度是**枚举**：{weak, medium, strong} ∪ {None}，三个边界都要守住。
 
 ## 缺陷本体（2026-11-06 实测）
 
-历史工程包把 `line_removal.strength` 存成**数字**（如 `0.6`）。`project_load` 原样写进
-`session.degrid_strength`（而该字段注解是 `str | None`），于是任何走取数的路径都会调到
-`algorithm_degrid` → `image.normalize_grid_line_strength` → **ValueError**。
+`session.degrid_strength` 的注解是 `str | None`，但工程包是用户可手改的文本、
+会话状态也可能被别的入口写入。非法值（如 `0.6`）一旦进来，任何走取数的路径都会调到
+`algorithm_degrid` → `image.normalize_grid_line_strength` → **ValueError**；
 更糟的是 `project_save` 的保底逻辑把这条错误吞成一份「每格 0.00」的占位 CSV：
 用户以为「我没数字化」，实际是去线强度不合法。
 
-## 修法（两层，各有各的理由）
+## 设计：一个合法域，三个边界
 
-1. **载入边界**：合法预设 → 规范化；其余 → `None` + `logger.warning`。
-   不抛错是因为老包必须能载入（与版本门禁同一取舍）；丢弃是因为无法可靠推断
-   `0.6` 对应 weak/medium/strong 中的哪一个，猜一个比不设更危险。
-2. **运行时入口**：`_extraction_mask` 再挡一次（只认预设名），保证任何入口
-   （工程包、手改 JSON、WebMCP 直通）都炸不到取数。
+| 边界 | 行为 |
+| --- | --- |
+| 写入（`_build_project_json`） | 非法 → 写 `null`（绝不把非法值写回文件） |
+| 读取（`project_load`） | 非法 → `null` + `logger.warning` |
+| 运行时（`_extraction_mask`） | 非法 → 跳过去线，不炸取数 |
 
-## 反向验证
+不做「数字 → 预设」映射：`0.6` 究竟算 weak 还是 medium 没有任何可靠依据，猜一个比不设更危险。
+也不对非法值抛错：它是外观设置，不该把整份工程挡在门外——与 `_parse_schema_major`
+对乱码版本号的取舍同源。
 
-把载入侧的 `_validated_degrid_strength` 换回 `line_removal.get("strength")`，
-`test_legacy_numeric_strength_is_dropped_with_warning` 与
-`test_export_stops_falling_back_to_placeholder` 都会变红。
+## 反向验证（三处都做过）
+
+- 拿掉读取侧校验 → `test_load_drops_invalid_strength_with_warning` 与大小写规范化两条红；
+- 拿掉写入侧校验 → `test_save_never_writes_invalid_strength` 红（0.6 会被写回文件）；
+- 拿掉运行时守卫 → `test_runtime_guard_skips_invalid_strength` 与端到端导出那条红。
 """
 
 from __future__ import annotations
@@ -38,6 +42,7 @@ from straditize_core.session import StraditizeSession
 from test_project_load_golden import _legacy_payload
 
 PLATE = "tests/data/figures/real_plates/fig3_raw.jpeg"
+WARNING_KEY = "去线强度"
 
 
 def _payload(strength):
@@ -56,29 +61,50 @@ def _loaded(strength=None) -> StraditizeSession:
     return session
 
 
-def test_legacy_numeric_strength_is_dropped_with_warning(caplog) -> None:
+@pytest.mark.parametrize("bad", [0.6, 1, "banana", True])
+def test_load_drops_invalid_strength_with_warning(caplog, bad) -> None:
     with caplog.at_level(logging.WARNING, logger="straditize_rpc"):
-        session = _loaded(0.6)
+        session = _loaded(bad)
 
     assert session.degrid_strength is None, (
-        "数字强度被原样带进了运行时——它会一路走到 normalize_grid_line_strength 抛错"
+        "非法强度被带进了运行时——它会一路走到 normalize_grid_line_strength 抛错"
     )
     messages = [record.getMessage() for record in caplog.records]
-    assert any("0.6" in message for message in messages), (
-        f"丢弃必须留痕，否则用户无从知道自己的去线设置没了：{messages}"
+    assert any(WARNING_KEY in message and repr(bad) in message for message in messages), (
+        f"丢弃必须留痕（写清丢的是什么），否则用户无从知道自己的去线设置没了：{messages}"
     )
 
 
 @pytest.mark.parametrize("raw", ["Strong", " weak ", "medium"])
-def test_supported_preset_is_kept_and_canonicalised(raw: str) -> None:
+def test_load_keeps_preset_and_canonicalises(raw: str) -> None:
     assert _loaded(raw).degrid_strength == raw.strip().lower()
 
 
-def test_missing_strength_is_silent(caplog) -> None:
+def test_load_missing_is_silent(caplog) -> None:
     with caplog.at_level(logging.WARNING, logger="straditize_rpc"):
         session = _loaded(None)
     assert session.degrid_strength is None
-    assert not [r for r in caplog.records if "line_removal.strength" in r.getMessage()]
+    assert not [r for r in caplog.records if WARNING_KEY in r.getMessage()]
+
+
+def test_save_never_writes_invalid_strength() -> None:
+    session = _loaded(None)
+    session.degrid_strength = 0.6
+
+    payload = session.project_save(format="json")["data"]
+
+    assert payload["line_removal"]["strength"] is None, (
+        "非法强度被写回了工程包——下一份文件又把问题带回来"
+    )
+
+
+def test_save_writes_canonical_preset() -> None:
+    session = _loaded(None)
+    session.degrid_strength = "Strong"
+
+    payload = session.project_save(format="json")["data"]
+
+    assert payload["line_removal"]["strength"] == "strong"
 
 
 def _plate_session() -> StraditizeSession:
@@ -89,7 +115,7 @@ def _plate_session() -> StraditizeSession:
     return session
 
 
-def test_runtime_guard_skips_unsupported_strength() -> None:
+def test_runtime_guard_skips_invalid_strength() -> None:
     session = _plate_session()
     session.degrid_strength = 0.6  # 模拟从别的入口塞进来的非法值
 

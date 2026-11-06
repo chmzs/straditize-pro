@@ -618,11 +618,13 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
   `unobserved taxa are strictly 0.0` 只描述**正常导出**的约定，不能用来解释占位表。
 - `json` 分支不产 `data.csv`，故不带这两个字段。
 
-> 实测触发例（**已修**，2026-11-06）：载入一个 `line_removal.strength` 为数字（如 `0.6`）的
-> 历史工程包后导出，网格去线预设只认 `weak` / `medium` / `strong`，`normalize_grid_line_strength`
-> 抛 `ValueError`，CSV 于是退化成占位表。现在载入边界会丢弃非法强度并 `logger.warning`，
-> 运行时入口 `_extraction_mask` 再挡一次（`image.is_supported_grid_line_strength`）；
-> 回归钉子：`tests/unit/test_degrid_strength_compat.py`。
+> 相关约定：`line_removal.strength` 是**枚举**——`weak` / `medium` / `strong`，或省略。
+> 工程包是用户可手改的文本，因此写入（`_build_project_json`）、读取（`project_load`）、
+> 运行时（`_extraction_mask`）三个边界都把非法值收敛成 `null`（读写两侧另加 `logger.warning`），
+> 不做「数字 → 预设」映射。2026-11-06 的实测里，一个 `strength=0.6` 正是通过这条链让
+> `normalize_grid_line_strength` 抛错、并被占位表保底吞掉的。
+> 回归钉子：`tests/unit/test_degrid_strength_validation.py`。
+
 ## 4A. 年代-深度模型与年代集合（`agedepth.*` / `ensemble.*`）
 
 > 本节是全量清单，不是示例：后端 `rpc_methods/agedepth.py` 注册的 12 个方法逐一在此展开。
