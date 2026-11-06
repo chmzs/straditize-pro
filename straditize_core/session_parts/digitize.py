@@ -92,6 +92,58 @@ class DigitizeSessionMixin:
 
         col = columns[col_index]
         col_roi_id = col.get("roi_id")
+        c_start, c_end, y0, y1 = self._digitize_column_window(
+            col, col_roi_id, col_index
+        )
+
+        if getattr(self, "foreground_mask", None) is None:
+            if getattr(self, "image", None) is not None:
+                self._extract_foreground_from_settings()
+            else:
+                raise JsonRpcError(STATE_ERROR, "No foreground mask or image loaded.")
+
+        mask = self._extraction_mask(roi_id=col_roi_id)
+        if mask is None:
+            raise JsonRpcError(STATE_ERROR, "No foreground mask or image loaded.")
+
+        points = self._read_column_profile(
+            mask, c_start, c_end, y0, y1, reader_type
+        )
+        if not points:
+            return {
+                "col_index": col_index,
+                "reader_type": reader_type,
+                "points": [],
+                "control_points_count": 0,
+            }
+
+        self._interpolate_across_hlines(points, c_start)
+
+        control_points, ctrl_pts_list = self._turning_control_points(
+            points, c_start, y0, y1, col_index
+        )
+
+        self.column_points[col_index] = points
+        self.control_points[col_index] = control_points
+        self.reader_types[col_index] = reader_type
+
+        return {
+            "col_index": col_index,
+            "reader_type": reader_type,
+            "points": points,
+            "control_points": ctrl_pts_list,
+            "control_points_count": len(control_points),
+        }
+
+    # ---- digitize 的分段实现 ----
+
+    def _digitize_column_window(
+        self,
+        col: dict[str, Any],
+        col_roi_id: str | None,
+        col_index: int,
+    ) -> tuple[int, int, int, int]:
+        """确定该列的取样窗口（x 起止去右边界 1px、y 用 ROI 或 data 范围），并挡掉整列落在 ROI 外。"""
         roi = self._roi_box(roi_id=col_roi_id)
         c_start = round(col.get("start", col.get("startX", 0)))
         c_end = round(col.get("end", col.get("endX", 100)))
@@ -124,18 +176,19 @@ class DigitizeSessionMixin:
                 f"ROI (x {round(roi[0])}..{round(roi[2])}). Widen the ROI or move the column; "
                 "no data was produced.",
             )
+        return c_start, c_end, y0, y1
 
-        if getattr(self, "foreground_mask", None) is None:
-            if getattr(self, "image", None) is not None:
-                self._extract_foreground_from_settings()
-            else:
-                raise JsonRpcError(STATE_ERROR, "No foreground mask or image loaded.")
-
-        mask = self._extraction_mask(roi_id=col_roi_id)
-        if mask is None:
-            raise JsonRpcError(STATE_ERROR, "No foreground mask or image loaded.")
+    def _read_column_profile(
+        self,
+        mask: np.ndarray,
+        c_start: int,
+        c_end: int,
+        y0: int,
+        y1: int,
+        reader_type: str,
+    ) -> list[dict[str, float]]:
+        """逐行把墨迹变成特征 x：area 读本列墨迹右缘、line 读曲线中心或填充顶边、bar 读柱子右缘。"""
         points: list[dict[str, float]] = []
-        control_points: dict[int, float] = {}
 
         # The column's own curve is identified by connected-component size; the
         # labelling is built once for the whole band rather than per row.
@@ -210,15 +263,12 @@ class DigitizeSessionMixin:
                 feat_x = float(c_start)
 
             points.append({"row": row_y, "x": feat_x, "y": float(row_y)})
+        return points
 
-        if not points:
-            return {
-                "col_index": col_index,
-                "reader_type": reader_type,
-                "points": [],
-                "control_points_count": 0,
-            }
-
+    def _interpolate_across_hlines(
+        self, points: list[dict[str, float]], c_start: int
+    ) -> None:
+        """跨横线插值：横线所在行会被读成 100% 尖峰，按相邻行线性补回来（就地改 points）。"""
         # Interpolate across pervasive horizontal grid lines to eliminate artificial 100% spikes
         if hasattr(self, "hline_rows") and self.hline_rows:
             raw_vals = np.array([p["x"] - c_start for p in points], dtype=float)
@@ -230,6 +280,16 @@ class DigitizeSessionMixin:
                 for p_idx, new_v in enumerate(interp_vals):
                     points[p_idx]["x"] = float(c_start + new_v)
 
+    def _turning_control_points(
+        self,
+        points: list[dict[str, float]],
+        c_start: int,
+        y0: int,
+        y1: int,
+        col_index: int,
+    ) -> tuple[dict[int, float], list[dict[str, Any]]]:
+        """按地形显著度抽拐点，再补首末两个端点控制点，返回 (行号→x 字典, 控制点列表)。"""
+        control_points: dict[int, float] = {}
         # Advanced peak extraction: using topological prominence and local extrema
         curve_profile = np.array([p["x"] - c_start for p in points], dtype=float)
         turning_rows, turning_vals, is_mand = detect_stratigraphic_turning_points(
@@ -279,18 +339,7 @@ class DigitizeSessionMixin:
             )
 
         ctrl_pts_list.sort(key=lambda p: p["y"])
-
-        self.column_points[col_index] = points
-        self.control_points[col_index] = control_points
-        self.reader_types[col_index] = reader_type
-
-        return {
-            "col_index": col_index,
-            "reader_type": reader_type,
-            "points": points,
-            "control_points": ctrl_pts_list,
-            "control_points_count": len(control_points),
-        }
+        return control_points, ctrl_pts_list
 
     def update_control_point(
         self,
