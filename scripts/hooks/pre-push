@@ -1,0 +1,24 @@
+#!/bin/sh
+# pre-push：推送前跑一次跨文件一致性门禁（~14 秒）。
+#
+# 为什么要有它：2026-11-05 有 6 条 push 因为 `pixi run lint` 的 D 门变红而无人发现，
+# 每条都要等 1 分钟 CI 才告诉人，而本地这道门只要 14 秒；期间 CI 一直是红的。
+#
+# 启用：git config core.hooksPath scripts/hooks
+# 跳过：git push --no-verify（只在明知门禁问题是既有时使用）
+set -u
+
+if ! command -v pixi >/dev/null 2>&1; then
+  echo "[pre-push] 找不到 pixi（多半是从 GUI 推的，PATH 不同）；跳过门禁。"
+  echo "[pre-push] 想每次都被拦：从 Git Bash 里 push，或把 pixi 加进系统 PATH。"
+  exit 0
+fi
+
+echo "[pre-push] pixi run lint ..."
+if ! pixi run lint; then
+  echo ""
+  echo "[pre-push] 门禁未通过，已阻止推送。修好后重试；确需跳过用 git push --no-verify。"
+  exit 1
+fi
+echo "[pre-push] ok"
+exit 0
