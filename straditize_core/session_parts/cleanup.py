@@ -26,6 +26,7 @@ from PIL import Image
 
 from ..image import rasterize_strokes
 from ..lines import detect_line_candidates
+from ..protocol import INVALID_PARAMS, JsonRpcError
 
 CANDIDATE = "candidate"
 REMOVED = "removed"
@@ -465,11 +466,18 @@ class CleanupMixin:
         if not hasattr(self, "line_candidates") or self.line_candidates is None:
             self._init_cleanup()
         if geometry is None:
-            raise ValueError("geometry is required")
+            raise JsonRpcError(INVALID_PARAMS, "geometry is required (got null)")
         if axis not in {"h", "v"}:
-            raise ValueError("axis must be 'h' or 'v'")
+            raise JsonRpcError(
+                INVALID_PARAMS, f"axis must be 'h' or 'v' (got {axis!r})"
+            )
         if any(key not in geometry for key in ("x0", "y0", "x1", "y1")):
-            raise ValueError("geometry must contain x0, y0, x1 and y1")
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                "geometry must contain x0, y0, x1 and y1 (missing "
+                + ", ".join(k for k in ("x0", "y0", "x1", "y1") if k not in geometry)
+                + ")",
+            )
 
         x0, x1 = sorted(
             [int(round(float(geometry["x0"]))), int(round(float(geometry["x1"])))]
@@ -523,13 +531,16 @@ class CleanupMixin:
     ) -> dict[str, Any]:
         """Confirm (``removed``) or retract (``candidate``) one geometry."""
         if status not in {CANDIDATE, REMOVED}:
-            raise ValueError("status must be 'candidate' or 'removed'")
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                f"status must be 'candidate' or 'removed' (got {status!r})",
+            )
         target = next(
             (c for c in self.line_candidates if str(c.get("id")) == str(candidate_id)),
             None,
         )
         if target is None:
-            raise ValueError(f"unknown geometry id: {candidate_id}")
+            raise JsonRpcError(INVALID_PARAMS, f"unknown geometry id: {candidate_id}")
         target["status"] = status
         roi_id, _ = self._roi_for(roi_id or target.get("roi_id"))
         return self._recompose(roi_id)
@@ -550,9 +561,13 @@ class CleanupMixin:
         """
         thickness = int(thickness)
         if thickness < 1:
-            raise ValueError("thickness must be >= 1")
+            raise JsonRpcError(
+                INVALID_PARAMS, f"thickness must be >= 1 (got {thickness})"
+            )
         if thickness > 500:
-            raise ValueError("thickness must be <= 500")
+            raise JsonRpcError(
+                INVALID_PARAMS, f"thickness must be <= 500 (got {thickness})"
+            )
 
         roi_id, _ = self._roi_for(roi_id)
         if candidate_id is None:
@@ -560,7 +575,9 @@ class CleanupMixin:
         else:
             targets = [c for c in self.line_candidates if str(c.get("id")) == str(candidate_id)]
             if not targets:
-                raise ValueError(f"unknown geometry id: {candidate_id}")
+                raise JsonRpcError(
+                    INVALID_PARAMS, f"unknown geometry id: {candidate_id}"
+                )
 
         half = (thickness - 1) // 2
         for target in targets:
@@ -589,7 +606,7 @@ class CleanupMixin:
             c for c in self.line_candidates if str(c.get("id")) != str(candidate_id)
         ]
         if len(self.line_candidates) == before:
-            raise ValueError(f"unknown geometry id: {candidate_id}")
+            raise JsonRpcError(INVALID_PARAMS, f"unknown geometry id: {candidate_id}")
         roi_id, _ = self._roi_for(roi_id)
         return self._recompose(roi_id)
 

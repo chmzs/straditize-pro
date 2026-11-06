@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+
 import numpy as np
+import pytest
 
 from straditize_core.lines import detect_line_candidates
+from straditize_core.protocol import INVALID_PARAMS, JsonRpcError
 from straditize_core.session import StraditizeSession
 
 HOYA_PATH = Path("straditize_core/assets/tutorials/hoya-del-castillo.png")
@@ -254,13 +257,14 @@ def test_set_line_thickness_keeps_centre_and_is_uniform():
     assert by_id[ids[0]]["at"] == 40
     assert by_id[ids[1]]["width"] == 5
 
-    # 越界必须显式报错，不静默夹逼
+    # 越界必须显式报错，不静默夹逼；错误码是 INVALID_PARAMS（用户输入错），
+    # 不能兜成 -32603 后端内部错误——那会让界面提示「请查看服务器控制台日志」。
     for bad in (0, -3, 501):
-        try:
+        with pytest.raises(JsonRpcError) as excinfo:
             session.set_line_thickness(bad, roi_id=roi["id"])
-        except ValueError:
-            continue
-        raise AssertionError(f"thickness={bad} 应当报错")
+        assert excinfo.value.code == INVALID_PARAMS, (
+            f"thickness={bad} 的错误码是 {excinfo.value.code}，应为 -32602"
+        )
 
 
 def test_set_line_thickness_vertical_uses_x_axis():
