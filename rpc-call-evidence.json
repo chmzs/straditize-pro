@@ -1,0 +1,1365 @@
+[
+ {
+  "rpc": "agedepth.checkREnvironment",
+  "client": "",
+  "ui": [
+   "components/agedepth/AgeDepthController.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "lambda",
+  "session_def": ""
+ },
+ {
+  "rpc": "agedepth.extractAndInspect",
+  "client": "",
+  "ui": [
+   "components/agedepth/AgeDepthController.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "test_no_fabrication.py",
+  "spec": "",
+  "session": "calibrate_and_extract_age_depth",
+  "session_def": "straditize_core/session_parts/agedepth.py:231"
+ },
+ {
+  "rpc": "agedepth.generateBaconScript",
+  "client": "",
+  "ui": [],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "lambda",
+  "session_def": ""
+ },
+ {
+  "rpc": "agedepth.generateEnsemble",
+  "client": "",
+  "ui": [],
+  "tests": [],
+  "session_direct_test": "test_no_fabrication.py",
+  "spec": "",
+  "session": "generate_age_ensemble",
+  "session_def": "straditize_core/age_depth_model.py:904"
+ },
+ {
+  "rpc": "agedepth.generateGeoChronRScript",
+  "client": "",
+  "ui": [],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "lambda",
+  "session_def": ""
+ },
+ {
+  "rpc": "agedepth.getInspection",
+  "client": "",
+  "ui": [
+   "components/agedepth/AgeDepthController.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "get_age_depth_inspection",
+  "session_def": "straditize_core/session_parts/agedepth.py:401"
+ },
+ {
+  "rpc": "agedepth.loadModelDiagram",
+  "client": "",
+  "ui": [
+   "components/agedepth/AgeDepthController.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "test_no_fabrication.py",
+  "spec": "",
+  "session": "load_age_depth_diagram",
+  "session_def": "straditize_core/session_parts/agedepth.py:192"
+ },
+ {
+  "rpc": "agedepth.runBaconModeling",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_rpc.py"
+  ],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "run_age_modeling",
+  "session_def": "straditize_core/session_parts/agedepth.py:639"
+ },
+ {
+  "rpc": "agedepth.runLocalBacon",
+  "client": "",
+  "ui": [
+   "components/agedepth/AgeDepthController.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "run_local_bacon",
+  "session_def": "straditize_core/age_depth_model.py:1873"
+ },
+ {
+  "rpc": "agedepth.updateModel",
+  "client": "",
+  "ui": [
+   "components/agedepth/AgeDepthController.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "update_age_depth_model",
+  "session_def": "straditize_core/session_parts/agedepth.py:425"
+ },
+ {
+  "rpc": "algorithm.applyLineRemoval",
+  "client": "refreshCleanup",
+  "ui": [
+   "services/CleanupManager.ts:88 (client:refreshCleanup)",
+   "services/InspectorBridge.ts:244 (literal,client:refreshCleanup)"
+  ],
+  "tests": [
+   "e2e",
+   "test_degrid_external_contract.py"
+  ],
+  "session_direct_test": "test_cleanup_pipeline.py",
+  "spec": "",
+  "session": "apply_line_removal",
+  "session_def": "straditize_core/session_parts/cleanup.py:633"
+ },
+ {
+  "rpc": "algorithm.clearCleanupEdits",
+  "client": "clearCleanupEdits",
+  "ui": [
+   "services/InspectorBridge.ts:326 (client:clearCleanupEdits)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "clear_cleanup_edits",
+  "session_def": "straditize_core/session_parts/cleanup.py:613"
+ },
+ {
+  "rpc": "algorithm.degrid",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_degrid_external_contract.py",
+   "test_rpc.py"
+  ],
+  "session_direct_test": "test_cleanup_pipeline.py",
+  "spec": "4.8",
+  "session": "algorithm_degrid",
+  "session_def": "straditize_core/session_parts/core.py:1946"
+ },
+ {
+  "rpc": "algorithm.deleteLineGeometry",
+  "client": "deleteLineGeometry",
+  "ui": [
+   "services/CleanupManager.ts:237 (client:deleteLineGeometry)"
+  ],
+  "tests": [
+   "test_cleanup_error_codes.py"
+  ],
+  "session_direct_test": "test_line_removal_v2.py",
+  "spec": "",
+  "session": "delete_line_geometry",
+  "session_def": "straditize_core/session_parts/cleanup.py:598"
+ },
+ {
+  "rpc": "algorithm.detectColumns",
+  "client": "detectColumns",
+  "ui": [],
+  "tests": [
+   "e2e",
+   "test_rpc.py"
+  ],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "algorithm_detect_columns",
+  "session_def": "straditize_core/session_parts/core.py:1849"
+ },
+ {
+  "rpc": "algorithm.detectLineCandidates",
+  "client": "",
+  "ui": [
+   "services/InspectorBridge.ts:1 (literal)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_cleanup_pipeline.py",
+  "spec": "",
+  "session": "detect_line_candidates",
+  "session_def": "straditize_core/lines.py:83"
+ },
+ {
+  "rpc": "algorithm.detectXTicks",
+  "client": "",
+  "ui": [
+   "services/InspectorBridge.ts:1 (literal)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_tick_band_locating.py",
+  "spec": "",
+  "session": "detect_xticks_rpc",
+  "session_def": "straditize_core/session_parts/xticks.py:201"
+ },
+ {
+  "rpc": "algorithm.measureRuler",
+  "client": "measureRuler",
+  "ui": [
+   "components/steps/XTicksPanel.ts:85 (client:measureRuler)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_measure_ruler_rpc.py",
+  "spec": "4.10c",
+  "session": "measure_ruler_geometry",
+  "session_def": "straditize_core/session_parts/xticks.py:448"
+ },
+ {
+  "rpc": "algorithm.extractHorizonConsensus",
+  "client": "",
+  "ui": [],
+  "tests": [],
+  "session_direct_test": "test_horizon_consensus.py",
+  "spec": "",
+  "session": "extract_horizon_consensus",
+  "session_def": "straditize_core/session_parts/core.py:1877"
+ },
+ {
+  "rpc": "algorithm.extractTurningPoints",
+  "client": "",
+  "ui": [],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "algorithm_extract_turning_points",
+  "session_def": "straditize_core/session_parts/digitize.py:457"
+ },
+ {
+  "rpc": "algorithm.setGeometryStatus",
+  "client": "setGeometryStatus",
+  "ui": [
+   "services/InspectorBridge.ts:317 (client:setGeometryStatus)"
+  ],
+  "tests": [
+   "test_cleanup_error_codes.py"
+  ],
+  "session_direct_test": "test_cleanup_pipeline.py",
+  "spec": "",
+  "session": "set_line_geometry_status",
+  "session_def": "straditize_core/session_parts/cleanup.py:526"
+ },
+ {
+  "rpc": "algorithm.setLineThickness",
+  "client": "setLineThickness",
+  "ui": [
+   "services/InspectorBridge.ts:338 (client:setLineThickness)"
+  ],
+  "tests": [
+   "e2e",
+   "test_cleanup_error_codes.py"
+  ],
+  "session_direct_test": "test_line_removal_v2.py",
+  "spec": "",
+  "session": "set_line_thickness",
+  "session_def": "straditize_core/session_parts/cleanup.py:548"
+ },
+ {
+  "rpc": "algorithm.upsertLineGeometry",
+  "client": "upsertLineGeometry",
+  "ui": [
+   "services/CleanupManager.ts:221 (client:upsertLineGeometry)"
+  ],
+  "tests": [
+   "test_cleanup_error_codes.py"
+  ],
+  "session_direct_test": "test_cleanup_error_codes.py",
+  "spec": "",
+  "session": "upsert_line_geometry",
+  "session_def": "straditize_core/session_parts/cleanup.py:456"
+ },
+ {
+  "rpc": "column.add",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "e2e",
+   "test_rpc.py"
+  ],
+  "session_direct_test": "verify_straditize_pro_e2e.py",
+  "spec": "",
+  "session": "column_add",
+  "session_def": "straditize_core/session_parts/core.py:1694"
+ },
+ {
+  "rpc": "column.calibrateXTicks",
+  "client": "calibrateColumnXTicks",
+  "ui": [
+   "services/InspectorBridge.ts:387 (client:calibrateColumnXTicks)"
+  ],
+  "tests": [
+   "e2e",
+   "test_undo_reverts_calibration.py",
+   "test_xticks_rpc_contract.py"
+  ],
+  "session_direct_test": "verify_straditize_pro_e2e.py",
+  "spec": "4.10",
+  "session": "calibrate_column_xticks",
+  "session_def": "straditize_core/session_parts/xticks.py:244"
+ },
+ {
+  "rpc": "column.clearXTicks",
+  "client": "clearColumnXTicks",
+  "ui": [
+   "services/InspectorBridge.ts:493 (client:clearColumnXTicks)"
+  ],
+  "tests": [
+   "e2e",
+   "test_xticks_rpc_contract.py"
+  ],
+  "session_direct_test": "test_scale_provenance_payload.py",
+  "spec": "",
+  "session": "clear_column_xticks",
+  "session_def": "straditize_core/session_parts/xticks.py:414"
+ },
+ {
+  "rpc": "column.remove",
+  "client": "removeColumn",
+  "ui": [
+   "components/Inspector.ts:600 (client:removeColumn)"
+  ],
+  "tests": [],
+  "session_direct_test": "test_edit_and_export_api.py",
+  "spec": "",
+  "session": "column_remove",
+  "session_def": "straditize_core/session_parts/core.py:1770"
+ },
+ {
+  "rpc": "column.update",
+  "client": "updateColumn",
+  "ui": [
+   "components/Inspector.ts:476 (client:updateColumn)",
+   "components/steps/XTicksPanel.ts:674 (client:updateColumn)"
+  ],
+  "tests": [
+   "e2e",
+   "test_exaggeration_single_key.py"
+  ],
+  "session_direct_test": "test_edit_and_export_api.py",
+  "spec": "",
+  "session": "column_update",
+  "session_def": "straditize_core/session_parts/core.py:1784"
+ },
+ {
+  "rpc": "component.getStatus",
+  "client": "",
+  "ui": [
+   "components/agedepth/AgeDepthController.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "lambda",
+  "session_def": ""
+ },
+ {
+  "rpc": "component.install",
+  "client": "",
+  "ui": [
+   "components/agedepth/AgeDepthController.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "lambda",
+  "session_def": ""
+ },
+ {
+  "rpc": "component.installOfflineZip",
+  "client": "",
+  "ui": [
+   "components/agedepth/AgeDepthController.ts:1 (literal)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "lambda",
+  "session_def": ""
+ },
+ {
+  "rpc": "component.uninstall",
+  "client": "",
+  "ui": [],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "lambda",
+  "session_def": ""
+ },
+ {
+  "rpc": "core.applyDepthGrid",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_rpc.py"
+  ],
+  "session_direct_test": "test_rpc.py",
+  "spec": "",
+  "session": "apply_depth_grid",
+  "session_def": "straditize_core/session_parts/export.py:912"
+ },
+ {
+  "rpc": "core.batchSetTaxa",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_rpc.py"
+  ],
+  "session_direct_test": "verify_straditize_pro_e2e.py",
+  "spec": "",
+  "session": "batch_set_taxa",
+  "session_def": "straditize_core/session_parts/export.py:888"
+ },
+ {
+  "rpc": "core.calibrateAxes",
+  "client": "calibrateDepthAxis",
+  "ui": [
+   "main.ts:478 (client:calibrateDepthAxis)"
+  ],
+  "tests": [
+   "e2e",
+   "test_rpc.py"
+  ],
+  "session_direct_test": "test_multi_roi.py",
+  "spec": "4.6",
+  "session": "calibrate_axes",
+  "session_def": "straditize_core/session_parts/export.py:567"
+ },
+ {
+  "rpc": "core.detectColumns",
+  "client": "detectColumnsInRoi",
+  "ui": [
+   "services/WorkflowController.ts:184 (client:detectColumnsInRoi)"
+  ],
+  "tests": [
+   "e2e",
+   "test_dispatcher_serialisation.py",
+   "test_rpc.py"
+  ],
+  "session_direct_test": "test_multi_roi.py",
+  "spec": "4.3",
+  "session": "detect_columns",
+  "session_def": "straditize_core/pipeline.py:68"
+ },
+ {
+  "rpc": "core.digitize",
+  "client": "digitizeColumn",
+  "ui": [
+   "services/InspectorBridge.ts:47 (client:digitizeColumn)",
+   "services/ToolbarBridge.ts:86 (client:digitizeColumn)"
+  ],
+  "tests": [
+   "e2e",
+   "test_rpc.py"
+  ],
+  "session_direct_test": "test_multi_roi.py",
+  "spec": "4.4",
+  "session": "digitize",
+  "session_def": "straditize_core/pipeline.py:105"
+ },
+ {
+  "rpc": "core.exportData",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "e2e",
+   "test_rpc.py"
+  ],
+  "session_direct_test": "verify_straditize_pro_e2e.py",
+  "spec": "4.9",
+  "session": "export_data",
+  "session_def": "straditize_core/session_parts/export.py:679"
+ },
+ {
+  "rpc": "core.extractForeground",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_rpc.py",
+   "test_rpc_spec_enums.py"
+  ],
+  "session_direct_test": "",
+  "spec": "4.2",
+  "session": "core_extract_foreground",
+  "session_def": "straditize_core/rpc_methods/digitize.py:13"
+ },
+ {
+  "rpc": "core.extractGridValues",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_rpc.py"
+  ],
+  "session_direct_test": "verify_straditize_pro_e2e.py",
+  "spec": "",
+  "session": "extract_grid_values",
+  "session_def": "straditize_core/session_parts/export.py:965"
+ },
+ {
+  "rpc": "core.getShadowLayer",
+  "client": "",
+  "ui": [],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "core_get_shadow_layer",
+  "session_def": "straditize_core/rpc_methods/digitize.py:51"
+ },
+ {
+  "rpc": "core.getStatus",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_rpc.py"
+  ],
+  "session_direct_test": "test_component_manager.py",
+  "spec": "",
+  "session": "get_status",
+  "session_def": "straditize_core/components/manager.py:117"
+ },
+ {
+  "rpc": "core.loadImage",
+  "client": "loadSampleDiagram",
+  "ui": [
+   "services/FileLoaderService.ts:286 (client:loadSampleDiagram)"
+  ],
+  "tests": [
+   "e2e",
+   "test_dispatcher_serialisation.py",
+   "test_multi_roi.py",
+   "test_rpc.py"
+  ],
+  "session_direct_test": "test_multi_roi.py",
+  "spec": "4.1",
+  "session": "load_image",
+  "session_def": "straditize_core/image.py:53"
+ },
+ {
+  "rpc": "core.reset",
+  "client": "",
+  "ui": [],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "reset_session",
+  "session_def": "straditize_core/rpc_methods/system.py:94"
+ },
+ {
+  "rpc": "core.updateControlPoint",
+  "client": "updateControlPoint",
+  "ui": [],
+  "tests": [
+   "e2e",
+   "test_rpc.py"
+  ],
+  "session_direct_test": "test_core.py",
+  "spec": "4.5",
+  "session": "update_control_point",
+  "session_def": "straditize_core/pipeline.py:173"
+ },
+ {
+  "rpc": "ensemble.add",
+  "client": "",
+  "ui": [],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "ensemble_add",
+  "session_def": "straditize_core/session_parts/metadata.py:181"
+ },
+ {
+  "rpc": "ensemble.list",
+  "client": "",
+  "ui": [
+   "components/ExportModal.ts:1 (literal)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_metadata_and_lipd.py",
+  "spec": "",
+  "session": "ensemble_list",
+  "session_def": "straditize_core/session_parts/metadata.py:200"
+ },
+ {
+  "rpc": "export.csv",
+  "client": "",
+  "ui": [
+   "components/ExportModal.ts:1 (literal)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_cross_image_state_leak.py",
+  "spec": "",
+  "session": "export_csv",
+  "session_def": "straditize_core/session_parts/export.py:1061"
+ },
+ {
+  "rpc": "export.exportLipd",
+  "client": "",
+  "ui": [
+   "components/ExportModal.ts:1 (literal)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_export_chain_equality.py",
+  "spec": "",
+  "session": "export_multi_lipd",
+  "session_def": "straditize_core/session_parts/export.py:498"
+ },
+ {
+  "rpc": "export.exportXlsx",
+  "client": "",
+  "ui": [
+   "components/ExportModal.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "test_export_chain_equality.py",
+  "spec": "",
+  "session": "export_multi_xlsx",
+  "session_def": "straditize_core/session_parts/export.py:404"
+ },
+ {
+  "rpc": "export.getReadiness",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_edit_and_export_api.py",
+  "spec": "",
+  "session": "get_export_readiness",
+  "session_def": "straditize_core/session_parts/export.py:166"
+ },
+ {
+  "rpc": "export.r",
+  "client": "",
+  "ui": [
+   "components/ExportModal.ts:1 (literal)"
+  ],
+  "tests": [
+   "test_rpc.py"
+  ],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "export_r",
+  "session_def": "straditize_core/session_parts/export.py:1076"
+ },
+ {
+  "rpc": "export.tar",
+  "client": "",
+  "ui": [
+   "core/ProjectManager.ts:1 (literal)"
+  ],
+  "tests": [
+   "e2e",
+   "test_rpc.py"
+  ],
+  "session_direct_test": "test_export_chain_equality.py",
+  "spec": "",
+  "session": "export_multi_tar",
+  "session_def": "straditize_core/session_parts/export.py:271"
+ },
+ {
+  "rpc": "history.redo",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_rpc.py",
+   "test_undo_reverts_calibration.py"
+  ],
+  "session_direct_test": "test_samples_undo.py",
+  "spec": "",
+  "session": "history_redo",
+  "session_def": "straditize_core/session_parts/project.py:197"
+ },
+ {
+  "rpc": "history.undo",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_rpc.py",
+   "test_samples_undo.py",
+   "test_undo_reverts_calibration.py"
+  ],
+  "session_direct_test": "test_cross_image_state_leak.py",
+  "spec": "",
+  "session": "history_undo",
+  "session_def": "straditize_core/session_parts/project.py:165"
+ },
+ {
+  "rpc": "image.detectDeskew",
+  "client": "detectDeskew",
+  "ui": [
+   "services/FileLoaderService.ts:203 (client:detectDeskew)"
+  ],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "detect_deskew_angle",
+  "session_def": "straditize_core/session_parts/core.py:773"
+ },
+ {
+  "rpc": "image.load",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_rpc.py"
+  ],
+  "session_direct_test": "test_multi_roi.py",
+  "spec": "",
+  "session": "load_image",
+  "session_def": "straditize_core/image.py:53"
+ },
+ {
+  "rpc": "image.rotate",
+  "client": "rotateImage",
+  "ui": [
+   "services/FileLoaderService.ts:231 (client:rotateImage)"
+  ],
+  "tests": [],
+  "session_direct_test": "test_geometry_scope_content_identity.py",
+  "spec": "",
+  "session": "rotate_image",
+  "session_def": "straditize_core/session_parts/core.py:785"
+ },
+ {
+  "rpc": "image.switchPdfPage",
+  "client": "",
+  "ui": [],
+  "tests": [],
+  "session_direct_test": "test_cross_image_state_leak.py",
+  "spec": "",
+  "session": "switch_pdf_page",
+  "session_def": "straditize_core/session_parts/core.py:510"
+ },
+ {
+  "rpc": "initialize",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_label_snapping.py"
+  ],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "mcp_initialize",
+  "session_def": "straditize_core/rpc_methods/naming.py:166"
+ },
+ {
+  "rpc": "metadata.extractFromPdf",
+  "client": "",
+  "ui": [
+   "components/MetadataModal.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "metadata_extract_pdf",
+  "session_def": "straditize_core/session_parts/metadata.py:39"
+ },
+ {
+  "rpc": "metadata.fetchByDoi",
+  "client": "",
+  "ui": [
+   "components/MetadataModal.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "metadata_fetch_doi",
+  "session_def": "straditize_core/session_parts/metadata.py:24"
+ },
+ {
+  "rpc": "metadata.get",
+  "client": "",
+  "ui": [
+   "components/MetadataModal.ts:1 (literal)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "metadata_get",
+  "session_def": "straditize_core/session_parts/metadata.py:177"
+ },
+ {
+  "rpc": "metadata.parseExternalText",
+  "client": "",
+  "ui": [
+   "components/MetadataModal.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "test_metadata_and_lipd.py",
+  "spec": "",
+  "session": "metadata_parse_external",
+  "session_def": "straditize_core/session_parts/metadata.py:147"
+ },
+ {
+  "rpc": "metadata.update",
+  "client": "",
+  "ui": [
+   "components/MetadataModal.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "test_column_groups_p2.py",
+  "spec": "",
+  "session": "metadata_update",
+  "session_def": "straditize_core/session_parts/metadata.py:140"
+ },
+ {
+  "rpc": "naming.renameColumn",
+  "client": "renameColumn",
+  "ui": [
+   "components/Inspector.ts:438 (client:renameColumn)",
+   "services/SidebarBridge.ts:72 (client:renameColumn)"
+  ],
+  "tests": [
+   "test_samples_undo.py"
+  ],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "rename_column",
+  "session_def": "straditize_core/rpc_methods/naming.py:80"
+ },
+ {
+  "rpc": "naming.snapLabels",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "snap_labels",
+  "session_def": "straditize_core/rpc_methods/naming.py:139"
+ },
+ {
+  "rpc": "notifications/initialized",
+  "client": "",
+  "ui": [],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "mcp_notifications_initialized",
+  "session_def": "straditize_core/rpc_methods/naming.py:175"
+ },
+ {
+  "rpc": "ocr.applyLabels",
+  "client": "",
+  "ui": [
+   "components/OcrReviewModal.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "test_ocr_species_recognition.py",
+  "spec": "",
+  "session": "ocr_apply_labels",
+  "session_def": "straditize_core/session_parts/ocr.py:210"
+ },
+ {
+  "rpc": "ocr.getTaxaDict",
+  "client": "getTaxaDict",
+  "ui": [
+   "components/ocr/TaxaDictionaryModal.ts:20 (client:getTaxaDict)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_ocr_species_recognition.py",
+  "spec": "",
+  "session": "ocr_get_taxa_dict",
+  "session_def": "straditize_core/session_parts/ocr.py:136"
+ },
+ {
+  "rpc": "ocr.parseTaxaText",
+  "client": "parseTaxaText",
+  "ui": [
+   "components/ocr/TaxaDictionaryModal.ts:134 (client:parseTaxaText)"
+  ],
+  "tests": [],
+  "session_direct_test": "test_ocr_species_recognition.py",
+  "spec": "",
+  "session": "ocr_parse_taxa_text",
+  "session_def": "straditize_core/session_parts/ocr.py:155"
+ },
+ {
+  "rpc": "ocr.recognizeLabels",
+  "client": "",
+  "ui": [
+   "components/OcrReviewModal.ts:1 (literal)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_ocr_label_band.py",
+  "spec": "",
+  "session": "ocr_recognize_labels",
+  "session_def": "straditize_core/session_parts/ocr.py:97"
+ },
+ {
+  "rpc": "ocr.saveCustomTaxa",
+  "client": "saveCustomTaxa",
+  "ui": [
+   "components/ocr/TaxaDictionaryModal.ts:179 (client:saveCustomTaxa)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_ocr_species_recognition.py",
+  "spec": "",
+  "session": "ocr_save_custom_taxa",
+  "session_def": "straditize_core/session_parts/ocr.py:166"
+ },
+ {
+  "rpc": "ping",
+  "client": "",
+  "ui": [],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "mcp_ping",
+  "session_def": "straditize_core/rpc_methods/naming.py:178"
+ },
+ {
+  "rpc": "point.add",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_rpc.py"
+  ],
+  "session_direct_test": "verify_straditize_pro_e2e.py",
+  "spec": "",
+  "session": "point_add",
+  "session_def": "straditize_core/session_parts/digitize.py:412"
+ },
+ {
+  "rpc": "point.move",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_rpc.py"
+  ],
+  "session_direct_test": "test_edit_and_export_api.py",
+  "spec": "",
+  "session": "point_move",
+  "session_def": "straditize_core/session_parts/digitize.py:434"
+ },
+ {
+  "rpc": "point.remove",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_rpc.py"
+  ],
+  "session_direct_test": "test_edit_and_export_api.py",
+  "spec": "",
+  "session": "point_remove",
+  "session_def": "straditize_core/session_parts/digitize.py:443"
+ },
+ {
+  "rpc": "project.load",
+  "client": "",
+  "ui": [
+   "core/ProjectManager.ts:1 (literal)"
+  ],
+  "tests": [
+   "test_rpc.py"
+  ],
+  "session_direct_test": "test_column_groups_p2.py",
+  "spec": "",
+  "session": "project_load",
+  "session_def": "straditize_core/session_parts/project.py:341"
+ },
+ {
+  "rpc": "project.new",
+  "client": "resetProjectState",
+  "ui": [
+   "services/ToolbarBridge.ts:137 (client:resetProjectState)"
+  ],
+  "tests": [
+   "e2e",
+   "test_rpc.py"
+  ],
+  "session_direct_test": "test_cross_image_cleanup.py",
+  "spec": "",
+  "session": "project_new",
+  "session_def": "straditize_core/session_parts/project.py:210"
+ },
+ {
+  "rpc": "project.save",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_rpc.py"
+  ],
+  "session_direct_test": "test_rpc.py",
+  "spec": "4.12",
+  "session": "project_save",
+  "session_def": "straditize_core/session_parts/project.py:784"
+ },
+ {
+  "rpc": "qa.summarize",
+  "client": "",
+  "ui": [
+   "components/steps/QaPanel.ts:1 (literal)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_export_chain_equality.py",
+  "spec": "",
+  "session": "qa_summarize",
+  "session_def": "straditize_core/session_parts/qa.py:22"
+ },
+ {
+  "rpc": "roi.applyFormDefaults",
+  "client": "roiApplyFormDefaults",
+  "ui": [],
+  "tests": [],
+  "session_direct_test": "test_multi_roi.py",
+  "spec": "",
+  "session": "roi_apply_form_defaults",
+  "session_def": "straditize_core/session_parts/roi.py:361"
+ },
+ {
+  "rpc": "roi.create",
+  "client": "roiCreate",
+  "ui": [
+   "services/InspectorBridge.ts:1 (literal)"
+  ],
+  "tests": [
+   "e2e",
+   "test_multi_roi.py"
+  ],
+  "session_direct_test": "test_multi_roi.py",
+  "spec": "",
+  "session": "roi_create",
+  "session_def": "straditize_core/session_parts/roi.py:55"
+ },
+ {
+  "rpc": "roi.groupCreate",
+  "client": "roiGroupCreate",
+  "ui": [
+   "components/steps/XTicksPanel.ts:870 (client:roiGroupCreate)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_column_groups_p2.py",
+  "spec": "4.11",
+  "session": "roi_group_create",
+  "session_def": "straditize_core/session_parts/roi.py:402"
+ },
+ {
+  "rpc": "roi.groupRemove",
+  "client": "roiGroupRemove",
+  "ui": [
+   "components/steps/XTicksPanel.ts:909 (client:roiGroupRemove)"
+  ],
+  "tests": [],
+  "session_direct_test": "test_column_groups_p2.py",
+  "spec": "",
+  "session": "roi_group_remove",
+  "session_def": "straditize_core/session_parts/roi.py:510"
+ },
+ {
+  "rpc": "roi.groupUpdate",
+  "client": "roiGroupUpdate",
+  "ui": [
+   "components/steps/XTicksPanel.ts:589 (client:roiGroupUpdate)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_column_groups_p2.py",
+  "spec": "",
+  "session": "roi_group_update",
+  "session_def": "straditize_core/session_parts/roi.py:440"
+ },
+ {
+  "rpc": "roi.list",
+  "client": "roiList",
+  "ui": [],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_edit_and_export_api.py",
+  "spec": "",
+  "session": "roi_list",
+  "session_def": "straditize_core/session_parts/roi.py:337"
+ },
+ {
+  "rpc": "roi.remove",
+  "client": "roiRemove",
+  "ui": [
+   "services/InspectorBridge.ts:1 (literal)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_multi_roi.py",
+  "spec": "",
+  "session": "roi_remove",
+  "session_def": "straditize_core/session_parts/roi.py:269"
+ },
+ {
+  "rpc": "roi.setActive",
+  "client": "roiSetActive",
+  "ui": [
+   "services/InspectorBridge.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "test_multi_roi.py",
+  "spec": "",
+  "session": "roi_set_active",
+  "session_def": "straditize_core/session_parts/roi.py:347"
+ },
+ {
+  "rpc": "roi.setPrimary",
+  "client": "roiSetPrimary",
+  "ui": [
+   "services/InspectorBridge.ts:1 (literal)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_multi_roi.py",
+  "spec": "",
+  "session": "roi_set_primary",
+  "session_def": "straditize_core/session_parts/roi.py:355"
+ },
+ {
+  "rpc": "roi.update",
+  "client": "updateRoi",
+  "ui": [
+   "services/CleanupManager.ts:143 (client:updateRoi)",
+   "services/InspectorBridge.ts:1 (literal)"
+  ],
+  "tests": [
+   "e2e",
+   "test_rpc.py"
+  ],
+  "session_direct_test": "test_multi_roi.py",
+  "spec": "4.7",
+  "session": "roi_update",
+  "session_def": "straditize_core/session_parts/roi.py:133"
+ },
+ {
+  "rpc": "samples.clear",
+  "client": "",
+  "ui": [
+   "services/InspectorBridge.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "test_sample_horizons.py",
+  "spec": "",
+  "session": "samples_clear",
+  "session_def": "straditize_core/session_parts/samples.py:96"
+ },
+ {
+  "rpc": "samples.extractConsensus",
+  "client": "",
+  "ui": [
+   "services/InspectorBridge.ts:1 (literal)"
+  ],
+  "tests": [],
+  "session_direct_test": "test_qa_summary.py",
+  "spec": "",
+  "session": "samples_extract_consensus",
+  "session_def": "straditize_core/session_parts/samples.py:104"
+ },
+ {
+  "rpc": "samples.list",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "samples_list",
+  "session_def": "straditize_core/session_parts/samples.py:90"
+ },
+ {
+  "rpc": "samples.pasteDepths",
+  "client": "",
+  "ui": [],
+  "tests": [],
+  "session_direct_test": "test_samples_undo.py",
+  "spec": "",
+  "session": "samples_paste_depths",
+  "session_def": "straditize_core/session_parts/samples.py:128"
+ },
+ {
+  "rpc": "samples.set",
+  "client": "",
+  "ui": [
+   "components/steps/SamplesPanel.ts:1 (literal)"
+  ],
+  "tests": [
+   "e2e"
+  ],
+  "session_direct_test": "test_samples_undo.py",
+  "spec": "",
+  "session": "samples_set",
+  "session_def": "straditize_core/session_parts/samples.py:26"
+ },
+ {
+  "rpc": "shutdown",
+  "client": "",
+  "ui": [],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "rpc_shutdown",
+  "session_def": "straditize_core/rpc_methods/system.py:15"
+ },
+ {
+  "rpc": "straditize.getDiagramData",
+  "client": "getDiagramData",
+  "ui": [
+   "app/scaleSync.ts:37 (client:getDiagramData)",
+   "components/steps/XTicksDroppedNotice.ts:348 (client:getDiagramData)",
+   "core/ProjectManager.ts:578 (client:getDiagramData)",
+   "main.ts:78 (client:getDiagramData)",
+   "services/FileLoaderService.ts:233 (client:getDiagramData)",
+   "services/InspectorBridge.ts:137 (client:getDiagramData)",
+   "services/ToolbarBridge.ts:185 (client:getDiagramData)",
+   "services/WorkflowController.ts:161 (client:getDiagramData)"
+  ],
+  "tests": [
+   "e2e",
+   "test_cleanup_pipeline.py",
+   "test_column_block_detection.py",
+   "test_diagram_payload_golden.py",
+   "test_dispatcher_serialisation.py",
+   "test_exaggeration_single_key.py",
+   "test_rpc.py",
+   "test_scale_provenance_payload.py",
+   "test_xscale_unification.py",
+   "test_xticks_drop_is_explicit.py",
+   "test_xticks_rpc_contract.py"
+  ],
+  "session_direct_test": "",
+  "spec": "4.10b",
+  "session": "get_diagram_data",
+  "session_def": "straditize_core/rpc_methods/system.py:64"
+ },
+ {
+  "rpc": "system.getConfig",
+  "client": "getSystemConfig",
+  "ui": [
+   "components/MetadataModal.ts:170 (client:getSystemConfig)",
+   "components/SettingsModal.ts:224 (client:getSystemConfig)"
+  ],
+  "tests": [
+   "e2e",
+   "test_remote_settings.py"
+  ],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "rpc_get_config",
+  "session_def": "straditize_core/rpc_methods/system.py:100"
+ },
+ {
+  "rpc": "system.ping",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_dispatcher_serialisation.py",
+   "test_remote_settings.py",
+   "test_rpc.py"
+  ],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "lambda",
+  "session_def": ""
+ },
+ {
+  "rpc": "system.updateConfig",
+  "client": "updateSystemConfig",
+  "ui": [
+   "components/MetadataModal.ts:640 (client:updateSystemConfig)",
+   "components/SettingsModal.ts:426 (client:updateSystemConfig)"
+  ],
+  "tests": [
+   "e2e",
+   "test_remote_settings.py"
+  ],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "rpc_update_config",
+  "session_def": "straditize_core/rpc_methods/system.py:131"
+ },
+ {
+  "rpc": "tools/call",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_dispatcher_serialisation.py",
+   "test_label_snapping.py"
+  ],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "mcp_tools_call",
+  "session_def": "straditize_core/rpc_methods/naming.py:181"
+ },
+ {
+  "rpc": "tools/list",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_label_snapping.py"
+  ],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "webmcp_list_tools",
+  "session_def": "straditize_core/rpc_methods/naming.py:152"
+ },
+ {
+  "rpc": "webmcp.callTool",
+  "client": "",
+  "ui": [],
+  "tests": [
+   "test_dispatcher_serialisation.py"
+  ],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "mcp_tools_call",
+  "session_def": "straditize_core/rpc_methods/naming.py:181"
+ },
+ {
+  "rpc": "webmcp.listTools",
+  "client": "",
+  "ui": [],
+  "tests": [],
+  "session_direct_test": "",
+  "spec": "",
+  "session": "webmcp_list_tools",
+  "session_def": "straditize_core/rpc_methods/naming.py:152"
+ }
+]
