@@ -401,6 +401,21 @@ export interface DiagramData {
   cleanup_selected_id?: string | null;
   /** 后端下发的清理统计，面板必须显示真实数字。 */
   cleanup_stats?: Record<string, number>;
+  /**
+   * 清理统计与图例（后端 `cleanup_payload()` 下发，零状态也发）。
+   *
+   * 此前类型里根本没有这个键，唯一消费点是 `RpcClient.ts` 的
+   * `if (data.cleanup?.stats) data.cleanup_stats = data.cleanup.stats`——
+   * 没有声明就意味着：后端把 `stats` 改名，编译期零提示，面板数字静默停在旧值。
+   *
+   * 声明为**可选**是因为 `loadImage` 之后前端会先构造一份不含它的乐观载荷
+   * （`RpcClient.applyLoadedImage`），不是"后端可能不发"。
+   */
+  cleanup?: {
+    roi_id: string | null;
+    stats: Record<string, number>;
+    legend: Record<string, string>;
+  };
 
   /** 采样层位扁平列表 */
   samples: SampleHorizon[];

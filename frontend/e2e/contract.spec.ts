@@ -73,6 +73,47 @@ const CLIENT_OWNED_FIELDS = new Set(['samples']);
  * 元素的地方都带 `xlim` 兜底），但类型系统挡不住将来有人写 `rois[i].xMin`。
  * 修它要动生产类型（给会话 ROI 记录一个自己的 interface），另行处理。
  */
+/**
+ * 反向判据：payload 里**不得有 TS 没声明的键**。
+ *
+ * 上面那条 `auditShape` 只保证"声明 ⊇ 真实（必填部分）"，方向是单向的：
+ * 后端多发一个键、而 TS 没声明，前端读到它时类型系统零保护（`(data as any).x`
+ * 才不会报错），新人也不知道这个键存在。§9 登记的"声明失真"就是这一侧。
+ *
+ * 三类合法的例外，都必须写清理由：
+ *   - `KNOWN_WIRE_ALIASES` 的**驼峰侧**（后端直发、TS 用下划线声明，由 RpcClient 归一化）；
+ *   - `CLIENT_OWNED_FIELDS`（前端自己填的，不来自后端）；
+ *   - `PAYLOAD_ONLY_FIELDS`（后端发、前端**无消费者**但对外部客户端有意义）。
+ */
+function auditNothingUndeclared(
+  payload: Record<string, unknown>,
+  iface: string,
+  where: string
+): void {
+  const declared = new Set(interfaceFields(iface).map((f) => f.name));
+  const aliased = new Set(Object.values(KNOWN_WIRE_ALIASES));
+  const extra = Object.keys(payload)
+    .filter((k) => !declared.has(k))
+    .filter((k) => !aliased.has(k))
+    .filter((k) => !CLIENT_OWNED_FIELDS.has(k))
+    .filter((k) => !(`${iface}.${k}` in PAYLOAD_ONLY_FIELDS))
+    .sort();
+  expect(
+    extra,
+    `${where}：真实 payload 里有 ${iface} 未声明的键 ${JSON.stringify(extra)}——` +
+      "要么补进 pollen.ts，要么在 PAYLOAD_ONLY_FIELDS 登记理由"
+  ).toEqual([]);
+}
+
+/**
+ * 后端会发、前端**无消费者**、但对外部客户端（WebMCP / 脚本）有意义的键。
+ *
+ * 登记在这里等于"债务在案"：前端若哪天开始读它，就该补进 TS 而不是留在本表。
+ */
+const PAYLOAD_ONLY_FIELDS: Record<string, string> = {
+  'DiagramData.lineRemoval':
+    '去线强度/竖线开关/笔迹的对外字段；前端零消费者（清理几何走 line_candidates/line_strokes）',
+};
 const NOT_SENT_BY_DESIGN: Record<string, string> = {
   'DataRoi.xMin': 'rois[] 元素是会话 ROI 记录（xlim/ylim）；坐标别名只出现在单数 data.roi 上',
   'DataRoi.xMax': 'rois[] 元素是会话 ROI 记录（xlim/ylim）；坐标别名只出现在单数 data.roi 上',
@@ -174,24 +215,29 @@ test.describe('前后端契约（真实 payload 对 TS 声明）', () => {
     const data = await diagramData<Record<string, unknown>>(page);
 
     auditShape(data, 'DiagramData', 'straditize.getDiagramData 加载态');
+    auditNothingUndeclared(data, 'DiagramData', 'straditize.getDiagramData 加载态');
 
     const calibration = data.calibration as Record<string, unknown> | null;
     expect(calibration, '基线必须有标定对象').toBeTruthy();
     auditShape(calibration!, 'DepthCalibration', 'payload.calibration');
+    auditNothingUndeclared(calibration!, 'DepthCalibration', 'payload.calibration');
 
     const rois = data.rois as Record<string, unknown>[];
     expect(rois.length, '基线必须有 ROI').toBeGreaterThan(0);
     // 复数元素是会话 ROI 记录，坐标别名不在此处（见 NOT_SENT_BY_DESIGN）
     auditShape(rois[0], 'DataRoi', 'payload.rois[0]');
+    auditNothingUndeclared(rois[0], 'DataRoi', 'payload.rois[0]');
 
     // 单数 roi 是包围盒，必须**严格**满足 DataRoi —— 这是上面那张豁免表的正向对照
     const roi = data.roi as Record<string, unknown> | null;
     expect(roi, '基线必须有主 ROI 包围盒').toBeTruthy();
     auditShape(roi!, 'DataRoi', 'payload.roi', { allowDesignGaps: false });
+    auditNothingUndeclared(roi!, 'DataRoi', 'payload.roi');
 
     const columns = data.columns as Record<string, unknown>[];
     expect(columns.length, '基线必须已分列').toBeGreaterThan(0);
     auditShape(columns[0], 'Column', 'payload.columns[0]');
+    auditNothingUndeclared(columns[0], 'Column', 'payload.columns[0]');
   });
 
   test('候选几何：扫描出的 LineCandidate 覆盖其必填字段', async ({ page }) => {
