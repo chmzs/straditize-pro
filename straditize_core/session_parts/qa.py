@@ -31,6 +31,65 @@ class QaMixin:
         2. Empty horizon accounting with reason "no ink read".
         3. Per-column peak vs declared scale max (derived strictly from x_ticks).
         """
+        target_roi = self._qa_target_roi(roi_id)
+        target_roi_id = target_roi.get("id", "pollen")
+        roi_name = target_roi.get("name", target_roi_id)
+        composition = bool(target_roi.get("composition", True))
+
+        target_columns = self._qa_target_columns(target_roi_id)
+        if not target_columns:
+            return compute_qa_summary(
+                roi_id=target_roi_id,
+                roi_name=roi_name,
+                composition=composition,
+                horizons=[],
+                columns_info=[],
+                tolerance=tolerance,
+            )
+
+        horizon_rows, horizon_depths = self._qa_horizons(target_columns)
+        if not horizon_rows:
+            return compute_qa_summary(
+                roi_id=target_roi_id,
+                roi_name=roi_name,
+                composition=composition,
+                horizons=[],
+                columns_info=[],
+                tolerance=tolerance,
+            )
+
+        columns_info, col_values_by_column = self._qa_column_values(
+            target_columns, horizon_rows
+        )
+
+        # Assemble per-horizon structures
+        horizons_data: list[dict[str, Any]] = []
+        for h_idx in range(len(horizon_rows)):
+            row_vals = [
+                col_values_by_column[c_i][h_idx] for c_i in range(len(target_columns))
+            ]
+            horizons_data.append(
+                {
+                    "depth": horizon_depths[h_idx],
+                    "values": row_vals,
+                }
+            )
+
+        return compute_qa_summary(
+            roi_id=target_roi_id,
+            roi_name=roi_name,
+            composition=composition,
+            horizons=horizons_data,
+            columns_info=columns_info,
+            tolerance=tolerance,
+        )
+
+    def _qa_target_roi(self, roi_id: str | None) -> dict[str, Any]:
+        """定位 QA 目标 ROI：显式 ID > 活跃 ROI > 第一个 ROI；一个 ROI 都没有时造一个占位。
+
+        显式给了不存在的 ID 必须报错，不能静默回落到第一个——否则用户以为在看 ROI-B，
+        实际看的是 ROI-A 的门禁结果。
+        """
         rois = getattr(self, "rois", [])
 
         # Resolve target ROI
@@ -57,8 +116,11 @@ class QaMixin:
         target_roi_id = target_roi.get("id", "pollen")
         roi_name = target_roi.get("name", target_roi_id)
         composition = bool(target_roi.get("composition", True))
+        return target_roi
 
-        # Filter columns belonging to this ROI
+    def _qa_target_columns(self, target_roi_id: str) -> list[dict[str, Any]]:
+        """归属过滤：有 roi_id 的按 ID 匹配；没有 roi_id 的老列只在单 ROI 或主 ROI 时才收。"""
+        rois = getattr(self, "rois", [])
         all_columns = getattr(self, "columns", [])
         target_columns: list[dict[str, Any]] = []
         for col in all_columns:
@@ -71,19 +133,12 @@ class QaMixin:
                 )
             ):
                 target_columns.append(col)
+        return target_columns
 
-        # Empty ROI check: no columns
-        if not target_columns:
-            return compute_qa_summary(
-                roi_id=target_roi_id,
-                roi_name=roi_name,
-                composition=composition,
-                horizons=[],
-                columns_info=[],
-                tolerance=tolerance,
-            )
-
-        # Gather horizon rows and depths
+    def _qa_horizons(
+        self, target_columns: list[dict[str, Any]]
+    ) -> tuple[list[int], list[float | None]]:
+        """层位与深度：有采样层就以它为准（深度是用户填的），否则取目标列逐行点的并集。"""
         horizon_rows: list[int] = []
         horizon_depths: list[float | None] = []
 
@@ -107,18 +162,17 @@ class QaMixin:
                     horizon_rows.append(r)
                     depth_func = getattr(self, "_depth_for_row_px", None)
                     horizon_depths.append(depth_func(r) if depth_func else None)
+        return horizon_rows, horizon_depths
 
-        if not horizon_rows:
-            return compute_qa_summary(
-                roi_id=target_roi_id,
-                roi_name=roi_name,
-                composition=composition,
-                horizons=[],
-                columns_info=[],
-                tolerance=tolerance,
-            )
+    def _qa_column_values(
+        self,
+        target_columns: list[dict[str, Any]],
+        horizon_rows: list[int],
+    ) -> tuple[list[dict[str, Any]], list[list[float]]]:
+        """逐列取值。这里 require_calibrated=False 是**有意**的：QA 要能对未标定列粗算，
 
-        # Extract values for each column across all horizons
+        好让"该列没标定/总和偏离"的提醒能被触发；导出路径对未标定列一律给 None，两者不通。
+        """
         columns_info: list[dict[str, Any]] = []
         col_values_by_column: list[list[float]] = []
 
@@ -163,25 +217,4 @@ class QaMixin:
                     "calibrated": scale.calibrated,
                 }
             )
-
-        # Assemble per-horizon structures
-        horizons_data: list[dict[str, Any]] = []
-        for h_idx in range(len(horizon_rows)):
-            row_vals = [
-                col_values_by_column[c_i][h_idx] for c_i in range(len(target_columns))
-            ]
-            horizons_data.append(
-                {
-                    "depth": horizon_depths[h_idx],
-                    "values": row_vals,
-                }
-            )
-
-        return compute_qa_summary(
-            roi_id=target_roi_id,
-            roi_name=roi_name,
-            composition=composition,
-            horizons=horizons_data,
-            columns_info=columns_info,
-            tolerance=tolerance,
-        )
+        return columns_info, col_values_by_column
