@@ -1,0 +1,275 @@
+{
+ "column_points_based": {
+  "ok": {
+   "composition": true,
+   "empty_horizons": [
+    {
+     "depth": null,
+     "reason": "no ink read"
+    }
+   ],
+   "n_horizons": 637,
+   "n_horizons_empty": 1,
+   "n_horizons_with_data": 636,
+   "n_uncalibrated": 0,
+   "per_column_max": [
+    {
+     "calibrated": true,
+     "declared_max": 100.0,
+     "name": "col01",
+     "over": false,
+     "peak": 68.4
+    },
+    {
+     "calibrated": true,
+     "declared_max": 100.0,
+     "name": "col02",
+     "over": false,
+     "peak": 67.6
+    },
+    {
+     "calibrated": true,
+     "declared_max": 100.0,
+     "name": "col03",
+     "over": false,
+     "peak": 67.6
+    }
+   ],
+   "roi_id": "roi_1",
+   "roi_name": "pollen",
+   "shortfall": {
+    "max": 97.3,
+    "mean": 86.3,
+    "min": 0.0
+   },
+   "sum": {
+    "max": 203.6,
+    "mean": 14.3,
+    "min": 0.0,
+    "p50": 10.7
+   },
+   "tolerance": 2.0,
+   "uncalibrated_columns": [],
+   "violations_over": [
+    {
+     "depth": null,
+     "sum": 203.6
+    },
+    {
+     "depth": null,
+     "sum": 203.6
+    },
+    {
+     "depth": null,
+     "sum": 203.6
+    },
+    {
+     "depth": null,
+     "sum": 169.3
+    }
+   ]
+  }
+ },
+ "empty_roi": {
+  "ok": {
+   "composition": true,
+   "empty_horizons": [],
+   "n_horizons": 0,
+   "n_horizons_empty": 0,
+   "n_horizons_with_data": 0,
+   "per_column_max": [],
+   "roi_id": "pollen",
+   "roi_name": "pollen",
+   "shortfall": {
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0
+   },
+   "sum": {
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "p50": 0.0
+   },
+   "tolerance": 2.0,
+   "violations_over": []
+  }
+ },
+ "multi_roi": {
+  "primary": {
+   "ok": {
+    "composition": true,
+    "empty_horizons": [
+     {
+      "depth": null,
+      "reason": "no ink read"
+     }
+    ],
+    "n_horizons": 637,
+    "n_horizons_empty": 1,
+    "n_horizons_with_data": 636,
+    "n_uncalibrated": 0,
+    "per_column_max": [
+     {
+      "calibrated": true,
+      "declared_max": 100.0,
+      "name": "col01",
+      "over": false,
+      "peak": 68.4
+     },
+     {
+      "calibrated": true,
+      "declared_max": 100.0,
+      "name": "col02",
+      "over": false,
+      "peak": 67.6
+     }
+    ],
+    "roi_id": "roi_1",
+    "roi_name": "pollen",
+    "shortfall": {
+     "max": 98.7,
+     "mean": 93.0,
+     "min": 0.0
+    },
+    "sum": {
+     "max": 136.0,
+     "mean": 7.2,
+     "min": 0.0,
+     "p50": 2.6
+    },
+    "tolerance": 2.0,
+    "uncalibrated_columns": [],
+    "violations_over": [
+     {
+      "depth": null,
+      "sum": 136.0
+     },
+     {
+      "depth": null,
+      "sum": 136.0
+     },
+     {
+      "depth": null,
+      "sum": 136.0
+     }
+    ]
+   }
+  },
+  "second": {
+   "ok": {
+    "composition": true,
+    "empty_horizons": [
+     {
+      "depth": null,
+      "reason": "no ink read"
+     }
+    ],
+    "n_horizons": 637,
+    "n_horizons_empty": 1,
+    "n_horizons_with_data": 636,
+    "n_uncalibrated": 0,
+    "per_column_max": [
+     {
+      "calibrated": true,
+      "declared_max": 100.0,
+      "name": "col03",
+      "over": false,
+      "peak": 67.6
+     },
+     {
+      "calibrated": true,
+      "declared_max": 100.0,
+      "name": "col04",
+      "over": false,
+      "peak": 68.4
+     }
+    ],
+    "roi_id": "roi_2",
+    "roi_name": "second",
+    "shortfall": {
+     "max": 97.3,
+     "mean": 82.2,
+     "min": 0.0
+    },
+    "sum": {
+     "max": 136.0,
+     "mean": 18.0,
+     "min": 0.0,
+     "p50": 16.0
+    },
+    "tolerance": 2.0,
+    "uncalibrated_columns": [],
+    "violations_over": [
+     {
+      "depth": null,
+      "sum": 136.0
+     },
+     {
+      "depth": null,
+      "sum": 136.0
+     },
+     {
+      "depth": null,
+      "sum": 136.0
+     }
+    ]
+   }
+  }
+ },
+ "samples_based": {
+  "ok": {
+   "composition": true,
+   "empty_horizons": [],
+   "n_horizons": 3,
+   "n_horizons_empty": 0,
+   "n_horizons_with_data": 3,
+   "n_uncalibrated": 0,
+   "per_column_max": [
+    {
+     "calibrated": true,
+     "declared_max": 100.0,
+     "name": "col01",
+     "over": false,
+     "peak": 2.6
+    },
+    {
+     "calibrated": true,
+     "declared_max": 100.0,
+     "name": "col02",
+     "over": false,
+     "peak": 0.0
+    },
+    {
+     "calibrated": true,
+     "declared_max": 100.0,
+     "name": "col03",
+     "over": false,
+     "peak": 8.1
+    }
+   ],
+   "roi_id": "roi_1",
+   "roi_name": "pollen",
+   "shortfall": {
+    "max": 94.7,
+    "mean": 91.1,
+    "min": 89.3
+   },
+   "sum": {
+    "max": 10.7,
+    "mean": 8.9,
+    "min": 5.3,
+    "p50": 10.7
+   },
+   "tolerance": 2.0,
+   "uncalibrated_columns": [],
+   "violations_over": []
+  }
+ },
+ "unknown_roi": {
+  "raised": {
+   "code": -32602,
+   "message": "ROI 'roi_nope' not found."
+  }
+ }
+}
