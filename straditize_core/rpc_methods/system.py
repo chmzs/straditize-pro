@@ -67,201 +67,12 @@ def register(dispatcher: Any, session: Any) -> None:
         Adheres strictly to Blacklist Rule #39: no silent fallback to sample figures
         when session.image is None. Zero-state is returned as-is.
         """
+        cleanup = cleanup_payload()
         if session.image is None:
-            return {
-                "imageSrc": None,
-                "imageWidth": 0,
-                "imageHeight": 0,
-                "columns": [],
-                "activeTaxaId": "",
-                "selectedEntity": None,
-                "isDesktopMode": getattr(session, "is_desktop_mode", False),
-                "roi": None,
-                "rois": [],
-                "primaryRoiId": None,
-                "activeRoiId": None,
-                "calibration": {
-                    "isCalibrated": False,
-                    "top_px": None,
-                    "top_cm": None,
-                    "bottom_px": None,
-                    "bottom_cm": None,
-                    "unit": getattr(session, "depth_unit", "cm"),
-                    "primaryAxis": getattr(session, "primary_axis", "depth"),
-                    "depthInterval": 2,
-                    "depthGridEnabled": True,
-                },
-                "lineRemoval": {
-                    "strength": None,
-                    "remove_vertical": True,
-                    "corrections": [],
-                },
-                **cleanup_payload(),
-            }
+            return _payload_zero_state(session, cleanup)
 
-        palette = [
-            "#38bdf8", "#34d399", "#fbbf24", "#a78bfa", "#f472b6", "#fb7185",
-            "#2dd4bf", "#818cf8", "#f97316", "#4ade80", "#e879f9", "#60a5fa",
-        ]
-        formatted_cols = []
-        for c in session.columns:
-            c_idx = c["col_index"]
-            c_start = int(c["start"])
-            c_end = int(c["end"])
-            name = c.get("name", f"Col {c_idx}")
-
-            if c_idx not in session.column_points:
-                session.digitize(c_idx, "area")
-
-            ctrls = session.control_points.get(c_idx, {})
-            pts = []
-            for r_val, x_val in ctrls.items():
-                pts.append({
-                    "id": f"pt_{c_idx}_{r_val}",
-                    "x": round(x_val),
-                    "y": int(r_val),
-                    "type": "peak",
-                    "isManual": False,
-                    "createdAt": 1700000000000 + int(r_val),
-                })
-            pts.sort(key=lambda p: p["y"])
-
-            scale = resolve_column_scale(session, c, c_idx)
-            species_val = c.get("species", name)
-
-            formatted_cols.append({
-                "id": c.get("id") or f"taxa_{c_idx}",
-                # 后端自己的权威列序号；前端拿它寻址。不要用数组下标代替：
-                # column_add 造的列没有 id，payload 会合成 taxa_N，按 id 反而找不到。
-                "col_index": c_idx,
-                "name": name,
-                "species": species_val,
-                "color": palette[c_idx % len(palette)],
-                "startX": c_start,
-                "endX": c_end,
-                "scale_type": scale.scale_type,
-                "plot_type": scale.plot_type,
-                "plotType": scale.plot_type,
-                "exaggeration_mult": scale.exaggeration_mult,
-                "hasExaggeration": scale.exaggeration_mult is not None,
-                "exaggerationMult": scale.exaggeration_mult,
-                # 标度的唯一事实源：两个真实刻度端点。null = 未标定。
-                # 删掉它整条链路就断（载荷剥字段 → 前端 hasTicks 恒 false → 标尺画不出来）。
-                "x_ticks": c.get("x_ticks"),
-                # 该列所属组。此前**整个列载荷没有这个字段**，于是前端读到 undefined，
-                # 只能把每一列都当成"默认组"——分组界面永远显示错误的归属，
-                # 用户无法判断哪列在哪组（这就是"分组操作不好用"的根因之一）。
-                "x_group_id": c.get("x_group_id"),
-                # 列级轴粗覆盖（ARCHITECTURE §6.4）：组值是初值，单列可覆盖。
-                # 必须下发，否则前端"仅本列"输入框读不到已存的值、画布绿线也只能
-                # 按组值画——用户改完刷新就"看不见了"（值在库里，界面却在说谎）。
-                # None = 未覆盖，跟随组值；这不是噪音键，见 TaxaColumn 的注释。
-                "axis_stroke_px": c.get("axis_stroke_px"),
-                # B-02：该列此前的标定因取数区/列边界变动被守卫丢弃时，
-                # 这里必须**原样透传**丢的是什么、丢在哪个区间，否则用户看到的
-                # 只是"标定没了"，无从判断需不需要重新标定。值为 None 表示
-                # 该列没有发生丢弃（正常列不带噪音键值）。
-                "x_ticks_dropped": c.get("x_ticks_dropped"),
-                # task-21：该列被判定为"填满整列的色块/空框"时，把**完整证据**
-                # 透传给前端，让界面能提示用户确认。
-                #
-                # 必须传整个 dict 而不是压成布尔值：前端要 `reason` 才能给出准确
-                # 文案（"该列填满整列，可能是色块而非曲线"），也才能显示
-                # cv / fill_ratio 让用户自己判断。只传 true/false 等于让用户
-                # 面对一句无法核实的断言。
-                #
-                # 值只含不可变标量（reason/cv/fill_ratio/mean_ink_width/
-                # column_width），故透传层**原样转发、不新建嵌套容器**——撤销栈的
-                # 列快照是浅拷贝，任何新建的可变容器都会与历史共享引用（B-02 教训）。
-                #
-                # 这条键若被删，用户就看不到任何提示：列还在、数值照样污染 CSV。
-                # 判别力对照见 `tests/unit/test_column_block_detection.py`
-                # 的 `TestPayloadExposesSuspectBlock`。
-                "suspect_block": c.get("suspect_block"),
-                "startValue": scale.val0,
-                "tickValue": scale.val1,
-                # ---- 读数的来历（B-01 主线）----
-                #
-                # `startValue`/`tickValue`/`maxPercent` 都是**算出来的数字**，它们
-                # 不携带"这个数是谁给的"。同一个 20 可能来自用户量的刻度，也可能
-                # 来自 `detect_columns` 里硬编码的 `tickValue: 20.0`——前者是科研
-                # 读数，后者是程序默认值。下发前它们在载荷里长得一模一样。
-                #
-                # **不要**改成"移除 startValue/tickValue 来表达未标定"：prod-gate
-                # 实测过，移除后步骤 6 的显示毫无变化（前端多处
-                # `?? 20` / `|| 100` 会补上同样的数字），用户看不出任何区别，
-                # 缺陷反而藏得更深。正确做法是保留兼容字段，**另给** provenance。
-                #
-                # 判据直接复用 `resolve_column_scale` 的返回值（与导出、网格采样、
-                # QA 同一个解析入口），不在这里另造一套判定。
-                # source 取值：`group_slope`（组级点齿标定，ARCHITECTURE §6.4，
-                # 当前主路径）| `x_ticks`（列级两齿）| `x_scales`（旧式两点）|
-                # `legacy`（沿用旧字段，如硬编码的 0/20）| `default`（无标度信息）。
-                # **判"是否已标定"要看 calibrated，不要看 x_ticks 是否存在** ——
-                # group_slope 生效时 x_ticks 会被清空。
-                "scale_provenance": {
-                    "calibrated": scale.calibrated,
-                    "source": scale.source,
-                },
-                "scaleCalib": {
-                    "originX": scale.abs_px0,
-                    "originVal": scale.val0,
-                    "calibX": scale.abs_px1,
-                    "calibVal": scale.val1,
-                    "unit": scale.unit,
-                },
-                "tickEndX": scale.abs_px1,
-                "maxPercent": max(scale.val0, scale.val1),
-                "unit": scale.unit,
-                "curveType": "linear",
-                "visible": True,
-                "isLocked": False,
-                "controlPoints": pts,
-                "roi_id": c.get("roi_id"),
-            })
-
-        depth_calib = session.depth_calib or {}
-        roi_box = session._roi_box()
-        rois = getattr(session, "rois", [])
-        return {
-            "imageSrc": "/image/current",
-            "imageWidth": session.width or 0,
-            "imageHeight": session.height or 0,
-            "columns": formatted_cols,
-            "activeTaxaId": formatted_cols[0]["id"] if formatted_cols else "",
-            "selectedEntity": None,
-            "isDesktopMode": getattr(session, "is_desktop_mode", False),
-            "roi": (
-                {"xMin": roi_box[0], "yMin": roi_box[1], "xMax": roi_box[2], "yMax": roi_box[3]}
-                if roi_box
-                else None
-            ),
-            "rois": rois,
-            "primaryRoiId": getattr(session, "primary_roi_id", None),
-            "activeRoiId": getattr(session, "active_roi_id", None),
-            "calibration": {
-                "isCalibrated": bool(session.is_calibrated and session.depth_calib),
-                "top_px": depth_calib.get("top_px"),
-                "top_cm": depth_calib.get("top_cm"),
-                "bottom_px": depth_calib.get("bottom_px"),
-                "bottom_cm": depth_calib.get("bottom_cm"),
-                "unit": session.depth_unit,
-                # 键名跟随同字典的 isCalibrated / depthInterval 用 camelCase。
-                "primaryAxis": getattr(session, "primary_axis", "depth"),
-                "depthInterval": 2,
-                "depthGridEnabled": True,
-            },
-            "lineRemoval": {
-                "strength": session.degrid_strength,
-                "remove_vertical": session.degrid_remove_vertical,
-                "corrections": session.line_corrections,
-            },
-            # Cleanup geometry is authoritative backend state. It MUST travel
-            # with the diagram payload: the frontend used to hold it only in
-            # memory, so every refresh silently reset it to [] and the
-            # geometry vanished from the canvas.
-            **cleanup_payload(),
-        }
+        formatted_cols = [_payload_column(session, c) for c in session.columns]
+        return _payload_loaded(session, formatted_cols, cleanup)
 
     dispatcher.register_method("straditize.getDiagramData", get_diagram_data)
 
@@ -374,3 +185,235 @@ def register(dispatcher: Any, session: Any) -> None:
         }
 
     dispatcher.register_method("system.updateConfig", rpc_update_config)
+
+
+_COLUMN_PALETTE: tuple[str, ...] = (
+    "#38bdf8",
+    "#34d399",
+    "#fbbf24",
+    "#a78bfa",
+    "#f472b6",
+    "#fb7185",
+    "#2dd4bf",
+    "#818cf8",
+    "#f97316",
+    "#4ade80",
+    "#e879f9",
+    "#60a5fa",
+)
+
+
+def _payload_zero_state(
+    session: Any, cleanup: dict[str, Any]
+) -> dict[str, Any]:
+    """没载图时的零状态载荷。必须与正常载荷共用 cleanup 的键。
+
+    历史上两条分支各写一份，零状态因此少了五个键，载图前步骤 4 面板的结构与之后不同。
+    """
+    return {
+        "imageSrc": None,
+        "imageWidth": 0,
+        "imageHeight": 0,
+        "columns": [],
+        "activeTaxaId": "",
+        "selectedEntity": None,
+        "isDesktopMode": getattr(session, "is_desktop_mode", False),
+        "roi": None,
+        "rois": [],
+        "primaryRoiId": None,
+        "activeRoiId": None,
+        "calibration": {
+            "isCalibrated": False,
+            "top_px": None,
+            "top_cm": None,
+            "bottom_px": None,
+            "bottom_cm": None,
+            "unit": getattr(session, "depth_unit", "cm"),
+            "primaryAxis": getattr(session, "primary_axis", "depth"),
+            "depthInterval": 2,
+            "depthGridEnabled": True,
+        },
+        "lineRemoval": {
+            "strength": None,
+            "remove_vertical": True,
+            "corrections": [],
+        },
+        **cleanup,
+    }
+
+
+def _payload_column(session: Any, c: dict[str, Any]) -> dict[str, Any]:
+    """单列的前端载荷：标度、标度来历、控制点、丢弃记录与色块证据。
+
+    列内每个键都是契约的一部分：少一个，前端读到 undefined 就静默退化成默认值
+    （x_ticks / x_group_id / axis_stroke_px / suspect_block 都这么丢过）。
+    """
+    c_idx = c["col_index"]
+    c_start = int(c["start"])
+    c_end = int(c["end"])
+    name = c.get("name", f"Col {c_idx}")
+
+    if c_idx not in session.column_points:
+        session.digitize(c_idx, "area")
+
+    ctrls = session.control_points.get(c_idx, {})
+    pts = []
+    for r_val, x_val in ctrls.items():
+        pts.append(
+            {
+                "id": f"pt_{c_idx}_{r_val}",
+                "x": round(x_val),
+                "y": int(r_val),
+                "type": "peak",
+                "isManual": False,
+                "createdAt": 1700000000000 + int(r_val),
+            }
+        )
+    pts.sort(key=lambda p: p["y"])
+
+    scale = resolve_column_scale(session, c, c_idx)
+    species_val = c.get("species", name)
+
+    return {
+        "id": c.get("id") or f"taxa_{c_idx}",
+        # 后端自己的权威列序号；前端拿它寻址。不要用数组下标代替：
+        # column_add 造的列没有 id，payload 会合成 taxa_N，按 id 反而找不到。
+        "col_index": c_idx,
+        "name": name,
+        "species": species_val,
+        "color": _COLUMN_PALETTE[c_idx % len(_COLUMN_PALETTE)],
+        "startX": c_start,
+        "endX": c_end,
+        "scale_type": scale.scale_type,
+        "plot_type": scale.plot_type,
+        "plotType": scale.plot_type,
+        "exaggeration_mult": scale.exaggeration_mult,
+        "hasExaggeration": scale.exaggeration_mult is not None,
+        "exaggerationMult": scale.exaggeration_mult,
+        # 标度的唯一事实源：两个真实刻度端点。null = 未标定。
+        # 删掉它整条链路就断（载荷剥字段 → 前端 hasTicks 恒 false → 标尺画不出来）。
+        "x_ticks": c.get("x_ticks"),
+        # 该列所属组。此前**整个列载荷没有这个字段**，于是前端读到 undefined，
+        # 只能把每一列都当成"默认组"——分组界面永远显示错误的归属，
+        # 用户无法判断哪列在哪组（这就是"分组操作不好用"的根因之一）。
+        "x_group_id": c.get("x_group_id"),
+        # 列级轴粗覆盖（ARCHITECTURE §6.4）：组值是初值，单列可覆盖。
+        # 必须下发，否则前端"仅本列"输入框读不到已存的值、画布绿线也只能
+        # 按组值画——用户改完刷新就"看不见了"（值在库里，界面却在说谎）。
+        # None = 未覆盖，跟随组值；这不是噪音键，见 TaxaColumn 的注释。
+        "axis_stroke_px": c.get("axis_stroke_px"),
+        # B-02：该列此前的标定因取数区/列边界变动被守卫丢弃时，
+        # 这里必须**原样透传**丢的是什么、丢在哪个区间，否则用户看到的
+        # 只是"标定没了"，无从判断需不需要重新标定。值为 None 表示
+        # 该列没有发生丢弃（正常列不带噪音键值）。
+        "x_ticks_dropped": c.get("x_ticks_dropped"),
+        # task-21：该列被判定为"填满整列的色块/空框"时，把**完整证据**
+        # 透传给前端，让界面能提示用户确认。
+        #
+        # 必须传整个 dict 而不是压成布尔值：前端要 `reason` 才能给出准确
+        # 文案（"该列填满整列，可能是色块而非曲线"），也才能显示
+        # cv / fill_ratio 让用户自己判断。只传 true/false 等于让用户
+        # 面对一句无法核实的断言。
+        #
+        # 值只含不可变标量（reason/cv/fill_ratio/mean_ink_width/
+        # column_width），故透传层**原样转发、不新建嵌套容器**——撤销栈的
+        # 列快照是浅拷贝，任何新建的可变容器都会与历史共享引用（B-02 教训）。
+        #
+        # 这条键若被删，用户就看不到任何提示：列还在、数值照样污染 CSV。
+        # 判别力对照见 `tests/unit/test_column_block_detection.py`
+        # 的 `TestPayloadExposesSuspectBlock`。
+        "suspect_block": c.get("suspect_block"),
+        "startValue": scale.val0,
+        "tickValue": scale.val1,
+        # ---- 读数的来历（B-01 主线）----
+        #
+        # `startValue`/`tickValue`/`maxPercent` 都是**算出来的数字**，它们
+        # 不携带"这个数是谁给的"。同一个 20 可能来自用户量的刻度，也可能
+        # 来自 `detect_columns` 里硬编码的 `tickValue: 20.0`——前者是科研
+        # 读数，后者是程序默认值。下发前它们在载荷里长得一模一样。
+        #
+        # **不要**改成"移除 startValue/tickValue 来表达未标定"：prod-gate
+        # 实测过，移除后步骤 6 的显示毫无变化（前端多处
+        # `?? 20` / `|| 100` 会补上同样的数字），用户看不出任何区别，
+        # 缺陷反而藏得更深。正确做法是保留兼容字段，**另给** provenance。
+        #
+        # 判据直接复用 `resolve_column_scale` 的返回值（与导出、网格采样、
+        # QA 同一个解析入口），不在这里另造一套判定。
+        # source 取值：`group_slope`（组级点齿标定，ARCHITECTURE §6.4，
+        # 当前主路径）| `x_ticks`（列级两齿）| `x_scales`（旧式两点）|
+        # `legacy`（沿用旧字段，如硬编码的 0/20）| `default`（无标度信息）。
+        # **判"是否已标定"要看 calibrated，不要看 x_ticks 是否存在** ——
+        # group_slope 生效时 x_ticks 会被清空。
+        "scale_provenance": {
+            "calibrated": scale.calibrated,
+            "source": scale.source,
+        },
+        "scaleCalib": {
+            "originX": scale.abs_px0,
+            "originVal": scale.val0,
+            "calibX": scale.abs_px1,
+            "calibVal": scale.val1,
+            "unit": scale.unit,
+        },
+        "tickEndX": scale.abs_px1,
+        "maxPercent": max(scale.val0, scale.val1),
+        "unit": scale.unit,
+        "curveType": "linear",
+        "visible": True,
+        "isLocked": False,
+        "controlPoints": pts,
+        "roi_id": c.get("roi_id"),
+    }
+
+
+def _payload_loaded(
+    session: Any, formatted_cols: list[dict[str, Any]], cleanup: dict[str, Any]
+) -> dict[str, Any]:
+    """根载荷：图像、列、ROI、深度标定、线清理状态 + 清理几何。"""
+    depth_calib = session.depth_calib or {}
+    roi_box = session._roi_box()
+    rois = getattr(session, "rois", [])
+    return {
+        "imageSrc": "/image/current",
+        "imageWidth": session.width or 0,
+        "imageHeight": session.height or 0,
+        "columns": formatted_cols,
+        "activeTaxaId": formatted_cols[0]["id"] if formatted_cols else "",
+        "selectedEntity": None,
+        "isDesktopMode": getattr(session, "is_desktop_mode", False),
+        "roi": (
+            {
+                "xMin": roi_box[0],
+                "yMin": roi_box[1],
+                "xMax": roi_box[2],
+                "yMax": roi_box[3],
+            }
+            if roi_box
+            else None
+        ),
+        "rois": rois,
+        "primaryRoiId": getattr(session, "primary_roi_id", None),
+        "activeRoiId": getattr(session, "active_roi_id", None),
+        "calibration": {
+            "isCalibrated": bool(session.is_calibrated and session.depth_calib),
+            "top_px": depth_calib.get("top_px"),
+            "top_cm": depth_calib.get("top_cm"),
+            "bottom_px": depth_calib.get("bottom_px"),
+            "bottom_cm": depth_calib.get("bottom_cm"),
+            "unit": session.depth_unit,
+            # 键名跟随同字典的 isCalibrated / depthInterval 用 camelCase。
+            "primaryAxis": getattr(session, "primary_axis", "depth"),
+            "depthInterval": 2,
+            "depthGridEnabled": True,
+        },
+        "lineRemoval": {
+            "strength": session.degrid_strength,
+            "remove_vertical": session.degrid_remove_vertical,
+            "corrections": session.line_corrections,
+        },
+        # Cleanup geometry is authoritative backend state. It MUST travel
+        # with the diagram payload: the frontend used to hold it only in
+        # memory, so every refresh silently reset it to [] and the
+        # geometry vanished from the canvas.
+        **cleanup,
+    }
