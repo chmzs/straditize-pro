@@ -460,9 +460,16 @@ export class ProjectManager {
     const polyVec = visibleCols.map((c) => (c.plotType === 'bar' || c.plotType === 'line' || c.plotType === 'symbol' ? 'FALSE' : 'TRUE')).join(', ');
     const barVec = visibleCols.map((c) => (c.plotType === 'bar' ? 'TRUE' : 'FALSE')).join(', ');
     const lineVec = visibleCols.map((c) => (c.plotType === 'line' ? 'TRUE' : 'FALSE')).join(', ');
-    const hasAnyExag = visibleCols.some((c) => c.hasExaggeration);
-    const maxExagMult = Math.max(5, ...visibleCols.filter((c) => c.hasExaggeration).map((c) => c.exaggerationMult || 5));
-    const exagVec = visibleCols.map((c) => (c.hasExaggeration ? 'TRUE' : 'FALSE')).join(', ');
+    // 放大倍数只有 `exaggeration_mult` 一个来源；没有就**不生成** exag 参数。
+    // 旧实现里 `Math.max(5, …)` 会在无人设置时也画成 5×——脚本与数据不一致。
+    const exagMults = visibleCols
+      .map((c) => c.exaggeration_mult)
+      .filter((m): m is number => typeof m === 'number' && m > 1);
+    const hasAnyExag = exagMults.length > 0;
+    const maxExagMult = hasAnyExag ? Math.max(...exagMults) : 0;
+    const exagVec = visibleCols
+      .map((c) => (typeof c.exaggeration_mult === 'number' && c.exaggeration_mult > 1 ? 'TRUE' : 'FALSE'))
+      .join(', ');
 
     const exagParam = hasAnyExag
       ? `  exag = plot_exag,\n  exag.mult = ${maxExagMult},\n  col.exag = "auto",\n  exag.alpha = 0.5,\n`

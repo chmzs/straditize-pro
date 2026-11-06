@@ -247,8 +247,12 @@ export class Inspector {
     };
 
     const currentPlotType = resolved.plotType;
-    const hasExag = resolved.exaggerationMult !== null;
-    const exagMult = resolved.exaggerationMult ?? col.exaggerationMult ?? 5;
+    // 只有一个值：`exaggeration_mult`（null = 未放大）。曾用 `?? col.exaggerationMult ?? 5`
+    // 兜底，于是「没设放大」在界面上显示成 5×，勾一下就写进库——而 px_to_value
+    // 会真的除以它，整列读数因此缩小 5 倍。
+    const exagMult = resolved.exaggerationMult;
+    const hasExag = exagMult !== null;
+    const exagInputValue = exagMult === null ? '' : String(exagMult);
 
     return `
       <div class="inspector-section">
@@ -289,19 +293,18 @@ export class Inspector {
               <input type="checkbox" id="chk-has-exag" ${hasExag ? 'checked' : ''} style="cursor: pointer;" />
               <span style="font-weight: 500;">局部放大曲线 (Exaggeration)</span>
             </label>
-            <span style="font-size: 10px; color: var(--accent-violet); font-weight: 600;">${hasExag ? `${exagMult}× 启用` : '未勾选'}</span>
+            <span style="font-size: 10px; color: var(--accent-violet); font-weight: 600;">${hasExag ? `${exagMult}× 启用` : '未启用'}</span>
           </div>
-          ${hasExag ? `
-            <div style="margin-top: 6px; display: flex; align-items: center; gap: 6px;">
-              <span style="font-size: 10px; color: var(--text-secondary);">放大倍数:</span>
-              <input type="number" id="inp-exag-mult" value="${exagMult}" min="1" max="100" style="width: 50px; font-size: 11px; padding: 2px 4px;" />
-              <div class="btn-group" style="display: flex; gap: 2px; flex: 1;">
-                <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="3" style="flex: 1; font-size: 9px; padding: 2px;">3×</button>
-                <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="5" style="flex: 1; font-size: 9px; padding: 2px;">5×</button>
-                <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="10" style="flex: 1; font-size: 9px; padding: 2px;">10×</button>
-              </div>
+          <!-- 输入框常显：先有数字才谈得上启用。空值时勾选框不写库，只提示。 -->
+          <div style="margin-top: 6px; display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 10px; color: var(--text-secondary);">放大倍数:</span>
+            <input type="number" id="inp-exag-mult" value="${exagInputValue}" min="1" max="100" placeholder="必填" style="width: 50px; font-size: 11px; padding: 2px 4px;" />
+            <div class="btn-group" style="display: flex; gap: 2px; flex: 1;">
+              <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="3" style="flex: 1; font-size: 9px; padding: 2px;">3×</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="5" style="flex: 1; font-size: 9px; padding: 2px;">5×</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="10" style="flex: 1; font-size: 9px; padding: 2px;">10×</button>
             </div>
-          ` : ''}
+          </div>
         </div>
 
         <div style="display: flex; gap: 8px; margin-top: 10px;">
@@ -467,83 +470,69 @@ export class Inspector {
     // 粘贴真实钻孔深度序列
 
 
-    // 局部放大曲线勾选与倍数（同步后端 column.update）
+    // 局部放大曲线：**一个值**，三个入口（勾选框 / 倍数输入 / 快捷按钮）。
+    // 曾经的实现里勾选就写 `5`（`|| 5` 兜底），而 `px_to_value` 会真的除以它 ——
+    // 等于用户只是点了一下勾，整列读数就缩小 5 倍。现在没有数字就不启用。
+    const writeExaggeration = async (value: number | null): Promise<void> => {
+      const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
+      if (!activeCol) return;
+      if (this.callbacks.rpcClient) {
+        try {
+          await this.callbacks.rpcClient.updateColumn(getColIdx(activeCol), {
+            exaggeration_mult: value,
+          });
+        } catch (err) {
+          notifyError(err instanceof Error ? err.message : String(err));
+          this.render();
+          return;
+        }
+      }
+      activeCol.exaggeration_mult = value;
+      this.history.push(
+        value === null
+          ? `Clear Exaggeration for ${activeCol.name}`
+          : `Set Exaggeration to ${value}x for ${activeCol.name}`,
+        this.data.columns,
+        this.data.activeTaxaId
+      );
+      this.render();
+      this.callbacks.onDataChange();
+    };
+
     this.element.querySelector('#chk-has-exag')?.addEventListener('change', async (e) => {
       const checked = (e.target as HTMLInputElement).checked;
-      const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
-      if (activeCol) {
-        const mult = checked ? (activeCol.exaggeration_mult || activeCol.exaggerationMult || 5) : null;
-        if (this.callbacks.rpcClient) {
-          try {
-            await this.callbacks.rpcClient.updateColumn(getColIdx(activeCol), {
-              hasExaggeration: checked,
-              exaggeration_mult: mult,
-            });
-          } catch (err) {
-            notifyError(err instanceof Error ? err.message : String(err));
-            this.render();
-            return;
-          }
-        }
-        activeCol.hasExaggeration = checked;
-        activeCol.exaggeration_mult = mult;
-        if (checked && mult) {
-          activeCol.exaggerationMult = mult;
-        }
-        this.history.push(`Toggle Exaggeration for ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
-        this.render();
-        this.callbacks.onDataChange();
+      if (!checked) {
+        await writeExaggeration(null);
+        return;
       }
+      const typed = Number(
+        (this.element.querySelector('#inp-exag-mult') as HTMLInputElement | null)?.value
+      );
+      if (!Number.isFinite(typed) || typed <= 1) {
+        // 不重建 DOM：重建会把勾选弹回未选，用户的这次操作就白点了。
+        // 界面保持"已勾选、待填倍数"，填完并有值时才真正写库。
+        notifyError('请先填写放大倍数（>1）再启用：没有倍数的“放大”会把读数除错。');
+        this.element.querySelector<HTMLInputElement>('#inp-exag-mult')?.focus();
+        return;
+      }
+      await writeExaggeration(typed);
     });
 
     this.element.querySelector('#inp-exag-mult')?.addEventListener('change', async (e) => {
-      const mult = parseFloat((e.target as HTMLInputElement).value);
-      const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
-      if (activeCol && !isNaN(mult) && mult > 1) {
-        if (this.callbacks.rpcClient) {
-          try {
-            await this.callbacks.rpcClient.updateColumn(getColIdx(activeCol), {
-              hasExaggeration: true,
-              exaggeration_mult: mult,
-            });
-          } catch (err) {
-            notifyError(err instanceof Error ? err.message : String(err));
-            this.render();
-            return;
-          }
-        }
-        activeCol.hasExaggeration = true;
-        activeCol.exaggeration_mult = mult;
-        activeCol.exaggerationMult = mult;
-        this.history.push(`Set Exaggeration to ${mult}x for ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
-        this.render();
-        this.callbacks.onDataChange();
+      const input = e.target as HTMLInputElement;
+      const typed = Number(input.value);
+      // 清空输入 = 取消放大；<=1 与非法值同样归为「未放大」，不写一个错的因子。
+      if (input.value.trim() === '' || !Number.isFinite(typed) || typed <= 1) {
+        await writeExaggeration(null);
+        return;
       }
+      await writeExaggeration(typed);
     });
 
     this.element.querySelectorAll('.quick-exag-btn').forEach((btn) => {
       btn.addEventListener('click', async () => {
-        const mult = parseFloat(btn.getAttribute('data-exag') || '5');
-        const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
-        if (activeCol && !isNaN(mult) && mult > 1) {
-          if (this.callbacks.rpcClient) {
-            try {
-              await this.callbacks.rpcClient.updateColumn(getColIdx(activeCol), {
-                hasExaggeration: true,
-                exaggeration_mult: mult,
-              });
-            } catch (err) {
-              notifyError(err instanceof Error ? err.message : String(err));
-              return;
-            }
-          }
-          activeCol.hasExaggeration = true;
-          activeCol.exaggeration_mult = mult;
-          activeCol.exaggerationMult = mult;
-          this.history.push(`Set Exaggeration to ${mult}x for ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
-          this.render();
-          this.callbacks.onDataChange();
-        }
+        const mult = Number(btn.getAttribute('data-exag'));
+        if (Number.isFinite(mult) && mult > 1) await writeExaggeration(mult);
       });
     });
 

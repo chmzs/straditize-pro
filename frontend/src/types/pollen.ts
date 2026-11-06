@@ -197,8 +197,7 @@ export interface Column {
   plot_type?: 'area' | 'bar' | 'line' | 'symbol';
   scale_type?: 'linear' | 'log';
   unit: string;
-  exaggeration_mult?: number | null; // null = 无局部放大
-  mult_source?: 'user' | 'inferred' | null; // null 当 exaggeration_mult 为 null
+  exaggeration_mult?: number | null; // 唯一的放大倍数（null = 无局部放大）
 
   control_points?: Point[];
 
@@ -212,8 +211,7 @@ export interface Column {
   plotType?: 'area' | 'bar' | 'line' | 'symbol';
   startValue?: number;
   tickValue?: number;
-  hasExaggeration?: boolean;
-  exaggerationMult?: number;
+
   scaleCalib?: {
     originX: number;
     originVal: number;

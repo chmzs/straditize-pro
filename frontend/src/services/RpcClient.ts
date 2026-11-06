@@ -895,8 +895,7 @@ export class RpcClient {
             // legacy 占位（不是读数）：见 LEGACY_FULL_SCALE 的注释。
             tickValue: c.tickValue || LEGACY_FULL_SCALE,
             plotType: c.plot_type || 'area',
-            hasExaggeration: c.has_exaggeration || false,
-            exaggerationMult: c.exaggeration_multiplier || 5,
+            exaggeration_mult: c.exaggeration_mult ?? null,
           };
         });
         this.currentDiagramData.columns = cols;

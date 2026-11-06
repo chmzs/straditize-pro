@@ -148,11 +148,11 @@ export class CoordinateSystem {
     const unit = col.unit || sc?.unit || '%';
     const plotType = col.plot_type || col.plotType || 'area';
 
+    // 只有一个来源：`exaggeration_mult`（>1 才算放大）。历史上这里还有一条
+    // `hasExaggeration + exaggerationMult` 的兜底，两个名字容易各说各话，已删除。
     let exaggerationMult: number | null = null;
-    if (col.exaggeration_mult !== undefined && col.exaggeration_mult !== null) {
-      if (col.exaggeration_mult > 1) exaggerationMult = col.exaggeration_mult;
-    } else if (col.hasExaggeration && col.exaggerationMult && col.exaggerationMult > 1) {
-      exaggerationMult = col.exaggerationMult;
+    if (col.exaggeration_mult !== undefined && col.exaggeration_mult !== null && col.exaggeration_mult > 1) {
+      exaggerationMult = col.exaggeration_mult;
     }
 
     const provenance = col.scale_provenance;

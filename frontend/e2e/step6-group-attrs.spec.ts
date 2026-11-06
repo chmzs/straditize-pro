@@ -31,7 +31,11 @@ function watchRpc(page: Page): string[] {
 }
 
 test.describe('步骤 6 属性层级', () => {
-  test('形态经 roi.groupUpdate、放大经 column.update，都必须真发 RPC', async ({ page }) => {
+  // 空倍数勾选会当场提示（见下方判据一），那是**预期**通知，不是缺陷。
+  test.use({ allowlists: { notice: [/放大倍数/] } });
+
+  test('形态经 roi.groupUpdate、放大经 column.update，都必须真发 RPC', async ({ page, telemetry }) => {
+    const notices = telemetry.notices;
     await resetBaseline(page);
     await gotoStage(page, 5);
     await gotoStage(page, 6);
@@ -57,14 +61,31 @@ test.describe('步骤 6 属性层级', () => {
       api.selectColumn(api.getState().columns[0].id);
     });
     const inspector = page.locator('.app-inspector');
+
+    // 判据一：**勾选但没填数字**不得写库。旧的实现勾一下就写 5（`|| 5` 兜底），
+    // 而 px_to_value 会真的除以它——用户只是点了一下，整列读数就缩小 5 倍。
     await inspector.locator('#chk-has-exag').check();
+    await page.waitForTimeout(500);
     await expect
       .poll(
         // 读**后端**权威载荷：前端镜像要等 onDataChange 才刷新，用它会写成假红。
         async () => {
           const cols = (await diagramData<{ columns: Array<Record<string, unknown>> }>(page)).columns;
-          const c = cols[0];
-          return c.exaggeration_mult ?? c.exaggerationMult;
+          return cols[0].exaggeration_mult ?? null;
+        },
+        { timeout: 10_000 }
+      )
+      .toBeNull();
+    expect(notices.join('\n'), '空倍数必须当场提示，不能静默不生效').toMatch(/放大倍数/);
+
+    // 判据二：填了数字才生效，且真的发 RPC。
+    await inspector.locator('#inp-exag-mult').fill('5');
+    await inspector.locator('#inp-exag-mult').press('Tab');
+    await expect
+      .poll(
+        async () => {
+          const cols = (await diagramData<{ columns: Array<Record<string, unknown>> }>(page)).columns;
+          return cols[0].exaggeration_mult ?? null;
         },
         { timeout: 10_000 }
       )

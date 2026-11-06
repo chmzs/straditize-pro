@@ -168,8 +168,8 @@ const requiredColumnFields = [
   'plot_type',
   'scale_type',
   'unit',
+  // 放大倍数只有 exaggeration_mult 一个键（mult_source 已删除，见 §9 收敛）。
   'exaggeration_mult',
-  'mult_source',
   'control_points',
 ];
 
