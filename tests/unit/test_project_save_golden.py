@@ -19,6 +19,18 @@ tar 成员、csv 从真实导出悄悄退回占位表，界面都不会报错，
 3. `tar_members`：带路径 → tar 成员清单，逐个 {名字, 字节数, 内容摘要}；manifest.json 剔除
    时间戳后再比对（时间戳天生不稳定，留着会让基线随机变红）。
 
+## 占位表必须显式（2026-11-06）
+
+合成载荷的列数字化不出来，data.csv 会退化成「每格 0.00」的占位表。这种表长得跟合法数据一样，
+README 里那句「unobserved = 0.0」还会替它背书。现在三处落痕：
+
+1. manifest.json 增加 data_csv_placeholder 字段（含失败原因）；
+2. tar 里紧跟一份 data.csv.PLACEHOLDER.md（人读）；
+3. project_save 返回值带 data_csv_placeholder / data_csv_placeholder_reason（程序读）。
+
+本文件同时钉**反向对照** tar_real_csv：真实取数成功时 flag 必须是 false、成员里不得出现说明文件。
+只用合成载荷时，「标记住」和「没标记」两种情况永远只见到一种。
+
 ## 重新生成
 
     UPDATE_PROJECT_SAVE_GOLDEN=1 pixi run python -m pytest tests/unit/test_project_save_golden.py
@@ -132,6 +144,28 @@ def _build_snapshots(tmp_dir: Path) -> dict:
         "result_keys": sorted(tar_result),
         "result_size_matches_file": tar_result["size"] == tar_path.stat().st_size,
         "members": members,
+    }
+
+    # 对照：真实取数成功时**不得**出现占位标记，也不得出现说明文件。
+    # 只用合成载荷（不能数字化）时，"标记住"和"没标记"两种情况永远只见到一种。
+    real_session = StraditizeSession()
+    real_session._init_cleanup()
+    real_session.load_image(image_path="tests/data/figures/real_plates/fig3_raw.jpeg")
+    real_session.detect_columns(data_xlim=[330, 1330], data_ylim=[233, 869])
+    for column in real_session.columns:
+        real_session.digitize(column["col_index"])
+    real_tar = tmp_dir / "real-pack.tar"
+    real_result = real_session.project_save(output_path=str(real_tar), format="tar")
+    with tarfile.open(real_tar, "r") as archive:
+        real_csv = archive.extractfile("data.csv").read()
+        real_members = archive.getnames()
+    out["tar_real_csv"] = {
+        "result_keys": sorted(real_result),
+        "placeholder_flag": real_result["data_csv_placeholder"],
+        "placeholder_reason": real_result["data_csv_placeholder_reason"],
+        "members": real_members,
+        "data_csv_size": len(real_csv),
+        "data_csv_head": real_csv.decode("utf-8").splitlines()[:2],
     }
 
     # 无路径的 tar 走 base64 返回：只钉成员清单，不钉整包摘要（含 mtime）

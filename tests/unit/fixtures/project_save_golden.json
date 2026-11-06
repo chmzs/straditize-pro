@@ -818,10 +818,13 @@
    "image/original.png",
    "image/age_depth.png",
    "data.csv",
+   "data.csv.PLACEHOLDER.md",
    "plot_strat.R",
    "README.txt"
   ],
   "result_keys": [
+   "data_csv_placeholder",
+   "data_csv_placeholder_reason",
    "size",
    "success",
    "tar_base64"
@@ -843,6 +846,11 @@
   "members": [
    {
     "manifest_without_timestamp": {
+     "data_csv_placeholder": {
+      "notice": "data.csv.PLACEHOLDER.md",
+      "reason": "ValueError: Unknown grid-line removal strength: 0.6",
+      "zeros_are_not_measurements": true
+     },
      "schema_version": "2.0",
      "tool": "straditize pro",
      "version": "2.0.0"
@@ -870,6 +878,11 @@
     "size": 107
    },
    {
+    "digest": "e11951f8801f",
+    "name": "data.csv.PLACEHOLDER.md",
+    "size": 606
+   },
+   {
     "digest": "4cad30896ad0",
     "name": "plot_strat.R",
     "size": 406
@@ -881,10 +894,36 @@
    }
   ],
   "result_keys": [
+   "data_csv_placeholder",
+   "data_csv_placeholder_reason",
    "path",
    "size",
    "success"
   ],
   "result_size_matches_file": true
+ },
+ "tar_real_csv": {
+  "data_csv_head": [
+   "depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
+   "233,,,,,,,,,,,,,,,,"
+  ],
+  "data_csv_size": 13480,
+  "members": [
+   "manifest.json",
+   "straditize.json",
+   "image/original.png",
+   "data.csv",
+   "plot_strat.R",
+   "README.txt"
+  ],
+  "placeholder_flag": false,
+  "placeholder_reason": null,
+  "result_keys": [
+   "data_csv_placeholder",
+   "data_csv_placeholder_reason",
+   "path",
+   "size",
+   "success"
+  ]
  }
 }

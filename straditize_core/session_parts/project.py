@@ -356,9 +356,7 @@ class ProjectSessionMixin:
         """
         path = os.path.abspath(project_data)
         if not os.path.exists(path):
-            raise JsonRpcError(
-                FILE_NOT_FOUND_ERROR, f"Project file not found: {path}"
-            )
+            raise JsonRpcError(FILE_NOT_FOUND_ERROR, f"Project file not found: {path}")
 
         if path.endswith(".tar") or tarfile.is_tarfile(path):
             with tarfile.open(path, "r") as tf:
@@ -373,9 +371,7 @@ class ProjectSessionMixin:
                         and "info" not in nl
                     ):
                         json_member = m
-                    elif "age_depth" in nl and nl.endswith(
-                        (".png", ".jpg", ".jpeg")
-                    ):
+                    elif "age_depth" in nl and nl.endswith((".png", ".jpg", ".jpeg")):
                         ad_img_member = m
                     elif nl.endswith((".png", ".jpg", ".jpeg")):
                         img_member = m
@@ -770,16 +766,26 @@ class ProjectSessionMixin:
         if format.lower() == "json":
             return self._save_project_json(project_json, ad_export, output_path)
 
-        tar_bytes = self._build_project_tar(project_json, manifest, columns)
+        tar_bytes, csv_reason = self._build_project_tar(project_json, manifest, columns)
+        placeholder = {
+            "data_csv_placeholder": csv_reason is not None,
+            "data_csv_placeholder_reason": csv_reason,
+        }
         if output_path:
             with open(output_path, "wb") as f:
                 f.write(tar_bytes)
-            return {"path": output_path, "size": len(tar_bytes), "success": True}
+            return {
+                "path": output_path,
+                "size": len(tar_bytes),
+                "success": True,
+                **placeholder,
+            }
 
         return {
             "tar_base64": base64.b64encode(tar_bytes).decode("ascii"),
             "size": len(tar_bytes),
             "success": True,
+            **placeholder,
         }
 
     save_project = project_save
@@ -966,11 +972,16 @@ class ProjectSessionMixin:
             return {"path": output_path, "success": True}
         return {"data": project_json, "success": True}
 
-    def _export_csv_or_placeholder(self, columns: list[dict[str, Any]]) -> bytes:
+    def _export_csv_or_placeholder(
+        self, columns: list[dict[str, Any]]
+    ) -> tuple[bytes, str | None]:
         """出 data.csv：先走真实数字化，失败才退占位表（首列 depth，未观测列填 0.00）。
 
-        占位表是**保底不报错**的老行为：真实 csv 导出失败时若抛错，用户拿不到整个 tar。
-        这条兜底是否该保留另议，但它的触发条件必须由基线钉住。
+        占位表是保底不报错的老行为：真实导出失败时若抛错，用户拿不到整个 tar。
+        但它**绝不静默**——第二个返回值就是失败原因，调用方必须三处落痕：
+        manifest.json 的 data_csv_placeholder 字段、tar 里的 data.csv.PLACEHOLDER.md、
+        以及 project_save 的返回值（前端据此提示）。全 0 的矩阵长得像合法数据，只靠
+        README 里那句「unobserved = 0.0」根本分辨不出来。
         """
         try:
             if not getattr(self, "column_points", None) and columns:
@@ -983,9 +994,10 @@ class ProjectSessionMixin:
                 else str(res)
             )
             if not csv_str.strip():
-                raise ValueError("empty csv")
-            csv_data = csv_str.encode("utf-8")
-        except (ValueError, KeyError, RuntimeError, JsonRpcError):
+                raise ValueError("导出结果为空字符串")
+            return csv_str.encode("utf-8"), None
+        except (ValueError, KeyError, RuntimeError, JsonRpcError) as exc:
+            reason = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
             headers = ["depth"] + [
                 c.get("species") or c.get("name") or f"col_{idx}"
                 for idx, c in enumerate(columns)
@@ -999,16 +1011,41 @@ class ProjectSessionMixin:
             ]
             for d in depth_vals:
                 lines.append(",".join([str(round(d, 2))] + ["0.00"] * len(columns)))
-            csv_data = "\n".join(lines).encode("utf-8")
-        return csv_data
+            return "\n".join(lines).encode("utf-8"), reason
+
+    def _csv_placeholder_notice(self, reason: str) -> bytes:
+        """占位表的显式说明（写进 tar，紧跟 data.csv）。人打开包第一眼就该看到它。"""
+        text = (
+            "# data.csv 是占位表，不是真实读数\n\n"
+            "本次打包时真实导出失败，data.csv 里**每一个数值都是 0.00**。"
+            "它们既不表示「未观测」，也不表示「观测到 0」，只是占位符。\n\n"
+            f"- 失败原因：{reason}\n"
+            "- 机器可读标记：manifest.json 的 data_csv_placeholder 字段\n"
+            "- 怎么办：回到步骤 8 重新取数（确认每列都已数字化），再重新导出工程包。\n\n"
+            "README.txt 里那句「unobserved taxa are strictly 0.0」描述的是**正常导出**"
+            "的约定，不要用它解释本文件旁边的 data.csv。\n"
+        )
+        return text.encode("utf-8")
 
     def _build_project_tar(
         self,
         project_json: dict[str, Any],
         manifest: dict[str, Any],
         columns: list[dict[str, Any]],
-    ) -> bytes:
-        """tar 分支：manifest / straditize.json / 两张图 / data.csv / plot_strat.R / README。"""
+    ) -> tuple[bytes, str | None]:
+        """tar 分支：manifest / straditize.json / 两张图 / data.csv / plot_strat.R / README。
+
+        返回 (tar 字节, 占位表原因|None)。占位表出现时额外写 data.csv.PLACEHOLDER.md，
+        并在 manifest 里留机器可读字段——两条通道分别服务人读与程序读。
+        """
+        csv_data, csv_reason = self._export_csv_or_placeholder(columns)
+        manifest = dict(manifest)
+        if csv_reason:
+            manifest["data_csv_placeholder"] = {
+                "reason": csv_reason,
+                "notice": "data.csv.PLACEHOLDER.md",
+                "zeros_are_not_measurements": True,
+            }
         tar_bio = io.BytesIO()
         with tarfile.open(fileobj=tar_bio, mode="w") as tf:
             # 1. manifest.json
@@ -1047,13 +1084,18 @@ class ProjectSessionMixin:
                 ti_ad.mtime = int(time.time())
                 tf.addfile(ti_ad, io.BytesIO(ad_data))
 
-            # 4. data.csv
-            csv_data = self._export_csv_or_placeholder(columns)
-
+            # 4. data.csv（若退化成占位表，紧跟着写一份显式说明）
             ti_csv = tarfile.TarInfo(name="data.csv")
             ti_csv.size = len(csv_data)
             ti_csv.mtime = int(time.time())
             tf.addfile(ti_csv, io.BytesIO(csv_data))
+
+            if csv_reason:
+                notice = self._csv_placeholder_notice(csv_reason)
+                ti_notice = tarfile.TarInfo(name="data.csv.PLACEHOLDER.md")
+                ti_notice.size = len(notice)
+                ti_notice.mtime = int(time.time())
+                tf.addfile(ti_notice, io.BytesIO(notice))
 
             # 5. plot_strat.R
             r_script = (
@@ -1088,7 +1130,7 @@ class ProjectSessionMixin:
             ti_readme.size = len(readme)
             ti_readme.mtime = int(time.time())
             tf.addfile(ti_readme, io.BytesIO(readme))
-        return tar_bio.getvalue()
+        return tar_bio.getvalue(), csv_reason
 
 
 ProjectMixin = ProjectSessionMixin
