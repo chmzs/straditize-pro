@@ -6,7 +6,7 @@ import { getStepPanel } from './steps/_registry';
 import { renderActiveColumnSuspectNotice } from './steps/SuspectBlockNotice';
 import { t, onLocaleChange } from '../i18n';
 import { RpcClient } from '../services/RpcClient';
-import { notifyError } from '../ui/feedback';
+import { notify, notifyCaught, notifyError } from '../ui/feedback';
 
 export interface InspectorCallbacks {
   onDataChange: () => void;
@@ -366,6 +366,11 @@ export class Inspector {
           <button id="btn-col-digitize" class="ui-btn ui-btn--quiet ui-btn--xs" style="flex: 1; font-size: 11px; padding: 6px; color: var(--accent-blue); border-color: rgba(2,132,199,0.3); background: rgba(2,132,199,0.06);">
             重新识别此列
           </button>
+          <!-- 自动峰谷：后端算法早已实现（保留手工点），此前没有任何入口 —— 属于
+               有能力没入口，而不是死代码。入口放在这里，因为它改的正是"这一列的控制点"。 -->
+          <button id="btn-extract-turning-points" class="ui-btn ui-btn--quiet ui-btn--xs" style="flex: 1; font-size: 11px; padding: 6px; color: var(--accent-violet); border-color: rgba(139,92,246,0.3); background: rgba(139,92,246,0.06);" title="按几何曲线自动提取峰/谷控制点（已手工加的点会保留）">
+            自动提取峰谷
+          </button>
           <button id="btn-col-delete" class="ui-btn ui-btn--quiet ui-btn--xs" style="color: var(--accent-red); border-color: rgba(220,38,38,0.3); background: rgba(220,38,38,0.04); font-size: 11px; padding: 6px;">
             删除列
           </button>
@@ -621,6 +626,28 @@ export class Inspector {
     this.element.querySelector('#btn-col-digitize')?.addEventListener('click', () => {
       this.callbacks.onDigitizeActiveColumn();
     });
+
+    this.element.querySelector('#btn-extract-turning-points')?.addEventListener('click', async () => {
+      const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
+      if (!activeCol || !this.callbacks.rpcClient) return;
+      const colIndex = activeCol.col_index ?? getColIdx(activeCol);
+      try {
+        const res = await this.callbacks.rpcClient.call<
+          { col_index?: number },
+          { success?: boolean; columns_updated?: number[]; message?: string }
+        >('algorithm.extractTurningPoints', { col_index: colIndex });
+        if (res?.success !== true) {
+          throw new Error(res?.message || 'algorithm.extractTurningPoints 未返回 success=true');
+        }
+        const updated = res.columns_updated ?? [];
+        // 结果必须让用户看见：控制点变多/变少都会改曲线形状，静默完成等于让用户猜。
+        notify(`已自动提取峰谷：更新 ${updated.length} 列控制点（手工点保留）`);
+        this.callbacks.onDataChange();
+      } catch (err) {
+        notifyCaught('自动提取峰谷失败', err);
+      }
+    });
+
 
     // 删除点
     this.element.querySelector('#btn-delete-point')?.addEventListener('click', () => {
