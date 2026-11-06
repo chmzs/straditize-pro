@@ -177,7 +177,10 @@ CLOSED_SET_CASES = [
         "### 4.3",
         "mode",
         "straditize_core/session_parts/core.py",
-        "extract_foreground",
+        # 分支实际发生在 _resolve_foreground_threshold 里（extract_foreground 只做编排）。
+        # 判据跟着代码走，而不是逼着代码为了过测试把分支留在入口——与 curve_channel
+        # 那次（c78f4ff）同样的处理。
+        "_resolve_foreground_threshold",
         "mode",
         False,
         id="mode",

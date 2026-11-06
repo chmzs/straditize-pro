@@ -839,55 +839,83 @@ class CoreMixin:
                 STATE_ERROR, "No image loaded. Please call core.loadImage first."
             )
 
-        from ..image import (
-            build_foreground,
-            normalize_extraction_mode,
-            shadow_layers,
-            two_layer_consistency,
-            two_layer_split,
-        )
+        from ..image import normalize_extraction_mode
 
         ext_mode = normalize_extraction_mode(extraction_mode)
         gray = np.array(self.image.convert("L"))
-        # 默认路径也必须走彩色/双轴分支。
-        #
-        # 历史断点：这里曾是 ``colour_path = ext_mode != "standard"``，而默认
-        # ``ext_mode`` 恰恰就是 ``"standard"`` —— 于是产品永远走下面的
-        # ``gray < actual_thresh`` 单阈值分支，``build_foreground()`` 里的
-        # 双轴分层**一次都没被调用过**。表现：灰度填充（如 ``(182,182,182)``，
-        # luminance 182 > Otsu 138）整列被判为背景丢掉，而合成图上同一套逻辑
-        # 却是 100% 正确 —— 因为测试直接调 ``build_foreground``，绕过了这个断点。
-        #
-        # 现在 ``standard`` 也走 ``build_foreground``；它内部的 ``two_axis``
-        # 对黑白图（内建教程图）退化为等价于原 Otsu 二值，故零回归。
-        colour_path = True
 
+        actual_thresh = self._resolve_foreground_threshold(
+            gray, threshold, mode
+        )
+        mask = self._build_foreground_mask(
+            gray, actual_thresh, ext_mode, column_edges
+        )
+
+        self.foreground_mask = mask
+        self.threshold = actual_thresh
+        self.segmentation_mode = mode
+        self.extraction_mode = ext_mode
+        self.foreground_column_edges = list(column_edges) if column_edges else None
+
+        self._apply_two_layer_split(ext_mode, column_edges)
+
+        fg_pixels = int(np.sum(mask))
+        fg_ratio = float(fg_pixels / gray.size)
+
+        result = {
+            "threshold": actual_thresh,
+            "mode": mode,
+            "extraction_mode": ext_mode,
+            "foreground_pixels": fg_pixels,
+            "foreground_ratio": fg_ratio,
+            "shape": list(mask.shape),
+        }
+        if ext_mode == "solid-over-shadow":
+            result["shadow_pixels"] = int(self.shadow_mask.sum())
+            result["solid_pixels"] = fg_pixels
+            result["layers"] = self.solid_layers
+        return result
+
+    # ---- extract_foreground 的分段实现 ----
+
+    def _otsu_threshold(self, gray: np.ndarray) -> float:
+        """Otsu 阈值；skimage 不可用时退化成手写的类间方差最大化（同一算法）。"""
+        try:
+            from skimage.filters import threshold_otsu
+
+            computed_thresh = float(threshold_otsu(gray))
+        except Exception:  # noqa: BLE001
+            hist, _bin_edges = np.histogram(gray, bins=256, range=(0, 256))
+            total = gray.size
+            current_max, threshold_val = 0, 128
+            sum_total = np.dot(np.arange(256), hist)
+            weight_bg, sum_bg = 0, 0
+            for t in range(256):
+                weight_bg += hist[t]
+                if weight_bg == 0:
+                    continue
+                weight_fg = total - weight_bg
+                if weight_fg == 0:
+                    break
+                sum_bg += t * hist[t]
+                mean_bg = sum_bg / weight_bg
+                mean_fg = (sum_total - sum_bg) / weight_fg
+                var_between = weight_bg * weight_fg * ((mean_bg - mean_fg) ** 2)
+                if var_between > current_max:
+                    current_max = var_between
+                    threshold_val = t
+            computed_thresh = float(threshold_val)
+        return computed_thresh
+
+    def _resolve_foreground_threshold(
+        self,
+        gray: np.ndarray,
+        threshold: float | None,
+        mode: str,
+    ) -> float:
+        """按 mode 取实际阈值（otsu / binary / adaptive）；未知 mode 直接报错，不猜。"""
         if mode == "otsu":
-            try:
-                from skimage.filters import threshold_otsu
-
-                computed_thresh = float(threshold_otsu(gray))
-            except Exception:  # noqa: BLE001
-                hist, _bin_edges = np.histogram(gray, bins=256, range=(0, 256))
-                total = gray.size
-                current_max, threshold_val = 0, 128
-                sum_total = np.dot(np.arange(256), hist)
-                weight_bg, sum_bg = 0, 0
-                for t in range(256):
-                    weight_bg += hist[t]
-                    if weight_bg == 0:
-                        continue
-                    weight_fg = total - weight_bg
-                    if weight_fg == 0:
-                        break
-                    sum_bg += t * hist[t]
-                    mean_bg = sum_bg / weight_bg
-                    mean_fg = (sum_total - sum_bg) / weight_fg
-                    var_between = weight_bg * weight_fg * ((mean_bg - mean_fg) ** 2)
-                    if var_between > current_max:
-                        current_max = var_between
-                        threshold_val = t
-                computed_thresh = float(threshold_val)
+            computed_thresh = self._otsu_threshold(gray)
             actual_thresh = threshold if threshold is not None else computed_thresh
         elif mode == "binary":
             actual_thresh = float(threshold) if threshold is not None else 128.0
@@ -896,37 +924,52 @@ class CoreMixin:
 
             block_size = 35
             local_thresh = threshold_local(gray, block_size, offset=10)
-            mask = gray < local_thresh
             actual_thresh = float(np.mean(local_thresh))
         else:
             raise JsonRpcError(
                 INVALID_PARAMS, f"Unknown foreground extraction mode: {mode}"
             )
+        return actual_thresh
 
-        if not colour_path:
-            if mode != "adaptive":
-                mask = gray < actual_thresh
-        else:
-            # 彩色/双层路径：阈值不再决定"是不是墨"，只决定"哪些黑白像素算墨"。
-            # 彩色像素由 extraction_mode 单独判定，否则浅彩色实心会被灰度阈值
-            # 整列丢掉（这正是 Han et al. 2026 Fig.3 的失败模式）。
-            rgb = (
-                self.image_array[..., :3]
-                if getattr(self, "image_array", None) is not None
-                else np.array(self.image)[..., :3]
-            )
-            mask = build_foreground(
-                np.dstack([rgb, np.full(rgb.shape[:2], 255, dtype=np.uint8)]),
-                threshold=actual_thresh * 3,
-                extraction_mode=ext_mode,
-                column_edges=column_edges,
-            )
+    def _build_foreground_mask(
+        self,
+        gray: np.ndarray,
+        actual_thresh: float,
+        ext_mode: str,
+        column_edges: list[int] | None,
+    ) -> np.ndarray:
+        """把阈值变成掩膜。阈值只决定哪些黑白像素算墨，彩色像素由 extraction_mode 判定。
 
-        self.foreground_mask = mask
-        self.threshold = actual_thresh
-        self.segmentation_mode = mode
-        self.extraction_mode = ext_mode
-        self.foreground_column_edges = list(column_edges) if column_edges else None
+        这里永远走 build_foreground：它内部的 two_axis 对黑白图退化为等价于 Otsu 二值，
+        对彩色/双层图才有正确分层。历史上这段曾是 colour_path = ext_mode != standard，
+        于是默认路径永远走单阈值分支、双层分层一次都没被调用过（灰度填充整列被丢）。
+        `gray` 保留在签名里只是为了与调用点一致。
+        """
+        from ..image import build_foreground
+
+        # 彩色/双层路径：阈值不再决定"是不是墨"，只决定"哪些黑白像素算墨"。
+        # 彩色像素由 extraction_mode 单独判定，否则浅彩色实心会被灰度阈值
+        # 整列丢掉（这正是 Han et al. 2026 Fig.3 的失败模式）。
+        rgb = (
+            self.image_array[..., :3]
+            if getattr(self, "image_array", None) is not None
+            else np.array(self.image)[..., :3]
+        )
+        mask = build_foreground(
+            np.dstack([rgb, np.full(rgb.shape[:2], 255, dtype=np.uint8)]),
+            threshold=actual_thresh * 3,
+            extraction_mode=ext_mode,
+            column_edges=column_edges,
+        )
+        return mask
+
+    def _apply_two_layer_split(
+        self,
+        ext_mode: str,
+        column_edges: list[int] | None,
+    ) -> None:
+        """双层图（实心 + 夸张包络）：包络单独留一份供导出与目视，永不进入读数掩膜。"""
+        from ..image import shadow_layers, two_layer_consistency, two_layer_split
 
         # 「实心层 + 夸张包络」：包络单独留一份，供导出与目视核对，
         # 但**永不**进入 foreground_mask —— 那是读数口径，不是视图。
@@ -956,23 +999,6 @@ class CoreMixin:
             layers = shadow_layers(rgb_full, column_edges=column_edges)
             self.solid_layers = {k: int(v.sum()) for k, v in layers.items()}
             self.shadow_mask = layers["shadow"]
-
-        fg_pixels = int(np.sum(mask))
-        fg_ratio = float(fg_pixels / gray.size)
-
-        result = {
-            "threshold": actual_thresh,
-            "mode": mode,
-            "extraction_mode": ext_mode,
-            "foreground_pixels": fg_pixels,
-            "foreground_ratio": fg_ratio,
-            "shape": list(mask.shape),
-        }
-        if ext_mode == "solid-over-shadow":
-            result["shadow_pixels"] = int(self.shadow_mask.sum())
-            result["solid_pixels"] = fg_pixels
-            result["layers"] = self.solid_layers
-        return result
 
     def _extract_foreground_from_settings(self) -> dict[str, Any]:
         """Re-run extraction with the mode the user picked.
