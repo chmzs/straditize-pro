@@ -1959,7 +1959,14 @@ class CoreMixin:
         corrections: list[dict[str, Any]] | None = None,
         remove_vertical: bool = True,
     ) -> dict[str, Any]:
-        """Detect grid/axis lines inside the ROI and publish the removal mask."""
+        """Detect grid/axis lines inside the ROI and publish the removal mask.
+
+        **对外接口，不是前端路径**：S2「去线灵敏度」面板下线后前端不再调用它
+        （清理几何走 `applyLineRemoval` + `lineCandidate`）。它仍可被 WebMCP
+        `callTool` 直达，且 `cleanup_stats["degrid_removed_pixels"]` **只有经它才会非零**
+        ——界面上恒 0 是因为没人调，不是因为算不出来。删它或改它要同步
+        `protocol.ALL_RPC_METHODS`、spec §4.8 与 `tests/unit/test_degrid_external_contract.py`。
+        """
         from ..image import (
             GRID_LINE_PRESETS,
             detect_grid_lines,
