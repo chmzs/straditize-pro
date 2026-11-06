@@ -1,0 +1,360 @@
+{
+ "control_points_only": {
+  "ok": {
+   "columns": [
+    "depth",
+    "col01",
+    "col02",
+    "col03",
+    "col04",
+    "col05",
+    "col06",
+    "col07",
+    "col08",
+    "col09",
+    "col10",
+    "col11",
+    "col12",
+    "col13",
+    "col14",
+    "col15",
+    "col16"
+   ],
+   "columns_count": 17,
+   "csv_content_equals_csv": true,
+   "csv_digest": "504cba91364b100d",
+   "csv_head": [
+    "depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
+    "50.0,,,,,,,,,,,,,,,,",
+    "100.0,,,,,,,,,,,,,,,,"
+   ],
+   "data_head": [
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "col04": null,
+     "col05": null,
+     "col06": null,
+     "col07": null,
+     "col08": null,
+     "col09": null,
+     "col10": null,
+     "col11": null,
+     "col12": null,
+     "col13": null,
+     "col14": null,
+     "col15": null,
+     "col16": null,
+     "depth": 50.0
+    },
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "col04": null,
+     "col05": null,
+     "col06": null,
+     "col07": null,
+     "col08": null,
+     "col09": null,
+     "col10": null,
+     "col11": null,
+     "col12": null,
+     "col13": null,
+     "col14": null,
+     "col15": null,
+     "col16": null,
+     "depth": 100.0
+    }
+   ],
+   "file_path": null,
+   "format": "csv",
+   "path_matches_file_path": true,
+   "rows_count": 2,
+   "strict": false
+  }
+ },
+ "csv_calibrated_columns": {
+  "ok": {
+   "columns": [
+    "depth",
+    "col01",
+    "col02",
+    "col03"
+   ],
+   "columns_count": 4,
+   "csv_content_equals_csv": true,
+   "csv_digest": "e7bad477dfb6c553",
+   "csv_head": [
+    "depth,col01,col02,col03",
+    "10.0,2.6316,0.0,8.1081",
+    "210.0,2.6316,0.0,2.7027"
+   ],
+   "data_head": [
+    {
+     "col01": 2.6316,
+     "col02": 0.0,
+     "col03": 8.1081,
+     "depth": 10.0
+    },
+    {
+     "col01": 2.6316,
+     "col02": 0.0,
+     "col03": 2.7027,
+     "depth": 210.0
+    }
+   ],
+   "file_path": null,
+   "format": "csv",
+   "path_matches_file_path": true,
+   "rows_count": 2,
+   "strict": false
+  }
+ },
+ "csv_calibrated_with_samples": {
+  "ok": {
+   "columns": [
+    "depth",
+    "col01",
+    "col02",
+    "col03"
+   ],
+   "columns_count": 4,
+   "csv_content_equals_csv": true,
+   "csv_digest": "d88733228aa86705",
+   "csv_head": [
+    "depth,col01,col02,col03",
+    "50.0,,,",
+    "150.0,,,"
+   ],
+   "data_head": [
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "depth": 50.0
+    },
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "depth": 150.0
+    },
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "depth": 250.0
+    }
+   ],
+   "file_path": null,
+   "format": "csv",
+   "path_matches_file_path": true,
+   "rows_count": 3,
+   "strict": false
+  }
+ },
+ "csv_uncalibrated": {
+  "ok": {
+   "columns": [
+    "depth",
+    "col01",
+    "col02",
+    "col03"
+   ],
+   "columns_count": 4,
+   "csv_content_equals_csv": true,
+   "csv_digest": "a02adcf4380ec57f",
+   "csv_head": [
+    "depth,col01,col02,col03",
+    "233,,,",
+    "234,,,"
+   ],
+   "data_head": [
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "depth": 233
+    },
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "depth": 234
+    },
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "depth": 235
+    }
+   ],
+   "file_path": null,
+   "format": "csv",
+   "path_matches_file_path": true,
+   "rows_count": 637,
+   "strict": false
+  }
+ },
+ "csv_with_age_model": {
+  "ok": {
+   "columns": [
+    "depth",
+    "age_est",
+    "age_min_95",
+    "age_max_95",
+    "col01",
+    "col02",
+    "col03"
+   ],
+   "columns_count": 7,
+   "csv_content_equals_csv": true,
+   "csv_digest": "00d8a7965fcb0138",
+   "csv_head": [
+    "depth,age_est,age_min_95,age_max_95,col01,col02,col03",
+    "16.5,59.23754375,55.28045993534482,63.19912300403226,,,",
+    "17.0,61.07826111111111,57.006306149425285,65.15495951612904,,,"
+   ],
+   "data_head": [
+    {
+     "age_est": 59.23754375,
+     "age_max_95": 63.19912300403226,
+     "age_min_95": 55.28045993534482,
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "depth": 16.5
+    },
+    {
+     "age_est": 61.07826111111111,
+     "age_max_95": 65.15495951612904,
+     "age_min_95": 57.006306149425285,
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "depth": 17.0
+    },
+    {
+     "age_est": 62.92161458333333,
+     "age_max_95": 67.1131527217742,
+     "age_min_95": 58.73507273706896,
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "depth": 17.5
+    }
+   ],
+   "file_path": null,
+   "format": "csv",
+   "path_matches_file_path": true,
+   "rows_count": 637,
+   "strict": false
+  }
+ },
+ "csv_with_file": {
+  "ok": {
+   "columns": [
+    "depth",
+    "col01",
+    "col02",
+    "col03"
+   ],
+   "columns_count": 4,
+   "csv_content_equals_csv": true,
+   "csv_digest": "d88733228aa86705",
+   "csv_head": [
+    "depth,col01,col02,col03",
+    "50.0,,,",
+    "150.0,,,"
+   ],
+   "data_head": [
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "depth": 50.0
+    },
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "depth": 150.0
+    },
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "depth": 250.0
+    }
+   ],
+   "file_path": "data.csv",
+   "format": "csv",
+   "path_matches_file_path": true,
+   "rows_count": 3,
+   "strict": false
+  }
+ },
+ "errors": {
+  "bad_format": {
+   "code": -32602,
+   "message": "Unsupported export format 'xlsx'. Use 'csv' or 'parquet'."
+  },
+  "no_data": {
+   "code": -32001,
+   "message": "No digitized data available to export."
+  },
+  "parquet_needs_path": {
+   "code": -32001,
+   "message": "Parquet export requires 'output_path' parameter."
+  },
+  "strict_uncalibrated": {
+   "code": -32003,
+   "message": "Axes calibration is required when strict=True."
+  }
+ },
+ "rows_from_column_points": {
+  "ok": {
+   "columns": [
+    "depth",
+    "col01",
+    "col02",
+    "col03"
+   ],
+   "columns_count": 4,
+   "csv_content_equals_csv": true,
+   "csv_digest": "56642e0947603e9b",
+   "csv_head": [
+    "depth,col01,col02,col03",
+    "16.5,,,",
+    "17.0,,,"
+   ],
+   "data_head": [
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "depth": 16.5
+    },
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "depth": 17.0
+    },
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "depth": 17.5
+    }
+   ],
+   "file_path": null,
+   "format": "csv",
+   "path_matches_file_path": true,
+   "rows_count": 637,
+   "strict": false
+  }
+ }
+}
