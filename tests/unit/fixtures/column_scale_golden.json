@@ -95,6 +95,30 @@
   "val0": 0.0,
   "val1": 100.0
  },
+ "priority_group_layout_over_slope": {
+  "abs_px0": 100.0,
+  "abs_px1": 200.0,
+  "calibrated": true,
+  "exaggeration_mult": null,
+  "plot_type": "area",
+  "scale_type": "linear",
+  "source": "group",
+  "unit": "%",
+  "val0": 0.0,
+  "val1": 40.0
+ },
+ "priority_group_slope_over_ticks": {
+  "abs_px0": 106.0,
+  "abs_px1": 107.0,
+  "calibrated": true,
+  "exaggeration_mult": null,
+  "plot_type": "area",
+  "scale_type": "linear",
+  "source": "group_slope",
+  "unit": "%",
+  "val0": 0.0,
+  "val1": 0.5
+ },
  "roi_group_fallback": {
   "abs_px0": 20.0,
   "abs_px1": 120.0,

@@ -217,6 +217,72 @@ def resolve_column_scale(
     c_start = float(col_dict.get("startX", col_dict.get("start", 0.0)))
     c_end = float(col_dict.get("endX", col_dict.get("end", c_start + 100.0)))
 
+    group_obj = _resolve_column_group(session, col_dict)
+    scale_type, unit, plot_type = _resolve_column_visual(col_dict, group_obj)
+    exaggeration_mult = _resolve_exaggeration(col_dict, group_obj)
+
+    # Case A1: Resolved via group tick_layout and column x_values (D1: 组管位置，列管数值)
+    x_values = col_dict.get("x_values")
+    if isinstance(x_values, (list, tuple)) and len(x_values) >= 2 and group_obj:
+        return _scale_from_group_layout(
+            x_values,
+            group_obj,
+            c_start,
+            c_end,
+            unit=unit,
+            plot_type=plot_type,
+            scale_type=scale_type,
+            exaggeration_mult=exaggeration_mult,
+        )
+
+    # 组级斜率（点齿标定的结果，ARCHITECTURE §6.4）优先于 x_ticks：
+    # 用户点一个刻度齿 + 填它的数字 → slope = 数字 / (该齿px − 0点px)；
+    # 组内所有列共用这个斜率（同量程），每列的 0 点各自算 = 左缘 + 轴线粗。
+    # 组标定是用户的显式动作，旧的两点视为过期——写入组标定时会清掉组内各列的
+    # x_ticks，保证单一事实源。这条优先级只能在这里表达，各分支自己看不见它。
+    _slope = _group_slope_value(group_obj)
+    if _slope is not None and _slope != 0:
+        return _scale_from_group_slope(
+            _slope,
+            group_obj,
+            col_dict,
+            c_start,
+            unit=unit,
+            plot_type=plot_type,
+            scale_type=scale_type,
+            exaggeration_mult=exaggeration_mult,
+        )
+
+    # Case A2: Explicit x_ticks (transition SSOT)
+    x_ticks = col_dict.get("x_ticks")
+    if isinstance(x_ticks, (list, tuple)) and len(x_ticks) >= 2:
+        return _scale_from_ticks(
+            x_ticks,
+            c_start,
+            c_end,
+            unit=unit,
+            plot_type=plot_type,
+            scale_type=scale_type,
+            exaggeration_mult=exaggeration_mult,
+        )
+
+    return _scale_from_fallback(
+        session,
+        col_dict,
+        col_index,
+        c_start,
+        c_end,
+        scale_type=scale_type,
+        unit=unit,
+        plot_type=plot_type,
+        exaggeration_mult=exaggeration_mult,
+    )
+
+
+def _resolve_column_group(
+    session: Any, col_dict: dict[str, Any]
+) -> dict[str, Any] | None:
+    """定位列所属的 x 组：列上的 roi_id → 该 ROI；没有则回落活跃/主 ROI，再回落第一个。    组的选择同理：列上的 x_group_id → 该组；没有则用 ROI 的 default_group_id；再没有用第一个组。    """
     # Look up ROI and X-Group if session has multi-ROI context (Design 2026-09-29 P2)
     roi_obj: dict[str, Any] | None = None
     group_obj: dict[str, Any] | None = None
@@ -242,7 +308,13 @@ def resolve_column_scale(
                 )
             if not group_obj and groups:
                 group_obj = groups[0]
+    return group_obj
 
+
+def _resolve_column_visual(
+    col_dict: dict[str, Any], group_obj: dict[str, Any] | None
+) -> tuple[str, str, str]:
+    """视觉三件套（scale_type / unit / plot_type）：列级覆盖 > 组级 > 缺省。"""
     scale_type = str(
         col_dict.get("scale_type")
         or (group_obj.get("scale_type") if group_obj else None)
@@ -259,7 +331,13 @@ def resolve_column_scale(
         or (group_obj.get("plot_type") if group_obj else None)
         or "area"
     )
+    return scale_type, unit, plot_type
 
+
+def _resolve_exaggeration(
+    col_dict: dict[str, Any], group_obj: dict[str, Any] | None
+) -> float | None:
+    """夸张倍数：现代键 > 历史键（has_exaggeration + multiplier）> 组级；<=1 一律视为未夸张。"""
     # Resolve exaggeration multiplier across both modern (`exaggeration_mult`)
     # and legacy (`has_exaggeration` + `exaggeration_multiplier` / `exaggerationMult`) keys.
     exaggeration_mult: float | None = None
@@ -282,88 +360,133 @@ def resolve_column_scale(
         raw_exag = float(group_obj["exaggeration_mult"])
         if raw_exag > 1.0:
             exaggeration_mult = raw_exag
+    return exaggeration_mult
 
-    # Case A1: Resolved via group tick_layout and column x_values (D1: 组管位置，列管数值)
-    x_values = col_dict.get("x_values")
-    if isinstance(x_values, (list, tuple)) and len(x_values) >= 2 and group_obj:
-        layout = group_obj.get("tick_layout") or [{"rel": 0.0}, {"rel": 1.0}]
-        rel0 = float(layout[0].get("rel", 0.0))
-        rel1 = float(layout[1].get("rel", 1.0))
-        abs_px0 = c_start + rel0 * (c_end - c_start)
-        abs_px1 = c_start + rel1 * (c_end - c_start)
-        val0 = float(x_values[0])
-        val1 = float(x_values[1])
-        return ColumnScale(
-            abs_px0=abs_px0,
-            val0=val0,
-            abs_px1=abs_px1,
-            val1=val1,
-            unit=unit,
-            plot_type=plot_type,
-            scale_type=scale_type,
-            exaggeration_mult=exaggeration_mult,
-            calibrated=True,
-            source="group",
-        )
 
-    # Case A1: 组级斜率（点齿标定的结果，ARCHITECTURE §6.4）
-    #
-    # 用户点一个刻度齿 + 填它的数字 → slope = 数字 / (该齿px − 0点px)。
-    # 组内所有列共用这个斜率（同量程），每列的 0 点各自算 = 左缘 + 轴线粗。
-    # 优先于 x_ticks：组标定是用户的显式动作，旧的两点视为过期
-    # （写入组标定时会清掉组内各列的 x_ticks，保证单一事实源）。
+def _scale_from_group_layout(
+    x_values: list | tuple,
+    group_obj: dict[str, Any],
+    c_start: float,
+    c_end: float,
+    *,
+    unit: str,
+    plot_type: str,
+    scale_type: str,
+    exaggeration_mult: float | None,
+) -> ColumnScale:
+    """组管位置、列管数值：组的 tick_layout 给出两个端点的相对位置，列的 x_values 给出数值。"""
+    layout = group_obj.get("tick_layout") or [{"rel": 0.0}, {"rel": 1.0}]
+    rel0 = float(layout[0].get("rel", 0.0))
+    rel1 = float(layout[1].get("rel", 1.0))
+    abs_px0 = c_start + rel0 * (c_end - c_start)
+    abs_px1 = c_start + rel1 * (c_end - c_start)
+    val0 = float(x_values[0])
+    val1 = float(x_values[1])
+    return ColumnScale(
+        abs_px0=abs_px0,
+        val0=val0,
+        abs_px1=abs_px1,
+        val1=val1,
+        unit=unit,
+        plot_type=plot_type,
+        scale_type=scale_type,
+        exaggeration_mult=exaggeration_mult,
+        calibrated=True,
+        source="group",
+    )
+
+
+def _group_slope_value(group_obj: dict[str, Any] | None) -> float | None:
+    """组级斜率（点齿标定写入的 value_per_px）；非数值或缺失都为 None。"""
     _slope_raw = group_obj.get("value_per_px") if group_obj else None
     _slope: float | None
     try:
         _slope = float(_slope_raw) if _slope_raw is not None else None
     except (TypeError, ValueError):
         _slope = None
-    if _slope is not None and _slope != 0:
-        _group = group_obj or {}
-        # 0 点 = 列左缘 + 轴线粗（ARCHITECTURE §6.4）。
-        #
-        # `c_start` 是 `detect_column_bounds` 给的**轴线左缘**（列切分线）；面积图的
-        # 0 点画在轴线右缘，所以必须再加 `axis_stroke_px`。两者分工是硬的：
-        # 红线 = start（列切分线，也是上一列的结束线），绿线 = start + 轴粗（0 点）。
-        #
-        # `detect_columns` 里的右缘锚定（`anchor_zero_at_axis_right`）默认关闭，
-        # 就是为了保住这条分工；一旦开启，start 变成右缘，这里再加轴粗即双偏移。
-        _stroke = resolve_axis_stroke(col_dict, _group)
-        _zero = c_start + _stroke
-        return ColumnScale(
-            abs_px0=_zero,
-            val0=0.0,
-            abs_px1=_zero + 1.0,
-            val1=_slope,
-            unit=str(_group.get("unit") or col_dict.get("unit") or "%"),
-            plot_type=str(_group.get("plot_type") or col_dict.get("plot_type") or "area"),
-            scale_type=str(_group.get("scale_type") or "linear"),
-            exaggeration_mult=_group.get("exaggeration_mult"),
-            calibrated=True,
-            source="group_slope",
-        )
+    return _slope
 
-    # Case A2: Explicit x_ticks (transition SSOT)
-    x_ticks = col_dict.get("x_ticks")
-    if isinstance(x_ticks, (list, tuple)) and len(x_ticks) >= 2:
-        t0, t1 = x_ticks[0], x_ticks[1]
-        abs_px0 = float(t0.get("px", t0.get("pixel", c_start)))
-        val0 = float(t0.get("value", t0.get("val", 0.0)))
-        abs_px1 = float(t1.get("px", t1.get("pixel", c_end)))
-        val1 = float(t1.get("value", t1.get("val", 100.0)))
-        return ColumnScale(
-            abs_px0=abs_px0,
-            val0=val0,
-            abs_px1=abs_px1,
-            val1=val1,
-            unit=unit,
-            plot_type=plot_type,
-            scale_type=scale_type,
-            exaggeration_mult=exaggeration_mult,
-            calibrated=True,
-            source="x_ticks",
-        )
 
+def _scale_from_group_slope(
+    _slope: float,
+    group_obj: dict[str, Any] | None,
+    col_dict: dict[str, Any],
+    c_start: float,
+    *,
+    unit: str,
+    plot_type: str,
+    scale_type: str,
+    exaggeration_mult: float | None,
+) -> ColumnScale:
+    """组级斜率标定：组内共用斜率，每列的 0 点 = 列左缘 + 轴线粗（ARCHITECTURE §6.4）。"""
+    _group = group_obj or {}
+    # 0 点 = 列左缘 + 轴线粗（ARCHITECTURE §6.4）。
+    #
+    # `c_start` 是 `detect_column_bounds` 给的**轴线左缘**（列切分线）；面积图的
+    # 0 点画在轴线右缘，所以必须再加 `axis_stroke_px`。两者分工是硬的：
+    # 红线 = start（列切分线，也是上一列的结束线），绿线 = start + 轴粗（0 点）。
+    #
+    # `detect_columns` 里的右缘锚定（`anchor_zero_at_axis_right`）默认关闭，
+    # 就是为了保住这条分工；一旦开启，start 变成右缘，这里再加轴粗即双偏移。
+    _stroke = resolve_axis_stroke(col_dict, _group)
+    _zero = c_start + _stroke
+    return ColumnScale(
+        abs_px0=_zero,
+        val0=0.0,
+        abs_px1=_zero + 1.0,
+        val1=_slope,
+        unit=str(_group.get("unit") or col_dict.get("unit") or "%"),
+        plot_type=str(_group.get("plot_type") or col_dict.get("plot_type") or "area"),
+        scale_type=str(_group.get("scale_type") or "linear"),
+        exaggeration_mult=_group.get("exaggeration_mult"),
+        calibrated=True,
+        source="group_slope",
+    )
+
+
+def _scale_from_ticks(
+    x_ticks: list | tuple,
+    c_start: float,
+    c_end: float,
+    *,
+    unit: str,
+    plot_type: str,
+    scale_type: str,
+    exaggeration_mult: float | None,
+) -> ColumnScale:
+    """列自己的两点刻度（迁移期的单一事实源）：px 与 value 直接取用。"""
+    t0, t1 = x_ticks[0], x_ticks[1]
+    abs_px0 = float(t0.get("px", t0.get("pixel", c_start)))
+    val0 = float(t0.get("value", t0.get("val", 0.0)))
+    abs_px1 = float(t1.get("px", t1.get("pixel", c_end)))
+    val1 = float(t1.get("value", t1.get("val", 100.0)))
+    return ColumnScale(
+        abs_px0=abs_px0,
+        val0=val0,
+        abs_px1=abs_px1,
+        val1=val1,
+        unit=unit,
+        plot_type=plot_type,
+        scale_type=scale_type,
+        exaggeration_mult=exaggeration_mult,
+        calibrated=True,
+        source="x_ticks",
+    )
+
+
+def _scale_from_fallback(
+    session: Any,
+    col_dict: dict[str, Any],
+    col_index: int | None,
+    c_start: float,
+    c_end: float,
+    *,
+    scale_type: str,
+    unit: str,
+    plot_type: str,
+    exaggeration_mult: float | None,
+) -> ColumnScale:
+    """兜底三选一：session.x_scales（已标定）> 历史三件套 > 纯缺省；结果 calibrated=False。"""
     # Fallback: legacy three-piece fields or session.x_scales
     abs_px0 = c_start
     raw_tick_end = col_dict.get("tickEndX")

@@ -148,6 +148,45 @@ def _collect() -> dict:
     out["no_exaggeration_when_le_one"] = _scale(
         _session(), {"startX": 0.0, "endX": 100.0, "exaggeration_mult": 1.0}, 10
     )
+    # 两条**优先级**判据：注释里写着「组标定优先于 x_ticks」「组布局优先于组斜率」，
+    # 但前面 11 个案例各自只给一种来源，谁也测不出顺序被调换。
+    out["priority_group_slope_over_ticks"] = _scale(
+        _session(
+            rois=[{
+                "id": "roi_1",
+                "default_group_id": "g1",
+                "x_groups": [_group(value_per_px=0.5, axis_stroke_px=6)],
+            }],
+            active_roi_id="roi_1",
+        ),
+        {
+            "startX": 100.0,
+            "endX": 200.0,
+            "roi_id": "roi_1",
+            "x_group_id": "g1",
+            "x_ticks": [{"px": 110.0, "value": 5.0}, {"px": 190.0, "value": 45.0}],
+        },
+        11,
+    )
+
+    out["priority_group_layout_over_slope"] = _scale(
+        _session(
+            rois=[{
+                "id": "roi_1",
+                "default_group_id": "g1",
+                "x_groups": [_group(value_per_px=0.5, axis_stroke_px=6)],
+            }],
+            active_roi_id="roi_1",
+        ),
+        {
+            "startX": 100.0,
+            "endX": 200.0,
+            "roi_id": "roi_1",
+            "x_group_id": "g1",
+            "x_values": [0.0, 40.0],
+        },
+        12,
+    )
     return out
 
 
