@@ -45,6 +45,44 @@ def export_lipd_jsonld(
     ).split()[-1]
     dataset_name = f"{site_name}_{authors_first}_{year_str}".replace(" ", "_")
 
+    geo_meta = _lipd_geo_metadata(site, site_name)
+    pub_meta = _lipd_publication_metadata(pub)
+    paleo_measurement_table = _lipd_paleo_tables(
+        roi_dfs, pollen_df, depth_unit, col_unit_map
+    )
+    chron_measurement_table = _lipd_chron_table(age_depth_df)
+    ensemble_measurement_table = _lipd_ensemble_tables(ensemble_tables)
+    investigators = _lipd_investigators(tech, pub)
+
+    lipd_obj: dict[str, Any] = {
+        "@context": "https://linkedearth.github.io/schema/context.json",
+        "dataSetName": dataset_name,
+        "archiveType": site.get("archive_type", "LakeSediment"),
+        "investigators": investigators,
+        "pub": pub_meta,
+        "geo": geo_meta,
+        "paleoData": [
+            {
+                "paleoMeasurementTable": paleo_measurement_table,
+            }
+        ],
+        "chronData": [
+            {
+                "chronMeasurementTable": chron_measurement_table,
+            }
+        ],
+    }
+
+    _lipd_apply_optional_fields(lipd_obj, pub, site, tech, qual)
+
+    if ensemble_measurement_table:
+        lipd_obj["chronData"][0]["chronEnsembleTable"] = ensemble_measurement_table
+
+    return lipd_obj
+
+
+def _lipd_geo_metadata(site: dict[str, Any], site_name: str) -> dict[str, Any]:
+    """地理段：经纬度/海拔解析失败降级成 null，水深与岩芯长度降级成字符串（两种策略不同，别改混）。"""
     # 1. Geographic metadata (LiPD v1.3 geo & site properties)
     try:
         lat = float(site.get("latitude", 0.0))
@@ -81,7 +119,11 @@ def export_lipd_jsonld(
             geo_meta["coreLength"] = str(site["core_length_m"])
     if site.get("collection_date"):
         geo_meta["collectionDate"] = str(site["collection_date"])
+    return geo_meta
 
+
+def _lipd_publication_metadata(pub: dict[str, Any]) -> list[dict[str, Any]]:
+    """文献段：LiPD 的 pub 是一个列表，type=primary 的那条。"""
     # 2. Publication metadata
     pub_meta = [
         {
@@ -93,73 +135,72 @@ def export_lipd_jsonld(
             "type": "primary",
         }
     ]
+    return pub_meta
 
-    # 3. PaleoData: One measurement table per ROI (Contract §4.2: tableName = ROI name)
-    paleo_measurement_table: list[dict[str, Any]] = []
 
+def _lipd_paleo_columns(
+    df: pd.DataFrame,
+    depth_unit: str,
+    col_unit_map: dict[str, str],
+) -> list[dict[str, Any]]:
+    """一张表里每一列 → LiPD 列对象（深度列单独定单位与 variableType）。"""
+    paleo_columns: list[dict[str, Any]] = []
+    for col_name in df.columns:
+        vals = df[col_name].tolist()
+        clean_vals = [float(v) if pd.notna(v) else None for v in vals]
+        is_depth = col_name.lower().startswith("depth")
+        resolved_unit = (
+            (depth_unit or "cm")
+            if is_depth
+            else (col_unit_map.get(col_name) or "%")
+        )
+        paleo_columns.append(
+            {
+                "variableName": col_name,
+                "units": resolved_unit,
+                "values": clean_vals,
+                "dataType": "float",
+                "variableType": "depth" if is_depth else "measured",
+                "proxy": "pollen" if not is_depth else None,
+                "description": f"Digitized {col_name} ({resolved_unit})"
+                if not is_depth
+                else "Core composite depth",
+            }
+        )
+    return paleo_columns
+
+
+def _lipd_paleo_tables(
+    roi_dfs: dict[str, pd.DataFrame] | None,
+    pollen_df: pd.DataFrame | None,
+    depth_unit: str,
+    col_unit_map: dict[str, str],
+) -> list[dict[str, Any]]:
+    """PaleoData 段：优先按 ROI 分表（tableName = ROI 名）；没有 roi_dfs 时退化成单张 pollen_data。
+
+    两个分支的列构造完全相同，只差 tableName——以前各写了一份，已经漂过一次。
+    """
+    tables: list[dict[str, Any]] = []
     if roi_dfs:
         for roi_name, df in roi_dfs.items():
-            paleo_columns: list[dict[str, Any]] = []
-            for col_name in df.columns:
-                vals = df[col_name].tolist()
-                clean_vals = [float(v) if pd.notna(v) else None for v in vals]
-                is_depth = col_name.lower().startswith("depth")
-                resolved_unit = (
-                    (depth_unit or "cm")
-                    if is_depth
-                    else (col_unit_map.get(col_name) or "%")
-                )
-                paleo_columns.append(
-                    {
-                        "variableName": col_name,
-                        "units": resolved_unit,
-                        "values": clean_vals,
-                        "dataType": "float",
-                        "variableType": "depth" if is_depth else "measured",
-                        "proxy": "pollen" if not is_depth else None,
-                        "description": f"Digitized {col_name} ({resolved_unit})"
-                        if not is_depth
-                        else "Core composite depth",
-                    }
-                )
-            paleo_measurement_table.append(
+            tables.append(
                 {
                     "tableName": roi_name,
-                    "columns": paleo_columns,
+                    "columns": _lipd_paleo_columns(df, depth_unit, col_unit_map),
                 }
             )
     elif pollen_df is not None:
-        paleo_columns = []
-        for col_name in pollen_df.columns:
-            vals = pollen_df[col_name].tolist()
-            clean_vals = [float(v) if pd.notna(v) else None for v in vals]
-            is_depth = col_name.lower().startswith("depth")
-            resolved_unit = (
-                (depth_unit or "cm")
-                if is_depth
-                else (col_unit_map.get(col_name) or "%")
-            )
-            paleo_columns.append(
-                {
-                    "variableName": col_name,
-                    "units": resolved_unit,
-                    "values": clean_vals,
-                    "dataType": "float",
-                    "variableType": "depth" if is_depth else "measured",
-                    "proxy": "pollen" if not is_depth else None,
-                    "description": f"Digitized {col_name} ({resolved_unit})"
-                    if not is_depth
-                    else "Core composite depth",
-                }
-            )
-        paleo_measurement_table.append(
+        tables.append(
             {
                 "tableName": "pollen_data",
-                "columns": paleo_columns,
+                "columns": _lipd_paleo_columns(pollen_df, depth_unit, col_unit_map),
             }
         )
+    return tables
 
-    # 4. ChronData (Age-Depth Models)
+
+def _lipd_chron_table(age_depth_df: pd.DataFrame | None) -> list[dict[str, Any]]:
+    """ChronData 段：年代-深度两列（空表也返回一条空的 chron_model，下游按存在性判读）。"""
     chron_columns: list[dict[str, Any]] = []
     if age_depth_df is not None and not age_depth_df.empty:
         for col_name in age_depth_df.columns:
@@ -183,8 +224,11 @@ def export_lipd_jsonld(
             "columns": chron_columns,
         }
     ]
+    return chron_measurement_table
 
-    # 5. Ensemble Tables (Section 9)
+
+def _lipd_ensemble_tables(ensemble_tables: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """集合表段（Section 9）：每条集合表 → 一张 measurement 表。"""
     ensemble_measurement_table = []
     if ensemble_tables:
         for idx, t in enumerate(ensemble_tables):
@@ -211,8 +255,11 @@ def export_lipd_jsonld(
                     "columns": ens_cols,
                 }
             )
+    return ensemble_measurement_table
 
-    # Resolve investigators (explicit field/lab investigators if provided, else publication authors)
+
+def _lipd_investigators(tech: dict[str, Any], pub: dict[str, Any]) -> list[str]:
+    """研究者：显式列表 > 逗号串 > 文献作者。"""
     raw_inv = tech.get("investigators")
     if isinstance(raw_inv, list) and raw_inv:
         investigators = raw_inv
@@ -220,27 +267,17 @@ def export_lipd_jsonld(
         investigators = [s.strip() for s in raw_inv.split(",") if s.strip()]
     else:
         investigators = pub.get("authors", [])
+    return investigators
 
-    # Assemble Root LiPD JSON-LD Object
-    lipd_obj: dict[str, Any] = {
-        "@context": "https://linkedearth.github.io/schema/context.json",
-        "dataSetName": dataset_name,
-        "archiveType": site.get("archive_type", "LakeSediment"),
-        "investigators": investigators,
-        "pub": pub_meta,
-        "geo": geo_meta,
-        "paleoData": [
-            {
-                "paleoMeasurementTable": paleo_measurement_table,
-            }
-        ],
-        "chronData": [
-            {
-                "chronMeasurementTable": chron_measurement_table,
-            }
-        ],
-    }
 
+def _lipd_apply_optional_fields(
+    lipd_obj: dict[str, Any],
+    pub: dict[str, Any],
+    site: dict[str, Any],
+    tech: dict[str, Any],
+    qual: dict[str, Any],
+) -> None:
+    """把可选字段按"有值才写"的纪律挂到根对象上（没值的键不能出现，空串也不算有值）。"""
     if pub.get("funding_agency") or pub.get("funding_grant"):
         lipd_obj["funding"] = [
             {
@@ -264,11 +301,6 @@ def export_lipd_jsonld(
         lipd_obj["originalDataUrl"] = str(qual["original_data_url"])
     if qual.get("quality_notes"):
         lipd_obj["notes"] = str(qual["quality_notes"])
-
-    if ensemble_measurement_table:
-        lipd_obj["chronData"][0]["chronEnsembleTable"] = ensemble_measurement_table
-
-    return lipd_obj
 
 
 def package_lipd_archive(
