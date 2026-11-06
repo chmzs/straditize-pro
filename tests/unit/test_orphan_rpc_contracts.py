@@ -114,3 +114,65 @@ def test_spec_documents_every_result_key_of_get_shadow_layer() -> None:
 
     undocumented = [key for key in result if f"`{key}`" not in section]
     assert undocumented == [], f"这些返回键没写进 spec §4.2b：{undocumented}"
+
+def _call_system(session: StraditizeSession, method: str, **params) -> dict:
+    dispatcher = JsonRpcDispatcher()
+    from straditize_core.rpc_methods import agedepth as agedepth_methods
+    from straditize_core.rpc_methods import system as system_methods
+
+    system_methods.register(dispatcher, session)
+    agedepth_methods.register(dispatcher, session)
+    return dispatcher.handle_object(
+        {"jsonrpc": "2.0", "method": method, "params": params, "id": 1}
+    )
+
+
+def test_core_reset_wipes_state_and_leaves_the_session_usable() -> None:
+    """@@core.reset@@ 是「整个会话重置」，不是「新项目」。
+
+    它与 @@project.new@@ 的差别：后者逐字段清项目状态（保留图像与清理几何的选择），
+    前者直接把 @@__init__@@ 再跑一遍——连 image / metadata / age_depth_model 一起回到出厂。
+    两者都不碰 @@session.server@@（由 rpc_server 外部挂载），所以重置后同一个会话还能继续用。
+    """
+    session = _session()
+    assert session.columns, "前提：基线必须有列，否则这条判据测不到清空"
+    session.paper_metadata["publication"]["title"] = "测试标题"
+
+    response = _call_system(session, "core.reset")
+
+    assert response["result"] == {"reset": True}
+    assert session.columns == []
+    assert session.image is None
+    assert session.paper_metadata["publication"]["title"] == "", (
+        "出厂重置必须连元数据一起清掉，否则上一篇文章的 DOI 会跟着新项目导出"
+    )
+
+    # 会话仍然可用：能重新载图并继续工作
+    session.load_image(image_path=PLATE)
+    assert session.image is not None
+    assert session.width > 0
+
+
+def test_ensemble_add_then_list_roundtrip() -> None:
+    """@@ensemble.add@@ 是对外导入入口：add 之后 @@ensemble.list@@ 必须能看到，同名覆盖不重复。"""
+    session = _session()
+    table = [[0.0, 1.0], [10.0, 2.0]]
+
+    added = _call_system(
+        session, "ensemble.add", name="bacon_run", columns=["depth", "age"], data=table
+    )["result"]
+
+    assert added["success"] is True
+    assert added["tables"] == ["bacon_run"]
+
+    listed = _call_system(session, "ensemble.list")["result"]
+    assert listed["count"] == 1
+    assert listed["tables"][0]["name"] == "bacon_run"
+
+    # 同名再导入 → 覆盖而不是追加（否则导出里会出现两张同名表）
+    _call_system(
+        session, "ensemble.add", name="bacon_run", columns=["depth", "age"], data=table
+    )
+    listed_again = _call_system(session, "ensemble.list")["result"]
+    assert listed_again["count"] == 1
+

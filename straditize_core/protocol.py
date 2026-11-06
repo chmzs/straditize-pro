@@ -63,7 +63,7 @@ ERROR_MESSAGES = {
 #:
 #: 这份清单只保证「后端注册表 ↔ 声明」一致（consistency_check 的 H 门禁），**不**表示每条都有
 #: 前端入口。已知的纯对外 / agent 面（前端零调用，用途由 spec 声明）：`core.getShadowLayer`、
-#: `algorithm.degrid`、`webmcp.listTools`。按调用量删这些方法是错的——先看
+#: `algorithm.degrid`、`core.reset`、`ensemble.add`、`webmcp.listTools`。按调用量删这些方法是错的——先看
 #: `docs/rpc-call-evidence.json` 里的调用证据与判据。
 ALL_RPC_METHODS: tuple[str, ...] = (
     "agedepth.checkREnvironment",
