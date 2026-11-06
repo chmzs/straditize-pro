@@ -1,0 +1,157 @@
+{
+ "adaptive_standard": {
+  "result": {
+   "extraction_mode": "standard",
+   "foreground_pixels": 271634,
+   "foreground_ratio": 0.137293,
+   "mode": "adaptive",
+   "shape": [
+    928,
+    2132
+   ],
+   "threshold": 213.223462
+  },
+  "state": {
+   "extraction_mode": "standard",
+   "foreground_column_edges": null,
+   "foreground_mask_digest": "0f56d00c2cedc19f",
+   "foreground_mask_pixels": 271634,
+   "segmentation_mode": "adaptive",
+   "shadow_mask_pixels": null,
+   "solid_layers": null,
+   "threshold": 213.223462,
+   "two_layer_report": null
+  }
+ },
+ "binary_120_standard": {
+  "result": {
+   "extraction_mode": "standard",
+   "foreground_pixels": 271630,
+   "foreground_ratio": 0.137291,
+   "mode": "binary",
+   "shape": [
+    928,
+    2132
+   ],
+   "threshold": 120.0
+  },
+  "state": {
+   "extraction_mode": "standard",
+   "foreground_column_edges": null,
+   "foreground_mask_digest": "224dbf43ac8b5da6",
+   "foreground_mask_pixels": 271630,
+   "segmentation_mode": "binary",
+   "shadow_mask_pixels": null,
+   "solid_layers": null,
+   "threshold": 120.0,
+   "two_layer_report": null
+  }
+ },
+ "otsu_dark_ink_light": {
+  "result": {
+   "extraction_mode": "dark-ink-light",
+   "foreground_pixels": 271630,
+   "foreground_ratio": 0.137291,
+   "mode": "otsu",
+   "shape": [
+    928,
+    2132
+   ],
+   "threshold": 138.0
+  },
+  "state": {
+   "extraction_mode": "dark-ink-light",
+   "foreground_column_edges": null,
+   "foreground_mask_digest": "224dbf43ac8b5da6",
+   "foreground_mask_pixels": 271630,
+   "segmentation_mode": "otsu",
+   "shadow_mask_pixels": null,
+   "solid_layers": null,
+   "threshold": 138.0,
+   "two_layer_report": null
+  }
+ },
+ "otsu_light_overlay_white": {
+  "result": {
+   "extraction_mode": "light-overlay-white",
+   "foreground_pixels": 276823,
+   "foreground_ratio": 0.139916,
+   "mode": "otsu",
+   "shape": [
+    928,
+    2132
+   ],
+   "threshold": 138.0
+  },
+  "state": {
+   "extraction_mode": "light-overlay-white",
+   "foreground_column_edges": null,
+   "foreground_mask_digest": "851f38b4dca9a62f",
+   "foreground_mask_pixels": 276823,
+   "segmentation_mode": "otsu",
+   "shadow_mask_pixels": null,
+   "solid_layers": null,
+   "threshold": 138.0,
+   "two_layer_report": null
+  }
+ },
+ "otsu_solid_over_shadow": {
+  "raised": {
+   "code": -32602,
+   "message": "双层分离（solid-over-shadow）在当前图上不可信，已拒绝产出前景掩膜，以免读数被按颜色分别放大。\n\n技术原因：Two pale layers of the same figure were classified oppositely: hue-210-225deg is 92% solid ink, while neutral is 94% shadow. The caption declares one shading layer, so splitting the same kind of object into both classes means one column's reading would be scaled by the exaggeration factor. Refusing to return a mask instead of returning a silently wrong one.\n\n建议：改用 standard 并人工核对浅色层；或提交一张该图版的裁剪样本以便补足判据。"
+  }
+ },
+ "otsu_standard": {
+  "result": {
+   "extraction_mode": "standard",
+   "foreground_pixels": 271630,
+   "foreground_ratio": 0.137291,
+   "mode": "otsu",
+   "shape": [
+    928,
+    2132
+   ],
+   "threshold": 138.0
+  },
+  "state": {
+   "extraction_mode": "standard",
+   "foreground_column_edges": null,
+   "foreground_mask_digest": "224dbf43ac8b5da6",
+   "foreground_mask_pixels": 271630,
+   "segmentation_mode": "otsu",
+   "shadow_mask_pixels": null,
+   "solid_layers": null,
+   "threshold": 138.0,
+   "two_layer_report": null
+  }
+ },
+ "otsu_standard_with_edges": {
+  "result": {
+   "extraction_mode": "standard",
+   "foreground_pixels": 262169,
+   "foreground_ratio": 0.132509,
+   "mode": "otsu",
+   "shape": [
+    928,
+    2132
+   ],
+   "threshold": 138.0
+  },
+  "state": {
+   "extraction_mode": "standard",
+   "foreground_column_edges": [
+    400,
+    700,
+    1000,
+    1300
+   ],
+   "foreground_mask_digest": "38c68dfb4d772bfe",
+   "foreground_mask_pixels": 262169,
+   "segmentation_mode": "otsu",
+   "shadow_mask_pixels": null,
+   "solid_layers": null,
+   "threshold": 138.0,
+   "two_layer_report": null
+  }
+ }
+}
