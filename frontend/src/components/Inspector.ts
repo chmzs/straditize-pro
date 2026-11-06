@@ -127,9 +127,62 @@ export class Inspector {
     this.render();
   }
 
+  /**
+   * 重渲染时把「正在编辑的现场」搬到新节点上。
+   *
+   * `render()` 是整段重写 `innerHTML`，而 `updateData()` 在任何数据变化时都会被调到——
+   * 于是用户点进属种名/倍数输入框后，一次后台数据刷新就会把那个 `<input>` 销毁：
+   * 焦点掉回 `<body>`（一个字打不进去），已敲入但未 `change` 的内容一起消失。
+   * 侧栏当年踩过同一个坑（`Sidebar.renderPreservingInlineEdit`），这里是同一套做法：
+   * 记下 id / 值 / 选区，重建后回填并恢复焦点与光标。
+   *
+   * 已知边界：IME 组合输入进行中被重建，组合串仍会丢（e2e 难稳定触发）；`<select>` 的
+   * 展开状态无法恢复（值由数据推导，无损）。
+   */
+  private captureEditSnapshot(): {
+    id: string;
+    value: string;
+    start: number | null;
+    end: number | null;
+  } | null {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLInputElement) && !(active instanceof HTMLTextAreaElement)) {
+      return null;
+    }
+    if (!active.id || !this.element.contains(active)) return null;
+    // **只恢复显式声明的输入**（`data-edit-preserve`）。
+    // 不能对所有输入做：面板里有些控件的聚焦本身会触发业务动作
+    // （`#inp-roi-name` 的聚焦走 `onRenameActiveRoi`），恢复焦点等于替用户重新触发一次，
+    // 实测会让「取消组分勾选」整条 case 60s 超时（step2-roi，2026-11-06）。
+    if (active.getAttribute('data-edit-preserve') !== '1') return null;
+    return {
+      id: active.id,
+      value: active.value,
+      start: active.selectionStart,
+      end: active.selectionEnd,
+    };
+  }
+
+  private restoreEditSnapshot(
+    snapshot: { id: string; value: string; start: number | null; end: number | null } | null
+  ): void {
+    if (!snapshot) return;
+    const again = this.element.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      `#${CSS.escape(snapshot.id)}`
+    );
+    if (!again) return;
+    again.value = snapshot.value;
+    // Inspector 没有自己的 focusin 监听（侧栏有，所以那边才需要再入标志），直接恢复即可。
+    // 若日后给本组件加 focusin 回调，必须在回调里跳过"正在回填"的情形，否则会自激重渲染。
+    again.focus();
+    if (snapshot.start !== null && snapshot.end !== null) {
+      again.setSelectionRange(snapshot.start, snapshot.end);
+    }
+  }
   public render(): void {
     const bodyEl = this.element.querySelector<HTMLElement>('.inspector-body');
     const prevScrollTop = bodyEl ? bodyEl.scrollTop : 0;
+    const editSnapshot = this.captureEditSnapshot();
 
     const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
     const selected = this.data.selectedEntity;
@@ -178,6 +231,8 @@ export class Inspector {
     if (newBodyEl && prevScrollTop > 0) {
       newBodyEl.scrollTop = prevScrollTop;
     }
+
+    this.restoreEditSnapshot(editSnapshot);
   }
 
   private renderStagePanel(activeCol: TaxaColumn | undefined, cal: DiagramCalibration): string {
@@ -272,7 +327,7 @@ export class Inspector {
 
         <div class="form-group">
           <label>属种名称 (Taxa Name):</label>
-          <input type="text" id="inp-col-name" value="${col.name}" class="text-input" />
+          <input type="text" id="inp-col-name" value="${col.name}" class="text-input" data-edit-preserve="1" />
         </div>
 
         <!-- 几何只读展示：标定/形态/尺度都是**组级**属性（见步骤 6 面板），
@@ -298,7 +353,7 @@ export class Inspector {
           <!-- 输入框常显：先有数字才谈得上启用。空值时勾选框不写库，只提示。 -->
           <div style="margin-top: 6px; display: flex; align-items: center; gap: 6px;">
             <span style="font-size: 10px; color: var(--text-secondary);">放大倍数:</span>
-            <input type="number" id="inp-exag-mult" value="${exagInputValue}" min="1" max="100" placeholder="必填" style="width: 50px; font-size: 11px; padding: 2px 4px;" />
+            <input type="number" id="inp-exag-mult" value="${exagInputValue}" min="1" max="100" placeholder="必填" data-edit-preserve="1" style="width: 50px; font-size: 11px; padding: 2px 4px;" />
             <div class="btn-group" style="display: flex; gap: 2px; flex: 1;">
               <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="3" style="flex: 1; font-size: 9px; padding: 2px;">3×</button>
               <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="5" style="flex: 1; font-size: 9px; padding: 2px;">5×</button>
