@@ -309,8 +309,10 @@ def test_diagram_payload_projects_scale_from_resolve_column_scale() -> None:
     assert col_payload["plot_type"] == "bar"
     assert col_payload["plotType"] == "bar"
     assert col_payload["exaggeration_mult"] == 5.0
-    assert col_payload["hasExaggeration"] is True
-    assert col_payload["exaggerationMult"] == 5.0
+    assert "hasExaggeration" not in col_payload, (
+        "布尔由 exaggeration_mult 是否为 null 推出，不再单独下发"
+    )
+    assert "exaggerationMult" not in col_payload, "驼峰别名已删除：payload 里只留一个键"
     assert col_payload["startValue"] == 0.0
     assert col_payload["tickValue"] == 40.0
     assert col_payload["tickEndX"] == 190.0

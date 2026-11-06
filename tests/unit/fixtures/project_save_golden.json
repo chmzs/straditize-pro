@@ -92,7 +92,6 @@
      "end": 60.0,
      "endX": 60.0,
      "exaggeration_mult": null,
-     "has_exaggeration": false,
      "id": "col_a",
      "name": "Pinus",
      "plot_type": "area",
@@ -144,7 +143,6 @@
      "end": 120.0,
      "endX": 120.0,
      "exaggeration_mult": null,
-     "has_exaggeration": false,
      "id": "col_b",
      "name": "Betula",
      "plot_type": "line",
@@ -172,7 +170,6 @@
      "end": 180.0,
      "endX": 180.0,
      "exaggeration_mult": null,
-     "has_exaggeration": false,
      "id": "col_c",
      "name": "Quercus",
      "plot_type": "area",
@@ -500,7 +497,6 @@
      "end": 60.0,
      "endX": 60.0,
      "exaggeration_mult": null,
-     "has_exaggeration": false,
      "id": "col_a",
      "name": "Pinus",
      "plot_type": "area",
@@ -552,7 +548,6 @@
      "end": 120.0,
      "endX": 120.0,
      "exaggeration_mult": null,
-     "has_exaggeration": false,
      "id": "col_b",
      "name": "Betula",
      "plot_type": "line",
@@ -580,7 +575,6 @@
      "end": 180.0,
      "endX": 180.0,
      "exaggeration_mult": null,
-     "has_exaggeration": false,
      "id": "col_c",
      "name": "Quercus",
      "plot_type": "area",
@@ -852,9 +846,9 @@
     "name": "manifest.json"
    },
    {
-    "digest": "c6f8d02eabc3",
+    "digest": "6497d40a8752",
     "name": "straditize.json",
-    "size": 7624
+    "size": 7525
    },
    {
     "digest": "36238134d819",

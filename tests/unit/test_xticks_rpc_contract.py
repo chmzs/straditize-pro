@@ -198,7 +198,6 @@ def test_calibrating_keeps_untouched_scale_fields() -> None:
     col["plot_type"] = "bar"
     col["scale_type"] = "log"
     col["exaggeration_mult"] = 5.0
-    col["mult_source"] = "user"
 
     dispatcher._methods["column.calibrateXTicks"](col_index=0, ticks=TICKS)
 
@@ -207,7 +206,7 @@ def test_calibrating_keeps_untouched_scale_fields() -> None:
     assert col["plot_type"] == "bar", "标定把用户的 plot_type 重置成默认 area 了"
     assert col["scale_type"] == "log", "标定把用户的 scale_type 重置成默认 linear 了"
     assert col["exaggeration_mult"] == 5.0, "标定把用户的放大倍数清空了"
-    assert col["mult_source"] == "user", "标定把放大倍数来源标记清空了"
+    assert "mult_source" not in col, "mult_source 已删除：一个概念不再存第二份来源标记"
 
 
 def test_calibrating_writes_explicitly_passed_scale_fields() -> None:
@@ -229,4 +228,4 @@ def test_calibrating_writes_explicitly_passed_scale_fields() -> None:
     assert col["plot_type"] == "bar"
     assert col["scale_type"] == "log"
     assert col["exaggeration_mult"] == 5.0
-    assert col["mult_source"] == "user"
+    assert "mult_source" not in col, "来源标记不再是独立状态：值本身说了是谁设的"

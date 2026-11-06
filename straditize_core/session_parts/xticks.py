@@ -7,7 +7,7 @@ import numpy as np
 
 from ..protocol import STATE_ERROR, JsonRpcError
 from ..xticks import detect_xticks
-from .xscale import normalize_scale_type
+from .xscale import normalize_scale_type, store_exaggeration
 
 #: 横轴线的判定门限：该行暗像素占全图宽度的比例。
 #:
@@ -397,8 +397,7 @@ class XTicksMixin:
         if scale_type is not None:
             col["scale_type"] = scale_type
         if exaggeration_mult is not None:
-            col["exaggeration_mult"] = exaggeration_mult
-            col["mult_source"] = "user"
+            store_exaggeration(col, exaggeration_mult)
 
         # Derive px_per_unit for inspection
         px_span = abs(px1 - px0)

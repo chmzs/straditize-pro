@@ -17,6 +17,7 @@ from ..protocol import (
     STATE_ERROR,
     JsonRpcError,
 )
+from .xscale import store_exaggeration
 
 #: 「填满整列的色块/空框」的判据阈值（task-21）。
 #:
@@ -1131,8 +1132,8 @@ class CoreMixin:
                         "tickValue": 20.0,
                         "tickEndX": round(col_start + init_tick_w, 1),
                         "plot_type": "area",
-                        "has_exaggeration": False,
-                        "exaggeration_multiplier": 5.0,
+                        # 放大倍数只存一个键（None = 未放大）；布尔与历史名一律不落库。
+                        "exaggeration_mult": None,
                     }
                 )
         else:
@@ -1444,7 +1445,6 @@ class CoreMixin:
             col["scale_type"] = old_c["scale_type"]
         if old_c.get("exaggeration_mult") is not None:
             col["exaggeration_mult"] = old_c["exaggeration_mult"]
-            col["has_exaggeration"] = True
 
     def _reset_column_group_after_relayout(
         self,
@@ -1815,21 +1815,11 @@ class CoreMixin:
                     "exaggerationMult",
                     "exaggeration_multiplier",
                 ):
-                    if v is None or float(v) <= 1.0:
-                        col["exaggeration_mult"] = None
-                        col["has_exaggeration"] = False
-                        col["mult_source"] = None
-                    else:
-                        col["exaggeration_mult"] = float(v)
-                        col["exaggeration_multiplier"] = float(v)
-                        col["has_exaggeration"] = True
-                        col["mult_source"] = "user"
+                    store_exaggeration(col, v)
                 elif k in ("has_exaggeration", "hasExaggeration"):
-                    has_ex = bool(v)
-                    col["has_exaggeration"] = has_ex
-                    if not has_ex:
-                        col["exaggeration_mult"] = None
-                        col["mult_source"] = None
+                    # 老调用方只传布尔：true 保留现值，false 才清（没有倍数就无从"启用"）。
+                    if not bool(v):
+                        store_exaggeration(col, None)
                 elif k == "axis_stroke_px":
                     # 列级轴粗覆盖（ARCHITECTURE §6.4）：只放用户显式值，必须**当场校验**。
                     # 不能靠 `resolve_axis_stroke` 的软回落吞掉非法值：那样用户改完

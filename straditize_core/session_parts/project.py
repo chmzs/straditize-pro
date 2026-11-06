@@ -22,10 +22,19 @@ from ..protocol import (
     INVALID_PARAMS,
     JsonRpcError,
 )
-from .xscale import resolve_column_scale
+from .xscale import resolve_column_scale, store_exaggeration
 
 logger = logging.getLogger("straditize_rpc")
 
+
+def _payload_exaggeration(raw_column: dict[str, Any]) -> Any:
+    """工程包里的放大倍数：优先现代键；老包只有 `has_exaggeration` + multiplier 那一对。"""
+    canonical = raw_column.get("exaggeration_mult")
+    if canonical is not None:
+        return canonical
+    if not bool(raw_column.get("has_exaggeration", raw_column.get("hasExaggeration", False))):
+        return None
+    return raw_column.get("exaggeration_multiplier", raw_column.get("exaggerationMult"))
 
 def _canonical_degrid_strength(raw: Any, *, origin: str) -> str | None:
     """把去线强度收敛到唯一合法域：{weak, medium, strong} ∪ {None}。
@@ -647,12 +656,13 @@ class ProjectSessionMixin:
                 "scale_type": c.get("scale_type", "linear"),
                 "plot_type": c.get("plot_type") or c.get("plotType") or "area",
                 "unit": c.get("unit", "%"),
-                "exaggeration_mult": c.get("exaggeration_mult"),
+                "exaggeration_mult": _payload_exaggeration(c),
                 "x_ticks": x_ticks,
                 "startValue": c.get("startValue", 0),
                 "tickValue": c.get("tickValue", 100),
                 "tickEndX": c.get("tickEndX", c.get("endX", 100)),
             }
+            store_exaggeration(col_dict, col_dict.get("exaggeration_mult"))
             self.columns.append(col_dict)
 
             pts = c.get("points") or c.get("controlPoints") or []
@@ -894,7 +904,6 @@ class ProjectSessionMixin:
                     "plot_type": scale.plot_type,
                     "unit": scale.unit,
                     "exaggeration_mult": scale.exaggeration_mult,
-                    "has_exaggeration": scale.exaggeration_mult is not None,
                     "startX": col.get("startX", col.get("start", 0)),
                     "start": col.get("start", 0),
                     "endX": col.get("endX", col.get("end", 100)),

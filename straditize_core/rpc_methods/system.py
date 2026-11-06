@@ -287,9 +287,8 @@ def _payload_column(session: Any, c: dict[str, Any]) -> dict[str, Any]:
         "scale_type": scale.scale_type,
         "plot_type": scale.plot_type,
         "plotType": scale.plot_type,
+        # 放大倍数只发这一个键：布尔与驼峰别名都已删除（前端读 `exaggeration_mult`）。
         "exaggeration_mult": scale.exaggeration_mult,
-        "hasExaggeration": scale.exaggeration_mult is not None,
-        "exaggerationMult": scale.exaggeration_mult,
         # 标度的唯一事实源：两个真实刻度端点。null = 未标定。
         # 删掉它整条链路就断（载荷剥字段 → 前端 hasTicks 恒 false → 标尺画不出来）。
         "x_ticks": c.get("x_ticks"),

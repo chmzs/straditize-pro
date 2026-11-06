@@ -71,7 +71,6 @@ def _column_row(col: dict) -> dict:
         "plot_type",
         "scale_type",
         "exaggeration_mult",
-        "has_exaggeration",
         "x_ticks",
         "x_ticks_dropped",
         "suspect_block",

@@ -334,6 +334,39 @@ def _resolve_column_visual(
     return scale_type, unit, plot_type
 
 
+#: 放大倍数只允许存在这一个键（None = 未放大）。
+#:
+#: 历史遗留的三个名字（`exaggeration_multiplier` / `has_exaggeration` / `mult_source`）只在
+#: **入口**被接受，落库前一律归一：同一个物理量在库里存三份就会互相打架，而
+#: `px_to_value` 会真的除以它——一份过期的 5 能让整列读数缩小 5 倍。
+_LEGACY_EXAGGERATION_KEYS: tuple[str, ...] = (
+    "exaggeration_multiplier",
+    "has_exaggeration",
+    "mult_source",
+)
+
+
+def store_exaggeration(column: dict[str, Any], raw: Any) -> None:
+    """把入参归一成唯一键 `exaggeration_mult`，并清掉历史名。
+
+    `None`、非数值、以及 <=1 一律当作"未放大"：放大 1 倍等于没放大，`px_to_value` 也
+    只在 >1 时才除。非数值**丢弃而不是转 0**——宁可没有放大，也不能留下一个错的因子。
+    """
+    for legacy in _LEGACY_EXAGGERATION_KEYS:
+        column.pop(legacy, None)
+    if raw is None:
+        column.pop("exaggeration_mult", None)
+        return
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        column.pop("exaggeration_mult", None)
+        return
+    if value <= 1.0:
+        column.pop("exaggeration_mult", None)
+        return
+    column["exaggeration_mult"] = value
+
 def _resolve_exaggeration(
     col_dict: dict[str, Any], group_obj: dict[str, Any] | None
 ) -> float | None:
