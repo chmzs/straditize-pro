@@ -1,0 +1,166 @@
+{
+ "b64_bad": {
+  "raised": {
+   "code": -32602,
+   "message": "Base64 图像数据解析失败: Invalid base64-encoded string: number of data characters (9) cannot be 1 more than a multiple of 4。请重新上传有效图片。"
+  }
+ },
+ "b64_pdf_page_1": {
+  "ok": {
+   "format": "PDF_IMAGE",
+   "mode": "RGB",
+   "path": null,
+   "pdf_info": {
+    "current_page": 1,
+    "total_pages": 1
+   },
+   "raw_pdf_len": 1906,
+   "size": [
+    180,
+    120
+   ]
+  }
+ },
+ "b64_pdf_page_out_of_range": {
+  "raised": {
+   "code": -32602,
+   "message": "页码超出有效范围：该 PDF 共有 1 页，请求的第 5 页不存在。请输入 1 到 1 之间的页码。"
+  }
+ },
+ "b64_png_bare": {
+  "ok": {
+   "format": "PNG",
+   "mode": "RGB",
+   "path": null,
+   "pdf_info": null,
+   "raw_pdf_len": null,
+   "size": [
+    200,
+    150
+   ]
+  }
+ },
+ "b64_png_data_url": {
+  "ok": {
+   "format": "PNG",
+   "mode": "RGB",
+   "path": null,
+   "pdf_info": null,
+   "raw_pdf_len": null,
+   "size": [
+    200,
+    150
+   ]
+  }
+ },
+ "b64_png_named_pdf": {
+  "ok": {
+   "format": "PNG",
+   "mode": "RGB",
+   "path": null,
+   "pdf_info": null,
+   "raw_pdf_len": null,
+   "size": [
+    200,
+    150
+   ]
+  }
+ },
+ "garbage_pdf_b64": {
+  "raised": {
+   "code": -32004,
+   "message": "PDF 解析失败: Stream has ended unexpectedly。请确认 PDF 包含图谱位图或转为 PNG 后导入。"
+  }
+ },
+ "no_source": {
+  "raised": {
+   "code": -32001,
+   "message": "前置输入缺失：未提供图谱源。请在【步骤 1: 载入图谱】中选择本地图片/单页PDF上传，或指定 sample_key（如 'hoya'）。"
+  }
+ },
+ "path_missing": {
+  "raised": {
+   "code": -32004,
+   "message": "未找到图谱文件: 'tests/data/does-not-exist.png'。请检查路径是否存在或已移动。"
+  }
+ },
+ "path_pdf_page_1": {
+  "ok": {
+   "format": "PDF_IMAGE",
+   "mode": "RGB",
+   "path": "bitmap.pdf",
+   "pdf_info": {
+    "current_page": 1,
+    "total_pages": 1
+   },
+   "raw_pdf_len": 1906,
+   "size": [
+    180,
+    120
+   ]
+  }
+ },
+ "path_pdf_page_out_of_range": {
+  "raised": {
+   "code": -32602,
+   "message": "页码超出有效范围：该 PDF 共有 1 页，请求的第 5 页不存在。请输入 1 到 1 之间的页码。"
+  }
+ },
+ "path_plate": {
+  "ok": {
+   "format": "JPEG",
+   "mode": "RGB",
+   "path": "fig3_raw.jpeg",
+   "pdf_info": null,
+   "raw_pdf_len": null,
+   "size": [
+    2132,
+    928
+   ]
+  }
+ },
+ "sample_beginner": {
+  "ok": {
+   "format": "PNG",
+   "mode": "RGBA",
+   "path": "beginner-tutorial.png",
+   "pdf_info": null,
+   "raw_pdf_len": null,
+   "size": [
+    1923,
+    1796
+   ]
+  }
+ },
+ "sample_hoya": {
+  "ok": {
+   "format": "PNG",
+   "mode": "RGBA",
+   "path": "hoya-del-castillo.png",
+   "pdf_info": null,
+   "raw_pdf_len": null,
+   "size": [
+    2339,
+    1654
+   ]
+  }
+ },
+ "sample_unknown_key": {
+  "raised": {
+   "code": -32602,
+   "message": "未知的 sample_key 'no-such-sample'。可选范例：['beginner', 'hoya', 'verification']。"
+  }
+ },
+ "vector_pdf_b64": {
+  "raised": {
+   "code": -32004,
+   "message": "PDF 解析失败: 该 PDF 第 1 页为纯矢量流未内嵌位图图谱。请将该页在外部导出为 PNG/JPG 图像后载入。请确认 PDF 包含图谱位图或转为 PNG 后导入。"
+  }
+ },
+ "vector_pdf_path": {
+  "raised": {
+   "code": -32004,
+   "message": "PDF 解析失败: 该 PDF 第 1 页为纯矢量流未内嵌位图图谱。请将该页在外部导出为 PNG/JPG 图像后载入。请确认 PDF 包含图谱位图或转为 PNG 后导入。"
+  }
+ }
+}

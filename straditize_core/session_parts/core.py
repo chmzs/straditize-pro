@@ -147,100 +147,135 @@ def _decode_diagram_source(
     Returns (PIL_Image, format_str, resolved_path, pdf_info, raw_pdf_bytes).
     Raises JsonRpcError with human guidance on failures.
     """
-    resolved_path: str | None = None
-
-    # Case 1: Built-in sample key
     if not image_path and not image_data and sample_key:
-        pkg_root = Path(__file__).resolve().parent.parent
-        repo_root = pkg_root.parent
-        tutorial_dir = pkg_root / "assets" / "tutorials"
-        sample_candidates = {
-            "hoya": tutorial_dir / "hoya-del-castillo.png",
-            "verification": repo_root / "verification_real_pollen_edit.png",
-            "beginner": tutorial_dir / "beginner-tutorial.png",
-        }
-        cand = sample_candidates.get(sample_key.lower())
-        if cand is None:
-            raise JsonRpcError(
-                INVALID_PARAMS,
-                f"未知的 sample_key '{sample_key}'。可选范例：{sorted(sample_candidates)}。",
-            )
-        if not cand.is_file():
-            raise JsonRpcError(
-                FILE_ERROR,
-                f"内置范例图片缺失: {cand}。请确认仓库完整性。",
-            )
-        image_path = str(cand)
+        image_path = _resolve_sample_image(sample_key)
 
-    # Case 2: Base64 data URL or raw Base64 string
     if image_data:
-        raw_b64 = image_data
-        is_pdf = False
-        name_hint = file_name or ""
-        if raw_b64.startswith("data:"):
-            header, raw_b64 = raw_b64.split(",", 1)
-            if "application/pdf" in header:
-                is_pdf = True
-        elif name_hint.lower().endswith(".pdf"):
-            is_pdf = True
+        return _decode_inline_payload(image_data, file_name, page_number)
 
-        try:
-            raw_bytes = base64.b64decode(raw_b64)
-        except Exception as e:
-            raise JsonRpcError(
-                INVALID_PARAMS,
-                f"Base64 图像数据解析失败: {e}。请重新上传有效图片。",
-            ) from e
-
-        if is_pdf or raw_bytes.startswith(b"%PDF"):
-            try:
-                import pypdf
-
-                reader = pypdf.PdfReader(io.BytesIO(raw_bytes))
-                total_pages = len(reader.pages)
-                if total_pages == 0:
-                    raise ValueError("PDF 文档为空，未包含任何页面。")
-                if page_number < 1 or page_number > total_pages:
-                    raise JsonRpcError(
-                        INVALID_PARAMS,
-                        f"页码超出有效范围：该 PDF 共有 {total_pages} 页，请求的第 {page_number} 页不存在。请输入 1 到 {total_pages} 之间的页码。",
-                    )
-                target_page = reader.pages[page_number - 1]
-                pdf_info = {"total_pages": total_pages, "current_page": page_number}
-                if target_page.images:
-                    imgs = [img.image for img in target_page.images]
-                    best_img = max(imgs, key=lambda im: im.size[0] * im.size[1])
-                    return best_img, "PDF_IMAGE", None, pdf_info, raw_bytes
-                raise ValueError(
-                    f"该 PDF 第 {page_number} 页为纯矢量流未内嵌位图图谱。请将该页导出为 PNG/JPG 图像后载入。"
-                )
-            except JsonRpcError:
-                raise
-            except Exception as e:
-                raise JsonRpcError(
-                    FILE_ERROR,
-                    f"PDF 解析失败: {e}。请确认 PDF 包含位图图版，或转为 PNG 导入。",
-                ) from e
-
-        try:
-            img = Image.open(io.BytesIO(raw_bytes))
-            img.load()
-            fmt = img.format or "PNG"
-            return img, fmt, None, None, None
-        except Exception as e:
-            raise JsonRpcError(
-                FILE_ERROR,
-                f"上传图像数据解码失败: {e}。请检查文件是否损坏。",
-            ) from e
-
-    # Case 3: Local file path
     if not image_path:
         raise JsonRpcError(
             STATE_ERROR,
             "前置输入缺失：未提供图谱源。请在【步骤 1: 载入图谱】中选择本地图片/单页PDF上传，或指定 sample_key（如 'hoya'）。",
         )
 
-    # Fallback search if relative path
+    resolved_path = _resolve_existing_image_path(image_path)
+    if resolved_path.lower().endswith(".pdf"):
+        with open(resolved_path, "rb") as f:
+            raw_bytes = f.read()
+        best_img, pdf_info = _read_pdf_page_image(raw_bytes, page_number)
+        return best_img, "PDF_IMAGE", resolved_path, pdf_info, raw_bytes
+
+    img, fmt = _open_raster_image(resolved_path, image_path)
+    return img, fmt, resolved_path, None, None
+
+
+def _resolve_sample_image(sample_key: str) -> str:
+    """内置范例名 → 包内图片路径；未知名字把可选项一并报出来。"""
+    pkg_root = Path(__file__).resolve().parent.parent
+    repo_root = pkg_root.parent
+    tutorial_dir = pkg_root / "assets" / "tutorials"
+    sample_candidates = {
+        "hoya": tutorial_dir / "hoya-del-castillo.png",
+        "verification": repo_root / "verification_real_pollen_edit.png",
+        "beginner": tutorial_dir / "beginner-tutorial.png",
+    }
+    cand = sample_candidates.get(sample_key.lower())
+    if cand is None:
+        raise JsonRpcError(
+            INVALID_PARAMS,
+            f"未知的 sample_key '{sample_key}'。可选范例：{sorted(sample_candidates)}。",
+        )
+    if not cand.is_file():
+        raise JsonRpcError(
+            FILE_ERROR,
+            f"内置范例图片缺失: {cand}。请确认仓库完整性。",
+        )
+    return str(cand)
+
+
+def _decode_inline_payload(
+    image_data: str,
+    file_name: str | None,
+    page_number: int,
+) -> tuple[Image.Image, str, str | None, dict[str, Any] | None, bytes | None]:
+    """base64 / data URL 载荷 → 解码后的图；PDF 载荷交给共用的页抽取。"""
+    raw_b64 = image_data
+    is_pdf = False
+    name_hint = file_name or ""
+    if raw_b64.startswith("data:"):
+        header, raw_b64 = raw_b64.split(",", 1)
+        if "application/pdf" in header:
+            is_pdf = True
+    elif name_hint.lower().endswith(".pdf"):
+        is_pdf = True
+
+    try:
+        raw_bytes = base64.b64decode(raw_b64)
+    except Exception as e:
+        raise JsonRpcError(
+            INVALID_PARAMS,
+            f"Base64 图像数据解析失败: {e}。请重新上传有效图片。",
+        ) from e
+
+    if is_pdf or raw_bytes.startswith(b"%PDF"):
+        best_img, pdf_info = _read_pdf_page_image(raw_bytes, page_number)
+        return best_img, "PDF_IMAGE", None, pdf_info, raw_bytes
+
+    try:
+        img = Image.open(io.BytesIO(raw_bytes))
+        img.load()
+        fmt = img.format or "PNG"
+        return img, fmt, None, None, None
+    except Exception as e:
+        raise JsonRpcError(
+            FILE_ERROR,
+            f"上传图像数据解码失败: {e}。请检查文件是否损坏。",
+        ) from e
+
+
+def _read_pdf_page_image(
+    raw_bytes: bytes, page_number: int
+) -> tuple[Image.Image, dict[str, Any]]:
+    """从 PDF 字节里抽出第 page_number 页面积最大的内嵌位图。
+
+    两个入口（base64 内嵌 / 本地 .pdf 路径）共用这一段，文案只有一份：
+    以前两份各写各的，「导出」与「在外部导出」、「位图图版」与「图谱位图」已经漂了，
+    而且内层句末的句号与外壳又拼出「载入。。请确认」的双句号。
+    """
+    try:
+        import pypdf
+
+        reader = pypdf.PdfReader(io.BytesIO(raw_bytes))
+        total_pages = len(reader.pages)
+        if total_pages == 0:
+            raise ValueError("PDF 文档为空，未包含任何有效页面")
+        if page_number < 1 or page_number > total_pages:
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                f"页码超出有效范围：该 PDF 共有 {total_pages} 页，请求的第 {page_number} 页不存在。请输入 1 到 {total_pages} 之间的页码。",
+            )
+        target_page = reader.pages[page_number - 1]
+        pdf_info = {"total_pages": total_pages, "current_page": page_number}
+        if target_page.images:
+            imgs = [img.image for img in target_page.images]
+            best_img = max(imgs, key=lambda im: im.size[0] * im.size[1])
+            return best_img, pdf_info
+        raise ValueError(
+            f"该 PDF 第 {page_number} 页为纯矢量流未内嵌位图图谱。"
+            "请将该页在外部导出为 PNG/JPG 图像后载入"
+        )
+    except JsonRpcError:
+        raise
+    except Exception as e:
+        raise JsonRpcError(
+            FILE_ERROR,
+            f"PDF 解析失败: {e}。请确认 PDF 包含图谱位图或转为 PNG 后导入。",
+        ) from e
+
+
+def _resolve_existing_image_path(image_path: str) -> str:
+    """相对路径找不到时再试 cwd 与包根；都不在就报缺文件，并给出绝对路径。"""
     if not os.path.isabs(image_path) and not os.path.exists(image_path):
         cwd_cand = os.path.abspath(os.path.join(os.getcwd(), image_path))
         core_cand = os.path.abspath(
@@ -256,42 +291,13 @@ def _decode_diagram_source(
             FILE_ERROR,
             f"未找到图谱文件: '{image_path}'。请检查路径是否存在或已移动。",
         )
+    return os.path.abspath(image_path)
 
-    resolved_path = os.path.abspath(image_path)
-    is_pdf = resolved_path.lower().endswith(".pdf")
 
-    if is_pdf:
-        try:
-            import pypdf
-
-            with open(resolved_path, "rb") as f:
-                raw_bytes = f.read()
-            reader = pypdf.PdfReader(io.BytesIO(raw_bytes))
-            total_pages = len(reader.pages)
-            if total_pages == 0:
-                raise ValueError("PDF 文档为空，未包含任何有效页面。")
-            if page_number < 1 or page_number > total_pages:
-                raise JsonRpcError(
-                    INVALID_PARAMS,
-                    f"页码超出有效范围：该 PDF 共有 {total_pages} 页，请求的第 {page_number} 页不存在。请输入 1 到 {total_pages} 之间的页码。",
-                )
-            target_page = reader.pages[page_number - 1]
-            pdf_info = {"total_pages": total_pages, "current_page": page_number}
-            if target_page.images:
-                imgs = [img.image for img in target_page.images]
-                best_img = max(imgs, key=lambda im: im.size[0] * im.size[1])
-                return best_img, "PDF_IMAGE", resolved_path, pdf_info, raw_bytes
-            raise ValueError(
-                f"该 PDF 第 {page_number} 页为纯矢量流未内嵌位图图谱。请将该页在外部导出为 PNG/JPG 图像后载入。"
-            )
-        except JsonRpcError:
-            raise
-        except Exception as e:
-            raise JsonRpcError(
-                FILE_ERROR,
-                f"PDF 解析失败: {e}。请确认 PDF 包含图谱位图或转为 PNG 后导入。",
-            ) from e
-
+def _open_raster_image(
+    resolved_path: str, image_path: str
+) -> tuple[Image.Image, str]:
+    """打开位图并定格式；失败时把用户给的路径和真实原因一起报出来。"""
     try:
         img = Image.open(resolved_path)
         img.load()
@@ -300,7 +306,7 @@ def _decode_diagram_source(
             or os.path.splitext(resolved_path)[1].lstrip(".").upper()
             or "PNG"
         )
-        return img, fmt, resolved_path, None, None
+        return img, fmt
     except Exception as e:
         raise JsonRpcError(
             FILE_ERROR,
