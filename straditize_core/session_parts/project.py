@@ -16,6 +16,7 @@ import numpy as np
 from PIL import Image
 
 from ..age_depth import AgeDepthModel
+from ..image import GRID_LINE_PRESETS, is_supported_grid_line_strength
 from ..protocol import (
     FILE_NOT_FOUND_ERROR,
     INVALID_PARAMS,
@@ -25,6 +26,26 @@ from .xscale import resolve_column_scale
 
 logger = logging.getLogger("straditize_rpc")
 
+
+def _validated_degrid_strength(raw: Any) -> str | None:
+    """工程包里的去线强度：空 → None；合法预设 → 规范名；其余 → None + 告警。
+
+    为什么不抛错：老工程包必须能载入（与版本门禁同一取舍）。但非法值也**绝不能**
+    带进运行时——它会一路走到 `algorithm_degrid` 里抛 ValueError，而 project_save 的
+    保底逻辑再把这条错误吞成一份全 0 的占位 CSV（实测 strength=0.6 就是这么消失的：
+    用户以为「没数字化」，实际是去线强度不合法）。
+    """
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None
+    if is_supported_grid_line_strength(raw):
+        return str(raw).strip().lower()
+    logger.warning(
+        "工程包里的 line_removal.strength=%r 不是当前支持的预设（%s），已忽略；"
+        "去线强度需要用户重新设置。",
+        raw,
+        " / ".join(sorted(GRID_LINE_PRESETS)),
+    )
+    return None
 
 def _parse_schema_major(raw_version: Any) -> int | None:
     """从工程包版本号里取出主版本整数；无法判定时返回 None。
@@ -450,7 +471,7 @@ class ProjectSessionMixin:
     def _reset_line_removal(self, project_data: dict[str, Any]) -> None:
         """恢复去线强度/竖线开关与笔迹，并把旧包缺 `mode` 的笔迹补成 erase。"""
         line_removal = project_data.get("line_removal") or {}
-        self.degrid_strength = line_removal.get("strength") or None
+        self.degrid_strength = _validated_degrid_strength(line_removal.get("strength"))
         self.degrid_remove_vertical = bool(line_removal.get("remove_vertical", True))
         corrections = line_removal.get("corrections") or []
         self.line_corrections = [

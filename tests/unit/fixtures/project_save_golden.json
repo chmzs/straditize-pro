@@ -261,7 +261,7 @@
      }
     ],
     "remove_vertical": false,
-    "strength": 0.6
+    "strength": null
    },
    "paper_metadata": {
     "chronology": {
@@ -668,7 +668,7 @@
      }
     ],
     "remove_vertical": false,
-    "strength": 0.6
+    "strength": null
    },
    "paper_metadata": {
     "chronology": {
@@ -818,7 +818,6 @@
    "image/original.png",
    "image/age_depth.png",
    "data.csv",
-   "data.csv.PLACEHOLDER.md",
    "plot_strat.R",
    "README.txt"
   ],
@@ -832,25 +831,20 @@
  },
  "tar_csv_branch": {
   "data_csv": {
-   "digest": "8af8d7aa8e95",
-   "size": 107
+   "digest": "2a3ccafb20ae",
+   "size": 155
   },
   "data_csv_head": [
-   "depth,Pinus,Betula,Quercus",
-   "0.0,0.00,0.00,0.00",
-   "50.0,0.00,0.00,0.00"
+   "depth,age_est,age_min_95,age_max_95,Pinus,Betula,Quercus",
+   "10.0,500.0,450.0,550.0,0.0,0.0,0.0",
+   "60.0,3000.0,3344.73684210526,2588.4615384615486,0.0,0.0,0.0"
   ],
-  "digitized": false
+  "digitized": true
  },
  "tar_members": {
   "members": [
    {
     "manifest_without_timestamp": {
-     "data_csv_placeholder": {
-      "notice": "data.csv.PLACEHOLDER.md",
-      "reason": "ValueError: Unknown grid-line removal strength: 0.6",
-      "zeros_are_not_measurements": true
-     },
      "schema_version": "2.0",
      "tool": "straditize pro",
      "version": "2.0.0"
@@ -858,9 +852,9 @@
     "name": "manifest.json"
    },
    {
-    "digest": "78432a237cfe",
+    "digest": "c6f8d02eabc3",
     "name": "straditize.json",
-    "size": 7623
+    "size": 7624
    },
    {
     "digest": "36238134d819",
@@ -873,14 +867,9 @@
     "size": 280
    },
    {
-    "digest": "8af8d7aa8e95",
+    "digest": "2a3ccafb20ae",
     "name": "data.csv",
-    "size": 107
-   },
-   {
-    "digest": "e11951f8801f",
-    "name": "data.csv.PLACEHOLDER.md",
-    "size": 606
+    "size": 155
    },
    {
     "digest": "4cad30896ad0",
@@ -901,6 +890,41 @@
    "success"
   ],
   "result_size_matches_file": true
+ },
+ "tar_placeholder_forced": {
+  "csv_head": [
+   "depth,Pinus,Betula,Quercus",
+   "0.0,0.00,0.00,0.00"
+  ],
+  "manifest_field": {
+   "notice": "data.csv.PLACEHOLDER.md",
+   "reason": "ValueError: 模拟真实导出失败",
+   "zeros_are_not_measurements": true
+  },
+  "members": [
+   "manifest.json",
+   "straditize.json",
+   "image/original.png",
+   "image/age_depth.png",
+   "data.csv",
+   "data.csv.PLACEHOLDER.md",
+   "plot_strat.R",
+   "README.txt"
+  ],
+  "notice_head": [
+   "# data.csv 是占位表，不是真实读数",
+   "",
+   "本次打包时真实导出失败，data.csv 里**每一个数值都是 0.00**。它们既不表示「未观测」，也不表示「观测到 0」，只是占位符。"
+  ],
+  "placeholder_flag": true,
+  "reason": "ValueError: 模拟真实导出失败",
+  "result_keys": [
+   "data_csv_placeholder",
+   "data_csv_placeholder_reason",
+   "path",
+   "size",
+   "success"
+  ]
  },
  "tar_real_csv": {
   "data_csv_head": [

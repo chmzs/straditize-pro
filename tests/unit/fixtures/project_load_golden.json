@@ -146,7 +146,7 @@
    300.0
   ],
   "degrid_remove_vertical": false,
-  "degrid_strength": 0.6,
+  "degrid_strength": null,
   "depth_calib": {
    "bottom_cm": 130.0,
    "bottom_px": 280.0,
@@ -703,7 +703,7 @@
    300.0
   ],
   "degrid_remove_vertical": false,
-  "degrid_strength": 0.6,
+  "degrid_strength": null,
   "depth_calib": {
    "bottom_cm": 130.0,
    "bottom_px": 280.0,

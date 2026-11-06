@@ -1669,14 +1669,21 @@ class CoreMixin:
         """Ink actually offered to the digitizer: inside the ROI, minus grid lines."""
         if getattr(self, "foreground_mask", None) is None:
             return None
+        from ..image import is_supported_grid_line_strength
+
         mask = self.foreground_mask
+        # 去线强度只接受预设名。这不是多余的校验：`degrid_strength` 除了 RPC 之外还能从
+        # 工程包载入（历史包存过数字），历史上的 `line_removal.strength=0.6` 会一路走到
+        # `algorithm_degrid` 抛 ValueError，再被导出侧的保底逻辑吞成一份全 0 的占位 CSV。
+        # 载入侧已经丢弃非法值并告警；这里再挡一次，保证任何入口都炸不到取数。
+        degrid_strength = getattr(self, "degrid_strength", None)
         if (
             getattr(self, "grid_line_mask", None) is None
-            and getattr(self, "degrid_strength", None) is not None
+            and is_supported_grid_line_strength(degrid_strength)
             and self._roi_box(roi_id=roi_id) is not None
         ):
             self.algorithm_degrid(
-                strength=self.degrid_strength,
+                strength=degrid_strength,
                 corrections=getattr(self, "line_corrections", []),
                 remove_vertical=getattr(self, "degrid_remove_vertical", True),
             )

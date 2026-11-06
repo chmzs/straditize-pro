@@ -127,11 +127,22 @@ GRID_LINE_PRESETS: dict[str, dict[str, float]] = {
 
 
 def normalize_grid_line_strength(strength: str | None) -> str:
-    """Normalize a grid-line removal strength label."""
+    """Normalize a grid-line removal strength label; unknown values raise."""
     key = str(strength or 'medium').strip().lower()
     if key not in GRID_LINE_PRESETS:
         raise ValueError(f'Unknown grid-line removal strength: {strength}')
     return key
+
+
+def is_supported_grid_line_strength(value: Any) -> bool:
+    """该值是否是当前支持的预设名（大小写不敏感，None 一律 False）。
+
+    给「不可信来源」做边界守卫用：工程包是用户可手改的文件，历史版本里
+    ``line_removal.strength`` 还存过数字（如 0.6）。``normalize_grid_line_strength``
+    必须继续对未知值抛错（RPC 靠它拒绝错误入参），所以判别单独抽到这里，
+    让载入侧能「丢弃 + 告警」，而不是把非法值带进运行时再去炸导出。
+    """
+    return str(value).strip().lower() in GRID_LINE_PRESETS
 
 
 def _run_lengths_along_rows(mask: np.ndarray) -> np.ndarray:

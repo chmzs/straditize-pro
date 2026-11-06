@@ -168,6 +168,31 @@ def _build_snapshots(tmp_dir: Path) -> dict:
         "data_csv_head": real_csv.decode("utf-8").splitlines()[:2],
     }
 
+    # 占位表路径单独用**注入失败**来钉：合成载荷原本靠"数字化不出来"触发，
+    # 但那条失败其实是去线强度合法性缺陷（已于 2026-11-06 修好），修好后不再触发。
+    # 占位表本身仍是必须显式标记的路径，所以这里显式制造失败，不依赖别的缺陷。
+    session = _session()
+
+    def _boom(*args, **kwargs):
+        raise ValueError("模拟真实导出失败")
+
+    session.export_data = _boom
+    forced_tar = tmp_dir / "forced-placeholder.tar"
+    forced_result = session.project_save(output_path=str(forced_tar), format="tar")
+    with tarfile.open(forced_tar, "r") as archive:
+        forced_members = archive.getnames()
+        manifest_raw = json.loads(archive.extractfile("manifest.json").read())
+        notice = archive.extractfile("data.csv.PLACEHOLDER.md").read().decode("utf-8")
+        forced_csv = archive.extractfile("data.csv").read().decode("utf-8")
+    out["tar_placeholder_forced"] = {
+        "result_keys": sorted(forced_result),
+        "placeholder_flag": forced_result["data_csv_placeholder"],
+        "reason": forced_result["data_csv_placeholder_reason"],
+        "members": forced_members,
+        "manifest_field": manifest_raw.get("data_csv_placeholder"),
+        "notice_head": notice.splitlines()[:3],
+        "csv_head": forced_csv.splitlines()[:2],
+    }
     # 无路径的 tar 走 base64 返回：只钉成员清单，不钉整包摘要（含 mtime）
     session = _session()
     mem_tar = session.project_save(format="tar")
