@@ -187,6 +187,36 @@
 
 ---
 
+### 4.2b `core.getShadowLayer` — 放大包络（显示层，**永不为读数**）
+
+双图层图（同一属种画了实心曲线 + 淡色的「放大包络」）里，包络只用于**显示**：它让用户
+看出图上标了几倍放大，但它**不是数据**——不参与 `px_to_value` 换算、不进入任何导出格式、
+也不参与 QA 门禁。这条边界由本节声明，并由 `tests/unit/test_orphan_rpc_contracts.py` 钉住。
+
+- **参数 (params)**：无
+- **返回 (result)**：
+
+  ```json
+  {
+    "available": true,
+    "extraction_mode": "threshold",
+    "overlay_png": "data:image/png;base64,...",
+    "shadow_pixels": 18421,
+    "solid_pixels": 60233,
+    "layers": null
+  }
+  ```
+
+  - `available`：本次会话有没有包络；没有时为 `false`，其余键**形状不变**；
+  - `extraction_mode`：当前取墨模式，供界面说明这一层是在哪种取墨下得到的；
+  - `overlay_png`：实心层 + 包络的双色叠加图，`available=false` 时为 `null`；
+  - `shadow_pixels` / `solid_pixels`：像素计数（**不是地学量**，不要写进导出）；
+  - `layers`：分层结构的原始描述，可为 `null`。
+- **错误**：未载入图像 → `-32001 STATE_ERROR`（"No image loaded."）
+- **消费者**：前端当前零引用。本方法属**对外接口**（脚本 / agent 需要查看包络时使用），
+  由本节声明用途与返回形状；若日后接入界面，请同时更新"前端唯一数据源"那一句的核对。
+
+---
 ### 4.3 `core.detectColumns`
 在指定的图表数据区域内，自动探测或切分各花粉/环境指标列的像素边界。
 

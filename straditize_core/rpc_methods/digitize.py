@@ -49,7 +49,13 @@ def register(dispatcher: Any, session: Any) -> None:
         )
 
     def core_get_shadow_layer() -> dict[str, Any]:
-        """Return the exaggeration envelope for display — never as data."""
+        """Return the exaggeration envelope for display — never as data.
+
+        **对外接口，前端零调用**：包络只用于显示（帮用户看出图上标了几倍放大），
+        不参与 `px_to_value`、不进入任何导出、不参与 QA 门禁。返回形状与用途写在
+        `docs/JSON_RPC_SPECIFICATION.md` §4.2b；改动需同步该节与
+        `tests/unit/test_orphan_rpc_contracts.py`。
+        """
         if getattr(session, "image", None) is None:
             raise JsonRpcError(STATE_ERROR, "No image loaded.")
         shadow = getattr(session, "shadow_mask", None)

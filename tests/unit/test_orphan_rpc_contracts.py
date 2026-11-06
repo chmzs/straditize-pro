@@ -20,6 +20,8 @@
 
 from __future__ import annotations
 
+import pathlib
+
 import numpy as np
 
 from straditize_core.protocol import STATE_ERROR, JsonRpcDispatcher
@@ -69,7 +71,7 @@ def test_extract_turning_points_preserves_manual_points() -> None:
     _call(session, "algorithm.extractTurningPoints", col_index=0)
 
     assert session.control_points[0].get(123) == 456.0, (
-        "手工点在自动提取后必须保留——这才是它能作为\"辅助\"被用起来的前提"
+        '手工点在自动提取后必须保留——这才是它能作为"辅助"被用起来的前提'
     )
 
 
@@ -93,3 +95,22 @@ def test_get_shadow_layer_reports_shape_without_shadow() -> None:
     assert result["shadow_pixels"] == 0
     assert result["solid_pixels"] >= 0
     assert "extraction_mode" in result
+
+
+def test_spec_documents_every_result_key_of_get_shadow_layer() -> None:
+    """文档与实现不许各说各话：返回体每个键都必须在 spec §4.2b 里出现。
+
+    这条替代不了形状判据，但能挡住两种漂移：实现加了键却不写文档（外部调用方读不到说明），
+    以及文档里的键名与实现不符（`shadow_pixels` vs `shadowPixels` 这种）。
+    """
+    spec = pathlib.Path("docs/JSON_RPC_SPECIFICATION.md").read_text(encoding="utf-8")
+    start = spec.index("### 4.2b")
+    end = spec.index("### 4.3", start)
+    section = spec[start:end]
+
+    session = _session()
+    session._extract_foreground_from_settings()
+    result = _call(session, "core.getShadowLayer")["result"]
+
+    undocumented = [key for key in result if f"`{key}`" not in section]
+    assert undocumented == [], f"这些返回键没写进 spec §4.2b：{undocumented}"
