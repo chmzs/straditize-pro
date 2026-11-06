@@ -694,6 +694,60 @@ class ExportMixin:
         output_path: str | None = None,
     ) -> dict[str, Any]:
         """Exports the calibrated data matrix to CSV or Parquet format."""
+        self._ensure_export_column_points()
+
+        if not getattr(self, "column_points", None):
+            raise JsonRpcError(STATE_ERROR, "No digitized data available to export.")
+
+        fmt = format.lower()
+        if fmt not in ("csv", "parquet"):
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                f"Unsupported export format '{format}'. Use 'csv' or 'parquet'.",
+            )
+
+        if strict and not getattr(self, "is_calibrated", False):
+            raise JsonRpcError(
+                CALIBRATION_ERROR,
+                "Axes calibration is required when strict=True.",
+            )
+
+        all_rows, depth_series = self._export_rows_and_depths()
+
+        data_dict: dict[str, Any] = {"depth": depth_series}
+
+        if getattr(self, "age_depth_model", None) is not None:
+            age_pred = self.age_depth_model.predict_age(depth_series)
+            data_dict["age_est"] = age_pred["age_est"]
+            data_dict["age_min_95"] = age_pred["age_min"]
+            data_dict["age_max_95"] = age_pred["age_max"]
+
+        data_dict.update(self._export_value_columns(all_rows, strict))
+
+        df = pd.DataFrame(data_dict)
+
+        csv_string, saved_path = self._write_export_file(fmt, df, output_path)
+
+        return {
+            "format": fmt,
+            "strict": strict,
+            "rows_count": len(df),
+            "columns_count": len(df.columns),
+            "columns": list(df.columns),
+            "data": df.head(50).to_dict(orient="records"),
+            "file_path": saved_path,
+            "path": saved_path,
+            "csv": csv_string,
+            "csv_content": csv_string,
+        }
+
+    def _ensure_export_column_points(self) -> None:
+        """没有逐行点时先补出来：控制点合成 > 现场数字化 > 取数区等距采样。
+
+        三条回落顺序有讲究：控制点优先（用户手调过的锚点最可信），其次真数字化，
+        最后才是等距采样（只保证导得出，不保证读数）。这里吞掉异常不抛——它是保底路径，
+        失败由下面的 no-data 守卫统一报。
+        """
         if not getattr(self, "column_points", None):
             if getattr(self, "control_points", None) and any(
                 self.control_points.values()
@@ -725,22 +779,12 @@ class ExportMixin:
                         {"row": r, "x": c_start} for r in sample_rows
                     ]
 
-        if not getattr(self, "column_points", None):
-            raise JsonRpcError(STATE_ERROR, "No digitized data available to export.")
+    def _export_rows_and_depths(self) -> tuple[list[int], list]:
+        """导出用的行号序列与深度列。
 
-        fmt = format.lower()
-        if fmt not in ("csv", "parquet"):
-            raise JsonRpcError(
-                INVALID_PARAMS,
-                f"Unsupported export format '{format}'. Use 'csv' or 'parquet'.",
-            )
-
-        if strict and not getattr(self, "is_calibrated", False):
-            raise JsonRpcError(
-                CALIBRATION_ERROR,
-                "Axes calibration is required when strict=True.",
-            )
-
+        有采样层就以采样层为准（用户显式标定的深度优先），否则取各列逐行点的并集；
+        已标定时深度由 y_scale 换算（round 4），未标定直接给行号。
+        """
         samples = getattr(self, "samples", None) or []
         if samples:
             all_rows = [int(round(s.get("row_px", 0))) for s in samples]
@@ -775,17 +819,19 @@ class ExportMixin:
                 depth_series = [round(sy * r + iy, 4) for r in all_rows]
             else:
                 depth_series = all_rows
+        return all_rows, depth_series
 
-        data_dict: dict[str, Any] = {"depth": depth_series}
+    def _export_value_columns(
+        self, all_rows: list[int], strict: bool
+    ) -> dict[str, Any]:
+        """逐列把像素换算成读数：标度解析复用唯一入口，未标定的列整列给 None。
 
-        if getattr(self, "age_depth_model", None) is not None:
-            age_pred = self.age_depth_model.predict_age(depth_series)
-            data_dict["age_est"] = age_pred["age_est"]
-            data_dict["age_min_95"] = age_pred["age_min"]
-            data_dict["age_max_95"] = age_pred["age_max"]
-
+        缺控制点的行填 0 点（= 列左缘 + 轴线粗）而不是列左缘：画布绿线画在 0 点，
+        基线与换算必须同源，否则这批行会落进轴内算出负值再被 clamp。
+        """
         columns = getattr(self, "columns", [])
         taxa_names = getattr(self, "taxa_names", [])
+        values: dict[str, Any] = {}
         for c_idx in sorted(self.column_points.keys()):
             col_def = columns[c_idx] if c_idx < len(columns) else {}
             if taxa_names and c_idx < len(taxa_names) and taxa_names[c_idx]:
@@ -805,7 +851,7 @@ class ExportMixin:
             default_start = float(scale.abs_px0)
             raw_x = [p_dict.get(r, default_start) for r in all_rows]
             # 未标定列整列不给数：与 export_data / extract_grid_values 同源。
-            data_dict[col_name] = (
+            values[col_name] = (
                 [
                     scale.px_to_value(
                         x,
@@ -819,9 +865,12 @@ class ExportMixin:
                 if scale.calibrated
                 else [None] * len(raw_x)
             )
+        return values
 
-        df = pd.DataFrame(data_dict)
-
+    def _write_export_file(
+        self, fmt: str, df: Any, output_path: str | None
+    ) -> tuple[str | None, str | None]:
+        """落盘（csv / parquet）并返回内存中的 csv 文本与保存路径。"""
         csv_string: str | None = None
         saved_path: str | None = None
 
@@ -855,19 +904,7 @@ class ExportMixin:
                     EXPORT_ERROR,
                     f"Failed to export parquet (ensure pyarrow/fastparquet is installed): {pe}",
                 )
-
-        return {
-            "format": fmt,
-            "strict": strict,
-            "rows_count": len(df),
-            "columns_count": len(df.columns),
-            "columns": list(df.columns),
-            "data": df.head(50).to_dict(orient="records"),
-            "file_path": saved_path,
-            "path": saved_path,
-            "csv": csv_string,
-            "csv_content": csv_string,
-        }
+        return csv_string, saved_path
 
     def batch_set_taxa(self, names: list[str]) -> dict[str, Any]:
         """Batch sets or updates taxa names for diagram columns."""
