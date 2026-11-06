@@ -8,7 +8,7 @@ calibration produce identical scientific values everywhere.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterator
+from typing import Any, Iterator, Sequence
 
 from ..calibration import LinearCalibration, LogCalibration
 from ..protocol import CALIBRATION_ERROR, INVALID_PARAMS, JsonRpcError
@@ -197,6 +197,64 @@ class ColumnScale:
         return round(clamped, ndigits) if ndigits is not None else clamped
 
 
+READ_PROFILE_EXPORT = "export"
+READ_PROFILE_QA = "qa"
+
+_READ_PROFILES: dict[str, dict[str, Any]] = {
+    # 导出/网格：未标定列整列不给数，4 位小数。
+    READ_PROFILE_EXPORT: {
+        "require_calibrated": False,
+        "ndigits": 4,
+        "null_when_uncalibrated": True,
+    },
+    # QA：**有意**允许未标定列粗算（否则「该列没标定」这条提醒永远不会触发），
+    # 且保留全精度（门限判定不该被取整影响）。
+    READ_PROFILE_QA: {
+        "require_calibrated": False,
+        "ndigits": None,
+        "null_when_uncalibrated": False,
+    },
+}
+
+
+def read_column_values(
+    scale: "ColumnScale",
+    rows_px: Sequence[float],
+    *,
+    profile: str = READ_PROFILE_EXPORT,
+    strict: bool = False,
+    col_name: str = "",
+) -> list[float | None]:
+    """把一串像素读成读数——**唯一入口**，出口差异只由 `profile` 表达。
+
+    此前 CSV / TAR / XLSX / 网格四处各写一遍「取 0 点 → 循环 px_to_value → 未标定给 None」，
+    QA 又单独写一遍（允许未标定 + 全精度）。四份拷贝里任何一份改了 `ndigits` 或基线，
+    同一物理量在不同出口就会给出不同数字，而四条判据各测各的、谁都发现不了。
+
+    基线与「未标定」两个决定都收敛到这里：
+    - 基线固定取 `scale.abs_px0`（= 列左缘 + 轴线粗，ARCHITECTURE §6.4）。画布绿线画在
+      0 点，换算基准必须同源，否则缺控制点的行会落进轴内算出负值再被 clamp；
+    - `null_when_uncalibrated` 由 profile 决定，而不是各调用方自己 `if scale.calibrated`。
+    """
+    policy = _READ_PROFILES.get(profile)
+    if policy is None:
+        raise ValueError(f"unknown read profile: {profile!r}")
+    if policy["null_when_uncalibrated"] and not scale.calibrated:
+        return [None] * len(rows_px)
+    baseline = float(scale.abs_px0)
+    return [
+        scale.px_to_value(
+            x,
+            baseline_px=baseline,
+            strict=strict,
+            col_name=col_name,
+            require_calibrated=policy["require_calibrated"],
+            ndigits=policy["ndigits"],
+        )
+        for x in rows_px
+    ]
+
+
 def resolve_column_scale(
     session: Any,
     col: dict[str, Any] | None,
@@ -366,6 +424,7 @@ def store_exaggeration(column: dict[str, Any], raw: Any) -> None:
         column.pop("exaggeration_mult", None)
         return
     column["exaggeration_mult"] = value
+
 
 def _resolve_exaggeration(
     col_dict: dict[str, Any], group_obj: dict[str, Any] | None

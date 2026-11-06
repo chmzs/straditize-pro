@@ -32,7 +32,7 @@ from ..protocol import (
     JsonRpcError,
 )
 from .agedepth import attach_windowed_rates, build_age_depth_frame
-from .xscale import resolve_column_scale
+from .xscale import read_column_values, resolve_column_scale
 
 
 def _normalize_negative_zero_depth(csv_string: str) -> str:
@@ -150,25 +150,14 @@ class ExportMixin:
                 scale = resolve_column_scale(self, col, c_idx)
                 pts = column_points.get(c_idx, [])
                 p_dict = {p["row"]: p["x"] for p in pts}
-                # 0 点（= 左缘 + 轴线粗），与画布绿线、与 px_to_value 的换算基准同源。
-                c_start_px = float(scale.abs_px0)
-
-                if scale.calibrated:
-                    vals = [
-                        scale.px_to_value(
-                            p_dict.get(r, c_start_px),
-                            baseline_px=c_start_px,
-                            col_name=col_name,
-                            ndigits=4,
-                        )
-                        for r in row_list
-                    ]
-                else:
-                    # 未标定列整列不给数（与界面、与 extract_grid_values 同源）：
-                    # 用列宽归一估算出来的百分比会被下游当成真实丰度。
-                    vals = [None] * len(row_list)
-
-                data_dict[col_name] = vals
+                # 缺控制点填 0 点、未标定整列不给数——两个决定都在 read_column_values 里，
+                # 这里只提供像素序列（与 CSV/网格/QA 同一个入口）。
+                baseline_px = float(scale.abs_px0)
+                data_dict[col_name] = read_column_values(
+                    scale,
+                    [p_dict.get(r, baseline_px) for r in row_list],
+                    col_name=col_name,
+                )
 
             roi_dfs[roi_name] = pd.DataFrame(data_dict)
 
@@ -846,24 +835,14 @@ class ExportMixin:
             pts = self.column_points[c_idx]
             p_dict = {p["row"]: p["x"] for p in pts}
             scale = resolve_column_scale(self, col_def, c_idx)
-            # 缺控制点的行填 **0 点**（= 列左缘 + 轴线粗，ARCHITECTURE §6.4），不是列左缘：
-            # 画布绿线画在 0 点，基线与换算必须同源，否则这批行会落进轴内算出负值再被 clamp。
-            default_start = float(scale.abs_px0)
-            raw_x = [p_dict.get(r, default_start) for r in all_rows]
-            # 未标定列整列不给数：与 export_data / extract_grid_values 同源。
-            values[col_name] = (
-                [
-                    scale.px_to_value(
-                        x,
-                        baseline_px=default_start,
-                        strict=strict,
-                        col_name=col_name,
-                        ndigits=4,
-                    )
-                    for x in raw_x
-                ]
-                if scale.calibrated
-                else [None] * len(raw_x)
+            # 缺控制点填 **0 点**（= 列左缘 + 轴线粗，ARCHITECTURE §6.4）；未标定整列不给数。
+            # 两个决定都在 read_column_values 里——四路出口共用一个入口，取整改一处即全改。
+            baseline_px = float(scale.abs_px0)
+            values[col_name] = read_column_values(
+                scale,
+                [p_dict.get(r, baseline_px) for r in all_rows],
+                strict=strict,
+                col_name=col_name,
             )
         return values
 
@@ -1059,21 +1038,10 @@ class ExportMixin:
 
                 col_def = columns[c_idx] if c_idx < len(columns) else {}
                 scale = resolve_column_scale(self, col_def, c_idx)
-                # 0 点（= 左缘 + 轴线粗），与画布绿线、与 px_to_value 的换算基准同源。
-                c_start_px = float(scale.abs_px0)
-                # 未标定列不出数。`px_to_value` 在 legacy/default 分支会用列宽归一
-                # 估算一个百分比——那是程序默认值，不是读数（界面按同一判据显示「未标定」）。
-                # 导出与界面必须同源，否则同一列一边说未标定、一边报 1.93%。
-                val = (
-                    scale.px_to_value(
-                        interp_x,
-                        baseline_px=c_start_px,
-                        col_name=taxon,
-                        ndigits=4,
-                    )
-                    if scale.calibrated
-                    else None
-                )
+                # 未标定列不出数：与 CSV / TAR / XLSX 同一个入口、同一套策略。
+                # `px_to_value` 在 legacy/default 分支会用列宽归一估一个百分比——那是程序
+                # 默认值不是读数；四路出口必须都按同一条判据给 None。
+                val = read_column_values(scale, [interp_x], col_name=taxon)[0]
 
                 row_vals.append(val)
                 row_dict[taxon] = val

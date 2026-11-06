@@ -9,7 +9,7 @@ from typing import Any
 
 from ..protocol import JsonRpcError
 from ..qa import compute_qa_summary
-from .xscale import resolve_column_scale
+from .xscale import READ_PROFILE_QA, read_column_values, resolve_column_scale
 
 
 class QaMixin:
@@ -191,22 +191,16 @@ class QaMixin:
             )
             p_dict = {p["row"]: p["x"] for p in pts}
 
-            # 0 点（= 左缘 + 轴线粗），与画布绿线、与 px_to_value 的换算基准同源。
-            col_start_px = float(scale.abs_px0)
-
-            c_vals = [
-                scale.px_to_value(
-                    p_dict.get(r, col_start_px),
-                    baseline_px=col_start_px,
-                    col_name=c_name,
-                    ndigits=None,
-                    # QA 这里保留旧行为：未标定列按 legacy 粗算，用来**触发**
-                    # "该列没标定/总和偏离"的提醒；它不进入导出，也不代表读数。
-                    # 导出路径（export.py）对未标定列一律给 None。
-                    require_calibrated=False,
-                )
-                for r in horizon_rows
-            ]
+            # 与导出同一个读取入口，差异只由 profile 表达：QA 允许未标定列粗算
+            # （否则"该列没标定"这条提醒永远不触发）且保留全精度（门限判定不该被取整影响）。
+            # 这个差异现在是**显式命名**的，不再是散落在调用处的两个参数。
+            baseline_px = float(scale.abs_px0)
+            c_vals = read_column_values(
+                scale,
+                [p_dict.get(r, baseline_px) for r in horizon_rows],
+                profile=READ_PROFILE_QA,
+                col_name=c_name,
+            )
 
             col_values_by_column.append(c_vals)
             columns_info.append(
