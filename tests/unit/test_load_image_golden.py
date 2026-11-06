@@ -216,6 +216,15 @@ def _collect(tmp_dir: Path) -> dict:
         session, session.load_image(image_path=str(pdf_path), page_number=1)
     )
 
+    # 缓存 PDF 回落：不传任何图源时，load_image 必须回到上一次的 PDF（PDF 换页正靠它）。
+    # 这条以前没被本文件覆盖——正是它漏掉了 helper 里 image_path/image_data 未初始化的
+    # UnboundLocalError（全量套件里的 switch_pdf_page 用例抓到）。
+    session = StraditizeSession()
+    session._init_cleanup()
+    session.load_image(image_path=str(pdf_path), page_number=1)
+    session.samples = [{"row_px": 3, "depth": 1.0}]
+    out["cached_pdf_reload"] = _snapshot(session, session.switch_pdf_page(1))
+
     return out
 
 

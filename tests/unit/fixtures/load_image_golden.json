@@ -101,6 +101,114 @@
   ],
   "selected_candidate_ids": []
  },
+ "cached_pdf_reload": {
+  "cleared": {
+   "candidate_line_mask": null,
+   "cleanup_overlay_png": null,
+   "data_xlim": [
+    36.0,
+    282.0
+   ],
+   "data_ylim": [
+    36.0,
+    176.0
+   ],
+   "degrid_info": null,
+   "degrid_line_mask": null,
+   "degrid_strength": null,
+   "depth_calib": null,
+   "exclusion_mask": null,
+   "foreground_column_edges": null,
+   "foreground_mask": null,
+   "grid_line_mask": null,
+   "manual_erase_mask": null,
+   "manual_restore_mask": null,
+   "shadow_mask": null,
+   "solid_layers": null,
+   "tick_band": null,
+   "y_scale": null
+  },
+  "dicts": {
+   "cleanup_stats": {},
+   "column_points": {},
+   "control_points": {},
+   "reader_types": {},
+   "x_scales": {}
+  },
+  "image": {
+   "format": "PDF_IMAGE",
+   "mode": "RGBA",
+   "size": [
+    300,
+    200
+   ]
+  },
+  "image_array": {
+   "is_none": false,
+   "shape": [
+    200,
+    300,
+    4
+   ]
+  },
+  "is_calibrated": false,
+  "lists": {
+   "columns": 0,
+   "depth_grid": 0,
+   "exclusion_regions": 0,
+   "line_candidates": 0,
+   "line_strokes": 0,
+   "redo_stack": 0,
+   "samples": 0,
+   "taxa_names": 0,
+   "undo_stack": 1
+  },
+  "pdf_cache": {
+   "cached_pdf_path_is_pdf": false,
+   "has_pdf_data": true,
+   "pdf_info": {
+    "current_page": 1,
+    "total_pages": 1
+   }
+  },
+  "result": {
+   "active_roi_id": "roi_1",
+   "format": "PDF_IMAGE",
+   "height": 200,
+   "image_path": "upload://diagram.png",
+   "image_url": "/image/current",
+   "mode": "RGB",
+   "pdf_info": {
+    "current_page": 1,
+    "total_pages": 1
+   },
+   "primary_roi_id": "roi_1",
+   "success": true,
+   "suggested_roi": {
+    "confidence": "low",
+    "method": "fallback_ratio",
+    "xMax": 282,
+    "xMin": 36,
+    "yMax": 176,
+    "yMin": 36
+   },
+   "width": 300
+  },
+  "rois": [
+   {
+    "id": "roi_1",
+    "xlim": [
+     36.0,
+     282.0
+    ],
+    "ylim": [
+     36.0,
+     176.0
+    ]
+   }
+  ],
+  "selected_candidate_ids": []
+ },
  "path_plate": {
   "cleared": {
    "candidate_line_mask": null,

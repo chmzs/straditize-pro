@@ -326,10 +326,7 @@ class CoreMixin:
     ) -> dict[str, Any]:
         """Loads a diagram image or PDF page into memory."""
         if not image_path and not image_data and not sample_key:
-            if getattr(self, "cached_pdf_data", None):
-                image_data = f"data:application/pdf;base64,{base64.b64encode(self.cached_pdf_data).decode('ascii')}"
-            elif getattr(self, "cached_pdf_path", None):
-                image_path = self.cached_pdf_path
+            image_path, image_data = self._cached_pdf_source()
 
         img, fmt, resolved_path, pdf_info, raw_pdf_bytes = _decode_diagram_source(
             image_path=image_path,
@@ -338,6 +335,50 @@ class CoreMixin:
             file_name=file_name,
             page_number=page_number,
         )
+        self._remember_pdf_state(resolved_path, pdf_info, raw_pdf_bytes)
+        self._apply_image_payload(img, fmt, resolved_path, file_name)
+        self._reset_per_image_state()
+        sug = self._init_default_roi_from_suggestion()
+
+        return {
+            "success": True,
+            "width": self.width,
+            "height": self.height,
+            "format": self.format,
+            "mode": self.mode,
+            "image_path": self.image_path,
+            "image_url": "/image/current",
+            "suggested_roi": sug,
+            "rois": self.rois,
+            "primary_roi_id": self.primary_roi_id,
+            "active_roi_id": self.active_roi_id,
+            "pdf_info": self.pdf_info,
+        }
+
+    # ---- load_image 的分段实现 ----
+
+    def _cached_pdf_source(self) -> tuple[str | None, str | None]:
+        """没有显式给图源时，回落到上一次载入的 PDF（换页正靠它）。
+
+        两个返回值必须先各自初始化为 None：原来这段在 `load_image` 体内时，
+        `image_path` / `image_data` 是**函数入参**（恒有值），抽成 helper 后变成局部变量，
+        只会赋值其中一个，另一个就会 UnboundLocalError。
+        """
+        image_path: str | None = None
+        image_data: str | None = None
+        if getattr(self, "cached_pdf_data", None):
+            image_data = f"data:application/pdf;base64,{base64.b64encode(self.cached_pdf_data).decode('ascii')}"
+        elif getattr(self, "cached_pdf_path", None):
+            image_path = self.cached_pdf_path
+        return image_path, image_data
+
+    def _remember_pdf_state(
+        self,
+        resolved_path: str | None,
+        pdf_info: dict[str, Any] | None,
+        raw_pdf_bytes: bytes | None,
+    ) -> None:
+        """记住 PDF 原文与页码信息（只对 .pdf 路径缓存路径，PDF 换页要用）。"""
         self.cached_pdf_data = raw_pdf_bytes
         self.cached_pdf_path = (
             resolved_path
@@ -346,6 +387,14 @@ class CoreMixin:
         )
         self.pdf_info = pdf_info
 
+    def _apply_image_payload(
+        self,
+        img: Image.Image,
+        fmt: str,
+        resolved_path: str | None,
+        file_name: str | None,
+    ) -> None:
+        """写入图像身份与像素数组；超过 16M 像素不建数组（避免一次吃掉几百 MB）。"""
         self.image_path = resolved_path or (
             f"upload://{file_name}" if file_name else "upload://diagram.png"
         )
@@ -360,6 +409,12 @@ class CoreMixin:
             self.image = img.convert("RGBA")
             self.image_array = np.array(self.image)
 
+    def _reset_per_image_state(self) -> None:
+        """清空所有"属于上一张图"的状态；清单里每一行都对着一个实测缺陷。
+
+        故意不清年代学（age_depth_model / ensemble_tables）、论文元数据与 PDF 缓存：
+        它们不派生于这张图的像素，清了等于毁掉用户的既有工作（详见下面的逐项注释）。
+        """
         # 指纹缓存由 `StraditizeSession.image` 的 setter 自动作废（见那里），
         # 这里不需要也不应该再手工清一次 —— 手写清单正是本轮反复漏项的地方。
         self.foreground_mask = None
@@ -427,6 +482,9 @@ class CoreMixin:
         #   因为那是"新项目"；换图是"同一项目里换一张图"，语义不同。
         # - `paper_metadata`：描述论文而非图，换图（含 PDF 换页）后仍然成立。
         # - `cached_pdf_data` / `cached_pdf_path` / `pdf_info`：PDF 换页正靠它们。
+
+    def _init_default_roi_from_suggestion(self) -> dict[str, Any]:
+        """按建议取数区自动建一个 pollen ROI，返回该建议（供调用方回给前端）。"""
         self.data_xlim = None
         self.data_ylim = None
         self._init_rois()
@@ -440,20 +498,7 @@ class CoreMixin:
             y1=sug["yMax"],
             composition=True,
         )
-        return {
-            "success": True,
-            "width": self.width,
-            "height": self.height,
-            "format": self.format,
-            "mode": self.mode,
-            "image_path": self.image_path,
-            "image_url": "/image/current",
-            "suggested_roi": sug,
-            "rois": self.rois,
-            "primary_roi_id": self.primary_roi_id,
-            "active_roi_id": self.active_roi_id,
-            "pdf_info": self.pdf_info,
-        }
+        return sug
 
     def switch_pdf_page(self, page_number: int = 1) -> dict[str, Any]:
         """Switch to a specific 1-based page of the currently loaded PDF."""
