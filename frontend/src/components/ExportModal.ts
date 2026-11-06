@@ -598,7 +598,11 @@ export class ExportModal {
         } else {
           chkEnsemble.disabled = true;
           chkEnsemble.checked = false;
-          subEnsemble.style.display = 'none';
+          // 空态**必须把理由显示出来**：禁用控件如果不说为什么，用户只能猜。
+          // 原来这里 display='none'，而「暂无原生或导入集成表」这句恰好就在这个容器里
+          // ——等于给了一个看得见、却永远灰着的选项。原生集成表要跑年代模型（依赖 R）
+          // 才会出现，所以空态在新机器上是**常态**，不是边界情况。
+          subEnsemble.style.display = 'block';
         }
       })
       .catch(() => {
