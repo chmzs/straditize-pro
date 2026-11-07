@@ -14,7 +14,7 @@ import json
 import os
 import tarfile
 import time
-from typing import Any
+from typing import Any, Collection, Sequence
 
 import numpy as np
 import pandas as pd
@@ -33,6 +33,55 @@ from ..protocol import (
 )
 from .agedepth import attach_windowed_rates, build_age_depth_frame
 from .xscale import read_column_values, resolve_column_scale
+
+
+
+def _column_row_window(
+    session: Any, col: dict[str, Any], c_idx: int
+) -> tuple[int, int] | None:
+    """该列在**哪几行**上出数（取数窗口 y0..y1）。
+
+    窗口内的缺行是「该行没有墨迹」→ 0（见 test_export_missing_row_semantics.py）；
+    窗口**之外**且没有实测点的行则是「不在本列读数范围内」→ None，不能给 0。
+
+    返回 None 表示**判不出范围**（没有取数区、或整列落在 ROI 外）。此时调用方不裁：
+    不知道边界就抹空，会把"手工构造的会话 / 移动过 ROI 但点还在"的真实读数一起杀掉。
+    """
+    try:
+        _, _, y0, y1 = session._digitize_column_window(col, col.get("roi_id"), c_idx)
+    except JsonRpcError:
+        # 整列落在 ROI 外：范围判不出（用户可能只是把 ROI 挪走了，点还在）→ 不裁。
+        return None
+    except (TypeError, AttributeError):
+        # 会话没有取数区（data_ylim/ROI 都缺，常见于手工构造的会话）：返回 None，
+        # 由调用方按「判不出范围」处理——不裁，保持原行为。
+        return None
+    return int(y0), int(y1)
+
+
+def _mask_outside_window(
+    rows: Sequence[int],
+    values: list[Any],
+    window: tuple[int, int] | None,
+    measured_rows: Collection[int],
+) -> list[Any]:
+    """把「窗口之外且没有实测点」的行置为 None。
+
+    只有**能判定范围**时才裁（`window` 是 (y0, y1)）；判不出范围就原样返回——
+    不知道边界却把整列抹空，会造成比原问题更严重的失真。
+
+    两个例外必须保留原值：
+    1. 行在窗口内（正常情况）；
+    2. 该行**有实测点**（column_points 里真有这一行）——窗口只是「哪些行应该有数」的
+       启发式，而实测点是真量到过的，绝不能因为窗口判窄就抹掉。
+    """
+    if not isinstance(window, tuple):
+        return list(values)
+    y0, y1 = window
+    return [
+        v if (y0 <= r <= y1 or r in measured_rows) else None
+        for r, v in zip(rows, values)
+    ]
 
 
 def _normalize_negative_zero_depth(csv_string: str) -> str:
@@ -153,10 +202,15 @@ class ExportMixin:
                 # 缺控制点填 0 点、未标定整列不给数——两个决定都在 read_column_values 里，
                 # 这里只提供像素序列（与 CSV/网格/QA 同一个入口）。
                 baseline_px = float(scale.abs_px0)
-                data_dict[col_name] = read_column_values(
-                    scale,
-                    [p_dict.get(r, baseline_px) for r in row_list],
-                    col_name=col_name,
+                data_dict[col_name] = _mask_outside_window(
+                    row_list,
+                    read_column_values(
+                        scale,
+                        [p_dict.get(r, baseline_px) for r in row_list],
+                        col_name=col_name,
+                    ),
+                    _column_row_window(self, col, c_idx),
+                    p_dict,
                 )
 
             roi_dfs[roi_name] = pd.DataFrame(data_dict)
@@ -838,11 +892,16 @@ class ExportMixin:
             # 缺控制点填 **0 点**（= 列左缘 + 轴线粗，ARCHITECTURE §6.4）；未标定整列不给数。
             # 两个决定都在 read_column_values 里——四路出口共用一个入口，取整改一处即全改。
             baseline_px = float(scale.abs_px0)
-            values[col_name] = read_column_values(
-                scale,
-                [p_dict.get(r, baseline_px) for r in all_rows],
-                strict=strict,
-                col_name=col_name,
+            values[col_name] = _mask_outside_window(
+                all_rows,
+                read_column_values(
+                    scale,
+                    [p_dict.get(r, baseline_px) for r in all_rows],
+                    strict=strict,
+                    col_name=col_name,
+                ),
+                _column_row_window(self, col_def, c_idx),
+                p_dict,
             )
         return values
 
@@ -1032,6 +1091,9 @@ class ExportMixin:
                 p_x = np.array([p["x"] for p in pts], dtype=float)
 
                 sort_idx = np.argsort(p_rows)
+                # 网格采样保持**线性插值 + 端点 clamp**（既有语义，e2e `verify_straditize_pro`
+                # 明确断言「已标定列必须给数」）。这不是本轮的改动点：把它改成「范围外 None」
+                # 会让网格出现空洞，属独立的产品判断，已登记 §9。
                 interp_x = float(
                     np.interp(target_pixel_row, p_rows[sort_idx], p_x[sort_idx])
                 )

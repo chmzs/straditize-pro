@@ -57,6 +57,8 @@ def _session() -> StraditizeSession:
         {"row_px": 20, "depth": 20.0},
         {"row_px": 30, "depth": 30.0},
     ]
+    # 取数区（真实会话里由 core.detectColumns 设定）：行 10..30
+    session.data_ylim = [10, 30]
     session.is_calibrated = True
     session.y_scale = {"slope": 1.0, "intercept": 0.0}
     return session
@@ -74,3 +76,24 @@ def test_missing_row_exports_zero_not_interpolated() -> None:
     # 对照：有数字化点的行照常换算（10px → 10%）
     assert values[10.0] == 10.0
     assert values[20.0] == 50.0
+
+def test_row_outside_the_data_window_exports_none() -> None:
+    """窗口**之外**的层位不在本列读数范围内，必须给 None——不能给 0。
+
+    与上一条的区别：缺行但仍在窗口内 = 无墨迹 = 0（真值）；超出窗口 = 没有这一行的读数
+    （粘一个超出取数区的深度就会命中）。把两者混成 0，用户会拿到一串看着像"真的等于零"的数。
+    """
+    session = _session()
+    session.samples = [
+        {"row_px": 5, "depth": 5.0},   # 窗口 [10, 30] 之外
+        {"row_px": 15, "depth": 15.0},  # 窗口内、无墨迹
+]
+
+    df = pd.read_csv(io.StringIO(session.export_data("csv")["csv"]))
+    values = dict(zip(df["depth"], df["col01"]))
+
+    assert values[15.0] == 0.0, "窗口内缺行仍应是 0（无墨迹）"
+    assert pd.isna(values[5.0]), (
+        f"窗口外的层位必须是空值，实得 {values[5.0]}；给 0 等于声称这一层读到了零丰度"
+    )
+
