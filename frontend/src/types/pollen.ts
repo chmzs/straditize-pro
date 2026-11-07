@@ -280,7 +280,7 @@ export interface DepthCalibration {
   primaryAxis?: 'depth' | 'age';
   depthInterval?: number;
   depthGridEnabled?: boolean;
-  customDepths?: number[]; // 用户从 Excel 粘贴的真实非等距深度层位序列
+
 }
 
 export interface LineCandidate {

@@ -258,7 +258,6 @@ export function normalizeProject(
     // 之前这里写 `?? true`，与 `GeologyCanvas` 的初始值 `depthGridEnabled: false` 打架 ——
     // 每次加载项目都被重新打开，表现为"网格线怎么清不掉"。
     depthGridEnabled: cal.depthGridEnabled ?? cal.depth_grid_enabled ?? false,
-    customDepths: cal.customDepths ?? cal.custom_depths ?? [],
   };
 
   const normalizedCols = rawCols.map((c: any, idx: number) => {

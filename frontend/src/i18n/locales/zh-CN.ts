@@ -333,6 +333,13 @@ export const zhCN = {
   'step7.listTitle': '层位列表 ({count} 层)',
   'step7.clear': '清空',
   'step7.clearTitle': '清空全部层位',
+  'step7.paste': '粘贴深度',
+  'step7.pasteTitle': '导入自定义深度',
+  'step7.pasteDesc':
+    '从 Excel 或文本粘贴真实深度序列（每行一个数，也可用逗号 / 分号分隔）。每个深度按当前 Y 轴标定换算成像素行，取值就用该行的实测读数。',
+  'step7.pasteConfirm': '导入并替换层位',
+  'step7.resolution': '深度分辨率',
+  'step7.resolutionUnknown': '未标定（无法把深度换算成像素行）',
   'step7.next': '完成提取，进入全剖面地学校验 (步骤 8)',
 
   // ===== 步骤 8：校验诊断面板 =====

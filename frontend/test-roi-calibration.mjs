@@ -101,13 +101,19 @@ assert.strictEqual(horizons.yPositions[0], 556, '上端像素取标定上端');
 assert.strictEqual(horizons.yPositions[horizons.yPositions.length - 1], 1311, '下端像素取标定下端');
 assert.strictEqual(horizons.depths.length, 7, '(4500-1500)/500 + 1 = 7 个层位');
 
-// 8. 自定义层位序列同样只经标定换算，不碰 ROI
-const custom = SplineInterpolator.getStandardDepthHorizons({
+// 8. 自定义深度序列**不再**由前端插值器接管（customDepths 已删除，2026-11-08）。
+//    粘贴的深度经 samples.pasteDepths 落库，画布由 SampleOverlay 按 samples 画、导出也读 samples；
+//    这里钉住的是「前端不再有第二条通往采样层位的路径」：误传该字段必须被忽略。
+const withGhost = SplineInterpolator.getStandardDepthHorizons({
   ...calibrated,
   customDepths: [1500, 3000, 4500],
 });
-assert.deepStrictEqual(custom.depths, [1500, 3000, 4500]);
-assert.deepStrictEqual(custom.yPositions, [556, 933.5, 1311]);
+const withoutGhost = SplineInterpolator.getStandardDepthHorizons({ ...calibrated });
+assert.deepStrictEqual(
+  withGhost,
+  withoutGhost,
+  'customDepths 已删除：误传该字段不得改变层位（唯一入口是 samples.pasteDepths）'
+);
 
 // 9. 未标定时锚定表为空，而不是给出错位的伪数据
 assert.deepStrictEqual(

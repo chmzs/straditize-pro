@@ -332,6 +332,13 @@ export const en = {
   'step7.listTitle': 'Horizons List ({count} layers)',
   'step7.clear': 'Clear',
   'step7.clearTitle': 'Clear all horizons',
+  'step7.paste': 'Paste depths',
+  'step7.pasteTitle': 'Import custom depths',
+  'step7.pasteDesc':
+    'Paste real depth values from Excel or text (one per line, or comma/semicolon separated). Each depth is converted to a pixel row with the current Y calibration, and the reading comes from that row.',
+  'step7.pasteConfirm': 'Import and replace horizons',
+  'step7.resolution': 'Depth resolution',
+  'step7.resolutionUnknown': 'Not calibrated (cannot convert depth to pixel row)',
   'step7.next': 'Complete Extraction, Proceed to QA (Step 8)',
 
   // ===== Step 8: QA Panel =====

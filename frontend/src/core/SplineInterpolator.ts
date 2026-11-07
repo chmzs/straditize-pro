@@ -157,15 +157,8 @@ export class SplineInterpolator {
     const slope = (bottomValue - topValue) / yRange;
     const intercept = topValue - slope * topPx;
 
-    // 优先采用用户从 Excel 粘贴的真实非等距深度层位 (忠实于原始物理真实)
-    if (cal.customDepths && cal.customDepths.length > 0) {
-      const depths = [...cal.customDepths];
-      const yPositions = depths.map((d) => {
-        const fraction = (d - top) / depthRange;
-        return Number((topPx + fraction * yRange).toFixed(2));
-      });
-      return { depths, yPositions };
-    }
+    // 采样层位不再走前端专属字段（customDepths 已删除）：粘贴的深度经
+    // samples.pasteDepths 落库，画布由 SampleOverlay 按 samples 画，导出也读 samples。
 
     const totalSpan = Math.abs(bottom - top);
     let interval = cal.depthInterval && cal.depthInterval > 0 ? cal.depthInterval : 2;
