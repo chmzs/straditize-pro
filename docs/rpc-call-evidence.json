@@ -1036,16 +1036,6 @@
   "session_def": "straditize_core/session_parts/qa.py:22"
  },
  {
-  "rpc": "roi.applyFormDefaults",
-  "client": "roiApplyFormDefaults",
-  "ui": [],
-  "tests": [],
-  "session_direct_test": "test_multi_roi.py",
-  "spec": "",
-  "session": "roi_apply_form_defaults",
-  "session_def": "straditize_core/session_parts/roi.py:361"
- },
- {
   "rpc": "roi.create",
   "client": "roiCreate",
   "ui": [

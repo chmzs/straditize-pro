@@ -121,7 +121,6 @@ export type RpcMethod =
   | 'project.new'
   | 'project.save'
   | 'qa.summarize'
-  | 'roi.applyFormDefaults'
   | 'roi.create'
   | 'roi.groupCreate'
   | 'roi.groupRemove'

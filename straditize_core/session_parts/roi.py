@@ -358,43 +358,6 @@ class RoiMixin:
         self.primary_roi_id = roi_id
         return {"primary_roi_id": self.primary_roi_id}
 
-    def roi_apply_form_defaults(self, roi_id: str) -> dict[str, Any]:
-        """Write form_defaults to all columns in this ROI without inheritance."""
-        roi = self._get_roi(roi_id)
-        form = roi.get("form_defaults")
-        if not form:
-            return {"changed": [], "count": 0}
-
-        changed: list[dict[str, Any]] = []
-        field_mapping = {
-            "plot_type": form.get("plotType"),
-            "scale_type": form.get("scaleType"),
-            "unit": form.get("unit"),
-            "exaggeration_mult": form.get("exaggerationMult"),
-            "startValue": form.get("startValue"),
-            "tickValue": form.get("step") or form.get("tickValue"),
-        }
-
-        for col in getattr(self, "columns", []):
-            if col.get("roi_id") == roi_id:
-                col_id = col.get("id") or f"col_{col.get('col_index')}"
-                for target_field, target_val in field_mapping.items():
-                    if target_val is not None:
-                        old_val = col.get(target_field)
-                        col[target_field] = target_val
-                        changed.append({
-                            "column_id": col_id,
-                            "field": target_field,
-                            "from": old_val,
-                            "to": target_val,
-                        })
-
-        record_history = getattr(self, "_record_history", None)
-        if callable(record_history):
-            record_history(f"Apply form defaults to ROI {roi_id}")
-
-        return {"changed": changed, "count": len(changed)}
-
     # ========================================================================
     # X-Groups within ROI Management (Design 2026-09-29 P2)
     # ========================================================================

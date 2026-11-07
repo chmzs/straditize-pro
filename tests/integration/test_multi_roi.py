@@ -183,60 +183,6 @@ def test_multi_roi_column_names_follow_global_col_index():
     assert session.columns[0]["roi_id"] == r_left["id"]
 
 
-def test_apply_form_defaults_no_inheritance():
-    """applyFormDefaults writes values and diffs, but establishes no dynamic inheritance."""
-    session = get_hoya_session()
-    session.rois.clear()
-    session.columns.clear()
-
-    roi = session.roi_create(name="pollen", x0=315, x1=800, y0=511, y1=1311)["roi"]
-    cols = session.detect_columns(roi_id=roi["id"])
-    assert len(cols) >= 2
-
-    # Set form_defaults on the ROI
-    form_v1: dict[str, Any] = {
-        "plotType": "bar",
-        "scaleType": "log",
-        "unit": "permille",
-        "exaggerationMult": 10.0,
-        "startValue": 5.0,
-        "step": 25.0,
-    }
-    session.roi_update(roi_id=roi["id"], form_defaults=form_v1)
-
-    # Apply defaults
-    res = session.roi_apply_form_defaults(roi_id=roi["id"])
-    assert res["count"] > 0
-    assert len(res["changed"]) == res["count"]
-
-    # Verify columns have received the values
-    for c in session.columns:
-        if c["roi_id"] == roi["id"]:
-            assert c["plot_type"] == "bar"
-            assert c["scale_type"] == "log"
-            assert c["unit"] == "permille"
-            assert c["exaggeration_mult"] == 10.0
-            assert c["startValue"] == 5.0
-            assert c["tickValue"] == 25.0
-
-    # Modify form_defaults to form_v2 WITHOUT calling applyFormDefaults
-    form_v2: dict[str, Any] = {
-        "plotType": "line",
-        "scaleType": "linear",
-        "unit": "%",
-        "exaggerationMult": None,
-        "startValue": 0.0,
-        "step": 50.0,
-    }
-    session.roi_update(roi_id=roi["id"], form_defaults=form_v2)
-
-    # Assert columns STILL have form_v1 values (proves ZERO inheritance)
-    for c in session.columns:
-        if c["roi_id"] == roi["id"]:
-            assert c["plot_type"] == "bar", "Dynamic inheritance occurred! Column value changed with form update"
-            assert c["unit"] == "permille"
-
-
 def test_roi_remove_cascades_columns_only():
     """Removing an ROI cascade-deletes its columns, leaving other ROIs untouched."""
     session = get_hoya_session()

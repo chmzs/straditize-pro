@@ -59,7 +59,7 @@ ERROR_MESSAGES = {
     FILE_ERROR: "File error",
 }
 
-#: Authoritative contract inventory of all registered backend RPC methods (105 methods).
+#: Authoritative contract inventory of all registered backend RPC methods (104 methods).
 #:
 #: 这份清单只保证「后端注册表 ↔ 声明」一致（consistency_check 的 H 门禁），**不**表示每条都有
 #: 前端入口。已知的纯对外 / agent 面（前端零调用，用途由 spec 声明）：`core.getShadowLayer`、
@@ -147,7 +147,6 @@ ALL_RPC_METHODS: tuple[str, ...] = (
     "project.new",
     "project.save",
     "qa.summarize",
-    "roi.applyFormDefaults",
     "roi.create",
     "roi.groupCreate",
     "roi.groupRemove",

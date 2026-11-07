@@ -1148,10 +1148,6 @@ export class RpcClient {
     return this.call('roi.setPrimary', { roi_id: roiId });
   }
 
-  public async roiApplyFormDefaults(roiId: string): Promise<{ changed: any[]; count: number }> {
-    return this.call('roi.applyFormDefaults', { roi_id: roiId });
-  }
-
   public async roiGroupCreate(
     roiId: string,
     params: {
