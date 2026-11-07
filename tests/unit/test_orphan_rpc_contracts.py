@@ -24,7 +24,7 @@ import pathlib
 
 import numpy as np
 
-from straditize_core.protocol import STATE_ERROR, JsonRpcDispatcher
+from straditize_core.protocol import INVALID_PARAMS, STATE_ERROR, JsonRpcDispatcher
 from straditize_core.rpc_methods import digitize as digitize_methods
 from straditize_core.session import StraditizeSession
 
@@ -175,4 +175,89 @@ def test_ensemble_add_then_list_roundtrip() -> None:
     )
     listed_again = _call_system(session, "ensemble.list")["result"]
     assert listed_again["count"] == 1
+
+def _call_component_and_agedepth(session: StraditizeSession, method: str, **params) -> dict:
+    dispatcher = JsonRpcDispatcher()
+    from straditize_core.rpc_methods import agedepth as agedepth_methods
+    from straditize_core.rpc_methods import components as component_methods
+
+    agedepth_methods.register(dispatcher, session)
+    component_methods.register(dispatcher, session)
+    return dispatcher.handle_object(
+        {"jsonrpc": "2.0", "method": method, "params": params, "id": 1}
+    )
+
+
+DATES = [
+    {"id": "1", "age": 1000.0, "error": 50.0, "depth": 10.0, "thickness": 1.0},
+    {"id": "2", "age": 2000.0, "error": 60.0, "depth": 40.0, "thickness": 1.0},
+]
+
+
+def test_generate_bacon_script_returns_a_runnable_script() -> None:
+    """generateBaconScript 是对外面：给用户一份能在 R 里跑的 rbacon 脚本。"""
+    session = _session()
+
+    result = _call_component_and_agedepth(
+        session, "agedepth.generateBaconScript", dates=DATES, core_name="TESTCORE"
+    )["result"]
+
+    assert isinstance(result, str) and "Bacon(" in result
+    assert "rbacon" in result, "脚本必须自己 load rbacon，否则拿到手跑不起来"
+    assert "TESTCORE" in result, "岩芯名必须进脚本——多岩芯时靠它区分输出"
+
+
+def test_generate_bacon_script_rejects_empty_dates() -> None:
+    """没有测年就生成 Bacon 脚本 = 产出「纯先验年龄模型」，属于会误导人的产物；
+
+    与占位 CSV 同一条不变量：取不到数据就报错，不返回一个看起来能跑的东西。
+    """
+    session = _session()
+
+    response = _call_component_and_agedepth(session, "agedepth.generateBaconScript", dates=[])
+
+    assert response["error"]["code"] == INVALID_PARAMS, (
+        "空测年必须被拒，否则用户会拿到一个没有任何测年约束的年龄模型"
+    )
+
+
+def test_generate_geochronr_script_returns_a_runnable_script() -> None:
+    """generateGeoChronRScript 给的是读 LiPD 容器再跑 runBacon 的下游脚本。"""
+    session = _session()
+
+    result = _call_component_and_agedepth(
+        session, "agedepth.generateGeoChronRScript", lipd_file_name="core.lpd"
+    )["result"]
+
+    assert "geoChronR" in result
+    assert "runBacon" in result
+    assert "core.lpd" in result, "脚本必须指向调用方给的那个 LiPD 文件"
+
+
+def test_component_uninstall_rejects_path_traversal() -> None:
+    """component.uninstall 会把 base_dir/name 整个 rmtree —— 所以 name 必须校验。
+
+    RPC 面把 name 原样透传给 shutil.rmtree：一个 ../.. 就能删到组件目录之外。
+    这条在**动磁盘之前**就该拒绝。
+    """
+    session = _session()
+
+    for evil in ("../evil", "..", "a/b", "age-modeling/../../x", ""):
+        response = _call_component_and_agedepth(session, "component.uninstall", name=evil)
+        assert response["error"]["code"] == INVALID_PARAMS, (
+            f"name={evil!r} 必须被拒；现在会走到 rmtree"
+        )
+
+
+def test_component_uninstall_is_idempotent_for_a_valid_name() -> None:
+    """合法但不存在时返回 removed=False（幂等），不得报错——卸载入口允许被重复点。"""
+    session = _session()
+
+    result = _call_component_and_agedepth(session, "component.uninstall", name="definitely-absent")[
+        "result"
+    ]
+
+    assert result["success"] is True
+    assert result["removed"] is False
+
 
