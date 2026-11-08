@@ -24,6 +24,8 @@ interface XTicksPanelState {
   pendingTick: { px: number; dist: number } | null;
   onTickPickedExternal: ((pt: { x: number; y: number }) => void) | null;
   isBatchAssignOpen: boolean;
+  /** 「列组」折叠区是否展开。必须存进 state：面板每次重渲染都会重建 DOM。 */
+  groupsFoldOpen: boolean;
   rulerGeo: RulerGeometry | null;
   rulerGeoError: string | null;
   rulerGeoKey: string | null;
@@ -37,6 +39,7 @@ const INITIAL_XTICKS_STATE: XTicksPanelState = {
   pendingTick: null,
   onTickPickedExternal: null,
   isBatchAssignOpen: false,
+  groupsFoldOpen: false,
   rulerGeo: null,
   rulerGeoError: null,
   rulerGeoKey: null,
@@ -310,10 +313,16 @@ export function render(data: DiagramData): string {
         </span>
       </div>
 
-      <!-- 模块 1：列组看板与多指标管理 (X-Groups) -->
-      <div class="inspector-section" style="padding: 10px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 12px; border: 1px solid var(--border-color);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="font-size: 11.5px; font-weight: 700; color: var(--text-heading);">列组看板 (按单位/量程分治)</span>
+      <!--
+        组管理收进折叠区（设计系统 §1.4 渐进披露 / §6 高级配置默认折叠）：
+        首屏只留「进度 → 检测 → 点齿 → 主动作」。分组只在需要分治单位/量程时才打开。
+        summary 里不放按钮——点了会连带折叠/展开。
+      -->
+      <details class="inspector-section" data-role="groups-fold" ${state.groupsFoldOpen ? 'open' : ''} style="padding: 8px 10px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--border-color);">
+        <summary style="font-size: 11.5px; font-weight: 700; color: var(--text-heading); cursor: pointer;" title="同单位、同量程的列共用一个标度。分组只影响标定，不改列几何">
+          列组 · ${groups.length} 组${currentGroup ? ` · 当前 ${currentGroup.name}` : ''}
+        </summary>
+        <div style="display: flex; justify-content: flex-end; align-items: center; margin: 8px 0;">
           <div style="display: flex; gap: 4px;">
             <button id="btn-create-new-group" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 1px 6px; color: var(--accent-blue);" title="新建一个列组：点它之后在图上点选属于该组的属种列（Shift 连选），其余列自动留在默认组">+ 分组</button>
             ${groups.length > 1 && currentGroupId !== activeRoi?.default_group_id ? `<button id="btn-delete-group" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 1px 6px; color: var(--accent-red);" title="删除当前列组：组内列自动回到默认组">删除本组</button>` : ''}
@@ -437,8 +446,10 @@ export function render(data: DiagramData): string {
               : ''
           }
         </div>
+      </details>
 
-        <!-- 参考标尺：一行检测结果 + 一个读数 + 一个按钮 -->
+      <!-- 标定：检测结果 + 轴线粗 + 点齿（首屏主体） -->
+      <div class="inspector-section" style="padding: 10px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 12px; border: 1px solid var(--border-color);">
         <div style="background: var(--bg-card); padding: 8px 10px; border-radius: 6px; border: 1px solid var(--accent-blue); margin-bottom: 6px;">
           <div data-role="ruler-detect" data-detected-columns="${(geo?.per_column ?? []).length}"
                data-spacing="${geo?.median_spacing_px ?? ''}"
@@ -559,6 +570,12 @@ export function render(data: DiagramData): string {
 }
 
 export function mount(root: HTMLElement, ctx: StepContext): void {
+  // 折叠状态存进 state 并在这里回写：面板每次 onDataChange 都整块重渲染，DOM 一换
+  // <details> 就回到默认闭合——用户在折叠区里点一下按钮、区块自己合上，等于把操作对象藏起来。
+  const groupsFold = root.querySelector<HTMLDetailsElement>('details[data-role="groups-fold"]');
+  groupsFold?.addEventListener('toggle', () => {
+    state.groupsFoldOpen = groupsFold.open;
+  });
   const activeColumn = () =>
     state.cachedData?.columns.find((c) => c.id === state.cachedData?.activeTaxaId) || state.cachedData?.columns[0];
   const columnIndex = (col: NonNullable<ReturnType<typeof activeColumn>>) =>

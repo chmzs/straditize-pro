@@ -8,7 +8,7 @@
  * 改一处另一处不知道，会直接写错数据。
  */
 import { expect, test } from './fixtures';
-import { diagramData, gotoStage, resetBaseline } from './helpers';
+import { diagramData, gotoStage, openStep6GroupsFold, resetBaseline } from './helpers';
 import type { Page } from '@playwright/test';
 
 /** 收集发往后端的 JSON-RPC：判据落在请求载荷上，而不只是前端乐观更新。 */
@@ -44,6 +44,8 @@ test.describe('步骤 6 属性层级', () => {
     const panel = page.locator('.step-panel[data-step="6"]');
 
     // 形态（plot_type）是**组**属性：入口在步骤 6 的组参数里，不是列属性面板。
+    // 组管理默认折叠（设计系统 §6）：形态按钮在折叠区里，先展开。
+    await openStep6GroupsFold(page);
     await panel.locator('.grp-plottype-btn[data-plottype="bar"]').click();
     await page.waitForTimeout(800);
 

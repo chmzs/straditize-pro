@@ -459,3 +459,18 @@ export async function footerToolMode(page: Page): Promise<string> {
 export async function activeTool(page: Page): Promise<{ footer: string; palette: string | null }> {
   return { footer: await footerToolMode(page), palette: await paletteActiveTool(page) };
 }
+
+/**
+ * 展开步骤 6 的「列组」折叠区（`<details data-role="groups-fold">`）。
+ *
+ * 组管理默认折叠（设计系统 §6「高级配置默认折叠」）：分组按钮、组 Tab、批量归组抽屉都在里面，
+ * 不先展开就会以 not visible 失败——这是折叠的必然结果，不是产品缺陷。
+ */
+export async function openStep6GroupsFold(page: Page): Promise<void> {
+  const fold = page.locator('.step-panel[data-step="6"] details[data-role="groups-fold"]');
+  if (!(await fold.evaluate((el) => (el as HTMLDetailsElement).open))) {
+    await fold.locator('summary').click();
+  }
+  await expect(fold, '列组折叠区必须已展开').toHaveAttribute('open', '');
+}
+

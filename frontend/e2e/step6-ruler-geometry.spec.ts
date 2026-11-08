@@ -17,7 +17,14 @@
  * 把锚点退回 col.startX，col1/col2/col3 的方向断言会变红。
  */
 import { expect, test } from './fixtures';
-import { backendRpc, clickCanvas, diagramData, gotoStage, resetBaseline } from './helpers';
+import {
+  backendRpc,
+  clickCanvas,
+  diagramData,
+  gotoStage,
+  openStep6GroupsFold,
+  resetBaseline,
+} from './helpers';
 import type { Page } from '@playwright/test';
 
 /**
@@ -43,6 +50,7 @@ interface BackendColumn {
 }
 
 const PANEL = '.step-panel[data-step="6"]';
+
 const DETECT = `${PANEL} [data-role="ruler-detect"]`;
 
 /** 图像物理真值：四列**轴线**（= 数据 0 点）的像素带。左缘实测 259/947/1352/1576，
@@ -134,6 +142,7 @@ test.describe('步骤 6 对齐本组（自动跨度）', () => {
     await expect(groupTabs, '应有两个组 Tab').toHaveCount(2);
 
     // 选中新组
+    await openStep6GroupsFold(page);
     await page.locator(`${PANEL} .btn-switch-group-tab[data-group-id="${newGroupId}"]`).click();
 
     // 展开批量归组抽屉
@@ -173,6 +182,7 @@ test.describe('步骤 6 对齐本组（自动跨度）', () => {
       expect(new Set(gidBefore).size, '前置：全部列同属默认组').toBe(1);
 
       // 进入选列模式
+      await openStep6GroupsFold(page);
       await page.locator(`${PANEL} #btn-create-new-group`).click();
       const bar = page.locator(`${PANEL} #column-pick-bar`);
       await expect(bar, '必须出现选列提示条').toBeVisible();
@@ -214,6 +224,7 @@ test.describe('步骤 6 对齐本组（自动跨度）', () => {
         .toEqual([2, 2]);
 
       // 删除刚才那个组 → 全部回默认组
+      await openStep6GroupsFold(page);
       await page.locator(`${PANEL} #btn-delete-group`).click();
       await expect
         .poll(
