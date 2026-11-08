@@ -209,4 +209,32 @@ console.log('✔ 标定结构不含 ROI 字段，深度换算与取数区完全�
 console.log('✔ 支持深度向下递增与年代向上递增两种方向');
 console.log('✔ 层位标尺铺在标定跨度上；未标定时为空');
 console.log('✔ 列 X 标度只读后端判定：group 形态判已标定、猜测端点判未标定');
+// 11. 草稿载荷的列数值端点：**未标定列必须给 null**
+//
+// 后端 `resolve_column_scale` 的 Case A1 只要看到「组 tick_layout + 列 x_values」就判
+// calibrated=true。若这里把 legacy 占位（startValue/tickValue，默认 0→100 或 0→20）
+// 填进去，未标定的列在恢复草稿后就会开始出数，而且是一整表看起来正常的百分比。
+const { draftColumnXValues } = await import('./src/core/draftPayload.ts');
+
+assert.strictEqual(
+  draftColumnXValues({ id: 'c1', x_ticks: null, startValue: 0, tickValue: 20 }),
+  null,
+  '未标定列不得写 x_values：占位刻度一旦变成端点，后端就会把它当读数用'
+);
+assert.strictEqual(
+  draftColumnXValues({ id: 'c2', x_ticks: [], startValue: 0, tickValue: 20 }),
+  null,
+  '空 x_ticks 同样按未标定处理'
+);
+assert.deepStrictEqual(
+  draftColumnXValues({
+    id: 'c3',
+    x_ticks: [
+      { px: 10, value: 0 },
+      { px: 60, value: 40 },
+    ],
+  }),
+  [0, 40],
+  '已标定列必须照搬 x_ticks 的端点数值'
+);
 console.log('\n🎉 ROI 与 Y 轴标定解耦 真实模块测试通过！');

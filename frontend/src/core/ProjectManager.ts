@@ -1,4 +1,5 @@
 import { Column, ControlPoint, DataRoi, DiagramCalibration, DiagramData, LEGACY_FULL_SCALE } from '../types/pollen';
+import { draftColumnXValues } from './draftPayload';
 import { RpcClient } from '../services/RpcClient';
 import { SplineInterpolator } from './SplineInterpolator';
 import { CoordinateSystem } from './CoordinateSystem';
@@ -91,22 +92,24 @@ export function draftToProjectPayload(draft: DiagramData): DraftRestorePayload {
 
     let rel0: number;
     let rel1: number;
-    let xValues: [number, number];
+    // 未标定列必须写 null：后端 `resolve_column_scale` 的 Case A1 只要看到
+    // 「组 + x_values」就判 calibrated=true，把 legacy 占位（0→100 / 0→20）当成真标度，
+    // 导出一整表看似正常的百分比。占位值绝不能填进这个字段。
+    let xValues: [number, number] | null;
     if (Array.isArray(c.x_ticks) && c.x_ticks.length >= 2) {
       // 标定过的列：端点就是两个真实刻度钉。
       rel0 = (Number(c.x_ticks[0].px) - start) / span;
       rel1 = (Number(c.x_ticks[1].px) - start) / span;
-      xValues = [Number(c.x_ticks[0].value), Number(c.x_ticks[1].value)];
+      xValues = draftColumnXValues(c);
     } else {
       // 未标定：起点在列左边界，终点取后端下发的 tickEndX
       // （它已经是后端 `resolve_column_scale` 算出的绝对像素，不是自造值）。
       const tickEndX = c.tickEndX ?? c.endX;
       rel0 = 0;
       rel1 = (Number(tickEndX) - start) / span;
-      // legacy 契约（0–100% 占位）不是读数：真正的标度一律经后端
-      // `resolve_column_scale`，未标定列在后端就不给数。这里只是让旧工程包
-      // 能还原出"当初画的量程"，数值来源仍是后端下发的字段。
-      xValues = [Number(c.startValue ?? 0), Number(c.tickValue ?? LEGACY_FULL_SCALE)];
+      // 未标定：不写 x_values（`draftColumnXValues` 返回 null）。见该函数的注释：
+      // 填了占位值，后端就会把这些列判成已标定并开始出数。
+      xValues = draftColumnXValues(c);
     }
     if (!Number.isFinite(rel0) || !Number.isFinite(rel1)) {
       // 端点算不出来就如实记下，绝不拿 0/1 顶上冒充。
