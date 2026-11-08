@@ -449,8 +449,10 @@ export function render(data: DiagramData): string {
           </div>
 
           <div data-role="units-per-cell-hint" style="font-size: 9.5px; line-height: 1.4; color: var(--text-muted); margin-bottom: 4px;">
-            这个数只能从图上读：<strong>相邻两个数字标签之差</strong>（如标签 10 / 30 → 填 20）。
-            标签隔一根齿才标数字时，取差值的一半。软件不替你猜——填错会让全组读数按同一比例偏掉。
+            <strong>相邻两个数字标签之差</strong>（标签 10 / 30 → 填 20）。
+            <details class="ui-help"><summary>取值规则</summary>
+              标签隔一根齿才标数字时取差值的一半。软件不替你猜：填错会让全组读数按同一比例偏掉。
+            </details>
           </div>
           <!-- 轴线粗：决定绿线「0 点 = 左缘 + 轴粗」的位置，同时给刻度检测定轴右缘。 -->
           <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px;">
@@ -458,7 +460,7 @@ export function render(data: DiagramData): string {
             <input type="number" id="inp-axis-stroke" value="${currentGroup && Number(currentGroup.axis_stroke_px) > 0 ? String(Number(currentGroup.axis_stroke_px)) : ''}" placeholder="5" min="1" max="20" step="1"
                    title="Y 轴轴线的描边宽度（像素）。0 点 = 左缘 + 它。填了就不再从像素里猜。"
                    style="width: 66px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
-            <span style="font-size: 9.5px; color: var(--text-muted);">px（0 点 = 左缘 + 它）</span>
+            <span style="font-size: 9.5px; color: var(--text-muted);">px</span>
            <!-- 单列覆盖：组值是初值，逐列差异真实存在（实测 beginner 3/5/5/5），
                 只调某列时不该把整组一起改。留空 = 跟随组。 -->
            <div style="display: flex; align-items: center; gap: 6px; width: 100%; margin-bottom: 6px;">
@@ -476,9 +478,9 @@ export function render(data: DiagramData): string {
                style="font-size: 9.5px; line-height: 1.45; margin: -2px 0 6px 0; color: ${axisStrokeMeasured ? 'var(--text-muted)' : 'var(--status-warning)'};">
             ${
               axisStrokeColOverride != null
-                ? `本列已单独覆盖：<strong>${axisStrokeColOverride}px</strong>（组值 ${Number(currentGroup?.axis_stroke_px) > 0 ? `${Number(currentGroup?.axis_stroke_px)}px` : "未实测/缺省 5px"}）；绿线 0 点 = 列左缘 + ${axisStrokePx}`
+                ? `本列覆盖 <strong>${axisStrokeColOverride}px</strong>（组值 ${Number(currentGroup?.axis_stroke_px) > 0 ? `${Number(currentGroup?.axis_stroke_px)}px` : "缺省 5px"}）· 绿线 = 列左缘 + ${axisStrokePx}`
                 : Number(currentGroup?.axis_stroke_px) > 0
-                  ? `轴线粗已从像素实测：<strong>${axisStrokePx}px</strong>（绿线 0 点 = 列左缘 + ${axisStrokePx}）`
+                  ? `轴线粗实测 <strong>${axisStrokePx}px</strong> · 绿线 = 列左缘 + ${axisStrokePx}`
                   : '轴线粗<strong>无法自动测量</strong>（这几列的左边不是灰度均匀的竖轴），当前按 <strong>5px</strong> 估算 —— 绿线可能偏，请量一下实际粗细后填入上面的输入框'
             }
           </div>
