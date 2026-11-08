@@ -23,6 +23,8 @@ export interface CursorEnv {
   roiHandle?: RoiHandle | null;
   hasAnchor: boolean;
   hasBoundary: boolean;
+  /** 步骤 6：指针在列 0 点（绿线）上——拖它改的是轴线粗，不是列宽。 */
+  hasZeroLine?: boolean;
   /** 平移进行中（左键已按下拖动）。 */
   isPanning: boolean;
   isSpaceDown: boolean;
@@ -45,6 +47,8 @@ export function resolveCanvasCursor(env: CursorEnv): string {
   }
   if (env.roiHandle) return cursorForRoiHandle(env.roiHandle);
   if (env.hasAnchor || env.strategyCursor === 'move') return 'move';
+  // 0 点（绿线）与列边界（红线）是两条不同的线：前者调轴线粗、后者调列宽，光标必须能区分。
+  if (env.hasZeroLine) return 'ew-resize';
   if (env.hasBoundary || env.strategyCursor === 'col-resize') return 'col-resize';
   if (env.strategyCursor) return env.strategyCursor;
   return env.defaultCursor;

@@ -11,6 +11,7 @@ import { SplineInterpolator } from '../core/SplineInterpolator';
 import { HistoryManager } from '../core/HistoryManager';
 import { ToolModeManager } from '../core/ToolModeManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
+import { resolveAxisStroke } from '../core/axisStroke';
 import { columnPick, setPickedColumnIds } from './steps/columnPick';
 import {
   STAGE,
@@ -87,6 +88,13 @@ export interface CanvasEventCallbacks {
   onYCalibPicked?: (marks: Point2D[]) => void;
   /** 步骤 6：点选 X 轴刻度齿的回调（世界坐标）。 */
   onTickPicked?: (pt: Point2D) => void;
+  /**
+   * 步骤 6：拖动绿线（0 点）改该列的轴线粗（`axis_stroke_px`，列级覆盖）。
+   *
+   * 绿线 = 列左缘 + 轴线粗。它**不是**列边界（红线）：红线调列宽、绿线调 0 点。
+   * 三个参数都必要 —— `previousStroke` 用于后端拒绝时把画布回滚，避免"拖了但没生效"。
+   */
+  onAxisStrokeCommit?: (colIndex: number, strokePx: number, previousStroke: number) => void;
   /** 线掩膜人工修正笔迹结束，调用方负责提交后端并回灌新叠加层。 */
   onLineFixStroke?: (stroke: LineMaskStroke) => void;
   /** Step 4：一条 geometry 被拖动/缩放/新建完成，调用方提交后端。 */
@@ -144,6 +152,15 @@ export class GeologyCanvas {
 
   // 悬停状态
 /** 鼠标悬停态。五项一起更新：命中的边界 / 锚点 / ROI 手柄 / 深度层位 / 标尺徽标。 */
+  /** 步骤 6：正在拖动的 0 点（绿线）。null = 没在拖。 */
+  private zeroDrag: {
+    colId: string;
+    colIndex: number;
+    leftEdgeX: number;
+    stroke: number;
+    previousStroke: number;
+  } | null = null;
+
 private pointer: PointerState = {
   anchor: null,
   boundary: null,
@@ -1161,6 +1178,24 @@ private pointer: PointerState = {
       return;
     }
 
+    // 步骤 6：拖动绿线（0 点）改轴线粗。必须**先于**工具策略——否则 pickTick 之类会把
+    // 这次按下当成「点选刻度齿」，用户拖半天没反应还多出一个刻度。
+    if (e.button === 0 && !this.isSpaceDown) {
+      const zeroHit = this.findHitZeroLine(screenPt);
+      if (zeroHit) {
+        this.zeroDrag = {
+          colId: zeroHit.col.id,
+          colIndex: zeroHit.colIndex,
+          leftEdgeX: zeroHit.leftEdgeX,
+          stroke: zeroHit.stroke,
+          previousStroke: zeroHit.stroke,
+        };
+        this.isMouseDown = true;
+        this.canvas.style.cursor = 'ew-resize';
+        return;
+      }
+    }
+
     if (e.button === 0) {
       const worldPt = this.viewport.screenToWorld(screenPt);
       const strategy = this.toolStrategies.get(mode);
@@ -1183,6 +1218,22 @@ private pointer: PointerState = {
     if (this.isPanning) {
       this.viewport.panBy(deltaX, deltaY);
       this.requestRender();
+      return;
+    }
+
+    // 拖 0 点：绿线跟手（乐观写画布数据），松手才提交后端。
+    if (this.zeroDrag) {
+      const col = this.data.columns.find((c) => c.id === this.zeroDrag!.colId);
+      if (col) {
+        const span = Math.max(1, Math.round(col.endX - col.startX));
+        const next = Math.min(
+          span - 1,
+          Math.max(1, Math.round(worldPt.x - this.zeroDrag.leftEdgeX))
+        );
+        this.zeroDrag.stroke = next;
+        col.axis_stroke_px = next;
+        this.requestRender();
+      }
       return;
     }
 
@@ -1233,6 +1284,19 @@ private pointer: PointerState = {
   }
 
   private onMouseUp(e: MouseEvent): void {
+    if (this.zeroDrag) {
+      const { colIndex, stroke, previousStroke } = this.zeroDrag;
+      this.zeroDrag = null;
+      this.isMouseDown = false;
+      this.updateCursor();
+      this.requestRender();
+      if (stroke !== previousStroke) {
+        // 值没变就不发 RPC：一次拖动不该产生一条无意义的 history。
+        void this.callbacks.onAxisStrokeCommit?.(colIndex, stroke, previousStroke);
+      }
+      return;
+    }
+
     if (this.isPanning) {
       this.isPanning = false;
       this.isMouseDown = false;
@@ -1498,6 +1562,45 @@ private pointer: PointerState = {
     });
   }
 
+  /**
+   * 步骤 6：命中某列的 0 点（绿线 = 列左缘 + 轴线粗）。
+   *
+   * 绿线与红线（列切分线 = 列左缘）是**两条不同的线**：红线动的是列宽（分列结果），
+   * 绿线动的是轴线粗（0 点偏移）。拖绿线只改 `axis_stroke_px`，不碰列几何。
+   *
+   * 容差按**屏幕像素**算（6/scale）：放大到 300% 时仍好点中，缩到 50% 时不会误抓整片。
+   */
+  private findHitZeroLine(
+    screenPt: Point2D
+  ): { col: TaxaColumn; colIndex: number; leftEdgeX: number; stroke: number } | null {
+    if (this.workflowStage !== STAGE.CALIBRATE_COLUMNS) return null;
+    const worldPt = this.viewport.screenToWorld(screenPt);
+    const roi = this.data.roi;
+    if (!roi) return null;
+    if (worldPt.y < roi.yMin - 60 || worldPt.y > roi.yMax + 40) return null;
+
+    const tol = 6 / this.viewport.scale;
+    const columns = this.data.columns ?? [];
+    for (let i = 0; i < columns.length; i++) {
+      const col = columns[i];
+      if (!col.visible) continue;
+      const stroke = resolveAxisStroke(col, this.groupOfColumn(col));
+      const zeroX = col.startX + stroke;
+      if (Math.abs(worldPt.x - zeroX) <= tol) {
+        return { col, colIndex: col.col_index ?? i, leftEdgeX: col.startX, stroke };
+      }
+    }
+    return null;
+  }
+
+  /** 列所属的 x 组（组级 `axis_stroke_px` 是列级覆盖的初值）。 */
+  private groupOfColumn(col: TaxaColumn) {
+    for (const roi of this.data.rois ?? []) {
+      const group = (roi.x_groups ?? []).find((g) => g.id === col.x_group_id);
+      if (group) return group;
+    }
+    return undefined;
+  }
   private findHitColumn(worldPt: Point2D): TaxaColumn | null {
     const roi = this.data.roi;
     // 允许在数据区深度范围以及上方标签区域点击选中该列

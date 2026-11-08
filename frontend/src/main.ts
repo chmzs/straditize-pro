@@ -37,6 +37,7 @@ import { applyTheme, createFooterDom, createHudDom, createWorkspaceDom } from '.
 import { createFooterUpdater } from './app/footer';
 import { setupDraftRecovery } from './app/draftRecovery';
 import { setupScaleSync } from './app/scaleSync';
+import { notifyError } from './ui/feedback';
 import { installBeforeUnloadGuard } from './app/lifecycle';
 import {
   showProvenanceGate,
@@ -190,6 +191,32 @@ async function bootstrap() {
   );
 
   const canvasComponent = new GeologyCanvas(canvasWrapper, initialData, history, {
+    onAxisStrokeCommit: (colIndex, strokePx, previousStroke) => {
+      void (async () => {
+        try {
+          await rpcClient.updateColumn(colIndex, { axis_stroke_px: strokePx });
+        } catch (err) {
+          // 后端拒绝（列落在 ROI 外 / 轴粗越界）：把画布回滚到拖之前，
+          // 否则界面会停在"拖了但没生效"的假象上。
+          const col = canvasComponent.data.columns.find(
+            (c) => (c.col_index ?? -1) === colIndex
+          );
+          if (col) col.axis_stroke_px = previousStroke;
+          canvasComponent.render();
+          notifyError(
+            `调整 0 点（轴线粗）失败：${err instanceof Error ? err.message : String(err)}`
+          );
+          return;
+        }
+        history.push(
+          `Axis stroke → ${strokePx}px (col ${colIndex})`,
+          canvasComponent.data.columns,
+          canvasComponent.data.activeTaxaId,
+          canvasComponent.data.calibration,
+          canvasComponent.data.roi
+        );
+      })();
+    },
     onGeometryCommit: cleanupManager.handleGeometryCommit,
     onGeometryDelete: cleanupManager.handleGeometryDelete,
     onGeometrySelected: cleanupManager.handleGeometrySelected,
