@@ -15,6 +15,7 @@ import {
 } from './XTicksDroppedNotice';
 import { renderOtherSuspectColumnsSummary } from './SuspectBlockNotice';
 import { resolveAxisStroke } from '../../core/axisStroke';
+import { columnAtX, zeroXOfColumn } from '../../core/tickRouting';
 
 /** 步骤 6 面板的全部可变状态。 */
 interface XTicksPanelState {
@@ -63,17 +64,6 @@ export function setTickPickedHandler(
   fn: ((pt: { x: number; y: number }) => void) | null
 ): void {
   state.onTickPickedExternal = fn;
-}
-
-/** 单列 0 点 = 列左缘 + 轴粗（与画布绿线、后端 `resolve_column_scale` 同源）。 */
-function zeroXOfColumn(
-  col: { startX: number; axis_stroke_px?: number | null; roi_id?: string; x_group_id?: string },
-  data: DiagramData | null
-): number {
-  const roi =
-    data?.rois?.find((r) => r.id === (col.roi_id ?? data?.active_roi_id)) ?? data?.rois?.[0];
-  const group = roi?.x_groups?.find((g) => g.id === col.x_group_id) ?? roi?.x_groups?.[0];
-  return Number(col.startX) + resolveAxisStroke(col, group);
 }
 
 /** 画布点选刻度齿时由 main.ts 调用。 */
@@ -572,6 +562,14 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   const columnIndex = (col: NonNullable<ReturnType<typeof activeColumn>>) =>
     col.col_index ?? state.cachedData?.columns.indexOf(col) ?? 0;
 
+  /**
+   * 点选位置落在**哪一列**：列的取数带 = [0 点, endX]。
+   *
+   * 为什么必须按位置解析：旧实现恒用 `activeColumn()`，多列图上无论点哪一列的齿都去改
+   * 「当前活动列」（通常就是第一列）——用户看到的是「只有第一列有用，其他列点了没反应」。
+   * 齿在列内、列带互不重叠（相邻列的 endX 就是下一列 startX），取第一个命中的即可。
+   */
+
   const activeRoi = () => {
     const col = activeColumn();
     return (
@@ -594,9 +592,16 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
 
   // 画布点选齿 → 记录"距本列 0 点多少"。判定在面板侧，画布只报坐标。
   setTickPickedHandler((pt) => {
-    const col = activeColumn();
-    if (!col) return;
-    const roi = state.cachedData?.rois?.find((r) => r.id === (col.roi_id ?? state.cachedData?.active_roi_id));
+    const data = state.cachedData;
+    const columns = (data?.columns ?? []) as NonNullable<DiagramData['columns']>;
+    // 点哪一列的齿就标哪一列（见 `columnAtX` 的注释）：旧实现恒用 `activeColumn()`，
+    // 多列图上只有第一列（活动列）能标，其余列点了等于在改别处。
+    const col = columnAtX(columns, data, pt.x);
+    if (!col) {
+      notifyError('点选位置不在任何一列的取数带内。请点在某一列的刻度齿上。');
+      return;
+    }
+    const roi = data?.rois?.find((r) => r.id === (col.roi_id ?? data?.active_roi_id));
     const g = roi?.x_groups?.find((x) => x.id === col.x_group_id) ?? roi?.x_groups?.[0];
     // 0 点 = 列左缘 + 轴线粗（与画布绿线同源，见 ARCHITECTURE §6.4）。
     // `start` 是轴线左缘（列切分线），轴粗取组参数，缺省 5。
@@ -626,6 +631,8 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       return;
     }
     state.pendingTick = { px: Math.round(nearest), dist: nearest - zero };
+    // 只在**吸附成功**后切换选中列：点在空处不该改选中，否则用户以为点中了。
+    if (col.id !== data?.activeTaxaId) ctx.onSelectTaxa?.(col.id);
     ctx.onDataChange?.();
   });
 

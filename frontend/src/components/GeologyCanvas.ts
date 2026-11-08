@@ -1180,7 +1180,9 @@ private pointer: PointerState = {
 
     // 步骤 6：拖动绿线（0 点）改轴线粗。必须**先于**工具策略——否则 pickTick 之类会把
     // 这次按下当成「点选刻度齿」，用户拖半天没反应还多出一个刻度。
-    if (e.button === 0 && !this.isSpaceDown) {
+    // 只在**非点选刻度**工具下抢这一步：pickTick 模式下用户点绿线附近是在「把 0 点
+    // 当成第一个刻度齿」——若被拖拽吃掉，刻度就永远点不上，表现为「step 6 乱掉」。
+    if (e.button === 0 && !this.isSpaceDown && mode !== 'pickTick') {
       const zeroHit = this.findHitZeroLine(screenPt);
       if (zeroHit) {
         this.zeroDrag = {
