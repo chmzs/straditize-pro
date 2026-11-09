@@ -148,6 +148,9 @@ export function registerWebMcpAndInspectionHandles(p: WebMcpBridgeParams): void 
           roi_id: c.roi_id,
           col_index: c.col_index ?? null,
           x_ticks: c.x_ticks ?? null,
+          // 控制点数量：工具语义判据要用（`A 加点 / S 微调` 必须可被机械验证）。
+          // 只暴露数量不暴露坐标：数量足够判断「点了到底加没加」，坐标会把调试口变成第二条数据源。
+          controlPointCount: (c.controlPoints ?? []).length,
         })),
         calibration: {
           isCalibrated: !!cal?.isCalibrated,

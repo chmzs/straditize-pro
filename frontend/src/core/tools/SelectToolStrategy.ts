@@ -1,10 +1,4 @@
-import {
-  ControlPoint,
-  Point2D,
-  ToolMode,
-} from '../../types/pollen';
-import { AddPointCommand } from '../Commands';
-import { CoordinateSystem } from '../CoordinateSystem';
+import { Point2D, ToolMode } from '../../types/pollen';
 import { ToolContext, ToolStrategy } from './ToolStrategy';
 
 export class SelectToolStrategy implements ToolStrategy {
@@ -146,50 +140,6 @@ export class SelectToolStrategy implements ToolStrategy {
       ctx.callbacks.onTaxaChange?.(hitCol.id);
       ctx.requestRender();
       return true;
-    }
-
-    // 5. 若在已激活列内点击且允许加点，执行加点操作
-    if (ctx.isToolAllowed('addPoint') && ctx.isWithinDiagramBounds(worldPt)) {
-      const activeCol = ctx.getActiveColumn();
-      if (activeCol && ctx.isWithinDiagramBounds(worldPt)) {
-        let targetY = Math.round(worldPt.y);
-
-        const calib = CoordinateSystem.calibrationBounds(ctx.data.calibration);
-        if (ctx.hoveredDepthHorizon !== null && calib) {
-          const depthFraction =
-            (ctx.hoveredDepthHorizon - calib.topValue) /
-            (calib.bottomValue - calib.topValue || 1);
-          const horizonY = Math.round(calib.topPx + depthFraction * (calib.bottomPx - calib.topPx));
-          if (Math.abs(worldPt.y - horizonY) <= 10 / ctx.viewport.scale) {
-            targetY = horizonY;
-          }
-        }
-
-        const newPoint: ControlPoint = {
-          id: `pt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-          x: Math.round(worldPt.x),
-          y: targetY,
-          type: 'manual',
-          isManual: true,
-          createdAt: Date.now(),
-        };
-
-        const cmd = new AddPointCommand(activeCol.id, newPoint, activeCol.name);
-        ctx.history.push(`Add Anchor to ${activeCol.name}`, ctx.data.columns, ctx.data.activeTaxaId);
-        cmd.execute(ctx.data);
-
-        this.dragInitialPointPos = { x: newPoint.x, y: newPoint.y };
-        this.draggingAnchor = {
-          taxaId: activeCol.id,
-          pointId: newPoint.id,
-        };
-        this.hasDraggedAnchor = false;
-        ctx.data.selectedEntity = { type: 'point', colId: activeCol.id, pointId: newPoint.id };
-
-        ctx.requestRender();
-        ctx.callbacks.onDataChange?.();
-        return true;
-      }
     }
 
     // 6. 点击空白处取消选择
