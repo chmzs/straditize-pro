@@ -5,7 +5,7 @@
   "calibration": {
    "bottom_cm": 320.0,
    "bottom_px": 869.0,
-   "depthGridEnabled": true,
+   "depthGridEnabled": false,
    "depthInterval": 2,
    "isCalibrated": true,
    "primaryAxis": "depth",
@@ -9440,7 +9440,7 @@
   "calibration": {
    "bottom_cm": 320.0,
    "bottom_px": 869.0,
-   "depthGridEnabled": true,
+   "depthGridEnabled": false,
    "depthInterval": 2,
    "isCalibrated": true,
    "primaryAxis": "depth",
@@ -18891,7 +18891,7 @@
   "calibration": {
    "bottom_cm": null,
    "bottom_px": null,
-   "depthGridEnabled": true,
+   "depthGridEnabled": false,
    "depthInterval": 2,
    "isCalibrated": false,
    "primaryAxis": "depth",

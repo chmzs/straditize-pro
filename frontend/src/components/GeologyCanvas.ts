@@ -1726,8 +1726,9 @@ private pointer: PointerState = {
       this.drawColumnBoundaries(ctx, isLight);
       this.lastRenderedLayers.add('columnBoundaries');
     }
-    // 选列高亮画在列边界之后：整列盖一层半透明色，让"哪些列已选"一眼可见。
-    this.drawColumnPickOverlay(ctx);
+    // 选列高亮**必须最后画**：花粉曲线是不透明的面积填充，先前画在曲线之前时，
+    // 高亮只在校验图顶部的空白处露出来一小块（用户截图里那块"浮在空中的蓝色矩形"），
+    // 曲线覆盖的整段完全看不见。改到所有叠加层之后，见下面的调用点。
 
     // 5. 花粉轮廓面积图与曲线 + 控制锚点 + 质检比对层
     if (showsPollenCurves(this.workflowStage, this.data.columns.length)) {
@@ -1773,6 +1774,11 @@ private pointer: PointerState = {
         this.callbacks.onOverlayError?.(ov.id, error);
       }
     }
+
+    // 选列高亮画在**所有**叠加层之后：整列盖一层半透明色，让"哪些列已选"一眼可见。
+    // 放在曲线/锚点/注册叠加层之前会让不透明的面积填充把它整段盖掉（只剩顶部空白处一小块）。
+    this.drawColumnPickOverlay(ctx);
+    if (columnPick.active) this.lastRenderedLayers.add('columnPick');
 
     ctx.restore();
   }
@@ -1865,20 +1871,30 @@ private pointer: PointerState = {
   private drawColumnPickOverlay(ctx: CanvasRenderingContext2D): void {
     if (!columnPick.active || columnPick.ids.length === 0) return;
     const roi = this.data.roi;
+    // **世界坐标**：本方法在 `applyTransform` 之后被调用（ctx 已带 world→screen 变换），
+    // 再调 `viewport.worldToScreen()` 会把变换应用第二次 —— 实测后果是选中列的高亮框
+    // 缩小成一小块并偏到左上（用户截图里的「红框里的蓝色矩形」就是这样来的）。
+    // 用**屏幕坐标**画，并显式把变换复位：本方法在渲染管线末尾，之前若干叠加层各自
+    // save/restore，靠"当前 ctx 还带着 world→screen"这个假设画过一次，结果是整块高亮
+    // 只露出 1/21（用户截图里那块浮在空中的蓝矩形）。这里不再依赖管线状态。
+    const canvas = this.canvas;
+    const k = canvas && canvas.clientWidth > 0 ? canvas.width / canvas.clientWidth : 1;
     const yTop = this.viewport.worldToScreen({ x: 0, y: roi.yMin - 40 }).y;
     const yBot = this.viewport.worldToScreen({ x: 0, y: roi.yMax }).y;
-    const top = Math.min(yTop, yBot);
-    const h = Math.abs(yBot - yTop);
+    const top = Math.min(yTop, yBot) * k;
+    const h = Math.max(1, Math.abs(yBot - yTop) * k);
+
     ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = 'rgba(56, 189, 248, 0.20)';
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1.5 * k;
     for (const col of this.data.columns) {
       if (!columnPick.ids.includes(col.id)) continue;
-      const sx0 = this.viewport.worldToScreen({ x: col.startX, y: 0 }).x;
-      const sx1 = this.viewport.worldToScreen({ x: col.endX, y: 0 }).x;
-      const left = Math.min(sx0, sx1);
-      const w = Math.max(2, Math.abs(sx1 - sx0));
+      const x0 = this.viewport.worldToScreen({ x: col.startX, y: 0 }).x * k;
+      const x1 = this.viewport.worldToScreen({ x: col.endX, y: 0 }).x * k;
+      const left = Math.min(x0, x1);
+      const w = Math.max(2, Math.abs(x1 - x0));
       ctx.fillRect(left, top, w, h);
       ctx.strokeRect(left, top, w, h);
     }

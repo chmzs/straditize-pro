@@ -231,7 +231,7 @@ def _payload_zero_state(
             "unit": getattr(session, "depth_unit", "cm"),
             "primaryAxis": getattr(session, "primary_axis", "depth"),
             "depthInterval": 2,
-            "depthGridEnabled": True,
+            "depthGridEnabled": False,
         },
         "lineRemoval": {
             "strength": None,
@@ -403,7 +403,7 @@ def _payload_loaded(
             # 键名跟随同字典的 isCalibrated / depthInterval 用 camelCase。
             "primaryAxis": getattr(session, "primary_axis", "depth"),
             "depthInterval": 2,
-            "depthGridEnabled": True,
+            "depthGridEnabled": False,
         },
         "lineRemoval": {
             "strength": session.degrid_strength,
