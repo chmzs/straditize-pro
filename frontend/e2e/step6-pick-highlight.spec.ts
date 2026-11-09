@@ -85,18 +85,6 @@ test.describe('步骤 6：画布像素判据', () => {
     const afterInside = await sampleColumn(page, localX, insideYs);
     const afterAbove = await sampleColumn(page, localX, aboveYs);
 
-    // —— 诊断输出（定位被染区域到底在哪） ——
-    const barText = await page
-      .locator(`${PANEL} #column-pick-bar`)
-      .innerText()
-      .catch(() => '(无选列条)');
-    console.log('[probe] pick bar:', barText.replace(/\s+/g, ' '));
-
-    const gridYs = Array.from({ length: 24 }, (_, i) => (data.calibration as unknown as { imageHeight?: number }) && 0).length
-      ? []
-      : [];
-    void gridYs;
-
     const changed = (a: number[][], b: number[][]) =>
       a.filter((rgb, i) => Math.abs(rgb[0] - b[i][0]) + Math.abs(rgb[1] - b[i][1]) + Math.abs(rgb[2] - b[i][2]) > 12).length;
 
