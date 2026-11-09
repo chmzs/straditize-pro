@@ -17,6 +17,7 @@ export function ensureCanvasLegend(container: HTMLElement): HTMLElement {
     <div class="canvas-legend-row"><span class="legend-sw legend-sw-column"></span>红：列切分线（轴线左缘）</div>
     <div class="canvas-legend-row"><span class="legend-sw legend-sw-zero"></span>绿：0 点（红线 + 轴线粗）</div>
     <div class="canvas-legend-row"><span class="legend-sw legend-sw-tick"></span>蓝：单位刻度（按像素长度等距外推）</div>
+    <div class="canvas-legend-row"><span class="legend-sw legend-sw-group" style="background: linear-gradient(90deg, var(--accent-blue) 50%, var(--status-warning) 50%);"></span>组色带：列上方横条 = 所属组（同组同色，每个连续段标一次组名）</div>
   `;
   container.appendChild(legend);
   return legend;

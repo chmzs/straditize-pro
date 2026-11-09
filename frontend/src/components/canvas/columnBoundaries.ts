@@ -18,6 +18,7 @@
  */
 import { CoordinateSystem } from '../../core/CoordinateSystem';
 import { resolveAxisStroke } from '../../core/axisStroke';
+import { resolveTickSpacingPx } from './tickGeometry';
 import type { DataRoi, TaxaColumn } from '../../types/pollen';
 
 /** 边界类型：列起点（红）/ 刻度端点（蓝尺）/ 列终点（仅悬停高亮）。 */
@@ -73,6 +74,48 @@ function hasRealCalibration(col: TaxaColumn): boolean {
   return CoordinateSystem.hasRealCalibration(col);
 }
 
+
+/**
+ * 组归属条：在数据区**上方**的空白带画一条组色横条（同组连续只标一次组名）。
+ *
+ * 为什么需要：分完组之后画布上没有任何组的信息，用户只能回侧栏逐列核对——8~20 列时对不上。
+ * 一条色带 + 每个连续段首列写一次组名，扫一眼就知道组边界在哪。
+ *
+ * 只在 ≥2 组时画：单组时是全图同色的纯噪声，侧栏已经写明组名。
+ * 颜色按组在 `roi.x_groups` 中的顺序取固定调色板：同组同色、不随列变。
+ */
+const GROUP_BAND_PALETTE = ['#0ea5e9', '#f59e0b', '#a855f7', '#10b981', '#ef4444', '#64748b'];
+
+function drawGroupBands(env: ColumnBoundaryEnv): void {
+  const { ctx, columns, roi, scale } = env;
+  const groups = roi.x_groups ?? [];
+  if (groups.length < 2) return;
+
+  const bandY = Math.max(0, roi.yMin - 30);
+  const bandH = Math.max(1, 4 / scale);
+  let prevGid: string | null = null;
+
+  ctx.save();
+  for (const col of columns) {
+    if (!col.visible) continue;
+    const gid = col.x_group_id ?? roi.default_group_id ?? groups[0]?.id ?? '';
+    const idx = Math.max(0, groups.findIndex((g) => g.id === gid));
+    const color = GROUP_BAND_PALETTE[idx % GROUP_BAND_PALETTE.length];
+
+    ctx.fillStyle = color;
+    ctx.fillRect(col.startX, bandY, Math.max(1, col.endX - col.startX), bandH);
+
+    if (gid !== prevGid) {
+      const name = groups[idx]?.name ?? '';
+      ctx.font = `600 ${Math.max(9, 10 / scale)}px sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(name, col.startX + 2 / scale, bandY - 2 / scale);
+    }
+    prevGid = gid;
+  }
+  ctx.restore();
+}
 export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
   const { ctx, isLight, columns, roi, imageHeight, scale, activeTaxaId, hovered, dragging } = env;
     const maxH = imageHeight || 12000;
@@ -107,7 +150,10 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
       const groupOfCol = roi.x_groups?.find((g) => g.id === col.x_group_id);
       // 一个单位刻度的像素长度（组级）。有它就按等距外推画刻度，
       // 不再依赖检测齿 —— 检测会漏、会多、会偏 1-2px（实测一列是第 2 个齿、另一列是第 3 个）。
-      const cellPx = Number(groupOfCol?.ref_span_px) > 0 ? Number(groupOfCol?.ref_span_px) : null;
+      // 齿的间距：**用户确认值（组级 ref_span_px）> 实测刻距 > 不画**。
+      // 只认 ref_span_px 时，用户刚进步骤 6（还没点齿标定）画布上一条齿都没有——
+      // 面板却写着「检测: 4 列 · 刻距 124.5px」，于是「点一个刻度齿」无从点起。
+      const cellPx = resolveTickSpacingPx(groupOfCol?.ref_span_px);
       // 列级覆盖 > 组级初值 > 缺省 5（与后端 xscale.resolve_axis_stroke 同语义）。
       const axisStrokePx = resolveAxisStroke(col, groupOfCol);
       const leftEdgeX = col.startX;
@@ -327,6 +373,9 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
         ctx.restore();
       }
     });
+
+    // 组归属条画在所有列之后：它只在数据区上方的一条窄带里，不遮挡任何列内容。
+    drawGroupBands(env);
 
     ctx.restore();
 }

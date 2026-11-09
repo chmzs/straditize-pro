@@ -16,6 +16,7 @@ import {
 import { renderOtherSuspectColumnsSummary } from './SuspectBlockNotice';
 import { resolveAxisStroke } from '../../core/axisStroke';
 import { columnAtX, zeroXOfColumn } from '../../core/tickRouting';
+import { setMeasuredTickSpacing } from '../canvas/tickGeometry';
 
 /** 步骤 6 面板的全部可变状态。 */
 interface XTicksPanelState {
@@ -196,9 +197,15 @@ async function ensureRulerGeometry(ctx: StepContext, root: HTMLElement): Promise
   try {
     state.rulerGeo = await client.measureRuler(roiId ?? undefined, state.axisStrokeOverride);
     state.rulerGeoError = null;
+    // 把**实测刻距**递给画布（`canvas/tickGeometry.ts`）：用户在点齿标定之前
+    // 组级 `ref_span_px` 还是 null，画布原来因此一条齿都不画——面板写着「刻距 124.5px」，
+    // 图上却没有齿，"点一个刻度齿"无从点起。齿的**位置**用实测值画，读数含义仍只在
+    // 用户确认后才存在。
+    setMeasuredTickSpacing(state.rulerGeo?.median_spacing_px ?? null);
   } catch (err) {
     state.rulerGeo = null;
     state.rulerGeoError = describeError(err);
+    setMeasuredTickSpacing(null);
     notifyError(`刻度几何检测失败：${state.rulerGeoError}`);
   } finally {
     state.rulerGeoPending = false;

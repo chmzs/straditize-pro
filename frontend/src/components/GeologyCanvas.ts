@@ -13,6 +13,7 @@ import { ToolModeManager } from '../core/ToolModeManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { resolveAxisStroke } from '../core/axisStroke';
 import { columnPick, setPickedColumnIds } from './steps/columnPick';
+import { setTickRedrawHook } from './canvas/tickGeometry';
 import {
   STAGE,
   canHitRoiHandle,
@@ -216,6 +217,9 @@ private pointer: PointerState = {
     // 步骤 6「在图上选列」需要画布重画高亮：把重绘钩子交给共享状态，
     // 面板改选中集时直接调它，不必再穿一层 callback。
     columnPick.requestRedraw = () => this.requestRender();
+    // 步骤 6 的刻度齿位置来自面板的异步实测（`canvas/tickGeometry.ts`）：测完要让画布重画，
+    // 否则「面板说刻距 124.5px、图上一条齿都没有」。
+    setTickRedrawHook(() => this.requestRender());
 
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'geology-canvas';
@@ -1721,14 +1725,15 @@ private pointer: PointerState = {
       this.lastRenderedLayers.add('lineFix');
     }
 
-    // 4. 各属种垂直分界标线与两点式物理刻度钉
+    // 4. 列分界标线 / 0 点 / 刻度齿 / 组归属条。
+    // **必须在 `showsPollenCurves` 的 if 之外**：列标线从步骤 3 起就要画，曲线从步骤 7 起
+    // 才画。曾把这段挪进曲线的 if 里，结果步骤 6 一条线都不画（只剩底图），
+    // `step-visibility` 的绘制层表立刻抓到。顺序仍保持在曲线之前（曲线压在标线之上是设计意图，
+    // 步骤 7 用锚点编辑曲线，标线不该盖在面积填充上）。
     if (showsColumnBoundaries(this.workflowStage, this.data.columns.length)) {
       this.drawColumnBoundaries(ctx, isLight);
       this.lastRenderedLayers.add('columnBoundaries');
     }
-    // 选列高亮**必须最后画**：花粉曲线是不透明的面积填充，先前画在曲线之前时，
-    // 高亮只在校验图顶部的空白处露出来一小块（用户截图里那块"浮在空中的蓝色矩形"），
-    // 曲线覆盖的整段完全看不见。改到所有叠加层之后，见下面的调用点。
 
     // 5. 花粉轮廓面积图与曲线 + 控制锚点 + 质检比对层
     if (showsPollenCurves(this.workflowStage, this.data.columns.length)) {
