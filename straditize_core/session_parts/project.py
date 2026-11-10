@@ -350,6 +350,35 @@ class ProjectSessionMixin:
 
         self._check_project_schema_version(project_data)
 
+        # 清理状态必须**先**初始化，再让 payload 覆盖。
+        #
+        # ## 缺这一行会怎样（用户实测，2026-11-09）
+        #
+        # `StraditizeSession.__init__` 不初始化清理状态（`_init_cleanup()` 只在
+        # detect/upsert/apply 三个入口的兜底里被调），而本方法此前从头到尾也没调过它：
+        # `_reset_loaded_state` 只清掩膜与 `cleanup_stats`，`_reset_line_removal` 只写
+        # `degrid_*` 与 `line_corrections`。于是"全新会话直接打开工程包"（用户双击
+        # 打开软件后的第一步）之后，`line_candidates` 由 `_restore_aux_fields` 从
+        # payload 建出来了，`exclusion_regions` / `line_strokes` **根本不存在**。
+        #
+        # 下一步前端就会发 `algorithm.applyLineRemoval` 重算掩膜：它的入口兜底判的是
+        # `line_candidates`（已存在 → 兜底不触发），于是直接撞上
+        # `cleanup.py:652` 的 `self.exclusion_regions` → AttributeError，
+        # 界面弹「载入项目后重算清理掩膜失败」。即使调用方省略 `exclusion_regions`，
+        # `_recompose` 也会在 `_exclusion_mask`（cleanup.py:363）以同一异常失败。
+        #
+        # ## 为什么调 `_init_cleanup()` 而不是再手写一遍四项
+        #
+        # 这四个属性此前有两个手写副本（`project_new` 的 project.py:234-237、
+        # `load_image` 的 core.py:449-451），本方法缺失 —— 再加第三份手写只会让
+        # 下一个入口继续漏。`_init_cleanup()` 是这件事的**唯一**入口（含掩膜、
+        # `cleanup_stats`、`cleanup_overlay_png`），也刻意不重置 `_candidate_seq`
+        # （id 会跨会话查重，重用编号会让 id 冲突复活）。
+        #
+        # 注意：这里的初始化**不**负责恢复 payload 里的几何 —— 那是
+        # `_restore_aux_fields` 的事，它的赋值发生在本行之后，不会被抹掉。
+        self._init_cleanup()
+
         cal = (
             project_data.get("depth_calibration")
             or project_data.get("calibration")
@@ -364,7 +393,12 @@ class ProjectSessionMixin:
         raw_cols = project_data.get("columns", [])
         self._reset_columns()
         primary_roi = self._restore_rois(project_data)
+        # 载入期自检的收集器：只有在这里才拿得到"**包里的** tickEndX"（见
+        # `_audit_restored_tick_end` 的说明：保存端比对自己的输出是循环论证）。
+        # 告警在**下一次 project_save** 时出现在 manifest.json 里。
+        self._load_axis_stroke_warnings = []
         self._restore_columns(raw_cols, primary_roi)
+        self._restore_reader_types(raw_cols)
         self._restore_embedded_image(project_data)
         self._restore_aux_fields(project_data)
         self._restore_age_depth(project_data)
@@ -505,9 +539,21 @@ class ProjectSessionMixin:
         ]
 
     def _apply_depth_calibration(self, cal: dict[str, Any]) -> None:
-        """payload 带完整标定端点时直接重算 y 轴标度。"""
+        """payload 带完整标定端点时直接重算 y 轴标度，并**无条件**恢复 Y 轴语义。
+
+        `primary_axis` 为什么要在这里显式赋值（P0-A）：`calibrate_axes` 的
+        `primary_axis=None` 分支会沿用 `self.primary_axis`（`export.py:643-644`），
+        所以"打开 A 包（age）再打开 B 包"会让 B 继承 A 的轴语义 —— 界面上完全看不出。
+        老包没有该键时显式回到 `depth`，等价于"打开软件后直接开这个包"的行为。
+        该赋值**不依赖是否标定**：只声明了轴语义、还没标定的工程同样要能恢复。
+        """
         if unit := cal.get("unit"):
             self.depth_unit = str(unit)
+
+        axis = str(cal.get("primary_axis") or "depth").strip().lower()
+        if axis not in ("depth", "age"):
+            axis = "depth"
+        self.primary_axis = axis
 
         top_px, bottom_px = cal.get("top_px"), cal.get("bottom_px")
         top_val = cal.get("top_cm", cal.get("top_val"))
@@ -521,13 +567,18 @@ class ProjectSessionMixin:
                     {"pixel": float(bottom_px), "val": float(bottom_val)},
                 ],
                 unit=self.depth_unit,
+                primary_axis=axis,
             )
 
     def _reset_columns(self) -> None:
         """清空列/控制点/物种名，准备按 payload 逐列重建。"""
         self.columns = []
         self.control_points = {}
+        self.manual_points = {}
         self.taxa_names = []
+        # `reader_types` 按 col_index 存，列一旦重建，旧索引指向的是别的列（P0-A）。
+        # 不清它，老包（没有逐列读法）会把上一份工程的读法套到新工程的同号列上。
+        self.reader_types = {}
 
     def _restore_rois(self, project_data: dict[str, Any]) -> dict[str, Any] | None:
         """恢复 ROI 列表（缺 x_groups 的补默认组），返回主 ROI。
@@ -661,17 +712,126 @@ class ProjectSessionMixin:
                 "startValue": c.get("startValue", 0),
                 "tickValue": c.get("tickValue", 100),
                 "tickEndX": c.get("tickEndX", c.get("endX", 100)),
+                # 列级轴粗覆盖（ARCHITECTURE §6.4）：**只放用户显式设的值**，
+                # 没设过就是 None（= 回落组值）。
+                #
+                # 缺这一行会让"本列轴粗"一进包就丢：载入后 `resolve_axis_stroke`
+                # 只能回落到组值，0 点随之平移（实测用户包 Pinus 列 4→6，2px），
+                # 而整列读数按 value_per_px 系统性偏移（0.16129×2 = 0.3226），
+                # 界面上看不出任何异常。老包没有这个键 → `.get` 得 None → 行为与今天一致。
+                "axis_stroke_px": c.get("axis_stroke_px"),
             }
             store_exaggeration(col_dict, col_dict.get("exaggeration_mult"))
             self.columns.append(col_dict)
+            self._audit_restored_tick_end(col_dict)
 
             pts = c.get("points") or c.get("controlPoints") or []
             ctrls: dict[int, float] = {}
+            manual: dict[int, dict[str, Any]] = {}
             for p in pts:
                 y_val = round(p.get("y", 0))
                 x_val = float(p.get("x", 0))
                 ctrls[y_val] = x_val
+                # 老包没有 `isManual` 这个键 → `.get` 得 None → 按 false 处理，
+                # 行为与今天（"所有点都是算法的"）一致；只有显式 true 才记成手工。
+                if p.get("isManual"):
+                    manual[y_val] = {
+                        "x": x_val,
+                        "kind": str(p.get("kind") or "manual"),
+                    }
             self.control_points[idx] = ctrls
+            if not isinstance(getattr(self, "manual_points", None), dict):
+                self.manual_points = {}
+            if manual:
+                self.manual_points[idx] = manual
+            else:
+                self.manual_points.pop(idx, None)
+
+    def _audit_restored_tick_end(self, col_dict: dict[str, Any]) -> None:
+        """载入期自检：包里的 `tickEndX` 与**该列实际生效的**轴粗是否自洽（Triage 建议）。
+
+        ## 为什么这条检查放在**载入**而不是保存
+
+        保存端写出去的 `tickEndX` 就是 `scale.abs_px1`（由轴粗算出来的），拿它再和
+        `start + 轴粗 + 1` 比是**循环论证**，永远相等，红不了。只有"包里的
+        `tickEndX`"这个来自文件的值，才可能和当前解析出的轴粗矛盾。
+
+        ## 为什么用"生效轴粗"而不是"列级覆盖"
+
+        用户那份包的形状恰恰是**列级覆盖已经丢了**（所以包里的 `tickEndX=264`
+        与组值 6 推出的 266 差 2px）。若要求"列级覆盖存在"才检查，就正好漏掉它。
+
+        ## 为什么只在 `source == "group_slope"` 时比较
+
+        只有这条分支的 `abs_px1` 是**由轴粗推出来的**（`start + 轴粗 + 1`）。
+        列带两齿 `x_ticks` 时 `abs_px1` 是第二个齿的像素；由 `x_values` 组布局时
+        又是另一套算法——拿它们去和"轴粗 + 1"比是无意义的比较，会把正常工程
+        全部刷成告警（首次实测：golden 用例里带 `x_ticks` 的列立刻误报，
+        `tickEndX=60` 与 `start+5+1=16` 被当成矛盾）。
+
+        ## 为什么不会给新工程刷一屏告警
+
+        `detect_columns` 会写一个**占位** `tickEndX`（`core.py:1133/1157` 的
+        `start + init_tick_w`，与轴粗无关），但那个值**不经过本函数**——本函数只在
+        `_restore_columns` 里被调，也就是只检查"从包里读出来的 `tickEndX`"。
+        新建/分列路径不会走进来，因此不存在"每个新工程 28 条告警"的噪音。
+
+        不抛错：用户此刻可能正需要这个包，阻断导出只会让人更没法取证。
+        """
+        if not hasattr(self, "_load_axis_stroke_warnings"):
+            return
+        tick_end = col_dict.get("tickEndX")
+        if tick_end is None:
+            return
+        try:
+            scale = resolve_column_scale(self, col_dict, col_dict.get("col_index"))
+        except Exception:  # noqa: BLE001 - 自检绝不能因解析失败而改变载入结果
+            return
+        if scale.source != "group_slope":
+            return
+        expected = float(scale.abs_px1)
+        start = float(col_dict.get("startX", col_dict.get("start", 0.0)) or 0.0)
+        try:
+            actual = float(tick_end)
+        except (TypeError, ValueError):
+            return
+        if abs(actual - expected) > 1e-6:
+            self._load_axis_stroke_warnings.append(
+                {
+                    "kind": "axis_stroke_tick_end_mismatch",
+                    "col_index": col_dict.get("col_index"),
+                    "column_id": col_dict.get("id"),
+                    "column_name": col_dict.get("name") or col_dict.get("species"),
+                    "column_axis_stroke_px": col_dict.get("axis_stroke_px"),
+                    "effective_axis_stroke_px": round(expected - start - 1.0, 6),
+                    "startX": start,
+                    "tickEndX_in_package": actual,
+                    "tickEndX_expected": expected,
+                    "offset_px": round(actual - expected, 6),
+                    "note": (
+                        "工程包里的 tickEndX 与该列当前生效的轴粗对不上：0 点可能已整体平移，"
+                        "整列读数会按 value_per_px 系统性偏移。请核对这一列的轴粗与刻度后再导出。"
+                    ),
+                }
+            )
+
+    def _restore_reader_types(self, raw_cols: list[dict[str, Any]]) -> None:
+        """逐列读法（P0-A）：包的每列对象带 `reader_type`。
+
+        `reader_types` 在后端是 `dict[col_index, str]`（`session.py:118`），列对象上
+        则是一个标量；两端用 **col_index** 对齐——`_restore_columns` 的 `idx` 就是
+        包里的列序，与 `col_index` 一致。
+
+        只写非空值：`None` 表示"这一列没被用户单独设过"，不该在 `reader_types` 里
+        留一个空串键（那会让"有没有设过"无从判断）。
+        """
+        self.reader_types = {}
+        for idx, raw in enumerate(raw_cols or []):
+            if not isinstance(raw, dict):
+                continue
+            reader_type = raw.get("reader_type")
+            if reader_type:
+                self.reader_types[int(idx)] = str(reader_type)
 
     def _restore_embedded_image(self, project_data: dict[str, Any]) -> None:
         """payload 自带 base64 时无条件替换底图，并作废由旧像素算出来的状态。"""
@@ -731,8 +891,31 @@ class ProjectSessionMixin:
             self.metadata_update(project_data["paper_metadata"])
         if project_data.get("samples") is not None:
             self.samples = list(project_data["samples"])
+        # 取样深度网格（P0-A）。**键缺失时显式清空**，不是"保持原值"：
+        # `_reset_loaded_state` 不清它，若这里不动，载入一份没有网格的老包会继承
+        # 上一份工程的网格（跨包串值），而交付数据的行集会因此错位。
+        depth_grid = project_data.get("depth_grid")
+        self.depth_grid = (
+            [float(d) for d in depth_grid] if isinstance(depth_grid, list) else []
+        )
         if project_data.get("line_candidates") is not None:
             self.line_candidates = list(project_data["line_candidates"])
+        # 排除区与笔迹（P0-B）。键缺失时**显式清空**（`_init_cleanup` 已置空，
+        # 这里再写一次是为了让"老包 ⇒ 空"成为这条代码路径本身的性质，
+        # 而不是依赖调用顺序）。载入时必须 `dict(...)` 拷贝：包里的 dict 一旦被
+        # 活状态原地改写，重新保存时就会把改动写回同一份载荷。
+        exclusion_regions = project_data.get("exclusion_regions")
+        self.exclusion_regions = (
+            [dict(e) for e in exclusion_regions if isinstance(e, dict)]
+            if isinstance(exclusion_regions, list)
+            else []
+        )
+        line_strokes = project_data.get("line_strokes")
+        self.line_strokes = (
+            [dict(s) for s in line_strokes if isinstance(s, dict)]
+            if isinstance(line_strokes, list)
+            else []
+        )
         if project_data.get("selected_candidate_ids") is not None:
             self.selected_candidate_ids = set(project_data["selected_candidate_ids"])
         if project_data.get("ensemble_tables") is not None:
@@ -793,6 +976,12 @@ class ProjectSessionMixin:
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "schema_version": "2.0",
         }
+        # 载入期自检（`_audit_restored_tick_end`）发现的矛盾随本次保存落到
+        # manifest.json。**只在非空时加键**：一致时不改变工程包结构，
+        # 也让"有没有告警"成为一个可判定的信号（键存在 ⇔ 确实有问题）。
+        load_warnings = list(getattr(self, "_load_axis_stroke_warnings", []) or [])
+        if load_warnings:
+            manifest["warnings"] = load_warnings
 
         calib = self._build_depth_calibration_export()
         roi = self._build_roi_export()
@@ -832,7 +1021,13 @@ class ProjectSessionMixin:
     # ---- project_save 的分段实现（顺序即工程格式的组装顺序）----
 
     def _build_depth_calibration_export(self) -> dict[str, Any]:
-        """标定段：有 depth_calib 就写完整端点，否则只写 is_calibrated=False + 单位。"""
+        """标定段：有 depth_calib 就写完整端点，否则只写 is_calibrated=False + 单位。
+
+        `primary_axis` **两个分支都写**（P0-A）：它声明 Y 轴测的是深度还是年代，
+        与"有没有标定端点"无关；只写标定分支会让"声明了 age 但还没标定"的工程
+        在重开后静默变回 depth。老包没有该键 ⇒ 载入端按 `depth` 处理。
+        """
+        axis = str(getattr(self, "primary_axis", "depth") or "depth")
         if getattr(self, "depth_calib", None):
             calib = {
                 "is_calibrated": True,
@@ -841,9 +1036,14 @@ class ProjectSessionMixin:
                 "top_cm": self.depth_calib["top_cm"],
                 "bottom_cm": self.depth_calib["bottom_cm"],
                 "unit": self.depth_calib.get("unit") or self.depth_unit,
+                "primary_axis": axis,
             }
         else:
-            calib = {"is_calibrated": False, "unit": getattr(self, "depth_unit", "cm")}
+            calib = {
+                "is_calibrated": False,
+                "unit": getattr(self, "depth_unit", "cm"),
+                "primary_axis": axis,
+            }
         return calib
 
     def _build_roi_export(self) -> dict[str, Any] | None:
@@ -867,6 +1067,7 @@ class ProjectSessionMixin:
     ) -> list[dict[str, Any]]:
         """列段：名字/标度/控制点/刻度一起写全（含 legacy startX/endX 兼容字段）。"""
         cols_export = []
+        reader_types = getattr(self, "reader_types", {}) or {}
         for idx, col in enumerate(columns):
             c_idx = col.get("col_index", idx)
             name = (
@@ -875,15 +1076,22 @@ class ProjectSessionMixin:
                 or (taxa_names[c_idx] if c_idx < len(taxa_names) else f"Col {c_idx}")
             )
             ctrls = getattr(self, "control_points", {}).get(c_idx, {})
+            # 控制点是"谁给的"必须落盘：只写坐标的话，重开工程包后用户手工补/改的
+            # 点全变成算法点，页脚「锚点: N 手动 / M 总计」归零，后续重分列/重提取
+            # 会把这些点当自动结果重算掉（用户手工劳动静默丢失，2026-11-10）。
+            manual_store = getattr(self, "manual_points", None) or {}
+            manual = manual_store.get(c_idx, {}) if isinstance(manual_store, dict) else {}
             pts = []
             for y_r, x_c in ctrls.items():
+                rec = manual.get(int(y_r)) or manual.get(y_r) or {}
                 pts.append(
                     {
                         "x": round(x_c, 2),
                         "y": y_r,
                         "value": round(x_c, 2),
-                        "kind": "peak",
+                        "kind": str(rec.get("kind") or "peak"),
                         "valid_segment": True,
+                        "isManual": bool(rec),
                     }
                 )
             pts.sort(key=lambda p: p["y"])
@@ -910,6 +1118,14 @@ class ProjectSessionMixin:
                     "end": col.get("end", 100),
                     "startValue": scale.val0,
                     "tickValue": scale.val1,
+                    # 列级轴粗覆盖必须进包，否则载入后退化到组值（U-ROWS-02）。
+                    # 写 `col.get(...)` 而不是 `scale` 里那个有效值：这里是**覆盖**，
+                    # 不是"最终生效值"——把有效值写进列级键会让"清除覆盖"失效
+                    # （下次载入又会把组值当成本列覆盖，从此再也回不到组值）。
+                    "axis_stroke_px": col.get("axis_stroke_px"),
+                    # 逐列读法（P0-A）：area / line / bar。从 `self.reader_types` 取，
+                    # 不从列对象取——那是会话级按 col_index 存的映射，列对象上没有这个键。
+                    "reader_type": reader_types.get(c_idx),
                     "tickEndX": scale.abs_px1,
                     "points": pts,
                 }
@@ -971,10 +1187,25 @@ class ProjectSessionMixin:
                 "corrections": getattr(self, "line_corrections", []),
             },
             "line_candidates": getattr(self, "line_candidates", []),
+            # 排除区与笔迹（P0-B）：都是**用户手工划的**，丢了必须重划，且会改变掩膜
+            # ⇒ 整列读数随之变化，而界面上"排除区(0 个)"看起来像"我本来就没划"。
+            # 只 `dict(...)` 浅拷贝：它们的值都是标量/列表，浅拷贝足以断开与活状态的
+            # 容器共享（与 `_build_columns_export` 对 points 的处理同一理由）。
+            "exclusion_regions": [
+                dict(e) for e in (getattr(self, "exclusion_regions", []) or [])
+            ],
+            "line_strokes": [
+                dict(s) for s in (getattr(self, "line_strokes", []) or [])
+            ],
             "selected_candidate_ids": sorted(
                 getattr(self, "selected_candidate_ids", set()) or set()
             ),
             "samples": getattr(self, "samples", []),
+            # 取样深度网格（P0-A）：它是**输入参数**而不是结果——用户指定在哪些深度
+            # 出数，直接决定交付数据的行集。逐项 float 化，避免 numpy 标量进 JSON。
+            "depth_grid": [
+                float(d) for d in (getattr(self, "depth_grid", []) or [])
+            ],
             "paper_metadata": getattr(self, "paper_metadata", {}),
             "age_depth": ad_export,
             "ensemble_tables": getattr(self, "ensemble_tables", []),

@@ -5,6 +5,25 @@ import { Column, ColumnGroup, ControlPoint, CleanupResult, DataRoi, DepthCalibra
 import { RulerGeometry } from '../types/ruler';
 import { PollenGlossary } from '../core/PollenGlossary';
 
+/**
+ * 会改变**列标度**的写入方法：写完必须广播 `onScaleMutated`。
+ *
+ * 订阅方是 `app/scaleSync.ts`：它会拉一次 `getDiagramData` 并把后端算好的
+ * `x_ticks` / `scaleCalib` / `scale_provenance` 逐列回填到前端镜像。不广播的后果是
+ * 界面与导出预览继续按"未标定"处理（组斜率写入会把 `x_ticks` 清成 null，
+ * `resolveColumnScale` 于是判 `calibrated=false`）——用户看到"已标定 · 0.1613 %/px"，
+ * 打开导出面板却整表 NA（B / U-NA-01 的另一半）。
+ *
+ * 放在 `call` 里而不是各包装方法：会写标度的入口不止一个
+ * （`roiGroupUpdate` → `roi.groupUpdate`、`calibrateColumnXTicks`、`clearColumnXTicks`），
+ * 而包装方法与实际调用点会漂移（`onCalibrateXTicks` 至今只有声明、没有调用点）。
+ */
+const SCALE_MUTATING_METHODS = new Set<string>([
+  'roi.groupUpdate',
+  'column.calibrateXTicks',
+  'column.clearXTicks',
+]);
+
 /** 后端 ocr.getTaxaDict 的返回结构 */
 export interface TaxaDictEntry {
   zh: string;
@@ -404,6 +423,14 @@ export class RpcClient {
       if (rpcRes.error) {
         // 面向用户的叙述按当前语言渲染；后端英文原文仅作为技术细节进 console
         throw new Error(tError(rpcRes.error.code, rpcRes.error.message));
+      }
+      // ---- 5. 标度写入成功后广播 ----
+      // 落在传输层而不是各包装方法：会写标度的方法不止一处（roiGroupUpdate
+      // → roi.groupUpdate、calibrateColumnXTicks、clearColumnXTicks），而包装方法与
+      // 实际调用点会漂移（`onCalibrateXTicks` 至今只有声明、没有调用点）。收在这里，
+      // "任何写标度的调用都会触发一次权威回填"才是结构性成立的。
+      if (SCALE_MUTATING_METHODS.has(method)) {
+        this.notifyScaleMutated();
       }
       return rpcRes.result as TResult;
     }

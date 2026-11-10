@@ -1,4 +1,5 @@
 import { Column, ControlPoint, DataRoi, DiagramCalibration, DiagramData, LEGACY_FULL_SCALE } from '../types/pollen';
+import { applyScaleSnapshot } from '../app/scaleSync';
 import { draftColumnXValues } from './draftPayload';
 import { RpcClient } from '../services/RpcClient';
 import { SplineInterpolator } from './SplineInterpolator';
@@ -388,12 +389,17 @@ export class ProjectManager {
 
   /**
    * 项目化保存为开放标准 .tar 归档 (POSIX UStar)
-   * 优先直连后端 T10 权威 export.tar 多 ROI 导出；
-   * 包含 manifest.json, image/original.png, straditize.json, data.csv, data/<roi>.csv, plot_strat.R, README.txt
+   *
+   * 必须走后端 `project.save`（**工程包**：manifest.json / straditize.json /
+   * image/original.png / data.csv / plot_strat.R / README.txt），因为「打开项目」
+   * 只认工程包——它在 `openProjectFile` 里明确排除 `manifest.json`，只接受
+   * `straditize.json`。曾走 `export.tar`（数据包，无 straditize.json），
+   * 结果是用户保存下来的文件自己永远打不开（T-05）。`export.tar` 那条路继续
+   * 服务顶栏「导出」按钮，两者不是同一个出口。
    */
   public async saveProjectFile(): Promise<void> {
     try {
-      const res = await this.rpcClient.call<any, any>('export.tar');
+      const res = await this.rpcClient.call<any, any>('project.save');
       if (res && (res.tar_base64 || res.data)) {
         const b64 = res.tar_base64 || (typeof res.data === 'string' ? res.data : '');
         if (b64) {
@@ -413,9 +419,9 @@ export class ProjectManager {
           return;
         }
       }
-      throw new Error('export.tar 返回的数据不合法');
+      throw new Error('project.save 返回的数据不合法');
     } catch (err: any) {
-      console.error('后端 export.tar 导出失败:', err);
+      console.error('后端 project.save 导出失败:', err);
       notifyError('科学项目包 (.tar) 导出失败：' + (err.message || err));
     }
   }
@@ -632,6 +638,47 @@ message("Finished! Stratigraphic plot generated successfully.")
   }
 
   /**
+   * 把后端权威标度语义回填到刚载入的列对象上。
+   *
+   * 工程包 JSON 里**没有** `scale_provenance`：它是后端 `resolve_column_scale` 的
+   * 派生结果，只在 `getDiagramData` 里下发。缺了它，`CoordinateSystem.resolveColumnScale`
+   * 会退回 `x_ticks.length >= 2` 判定（`CoordinateSystem.ts:158-162`），而组斜率标定
+   * （`x_groups[].value_per_px`）恰恰会把每列的 `x_ticks` 清成 `null` —— 于是界面与
+   * 导出预览集体判"未标定"、整表写 NA，而后端四条导出通道全都有数（U-NA-01）。
+   *
+   * 这里**只搬后端算好的结果**（与 `app/scaleSync.ts` 的 `onScaleMutated` 同一份例程），
+   * 不做任何本地推断：前端若按 legacy 字段自行猜"应该已标定"，就是伪造资格 ——
+   * 那正是本 bug 的镜像形态。
+   */
+  private async hydrateScaleProvenance(projectData: DiagramData): Promise<void> {
+    const columns = projectData.columns ?? [];
+    if (columns.length === 0) return;
+
+    let fresh: unknown;
+    try {
+      fresh = await this.rpcClient.getDiagramData();
+    } catch (err: any) {
+      // 取不到就明说：载入成功但标定语义未知，等于把"已标定"变成"仅供参考"。
+      notifyError(
+        '项目已载入，但无法从后端取回列标定状态：' +
+          (err?.message || err) +
+          '（导出预览可能显示 NA，请重新载入该工程包重试）。'
+      );
+      return;
+    }
+
+    const applied = applyScaleSnapshot(columns, fresh);
+    const freshColCount = ((fresh as { columns?: unknown[] } | null)?.columns ?? []).length;
+    // 只有"后端确实有列、却一列都对不上"才是真问题；后端本来就没有列（例如离线/空会话）
+    // 属于另一种状态，不在这里报警。
+    if (applied === 0 && freshColCount > 0) {
+      notifyError(
+        `项目已载入，但后端没有返回与这 ${columns.length} 列对得上的标定状态（列 id 不匹配），导出预览可能显示 NA。`
+      );
+    }
+  }
+
+  /**
    * 打开已有项目 (支持标准 .tar 归档 / .json)
    */
   public openProjectFile(file: File): void {
@@ -700,6 +747,7 @@ message("Finished! Stratigraphic plot generated successfully.")
 
             const projectData = normalizeProject(parsed, imageBlobUrl, this.data);
             if (projectData) {
+              await this.hydrateScaleProvenance(projectData);
               if (this.onProjectLoad) {
                 this.onProjectLoad(projectData);
               }
@@ -730,6 +778,7 @@ message("Finished! Stratigraphic plot generated successfully.")
         }
         const projectData = normalizeProject(parsed, null, this.data);
         if (projectData) {
+          await this.hydrateScaleProvenance(projectData);
           if (this.onProjectLoad) {
             this.onProjectLoad(projectData);
           }

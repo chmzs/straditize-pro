@@ -45,9 +45,13 @@ import {
   ensureDataProvenance,
   mountProvenanceBanner,
 } from './services/ProvenanceGate';
+import { installDiagRecorder } from './devtools/diagRecorder';
 export { reportBackendFailure };
 
 async function bootstrap() {
+  // 开发诊断记录器：默认关闭，仅 ?diag=1 或 localStorage['straditize.diag']==='1' 时启用。
+  // 必须在任何 RPC 之前安装，否则会漏掉启动阶段的 getDiagramData 往返。
+  installDiagRecorder();
   const appContainer = document.getElementById('app');
   if (!appContainer) throw new Error('Missing #app container');
 
@@ -626,8 +630,16 @@ async function bootstrap() {
   // 页脚刷新：实现移到 app/footer.ts（纯读，12 处回调共用）。
   const updateFooter = createFooterUpdater({ getCanvas: () => canvasComponent });
 
-  canvasComponent.canvas.addEventListener('wheel', () => {
+  // 缩放读数有两个消费者：顶栏徽标与页脚（页脚现读 `viewport.scale`，见 `app/footer.ts:32`）。
+  // 两者必须**同一次调用里一起刷新**，否则一条缩放路径只要漏掉页脚，页脚就会永久冻在
+  // 上一个值（T-01：载图后徽标 44%、页脚停在 100%；点 1:1 也不修）。
+  const syncZoomReadouts = (): void => {
     toolbar?.updateScale(canvasComponent.viewport.scale);
+    updateFooter();
+  };
+
+  canvasComponent.canvas.addEventListener('wheel', () => {
+    syncZoomReadouts();
   });
 
   window.addEventListener('resize', () => {
@@ -637,11 +649,10 @@ async function bootstrap() {
   requestAnimationFrame(() => {
     canvasComponent.handleResize();
     canvasComponent.fitToScreen();
-    toolbar?.updateScale(canvasComponent.viewport.scale);
+    syncZoomReadouts();
   });
 
-  updateFooter();
-  toolbar?.updateScale(canvasComponent.viewport.scale);
+  syncZoomReadouts();
   toolbar?.updateFilterState(canvasComponent.viewport.imageMode, canvasComponent.viewport.showBinaryOverlay);
 
   setupDraftRecovery({

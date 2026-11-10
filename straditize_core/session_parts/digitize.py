@@ -63,6 +63,20 @@ def normalize_reader_type(value: str | None) -> str:
 class DigitizeSessionMixin:
     """Digitization of curves/bars and manual/automatic control point manipulations."""
 
+    def _manual_store(self) -> dict[int, dict[int, dict[str, Any]]]:
+        """手工控制点的存储：`col_index -> row -> {"x", "kind"}`。
+
+        `control_points[c]` 只有"行 → x"，没有"这个点是谁给的"。用户手工补/改的点
+        是他唯一无法重做的劳动，必须跨 保存 → 载入 → 重分列 存活，所以另立一张表，
+        而不是把 `control_points` 的值类型改成字典（那是 20+ 处读点的公共结构）。
+        缺失时惰性建立，行为与"没有手工点"完全一致。
+        """
+        store = getattr(self, "manual_points", None)
+        if not isinstance(store, dict):
+            store = {}
+            self.manual_points = store
+        return store
+
     def digitize(
         self,
         col_index: int,
@@ -122,6 +136,24 @@ class DigitizeSessionMixin:
         control_points, ctrl_pts_list = self._turning_control_points(
             points, c_start, y0, y1, col_index
         )
+
+        # 重建只产出**算法**拐点；用户手工点原样并入（不删、不移动）。
+        # 没有这一步，重分列/重识别会把手工点整体覆盖掉（2026-11-10 用户缺陷：
+        # 重跑检测分列后 type 33→34、Chenopodiaceae 40→42，人工补的点全部消失）。
+        manual = self._manual_store().get(col_index, {})
+        for m_row, rec in manual.items():
+            control_points[int(m_row)] = float(rec["x"])
+        if manual:
+            ctrl_pts_list = [
+                {
+                    "id": f"pt_{col_index}_{row_int}",
+                    "x": float(x_val),
+                    "y": float(row_int),
+                    "type": str(manual.get(row_int, {}).get("kind") or "peak"),
+                    "isManual": row_int in manual,
+                }
+                for row_int, x_val in sorted(control_points.items())
+            ]
 
         self.column_points[col_index] = points
         self.control_points[col_index] = control_points
@@ -360,11 +392,13 @@ class DigitizeSessionMixin:
         y1 = round(self.data_ylim[1])
 
         action = "updated"
+        manual = dict(self._manual_store().get(col_index, {}))
         if remove:
             if ctrls:
                 nearest_row = min(ctrls.keys(), key=lambda r: abs(r - row))
                 if abs(nearest_row - row) <= max(15, (y1 - y0) // 10):
                     del ctrls[nearest_row]
+                    manual.pop(nearest_row, None)
                     action = "removed"
                 else:
                     raise JsonRpcError(
@@ -376,7 +410,10 @@ class DigitizeSessionMixin:
                 )
         else:
             ctrls[int(row)] = float(x)
+            # 这里的每一次写都是用户在图上的显式编辑 → 记为手工点
+            manual[int(row)] = {"x": float(x), "kind": "manual"}
             action = "updated"
+        self._manual_store()[col_index] = manual
 
         # Ensure boundary anchor points exist
         if y0 not in ctrls:
@@ -423,6 +460,11 @@ class DigitizeSessionMixin:
         if c_idx not in self.control_points:
             self.control_points[c_idx] = {}
         self.control_points[c_idx][y_int] = float(x)
+        # 走 `point.add` 的每一次加/改都是用户在图上的显式动作 → 手工点
+        self._manual_store().setdefault(c_idx, {})[y_int] = {
+            "x": float(x),
+            "kind": str(kind or "manual"),
+        }
         return {
             "success": True,
             "col_index": c_idx,
@@ -451,6 +493,7 @@ class DigitizeSessionMixin:
         y_int = round(y)
         if c_idx in self.control_points and y_int in self.control_points[c_idx]:
             del self.control_points[c_idx][y_int]
+            self._manual_store().get(c_idx, {}).pop(y_int, None)
             return {"success": True, "removed_y": y_int}
         return {"success": False, "message": "Point not found"}
 
@@ -494,7 +537,11 @@ class DigitizeSessionMixin:
             detected_rows = set(p_rows[peaks_idx]).union(set(p_rows[valleys_idx]))
 
             merged_ctrls = dict(existing_ctrls)
+            manual = self._manual_store().get(c_idx, {})
             for r in detected_rows:
+                # 用户手工点不接受算法改写（重提取只补/改自动点）
+                if int(r) in manual:
+                    continue
                 idx_arr = np.where(p_rows == r)[0]
                 if len(idx_arr) > 0:
                     merged_ctrls[int(r)] = float(p_x[idx_arr[0]])

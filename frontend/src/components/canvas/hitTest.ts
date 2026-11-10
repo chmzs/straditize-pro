@@ -114,6 +114,17 @@ export function findHitRoiHandleAt(env: HitTestEnv): RoiHandle | null {
     r: { x: brScreen.x, y: midY },
   };
 
+  // 零面积的"待框选" ROI（新建后尚未框选）：8 个手柄全部重合在同一个点。
+  //
+  // 按下面的名单顺序会先命中 `tl`，而 `RoiToolStrategy` 对 `tl` 的夹取是
+  // `xMin = min(x, xMax - 20)`——xMax 还是 0 时它恒等于 0，于是拖拽纹丝不动，
+  // 用户只会觉得画布坏了。此时唯一有意义的抓手是右下角：它能把矩形向右下打开。
+  if (roi.xMax - roi.xMin === 0 || roi.yMax - roi.yMin === 0) {
+    const hitDegenerate =
+      Math.hypot(screenPt.x - tlScreen.x, screenPt.y - tlScreen.y) <= roiHandleHitDist;
+    return hitDegenerate ? 'br' : null;
+  }
+
   for (const [key, pt] of Object.entries(handles) as [RoiHandle, Point2D][]) {
     if (Math.hypot(screenPt.x - pt.x, screenPt.y - pt.y) <= roiHandleHitDist) {
       return key;

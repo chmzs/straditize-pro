@@ -16,6 +16,14 @@ export function render(data: DiagramData): string {
 
   const currentColumns = (data.columns || []).filter((c) => c.roi_id === activeRoi.id);
 
+  // 零面积 = 用户还没框选（产品决策 ③：新建 ROI 是空区域）。
+  //
+  // 面板必须把"下一步要画什么"写出来：新建后画布上只剩一个点，不提示的话用户
+  // 不知道该抓哪里、也不知道为什么后面分列会报"区域太小"。
+  const roiW = Math.abs((activeRoi.xlim?.[1] ?? 0) - (activeRoi.xlim?.[0] ?? 0));
+  const roiH = Math.abs((activeRoi.ylim?.[1] ?? 0) - (activeRoi.ylim?.[0] ?? 0));
+  const isEmptyRoi = roiW === 0 || roiH === 0;
+
   return `
     <div class="step-panel" data-step="2">
       <div class="step-title">${t('step2.title')}</div>
@@ -57,6 +65,13 @@ export function render(data: DiagramData): string {
       <!-- 当前选中 ROI 属性编辑 -->
       <div class="inspector-section" style="margin-bottom: 12px;">
         <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">${t('step2.currentRoi')}: ${activeRoi.name || activeRoi.id}</div>
+        ${isEmptyRoi
+          ? `
+        <div class="roi-empty-hint" data-roi-empty-hint style="margin: 6px 0 8px; padding: 8px; border-radius: 6px; border: 1px dashed var(--accent-blue); background: rgba(56, 189, 248, 0.10); font-size: 10.5px; line-height: 1.55;">
+          <div style="font-weight: 700; margin-bottom: 2px;">${t('step2.emptyRoiTitle')}</div>
+          <div>${t('step2.emptyRoiHint')}</div>
+        </div>`
+          : ''}
         <div style="display: flex; flex-direction: column; gap: 6px; font-size: 11px;">
           <div>
             <label style="color: var(--text-muted); font-size: 10px;">${t('step2.roiName')}</label>

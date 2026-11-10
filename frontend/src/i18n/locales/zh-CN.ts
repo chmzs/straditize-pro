@@ -261,6 +261,8 @@ export const zhCN = {
   'step2.pixelY': '像素边界: Y',
   'step2.assignedCols': '归属列数:',
   'step2.next': '确认有效区，进入 Y 轴标定 (步骤 3)',
+  'step2.emptyRoiTitle': '此区域尚未框选',
+  'step2.emptyRoiHint': '在画布上按住该区域左上角的手柄，向右下拖动画出取数范围。框选完成前请勿进入「分列」步骤（零面积区域会被后端拒绝）。',
 
   // ===== 步骤 3：Y 标定面板 =====
   'step3.title': '3. Y 轴物理标定',

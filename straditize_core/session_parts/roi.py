@@ -65,21 +65,35 @@ class RoiMixin:
         if not hasattr(self, "rois") or self.rois is None:
             self._init_rois()
 
+        existing_ids = {str(r.get("id")) for r in self.rois}
         if name is None:
-            self._roi_counter += 1
-            cand_name = f"roi_{self._roi_counter}"
-            while any(r["name"] == cand_name for r in self.rois):
+            # 默认名与 id 同号：一起推进，直到既不撞既有 id 也不撞既有名字
+            while True:
                 self._roi_counter += 1
-                cand_name = f"roi_{self._roi_counter}"
-            name = cand_name
+                roi_id = f"roi_{self._roi_counter}"
+                if roi_id not in existing_ids and all(
+                    r.get("name") != roi_id for r in self.rois
+                ):
+                    break
+            name = roi_id
             name_source = "default"
         else:
             name_source = "user"
+            # `_roi_counter` 只在 `_init_rois` 里归零，而 `project_load` 直接替换
+            # `self.rois`、**不恢复计数器**（`_restore_rois`）。所以载入含 `roi_1`
+            # 的工程包后计数器仍是 0，下一次创建又得到 `roi_1` —— 两个 ROI 同 id：
+            # 界面两张卡片都显示「主区」、都按 `col.roi_id === r.id` 声称拥有同一批列；
+            # `roi_remove` 的级联也按 `roi_id` 匹配列（见本文件 roi_remove），删任一个
+            # 都会把另一方的列一起删掉（用户手工数字化成果）。这里对**既有 id 集合**
+            # 去重，与名字去重同一处：对老包、对计数器未恢复的路径都成立。
             self._roi_counter += 1
+            roi_id = f"roi_{self._roi_counter}"
+            while roi_id in existing_ids:
+                self._roi_counter += 1
+                roi_id = f"roi_{self._roi_counter}"
 
         self._validate_roi_name(name)
 
-        roi_id = f"roi_{self._roi_counter}"
         default_grp_id = f"{roi_id}_grp1"
         default_grp = {
             "id": default_grp_id,
@@ -266,12 +280,34 @@ class RoiMixin:
             "success": True,
         }
 
-    def roi_remove(self, roi_id: str) -> dict[str, Any]:
-        """Remove an ROI and cascade-delete its columns."""
+    def roi_remove(self, roi_id: str, confirm_drop_columns: bool = False) -> dict[str, Any]:
+        """Remove an ROI and cascade-delete its columns.
+
+        ## 为什么要显式确认（2026-11-10 用户缺陷）
+
+        级联会**真的删掉**该 ROI 下的全部列（`user` 数字化出来的成果），而且没有撤销
+        入口、没有确认弹窗、也没有提示。用户删掉一个"误建的空分区"，丢的是另一个分区
+        的 4 列——界面上两张卡片的删除按钮长得一模一样。
+
+        所以：**有列且未显式确认 → 报 -32002**，文案说清"会删几列"。空 ROI 不受影响
+        （删空分区是纯整理动作，拦下来只会让最常见的清理多一步）。
+        """
         if not hasattr(self, "rois") or self.rois is None:
             self._init_rois()
 
         roi = self._get_roi(roi_id)
+
+        doomed_columns = [
+            c for c in getattr(self, "columns", []) if c.get("roi_id") == roi_id
+        ]
+        if doomed_columns and not confirm_drop_columns:
+            raise JsonRpcError(
+                -32002,
+                f"确认删除：分区 '{roi.get('name') or roi_id}' 下有 {len(doomed_columns)} 列，"
+                "删除该分区会把这些列一并删除且无法撤销。确认无误请带 "
+                "confirm_drop_columns=true 重试。",
+            )
+
         self.rois.remove(roi)
 
         # Cascade delete columns belonging to this ROI and re-index point stores

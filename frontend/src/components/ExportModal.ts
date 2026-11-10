@@ -4,6 +4,8 @@ import { SplineInterpolator } from '../core/SplineInterpolator';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { ProjectManager } from '../core/ProjectManager';
 import { computeExportReadiness, renderExportReadiness } from './steps/ExportReadinessPanel';
+import { computeQaVerdict, QA_DEFAULT_TOLERANCE } from '../core/qaVerdict';
+import type { QaSummary } from './steps/QaPanel';
 import { notifyError } from '../ui/feedback';
 
 export class ExportModal {
@@ -99,6 +101,12 @@ export class ExportModal {
                 <option value="depth_grid">2. 参考标尺均匀层位 [用于等距辅助测试]</option>
                 <option value="turning_points">3. 离散拐点稀疏特征清单 [原始坐标表]</option>
               </select>
+              <!--
+                行集说明：用户必须先知道"这 N 行是哪来的"。
+                以前预览（控制点并集）与下载（后端样品层位）是两套行集，界面一个字都没说，
+                用户看到「预览 125 行 / 下载 35 行」完全无法判断哪个权威（U-ROWS-01）。
+              -->
+              <div id="wpd-rowset-caption" style="margin-top: 5px; font-size: 10.5px; line-height: 1.45; color: var(--text-muted);"></div>
             </div>
 
             <!-- 排序 -->
@@ -143,6 +151,17 @@ export class ExportModal {
                   </select>
                 </div>
               </div>
+            </div>
+
+            <!--
+              工作簿类导出的行集来源必须写在界面上。
+              后端 export.exportXlsx / export.exportLipd / export.tar 都没有"指定层位"
+              参数（export.csv 的 depths 形参实际未被使用），它们固定按 samples 采样层位
+              出表，与上方数据集选择器的行集是两回事。写成静态说明而不是悄悄不同
+              （U-ROWS-01 的根因就是"隐性另搞一套"）。
+            -->
+            <div id="wpd-workbook-rowset-note" style="font-size: 10px; line-height: 1.5; color: var(--status-warning); padding: 6px 8px; border-radius: 4px; background: rgba(245, 158, 11, 0.10); border: 1px solid rgba(245, 158, 11, 0.35);">
+              XLSX / LiPD / TAR 由后端生成，固定按「样品层位」出表（与上方预览的行集可能不同）。
             </div>
 
             <div class="divider" style="margin: 2px 0;"></div>
@@ -218,6 +237,14 @@ export class ExportModal {
     const naFillSelect = modal.querySelector('#wpd-na-fill') as HTMLSelectElement;
     const varsLabel = modal.querySelector('#wpd-vars-label') as HTMLElement;
     const sizeLabel = modal.querySelector('#wpd-data-size-label') as HTMLElement;
+    const rowSetCaptionEl = modal.querySelector('#wpd-rowset-caption') as HTMLElement | null;
+
+    /** 数据集 → 行集来源的人话名字（与 `#wpd-dataset-select` 的选项一一对应）。 */
+    const ROWSET_SOURCE: Record<string, string> = {
+      union_points: '按控制点层位',
+      depth_grid: '按标尺均匀层位',
+      turning_points: '按离散拐点清单',
+    };
 
     // 动态表格数据模型与手动微调记录
     let currentHeaders: string[] = [];
@@ -425,48 +452,75 @@ export class ExportModal {
       sizeLabel.textContent = `${(dataStr.length / 1024).toFixed(1)} KB (${currentRows.length} rows)`;
     };
 
+    /**
+     * QA 结论的唯一数据源：后端 `qa.summarize`。
+     *
+     * 曾经这里自己遍历预览表求 min/max，再套硬编码窗口 `minSum >= 85 && maxSum <= 115`。
+     * 两个后果都被实测抓到（`.scratch/hands-on/export/`）：
+     * ① 一行都没被检验时 `minSum` 停在初始化哨兵 `999999`，而
+     *    `999999 >= 85 && 0 <= 115` 恒真 ⇒ 「**0 层位质检** … **质检达标**」；
+     * ② 同一个哨兵被当成真实数值印给用户：「各层位介于 **999999.0%** ~ 0.0%」。
+     * 同屏步骤 8 的横幅此刻报的是「组分总和超标报警（788 个层位）」——两条结论直接对立。
+     *
+     * 现在自检行**只复述后端字段**（超限层位数 / 最大总和 / 实际被检层位数），
+     * 判定走 `core/qaVerdict.ts` 的同一个函数；前端不再有第二条求和路径。
+     * 空集（被检层位 = 0）由该函数判为"无法判定"，绝不再算达标。
+     */
+    let latestQa: QaSummary | null = null;
+    let latestQaError: string | null = null;
+
+    const refreshQa = async (): Promise<void> => {
+      try {
+        latestQa = await this.rpcClient.call<{ tolerance: number }, QaSummary>('qa.summarize', {
+          tolerance: QA_DEFAULT_TOLERANCE,
+        });
+        latestQaError = null;
+      } catch (err) {
+        latestQa = null;
+        latestQaError = (err as Error)?.message || String(err);
+      }
+      updateSumCheck();
+    };
+
     const updateSumCheck = () => {
       const bannerEl = modal.querySelector('#wpd-sum-check-banner') as HTMLElement;
       const textEl = modal.querySelector('#wpd-sum-check-text') as HTMLElement;
       const subEl = modal.querySelector('#wpd-sum-check-sub') as HTMLElement;
       if (!bannerEl || !textEl || !subEl) return;
 
-      if (datasetSelect.value === 'turning_points' || currentRows.length === 0) {
+      if (datasetSelect.value === 'turning_points') {
         bannerEl.style.display = 'none';
         return;
       }
       bannerEl.style.display = 'flex';
 
-      let totalSum = 0;
-      let minSum = 999999;
-      let maxSum = 0;
-      let countedRows = 0;
-
-      for (const row of currentRows) {
-        let rowSum = 0;
-        for (let c = 1; c < row.length; c++) {
-          const val = parseFloat(row[c]);
-          if (!isNaN(val)) rowSum += val;
-        }
-        if (rowSum > 0) {
-          totalSum += rowSum;
-          minSum = Math.min(minSum, rowSum);
-          maxSum = Math.max(maxSum, rowSum);
-          countedRows++;
-        }
-      }
-
-      const meanSum = countedRows > 0 ? totalSum / countedRows : 100;
-      subEl.textContent = `${countedRows} 层位质检`;
-
-      if (minSum >= 85 && maxSum <= 115) {
-        bannerEl.className = 'wpd-qa-banner wpd-qa-banner--ok';
-        textEl.innerHTML = `<strong>百分比总和自检</strong>: 全剖面平均总和 <strong>${meanSum.toFixed(1)}%</strong> (各层位介于 ${minSum.toFixed(1)}% ~ ${maxSum.toFixed(1)}%，质检达标)`;
-      } else {
+      // 后端结论还没到手：不许先给一句"达标"占位。
+      if (latestQaError) {
         bannerEl.className = 'wpd-qa-banner wpd-qa-banner--warn';
-        const minDisp = minSum === 999999 ? 0 : minSum.toFixed(1);
-        textEl.innerHTML = `<strong>质检提示</strong>: 存在层位总和偏离 100% (范围: <strong>${minDisp}% ~ ${maxSum.toFixed(1)}%</strong>)，请检查是否有穿透越界峰或漏识属种`;
+        textEl.innerHTML = `<strong>百分比总和自检</strong>: 无法取得后端校验结果（${latestQaError}）`;
+        subEl.textContent = '未检验';
+        return;
       }
+      if (!latestQa) {
+        bannerEl.className = 'wpd-qa-banner wpd-qa-banner--warn';
+        textEl.innerHTML = '<strong>百分比总和自检</strong>: 分析中...';
+        subEl.textContent = '-- 层位';
+        return;
+      }
+
+      const verdict = computeQaVerdict({
+        nOverHorizons: latestQa.violations_over?.length ?? 0,
+        maxSum: typeof latestQa.sum?.max === 'number' ? latestQa.sum.max : null,
+        tolerance: latestQa.tolerance,
+        nUncalibrated: latestQa.n_uncalibrated ?? latestQa.uncalibrated_columns?.length ?? 0,
+        nChecked: latestQa.n_horizons_with_data,
+      });
+      bannerEl.className =
+        verdict.level === 'green' ? 'wpd-qa-banner wpd-qa-banner--ok' : 'wpd-qa-banner wpd-qa-banner--warn';
+      textEl.innerHTML = `<strong>百分比总和自检</strong>: ${verdict.headline}${
+        verdict.detail ? `｜${verdict.detail}` : ''
+      }`;
+      subEl.textContent = `${latestQa.n_horizons_with_data} 层位被检验`;
     };
 
     const updateFullDisplay = () => {
@@ -482,6 +536,26 @@ export class ExportModal {
       renderTableGrid();
       syncSerializedText();
       updateSumCheck();
+      updateRowSetCaption();
+    };
+
+    /**
+     * 选择器下方那行"当前行集是哪来的、有多少行"。
+     *
+     * 界面必须同时说明两件事：来源（控制点并集 / 标尺均匀 / 拐点清单）与行数。
+     * 用户原来只看到「预览 125 行」，下载却是 35 行，没有任何一处文字解释这个差异。
+     */
+    const updateRowSetCaption = () => {
+      if (!rowSetCaptionEl) return;
+      if (currentRows.length === 0) {
+        rowSetCaptionEl.style.color = 'var(--status-warning)';
+        rowSetCaptionEl.textContent =
+          '当前行集为空（0 行）：这个数据集在当前图谱上没有可用层位。请先在步骤 3 完成 Y 轴标定，或换一个数据集。';
+        return;
+      }
+      const source = ROWSET_SOURCE[datasetSelect.value] ?? '按当前数据集';
+      rowSetCaptionEl.style.color = 'var(--text-muted)';
+      rowSetCaptionEl.textContent = `${source}（${currentRows.length} 行）· 预览、复制与 CSV 下载都按此行集导出`;
     };
 
     // 还原按钮
@@ -501,6 +575,8 @@ export class ExportModal {
     naFillSelect.addEventListener('change', updateFullDisplay);
 
     updateFullDisplay();
+    // 自检行只复述后端结论，所以必须真的去问一次后端（不能等用户点按钮）。
+    void refreshQa();
 
     // 复制到剪贴板
     const copyBtn = modal.querySelector('#btn-wpd-copy') as HTMLButtonElement;
@@ -510,31 +586,38 @@ export class ExportModal {
       setTimeout(() => (copyBtn.textContent = '复制当前数据'), 1500);
     });
 
-    // 下载 CSV (直连后端 export.csv)
-    modal.querySelector('#btn-wpd-download-csv')?.addEventListener('click', async () => {
+    // 下载 CSV：**导出当前预览矩阵本身**，不再另走一条后端通路。
+    //
+    // 以前这里直连 `export.csv`，后端按 `samples` 采样层位出表，与上方数据集选择器
+    // 控制的行集是两个东西 —— 用户看到「预览 125 行、下载 35 行」，界面没有任何说明，
+    // 无法判断哪个权威（U-ROWS-01）。
+    //
+    // 后端也接不住这个需求：`export_csv(depths=…)` 的 `depths` 形参在实现里根本没被
+    // 使用（`export.py:1129` 直接转调 `export_data`），`export.exportXlsx` /
+    // `export.exportLipd` 更是没有行集参数。所以"选择器同时控制下载"只能由前端
+    // 把**同一个矩阵**写出去 —— 这同时保证了预览与下载物逐格同值（构造即成立）。
+    modal.querySelector('#btn-wpd-download-csv')?.addEventListener('click', () => {
+      if (currentRows.length === 0) {
+        // 空行集给"成功下载了一个空文件"是最误导的做法：用户会以为导完了。
+        notifyError(
+          '当前行集为空（0 行），没有可导出的数据：请先在步骤 3 完成 Y 轴标定，或换一个数据集。'
+        );
+        return;
+      }
+      // 这条路径是自己拼字符串 + 造 Blob，没有后端参与，但**照样会失败**
+      // （序列化异常、Blob 构造被环境拒绝、移动端内存不足）。失败必须让用户看见，
+      // 不能停在"点了没反应"（本仓 §2：禁止静默兜底）。
       try {
-        const res = await this.rpcClient.call<any, any>('export.csv');
-        const csvStr = typeof res === 'string' ? res : (res?.csv || res?.csv_content || '');
-        if (csvStr) {
-          const blob = new Blob([csvStr], { type: 'text/csv;charset=utf-8;' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `straditize_${this.data.primary_roi_id || 'data'}_${Date.now()}.csv`;
-          a.click();
-          URL.revokeObjectURL(url);
-        } else {
-          // Fallback to textarea text if offline
-          const blob = new Blob([textarea.value], { type: 'text/csv;charset=utf-8;' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `straditize_pollen_${Date.now()}.csv`;
-          a.click();
-          URL.revokeObjectURL(url);
-        }
+        const csvStr = serializeMatrixToText(currentHeaders, currentRows);
+        const blob = new Blob([csvStr], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `straditize_${this.data.primary_roi_id || 'data'}_${Date.now()}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
       } catch (err: any) {
-        notifyError(`导出 CSV 失败: ${err.message || err}`);
+        notifyError(`导出 CSV 失败: ${err?.message || err}`);
       }
     });
 

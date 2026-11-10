@@ -175,8 +175,19 @@ export class CleanupManager {
   public applyHistorySnapshot(snapshot: HistorySnapshot): void {
     this.canvasComponent.data.columns = snapshot.columns;
     this.canvasComponent.data.activeTaxaId = snapshot.activeTaxaId;
+    // 标定端点 / `isCalibrated` 是**后端权威量**，撤销不得改写（T-04）。
+    // 旧实现整体回写 `snapshot.calibration`，而快照可能是在标定**之前**压入的，
+    // 于是一次撤销就把镜像的 `isCalibrated` 打回 false，而 `CoordinateSystem
+    // .calibrationBounds` 见 false 即返回 null —— 面板/Ratio/深度换算一起否定
+    // 后端已确认的标定（后端从未收到任何清除请求，前后端从此分叉）。
+    // 这里只恢复前端自有的显示偏好（层位间隔 / 深度网格），它们是这份镜像里
+    // 唯一不由后端写入的字段。
     if (snapshot.calibration) {
-      this.canvasComponent.data.calibration = { ...snapshot.calibration };
+      this.canvasComponent.data.calibration = {
+        ...this.canvasComponent.data.calibration,
+        depthInterval: snapshot.calibration.depthInterval,
+        depthGridEnabled: snapshot.calibration.depthGridEnabled,
+      };
     }
     if (snapshot.roi) {
       this.canvasComponent.data.roi = { ...snapshot.roi };

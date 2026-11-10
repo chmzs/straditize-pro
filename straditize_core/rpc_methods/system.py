@@ -257,15 +257,21 @@ def _payload_column(session: Any, c: dict[str, Any]) -> dict[str, Any]:
         session.digitize(c_idx, "area")
 
     ctrls = session.control_points.get(c_idx, {})
+    # 「哪些点是用户手工给/改的」是会话自己的事实（`session.manual_points`），
+    # 不能在这里统一写 False：用户重开工程包后看到的「锚点: 0 手动 / 46 总计」
+    # 就是这么来的，而重分列会把这些点当算法结果重算掉（2026-11-10 用户缺陷）。
+    manual_store = getattr(session, "manual_points", None) or {}
+    manual = manual_store.get(c_idx, {}) if isinstance(manual_store, dict) else {}
     pts = []
     for r_val, x_val in ctrls.items():
+        rec = manual.get(int(r_val)) or manual.get(r_val) or {}
         pts.append(
             {
                 "id": f"pt_{c_idx}_{r_val}",
                 "x": round(x_val),
                 "y": int(r_val),
-                "type": "peak",
-                "isManual": False,
+                "type": str(rec.get("kind") or "peak"),
+                "isManual": bool(rec),
                 "createdAt": 1700000000000 + int(r_val),
             }
         )

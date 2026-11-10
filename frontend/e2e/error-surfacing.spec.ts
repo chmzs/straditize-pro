@@ -66,8 +66,11 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe('后端失败必须被用户看见', () => {
+  // U-ROWS-01 之后 CSV 按钮不再走后端（改为导出预览矩阵本身），它没有"后端失败"
+  // 这条路径了。本用例的意图是"后端导出失败必须被看见"，改指仍然直连后端的工作簿
+  // 导出（XLSX），意图不变、覆盖不降。
   test.use({
-    allowlists: { rpcError: [/export\.csv/], notice: [INJECTED, /导出 CSV 失败/] },
+    allowlists: { rpcError: [/export\.exportXlsx/], notice: [INJECTED, /导出 XLSX 失败/] },
   });
 
   test('导出失败必须通知用户，而不是静默给一份空数据', async ({ page, telemetry }) => {
@@ -75,8 +78,8 @@ test.describe('后端失败必须被用户看见', () => {
     await page.locator('#btn-export-csv').click();
     await expect(page.locator('.wpd-export-dialog'), '导出面板应打开').toBeVisible();
 
-    await failRpcMethod(page, 'export.csv', INJECTED);
-    await page.locator('#btn-wpd-download-csv').click();
+    await failRpcMethod(page, 'export.exportXlsx', INJECTED);
+    await page.locator('#btn-wpd-download-xlsx').click();
 
     // 断言"用户看见了"，而不是"代码里有个 catch"
     await expect
@@ -85,7 +88,7 @@ test.describe('后端失败必须被用户看见', () => {
         timeout: 10_000,
       })
       .toContain(INJECTED);
-    expect(telemetry.notices.join('\n'), '通知应说明失败的是导出').toContain('导出 CSV 失败');
+    expect(telemetry.notices.join('\n'), '通知应说明失败的是导出').toContain('导出 XLSX 失败');
   });
 });
 

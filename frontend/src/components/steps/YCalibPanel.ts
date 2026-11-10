@@ -121,24 +121,59 @@ export function render(data: DiagramData): string {
 }
 
 export function mount(root: HTMLElement, ctx: StepContext): void {
-  const commitCalibration = () => {
-    const topPx = parseFloat((root.querySelector('#ycal-inp-top-px') as HTMLInputElement)?.value || '');
-    const topVal = parseFloat((root.querySelector('#ycal-inp-top-val') as HTMLInputElement)?.value || '');
-    const botPx = parseFloat((root.querySelector('#ycal-inp-bot-px') as HTMLInputElement)?.value || '');
-    const botVal = parseFloat((root.querySelector('#ycal-inp-bot-val') as HTMLInputElement)?.value || '');
-    const unit = (root.querySelector('#ycal-inp-unit') as HTMLInputElement)?.value.trim() || 'cm';
+  /**
+   * 四个必填数值框 + 对用户的中文名字。
+   *
+   * 顺序即错误文案里的列举顺序。名字必须细到"哪一个框"：只说"参数不完整"
+   * 等于没告诉用户该改哪里，而 Y 标定是所有深度读数的唯一来源。
+   */
+  const REQUIRED: ReadonlyArray<readonly [string, string]> = [
+    ['#ycal-inp-top-px', 'Y1 像素行'],
+    ['#ycal-inp-top-val', 'Y1 数值'],
+    ['#ycal-inp-bot-px', 'Y2 像素行'],
+    ['#ycal-inp-bot-val', 'Y2 数值'],
+  ];
+  const APPLY_ERROR_PREFIX = 'Y 轴标定未提交';
+
+  /**
+   * @param reportMissing 是否把"缺项"报给用户。
+   *
+   * 只有用户**显式点「应用标定」**时才为 true。`change` 触发的自动提交必须保持静默：
+   * 用户逐框填写时前三次必然缺项，若每次失焦都弹一条错误，输入过程就变成报警器。
+   *
+   * 曾经这里是无条件静默 `return`（缺项时零请求、零提示、零变化），而四个框的
+   * `placeholder` 是 `556 / 0 / 1320 / 1500` 这组字面量常量，看起来像已填好 ——
+   * 用户点完以为标定过了，实际上什么都没发生（T-02）。
+   */
+  const commitCalibration = (reportMissing: boolean) => {
+    const raw = (selector: string): string =>
+      (root.querySelector(selector) as HTMLInputElement | null)?.value.trim() ?? '';
+    const num = (selector: string): number => Number.parseFloat(raw(selector));
+
+    const topPx = num('#ycal-inp-top-px');
+    const topVal = num('#ycal-inp-top-val');
+    const botPx = num('#ycal-inp-bot-px');
+    const botVal = num('#ycal-inp-bot-val');
+    const unit = raw('#ycal-inp-unit') || 'cm';
     const axisRaw = (root.querySelector('#ycal-sel-primary-axis') as HTMLSelectElement)?.value;
     const primaryAxis: 'depth' | 'age' = axisRaw === 'age' ? 'age' : 'depth';
 
     // 即使真实数值尚未填齐，也实时同步 Y1/Y2 像素位置到画布预览
     if (ctx.onPreviewYCalibrationPx) {
       ctx.onPreviewYCalibrationPx(
-        isNaN(topPx) ? null : topPx,
-        isNaN(botPx) ? null : botPx
+        Number.isFinite(topPx) ? topPx : null,
+        Number.isFinite(botPx) ? botPx : null
       );
     }
 
-    if (isNaN(topPx) || isNaN(topVal) || isNaN(botPx) || isNaN(botVal)) {
+    // 空串与"打了但不是数字"（`-`、`1e`）同属缺有效输入，一起点名。
+    const missing = REQUIRED.filter(([selector]) => !Number.isFinite(num(selector)));
+    if (missing.length > 0) {
+      if (reportMissing) {
+        notifyError(
+          `${APPLY_ERROR_PREFIX}：请先填 ${missing.map(([, label]) => label).join('、')}（四个数值框都必须有数字）。`
+        );
+      }
       return;
     }
     if (topPx === botPx) {
@@ -161,11 +196,12 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   });
 
   root.querySelectorAll('#ycal-inp-top-px, #ycal-inp-top-val, #ycal-inp-bot-px, #ycal-inp-bot-val, #ycal-inp-unit, #ycal-sel-primary-axis').forEach((inp) => {
-    inp.addEventListener('change', commitCalibration);
+    // 自动提交保持静默：逐框填写时前几次必然缺项（见 commitCalibration 的注释）。
+    inp.addEventListener('change', () => commitCalibration(false));
   });
 
-  // 手动点击应用
-  root.querySelector('#btn-apply-ycalib')?.addEventListener('click', commitCalibration);
+  // 手动点击应用：这是用户明确表达"我要提交"，缺项必须报出来。
+  root.querySelector('#btn-apply-ycalib')?.addEventListener('click', () => commitCalibration(true));
 
   // 重新图上选点
   root.querySelector('#btn-repick-ycalib')?.addEventListener('click', () => {
@@ -174,7 +210,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
 
   // 推进到步骤 4
   root.querySelector('#btn-apply-ycalib-next')?.addEventListener('click', () => {
-    commitCalibration();
+    commitCalibration(false);
     ctx.onAdvanceWorkflowStage?.(4);
   });
 }

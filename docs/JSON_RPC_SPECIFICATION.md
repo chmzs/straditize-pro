@@ -559,6 +559,53 @@
 
 ---
 
+### 4.10b-2 列级轴粗 `axis_stroke_px`（U-ROWS-02，2026-11-10）
+
+0 点的定义是**硬约定**（ARCHITECTURE §6.4）：
+
+```
+abs_px0（绿线 / 0 点） = startX（红线 / 列切分线） + axis_stroke_px
+```
+
+`axis_stroke_px` 的解析优先级由 `xscale.resolve_axis_stroke` 唯一给出：
+**列级覆盖 > 组级初值 > 缺省 5**。组的 `axis_stroke_px` 是分列时实测的中位数
+（或用户在组属性里手填）；列的 `axis_stroke_px` **只放用户显式覆盖**
+（`column.update` 的 `updates.axis_stroke_px`，`None` = 清除覆盖回到组值）。
+
+- **`getDiagramData` 载荷**：每列携带 `axis_stroke_px`（可为 `null`），
+  见 `rpc_methods/system.py` 的 `_payload_column`。
+- **工程包 `straditize.json` 的列段**：自 2026-11-10 起同样写 `axis_stroke_px`
+  （`project.py` 的 `_build_columns_export`），载入端 `_restore_columns` 一并恢复。
+  - **老包缺该键 ⇒ 视为未覆盖（`null`）⇒ 回落组值**，与修复前行为一致，向后兼容。
+  - 修复前两端都不写这个字段，列级覆盖一进包就丢：载入后 0 点从 `start+4` 漂到
+    `start+6`（实测用户包 Pinus 列 `tickEndX` 264→266），整列读数按
+    `value_per_px` 系统性偏移（0.16129×2 = 0.3226），而界面完全正常。
+- **载入期自检**：`project.load` 比较"包里的 `tickEndX`"与"当前解析出的 `abs_px1`"，
+  只在 `scale_provenance.source == "group_slope"` 时比较（其它分支的 `abs_px1`
+  不由轴粗决定）。不一致时**不阻断载入**，而是在**下一次 `project.save`** 的
+  `manifest.json` 里写一条 `warnings[]`：
+
+```json
+{
+  "kind": "axis_stroke_tick_end_mismatch",
+  "col_index": 0, "column_id": "roi_1_col01", "column_name": "Pinus",
+  "column_axis_stroke_px": null, "effective_axis_stroke_px": 6.0,
+  "startX": 319.0, "tickEndX_in_package": 324.0, "tickEndX_expected": 326.0,
+  "offset_px": -2.0,
+  "note": "工程包里的 tickEndX 与该列当前生效的轴粗对不上：0 点可能已整体平移…"
+}
+```
+
+  `warnings` 键**只在非空时出现**（键存在 ⇔ 真的有问题），因此"没有该键"本身
+  就是一个可判定的绿灯。
+
+> 为什么自检放在**载入**而不是保存：保存端写出去的 `tickEndX` 就是
+> `scale.abs_px1`，拿它和 `start + 轴粗 + 1` 比是循环论证，永远相等，红不了。
+> 只有"包里的 `tickEndX`"这个来自文件的值才可能和当前轴粗矛盾。
+
+
+---
+
 ### 4.10c `algorithm.measureRuler` — 刻度尺**几何**（只读，不产出读数）
 步骤 6 的「参考标尺模数」用它拿到每列刻度尺的客观几何：轴线行、刻线 x 位置、
 格数、刻距、是否规则。后端实现见 `ruler.py::detect_ruler_for_columns` 与

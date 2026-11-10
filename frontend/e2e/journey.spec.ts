@@ -30,11 +30,15 @@ interface RoiSummary {
   id: string;
   name: string;
   name_source: string;
+  /** 产品决策 ③ 之后新建 ROI 是零面积壳，框选要用到边界，故一并声明。 */
+  xlim?: [number, number];
+  ylim?: [number, number];
 }
 
 interface DiagramData {
   rois: RoiSummary[];
   primaryRoiId: string;
+  activeRoiId?: string;
   columns: { id: string }[];
   calibration: {
     isCalibrated: boolean;
@@ -83,6 +87,47 @@ function untarArchive(buf: Buffer): Map<string, Buffer> {
   return entries;
 }
 
+/**
+ * 把当前活动 ROI 从左上角手柄拖到世界坐标 (wx, wy)。
+ *
+ * 产品决策 ③（2026-11-09）之后，新建 ROI 是一个 [0,0]×[0,0] 的**空壳**，不再是当前
+ * ROI 的克隆。所以本旅程在新建第二个区域后必须像真实用户那样先把它框出来；否则
+ * 走到步骤 5 时后端会拒绝零面积区域：
+ * `Bounds [0.0, 0.0], [0.0, 0.0] is too small (image is 2339x1654)`。
+ * 这是产品语义变更带来的**流程**变更，不是放宽断言。
+ */
+async function frameActiveRoi(page: Page, wx: number, wy: number): Promise<void> {
+  const box = await canvasBox(page);
+  const vp = (await getState<{ viewport: { scale: number; panX: number; panY: number } }>(page))
+    .viewport;
+  const data = await diagramData<DiagramData>(page);
+  const activeId = data.activeRoiId ?? data.rois[0]?.id;
+  const active = data.rois.find((r) => r.id === activeId);
+  if (!active?.xlim || !active.ylim) throw new Error('活动 ROI 缺少边界，无法框选');
+
+  const from = {
+    x: box.x + active.xlim[0] * vp.scale + vp.panX,
+    y: box.y + active.ylim[0] * vp.scale + vp.panY,
+  };
+  const to = { x: box.x + wx * vp.scale + vp.panX, y: box.y + wy * vp.scale + vp.panY };
+
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 24 });
+  await page.mouse.up();
+
+  await expect
+    .poll(
+      async () => {
+        const after = await diagramData<DiagramData>(page);
+        const roi = after.rois.find((r) => r.id === activeId);
+        return roi?.xlim ? Math.abs(roi.xlim[1] - roi.xlim[0]) : 0;
+      },
+      { message: '框选后活动 ROI 必须从零面积变成真实宽度', timeout: 15_000 },
+    )
+    .toBeGreaterThan(0);
+}
+
 test.describe('八步黄金旅程（全 DOM 点击驱动）', () => {
   test.beforeEach(async ({ page }) => {
     await resetBaseline(page);
@@ -123,6 +168,9 @@ test.describe('八步黄金旅程（全 DOM 点击驱动）', () => {
     await page.locator('.btn-set-primary').first().click();
     const afterPrimary = await diagramData<DiagramData>(page);
     expect(afterPrimary.primaryRoiId, '点非主区卡片上的按钮应把该 ROI 提升为主区').toBe(herb.id);
+
+    // 产品决策 ③：新建出来的 herb_pollen 是待框选的空区域，先框出来再去分列。
+    await frameActiveRoi(page, 1900, 1300);
 
     await page.locator('#btn-apply-roi-next').click();
     await waitStage(page, 3);

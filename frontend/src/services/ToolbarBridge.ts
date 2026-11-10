@@ -46,26 +46,34 @@ export interface ToolbarBridgeParams {
 }
 
 export function createToolbarCallbacks(p: ToolbarBridgeParams) {
+  // 缩放读数有两个消费者：顶栏徽标（`Toolbar.updateScale`）与页脚（`updateFooter` →
+  // `app/footer.ts:32` 现读 `viewport.scale`）。两者各自快照，**必须同一次调用里一起刷新**。
+  // 曾经 4 个缩放回调只刷新徽标，页脚于是冻在上一个值（T-01）。
+  const syncZoomReadouts = (): void => {
+    p.getToolbar()?.updateScale(p.canvasComponent.viewport.scale);
+    p.updateFooter();
+  };
+
   return {
     onFit: () => {
       p.canvasComponent.fitToScreen();
-      p.getToolbar()?.updateScale(p.canvasComponent.viewport.scale);
+      syncZoomReadouts();
     },
     onReset100: () => {
       p.canvasComponent.resetZoom100();
-      p.getToolbar()?.updateScale(p.canvasComponent.viewport.scale);
+      syncZoomReadouts();
     },
     onZoomIn: () => {
       const rect = p.canvasComponent.canvas.getBoundingClientRect();
       p.canvasComponent.viewport.zoomAt({ x: rect.width / 2, y: rect.height / 2 }, 1.25);
       p.canvasComponent.requestRender();
-      p.getToolbar()?.updateScale(p.canvasComponent.viewport.scale);
+      syncZoomReadouts();
     },
     onZoomOut: () => {
       const rect = p.canvasComponent.canvas.getBoundingClientRect();
       p.canvasComponent.viewport.zoomAt({ x: rect.width / 2, y: rect.height / 2 }, 0.8);
       p.canvasComponent.requestRender();
-      p.getToolbar()?.updateScale(p.canvasComponent.viewport.scale);
+      syncZoomReadouts();
     },
     onUndo: () => {
       const prev = p.canvasComponent.history.undo();

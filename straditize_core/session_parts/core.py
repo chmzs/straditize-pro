@@ -453,6 +453,7 @@ class CoreMixin:
         self.columns = []
         self.column_points = {}
         self.control_points = {}
+        self.manual_points = {}
         self.reader_types = {}
         self.is_calibrated = False
         self.y_scale = None
@@ -805,6 +806,7 @@ class CoreMixin:
         self.columns = []
         self.column_points = {}
         self.control_points = {}
+        self.manual_points = {}
 
         return {
             "success": True,
@@ -1712,6 +1714,7 @@ class CoreMixin:
         self.columns.append(col_dict)
         self.taxa_names.append(name)
         self.control_points[c_idx] = {}
+        self.manual_points.setdefault(c_idx, {})
         return {"col_index": c_idx, "column": col_dict}
 
     def _resolve_col_index(self, col_index: int | str) -> int:
@@ -1734,30 +1737,50 @@ class CoreMixin:
         """Re-assigns sequential col_index = 0..N-1 on self.columns."""
         new_column_points: dict[int, list[dict[str, float]]] = {}
         new_control_points: dict[int, dict[int, float]] = {}
+        new_manual_points: dict[int, dict[int, dict[str, Any]]] = {}
         new_reader_types: dict[int, str] = {}
         new_x_scales: dict[int, dict[str, float]] = {}
 
         old_column_points = getattr(self, "column_points", {}) or {}
         old_control_points = getattr(self, "control_points", {}) or {}
+        old_manual_points = getattr(self, "manual_points", {}) or {}
         old_reader_types = getattr(self, "reader_types", {}) or {}
         old_x_scales = getattr(self, "x_scales", {}) or {}
 
+        matched_manual: set[int] = set()
         for new_idx, col in enumerate(self.columns):
             is_new = bool(col.pop("_is_new_col", False))
             old_idx = col.get("col_index")
             col["col_index"] = new_idx
             if not is_new and isinstance(old_idx, int):
+                matched_manual.add(old_idx)
                 if old_idx in old_column_points:
                     new_column_points[new_idx] = old_column_points[old_idx]
                 if old_idx in old_control_points:
                     new_control_points[new_idx] = old_control_points[old_idx]
+                # 手工点标记必须跟着列序号一起搬家，否则"删一列/重排"就让手工点
+                # 变成匿名点，下一次重建即被覆盖。
+                if old_idx in old_manual_points:
+                    new_manual_points[new_idx] = old_manual_points[old_idx]
                 if old_idx in old_reader_types:
                     new_reader_types[new_idx] = old_reader_types[old_idx]
                 if old_idx in old_x_scales:
                     new_x_scales[new_idx] = old_x_scales[old_idx]
 
+        # 整列重建（重分列）时旧列被整体替换，旧 col_index 一个都对不上；手工点
+        # 是**像素坐标**，按 x 落到新列里继续有效——否则用户手工补的点在"检测分列"
+        # 之后整体消失（2026-11-10 用户缺陷）。
+        for old_idx, records in old_manual_points.items():
+            if old_idx in matched_manual:
+                continue
+            for row, rec in records.items():
+                target = self._column_index_at_x(float(rec.get("x", 0.0)))
+                if target is not None:
+                    new_manual_points.setdefault(target, {})[int(row)] = rec
+
         self.column_points = new_column_points
         self.control_points = new_control_points
+        self.manual_points = new_manual_points
         self.reader_types = new_reader_types
         self.x_scales = new_x_scales
 
@@ -1766,6 +1789,24 @@ class CoreMixin:
                 c.get("name") or c.get("species") or f"col{i + 1:02d}"
                 for i, c in enumerate(self.columns)
             ]
+
+    def _column_index_at_x(self, x: float) -> int | None:
+        """把像素 x 归到列：先找 x 落在 [start, end) 的列，找不到取最近的一列。
+
+        只用于"整列重建后把手工点接回新列"——手工点的坐标是像素，语义上属于
+        覆盖该像素的列，而不是它当年恰好挂着的那个 col_index。
+        """
+        best_idx: int | None = None
+        best_dist: float | None = None
+        for c in getattr(self, "columns", []) or []:
+            start = float(c.get("start", 0.0))
+            end = float(c.get("end", start))
+            if start <= x < end:
+                return int(c.get("col_index", 0))
+            dist = 0.0 if start <= x <= end else min(abs(x - start), abs(x - end))
+            if best_dist is None or dist < best_dist:
+                best_idx, best_dist = int(c.get("col_index", 0)), dist
+        return best_idx
 
     def column_remove(self, col_index: int | str) -> dict[str, Any]:
         """Removes a column from the project and re-indexes point stores."""

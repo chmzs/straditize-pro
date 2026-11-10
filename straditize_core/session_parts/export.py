@@ -112,10 +112,19 @@ class ExportMixin:
         """Initialize export state."""
         pass
 
-    def get_roi_dataframes(self) -> dict[str, pd.DataFrame]:
-        """Construct a pandas DataFrame for each ROI."""
+    def get_roi_dataframes(self, strict: bool = False) -> dict[str, pd.DataFrame]:
+        """Construct a pandas DataFrame for each ROI.
+
+        `strict` 透传给 `read_column_values`：CSV 与 XLSX/LiPD/TAR 共用本入口后，
+        这个开关必须能一路传到唯一的换算函数，否则"严格模式"只剩一半语义。
+        """
         rois = getattr(self, "rois", [])
-        if not rois:
+        # 手工构造的会话（测试、CLI 直调）常常没有 ROI 记账，但列上仍带着某个 roi_id。
+        # 此时下面的 `roi_cols` 过滤会把整张表判空（roi_id 对不上合成出来的 "pollen"）。
+        # 语义上：**没有 ROI 记账就没有排除任何列的依据**，所以合成单 ROI 时要收全部列。
+        # 真实会话永远有 rois，走不到这条分支。
+        synthetic_roi = not rois
+        if synthetic_roi:
             rois = [{"id": "pollen", "name": "pollen", "name_source": "default"}]
 
         all_columns = getattr(self, "columns", [])
@@ -130,18 +139,22 @@ class ExportMixin:
             roi_id = roi["id"]
             roi_name = roi.get("name", roi_id)
 
-            roi_cols = [
-                c
-                for c in all_columns
-                if c.get("roi_id") == roi_id
-                or (
-                    not c.get("roi_id")
-                    and (
-                        len(rois) <= 1
-                        or roi_id == getattr(self, "primary_roi_id", None)
+            roi_cols = (
+                list(all_columns)
+                if synthetic_roi
+                else [
+                    c
+                    for c in all_columns
+                    if c.get("roi_id") == roi_id
+                    or (
+                        not c.get("roi_id")
+                        and (
+                            len(rois) <= 1
+                            or roi_id == getattr(self, "primary_roi_id", None)
+                        )
                     )
-                )
-            ]
+                ]
+            )
 
             if not roi_cols:
                 if samples:
@@ -207,6 +220,7 @@ class ExportMixin:
                     read_column_values(
                         scale,
                         [p_dict.get(r, baseline_px) for r in row_list],
+                        strict=strict,
                         col_name=col_name,
                     ),
                     _column_row_window(self, col, c_idx),
@@ -730,6 +744,46 @@ class ExportMixin:
             "primary_axis": resolved_axis,
         }
 
+    def _primary_roi_sheet_name(self, frames: dict[str, Any]) -> str:
+        """主 ROI 在 `get_roi_dataframes()` 里的表名（键是 ROI **名字**）。"""
+        primary_id = getattr(self, "primary_roi_id", None)
+        for roi in getattr(self, "rois", []) or []:
+            if roi.get("id") == primary_id:
+                name = roi.get("name", roi["id"])
+                if name in frames:
+                    return name
+        return next(iter(frames))
+
+    def _primary_roi_export_frame(self, *, strict: bool) -> Any:
+        """`data.csv` 用的数据帧 = **主 ROI 的那一张表**（`get_roi_dataframes` 同一入口）。
+
+        ## 为什么不能"把各 ROI 的列拼平"（2026-11-10 实测）
+
+        旧实现 `_export_value_columns` 把逐列结果写进 `values[col_name]` —— 一个
+        **按列名**索引的 dict。两个 ROI 里的同名属种列（`col01`…）互相覆盖：
+        后一个 ROI 的值顶掉前一个。若顶上来的是未标定列（`read_column_values`
+        对未标定整列给 `None`），用户看到的就是"CSV 整表全空，而 XLSX 有数"；
+        同时表头数量少于真实列数，**整列数据静默消失**，且没有任何提示。
+
+        列名不是唯一键，所以任何"按名字拼表"的做法都必然吞列。收敛到
+        `get_roi_dataframes()` 后：本函数只取一张表，列名在表内天然唯一，
+        其余 ROI 各出一份 `data/<roi>.csv`（XLSX/LiPD/TAR 本来就这么做）。
+
+        ## 产品口径（与既有约定一致，不是新发明）
+
+        `data.csv` = 主 ROI；这与 `frontend/e2e/from-zero-journey.spec.ts` 早已断言的
+        「`data.csv` 逐字节等于 `data/<主 ROI>.csv`」一致，也与 HUD 文案
+        「已将 <roi> 设为主有效区（对应导出 data.csv）」一致。
+        """
+        frames = self.get_roi_dataframes(strict=strict)
+        if not frames:
+            raise JsonRpcError(STATE_ERROR, "No ROI sheets available to export.")
+        name = self._primary_roi_sheet_name(frames)
+        frame = frames.get(name)
+        if frame is None:
+            frame = next(iter(frames.values()))
+        return frame
+
     def export_data(
         self,
         format: str = "csv",
@@ -755,19 +809,27 @@ class ExportMixin:
                 "Axes calibration is required when strict=True.",
             )
 
-        all_rows, depth_series = self._export_rows_and_depths()
-
-        data_dict: dict[str, Any] = {"depth": depth_series}
+        # 取数收敛：不再自己拼行集与列名，直接用主 ROI 的那一张表（同一入口）。
+        # `_export_rows_and_depths` / `_export_value_columns` 保留给单 ROI 的既有调用与
+        # 各自的判据，但 CSV 不再走它们——两条链在"行集 + 列名 + 补点时机"上各写一套
+        # 正是本缺陷的来源。
+        df = self._primary_roi_export_frame(strict=strict)
+        depth_series = df["depth"].tolist()
+        all_rows = list(range(len(depth_series)))
 
         if getattr(self, "age_depth_model", None) is not None:
             age_pred = self.age_depth_model.predict_age(depth_series)
-            data_dict["age_est"] = age_pred["age_est"]
-            data_dict["age_min_95"] = age_pred["age_min"]
-            data_dict["age_max_95"] = age_pred["age_max"]
-
-        data_dict.update(self._export_value_columns(all_rows, strict))
-
-        df = pd.DataFrame(data_dict)
+            # 列序必须与旧实现一致：depth, age_est, age_min_95, age_max_95, 各属种列。
+            age_frame = pd.DataFrame(
+                {
+                    "age_est": age_pred["age_est"],
+                    "age_min_95": age_pred["age_min"],
+                    "age_max_95": age_pred["age_max"],
+                }
+            )
+            df = pd.concat(
+                [df[["depth"]], age_frame, df.drop(columns=["depth"])], axis=1
+            )
 
         csv_string, saved_path = self._write_export_file(fmt, df, output_path)
 
@@ -1151,7 +1213,7 @@ class ExportMixin:
             "df <- read.csv(data_file, check.names = FALSE, stringsAsFactors = FALSE)\n"
             "depth <- df[[1]]\n"
             "taxa_data <- as.matrix(sapply(df[, -1, drop = FALSE], as.numeric))\n"
-            "taxa_data[is.na(taxa_data)] <- 0\n\n"
+            "# 空单元格 = 该行不在这一列的取数窗口内（未测），**不是 0 丰度**。\n# 旧模板曾在这一步把 NA 静默填成 0，等于把「没测」画成「测到 0」，会被当成科学结论。\n# 这里**保留 NA**：rioja::strat.plot 会把 NA 画成空白/缺口。\n# 下游统计若确实需要一个数，请显式处理（na.omit / 按缺失模型插补），不要替用户决定。\n\n\n"
             "pdf('stratigraphic_diagram.pdf', width = 12, height = 8)\n"
             "strat.plot(\n"
             "  d = taxa_data,\n"

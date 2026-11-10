@@ -23,6 +23,48 @@ export interface ScaleSyncDeps {
   setHudNotice: (text: string, duration?: number) => void;
 }
 
+/** 一列上由后端权威下发的标度字段（`onScaleMutated` 与工程包载入共用同一份）。 */
+export interface ScaleSnapshotTarget {
+  id?: string;
+  x_ticks?: unknown;
+  x_ticks_dropped?: unknown;
+  scaleCalib?: unknown;
+  scale_provenance?: unknown;
+}
+
+/**
+ * 按列 id 把后端权威标度快照回填到目标列上，返回命中的列数。
+ *
+ * **只搬后端算好的结果，不在这里推断任何东西。** 前端曾自己实现过一套标度优先级，
+ * 支持面比后端窄（只认 `x_ticks`），于是组斜率标定（`value_per_px`，后端会把
+ * `x_ticks` 清成 null）在界面上被判"未标定"，而导出却照样有数 —— 见
+ * `CoordinateSystem.resolveColumnScale` 的注释与 U-NA-01。
+ *
+ * 抽成公开函数的原因：这条回填现在有两个调用点（标度变更广播、工程包载入后），
+ * 两边必须逐字段完全一致，否则又是一处"只在一半路径上修好"的分叉。
+ */
+export function applyScaleSnapshot<T extends ScaleSnapshotTarget>(
+  targetCols: T[],
+  fresh: unknown
+): number {
+  const freshCols =
+    (fresh as { columns?: Array<Record<string, unknown>> } | null)?.columns ?? [];
+  let applied = 0;
+  for (const freshCol of freshCols) {
+    const target = targetCols.find((c) => c.id === (freshCol.id as string | undefined));
+    if (!target) continue;
+    target.x_ticks = freshCol.x_ticks;
+    // 「标定已被清空」的提示必须**同批**失效：后端在写组斜率时已清掉该键
+    // （roi.py 的 value_per_px 分支），前端若只回填 x_ticks，屏幕上会继续
+    // 挂着"需要你重新标定"，与"其实已经能读数"自相矛盾。
+    target.x_ticks_dropped = freshCol.x_ticks_dropped;
+    target.scaleCalib = freshCol.scaleCalib;
+    target.scale_provenance = freshCol.scale_provenance;
+    applied += 1;
+  }
+  return applied;
+}
+
 /** 注册 `onScaleMutated`：120ms 防抖后拉一次权威数据并逐列回填。 */
 export function setupScaleSync(deps: ScaleSyncDeps): void {
   const { rpcClient, getCanvas, getSidebar, getInspector, updateFooter, setHudNotice } = deps;
@@ -36,18 +78,7 @@ export function setupScaleSync(deps: ScaleSyncDeps): void {
         try {
           const fresh = await rpcClient.getDiagramData();
           const canvasComponent = getCanvas();
-          const freshCols: Array<Record<string, unknown>> = (fresh as any).columns ?? [];
-          for (const freshCol of freshCols) {
-            const target = canvasComponent.data.columns.find((c) => c.id === freshCol.id);
-            if (!target) continue;
-            target.x_ticks = freshCol.x_ticks as typeof target.x_ticks;
-            // 「标定已被清空」的提示必须**同批**失效：后端在写组斜率时已清掉该键
-            // （roi.py 的 value_per_px 分支），前端若只回填 x_ticks，屏幕上会继续
-            // 挂着"需要你重新标定"，与"其实已经能读数"自相矛盾。
-            target.x_ticks_dropped = freshCol.x_ticks_dropped as typeof target.x_ticks_dropped;
-            target.scaleCalib = freshCol.scaleCalib as typeof target.scaleCalib;
-            target.scale_provenance = freshCol.scale_provenance as typeof target.scale_provenance;
-          }
+          applyScaleSnapshot(canvasComponent.data.columns, fresh);
           canvasComponent.requestRender();
           getInspector()?.updateData(canvasComponent.data);
           getSidebar()?.updateData(canvasComponent.data);

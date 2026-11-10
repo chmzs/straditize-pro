@@ -145,19 +145,14 @@ export function createInspectorCallbacks(
     },
     onCreateRoi: async () => {
       try {
-        const nextIdx = (canvasComponent.data.rois?.length || 0) + 1;
-        const x0 = canvasComponent.data.roi?.xMin || 315;
-        const x1 = canvasComponent.data.roi?.xMax || (canvasComponent.data.imageWidth ? Math.round(canvasComponent.data.imageWidth * 0.85) : 1946);
-        const y0 = canvasComponent.data.roi?.yMin || 511;
-        const y1 = canvasComponent.data.roi?.yMax || (canvasComponent.data.imageHeight ? Math.round(canvasComponent.data.imageHeight * 0.85) : 1311);
-        const res = await rpcClient.call<any, any>('roi.create', {
-          name: `roi_${nextIdx}`,
-          x0,
-          x1,
-          y0,
-          y1,
-          composition: true,
-        });
+        // 产品决策 ③：新建 ROI 是**待用户框选的空区域**，不是当前 ROI 的克隆。
+        //
+        // 因此这里刻意**不传** x0/x1/y0/y1，也**不传** name：
+        // - 不传边界 → 后端按默认值 [0,0]×[0,0] 建一个零面积壳，用户随后在画布上框选；
+        //   传当前 ROI 的边界会让新区域与旧区域逐像素重合（用户看不出任何区别）。
+        // - 不传 name → 后端自己编号并记 `name_source="default"`；显式传 name 会被
+        //   打成 "user"，等于谎称这是用户起的名字，后续重命名语义也会被污染。
+        const res = await rpcClient.call<any, any>('roi.create', { composition: true });
         if (res?.roi) {
           await rpcClient.call('roi.setActive', { roi_id: res.roi.id });
           const freshData = await rpcClient.getDiagramData();

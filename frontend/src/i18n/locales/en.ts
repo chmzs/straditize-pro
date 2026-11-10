@@ -260,6 +260,8 @@ export const en = {
   'step2.pixelY': 'Pixel Bounds: Y',
   'step2.assignedCols': 'Assigned Columns:',
   'step2.next': 'Confirm ROI, Proceed to Y-Calib (Step 3)',
+  'step2.emptyRoiTitle': 'This region is not framed yet',
+  'step2.emptyRoiHint': 'Drag the handle at its top-left corner down-right on the canvas to draw the sampling region. Do not proceed to the "split columns" step before that (a zero-area region is rejected by the backend).',
 
   // ===== Step 3: Y-Calib Panel =====
   'step3.title': '3. Y-Axis Calibration',

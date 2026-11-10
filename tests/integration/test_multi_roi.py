@@ -200,7 +200,20 @@ def test_roi_remove_cascades_columns_only():
     assert len(r1_cols) > 0
     assert len(r2_cols) > 0
 
-    rem_res = session.roi_remove(r1["id"])
+    # 新契约（2026-11-10）：`roi.remove` 删**有列**的 ROI 必须显式 `confirm_drop_columns=True`，
+    # 否则返回 -32002 且**零变化**（删除会不可撤销地丢列，见 roi.py 的同名注释）。
+    # 下面先钉"默认被拦"，再钉"确认后真删"——两条合起来才算钉住"旧行为仍可达成"。
+    with pytest.raises(JsonRpcError) as denied:
+        session.roi_remove(r1["id"])
+    assert denied.value.code == -32002
+    assert "confirm_drop_columns" in denied.value.message
+    assert [c for c in session.columns if c["roi_id"] == r1["id"]] == r1_cols, (
+        "未确认被拦时不得动任何列"
+    )
+    assert any(r["id"] == r1["id"] for r in session.rois), "未确认被拦时不得删掉 ROI"
+
+    # 本用例验的正是"级联删列"语义，所以必须显式确认。
+    rem_res = session.roi_remove(r1["id"], confirm_drop_columns=True)
     assert rem_res["success"] is True
     assert len(rem_res["removed_column_ids"]) == len(r1_cols)
 
