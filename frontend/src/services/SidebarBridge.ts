@@ -24,6 +24,11 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
   return {
     onSelectTaxa: (taxaId: string) => {
       p.canvasComponent.setActiveTaxa(taxaId);
+      // 侧栏点选一列 = 选中"列"实体，让属性检查器切到**列属性**面板。
+      // 历史缺陷：只有"画布上用选择工具(S)点列边界"才会设置 selectedEntity，
+      // 而【删除列】按钮就在列属性面板里 ⇒ 从侧栏根本走不到，用户以为没有删除功能。
+      p.canvasComponent.data.selectedEntity = { type: 'column', id: taxaId };
+      p.getInspector()?.updateData(p.canvasComponent.data);
       p.updateFooter();
     },
     onToggleVisible: (taxaId: string) => {

@@ -597,28 +597,49 @@ export class Inspector {
     });
 
     // 删除列（同步后端 column.remove，并重编前端镜像的 col_index）
-    this.element.querySelector('#btn-col-delete')?.addEventListener('click', async () => {
+    // 破坏性操作要二次确认：第一次点击只"上膛"（按钮文案变），3 秒内再点才真删。
+    // 不用 window.confirm：本应用没有原生对话框通道，且全局错误门禁会把原生弹窗
+    // 当成"未预期的用户通知"，原生 confirm 反而与既有测试基建冲突。
+    const delBtn = this.element.querySelector<HTMLButtonElement>('#btn-col-delete');
+    let delArmedAt = 0;
+    delBtn?.addEventListener('click', async () => {
       const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
-      if (activeCol && this.data.columns.length > 1) {
-        if (this.callbacks.rpcClient) {
-          try {
-            await this.callbacks.rpcClient.removeColumn(getColIdx(activeCol));
-          } catch (err) {
-            notifyError(err instanceof Error ? err.message : String(err));
-            return;
+      if (!activeCol || this.data.columns.length <= 1) return;
+
+      const now = Date.now();
+      if (now - delArmedAt > 3000) {
+        delArmedAt = now;
+        delBtn.textContent = '再点一次确认删除';
+        delBtn.dataset.armed = '1';
+        window.setTimeout(() => {
+          delArmedAt = 0;
+          if (delBtn.dataset.armed === '1') {
+            delBtn.textContent = '删除列';
+            delete delBtn.dataset.armed;
           }
+        }, 3000);
+        return;
+      }
+
+      delArmedAt = 0;
+      if (this.callbacks.rpcClient) {
+        try {
+          await this.callbacks.rpcClient.removeColumn(getColIdx(activeCol));
+        } catch (err) {
+          notifyError(err instanceof Error ? err.message : String(err));
+          return;
         }
-        const idx = this.data.columns.findIndex((c) => c.id === activeCol.id);
-        if (idx !== -1) {
-          this.data.columns.splice(idx, 1);
-          this.data.columns.forEach((c, i) => {
-            c.col_index = i;
-          });
-          this.data.activeTaxaId = this.data.columns[0]?.id || '';
-          this.history.push(`Delete Column ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
-          this.callbacks.onDataChange();
-          this.callbacks.onSelectTaxa(this.data.activeTaxaId);
-        }
+      }
+      const idx = this.data.columns.findIndex((c) => c.id === activeCol.id);
+      if (idx !== -1) {
+        this.data.columns.splice(idx, 1);
+        this.data.columns.forEach((c, i) => {
+          c.col_index = i;
+        });
+        this.data.activeTaxaId = this.data.columns[0]?.id || '';
+        this.history.push(`Delete Column ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
+        this.callbacks.onDataChange();
+        this.callbacks.onSelectTaxa(this.data.activeTaxaId);
       }
     });
 
