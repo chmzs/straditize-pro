@@ -104,24 +104,6 @@ async function calibrateColumnsX(page: Page): Promise<void> {
   });
 }
 
-/** 打开导出面板，直到预览里至少出现 `minCells` 个有限数值（不睡眠，靠重开轮询）。 */
-async function openExportWithNumbers(page: Page, minCells: number): Promise<PreviewTable> {
-  for (let attempt = 0; attempt < 10; attempt++) {
-    await openExport(page);
-    const preview = await readPreview(page);
-    const finite = preview.rows
-      .flatMap((row) => row.slice(1))
-      .map((cell) => Number.parseFloat(cell))
-      .filter((v) => Number.isFinite(v));
-    if (finite.length >= minCells) return preview;
-    await page.locator('#export-modal-close').click();
-    await expect(page.locator('#wpd-preview-table')).toHaveCount(0);
-  }
-  throw new Error(
-    `导出预览始终没有有效数值（要求 ≥${minCells} 格）：X 标定没有回填到前端镜像`
-  );
-}
-
 /** 打开导出模态并等到预览表出现。 */
 async function openExport(page: Page): Promise<void> {
   await page.locator('#btn-export-csv').click();

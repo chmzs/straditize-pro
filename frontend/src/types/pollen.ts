@@ -438,7 +438,7 @@ export interface HistorySnapshot {
   /**
    * 快照时刻的标定镜像。
    *
-   * ⚠️ 只有**前端自有**字段（`depthInterval` / `depthGridEnabled`）允许被撤销回放；
+   * 注意：只有**前端自有**字段（`depthInterval` / `depthGridEnabled`）允许被撤销回放；
    * 端点 / `isCalibrated` / `unit` / `primaryAxis` 属后端权威量，撤销时一律保留
    * 当前镜像（= 后端最近一次成功响应），见 `CleanupManager.applyHistorySnapshot`
    * 与 T-04。整块回写会让面板否定后端已确认的标定。
