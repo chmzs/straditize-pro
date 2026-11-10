@@ -58,11 +58,16 @@ export function computeQaVerdict(input: QaVerdictInput): QaVerdict {
   const { nOverHorizons, maxSum, tolerance, nUncalibrated, nChecked } = input;
 
   // ① 空集：没有任何层位被检验 ⇒ 无信息，不得判通过。
-  // [CANARY 临时删除空集守卫]
-  if (false && nChecked <= 0) {
+  //
+  // 注（2026-11-10）：这里在共享工作区里被留成了 `if (false && nChecked <= 0)`
+  // 并带一行 `[CANARY 临时删除空集守卫]` 注释——某个会话为了验证"空集不得绿"这条
+  // 判据临时把守卫注掉，之后没有还原。危险点：守卫被注掉后 `computeQaVerdict` 会走到
+  // 末尾的 green 分支，`999999 >= 85 && 0 <= 115` 那类"全绿陷阱"立刻复活——0 层位
+  // 质检也会报「门禁通过」。已恢复为真守卫，并保留此说明，避免再被当成可随手注掉的开关。
+  if (nChecked <= 0) {
     return {
       level: 'yellow',
-      headline: '未检验任何层位，无法判定数据是否合格',
+      headline: '无可校验层位：没有任何分区产出可检验的层位读数，不得判通过',
       detail: '先在步骤 5/6 完成分列与刻度标定，让剖面产出可检验的层位读数。',
     };
   }
@@ -108,4 +113,158 @@ export function computeQaVerdict(input: QaVerdictInput): QaVerdict {
 /** 结论文案里是否含"通过/达标"这类**成功断言**（供测试与调用方统一判断）。 */
 export function isPassingVerdict(verdict: QaVerdict): boolean {
   return verdict.level === 'green';
+}
+
+/* ------------------------------------------------------------------ *
+ * 多分区聚合：QA 必须覆盖**所有"有列"的分区**，而不是只算当前 active 分区
+ * ------------------------------------------------------------------ */
+
+/**
+ * 一个分区 `qa.summarize` 的返回（结构上兼容 `steps/QaPanel` 的 `QaSummary` 与
+ * `ExportModal` 里的同名类型；这里只声明聚合真正用到的字段）。
+ */
+export interface QaScopeSummary {
+  ratio?: number;
+  n_horizons: number;
+  n_horizons_with_data: number;
+  n_horizons_empty?: number;
+  violations_over: unknown[];
+  empty_horizons?: { depth: number | null; reason?: string }[];
+  per_column_max?: {
+    name: string;
+    peak: number;
+    declared_max: number;
+    over: boolean;
+    calibrated?: boolean;
+  }[];
+  sum: { max: number };
+  n_uncalibrated?: number;
+  uncalibrated_columns?: string[];
+}
+
+export interface QaScopePart {
+  roiId: string;
+  roiName: string;
+  columnCount: number;
+  summary: QaScopeSummary;
+}
+
+export interface QaScopeSkip {
+  roiId: string;
+  roiName: string;
+}
+
+export interface QaAggregate {
+  level: QaLevel;
+  headline: string;
+  detail: string;
+  /** 「已校验 2 个分区（dirty, clean）」 */
+  scopeLabel: string;
+  /** 「跳过 1 个无列分区（empty）」；没有跳过时为空串 */
+  skippedLabel: string;
+  nChecked: number;
+  nHorizons: number;
+  nHorizonsEmpty: number;
+  nOverHorizons: number;
+  maxSum: number | null;
+  /** 各分区"非空层位平均缺额"的加权平均（按被检层位数加权）；无数据时为 null。 */
+  shortfallMean: number | null;
+  nUncalibrated: number;
+  parts: QaScopePart[];
+  skipped: QaScopeSkip[];
+}
+
+function scopeNames(parts: { roiName: string }[]): string {
+  return parts.map((p) => p.roiName).join(', ');
+}
+
+/**
+ * 把"每个有列分区各自的 QA 汇总"合并成**一个**结论。
+ *
+ * 三条规则（横幅与导出模态自检共用，不许再各写一份）：
+ *
+ * 1. **任一分区超标 > 0 ⇒ 红。** 曾经只对 active 分区算，于是"选中哪个分区"
+ *    决定门禁结论：把 active 从脏分区切到干净分区，同一份数据从红变绿，而脏分区
+ *    的 788 个超标层位一颗都没算。
+ * 2. **空集（所有分区都没层位）⇒ 不得判通过**，交 `computeQaVerdict` 的黄条。
+ * 3. 全部合格 ⇒ 绿。
+ *
+ * 范围必须写进结论文案：用户看到的"通过"必须能对应到"校验了哪几个分区"。
+ */
+export function aggregateQaScope(
+  parts: QaScopePart[],
+  skipped: QaScopeSkip[],
+  tolerance: number
+): QaAggregate {
+  const nChecked = parts.reduce(
+    (sum, p) => sum + (p.summary.n_horizons_with_data ?? p.summary.n_horizons ?? 0),
+    0
+  );
+  const nHorizons = parts.reduce((sum, p) => sum + (p.summary.n_horizons ?? 0), 0);
+  const nHorizonsEmpty = parts.reduce((sum, p) => sum + (p.summary.n_horizons_empty ?? 0), 0);
+  const nOverHorizons = parts.reduce((sum, p) => sum + (p.summary.violations_over?.length ?? 0), 0);
+  const nUncalibrated = parts.reduce(
+    (sum, p) =>
+      sum + (p.summary.n_uncalibrated ?? p.summary.uncalibrated_columns?.length ?? 0),
+    0
+  );
+
+  const maxes = parts
+    .map((p) => p.summary.sum?.max)
+    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+  const maxSum = maxes.length > 0 ? Math.max(...maxes) : null;
+
+  const weighted = parts.filter(
+    (p) =>
+      typeof (p.summary as { shortfall?: { mean?: number } }).shortfall?.mean === 'number' &&
+      (p.summary.n_horizons_with_data ?? 0) > 0
+  );
+  const weightedTotal = weighted.reduce((s, p) => s + (p.summary.n_horizons_with_data ?? 0), 0);
+  const shortfallMean =
+    weightedTotal > 0
+      ? weighted.reduce(
+          (s, p) =>
+            s +
+            ((p.summary as { shortfall?: { mean?: number } }).shortfall?.mean ?? 0) *
+              (p.summary.n_horizons_with_data ?? 0),
+          0
+        ) / weightedTotal
+      : null;
+
+  const verdict = computeQaVerdict({
+    nOverHorizons,
+    maxSum,
+    tolerance,
+    nUncalibrated,
+    nChecked,
+  });
+
+  const scopeLabel =
+    parts.length === 0
+      ? '没有可校验的分区（所有分区都没有列）'
+      : `已校验 ${parts.length} 个分区（${scopeNames(parts)}）`;
+  const skippedLabel =
+    skipped.length === 0 ? '' : `跳过 ${skipped.length} 个无列分区（${scopeNames(skipped)}）`;
+
+  return {
+    level: verdict.level,
+    headline: verdict.headline,
+    detail: verdict.detail,
+    scopeLabel,
+    skippedLabel,
+    nChecked,
+    nHorizons,
+    nHorizonsEmpty,
+    nOverHorizons,
+    maxSum,
+    shortfallMean,
+    nUncalibrated,
+    parts,
+    skipped,
+  };
+}
+
+/** 横幅/自检行显示的唯一文案：结论 + 范围（+ 跳过的分区）。 */
+export function aggregateHeadline(agg: QaAggregate): string {
+  return [agg.headline, agg.scopeLabel, agg.skippedLabel].filter(Boolean).join(' ｜ ');
 }

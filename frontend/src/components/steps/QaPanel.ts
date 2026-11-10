@@ -2,6 +2,13 @@ import { DiagramData } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
 import { RpcClient } from '../../services/RpcClient';
+import {
+  aggregateHeadline,
+  aggregateQaScope,
+  type QaAggregate,
+  type QaScopePart,
+  type QaScopeSkip,
+} from '../../core/qaVerdict';
 
 export const step = 8;
 export const title = '8. 校验与质量诊断';
@@ -37,48 +44,40 @@ export interface QaSummary {
   uncalibrated_columns?: string[];
 }
 
-// 缓存最近一次的 QA 诊断结果
-let latestSummary: QaSummary | null = null;
-let currentTolerance = 2.0;
-let cachedData: DiagramData | null = null;
+// 缓存最近一次的 QA 诊断结果（**聚合**：所有有列分区）
+let latestAggregate: QaAggregate | null = null;
 /**
- * 上一次已通知外部的诊断摘要指纹。
- *
- * 用途只有一个：**打断重挂循环**。`mount()` 末尾会 `triggerSummarize()`，
- * 若成功后再无条件 `onDataChange()`，外部会 `Inspector.render()` 整块重写 DOM，
- * 于是本面板被重新 mount、再次 summarize、再次 onDataChange……
- * 步骤 8 的按钮会以每帧一次的频率被替换（`element was detached from the DOM`），
- * 用户根本点不中。指纹相同 = 数据没变 = 不通知。
+ * 上一次**已完成**聚合的指纹（容差 + 各分区 id/列数 + 层位数）。
+ * 相同 ⇒ 不重复请求后端：这既打断重挂循环，也修掉"进一次步骤 8 连发 3 条
+ * 完全相同的 `qa.summarize`"（实测 id 24/25/26）。
  */
-let lastSummaryKey: string | null = null;
+let latestAggregateKey: string | null = null;
+let currentTolerance = 2.0;
+/**
+ * 正在飞行中的指纹。**必须同步写入**（在第一个 `await` 之前）：
+ * 步骤 8 进入时 `mount()` 会被调用不止一次（`gotoStage` 一次 + Inspector 重渲染一次），
+ * 两次都在 `latestAggregateKey` 还是旧值时通过"缓存未命中"判断，于是同一份状态
+ * 被完整请求两遍——实测 2 个有列分区 → 4 条 `qa.summarize`。
+ * 这是并发竞态，不是"进入次数过多"，所以修法是把指纹提前占位，而不是 debounce。
+ */
+let inflightKey: string | null = null;
+let cachedData: DiagramData | null = null;
 
 /** 红色 banner 的内联样式。正常路径与「后端失败」路径共用，避免两处各写一份。 */
 const BANNER_RED_STYLE =
   'background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #dc2626;';
 
-function computeBannerMeta(summary: QaSummary) {
-  let bannerLevel = 'green';
-  let bannerText = '地学校验门禁通过，数据符合规律';
-  if (summary.violations_over && summary.violations_over.length > 0) {
-    bannerLevel = 'red';
-    bannerText = `组分总和超标报警 (发现 ${summary.violations_over.length} 个层位总和 > 100%+${summary.tolerance}%)`;
-  } else if (summary.per_column_max && summary.per_column_max.some((c) => c.over)) {
-    bannerLevel = 'yellow';
-    const overCount = summary.per_column_max.filter((c) => c.over).length;
-    bannerText = `单列峰值超刻度警告 (发现 ${overCount} 列峰值超出声明满刻度)`;
-  } else if (summary.uncalibrated_columns && summary.uncalibrated_columns.length > 0) {
-    bannerLevel = 'yellow';
-    bannerText = `存在未标定列 (发现 ${summary.uncalibrated_columns.length} 列未在步骤 6 标定 X 刻度，这些列不出数、导出记为空)`;
+/**
+ * 横幅样式只按**共享判定**给出的 level 取色。
+ * 判定本身（含范围声明）由 `core/qaVerdict.ts::aggregateQaScope` 产出，
+ * 面板这里不再自己写阈值——曾经面板与导出模态各有一套，同屏出现一红一绿。
+ */
+function bannerColorFor(level: string): string {
+  if (level === 'red') return BANNER_RED_STYLE;
+  if (level === 'yellow') {
+    return 'background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; color: #d97706;';
   }
-
-  const bannerColor =
-    bannerLevel === 'red'
-      ? BANNER_RED_STYLE
-      : bannerLevel === 'yellow'
-      ? 'background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; color: #d97706;'
-      : 'background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #059669;';
-
-  return { bannerLevel, bannerText, bannerColor };
+  return 'background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #059669;';
 }
 
 function renderExceptionsHtml(summary: QaSummary): string {
@@ -131,24 +130,55 @@ function renderColumnPeaksHtml(summary: QaSummary): string {
     .join('');
 }
 
+/**
+ * 把"每个有列分区各自的汇总"摊平成一个视图，供四宫格/列表渲染。
+ *
+ * 判定与范围**不在这里**：那是 `core/qaVerdict.ts::aggregateQaScope` 的职责，
+ * 横幅文案由 `aggregateHeadline()` 给出。这里只做展示层的合并。
+ */
+function mergedView(agg: QaAggregate): QaSummary {
+  const parts = agg.parts;
+  return {
+    roi_id: parts.map((p) => p.roiId).join('+') || 'none',
+    roi_name: parts.map((p) => p.roiName).join(', '),
+    composition: true,
+    n_horizons: agg.nHorizons,
+    n_horizons_with_data: agg.nChecked,
+    n_horizons_empty: agg.nHorizonsEmpty,
+    empty_horizons: parts.flatMap((p) => p.summary.empty_horizons ?? []),
+    sum: { min: 0.0, p50: 0.0, max: agg.maxSum ?? 0.0, mean: 0.0 },
+    tolerance: currentTolerance,
+    violations_over: parts.flatMap((p) => p.summary.violations_over as QaHorizonSummary[]),
+    shortfall: { min: 0.0, max: 0.0, mean: agg.shortfallMean ?? 0.0 },
+    per_column_max: parts.flatMap((p) => p.summary.per_column_max ?? []),
+    n_uncalibrated: agg.nUncalibrated,
+    uncalibrated_columns: [],
+  };
+}
+
 export function render(data: DiagramData): string {
   cachedData = data;
-  const summary: QaSummary = latestSummary || {
-    roi_id: data.rois?.[0]?.id || 'pollen',
-    roi_name: data.rois?.[0]?.name || 'pollen',
-    composition: true,
-    n_horizons: data.samples?.length || 0,
-    n_horizons_with_data: data.samples?.length || 0,
-    n_horizons_empty: 0,
-    empty_horizons: [],
-    sum: { min: 0.0, p50: 0.0, max: 0.0, mean: 0.0 },
-    tolerance: currentTolerance,
-    violations_over: [],
-    shortfall: { min: 0.0, max: 0.0, mean: 0.0 },
-    per_column_max: [],
-  };
+  const agg = latestAggregate;
+  const summary: QaSummary = agg
+    ? mergedView(agg)
+    : {
+        roi_id: 'none',
+        roi_name: '',
+        composition: true,
+        n_horizons: 0,
+        n_horizons_with_data: 0,
+        n_horizons_empty: 0,
+        empty_horizons: [],
+        sum: { min: 0.0, p50: 0.0, max: 0.0, mean: 0.0 },
+        tolerance: currentTolerance,
+        violations_over: [],
+        shortfall: { min: 0.0, max: 0.0, mean: 0.0 },
+        per_column_max: [],
+      };
 
-  const { bannerLevel, bannerText, bannerColor } = computeBannerMeta(summary);
+  const bannerLevel = agg?.level ?? 'yellow';
+  const bannerText = agg ? aggregateHeadline(agg) : '正在聚合各分区的校验结果…';
+  const bannerColor = bannerColorFor(bannerLevel);
 
   return `
     <div class="step-panel" data-step="8">
@@ -232,9 +262,12 @@ export function render(data: DiagramData): string {
 }
 
 export function mount(root: HTMLElement, ctx: StepContext): void {
-  const updateDomWithSummary = (summary: QaSummary) => {
-    latestSummary = summary;
-    const { bannerLevel, bannerText, bannerColor } = computeBannerMeta(summary);
+  const updateDomWithAggregate = (agg: QaAggregate) => {
+    latestAggregate = agg;
+    const summary = mergedView(agg);
+    const bannerLevel = agg.level;
+    const bannerText = aggregateHeadline(agg);
+    const bannerColor = bannerColorFor(bannerLevel);
 
     const banner = root.querySelector('#qa-banner');
     if (banner) {
@@ -291,37 +324,63 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     }
 
     try {
-      const activeRoiId = cachedData?.active_roi_id || cachedData?.rois?.[0]?.id;
-      const params: { tolerance: number; roi_id?: string } = { tolerance: tol };
-      if (activeRoiId && cachedData?.rois?.some((r) => r.id === activeRoiId)) {
-        params.roi_id = activeRoiId;
+      // **所有"有列"的分区都要算**，不是只有 active 那个。
+      // 实测缺陷：active=roi_2（干净）时横幅判"通过"，而 roi_1 的 788 个超标
+      // 层位一颗没算；把 active 换成 roi_1 又变成 808 层——门禁结论取决于当前选中谁。
+      const rois = cachedData?.rois ?? [];
+      const columns = cachedData?.columns ?? [];
+      const scored = rois.map((r) => {
+        const roiId = String(r.id ?? '');
+        return { roiId, roiName: r.name || roiId, columnCount: columns.filter((c) => c.roi_id === roiId).length };
+      });
+      const checked = scored.filter((s) => s.columnCount > 0);
+      const skipped: QaScopeSkip[] = scored
+        .filter((s) => s.columnCount === 0)
+        .map((s) => ({ roiId: s.roiId, roiName: s.roiName }));
+
+      const key = JSON.stringify({
+        tol,
+        scope: checked.map((s) => [s.roiId, s.columnCount]),
+        samples: cachedData?.samples?.length ?? 0,
+      });
+      if (key === latestAggregateKey && latestAggregate) {
+        // 同一份状态：只重绘，不再打后端（修掉"进一次步骤 8 连发 3 条相同请求"）。
+        updateDomWithAggregate(latestAggregate);
+        return;
+      }
+      if (key === inflightKey) {
+        // 同一份状态的另一次挂载已经在请求中：让它去完成并触发重绘，这里不再发一轮。
+        return;
+      }
+      inflightKey = key;
+
+      const parts: QaScopePart[] = [];
+      for (const { roiId, roiName, columnCount } of checked) {
+        const params = { tolerance: tol, roi_id: roiId };
+        // 走共享客户端的唯一通路。曾经这里自己拼 JSON-RPC 信封 + 裸 fetch，并写成
+        // `if (response.ok) { if (json.result) ... }` —— 本后端的应用级错误是
+        // `HTTP 200 + body.error`，于是 `response.ok` 为真、`json.result` 为空，
+        // 每一个后端错误都被静默吞掉（连 console.warn 都没有）。
+        const summary = await rpc.call<typeof params, QaSummary>('qa.summarize', params);
+        if (!summary || typeof summary !== 'object') {
+          // 不补默认值、不假装成功：缺字段就是契约不符。
+          throw new Error(`qa.summarize 未返回汇总对象（违反契约）：分区 ${roiId}`);
+        }
+        parts.push({ roiId, roiName, columnCount, summary });
       }
 
-      // 走共享客户端的唯一通路。曾经这里自己拼 JSON-RPC 信封 + 裸 fetch，并写成
-      // `if (response.ok) { if (json.result) ... }` —— 本后端的应用级错误是
-      // `HTTP 200 + body.error`，于是 `response.ok` 为真、`json.result` 为空，
-      // 每一个后端错误都被静默吞掉（连 console.warn 都没有）。
-      const summary = await rpc.call<typeof params, QaSummary>('qa.summarize', params);
-      if (!summary || typeof summary !== 'object') {
-        // 不补默认值、不假装成功：缺字段就是契约不符。
-        throw new Error('qa.summarize 未返回汇总对象（违反契约）');
-      }
-      updateDomWithSummary(summary);
-      // 注意：这里**不能**无条件调 `ctx.onDataChange?.()`：
-      // 它会 `inspector.updateData()` → `Inspector.render()` 整块重写 `innerHTML`
-      // → 本面板被重新 `mount()` → 末尾再 `triggerSummarize()` → 又一次 onDataChange ……
-      // 形成**无限重挂循环**。实测后果：步骤 8 的「直通导出」按钮每 16ms 被换掉一次，
-      // 用户（与 Playwright）点上去永远命中 `element was detached from the DOM`，
-      // 导出入口实际上不可点（journey.spec.ts:185 因此超时）。
-      //
-      // 只有**诊断数值真的变了**才通知外部；没变就不打扰，循环自然终止。
-      const key = JSON.stringify(summary);
-      if (key !== lastSummaryKey) {
-        lastSummaryKey = key;
-        ctx.onDataChange?.();
-      }
+      const agg = aggregateQaScope(parts, skipped, tol);
+      latestAggregateKey = key;
+      updateDomWithAggregate(agg);
+      // 这里**不能**每次无条件 `ctx.onDataChange?.()`：它会 `Inspector.render()`
+      // 整块重写 innerHTML → 本面板重新 mount → 再 summarize → 再 onDataChange ……
+      // 形成无限重挂循环（实测：步骤 8 的按钮每 16ms 被换掉，永远点不中）。
+      // 指纹已在上文更新，重挂时走缓存分支，循环自然终止。
+      ctx.onDataChange?.();
     } catch (err) {
       reportFailure(err);
+    } finally {
+      inflightKey = null;
     }
   };
 

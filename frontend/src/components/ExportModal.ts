@@ -4,7 +4,13 @@ import { SplineInterpolator } from '../core/SplineInterpolator';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { ProjectManager } from '../core/ProjectManager';
 import { computeExportReadiness, renderExportReadiness } from './steps/ExportReadinessPanel';
-import { computeQaVerdict, QA_DEFAULT_TOLERANCE } from '../core/qaVerdict';
+import {
+  aggregateHeadline,
+  aggregateQaScope,
+  QA_DEFAULT_TOLERANCE,
+  type QaAggregate,
+  type QaScopePart,
+} from '../core/qaVerdict';
 import type { QaSummary } from './steps/QaPanel';
 import { notifyError } from '../ui/feedback';
 
@@ -466,17 +472,48 @@ export class ExportModal {
      * 判定走 `core/qaVerdict.ts` 的同一个函数；前端不再有第二条求和路径。
      * 空集（被检层位 = 0）由该函数判为"无法判定"，绝不再算达标。
      */
-    let latestQa: QaSummary | null = null;
+    let latestAggregate: QaAggregate | null = null;
     let latestQaError: string | null = null;
 
+    /**
+     * 自检行的数据源与步骤 8 横幅**完全相同**：对每个"有列"的分区各调一次
+     * `qa.summarize`，再用 `aggregateQaScope` 合成一个结论。
+     *
+     * 只算 active 分区曾造成：横幅（后端 violations）报红、自检行（另一个分区/另一套
+     * 求和）报"达标"，同屏两个对立结论；哨兵 `999999` 还被印成真实数值。
+     */
     const refreshQa = async (): Promise<void> => {
       try {
-        latestQa = await this.rpcClient.call<{ tolerance: number }, QaSummary>('qa.summarize', {
-          tolerance: QA_DEFAULT_TOLERANCE,
+        const rois = this.data.rois ?? [];
+        const columns = this.data.columns ?? [];
+        const scored = rois.map((r) => {
+          const roiId = String(r.id ?? '');
+          return {
+            roiId,
+            roiName: r.name || roiId,
+            columnCount: columns.filter((c) => c.roi_id === roiId).length,
+          };
         });
+        const checked = scored.filter((s) => s.columnCount > 0);
+        const skipped = scored
+          .filter((s) => s.columnCount === 0)
+          .map((s) => ({ roiId: s.roiId, roiName: s.roiName }));
+
+        const parts: QaScopePart[] = [];
+        for (const { roiId, roiName, columnCount } of checked) {
+          const summary = await this.rpcClient.call<
+            { tolerance: number; roi_id: string },
+            QaSummary
+          >('qa.summarize', { tolerance: QA_DEFAULT_TOLERANCE, roi_id: roiId });
+          if (!summary || typeof summary !== 'object') {
+            throw new Error(`qa.summarize 未返回汇总对象（违反契约）：分区 ${roiId}`);
+          }
+          parts.push({ roiId, roiName, columnCount, summary });
+        }
+        latestAggregate = aggregateQaScope(parts, skipped, QA_DEFAULT_TOLERANCE);
         latestQaError = null;
       } catch (err) {
-        latestQa = null;
+        latestAggregate = null;
         latestQaError = (err as Error)?.message || String(err);
       }
       updateSumCheck();
@@ -501,26 +538,20 @@ export class ExportModal {
         subEl.textContent = '未检验';
         return;
       }
-      if (!latestQa) {
+      if (!latestAggregate) {
         bannerEl.className = 'wpd-qa-banner wpd-qa-banner--warn';
         textEl.innerHTML = '<strong>百分比总和自检</strong>: 分析中...';
         subEl.textContent = '-- 层位';
         return;
       }
 
-      const verdict = computeQaVerdict({
-        nOverHorizons: latestQa.violations_over?.length ?? 0,
-        maxSum: typeof latestQa.sum?.max === 'number' ? latestQa.sum.max : null,
-        tolerance: latestQa.tolerance,
-        nUncalibrated: latestQa.n_uncalibrated ?? latestQa.uncalibrated_columns?.length ?? 0,
-        nChecked: latestQa.n_horizons_with_data,
-      });
+      const agg = latestAggregate;
       bannerEl.className =
-        verdict.level === 'green' ? 'wpd-qa-banner wpd-qa-banner--ok' : 'wpd-qa-banner wpd-qa-banner--warn';
-      textEl.innerHTML = `<strong>百分比总和自检</strong>: ${verdict.headline}${
-        verdict.detail ? `｜${verdict.detail}` : ''
+        agg.level === 'green' ? 'wpd-qa-banner wpd-qa-banner--ok' : 'wpd-qa-banner wpd-qa-banner--warn';
+      textEl.innerHTML = `<strong>百分比总和自检</strong>: ${aggregateHeadline(agg)}${
+        agg.detail ? `｜${agg.detail}` : ''
       }`;
-      subEl.textContent = `${latestQa.n_horizons_with_data} 层位被检验`;
+      subEl.textContent = `${agg.nChecked} 层位被检验`;
     };
 
     const updateFullDisplay = () => {

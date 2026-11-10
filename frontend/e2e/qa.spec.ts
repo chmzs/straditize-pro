@@ -63,9 +63,14 @@ test.describe('Step 8 QA 诊断门禁', () => {
     // 基线里 detect_columns 已经给 roi_1 分好了列。旧测试的 `session.rois.clear()` /
     // `session.columns.clear()` 在 RPC 面上没有等价物（不存在 roi.clear / column.clear），
     // 只能逐条 roi.remove；好在 roi.remove 会级联删掉该 ROI 的列。
+    //
+    // 该 ROI **下有列**，删除会级联删列且不可撤销，所以按新契约显式
+    // `confirm_drop_columns: true`（后端对"有列且未确认"的删除返回 -32002）。
+    // 这里是测试跟随契约，不是放宽断言：级联是否真的删掉列仍由下一行的
+    // `expect(emptied.columns).toEqual([])` 正面检查。
     const { rois } = await rpc<{ rois: { id: string }[] }>(page, 'roi.list');
     for (const roi of rois) {
-      await rpc(page, 'roi.remove', { roi_id: roi.id });
+      await rpc(page, 'roi.remove', { roi_id: roi.id, confirm_drop_columns: true });
     }
     const emptied = await rpc<{ columns: { id: string }[] }>(page, 'straditize.getDiagramData');
     expect(emptied.columns, 'roi.remove 必须级联清掉该 ROI 的属种列').toEqual([]);
