@@ -83,7 +83,7 @@ export function makeRenameUndo(
 ): UndoableOp {
   const kindLabel = kind === 'roi' ? '有效区' : '列';
   return {
-    label: `重命名${kindLabel} ${oldName} → ${newName}`,
+    label: `重命名${kindLabel} ${oldName} → ${newName}（${id}）`,
     inverse: () => apply(oldName),
     forward: () => apply(newName),
     verify: async () => (await read()) === oldName,

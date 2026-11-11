@@ -7,6 +7,8 @@ import { Toolbar } from '../components/Toolbar';
 // （main 装配它、它又反过来 import main 的 re-export），运行时顺序一变就抛
 // "Cannot access before initialization"。定义在 ProvenanceGate，main 只是转发。
 import { reportBackendFailure } from './ProvenanceGate';
+import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
+import { makeRenameUndo } from '../core/undoActions';
 
 export interface SidebarBridgeParams {
   rpcClient: RpcClient;
@@ -81,6 +83,38 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
             p.canvasComponent.data.activeTaxaId
           );
           p.getToolbar()?.updateHistoryState();
+          // U3：把改名登记为**可撤销动作**（逆操作 = 用同一个 renameColumn 写回旧名）。
+          // 只有后端确认写入成功后才 push；逆操作自己刷后端状态，verify 也读后端。
+          if (prevName && prevName !== newName) {
+            const refreshFromBackend = async () => {
+              const fresh = (await p.rpcClient.getDiagramData()) as any;
+              p.canvasComponent.loadNewDiagram(fresh);
+              p.getSidebar()?.updateData(p.canvasComponent.data);
+              p.getInspector()?.updateData(p.canvasComponent.data);
+              p.updateFooter();
+            };
+            undoStack.push(
+              makeRenameUndo(
+                'column',
+                taxaId,
+                prevName,
+                newName,
+                async (name) => {
+                  await p.rpcClient.renameColumn(taxaId, name);
+                  await refreshFromBackend();
+                },
+                async () => {
+                  const fresh = (await p.rpcClient.getDiagramData()) as any;
+                  const col = (fresh.columns || []).find((c: any) => c.id === taxaId);
+                  return (col?.name ?? '') as string;
+                }
+              )
+            );
+          }
+          refreshUndoButtons({
+            canUndo: p.canvasComponent.history.canUndo(),
+            canRedo: false,
+          });
           p.setHudNotice(`属种已更名为: ${newName}`);
         } catch (err) {
           col.name = prevName;

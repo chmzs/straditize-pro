@@ -6,6 +6,7 @@ import { Inspector } from '../components/Inspector';
 import { PropertyPanel } from '../components/PropertyPanel';
 import { ExportModal } from '../components/ExportModal';
 import { ProjectManager } from '../core/ProjectManager';
+import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
 import { AgeDepthModal } from '../components/AgeDepthModal';
 import { MetadataModal } from '../components/MetadataModal';
 import { OcrReviewModal } from '../components/OcrReviewModal';
@@ -76,12 +77,34 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
       syncZoomReadouts();
     },
     onUndo: () => {
+      // 迁移期：栈里有「已迁移动作」的逆操作时优先走它（真正的后端回退）；
+      // 否则回落到旧的前端快照重放（未迁移动作，行为与改造前一致）。
+      if (undoStack.state.canUndo) {
+        void undoStack.undo().then((ok) => {
+          if (ok) p.getToolbar()?.updateHistoryState();
+          refreshUndoButtons({
+            canUndo: undoStack.state.canUndo || p.canvasComponent.history.canUndo(),
+            canRedo: undoStack.state.canRedo,
+          });
+        });
+        return;
+      }
       const prev = p.canvasComponent.history.undo();
       if (prev) {
         p.cleanupManager.applyHistorySnapshot(prev);
       }
     },
     onRedo: () => {
+      if (undoStack.state.canRedo) {
+        void undoStack.redo().then((ok) => {
+          if (ok) p.getToolbar()?.updateHistoryState();
+          refreshUndoButtons({
+            canUndo: undoStack.state.canUndo || p.canvasComponent.history.canUndo(),
+            canRedo: undoStack.state.canRedo,
+          });
+        });
+        return;
+      }
       const next = p.canvasComponent.history.redo();
       if (next) {
         p.cleanupManager.applyHistorySnapshot(next);
