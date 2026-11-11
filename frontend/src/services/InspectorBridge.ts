@@ -1,4 +1,6 @@
 import { RpcClient } from './RpcClient';
+import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
+import { makeRenameUndo } from '../core/undoActions';
 import { GeologyCanvas } from '../components/GeologyCanvas';
 import { Sidebar } from '../components/Sidebar';
 import { Inspector } from '../components/Inspector';
@@ -208,12 +210,40 @@ export function createInspectorCallbacks(
           });
         } else {
           const activeId = canvasComponent.data.active_roi_id || (canvasComponent.data as any).activeRoiId || rois[0]?.id;
+          const prevName = (rois.find((r) => r.id === activeId)?.name ?? '') as string;
           await rpcClient.call('roi.update', { roi_id: activeId, name: newName });
+          // U3b：ROI 改名同样登记为可撤销动作（逆操作 = 用同一个 roi.update 写回旧名）
+          if (prevName && prevName !== newName) {
+            undoStack.push(
+              makeRenameUndo(
+                'roi',
+                activeId,
+                prevName,
+                newName,
+                async (name) => {
+                  await rpcClient.call('roi.update', { roi_id: activeId, name });
+                  const fresh = await rpcClient.getDiagramData();
+                  canvasComponent.loadNewDiagram(fresh);
+                  getSidebar()?.updateData(canvasComponent.data);
+                  getInspector()?.updateData(canvasComponent.data);
+                },
+                async () => {
+                  const fresh = (await rpcClient.getDiagramData()) as any;
+                  const roi = (fresh.rois || []).find((r: any) => r.id === activeId);
+                  return (roi?.name ?? '') as string;
+                }
+              )
+            );
+          }
         }
         const freshData = await rpcClient.getDiagramData();
         canvasComponent.loadNewDiagram(freshData);
         getSidebar()?.updateData(canvasComponent.data);
         getInspector()?.updateData(canvasComponent.data);
+        refreshUndoButtons({
+          canUndo: undoStack.state.canUndo || canvasComponent.history.canUndo(),
+          canRedo: undoStack.state.canRedo,
+        });
         callbacks.setHudNotice(`有效区已更名为: ${newName}`);
       } catch (err) {
         callbacks.reportBackendFailure('重命名有效区', err);

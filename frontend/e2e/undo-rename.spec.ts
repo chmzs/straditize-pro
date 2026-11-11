@@ -16,6 +16,47 @@ import { gotoStage, openApp, rpc } from './helpers';
  *
  * 金丝雀：注掉 `SidebarBridge` 里 `undoStack.push(...)` → 第 2 条必红（回落旧快照重放，只改界面）。
  */
+test.describe('撤销 ROI 改名', () => {
+  test('改 ROI 名 → 撤销 → 后端名字回退', async ({ page }) => {
+    await openApp(page);
+    await gotoStage(page, 2);
+
+    const before = (await rpc(page, 'straditize.getDiagramData', {})) as any;
+    const roi = (before.rois ?? [])[0] as any;
+    expect(roi, '基线应有至少一个 ROI').toBeTruthy();
+    const oldName: string = roi.name;
+    const newName = `Roi_${Date.now() % 100000}`;
+
+    const input = page.locator('#inp-roi-name');
+    await input.click();
+    await input.fill(newName);
+    await input.press('Tab');
+
+    await expect
+      .poll(
+        async () => {
+          const d = (await rpc(page, 'straditize.getDiagramData', {})) as any;
+          return (d.rois ?? []).find((r: any) => r.id === roi.id)?.name;
+        },
+        { message: 'ROI 改名必须先落到后端', timeout: 15_000 }
+      )
+      .toBe(newName);
+
+    await expect(page.locator('#btn-undo')).toBeEnabled({ timeout: 10_000 });
+    await page.locator('#btn-undo').click();
+
+    await expect
+      .poll(
+        async () => {
+          const d = (await rpc(page, 'straditize.getDiagramData', {})) as any;
+          return (d.rois ?? []).find((r: any) => r.id === roi.id)?.name;
+        },
+        { message: '撤销后后端 ROI 名必须回到旧名', timeout: 20_000 }
+      )
+      .toBe(oldName);
+  });
+});
+
 test.describe('撤销列改名', () => {
   test('改名列 → 撤销 → 后端名字回退；重做 → 再改回', async ({ page }) => {
     await openApp(page);
