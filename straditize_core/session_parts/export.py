@@ -808,15 +808,23 @@ class ExportMixin:
     def _dataset_frame(self, dataset: str | None, *, strict: bool) -> Any:
         """按 dataset 产出一张表；**三种行集共用同一取数口径**。
 
-        `union_points` 保持既有行为（`_primary_roi_export_frame`，samples 优先，
-        否则各列逐行点并集）——默认值不变，避免破坏既有调用与 golden 文件。
-        `depth_grid` / `turning_points` 都经 `extract_grid_values` /
-        `read_column_values` 取值，与顶栏导出、工程包 `data.csv` 同一套换算，
-        不再让前端自己用样条造第二套数。
+        `dataset=None`（未传）保持既有行为：`_primary_roi_export_frame`（samples 优先）。
+        这是 `data.csv` / 工程包那条出口的语义，**不能**跟面板下拉混为一谈。
+
+        面板显式传三值时：
+        - `union_points` = **控制点并集**（所有 `control_points` 的 row 去重排序），
+          即下拉里「真实物理拐点共振层位 [推荐]」；
+        - `depth_grid` = 标尺均匀层位；
+        - `turning_points` = 离散拐点长表。
+
+        取值一律经 `extract_grid_values` / `read_column_values`，与顶栏导出同一套换算，
+        不让前端再用样条造第二套数。
         """
-        key = (dataset or "union_points").strip().lower()
-        if key == "union_points":
+        key = (dataset or "").strip().lower()
+        if not key:
             return self._primary_roi_export_frame(strict=strict)
+        if key == "union_points":
+            return self._union_points_frame()
         if key == "depth_grid":
             return self._depth_grid_frame()
         if key == "turning_points":
@@ -825,6 +833,40 @@ class ExportMixin:
             INVALID_PARAMS,
             f"Unsupported dataset '{dataset}'. Use one of: {', '.join(self.EXPORT_DATASETS)}.",
         )
+
+    def _control_point_rows(self) -> list[int]:
+        """`control_points` 里所有 row 的并集（去重排序）；缺失时退回 `column_points`。"""
+        rows = {
+            int(round(float(row)))
+            for pts in (getattr(self, "control_points", None) or {}).values()
+            for row in pts
+        }
+        if not rows:
+            rows = {
+                int(round(float(p["row"])))
+                for pts in (getattr(self, "column_points", None) or {}).values()
+                for p in pts
+            }
+        return sorted(rows)
+
+    def _union_points_frame(self) -> Any:
+        """控制点并集行集：行取自 `control_points`，值经 `extract_grid_values` 取。"""
+        rows = self._control_point_rows()
+        if not rows:
+            return pd.DataFrame({"depth": []})
+        y_scale = getattr(self, "y_scale", None)
+        calibrated = bool(getattr(self, "is_calibrated", False)) and y_scale is not None
+        if calibrated:
+            slope = float(y_scale["slope"])
+            intercept = float(y_scale["intercept"])
+            depths = [round(slope * row + intercept, 4) for row in rows]
+        else:
+            depths = [float(row) for row in rows]
+        grid = self.extract_grid_values(depths=depths)
+        data: dict[str, Any] = {"depth": [round(float(d), 4) for d in grid["depths"]]}
+        for idx, taxon in enumerate(grid["taxa"]):
+            data[str(taxon)] = [row[idx] for row in grid["matrix"]]
+        return pd.DataFrame(data)
 
     def _uniform_depth_list(self) -> list[float]:
         """按 `depth_calib` + `depth_interval` 生成均匀层位（标尺网格）。"""
@@ -859,7 +901,11 @@ class ExportMixin:
         return pd.DataFrame(data)
 
     def _turning_points_frame(self) -> Any:
-        """离散拐点长表：每个控制点一行（taxon / type / depth / value / x / y）。"""
+        """离散拐点长表：每个**控制点**一行（taxon / type / depth / value / x / y）。
+
+        行的来源是 `control_points` —— 用户眼里的"拐点"就是它们；
+        `column_points` 是数字化出的逐行曲线（行数完全不同），两者不能混。
+        """
         columns = getattr(self, "columns", []) or []
         taxa_names = getattr(self, "taxa_names", []) or []
         y_scale = getattr(self, "y_scale", None)
@@ -868,7 +914,7 @@ class ExportMixin:
         intercept = float(y_scale["intercept"]) if calibrated else None
 
         records: list[dict[str, Any]] = []
-        for c_idx, pts in sorted((getattr(self, "column_points", {}) or {}).items()):
+        for c_idx, pts in sorted((getattr(self, "control_points", None) or {}).items()):
             col_def = columns[c_idx] if c_idx < len(columns) else {}
             name = (
                 col_def.get("species")
@@ -876,17 +922,17 @@ class ExportMixin:
                 or (taxa_names[c_idx] if c_idx < len(taxa_names) else f"col_{c_idx}")
             )
             scale = resolve_column_scale(self, col_def, c_idx)
-            for point in sorted(pts, key=lambda item: item["row"]):
-                row_px = float(point["row"])
+            for row, x_px in sorted(pts.items(), key=lambda item: item[0]):
+                row_px = float(row)
                 depth = round(slope * row_px + intercept, 4) if calibrated else row_px
-                value = read_column_values(scale, [float(point["x"])], col_name=name)[0]
+                value = read_column_values(scale, [float(x_px)], col_name=name)[0]
                 records.append(
                     {
                         "taxon": name,
                         "type": "peak",
                         "depth": depth,
                         "value": value,
-                        "x": float(point["x"]),
+                        "x": float(x_px),
                         "y": row_px,
                     }
                 )
@@ -899,14 +945,14 @@ class ExportMixin:
         format: str = "csv",
         strict: bool = False,
         output_path: str | None = None,
-        dataset: str = "union_points",
+        dataset: str | None = None,
     ) -> dict[str, Any]:
         """Exports the calibrated data matrix to CSV or Parquet format.
 
         `dataset` 选择**行集**，与前端导出面板的下拉一一对应：
-        `union_points`（默认，控制点并集 = 既有行为）/ `depth_grid`（标尺均匀层位）/
-        `turning_points`（离散拐点长表）。三种行集都从同一套 `column_points` + `y_scale`
-        取值，与 `extract_grid_values` 同源——面板看到的数必须等于这里导出的数。
+        `union_points`（控制点并集）/ `depth_grid`（标尺均匀层位）/
+        `turning_points`（离散拐点长表）。**不传（None）保持既有行为**（samples 优先），
+        `data.csv` / 工程包走的就是这条路，两种语义不能混。
         """
         self._ensure_export_column_points()
 
@@ -1331,12 +1377,12 @@ class ExportMixin:
         self,
         depths: list[float] | None = None,
         output_path: str | None = None,
-        dataset: str = "union_points",
+        dataset: str | None = None,
     ) -> str | dict[str, Any]:
         """Generates stratigraphic CSV: depth in 1st col, unobserved taxa = 0.0 (Section 八).
 
-        `dataset` 透传给 `export_data`，取值见 `EXPORT_DATASETS`；默认 `union_points`
-        保持既有调用字节不变。
+        `dataset` 透传给 `export_data`，取值见 `EXPORT_DATASETS`。
+        不传（None）保持既有调用字节不变（samples 优先，即 `data.csv` 的语义）。
         """
         res = self.export_data("csv", output_path=output_path, dataset=dataset)
         if output_path:

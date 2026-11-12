@@ -17,7 +17,7 @@
  * 修好后两者应当**逐格相等**；修复前必然红（两套数）。
  */
 import { expect, test, type Page } from './fixtures';
-import { backendRpc, gotoStage, resetBaseline, rpc } from './helpers';
+import { backendRpc, diagramData, gotoStage, resetBaseline, rpc } from './helpers';
 
 const RID = 'roi_1';
 const GID = 'roi_1_grp1';
@@ -110,6 +110,31 @@ function diffMatrix(panel: Matrix, backend: Matrix): string {
   return 'same';
 }
 
+/**
+ * 该 dataset 按其**定义**应有的行数（用 `getDiagramData` 的权威数据算，不看面板）。
+ *
+ * 这条是防"两边一起缩水"的：只断言面板 == 后端，把两边都做成 3 行 samples 也能过。
+ */
+async function expectedRowCount(page: Page, dataset: string): Promise<number> {
+  const d = await diagramData<{
+    columns: Array<{ controlPoints?: Array<{ y: number }> }>;
+    calibration: { top_cm: number | null; bottom_cm: number | null; depthInterval?: number };
+  }>(page);
+  const points = d.columns.flatMap((c) => c.controlPoints ?? []);
+  if (dataset === 'union_points') {
+    return new Set(points.map((p) => Math.round(p.y))).size;
+  }
+  if (dataset === 'turning_points') {
+    return points.length;
+  }
+  const top = d.calibration.top_cm ?? 0;
+  const bottom = d.calibration.bottom_cm ?? 0;
+  const step = d.calibration.depthInterval ?? 2;
+  const lo = Math.min(top, bottom);
+  const hi = Math.max(top, bottom);
+  return Math.round((hi - lo) / step) + 1;
+}
+
 for (const dataset of DATASETS) {
   test(`dataset=${dataset}：面板 CSV 必须与后端 export.csv 逐格同值`, async ({ page }) => {
     test.setTimeout(150_000);
@@ -158,5 +183,12 @@ for (const dataset of DATASETS) {
         }
       )
       .toBe('same');
+
+    // 行数必须符合该 dataset 的**定义**，不能"两边一起缩水"。
+    const panelRows = parseCsv(await panelCsv(page)).rows.length;
+    expect(
+      panelRows,
+      `dataset=${dataset} 的行数必须符合其定义（若塌成 samples 的 3 行，就是语义回归）`
+    ).toBe(await expectedRowCount(page, dataset));
   });
 }
