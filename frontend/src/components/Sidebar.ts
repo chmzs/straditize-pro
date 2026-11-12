@@ -175,8 +175,31 @@ export class Sidebar {
     }
   }
 
+  /**
+   * 左栏要渲染哪些列：**跟随当前 active ROI**。
+   *
+   * 缺陷背景（hands-on ledger H-15）：切换 active/primary ROI 后左栏仍渲染原来那一组列，
+   * 卡片上写「roi_2 (0列)」而左栏列着 roi_1 的 29 列 —— 后端 `columns[].roi_id` 是对的，
+   * 是显示层没跟随。后果：用户在 A 分区里点选/改名，改的其实是 B 分区的列。
+   *
+   * 只在"有多个分区"且列带 roi_id 时才过滤；单分区或旧数据（无 roi_id）保持原样，
+   * 避免把本来正常的单 ROI 场景改坏。
+   */
+  private visibleColumns(): TaxaColumn[] {
+    const all = this.data.columns || [];
+    const rois = (this.data as unknown as { rois?: { id: string }[] }).rois;
+    if (!rois || rois.length <= 1) return all;
+    const d = this.data as unknown as { active_roi_id?: string; activeRoiId?: string };
+    const activeId = d.active_roi_id || d.activeRoiId;
+    if (!activeId) return all;
+    return all.filter((c) => {
+      const rid = (c as unknown as { roi_id?: string }).roi_id;
+      return !rid || rid === activeId;
+    });
+  }
+
   private renderColumnsList(): string {
-    const cols = this.data.columns || [];
+    const cols = this.visibleColumns();
     if (cols.length === 0) {
       return `
         <div class="sidebar-empty-hint">
