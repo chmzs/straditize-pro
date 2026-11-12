@@ -637,7 +637,9 @@ export class Inspector {
           c.col_index = i;
         });
         this.data.activeTaxaId = this.data.columns[0]?.id || '';
-        this.history.push(`Delete Column ${activeCol.name}`, this.data.columns, this.data.activeTaxaId);
+        // 删除列**不可撤销**（后端没有恢复列的通道），所以不压任何历史。
+        // 压旧 history 只会让撤销按钮亮起来、点下去却什么也回不来 ——
+        // 那正是"可点但没反应"的形态，按设计不入栈（见 core/undoActions.ts 的 NON_UNDOABLE）。
         this.callbacks.onDataChange();
         this.callbacks.onSelectTaxa(this.data.activeTaxaId);
       }

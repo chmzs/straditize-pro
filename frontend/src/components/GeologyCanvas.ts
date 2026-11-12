@@ -1534,7 +1534,8 @@ private pointer: PointerState = {
         const deleted = this.data.columns.splice(colIdx, 1)[0];
         this.data.selectedEntity = null;
         this.data.activeTaxaId = this.data.columns[Math.max(0, colIdx - 1)].id;
-        this.history.push(`Delete Column ${deleted.name}`, this.data.columns, this.data.activeTaxaId);
+        // 删除列不可撤销（后端无恢复通道），不压历史：压了只会让撤销按钮亮而无效。
+
         this.pointer.boundary = null;
         this.updateCursor();
         this.requestRender();

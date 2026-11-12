@@ -35,7 +35,7 @@ export class EraserToolStrategy implements ToolStrategy {
       const colIdx = ctx.data.columns.findIndex((c) => c.id === hitBoundary.taxaId);
       if (colIdx !== -1 && ctx.data.columns.length > 1) {
         const deleted = ctx.data.columns.splice(colIdx, 1)[0];
-        ctx.history.push(`Delete Column ${deleted.name}`, ctx.data.columns, ctx.data.activeTaxaId);
+        // 删除列不可撤销（后端无恢复通道），不压历史。
         ctx.notifyNotice(`已删除属种列: ${deleted.name}`);
         ctx.requestRender();
         ctx.callbacks.onDataChange?.();
