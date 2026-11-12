@@ -497,6 +497,21 @@
 
 ---
 
+#### `dataset` 参数（2026-11-12，U-ROWS-01）
+
+`core.exportData` / `export.csv` / `export.data` 接受可选 `dataset`，它选择**行集**（不是格式化方式）：
+
+| 值 | 行源（唯一口径） |
+| :--- | :--- |
+| 不传（`null`） | 既有行为：有 `samples` 按采样层位，否则各列逐行点并集。`data.csv` / 工程包走这条路 |
+| `union_points` | **`control_points` 全部 row 去重排序**（面板「真实物理拐点共振层位 [推荐]」）；取值经 `extract_grid_values` |
+| `depth_grid` | 按 `depth_calib` + `depth_interval` 切格；无标定/无网格时 `-32001 STATE_ERROR` |
+| `turning_points` | 每个**控制点**一行（`taxon/type/depth/value/x/y`）；行源是 `control_points`，**不是** `column_points` |
+
+非法值 → `-32602`，错误信息列出允许值。
+
+行集大小是定义的一部分：同一会话下三者行数必然不同（实测 298 / 21 / 896）。前端导出面板的下拉与本参数一一对应，且面板只渲染本接口返回的数据——不得由前端另算一套。
+
 ### 4.10 `column.calibrateXTicks` 与 `column.clearXTicks`
 步骤 6 属种列 X-轴标尺标定与清空。
 

@@ -488,6 +488,18 @@ export class ExportModal {
         csvText = typeof res === 'string' ? res : (res?.csv || res?.csv_content || '');
       } catch (err: any) {
         if (requestToken !== displayToken) return;
+        // 后端明确说没有可导出行集（`STATE_ERROR`）时，**面板本身**必须说明，
+        // 不能只剩一条 toast + 一张空表 —— 空表看起来像"这张图没数据"。
+        currentHeaders = [];
+        currentRows = [];
+        backendCsvText = '';
+        renderTableGrid();
+        syncSerializedText();
+        updateSumCheck();
+        if (rowSetCaptionEl) {
+          rowSetCaptionEl.style.color = 'var(--status-warning)';
+          rowSetCaptionEl.textContent = `当前行集为空（0 行）：${dataset} 数据集在此会话没有可导出的层位。请先在步骤 3 完成 Y 轴标定，或换一个数据集。`;
+        }
         notifyError(`读取 ${dataset} 数据集失败：${err?.message || err}`);
         return;
       }

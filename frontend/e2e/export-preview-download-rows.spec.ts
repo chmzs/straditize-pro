@@ -105,14 +105,15 @@ async function calibrateColumnsX(page: Page): Promise<void> {
 }
 
 /** 打开导出模态并等到预览表出现。 */
+/** 打开导出面板，等到**真的有行**（异步取数后"表格节点存在"不等于"有数据"）。 */
 async function openExport(page: Page): Promise<void> {
   await page.locator('#btn-export-csv').click();
   await expect
-    .poll(() => page.evaluate(() => Boolean(document.querySelector('#wpd-preview-table'))), {
-      message: '导出面板必须打开',
+    .poll(() => page.locator('#wpd-preview-table tbody tr').count(), {
+      message: '导出面板必须渲染出数据行',
       timeout: 20_000,
     })
-    .toBe(true);
+    .toBeGreaterThan(0);
 }
 
 /** 读预览表：数值格读 `<input class="wpd-cell-input">.value`，深度格读文本。 */
@@ -312,7 +313,15 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
 });
 
 test.describe('U-ROWS-01 行集为空时的说法', () => {
-  test.use({ allowlists: { notice: [/行集为空/] } });
+  // 未标定 + `depth_grid`：后端按契约抛 `STATE_ERROR`（export.csv），前端把它翻成
+  // 面板上的「行集为空」说明 + 一条错误通知。这条**错误路径是故意触发的**，
+  // 不是静默兜底，所以在此显式豁免（豁免写在用例文件里可见）。
+  test.use({
+    allowlists: {
+      notice: [/行集为空/, /读取 depth_grid 数据集失败/],
+      rpcError: [/export\.csv/],
+    },
+  });
 
   test.beforeEach(async ({ page }) => {
     await resetBaseline(page);
