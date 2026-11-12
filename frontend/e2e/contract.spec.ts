@@ -114,6 +114,13 @@ function auditNothingUndeclared(
 const PAYLOAD_ONLY_FIELDS: Record<string, string> = {
   'DiagramData.lineRemoval':
     '去线强度/竖线开关/笔迹的对外字段；前端零消费者（清理几何走 line_candidates/line_strokes）',
+  // 下面两个是**兼容别名**：后端同时发 camel 与 snake（`system.py` 两处都写），
+  // 前端只消费 snake（`active_roi_id`/`primary_roi_id`）。camel 保留给外部客户端，
+  // 因为早期载荷里只有 camel，删掉会打断已发布的消费方。
+  'DiagramData.activeRoiId':
+    'camel 兼容别名，与 active_roi_id 同值；前端只读 snake，别名留给外部客户端',
+  'DiagramData.primaryRoiId':
+    'camel 兼容别名，与 primary_roi_id 同值；前端只读 snake，别名留给外部客户端',
 };
 const NOT_SENT_BY_DESIGN: Record<string, string> = {
   'DataRoi.xMin': 'rois[] 元素是会话 ROI 记录（xlim/ylim）；坐标别名只出现在单数 data.roi 上',
