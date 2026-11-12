@@ -296,6 +296,12 @@ test.describe('模态框原语与主题契约', () => {
     await expect(closeBtn, '应使用专属 #export-modal-close').toHaveCount(1);
 
     // 验证尺寸收敛：在 1680x1050 视口下，max-width 应为 1180px（消除历史 1200px 冲突）
+    // ⚠️ 必须先等入场动画结束：`.modal-dialog` 有 `animation: modalEnter .2s`（scale），
+    // 动画中途 `getBoundingClientRect()` 量到的是缩放后的值（实测 1132.8 / 1144 / 1168 三种），
+    // 与 `getComputedStyle().width`（恒 1180px）不符。这不是尺寸回归。
+    await exportDialog.evaluate((el) =>
+      Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)).then(() => undefined)
+    );
     const box = await exportDialog.boundingBox();
     expect(box).not.toBeNull();
     if (box) {
