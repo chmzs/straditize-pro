@@ -2,6 +2,16 @@
 
 from __future__ import annotations
 
+# 工程包 data.csv 的缺测语义说明。**必须**同时讲清"窗口内 0.0"与"整列 NA"两件事：
+# 旧文案写的是「unobserved taxa are strictly 0.0 (never NA)」，把两种情况混成一句，
+# 结果是用户把"没测到"当成"测到 0 丰度"拿去算百分比与对数和。
+CSV_MISSING_NOTICE = (
+    b"SCIENTIFIC NOTICE (missing-data semantics):\n"
+    b"  1) gaps INSIDE a column's digitizing window are written 0.0 = true zero abundance.\n"
+    b"  2) columns never digitized / not X-calibrated are written NA = NO DATA, not zero.\n"
+    b"  3) never treat NA as 0; handle NA before log transforms, then add a pseudocount.\n"
+)
+
 import base64
 import copy
 import io
@@ -1293,7 +1303,7 @@ class ProjectSessionMixin:
             f"- 失败原因：{reason}\n"
             "- 机器可读标记：manifest.json 的 data_csv_placeholder 字段\n"
             "- 怎么办：回到步骤 8 重新取数（确认每列都已数字化），再重新导出工程包。\n\n"
-            "README.txt 里那句「unobserved taxa are strictly 0.0」描述的是**正常导出**"
+            "README.txt 里的 SCIENTIFIC NOTICE 描述的是**正常导出**"
             "的约定，不要用它解释本文件旁边的 data.csv。\n"
         )
         return text.encode("utf-8")
@@ -1393,9 +1403,7 @@ class ProjectSessionMixin:
                 b"data.csv           - Calibrated matrix (Depth in 1st col, unobserved = 0.0)\n"
                 b"plot_strat.R       - rioja::strat.plot plotting template\n"
                 b"README.txt         - Documentation\n\n"
-                b"SCIENTIFIC NOTICE:\n"
-                b"In data.csv, unobserved taxa are strictly 0.0 (never NA).\n"
-                b"Add a pseudocount before taking log transformations.\n"
+                + CSV_MISSING_NOTICE
             )
             ti_readme = tarfile.TarInfo(name="README.txt")
             ti_readme.size = len(readme)

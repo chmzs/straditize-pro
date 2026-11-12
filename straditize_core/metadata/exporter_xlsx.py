@@ -292,7 +292,7 @@ _META_ROWS: tuple[_MetaRowSpec, ...] = (
         "Quality Notes",
         "quality",
         "quality_notes",
-        default="Unobserved taxa strictly filled as 0.00 (Zero-Abundance standard).",
+        default=("In-window gaps are 0.00 (true zero). Never-digitized / uncalibrated columns are EMPTY = no data, NOT zero."),
         source="User",
         confidence="high",
     ),
@@ -464,7 +464,7 @@ def _write_doc_sheets(
             },
             {
                 "Item": "Pollen Matrix Standard",
-                "Description": "Depths in 1st column. Unobserved taxa strictly filled as 0.00 (never NA).",
+                "Description": "Depths in 1st column. In-window gaps = 0.00 (true zero); never-digitized / uncalibrated columns are left EMPTY = no data, not zero.",
             },
             {
                 "Item": "LiPD Compatibility",
