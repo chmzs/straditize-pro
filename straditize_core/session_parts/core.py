@@ -1719,6 +1719,12 @@ class CoreMixin:
         self.columns.append(col_dict)
         self.taxa_names.append(name)
         self.control_points[c_idx] = {}
+        # `manual_points` 只在 `_reset_columns()` 里建，`__init__` 不建；这里裸用
+        # `setdefault` 会让"还没走过一次分列就添列"的会话直接 AttributeError
+        # （经 `column.add` 冒成 -32603）。同文件 `:1751` 用的是 `getattr(...) or {}`，
+        # 两处口径必须一致：先确保容器存在，再写入。
+        if not hasattr(self, "manual_points"):
+            self.manual_points = {}
         self.manual_points.setdefault(c_idx, {})
         return {"col_index": c_idx, "column": col_dict}
 
