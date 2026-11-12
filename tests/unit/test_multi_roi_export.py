@@ -251,3 +251,33 @@ def test_tar_readme_states_missing_data_semantics():
 
     assert CSV_MISSING_NOTICE in readme, "tar README 必须包含缺测语义说明"
     assert b"never NA" not in readme, "不得再出现 never-NA 断言"
+
+
+def test_unnamed_roi_csv_files_use_data_roi_sequence():
+    """未命名的 ROI：per-ROI CSV 文件名用 `data_roi_<序号>`，不把内部 ID 暴露给下游。
+
+    规则来源：用户明确要求「roi 名字如果没有指定，默认使用 data_roi_序号」。
+    命名口径只在**未显式命名**（`name_source != "user"`）时生效；显式命名的 ROI
+    仍用自己的名字（见 `data/charcoal.csv` 那条用例）。
+    """
+    session = StraditizeSession()
+    session.load_image(str(HOYA_PATH))
+    roi_a = session.roi_create(composition=True)["roi"]
+    roi_b = session.roi_create(composition=False)["roi"]
+    assert roi_a.get("name_source") != "user", "前置：该 ROI 不应是用户命名"
+    assert roi_b.get("name_source") != "user", "前置：该 ROI 不应是用户命名"
+
+    session.column_add({"name": "Pinus", "startX": 320, "endX": 420})
+    session.column_update(0, {"roi_id": roi_a["id"]})
+    session.column_add({"name": "Chenopodiaceae", "startX": 500, "endX": 620})
+    session.column_update(1, {"roi_id": roi_b["id"]})
+    session.roi_set_primary(roi_a["id"])
+
+    result = session.export_multi_tar()
+    raw = base64.b64decode(result.get("data") or result.get("tar_base64"))
+    with tarfile.open(fileobj=io.BytesIO(raw)) as handle:
+        names = handle.getnames()
+
+    assert "data/data_roi_1.csv" in names, names
+    assert "data/data_roi_2.csv" in names, names
+    assert "data.csv" in names, names

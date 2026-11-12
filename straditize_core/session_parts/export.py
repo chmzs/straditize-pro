@@ -389,6 +389,11 @@ class ExportMixin:
                 "library(rioja)\n",
             ]
 
+            # 每个 ROI 的 CSV 文件名规则：用户显式命名的用名字，未命名的用
+            # `data_roi_<序号>`（序号按 roi_dfs 顺序从 1 起）。用名字时保留可读性，
+            # 未命名时不把 `roi_1` 这类内部 ID 暴露给下游脚本。
+            roi_meta_by_name = {r.get("name"): r for r in (getattr(self, "rois", None) or [])}
+            unnamed_seq = 0
             for roi_name, df in roi_dfs.items():
                 # 未标定列整列不给数：写 CSV 时用显式 `NA`，不要留空。
                 # 空单元格在下游读入器里既可能是缺失也可能是 0，`NA` 是无歧义的
@@ -396,7 +401,15 @@ class ExportMixin:
                 csv_str = df.to_csv(index=False, na_rep="NA")
                 csv_bytes = csv_str.encode("utf-8")
 
-                csv_filename = f"data/{roi_name}.csv"
+                meta = roi_meta_by_name.get(roi_name) or {}
+                if meta.get("name_source") == "user":
+                    member_name = roi_name
+                else:
+                    # 序号只在"未命名"的 ROI 之间递增：已命名的 ROI 不占号，
+                    # 否则第一个未命名分区会因为前面有 pollen 而变成 data_roi_2。
+                    unnamed_seq += 1
+                    member_name = f"data_roi_{unnamed_seq}"
+                csv_filename = f"data/{member_name}.csv"
                 ti_roi_csv = tarfile.TarInfo(name=csv_filename)
                 ti_roi_csv.size = len(csv_bytes)
                 ti_roi_csv.mtime = int(time.time())
