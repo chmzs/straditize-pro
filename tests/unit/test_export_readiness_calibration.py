@@ -37,9 +37,13 @@ def _session_with_columns() -> StraditizeSession:
     session = StraditizeSession()
     session._init_cleanup()
     session.load_image(sample_key="hoya")
+    # 载图自动建的取数区现在是"默认命名"（name_source=default），而 readiness 要求
+    # "ROI 已命名"。前置必须**由测试自己建立**（显式改一次名），不能再断言
+    # "它本来就不是 default"——那条现状已不成立（决策③ 之后 name 只能靠 update 给）。
+    session.roi_update(roi_id=session.rois[0]["id"], name="readiness_roi")
     session.detect_columns(HOYA_X, HOYA_Y, roi_id=session.rois[0]["id"])
-    assert session.rois[0].get("name_source") != "default", (
-        "前置：ROI 必须是用户命名的，否则会被 readiness_missing 挡住，"
+    assert session.rois[0].get("name_source") == "user", (
+        "前置：改名后 ROI 必须被记为「用户命名」，否则 readiness 一律 missing，"
         "测不到标定这条规则"
     )
     return session
