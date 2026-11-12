@@ -397,7 +397,7 @@ export class ProjectManager {
    * 结果是用户保存下来的文件自己永远打不开（T-05）。`export.tar` 那条路继续
    * 服务顶栏「导出」按钮，两者不是同一个出口。
    */
-  public async saveProjectFile(): Promise<void> {
+  public async saveProjectFile(): Promise<boolean> {
     try {
       const res = await this.rpcClient.call<any, any>('project.save');
       if (res && (res.tar_base64 || res.data)) {
@@ -416,13 +416,16 @@ export class ProjectManager {
           a.download = `straditize_project_${Date.now()}.tar`;
           a.click();
           URL.revokeObjectURL(url);
-          return;
+          return true;
         }
       }
       throw new Error('project.save 返回的数据不合法');
     } catch (err: any) {
       console.error('后端 project.save 导出失败:', err);
       notifyError('科学项目包 (.tar) 导出失败：' + (err.message || err));
+      // 返回 false 而不是吞掉：调用方（保存按钮）必须能区分"存了"和"没存"，
+      // 旧实现只 notifyError 就返回，于是顶栏照样报"已打包导出成功"。
+      return false;
     }
   }
 

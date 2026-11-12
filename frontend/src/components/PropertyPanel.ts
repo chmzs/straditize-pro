@@ -155,7 +155,7 @@ export class PropertyPanel {
   /**
    * 3. 项目化保存为开放标准 .tar 归档 (委托至 ProjectManager)
    */
-  public async saveProjectFile(): Promise<void> {
+  public async saveProjectFile(): Promise<boolean> {
     return this.projectManager.saveProjectFile();
   }
 

@@ -152,9 +152,21 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
         p.reportBackendFailure('数据导出', err);
       }
     },
-    onSaveProject: () => {
-      void p.projectManager.saveProjectFile();
-      p.setHudNotice('数字化项目已打包导出为标准归档包 (.tar)！', 3500);
+    onSaveProject: async () => {
+      // 旧实现是"发出去就报成功"（void + 立刻 setHudNotice）：后端失败也照样显示
+      // "已打包导出"，用户无法区分存了没存。现在必须等结果再说话。
+      try {
+        const ok = await p.projectManager.saveProjectFile();
+        if (ok) {
+          p.setHudNotice('工程包已保存（straditize.json + data.csv + R 脚本）。', 4000);
+        } else {
+          p.setHudNotice('保存工程包失败：详见错误提示。', 8000);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        p.setHudNotice(`保存工程包失败：${msg}`, 8000);
+        (p as any).reportBackendFailure?.('保存工程包', err);
+      }
     },
     onOpenProjectFile: (file: File) => {
       p.projectManager.openProjectFile(file);
