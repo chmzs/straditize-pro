@@ -36,6 +36,7 @@ import { createToolbarCallbacks } from './services/ToolbarBridge';
 import { createSidebarCallbacks } from './services/SidebarBridge';
 import { registerWebMcpAndInspectionHandles } from './services/WebMcpBridge';
 import { applyTheme, createFooterDom, createHudDom, createWorkspaceDom } from './app/dom';
+import { installModalEscape } from './app/modalEsc';
 import { createFooterUpdater } from './app/footer';
 import { setupDraftRecovery } from './app/draftRecovery';
 import { setupScaleSync } from './app/scaleSync';
@@ -164,6 +165,8 @@ async function bootstrap() {
 
   const hud = createHudDom();
   canvasWrapper.appendChild(hud);
+  // 全局 Esc 关闭最上层模态（各模态自己手写 backdrop，没有统一基类）
+  installModalEscape();
 
   let hudTimer: number | null = null;
   const getDefaultHudText = () =>
