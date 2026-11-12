@@ -1058,19 +1058,29 @@ class ExportMixin:
                 getattr(self, "columns", None)
                 and getattr(self, "image", None) is not None
             ):
+                # 现场数字化：失败的列**收集原因并统一报错**，不许 `pass` 之后
+                # 落到"造一条水平直线"的兜底（那条兜底会把列左缘当读数，
+                # 整列常数、看起来完全合法）。项目第一不变量：取不到就报错停在原地。
+                failures: list[str] = []
                 for col in self.columns:
                     try:
                         self.digitize(col["col_index"])
-                    except (ValueError, KeyError, RuntimeError, JsonRpcError):
-                        pass
-            elif getattr(self, "columns", None) and getattr(self, "data_ylim", None):
-                y0, y1 = int(self.data_ylim[0]), int(self.data_ylim[1])
-                sample_rows = list(range(y0, y1 + 1, max(1, (y1 - y0) // 50)))
-                for c_idx in range(len(self.columns)):
-                    c_start = float(self.columns[c_idx].get("start", 0))
-                    self.column_points[c_idx] = [
-                        {"row": r, "x": c_start} for r in sample_rows
-                    ]
+                    except (ValueError, KeyError, RuntimeError, JsonRpcError) as exc:
+                        name = col.get("name") or f"col_index={col.get('col_index')}"
+                        failures.append(f"{name}（{exc}）")
+                if failures:
+                    raise JsonRpcError(
+                        STATE_ERROR,
+                        "以下列无法从图像取数，且没有手工控制点可用："
+                        + "；".join(failures)
+                        + "。请先在步骤 5/7 数字化这些列，或补控制点后再导出。",
+                    )
+            else:
+                raise JsonRpcError(
+                    STATE_ERROR,
+                    "没有任何可取数的列：既没有手工控制点，也没有可数字化的图像。"
+                    "系统不会用等距采样的替代数据充数。",
+                )
 
     def _export_rows_and_depths(self) -> tuple[list[int], list]:
         """导出用的行号序列与深度列。

@@ -75,6 +75,9 @@
  * 监听本身在 `helpers.ts` 的 `watchPage`（那里是"与页面交互的唯一入口"，且如实
  * 记录不过滤），本文件只负责"何时判失败"和"哪些算豁免"——豁免只在这一个地方判定。
  */
+import { readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test as base, expect } from '@playwright/test';
 import { watchPage, type PageTelemetry } from './helpers';
 
@@ -91,6 +94,46 @@ export interface Allowlists {
   rpcError: Matcher[];
   /** 允许出现的用户通知文本（原生对话框 + 应用内 toast / 错误弹窗）。 */
   notice: Matcher[];
+}
+
+
+/**
+ * `dist` 新鲜度门槛（机械层，2026-11-12 加入）。
+ *
+ * 本会话两次出现"金丝雀绿了、其实修复没生效"：`npm run build` 失败或没跑，
+ * e2e 读到的是上一版 `dist`，于是旧产物给出了绿灯。**只看测试结果判不了这个**，
+ * 所以在这里硬失败：src 里有文件比 dist 新，就不许跑。
+ */
+function newestMtime(dir: string): number {
+  let newest = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) newest = Math.max(newest, newestMtime(full));
+    else newest = Math.max(newest, statSync(full).mtimeMs);
+  }
+  return newest;
+}
+
+function assertDistFresh(): void {
+  const frontendRoot = fileURLToPath(new URL('..', import.meta.url));
+  const assetsDir = join(frontendRoot, 'dist', 'assets');
+  let distMtime = 0;
+  try {
+    for (const file of readdirSync(assetsDir)) {
+      if (file.endsWith('.js')) {
+        distMtime = Math.max(distMtime, statSync(join(assetsDir, file)).mtimeMs);
+      }
+    }
+  } catch {
+    throw new Error('frontend/dist 不存在或没有 js 产物：先 `npm run build` 再跑 e2e');
+  }
+  const srcMtime = newestMtime(join(frontendRoot, 'src'));
+  if (distMtime === 0 || srcMtime > distMtime) {
+    throw new Error(
+      `frontend/dist 比 src 旧（src=${new Date(srcMtime).toISOString()} > dist=${new Date(distMtime).toISOString()}）：` +
+        '先 `npm run build`。否则你测的是旧产物，"绿"不作数。'
+    );
+  }
 }
 
 function matches(text: string, allow: Matcher[]): boolean {
@@ -116,6 +159,7 @@ export const test = base.extend<{
     async ({ page, allowlists }, use) => {
       // setup 早于 `beforeEach`，而各 spec 的 `resetBaseline` 正是在 `beforeEach`
       // 里首次导航，所以 `watchPage` 里的 `addInitScript` 一定赶在任何 `goto` 之前。
+      assertDistFresh();
       const telemetry = await watchPage(page);
 
       await use(telemetry);
