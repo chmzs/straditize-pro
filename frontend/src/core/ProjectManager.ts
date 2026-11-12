@@ -422,7 +422,9 @@ export class ProjectManager {
       throw new Error('project.save 返回的数据不合法');
     } catch (err: any) {
       console.error('后端 project.save 导出失败:', err);
-      notifyError('科学项目包 (.tar) 导出失败：' + (err.message || err));
+      // 与顶栏「保存项目」同一口径：保存的是**工程包**（straditize.json + data.csv + R 脚本），
+      // 不是"数据包 .tar"。旧文案写"科学项目包 (.tar) 导出失败"，与出口名不符，容易误导。
+      notifyError('工程包保存失败：' + (err.message || err));
       // 返回 false 而不是吞掉：调用方（保存按钮）必须能区分"存了"和"没存"，
       // 旧实现只 notifyError 就返回，于是顶栏照样报"已打包导出成功"。
       return false;

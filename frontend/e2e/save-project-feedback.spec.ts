@@ -12,10 +12,12 @@ import { gotoStage, openApp } from './helpers';
  */
 test.describe('保存项目的反馈必须真实', () => {
   // 故意让后端失败：错误冒泡到控制台与提示通道是**期望行为**，不是缺陷。
+  // 注意：Playwright 的**对象型 option 整体替换**，所以豁免只能写在这一处——
+  // 再写第二个 `test.use({ allowlists: ... })` 会把上面的完全覆盖掉（本轮踩过）。
   test.use({
     allowlists: {
       consoleError: [/模拟后端保存失败/],
-      notice: [/导出失败/],
+      notice: [/导出失败/, /工程包保存失败/],
       rpcError: [/模拟后端保存失败/],
     },
   });

@@ -150,9 +150,11 @@ export class ExportModal {
                 <div style="display: flex; align-items: center; justify-content: space-between;">
                   <span style="color: var(--text-muted);">缺测填充:</span>
                   <select id="wpd-na-fill" class="sample-select" style="width: 80px; font-size: 11px;">
-                    <option value="0.0" selected>0.0 (地学)</option>
+                    <!-- 默认必须是 NA：缺测（未测到）不是"零丰度"。
+                         曾经默认选中 0.0，等于教用户把"没测"当成"测到 0"写进结果。 -->
+                    <option value="0.0">0.0（当成真实零丰度，慎用）</option>
                     <option value="NaN">NaN</option>
-                    <option value="NA">NA</option>
+                    <option value="NA" selected>NA（推荐）</option>
                     <option value="">(空)</option>
                   </select>
                 </div>
