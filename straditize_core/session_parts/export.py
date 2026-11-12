@@ -800,13 +800,114 @@ class ExportMixin:
             frame = next(iter(frames.values()))
         return frame
 
+    # ---- dataset 行集（与前端面板下拉同义，三种都从 column_points 取值）----
+
+    #: `export_data(dataset=...)` 允许的取值，顺序即产品下拉顺序。
+    EXPORT_DATASETS = ("union_points", "depth_grid", "turning_points")
+
+    def _dataset_frame(self, dataset: str | None, *, strict: bool) -> Any:
+        """按 dataset 产出一张表；**三种行集共用同一取数口径**。
+
+        `union_points` 保持既有行为（`_primary_roi_export_frame`，samples 优先，
+        否则各列逐行点并集）——默认值不变，避免破坏既有调用与 golden 文件。
+        `depth_grid` / `turning_points` 都经 `extract_grid_values` /
+        `read_column_values` 取值，与顶栏导出、工程包 `data.csv` 同一套换算，
+        不再让前端自己用样条造第二套数。
+        """
+        key = (dataset or "union_points").strip().lower()
+        if key == "union_points":
+            return self._primary_roi_export_frame(strict=strict)
+        if key == "depth_grid":
+            return self._depth_grid_frame()
+        if key == "turning_points":
+            return self._turning_points_frame()
+        raise JsonRpcError(
+            INVALID_PARAMS,
+            f"Unsupported dataset '{dataset}'. Use one of: {', '.join(self.EXPORT_DATASETS)}.",
+        )
+
+    def _uniform_depth_list(self) -> list[float]:
+        """按 `depth_calib` + `depth_interval` 生成均匀层位（标尺网格）。"""
+        calib = getattr(self, "depth_calib", None) or {}
+        top = calib.get("top_cm")
+        bottom = calib.get("bottom_cm")
+        if top is None or bottom is None:
+            return []
+        step_raw = getattr(self, "depth_interval", None)
+        try:
+            step = float(step_raw) if step_raw else 2.0
+        except (TypeError, ValueError):
+            step = 2.0
+        if step <= 0:
+            step = 2.0
+        lo, hi = sorted((float(top), float(bottom)))
+        count = int(round((hi - lo) / step)) + 1
+        return [round(lo + i * step, 4) for i in range(max(count, 1))]
+
+    def _depth_grid_frame(self) -> Any:
+        """标尺均匀层位：直接复用 `extract_grid_values` 的取值口径。"""
+        depths = list(getattr(self, "depth_grid", None) or self._uniform_depth_list())
+        if not depths:
+            raise JsonRpcError(
+                STATE_ERROR,
+                "No depth grid available: set Y calibration or call core.applyDepthGrid first.",
+            )
+        grid = self.extract_grid_values(depths=depths)
+        data: dict[str, Any] = {"depth": [round(float(d), 4) for d in grid["depths"]]}
+        for idx, taxon in enumerate(grid["taxa"]):
+            data[str(taxon)] = [row[idx] for row in grid["matrix"]]
+        return pd.DataFrame(data)
+
+    def _turning_points_frame(self) -> Any:
+        """离散拐点长表：每个控制点一行（taxon / type / depth / value / x / y）。"""
+        columns = getattr(self, "columns", []) or []
+        taxa_names = getattr(self, "taxa_names", []) or []
+        y_scale = getattr(self, "y_scale", None)
+        calibrated = bool(getattr(self, "is_calibrated", False)) and y_scale is not None
+        slope = float(y_scale["slope"]) if calibrated else None
+        intercept = float(y_scale["intercept"]) if calibrated else None
+
+        records: list[dict[str, Any]] = []
+        for c_idx, pts in sorted((getattr(self, "column_points", {}) or {}).items()):
+            col_def = columns[c_idx] if c_idx < len(columns) else {}
+            name = (
+                col_def.get("species")
+                or col_def.get("name")
+                or (taxa_names[c_idx] if c_idx < len(taxa_names) else f"col_{c_idx}")
+            )
+            scale = resolve_column_scale(self, col_def, c_idx)
+            for point in sorted(pts, key=lambda item: item["row"]):
+                row_px = float(point["row"])
+                depth = round(slope * row_px + intercept, 4) if calibrated else row_px
+                value = read_column_values(scale, [float(point["x"])], col_name=name)[0]
+                records.append(
+                    {
+                        "taxon": name,
+                        "type": "peak",
+                        "depth": depth,
+                        "value": value,
+                        "x": float(point["x"]),
+                        "y": row_px,
+                    }
+                )
+        return pd.DataFrame(
+            records, columns=["taxon", "type", "depth", "value", "x", "y"]
+        )
+
     def export_data(
         self,
         format: str = "csv",
         strict: bool = False,
         output_path: str | None = None,
+        dataset: str = "union_points",
     ) -> dict[str, Any]:
-        """Exports the calibrated data matrix to CSV or Parquet format."""
+        """Exports the calibrated data matrix to CSV or Parquet format.
+
+        `dataset` 选择**行集**，与前端导出面板的下拉一一对应：
+        `union_points`（默认，控制点并集 = 既有行为）/ `depth_grid`（标尺均匀层位）/
+        `turning_points`（离散拐点长表）。三种行集都从同一套 `column_points` + `y_scale`
+        取值，与 `extract_grid_values` 同源——面板看到的数必须等于这里导出的数。
+        """
         self._ensure_export_column_points()
 
         if not getattr(self, "column_points", None):
@@ -829,7 +930,7 @@ class ExportMixin:
         # `_export_rows_and_depths` / `_export_value_columns` 保留给单 ROI 的既有调用与
         # 各自的判据，但 CSV 不再走它们——两条链在"行集 + 列名 + 补点时机"上各写一套
         # 正是本缺陷的来源。
-        df = self._primary_roi_export_frame(strict=strict)
+        df = self._dataset_frame(dataset, strict=strict)
         depth_series = df["depth"].tolist()
         all_rows = list(range(len(depth_series)))
 
@@ -1230,9 +1331,14 @@ class ExportMixin:
         self,
         depths: list[float] | None = None,
         output_path: str | None = None,
+        dataset: str = "union_points",
     ) -> str | dict[str, Any]:
-        """Generates stratigraphic CSV: depth in 1st col, unobserved taxa = 0.0 (Section 八)."""
-        res = self.export_data("csv", output_path=output_path)
+        """Generates stratigraphic CSV: depth in 1st col, unobserved taxa = 0.0 (Section 八).
+
+        `dataset` 透传给 `export_data`，取值见 `EXPORT_DATASETS`；默认 `union_points`
+        保持既有调用字节不变。
+        """
+        res = self.export_data("csv", output_path=output_path, dataset=dataset)
         if output_path:
             return {"path": output_path, "success": True}
         return res.get("csv", "") if isinstance(res, dict) else str(res)

@@ -1,7 +1,5 @@
 import { DiagramData } from '../types/pollen';
 import { RpcClient } from '../services/RpcClient';
-import { SplineInterpolator } from '../core/SplineInterpolator';
-import { CoordinateSystem } from '../core/CoordinateSystem';
 import { ProjectManager } from '../core/ProjectManager';
 import { computeExportReadiness, renderExportReadiness } from './steps/ExportReadinessPanel';
 import {
@@ -243,7 +241,6 @@ export class ExportModal {
     const digitsInp = modal.querySelector('#wpd-digits') as HTMLInputElement;
     const colSepSelect = modal.querySelector('#wpd-col-sep') as HTMLSelectElement;
     const naFillSelect = modal.querySelector('#wpd-na-fill') as HTMLSelectElement;
-    const varsLabel = modal.querySelector('#wpd-vars-label') as HTMLElement;
     const sizeLabel = modal.querySelector('#wpd-data-size-label') as HTMLElement;
     const rowSetCaptionEl = modal.querySelector('#wpd-rowset-caption') as HTMLElement | null;
 
@@ -258,6 +255,22 @@ export class ExportModal {
     let currentHeaders: string[] = [];
     let currentRows: Array<string[]> = [];
     const userEdits = new Map<string, string>(); // key: `${rowIdx}_${colIdx}` -> editedValue
+
+    /** 后端返回的原始 CSV；**没有用户编辑时**界面与下载都用它，保证逐字节一致。 */
+    let backendCsvText = '';
+    /** 异步取数的乱序保护：同一个面板只有最后一次 dataset 请求可以落地。 */
+    let displayToken = 0;
+
+    /** 后端 CSV → 矩阵。后端输出是纯逗号分隔、无引号（taxon 名不含逗号）。 */
+    const parseDelimitedMatrix = (text: string): { headers: string[]; rows: string[][] } => {
+      const trimmed = text.trim();
+      if (!trimmed) return { headers: [], rows: [] };
+      const lines = trimmed.split(/\r?\n/);
+      return {
+        headers: lines[0].split(',').map((cell) => cell.trim()),
+        rows: lines.slice(1).map((line) => line.split(',').map((cell) => cell.trim())),
+      };
+    };
 
     const tabBtnGrid = modal.querySelector('#tab-btn-grid') as HTMLButtonElement;
     const tabBtnText = modal.querySelector('#tab-btn-text') as HTMLButtonElement;
@@ -281,103 +294,6 @@ export class ExportModal {
     });
 
     // 重新计算原始提取数据矩阵
-    const extractRawMatrix = (): { headers: string[]; rows: Array<string[]> } => {
-      const dataset = datasetSelect.value;
-      const digits = parseInt(digitsInp.value, 10) || 2;
-      const naStr = naFillSelect.value;
-      // 未标定列与「个别层位缺测」是两件事，不能合并：
-      //   - 缺测（列已标定，但该层没数据）：按用户选的 naFill 填（默认 0.0，地学惯例）；
-      //   - 未标定（整列没有标度）：整列写 NA，绝不混进 0.0 —— 那会被读成
-      //     "该层确实 0% 花粉"，是编造读数。
-      const UNCALIBRATED_NA = 'NA';
-      const isDesc = sortOrderSelect.value === 'desc';
-
-      const cal = this.data.calibration;
-      const visibleCols = this.data.columns.filter((c) => c.visible);
-
-      if (dataset === 'turning_points') {
-        varsLabel.textContent = 'Taxon, Type, Depth, Value, X, Y';
-        const headers = ['Taxon', 'Type', `Depth_${cal.unit}`, 'Value', 'X_px', 'Y_px'];
-        const matrix: Array<string[]> = [];
-
-        visibleCols.forEach((col) => {
-          const pts = [...col.controlPoints].sort((a, b) => (isDesc ? b.y - a.y : a.y - b.y));
-          pts.forEach((pt) => {
-            const depth = CoordinateSystem.imageYToDepth(pt.y, cal);
-            // 未标定列不出数：naStr 是既有占位通道（与深度缺标定一致）。
-            const calibrated = CoordinateSystem.hasRealCalibration(col);
-            const val = calibrated ? CoordinateSystem.imageXToPercent(pt.x, col) : undefined;
-            matrix.push([
-              col.name,
-              pt.type || 'transition',
-              depth !== undefined ? depth.toFixed(digits) : naStr,
-              val !== undefined ? val.toFixed(digits) : calibrated ? naStr : UNCALIBRATED_NA,
-              String(pt.x),
-              String(pt.y),
-            ]);
-          });
-        });
-        return { headers, rows: matrix };
-      }
-
-      if (dataset === 'union_points') {
-        varsLabel.textContent = `Depth_${cal.unit}, ${visibleCols.length} Taxa (Union Horizons: 0 NA)`;
-        const allYSet = new Set<number>();
-        visibleCols.forEach((col) => {
-          col.controlPoints.forEach((pt) => allYSet.add(pt.y));
-        });
-        const sortedY = Array.from(allYSet).sort((a, b) => (isDesc ? b - a : a - b));
-        const headers = [`Depth_${cal.unit}`, ...visibleCols.map((c) => c.name)];
-        const matrix: Array<string[]> = [];
-
-        for (const y of sortedY) {
-          const depth = CoordinateSystem.imageYToDepth(y, cal);
-          const rowVals: string[] = [depth !== undefined ? depth.toFixed(digits) : naStr];
-          for (const col of visibleCols) {
-            const v = SplineInterpolator.interpolatePercentAtY(col, y);
-            const calibrated = CoordinateSystem.hasRealCalibration(col);
-            rowVals.push(
-              calibrated
-                ? v !== undefined && !isNaN(v)
-                  ? v.toFixed(digits)
-                  : naStr
-                : UNCALIBRATED_NA
-            );
-          }
-          matrix.push(rowVals);
-        }
-        return { headers, rows: matrix };
-      }
-
-      // 默认: 标准深度层位网格 (depth_grid)
-      varsLabel.textContent = `Depth_${cal.unit}, ${visibleCols.length} Taxa`;
-      const { depths, yPositions } = SplineInterpolator.getStandardDepthHorizons(cal);
-      const headers = [`Depth_${cal.unit}`, ...visibleCols.map((c) => c.name)];
-      const matrix: Array<string[]> = [];
-
-      const indices = Array.from({ length: depths.length }, (_, i) => i);
-      if (isDesc) indices.reverse();
-
-      for (const i of indices) {
-        const d = depths[i];
-        const y = yPositions[i];
-        const rowVals: string[] = [d.toFixed(digits)];
-
-        for (const col of visibleCols) {
-          const v = SplineInterpolator.interpolatePercentAtY(col, y);
-          const calibrated = CoordinateSystem.hasRealCalibration(col);
-          if (!calibrated) {
-            rowVals.push(UNCALIBRATED_NA);
-          } else if (v !== undefined && !isNaN(v)) {
-            rowVals.push(v.toFixed(digits));
-          } else {
-            rowVals.push(naStr);
-          }
-        }
-        matrix.push(rowVals);
-      }
-      return { headers, rows: matrix };
-    };
 
     // 将当前内存矩阵格式化为文本 (包含用户编辑覆盖项)
     const serializeMatrixToText = (headers: string[], rows: Array<string[]>): string => {
@@ -455,7 +371,11 @@ export class ExportModal {
     };
 
     const syncSerializedText = () => {
-      const dataStr = serializeMatrixToText(currentHeaders, currentRows);
+      // 无编辑时直接用后端的原文：这样「面板里看到的」与「点 CSV 下载到的」
+      // 是同一串字节，不经过任何前端再序列化（U-ROWS-01 的判据就钉在这里）。
+      const dataStr = userEdits.size > 0
+        ? serializeMatrixToText(currentHeaders, currentRows)
+        : backendCsvText || serializeMatrixToText(currentHeaders, currentRows);
       textarea.value = dataStr;
       sizeLabel.textContent = `${(dataStr.length / 1024).toFixed(1)} KB (${currentRows.length} rows)`;
     };
@@ -556,16 +476,33 @@ export class ExportModal {
       subEl.textContent = `${agg.nChecked} 层位被检验`;
     };
 
-    const updateFullDisplay = () => {
-      const { headers, rows } = extractRawMatrix();
-      currentHeaders = headers;
-      // 叠加上用户修改
-      currentRows = rows.map((r, rIdx) => {
-        return r.map((cell, cIdx) => {
+    const updateFullDisplay = async () => {
+      // 行集与数值**全部由后端产出**（`export.csv{dataset}`）：面板只是它的渲染。
+      // 这样「预览看到的数」与「点 CSV 下载到的数」由构造保证同源，不再让前端
+      // 用 `SplineInterpolator` 在 controlPoints 上另造一套（两套数差 11.8×/2.1×）。
+      const dataset = datasetSelect.value;
+      const requestToken = ++displayToken;
+      let csvText = '';
+      try {
+        const res = await this.rpcClient.call<any, any>('export.csv', { dataset });
+        csvText = typeof res === 'string' ? res : (res?.csv || res?.csv_content || '');
+      } catch (err: any) {
+        if (requestToken !== displayToken) return;
+        notifyError(`读取 ${dataset} 数据集失败：${err?.message || err}`);
+        return;
+      }
+      // 快速切换 dataset 时，只有最后一次请求的结果可以落到界面上。
+      if (requestToken !== displayToken) return;
+
+      backendCsvText = csvText;
+      const parsed = parseDelimitedMatrix(csvText);
+      currentHeaders = parsed.headers;
+      currentRows = parsed.rows.map((row, rIdx) =>
+        row.map((cell, cIdx) => {
           const key = `${rIdx}_${cIdx}`;
           return userEdits.has(key) ? userEdits.get(key)! : cell;
-        });
-      });
+        })
+      );
       renderTableGrid();
       syncSerializedText();
       updateSumCheck();
@@ -594,20 +531,20 @@ export class ExportModal {
     // 还原按钮
     resetEditsBtn?.addEventListener('click', () => {
       userEdits.clear();
-      updateFullDisplay();
+      void updateFullDisplay();
     });
 
     datasetSelect.addEventListener('change', () => {
       userEdits.clear();
-      updateFullDisplay();
+      void updateFullDisplay();
     });
-    sortBySelect.addEventListener('change', updateFullDisplay);
-    sortOrderSelect.addEventListener('change', updateFullDisplay);
-    digitsInp.addEventListener('input', updateFullDisplay);
+    sortBySelect.addEventListener('change', () => void updateFullDisplay());
+    sortOrderSelect.addEventListener('change', () => void updateFullDisplay());
+    digitsInp.addEventListener('input', () => void updateFullDisplay());
     colSepSelect.addEventListener('change', syncSerializedText);
-    naFillSelect.addEventListener('change', updateFullDisplay);
+    naFillSelect.addEventListener('change', () => void updateFullDisplay());
 
-    updateFullDisplay();
+    void updateFullDisplay();
     // 自检行只复述后端结论，所以必须真的去问一次后端（不能等用户点按钮）。
     void refreshQa();
 
@@ -641,7 +578,9 @@ export class ExportModal {
       // （序列化异常、Blob 构造被环境拒绝、移动端内存不足）。失败必须让用户看见，
       // 不能停在"点了没反应"（本仓 §2：禁止静默兜底）。
       try {
-        const csvStr = serializeMatrixToText(currentHeaders, currentRows);
+        // 下载的就是 textarea 里那串（= 面板显示的 CSV）：无编辑时它就是后端
+        // `export.csv` 的原文，逐字节一致；有用户编辑时是该编辑后的重序列化。
+        const csvStr = textarea.value;
         const blob = new Blob([csvStr], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
