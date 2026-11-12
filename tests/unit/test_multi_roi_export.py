@@ -11,6 +11,8 @@ Plus L3 check on real Hoya three-ROI export.
 
 from __future__ import annotations
 
+from straditize_core.session_parts.export_docs import CSV_MISSING_NOTICE
+
 import base64
 import io
 from pathlib import Path
@@ -232,3 +234,20 @@ def test_l3_three_rois_reporting():
     assert "data/charcoal.csv" in data_files
     assert "data/main_pollen.csv" in data_files
     assert "data/minor_taxa.csv" in data_files
+
+
+def test_tar_readme_states_missing_data_semantics():
+    """导出面板拿到的 tar，其 README 必须与工程包同一份缺测说明。
+
+    实测过两次分叉：README 有两个写入点（`project.py` / `export.py`），
+    只改一处时，用户在导出面板下载的 tar 里没有缺测说明，仍按"never NA"理解数据。
+    """
+    session = _setup_two_rois_session()
+    tar_res = session.export_multi_tar()
+    assert tar_res["success"] is True
+
+    with tarfile.open(fileobj=io.BytesIO(base64.b64decode(tar_res["data"]))) as tf:
+        readme = tf.extractfile("README.txt").read()
+
+    assert CSV_MISSING_NOTICE in readme, "tar README 必须包含缺测语义说明"
+    assert b"never NA" not in readme, "不得再出现 never-NA 断言"

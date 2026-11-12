@@ -2,15 +2,7 @@
 
 from __future__ import annotations
 
-# 工程包 data.csv 的缺测语义说明。**必须**同时讲清"窗口内 0.0"与"整列 NA"两件事：
-# 旧文案写的是「unobserved taxa are strictly 0.0 (never NA)」，把两种情况混成一句，
-# 结果是用户把"没测到"当成"测到 0 丰度"拿去算百分比与对数和。
-CSV_MISSING_NOTICE = (
-    b"SCIENTIFIC NOTICE (missing-data semantics):\n"
-    b"  1) gaps INSIDE a column's digitizing window are written 0.0 = true zero abundance.\n"
-    b"  2) columns never digitized / not X-calibrated are written NA = NO DATA, not zero.\n"
-    b"  3) never treat NA as 0; handle NA before log transforms, then add a pseudocount.\n"
-)
+from .export_docs import CSV_MISSING_NOTICE
 
 import base64
 import copy

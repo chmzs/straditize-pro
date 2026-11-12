@@ -8,6 +8,8 @@ Strictly adheres to:
 
 from __future__ import annotations
 
+from .export_docs import CSV_MISSING_NOTICE
+
 import base64
 import io
 import json
@@ -443,7 +445,7 @@ class ExportMixin:
                 f"data/<roi>.csv       - Per-ROI isolated scientific CSV tables\n"
                 f"plot_strat.R         - R plotting script with sections for each ROI\n"
                 f"manifest.json        - Version metadata and ROI hierarchy\n"
-            ).encode("utf-8")
+            ).encode("utf-8") + b"\n" + CSV_MISSING_NOTICE
             ti_readme = tarfile.TarInfo(name="README.txt")
             ti_readme.size = len(readme)
             ti_readme.mtime = int(time.time())
