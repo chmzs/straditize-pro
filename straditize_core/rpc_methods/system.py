@@ -220,8 +220,13 @@ def _payload_zero_state(
         "isDesktopMode": getattr(session, "is_desktop_mode", False),
         "roi": None,
         "rois": [],
+        # 同一概念曾出现两种拼写（camel 与 snake），外部读者各读一种 → 谁读到不存在的
+        # 那个就得到 undefined，把"没变"当成缺陷。这里两种都发、值相等（见
+        # docs/JSON_RPC_SPECIFICATION.md §4B）。权威拼写仍是 camel，snake 为兼容别名。
         "primaryRoiId": None,
+        "primary_roi_id": None,
         "activeRoiId": None,
+        "active_roi_id": None,
         "calibration": {
             "isCalibrated": False,
             "top_px": None,
@@ -398,7 +403,9 @@ def _payload_loaded(
         ),
         "rois": rois,
         "primaryRoiId": getattr(session, "primary_roi_id", None),
+        "primary_roi_id": getattr(session, "primary_roi_id", None),
         "activeRoiId": getattr(session, "active_roi_id", None),
+        "active_roi_id": getattr(session, "active_roi_id", None),
         "calibration": {
             "isCalibrated": bool(session.is_calibrated and session.depth_calib),
             "top_px": depth_calib.get("top_px"),

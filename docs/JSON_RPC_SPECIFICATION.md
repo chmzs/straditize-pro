@@ -1131,3 +1131,15 @@ async function rpcCall(method: string, params: Record<string, any> = {}) {
 const imageInfo = await rpcCall("core.loadImage", { image_path: "path/to/img.png" });
 const columns = await rpcCall("core.detectColumns", { data_xlim: [300, 1800], data_ylim: [500, 1300] });
 ```
+
+### 4.10c `straditize.getDiagramData` — ROI 标识的两种拼写
+
+`primaryRoiId` / `activeRoiId` 是**权威拼写**；`primary_roi_id` / `active_roi_id` 是**兼容别名**，
+两者在同一载荷里同时存在且值相等（`tests/unit/test_diagram_payload_roi_keys.py` 钉住）。
+
+之所以要同时给：`roi.list` 返回的是 snake（`primary_roi_id`），而本载荷曾只有 camel，
+外部读者各按一种拼写读，读到不存在的那个就得到 `undefined`，把"值没变"误判成"功能没生效"
+（本轮实测产生过两次假警报：一次前端 e2e、一次独立黑盒核验）。
+
+新增标识字段时：**两种拼写同批加**，不要只加一种；判定"某动作是否生效"必须读与本动作
+同一来源的那个键，不要跨方法混读。
