@@ -4,6 +4,7 @@ import { Sidebar } from '../components/Sidebar';
 import { Inspector } from '../components/Inspector';
 import { Toolbar } from '../components/Toolbar';
 import { DataRoi, HistorySnapshot, LineCandidate, LineMaskStroke } from '../types/pollen';
+import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
 
 export interface CleanupManagerCallbacks {
   setHudNotice: (text: string, duration?: number) => void;
@@ -210,6 +211,33 @@ export class CleanupManager {
       const res = await this.rpcClient.setLineStrokes(this.canvasComponent.data.line_strokes, roiId);
       this.applyCleanupState(res);
       const total = this.canvasComponent.data.line_strokes.length;
+      const strokesAfter = [...this.canvasComponent.data.line_strokes];
+      const strokesBefore = strokesAfter.slice(0, -1);
+      // U5：单笔人工修正可撤销。`setLineStrokes` 是**全量覆盖**语义，所以逆操作 =
+      // 把"这一笔之前的那份列表"整体写回去（不需要后端提供"删最后一笔"的接口）。
+      undoStack.push({
+        label: `人工修正笔迹（${stroke.mode === 'erase' ? '擦除' : '补线'}）`,
+        inverse: async () => {
+          const res = await this.rpcClient.setLineStrokes(strokesBefore, roiId);
+          this.canvasComponent.data.line_strokes = [...strokesBefore];
+          this.applyCleanupState(res);
+          this.canvasComponent.requestRender();
+        },
+        forward: async () => {
+          const res = await this.rpcClient.setLineStrokes(strokesAfter, roiId);
+          this.canvasComponent.data.line_strokes = [...strokesAfter];
+          this.applyCleanupState(res);
+          this.canvasComponent.requestRender();
+        },
+        verify: async (dir) => {
+          const data = (await this.rpcClient.getDiagramData()) as unknown as {
+            line_strokes?: unknown[];
+          };
+          const expected = dir === 'inverse' ? strokesBefore.length : strokesAfter.length;
+          return (data.line_strokes?.length ?? 0) === expected;
+        },
+      });
+      refreshUndoButtons({ canUndo: true, canRedo: false });
       this.callbacks.setHudNotice(
         stroke.mode === 'erase'
           ? `已擦除该处误标（人工修正共 ${total} 条）。`

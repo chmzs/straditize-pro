@@ -23,9 +23,11 @@ export interface UndoableOp {
   forward?: () => Promise<void>;
   /**
    * 可选复核：撤销/重做后读一次后端，确认状态真的到了预期。
+   * 参数 `direction` 说明这次是回退（`inverse`）还是重做（`forward`）——
+   * 有些动作两者的期望值不同（例如"全量覆盖"型的笔迹列表）。
    * 返回 false 时栈**不吃掉**这条操作（用户可以重试或报告）。
    */
-  verify?: () => Promise<boolean>;
+  verify?: (direction: 'inverse' | 'forward') => Promise<boolean>;
 }
 
 export interface UndoState {
@@ -85,7 +87,7 @@ export class UndoStack {
     this.busy = true;
     try {
       await op.inverse();
-      if (op.verify && !(await op.verify())) return false;
+      if (op.verify && !(await op.verify('inverse'))) return false;
       this.undoOps.pop();
       if (op.forward) this.redoOps.push(op);
       this.emit();
@@ -104,7 +106,7 @@ export class UndoStack {
     this.busy = true;
     try {
       await op.forward();
-      if (op.verify && !(await op.verify())) return false;
+      if (op.verify && !(await op.verify('forward'))) return false;
       this.redoOps.pop();
       this.undoOps.push(op);
       this.emit();
