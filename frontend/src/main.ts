@@ -1,6 +1,8 @@
 import './style.css';
 import { RpcClient } from './services/RpcClient';
 import { HistoryManager } from './core/HistoryManager';
+import { undoStack } from './core/undoRuntime';
+import { makeCalibrationUndo } from './core/undoActions';
 import { GeologyCanvas } from './components/GeologyCanvas';
 import { handleTickPicked } from './components/steps/XTicksPanel';
 import { Toolbar } from './components/Toolbar';
@@ -502,9 +504,13 @@ async function bootstrap() {
     marks: Point2D[],
     values: number[],
     unit: string,
-    primaryAxis: 'depth' | 'age' = 'depth'
+    primaryAxis: 'depth' | 'age' = 'depth',
+    recordUndo = true
   ): Promise<void> {
     const cal = canvasComponent.data.calibration;
+    // 撤销用的"改前快照"取**后端权威值**，不取前端镜像：镜像由 `res.canvas` 拼成，
+    // 未必带 `isCalibrated`（实测撤销按钮 title 始终是静态文案 ⇒ 没入栈 ⇒ 守卫误判"未标定"）。
+    const calBefore = ((await rpcClient.getDiagramData()) as any)?.calibration;
     try {
       const res = await rpcClient.calibrateDepthAxis(
         [
@@ -524,6 +530,52 @@ async function bootstrap() {
         canvasComponent.data.roi
       );
       canvasComponent.setYCalibMarks(marks);
+      // U2：标定登记为可撤销动作。逆操作 = 用**改前的五点**重新标一次（同一个
+      // applyDepthCalibration 通道，recordUndo=false 防止递归压栈）；verify 读后端。
+      if (recordUndo) {
+        const snap = (o: any) => ({
+          isCalibrated: Boolean(o?.isCalibrated ?? o?.is_calibrated),
+          topPx: Number(o?.top_px ?? o?.topPx ?? 0),
+          topValue: Number(o?.top_cm ?? o?.topValue ?? 0),
+          bottomPx: Number(o?.bottom_px ?? o?.bottomPx ?? 0),
+          bottomValue: Number(o?.bottom_cm ?? o?.bottomValue ?? 0),
+          unit: String(o?.unit ?? unit),
+          primaryAxis: (o?.primaryAxis ?? o?.primary_axis ?? primaryAxis) as 'depth' | 'age',
+        });
+        const prevSnap = snap(calBefore ?? previous);
+        const nextSnap = snap(res.canvas);
+        // 逐框填值会触发多次提交，其中有"值与后端相同"的空转提交（prev === next）。
+        // 空转不入栈：否则栈顶是一条 no-op，撤销时"写回同样的值"，用户看到的就是"点了没反应"。
+        const sameCal =
+          prevSnap.topPx === nextSnap.topPx &&
+          prevSnap.topValue === nextSnap.topValue &&
+          prevSnap.bottomPx === nextSnap.bottomPx &&
+          prevSnap.bottomValue === nextSnap.bottomValue &&
+          prevSnap.unit === nextSnap.unit &&
+          (prevSnap.primaryAxis ?? 'depth') === (nextSnap.primaryAxis ?? 'depth');
+        // 「标定前本来没标定」这种情况**没有逆操作**：后端没有"清除标定"的 RPC，
+        // 用 0/0 去反标只会造出一组伪造读数。按设计不入栈（撤销按钮回落到旧行为）。
+        if (!sameCal && prevSnap.isCalibrated) {
+          undoStack.push(
+            makeCalibrationUndo(
+              prevSnap,
+              nextSnap,
+              (patch) =>
+                applyDepthCalibration(
+                  [
+                    { x: marks[0].x, y: patch.topPx },
+                    { x: marks[1].x, y: patch.bottomPx },
+                  ],
+                  [patch.topValue, patch.bottomValue],
+                  patch.unit,
+                  patch.primaryAxis,
+                  false
+                ),
+              async () => snap(((await rpcClient.getDiagramData()) as any).calibration)
+            )
+          );
+        }
+      }
       if (workflowController.getCurrentStage() === 3) {
         canvasComponent.setToolMode('ycalib');
       } else {
