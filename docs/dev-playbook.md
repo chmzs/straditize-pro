@@ -96,6 +96,23 @@ pixi run dev                       # == pixi run python support/dev_up.py；后�
 | `Start-Process` 报"字典中的关键字 HTTPS_PROXY / https_proxy" | 两个大小写变量并存 | 同上，或先 `Remove-Item Env:https_proxy` |
 | 查询 bundle 目录"缺失" | DSH 双层解析：profile `node_modules` + **dsh 安装目录** `node_modules` | 12 个 `@deepseek-ai/*` core bundle 在后者，别误判 |
 
+### 3-8 worktree 里跑不了 e2e（2026-11-12 实测）
+
+- **症状**：`npx playwright test` 报
+  `Process from config.webServer was not able to start. Exit code: 1`，
+  看起来像"用例全红"，其实**一条都没跑**。
+- **真因**：`frontend/playwright.config.ts` 的 `webServer` 是
+  `pixi run python support/serve_e2e_backend.py`；pixi 会先对**工作树路径**做一次 editable 安装
+  （`straditize-pro @ file:///…/.agents/worktrees/<name>`），uv 的 build cache 在
+  `get_requires_for_build_editable.txt` 上 `PermissionError`，后端起不来。
+- **三条规则**：
+  1. **e2e 只在主 checkout 跑**；worktree 只用于改代码与跑单测（`pixi run python -m pytest`）。
+  2. 多会话并发用**串行化 + 各自端口**隔离（`STRADITIZE_E2E_PORT=2301x`），
+     不要指望用 worktree 隔离 `frontend/dist` —— `dist` 属于主 checkout，
+     worktree 里跑 e2e 读到的是别人构建的产物。
+  3. 跑 e2e 前必须 `npm --prefix frontend run build`，且**先看 BUILD 的退出码**：
+     `BUILD≠0` 时 e2e 的"通过"是旧 `dist` 给的假绿（已实测踩过两次）。
+
 ## 4 端口分配约定
 
 | 端口 | 用途 | 谁在用 | 备注 |

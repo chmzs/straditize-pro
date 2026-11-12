@@ -308,7 +308,47 @@ fig3 1~2px —— 同组各列差 2px 是常态，故轴粗支持**列级覆盖*
 
 ---
 
+### 6.5 多 ROI 语义：标定作用域与导出口径（2026-11-12）
+
+一个工程可以有多个取数区（ROI），各自的 `xlim/ylim` 与列集合互不相干；但**深度方向只有一把尺**。
+
+- **深度标定为全图共用。** `depth_calib` / `y_scale` / `is_calibrated` 是**会话级**属性，
+  不在 ROI 字典里（`session_parts/roi.py` 全文无 `depth_calib`）。语义上正确：层位深度是
+  剖面图的纵轴，与"横向取哪几段数据"无关。因此**多 ROI 不需要、也不允许各自标定深度**；
+  步骤 3 的标定对所有分区同时生效。
+- **导出以主 ROI 为准。** `data.csv` 恒等于主 ROI 的那张分表，两者逐字节相同
+  （判据见 `frontend/e2e/export.spec.ts` 的 tar 比对）。主 ROI 由 `roi.setPrimary` 指定，
+  切换后 `data.csv` 随之改变——`data.csv` **不是**所有 ROI 的合并表。
+- **per-ROI 分表命名规则**（`session_parts/export.py:393-411`）：
+  - 用户**已命名**的 ROI → 用该名字（`data/<名字>.csv`）；
+  - **未命名**的 ROI → `data/data_roi_<序号>.csv`，序号从 **1** 起、按导出时的 ROI 顺序分配；
+  - 载图时自动建的取数区被标为 `name_source="default"`（`session_parts/core.py:510`），
+    于是**单分区**工程的包内命名是稳定的 `data_roi_1.csv`，不会因为"名字是 pollen 还是默认"
+    而在两次导出间跳变。
+  - 判据：`frontend/e2e/` 的 per-ROI 命名用例 + 金丝雀；反向验证为把已命名 ROI 也改走序号时变红。
+
+---
+
 ## 7. 分列 → 数字化的数据流
+
+### 7.0 载荷命名：ROI 标识的两种拼写（兼容别名，2026-11-12）
+
+同一个"主 ROI"在报文里有 **camel 与 snake 两种拼写，值恒相等**：
+
+| 出口 | 键 | 证据 |
+| --- | --- | --- |
+| `straditize.getDiagramData` | `primaryRoiId` **和** `primary_roi_id` 同时下发 | `rpc_methods/system.py:405-406` |
+| 同上（零状态） | 两键同时存在且同为 `null` | `rpc_methods/system.py:226-227` |
+| `roi.list` | 只有 `primary_roi_id`（snake）+ `active_roi_id` | `session_parts/roi.py` 的 `roi_list` |
+
+规则：
+
+1. **新代码读 snake**（`primary_roi_id`）——它是会话属性名，也是 `roi.list` 的拼写。
+2. camel 是**兼容别名**，不得只写一个：抓 `getDiagramData` 的旧代码按 camel 读，
+   只发 snake 会让它静默拿到 `undefined`（历史事故：`step-visibility.spec.ts` 曾踩过）。
+3. 增删键必须同步 `docs/JSON_RPC_SPECIFICATION.md` 与 `frontend/e2e/contract.spec.ts`
+   （契约 lane 会对着真实 payload 反查未声明键）。
+
 
 ```text
 core.loadImage          → 载入图像 + suggested_roi（仅区域）
@@ -318,7 +358,7 @@ algorithm.detectLineCandidates → ROI 内的候选干扰线几何（status=cand
 algorithm.applyLineRemoval → 重新合成线掩膜 + B 键 QC 叠加层（不改输入）
 core.digitize(col)      → 该列曲线控制点（纯像素几何，线圈在 ROI 内并被线掩膜扣除）
 core.calibrateAxes      → y_scale（深度，来自用户两点）+ x_scales[col]（百分比）
-core.extractGridValues  → 按标准深度层位求交，未观测填 0.0（绝不输出 NA）
+core.extractGridValues  → 按标准深度层位求交；缺测写 NA（`na_rep="NA"`，export.py:401/436），缺测 ≠ 0
 core.exportData / project.save
 ```
 
