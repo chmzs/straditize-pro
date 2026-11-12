@@ -506,6 +506,11 @@ class CoreMixin:
             y1=sug["yMax"],
             composition=True,
         )
+        # 这个名字是**程序**给的（载图自动建的取数区），不是用户输入的：
+        # 标成 `default` 才能让导出侧把它当"未命名"处理（per-ROI CSV 用 data_roi_1）。
+        # 若标成 `user`，用户手打的 `charcoal`/`湖泊A` 就会被"统一命名"波及——两者语义不同。
+        if getattr(self, "rois", None):
+            self.rois[-1]["name_source"] = "default"
         return sug
 
     def switch_pdf_page(self, page_number: int = 1) -> dict[str, Any]:

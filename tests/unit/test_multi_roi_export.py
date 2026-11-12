@@ -281,3 +281,28 @@ def test_unnamed_roi_csv_files_use_data_roi_sequence():
     assert "data/data_roi_1.csv" in names, names
     assert "data/data_roi_2.csv" in names, names
     assert "data.csv" in names, names
+
+
+def test_auto_created_roi_uses_sequence_name_not_pollen():
+    """载图自动建的取数区不是"用户命名"，per-ROI CSV 必须叫 data_roi_1.csv。
+
+    缺陷背景：`_ensure_default_roi` 用 `roi_create(name="pollen")` 建默认区，而被当成
+    `name_source="user"`，于是单分区工程导出 `data/pollen.csv` —— 与多分区的
+    `data_roi_<序号>` 风格不一致，下游脚本要为"单/多分区"写两套路径规则。
+    用户**手打**的名字（charcoal / 湖泊A）仍必须用名字，见 criterion_5。
+    """
+    import io  # noqa: PLC0415
+    import tarfile  # noqa: PLC0415
+
+    from straditize_core.session import StraditizeSession  # noqa: PLC0415
+
+    session = StraditizeSession()
+    session.load_image("straditize_core/assets/tutorials/hoya-del-castillo.png")
+    roi = session.rois[0]
+    assert roi.get("name_source") == "default", roi
+    res = session.export_multi_tar()
+    with tarfile.open(fileobj=io.BytesIO(base64.b64decode(res["tar_base64"]))) as tf:
+        names = tf.getnames()
+    assert "data/data_roi_1.csv" in names, names
+    assert "data/pollen.csv" not in names, names
+    assert "data.csv" in names, names
