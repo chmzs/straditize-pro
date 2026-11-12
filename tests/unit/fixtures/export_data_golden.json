@@ -550,7 +550,7 @@
   },
   "no_data": {
    "code": -32001,
-   "message": "No digitized data available to export."
+   "message": "没有任何可取数的列：既没有手工控制点，也没有可数字化的图像。系统不会用等距采样的替代数据充数。"
   },
   "parquet_needs_path": {
    "code": -32001,
