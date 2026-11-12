@@ -62,7 +62,27 @@ def export_scientific_xlsx(
     bio.seek(0)
     wb = openpyxl.load_workbook(bio)
     _style_workbook(wb)
+    _activate_first_data_sheet(wb)
     return _serialize_workbook(wb, output_path)
+
+
+#: 非数据 sheet 的名字前缀。打开工作簿时应停在**数据页**，而不是元信息/说明页。
+_DOC_SHEET_PREFIXES = ("meta", "readme", "qc", "doc", "说明", "元数据")
+
+
+def _activate_first_data_sheet(wb: openpyxl.Workbook) -> None:
+    """把活动页设为**第一张数据页**。
+
+    旧行为：sheet 顺序是 meta_info → 数据 → readme，`wb.active` 保持 0，
+    用户打开文件先看到元信息表，得手动切到数据页才能用。数据页在前只是"看起来"
+    对，实际落点由 active 决定。
+    """
+    for index, worksheet in enumerate(wb.worksheets):
+        name = (worksheet.title or "").strip().lower()
+        if name.startswith(_DOC_SHEET_PREFIXES):
+            continue
+        wb.active = index
+        return
 
 
 def _format_authors(raw: Any) -> str:
