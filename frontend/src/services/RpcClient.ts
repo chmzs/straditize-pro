@@ -412,11 +412,18 @@ export class RpcClient {
       }
 
       // ---- 3. 解析层：响应不是合法 JSON-RPC → 报错并标记离线 ----
+      // 解析失败 ≠ 连接断开：后端可能返回了非法 JSON（典型：pandas NaN 直出成
+      // 字面量 `NaN`，JSON 规范不允许）。复用 raiseBackendLost 会把人引去查网络，
+      // 所以这里单独给错误，并带上响应片段供定位；同时**不**把客户端标记为离线。
       let rpcRes: JsonRpcResponse<TResult>;
+      let rawBody = '';
       try {
-        rpcRes = await response.json();
-      } catch (err) {
-        this.raiseBackendLost(method, err);
+        rawBody = await response.text();
+        rpcRes = JSON.parse(rawBody) as JsonRpcResponse<TResult>;
+      } catch {
+        throw new Error(
+          `后端响应不是合法 JSON（${method}）：${rawBody.slice(0, 160) || '<空响应>'}`
+        );
       }
 
       // ---- 4. 业务层：后端已明确应答错误 → 冒泡给调用方，绝不静默返回假数据 ----

@@ -13,6 +13,7 @@ from .export_docs import CSV_MISSING_NOTICE
 import base64
 import io
 import json
+import math
 import os
 import tarfile
 import time
@@ -854,12 +855,37 @@ class ExportMixin:
             "rows_count": len(df),
             "columns_count": len(df.columns),
             "columns": list(df.columns),
-            "data": df.head(50).to_dict(orient="records"),
+            "data": self._json_safe_records(df.head(50)),
             "file_path": saved_path,
             "path": saved_path,
             "csv": csv_string,
             "csv_content": csv_string,
         }
+
+    @staticmethod
+    def _json_safe_records(frame: Any) -> list[dict[str, Any]]:
+        """把 DataFrame 转成**合法 JSON** 的记录列表。
+
+        pandas 的 NaN 经 `to_dict(orient="records")` 会原样留在 dict 里，而
+        `json.dumps` 默认 `allow_nan=True` 会把它写成字面量 `NaN` —— 那不是合法
+        JSON。浏览器的 `Response.json()` 会抛 SyntaxError，前端再把解析失败当成
+        "与后端的连接已断开"，把人引去查网络（实测：导出面板打不开 + 连接断开提示，
+        真实原因是某列某层位是 NaN）。
+
+        这里把缺测转成 `None`（JSON `null`），与"缺测 ≠ 0"的既有语义一致。
+        """
+        records = frame.astype(object).where(frame.notnull(), None).to_dict(
+            orient="records"
+        )
+        # `inf`/`-inf` 也是非法 JSON（`allow_nan=False` 会抛 Out of range）。
+        # 它们同样表示"这个数没有意义"，按缺测处理。
+        return [
+            {
+                key: (None if isinstance(value, float) and not math.isfinite(value) else value)
+                for key, value in record.items()
+            }
+            for record in records
+        ]
 
     def _ensure_export_column_points(self) -> None:
         """没有逐行点时先补出来：控制点合成 > 现场数字化 > 取数区等距采样。
