@@ -1,4 +1,5 @@
 import { DiagramData, ColumnGroup } from '../../types/pollen';
+import { countCalibratedColumns } from '../../core/calibProgress';
 import type { RulerGeometry } from '../../types/ruler';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
@@ -237,7 +238,7 @@ export function render(data: DiagramData): string {
   const activeCol = cols.find((c) => c.id === data.activeTaxaId) || cols[0];
 
   const totalCols = cols.length;
-  const calibratedCols = cols.filter((c) => c.x_ticks && c.x_ticks.length === 2).length;
+  const calibratedCols = countCalibratedColumns(cols);
   const pct = Math.round((calibratedCols / totalCols) * 100);
 
   // 解析当前 ROI 与分组结构
