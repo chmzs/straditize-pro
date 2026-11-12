@@ -985,7 +985,10 @@ class ExportMixin:
             if output_path:
                 out_dir = os.path.dirname(os.path.abspath(output_path))
                 os.makedirs(out_dir, exist_ok=True)
-                with open(output_path, "w", encoding="utf-8") as f:
+                # newline="" 必须显式给：pandas 的 to_csv 已经用 "\r\n" 结尾，
+                # 文本模式默认还会把 "\n" 再翻译成 "\r\n"，落盘就成了 "\r\r\n"。
+                # 下游 R/Excel 读到行尾多余 \r 会把最后一列的值/列名带上控制符。
+                with open(output_path, "w", encoding="utf-8", newline="") as f:
                     f.write(csv_string)
                 saved_path = os.path.abspath(output_path)
         elif fmt == "parquet":
