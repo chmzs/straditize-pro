@@ -14,6 +14,8 @@ extra-index-urls = ["https://pypi.org/simple"]
 [tasks]
 app = "python -m straditize_core.rpc_server"                                   # 启动现代版应用 (浏览器 + JSON-RPC + WebMCP + 退出)
 frontend-dev = "npm --prefix frontend run dev"                            # 启动现代版前端开发服务器
+doctor = "python support/dev_doctor.py"                                   # 环境自检（只读）：端口/锁/pytest入口/dist/ego/磁盘，PASS-WARN-FAIL
+dev = "python support/dev_up.py"                                          # 后端:8765 + vite:5173 一条命令起，改 src 即热更新（坑见 docs/dev-playbook.md）
 record-tutorials = "python scripts/record_tutorials.py"                   # 自动录制 8 步工作流与三大模态框真机动图与视频
 # ── 复跑入口（#11 治理：要长期复跑的脚本升为正式任务，升级即入库）────────────
 # 这些曾散落在 docs/findings/README.md §2 里靠手敲命令；升为任务后
@@ -82,7 +84,7 @@ depends-on = ["lint-ruff", "lint-consistency", "lint-rpc-doc"]
 
 [tasks.lint-ruff]
 description = "Run ruff checks"
-cmd = "ruff check straditize_core tests"
+cmd = "ruff check straditize_core tests support"
 
 [tasks.lint-consistency]
 description = "核对跨文件必须一致的两端：签名/类型标注/package-data/测试收集/阶段编号/注释编号"
