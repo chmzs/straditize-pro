@@ -311,7 +311,7 @@
     ],
     [
      "Pollen Matrix Standard",
-     "Depths in 1st column. Unobserved taxa strictly filled as 0.00 (never NA)."
+     "Depths in 1st column. In-window gaps = 0.00 (true zero); never-digitized / uncalibrated columns are left EMPTY = no data, not zero."
     ],
     [
      "LiPD Compatibility",

@@ -2,6 +2,7 @@
  "loaded_full": {
   "activeRoiId": "roi_1",
   "activeTaxaId": "roi_1_col01",
+  "active_roi_id": "roi_1",
   "calibration": {
    "bottom_cm": 320.0,
    "bottom_px": 869.0,
@@ -9383,6 +9384,7 @@
    }
   ],
   "primaryRoiId": "roi_1",
+  "primary_roi_id": "roi_1",
   "roi": {
    "xMax": 1330.0,
    "xMin": 330.0,
@@ -9397,7 +9399,7 @@
     "form_defaults": null,
     "id": "roi_1",
     "name": "pollen",
-    "name_source": "user",
+    "name_source": "default",
     "visible": true,
     "x_groups": [
      {
@@ -9437,6 +9439,7 @@
  "with_dropped_and_suspect": {
   "activeRoiId": "roi_1",
   "activeTaxaId": "roi_1_col01",
+  "active_roi_id": "roi_1",
   "calibration": {
    "bottom_cm": 320.0,
    "bottom_px": 869.0,
@@ -18834,6 +18837,7 @@
    }
   ],
   "primaryRoiId": "roi_1",
+  "primary_roi_id": "roi_1",
   "roi": {
    "xMax": 1330.0,
    "xMin": 330.0,
@@ -18848,7 +18852,7 @@
     "form_defaults": null,
     "id": "roi_1",
     "name": "pollen",
-    "name_source": "user",
+    "name_source": "default",
     "visible": true,
     "x_groups": [
      {
@@ -18888,6 +18892,7 @@
  "zero_state": {
   "activeRoiId": null,
   "activeTaxaId": "",
+  "active_roi_id": null,
   "calibration": {
    "bottom_cm": null,
    "bottom_px": null,
@@ -18923,6 +18928,7 @@
   "line_candidates": [],
   "line_strokes": [],
   "primaryRoiId": null,
+  "primary_roi_id": null,
   "roi": null,
   "rois": [],
   "selectedEntity": null,
