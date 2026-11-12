@@ -4,6 +4,7 @@ import { ImageDisplayMode } from '../core/Viewport';
 import { ToolMode } from '../types/pollen';
 import { WORKFLOW_STEP_ITEMS } from '../types/workflow';
 import { t } from '../i18n';
+import { refreshUndoButtons } from '../core/undoRuntime';
 
 export interface ToolbarCallbacks {
   onFit: () => void;
@@ -157,10 +158,13 @@ export class Toolbar {
   }
 
   public updateHistoryState(): void {
-    const undoBtn = this.element.querySelector('#btn-undo') as HTMLButtonElement;
-    const redoBtn = this.element.querySelector('#btn-redo') as HTMLButtonElement;
-    if (undoBtn) undoBtn.disabled = !this.history.canUndo();
-    if (redoBtn) redoBtn.disabled = !this.history.canRedo();
+    // 撤销/重做的可用状态**只有这一个写入口**：真回退栈（undoStack）+ 迁移期兜底（旧 history）。
+    // 曾经这里直接按 `history.canUndo()` 设 disabled，于是"栈里明明有可撤销动作、
+    // 按钮却是灰的"（U1 缺陷）。现在统一交给 refreshUndoButtons 决定。
+    refreshUndoButtons({
+      canUndo: this.history.canUndo(),
+      canRedo: this.history.canRedo(),
+    });
   }
 
   public render(): void {
