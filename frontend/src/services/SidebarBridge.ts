@@ -8,6 +8,7 @@ import { Toolbar } from '../components/Toolbar';
 // "Cannot access before initialization"。定义在 ProvenanceGate，main 只是转发。
 import { reportBackendFailure } from './ProvenanceGate';
 import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
+import { STAGE } from '../core/WorkflowStage';
 import { makeRenameUndo } from '../core/undoActions';
 
 export interface SidebarBridgeParams {
@@ -29,8 +30,14 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
       // 侧栏点选一列 = 选中"列"实体，让属性检查器切到**列属性**面板。
       // 历史缺陷：只有"画布上用选择工具(S)点列边界"才会设置 selectedEntity，
       // 而【删除列】按钮就在列属性面板里 ⇒ 从侧栏根本走不到，用户以为没有删除功能。
-      p.canvasComponent.data.selectedEntity = { type: 'column', id: taxaId };
-      p.getInspector()?.updateData(p.canvasComponent.data);
+      // 分列/命名阶段（STAGE.SPLIT）例外：那时右侧面板是"命名核对"，用户点一列是为了
+      // 看**命名进度与逐列高亮**，把面板整块换成"列属性"会把它顶掉（实测导致
+      // `#naming-sequential-highlight` 找不到，命名核对功能等于失效）。
+      // 其它阶段仍然点选即看列属性——那是 U6 给【删除列】开入口的做法。
+      if (p.canvasComponent.workflowStage !== STAGE.SPLIT) {
+        p.canvasComponent.data.selectedEntity = { type: 'column', id: taxaId };
+        p.getInspector()?.updateData(p.canvasComponent.data);
+      }
       p.updateFooter();
     },
     onToggleVisible: (taxaId: string) => {

@@ -93,7 +93,9 @@ test.describe('导出就绪清单与 .tar 归档', () => {
     // 基线的 roi_1 是 detect_columns 的产物，先逐条删干净（roi.remove 会级联删列）。
     const { rois } = await rpc<{ rois: Roi[] }>(page, 'roi.list');
     for (const roi of rois) {
-      await rpc(page, 'roi.remove', { roi_id: roi.id });
+      // 该 ROI 下有列，删除会级联删列且不可撤销，后端要求显式确认（-32002 = 未确认）。
+      // 这里是测试跟随新契约，不是放宽断言：级联结果仍由后续断言正面检查。
+      await rpc(page, 'roi.remove', { roi_id: roi.id, confirm_drop_columns: true });
     }
 
     const pollen = (

@@ -44,10 +44,11 @@ interface TsField {
  * 放进这张表意味着"债务被登记在案，且不再增长"：任何**新增**的名字不一致
  * 都会让本文件失败。要删条目，先让后端改名（那是契约变更，需同步前端/测试/文档）。
  */
-const KNOWN_WIRE_ALIASES: Record<string, string> = {
-  primary_roi_id: 'primaryRoiId',
-  active_roi_id: 'activeRoiId',
-};
+// 这两个键后端**两个拼写都发**（`system.py` 同时写 `primaryRoiId`/`primary_roi_id`、
+// `activeRoiId`/`active_roi_id`），所以它们不再是"前端单方面别名"，
+// 也就没有"要从前端删掉"的理由。表留空而不是删掉这段，是为了让下一个人知道
+// 这里**曾经**有别名问题、以及为什么现在没有了。
+const KNOWN_WIRE_ALIASES: Record<string, string> = {};
 
 /**
  * 由前端自己填充、**不属于 `getDiagramData` 契约**的字段。
