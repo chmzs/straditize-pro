@@ -211,9 +211,14 @@ calibration: { isCalibrated, top_px, top_cm,
 
 **未标定列一律不给数，三处同源**：
 1. 后端 `ColumnScale.px_to_value` 默认 `require_calibrated=True` → 抛错；
-2. 导出（`export_data` / `extract_grid_values`）写 `NA`，且与「个别层位缺测按 naFill」
-   分开 —— 前者是"没有这个数"，后者是地学惯例的 0；
-3. 界面（侧栏 / 悬停 / 导出预览）显示「未标定」或 `--`。
+2. 导出（`export_data` / `extract_grid_values`）**直接拒绝**：抛
+   `CALIBRATION_ERROR`（RPC 码 `-32003`），前端导出面板照常打开，表格区为空，
+   由行集 caption 说明「导出需要深度标定：请先完成步骤 3 的 Y 轴两点标定」。
+   2026-11 之前这里写整表 `NA`，那会让同一界面出现「左边说未标定、右边有数」、
+   也让用户拿到一张看起来正常其实全是 NA 的表，该通路已删除；
+3. 界面（侧栏 / 悬停 / 导出预览的 caption）显示「未标定」或 `--`。
+   导出预览不再渲染 NA 行集——"没有这个数"表现为**拒绝导出并说明原因**，
+   而不是一排 NA 冒充数据；「个别层位缺测按 naFill」仍是地学惯例的 0，两者语义不同。
 
 ### 6.3 无横轴列：两种制图约定与各自的折算
 
@@ -499,7 +504,9 @@ digitize 用 ink & ~grid_line_mask & roi_mask
 14. **标度只有一个真相源**：后端 `resolve_column_scale` + `scale_provenance`；
     前端禁止自行解析 `x_ticks` / `x_values` / `x_scales`（`CoordinateSystem.resolveColumnScale`
     是纯取值器，只读后端结论）。
-15. **未标定列一律不给数**，三处同源：`px_to_value` 默认抛错、导出写 `NA`、界面「未标定」。
+15. **未标定列一律不给数**，三处同源：`px_to_value` 默认抛错、
+    导出抛 `CALIBRATION_ERROR`（`-32003`，面板照常打开 + caption 说明原因，
+    **不再整表写 `NA`**）、界面「未标定」。
 16. **单列标定的端点由后端自检**（轴线右缘 + 检测到的末齿），前端不得传猜测像素；
     分列期写入的 `tickEndX` 不得参与任何标定。
 17. **无横轴列按 `source` 折算**（`column_width_as_unit` / `shared_scale`），
