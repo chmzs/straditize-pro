@@ -387,9 +387,27 @@ class DigitizeSessionMixin:
                 f"Column {col_index} has not been digitized yet. Call core.digitize first.",
             )
 
+        # 入口守卫：这两样都可能为空，缺了就直接 500（实测 `float() argument must be
+        # a string or a real number, not 'NoneType'` 冒成 -32603，用户只会看到
+        # "后端算法执行异常，请查看服务器控制台日志" —— 不可执行）。缺就说清缺什么。
+        ylim = getattr(self, "data_ylim", None)
+        if not ylim or len(ylim) < 2 or ylim[0] is None or ylim[1] is None:
+            raise JsonRpcError(
+                STATE_ERROR,
+                "缺少可读数据范围（data_ylim 为空）：请先在步骤 2 确认有效区，再增删控制点。",
+            )
+        usable_xs = [
+            p.get("x") for p in (self.column_points.get(col_index) or []) if p.get("x") is not None
+        ]
+        if not usable_xs:
+            raise JsonRpcError(
+                STATE_ERROR,
+                "该列缺少可读点（点的 x 全为空）：请先重新数字化该列，再加控制点。",
+            )
+
         ctrls = self.control_points.get(col_index, {})
-        y0 = round(self.data_ylim[0])
-        y1 = round(self.data_ylim[1])
+        y0 = round(ylim[0])
+        y1 = round(ylim[1])
 
         action = "updated"
         manual = dict(self._manual_store().get(col_index, {}))
@@ -417,9 +435,9 @@ class DigitizeSessionMixin:
 
         # Ensure boundary anchor points exist
         if y0 not in ctrls:
-            ctrls[y0] = float(self.column_points[col_index][0]["x"])
+            ctrls[y0] = float(usable_xs[0])
         if y1 not in ctrls:
-            ctrls[y1] = float(self.column_points[col_index][-1]["x"])
+            ctrls[y1] = float(usable_xs[-1])
 
         sorted_rows = sorted(ctrls.keys())
         sorted_x = [ctrls[r] for r in sorted_rows]
