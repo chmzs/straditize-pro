@@ -215,7 +215,7 @@ test.describe('导出就绪清单与 .tar 归档', () => {
     // 而默认 ROI 名是 `roi_<counter>`（`roi_create` 的计数器），用 `unnamed.name` 拼路径会与后端分歧。
     // 序号按 `name_source !== 'user'` 的**出现顺序**推（不硬写 1）：后端增减已命名 ROI 都不会假红。
     const archiveRois = (
-      await diagramData<{ rois: Array<{ name_source?: string }> }>(page)
+      await diagramData<{ rois: Array<{ name?: string; name_source?: string }> }>(page)
     ).rois;
     const unnamedRois = archiveRois.filter((r) => r.name_source !== 'user');
     const unnamedPos = unnamedRois.findIndex((r) => r.name === unnamed.name) + 1;
