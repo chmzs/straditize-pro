@@ -237,6 +237,13 @@ class TestExportReadinessAndOutputs(unittest.TestCase):
         self.assertFalse(r["ready"])
 
     def test_export_csv_header_matches_columns(self) -> None:
+        # 导出守卫要求深度标定（export.py 的 CALIBRATION_ERROR）。本用例钉的是
+        # 「表头列数 = 深度 + 分列数」，不是守卫本身，所以先在**真实 RPC** 上把
+        # Y 两点标定做掉，让它跑到内容层；断言一字未改。
+        self.session.calibrate_axes(
+            y_marks=[{"pixel": 511.0, "val": 0.0}, {"pixel": 1311.0, "val": 150.0}],
+            unit="cm",
+        )
         csv_text = self.session.export_csv()
         header = csv_text.splitlines()[0].split(",")
         self.assertEqual(header[0], "depth", "CSV 首列必须是深度")
