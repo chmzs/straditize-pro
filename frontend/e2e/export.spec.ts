@@ -210,13 +210,27 @@ test.describe('导出就绪清单与 .tar 归档', () => {
     ).toEqual([unnamed.name]);
 
     // ---- 归档不变式：data.csv 必须与主 ROI 的分表逐字节相同 ----
+    // 归档里“未命名 ROI”的分表名**不是** ROI 名：后端按“未命名之间的序号”生成
+    // `data_roi_<n>`（`straditize_core/session_parts/export.py:404-413`），与主 ROI 序列无关、因而可预测；
+    // 而默认 ROI 名是 `roi_<counter>`（`roi_create` 的计数器），用 `unnamed.name` 拼路径会与后端分歧。
+    // 序号按 `name_source !== 'user'` 的**出现顺序**推（不硬写 1）：后端增减已命名 ROI 都不会假红。
+    const archiveRois = (
+      await diagramData<{ rois: Array<{ name_source?: string }> }>(page)
+    ).rois;
+    const unnamedRois = archiveRois.filter((r) => r.name_source !== 'user');
+    const unnamedPos = unnamedRois.findIndex((r) => r.name === unnamed.name) + 1;
+    expect(
+      unnamedPos,
+      '前置：本用例的未命名 ROI 必须能在“未命名序列”里被找到（否则下面拼的名字没意义）'
+    ).toBeGreaterThan(0);
+    const unnamedMember = `data_roi_${unnamedPos}`;
     const pollenPrimary = await exportTar(page);
     expect([...pollenPrimary.keys()].sort()).toEqual(
       [
         'README.txt',
         'data.csv',
         'data/charcoal.csv',
-        `data/${unnamed.name}.csv`,
+        `data/${unnamedMember}.csv`,
         'data/pollen.csv',
         'image/original.png',
         'manifest.json',
