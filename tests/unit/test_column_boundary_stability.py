@@ -59,6 +59,14 @@ def test_horizons_outside_the_roi_export_as_empty_not_zero() -> None:
     session._init_cleanup()
     session.load_image(image_path=PLATE)
     cols = session.detect_columns(data_xlim=XLIM, data_ylim=[120, 500])
+    # 导出守卫要求深度标定（export.py 的 CALIBRATION_ERROR）。本用例钉的是
+    # 「取数区之外整行为空、而不是 0」，属于导出内容语义，所以先经真实 RPC 做
+    # Y 两点标定。端点取 1px = 1 深度单位：本用例下面的 samples 本来就是
+    # `depth = row_px`，标定只把「Y 轴读出什么」写成显式声明，不改任何期望值。
+    session.calibrate_axes(
+        y_marks=[{"pixel": 120.0, "val": 120.0}, {"pixel": 500.0, "val": 500.0}],
+        unit="cm",
+    )
     for i, c in enumerate(cols):
         left, right = float(c["start"]), float(c["end"])
         session.calibrate_column_xticks(
