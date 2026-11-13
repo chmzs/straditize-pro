@@ -38,3 +38,17 @@ def test_missing_data_ylim_raises_state_error() -> None:
         session.update_control_point(col_index=0, row=350, x=120.0)
     assert excinfo.value.code == STATE_ERROR
     assert "data_ylim" in str(excinfo.value)
+
+
+def test_dirty_none_control_points_are_filtered_not_crashed() -> None:
+    """历史脏状态（控制点值为 None）不许把 PchipInterpolator 打崩。
+
+    实测：`roi.groupUpdate{value_per_px}` 之后，旧控制点可能以 None 值残留；
+    写新控制点时 `sorted_x` 里混进 None → `float(None)` → -32603。
+    """
+    session = _session_with_bad_points()
+    session.column_points = {0: [{"row": 300, "x": 110.0}, {"row": 400, "x": 130.0}]}
+    session.control_points = {0: {300: None, 400: None}}
+    session.update_control_point(col_index=0, row=350, x=120.0)
+    # 脏值被剔除，剩下的是新点 + 两条边界锚点
+    assert all(v is not None for v in session.control_points[0].values())

@@ -439,8 +439,21 @@ class DigitizeSessionMixin:
         if y1 not in ctrls:
             ctrls[y1] = float(usable_xs[-1])
 
+        # 脏状态：`ctrls` 里可能有值为 None 的历史条目（例如组标度被清空后旧控制点残留）。
+        # 直接喂给 PchipInterpolator 会抛 `float() argument must be ... not 'NoneType'`，
+        # 被 handler 包成 -32603「后端算法执行异常」——用户完全无法执行。
+        # 这里剔除脏值，并在剩余点不足时给可执行提示。
+        dirty_rows = [r for r, v in list(ctrls.items()) if v is None]
+        for r in dirty_rows:
+            ctrls.pop(r, None)
+        if len(ctrls) < 2:
+            raise JsonRpcError(
+                STATE_ERROR,
+                "该列的控制点不足（剔除无效值后少于 2 个）：请重新数字化该列，或重新添加控制点。",
+            )
+
         sorted_rows = sorted(ctrls.keys())
-        sorted_x = [ctrls[r] for r in sorted_rows]
+        sorted_x = [float(ctrls[r]) for r in sorted_rows]
 
         all_rows = np.arange(y0, y1 + 1)
         if len(sorted_rows) >= 3 and PchipInterpolator is not None:
