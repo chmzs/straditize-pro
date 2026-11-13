@@ -536,8 +536,13 @@ export class ExportModal {
         return;
       }
       const source = ROWSET_SOURCE[datasetSelect.value] ?? '按当前数据集';
-      rowSetCaptionEl.style.color = 'var(--text-muted)';
-      rowSetCaptionEl.textContent = `${source}（${currentRows.length} 行）· 预览、复制与 CSV 下载都按此行集导出`;
+      // 未做 Y 标定时后端把深度列留空、另给 `row_px` 列（不再拿行号冒充深度）。
+      // 这件事必须在面板上说清，否则用户会以为"深度算出来是空的"。
+      const uncalibrated = currentHeaders[1] === 'row_px';
+      rowSetCaptionEl.style.color = uncalibrated ? 'var(--status-warning)' : 'var(--text-muted)';
+      rowSetCaptionEl.textContent = uncalibrated
+        ? `${source}（${currentRows.length} 行）· 深度列留空：尚未完成步骤 3 的 Y 轴标定，当前按像素行 row_px 对齐`
+        : `${source}（${currentRows.length} 行）· 预览、复制与 CSV 下载都按此行集导出`;
     };
 
     // 还原按钮

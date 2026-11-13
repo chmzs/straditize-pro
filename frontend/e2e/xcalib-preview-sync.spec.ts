@@ -80,6 +80,19 @@ test.describe('B 组斜率标定后，不刷新页面导出预览也必须出数
       updates: { value_per_px: SLOPE },
     });
 
+    // 必须让列真的从图像取到数：本 spec 只关心"标定后预览是否需要刷新"，
+    // 但预览的数据必须来自真实取数。此前这条用例是**靠旧的「等距采样造点」兜底**
+    // 才有数（整列常数、每条读数都等于列左缘），那个兜底已按第一不变量删除，
+    // 所以这里显式数字化前两列，让判据测的是"刷新同步"而不是"能不能造数"。
+    const cols = (
+      (await rpc(page, 'straditize.getDiagramData', {})) as {
+        columns: Array<{ col_index: number }>;
+      }
+    ).columns.slice(0, 2);
+    for (const col of cols) {
+      await rpc(page, 'core.digitize', { col_index: col.col_index });
+    }
+
     // 后端必须已经认这条标定（前置，不是判据）。
     await expect
       .poll(
