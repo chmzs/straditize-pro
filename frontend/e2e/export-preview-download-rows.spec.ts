@@ -315,7 +315,7 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
 test.describe('U-ROWS-01 行集为空时的说法', () => {
   // 未标定场景**故意**触发 -32003：面板会把原因写进 caption + toast，这条错误路径是
   // 本用例的被测行为，不是静默兜底，所以在用例文件里显式豁免。
-  // ⚠️ Playwright 的 `allowlists` 是**对象整体替换**：同一作用域写第二个 `test.use`
+  // 注意： Playwright 的 `allowlists` 是**对象整体替换**：同一作用域写第二个 `test.use`
   // 会把前一个整个覆盖掉（这里曾因此漏掉 notice，导致用例仍报未预期通知）。
   test.use({
     allowlists: {

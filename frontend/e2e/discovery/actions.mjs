@@ -177,7 +177,7 @@ export async function waitForStableFront(page, { samples = 2, frameBudget = 1200
 /**
  * `waitFor` 内部的轮询间隔。
  *
- * ⚠️ 只服务于"两次检查之间隔多久"，**不是**"等某个动作完成"。判断动作是否完成一律
+ * 注意： 只服务于"两次检查之间隔多久"，**不是**"等某个动作完成"。判断动作是否完成一律
  * 用 `waitForQuiet` / `waitForStableFront` / 显式状态谓词。这也是本文件里唯一允许
  * 出现 `setTimeout` 的地方。
  */
