@@ -156,6 +156,19 @@ function countQaCalls(page: Page): string[] {
 }
 
 test.describe('步骤 8 QA 覆盖范围：所有"有列"的分区', () => {
+  // 契约：点【导出】必然打开面板（未标定也开）。本文件的现场只造列与读数、不做
+  // Y 轴标定，于是面板一打开就发的 `export.csv` 被后端按 CALIBRATION_ERROR
+  // (`-32003`) 拒绝；该失败由 `ExportModal.updateFullDisplay` 写进行集 caption 并
+  // notifyError，用户可见，不是被静默吞掉。豁免只覆盖这一种病因（方法名 + 错误码 +
+  // 病因文案），别的方法失败、别的错误码仍判红；本文件的第二条用例（两分区都合格
+  // ⇒ 判绿）根本不打开面板，用不到这条豁免。
+  test.use({
+    allowlists: {
+      rpcError: [/export\.csv \[-32003\]/],
+      notice: [/数据集失败：.*导出需要深度标定/],
+    },
+  });
+
   test.beforeEach(async ({ page }) => {
     await resetBaseline(page);
   });
