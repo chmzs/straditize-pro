@@ -370,8 +370,11 @@ class JsonRpcDispatcher:
                 return None
             return {"jsonrpc": "2.0", "error": jre.to_dict(), "id": request.id}
         except Exception as ex:  # noqa: BLE001
+            # traceback 必须落在 **ERROR** 级：DEBUG 级在默认日志配置下不输出，
+            # 结果只剩一句 "float() argument must be ... not 'NoneType'"，既没有文件行号
+            # 也没有调用栈，定位一次要重跑一轮 e2e（本项目已实际发生过两次）。
             logger.error("Internal error executing %s: %s", request.method, ex)
-            logger.debug(traceback.format_exc())
+            logger.error(traceback.format_exc())
             if request.is_notification:
                 return None
             return {
