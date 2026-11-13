@@ -215,6 +215,14 @@ class TestMetadataAndLiPDSuite(unittest.TestCase):
         session = StraditizeSession()
         session.load_image(sample_key="hoya")
         session.detect_columns([315, 1946], [511, 1311])
+        # 导出守卫要求深度标定（export.py 的 CALIBRATION_ERROR）。本用例是整条
+        # 流水线的集成冒烟：DOI -> 年代-深度 -> 原生 ensemble -> XLSX & LiPD。
+        # 深度端点取 hoya ROI 的上下缘并映射到 0/150 cm，与下面的
+        # apply_depth_grid(0, 150, 10) 同一量程；断言一字未改。
+        session.calibrate_axes(
+            y_marks=[{"pixel": 511.0, "val": 0.0}, {"pixel": 1311.0, "val": 150.0}],
+            unit="cm",
+        )
         session.apply_depth_grid(start_depth=0, end_depth=150, step=10)
 
         # 1. Set paper metadata
