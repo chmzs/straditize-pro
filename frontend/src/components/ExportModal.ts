@@ -498,7 +498,15 @@ export class ExportModal {
         updateSumCheck();
         if (rowSetCaptionEl) {
           rowSetCaptionEl.style.color = 'var(--status-warning)';
-          rowSetCaptionEl.textContent = `当前行集为空（0 行）：${dataset} 数据集在此会话没有可导出的层位。请先在步骤 3 完成 Y 轴标定，或换一个数据集。`;
+          // 「未标定」与「行集为空」是两件事：前者是**导出被拒绝**，后者是没数据。
+          // 后端现在对未标定统一抛 CALIBRATION_ERROR（-32003），这里必须原样说明，
+          // 否则用户看到"空行集"会去换数据集，而真正要做的是一次 Y 轴标定。
+          const errText = String(err?.message ?? err ?? '');
+          const isCalibration =
+            err?.code === -32003 || errText.includes('深度标定') || errText.includes('calibration');
+          rowSetCaptionEl.textContent = isCalibration
+            ? '导出需要深度标定：请先完成步骤 3 的 Y 轴两点标定（当前未标定），完成后再回到这里导出。'
+            : `当前行集为空（0 行）：${dataset} 数据集在此会话没有可导出的层位。请先在步骤 3 完成 Y 轴标定，或换一个数据集。`;
         }
         notifyError(`读取 ${dataset} 数据集失败：${err?.message || err}`);
         return;
@@ -536,13 +544,8 @@ export class ExportModal {
         return;
       }
       const source = ROWSET_SOURCE[datasetSelect.value] ?? '按当前数据集';
-      // 未做 Y 标定时后端把深度列留空、另给 `row_px` 列（不再拿行号冒充深度）。
-      // 这件事必须在面板上说清，否则用户会以为"深度算出来是空的"。
-      const uncalibrated = currentHeaders[1] === 'row_px';
-      rowSetCaptionEl.style.color = uncalibrated ? 'var(--status-warning)' : 'var(--text-muted)';
-      rowSetCaptionEl.textContent = uncalibrated
-        ? `${source}（${currentRows.length} 行）· 深度列留空：尚未完成步骤 3 的 Y 轴标定，当前按像素行 row_px 对齐`
-        : `${source}（${currentRows.length} 行）· 预览、复制与 CSV 下载都按此行集导出`;
+      rowSetCaptionEl.style.color = 'var(--text-muted)';
+      rowSetCaptionEl.textContent = `${source}（${currentRows.length} 行）· 预览、复制与 CSV 下载都按此行集导出`;
     };
 
     // 还原按钮
