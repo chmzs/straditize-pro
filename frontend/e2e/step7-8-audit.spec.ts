@@ -18,6 +18,18 @@ import { expect, test } from './fixtures';
 import { gotoStage, resetBaseline, rpc } from './helpers';
 
 test.describe('步骤 7 & 8 逐动作可用性排查', () => {
+  // 契约：点【导出】必然打开面板（未标定也开）。本文件第二条用例刻意跑在未标定
+  // 基线上（判据正是「未标定必须显式化」），于是面板一打开就发的 `export.csv` 被
+  // 后端按 CALIBRATION_ERROR(`-32003`) 拒绝；该失败由
+  // `ExportModal.updateFullDisplay` 写进行集 caption 并 notifyError，用户可见。
+  // 豁免只覆盖这一种病因；第一条用例（步骤 7）不打开导出面板，用不到它。
+  test.use({
+    allowlists: {
+      rpcError: [/export\.csv \[-32003\]/],
+      notice: [/数据集失败：.*导出需要深度标定/],
+    },
+  });
+
   test.beforeEach(async ({ page }) => {
     await resetBaseline(page);
   });
