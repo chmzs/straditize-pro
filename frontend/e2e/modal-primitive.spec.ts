@@ -37,6 +37,19 @@ async function tokenColor(page: Page, token: string): Promise<string> {
 }
 
 test.describe('模态框原语与主题契约', () => {
+  // 未标定场景**故意**触发 -32003：面板会把它写成 caption 与 toast。
+  // 这条 console.error 是预期的（fixtures 的 telemetry 要求显式声明豁免，不是放宽判据）。
+  test.use({
+    allowlists: {
+      consoleError: [/导出需要深度标定/],
+      // `export.csv` 的 -32003 是本场景**被测的行为**（面板必须把它写成 caption），
+      // 不是被吞掉的失败：断言在 caption 上。
+      rpcError: [/导出需要深度标定/],
+      // 面板首次取数失败会弹一条通知（-32003），属未标定场景的被测行为。
+      notice: [/读取 .* 数据集失败/],
+    },
+  });
+
   test('设置弹窗：header/footer 的计算样式来自 token，且不得混挂 legacy 类名', async ({ page }) => {
     await resetBaseline(page);
     expect(
@@ -290,6 +303,12 @@ test.describe('模态框原语与主题契约', () => {
     await page.locator('#btn-export-csv').click();
     const exportDialog = page.locator('.wpd-export-dialog');
     await expect(exportDialog).toBeVisible();
+
+    // 未标定时面板照样打开，并在 caption 里说明原因（不能"点了没反应"）。
+    await expect(
+      exportDialog.locator('#wpd-rowset-caption'),
+      '面板必须说明为什么没有数据（需要步骤 3 的深度标定）'
+    ).toHaveText(/标定/);
 
     // 验证专属关闭 ID
     const closeBtn = exportDialog.locator('#export-modal-close');

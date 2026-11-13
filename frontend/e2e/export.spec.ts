@@ -162,6 +162,15 @@ test.describe('导出就绪清单与 .tar 归档', () => {
       ],
     });
 
+    // 导出前置：未完成步骤 3 的 Y 轴两点标定时，`export.tar` 会被 -32003 拒绝
+    // （「导出需要深度标定」），归档根本拿不到。本用例要比对归档内部字节，必须标定。
+    await rpc(page, 'core.calibrateAxes', {
+      y_marks: [
+        { px: 450, val: 0 },
+        { px: 1350, val: 40 },
+      ],
+    });
+
     return { pollen, charcoal, unnamed };
   }
 

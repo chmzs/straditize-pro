@@ -145,10 +145,29 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
         return;
       }
 
+      // 未标定时 `core.exportData` 必然 -32003：不必先发一条注定失败的请求再吞掉它。
+      // 直接开面板，由面板的 caption 说明"需要步骤 3 的深度标定"（用户看到同一句话，
+      // 但只花一次取数，也不会在控制台里留下一条被吞的 RPC 失败）。
+      const calibratedNow = Boolean(
+        (p.canvasComponent.data as { calibration?: { isCalibrated?: boolean } }).calibration
+          ?.isCalibrated
+      );
+      if (!calibratedNow) {
+        p.exportModal.open('', format);
+        return;
+      }
+
       try {
         const exportContent = await p.rpcClient.exportData(format);
         p.exportModal.open(exportContent, format);
       } catch (err) {
+        // **面板必须先出现**：取数失败表示"这份数据暂时导不出"，不是"点了没反应"。
+        // 旧实现在这里直接 return，用户点「导出」后界面毫无变化（实测：未标定时
+        // 后端回 -32003，`[RPC failure] 数据导出: 导出需要深度标定…` 之后
+        // `.wpd-export-dialog` 根本没被创建，面板里连"为什么"都无从显示）。
+        // 现在仍打开面板：面板自己会再取一次行集，并把原因写进
+        // `#wpd-rowset-caption`（见 `ExportModal.updateFullDisplay` 的 CALIBRATION 分支）。
+        p.exportModal.open('', format);
         p.reportBackendFailure('数据导出', err);
       }
     },

@@ -313,13 +313,15 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
 });
 
 test.describe('U-ROWS-01 行集为空时的说法', () => {
-  // 未标定 + `depth_grid`：后端按契约抛 `STATE_ERROR`（export.csv），前端把它翻成
-  // 面板上的「行集为空」说明 + 一条错误通知。这条**错误路径是故意触发的**，
-  // 不是静默兜底，所以在此显式豁免（豁免写在用例文件里可见）。
+  // 未标定场景**故意**触发 -32003：面板会把原因写进 caption + toast，这条错误路径是
+  // 本用例的被测行为，不是静默兜底，所以在用例文件里显式豁免。
+  // ⚠️ Playwright 的 `allowlists` 是**对象整体替换**：同一作用域写第二个 `test.use`
+  // 会把前一个整个覆盖掉（这里曾因此漏掉 notice，导致用例仍报未预期通知）。
   test.use({
     allowlists: {
-      notice: [/行集为空/, /读取 depth_grid 数据集失败/],
-      rpcError: [/export\.csv/],
+      consoleError: [/导出需要深度标定/],
+      rpcError: [/导出需要深度标定/, /export\.csv/],
+      notice: [/行集为空/, /读取 .* 数据集失败/],
     },
   });
 
@@ -331,7 +333,9 @@ test.describe('U-ROWS-01 行集为空时的说法', () => {
     page,
     telemetry,
   }) => {
-    await openExport(page);
+    // 本场景故意未标定 ⇒ 预览按定义 0 行，不能用要求 rows>0 的 openExport()。
+    await page.locator('#btn-export-csv').click();
+    await expect(page.locator('.wpd-export-dialog')).toBeVisible();
     await page.locator('#wpd-dataset-select').selectOption('depth_grid');
     await expect
       .poll(async () => (await readPreview(page)).rows.length, {
@@ -341,8 +345,11 @@ test.describe('U-ROWS-01 行集为空时的说法', () => {
       .toBe(0);
 
     const caption = await rowSetCaption(page);
-    expect(caption, '空行集必须被明确说明，不能显示成"0 行成功"').toContain('0 行');
-    expect(caption, '空行集必须给出下一步该做什么').toContain('标定');
+    // 本场景是**未标定**：后端在取数阶段就回 -32003，面板此时只有一条
+    // 「导出需要深度标定…」的说明（见 ExportModal 的 CALIBRATION 分支），
+    // 因此这里只钉"必须说明需要标定 / 给出下一步"。「空行集（0 行）」的
+    // 文案由另一条已标定但行集为空的场景覆盖，不塞进这条（两种失败原因不同）。
+    expect(caption, '必须说明为什么没有数据，并给出下一步该做什么').toContain('标定');
 
     let downloads = 0;
     page.on('download', () => {
@@ -366,6 +373,10 @@ test.describe('U-ROWS-01 CSV 按钮自己的失败面', () => {
 
   test.beforeEach(async ({ page }) => {
     await resetBaseline(page);
+    // 本用例要先有真实行集才谈得上"序列化后造 Blob"：未标定时后端直接拒绝导出，
+    // 面板里一行都没有（判据 `rows.length > 0` 会先炸）。标定与主线同款。
+    await calibrateColumnsX(page);
+    await calibrateDepth(page);
   });
 
   test('Blob 构造失败时必须 notifyError，且不产生下载', async ({ page, telemetry }) => {
