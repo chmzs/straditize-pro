@@ -1145,9 +1145,16 @@ class TestSectionFiveJsonRpcMethods(unittest.TestCase):
         from straditize_core.cli import cmd_run_project
 
         # Prepare project
+        # 导出守卫要求深度标定（export.py 的 CALIBRATION_ERROR）。本用例钉的是
+        # 「CLI 能从 .tar / .json 工程跑出带 depth 列的 CSV」，不是守卫本身，
+        # 所以先在**真实 RPC** 上做 Y 两点标定，让它跑到内容层；断言一字未改。
         self.rpc_call("image.load", {"image_path": self.image_path})
         self.rpc_call("roi.update", {"x0": 315, "x1": 1946, "y0": 511, "y1": 1311})
         self.rpc_call("algorithm.detectColumns", {"xlim": [315, 1946], "ylim": [511, 1311]})
+        self.session.calibrate_axes(
+            y_marks=[{"pixel": 511.0, "val": 0.0}, {"pixel": 1311.0, "val": 150.0}],
+            unit="cm",
+        )
 
         with tempfile.NamedTemporaryFile(suffix=".tar", delete=False) as tf_tar, \
              tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tf_out_tar, \
@@ -1180,6 +1187,49 @@ class TestSectionFiveJsonRpcMethods(unittest.TestCase):
                 if os.path.exists(p):
                     try:
                         os.remove(p)
+                    except Exception:
+                        pass
+
+    def test_cli_run_project_reports_uncalibrated_refusal_without_traceback(self):
+        """未标定的工程包跑 CLI，必须是「一行可读错误 + 非零退出」，不是 traceback。
+
+        导出守卫（export.py 的 CALIBRATION_ERROR）对未标定工程会拒绝导出，这是
+        契约行为；但 `cmd_run_project` 以前直接把 `JsonRpcError` 抛出来，命令行
+        用户看到的是一段 traceback，既不知道要回步骤 3 做 Y 两点标定，也没法被
+        自动化区分成「还差步骤」还是「工具坏了」。
+        """
+        import contextlib
+        import io as _io
+        from argparse import Namespace
+
+        from straditize_core.cli import cmd_run_project
+
+        self.rpc_call("image.load", {"image_path": self.image_path})
+        self.rpc_call("roi.update", {"x0": 315, "x1": 1946, "y0": 511, "y1": 1311})
+        self.rpc_call("algorithm.detectColumns", {"xlim": [315, 1946], "ylim": [511, 1311]})
+        # 刻意**不做** Y 标定：本用例测的就是未标定这条拒绝路径。
+        self.assertFalse(getattr(self.session, "is_calibrated", False))
+
+        with tempfile.NamedTemporaryFile(suffix=".tar", delete=False) as tf_tar, \
+             tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tf_out:
+            tar_path = tf_tar.name
+            out_csv = tf_out.name
+        try:
+            self.session.project_save(tar_path, format="tar")
+            stderr = _io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                code = cmd_run_project(
+                    Namespace(project=tar_path, output=out_csv, format="csv")
+                )
+            text = stderr.getvalue()
+            self.assertEqual(code, 1, "未标定必须非零退出")
+            self.assertIn("深度标定", text, "错误信息必须点名缺的是深度标定")
+            self.assertNotIn("Traceback", text, "命令行不得把 traceback 甩给用户")
+        finally:
+            for path in (tar_path, out_csv):
+                if os.path.exists(path):
+                    try:
+                        os.remove(path)
                     except Exception:
                         pass
 

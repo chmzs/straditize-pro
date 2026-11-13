@@ -13,7 +13,24 @@ import os
 import sys
 
 from .mcp_server import StraditizeWebMcpServer
+from .protocol import JsonRpcError
 from .session import StraditizeSession
+
+
+def _export_or_report(session, out_format: str, output_path: str) -> int | None:
+    """导出并统一把后端拒绝变成可读的一行 stderr + 非零退出码。
+
+    导出会按业务条件拒绝（未标定 → `CALIBRATION_ERROR`；没有数字化数据 →
+    `STATE_ERROR`）。这些是用户操作序列的问题，不是程序崩溃，命令行不该把
+    `JsonRpcError` 的 traceback 甩给用户——那既看不出该回去做哪一步，也会被
+    自动化当成"工具坏了"而不是"还差步骤 3"。
+    """
+    try:
+        session.export_data(format=out_format, output_path=output_path)
+    except JsonRpcError as exc:
+        print(f"Error: {exc.message}", file=sys.stderr)
+        return 1
+    return None
 
 
 def cmd_mcp(args: argparse.Namespace) -> int:
@@ -130,7 +147,9 @@ def cmd_extract(args: argparse.Namespace) -> int:
 
     out_format = args.format or ("csv" if args.output.endswith(".csv") else "json")
     output_path = os.path.abspath(args.output)
-    session.export_data(format=out_format, output_path=output_path)
+    failed = _export_or_report(session, out_format, output_path)
+    if failed is not None:
+        return failed
 
     print(f"SUCCESS: Exported {out_format.upper()} data to {output_path}")
     return 0
@@ -147,7 +166,9 @@ def cmd_run_project(args: argparse.Namespace) -> int:
     session.load_project(proj_path)
     out_format = args.format or "csv"
     output_path = os.path.abspath(args.output)
-    session.export_data(format=out_format, output_path=output_path)
+    failed = _export_or_report(session, out_format, output_path)
+    if failed is not None:
+        return failed
 
     print(f"SUCCESS: Exported data to {output_path}")
     return 0
