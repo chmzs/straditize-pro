@@ -96,6 +96,16 @@ class TestLoadImageClearsSamples:
 
         session.load_image(sample_key="beginner")
         session.detect_columns(BEGINNER_X, BEGINNER_Y, roi_id=session.rois[0]["id"])
+        # 导出守卫要求深度标定（export.py 的 CALIBRATION_ERROR）。必须在换图**之后**
+        # 标定：换图会清掉深度标定，正是本文件钉的"状态跟着图走"的一部分。标定只
+        # 提供一个新的 depth 网格，断言仍然是「该网格里不得出现上一张图的 5.0/15.0」。
+        # 端点刻意取非整数（200px→3.7、1600px→61.3）：若取 200→0 / 1600→70，
+        # slope=0.05，beginner 的行 300/500 恰好映射成 5.0/15.0，判定会与残留样本
+        # 混在一起——那样绿了也分不清是"没残留"还是"新网格撞出了同样的数"。
+        session.calibrate_axes(
+            y_marks=[{"pixel": 200.0, "val": 3.7}, {"pixel": 1600.0, "val": 61.3}],
+            unit="cm",
+        )
         csv_text = session.export_csv()
 
         rows = [line for line in csv_text.splitlines() if line.strip()]
