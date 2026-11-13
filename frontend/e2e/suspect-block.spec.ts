@@ -90,6 +90,18 @@ async function loadBenchmarkProductPath(
 }
 
 test.describe('P1 suspect_block 色块列必须在界面上可见', () => {
+  // 契约：点【导出】必然打开面板（未标定也开）。本文件的产品路径现场只跑分列与
+  // 点选，不做 Y 轴标定，于是面板一打开就发的 `export.csv` 被后端按
+  // CALIBRATION_ERROR(`-32003`) 拒绝；该失败由 `ExportModal.updateFullDisplay` 写进
+  // 行集 caption 并 notifyError，用户可见，不是被静默吞掉。豁免只覆盖这一种病因；
+  // T2/T3 不打开导出面板，用不到它。
+  test.use({
+    allowlists: {
+      rpcError: [/export\.csv \[-32003\]/],
+      notice: [/数据集失败：.*导出需要深度标定/],
+    },
+  });
+
   test.beforeEach(async ({ page }) => {
     await resetBaseline(page);
   });
