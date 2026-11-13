@@ -69,8 +69,17 @@ test.describe('后端失败必须被用户看见', () => {
   // U-ROWS-01 之后 CSV 按钮不再走后端（改为导出预览矩阵本身），它没有"后端失败"
   // 这条路径了。本用例的意图是"后端导出失败必须被看见"，改指仍然直连后端的工作簿
   // 导出（XLSX），意图不变、覆盖不降。
+  //
+  // 第二条豁免是**契约**要求的：点【导出】必然打开面板（即使未标定），而面板一打开
+  // 就发 `export.csv` 取行集；未标定会话后端按 CALIBRATION_ERROR(`-32003`) 拒绝。
+  // 这条失败不是被吞掉的——`ExportModal.updateFullDisplay` 把它写进行集 caption，
+  // 同时弹一条 toast（本用例的 `notices` 就采集到它）。这里只豁免这一种**具体**
+  // 病因的导出失败：任何别的 `export.csv` 失败（码不同、方法名不对）仍然会红。
   test.use({
-    allowlists: { rpcError: [/export\.exportXlsx/], notice: [INJECTED, /导出 XLSX 失败/] },
+    allowlists: {
+      rpcError: [/export\.exportXlsx/, /export\.csv \[-32003\]/],
+      notice: [INJECTED, /导出 XLSX 失败/, /数据集失败：.*导出需要深度标定/],
+    },
   });
 
   test('导出失败必须通知用户，而不是静默给一份空数据', async ({ page, telemetry }) => {
