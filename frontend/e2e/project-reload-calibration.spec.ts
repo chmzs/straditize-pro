@@ -280,19 +280,68 @@ test.describe('U-NA-01 工程包重载后导出预览不得整表 NA', () => {
     }
   });
 
-  test('负向对照：未标定的干净会话，导出预览必须仍然显示 NA', async ({ page }) => {
-    // 只做 Y 标定（否则层位网格为空、预览连行都没有），**不做**任何 X 标定：
-    // 这正是"列确实没标度"的干净现场。
-    await calibrateDepth(page);
-    const scale = await readColumnScale(page, 0);
-    expect(scale.calibrated, '负向对照的前置：基线列必须仍未标定').toBe(false);
+  /**
+   * 负向对照：**完全未标定**的会话。
+   *
+   * ## 判据为什么改了（契约变更，不是为了让用例变绿）
+   *
+   * 旧判据是「未标定 ⇒ 导出预览整表 NA」。那时 NA 表是**前端**造的：
+   * `hasRealCalibration` 为 false 就整表写 `NA`，与后端导出的真实数并存，
+   * 于是同屏出现"左边未标定、右边有数"。该通路已删除：现在预览表的每个格子都是
+   * 后端 `export.csv` 的输出，渲染层不再有第二条造数路径。
+   *
+   * 现行契约：未标定（`is_calibrated=false` 且无 `y_scale` 且 `depth_calib.top_cm`
+   * 为空）时后端**拒绝**导出（`CALIBRATION_ERROR`，RPC 码 `-32003`），不返回行集；
+   * 前端则必须仍然打开面板，并由行集 caption 说明"先做步骤 3 的 Y 轴两点标定"。
+   *
+   * 所以本用例现在的可判定形态是三件事同时成立：
+   * ① 面板照常打开（未标定不再静默拦住入口）；
+   * ② caption 明说需要深度标定（原因由界面给出，不是一张空表让用户猜）；
+   * ③ 不渲染任何数据行——既不是 NA 表（旧缺陷），也不是伪造读数表（旧缺陷的镜像）。
+   *
+   * 仍然能红的三条路：后端把 NA 行集还回来（caption 变成"（N 行）· 预览…"，②红，
+   * 且 ③ 红）；前端自己造数（③ 红）；未标定被静默拦在门外（① 红）。
+   */
+  test.describe('负向对照：完全未标定的会话', () => {
+    test.use({
+      allowlists: {
+        // 面板打开必然发 `export.csv`，未标定被后端按 -32003 拒绝：这是契约要求的
+        // 拒绝，且用户可见（caption + toast）。只豁免这一种病因。
+        rpcError: [/export\.csv \[-32003\]/],
+        notice: [/数据集失败：.*导出需要深度标定/],
+      },
+    });
 
-    const preview = await openExportPreview(page);
-    const valueCells = preview.rows.flatMap((row) => row.slice(1));
-    expect(valueCells.length, '预览必须有数值单元格').toBeGreaterThan(0);
-    expect(
-      valueCells.filter((cell) => cell === 'NA').length,
-      '未标定的会话必须如实写 NA —— 否则 hasRealCalibration 被改成了恒真（伪造资格）'
-    ).toBe(valueCells.length);
+    test('未标定时面板照常打开、caption 明说需要标定，且不得渲染出 NA 数据行', async ({
+      page,
+    }) => {
+      // 前置：本用例必须跑在**完全未标定**的会话上（不做 Y 标定、也不做任何 X 标定）。
+      const state = await wire(page);
+      expect(state.calibration.isCalibrated, '前置：本用例的会话必须未标定').toBe(false);
+      const scale = await readColumnScale(page, 0);
+      expect(scale.calibrated, '前置：基线列也没有 X 标定').toBe(false);
+
+      await page.locator('#btn-export-csv').click();
+      const caption = page.locator('#wpd-rowset-caption');
+      await expect(caption, '未标定时导出面板也必须打开（入口不得被静默拦掉）').toBeVisible({
+        timeout: 20_000,
+      });
+      await expect
+        .poll(async () => (await caption.textContent()) ?? '', {
+          message: 'caption 必须说明"导出需要深度标定"，而不是只留一张空表',
+          timeout: 20_000,
+        })
+        .toContain('导出需要深度标定');
+      const captionText = (await caption.textContent()) ?? '';
+      expect(captionText, 'caption 必须点明当前处于未标定状态').toContain('未标定');
+
+      const preview = await readPreviewTable(page);
+      expect(
+        preview.rows.length,
+        '未标定的会话不得渲染任何数据行（旧行为是整表 NA；伪造读数表是它的镜像）'
+      ).toBe(0);
+      const cells = preview.rows.flatMap((row) => row.slice(1));
+      expect(cells.filter((cell) => cell === 'NA').length, '不得用 NA 表冒充"没数据"').toBe(0);
+    });
   });
 });
