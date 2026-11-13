@@ -497,6 +497,21 @@
 
 ---
 
+#### `dataset` 参数（2026-11-12，U-ROWS-01）
+
+`core.exportData` / `export.csv` / `export.data` 接受可选 `dataset`，它选择**行集**（不是格式化方式）：
+
+| 值 | 行源（唯一口径） |
+| :--- | :--- |
+| 不传（`null`） | 既有行为：有 `samples` 按采样层位，否则各列逐行点并集。`data.csv` / 工程包走这条路 |
+| `union_points` | **`control_points` 全部 row 去重排序**（面板「真实物理拐点共振层位 [推荐]」）；取值经 `extract_grid_values` |
+| `depth_grid` | 按 `depth_calib` + `depth_interval` 切格；无标定/无网格时 `-32001 STATE_ERROR` |
+| `turning_points` | 每个**控制点**一行（`taxon/type/depth/value/x/y`）；行源是 `control_points`，**不是** `column_points` |
+
+非法值 → `-32602`，错误信息列出允许值。
+
+行集大小是定义的一部分：同一会话下三者行数必然不同（实测 298 / 21 / 896）。前端导出面板的下拉与本参数一一对应，且面板只渲染本接口返回的数据——不得由前端另算一套。
+
 ### 4.10 `column.calibrateXTicks` 与 `column.clearXTicks`
 步骤 6 属种列 X-轴标尺标定与清空。
 
@@ -556,6 +571,53 @@
 > "后端认为该列量程是 20%"。`scale_provenance` 把这一区别显式化，
 > 使前端可以把未标定列的数值渲染成"建议值（来源：图版默认）"而非裸数字。
 > 该键**不写入工程包**（`project_save` 的列白名单不含它）。
+
+---
+
+### 4.10b-2 列级轴粗 `axis_stroke_px`（U-ROWS-02，2026-11-10）
+
+0 点的定义是**硬约定**（ARCHITECTURE §6.4）：
+
+```
+abs_px0（绿线 / 0 点） = startX（红线 / 列切分线） + axis_stroke_px
+```
+
+`axis_stroke_px` 的解析优先级由 `xscale.resolve_axis_stroke` 唯一给出：
+**列级覆盖 > 组级初值 > 缺省 5**。组的 `axis_stroke_px` 是分列时实测的中位数
+（或用户在组属性里手填）；列的 `axis_stroke_px` **只放用户显式覆盖**
+（`column.update` 的 `updates.axis_stroke_px`，`None` = 清除覆盖回到组值）。
+
+- **`getDiagramData` 载荷**：每列携带 `axis_stroke_px`（可为 `null`），
+  见 `rpc_methods/system.py` 的 `_payload_column`。
+- **工程包 `straditize.json` 的列段**：自 2026-11-10 起同样写 `axis_stroke_px`
+  （`project.py` 的 `_build_columns_export`），载入端 `_restore_columns` 一并恢复。
+  - **老包缺该键 ⇒ 视为未覆盖（`null`）⇒ 回落组值**，与修复前行为一致，向后兼容。
+  - 修复前两端都不写这个字段，列级覆盖一进包就丢：载入后 0 点从 `start+4` 漂到
+    `start+6`（实测用户包 Pinus 列 `tickEndX` 264→266），整列读数按
+    `value_per_px` 系统性偏移（0.16129×2 = 0.3226），而界面完全正常。
+- **载入期自检**：`project.load` 比较"包里的 `tickEndX`"与"当前解析出的 `abs_px1`"，
+  只在 `scale_provenance.source == "group_slope"` 时比较（其它分支的 `abs_px1`
+  不由轴粗决定）。不一致时**不阻断载入**，而是在**下一次 `project.save`** 的
+  `manifest.json` 里写一条 `warnings[]`：
+
+```json
+{
+  "kind": "axis_stroke_tick_end_mismatch",
+  "col_index": 0, "column_id": "roi_1_col01", "column_name": "Pinus",
+  "column_axis_stroke_px": null, "effective_axis_stroke_px": 6.0,
+  "startX": 319.0, "tickEndX_in_package": 324.0, "tickEndX_expected": 326.0,
+  "offset_px": -2.0,
+  "note": "工程包里的 tickEndX 与该列当前生效的轴粗对不上：0 点可能已整体平移…"
+}
+```
+
+  `warnings` 键**只在非空时出现**（键存在 ⇔ 真的有问题），因此"没有该键"本身
+  就是一个可判定的绿灯。
+
+> 为什么自检放在**载入**而不是保存：保存端写出去的 `tickEndX` 就是
+> `scale.abs_px1`，拿它和 `start + 轴粗 + 1` 比是循环论证，永远相等，红不了。
+> 只有"包里的 `tickEndX`"这个来自文件的值才可能和当前轴粗矛盾。
+
 
 ---
 
@@ -1084,3 +1146,15 @@ async function rpcCall(method: string, params: Record<string, any> = {}) {
 const imageInfo = await rpcCall("core.loadImage", { image_path: "path/to/img.png" });
 const columns = await rpcCall("core.detectColumns", { data_xlim: [300, 1800], data_ylim: [500, 1300] });
 ```
+
+### 4.10c `straditize.getDiagramData` — ROI 标识的两种拼写
+
+`primaryRoiId` / `activeRoiId` 是**权威拼写**；`primary_roi_id` / `active_roi_id` 是**兼容别名**，
+两者在同一载荷里同时存在且值相等（`tests/unit/test_diagram_payload_roi_keys.py` 钉住）。
+
+之所以要同时给：`roi.list` 返回的是 snake（`primary_roi_id`），而本载荷曾只有 camel，
+外部读者各按一种拼写读，读到不存在的那个就得到 `undefined`，把"值没变"误判成"功能没生效"
+（本轮实测产生过两次假警报：一次前端 e2e、一次独立黑盒核验）。
+
+新增标识字段时：**两种拼写同批加**，不要只加一种；判定"某动作是否生效"必须读与本动作
+同一来源的那个键，不要跨方法混读。

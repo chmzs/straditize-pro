@@ -323,3 +323,203 @@ C2 让请求根本发不出去，于是 C4 想暴露的"后端 `-32002` 冒泡"�
 | **X 轴换算链（已收口，2026-11-06）** | `session_parts/xscale.py` `read_column_values` + 两 profile | 原登记：链 L（`export_data` / `extract_grid_values`）读 legacy 三件套、链 X（XLSX/LiPD/QA）读 `x_ticks` ⇒ 同一列换个格式数字不同，且「未标定」的兜底互相矛盾。**第一步（已落地）**：`resolve_column_scale` 成为唯一解析入口。**第二步（本轮）**：读取也收敛——`read_column_values(scale, rows_px, profile=...)` 是唯一入口，`READ_PROFILE_EXPORT`（未标定整列 `None`、4 位）与 `READ_PROFILE_QA`（允许粗算、全精度）两个**命名** profile 把差异写死在一处，四处调用点的重复拷贝全部删除。判据 `tests/unit/test_export_chain_equality.py`：①CSV/TAR/XLSX/LiPD/网格在同一 (列,行) 逐位相等且 `depth` 对齐；②未标定列四路全 `None` 而 QA 仍有数；③两 profile 在已标定列只差取整。**局限（反向验证暴露）**：①抓不到「策略改错」——四路一起变，相等仍成立（只有③能红）；③抓不到「某一路另写一份」。两条判据覆盖两种失效模式，缺一即半边盲区。**未做**：QA 精度与导出统一（有意不同，现已显式命名，不必统一）。 |
 | **`column_remove` 删中间列后点数据错位（取数张冠李戴）（已修，2026-09-29）** | `straditize_core/session.py` `_reindex_columns` / `column_remove` / `roi_remove` | 新增 `_reindex_columns` 在 `column_remove`、`roi_remove`、`detect_columns` 时按存活列的原 `col_index` 同步搬移 `column_points`、`control_points`、`reader_types`、`x_scales` 与 `taxa_names`，前端 `#btn-col-delete` 接入 `column.remove` RPC；由 `test_column_remove_migrates_point_stores_and_taxa_names` 钉死。 |
 | **列级 `unit` / `plot_type` 后端只写不读，载荷还把 `unit` 硬编码成 `"%"`（已修，2026-09-29）** | `rpc_methods/system.py` + `metadata/exporter_lipd.py` | 列载荷与 LiPD 导出均已改为经 `resolve_column_scale` 读取真实 `unit` 与 `plot_type`。 |
+
+## 10 Discovery lane（随机状态机探索）
+
+回归 lane（`frontend/e2e/*.spec.ts`）回答的是「**我们想过的那些路径还对吗**」；
+它有一个结构性盲区：**没人想到的路径永远不会被走到**。Discovery lane 补的就是这一块——
+用确定性随机种子在真实 UI 上乱走，把状态机里"人真会碰到、但没人写用例"的路径踩一遍。
+
+它**不是**回归套件：没有固定断言序列，失败即报警并保留证据，由人判断是产品缺陷、
+还是动作选得不合理。它**不改产品代码**，也**不引入第二套 E2E 框架**——只用
+`frontend/` 已有的 `@playwright/test`（`channel: 'msedge'`，真实 Edge）。
+
+### 10.1 跑什么
+
+状态机九个状态：
+
+```
+EMPTY → IMAGE_LOADED → ROI_READY → Y_CALIBRATED → CLEANED
+      → COLUMNS_DETECTED → X_CALIBRATED → SAMPLES_READY → EXPORT_READY
+```
+
+状态**不单调**：删除 ROI / 清空层位 / 撤销都会往回推，每步都从后端权威载荷重算。
+
+每个状态有一张「合法动作集」（`states.mjs` 的 `TRANSITIONS`），每个动作声明前置状态、
+后继状态、是否危险（返回 / 删除 / 重做 / 保存重开 / 连击）。动作实现（`actions.mjs`）
+**全部走真实 UI 入口**：真实 `<input type=file>` 与 `filechooser`、真实按钮点击、
+真实键盘逐字事件、真实鼠标拖拽 / 右键平移 / 双击、真实画布坐标。
+
+**禁止用 RPC 摆状态。** 只读 RPC 由一个硬白名单（`run.mjs` 的 `READ_ONLY_RPC`）在运行时
+强制：`straditize.getDiagramData` / `roi.list` / `samples.list` / `qa.summarize` /
+`core.getStatus` / `system.ping` / `e2e.health`。白名单外一律抛错。
+
+`e2e.reset` 是唯一例外，且**只用于 seed 隔离**（每个 seed 前把零状态后端复位），
+不参与任何业务动作。
+
+### 10.2 seed 语义与重放
+
+- `seed` 是**动作序列的唯一来源**：`mulberry32(seed)` 初始化 RNG，动作 = 给定状态的
+  候选动作**排序后按权重抽取**。权重是常量表，所以
+  「同 seed + 同动作表 ⇒ 动作序列逐条相同」是由构造保证的，不依赖 `Math.random`。
+- ⚠️ **改了动作表（增删动作 / 改 `from` / 改权重）就会改变既有 seed 的序列**。
+  这不是缺陷，但要意识到：老 seed 的 `seq.json` 与新种子不再可比。
+- 重放命令：
+
+```bash
+# 跑一批 seed（1..20 或 1-3 或 1,2,3）
+npm --prefix frontend run discovery -- --seeds=1-3 --steps=10 --port=22960
+
+# 单 seed 重放，并与磁盘上既有 seq.json 逐条比对（不一致 = 失败，REPLAY_MISMATCH）
+npm --prefix frontend run discovery -- --seed=7 --replay --steps=20 --port=22960
+
+# 只跑 known-failures 清单里那批 seed
+npm --prefix frontend run discovery:replay
+```
+
+- 需要先起**零状态**后端（探索器不负责起后端，避免与其它会话抢端口）：
+
+```bash
+STRADITIZE_ZERO_PORT=22960 pixi run python support/serve_zero_backend.py
+```
+
+端口约定：`22960` 是本 lane 的默认口，`22961` 保留给第二实例。
+不要用 `8799`（回归基线）/ `22920-22930`（从零旅程）/ `22950`。
+
+### 10.3 产物目录
+
+落在 `.scratch/discovery/<seed>/`（`.scratch/` 已被 `.gitignore` 覆盖）：
+
+| 文件 | 内容 |
+| --- | --- |
+| `seq.json` | seed、动作序列、每步前后状态摘要、末轮不变量结果、失败归因 |
+| `trace.zip` | `context.tracing`（含截图与 DOM 快照） |
+| `shot-<n>.png` | 第 n 步**动作前**的画面；失败时另有 `shot-<n>-fail.png`（失败后） |
+| `console.jsonl` | 全部控制台消息与未捕获异常 |
+| `rpc.jsonl` | 页面发起的写 RPC + 探索器的只读 RPC，各带结果与耗时 |
+| `state-before.json` / `state-after.json` | 整个序列起点 / 终点的状态摘要 |
+| `steps/<n>/state-before.json|after.json` | 每一步的前后完整摘要 |
+| `saved-project.tar` | 若走过「保存项目」，原始归档 |
+
+**失败保留全部产物**并写明违反了哪条不变量；**通过时默认只留 `seq.json`**
+（`--keep-artifacts` 可关掉裁剪，冒烟验证目录结构时用它；`--compact` 会把通过的
+`seq.json` 压成摘要）。
+
+实测体积（seed 2，10 步）：
+
+| 情形 | 留下的文件 | 体积 |
+| --- | --- | --- |
+| 失败（故意把 I4 改成恒假，停在第 8 步） | 31 个：`trace.zip` + 9 张 `shot-*.png` + `console.jsonl` + `rpc.jsonl` + `state-before/after.json` + `steps/1..8/*` + `seq.json` | `trace.zip` 10.06 MB，`seq.json` 13.5 KB，其余约 2.1 MB |
+| 通过（默认） | 只有 `seq.json` | 约 15 KB |
+| 通过（`--compact`） | 只有 `seq.json`（摘要形态） | 219 B |
+
+⚠️ 关于「摘要 ≤ 200 字节」：**10 步就已经 219 字节**，因为摘要里最占地方的是
+动作 id 列表本身（`double_click_canvas` 这类长名字 10 条约 170 字节）。
+`--steps` 允许到 30，摘要必然远超 200 字节。只有"摘要里不放动作列表"才可能达标，
+但那样又毁掉「同 seed 两次序列可比对」这条证据。**这里选择保留动作列表**，
+体积以本表实测为准；要卡死 200 字节请改用更短的 action id（那会让 `seq.json`
+不再自解释，收益不抵成本）。
+
+动作失败不得静默跳过：按钮不存在或不可见记 `ACTION_UNAVAILABLE` 并记录 selector 与原因，
+点了但没生效记 `ACTION_FAILED`，两者都**不算通过**。
+
+### 10.4 与 regression lane 的分工
+
+| | regression lane | discovery lane |
+| --- | --- | --- |
+| 判据 | 写死的断言，语义「这条路径必须仍然对」 | 6 条不变量 + 动作成败，语义「随机路径上不许出现这些坏形状」 |
+| 起点 | 基线（预载 hoya）或零状态 | 零状态 + `e2e.reset` |
+| 覆盖 | 已知路径，深且窄 | 未知路径，浅而广 |
+| 失败含义 | 产品退化了 | 要么产品缺陷，要么动作表不合理，**需人判** |
+| 产物 | `test-results-<port>/` | `.scratch/discovery/<seed>/` |
+| 何时跑 | 每次改动 + CI | 随机制动跑；PR 只跑 known-failures 清单 |
+
+六条机检（`invariants.mjs`）：
+① 无未捕获异常 / `console.error`；② 前端活动 ROI == 后端 `active_roi_id`；
+③ primary / active 指向仍存在的 ROI；④ 所有列的 `roi_id` 都存在；
+⑤ 删除后该 id 不再出现在任何状态里；⑥ 保存 → 重开后关键状态一致。
+
+其余**刻意不做机检**的项（及其理由）写在 `invariants.mjs` 的 `MANUAL_ONLY` 注释里：
+三种平移手势等价、画布像素层面"该层真的画了"、列内曲线数值正确性、撤销栈深层一致性、
+并发/时序类缺陷、导出归档内容正确性。共同点是：要么缺一条可证伪的观测，
+要么已被既有回归用例覆盖，硬塞进来只会制造无法归因的红灯。
+
+### 10.5 PR 只跑「最近失败 seed 清单」
+
+全量随机探索不适合每次 PR 都跑（慢且噪声大）。CI / PR 只重放**已知会失败的 seed**：
+
+- 清单文件：`frontend/e2e/discovery/known-failures.json`，初始为空数组 `[]`。
+- 探索器每次运行结束会**自动维护**它：失败的 seed 加入、通过的 seed 移除。
+- PR 侧命令：`npm --prefix frontend run discovery:replay`（等价于只跑清单里的 seed）。
+- 清单为空 ⇒ 直接退出，不启动浏览器。
+- 修好某个 seed 后，重放通过会把该 seed 自动移出清单——**清单必须能自己变短**，
+  否则它会退化成一份没人清理的忽略列表。
+
+### 10.6 已知局限（写清边界，避免把绿灯当全覆盖）
+
+1. **深状态靠步数堆。** `--steps=10` 的实测覆盖是
+   `EMPTY / IMAGE_LOADED / ROI_READY / Y_CALIBRATED / COLUMNS_DETECTED`；
+   `CLEANED` 需要进第 4 步且真的点一次「确认去除」，`X_CALIBRATED` 需要进第 6 步手工
+   写刻度，`EXPORT_READY` 需要第 7→8 步。26 步的实测能到 `SAMPLES_READY`，但仍可能
+   整轮绕过 `CLEANED`（那一步的候选集很大）。要稳定覆盖深层状态就得加步数，
+   而加步数会让单条序列跑到 3 分钟以上——这是刻意保留的取舍，不是遗漏。
+2. **没进动作表的入口**（因此完全没被随机走过）：列删除（要先在 Inspector 里选中一列）、
+   清理笔刷涂抹 / 排除区拖框（画家式拖动，判据难以与"拖歪了"区分）、
+   年龄-深度模型弹窗、OCR 审阅弹窗、导出面板各格式下载。
+3. **I2 只在第 2 步生效。** 其它步骤第 2 步面板不在 DOM 里，读不到"界面认为的活动 ROI"，
+   该步记 `skip`（不是 `pass`）。
+4. **写 RPC 失败要分两种。** 后端拒绝且前端已经 toast / 弹窗告知用户 = 产品在正确工作，
+   记 `OK_RPC_REJECTED_SURFACED`（观测项）；后端拒绝但用户毫不知情 = 违反不变量 1，
+   记 `RPC_WRITE_FAILED` 并中止。判"是否告知"靠页面上的通知通道采集，理论上存在
+   "用户看到通知但采集器没抓到"的漏判，未做反向验证。
+5. **`trace.zip` 会长。** 10 步约 10 MB，因为 `screenshots: true` + `snapshots: true`；
+   通过时会被裁掉，失败时才留下。
+6. **只用零状态后端 + 真实 Edge。** 基线（预载 hoya）后端跑本 lane 时 `e2e.reset`
+   不存在，脚本会直接报错退出并指名端口——这是刻意的快速失败。
+
+### 10.7 等待纪律：条件优先，`heuristic_wait` 必须自曝
+
+初版在每步动作之后有一句 `await page.waitForTimeout(80)`。那是**固定 sleep 当同步用**，
+正是本仓明令禁止的假绿来源：短了会把**半完成状态**读成 PASS，长了则掩盖"动作早就结束"。
+已全部替换，规则如下。
+
+**① 页面侧的 `/rpc` 在飞计数（默认等待）。**
+`run.mjs` 的 `addInitScript` 包一层 `window.fetch`，只包 `pathname === '/rpc'`：
+
+- 不包 `/events`（SSE 长连接）——算进去会让计数永不归零，quiescence 变死等；
+- 减计数发生在 **body 被读完之后**（`res.clone().text()`），不是响应头到达时。
+  `fetch()` 的 Promise 在响应头就 resolve，而业务代码是 `await res.json()` 之后才动状态；
+  在响应头处减，"安静"会早于数据落地，读到的仍是半完成状态；
+- 采样由 `requestAnimationFrame` 驱动，**连续两帧**都为 0 才算安静；不是定时器轮询。
+- 帧预算（1800 帧）只是防"某个请求永不返回把整轮挂死"的兜底：耗尽即判
+  `QUIESCE_TIMEOUT` **失败**，不允许"差不多得了"。
+
+**② 多阶段落地用"镜像稳定"当判据。** 打开项目（解 tar → 换图 → 建 ROI → 面板整块重挂）
+没有单一统计量，用 `waitForStableFront`：连续两次采样 `{stage, ROIs, 列数, 图尺寸, 标定}`
+完全相同才收敛，且顺序必须是**先等安静、再等稳定**（反过来会在"请求未回、镜像暂时没变"
+的空窗里判稳定）。
+
+**③ 动作级等待同样不许 sleep。** `undo`/`redo` 改成等安静（它们可能发 0 个也可能发 1 个
+RPC）；`run_qa` 原来的判据是"`#qa-banner` 存在"，而横幅在点击前就已渲染 ⇒ 恒真、等于没等，
+现改成「安静 + 横幅内容非空」并记录 `qaTextChanged`。
+
+**④ 五个动作确实无法条件化，标 `heuristic_wait` 并逐步写进 `seq.json`。**
+
+| 动作 | 为什么不可条件化 |
+| --- | --- |
+| `fit_view` | `F` 幂等且不发 RPC：已适应屏幕时再按，视口三元组一个字节都不动 |
+| `zoom_in` / `zoom_out` | 缩放有上下限，已到极限时 `scale` 不变，"变了"不是恒成立的判据 |
+| `pan_canvas` | 平移在图像边缘被钳制，`panX/panY` 可能一格不动；纯 canvas 手势无 RPC |
+| `double_click_canvas` | 双击语义随工具模式变化（加控制点 / 放大 / 无动作），无单一后端量可证"已处理" |
+
+这五个动作的等待是 `requestAnimationFrame` 两次帧边界（不是毫秒数），`seq.json` 里每步有
+`waitMode: "heuristic_wait" | "condition"` 与 `quiesce: {quiet, frames, inflight}` 可查；
+其余 24 个动作是 `condition`。
+
+**⑤ 机制必须自证活着。** 若整轮 `__discRpcWrapped === 0`（应用的 RPC 不走 `window.fetch`），
+`waitForQuiet` 实际退化成了帧边界等待——这时 `seq.json` 会出现
+`observations[O3] = inert`，明确写出"本轮不该被当作有条件的同步来信任"，而不是静默装成有等待。
+
+**实测（2026-11-09，seed 1，10 步）**：`inflightWrappedRpcs = 9`（确实包到 9 次 `/rpc`）；
+第 10 步 `apply_ycalib_next` 的 `quiesce.frames = 52` —— 旧实现会在 80 ms 处直接读状态，
+而真实请求还在飞，那一步读到的是半完成镜像。这一条就是这次改动的收益。
