@@ -1,5 +1,6 @@
 import { DiagramData } from '../../types/pollen';
 import { renderExportSuspectBlockRow } from './SuspectBlockNotice';
+import { isColumnCalibrated } from '../../core/calibProgress';
 
 export interface ExportReadinessState {
   sheets: string[];
@@ -49,9 +50,10 @@ export function renderExportReadiness(data: DiagramData): string {
   const missingStr = `[${state.readinessMissing.join(',')}]`;
 
   const cols = data.columns || [];
-  const calibratedCount = cols.filter(
-    (c) => Array.isArray(c.x_ticks) && c.x_ticks.length === 2
-  ).length;
+  // 与步骤 6 进度条、列徽标用**同一判据**：后端写入组级斜率时会主动清空各列的
+  // `x_ticks`（roi.py:470-478），所以"只认 x_ticks.length===2"会把所有通过组斜率
+  // 标定的列算成未标定 —— 用户写完组斜率，这里仍报"0 列已标定"。
+  const calibratedCount = cols.filter((c) => isColumnCalibrated(c)).length;
   const uncalibratedCount = cols.length - calibratedCount;
 
   return `
