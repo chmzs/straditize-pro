@@ -73,6 +73,19 @@ async function stageZeroSumColumn(page: Page): Promise<void> {
 }
 
 test.describe('导出模态自检行：不得把空集或哨兵值说成达标', () => {
+  // 契约：点【导出】必然打开面板（未标定也开）。面板一打开就发 `export.csv` 取行集，
+  // 本用例现场没有 Y 轴标定，后端按 CALIBRATION_ERROR(`-32003`) 拒绝；这条失败由
+  // `ExportModal.updateFullDisplay` 的 catch 分支写进行集 caption 并 notifyError，
+  // 用户可见，不是被吞掉。自检行本身（`#wpd-sum-check-*`）的数据源是 `qa.summarize`，
+  // 与行集无关，所以本用例的判据不受这次拒绝影响。
+  // 豁免只收窄到这一种病因：别的方法失败、别的错误码仍判红。
+  test.use({
+    allowlists: {
+      rpcError: [/export\.csv \[-32003\]/],
+      notice: [/数据集失败：.*导出需要深度标定/],
+    },
+  });
+
   test.beforeEach(async ({ page }) => {
     await resetBaseline(page);
   });
