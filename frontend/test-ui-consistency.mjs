@@ -135,7 +135,10 @@ const walkSources = (dir, filePattern, callback) => {
 };
 const pictographHits = [];
 for (const dir of ['src', 'e2e']) {
-  walkSources(dir, /\.(ts|css|html)$/, (file) => {
+  // 含 `.mjs`：`e2e/discovery/*.mjs` 是探索器的说明与日志文案来源，同样是界面/报告语义词，
+  // 2026-11-13 有一处 `⚠️` 从这里漏过（门禁只扫 ts/css/html）。箭头 `→`/`⇒` 不在
+  // `Extended_Pictographic` 里，加 `.mjs` 不会误伤它们。
+  walkSources(dir, /\.(ts|css|html|mjs)$/, (file) => {
     readFileSync(file, 'utf8')
       .split(/\r?\n/)
       .forEach((line, index) => {
