@@ -25,7 +25,15 @@
 
 - 拿掉读取侧校验 → `test_load_drops_invalid_strength_with_warning` 与大小写规范化两条红；
 - 拿掉写入侧校验 → `test_save_never_writes_invalid_strength` 红（0.6 会被写回文件）；
-- 拿掉运行时守卫 → `test_runtime_guard_skips_invalid_strength` 与端到端导出那条红。
+- 拿掉运行时守卫 → `test_runtime_guard_skips_invalid_strength` 与端到端导出那条
+  （`test_export_stops_falling_back_to_placeholder`）红。
+
+## 未标定导出的契约变化（本轮）
+
+`export_data` 现在在未标定会话上直接抛 `CALIBRATION_ERROR`，所以「导出」这一条
+拆成一对：`test_uncalibrated_export_refuses_instead_of_faking_a_table` 钉拒绝行为，
+`test_export_stops_falling_back_to_placeholder` 钉标定后的对照（非法强度不得退化）。
+只有前者会全绿也可以，所以后者必须真的产出非空读数。
 """
 
 from __future__ import annotations
@@ -37,6 +45,7 @@ import tarfile
 
 import pytest
 
+from straditize_core.protocol import CALIBRATION_ERROR, JsonRpcError
 from straditize_core.session import StraditizeSession
 
 from test_project_load_golden import _legacy_payload
@@ -125,9 +134,67 @@ def test_runtime_guard_skips_invalid_strength() -> None:
     assert session.grid_line_mask is None, "不该在强度非法时真的去跑一次去线"
 
 
-def test_export_stops_falling_back_to_placeholder() -> None:
+def _calibrate_y_and_columns(session: StraditizeSession) -> None:
+    """把 fig3_raw 会话标定到「能导出真实读数」：Y 两点 + 每列 X 两点。
+
+    全部走真实 RPC（`calibrate_axes` / `calibrate_column_xticks`），不碰
+    `is_calibrated` / `y_scale` 字段。列端点的换算沿用本项目这些实测剖面的既有
+    口径：整列宽 = 3.80 像素/百分点，故右端取值 = 宽 / 3.80。
+    """
+    session.calibrate_axes(
+        y_marks=[{"pixel": 233.0, "val": 0.0}, {"pixel": 869.0, "val": 100.0}],
+        unit="cm",
+    )
+    for index, column in enumerate(session.columns):
+        left, right = float(column["start"]), float(column["end"])
+        session.calibrate_column_xticks(
+            index,
+            [{"px": left, "value": 0.0}, {"px": right, "value": (right - left) / 3.80}],
+            unit="%",
+        )
+
+
+def test_uncalibrated_export_refuses_instead_of_faking_a_table() -> None:
+    """**未标定就不出数**：必须抛 CALIBRATION_ERROR(-32003)，不得给空表/占位表。
+
+    取代旧的「未标定也该出一张表，只是不许退化」的判据。旧判据把「抛错」误判成
+    「退化成占位表」(`assert True is False`)，于是把正确行为记成了缺陷；新契约下
+    抛错正是要断言的行为——「没有深度就没有可交付的剖面」。
+    """
     session = _plate_session()
-    session.degrid_strength = 0.6
+    session.degrid_strength = 0.6  # 与旧用例同一起点：非法去线强度
+
+    with pytest.raises(JsonRpcError) as excinfo:
+        session.export_data("csv")
+
+    assert excinfo.value.code == CALIBRATION_ERROR, (
+        f"未标定导出必须以 CALIBRATION_ERROR(-32003) 拒绝，实得 {excinfo.value.code}"
+    )
+    assert "深度标定" in str(excinfo.value), (
+        f"拒绝文案必须告诉用户问题在哪（深度标定），实得：{excinfo.value}"
+    )
+
+    # 工程包这条出口仍然要交付（不能因为拒绝导出就不给整个 tar），但占位表必须
+    # 显式写明「原因是未标定」——全 0 的矩阵长得和合法数据一样，靠 README 里那句
+    # 「unobserved = 0.0」分辨不出来，所以标记必须落在这里。
+    result = session.project_save(format="tar")
+    assert result["data_csv_placeholder"] is True
+    assert "深度标定" in (result["data_csv_placeholder_reason"] or ""), (
+        f"占位表原因必须指向深度标定，实得：{result.get('data_csv_placeholder_reason')}"
+    )
+
+
+def test_export_stops_falling_back_to_placeholder() -> None:
+    """对照（反向）：标定之后，非法去线强度**不得**把导出退化成占位表。
+
+    上面那条只证明「未标定会被拒」。若只有它，守卫把一切都拒掉也能全绿。
+    这一条把同一会话标定掉再导出：真读数必须出得来、占位说明文件必须不出现。
+    非法强度若真的让取数炸掉，这里就会退回占位表（`data.csv_placeholder` 为 True），
+    也就是本文件开篇记的那个缺陷：错误被吞成一份「每格 0.00」的假表。
+    """
+    session = _plate_session()
+    session.degrid_strength = 0.6  # 模拟从别的入口塞进来的非法值
+    _calibrate_y_and_columns(session)
 
     result = session.project_save(format="tar")
 
@@ -141,3 +208,6 @@ def test_export_stops_falling_back_to_placeholder() -> None:
     assert "data.csv.PLACEHOLDER.md" not in names
     assert csv_text.splitlines()[0].startswith("depth,")
     assert "0.00" not in csv_text.splitlines()[1], "对照：真实取数那行不该是占位表"
+    assert any(
+        cell not in ("", "0.0") for cell in csv_text.splitlines()[1].split(",")[1:]
+    ), "对照：标定后的首行必须有真实读数（否则上面那条只是被守卫拒掉才绿的）"
