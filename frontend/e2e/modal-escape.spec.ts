@@ -12,6 +12,17 @@ import { gotoStage, openApp } from './helpers';
  * 正对照：再打开 → 点关闭按钮 → 同样消失（证明判据不是"永远为空"）。
  */
 test.describe('Esc 关闭模态', () => {
+  // 契约：点【导出】必然打开面板（未标定也开），面板一打开就发 `export.csv` 取行集，
+  // 未标定会话被后端按 CALIBRATION_ERROR(`-32003`) 拒绝。这条失败是**预期**的，
+  // 用户看得见（行集 caption + toast），不是被吞掉。豁免只覆盖这一种具体病因：
+  // 别的方法失败、别的错误码、别的原因仍然判红。
+  test.use({
+    allowlists: {
+      rpcError: [/export\.csv \[-32003\]/],
+      notice: [/数据集失败：.*导出需要深度标定/],
+    },
+  });
+
   test('打开导出模态后按 Esc 必须关闭；点关闭按钮同样能关', async ({ page }) => {
     await openApp(page);
     await gotoStage(page, 3);
