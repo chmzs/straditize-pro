@@ -863,16 +863,14 @@ class ExportMixin:
         else:
             depths = [float(row) for row in rows]
         grid = self.extract_grid_values(depths=depths)
-        if calibrated:
-            data: dict[str, Any] = {
-                "depth": [round(float(d), 4) for d in grid["depths"]]
-            }
-        else:
-            # 未做 Y 标定时**没有深度**。旧实现把像素行号当 depth 写进名为 `depth`
-            # 的列里（511/534/…），用户拿去画年龄-深度图会整体错位 —— 这是用单位撒谎。
-            # 现在：depth 留空（null），行号另立 `row_px` 列，语义写在列名里；
-            # 数值照常出 —— 它们来自图像，是真实计算，不该因为缺标定就藏起来。
-            data = {"depth": [None] * len(grid["depths"]), "row_px": list(rows)}
+        if not calibrated:
+            # 未标定一律不出数（守卫在 `export_data` 的入口，这里再挡一次，
+            # 防止有人绕过入口直接调用数据集构造器）。
+            raise JsonRpcError(
+                CALIBRATION_ERROR,
+                "导出需要深度标定：请先完成步骤 3 的 Y 轴两点标定（当前 is_calibrated=false）。",
+            )
+        data: dict[str, Any] = {"depth": [round(float(d), 4) for d in grid["depths"]]}
         for idx, taxon in enumerate(grid["taxa"]):
             data[str(taxon)] = [row[idx] for row in grid["matrix"]]
         return pd.DataFrame(data)
@@ -975,10 +973,22 @@ class ExportMixin:
                 f"Unsupported export format '{format}'. Use 'csv' or 'parquet'.",
             )
 
-        if strict and not getattr(self, "is_calibrated", False):
+        # 导出必须有深度：没有 Y 轴标定就没有 depth 列。任何"未标定也能出数"的形态
+        # 要么把像素行号冒充深度，要么给下游一张 depth 全空的表——两者都在撒谎。
+        # 步骤 3（Y 两点标定）本来就在导出之前，所以这个门槛在正常流程里不会被触发。
+        # 「有深度标定」的判据要与取数层一致：`is_calibrated` 是派生属性，某些
+        # 会话（测试/导入）只设了 `y_scale` 或 `depth_calib`。三者在同一次
+        # calibrate_axes 里一起写入，这里任一个成立即视为已标定。
+        _has_calibration = bool(
+            getattr(self, "is_calibrated", False)
+            or getattr(self, "y_scale", None)
+            or (getattr(self, "depth_calib", None) or {}).get("top_cm") is not None
+        )
+        if not _has_calibration:
             raise JsonRpcError(
                 CALIBRATION_ERROR,
-                "Axes calibration is required when strict=True.",
+                "导出需要深度标定：请先完成步骤 3 的 Y 轴两点标定（当前 is_calibrated=false）。"
+                " Export requires depth calibration (two-point Y calibration).",
             )
 
         # 取数收敛：不再自己拼行集与列名，直接用主 ROI 的那一张表（同一入口）。

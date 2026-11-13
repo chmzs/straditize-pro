@@ -247,98 +247,9 @@
   }
  },
  "csv_uncalibrated": {
-  "ok": {
-   "columns": [
-    "depth",
-    "col01",
-    "col02",
-    "col03",
-    "col04",
-    "col05",
-    "col06",
-    "col07",
-    "col08",
-    "col09",
-    "col10",
-    "col11",
-    "col12",
-    "col13",
-    "col14",
-    "col15",
-    "col16"
-   ],
-   "columns_count": 17,
-   "csv_content_equals_csv": true,
-   "csv_digest": "c185b44589f5e675",
-   "csv_head": [
-    "depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
-    "233,,,,,,,,,,,,,,,,",
-    "234,,,,,,,,,,,,,,,,"
-   ],
-   "data_head": [
-    {
-     "col01": null,
-     "col02": null,
-     "col03": null,
-     "col04": null,
-     "col05": null,
-     "col06": null,
-     "col07": null,
-     "col08": null,
-     "col09": null,
-     "col10": null,
-     "col11": null,
-     "col12": null,
-     "col13": null,
-     "col14": null,
-     "col15": null,
-     "col16": null,
-     "depth": 233
-    },
-    {
-     "col01": null,
-     "col02": null,
-     "col03": null,
-     "col04": null,
-     "col05": null,
-     "col06": null,
-     "col07": null,
-     "col08": null,
-     "col09": null,
-     "col10": null,
-     "col11": null,
-     "col12": null,
-     "col13": null,
-     "col14": null,
-     "col15": null,
-     "col16": null,
-     "depth": 234
-    },
-    {
-     "col01": null,
-     "col02": null,
-     "col03": null,
-     "col04": null,
-     "col05": null,
-     "col06": null,
-     "col07": null,
-     "col08": null,
-     "col09": null,
-     "col10": null,
-     "col11": null,
-     "col12": null,
-     "col13": null,
-     "col14": null,
-     "col15": null,
-     "col16": null,
-     "depth": 235
-    }
-   ],
-   "file_path": null,
-   "format": "csv",
-   "path_matches_file_path": true,
-   "rows_count": 637,
-   "strict": false
+  "raised": {
+   "code": -32003,
+   "message": "导出需要深度标定：请先完成步骤 3 的 Y 轴两点标定（当前 is_calibrated=false）。 Export requires depth calibration (two-point Y calibration)."
   }
  },
  "csv_with_age_model": {
@@ -558,7 +469,7 @@
   },
   "strict_uncalibrated": {
    "code": -32003,
-   "message": "Axes calibration is required when strict=True."
+   "message": "导出需要深度标定：请先完成步骤 3 的 Y 轴两点标定（当前 is_calibrated=false）。 Export requires depth calibration (two-point Y calibration)."
   }
  },
  "rows_from_column_points": {
