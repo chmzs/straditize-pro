@@ -31,6 +31,21 @@ README 里那句「unobserved = 0.0」还会替它背书。现在三处落痕：
 本文件同时钉**反向对照** tar_real_csv：真实取数成功时 flag 必须是 false、成员里不得出现说明文件。
 只用合成载荷时，「标记住」和「没标记」两种情况永远只见到一种。
 
+## 未标定拒绝导出后的两个分支（本轮）
+
+契约改成「未标定不得导出」（`export.py` 的 `CALIBRATION_ERROR` / -32003）后，
+占位表最常见的来源不再是缺陷，而是**守卫的合法拒绝**。于是基线拆成一对：
+
+- `tar_uncalibrated_refusal`：同一张真实图版、不标定 → 占位三处落痕齐全
+  （flag=True、reason 含「深度标定」、manifest 的
+  `zeros_are_not_measurements=True`）。这条取代了旧的「注入人造 ValueError」
+  写法——人造失败钉不到「原因是否指向标定」。
+- `tar_real_csv`：同一张图版补真实两点标定 → flag=False、无说明文件、
+  `data.csv_first_row_nonzero=True`（真读数）。没有这一条，基线分不清
+  「占位路径把一切都吃了」和「守卫正确拒绝」。
+
+两者共用 `_real_plate_session()`，唯一变量是标定。
+
 ## 重新生成
 
     UPDATE_PROJECT_SAVE_GOLDEN=1 pixi run python -m pytest tests/unit/test_project_save_golden.py
@@ -77,6 +92,22 @@ def _session() -> StraditizeSession:
     session = StraditizeSession()
     session._init_cleanup()
     session.project_load(_legacy_payload())
+    return session
+
+
+def _real_plate_session() -> StraditizeSession:
+    """真实图版会话：图 3 的数据框 + 已分列 + 已数字化，**未做任何标定**。
+
+    两个用例共用它：`tar_uncalibrated_refusal` 直接用（命中拒绝守卫），
+    `tar_real_csv` 在上面补真实两点标定（拿到真读数）。同一份起点保证两者的
+    差别只有「标定」这一个变量。
+    """
+    session = StraditizeSession()
+    session._init_cleanup()
+    session.load_image(image_path="tests/data/figures/real_plates/fig3_raw.jpeg")
+    session.detect_columns(data_xlim=[330, 1330], data_ylim=[233, 869])
+    for column in session.columns:
+        session.digitize(column["col_index"])
     return session
 
 
@@ -148,50 +179,71 @@ def _build_snapshots(tmp_dir: Path) -> dict:
 
     # 对照：真实取数成功时**不得**出现占位标记，也不得出现说明文件。
     # 只用合成载荷（不能数字化）时，"标记住"和"没标记"两种情况永远只见到一种。
-    real_session = StraditizeSession()
-    real_session._init_cleanup()
-    real_session.load_image(image_path="tests/data/figures/real_plates/fig3_raw.jpeg")
-    real_session.detect_columns(data_xlim=[330, 1330], data_ylim=[233, 869])
+    #
+    # 新契约（未标定拒绝导出）落地后，这个"真实取数"会话必须真的做标定，
+    # 否则它命中的是拒绝分支、data.csv 退回占位表，这条对照就退化成与
+    # tar_uncalibrated_refusal 同一件事。标定走真实 RPC：
+    #   - Y 两点：图 3 数据框上下缘 233/869 px → 0/100 cm；
+    #   - 每列 X 两点：本仓库这批实测剖面沿用 3.80 px/百分点，右端取值 = 宽 / 3.80。
+    real_session = _real_plate_session()
+    real_session.calibrate_axes(
+        y_marks=[{"pixel": 233.0, "val": 0.0}, {"pixel": 869.0, "val": 100.0}],
+        unit="cm",
+    )
     for column in real_session.columns:
-        real_session.digitize(column["col_index"])
+        left, right = float(column["start"]), float(column["end"])
+        real_session.calibrate_column_xticks(
+            column["col_index"],
+            [{"px": left, "value": 0.0}, {"px": right, "value": (right - left) / 3.80}],
+            unit="%",
+        )
     real_tar = tmp_dir / "real-pack.tar"
     real_result = real_session.project_save(output_path=str(real_tar), format="tar")
     with tarfile.open(real_tar, "r") as archive:
         real_csv = archive.extractfile("data.csv").read()
         real_members = archive.getnames()
+    real_lines = real_csv.decode("utf-8").splitlines()
+    real_first_row = real_lines[1].split(",")[1:] if len(real_lines) > 1 else []
     out["tar_real_csv"] = {
         "result_keys": sorted(real_result),
         "placeholder_flag": real_result["data_csv_placeholder"],
         "placeholder_reason": real_result["data_csv_placeholder_reason"],
         "members": real_members,
         "data_csv_size": len(real_csv),
-        "data_csv_head": real_csv.decode("utf-8").splitlines()[:2],
+        "data_csv_head": real_lines[:2],
+        # 判别力：只有「没有占位标记」还不够——导出若整体不出数（全空/全 0），
+        # flag 一样是 false。这一项要求首行真的读到非零丰度。
+        "data_csv_first_row_nonzero": any(
+            cell not in ("", "0.0", "0.00") for cell in real_first_row
+        ),
     }
 
-    # 占位表路径单独用**注入失败**来钉：合成载荷原本靠"数字化不出来"触发，
-    # 但那条失败其实是去线强度合法性缺陷（已于 2026-11-06 修好），修好后不再触发。
-    # 占位表本身仍是必须显式标记的路径，所以这里显式制造失败，不依赖别的缺陷。
-    session = _session()
-
-    def _boom(*args, **kwargs):
-        raise ValueError("模拟真实导出失败")
-
-    session.export_data = _boom
-    forced_tar = tmp_dir / "forced-placeholder.tar"
-    forced_result = session.project_save(output_path=str(forced_tar), format="tar")
-    with tarfile.open(forced_tar, "r") as archive:
-        forced_members = archive.getnames()
-        manifest_raw = json.loads(archive.extractfile("manifest.json").read())
+    # 占位表路径：用**真实**的未标定拒绝来钉，不再注入人造失败。
+    # 旧写法把 `export_data` 换成抛 ValueError 的桩，钉的是"保底逻辑"本身；
+    # 新契约下守卫就是最常见的占位来源，用它会顺带钉住占位原因是否指向
+    # 「深度标定」——人造失败永远钉不到这一点。占位表本身仍是必须显式标记的
+    # 路径（全 0 矩阵长得像合法数据），所以这里同时钉三处落痕：
+    # flag、reason、manifest 里的 zeros_are_not_measurements。
+    uncalibrated = _real_plate_session()
+    refusal_tar = tmp_dir / "uncalibrated.tar"
+    refusal_result = uncalibrated.project_save(output_path=str(refusal_tar), format="tar")
+    with tarfile.open(refusal_tar, "r") as archive:
+        refusal_members = archive.getnames()
+        refusal_manifest = json.loads(archive.extractfile("manifest.json").read())
+        refusal_manifest.pop("timestamp", None)
         notice = archive.extractfile("data.csv.PLACEHOLDER.md").read().decode("utf-8")
-        forced_csv = archive.extractfile("data.csv").read().decode("utf-8")
-    out["tar_placeholder_forced"] = {
-        "result_keys": sorted(forced_result),
-        "placeholder_flag": forced_result["data_csv_placeholder"],
-        "reason": forced_result["data_csv_placeholder_reason"],
-        "members": forced_members,
-        "manifest_field": manifest_raw.get("data_csv_placeholder"),
+        refusal_csv = archive.extractfile("data.csv").read().decode("utf-8")
+    out["tar_uncalibrated_refusal"] = {
+        "result_keys": sorted(refusal_result),
+        "placeholder_flag": refusal_result["data_csv_placeholder"],
+        "reason": refusal_result["data_csv_placeholder_reason"],
+        "members": refusal_members,
+        "manifest_field": refusal_manifest.get("data_csv_placeholder"),
+        "zeros_are_not_measurements": (
+            refusal_manifest.get("data_csv_placeholder") or {}
+        ).get("zeros_are_not_measurements"),
         "notice_head": notice.splitlines()[:3],
-        "csv_head": forced_csv.splitlines()[:2],
+        "csv_head": refusal_csv.splitlines()[:2],
     }
     # 无路径的 tar 走 base64 返回：只钉成员清单，不钉整包摘要（含 mtime）
     session = _session()

@@ -911,47 +911,13 @@
   ],
   "result_size_matches_file": true
  },
- "tar_placeholder_forced": {
-  "csv_head": [
-   "depth,Pinus,Betula,Quercus",
-   "0.0,0.00,0.00,0.00"
-  ],
-  "manifest_field": {
-   "notice": "data.csv.PLACEHOLDER.md",
-   "reason": "ValueError: 模拟真实导出失败",
-   "zeros_are_not_measurements": true
-  },
-  "members": [
-   "manifest.json",
-   "straditize.json",
-   "image/original.png",
-   "image/age_depth.png",
-   "data.csv",
-   "data.csv.PLACEHOLDER.md",
-   "plot_strat.R",
-   "README.txt"
-  ],
-  "notice_head": [
-   "# data.csv 是占位表，不是真实读数",
-   "",
-   "本次打包时真实导出失败，data.csv 里**每一个数值都是 0.00**。它们既不表示「未观测」，也不表示「观测到 0」，只是占位符。"
-  ],
-  "placeholder_flag": true,
-  "reason": "ValueError: 模拟真实导出失败",
-  "result_keys": [
-   "data_csv_placeholder",
-   "data_csv_placeholder_reason",
-   "path",
-   "size",
-   "success"
-  ]
- },
  "tar_real_csv": {
+  "data_csv_first_row_nonzero": true,
   "data_csv_head": [
    "depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
-   "233,,,,,,,,,,,,,,,,"
+   "0.0,6.8421,6.5789,6.5789,6.8421,6.5789,13.4211,6.5789,6.8421,6.8421,52.6316,46.0526,6.8421,13.4211,6.8421,10.0,12.8947"
   ],
-  "data_csv_size": 13480,
+  "data_csv_size": 74947,
   "members": [
    "manifest.json",
    "straditize.json",
@@ -969,5 +935,40 @@
    "size",
    "success"
   ]
+ },
+ "tar_uncalibrated_refusal": {
+  "csv_head": [
+   "depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
+   "0.0,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00"
+  ],
+  "manifest_field": {
+   "notice": "data.csv.PLACEHOLDER.md",
+   "reason": "JsonRpcError: 导出需要深度标定：请先完成步骤 3 的 Y 轴两点标定（当前 is_calibrated=false）。 Export requires depth calibration (two-point Y calibration).",
+   "zeros_are_not_measurements": true
+  },
+  "members": [
+   "manifest.json",
+   "straditize.json",
+   "image/original.png",
+   "data.csv",
+   "data.csv.PLACEHOLDER.md",
+   "plot_strat.R",
+   "README.txt"
+  ],
+  "notice_head": [
+   "# data.csv 是占位表，不是真实读数",
+   "",
+   "本次打包时真实导出失败，data.csv 里**每一个数值都是 0.00**。它们既不表示「未观测」，也不表示「观测到 0」，只是占位符。"
+  ],
+  "placeholder_flag": true,
+  "reason": "JsonRpcError: 导出需要深度标定：请先完成步骤 3 的 Y 轴两点标定（当前 is_calibrated=false）。 Export requires depth calibration (two-point Y calibration).",
+  "result_keys": [
+   "data_csv_placeholder",
+   "data_csv_placeholder_reason",
+   "path",
+   "size",
+   "success"
+  ],
+  "zeros_are_not_measurements": true
  }
 }
