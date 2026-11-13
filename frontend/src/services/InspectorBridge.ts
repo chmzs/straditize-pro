@@ -1,4 +1,5 @@
 import { RpcClient } from './RpcClient';
+import { showConfirmDialog } from '../ui/confirm';
 import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
 import { makeRenameUndo } from '../core/undoActions';
 import { GeologyCanvas } from '../components/GeologyCanvas';
@@ -180,8 +181,43 @@ export function createInspectorCallbacks(
       }
     },
     onDeleteRoi: async (roiId: string) => {
+      // 删除会**级联删掉该 ROI 下的全部列**且不可撤销（`session_parts/roi.py:283-309`）。
+      // 后端为此要求显式 `confirm_drop_columns: true`，旧前端永远只发 `{ roi_id }`，
+      // 于是这条删除对"有列的 ROI"**永远做不到**：用户只拿到一条 -32002 报错，
+      // 界面上没有任何可以"确认"的地方。
+      //
+      // "有多少列会被连带删掉"**必须问后端**：这是破坏性操作的边界，不能拿前端镜像
+      // 里可能缺失/过期的 `col.roi_id` 去数（实测镜像里该字段可能为空，数出 0 就会
+      // 直接跳过确认、把 -32002 死路留在原地）。
+      let doomed: Array<{ id: string; name?: string }> = [];
       try {
-        await rpcClient.call('roi.remove', { roi_id: roiId });
+        const fresh = await rpcClient.getDiagramData();
+        doomed = ((fresh.columns ?? []) as Array<{ id: string; name?: string; roi_id?: string }>).filter(
+          (c) => c.roi_id === roiId
+        );
+      } catch (err) {
+        // 拿不到边界就不许"猜着删"：明确报错并停在原地。
+        callbacks.reportBackendFailure('读取待删除列清单', err);
+        return;
+      }
+
+      if (doomed.length > 0) {
+        const roiName = (canvasComponent.data.rois || []).find((r) => r.id === roiId)?.name || roiId;
+        const names = doomed.slice(0, 3).map((c) => c.name || c.id).join('、');
+        const more = doomed.length > 3 ? ` 等（共 ${doomed.length} 列）` : '';
+        const ok = await showConfirmDialog(
+          '删除有效区并连带删除列',
+          `有效区「${roiName}」下有 ${doomed.length} 列：${names}${more}。删除该有效区会把这些列一并删除，且无法撤销。`,
+          { confirmText: `删除 ${doomed.length} 列并删除有效区`, destructive: true }
+        );
+        // 取消 = **一发请求都不发**（不能"先试着删、失败了再问"）。
+        if (!ok) return;
+      }
+      try {
+        await rpcClient.call('roi.remove', {
+          roi_id: roiId,
+          confirm_drop_columns: doomed.length > 0,
+        });
         const freshData = await rpcClient.getDiagramData();
         canvasComponent.loadNewDiagram(freshData);
         getSidebar()?.updateData(canvasComponent.data);
