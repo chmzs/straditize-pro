@@ -110,10 +110,41 @@ export function reportBackendFailure(actionLabel: string, err: unknown): void {
 }
 
 
+/**
+ * 探测重试次数与退避。
+ *
+ * 单次探测失败**不等于**后端不在：`RpcClient.probeBackend` 对每个候选地址只有
+ * 2.5 秒 abort 时限，而后端是**单会话串行**执行的——`e2e.reset`、分列、年模提取
+ * 这类重活会把 `system.ping` 压到 4 秒以上（2026-11-13 本机实测：
+ * `agedepth-modal` 跑动期间逐秒探测得到 4.13s / 4.23s / 4.27s 的响应）。
+ * 拿第一次结果当终局，等于把"后端忙"误判成"后端未连接"，并挂出一张只能人工点击的
+ * 阻塞闸门——用户什么都没做错，却要为此点一下。
+ *
+ * 重试仍然是**诚实的**：每次都是真实探测，失败足够多次之后照旧亮闸门；闸门背后没有
+ * 任何替代数据，也没有"进入演示模式"这一退路。
+ *
+ * 探测真失败（端口拒绝）时每次尝试都在毫秒级返回，所以最坏等待约
+ * 3 ×（0.5 + 1 + 1.5）= 3 秒，不会把"后端确实不在"的提示拖到很久以后。
+ */
+const PROBE_ATTEMPTS = 4;
+const PROBE_BACKOFF_MS = 500;
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** 探测到"连上"或"需要密码"为止；都失败时把结果留在 `getStatus()` 里。 */
+async function probeWithRetries(rpcClient: RpcClient): Promise<void> {
+  for (let attempt = 1; attempt <= PROBE_ATTEMPTS; attempt += 1) {
+    await rpcClient.probeBackend();
+    if (rpcClient.isAuthNeeded()) return;
+    if (rpcClient.getStatus().connected) return;
+    if (attempt < PROBE_ATTEMPTS) await sleep(PROBE_BACKOFF_MS * attempt);
+  }
+}
+
 /** 后端未连接时阻塞启动，直到连上为止 */
 export async function ensureDataProvenance(rpcClient: RpcClient): Promise<void> {
   for (;;) {
-    await rpcClient.probeBackend();
+    await probeWithRetries(rpcClient);
     if (rpcClient.isAuthNeeded()) return;
     if (rpcClient.getStatus().connected) return;
     if (document.getElementById('auth-gate-modal')) {
