@@ -126,11 +126,24 @@ def detect_line_candidates(
     line_width_min: int = 1,
     line_width_max: int | None = 2,
     roi_id: str = "roi_1",
+    include_horizontal: bool = True,
+    include_vertical: bool = True,
 ) -> list[dict[str, Any]]:
     """Detect structured line candidates inside the declared ROI.
 
     Uses continuous morphological opening and perpendicular stroke thickness
     to isolate true thin linear structures without eating solid silhouette areas.
+
+    ``include_horizontal`` / ``include_vertical`` 决定**生成哪几类**候选：
+
+    * ``include_horizontal`` 管 Kind A（贯穿横向线，坐标线）；
+    * ``include_vertical`` 管 Kind B（贯穿纵向线，网格线）**与** Kind C
+      （列内纵向短线，刻度齿/基线）—— 两者都是竖的，用户眼里的"竖线"就是
+      这个集合，拆成两个开关只会让人猜。
+
+    关掉的一类**不进入生成流程**（不是生成后过滤）：Kind C 的逐列
+    ``_detect_linear_structures`` 也一并跳过。默认两个都是 ``True``，因而
+    不传时行为与引入开关之前**逐字节相同**。
     """
     ink = np.asarray(ink, dtype=bool)
     if ink.ndim != 2 or ink.size == 0:
@@ -165,11 +178,18 @@ def detect_line_candidates(
     axis_positions = _column_axis_positions(columns, roi_id)
 
     # 1. Kind A: Horizontal lines across ROI (legacy projection semantics).
-    rows_h = _projection_line_rows(
-        sub_ink,
-        fraction=line_fraction_h,
-        min_width=line_width_min,
-        max_width=resolved_max,
+    #
+    # `include_horizontal=False` 时 `rows_h` 为空 —— 下面的循环一次都不进去，
+    # 一条 Kind A 字典也不会被构造。这是"不生成"，不是"生成后丢掉"。
+    rows_h = (
+        _projection_line_rows(
+            sub_ink,
+            fraction=line_fraction_h,
+            min_width=line_width_min,
+            max_width=resolved_max,
+        )
+        if include_horizontal
+        else np.array([], dtype=int)
     )
     # ROI 边缘保护带：只够挡掉 1–2px 的 ROI 描边即可，必须是**小常量**。
     #
@@ -215,6 +235,8 @@ def detect_line_candidates(
 
     # 2. Kind B: Cross-ROI vertical axes/grid lines (legacy projection semantics).
     #
+    # `include_vertical=False` 时 `cols_v` 为空（见上），循环一次都不进。
+    #
     # 列轴（= 列左缘那条贯穿竖线）**一律不提**。
     #
     # 面积图的 0 点画在列轴上，而 `_extraction_mask()` 会把已确认几何的像素从
@@ -233,11 +255,15 @@ def detect_line_candidates(
     #
     # 抑制条件只用列结构（`columns[].start`），与 `line_fraction_v` 无关：把
     # fraction 调到能滤掉列轴的程度，真正的贯穿纵线（表格网格线）会一起消失。
-    cols_v = _projection_line_cols(
-        sub_ink,
-        fraction=line_fraction_v,
-        min_width=line_width_min,
-        max_width=resolved_max,
+    cols_v = (
+        _projection_line_cols(
+            sub_ink,
+            fraction=line_fraction_v,
+            min_width=line_width_min,
+            max_width=resolved_max,
+        )
+        if include_vertical
+        else np.array([], dtype=int)
     )
     for cluster in _cluster_indices(cols_v):
         at_local = int(round(float(np.mean(cluster))))
@@ -270,7 +296,10 @@ def detect_line_candidates(
         mask_v[:, cols_v] = sub_ink[:, cols_v]
 
     # 3. Kind C: Column-internal vertical lines (列内竖线)
-    if columns:
+    #
+    # 与 Kind B 同一个开关：列内短竖线在用户眼里也是"竖线"。关掉竖线时连逐列的
+    # `_detect_linear_structures` 都不跑 —— 那是本函数最贵的一段（每列一次形态学）。
+    if include_vertical and columns:
         for col_idx, col in enumerate(columns):
             if col.get("roi_id") and col["roi_id"] != roi_id:
                 continue
