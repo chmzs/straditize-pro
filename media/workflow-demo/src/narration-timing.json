@@ -1,0 +1,215 @@
+{
+  "voice": "zh-CN-YunyangNeural",
+  "fps": 30,
+  "tailPadSeconds": 0.5,
+  "items": {
+    "opening": {
+      "sentences": [
+        {
+          "text": "从一张花粉图版扫描件，到一份可以复核的数据表。",
+          "file": "voice/opening-0.mp3",
+          "dur": 4.416
+        }
+      ],
+      "dur": 4.416,
+      "frames": 147
+    },
+    "load": {
+      "sentences": [
+        {
+          "text": "第一步载入图谱，系统解析出二十八个属性列。",
+          "file": "voice/load-0.mp3",
+          "dur": 4.296
+        }
+      ],
+      "dur": 4.296,
+      "frames": 144
+    },
+    "roi": {
+      "sentences": [
+        {
+          "text": "第二步框出数据有效区，像素边界归属二十八列。",
+          "file": "voice/roi-0.mp3",
+          "dur": 4.608
+        }
+      ],
+      "dur": 4.608,
+      "frames": 153
+    },
+    "ycalib": {
+      "sentences": [
+        {
+          "text": "第三步在纵轴上点两个已知刻度，像素就换算成了厘米。",
+          "file": "voice/ycalib-0.mp3",
+          "dur": 5.28
+        }
+      ],
+      "dur": 5.28,
+      "frames": 173
+    },
+    "clean-candidates": {
+      "sentences": [
+        {
+          "text": "第四步系统先列出二十条干扰线候选，确认之前不动原图。",
+          "file": "voice/clean-candidates-0.mp3",
+          "dur": 5.424
+        }
+      ],
+      "dur": 5.424,
+      "frames": 178
+    },
+    "clean-mask": {
+      "sentences": [
+        {
+          "text": "打开二值化遮罩，被遮住的像素不再参与分列。",
+          "file": "voice/clean-mask-0.mp3",
+          "dur": 4.368
+        }
+      ],
+      "dur": 4.368,
+      "frames": 146
+    },
+    "split": {
+      "sentences": [
+        {
+          "text": "一列一列切开，二十八列各自成为独立数据。",
+          "file": "voice/split-0.mp3",
+          "dur": 4.152
+        }
+      ],
+      "dur": 4.152,
+      "frames": 140
+    },
+    "ocr": {
+      "sentences": [
+        {
+          "text": "属种名自动识别三十列，认不准的两列留给人来核对。",
+          "file": "voice/ocr-0.mp3",
+          "dur": 4.848
+        },
+        {
+          "text": "识别结果逐行可改，改完再应用到各列。",
+          "file": "voice/ocr-1.mp3",
+          "dur": 3.936
+        }
+      ],
+      "dur": 8.784,
+      "frames": 279
+    },
+    "metadata": {
+      "sentences": [
+        {
+          "text": "图版与文献里的元信息自动读出，包含 DOI 和采样点坐标。",
+          "file": "voice/metadata-0.mp3",
+          "dur": 5.376
+        }
+      ],
+      "dur": 5.376,
+      "frames": 176
+    },
+    "xticks-roi-too-small": {
+      "sentences": [
+        {
+          "text": "有效区没盖住印刷轴行时，界面直接告诉你下边界该移到哪。",
+          "file": "voice/xticks-roi-too-small-0.mp3",
+          "dur": 5.904
+        }
+      ],
+      "dur": 5.904,
+      "frames": 192
+    },
+    "xticks-ok": {
+      "sentences": [
+        {
+          "text": "补上下边界重新检测，二十八列全部检出刻齿。",
+          "file": "voice/xticks-ok-0.mp3",
+          "dur": 4.44
+        }
+      ],
+      "dur": 4.44,
+      "frames": 148
+    },
+    "agedepth": {
+      "sentences": [
+        {
+          "text": "年代深度模型跑出曲线与置信带，提取六百八十二个深度层位。",
+          "file": "voice/agedepth-0.mp3",
+          "dur": 5.664
+        },
+        {
+          "text": "样本深度按这条曲线反推成年代。",
+          "file": "voice/agedepth-1.mp3",
+          "dur": 3.6
+        }
+      ],
+      "dur": 9.264,
+      "frames": 293
+    },
+    "horizons": {
+      "sentences": [
+        {
+          "text": "跨属性寻找共识层位，得到一百一十二个采样层位。",
+          "file": "voice/horizons-0.mp3",
+          "dur": 4.56
+        }
+      ],
+      "dur": 4.56,
+      "frames": 152
+    },
+    "qa": {
+      "sentences": [
+        {
+          "text": "组分总和超过百分之一百零二，八十五个层位被点名。",
+          "file": "voice/qa-0.mp3",
+          "dur": 4.824
+        },
+        {
+          "text": "超标不是报错，是提示回去核对组分比例。",
+          "file": "voice/qa-1.mp3",
+          "dur": 4.2
+        }
+      ],
+      "dur": 9.024,
+      "frames": 286
+    },
+    "export-blocked": {
+      "sentences": [
+        {
+          "text": "没做深度标定就不给导出，清单里写明缺什么。",
+          "file": "voice/export-blocked-0.mp3",
+          "dur": 4.68
+        },
+        {
+          "text": "补齐清单上的项，导出才会放行。",
+          "file": "voice/export-blocked-1.mp3",
+          "dur": 3.336
+        }
+      ],
+      "dur": 8.016,
+      "frames": 255
+    },
+    "ledger": {
+      "sentences": [
+        {
+          "text": "这一页把前面的数字收在一起，每个都能回到它那一帧。",
+          "file": "voice/ledger-0.mp3",
+          "dur": 5.04
+        }
+      ],
+      "dur": 5.04,
+      "frames": 166
+    },
+    "closing": {
+      "sentences": [
+        {
+          "text": "每一步都留痕，每一个数字都能回到那一帧。",
+          "file": "voice/closing-0.mp3",
+          "dur": 4.104
+        }
+      ],
+      "dur": 4.104,
+      "frames": 138
+    }
+  },
+  "totalFramesNoTransition": 3166
+}
