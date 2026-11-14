@@ -132,4 +132,46 @@ assert.equal(mod.describeAxisCoverageGap(allAxis, [0, 1300]), null, '各列都�
 assert.equal(mod.describeAxisCoverageGap(null, [0, 1300]), null);
 assert.equal(mod.describeAxisCoverageGap(clippedGeo, null), null);
 
-console.log('✓ rulerSpan：4 组判据全部通过');
+// ---- 4b. 轴行实测值时，提示必须报出那个 y（②的升级判据） -------------------
+//
+// 后端 `measureRuler` 的 `per_column[].axis_row_outside_roi` 只在"轴行存在但在
+// 有效区之外"时有值（`ruler.py::find_axis_row_below_roi`），`null` 表示窗口内
+// **确实找不到**轴行。两种语义必须给出两种文案：有值就报 y，没值就退回不带数字的
+// 版本 —— 编一个 y 等于把"没找到"说成"找到了，在别处"。
+const withAxisRow = {
+  ...clippedGeo,
+  per_column: clippedGeo.per_column.map((c) => ({ ...c, axis_row_outside_roi: 1307 })),
+};
+const measured = mod.describeAxisCoverageGap(withAxisRow, [0, 1300]);
+assert.ok(measured, '有实测轴行时仍要给出诊断');
+assert.ok(measured.includes('y≈1307'), `必须报出后端实测的轴行 y=1307，实得：${measured}`);
+assert.ok(measured.includes('y=1300'), `必须报出有效区下边界 1300，实得：${measured}`);
+assert.ok(measured.includes('26/29'), `必须报出实测列数 26/29，实得：${measured}`);
+assert.ok(/下移/.test(measured), `必须给出可执行动作，实得：${measured}`);
+
+// 负向对照：全部为 null（后端确实找不到轴行）⇒ **不得**出现"y≈"，退回旧文案。
+const nullAxis = {
+  ...clippedGeo,
+  per_column: clippedGeo.per_column.map((c) => ({ ...c, axis_row_outside_roi: null })),
+};
+const fallback = mod.describeAxisCoverageGap(nullAxis, [0, 1300]);
+assert.ok(fallback, '找不到轴行时仍要给出"下边界可能没盖住轴行"的诊断');
+assert.ok(
+  !fallback.includes('y≈'),
+  `找不到轴行时不得编一个 y（实测 payload 里就是 null），实得：${fallback}`
+);
+
+// 众数判据：单列偏差不得改写提示里的 y（印刷轴行是全图版共用的一行）。
+const oneOutlier = {
+  ...clippedGeo,
+  per_column: clippedGeo.per_column.map((c, i) => ({
+    ...c,
+    axis_row_outside_roi: i === 0 ? 999 : 1307,
+  })),
+};
+assert.ok(
+  mod.describeAxisCoverageGap(oneOutlier, [0, 1300]).includes('y≈1307'),
+  '28 列说 1307、1 列说 999 时必须取众数 1307，不能被单列偏差带跑'
+);
+
+console.log('✓ rulerSpan：5 组判据全部通过');

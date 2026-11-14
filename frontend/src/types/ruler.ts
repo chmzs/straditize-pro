@@ -17,6 +17,18 @@ export interface RulerGeometryColumn {
   name: string | null;
   /** 刻度尺所依附的横轴线所在行（像素 y）；未找到轴线为 null。 */
   axis_row: number | null;
+  /**
+   * 轴行**在有效区之外**时的实测行号；`null` = 窗口内确实找不到轴行。
+   *
+   * 语义严格区分两种情况（后端口径，`ruler.py::find_axis_row_below_roi`）：
+   *   * `number` ⇒ 轴行存在，但在 ROI 下边界之下 —— 界面可以报出这个 y 并让用户
+   *     把下边界下移到它以下；
+   *   * `null` ⇒ **确实找不到**轴行（图本来没有刻度尺）—— 界面必须退回
+   *     "未找到刻度尺"的说法，**不得**编一个 y。
+   *
+   * 只在 `axis_row` 为 null（有效区内没找到）时才有值；两者不会同时非空。
+   */
+  axis_row_outside_roi?: number | null;
   /** 刻线 x 中心，升序。空数组 = 该列没检测到刻线。 */
   ticks: number[];
   /** 画出来的刻线间隔数 = `len(ticks) - 1`；**不是**该列视觉格数。 */

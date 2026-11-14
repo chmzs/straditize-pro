@@ -39,6 +39,8 @@ const GAP_HINT = `${STEP6} [data-role="axis-coverage-hint"]`;
 interface WireRulerColumn {
   col_index: number | null;
   axis_row: number | null;
+  /** 轴行在有效区之外时的实测行号；null = 窗口内确实找不到轴行。 */
+  axis_row_outside_roi?: number | null;
   ticks: number[];
 }
 
@@ -116,10 +118,27 @@ test.describe('步骤 6：有效区没盖住印刷轴行', () => {
       })
       .toBe('1');
 
+    // 轴行的实测 y：取后端同一份 payload 的众数（印刷轴行是全图版共用的一行）。
+    // 期望值不写死：换图或后端改了检测，这里自动跟着变。
+    const outsideVals = cols
+      .map((c) => c.axis_row_outside_roi)
+      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+    expect(
+      outsideVals.length,
+      '前置：必须真的测到「轴行在有效区之外」的行号（axis_row_outside_roi）'
+    ).toBeGreaterThan(0);
+    const counts = new Map<number, number>();
+    for (const v of outsideVals) counts.set(v, (counts.get(v) ?? 0) + 1);
+    const [axisRow, axisRowN] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+
     const text = (await page.locator(GAP_HINT).innerText()).replace(/\s+/g, ' ');
     expect(text, `诊断必须报出实测下边界 y=${bottom}，实得：${text}`).toContain(
       String(Math.round(Number(bottom)))
     );
+    expect(
+      text,
+      `诊断必须报出后端实测的印刷轴行 y≈${axisRow}（${axisRowN} 列报告该行），实得：${text}`
+    ).toContain(`y≈${axisRow}`);
     expect(
       text,
       `诊断必须报出实测的缺失列数 ${missing}/${cols.length}，实得：${text}`

@@ -129,10 +129,53 @@ export function describeAxisCoverageGap(
   if (measuredAxis === cols.length) return null;
   const missing = cols.length - measuredAxis;
   const bottom = Math.round(Number(roiYlim[1]));
+  // 轴行的实测 y：后端只在 `axis_row` 为 null 时才去 ROI 之下查
+  // （`ruler.py::find_axis_row_below_roi`），所以这里取众数即"多数列公认的那一行"。
+  // 全部为 null ⇒ 窗口内确实找不到轴行 ⇒ **不许**编一个 y，退回不带数字的版本。
+  const axisRow = modalAxisRowOutside(cols);
+  const cause =
+    '刻度齿只在轴线下方 1–8px 内搜索，框选时若没把印刷的轴行框进有效区，' +
+    '整段搜索带就落在轴行之上，一条齿也检不出来。';
+  if (axisRow != null) {
+    return (
+      `有效区下边界 y=${bottom} 未覆盖印刷轴行 y≈${axisRow}（${missing}/${cols.length} 列在区内测不到轴线）：` +
+      cause +
+      `请把有效区下边界下移到 y=${axisRow} 以下（框住那条横轴本身）后点【重新检测】。`
+    );
+  }
   return (
     `有效区下边界（y=${bottom}）以内有 ${missing}/${cols.length} 列测不到刻度轴线：` +
-    `刻度齿只在轴线下方 1–8px 内搜索，框选时若没把印刷的轴行框进有效区，` +
-    `整段搜索带就落在轴行之上，一条齿也检不出来。` +
+    cause +
     `请把有效区下边界下移到印刷轴行以下（框住那条横轴本身）后点【重新检测】。`
   );
+}
+
+/**
+ * 多数列一致报告的"轴行在有效区之外"的行号；没有一致意见就返回 null。
+ *
+ * 为什么要众数而不是取第一个非 null：单列可能把一条内部分隔线当成轴行（后端已用
+ * "窄齿比例 ≥0.90 + 非整幅外框"挡掉大部分，但边缘列仍可能有偏差）。印刷轴行是
+ * **全图版共用**的一行，众数就是"多数列公认"的那一行。
+ * 平票或没有任何非 null 值 ⇒ null（调用方退回不带 y 的文案）。
+ */
+function modalAxisRowOutside(cols: RulerGeometry['per_column']): number | null {
+  const counts = new Map<number, number>();
+  for (const g of cols) {
+    const y = g.axis_row_outside_roi;
+    if (typeof y !== 'number' || !Number.isFinite(y)) continue;
+    counts.set(y, (counts.get(y) ?? 0) + 1);
+  }
+  let best: number | null = null;
+  let bestN = 0;
+  let tie = false;
+  for (const [y, n] of counts) {
+    if (n > bestN) {
+      best = y;
+      bestN = n;
+      tie = false;
+    } else if (n === bestN) {
+      tie = true;
+    }
+  }
+  return tie ? null : best;
 }
