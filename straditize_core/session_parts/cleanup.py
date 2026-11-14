@@ -31,6 +31,15 @@ from ..protocol import INVALID_PARAMS, JsonRpcError
 CANDIDATE = "candidate"
 REMOVED = "removed"
 
+#: 判定「列轴线被盖住」时检查的像素带宽（从列左缘起）。
+#: 轴线普遍 1–3px 宽（`_find_axis_x` 的 1–6px 夹取区间），取 2 足以覆盖常见印刷线。
+AXIS_BAND_PX = 2
+#: 轴线带被删除 mask 覆盖到多少（相对 ROI 高度）才算「0 点被抹掉」。
+#:
+#: 取 0.5 而不是 1.0：轴线在底部常被下轴盖住、在上部常被图框或留白打断，
+#: 覆盖到一半就意味着这一列的 0 点已经不能从墨迹里读出来了。
+AXIS_ERASURE_MIN_COVERAGE = 0.5
+
 
 def _rect_of(candidate: dict[str, Any]) -> tuple[int, int, int, int]:
     """Return ``(x0, y0, x1, y1)`` for a candidate.
@@ -313,6 +322,97 @@ class CleanupMixin:
         if self.manual_restore_mask is not None:
             line = line & ~(self.manual_restore_mask & ~exclusion)
         self.grid_line_mask = line | exclusion
+
+    def _axis_erasure_warnings(
+        self,
+        roi_id: str,
+        exclusion_mask: np.ndarray,
+        geometry_mask: np.ndarray,
+    ) -> list[dict[str, Any]]:
+        """报出「步骤 4 的编辑把某列的轴线抹掉了」的列。
+
+        ## 为什么必须报
+
+        面积图的 0 点画在列轴线（左缘那条竖线）上，而
+        ``_extraction_mask()`` 是 ``foreground & ~grid_line_mask & roi_mask`` ——
+        排除区与已确认几何都从这里减墨迹。轴线一旦被减掉：
+
+        * 画布上没有任何变化（overlay 只把被删像素标红，不标"这一列 0 点没了"）；
+        * ``digitize()`` 照常返回 801 个点，整列退化成同一个 x = 列左缘，
+          也就是"全 0"，与"这一列真是 0"**完全无法区分**。
+
+        实测（``hoya-del-castillo.png`` col09 [1065,1097)）：整列圈进排除区后
+        ``ink left in window = 0``、``distinct x = [1065.0]``、801 点，
+        而 RPC 响应此前没有任何警告字段。
+
+        实测第二条（同图自动检测）：21 条候选里 18 条是竖线，其中 **17 条正好落在
+        列边界上**（即列轴本身）—— 用户"检测干扰线 → 全选 → 删除"就是在删轴线。
+        确认它们会让 col02 / col15 / col22 分别有 101 / 294 / 255 行的读数位移 1px。
+
+        ## 为什么不拦、只报
+
+        轴线有时确实是用户想删的东西（例如他把 0 点画在别处）。这里只负责把
+        「你刚删的是某一列的 0 点」变成可读的事实，决策留给用户。
+        """
+        mask = getattr(self, "grid_line_mask", None)
+        columns = getattr(self, "columns", None)
+        if mask is None or not columns:
+            return []
+        h, w = mask.shape
+        _, roi = self._roi_for(roi_id)
+        ylim = roi.get("ylim") if hasattr(roi, "get") else None
+        if ylim:
+            y0 = max(0, int(round(float(ylim[0]))))
+            y1 = min(h, int(round(float(ylim[1]))))
+        else:
+            y0, y1 = 0, h
+        if y1 <= y0:
+            return []
+
+        warnings: list[dict[str, Any]] = []
+        for col in columns:
+            if col.get("roi_id") not in (None, roi_id):
+                continue
+            start = int(round(float(col.get("start", col.get("startX", 0)))))
+            x0 = max(0, min(w, start))
+            x1 = max(x0, min(w, start + AXIS_BAND_PX))
+            if x1 <= x0:
+                continue
+            band_hit = mask[y0:y1, x0:x1].any(axis=1)
+            if not len(band_hit):
+                continue
+            covered = float(band_hit.mean())
+            if covered < AXIS_ERASURE_MIN_COVERAGE:
+                continue
+            by_exclusion = float(
+                exclusion_mask[y0:y1, x0:x1].any(axis=1).mean()
+            ) >= AXIS_ERASURE_MIN_COVERAGE
+            geometry_hit = geometry_mask[y0:y1, x0:x1].any()
+            kind = (
+                "exclusion_covers_column_axis"
+                if by_exclusion
+                else "confirmed_line_covers_column_axis"
+            )
+            name = col.get("name") or col.get("species") or f"col{col.get('col_index', 0) + 1:02d}"
+            warnings.append(
+                {
+                    "kind": kind,
+                    "col_index": col.get("col_index"),
+                    "column_id": col.get("id"),
+                    "column_name": name,
+                    "column_start_x": start,
+                    "covered_fraction": round(covered, 3),
+                    "geometry_hit": bool(geometry_hit),
+                    "note": (
+                        f"步骤 4 的编辑盖住了列 {name} 的轴线（x={start}）"
+                        f"——已覆盖该列纵向 {covered:.0%}。轴线是这一列的 0 点："
+                        "它被抹掉之后，取数会在没有基线的墨迹上定 0，整列读数会"
+                        "整体偏移且不会报错。请把解除/擦除区从列左缘让开 2px 以上，"
+                        "或确认这一列确实要按 0 处理。"
+                    ),
+                }
+            )
+        return warnings
 
     def _roi_for(self, roi_id: str | None) -> tuple[str, Any]:
         """Resolve the ROI to operate on, falling back to the active one."""
@@ -681,6 +781,7 @@ class CleanupMixin:
         self.manual_restore_mask = restore_mask
         self.manual_erase_mask = erase_mask
         self._rebuild_grid_line_mask()
+        warnings = self._axis_erasure_warnings(roi_id, exclusion_mask, geometry_mask)
 
         final_mask = (
             self.grid_line_mask
@@ -740,6 +841,7 @@ class CleanupMixin:
             "roi_id": roi_id,
             "stats": stats,
             "candidates": [dict(c) for c in roi_candidates],
+            "warnings": warnings,
             "selected_ids": sorted(
                 str(c["id"]) for c in roi_candidates if c.get("status") == REMOVED
             ),
