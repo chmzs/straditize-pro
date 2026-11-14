@@ -272,7 +272,7 @@ async function bootstrap() {
         if (cal.top_cm !== null && cal.top_cm !== undefined && cal.bottom_cm !== null && cal.bottom_cm !== undefined) {
           void applyDepthCalibration(marks, [Number(cal.top_cm), Number(cal.bottom_cm)], cal.unit || 'cm');
         } else {
-          setHudNotice(`已拾取两点像素行 (Y1=${Math.round(topPx)}px, Y2=${Math.round(botPx)}px)！请在右侧侧栏输入对应真实数值并应用标定。`, 5000);
+          setHudNotice(`已拾取两点像素行 (Y1=${Math.round(topPx)}px, Y2=${Math.round(botPx)}px)。在右侧侧栏填入对应真实数值后点【应用标定】。`, 5000);
         }
       }
     },
@@ -390,7 +390,7 @@ async function bootstrap() {
     (_extractedModel) => {
       canvasComponent.requestRender();
       inspector?.updateData(canvasComponent.data);
-      setHudNotice('成功将年代-深度模型关联至花粉图谱！');
+      setHudNotice('年代-深度模型已关联到当前图谱。');
     }
   );
 
@@ -398,7 +398,7 @@ async function bootstrap() {
     document.body,
     rpcClient,
     () => {
-      setHudNotice('图谱元数据已保存更新！');
+      setHudNotice('图谱元数据已保存。');
     }
   );
 
@@ -413,7 +413,7 @@ async function bootstrap() {
       canvasComponent.requestRender();
       updateFooter();
       scheduleAutosave();
-      setHudNotice('成功应用 OCR 识别结果并更新属种列名！');
+      setHudNotice('已应用 OCR 识别结果，属种列名已更新。');
     }
   );
 
@@ -443,7 +443,7 @@ async function bootstrap() {
     toolbar?.updateScale(canvasComponent.viewport.scale);
     updateFooter();
     void cleanupManager.recomposeCleanupState('载入项目后重算清理掩膜');
-    setHudNotice('成功载入 Straditize 科学项目包 (.tar)！已 100% 还原全部属种、刻度钉与控制点。', 4500);
+    setHudNotice('已载入项目包 (.tar)：属种列、刻度齿与控制点已从包内恢复。', 4500);
   };
 
   const projectManager = new ProjectManager(
