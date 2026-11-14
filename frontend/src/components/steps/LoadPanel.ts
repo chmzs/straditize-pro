@@ -18,7 +18,7 @@ export function render(data: DiagramData): string {
         </button>
       ` : `
         <div class="info-callout">
-          <span>尚未载入剖面图。请点击顶栏【范例】快速体验，或将图片文件拖拽至中央画布。</span>
+          <span>尚未载入剖面图。点顶栏【范例】载入内置示例，或把图片文件拖到中央画布。</span>
         </div>
       `}
     </div>
