@@ -429,7 +429,14 @@ export class RpcClient {
       // ---- 4. 业务层：后端已明确应答错误 → 冒泡给调用方，绝不静默返回假数据 ----
       if (rpcRes.error) {
         // 面向用户的叙述按当前语言渲染；后端英文原文仅作为技术细节进 console
-        throw new Error(tError(rpcRes.error.code, rpcRes.error.message));
+        const rpcError = new Error(tError(rpcRes.error.code, rpcRes.error.message));
+        // `code` / `data` 必须跟着冒泡：同一个 `-32003` 在不同前置条件下指向**不同的
+        // 补救步骤**（深度标定 → 步骤 3；列刻度 → 步骤 6），只看本地化文案里的
+        // 「标定」二字分不出来。原先这里只抛一句 message，调用方拿不到结构化判别依据，
+        // 只能去猜关键词（ExportModal 正在这么做，实测就把用户引去了错误的步骤）。
+        (rpcError as Error & { code?: number; data?: unknown }).code = rpcRes.error.code;
+        (rpcError as Error & { code?: number; data?: unknown }).data = rpcRes.error.data;
+        throw rpcError;
       }
       // ---- 5. 标度写入成功后广播 ----
       // 落在传输层而不是各包装方法：会写标度的方法不止一处（roiGroupUpdate

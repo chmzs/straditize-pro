@@ -43,6 +43,16 @@ def _session(calibrated: bool) -> StraditizeSession:
             "bottom_cm": 318.0,
             "unit": "cm",
         }
+        # 面板三张表还要求 **至少一列** 有 X 刻度（`_assert_export_column_scale`）：
+        # 全列未标定时它们只能交出一张整表空白，那种表不许当成成功导出（见
+        # `test_export_requires_column_scale.py`）。这里给第一列真实的刻度端点，
+        # 让"标定后必须真的出数"这条判据仍然测的是**守卫不误伤正常路径**。
+        col = session.columns[0]
+        px0 = float(col.get("startX", col.get("start", 0.0))) + 5.0
+        session.calibrate_column_xticks(
+            col["col_index"],
+            [{"px": px0, "value": 0.0}, {"px": px0 + 40.0, "value": 100.0}],
+        )
     return session
 
 

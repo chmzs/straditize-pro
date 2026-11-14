@@ -823,15 +823,63 @@ class ExportMixin:
         key = (dataset or "").strip().lower()
         if not key:
             return self._primary_roi_export_frame(strict=strict)
+        # 参数错误必须先报：非法 dataset 名不该被"还没标定"这条前置条件盖住。
+        if key not in self.EXPORT_DATASETS:
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                f"Unsupported dataset '{dataset}'. Use one of: {', '.join(self.EXPORT_DATASETS)}.",
+            )
+        # 面板三张表都以「读数」为内容：一列都没标定 X 刻度时它们只能给出整表空白，
+        # 那看起来像"这张图没数据"，而不是"你还没做步骤 6"。
+        self._assert_export_column_scale()
         if key == "union_points":
             return self._union_points_frame()
         if key == "depth_grid":
             return self._depth_grid_frame()
-        if key == "turning_points":
-            return self._turning_points_frame()
+        return self._turning_points_frame()  # 只剩 turning_points（上面已校验取值）
+
+    def _export_column_scale_summary(self) -> tuple[int, int]:
+        """(参与导出的列数, 其中已标定 X 刻度的列数)。
+
+        判据与取数层同源：列集取 `column_points` 的键（= 表里真正会出现的列），
+        「是否已标定」走 `resolve_column_scale(...).calibrated`，不在这里另写一套
+        ——组级斜率（`value_per_px`）、列两点（`x_ticks`）、`x_scales` 三种来源的
+        标定状态只有那一个函数判得准。
+        """
+        columns = getattr(self, "columns", []) or []
+        indices = sorted((getattr(self, "column_points", None) or {}).keys())
+        calibrated = 0
+        for idx in indices:
+            col_def = columns[idx] if idx < len(columns) else {}
+            if resolve_column_scale(self, col_def, idx).calibrated:
+                calibrated += 1
+        return len(indices), calibrated
+
+    def _assert_export_column_scale(self) -> None:
+        """全列未标定 X 刻度时**拒绝**面板导出，而不是交付一张整表空白。
+
+        `docs/ARCHITECTURE.md` §2：取不到数据就报错并停在原地，绝不返回替代数据。
+        未标定的列在取数层（`read_column_values` 的 export profile）按既有 `NA`
+        语义整列留空——单列如此是对的（缺的是那一列的刻度，不是整份数据）。但
+        **所有列都没标定**时，三张表就只剩 `depth` 列有值，面板仍会把它渲染成
+        「来源（N 行）· 预览、复制与 CSV 下载都按此行集导出」的正常表：用户看不出
+        自己卡在步骤 6，只会以为"这张图没有数据"。
+
+        所以只挡这一种情况：`calibrated == 0` 才拒绝；只要有一列标定过就照常导出
+        （已标定列给真值，未标定列整列 NA），不因"有列没标定"整体拒绝。
+
+        错误码沿用 `CALIBRATION_ERROR`（-32003）：这是同一种"标定缺失 → 拒绝导出"，
+        新造错误码只会逼前端再写一套分支。区分两种缺什么，靠文案 + `data.reason`。
+        """
+        total, calibrated = self._export_column_scale_summary()
+        if total == 0 or calibrated > 0:
+            return
         raise JsonRpcError(
-            INVALID_PARAMS,
-            f"Unsupported dataset '{dataset}'. Use one of: {', '.join(self.EXPORT_DATASETS)}.",
+            CALIBRATION_ERROR,
+            f"导出需要列刻度：{total} 列都没有 X 轴标度，请先完成步骤 6 的刻度齿标定，"
+            "再回到这里导出。 Export requires column X-scale calibration (step 6): none "
+            f"of the {total} columns has its tick endpoints yet.",
+            {"reason": "column_scale", "columns": total, "calibrated": 0},
         )
 
     def _control_point_rows(self) -> list[int]:
@@ -989,6 +1037,9 @@ class ExportMixin:
                 CALIBRATION_ERROR,
                 "导出需要深度标定：请先完成步骤 3 的 Y 轴两点标定（当前 is_calibrated=false）。"
                 " Export requires depth calibration (two-point Y calibration).",
+                # 前端据 `data.reason` 区分「缺深度标定」与「缺列刻度」两种 -32003：
+                # 两者的补救动作在不同步骤（3 vs 6），靠模糊的 includes('标定') 判不出来。
+                {"reason": "depth_calibration"},
             )
 
         # 取数收敛：不再自己拼行集与列名，直接用主 ROI 的那一张表（同一入口）。

@@ -499,14 +499,23 @@ export class ExportModal {
         if (rowSetCaptionEl) {
           rowSetCaptionEl.style.color = 'var(--status-warning)';
           // 「未标定」与「行集为空」是两件事：前者是**导出被拒绝**，后者是没数据。
-          // 后端现在对未标定统一抛 CALIBRATION_ERROR（-32003），这里必须原样说明，
-          // 否则用户看到"空行集"会去换数据集，而真正要做的是一次 Y 轴标定。
+          // 而后端现在有两种「未标定」拒绝（都是 -32003），指向**不同步骤**：
+          //   深度未标定 → 步骤 3（Y 轴两点标定）；
+          //   全列未标定 → 步骤 6（刻列：点刻度齿标定 X 轴）。
+          // 判据只认后端给的结构化 `reason`（`data.reason`，经 RpcClient 冒泡），
+          // 退化时也只匹配后端那句**逐字**开头；绝不按模糊的 includes('标定') 判——
+          // 那句话两种错误都含，实测会把卡在步骤 6 的用户引去步骤 3。
           const errText = String(err?.message ?? err ?? '');
-          const isCalibration =
-            err?.code === -32003 || errText.includes('深度标定') || errText.includes('calibration');
-          rowSetCaptionEl.textContent = isCalibration
-            ? '导出需要深度标定：请先完成步骤 3 的 Y 轴两点标定（当前未标定），完成后再回到这里导出。'
-            : `当前行集为空（0 行）：${dataset} 数据集在此会话没有可导出的层位。请先在步骤 3 完成 Y 轴标定，或换一个数据集。`;
+          const reason = (err as { data?: { reason?: string } } | null)?.data?.reason;
+          const lacksColumnScale =
+            reason === 'column_scale' || errText.includes('导出需要列刻度');
+          const lacksDepthScale =
+            reason === 'depth_calibration' || errText.includes('导出需要深度标定');
+          rowSetCaptionEl.textContent = lacksColumnScale
+            ? '导出需要列刻度：所有属种列都还没有 X 轴标度，这张表一个读数也不会有。请先完成步骤 6（刻列）的刻度齿标定，再回到这里导出。'
+            : lacksDepthScale
+              ? '导出需要深度标定：请先完成步骤 3 的 Y 轴两点标定（当前未标定），完成后再回到这里导出。'
+              : `当前行集为空（0 行）：${dataset} 数据集在此会话没有可导出的层位。请先在步骤 3 完成 Y 轴标定，或换一个数据集。`;
         }
         notifyError(`读取 ${dataset} 数据集失败：${err?.message || err}`);
         return;
