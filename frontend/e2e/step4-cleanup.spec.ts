@@ -161,6 +161,18 @@ async function dragOnCanvas(
 }
 
 test.describe('步骤 4 干扰清理', () => {
+  /**
+   * 「⬚ 添加排除区」在 hoya 基线上**必然**盖住 col26/27/28 三条列轴的左缘
+   * （矩形固定在 `x∈[xMax-250, xMax]`、纵向贯穿），后端因此必然返回
+   * `exclusion_covers_column_axis` 告警，前端也必然弹 warning toast。
+   *
+   * 这条告警是**正确行为**，不是"前置状态缺失"：本文件里点那个按钮的用例
+   * （「清空本步全部…」）因此需要豁免。豁免只覆盖这一句精确文案；告警的
+   * **内容**（列名 / 覆盖比例 / 建议）由 `step4-axis-warning-surfacing.spec.ts`
+   * 正向断言，删掉那条正向用例不会因为这里放宽而静默通过。
+   */
+  test.use({ allowlists: { notice: [/^警告：\d+ 列的轴线被本步编辑盖住/] } });
+
   test.beforeEach(async ({ page }) => {
     await resetBaseline(page);
   });

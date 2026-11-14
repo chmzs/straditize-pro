@@ -363,11 +363,11 @@ export function createInspectorCallbacks(
           selected_ids: canvasComponent.data.selected_candidate_ids || [],
           exclusion_regions: canvasComponent.data.exclusion_regions,
         });
-        if (maskRes?.overlay_png) {
-          canvasComponent.setLineOverlay(maskRes.overlay_png);
-        }
-        getInspector()?.updateData(canvasComponent.data);
-        canvasComponent.requestRender();
+        // 必须走 `applyCleanupState`，不能只塞 overlay：
+        // 这个响应里除了掩膜还有 `stats`（排除区像素计入统计）与 `warnings`
+        // （排除区盖住某列轴线的告警）。此前只取 `overlay_png`，于是"排除区盖住
+        // 整列"这件事在界面上完全不可见 —— 用户只能在下游看到一列恒为 0。
+        cleanupManager.applyCleanupState(maskRes);
         callbacks.setHudNotice(`⛶ 已划定排除区 [X: ${exX0}~${exX1}]！该区域所有墨迹在数字化时将被绝对剔除。`, 4500);
       } catch (err) {
         callbacks.reportBackendFailure('添加排除区', err);

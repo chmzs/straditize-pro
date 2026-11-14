@@ -3,8 +3,16 @@ import { GeologyCanvas } from '../components/GeologyCanvas';
 import { Sidebar } from '../components/Sidebar';
 import { Inspector } from '../components/Inspector';
 import { Toolbar } from '../components/Toolbar';
-import { DataRoi, HistorySnapshot, LineCandidate, LineMaskStroke } from '../types/pollen';
+import {
+  CleanupAxisWarning,
+  DataRoi,
+  HistorySnapshot,
+  LineCandidate,
+  LineMaskStroke,
+} from '../types/pollen';
 import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
+import { axisWarningHeadline } from '../core/axisWarnings';
+import { notify } from '../ui/feedback';
 
 export interface CleanupManagerCallbacks {
   setHudNotice: (text: string, duration?: number) => void;
@@ -23,6 +31,8 @@ export class CleanupManager {
   private roiCommitPromise: Promise<void> = Promise.resolve();
   private cleanupRecomposePromise: Promise<void> = Promise.resolve();
   private cleanupRecomposeVersion: number = 0;
+  /** 上一次已提示过的轴线告警集合签名（去重，见 `applyAxisWarnings`）。 */
+  private axisWarningSignature: string = '';
 
   constructor(
     rpcClient: RpcClient,
@@ -58,6 +68,7 @@ export class CleanupManager {
     selected_ids?: string[];
     stats?: Record<string, number>;
     overlay_png?: string;
+    warnings?: CleanupAxisWarning[];
   }): void {
     const data = this.canvasComponent.data;
     if (Array.isArray(res.candidates)) {
@@ -69,6 +80,7 @@ export class CleanupManager {
     if (res.stats) {
       data.cleanup_stats = res.stats;
     }
+    this.applyAxisWarnings(Array.isArray(res.warnings) ? res.warnings : []);
     if (res.overlay_png) {
       this.canvasComponent.setLineOverlay(res.overlay_png);
       this.canvasComponent.viewport.showBinaryOverlay = true;
@@ -79,6 +91,46 @@ export class CleanupManager {
     this.getInspector()?.updateData(data);
     this.getSidebar()?.updateData(data);
     this.canvasComponent.requestRender();
+  }
+
+  /**
+   * 把后端「这一步编辑抹掉了某列轴线」的告警送到界面。
+   *
+   * 两件事必须同时成立，否则这次修复等于没做：
+   *
+   * 1. **写进镜像状态**（`data.cleanup_warnings`）→ 步骤 4 面板常驻显示；
+   *    toast 会 6 秒后消失，用户回头再看就只剩"这一列为什么全 0"。
+   * 2. **弹一条 warning toast** → 用户刚点完按钮、目光还在按钮上时就能看到。
+   *
+   * 去重只按「本次告警集合是否变化」：`_recompose` 在每次拖动/连点上都会跑，
+   * 若按条数弹 toast，拖一次几何就会刷出十几条相同的提示，最后被用户当噪音忽略
+   * ——那正是这类告警失效的常见死法。
+   */
+  private applyAxisWarnings(warnings: CleanupAxisWarning[]): void {
+    const data = this.canvasComponent.data;
+    data.cleanup_warnings = warnings;
+
+    const signature = warnings
+      .map((w) => `${w.kind}|${w.column_id ?? w.column_name}|${w.covered_fraction}`)
+      .sort()
+      .join(';');
+    if (signature === this.axisWarningSignature) return;
+    this.axisWarningSignature = signature;
+
+    if (warnings.length === 0) return;
+    // 一次编辑常常同时盖住相邻几列的轴线（面板的「添加排除区」就是一条 250px 宽、
+    // 纵向贯穿的矩形）。逐条弹 toast 会一次刷出好几条同义提示 —— 那正是"告警被
+    // 当噪音忽略"的起点。所以聚合成一条，逐列的细节留在面板里。
+    if (warnings.length === 1) {
+      notify(`警告：${axisWarningHeadline(warnings[0])}（处理建议见步骤 4 面板）`, 'warning');
+      return;
+    }
+    const names = warnings.map((w) => `「${w.column_name}」`).join('、');
+    notify(
+      `警告：${warnings.length} 列的轴线被本步编辑盖住（${names}），` +
+        '取数会整列偏移且不会报错；逐列处理建议见步骤 4 面板',
+      'warning'
+    );
   }
 
   public recomposeCleanupState(label = '重算清理掩膜'): Promise<void> {

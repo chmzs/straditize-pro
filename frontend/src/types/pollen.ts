@@ -310,6 +310,29 @@ export interface LineCandidate {
 }
 
 /** 后端 `algorithm.*LineGeometry` 统一返回的清理状态与预览。 */
+/**
+ * 步骤 4 的编辑把某一列的**轴线**（0 点）抹掉时，后端下发的告警。
+ *
+ * 为什么必须到界面：轴线被抹掉之后画布上没有任何变化，`digitize()` 照常返回
+ * 整列读数，只是每行都退化成列左缘 —— 与"这一列真是 0"无法区分。用户唯一的
+ * 线索就是这条告警，所以它不能只留在 RPC 响应里。
+ *
+ * 字段名与后端 `cleanup._axis_erasure_warnings()` 的返回一致，不在前端重算。
+ */
+export interface CleanupAxisWarning {
+  kind: 'exclusion_covers_column_axis' | 'confirmed_line_covers_column_axis';
+  col_index: number | null;
+  column_id: string | null;
+  column_name: string;
+  /** 列左缘（轴线）的像素 x。 */
+  column_start_x: number;
+  /** 轴线带被删除 mask 覆盖的比例（0..1，后端已 round 到 3 位）。 */
+  covered_fraction: number;
+  geometry_hit: boolean;
+  /** 后端给的处理建议（原文，含"让开 2px 以上"这类可操作信息）。 */
+  note: string;
+}
+
 export interface CleanupResult {
   roi_id: string;
   stats: Record<string, number>;
@@ -317,6 +340,8 @@ export interface CleanupResult {
   selected_ids: string[];
   overlay_png: string;
   overlay_legend: Record<string, string>;
+  /** 轴线被这次编辑抹掉的列（见 {@link CleanupAxisWarning}）。 */
+  warnings?: CleanupAxisWarning[];
 }
 
 /** 线掩膜的人工修正笔迹：mode=erase 擦掉误标，mode=restore 补回漏标。 */
@@ -399,6 +424,14 @@ export interface DiagramData {
   cleanup_selected_id?: string | null;
   /** 后端下发的清理统计，面板必须显示真实数字。 */
   cleanup_stats?: Record<string, number>;
+  /**
+   * 最近一次步骤 4 编辑**抹掉了谁家轴线**（后端 `warnings` 原文）。
+   *
+   * 由 `CleanupManager.applyCleanupState()` 从 cleanup 类 RPC 的响应里灌入，
+   * 每次编辑整体替换（不是累积）：清空编辑时后端不再返回它，面板上的告警
+   * 必须跟着消失，否则"已经修好了"和"还在坏着"看起来一模一样。
+   */
+  cleanup_warnings?: CleanupAxisWarning[];
   /**
    * 清理统计与图例（后端 `cleanup_payload()` 下发，零状态也发）。
    *

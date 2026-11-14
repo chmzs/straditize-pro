@@ -1,6 +1,7 @@
 import { DiagramData, LineCandidate } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
+import { axisWarningHeadline, axisWarningNote } from '../../core/axisWarnings';
 
 export const step = 4;
 export const title = '4. 干扰清理';
@@ -35,6 +36,7 @@ export function render(data: DiagramData): string {
   const exclusionCount = data.exclusion_regions ? data.exclusion_regions.length : 0;
   const strokeCount = data.line_strokes ? data.line_strokes.length : 0;
   const selectedId = data.cleanup_selected_id ?? null;
+  const axisWarnings = data.cleanup_warnings || [];
 
   // 统一厚度输入框的默认值：优先取选中几何的实际宽度，否则取出现次数最多的宽度。
   // 这样用户点一条线再看侧栏，输入框里就是那条线的真实厚度。
@@ -90,6 +92,27 @@ export function render(data: DiagramData): string {
       <div class="step-desc">
         ${t('step4.forRoi')}<strong style="color: var(--accent-blue);">${roiName}</strong>
       </div>
+
+      ${
+        axisWarnings.length === 0
+          ? ''
+          : `<div id="cleanup-axis-warnings" class="inspector-section"
+               style="padding:8px;border-radius:6px;margin-bottom:10px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.55);border-left:4px solid var(--status-warning);">
+              <div style="font-size:11px;font-weight:700;color:var(--status-warning);margin-bottom:4px;">
+                警告：本步编辑抹掉了 ${axisWarnings.length} 列的轴线（0 点）：取数会整列偏移，且不会报错
+              </div>
+              ${axisWarnings
+                .map(
+                  (w) => `<div class="cleanup-axis-warning" data-warning-kind="${w.kind}"
+                     data-column-name="${w.column_name}" data-column-start-x="${w.column_start_x}"
+                     style="font-size:10px;line-height:1.5;color:var(--text-primary);margin-bottom:4px;">
+                    <div style="font-weight:600;">${axisWarningHeadline(w)}</div>
+                    <div style="color:var(--text-secondary);">${axisWarningNote(w)}</div>
+                  </div>`
+                )
+                .join('')}
+            </div>`
+      }
 
       <!-- 1. 检测：唯一条目（无"灵敏度"旋钮，档位模型已下线） -->
       <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border-color);">
