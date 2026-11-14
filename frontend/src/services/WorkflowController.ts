@@ -114,7 +114,7 @@ export class WorkflowController {
       this.canvasComponent.setToolMode('roi');
       this.canvasComponent.requestRender();
       this.callbacks.setHudNotice(
-        '已进入 Step 2 数据有效区 (ROI) 划分！请拖拽手柄界定数据区或在侧栏新建多 ROI。',
+        '已进入步骤 2：数据有效区 (ROI) 划分。拖拽手柄界定数据区，或在侧栏新建多 ROI。',
         4500
       );
     } else if (targetStage === STAGE.Y_CALIB) {
@@ -124,7 +124,7 @@ export class WorkflowController {
       this.canvasComponent.setToolMode('ycalib');
       this.canvasComponent.requestRender();
       this.callbacks.setHudNotice(
-        '已进入 Step 3 Y 轴标定！请在图上点选两点，或在右侧侧栏直接填入已知刻度与真实深度值。',
+        '已进入步骤 3：Y 轴标定。在图上点选两点，或在右侧侧栏填入已知刻度与真实深度值。',
         5000
       );
     } else if (targetStage === STAGE.CLEANUP) {
@@ -137,7 +137,7 @@ export class WorkflowController {
         (document.querySelector('#btn-detect-candidates') as HTMLButtonElement | null)?.click();
       });
       this.callbacks.setHudNotice(
-        '已进入 Step 4 干扰清理！候选 geometry 正在生成，橙色待确认、红色已去除。',
+        '已进入步骤 4：干扰清理。候选线正在生成：橙色待确认，红色已去除。',
         4500
       );
     } else if (targetStage === STAGE.SPLIT) {
@@ -196,7 +196,7 @@ export class WorkflowController {
           wfNextBtn.disabled = false;
         }
         this.callbacks.reportBackendFailure('分列识别', err);
-        this.callbacks.setHudNotice('分列识别失败，已停留在 Step 4。请检查有效区后重试。', 6000);
+        this.callbacks.setHudNotice('分列识别失败，已停留在步骤 4。请检查有效区后重试。', 6000);
         return;
       }
       this.currentStage = STAGE.SPLIT;
@@ -208,7 +208,7 @@ export class WorkflowController {
       this.callbacks.updateFooter();
       this.canvasComponent.requestRender();
       this.callbacks.setHudNotice(
-        `成功切分 ${this.canvasComponent.data.columns.length} 个属种列！可点击 OCR 识别或在左栏输入各列名称。`,
+        `已切分 ${this.canvasComponent.data.columns.length} 个属种列。可点 OCR 识别，或在左栏输入各列名称。`,
         5000
       );
     } else if (targetStage === STAGE.CALIBRATE_COLUMNS) {
@@ -217,21 +217,21 @@ export class WorkflowController {
       this.canvasComponent.setToolMode('select');
       this.updateWorkflowBar();
       this.getInspector()?.updateData(this.canvasComponent.data);
-      this.callbacks.setHudNotice('已进入 Step 6 列标定！在底端刻度尺直接点击锯齿即可吸附 X2 刻度点。', 4500);
+      this.callbacks.setHudNotice('已进入步骤 6：标定列。在底端刻度尺上点锯齿即可吸附第二个刻度点。', 4500);
     } else if (targetStage === STAGE.SPEARS_AND_SAMPLES) {
       this.currentStage = STAGE.SPEARS_AND_SAMPLES;
       this.callbacks.onStageChange?.(this.currentStage);
       this.canvasComponent.setToolMode('select');
       this.updateWorkflowBar();
       this.getInspector()?.updateData(this.canvasComponent.data);
-      this.callbacks.setHudNotice('已进入 Step 7 采样层位！点击侧栏【提取采样共识】或从外部粘贴真实层位。', 4500);
+      this.callbacks.setHudNotice('已进入步骤 7：拐点与采样层位。点侧栏【提取采样共识】，或从外部粘贴真实层位。', 4500);
     } else if (targetStage === STAGE.QA) {
       this.currentStage = STAGE.QA;
       this.callbacks.onStageChange?.(this.currentStage);
       this.canvasComponent.setToolMode('select');
       this.updateWorkflowBar();
       this.getInspector()?.updateData(this.canvasComponent.data);
-      this.callbacks.setHudNotice('已进入 Step 8 地学校验！正在核验组分总和 ≤100% 门禁与空层位排查。', 4000);
+      this.callbacks.setHudNotice('已进入步骤 8：校验。检查组分总和 ≤100% 门禁与空层位。', 4000);
     }
   }
 
