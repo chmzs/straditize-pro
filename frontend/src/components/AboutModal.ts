@@ -1,6 +1,8 @@
+import { APP_VERSION, compareVersions } from '../core/appVersion';
 import { notify } from '../ui/feedback';
 
-const CURRENT_VERSION = '2.0.0';
+// 版本号**不在这里定义**：唯一事实源是 `frontend/package.json` 的 `version`，
+// 由 `vite.config.ts` 在构建期注入（见 `src/core/appVersion.ts`）。
 
 const CITATION_CN = `陈鸿明, 向丽雄*, 王文佳, 欧阳瑶, 闫创子, 李鹏宇, 黄小忠*. (2026). Straditize Pro: 专业地层花粉与古气候图表数字化科研解译系统 (v2.0) [CP/OL]. 兰州大学资源环境学院. https://github.com/chmzs/straditize-pro (*通讯作者).`;
 
@@ -54,8 +56,8 @@ export class AboutModal {
               <div>
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-heading);">Straditize Pro</h4>
-                  <span style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: color-mix(in srgb, var(--accent-blue) 15%, transparent); color: var(--accent-blue);">
-                    v${CURRENT_VERSION}
+                  <span id="about-version" style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: color-mix(in srgb, var(--accent-blue) 15%, transparent); color: var(--accent-blue);">
+                    v${APP_VERSION}
                   </span>
                 </div>
                 <div style="margin-top: 4px; font-size: 11px; color: var(--text-secondary);">
@@ -235,11 +237,31 @@ export class AboutModal {
 
       const data = await resp.json();
       const latestTag = String(data.tag_name || '').replace(/^v/, '');
-      const currentVer = CURRENT_VERSION.replace(/^v/, '');
+      const currentVer = APP_VERSION.replace(/^v/, '');
 
       if (!statusEl) return;
 
-      if (latestTag && latestTag !== currentVer) {
+      // 语义化比较，不是字符串不等比较：`'2.0.10' < '2.0.9'` 在字典序下成立，
+      // 字符串比较会把新版判成旧版。cmp 的三向语义见 core/appVersion.ts。
+      const cmp = latestTag && currentVer ? compareVersions(latestTag, currentVer) : 0;
+
+      if (!currentVer) {
+        // 构建期未注入版本时如实说"不知道"，不假装能比较。
+        statusEl.innerHTML = `
+          <span style="color: var(--status-warning); font-weight: 600;">
+            无法读取当前构建的版本号，跳过版本比较。
+          </span>
+          <a href="${data.html_url || 'https://github.com/chmzs/straditize-pro/releases/latest'}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-blue); text-decoration: underline; margin-left: 6px;">
+            前往 Releases 页面 &rarr;
+          </a>
+        `;
+      } else if (!latestTag) {
+        statusEl.innerHTML = `
+          <span style="color: var(--status-warning); font-weight: 600;">
+            无法从 GitHub Release 读到版本号，当前为 v${currentVer}。
+          </span>
+        `;
+      } else if (cmp > 0) {
         statusEl.innerHTML = `
           <span style="color: var(--status-warning); font-weight: 600;">
             发现新版本 v${latestTag}，当前为 v${currentVer}。
@@ -248,10 +270,17 @@ export class AboutModal {
             前往下载更新 &rarr;
           </a>
         `;
+      } else if (cmp < 0) {
+        // 本地构建比线上最新发布还新（预发布 / 本地打包），不能说"已是最新"。
+        statusEl.innerHTML = `
+          <span style="color: var(--status-success); font-weight: 600;">
+            当前版本 v${currentVer} 高于线上最新发布 v${latestTag}。
+          </span>
+        `;
       } else {
         statusEl.innerHTML = `
           <span style="color: var(--status-success); font-weight: 600;">
-            当前已是最新版本 (v${CURRENT_VERSION})。
+            当前已是最新版本 (v${currentVer})。
           </span>
         `;
       }

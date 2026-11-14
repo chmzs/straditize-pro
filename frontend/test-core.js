@@ -358,4 +358,35 @@ assert.strictEqual(
 );
 console.log('✔ 开放标准 .tar (POSIX UStar) 科学项目归档打包与解包引擎验证通过');
 
+// 12. 版本号：语义化比较（不是字符串不等比较）
+//
+// 缺陷背景：`AboutModal` 曾把 `CURRENT_VERSION = '2.0.0'` 写死，并用
+// `latestTag !== currentVer` 判断"是否有新版本"。字符串不等比较在语义化版本上
+// 直接错：`2.0.10` 与 `2.0.9` 的字典序是 `'1' < '9'`，于是 2.0.10 会被判成旧版本；
+// 而任何一次发布（2.0.1…2.0.5）都会让写死的 2.0.0 判成"有新版本"。
+// 本组断言钉住 `compareVersions` 的三向语义（<0 / 0 / >0），它是检查更新的唯一判据。
+const { APP_VERSION, compareVersions } = await import('./src/core/appVersion.ts');
+
+assert.strictEqual(typeof APP_VERSION, 'string', 'APP_VERSION 必须是字符串（构建期注入的 package.json version）');
+assert.strictEqual(
+  compareVersions('2.0.10', '2.0.9'),
+  1,
+  '2.0.10 必须大于 2.0.9（字典序会判反，故不得用字符串不等比较）',
+);
+assert.strictEqual(compareVersions('2.0.9', '2.0.10'), -1, '2.0.9 必须小于 2.0.10');
+assert.strictEqual(
+  compareVersions('2.0.5', '2.0.5'),
+  0,
+  '同版本必须相等：相等就不得报「发现新版本」',
+);
+assert.strictEqual(compareVersions('v2.0.5', '2.0.5'), 0, 'GitHub tag 的前缀 v 不得影响相等判定');
+assert.strictEqual(compareVersions('2.1.0', '2.0.99'), 1, '主/次版本号优先于段内数值');
+assert.strictEqual(compareVersions('2.0.0', '2.0'), 0, '省略的末段按 0 处理');
+assert.strictEqual(
+  compareVersions('2.0.0-beta.1', '2.0.0'),
+  -1,
+  '预发布版本必须低于同号正式版本',
+);
+console.log('✔ 版本号语义化比较（2.0.10 > 2.0.9、2.0.5 == 2.0.5）验证通过');
+
 console.log('\n🎉 全部前端核心功能自检测试顺利通过！');

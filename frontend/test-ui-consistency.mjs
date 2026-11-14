@@ -853,6 +853,52 @@ for (const v of ['warning', 'danger']) {
   );
 }
 
+// ---- 22. 版本号唯一事实源：frontend/package.json ---------------------------
+//
+// 缺陷：`AboutModal` 写过 `CURRENT_VERSION = '2.0.0'`，而 package.json 已到 2.0.5。
+// 坏处不只是显示旧版本——`handleCheckUpdate` 拿它跟 GitHub tag 做**字符串不等**
+// 比较，于是 2.0.1–2.0.5 全部被判成"发现新版本"。现已改为构建期从
+// `frontend/package.json` 注入（vite `define` → `src/core/appVersion.ts`）。
+// 本组保证"注入链路不断"且"源码里不再出现当前版本的字面量副本"。
+const aboutModalSrc = read('./src/components/AboutModal.ts');
+const viteConfigSrc = read('./vite.config.ts');
+const appVersionSrc = read('./src/core/appVersion.ts');
+const pkgVersion = JSON.parse(read('./package.json')).version;
+
+// 只看**代码**，不看注释：注释里写"曾写死 2.0.0"是历史说明，不是事实源。
+// 反过来，若某天有人把版本号塞进字符串字面量，剥注释后仍然会被抓到。
+const stripComments = (src) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+const aboutModalCode = stripComments(aboutModalSrc);
+
+// 三段式版本字面量：AboutModal 里一个都不许有（面板版本必须来自注入）。
+// 注意不匹配 `v2.0`（引用条目里的版本写法）与 `3.12`（Python 版本）。
+check(
+  !/\d+\.\d+\.\d+/.test(aboutModalCode),
+  '关于面板代码里不得出现任何三段式版本字面量：版本号唯一事实源是 frontend/package.json',
+);
+// 全仓同口径：当前版本号不得以字面量形式出现在 src 的任何源文件里。
+// 这条是"复制一份版本号"这个动作本身的哨兵——不管复制到哪个文件都会被点名。
+const versionCopies = walk(srcRoot)
+  .filter((file) => stripComments(readFileSync(file, 'utf8')).includes(pkgVersion))
+  .map((file) => relative(srcRoot, file));
+check(
+  versionCopies.length === 0,
+  `frontend/src 下不得出现当前版本字面量 ${pkgVersion}（应读构建期注入值）：${versionCopies.join('、')}`,
+);
+check(
+  viteConfigSrc.includes('__APP_VERSION__') && viteConfigSrc.includes('version'),
+  'vite.config.ts 必须从 package.json 的 version 注入 __APP_VERSION__（构建期单一事实源）',
+);
+check(
+  appVersionSrc.includes('__APP_VERSION__'),
+  'src/core/appVersion.ts 必须从注入的 __APP_VERSION__ 取值，不得自建常量',
+);
+check(
+  aboutModalCode.includes('compareVersions') && !/!==\s*currentVer|latestTag\s*!==/.test(aboutModalCode),
+  '检查更新必须用语义化比较 compareVersions，不得用字符串不等比较版本',
+);
+
 if (failures.length > 0) {
   console.error(`✘ UI 一致性门禁失败（${failures.length} 项）:`);
   for (const failure of failures) console.error(`  - ${failure}`);

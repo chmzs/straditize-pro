@@ -1,7 +1,17 @@
+import { readFileSync } from 'node:fs';
+
 import { defineConfig } from 'vite';
 
 // 开发模式下后端所在地址（与 `pixi run rpc-server` 的默认端口一致）
 const BACKEND = process.env.STRADITIZE_BACKEND ?? 'http://127.0.0.1:8765';
+
+// 应用版本的**唯一事实源**：frontend/package.json 的 `version`。
+// 构建期读一次，经 `define` 注入为 `__APP_VERSION__`（见下方 define 与
+// `src/core/appVersion.ts`）。界面不得再写版本字面量——那是 e896bff 修过的
+// 站点徽章漂移的同一个坑。
+const PKG_VERSION: string = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
+).version;
 
 // 后端自有的路径前缀，开发时全部代理过去。
 //
@@ -25,6 +35,10 @@ export default defineConfig({
   root: '.',
   base: './',
   publicDir: 'public',
+  // 版本号在构建期作为字面量烧进产物（唯一事实源见文件顶部的 PKG_VERSION）。
+  define: {
+    __APP_VERSION__: JSON.stringify(PKG_VERSION),
+  },
   server: {
     port: 5173,
     host: true,
