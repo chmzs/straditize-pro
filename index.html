@@ -694,7 +694,7 @@
     </p>
     <div class="hero-actions">
       <a href="https://github.com/chmzs/straditize-pro/releases/latest" class="btn-primary">
-        <span>🚀 下载 Windows 一键安装包 (.exe)</span>
+        <span>🚀 下载发行包（Windows / macOS / Linux）</span>
       </a>
       <a href="./tutorials/01_quickstart.html" class="btn-secondary">
         <span>📖 5 分钟上手实战教程 (HTML)</span>
@@ -955,7 +955,7 @@
             <td>Windows 商业闭源软件 (需注册码)</td>
             <td>C++/Qt 本地安装</td>
             <td>依赖复杂 Python+PyQt5 本地环境</td>
-            <td class="highlight-col"><strong>✅ Windows 一键 Setup / 便携版 / 极速 120 FPS 视口</strong></td>
+            <td class="highlight-col"><strong>✅ Windows（Setup / 便携版）/ macOS Apple Silicon / Linux（deb / rpm / tar.gz）预编译包，或浏览器即开即用；极速 120 FPS 视口</strong></td>
           </tr>
         </tbody>
       </table>
@@ -1100,33 +1100,58 @@
     <div class="section-header">
       <span class="section-tag">Get Started</span>
       <h2 class="section-title">下载并开始使用 Straditize Pro</h2>
-      <p class="section-subtitle">提供开箱即用的 Windows 预编译安装包，亦支持全功能源码部署</p>
+      <p class="section-subtitle">Windows、macOS（Apple Silicon）、Linux 三平台预编译包开箱即用，均内嵌 Python 运行时与离线模型；亦支持全功能源码部署</p>
     </div>
 
     <div class="download-grid">
       <div class="dl-card dl-card-featured">
         <div>
           <div class="dl-badge">科研用户首选 • 推荐</div>
-          <h3 class="dl-title">Windows 一键安装包</h3>
+          <h3 class="dl-title">Windows x64</h3>
           <p class="dl-desc">
-            内嵌独立 Python 计算环境、ONNX Runtime 推理引擎与 PP-OCRv6 离线权重。双击安装自动创建桌面快捷方式，电脑无需配置任何环境即可运行。
+            内嵌独立 Python 计算环境、ONNX Runtime 推理引擎与 PP-OCRv6 离线权重。安装包双击即装、自动建快捷方式、按用户安装无需管理员权限；便携版解压即用、不写注册表，适合 U 盘与教学机房。
+          </p>
+          <p class="dl-desc" style="font-family: var(--font-mono, monospace); font-size: 13px; opacity: .8;">
+            Straditize-Pro-v2.0.1-Windows-x64-Setup.exe<br>
+            straditize-v2.0.1-windows-x64-portable.zip
           </p>
         </div>
         <a href="https://github.com/chmzs/straditize-pro/releases/latest" class="dl-btn dl-btn-primary">
-          🚀 下载 Setup.exe (GitHub Releases)
+          🚀 下载 Setup.exe / Portable.zip
         </a>
       </div>
 
       <div class="dl-card">
         <div>
-          <div class="dl-badge" style="color: var(--accent-blue);">便携随身版</div>
-          <h3 class="dl-title">Windows 绿色免安装包</h3>
+          <div class="dl-badge" style="color: var(--accent-blue);">Apple Silicon</div>
+          <h3 class="dl-title">macOS（M 系列芯片）</h3>
           <p class="dl-desc">
-            解压即用，不修改系统注册表。适合存放于 U 盘随身携带，或在实验室公用计算机、无管理员权限的教学机房中直接运行。
+            解压后直接运行包内的 <code>straditize</code>（首次需 <code>chmod +x</code>）。发行包未签名，首次启动请在「系统设置 → 隐私与安全性」放行。Intel Mac 请使用源码安装。
+          </p>
+          <p class="dl-desc" style="font-family: var(--font-mono, monospace); font-size: 13px; opacity: .8;">
+            straditize-v2.0.1-macos-arm64.tar.gz
           </p>
         </div>
         <a href="https://github.com/chmzs/straditize-pro/releases/latest" class="dl-btn dl-btn-subtle">
-          📦 下载 Portable.zip
+          📦 下载 macOS tar.gz
+        </a>
+      </div>
+
+      <div class="dl-card">
+        <div>
+          <div class="dl-badge" style="color: var(--accent-blue);">x86_64</div>
+          <h3 class="dl-title">Linux x64</h3>
+          <p class="dl-desc">
+            提供 Debian/Ubuntu、Fedora/RHEL/CentOS 安装包与不挑发行版的通用压缩包。<code>sudo apt install ./xxx.deb</code> 或 <code>sudo rpm -i xxx.rpm</code> 即可；无 root 权限的集群登录节点用 tar.gz 直接运行。
+          </p>
+          <p class="dl-desc" style="font-family: var(--font-mono, monospace); font-size: 13px; opacity: .8;">
+            straditize_2.0.1_amd64.deb<br>
+            straditize-2.0.1-1.x86_64.rpm<br>
+            straditize-v2.0.1-linux-x64.tar.gz
+          </p>
+        </div>
+        <a href="https://github.com/chmzs/straditize-pro/releases/latest" class="dl-btn dl-btn-subtle">
+          📦 下载 deb / rpm / tar.gz
         </a>
       </div>
 
