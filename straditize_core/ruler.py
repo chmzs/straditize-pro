@@ -77,6 +77,8 @@ def find_axis_row(
     dark_threshold: int = DARK_THRESHOLD,
     min_coverage: float = AXIS_MIN_COVERAGE,
     search_from: float = 0.70,
+    y0: int | None = None,
+    y1: int | None = None,
 ) -> int | None:
     """Locate the column's bottom axis row (the horizontal line the ruler hangs from).
 
@@ -86,13 +88,20 @@ def find_axis_row(
     ``search_from`` 取 0.70 而非 0.85：柱状图的数据区可以一直画到接近底线，
     若只在最底部 15% 找，遇到"柱体紧贴轴线"的图版（本仓库内置教程图即如此）
     会把最后一根数据柱的顶边误当轴线。70% 起搜仍能排除上方标题区。
+
+    ``y0``/``y1`` 是该列所在 ROI 的纵向取数区。**必须传**：真实图版在 ROI 之外
+    常有全宽暗行（整幅图的外框下边、面板之间的分隔线），它们比每列真正的下轴
+    更靠下，"取最下面一行"就会选中它们 —— hoya-del-castillo 的外框下边在
+    y=1375，而各列下轴在 1306/1307、ROI 的 y1 只有 1311。选中外框之后，齿搜索
+    带整段落进纯白区，28 列全报 0 齿（真值 28 列全有齿）。
     """
     h, w = gray.shape
-    lo = int(h * search_from)
+    lo = max(int(h * search_from), int(y0) if y0 is not None else 0)
+    hi = min(h, int(y1)) if y1 is not None else h
     x0c, x1c = max(0, int(x0)), min(w, int(x1))
-    if x1c <= x0c:
+    if x1c <= x0c or hi <= lo:
         return None
-    band = gray[lo:h, x0c:x1c] < dark_threshold
+    band = gray[lo:hi, x0c:x1c] < dark_threshold
     coverage = band.mean(axis=1)
     rows = np.where(coverage >= min_coverage)[0]
     if not len(rows):
@@ -109,6 +118,7 @@ def _find_axis_x(
     dark_threshold: int = DARK_THRESHOLD,
     min_frac: float = 0.85,
     axis_stroke: float | None = None,
+    y0: int | None = None,
 ) -> tuple[float | None, float | None]:
     """该列轴线（spine）的 x，返回 ``(左缘, 右缘)``。
 
@@ -122,9 +132,14 @@ def _find_axis_x(
     右缘 = 左缘 + 描边宽度 - 1；描边宽度按各行「从轴线起的连续暗 run」的**最小值**估计
     （填充最薄那一行只剩描边），并夹到 1–6px。图上轴线描边普遍 1–3px，左/右缘之差
     折算成读数不到半个单位。
+
+    ``y0`` 是 ROI 的上边界，**必须传**：采样区间从 ``axis_row * 0.15`` 起算，在
+    hoya 这类"数据区上方留白多"的图版上会一路跨到整幅图的图框，85% 判据于图上
+    任何 x 都不成立 → `axis_x` 全为 None。夹到 ROI 后 col02/03/04 精确等于各自
+    列左缘（497/728/864）。
     """
     h, w = gray.shape
-    top = max(0, int(axis_row * 0.15))
+    top = max(int(axis_row * 0.15), int(y0) if y0 is not None else 0)
     bottom = max(top + 1, int(axis_row) - 4)
     step = max(1, (bottom - top) // 120)
     rows = list(range(top, bottom, step))
@@ -182,6 +197,8 @@ def detect_ruler(
     min_tick_height: int = MIN_TICK_HEIGHT,
     search_below: tuple[int, int] = TICK_SEARCH_BELOW,
     axis_stroke: float | None = None,
+    y0: int | None = None,
+    y1: int | None = None,
 ) -> dict[str, Any]:
     """Detect one column's tick ruler geometry.
 
@@ -210,13 +227,19 @@ def detect_ruler(
         "axis_x_right": None,
     }
 
-    axis = find_axis_row(gray, x0, x1, dark_threshold=dark_threshold)
+    axis = find_axis_row(gray, x0, x1, dark_threshold=dark_threshold, y0=y0, y1=y1)
     if axis is None:
         return result
     result["axis_row"] = axis
 
     axis_x, axis_x_right = _find_axis_x(
-        gray, x0, x1, axis, dark_threshold=dark_threshold, axis_stroke=axis_stroke
+        gray,
+        x0,
+        x1,
+        axis,
+        dark_threshold=dark_threshold,
+        axis_stroke=axis_stroke,
+        y0=y0,
     )
     result["axis_x"] = axis_x
     result["axis_x_right"] = axis_x_right
@@ -248,10 +271,14 @@ def detect_ruler_for_columns(
     *,
     dark_threshold: int = DARK_THRESHOLD,
     axis_stroke: float | None = None,
+    y0: int | None = None,
+    y1: int | None = None,
 ) -> dict[str, Any]:
     """Run :func:`detect_ruler` over a column list.
 
     ``columns`` items are the session's column dicts (need ``start``/``end``).
+    ``y0``/``y1`` 是这些列所在 ROI 的纵向取数区，原样透传给 :func:`find_axis_row`
+    与 :func:`_find_axis_x`（见那两处的说明：不传时 ROI 之外的全宽暗行会抢走轴线）。
     Returns ``{per_column: [...], median_spacing_px, all_regular}``.
     """
     per_column: list[dict[str, Any]] = []
@@ -260,7 +287,13 @@ def detect_ruler_for_columns(
         x0 = float(col.get("start", col.get("startX", 0)))
         x1 = float(col.get("end", col.get("endX", 0)))
         geo = detect_ruler(
-            gray, int(x0), int(x1), dark_threshold=dark_threshold, axis_stroke=axis_stroke
+            gray,
+            int(x0),
+            int(x1),
+            dark_threshold=dark_threshold,
+            axis_stroke=axis_stroke,
+            y0=y0,
+            y1=y1,
         )
         geo["col_index"] = col.get("col_index")
         geo["name"] = col.get("name")

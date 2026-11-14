@@ -489,7 +489,21 @@ class XTicksMixin:
             )
 
         gray = np.array(self.image.convert("L"))
-        result = detect_ruler_for_columns(gray, columns, axis_stroke=axis_stroke)
+        # ROI 的纵向取数区必须传下去：ROI 之外常有全宽暗行（整幅图的外框下边、
+        # 面板分隔线），它们比每列真正的下轴更靠下。不传时 `find_axis_row`
+        # 会选中外框（hoya 实测 y=1375，而各列下轴在 1306/1307、ROI y1=1311），
+        # 齿搜索带整段落进纯白区 → 28 列全报 0 齿。
+        y0: int | None = None
+        y1: int | None = None
+        roi = next(
+            (r for r in getattr(self, "rois", []) if r.get("id") == target_roi_id), None
+        )
+        if roi is not None and roi.get("ylim"):
+            y0 = int(round(float(roi["ylim"][0])))
+            y1 = int(round(float(roi["ylim"][1])))
+        result = detect_ruler_for_columns(
+            gray, columns, axis_stroke=axis_stroke, y0=y0, y1=y1
+        )
         result["roi_id"] = target_roi_id
         # 明确声明：本接口不产出任何读数。
         result["calibration_suggestions"] = []
