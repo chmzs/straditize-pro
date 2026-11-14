@@ -102,7 +102,7 @@ test.describe('后端失败必须被用户看见', () => {
 });
 
 test.describe('客户端校验失败同样必须被用户看见', () => {
-  test.use({ allowlists: { notice: [/两点标定错误/] } });
+  test.use({ allowlists: { notice: [/两点标定未生效/] } });
 
   test('两点像素 Y 相同时必须明确提示，而不是静默不生效', async ({ page, telemetry }) => {
     await gotoStage(page, 3);
@@ -121,7 +121,10 @@ test.describe('客户端校验失败同样必须被用户看见', () => {
         message: '两个参考点像素 Y 相同时必须明确提示（静默忽略会让用户以为已标定）',
         timeout: 10_000,
       })
-      .toContain('两点标定错误');
+      .toContain('两点标定未生效');
+    // 断言强度不低于改文案前：除结论外还钉住被回显的重复像素值（600 来自上面 fill），
+    // 从而区分"点名了同 Y 这个病因"与"其它任何标定失败"。
+    expect(telemetry.notices.join('\n'), '提示必须回显重复的那个像素行值').toContain('像素 Y 都是 600');
   });
 });
 

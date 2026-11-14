@@ -177,7 +177,9 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       return;
     }
     if (topPx === botPx) {
-      notifyError('两点标定错误：两个参考点的像素 Y 坐标不能相同！');
+      notifyError(
+        `两点标定未生效：两个参考点的像素 Y 都是 ${topPx}，同一个像素行算不出斜率；请改填两个不同的像素行后再点【应用标定】。`
+      );
       return;
     }
 
