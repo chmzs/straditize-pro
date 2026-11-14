@@ -473,7 +473,7 @@ def main() -> int:
                 ("step4_binary_overlay.png", "步骤 4/8：按 B 开二值化墨迹高亮遮罩，核对网格线是否被剔除", 2200),
                 ("step5_naming.png", "步骤 5/8：自动探测属种分列基线与行内/批量命名", 1800),
                 ("modal_ocr.png", "步骤 5/8：离线 PP-OCRv6 属种名识别与古生态科属词典对齐", 2200),
-                ("step6_xticks.png", "步骤 6/8：列组管理 + 两点式 X 轴刻度标定入口（点一个刻度齿并填其读数）", 2000),
+                ("step6_xticks.png", "步骤 6/8：先看自动检出（28 列 · 刻距 11px · 刻距不均），再点一个刻度齿填其数字", 2000),
                 ("step7_samples.png", "步骤 7/8：曲线拐点数字化与共识采样层位自动提取", 2000),
                 ("modal_agedepth.png", "步骤 7/8：Bacon/Bchron 年代-深度曲线与 95% 置信包络提取及 1000 集合生成", 2400),
                 ("modal_metadata.png", "步骤 8/8：FAIR / LiPD v1.3 标准元数据与外部 AI 免 Token 导入助手", 2200),
@@ -486,7 +486,7 @@ def main() -> int:
         build_gif(
             [
                 ("step3_ycalib.png", "1. Y 轴两点标定：任意两已知刻度像素行映射真实深度/年代，独立于 ROI 边界", 2400),
-                ("step6_xticks.png", "2. X 轴两点物理刻度标定：基线原点 P1 + 印刷刻度齿 P2，支持列组与对数尺度保护", 2400),
+                ("step6_xticks.png", "2. X 轴标定：自动检出刻齿（28 列 · 刻距 11px · 刻距不均）后，点一个刻度齿并填其数字定斜率", 2400),
                 ("step8_qa_export.png", "3. 唯一标度入口：导出与 QA 诊断严格共用 x_ticks，未标定列在单列诊断里逐条列出", 2400),
             ],
             OUT_DIR / "02_twopoint_calibration.gif",
