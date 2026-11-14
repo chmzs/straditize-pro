@@ -210,14 +210,25 @@ async function dismissDraftBanner(page) {
   // 旧脚本在这里填 `#inp-manual-tick-val1/val2` + `#btn-save-manual-ticks`，这三个
   // 选择器在当前前端**已全部不存在**（步骤 6 改成「列组 + 点一个刻度齿 + 填数字」，
   // `XTicksPanel.ts` 只留 `#btn-pick-tick` / `#inp-tick-value` / `#btn-apply-tick-calib`），
-  // 而旧代码外面套着 `if (await val1.isVisible())`，于是它**静默什么都不做**：
-  // 截出来的步骤 6 是"0/28 未标定"，却挂着"两点式 X 轴刻度标定"的图注。
+  // 而旧代码外面套着 `if (await val1.isVisible())`，于是它**静默什么都不做**。
   //
-  // 这里不再脚本化标定：刻度齿需要人工在图上选取（面板明示"检测: 28 列, 未找到刻度尺"，
-  // 齿位由用户在画布上点）。伪造一对 px/value 能让表格看起来"有数"，但那些数字不是
-  // 从图版读出来的——教程里不能放这种数。故本图只如实记录"标定入口与规则"这一状态。
+  // 这里仍不脚本化标定：斜率要由人点一根刻度齿并填它的读数（面板给的是
+  // 「点一个刻度齿（离绿线越远越准）… 点完输入它旁边的数字即可」）。伪造一对 px/value
+  // 能让表看起来"有数"，但那些数字不是从图版读出来的——教程里不放这种数。
+  //
+  // 但**检出**必须等：`[data-role="ruler-detect"]` 先渲染占位，`patchRulerDom` 再就地
+  // 填值（`data-spacing` = 中位刻距）。判据用 `data-spacing` 非空，不用
+  // `data-detected-columns`——后者是"枚举到几列"，检出全失败时照样等于列数。
   await gotoStage(page, 6);
-  await page.waitForTimeout(800);
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector('[data-role="ruler-detect"]');
+      return !!el && (el.getAttribute('data-spacing') || '') !== '';
+    },
+    null,
+    { timeout: 60000 }
+  );
+  await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(OUT_DIR, 'step6_xticks.png') });
 
   // Step 7: Curve Digitization & Consensus Sample Horizons
@@ -360,6 +371,151 @@ async function dismissDraftBanner(page) {
 """
 
 
+NODE_SCRIPT_STEP6 = r"""
+import { chromium } from 'playwright';
+import path from 'node:path';
+
+const BASE_URL = process.env.BASE_URL;
+const OUT_DIR = process.env.OUT_DIR;
+
+async function rpc(page, method, params = {}) {
+  return await page.evaluate(
+    async ({ m, p }) => {
+      const res = await fetch('/rpc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: m, params: p }),
+      });
+      const body = await res.json();
+      if (body.error) throw new Error(`${m}: ${body.error.message}`);
+      return body.result;
+    },
+    { m: method, p: params }
+  );
+}
+
+async function gotoStage(page, stage) {
+  await page.evaluate((s) => window.__straditize.gotoStage(s), stage);
+  await page.waitForTimeout(350);
+}
+
+async function dismissDraftBanner(page) {
+  const banner = page.locator('.draft-recovery-banner');
+  if ((await banner.count()) === 0) return;
+  await page.locator('#btn-discard-draft').click();
+  await banner.waitFor({ state: 'detached', timeout: 10000 });
+  await page.waitForTimeout(300);
+}
+
+/**
+ * 步骤 6 的刻线几何是异步回来的，`[data-role="ruler-detect"]` 会先渲染占位再被
+ * `patchRulerDom` 就地填值。
+ *
+ * **判据只能用 `data-spacing` / `data-gap`，不能用 `data-detected-columns`**：
+ * 后者是 `(geo.per_column ?? []).length`，即"枚举到几列"，检出全失败时**照样是 28**
+ * （实测 y1=1300 那条告警里它仍是 28）。真正区分成功/失败的是
+ * `data-spacing`（= `median_spacing_px`，失败时为 null ⇒ 属性为空串）。
+ */
+async function waitDetected(page) {
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector('[data-role="ruler-detect"]');
+      const hint = document.querySelector('[data-role="axis-coverage-hint"]');
+      if (!el) return false;
+      const spacing = el.getAttribute('data-spacing');
+      const regular = el.getAttribute('data-regular');
+      const gap = hint ? hint.getAttribute('data-gap') : '0';
+      return spacing != null && spacing !== '' && regular !== '' && gap === '0';
+    },
+    null,
+    { timeout: 60000 }
+  );
+}
+
+(async () => {
+  const browser = await chromium.launch({ channel: 'msedge', headless: true });
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    locale: 'zh-CN',
+  });
+  const page = await context.newPage();
+
+  await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+  await rpc(page, 'e2e.reset');
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForTimeout(500);
+  await dismissDraftBanner(page);
+
+  const cols = (await rpc(page, 'straditize.getDiagramData')).columns.length;
+
+  // ── 主图：基线 ROI（y 511..1311，盖住印刷轴行）→ 应检出全部列 ──────────────
+  await gotoStage(page, 6);
+  await waitDetected(page);
+  await page.waitForTimeout(600);
+  const detectLine = (
+    (await page.locator('[data-role="ruler-detect"]').textContent()) || ''
+  ).trim();
+  const spacing = await page
+    .locator('[data-role="ruler-detect"]')
+    .getAttribute('data-spacing');
+  if (!spacing || !detectLine.includes('刻距')) {
+    throw new Error(`基线 ROI 应检出刻距，实际 data-spacing=${spacing} 文案=${detectLine}`);
+  }
+  await page.screenshot({ path: path.join(OUT_DIR, 'step6_xticks.png') });
+  console.log(`[step6] 刻距=${spacing}px 列数=${cols} :: ${detectLine}`);
+
+  // ── 诊断示例：把 ROI 下边界抬到轴行之上，复现「未覆盖轴行」告警 ──────────────
+  //
+  // 注意 `roi.update` 只认 `xlim`/`ylim`（`session_parts/roi.py::roi_update`）：
+  // 传 `y0`/`y1` 会被**静默忽略**、ROI 原地不动，于是"改了框"实际没改。
+  // 实测 hoya 上 y1 与检测结果的关系（这是本图取 1300 的依据）：
+  //   y1=1311 → 刻距 11px（正常）  y1=1307 → 未找到刻度尺（轴行卡在边界上）
+  //   y1≤1300 → 告警：轴行 y≈1307 在区外，25~27/28 列测不到轴线
+  const activeRoiId =
+    (await rpc(page, 'straditize.getDiagramData')).active_roi_id || 'roi_1';
+  await rpc(page, 'roi.update', { roi_id: activeRoiId, ylim: [511, 1300] });
+  const movedYlim = (await rpc(page, 'straditize.getDiagramData')).rois.find(
+    (r) => r.id === activeRoiId
+  ).ylim;
+  if (Math.round(movedYlim[1]) !== 1300) {
+    throw new Error(`ROI 下边界没改成 1300，实际 ylim=${JSON.stringify(movedYlim)}`);
+  }
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForTimeout(500);
+  await dismissDraftBanner(page);
+  await gotoStage(page, 6);
+  // 三条件同时成立才截：告警出现(+1)、没有中位刻距(检测确实失败)、告警文案报出了实测轴行 y。
+  // 只等"告警可见"会把 pending 那一帧当成结果；只等 detected-columns 更没意义（失败时也是 28）。
+  await page.waitForFunction(
+    () => {
+      const hint = document.querySelector('[data-role="axis-coverage-hint"]');
+      const line = document.querySelector('[data-role="ruler-detect"]');
+      if (!hint || !line) return false;
+      return (
+        hint.getAttribute('data-gap') === '1' &&
+        (line.getAttribute('data-spacing') || '') === '' &&
+        (hint.textContent || '').includes('未覆盖印刷轴行')
+      );
+    },
+    null,
+    { timeout: 60000 }
+  );
+  await page.waitForTimeout(700);
+  const gapText = (
+    (await page.locator('[data-role="axis-coverage-hint"]').textContent()) || ''
+  ).trim();
+  if (!gapText.includes('未覆盖印刷轴行')) {
+    throw new Error(`告警文案里没有实测轴行 y：${gapText}`);
+  }
+  await page.screenshot({ path: path.join(OUT_DIR, 'step6_roi_not_covering_axis.png') });
+  console.log(`[step6-gap] :: ${gapText}`);
+
+  await context.close();
+  await browser.close();
+})();
+"""
+
+
 def add_banner(img_path: Path, caption: str, size: tuple[int, int] = (1152, 720)) -> Image.Image:
     """Resize screenshot and add a high-contrast step caption banner at bottom."""
     im = Image.open(img_path).convert("RGB").resize(size, Image.Resampling.LANCZOS)
@@ -427,6 +583,17 @@ def main() -> int:
     env = os.environ.copy()
     env["STRADITIZE_E2E_PORT"] = str(PORT)
 
+    # 只重录某一组图（`STRADITIZE_TUTORIAL_ONLY=step6`）。
+    #
+    # 为什么要这个开关：全量模式会把 19 张 PNG 连同 3 个 GIF 一起重写，而 GIF 已交给
+    # 视频 lane 统一换成动效版（`media/workflow-demo/`），局部重录一次就会把那条线的
+    # 产物覆盖成静帧合成版。局部模式只跑对应的抓图脚本、**不合成任何 GIF**。
+    only = os.environ.get("STRADITIZE_TUTORIAL_ONLY", "").strip()
+    if only and only != "step6":
+        print(f"[!] 未知的 STRADITIZE_TUTORIAL_ONLY={only!r}（目前只支持 'step6'）")
+        return 2
+    node_body = NODE_SCRIPT_STEP6 if only == "step6" else NODE_SCRIPT
+
     print(f"[1/4] Starting isolated backend on {BASE_URL} ...")
     backend_proc = subprocess.Popen(
         [sys.executable, str(ROOT / "support" / "serve_e2e_backend.py")],
@@ -439,7 +606,7 @@ def main() -> int:
         wait_for_backend(BASE_URL)
         with tempfile.TemporaryDirectory() as tmpdir:
             mjs_path = ROOT / "frontend" / "_tmp_record_tutorials.mjs"
-            mjs_path.write_text(NODE_SCRIPT, encoding="utf-8")
+            mjs_path.write_text(node_body, encoding="utf-8")
             try:
                 node_env = env.copy()
                 node_env["BASE_URL"] = BASE_URL
@@ -454,6 +621,11 @@ def main() -> int:
                 )
             finally:
                 mjs_path.unlink(missing_ok=True)
+
+            if only == "step6":
+                print("[3/4] 局部模式（step6）：跳过 GIF 合成，其余素材保持不变")
+                print("[4/4] step6 重录完成")
+                return 0
 
             # Copy recorded WebM video
             webm_files = list(Path(tmpdir).glob("*.webm"))
@@ -473,7 +645,7 @@ def main() -> int:
                 ("step4_binary_overlay.png", "步骤 4/8：按 B 开二值化墨迹高亮遮罩，核对网格线是否被剔除", 2200),
                 ("step5_naming.png", "步骤 5/8：自动探测属种分列基线与行内/批量命名", 1800),
                 ("modal_ocr.png", "步骤 5/8：离线 PP-OCRv6 属种名识别与古生态科属词典对齐", 2200),
-                ("step6_xticks.png", "步骤 6/8：先看自动检出（28 列 · 刻距 11px · 刻距不均），再点一个刻度齿填其数字", 2000),
+                ("step6_xticks.png", "步骤 6/8：自动检出刻齿「检测：28 列 · 刻距 11px · 刻距不均」，再点一个刻度齿并填它旁边的数字", 2000),
                 ("step7_samples.png", "步骤 7/8：曲线拐点数字化与共识采样层位自动提取", 2000),
                 ("modal_agedepth.png", "步骤 7/8：Bacon/Bchron 年代-深度曲线与 95% 置信包络提取及 1000 集合生成", 2400),
                 ("modal_metadata.png", "步骤 8/8：FAIR / LiPD v1.3 标准元数据与外部 AI 免 Token 导入助手", 2200),
@@ -486,7 +658,7 @@ def main() -> int:
         build_gif(
             [
                 ("step3_ycalib.png", "1. Y 轴两点标定：任意两已知刻度像素行映射真实深度/年代，独立于 ROI 边界", 2400),
-                ("step6_xticks.png", "2. X 轴标定：自动检出刻齿（28 列 · 刻距 11px · 刻距不均）后，点一个刻度齿并填其数字定斜率", 2400),
+                ("step6_xticks.png", "2. X 轴标定：自动检出刻齿（28 列 · 刻距 11px · 刻距不均）后点离线最远的那个带标签齿并填数字；框没盖住轴行时面板报出实测轴行 y（如「下边界 y=1300 未覆盖 y≈1307」），那是框选问题不是检测失败", 2400),
                 ("step8_qa_export.png", "3. 唯一标度入口：导出与 QA 诊断严格共用 x_ticks，未标定列在单列诊断里逐条列出", 2400),
             ],
             OUT_DIR / "02_twopoint_calibration.gif",
