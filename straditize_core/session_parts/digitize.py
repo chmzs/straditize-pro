@@ -120,6 +120,10 @@ class DigitizeSessionMixin:
         if mask is None:
             raise JsonRpcError(STATE_ERROR, "No foreground mask or image loaded.")
 
+        self._refuse_if_column_ink_was_erased(
+            mask, col, c_start, c_end, y0, y1, col_index
+        )
+
         points = self._read_column_profile(
             mask, c_start, c_end, y0, y1, reader_type
         )
@@ -209,6 +213,74 @@ class DigitizeSessionMixin:
                 "no data was produced.",
             )
         return c_start, c_end, y0, y1
+
+    def _refuse_if_column_ink_was_erased(
+        self,
+        mask: np.ndarray,
+        col: dict[str, Any],
+        c_start: int,
+        c_end: int,
+        y0: int,
+        y1: int,
+        col_index: int,
+    ) -> None:
+        """整列墨迹被清理擦光时拒绝取数 —— 返回全 0 就是编造读数。
+
+        ## 为什么必须拒绝而不是报警
+
+        `_read_column_profile` 对"该行没有墨迹"的处理是 ``feat_x = float(c_start)``
+        （见那里的 ``else`` 分支）。因此一列墨迹被擦光后，`digitize` 仍然返回
+        ``y1-y0+1`` 个点、每个点的 x 都等于列左缘 —— 换算成读数就是**整列 0**，
+        与"这一列真的是 0"在返回结构上完全一致。这是"没有测量值"被伪装成
+        "测量值为 0"，直接违反 `docs/ARCHITECTURE.md` §2
+        （取不到就报错并停在原地，绝不返回替代数据）。报警不够：调用方
+        （导出、批量取数、前端）都只读 `points`，没人会去读 `warnings`。
+
+        ## 判据：raw 有墨、kept 无墨
+
+        两个计数取**同一个窗口**：
+
+        * ``raw``  = `foreground_mask`，原图墨迹，未扣任何清理；
+        * ``kept`` = `_extraction_mask()`，实际喂给读取器的墨迹。
+
+        ``raw > 0 and kept == 0`` 就是"这一列的数据被擦光了"，判据没有可调参数：
+        它不是"读数偏小"，而是**一个像素都不剩**。
+
+        ## 刻意不做的两件事
+
+        * **不按"读数全 0"拒**：某一层没有花粉是合法读数，`_read_column_profile`
+          对空行返回基线正是为此；按"全 0"拒会把正常的空层当缺陷。
+        * **不按去掉比例拒**：部分擦除（一条干扰线、一小块污点）是步骤 4 的正常
+          用法。这种情况由 `cleanup` 的 `_axis_erasure_warnings` 在"轴线被覆盖
+          ≥50% 高度"时报警，两条判据分工明确：**数据还在就报警，数据不在就拒绝**。
+        """
+        raw = getattr(self, "foreground_mask", None)
+        if raw is None or mask is None:
+            return
+        rows = slice(max(0, int(y0)), min(int(raw.shape[0]), int(y1) + 1))
+        if rows.stop <= rows.start:
+            return
+        raw_count = int(raw[rows, c_start:c_end].sum())
+        if raw_count == 0:
+            return
+        kept_count = int(mask[rows, c_start:c_end].sum())
+        if kept_count > 0:
+            return
+
+        name = (
+            col.get("species")
+            or col.get("name")
+            or f"col{col_index + 1:02d}"
+        )
+        raise JsonRpcError(
+            STATE_ERROR,
+            f"列 '{name}'（x {c_start}..{c_end}）的 {raw_count} 个墨迹像素被步骤 4 的"
+            "编辑整列删掉了，本行一个像素都不剩 —— 这里没有测量值可取，因此不产出读数。"
+            "如果照常返回，整列会变成 0，而那只是'没有数据'被写成了'数值为 0'。"
+            "请检查：① 是否有排除区盖住了整列；② 是否把这一列的轴线当干扰线确认删除了；"
+            "③ 去网格线强度是否过高。修好后重跑该列取数；确实要按 0 处理，"
+            "请手工录入而不要求自动取数。",
+        )
 
     def _read_column_profile(
         self,
