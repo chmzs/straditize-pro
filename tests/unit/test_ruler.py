@@ -53,6 +53,34 @@ def _synthetic_column(
     return gray
 
 
+def _column_with_dashed_spine(
+    *,
+    width: int = 80,
+    height: int = 140,
+    axis_y: int = 110,
+    spine_x: int = 20,
+    stroke: int = 2,
+    period: int = 4,
+    ticks: tuple[int, ...] = (30, 50, 70),
+) -> np.ndarray:
+    """白底 + 横轴 + **虚线**竖轴（每 ``period`` 行实、``period`` 行虚）。
+
+    真图上的窄列就是这样画的（见 ``TestDashedSpine`` 的实测证据），
+    所以「贯穿率 ≥85%」在这类列上恒不成立，轴线位置只能靠"孤立竖线"判据找。
+    """
+    gray = np.full((height, width), 255, dtype=np.uint8)
+    gray[axis_y, :] = 0
+    for y in range(0, axis_y):
+        if (y // period) % 2 == 0:
+            gray[y, spine_x : spine_x + stroke] = 0
+    below = TICK_SEARCH_BELOW
+    for x in ticks:
+        if x < width:
+            for dy in range(below[0], below[1]):
+                gray[axis_y + dy, x] = 0
+    return gray
+
+
 def _column_with_spine(
     *,
     width: int = 80,
@@ -186,6 +214,48 @@ def _synthetic_spine_column(
         if run:
             gray[y, spine_x + spine_w : spine_x + spine_w + run] = 0
     return gray
+
+
+class TestDashedSpine:
+    """虚线轴线必须被检出 —— 真图窄列实测钉子。
+
+    ## 实测证据（`hoya-del-castillo.png`，28 列，axis_row=1307，ROI y=[511,1311]）
+
+    15/28 列的 `axis_x` 是 `None`。逐行取样后原因只有一条：这些列的竖轴是
+    **点划线**，4px 实 / 4px 虚，贯穿率恒为 ~50%（col09 x=1097 实测 0.44、
+    col05 x=939 实测 0.81），而 `min_frac=0.85` 要求 85%。
+
+    这条与 `DARK_THRESHOLD` 无关：该图去灰度后只剩 11 个灰度级、柱内像素
+    非 0 即 255，把阈值从 170 放到 210、采样从 132 行加密到 264 行，
+    `axis_x` 通过列数都是 **13/28（0 恢复）**。也不是"图没画线"：那 15 列的
+    轴线 x 与列切分的 `start` **逐个相等**（939/971/1001/1065/1097/1193/1225/
+    1330/1436/1468/1616/1648/1680/1711/1743）。
+
+    判据：轴线是"孤立竖线"——覆盖率达到背景的 4 倍以上，
+    而不是"覆盖率达到 85%"。填充区同样暗，但它不孤立。
+    """
+
+    def test_axis_x_found_on_dashed_spine(self) -> None:
+        gray = _column_with_dashed_spine(spine_x=20, stroke=2, ticks=(30, 50, 70))
+        got = detect_ruler(gray, 4, 76)
+
+        assert got["axis_x"] == 20, (
+            f"虚线轴线的左缘应为 20，实际 {got['axis_x']!r} —— "
+            "「贯穿率 ≥85%」对 4 实 4 虚的轴线恒不成立，必须另有孤立竖线判据"
+        )
+        assert got["axis_x_right"] == 21, (
+            f"虚线轴线 2px 宽，右缘应为 21，实际 {got['axis_x_right']!r}"
+        )
+
+    def test_no_spine_still_returns_none(self) -> None:
+        """金丝雀：**没有**轴线时不得凭空造一个 —— 放宽判据不能变成"总能找到"。"""
+        gray = _synthetic_column(ticks=(5, 17, 29, 42))
+        got = detect_ruler(gray, 0, 60)
+
+        assert got["axis_x"] is None, (
+            f"纯白列上检出了 axis_x={got['axis_x']!r} —— 孤立竖线判据被放宽成了" \
+            "「总能找到」，axis_x 从此不可信"
+        )
 
 
 class TestAxisAnchorIsImmuneToColumnStart:

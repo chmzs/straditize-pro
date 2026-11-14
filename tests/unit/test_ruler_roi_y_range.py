@@ -107,6 +107,90 @@ class TestHoyaWithFullWidthDarkRowsBelowRoi:
         )
 
 
+class TestHoyaNarrowColumnsAreDashed:
+    """hoya 的 15 个窄列：轴线是点划线，`axis_x` 不得丢。
+
+    ## 缺陷本体
+
+    `_find_axis_x` 的判据是「贯穿 ≥ `min_frac`(0.85) 采样行」。hoya 上 15 个窄列
+    的竖轴是 **4px 实 / 4px 虚**的点划线（col09 x=1097 贯穿率 0.44、col05 x=939
+    为 0.81），永远达不到 0.85，于是 `axis_x = None`。
+
+    ## 已经排除的两个替罪羊
+
+    * **不是阈值**：该图只有 11 个灰度级、柱内像素非 0 即 255，阈值 170/190/210
+      三档、采样 132/264 行四组组合下通过列数恒为 13/28，恢复 0 列；
+    * **不是步骤 4 的清理**：`measure_ruler_geometry` 的灰度来自 `self.image`
+      （原图），而清理只写旁路 mask（`cleanup.py`），全新会话未做任何清理时实测
+      就是 13/28。
+
+    ## 判据
+
+    15 个窄列的 `axis_x` 必须等于各自的列左缘（`start`）—— 与已经命中的 13 列
+    同理：面积图的 0 点画在轴线/列边界上。
+    """
+
+    #: 修前 `axis_x is None` 的列（实测），其值必须等于列左缘。
+    NARROW = {
+        "col05": 939.0,
+        "col06": 971.0,
+        "col07": 1001.0,
+        "col09": 1065.0,
+        "col10": 1097.0,
+        "col13": 1193.0,
+        "col14": 1225.0,
+        "col16": 1330.0,
+        "col18": 1436.0,
+        "col19": 1468.0,
+        "col23": 1616.0,
+        "col24": 1648.0,
+        "col25": 1680.0,
+        "col26": 1711.0,
+        "col27": 1743.0,
+    }
+
+    def test_narrow_columns_recover_their_axis(self) -> None:
+        result = _hoya_session().measure_ruler_geometry()
+        by_name = {c["name"]: c for c in result["per_column"]}
+
+        for name, expected in self.NARROW.items():
+            assert by_name[name]["axis_x"] == pytest.approx(expected, abs=0.01), (
+                f"{name} 的 axis_x = {by_name[name]['axis_x']!r}，应为列左缘 {expected} "
+                "—— 该列轴线是 4 实 4 虚的点划线，85% 贯穿率判据对它恒不成立"
+            )
+
+    def test_every_column_has_an_axis(self) -> None:
+        result = _hoya_session().measure_ruler_geometry()
+        missing = [c["name"] for c in result["per_column"] if c["axis_x"] is None]
+
+        assert not missing, f"这 {len(missing)} 列仍测不出轴线：{missing}"
+
+    def test_wide_columns_do_not_move(self) -> None:
+        """零回归：修前已命中的列，值一个都不许变。"""
+        result = _hoya_session().measure_ruler_geometry()
+        by_name = {c["name"]: c for c in result["per_column"]}
+
+        # col01 是"start 偏右"的真实案例：轴线在 309，start 在 319。
+        assert by_name["col01"]["axis_x"] == pytest.approx(309.0, abs=0.01)
+        for name, expected in (
+            ("col02", 497.0),
+            ("col03", 728.0),
+            ("col04", 864.0),
+            ("col08", 1033.0),
+            ("col11", 1129.0),
+            ("col12", 1161.0),
+            ("col15", 1255.0),
+            ("col17", 1362.0),
+            ("col20", 1500.0),
+            ("col21", 1552.0),
+            ("col22", 1584.0),
+            ("col28", 1774.0),
+        ):
+            assert by_name[name]["axis_x"] == pytest.approx(expected, abs=0.01), (
+                f"{name} 的 axis_x 从 {expected} 变成了 {by_name[name]['axis_x']!r}"
+            )
+
+
 class TestBeginnerNoRegression:
     """beginner：ROI 默认覆盖全图，下轴本来就是最靠下的全宽暗行 —— 必须不变。"""
 

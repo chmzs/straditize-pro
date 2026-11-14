@@ -54,6 +54,23 @@ TICK_SEARCH_BELOW = (1, 8)
 #: 又不至于把"数据柱体"误判为轴线（柱体在轴线之上，且本函数只搜底部 15% 区域）。
 AXIS_MIN_COVERAGE = 0.65
 
+#: 虚线轴线的通过判据：该 x 的贯穿率下限。
+#:
+#: 实测（`hoya-del-castillo.png`）：窄列的竖轴是 **4px 实 / 4px 虚**的点划线，
+#: 贯穿率恒在 0.44–0.81（col10 x=1097 为 0.44、col05 x=939 为 0.81）。这既不是
+#: "图没画线"（那 15 列的轴线 x 与列切分 `start` 逐个相等），也不是灰度问题
+#: （该图只有 11 个灰度级，阈值 170/190/210 × 采样 132/264 行共 6 组，通过列数
+#: 恒为 13/28、恢复 0 列），而是 `min_frac=0.85` 与点划线不相容。
+DASHED_MIN_FRAC = 0.35
+#: 虚线轴线的孤立性判据：该 x 的贯穿率至少是左侧 :data:`DASHED_GAP` 列背景的这么多倍。
+#:
+#: 这是「轴线」与「面积填充」的唯一分界。填充同样暗，但它**不孤立**——左右邻列
+#: 一样暗（背景≈自身），比值≈1；轴线左右是纸白（背景≈0.01），比值可达 40 倍。
+#: 取 4 是保守值：0.44 / 0.01 = 44，而填充区的比值上限就是 1。
+DASHED_CONTRAST = 4.0
+#: 判定孤立性时回看的像素列数（含该 x 左侧 :data:`DASHED_GAP` 列）。
+DASHED_GAP = 3
+
 
 def _dark_columns(mask: np.ndarray) -> list[int]:
     """Return x centres of runs of `True` columns, merging gaps ≤1 px."""
@@ -107,6 +124,38 @@ def find_axis_row(
     if not len(rows):
         return None
     return int(rows.max()) + lo
+
+
+def _leftmost_dashed_spine(
+    coverage: np.ndarray,
+    lo: int,
+    hi: int,
+    *,
+    min_frac: float = DASHED_MIN_FRAC,
+    contrast: float = DASHED_CONTRAST,
+    gap: int = DASHED_GAP,
+) -> int | None:
+    """Return the leftmost x that is an **isolated** vertical run, else ``None``.
+
+    「贯穿率 ≥ min_frac」的绝对判据对点划线无效（见 :data:`DASHED_MIN_FRAC`），
+    这里换成**相对**判据：该 x 的贯穿率至少是左侧 ``gap`` 列背景的 ``contrast`` 倍。
+
+    为什么相对判据是安全的：面积填充的贯穿率等于该行花粉值，但它的左右邻列
+    一样暗，比值≈1；轴线的左右是纸白，比值可达 40 倍。所以"孤立"才是轴线的
+    定义性特征，"连续"只是印刷样式的偶然结果。
+
+    为什么要 ``lo + gap`` 作起点：孤立性要回看 ``gap`` 列背景，起点附近没有背景
+    可比；而搜索窗口的左端本就由「列切分 start 的偏移量」决定（可能落在填充区
+    内部），那里起步的候选没有判别力。
+    """
+    last = min(int(hi), int(len(coverage)))
+    for x in range(int(lo) + gap, last):
+        if coverage[x] < min_frac:
+            continue
+        background = float(coverage[x - gap : x].max())
+        if coverage[x] >= contrast * background:
+            return x
+    return None
 
 
 def _find_axis_x(
@@ -164,6 +213,10 @@ def _find_axis_x(
         if counter[x] >= need:
             left = x
             break
+    if left is None:
+        # 连续竖线判据落空 = 这一列的轴线可能是点划线（真图窄列常见），
+        # 改用「孤立竖线」判据。找不到仍返回 None（调用方据此退回 startX）。
+        left = _leftmost_dashed_spine(counter / float(len(rows)), lo, hi)
     if left is None:
         return None, None
 
