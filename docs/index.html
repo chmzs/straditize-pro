@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Straditize Pro - 专业地层花粉与古气候图表数字化科研解译系统</title>
-  <meta name="description" content="专为第四纪古生态学、古气候学与沉积地层学打造的高精度多指标图表数字化科研系统。支持多列地质图谱并发解译、PP-OCRv6拉丁学名识别、两点物理标定、等深横截零NA矩阵与LiPD/FAIR国际元数据。" />
+  <title>Straditize Pro - 地层图与花粉图数字化</title>
+  <meta name="description" content="把地层与花粉图谱还原成深度对齐的数据矩阵。多列并发解译、PP-OCRv6 拉丁学名识别、两点物理标定、等深截交无 NA 矩阵、LiPD 元数据。" />
   <link rel="icon" type="image/svg+xml" href="./assets/logos/logo-icon.svg" />
   <style>
     :root {
@@ -670,8 +670,8 @@
       </div>
     </a>
     <nav>
-      <a href="#why">科研痛点与对比</a>
-      <a href="#features">核心突破</a>
+      <a href="#why">问题与对比</a>
+      <a href="#features">功能</a>
       <a href="#workflow">8 步工作流</a>
       <a href="./tutorials/01_quickstart.html">实战教程</a>
       <a href="#download">下载获取</a>
@@ -684,30 +684,30 @@
   <!-- Hero 区 -->
   <div class="hero">
     <div class="hero-pill">
-      <span>✨ 专为第四纪地质学与古气候学打造</span>
+      <span>地质剖面与花粉图谱</span>
       <span>•</span>
-      <span>多列图谱并发解译系统</span>
+      <span>多列并发解译</span>
     </div>
-    <h1>让历史文献中的地层数据<br><span class="gradient-text">重获高精度数字化新生</span></h1>
+    <h1>把论文里的地层图<br><span class="gradient-text">还原成可计算的数据矩阵</span></h1>
     <p>
-      摆脱通用折线工具对多指标图谱的低效手工描点与“伪空值（Pseudo-NA）”困扰。融合计算机视觉、PP-OCRv6 拉丁学名识别、两点物理标定与贝叶斯年代学模型，一键提取出版级完整数据矩阵。
+      通用折线工具按单曲线采点：每个属种要单独建数据集、单独标定，拼表时深度对不齐，矩阵里出现伪空值（Pseudo-NA）。本软件把 8 步串成一条流水线：Radon 矫正扫描倾角、自动去线、PP-OCRv6 识别拉丁学名、Y 轴与 X 轴各做一次两点物理标定、等深截交生成共识层位、最后按 Σ% 门禁校验并导出矩阵。
     </p>
     <div class="hero-actions">
       <a href="https://github.com/chmzs/straditize-pro/releases/latest" class="btn-primary">
-        <span>🚀 下载发行包（Windows / macOS / Linux）</span>
+        <span>下载发行包（Windows / macOS / Linux）</span>
       </a>
       <a href="./tutorials/01_quickstart.html" class="btn-secondary">
-        <span>📖 5 分钟上手实战教程 (HTML)</span>
+        <span>8 步实战教程 (HTML)</span>
         <span>&rarr;</span>
       </a>
       <a href="https://github.com/chmzs/straditize-pro" target="_blank" class="btn-secondary">
-        <span>⭐ GitHub 开源仓库</span>
+        <span>GitHub 开源仓库</span>
       </a>
     </div>
     <div class="hero-badges">
       <!-- 动态徽章：跟着 GitHub 最新 Release 走。以前写死 v2.0.0，一路落后到 v2.0.3 才被发现 -->
       <img src="https://img.shields.io/github/v/release/chmzs/straditize-pro?style=flat-square&color=059669" alt="Latest Release" />
-      <img src="https://img.shields.io/badge/PP--OCRv6-500%2B%20Taxa%20Lexicon-7c3aed.svg?style=flat-square" alt="Taxa OCR" />
+      <img src="https://img.shields.io/badge/PP--OCRv6-Taxa%20OCR-7c3aed.svg?style=flat-square" alt="Taxa OCR" />
       <img src="https://img.shields.io/badge/Data%20Matrix-Zero%20Pseudo--NA-38bdf8.svg?style=flat-square" alt="Zero NA Guarantee" />
       <img src="https://img.shields.io/badge/Chronology-Bacon%20%7C%201000%20Ensembles-d97706.svg?style=flat-square" alt="Chronology" />
       <img src="https://img.shields.io/badge/Downstream-rioja%20%7C%20vegan%20%7C%20LiPD-10b981.svg?style=flat-square" alt="Downstream" />
@@ -736,8 +736,8 @@
   <section id="why">
     <div class="section-header">
       <span class="section-tag">Challenges & Comparison</span>
-      <h2 class="section-title">地学多指标图谱数字化的核心难题</h2>
-      <p class="section-subtitle">地层剖面与花粉图谱具有独特的领域复杂性，普通二维 X-Y 曲线工具无法满足科研实际需求</p>
+      <h2 class="section-title">多指标地层图谱的数字化问题</h2>
+      <p class="section-subtitle">普通二维 X-Y 曲线工具按单图单曲线处理，与多列地层图谱的结构不匹配</p>
     </div>
 
     <!-- 难题网格 -->
@@ -771,7 +771,7 @@
           <span class="challenge-num">难题 04</span>
           <h4>复杂长拉丁学名盲打录入</h4>
         </div>
-        <p>几十个倾斜排版的拉丁属种名称全靠手动盲打输入，不仅极度繁琐乏味，而且极易引入拼写差错，影响下游古生物学词库匹配。</p>
+        <p>几十个倾斜排版的拉丁属种名称靠手动输入，拼写差错会直接影响下游词库匹配。</p>
       </div>
 
       <div class="challenge-card">
@@ -779,7 +779,7 @@
           <span class="challenge-num">难题 05</span>
           <h4>多尺度混排与非线性局部畸变</h4>
         </div>
-        <p>优势属种（60%）、微量属种（5%）、夸大曲线（10×）以及对数（Log）轴混排。通用工具机械按选框映射导致小刻度严重失真。</p>
+        <p>优势属种 60%、微量属种 5%、夸大曲线 10×、对数轴可在同一张图内混排。通用工具按选框统一映射，小刻度失真。</p>
       </div>
 
       <div class="challenge-card">
@@ -787,7 +787,7 @@
           <span class="challenge-num">难题 06</span>
           <h4>年代学不确定性断链丢失</h4>
         </div>
-        <p>剖面自带放射性碳测年与 Bacon/Bchron 年代-深度模型。通用工具无法提取 95% 置信包络与 1000 集合，导致年代误差无法无损传递。</p>
+        <p>剖面自带放射性碳测年与 Bacon/Bchron 年代-深度模型。通用工具不提取 95% 置信包络与 1000 集合，年代误差因此无法随数据传递。</p>
       </div>
     </div>
 
@@ -795,7 +795,7 @@
     <div class="comparison-grid" style="margin-top: 48px;">
       <div class="comp-card comp-card-traditional">
         <span class="comp-badge comp-badge-red">传统通用工具 (WebPlotDigitizer 等)</span>
-        <h3 class="comp-title">面对多列地层图谱力不从心</h3>
+        <h3 class="comp-title">按单列处理多列图谱</h3>
         <ul class="comp-list">
           <li class="comp-item">
             <span class="comp-item-icon">❌</span>
@@ -807,22 +807,22 @@
           </li>
           <li class="comp-item">
             <span class="comp-item-icon">❌</span>
-            <div><strong>分带线与网格干扰</strong>：无法自动剥离水平地层界线、剖面网格和阴影填充，需繁重的手工擦除。</div>
+            <div><strong>分带线与网格干扰</strong>：不剥离水平地层界线、剖面网格和阴影填充，只能手工擦除。</div>
           </li>
           <li class="comp-item">
             <span class="comp-item-icon">❌</span>
-            <div><strong>属种学名盲打录入</strong>：几十个复杂的拉丁属种名称全靠手动盲打输入，拼写极易出错。</div>
+            <div><strong>属种学名手工录入</strong>：几十个拉丁属种名称靠手动输入，拼写易错。</div>
           </li>
           <li class="comp-item">
             <span class="comp-item-icon">❌</span>
-            <div><strong>年代学与元数据割裂</strong>：无法同时提取年代-深度模型及其 95% 置信区间，缺乏国际 FAIR 与 LiPD 规范支持。</div>
+            <div><strong>年代学与元数据割裂</strong>：不提取年代-深度模型及其 95% 置信区间，输出不符合 FAIR 与 LiPD 规范。</div>
           </li>
         </ul>
       </div>
 
       <div class="comp-card comp-card-straditize">
-        <span class="comp-badge comp-badge-green">Straditize Pro 专业科研方案</span>
-        <h3 class="comp-title">专为地学与古生态剖面量身打造</h3>
+        <span class="comp-badge comp-badge-green">Straditize Pro 的处理方式</span>
+        <h3 class="comp-title">按地层图谱的结构设计</h3>
         <ul class="comp-list">
           <li class="comp-item">
             <span class="comp-item-icon">✅</span>
@@ -830,19 +830,19 @@
           </li>
           <li class="comp-item">
             <span class="comp-item-icon">✅</span>
-            <div><strong>等深横向几何截交与零 NA 保证</strong>：统一深度网格横切全部分类单元，未检出层位赋严格真值 <code>0.00</code>，直接对接生态学模型。</div>
+            <div><strong>等深截交与零 NA</strong>：按统一深度网格横切全部分类单元，未检出层位赋 <code>0.00</code>，矩阵中不出现 NA。</div>
           </li>
           <li class="comp-item">
             <span class="comp-item-icon">✅</span>
-            <div><strong>智能去线与 B 键二值化透视</strong>：自适应滤除水平网格与分带线；按键盘 <code>B</code> 键实时切换红白掩膜，所见即所得。</div>
+            <div><strong>去线与 B 键二值化透视</strong>：滤除水平网格与分带线；按 <code>B</code> 键切换红白掩膜。</div>
           </li>
           <li class="comp-item">
             <span class="comp-item-icon">✅</span>
-            <div><strong>PP-OCRv6 离线识别与词库纠错</strong>：内置古生物学拉丁分类词典（500+ Taxa），倾斜文本自动吸附校正与模糊纠错。</div>
+            <div><strong>PP-OCRv6 离线识别与词库纠错</strong>：内置花粉与微体古生物中拉对照词库，对倾斜文本的识别结果做模糊匹配与纠错。</div>
           </li>
           <li class="comp-item">
             <span class="comp-item-icon">✅</span>
-            <div><strong>Bacon 贝叶斯年代学与 LiPD 打包</strong>：解译年代中位数曲线与 95% 置信包络，重构 1000 集合年代学并输出 LiPD v1.3 标准。</div>
+            <div><strong>Bacon 年代学与 LiPD 打包</strong>：解译年代中位数曲线与 95% 置信包络，生成 1000 集合年代学，按 LiPD v1.3 输出。</div>
           </li>
         </ul>
       </div>
@@ -850,8 +850,8 @@
 
     <!-- 主流工具横向对比表格 -->
     <div style="margin-top: 56px; text-align: center;">
-      <h3 style="font-size: 22px; font-weight: 800; margin-bottom: 8px;">主流数值化提取工具优缺点客观对比</h3>
-      <p style="color: var(--text-muted); font-size: 14px;">横向评估不同数字化工具在处理复杂多指标地层图谱时的专业能力差异</p>
+      <h3 style="font-size: 22px; font-weight: 800; margin-bottom: 8px;">主流数值化提取工具对比</h3>
+      <p style="color: var(--text-muted); font-size: 14px;">按同一组维度逐项对比</p>
     </div>
 
     <div class="table-wrapper">
@@ -875,7 +875,7 @@
             <td>通用工业与工程图表 (共享软件)</td>
             <td>通用开源散点与曲线</td>
             <td>地层花粉图谱初版原型 (Sommer 2019)</td>
-            <td class="highlight-col"><strong>专为地质地层与多指标打造的科研系统</strong></td>
+            <td class="highlight-col"><strong>面向地层图与花粉图的多列数字化工具</strong></td>
           </tr>
           <tr>
             <td><strong>多列图谱 (Polydiagrams)</strong></td>
@@ -883,7 +883,7 @@
             <td>❌ 仅限单坐标系，多列需建几十个图层</td>
             <td>❌ 纯单图单轴思维，需按列分别截图</td>
             <td>❌ 单曲线模式，不支持多列排版</td>
-            <td>⚠️ 支持分列，但多列时界面易卡顿</td>
+            <td>⚠️ 支持分列；多列时界面卡顿</td>
             <td class="highlight-col"><strong>✅ 全剖面多列并发管理，基线自动探测与拖拽联动</strong></td>
           </tr>
           <tr>
@@ -893,7 +893,7 @@
             <td>❌ 离散散点输出，无层位概念</td>
             <td>❌ 离散点位，无层位概念</td>
             <td>⚠️ 依赖有限插值网格，存在漂移</td>
-            <td class="highlight-col"><strong>✅ 严密等深横向几何截交，自动提取全属种共识深度</strong></td>
+            <td class="highlight-col"><strong>✅ 等深横向截交，提取全属种共识深度</strong></td>
           </tr>
           <tr>
             <td><strong>数据矩阵质量</strong></td>
@@ -902,16 +902,16 @@
             <td>❌ 散乱坐标点，需在 Excel 重组拼表</td>
             <td>❌ 无法导出标准二维地层表</td>
             <td>⚠️ 部分层位可能遗漏</td>
-            <td class="highlight-col"><strong>✅ 严格零伪 NA（未检出层位赋真值 0.00，直通分析）</strong></td>
+            <td class="highlight-col"><strong>✅ 未检出层位赋 0.00，不产生伪 NA</strong></td>
           </tr>
           <tr>
             <td><strong>水平分带/网格去线</strong></td>
             <td>❌ 仅普通二值化，易混淆杂线</td>
             <td>❌ 无网格剔除算法，易抓取网格交点</td>
-            <td>❌ 纯手工点橡皮擦抹除，极耗时</td>
+            <td>❌ 手工橡皮擦抹除</td>
             <td>❌ 仅简单色彩滤镜，横线依然粘连</td>
             <td>⚠️ Python 后台批处理，缺乏交互透视</td>
-            <td class="highlight-col"><strong>✅ 智能去线算法 + B 键红白二值化实时透视遮罩</strong></td>
+            <td class="highlight-col"><strong>✅ 去线算法 + B 键二值化透视遮罩</strong></td>
           </tr>
           <tr>
             <td><strong>属种名称提取</strong></td>
@@ -920,7 +920,7 @@
             <td>❌ 无文字识别功能</td>
             <td>❌ 无文字识别功能</td>
             <td>❌ 无属种 OCR 支持</td>
-            <td class="highlight-col"><strong>✅ PP-OCRv6 离线识别 + 500+ 拉丁古生物词典纠错</strong></td>
+            <td class="highlight-col"><strong>✅ PP-OCRv6 离线识别 + 内置中拉学名词库纠错</strong></td>
           </tr>
           <tr>
             <td><strong>物理刻度标定</strong></td>
@@ -941,13 +941,13 @@
             <td class="highlight-col"><strong>✅ 提取 Bacon 95% 置信包络并重构 1000 集合年代学</strong></td>
           </tr>
           <tr>
-            <td><strong>生态学下游闭环</strong></td>
+            <td><strong>生态学下游对接</strong></td>
             <td>⚠️ 导出离散 CSV，需大量清洗</td>
             <td>⚠️ 导出 Origin Worksheet，无标准化</td>
             <td>⚠️ 纯文本坐标点，无生态学绑定</td>
             <td>⚠️ 纯文本坐标点</td>
             <td>⚠️ 需手动编写 R 脚本</td>
-            <td class="highlight-col"><strong>✅ 一键直通 R rioja::strat.plot 出版脚本 + LiPD</strong></td>
+            <td class="highlight-col"><strong>✅ 导出 rioja::strat.plot 脚本 + LiPD</strong></td>
           </tr>
           <tr>
             <td><strong>运行架构与部署</strong></td>
@@ -956,7 +956,7 @@
             <td>Windows 商业闭源软件 (需注册码)</td>
             <td>C++/Qt 本地安装</td>
             <td>依赖复杂 Python+PyQt5 本地环境</td>
-            <td class="highlight-col"><strong>✅ Windows（Setup / 便携版）/ macOS（Apple Silicon / Intel）/ Linux（deb / rpm / tar.gz）预编译包，或浏览器即开即用；极速 120 FPS 视口</strong></td>
+            <td class="highlight-col"><strong>✅ Windows（Setup / 便携版）/ macOS（Apple Silicon / Intel）/ Linux（deb / rpm / tar.gz）预编译包，或浏览器直接打开；视口为 HTML5 Canvas 2D</strong></td>
           </tr>
         </tbody>
       </table>
@@ -967,45 +967,45 @@
   <section id="features">
     <div class="section-header">
       <span class="section-tag">Key Features</span>
-      <h2 class="section-title">六大科研级专业核心功能</h2>
-      <p class="section-subtitle">兼具严谨的数学几何核心与现代极速交互视口，重新定义图谱数字化行业水准</p>
+      <h2 class="section-title">六项功能</h2>
+      <p class="section-subtitle">分别对应 8 步工作流中的一步</p>
     </div>
 
     <div class="features-grid">
       <div class="feature-card">
         <div class="feature-icon-box">🏷️</div>
-        <h3>PP-OCRv6 古生物分类学识别</h3>
-        <p>集成离线 PP-OCRv6 视觉模型，支持 0°-60° 多角度旋转文本投影识别。内置 500+ 花粉、硅藻、微体古生物分类词库，自动纠正常见拼写错误。</p>
+        <h3>PP-OCRv6 学名识别</h3>
+        <p>离线 PP-OCRv6 模型识别 0°–60° 倾斜文本。内置花粉、硅藻、微体古生物中拉对照词库，对识别结果做模糊匹配与纠错。</p>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon-box">📐</div>
-        <h3>两点物理刻度钉标定</h3>
-        <p>坐标标定与取数裁剪框彻底物理解耦。原点锚定基线，刻度钉精确对齐任意印刷刻度齿，原生支持线性（Linear）与对数（Log）双尺度。</p>
+        <h3>两点物理刻度标定</h3>
+        <p>坐标标定与取数区边框解耦。原点锚定基线，刻度钉对齐印刷刻度齿；线性与对数两种尺度都支持。</p>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon-box">🧬</div>
-        <h3>等深横截与“零伪 NA”保证</h3>
-        <p>沿地层共识采样深度横向截交全属种多边形轮廓。未检出层位赋予严格真值 <code>0.00</code>，产出规范完整的矩阵，彻底杜绝破坏统计模型的伪空值。</p>
+        <h3>等深截交与零伪 NA</h3>
+        <p>按共识采样深度横向截交全属种轮廓。未检出层位赋 <code>0.00</code>，矩阵中不出现 NA。</p>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon-box">📈</div>
-        <h3>Bacon 贝叶斯年代-深度提取</h3>
-        <p>从图谱中直接解译沉积年代模型的中位数与 95% 置信包络线；在速率空间利用高斯过程重构 1000 条单调年代学集合，实现不确定性无损传递。</p>
+        <h3>Bacon 年代-深度模型提取</h3>
+        <p>从图谱中解译年代模型的中位数曲线与 95% 置信包络；按速率空间高斯过程生成 1000 条单调年代学集合，随导出件一起保存。</p>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon-box">📊</div>
-        <h3>直通 R 语言 rioja 出版级成图</h3>
-        <p>对齐专业地层制图规范，一键导出清洗完备的 CSV/Excel 矩阵，并自动生成配套的 <code>rioja::strat.plot</code> 绘图脚本，开箱即得学术出版级图表。</p>
+        <h3>导出 rioja::strat.plot 脚本</h3>
+        <p>导出 CSV/Excel 矩阵，同时生成配套的 <code>rioja::strat.plot</code> 绘图脚本；脚本读的就是导出的那份 CSV。</p>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon-box">📦</div>
-        <h3>开放标准工程包与 LiPD 支持</h3>
-        <p>项目完整归档为 POSIX UStar 标准 <code>.tar</code> 开放工程包（含原图、矢量模型、矩阵与脚本），集成 LiPD v1.3 元数据，100% 满足学术评议复现要求。</p>
+        <h3>工程归档包与 LiPD</h3>
+        <p>工程归档为 POSIX UStar <code>.tar</code> 包，含原图、矢量模型、矩阵与脚本；同时输出 LiPD v1.3 元数据。</p>
       </div>
     </div>
   </section>
@@ -1014,57 +1014,57 @@
   <section id="workflow">
     <div class="section-header">
       <span class="section-tag">Scientific Workflow</span>
-      <h2 class="section-title">严格遵循 8 阶段科学解译工作流</h2>
-      <p class="section-subtitle">状态机架构驱动，顶部胶囊清晰指示阶段进度，已完成步骤可随时自由回跳微调</p>
+      <h2 class="section-title">8 阶段解译工作流</h2>
+      <p class="section-subtitle">状态机驱动，顶部胶囊显示当前处于哪一步，已完成步骤可回跳修改</p>
     </div>
 
     <div class="workflow-timeline">
       <div class="workflow-step">
         <span class="step-num">Step 01</span>
-        <h4 class="step-name">1. 载入与微倾矫正</h4>
-        <p class="step-desc">支持 PNG/JPG/TIFF 及单页 PDF；Radon 变换自动检测扫描微倾斜并完成水平校正。</p>
+        <h4 class="step-name">1. 载入</h4>
+        <p class="step-desc">支持 PNG/JPG/TIFF 及单页 PDF；Radon 变换检测扫描倾角，检出 ≥ 0.3° 时提示旋转校正。</p>
       </div>
 
       <div class="workflow-step">
         <span class="step-num">Step 02</span>
-        <h4 class="step-name">2. 划分多取数区</h4>
-        <p class="step-desc">多 ROI 分组管理，将数据曲线区与图名、图例、深度标尺和聚类树彻底物理隔离。</p>
+        <h4 class="step-name">2. 有效区(ROI)</h4>
+        <p class="step-desc">多 ROI 分组，把数据曲线区与图名、图例、深度标尺、聚类树分开。</p>
       </div>
 
       <div class="workflow-step">
         <span class="step-num">Step 03</span>
-        <h4 class="step-name">3. Y 轴绝对标定</h4>
-        <p class="step-desc">两点式物理映射深度（或年代）坐标，配置单位（cm、m、cal yr BP），支持正反向递增。</p>
+        <h4 class="step-name">3. Y 轴两点标定</h4>
+        <p class="step-desc">两点映射深度或年代坐标，单位可选 cm、m、cal yr BP，支持正反向递增。</p>
       </div>
 
       <div class="workflow-step">
         <span class="step-num">Step 04</span>
-        <h4 class="step-name">4. 去线清理掩膜</h4>
-        <p class="step-desc">智能过滤水平网格线；按键盘 <code>B</code> 键开启二值化透视遮罩，受保护门禁避免截断花粉带。</p>
+        <h4 class="step-name">4. 清理</h4>
+        <p class="step-desc">提取水平网格线与分带线；<code>B</code> 键开启二值化透视遮罩；保护阈值避免切断花粉带。</p>
       </div>
 
       <div class="workflow-step">
         <span class="step-num">Step 05</span>
-        <h4 class="step-name">5. 分列与属种命名</h4>
-        <p class="step-desc">自动探测列基线；调用 PP-OCRv6 离线识别拉丁学名，500+ 分类词典自动纠错吸附。</p>
+        <h4 class="step-name">5. 分列</h4>
+        <p class="step-desc">自动探测列基线；PP-OCRv6 离线识别拉丁学名，配合词库做纠错。</p>
       </div>
 
       <div class="workflow-step">
         <span class="step-num">Step 06</span>
-        <h4 class="step-name">6. X 刻度精细对齐</h4>
-        <p class="step-desc">两点式刻度钉对准刻度齿；属种列组统一应用；内置对数（Log）尺度有效性拦截保护。</p>
+        <h4 class="step-name">6. X 刻度标定</h4>
+        <p class="step-desc">两点式刻度钉对准刻度齿，按列组统一应用；起点 ≤ 0 时对数尺度被拦截并提示。</p>
       </div>
 
       <div class="workflow-step">
         <span class="step-num">Step 07</span>
-        <h4 class="step-name">7. 拓扑数字化</h4>
-        <p class="step-desc">提取显著拐点多边形；提取共识采样层位；支持提取 Bacon 年代模型及 95% 置信区间。</p>
+        <h4 class="step-name">7. 拐点层位</h4>
+        <p class="step-desc">提取轮廓拐点与多边形；提取全属种共识采样层位；可提取 Bacon 年代模型与 95% 置信包络。</p>
       </div>
 
       <div class="workflow-step">
         <span class="step-num">Step 08</span>
-        <h4 class="step-name">8. 校验与矩阵导出</h4>
-        <p class="step-desc">执行 $\sum\% \approx 100\%$ 生态学自洽检验；一键导出无 NA 矩阵、LiPD 与 <code>riojaPlot</code> 脚本。</p>
+        <h4 class="step-name">8. 校验/导出</h4>
+        <p class="step-desc">按 Σ% ≤ 102% 检查各层位百分比总和；导出无 NA 矩阵、LiPD 与 <code>riojaPlot</code> 脚本。</p>
       </div>
     </div>
 
@@ -1072,13 +1072,13 @@
     <div class="ecosystem-section">
       <div style="text-align: center;">
         <span class="section-tag">Downstream Ecosystem</span>
-        <h3 style="font-size: 24px; font-weight: 800; margin-bottom: 8px;">无缝衔接第四纪与古气候科研生态</h3>
-        <p style="color: var(--text-muted); font-size: 14.5px;">无需繁琐的数据转置与空值修补，导出成果直通主流科研工具</p>
+        <h3 style="font-size: 24px; font-weight: 800; margin-bottom: 8px;">导出件的下游去处</h3>
+        <p style="color: var(--text-muted); font-size: 14.5px;">导出件不需要转置或补空值</p>
       </div>
       <div class="eco-grid">
         <div class="eco-item">
           <h4>R • rioja / vegan</h4>
-          <p>开箱即用的 <code>strat.plot</code> 地层绘图、CONISS 约束聚类与 CCA/RDA 排序分析</p>
+          <p><code>strat.plot</code> 地层绘图、CONISS 约束聚类与 CCA/RDA 排序分析</p>
         </div>
         <div class="eco-item">
           <h4>R • rbacon / Bchron</h4>
@@ -1090,7 +1090,7 @@
         </div>
         <div class="eco-item">
           <h4>Excel & CSV 数据矩阵</h4>
-          <p>规范二维表格、首列固定深度、严谨无伪 NA，直接输入任意统计与机器学习管线</p>
+          <p>二维表格，首列固定为深度，不含伪 NA，可直接读入统计与建模脚本</p>
         </div>
       </div>
     </div>
@@ -1101,14 +1101,14 @@
     <div class="section-header">
       <span class="section-tag">Get Started</span>
       <h2 class="section-title">下载并开始使用 Straditize Pro</h2>
-      <p class="section-subtitle">Windows、macOS（Apple Silicon 与 Intel 双架构）、Linux 四种预编译包开箱即用，均内嵌 Python 运行时与离线模型；亦支持全功能源码部署</p>
+      <p class="section-subtitle">Windows、macOS（Apple Silicon 与 Intel 双架构）、Linux 四种预编译包均内嵌 Python 运行时与离线模型；也可从源码运行</p>
       <p class="section-note" style="text-align:center; font-size:13px; opacity:.75;">下面文件名以当前版本为例；实际请从 GitHub Releases 的 Latest 取与机器匹配的那个</p>
     </div>
 
     <div class="download-grid">
       <div class="dl-card dl-card-featured">
         <div>
-          <div class="dl-badge">科研用户首选 • 推荐</div>
+          <div class="dl-badge">推荐</div>
           <h3 class="dl-title">Windows x64</h3>
           <p class="dl-desc">
             内嵌独立 Python 计算环境、ONNX Runtime 推理引擎与 PP-OCRv6 离线权重。安装包双击即装、自动建快捷方式、按用户安装无需管理员权限；便携版解压即用、不写注册表，适合 U 盘与教学机房。
@@ -1119,7 +1119,7 @@
           </p>
         </div>
         <a href="https://github.com/chmzs/straditize-pro/releases/latest" class="dl-btn dl-btn-primary">
-          🚀 下载 Setup.exe / Portable.zip
+          下载 Setup.exe / Portable.zip
         </a>
       </div>
 
@@ -1136,7 +1136,7 @@
           </p>
         </div>
         <a href="https://github.com/chmzs/straditize-pro/releases/latest" class="dl-btn dl-btn-subtle">
-          📦 下载 macOS tar.gz（arm64 / x64）
+          下载 macOS tar.gz（arm64 / x64）
         </a>
       </div>
 
@@ -1154,7 +1154,7 @@
           </p>
         </div>
         <a href="https://github.com/chmzs/straditize-pro/releases/latest" class="dl-btn dl-btn-subtle">
-          📦 下载 deb / rpm / tar.gz
+          下载 deb / rpm / tar.gz
         </a>
       </div>
 
@@ -1163,11 +1163,11 @@
           <div class="dl-badge" style="color: var(--accent-purple);">开发者与服务器模式</div>
           <h3 class="dl-title">源码运行 / 跨平台</h3>
           <p class="dl-desc">
-            通过 Git 克隆源码，基于 Pixi 或 Conda 一键管理环境。支持在无界面的 Linux 高性能计算节点后台运行并通过 SSH 隧道远程访问。
+            通过 Git 克隆源码，用 Pixi 或 Conda 管理环境。可在无界面的 Linux 计算节点后台运行，通过 SSH 隧道远程访问。
           </p>
         </div>
         <a href="https://github.com/chmzs/straditize-pro#2-源码安装与开发者模式" class="dl-btn dl-btn-subtle">
-          ⚙️ 查看源码部署文档
+          查看源码部署文档
         </a>
       </div>
     </div>
@@ -1178,7 +1178,7 @@
     <div class="section-header" style="margin-bottom: 24px;">
       <span class="section-tag">Academic Citation</span>
       <h2 class="section-title" style="font-size: 28px;">学术引用与开源许可</h2>
-      <p class="section-subtitle">Straditize Pro 基于 GNU GPL-3.0-or-later 协议完全开源。在科研论文、专著与学位论文中使用时，请按如下规范分别进行引用：</p>
+      <p class="section-subtitle">Straditize Pro 以 GNU GPL-3.0-or-later 协议开源。在论文、专著与学位论文中引用时按以下格式：</p>
     </div>
 
     <div style="display: flex; flex-direction: column; gap: 24px; margin-top: 32px;">
@@ -1244,7 +1244,7 @@
   <!-- 页脚 -->
   <footer>
     <p>
-      Straditize Pro v2.0 • 专为地质学、古气候学与古生态学打造 • 基于 GNU General Public License v3.0 协议开源
+      Straditize Pro v2.0 • 基于 GNU General Public License v3.0 协议开源
     </p>
     <p style="margin-top: 10px;">
       开源仓库: <a href="https://github.com/chmzs/straditize-pro" target="_blank">GitHub (chmzs/straditize-pro)</a>
