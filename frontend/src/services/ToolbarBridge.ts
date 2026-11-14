@@ -218,10 +218,10 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
     onResetAll: async () => {
       const confirmed = window.confirm(
         '确定要重置当前图谱的全部操作吗？\n\n' +
-          '· 将清空：全部分列、控制点、刻度钉、深度标尺与 ROI 边界\n' +
+          '· 将清空：全部分列、控制点、刻度齿、深度标尺与 ROI 边界\n' +
           '· 撤销历史将一并清空，且本操作不可撤销\n' +
           '· 底图图片本身会完整保留\n\n' +
-          '重置后可从 S1（框选数据有效区）重新开始。'
+          '重置后从步骤 1（载入）重新开始。'
       );
       if (!confirmed) return;
 
