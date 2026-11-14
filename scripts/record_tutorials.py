@@ -121,15 +121,18 @@ async function gotoStage(page, stage) {
   await page.waitForTimeout(300);
 
   // Step 6: Column X-Ticks Calibration
+  //
+  // 旧脚本在这里填 `#inp-manual-tick-val1/val2` + `#btn-save-manual-ticks`，这三个
+  // 选择器在当前前端**已全部不存在**（步骤 6 改成「列组 + 点一个刻度齿 + 填数字」，
+  // `XTicksPanel.ts` 只留 `#btn-pick-tick` / `#inp-tick-value` / `#btn-apply-tick-calib`），
+  // 而旧代码外面套着 `if (await val1.isVisible())`，于是它**静默什么都不做**：
+  // 截出来的步骤 6 是"0/28 未标定"，却挂着"两点式 X 轴刻度标定"的图注。
+  //
+  // 这里不再脚本化标定：刻度齿需要人工在图上选取（面板明示"检测: 28 列, 未找到刻度尺"，
+  // 齿位由用户在画布上点）。伪造一对 px/value 能让表格看起来"有数"，但那些数字不是
+  // 从图版读出来的——教程里不能放这种数。故本图只如实记录"标定入口与规则"这一状态。
   await gotoStage(page, 6);
-  const val1 = page.locator('.step-panel[data-step="6"] #inp-manual-tick-val1');
-  const val2 = page.locator('.step-panel[data-step="6"] #inp-manual-tick-val2');
-  if (await val1.isVisible()) {
-    await val1.fill('0');
-    await val2.fill('20');
-    await page.locator('.step-panel[data-step="6"] #btn-save-manual-ticks').click();
-    await page.waitForTimeout(500);
-  }
+  await page.waitForTimeout(800);
   await page.screenshot({ path: path.join(OUT_DIR, 'step6_xticks.png') });
 
   // Step 7: Curve Digitization & Consensus Sample Horizons
