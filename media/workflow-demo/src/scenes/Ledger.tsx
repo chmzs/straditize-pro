@@ -45,7 +45,7 @@ export const Ledger = () => {
             opacity: headOpacity,
           }}
         >
-          八个步骤，八个可复核的数字
+          {LEDGER_ROWS.length} 个数字，全部取自当帧画面
         </div>
 
         <div

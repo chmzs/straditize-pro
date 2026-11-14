@@ -6,7 +6,7 @@ export type CaptionItem = {
   from: number;
   frames: number;
   accent: string;
-  caption: {index: string; title: string; detail: string; stat: Stat};
+  caption: {index: string; title: string; detail: string; stat?: Stat};
 };
 
 /**

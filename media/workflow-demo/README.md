@@ -19,7 +19,10 @@ docs/assets/tutorials/step4_cleanup.png
 docs/assets/tutorials/step4_binary_overlay.png
 docs/assets/tutorials/step5_naming.png
 docs/assets/tutorials/step6_xticks.png                            # 28/28 列检出刻齿（ad7bb68 重拍）
-docs/assets/tutorials/step6_roi_not_covering_axis.png             # 框没盖住轴行时的实测诊断
+docs/assets/tutorials/modal_ocr.png                               # 属种 OCR 审核（30 列：26/2/2）
+docs/assets/tutorials/modal_metadata.png                          # LiPD / FAIR 元信息提取
+docs/assets/tutorials/modal_agedepth.png                          # 年代-深度模型（BACON）
+docs/assets/tutorials/step6_roi_not_covering_axis.png             # 框没盖住轴行时的实测诊断（⑥ 第一拍）
 docs/assets/tutorials/step7_samples.png
 docs/assets/tutorials/step8_qa_export.png
 docs/assets/tutorials/modal_export_uncalibrated.png
@@ -28,10 +31,36 @@ docs/assets/tutorials/modal_export_uncalibrated.png
 渲染前把它们同步进 `public/shots/`（Remotion 只认 `public/` 下的 `staticFile`）：
 
 ```bash
-cp ../../docs/assets/tutorials/{step1_load,step2_roi,step3_ycalib,step4_cleanup,step4_binary_overlay,step5_naming,step6_xticks,step6_roi_not_covering_axis,step7_samples,step8_qa_export,modal_export_uncalibrated}.png public/shots/
+cp ../../docs/assets/tutorials/{step1_load,step2_roi,step3_ycalib,step4_cleanup,step4_binary_overlay,step5_naming,modal_ocr,modal_metadata,step6_roi_not_covering_axis,step6_xticks,modal_agedepth,step7_samples,step8_qa_export,modal_export_uncalibrated}.png public/shots/
 ```
 
 `competition_materials/live_captures/` 那批是 2026-10 的旧界面，只做过构图参考，**没有一帧进入成片**。
+
+## 配音（配音驱动画面）
+
+片子是**配音驱动**的：镜头时长不再是手写的，而是由每句解说词的真实音频时长推出来的。
+
+```
+narration.json               解说词唯一事实源（每镜一句或多句）
+  ↓ tools/synthesize_narration.py   （edge_tts + zh-CN-YunyangNeural，逐句 ffprobe 量时长）
+public/voice/<key>-<n>.mp3   逐句音频
+src/narration-timing.json    每句真实时长 + 每镜帧数（生成物，不要手改）
+  ↓ src/narration.ts
+镜头帧数 = round((该镜音频总时长 + 0.5s) * 30)
+字幕窗口 = 该句音频的起止；字幕正文 = 同一份 narration.json 字符串
+```
+
+改解说词 → 跑一次 `python tools/synthesize_narration.py` → 重渲。
+字幕不另写一份文案，所以不存在"配音改了字幕没改"。
+
+```bash
+python tools/synthesize_narration.py          # 全量重生成音频与时长表
+python tools/synthesize_narration.py --check  # 只校验音频与时长表
+```
+
+音色固定 `zh-CN-YunyangNeural`（Edge TTS），不混音色。
+（仓库原有的 `competition_materials/video/generate_edge_tts.mjs` 走的是同一个 Edge 接口，
+但自实现的握手已被服务端拒（401 / WS 1006），改用官方 `edge_tts` 库，声线与语音内容不变。）
 
 ## 安装与渲染
 

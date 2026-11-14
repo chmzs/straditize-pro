@@ -3,6 +3,7 @@ import {Backdrop, Slot} from './components/Backdrop';
 import {CaptionTrack, type CaptionItem} from './components/CaptionTrack';
 import {StepShotView} from './scenes/StepShotView';
 import {STEPS, type StepShotSpec} from './scenario';
+import {sentencesOf} from './narration';
 import {COLORS, W} from './theme';
 import {EASE} from './lib/camera';
 
@@ -49,11 +50,17 @@ const compactSpec = (spec: StepShotSpec): StepShotSpec => {
 
 const COMPACT = STEPS.map(compactSpec);
 
+/** 动图静音，但字幕仍是解说词原文（取该镜第一句），不另写一份文案。 */
 const CAPTIONS: CaptionItem[] = COMPACT.map((spec, i) => ({
   from: GIF_BEAT_FRAMES + i * GIF_SHOT_FRAMES,
   frames: GIF_SHOT_FRAMES,
   accent: spec.tone === 'warm' ? COLORS.amber : COLORS.cyan,
-  caption: spec.caption,
+  caption: {
+    index: spec.caption.index,
+    title: spec.caption.title,
+    detail: sentencesOf(spec.id)[0]?.text ?? '',
+    stat: spec.caption.stat,
+  },
 }));
 
 /** 暗场拍子：开场淡出暗场，收尾淡入暗场，loop 首尾都落在暗场。 */

@@ -19,7 +19,7 @@ export const Caption = ({
   index: string;
   title: string;
   detail: string;
-  stat: Stat;
+  stat?: Stat;
   accent?: string;
   dur: number;
 }) => {
@@ -108,6 +108,7 @@ export const Caption = ({
           </div>
         </div>
 
+        {stat ? (
         <div
           style={{
             textAlign: 'right',
@@ -115,7 +116,7 @@ export const Caption = ({
             flexShrink: 0,
             // 读数与单位一起在开始计数那一刻才出现：既避免「0 列 / 0.0000」，
             // 也避免只剩一个孤零零的单位标签
-            opacity: interpolate(frame, [8, 14], [0, 1], {
+            opacity: interpolate(frame, [11, 15], [0, 1], {
               extrapolateLeft: 'clamp',
               extrapolateRight: 'clamp',
             }),
@@ -136,14 +137,14 @@ export const Caption = ({
                 value={stat.value}
                 decimals={stat.decimals ?? 0}
                 suffix={stat.suffix ?? ''}
-                delay={12}
-                duration={14}
+                delay={11}
+                duration={15}
               />
             ) : stat.kind === 'pair' ? (
               <>
-                <Counter value={stat.a} delay={12} duration={14} />
+                <Counter value={stat.a} delay={11} duration={15} />
                 <span style={{opacity: 0.75, padding: '0 10px'}}>×</span>
-                <Counter value={stat.b} delay={12} duration={14} />
+                <Counter value={stat.b} delay={11} duration={15} />
               </>
             ) : (
               stat.text
@@ -161,6 +162,7 @@ export const Caption = ({
             {stat.label}
           </div>
         </div>
+        ) : null}
       </div>
     </AbsoluteFill>
   );
