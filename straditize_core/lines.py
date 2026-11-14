@@ -28,6 +28,42 @@ _AUTO_WIDTH_RATIO = 0.0015
 #: 自适应线宽下限：再小的图也不低于 3px，否则抗锯齿边缘会被当成结构线。
 _AUTO_WIDTH_FLOOR = 3
 
+#: 与列左缘重合多少像素以内的竖线算"这一列的轴线"。
+#:
+#: 与 ``cleanup.AXIS_BAND_PX`` 同口径：轴线普遍 1–3px 宽，列左缘取整误差在
+#: ±1px 内，2px 足以覆盖。
+COLUMN_AXIS_TOLERANCE_PX = 2
+
+
+def _column_axis_positions(
+    columns: Sequence[dict[str, Any]] | None,
+    roi_id: str,
+) -> list[int]:
+    """本 ROI 各列的**轴线** x 位置（列左缘）。
+
+    过滤口径与 Kind C 的列遍历一致：``roi_id`` 不匹配的列跳过（跨 ROI 的列坐标
+    与本 ROI 无关，拿它排除会误杀本 ROI 里正当的竖线）。
+    """
+    if not columns:
+        return []
+    positions: list[int] = []
+    for col in columns:
+        col_roi = col.get("roi_id")
+        if col_roi and col_roi != roi_id:
+            continue
+        raw = col.get("start", col.get("startX"))
+        if raw is None:
+            continue
+        positions.append(int(round(float(raw))))
+    return positions
+
+
+def _is_column_axis(at: int, axis_positions: Sequence[int]) -> bool:
+    return any(
+        abs(int(at) - position) <= COLUMN_AXIS_TOLERANCE_PX
+        for position in axis_positions
+    )
+
 
 def resolve_width_max(sub_shape: Sequence[int], line_width_max: int | None) -> int:
     """把 ``line_width_max`` 解析成实际像素上限。
@@ -124,6 +160,9 @@ def detect_line_candidates(
     resolved_max = resolve_width_max((sub_h, sub_w), line_width_max)
     max_thick = int(resolved_max)
     min_span_v = max(1, int(round(line_fraction_v * sub_h)))
+    # 列轴线位置：**结构判据**，与列几何绑定（`columns[].start ±2px`），
+    # 不是又一个覆盖率阈值。见 Kind B 里的排除说明。
+    axis_positions = _column_axis_positions(columns, roi_id)
 
     # 1. Kind A: Horizontal lines across ROI (legacy projection semantics).
     rows_h = _projection_line_rows(
@@ -175,6 +214,25 @@ def detect_line_candidates(
         })
 
     # 2. Kind B: Cross-ROI vertical axes/grid lines (legacy projection semantics).
+    #
+    # 列轴（= 列左缘那条贯穿竖线）**一律不提**。
+    #
+    # 面积图的 0 点画在列轴上，而 `_extraction_mask()` 会把已确认几何的像素从
+    # 墨迹里减掉。列轴被提成候选之后的每一步都是错的：
+    #
+    # * 它通过全部闸门是**必然**的——1–3px 宽（< max_thick）、贯穿 ROI 高度；
+    #   反过来"实线轴 + 填充"会连成宽 cluster 被"太厚"滤掉。也就是说检出的
+    #   偏好恰好反向选中了最不该删的那批。实测 `hoya-del-castillo.png`（29 列）：
+    #   21 条候选里 18 条竖线，**18 条全部落在列左缘 ±2px 内**。
+    # * 确认它 = 删掉这一列的 0 点：col02 / col15 / col22 分别有 101 / 294 / 255
+    #   行读数整体位移 1px，而画布上没有任何变化（`_axis_erasure_warnings` 只
+    #   负责事后报警，用户看到时数据已经偏了）。
+    # * 候选清单上唯一的动作是"确认去除 / 删除"。对列轴来说这两个动作都只有害处，
+    #   所以"提出来再禁用"等于把 18 行不可选项塞进一个总共 21 行的清单里——那是
+    #   噪音，不是信息。故选择**不提**，而不是提出来打标记。
+    #
+    # 抑制条件只用列结构（`columns[].start`），与 `line_fraction_v` 无关：把
+    # fraction 调到能滤掉列轴的程度，真正的贯穿纵线（表格网格线）会一起消失。
     cols_v = _projection_line_cols(
         sub_ink,
         fraction=line_fraction_v,
@@ -186,6 +244,8 @@ def detect_line_candidates(
         if at_local <= edge_margin or at_local >= sub_w - 1 - edge_margin:
             continue
         at_global = rx0 + at_local
+        if _is_column_axis(at_global, axis_positions):
+            continue
         seq += 1
         candidates.append({
             "id": f"line_v_{seq}",
@@ -237,10 +297,15 @@ def detect_line_candidates(
                 clusters = _cluster_indices(cols_c)
                 for cluster in clusters:
                     global_cluster = [c_start + c for c in cluster]
+                    at_local = int(round(float(np.mean(global_cluster))))
+                    at_global = rx0 + at_local
+                    # 与 Kind B 同一条结构判据：列左缘那一列就是轴线本身。
+                    # Kind C 只看列内 15%–30% 高度的短竖线，列轴偶尔会被底轴
+                    # 打断成这种长度 —— 打断不等于它不再是这一列的 0 点。
+                    if _is_column_axis(at_global, axis_positions):
+                        continue
                     # verify not in mask_v
                     if not np.any(mask_v[:, global_cluster]):
-                        at_local = int(round(float(np.mean(global_cluster))))
-                        at_global = rx0 + at_local
                         ink_rows = np.where(np.any(col_mask_c[:, cluster], axis=1))[0]
                         if len(ink_rows) > 0 and len(ink_rows) < min_span_v:
                             span = [int(ry0 + ink_rows[0]), int(ry0 + ink_rows[-1])]

@@ -108,20 +108,41 @@ def test_exclusion_away_from_the_axis_is_not_reported() -> None:
 
 
 def test_confirmed_vertical_geometry_on_the_axis_is_reported() -> None:
-    """自动检测提出的"干扰竖线"常常正好是列轴本身，确认它同样要报。"""
+    """用户把一条竖线拖到列轴上并确认去除，同样要报。
+
+    ## 场景来源变了，判据没变
+
+    这条用例原来靠"自动检测提出的竖线正好是列轴"来搭现场。那个现场现在是**缺陷
+    本身**：列轴按结构判据不再被提为候选（见 `test_line_candidates_column_axis.py`），
+    否则用户"检测 → 逐条确认"就是在删各列的 0 点。
+
+    但"确认的竖线压在列轴上"这条路仍然可达，而且更常见：用户想把轴旁边多出来的
+    竖边去掉时，`drawLineV` 拖出来的就是一条 x = 列左缘的几何。所以现场改由
+    `upsert_line_geometry`（手动几何的落库入口）搭建，告警判据一字未改。
+    """
     session, roi_id, column = _session_with_column()
+    axis_x = int(column["start"])
+
     candidates = session.detect_line_candidates(
         roi_id, line_fraction_h=0.7, line_fraction_v=0.3, line_width_max=2
     )["candidates"]
-    on_axis = next(
+    assert not [
         c
         for c in candidates
-        if c["axis"] == "v" and abs(c["at"] - int(column["start"])) <= 2
+        if c["axis"] == "v" and abs(c["at"] - axis_x) <= 2
+    ], (
+        "前置：自动检测不得再提出列轴 —— 否则本用例会在任务① 的回归上继续变绿，"
+        f"掩盖「检测→全选→删除」整条危险路径（候选：{[(c['axis'], c['at']) for c in candidates]}）"
     )
 
-    result = session.set_line_geometry_status(on_axis["id"], "removed", roi_id=roi_id)
+    result = session.upsert_line_geometry(
+        roi_id=roi_id,
+        geometry={"x0": axis_x, "y0": 0, "x1": axis_x, "y1": 119},
+        axis="v",
+        status="removed",
+    )
 
     warnings = result.get("warnings") or []
     assert any(w.get("kind") == "confirmed_line_covers_column_axis" for w in warnings), (
-        f"确认了落在 col01 轴线上的竖线（x={on_axis['at']}），返回里没有警告：{warnings}"
+        f"确认了落在 col01 轴线上的竖线（x={axis_x}），返回里没有警告：{warnings}"
     )
