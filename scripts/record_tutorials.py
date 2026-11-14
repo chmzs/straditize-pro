@@ -95,12 +95,25 @@ async function gotoStage(page, stage) {
   await page.screenshot({ path: path.join(OUT_DIR, 'step3_ycalib.png') });
 
   // Step 4: Line Removal & Binary Preview (B key)
+  //
+  // 进入步骤 4 后二值遮罩**默认已开启**（`GeologyViewport` 载入二值遮罩后自动打开），
+  // 所以"先按 B"其实是在关掉它。旧脚本直接按一次就截图，截到的是 `[已关闭]` 那一帧，
+  // 图注却写着"按 B 键开启"——图文对不上。这里改成按状态断言，不靠次数猜：
+  //   关一次 → 截 step4_cleanup（原始墨迹 + 候选线）；
+  //   开一次 → 等提示变成 [已开启] 再截 step4_binary_overlay。
   await gotoStage(page, 4);
   await page.locator('#btn-detect-candidates').click();
   await page.waitForTimeout(1200);
-  await page.screenshot({ path: path.join(OUT_DIR, 'step4_cleanup.png') });
-  // Toggle B-key binary overlay
   await page.keyboard.press('b');
+  await page
+    .locator('text=透视遮罩: 二值化墨迹高亮模式 [已关闭]')
+    .waitFor({ state: 'visible', timeout: 8000 });
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(OUT_DIR, 'step4_cleanup.png') });
+  await page.keyboard.press('b');
+  await page
+    .locator('text=透视遮罩: 二值化墨迹高亮模式 [已开启]')
+    .waitFor({ state: 'visible', timeout: 8000 });
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(OUT_DIR, 'step4_binary_overlay.png') });
   await page.keyboard.press('b');
