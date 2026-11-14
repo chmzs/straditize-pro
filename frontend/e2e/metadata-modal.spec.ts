@@ -271,7 +271,7 @@ test.describe('MetadataModal (FAIR / LiPD v1.3 元数据模块) E2E', () => {
     await extPanel.locator('#btn-parse-external-json').click();
 
     await expect(dialog.locator('#meta-extract-status')).toContainText(
-      '已成功解析外部 AI 结果并填入全部元数据字段'
+      '已解析外部 AI 结果并填入全部元数据字段'
     );
 
     // 4. 断言弹窗内各分组输入框已自动回填（且 DOI 前缀 https://doi.org/ 已被自动清洗）

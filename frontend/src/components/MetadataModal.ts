@@ -589,7 +589,7 @@ export class MetadataModal {
         if (res && res.success && res.current_metadata) {
           applyMetadataToForm(res.current_metadata);
           if (statusEl) {
-            statusEl.textContent = '已成功解析外部 AI 结果并填入全部元数据字段。';
+            statusEl.textContent = '已解析外部 AI 结果并填入全部元数据字段。';
           }
         }
       } catch (err: any) {
