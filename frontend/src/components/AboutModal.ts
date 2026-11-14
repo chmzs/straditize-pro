@@ -59,7 +59,7 @@ export class AboutModal {
                   </span>
                 </div>
                 <div style="margin-top: 4px; font-size: 11px; color: var(--text-secondary);">
-                  地质地层与古生态多指标图表高精度数字化科研系统
+                  地层与古生态多指标图谱数字化工具
                 </div>
               </div>
               <div style="display: flex; align-items: center; gap: 8px;">
@@ -78,7 +78,7 @@ export class AboutModal {
           <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px;">
             <div style="font-size: 12px; font-weight: 700; color: var(--text-heading); margin-bottom: 6px;">系统介绍</div>
             <p style="margin: 0; font-size: 11.5px; line-height: 1.6; color: var(--text-secondary);">
-              专为第四纪古生态学、古气候学与沉积地层学打造的高精度多指标图表数字化科研系统。针对复杂多列地层图谱 (Polydiagrams) 的高维并列、点位参差与伪空值难题，提供倾斜自校正、智能网格去线、PP-OCRv6 古生物学名识别纠错、等深几何截交与贝叶斯年代学模型提取，直通 R 语言分析与 FAIR 开放数据标准。
+              多指标地层图谱 (Polydiagrams) 数字化系统，面向第四纪古生态与沉积地层剖面。功能：倾斜自校正、网格线去除、属种名 OCR 识别与词典纠错、等深几何截交、贝叶斯年代-深度模型提取；导出 CSV / XLSX / LiPD / .tar 与 R 绘图脚本。
             </p>
           </div>
 
@@ -108,9 +108,9 @@ export class AboutModal {
             <div style="font-size: 12px; font-weight: 700; color: var(--text-heading); margin-bottom: 8px;">核心技术与必要依赖</div>
             <div style="display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: var(--text-secondary);">
               <div>• <strong>后端服务：</strong>Python 3.12+ (<code style="background: var(--bg-tertiary); padding: 1px 4px; border-radius: 4px;">straditize_core</code>，支持 Pixi / Conda / PyPI 环境)</div>
-              <div>• <strong>前端引擎：</strong>TypeScript 7 + HTML5 Canvas 2D + Vite 8 (120 FPS 视口渲染与零框架响应)</div>
-              <div>• <strong>古生物 OCR：</strong>PP-OCRv6 拉丁学名识别引擎 (ONNX Runtime 离线推理 + 500+ 分类词典)</div>
-              <div>• <strong>贝叶斯年代学 (可选)：</strong>R (≥ 4.2) 或内置 WebAssembly WebR (Bacon / Bchron 模型提取)</div>
+              <div>• <strong>前端引擎：</strong>TypeScript + HTML5 Canvas 2D + Vite</div>
+              <div>• <strong>属种名 OCR：</strong>PP-OCR (ONNX Runtime 离线推理) + 属种词典纠错</div>
+              <div>• <strong>贝叶斯年代学 (可选)：</strong>R 或内置 WebAssembly WebR (Bacon / Bchron 模型提取)</div>
             </div>
           </div>
 
@@ -242,7 +242,7 @@ export class AboutModal {
       if (latestTag && latestTag !== currentVer) {
         statusEl.innerHTML = `
           <span style="color: var(--status-warning); font-weight: 600;">
-            发现新版本 v${latestTag}！当前为 v${currentVer}。
+            发现新版本 v${latestTag}，当前为 v${currentVer}。
           </span>
           <a href="${data.html_url || 'https://github.com/chmzs/straditize-pro/releases/latest'}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-blue); text-decoration: underline; margin-left: 6px;">
             前往下载更新 &rarr;
