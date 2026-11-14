@@ -414,6 +414,24 @@ class CleanupMixin:
             )
         return warnings
 
+    def _record_cleanup_action(self, action_name: str) -> None:
+        """把「即将发生的步骤 4 编辑」压进撤销栈（一次用户动作 = 一格）。
+
+        必须在改动**之前**调用：`_record_history` 记的是调用这一刻的状态，先改
+        再记就等于把新值压进栈，撤销只会把新值再回填一次（B-06 的教训）。
+
+        用 `getattr` 取，与 `roi.py` / `samples.py` 的写法一致：本 mixin 单独
+        实例化（部分单元测试只建这一层）时没有 `_record_history`，那就静默跳过
+        ——记录历史是会话层的能力，不是几何层的正确性前提。
+
+        粒度：本文件的每个公开入口恰好对应一次用户动作（确认一批候选、划一个
+        排除区、重跑一次检测、删一条几何、清空全部），所以每个入口只记一格。
+        逐条记录会让"确认 20 条"需要按 20 次 Ctrl+Z 才能退回一次操作。
+        """
+        record_history = getattr(self, "_record_history", None)
+        if callable(record_history):
+            record_history(action_name)
+
     def _roi_for(self, roi_id: str | None) -> tuple[str, Any]:
         """Resolve the ROI to operate on, falling back to the active one."""
         if roi_id and hasattr(self, "_get_roi"):
@@ -570,6 +588,9 @@ class CleanupMixin:
                 restored += 1
 
         # Re-detection replaces this ROI's candidate set but keeps other ROIs.
+        # 记历史**放在这里**：检测本身是纯函数，前面任何一步抛错都不该留下
+        # 一格"什么都没变"的撤销步。
+        self._record_cleanup_action("Detect disturbance lines")
         self.line_candidates = [
             c for c in self.line_candidates if c.get("roi_id") != roi_id
         ] + candidates
@@ -646,6 +667,9 @@ class CleanupMixin:
         }
         _apply_derived_fields(candidate)
 
+        self._record_cleanup_action(
+            "Move line geometry" if existing is not None else "Add line geometry"
+        )
         if existing is None:
             self.line_candidates.append(candidate)
         else:
@@ -671,8 +695,14 @@ class CleanupMixin:
         )
         if target is None:
             raise JsonRpcError(INVALID_PARAMS, f"unknown geometry id: {candidate_id}")
-        target["status"] = status
         roi_id, _ = self._roi_for(roi_id or target.get("roi_id"))
+        # 状态已经是目标值时不记历史：那会是"白耗一格"的空步——用户按 Ctrl+Z
+        # 看到画面不动，却少了一格（`_record_history` 的 docstring 里点过这个坑）。
+        if target.get("status") != status:
+            self._record_cleanup_action(
+                "Confirm line removal" if status == REMOVED else "Retract line removal"
+            )
+            target["status"] = status
         return self._recompose(roi_id)
 
     def set_line_thickness(
@@ -732,17 +762,22 @@ class CleanupMixin:
     ) -> dict[str, Any]:
         """Delete one geometry entirely."""
         before = len(self.line_candidates)
-        self.line_candidates = [
+        remaining = [
             c for c in self.line_candidates if str(c.get("id")) != str(candidate_id)
         ]
-        if len(self.line_candidates) == before:
+        if len(remaining) == before:
             raise JsonRpcError(INVALID_PARAMS, f"unknown geometry id: {candidate_id}")
+        self._record_cleanup_action("Delete line geometry")
+        self.line_candidates = remaining
         roi_id, _ = self._roi_for(roi_id)
         return self._recompose(roi_id)
 
     def clear_cleanup_edits(self, roi_id: str | None = None) -> dict[str, Any]:
         """Drop every Step-4 edit for an ROI and recompose."""
         roi_id, _ = self._roi_for(roi_id)
+        # 清空是本步唯一的"重来"手段，它自己也必须能撤回——否则用户误点一次
+        # 就把几十条手工确认的几何全丢了，且没有任何退回路径。
+        self._record_cleanup_action("Clear cleanup edits")
         self.line_candidates = [
             c for c in self.line_candidates if c.get("roi_id") != roi_id
         ]
@@ -777,6 +812,10 @@ class CleanupMixin:
             self._extract_foreground_from_settings()
 
         roi_id, _ = self._roi_for(roi_id)
+
+        # 一次 `algorithm.applyLineRemoval` 就是一次用户动作（前端"确认一批候选"、
+        # "加一个排除区"、"提交一把笔迹"各发一次），所以只记一格。
+        self._record_cleanup_action("Apply line removal")
 
         if exclusion_regions is not None:
             others = [e for e in self.exclusion_regions if e.get("roi_id") != roi_id]

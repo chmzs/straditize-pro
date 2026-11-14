@@ -142,6 +142,25 @@ class ProjectSessionMixin:
             # 同样深拷贝：`samples` 是 `list[dict]`，浅拷贝会让快照与实时共享
             # 字典，任何原地改（如改某条的 depth）都会污染历史。
             "samples": copy.deepcopy(getattr(self, "samples", []) or []),
+            # 步骤 4 的三类清理几何（2026-11-14）。它们此前**完全不在撤销范围内**：
+            # `cleanup.py` 的六个入口一次都不调 `_record_history`，快照里也没有这
+            # 三个键，于是 Ctrl+Z 对"确认删除一条干扰线"毫无反应——用户误删之后
+            # 唯一的退路是"清空全部重来"，而那个动作本身也不可撤销。
+            #
+            # 为什么必须深拷贝、而且必须**保住 id**：`line_candidates` 里每条候选
+            # 的身份是 `id`。前端按 id 记住"哪条被确认""哪条被选中"，后端
+            # `_geometry_mask` 按 status 扣墨迹。若撤销后重新铸 id（例如按位置
+            # 重建），前端的选择集与 `selected_candidate_ids` 会指向不存在的对象，
+            # 而 `_candidate_seq` 的注释写明的撞号风险也会回来（重铸的 id 可能
+            # 与现存候选相同，delete-by-id 就会一次删掉两条）。deepcopy 原样搬运
+            # 字典，id 字符串不变，这也是这里唯一正确的做法。
+            "line_candidates": copy.deepcopy(
+                getattr(self, "line_candidates", []) or []
+            ),
+            "exclusion_regions": copy.deepcopy(
+                getattr(self, "exclusion_regions", []) or []
+            ),
+            "line_strokes": copy.deepcopy(getattr(self, "line_strokes", []) or []),
         }
 
     def _record_history(self, action_name: str) -> None:
@@ -195,6 +214,39 @@ class ProjectSessionMixin:
         # 变得无法区分。
         if "samples" in snapshot:
             self.samples = copy.deepcopy(snapshot["samples"])
+        # 步骤 4 的清理几何。缺键的兜底理由与 `samples` 完全相同（同一次会话里
+        # 旧快照新代码混用）：保持当前清理状态不动，而不是清空——"回到本来就
+        # 没有几何的状态"与"把用户确认过的清理全部洗掉"必须可区分。
+        restored_cleanup = False
+        for key in ("line_candidates", "exclusion_regions", "line_strokes"):
+            if key in snapshot:
+                setattr(self, key, copy.deepcopy(snapshot[key]))
+                restored_cleanup = True
+        if restored_cleanup:
+            self._rebuild_cleanup_masks_after_restore()
+
+    def _rebuild_cleanup_masks_after_restore(self) -> None:
+        """把清理几何回填之后，必须重算派生掩膜。
+
+        只回填列表是不够的：`grid_line_mask` 是撤销**之前**那版合成结果，而
+        `_extraction_mask()` 直接读它。不重算的表现是——候选列表上写着
+        `candidate`（界面上"未确认"），取数却照样把这块墨迹扣掉；也就是说
+        "撤销"看起来成功了，数据没回来。这正是本项目最怕的静默错。
+
+        没有像素时（还没载图）无法合成：把派生掩膜全部置空，宁可"没有掩膜"，
+        也绝不留下与恢复状态不符的旧掩膜。
+        """
+        if getattr(self, "image", None) is None or getattr(
+            self, "foreground_mask", None
+        ) is None:
+            self.candidate_line_mask = None
+            self.exclusion_mask = None
+            self.manual_restore_mask = None
+            self.manual_erase_mask = None
+            self.grid_line_mask = None
+            return
+        roi_id, _ = self._roi_for(None)
+        self._recompose(roi_id)
 
     def history_redo(self) -> dict[str, Any]:
         """Redo last undone command."""
