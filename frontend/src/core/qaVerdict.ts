@@ -105,7 +105,7 @@ export function computeQaVerdict(input: QaVerdictInput): QaVerdict {
 
   return {
     level: 'green',
-    headline: '地学校验门禁通过，数据符合规律',
+    headline: `地学校验门禁通过：${nChecked} 个层位的组分总和都在 100% ± ${tolerance}% 内`,
     detail: maxSum === null ? `已检验 ${nChecked} 个层位` : `已检验 ${nChecked} 个层位，最大总和 ${maxSum}%`,
   };
 }
