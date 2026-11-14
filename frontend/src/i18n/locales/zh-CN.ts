@@ -63,7 +63,7 @@ export const zhCN = {
   'settings.webmcpDesc': '/mcp (支持 Claude Code / DSH 远程控制)',
   'settings.save': '保存并应用配置',
   'settings.cancel': '取消',
-  'settings.saved': '设置已保存并成功应用！',
+  'settings.saved': '设置已保存，已生效。',
 
   // ===== 顶栏按钮与菜单 =====
   'toolbar.diagram': '打开图谱',
@@ -166,7 +166,7 @@ export const zhCN = {
   'draft.found': '发现上次未保存的草稿 ({time}, 含 {count} 个属种列)',
   'draft.restore': '恢复草稿',
   'draft.ignore': '忽略',
-  'draft.restored': '成功恢复上次自动暂存的项目草稿！',
+  'draft.restored': '已恢复上次自动暂存的草稿。',
   'hud.default': '就绪：A 加点 | S 微调 (方向键 1px 精调) | D 删点 | 右键/中键拖拽平移 | 滚轮缩放 | F1 帮助',
   // 步骤 4 的工具集与全局默认不同（只有 微调/修线/平移，没有 A 加点、D 也不是"删点"），
   // 全局提示会教用户按不存在的键，所以单列一条按阶段切换。
@@ -301,7 +301,7 @@ export const zhCN = {
   'step5.reconTitle': '区间归属对账状态',
   'step5.sequentialTitle': '逐列点名模式 (顺序无关)',
   'step5.selectedCol': '当前选中列:',
-  'step5.sequentialDesc': '在左侧栏中直接输入各列属种名，获得焦点时画布将即时高亮该列，杜绝顺序假定。',
+  'step5.sequentialDesc': '在左侧栏直接输入各列属种名；某一列获得焦点时，画布高亮该列。',
   'step5.next': '确认列命名，进入 X 轴刻度标定 (步骤 6)',
 
   // ===== 步骤 6：X 刻度面板 =====
@@ -322,7 +322,7 @@ export const zhCN = {
   'step6.reinput': '重新输入两端点',
   'step6.saveTicks': '保存标度',
   'step6.applyToGroup': '应用刻度至同组全部列',
-  'step6.applyToGroupSuccess': '已将刻度 ({val1} ~ {val2} {unit}) 批量应用到同组 {count} 个属种！',
+  'step6.applyToGroupSuccess': '已将刻度 ({val1} ~ {val2} {unit}) 应用到同组 {count} 个属种。',
   'step6.applyToGroupEmpty': '当前组内无其他可用属种列。',
   'step6.next': '确认列刻度，提取拐点与采样层位 (步骤 7)',
 
@@ -346,10 +346,10 @@ export const zhCN = {
 
   // ===== 步骤 8：校验诊断面板 =====
   'step8.title': '8. 校验与质量诊断',
-  'step8.desc': '执行组分总和 ≤100% 门禁检查与异常诊断。全部达标后，可直接点击顶栏 [导出] 导出科学数据。',
+  'step8.desc': '执行组分总和 ≤100% 门禁检查与异常诊断；全部达标后点顶栏【导出】。',
   'step8.runQa': '重新运行全剖面 QA 诊断',
   'step8.exportBtn': '打开顶栏导出就绪清单',
-  'step8.directExport': '直通导出数据 (进入交付出口)',
+  'step8.directExport': '打开导出面板',
 
   // ===== 远程安全认证 =====
   'auth.title': '远程访问保护',
