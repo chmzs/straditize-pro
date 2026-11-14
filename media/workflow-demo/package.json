@@ -1,0 +1,20 @@
+{
+  "name": "workflow-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Straditize 8-step workflow demo video (Remotion)",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render Workflow8Steps out/workflow-8steps.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.532",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.532"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "typescript": "5.6.3"
+  }
+}
