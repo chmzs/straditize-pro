@@ -19,7 +19,7 @@
  * `rois`），不是"下拉框里有几项"。
  */
 import { expect, test } from './fixtures';
-import { diagramData, resetBaseline, rpc } from './helpers';
+import { diagramData, gotoStage, resetBaseline, rpc } from './helpers';
 
 /** 每个可选项对应的真值尺寸——取自真实样本文件，改动样本即须同步改这里。 */
 const SAMPLE_TRUTH: Record<string, [number, number]> = {
@@ -132,5 +132,46 @@ test.describe('步骤 1 载入：每条入口都必须真的把后端切到那�
     // 推进按钮真的把工作流推进到步骤 2
     await page.locator('#btn-goto-step2').click();
     await expect(page.locator('.step-panel[data-step="2"]'), '步骤 2 面板应出现').toBeVisible();
+  });
+});
+
+/**
+ * 步骤 1 的标题**只能有一个来源**。
+ *
+ * 缺陷背景：`LoadPanel.ts` 曾同时存在两种叫法——模块导出的 `title = '1. 载入图谱'`
+ * 与渲染进 DOM 的 `<div class="step-title">1. 载入地质图谱</div>`；两者都不是
+ * i18n 词条（i18n 里步骤 1 的官方名是 `workflow.name1` = 「载入」，其余 7 步的
+ * 面板标题一律走 `t('stepN.title')`，只有步骤 1 是手写字符串）。
+ *
+ * 判据打在渲染后的 DOM 上，而不是"源码里有没有某个字符串"：
+ * 断言 `.step-title` **有且仅有一个**且文本等于官方名。只断言"包含正确文本"
+ * 会让双标题悄悄通过——两个来源同时保留时，包含关系依然成立。
+ */
+test.describe('步骤 1 面板：标题只有一个来源', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetBaseline(page);
+  });
+
+  test('面板内标题唯一，且等于 i18n 官方名「载入」', async ({ page }) => {
+    await gotoStage(page, 1);
+
+    const panel = page.locator('.step-panel[data-step="1"]');
+    await expect(panel, '步骤 1 面板应可见').toBeVisible();
+
+    const titles = panel.locator('.step-title');
+    await expect(titles, '步骤 1 面板内只允许一个步骤标题').toHaveCount(1);
+    await expect(
+      titles,
+      '标题必须等于 i18n 词条 step1.title（步骤 1 的官方名以 workflow.name1「载入」为准）',
+    ).toHaveText('1. 载入');
+
+    // 同屏不得再出现第二种叫法（历史缺陷：模块常量与面板 HTML 各写一份）
+    await expect(panel, '面板不得残留「载入地质图谱」这种叫法').not.toContainText('载入地质图谱');
+
+    // 整个检查器区域也只能有一个步骤标题（防止将来把两种标题都渲染出来）
+    await expect(
+      page.locator('.step-panel .step-title'),
+      '检查器内不得同时出现两个步骤标题',
+    ).toHaveCount(1);
   });
 });

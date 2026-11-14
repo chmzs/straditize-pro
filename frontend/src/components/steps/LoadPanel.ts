@@ -1,14 +1,17 @@
+import { t } from '../../i18n';
 import { DiagramData } from '../../types/pollen';
 import { StepContext } from './_registry';
 
 export const step = 1;
-export const title = '1. 载入图谱';
+// 标题**只**来自 i18n 词条 `step1.title`（官方名以 `workflow.name1` 为准）。
+// 这里不再导出 `title`：它没有任何消费方，留着就是第二个事实源，
+// 早晚和面板里的那一份分叉（曾经同屏出现「1. 载入图谱」与「1. 载入地质图谱」）。
 
 export function render(data: DiagramData): string {
   const hasImage = Boolean(data.imageSrc);
   return `
     <div class="step-panel" data-step="1">
-      <div class="step-title">1. 载入地质图谱</div>
+      <div class="step-title">${t('step1.title')}</div>
       ${hasImage ? `
         <div class="info-callout success">
           <span>当前图谱尺寸：<strong>${data.imageWidth} × ${data.imageHeight} px</strong></span>

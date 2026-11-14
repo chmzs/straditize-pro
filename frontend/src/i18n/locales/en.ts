@@ -243,6 +243,10 @@ export const en = {
   'tool.drawLineVShortcut': 'drag',
   'tool.drawLineVHint': 'Drag a vertical rectangle on the canvas to commit an interference-line geometry (step 4)',
 
+  // ===== Step 1: Load Panel =====
+  // Official name follows `workflow.name1` ("Load"), same wording as `workflow.step1`.
+  'step1.title': '1. Load',
+
   // ===== Step 2: ROI Panel =====
   'step2.title': '2. Data ROI Definition',
   'step2.desc': 'Drag handles on canvas to bound data region (ROI). Supports multiple ROIs.',

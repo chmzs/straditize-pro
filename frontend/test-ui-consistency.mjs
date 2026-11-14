@@ -899,6 +899,33 @@ check(
   '检查更新必须用语义化比较 compareVersions，不得用字符串不等比较版本',
 );
 
+// ---- 23. 步骤 1 标题唯一来源：i18n 词条 step1.title ------------------------
+//
+// 缺陷：`LoadPanel` 曾同时存在 `title = '1. 载入图谱'` 与
+// `<div class="step-title">1. 载入地质图谱</div>` 两种叫法。现统一到 i18n
+// 词条 `step1.title`（步骤 1 的官方名以 `workflow.name1`＝「载入」为准，
+// 其余 7 步的面板标题一律走 `t('stepN.title')`，步骤 1 是唯一的例外）。
+//
+// 注：本文件下方断言字符串里出现的「载入地质图谱」是**故意保留**的
+// 反向哨兵（用来抓"有人又把手写标题放回来"），不是漏改。
+const loadPanelCode = stripComments(read('./src/components/steps/LoadPanel.ts'));
+check(
+  loadPanelCode.includes("t('step1.title')"),
+  '步骤 1 的标题必须来自 i18n 词条 step1.title（面板内不得另写一份标题）',
+);
+check(
+  !loadPanelCode.includes('载入地质图谱'),
+  '步骤 1 面板不得残留第二种叫法「载入地质图谱」',
+);
+check(
+  !/export const title\s*=\s*['"]/.test(loadPanelCode),
+  '步骤 1 面板不得再导出第二个标题常量：标题唯一来源是 i18n',
+);
+check(
+  zh.includes("'step1.title'") && en.includes("'step1.title'"),
+  'i18n 必须在 zh-CN.ts 与 en.ts 同步提供 step1.title',
+);
+
 if (failures.length > 0) {
   console.error(`✘ UI 一致性门禁失败（${failures.length} 项）:`);
   for (const failure of failures) console.error(`  - ${failure}`);
