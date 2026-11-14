@@ -185,13 +185,35 @@ async function gotoStage(page, stage) {
   await page.screenshot({ path: path.join(OUT_DIR, '..', 'real_browser_playwright_verified.png') });
 
   // Open Age-Depth Modal & extract Bacon curve
+  // 旧脚本点完范例只 `waitForTimeout(800)` 就点提取，实际上图像还没载入、标定点没落位，
+  // 于是截到的是空状态（"请载入年代-深度模型图谱"、标定未完成 0/4），与图注完全无关。
+  // 现在按 `agedepth-modal.spec.ts` 的口径等真实信号：标题栏变成「范例: BACON」、
+  // 标定值面板出现，然后提取并等 `#ad-status-msg` 报"识别成功"。
   await page.locator('#btn-age-depth-modal').click();
   const adDialog = page.locator('.agedepth-dialog');
   await adDialog.waitFor({ state: 'visible' });
   await adDialog.locator('#ad-btn-center-bacon').click();
-  await page.waitForTimeout(800);
+  await adDialog.locator('#ad-current-source-label').waitFor({ state: 'visible' });
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector('#ad-current-source-label');
+      return !!el && /BACON/i.test(el.textContent || '');
+    },
+    null,
+    { timeout: 30000 }
+  );
+  await adDialog.locator('#ad-calib-values').waitFor({ state: 'visible', timeout: 20000 });
+  await page.waitForTimeout(600);
   await adDialog.locator('#ad-btn-extract').click();
-  await page.waitForTimeout(2500);
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector('#ad-status-msg');
+      return !!el && (el.textContent || '').includes('识别成功');
+    },
+    null,
+    { timeout: 60000 }
+  );
+  await page.waitForTimeout(1200);
   await page.screenshot({ path: path.join(OUT_DIR, 'modal_agedepth.png') });
   await page.locator('#ad-close-btn').click();
   await page.locator('.agedepth-dialog').waitFor({ state: 'detached' });
