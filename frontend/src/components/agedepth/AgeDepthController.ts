@@ -338,7 +338,7 @@ export class AgeDepthController {
         metadata: inspectionData.metadata,
       });
       if (statusEl) {
-        statusEl.textContent = '已成功将修改后的年代-深度数据同步到工程！';
+        statusEl.textContent = '已成功将修改后的年代-深度数据同步到工程。';
         setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
       }
     } catch (err: any) {
@@ -487,7 +487,7 @@ export class AgeDepthController {
 
       if (instRes && instRes.success) {
         this.onComponentReady(instRes);
-        notify('组件已就绪，年龄建模功能已激活！', 'success');
+        notify('组件已就绪，可以开始建模。', 'success');
         this.checkComponentStatus();
       }
     } catch (err: any) {
@@ -529,7 +529,7 @@ export class AgeDepthController {
     if (box) box.style.display = 'block';
     if (bar) bar.style.width = '100%';
     if (txt) {
-      txt.innerHTML = `<span style="color:var(--status-success); font-weight: 700;">组件已就绪，年龄建模功能已激活！</span>`;
+      txt.innerHTML = `<span style="color:var(--status-success); font-weight: 700;">组件已就绪，可以开始建模。</span>`;
     }
     if (statusEl) {
       const ver = data?.version || '1.0.0';
@@ -553,7 +553,7 @@ export class AgeDepthController {
     deltaRStd: number | undefined;
   }): Promise<void> {
     if (params.dates.length < 2) {
-      notifyError('请至少在测年数据表中保留或输入 2 个测年层位！');
+      notifyError('请至少在测年数据表中保留或输入 2 个测年层位。');
       return;
     }
 
@@ -603,9 +603,9 @@ export class AgeDepthController {
         if (res && res !== true && res.success && res.inspection) {
           this.callbacks.onLocalBaconSuccess?.(res);
           if (statusEl) {
-            statusEl.innerHTML = `<strong>本地 R 建模完成</strong>: 原生 150 万次 MCMC 成功完成并生成 95% 置信带！`;
+            statusEl.innerHTML = `<strong>本地 R 建模完成</strong>：已生成 95% 置信带。`;
           }
-          notify('本地 Rscript 原生满血 Bacon 建模完成！已自动生成拟合中值线与 95% 置信区间。', 'success');
+          notify('本地 R 建模完成：已生成拟合中值线与 95% 置信区间。', 'success');
           return;
         }
         if (res && res !== true && res.error) {
@@ -697,7 +697,7 @@ L <- mapAgeEnsembleToPaleoData(L, age.var="age")
 # 4. 出版级诊断图
 plotChron(L)
 
-message("geoChronR 年代不确定性建模完成！已成功与花粉图谱建立时间轴映射。")
+message("geoChronR 年代不确定性建模完成：已建立与图谱的时间轴映射。")
 `;
     const blob = new Blob([rScript], { type: 'text/plain;charset=utf-8;' });
     const url = URL.createObjectURL(blob);

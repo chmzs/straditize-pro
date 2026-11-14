@@ -419,7 +419,7 @@ export class AgeDepthModal {
     modal.querySelector('#ad-btn-apply')?.addEventListener('click', async () => {
       const inspection = this.canvasComp?.getInspectionData();
       if (!inspection) {
-        notifyError('请先运行提取或生成年代模型！');
+        notifyError('请先运行提取或生成年代模型。');
         return;
       }
       try {

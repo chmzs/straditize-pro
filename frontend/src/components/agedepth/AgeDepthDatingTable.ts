@@ -807,7 +807,7 @@ export class AgeDepthDatingTable {
 
   public addTableRow(): void {
     if (!this.inspectionData) {
-      notifyError('请先运行提取或载入年代模型！');
+      notifyError('请先运行提取或载入年代模型。');
       return;
     }
     // The samples view renders mappedSamples (depths inherited from the pollen diagram's
@@ -861,7 +861,7 @@ export class AgeDepthDatingTable {
 
   public deleteTableRow(idx: number): void {
     if (!this.inspectionData || this.inspectionData.depths.length <= 2) {
-      notifyError('年代模型至少需要保留 2 个层位！');
+      notifyError('年代模型至少需要保留 2 个层位。');
       return;
     }
     this.inspectionData.depths.splice(idx, 1);
@@ -908,7 +908,7 @@ export class AgeDepthDatingTable {
 
   public async copyTableTsv(): Promise<void> {
     if (!this.inspectionData || this.inspectionData.depths.length === 0) {
-      notify('当前尚无年代-深度数据可复制！', 'info');
+      notify('当前没有年代-深度数据可复制。', 'info');
       return;
     }
     const d = this.inspectionData.depths;
@@ -942,7 +942,7 @@ export class AgeDepthDatingTable {
       }
       const statusEl = this.container.querySelector('#ad-table-sync-status');
       if (statusEl) {
-        statusEl.textContent = `已成功复制 ${d.length} 行数据至剪贴板（TSV 格式）！`;
+        statusEl.textContent = `已复制 ${d.length} 行数据到剪贴板（TSV 格式）。`;
         setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
       }
     } catch {

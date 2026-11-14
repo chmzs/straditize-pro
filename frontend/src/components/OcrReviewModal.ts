@@ -390,7 +390,7 @@ export class OcrReviewModal {
     const confirmed = this.reviewTable.getConfirmedLabels();
 
     if (confirmed.length === 0) {
-      notifyError('请至少勾选采纳 1 项属种名称！');
+      notifyError('请至少勾选采纳 1 项属种名称。');
       return;
     }
 

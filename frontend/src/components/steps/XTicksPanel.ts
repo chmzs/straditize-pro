@@ -1032,7 +1032,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         }
         if (mergedCount > 0) {
           state.selectedGroupId = roi.x_groups[0].id;
-          notify(`已成功合并 ${mergedCount} 个标度相同的列组！`, 'success');
+          notify(`已合并 ${mergedCount} 个标度相同的列组。`, 'success');
           ctx.onDataChange?.();
         } else {
           notify('当前 ROI 内所有列组形态或标度各不相同，未发现可合并的同类组。', 'info');

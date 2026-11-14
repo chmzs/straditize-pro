@@ -461,7 +461,7 @@ export class MetadataModal {
     modal.querySelector('#btn-fetch-doi')?.addEventListener('click', async () => {
       const doiInp = (modal.querySelector('#meta-inp-doi') as HTMLInputElement).value.trim();
       if (!doiInp) {
-        notifyError('请输入有效的 DOI 编号！');
+        notifyError('请输入有效的 DOI 编号。');
         return;
       }
       const statusEl = modal.querySelector('#meta-extract-status');
@@ -475,7 +475,7 @@ export class MetadataModal {
           (modal.querySelector('#meta-pub-authors') as HTMLInputElement).value = (d.authors || []).join(', ');
           (modal.querySelector('#meta-pub-journal') as HTMLInputElement).value = d.journal || '';
           (modal.querySelector('#meta-pub-year') as HTMLInputElement).value = String(d.year || '');
-          if (statusEl) statusEl.textContent = `成功索引出版信息 (来源: ${d.source})！`;
+          if (statusEl) statusEl.textContent = `已索引出版信息（来源：${d.source}）。`;
         } else {
           if (statusEl) statusEl.textContent = `未检索到 DOI，请核对编号或手动填写。`;
         }
@@ -516,7 +516,7 @@ export class MetadataModal {
       const statusEl = modal.querySelector('#meta-extract-status');
       try {
         await navigator.clipboard.writeText(textToCopy);
-        if (statusEl) statusEl.textContent = '已复制提取提示词！请前往网页版 AI 上传论文 PDF 并粘贴发送。';
+        if (statusEl) statusEl.textContent = '已复制提取提示词。请前往网页版 AI 上传论文 PDF 并粘贴发送。';
       } catch {
         if (extPromptBox) {
           extPromptBox.style.display = 'block';
@@ -578,7 +578,7 @@ export class MetadataModal {
     const parseAndApplyExternalText = async (rawText: string) => {
       const statusEl = modal.querySelector('#meta-extract-status');
       if (!rawText.trim()) {
-        notifyError('请先在文本框中粘贴外部 AI 生成的 JSON 内容，或选择文件导入！');
+        notifyError('请先在文本框中粘贴外部 AI 生成的 JSON 内容，或选择文件导入。');
         return;
       }
       try {
@@ -589,7 +589,7 @@ export class MetadataModal {
         if (res && res.success && res.current_metadata) {
           applyMetadataToForm(res.current_metadata);
           if (statusEl) {
-            statusEl.textContent = '已成功解析外部 AI 结果并填入全部元数据字段！';
+            statusEl.textContent = '已成功解析外部 AI 结果并填入全部元数据字段。';
           }
         }
       } catch (err: any) {
@@ -644,7 +644,7 @@ export class MetadataModal {
           llm_prompt_template: this.llmPromptTemplate,
         });
         if (showNotice && statusEl) {
-          statusEl.textContent = 'LLM 配置与提示词已保存！';
+          statusEl.textContent = 'LLM 配置与提示词已保存。';
         }
       } catch (err: any) {
         if (showNotice && statusEl) {
@@ -683,7 +683,7 @@ export class MetadataModal {
         });
         if (res && res.success && res.current_metadata) {
           applyMetadataToForm(res.current_metadata);
-          if (statusEl) statusEl.textContent = `完成 ${res.chunks_count} 块文本提取！未提及项已严格留空。`;
+          if (statusEl) statusEl.textContent = `已提取 ${res.chunks_count} 块文本。未提及项留空。`;
         }
       } catch (err: any) {
         if (statusEl) statusEl.textContent = `PDF 提取提示: ${err.message || err}`;
