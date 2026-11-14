@@ -543,11 +543,41 @@ class CleanupMixin:
             cand["image_scope"] = self._geometry_scope()
             _apply_derived_fields(cand)
 
+        # 重检必须保留"几何完全相同"的候选的确认状态。
+        #
+        # 没有这一步，用户唯一的劳动（在几十条投影误报里逐条确认哪几条是真干扰线）
+        # 会被一次"再检测一下"整体抹掉：新候选每次 mint 新 id，旧 id 连同它的
+        # `status="removed"` 一起消失，于是 `_geometry_mask(statuses={REMOVED})`
+        # 变空、`grid_line_mask` 不再扣这些像素、取数结果悄悄变了 —— 而界面上只显示
+        # "检测完成"。几何幂等并不等于状态幂等，这两件事必须分开保证。
+        #
+        # 只认"轴向 + 矩形完全一致"：用户挪过 1px 的几何算新几何，需要重新确认
+        # （挪动本身已经说明他不同意原位置）。
+        previous = [c for c in self.line_candidates if c.get("roi_id") == roi_id]
+        restored = 0
+        for cand in candidates:
+            twin = next(
+                (
+                    prev
+                    for prev in previous
+                    if prev.get("axis") == cand.get("axis")
+                    and _rect_of(prev) == _rect_of(cand)
+                ),
+                None,
+            )
+            if twin is not None and twin.get("status") == REMOVED:
+                cand["status"] = REMOVED
+                restored += 1
+
         # Re-detection replaces this ROI's candidate set but keeps other ROIs.
         self.line_candidates = [
             c for c in self.line_candidates if c.get("roi_id") != roi_id
         ] + candidates
-        return {"candidates": candidates, "roi_id": roi_id}
+        return {
+            "candidates": candidates,
+            "roi_id": roi_id,
+            "restored_confirmations": restored,
+        }
 
     # ------------------------------------------------------------------
     # geometry editing
