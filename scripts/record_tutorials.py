@@ -53,6 +53,24 @@ async function gotoStage(page, stage) {
   await page.waitForTimeout(350);
 }
 
+// 等浮层提示自己消失（`ui/feedback.ts`：danger 8s / warning 6s / info 4s + 160ms 退场）。
+// 不清理的话，上一动作的报错浮层会压在下一张图右上角，挡住弹窗关闭按钮之类的控件。
+async function clearToasts(page) {
+  await page.waitForFunction(() => document.querySelectorAll('.ui-toast').length === 0, null, {
+    timeout: 20000,
+  });
+}
+
+// 页面 reload 后会自动暂存草稿的恢复横幅（`app/draftRecovery.ts`），它固定在 top:48px，
+// 正好压住步骤条与面板标题。录制时一律点「忽略」，否则每张 reload 后的图都会顶着它。
+async function dismissDraftBanner(page) {
+  const banner = page.locator('.draft-recovery-banner');
+  if ((await banner.count()) === 0) return;
+  await page.locator('#btn-discard-draft').click();
+  await banner.waitFor({ state: 'detached', timeout: 10000 });
+  await page.waitForTimeout(300);
+}
+
 (async () => {
   const browser = await chromium.launch({ channel: 'msedge', headless: true });
   const context = await browser.newContext({
@@ -66,6 +84,32 @@ async function gotoStage(page, stage) {
   await rpc(page, 'e2e.reset');
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForTimeout(500);
+
+  // ── 导出闸门（未标定）：**必须在步骤 3 之前抓**，否则后端已 is_calibrated=true，
+  //    `-32003`（导出需要深度标定）分支永远走不到，截出来的是一张"有数据"的表。
+  await page.locator('#btn-export-csv').click();
+  await page.locator('.wpd-export-dialog').waitFor({ state: 'visible' });
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector('#wpd-rowset-caption');
+      return !!el && (el.textContent || '').includes('导出需要深度标定');
+    },
+    null,
+    { timeout: 15000 }
+  );
+  await page.waitForTimeout(600);
+  // 判据：说明文字必须是「未标定」这一支，且**不得**退化成"当前行集为空"那一支
+  // （两条分支对应两件不同的事：导出被拒绝 vs 没数据，图注要指着前者）。
+  const gateCaption = ((await page.locator('#wpd-rowset-caption').textContent()) || '').trim();
+  if (!gateCaption.includes('导出需要深度标定') || gateCaption.includes('当前行集为空')) {
+    throw new Error(`导出面板未落在 -32003 分支，实际说明文字：${gateCaption}`);
+  }
+  await clearToasts(page);
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: path.join(OUT_DIR, 'modal_export_uncalibrated.png') });
+  await page.locator('#export-modal-close').click();
+  await page.locator('.wpd-export-dialog').waitFor({ state: 'detached' });
+  await page.waitForTimeout(300);
 
   // Step 1: Load Image (Hoya sample loaded)
   await gotoStage(page, 1);
@@ -240,6 +284,76 @@ async function gotoStage(page, stage) {
   await page.waitForTimeout(800);
   await page.screenshot({ path: path.join(OUT_DIR, 'step8_qa_export.png') });
 
+  // ── 删除「有列的有效区」确认框（应用内 `#ui-confirm-modal`）──────────────────
+  // 这条行为是 2026-11-13 才有的（`services/InspectorBridge.ts:183-215` + `ui/confirm.ts`）：
+  // 删除按钮只在 ROI 数 > 1 时渲染，且只有该 ROI **带列**时才会弹确认框，所以这里
+  // 按 `e2e/roi-delete-with-columns.spec.ts` 的口径先造出"第二个带 1 列的分区"。
+  await rpc(page, 'roi.create', {
+    name: 'charcoal',
+    x0: 315,
+    x1: 1946,
+    y0: 511,
+    y1: 1311,
+  });
+  const { rois: roisNow } = await rpc(page, 'straditize.getDiagramData');
+  const survivorId = roisNow.map((r) => r.id).find((id) => id !== 'roi_1');
+  const added = await rpc(page, 'column.add', {
+    column: { name: 'Charcoal', startX: 1700, endX: 1760 },
+  });
+  await rpc(page, 'column.update', {
+    col_index: added.col_index,
+    updates: { roi_id: survivorId },
+  });
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForTimeout(500);
+  await dismissDraftBanner(page);
+  await gotoStage(page, 2);
+  await page.locator('.btn-delete-roi[data-roi-id="roi_1"]').click();
+  const confirmModal = page.locator('#ui-confirm-modal');
+  await confirmModal.waitFor({ state: 'visible', timeout: 15000 });
+  await page.waitForTimeout(400);
+  // 判据：正文里的列数、按钮上的列数、后端真实列数三者必须一致（旧实现根本弹不出这个框）。
+  const confirmBody = ((await page.locator('#ui-confirm-text').textContent()) || '').trim();
+  const confirmOk = ((await page.locator('#ui-confirm-ok').textContent()) || '').trim();
+  const bodyN = Number((confirmBody.match(/共\s*(\d+)\s*列/) || [])[1]);
+  const okN = Number((confirmOk.match(/删除\s*(\d+)\s*列/) || [])[1]);
+  const backendCols = (await rpc(page, 'straditize.getDiagramData')).columns.filter(
+    (c) => c.roi_id === 'roi_1'
+  ).length;
+  if (!bodyN || bodyN !== okN || bodyN !== backendCols) {
+    throw new Error(
+      `删除确认框列数不一致：正文=${bodyN} 按钮=${okN} 后端=${backendCols}（正文: ${confirmBody}）`
+    );
+  }
+  await page.screenshot({ path: path.join(OUT_DIR, 'modal_confirm_delete_roi.png') });
+  // 取消 = 零写：不在录制里真删，避免影响后续任何一次重跑的可复现性。
+  await page.locator('#ui-confirm-cancel').click();
+  await confirmModal.waitFor({ state: 'detached' });
+
+  // ── 左栏列清单跟随 active ROI（`components/Sidebar.ts:188-199` visibleColumns）──────
+  // 只在「分区数 > 1」时才过滤，单分区基线永远看不出这条行为，所以必须先把上面那个
+  // 带 1 列的 charcoal 分区切成 active，再截：左栏应只剩 Charcoal 一列，
+  // 而右栏「有效区容器」仍同时列出 pollen(28 列) 与 charcoal(1 列)。
+  await rpc(page, 'roi.setActive', { roi_id: survivorId });
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForTimeout(600);
+  await dismissDraftBanner(page);
+  await gotoStage(page, 2);
+  await page.waitForTimeout(600);
+  // 判据（精确相等，不放宽）：左栏可见列名必须**只有** charcoal 分区的那一列。
+  // 旧行为是"切了 active ROI 左栏仍列着原来那组列"（缺陷 H-15），若回退，这里会红。
+  const visibleColNames = await page
+    .locator('input.taxa-name-inline-input')
+    .evaluateAll((els) =>
+      els.filter((e) => e.offsetParent !== null).map((e) => e.value)
+    );
+  if (visibleColNames.length !== 1 || visibleColNames[0] !== 'Charcoal') {
+    throw new Error(
+      `左栏列清单未跟随 active ROI：期望 ["Charcoal"]，实际 ${JSON.stringify(visibleColNames)}`
+    );
+  }
+  await page.screenshot({ path: path.join(OUT_DIR, 'step2_roi_multi.png') });
+
   await context.close();
   await browser.close();
 })();
@@ -353,16 +467,18 @@ def main() -> int:
             [
                 ("step1_load.png", "步骤 1/8：载入地层花粉图谱（支持 PNG/JPG/TIFF/PDF 与内置范例）", 1800),
                 ("step2_roi.png", "步骤 2/8：管理取数区 (Multi-ROI) —— 纯数据区与坐标轴完全解耦", 1800),
+                ("step2_roi_multi.png", "步骤 2/8：多分区时左栏只列出当前 active 分区的列（pollen 28 列 / charcoal 1 列）", 2000),
                 ("step3_ycalib.png", "步骤 3/8：Y 轴两点物理标定 (511px → 0 cm, 1311px → 150 cm)", 2000),
                 ("step4_cleanup.png", "步骤 4/8：自动探测网格/分带线候选与排除框管理", 1800),
-                ("step4_binary_overlay.png", "步骤 4/8：按 B 键开启二值化透视遮罩（白=保留花粉，红=剔除网格线）", 2200),
+                ("step4_binary_overlay.png", "步骤 4/8：按 B 开二值化墨迹高亮遮罩，核对网格线是否被剔除", 2200),
                 ("step5_naming.png", "步骤 5/8：自动探测属种分列基线与行内/批量命名", 1800),
                 ("modal_ocr.png", "步骤 5/8：离线 PP-OCRv6 属种名识别与古生态科属词典对齐", 2200),
-                ("step6_xticks.png", "步骤 6/8：列组管理与两点式 X 轴物理刻度标定 (0% → 20%)", 2000),
+                ("step6_xticks.png", "步骤 6/8：列组管理 + 两点式 X 轴刻度标定入口（点一个刻度齿并填其读数）", 2000),
                 ("step7_samples.png", "步骤 7/8：曲线拐点数字化与共识采样层位自动提取", 2000),
                 ("modal_agedepth.png", "步骤 7/8：Bacon/Bchron 年代-深度曲线与 95% 置信包络提取及 1000 集合生成", 2400),
                 ("modal_metadata.png", "步骤 8/8：FAIR / LiPD v1.3 标准元数据与外部 AI 免 Token 导入助手", 2200),
-                ("step8_qa_export.png", "步骤 8/8：地学 QA 诊断（百和门禁 Σ% / 未标定列显式提示）与多格式导出", 2400),
+                ("step8_qa_export.png", "步骤 8/8：地学 QA 诊断（百分比总和门禁 / 超标层位逐条点名）", 2400),
+                ("modal_export_uncalibrated.png", "步骤 8/8：导出前必须先有深度标定 —— 未标定时面板给出原因（RPC -32003）", 2600),
             ],
             OUT_DIR / "01_workflow_8steps.gif",
         )
@@ -371,7 +487,7 @@ def main() -> int:
             [
                 ("step3_ycalib.png", "1. Y 轴两点标定：任意两已知刻度像素行映射真实深度/年代，独立于 ROI 边界", 2400),
                 ("step6_xticks.png", "2. X 轴两点物理刻度标定：基线原点 P1 + 印刷刻度齿 P2，支持列组与对数尺度保护", 2400),
-                ("step8_qa_export.png", "3. 唯一标度入口：导出与 QA 诊断严格共用 x_ticks，未标定列显式标注 ⚠️ 未标定", 2400),
+                ("step8_qa_export.png", "3. 唯一标度入口：导出与 QA 诊断严格共用 x_ticks，未标定列在单列诊断里逐条列出", 2400),
             ],
             OUT_DIR / "02_twopoint_calibration.gif",
         )
@@ -381,7 +497,8 @@ def main() -> int:
                 ("modal_ocr.png", "1. 离线 OCR 与科属词典：支持花粉/硅藻/NPP词表与期刊图版说明一键解析", 2200),
                 ("modal_agedepth.png", "2. 年代-深度模型：自动追踪中位数与 95% 置信包络，生成 1000 条单调年代集合", 2400),
                 ("modal_metadata.png", "3. LiPD v1.3 元数据：支持在线 LLM 提取与外部网页 AI 免 Token 一键粘贴回填", 2200),
-                ("step8_qa_export.png", "4. 科学导出：零 NA 等深层位求交，一键导出 CSV / 多表 XLSX / LiPD / .tar 及 R 脚本", 2400),
+                ("modal_confirm_delete_roi.png", "4. 破坏性操作先确认：删除有列的有效区前弹应用内确认框，写明将连带删除的列数与列名，取消即零写", 2600),
+                ("modal_export_uncalibrated.png", "5. 科学导出的前置条件：未完成 Y 轴深度标定时，面板直接说明原因并指出该回哪一步", 2600),
             ],
             OUT_DIR / "03_modals_and_export.gif",
         )
