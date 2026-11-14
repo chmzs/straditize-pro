@@ -157,7 +157,7 @@ test.describe('步骤 5 分列与命名', () => {
 
   test.describe('T3 同 ROI 重名', () => {
     // 前端在提交前就把重名拦下来了（并且故意不惊动后端），这里放行那条提示。
-    test.use({ allowlists: { notice: [/严禁重名/] } });
+    test.use({ allowlists: { notice: [/列名必须唯一/] } });
 
     test('T3 同有效区内重名：当场拦下并回滚，后端不被惊动', async ({ page, telemetry }) => {
       await gotoStage(page, 5);
@@ -170,7 +170,7 @@ test.describe('步骤 5 分列与命名', () => {
       await renameViaUI(page, target.id, other.name ?? '');
 
       await expect.poll(() => telemetry.notices.length, { timeout: 10_000 }).toBe(1);
-      expect(telemetry.notices[0]).toContain('严禁重名');
+      expect(telemetry.notices[0]).toContain('同一有效区内的列名必须唯一');
 
       await expect(renameInput(page, target.id), '被拒的名字必须当场回滚到原名').toHaveValue(origin);
       expect((await colById(page, target.id))?.name, '后端不该收到这个请求').toBe(origin);

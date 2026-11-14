@@ -452,7 +452,7 @@ export class Sidebar {
           // Check for duplicate in same ROI
           const duplicate = this.data.columns.some((c) => c.id !== col.id && c.roi_id === col.roi_id && c.name === newName);
           if (duplicate) {
-            notifyError(`列名 '${newName}' 在当前有效区已存在，严禁重名。`);
+            notifyError(`列名 '${newName}' 在当前有效区已存在；同一有效区内的列名必须唯一，未改名。`);
             target.value = col.name;
             return;
           }
