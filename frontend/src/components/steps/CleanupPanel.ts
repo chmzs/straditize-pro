@@ -2,6 +2,16 @@ import { DiagramData, LineCandidate } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
 import { axisWarningHeadline, axisWarningNote } from '../../core/axisWarnings';
+// 勾选状态与文案都在 `core/detectOrientation.ts`（纯逻辑，可脱浏览器跑判据）。
+// 状态住在模块级而不是 `render()` 的局部变量：本面板每次 `applyCleanupState`
+// 之后都会整块重建，局部状态会在重建时被重置回默认值。
+import {
+  countByOrientation,
+  getDetectOrientation,
+  orientationNotice,
+  setDetectOrientation,
+  toDetectPayload,
+} from '../../core/detectOrientation';
 
 export const step = 4;
 export const title = '4. 干扰清理';
@@ -37,6 +47,9 @@ export function render(data: DiagramData): string {
   const strokeCount = data.line_strokes ? data.line_strokes.length : 0;
   const selectedId = data.cleanup_selected_id ?? null;
   const axisWarnings = data.cleanup_warnings || [];
+  const orientation = getDetectOrientation();
+  const orientationCounts = countByOrientation(cands);
+  const orientationHint = orientationNotice(orientationCounts, orientation);
 
   // 统一厚度输入框的默认值：优先取选中几何的实际宽度，否则取出现次数最多的宽度。
   // 这样用户点一条线再看侧栏，输入框里就是那条线的真实厚度。
@@ -70,7 +83,7 @@ export function render(data: DiagramData): string {
       : '<span style="color:var(--status-warning);font-weight:700;">待确认</span>';
     const src = c.source === 'manual' ? '手动' : '自动';
     return `
-      <div class="cleanup-row" data-cand-id="${c.id}"
+      <div class="cleanup-row" data-cand-id="${c.id}" data-cand-kind="${c.kind}"
            style="display:flex;align-items:center;gap:5px;padding:3px 4px;border-radius:3px;margin-bottom:2px;
                   background:${isSelected ? 'rgba(56,189,248,0.18)' : 'transparent'};
                   border:1px solid ${isSelected ? 'var(--accent-blue)' : 'transparent'};">
@@ -87,7 +100,9 @@ export function render(data: DiagramData): string {
   };
 
   return `
-    <div class="step-panel" data-step="4" data-selected-cand-id="${selectedId ?? ''}">
+    <div class="step-panel" data-step="4" data-selected-cand-id="${selectedId ?? ''}"
+         data-horizontal-candidates="${orientationCounts.horizontal}"
+         data-vertical-candidates="${orientationCounts.vertical}">
       <div class="step-title">${t('step4.title')}</div>
       <div class="step-desc">
         ${t('step4.forRoi')}<strong style="color: var(--accent-blue);">${roiName}</strong>
@@ -117,9 +132,32 @@ export function render(data: DiagramData): string {
       <!-- 1. 检测：唯一条目（无"灵敏度"旋钮，档位模型已下线） -->
       <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border-color);">
         <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px; color: var(--text-primary);">① 检测干扰线</div>
+        <div style="display: flex; gap: 14px; align-items: center; margin-bottom: 6px;">
+          <label for="chk-detect-horizontal"
+                 title="贯穿 ROI 的横向坐标线（Kind A）"
+                 style="display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--text-secondary); cursor: pointer;">
+            <input id="chk-detect-horizontal" type="checkbox" ${orientation.horizontal ? 'checked' : ''}
+                   style="margin: 0; cursor: pointer;" />
+            检测横线
+          </label>
+          <label for="chk-detect-vertical"
+                 title="竖线含贯穿网格线与列内短竖线（Kind B / Kind C）"
+                 style="display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--text-secondary); cursor: pointer;">
+            <input id="chk-detect-vertical" type="checkbox" ${orientation.vertical ? 'checked' : ''}
+                   style="margin: 0; cursor: pointer;" />
+            检测竖线
+          </label>
+        </div>
         <button id="btn-detect-candidates" class="ui-btn ui-btn--secondary" style="width: 100%; font-size: 11px; padding: 5px;">
           ${t('step4.rescan')}
         </button>
+        <div style="font-size: 9.5px; color: var(--text-muted); line-height: 1.45; margin-top: 5px;">
+          <strong>横线</strong>是贯穿 ROI 的坐标线；<strong>竖线</strong>含<strong>贯穿网格线</strong>与
+          <strong>列内短竖线</strong>（刻度齿/基线），两者共用一个开关。取消勾选只影响
+          <strong>下一次检测</strong>，已检出的候选不会被删掉。
+        </div>
+        <div id="cleanup-orientation-hint" class="cleanup-orientation-hint"
+             style="font-size: 10px; color: var(--status-warning); line-height: 1.45; margin-top: 5px;">${orientationHint}</div>
         <div style="font-size: 10px; color: var(--text-muted); line-height: 1.45; margin-top: 6px;">
           检测出的几何一律为<strong style="color:var(--status-warning);">待确认</strong>：不点"确认去除"就不会动任何一个像素。
         </div>
@@ -225,9 +263,33 @@ export function render(data: DiagramData): string {
 }
 
 export function mount(root: HTMLElement, ctx: StepContext): void {
-  // 检测（单一入口）
+  const panel = root.querySelector('.step-panel') as HTMLElement | null;
+  const hintBox = root.querySelector('#cleanup-orientation-hint') as HTMLElement | null;
+  // 当前列表里各类候选的条数由 `render()` 写进面板的 data 属性：勾选变化要
+  // 立刻更新提示，而 mount 手里没有 DiagramData。
+  const refreshHint = (): void => {
+    if (!hintBox || !panel) return;
+    hintBox.textContent = orientationNotice(
+      {
+        horizontal: Number(panel.dataset.horizontalCandidates || '0'),
+        vertical: Number(panel.dataset.verticalCandidates || '0'),
+      },
+      getDetectOrientation()
+    );
+  };
+
+  root.querySelector('#chk-detect-horizontal')?.addEventListener('change', (event) => {
+    setDetectOrientation({ horizontal: (event.target as HTMLInputElement).checked });
+    refreshHint();
+  });
+  root.querySelector('#chk-detect-vertical')?.addEventListener('change', (event) => {
+    setDetectOrientation({ vertical: (event.target as HTMLInputElement).checked });
+    refreshHint();
+  });
+
+  // 检测（单一入口）：勾选状态作为参数送到后端，只影响这一次检测。
   root.querySelector('#btn-detect-candidates')?.addEventListener('click', () => {
-    ctx.onDetectLineCandidates?.();
+    ctx.onDetectLineCandidates?.(toDetectPayload(getDetectOrientation()));
   });
 
   // 手动添加：进入画布拖拽模式

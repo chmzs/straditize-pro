@@ -297,16 +297,28 @@ export function createInspectorCallbacks(
         callbacks.reportBackendFailure('更新有效区组分属性', err);
       }
     },
-    onDetectLineCandidates: async () => {
+    onDetectLineCandidates: async (options?: {
+      includeHorizontal?: boolean;
+      includeVertical?: boolean;
+    }) => {
+      // 缺省两项都按 `true` 处理：不传 `options` 的调用方（老路径）行为不变。
+      const includeHorizontal = options?.includeHorizontal ?? true;
+      const includeVertical = options?.includeVertical ?? true;
       await cleanupManager.runCleanupAction('检测候选线', async () => {
         const res = await rpcClient.call<any, any>('algorithm.detectLineCandidates', {
           roi_id: cleanupManager.activeCleanupRoiId(),
+          include_horizontal: includeHorizontal,
+          include_vertical: includeVertical,
         });
         const composed = await rpcClient.refreshCleanup(cleanupManager.activeCleanupRoiId());
         canvasComponent.setSelectedGeometryId(null);
-        const count = res?.candidates?.length ?? composed.candidates?.length ?? 0;
+        const candidates: any[] = res?.candidates ?? composed.candidates ?? [];
+        const count = candidates.length;
+        // 按 `kind` 分类（A=横线，B/C=竖线），不按 `axis` 猜。
+        const verticalCount = candidates.filter((cand) => cand?.kind !== 'A').length;
+        const scope = `横线 ${count - verticalCount} 条 / 竖线 ${verticalCount} 条`;
         callbacks.setHudNotice(
-          `已检测 ${count} 条候选干扰线（橙色=待确认）。在图上点选/拖动修正，确认后才会真正去除。`,
+          `已检测 ${count} 条候选干扰线（${scope}，橙色=待确认）。在图上点选/拖动修正，确认后才会真正去除。`,
           5000
         );
         return composed;

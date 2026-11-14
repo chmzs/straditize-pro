@@ -45,7 +45,15 @@ export interface InspectorCallbacks {
   onDeleteRoi?: (roiId: string) => void;
   onRenameActiveRoi?: (name: string) => void;
   onUpdateRoiComposition?: (composition: boolean) => void;
-  onDetectLineCandidates?: () => void;
+  /**
+   * 步骤 4：检测候选干扰线。`options` 决定**这一次**生成哪几类候选
+   * （横线 = Kind A；竖线 = Kind B/C）。缺省两项都按 `true` 处理，与引入
+   * 开关之前的行为一致。
+   */
+  onDetectLineCandidates?: (options?: {
+    includeHorizontal?: boolean;
+    includeVertical?: boolean;
+  }) => void;
   onAddExclusionRect?: () => void;
   onToggleCandidateSelection?: (candId: string, selected: boolean) => void;
   onAddLineGeometry?: (axis: 'h' | 'v') => void;
