@@ -198,7 +198,7 @@
 
     <h1>教程 2：两点式物理刻度钉标定与对数 (Log) 尺度实战</h1>
     <p class="lead-text">
-      在传统图表数字化软件中，通常假设每一列从 0 开始、以列宽作为 100% 相对刻度。然而在真实古生态学图谱中，往往存在完全不同的标尺形式：优势属种（100%）、微量属种（20% 或 5%）、跨越数个数量级的对数浓度（Log）或同位素负值区间。为此，Straditize Pro 提出了<strong>两点式物理刻度标定系统 (Two-Point Physical Tick Calibration)</strong>。
+      传统数字化软件假设每列从 0 开始、以列宽作为 100%。地层图谱里的标尺并不统一：优势属种 100%、微量属种 20% 或 5%、跨数量级的对数浓度、同位素负值区间。Straditize Pro 用<strong>两点式物理刻度标定 (Two-Point Physical Tick Calibration)</strong> 处理这类列。
     </p>
 
     <div class="tutorial-media">
@@ -206,7 +206,7 @@
     </div>
 
     <h2>1. 物理标定原理</h2>
-    <p>每一列不再被假定为静态的相对宽度，而是由两个具有明确科学含义的<strong>物理锚点</strong>定义：</p>
+    <p>每一列由两个<strong>物理锚点</strong>定义，不再按列宽等分：</p>
     <ul>
       <li><strong>端点 1（基准原点 P₁）</strong>：
         <ul>
@@ -228,9 +228,9 @@
       <li>在右侧属性面板的 <strong>两点刻度标定</strong> 区域：
         <ul>
           <li>查看 <strong>端点 1</strong>：默认原点数值为 <code>0</code>；</li>
-          <li>查看 <strong>端点 2</strong>：在图谱标题或坐标轴上找到刻度齿标记（例如刻度标注为 20%）；</li>
+          <li>查看 <strong>端点 2</strong>：在图谱标题或坐标轴上找到刻度齿（例如标注 20%）；</li>
           <li>点击面板上的 <strong><code>[齿:20%]</code></strong> 快捷胶囊（或手动输入 <code>20</code>）；</li>
-          <li>在画布横轴上，直接用鼠标左右拖动<strong>橙色的刻度齿手柄</strong>，使其与图谱印刷的 20% 刻度标记完全重合。</li>
+          <li>在画布横轴上，直接用鼠标左右拖动<strong>橙色的刻度齿手柄</strong>，使其与图谱印刷的 20% 刻度齿重合。</li>
         </ul>
       </li>
       <li>此时该列所有轮廓点自动按以下公式即时换算：</li>
@@ -254,10 +254,10 @@
       val(x) = exp( ln(startVal) + [(x - X₀) / (X₁ - X₀)] × (ln(tickVal) - ln(startVal)) )
     </div>
 
-    <h3>科学安全防护机制：</h3>
-    <p>如果当前端点 1 的数值为 <code>0</code>，Straditize Pro 会立即<strong>将 Log 按钮禁用置灰</strong>，并在下方以醒目的黄色提示：</p>
+    <h3>约束处理：</h3>
+    <p>端点 1 的数值为 <code>0</code> 时，<strong>Log 按钮被禁用置灰</strong>，下方给出黄色提示：</p>
     <div class="callout">
-      ⚠️ <strong>数学约束拦截</strong>：对数刻度要求起点值 > 0（当前为 0，ln(0) 无定义）。杜绝因误触导致的数据非数 (NaN) 污染或计算死循环。
+      ⚠️ <strong>数学约束</strong>：对数刻度要求起点值 > 0（当前为 0，ln(0) 无定义）。换算不会产生 NaN。
     </div>
 
     <div class="pagination">

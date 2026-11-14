@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>教程 1：五分钟快速上手古生态图谱数字化全流程 - Straditize Pro</title>
+  <title>教程 1：8 步走完古生态图谱数字化全流程 - Straditize Pro</title>
   <meta name="description" content="Straditize Pro 8阶段地学图谱解译工作流实战教程，从图片载入、网格去线、PP-OCRv6属种命名到rioja出版级成图。" />
   <link rel="icon" type="image/svg+xml" href="../assets/logos/logo-icon.svg" />
   <style>
@@ -193,67 +193,67 @@
 
   <div class="container">
     <div class="breadcrumb">
-      <a href="../index.html">首页</a> / <a href="#">实战教程</a> / 教程 1：五分钟快速上手
+      <a href="../index.html">首页</a> / <a href="#">实战教程</a> / 教程 1：8 步走完
     </div>
 
-    <h1>教程 1：五分钟快速上手古生态图谱数字化全流程</h1>
+    <h1>教程 1：8 步走完古生态图谱数字化全流程</h1>
     <p class="lead-text">
-      本教程指导你如何利用 <strong>Straditize Pro v2.0</strong> 的 <strong>8 阶段地学图谱解译工作流</strong>，将一张地层花粉、微炭屑与古气候图谱扫描件解译为发表级的高保真科研数据矩阵。
+      本教程用 <strong>Straditize Pro v2.0</strong> 的 8 阶段解译工作流，把一张地层花粉、微炭屑与古气候图谱扫描件解译成数据矩阵。
     </p>
 
     <div class="tutorial-media">
       <img src="../assets/tutorials/01_workflow_8steps.gif" alt="Straditize Pro 8步工作流真机动图演示" />
     </div>
 
-    <h2>阶段概览：8 步科学解译工作流</h2>
+    <h2>阶段概览：8 步解译工作流</h2>
     <p>
       顶部导航条提供 8 个状态胶囊，已完成标记为 <code>✓</code>，当前进行中为 <code>●</code>，未开始为 <code>○</code>：
     </p>
     <div class="callout">
-      <code>[1.载入] → [2.取数区] → [3.Y标定] → [4.去线] → [5.分列命名] → [6.X刻度] → [7.数字化] → [8.校验导出]</code>
+      <code>[1.载入] → [2.ROI] → [3.Y标定] → [4.清理] → [5.分列] → [6.标定列] → [7.拐点] → [8.校验]</code>
     </div>
-    <p>你可以随时点击已完成的步骤胶囊跳回修改，也可以通过右侧步骤面板底部的推进按钮顺序流转。</p>
+    <p>已完成的步骤胶囊可以点击跳回修改；右侧步骤面板底部有推进按钮。</p>
 
-    <h2>步骤 1：载入图谱图片与大图安全保障</h2>
+    <h2>步骤 1：载入图谱</h2>
     <ol>
       <li><strong>载入方式</strong>：
         <ul>
-          <li>点击顶栏 <strong>[📁 图谱]</strong> 按钮选择本地文件（支持 PNG / JPG / TIFF / WebP / 单页 PDF）；</li>
+          <li>点击顶栏 <strong>[打开图谱]</strong> 按钮选择本地文件（支持 PNG / JPG / TIFF / WebP / 单页 PDF）；</li>
           <li>或者直接将图片拖拽至中央画布虚线框释放；</li>
-          <li>快速体验：在顶栏 <strong>“📂 范例...”</strong> 下拉菜单中选择 <strong><code>Hoya</code></strong> 或 <strong><code>Beginner</code></strong> 剖面。</li>
+          <li>快速体验：在顶栏 <strong>“示例”</strong> 下拉菜单中选择 <strong><code>Hoya</code></strong> 或 <strong><code>Beginner</code></strong> 剖面。</li>
         </ul>
       </li>
-      <li><strong>大图与微斜安全防护</strong>：
+      <li><strong>大图与微斜检查</strong>：
         <ul>
-          <li><strong>尺寸预算</strong>：主力覆盖 A4/A3 600 DPI（约 5000×7000 至 7000×10000 px）。超过 8000×12000 px 时系统自动弹出安全拦截窗口，可一键选择 50% 降采样加载，内存严格受控在 1 GB 以内；</li>
-          <li><strong>智能微斜检测 (Radon Deskew)</strong>：载入后系统自动进行氡变换倾角检测。若检测到扫描存在 ≥ 0.3° 的微斜，右上角自动滑出提示横幅，点击 <strong>[旋转校正]</strong> 即可 1 秒恢复水平。</li>
+          <li><strong>尺寸上限</strong>：超过 8000×12000 px 时弹出拦截窗口，可选按 50% 降采样加载，或中止加载；</li>
+          <li><strong>微斜检测 (Radon Deskew)</strong>：载入后做一次氡变换倾角检测。检出 ≥ 0.3° 的倾角时，右上角滑出提示横幅，点击 <strong>[旋转校正]</strong> 按该角度转回水平。</li>
         </ul>
       </li>
       <li><strong>完成加载</strong>：图片自适应居中，进入步骤 2。</li>
     </ol>
 
-    <h2>步骤 2：管理取数区 (Multi-ROI)</h2>
+    <h2>步骤 2：框选有效区 (ROI)</h2>
     <ol>
       <li>工具栏自动激活 <strong>ROI 模式</strong>（快捷键 <code>R</code>）；</li>
       <li>画布上呈现 8 个方块控制手柄：
         <ul>
           <li>拖拽手柄对齐花粉数据区边界；</li>
-          <li><strong>地学规范</strong>：<strong>严格将左侧纵坐标轴线、右侧聚类分析树 (CONISS) 与底部刻度排除在框外</strong>；</li>
-          <li>边框标签只报<strong>像素范围</strong>（如 <code>ROI Y: 511px - 1311px</code>）——取数区不携带任何深度含义；</li>
+          <li><strong>地学规范</strong>：<strong>把左侧纵坐标轴线、右侧聚类分析树 (CONISS) 与底部刻度排除在框外</strong>；</li>
+          <li>边框标签只报<strong>像素范围</strong>（如 <code>ROI Y: 511px - 1311px</code>）——有效区不携带任何深度含义；</li>
         </ul>
       </li>
-      <li><strong>多取数区 (Multi-ROI) 支持</strong>：
+      <li><strong>多有效区 (Multi-ROI) 支持</strong>：
         <ul>
-          <li>如果图谱包含主花粉丰度区、炭屑浓度区或磁化率附图，可在右侧面板点击 <strong>[＋ 新建取数区]</strong> 分块管理；</li>
-          <li>每个取数区拥有独立的名称、分列集合与百分比组合属性（<code>composition=true/false</code>）；</li>
+          <li>如果图谱包含主花粉丰度区、炭屑浓度区或磁化率附图，可在右侧面板点击 <strong>[＋ 新建有效区]</strong> 分块管理；</li>
+          <li>每个有效区有独立的名称、分列集合与百分比组合属性（<code>composition=true/false</code>）；</li>
         </ul>
       </li>
-      <li>点击右侧面板 <strong>[👉 确认取数区，进入 Y 轴标定]</strong> 推进。</li>
+      <li>点击右侧面板 <strong>[确认有效区，进入 Y 轴标定]</strong> 推进。</li>
     </ol>
 
     <h2>步骤 3：Y 轴两点标定（深度 / 年代轴）</h2>
     <div class="callout callout-warn">
-      ⚠️ <strong>科学不变量</strong>：<strong>Y 轴标定与取数区 (ROI) 完全解耦</strong>。未标定时界面如实显示 <code>--</code>，系统绝不拿取数区边框冒充真实刻度。
+      ⚠️ <strong>Y 轴标定与有效区 (ROI) 解耦</strong>。未标定时界面显示 <code>--</code>，不会拿有效区边框当刻度。
     </div>
     <ol>
       <li><strong>两点标定操作</strong>：
@@ -268,17 +268,17 @@
           <li>画布呈现黄色半透明标定跨度带与两条 ⚑ 刻度基准线，超出该跨度的层位自动作为外推区标记；</li>
         </ul>
       </li>
-      <li>点击右侧面板 <strong>[👉 确认标定，进入去线清理]</strong> 推进。</li>
+      <li>点击右侧面板 <strong>[确认标尺，进入干扰线清理]</strong> 推进。</li>
     </ol>
 
-    <h2>步骤 4：去线与网格降噪 (Cleanup)</h2>
+    <h2>步骤 4：清理干扰线与网格 (Cleanup)</h2>
     <ol>
-      <li>点击 <strong>[🔍 自动扫描候选线]</strong>，后端智能检测水平分带线与网格线；</li>
+      <li>点击 <strong>[自动扫描候选线]</strong>，后端检测水平分带线与网格线；</li>
       <li><strong>即时透视遮罩 (B 键)</strong>：
         <ul>
           <li>按下键盘 <strong><code>B</code></strong> 键，画布开启双色二值化透视遮罩：</li>
           <li>⚪ <strong>白色</strong>：保留下来的花粉轮廓与墨迹；</li>
-          <li>🔴 <strong>红色</strong>：被识别并剔除的线像素（后端掩膜原样呈现，<strong>所见即数字化所用</strong>）；</li>
+          <li>🔴 <strong>红色</strong>：被剔除的线像素（遮罩由后端原样返回，分列只认没被遮掉的像素）；</li>
         </ul>
       </li>
       <li><strong>排除框与画笔微调</strong>：
@@ -287,7 +287,7 @@
           <li>使用修正画笔手工擦除误标或补标漏线，松手即刻触发后端增量重算；</li>
         </ul>
       </li>
-      <li>点击右侧面板 <strong>[👉 确认清理，进入分列与命名]</strong> 推进。</li>
+      <li>点击右侧面板 <strong>[确认清理，开始自动分列]</strong> 推进。</li>
     </ol>
 
     <h2>步骤 5：分列与属种命名 (Naming)</h2>
@@ -296,18 +296,18 @@
       <li><strong>属种名单对齐与批量导入</strong>：
         <ul>
           <li>行内点击列标题快速重命名；</li>
-          <li>点击 <strong>[📋 批量导入]</strong>，直接粘贴来自文献表格的多行属种名单，自动从左到右匹配；</li>
+          <li>点击 <strong>[批量导入]</strong>，直接粘贴来自文献表格的多行属种名单，自动从左到右匹配；</li>
         </ul>
       </li>
       <li><strong>离线 PP-OCRv6 属种识别</strong>：
         <ul>
-          <li>点击顶栏 <strong>[🔍 OCR 属种名识别]</strong>；</li>
+          <li>点击顶栏 <strong>[OCR]</strong>；</li>
           <li>支持 0°/30°/45°/60° 旋转投影识别倾斜标签；</li>
-          <li>内置花粉、硅藻、微体古生物 (NPP) 权威中拉科学词典，支持自动模糊拼写纠错；</li>
+          <li>内置花粉、硅藻、微体古生物 (NPP) 中拉对照词库，对识别结果做模糊匹配与拼写纠错；</li>
           <li>支持粘贴期刊图版说明（Plate caption）一键解析并保存自定义属种词条；</li>
         </ul>
       </li>
-      <li>点击右侧面板 <strong>[👉 确认列，进入刻度标定]</strong> 推进。</li>
+      <li>点击右侧面板 <strong>[确认列命名，进入 X 轴刻度标定]</strong> 推进。</li>
     </ol>
 
     <h2>步骤 6：X 轴两点物理刻度标定与列组</h2>
@@ -326,52 +326,52 @@
       <li><strong>尺度与对数保护</strong>：
         <ul>
           <li>炭屑或浓度指标可切换对数尺度 (Log Scale)；</li>
-          <li>若起点 ≤ 0，系统自动禁用 Log 选项并红字警示拦截，杜绝 ln(0) 产生异常；</li>
+          <li>起点 ≤ 0 时 Log 选项被禁用并红字提示，ln(0) 不会进入换算；</li>
         </ul>
       </li>
-      <li>点击右侧面板 <strong>[👉 确认刻度，开始数字化提取]</strong> 推进。</li>
+      <li>点击右侧面板 <strong>[确认列刻度，提取拐点与采样层位]</strong> 推进。</li>
     </ol>
 
-    <h2>步骤 7：数字化、曲线拐点与采样层位</h2>
+    <h2>步骤 7：拐点与采样层位</h2>
     <ol>
-      <li>系统自动提取轮廓边缘并压缩为高显著性拓扑拐点；</li>
+      <li>系统提取轮廓边缘并压缩成拐点；</li>
       <li><strong>层位共识提取</strong>：
         <ul>
-          <li>点击 <strong>[🎯 自动提取共识层位]</strong>，系统分析所有属种波峰与基线相交位置，自动生成地层采样层位矩阵；</li>
+          <li>点击 <strong>[自动提取共识层位]</strong>，系统分析各属种波峰与基线的相交位置，生成采样层位矩阵；</li>
           <li>支持单行删除与层位深度微调；</li>
         </ul>
       </li>
-      <li><strong>年代-深度模型提取 (Age-Depth Modal)</strong>：
+      <li><strong>年代-深度模型提取 (Age-Depth Model)</strong>：
         <ul>
-          <li>点击顶栏 <strong>[⏳ 年代模型]</strong>，载入图谱附带的 Bacon 或 Bchron 年代图；</li>
+          <li>点击顶栏 <strong>[年代模型]</strong>，载入图谱附带的 Bacon 或 Bchron 年代图；</li>
           <li>自动追踪中位数年代曲线与 95% 置信包络区间；</li>
-          <li>基于贝叶斯先验生成 1000 条单调年代学集合实现，与花粉层位无缝映射；</li>
+          <li>按贝叶斯先验生成 1000 条单调年代学集合，按层位深度对齐；</li>
         </ul>
       </li>
-      <li>点击右侧面板 <strong>[👉 确认数据，进入校验与导出]</strong> 推进。</li>
+      <li>点击右侧面板 <strong>[完成提取，进入全剖面地学校验]</strong> 推进。</li>
     </ol>
 
-    <h2>步骤 8：地学 QA 诊断与发表级成果导出</h2>
+    <h2>步骤 8：校验诊断与导出</h2>
     <ol>
       <li><strong>地学质量把关 (QA Diagnostics)</strong>：
         <ul>
-          <li><strong>百和检验 (∑% 门禁)</strong>：自动检验全剖面各层位百分比加和（默认容差 ±2.0%），直观标出超限与空层位；</li>
-          <li><strong>未标定列显式警示</strong>：若有属种列未标定刻度，明确提示 ⚠️ 状态，杜绝带病导出；</li>
+          <li><strong>百分比和门禁 (∑%)</strong>：检验全剖面各层位百分比加和，上界为 100% + 容差 2.0%，超限与空层位会被标出；</li>
+          <li><strong>未标定列警示</strong>：属种列未标定刻度时给出 ⚠️ 状态，导出就绪清单会拦下；</li>
         </ul>
       </li>
       <li><strong>FAIR / LiPD v1.3 标准元数据录入</strong>：
         <ul>
-          <li>点击顶栏 <strong>[📄 元数据]</strong>，录入文献 DOI、站点经纬度、水深、孔长、采集人与基金信息；</li>
+          <li>点击顶栏 <strong>[元数据]</strong>，录入文献 DOI、站点经纬度、水深、孔长、采集人与基金信息；</li>
           <li>支持<strong>外部 AI 免 Token 导入助手</strong>：一键复制结构化 Prompt，粘贴外部网页 AI 解读结果即刻自动解析回填；</li>
         </ul>
       </li>
       <li><strong>多格式科研成果一键导出</strong>：
         <ul>
-          <li><strong><code>[💾 下载 CSV]</code></strong>：标准无 NA 地层百分比矩阵；</li>
-          <li><strong><code>[📊 导出多表 Excel]</code></strong>：每个取数区独立 Sheet，附带综合统计与元数据；</li>
-          <li><strong><code>[🌐 导出 LiPD]</code></strong>：国际古气候数据共享标准格式（含测量表与年代集合）；</li>
-          <li><strong><code>[📦 导出 TAR 包]</code></strong>：POSIX UStar 开放项目包，内嵌双原图、JSON 矢量模型与完整中间态，零依赖 100% 科学复现；</li>
-          <li><strong><code>[📈 R 脚本]</code></strong>：生成开箱即用的 <code>plot_strat.R</code>，直通 <code>rioja::strat.plot()</code> 出版级绘图！</li>
+          <li><strong><code>[下载 CSV]</code></strong>：无 NA 地层百分比矩阵；</li>
+          <li><strong><code>[导出多表 Excel]</code></strong>：每个有效区独立 Sheet，附带综合统计与元数据；</li>
+          <li><strong><code>[导出 LiPD]</code></strong>：LiPD v1.3 格式（含测量表与年代集合）；</li>
+          <li><strong><code>[导出 TAR 包]</code></strong>：POSIX UStar 项目包，含双原图、JSON 矢量模型与中间态，解压后不依赖其他文件；</li>
+          <li><strong><code>[R 脚本]</code></strong>：生成 <code>plot_strat.R</code>，读导出的 CSV 后用 <code>rioja::strat.plot()</code> 出图。</li>
         </ul>
       </li>
     </ol>
