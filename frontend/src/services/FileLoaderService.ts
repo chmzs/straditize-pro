@@ -120,7 +120,7 @@ export class FileLoaderService {
         this.callbacks.updateFooter();
 
         this.callbacks.setHudNotice(
-          `成功载入 PDF [${file.name}] 第 ${pageNum} 页图谱 (${newDiagramData.imageWidth}×${newDiagramData.imageHeight})！请在画布上调整数据有效区 (Step 1)。`,
+          `已载入 PDF [${file.name}] 第 ${pageNum} 页图谱 (${newDiagramData.imageWidth}×${newDiagramData.imageHeight})。在画布上调整数据有效区（步骤 1），再点下方推进。`,
           5000
         );
         return;
@@ -194,7 +194,7 @@ export class FileLoaderService {
         this.callbacks.updateFooter();
 
         this.callbacks.setHudNotice(
-          `成功载入图谱 [${file.name}] (${w}×${h})！请在画布上调整数据有效区 (Step 1)，随后点击下方推进。`,
+          `已载入图谱 [${file.name}] (${w}×${h})。在画布上调整数据有效区（步骤 1），再点下方推进。`,
           5000
         );
 
@@ -235,7 +235,7 @@ export class FileLoaderService {
                     this.history.reset([], '');
                     this.callbacks.setCurrentStage(1);
                     this.callbacks.updateWorkflowBar();
-                    this.callbacks.setHudNotice(`已水平矫正图谱！有效区已重置。`, 3500);
+                    this.callbacks.setHudNotice(`已水平矫正图谱，有效区已重置。`, 3500);
                   } else {
                     throw new Error(t('error.unknown'));
                   }
@@ -310,7 +310,7 @@ export class FileLoaderService {
       beginner: '初学者沉积图谱',
     };
     this.callbacks.setHudNotice(
-      `已载入范例: ${nameMap[sampleKey] || sampleKey}，已自动居中重置！`,
+      `已载入范例：${nameMap[sampleKey] || sampleKey}，视图已居中重置。`,
       3500
     );
   }
