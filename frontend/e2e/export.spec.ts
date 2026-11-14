@@ -33,6 +33,11 @@ import {
 const ROW_TOP = 100;
 const ROW_BOTTOM = 475;
 
+/** 列刻度标定用的两个常量：与 `column.update` 写进去的满量程刻度同一口径。 */
+const TICK_VALUE = 100;
+/** 轴线粗缺省值（`xscale.resolve_axis_stroke` 的第三级回落）。0 点 = 列左缘 + 它。 */
+const DEFAULT_AXIS_STROKE = 5;
+
 interface Roi {
   id: string;
   name: string;
@@ -150,10 +155,47 @@ test.describe('导出就绪清单与 .tar 归档', () => {
           roi_id: columns[i][0].id,
           scale_type: 'linear',
           startValue: 0,
-          tickValue: 100,
+          tickValue: TICK_VALUE,
         },
       });
     }
+
+    // 导出前置（步骤 6 的列刻度）：`4c287b6` 之后 `export_data(dataset=…)` 在
+    // **全列都没有 X 轴标度**时拒绝导出（-32003「导出需要列刻度 … 请先完成步骤 6」）。
+    // 本用例要把归档逐字节比对，必须真的导出成功；面板预览（点【导出】后那条
+    // `export.csv` 请求）走的也是 dataset 取值，CI 里报的 `export.csv [-32003]` 就是它。
+    // 所以这里补的是**用例缺失的前置**，不是放宽断言。
+    //
+    // 写入通路刻意选 `roi.groupUpdate({value_per_px})`：步骤 6 的标定结果就是
+    // 组级斜率（ARCHITECTURE §6.4），UI【应用】发的正是这个 RPC（判据见
+    // `step6-picktick.spec.ts` T2）；反过来手写列的 `x_ticks` 是那个被废弃的
+    // 旧事实源，后端在写组斜率时还会主动清空它。
+    const roisNow = (
+      await diagramData<{ rois: Array<{ id: string; x_groups?: Array<{ id: string }> }> }>(page)
+    ).rois;
+    for (const [roi, , startX, endX] of columns) {
+      const groupId = roisNow.find((r) => r.id === roi.id)?.x_groups?.[0]?.id;
+      if (!groupId) throw new Error(`ROI ${roi.id} 没有列组，无法做步骤 6 的组级标定`);
+      // 斜率 = 声明满量程刻度 / 距 0 点像素；0 点 = 列左缘 + 轴线粗，与
+      // `resolve_column_scale` 同一个定义（所以三列都会落到 calibrated=true）。
+      await rpc(page, 'roi.groupUpdate', {
+        roi_id: roi.id,
+        group_id: groupId,
+        updates: { value_per_px: TICK_VALUE / (endX - startX - DEFAULT_AXIS_STROKE) },
+      });
+    }
+    // 前置成立才往下走：三列都必须被后端认成已标定，否则下面比的是整列 NA 的归档。
+    await expect
+      .poll(
+        async () =>
+          (
+            await diagramData<{ columns: Array<{ scale_provenance?: { calibrated?: boolean } }> }>(
+              page
+            )
+          ).columns.map((c) => Boolean(c.scale_provenance?.calibrated)),
+        { timeout: 10_000, message: '步骤 6 标定必须让三列都进入已标定态' }
+      )
+      .toEqual([true, true, true]);
 
     await rpc(page, 'samples.set', {
       samples: [
