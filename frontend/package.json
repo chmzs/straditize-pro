@@ -1,6 +1,6 @@
 {
   "name": "straditize-modern-frontend",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Modern Interactive Geological Pollen Diagram Digitizer Frontend",
   "type": "module",
   "scripts": {
