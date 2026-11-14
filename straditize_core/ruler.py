@@ -71,6 +71,54 @@ DASHED_CONTRAST = 4.0
 #: 判定孤立性时回看的像素列数（含该 x 左侧 :data:`DASHED_GAP` 列）。
 DASHED_GAP = 3
 
+#: 「轴行在 ROI 之外」的搜索窗口：ROI 下边界之下的图高比例（另有像素下限）。
+#:
+#: 为什么必须是比例、不能取固定像素：窗口要覆盖的"下边界与轴行之间那段空白"
+#: 随图幅分辨率一起放大。实测两档内置图：
+#:
+#: | 图 | 图高 | 下边界 | 印刷轴行 | 需要覆盖的落差 |
+#: | --- | --- | --- | --- | --- |
+#: | hoya（herb 框到 1300） | 1654 | 1300 | 1306/1307 | **7px** |
+#: | beginner（框到 1600） | 1796 | 1600 | 1661–1664 | **61px** |
+#:
+#: 一个能同时覆盖 61px、又不至于跨到底边外框的**固定**像素值并不存在：
+#: hoya 的外框下边在 y=1375，距它自己的下边界（1311）只有 **64px** —— 任何
+#: `≥64px` 的固定窗口都会把外框吞进来（实测 W=64 时 hoya 基线返回 1374）。
+#: 所以窗口取图高的 10%：hoya 165px、beginner 180px，两者都远大于所需的
+#: 7px / 61px，而外框是否被排除**不靠窗口大小**，靠下面的结构判据。
+AXIS_ROW_OUTSIDE_SEARCH_FRAC = 0.10
+#: 窗口像素下限：小图（图高 < 240px）取比例会只剩十几像素，够不到任何轴行。
+AXIS_ROW_OUTSIDE_SEARCH_MIN_PX = 24
+#: 「整幅外框」的判据：该行在 **ROI 横向之外** 仍然这么暗。
+#:
+#: 这是「每列自己的下轴」与「整幅图版的外框下边」唯一可靠的区分，与窗口大小无关：
+#: 实测 hoya——
+#:   * 轴行 1306/1307：ROI 内 0.98，ROI 外 0.013（左）/0.219（右）；
+#:   * 外框 1374/1375：ROI 内 1.00，ROI 外 **0.489（左）/0.664（右）**。
+#: 取 0.40 落在两档之间（轴行最高 0.219，外框最低 0.489），两边都留了余量。
+#: beginner 的轴行 1661–1664：ROI 内 1.00，ROI 外 0.19–0.23，同样远离阈值。
+AXIS_ROW_FRAME_OUTSIDE_FRAC = 0.40
+#: 「这一行是刻度尺的横轴」所需的**齿证据**：正下方 :data:`TICK_SEARCH_BELOW`
+#: 窗口内必须是 **窄而孤立** 的暗竖笔，且**几乎全部**都是窄的。
+#:
+#: 为什么必须有这一条：图版内还有其他横贯 ROI 的暗行（内部分隔线、面积填充的顶边），
+#: 它们同样"在 ROI 内够暗"，光看覆盖率分不开。实测（判据取 **全 ROI 横向**，
+#: 因为齿间距远大于列宽、单列里的竖笔数不足以判别）：
+#:
+#: | 行（hoya） | 暗游程数 | 其中窄笔 | 窄笔占比 |
+#: | --- | --- | --- | --- |
+#: | 1307 真轴行 | 31 | 31 | **1.00** |
+#: | 1313 副齿带 | 29 | 29 | 1.00 |
+#: | 1130 内部横线 | 21 | 12 | **0.57** |
+#: | 1374 外框 | 0 | 0 | 0.00 |
+#:
+#: beginner 轴行 1661–1664 同为 12/12 = 1.00。取 0.90 落在 0.57 与 1.00 之间；
+#: 再要求至少 :data:`AXIS_ROW_MIN_NARROW_TICKS` 条，避免"一行只有两根竖笔"也算轴。
+AXIS_ROW_NARROW_TICK_RATIO = 0.90
+AXIS_ROW_MIN_NARROW_TICKS = 8
+#: 窄齿的最大宽度（px）。齿宽 1–2px，允许 4px 以兼容重描边/抗锯齿。
+AXIS_ROW_TICK_MAX_WIDTH = 4
+
 
 def _dark_columns(mask: np.ndarray) -> list[int]:
     """Return x centres of runs of `True` columns, merging gaps ≤1 px."""
@@ -124,6 +172,122 @@ def find_axis_row(
     if not len(rows):
         return None
     return int(rows.max()) + lo
+
+
+def _tick_stroke_widths(
+    dark: np.ndarray, row: int, x0: int, x1: int, *, depth: int
+) -> tuple[int, int]:
+    """Return ``(n_runs, n_narrow_runs)`` for the strokes hanging below ``row``.
+
+    齿的定义性结构是"窄而孤立"：宽暗块（面积填充的顶边、图例色块）不算齿。
+    返回两个数是为了让调用方用**比例**判别，而不是绝对条数——绝对条数随图幅宽度
+    变化，比例不随（实测把阈值写成条数时，窄列与宽列的通过情况会分叉）。
+    实测（hoya，ROI 全宽）：真轴行 31/31 = 1.00，内部横线 21/12 = 0.57，外框 0。
+    """
+    h = dark.shape[0]
+    if row + 1 + depth > h:
+        return 0, 0
+    band = dark[row + 1 : row + 1 + depth, x0:x1]
+    full = band.mean(axis=0) >= 0.99
+    widths: list[int] = []
+    run = 0
+    for v in full:
+        if v:
+            run += 1
+            continue
+        if run:
+            widths.append(run)
+        run = 0
+    if run:
+        widths.append(run)
+    return len(widths), sum(1 for wst in widths if wst <= AXIS_ROW_TICK_MAX_WIDTH)
+
+
+def find_axis_row_below_roi(
+    gray: np.ndarray,
+    x0: int,
+    x1: int,
+    *,
+    roi_x: tuple[int, int],
+    y_bottom: int,
+    dark_threshold: int = DARK_THRESHOLD,
+    min_coverage: float = AXIS_MIN_COVERAGE,
+    window_frac: float = AXIS_ROW_OUTSIDE_SEARCH_FRAC,
+    window_min_px: int = AXIS_ROW_OUTSIDE_SEARCH_MIN_PX,
+    frame_outside_frac: float = AXIS_ROW_FRAME_OUTSIDE_FRAC,
+    min_narrow_ticks: int = AXIS_ROW_MIN_NARROW_TICKS,
+    narrow_tick_ratio: float = AXIS_ROW_NARROW_TICK_RATIO,
+    tick_depth: int = TICK_SEARCH_BELOW[1],
+) -> int | None:
+    """Find the printed axis row **below** the ROI bottom, or ``None``.
+
+    「轴行存在但在有效区之外」——用于在 ROI 下边界偏高、齿搜索带整段落空时，
+    告诉用户该把下边界移到哪里（而不是只说"没有刻度尺"）。
+
+    ## 与 :func:`find_axis_row` 的分工
+
+    ``find_axis_row`` 只在 ``[max(0.70·h, y0), min(h, y1))`` 内找，也就是**严格
+    限制在 ROI 内**——这正是它的价值（ROI 之外的全宽暗行会被它排除），也是
+    它在下边界偏高时只能返回 ``None`` 的原因。本函数专门查 ``y1`` 之下那一小段，
+    好让界面能报出"轴行在 y=…，你的下边界没盖住它"。
+
+    ## 三条判据（全部实测，都不依赖窗口大小）
+
+    1. **在列宽上够暗**：``coverage ≥ min_coverage``（与 ``find_axis_row`` 同一档，
+       实测轴行 ROI 内 0.98–1.00）；
+    2. **不是整幅外框**：ROI 横向之外仍然暗的比例 ``< frame_outside_frac``。
+       实测 hoya：轴行 0.013/0.219，外框 0.489/0.664 —— 阈值 0.40 卡在中间；
+    3. **下面挂着窄齿**：正下方 :data:`TICK_SEARCH_BELOW` 窗口里至少
+       ``min_narrow_ticks`` 条竖笔，且其中 ≥ ``narrow_tick_ratio`` 是窄笔
+       （≤ :data:`AXIS_ROW_TICK_MAX_WIDTH`）。齿证据按 **ROI 全宽** 统计：齿间距
+       远大于列宽，单列里的竖笔数不足以判别。实测 hoya 真轴行 1.00、内部横线
+       0.57、外框 0.00。
+
+    三条同时成立才返回该行的**末端**（粗轴线常占 2–4 行，返回最下面那行，
+    与 ``find_axis_row`` 的"取 rows.max()"同口径）。一条都不成立返回 ``None``——
+    **``None`` 表示"确实找不到轴行"，调用方必须退回到"未找到刻度尺"的说法，
+    不得编一个 y**。
+    """
+    h, w = gray.shape
+    width = max(int(window_min_px), int(round(h * window_frac)))
+    lo = max(0, int(y_bottom))
+    hi = min(h, lo + width)
+    if hi <= lo:
+        return None
+    dark = gray < dark_threshold
+    cx0, cx1 = max(0, int(x0)), min(w, int(x1))
+    rx0, rx1 = max(0, int(roi_x[0])), min(w, int(roi_x[1]))
+    if cx1 <= cx0:
+        return None
+
+    # 整幅外框行：ROI 横向之外仍然暗。整幅算一次，逐行比较即可。
+    if rx0 > 0:
+        left = dark[:, :rx0].mean(axis=1)
+    else:
+        left = np.zeros(h)
+    if rx1 < w:
+        right = dark[:, rx1:].mean(axis=1)
+    else:
+        right = np.zeros(h)
+    frame = np.maximum(left, right) >= frame_outside_frac
+
+    y = lo
+    while y < hi:
+        if dark[y, cx0:cx1].mean() < min_coverage:
+            y += 1
+            continue
+        # 这条暗行可能占 2–4 行（粗轴），先找到它的末端。
+        end = y
+        while end + 1 < hi and dark[end + 1, cx0:cx1].mean() >= min_coverage:
+            end += 1
+        if not frame[end]:
+            n_runs, n_narrow = _tick_stroke_widths(dark, end, rx0, rx1, depth=tick_depth)
+            if n_narrow >= min_narrow_ticks and n_narrow >= narrow_tick_ratio * max(
+                1, n_runs
+            ):
+                return int(end)
+        y = end + 1
+    return None
 
 
 def _leftmost_dashed_spine(
@@ -252,6 +416,7 @@ def detect_ruler(
     axis_stroke: float | None = None,
     y0: int | None = None,
     y1: int | None = None,
+    roi_x: tuple[int, int] | None = None,
 ) -> dict[str, Any]:
     """Detect one column's tick ruler geometry.
 
@@ -278,10 +443,25 @@ def detect_ruler(
         # 实测可偏离轴线数个像素（22 列图上见过 6px）。故轴线位置单独实测。
         "axis_x": None,
         "axis_x_right": None,
+        # 轴行**在 ROI 之外**时的实测行号（见 `find_axis_row_below_roi`）。
+        # 语义严格区分两种情况，调用方据此决定要不要报"下边界没盖住轴行"：
+        #   * int  = 轴行确实存在，但在 ROI 下边界之下 → 可以报 y 并让用户下移边界；
+        #   * None = 在窗口内**确实找不到**轴行（图本来没有刻度尺 / 什么都没画）。
+        # 只有 ROI 下边界之上没找到轴行（`axis is None`）时才去查，否则恒为 None。
+        "axis_row_outside_roi": None,
     }
 
     axis = find_axis_row(gray, x0, x1, dark_threshold=dark_threshold, y0=y0, y1=y1)
     if axis is None:
+        if y1 is not None and roi_x is not None:
+            result["axis_row_outside_roi"] = find_axis_row_below_roi(
+                gray,
+                int(x0),
+                int(x1),
+                roi_x=roi_x,
+                y_bottom=int(y1),
+                dark_threshold=dark_threshold,
+            )
         return result
     result["axis_row"] = axis
 
@@ -336,6 +516,15 @@ def detect_ruler_for_columns(
     """
     per_column: list[dict[str, Any]] = []
     spacings: list[float] = []
+    # ROI 横向范围 = 这批列的并集：判「整幅外框」时要比的是"有效区之外还暗不暗"，
+    # 单列的范围在列内处处为暗，分不开外框与本列的轴行。
+    spans = [
+        (float(c.get("start", c.get("startX", 0))), float(c.get("end", c.get("endX", 0))))
+        for c in columns
+    ]
+    roi_x: tuple[int, int] | None = (
+        (int(min(s[0] for s in spans)), int(max(s[1] for s in spans))) if spans else None
+    )
     for col in columns:
         x0 = float(col.get("start", col.get("startX", 0)))
         x1 = float(col.get("end", col.get("endX", 0)))
@@ -347,6 +536,7 @@ def detect_ruler_for_columns(
             axis_stroke=axis_stroke,
             y0=y0,
             y1=y1,
+            roi_x=roi_x,
         )
         geo["col_index"] = col.get("col_index")
         geo["name"] = col.get("name")
