@@ -18,7 +18,8 @@ docs/assets/tutorials/step3_ycalib.png
 docs/assets/tutorials/step4_cleanup.png
 docs/assets/tutorials/step4_binary_overlay.png
 docs/assets/tutorials/step5_naming.png
-docs/assets/tutorials/step6_xticks.png
+docs/assets/tutorials/step6_xticks.png                            # 28/28 列检出刻齿（ad7bb68 重拍）
+docs/assets/tutorials/step6_roi_not_covering_axis.png             # 框没盖住轴行时的实测诊断
 docs/assets/tutorials/step7_samples.png
 docs/assets/tutorials/step8_qa_export.png
 docs/assets/tutorials/modal_export_uncalibrated.png
@@ -27,7 +28,7 @@ docs/assets/tutorials/modal_export_uncalibrated.png
 渲染前把它们同步进 `public/shots/`（Remotion 只认 `public/` 下的 `staticFile`）：
 
 ```bash
-cp ../../docs/assets/tutorials/{step1_load,step2_roi,step3_ycalib,step4_cleanup,step4_binary_overlay,step5_naming,step6_xticks,step7_samples,step8_qa_export,modal_export_uncalibrated}.png public/shots/
+cp ../../docs/assets/tutorials/{step1_load,step2_roi,step3_ycalib,step4_cleanup,step4_binary_overlay,step5_naming,step6_xticks,step6_roi_not_covering_axis,step7_samples,step8_qa_export,modal_export_uncalibrated}.png public/shots/
 ```
 
 `competition_materials/live_captures/` 那批是 2026-10 的旧界面，只做过构图参考，**没有一帧进入成片**。
@@ -76,7 +77,7 @@ rm -rf out/seq            # 739 MB，别留在仓库里
 **只改 `src/scenario.ts` 一个文件**，场景组件不写死任何坐标与数字：
 
 - `SHOTS` —— 帧图文件名（换成新截图只改这里 + 覆盖 `public/shots/`）
-- `STEPS[]` —— 每个镜头一段：`frames`（时长）、`camera`（运镜关键帧）、`boxes`（高亮框，素材像素坐标）、`masks`（同色遮罩）、`caption`（步骤号 / 标题 / 说明 / 读数）
+- `STEPS[]` —— 每个镜头一段：`frames`（时长）、`camera`（运镜关键帧）、`boxes`（高亮框，素材像素坐标）、`crop`/`cardHeight`（取景裁切与竖版卡片）、`caption`（步骤号 / 标题 / 说明 / 读数）
 - `LEDGER_ROWS` —— 结尾账本回收的数字
 
 **数字铁律**：`caption.stat` 与 `LEDGER_ROWS` 里的每个值都必须能在对应截图上读到。
@@ -106,7 +107,9 @@ src/
   WorkflowCompact.tsx    动图专用紧凑剪辑（定位镜头 + 硬切）
 ```
 
-- 转场是**遮罩滑动**（`Slot` 的 `clipPath` 竖帘，7 帧，帘边一道青光）。
+- 转场是**遮罩滑动**（`Slot` 的 `clipPath` 竖帘，5 帧，帘边一道青光）；
+  纯排版镜头（开场/账本/收尾）用硬切，因为整屏是字，扫进来会出现半屏空暗场的中间帧。
+  `Slot` 还会给每个镜头铺一层与全片同源的底，保证扫过时不会透出上一镜。
   时间轴上相邻镜头重叠 7 帧，帘扫过时两侧各自完整 —— 不重影、不变暗、不虚。
   试过并否掉的两个方案，写在 `Slot` 的注释里：交叉淡化会成重影，淡到 0 再淡回 1 会在每个交界闪一下全黑。
 - 运镜统一 `Easing.bezier(.33,0,.15,1)`，末端做边界钳制，画面不会移出素材外。
@@ -125,7 +128,7 @@ src/
 | 时长 | 2069 帧 / 69.0 s | 740 帧 / 24.7 s |
 | 镜头 | 开场 + 10 个步骤镜头 + 账本 + 收尾 | 暗场拍子 + 8 个步骤镜头 + 暗场拍子 |
 | 运镜 | 每段 1.5–3 s 缓入缓出推近，最长 1.72× | **定位镜头**：固定 1.2× 裁切，不推拉 |
-| 转场 | 遮罩滑动（竖帘 + 边缘光，7 帧） | 硬切 |
+| 转场 | 镜头之间遮罩滑动（竖帘 + 边缘光，5 帧）；开场/账本/收尾硬切 | 硬切 |
 | 动效来源 | 运镜 + 高亮 + 字幕 + 计数 | 高亮描边生长 + 字幕淡入 + 计数上浮 |
 | 真值 | 完全一致（同一个 `STEPS`） | 完全一致（同一个 `STEPS`） |
 
@@ -134,10 +137,12 @@ src/
 
 ## 已知取舍（如实记录）
 
-1. **⑧ 导出拦截镜头的弹窗来自另一次会话**（横幅上是 601 层位 / 174.2%、变量行是 29 Taxa），
-   与 ⑧ 正片用的 112 层位 / 85 超标 / 170.8% 不同源。为避免把两套数据混成一套，
-   渲染中用与弹窗同色的纯白遮罩隐去「顶部自检横幅 + 变量统计行」这两条（`scenario.ts` 的 `masks`），
-   其余像素未改动。该镜头只呈现「就绪清单 / 未就绪清单 / 深度标定提示」。
+1. **⑧ 导出拦截镜头用取景裁切，不用遮罩。** 弹窗截图来自另一次会话（横幅上是 601 层位 / 174.2%），
+   与 ⑧ 正片用的 112 / 85 / 170.8% 不同源；而且弹窗左侧的表区本身是空的（0 rows），
+   整张 1440×900 一进画框就有三分之一是纯白，观众会读成「面板白屏」。
+   处理方式：`scenario.ts` 里给这一镜配 `crop: {x:1015, y:140, w:285, h:390}` + `cardHeight:780`，
+   只取右栏那一竖条（readiness 清单 + Dataset + 橙色 caption）并放大到 2.0 倍展示。
+   横幅与空表都被**裁到画外**，不是拿色块盖。字幕显式写出「拒绝导出 ⇒ 表区为空，不是一张 0 值表」。
 2. **⑥ 刻度标定镜头是静态推镜**：素材是单张截图，无法演出「点齿→填读数」的连续过程；
    文字与高亮框承担说明，不做假动画。⑥ 的字幕只写两条已确认稳定的事实
    （`检出 28 列 · 刻距 11px · 刻距不均` / `仍需人工点一个刻度齿填读数，才定得下斜率`），

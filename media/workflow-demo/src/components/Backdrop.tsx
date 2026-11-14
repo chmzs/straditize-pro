@@ -1,6 +1,6 @@
 import {AbsoluteFill, useCurrentFrame, interpolate} from 'remotion';
 import type {CSSProperties, ReactNode} from 'react';
-import {COLORS, H, W} from '../theme';
+import {BACKDROP_GRADIENT, COLORS, H, W} from '../theme';
 
 /** 全局底：深海军蓝 + 极淡网格 + 暗角。所有镜头共用一层，避免转场时底色脉动。 */
 export const Backdrop = ({children}: {children?: ReactNode}) => (
@@ -8,7 +8,7 @@ export const Backdrop = ({children}: {children?: ReactNode}) => (
     <AbsoluteFill
       style={{
         backgroundImage: [
-          `radial-gradient(1100px 720px at 50% 34%, ${COLORS.bgHigh} 0%, ${COLORS.bgMid} 46%, ${COLORS.bgDeep} 100%)`,
+          BACKDROP_GRADIENT,
           'repeating-linear-gradient(0deg, rgba(120,180,255,0.055) 0 1px, transparent 1px 64px)',
           'repeating-linear-gradient(90deg, rgba(120,180,255,0.055) 0 1px, transparent 1px 64px)',
         ].join(','),
@@ -78,8 +78,17 @@ export const Slot = ({
         })
       : 1;
 
+  // 每个镜头自带一层与全片同源的底：镜头不再是「透明贴在背景上」，
+  // 而是不透明的画面 —— 这样遮罩扫过时不会透出上一镜的内容。
+  const fill = <AbsoluteFill style={{background: BACKDROP_GRADIENT}} />;
+
   if (wipe >= 1 && outP >= 1) {
-    return <AbsoluteFill style={style}>{children}</AbsoluteFill>;
+    return (
+      <AbsoluteFill style={style}>
+        {fill}
+        {children}
+      </AbsoluteFill>
+    );
   }
 
   // 帘边一道细光，交代"这是转场，不是画面抖动"
@@ -92,6 +101,7 @@ export const Slot = ({
         ...style,
       }}
     >
+      {fill}
       {children}
       {wipe < 1 ? (
         <div

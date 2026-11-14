@@ -44,6 +44,10 @@ export type StepShotSpec = {
   tone: 'cool' | 'warm';
   /** public/shots/ 下的文件名 */
   image: string;
+  /** 只取原图的一块区域展示（取景裁切，不改像素）。用于把空表之类无关区域裁出画外。 */
+  crop?: {x: number; y: number; w: number; h: number};
+  /** 给了就把卡片做成该高度（像素）；宽度按裁切比例。 */
+  cardHeight?: number;
   camera: CamKey[];
   boxes: Box[];
   masks?: Mask[];
@@ -64,6 +68,7 @@ export const SHOTS = {
   cleanMask: 'step4_binary_overlay.png',
   split: 'step5_naming.png',
   xticks: 'step6_xticks.png',
+  xticksRoiWarn: 'step6_roi_not_covering_axis.png',
   horizons: 'step7_samples.png',
   qa: 'step8_qa_export.png',
   exportBlocked: 'modal_export_uncalibrated.png',
@@ -204,14 +209,31 @@ export const STEPS: StepShotSpec[] = [
       {at: 106, x: 1280, y: 340, scale: 1.7},
     ],
     boxes: [
-      {x: 1198, y: 288, w: 228, h: 86, delay: 30, color: COLORS.cyan},
-      {x: 1198, y: 530, w: 232, h: 38, delay: 78, color: COLORS.amber},
+      {x: 1198, y: 300, w: 228, h: 92, delay: 30, color: COLORS.cyan},
+      {x: 1198, y: 538, w: 232, h: 44, delay: 78, color: COLORS.amber},
     ],
     caption: {
       index: '06',
       title: '刻度标定：不是一键完成',
       detail: '检出 28 列 · 刻距 11px · 刻距不均\n仍需人工点一个刻度齿填读数，才定得下斜率',
       stat: {kind: 'number', value: 11, suffix: ' px', label: '检出刻距'},
+    },
+  },
+  {
+    id: 'xticks-roi-warn',
+    frames: 78,
+    tone: 'warm',
+    image: SHOTS.xticksRoiWarn,
+    camera: [
+      {at: 0, x: 900, y: 420, scale: 1.14},
+      {at: 70, x: 1280, y: 400, scale: 1.66},
+    ],
+    boxes: [{x: 1213, y: 338, w: 206, h: 142, delay: 26, color: COLORS.amber}],
+    caption: {
+      index: '06',
+      title: '框没盖住轴行，界面直接说',
+      detail: '有效区下边界 y=1300 未覆盖印刷轴行 y≈1307\n框没盖住时不会静默返回空值，而是给出下边界该移到哪',
+      stat: {kind: 'number', value: 25, suffix: ' / 28 列', label: '测不到轴线的列'},
     },
   },
   {
@@ -262,20 +284,24 @@ export const STEPS: StepShotSpec[] = [
     frames: 180,
     tone: 'warm',
     image: SHOTS.exportBlocked,
+    // 只取弹窗右栏这一竖条：readiness 清单 + Dataset + 橙色 caption。
+    // 弹窗左侧的表区是空的（0 rows），整张 1440x900 一进来就有三分之一是纯白，
+    // 观众会读成"面板白屏"。裁切把它直接裁到画外，而不是盖一块色。
+    crop: {x: 1015, y: 140, w: 285, h: 390},
+    cardHeight: 780,
     camera: [
-      {at: 0, x: 720, y: 450, scale: 1.0},
-      {at: 32, x: 900, y: 430, scale: 1.2},
-      {at: 106, x: 1185, y: 395, scale: 1.72},
+      {at: 0, x: 142, y: 190, scale: 1.0},
+      {at: 78, x: 142, y: 196, scale: 1.05},
     ],
-    masks: [{x: 146, y: 141, w: 880, h: 84, delay: 6, color: '#ffffff'}],
     boxes: [
-      {x: 1028, y: 146, w: 258, h: 254, delay: 26, color: COLORS.amber},
-      {x: 1030, y: 324, w: 254, h: 20, delay: 70, color: COLORS.red},
+      {x: 8, y: 7, w: 270, h: 253, delay: 22, color: COLORS.amber},
+      {x: 15, y: 187, w: 250, h: 13, delay: 56, color: COLORS.red},
+      {x: 15, y: 348, w: 250, h: 32, delay: 84, color: COLORS.amber},
     ],
     caption: {
       index: '08',
       title: '没标定，就不给导出',
-      detail: '就绪清单写明缺什么、缺在哪个分区 · 先补 Y 轴两点标定',
+      detail: '拒绝导出 ⇒ 表区为空，不是一张 0 值表\n未就绪清单写明缺什么：0 列已标定 / 28 列未标定',
       stat: {kind: 'text', text: '待完善', label: '导出就绪清单'},
     },
   },

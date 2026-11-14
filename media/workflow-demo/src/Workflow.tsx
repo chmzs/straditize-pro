@@ -15,18 +15,19 @@ import {
 } from './scenario';
 import {COLORS, W} from './theme';
 
-type Item = {key: string; frames: number; node: React.ReactNode};
+type Item = {key: string; frames: number; kind: 'step' | 'card'; node: React.ReactNode};
 
 /** 所有镜头按顺序排布，相邻两个重叠 OVERLAP_FRAMES 帧（后一镜压在前一镜上淡入）。 */
 const ITEMS: Item[] = [
-  {key: 'open', frames: OPENING_FRAMES, node: <Opening />},
+  {key: 'open', frames: OPENING_FRAMES, kind: 'card', node: <Opening />},
   ...STEPS.map((spec) => ({
     key: spec.id,
     frames: spec.frames,
+    kind: 'step' as const,
     node: <StepShotView spec={spec} />,
   })),
-  {key: 'ledger', frames: LEDGER_FRAMES, node: <Ledger />},
-  {key: 'close', frames: CLOSING_FRAMES, node: <Closing dur={CLOSING_FRAMES} />},
+  {key: 'ledger', frames: LEDGER_FRAMES, kind: 'card', node: <Ledger />},
+  {key: 'close', frames: CLOSING_FRAMES, kind: 'card', node: <Closing dur={CLOSING_FRAMES} />},
 ];
 
 const PLACED = (() => {
@@ -38,16 +39,18 @@ const PLACED = (() => {
   });
 })();
 
-/** 字幕轨：只取步骤镜头的字幕（开场/账本/收尾没有字幕）。 */
+/** 字幕轨：只取步骤镜头的字幕（开场/账本/收尾没有字幕）。
+ *  每条的窗口严格截止到「下一场景开始」，所以字幕既不会断档，也不会残留在账本页上。 */
 const CAPTIONS: CaptionItem[] = PLACED.flatMap((item, i) => {
   const spec = STEPS[i - 1];
-  if (i === 0 || !spec) {
+  const next = PLACED[i + 1];
+  if (i === 0 || !spec || !next) {
     return [];
   }
   return [
     {
       from: item.from,
-      frames: item.frames,
+      frames: next.from - item.from,
       accent: spec.tone === 'warm' ? COLORS.amber : COLORS.cyan,
       caption: spec.caption,
     },
@@ -81,7 +84,8 @@ export const Workflow = () => (
     <Backdrop />
     {PLACED.map((item) => (
       <Sequence key={item.key} from={item.from} durationInFrames={item.frames}>
-        <Slot dur={item.frames} fadeIn={OVERLAP_FRAMES}>
+        {/* 纯排版镜头硬切：它们整屏是字，用遮罩扫进来会出现「半屏空暗场」的中间帧 */}
+        <Slot dur={item.frames} fadeIn={item.kind === 'step' ? OVERLAP_FRAMES : 0}>
           {item.node}
         </Slot>
       </Sequence>

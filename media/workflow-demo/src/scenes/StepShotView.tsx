@@ -13,13 +13,15 @@ import {MaskLayer} from '../components/MaskLayer';
  * 转场包络由 Workflow 的 Slot 统一负责，这里只管内容。
  */
 export const StepShotView = ({spec}: {spec: StepShotSpec}) => {
-  const cam = useCamera(spec.camera, IMG.w, IMG.h);
+  const viewW = spec.crop?.w ?? IMG.w;
+  const viewH = spec.crop?.h ?? IMG.h;
+  const cam = useCamera(spec.camera, viewW, viewH);
   const accent = spec.tone === 'warm' ? COLORS.amber : COLORS.cyan;
 
   return (
     <AbsoluteFill>
       <Tone tone={spec.tone} />
-      <Screen src={spec.image} cam={cam}>
+      <Screen src={spec.image} cam={cam} crop={spec.crop} cardHeight={spec.cardHeight}>
         {(spec.masks ?? []).map((mask, i) => (
           <MaskLayer key={`m${i}`} mask={mask} />
         ))}
@@ -34,6 +36,8 @@ export const StepShotView = ({spec}: {spec: StepShotSpec}) => {
             until={box.until}
             color={box.color ?? accent}
             label={box.label}
+            viewW={viewW}
+            viewH={viewH}
           />
         ))}
       </Screen>

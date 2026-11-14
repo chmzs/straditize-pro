@@ -7,7 +7,7 @@ import {LEDGER_ROWS} from '../scenario';
 export const Ledger = () => {
   const frame = useCurrentFrame();
 
-  const headOpacity = interpolate(frame, [0, 16], [0, 1], {
+  const headOpacity = interpolate(frame, [0, 6], [0, 1], {
     easing: EASE,
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
@@ -57,7 +57,7 @@ export const Ledger = () => {
           }}
         >
           {LEDGER_ROWS.map((row, i) => {
-            const delay = 18 + i * 9;
+            const delay = 8 + i * 8;
             const opacity = interpolate(frame, [delay, delay + 16], [0, 1], {
               easing: EASE,
               extrapolateLeft: 'clamp',

@@ -16,6 +16,8 @@ export const Highlight = ({
   color = COLORS.cyan,
   label,
   radius = 6,
+  viewW = IMG.w,
+  viewH = IMG.h,
 }: {
   x: number;
   y: number;
@@ -26,6 +28,9 @@ export const Highlight = ({
   color?: string;
   label?: string;
   radius?: number;
+  /** 取景坐标系尺寸（裁切镜头下是裁切区的宽高）。 */
+  viewW?: number;
+  viewH?: number;
 }) => {
   const frame = useCurrentFrame();
   const grow = interpolate(frame, [delay, delay + 22], [0, 1], {
@@ -50,9 +55,9 @@ export const Highlight = ({
 
   return (
     <svg
-      width={IMG.w}
-      height={IMG.h}
-      viewBox={`0 0 ${IMG.w} ${IMG.h}`}
+      width={viewW}
+      height={viewH}
+      viewBox={`0 0 ${viewW} ${viewH}`}
       style={{position: 'absolute', left: 0, top: 0, pointerEvents: 'none'}}
     >
       {/* 柔光底 */}

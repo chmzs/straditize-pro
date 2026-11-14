@@ -15,6 +15,10 @@ export const CARD = {
 export const FONT =
   '"Noto Sans SC","Microsoft YaHei","Source Han Sans SC","PingFang SC",sans-serif';
 
+/** 全片底色渐变：Backdrop 与「竖版卡片」镜头共用，保证转场时帘子扫过的是同一片底。 */
+export const BACKDROP_GRADIENT =
+  'radial-gradient(1100px 720px at 50% 34%, #102338 0%, #0a1626 46%, #04080f 100%)';
+
 export const COLORS = {
   bgDeep: '#04080f',
   bgMid: '#0a1626',
