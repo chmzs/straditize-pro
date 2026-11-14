@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release Version Tag (e.g. v2.0.0)"
+        description: "Release Version Tag（如 v2.0.1）。留空则取 pyproject.toml 的版本"
         required: false
-        default: "v2.0.0"
+        default: ""
   push:
     tags:
       - "v*"
@@ -133,13 +133,12 @@ jobs:
 
       - name: Package Linux Distributions (.deb, .rpm, .tar.gz)
         run: |
-          TAG="${{ github.ref_name }}"
-          if [ "${{ github.ref_type }}" != "tag" ] || [ -z "$TAG" ]; then
-            TAG="${{ github.event.inputs.release_tag }}"
+          TAG="${{ github.event.inputs.release_tag }}"
+          if [ -z "$TAG" ]; then TAG="${{ github.ref_name }}"; fi
+          if [ -z "$TAG" ] || [ "$TAG" = "main" ] || [ "$TAG" = "master" ]; then
+            TAG="v$(grep -m1 '^version' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')"
           fi
-          if [ -z "$TAG" ]; then
-            TAG="v2.0.0"
-          fi
+          echo "TAG=$TAG"
           RAW_VER=$(echo $TAG | sed 's/^v//')
 
           # 1. Create directory structure for native packages
@@ -191,6 +190,55 @@ jobs:
             straditize-*-linux-x64.tar.gz
 
   # ==========================================================================
+  # ==========================================================================
+  # 3b. macOS Intel (x86_64) Build (.tar.gz)
+  # `macos-13` 已进入退役流程，Intel 环境改用官方新标签 `macos-15-intel`
+  # （https://github.com/actions/runner-images/issues/13045，可用至 2027-08）。
+  # ==========================================================================
+  build-macos-intel:
+    name: macOS Intel x86_64 Build (.tar.gz)
+    runs-on: macos-15-intel
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build Frontend SPA
+        working-directory: frontend
+        run: |
+          npm install
+          npm run build
+
+      - name: Setup Pixi
+        uses: actions/setup-pixi@v0.8.3
+        with:
+          pixi-version: v0.71.1
+          cache: true
+
+      - name: Build Standalone Binary via PyInstaller
+        run: pixi run build
+
+      - name: Package macOS Intel Tarball
+        run: |
+          TAG="${{ github.event.inputs.release_tag }}"
+          if [ -z "$TAG" ]; then TAG="${{ github.ref_name }}"; fi
+          if [ -z "$TAG" ] || [ "$TAG" = "main" ] || [ "$TAG" = "master" ]; then
+            TAG="v$(grep -m1 '^version' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          fi
+          echo "TAG=$TAG"
+          tar -czvf "straditize-${TAG}-macos-x64.tar.gz" -C dist straditize
+
+      - name: Upload macOS Intel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-x64-bundle
+          if-no-files-found: error
+          path: straditize-*-macos-x64.tar.gz
+
   # 3. macOS ARM64 Build (.tar.gz)
   # ==========================================================================
   build-macos:
@@ -222,13 +270,12 @@ jobs:
 
       - name: Package macOS Tarball
         run: |
-          TAG="${{ github.ref_name }}"
-          if [ "${{ github.ref_type }}" != "tag" ] || [ -z "$TAG" ]; then
-            TAG="${{ github.event.inputs.release_tag }}"
+          TAG="${{ github.event.inputs.release_tag }}"
+          if [ -z "$TAG" ]; then TAG="${{ github.ref_name }}"; fi
+          if [ -z "$TAG" ] || [ "$TAG" = "main" ] || [ "$TAG" = "master" ]; then
+            TAG="v$(grep -m1 '^version' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')"
           fi
-          if [ -z "$TAG" ]; then
-            TAG="v2.0.0"
-          fi
+          echo "TAG=$TAG"
           tar -czvf "straditize-${TAG}-macos-arm64.tar.gz" -C dist straditize
 
       - name: Upload macOS Artifact
@@ -242,7 +289,7 @@ jobs:
   # ==========================================================================
   publish-release:
     name: Publish GitHub Release Assets
-    needs: [build-windows, build-linux, build-macos]
+    needs: [build-windows, build-linux, build-macos, build-macos-intel]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     steps:
@@ -264,7 +311,8 @@ jobs:
           ls -lh release_assets/
           failed=0
           for pattern in '*Setup.exe' '*-windows-x64-portable.zip' \
-                         '*-macos-arm64.tar.gz' '*-linux-x64.tar.gz' '*.deb' '*.rpm'; do
+                         '*-macos-arm64.tar.gz' '*-macos-x64.tar.gz' \
+                         '*-linux-x64.tar.gz' '*.deb' '*.rpm'; do
             if compgen -G "release_assets/${pattern}" > /dev/null; then
               echo "ok: ${pattern}"
             else
@@ -274,11 +322,29 @@ jobs:
           done
           exit "$failed"
 
+      # `github.ref_name` 在 workflow_dispatch 下是分支名（main），曾经因此
+      # 建出一个 tag 叫 main 的假 Release，还抢走了 /releases/latest。
+      # 所以：先认手动输入的 release_tag，再认 ref_name，且必须形如 v*。
+      - name: Resolve release tag
+        id: release_tag
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.inputs.release_tag }}"
+          if [ -z "$tag" ]; then tag="${{ github.ref_name }}"; fi
+          if [ "$tag" = "main" ] || [ "$tag" = "master" ]; then
+            tag="v$(grep -m1 '^version' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          fi
+          case "$tag" in
+            v[0-9]*) echo "tag=$tag" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::发布 tag 非法：'$tag'（必须是 v 开头的版本号；手动触发请填 release_tag）"; exit 1 ;;
+          esac
+          echo "publishing as $tag"
+
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name || github.event.inputs.release_tag }}
-          name: "Straditize Pro ${{ github.ref_name || github.event.inputs.release_tag }}"
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: "Straditize Pro ${{ steps.release_tag.outputs.tag }}"
           draft: false
           prerelease: false
           generate_release_notes: true

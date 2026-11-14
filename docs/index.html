@@ -955,7 +955,7 @@
             <td>Windows 商业闭源软件 (需注册码)</td>
             <td>C++/Qt 本地安装</td>
             <td>依赖复杂 Python+PyQt5 本地环境</td>
-            <td class="highlight-col"><strong>✅ Windows（Setup / 便携版）/ macOS Apple Silicon / Linux（deb / rpm / tar.gz）预编译包，或浏览器即开即用；极速 120 FPS 视口</strong></td>
+            <td class="highlight-col"><strong>✅ Windows（Setup / 便携版）/ macOS（Apple Silicon / Intel）/ Linux（deb / rpm / tar.gz）预编译包，或浏览器即开即用；极速 120 FPS 视口</strong></td>
           </tr>
         </tbody>
       </table>
@@ -1100,7 +1100,7 @@
     <div class="section-header">
       <span class="section-tag">Get Started</span>
       <h2 class="section-title">下载并开始使用 Straditize Pro</h2>
-      <p class="section-subtitle">Windows、macOS（Apple Silicon）、Linux 三平台预编译包开箱即用，均内嵌 Python 运行时与离线模型；亦支持全功能源码部署</p>
+      <p class="section-subtitle">Windows、macOS（Apple Silicon 与 Intel 双架构）、Linux 四种预编译包开箱即用，均内嵌 Python 运行时与离线模型；亦支持全功能源码部署</p>
     </div>
 
     <div class="download-grid">
@@ -1123,17 +1123,18 @@
 
       <div class="dl-card">
         <div>
-          <div class="dl-badge" style="color: var(--accent-blue);">Apple Silicon</div>
-          <h3 class="dl-title">macOS（M 系列芯片）</h3>
+          <div class="dl-badge" style="color: var(--accent-blue);">双架构</div>
+          <h3 class="dl-title">macOS（Apple Silicon / Intel）</h3>
           <p class="dl-desc">
-            解压后直接运行包内的 <code>straditize</code>（首次需 <code>chmod +x</code>）。发行包未签名，首次启动请在「系统设置 → 隐私与安全性」放行。Intel Mac 请使用源码安装。
+            按机型选包：M1–M4 用 <strong>arm64</strong>，2020 年及更早的 Intel Mac 用 <strong>x64</strong>。解压后直接运行包内的 <code>straditize</code>（首次需 <code>chmod +x</code>）。发行包未签名，首次启动请在「系统设置 → 隐私与安全性」放行。
           </p>
           <p class="dl-desc" style="font-family: var(--font-mono, monospace); font-size: 13px; opacity: .8;">
-            straditize-v2.0.1-macos-arm64.tar.gz
+            straditize-v2.0.1-macos-arm64.tar.gz<br>
+            straditize-v2.0.1-macos-x64.tar.gz
           </p>
         </div>
         <a href="https://github.com/chmzs/straditize-pro/releases/latest" class="dl-btn dl-btn-subtle">
-          📦 下载 macOS tar.gz
+          📦 下载 macOS tar.gz（arm64 / x64）
         </a>
       </div>
 
