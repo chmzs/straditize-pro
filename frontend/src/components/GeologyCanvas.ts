@@ -380,7 +380,7 @@ private pointer: PointerState = {
           <path d="M12 12v9"/>
           <path d="m8 16 4-4 4 4"/>
         </svg>
-        <h3>松开鼠标以载入地质图谱</h3>
+        <h3>松开鼠标以载入图谱</h3>
         <p>支持 PNG / JPG / WebP / SVG 地学花粉与沉积剖面图像</p>
       </div>
     `;
@@ -708,7 +708,7 @@ private pointer: PointerState = {
           const file = items[i].getAsFile();
           if (file) {
             this.callbacks.onDropFile?.(file);
-            this.notifyNotice('已从剪贴板粘贴载入地质图谱图片');
+            this.notifyNotice('已从剪贴板粘贴载入图谱图片');
             break;
           }
         }

@@ -101,7 +101,7 @@ export function drawBackgroundDiagramOverlay(env: BackgroundEnv): void {
     ctx.fillRect(0, 0, env.data.imageWidth || 1600, env.data.imageHeight || 1000);
     ctx.fillStyle = isLight ? '#64748b' : '#94a3b8';
     ctx.font = '16px sans-serif';
-    ctx.fillText('正在解码地质图谱...', 40, 60);
+    ctx.fillText('正在解码图谱...', 40, 60);
     ctx.restore();
   }
 }

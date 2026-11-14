@@ -71,7 +71,7 @@ export class FileLoaderService {
       }
     }
 
-    this.callbacks.setHudNotice(`正在载入地质图谱: ${file.name}...`, 8000);
+    this.callbacks.setHudNotice(`正在载入图谱: ${file.name}...`, 8000);
 
     const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
     const reader = new FileReader();
