@@ -15,8 +15,8 @@
 
 <p align="center">
   <a href="https://chmzs.github.io/straditize-pro/"><img src="https://img.shields.io/badge/Website-chmzs.github.io%2Fstraditize--pro-0284c7.svg?style=flat-square&logo=googlechrome&logoColor=white" alt="Official Website" /></a>
-  <a href="https://github.com/chmzs/straditize-pro/releases/latest"><img src="https://img.shields.io/badge/Release-v2.0.0-059669.svg?style=flat-square" alt="Latest Release" /></a>
-  <img src="https://img.shields.io/badge/Platform-Windows%20(Setup%20%7C%20Portable)%20%7C%20Web-059669.svg?style=flat-square&logo=windows" alt="Platform Support" />
+  <a href="https://github.com/chmzs/straditize-pro/releases/latest"><img src="https://img.shields.io/badge/Release-v2.0.1-059669.svg?style=flat-square" alt="Latest Release" /></a>
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20(Apple%20Silicon)%20%7C%20Linux%20%7C%20Web-059669.svg?style=flat-square&logo=windows" alt="Platform Support" />
   <img src="https://img.shields.io/badge/OCR-PP--OCRv6%20Taxa%20Engine-7c3aed.svg?style=flat-square" alt="PP-OCRv6" />
   <img src="https://img.shields.io/badge/Python-3.12%2B-blue.svg?style=flat-square&logo=python" alt="Python 3.12+" />
   <img src="https://img.shields.io/badge/Frontend-TypeScript%20%7C%20HTML5%20Canvas%202D-10b981.svg?style=flat-square&logo=typescript" alt="TypeScript Frontend" />
@@ -26,7 +26,7 @@
 
 <p align="center">
   <a href="https://chmzs.github.io/straditize-pro/"><strong>🌐 官方主页与在线文档</strong></a> &nbsp;|&nbsp;
-  <a href="https://github.com/chmzs/straditize-pro/releases/latest"><strong>🚀 下载 Windows 独立安装包 (.exe)</strong></a> &nbsp;|&nbsp;
+  <a href="https://github.com/chmzs/straditize-pro/releases/latest"><strong>🚀 下载发行包（Windows / macOS / Linux）</strong></a> &nbsp;|&nbsp;
   <a href="#-8-阶段科学解译工作流"><strong>📖 8 步解译工作流</strong></a> &nbsp;|&nbsp;
   <a href="https://chmzs.github.io/straditize-pro/tutorials/01_quickstart.html"><strong>📚 在线实战教程 (HTML)</strong></a>
 </p>
@@ -73,7 +73,7 @@
 | **物理刻度标定** | ⚠️ 依赖手动选框，每列重复点选 | ⚠️ 需手动定义 X1/X2/Y1/Y2 四点轴线 | ⚠️ 手工设置单轴极值 | ⚠️ 单一直角坐标系映射 | ⚠️ 相对比例标定，小刻度属种易失真 | **✅ 两点式物理刻度钉（原点+刻度齿）+ 对数 Log 校验** |
 | **年代-深度模型提取** | ❌ 完全不支持，仅作普通折线处理 | ❌ 不支持年代学不确定性建模 | ❌ 不支持 | ❌ 不支持 | ❌ 仅提取花粉曲线 | **✅ 提取 Bacon 95% 置信包络并重构 1000 集合年代学** |
 | **下游生态与标准闭环** | ⚠️ 导出离散 CSV，需大量清洗拉平 | ⚠️ 导出 Origin Worksheet，无标准化 | ⚠️ 导出无格式文本，无生态学绑定 | ⚠️ 纯文本坐标点 | ⚠️ 需用户自行编写复杂 R 代码绘图 | **✅ 一键导出 R `rioja::strat.plot` 出版脚本 + LiPD** |
-| **运行架构与部署** | Web 浏览器 / Electron 桌面打包 | 需商业授权购买完整 OriginLab 软件 | 商业闭源共享软件 (需注册码) | C++/Qt 本地编译安装 | 依赖复杂 Python+PyQt5 本地环境 | **✅ Windows 一键 Setup / 便携版 / 极速 120 FPS 视口** |
+| **运行架构与部署** | Web 浏览器 / Electron 桌面打包 | 需商业授权购买完整 OriginLab 软件 | 商业闭源共享软件 (需注册码) | C++/Qt 本地编译安装 | 依赖复杂 Python+PyQt5 本地环境 | **✅ Windows（Setup / 便携版）/ macOS Apple Silicon / Linux（deb / rpm / tar.gz）预编译包，或浏览器即开即用；极速 120 FPS 视口** |
 
 ---
 
@@ -104,7 +104,7 @@
 ### 5. 现代化免安装运行与直通 R 语言生态
 - **开箱即用出图**：一键导出匹配 R 语言 `rioja::strat.plot` 的出版级脚本，实现数据解译到重新成图的无缝闭环。
 - **多格式导出与百分和校验**：支持导出 CSV、多表头 Excel、JSON、LiPD 及开放 POSIX UStar `.tar` 归档工程包；内置 $\sum\% \approx 100\%$ 生态学自洽性校验门禁。
-- **跨平台与轻量化架构**：Windows 提供打包独立执行程序，双击即用；底层核心与交互视口解耦，支持超大图谱流畅交互与移动设备局域网协同。
+- **跨平台与轻量化架构**：Windows、macOS（Apple Silicon）、Linux 三平台均提供内嵌运行时的预编译包，装完即用；底层核心与交互视口解耦，支持超大图谱流畅交互与移动设备局域网协同。
 
 ---
 
@@ -140,16 +140,21 @@
 
 ## 📥 下载与使用
 
-### 1. Windows 用户（推荐独立安装）
+### 1. 预编译发行包（Windows / macOS / Linux）
 
-前往 [**GitHub Releases**](https://github.com/chmzs/straditize-pro/releases/latest) 下载预打包的 Windows 版本：
+前往 [**GitHub Releases**](https://github.com/chmzs/straditize-pro/releases/latest) 下载对应平台的预编译包。三个平台的发行包都已内嵌完整 Python 运行时、ONNX Runtime 视觉推理引擎与 PP-OCRv6 模型权重，**目标机器无需预装 Python 或 Node.js**。
 
-| 版本类型 | 文件名 | 说明 |
-| :--- | :--- | :--- |
-| **🚀 Windows 一键安装包（推荐）** | `Straditize-Pro-v2.0.0-Windows-x64-Setup.exe` | **科研人员首选**。双击即可安装，自动创建桌面快捷方式，内嵌完整离线模型与独立计算环境，开箱即用。 |
-| **📦 绿色免安装便携版** | `straditize-v2.0.0-windows-x64-portable.zip` | 解压至任意目录，双击 `straditize.exe` 即可运行，适合 U 盘随身携带或实验室公用电脑。 |
+| 平台 | 版本类型 | 文件名（以 v2.0.1 为例） | 说明 |
+| :--- | :--- | :--- | :--- |
+| **Windows x64** | 一键安装包（推荐） | `Straditize-Pro-v2.0.1-Windows-x64-Setup.exe` | 双击安装，自动创建开始菜单与桌面快捷方式，按用户安装、无需管理员权限。 |
+| **Windows x64** | 绿色便携版 | `straditize-v2.0.1-windows-x64-portable.zip` | 解压到任意目录，双击 `straditize.exe` 运行；适合 U 盘随身携带或实验室公用电脑。 |
+| **macOS（Apple Silicon）** | 便携压缩包 | `straditize-v2.0.1-macos-arm64.tar.gz` | 解压后运行包内的 `straditize`。**仅支持 M 系列芯片**；Intel Mac 请走源码安装。首次运行需在「系统设置 → 隐私与安全性」放行（未签名发行包）。 |
+| **Linux x64** | Debian / Ubuntu | `straditize_2.0.1_amd64.deb` | `sudo apt install ./straditize_2.0.1_amd64.deb`，或 `sudo dpkg -i` 后补依赖。 |
+| **Linux x64** | Fedora / RHEL / CentOS | `straditize-2.0.1-1.x86_64.rpm` | `sudo rpm -i straditize-2.0.1-1.x86_64.rpm`。 |
+| **Linux x64** | 通用便携压缩包 | `straditize-v2.0.1-linux-x64.tar.gz` | 不挑发行版，解压后直接运行包内的 `straditize`；适合无 root 权限的集群登录节点。 |
 
-*注：Windows 发行版已内嵌完整 Python 运行时、ONNX Runtime 视觉推理引擎与 PP-OCRv6 模型权重，计算机无需预装 Python 或 Node.js。*
+> macOS 与 Linux 发行包首次运行若提示无执行权限：`chmod +x ./straditize`。
+> 三平台产物由 `.github/workflows/build-release.yml` 在打 tag 时自动构建并上传，版本号取自 tag。
 
 ---
 
