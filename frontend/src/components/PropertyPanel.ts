@@ -85,7 +85,7 @@ export class PropertyPanel {
                   : '<span style="color: var(--status-warning); font-weight: 700;">尚未标定</span> —— 深度一律显示为 --'
               }
             </div>
-            <small style="display: block; margin-top: 6px;">在 S4 面板点击「 开始两点标定」后在画布上点两个已知刻度即可修改。</small>
+            <small style="display: block; margin-top: 6px;">修改标定：在步骤 3（Y 轴标定）填入两个已知刻度的像素行与真实值，或在画布上点这两个刻度行。</small>
           </div>
 
           <div class="form-group">
@@ -196,8 +196,8 @@ export class PropertyPanel {
         </div>
         <div class="ui-modal__body">
           <p style="color: var(--text-secondary); font-size: 13px; line-height: 1.5; margin-bottom: 16px;">
-            前端自带高仿真 Mock 引擎，即使后端服务未启动也可完全自主交互、加点吸附、撤销重做和导出数据；
-            当 Agent 2 的 JSON-RPC 服务启动时，可在此输入地址无缝直连。
+            图谱载入、分列、数字化与导出全部由后端算法完成，后端未启动时界面无法产出任何真实数据。
+            当 Agent 2 的 JSON-RPC 服务启动时，在此填入地址即可连接。
           </p>
           <div class="form-group">
             <label>JSON-RPC 2.0 Endpoint 地址:</label>
@@ -206,7 +206,7 @@ export class PropertyPanel {
           <div class="form-group">
             <label>当前运行模式:</label>
             <div class="mode-pill ${status.connected ? 'online' : 'mock'}">
-              ${status.connected ? '已连接到后端 Agent 2' : '本地 Mock 仿真自主运行 (无后端)'}
+              ${status.connected ? '已连接到后端 Agent 2' : '未连接后端（界面只显示空态，不做任何计算）'}
             </div>
           </div>
         </div>

@@ -277,7 +277,7 @@ export class Inspector {
           </div>
           <div class="prop-row">
             <span class="prop-label">深度跨度:</span>
-            <span class="prop-val">${bounds ? `${bounds.topValue} ~ ${bounds.bottomValue} ${cal.unit}` : '<span style="color:var(--status-warning);">未标定 (S4 两点标定)</span>'}</span>
+            <span class="prop-val">${bounds ? `${bounds.topValue} ~ ${bounds.bottomValue} ${cal.unit}` : '<span style="color:var(--status-warning);">未标定（步骤 3 两点标定）</span>'}</span>
           </div>
           <div class="prop-row">
             <span class="prop-label">标准层位采样点:</span>
