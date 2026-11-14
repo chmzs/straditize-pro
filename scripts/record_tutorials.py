@@ -124,10 +124,38 @@ async function gotoStage(page, stage) {
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(OUT_DIR, 'step5_naming.png') });
 
-  // Open OCR Modal
+  // Open OCR Modal —— 只打开不点「执行 OCR 识别」的话，表格是空的（"点击左侧执行 OCR 识别"），
+  // 图注声称的"属种名识别与科属词典对齐"在画面上不存在。必须真跑一次识别并等到统计落定。
   await page.locator('#btn-ocr-review-modal').click();
   await page.locator('.ocr-review-dialog').waitFor({ state: 'visible' });
-  await page.waitForTimeout(500);
+  await page.locator('#btn-ocr-run').click();
+  // 判据不能用"统计不等于 --"：这三个计数在**识别开始前**就已经是 0/0/28（未识别=列数），
+  // 于是那种判据会立刻通过，截到的是"正在以 45° 旋转扶正并执行…匹配…"的进度占位行。
+  // 这里改成结构性判据：占位行必须消失 + 自动准确/待确认/未识别都是整数 + 三者之和
+  // 必须等于列数（识别失败留空行时和不等于列数，判据会红）。
+  await page.waitForFunction(
+    () => {
+      const tb = document.querySelector('#ocr-summary-tbody');
+      if (!tb) return false;
+      const rows = Array.from(tb.querySelectorAll('tr'));
+      if (rows.length === 0) return false;
+      if (rows.some((r) => (r.textContent || '').includes('正在以'))) return false;
+      const num = (sel) => {
+        const el = document.querySelector(sel);
+        const txt = ((el && el.textContent) || '').trim();
+        return /^\d+$/.test(txt) ? Number(txt) : NaN;
+      };
+      const auto = num('#ocr-stat-auto');
+      const confirm = num('#ocr-stat-confirm');
+      const unrec = num('#ocr-stat-unrec');
+      const total = num('#ocr-stat-total');
+      if ([auto, confirm, unrec, total].some((n) => Number.isNaN(n))) return false;
+      return total > 0 && auto + confirm + unrec === total;
+    },
+    null,
+    { timeout: 180000 }
+  );
+  await page.waitForTimeout(1200);
   await page.screenshot({ path: path.join(OUT_DIR, 'modal_ocr.png') });
   await page.locator('#ocr-close-btn').click();
   await page.locator('.ocr-review-dialog').waitFor({ state: 'detached' });
