@@ -58,7 +58,7 @@ export function createInspectorCallbacks(
           canvasComponent.requestRender();
           getSidebar()?.updateData(canvasComponent.data);
           getInspector()?.updateData(canvasComponent.data);
-          callbacks.setHudNotice(`属种 ${activeCol.name} 轮廓已根据图像算法完成重识别！`);
+          callbacks.setHudNotice(`属种 ${activeCol.name} 轮廓已重新识别。`);
         }
       } catch (err) {
         callbacks.reportBackendFailure('属种轮廓重识别', err);
@@ -86,7 +86,7 @@ export function createInspectorCallbacks(
           canvasComponent.requestRender();
           getSidebar()?.updateData(canvasComponent.data);
           getInspector()?.updateData(canvasComponent.data);
-          callbacks.setHudNotice(`属种 ${activeCol.name} 轮廓已根据图像算法完成重识别！`);
+          callbacks.setHudNotice(`属种 ${activeCol.name} 轮廓已重新识别。`);
         }
       } catch (err) {
         callbacks.reportBackendFailure('属种轮廓重识别', err);
@@ -368,7 +368,7 @@ export function createInspectorCallbacks(
         // （排除区盖住某列轴线的告警）。此前只取 `overlay_png`，于是"排除区盖住
         // 整列"这件事在界面上完全不可见 —— 用户只能在下游看到一列恒为 0。
         cleanupManager.applyCleanupState(maskRes);
-        callbacks.setHudNotice(`⛶ 已划定排除区 [X: ${exX0}~${exX1}]！该区域所有墨迹在数字化时将被绝对剔除。`, 4500);
+        callbacks.setHudNotice(`已划定排除区 [X: ${exX0}~${exX1}]：该区间内的墨迹不参与数字化取数。`, 4500);
       } catch (err) {
         callbacks.reportBackendFailure('添加排除区', err);
       }
@@ -585,7 +585,7 @@ export function createInspectorCallbacks(
           canvasComponent.data.samples = res.samples;
           getInspector()?.updateData(canvasComponent.data);
           canvasComponent.requestRender();
-          callbacks.setHudNotice(`成功提取 ${res.samples.length} 个跨属种拐点共识采样层位！`, 4000);
+          callbacks.setHudNotice(`已提取 ${res.samples.length} 个跨属种拐点共识采样层位。`, 4000);
         }
       } catch (err) {
         callbacks.reportBackendFailure('提取采样层位', err);
