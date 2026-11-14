@@ -338,7 +338,7 @@ export class AgeDepthController {
         metadata: inspectionData.metadata,
       });
       if (statusEl) {
-        statusEl.textContent = '已成功将修改后的年代-深度数据同步到工程。';
+        statusEl.textContent = `已将 ${inspectionData.depths.length} 行修改后的年代-深度数据同步到工程。`;
         setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
       }
     } catch (err: any) {

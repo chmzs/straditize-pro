@@ -218,7 +218,7 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
 
     // 8. 测试保存同步到模型
     await tablePanel.locator('#ad-tbl-btn-sync').click();
-    await expect(tablePanel.locator('#ad-table-sync-status')).toContainText('已成功将修改后的年代-深度数据同步', {
+    await expect(tablePanel.locator('#ad-table-sync-status')).toContainText(/已将 \d+ 行修改后的年代-深度数据同步到工程/, {
       timeout: 10_000,
     });
 
@@ -323,7 +323,7 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
     // ④ 排序后同步仍成功（显示顺序不改变数据语义）
     await panel.locator('#ad-tbl-btn-sync').click();
     await expect(panel.locator('#ad-table-sync-status')).toContainText(
-      '已成功将修改后的年代-深度数据同步',
+      /已将 \d+ 行修改后的年代-深度数据同步到工程/,
       { timeout: 10_000 },
     );
 
