@@ -517,7 +517,12 @@ async function waitDetected(page) {
 
 
 def add_banner(img_path: Path, caption: str, size: tuple[int, int] = (1152, 720)) -> Image.Image:
-    """Resize screenshot and add a high-contrast step caption banner at bottom."""
+    """Resize screenshot and add a high-contrast step caption banner at bottom.
+
+    字幕是**单行**绘制（不换行、不省略号）：文案一旦宽过横幅就直接被右边缘切掉，
+    观众看到的是半句话（实测踩过：1508px 的文案塞进 1112px 可用宽度，末尾 400px 没了）。
+    所以这里按实测宽度挑字号——从 20px 逐级降到 14px，取第一个塞得下的；都塞不下才告警。
+    """
     im = Image.open(img_path).convert("RGB").resize(size, Image.Resampling.LANCZOS)
     draw = ImageDraw.Draw(im)
     w, h = size
@@ -526,22 +531,37 @@ def add_banner(img_path: Path, caption: str, size: tuple[int, int] = (1152, 720)
     draw.line([0, h - banner_h, w, h - banner_h], fill=(56, 189, 248), width=2)
 
     # Load CJK font on Windows if available
-    font = None
+    font_path = None
     for candidate in [
         "C:/Windows/Fonts/msyhbd.ttc",
         "C:/Windows/Fonts/msyh.ttc",
         "C:/Windows/Fonts/simhei.ttf",
     ]:
         if os.path.exists(candidate):
-            try:
-                font = ImageFont.truetype(candidate, 20)
-                break
-            except Exception:
-                pass
-    if font is None:
-        font = ImageFont.load_default()
+            font_path = candidate
+            break
 
-    draw.text((20, h - banner_h + 10), caption, fill=(248, 250, 252), font=font)
+    margin = 20
+    usable = w - 2 * margin
+    font = ImageFont.load_default()
+    if font_path is not None:
+        for pt in (20, 19, 18, 17, 16, 15, 14):
+            candidate_font = None
+            try:
+                candidate_font = ImageFont.truetype(font_path, pt)
+            except Exception:
+                break
+            if candidate_font.getlength(caption) <= usable:
+                font = candidate_font
+                break
+        else:
+            font = ImageFont.truetype(font_path, 14)
+            print(
+                f"[!] 字幕仍超宽（{int(font.getlength(caption))}px > {usable}px），"
+                f"已压到 14px 仍会切边：{caption}"
+            )
+
+    draw.text((margin, h - banner_h + 10), caption, fill=(248, 250, 252), font=font)
     return im
 
 
@@ -564,6 +584,16 @@ def build_gif(frames_spec: list[tuple[str, str, int]], out_path: Path) -> None:
         optimize=True,
     )
     print(f"[OK] Generated GIF: {out_path.relative_to(ROOT)} ({out_path.stat().st_size // 1024} KB)")
+
+
+# `02_twopoint_calibration.gif` 的帧规格（文件名、字幕、时长）。抽成常量是为了
+# 让「只重建这一个 GIF」的局部模式（`STRADITIZE_TUTORIAL_ONLY=gif02`）与全量模式
+# 共用同一份规格——字幕改一处两边都跟着变，不会出现两套文案。
+GIF_02_FRAMES: list[tuple[str, str, int]] = [
+    ("step3_ycalib.png", "1. Y 轴两点标定：任意两已知刻度像素行映射真实深度/年代，独立于 ROI 边界", 2400),
+    ("step6_xticks.png", "2. X 轴标定：面板自动检出刻齿（28 列 · 刻距 11px），点一根带标签的齿填其数字；框没盖住轴行≠检测失败", 2400),
+    ("step8_qa_export.png", "3. 唯一标度入口：导出与 QA 诊断严格共用 x_ticks，未标定列在单列诊断里逐条列出", 2400),
+]
 
 
 def wait_for_backend(url: str, timeout: float = 30.0) -> None:
@@ -589,9 +619,20 @@ def main() -> int:
     # 视频 lane 统一换成动效版（`media/workflow-demo/`），局部重录一次就会把那条线的
     # 产物覆盖成静帧合成版。局部模式只跑对应的抓图脚本、**不合成任何 GIF**。
     only = os.environ.get("STRADITIZE_TUTORIAL_ONLY", "").strip()
-    if only and only != "step6":
-        print(f"[!] 未知的 STRADITIZE_TUTORIAL_ONLY={only!r}（目前只支持 'step6'）")
+    if only and only not in ("step6", "gif02"):
+        print(
+            f"[!] 未知的 STRADITIZE_TUTORIAL_ONLY={only!r}"
+            "（目前只支持 'step6' / 'gif02'）"
+        )
         return 2
+
+    # 只重建单个 GIF：不启后端、不开浏览器，纯粹把现有 PNG 按同一份规格重新合成。
+    # 用于「PNG 已重拍、但 GIF 归另一条 lane 管」的场景——只碰这一个文件。
+    if only == "gif02":
+        build_gif(GIF_02_FRAMES, OUT_DIR / "02_twopoint_calibration.gif")
+        print("[OK] 局部模式（gif02）：只重建 02_twopoint_calibration.gif，其余素材未动")
+        return 0
+
     node_body = NODE_SCRIPT_STEP6 if only == "step6" else NODE_SCRIPT
 
     print(f"[1/4] Starting isolated backend on {BASE_URL} ...")
@@ -656,11 +697,7 @@ def main() -> int:
         )
 
         build_gif(
-            [
-                ("step3_ycalib.png", "1. Y 轴两点标定：任意两已知刻度像素行映射真实深度/年代，独立于 ROI 边界", 2400),
-                ("step6_xticks.png", "2. X 轴标定：自动检出刻齿（28 列 · 刻距 11px · 刻距不均）后点离线最远的那个带标签齿并填数字；框没盖住轴行时面板报出实测轴行 y（如「下边界 y=1300 未覆盖 y≈1307」），那是框选问题不是检测失败", 2400),
-                ("step8_qa_export.png", "3. 唯一标度入口：导出与 QA 诊断严格共用 x_ticks，未标定列在单列诊断里逐条列出", 2400),
-            ],
+            GIF_02_FRAMES,
             OUT_DIR / "02_twopoint_calibration.gif",
         )
 
