@@ -8,7 +8,12 @@ Unicode True
 
 ; --- Application Information ---
 !define PRODUCT_NAME "Straditize Pro"
-!define PRODUCT_VERSION "2.0.0"
+; 版本号由 CI 用 /DPRODUCT_VERSION=<x.y.z> 传入（取自 release tag）；
+; 本地手工打包不传时退回本默认值。硬编码版本曾让 v2.0.1 的发行包里出现
+; 名为 v2.0.0 的 Setup.exe。
+!ifndef PRODUCT_VERSION
+  !define PRODUCT_VERSION "2.0.0"
+!endif
 !define PRODUCT_PUBLISHER "chmzs"
 !define PRODUCT_WEB_SITE "https://github.com/chmzs/straditize-pro"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\straditize.exe"

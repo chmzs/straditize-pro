@@ -51,21 +51,38 @@ jobs:
       - name: Build Windows Setup Installer (NSIS)
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+          # 版本号从 tag 取（refs/tags/v2.0.1 → 2.0.1），否则读 pyproject；
+          # 绝不再用写死的默认值，否则发行包里会出现版本错名的安装包。
+          $tag = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "${{ github.event.inputs.release_tag }}" }
+          if (-not $tag) {
+            $ver = (Select-String -Path pyproject.toml -Pattern '^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+          } else {
+            $ver = $tag -replace '^v', ''
+          }
+          if (-not $ver) { throw "无法确定版本号（tag 与 pyproject.toml 都为空）" }
+          Write-Host "NSIS VERSION = $ver"
+
           if (Get-Command makensis -ErrorAction SilentlyContinue) {
-            makensis support/installer.nsi
+            $nsis = "makensis"
           } elseif (Test-Path "C:\Program Files (x86)\NSIS\makensis.exe") {
-            & "C:\Program Files (x86)\NSIS\makensis.exe" support/installer.nsi
+            $nsis = "C:\Program Files (x86)\NSIS\makensis.exe"
           } else {
             choco install nsis -y
             $env:PATH += ";C:\Program Files (x86)\NSIS"
-            makensis support/installer.nsi
+            $nsis = "makensis"
           }
+          & $nsis "/DPRODUCT_VERSION=$ver" support/installer.nsi
+          if ($LASTEXITCODE -ne 0) { throw "makensis 退出码 $LASTEXITCODE" }
 
       - name: Package Windows Zip (Portable)
         shell: pwsh
         run: |
           $tag = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "${{ github.event.inputs.release_tag }}" }
-          if (-not $tag) { $tag = "v2.0.0" }
+          if (-not $tag) {
+            $ver = (Select-String -Path pyproject.toml -Pattern '^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+            $tag = "v$ver"
+          }
           $zipName = "straditize-$tag-windows-x64-portable.zip"
           Compress-Archive -Path "dist/straditize/*" -DestinationPath $zipName -Force
 
@@ -73,6 +90,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-x64-bundle
+          if-no-files-found: error
           path: |
             dist/*Setup.exe
             straditize-*-windows-x64-portable.zip
@@ -234,8 +252,27 @@ jobs:
           path: release_assets
           merge-multiple: true
 
-      - name: Display Release Files
-        run: ls -lh release_assets/
+      # 上传的 artifact 会保留各自的工作树路径：Windows 包的 Setup.exe 落在
+      # `dist/` 子目录里，而发布步骤的 `release_assets/*` 是非递归 glob，
+      # 于是 v2.0.1 的 Windows 安装包进了 artifact 却没进 Release（页面上只剩 zip）。
+      # 这里先摊平目录，再逐个平台校验产物存在，缺一个就红。
+      - name: Flatten and verify release assets
+        run: |
+          set -euo pipefail
+          find release_assets -mindepth 2 -type f -exec mv -f {} release_assets/ \;
+          find release_assets -mindepth 1 -type d -empty -delete
+          ls -lh release_assets/
+          failed=0
+          for pattern in '*Setup.exe' '*-windows-x64-portable.zip' \
+                         '*-macos-arm64.tar.gz' '*-linux-x64.tar.gz' '*.deb' '*.rpm'; do
+            if compgen -G "release_assets/${pattern}" > /dev/null; then
+              echo "ok: ${pattern}"
+            else
+              echo "::error::缺少发行产物：${pattern}"
+              failed=1
+            fi
+          done
+          exit "$failed"
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
