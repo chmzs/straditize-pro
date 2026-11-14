@@ -6,8 +6,8 @@ import { t } from '../../i18n';
 import { notify, notifyError, describeError } from '../../ui/feedback';
 import { columnPick, beginColumnPick, resetColumnPick } from './columnPick';
 import {
-  detectedSpans,
   describeRulerDetection,
+  detectedSpans,
   maxDetectedSpan,
 } from './rulerSpan';
 import {
@@ -16,7 +16,7 @@ import {
 } from './XTicksDroppedNotice';
 import { renderOtherSuspectColumnsSummary } from './SuspectBlockNotice';
 import { resolveAxisStroke } from '../../core/axisStroke';
-import { columnAtX, zeroXOfColumn } from '../../core/tickRouting';
+import { resolveColumnAtX, zeroXOfColumn } from '../../core/tickRouting';
 import { setMeasuredTickSpacing } from '../canvas/tickGeometry';
 
 /** 步骤 6 面板的全部可变状态。 */
@@ -467,6 +467,7 @@ export function render(data: DiagramData): string {
             ${rulerLine}
           </div>
 
+
           <div data-role="units-per-cell-hint" style="font-size: 9.5px; line-height: 1.4; color: var(--text-muted); margin-bottom: 4px;">
             <strong>相邻两个数字标签之差</strong>（标签 10 / 30 → 填 20）。
             <details class="ui-help"><summary>取值规则</summary>
@@ -621,13 +622,33 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   setTickPickedHandler((pt) => {
     const data = state.cachedData;
     const columns = (data?.columns ?? []) as NonNullable<DiagramData['columns']>;
-    // 点哪一列的齿就标哪一列（见 `columnAtX` 的注释）：旧实现恒用 `activeColumn()`，
-    // 多列图上只有第一列（活动列）能标，其余列点了等于在改别处。
-    const col = columnAtX(columns, data, pt.x);
-    if (!col) {
+    // 点哪一列的齿就标哪一列（见 `resolveColumnAtX` 的注释）：旧实现恒用
+    // `activeColumn()`，多列图上只有第一列（活动列）能标，其余列点了等于在改别处。
+    //
+    // 归属必须**先按活动有效区过滤**：多 ROI 图上两个分区的列区间可以整段重叠
+    // （实测 tree 315–1946 与 herb 161–1899），按数组顺序取第一个命中会在 herb
+    // 活动区里把点击解析回 tree 的列，于是 herb 自己的齿被判「没有检测到刻度齿」。
+    const hit = resolveColumnAtX(columns, data, pt.x);
+    if (!hit) {
       notifyError('点选位置不在任何一列的取数带内。请点在某一列的刻度齿上。');
       return;
     }
+    if (!hit.inActiveRoi) {
+      // 只在别的分区命中：必须指名那个分区，不能退回「此处没有检测到刻度齿」
+      // ——那等于把"有齿但属于别的分区"说成"没齿"。
+      const otherName =
+        data?.rois?.find((r) => r.id === hit.roiId)?.name || hit.roiId || '另一个有效区';
+      const activeName =
+        data?.rois?.find((r) => r.id === data?.active_roi_id)?.name ||
+        data?.active_roi_id ||
+        '当前有效区';
+      notifyError(
+        `这条齿属于有效区「${otherName}」的列，当前活动区是「${activeName}」。` +
+          `请先把「${otherName}」设为活动区再来点它的齿。`
+      );
+      return;
+    }
+    const col = hit.col;
     const roi = data?.rois?.find((r) => r.id === (col.roi_id ?? data?.active_roi_id));
     const g = roi?.x_groups?.find((x) => x.id === col.x_group_id) ?? roi?.x_groups?.[0];
     // 0 点 = 列左缘 + 轴线粗（与画布绿线同源，见 ARCHITECTURE §6.4）。
