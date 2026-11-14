@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://chmzs.github.io/straditize-pro/"><img src="https://img.shields.io/badge/Website-chmzs.github.io%2Fstraditize--pro-0284c7.svg?style=flat-square&logo=googlechrome&logoColor=white" alt="Official Website" /></a>
-  <a href="https://github.com/chmzs/straditize-pro/releases/latest"><img src="https://img.shields.io/badge/Release-v2.0.1-059669.svg?style=flat-square" alt="Latest Release" /></a>
+  <a href="https://github.com/chmzs/straditize-pro/releases/latest"><img src="https://img.shields.io/badge/Release-v2.0.2-059669.svg?style=flat-square" alt="Latest Release" /></a>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20(Apple%20Silicon%20%7C%20Intel)%20%7C%20Linux%20%7C%20Web-059669.svg?style=flat-square&logo=windows" alt="Platform Support" />
   <img src="https://img.shields.io/badge/OCR-PP--OCRv6%20Taxa%20Engine-7c3aed.svg?style=flat-square" alt="PP-OCRv6" />
   <img src="https://img.shields.io/badge/Python-3.12%2B-blue.svg?style=flat-square&logo=python" alt="Python 3.12+" />
@@ -144,15 +144,15 @@
 
 前往 [**GitHub Releases**](https://github.com/chmzs/straditize-pro/releases/latest) 下载对应平台的预编译包。三个平台的发行包都已内嵌完整 Python 运行时、ONNX Runtime 视觉推理引擎与 PP-OCRv6 模型权重，**目标机器无需预装 Python 或 Node.js**。
 
-| 平台 | 版本类型 | 文件名（以 v2.0.1 为例） | 说明 |
+| 平台 | 版本类型 | 文件名（以 v2.0.2 为例） | 说明 |
 | :--- | :--- | :--- | :--- |
-| **Windows x64** | 一键安装包（推荐） | `Straditize-Pro-v2.0.1-Windows-x64-Setup.exe` | 双击安装，自动创建开始菜单与桌面快捷方式，按用户安装、无需管理员权限。 |
-| **Windows x64** | 绿色便携版 | `straditize-v2.0.1-windows-x64-portable.zip` | 解压到任意目录，双击 `straditize.exe` 运行；适合 U 盘随身携带或实验室公用电脑。 |
-| **macOS（Apple Silicon）** | 便携压缩包 | `straditize-v2.0.1-macos-arm64.tar.gz` | 适配 M1–M4 等 Apple Silicon 机型。解压后运行包内的 `straditize`。首次运行需在「系统设置 → 隐私与安全性」放行（未签名发行包）。 |
-| **macOS（Intel x86_64）** | 便携压缩包 | `straditize-v2.0.1-macos-x64.tar.gz` | 适配 2020 年及更早的 Intel Mac（Core i5/i7/i9）。用法同上：解压后运行包内 `straditize`，首次需 `chmod +x` 并在系统设置中放行。 |
-| **Linux x64** | Debian / Ubuntu | `straditize_2.0.1_amd64.deb` | `sudo apt install ./straditize_2.0.1_amd64.deb`，或 `sudo dpkg -i` 后补依赖。 |
-| **Linux x64** | Fedora / RHEL / CentOS | `straditize-2.0.1-1.x86_64.rpm` | `sudo rpm -i straditize-2.0.1-1.x86_64.rpm`。 |
-| **Linux x64** | 通用便携压缩包 | `straditize-v2.0.1-linux-x64.tar.gz` | 不挑发行版，解压后直接运行包内的 `straditize`；适合无 root 权限的集群登录节点。 |
+| **Windows x64** | 一键安装包（推荐） | `Straditize-Pro-v2.0.2-Windows-x64-Setup.exe` | 双击安装，自动创建开始菜单与桌面快捷方式，按用户安装、无需管理员权限。 |
+| **Windows x64** | 绿色便携版 | `straditize-v2.0.2-windows-x64-portable.zip` | 解压到任意目录，双击 `straditize.exe` 运行；适合 U 盘随身携带或实验室公用电脑。 |
+| **macOS（Apple Silicon）** | 便携压缩包 | `straditize-v2.0.2-macos-arm64.tar.gz` | 适配 M1–M4 等 Apple Silicon 机型。解压后运行包内的 `straditize`。首次运行需在「系统设置 → 隐私与安全性」放行（未签名发行包）。 |
+| **macOS（Intel x86_64）** | 便携压缩包 | `straditize-v2.0.2-macos-x64.tar.gz` | 适配 2020 年及更早的 Intel Mac（Core i5/i7/i9）。用法同上：解压后运行包内 `straditize`，首次需 `chmod +x` 并在系统设置中放行。 |
+| **Linux x64** | Debian / Ubuntu | `straditize_2.0.2_amd64.deb` | `sudo apt install ./straditize_2.0.2_amd64.deb`，或 `sudo dpkg -i` 后补依赖。 |
+| **Linux x64** | Fedora / RHEL / CentOS | `straditize-2.0.2-1.x86_64.rpm` | `sudo rpm -i straditize-2.0.2-1.x86_64.rpm`。 |
+| **Linux x64** | 通用便携压缩包 | `straditize-v2.0.2-linux-x64.tar.gz` | 不挑发行版，解压后直接运行包内的 `straditize`；适合无 root 权限的集群登录节点。 |
 
 > macOS 与 Linux 发行包首次运行若提示无执行权限：`chmod +x ./straditize`。
 > 四种平台/架构产物（Windows、macOS arm64、macOS x64、Linux）由 `.github/workflows/build-release.yml` 在打 tag 时自动构建并上传，版本号取自 tag。

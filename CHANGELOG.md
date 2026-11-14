@@ -1,5 +1,30 @@
 # 变更记录（CHANGELOG）
 
+## [2.0.2] - 2026-11-14
+
+基线 `v2.0.1..HEAD`。只列用户能感知的变化，每条末尾可 `git show <hash>` 复核。
+
+### 会丢 / 会错的数据
+
+- **删除有列的分区以前根本做不到**：后端对「该分区下有列且未显式确认」返回 `-32002`，而前端永远只发 `{roi_id}`、界面上也没有确认入口——用户只拿到一条报错。现在删除前会问后端「将连带删掉多少列」并弹应用内确认框，取消则零写请求。`2caf20f`
+
+### 使用体验
+
+- **工程包导出被业务拒绝时，命令行给一行可读错误**：未标定的工程包跑 `straditize … --project x.tar --output y.csv` 以前抛 `JsonRpcError` 的 traceback，现在打印「导出需要深度标定：请先完成步骤 3 的 Y 轴两点标定」并退出 1，自动化能区分「还差步骤」与「工具坏了」。`f59d774`
+
+### 发行包（三平台四产物）
+
+- **Windows 安装包此前构建出来了却没进 Release**：NSIS 产物写在 `dist/` 子目录，而发布步骤用非递归 glob `release_assets/*`，于是 v2.0.1 的 Release 只有 zip、网页却在宣传 `.exe`。现在发布前先摊平目录，再按 6 个模式逐个校验产物，缺一个即红。`a2df1f8`
+- **安装包版本号不再写死 2.0.0**：makensis 由 CI 传 `/DPRODUCT_VERSION=<tag>`，v2.0.1 的发版曾因此产出名为 v2.0.0 的 Setup.exe。`a2df1f8`
+- **补上 macOS Intel（x86_64）发行包**：新增 `macos-15-intel` 构建（`macos-13` 已退役），产物 `straditize-v2.0.2-macos-x64.tar.gz`；`pixi.toml` 增加 `osx-64` 平台并重解析锁文件。`a85e8b0` `5de945a`
+- **发布 tag 不再取分支名**：`workflow_dispatch` 下 `github.ref_name` 是 `main`，曾因此建出 tag 叫 `main` 的假 Release 并抢走 `/releases/latest`；现在优先取手动输入且必须是 `v<数字>`，否则直接失败。`a85e8b0`
+- **网页与 README 的下载区补全为三平台六产物**（Windows Setup/便携、macOS arm64/x64、Linux deb/rpm/tar.gz），并删掉对并不存在的 `.exe` 的旧宣传。`989406e` `a85e8b0`
+
+### 工程门禁
+
+- **UI 一致性门禁扫描范围补 `.mjs`**：`e2e/discovery/*.mjs` 里有一处 emoji 漏扫。`7397815`
+- 未标定导出的守卫用例覆盖全部五个出口并补「标定后仍出数」正对照；CLI 拒绝路径新增用例。`e98f440` `f59d774`
+
 ## [2.0.1] - 2026-11-13
 
 基线 `v2.0.0..HEAD`。完整改动：`git log v2.0.0..HEAD`（本轮 231 个提交，含大量重构与测试补充）。
