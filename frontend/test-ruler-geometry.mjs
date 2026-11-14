@@ -97,4 +97,39 @@ assert.equal(
 assert.equal(mod.describeRulerDetection(null, '后端 500', false), '检测失败：后端 500');
 assert.equal(mod.describeRulerDetection(null, null, true), '正在检测刻度尺…');
 
-console.log('✓ rulerSpan：3 组判据全部通过');
+
+// ---- 4. ROI 下边界没盖住印刷轴行时的诊断文案（②，实测形态） ----------------
+//
+// 实测（hoya，`frontend/e2e/step6-axis-coverage-hint.spec.ts` 造同一形态）：
+// herb 的框 (0,0)–(1900,1300)，而 hoya 的印刷轴行在 y≈1306/1313。后端
+// `ruler.py:find_axis_row` 只在 `[…, min(h, ylim[1]))` 里搜，于是 29 列里 26 列
+// `axis_row` 为 null、每列最多 1 条孤齿，面板此前只报「检测：29 列，未找到刻度尺」。
+// 判据：有 26/29 列测不到轴线、且没有任何列测到 2 条齿 ⇒ 必须给出"下移下边界"的可行动作，
+// 且数字全部来自传进来的实测值（不是写死）。
+const clippedGeo = {
+  roi_id: 'roi_2',
+  median_spacing_px: null,
+  all_regular: null,
+  calibration_suggestions: [],
+  per_column: [
+    // 26 列测不到轴线，3 列各检出 1 条孤齿（真实分布）
+    ...Array.from({ length: 3 }, (_, i) => ({ col_index: i, name: `c${i}`, axis_row: 1299, axis_x: null, axis_x_right: null, ticks: [500 + i], n_cells: 0, spacing_px: null, regular: null, column_width: 100 })),
+    ...Array.from({ length: 26 }, (_, i) => ({ col_index: 3 + i, name: `c${3 + i}`, axis_row: null, axis_x: null, axis_x_right: null, ticks: [], n_cells: 0, spacing_px: null, regular: null, column_width: 100 })),
+  ],
+};
+const gap = mod.describeAxisCoverageGap(clippedGeo, [0, 1300]);
+assert.ok(gap, '26/29 列测不到轴线、0 列测到齿时必须给出诊断，不能只说"未找到刻度尺"');
+assert.ok(gap.includes('1300'), `提示必须报出有效区下边界的真实值 1300，实得：${gap}`);
+assert.ok(gap.includes('26') && gap.includes('29'), `提示必须报出实测列数 26/29，实得：${gap}`);
+assert.ok(/下移|下边界/.test(gap), `提示必须给出可执行动作（把有效区下边界下移），实得：${gap}`);
+
+// 负向对照 1：检测本来正常（有列测到 ≥2 条齿）⇒ 不得出现这条提示。
+assert.equal(mod.describeAxisCoverageGap(geo, [0, 1700]), null, '刻度尺正常检测到时不得提示下移边界');
+// 负向对照 2：所有列都测到了轴线（只是没齿）⇒ 病因不是下边界，不得误报。
+const allAxis = { ...clippedGeo, per_column: clippedGeo.per_column.map((c) => ({ ...c, axis_row: 1299 })) };
+assert.equal(mod.describeAxisCoverageGap(allAxis, [0, 1300]), null, '各列都测到轴线时不得把病因归给下边界');
+// 边界：没有几何 / 没有 ylim ⇒ 没有实测值就不能说话。
+assert.equal(mod.describeAxisCoverageGap(null, [0, 1300]), null);
+assert.equal(mod.describeAxisCoverageGap(clippedGeo, null), null);
+
+console.log('✓ rulerSpan：4 组判据全部通过');

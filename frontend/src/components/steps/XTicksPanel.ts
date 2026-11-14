@@ -6,6 +6,7 @@ import { t } from '../../i18n';
 import { notify, notifyError, describeError } from '../../ui/feedback';
 import { columnPick, beginColumnPick, resetColumnPick } from './columnPick';
 import {
+  describeAxisCoverageGap,
   describeRulerDetection,
   detectedSpans,
   maxDetectedSpan,
@@ -160,6 +161,13 @@ function patchRulerDom(root: HTMLElement): void {
     line.setAttribute('data-span', rigidSpan == null ? '' : String(rigidSpan));
     line.style.color = state.rulerGeoError ? 'var(--accent-red)' : 'var(--text-secondary)';
   }
+  const gapEl = root.querySelector('[data-role="axis-coverage-hint"]') as HTMLElement | null;
+  if (gapEl) {
+    const gap = describeAxisCoverageGap(geo, state.cachedData?.rois?.find((r) => r.id === state.cachedData?.active_roi_id)?.ylim);
+    gapEl.textContent = gap ?? '';
+    gapEl.setAttribute('data-gap', gap ? '1' : '0');
+    gapEl.style.display = gap ? 'block' : 'none';
+  }
   if (spanEl) {
     spanEl.textContent =
       rigidSpan == null
@@ -298,6 +306,10 @@ export function render(data: DiagramData): string {
   const rigidSpan = maxDetectedSpan(spans);
   const groupUnit = currentGroup?.unit || '%';
   const rulerLine = describeRulerDetection(geo, geoError, geoPending);
+  // 「框没盖住印刷轴行」的诊断：齿的搜索带来自 roi.ylim（后端 `find_axis_row` 只在
+  // `[…, min(h, y1))` 里找下轴线），下边界偏高时整段搜索带落在轴行之上，29 列只有
+  // 3 列各检出 1 条孤齿。这条提示把病因与可执行动作写出来，数字取自实测 payload。
+  const axisCoverageGap = describeAxisCoverageGap(geo, activeRoi?.ylim);
   // 0 点是**实测轴线右缘**，不是列切分给的 startX：后者实测可偏离轴线 6–20px。
   // 面板显示的像素必须与实际标定用的是同一个数，否则用户照着它校正会自造偏差。
 
@@ -467,6 +479,10 @@ export function render(data: DiagramData): string {
             ${rulerLine}
           </div>
 
+          <!-- 诊断行常驻：检测是异步回来的，patchRulerDom 就地填它，
+               不重建 DOM（重建会冲掉用户正在填的输入框）。无诊断时 display:none。 -->
+          <div data-role="axis-coverage-hint" data-gap="${axisCoverageGap ? '1' : '0'}"
+               style="font-size: 10px; line-height: 1.55; margin-bottom: 6px; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--status-warning); background: var(--bg-tertiary); color: var(--status-warning); display: ${axisCoverageGap ? 'block' : 'none'};">${axisCoverageGap ?? ''}</div>
 
           <div data-role="units-per-cell-hint" style="font-size: 9.5px; line-height: 1.4; color: var(--text-muted); margin-bottom: 4px;">
             <strong>相邻两个数字标签之差</strong>（标签 10 / 30 → 填 20）。
