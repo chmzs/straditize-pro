@@ -899,7 +899,7 @@ class ExportMixin:
         不让前端再用样条造第二套数。
         """
         key = (dataset or "").strip().lower()
-        if not key or key == "samples":
+        if not key:
             return self._primary_roi_export_frame(strict=strict)
         # 参数错误必须先报：非法 dataset 名不该被"还没标定"这条前置条件盖住。
         if key not in self.EXPORT_DATASETS:
@@ -910,6 +910,11 @@ class ExportMixin:
         # 面板三张表都以「读数」为内容：一列都没标定 X 刻度时它们只能给出整表空白，
         # 那看起来像"这张图没数据"，而不是"你还没做步骤 6"。
         self._assert_export_column_scale()
+        # 面板上「共识层位」同样要过列标度守卫：全列未标定时它只会给一整张 NA 表，
+        # 看起来像「这张图没数据」，而不是「你卡在步骤 6」。
+        # 不传 dataset（data.csv / tar / xlsx 出口）不受此守卫约束（那条契约不变）。
+        if key == "samples":
+            return self._primary_roi_export_frame(strict=strict)
         if key == "union_points":
             return self._union_points_frame()
         if key == "depth_grid":

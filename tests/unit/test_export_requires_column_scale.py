@@ -78,7 +78,9 @@ def test_all_columns_uncalibrated_grid_is_blank() -> None:
     )
 
 
-@pytest.mark.parametrize("dataset", ["depth_grid", "union_points", "turning_points"])
+@pytest.mark.parametrize(
+    "dataset", ["samples", "depth_grid", "union_points", "turning_points"]
+)
 def test_all_columns_uncalibrated_export_is_rejected(dataset: str) -> None:
     session = _session()
     with pytest.raises(JsonRpcError) as excinfo:
@@ -101,7 +103,7 @@ def test_all_columns_uncalibrated_export_is_rejected(dataset: str) -> None:
     assert excinfo.value.data["calibrated"] == 0
 
 
-@pytest.mark.parametrize("dataset", ["depth_grid", "union_points"])
+@pytest.mark.parametrize("dataset", ["samples", "depth_grid", "union_points"])
 def test_one_calibrated_column_exports_real_values_and_blanks_the_rest(
     dataset: str,
 ) -> None:
