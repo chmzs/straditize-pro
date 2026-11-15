@@ -121,8 +121,13 @@ def test_one_calibrated_column_exports_real_values_and_blanks_the_rest(
     # `columns[0]` = `col01`，即表格第 2 列（表头顺序 = column_points 的键序）。
     assert headers[1] == "col01", f"已标定列必须是 col01，实际 {headers[1]!r}"
     assert nonblank[1] == len(rows), "已标定列必须整列有真实读数"
-    assert nonblank[2:] == [0] * (len(headers) - 2), (
-        f"未标定列必须整列为空（NA 语义），实际非空数：{nonblank[2:]}"
+    # 未标定列必须整列 NA：缺测在 CSV 里写成字面量 NA（na_rep="NA"），
+    # 不是空单元格——空单元格在下游读入器里既可能是缺失也可能是 0。
+    na_counts = [
+        sum(1 for row in rows if row[i].strip() == "NA") for i in range(2, len(headers))
+    ]
+    assert na_counts == [len(rows)] * (len(headers) - 2), (
+        f"未标定列必须整列 NA，实际 NA 数：{na_counts}"
     )
 
     values = [float(row[1]) for row in rows]
