@@ -39,8 +39,9 @@ def test_control_points_are_never_negative():
         y1=229,
         col_index=0,
         col_width=700.0,
+        zero_offset=6.0,
     )
     assert ctrl_pts, "该曲线有真实拐点，控制点不应为空"
-    offenders = {p["y"]: p["x"] for p in ctrl_pts if p["x"] < c_start}
-    assert offenders == {}, f"控制点出现负宽度（<0%）：{offenders}"
-    assert all(v >= c_start for v in rows_to_x.values()), "行→x 表里出现负宽度"
+    offenders = {p["y"]: p["x"] for p in ctrl_pts if p["x"] < c_start + 6.0}
+    assert offenders == {}, f"控制点落在 0 点（绿线）左侧，等于负读数：{offenders}"
+    assert all(v >= c_start + 6.0 for v in rows_to_x.values()), "行→x 表里出现 0 点左侧的取值"
