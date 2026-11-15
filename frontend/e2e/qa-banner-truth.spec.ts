@@ -38,7 +38,12 @@ import { openApp, resetBaseline, rpc } from './helpers';
  */
 async function stageZeroSumColumn(page: Page): Promise<void> {
   const data = await rpc<{
-    columns: Array<{ id: string; startX: number; endX: number }>;
+    columns: Array<{
+      id: string;
+      startX: number;
+      endX: number;
+      controlPoints?: Array<{ y?: number; row?: number }>;
+    }>;
     rois: Array<{ id: string; ylim: number[] }>;
   }>(page, 'straditize.getDiagramData');
   const col = data.columns[0];
@@ -60,12 +65,18 @@ async function stageZeroSumColumn(page: Page): Promise<void> {
   });
   await rpc(page, 'core.digitize', { col_index: 0 });
 
-  const ylim = roi.ylim ?? [0, 0];
-  for (let i = 0; i < 4; i++) {
-    const row = Math.round(ylim[0] + ((ylim[1] - ylim[0]) * (i + 1)) / 5);
-    // x 压到列起点 ⇒ 该行每个属种的读数都是 0% ⇒ 行总和 0 ⇒ 不计入质检。
-    await rpc(page, 'core.updateControlPoint', { col_index: 0, row, x: col.startX });
-  }
+  // 整列**所有**控制点都压到列起点 ⇒ 每一行读数都是 0% ⇒ 行总和 0 ⇒ 无层位可检验。
+  //
+  // 旧写法只压 4 个点（ylim 五等分处的 4 行）：step7 把控制点判据换成垂直误差界后，
+  // 每列控制点从 ~20 涨到 ~60-180，未压到的行仍带非零读数，自检行于是变成
+  // 「801 层位被检验」——本用例赖以成立的"空集"前提消失（实测 CI 与本机都是这个差异）。
+  // 因此这里改成整列替换（column.setControlPoints，一次往返），而不是放宽断言。
+  const existing = data.columns[0]?.controlPoints ?? [];
+  const points = existing
+    .map((p) => ({ row: Math.round(Number(p.y ?? p.row)), x: col.startX, manual: true }))
+    .filter((p) => Number.isFinite(p.row));
+  if (!points.length) throw new Error('基线第 0 列没有控制点，无法构造零和现场');
+  await rpc(page, 'column.setControlPoints', { col_index: 0, points });
 
   // 前端镜像只有重载后才拿得到上面那批后端改动。
   await page.reload();
