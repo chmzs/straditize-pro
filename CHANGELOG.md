@@ -11,7 +11,8 @@
 - **引擎与降级**：优先 `riojaPlot`（Italicise / Break long / Exaggeration / Min-max / 旋转只有它有），缺包时回退 `rioja::strat.plot` 并在 `unsupported` + `warnings` 里逐条列出没生效的开关，不静默降级。
 - **契约**：`plot.render` 返回值新增 `data_url` / `mime` / `settings` / `warnings` / `unsupported`；`path` 默认 `None`（只有显式落盘才有值）；`format` 默认由 `pdf` 改为 `jpeg`。未知设置键 → `-32602`（不当没看见）。
 - **y 轴标题**：按帮助页用 `yvar.name`（`name of the variable to use for primary y-axis`）—— 它是 chron 数据框的**列名**，把该列命名成想要的标题即可（`names(y_df) <- ylabel`），不再用 `style$ylabel`（后者在 `y.rev` 下会被算到画布外，此前 `Depth` 一直不显示就是这个原因）。
-- **测试**：`tests/unit/test_plot_render.py` 重写为 11 条，新增「默认不落盘且返回 data URL」「显式 output_path 才写文件」「JPEG/PNG 魔术字节」「未知设置键报错」「默认开关逐个断言」。
+- **y 轴范围三格（可选）**：`settings.y_axis = {min, max, interval}`，默认 `None`（留空 = 自动范围）。规则：三项都填才写进 R 设置并传给 `riojaPlot` 的 `ymin/ymax/yinterval`；只填 1~2 项 → **整套忽略**并在 `warnings` 里说明「需要三项都填才生效」，不做半生效；三项齐全但 `min>=max` / `interval<=0` / `(max-min)/interval > 200` / 非数字 → 当场 `-32602` 拒绝。前端在同一位置给三格输入 + 当场提示。
+- **测试**：`tests/unit/test_plot_render.py` 共 22 条（含 y 轴三格的 ①合法写入 ②非法拒绝 ③留空自动，以及「旁路校验则非法用例必须变红」的反向验证），新增「默认不落盘且返回 data URL」「显式 output_path 才写文件」「JPEG/PNG 魔术字节」「未知设置键报错」「默认开关逐个断言」。
 
 ### 步骤 6 只做手动标定
 

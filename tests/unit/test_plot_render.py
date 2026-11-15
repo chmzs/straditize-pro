@@ -29,7 +29,12 @@ import pytest
 from straditize_core.plotting import candidate_rscripts, detect_rscript
 from straditize_core.protocol import JsonRpcError
 from straditize_core.session import StraditizeSession
-from straditize_core.strat_plot import DEFAULT_PLOT_SETTINGS, render_strat_diagram
+from straditize_core.strat_plot import (
+    DEFAULT_PLOT_SETTINGS,
+    _settings_tsv,
+    render_strat_diagram,
+    resolve_settings,
+)
 
 MISSING = "C:/definitely/not/a/real/Rscript.exe"
 
@@ -261,4 +266,70 @@ def test_default_settings_match_requested_switches() -> None:
     assert DEFAULT_PLOT_SETTINGS["break_long"] is True     # Break long
     assert DEFAULT_PLOT_SETTINGS["break_n"] == 20          # 20 chars
     assert DEFAULT_PLOT_SETTINGS["axis"] is True           # 底部刻度轴
+    assert DEFAULT_PLOT_SETTINGS["y_axis"] is None         # y 轴范围默认留空 = 自动
+
+# ---- y 轴范围三格（min / max / interval）----
+# 判据：①三项合法 → 写进 R 设置且与输入一致；②任一项非法 → 拒绝，且不产生这三项；
+#      ③三项留空 → 不写且自动范围仍出图。
+# 反向验证：删掉 validate_y_axis 里的三条校验 → ② 的那几个用例必须变红。
+
+
+def test_y_axis_all_three_values_are_written_to_settings() -> None:
+    merged, warnings = resolve_settings(
+        {"y_axis": {"min": 10, "max": 60, "interval": 10}}
+    )
+
+    tsv = _settings_tsv(merged)
+    assert "y_min\t10.0" in tsv
+    assert "y_max\t60.0" in tsv
+    assert "y_interval\t10.0" in tsv
+    assert warnings == [], "三项齐备时不该有任何「已忽略」的提示"
+
+
+def test_y_axis_partial_is_ignored_with_hint() -> None:
+    merged, warnings = resolve_settings({"y_axis": {"min": 10, "max": 60}})
+
+    assert merged["y_axis"] is None, "只给两项必须整套忽略，不能半生效"
+    assert "y_min" not in _settings_tsv(merged)
+    assert warnings and "三项都填" in warnings[0], warnings
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"min": 60, "max": 10, "interval": 10},   # min >= max
+        {"min": 10, "max": 10, "interval": 10},   # min == max
+        {"min": 10, "max": 60, "interval": 0},    # interval <= 0
+        {"min": 10, "max": 60, "interval": -5},   # interval < 0
+        {"min": 0, "max": 500, "interval": 1},    # 500 格 > MAX_Y_TICKS(200)
+        {"min": "abc", "max": 60, "interval": 10},  # 非数字
+    ],
+)
+def test_y_axis_illegal_is_rejected(bad: dict) -> None:
+    with pytest.raises(ValueError):
+        resolve_settings({"y_axis": bad})
+
+
+def test_y_axis_empty_keeps_auto_range() -> None:
+    merged, warnings = resolve_settings({"y_axis": None})
+
+    assert merged["y_axis"] is None
+    assert warnings == []
+    assert "y_min" not in _settings_tsv(merged), "留空时不得给 R 传任何 y 轴范围"
+
+
+def test_plot_render_rejects_illegal_y_axis() -> None:
+    # 走 RPC 层：非法值必须当场 -32602，而不是静默回落成自动范围。
+    with pytest.raises(JsonRpcError) as excinfo:
+        _session().plot_render(settings={"y_axis": {"min": 60, "max": 10, "interval": 10}})
+    assert "min" in str(excinfo.value)
+
+
+@pytest.mark.skipif(RSCRIPT is None or not _has_rioja(), reason="本机没有 R + rioja")
+def test_plot_render_with_explicit_y_axis() -> None:
+    result = _session().plot_render(settings={"y_axis": {"min": 0, "max": 100, "interval": 20}})
+
+    assert result["settings"]["y_axis"] == {"min": 0.0, "max": 100.0, "interval": 20.0}
+    assert result["warnings"] == []
+    assert str(result["data_url"]).startswith("data:image/jpeg;base64,")
 

@@ -249,6 +249,17 @@ export class ExportModal {
           <p id="wpd-plot-meta" style="font-size: 10px; color: var(--text-muted); margin: 6px 0 0;"></p>
         </div>
 
+        <!-- y 轴范围：三项都填才生效（后端 validate_y_axis 同一口径）。留空 = 自动。 -->
+        <div class="form-group" id="wpd-plot-options" style="margin: 0;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span style="font-size: 11px; color: var(--text-muted);">y 轴范围（留空=自动，三项都填才生效）：</span>
+            <input type="number" id="inp-wpd-y-min" placeholder="min" style="width: 72px; font-size: 11px;" />
+            <input type="number" id="inp-wpd-y-max" placeholder="max" style="width: 72px; font-size: 11px;" />
+            <input type="number" id="inp-wpd-y-interval" placeholder="间隔" style="width: 72px; font-size: 11px;" />
+            <span id="wpd-plot-y-hint" style="font-size: 10px; color: var(--status-warning);"></span>
+          </div>
+        </div>
+
         <div class="ui-modal__footer export-modal-footer">
           <button class="ui-btn ui-btn--quiet" id="btn-wpd-copy">复制当前数据</button>
           <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-wpd-refresh" title="重新从后端拉取当前行集（画布上改过控制点后点这里）">刷新数据</button>
@@ -672,10 +683,35 @@ export class ExportModal {
       const btn = ev.currentTarget as HTMLButtonElement;
       const label = btn.textContent || '本机出图';
       const fmt = plotFormat?.value || 'jpeg';
+      // y 轴范围三格：三项都填才发给后端（后端同一口径，只给一部分会被整套忽略并提示）。
+      const readNum = (selector: string): number | null => {
+        const el = modal.querySelector(selector) as HTMLInputElement | null;
+        const raw = (el?.value ?? '').trim();
+        if (!raw) return null;
+        const value = Number(raw);
+        return Number.isFinite(value) ? value : null;
+      };
+      const yMin = readNum('#inp-wpd-y-min');
+      const yMax = readNum('#inp-wpd-y-max');
+      const yStep = readNum('#inp-wpd-y-interval');
+      const yGiven = [yMin, yMax, yStep].filter((v) => v !== null).length;
+      const yHint = modal.querySelector('#wpd-plot-y-hint') as HTMLElement | null;
+      let yAxis: { min: number; max: number; interval: number } | null = null;
+      if (yGiven === 3) {
+        yAxis = { min: yMin as number, max: yMax as number, interval: yStep as number };
+        if (yHint) yHint.textContent = '';
+      } else if (yGiven > 0) {
+        if (yHint) yHint.textContent = '需要三项都填才生效（本次已忽略，按数据自动）';
+      } else if (yHint) {
+        yHint.textContent = '';
+      }
       btn.disabled = true;
       btn.textContent = '出图中…';
       try {
-        const res: any = await this.rpcClient.call<any, any>('plot.render', { format: fmt });
+        const res: any = await this.rpcClient.call<any, any>('plot.render', {
+          format: fmt,
+          ...(yAxis ? { settings: { y_axis: yAxis } } : {}),
+        });
         if (!res?.data_url) throw new Error('后端没有返回图片数据（data_url 为空）');
         lastPlot = { dataUrl: String(res.data_url), format: String(res.format || fmt) };
         if (plotImg) plotImg.src = lastPlot.dataUrl;

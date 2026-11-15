@@ -23,7 +23,7 @@ from ..protocol import EXPORT_ERROR, INVALID_PARAMS, STATE_ERROR, JsonRpcError
 from ..strat_plot import (
     PNG_TRANSCODE_FORMATS,
     SUPPORTED_PLOT_FORMATS,
-    normalize_settings,
+    resolve_settings,
     read_as_data_url,
     render_strat_diagram,
 )
@@ -84,7 +84,7 @@ class PlottingMixin:
             )
 
         try:
-            merged = normalize_settings(settings)
+            merged, setting_warnings = resolve_settings(settings)
         except ValueError as exc:
             raise JsonRpcError(INVALID_PARAMS, str(exc)) from exc
         if title is not None:
@@ -165,7 +165,7 @@ class PlottingMixin:
             "rows_count": int(len(frame)),
             "columns_count": int(len(frame.columns) - 1),
             "settings": info["settings"],
-            "warnings": info["warnings"],
+            "warnings": info["warnings"] + setting_warnings,
             "unsupported": info["unsupported"],
             "rscript": info["rscript"],
             "source": "data.csv（主 ROI 当前导出表）",

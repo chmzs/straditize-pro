@@ -45,6 +45,9 @@ DEFAULT_PLOT_SETTINGS: dict[str, Any] = {
     "width_px": 2200,
     "height_px": 1500,
     "dpi": 150,
+    # y 轴范围三格（min / max / interval）。None = 自动（数据范围 + pretty 刻度）。
+    # 三格必须同时给：只给一部分会「半生效」，所以整套忽略并如实提示。
+    "y_axis": None,
 }
 
 #: 只有 riojaPlot 才有的开关；回退到 rioja 时这些不生效，必须报告。
@@ -67,20 +70,95 @@ MIME_BY_FORMAT = {
 
 def normalize_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     """把用户给的设置并到默认值上，未知键直接拒绝（不做「当没看见」）。"""
-    merged = dict(DEFAULT_PLOT_SETTINGS)
-    if not settings:
-        return merged
-    unknown = sorted(set(settings) - set(DEFAULT_PLOT_SETTINGS))
+    return resolve_settings(settings)[0]
+
+
+#: y 轴范围最多允许的刻度格数（再密就没法读，R 里 seq() 也会糊成一片）。
+MAX_Y_TICKS = 200
+
+
+def validate_y_axis(value: Any) -> tuple[dict[str, float] | None, str | None]:
+    """把 y 轴三格归一成 `{min,max,interval}` 或 None，并给出「被忽略」的原因。
+
+    - 三格都没填（None / 空串 / 空 dict）→ `(None, None)`，走自动范围；
+    - 只填了 1~2 格 → `(None, 提示)`：整套忽略，不进入半生效状态；
+    - 三格都在但非法（min>=max / interval<=0 / 格数>MAX_Y_TICKS）→ 抛 ValueError；
+    - 三格合法 → `({min,max,interval}, None)`。
+    """
+    if value is None or value == {}:
+        return None, None
+    if not isinstance(value, dict):
+        raise ValueError("y 轴范围需要三项：{min, max, interval}")
+    unknown = sorted(set(value) - {"min", "max", "interval"})
     if unknown:
-        raise ValueError("未知的出图设置：" + ", ".join(unknown))
-    merged.update(settings)
-    return merged
+        raise ValueError("y 轴范围只接受 min / max / interval，未知项：" + ", ".join(unknown))
+
+    def _one(key: str) -> float | None:
+        raw = value.get(key)
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            return None
+        try:
+            num = float(raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"y 轴 {key} 不是数字：{raw!r}") from exc
+        if num != num or num in (float("inf"), float("-inf")):
+            raise ValueError(f"y 轴 {key} 不是有限数字：{raw!r}")
+        return num
+
+    ymin, ymax, interval = _one("min"), _one("max"), _one("interval")
+    filled = [v for v in (ymin, ymax, interval) if v is not None]
+    if not filled:
+        return None, None
+    if len(filled) != 3:
+        hint = (
+            "y 轴范围需要 min / max / interval 三项都填才生效："
+            f"只填了 {len(filled)} 项，本次已忽略，刻度按数据自动。"
+        )
+        return None, hint
+    assert ymin is not None and ymax is not None and interval is not None
+    if ymin >= ymax:
+        raise ValueError(f"y 轴范围非法：min({ymin:g}) 必须小于 max({ymax:g})")
+    if interval <= 0:
+        raise ValueError(f"y 轴刻度间隔必须大于 0，收到 {interval:g}")
+    ticks = (ymax - ymin) / interval
+    if ticks > MAX_Y_TICKS:
+        raise ValueError(
+            f"y 轴范围过密：({ymax:g} - {ymin:g}) / {interval:g} = {ticks:.0f} 格，上限 {MAX_Y_TICKS} 格"
+        )
+    return {"min": ymin, "max": ymax, "interval": interval}, None
+
+
+def resolve_settings(settings: dict[str, Any] | None) -> tuple[dict[str, Any], list[str]]:
+    """归一化设置，并返回「已经如实告知、但没生效」的提示列表。
+
+    y 轴三格只填了一部分时，这里把它归成 None（整套忽略）并把原因放进 warnings，
+    而不是让三个参数里只生效两个。
+    """
+    merged = dict(DEFAULT_PLOT_SETTINGS)
+    warnings: list[str] = []
+    if settings:
+        unknown = sorted(set(settings) - set(DEFAULT_PLOT_SETTINGS))
+        if unknown:
+            raise ValueError("未知的出图设置：" + ", ".join(unknown))
+        merged.update(settings)
+    y_axis, hint = validate_y_axis(merged.get("y_axis"))
+    merged["y_axis"] = y_axis
+    if hint:
+        warnings.append(hint)
+    return merged, warnings
 
 
 def _settings_tsv(settings: dict[str, Any]) -> str:
     """把设置写成 key<TAB>value 行；不用 JSON，省掉 R 侧对 jsonlite 的依赖。"""
     lines: list[str] = []
     for key, value in settings.items():
+        if key == "y_axis":
+            # 三格齐备才写成 R 认识的三行；None 时一行都不写（R 得到 NA = 自动）。
+            if isinstance(value, dict):
+                lines.append("y_min\t" + repr(float(value["min"])))
+                lines.append("y_max\t" + repr(float(value["max"])))
+                lines.append("y_interval\t" + repr(float(value["interval"])))
+            continue
         if isinstance(value, bool):
             text = "true" if value else "false"
         elif isinstance(value, (int, float)):
@@ -169,6 +247,10 @@ collect_warnings <- function(expr) {
 }
 
 fs <- num("font_scale", 2)
+# y 轴范围三格：Python 侧只有三项齐备才写这三行；缺行 → NA → riojaPlot 用自动范围。
+ymin_v <- num("y_min", NA_real_)
+ymax_v <- num("y_max", NA_real_)
+yint_v <- num("y_interval", NA_real_)
 use_riojaplot <- requireNamespace("riojaPlot", quietly = TRUE)
 engine <- if (use_riojaplot) "riojaPlot" else "rioja"
 
@@ -185,6 +267,9 @@ warns <- tryCatch(
         plot.bar = flag("bar", TRUE),
         plot.line = flag("line", TRUE),
         y.rev = flag("rev_y", TRUE),
+        ymin = ymin_v,
+        ymax = ymax_v,
+        yinterval = yint_v,
         plot.exag = flag("exaggeration", TRUE),
         exag.mult = num("exag_mult", 5),
         exag.alpha = num("exag_alpha", 0.2),
