@@ -1,24 +1,17 @@
 import { DiagramData, ColumnGroup } from '../../types/pollen';
 import { countCalibratedColumns } from '../../core/calibProgress';
-import type { RulerGeometry } from '../../types/ruler';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
-import { notify, notifyError, describeError } from '../../ui/feedback';
+import { notify, notifyError } from '../../ui/feedback';
 import { columnPick, beginColumnPick, resetColumnPick } from './columnPick';
-import {
-  describeAxisCoverageGap,
-  describeRulerDetection,
-  detectedSpans,
-  maxDetectedSpan,
-} from './rulerSpan';
 import {
   renderActiveColumnLostNotice,
   renderOtherLostColumnsSummary,
 } from './XTicksDroppedNotice';
 import { renderOtherSuspectColumnsSummary } from './SuspectBlockNotice';
 import { resolveAxisStroke } from '../../core/axisStroke';
-import { resolveColumnAtX, zeroXOfColumn } from '../../core/tickRouting';
-import { setMeasuredTickSpacing } from '../canvas/tickGeometry';
+import { resolveColumnAtX } from '../../core/tickRouting';
+import { setGroupCalibMark } from '../canvas/groupCalibMarks';
 
 /** 步骤 6 面板的全部可变状态。 */
 interface XTicksPanelState {
@@ -29,10 +22,7 @@ interface XTicksPanelState {
   isBatchAssignOpen: boolean;
   /** 「列组」折叠区是否展开。必须存进 state：面板每次重渲染都会重建 DOM。 */
   groupsFoldOpen: boolean;
-  rulerGeo: RulerGeometry | null;
-  rulerGeoError: string | null;
-  rulerGeoKey: string | null;
-  rulerGeoPending: boolean;
+
   axisStrokeOverride: number | null;
 }
 
@@ -43,10 +33,7 @@ const INITIAL_XTICKS_STATE: XTicksPanelState = {
   onTickPickedExternal: null,
   isBatchAssignOpen: false,
   groupsFoldOpen: false,
-  rulerGeo: null,
-  rulerGeoError: null,
-  rulerGeoKey: null,
-  rulerGeoPending: false,
+
   axisStrokeOverride: null,
 };
 
@@ -105,123 +92,6 @@ const manualTickDrafts = new Map<string, { v1: string; v2: string }>();
  */
 
 
-/**
- * 几何检测的缓存键：ROI + 图片 + 本 ROI 内每列的像素范围。
- *
- * 任何一项变了都必须重测。列几何用整数像素，避免浮点抖动造成假失效。
- */
-function rulerGeoKeyFor(data: DiagramData, roiId: string | null): string {
-  const cols = (data.columns || []).filter((c) => !roiId || !c.roi_id || c.roi_id === roiId);
-  const geom = cols
-    .map((c) => `${c.col_index ?? '?'}:${Math.round(c.startX)}:${Math.round(c.endX)}`)
-    .join('|');
-  return `${roiId ?? ''}#${data.imageWidth}x${data.imageHeight}#${(data.imageSrc || '').length}#${geom}#stroke${state.axisStrokeOverride ?? ''}`;
-}
-
-/**
- * 拉取本 ROI 的刻线几何（`algorithm.measureRuler`，只读）。
- *
- * 三条纪律：
- * 1. **失败必须冒泡**：`notifyError` + 面板显示错误原文，绝不把"检测失败"演成
- *    "检测到 0 条刻线"；ΔX 退回占位值时文案也明说"必须手工校准"。
- * 2. **结果按数据签名缓存**：同一张图重复渲染不重复打后端；换图/重分列/换 ROI
- *    即失效重测（否则会拿着上一张图的刻距当默认值）。
- * 3. **失败也缓存**，避免"错误 → onDataChange → 再请求 → 再错误"的死循环；
- *    用户在错误框里点【重新检测】才清缓存重试。
- */
-/**
- * 把检测结果**就地**写进已渲染的两行，而不是整块重渲染。
- *
- * 为什么：`ensureRulerGeometry` 是异步的，用户在它返回前可能已经开始填写
- * 「每根齿单位数」或单列刻度；整块重渲染会把 `innerHTML` 换掉，未提交的输入当场消失
- * （step3 的同类问题已记录在 `docs/testing-strategy.md` §9）。实测后果：
- * `step6-xticks T7` 偶发红——填完值、检测返回、输入被冲掉，保存写的是旧值。
- */
-function patchRulerDom(root: HTMLElement): void {
-  const geo = state.rulerGeo;
-  const line = root.querySelector('[data-role="ruler-detect"]') as HTMLElement | null;
-  const spanEl = root.querySelector('[data-role="ruler-span"]') as HTMLElement | null;
-
-  const spans = detectedSpans(state.cachedData?.columns ?? [], geo, (c) => zeroXOfColumn(c, state.cachedData));
-  const rigidSpan = maxDetectedSpan(spans);
-
-  if (line) {
-    line.textContent = describeRulerDetection(geo, state.rulerGeoError, state.rulerGeoPending);
-    line.setAttribute('data-detected-columns', String((geo?.per_column ?? []).length));
-    line.setAttribute(
-      'data-spacing',
-      geo?.median_spacing_px != null ? String(geo.median_spacing_px) : ''
-    );
-    line.setAttribute(
-      'data-regular',
-      geo?.all_regular === null || geo?.all_regular === undefined
-        ? ''
-        : String(geo.all_regular)
-    );
-    line.setAttribute('data-span', rigidSpan == null ? '' : String(rigidSpan));
-    line.style.color = state.rulerGeoError ? 'var(--accent-red)' : 'var(--text-secondary)';
-  }
-  const gapEl = root.querySelector('[data-role="axis-coverage-hint"]') as HTMLElement | null;
-  if (gapEl) {
-    const gap = describeAxisCoverageGap(geo, state.cachedData?.rois?.find((r) => r.id === state.cachedData?.active_roi_id)?.ylim);
-    gapEl.textContent = gap ?? '';
-    gapEl.setAttribute('data-gap', gap ? '1' : '0');
-    gapEl.style.display = gap ? 'block' : 'none';
-  }
-  if (spanEl) {
-    spanEl.textContent =
-      rigidSpan == null
-        ? '刻距 —（需先检测到刻度尺）'
-        : `刻距 ${geo?.median_spacing_px ?? '—'}px（自动检测）`;
-    spanEl.setAttribute('data-span', rigidSpan == null ? '' : String(rigidSpan));
-  }
-}
-
-async function ensureRulerGeometry(ctx: StepContext, root: HTMLElement): Promise<void> {
-  const data = state.cachedData;
-  if (!data) return;
-  const roiId = data.active_roi_id || data.rois?.[0]?.id || null;
-  const key = rulerGeoKeyFor(data, roiId);
-  if (state.rulerGeoPending) return;
-  if (state.rulerGeoKey === key && (state.rulerGeo != null || state.rulerGeoError != null)) return;
-
-  const client = ctx.rpcClient as
-    | {
-        measureRuler?: (
-          roiId?: string,
-          axisStroke?: number | null
-        ) => Promise<RulerGeometry>;
-      }
-    | undefined;
-  if (!client?.measureRuler) {
-    state.rulerGeo = null;
-    state.rulerGeoError = '前端 RpcClient 缺少 measureRuler：前后端契约不一致';
-    state.rulerGeoKey = key;
-    notifyError(`刻度几何检测失败：${state.rulerGeoError}`);
-    patchRulerDom(root);
-    return;
-  }
-
-  state.rulerGeoPending = true;
-  try {
-    state.rulerGeo = await client.measureRuler(roiId ?? undefined, state.axisStrokeOverride);
-    state.rulerGeoError = null;
-    // 把**实测刻距**递给画布（`canvas/tickGeometry.ts`）：用户在点齿标定之前
-    // 组级 `ref_span_px` 还是 null，画布原来因此一条齿都不画——面板写着「刻距 124.5px」，
-    // 图上却没有齿，"点一个刻度齿"无从点起。齿的**位置**用实测值画，读数含义仍只在
-    // 用户确认后才存在。
-    setMeasuredTickSpacing(state.rulerGeo?.median_spacing_px ?? null);
-  } catch (err) {
-    state.rulerGeo = null;
-    state.rulerGeoError = describeError(err);
-    setMeasuredTickSpacing(null);
-    notifyError(`刻度几何检测失败：${state.rulerGeoError}`);
-  } finally {
-    state.rulerGeoPending = false;
-    state.rulerGeoKey = key;
-  }
-  patchRulerDom(root);
-}
 
 export function render(data: DiagramData): string {
   state.cachedData = data;
@@ -296,20 +166,7 @@ export function render(data: DiagramData): string {
   const axisStrokeMeasured =
     Number(currentGroup?.axis_stroke_px) > 0 || axisStrokeColOverride != null;
 
-  // 刻线几何：只对**本 ROI** 的列测（后端按 roi_id 过滤，这里必须同口径，否则错位）。
-  const roiCols = cols.filter((c) => !activeRoi?.id || !c.roi_id || c.roi_id === activeRoi.id);
-  const geoKey = rulerGeoKeyFor(data, activeRoi?.id ?? null);
-  const geo = state.rulerGeoKey === geoKey ? state.rulerGeo : null;
-  const geoError = state.rulerGeoKey === geoKey ? state.rulerGeoError : null;
-  const geoPending = state.rulerGeoPending || (!geo && !geoError);
-  const spans = detectedSpans(roiCols, geo, (c) => zeroXOfColumn(c, data));
-  const rigidSpan = maxDetectedSpan(spans);
   const groupUnit = currentGroup?.unit || '%';
-  const rulerLine = describeRulerDetection(geo, geoError, geoPending);
-  // 「框没盖住印刷轴行」的诊断：齿的搜索带来自 roi.ylim（后端 `find_axis_row` 只在
-  // `[…, min(h, y1))` 里找下轴线），下边界偏高时整段搜索带落在轴行之上，29 列只有
-  // 3 列各检出 1 条孤齿。这条提示把病因与可执行动作写出来，数字取自实测 payload。
-  const axisCoverageGap = describeAxisCoverageGap(geo, activeRoi?.ylim);
   // 0 点是**实测轴线右缘**，不是列切分给的 startX：后者实测可偏离轴线 6–20px。
   // 面板显示的像素必须与实际标定用的是同一个数，否则用户照着它校正会自造偏差。
 
@@ -470,19 +327,7 @@ export function render(data: DiagramData): string {
 
       <!-- 标定：检测结果 + 轴线粗 + 点齿（首屏主体） -->
       <div class="inspector-section" style="padding: 10px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 12px; border: 1px solid var(--border-color);">
-        <div style="background: var(--bg-card); padding: 8px 10px; border-radius: 6px; border: 1px solid var(--accent-blue); margin-bottom: 6px;">
-          <div data-role="ruler-detect" data-detected-columns="${(geo?.per_column ?? []).length}"
-               data-spacing="${geo?.median_spacing_px ?? ''}"
-               data-regular="${geo?.all_regular === null || geo?.all_regular === undefined ? '' : String(geo?.all_regular)}"
-               data-span="${rigidSpan ?? ''}"
-               style="font-size: 10.5px; line-height: 1.5; margin-bottom: 6px; color: ${geoError ? 'var(--accent-red)' : 'var(--text-secondary)'};">
-            ${rulerLine}
-          </div>
 
-          <!-- 诊断行常驻：检测是异步回来的，patchRulerDom 就地填它，
-               不重建 DOM（重建会冲掉用户正在填的输入框）。无诊断时 display:none。 -->
-          <div data-role="axis-coverage-hint" data-gap="${axisCoverageGap ? '1' : '0'}"
-               style="font-size: 10px; line-height: 1.55; margin-bottom: 6px; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--status-warning); background: var(--bg-tertiary); color: var(--status-warning); display: ${axisCoverageGap ? 'block' : 'none'};">${axisCoverageGap ?? ''}</div>
 
           <div data-role="units-per-cell-hint" style="font-size: 9.5px; line-height: 1.4; color: var(--text-muted); margin-bottom: 4px;">
             <strong>相邻两个数字标签之差</strong>（标签 10 / 30 → 填 20）。
@@ -677,24 +522,14 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     );
     const zero = start + stroke;
 
-    // **必须吸附到检测到的刻度齿**：否则用户可以点任意位置，等于绕过了
-    // "图上没有刻度尺就不许标定"这条约束（旧「对齐本组」靠"取不到跨度就拒绝"
-    // 守的就是它）。吸附容差 6px —— 齿宽 1–2px，6px 足够容人手抖而不误吸邻齿。
-    const idx = col.col_index ?? state.cachedData?.columns.indexOf(col) ?? 0;
-    const colGeo = state.rulerGeo?.per_column?.find((c) => c.col_index === idx);
-    const ticks = (colGeo?.ticks ?? []) as number[];
-    const SNAP_TOL = 6;
-    let nearest: number | null = null;
-    for (const t of ticks) {
-      if (nearest === null || Math.abs(t - pt.x) < Math.abs(nearest - pt.x)) nearest = t;
-    }
-    if (nearest === null || Math.abs(nearest - pt.x) > SNAP_TOL) {
-      notifyError(
-        '此处没有检测到刻度齿。请点在齿上（放大后更准）；若整张图都没有刻度尺，说明该图无法用刻度标定。'
-      );
+    // 位置完全由用户决定：不吸附任何检测结果。点错了照样记下来，再点一次即覆盖
+    // （用户制度：手动标定；ARCHITECTURE §6.4:254 明确不拿检测齿当锚点）。
+    // 唯一拒绝的情况是落在 0 点或左侧 —— 对斜率没有意义（v(x) = (x − 0 点) × 斜率）。
+    if (pt.x <= zero) {
+      notifyError('请点在绿线（0 点）右侧的刻度上；0 点及其左侧无法确定斜率。');
       return;
     }
-    state.pendingTick = { px: Math.round(nearest), dist: nearest - zero };
+    state.pendingTick = { px: Math.round(pt.x), dist: pt.x - zero };
     // 只在**吸附成功**后切换选中列：点在空处不该改选中，否则用户以为点中了。
     if (col.id !== data?.activeTaxaId) ctx.onSelectTaxa?.(col.id);
     ctx.onDataChange?.();
@@ -718,15 +553,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
           : null;
       // 同时落库：绿线「0 点 = 左缘 + 轴线粗」靠它，而 `state.axisStrokeOverride` 只是前端内存。
       patchGroup({ axis_stroke_px: state.axisStrokeOverride });
-      // 缓存键里含粗细；清空这三项才会真的重测。
-      state.rulerGeo = null;
-      state.rulerGeoError = null;
-      state.rulerGeoKey = null;
-      // 重测完成后必须整块重渲染：0 点像素是**渲染时**写进模板的（`px1`），
-      // `patchRulerDom` 只就地更新检测那两行，不会更新「像素位置」。
-      void ensureRulerGeometry(ctx, root).then(() => {
-        ctx.onDataChange?.();
-      });
+      ctx.onDataChange?.();
     });
 
     // 单列覆盖：只改当前列的 0 点位置（组值仍是初值）。留空 = 清掉覆盖、回到组值。
@@ -778,9 +605,10 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       // 斜率 = 值 / 距 0 点像素。0 点 = 左缘 + 轴线粗（见 ARCHITECTURE §6.4）。
       const pickedDist = state.pendingTick.dist;
       const slope = value / pickedDist;
+      setGroupCalibMark(state.selectedGroupId, { px: state.pendingTick.px, reading: value });
       patchGroup({ value_per_px: slope });
       state.pendingTick = null;
-      notify(`已按「${value} 对应 ${pickedDist.toFixed(0)}px」标定本组：斜率 ${slope.toFixed(4)}`, 'info');
+      notify(`已按「${value} 对应 ${pickedDist.toFixed(0)}px」标定本组：斜率 ${slope.toFixed(3)}`, 'info');
     });
   };
   wireTickCalibration();
@@ -804,8 +632,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   wireGroupAttributes();
 
 
-  // 0. 刻线几何检测：进入本步（以及数据变化后）自动拉一次，只读、不写任何标定。
-  void ensureRulerGeometry(ctx, root);
+
 
 
 

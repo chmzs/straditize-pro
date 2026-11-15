@@ -1,5 +1,14 @@
 # 变更记录（CHANGELOG）
 
+## [Unreleased]
+
+### 步骤 6 只做手动标定
+
+- **点齿不再吸附自动检测的齿**：`XTicksPanel` 删掉 ±6px 吸附与「此处没有检测到刻度齿」拒绝，落点即标定位置，再点覆盖；仅 0 点及左侧拒绝（ARCHITECTURE §6.4:254 早就写着不拿检测齿当锚点）。
+- **未标定列不画刻度齿**：画布刻度间距改由组级 `value_per_px` 派生（`1/|斜率|`），删掉「用户确认值 > 实测刻距 > 不画」回退链 —— 那条链让算法测出的刻距在你没标定时就以蓝线呈现。
+- **下架自动刻度检测**：`algorithm.detectXTicks` / `algorithm.measureRuler` 从 RPC 注册表、`protocol.py`、前端 `RpcMethod`、MCP 工具表移除；`ruler.py`、`detect_xticks`、`_locate_tick_band`、`measure_ruler_geometry` 实现体删除；`calibrate_column_xticks` 不再用检测兜底端点（缺 px 直接 `-32602`）。
+- **测试**：删 6 个只测检测实现的单元测试与 4 个只断言吸附的 e2e spec；新增 `step6-manual-calib.spec.ts` 钉「落点即标定位置 / 0 点左侧拒绝 / 斜率 = 读数 ÷ (落点 − 0 点)」。
+- **文档**：ARCHITECTURE §6.4 组参数改为组级 `value_per_px`，蓝线依据改为斜率派生，并写明检测下架的理由。
 ## [2.0.6] - 2026-11-15
 
 基线 `v2.0.5..HEAD`。三条是「同一事实有多个来源」，一条是界面文案的第二批，另含演示片配音。

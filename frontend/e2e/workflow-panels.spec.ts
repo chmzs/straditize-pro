@@ -231,7 +231,7 @@ test.describe('步骤面板与阶段工具门禁', () => {
     await rpc(page, 'algorithm.applyLineRemoval', { roi_id: roiId, strokes: [] });
   });
 
-  test('步骤 6 刻度：检测接口可用，且对本样本不假报刻度', async ({ page }) => {
+  test('步骤 6 刻度：手动点齿入口可用，且不自动写入任何读数', async ({ page }) => {
     await gotoStage(page, 6);
     await expect(page.locator('.step-panel[data-step="6"]')).toBeVisible();
     // 「自动提取」随模块 2（单列两点标定）一起删除；步骤 6 的标定入口现在是
@@ -242,24 +242,10 @@ test.describe('步骤面板与阶段工具门禁', () => {
     const data = await rpc<{ rois: { id: string }[] }>(page, 'straditize.getDiagramData');
     expect(data.rois.length, '基线应有 ROI').toBeGreaterThan(0);
 
-    // 注意传的是 **ROI id**（不是 column id）。
-    const res = await rpc<{ band: unknown; per_column: unknown[] }>(page, 'algorithm.detectXTicks', {
-      roi_id: data.rois[0].id,
-    });
-    expect(Array.isArray(res.per_column), 'per_column 应是数组').toBe(true);
-
-    // hoya 样本**没有刻度尺**（`tests/data/truth/index.json` 的
-    // images.hoya.has_tick_ruler=false、ticks=0），所以正确的期望是"不假报刻度"，
-    // 而不是"检出刻度"——断言 >0 会是错的期望。这条同时是**无假阳性**回归钉子：
-    // 检测器一旦开始对着没有标尺的图谱乱吐齿位，这里立刻失败。
-    expect(
-      res.per_column.length,
-      'hoya 无刻度尺，不应检出任何齿位（真值 has_tick_ruler=false）'
-    ).toBe(0);
-
-    // 「自动提取」按钮已随模块 2 删除：刻度检测现在由 `ensureRulerGeometry`
-    // **进入步骤 6 时自动触发**（只读，不写任何标定），所以这里不再有点击动作。
-    // 下面那条「检测不得替用户编造读数」的钉子反而更硬了 —— 检测完全不碰 x_ticks。
+    // `algorithm.detectXTicks` 已随 step6 手动标定下架：后端 95 个注册 RPC 里与刻度
+    // 有关的只剩 `core.calibrateAxes` / `column.calibrateXTicks` / `column.clearXTicks`。
+    // 原先那条「hoya 无刻度尺不得假报齿位」的钉子因此失去被测对象，一并下架；
+    // 替代它的钉子见本用例末尾（读数只能由人给、没有任何自动路径会写 x_ticks）。
 
     // ===== 回归钉子：检测**不得**替用户编造读数 (bug-report B-01) =====
     //
@@ -279,7 +265,7 @@ test.describe('步骤面板与阶段工具门禁', () => {
     );
     expect(
       fabricated.length,
-      '点「自动提取刻度」后**不得**有任何列被自动写入 x_ticks（读数只能由人给；' +
+      '进入步骤 6 且尚未手动点齿标定前，**不得**有任何列被自动写入 x_ticks（读数只能由人给；' +
         '旧实现会拿硬编码 0/20 冒充用户读数，见 docs/findings/bug-report.md B-01）'
     ).toBe(0);
   });

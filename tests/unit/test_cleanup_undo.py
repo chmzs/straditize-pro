@@ -226,7 +226,7 @@ def test_clear_cleanup_edits_is_undoable() -> None:
 
 
 def test_read_only_calls_push_no_history() -> None:
-    """`straditize.getDiagramData` 与 `algorithm.measureRuler` 只读，必不记历史。"""
+    """`straditize.getDiagramData` 只读，必不记历史（`algorithm.measureRuler` 已随自动刻度检测下架）。"""
     session, roi_id = _session()
     session.detect_line_candidates(roi_id)
     dispatcher = create_rpc_dispatcher(session)
@@ -234,7 +234,6 @@ def test_read_only_calls_push_no_history() -> None:
     redo_depth = len(session.redo_stack)
 
     dispatcher._methods["straditize.getDiagramData"]()
-    dispatcher._methods["algorithm.measureRuler"](roi_id=roi_id)
 
     assert len(session.undo_stack) == depth, (
         f"只读接口写了撤销栈：{depth} → {len(session.undo_stack)}"

@@ -5,7 +5,7 @@ Directly adopts the proven implementation and conclusions from support/probe_x_t
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any
 import numpy as np
 
 TICK_MAX_RUN = 12
@@ -39,39 +39,6 @@ def _stroke_columns(
         else:
             merged.append(int(x))
     return merged, [int(c) for c in cols]
-
-
-def _find_tick_band(
-    gray: np.ndarray,
-    *,
-    band_height: int,
-    dark_threshold: int,
-) -> tuple[int, int] | None:
-    """Locate a band of short isolated vertical strokes (an x-axis tick ruler)."""
-    h, w = gray.shape
-    dark = gray < dark_threshold
-    best: tuple[float, int, int] | None = None
-
-    for top in range(int(h * 0.70), h - band_height):
-        band = dark[top : top + band_height, :]
-        col_fill = band.mean(axis=0)
-        stroke_cols = col_fill > 0.95
-        n_strokes = int(stroke_cols.sum())
-        if n_strokes < 3 or n_strokes > int(w * 0.5):
-            continue
-        bimodal = float(((col_fill > 0.95) | (col_fill < 0.05)).mean())
-        if bimodal < 0.97:
-            continue
-
-        y_ref = top + band_height // 2
-        if any(_col_run_through(dark, x, y_ref) > TICK_MAX_RUN for x in np.where(stroke_cols)[0]):
-            continue
-
-        score = (bimodal, n_strokes, top)
-        if best is None or score > best:
-            best = score
-
-    return None if best is None else (best[2], best[2] + band_height)
 
 
 def _strokes_in_band(
@@ -110,60 +77,3 @@ def _spacing_uniformity(ticks: list[int]) -> dict[str, Any]:
         "frac_within_15pct": round(float((np.abs(gaps - med) <= 0.15 * med).mean()), 4),
     }
 
-
-def detect_xticks(
-    gray: np.ndarray,
-    band: tuple[int, int] | Sequence[int] | None = None,
-    *,
-    tick_band_height: int = 9,
-    dark_threshold: int = 160,
-    columns: list[tuple[float, float]] | list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    """Detect x-axis tick marks via 1-D geometric run pass."""
-    gray = np.asarray(gray)
-    if gray.ndim != 2:
-        raise ValueError("detect_xticks expects a 2-D greyscale array")
-
-    auto_band = band is None
-    resolved = tuple(band) if band is not None else _find_tick_band(
-        gray, band_height=tick_band_height, dark_threshold=dark_threshold
-    )
-    if resolved is None:
-        return {
-            "band": None,
-            "ticks": [],
-            "per_column": [],
-            "auto_band": auto_band,
-            "spacing": _spacing_uniformity([]),
-        }
-
-    ticks, _ = _strokes_in_band(gray, resolved, dark_threshold=dark_threshold)
-
-    per_column: list[dict[str, Any]] = []
-    if columns:
-        for idx, col_item in enumerate(columns):
-            if isinstance(col_item, dict):
-                x0 = col_item.get("startX", col_item.get("start", 0))
-                x1 = col_item.get("endX", col_item.get("end", 0))
-            else:
-                x0, x1 = col_item
-            lo, hi = (x0, x1) if x0 <= x1 else (x1, x0)
-            inside = [x for x in ticks if lo <= x < hi]
-            n = len(inside)
-            per_column.append(
-                {
-                    "column_index": idx,
-                    "ticks": inside,
-                    "n": n,
-                    "usable": n >= 2,
-                    "reason": None if n >= 2 else f"only {n} tick(s) detected",
-                }
-            )
-
-    return {
-        "band": [int(resolved[0]), int(resolved[1])],
-        "ticks": ticks,
-        "per_column": per_column,
-        "auto_band": auto_band,
-        "spacing": _spacing_uniformity(ticks),
-    }

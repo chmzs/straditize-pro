@@ -216,7 +216,6 @@ class TestPayloadStateSurvivesImageReplacement:
         assert session.image_array is None, "旧 image_array 会被当成新图的像素源"
         assert session.shadow_mask is None
         assert session.solid_layers is None
-        assert session.tick_band is None
 
 
 class TestBothLoadPathsAgree:

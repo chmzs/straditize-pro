@@ -16,7 +16,7 @@
  */
 
 import { expect, test } from './fixtures';
-import { diagramData, resetBaseline } from './helpers';
+import { diagramData, gotoStage, resetBaseline } from './helpers';
 
 interface ColumnPayload {
   id: string;
@@ -34,6 +34,9 @@ test.describe('列属性面板：自动提取峰谷', () => {
 
   test('点按钮 → 发 algorithm.extractTurningPoints → 已有控制点不丢', async ({ page }) => {
     await resetBaseline(page);
+    // 列属性面板只在步骤 5 与 7 出现（`Inspector.ts:210`）：【自动提取峰谷】的
+    // 入口就在这个面板里，先把工作流推进到步骤 7，否则按钮无法渲染。
+    await gotoStage(page, 7);
 
     const methods: string[] = [];
     page.on('request', (req) => {

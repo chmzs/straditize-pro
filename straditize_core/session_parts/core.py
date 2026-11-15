@@ -476,7 +476,6 @@ class CoreMixin:
         self.foreground_column_edges = None
         self.shadow_mask = None
         self.solid_layers = None
-        self.tick_band = None
         # 撤销栈存的是**上一张图**的 columns/control_points/data_ylim 快照。
         # 换图后 columns 已清空，若栈还在，`history.undo()` 就能把旧图的列与取数区
         # 复活到新图上（跨图伪造几何）。前端在载图时本就 `history.reset(...)`，
