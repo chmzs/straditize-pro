@@ -22,6 +22,11 @@ import {
   resetBaseline,
   rpc,
 } from './helpers';
+// `qa.summarize` 的返回形状只有一份来源（`types/pollen.ts::QaSummary`），e2e 也用它。
+// 本地再声明一份同名接口（本文件曾如此）会与真实契约各自演化，而 tsc 两边都能过
+// ——那正是 issue #16/#17 修掉的那类分叉。`check-e2e-skips.mjs` 现在机械禁止
+// e2e 目录下再出现 `interface QaSummary`。
+import type { QaSummary } from '../src/types/pollen';
 
 const ROI_X0 = 100;
 const ROI_X1 = 200;
@@ -41,17 +46,6 @@ const ROW_STEP = 5;
  * 该列的像素→百分比映射为 value = raw_x - 100，所以钉 x = 100 + 目标和值即可。
  */
 const TARGET_SUMS: number[] = [...new Array<number>(72).fill(96), 92, 103.2, 0, 0];
-
-interface QaSummary {
-  n_horizons: number;
-  n_horizons_with_data: number;
-  n_horizons_empty: number;
-  sum: { min: number; p50: number; max: number; mean: number };
-  shortfall: { min: number; max: number; mean: number };
-  tolerance: number;
-  violations_over: { depth: number | null; sum: number }[];
-  per_column_max: { name: string; peak: number; declared_max: number; over: boolean }[];
-}
 
 test.describe('Step 8 QA 诊断门禁', () => {
   test.beforeEach(async ({ page }) => {

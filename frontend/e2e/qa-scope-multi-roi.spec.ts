@@ -27,18 +27,14 @@
  */
 import { expect, test, type Page } from './fixtures';
 import { gotoStage, openApp, resetBaseline, rpc } from './helpers';
+// 与 `qa.spec.ts` 同一口径：`QaSummary` 只在 `types/pollen.ts` 声明一份，
+// e2e 里不得再写本地同名接口（`check-e2e-skips.mjs` 机械拦）。
+import type { QaSummary } from '../src/types/pollen';
 
 const ROI_Y0 = 100;
 const ROI_Y1 = 475;
 const HORIZON_ROWS = [100, 105, 110, 115, 120, 125];
 const TOLERANCE = 2.0; // 与 QA_DEFAULT_TOLERANCE 一致
-
-interface QaSummary {
-  n_horizons: number;
-  n_horizons_with_data: number;
-  violations_over: unknown[];
-  n_uncalibrated?: number;
-}
 
 /** 清掉基线里所有 ROI（`roi.remove` 会级联删列；有列时必须显式确认）。 */
 async function clearAllRois(page: Page): Promise<void> {
