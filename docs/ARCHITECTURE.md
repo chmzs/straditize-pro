@@ -521,6 +521,12 @@ digitize 用 ink & ~grid_line_mask & roi_mask
 20. **0 点口径只有一处**：`start + 轴粗`。画布绿线、`rulerSpan` 的跨度、点齿标定的
     「距 0 点」、导出/QA 的零丰度基线全部走它；`axis_x_right`（实测轴右缘）只是测量
     近似，可差 1px，不得在产品路径里另立一套当 0 点。
+21. **画布上的锚点编辑必须立刻回写后端**：拖动结束 / 删除锚点 / 微调去抖（500ms）后调
+    `column.setControlPoints`（整列一次往返，内部与 `core.updateControlPoint` 共用同一套
+    插值）。只改前端模型 = 导出面板与 `data.csv` 读到的是上一次 `core.digitize` 的旧点，
+    用户看到的是「改了不生效」（实测缺陷：编辑锚点后导出表完全不变）。
+    配套两处：导出面板 `btn-wpd-refresh` 手动刷新 + 打开期间由 `onDataChange` 触发
+    `refreshOpenExportModal()`，否则面板开着看不到新数。
 
 
 ---

@@ -1018,6 +1018,23 @@ export class RpcClient {
     return !!res;
   }
 
+  /**
+   * 整列同步锚点（画布上一次编辑结束）。
+   *
+   * 画布上的拖动/删除/微调只改前端模型，必须经这里落到后端 `control_points`；
+   * 否则导出面板与 data.csv 读到的还是上一次数字化时的点。
+   */
+  public async setControlPoints(
+    colIndex: number,
+    points: Array<{ row: number; x: number; manual?: boolean }>
+  ): Promise<boolean> {
+    const res = await this.call<{ col_index: number; points: unknown[] }>(
+      'column.setControlPoints',
+      { col_index: colIndex, points }
+    );
+    return !!res;
+  }
+
   public async digitizeColumn(taxaId: string): Promise<ControlPoint[]> {
     const colIndex = this.currentDiagramData.columns.findIndex((c) => c.id === taxaId);
     const res = await this.call<{ col_index: number }, { points: ControlPoint[]; control_points?: ControlPoint[] }>('core.digitize', {

@@ -337,6 +337,7 @@ class TestStraditizeProFullE2E(unittest.TestCase):
 
             # Verify CSV format: 1st column is depth
             with open(csv_path, "r", encoding="utf-8") as f:
+                na_cells = 0
                 header_line = f.readline().strip()
                 self.assertTrue(header_line.lower().startswith("depth"))
                 for line in f:
@@ -347,9 +348,17 @@ class TestStraditizeProFullE2E(unittest.TestCase):
                     # Ensure all numbers are valid floats
                     for p in parts:
                         if p:
+                            # NA = 该格没有读数（缺测），不是数字也不是 0；跳过数值校验但计数。
+                            if p == "NA":
+                                na_cells += 1
+                                continue
                             v = float(p)
                             self.assertFalse(math.isnan(v))
-            print("  -> Passed: Scientific digitization pipeline and 0.0 zero-abundance verified.")
+            # 非 NA 的格子必须都是合法 float；NA 是缺测语义的正常产物。
+            print(
+                "  -> Passed: Scientific digitization pipeline "
+                f"({na_cells} NA cells = missing data) verified."
+            )
         finally:
             try:
                 os.remove(csv_path)

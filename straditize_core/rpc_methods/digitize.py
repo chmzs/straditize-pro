@@ -85,6 +85,7 @@ def register(dispatcher: Any, session: Any) -> None:
     dispatcher.register_method("core.getShadowLayer", core_get_shadow_layer)
     dispatcher.register_method("core.digitize", session.digitize)
     dispatcher.register_method("core.updateControlPoint", session.update_control_point)
+    dispatcher.register_method("column.setControlPoints", session.set_control_points)
     dispatcher.register_method("point.add", session.point_add)
     dispatcher.register_method("point.move", session.point_move)
     dispatcher.register_method("point.remove", session.point_remove)

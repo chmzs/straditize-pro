@@ -52,6 +52,13 @@ export interface ToolContext {
   requestRender: () => void;
   /** 在状态栏或 HUD 发布提示 */
   notifyNotice: (msg: string) => void;
+  /**
+   * 把某列的锚点整列推给后端（`column.setControlPoints`）。
+   *
+   * 拖动结束 / 删除锚点 / 微调去抖后必须调一次：画布改的只是前端模型，
+   * 不回写后端的话导出面板与 data.csv 读到的还是上一次数字化时的点。
+   */
+  commitControlPoints: (colId: string) => void;
   /** 触发光标重评估 */
   updateCursor: () => void;
   /** 切换工具模式 */

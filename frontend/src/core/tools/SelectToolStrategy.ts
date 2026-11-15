@@ -280,6 +280,7 @@ export class SelectToolStrategy implements ToolStrategy {
       const col = ctx.data.columns.find((c) => c.id === this.draggingAnchor!.taxaId);
       if (col) {
         ctx.history.push(`Move Anchor in ${col.name}`, ctx.data.columns, ctx.data.activeTaxaId);
+        ctx.commitControlPoints(col.id);
         ctx.callbacks.onDataChange?.();
       }
       handled = true;
