@@ -115,6 +115,8 @@ check('聚合覆盖所有有列分区：脏分区的超标必须被计入并判�
         n_horizons_with_data: 6,
         n_horizons_empty: 0,
         violations_over: [1, 2, 3, 4, 5, 6],
+        empty_horizons: [],
+        per_column_max: [],
         sum: { max: 103.2 },
         n_uncalibrated: 0,
       }),
@@ -123,6 +125,8 @@ check('聚合覆盖所有有列分区：脏分区的超标必须被计入并判�
         n_horizons_with_data: 6,
         n_horizons_empty: 0,
         violations_over: [],
+        empty_horizons: [],
+        per_column_max: [],
         sum: { max: 96 },
         n_uncalibrated: 0,
       }),
@@ -148,6 +152,8 @@ check('聚合：所有分区都合格时才判绿', () => {
         n_horizons_with_data: 6,
         n_horizons_empty: 0,
         violations_over: [],
+        empty_horizons: [],
+        per_column_max: [],
         sum: { max: 96 },
         n_uncalibrated: 0,
       }),
@@ -156,6 +162,8 @@ check('聚合：所有分区都合格时才判绿', () => {
         n_horizons_with_data: 6,
         n_horizons_empty: 0,
         violations_over: [],
+        empty_horizons: [],
+        per_column_max: [],
         sum: { max: 97 },
         n_uncalibrated: 0,
       }),
@@ -175,6 +183,8 @@ check('聚合：所有分区 0 层位 ⇒ 黄「无可校验层位」', () => {
         n_horizons_with_data: 0,
         n_horizons_empty: 3,
         violations_over: [],
+        empty_horizons: [],
+        per_column_max: [],
         sum: { max: 0 },
       }),
       part('b', {
@@ -182,6 +192,8 @@ check('聚合：所有分区 0 层位 ⇒ 黄「无可校验层位」', () => {
         n_horizons_with_data: 0,
         n_horizons_empty: 3,
         violations_over: [],
+        empty_horizons: [],
+        per_column_max: [],
         sum: { max: 0 },
       }),
     ],
@@ -197,7 +209,16 @@ check('聚合：所有分区 0 层位 ⇒ 黄「无可校验层位」', () => {
 check('没有可校验分区时，范围文案必须说清（不得伪造已校验）', () => {
   const agg = aggregateQaScope(
     [],
-    [part('empty', { n_horizons: 0, n_horizons_with_data: 0, violations_over: [], sum: { max: 0 } })],
+    [
+      part('empty', {
+        n_horizons: 0,
+        n_horizons_with_data: 0,
+        empty_horizons: [],
+        per_column_max: [],
+        violations_over: [],
+        sum: { max: 0 },
+      }),
+    ],
     TOL
   );
   const headline = aggregateHeadline(agg);
@@ -232,7 +253,8 @@ function partFromJson(name, rawSummaryJson) {
 check('缺 summary.sum 必须抛错（不得被当成 maxSum = null 静默放行）', () => {
   const broken = partFromJson(
     'a',
-    '{"n_horizons":6,"n_horizons_with_data":6,"violations_over":[]}'
+    '{"n_horizons":6,"n_horizons_with_data":6,"violations_over":[],' +
+      '"empty_horizons":[],"per_column_max":[]}'
   );
   assert.throws(
     () => aggregateQaScope([broken], [], TOL),
@@ -244,12 +266,55 @@ check('缺 summary.sum 必须抛错（不得被当成 maxSum = null 静默放行
 check('缺 summary.violations_over 必须抛错（不得被当成 0 个超标而判绿）', () => {
   const broken = partFromJson(
     'a',
-    '{"n_horizons":6,"n_horizons_with_data":6,"sum":{"max":96}}'
+    '{"n_horizons":6,"n_horizons_with_data":6,"sum":{"max":96},' +
+      '"empty_horizons":[],"per_column_max":[]}'
   );
   assert.throws(
     () => aggregateQaScope([broken], [], TOL),
     /violations_over/,
     '缺 summary.violations_over 时报错信息必须点名该字段'
+  );
+});
+
+/*
+ * ---- 11/12. 契约：`per_column_max` / `empty_horizons` 恒返回，缺失必须报错 ----
+ *
+ * `straditize_core/qa.py::compute_qa_summary` 有两条 return 路径，这两个字段在
+ * **两条都给了**：
+ * - 空集提前返回 `qa.py:39-52`：`empty_horizons` :46、`per_column_max` :51。
+ * - 正常返回 `qa.py:141-156`：`empty_horizons` :148、`per_column_max` :153。
+ *
+ * 因此前端把它们声明为**可选**（`?`）属于契约倒退：它让"后端没给"变成一种合法输入，
+ * 而消费端遇到这种情况只能按空数组兜——`empty_horizons` 缺 ⇒ 面板说「未发现空层位」，
+ * `per_column_max` 缺 ⇒ 面板说「暂无列刻度信息」，把"后端没给"报成"确实没有"。
+ *
+ * 与 #14 同一口径：只有**空集路径真的不给**的 `n_uncalibrated` /
+ * `uncalibrated_columns`（仅 `qa.py:154-155`）才允许可选 + `?.`。
+ */
+
+check('缺 summary.per_column_max 必须抛错（不得渲染成「暂无列刻度信息」）', () => {
+  const broken = partFromJson(
+    'a',
+    '{"n_horizons":6,"n_horizons_with_data":6,"n_horizons_empty":0,' +
+      '"empty_horizons":[],"violations_over":[],"sum":{"max":96}}'
+  );
+  assert.throws(
+    () => aggregateQaScope([broken], [], TOL),
+    /summary\.per_column_max（违反契约）/,
+    '缺 summary.per_column_max 时报错信息必须点名该字段'
+  );
+});
+
+check('缺 summary.empty_horizons 必须抛错（不得渲染成「0 个空层位」）', () => {
+  const broken = partFromJson(
+    'a',
+    '{"n_horizons":6,"n_horizons_with_data":6,"n_horizons_empty":0,' +
+      '"per_column_max":[],"violations_over":[],"sum":{"max":96}}'
+  );
+  assert.throws(
+    () => aggregateQaScope([broken], [], TOL),
+    /summary\.empty_horizons（违反契约）/,
+    '缺 summary.empty_horizons 时报错信息必须点名该字段'
   );
 });
 

@@ -128,9 +128,11 @@ export function isPassingVerdict(verdict: QaVerdict): boolean {
  * `straditize_core/qa.py::compute_qa_summary` 有两条出口，两者的字段集**不同**：
  *
  * - 空集提前返回（`qa.py:38-52`：无层位 / 无列都会走到）：
- *   `sum` 给了（`max: 0.0`）、`violations_over` 给了（`[]`）、`per_column_max` 给了（`[]`），
+ *   `sum` 给了（`:47`，`max: 0.0`）、`violations_over` 给了（`:49`，`[]`）、
+ *   `empty_horizons` 给了（`:46`，`[]`）、`per_column_max` 给了（`:51`，`[]`），
  *   **但 `n_uncalibrated` / `uncalibrated_columns` 没给**。
- * - 正常返回（`qa.py:141-155`）：以上全部字段都给。
+ * - 正常返回（`qa.py:141-156`）：以上全部字段都给（`:149` / `:151` / `:148` / `:153`，
+ *   未标定两字段 `:154-155`）。
  *
  * 于是：
  * - `violations_over` / `sum` / `per_column_max` / `empty_horizons` 等 **恒存在** ⇒ 声明为必填，
@@ -148,19 +150,23 @@ export interface QaScopeSummary {
   n_horizons: number;
   n_horizons_with_data: number;
   n_horizons_empty?: number;
-  /** 超标层位清单；后端**恒返回**（空集时为 `[]`）。 */
+  /** 超标层位清单；后端**恒返回**（空集时为 `[]`，`qa.py:49` / `:151`）。 */
   violations_over: unknown[];
-  empty_horizons?: { depth: number | null; reason?: string }[];
-  per_column_max?: {
+  /** 空层位清单；后端**恒返回**（空集时为 `[]`，`qa.py:46` / `:148`）。 */
+  empty_horizons: { depth: number | null; reason?: string }[];
+  /** 各列峰值与声明刻度；后端**恒返回**（空集时为 `[]`，`qa.py:51` / `:153`）。 */
+  per_column_max: {
     name: string;
     peak: number;
     declared_max: number;
     over: boolean;
     calibrated?: boolean;
   }[];
-  /** 总和统计；后端**恒返回**，空集时 `max` 为 `0.0`。 */
+  /** 总和统计；后端**恒返回**，空集时 `max` 为 `0.0`（`qa.py:47` / `:149`）。 */
   sum: { max: number };
+  /** 未标定列数；**仅正常返回路径给**（`qa.py:154`），空集提前返回没有 ⇒ 可选。 */
   n_uncalibrated?: number;
+  /** 未标定列名；**仅正常返回路径给**（`qa.py:155`），空集提前返回没有 ⇒ 可选。 */
   uncalibrated_columns?: string[];
 }
 
@@ -208,6 +214,12 @@ function scopeNames(parts: { roiName: string }[]): string {
  * 缺 `sum` ⇒ `maxSum = null`，两条越限分支（②③）双双被跳过，于是**判绿** ——
  * 实测旧实现拿到这样的 payload 会输出「地学校验门禁通过：6 个层位的组分总和都在
  * 100% ± 2% 内」。契约破损冒充"合格"是本模块存在的理由的反面（issue #14）。
+ *
+ * `empty_horizons` / `per_column_max` 聚合本身不读，但同样在这里校验：校验点必须落在
+ * **HTTP 响应体进入前端的这个唯一入口**上。它们是下游 `steps/QaPanel` 渲染异常清单与
+ * 列峰值表的输入（同一批对象原样传下去），缺失时面板会说「未发现空层位」/
+ * 「暂无列刻度信息」—— 把"后端没给"说成"确实没有"。与其让每个渲染分支各写一次
+ * `?? []` 永远不报错，不如在这里一次性炸掉（issue #16）。
  */
 function assertQaScopeContract(part: QaScopePart): void {
   const who = part.roiName || part.roiId;
@@ -217,6 +229,12 @@ function assertQaScopeContract(part: QaScopePart): void {
   }
   if (!Array.isArray(summary.violations_over)) {
     throw new Error(`qa.summarize 返回缺少 summary.violations_over（违反契约）：分区 ${who}`);
+  }
+  if (!Array.isArray(summary.empty_horizons)) {
+    throw new Error(`qa.summarize 返回缺少 summary.empty_horizons（违反契约）：分区 ${who}`);
+  }
+  if (!Array.isArray(summary.per_column_max)) {
+    throw new Error(`qa.summarize 返回缺少 summary.per_column_max（违反契约）：分区 ${who}`);
   }
   if (typeof summary.sum?.max !== 'number') {
     throw new Error(`qa.summarize 返回缺少 summary.sum.max（违反契约）：分区 ${who}`);
