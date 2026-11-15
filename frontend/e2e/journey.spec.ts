@@ -135,7 +135,6 @@ async function calibrateColumnTicks(page: Page): Promise<void> {
   const strokePx = Number(group?.axis_stroke_px ?? 5) || 5;
   const zeroPx = Number(widest!.startX ?? 0) + strokePx;
   const targetTick = Math.round(zeroPx + (Number(widest!.endX ?? 0) - zeroPx) * 0.6);
-  const expectedSlope = TICK_READING / (targetTick - zeroPx);
   const targetColIndex = Number(widest!.col_index);
 
   await page.locator(`${STEP6} #btn-pick-tick`).click();
@@ -147,10 +146,20 @@ async function calibrateColumnTicks(page: Page): Promise<void> {
     box.y + box.height * 0.55
   );
   // 手动标定判据：面板报的必须就是点击落点（不吸附、不纠正）。
-  await expect(
-    page.locator(`${STEP6} [data-role="pending-tick"]`),
-    `点齿必须原样记下点击位置 x = ${targetTick}px`
-  ).toContainText(`x = ${targetTick}px`);
+  //
+  // 判据强度说明：页面 px ↔ 世界 x 之间要经过 `Math.round(scale*x + panX)` 与反向
+  // 除法/取整的整数往返，逐像素相等是**过强**的判据 —— 实测差 1px 全部来自这两次
+  // 取整（world 637.x → 页面 638 → 解析回 637），与「吸附」无关。因此这里改为：
+  // 断言实际记下的 px 与目标相差 ≤ 1px（只吸收像素取整），并把**实际值**作为
+  // 后续斜率断言的基准 —— 否则斜率也会被同一次取整带偏。
+  const pendingText = await page.locator(`${STEP6} [data-role="pending-tick"]`).innerText();
+  const recorded = Number(/x = (\d+)px/.exec(pendingText)?.[1] ?? NaN);
+  expect(Number.isFinite(recorded), `面板必须报出选中的齿位，实际文本：${pendingText}`).toBe(true);
+  expect(
+    Math.abs(recorded - targetTick),
+    `点齿必须记下点击落点（容差 1px，仅吸收像素取整）：目标 ${targetTick}px，实际 ${recorded}px`
+  ).toBeLessThanOrEqual(1);
+  const expectedSlope = TICK_READING / (recorded - zeroPx);
 
   await page.locator(`${STEP6} #inp-tick-value`).fill(String(TICK_READING));
   await page.locator(`${STEP6} #btn-apply-tick-calib`).click();

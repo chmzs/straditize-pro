@@ -16,7 +16,9 @@ import { gotoStage, openApp, rpc } from './helpers';
 test.describe('删除列不可撤销', () => {
   test('删除中间列后撤销按钮状态不变；点撤销也不会把列恢复', async ({ page }) => {
     await openApp(page);
-    await gotoStage(page, 6);
+    // 列属性面板只在步骤 5 与 7 出现（`Inspector.ts:210`）：步骤 6 点列只高亮、
+    // 不换面板（本 PR 的设计变更），【删除列】在那个面板里，所以停到步骤 7。
+    await gotoStage(page, 7);
 
     const before = (await rpc(page, 'straditize.getDiagramData', {})) as any;
     const cols = (before.columns ?? []) as any[];
