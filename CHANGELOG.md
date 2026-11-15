@@ -7,9 +7,10 @@
 - **产物去向**：`plot.render` 默认**不落盘**，图以 `data_url` 交回前端（导出弹窗里直接预览 + 「下载图片」浏览器下载事件）。旧行为默认写 `~/.straditize/plots`，用户点完按钮只拿到一句路径，人还得自己去那个目录找 —— 那不是出图。只有显式传 `output_path` 才写文件。
 - **格式**：默认 JPEG（`--format jpeg`，quality 95，cairo 设备），另支持 PNG / WebP（R 没有 webp 图形设备，走 PNG→Pillow 转码）/ PDF / SVG。`webp` 走转码这件事在返回值里报 `format=webp`、`mime=image/webp`，不假装是 R 直接出的。
 - **画图默认启用常用开关**（对齐 riojaPlot shiny 的常用组合）：Style = Silhouette %（`scale.percent` + `plot.poly`）、show bar（`plot.bar`）、Exaggeration Show（`plot.exag`，3× 、alpha 0.15）、Rev. Y（`y.rev`）、列名斜体（`labels.italicise`）+ 45°（`srt.xlabel`）+ 超 20 字符折行（`labels.break.long` / `labels.break.n=20`）、底部刻度轴（`plot.bottom.axis`）。Min/max（`scale.minmax` + 每列 min/max 矩阵）可选；它与百分比刻度在 riojaPlot 里是 if/else 互斥分支，开启时自动关掉百分比刻度并在 `settings` 里回显，不静默吞掉。
-- **排版**：轴与标签字号默认放大 2 倍（`cex.* = riojaPlot 默认 × font_scale`，`font_scale` 可调）；列名 +45° 斜排（斜体）并显式下移绘图区顶端（`yTop=0.86`）、抬升底边（`yBottom=0.15`）；轴线与刻度齿加粗到 `lwd=4`、齿长 `tcl=-1.3`（riojaPlot 里刻度数字与轴线的间距由 `spc=|tcl|` 决定，不加大齿长就会贴住轴线），解决「字号变大后列名顶到画布边、x 轴刻度与面板底边挤在一行」的实测问题。
+- **排版**：轴与标签字号默认放大 2 倍（`cex.* = riojaPlot 默认 × font_scale`，`font_scale` 可调）；列名 +45° 斜排（斜体）并显式下移绘图区顶端（`yTop=0.86`）、抬升底边（`yBottom=0.15`）；轴线与刻度齿加粗到 `lwd=4`；齿长保持帮助页默认 `tcl=-0.3` —— riojaPlot 内部 `spc <- -tclx` 把「标签离轴距离」与齿长绑死，把 `tcl` 调大只会让**齿穿过数字**（实测 -1.3 时 10/20/30 被齿线穿过），解决「字号变大后列名顶到画布边、x 轴刻度与面板底边挤在一行」的实测问题。
 - **引擎与降级**：优先 `riojaPlot`（Italicise / Break long / Exaggeration / Min-max / 旋转只有它有），缺包时回退 `rioja::strat.plot` 并在 `unsupported` + `warnings` 里逐条列出没生效的开关，不静默降级。
 - **契约**：`plot.render` 返回值新增 `data_url` / `mime` / `settings` / `warnings` / `unsupported`；`path` 默认 `None`（只有显式落盘才有值）；`format` 默认由 `pdf` 改为 `jpeg`。未知设置键 → `-32602`（不当没看见）。
+- **y 轴标题**：按帮助页用 `yvar.name`（`name of the variable to use for primary y-axis`）—— 它是 chron 数据框的**列名**，把该列命名成想要的标题即可（`names(y_df) <- ylabel`），不再用 `style$ylabel`（后者在 `y.rev` 下会被算到画布外，此前 `Depth` 一直不显示就是这个原因）。
 - **测试**：`tests/unit/test_plot_render.py` 重写为 11 条，新增「默认不落盘且返回 data URL」「显式 output_path 才写文件」「JPEG/PNG 魔术字节」「未知设置键报错」「默认开关逐个断言」。
 
 ### 步骤 6 只做手动标定

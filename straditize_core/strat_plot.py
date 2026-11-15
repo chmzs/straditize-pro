@@ -175,7 +175,7 @@ engine <- if (use_riojaplot) "riojaPlot" else "rioja"
 open_device()
 # 轴与刻度齿的线宽：axis() 不接收 lwd 形参，只认 par("lwd")。放这里只影响轴/齿，
 # 不影响曲线（riojaPlot 画线时显式传了 lwd.line）。
-par(lwd = num("axis_lwd", 2))
+par(lwd = num("axis_lwd", 4))
 warns <- tryCatch(
   collect_warnings({
     if (use_riojaplot) {
@@ -196,18 +196,18 @@ warns <- tryCatch(
         cex.xaxis = 0.6 * fs,
         cex.yaxis = 0.7 * fs,
         cex.ylabel = 0.9 * fs,
-        # riojaPlot 没有 mgp 形参（... 全被当 style 覆盖校验，传 mgp 会直接报错），
-        # 刻度数字与轴线的距离由 .riojaPlot2 内部的 spc = |tcl| 推出 —— 所以要拉开
-        # 距离只能加大齿长 tcl。默认 -0.2 在 2 倍字号下数字会贴住轴线（实测像被盖住）。
-        tcl = num("tcl", -0.6),
-        lwd.axis = num("axis_lwd", 2),
+        # 齿长 tcl 与「标签离轴距离」在 riojaPlot 里是绑死的：内部 spc <- -tclx，
+        # 标签起点正好落在齿末端。所以把 tcl 调大只会让**刻度齿穿过数字**
+        # （实测 -1.3 时 10/20/30 被齿线穿过）。帮助页写 tcl 默认 -0.3，保持默认。
+        tcl = num("tcl", -0.3),
+        lwd.axis = num("axis_lwd", 4),
         plot.bottom.axis = flag("axis", TRUE),
         plot.top.axis = FALSE,
         plot.yaxis = TRUE,
         x.pc.omit0 = TRUE,
-        # 注意：yvar.name 是**数据列名**（chron 里选哪一列当 y），传标题会报
-        # "is not a column in the chronology data"；y 轴标题仍只能用 style$ylabel。
-        ylabel = txt("ylabel", "Depth"),
+        # y 轴标题走 yvar.name（帮助页：name of the variable to use for primary
+        # y-axis），它是 **chron 数据框的列名**；把该列命名成想要的标题即可，
+        # 见下面调用处的 names(y_df)。style$ylabel 在 y.rev 下会被算到画布外，别用。
         # 配色与留白：默认的深灰填充 + 黑竖线在打印/投影上都显脏，这里降一档对比度。
         col.poly = "#C9CFD8",
         col.bar = "#3B4453",
@@ -222,7 +222,8 @@ warns <- tryCatch(
         yTop = num("y_top", 0.86),
         # 底部拥挤：字号放大 2 倍后，x 轴刻度数字与面板底边、与相邻列都贴在一起。
         # 把绘图区底边上抬（默认 0.05 → 0.12），给刻度一整行的高度。
-        yBottom = num("y_bottom", 0.10),
+        # tcl 回到默认后齿不再需要大留白；0.15 会在底部留下一整块空白（实测）。
+        yBottom = num("y_bottom", 0.08),
         # ylabPos 不覆盖：留空让 riojaPlot 按刻度实际宽度自己算。
         # 列名角度 +45°（逆时针上倾）+ 斜体；y.rev 时列名画在图顶，
         # 不再强制居中——居中会把长属种名挤到邻列上。
@@ -237,7 +238,11 @@ warns <- tryCatch(
         maxs <- apply(taxa, 2, function(v) max(v, na.rm = TRUE))
         style$minmax <- cbind(mins, maxs)
       }
-      riojaPlot::riojaPlot(x = taxa, y = data.frame(depth = depth), style = style)
+      # 把 y 列命名成用户要的轴标题：riojaPlot 用 yvar.name 选列，同时把它当轴标签。
+      y_df <- data.frame(depth)
+      names(y_df) <- txt("ylabel", "Depth")
+      riojaPlot::riojaPlot(x = taxa, y = y_df, style = style,
+                           yvar.name = names(y_df)[1])
     } else {
       rioja::strat.plot(
         d = as.matrix(taxa),
