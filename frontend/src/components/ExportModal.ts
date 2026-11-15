@@ -101,9 +101,10 @@ export class ExportModal {
             <div class="form-group" style="margin: 0;">
               <label style="font-size: 11px; font-weight: bold; color: var(--text-primary);">Dataset (数据集形态):</label>
               <select id="wpd-dataset-select" class="sample-select" style="width: 100%; font-size: 11px;">
-                <option value="union_points" selected>1. 真实物理拐点共振层位 [推荐: 忠实原图/无伪插值]</option>
-                <option value="depth_grid">2. 参考标尺均匀层位 [用于等距辅助测试]</option>
-                <option value="turning_points">3. 离散拐点稀疏特征清单 [原始坐标表]</option>
+                <option value="samples" selected>1. 共识层位（samples 采样层位）[推荐: 与 data.csv / TAR / XLSX 同源]</option>
+                <option value="union_points">2. 控制点并集层位 [行数多于共识层位；该列没有拐点的行给 NA]</option>
+                <option value="depth_grid">3. 参考标尺均匀层位 [用于等距辅助测试]</option>
+                <option value="turning_points">4. 离散拐点稀疏特征清单 [原始坐标表]</option>
               </select>
               <!--
                 行集说明：用户必须先知道"这 N 行是哪来的"。
@@ -246,7 +247,8 @@ export class ExportModal {
 
     /** 数据集 → 行集来源的人话名字（与 `#wpd-dataset-select` 的选项一一对应）。 */
     const ROWSET_SOURCE: Record<string, string> = {
-      union_points: '按控制点层位',
+      samples: '按共识层位（samples）',
+      union_points: '按控制点并集层位',
       depth_grid: '按标尺均匀层位',
       turning_points: '按离散拐点清单',
     };
