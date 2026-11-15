@@ -30,7 +30,7 @@ from straditize_core.protocol import INTERNAL_ERROR, INVALID_PARAMS, JsonRpcDisp
 from straditize_core.rpc_methods import cleanup as cleanup_methods
 from straditize_core.session import StraditizeSession
 
-PLATE = "tests/data/figures/real_plates/fig3_raw.jpeg"
+PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
 INTERNAL_HINT = "请查看服务器控制台日志"
 
 

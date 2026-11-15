@@ -128,7 +128,7 @@ class TestLabelBandTop:
         assert 0 <= band_top < 300, f"回退值 {band_top} 必须落在 [0, data_top) 内"
 
 
-REAL_PLATE = "tests/data/figures/real_plates/fig3_raw.jpeg"
+REAL_PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
 REAL_PDF = (
     "F:/Zotero/storage/HV4FXL63/"
     "Han Y.-2026-A synthesis of pollen sequences from the central-w.pdf"

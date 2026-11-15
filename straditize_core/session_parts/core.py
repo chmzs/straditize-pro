@@ -124,7 +124,7 @@ def _detect_block_column(
             "column_width": span,
         }
 
-    # 形态 2（空框）已撤回：实测把 Pollen_CruveStyle 的 col6（真实细线曲线，
+    # 形态 2（空框）已撤回：实测把 pollen_curves_riojaplot 的 col6（真实细线曲线，
     # 逐行只有 1~4px 墨迹、跨度极小）误判成空框——`interior_ink_ratio` 高
     # 只说明"墨迹在跨度内是连续的"，细线曲线同样满足。该维度不足以区分
     # 空框与细线曲线，需结合"墨迹位置是否随 y 变化"，属独立任务。
@@ -690,7 +690,7 @@ class CoreMixin:
         # 阈值"的位置，而累计量在密集图上从一开始就超过阈值，于是 x_min/x_max、
         # y_min/y_max 全部塌缩到同一处，最后得到只有 2px 高的框。
         #
-        # 实测（tests/data/figures/benchmark_types/Diatom_riojaPlotTestData.png，
+        # 实测（tests/data/figures/riojaplot/diatom_area_riojaplot.png，
         # 1179×600，墨迹占比 40.9%）：right_candidates 与 left_candidates **都是 0**，
         # 建议框退化为 xlim=[68,1061] ylim=[241,243]（高 2px），随后 detect_columns
         # 直接抛 "Bounds is too small"，用户点【下一步】就崩。

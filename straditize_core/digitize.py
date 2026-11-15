@@ -176,7 +176,7 @@ def _line_own_offset(
     the stroke itself, and its centre is the reading. Averaging the ink — the
     legacy ``np.mean(fg_indices)`` — lands on the middle of a filled silhouette, so
     every column reported exactly 0.500 of the truth. Measured on
-    `Diatom_riojaPlotTestData.png` (px/unit 3.80, filled profiles):
+    `diatom_area_riojaplot.png` (px/unit 3.80, filled profiles):
 
         column              area   line (legacy)   ratio
         Brachysira vitrea  14.21        7.11       0.500

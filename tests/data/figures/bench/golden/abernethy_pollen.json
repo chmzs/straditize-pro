@@ -1,6 +1,6 @@
 {
  "sheet": "Abernethy_Pollen",
- "source_xlsx": "tests/data/figures/benchmark_types/riojaPlotTestData_Pollen_and_Diatom.xlsx",
+ "source_xlsx": "tests/data/figures/riojaplot/measurements_pollen_diatom.xlsx",
  "min_max_filter": 2.0,
  "meta_columns": [
   "Depth (cm)",

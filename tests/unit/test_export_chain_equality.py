@@ -37,7 +37,7 @@ import pytest
 
 from straditize_core.session import StraditizeSession
 
-PLATE = "tests/data/figures/real_plates/fig3_raw.jpeg"
+PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
 
 
 def _session(calibrated: bool = True) -> StraditizeSession:

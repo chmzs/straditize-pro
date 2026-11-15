@@ -37,7 +37,7 @@ from typing import Any
 
 from straditize_core.session import StraditizeSession
 
-PLATE = "tests/data/figures/real_plates/fig3_raw.jpeg"
+PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
 GOLDEN = Path(__file__).parent / "fixtures" / "merge_columns_golden.json"
 
 FULL = {"xlim": [330, 1330], "ylim": [233, 869]}

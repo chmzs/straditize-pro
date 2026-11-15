@@ -28,7 +28,7 @@ from straditize_core.protocol import INVALID_PARAMS, STATE_ERROR, JsonRpcDispatc
 from straditize_core.rpc_methods import digitize as digitize_methods
 from straditize_core.session import StraditizeSession
 
-PLATE = "tests/data/figures/real_plates/fig3_raw.jpeg"
+PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
 
 
 def _session(with_image: bool = True) -> StraditizeSession:

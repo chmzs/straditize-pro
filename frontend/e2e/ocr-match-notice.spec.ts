@@ -16,14 +16,14 @@
  *
  * ## 真实取样（为什么用建议 ROI 而不是手框）
  *
- * 真实图版 `fig3_raw.jpeg` 用**建议取数区** `[69,1867]×[266,744]` 分列得 22 列，
+ * 真实图版 `han2026GPC_ngamringLake_withbackcolor.jpeg` 用**建议取数区** `[69,1867]×[266,744]` 分列得 22 列，
  * OCR 识别 24 个标签，后端 `matched=false`（`ambiguous` 21 个）。实测其中有
  * 2 列完全没标签（表格里「OCR 原始读数」显示 `--`），正是本提示要解释的对象。
  */
 import { expect, test } from './fixtures';
 import { openApp, resetBaseline, rpc } from './helpers';
 
-const FIG3 = 'tests/data/figures/real_plates/fig3_raw.jpeg';
+const FIG3 = 'tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg';
 
 interface Recon {
   matched?: boolean;

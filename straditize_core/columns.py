@@ -122,7 +122,7 @@ def detect_column_starts(binary: np.ndarray,
     # ``min_diff`` belong to ONE panel: the winner is the one that spans the
     # panel's full height.
     #
-    # Benchmark P-01 (`Pollen_CruveStyle_riojaPlotTestData.png`): the curve
+    # Benchmark P-01 (`pollen_curves_riojaplot.png`): the curve
     # drawing puts a candidate 4-8 px right of three real axes, and the legacy
     # rule — keep a candidate when its gap to the NEXT candidate is wide enough —
     # kept that follower instead, so Empetrum's band ran to 609 and read
@@ -133,7 +133,7 @@ def detect_column_starts(binary: np.ndarray,
     #     652 -> 1.000   vs   658 -> 0.073
     #     839 -> 1.000   vs   843 -> 0.098
     #     691 -> 1.000   vs   690 -> 0.015     (diatom-like 1-px antialias speck)
-    #      76 -> 0.865   vs    73 -> 0.010     (Diatom_riojaPlotTestData.png)
+    #      76 -> 0.865   vs    73 -> 0.010     (diatom_area_riojaplot.png)
     #
     # A panel axis runs the whole height; a curve's first ink, a tick or an
     # antialias speck does not. So a close pair is resolved by coverage (higher

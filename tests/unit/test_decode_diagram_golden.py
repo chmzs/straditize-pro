@@ -38,8 +38,8 @@ from straditize_core.session_parts.core import _decode_diagram_source
 
 GOLDEN = Path(__file__).parent / "fixtures" / "decode_diagram_golden.json"
 
-PLATE = "tests/data/figures/real_plates/fig3_raw.jpeg"
-VECTOR_PDF = "tests/data/figures/benchmark_types/Pollen_riojaPlotTestData.pdf"
+PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
+VECTOR_PDF = "tests/data/figures/riojaplot/pollen_area_riojaplot.pdf"
 
 
 def _label(value):

@@ -3,7 +3,7 @@ Benchmark Abernethy Forest (Aber) pollen diagram digitization accuracy
 against ground truth dataset from rioja/riojaPlot.
 
 This test:
-1. Loads the genuine Aber pollen diagram image (type1_filled_silhouette_aber.png)
+1. Loads the genuine Aber pollen diagram image (silhouette_filled_abernethy.png)
 2. Loads the genuine ground truth dataset (49 depths x 36 pollen taxa)
 3. Evaluates Straditize automated column detection and area profile digitization
 4. Computes scientific error metrics (RMSE, MAE, R^2, max deviation) for all taxa
@@ -38,10 +38,10 @@ class TestAberPollenAccuracyBenchmark(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.image_path = os.path.join(
-            "tests", "data", "figures", "benchmark_types", "type1_filled_silhouette_aber.png"
+            "tests", "data", "figures", "bench", "silhouette_filled_abernethy.png"
         )
         cls.gt_csv_path = os.path.join(
-            "tests", "data", "figures", "benchmark_types", "data", "aber_ground_truth.csv"
+            "tests", "data", "figures", "bench", "data", "aber_ground_truth.csv"
         )
 
         assert os.path.exists(cls.image_path), f"Missing test image {cls.image_path}"
