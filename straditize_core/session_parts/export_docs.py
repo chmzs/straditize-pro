@@ -15,7 +15,7 @@ CSV_MISSING_NOTICE = (
     b"SCIENTIFIC NOTICE (missing-data semantics):\n"
     b"  1) gaps INSIDE a column's digitizing window are written 0.0 = true zero abundance.\n"
     b"  2) columns never digitized / not X-calibrated are written NA = NO DATA, not zero.\n"
-    b"  3) rows where a column has NO measurement (control-point based column, or a row it\n"
-    b"     never sampled) are written NA = NO DATA, not zero.\n"
+    b"  3) a calibrated column's gap at a consensus horizon is filled by that column's own\n"
+    b"     linear interpolation (endpoint-clamped); uncalibrated columns stay NA = NO DATA.\n"
     b"  4) never treat NA as 0; handle NA before log transforms, then add a pseudocount.\n"
 )

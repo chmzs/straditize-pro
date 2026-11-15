@@ -111,6 +111,10 @@ export class ExportModal {
                 <option value="samples" selected>1. 共识层位 —— 每个采样层位一行；与 data.csv / TAR / XLSX 同源</option>
                 <option value="union_points">2. 各列拐点并集 —— 所有列的拐点深度合并去重成行；某列在该深度没有拐点则按其曲线线性插值（不是 0）</option>
                 <option value="turning_points">3. 拐点原始坐标表 —— 长表，一行一个拐点（taxon/type/depth/value/x/y）；不能与上面两张矩阵表混用</option>
+                <!-- 缺值口径必须写在面板上：插值 vs NA 是两种完全不同的数，用户看不到就会误读。 -->
+                <div style="margin-top: 4px; font-size: 10px; line-height: 1.45; color: var(--text-muted);">
+                  共识层位上某列没有拐点时：<b>已标定列</b>按该列曲线线性插值填充；<b>未标定列</b>仍为 NA（不给数）。
+                </div>
                 <optgroup label="高级">
                   <option value="depth_grid">按深度间隔重采样 —— 按设置里的深度间隔生成规则层位（调试/等距辅助用，不是共识层位）</option>
                 </optgroup>

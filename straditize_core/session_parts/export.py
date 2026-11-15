@@ -93,9 +93,8 @@ def _control_point_only_columns(session: Any) -> set[int]:
     两类「某行没有点」物理含义完全不同，不能给同一个数：
 
     - 真数字化过的列：缺行 = 那一行没有墨迹 = **真零丰度** → 0；
-    - 控制点合成列：缺行 = **这一行没有读数** → None（导出写 NA）。
-
-    把后者写成 0，用户会把「没测」当成「测到 0」拿去做百分比与对数变换。
+    - 控制点合成列：缺行 = 这一层没有拐点/样点 → 按该列曲线**线性插值**（已标定列）
+      或 NA（未标定列）。把前者写成 0，用户会把「没测」当成「测到 0」。
     """
     return set(getattr(session, "control_point_columns", None) or ())
 
@@ -109,23 +108,53 @@ def _read_row_values(
     col_name: str,
     missing_is_na: bool,
 ) -> list[Any]:
-    """按行读一列读数：缺行给 0 点还是 None，由 missing_is_na 决定。
+    """按行读一列读数；缺行怎么补由该列的来历决定。
 
-    「这一行有没有点」只认 p_dict（真有这一点行）；缺行时换成的那个像素（基线 =
-    列左缘 + 轴线粗，ARCHITECTURE §6.4）只在「无墨迹 = 0」的列里成立，控制点合成列
-    必须原样留成 None，否则就是拿基线冒充读数。
+    - `missing_is_na=False`（真数字化过的列）：缺行 = 那一行没有墨迹 = **真零丰度**，
+      用基线（列左缘 + 轴线粗，ARCHITECTURE §6.4）换算成 0；
+    - `missing_is_na=True`（控制点合成列）：缺行 = 这一层没有拐点/样点，**按该列自己的
+      锚点线性插值**（端点 clamp，与 `extract_grid_values` 同口径）。已标定列给插值读数；
+      未标定列仍由 `read_column_values` 整列给 None → 导出 NA（未标定列一律不给数）。
+
+    「这一行有没有点」只认 p_dict（真有这一点行），基线只在「无墨迹 = 0」的列里成立。
     """
     baseline_px = float(scale.abs_px0)
     px = [p_dict.get(r) for r in rows]
+    if missing_is_na:
+        filled = _interpolate_missing_px(px, rows, p_dict)
+        values = read_column_values(
+            scale,
+            [baseline_px if p is None else p for p in filled],
+            strict=strict,
+            col_name=col_name,
+        )
+        return [None if p is None else v for p, v in zip(filled, values)]
     values = read_column_values(
         scale,
         [baseline_px if p is None else p for p in px],
         strict=strict,
         col_name=col_name,
     )
-    if not missing_is_na:
-        return values
-    return [None if p is None else v for p, v in zip(px, values)]
+    return list(values)
+
+
+def _interpolate_missing_px(
+    px: Sequence[float | None], rows: Sequence[int], p_dict: dict[int, float]
+) -> list[float | None]:
+    """缺行按该列锚点线性插值（端点 clamp）；整列没有锚点时给 None（→ NA）。
+
+    只做**该列自己**的插值：跨列借值等于替另一列编读数。未标定列即便插出像素，
+    也会被 `read_column_values` 的 `null_when_uncalibrated` 整列丢掉。
+    """
+    known = sorted(p_dict)
+    if not known:
+        return [None] * len(rows)
+    known_rows = [float(r) for r in known]
+    known_x = [float(p_dict[r]) for r in known]
+    return [
+        float(np.interp(r, known_rows, known_x)) if p is None else p
+        for r, p in zip(rows, px)
+    ]
 
 
 def _normalize_negative_zero_depth(csv_string: str) -> str:
