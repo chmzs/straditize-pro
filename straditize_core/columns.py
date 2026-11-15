@@ -288,7 +288,8 @@ def measure_axis_right_edge(rgb: np.ndarray,
     ## 用途
 
     `detect_column_bounds` 返回的 `start` 是该列第一个墨迹像素 = 基线**左缘**。
-    科研绘图软件（Origin / R / Python / riojaPlot / Tilia）里，X 轴刻度齿从
+    科研绘图软件（Origin / R / Python / riojaPlot / Tilia；注意 riojaPlot 是另一个
+    R 绘图包，本产品未调用它的代码，只调 `rioja::strat.plot`）里，X 轴刻度齿从
     基线**右缘**向右生长，曲线也从右缘起笔。拿左缘当零点会让每列系统性左偏
     0~7px（fig3 实测），画布零点标记也与底图刻度齿对不齐。
 

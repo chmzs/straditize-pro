@@ -188,7 +188,7 @@ pixi run app
 
 - [教程一：8 步走完古生态图谱数字化全流程 (在线 HTML)](https://chmzs.github.io/straditize-pro/tutorials/01_quickstart.html) ｜ [本地 Markdown 源码](docs/tutorials/01_quickstart.md)
 - [教程二：两点式物理刻度钉标定与对数（Log）曲线实战 (在线 HTML)](https://chmzs.github.io/straditize-pro/tutorials/02_twopoint_calibration.html) ｜ [本地 Markdown 源码](docs/tutorials/02_twopoint_calibration.md)
-- [教程三：数据导出规范、无 NA 矩阵与 R 语言 riojaPlot 成图 (在线 HTML)](https://chmzs.github.io/straditize-pro/tutorials/03_export_and_riojaplot.html) ｜ [本地 Markdown 源码](docs/tutorials/03_export_and_riojaplot.md)
+- [教程三：数据导出规范、无 NA 矩阵与 R 语言 rioja::strat.plot 成图 (在线 HTML)](https://chmzs.github.io/straditize-pro/tutorials/03_export_and_riojaplot.html) ｜ [本地 Markdown 源码](docs/tutorials/03_export_and_riojaplot.md)
 
 ---
 

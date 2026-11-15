@@ -1,3 +1,4 @@
+# vendored upstream demo (riojaPlot package by nsj3)；本产品不调用，仅作数据来源存档
 # remotes::install_github("nsj3/riojaPlot", built_vignettes=TRUE, dependencies=TRUE)
 # or
 # install.packages("riojaPlot", repos="https://nsj3.r-universe.dev")
