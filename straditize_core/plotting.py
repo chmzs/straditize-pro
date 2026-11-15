@@ -56,7 +56,7 @@ def candidate_rscripts() -> list[str]:
     found: list[str] = []
     seen: set[str] = set()
 
-    def add(path: str | None) -> None:
+    def register(path: str | None) -> None:
         if not path:
             return
         key = os.path.normcase(os.path.abspath(path))
@@ -65,10 +65,10 @@ def candidate_rscripts() -> list[str]:
         seen.add(key)
         found.append(os.path.abspath(path))
 
-    add(shutil.which("Rscript"))
+    register(shutil.which("Rscript"))
     for root in COMMON_R_ROOTS:
         for exe in _rscript_paths_under(Path(root)):
-            add(exe)
+            register(exe)
     return found
 
 
