@@ -25,7 +25,7 @@ re-implements the ground-truth rule proves nothing, so this probe tries to bring
    the **data area** -- every column baseline is a 9-px-tall narrow stroke, so any
    9-row window inside the plot looks like a comb (228 "strokes" in the bell figure
    vs 80 in the real ruler). Chasing that exposed that
-   ``type1_filled_silhouette_aber.png`` (median "tick" run 64 px, max 333 px) and
+   ``silhouette_filled_abernethy.png`` (median "tick" run 64 px, max 333 px) and
    ``hoya`` (median 149 px, max 1162 px) had **no tick ruler at all**: their supposed
    35 / 13 ticks were **long column baselines crossing the band**.
    ``gen_ground_truth.py`` was tightened (a tick must be a short isolated stroke) and

@@ -104,7 +104,7 @@ def _real_plate_session() -> StraditizeSession:
     """
     session = StraditizeSession()
     session._init_cleanup()
-    session.load_image(image_path="tests/data/figures/real_plates/fig3_raw.jpeg")
+    session.load_image(image_path="tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg")
     session.detect_columns(data_xlim=[330, 1330], data_ylim=[233, 869])
     for column in session.columns:
         session.digitize(column["col_index"])

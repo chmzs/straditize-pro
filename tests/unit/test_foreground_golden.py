@@ -33,7 +33,7 @@ from straditize_core.session import StraditizeSession
 
 GOLDEN = Path(__file__).parent / "fixtures" / "foreground_golden.json"
 
-PLATE = "tests/data/figures/real_plates/fig3_raw.jpeg"
+PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
 COLUMN_EDGES = [400, 700, 1000, 1300]
 
 CASES = {

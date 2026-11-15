@@ -8,7 +8,7 @@ out_df <- data.frame(
   spec,
   check.names = FALSE
 )
-target_path <- "tests/test_figures/benchmark_types/data/aber_ground_truth.csv"
+target_path <- "tests/data/figures/bench/data/aber_ground_truth.csv"
 write.csv(out_df, target_path, row.names = FALSE)
 cat(sprintf("Abernethy ground truth exported: %d rows x %d columns -> %s\n", 
             nrow(out_df), ncol(out_df), target_path))

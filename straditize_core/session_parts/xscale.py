@@ -86,6 +86,11 @@ class ColumnScale:
     exaggeration_mult: float | None
     calibrated: bool
     source: str  # "group_slope" | "x_ticks" | "legacy" | "x_scales" | "default"
+    #: 0 点可疑：abs_px0 落在列左缘与 0 点之间（比 0 点更靠左）。
+    #: 只有 x_ticks 分支可能出现——它直接采信写入方给的像素，而 0 点的定义是
+    #: 列左缘 + 轴粗；若写入方把列左缘当 0 点写进 x_ticks[0].px，读数会整体偏大
+    #: 轴粗 x 斜率。下游据此提示/拒绝，而不是静默给出偏大的数。
+    origin_suspect: bool = False
 
     def __post_init__(self) -> None:
         """构造时一次性归一化，使下游只需面对两个已知取值。
@@ -287,6 +292,7 @@ def resolve_column_scale(
             group_obj,
             c_start,
             c_end,
+            col_dict=col_dict,
             unit=unit,
             plot_type=plot_type,
             scale_type=scale_type,
@@ -318,6 +324,8 @@ def resolve_column_scale(
             x_ticks,
             c_start,
             c_end,
+            col_dict=col_dict,
+            group_obj=group_obj,
             unit=unit,
             plot_type=plot_type,
             scale_type=scale_type,
@@ -461,17 +469,29 @@ def _scale_from_group_layout(
     c_start: float,
     c_end: float,
     *,
+    col_dict: dict[str, Any] | None = None,
     unit: str,
     plot_type: str,
     scale_type: str,
     exaggeration_mult: float | None,
 ) -> ColumnScale:
-    """组管位置、列管数值：组的 tick_layout 给出两个端点的相对位置，列的 x_values 给出数值。"""
+    """组管位置、列管数值：组的 tick_layout 给出两个端点的相对位置，列的 x_values 给出数值。
+
+    rel 的语义是**绘图区内的相对位置**（0 = 数据起点 = 0 点，1 = 列右界），不是
+    "列框内的相对位置"。证据：所有写入端（project.py:662/744、roi.py:105/425）写入的
+    rel 都是 0.0/1.0 这类整框比例，没有一处包含轴粗；而面积图的 0 点在轴线**右缘**，
+    所以绘图区是 [c_start + 轴粗, c_end]。原实现拿 c_start 当 0 位，rel0 = 0 时
+    abs_px0 = c_start，比 0 点少一个轴粗 —— 每行读数因此偏大 轴粗 × 斜率
+    （本仓实测 stroke 6 + 0.16667 %/px = +1.0%；量程 100% / cell 60px 的列 = +10%）。
+    """
     layout = group_obj.get("tick_layout") or [{"rel": 0.0}, {"rel": 1.0}]
     rel0 = float(layout[0].get("rel", 0.0))
     rel1 = float(layout[1].get("rel", 1.0))
-    abs_px0 = c_start + rel0 * (c_end - c_start)
-    abs_px1 = c_start + rel1 * (c_end - c_start)
+    stroke = resolve_axis_stroke(col_dict, group_obj)
+    plot_start = c_start + stroke
+    plot_span = max(1.0, (c_end - c_start) - stroke)
+    abs_px0 = plot_start + rel0 * plot_span
+    abs_px1 = plot_start + rel1 * plot_span
     val0 = float(x_values[0])
     val1 = float(x_values[1])
     return ColumnScale(
@@ -541,17 +561,26 @@ def _scale_from_ticks(
     c_start: float,
     c_end: float,
     *,
+    col_dict: dict[str, Any] | None = None,
+    group_obj: dict[str, Any] | None = None,
     unit: str,
     plot_type: str,
     scale_type: str,
     exaggeration_mult: float | None,
 ) -> ColumnScale:
-    """列自己的两点刻度（迁移期的单一事实源）：px 与 value 直接取用。"""
+    """列自己的两点刻度（迁移期的单一事实源）：px 与 value 直接取用。
+
+    唯一不采信外部输入的地方是 0 点：若 x_ticks[0].px 落在列左缘与 0 点之间，
+    说明写入方很可能把列左缘当成了 0 点（0 点的定义是 列左缘 + 轴粗）。这种情况
+    不直接改数（用户量的位置就是权威），而是打 origin_suspect，由下游提示/拒绝。
+    """
     t0, t1 = x_ticks[0], x_ticks[1]
     abs_px0 = float(t0.get("px", t0.get("pixel", c_start)))
     val0 = float(t0.get("value", t0.get("val", 0.0)))
     abs_px1 = float(t1.get("px", t1.get("pixel", c_end)))
     val1 = float(t1.get("value", t1.get("val", 100.0)))
+    stroke = resolve_axis_stroke(col_dict, group_obj)
+    origin_suspect = bool(stroke > 0 and (abs_px0 - c_start) < (stroke - 0.5))
     return ColumnScale(
         abs_px0=abs_px0,
         val0=val0,
@@ -563,6 +592,7 @@ def _scale_from_ticks(
         exaggeration_mult=exaggeration_mult,
         calibrated=True,
         source="x_ticks",
+        origin_suspect=origin_suspect,
     )
 
 

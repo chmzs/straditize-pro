@@ -229,6 +229,37 @@ export class ExportModal {
           </div>
         </div>
 
+        <!-- 本机出图预览：图直接显示在这里，下载走浏览器下载事件。
+             以前只把路径写进 ~/.straditize/plots，用户点完按钮还得自己去隐藏目录里找，
+             那不是「出图」，是「出一个文件路径」。 -->
+        <div class="form-group" id="wpd-plot-preview-box" style="display: none; margin: 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
+            <label style="font-size: 11px; font-weight: bold; color: var(--accent-blue);">本机出图预览</label>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <select id="sel-wpd-plot-format" class="sample-select" style="font-size: 11px;" title="出图格式（JPEG 可直接分享，PNG 无损）">
+                <option value="jpeg" selected>JPEG</option>
+                <option value="png">PNG</option>
+              </select>
+              <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-plot-download" disabled>下载图片</button>
+            </div>
+          </div>
+          <div id="wpd-plot-frame" style="border: 1px solid var(--border-light); border-radius: 6px; background: var(--bg-tertiary); padding: 4px; max-height: 420px; overflow: auto;">
+            <img id="wpd-plot-image" alt="地层图预览" style="display: block; width: 100%; height: auto;" />
+          </div>
+          <p id="wpd-plot-meta" style="font-size: 10px; color: var(--text-muted); margin: 6px 0 0;"></p>
+        </div>
+
+        <!-- y 轴范围：三项都填才生效（后端 validate_y_axis 同一口径）。留空 = 自动。 -->
+        <div class="form-group" id="wpd-plot-options" style="margin: 0;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span style="font-size: 11px; color: var(--text-muted);">y 轴范围（留空=自动，三项都填才生效）：</span>
+            <input type="number" id="inp-wpd-y-min" placeholder="min" style="width: 72px; font-size: 11px;" />
+            <input type="number" id="inp-wpd-y-max" placeholder="max" style="width: 72px; font-size: 11px;" />
+            <input type="number" id="inp-wpd-y-interval" placeholder="间隔" style="width: 72px; font-size: 11px;" />
+            <span id="wpd-plot-y-hint" style="font-size: 10px; color: var(--status-warning);"></span>
+          </div>
+        </div>
+
         <div class="ui-modal__footer export-modal-footer">
           <button class="ui-btn ui-btn--quiet" id="btn-wpd-copy">复制当前数据</button>
           <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-wpd-refresh" title="重新从后端拉取当前行集（画布上改过控制点后点这里）">刷新数据</button>
@@ -628,17 +659,74 @@ export class ExportModal {
     // 使用（`export.py:1129` 直接转调 `export_data`），`export.exportXlsx` /
     // `export.exportLipd` 更是没有行集参数。所以"选择器同时控制下载"只能由前端
     // 把**同一个矩阵**写出去 —— 这同时保证了预览与下载物逐格同值（构造即成立）。
-    // 本机出图：走本机 R（rioja::strat.plot），不联网。失败必须把「缺什么」原样告诉用户，
+    // 本机出图：走本机 R（riojaPlot 优先，缺失时回退 rioja::strat.plot），不联网。
+    //
+    // 产物**不落盘**：后端把图以 data URL 交回来，这里直接 <img src> 显示，
+    // 「下载」交给浏览器下载事件。失败必须把「缺什么」原样告诉用户，
     // 不许变成一张空白图（ARCHITECTURE §2）。
+    let lastPlot: { dataUrl: string; format: string } | null = null;
+    const plotImg = modal.querySelector('#wpd-plot-image') as HTMLImageElement | null;
+    const plotBox = modal.querySelector('#wpd-plot-preview-box') as HTMLElement | null;
+    const plotMeta = modal.querySelector('#wpd-plot-meta') as HTMLElement | null;
+    const plotDownload = modal.querySelector('#btn-wpd-plot-download') as HTMLButtonElement | null;
+    const plotFormat = modal.querySelector('#sel-wpd-plot-format') as HTMLSelectElement | null;
+
+    plotDownload?.addEventListener('click', () => {
+      if (!lastPlot) return;
+      const a = document.createElement('a');
+      a.href = lastPlot.dataUrl;
+      a.download = `straditize_strat_diagram_${Date.now()}.${lastPlot.format}`;
+      a.click();
+    });
+
     modal.querySelector('#btn-wpd-plot-oneclick')?.addEventListener('click', async (ev) => {
       const btn = ev.currentTarget as HTMLButtonElement;
       const label = btn.textContent || '本机出图';
+      const fmt = plotFormat?.value || 'jpeg';
+      // y 轴范围三格：三项都填才发给后端（后端同一口径，只给一部分会被整套忽略并提示）。
+      const readNum = (selector: string): number | null => {
+        const el = modal.querySelector(selector) as HTMLInputElement | null;
+        const raw = (el?.value ?? '').trim();
+        if (!raw) return null;
+        const value = Number(raw);
+        return Number.isFinite(value) ? value : null;
+      };
+      const yMin = readNum('#inp-wpd-y-min');
+      const yMax = readNum('#inp-wpd-y-max');
+      const yStep = readNum('#inp-wpd-y-interval');
+      const yGiven = [yMin, yMax, yStep].filter((v) => v !== null).length;
+      const yHint = modal.querySelector('#wpd-plot-y-hint') as HTMLElement | null;
+      let yAxis: { min: number; max: number; interval: number } | null = null;
+      if (yGiven === 3) {
+        yAxis = { min: yMin as number, max: yMax as number, interval: yStep as number };
+        if (yHint) yHint.textContent = '';
+      } else if (yGiven > 0) {
+        if (yHint) yHint.textContent = '需要三项都填才生效（本次已忽略，按数据自动）';
+      } else if (yHint) {
+        yHint.textContent = '';
+      }
       btn.disabled = true;
       btn.textContent = '出图中…';
       try {
-        const res: any = await this.rpcClient.call<any, any>('plot.render', { format: 'pdf' });
+        const res: any = await this.rpcClient.call<any, any>('plot.render', {
+          format: fmt,
+          ...(yAxis ? { settings: { y_axis: yAxis } } : {}),
+        });
+        if (!res?.data_url) throw new Error('后端没有返回图片数据（data_url 为空）');
+        lastPlot = { dataUrl: String(res.data_url), format: String(res.format || fmt) };
+        if (plotImg) plotImg.src = lastPlot.dataUrl;
+        if (plotBox) plotBox.style.display = '';
+        if (plotDownload) plotDownload.disabled = false;
         const sizeKb = Math.round(Number(res?.size_bytes || 0) / 1024);
-        notify('已出图：' + String(res?.path) + '（' + sizeKb + ' KB，' + String(res?.rows_count) + ' 行）', 'success', 8000);
+        const warns: string[] = Array.isArray(res?.warnings) ? res.warnings.filter(Boolean) : [];
+        if (plotMeta) {
+          plotMeta.textContent =
+            `${res?.engine || '?'} · ${res?.columns_count ?? '?'} 列 · ${res?.rows_count ?? '?'} 行 · ` +
+            `${res?.format || fmt} · ${sizeKb} KB` +
+            (warns.length ? ` · 警告：${warns.join(' / ')}` : '');
+        }
+        if (warns.length) notify('出图完成，但有降级：' + warns.join('；'), 'info', 12000);
+        else notify('出图完成（' + sizeKb + ' KB）：图在上方预览区，点「下载图片」保存。', 'success', 6000);
       } catch (err: any) {
         const data = (err as { data?: { reason?: string } } | null)?.data;
         notifyError(

@@ -20,7 +20,7 @@ from straditize_core.calibration import LinearCalibration, LogCalibration
 
 
 class TestPollenMorphologyBenchmarks(unittest.TestCase):
-    BENCHMARK_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "figures", "benchmark_types")
+    BENCHMARK_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "figures", "bench")
 
     def _get_image_path(self, filename: str) -> str:
         path = os.path.join(self.BENCHMARK_DIR, filename)
@@ -28,9 +28,9 @@ class TestPollenMorphologyBenchmarks(unittest.TestCase):
             self.skipTest(f"Benchmark asset {filename} not found in {self.BENCHMARK_DIR}")
         return path
 
-    def test_type1_filled_silhouette(self):
+    def test_silhouette_filled_abernethy(self):
         """Type 1: Continuous filled silhouette area digitization."""
-        img_path = self._get_image_path("type1_filled_silhouette_aber.png")
+        img_path = self._get_image_path("silhouette_filled_abernethy.png")
         session = StraditizeSession()
         info = session.load_image(img_path)
         self.assertGreater(info["width"], 100)
@@ -49,9 +49,9 @@ class TestPollenMorphologyBenchmarks(unittest.TestCase):
         self.assertIn("points", dig_res)
         self.assertGreater(len(dig_res["points"]), 0)
 
-    def test_type2_exaggeration_handling(self):
+    def test_silhouette_exaggerated_bell(self):
         """Type 2: Low-abundance exaggeration curves (e.g. 5x overlay)."""
-        img_path = self._get_image_path("type2_exaggeration_bell.png")
+        img_path = self._get_image_path("silhouette_exaggerated_bell.png")
         session = StraditizeSession()
         info = session.load_image(img_path)
         self.assertGreater(info["width"], 200)
@@ -63,9 +63,9 @@ class TestPollenMorphologyBenchmarks(unittest.TestCase):
         cols = session.detect_columns([100, info["width"] - 50], [80, info["height"] - 80])
         self.assertGreaterEqual(len(cols), 1)
 
-    def test_type3_discrete_horizontal_bars(self):
+    def test_bars_discrete_bell(self):
         """Type 3: Discrete horizontal bars across discrete stratigraphic samples."""
-        img_path = self._get_image_path("type3_discrete_bars_bell.png")
+        img_path = self._get_image_path("bars_discrete_bell.png")
         session = StraditizeSession()
         info = session.load_image(img_path)
         self.assertGreater(info["width"], 200)
@@ -76,9 +76,9 @@ class TestPollenMorphologyBenchmarks(unittest.TestCase):
         cols = session.detect_columns([100, info["width"] - 50], [80, info["height"] - 80])
         self.assertGreaterEqual(len(cols), 1)
 
-    def test_type4_pure_line_proxies(self):
+    def test_line_pure_proxy(self):
         """Type 4: Pure line curves / non-filled proxy indicator curves."""
-        img_path = self._get_image_path("type4_pure_line_proxy.png")
+        img_path = self._get_image_path("line_pure_proxy.png")
         session = StraditizeSession()
         info = session.load_image(img_path)
         self.assertGreater(info["width"], 100)
@@ -86,9 +86,9 @@ class TestPollenMorphologyBenchmarks(unittest.TestCase):
         fg_res = session.extract_foreground(mode="otsu")
         self.assertGreater(fg_res["foreground_pixels"], 0)
 
-    def test_type5_presence_absence_symbols(self):
+    def test_symbols_presence_absent(self):
         """Type 5: Discrete presence/absence symbol markings (<2% detections)."""
-        img_path = self._get_image_path("type5_presence_symbols.png")
+        img_path = self._get_image_path("symbols_presence_absent.png")
         session = StraditizeSession()
         info = session.load_image(img_path)
         self.assertGreater(info["width"], 100)
@@ -96,9 +96,9 @@ class TestPollenMorphologyBenchmarks(unittest.TestCase):
         fg_res = session.extract_foreground(mode="otsu")
         self.assertGreater(fg_res["foreground_pixels"], 0)
 
-    def test_type6_composite_diagram_roi_and_calibration(self):
+    def test_composite_zonation_cluster(self):
         """Type 6: Composite publication diagram (Zonation + Dual Y-axis + Dendrogram)."""
-        img_path = self._get_image_path("type6_composite_zonation_cluster.png")
+        img_path = self._get_image_path("composite_zonation_cluster.png")
         session = StraditizeSession()
         info = session.load_image(img_path)
         self.assertGreater(info["width"], 300)

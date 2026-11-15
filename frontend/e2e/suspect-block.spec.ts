@@ -61,7 +61,7 @@ async function loadBenchmarkProductPath(
 ): Promise<WireColumn[]> {
   await openApp(page);
   const load = await rpc<{ suggested_roi: Record<string, number> }>(page, 'core.loadImage', {
-    image_path: 'tests/data/figures/benchmark_types/Pollen_riojaPlotTestData.png',
+    image_path: 'tests/data/figures/riojaplot/pollen_area_riojaplot.png',
   });
   const sug = load.suggested_roi;
   await rpc(page, 'core.detectColumns', {

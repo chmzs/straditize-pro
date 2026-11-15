@@ -97,12 +97,12 @@ class TestMeasureAxisRightEdge:
         assert measure_axis_right_edge(np.zeros((5, 0, 3), dtype=np.uint8), np.zeros((5, 0), dtype=bool), [0]) == [0]
 
 
-REAL_PLATE = "tests/data/figures/real_plates/fig3_raw.jpeg"
+REAL_PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
 
 
 @pytest.mark.skipif(
     not os.path.exists(REAL_PLATE),
-    reason="真实图版不在本机（output/ 不入库），需 fig3_raw.jpeg 才能验真",
+    reason="真实图版不在本机（output/ 不入库），需 han2026GPC_ngamringLake_withbackcolor.jpeg 才能验真",
 )
 class TestRealPlateZeroPoint:
     """真实图版上：分列后每列零点必须落在灰线右缘（或实心块左缘）。"""

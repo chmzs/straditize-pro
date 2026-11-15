@@ -36,7 +36,7 @@ from straditize_core.protocol import CALIBRATION_ERROR, JsonRpcError
 from straditize_core.session import StraditizeSession
 from straditize_core.session_parts.xscale import resolve_column_scale
 
-PLATE = "tests/data/figures/real_plates/fig3_raw.jpeg"
+PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
 
 
 def _base_payload() -> dict:

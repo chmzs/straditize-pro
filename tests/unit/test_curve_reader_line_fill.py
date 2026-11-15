@@ -20,8 +20,8 @@ import pytest
 from straditize_core.digitize import _line_own_offset
 from straditize_core.session import StraditizeSession
 
-BENCH = os.path.join("tests", "data", "figures", "benchmark_types")
-DIATOM_IMAGE = os.path.join(BENCH, "Diatom_riojaPlotTestData.png")
+RIOJAPLOT = os.path.join("tests", "data", "figures", "riojaplot")
+DIATOM_IMAGE = os.path.join(RIOJAPLOT, "diatom_area_riojaplot.png")
 
 
 def _row(offsets: list[int], areas: list[float]):

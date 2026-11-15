@@ -26,7 +26,7 @@ import pandas as pd
 
 from straditize_core.session import StraditizeSession
 
-PLATE = "tests/data/figures/benchmark_types/Diatom_riojaPlotTestData.png"
+PLATE = "tests/data/figures/riojaplot/diatom_area_riojaplot.png"
 XLIM = [70, 1055]
 YLIMS = ([1, 579], [70, 565], [78, 563], [120, 500])
 

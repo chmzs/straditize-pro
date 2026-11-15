@@ -45,15 +45,15 @@ from straditize_core.session_parts.core import (
     _detect_block_column,
 )
 
-BENCH_DIR = Path("tests/data/figures/benchmark_types")
+RIOJAPLOT_DIR = Path("tests/data/figures/riojaplot")
 
 #: 五张图的期望命中列（1-based），来自 Lead 实测 + 本文件复核。
 EXPECTED_FLAGGED = {
     "hoya": [29],
     "beginner": [4],
-    "Pollen_riojaPlotTestData.png": [21],
-    "Pollen_BarStyle_riojaPlotTestData.png": [21],
-    "Pollen_CruveStyle_riojaPlotTestData.png": [21],
+    "pollen_area_riojaplot.png": [21],
+    "pollen_bars_riojaplot.png": [21],
+    "pollen_curves_riojaplot.png": [21],
 }
 
 
@@ -73,7 +73,7 @@ def _load_and_split(**kwargs) -> StraditizeSession:
 
 
 def _bench(name: str) -> str:
-    return str(BENCH_DIR / name)
+    return str(RIOJAPLOT_DIR / name)
 
 
 class TestBuiltInFigures:
@@ -106,7 +106,7 @@ class TestBuiltInFigures:
 
         补过两种判据都被真实数据证伪：
         - "墨迹宽度 ≤3px 即非曲线" → 误标 Diatom 18 列、PollenCurve 13 列真实细线；
-        - "内部墨迹比低即空框" → 误标 Pollen_CruveStyle col6 真实细线曲线。
+        - "内部墨迹比低即空框" → 误标 pollen_curves_riojaplot col6 真实细线曲线。
 
         彻底区分"空框"与"细线曲线"需要"墨迹位置是否随 y 变化"这个维度，属独立任务。
         当前保持已知缺口：col29 不被标记，其数值仍进导出。
@@ -152,9 +152,9 @@ class TestBenchmarkFigures:
     @pytest.mark.parametrize(
         "figure_name",
         [
-            "Pollen_riojaPlotTestData.png",
-            "Pollen_BarStyle_riojaPlotTestData.png",
-            "Pollen_CruveStyle_riojaPlotTestData.png",
+            "pollen_area_riojaplot.png",
+            "pollen_bars_riojaplot.png",
+            "pollen_curves_riojaplot.png",
         ],
     )
     def test_flags_only_col21(self, figure_name: str) -> None:
@@ -170,7 +170,7 @@ class TestBenchmarkFigures:
 
     def test_bar_style_real_columns_are_not_flagged(self) -> None:
         """**最大风险点**：bar 风格的列宽度也可能较恒定，不得被误判成色块。"""
-        path = _bench("Pollen_BarStyle_riojaPlotTestData.png")
+        path = _bench("pollen_bars_riojaplot.png")
         if not os.path.exists(path):
             pytest.skip(f"基准图不存在：{path}")
 
