@@ -490,6 +490,50 @@ export interface DepthHorizon {
   values: Record<string, number>;
 }
 
+/**
+ * QA 异常清单里的一条：`empty_horizons` 与 `violations_over` 共用本结构。
+ *
+ * 两个字段各自只在一边出现——`reason` 只由空层位给（`qa.py:65-70`，值恒为
+ * `"no ink read"`），`sum` 只由超标层位给（`qa.py:93-99`）。故各为可选。
+ */
+export interface QaHorizonSummary {
+  depth: number | null;
+  reason?: string;
+  sum?: number;
+}
+
+/** 单列峰值与声明刻度的对照（`per_column_max` 的一条，见 `qa.py:131-140`）。 */
+export interface QaColumnMax {
+  name: string;
+  peak: number;
+  declared_max: number;
+  over: boolean;
+  calibrated?: boolean;
+}
+
+/**
+ * `qa.summarize` 单个分区的返回（Frozen Contract v1.3 §2.7）。
+ *
+ * **全仓唯一一份定义**：`core/qaVerdict.ts` 的聚合、`components/steps/QaPanel.ts`
+ * 的渲染、`components/ExportModal.ts` 的自检都从这里 import。曾经
+ * `steps/QaPanel.ts` 自带一份同名宽定义、这里留一份窄定义（缺 `violations_over` /
+ * `per_column_max` / `tolerance` / `shortfall`），两个消费者各信一份，改哪份都不同步，
+ * 而 tsc 两边都能过（issue #16）。
+ *
+ * ## 必填 vs 可选的分界线是后端的两条 return 路径
+ *
+ * `straditize_core/qa.py::compute_qa_summary` 有两条出口：
+ *
+ * - 空集提前返回（`:38-52`）：`n_horizons` :43、`n_horizons_with_data` :44、
+ *   `n_horizons_empty` :45、`empty_horizons` :46、`sum` :47、`tolerance` :48、
+ *   `violations_over` :49、`shortfall` :50、`per_column_max` :51 —— **全部都给**。
+ * - 正常返回（`:141-156`）：上述字段全部再给一遍（`:145`–`:153`），**并额外**
+ *   给 `n_uncalibrated` :154 与 `uncalibrated_columns` :155。
+ *
+ * 所以只有 `n_uncalibrated` / `uncalibrated_columns` 是"空集路径确实不给"⇒ 可选，
+ * 消费端用 `?.` 是对的。其余字段一律必填：消费端不得用 `?.` / `?? ` 把
+ * "后端没给"兜成 0——那是契约破损，必须报错（#14、#16）。
+ */
 export interface QaSummary {
   roi_id: string;
   roi_name: string;
@@ -497,8 +541,14 @@ export interface QaSummary {
   n_horizons: number;
   n_horizons_with_data: number;
   n_horizons_empty: number;
-  empty_horizons: { depth: number | null; reason: string }[];
+  empty_horizons: QaHorizonSummary[];
   sum: { min: number; p50: number; max: number; mean: number };
+  tolerance: number;
+  violations_over: QaHorizonSummary[];
+  shortfall: { min: number; max: number; mean: number };
+  per_column_max: QaColumnMax[];
+  n_uncalibrated?: number;
+  uncalibrated_columns?: string[];
 }
 
 export type ControlPoint = Point;

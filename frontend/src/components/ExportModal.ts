@@ -9,7 +9,7 @@ import {
   type QaAggregate,
   type QaScopePart,
 } from '../core/qaVerdict';
-import type { QaSummary } from './steps/QaPanel';
+import type { QaSummary } from '../types/pollen';
 import { notifyError } from '../ui/feedback';
 
 export class ExportModal {

@@ -120,8 +120,9 @@ export function isPassingVerdict(verdict: QaVerdict): boolean {
  * ------------------------------------------------------------------ */
 
 /**
- * 一个分区 `qa.summarize` 的返回（结构上兼容 `steps/QaPanel` 的 `QaSummary` 与
- * `ExportModal` 里的同名类型；这里只声明聚合真正用到的字段）。
+ * 一个分区 `qa.summarize` 的返回。这是 `types/pollen.ts::QaSummary` 的**子集**：
+ * 同一份后端契约，这里只声明聚合真正用到的字段（全字段表在 `QaSummary`，
+ * 渲染层用它；两份不得再各自演进出不同的必填/可选口径，见 issue #16）。
  *
  * ## 必填 vs 可选的分界线是**后端的两条 return 路径**，不是"聚合读不读"
  *

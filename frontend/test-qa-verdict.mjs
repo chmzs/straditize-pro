@@ -15,6 +15,8 @@
  * 5. 聚合必须覆盖**所有**有列分区：任一分区超标 ⇒ 红；范围文案必须点名分区。
  */
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   aggregateHeadline,
   aggregateQaScope,
@@ -367,6 +369,85 @@ check('缺 summary.n_horizons_empty 必须抛错（不得按 0 空层位兜）',
     () => aggregateQaScope([broken], [], TOL),
     /summary\.n_horizons_empty（违反契约）/,
     '缺 summary.n_horizons_empty 时报错信息必须点名该字段'
+  );
+});
+
+/*
+ * ---- 16. `QaSummary` 在全仓只允许有一份定义 ----
+ *
+ * 为什么用"扫描源码 + 字段清单"而不是"删掉就算"：同名类型留两份，任何一侧单独演进
+ * 都会让**另一个消费者**静默相信一份过时的形状——tsc 不会报错，因为两份各自都能编译。
+ * 这正是本 issue 的原始形态：`types/pollen.ts:493` 那份窄（缺 `violations_over` /
+ * `per_column_max` / `tolerance` / `shortfall`），`steps/QaPanel.ts:30` 那份宽，
+ * 而 `components/ExportModal.ts:12` 从组件里 import、`QaPanel` 内部用自己的那份。
+ *
+ * 判据分三层，互相不可替代：
+ * 1. **基数**：`src/**` 内 `interface QaSummary` 只能出现一次，且落在 `types/pollen.ts`。
+ * 2. **内容**：那份声明必须包含后端两条路径恒返回的**全部**字段（窄定义在此处红）。
+ * 3. **消费端**：`QaPanel` 必须从 `types/pollen` import，不得自带第二份。
+ */
+
+/** `qa.summarize` 返回里后端**恒给**、前端因此必须声明的字段。 */
+const QA_SUMMARY_REQUIRED_FIELDS = [
+  'roi_id',
+  'roi_name',
+  'composition',
+  'n_horizons',
+  'n_horizons_with_data',
+  'n_horizons_empty',
+  'empty_horizons',
+  'sum',
+  'tolerance',
+  'violations_over',
+  'shortfall',
+  'per_column_max',
+];
+
+/**
+ * 取某段源码里唯一那份 `interface QaSummary` 的声明文本（从 `interface` 到行首 `}`）。
+ *
+ * @param {string} source 文件全文
+ * @returns {string} 声明体
+ */
+function qaSummaryInterfaceBody(source) {
+  const start = source.search(/^[ \t]*(?:export[ \t]+)?interface[ \t]+QaSummary\b/m);
+  assert.notEqual(start, -1, '该文件未声明 interface QaSummary');
+  const body = source.slice(start);
+  const end = body.search(/^\}/m);
+  assert.notEqual(end, -1, 'interface QaSummary 没有闭合的行首 }');
+  return body.slice(0, end);
+}
+
+check('QaSummary 全仓唯一：只允许 src/types/pollen.ts 声明，且字段集完整', () => {
+  const srcDir = fileURLToPath(new URL('./src/', import.meta.url));
+  const relFiles = readdirSync(srcDir, { recursive: true, encoding: 'utf8' })
+    .map((rel) => rel.replace(/\\/g, '/'))
+    .filter((rel) => rel.endsWith('.ts'))
+    .sort();
+
+  const definers = relFiles.filter((rel) =>
+    /^[ \t]*(?:export[ \t]+)?interface[ \t]+QaSummary\b/m.test(readFileSync(srcDir + rel, 'utf8'))
+  );
+  assert.deepEqual(
+    definers,
+    ['types/pollen.ts'],
+    `interface QaSummary 必须全仓只有一份且在 types/pollen.ts，实际声明处：${definers.join(', ') || '（无）'}`
+  );
+
+  const body = qaSummaryInterfaceBody(readFileSync(srcDir + 'types/pollen.ts', 'utf8'));
+  for (const field of QA_SUMMARY_REQUIRED_FIELDS) {
+    assert.match(
+      body,
+      new RegExp(`^[ \\t]*${field}\\??[ \\t]*:`, 'm'),
+      `types/pollen.ts 的 QaSummary 缺少后端恒返回的字段 ${field}（窄定义会与消费端分叉）`
+    );
+  }
+
+  const panel = readFileSync(srcDir + 'components/steps/QaPanel.ts', 'utf8');
+  assert.match(
+    panel,
+    /import[^;]*\bQaSummary\b[^;]*from '\.\.\/\.\.\/types\/pollen'/,
+    'QaPanel 必须从 ../../types/pollen import QaSummary（单一来源），不得自带定义'
   );
 });
 

@@ -1,4 +1,5 @@
 import { DiagramData } from '../../types/pollen';
+import type { QaHorizonSummary, QaSummary } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
 import { RpcClient } from '../../services/RpcClient';
@@ -12,37 +13,6 @@ import {
 
 export const step = 8;
 export const title = '8. 校验与质量诊断';
-
-export interface QaHorizonSummary {
-  depth: number | null;
-  reason?: string;
-  sum?: number;
-}
-
-export interface QaColumnMax {
-  name: string;
-  peak: number;
-  declared_max: number;
-  over: boolean;
-  calibrated?: boolean;
-}
-
-export interface QaSummary {
-  roi_id: string;
-  roi_name: string;
-  composition: boolean;
-  n_horizons: number;
-  n_horizons_with_data: number;
-  n_horizons_empty: number;
-  empty_horizons: QaHorizonSummary[];
-  sum: { min: number; p50: number; max: number; mean: number };
-  tolerance: number;
-  violations_over: QaHorizonSummary[];
-  shortfall: { min: number; max: number; mean: number };
-  per_column_max: QaColumnMax[];
-  n_uncalibrated?: number;
-  uncalibrated_columns?: string[];
-}
 
 // 缓存最近一次的 QA 诊断结果（**聚合**：所有有列分区）
 let latestAggregate: QaAggregate | null = null;
