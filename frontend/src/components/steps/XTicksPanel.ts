@@ -11,6 +11,7 @@ import {
 import { renderOtherSuspectColumnsSummary } from './SuspectBlockNotice';
 import { resolveAxisStroke } from '../../core/axisStroke';
 import { resolveColumnAtX } from '../../core/tickRouting';
+import { setGroupCalibMark } from '../canvas/groupCalibMarks';
 
 /** 步骤 6 面板的全部可变状态。 */
 interface XTicksPanelState {
@@ -604,9 +605,10 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       // 斜率 = 值 / 距 0 点像素。0 点 = 左缘 + 轴线粗（见 ARCHITECTURE §6.4）。
       const pickedDist = state.pendingTick.dist;
       const slope = value / pickedDist;
+      setGroupCalibMark(state.selectedGroupId, { px: state.pendingTick.px, reading: value });
       patchGroup({ value_per_px: slope });
       state.pendingTick = null;
-      notify(`已按「${value} 对应 ${pickedDist.toFixed(0)}px」标定本组：斜率 ${slope.toFixed(4)}`, 'info');
+      notify(`已按「${value} 对应 ${pickedDist.toFixed(0)}px」标定本组：斜率 ${slope.toFixed(3)}`, 'info');
     });
   };
   wireTickCalibration();
