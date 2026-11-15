@@ -17,6 +17,7 @@
  * `startX`（红线已画）；再画一条会让用户无法判断哪条才是真正的分界。
  */
 import { resolveAxisStroke } from '../../core/axisStroke';
+import { groupBandRect } from './groupBandRect';
 import { formatCalibNumber, getGroupCalibMark } from './groupCalibMarks';
 import type { DataRoi, TaxaColumn } from '../../types/pollen';
 
@@ -99,7 +100,10 @@ function drawGroupBands(env: ColumnBoundaryEnv): void {
     const color = GROUP_BAND_PALETTE[idx % GROUP_BAND_PALETTE.length];
 
     ctx.fillStyle = color;
-    ctx.fillRect(col.startX, bandY, Math.max(1, col.endX - col.startX), bandH);
+    const band = groupBandRect(col.startX, col.endX, resolveAxisStroke(col, groups[idx]));
+    if (band.width > 0) {
+      ctx.fillRect(band.x, bandY, band.width, bandH);
+    }
 
     if (gid !== prevGid) {
       const name = groups[idx]?.name ?? '';

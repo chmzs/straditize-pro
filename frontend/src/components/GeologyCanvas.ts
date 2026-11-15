@@ -1415,7 +1415,11 @@ private pointer: PointerState = {
       if (col && dx !== 0) {
         if (part === 'start') {
           col.startX += dx;
-          if (col.scaleCalib) col.scaleCalib.originX = col.startX;
+          // 0 点 = 列左缘 + 轴粗：拖列左缘只挪几何，轴粗不变，originX 必须跟着加回轴粗，
+          // 否则拖动一次就丢掉轴粗（读数系统性偏大 轴粗×斜率）。
+          if (col.scaleCalib) {
+            col.scaleCalib.originX = col.startX + resolveAxisStroke(col, this.groupOfColumn(col));
+          }
         } else if (part === 'tick') {
           col.tickEndX = (col.tickEndX ?? col.endX) + dx;
           if (col.scaleCalib) col.scaleCalib.calibX = col.tickEndX;
