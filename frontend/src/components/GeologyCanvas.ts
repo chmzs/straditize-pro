@@ -11,6 +11,7 @@ import { SplineInterpolator } from '../core/SplineInterpolator';
 import { HistoryManager } from '../core/HistoryManager';
 import { ToolModeManager } from '../core/ToolModeManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
+import { controlPointsForWriteback } from '../core/controlPointWriteback';
 import { resolveAxisStroke } from '../core/axisStroke';
 import { columnPick, setPickedColumnIds } from './steps/columnPick';
 import {
@@ -1372,11 +1373,14 @@ private pointer: PointerState = {
     const idx = this.data.columns.findIndex((c) => c.id === colId);
     if (idx < 0) return;
     const col = this.data.columns[idx];
-    const points = col.controlPoints.map((p) => ({
-      row: Math.round(p.y),
-      x: p.x,
-      manual: p.isManual !== false,
-    }));
+    // 写回前按**当前** 0 点重算下界：镜像里的 x 可能来自上一次标定（拖动/换标度后
+    // originX 变了），直接回写会被后端拒绝（-32602 读数不能为负），整列写回失败。
+    // 拖动 / 微调（去抖 500ms）/ 删除 / 新增 都走这里，所以只需要这一处。
+    // 0 点用**几何规则**算，不读 col.scaleCalib.originX：换标定后前端镜像里的
+    // scaleCalib 可能还是旧值（实测 319 vs 后端 324），那样钳制等于没钳。
+    // 规则与后端 xscale.resolve_axis_stroke 同源：列级 axis_stroke_px > 组级 > 5。
+    const zeroX = col.startX + resolveAxisStroke(col, this.groupOfColumn(col));
+    const points = controlPointsForWriteback(col.controlPoints, zeroX);
     this.callbacks.onControlPointsCommit?.(idx, points);
   }
 
