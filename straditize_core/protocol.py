@@ -143,6 +143,8 @@ ALL_RPC_METHODS: tuple[str, ...] = (
     "point.add",
     "point.move",
     "point.remove",
+    "plot.detectR",
+    "plot.render",
     "project.load",
     "project.new",
     "project.save",

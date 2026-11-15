@@ -117,6 +117,8 @@ export type RpcMethod =
   | 'point.add'
   | 'point.move'
   | 'point.remove'
+  | 'plot.detectR'
+  | 'plot.render'
   | 'project.load'
   | 'project.new'
   | 'project.save'
