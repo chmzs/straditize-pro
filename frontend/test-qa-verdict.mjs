@@ -213,6 +213,7 @@ check('没有可校验分区时，范围文案必须说清（不得伪造已校�
       part('empty', {
         n_horizons: 0,
         n_horizons_with_data: 0,
+        n_horizons_empty: 0,
         empty_horizons: [],
         per_column_max: [],
         violations_over: [],
@@ -315,6 +316,57 @@ check('缺 summary.empty_horizons 必须抛错（不得渲染成「0 个空层�
     () => aggregateQaScope([broken], [], TOL),
     /summary\.empty_horizons（违反契约）/,
     '缺 summary.empty_horizons 时报错信息必须点名该字段'
+  );
+});
+
+/*
+ * ---- 13/14/15. 契约：三个层位计数恒返回，实现里不得再 `?? 0` ----
+ *
+ * `n_horizons` / `n_horizons_with_data` / `n_horizons_empty` 在两条 return 路径都给：
+ * 空集 `qa.py:43-45`，正常 `:145-147`。而旧实现把前两个写成
+ * `p.summary.n_horizons_with_data ?? p.summary.n_horizons ?? 0` 与 `?? 0`：
+ * 缺 `n_horizons_with_data` 时静默改用 `n_horizons`（把"没数据"说成"有数据"），
+ * 两者都缺时按 0 算，于是「无可校验层位」把契约破损报成"用户没画层位"。
+ *
+ * 这些字段是 HTTP 响应体里的 JSON，tsc 不参与，所以判据必须落在运行时。
+ */
+
+check('缺 summary.n_horizons 必须抛错（不得按 0 层位算出「无可校验层位」）', () => {
+  const broken = partFromJson(
+    'a',
+    '{"n_horizons_with_data":6,"n_horizons_empty":0,"empty_horizons":[],' +
+      '"per_column_max":[],"violations_over":[],"sum":{"max":96}}'
+  );
+  assert.throws(
+    () => aggregateQaScope([broken], [], TOL),
+    /summary\.n_horizons（违反契约）/,
+    '缺 summary.n_horizons 时报错信息必须点名该字段'
+  );
+});
+
+check('缺 summary.n_horizons_with_data 必须抛错（不得静默改用 n_horizons）', () => {
+  const broken = partFromJson(
+    'a',
+    '{"n_horizons":6,"n_horizons_empty":0,"empty_horizons":[],' +
+      '"per_column_max":[],"violations_over":[],"sum":{"max":96}}'
+  );
+  assert.throws(
+    () => aggregateQaScope([broken], [], TOL),
+    /summary\.n_horizons_with_data（违反契约）/,
+    '缺 summary.n_horizons_with_data 时报错信息必须点名该字段'
+  );
+});
+
+check('缺 summary.n_horizons_empty 必须抛错（不得按 0 空层位兜）', () => {
+  const broken = partFromJson(
+    'a',
+    '{"n_horizons":6,"n_horizons_with_data":6,"empty_horizons":[],' +
+      '"per_column_max":[],"violations_over":[],"sum":{"max":96}}'
+  );
+  assert.throws(
+    () => aggregateQaScope([broken], [], TOL),
+    /summary\.n_horizons_empty（违反契约）/,
+    '缺 summary.n_horizons_empty 时报错信息必须点名该字段'
   );
 });
 

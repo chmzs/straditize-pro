@@ -147,9 +147,12 @@ export function isPassingVerdict(verdict: QaVerdict): boolean {
  */
 export interface QaScopeSummary {
   ratio?: number;
+  /** 层位总数；后端**恒返回**（空集 `qa.py:43`，正常 `:145`）。 */
   n_horizons: number;
+  /** 有读数的层位数；后端**恒返回**（空集 `qa.py:44`，正常 `:146`）。 */
   n_horizons_with_data: number;
-  n_horizons_empty?: number;
+  /** 空层位数；后端**恒返回**（空集 `qa.py:45`，正常 `:147`）。 */
+  n_horizons_empty: number;
   /** 超标层位清单；后端**恒返回**（空集时为 `[]`，`qa.py:49` / `:151`）。 */
   violations_over: unknown[];
   /** 空层位清单；后端**恒返回**（空集时为 `[]`，`qa.py:46` / `:148`）。 */
@@ -207,6 +210,14 @@ function scopeNames(parts: { roiName: string }[]): string {
 }
 
 /**
+ * 后端**两条 return 路径都给**的层位计数（空集 `qa.py:43-45`，正常 `:145-147`）。
+ *
+ * 抽成一张表是为了让 `assertQaScopeContract` 的报错文案与字段名一一对应，
+ * 新增同类字段时只改这一处，不会漏掉某个 reduce 里的 `?? 0`（issue #16）。
+ */
+const QA_COUNT_FIELDS = ['n_horizons', 'n_horizons_with_data', 'n_horizons_empty'] as const;
+
+/**
  * 后端契约核查：`qa.summarize` 的返回一旦缺少聚合要读的字段，就在这里变成
  * **点名该字段与该分区**的异常，而不是让 `?.` 兜成 0 / null。
  *
@@ -239,6 +250,11 @@ function assertQaScopeContract(part: QaScopePart): void {
   if (typeof summary.sum?.max !== 'number') {
     throw new Error(`qa.summarize 返回缺少 summary.sum.max（违反契约）：分区 ${who}`);
   }
+  for (const field of QA_COUNT_FIELDS) {
+    if (typeof summary[field] !== 'number') {
+      throw new Error(`qa.summarize 返回缺少 summary.${field}（违反契约）：分区 ${who}`);
+    }
+  }
 }
 
 /**
@@ -263,13 +279,12 @@ export function aggregateQaScope(
 ): QaAggregate {
   parts.forEach(assertQaScopeContract);
 
-  const nChecked = parts.reduce(
-    (sum, p) => sum + (p.summary.n_horizons_with_data ?? p.summary.n_horizons ?? 0),
-    0
-  );
-  const nHorizons = parts.reduce((sum, p) => sum + (p.summary.n_horizons ?? 0), 0);
-  const nHorizonsEmpty = parts.reduce((sum, p) => sum + (p.summary.n_horizons_empty ?? 0), 0);
+  const nChecked = parts.reduce((sum, p) => sum + p.summary.n_horizons_with_data, 0);
+  const nHorizons = parts.reduce((sum, p) => sum + p.summary.n_horizons, 0);
+  const nHorizonsEmpty = parts.reduce((sum, p) => sum + p.summary.n_horizons_empty, 0);
   const nOverHorizons = parts.reduce((sum, p) => sum + p.summary.violations_over.length, 0);
+  /* `n_uncalibrated` / `uncalibrated_columns` 是**唯二**允许可选的字段：
+     空集提前返回（`qa.py:39-52`）确实不给它们。 */
   const nUncalibrated = parts.reduce(
     (sum, p) =>
       sum + (p.summary.n_uncalibrated ?? p.summary.uncalibrated_columns?.length ?? 0),
@@ -284,16 +299,16 @@ export function aggregateQaScope(
   const weighted = parts.filter(
     (p) =>
       typeof (p.summary as { shortfall?: { mean?: number } }).shortfall?.mean === 'number' &&
-      (p.summary.n_horizons_with_data ?? 0) > 0
+      p.summary.n_horizons_with_data > 0
   );
-  const weightedTotal = weighted.reduce((s, p) => s + (p.summary.n_horizons_with_data ?? 0), 0);
+  const weightedTotal = weighted.reduce((s, p) => s + p.summary.n_horizons_with_data, 0);
   const shortfallMean =
     weightedTotal > 0
       ? weighted.reduce(
           (s, p) =>
             s +
             ((p.summary as { shortfall?: { mean?: number } }).shortfall?.mean ?? 0) *
-              (p.summary.n_horizons_with_data ?? 0),
+              p.summary.n_horizons_with_data,
           0
         ) / weightedTotal
       : null;
