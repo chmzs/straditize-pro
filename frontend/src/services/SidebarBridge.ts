@@ -35,7 +35,7 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
       // `#naming-sequential-highlight` 找不到，命名核对功能等于失效）。
       // 其它阶段仍然点选即看列属性——那是 U6 给【删除列】开入口的做法。
       // 列属性面板只在步骤 7（拐点与采样层位）出现：步骤 6 点列只高亮，不换面板。
-      if (p.canvasComponent.workflowStage === STAGE.SPEARS_AND_SAMPLES) {
+      if (p.canvasComponent.workflowStage === STAGE.SPLIT || p.canvasComponent.workflowStage === STAGE.SPEARS_AND_SAMPLES) {
         p.canvasComponent.data.selectedEntity = { type: 'column', id: taxaId };
         p.getInspector()?.updateData(p.canvasComponent.data);
       }
