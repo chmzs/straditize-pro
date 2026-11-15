@@ -138,7 +138,7 @@ class DigitizeSessionMixin:
         self._interpolate_across_hlines(points, c_start)
 
         control_points, ctrl_pts_list = self._turning_control_points(
-            points, c_start, y0, y1, col_index
+            points, c_start, y0, y1, col_index, float(c_end - c_start)
         )
 
         # 重建只产出**算法**拐点；用户手工点原样并入（不删、不移动）。
@@ -391,16 +391,30 @@ class DigitizeSessionMixin:
         y0: int,
         y1: int,
         col_index: int,
+        col_width: float,
     ) -> tuple[dict[int, float], list[dict[str, Any]]]:
         """按地形显著度抽拐点，再补首末两个端点控制点，返回 (行号→x 字典, 控制点列表)。"""
         control_points: dict[int, float] = {}
         # Advanced peak extraction: using topological prominence and local extrema
         curve_profile = np.array([p["x"] - c_start for p in points], dtype=float)
+        # 阈值随列宽缩放：宽度按像素读，1.5px 的绝对显著度在 700px 宽的列上会把
+        # 抗锯齿与基线抖动全当拐点（实测：贴轴 3-10px 处冒出成对小折角）。
+        prominence_px = max(2.0, 0.02 * float(col_width))
+        epsilon_px = max(1.0, 0.005 * float(col_width))
+        min_distance_px = 3
+        baseline_px = max(2.0, 0.01 * float(col_width))
         turning_rows, turning_vals, is_mand = detect_stratigraphic_turning_points(
-            curve_profile, prominence=1.5, min_distance=3, epsilon=1.0, max_points=32
+            curve_profile,
+            prominence=prominence_px,
+            min_distance=min_distance_px,
+            epsilon=epsilon_px,
+            max_points=32,
         )
         ctrl_pts_list = []
         for r_rel, v_rel, _mand in zip(turning_rows, turning_vals, is_mand):
+            # 基线附近的微折角不算拐点：幅度小于 baseline_px 的起伏只是线宽/抗锯齿。
+            if abs(float(v_rel)) <= baseline_px:
+                continue
             r_int = int(y0 + r_rel)
             x_val = float(c_start + v_rel)
             control_points[r_int] = x_val
