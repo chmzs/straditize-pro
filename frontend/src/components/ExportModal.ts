@@ -10,7 +10,7 @@ import {
   type QaScopePart,
 } from '../core/qaVerdict';
 import type { QaSummary } from '../types/pollen';
-import { notifyError } from '../ui/feedback';
+import { notify, notifyError } from '../ui/feedback';
 
 export class ExportModal {
   private container: HTMLElement;
@@ -221,6 +221,8 @@ export class ExportModal {
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-csv">CSV</button>
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-lipd" title="导出符合 LiPD / LinkedEarth 规范的数据包">LiPD</button>
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-r" title="下载 rioja::strat.plot 绘图脚本">R 脚本</button>
+            <button class="ui-btn ui-btn--primary ui-btn--sm" id="btn-wpd-plot-oneclick" title="用本机 R 的 rioja::strat.plot 直接出图（不联网）">本机出图</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-wpd-riojaplot-web" title="把当前 CSV 复制到剪贴板并打开 riojaPlot 网页；需手动上传，不是本地出图">riojaPlot 网页</button>
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-tar" title="下载包含数据、原图与脚本的项目归档">TAR 归档</button>
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-json">JSON</button>
           </div>
@@ -595,6 +597,40 @@ export class ExportModal {
     // 使用（`export.py:1129` 直接转调 `export_data`），`export.exportXlsx` /
     // `export.exportLipd` 更是没有行集参数。所以"选择器同时控制下载"只能由前端
     // 把**同一个矩阵**写出去 —— 这同时保证了预览与下载物逐格同值（构造即成立）。
+    // 本机出图：走本机 R（rioja::strat.plot），不联网。失败必须把「缺什么」原样告诉用户，
+    // 不许变成一张空白图（ARCHITECTURE §2）。
+    modal.querySelector('#btn-wpd-plot-oneclick')?.addEventListener('click', async (ev) => {
+      const btn = ev.currentTarget as HTMLButtonElement;
+      const label = btn.textContent || '本机出图';
+      btn.disabled = true;
+      btn.textContent = '出图中…';
+      try {
+        const res: any = await this.rpcClient.call<any, any>('plot.render', { format: 'pdf' });
+        const sizeKb = Math.round(Number(res?.size_bytes || 0) / 1024);
+        notify('已出图：' + String(res?.path) + '（' + sizeKb + ' KB，' + String(res?.rows_count) + ' 行）', 'success', 8000);
+      } catch (err: any) {
+        const data = (err as { data?: { reason?: string } } | null)?.data;
+        notifyError(
+          (data?.reason === 'r_missing' ? '本机出图需要 R + rioja：' : '出图失败：') +
+            String(err?.message || err)
+        );
+      } finally {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    });
+
+    // 兜底路线：riojaPlot 网页。**不是本地出图**——用户要自己把 CSV 上传上去。
+    modal.querySelector('#btn-wpd-riojaplot-web')?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(textarea.value);
+        window.open('https://nsj3.shinyapps.io/riojaPlot/', '_blank', 'noopener');
+        notify('已复制当前 CSV 到剪贴板，并打开 riojaPlot 网页：需要在网页里手动上传，不是本地出图。', 'info', 9000);
+      } catch (err: any) {
+        notifyError('打开 riojaPlot 网页失败：' + String(err?.message || err));
+      }
+    });
+
     modal.querySelector('#btn-wpd-download-csv')?.addEventListener('click', () => {
       if (currentRows.length === 0) {
         // 空行集给"成功下载了一个空文件"是最误导的做法：用户会以为导完了。
