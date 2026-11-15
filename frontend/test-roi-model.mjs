@@ -40,6 +40,11 @@ import { ResizeRoiCommand } from './src/core/Commands.ts';
 
 const hm = new HistoryManager(10);
 
+/**
+ * ROI 夹具。`name_source` 在 `DataRoi` 上是 `'default' | 'user'` 联合，
+ * `xlim` / `ylim` 是二元组——都靠上下文类型才不会被放宽成 `string` / `number[]`。
+ * @type {import('./src/types/pollen.ts').DataRoi[]}
+ */
 const initialRois = [
   {
     id: 'roi_1',
@@ -60,6 +65,7 @@ const initialRois = [
 
 hm.reset([], '', undefined, initialRois[0], initialRois, 'roi_1', 'roi_1');
 
+/** @type {import('./src/types/pollen.ts').DataRoi[]} */
 const modifiedRois = [
   {
     ...initialRois[0],
@@ -106,6 +112,13 @@ console.log('✔ HistoryManager 对 rois / primary_roi_id / active_roi_id 的深
 // 3. ROI 拖拽必须同时更新单数 ROI 与 rois[] 的双字段镜像。
 const commandOldRoi = { ...initialRois[0], xMin: 100, xMax: 500, yMin: 200, yMax: 800 };
 const commandNewRoi = { ...commandOldRoi, xMin: 160, xMax: 760, yMin: 240, yMax: 740 };
+/**
+ * `ResizeRoiCommand.execute/undo` 的类型是完整的 `DiagramData`（13+ 个必填字段），
+ * 而这两个方法只读 `roi` / `rois` / `active_roi_id` 三个字段，并且是**原地改写**。
+ * 补全整个 `DiagramData` 会让夹具带上十几个与本判据无关、也无人读取的字段，
+ * 反而把"命令只碰这几个键"这件事掩盖掉。此处按"被测代码实际读的字段"构造。
+ * @type {any}
+ */
 const commandData = {
   roi: { ...commandOldRoi },
   rois: [{ ...commandOldRoi }],

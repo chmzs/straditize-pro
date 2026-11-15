@@ -15,7 +15,12 @@ import assert from 'node:assert/strict';
 import { countCalibratedColumns, isColumnCalibrated } from './src/core/calibProgress.ts';
 
 let n = 0;
+/** @type {Promise<void>} */
 let chain = Promise.resolve();
+/**
+ * @param {string} label
+ * @param {() => void | Promise<void>} fn
+ */
 function check(label, fn) {
   chain = chain.then(async () => {
     await fn();
@@ -24,6 +29,13 @@ function check(label, fn) {
   });
 }
 
+/**
+ * 列夹具。`unit` / `controlPoints` 是 `TaxaColumn` 的必填字段，本判据一个都不读
+ * （`resolveColumnScale` 只在返回值里带出 `unit`，`controlPoints` 完全不读），
+ * 填成中性值只为让夹具能被 `tsc` 对上 `TaxaColumn` —— 不改任何被断言的量。
+ *
+ * @type {import('./src/types/pollen.ts').TaxaColumn}
+ */
 const base = {
   id: 'c1',
   name: 'Pinus',
@@ -32,11 +44,16 @@ const base = {
   endX: 420,
   visible: true,
   plotType: 'area',
+  unit: '%',
+  controlPoints: [],
   // resolveColumnScale 的 calibrated 分支要求端点齐备（scaleCalib），否则退回未标定
   scaleCalib: { originX: 300, originVal: 0, calibX: 420, calibVal: 100, unit: '%' },
 };
 
 check('双刻度钉标定的列算已标定', () => {
+  // 显式标注：`x_ticks` 在 `TaxaColumn` 上是 `[Tick, Tick] | null` 元组，
+  // 带展开的局部对象拿不到上下文类型，写成注解才能让字面量按元组校验。
+  /** @type {import('./src/types/pollen.ts').TaxaColumn} */
   const col = { ...base, x_ticks: [{ px: 300, value: 0 }, { px: 420, value: 100 }] };
   assert.equal(isColumnCalibrated(col), true);
 });
@@ -52,6 +69,7 @@ check('无任何标定信息的列算未标定', () => {
 });
 
 check('计数覆盖三类混合，且分母是全部列', () => {
+  /** @type {import('./src/types/pollen.ts').TaxaColumn[]} */
   const cols = [
     { ...base, id: 'a', x_ticks: [{ px: 300, value: 0 }, { px: 420, value: 100 }] },
     { ...base, id: 'b', scale_provenance: { calibrated: true, source: 'group' } },

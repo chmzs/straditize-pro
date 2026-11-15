@@ -23,11 +23,38 @@ import {
 
 const TOL = 2.0;
 
+/**
+ * 分区夹具。
+ *
+ * `columnCount` 是面板展示用的字段，`aggregateQaScope` / `aggregateHeadline`
+ * 一行都不读（聚合只看 `summary.*` 与 `roiName`）。填 1 只是让对象满足
+ * `QaScopePart` 的形状，不影响任何被断言的量。
+ *
+ * 这里对返回值做一次断言，原因是 `QaScopeSummary` 把 `violations_over` 与 `sum`
+ * 声明为**必填**，而 `aggregateQaScope` 读它们时全程用 `?.`（缺失按 0 / null 处理）——
+ * 也就是说 src 的类型比实现更严。用例 7/8 刻意只给聚合真正读的字段，
+ * 为了不把"未提供的字段"伪造成 0（伪造 `sum.max = 0` 会改变 `maxSum` 的语义），
+ * 只在夹具出口收敛一次类型。（若把这两个字段在 `QaScopeSummary` 上改成可选，
+ * 这处断言就可以删掉——但那是 src 的改动，不在本任务范围。）
+ *
+ * @param {string} name
+ * @param {Partial<import('./src/core/qaVerdict.ts').QaScopeSummary>} summary
+ * @returns {import('./src/core/qaVerdict.ts').QaScopePart}
+ */
 function part(name, summary) {
-  return { roiId: name, roiName: name, summary };
+  return /** @type {import('./src/core/qaVerdict.ts').QaScopePart} */ ({
+    roiId: name,
+    roiName: name,
+    columnCount: 1,
+    summary,
+  });
 }
 
 let n = 0;
+/**
+ * @param {string} label
+ * @param {() => void} fn
+ */
 function check(label, fn) {
   fn();
   n += 1;

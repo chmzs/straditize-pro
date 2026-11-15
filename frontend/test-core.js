@@ -16,8 +16,10 @@
  */
 import assert from 'node:assert';
 
-// Viewport 构造函数读 window.devicePixelRatio —— 垫的是测试运行环境，不是业务逻辑
-globalThis.window ??= { devicePixelRatio: 1 };
+// Viewport 构造函数读 window.devicePixelRatio —— 垫的是测试运行环境，不是业务逻辑。
+// 断言到 any：DOM lib 把 `window` 声明成完整的 `Window`，而 Node 下这里只提供一个
+// 只含被测字段的替身（补全 Window 的 200+ 成员没有意义，也不是本文件的被测对象）。
+globalThis.window ??= /** @type {any} */ ({ devicePixelRatio: 1 });
 
 const { HistoryManager } = await import('./src/core/HistoryManager.ts');
 const { Viewport } = await import('./src/core/Viewport.ts');
@@ -29,19 +31,42 @@ console.log('--- 运行 Straditize 前端核心功能回归测试 ---');
 
 // 1. 撤销重做 —— 真模块 HistoryManager（原为本地 TestHistory 副本）
 const history = new HistoryManager();
+/**
+ * 列夹具。`color` / `unit` / `controlPoints` 是 `Column` 的必填字段，本判据不读它们
+ * （HistoryManager 只做 JSON 深拷贝快照），填中性值只为让夹具满足 `Column` 的形状。
+ * `maxPercent` 是可选字段，保留原值。
+ * @param {number} n
+ * @returns {import('./src/types/pollen.ts').Column[]}
+ */
 const cols = (n) => [
-  { id: 'c1', name: `Col${n}`, startX: 100, endX: 200, maxPercent: 40, visible: true },
+  {
+    id: 'c1',
+    name: `Col${n}`,
+    startX: 100,
+    endX: 200,
+    maxPercent: 40,
+    visible: true,
+    color: '#888',
+    unit: '%',
+    controlPoints: [],
+  },
 ];
 history.push('state1', cols(1), 'c1');
 history.push('state2', cols(2), 'c1');
 history.push('state3', cols(3), 'c1');
 
 assert.strictEqual(history.canUndo(), true, '已有 3 个状态应可撤销');
-assert.strictEqual(history.undo().columns[0].name, 'Col2', 'Undo 应回滚到 Col2');
-assert.strictEqual(history.undo().columns[0].name, 'Col1', 'Undo 应回滚到 Col1');
+// `undo()` / `redo()` 的类型是 `HistorySnapshot | null`（栈空返回 null，本文件下面
+// 三行专门断言 null 分支）。这几处前提是非空，取出快照再断言，语义与原写法一致。
+const snapshot2 = /** @type {import('./src/types/pollen.ts').HistorySnapshot} */ (history.undo());
+assert.strictEqual(snapshot2.columns[0].name, 'Col2', 'Undo 应回滚到 Col2');
+const snapshot1 = /** @type {import('./src/types/pollen.ts').HistorySnapshot} */ (history.undo());
+assert.strictEqual(snapshot1.columns[0].name, 'Col1', 'Undo 应回滚到 Col1');
 assert.strictEqual(history.undo(), null, '栈底状态不能继续 Undo');
-assert.strictEqual(history.redo().columns[0].name, 'Col2', 'Redo 应恢复到 Col2');
-assert.strictEqual(history.redo().columns[0].name, 'Col3', 'Redo 应恢复到 Col3');
+const redone2 = /** @type {import('./src/types/pollen.ts').HistorySnapshot} */ (history.redo());
+assert.strictEqual(redone2.columns[0].name, 'Col2', 'Redo 应恢复到 Col2');
+const redone3 = /** @type {import('./src/types/pollen.ts').HistorySnapshot} */ (history.redo());
+assert.strictEqual(redone3.columns[0].name, 'Col3', 'Redo 应恢复到 Col3');
 assert.strictEqual(history.redo(), null, '栈顶不能继续 Redo');
 
 // 新操作必须清空 redo 栈 —— 复刻版实现了这条，但只有打在真模块上才算数
@@ -259,6 +284,18 @@ console.log('✔ 硅藻属名表（内陆+海相）与源表拼写异名验证�
 // 画布与列数据，Node 下无法脱离 DOM 加载。下面这段是【规格复现】而非
 // 产品测试：钉住"只按 ROI 展宽、绝不触碰深度标定"这条不变量的算法规格，
 // 不能据此断言真代码正确。真正的产品级覆盖须走 tests/e2e 或浏览器侧测试。
+/**
+ * 规格复现里用到的列形状：只需要定位与命名，**不是**完整 `Column`
+ * （这个函数不画、不标定、不读 controlPoints），所以按实际读写的字段声明。
+ * @typedef {{ id: string, name: string, startX: number, endX: number, visible?: boolean, maxPercent?: number }} SpecColumn
+ */
+
+/**
+ * @param {SpecColumn[]} existingColumns
+ * @param {string[]} newTaxaNames
+ * @param {{ xMin: number, xMax: number }} roi
+ * @returns {SpecColumn[]}
+ */
 function specBatchTaxaUpdate(existingColumns, newTaxaNames, roi) {
   const sortedCols = [...existingColumns].sort((a, b) => a.startX - b.startX);
   const existingCount = sortedCols.length;
@@ -338,9 +375,13 @@ const tarBuffer = TarArchive.create(tarEntries);
 assert.ok(tarBuffer instanceof Uint8Array, 'TarArchive.create 应返回 Uint8Array');
 assert.ok(tarBuffer.length >= 1536, 'tar 至少包含两个 512B 全零终止块');
 
-// extract 接收 ArrayBuffer：切出本视图对应的那一段，避免带上底层大 buffer 的其余字节
+// extract 接收 ArrayBuffer：切出本视图对应的那一段，避免带上底层大 buffer 的其余字节。
+// `Uint8Array.buffer` 的类型是 `ArrayBufferLike`（可能是 SharedArrayBuffer），而
+// `TarArchive.create` 内部用普通 `ArrayBuffer` 建视图，故这里收窄到 ArrayBuffer。
 const extracted = TarArchive.extract(
-  tarBuffer.buffer.slice(tarBuffer.byteOffset, tarBuffer.byteOffset + tarBuffer.byteLength),
+  /** @type {ArrayBuffer} */ (
+    tarBuffer.buffer.slice(tarBuffer.byteOffset, tarBuffer.byteOffset + tarBuffer.byteLength)
+  ),
 );
 assert.strictEqual(extracted.length, 3, `应解出 3 个条目，实际 ${extracted.length}`);
 assert.strictEqual(extracted[0].name, 'info.json');

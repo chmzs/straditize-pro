@@ -14,7 +14,19 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { assertNoDuplicateBindings, matchesKeyBinding } from './src/components/canvas/keyBindings.ts';
 
+/**
+ * 绑定夹具：`over` 是任意字段子集，故意不写成 `Partial<KeyBinding>`。
+ * 写成 `Partial<>` 会让展开后的 `label` 退化成 `string | undefined`，与必填的
+ * `label: string` 冲突；而这里要测的恰恰是"表里写什么就是什么"，夹具字段由用例决定。
+ * @param {any} over
+ */
 const mk = (over) => ({ label: 'x', run: () => {}, ...over });
+/**
+ * 事件夹具：只填被测代码真正读的那几个字段，**不是**完整 `KeyboardEvent`。
+ * 展开 `any` 让结果保持 any —— 若写成 `Partial<KeyboardEvent>`，结果会变成具体对象
+ * 类型，于是每个调用点都要和 DOM 的 200 多个成员对齐，测的就不是匹配语义了。
+ * @param {any} over
+ */
 const ev = (over) => ({ code: '', key: '', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...over });
 
 // 1) 唯一表必须通过

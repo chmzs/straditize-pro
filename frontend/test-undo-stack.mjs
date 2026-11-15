@@ -11,7 +11,12 @@ import { UndoStack } from './src/core/UndoStack.ts';
 
 let n = 0;
 // 串行执行（含 async 用例）：每条都 await 完再跑下一条，失败即中断并抛错。
+/** @type {Promise<void>} */
 let chain = Promise.resolve();
+/**
+ * @param {string} label
+ * @param {() => void | Promise<void>} fn
+ */
 function check(label, fn) {
   chain = chain.then(async () => {
     await fn();
@@ -19,8 +24,6 @@ function check(label, fn) {
     console.log(`ok ${n} - ${label}`);
   });
 }
-
-const tick = () => new Promise((r) => setTimeout(r, 0));
 
 // 1. 空栈：不可撤销、不可重做
 check('空栈时 canUndo/canRedo 都为 false（按钮应 disabled）', () => {
@@ -42,10 +45,21 @@ check('push 后可撤销且暴露 label', () => {
 
 // 3. undo 调该 op 的 inverse，且按后进先出
 check('undo 只调自己的 inverse，且后进先出', async () => {
+  /** @type {string[]} */
   const calls = [];
   const s = new UndoStack();
-  s.push({ label: 'a', inverse: async () => calls.push('a') });
-  s.push({ label: 'b', inverse: async () => calls.push('b') });
+  s.push({
+    label: 'a',
+    inverse: async () => {
+      calls.push('a');
+    },
+  });
+  s.push({
+    label: 'b',
+    inverse: async () => {
+      calls.push('b');
+    },
+  });
   await s.undo();
   assert.deepEqual(calls, ['b']);
   assert.equal(s.state.undoLabel, 'a');
@@ -87,12 +101,17 @@ check('没有 forward 的操作撤销后不可重做；有 forward 的可重做�
   await s1.undo();
   assert.equal(s1.state.canRedo, false);
 
+  /** @type {string[]} */
   const calls = [];
   const s2 = new UndoStack();
   s2.push({
     label: 'with-forward',
-    inverse: async () => calls.push('inv'),
-    forward: async () => calls.push('fwd'),
+    inverse: async () => {
+      calls.push('inv');
+    },
+    forward: async () => {
+      calls.push('fwd');
+    },
   });
   await s2.undo();
   assert.equal(s2.state.canRedo, true);
@@ -130,6 +149,11 @@ check('clear 清空两侧，按钮回到 disabled', () => {
 
 // 10. busy 期间不接受重入
 check('撤销进行中时再次 undo 返回 false（防连点重复回退）', async () => {
+  // Promise executor 同步执行，`release` 在下一行之前必然已赋值。
+  // 类型写成 any 而不是 `() => void`：executor 回调的形参是 `(value: unknown) => void`，
+  // 它与"零参调用"互不赋值兼容（形参多的函数不能赋给形参少的签名），这里要的只是
+  // 一个延迟释放用的钩子，收窄成 `() => void` 反而要额外断言。
+  /** @type {any} */
   let release;
   const gate = new Promise((r) => {
     release = r;
@@ -149,6 +173,7 @@ check('撤销进行中时再次 undo 返回 false（防连点重复回退）', a
 
 // 11. 订阅：push/undo 都会通知，且首帧立即回调一次
 check('subscribe 立即回调一次并随后续状态变化通知', async () => {
+  /** @type {boolean[]} */
   const seen = [];
   const s = new UndoStack();
   const off = s.subscribe((st) => seen.push(st.canUndo));

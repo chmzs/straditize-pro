@@ -11,7 +11,12 @@ import assert from 'node:assert/strict';
 import { makeCalibrationUndo, makeRenameUndo, NON_UNDOABLE } from './src/core/undoActions.ts';
 
 let n = 0;
+/** @type {Promise<void>} */
 let chain = Promise.resolve();
+/**
+ * @param {string} label
+ * @param {() => void | Promise<void>} fn
+ */
 function check(label, fn) {
   chain = chain.then(async () => {
     await fn();
@@ -20,6 +25,11 @@ function check(label, fn) {
   });
 }
 
+/**
+ * 标定快照夹具。`primaryAxis: 'depth'` 在 `DepthCalibrationPatch` 上是
+ * `'depth' | 'age'` 联合，字面量需要上下文类型才不会被放宽成 `string`。
+ * @type {import('./src/core/undoActions.ts').CalibrationSnapshot}
+ */
 const PREV = {
   isCalibrated: true,
   topPx: 806,
@@ -29,6 +39,7 @@ const PREV = {
   unit: 'cm',
   primaryAxis: 'depth',
 };
+/** @type {import('./src/core/undoActions.ts').CalibrationSnapshot} */
 const NEXT = {
   isCalibrated: true,
   topPx: 700,
@@ -41,6 +52,7 @@ const NEXT = {
 
 // 1. 撤销标定：必须用"改前的值"调 apply（且只调一次）
 check('标定撤销用改前的五点调用 apply，只调一次', async () => {
+  /** @type {import('./src/core/undoActions.ts').DepthCalibrationPatch[]} */
   const calls = [];
   const op = makeCalibrationUndo(
     PREV,
@@ -57,6 +69,7 @@ check('标定撤销用改前的五点调用 apply，只调一次', async () => {
 
 // 2. 重做标定：用改后的值
 check('标定重做用改后的五点调用 apply', async () => {
+  /** @type {import('./src/core/undoActions.ts').DepthCalibrationPatch[]} */
   const calls = [];
   const op = makeCalibrationUndo(
     PREV,
@@ -66,7 +79,10 @@ check('标定重做用改后的五点调用 apply', async () => {
     },
     async () => NEXT
   );
-  await op.forward();
+  // `UndoableOp.forward` / `.verify` 在类型上是可选键（删除类动作两者都没有），
+  // 而这两个构造器**总是**给出它们。收窄一次，运行期只是取出同一个函数引用。
+  const forward = /** @type {NonNullable<typeof op.forward>} */ (op.forward);
+  await forward();
   assert.deepEqual(calls[0], NEXT);
 });
 
@@ -78,7 +94,10 @@ check('verify 以后端为准：后端仍是新值时返回 false（不得当撤
     async () => {},
     async () => NEXT
   );
-  assert.equal(await op.verify(), false);
+  // `verify` 的 direction 参数被 `makeCalibrationUndo` 忽略（它只比对 read() 与 prev），
+  // 这里传 'inverse' 是为了满足签名，不影响断言口径。
+  const verify = /** @type {NonNullable<typeof op.verify>} */ (op.verify);
+  assert.equal(await verify('inverse'), false);
 });
 
 // 4. verify 后端回到旧值 ⇒ true
@@ -89,11 +108,13 @@ check('verify 后端回到旧值时返回 true', async () => {
     async () => {},
     async () => PREV
   );
-  assert.equal(await op.verify(), true);
+  const verify = /** @type {NonNullable<typeof op.verify>} */ (op.verify);
+  assert.equal(await verify('inverse'), true);
 });
 
 // 5. 撤名：inverse 用旧名、forward 用新名
 check('改名撤销/重做分别用旧名与新名', async () => {
+  /** @type {string[]} */
   const names = [];
   const op = makeRenameUndo(
     'column',
@@ -106,7 +127,8 @@ check('改名撤销/重做分别用旧名与新名', async () => {
     async () => names.at(-1) ?? 'Pinus2'
   );
   await op.inverse();
-  await op.forward();
+  const forward = /** @type {NonNullable<typeof op.forward>} */ (op.forward);
+  await forward();
   assert.deepEqual(names, ['Pinus', 'Pinus2']);
   assert.match(op.label, /Pinus → Pinus2/);
 });
@@ -121,7 +143,8 @@ check('改名 verify 以后端为准（仍是新名 ⇒ false）', async () => {
     async () => {},
     async () => '湖泊A'
   );
-  assert.equal(await op.verify(), false);
+  const verify = /** @type {NonNullable<typeof op.verify>} */ (op.verify);
+  assert.equal(await verify('inverse'), false);
 });
 
 // 7. 删除类没有构造器：NON_UNDOABLE 必须非空（防止有人给删除编一个假逆操作）
