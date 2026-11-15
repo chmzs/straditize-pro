@@ -122,12 +122,33 @@ export function isPassingVerdict(verdict: QaVerdict): boolean {
 /**
  * 一个分区 `qa.summarize` 的返回（结构上兼容 `steps/QaPanel` 的 `QaSummary` 与
  * `ExportModal` 里的同名类型；这里只声明聚合真正用到的字段）。
+ *
+ * ## 必填 vs 可选的分界线是**后端的两条 return 路径**，不是"聚合读不读"
+ *
+ * `straditize_core/qa.py::compute_qa_summary` 有两条出口，两者的字段集**不同**：
+ *
+ * - 空集提前返回（`qa.py:38-52`：无层位 / 无列都会走到）：
+ *   `sum` 给了（`max: 0.0`）、`violations_over` 给了（`[]`）、`per_column_max` 给了（`[]`），
+ *   **但 `n_uncalibrated` / `uncalibrated_columns` 没给**。
+ * - 正常返回（`qa.py:141-155`）：以上全部字段都给。
+ *
+ * 于是：
+ * - `violations_over` / `sum` / `per_column_max` / `empty_horizons` 等 **恒存在** ⇒ 声明为必填，
+ *   聚合里不得用 `?.` 兜（缺字段是契约破损，必须报错，见 `assertQaScopeContract`）。
+ * - `n_uncalibrated` / `uncalibrated_columns` **空集时确实没有** ⇒ 可选，`?.` 是对的。
+ *
+ * issue #14 之前 `violations_over` / `sum` 被声明为必填、实现却全程 `?.`，
+ * 类型与实现互相矛盾。选"收紧实现"而不是"放宽类型"的实测理由：一份同时缺这两个字段
+ * 的 payload 在旧实现下**判绿**（`nOverHorizons = 0`、`maxSum = null` 让两条越限分支
+ * 都被跳过 ⇒ 「地学校验门禁通过：6 个层位的组分总和都在 100% ± 2% 内」）——
+ * 把字段改成可选等于给这条"全绿陷阱"发合法身份证。
  */
 export interface QaScopeSummary {
   ratio?: number;
   n_horizons: number;
   n_horizons_with_data: number;
   n_horizons_empty?: number;
+  /** 超标层位清单；后端**恒返回**（空集时为 `[]`）。 */
   violations_over: unknown[];
   empty_horizons?: { depth: number | null; reason?: string }[];
   per_column_max?: {
@@ -137,6 +158,7 @@ export interface QaScopeSummary {
     over: boolean;
     calibrated?: boolean;
   }[];
+  /** 总和统计；后端**恒返回**，空集时 `max` 为 `0.0`。 */
   sum: { max: number };
   n_uncalibrated?: number;
   uncalibrated_columns?: string[];
@@ -179,6 +201,29 @@ function scopeNames(parts: { roiName: string }[]): string {
 }
 
 /**
+ * 后端契约核查：`qa.summarize` 的返回一旦缺少聚合要读的字段，就在这里变成
+ * **点名该字段与该分区**的异常，而不是让 `?.` 兜成 0 / null。
+ *
+ * 为什么必须报错而不是兜底：缺 `violations_over` ⇒ `nOverHorizons = 0`，
+ * 缺 `sum` ⇒ `maxSum = null`，两条越限分支（②③）双双被跳过，于是**判绿** ——
+ * 实测旧实现拿到这样的 payload 会输出「地学校验门禁通过：6 个层位的组分总和都在
+ * 100% ± 2% 内」。契约破损冒充"合格"是本模块存在的理由的反面（issue #14）。
+ */
+function assertQaScopeContract(part: QaScopePart): void {
+  const who = part.roiName || part.roiId;
+  const summary: QaScopeSummary | undefined = part.summary;
+  if (!summary || typeof summary !== 'object') {
+    throw new Error(`qa.summarize 未返回汇总对象（违反契约）：分区 ${who}`);
+  }
+  if (!Array.isArray(summary.violations_over)) {
+    throw new Error(`qa.summarize 返回缺少 summary.violations_over（违反契约）：分区 ${who}`);
+  }
+  if (typeof summary.sum?.max !== 'number') {
+    throw new Error(`qa.summarize 返回缺少 summary.sum.max（违反契约）：分区 ${who}`);
+  }
+}
+
+/**
  * 把"每个有列分区各自的 QA 汇总"合并成**一个**结论。
  *
  * 三条规则（横幅与导出模态自检共用，不许再各写一份）：
@@ -189,6 +234,8 @@ function scopeNames(parts: { roiName: string }[]): string {
  * 2. **空集（所有分区都没层位）⇒ 不得判通过**，交 `computeQaVerdict` 的黄条。
  * 3. 全部合格 ⇒ 绿。
  *
+ * 先过 `assertQaScopeContract`：缺字段是契约破损，抛错，绝不按 0 / null 兜成"合格"。
+ *
  * 范围必须写进结论文案：用户看到的"通过"必须能对应到"校验了哪几个分区"。
  */
 export function aggregateQaScope(
@@ -196,13 +243,15 @@ export function aggregateQaScope(
   skipped: QaScopeSkip[],
   tolerance: number
 ): QaAggregate {
+  parts.forEach(assertQaScopeContract);
+
   const nChecked = parts.reduce(
     (sum, p) => sum + (p.summary.n_horizons_with_data ?? p.summary.n_horizons ?? 0),
     0
   );
   const nHorizons = parts.reduce((sum, p) => sum + (p.summary.n_horizons ?? 0), 0);
   const nHorizonsEmpty = parts.reduce((sum, p) => sum + (p.summary.n_horizons_empty ?? 0), 0);
-  const nOverHorizons = parts.reduce((sum, p) => sum + (p.summary.violations_over?.length ?? 0), 0);
+  const nOverHorizons = parts.reduce((sum, p) => sum + p.summary.violations_over.length, 0);
   const nUncalibrated = parts.reduce(
     (sum, p) =>
       sum + (p.summary.n_uncalibrated ?? p.summary.uncalibrated_columns?.length ?? 0),
@@ -210,7 +259,7 @@ export function aggregateQaScope(
   );
 
   const maxes = parts
-    .map((p) => p.summary.sum?.max)
+    .map((p) => p.summary.sum.max)
     .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
   const maxSum = maxes.length > 0 ? Math.max(...maxes) : null;
 
