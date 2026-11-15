@@ -1,5 +1,5 @@
 import { DiagramData } from '../../types/pollen';
-import type { QaHorizonSummary, QaSummary } from '../../types/pollen';
+import type { QaSummary } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
 import { RpcClient } from '../../services/RpcClient';
@@ -118,7 +118,10 @@ function mergedView(agg: QaAggregate): QaSummary {
     empty_horizons: parts.flatMap((p) => p.summary.empty_horizons),
     sum: { min: 0.0, p50: 0.0, max: agg.maxSum ?? 0.0, mean: 0.0 },
     tolerance: currentTolerance,
-    violations_over: parts.flatMap((p) => p.summary.violations_over as QaHorizonSummary[]),
+    // 不做 `as` 强转：`QaScopeSummary.violations_over` 与 `QaSummary.violations_over`
+    // 现在共用 `QaHorizonSummary`（同一份后端契约，见 `core/qaVerdict.ts` 的类型注释），
+    // flatMap 自然给出 `QaHorizonSummary[]`。强转曾是两份形状不一致的补丁（issue #17）。
+    violations_over: parts.flatMap((p) => p.summary.violations_over),
     shortfall: { min: 0.0, max: 0.0, mean: agg.shortfallMean ?? 0.0 },
     per_column_max: parts.flatMap((p) => p.summary.per_column_max),
     n_uncalibrated: agg.nUncalibrated,

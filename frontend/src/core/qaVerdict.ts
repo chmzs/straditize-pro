@@ -23,6 +23,8 @@
  * 像素/表格读取，也不产生替代数据。
  */
 
+import type { QaHorizonSummary } from '../types/pollen';
+
 export type QaLevel = 'green' | 'yellow' | 'red';
 
 export interface QaVerdictInput {
@@ -160,8 +162,16 @@ export interface QaScopeSummary {
   n_horizons_with_data: number;
   /** 空层位数；后端**恒返回**（空集 `qa.py:45`，正常 `:147`）。 */
   n_horizons_empty: number;
-  /** 超标层位清单；后端**恒返回**（空集时为 `[]`，`qa.py:49` / `:151`）。 */
-  violations_over: unknown[];
+  /**
+   * 超标层位清单；后端**恒返回**（空集时为 `[]`，`qa.py:49` / `:151`）。
+   *
+   * 与 `types/pollen.ts::QaSummary` 的同一字段**共用 `QaHorizonSummary`**
+   * （`qa.py:93-99` 的条目是 `{depth, sum}`）：聚合只读 `.length`，面板
+   * （`steps/QaPanel.ts:58-66`）逐条渲染 `depth` / `sum`。同一个后端字段在两处
+   * 各养一份形状（这里曾写 `unknown[]`、面板靠 `as QaHorizonSummary[]` 桥接）
+   * 是分叉的入口（issue #17）。
+   */
+  violations_over: QaHorizonSummary[];
   /** 空层位清单；后端**恒返回**（空集时为 `[]`，`qa.py:46` / `:148`）。 */
   empty_horizons: { depth: number | null; reason?: string }[];
   /** 各列峰值与声明刻度；后端**恒返回**（空集时为 `[]`，`qa.py:51` / `:153`）。 */
@@ -294,6 +304,21 @@ function assertQaScopeContract(part: QaScopePart): void {
       throw new Error(`qa.summarize 返回缺少 summary.${field}（违反契约）：分区 ${who}`);
     }
   }
+  /*
+   * `violations_over` 的**逐条**形状：聚合只读 `.length`，但面板逐条渲染
+   * `depth` / `sum`（`steps/QaPanel.ts:58-66`）。只查"是不是数组"时，一条缺 `sum`
+   * 的记录会让面板印出 `Σ = undefined%` 而聚合计数照旧正常——两层都看不出问题。
+   * 所以缺键必须点名字段**与索引**（两端都给 `depth` / `sum`，见 `qa.py:93-99`）。
+   */
+  summary.violations_over.forEach((entry: unknown, i: number) => {
+    for (const key of ['depth', 'sum'] as const) {
+      if (entry === null || typeof entry !== 'object' || !(key in entry)) {
+        throw new Error(
+          `qa.summarize 返回的 summary.violations_over[${i}] 缺少 ${key}（违反契约）：分区 ${who}`
+        );
+      }
+    }
+  });
 }
 
 /**

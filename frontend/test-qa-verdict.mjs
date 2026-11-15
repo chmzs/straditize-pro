@@ -116,7 +116,17 @@ check('聚合覆盖所有有列分区：脏分区的超标必须被计入并判�
         n_horizons: 6,
         n_horizons_with_data: 6,
         n_horizons_empty: 0,
-        violations_over: [1, 2, 3, 4, 5, 6],
+        // 6 条**真实**条目（`{depth, sum}`，与 `qa.py:93-99` 同形），不再是 6 个裸数字：
+        // 裸数字在旧 `unknown[]` 声明下能过 tsc，却让"类型层能不能抓住形状违约"这条
+        // 判据失效。断言目标仍是 `nOverHorizons === 6`（改数据不改判据）。
+        violations_over: [
+          { depth: 0, sum: 103.2 },
+          { depth: 5, sum: 102.4 },
+          { depth: 10, sum: 102.1 },
+          { depth: 15, sum: 102.9 },
+          { depth: 20, sum: 102.2 },
+          { depth: 25, sum: 102.6 },
+        ],
         empty_horizons: [],
         per_column_max: [],
         sum: { max: 103.2 },
@@ -385,7 +395,7 @@ check('缺 summary.n_horizons_empty 必须抛错（不得按 0 空层位兜）',
 });
 
 /*
- * ---- 17/18. 契约：`shortfall` 恒返回（不得兜 0） ----
+ * ---- 17/18/19. 契约：`shortfall` 恒返回（不得兜 0），`violations_over` 逐条有结构 ----
  *
  * `shortfall` 是聚合里**唯一参与加权计算**的字段（`qaVerdict.ts::aggregateQaScope`
  * 按各分区 `n_horizons_with_data` 加权平均其 `mean`）。旧实现没在 `QaScopeSummary`
@@ -393,6 +403,10 @@ check('缺 summary.n_horizons_empty 必须抛错（不得按 0 空层位兜）',
  * （或缺值按 0 计入），于是「平均缺额」这个展示给用户的数字在契约破损时照样印出来。
  *
  * 后端两条 return 路径都给 `shortfall`（空集 `qa.py:50`，正常 `:152`），故必填。
+ *
+ * `violations_over` 不只是"数组长度"：`steps/QaPanel.ts:58-66` 逐条渲染
+ * `v.depth` / `v.sum`。一条缺 `sum` 的记录会让面板印出 `Σ = undefined%`，
+ * 而聚合层的 `.length` 计数照旧正常 —— 只有逐条校验能拦住，且必须点名字段与索引。
  */
 check('缺 summary.shortfall 必须抛错（不得按 0 缺额静默加权）', () => {
   const broken = partFromJson(
@@ -436,6 +450,21 @@ check('shortfallMean 加权口径不变：按 n_horizons_with_data 加权', () =
   );
   // (4.0×74 + 1.5×10) / 84 —— 与收紧前的实测值 3.7023809523809526 逐位相同
   assert.equal(agg.shortfallMean, (4.0 * 74 + 1.5 * 10) / 84);
+});
+
+check('violations_over 元素缺 sum 必须抛错（必须点名索引与字段）', () => {
+  const broken = partFromJson(
+    'a',
+    '{"n_horizons":3,"n_horizons_with_data":3,"n_horizons_empty":0,' +
+      '"empty_horizons":[],"per_column_max":[],"shortfall":{"mean":0.0},' +
+      '"sum":{"max":103.2},' +
+      '"violations_over":[{"depth":0,"sum":103.2},{"depth":5,"sum":101.0},{"depth":10}]}'
+  );
+  assert.throws(
+    () => aggregateQaScope([broken], [], TOL),
+    /summary\.violations_over\[2\] 缺少 sum/,
+    '缺元素字段时必须点名 summary.violations_over[索引] 与字段名'
+  );
 });
 
 /*
