@@ -1,0 +1,37 @@
+{
+  /*
+   * 前端门禁脚本（test-*.mjs / test-core.js）的类型检查面。
+   *
+   * 为什么不塞进 `tsconfig.json`：那个配置的 `include` 只有 `src`，且 `types: []`
+   * 是刻意为之（保护生产构建，理由见该文件内注释）。`npm run build` 跑的是它，
+   * 把测试脚本并进去会让**生产构建**依赖 Node 全局与测试工具链。
+   *
+   * 为什么不塞进 `tsconfig.e2e.json`：e2e 面是 Playwright spec，本目录脚本是
+   * `node --experimental-strip-types` 直接跑的独立断言脚本，两者生命周期不同。
+   *
+   * 本配置只覆盖**真正 import 了 src/** 的那批脚本 —— 它们与生产代码有真实类型
+   * 契约（改 src 的签名会让脚本静默传错参数）。不 import 的脚本没有契约可查，
+   * 纳进来只会往门禁里塞一堆环境噪声。
+   *
+   * `types: ["node"]` 是必需的：脚本用 `node:assert` / `node:fs`。它只作用于本
+   * 配置，`tsconfig.json` 的 `types: []` 不受影响。
+   *
+   * `allowJs` + `checkJs`：脚本是 JS，靠 JSDoc 承载类型。
+   */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": [
+    "test-core.js",
+    "test-calib-progress.mjs",
+    "test-key-bindings.mjs",
+    "test-qa-verdict.mjs",
+    "test-roi-model.mjs",
+    "test-undo-actions.mjs",
+    "test-undo-stack.mjs"
+  ]
+}
