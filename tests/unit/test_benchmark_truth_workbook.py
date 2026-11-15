@@ -3,7 +3,7 @@
 
 ## 这个文件修的是什么
 
-用户提供的 `riojaPlotTestData_Pollen_and_Diatom.xlsx` 是**权威真值表**——
+用户提供的 `measurements_pollen_diatom.xlsx` 是**权威真值表**——
 它和同目录的 `Pollen_*` / `Diatom_*.png` 是同一份数据画出来的，所以可以
 用来逐格核验数字化精度。但原始文件用 openpyxl 打不开：
 
@@ -41,13 +41,13 @@ import zipfile
 
 import pytest
 
-BENCH = "tests/data/figures/benchmark_types"
-TRUTH_XLSX = f"{BENCH}/riojaPlotTestData_Pollen_and_Diatom.xlsx"
+RIOJAPLOT = "tests/data/figures/riojaplot"
+TRUTH_XLSX = f"{RIOJAPLOT}/measurements_pollen_diatom.xlsx"
 
 
 @pytest.mark.skipif(
     not os.path.exists(TRUTH_XLSX),
-    reason="权威真值表不在本机（tests/data/figures/benchmark_types 未包含该文件）",
+    reason="权威真值表不在本机（tests/data/figures/riojaplot 未包含该文件）",
 )
 class TestBenchmarkTruthWorkbook:
     """真值表必须可被 openpyxl 打开，且三张表数据齐全。"""

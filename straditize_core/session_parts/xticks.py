@@ -12,7 +12,7 @@ from .xscale import normalize_scale_type, store_exaggeration
 #: 刻度尺的物理结构是"**一条横轴 + 一排垂直于它、向下伸出的短齿**"。故先找轴线，
 #: 再在轴线正下方找齿——这个先后顺序是判据可信的来源，不是先找齿再猜哪条带像尺。
 #:
-#: 实测（fig3_raw 2132×928）：
+#: 实测（han2026GPC_ngamringLake_withbackcolor 2132×928）：
 #:
 #: | 行 | 暗像素占比 | 是什么 |
 #: |---|---|---|
@@ -70,7 +70,7 @@ TICK_CLEAR_ABOVE = 3
 #:
 #: | 图 | 最佳候选带的齿数 | 真值 |
 #: |---|---|---|
-#: | fig3_raw（有尺） | **51**（轴线 y=869） | 有刻度尺 |
+#: | han2026GPC_ngamringLake_withbackcolor（有尺） | **51**（轴线 y=869） | 有刻度尺 |
 #: | hoya（无尺） | 16（轴线 y=1307，图例文字） | 无刻度尺 |
 #: | beginner（无尺） | 2（轴线 y=1664） | 无刻度尺 |
 #:

@@ -17,14 +17,14 @@ import pytest
 
 from straditize_core.session import StraditizeSession
 
-FIGURES = Path(__file__).resolve().parent.parent / "data/figures/benchmark_types"
+FIGURES = Path(__file__).resolve().parent.parent / "data/figures/riojaplot"
 
 # (文件名, 数据区上沿, 下沿) —— 真值来自填充色分段，与轴线检测互验
 BENCHMARKS = [
-    ("Pollen_riojaPlotTestData.png", 93, 568),
-    ("Pollen_BarStyle_riojaPlotTestData.png", 82, 568),
-    ("Pollen_CruveStyle_riojaPlotTestData.png", 82, 568),
-    ("Diatom_riojaPlotTestData.png", 78, 568),
+    ("pollen_area_riojaplot.png", 93, 568),
+    ("pollen_bars_riojaplot.png", 82, 568),
+    ("pollen_curves_riojaplot.png", 82, 568),
+    ("diatom_area_riojaplot.png", 78, 568),
 ]
 
 

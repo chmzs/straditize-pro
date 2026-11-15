@@ -16,7 +16,7 @@ from straditize_core.session import StraditizeSession
 
 BARS = (
     Path(__file__).resolve().parent.parent
-    / "data/figures/benchmark_types/Pollen_BarStyle_riojaPlotTestData.png"
+    / "data/figures/riojaplot/pollen_bars_riojaplot.png"
 )
 
 

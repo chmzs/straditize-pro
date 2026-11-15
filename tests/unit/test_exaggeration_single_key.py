@@ -38,7 +38,7 @@ from straditize_core.rpc_methods import columns as columns_methods
 from straditize_core.rpc_methods import system as system_methods
 from straditize_core.session import StraditizeSession
 
-PLATE = "tests/data/figures/real_plates/fig3_raw.jpeg"
+PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
 ALIASES = ("exaggeration_multiplier", "has_exaggeration", "mult_source")
 
 

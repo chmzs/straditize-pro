@@ -50,7 +50,7 @@ from straditize_core.session import StraditizeSession
 
 from test_project_load_golden import _legacy_payload
 
-PLATE = "tests/data/figures/real_plates/fig3_raw.jpeg"
+PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
 WARNING_KEY = "去线强度"
 
 
@@ -135,7 +135,7 @@ def test_runtime_guard_skips_invalid_strength() -> None:
 
 
 def _calibrate_y_and_columns(session: StraditizeSession) -> None:
-    """把 fig3_raw 会话标定到「能导出真实读数」：Y 两点 + 每列 X 两点。
+    """把 han2026GPC_ngamringLake_withbackcolor 会话标定到「能导出真实读数」：Y 两点 + 每列 X 两点。
 
     全部走真实 RPC（`calibrate_axes` / `calibrate_column_xticks`），不碰
     `is_calibrated` / `y_scale` 字段。列端点的换算沿用本项目这些实测剖面的既有

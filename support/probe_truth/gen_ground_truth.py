@@ -25,9 +25,9 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "tests" / "data" / "truth"
 
 IMAGES = {
-    "exaggeration_bell": ROOT / "tests/data/figures/benchmark_types/type2_exaggeration_bell.png",
-    "composite_cluster": ROOT / "tests/data/figures/benchmark_types/type6_composite_zonation_cluster.png",
-    "filled_silhouette": ROOT / "tests/data/figures/benchmark_types/type1_filled_silhouette_aber.png",
+    "exaggeration_bell": ROOT / "tests/data/figures/bench/silhouette_exaggerated_bell.png",
+    "composite_cluster": ROOT / "tests/data/figures/bench/composite_zonation_cluster.png",
+    "filled_silhouette": ROOT / "tests/data/figures/bench/silhouette_filled_abernethy.png",
     "hoya": ROOT / "straditize_core/assets/tutorials/hoya-del-castillo.png",
 }
 
@@ -119,7 +119,7 @@ def _detect_tick_band(gray: np.ndarray) -> tuple[int, int] | None:
 
     **v1.1 fix**: the first version dropped requirement 2, so it also matched bands
     of *long column baselines* crossing them. That is exactly what happened to
-    ``type1_filled_silhouette_aber.png`` (median "stroke" length 64 px, max 333 px)
+    ``silhouette_filled_abernethy.png`` (median "stroke" length 64 px, max 333 px)
     and ``hoya`` (median 149 px, max 1162 px): their supposed ticks were baselines.
     The T00-b probe surfaced this; a figure with no tick ruler legitimately has no
     ticks, and reporting 35 fake ones is worse than reporting 0.

@@ -39,7 +39,7 @@ from straditize_core.rpc_methods import system as system_methods
 from straditize_core.session import StraditizeSession
 
 GOLDEN = Path(__file__).parent / "fixtures" / "diagram_payload_golden.json"
-PLATE = "tests/data/figures/real_plates/fig3_raw.jpeg"
+PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
 
 
 def _payload(session: StraditizeSession) -> dict:

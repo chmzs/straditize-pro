@@ -1,7 +1,7 @@
 """从 rioja 测试数据的原始 Excel 生成 benchmark 黄金值。
 
-背景：`tests/data/figures/benchmark_types/` 下的四张 rioja 图与
-`riojaPlotTestData_Pollen_and_Diatom.xlsx` 是同一份数据的不同画法，
+背景：`tests/data/figures/riojaplot/` 下的四张 rioja 图与
+`measurements_pollen_diatom.xlsx` 是同一份数据的不同画法，
 图 ↔ 数据一一对应，所以可以拿 Excel 当**真值**量数字化误差。
 
 一条规则（已与图逐列核对）：图上只画 `max >= MIN_MAX` 的属种，顺序同 Excel。
@@ -16,7 +16,7 @@ axis_max = 列宽/3.80，只有 1/25 列等于 20）。把从图推出的量写�
 
 用法：
     .pixi/envs/default/python.exe scripts/bench_golden.py
-输出：`tests/data/figures/benchmark_types/golden/{abernethy_pollen,rlgh_diatom}.json`
+输出：`tests/data/figures/bench/golden/{abernethy_pollen,rlgh_diatom}.json`
 """
 from __future__ import annotations
 
@@ -26,8 +26,8 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
-XLSX = ROOT / "tests/data/figures/benchmark_types/riojaPlotTestData_Pollen_and_Diatom.xlsx"
-OUT_DIR = ROOT / "tests/data/figures/benchmark_types/golden"
+XLSX = ROOT / "tests/data/figures/riojaplot/measurements_pollen_diatom.xlsx"
+OUT_DIR = ROOT / "tests/data/figures/bench/golden"
 MIN_MAX = 2.0
 
 

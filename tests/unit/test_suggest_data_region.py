@@ -7,7 +7,7 @@
 的像素位置求四边。当两个候选集**都为空**时走 else 分支，而累计量在密集图上
 从一开始就超过阈值，于是四边全部塌缩到同一处。
 
-实测（`tests/data/figures/benchmark_types/Diatom_riojaPlotTestData.png`，
+实测（`tests/data/figures/riojaplot/diatom_area_riojaplot.png`，
 1179×600，墨迹占比 40.9%）：
 
     right_candidates = 0 个   left_candidates = 0 个
@@ -41,9 +41,9 @@ from PIL import Image
 
 from straditize_core.session import StraditizeSession
 
-BENCH = "tests/data/figures/benchmark_types"
-DIATOM = f"{BENCH}/Diatom_riojaPlotTestData.png"
-POLLEN = f"{BENCH}/Pollen_riojaPlotTestData.png"
+RIOJAPLOT = "tests/data/figures/riojaplot"
+DIATOM = f"{RIOJAPLOT}/diatom_area_riojaplot.png"
+POLLEN = f"{RIOJAPLOT}/pollen_area_riojaplot.png"
 
 # 合法框的最小尺寸（相对图像）：高 ≥20%、宽 ≥30%
 MIN_HEIGHT_FRAC = 0.20
@@ -123,7 +123,7 @@ class TestDegenerateHeuristic:
 
 @pytest.mark.skipif(
     not os.path.exists(DIATOM),
-    reason="真实基准图不在本机（tests/data/figures/benchmark_types 未包含该文件）",
+    reason="真实基准图不在本机（tests/data/figures/riojaplot 未包含该文件）",
 )
 class TestRealBenchmark:
     """真实基准图版（用户提供，配 Excel 权威真值）。"""
@@ -135,7 +135,7 @@ class TestRealBenchmark:
         session.load_image(image_path=DIATOM)
 
         sug = _suggested(session)
-        _assert_usable(session, sug, "Diatom_riojaPlotTestData")
+        _assert_usable(session, sug, "diatom_area_riojaplot")
 
         session.detect_columns(roi_id=session.rois[0]["id"])
         assert len(session.columns) >= 3, (

@@ -21,8 +21,8 @@ from pathlib import Path
 
 from straditize_core.session import StraditizeSession
 
-FIGURES = Path(__file__).resolve().parent.parent / "data/figures/benchmark_types"
-DIATOM = FIGURES / "Diatom_riojaPlotTestData.png"
+FIGURES = Path(__file__).resolve().parent.parent / "data/figures/riojaplot"
+DIATOM = FIGURES / "diatom_area_riojaplot.png"
 
 
 def _flags(name: str | None = None, path: Path | None = None) -> list[bool]:

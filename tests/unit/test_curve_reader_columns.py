@@ -25,9 +25,9 @@ from straditize_core.columns import detect_column_starts
 from straditize_core.digitize import trace_area_profile
 from straditize_core.session import StraditizeSession
 
-BENCH = os.path.join("tests", "data", "figures", "benchmark_types")
-CURVE_IMAGE = os.path.join(BENCH, "Pollen_CruveStyle_riojaPlotTestData.png")
-POLLEN_GOLDEN = os.path.join(BENCH, "golden", "abernethy_pollen.json")
+RIOJAPLOT = os.path.join("tests", "data", "figures", "riojaplot")
+CURVE_IMAGE = os.path.join(RIOJAPLOT, "pollen_curves_riojaplot.png")
+POLLEN_GOLDEN = os.path.join("tests", "data", "figures", "bench", "golden", "abernethy_pollen.json")
 
 #: Panel left axes measured from the pixels (identical on all three pollen styles;
 #: see ``docs/findings/bench-pollen.md`` §1).

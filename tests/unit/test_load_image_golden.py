@@ -42,7 +42,7 @@ from straditize_core.session import StraditizeSession
 
 GOLDEN = Path(__file__).parent / "fixtures" / "load_image_golden.json"
 
-PLATE = "tests/data/figures/real_plates/fig3_raw.jpeg"
+PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
 # PDF 用 PIL 现场生成：仓库里的 rioja 图版是纯矢量流（源码里明确会 raise），
 # 那样钉住的只是报错分支，钉不到"从 PDF 抽位图"的正常路径。
 
