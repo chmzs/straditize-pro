@@ -64,6 +64,8 @@ real_interactive_ocr_cropper_verified.png
 crop_orig.png
 Rplots.pdf
 real_browser_*_verified.png
+# 例外：站点 hero 图必须入库（上面那条通配会连它一起忽略，导致 clone 后缺图）
+!docs/assets/real_browser_playwright_verified.png
 verification_*.png
 output/
 
