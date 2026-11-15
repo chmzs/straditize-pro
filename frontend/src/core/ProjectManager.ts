@@ -321,13 +321,11 @@ export function normalizeProject(
       tickValue: tickVal,
       controlPoints: pts,
       points: pts,
-      scaleCalib: c.scaleCalib || {
-        originX: startX,
-        originVal: startVal,
-        calibX: tickEndX,
-        calibVal: tickVal,
-        unit: c.unit || '%',
-      },
+      // 缺 scaleCalib 就**不给**这个字段：CoordinateSystem.resolveColumnScale 会走
+      // 未标定分支（界面显示"未标定"）。绝不能拿 startX 冒充 0 点 —— 0 点的定义是
+      // startX + 轴粗（ARCHITECTURE §6.4），用列左缘会让每列读数系统性偏大
+      // 轴粗×斜率（本仓实测 6px × 0.16667 ≈ +1.0%，用户看到的就是"多了轴线粗"）。
+      scaleCalib: c.scaleCalib,
     };
   });
 
