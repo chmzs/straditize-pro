@@ -1,4 +1,5 @@
 import { DataRoi, DiagramData, TaxaColumn, ControlPoint, DiagramCalibration } from '../types/pollen';
+import { STAGE } from '../core/WorkflowStage';
 import { HistoryManager } from '../core/HistoryManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { DeletePointCommand } from '../core/Commands';
@@ -206,7 +207,7 @@ export class Inspector {
       } else {
         contentHtml = this.renderStagePanel(activeCol, cal);
       }
-    } else if (selected?.type === 'column' && activeCol) {
+    } else if (selected?.type === 'column' && activeCol && this.currentStage === STAGE.SPEARS_AND_SAMPLES) {
       contentHtml = this.renderColumnInspector(activeCol);
     } else {
       contentHtml = this.renderStagePanel(activeCol, cal);
@@ -344,7 +345,7 @@ export class Inspector {
           <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 3px;">几何（只读）：标定在步骤 6 的组参数里改</div>
           <div style="font-size: 10.5px; line-height: 1.5; color: var(--text-secondary);">
             左缘 ${col.startX.toFixed(0)}px → 0 点 ${sc.originX.toFixed(0)}px
-            ${sc.calibX === '' ? '　|　刻度：未标定' : `→ 刻度 ${Number(sc.calibX).toFixed(0)}px（${sc.calibVal} ${sc.unit}）`}
+            ${sc.calibX === '' ? '　|　未标定' : `　|　组斜率 ${Number(sc.calibVal).toFixed(3)} ${sc.unit}/px`}
           </div>
         </div>
 
