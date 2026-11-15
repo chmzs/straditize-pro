@@ -1668,7 +1668,14 @@ class CoreMixin:
         x0, y0, x1, y1 = (int(round(v)) for v in box)
         x0, x1 = sorted((max(0, min(self.width, x0)), max(0, min(self.width, x1))))
         y0, y1 = sorted((max(0, min(self.height, y0)), max(0, min(self.height, y1))))
-        mask[y0:y1, x0:x1] = True
+        # 闭区间：ROI 的 y1 / x1 是**最后一个被包含**的像素。
+        # 这里原来写排他切片（mask[y0:y1, x0:x1]），与下游不一致：_read_column_profile
+        # 用 mask[y0:y1+1] 且 for row_y in range(y0, y1+1)。结果 _extraction_mask
+        # 把 ROI 最后一行整行清零 → 该行 fg_indices 为空 → 回落 feat_x = c_start，
+        # 最后一行恒读成"列左缘"（≈0 读数）。实测：4 列工程包 row 1651 的 x 全等于各自
+        # c_start；合成图上 foreground_mask 该行有墨、(extraction) mask 该行全空。
+        # x 方向同理：ROI 最右一列像素原来被排除，列右缘的墨迹会少算 1px。
+        mask[y0 : min(self.height, y1 + 1), x0 : min(self.width, x1 + 1)] = True
         return mask
 
     def _extraction_mask(self, roi_id: str | None = None) -> np.ndarray | None:
