@@ -13,7 +13,6 @@ import { ToolModeManager } from '../core/ToolModeManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { resolveAxisStroke } from '../core/axisStroke';
 import { columnPick, setPickedColumnIds } from './steps/columnPick';
-import { setTickRedrawHook } from './canvas/tickGeometry';
 import {
   STAGE,
   canHitRoiHandle,
@@ -75,6 +74,11 @@ interface PointerState {
 export interface CanvasEventCallbacks {
   onTaxaChange?: (taxaId: string) => void;
   onDataChange?: () => void;
+  /** 列点编辑落库：拖动结束 / 删除锚点 / 微调去抖后，把整列锚点推给后端。 */
+  onControlPointsCommit?: (
+    colIndex: number,
+    points: Array<{ row: number; x: number; manual?: boolean }>
+  ) => void;
   onHoverInfo?: (info: { worldX: number; worldY: number; depth?: number; percent?: number; horizonDepth?: number | null } | null) => void;
   onFilterChange?: (mode: ImageDisplayMode, binaryOverlay: boolean) => void;
   onDropFile?: (file: File) => void;
@@ -219,7 +223,6 @@ private pointer: PointerState = {
     columnPick.requestRedraw = () => this.requestRender();
     // 步骤 6 的刻度齿位置来自面板的异步实测（`canvas/tickGeometry.ts`）：测完要让画布重画，
     // 否则「面板说刻距 124.5px、图上一条齿都没有」。
-    setTickRedrawHook(() => this.requestRender());
 
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'geology-canvas';
@@ -1116,6 +1119,7 @@ private pointer: PointerState = {
       history: this.history,
       requestRender: () => this.requestRender(),
       notifyNotice: (msg) => this.notifyNotice(msg),
+      commitControlPoints: (colId) => this.commitControlPoints(colId),
       updateCursor: () => this.updateCursor(),
       setToolMode: (mode) => this.setToolMode(mode),
       getActiveColumn: () => this.getActiveColumn() ?? null,
@@ -1358,6 +1362,24 @@ private pointer: PointerState = {
     return [...this.overlayErrors.entries()].map(([id, error]) => ({ id, error }));
   }
 
+  /**
+   * 把某列的锚点整列推给后端（`column.setControlPoints`）。
+   *
+   * 画布上的拖动/删除/微调只改前端模型；不回写后端，导出面板与 data.csv
+   * 拿到的仍是上一次 `core.digitize` / `project.load` 时的锚点。
+   */
+  public commitControlPoints(colId: string): void {
+    const idx = this.data.columns.findIndex((c) => c.id === colId);
+    if (idx < 0) return;
+    const col = this.data.columns[idx];
+    const points = col.controlPoints.map((p) => ({
+      row: Math.round(p.y),
+      x: p.x,
+      manual: p.isManual !== false,
+    }));
+    this.callbacks.onControlPointsCommit?.(idx, points);
+  }
+
   private nudgeTimer: number | null = null;
 
   public nudgeSelectedEntity(dx: number, dy: number): void {
@@ -1381,6 +1403,7 @@ private pointer: PointerState = {
           if (this.nudgeTimer) clearTimeout(this.nudgeTimer);
           this.nudgeTimer = window.setTimeout(() => {
             this.history.push(`Nudge Anchor in ${col.name}`, this.data.columns, this.data.activeTaxaId);
+            this.commitControlPoints(col.id);
             this.nudgeTimer = null;
           }, 500);
         }
@@ -1519,6 +1542,7 @@ private pointer: PointerState = {
       if (col) {
         const pt = col.controlPoints.find((p) => p.id === pointId);
         col.controlPoints = col.controlPoints.filter((p) => p.id !== pointId);
+        this.commitControlPoints(col.id);
         this.history.push(`Delete Anchor from ${col.name}`, this.data.columns, this.data.activeTaxaId);
         this.data.selectedEntity = null;
         this.pointer.anchor = null;

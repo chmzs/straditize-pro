@@ -17,7 +17,7 @@
  */
 
 import { expect, test } from './fixtures';
-import { resetBaseline } from './helpers';
+import { gotoStage, resetBaseline } from './helpers';
 
 interface EditState {
   activeId: string;
@@ -42,6 +42,9 @@ async function readEditState(page: import('@playwright/test').Page): Promise<Edi
 test.describe('Inspector 重渲染保输入', () => {
   test('属种名输入框：重渲染后焦点、值、光标都还在', async ({ page }) => {
     await resetBaseline(page);
+    // 列属性面板只在步骤 5 与 7 出现（`Inspector.ts:210`）：本用例断言的是列属性
+    // 面板的重渲染保输入，先把工作流推进到步骤 7，否则面板根本不渲染。
+    await gotoStage(page, 7);
     const colId = await page.evaluate(
       () => (window as unknown as { __straditize: { getState: () => any } }).__straditize.getState().columns[0].id
     );

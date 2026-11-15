@@ -21,7 +21,10 @@ import { gotoStage, openApp, rpc } from './helpers';
 test.describe('列删除入口与删后不错位', () => {
   test('侧栏点选列即可打开列属性面板；确认后删除该列，其余列控制点逐列不变', async ({ page }) => {
     await openApp(page);
-    await gotoStage(page, 6);
+    // 列属性面板只在步骤 5（分列/命名）与 7（拐点与采样层位）出现 ——
+    // `Inspector.ts:210` 的阶段门禁，step6 让步骤 6 只高亮列、不再换面板。
+    // 本用例测的是列属性面板里的【删除列】，所以必须停在允许的步骤。
+    await gotoStage(page, 7);
 
     const before = (await rpc(page, 'straditize.getDiagramData', {})) as any;
     const cols = (before.columns ?? []) as any[];

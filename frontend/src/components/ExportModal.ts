@@ -10,7 +10,14 @@ import {
   type QaScopePart,
 } from '../core/qaVerdict';
 import type { QaSummary } from '../types/pollen';
-import { notifyError } from '../ui/feedback';
+import { notify, notifyError } from '../ui/feedback';
+
+let activeExportRefresh: (() => void) | null = null;
+
+/** 刷新当前打开的导出面板（未打开时为空操作）。 */
+export function refreshOpenExportModal(): void {
+  activeExportRefresh?.();
+}
 
 export class ExportModal {
   private container: HTMLElement;
@@ -101,9 +108,16 @@ export class ExportModal {
             <div class="form-group" style="margin: 0;">
               <label style="font-size: 11px; font-weight: bold; color: var(--text-primary);">Dataset (数据集形态):</label>
               <select id="wpd-dataset-select" class="sample-select" style="width: 100%; font-size: 11px;">
-                <option value="union_points" selected>1. 真实物理拐点共振层位 [推荐: 忠实原图/无伪插值]</option>
-                <option value="depth_grid">2. 参考标尺均匀层位 [用于等距辅助测试]</option>
-                <option value="turning_points">3. 离散拐点稀疏特征清单 [原始坐标表]</option>
+                <option value="samples" selected>1. 共识层位 —— 每个采样层位一行；与 data.csv / TAR / XLSX 同源</option>
+                <option value="union_points">2. 各列拐点并集 —— 所有列的拐点深度合并去重成行；某列在该深度没有拐点则按其曲线线性插值（不是 0）</option>
+                <option value="turning_points">3. 拐点原始坐标表 —— 长表，一行一个拐点（taxon/type/depth/value/x/y）；不能与上面两张矩阵表混用</option>
+                <!-- 缺值口径必须写在面板上：插值 vs NA 是两种完全不同的数，用户看不到就会误读。 -->
+                <div style="margin-top: 4px; font-size: 10px; line-height: 1.45; color: var(--text-muted);">
+                  共识层位上某列没有拐点时：<b>已标定列</b>按该列曲线线性插值填充；<b>未标定列</b>仍为 NA（不给数）。
+                </div>
+                <optgroup label="高级">
+                  <option value="depth_grid">按深度间隔重采样 —— 按设置里的深度间隔生成规则层位（调试/等距辅助用，不是共识层位）</option>
+                </optgroup>
               </select>
               <!--
                 行集说明：用户必须先知道"这 N 行是哪来的"。
@@ -217,10 +231,13 @@ export class ExportModal {
 
         <div class="ui-modal__footer export-modal-footer">
           <button class="ui-btn ui-btn--quiet" id="btn-wpd-copy">复制当前数据</button>
+          <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-wpd-refresh" title="重新从后端拉取当前行集（画布上改过控制点后点这里）">刷新数据</button>
           <div class="export-format-actions">
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-csv">CSV</button>
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-lipd" title="导出符合 LiPD / LinkedEarth 规范的数据包">LiPD</button>
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-r" title="下载 rioja::strat.plot 绘图脚本">R 脚本</button>
+            <button class="ui-btn ui-btn--primary ui-btn--sm" id="btn-wpd-plot-oneclick" title="用本机 R 的 rioja::strat.plot 直接出图（不联网）">本机出图</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-wpd-riojaplot-web" title="把当前 CSV 复制到剪贴板并打开 riojaPlot 网页；需手动上传，不是本地出图">riojaPlot 网页</button>
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-tar" title="下载包含数据、原图与脚本的项目归档">TAR 归档</button>
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-json">JSON</button>
           </div>
@@ -231,7 +248,10 @@ export class ExportModal {
 
     this.container.appendChild(modal);
 
-    const closeModal = () => modal.remove();
+    const closeModal = () => {
+      activeExportRefresh = null;
+      modal.remove();
+    };
     modal.querySelector('#export-modal-close')?.addEventListener('click', closeModal);
 
     const textarea = modal.querySelector('#wpd-data-textarea') as HTMLTextAreaElement;
@@ -246,9 +266,10 @@ export class ExportModal {
 
     /** 数据集 → 行集来源的人话名字（与 `#wpd-dataset-select` 的选项一一对应）。 */
     const ROWSET_SOURCE: Record<string, string> = {
-      union_points: '按控制点层位',
-      depth_grid: '按标尺均匀层位',
-      turning_points: '按离散拐点清单',
+      samples: '按共识层位（samples）',
+      union_points: '按各列拐点并集（无拐点处插值）',
+      depth_grid: '按深度间隔重采样（高级）',
+      turning_points: '按拐点原始坐标表',
     };
 
     // 动态表格数据模型与手动微调记录
@@ -563,6 +584,18 @@ export class ExportModal {
       void updateFullDisplay();
     });
 
+    // 刷新：画布上改过锚点后立刻重拉，不关面板也能看到新数。
+    modal.querySelector('#btn-wpd-refresh')?.addEventListener('click', () => {
+      userEdits.clear();
+      void updateFullDisplay();
+    });
+
+    // 面板打开期间的后端数据变更（画布改锚点）由 main.ts 通过这个句柄重拉。
+    activeExportRefresh = () => {
+      userEdits.clear();
+      void updateFullDisplay();
+    };
+
     datasetSelect.addEventListener('change', () => {
       userEdits.clear();
       void updateFullDisplay();
@@ -595,6 +628,40 @@ export class ExportModal {
     // 使用（`export.py:1129` 直接转调 `export_data`），`export.exportXlsx` /
     // `export.exportLipd` 更是没有行集参数。所以"选择器同时控制下载"只能由前端
     // 把**同一个矩阵**写出去 —— 这同时保证了预览与下载物逐格同值（构造即成立）。
+    // 本机出图：走本机 R（rioja::strat.plot），不联网。失败必须把「缺什么」原样告诉用户，
+    // 不许变成一张空白图（ARCHITECTURE §2）。
+    modal.querySelector('#btn-wpd-plot-oneclick')?.addEventListener('click', async (ev) => {
+      const btn = ev.currentTarget as HTMLButtonElement;
+      const label = btn.textContent || '本机出图';
+      btn.disabled = true;
+      btn.textContent = '出图中…';
+      try {
+        const res: any = await this.rpcClient.call<any, any>('plot.render', { format: 'pdf' });
+        const sizeKb = Math.round(Number(res?.size_bytes || 0) / 1024);
+        notify('已出图：' + String(res?.path) + '（' + sizeKb + ' KB，' + String(res?.rows_count) + ' 行）', 'success', 8000);
+      } catch (err: any) {
+        const data = (err as { data?: { reason?: string } } | null)?.data;
+        notifyError(
+          (data?.reason === 'r_missing' ? '本机出图需要 R + rioja：' : '出图失败：') +
+            String(err?.message || err)
+        );
+      } finally {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    });
+
+    // 兜底路线：riojaPlot 网页。**不是本地出图**——用户要自己把 CSV 上传上去。
+    modal.querySelector('#btn-wpd-riojaplot-web')?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(textarea.value);
+        window.open('https://nsj3.shinyapps.io/riojaPlot/', '_blank', 'noopener');
+        notify('已复制当前 CSV 到剪贴板，并打开 riojaPlot 网页：需要在网页里手动上传，不是本地出图。', 'info', 9000);
+      } catch (err: any) {
+        notifyError('打开 riojaPlot 网页失败：' + String(err?.message || err));
+      }
+    });
+
     modal.querySelector('#btn-wpd-download-csv')?.addEventListener('click', () => {
       if (currentRows.length === 0) {
         // 空行集给"成功下载了一个空文件"是最误导的做法：用户会以为导完了。

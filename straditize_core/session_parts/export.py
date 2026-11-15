@@ -87,6 +87,76 @@ def _mask_outside_window(
     ]
 
 
+def _control_point_only_columns(session: Any) -> set[int]:
+    """哪些列的逐行点是**由控制点合成**的（不是真数字化出来的）。
+
+    两类「某行没有点」物理含义完全不同，不能给同一个数：
+
+    - 真数字化过的列：缺行 = 那一行没有墨迹 = **真零丰度** → 0；
+    - 控制点合成列：缺行 = 这一层没有拐点/样点 → 按该列曲线**线性插值**（已标定列）
+      或 NA（未标定列）。把前者写成 0，用户会把「没测」当成「测到 0」。
+    """
+    return set(getattr(session, "control_point_columns", None) or ())
+
+
+def _read_row_values(
+    scale: Any,
+    rows: Sequence[int],
+    p_dict: dict[int, float],
+    *,
+    strict: bool,
+    col_name: str,
+    missing_is_na: bool,
+) -> list[Any]:
+    """按行读一列读数；缺行怎么补由该列的来历决定。
+
+    - `missing_is_na=False`（真数字化过的列）：缺行 = 那一行没有墨迹 = **真零丰度**，
+      用基线（列左缘 + 轴线粗，ARCHITECTURE §6.4）换算成 0；
+    - `missing_is_na=True`（控制点合成列）：缺行 = 这一层没有拐点/样点，**按该列自己的
+      锚点线性插值**（端点 clamp，与 `extract_grid_values` 同口径）。已标定列给插值读数；
+      未标定列仍由 `read_column_values` 整列给 None → 导出 NA（未标定列一律不给数）。
+
+    「这一行有没有点」只认 p_dict（真有这一点行），基线只在「无墨迹 = 0」的列里成立。
+    """
+    baseline_px = float(scale.abs_px0)
+    px = [p_dict.get(r) for r in rows]
+    if missing_is_na:
+        filled = _interpolate_missing_px(px, rows, p_dict)
+        values = read_column_values(
+            scale,
+            [baseline_px if p is None else p for p in filled],
+            strict=strict,
+            col_name=col_name,
+        )
+        return [None if p is None else v for p, v in zip(filled, values)]
+    values = read_column_values(
+        scale,
+        [baseline_px if p is None else p for p in px],
+        strict=strict,
+        col_name=col_name,
+    )
+    return list(values)
+
+
+def _interpolate_missing_px(
+    px: Sequence[float | None], rows: Sequence[int], p_dict: dict[int, float]
+) -> list[float | None]:
+    """缺行按该列锚点线性插值（端点 clamp）；整列没有锚点时给 None（→ NA）。
+
+    只做**该列自己**的插值：跨列借值等于替另一列编读数。未标定列即便插出像素，
+    也会被 `read_column_values` 的 `null_when_uncalibrated` 整列丢掉。
+    """
+    known = sorted(p_dict)
+    if not known:
+        return [None] * len(rows)
+    known_rows = [float(r) for r in known]
+    known_x = [float(p_dict[r]) for r in known]
+    return [
+        float(np.interp(r, known_rows, known_x)) if p is None else p
+        for r, p in zip(rows, px)
+    ]
+
+
 def _normalize_negative_zero_depth(csv_string: str) -> str:
     """把 CSV 行首（深度列）的 `-0.0` 规整成 `0.0`。
 
@@ -112,8 +182,12 @@ class ExportMixin:
     """Session mixin for multi-ROI chunked tabular exports (CSV/TSV/LiPD/XLSX/TAR)."""
 
     def _init_export(self) -> None:
-        """Initialize export state."""
-        pass
+        """Initialize export state.
+
+        control_point_columns = 逐行点由控制点合成的列（见
+        _ensure_export_column_points）。这些列的缺行按 NA 出，不按 0 出。
+        """
+        self.control_point_columns: set[int] = set()
 
     def get_roi_dataframes(self, strict: bool = False) -> dict[str, pd.DataFrame]:
         """Construct a pandas DataFrame for each ROI.
@@ -215,16 +289,17 @@ class ExportMixin:
                 scale = resolve_column_scale(self, col, c_idx)
                 pts = column_points.get(c_idx, [])
                 p_dict = {p["row"]: p["x"] for p in pts}
-                # 缺控制点填 0 点、未标定整列不给数——两个决定都在 read_column_values 里，
-                # 这里只提供像素序列（与 CSV/网格/QA 同一个入口）。
-                baseline_px = float(scale.abs_px0)
+                # 未标定整列不给数在 read_column_values 里判；缺行给 0 还是 NA 由
+                # 该列是不是「控制点合成」决定（与 _export_value_columns 同一入口）。
                 data_dict[col_name] = _mask_outside_window(
                     row_list,
-                    read_column_values(
+                    _read_row_values(
                         scale,
-                        [p_dict.get(r, baseline_px) for r in row_list],
+                        row_list,
+                        p_dict,
                         strict=strict,
                         col_name=col_name,
+                        missing_is_na=c_idx in _control_point_only_columns(self),
                     ),
                     _column_row_window(self, col, c_idx),
                     p_dict,
@@ -803,7 +878,10 @@ class ExportMixin:
     # ---- dataset 行集（与前端面板下拉同义，三种都从 column_points 取值）----
 
     #: `export_data(dataset=...)` 允许的取值，顺序即产品下拉顺序。
-    EXPORT_DATASETS = ("union_points", "depth_grid", "turning_points")
+    #: 第一项是默认行集：共识层位（= samples），与 data.csv 同源。
+    #: union_points 是**各列拐点 y 的并集**，行数必然多于共识层位，且并集行上
+    #: 大多数列没有拐点——把它的缺行填 0 会把「没测」写成「测到 0」。
+    EXPORT_DATASETS = ("samples", "union_points", "depth_grid", "turning_points")
 
     def _dataset_frame(self, dataset: str | None, *, strict: bool) -> Any:
         """按 dataset 产出一张表；**三种行集共用同一取数口径**。
@@ -832,6 +910,11 @@ class ExportMixin:
         # 面板三张表都以「读数」为内容：一列都没标定 X 刻度时它们只能给出整表空白，
         # 那看起来像"这张图没数据"，而不是"你还没做步骤 6"。
         self._assert_export_column_scale()
+        # 面板上「共识层位」同样要过列标度守卫：全列未标定时它只会给一整张 NA 表，
+        # 看起来像「这张图没数据」，而不是「你卡在步骤 6」。
+        # 不传 dataset（data.csv / tar / xlsx 出口）不受此守卫约束（那条契约不变）。
+        if key == "samples":
+            return self._primary_roi_export_frame(strict=strict)
         if key == "union_points":
             return self._union_points_frame()
         if key == "depth_grid":
@@ -1115,15 +1198,19 @@ class ExportMixin:
             if getattr(self, "control_points", None) and any(
                 self.control_points.values()
             ):
-                all_r = sorted(
-                    {r for ctrls in self.control_points.values() for r in ctrls}
-                )
+                sparse_columns: set[int] = set()
                 for c_idx in range(len(getattr(self, "columns", []))):
-                    ctrls = self.control_points.get(c_idx, {})
-                    c_start = float(self.columns[c_idx].get("start", 0))
+                    ctrls = self.control_points.get(c_idx, {}) or {}
+                    # 只给**真有控制点**的行建点：没有控制点的行是「这一列没有这一层
+                    # 的读数」，编一个 c_start 像素（旧行为）等于把它写成 0 丰度，
+                    # 用户会把 0 当成真实读数。这些列记进 control_point_columns，
+                    # 取值时缺行一律 NA（见 _read_row_values）。
                     self.column_points[c_idx] = [
-                        {"row": r, "x": float(ctrls.get(r, c_start))} for r in all_r
+                        {"row": int(round(float(row))), "x": float(x)}
+                        for row, x in sorted(ctrls.items())
                     ]
+                    sparse_columns.add(c_idx)
+                self.control_point_columns = sparse_columns
             elif (
                 getattr(self, "columns", None)
                 and getattr(self, "image", None) is not None
@@ -1204,6 +1291,7 @@ class ExportMixin:
         """
         columns = getattr(self, "columns", [])
         taxa_names = getattr(self, "taxa_names", [])
+        sparse_columns = _control_point_only_columns(self)
         values: dict[str, Any] = {}
         for c_idx in sorted(self.column_points.keys()):
             col_def = columns[c_idx] if c_idx < len(columns) else {}
@@ -1219,16 +1307,17 @@ class ExportMixin:
             pts = self.column_points[c_idx]
             p_dict = {p["row"]: p["x"] for p in pts}
             scale = resolve_column_scale(self, col_def, c_idx)
-            # 缺控制点填 **0 点**（= 列左缘 + 轴线粗，ARCHITECTURE §6.4）；未标定整列不给数。
-            # 两个决定都在 read_column_values 里——四路出口共用一个入口，取整改一处即全改。
-            baseline_px = float(scale.abs_px0)
+            # 未标定整列不给数在 read_column_values 里判；缺行给 0 点（无墨迹 = 真零）
+            # 还是 None（控制点合成列 = 没有这一行的读数），由该列的来历决定。
             values[col_name] = _mask_outside_window(
                 all_rows,
-                read_column_values(
+                _read_row_values(
                     scale,
-                    [p_dict.get(r, baseline_px) for r in all_rows],
+                    all_rows,
+                    p_dict,
                     strict=strict,
                     col_name=col_name,
+                    missing_is_na=c_idx in sparse_columns,
                 ),
                 _column_row_window(self, col_def, c_idx),
                 p_dict,
@@ -1243,7 +1332,9 @@ class ExportMixin:
         saved_path: str | None = None
 
         if fmt == "csv":
-            csv_string = df.to_csv(index=False)
+            # 缺测写成语义无歧义的 NA：空单元格在下游读入器里既可能是缺失也可能是 0，
+            # 与 export_multi_tar 的两处 to_csv 保持同一口径。
+            csv_string = df.to_csv(index=False, na_rep="NA")
             # `-0.0` 的符号位会被 pandas 原样渲染，CSV 里就成了字面量 `-0.0`
             # （pandas 对 `float(-0.0)` 一律输出 `-0.0`，加 0.0 也抹不掉符号位）。
             # 下游 R / Excel / 严格校验的读入器会把它当**负深度**，而它实际就是 0。
@@ -1420,6 +1511,12 @@ class ExportMixin:
 
             for c_idx, taxon in zip(col_indices, taxa_labels):
                 pts = self.column_points[c_idx]
+                if not pts:
+                    # 这一列一个点都没有（控制点合成列里没有控制点的列）：网格上整列
+                    # 无读数 → NA。np.interp 对空 points 会抛，也不该拿 0 充数。
+                    row_vals.append(None)
+                    row_dict[taxon] = None
+                    continue
                 p_rows = np.array([p["row"] for p in pts], dtype=float)
                 p_x = np.array([p["x"] for p in pts], dtype=float)
 

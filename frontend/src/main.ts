@@ -41,6 +41,7 @@ import { createFooterUpdater } from './app/footer';
 import { setupDraftRecovery } from './app/draftRecovery';
 import { setupScaleSync } from './app/scaleSync';
 import { notifyError } from './ui/feedback';
+import { refreshOpenExportModal } from './components/ExportModal';
 import { installBeforeUnloadGuard } from './app/lifecycle';
 import {
   showProvenanceGate,
@@ -226,6 +227,19 @@ async function bootstrap() {
         );
       })();
     },
+    // 列点编辑落库：拖动结束 / 删除锚点 / 微调去抖后把整列锚点推给后端。
+    // 失败必须冒泡（后端会因 data_ylim 缺失等拒绝），不许只在控制台留一行。
+    onControlPointsCommit: (colIndex, points) => {
+      void (async () => {
+        try {
+          await rpcClient.setControlPoints(colIndex, points);
+        } catch (err) {
+          notifyError(
+            `控制点同步失败（col ${colIndex}）：${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      })();
+    },
     onGeometryCommit: cleanupManager.handleGeometryCommit,
     onGeometryDelete: cleanupManager.handleGeometryDelete,
     onGeometrySelected: cleanupManager.handleGeometrySelected,
@@ -235,6 +249,8 @@ async function bootstrap() {
       updateFooter();
     },
     onDataChange: () => {
+      // 导出面板开着时立刻重拉：改过锚点后不必关掉重开（P0-B）。
+      refreshOpenExportModal();
       sidebar?.updateData(canvasComponent.data);
       inspector?.updateData(canvasComponent.data);
       toolbar?.updateHistoryState();

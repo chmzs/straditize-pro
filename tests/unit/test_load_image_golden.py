@@ -57,7 +57,6 @@ CLEARED_ATTRS = [
     "foreground_column_edges",
     "shadow_mask",
     "solid_layers",
-    "tick_band",
     "y_scale",
     "depth_calib",
     "data_xlim",
@@ -193,7 +192,6 @@ def _collect(tmp_dir: Path) -> dict:
     session.selected_candidate_ids = {"cand_stale"}
     session.foreground_mask = np.zeros((8, 8), dtype=bool)
     session.grid_line_mask = np.zeros((8, 8), dtype=bool)
-    session.tick_band = {"y0": 1, "y1": 2}
     session.is_calibrated = True
     session.y_scale = {"slope": 1.0, "intercept": 0.0}
     session.depth_calib = {"top_px": 0.0, "bottom_px": 10.0, "top_cm": 0.0, "bottom_cm": 5.0}

@@ -16,9 +16,8 @@
  * 注意：**列结束位置不画**。rioja / Tilia 的列首尾相接，`endX` 恒等于下一列的
  * `startX`（红线已画）；再画一条会让用户无法判断哪条才是真正的分界。
  */
-import { CoordinateSystem } from '../../core/CoordinateSystem';
 import { resolveAxisStroke } from '../../core/axisStroke';
-import { resolveTickSpacingPx } from './tickGeometry';
+import { formatCalibNumber, getGroupCalibMark } from './groupCalibMarks';
 import type { DataRoi, TaxaColumn } from '../../types/pollen';
 
 /** 边界类型：列起点（红）/ 刻度端点（蓝尺）/ 列终点（仅悬停高亮）。 */
@@ -70,9 +69,6 @@ export function getColumnCalibVal(col: TaxaColumn): number {
 }
 
 /** 只有用户确认过的两点标定才算数（判据单一源在 CoordinateSystem）。 */
-function hasRealCalibration(col: TaxaColumn): boolean {
-  return CoordinateSystem.hasRealCalibration(col);
-}
 
 
 /**
@@ -128,13 +124,6 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
       if (!col.visible) return;
 
       const isActive = col.id === activeTaxaId;
-      const sc = {
-        originX: col.x_ticks?.[0]?.px ?? col.startX,
-        originVal: col.x_ticks?.[0]?.value ?? col.scaleCalib?.originVal ?? 0,
-        calibX: getColumnCalibX(col),
-        calibVal: getColumnCalibVal(col),
-        unit: col.unit || '%',
-      };
 
       // ── 列的四条线（语义由领域确定，不要凭感觉调色）────────────────────────
       //   红实线 = `col.startX` = 轴线**左缘** = 列切分线（也是上一列的结束位置）
@@ -148,12 +137,12 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
       // （`anchor_zero_at_axis_right`）默认关闭就是为了这个；一旦开启，start 变成
       // 右缘，这里再加轴粗即双偏移（实测事故见 ARCHITECTURE §6.4）。
       const groupOfCol = roi.x_groups?.find((g) => g.id === col.x_group_id);
-      // 一个单位刻度的像素长度（组级）。有它就按等距外推画刻度，
-      // 不再依赖检测齿 —— 检测会漏、会多、会偏 1-2px（实测一列是第 2 个齿、另一列是第 3 个）。
-      // 齿的间距：**用户确认值（组级 ref_span_px）> 实测刻距 > 不画**。
-      // 只认 ref_span_px 时，用户刚进步骤 6（还没点齿标定）画布上一条齿都没有——
-      // 面板却写着「检测: 4 列 · 刻距 124.5px」，于是「点一个刻度齿」无从点起。
-      const cellPx = resolveTickSpacingPx(groupOfCol?.ref_span_px);
+      // 一个单位刻度的像素长度 = 组级斜率的倒数（value_per_px = 每像素多少单位）。
+      // 斜率只由用户「点一个齿 + 填它的数字」写入（ARCHITECTURE §6.4）；未标定 → null → 一条齿都不画。
+      // 自动检测的刻距不参与：实测同图各列差 1–2px，且从未经用户确认（§6.4:254）。
+      const groupSlope = Number(groupOfCol?.value_per_px);
+      const cellPx =
+        Number.isFinite(groupSlope) && groupSlope !== 0 ? 1 / Math.abs(groupSlope) : null;
       // 列级覆盖 > 组级初值 > 缺省 5（与后端 xscale.resolve_axis_stroke 同语义）。
       const axisStrokePx = resolveAxisStroke(col, groupOfCol);
       const leftEdgeX = col.startX;
@@ -178,9 +167,29 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
       ctx.stroke();
 
       
-      const isOriginHovered =
-        (hovered?.taxaId === col.id && hovered.type === 'start') ||
-        (dragging?.taxaId === col.id && dragging.type === 'start');
+
+      // 手动标定的两个锚点：0 点落绿线（轴线右缘），用户点的那条齿落在它自己的像素上。
+      // 只有该组真的标定过才画；未标定列一个标记都没有（ARCHITECTURE §6.4）。
+      const calibMark = getGroupCalibMark(groupOfCol?.id);
+      if (calibMark) {
+        ctx.save();
+        ctx.font = "600 " + String(Math.max(9, 10 / scale)) + "px monospace";
+        ctx.textBaseline = "top";
+        const drawCalibMark = (x: number, label: string, color: string): void => {
+          ctx.beginPath();
+          ctx.moveTo(x, bottomY);
+          ctx.lineTo(x, bottomY + 10 / scale);
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2 / scale;
+          ctx.stroke();
+          ctx.fillStyle = color;
+          ctx.textAlign = "center";
+          ctx.fillText(label, x, bottomY + 12 / scale);
+        };
+        drawCalibMark(zeroX, "0", "#22c55e");
+        drawCalibMark(calibMark.px, formatCalibNumber(calibMark.reading), isLight ? "#0284c7" : "#38bdf8");
+        ctx.restore();
+      }
 
       const isCalibHovered =
         (hovered?.taxaId === col.id && hovered.type === 'tick') ||
@@ -226,93 +235,6 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
         ctx.stroke();
       }
 
-      // 4. 绘制两点式物理刻度手柄 (Tick Pins) — 激活列显式绘制顶部与底部定位把手圆点
-      //    未标定列同样不画：把手位置来自 sc.calibX（猜测值），画出来在视觉上等于承认它。
-      if (isActive && hasRealCalibration(col)) {
-        const origColor = isOriginHovered ? '#f97316' : (isLight ? '#0284c7' : '#38bdf8');
-        const calibColor = isCalibHovered ? '#f97316' : '#10b981';
-        const pinR = (isOriginHovered ? 6 : 4.5) / scale;
-        const calR = (isCalibHovered ? 6 : 4.5) / scale;
-
-        // 顶部圆点把手 (Top Pins)
-        ctx.beginPath();
-        ctx.arc(sc.originX, topY, pinR, 0, Math.PI * 2);
-        ctx.fillStyle = origColor;
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.5 / scale;
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(sc.calibX, topY, calR, 0, Math.PI * 2);
-        ctx.fillStyle = calibColor;
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.5 / scale;
-        ctx.stroke();
-
-        // 底部刻度基线与圆点把手 (Bottom Pins & Ruler)
-        ctx.beginPath();
-        ctx.strokeStyle = isLight ? 'rgba(2, 132, 199, 0.8)' : 'rgba(56, 189, 248, 0.8)';
-        ctx.lineWidth = 2 / scale;
-        ctx.moveTo(sc.originX, bottomY);
-        ctx.lineTo(sc.calibX, bottomY);
-        ctx.stroke();
-
-        // 绘制检测到的刻度短锯齿 (Detected Tick Teeth)
-        const teeth = col.detected_ticks || [];
-        if (teeth.length > 0) {
-          ctx.save();
-          const toothH = 8 / scale;
-          for (const tx of teeth) {
-            const isChosen = Math.abs(tx - sc.calibX) <= 3;
-            ctx.beginPath();
-            ctx.strokeStyle = isChosen ? '#10b981' : (isLight ? '#f97316' : '#fbbf24');
-            ctx.lineWidth = (isChosen ? 2.5 : 1.5) / scale;
-            ctx.moveTo(tx, bottomY);
-            ctx.lineTo(tx, bottomY + toothH);
-            ctx.stroke();
-
-            // 小齿底端微型指示圆钉
-            ctx.beginPath();
-            ctx.arc(tx, bottomY + toothH, (isChosen ? 2.8 : 1.8) / scale, 0, Math.PI * 2);
-            ctx.fillStyle = isChosen ? '#10b981' : (isLight ? '#f97316' : '#fbbf24');
-            ctx.fill();
-          }
-          ctx.restore();
-        }
-
-        ctx.beginPath();
-        ctx.arc(sc.originX, bottomY, pinR, 0, Math.PI * 2);
-        ctx.fillStyle = origColor;
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.5 / scale;
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(sc.calibX, bottomY, calR, 0, Math.PI * 2);
-        ctx.fillStyle = calibColor;
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.5 / scale;
-        ctx.stroke();
-
-        // 底部刻度值标签 (Bottom value badges: 直接展示纯数字，不带 % 符号)
-        ctx.save();
-        const fontPx = Math.max(9, 10 / scale);
-        ctx.font = `600 ${fontPx}px monospace`;
-        ctx.fillStyle = origColor;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText(`${sc.originVal}`, sc.originX, bottomY + 6 / scale);
-
-        ctx.fillStyle = calibColor;
-        ctx.textAlign = 'center';
-        ctx.fillText(`${sc.calibVal}`, sc.calibX, bottomY + 6 / scale);
-        ctx.restore();
-      }
-
       // 5. 属种名称与端点数值标签
       const width = col.endX - col.startX;
       const centerX = col.startX + width / 2;
@@ -342,15 +264,6 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
         ctx.fillText(col.name, centerX, topY - 16 / scale);
         ctx.restore();
 
-        // 仅在当前选中的激活列显示清晰端点刻度（直接展示纯数字），防止几十列文字相互横向打架
-        ctx.font = `600 ${Math.max(8.5, 9.5 / scale)}px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif`;
-        ctx.fillStyle = isLight ? '#0284c7' : '#38bdf8';
-        ctx.textAlign = 'left';
-        ctx.fillText(`${sc.originVal}`, sc.originX + 2 / scale, topY - 2 / scale);
-
-        ctx.fillStyle = isLight ? '#dc2626' : '#f87171';
-        ctx.textAlign = 'right';
-        ctx.fillText(`${sc.calibVal}`, sc.calibX - 2 / scale, topY - 2 / scale);
       } else {
         // 未激活列：若列较窄（< 40px），名称以 45 度优雅斜角呈现，杜绝多列名称横向重叠！
         ctx.save();

@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from typing import Any, Sequence
-import numpy as np
 
-from ..protocol import STATE_ERROR, JsonRpcError
-from ..xticks import detect_xticks
+from ..protocol import JsonRpcError
 from .xscale import normalize_scale_type, store_exaggeration
 
 #: 横轴线的判定门限：该行暗像素占全图宽度的比例。
@@ -99,147 +97,9 @@ def _merge_adjacent(columns: Sequence[int], gap: int = 2) -> list[int]:
 class XTicksMixin:
     """Session mixin for X-ticks detection and per-column calibration."""
 
-    tick_band: list[int] | None
 
     def _init_xticks(self) -> None:
         """Initialize xticks state."""
-        self.tick_band = None
-
-    def _locate_tick_band(
-        self,
-        gray: np.ndarray,
-        *,
-        ylim: Sequence[float],
-    ) -> tuple[int, int] | None:
-        """找出横轴刻度尺所在的带；找不到返回 ``None``。
-
-        ## 旧实现为什么恒为死代码（G-01a）
-
-        旧搜索窗口 ``range(y_bottom - 4, y_bottom + 16)`` 同时要求
-        ``top + bh <= hi_search``（``hi_search = y_bottom``）。最小可达的
-        ``top + bh`` 是 ``(y_bottom - 4) + 6 = y_bottom + 2``，**恒大于** ``hi_search``
-        ——60 个候选全被 ``continue``，一个都没测过。步骤 6 的"自动提取"因此完全
-        不可用，而表面现象只是"这张图没有刻度尺"。
-
-        而且"刻度尺紧贴 ROI 底部 ±16px"这个假设本身是错的：fig3_raw 的 ROI 底是
-        744，真尺在 869-875，差 125px。ROI 是用户框的**取数区**，刻度尺画在图版
-        下缘。故本实现不再假设相对位置，而是**按物理结构找轴线**。
-
-        ## 判据（按物理结构，不按齿数拟合）
-
-        刻度尺的定义性结构是"一条横轴 + 一排垂直于它、只向下伸出的短齿"。据此：
-
-        1. **找轴线**：逐行算暗像素占全宽比例，超过 :data:`AXIS_DARK_FRACTION`
-           的行是横轴候选（fig3 实测 y=869 达 66%，其余行 ≤7%）；
-        2. **在轴线正下方找齿**：轴线之下 :data:`TICK_DEPTH` 行内连续为暗的列；
-        3. **T2 排除**：该列在轴线上方 :data:`TICK_CLEAR_ABOVE` 行内不得有暗像素
-           ——真齿只往下伸，贯穿框线与图例字母的竖笔会穿过轴线；
-        4. **量级门槛**：齿数需达 :data:`MIN_TICKS_FOR_SCALE`。这一步挡的是
-           "轴线下恰好有零星短笔画"（hoya 图例区最多 16、beginner 最多 2）。
-
-        ## 为什么不用"齿数最多"或"游程最长"当判据
-
-        两者都实测过、都不成立：fig3 的**数字区**（y=886）齿数 55 比真齿区 51 还多
-        ——齿数不但不能区分对错，方向甚至相反；而真齿带里含贯穿框线，最长游程达
-        662px，用游程阈值会把真尺整条误杀。这也是本任务书前几版判据全部失败的原因。
-
-        返回 ``(axis + 1, axis + 1 + TICK_DEPTH)``：带从轴线**下方第一行**开始，
-        不含轴线本身（含轴线会把横线算成一整条"齿"）。
-        """
-        img_h = int(gray.shape[0])
-        if img_h <= TICK_DEPTH:
-            return None
-        dark = gray < 160
-        y_top = max(0, int(round(float(ylim[0]))))
-        y_bottom = float(ylim[1])
-
-        axis_rows = [
-            y
-            for y in range(min(y_top, int(round(y_bottom))), img_h)
-            if dark[y].mean() > AXIS_DARK_FRACTION
-        ]
-        if not axis_rows:
-            return None
-
-        # 合并相邻轴线行（粗轴线可能占 2-3 行），取每组最后一行作为齿的起点。
-        axis_groups: list[list[int]] = []
-        for y in axis_rows:
-            if axis_groups and y - axis_groups[-1][-1] <= 2:
-                axis_groups[-1].append(y)
-            else:
-                axis_groups.append([y])
-
-        best: tuple[int, tuple[int, int]] | None = None
-        for group in axis_groups:
-            axis = group[-1]
-            band_start = axis + 1
-            if band_start + TICK_DEPTH >= img_h:
-                continue
-            band = dark[band_start : band_start + TICK_DEPTH, :]
-            stroke_columns = np.where(band.mean(axis=0) > 0.99)[0]
-            if len(stroke_columns) < MIN_TICKS_FOR_SCALE:
-                continue
-            # T2：真齿只从轴线向下伸出，正上方必须是空白。
-            clear_above = [
-                int(x)
-                for x in stroke_columns
-                if not any(
-                    dark[axis - offset, x]
-                    for offset in range(1, TICK_CLEAR_ABOVE + 1)
-                    if axis - offset >= 0
-                )
-            ]
-            merged = _merge_adjacent(clear_above)
-            tick_count = len(merged)
-            if tick_count < MIN_TICKS_FOR_SCALE:
-                continue
-            if best is None or tick_count > best[0]:
-                best = (tick_count, (band_start, band_start + TICK_DEPTH))
-
-        return best[1] if best is not None else None
-
-    def detect_xticks_rpc(
-        self,
-        roi_id: str | None = None,
-        band: Sequence[int] | None = None,
-        dark_threshold: int = 160,
-    ) -> dict[str, Any]:
-        """Detect x-axis tick marks for an ROI using geometric run algorithm."""
-        if getattr(self, "image", None) is None:
-            return {"band": None, "per_column": []}
-
-        # Convert image to greyscale
-        img = self.image.convert("L")
-        gray = np.array(img)
-
-        cols = []
-        target_roi_id = roi_id
-        if not target_roi_id and hasattr(self, "rois") and self.rois:
-            target_roi_id = getattr(self, "active_roi_id", None) or self.rois[0]["id"]
-
-        for col in getattr(self, "columns", []):
-            if not target_roi_id or col.get("roi_id") == target_roi_id:
-                cols.append((col.get("startX", col.get("start", 0)), col.get("endX", col.get("end", 0))))
-
-        resolved_band = band
-        if resolved_band is None and target_roi_id and hasattr(self, "_get_roi"):
-            try:
-                target_roi = self._get_roi(target_roi_id)
-                ylim = target_roi.get("ylim") if target_roi else None
-                if ylim and len(ylim) == 2:
-                    resolved_band = self._locate_tick_band(gray, ylim=ylim)
-            except Exception:
-                pass
-
-        res = detect_xticks(
-            gray,
-            band=resolved_band,
-            dark_threshold=dark_threshold,
-            columns=cols if cols else None,
-        )
-        if res.get("band"):
-            self.tick_band = list(res["band"])
-        return res
 
     def calibrate_column_xticks(
         self,
@@ -294,40 +154,14 @@ class XTicksMixin:
         if scale_type is not None:
             scale_type = normalize_scale_type(scale_type)
 
-        # 端点像素**可省略**：省略即由后端自检（几何只在后端命中）。
-        # 这是保证「不拿猜测位置当用户读数」的唯一做法——前端没有几何，
-        # 让它凑一个 px，就是把分列期写入的 `startX + max(20, 0.65×列宽)` 落库成标定。
+        # 端点像素必须由前端给出（用户在画布上点的位置）。后端不做任何检测兜底：
+        # 自动找齿会把「算法猜的位置」写成用户读数，正是 2026-11-15 下架自动检测的原因。
         if px0_raw is None or px1_raw is None:
-            if getattr(self, "image", None) is None:
-                raise JsonRpcError(STATE_ERROR, "未载入图像，无法确定刻度端点。")
-            from ..ruler import detect_ruler
-
-            _img = self.image
-            _x0 = int(float(col.get("startX", col.get("start", 0))))
-            _x1 = int(float(col.get("endX", col.get("end", 0))))
-            probe = detect_ruler(np.array(_img.convert("L")), _x0, _x1)
-            if px0_raw is None:
-                axis_right = probe.get("axis_x_right")
-                if axis_right is None:
-                    raise JsonRpcError(
-                        STATE_ERROR,
-                        "这一列的轴线未识别，无法确定 0 点。请先用「对齐本组」，或手动填入端点像素。",
-                    )
-                px0 = float(axis_right)
-            else:
-                px0 = float(px0_raw)
-            if px1_raw is None:
-                detected_ticks = probe.get("ticks") or []
-                if not detected_ticks:
-                    raise JsonRpcError(
-                        STATE_ERROR,
-                        "这一列没有检测到刻度齿，无法确定第二端点。请用「对齐本组」，或手动填入端点像素。",
-                    )
-                px1 = float(detected_ticks[-1])
-            else:
-                px1 = float(px1_raw)
-        else:
-            px0, px1 = float(px0_raw), float(px1_raw)
+            raise JsonRpcError(
+                -32602,
+                "参数格式不合规：两个端点的像素坐标都必须给出（px）。后端不再代为检测刻度齿。",
+            )
+        px0, px1 = float(px0_raw), float(px1_raw)
 
         if px0 == px1:
             raise JsonRpcError(
@@ -444,71 +278,3 @@ class XTicksMixin:
         col.pop("x_ticks_dropped", None)
 
         return {"col_index": resolved, "x_ticks": None, "cleared": had_ticks}
-
-    def measure_ruler_geometry(
-        self, roi_id: str | None = None, axis_stroke: float | None = None
-    ) -> dict[str, Any]:
-        """Measure each column's **tick-ruler geometry** (read-only, no side effects).
-
-        Returns, per column: the axis row, tick x-positions, cell count, cell
-        spacing and whether the spacing is regular — plus the ROI-wide median
-        spacing. No calibration values are produced or written.
-
-        ## 为什么只给几何、不给读数
-
-        刻度尺的**几何**是客观的（图上有几条刻线、间距多少），可以自动测；
-        但**每格代表多少**是作图书版的设定，图上没有任何信息可推。
-
-        实测反证（Han et al. 2026 Fig.3，以 Cyperaceae 13 格 = 70.07% 为锚点外推）：
-        `Artemisia` 刻距 12.5px 与锚点 13.0px 几乎相同，外推误差却达 **−84%**；
-        `Caryophyllaceae` 达 **+151%**。故任何跨列外推都是猜，本方法坚决不产出。
-
-        前端应把 `n_cells` 展示给用户，用于**发现**哪些列没有印刷数字、
-        哪些列刻距异常（例如明显偏离中位数的列），而不是用来生成读数。
-        """
-        if getattr(self, "image", None) is None:
-            raise JsonRpcError(
-                STATE_ERROR, "No image loaded. Please call core.loadImage first."
-            )
-
-        from ..ruler import detect_ruler_for_columns
-
-        target_roi_id = roi_id or getattr(self, "active_roi_id", None)
-        if not target_roi_id and getattr(self, "rois", None):
-            target_roi_id = self.rois[0]["id"]
-
-        columns = [
-            c
-            for c in getattr(self, "columns", [])
-            if not target_roi_id or c.get("roi_id") == target_roi_id
-        ]
-        if not columns:
-            raise JsonRpcError(
-                STATE_ERROR,
-                "前置状态缺失：当前有效区内没有列。请先在【步骤 5: 分列】确认列切分后再测量刻度尺。",
-            )
-
-        gray = np.array(self.image.convert("L"))
-        # ROI 的纵向取数区必须传下去：ROI 之外常有全宽暗行（整幅图的外框下边、
-        # 面板分隔线），它们比每列真正的下轴更靠下。不传时 `find_axis_row`
-        # 会选中外框（hoya 实测 y=1375，而各列下轴在 1306/1307、ROI y1=1311），
-        # 齿搜索带整段落进纯白区 → 28 列全报 0 齿。
-        y0: int | None = None
-        y1: int | None = None
-        roi = next(
-            (r for r in getattr(self, "rois", []) if r.get("id") == target_roi_id), None
-        )
-        if roi is not None and roi.get("ylim"):
-            y0 = int(round(float(roi["ylim"][0])))
-            y1 = int(round(float(roi["ylim"][1])))
-        result = detect_ruler_for_columns(
-            gray, columns, axis_stroke=axis_stroke, y0=y0, y1=y1
-        )
-        result["roi_id"] = target_roi_id
-        # 明确声明：本接口不产出任何读数。
-        result["calibration_suggestions"] = []
-        result["note"] = (
-            "仅测量刻线几何（轴线/刻线/格数/刻距）。不产出任何满量程读数："
-            "每格数值是作图书版设定，图上无法推得；跨列外推实测误差可达 84%–151%。"
-        )
-        return result

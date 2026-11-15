@@ -150,7 +150,6 @@ class TestLoadImageClearsColumnDerivedState:
         session.extract_foreground(extraction_mode="solid-over-shadow")
         assert session.shadow_mask is not None, "前置：hoya 上应产出阴影包络"
         session.foreground_column_edges = [0, 100, 200]
-        session.tick_band = [900, 909]
 
         session.load_image(sample_key="beginner")
 
@@ -161,7 +160,6 @@ class TestLoadImageClearsColumnDerivedState:
             "换图后 solid_layers 未清 —— 旧图的像素计数会被当成本图的统计量"
         )
         assert session.foreground_column_edges is None
-        assert session.tick_band is None
 
     def test_load_image_clears_undo_and_redo_stacks(self) -> None:
         """撤销栈存的是旧图快照，留着就能把旧图的列复活到新图上。

@@ -153,6 +153,11 @@ test.describe('点取数被拒：后端原文必须到界面', () => {
       )
       .toBe(1);
 
+    // 列属性面板只在步骤 5（分列/命名）与 7（拐点与采样层位）出现 ——
+    // `Inspector.ts:210` 的阶段门禁（step6 让步骤 6 只高亮列、不换面板）。
+    // 【重新识别此列】就在这个面板里，所以先把工作流推进到步骤 7，否则按钮不渲染。
+    await gotoStage(page, 7);
+
     // 选中这一列（侧栏点列名 = 真实用户路径），【重新识别此列】就是取数入口
     await page
       .locator(`input.taxa-name-inline-input[data-col-id="${target.id}"]`)

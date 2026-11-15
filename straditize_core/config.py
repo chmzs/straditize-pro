@@ -16,6 +16,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "allowed_hosts": ["127.0.0.1", "localhost"],
     "locale": "zh-CN",
     "theme": "light",
+    #: 一键出图用的 Rscript 绝对路径；空 = 自动探测（PATH + 常见安装目录）。
+    "rscript_path": "",
     "llm_base_url": "https://api.openai.com/v1",
     "llm_api_key": "",
     "llm_model": "gpt-4o",

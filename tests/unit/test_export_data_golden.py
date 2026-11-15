@@ -18,6 +18,12 @@
 | `control_points_only` | 只有控制点、没有逐行点 → 按控制点合成 |
 | `errors` | 坏格式 / parquet 缺路径 / strict 未标定 / 完全没数据 |
 
+## 缺测表示（2026-11-15 变更）
+
+基线里缺测一律写成字面量 `NA`（`na_rep="NA"`），不再留空单元格：空单元格在下游
+读入器里既可能是缺失也可能是 0。同时缺行不再被编一个 0 点像素冒充读数。
+本次基线更新只发生「空 → NA」与 `csv_digest`/`csv_head` 随之变化，行集与列集不变。
+
 ## 重新生成
 
     UPDATE_EXPORT_DATA_GOLDEN=1 pixi run python -m pytest tests/unit/test_export_data_golden.py

@@ -105,15 +105,6 @@ export class SelectToolStrategy implements ToolStrategy {
         ctx.data.activeTaxaId = col.id;
         ctx.data.selectedEntity = { type: 'column', id: col.id, part: 'tick' };
         let targetX = Math.round(worldPt.x);
-        // 若附近 15px 内有算法检测到的锯齿，自动高精度磁吸对齐到锯齿中线
-        if (col.detected_ticks && col.detected_ticks.length > 0) {
-          const nearest = col.detected_ticks.reduce((prev, curr) =>
-            Math.abs(curr - targetX) < Math.abs(prev - targetX) ? curr : prev
-          );
-          if (Math.abs(nearest - targetX) <= 15 / ctx.viewport.scale) {
-            targetX = nearest;
-          }
-        }
         targetX = Math.max(col.startX + 5, targetX);
         col.tickEndX = targetX;
         if (col.scaleCalib) {
@@ -239,14 +230,6 @@ export class SelectToolStrategy implements ToolStrategy {
           }
         } else if (type === 'tick') {
           let targetX = newX;
-          if (targetCol.detected_ticks && targetCol.detected_ticks.length > 0) {
-            const nearest = targetCol.detected_ticks.reduce((prev, curr) =>
-              Math.abs(curr - newX) < Math.abs(prev - newX) ? curr : prev
-            );
-            if (Math.abs(nearest - newX) <= 10 / ctx.viewport.scale) {
-              targetX = nearest;
-            }
-          }
           targetCol.tickEndX = Math.max(targetCol.startX + 5, targetX);
           if (targetCol.scaleCalib) {
             targetCol.scaleCalib.calibX = targetCol.tickEndX;
@@ -297,6 +280,7 @@ export class SelectToolStrategy implements ToolStrategy {
       const col = ctx.data.columns.find((c) => c.id === this.draggingAnchor!.taxaId);
       if (col) {
         ctx.history.push(`Move Anchor in ${col.name}`, ctx.data.columns, ctx.data.activeTaxaId);
+        ctx.commitControlPoints(col.id);
         ctx.callbacks.onDataChange?.();
       }
       handled = true;

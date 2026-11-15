@@ -125,7 +125,8 @@ def test_uncalibrated_column_exports_as_empty_once_the_y_axis_is_calibrated() ->
 
     rows = session.export_data("csv")["csv"].splitlines()
     assert rows[0].startswith("depth,")
-    assert set(rows[1].split(",")[1:]) == {""}, f"未标定列必须整列为空，实得：{rows[1]}"
+    # 缺测在 CSV 里写成字面量 NA（na_rep="NA"）：空单元格在下游既可能是缺失也可能是 0。
+    assert set(rows[1].split(",")[1:]) == {"NA"}, f"未标定列整列必须是 NA（缺测），实得：{rows[1]}"
 
 
 def test_calibrated_column_exports_real_readings() -> None:

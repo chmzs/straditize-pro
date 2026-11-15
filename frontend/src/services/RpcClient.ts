@@ -2,7 +2,6 @@ import { BackendStatus, JsonRpcRequest, JsonRpcResponse } from '../types/rpc';
 import { tError } from '../i18n/errorCodes';
 import { t } from '../i18n';
 import { Column, ColumnGroup, ControlPoint, CleanupResult, DataRoi, DepthCalibration, DiagramData, LEGACY_FULL_SCALE, LineMaskStroke, Tick } from '../types/pollen';
-import { RulerGeometry } from '../types/ruler';
 import { PollenGlossary } from '../core/PollenGlossary';
 
 /**
@@ -608,35 +607,6 @@ export class RpcClient {
     return res;
   }
 
-  /**
-   * 只读：测量本 ROI 每列的**刻度尺几何**（轴线 / 刻线 / 格数 / 刻距 / 规则性）。
-   *
-   * 后端 `session_parts/xticks.py::measure_ruler_geometry` 明确**不产出任何读数**：
-   * 每格代表多少是作图书版的设定，跨列外推实测误差 84%–151%，故返回值里没有、
-   * 也不会有"建议量程"。前端只能把它当几何事实展示，绝不能拿齿数比例去猜 %。
-   *
-   * 失败（未载图 / 该 ROI 没有列）由 `call` 直接抛出后端原文，调用方必须冒泡给用户。
-   */
-  public async measureRuler(
-    roiId?: string,
-    axisStroke?: number | null
-  ): Promise<RulerGeometry> {
-    const params: Record<string, unknown> = {};
-    if (roiId) params.roi_id = roiId;
-    // 用户显式量出的轴线粗细：给了就让后端直接算右缘（不再从像素里猜，
-    // 也不受自动估计那套 1–6px 的夹取上限限制）。
-    if (axisStroke != null && Number.isFinite(axisStroke)) {
-      params.axis_stroke = axisStroke;
-    }
-    const res = await this.call<Record<string, unknown>, RulerGeometry>(
-      'algorithm.measureRuler',
-      params
-    );
-    if (!res || !Array.isArray(res.per_column)) {
-      throw new Error(tError(-32603, 'algorithm.measureRuler returned no per_column'));
-    }
-    return res;
-  }
 
   /**
    * 两点式 Y 轴标定：用户在画布上点选的两个参考点 + 其真实值。
@@ -1044,6 +1014,23 @@ export class RpcClient {
     const res = await this.call<{ col_index: number; row: number; x: number; remove?: boolean }>(
       'core.updateControlPoint',
       { col_index: colIndex, row, x, remove }
+    );
+    return !!res;
+  }
+
+  /**
+   * 整列同步锚点（画布上一次编辑结束）。
+   *
+   * 画布上的拖动/删除/微调只改前端模型，必须经这里落到后端 `control_points`；
+   * 否则导出面板与 data.csv 读到的还是上一次数字化时的点。
+   */
+  public async setControlPoints(
+    colIndex: number,
+    points: Array<{ row: number; x: number; manual?: boolean }>
+  ): Promise<boolean> {
+    const res = await this.call<{ col_index: number; points: unknown[] }>(
+      'column.setControlPoints',
+      { col_index: colIndex, points }
     );
     return !!res;
   }
