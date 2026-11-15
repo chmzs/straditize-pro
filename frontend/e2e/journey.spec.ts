@@ -69,16 +69,11 @@ const STEP6 = '.step-panel[data-step="6"]';
 /** 填给刻度齿的读数：固定值，只为让斜率有确定值；本用例不判定它的科学含义。 */
 const TICK_READING = 30;
 
-interface RulerGeo {
-  roi_id?: string;
-  per_column?: Array<{ col_index?: number | null; ticks?: number[] }>;
-}
-
 /**
  * 把活动区切成指定 ROI（真实点击：工作流胶囊回到步骤 2 → 点 ROI 卡片 → 回到步骤 6）。
  *
- * 步骤 6 的标定是**活动区**的属性（面板取 `data.active_roi_id` 去问后端 `algorithm.
- * measureRuler`），而本旅程在第 2 步把 herb_pollen 提升为主区后它就一直是活动区。
+ * 步骤 6 的标定是**活动区**的属性（面板取 `data.active_roi_id` 决定标哪一组），
+ * 而本旅程在第 2 步把 herb_pollen 提升为主区后它就一直是活动区。
  */
 async function switchActiveRoi(page: Page, roiId: string): Promise<void> {
   await page.locator('.workflow-step-btn[data-step="2"]').click();
@@ -127,30 +122,21 @@ async function switchActiveRoi(page: Page, roiId: string): Promise<void> {
 async function calibrateColumnTicks(page: Page): Promise<void> {
   await switchActiveRoi(page, 'roi_1');
 
-  // 面板的刻线几何是异步拉的：`data-spacing` 有值才说明 `rulerGeo` 就位，否则吸附
-  // 判定拿不到齿表，点齿必然被拒（会把"点不中"误判成缺陷）。
-  await expect
-    .poll(
-      async () =>
-        page.locator(`${STEP6} [data-role="ruler-detect"]`).getAttribute('data-spacing'),
-      { timeout: 20_000, message: '步骤 6 必须真的检测到刻度尺（刻距非空）' }
-    )
-    .not.toBe('');
-
-  const geo = await rpc<RulerGeo>(page, 'algorithm.measureRuler', {});
-  const perColumn = geo.per_column ?? [];
-  expect(geo.roi_id, '刻度几何必须按活动区（tree_pollen）测量').toBe('roi_1');
-  // 取齿数最多的一列，再点它**离 0 点最远**的那条齿（面板自己的建议：越远越准）。
-  const richest = [...perColumn].sort(
-    (a, b) => (b.ticks?.length ?? 0) - (a.ticks?.length ?? 0)
-  )[0];
-  const ticks = richest?.ticks ?? [];
-  expect(
-    ticks.length,
-    `前置：tree_pollen 的某列必须有检测到的刻度齿（实得 ${ticks.length} 条）`
-  ).toBeGreaterThanOrEqual(2);
-  const targetTick = ticks[ticks.length - 1];
-  const targetColIndex = Number(richest.col_index);
+  // 手动标定：点哪儿记哪儿（2026-11-15 起不再吸附检测齿，也不再拉 measureRuler）。
+  // 目标列取本区最宽的一列，点击落点放在列内 60% 处——离 0 点越远，斜率越稳。
+  const data0 = await diagramData<{
+    rois: Array<{ id?: string; x_groups?: Array<{ id?: string; axis_stroke_px?: number | null }> }>;
+    columns: Array<{ col_index?: number; roi_id?: string; x_group_id?: string; startX?: number; endX?: number }>;
+  }>(page);
+  const roiCols = data0.columns.filter((c) => (c.roi_id ?? data0.rois[0]?.id) === 'roi_1');
+  const widest = [...roiCols].sort((a, b) => Number(b.endX ?? 0) - Number(b.startX ?? 0) - (Number(a.endX ?? 0) - Number(a.startX ?? 0)))[0];
+  expect(widest, '前置：roi_1 必须有列（步骤 5 分列已做）').toBeTruthy();
+  const group = data0.rois.flatMap((r) => r.x_groups ?? []).find((g) => g.id === widest!.x_group_id);
+  const strokePx = Number(group?.axis_stroke_px ?? 5) || 5;
+  const zeroPx = Number(widest!.startX ?? 0) + strokePx;
+  const targetTick = Math.round(zeroPx + (Number(widest!.endX ?? 0) - zeroPx) * 0.6);
+  const expectedSlope = TICK_READING / (targetTick - zeroPx);
+  const targetColIndex = Number(widest!.col_index);
 
   await page.locator(`${STEP6} #btn-pick-tick`).click();
   // 世界 x → 画布 x 用产品视口参数（`getState().viewport` 与渲染同一组值）。
@@ -160,10 +146,10 @@ async function calibrateColumnTicks(page: Page): Promise<void> {
     box.x + Math.round(vp.scale * targetTick + vp.panX),
     box.y + box.height * 0.55
   );
-  // 吸附判据：面板必须报出**这条**齿（不是相邻那条），否则后面的斜率就是错齿算出来的。
+  // 手动标定判据：面板报的必须就是点击落点（不吸附、不纠正）。
   await expect(
     page.locator(`${STEP6} [data-role="pending-tick"]`),
-    `点齿必须吸附到 x = ${targetTick}px 的那一条`
+    `点齿必须原样记下点击位置 x = ${targetTick}px`
   ).toContainText(`x = ${targetTick}px`);
 
   await page.locator(`${STEP6} #inp-tick-value`).fill(String(TICK_READING));
@@ -187,7 +173,7 @@ async function calibrateColumnTicks(page: Page): Promise<void> {
   };
   await expect
     .poll(slopeOf, { timeout: 15_000, message: '【应用】必须把组斜率写成后端的值' })
-    .toBeGreaterThan(0);
+    .toBeGreaterThan(expectedSlope * 0.98);
 
   const calibrated = async (): Promise<{ calibrated?: boolean; source?: string }> =>
     (
