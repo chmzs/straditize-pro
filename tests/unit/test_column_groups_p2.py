@@ -19,7 +19,7 @@ import pytest
 
 from straditize_core.protocol import JsonRpcError
 from straditize_core.session import StraditizeSession
-from straditize_core.session_parts.xscale import resolve_column_scale
+from straditize_core.session_parts.xscale import resolve_axis_stroke, resolve_column_scale
 
 
 def test_roi_create_initializes_default_group() -> None:
@@ -89,7 +89,13 @@ def test_group_lifecycle_and_fallback_on_delete() -> None:
 
 
 def test_resolve_column_scale_from_group_layout_and_column_values() -> None:
-    """Scale derivation strictly follows: abs_px_i = start + rel_i * (end - start)."""
+    """Scale derivation: abs_px_i = (start + 轴粗) + rel_i * (end - start - 轴粗).
+
+    rel 是**绘图区内**的相对位置（0 = 0 点 = 列左缘 + 轴粗），不是列框内的位置。
+    证据：所有写入端（project.py:662/744、roi.py:105）写的都是 0.0/1.0 这类整框比例，
+    从不包含轴粗；而面积/折线图的 0 点在轴线右缘。旧实现拿 start 当 0 位，rel0 = 0 时
+    abs_px0 = start，读数整体偏大 轴粗 x 斜率（本仓实测 +1.0% ~ +10%）。
+    """
     session = StraditizeSession()
     roi = session.roi_create(name="pollen")["roi"]
     roi_id = roi["id"]
@@ -112,18 +118,17 @@ def test_resolve_column_scale_from_group_layout_and_column_values() -> None:
     scale = resolve_column_scale(session, col)
     assert scale.calibrated is True
     assert scale.source == "group"
-    # abs_px0 = 200 + 0 * 200 = 200
-    # abs_px1 = 200 + 0.5 * 200 = 300
-    assert (scale.abs_px0, scale.val0, scale.abs_px1, scale.val1) == (
-        200.0,
-        0.0,
-        300.0,
-        25.0,
-    )
+    stroke = resolve_axis_stroke(col, roi["x_groups"][0])
+    plot_start = 200.0 + stroke
+    plot_span = 200.0 - stroke
+    assert (scale.abs_px0, scale.val0) == (plot_start, 0.0)
+    assert scale.abs_px1 == plot_start + 0.5 * plot_span
+    assert scale.val1 == 25.0
     assert scale.unit == "‰"
     assert scale.plot_type == "line"
-    # At x=250 (midpoint of 200..300), value is 12.5
-    assert scale.px_to_value(250.0, baseline_px=200.0) == 12.5
+    # 绘图区中点 = (0 点 + 标定端点) / 2 → 12.5
+    midpoint = (scale.abs_px0 + scale.abs_px1) / 2.0
+    assert scale.px_to_value(midpoint, baseline_px=scale.abs_px0) == 12.5
 
 
 def test_resplit_preserves_column_calibrations_when_count_unchanged() -> None:
