@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from ..protocol import JsonRpcError
+from ..protocol import INVALID_PARAMS, JsonRpcError
 from ..session_parts.xscale import resolve_column_scale
 
 
@@ -118,6 +118,7 @@ def register(dispatcher: Any, session: Any) -> None:
             "llm_api_key": cfg.get("llm_api_key", ""),
             "llm_model": cfg.get("llm_model", "gpt-4o"),
             "llm_prompt_template": cfg.get("llm_prompt_template", ""),
+            "rscript_path": cfg.get("rscript_path", ""),
             "rpc_endpoint": f"http://127.0.0.1:{port}/rpc",
             "webmcp_endpoint": "/mcp",
             "server_bound_host": host,
@@ -138,9 +139,12 @@ def register(dispatcher: Any, session: Any) -> None:
         llm_api_key: str | None = None,
         llm_model: str | None = None,
         llm_prompt_template: str | None = None,
+        rscript_path: str | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         import re
+        from pathlib import Path
+
         from ..config import save_config
 
         updates: dict[str, Any] = {}
@@ -170,6 +174,21 @@ def register(dispatcher: Any, session: Any) -> None:
             updates["llm_model"] = str(llm_model).strip()
         if llm_prompt_template is not None:
             updates["llm_prompt_template"] = str(llm_prompt_template)
+        if rscript_path is not None:
+            # 填一个不存在的路径必须当场报错，且**不写盘**（旧值保留）：
+            # 悄悄存下一个坏路径，用户下次出图才失败，且看不出是哪一步坏了。
+            candidate = str(rscript_path).strip()
+            if candidate:
+                probe = Path(candidate).expanduser()
+                if not probe.is_file():
+                    raise JsonRpcError(
+                        INVALID_PARAMS,
+                        f"Rscript 路径不存在：{candidate}。请填写 Rscript 可执行文件的绝对路径，或清空该字段改用自动探测。",
+                        {"reason": "rscript_path"},
+                    )
+                updates["rscript_path"] = str(probe.resolve())
+            else:
+                updates["rscript_path"] = ""
 
         saved = save_config(updates)
         server = getattr(session, "server", None)

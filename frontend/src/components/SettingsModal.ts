@@ -1,4 +1,5 @@
 import { RpcClient, SystemConfig } from '../services/RpcClient';
+import { notifyError } from '../ui/feedback';
 import { getLocale, setLocale, Locale, t } from '../i18n';
 import { AboutModal } from './AboutModal';
 
@@ -152,6 +153,23 @@ export class SettingsModal {
                 <small style="font-size: 10.5px; color: var(--text-muted); line-height: 1.4;">
                   ${t('settings.remotePasswordHint')}
                 </small>
+              </div>
+            </div>
+          </div>
+
+          <!-- 本机出图（R / rioja）：路径必须可配，探测失败要说清缺什么 -->
+          <div class="settings-section" style="background: var(--bg-tertiary); border: 1px solid var(--border-light); border-radius: 8px; padding: 14px 16px;">
+            <div style="font-weight: 700; font-size: 13px; color: var(--text-heading); margin-bottom: 12px;">本机出图 (R)</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <label for="settings-rscript-path" style="font-size: 12px; color: var(--text-primary); font-weight: 500; white-space: nowrap;">Rscript 路径:</label>
+                <div style="display: flex; gap: 6px; flex: 1; justify-content: flex-end; max-width: 380px;">
+                  <input type="text" id="settings-rscript-path" value="" placeholder="留空 = 自动探测（PATH + 常见安装目录）" style="flex: 1; padding: 4px 8px; font-size: 11px; font-family: var(--font-mono); border-radius: 5px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
+                  <button id="btn-settings-detect-r" class="ui-btn ui-btn--quiet ui-btn--xs" style="padding: 3px 8px; font-size: 11px; white-space: nowrap;">探测</button>
+                </div>
+              </div>
+              <div id="settings-r-hint" style="font-size: 10.5px; line-height: 1.5; color: var(--text-muted);">
+                一键画图用本机 R 的 rioja::strat.plot 出 PDF/PNG；没有 R 时只能用「riojaPlot 网页」手动上传。
               </div>
             </div>
           </div>
@@ -375,6 +393,35 @@ export class SettingsModal {
       }
     });
 
+    // 探测本机 R：成功就把路径填进输入框；失败把「缺什么」写在提示行里。
+    const detectRBtn = modal.querySelector('#btn-settings-detect-r') as HTMLButtonElement | null;
+    const rHint = modal.querySelector('#settings-r-hint') as HTMLElement | null;
+    const rPathInput = modal.querySelector('#settings-rscript-path') as HTMLInputElement | null;
+    if (rPathInput) rPathInput.value = String((config as any).rscript_path || '');
+    detectRBtn?.addEventListener('click', async () => {
+      detectRBtn.disabled = true;
+      try {
+        const rep: any = await this.rpcClient.call<any, any>('plot.detectR', {});
+        if (rep?.available) {
+          if (rPathInput) rPathInput.value = String(rep.path || '');
+          if (rHint) {
+            rHint.style.color = 'var(--text-muted)';
+            rHint.textContent = '已找到：' + String(rep.path) + '（来源：' + String(rep.source || '-') + '）';
+          }
+        } else {
+          if (rHint) {
+            rHint.style.color = 'var(--status-warning)';
+            rHint.textContent = String(rep?.error || '未找到 Rscript') + (rep?.hint ? ' ' + String(rep.hint) : '');
+          }
+          notifyError('未找到 Rscript：一键画图不可用（可用 riojaPlot 网页手动上传）。');
+        }
+      } catch (err: any) {
+        notifyError('探测 R 失败：' + String(err?.message || err));
+      } finally {
+        detectRBtn.disabled = false;
+      }
+    });
+
     // 保存并应用
     const saveBtn = modal.querySelector('#btn-settings-save') as HTMLButtonElement;
     saveBtn?.addEventListener('click', async () => {
@@ -423,10 +470,15 @@ export class SettingsModal {
           } else if (pwdVal) {
             updates.remote_password = pwdVal;
           }
+          const rscriptInput = modal.querySelector('#settings-rscript-path') as HTMLInputElement | null;
+          const rscriptVal = rscriptInput?.value?.trim() ?? '';
+          // 空串 = 清空配置回到自动探测；非空则交给后端校验（不存在会当场报错）。
+          updates.rscript_path = rscriptVal;
           await this.rpcClient.updateSystemConfig(updates);
         }
       } catch (err) {
-        console.warn('[SettingsModal] 保存远程配置到后端失败（可能处于离线模式）:', err);
+        // 后端校验失败（如 Rscript 路径不存在）必须让用户看见；旧值保持不变。
+        notifyError('保存设置失败：' + String((err as any)?.message || err));
       }
     });
   }

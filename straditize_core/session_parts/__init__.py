@@ -16,6 +16,7 @@ from .export import ExportMixin
 from .layers import LayersMixin
 from .metadata import MetadataMixin, MetadataSessionMixin
 from .ocr import OcrMixin, OcrSessionMixin
+from .plotting import PlottingMixin
 from .project import ProjectMixin, ProjectSessionMixin
 from .qa import QaMixin
 from .roi import RoiMixin
@@ -32,6 +33,7 @@ __all__ = [
     "LayersMixin",
     "QaMixin",
     "ExportMixin",
+    "PlottingMixin",
     "DigitizeSessionMixin",
     "DigitizeMixin",
     "AgeDepthSessionMixin",

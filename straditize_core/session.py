@@ -11,6 +11,7 @@ from PIL import Image
 from .age_depth import AgeDepthModel
 from .session_parts import (
     AGE_DEPTH_BASE_COLUMNS,
+    PlottingMixin,
     AGE_DEPTH_RATE_COLUMNS,
     AgeDepthSessionMixin,
     CleanupMixin,
@@ -56,6 +57,7 @@ class StraditizeSession(
     ProjectSessionMixin,
     MetadataSessionMixin,
     OcrSessionMixin,
+    PlottingMixin,
 ):
     """Encapsulates the state and processing pipeline of a digitization workflow."""
 
