@@ -191,6 +191,39 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
     await resetBaseline(page);
   });
 
+  test('默认数据集必须是共识层位（samples）：不选任何数据集时行数 = samples 数', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    // 与下一条相反：这里**不动**数据集选择器，直接读默认值。
+    // 默认值曾从 samples 改成 union_points 又改回来，每次改动都必须有人知道——
+    // 钉住「不选时行数 = 自己标定的样品层位数」，而不是各列拐点 y 的并集。
+    const SAMPLE_ROWS = [
+      { row_px: 300, depth: 10.0, source: 'manual' },
+      { row_px: 420, depth: 20.0, source: 'manual' },
+      { row_px: 540, depth: 30.0, source: 'manual' },
+    ];
+    await backendRpc(page, 'samples.set', { samples: SAMPLE_ROWS });
+    await calibrateColumnsX(page);
+    await calibrateDepth(page);
+
+    await openExport(page);
+    await expect(
+      page.locator('#wpd-dataset-select'),
+      '面板默认数据集必须是 samples（共识层位）'
+    ).toHaveValue('samples');
+
+    const preview = await readPreview(page);
+    expect(
+      preview.rows.length,
+      `默认行集必须等于 samples 数（${SAMPLE_ROWS.length}），不能是拐点并集`
+    ).toBe(SAMPLE_ROWS.length);
+
+    const caption = await rowSetCaption(page);
+    expect(caption, '行集说明必须点明来源是共识层位').toContain('共识层位');
+    expect(caption, '说明里的行数必须与预览一致').toContain(String(preview.rows.length));
+  });
+
   test('选择器同时控制预览与 CSV 下载；预览数值必须对得上后端同层位取值', async ({ page }) => {
     // 这条用例要做：Y 标定 → 重载页面 → 3 次下载/比对 → 后端同层位重算，
     // 在基线 28 列 × 298 行的矩阵上跑，60s 的默认预算不够（实测会被单步 reload 吃掉）。
@@ -209,6 +242,9 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
     await calibrateDepth(page);
 
     await openExport(page);
+    // 本用例测的是「选择器同时控制预览与下载」，与默认值无关 → 显式选 union_points，
+    // 让断言与默认数据集解耦（默认值由下一条用例单独钉住）。
+    await selectDataset(page, 'union_points');
     const preview = await readPreview(page);
     const headers = dataHeaders(preview);
 
@@ -295,7 +331,8 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
     ).not.toBe(preview.rows.length);
     const gridCaption = await rowSetCaption(page);
     expect(gridCaption, '切换后行集说明必须跟着更新').toContain(String(gridPreview.rows.length));
-    expect(gridCaption, '说明必须点明来源换了').toContain('标尺');
+    // depth_grid 的文案已改成「按深度间隔重采样（高级）」，不再叫「标尺均匀层位」。
+    expect(gridCaption, '说明必须点明来源换了').toContain('重采样');
 
     const gridDownload = await downloadCsv(page, 'grid');
     expect(

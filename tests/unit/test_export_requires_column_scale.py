@@ -103,6 +103,25 @@ def test_all_columns_uncalibrated_export_is_rejected(dataset: str) -> None:
     assert excinfo.value.data["calibrated"] == 0
 
 
+def test_samples_dataset_is_guarded_by_column_scale() -> None:
+    """面板「共识层位」也必须过列标度守卫（不是只有 union/depth/turning 三张表）。
+
+    面板默认数据集从 union_points 改成 samples 后，samples 一度直接走
+    `_primary_roi_export_frame`（data.csv 语义），绕过 `_assert_export_column_scale`：
+    全列未标定时不再抛 -32003，只给一张 28 列全 NA 的表 —— 看起来像「这张图没数据」，
+    用户看不出自己卡在步骤 6。这条钉住「面板上的任何数据集都必须过守卫」，
+    只有**不传 dataset** 的 data.csv / tar / xlsx 出口例外。
+    """
+    session = _session()
+    with pytest.raises(JsonRpcError) as excinfo:
+        session.export_data(dataset="samples")
+
+    assert excinfo.value.code == CALIBRATION_ERROR
+    message = str(excinfo.value.message)
+    assert "列" in message and "步骤 6" in message, message
+    assert "深度标定" not in message, message
+    assert excinfo.value.data["reason"] == "column_scale"
+
 @pytest.mark.parametrize("dataset", ["samples", "depth_grid", "union_points"])
 def test_one_calibrated_column_exports_real_values_and_blanks_the_rest(
     dataset: str,
