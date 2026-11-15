@@ -16,7 +16,12 @@ try:
 except ImportError:
     find_peaks = None
 
-from ..curve import detect_stratigraphic_turning_points
+from ..curve import (
+    VERTICAL_TOLERANCE_PX,
+    detect_turning_points_vertical,
+    enforce_error_bound,
+    prune_axis_pileups,
+)
 from ..digitize import (
     _axis_ink_offsets,
     _band_components,
@@ -395,7 +400,19 @@ class DigitizeSessionMixin:
         col_width: float,
         zero_offset: float = 0.0,
     ) -> tuple[dict[int, float], list[dict[str, Any]]]:
-        """按地形显著度抽拐点，再补首末两个端点控制点，返回 (行号→x 字典, 控制点列表)。"""
+        """按垂直误差界抽拐点，再补首末两个端点控制点，返回 (行号→x 字典, 控制点列表)。
+
+        判据是**垂直距离**（见 straditize_core.curve.detect_turning_points_vertical）：
+        显著极值（凸点/凹点/肩部）作为强制锚点先保留，锚点之间再用垂直 RDP 加密到
+        VERTICAL_TOLERANCE_PX 的误差界，因此"重构 vs 逐行轮廓"的 P95/max 误差
+        有上界，而不是靠调阈值碰运气。
+
+        三条旧启发式**已删除**，它们都只在"看不出错"的地方悄悄丢点：
+        ① 只在锚点区间长度 > 6 行时才跑 RDP（短区间完全不复核）——实测列底
+           172→5 的一行台阶因此被拉成 3 行斜坡，单点误差 110px；
+        ② 丢弃 |v| <= baseline_px 的近基线点——台阶脚恰好落在基线附近；
+        ③ max_points 上限裁剪。
+        """
         control_points: dict[int, float] = {}
         # 0 点是轴线右缘（列左缘 + 轴粗）：控制点落在它左侧等于给出负读数，
         # 因此曲线宽度的下限取轴粗，而不是 0。
@@ -403,26 +420,25 @@ class DigitizeSessionMixin:
         curve_profile = np.clip(
             np.array([p["x"] - c_start for p in points], dtype=float), min_width, None
         )
-        # 阈值随列宽缩放：绝对阈值在宽列上会把抗锯齿与基线抖动当作拐点。
-        prominence_px = max(3.0, 0.01 * float(col_width))
-        epsilon_px = max(1.0, 0.005 * float(col_width))
-        min_distance_px = 3
-        baseline_px = max(2.0, 0.005 * float(col_width))
-        # 上限不再写死 32：实测一列 34 个控制点即被截断，肩部/曲率拐点直接丢失。
-        turning_rows, turning_vals, is_mand = detect_stratigraphic_turning_points(
+        # 显著度随列宽缩放：绝对显著度在宽列上会把抗锯齿与基线抖动当作拐点。
+        # 垂直容差是**绝对** 2px：它就是重构误差判据本身，不随列宽放宽。
+        prominence_px = max(2.0, 0.005 * float(col_width))
+        turning_rows, turning_vals, is_mandatory = detect_turning_points_vertical(
             curve_profile,
+            epsilon=VERTICAL_TOLERANCE_PX,
             prominence=prominence_px,
-            min_distance=min_distance_px,
-            epsilon=epsilon_px,
-            max_points=None,
+            min_distance=3,
         )
-        ctrl_pts_list = []
-        for r_rel, v_rel, _mand in zip(turning_rows, turning_vals, is_mand):
-            # 基线附近的微折角不算拐点：幅度小于 baseline_px 的起伏只是线宽/抗锯齿。
-            if abs(float(v_rel)) <= baseline_px:
-                continue
+        kept_rows, kept_vals = prune_axis_pileups(turning_rows, turning_vals, is_mandatory)
+        # 兜底：去堆叠的两点并一点可能把误差顶起来，这里把超差行补回去。
+        kept_rows, kept_vals = enforce_error_bound(
+            np.arange(len(curve_profile), dtype=float), curve_profile, kept_rows, kept_vals
+        )
+
+        ctrl_pts_list: list[dict[str, Any]] = []
+        for r_rel, v_rel in zip(kept_rows, kept_vals):
             r_int = int(y0 + r_rel)
-            x_val = float(c_start + v_rel)
+            x_val = float(c_start + max(min_width, float(v_rel)))
             control_points[r_int] = x_val
             ctrl_pts_list.append(
                 {
