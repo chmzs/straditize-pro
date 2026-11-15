@@ -42,6 +42,8 @@ async function stageZeroSumColumn(page: Page): Promise<void> {
       id: string;
       startX: number;
       endX: number;
+      axis_stroke_px?: number;
+      scaleCalib?: { originX?: number };
       controlPoints?: Array<{ y?: number; row?: number }>;
     }>;
     rois: Array<{ id: string; ylim: number[] }>;
@@ -71,9 +73,27 @@ async function stageZeroSumColumn(page: Page): Promise<void> {
   // 每列控制点从 ~20 涨到 ~60-180，未压到的行仍带非零读数，自检行于是变成
   // 「801 层位被检验」——本用例赖以成立的"空集"前提消失（实测 CI 与本机都是这个差异）。
   // 因此这里改成整列替换（column.setControlPoints，一次往返），而不是放宽断言。
-  const existing = data.columns[0]?.controlPoints ?? [];
+  // 压到 **0 点**（列左缘 + 轴粗），不是列左缘：后端现在拒绝"0 点左侧"的手工点
+  // （读数不能为负），压到左缘会直接 -32602。0 点读数恰为 0，同样满足"行总和 0"。
+  // 0 点（abs_px0）只有后端能给：标度刚写入，必须**重新取一次** diagramData，
+  // 上一份是标定前的，没有 scaleCalib。
+  const fresh = await rpc<{
+    columns: Array<{
+      id: string;
+      startX: number;
+      axis_stroke_px?: number;
+      scaleCalib?: { originX?: number };
+      controlPoints?: Array<{ y?: number; row?: number }>;
+    }>;
+  }>(page, 'straditize.getDiagramData');
+  const freshCol = fresh.columns[0];
+  const zeroX = freshCol?.scaleCalib?.originX;
+  if (typeof zeroX !== 'number') {
+    throw new Error('后端没有下发 0 点（scaleCalib.originX），无法构造零和现场');
+  }
+  const existing = freshCol?.controlPoints ?? data.columns[0]?.controlPoints ?? [];
   const points = existing
-    .map((p) => ({ row: Math.round(Number(p.y ?? p.row)), x: col.startX, manual: true }))
+    .map((p) => ({ row: Math.round(Number(p.y ?? p.row)), x: zeroX, manual: true }))
     .filter((p) => Number.isFinite(p.row));
   if (!points.length) throw new Error('基线第 0 列没有控制点，无法构造零和现场');
   await rpc(page, 'column.setControlPoints', { col_index: 0, points });

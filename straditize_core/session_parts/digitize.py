@@ -31,7 +31,7 @@ from ..digitize import (
     _without_axis_ink,
     interpolate_hlines,
 )
-from .xscale import resolve_axis_stroke
+from .xscale import _resolve_column_group, resolve_axis_stroke
 from ..protocol import (
     INVALID_PARAMS,
     STATE_ERROR,
@@ -390,6 +390,34 @@ class DigitizeSessionMixin:
                 for p_idx, new_v in enumerate(interp_vals):
                     points[p_idx]["x"] = float(c_start + new_v)
 
+    def _zero_point_x(self, col_index: int) -> float | None:
+        """该列的 0 点像素（列左缘 + 轴粗）。取不到返回 None。"""
+        cols = getattr(self, "columns", None) or []
+        if col_index < 0 or col_index >= len(cols):
+            return None
+        col = cols[col_index]
+        c_start = float(col.get("startX", col.get("start", 0.0)) or 0.0)
+        try:
+            group = _resolve_column_group(self, col)
+        except Exception:  # pragma: no cover - 组结构异常时退化为无轴粗
+            group = None
+        return c_start + float(resolve_axis_stroke(col, group))
+
+    def _reject_below_zero_point(self, col_index: int, row: int, x: float) -> None:
+        """手工点落在 0 点左侧时拒绝（不静默钳制：那是用户亲手放的点）。
+
+        x == 0 点允许——丰度 0 是合法数据；只有严格小于 0 点才是负读数。
+        """
+        zero = self._zero_point_x(col_index)
+        if zero is None:
+            return
+        if float(x) < zero - 1e-9:
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                f"读数不能为负：该列 0 点在 x={zero:.6g}，"
+                f"你给的点（row {row}, x={float(x):.6g}）在它左侧。",
+            )
+
     def _turning_control_points(
         self,
         points: list[dict[str, float]],
@@ -535,6 +563,7 @@ class DigitizeSessionMixin:
                     INVALID_PARAMS, "No control points available to remove"
                 )
         else:
+            self._reject_below_zero_point(col_index, int(row), float(x))
             ctrls[int(row)] = float(x)
             # 这里的每一次写都是用户在图上的显式编辑 → 记为手工点
             manual[int(row)] = {"x": float(x), "kind": "manual"}
@@ -616,6 +645,7 @@ class DigitizeSessionMixin:
                     "控制点必须同时带 row 与 x：收到 " + repr(point),
                 )
             row = int(round(float(row_raw)))
+            self._reject_below_zero_point(c_idx, row, float(x_raw))
             ctrls[row] = float(x_raw)
             if point.get("manual", True):
                 manual[row] = {"x": float(x_raw), "kind": "manual"}
