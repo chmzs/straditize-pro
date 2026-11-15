@@ -83,7 +83,6 @@ PIXEL_DERIVED = [
     "shadow_mask",
     "solid_layers",
     "foreground_column_edges",
-    "tick_band",
     "grid_line_mask",
     "candidate_line_mask",
     "degrid_line_mask",

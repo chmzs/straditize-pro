@@ -266,7 +266,7 @@
    "segmentation_mode": null,
    "shadow_mask": null,
    "solid_layers": null,
-   "threshold": null,
+   "threshold": null
   },
   "primary_roi_id": "roi_1",
   "result": {
@@ -490,7 +490,7 @@
    "segmentation_mode": null,
    "shadow_mask": null,
    "solid_layers": null,
-   "threshold": null,
+   "threshold": null
   },
   "primary_roi_id": "roi_8",
   "result": {
@@ -821,7 +821,7 @@
    "segmentation_mode": null,
    "shadow_mask": null,
    "solid_layers": null,
-   "threshold": null,
+   "threshold": null
   },
   "primary_roi_id": "roi_1",
   "result": {
