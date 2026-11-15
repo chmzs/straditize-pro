@@ -1,17 +1,23 @@
-"""一键画图（本机 R + rioja）：探测、路径校验、真实出图、失败提示。
+"""一键画图（本机 R + riojaPlot/rioja）：探测、路径校验、真出图、失败提示、产物去向。
 
 ## 判据
 
 1. 显式配置了不存在的 Rscript 路径 → 探测失败并说明缺什么（不静默回退到别的 R）；
 2. system.updateConfig 填不存在的路径 → 当场报错，配置里的旧值原样保留；
-3. 真跑一次出图：产物存在、能被 PDF 读器打开（%PDF 头）、大小 > 0；
-4. R 缺失 / R 跑挂 → JsonRpcError 带可执行提示（安装 R、装 rioja，或改用 riojaPlot 网页），
-   绝不返回空图。
+3. 真跑一次出图：产物存在、字节头是真图片（JPEG/PNG）、大小 > 0；
+4. R 缺失 / R 跑挂 → JsonRpcError 带可执行提示，绝不返回空图；
+5. **产物去向**：默认不落盘（`path` 为 None），图以 `data_url` 交回前端；
+   只有显式传 `output_path` 才写文件。旧行为默认写 `~/.straditize/plots`，
+   用户点完按钮只拿到一句路径——那不是出图。
+6. 回退如实报告：只装了 rioja 时 `unsupported` 必须列出没生效的开关（Italicise /
+   Break long / Exaggeration / Min-max / 标签旋转），不许假装全应用了。
 
 ## 反向验证
 
 把 plot_render 里的 raise JsonRpcError(...) 改成 return {"success": True} → 判据 4 变红。
 把 updateConfig 的路径校验删掉 → 判据 2 变红（坏路径被写进配置）。
+把 plot_render 的 data_url 去掉、改回只返回 path → 判据 5 变红。
+把 unsupported 恒置为空列表 → 判据 6 在只有 rioja 的机器上变红。
 """
 
 from __future__ import annotations
@@ -20,9 +26,15 @@ import subprocess
 
 import pytest
 
-from straditize_core.plotting import candidate_rscripts, detect_rscript, render_with_rioja
+from straditize_core.plotting import candidate_rscripts, detect_rscript
 from straditize_core.protocol import JsonRpcError
 from straditize_core.session import StraditizeSession
+from straditize_core.strat_plot import (
+    DEFAULT_PLOT_SETTINGS,
+    _settings_tsv,
+    render_strat_diagram,
+    resolve_settings,
+)
 
 MISSING = "C:/definitely/not/a/real/Rscript.exe"
 
@@ -35,12 +47,12 @@ def _first_rscript() -> str | None:
 RSCRIPT = _first_rscript()
 
 
-def _has_rioja() -> bool:
+def _has_pkg(name: str) -> bool:
     if not RSCRIPT:
         return False
     try:
         out = subprocess.run(
-            [RSCRIPT, "-e", 'cat(requireNamespace("rioja", quietly = TRUE))'],
+            [RSCRIPT, "-e", f'cat(requireNamespace("{name}", quietly = TRUE))'],
             capture_output=True,
             text=True,
             timeout=120,
@@ -49,6 +61,10 @@ def _has_rioja() -> bool:
     except (OSError, subprocess.SubprocessError):
         return False
     return out.stdout.strip().upper() == "TRUE"
+
+
+def _has_rioja() -> bool:
+    return _has_pkg("rioja")
 
 
 def _session() -> StraditizeSession:
@@ -94,9 +110,7 @@ def test_missing_explicit_path_is_reported_not_silently_replaced() -> None:
     assert "不存在" in (report["error"] or ""), report
 
 
-def test_update_config_rejects_missing_rscript_and_keeps_old_value(
-    tmp_path, monkeypatch
-) -> None:
+def test_update_config_rejects_missing_rscript_and_keeps_old_value(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("STRADITIZE_CONFIG_PATH", str(tmp_path / "config.json"))
 
     from straditize_core.config import load_config, save_config
@@ -129,7 +143,7 @@ def test_plot_render_failure_is_actionable(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         plotting_part,
-        "render_with_rioja",
+        "render_strat_diagram",
         lambda **kwargs: (_ for _ in ()).throw(RuntimeError("R 出图失败（返回码 1）：boom")),
     )
 
@@ -162,6 +176,18 @@ def test_plot_render_without_r_gives_install_hint(monkeypatch) -> None:
     assert str(data.get("rioja_plot_url", "")).startswith("https://")
 
 
+def test_unknown_setting_is_rejected_not_ignored() -> None:
+    with pytest.raises(JsonRpcError) as excinfo:
+        _session().plot_render(settings={"no_such_switch": True})
+    assert "未知的出图设置" in str(excinfo.value), "未知开关必须报错，不能当没看见"
+
+
+def test_unsupported_format_is_rejected() -> None:
+    with pytest.raises(JsonRpcError) as excinfo:
+        _session().plot_render(format="gif")
+    assert "不支持的出图格式" in str(excinfo.value)
+
+
 @pytest.mark.skipif(RSCRIPT is None, reason="本机没有 Rscript")
 def test_render_writes_a_readable_pdf(tmp_path) -> None:
     csv_path = tmp_path / "in.csv"
@@ -170,29 +196,140 @@ def test_render_writes_a_readable_pdf(tmp_path) -> None:
 
     if not _has_rioja():
         with pytest.raises(RuntimeError) as excinfo:
-            render_with_rioja(
+            render_strat_diagram(
                 csv_path=str(csv_path), out_path=str(out_path), rscript=str(RSCRIPT)
             )
         assert "rioja" in str(excinfo.value)
         return
 
-    info = render_with_rioja(
-        csv_path=str(csv_path), out_path=str(out_path), rscript=str(RSCRIPT), title="t"
+    info = render_strat_diagram(
+        csv_path=str(csv_path), out_path=str(out_path), rscript=str(RSCRIPT), settings={"title": "t"}
     )
 
-    assert out_path.is_file(), "出图必须真的落盘"
+    assert out_path.is_file(), "出图必须真的落盘（这是直接调渲染层，不是 RPC）"
     assert out_path.stat().st_size > 0
     assert info["size_bytes"] == out_path.stat().st_size
+    assert info["engine"] in ("riojaPlot", "rioja")
     with open(out_path, "rb") as handle:
         assert handle.read(5) == b"%PDF-", "产物必须是能被 PDF 读器打开的 PDF"
 
 
 @pytest.mark.skipif(RSCRIPT is None or not _has_rioja(), reason="本机没有 R + rioja")
-def test_plot_render_end_to_end(tmp_path) -> None:
-    out_path = tmp_path / "e2e.pdf"
-    result = _session().plot_render(output_path=str(out_path))
+def test_plot_render_returns_inline_image_and_writes_nothing(tmp_path, monkeypatch) -> None:
+    # 把默认落盘目录指到 tmp：一旦实现又偷偷写文件，这条会立刻抓到。
+    monkeypatch.setattr(
+        StraditizeSession, "_plot_output_dir", lambda self: tmp_path / "should_not_be_used"
+    )
+
+    result = _session().plot_render()
 
     assert result["success"] is True
-    assert result["engine"] == "rioja"
+    assert result["format"] == "jpeg"
+    assert result["mime"] == "image/jpeg"
+    assert str(result["data_url"]).startswith("data:image/jpeg;base64,"), (
+        "图必须以 data URL 交回前端（前端直接 <img src>）"
+    )
+    assert result["path"] is None, "默认不许落盘到隐藏目录"
+    assert not (tmp_path / "should_not_be_used").exists()
     assert result["rows_count"] == 3
+    assert result["settings"]["percent"] is True
+    assert result["settings"]["label_rotate"] == 45
+    assert result["settings"]["break_n"] == 20
+
+
+@pytest.mark.skipif(RSCRIPT is None or not _has_rioja(), reason="本机没有 R + rioja")
+def test_plot_render_persists_only_when_asked(tmp_path) -> None:
+    out_path = tmp_path / "explicit.jpeg"
+    result = _session().plot_render(output_path=str(out_path))
+
+    assert result["path"] == str(out_path.resolve())
     assert out_path.is_file() and out_path.stat().st_size > 0
+    with open(out_path, "rb") as handle:
+        assert handle.read(3) == b"\xff\xd8\xff", "JPEG 魔术字节"
+
+
+@pytest.mark.skipif(RSCRIPT is None or not _has_rioja(), reason="本机没有 R + rioja")
+def test_png_format_is_supported(tmp_path) -> None:
+    result = _session().plot_render(format="png", output_path=str(tmp_path / "p.png"))
+    assert result["mime"] == "image/png"
+    assert str(result["data_url"]).startswith("data:image/png;base64,")
+
+
+def test_default_settings_match_requested_switches() -> None:
+    assert DEFAULT_PLOT_SETTINGS["percent"] is True       # Style = Silhouette %
+    assert DEFAULT_PLOT_SETTINGS["silhouette"] is True
+    assert DEFAULT_PLOT_SETTINGS["bar"] is True            # show bar
+    assert DEFAULT_PLOT_SETTINGS["exaggeration"] is True   # Exaggeration Show
+    assert DEFAULT_PLOT_SETTINGS["rev_y"] is True          # Rev. Y
+    assert DEFAULT_PLOT_SETTINGS["italicise"] is True      # Label extras: Italicise
+    assert DEFAULT_PLOT_SETTINGS["label_rotate"] == 45     # Rotate 45
+    assert DEFAULT_PLOT_SETTINGS["break_long"] is True     # Break long
+    assert DEFAULT_PLOT_SETTINGS["break_n"] == 20          # 20 chars
+    assert DEFAULT_PLOT_SETTINGS["axis"] is True           # 底部刻度轴
+    assert DEFAULT_PLOT_SETTINGS["y_axis"] is None         # y 轴范围默认留空 = 自动
+
+# ---- y 轴范围三格（min / max / interval）----
+# 判据：①三项合法 → 写进 R 设置且与输入一致；②任一项非法 → 拒绝，且不产生这三项；
+#      ③三项留空 → 不写且自动范围仍出图。
+# 反向验证：删掉 validate_y_axis 里的三条校验 → ② 的那几个用例必须变红。
+
+
+def test_y_axis_all_three_values_are_written_to_settings() -> None:
+    merged, warnings = resolve_settings(
+        {"y_axis": {"min": 10, "max": 60, "interval": 10}}
+    )
+
+    tsv = _settings_tsv(merged)
+    assert "y_min\t10.0" in tsv
+    assert "y_max\t60.0" in tsv
+    assert "y_interval\t10.0" in tsv
+    assert warnings == [], "三项齐备时不该有任何「已忽略」的提示"
+
+
+def test_y_axis_partial_is_ignored_with_hint() -> None:
+    merged, warnings = resolve_settings({"y_axis": {"min": 10, "max": 60}})
+
+    assert merged["y_axis"] is None, "只给两项必须整套忽略，不能半生效"
+    assert "y_min" not in _settings_tsv(merged)
+    assert warnings and "三项都填" in warnings[0], warnings
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"min": 60, "max": 10, "interval": 10},   # min >= max
+        {"min": 10, "max": 10, "interval": 10},   # min == max
+        {"min": 10, "max": 60, "interval": 0},    # interval <= 0
+        {"min": 10, "max": 60, "interval": -5},   # interval < 0
+        {"min": 0, "max": 500, "interval": 1},    # 500 格 > MAX_Y_TICKS(200)
+        {"min": "abc", "max": 60, "interval": 10},  # 非数字
+    ],
+)
+def test_y_axis_illegal_is_rejected(bad: dict) -> None:
+    with pytest.raises(ValueError):
+        resolve_settings({"y_axis": bad})
+
+
+def test_y_axis_empty_keeps_auto_range() -> None:
+    merged, warnings = resolve_settings({"y_axis": None})
+
+    assert merged["y_axis"] is None
+    assert warnings == []
+    assert "y_min" not in _settings_tsv(merged), "留空时不得给 R 传任何 y 轴范围"
+
+
+def test_plot_render_rejects_illegal_y_axis() -> None:
+    # 走 RPC 层：非法值必须当场 -32602，而不是静默回落成自动范围。
+    with pytest.raises(JsonRpcError) as excinfo:
+        _session().plot_render(settings={"y_axis": {"min": 60, "max": 10, "interval": 10}})
+    assert "min" in str(excinfo.value)
+
+
+@pytest.mark.skipif(RSCRIPT is None or not _has_rioja(), reason="本机没有 R + rioja")
+def test_plot_render_with_explicit_y_axis() -> None:
+    result = _session().plot_render(settings={"y_axis": {"min": 0, "max": 100, "interval": 20}})
+
+    assert result["settings"]["y_axis"] == {"min": 0.0, "max": 100.0, "interval": 20.0}
+    assert result["warnings"] == []
+    assert str(result["data_url"]).startswith("data:image/jpeg;base64,")
+
