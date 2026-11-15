@@ -50,6 +50,9 @@ async function stageZeroSumColumn(page: Page): Promise<void> {
   }>(page, 'straditize.getDiagramData');
   const col = data.columns[0];
   const roi = data.rois[0];
+  // 0 点 = 列左缘 + 轴粗（与后端 xscale.resolve_axis_stroke 同源：列级 > 组级 > 5）
+  const colZeroX =
+    col.startX + ((data.columns[0] as { axis_stroke_px?: number }).axis_stroke_px ?? 5);
   if (!col || !roi) throw new Error('基线缺少列或 ROI，无法构造零和现场');
 
   await rpc(page, 'column.update', {
@@ -59,8 +62,12 @@ async function stageZeroSumColumn(page: Page): Promise<void> {
       scale_type: 'linear',
       startValue: 0,
       tickValue: 100,
+      // 0 点的 x_ticks 像素必须是 **0 点**（列左缘 + 轴粗），不是列左缘：
+      // 后端现在拒绝落在 0 点左侧的手工点（-32602 读数不能为负），而 x_ticks 分支
+      // 会把 abs_px0 直接取成这里的 px —— 写 startX 就等于宣称"0 点在列左缘"，
+      // 随后压零点必然被拒（实测 x=319 vs 真 0 点 324）。
       x_ticks: [
-        { px: col.startX, value: 0 },
+        { px: colZeroX, value: 0 },
         { px: col.endX, value: 100 },
       ],
     },
