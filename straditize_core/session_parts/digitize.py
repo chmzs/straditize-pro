@@ -412,7 +412,8 @@ class DigitizeSessionMixin:
             prominence=prominence_px,
             min_distance=min_distance_px,
             epsilon=epsilon_px,
-            max_points=32,
+            # 上限不再写死 32：实测一列 34 个控制点就被截断，肩部/曲率拐点直接丢失（col03 row 1171）。
+            max_points=None,
         )
         ctrl_pts_list = []
         for r_rel, v_rel, _mand in zip(turning_rows, turning_vals, is_mand):
