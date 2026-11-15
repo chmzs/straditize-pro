@@ -245,6 +245,15 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
     // 本用例测的是「选择器同时控制预览与下载」，与默认值无关 → 显式选 union_points，
     // 让断言与默认数据集解耦（默认值由下一条用例单独钉住）。
     await selectDataset(page, 'union_points');
+    // 切数据集是**异步取数**（ExportModal 用 displayToken 防乱序）：`selectOption` 返回时
+    // 表格还可能是刚才 samples 的 3 行。必须等预览真的换成 union 行集再读，
+    // 否则下面 `finite >= 100` 会读到 28（CI 实测就栽在这里，不是数值错）。
+    await expect
+      .poll(async () => (await readPreview(page)).rows.length, {
+        message: '切到 union_points 后预览行数必须大于 samples 行数（3）',
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(3);
     const preview = await readPreview(page);
     const headers = dataHeaders(preview);
 
