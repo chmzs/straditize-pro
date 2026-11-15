@@ -136,9 +136,15 @@ export function isPassingVerdict(verdict: QaVerdict): boolean {
  *   未标定两字段 `:154-155`）。
  *
  * 于是：
- * - `violations_over` / `sum` / `per_column_max` / `empty_horizons` 等 **恒存在** ⇒ 声明为必填，
- *   聚合里不得用 `?.` 兜（缺字段是契约破损，必须报错，见 `assertQaScopeContract`）。
+ * - `violations_over` / `sum` / `shortfall` / `per_column_max` / `empty_horizons` 等
+ *   **恒存在** ⇒ 声明为必填，聚合里不得用 `?.` 兜（缺字段是契约破损，必须报错，
+ *   见 `assertQaScopeContract`）。
  * - `n_uncalibrated` / `uncalibrated_columns` **空集时确实没有** ⇒ 可选，`?.` 是对的。
+ *
+ * `shortfall` 曾经**没被声明**，聚合靠三处内联强转
+ * （`(p.summary as { shortfall?: { mean?: number } }).shortfall?.mean ?? 0`）读取。
+ * 那等于给「后端没给缺额」开了一条静默通道：缺字段的分区被 `?? 0` 当成"零缺额"或
+ * 被 `filter` 悄悄排除出加权，而面板照旧印出「平均缺额 x.x%」（issue #17）。
  *
  * issue #14 之前 `violations_over` / `sum` 被声明为必填、实现却全程 `?.`，
  * 类型与实现互相矛盾。选"收紧实现"而不是"放宽类型"的实测理由：一份同时缺这两个字段
@@ -168,6 +174,13 @@ export interface QaScopeSummary {
   }[];
   /** 总和统计；后端**恒返回**，空集时 `max` 为 `0.0`（`qa.py:47` / `:149`）。 */
   sum: { max: number };
+  /**
+   * 缺额统计（每层 `100 - sum`）；后端**恒返回**（空集 `qa.py:50`，正常 `:152`）。
+   *
+   * 聚合按 `n_horizons_with_data` 加权只读 `mean`（与 `sum.max` 同一窄声明风格）。
+   * 曾未声明、靠内联强转 + `?? 0` 读取，见本接口上方注释（issue #17）。
+   */
+  shortfall: { mean: number };
   /** 未标定列数；**仅正常返回路径给**（`qa.py:154`），空集提前返回没有 ⇒ 可选。 */
   n_uncalibrated?: number;
   /** 未标定列名；**仅正常返回路径给**（`qa.py:155`），空集提前返回没有 ⇒ 可选。 */
@@ -219,6 +232,29 @@ function scopeNames(parts: { roiName: string }[]): string {
 const QA_COUNT_FIELDS = ['n_horizons', 'n_horizons_with_data', 'n_horizons_empty'] as const;
 
 /**
+ * 后端**两条 return 路径都给**、且聚合直接当数值参与计算的**嵌套单值**字段：
+ *
+ * - `sum.max` —— 空集 `qa.py:47`（`max: 0.0`）、正常 `:149`；
+ * - `shortfall.mean` —— 空集 `qa.py:50`、正常 `:152`。
+ *
+ * 与 `QA_COUNT_FIELDS` 同一写法（一张表 + 一个循环），报错文案里的字段路径与被读的
+ * 位置一一对应；新增同类字段只改这一处，不会留某处 `?.` 没被覆盖（issue #17）。
+ *
+ * 读的是 `qa.summarize` 的 HTTP 响应体（未经 tsc 校验的 JSON），所以走
+ * `readJsonPath` 而不是直接属性访问：缺 `sum` 对象时要报出**具名契约错误**，
+ * 而不是 `Cannot read properties of undefined` 这种看不出字段名的 TypeError。
+ */
+const QA_SCALAR_FIELDS = ['sum.max', 'shortfall.mean'] as const;
+
+/** 按 `a.b` 路径读未受检 JSON；任何一层不是对象就返回 `undefined`。 */
+function readJsonPath(root: unknown, path: string): unknown {
+  return path.split('.').reduce<unknown>((node, key) => {
+    if (node === null || typeof node !== 'object') return undefined;
+    return (node as Record<string, unknown>)[key];
+  }, root);
+}
+
+/**
  * 后端契约核查：`qa.summarize` 的返回一旦缺少聚合要读的字段，就在这里变成
  * **点名该字段与该分区**的异常，而不是让 `?.` 兜成 0 / null。
  *
@@ -248,8 +284,10 @@ function assertQaScopeContract(part: QaScopePart): void {
   if (!Array.isArray(summary.per_column_max)) {
     throw new Error(`qa.summarize 返回缺少 summary.per_column_max（违反契约）：分区 ${who}`);
   }
-  if (typeof summary.sum?.max !== 'number') {
-    throw new Error(`qa.summarize 返回缺少 summary.sum.max（违反契约）：分区 ${who}`);
+  for (const path of QA_SCALAR_FIELDS) {
+    if (typeof readJsonPath(summary, path) !== 'number') {
+      throw new Error(`qa.summarize 返回缺少 summary.${path}（违反契约）：分区 ${who}`);
+    }
   }
   for (const field of QA_COUNT_FIELDS) {
     if (typeof summary[field] !== 'number') {
@@ -297,19 +335,15 @@ export function aggregateQaScope(
     .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
   const maxSum = maxes.length > 0 ? Math.max(...maxes) : null;
 
-  const weighted = parts.filter(
-    (p) =>
-      typeof (p.summary as { shortfall?: { mean?: number } }).shortfall?.mean === 'number' &&
-      p.summary.n_horizons_with_data > 0
-  );
+  /* `shortfall.mean` 是必填（空集 `qa.py:50`、正常 `:152` 都给），
+     所以这里既不 `?.` 也不 `?? 0`：缺字段在 `assertQaScopeContract` 就已抛错。
+     加权口径不变 —— 按各分区**被检层位数**加权，无被检层位的分区不参与。 */
+  const weighted = parts.filter((p) => p.summary.n_horizons_with_data > 0);
   const weightedTotal = weighted.reduce((s, p) => s + p.summary.n_horizons_with_data, 0);
   const shortfallMean =
     weightedTotal > 0
       ? weighted.reduce(
-          (s, p) =>
-            s +
-            ((p.summary as { shortfall?: { mean?: number } }).shortfall?.mean ?? 0) *
-              p.summary.n_horizons_with_data,
+          (s, p) => s + p.summary.shortfall.mean * p.summary.n_horizons_with_data,
           0
         ) / weightedTotal
       : null;

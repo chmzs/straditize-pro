@@ -120,6 +120,7 @@ check('聚合覆盖所有有列分区：脏分区的超标必须被计入并判�
         empty_horizons: [],
         per_column_max: [],
         sum: { max: 103.2 },
+        shortfall: { mean: 0.0 },
         n_uncalibrated: 0,
       }),
       part('clean', {
@@ -130,6 +131,7 @@ check('聚合覆盖所有有列分区：脏分区的超标必须被计入并判�
         empty_horizons: [],
         per_column_max: [],
         sum: { max: 96 },
+        shortfall: { mean: 0.0 },
         n_uncalibrated: 0,
       }),
     ],
@@ -157,6 +159,7 @@ check('聚合：所有分区都合格时才判绿', () => {
         empty_horizons: [],
         per_column_max: [],
         sum: { max: 96 },
+        shortfall: { mean: 0.0 },
         n_uncalibrated: 0,
       }),
       part('b', {
@@ -167,6 +170,7 @@ check('聚合：所有分区都合格时才判绿', () => {
         empty_horizons: [],
         per_column_max: [],
         sum: { max: 97 },
+        shortfall: { mean: 0.0 },
         n_uncalibrated: 0,
       }),
     ],
@@ -188,6 +192,7 @@ check('聚合：所有分区 0 层位 ⇒ 黄「无可校验层位」', () => {
         empty_horizons: [],
         per_column_max: [],
         sum: { max: 0 },
+        shortfall: { mean: 0.0 },
       }),
       part('b', {
         n_horizons: 3,
@@ -197,6 +202,7 @@ check('聚合：所有分区 0 层位 ⇒ 黄「无可校验层位」', () => {
         empty_horizons: [],
         per_column_max: [],
         sum: { max: 0 },
+        shortfall: { mean: 0.0 },
       }),
     ],
     [],
@@ -220,6 +226,7 @@ check('没有可校验分区时，范围文案必须说清（不得伪造已校�
         per_column_max: [],
         violations_over: [],
         sum: { max: 0 },
+        shortfall: { mean: 0.0 },
       }),
     ],
     TOL
@@ -240,6 +247,10 @@ check('没有可校验分区时，范围文案必须说清（不得伪造已校�
  *
  * 造坏 payload 走 `JSON.parse` 是**故意**的，不是绕过类型检查的技巧：
  * 生产路径上的这份数据结构就是 JSON，tsc 不参与；要测的就是"运行时拿到坏 payload"。
+ *
+ * 每个坏 payload **只缺它要测的那一个字段**，其余照契约给全。缺多个字段时，
+ * 抛出来的可能是先被检查的那个 —— 断言就会退化成"在测检查顺序"，而不是
+ * "缺 X 时错误必须点名 X"。
  */
 
 /**
@@ -256,8 +267,9 @@ function partFromJson(name, rawSummaryJson) {
 check('缺 summary.sum 必须抛错（不得被当成 maxSum = null 静默放行）', () => {
   const broken = partFromJson(
     'a',
-    '{"n_horizons":6,"n_horizons_with_data":6,"violations_over":[],' +
-      '"empty_horizons":[],"per_column_max":[]}'
+    '{"n_horizons":6,"n_horizons_with_data":6,"n_horizons_empty":0,' +
+      '"violations_over":[],"empty_horizons":[],"per_column_max":[],' +
+      '"shortfall":{"mean":0.0}}'
   );
   assert.throws(
     () => aggregateQaScope([broken], [], TOL),
@@ -269,8 +281,8 @@ check('缺 summary.sum 必须抛错（不得被当成 maxSum = null 静默放行
 check('缺 summary.violations_over 必须抛错（不得被当成 0 个超标而判绿）', () => {
   const broken = partFromJson(
     'a',
-    '{"n_horizons":6,"n_horizons_with_data":6,"sum":{"max":96},' +
-      '"empty_horizons":[],"per_column_max":[]}'
+    '{"n_horizons":6,"n_horizons_with_data":6,"n_horizons_empty":0,"sum":{"max":96},' +
+      '"empty_horizons":[],"per_column_max":[],"shortfall":{"mean":0.0}}'
   );
   assert.throws(
     () => aggregateQaScope([broken], [], TOL),
@@ -299,7 +311,7 @@ check('缺 summary.per_column_max 必须抛错（不得渲染成「暂无列刻�
   const broken = partFromJson(
     'a',
     '{"n_horizons":6,"n_horizons_with_data":6,"n_horizons_empty":0,' +
-      '"empty_horizons":[],"violations_over":[],"sum":{"max":96}}'
+      '"empty_horizons":[],"violations_over":[],"sum":{"max":96},"shortfall":{"mean":0.0}}'
   );
   assert.throws(
     () => aggregateQaScope([broken], [], TOL),
@@ -312,7 +324,7 @@ check('缺 summary.empty_horizons 必须抛错（不得渲染成「0 个空层�
   const broken = partFromJson(
     'a',
     '{"n_horizons":6,"n_horizons_with_data":6,"n_horizons_empty":0,' +
-      '"per_column_max":[],"violations_over":[],"sum":{"max":96}}'
+      '"per_column_max":[],"violations_over":[],"sum":{"max":96},"shortfall":{"mean":0.0}}'
   );
   assert.throws(
     () => aggregateQaScope([broken], [], TOL),
@@ -337,7 +349,7 @@ check('缺 summary.n_horizons 必须抛错（不得按 0 层位算出「无可�
   const broken = partFromJson(
     'a',
     '{"n_horizons_with_data":6,"n_horizons_empty":0,"empty_horizons":[],' +
-      '"per_column_max":[],"violations_over":[],"sum":{"max":96}}'
+      '"per_column_max":[],"violations_over":[],"sum":{"max":96},"shortfall":{"mean":0.0}}'
   );
   assert.throws(
     () => aggregateQaScope([broken], [], TOL),
@@ -350,7 +362,7 @@ check('缺 summary.n_horizons_with_data 必须抛错（不得静默改用 n_hori
   const broken = partFromJson(
     'a',
     '{"n_horizons":6,"n_horizons_empty":0,"empty_horizons":[],' +
-      '"per_column_max":[],"violations_over":[],"sum":{"max":96}}'
+      '"per_column_max":[],"violations_over":[],"sum":{"max":96},"shortfall":{"mean":0.0}}'
   );
   assert.throws(
     () => aggregateQaScope([broken], [], TOL),
@@ -363,13 +375,67 @@ check('缺 summary.n_horizons_empty 必须抛错（不得按 0 空层位兜）',
   const broken = partFromJson(
     'a',
     '{"n_horizons":6,"n_horizons_with_data":6,"empty_horizons":[],' +
-      '"per_column_max":[],"violations_over":[],"sum":{"max":96}}'
+      '"per_column_max":[],"violations_over":[],"sum":{"max":96},"shortfall":{"mean":0.0}}'
   );
   assert.throws(
     () => aggregateQaScope([broken], [], TOL),
     /summary\.n_horizons_empty（违反契约）/,
     '缺 summary.n_horizons_empty 时报错信息必须点名该字段'
   );
+});
+
+/*
+ * ---- 17/18. 契约：`shortfall` 恒返回（不得兜 0） ----
+ *
+ * `shortfall` 是聚合里**唯一参与加权计算**的字段（`qaVerdict.ts::aggregateQaScope`
+ * 按各分区 `n_horizons_with_data` 加权平均其 `mean`）。旧实现没在 `QaScopeSummary`
+ * 里声明它，只在内联强转后 `?.mean ?? 0` 读取：缺字段的分区被**静默排除**出加权
+ * （或缺值按 0 计入），于是「平均缺额」这个展示给用户的数字在契约破损时照样印出来。
+ *
+ * 后端两条 return 路径都给 `shortfall`（空集 `qa.py:50`，正常 `:152`），故必填。
+ */
+check('缺 summary.shortfall 必须抛错（不得按 0 缺额静默加权）', () => {
+  const broken = partFromJson(
+    'a',
+    '{"n_horizons":6,"n_horizons_with_data":6,"n_horizons_empty":0,' +
+      '"empty_horizons":[],"per_column_max":[],"violations_over":[],"sum":{"max":96}}'
+  );
+  assert.throws(
+    () => aggregateQaScope([broken], [], TOL),
+    /summary\.shortfall\.mean/,
+    '缺 summary.shortfall 时报错信息必须点名该字段'
+  );
+});
+
+check('shortfallMean 加权口径不变：按 n_horizons_with_data 加权', () => {
+  const agg = aggregateQaScope(
+    [
+      part('dirty', {
+        n_horizons: 76,
+        n_horizons_with_data: 74,
+        n_horizons_empty: 2,
+        violations_over: [],
+        empty_horizons: [],
+        per_column_max: [],
+        sum: { max: 103.2 },
+        shortfall: { mean: 4.0 },
+      }),
+      part('clean', {
+        n_horizons: 12,
+        n_horizons_with_data: 10,
+        n_horizons_empty: 2,
+        violations_over: [],
+        empty_horizons: [],
+        per_column_max: [],
+        sum: { max: 96 },
+        shortfall: { mean: 1.5 },
+      }),
+    ],
+    [],
+    TOL
+  );
+  // (4.0×74 + 1.5×10) / 84 —— 与收紧前的实测值 3.7023809523809526 逐位相同
+  assert.equal(agg.shortfallMean, (4.0 * 74 + 1.5 * 10) / 84);
 });
 
 /*
