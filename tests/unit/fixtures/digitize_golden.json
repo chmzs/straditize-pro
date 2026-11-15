@@ -32,8 +32,8 @@
    "854": 340.0,
    "859": 336.0,
    "862": 340.0,
-   "863": 333.0,
-   "869": 332.0
+   "865": 333.0,
+   "869": 358.0
   },
   "ctrl_ids": [
    "pt_0_233",
@@ -65,7 +65,7 @@
    "pt_0_854",
    "pt_0_859",
    "pt_0_862",
-   "pt_0_863",
+   "pt_0_865",
    "pt_0_869"
   ],
   "ctrl_types": [
@@ -99,7 +99,7 @@
    "peak",
    "peak",
    "trough",
-   "trough"
+   "peak"
   ],
   "first_point": {
    "row": 233.0,
@@ -108,12 +108,12 @@
   },
   "last_point": {
    "row": 869.0,
-   "x": 332.0,
+   "x": 358.0,
    "y": 869.0
   },
   "point_count": 637,
   "reader_type": "area",
-  "x_digest": "06e76d7b78ffa6df"
+  "x_digest": "2d5c38848109fb63"
  },
  "col0_bar": {
   "col_index": 0,
@@ -148,8 +148,8 @@
    "854": 340.0,
    "859": 336.0,
    "862": 340.0,
-   "863": 333.0,
-   "869": 332.0
+   "865": 333.0,
+   "869": 358.0
   },
   "ctrl_ids": [
    "pt_0_233",
@@ -181,7 +181,7 @@
    "pt_0_854",
    "pt_0_859",
    "pt_0_862",
-   "pt_0_863",
+   "pt_0_865",
    "pt_0_869"
   ],
   "ctrl_types": [
@@ -215,7 +215,7 @@
    "peak",
    "peak",
    "trough",
-   "trough"
+   "peak"
   ],
   "first_point": {
    "row": 233.0,
@@ -224,12 +224,12 @@
   },
   "last_point": {
    "row": 869.0,
-   "x": 332.0,
+   "x": 358.0,
    "y": 869.0
   },
   "point_count": 637,
   "reader_type": "bar",
-  "x_digest": "06e76d7b78ffa6df"
+  "x_digest": "2d5c38848109fb63"
  },
  "col0_line": {
   "col_index": 0,
@@ -264,8 +264,8 @@
    "854": 340.0,
    "859": 336.0,
    "862": 340.0,
-   "863": 333.0,
-   "869": 332.0
+   "865": 333.0,
+   "869": 358.0
   },
   "ctrl_ids": [
    "pt_0_233",
@@ -297,7 +297,7 @@
    "pt_0_854",
    "pt_0_859",
    "pt_0_862",
-   "pt_0_863",
+   "pt_0_865",
    "pt_0_869"
   ],
   "ctrl_types": [
@@ -331,7 +331,7 @@
    "peak",
    "peak",
    "trough",
-   "trough"
+   "peak"
   ],
   "first_point": {
    "row": 233.0,
@@ -340,30 +340,27 @@
   },
   "last_point": {
    "row": 869.0,
-   "x": 332.0,
+   "x": 358.0,
    "y": 869.0
   },
   "point_count": 637,
   "reader_type": "line",
-  "x_digest": "06e76d7b78ffa6df"
+  "x_digest": "2d5c38848109fb63"
  },
  "col15_area": {
   "col_index": 15,
-  "control_point_count": 3,
+  "control_point_count": 2,
   "control_points": {
    "233": 1328.0,
-   "867": 1328.0,
-   "869": 1279.0
+   "869": 1328.0
   },
   "ctrl_ids": [
    "pt_15_233",
-   "pt_15_867",
    "pt_15_869"
   ],
   "ctrl_types": [
    "peak",
-   "peak",
-   "trough"
+   "peak"
   ],
   "first_point": {
    "row": 233.0,
@@ -372,30 +369,27 @@
   },
   "last_point": {
    "row": 869.0,
-   "x": 1279.0,
+   "x": 1328.0,
    "y": 869.0
   },
   "point_count": 637,
   "reader_type": "area",
-  "x_digest": "8ee52dcf60bbfa7b"
+  "x_digest": "88291ff43a72c257"
  },
  "col15_bar": {
   "col_index": 15,
-  "control_point_count": 3,
+  "control_point_count": 2,
   "control_points": {
    "233": 1328.0,
-   "867": 1328.0,
-   "869": 1279.0
+   "869": 1328.0
   },
   "ctrl_ids": [
    "pt_15_233",
-   "pt_15_867",
    "pt_15_869"
   ],
   "ctrl_types": [
    "peak",
-   "peak",
-   "trough"
+   "peak"
   ],
   "first_point": {
    "row": 233.0,
@@ -404,30 +398,27 @@
   },
   "last_point": {
    "row": 869.0,
-   "x": 1279.0,
+   "x": 1328.0,
    "y": 869.0
   },
   "point_count": 637,
   "reader_type": "bar",
-  "x_digest": "8ee52dcf60bbfa7b"
+  "x_digest": "88291ff43a72c257"
  },
  "col15_line": {
   "col_index": 15,
-  "control_point_count": 3,
+  "control_point_count": 2,
   "control_points": {
    "233": 1328.0,
-   "867": 1328.0,
-   "869": 1279.0
+   "869": 1328.0
   },
   "ctrl_ids": [
    "pt_15_233",
-   "pt_15_867",
    "pt_15_869"
   ],
   "ctrl_types": [
    "peak",
-   "peak",
-   "trough"
+   "peak"
   ],
   "first_point": {
    "row": 233.0,
@@ -436,12 +427,12 @@
   },
   "last_point": {
    "row": 869.0,
-   "x": 1279.0,
+   "x": 1328.0,
    "y": 869.0
   },
   "point_count": 637,
   "reader_type": "line",
-  "x_digest": "8ee52dcf60bbfa7b"
+  "x_digest": "88291ff43a72c257"
  },
  "col3_area": {
   "col_index": 3,
@@ -528,8 +519,8 @@
    "850": 463.0,
    "855": 452.0,
    "860": 454.0,
-   "863": 445.0,
-   "869": 444.0
+   "865": 445.0,
+   "869": 470.0
   },
   "ctrl_ids": [
    "pt_3_233",
@@ -613,7 +604,7 @@
    "pt_3_850",
    "pt_3_855",
    "pt_3_860",
-   "pt_3_863",
+   "pt_3_865",
    "pt_3_869"
   ],
   "ctrl_types": [
@@ -699,7 +690,7 @@
    "peak",
    "peak",
    "trough",
-   "trough"
+   "peak"
   ],
   "first_point": {
    "row": 233.0,
@@ -708,12 +699,12 @@
   },
   "last_point": {
    "row": 869.0,
-   "x": 444.0,
+   "x": 470.0,
    "y": 869.0
   },
   "point_count": 637,
   "reader_type": "area",
-  "x_digest": "4a2e92d428283880"
+  "x_digest": "6b03df5dd44e6961"
  },
  "col3_bar": {
   "col_index": 3,
@@ -800,8 +791,8 @@
    "850": 463.0,
    "855": 452.0,
    "860": 454.0,
-   "863": 445.0,
-   "869": 444.0
+   "865": 445.0,
+   "869": 470.0
   },
   "ctrl_ids": [
    "pt_3_233",
@@ -885,7 +876,7 @@
    "pt_3_850",
    "pt_3_855",
    "pt_3_860",
-   "pt_3_863",
+   "pt_3_865",
    "pt_3_869"
   ],
   "ctrl_types": [
@@ -971,7 +962,7 @@
    "peak",
    "peak",
    "trough",
-   "trough"
+   "peak"
   ],
   "first_point": {
    "row": 233.0,
@@ -980,12 +971,12 @@
   },
   "last_point": {
    "row": 869.0,
-   "x": 444.0,
+   "x": 470.0,
    "y": 869.0
   },
   "point_count": 637,
   "reader_type": "bar",
-  "x_digest": "4a2e92d428283880"
+  "x_digest": "6b03df5dd44e6961"
  },
  "col3_line": {
   "col_index": 3,
@@ -1072,8 +1063,8 @@
    "850": 463.0,
    "855": 452.0,
    "860": 454.0,
-   "863": 445.0,
-   "869": 444.0
+   "865": 445.0,
+   "869": 470.0
   },
   "ctrl_ids": [
    "pt_3_233",
@@ -1157,7 +1148,7 @@
    "pt_3_850",
    "pt_3_855",
    "pt_3_860",
-   "pt_3_863",
+   "pt_3_865",
    "pt_3_869"
   ],
   "ctrl_types": [
@@ -1243,7 +1234,7 @@
    "peak",
    "peak",
    "trough",
-   "trough"
+   "peak"
   ],
   "first_point": {
    "row": 233.0,
@@ -1252,16 +1243,16 @@
   },
   "last_point": {
    "row": 869.0,
-   "x": 444.0,
+   "x": 470.0,
    "y": 869.0
   },
   "point_count": 637,
   "reader_type": "line",
-  "x_digest": "4a2e92d428283880"
+  "x_digest": "6b03df5dd44e6961"
  },
  "col8_area": {
   "col_index": 8,
-  "control_point_count": 63,
+  "control_point_count": 64,
   "control_points": {
    "233": 682.0,
    "237": 657.0,
@@ -1324,8 +1315,9 @@
    "833": 657.0,
    "836": 657.0,
    "840": 660.0,
-   "862": 658.0,
-   "869": 656.0
+   "851": 657.0,
+   "865": 657.0,
+   "869": 682.0
   },
   "ctrl_ids": [
    "pt_8_233",
@@ -1389,7 +1381,8 @@
    "pt_8_833",
    "pt_8_836",
    "pt_8_840",
-   "pt_8_862",
+   "pt_8_851",
+   "pt_8_865",
    "pt_8_869"
   ],
   "ctrl_types": [
@@ -1454,8 +1447,9 @@
    "trough",
    "trough",
    "peak",
-   "peak",
-   "trough"
+   "trough",
+   "trough",
+   "peak"
   ],
   "first_point": {
    "row": 233.0,
@@ -1464,16 +1458,16 @@
   },
   "last_point": {
    "row": 869.0,
-   "x": 656.0,
+   "x": 682.0,
    "y": 869.0
   },
   "point_count": 637,
   "reader_type": "area",
-  "x_digest": "67c5bd32bacf650e"
+  "x_digest": "d86eb838a2037631"
  },
  "col8_bar": {
   "col_index": 8,
-  "control_point_count": 63,
+  "control_point_count": 64,
   "control_points": {
    "233": 682.0,
    "237": 657.0,
@@ -1536,8 +1530,9 @@
    "833": 657.0,
    "836": 657.0,
    "840": 660.0,
-   "862": 658.0,
-   "869": 656.0
+   "851": 657.0,
+   "865": 657.0,
+   "869": 682.0
   },
   "ctrl_ids": [
    "pt_8_233",
@@ -1601,7 +1596,8 @@
    "pt_8_833",
    "pt_8_836",
    "pt_8_840",
-   "pt_8_862",
+   "pt_8_851",
+   "pt_8_865",
    "pt_8_869"
   ],
   "ctrl_types": [
@@ -1666,8 +1662,9 @@
    "trough",
    "trough",
    "peak",
-   "peak",
-   "trough"
+   "trough",
+   "trough",
+   "peak"
   ],
   "first_point": {
    "row": 233.0,
@@ -1676,16 +1673,16 @@
   },
   "last_point": {
    "row": 869.0,
-   "x": 656.0,
+   "x": 682.0,
    "y": 869.0
   },
   "point_count": 637,
   "reader_type": "bar",
-  "x_digest": "9b78154138d90fcd"
+  "x_digest": "7008824a8451f549"
  },
  "col8_line": {
   "col_index": 8,
-  "control_point_count": 63,
+  "control_point_count": 64,
   "control_points": {
    "233": 682.0,
    "237": 657.0,
@@ -1748,8 +1745,9 @@
    "833": 657.0,
    "836": 657.0,
    "840": 660.0,
-   "862": 658.0,
-   "869": 656.0
+   "851": 657.0,
+   "865": 657.0,
+   "869": 682.0
   },
   "ctrl_ids": [
    "pt_8_233",
@@ -1813,7 +1811,8 @@
    "pt_8_833",
    "pt_8_836",
    "pt_8_840",
-   "pt_8_862",
+   "pt_8_851",
+   "pt_8_865",
    "pt_8_869"
   ],
   "ctrl_types": [
@@ -1878,8 +1877,9 @@
    "trough",
    "trough",
    "peak",
-   "peak",
-   "trough"
+   "trough",
+   "trough",
+   "peak"
   ],
   "first_point": {
    "row": 233.0,
@@ -1888,12 +1888,12 @@
   },
   "last_point": {
    "row": 869.0,
-   "x": 656.0,
+   "x": 682.0,
    "y": 869.0
   },
   "point_count": 637,
   "reader_type": "line",
-  "x_digest": "67c5bd32bacf650e"
+  "x_digest": "d86eb838a2037631"
  },
  "errors": {
   "col_index_out_of_range": {
@@ -1974,7 +1974,7 @@
    "438": 1729.0,
    "546": 1729.0,
    "657": 1748.0,
-   "662": 1729.0,
+   "662": 1734.0,
    "75": 1729.0
   },
   "ctrl_ids": [
@@ -2105,7 +2105,7 @@
    "trough",
    "trough",
    "peak",
-   "trough"
+   "peak"
   ],
   "first_point": {
    "row": 75.0,
@@ -2114,12 +2114,12 @@
   },
   "last_point": {
    "row": 662.0,
-   "x": 1729.0,
+   "x": 1734.0,
    "y": 662.0
   },
   "point_count": 588,
   "reader_type": "area",
-  "x_digest": "e289f5619db23fa0"
+  "x_digest": "0e8e0952e9d6fddd"
  },
  "scan_col23_bar": {
   "col_index": 23,
@@ -2186,7 +2186,7 @@
    "438": 1729.0,
    "546": 1729.0,
    "657": 1748.0,
-   "662": 1729.0,
+   "662": 1734.0,
    "75": 1729.0
   },
   "ctrl_ids": [
@@ -2317,7 +2317,7 @@
    "trough",
    "trough",
    "peak",
-   "trough"
+   "peak"
   ],
   "first_point": {
    "row": 75.0,
@@ -2326,12 +2326,12 @@
   },
   "last_point": {
    "row": 662.0,
-   "x": 1729.0,
+   "x": 1734.0,
    "y": 662.0
   },
   "point_count": 588,
   "reader_type": "bar",
-  "x_digest": "e289f5619db23fa0"
+  "x_digest": "0e8e0952e9d6fddd"
  },
  "scan_col23_line": {
   "col_index": 23,
@@ -2411,7 +2411,7 @@
    "655": 1729.0,
    "658": 1738.5,
    "659": 1746.5,
-   "662": 1729.0,
+   "662": 1733.0,
    "75": 1729.0
   },
   "ctrl_ids": [
@@ -2568,7 +2568,7 @@
    "trough",
    "peak",
    "peak",
-   "trough"
+   "peak"
   ],
   "first_point": {
    "row": 75.0,
@@ -2577,16 +2577,16 @@
   },
   "last_point": {
    "row": 662.0,
-   "x": 1729.0,
+   "x": 1733.0,
    "y": 662.0
   },
   "point_count": 588,
   "reader_type": "line",
-  "x_digest": "47247b9f714dd997"
+  "x_digest": "eb2a5b38edff5d06"
  },
  "scan_col3_area": {
   "col_index": 3,
-  "control_point_count": 49,
+  "control_point_count": 51,
   "control_points": {
    "100": 425.0,
    "104": 420.0,
@@ -2633,7 +2633,9 @@
    "556": 377.0,
    "586": 377.0,
    "588": 379.0,
-   "662": 377.0,
+   "624": 377.0,
+   "659": 377.0,
+   "662": 451.0,
    "75": 378.0,
    "80": 394.0,
    "87": 392.0
@@ -2687,6 +2689,8 @@
    "pt_3_556",
    "pt_3_586",
    "pt_3_588",
+   "pt_3_624",
+   "pt_3_659",
    "pt_3_662"
   ],
   "ctrl_types": [
@@ -2738,7 +2742,9 @@
    "trough",
    "trough",
    "peak",
-   "trough"
+   "trough",
+   "trough",
+   "peak"
   ],
   "first_point": {
    "row": 75.0,
@@ -2747,16 +2753,16 @@
   },
   "last_point": {
    "row": 662.0,
-   "x": 377.0,
+   "x": 451.0,
    "y": 662.0
   },
   "point_count": 588,
   "reader_type": "area",
-  "x_digest": "793a10cfebf9dae4"
+  "x_digest": "3ec14e27feb22356"
  },
  "scan_col3_bar": {
   "col_index": 3,
-  "control_point_count": 49,
+  "control_point_count": 51,
   "control_points": {
    "100": 425.0,
    "104": 420.0,
@@ -2803,7 +2809,9 @@
    "556": 377.0,
    "586": 377.0,
    "587": 456.0,
-   "662": 377.0,
+   "624": 377.0,
+   "659": 377.0,
+   "662": 451.0,
    "75": 378.0,
    "80": 394.0,
    "87": 392.0
@@ -2857,6 +2865,8 @@
    "pt_3_556",
    "pt_3_586",
    "pt_3_587",
+   "pt_3_624",
+   "pt_3_659",
    "pt_3_662"
   ],
   "ctrl_types": [
@@ -2908,7 +2918,9 @@
    "trough",
    "trough",
    "peak",
-   "trough"
+   "trough",
+   "trough",
+   "peak"
   ],
   "first_point": {
    "row": 75.0,
@@ -2917,16 +2929,16 @@
   },
   "last_point": {
    "row": 662.0,
-   "x": 377.0,
+   "x": 451.0,
    "y": 662.0
   },
   "point_count": 588,
   "reader_type": "bar",
-  "x_digest": "93c64f5e330cfeda"
+  "x_digest": "7b3b60cab03c0805"
  },
  "scan_col3_line": {
   "col_index": 3,
-  "control_point_count": 49,
+  "control_point_count": 51,
   "control_points": {
    "100": 425.0,
    "104": 420.0,
@@ -2973,7 +2985,9 @@
    "556": 377.0,
    "586": 377.0,
    "588": 379.0,
-   "662": 377.0,
+   "624": 377.0,
+   "659": 377.0,
+   "662": 451.0,
    "75": 378.0,
    "80": 394.0,
    "87": 392.0
@@ -3027,6 +3041,8 @@
    "pt_3_556",
    "pt_3_586",
    "pt_3_588",
+   "pt_3_624",
+   "pt_3_659",
    "pt_3_662"
   ],
   "ctrl_types": [
@@ -3078,7 +3094,9 @@
    "trough",
    "trough",
    "peak",
-   "trough"
+   "trough",
+   "trough",
+   "peak"
   ],
   "first_point": {
    "row": 75.0,
@@ -3087,12 +3105,12 @@
   },
   "last_point": {
    "row": 662.0,
-   "x": 377.0,
+   "x": 451.0,
    "y": 662.0
   },
   "point_count": 588,
   "reader_type": "line",
-  "x_digest": "793a10cfebf9dae4"
+  "x_digest": "3ec14e27feb22356"
  },
  "session_state": {
   "column_point_keys": [
