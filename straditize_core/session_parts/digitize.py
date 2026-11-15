@@ -396,7 +396,11 @@ class DigitizeSessionMixin:
         """按地形显著度抽拐点，再补首末两个端点控制点，返回 (行号→x 字典, 控制点列表)。"""
         control_points: dict[int, float] = {}
         # Advanced peak extraction: using topological prominence and local extrema
-        curve_profile = np.array([p["x"] - c_start for p in points], dtype=float)
+        # 读数不允许为负：墨迹可能落在轴线内（x < 列左缘），那只是轴线描边，不是负百分比。
+        # 负宽度一律钳到 0（用户口径：图上不该出现 <0% 的点）。
+        curve_profile = np.clip(
+            np.array([p["x"] - c_start for p in points], dtype=float), 0.0, None
+        )
         # 阈值随列宽缩放：宽度按像素读，1.5px 的绝对显著度在 700px 宽的列上会把
         # 抗锯齿与基线抖动全当拐点（实测：贴轴 3-10px 处冒出成对小折角）。
         prominence_px = max(2.0, 0.02 * float(col_width))
@@ -429,8 +433,8 @@ class DigitizeSessionMixin:
             )
 
         # Ensure endpoints exist
-        y0_x = float(points[0]["x"])
-        y1_x = float(points[-1]["x"])
+        y0_x = float(c_start + max(0.0, points[0]["x"] - c_start))
+        y1_x = float(c_start + max(0.0, points[-1]["x"] - c_start))
         control_points[y0] = y0_x
         control_points[y1] = y1_x
 
