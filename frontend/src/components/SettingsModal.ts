@@ -169,7 +169,7 @@ export class SettingsModal {
                 </div>
               </div>
               <div id="settings-r-hint" style="font-size: 10.5px; line-height: 1.5; color: var(--text-muted);">
-                一键画图用本机 R 的 rioja::strat.plot 出 PDF/PNG；没有 R 时只能用「riojaPlot 网页」手动上传。
+                本机出图用本机 R 的 rioja::strat.plot 出 PDF/PNG；没有 R 时只能用「riojaPlot 网页」手动上传。
               </div>
             </div>
           </div>
@@ -413,7 +413,7 @@ export class SettingsModal {
             rHint.style.color = 'var(--status-warning)';
             rHint.textContent = String(rep?.error || '未找到 Rscript') + (rep?.hint ? ' ' + String(rep.hint) : '');
           }
-          notifyError('未找到 Rscript：一键画图不可用（可用 riojaPlot 网页手动上传）。');
+          notifyError('未找到 Rscript：本机出图不可用（可用 riojaPlot 网页手动上传）。');
         }
       } catch (err: any) {
         notifyError('探测 R 失败：' + String(err?.message || err));
