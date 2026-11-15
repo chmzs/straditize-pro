@@ -549,6 +549,60 @@ class DigitizeSessionMixin:
             "points": new_points,
         }
 
+    def set_control_points(
+        self, col_index: int | str, points: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """整列同步锚点：画布上一次编辑（拖动结束 / 删除 / 微调去抖）一次往返落库。
+
+        `points` = [{"row": int, "x": float, "manual": bool}]，语义是「这一列现在就是这些
+        锚点」——整列替换，不是增量。存在的理由：画布编辑一次可能同时改好几个锚点，
+        走单点接口 `core.updateControlPoint` 要逐点往返，且每个点都重算整列插值。
+
+        与单点接口共用 `update_control_point` 的守卫 + 插值实现（只调一次、种子取排序后
+        的第一个锚点），避免两条链各写一套插值后给出不同曲线。
+        """
+        self._record_history("Sync control points")
+        c_idx = self._resolve_col_index(col_index)
+        if c_idx not in self.column_points:
+            raise JsonRpcError(
+                STATE_ERROR,
+                f"Column {c_idx} has not been digitized yet. Call core.digitize first.",
+            )
+
+        ctrls: dict[int, float] = {}
+        manual = dict(self._manual_store().get(c_idx, {}))
+        for point in points or []:
+            row_raw = point.get("row", point.get("y"))
+            x_raw = point.get("x")
+            if row_raw is None or x_raw is None:
+                raise JsonRpcError(
+                    INVALID_PARAMS,
+                    "控制点必须同时带 row 与 x：收到 " + repr(point),
+                )
+            row = int(round(float(row_raw)))
+            ctrls[row] = float(x_raw)
+            if point.get("manual", True):
+                manual[row] = {"x": float(x_raw), "kind": "manual"}
+            else:
+                manual.pop(row, None)
+
+        if not ctrls:
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                "控制点列表为空：至少要保留两个端点，否则这一列没有可插值的曲线。",
+            )
+
+        self.control_points[c_idx] = ctrls
+        self._manual_store()[c_idx] = manual
+        seed_row = sorted(ctrls)[0]
+        result = self.update_control_point(c_idx, seed_row, ctrls[seed_row])
+        return {
+            "col_index": c_idx,
+            "action": "synced",
+            "control_points_count": result["control_points_count"],
+            "points": result["points"],
+        }
+
     def point_add(
         self,
         col_index: int | str,

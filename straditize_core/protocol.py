@@ -93,6 +93,7 @@ ALL_RPC_METHODS: tuple[str, ...] = (
     "column.calibrateXTicks",
     "column.clearXTicks",
     "column.remove",
+    "column.setControlPoints",
     "column.update",
     "component.getStatus",
     "component.install",
