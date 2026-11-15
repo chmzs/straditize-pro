@@ -13,7 +13,6 @@ import { ToolModeManager } from '../core/ToolModeManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { resolveAxisStroke } from '../core/axisStroke';
 import { columnPick, setPickedColumnIds } from './steps/columnPick';
-import { setTickRedrawHook } from './canvas/tickGeometry';
 import {
   STAGE,
   canHitRoiHandle,
@@ -219,7 +218,6 @@ private pointer: PointerState = {
     columnPick.requestRedraw = () => this.requestRender();
     // 步骤 6 的刻度齿位置来自面板的异步实测（`canvas/tickGeometry.ts`）：测完要让画布重画，
     // 否则「面板说刻距 124.5px、图上一条齿都没有」。
-    setTickRedrawHook(() => this.requestRender());
 
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'geology-canvas';

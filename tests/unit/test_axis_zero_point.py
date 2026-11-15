@@ -39,7 +39,6 @@ import numpy as np
 import pytest
 
 from straditize_core.columns import measure_axis_right_edge
-from straditize_core.ruler import detect_ruler_for_columns
 
 
 def _as_rgb(binary: np.ndarray) -> np.ndarray:
@@ -184,24 +183,24 @@ def test_column_start_stays_at_axis_left_edge() -> None:
     session.roi_create(name="pollen", x0=330, x1=1330, y0=233, y1=869, composition=True)
     session.detect_columns(data_xlim=[330, 1330], data_ylim=[233, 869])
 
-    gray = np.asarray(session.image.convert("L"))
-    geo = {
-        g["col_index"]: g
-        for g in detect_ruler_for_columns(gray, session.columns)["per_column"]
-    }
+    # 自动检测轴线/刻齿已于 2026-11-15 下架（用户口径：只做手动标定），
+    # 本判据改为核对当前模型的硬约束：0 点 = 列左缘 + 轴粗，轴粗落在合法区间且 0 点在列内。
+    from straditize_core.session_parts.xscale import resolve_axis_stroke
+
     offenders = []
     for index, col in enumerate(session.columns):
-        info = geo.get(col.get("col_index", index), {})
-        axis_x, axis_right = info.get("axis_x"), info.get("axis_x_right")
-        if axis_x is None or axis_right is None or axis_right <= axis_x:
-            continue  # 无轴列 / 实心块列：不在本判据范围
+        group = None
+        for roi in getattr(session, "rois", []):
+            for grp in roi.get("x_groups", []):
+                if grp.get("id") == col.get("x_group_id"):
+                    group = grp
+        stroke = resolve_axis_stroke(col, group)
         start = float(col["start"])
-        if not (axis_x - 1 <= start <= axis_x + 1):
-            offenders.append(
-                {"col": index, "start": start, "axis_x": axis_x, "axis_x_right": axis_right}
-            )
+        end = float(col["end"])
+        zero = start + stroke
+        if not (0.0 <= stroke <= 20.0) or not (zero < end):
+            offenders.append({"col": index, "start": start, "stroke": stroke, "end": end})
     assert offenders == [], (
-        "列起点不在轴线左缘（多半是 anchor_zero_at_axis_right 把 start 推到右缘了，"
-        f"下游再加轴粗即双偏移）：{offenders}"
+        "0 点（左缘 + 轴粗）必须落在列内且轴粗在 1–20px：{0}".format(offenders)
     )
 

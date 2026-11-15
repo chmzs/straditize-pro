@@ -267,7 +267,6 @@
    "shadow_mask": null,
    "solid_layers": null,
    "threshold": null,
-   "tick_band": null
   },
   "primary_roi_id": "roi_1",
   "result": {
@@ -492,7 +491,6 @@
    "shadow_mask": null,
    "solid_layers": null,
    "threshold": null,
-   "tick_band": "<absent>"
   },
   "primary_roi_id": "roi_8",
   "result": {
@@ -824,7 +822,6 @@
    "shadow_mask": null,
    "solid_layers": null,
    "threshold": null,
-   "tick_band": "<absent>"
   },
   "primary_roi_id": "roi_1",
   "result": {

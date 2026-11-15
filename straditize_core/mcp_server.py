@@ -225,21 +225,6 @@ WEBMCP_TOOLS: list[dict[str, Any]] = [
         },
     },
     {
-        "name": "straditize_detect_xticks",
-        "description": "Step 6: Detect X-axis scale tick marks using 1-D vertical run geometry.",
-        "rpc_method": "algorithm.detectXTicks",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "roi_id": {"type": "string", "description": "Target ROI ID."},
-                "dark_threshold": {
-                    "type": "integer",
-                    "description": "Greyscale threshold (default 160).",
-                },
-            },
-        },
-    },
-    {
         "name": "straditize_calibrate_column",
         "description": "Step 6: Calibrate a column's X-axis scale using two tick endpoints [Tick(px, value), Tick(px, value)].",
         "rpc_method": "column.calibrateXTicks",

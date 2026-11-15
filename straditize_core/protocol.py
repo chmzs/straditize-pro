@@ -82,8 +82,6 @@ ALL_RPC_METHODS: tuple[str, ...] = (
     "algorithm.deleteLineGeometry",
     "algorithm.detectColumns",
     "algorithm.detectLineCandidates",
-    "algorithm.detectXTicks",
-    "algorithm.measureRuler",
     "algorithm.extractHorizonConsensus",
     "algorithm.extractTurningPoints",
     "algorithm.setGeometryStatus",

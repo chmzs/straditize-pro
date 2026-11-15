@@ -937,7 +937,6 @@ class ProjectSessionMixin:
             self.shadow_mask = None
             self.solid_layers = None
             self.foreground_column_edges = None
-            self.tick_band = None
 
     def _restore_aux_fields(self, project_data: dict[str, Any]) -> None:
         """回填论文元数据、样本、候选线（含 status 兼容视图）、集合表。"""

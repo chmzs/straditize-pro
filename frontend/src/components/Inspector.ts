@@ -70,7 +70,6 @@ export interface InspectorCallbacks {
   onClearCleanupEdits?: () => void;
   /** 统一厚度：`candidateId` 省略 = 该 ROI 内全部几何（步骤 4 侧栏）。 */
   onSetLineThickness?: (thickness: number, candidateId?: string) => void;
-  onDetectXTicks?: () => void;
   onExtractConsensusHorizons?: () => void;
   onClearHorizons?: () => void;
   /**

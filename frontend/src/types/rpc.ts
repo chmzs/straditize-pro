@@ -56,8 +56,6 @@ export type RpcMethod =
   | 'algorithm.deleteLineGeometry'
   | 'algorithm.detectColumns'
   | 'algorithm.detectLineCandidates'
-  | 'algorithm.detectXTicks'
-  | 'algorithm.measureRuler'
   | 'algorithm.extractHorizonConsensus'
   | 'algorithm.extractTurningPoints'
   | 'algorithm.setGeometryStatus'

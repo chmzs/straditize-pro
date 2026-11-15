@@ -18,7 +18,6 @@
  */
 import { CoordinateSystem } from '../../core/CoordinateSystem';
 import { resolveAxisStroke } from '../../core/axisStroke';
-import { resolveTickSpacingPx } from './tickGeometry';
 import type { DataRoi, TaxaColumn } from '../../types/pollen';
 
 /** 边界类型：列起点（红）/ 刻度端点（蓝尺）/ 列终点（仅悬停高亮）。 */
@@ -148,12 +147,12 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
       // （`anchor_zero_at_axis_right`）默认关闭就是为了这个；一旦开启，start 变成
       // 右缘，这里再加轴粗即双偏移（实测事故见 ARCHITECTURE §6.4）。
       const groupOfCol = roi.x_groups?.find((g) => g.id === col.x_group_id);
-      // 一个单位刻度的像素长度（组级）。有它就按等距外推画刻度，
-      // 不再依赖检测齿 —— 检测会漏、会多、会偏 1-2px（实测一列是第 2 个齿、另一列是第 3 个）。
-      // 齿的间距：**用户确认值（组级 ref_span_px）> 实测刻距 > 不画**。
-      // 只认 ref_span_px 时，用户刚进步骤 6（还没点齿标定）画布上一条齿都没有——
-      // 面板却写着「检测: 4 列 · 刻距 124.5px」，于是「点一个刻度齿」无从点起。
-      const cellPx = resolveTickSpacingPx(groupOfCol?.ref_span_px);
+      // 一个单位刻度的像素长度 = 组级斜率的倒数（value_per_px = 每像素多少单位）。
+      // 斜率只由用户「点一个齿 + 填它的数字」写入（ARCHITECTURE §6.4）；未标定 → null → 一条齿都不画。
+      // 自动检测的刻距不参与：实测同图各列差 1–2px，且从未经用户确认（§6.4:254）。
+      const groupSlope = Number(groupOfCol?.value_per_px);
+      const cellPx =
+        Number.isFinite(groupSlope) && groupSlope !== 0 ? 1 / Math.abs(groupSlope) : null;
       // 列级覆盖 > 组级初值 > 缺省 5（与后端 xscale.resolve_axis_stroke 同语义）。
       const axisStrokePx = resolveAxisStroke(col, groupOfCol);
       const leftEdgeX = col.startX;
@@ -259,28 +258,6 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
         ctx.lineTo(sc.calibX, bottomY);
         ctx.stroke();
 
-        // 绘制检测到的刻度短锯齿 (Detected Tick Teeth)
-        const teeth = col.detected_ticks || [];
-        if (teeth.length > 0) {
-          ctx.save();
-          const toothH = 8 / scale;
-          for (const tx of teeth) {
-            const isChosen = Math.abs(tx - sc.calibX) <= 3;
-            ctx.beginPath();
-            ctx.strokeStyle = isChosen ? '#10b981' : (isLight ? '#f97316' : '#fbbf24');
-            ctx.lineWidth = (isChosen ? 2.5 : 1.5) / scale;
-            ctx.moveTo(tx, bottomY);
-            ctx.lineTo(tx, bottomY + toothH);
-            ctx.stroke();
-
-            // 小齿底端微型指示圆钉
-            ctx.beginPath();
-            ctx.arc(tx, bottomY + toothH, (isChosen ? 2.8 : 1.8) / scale, 0, Math.PI * 2);
-            ctx.fillStyle = isChosen ? '#10b981' : (isLight ? '#f97316' : '#fbbf24');
-            ctx.fill();
-          }
-          ctx.restore();
-        }
 
         ctx.beginPath();
         ctx.arc(sc.originX, bottomY, pinR, 0, Math.PI * 2);
