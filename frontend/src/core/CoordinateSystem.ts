@@ -20,7 +20,16 @@ export interface ViewportTransform {
  * 于是「未标定」在数据流里变成一个猜出来的标度，任何不看 `calibrated`
  * 的调用点都会把它当读数算出去（侧栏峰值、悬停丰度、导出 Value 列都中过招）。
  */
-export type ScaleSource = 'x_ticks' | 'group' | 'x_scales' | 'legacy' | 'default';
+// 与后端 `ColumnScale.source` 逐值对齐（`xscale.py:88`）：
+// 'group_slope' 是「点一个齿 + 填数字」写出的组级斜率，后端一直在发这个值，
+// 前端类型此前漏了它，导致按 source 分支的显示逻辑在 TS 层被判为不可能（TS2367）。
+export type ScaleSource =
+  | 'x_ticks'
+  | 'group'
+  | 'group_slope'
+  | 'x_scales'
+  | 'legacy'
+  | 'default';
 
 export type ResolvedColumnScale =
   | {

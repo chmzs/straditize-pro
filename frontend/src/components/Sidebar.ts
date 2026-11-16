@@ -269,6 +269,9 @@ export class Sidebar {
     // 判别式用解析结果自己的 `calibrated`（与画布同源）；不要在这里另判一次 x_ticks，
     // 两处判据分叉正是这一类缺陷的起点。
     const scale = resolved.calibrated ? resolved : null;
+    // 组斜率模型下 `val1` 是斜率（每像素单位数），不是满刻度——见下方标签分支。
+    const isSlopeScale =
+      resolved.source === 'group_slope' || resolved.source === 'group';
     let maxValStr = scale ? `${formatScaleValue(scale.val1)}${scale.unit}` : '未标定';
     if (scale && col.controlPoints && col.controlPoints.length > 0) {
       const maxX = Math.max(...col.controlPoints.map((p) => p.x));
@@ -359,8 +362,16 @@ export class Sidebar {
             <code>${col.startX} ~ ${col.endX} px</code>
           </div>
           <div class="meta-item">
-            <span>实测峰值 / 满刻度:</span>
-            <code>${scale ? `<strong>${maxValStr}</strong> / ${scale.val1}${scale.unit}` : '未标定（X 轴刻度未设定）'}</code>
+            <span>峰值（实测最大）:</span>
+            <code>${scale ? `<strong>${maxValStr}</strong>` : '未标定（X 轴刻度未设定）'}</code>
+          </div>
+          <div class="meta-item">
+            <!-- 两种标定模型的 val1 语义不同，标签必须跟着 source 走：
+                 - group_slope：val1 是**斜率**（每像素多少单位），不是满刻度；
+                 - x_ticks：val1 才是第二齿的真实读数（满刻度）。
+                 把它们都写成「满刻度」会让用户看到「峰值 112% / 满刻度 1%」这种自相矛盾的行。 -->
+            <span>${isSlopeScale ? '标定斜率（每像素）:' : '满刻度（末齿读数）:'}</span>
+            <code>${scale ? `${formatScaleValue(scale.val1)}${scale.unit}${isSlopeScale ? '/px' : ''}` : '—'}</code>
           </div>
           <div class="meta-item">
             <span>锚点总数:</span>
