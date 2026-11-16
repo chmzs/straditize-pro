@@ -27,6 +27,8 @@ import json
 import subprocess
 import tarfile
 
+from straditize_core.strat_plot import is_percent_unit
+
 import pytest
 
 from straditize_core.plotting import candidate_rscripts
@@ -106,18 +108,11 @@ def test_non_percent_column_is_not_plotted_on_the_percent_basis() -> None:
     pct_name = next(c.get("name") for c in session.columns if c.get("x_group_id") != counts_gid)
     assert units[fixed_name] == "counts"
 
-    script = _script(session)
+    segments = _segments(_script(session))
+    flags = {col: is_pct for is_pct, cols in segments for col in cols}
 
-    assert f'fixed_cols <- intersect(c("{fixed_name}")' in script, (
-        "非百分比列必须被单独挑出来画：\n" + script
-    )
-    assert "scale.percent = FALSE" in script, "非百分比列必须关掉百分比刻度"
-    pct_line = next(line for line in script.splitlines() if "pct_cols <- intersect(" in line)
-    assert f'"{pct_name}"' in pct_line, f"百分比列仍按百分比基准画：{pct_line}"
-    # 判据的核心：含 TRUE 的那一行不许提到非百分比列（否则它又回到 0-100 基准）
-    for line in script.splitlines():
-        if "scale.percent = TRUE" in line:
-            assert fixed_name not in line, f"非百分比列仍在百分比调用里：{line}"
+    assert flags.get(fixed_name) is False, f"非 % 列必须落在非 % 段：{flags}"
+    assert flags.get(pct_name) is True, f"% 列必须在 % 段：{flags}"
 
 
 def test_manifest_records_column_and_group_units() -> None:
@@ -154,14 +149,14 @@ def test_all_percent_project_emits_one_call_with_own_range_minmax() -> None:
     session = _session()
     script = _script(session)
 
-    assert script.count("strat.plot(") == 1
-    call_line = next(line for line in script.splitlines() if "strat.plot(" in line)
-    assert "scale.percent = FALSE" in call_line, (
-        "面板宽度必须等宽：rioja 的 percent=TRUE 会让面板宽度 ∝ 该列最大值，"
-        "一个 800 的浓度列会把百分比列挤成细条"
+    segments = _segments(script)
+    assert len(segments) == 1, "全 % 工程应只有 1 段"
+    assert segments[0][0] is True, "该段必须是百分比段"
+    assert "scale.percent = FALSE" in script, (
+        "面板宽度必须由我们给的 graph.widths 决定（rioja 的 percent=TRUE 会让宽度 ∝ 该列最大值）"
     )
-    assert "scale.minmax = TRUE" in call_line
-    assert "minmax = cbind(lo, hi)" in call_line, "每列 xlim 必须由数据算出"
+    assert "scale.minmax = TRUE" in script
+    assert "minmax = cbind(lo, hi)" in script, "每列 xlim 必须由数据算出"
     assert "非百分比列" not in script, "全 % 时不该出现非百分比列说明"
 
 
@@ -202,6 +197,46 @@ def test_unit_change_moves_a_group_between_percent_and_own_range() -> None:
     assert split != both_pct, "改单位必须改变脚本"
     assert "非百分比列" in split
     assert f"{other_col}(粒/g)" in split, f"改单位后该列必须被点名：{split[:300]}"
+
+
+
+def _segments(script: str) -> list[tuple[bool, list[str]]]:
+    """从生成的 R 脚本里解析段列表：`segments <- list(list(cols = c(...), percent = TRUE), ...)`。
+
+    段数在**生成期**就已确定，所以判据落在脚本文本上，不依赖 R 运行期日志。
+    """
+    import re
+
+    block = re.search(r"segments <- list\((.*?)\n    \)", script, re.S)
+    assert block, f"脚本里没有段列表：{script[:400]}"
+    out: list[tuple[bool, list[str]]] = []
+    for m in re.finditer(r'list\(cols = c\((.*?)\), percent = (TRUE|FALSE)\)', block.group(1)):
+        out.append((m.group(2) == "TRUE", re.findall(r'"([^"]*)"', m.group(1))))
+    return out
+
+
+def test_segment_list_matches_groups_and_partitions_columns() -> None:
+    """段数 == 组数；每段 percent 标志与组单位一致；各段列集合 = 全列且两两不相交。"""
+    from straditize_core.strat_plot import is_percent_unit
+
+    session = _session()
+    roi_id, _pct_gid, other_gid = _two_groups(session)
+    session.roi_group_update(roi_id, other_gid, {"unit": "粒/g"})
+
+    segments = _segments(_script(session))
+    units = session._roi_column_units()[session.rois[0]["name"]]
+
+    assert len(segments) == 2, f"应切成 2 段（1 个 % 段 + 1 个非 % 段），实际 {len(segments)}"
+
+    flags = {col: is_pct for is_pct, cols in segments for col in cols}
+    for col, is_pct in flags.items():
+        assert is_pct == is_percent_unit(units[col]), (
+            f"{col} 的段类型与单位不一致：段内 percent={is_pct}，unit={units[col]!r}"
+        )
+
+    all_cols = [col for _, cols in segments for col in cols]
+    assert sorted(all_cols) == sorted(units), "段的列并集必须等于全部列（漏列/多列都不许）"
+    assert len(all_cols) == len(set(all_cols)), "同一列不许出现在两个段里"
 
 def _first_rscript() -> str | None:
     found = candidate_rscripts()

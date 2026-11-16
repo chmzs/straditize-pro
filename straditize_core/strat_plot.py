@@ -369,50 +369,50 @@ def build_strat_plot_r_script(
         "",
     ]
     explicit_widths = dict(widths or {})
+    explicit_widths = dict(widths or {})
     for label, csv_path, units in entries:
-        pct_cols = sorted(c for c, u in units.items() if is_percent_unit(u))
-        fixed_cols = sorted(c for c, u in units.items() if not is_percent_unit(u))
+        ordered = list(units)
+        # 连续同类列成一段；段序 = 画布列序（col01 最左 … col28 最右）
+        segments: list[tuple[bool, list[str]]] = []
+        for name in ordered:
+            is_pct = is_percent_unit(units[name])
+            if segments and segments[-1][0] == is_pct:
+                segments[-1][1].append(name)
+            else:
+                segments.append((is_pct, [name]))
         lines.append(f"# --- ROI: {label} ---")
-        if fixed_cols:
-            detail = ", ".join(f"{c}({units[c]})" for c in fixed_cols)
-            lines.append(f"# 非百分比列（按自身量程画）：{detail}")
+        non_pct = [c for c in ordered if not is_percent_unit(units[c])]
+        if non_pct:
+            detail = ", ".join(f"{c}({units[c]})" for c in non_pct)
+            lines.append(f"# 非百分比列（各自成段、按自身量程画）：{detail}")
         lines.append(f"if (file.exists('{csv_path}')) {{")
         lines.append(f"  df <- read.csv('{csv_path}', check.names = FALSE)")
         lines.append("  if (ncol(df) > 1) {")
-        if fixed_cols:
-            lines.append(f"    pct_cols <- intersect({_r_string_vector(pct_cols)}, names(df))")
-            lines.append(f"    fixed_cols <- intersect({_r_string_vector(fixed_cols)}, names(df))")
-            lines.append("    all_cols <- c(pct_cols, fixed_cols)")
-            lines.append("    d <- df[, all_cols, drop = FALSE]")
-            lines.append("    lo <- apply(d, 2, function(v) min(v, na.rm = TRUE))")
-            lines.append("    hi <- apply(d, 2, function(v) max(v, na.rm = TRUE))")
-            lines.append("    lo[pct_cols] <- 0  # 百分比列从 0 起，铺满到本列最大值")
-            lines.append("    hi[!is.finite(hi) | hi <= lo] <- lo[!is.finite(hi) | hi <= lo] + 1")
-            lines.append("    # 段内列宽：% 列按本列最大值归一，非 % 列固定权重（字面数字，可手工改）。")
-            lines.append("    gw <- rep(1, ncol(d)); names(gw) <- names(d)")
-            lines.append("    ref <- max(hi[pct_cols], na.rm = TRUE); if (!is.finite(ref) || ref <= 0) ref <- 1")
-            lines.append("    gw[pct_cols] <- pmax(hi[pct_cols]/ref, 0.02)")
-            lines.append("    gw[fixed_cols] <- if (length(pct_cols)) stats::median(gw[pct_cols]) else 1")
-            for col, weight in sorted(explicit_widths.items()):
-                if col in pct_cols or col in fixed_cols:
-                    lines.append(f"    gw[\"{col}\"] <- {float(weight)!r}  # 用户显式列宽")
-            lines.append(
-                f"    strat.plot(d, yvar = df[[1]], y.rev = TRUE, scale.percent = FALSE, scale.minmax = TRUE, minmax = cbind(lo, hi), graph.widths = gw, plot.line = TRUE, title = '{label}')"
-            )
-        else:
-            lines.append("    d <- df[, -1, drop = FALSE]")
-            lines.append("    lo <- rep(0, ncol(d))")
-            lines.append("    hi <- apply(d, 2, function(v) max(v, na.rm = TRUE))")
-            lines.append("    hi[!is.finite(hi) | hi <= 0] <- 1")
-            lines.append("    # 面板宽度 ∝ 该列最大值（与出图同一口径）")
-            lines.append("    ref <- max(hi, na.rm = TRUE); if (!is.finite(ref) || ref <= 0) ref <- 1")
-            lines.append("    gw <- pmax(hi/ref, 0.02)")
-            for col, weight in sorted(explicit_widths.items()):
-                if col in list(units):
-                    lines.append(f"    gw[\"{col}\"] <- {float(weight)!r}  # 用户显式列宽")
-            lines.append(
-                f"    strat.plot(d, yvar = df[[1]], y.rev = TRUE, scale.percent = FALSE, scale.minmax = TRUE, minmax = cbind(lo, hi), graph.widths = gw, plot.line = TRUE, title = '{label}')"
-            )
+        lines.append("    # 段列表：段数 / 每段列集合 / 每段是否按百分比画 —— 生成期即确定，可直接核对。")
+        seg_lines = [
+            f"      list(cols = {_r_string_vector(seg_cols)}, percent = {'TRUE' if is_pct else 'FALSE'})"
+            for is_pct, seg_cols in segments
+        ]
+        lines.append("    segments <- list(")
+        lines.append(",\n".join(seg_lines))
+        lines.append("    )")
+        width_pairs = ", ".join(
+            f'"{c}" = {float(explicit_widths.get(c, 1.0))!r}' for c in ordered
+        )
+        lines.append(f"    col_widths <- c({width_pairs})")
+        lines.append("    for (i in seq_along(segments)) {")
+        lines.append("      seg <- segments[[i]]")
+        lines.append("      d <- df[, seg$cols, drop = FALSE]")
+        lines.append(
+            "      lo <- if (seg$percent) rep(0, length(seg$cols)) else apply(d, 2, function(v) min(v, na.rm = TRUE))"
+        )
+        lines.append("      hi <- apply(d, 2, function(v) max(v, na.rm = TRUE))")
+        lines.append("      hi[!is.finite(hi) | hi <= lo] <- lo[!is.finite(hi) | hi <= lo] + 1")
+        lines.append("      strat.plot(d, yvar = df[[1]], y.rev = TRUE, scale.percent = FALSE,")
+        lines.append("                  scale.minmax = TRUE, minmax = cbind(lo, hi),")
+        lines.append("                  graph.widths = col_widths[seg$cols], plot.line = TRUE,")
+        lines.append(f"                  add = i > 1, title = '{label}')")
+        lines.append("    }")
         lines.append("  }")
         lines.append("}")
         lines.append("")
