@@ -36,6 +36,15 @@ class QaMixin:
         roi_name = target_roi.get("name", target_roi_id)
         composition = bool(target_roi.get("composition", True))
 
+        # 掩膜变过（步骤 4 确认过干扰线 / 加过排除区）⇒ 受影响列的逐行点已被作废。
+        # 不先补齐的话，`_qa_column_values` 会把缺行按 0 点读出满量程 0 值，
+        # QA 会因为"清理过"而给出与导出不同的结论。
+        if any(
+            bool(roi.get("columns_stale"))
+            for roi in (getattr(self, "rois", None) or [])
+        ):
+            self._fill_missing_column_points()
+
         target_columns = self._qa_target_columns(target_roi_id)
         if not target_columns:
             return compute_qa_summary(

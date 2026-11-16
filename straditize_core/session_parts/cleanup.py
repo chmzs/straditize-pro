@@ -846,6 +846,61 @@ class CleanupMixin:
 
         return self._recompose(roi_id)
 
+    def _invalidate_digitized_points(self, roi_id: str) -> list[str]:
+        """掩膜变了 ⇒ 作废本 ROI 的逐行点集，让下一次取数按新墨迹重建。
+
+        ## 为什么必须作废
+
+        `column_points`（逐行点集）是导出/QA/年代模型**唯一**的取数源，而它只在
+        `core.digitize` 时写入。干扰线确认、排除区、笔迹擦除都只改掩膜，不改这个字典，
+        于是「清理了但数据没变」——用户会以为清除线无效（S2 现场实测：掩膜删了
+        11335 个像素、`columns_stale=True`，`data.csv` 一字未变）。
+
+        ## 手工锚点为什么不会被丢
+
+        作废的是 `column_points`（逐行稠密点）与 `control_points`（**算法**拐点）。
+        用户手点的锚点在 `_manual_store()` 里单独存着，`digitize` 重建后会把它原样
+        并回新拐点集合（digitize.py「重建只产出算法拐点；用户手工点原样并入」）。
+
+        ## 为什么不在这里重建
+
+        重建要跑 `digitize`，而整列被排除区抹掉时它**有意**拒绝取数
+        （`_refuse_if_column_ink_was_erased`）。若在这里重建，"把整列圈进排除区"
+        这个合法动作会直接失败。重建留给读取侧（`export._fill_missing_column_points`），
+        那时才是真正需要数的一刻。
+
+        Returns
+        -------
+        list of str
+            被作废的列名（供日志/调试；不参与判定）。
+        """
+        points = getattr(self, "column_points", None)
+        anchors = getattr(self, "control_points", None)
+        if not points and not anchors:
+            return []
+        invalidated = set(getattr(self, "_points_invalidated", None) or set())
+        dropped: list[str] = []
+        for position, column in enumerate(getattr(self, "columns", None) or []):
+            if column.get("roi_id") not in (None, roi_id):
+                continue
+            index = column.get("col_index", position)
+            hit = False
+            if points is not None and points.pop(index, None) is not None:
+                hit = True
+            # 锚点也要作废：`digitize` 会**重新算**算法拐点，再把手工作标点
+            # （`_manual_store`）原样并回去（digitize.py 的"重建只产出算法拐点"）。
+            # 只清 `column_points` 不清锚点的话，重建会走"从锚点插值"那条路，
+            # 用的还是旧掩膜下的拐点，掩膜改了等于没改（实测：清完线读数不变）。
+            if anchors is not None and anchors.pop(index, None) is not None:
+                hit = True
+            if hit:
+                dropped.append(
+                    str(column.get("name") or column.get("species") or f"col{index:02d}")
+                )
+                invalidated.add(index)
+        self._points_invalidated = invalidated
+        return dropped
+
     def _recompose(self, roi_id: str) -> dict[str, Any]:
         """Rebuild geometry/exclusion/brush masks, statistics and preview."""
         if getattr(self, "foreground_mask", None) is None:
@@ -884,6 +939,10 @@ class CleanupMixin:
         roi_ref = self._get_roi(roi_id) if hasattr(self, "_get_roi") else None
         if roi_ref is not None:
             roi_ref["columns_stale"] = True
+        # 光置标记不够：取数读的是 `column_points`，它不会因为掩膜变了而自己失效
+        # （实测：删掉 11335 个线像素后导出读数一字不变，见
+        # `docs/findings/recon-20261117.md` §3.2）。作废受影响列，下一次取数按新墨迹重建。
+        self._invalidate_digitized_points(roi_id)
 
         overlay = np.zeros((h, w, 4), dtype=np.uint8)
         kept = raw_ink & ~final_mask & ~exclusion_mask

@@ -1301,57 +1301,102 @@ class ExportMixin:
             for record in records
         ]
 
-    def _ensure_export_column_points(self) -> None:
-        """没有逐行点时先补出来：控制点合成 > 现场数字化 > 取数区等距采样。
+    def _fill_missing_column_points(self) -> list[str]:
+        """补齐逐行点：**整表为空**时按老口径全补；**部分存在**时只补被掩膜作废的列。
 
-        三条回落顺序有讲究：控制点优先（用户手调过的锚点最可信），其次真数字化，
-        最后才是等距采样（只保证导得出，不保证读数）。这里吞掉异常不抛——它是保底路径，
-        失败由下面的 no-data 守卫统一报。
+        ## 两条路径的语义差别（不能合并）
+
+        | 情形 | 行为 | 理由 |
+        |:--|:--|:--|
+        | `column_points` 整张表为空 | 有控制点 → 按控制点合成（**不**数字化）；否则全列现场数字化 | 既有口径：用户还没数字化时让「导得出」，而控制点是用户手调的权威 |
+        | 表里有列、但某几列被作废 | **只**补那几列（控制点优先，其次数字化） | 未数字化的列必须保持 `NA`（README 缺测约定）；把"只数字化了 3 列"补成 17 列 = 伪造读数 |
+
+        历史：本方法的前身是 `if not column_points:` 一整块，只有"全补"一条路；于是掩膜
+        变更（`_invalidate_digitized_points` 清掉受影响列）之后永远不重建 ——
+        `data.csv` 用旧点，用户看到"清除线无效"（`docs/findings/recon-20261117.md` §3.2）。
+
+        ## 失败处理
+
+        只收集原因**不抛**：导出侧统一报错（`_ensure_export_column_points`），QA 自行决定
+        怎么呈现。绝不造一条水平直线兜底（那会把列左缘当读数冒充真实数据）。
         """
-        if not getattr(self, "column_points", None):
-            if getattr(self, "control_points", None) and any(
-                self.control_points.values()
-            ):
-                sparse_columns: set[int] = set()
-                for c_idx in range(len(getattr(self, "columns", []))):
-                    ctrls = self.control_points.get(c_idx, {}) or {}
-                    # 只给**真有控制点**的行建点：没有控制点的行是「这一列没有这一层
-                    # 的读数」，编一个 c_start 像素（旧行为）等于把它写成 0 丰度，
-                    # 用户会把 0 当成真实读数。这些列记进 control_point_columns，
-                    # 取值时缺行一律 NA（见 _read_row_values）。
-                    self.column_points[c_idx] = [
-                        {"row": int(round(float(row))), "x": float(x)}
-                        for row, x in sorted(ctrls.items())
-                    ]
-                    sparse_columns.add(c_idx)
-                self.control_point_columns = sparse_columns
-            elif (
-                getattr(self, "columns", None)
-                and getattr(self, "image", None) is not None
-            ):
-                # 现场数字化：失败的列**收集原因并统一报错**，不许 `pass` 之后
-                # 落到"造一条水平直线"的兜底（那条兜底会把列左缘当读数，
-                # 整列常数、看起来完全合法）。项目第一不变量：取不到就报错停在原地。
-                failures: list[str] = []
-                for col in self.columns:
-                    try:
-                        self.digitize(col["col_index"])
-                    except (ValueError, KeyError, RuntimeError, JsonRpcError) as exc:
-                        name = col.get("name") or f"col_index={col.get('col_index')}"
-                        failures.append(f"{name}（{exc}）")
-                if failures:
-                    raise JsonRpcError(
-                        STATE_ERROR,
-                        "以下列无法从图像取数，且没有手工控制点可用："
-                        + "；".join(failures)
-                        + "。请先在步骤 5/7 数字化这些列，或补控制点后再导出。",
+        columns = list(getattr(self, "columns", None) or [])
+        if not columns:
+            return []
+        points = getattr(self, "column_points", None)
+        if points is None:
+            self.column_points = points = {}
+        controls = getattr(self, "control_points", None) or {}
+        invalidated = set(getattr(self, "_points_invalidated", None) or set())
+        failures: list[str] = []
+
+        def _points_from_controls(index: int, ctrls: dict) -> None:
+            # 只给**真有控制点**的行建点：没有控制点的行是「这一列没有这一层的读数」，
+            # 编一个 c_start 像素（旧行为）等于把它写成 0 丰度。
+            points[index] = [
+                {"row": int(round(float(row))), "x": float(x)}
+                for row, x in sorted(ctrls.items())
+            ]
+            self.control_point_columns = set(
+                getattr(self, "control_point_columns", set()) or set()
+            ) | {index}
+
+        def _digitize(col: dict) -> None:
+            try:
+                self.digitize(col["col_index"])
+            except (ValueError, KeyError, RuntimeError, JsonRpcError) as exc:
+                name = col.get("name") or f"col_index={col.get('col_index')}"
+                failures.append(f"{name}（{exc}）")
+
+        if not points:
+            if any(controls.values()):
+                for position, col in enumerate(columns):
+                    _points_from_controls(
+                        col.get("col_index", position),
+                        controls.get(col.get("col_index", position), {}) or {},
                     )
-            else:
+                return []
+            if getattr(self, "image", None) is None:
                 raise JsonRpcError(
                     STATE_ERROR,
                     "没有任何可取数的列：既没有手工控制点，也没有可数字化的图像。"
                     "系统不会用等距采样的替代数据充数。",
                 )
+            for col in columns:
+                _digitize(col)
+            return failures
+
+        for position, col in enumerate(columns):
+            index = col.get("col_index", position)
+            if index not in invalidated:
+                continue
+            ctrls = controls.get(index, {}) or {}
+            if ctrls:
+                _points_from_controls(index, ctrls)
+            else:
+                _digitize(col)
+            invalidated.discard(index)
+        self._points_invalidated = invalidated
+        return failures
+
+    def _ensure_export_column_points(self) -> None:
+        """导出前补齐逐行点；补不出来的列**收集原因并统一报错**。"""
+        if not getattr(self, "columns", None):
+            if not getattr(self, "column_points", None):
+                raise JsonRpcError(
+                    STATE_ERROR,
+                    "没有任何可取数的列：既没有手工控制点，也没有可数字化的图像。"
+                    "系统不会用等距采样的替代数据充数。",
+                )
+            return
+        failures = self._fill_missing_column_points()
+        if failures:
+            raise JsonRpcError(
+                STATE_ERROR,
+                "以下列无法从图像取数，且没有手工控制点可用："
+                + "；".join(failures)
+                + "。请先在步骤 5/7 数字化这些列，或补控制点后再导出。",
+            )
 
     def _export_rows_and_depths(self) -> tuple[list[int], list]:
         """导出用的行号序列与深度列。
