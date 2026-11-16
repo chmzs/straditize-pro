@@ -767,9 +767,21 @@ const GLOSS_BAN = [
     // 右侧 270px 控制栏压成纵排（实测 right.y 落到 body 折叠线以下的 919px）。
     const variantBody = variant ? css.slice(variant.index, css.indexOf('}', variant.index)) : '';
     check(
-      /(?<![-\w])flex-direction\s*:\s*row\s*;/.test(variantBody),
-      '导出弹窗方向：`.wpd-modal-body` 必须显式 `flex-direction: row`（否则左表与右侧控制栏被压成纵排，控制栏掉到折叠线以下）',
+      /(?<![-\w])flex-direction\s*:\s*column\s*;/.test(variantBody),
+      '导出弹窗堆叠：`.wpd-modal-body` 必须是 `flex-direction: column`（主区在上，出图设置与预览在下，全宽）',
     );
+    // 横向那一层在 `.wpd-export-main`（2026-11-16 版面返工：body 拆成「主区 + 全宽预览」两段）。
+    // 判据原意不变——「控制栏不许掉到折叠线以下」——只是承重声明跟着真正承载横向的容器走；
+    // 两层里任何一层缺方向，都会继承上一层方向被压成一列。
+    const mainRow = /(?:^|\n)\.wpd-export-main\s*\{/.exec(css);
+    check(Boolean(mainRow), '导出弹窗主区：`.wpd-export-main` 规则消失（左表与右控制栏的横向容器）');
+    if (mainRow) {
+      const mainBody = css.slice(mainRow.index, css.indexOf('}', mainRow.index));
+      check(
+        /(?<![-\w])flex-direction\s*:\s*row\s*;/.test(mainBody),
+        '导出弹窗方向：`.wpd-export-main` 必须显式 `flex-direction: row`（否则左表与右侧控制栏被压成纵排，控制栏掉到折叠线以下）',
+      );
+    }
   }
 }
 

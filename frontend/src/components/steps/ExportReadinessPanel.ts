@@ -69,7 +69,7 @@ export function renderExportReadiness(data: DiagramData): string {
         </span>
       </div>
 
-      <div style="line-height: 1.6; font-size: 10.5px;">
+      <div style="line-height: 1.6; font-size: var(--font-size-sm);">
         <div>• 导出分表 (SHEETS): <strong id="lbl-export-sheets" style="color: var(--accent-blue);">${sheetsStr}</strong></div>
         <div>• 主工作区 (PRIMARY_ROI): <strong id="lbl-export-primary" style="color: var(--accent-green);">${state.primaryRoi}</strong> (对应归档 <code>data.csv</code>)</div>
         <div>• 根数据归属: <span id="lbl-export-data-csv-owner">data.csv ← 主 ROI（由后端生成，导出时逐字节校验）</span></div>
