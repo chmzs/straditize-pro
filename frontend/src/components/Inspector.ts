@@ -234,6 +234,9 @@ export class Inspector {
     `;
 
     this.bindEvents();
+    // 步骤面板的主动作必须落在滚动容器**之外**（见 hoistStepPrimaryAction）。
+    // 必须在 bindEvents 之后搬：面板的点击接线是在 mount 里按 root.querySelector 挂的。
+    this.hoistStepPrimaryAction();
 
     const newBodyEl = this.element.querySelector<HTMLElement>('.inspector-body');
     if (newBodyEl && prevScrollTop > 0) {
@@ -241,6 +244,30 @@ export class Inspector {
     }
 
     this.restoreEditSnapshot(editSnapshot);
+  }
+
+  /**
+   * 把当前步骤面板的主动作（`data-role="step-primary-action"`）从 `.inspector-body`
+   * 提到滚动容器之外。
+   *
+   * 为什么必须提出来：`.inspector-body` 是唯一滚动容器，面板内容比它高时，贴在滚动区
+   * 里的 `position: sticky` 按钮会**盖住**下方的内容。实测 1280×720 下它与分组按钮的
+   * 矩形相交——用户既看不见那排按钮，也点不着，还以为功能没了。放到 `.inspector-footer`
+   * 后：滚动只发生在 body 内，主动作恒定可见且与任何控件不相交。
+   *
+   * 面板侧只声明「这是主动作」，布局约束由 Inspector 统一承担，所有步骤共用一条规则。
+   */
+  private hoistStepPrimaryAction(): void {
+    const bodyEl = this.element.querySelector<HTMLElement>('.inspector-body');
+    const action = bodyEl?.querySelector<HTMLElement>('[data-role="step-primary-action"]');
+    if (!bodyEl || !action) return;
+    let footer = this.element.querySelector<HTMLElement>('.inspector-footer');
+    if (!footer) {
+      footer = document.createElement('div');
+      footer.className = 'inspector-footer';
+      this.element.appendChild(footer);
+    }
+    footer.appendChild(action);
   }
 
   private renderStagePanel(activeCol: TaxaColumn | undefined, cal: DiagramCalibration): string {

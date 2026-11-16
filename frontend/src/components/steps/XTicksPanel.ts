@@ -103,11 +103,11 @@ export function render(data: DiagramData): string {
       <div class="step-panel" data-step="6">
         <div class="step-title">${t('step6.title')}</div>
         <div class="inspector-section" style="padding: 24px 16px; background: var(--bg-tertiary); border-radius: 8px; text-align: center; border: 1px solid var(--border-color); margin-top: 12px;">
-          <div style="font-size: 13px; font-weight: 700; color: var(--text-heading); margin-bottom: 6px;">${t('step6.noColsTitle')}</div>
-          <p style="font-size: 11px; line-height: 1.6; color: var(--text-secondary); margin: 0 0 16px 0;">
+          <div style="font-size: var(--font-size-lg); font-weight: 700; color: var(--text-heading); margin-bottom: 6px;">${t('step6.noColsTitle')}</div>
+          <p style="font-size: var(--font-size-sm); line-height: 1.6; color: var(--text-secondary); margin: 0 0 16px 0;">
             ${t('step6.noColsDesc')}
           </p>
-          <button id="btn-goto-step5-split" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+          <button id="btn-goto-step5-split" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: var(--font-size-md);">
             ${t('step6.gotoStep5')}
           </button>
         </div>
@@ -158,6 +158,8 @@ export function render(data: DiagramData): string {
 
   // 统计各组包含的列
   const groupCols = cols.filter((c) => (c.x_group_id || activeRoi?.default_group_id) === currentGroupId);
+  // 「删除本组」恒常渲染，但默认组 / 只有一个组时不可用：位置固定，禁用态即状态。
+  const canDeleteGroup = groups.length > 1 && currentGroupId !== activeRoi?.default_group_id;
 
   // 轴线粗的生效值：**列级覆盖 > 组级初值 > 缺省 5**（ARCHITECTURE §6.4）。
   // 组上的正数来自分列实测（`measure_axis_stroke`）或用户手填；列上的正数只可能是
@@ -185,7 +187,7 @@ export function render(data: DiagramData): string {
       ${otherLostSummary}
 
       <!-- 全局标定进度指示 -->
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 10px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 8px; font-size: 11px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 10px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 8px; font-size: var(--font-size-sm);">
         <span style="color: var(--text-secondary); font-weight: 500;">${t('step6.progress')}</span>
         <span style="font-weight: 700; color: ${calibratedCols === totalCols ? 'var(--status-success)' : 'var(--accent-blue)'};">
           ${calibratedCols} / ${totalCols} 列 (${pct}%)
@@ -199,19 +201,23 @@ export function render(data: DiagramData): string {
         summary 里不放按钮——点了会连带折叠/展开。
       -->
       <details class="inspector-section" data-role="groups-fold" ${state.groupsFoldOpen ? 'open' : ''} style="padding: 8px 10px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--border-color);">
-        <summary style="font-size: 11.5px; font-weight: 700; color: var(--text-heading); cursor: pointer;" title="同单位、同量程的列共用一个标度。分组只影响标定，不改列几何">
+        <summary style="font-size: var(--font-size-sm); font-weight: 700; color: var(--text-heading); cursor: pointer;" title="同单位、同量程的列共用一个标度。分组只影响标定，不改列几何">
           列组 · ${groups.length} 组${currentGroup ? ` · 当前 ${currentGroup.name}` : ''}
         </summary>
-        <!-- 默认展开后必须限高：组一多（hoya 3 组 / 28 列）展开区会把「进度 → 点齿 → 主动作」
-             挤出首屏。这里给展开内容一个上限 + 内部滚动，折叠行为本身不变。
-             实测 1280×720：限高前 panel 650px（可用 560）→ 主按钮掉到 844px（视口 720）。 -->
-        <div data-role="groups-fold-body" style="max-height: 132px; overflow-y: auto; padding-right: 2px;">
-        <div style="display: flex; justify-content: flex-end; align-items: center; margin: 8px 0;">
-          <div style="display: flex; gap: 4px;">
-            <button id="btn-create-new-group" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 1px 6px; color: var(--accent-blue);" title="新建一个列组：点它之后在图上点选属于该组的属种列（Shift 连选），其余列自动留在默认组">+ 分组</button>
-            ${groups.length > 1 && currentGroupId !== activeRoi?.default_group_id ? `<button id="btn-delete-group" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 1px 6px; color: var(--accent-red);" title="删除当前列组：组内列自动回到默认组">删除本组</button>` : ''}
-            ${groups.length > 1 ? `<button id="btn-merge-groups" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 1px 6px;" title="合并形态标度完全一致的组">合并同类组</button>` : ''}
-          </div>
+        <!-- **不限高、不内滚**：曾经限高 132px + 内部滚动，结果「单位 / 形态 / 尺度」被从半行
+             切断，外面一条滚动条、里面的勾选清单又有一条（它自带 max-height），参数卡片根本看不全。
+             首屏高度改由两件事保证：① .inspector-body 是唯一滚动容器（整页滚）；
+             ② 主动作被 Inspector 提到滚动容器之外的 .inspector-footer，内容再高也始终可见。 -->
+        <div data-role="groups-fold-body">
+        <!-- 组管理动作：**恒定可见、固定顺序**。
+             旧实现按条件渲染（默认组时不画「删除本组」、只有 1 个组时不画「合并」），
+             于是切组时这一行忽长忽短，右侧按钮整排左右跳（实测位移 60px+），
+             用户还会以为「这个组的删除功能没了」。现在三个按钮永远在，不可用时
+             disabled：位置不动，可用性靠原生禁用态表达。 -->
+        <div data-role="group-actions" style="display: flex; align-items: center; gap: 4px; margin: 8px 0; min-height: var(--control-h-sm);">
+            <button id="btn-create-new-group" class="ui-btn ui-btn--quiet ui-btn--xs" style="padding: 1px 6px; color: var(--accent-blue);" title="新建一个列组：点它之后在图上点选属于该组的属种列（Shift 连选），其余列自动留在默认组">+ 分组</button>
+          <button id="btn-delete-group" class="ui-btn ui-btn--quiet ui-btn--xs" style="padding: 1px 6px; color: var(--accent-red);" title="删除当前列组：组内列自动回到默认组" ${canDeleteGroup ? '' : 'disabled'}>删除本组</button>
+          <button id="btn-merge-groups" class="ui-btn ui-btn--quiet ui-btn--xs" style="padding: 1px 6px;" title="合并形态标度完全一致的组" ${groups.length > 1 ? '' : 'disabled'}>合并同类组</button>
         </div>
 
         <!-- 组 Tab 选择器 -->
@@ -227,10 +233,10 @@ export function render(data: DiagramData): string {
                   type="button"
                   class="btn-switch-group-tab ui-btn ${isSelected ? 'ui-btn--primary' : 'ui-btn--quiet'}"
                   data-group-id="${g.id}"
-                  style="font-size: 10.5px; padding: 3px 8px; border-radius: 4px; display: flex; align-items: center; gap: 4px; border: 1px solid ${isSelected ? 'var(--accent-blue)' : 'var(--border-color)'};"
+                  style="font-size: var(--font-size-sm); padding: 3px 8px; border-radius: 4px; display: flex; align-items: center; gap: 4px; border: 1px solid ${isSelected ? 'var(--accent-blue)' : 'var(--border-color)'};"
                 >
                   <span>${g.name}</span>
-                  <span style="font-size: 9.5px; opacity: 0.85; background: rgba(0,0,0,0.15); padding: 0 4px; border-radius: 3px;">${gCols.length}列</span>
+                  <span style="font-size: var(--font-size-xs); opacity: 0.85; background: rgba(0,0,0,0.15); padding: 0 4px; border-radius: 3px;">${gCols.length}列</span>
                   <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${isFullCalib ? 'var(--status-success)' : 'var(--status-warning)'};" title="${isFullCalib ? '组内所有列已定标' : '待定标或部分定标'}"></span>
                 </button>
               `;
@@ -240,65 +246,67 @@ export function render(data: DiagramData): string {
 
         <!-- 当前选中组属性与操作卡片 -->
         <div style="background: var(--bg-card); padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 8px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 11px;">
-            <div style="color: var(--text-primary); font-weight: 600;">
-              当前组: <span style="color: var(--accent-blue);">${currentGroup?.name}</span>
-            </div>
-            <!-- 单位是「组」属性，也是下游判量纲的唯一依据：列载荷 unit、LiPD units、
-                 随包 plot_strat.R 的 scale.percent 都读它。此前这里只显示不可编辑，
-                 于是 28 列全是 % —— 炭屑/浓度也按百分比画。 -->
-            <label for="grp-unit-inp" style="display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-muted);" title="本组量纲标签（默认 %）。% 的组按 rioja 惯例画（每列按本列最大值归一、画满宽）；非 % 的组按自身量程（min..max）画。">
-              单位:
-              <input id="grp-unit-inp" type="text" value="${String(groupUnit).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" list="grp-unit-options" style="width: 68px; font-size: 10px; padding: 1px 4px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 3px;" />
-              <datalist id="grp-unit-options">
-                <option value="%"></option><option value="‰"></option><option value="counts"></option>
-                <option value="粒/g"></option><option value="粒/cm2/yr"></option><option value="10^3 粒/cm3"></option>
-              </datalist>
-            </label>
+          <div style="color: var(--text-primary); font-weight: 600; font-size: var(--font-size-sm); margin-bottom: 6px;">
+            当前组: <span style="color: var(--accent-blue);">${currentGroup?.name}</span>
           </div>
 
-          <!-- 组级参数：图形形态与尺度类型都是**组**的属性（同一组的列共用），
-               所以编辑入口只在这里，列属性面板不再重复。 -->
-          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 6px; font-size: 10px;">
-            <span style="color: var(--text-muted);">形态:</span>
-            ${(['area', 'bar', 'line', 'symbol'] as const)
-              .map(
-                (t) =>
-                  `<button class="ui-btn ui-btn--quiet ui-btn--xs grp-plottype-btn ${
-                    currentGroup?.plot_type === t ? 'active-mode' : ''
-                  }" data-plottype="${t}" style="padding: 1px 7px; font-size: 9.5px;">${
-                    t === 'area' ? '面积' : t === 'bar' ? '柱状' : t === 'line' ? '折线' : '符号'
-                  }</button>`
-              )
-              .join('')}
-            <span style="color: var(--text-muted); margin-left: 6px;">尺度:</span>
-            ${(['linear', 'log'] as const)
-              .map(
-                (t) =>
-                  `<button class="ui-btn ui-btn--quiet ui-btn--xs grp-scaletype-btn ${
-                    currentGroup?.scale_type === t ? 'active-mode' : ''
-                  }" data-scaletype="${t}" style="padding: 1px 7px; font-size: 9.5px;">${
-                    t === 'linear' ? '线性' : '对数'
-                  }</button>`
-              )
-              .join('')}
+          <!-- 单位 / 形态 / 尺度 是同一组参数，按网格对齐：label 一列、控件一列。
+               旧实现把单位做成 68px 裸输入框塞在标题行右侧（高 16px、与下面两行不同列、
+               不同高），三件事看起来互不相干；现在三行左边界与控件高度都统一。
+               单位是「组」属性，也是下游判量纲的唯一依据：列载荷 unit、LiPD units、
+               随包 plot_strat.R 的 scale.percent 都读它。 -->
+          <div data-role="group-param-grid" style="display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 6px 8px;">
+            <label for="grp-unit-inp" style="font-size: var(--font-size-xs); color: var(--text-muted);" title="本组量纲标签（默认 %）。% 的组按 rioja 惯例画（每列按本列最大值归一、画满宽）；非 % 的组按自身量程（min..max）画。">单位</label>
+            <input id="grp-unit-inp" type="text" value="${String(groupUnit).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" list="grp-unit-options" style="height: var(--control-h-sm); width: 100%; box-sizing: border-box; font-size: var(--font-size-xs); padding: 0 6px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px;" />
+
+            <span style="font-size: var(--font-size-xs); color: var(--text-muted);">形态</span>
+            <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+              ${(['area', 'bar', 'line', 'symbol'] as const)
+                .map(
+                  (t) =>
+                    `<button class="ui-btn ui-btn--quiet ui-btn--xs grp-plottype-btn ${
+                      currentGroup?.plot_type === t ? 'active-mode' : ''
+                    }" data-plottype="${t}" style="padding: 1px 7px; font-size: var(--font-size-xs);">${
+                      t === 'area' ? '面积' : t === 'bar' ? '柱状' : t === 'line' ? '折线' : '符号'
+                    }</button>`
+                )
+                .join('')}
+            </div>
+
+            <span style="font-size: var(--font-size-xs); color: var(--text-muted);">尺度</span>
+            <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+              ${(['linear', 'log'] as const)
+                .map(
+                  (t) =>
+                    `<button class="ui-btn ui-btn--quiet ui-btn--xs grp-scaletype-btn ${
+                      currentGroup?.scale_type === t ? 'active-mode' : ''
+                    }" data-scaletype="${t}" style="padding: 1px 7px; font-size: var(--font-size-xs);">${
+                      t === 'linear' ? '线性' : '对数'
+                    }</button>`
+                )
+                .join('')}
+            </div>
           </div>
+          <datalist id="grp-unit-options">
+            <option value="%"></option><option value="‰"></option><option value="counts"></option>
+            <option value="粒/g"></option><option value="粒/cm2/yr"></option><option value="10^3 粒/cm3"></option>
+          </datalist>
 
           <!-- 组内属种与批量划组管理 -->
           ${
             columnPick.active
               ? `
           <div id="column-pick-bar" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; margin-bottom: 6px; border: 1px solid var(--accent-blue); border-radius: 4px; background: var(--bg-tertiary);">
-            <span style="flex: 1 1 100%; font-size: 10px; color: var(--accent-blue); font-weight: 600;">在图上点击属种列（Shift 连选）</span>
-            <span style="font-size: 10px; color: var(--text-secondary);">已选 ${columnPick.ids.length} 列</span>
-            <button type="button" id="btn-confirm-column-pick" class="ui-btn ui-btn--primary ui-btn--xs" style="font-size: 10px; padding: 2px 10px; margin-left: auto;" ${columnPick.ids.length === 0 ? 'disabled' : ''}>确认成组</button>
-            <button type="button" id="btn-cancel-column-pick" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 2px 10px;">取消</button>
+            <span style="flex: 1 1 100%; font-size: var(--font-size-xs); color: var(--accent-blue); font-weight: 600;">在图上点击属种列（Shift 连选）</span>
+            <span style="font-size: var(--font-size-xs); color: var(--text-secondary);">已选 ${columnPick.ids.length} 列</span>
+            <button type="button" id="btn-confirm-column-pick" class="ui-btn ui-btn--primary ui-btn--xs" style="font-size: var(--font-size-xs); padding: 2px 10px; margin-left: auto;" ${columnPick.ids.length === 0 ? 'disabled' : ''}>确认成组</button>
+            <button type="button" id="btn-cancel-column-pick" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: var(--font-size-xs); padding: 2px 10px;">取消</button>
           </div>`
               : ''
           }
           <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 6px;">
-            <span style="font-size: 10px; color: var(--text-secondary);">包含 ${groupCols.length} 个属种列:</span>
-            <button id="btn-toggle-batch-assign" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 1px 6px;">
+            <span style="font-size: var(--font-size-xs); color: var(--text-secondary);">包含 ${groupCols.length} 个属种列:</span>
+            <button id="btn-toggle-batch-assign" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: var(--font-size-xs); padding: 1px 6px;">
               ${state.isBatchAssignOpen ? '收起归组列表 ▲' : '批量调整属种归组 ▼'}
             </button>
           </div>
@@ -309,9 +317,9 @@ export function render(data: DiagramData): string {
               ? `
             <div id="drawer-batch-assign" style="background: var(--bg-tertiary); border: 1px dashed var(--border-color); border-radius: 4px; padding: 6px 8px; margin-bottom: 8px;">
               <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 5px;">
-                <span style="font-size: 9.5px; color: var(--text-muted);">勾选属种，Shift+点击可连选：</span>
-                <button type="button" id="btn-group-select-all" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9px; padding: 0 5px; margin-left: auto;">全选</button>
-                <button type="button" id="btn-group-select-none" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9px; padding: 0 5px;">全不选</button>
+                <span style="font-size: var(--font-size-xs); color: var(--text-muted);">勾选属种，Shift+点击可连选：</span>
+                <button type="button" id="btn-group-select-all" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: var(--font-size-xs); padding: 0 5px; margin-left: auto;">全选</button>
+                <button type="button" id="btn-group-select-none" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: var(--font-size-xs); padding: 0 5px;">全不选</button>
               </div>
               <div id="group-col-checklist" style="max-height: 140px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 3px; background: var(--bg-card);">
                 ${cols
@@ -320,18 +328,18 @@ export function render(data: DiagramData): string {
                     const inThis = gid === currentGroupId;
                     const gname = (groups.find((g) => g.id === gid)?.name) || '默认组';
                     return `
-                      <label class="group-col-row" style="display: flex; align-items: center; gap: 5px; padding: 2px 5px; font-size: 10px; cursor: pointer; border-bottom: 1px solid var(--border-color);">
+                      <label class="group-col-row" style="display: flex; align-items: center; gap: 5px; padding: 2px 5px; font-size: var(--font-size-xs); cursor: pointer; border-bottom: 1px solid var(--border-color);">
                         <input type="checkbox" class="group-col-check" data-col-id="${c.id}" data-idx="${i}" ${inThis ? 'checked' : ''} style="margin: 0;" />
                         <span style="flex: 1; color: var(--text-primary);">${c.name}</span>
-                        <span style="font-size: 9px; color: ${inThis ? 'var(--status-success)' : 'var(--text-muted)'};">${gname}</span>
+                        <span style="font-size: var(--font-size-xs); color: ${inThis ? 'var(--status-success)' : 'var(--text-muted)'};">${gname}</span>
                       </label>
                     `;
                   })
                   .join('')}
               </div>
               <div style="display: flex; gap: 5px; margin-top: 5px;">
-                <button type="button" id="btn-assign-selected-to-group" class="ui-btn ui-btn--primary ui-btn--xs" style="flex: 1; font-size: 10px; padding: 4px;">划入【${currentGroup?.name}】</button>
-                <button type="button" id="btn-remove-selected-from-group" class="ui-btn ui-btn--quiet ui-btn--xs" style="flex: 1; font-size: 10px; padding: 4px;">移回默认组</button>
+                <button type="button" id="btn-assign-selected-to-group" class="ui-btn ui-btn--primary ui-btn--xs" style="flex: 1; font-size: var(--font-size-xs); padding: 4px;">划入【${currentGroup?.name}】</button>
+                <button type="button" id="btn-remove-selected-from-group" class="ui-btn ui-btn--quiet ui-btn--xs" style="flex: 1; font-size: var(--font-size-xs); padding: 4px;">移回默认组</button>
               </div>
             </div>
           `
@@ -345,7 +353,7 @@ export function render(data: DiagramData): string {
       <div class="inspector-section" style="padding: 10px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 12px; border: 1px solid var(--border-color);">
 
 
-          <div data-role="units-per-cell-hint" style="font-size: 9.5px; line-height: 1.4; color: var(--text-muted); margin-bottom: 4px;">
+          <div data-role="units-per-cell-hint" style="font-size: var(--font-size-xs); line-height: 1.4; color: var(--text-muted); margin-bottom: 4px;">
             <strong>相邻两个数字标签之差</strong>（标签 10 / 30 → 填 20）。
             <details class="ui-help"><summary>取值规则</summary>
               标签隔一根齿才标数字时取差值的一半。软件不替你猜：填错会让全组读数按同一比例偏掉。
@@ -353,22 +361,22 @@ export function render(data: DiagramData): string {
           </div>
           <!-- 轴线粗：决定绿线「0 点 = 左缘 + 轴粗」的位置，同时给刻度检测定轴右缘。 -->
           <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px;">
-            <label for="inp-axis-stroke" style="font-size: 10.5px; color: var(--text-muted);">轴线粗细:</label>
+            <label for="inp-axis-stroke" style="font-size: var(--font-size-sm); color: var(--text-muted);">轴线粗细:</label>
             <input type="number" id="inp-axis-stroke" value="${currentGroup && Number(currentGroup.axis_stroke_px) > 0 ? String(Number(currentGroup.axis_stroke_px)) : state.axisStrokeOverride != null ? String(state.axisStrokeOverride) : ''}" placeholder="5" min="1" max="20" step="1"
                    title="Y 轴轴线的描边宽度（像素）。0 点 = 左缘 + 它。填了就不再从像素里猜。目视估读即可（1–20px）。"
-                   style="width: 66px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
-            <span style="font-size: 9.5px; color: var(--text-muted);">px</span>
+                   style="width: 66px; font-size: var(--font-size-sm); padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
+            <span style="font-size: var(--font-size-xs); color: var(--text-muted);">px</span>
            <!-- 单列覆盖：组值是初值，逐列差异真实存在（实测 beginner 3/5/5/5），
                 只调某列时不该把整组一起改。留空 = 跟随组。 -->
            <div style="display: flex; align-items: center; gap: 6px; width: 100%; margin-bottom: 6px;">
-             <label for="inp-col-axis-stroke" style="font-size: 10.5px; color: var(--text-muted);">仅本列:</label>
+             <label for="inp-col-axis-stroke" style="font-size: var(--font-size-sm); color: var(--text-muted);">仅本列:</label>
              <input type="number" id="inp-col-axis-stroke" value="${axisStrokeColOverride != null ? String(axisStrokeColOverride) : ''}" placeholder="${Number(currentGroup?.axis_stroke_px) > 0 ? String(Number(currentGroup?.axis_stroke_px)) : '5'}" min="1" max="20" step="1"
                     title="只改当前这一列的 0 点位置。留空 = 跟随组值。"
-                    style="width: 66px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
-             <span style="font-size: 9.5px; color: var(--text-muted);">px（留空 = 跟随组）</span>
+                    style="width: 66px; font-size: var(--font-size-sm); padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
+             <span style="font-size: var(--font-size-xs); color: var(--text-muted);">px（留空 = 跟随组）</span>
              <!-- 「留空」是隐性操作：用户看不出它等于清除覆盖。给一个显式入口。 -->
              ${axisStrokeColOverride != null
-               ? `<button type="button" id="btn-clear-col-axis-stroke" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 1px 6px;" title="清除本列的轴粗覆盖，回到组值（发 axis_stroke_px: null）">回到组值</button>`
+               ? `<button type="button" id="btn-clear-col-axis-stroke" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: var(--font-size-xs); padding: 1px 6px;" title="清除本列的轴粗覆盖，回到组值（发 axis_stroke_px: null）">回到组值</button>`
                : ''}
            </div>
           </div>
@@ -376,7 +384,7 @@ export function render(data: DiagramData): string {
                分列时按灰度层次实测（columns.measure_axis_stroke），测得出就直接用；
                测不出就说清楚是估算，不要静默拿 5px 冒充实测值。 -->
           <div data-role="axis-stroke-source" data-measured="${axisStrokeMeasured ? '1' : '0'}"
-               style="font-size: 9.5px; line-height: 1.45; margin: -2px 0 6px 0; color: ${axisStrokeMeasured ? 'var(--text-muted)' : 'var(--status-warning)'};">
+               style="font-size: var(--font-size-xs); line-height: 1.45; margin: -2px 0 6px 0; color: ${axisStrokeMeasured ? 'var(--text-muted)' : 'var(--status-warning)'};">
             ${
               axisStrokeColOverride != null
                 ? `本列覆盖 <strong>${axisStrokeColOverride}px</strong>（组值 ${Number(currentGroup?.axis_stroke_px) > 0 ? `${Number(currentGroup?.axis_stroke_px)}px` : "缺省 5px"}）· 绿线 = 列左缘 + ${axisStrokePx}`
@@ -392,17 +400,17 @@ export function render(data: DiagramData): string {
                不依赖"检测到几个齿"，所以漏齿、齿数不一致都不影响。 -->
           <div data-role="tick-calib" style="border-top: 1px dashed var(--border-color); margin-top: 8px; padding-top: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px;">
-              <span style="font-size: 10.5px; font-weight: 600; color: var(--text-secondary);">X 轴标定（本组共用）</span>
+              <span style="font-size: var(--font-size-sm); font-weight: 600; color: var(--text-secondary);">X 轴标定（本组共用）</span>
               ${
                 currentGroup?.value_per_px != null && Number(currentGroup.value_per_px) !== 0
-                  ? `<span data-role="slope-readout" style="font-size: 9.5px; color: var(--status-success);">已标定 · ${Number(currentGroup.value_per_px).toFixed(4)} ${groupUnit}/px</span>`
-                  : '<span style="font-size: 9.5px; color: var(--status-warning);">未标定</span>'
+                  ? `<span data-role="slope-readout" style="font-size: var(--font-size-xs); color: var(--status-success);">已标定 · ${Number(currentGroup.value_per_px).toFixed(4)} ${groupUnit}/px</span>`
+                  : '<span style="font-size: var(--font-size-xs); color: var(--status-warning);">未标定</span>'
               }
             </div>
             ${
               state.pendingTick
                 ? `
-            <div data-role="pending-tick" style="font-size: 10.5px; line-height: 1.6; margin-bottom: 6px; padding: 6px 8px; background: var(--bg-tertiary); border-radius: 4px;">
+            <div data-role="pending-tick" style="font-size: var(--font-size-sm); line-height: 1.6; margin-bottom: 6px; padding: 6px 8px; background: var(--bg-tertiary); border-radius: 4px;">
               已选齿：<code style="color: var(--accent-blue);">x = ${state.pendingTick.px}px</code>
               · 距 0 点 <strong>${state.pendingTick.dist.toFixed(0)}px</strong>
               ${
@@ -412,36 +420,35 @@ export function render(data: DiagramData): string {
               }
             </div>
             <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-              <label for="inp-tick-value" style="font-size: 10.5px; color: var(--text-muted);">这个齿的数字:</label>
+              <label for="inp-tick-value" style="font-size: var(--font-size-sm); color: var(--text-muted);">这个齿的数字:</label>
               <input type="number" id="inp-tick-value" placeholder="如 10"
-                     style="width: 72px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
-              <span style="font-size: 10px; color: var(--text-muted);">${groupUnit}</span>
+                     style="width: 72px; font-size: var(--font-size-sm); padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
+              <span style="font-size: var(--font-size-xs); color: var(--text-muted);">${groupUnit}</span>
             </div>
             <div style="display: flex; gap: 6px;">
-              <button id="btn-apply-tick-calib" class="ui-btn ui-btn--primary" style="flex: 1; font-size: 11px; padding: 5px 6px;">应用</button>
-              <button id="btn-cancel-tick-calib" class="ui-btn ui-btn--quiet" style="font-size: 10px; padding: 5px 8px;">取消</button>
+              <button id="btn-apply-tick-calib" class="ui-btn ui-btn--primary" style="flex: 1; font-size: var(--font-size-sm); padding: 5px 6px;">应用</button>
+              <button id="btn-cancel-tick-calib" class="ui-btn ui-btn--quiet" style="font-size: var(--font-size-xs); padding: 5px 8px;">取消</button>
             </div>`
                 : `
-            <button id="btn-pick-tick" class="ui-btn ui-btn--primary" style="width: 100%; font-size: 11px; padding: 6px;">
+            <button id="btn-pick-tick" class="ui-btn ui-btn--primary" style="width: 100%; font-size: var(--font-size-sm); padding: 6px;">
               点一个刻度齿
             </button>
-            <div style="font-size: 9.5px; line-height: 1.45; color: var(--text-muted); margin-top: 4px;">
+            <div style="font-size: var(--font-size-xs); line-height: 1.45; color: var(--text-muted); margin-top: 4px;">
               点<strong>离绿线（0 点）最远</strong>的那个带标签的齿更准；点完输入它旁边的数字即可。
             </div>`
             }
           </div>
         </div>
-      </div>
 
       ${
         activeCol?.zero_point_measurable === false
           ? `
       <div class="inspector-section" data-role="zero-point-warning"
            style="padding: 8px 10px; background: rgba(245, 158, 11, 0.12); border: 1px solid var(--status-warning); border-radius: 6px; margin-bottom: 10px;">
-        <div style="font-size: 11px; font-weight: 700; color: var(--status-warning); margin-bottom: 3px;">
+        <div style="font-size: var(--font-size-sm); font-weight: 700; color: var(--status-warning); margin-bottom: 3px;">
           注意：该列 0 点不可自动测量
         </div>
-        <div style="font-size: 10px; line-height: 1.45; color: var(--text-secondary);">
+        <div style="font-size: var(--font-size-xs); line-height: 1.45; color: var(--text-secondary);">
           这一列左缘没有贯穿整列的竖轴（可能不是真正的面板，或轴太淡）。
           <strong>0 点 = 左缘 + 轴线粗</strong> 这个公式在这里不成立，所以本列
           <strong>不给数</strong>（导出记 NA）—— 请在下方手动填入 0 点像素，或确认该列是否应删除。
@@ -451,10 +458,10 @@ export function render(data: DiagramData): string {
       }
 
 
-      <!-- 阶段提交按钮 -->
-      <!-- 主动作固定在可视区底部：默认展开的列组会把面板撑高（实测 1280×720 时 panel 596px、
-           可用 560px），不粘住它就会被挤到首屏之外。粘住 + 折叠区限高，两者一起才够。 -->
-      <button id="btn-apply-xticks-next" class="ui-btn ui-btn--primary" style="position: sticky; bottom: 0; z-index: 3; width: 100%; padding: 8px 12px; font-size: 12px; box-shadow: 0 -6px 10px rgba(0,0,0,0.12);">
+      <!-- 阶段提交按钮：由 Inspector 在挂载后提到滚动容器之外（data-role="step-primary-action"）。
+           贴在滚动区里的 sticky 按钮必然盖住它下方的内容：1280×720 实测与分组按钮的矩形相交，
+           用户既看不见也点不着。挪进 .inspector-footer 后既恒定可见，又与任何控件不相交。 -->
+      <button id="btn-apply-xticks-next" data-role="step-primary-action" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: var(--font-size-md);">
         ${t('step6.next')}
       </button>
     </div>

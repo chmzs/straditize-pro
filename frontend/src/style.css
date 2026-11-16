@@ -1153,6 +1153,14 @@ body.theme-light .floating-tool-btn.active-mode {
   gap: 16px;
 }
 
+/* 步骤面板的主动作：在滚动容器之外，恒定可见且不遮任何控件（见 Inspector.hoistStepPrimaryAction）。 */
+.inspector-footer {
+  flex-shrink: 0;
+  padding: 8px 14px 12px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
 .inspector-section {
   display: flex;
   flex-direction: column;
@@ -1815,7 +1823,7 @@ input[type="text"]:focus, input[type="number"]:focus {
 }
 
 .step-title {
-  font-size: 13px;
+  font-size: var(--font-size-lg);
   font-weight: 700;
   color: var(--text-heading, #f8fafc);
   display: flex;

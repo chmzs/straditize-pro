@@ -9,15 +9,17 @@
  *    面板每次 `onDataChange` 都整块重渲染、DOM 会重建，所以这条必须实测）；
  * 4. 默认展开**不许把主动作挤出首屏**：1280×720（设计系统 §「最低支持 1280×720」）下
  *    `#btn-apply-xticks-next` 必须完整落在视口内；
- * 5. 折叠区内容**限高 + 内部滚动**：内容超过上限时 `clientHeight <= 132`（限高生效），
- *    不是把整块撑开。
+ * 5. 折叠区内容**不得被裁剪、不得自成滚动容器**：参数卡片（单位 / 形态 / 尺度 / 轴粗）
+ *    必须整块可读，滚动只由 `.inspector-body` 承担。曾经的 132px 限高会把卡片从半行切断，
+ *    并且与勾选清单的 max-height 形成嵌套滚动——那是本用例现在要挡住的回归。
  *
  * ## 反向验证
  *
  * - 把 `INITIAL_XTICKS_STATE.groupsFoldOpen` 改回 `false` → 判据 1 红；
  * - 删掉 `mount()` 里 `details.toggle` 的回写 → 判据 3 红；
- * - 去掉 `position: sticky` → 判据 4 红（实测未粘住时 button bottom 790 > 720）；
- * - 去掉折叠区的 `max-height` → 判据 5 红（实测限高前 foldBody clientHeight = 198）。
+ * - 把主动作搬回 `.inspector-body`（去掉 `.inspector-footer`）→ 判据 4 红：留在滚动区里时
+ *   button bottom 790 > 720，且会压住轴粗输入框（见 step6-panel-layout.spec.ts 判据 4）；
+ * - 给折叠区加回 `max-height: 132px; overflow-y: auto` → 判据 5 红（裁剪 + 嵌套滚动）。
  */
 import { expect, test } from './fixtures';
 import { gotoStage, resetBaseline } from './helpers';
@@ -47,15 +49,30 @@ test.describe('步骤 6 列组折叠区', () => {
       `主动作被挤出首屏：bottom=${Math.round(box!.y + box!.height)} viewport=${viewport!.height}`
     ).toBe(true);
 
-    // 判据 5：折叠区限高 + 内部滚动（内容超限时窗口不超过上限）
-    const foldBody = await page.locator(FOLD_BODY).evaluate((el) => ({
-      client: el.clientHeight,
-      scroll: el.scrollHeight,
-    }));
-    expect(foldBody.client, `折叠区内容窗口必须限高（实测 ${foldBody.client}px）`).toBeLessThanOrEqual(133);
-    if (foldBody.scroll > foldBody.client) {
-      expect(foldBody.scroll, '限高时内容应可内部滚动').toBeGreaterThan(foldBody.client);
-    }
+    // 判据 5：参数区不得被裁剪，也不许自成滚动容器（嵌套滚动是上一版的真实缺陷）
+    const layout = await page.locator(FOLD_BODY).evaluate((el) => {
+      const body = el as HTMLElement;
+      const scrollAncestors: string[] = [];
+      let node: HTMLElement | null = body;
+      while (node) {
+        const style = getComputedStyle(node);
+        if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 1) {
+          scrollAncestors.push(node.className || node.tagName);
+        }
+        node = node.parentElement;
+      }
+      return {
+        foldOverflowY: getComputedStyle(body).overflowY,
+        clipped: body.scrollHeight > body.clientHeight + 1,
+        scrollAncestors,
+      };
+    });
+    expect(layout.foldOverflowY, '折叠区内容不许设 overflow-y（会切断参数卡片）').toBe('visible');
+    expect(layout.clipped, '折叠区内容被裁剪：参数卡片看不全').toBe(false);
+    expect(
+      layout.scrollAncestors,
+      `滚动只许由 .inspector-body 承担，实测 ${JSON.stringify(layout.scrollAncestors)}`
+    ).toEqual(['inspector-body']);
 
     // 判据 2：收起 / 再展开
     await fold.locator('summary').click();
