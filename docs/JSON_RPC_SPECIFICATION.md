@@ -512,6 +512,22 @@
 
 行集大小是定义的一部分：同一会话下三者行数必然不同（实测 298 / 21 / 896）。前端导出面板的下拉与本参数一一对应，且面板只渲染本接口返回的数据——不得由前端另算一套。
 
+#### `curvePoints` / `curveError`：画布的稠密曲线（2026-11-16）
+
+画布与导出**必须画/读同一条曲线**。`straditize.getDiagramData` 的每列新增两个字段，取点走与导出完全相同的 `_ensure_export_column_points()`（控制点优先 > 现场数字化 > 等距采样）：
+
+| 字段 | 含义 |
+| :--- | :--- |
+| `curvePoints` | `[{y, x}]`，逐行读数（= 导出 CSV 用的 column_points）。**主渲染只用它** |
+| `curveError` | 取不到稠密点时的原因（null = 正常）。画布写「本列无法取数：<原因>」 |
+
+两条硬约束：
+
+1. **没有回退**：稠密点缺失时不得画控制点折线替代（取不到就报错停在原地）；前端判据 `frontend/test-dense-curve.mjs` 断言缺数时 `strokes.length === 0` 且写明原因。
+2. **负值归 0**：近零行的墨迹落在 0 点左侧属像素量化，`px_to_value` 的 `max(0.0, val)` 保留，表里写恰好 `0.0`，不产生用户可见告警。
+
+编辑闭环：`setControlPoints` / `point.add` 后由 `update_control_point` 按锚点重建整列曲线（Pchip），**不得在重建后再丢弃 column_points** —— 实测那样会让导出读出 0.0。
+
 ### 4.10 `column.calibrateXTicks` 与 `column.clearXTicks`
 步骤 6 属种列 X-轴标尺标定与清空。
 

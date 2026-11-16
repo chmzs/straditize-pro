@@ -201,6 +201,17 @@ export interface Column {
 
   // 严格保持向后兼容过渡别名（确保现有渲染组件与算法不挂）
   controlPoints: Point[];
+  /**
+   * 稠密逐行读数（后端 column_points：逐行墨迹，或按锚点重建的折线）。
+   * 主渲染用它；缺失时回退 controlPoints 折线并在画布标「控制点近似」。
+   * 与导出 CSV 同源：同一个后端字段，前端不再自己插值造第二条曲线。
+   */
+  curvePoints?: Array<{ y: number; x: number }> | null;
+  /**
+   * 取不到稠密读数时的原因（null = 正常）。画布据此写「本列无法取数：<原因>」，
+   * **不画替代折线** —— 取不到就报错停在原地。
+   */
+  curveError?: string | null;
   species?: string;
   isLocked?: boolean;
   maxPercent?: number;

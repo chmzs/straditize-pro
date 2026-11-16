@@ -1,16 +1,23 @@
 /**
  * 花粉曲线（area / bar / line / symbol）与控制锚点的绘制。
  *
- * 两者都只读列数据 + 画 ctx，原本混在 GeologyCanvas 的渲染管线里。抽出来后：
- * - 曲线绘制只认 columns / activeTaxaId / scale；
- * - 锚点绘制只认 activeColumn / hoveredPointId / draggingPointId（拖拽态由调用方取）。
+ * ## 只有一条渲染路径：稠密曲线，且从 0 点起填充
  *
- * 为什么不合并成一个函数：曲线与锚点是同名阶段的**两层**，可见性分别受
- * showsPollenCurves 与选中列控制；将来采样层位若要单独画，混在一起反而难拆。
+ * 画布与导出必须画/读**同一条曲线**：后端载荷的 curvePoints 就是导出 CSV 用的
+ * column_points（同一个字段，同一个 _ensure_export_column_points 产出）。
+ *
+ * 填充左端是 **0 点（绿线 = 列左缘 + 轴粗）**，不是列左缘 —— 从列左缘起等于把轴线
+ * 涂进数据区（#31 的判据）。两者正交：0 点决定「从哪起」，稠密曲线决定「画到哪」。
+ *
+ * **没有回退**：稠密点缺失时不画折线、不插值、不猜 —— 画布上直接写
+ * 「本列无法取数：<原因>」（原因由后端 curveError 给出）。仓库不变量：
+ * 取不到就报错停在原地，绝不返回替代数据。
+ *
+ * symbol 例外：它的语义就是"控制点处的存在/缺失标记"，与曲线读数无关。
  */
-import { SplineInterpolator } from '../../core/SplineInterpolator';
+import { SplineInterpolator } from '../../core/SplineInterpolator.ts';
 import type { TaxaColumn } from '../../types/pollen';
-import { zeroSpanOfColumn } from './groupBandRect';
+import { zeroSpanOfColumn } from './groupBandRect.ts';
 
 export interface PollenCurveEnv {
   ctx: CanvasRenderingContext2D;
@@ -18,26 +25,131 @@ export interface PollenCurveEnv {
   columns: TaxaColumn[];
   activeTaxaId: string | null;
   /**
-   * 列所属的 x 组（组级 `axis_stroke_px` 是列级覆盖的初值）。取不到时按缺省轴粗处理——
+   * 列所属的 x 组（组级 axis_stroke_px 是列级覆盖的初值）。取不到时按缺省轴粗处理 ——
    * 0 点仍然不等于列左缘。
    */
   groupOfColumn?: (col: TaxaColumn) => { axis_stroke_px?: number | null } | undefined;
+  /** 视口 y 区间（图像像素）。不给时按 ctx 当前变换反解，保证裁剪总是生效。 */
+  viewY?: { min: number; max: number };
 }
 
-export function drawPollenCurvesOverlay(env: PollenCurveEnv): void {
+export interface MissingCurve {
+  id: string;
+  name: string;
+  reason: string;
+}
+
+export interface PollenCurveResult {
+  /** 取不到稠密读数的列（画布上已写明原因，不画替代曲线）。 */
+  missingColumns: MissingCurve[];
+}
+
+/** 该列是否有可渲染的稠密曲线（唯一判据；不提供控制点回退）。 */
+export function hasDenseCurve(col: TaxaColumn): boolean {
+  return Array.isArray(col.curvePoints) && col.curvePoints.length >= 2;
+}
+
+/**
+ * 每列的 Path2D 缓存：只在「数据或视口变了」时重建。
+ *
+ * 28 列 x 1249 行 = 35k 点/帧，逐帧重建会把重绘预算吃光（实测未缓存 2.8ms/帧）。
+ * 签名含**全量 x 求和**（不做抽样：抽样会漏检"中间某个点被拖动"，复用陈旧路径）。
+ */
+const pathCache = new Map<
+  string,
+  { signature: string; curve: Path2D; area: Path2D | null }
+>();
+
+function curveSignature(
+  col: TaxaColumn,
+  view: { min: number; max: number },
+  zeroX: number
+): string {
+  const points = col.curvePoints as Array<{ y: number; x: number }>;
+  let sum = 0;
+  for (let index = 0; index < points.length; index++) {
+    sum += points[index].x;
+  }
+  return [
+    col.id,
+    points.length,
+    sum.toFixed(3),
+    view.min.toFixed(2),
+    view.max.toFixed(2),
+    zeroX.toFixed(2),
+    col.plotType || 'area',
+  ].join('|');
+}
+
+/** 从当前变换反解视口 y 区间（世界坐标 = 图像像素）。 */
+function viewFromContext(ctx: CanvasRenderingContext2D): { min: number; max: number } {
+  const matrix = ctx.getTransform();
+  const factor = matrix.d || 1;
+  const height = ctx.canvas.height || 0;
+  return { min: -matrix.f / factor, max: (height - matrix.f) / factor };
+}
+
+/** 取不到数：把原因写在画布上，屏幕恒定字号。 */
+function drawMissingNotice(
+  ctx: CanvasRenderingContext2D,
+  col: TaxaColumn,
+  reason: string,
+  scale: number,
+  view: { min: number; max: number }
+): void {
+  ctx.save();
+  ctx.fillStyle = 'rgba(248, 113, 113, 0.95)';
+  ctx.font = String(11 / scale) + 'px system-ui, sans-serif';
+  ctx.textBaseline = 'top';
+  ctx.fillText('本列无法取数：' + reason, col.startX + 6 / scale, view.min + 6 / scale);
+  ctx.restore();
+}
+
+export function drawPollenCurvesOverlay(env: PollenCurveEnv): PollenCurveResult {
   const { ctx, scale, columns, activeTaxaId } = env;
+  const view = env.viewY
+    ? { min: env.viewY.min, max: env.viewY.max }
+    : viewFromContext(ctx);
+  const denseView = { yMin: view.min, yMax: view.max };
+  const missingColumns: MissingCurve[] = [];
   ctx.save();
 
   columns.forEach((col) => {
-    if (!col.visible || col.controlPoints.length === 0) return;
+    if (!col.visible) return;
 
     const isActive = col.id === activeTaxaId;
-    // 0 点 = 列左缘 + 轴粗（画布绿线，ARCHITECTURE §6.4）。所有从基线出发的填充都必须
-    // 从这里起：从 `col.startX` 起等于把轴线涂进数据区，用户看到的就是「遮罩包住轴线」。
-    // 宽度 ≤ 0 时 `zero` 为 null：只跳过填充，曲线照画。
-    const zero = zeroSpanOfColumn(col, env.groupOfColumn?.(col));
-    const sortedPoints = [...col.controlPoints].sort((a, b) => a.y - b.y);
     const pType = col.plotType || 'area';
+    // 0 点 = 列左缘 + 轴粗（画布绿线，ARCHITECTURE §6.4）。所有从基线出发的填充都必须
+    // 从这里起：从 col.startX 起等于把轴线涂进数据区，用户看到的就是「遮罩包住轴线」。
+    // 宽度 ≤ 0 时 zero 为 null：只跳过填充，曲线照画。
+    const zero = zeroSpanOfColumn(col, env.groupOfColumn?.(col));
+    const sortedControl = [...col.controlPoints].sort((a, b) => a.y - b.y);
+
+    if (pType === 'symbol') {
+      // 符号图的语义是"控制点处的存在/缺失"，不是曲线读数。
+      ctx.strokeStyle = col.color;
+      ctx.lineWidth = 1.5 / scale;
+      const symR = 4 / scale;
+      sortedControl.forEach((pt) => {
+        if (pt.x > col.startX + 0.5) {
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, symR, 0, Math.PI * 2);
+          ctx.fillStyle = isActive ? col.color : col.color + '88';
+          ctx.fill();
+          ctx.stroke();
+        }
+      });
+      return;
+    }
+
+    if (!hasDenseCurve(col)) {
+      const reason = col.curveError || '后端未给出该列的逐行读数';
+      missingColumns.push({ id: col.id, name: col.name, reason });
+      drawMissingNotice(ctx, col, reason, scale, view);
+      return;
+    }
+
+    const dense = col.curvePoints as Array<{ y: number; x: number }>;
 
     if (pType === 'bar') {
       // 柱状图：从 0 点向右延伸水平柱条（起点是绿线，不是列左缘）
@@ -45,44 +157,44 @@ export function drawPollenCurvesOverlay(env: PollenCurveEnv): void {
       ctx.fillStyle = col.color;
       ctx.strokeStyle = col.color;
       const barThickness = Math.max(1.5, 3.0 / scale);
-
-      sortedPoints.forEach((pt) => {
+      dense.forEach((pt) => {
+        if (pt.y < view.min - barThickness || pt.y > view.max + barThickness) return;
         const barWidth = Math.max(0, pt.x - zero.x);
         if (barWidth > 0) {
           ctx.fillRect(zero.x, pt.y - barThickness / 2, barWidth, barThickness);
         }
       });
-    } else if (pType === 'symbol') {
-      // 散点符号标记图（存在/缺失）
-      ctx.strokeStyle = col.color;
-      ctx.lineWidth = 1.5 / scale;
-      const symR = 4 / scale;
-      sortedPoints.forEach((pt) => {
-        if (pt.x > col.startX + 0.5) {
-          ctx.beginPath();
-          ctx.arc(pt.x, pt.y, symR, 0, Math.PI * 2);
-          ctx.fillStyle = isActive ? col.color : `${col.color}88`;
-          ctx.fill();
-          ctx.stroke();
-        }
-      });
-    } else {
-      // 面积图或纯折线图
-      if (pType === 'area' && zero) {
-        const areaPath = SplineInterpolator.buildAreaPath(sortedPoints, zero.x);
-        ctx.fillStyle = isActive ? `${col.color}44` : `${col.color}1a`;
-        ctx.fill(areaPath);
-      }
-
-      const curvePath = SplineInterpolator.buildPath(sortedPoints);
-      ctx.strokeStyle = col.color;
-      ctx.lineWidth = (isActive ? 2.5 : 1.4) / scale;
-      ctx.setLineDash([]);
-      ctx.stroke(curvePath);
+      return;
     }
+
+    const zeroX = zero ? zero.x : col.startX;
+    const signature = curveSignature(col, view, zeroX);
+    let cached = pathCache.get(col.id);
+    if (!cached || cached.signature !== signature) {
+      cached = {
+        signature,
+        curve: SplineInterpolator.buildDensePath(dense, denseView),
+        area:
+          pType === 'area' && zero
+            ? SplineInterpolator.buildDenseAreaPath(dense, zero.x, denseView)
+            : null,
+      };
+      pathCache.set(col.id, cached);
+    }
+
+    if (cached.area) {
+      ctx.fillStyle = isActive ? col.color + '44' : col.color + '1a';
+      ctx.fill(cached.area);
+    }
+
+    ctx.strokeStyle = col.color;
+    ctx.lineWidth = (isActive ? 2.5 : 1.4) / scale;
+    ctx.setLineDash([]);
+    ctx.stroke(cached.curve);
   });
 
   ctx.restore();
+  return { missingColumns };
 }
 
 export interface AnchorEnv {
@@ -126,28 +238,24 @@ export function drawAnchorsOverlay(env: AnchorEnv): void {
     ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
 
     if (pt.type === 'peak') {
-      // 一级物理极大值（峰顶）：实心金黄色
       ctx.fillStyle = isDragging ? '#f97316' : '#fbbf24';
       ctx.fill();
       ctx.strokeStyle = '#111827';
       ctx.lineWidth = 1.8 / scale;
       ctx.stroke();
     } else if (pt.type === 'trough') {
-      // 一级物理极小值（谷底/基线）：实心琥珀色
       ctx.fillStyle = isDragging ? '#f97316' : '#f59e0b';
       ctx.fill();
       ctx.strokeStyle = '#111827';
       ctx.lineWidth = 1.8 / scale;
       ctx.stroke();
     } else if (pt.type === 'manual' || pt.isManual) {
-      // 手工强控制锚点：实心亮青色
       ctx.fillStyle = isDragging ? '#f97316' : '#38bdf8';
       ctx.fill();
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.8 / scale;
       ctx.stroke();
     } else {
-      // 二级平缓过渡点：空心白圈
       ctx.fillStyle = 'rgba(17, 24, 39, 0.75)';
       ctx.fill();
       ctx.strokeStyle = activeColumn.color || '#ffffff';

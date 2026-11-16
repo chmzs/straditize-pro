@@ -1382,6 +1382,10 @@ private pointer: PointerState = {
     // 规则与后端 xscale.resolve_axis_stroke 同源：列级 axis_stroke_px > 组级 > 5。
     const zeroX = col.startX + resolveAxisStroke(col, this.groupOfColumn(col));
     const points = controlPointsForWriteback(col.controlPoints, zeroX);
+    // 锚点变了 → 稠密缓存作废（后端 setControlPoints 会按 Pchip 重建）。
+    // 立刻按手柄折线重画，用户看到的就是刚拖出来的形状；下一次载荷/导出
+    // 按同一批锚点重建稠密曲线，两边仍是同一条。
+    col.curvePoints = undefined;
     this.callbacks.onControlPointsCommit?.(idx, points);
   }
 
