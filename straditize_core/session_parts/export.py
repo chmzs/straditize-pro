@@ -1627,7 +1627,9 @@ class ExportMixin:
         units = self._roi_column_units().get(name, {})
         return [(name, "data.csv", dict(units))]
 
-    def _column_widths_from_frame(self, frame: Any, units: dict[str, str]) -> dict[str, float]:
+    def _column_widths_from_frame(
+        self, frame: Any, units: dict[str, str], *, min_column_max: float = 5.0
+    ) -> dict[str, float]:
         """按导出表算每列的列宽权重（与出图同一公式），写进 R 脚本时是字面数字。
 
         % 列：w_i = max_i / mean(max of % cols)（照抄 riojaPlot percent 分支的 colM；
@@ -1642,11 +1644,12 @@ class ExportMixin:
         pct = [c for c in cols if is_percent_unit(units[str(c)])]
         weights: dict[str, float] = {}
         if pct:
-            ref = sum(maxes[str(c)] for c in pct) / len(pct)
+            eff = {str(c): max(maxes[str(c)], min_column_max) for c in pct}
+            ref = sum(eff.values()) / len(eff)
             if ref <= 0:
                 ref = 1.0
-            for col in pct:
-                weights[str(col)] = maxes[str(col)] / ref
+            for col, value in eff.items():
+                weights[col] = value / ref
         if len(pct) < len(cols):
             fixed_w = sorted(weights.values())[len(weights) // 2] if weights else 1.0
             for col in cols:
