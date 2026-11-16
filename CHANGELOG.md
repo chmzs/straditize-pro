@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 混合量纲（二）：组单位可编辑 + 导出按单位画
+
+- **组单位可编辑**（`frontend/src/components/steps/XTicksPanel.ts`）：步骤 6 组卡片原来只显示「单位: %」不可改，28 列因此全是 `%`（炭屑、花粉浓度也被标成百分比）。现为文本输入（默认 `%`，带 `%` / `‰` / `counts` / `粒/g` 等候选），写入 `roi.groupUpdate{unit}`。
+- **顺带修掉一个静默无操作**：`patchGroup` 原先直接用 `state.selectedGroupId`，而它只在点过组 Tab 后才有值 —— 首屏点「形态 / 尺度」是**看着能点、点了什么都不发生**。现按渲染时同一套回退规则解析生效组。
+- **写入端校验**（`roi.py::_normalize_group_unit`）：`unit` 去空白，空串当场 `-32602`（空单位会让下游无法判「是不是百分比」，三个出口只能各自猜）。
+- **manifest / README 记量纲**：随包 `manifest.json` 新增 `column_units`（按 ROI，同名不同 ROI 不互相覆盖）与 `group_units`（按组）；`README.txt` 增「Units」段并写明「非 % 列按自身量程画」。`data.csv` **一个字节都没动**。
+- **随包 `plot_strat.R` 按单位画**：非 % 列不再硬写 `scale.percent = TRUE`，改为单独一次 `strat.plot(..., scale.percent = FALSE, add = TRUE)`（rioja 的 `scale.percent` 是整表开关，混排只能分两次画）。全 % 的工程生成的脚本与以前完全一致。
+- **测试**：`tests/unit/test_group_unit_editable.py`（4 条：落库 / 列载荷 / LiPD / 空串拒绝）与 `tests/unit/test_export_script_units.py`（6 条：脚本参数、manifest、README、三处字符串一致、全 % 零回归、生成脚本真能被 R 跑通）。反向验证：`is_percent_unit` 恒 `True` → 1 条红；`_normalize_group_unit` 恒返回 `%` → 4 条红。
+- **未做**：独立单表模板 `export_r()` 仍写 `scale.percent = TRUE`（拿不到逐列量纲，属已知剩余出口）；`plot_scale_mode` 的 UI 未接。
+
 ### 混合量纲：每列可退出「默认缩放」（`plot_scale_mode`）
 
 - **开关**：`plot.render` 的 `settings.plot_scale_mode = {列名: "normalize" | "fixed"}`，默认 `{}`（全部列走百分比基准 = 历史行为，脚本与产物一字不变）。`fixed` = 该列按自身量程画、不与其他列共用缩放基准，用于炭屑 / 花粉浓度这类绝对值列。

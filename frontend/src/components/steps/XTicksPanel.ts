@@ -237,9 +237,17 @@ export function render(data: DiagramData): string {
             <div style="color: var(--text-primary); font-weight: 600;">
               当前组: <span style="color: var(--accent-blue);">${currentGroup?.name}</span>
             </div>
-            <div style="font-size: 10px; color: var(--text-muted);">
-              单位: <strong>${groupUnit}</strong>
-            </div>
+            <!-- 单位是「组」属性，也是下游判量纲的唯一依据：列载荷 unit、LiPD units、
+                 随包 plot_strat.R 的 scale.percent 都读它。此前这里只显示不可编辑，
+                 于是 28 列全是 % —— 炭屑/浓度也按百分比画。 -->
+            <label for="grp-unit-inp" style="display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-muted);" title="本组量纲标签（默认 %）。非 % 的组在出图与随包 R 脚本里按自身量程画，不与其他列共用百分比基准。">
+              单位:
+              <input id="grp-unit-inp" type="text" value="${String(groupUnit).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" list="grp-unit-options" style="width: 68px; font-size: 10px; padding: 1px 4px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 3px;" />
+              <datalist id="grp-unit-options">
+                <option value="%"></option><option value="‰"></option><option value="counts"></option>
+                <option value="粒/g"></option><option value="粒/cm2/yr"></option><option value="10^3 粒/cm3"></option>
+              </datalist>
+            </label>
           </div>
 
           <!-- 组级参数：图形形态与尺度类型都是**组**的属性（同一组的列共用），
@@ -471,10 +479,32 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     );
   };
 
-  // 组级写入的唯一通路：形态 / 尺度 / 单位刻度长度 / 轴线粗 都是组的属性。
+  /**
+   * 真正生效的组 id。
+   *
+   * `selectedGroupId` 只在用户点过组 Tab 之后才有值；首屏（含默认组）它是 null。
+   * 旧写法直接拿它去写，于是「没切过 Tab 就点形态/单位」是**静默无操作** —— 按钮
+   * 看着能点，点了什么都不发生。回退规则必须与 `render()` 解析 currentGroup 的那套一致。
+   */
+  const effectiveGroupId = (): string | undefined => {
+    const roi = activeRoi();
+    return state.selectedGroupId || roi?.default_group_id || roi?.x_groups?.[0]?.id;
+  };
+
+  /** 生效组当前的单位（空串/缺省一律按 % 显示，与后端默认一致）。 */
+  const effectiveGroupUnit = (): string => {
+    const roi = activeRoi();
+    const gid = effectiveGroupId();
+    return roi?.x_groups?.find((g) => g.id === gid)?.unit || '%';
+  };
+
+  // 组级写入的唯一通路：形态 / 尺度 / 单位 / 单位刻度长度 / 轴线粗 都是组的属性。
   // **放在所有使用点之前** —— 之前它在 axis-stroke 的 handler 之后，直接引用会撞 TDZ。
+  // #37 把这里改成 async + notifyError（失败必须冒泡）；本分支补上生效组回退。
+  // 两者必须同时存在：只取 #37 版会让首屏点形态/单位继续静默无操作，
+  // 只取本分支版会把 #37 的失败冒泡丢掉。
   const patchGroup = async (field: Record<string, unknown>): Promise<boolean> => {
-    const gid = state.selectedGroupId;
+    const gid = effectiveGroupId();
     const roiId = activeRoi()?.id;
     const client = ctx.rpcClient as
       | { roiGroupUpdate?: (r: string, g: string, p: Record<string, unknown>) => Promise<unknown> }
@@ -668,6 +698,24 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         const t = btn.getAttribute('data-scaletype');
         if (t) patchGroup({ scale_type: t });
       });
+    });
+
+    // 组单位：回车即提交（不等 blur），空串就地回填并提示（后端也会拒）。
+    const unitInput = root.querySelector<HTMLInputElement>('#grp-unit-inp');
+    if (!unitInput) return;
+    unitInput.addEventListener('keydown', (ev) => {
+      if ((ev as KeyboardEvent).key === 'Enter') unitInput.blur();
+    });
+    unitInput.addEventListener('change', () => {
+      const raw = (unitInput.value || '').trim();
+      const current = effectiveGroupUnit();
+      if (!raw) {
+        unitInput.value = current;
+        notifyError('单位不能为空：它决定导出与随包 R 脚本按不按百分比画。');
+        return;
+      }
+      if (raw === current) return;
+      patchGroup({ unit: raw });
     });
   };
   wireGroupAttributes();

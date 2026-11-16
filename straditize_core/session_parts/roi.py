@@ -13,6 +13,22 @@ from .xscale import normalize_scale_type
 ROI_NAME_PATTERN = re.compile(r"^[\w\u4e00-\u9fa5-]{1,31}$")
 
 
+def _normalize_group_unit(value: object) -> str:
+    """组单位的唯一入口：去空白，空串当场拒绝。
+
+    单位是标签，但下游三处都拿它判量纲（列载荷 `unit` / LiPD `units` / 随包
+    `plot_strat.R` 的 `scale.percent`）。空串会让「是不是百分比」无从判断，
+    所以写入端就拒，而不是存进去让三个出口各自猜。
+    """
+    text = str(value).strip()
+    if not text:
+        raise JsonRpcError(
+            INVALID_PARAMS,
+            '组的 unit 不能为空：它决定导出与随包 R 脚本按不按百分比画（默认 "%"）。',
+        )
+    return text
+
+
 class RoiMixin:
     """ROI lifecycle, multi-ROI state, and form defaults."""
 
@@ -413,6 +429,7 @@ class RoiMixin:
         # 写入端校验（审计 D-1）：否则一个拼错的组标度会先"创建成功"，等到某列回落到
         # 该组时才在读取端报 -32602。
         scale_type = normalize_scale_type(scale_type)
+        unit = _normalize_group_unit(unit)
         roi = self._get_roi(roi_id)
         groups = roi.setdefault("x_groups", [])
         grp_num = len(groups) + 1
@@ -511,6 +528,10 @@ class RoiMixin:
                         "0 会让整列读数恒为 0，inf/NaN 会污染全部换算。",
                     )
                 value = _v
+            if field == "unit":
+                # 单位是下游判量纲的唯一依据（列载荷 / LiPD / 随包 R 脚本），
+                # 空串必须在写入端拒掉，不能让三个出口各自猜。
+                value = _normalize_group_unit(value)
             if field == "scale_type":
                 # 同 `roi_group_create`：写入端校验，别让错拼的标度先存住、
                 # 等到某列回落到该组时才在读取端报 -32602（审计 D-1）。

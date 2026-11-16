@@ -2,7 +2,8 @@
 
 > 触发：hoya 新场景 `c:\tmp\proj3`（28 列 / 3 组）里 col01 = 炭屑、col28 = 花粉浓度（绝对值），
 > 其余列是百分比。用户问「这种导出需要做处理么？」
-> 状态：**仅评估，未改导出格式**。画图侧已单独处理（`settings.plot_scale_mode`）。
+> 状态：**已按裁决实施方案 A+B**（2026-11-16）。画图侧另有 `settings.plot_scale_mode`。
+> 实施内容与判据见本文 §6；`data.csv` 一个字节都没动。
 
 ## 结论先行
 
@@ -52,12 +53,13 @@
 - `col01 [counts]` 或 `col01_counts`。可读性最好，但破坏逐字节相等断言、破坏 `read.csv` 后的列名映射、
   破坏用户既有脚本。若要做，需一次迁移 + 版本号。
 
-## 4. 本次未做（等裁决）
+## 4. 本次不做（已裁决为「不做」）
 
-- 未改 `data.csv` / `data/<roi>.csv` 表头与内容；
-- 未改 `manifest.json` / `README.txt`；
-- 未改 XLSX / LiPD 导出；
-- 未改随包 `plot_strat.R` 的 `scale.percent = TRUE`。
+- `data.csv` / `data/<roi>.csv` 表头与内容：不动（保住「`data.csv` 逐字节等于 `data/<roi>.csv`」）；
+- XLSX 导出：不动（方案 A+B 不涉及）；
+- LiPD 导出结构：不动（它本来就有逐列 `units`，值随组单位自动正确）；
+- 独立模板 `export_r()`（不是随包文件）：仍对整表写 `scale.percent = TRUE`。它是单表模板、
+  拿不到逐列量纲，未做逐列处理 —— 属已知剩余出口，未静默假装已修。
 
 ## 5. 若批准方案 A+B，验收判据（可判定）
 
@@ -65,3 +67,18 @@
 2. `data.csv` 与 `data/<roi>.csv` 仍逐字节相同（现有 e2e 保持绿）；
 3. 随包 `plot_strat.R` 里非百分比列所在 ROI 的 `strat.plot` 调用 **不含** `scale.percent = TRUE`（字符串断言）；
 4. 反向验证：把 unit 强行写回 `%` → 判据 1、3 变红。
+## 6. 已实施（方案 A+B，2026-11-16）
+
+| 改动 | 落点 | 判据 |
+| --- | --- | --- |
+| 组单位可编辑（源头） | `frontend/src/components/steps/XTicksPanel.ts` 步骤 6 组卡片「单位」输入；`roi.py::_normalize_group_unit` 写入端归一 + 空串 `-32602` | `tests/unit/test_group_unit_editable.py`（4 条） |
+| manifest 记量纲 | `export.py::export_multi_tar` → `column_units`（按 ROI）+ `group_units`（按组） | `test_export_script_units.py::test_manifest_records_column_and_group_units` |
+| README 记量纲与规则 | 同一处，`Units (authoritative copy: manifest.json -> column_units)` 段 | `test_readme_documents_units_and_the_scale_rule` |
+| 随包 `plot_strat.R` 按单位画 | 非 % 列单独一次 `strat.plot(..., scale.percent = FALSE, add = TRUE)`；全 % 时保持原来的一次调用（字节不变） | `test_non_percent_column_is_not_plotted_on_the_percent_basis` + `test_all_percent_project_keeps_the_single_call_template` |
+| 三处字符串一致 | 列载荷 `unit` / LiPD `units` / manifest `column_units` | `test_three_places_agree_on_the_same_unit_string`（同一组设成 `粒/g`，三处全等） |
+| 脚本真能跑 | 把生成物原样交给 R（合成数值覆盖 NA 表） | `test_generated_script_actually_runs_on_a_mixed_project`（skipif 无 R/rioja） |
+
+反向验证（已实跑）：`is_percent_unit` 改成恒 `True` → `test_non_percent_column_...` 变红；
+`_normalize_group_unit` 改成恒返回 `"%"` → 组单位 4 条全红。
+
+剩余出口：`export_r()` 的独立单表模板仍写 `scale.percent = TRUE`（见 §4），未处理。
