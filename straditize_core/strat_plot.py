@@ -656,6 +656,12 @@ def render_strat_diagram(
 ) -> dict[str, Any]:
     """跑 R 出图；失败抛 RuntimeError（消息里带 R 自己的 stderr）。"""
     merged = normalize_settings(settings)
+    # 中文字体探测必须在这里做，而不是只放在 plot_render：任何直接调 render_strat_diagram
+    # 的调用方（测试、脚本、MCP）都会因为没有 font_path 而让 R 侧 stop()。
+    if not merged.get("font_path"):
+        _probe_path, _probe_src = probe_cjk_font()
+        merged["font_path"] = _probe_path or ""
+        merged["font_source"] = _probe_src or ""
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
 
