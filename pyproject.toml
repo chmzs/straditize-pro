@@ -51,7 +51,7 @@ include = ["straditize_core*"]
 # 后者原先漏配，pip 装的包会静默退回"只有花粉词表"（PyInstaller 路径早已登记）。
 "straditize_core.ocr" = ["models/*", "data/*"]
 # 内置范例图（load_image / load_age_depth_diagram 的 sample_key 读取）
-"straditize_core.assets" = ["age_models/*", "tutorials/*"]
+"straditize_core.assets" = ["age_models/*", "tutorials/*", "fonts/*"]
 
 # ---------------------------------------------------------------------------
 # Ruff（原独立 ruff.toml，已并入本文件作为唯一配置源）
