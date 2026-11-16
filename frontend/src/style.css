@@ -2208,10 +2208,12 @@ body.theme-light .reset-all-btn:hover {
    WPD 导出表格预览与交互编辑样式
    ============================================================================== */
 .modal-dialog.wpd-export-dialog {
-  /* 宽度由 --modal-width 决定（ExportModal 内联设为 1180px）；这里只压上限。 */
+  /* 宽度由 --modal-width 决定（ExportModal 内联设为 1180px）；这里只压上限。
+     高度改成「按内容、封顶视口」：旧值 86vh 在 1366×768 下是 660px，
+     与 footer/设置项抢空间；现在由 body 滚动，弹窗自身不再撑满。 */
   max-width: 1180px;
-  height: 86vh;
-  max-height: 86vh;
+  height: auto;
+  max-height: calc(100dvh - 48px);
   display: flex;
   flex-direction: column;
 }
@@ -2220,29 +2222,46 @@ body.theme-light .reset-all-btn:hover {
    该变体必须晚于原语声明，否则 gap:16px / padding:16px / flex-direction:row
    会被原语的堆叠契约覆盖。 */
 
+/* 主区：左表格 + 右控制栏横向并列；出图设置与预览在 .wpd-export-extras 里全宽。
+   整体高度由内容决定，纵向滚动**只**发生在 .ui-modal__body（单滚动容器）。 */
+.wpd-export-main {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  min-height: 0;
+}
+
+.wpd-export-extras {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .wpd-left-area {
   flex: 1;
   min-width: 0;
-  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
 .wpd-right-controls {
+  /* 不再自己滚：控制栏的长内容交给 body 的滚动条，避免嵌套滚动容器。 */
   width: 270px;
   min-width: 270px;
-  height: 100%;
-  overflow-y: auto;
+  overflow: visible;
   box-sizing: border-box;
 }
 
 .wpd-table-wrapper {
+  /* 只做**横向**滚动（29 列），纵向不滚：表格高度随行数增长，
+     纵向滚动统一交给 .ui-modal__body。th 的 sticky 仍贴在 body 的滚动口上。 */
   flex: 1;
   height: auto !important;
-  min-height: 200px;
-  max-height: calc(86vh - 180px);
-  overflow: auto;
+  min-height: 0;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid var(--border-light);
   border-radius: 6px;
   background: rgba(15, 23, 42, 0.6);
@@ -3271,11 +3290,13 @@ body.theme-light .ad-row-inversion td {
    （依据 ExportModal.ts 源码注释与 .wpd-right-controls 的定宽声明）。
    必须晚于 .ui-modal__body，否则 gap/padding/flex-direction 会被原语覆盖。 */
 .wpd-modal-body {
+  /* 纵向堆叠：主区（表格+控制栏）在上，出图设置与预览在下，全宽。
+     唯一的纵向滚动容器（.ui-modal__body 的 overflow: auto）就在这里。 */
   flex: 1;
   min-height: 0;
   display: flex;
-  flex-direction: row;
-  gap: 16px;
+  flex-direction: column;
+  gap: 12px;
   padding: 16px;
   box-sizing: border-box;
 }
@@ -3572,6 +3593,18 @@ body.theme-light .ad-pane-splitter {
 .export-modal-footer {
   flex-wrap: wrap;
   justify-content: space-between;
+}
+
+/* 导出弹窗内的等宽文本与表单控件统一走 token 字号。
+   Chromium 给 `code` 的默认等宽字号是 13px、给 `input` 的默认表单字号是 13.33px，
+   两者都不在设计系统的 {10,11,12,14,16} 档里（e2e 字号门禁会抓）。 */
+.wpd-export-dialog code,
+.wpd-export-dialog kbd,
+.wpd-export-dialog samp,
+.wpd-export-dialog input,
+.wpd-export-dialog select,
+.wpd-export-dialog textarea {
+  font-size: var(--font-size-sm);
 }
 
 .export-format-actions {

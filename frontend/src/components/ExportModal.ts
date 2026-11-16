@@ -86,10 +86,10 @@ export class ExportModal {
           .map((group) => {
             const follow = isPercentUnit(group.unit) ? '按列归一' : '自身量程';
             return `
-              <label style="display: flex; align-items: center; gap: 6px; font-size: 10.5px;">
+              <label style="display: flex; align-items: center; gap: 6px; font-size: var(--font-size-sm);">
                 <span style="min-width: 110px; color: var(--text-primary);">${group.name}</span>
                 <span style="color: var(--text-muted); min-width: 150px;">单位 ${group.unit} · ${group.columns.length} 列</span>
-                <select class="sel-wpd-scale-mode" data-group-id="${group.gid}" data-group-unit="${group.unit}" style="font-size: 10.5px;">
+                <select class="sel-wpd-scale-mode" data-group-id="${group.gid}" data-group-unit="${group.unit}" style="font-size: var(--font-size-sm);">
                   <option value="follow" selected>跟随单位（${follow}）</option>
                   <option value="normalize">强制按列归一</option>
                   <option value="fixed">强制自身量程</option>
@@ -97,7 +97,7 @@ export class ExportModal {
               </label>`;
           })
           .join('')
-      : '<span style="font-size: 10px; color: var(--text-muted);">当前有效区没有分组。</span>';
+      : '<span style="font-size: var(--font-size-xs); color: var(--text-muted);">当前有效区没有分组。</span>';
 
     modal.innerHTML = `
       <div class="modal-dialog wpd-export-dialog ui-modal" style="--modal-width: 1180px;"
@@ -113,6 +113,7 @@ export class ExportModal {
         </div>
 
         <div class="wpd-modal-body ui-modal__body">
+          <div class="wpd-export-main">
           <!-- 左侧：双模式（表格预览与交互编辑 / 原始代码）区域 -->
           <div class="wpd-left-area" style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; height: 100%;">
             <!-- 地层丰度百分比总和自检门禁 (Sum Check QA Gate) -->
@@ -123,45 +124,45 @@ export class ExportModal {
 
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; flex-shrink: 0;">
               <div style="display: flex; gap: 4px;">
-                <button id="tab-btn-grid" class="ui-btn ui-btn--quiet ui-btn--xs active-mode" style="font-size: 11px; padding: 4px 10px;" title="可就地编辑的数值表格">数据表格</button>
-                <button id="tab-btn-text" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 11px; padding: 4px 10px;" title="原始 CSV 文本，可复制或手工调整">原始文本</button>
+                <button id="tab-btn-grid" class="ui-btn ui-btn--quiet ui-btn--xs active-mode" style="font-size: var(--font-size-sm); padding: 4px 10px;" title="可就地编辑的数值表格">数据表格</button>
+                <button id="tab-btn-text" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: var(--font-size-sm); padding: 4px 10px;" title="原始 CSV 文本，可复制或手工调整">原始文本</button>
               </div>
-              <div style="font-size: 11px; color: var(--text-muted); display: flex; gap: 10px; align-items: center;">
+              <div style="font-size: var(--font-size-sm); color: var(--text-muted); display: flex; gap: 10px; align-items: center;">
                 <span>Variables: <strong id="wpd-vars-label" style="color: var(--accent-blue);">Depth, 29 Taxa</strong></span>
                 <span id="wpd-data-size-label">0 KB</span>
-                <button id="btn-wpd-reset-edits" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 2px 7px; color: var(--text-muted);" title="清除所有手动微调，还原为图谱自动提取值">还原提取值</button>
+                <button id="btn-wpd-reset-edits" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: var(--font-size-xs); padding: 2px 7px; color: var(--text-muted);" title="清除所有手动微调，还原为图谱自动提取值">还原提取值</button>
               </div>
             </div>
 
             <!-- 视图 1: 交互式表格视图 (支持直接点选单元格修改数字) -->
-            <div id="wpd-table-wrapper" class="wpd-table-wrapper" style="flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--border-light); border-radius: 6px;">
+            <div id="wpd-table-wrapper" class="wpd-table-wrapper" style="flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--border-light); border-radius: 6px;">
               <table id="wpd-preview-table" class="wpd-preview-table">
                 <!-- 动态填充 thead 与 tbody -->
               </table>
             </div>
 
             <!-- 视图 2: 纯文本导出框 (可复制或手工调整) -->
-            <textarea id="wpd-data-textarea" class="export-textarea" style="display: none; flex: 1; min-height: 0; font-family: var(--font-mono); font-size: 11px; line-height: 1.45;"></textarea>
+            <textarea id="wpd-data-textarea" class="export-textarea" style="display: none; flex: 1; min-height: 0; font-family: var(--font-mono); font-size: var(--font-size-sm); line-height: 1.45;"></textarea>
 
-            <div style="font-size: 10px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;">
+            <div style="font-size: var(--font-size-xs); color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;">
               <span>提示：点击任意表格单元格可直接修改数值（修改项呈橙色高亮），导出 CSV、R 脚本与 TAR 包将实时同步生效。</span>
             </div>
           </div>
 
           <!-- 右侧：WPD 风格的控制面板 (Dataset, Sort, Format, Visualize) 并列排布 -->
-          <div class="wpd-right-controls" style="width: 270px; min-width: 270px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; background: var(--bg-tertiary); padding: 12px; border-radius: 6px; border: 1px solid var(--border-light); height: 100%; box-sizing: border-box; overflow-y: auto;">
+          <div class="wpd-right-controls" style="width: 270px; min-width: 270px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; background: var(--bg-tertiary); padding: 12px; border-radius: 6px; border: 1px solid var(--border-light); box-sizing: border-box;">
             <!-- 导出就绪状态清单 (T10) -->
             ${renderExportReadiness(this.data)}
 
             <!-- 数据集选择 -->
             <div class="form-group" style="margin: 0;">
-              <label style="font-size: 11px; font-weight: bold; color: var(--text-primary);">Dataset (数据集形态):</label>
-              <select id="wpd-dataset-select" class="sample-select" style="width: 100%; font-size: 11px;">
+              <label style="font-size: var(--font-size-sm); font-weight: bold; color: var(--text-primary);">Dataset (数据集形态):</label>
+              <select id="wpd-dataset-select" class="sample-select" style="width: 100%; font-size: var(--font-size-sm);">
                 <option value="samples" selected>1. 共识层位 —— 每个采样层位一行；与 data.csv / TAR / XLSX 同源</option>
                 <option value="union_points">2. 各列拐点并集 —— 所有列的拐点深度合并去重成行；某列在该深度没有拐点则按其曲线线性插值（不是 0）</option>
                 <option value="turning_points">3. 拐点原始坐标表 —— 长表，一行一个拐点（taxon/type/depth/value/x/y）；不能与上面两张矩阵表混用</option>
                 <!-- 缺值口径必须写在面板上：插值 vs NA 是两种完全不同的数，用户看不到就会误读。 -->
-                <div style="margin-top: 4px; font-size: 10px; line-height: 1.45; color: var(--text-muted);">
+                <div style="margin-top: 4px; font-size: var(--font-size-xs); line-height: 1.45; color: var(--text-muted);">
                   共识层位上某列没有拐点时：<b>已标定列</b>按该列曲线线性插值填充；<b>未标定列</b>仍为 NA（不给数）。
                 </div>
                 <optgroup label="高级">
@@ -173,18 +174,18 @@ export class ExportModal {
                 以前预览（控制点并集）与下载（后端样品层位）是两套行集，界面一个字都没说，
                 用户看到「预览 125 行 / 下载 35 行」完全无法判断哪个权威（U-ROWS-01）。
               -->
-              <div id="wpd-rowset-caption" style="margin-top: 5px; font-size: 10.5px; line-height: 1.45; color: var(--text-muted);"></div>
+              <div id="wpd-rowset-caption" style="margin-top: 5px; font-size: var(--font-size-sm); line-height: 1.45; color: var(--text-muted);"></div>
             </div>
 
             <!-- 排序 -->
             <div class="form-group" style="margin: 0;">
-              <label style="font-size: 11px; font-weight: bold; color: var(--text-primary);">Sort (排序):</label>
+              <label style="font-size: var(--font-size-sm); font-weight: bold; color: var(--text-primary);">Sort (排序):</label>
               <div style="display: flex; gap: 6px;">
-                <select id="wpd-sort-by" class="sample-select" style="flex: 1; font-size: 11px;">
+                <select id="wpd-sort-by" class="sample-select" style="flex: 1; font-size: var(--font-size-sm);">
                   <option value="depth" selected>Depth (深度)</option>
                   <option value="raw">Raw (原始)</option>
                 </select>
-                <select id="wpd-sort-order" class="sample-select" style="flex: 1; font-size: 11px;">
+                <select id="wpd-sort-order" class="sample-select" style="flex: 1; font-size: var(--font-size-sm);">
                   <option value="asc" selected>升序 (顶->底)</option>
                   <option value="desc">降序 (底->顶)</option>
                 </select>
@@ -193,15 +194,15 @@ export class ExportModal {
 
             <!-- 格式化 Format -->
             <div class="form-group" style="margin: 0;">
-              <label style="font-size: 11px; font-weight: bold; color: var(--text-primary);">Format (格式化):</label>
-              <div style="display: flex; flex-direction: column; gap: 6px; font-size: 11px;">
+              <label style="font-size: var(--font-size-sm); font-weight: bold; color: var(--text-primary);">Format (格式化):</label>
+              <div style="display: flex; flex-direction: column; gap: 6px; font-size: var(--font-size-sm);">
                 <div style="display: flex; align-items: center; justify-content: space-between;">
                   <span style="color: var(--text-muted);">浮点精度:</span>
-                  <input type="number" id="wpd-digits" value="2" min="0" max="6" style="width: 60px; font-size: 11px;" />
+                  <input type="number" id="wpd-digits" value="2" min="0" max="6" style="width: 60px; font-size: var(--font-size-sm);" />
                 </div>
                 <div style="display: flex; align-items: center; justify-content: space-between;">
                   <span style="color: var(--text-muted);">列分隔符:</span>
-                  <select id="wpd-col-sep" class="sample-select" style="width: 80px; font-size: 11px;">
+                  <select id="wpd-col-sep" class="sample-select" style="width: 80px; font-size: var(--font-size-sm);">
                     <option value="," selected>逗号 (,)</option>
                     <option value="\t">Tab (\\t)</option>
                     <option value=";">分号 (;)</option>
@@ -210,7 +211,7 @@ export class ExportModal {
                 </div>
                 <div style="display: flex; align-items: center; justify-content: space-between;">
                   <span style="color: var(--text-muted);">缺测填充:</span>
-                  <select id="wpd-na-fill" class="sample-select" style="width: 80px; font-size: 11px;">
+                  <select id="wpd-na-fill" class="sample-select" style="width: 80px; font-size: var(--font-size-sm);">
                     <!-- 默认必须是 NA：缺测（未测到）不是"零丰度"。
                          曾经默认选中 0.0，等于教用户把"没测"当成"测到 0"写进结果。 -->
                     <option value="0.0">0.0（当成真实零丰度，慎用）</option>
@@ -229,7 +230,7 @@ export class ExportModal {
               出表，与上方数据集选择器的行集是两回事。写成静态说明而不是悄悄不同
               （U-ROWS-01 的根因就是"隐性另搞一套"）。
             -->
-            <div id="wpd-workbook-rowset-note" style="font-size: 10px; line-height: 1.5; color: var(--status-warning); padding: 6px 8px; border-radius: 4px; background: rgba(245, 158, 11, 0.10); border: 1px solid rgba(245, 158, 11, 0.35);">
+            <div id="wpd-workbook-rowset-note" style="font-size: var(--font-size-xs); line-height: 1.5; color: var(--status-warning); padding: 6px 8px; border-radius: 4px; background: rgba(245, 158, 11, 0.10); border: 1px solid rgba(245, 158, 11, 0.35);">
               XLSX / LiPD / TAR 由后端生成，固定按「样品层位」出表（与上方预览的行集可能不同）。
             </div>
 
@@ -237,8 +238,8 @@ export class ExportModal {
 
             <!-- 导出内容选择与集成表 (规范第九章) -->
             <div class="form-group wpd-content-tree-box" style="margin: 0; padding: 8px; border-radius: 4px; border: 1px solid var(--border-light);">
-              <label style="font-size: 11px; font-weight: bold; color: var(--accent-blue);">导出内容选择 (Content Tree):</label>
-              <div style="display: flex; flex-direction: column; gap: 5px; font-size: 10px; margin-top: 5px;">
+              <label style="font-size: var(--font-size-sm); font-weight: bold; color: var(--accent-blue);">导出内容选择 (Content Tree):</label>
+              <div style="display: flex; flex-direction: column; gap: 5px; font-size: var(--font-size-xs); margin-top: 5px;">
                 <label style="display: flex; align-items: center; gap: 6px; color: var(--text-muted); cursor: not-allowed;">
                   <input type="checkbox" checked disabled />
                   <span>核心数据 (meta_info + pollen) [必选]</span>
@@ -251,7 +252,7 @@ export class ExportModal {
                   <input type="checkbox" id="chk-export-ensemble" />
                   <span id="txt-export-ensemble" style="color: var(--accent-amber); font-weight: 600;">集成表 (ensemble tables)</span>
                 </label>
-                <div id="ensemble-sub-options" style="display: none; padding-left: 18px; font-size: 9.5px; color: var(--text-muted);">
+                <div id="ensemble-sub-options" style="display: none; padding-left: 18px; font-size: var(--font-size-xs); color: var(--text-muted);">
                   <span id="ensemble-list-hint">暂无原生或导入集成表</span>
                 </div>
                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
@@ -263,8 +264,8 @@ export class ExportModal {
 
             <!-- 导出说明 (Section 八: R 脚本本地出图) -->
             <div class="form-group" style="margin: 0;">
-              <label style="font-size: 11px; font-weight: bold; color: var(--accent-blue);">导出格式说明:</label>
-              <p style="font-size: 10px; color: var(--text-muted); line-height: 1.4; margin-bottom: 6px;">
+              <label style="font-size: var(--font-size-sm); font-weight: bold; color: var(--accent-blue);">导出格式说明:</label>
+              <p style="font-size: var(--font-size-xs); color: var(--text-muted); line-height: 1.4; margin-bottom: 6px;">
                 可导出无 NA 的地学标准丰度表、<code>rioja::strat.plot</code> 绘图脚本与 POSIX UStar 项目归档。
               </p>
               <div class="wpd-scientific-qc-box">
@@ -276,65 +277,71 @@ export class ExportModal {
               </div>
             </div>
           </div>
-        </div>
+          </div>
 
-        <!-- 本机出图预览：图直接显示在这里，下载走浏览器下载事件。
-             以前只把路径写进 ~/.straditize/plots，用户点完按钮还得自己去隐藏目录里找，
-             那不是「出图」，是「出一个文件路径」。
+          <!-- 出图设置与预览（全宽，跟在主区下面）。
+               这两块必须在 body（滚动区）**内部**：旧版把它们放在 body 与 footer 之间，
+               预览一出现就把 footer 顶出视口、y 轴范围与列量程也被挤出首屏（1366×768 实测）。
+               现在 body 是唯一滚动容器，footer 钉在 grid 第三行，任何时候都完整可见。 -->
+          <div class="wpd-export-extras">
+            <!-- y 轴范围：三项都填才生效（后端 validate_y_axis 同一口径）。留空 = 自动。 -->
+            <div class="form-group" id="wpd-plot-options" style="margin: 0;">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--font-size-sm);">
+                <span style="color: var(--text-muted);" title="三项都填才生效（与后端 validate_y_axis 同一口径）；留空 = 按数据自动">y 轴范围（留空=自动）：</span>
+                <input type="number" id="inp-wpd-y-min" placeholder="min" style="width: 72px; font-size: var(--font-size-sm);" />
+                <input type="number" id="inp-wpd-y-max" placeholder="max" style="width: 72px; font-size: var(--font-size-sm);" />
+                <input type="number" id="inp-wpd-y-interval" placeholder="间隔" style="width: 72px; font-size: var(--font-size-sm);" />
+                <span id="wpd-plot-y-hint" style="font-size: var(--font-size-xs); color: var(--status-warning);"></span>
+              </div>
 
-             预览区自带缩放/平移：默认「适应窗口」显示全貌（object-fit: contain + 固定
-             46vh 高，长图不会把弹窗撑爆），滚轮以光标为锚点缩放、拖拽平移、双击复位。 -->
-        <div class="form-group" id="wpd-plot-preview-box" style="display: none; margin: 0;">
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
-            <label style="font-size: 11px; font-weight: bold; color: var(--accent-blue);">本机出图预览</label>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <select id="sel-wpd-plot-format" class="sample-select" style="font-size: 11px;" title="下载格式：JPEG 位图，直接分享；PDF 矢量，适合排版放大（只影响下载，预览固定 JPEG）">
-                <option value="jpeg" selected>JPEG（位图 · 直接分享）</option>
-                <option value="pdf">PDF（矢量 · 排版放大）</option>
-              </select>
-              <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-plot-download" disabled>下载图片</button>
-              <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-wpd-plot-close" title="关闭预览并释放图片数据">✕ 关闭预览</button>
+              <!-- 列量程（按组）：默认跟随单位——非 % 的组按自身量程画，不与百分比列共用
+                   0–100 基准。这里只做覆盖，不改组的单位（unit 是唯一事实源）。
+                   说明压成两行；例子（A 列 20% / B 列 5%）进 summary 的 title——写在正文里
+                   会在窄栏折成五行碎片（用户实测反馈）。 -->
+              <details id="wpd-scale-mode-box" style="margin-top: 6px;">
+                <summary style="font-size: var(--font-size-sm); color: var(--text-muted); cursor: pointer;" title="默认「跟随单位」：unit 是百分比族就按 rioja 惯例画（每列按本列最大值归一、画满宽），否则按该组自身量程画。例：A 列 max 20%、B 列 max 5%，归一后两者都画满宽——不是共用一把 0–100 的尺；要固定尺请选「强制自身量程」。">
+                  列量程（按组，默认跟随单位）
+                </summary>
+                <div style="font-size: var(--font-size-sm); color: var(--text-muted); margin: 4px 0 6px; line-height: 1.5;">
+                  百分比组按本列最大值归一后画满宽（花粉图惯例）；非 <code>%</code> 的组按自身量程（min..max）画。
+                  这里的覆盖只影响本次出图，不改组的单位。
+                </div>
+                <div id="wpd-scale-mode-rows" style="display: flex; flex-direction: column; gap: 4px;">
+                  ${scaleRowsHtml}
+                </div>
+              </details>
+            </div>
+
+            <!-- 本机出图预览：图直接显示在这里，下载走浏览器下载事件。
+                 以前只把路径写进 ~/.straditize/plots，用户点完按钮还得自己去隐藏目录里找，
+                 那不是「出图」，是「出一个文件路径」。
+
+                 尺寸：height 取 min(34vh, 360px)——1366×768 下约 261px，加工具行与 meta 行
+                 仍能让 footer 与设置项留在首屏；更大的图交给缩放/平移看。
+                 工具行只放控件与百分比，长说明进 title 与下方 meta 行，避免窄栏折成碎片。 -->
+            <div class="form-group" id="wpd-plot-preview-box" style="display: none; margin: 12px 0 0;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; flex-wrap: nowrap;">
+                <label style="font-size: var(--font-size-sm); font-weight: bold; color: var(--accent-blue); white-space: nowrap;">本机出图预览</label>
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;">
+                  <select id="sel-wpd-plot-format" class="sample-select" style="font-size: var(--font-size-sm);" title="下载格式：JPEG 位图，直接分享；PDF 矢量，适合排版放大（只影响下载，预览固定 JPEG）">
+                    <option value="jpeg" selected>JPEG（位图 · 直接分享）</option>
+                    <option value="pdf">PDF（矢量 · 排版放大）</option>
+                  </select>
+                  <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-plot-download" disabled>下载图片</button>
+                  <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-wpd-plot-close" title="关闭预览并释放图片数据">✕ 关闭</button>
+                </div>
+              </div>
+              <div id="wpd-plot-toolbar" style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: nowrap; font-size: var(--font-size-xs); color: var(--text-muted); line-height: 20px;">
+                <button class="ui-btn ui-btn--quiet ui-btn--xs" id="btn-wpd-plot-fit" title="整图缩放到预览框内（默认）">适应窗口</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs" id="btn-wpd-plot-actual" title="按图片原始像素 1:1 显示，超出部分拖拽查看">1:1</button>
+                <span id="wpd-plot-zoom-label" style="min-width: 36px; text-align: right;">100%</span>
+              </div>
+              <div id="wpd-plot-frame" title="滚轮缩放（以光标为锚点）· 拖拽平移 · 双击复位" style="position: relative; border: 1px solid var(--border-light); border-radius: 6px; background: var(--bg-tertiary); padding: 0; height: min(34vh, 360px); overflow: hidden; cursor: grab; touch-action: none;">
+                <img id="wpd-plot-image" alt="地层图预览" draggable="false" style="display: block; width: 100%; height: 100%; object-fit: contain; transform-origin: 0 0; will-change: transform; user-select: none;" />
+              </div>
+              <p id="wpd-plot-meta" style="font-size: var(--font-size-xs); color: var(--text-muted); margin: 6px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></p>
             </div>
           </div>
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 10px; color: var(--text-muted);">
-            <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-wpd-plot-fit" title="整图缩放到预览框内（默认）">适应窗口</button>
-            <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-wpd-plot-actual" title="按图片原始像素 1:1 显示，超出部分拖拽查看">1:1</button>
-            <span id="wpd-plot-zoom-label" style="min-width: 40px; text-align: right;">100%</span>
-            <span>滚轮缩放（光标为锚点）· 拖拽平移 · 双击复位 · 预览固定 JPEG，下载按所选格式</span>
-          </div>
-          <div id="wpd-plot-frame" style="position: relative; border: 1px solid var(--border-light); border-radius: 6px; background: var(--bg-tertiary); padding: 0; height: 46vh; max-height: 46vh; overflow: hidden; cursor: grab; touch-action: none;">
-            <img id="wpd-plot-image" alt="地层图预览" draggable="false" style="display: block; width: 100%; height: 100%; object-fit: contain; transform-origin: 0 0; will-change: transform; user-select: none;" />
-          </div>
-          <p id="wpd-plot-meta" style="font-size: 10px; color: var(--text-muted); margin: 6px 0 0;"></p>
-        </div>
-
-        <!-- y 轴范围：三项都填才生效（后端 validate_y_axis 同一口径）。留空 = 自动。 -->
-        <div class="form-group" id="wpd-plot-options" style="margin: 0;">
-          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span style="font-size: 11px; color: var(--text-muted);">y 轴范围（留空=自动，三项都填才生效）：</span>
-            <input type="number" id="inp-wpd-y-min" placeholder="min" style="width: 72px; font-size: 11px;" />
-            <input type="number" id="inp-wpd-y-max" placeholder="max" style="width: 72px; font-size: 11px;" />
-            <input type="number" id="inp-wpd-y-interval" placeholder="间隔" style="width: 72px; font-size: 11px;" />
-            <span id="wpd-plot-y-hint" style="font-size: 10px; color: var(--status-warning);"></span>
-          </div>
-
-          <!-- 列量程（按组）：默认跟随单位——非 % 的组按自身量程画，不与百分比列共用
-               0–100 基准。这里只做覆盖，不改组的单位（unit 是唯一事实源）。 -->
-          <details id="wpd-scale-mode-box" style="margin-top: 8px;">
-            <summary style="font-size: 11px; color: var(--text-muted); cursor: pointer;" title="默认「跟随单位」：unit 是百分比族就按 rioja 惯例画（每列按本列最大值归一、画满宽），否则按该组自身量程画">
-              列量程（按组，默认跟随单位）
-            </summary>
-            <div style="font-size: 10px; color: var(--text-muted); margin: 4px 0 6px; line-height: 1.6;">
-              百分比组：<strong>每列按本列最大值归一后画满宽</strong>（花粉图惯例）。
-              它不是「所有列共用一把 0–100 的尺」—— A 列 max 20%、B 列 max 5%，归一后两者都画满宽；
-              要按 0–100 固定尺画，请选「强制自身量程」并显式给量程。
-              <br />非 <code>%</code> 的组按自身量程（min..max）画（炭屑 / 花粉浓度这类绝对值列）。
-              这里的覆盖只影响本次出图，不改组的单位。
-            </div>
-            <div id="wpd-scale-mode-rows" style="display: flex; flex-direction: column; gap: 4px;">
-              ${scaleRowsHtml}
-            </div>
-          </details>
         </div>
 
         <div class="ui-modal__footer export-modal-footer">
@@ -879,10 +886,16 @@ export class ExportModal {
       if (plotImg) plotImg.removeAttribute('src');
       if (plotBox) plotBox.style.display = 'none';
       if (plotDownload) plotDownload.disabled = true;
-      if (plotMeta) plotMeta.textContent = '';
+      if (plotMeta) {
+        plotMeta.textContent = '';
+        plotMeta.removeAttribute('title');
+      }
       fitPlot();
     };
     plotClose?.addEventListener('click', () => closePlotPreview());
+
+    /** 预览区的手势说明（只出现在 meta 行与 title 里，不占工具行）。 */
+    const PLOT_GESTURE_HINT = '滚轮缩放（以光标为锚点）· 拖拽平移 · 双击复位 · 预览固定 JPEG，下载按所选格式';
 
     /** 出图（唯一入口）：本机出图按钮与「按所选格式下载」都走这里。失败直接抛。 */
     const renderPlot = async (fmt: string, options: { quiet?: boolean; preview?: boolean } = {}) => {
@@ -945,10 +958,14 @@ export class ExportModal {
       const sizeKb = Math.round(Number(res?.size_bytes || 0) / 1024);
       const warns: string[] = Array.isArray(res?.warnings) ? res.warnings.filter(Boolean) : [];
       if (plotMeta) {
-        plotMeta.textContent =
+        const summary =
           `${res?.engine || '?'} · ${res?.columns_count ?? '?'} 列 · ${res?.rows_count ?? '?'} 行 · ` +
           `${res?.format || fmt} · ${sizeKb} KB` +
           (warns.length ? ` · 警告：${warns.join(' / ')}` : '');
+        // 手势说明只在这一行出现（工具行只放控件与百分比）：窄窗口放不下就省略号，
+        // 全文进 title，hover 可读。
+        plotMeta.textContent = `${summary} ｜ ${PLOT_GESTURE_HINT}`;
+        plotMeta.title = `${summary}\n${PLOT_GESTURE_HINT}`;
       }
       if (!options.quiet) {
         if (warns.length) notify('出图完成，但有降级：' + warns.join('；'), 'info', 12000);

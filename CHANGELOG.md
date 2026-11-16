@@ -1,6 +1,16 @@
 # 变更记录（CHANGELOG）
 
 ## [Unreleased]
+### 导出弹窗版面返工：footer 钉住、单滚动容器、字号归位、预览不再顶掉设置
+
+- **根因**：出图预览、y 轴范围、列量程三块原来是 `.ui-modal` 里 body 与 footer 的**兄弟节点**，预览一出现就把 footer 顶出视口（1366×768 实测 footer 底边 1156px > 768px，y 轴范围与列量程也被挤出首屏）。
+- **结构**：body 拆两段 —— `.wpd-export-main`（左表格 + 右 270px 控制栏，横向）与 `.wpd-export-extras`（y 轴范围 + 列量程 + 全宽出图预览）。footer 留在 `grid-template-rows: auto minmax(0,1fr) auto` 的第三行，任何时候完整可见。
+- **单滚动容器**：纵向滚动只发生在 `.ui-modal__body`；`.wpd-table-wrapper` 改为只横向滚动（29 列），`.wpd-right-controls` 不再自己滚 —— 嵌套滚动条消失。
+- **尺寸**：`.wpd-export-dialog` 由固定 `86vh` 改为 `height: auto; max-height: calc(100dvh - 48px)`；出图预览框由 `46vh` 改为 `min(34vh, 360px)`（1366×768 下约 261px）。
+- **字号**：弹窗内所有内联字号改走 `var(--font-size-xs|sm|md|lg|xl)`，`9.5px / 10.5px` 等离标值清零；Chromium 给 `code` 的默认 13px、给 `input` 的默认 13.33px 一并归到 `--font-size-sm`。
+- **文案密度**：出图工具行只留「适应窗口 / 1:1 / 100%」，手势说明进 `title` 与 meta 行（单行 + 省略号）；列量程说明从 5 行压到 2 行，「A 列 20% / B 列 5%」的例子进 `summary` 的 `title`。
+- **门禁**：新增 `frontend/e2e/export-modal-density.spec.ts`（footer 完整在视口内、body 内单滚动容器、字号集合 ⊆ {10,11,12,14,16}px、工具行单行、预览出现后设置项仍可达；1366×768 与 1280×720 各一遍）。`test-ui-consistency.mjs` 的弹窗方向契约改为两层：`.wpd-modal-body` column + `.wpd-export-main` row。
+- **待裁决（本轮只报不改）**：`docs/UI_DESIGN_SYSTEM.md:192` 要求 footer 最多三个动作，导出弹窗 footer 现有 8 个（历史遗留，早于本轮改动）。
 
 ### 混合量纲（二）：组单位可编辑 + 导出按单位画
 
