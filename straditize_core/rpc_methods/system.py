@@ -277,7 +277,13 @@ def _payload_column(session: Any, c: dict[str, Any]) -> dict[str, Any]:
     c_end = int(c["end"])
     name = c.get("name", f"Col {c_idx}")
 
-    if c_idx not in session.column_points:
+    # 只读载荷不得改写取数状态。digitize 会把 column_points 填成逐行墨迹，
+    # 而导出按"column_points 非空就取稠密曲线、为空就插值控制点"分流 ——
+    # 于是"先开画布再导出"与"直接导出"给出两套数（实测同一格 68.6885 vs 68.65）。
+    # 只在**完全没有点**时才数字化（新图第一次打开需要种子点）；已有控制点就只读。
+    if c_idx not in session.column_points and not (
+        session.control_points.get(c_idx)
+    ):
         session.digitize(c_idx, "area")
 
     ctrls = session.control_points.get(c_idx, {})

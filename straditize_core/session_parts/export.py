@@ -107,6 +107,7 @@ def _read_row_values(
     strict: bool,
     col_name: str,
     missing_is_na: bool,
+    negatives: list | None = None,
 ) -> list[Any]:
     """按行读一列读数；缺行怎么补由该列的来历决定。
 
@@ -127,6 +128,7 @@ def _read_row_values(
             [baseline_px if p is None else p for p in filled],
             strict=strict,
             col_name=col_name,
+            negatives=negatives,
         )
         return [None if p is None else v for p, v in zip(filled, values)]
     values = read_column_values(
@@ -134,6 +136,7 @@ def _read_row_values(
         [baseline_px if p is None else p for p in px],
         strict=strict,
         col_name=col_name,
+        negatives=negatives,
     )
     return list(values)
 
@@ -277,6 +280,9 @@ class ExportMixin:
             data_dict: dict[str, Any] = {"depth": depth_list}
 
             taxa_names = getattr(self, "taxa_names", None) or []
+            readouts = getattr(self, "_negative_readouts", None)
+            if readouts is None:
+                readouts = self._negative_readouts = []
             for idx, col in enumerate(roi_cols):
                 c_idx = col.get("col_index", idx)
                 if taxa_names and c_idx < len(taxa_names) and taxa_names[c_idx]:
@@ -291,6 +297,7 @@ class ExportMixin:
                 p_dict = {p["row"]: p["x"] for p in pts}
                 # 未标定整列不给数在 read_column_values 里判；缺行给 0 还是 NA 由
                 # 该列是不是「控制点合成」决定（与 _export_value_columns 同一入口）。
+                before = len(readouts)
                 data_dict[col_name] = _mask_outside_window(
                     row_list,
                     _read_row_values(
@@ -300,10 +307,20 @@ class ExportMixin:
                         strict=strict,
                         col_name=col_name,
                         missing_is_na=c_idx in _control_point_only_columns(self),
+                        negatives=readouts,
                     ),
                     _column_row_window(self, col, c_idx),
                     p_dict,
                 )
+                for item in readouts[before:]:
+                    item.setdefault("column", col_name)
+                    row_index = item.get("index")
+                    item.setdefault(
+                        "row",
+                        row_list[row_index]
+                        if 0 <= row_index < len(row_list)
+                        else None,
+                    )
 
             roi_dfs[roi_name] = pd.DataFrame(data_dict)
 
@@ -921,6 +938,48 @@ class ExportMixin:
             return self._depth_grid_frame()
         return self._turning_points_frame()  # 只剩 turning_points（上面已校验取值）
 
+    def _negative_abundance_warnings(self) -> list[dict[str, Any]]:
+        """几何上算出负值的读数 → **显式 warning**，不静默变成 0。
+
+        为什么必须有这条：px_to_value 会把负值截成 0.0（物理丰度没有负值），
+        但 0.0 同时也是"这一层真的没有该属种"的合法读数。两种语义混在一起，
+        用户无法分辨"测到 0"与"0 点画偏了"。表里仍写 0.0（不编造负丰度），
+        但出口必须带上"这几行是截出来的"这条事实。
+        """
+        readouts = getattr(self, "_negative_readouts", None) or []
+        if not readouts:
+            return []
+        grouped: dict[str, dict[str, Any]] = {}
+        for item in readouts:
+            name = str(item.get("column") or "?")
+            entry = grouped.setdefault(
+                name, {"count": 0, "min": 0.0, "rows": [], "depths": []}
+            )
+            entry["count"] += 1
+            entry["min"] = min(entry["min"], float(item["value"]))
+            row = item.get("row")
+            if row is not None and row not in entry["rows"]:
+                entry["rows"].append(row)
+            depth = item.get("depth")
+            if depth is not None and depth not in entry["depths"]:
+                entry["depths"].append(depth)
+        detail = "；".join(
+            f"{name}: {entry['count']} 行，最小 {entry['min']:.4f}"
+            for name, entry in grouped.items()
+        )
+        return [
+            {
+                "code": "NEGATIVE_ABUNDANCE",
+                "severity": "warning",
+                "message": (
+                    "以下读数在几何上为负（像素落在 0 点左侧），已按 0.0 写入表："
+                    + detail
+                    + "。0.0 不是真实零，请检查该列的轴线粗 / 0 点位置。"
+                ),
+                "columns": grouped,
+            }
+        ]
+
     def _export_column_scale_summary(self) -> tuple[int, int]:
         """(参与导出的列数, 其中已标定 X 刻度的列数)。
 
@@ -1063,7 +1122,17 @@ class ExportMixin:
             for row, x_px in sorted(pts.items(), key=lambda item: item[0]):
                 row_px = float(row)
                 depth = round(slope * row_px + intercept, 4) if calibrated else row_px
-                value = read_column_values(scale, [float(x_px)], col_name=name)[0]
+                readouts = getattr(self, "_negative_readouts", None)
+                if readouts is None:
+                    readouts = self._negative_readouts = []
+                before = len(readouts)
+                value = read_column_values(
+                    scale, [float(x_px)], col_name=name, negatives=readouts
+                )[0]
+                for item in readouts[before:]:
+                    item.setdefault("column", name)
+                    item.setdefault("row", int(row_px))
+                    item.setdefault("depth", depth)
                 records.append(
                     {
                         "taxon": name,
@@ -1092,6 +1161,7 @@ class ExportMixin:
         `turning_points`（离散拐点长表）。**不传（None）保持既有行为**（samples 优先），
         `data.csv` / 工程包走的就是这条路，两种语义不能混。
         """
+        self._negative_readouts: list[dict[str, Any]] = []
         self._ensure_export_column_points()
 
         if not getattr(self, "column_points", None):
@@ -1148,6 +1218,7 @@ class ExportMixin:
             )
 
         csv_string, saved_path = self._write_export_file(fmt, df, output_path)
+        warnings = self._negative_abundance_warnings()
 
         return {
             "format": fmt,
@@ -1160,6 +1231,9 @@ class ExportMixin:
             "path": saved_path,
             "csv": csv_string,
             "csv_content": csv_string,
+            # 键存在 ⇔ 真的有问题（与 manifest.warnings 同一约定）：
+            # 负丰度被截成 0 的行必须能被调用方看见，不能只活在后端内存里。
+            **({"warnings": warnings} if warnings else {}),
         }
 
     @staticmethod
@@ -1292,6 +1366,7 @@ class ExportMixin:
         columns = getattr(self, "columns", [])
         taxa_names = getattr(self, "taxa_names", [])
         sparse_columns = _control_point_only_columns(self)
+        negatives: list = []
         values: dict[str, Any] = {}
         for c_idx in sorted(self.column_points.keys()):
             col_def = columns[c_idx] if c_idx < len(columns) else {}
@@ -1309,6 +1384,7 @@ class ExportMixin:
             scale = resolve_column_scale(self, col_def, c_idx)
             # 未标定整列不给数在 read_column_values 里判；缺行给 0 点（无墨迹 = 真零）
             # 还是 None（控制点合成列 = 没有这一行的读数），由该列的来历决定。
+            before = len(negatives)
             values[col_name] = _mask_outside_window(
                 all_rows,
                 _read_row_values(
@@ -1318,10 +1394,18 @@ class ExportMixin:
                     strict=strict,
                     col_name=col_name,
                     missing_is_na=c_idx in sparse_columns,
+                    negatives=negatives,
                 ),
                 _column_row_window(self, col_def, c_idx),
                 p_dict,
             )
+            for item in negatives[before:]:
+                item.setdefault("column", col_name)
+                idx = item.get("index")
+                item.setdefault(
+                    "row", all_rows[idx] if 0 <= idx < len(all_rows) else None
+                )
+        self._negative_readouts = negatives
         return values
 
     def _write_export_file(
@@ -1533,7 +1617,19 @@ class ExportMixin:
                 # 未标定列不出数：与 CSV / TAR / XLSX 同一个入口、同一套策略。
                 # `px_to_value` 在 legacy/default 分支会用列宽归一估一个百分比——那是程序
                 # 默认值不是读数；四路出口必须都按同一条判据给 None。
-                val = read_column_values(scale, [interp_x], col_name=taxon)[0]
+                readouts = getattr(self, "_negative_readouts", None)
+                if readouts is None:
+                    readouts = self._negative_readouts = []
+                before = len(readouts)
+                val = read_column_values(
+                    scale,
+                    [interp_x],
+                    col_name=taxon,
+                    negatives=readouts,
+                )[0]
+                for item in readouts[before:]:
+                    item.setdefault("column", taxon)
+                    item.setdefault("depth", round(float(d), 4))
 
                 row_vals.append(val)
                 row_dict[taxon] = val
@@ -1562,6 +1658,12 @@ class ExportMixin:
         不传（None）保持既有调用字节不变（samples 优先，即 `data.csv` 的语义）。
         """
         res = self.export_data("csv", output_path=output_path, dataset=dataset)
+        # export.csv 的返回契约是**裸 CSV 字符串**（前端按字符串消费），
+        # 告警不能塞进返回值里。改由 readiness 通道回传：面板打开时就能看到
+        # "这几行的 0.0 是截出来的"。空列表 ⇔ 没有问题。
+        self._last_export_warnings = (
+            list(res.get("warnings") or []) if isinstance(res, dict) else []
+        )
         if output_path:
             return {"path": output_path, "success": True}
         return res.get("csv", "") if isinstance(res, dict) else str(res)

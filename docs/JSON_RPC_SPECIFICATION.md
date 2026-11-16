@@ -512,6 +512,22 @@
 
 行集大小是定义的一部分：同一会话下三者行数必然不同（实测 298 / 21 / 896）。前端导出面板的下拉与本参数一一对应，且面板只渲染本接口返回的数据——不得由前端另算一套。
 
+#### `warnings` 键：负丰度必须显式化（2026-11-16）
+
+物理丰度没有负值，但像素落在 0 点左侧是**真实会发生**的几何情形（近零行的墨迹就是轴线自身的像素，实测比 0 点小 1px）。两个决定：
+
+1. 表里写 `0.0`（不编造负丰度）；
+2. 返回体带 `warnings`（键存在 ⇔ 真的有问题，与 `manifest.warnings` 同一约定），否则"截出来的 0"与"测到的 0"无法区分。
+
+| 字段 | 含义 |
+| :--- | :--- |
+| `code` | 目前只有 `NEGATIVE_ABUNDANCE` |
+| `columns.<列名>` | `{count, min, rows, depths}`：几何上为负的行 |
+
+`export.csv` 的返回契约仍是**裸 CSV 字符串**（前端按字符串消费），故告警由 `export.getReadiness` 回传；`export.data` 直接在返回体里带该键。
+
+配套不变量：`straditize.getDiagramData` 是**只读** RPC，不得改写 `column_points`。它曾无条件调用 `session.digitize()`，把取数缓存填成逐行墨迹，而导出按"缓存非空就取稠密曲线、为空就插值控制点"分流 —— 于是"先开画布再导出"与"直接导出"是两张表（实测同一格 68.6885 vs 68.65）。画布口径（控制点折线）与导出口径必须是同一条曲线，判据见 `tests/unit/test_canvas_export_numeric_consistency.py`。
+
 ### 4.10 `column.calibrateXTicks` 与 `column.clearXTicks`
 步骤 6 属种列 X-轴标尺标定与清空。
 

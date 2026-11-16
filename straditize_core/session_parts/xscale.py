@@ -128,6 +128,7 @@ class ColumnScale:
         col_name: str = "column",
         ndigits: int | None = 4,
         require_calibrated: bool = True,
+        clamp: bool = True,
     ) -> float:
         """Convert an image X pixel coordinate to scientific abundance/value.
 
@@ -198,9 +199,15 @@ class ColumnScale:
         ):
             val = val / self.exaggeration_mult
 
-        clamped = max(0.0, val)
-        return round(clamped, ndigits) if ndigits is not None else clamped
+        # clamp=False 只给**诊断**用：几何上算出负值时上层必须显式告警，
+        # 而告警需要看到负的原值。写入表的值永远是 clamp 过的（物理丰度无负）。
+        result = max(0.0, val) if clamp else val
+        return round(result, ndigits) if ndigits is not None else result
 
+
+#: 负值判定容差：只吸收浮点噪声（四舍五入后的 -0.0 之类），不吸收真实负读数
+#: —— 后者是 0 点位置错了的信号，必须报出去。
+_NEGATIVE_EPS = 1e-9
 
 READ_PROFILE_EXPORT = "export"
 READ_PROFILE_QA = "qa"
@@ -229,6 +236,7 @@ def read_column_values(
     profile: str = READ_PROFILE_EXPORT,
     strict: bool = False,
     col_name: str = "",
+    negatives: list[dict[str, Any]] | None = None,
 ) -> list[float | None]:
     """把一串像素读成读数——**唯一入口**，出口差异只由 `profile` 表达。
 
@@ -247,17 +255,24 @@ def read_column_values(
     if policy["null_when_uncalibrated"] and not scale.calibrated:
         return [None] * len(rows_px)
     baseline = float(scale.abs_px0)
-    return [
-        scale.px_to_value(
+    ndigits = policy["ndigits"]
+    values: list[float | None] = []
+    for index, x in enumerate(rows_px):
+        raw = scale.px_to_value(
             x,
             baseline_px=baseline,
             strict=strict,
             col_name=col_name,
             require_calibrated=policy["require_calibrated"],
-            ndigits=policy["ndigits"],
+            ndigits=ndigits,
+            clamp=False,
         )
-        for x in rows_px
-    ]
+        # 负值**不静默**：几何上落在 0 点左侧的读数一律登记，由导出出口变成
+        # 显式 warning（表里仍写 0.0 —— 物理丰度没有负值，但 0.0 不等于真实零）。
+        if negatives is not None and raw is not None and raw < -_NEGATIVE_EPS:
+            negatives.append({"index": index, "px": float(x), "value": raw})
+        values.append(None if raw is None else max(0.0, raw))
+    return values
 
 
 def resolve_column_scale(
