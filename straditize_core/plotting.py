@@ -1,4 +1,4 @@
-"""本机一键出图：探测 Rscript、生成 rioja 脚本、跑出 PDF/PNG。
+"""本机一键出图：探测 Rscript、生成 rioja 脚本、跑出 JPEG/PDF。
 
 ## 为什么单开一个模块
 
@@ -134,12 +134,12 @@ depth <- raw[[1]]
 taxa <- as.matrix(sapply(raw[, -1, drop = FALSE], as.numeric))
 
 ext <- tolower(tools::file_ext(out_path))
-if (ext == "png") {
-  png(out_path, width = 1800, height = 1300, res = 150)
-} else if (ext == "svg") {
-  svg(out_path, width = 12, height = 8)
-} else {
+if (ext == "jpeg" || ext == "jpg") {
+  jpeg(out_path, width = 1800, height = 1300, res = 150, quality = 95)
+} else if (ext == "pdf") {
   pdf(out_path, width = 12, height = 8)
+} else {
+  stop("unsupported plot format: ", ext, " (jpeg / pdf)")
 }
 rioja::strat.plot(
   d = taxa,

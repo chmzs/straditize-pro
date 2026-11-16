@@ -53,18 +53,15 @@ DEFAULT_PLOT_SETTINGS: dict[str, Any] = {
 #: 只有 riojaPlot 才有的开关；回退到 rioja 时这些不生效，必须报告。
 RIOJAPLOT_ONLY_KEYS = ("italicise", "break_long", "break_n", "exaggeration", "exag_mult", "exag_alpha", "minmax", "label_rotate")
 
-SUPPORTED_PLOT_FORMATS = ("jpeg", "jpg", "png", "webp", "pdf", "svg")
-
-#: webp 不是 R 的图形设备（webp 包只读写、不画图）：先出 PNG，再用 Pillow 转码。
-PNG_TRANSCODE_FORMATS = ("webp",)
+#: 出图格式只有两种，前后端同一份枚举（用户裁决："前后端一致支持两种就行了，
+#: jpg 和 pdf，没必要冗余"）。jpeg = 位图，直接分享；pdf = 矢量，适合排版放大。
+#: 曾同时支持 png / jpg / webp / svg，四份冗余枚举要在前端下拉、RPC 校验、文档与测试
+#: 四处各维护一遍，且没有任何一种带来 jpeg/pdf 之外的用途。
+SUPPORTED_PLOT_FORMATS = ("jpeg", "pdf")
 
 MIME_BY_FORMAT = {
     "jpeg": "image/jpeg",
-    "jpg": "image/jpeg",
-    "png": "image/png",
     "pdf": "application/pdf",
-    "svg": "image/svg+xml",
-    "webp": "image/webp",
 }
 
 
@@ -221,16 +218,12 @@ H <- num("height_px", 1500)
 DPI <- num("dpi", 150)
 
 open_device <- function() {
-  if (fmt %in% c("jpeg", "jpg")) {
+  if (fmt == "jpeg") {
     grDevices::jpeg(out_path, width = W, height = H, res = DPI, quality = 95, type = "cairo")
-  } else if (fmt == "png") {
-    grDevices::png(out_path, width = W, height = H, res = DPI, type = "cairo")
-  } else if (fmt == "svg") {
-    grDevices::svg(out_path, width = W / DPI, height = H / DPI)
   } else if (fmt == "pdf") {
     grDevices::pdf(out_path, width = W / DPI, height = H / DPI)
   } else {
-    stop("STRADITIZE_ERROR: 不支持的输出格式 ", fmt, "（支持 jpeg/png/pdf/svg）")
+    stop("STRADITIZE_ERROR: 不支持的输出格式 ", fmt, "（支持 jpeg/pdf）")
   }
 }
 

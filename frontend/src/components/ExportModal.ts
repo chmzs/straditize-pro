@@ -232,20 +232,30 @@ export class ExportModal {
 
         <!-- 本机出图预览：图直接显示在这里，下载走浏览器下载事件。
              以前只把路径写进 ~/.straditize/plots，用户点完按钮还得自己去隐藏目录里找，
-             那不是「出图」，是「出一个文件路径」。 -->
+             那不是「出图」，是「出一个文件路径」。
+
+             预览区自带缩放/平移：默认「适应窗口」显示全貌（object-fit: contain + 固定
+             46vh 高，长图不会把弹窗撑爆），滚轮以光标为锚点缩放、拖拽平移、双击复位。 -->
         <div class="form-group" id="wpd-plot-preview-box" style="display: none; margin: 0;">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
             <label style="font-size: 11px; font-weight: bold; color: var(--accent-blue);">本机出图预览</label>
             <div style="display: flex; align-items: center; gap: 6px;">
-              <select id="sel-wpd-plot-format" class="sample-select" style="font-size: 11px;" title="出图格式（JPEG 可直接分享，PNG 无损）">
-                <option value="jpeg" selected>JPEG</option>
-                <option value="png">PNG</option>
+              <select id="sel-wpd-plot-format" class="sample-select" style="font-size: 11px;" title="下载格式：JPEG 位图，直接分享；PDF 矢量，适合排版放大（只影响下载，预览固定 JPEG）">
+                <option value="jpeg" selected>JPEG（位图 · 直接分享）</option>
+                <option value="pdf">PDF（矢量 · 排版放大）</option>
               </select>
               <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-plot-download" disabled>下载图片</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-wpd-plot-close" title="关闭预览并释放图片数据">✕ 关闭预览</button>
             </div>
           </div>
-          <div id="wpd-plot-frame" style="border: 1px solid var(--border-light); border-radius: 6px; background: var(--bg-tertiary); padding: 4px; max-height: 420px; overflow: auto;">
-            <img id="wpd-plot-image" alt="地层图预览" style="display: block; width: 100%; height: auto;" />
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 10px; color: var(--text-muted);">
+            <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-wpd-plot-fit" title="整图缩放到预览框内（默认）">适应窗口</button>
+            <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-wpd-plot-actual" title="按图片原始像素 1:1 显示，超出部分拖拽查看">1:1</button>
+            <span id="wpd-plot-zoom-label" style="min-width: 40px; text-align: right;">100%</span>
+            <span>滚轮缩放（光标为锚点）· 拖拽平移 · 双击复位 · 预览固定 JPEG，下载按所选格式</span>
+          </div>
+          <div id="wpd-plot-frame" style="position: relative; border: 1px solid var(--border-light); border-radius: 6px; background: var(--bg-tertiary); padding: 0; height: 46vh; max-height: 46vh; overflow: hidden; cursor: grab; touch-action: none;">
+            <img id="wpd-plot-image" alt="地层图预览" draggable="false" style="display: block; width: 100%; height: 100%; object-fit: contain; transform-origin: 0 0; will-change: transform; user-select: none;" />
           </div>
           <p id="wpd-plot-meta" style="font-size: 10px; color: var(--text-muted); margin: 6px 0 0;"></p>
         </div>
@@ -676,19 +686,143 @@ export class ExportModal {
     const plotMeta = modal.querySelector('#wpd-plot-meta') as HTMLElement | null;
     const plotDownload = modal.querySelector('#btn-wpd-plot-download') as HTMLButtonElement | null;
     const plotFormat = modal.querySelector('#sel-wpd-plot-format') as HTMLSelectElement | null;
+    const plotFrame = modal.querySelector('#wpd-plot-frame') as HTMLElement | null;
+    const plotClose = modal.querySelector('#btn-wpd-plot-close') as HTMLButtonElement | null;
+    const plotFitBtn = modal.querySelector('#btn-wpd-plot-fit') as HTMLButtonElement | null;
+    const plotActualBtn = modal.querySelector('#btn-wpd-plot-actual') as HTMLButtonElement | null;
+    const plotZoomLabel = modal.querySelector('#wpd-plot-zoom-label') as HTMLElement | null;
 
-    plotDownload?.addEventListener('click', () => {
-      if (!lastPlot) return;
-      const a = document.createElement('a');
-      a.href = lastPlot.dataUrl;
-      a.download = `straditize_strat_diagram_${Date.now()}.${lastPlot.format}`;
-      a.click();
+    // ---- 预览区缩放 / 平移 ----
+    //
+    // 视图 = `translate(tx, ty) scale(scale)`，原点固定在图左上角（`transform-origin: 0 0`）。
+    // 默认 scale=1 / tx=ty=0 就是「适应窗口」：`<img>` 是 width/height:100% +
+    // `object-fit: contain`，长图自动缩到框内，用户一打开就看见全貌。
+    const PLOT_MIN_SCALE = 0.2;
+    const PLOT_MAX_SCALE = 12;
+    const plotView = { scale: 1, tx: 0, ty: 0 };
+
+    /**
+     * 图在容器里的**实际画面**几何。
+     *
+     * `<img>` 的布局盒永远等于容器，真正画出来的图是盒内居中的那块（contain 会留白）。
+     * 缩放/平移必须按画面算：按盒子算的话，光标锚点会偏掉一截留白，图会跟着跑。
+     */
+    const plotContentBox = () => {
+      const boxW = plotImg?.offsetWidth ?? 0;
+      const boxH = plotImg?.offsetHeight ?? 0;
+      const nw = plotImg?.naturalWidth ?? 0;
+      const nh = plotImg?.naturalHeight ?? 0;
+      if (!boxW || !boxH || !nw || !nh) return null;
+      const ratio = Math.min(boxW / nw, boxH / nh);
+      const width = nw * ratio;
+      const height = nh * ratio;
+      return { boxW, boxH, width, height, left: (boxW - width) / 2, top: (boxH - height) / 2 };
+    };
+
+    const applyPlotView = () => {
+      if (!plotImg) return;
+      plotImg.style.transform =
+        `translate(${plotView.tx}px, ${plotView.ty}px) scale(${plotView.scale})`;
+      if (plotZoomLabel) plotZoomLabel.textContent = `${Math.round(plotView.scale * 100)}%`;
+    };
+
+    /** 适应窗口：整图缩回框内（默认态）。双击也走这里。 */
+    const fitPlot = () => {
+      plotView.scale = 1;
+      plotView.tx = 0;
+      plotView.ty = 0;
+      applyPlotView();
+    };
+
+    /** 1:1：按图片原始像素显示并居中，超出框的部分靠拖拽/滚轮查看。 */
+    const actualSizePlot = () => {
+      const content = plotContentBox();
+      if (!content || !plotImg) return;
+      // 居中基准用 img 自己的布局盒（content.boxW/boxH），不用 frame.clientWidth：
+      // 框有 1px 边框，clientWidth 不含边框而 img 盒从边框内侧起算，用它会整体偏 1px。
+      const frameW = content.boxW;
+      const frameH = content.boxH;
+      const scale = plotImg.naturalWidth / content.width;
+      plotView.scale = scale;
+      // 画面中心对到框中心：画面点 u 的屏幕横坐标 = tx + scale * (left + u * width)。
+      plotView.tx = frameW / 2 - scale * (content.left + content.width / 2);
+      plotView.ty = frameH / 2 - scale * (content.top + content.height / 2);
+      applyPlotView();
+    };
+
+    /**
+     * 以容器内坐标 (px, py) 为锚点缩放到 nextScale：锚点下的那个图像点留在原地。
+     *
+     * 由画面点 u 的屏幕横坐标 X = tx + s * (left + u * width) 解出 u，再令新比例下
+     * X 仍等于 px，得到新的 tx（纵轴同理）。这样滚轮缩放是「钉住光标」而不是
+     * 「以框中心缩放」——后者在放大长图时目标会飘走。
+     */
+    const zoomPlotAt = (px: number, py: number, nextScale: number) => {
+      const content = plotContentBox();
+      if (!content) return;
+      const scale = Math.min(PLOT_MAX_SCALE, Math.max(PLOT_MIN_SCALE, nextScale));
+      const u = (px - plotView.tx - plotView.scale * content.left) / (plotView.scale * content.width);
+      const v = (py - plotView.ty - plotView.scale * content.top) / (plotView.scale * content.height);
+      plotView.scale = scale;
+      plotView.tx = px - scale * (content.left + u * content.width);
+      plotView.ty = py - scale * (content.top + v * content.height);
+      applyPlotView();
+    };
+
+    // 新图落地后回到「适应窗口」：换一张图还停在上一次的放大位置，用户会以为图没出来。
+    plotImg?.addEventListener('load', () => fitPlot());
+
+    plotFrame?.addEventListener('wheel', (ev) => {
+      if (!plotImg?.getAttribute('src')) return;
+      // 不 preventDefault 的话，滚轮会连带把弹窗内容滚走，图钉不住。
+      ev.preventDefault();
+      const rect = plotFrame.getBoundingClientRect();
+      const factor = Math.exp(-ev.deltaY * 0.0015);
+      zoomPlotAt(ev.clientX - rect.left, ev.clientY - rect.top, plotView.scale * factor);
+    }, { passive: false });
+
+    // 拖拽平移：pointer capture 让指针移出框后仍然跟随（否则一甩就断）。
+    let dragFrom: { x: number; y: number; tx: number; ty: number } | null = null;
+    plotFrame?.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 0 || !plotImg?.getAttribute('src')) return;
+      dragFrom = { x: ev.clientX, y: ev.clientY, tx: plotView.tx, ty: plotView.ty };
+      plotFrame.setPointerCapture(ev.pointerId);
+      plotFrame.style.cursor = 'grabbing';
     });
+    plotFrame?.addEventListener('pointermove', (ev) => {
+      if (!dragFrom) return;
+      plotView.tx = dragFrom.tx + (ev.clientX - dragFrom.x);
+      plotView.ty = dragFrom.ty + (ev.clientY - dragFrom.y);
+      applyPlotView();
+    });
+    const endPlotDrag = (ev: PointerEvent) => {
+      if (!dragFrom) return;
+      dragFrom = null;
+      if (plotFrame?.hasPointerCapture(ev.pointerId)) plotFrame.releasePointerCapture(ev.pointerId);
+      if (plotFrame) plotFrame.style.cursor = 'grab';
+    };
+    plotFrame?.addEventListener('pointerup', endPlotDrag);
+    plotFrame?.addEventListener('pointercancel', endPlotDrag);
+    plotFrame?.addEventListener('dblclick', () => fitPlot());
+    plotFitBtn?.addEventListener('click', () => fitPlot());
+    plotActualBtn?.addEventListener('click', () => actualSizePlot());
 
-    modal.querySelector('#btn-wpd-plot-oneclick')?.addEventListener('click', async (ev) => {
-      const btn = ev.currentTarget as HTMLButtonElement;
-      const label = btn.textContent || '本机出图';
-      const fmt = plotFormat?.value || 'jpeg';
+    /** 关掉预览并把图数据真的放掉（data URL 是几十万字符的字符串，留着就是泄漏）。 */
+    const closePlotPreview = () => {
+      lastPlot = null;
+      if (plotImg) plotImg.removeAttribute('src');
+      if (plotBox) plotBox.style.display = 'none';
+      if (plotDownload) plotDownload.disabled = true;
+      if (plotMeta) plotMeta.textContent = '';
+      fitPlot();
+    };
+    plotClose?.addEventListener('click', () => closePlotPreview());
+
+    /** 出图（唯一入口）：本机出图按钮与「按所选格式下载」都走这里。失败直接抛。 */
+    const renderPlot = async (fmt: string, options: { quiet?: boolean; preview?: boolean } = {}) => {
+      // `preview: false` = 只为下载出图（PDF 无法塞进 <img>，塞进去就是一张碎图 +
+      // 一条控制台报错）。预览永远是 JPEG，下载按所选格式现场出图。
+      const preview = options.preview !== false;
       // y 轴范围三格：三项都填才发给后端（后端同一口径，只给一部分会被整套忽略并提示）。
       const readNum = (selector: string): number | null => {
         const el = modal.querySelector(selector) as HTMLInputElement | null;
@@ -711,34 +845,74 @@ export class ExportModal {
       } else if (yHint) {
         yHint.textContent = '';
       }
+      const res: any = await this.rpcClient.call<any, any>('plot.render', {
+        format: fmt,
+        ...(yAxis ? { settings: { y_axis: yAxis } } : {}),
+      });
+      if (!res?.data_url) throw new Error('后端没有返回图片数据（data_url 为空）');
+      const plot = { dataUrl: String(res.data_url), format: String(res.format || fmt) };
+      if (preview) {
+        lastPlot = plot;
+        if (plotImg) plotImg.src = plot.dataUrl;
+        if (plotBox) plotBox.style.display = '';
+        if (plotDownload) plotDownload.disabled = false;
+      }
+      const sizeKb = Math.round(Number(res?.size_bytes || 0) / 1024);
+      const warns: string[] = Array.isArray(res?.warnings) ? res.warnings.filter(Boolean) : [];
+      if (plotMeta) {
+        plotMeta.textContent =
+          `${res?.engine || '?'} · ${res?.columns_count ?? '?'} 列 · ${res?.rows_count ?? '?'} 行 · ` +
+          `${res?.format || fmt} · ${sizeKb} KB` +
+          (warns.length ? ` · 警告：${warns.join(' / ')}` : '');
+      }
+      if (!options.quiet) {
+        if (warns.length) notify('出图完成，但有降级：' + warns.join('；'), 'info', 12000);
+        else notify('出图完成（' + sizeKb + ' KB）：图在上方预览区，点「下载图片」保存。', 'success', 6000);
+      }
+      return plot;
+    };
+
+    const reportPlotError = (err: any) => {
+      const data = (err as { data?: { reason?: string } } | null)?.data;
+      notifyError(
+        (data?.reason === 'r_missing' ? '本机出图需要 R + rioja：' : '出图失败：') +
+          String(err?.message || err)
+      );
+    };
+
+    // 下载：按**所选扩展名**保存（手里是预览 JPEG，选 PDF 时现场重出，见下）。
+    plotDownload?.addEventListener('click', async () => {
+      if (!lastPlot) return;
+      const selected = plotFormat?.value || 'jpeg';
+      const btn = plotDownload;
+      btn.disabled = true;
+      try {
+        // 手里这份是预览用的 JPEG；选 PDF 时必须按 PDF 现场重出，再把 PDF 字节存成
+        // .pdf —— 直接把 jpeg 字节存成 .pdf，用户会拿到一个打不开的文件。
+        const plot = selected === 'jpeg' && lastPlot.format === 'jpeg'
+          ? lastPlot
+          : await renderPlot(selected, { quiet: true, preview: false });
+        const a = document.createElement('a');
+        a.href = plot.dataUrl;
+        a.download = `straditize_strat_diagram_${Date.now()}.${plot.format}`;
+        a.click();
+      } catch (err: any) {
+        reportPlotError(err);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    modal.querySelector('#btn-wpd-plot-oneclick')?.addEventListener('click', async (ev) => {
+      const btn = ev.currentTarget as HTMLButtonElement;
+      const label = btn.textContent || '本机出图';
       btn.disabled = true;
       btn.textContent = '出图中…';
       try {
-        const res: any = await this.rpcClient.call<any, any>('plot.render', {
-          format: fmt,
-          ...(yAxis ? { settings: { y_axis: yAxis } } : {}),
-        });
-        if (!res?.data_url) throw new Error('后端没有返回图片数据（data_url 为空）');
-        lastPlot = { dataUrl: String(res.data_url), format: String(res.format || fmt) };
-        if (plotImg) plotImg.src = lastPlot.dataUrl;
-        if (plotBox) plotBox.style.display = '';
-        if (plotDownload) plotDownload.disabled = false;
-        const sizeKb = Math.round(Number(res?.size_bytes || 0) / 1024);
-        const warns: string[] = Array.isArray(res?.warnings) ? res.warnings.filter(Boolean) : [];
-        if (plotMeta) {
-          plotMeta.textContent =
-            `${res?.engine || '?'} · ${res?.columns_count ?? '?'} 列 · ${res?.rows_count ?? '?'} 行 · ` +
-            `${res?.format || fmt} · ${sizeKb} KB` +
-            (warns.length ? ` · 警告：${warns.join(' / ')}` : '');
-        }
-        if (warns.length) notify('出图完成，但有降级：' + warns.join('；'), 'info', 12000);
-        else notify('出图完成（' + sizeKb + ' KB）：图在上方预览区，点「下载图片」保存。', 'success', 6000);
+        // 预览固定 JPEG：PDF 无法内嵌显示；所选格式只决定「下载图片」写出的扩展名。
+        await renderPlot('jpeg');
       } catch (err: any) {
-        const data = (err as { data?: { reason?: string } } | null)?.data;
-        notifyError(
-          (data?.reason === 'r_missing' ? '本机出图需要 R + rioja：' : '出图失败：') +
-            String(err?.message || err)
-        );
+        reportPlotError(err);
       } finally {
         btn.disabled = false;
         btn.textContent = label;
