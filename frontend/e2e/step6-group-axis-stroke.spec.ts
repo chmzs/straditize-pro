@@ -67,10 +67,6 @@ async function selectGroup(page: Page, gid: string): Promise<void> {
   await page.waitForTimeout(200);
 }
 
-async function axisStrokeInput(page: Page): Promise<string> {
-  return page.locator('#inp-axis-stroke').inputValue();
-}
-
 test.describe('步骤 6：组轴粗的显示隔离', () => {
   test('T1 给 grp2 设 1 后，grp1 / grp3 的输入框不得跟着显示 1', async ({ page }) => {
     const { g1, g2, g3 } = await setupThreeGroups(page);
