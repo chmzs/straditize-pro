@@ -149,15 +149,20 @@ def test_readme_documents_units_and_the_scale_rule() -> None:
     assert "normalized" in readme, "README 必须写明 % 列是逐列归一（不是共用 0-100 轴）"
 
 
-def test_all_percent_project_keeps_the_single_call_template() -> None:
-    """零回归：全 % 的工程仍只生成一次 strat.plot 调用，参数与以前一致。"""
+def test_all_percent_project_emits_one_call_with_own_range_minmax() -> None:
+    """全 % 工程：一次调用，xlim 由逐列 minmax 给出（不再写死 scale.percent = TRUE）。"""
     session = _session()
     script = _script(session)
 
-    assert "fixed_cols" not in script, "没有任何非 % 列时不该出现分两次画的代码"
-    assert "scale.percent = FALSE" not in script
     assert script.count("strat.plot(") == 1
-    assert "scale.percent = TRUE" in script
+    call_line = next(line for line in script.splitlines() if "strat.plot(" in line)
+    assert "scale.percent = FALSE" in call_line, (
+        "面板宽度必须等宽：rioja 的 percent=TRUE 会让面板宽度 ∝ 该列最大值，"
+        "一个 800 的浓度列会把百分比列挤成细条"
+    )
+    assert "scale.minmax = TRUE" in call_line
+    assert "minmax = cbind(lo, hi)" in call_line, "每列 xlim 必须由数据算出"
+    assert "非百分比列" not in script, "全 % 时不该出现非百分比列说明"
 
 
 def test_three_places_agree_on_the_same_unit_string() -> None:
@@ -179,33 +184,24 @@ def test_three_places_agree_on_the_same_unit_string() -> None:
         f"三处不一致：payload={payload_unit!r} lipd={lipd_unit!r} manifest={manifest_unit!r}"
     )
 
-def test_two_percent_groups_both_go_percent_then_one_unit_splits_them() -> None:
-    """两个组都是 % → 两列都走 percent；把其中一组改成 粒/g → 只有该组落到 fixed。"""
+def test_unit_change_moves_a_group_between_percent_and_own_range() -> None:
+    """两组都 % → 无「非百分比列」说明；改一组 粒/g → 该组列被点名，脚本随之变化。"""
     session = _session()
-    roi_id, pct_gid, other_gid = _two_groups(session)
+    roi_id, _pct_gid, other_gid = _two_groups(session)
     session.roi_group_update(roi_id, other_gid, {"unit": "%"})
 
     other_col = next(c.get("name") for c in session.columns if c.get("x_group_id") == other_gid)
-    pct_col = next(c.get("name") for c in session.columns if c.get("x_group_id") == pct_gid)
 
     both_pct = _script(session)
-    assert "fixed_cols" not in both_pct, "两个组都是 % 时不该出现 fixed 分支"
-    assert both_pct.count("strat.plot(") == 1, "两个 % 组应共用同一次 percent 调用"
-    call_line = next(line for line in both_pct.splitlines() if "strat.plot(" in line)
-    assert "scale.percent = TRUE" in call_line
-    # 全 % 时脚本把整张表（df[-1]）交给同一次 percent 调用，列名不出现在行里
-    assert "[-1]" in call_line, f"两个 % 列必须都在同一次 percent 调用里：{call_line}"
+    assert "非百分比列" not in both_pct, "两个组都是 % 时不该有非百分比列"
+    assert both_pct.count("strat.plot(") == 1
 
-    # 只改一个组的单位 → 只有该组的列落到 fixed 分支
     session.roi_group_update(roi_id, other_gid, {"unit": "粒/g"})
     split = _script(session)
 
-    fixed_line = next(line for line in split.splitlines() if "fixed_cols <- intersect(" in line)
-    pct_line = next(line for line in split.splitlines() if "pct_cols <- intersect(" in line)
-    assert f'"{other_col}"' in fixed_line, f"非 % 组的列没落到 fixed：{fixed_line}"
-    assert f'"{other_col}"' not in pct_line
-    assert f'"{pct_col}"' in pct_line, f"% 组的列不该被拖进 fixed：{pct_line}"
-    assert "scale.percent = FALSE" in split
+    assert split != both_pct, "改单位必须改变脚本"
+    assert "非百分比列" in split
+    assert f"{other_col}(粒/g)" in split, f"改单位后该列必须被点名：{split[:300]}"
 
 def _first_rscript() -> str | None:
     found = candidate_rscripts()
@@ -239,22 +235,17 @@ def test_generated_script_actually_runs_on_a_mixed_project(tmp_path) -> None:
     session.roi_group_update(roi_id, counts_gid, {"unit": "counts"})
 
     members = _tar_members(session)
-    # 本判据验的是**脚本结构**（两次 strat.plot + add = TRUE 能不能跑），不是取数：
-    # 这个会话没有数字化过列，导出的表全是 NA，rioja 会因 xlim 非有限而报错——
-    # 那是「没有数据」的报错，会把结构问题盖住。所以用同名列的合成数值覆盖 CSV。
-    for name, data in members.items():
-        if not name.startswith("data/"):
-            continue
-        header = data.decode("utf-8").splitlines()[0]
-        cols = header.split(",")
-        rows = [header]
-        for row_index in range(1, 4):
-            values = [str(row_index * 10)]
-            values += [str(round(10.0 * row_index + col_index, 2)) for col_index in range(1, len(cols))]
-            rows.append(",".join(values))
-        target = tmp_path / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    # 脚本读的是 data.csv（主有效区）。这个会话没数字化过列，导出的表全是 NA，
+    # rioja 会因 xlim 非有限而报错——那是「没有数据」的报错，会把结构问题盖住。
+    # 所以用同名列的合成数值覆盖 data.csv，专测脚本结构能否跑通。
+    header = members["data.csv"].decode("utf-8").splitlines()[0]
+    cols = header.split(",")
+    rows = [header]
+    for row_index in range(1, 4):
+        values = [str(row_index * 10)]
+        values += [str(round(10.0 * row_index + col_index, 2)) for col_index in range(1, len(cols))]
+        rows.append(",".join(values))
+    (tmp_path / "data.csv").write_text("\n".join(rows) + "\n", encoding="utf-8")
     (tmp_path / "plot_strat.R").write_bytes(members["plot_strat.R"])
 
     proc = subprocess.run(
@@ -268,3 +259,35 @@ def test_generated_script_actually_runs_on_a_mixed_project(tmp_path) -> None:
 
     assert proc.returncode == 0, proc.stderr or proc.stdout
     assert (tmp_path / "Rplots.pdf").is_file(), "脚本必须真的画出图来"
+
+def test_tar_member_equals_download_script_byte_identical() -> None:
+    """判据：同一工程，tar 内 plot_strat.R 与「R 脚本」下载**逐字节相同**。"""
+    session = _session()
+    roi_id, _, counts_gid = _two_groups(session)
+    session.roi_group_update(roi_id, counts_gid, {"unit": "counts"})
+
+    from_tar = _tar_members(session)["plot_strat.R"]
+    from_download = session.export_r().encode("utf-8")
+    assert from_tar == from_download, "tar 成员与下载内容必须同源（同一生成器）"
+
+    # 改单位 → 两者同时变化，且仍逐字节相同
+    session.roi_group_update(roi_id, counts_gid, {"unit": "%"})
+    changed_tar = _tar_members(session)["plot_strat.R"]
+    changed_download = session.export_r().encode("utf-8")
+    assert changed_tar != from_tar, "改单位必须改变 tar 里的脚本"
+    assert changed_download != from_download, "改单位必须改变下载的脚本"
+    assert changed_tar == changed_download
+
+
+def test_project_archive_tar_uses_the_same_script(tmp_path) -> None:
+    """`project.save(format="tar")`（工程包）里的 plot_strat.R 也必须是同一份。"""
+    session = _session()
+    roi_id, _, counts_gid = _two_groups(session)
+    session.roi_group_update(roi_id, counts_gid, {"unit": "counts"})
+
+    out = tmp_path / "proj.tar"
+    session.project_save(output_path=str(out), format="tar")
+    with tarfile.open(out) as tf:
+        from_project = tf.extractfile("plot_strat.R").read()
+
+    assert from_project == session.export_r().encode("utf-8")
