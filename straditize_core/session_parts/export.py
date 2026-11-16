@@ -35,7 +35,7 @@ from ..protocol import (
     JsonRpcError,
 )
 from .agedepth import attach_windowed_rates, build_age_depth_frame
-from ..strat_plot import build_strat_plot_r_script
+from ..strat_plot import build_strat_plot_r_script, is_percent_unit
 from .xscale import read_column_values, resolve_column_scale
 
 # `is_percent_unit` / `PERCENT_UNITS` 的唯一实现在 `strat_plot.py`（与出图共用同一口径），
@@ -1627,12 +1627,44 @@ class ExportMixin:
         units = self._roi_column_units().get(name, {})
         return [(name, "data.csv", dict(units))]
 
+    def _column_widths_from_frame(self, frame: Any, units: dict[str, str]) -> dict[str, float]:
+        """按导出表算每列的列宽权重（与出图同一公式），写进 R 脚本时是字面数字。
+
+        % 列：w_i = max_i / mean(max of % cols)（照抄 riojaPlot percent 分支的 colM；
+        不 floor、不 clip）。非 % 列：固定权重 = % 列 w 的中位数（与自身数值无关）。
+        """
+        cols = [c for c in frame.columns if str(c) in units]
+        maxes: dict[str, float] = {}
+        for col in cols:
+            series = frame[col].dropna()
+            value = float(series.max()) if len(series) else 1.0
+            maxes[str(col)] = value if value > 0 else 1.0
+        pct = [c for c in cols if is_percent_unit(units[str(c)])]
+        weights: dict[str, float] = {}
+        if pct:
+            ref = sum(maxes[str(c)] for c in pct) / len(pct)
+            if ref <= 0:
+                ref = 1.0
+            for col in pct:
+                weights[str(col)] = maxes[str(col)] / ref
+        if len(pct) < len(cols):
+            fixed_w = sorted(weights.values())[len(weights) // 2] if weights else 1.0
+            for col in cols:
+                weights.setdefault(str(col), fixed_w)
+        return weights
+
     def strat_plot_r_script(self, widths: dict[str, float] | None = None) -> str:
         """导出用 R 脚本（唯一出口）。tar 成员与「R 脚本」下载都调它。
 
         `widths` 是显式列宽（相对权重）；给空时由生成器按「% 列 ∝ 本列最大值」
         的规则在脚本里算，非空项以**字面数字**写进脚本，用户可手工改。
         """
+        if widths is None:
+            entries = self._strat_script_entries()
+            if entries:
+                _label, _csv, units = entries[0]
+                frame = self._primary_roi_export_frame(strict=False)
+                widths = self._column_widths_from_frame(frame, units)
         return build_strat_plot_r_script(self._strat_script_entries(), widths=widths)
 
     def export_r(self, output_path: str | None = None) -> str | dict[str, Any]:
