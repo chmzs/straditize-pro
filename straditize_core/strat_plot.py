@@ -69,15 +69,15 @@ RIOJAPLOT_ONLY_KEYS = (
     "label_rotate",
 )
 
-#: 出图格式只有两种，前后端同一份枚举（用户裁决："前后端一致支持两种就行了，
-#: jpg 和 pdf，没必要冗余"）。jpeg = 位图，直接分享；pdf = 矢量，适合排版放大。
-#: 曾同时支持 png / jpg / webp / svg，四份冗余枚举要在前端下拉、RPC 校验、文档与测试
-#: 四处各维护一遍，且没有任何一种带来 jpeg/pdf 之外的用途。
-SUPPORTED_PLOT_FORMATS = ("jpeg", "pdf")
+#: 出图格式只有两种，前后端同一份枚举（用户裁决：jpg + svg；PDF 字体处理麻烦，砍掉）。
+#: jpeg = 位图，设备端烘焙好，所见即所得（预览固定用它）；svg = 矢量，适合排版放大。
+#: 曾先后支持过 png / jpg / webp / pdf：每多一种就要在前端下拉、RPC 校验、R 设备分支、
+#: 文档与测试五处各维护一遍，而用户实际只用得上位图与矢量两种。
+SUPPORTED_PLOT_FORMATS = ("jpeg", "svg")
 
 MIME_BY_FORMAT = {
     "jpeg": "image/jpeg",
-    "pdf": "application/pdf",
+    "svg": "image/svg+xml",
 }
 
 
@@ -275,13 +275,70 @@ W <- num("width_px", 2200)
 H <- num("height_px", 1500)
 DPI <- num("dpi", 150)
 
+# ---- 中文字体：cairo 设备只认**真实字体名**，R 的 windowsFonts 别名它不认 ----------
+# 用户的写法是 windowsFonts(straditize = windowsFont("SimHei")) 再 family = "straditize"。
+# 实测（本机 R 4.x + cairo）：别名在 jpeg()/svg() 里**不生效** —— family = "straditize"
+# 的产物与 family = "sans" 逐字节相同（同尺寸 996 个暗像素），中文全成方框；
+# 直接传真实字体名 family = "SimHei" 才有字（7528 个暗像素，SVG 813B → 9.3KB 的字形轮廓）。
+# 所以两件事都做：注册别名（pdf/postscript 那类设备认它），并记住真实名给 cairo 用。
+CN_FONT_NAMES <- c("SimHei", "Microsoft YaHei", "Noto Sans CJK SC")
+CN_FONT_FILES <- c(
+  "SimHei" = "simhei.ttf",
+  "Microsoft YaHei" = "msyh.ttc",
+  "Noto Sans CJK SC" = "NotoSansCJK-Regular.ttc"
+)
+font_installed <- function(name) {
+  if (requireNamespace("systemfonts", quietly = TRUE)) {
+    hit <- systemfonts::match_fonts(name)
+    return(nzchar(hit$path[[1]]) && file.exists(hit$path[[1]]))
+  }
+  file_name <- CN_FONT_FILES[[name]]
+  if (is.null(file_name)) return(FALSE)
+  file.exists(file.path(Sys.getenv("WINDIR", "C:/Windows"), "Fonts", file_name))
+}
+font_family <- "sans"
+font_warnings <- character(0)
+if (.Platform$OS.type == "windows") {
+  cn_font <- NULL
+  for (candidate in CN_FONT_NAMES) {
+    if (font_installed(candidate)) { cn_font <- candidate; break }
+  }
+  if (is.null(cn_font)) {
+    stop("STRADITIZE_ERROR: 没找到可用的中文字体（试过 ", paste(CN_FONT_NAMES, collapse = " / "),
+         "）：请安装其中任一款后重试 —— 静默回退 sans 会把中文标签画成方框。")
+  }
+  grDevices::windowsFonts(straditize = grDevices::windowsFont(cn_font))
+  font_family <- cn_font
+} else if (requireNamespace("sysfonts", quietly = TRUE) && requireNamespace("systemfonts", quietly = TRUE)) {
+  for (candidate in CN_FONT_NAMES) {
+    hit <- systemfonts::match_fonts(candidate)
+    if (nzchar(hit$path[[1]]) && file.exists(hit$path[[1]])) {
+      sysfonts::font_add("straditize", regular = hit$path[[1]])
+      font_family <- "straditize"
+      break
+    }
+  }
+  if (font_family == "sans") {
+    font_warnings <- c(font_warnings, paste0(
+      "非 Windows 且没找到中文字体（sysfonts / systemfonts）：",
+      "标签可能显示为方框。装 Noto Sans CJK 或 SimHei 后重试。"
+    ))
+  }
+} else {
+  font_warnings <- c(font_warnings, paste0(
+    "非 Windows 且缺少 sysfonts/systemfonts 包：中文字体未注册，标签可能显示为方框。"
+  ))
+}
+
 open_device <- function() {
   if (fmt == "jpeg") {
-    grDevices::jpeg(out_path, width = W, height = H, res = DPI, quality = 95, type = "cairo")
-  } else if (fmt == "pdf") {
-    grDevices::pdf(out_path, width = W / DPI, height = H / DPI)
+    grDevices::jpeg(out_path, width = W, height = H, res = DPI, quality = 95,
+                    type = "cairo", family = font_family)
+  } else if (fmt == "svg") {
+    # 尺寸与 jpeg 同口径：像素 / dpi = 英寸（2200/150 × 1500/150 = 14.67in × 10in）。
+    grDevices::svg(out_path, width = W / DPI, height = H / DPI, family = font_family)
   } else {
-    stop("STRADITIZE_ERROR: 不支持的输出格式 ", fmt, "（支持 jpeg/pdf）")
+    stop("STRADITIZE_ERROR: 不支持的输出格式 ", fmt, "（支持 jpeg/svg）")
   }
 }
 
@@ -435,7 +492,7 @@ invisible(grDevices::dev.off())
 if (!file.exists(out_path)) stop("STRADITIZE_ERROR: R 没有产出文件：", out_path)
 
 cat(sprintf("STRADITIZE_ENGINE\t%s\n", engine))
-for (w in unique(warns)) {
+for (w in unique(c(font_warnings, warns))) {
   cat(sprintf("STRADITIZE_WARN\t%s\n", gsub("[\r\n]+", " ", w)))
 }
 '''

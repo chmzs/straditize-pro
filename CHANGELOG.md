@@ -1,6 +1,14 @@
 # 变更记录（CHANGELOG）
 
 ## [Unreleased]
+### 出图格式改为 jpg + svg：中文标签走 Windows 字体，预览固定 jpg
+
+- **格式枚举**（用户裁决：PDF 字体处理麻烦，砍掉）：`SUPPORTED_PLOT_FORMATS = ("jpeg", "svg")`，`MIME_BY_FORMAT` 同步加 `svg: image/svg+xml`。请求 `pdf` / `png` / `jpg` / `webp` 一律 `-32602` 并点名可用值，不静默回落成 jpeg。
+- **R 设备**：去掉 `grDevices::pdf()`，`jpeg()` 与 `svg()` 同口径（英寸 = 像素 / dpi）。SVG 里文字被 cairo 烘成**字形轮廓**（`<path>`/`<use>`，没有 `<text>` 与 font-family），所以下载的 SVG 不依赖对方机器装了什么字体。
+- **中文字体**：Windows 上注册 `windowsFonts(straditize = windowsFont("SimHei"))`，但 cairo 设备**不认这个别名**——实测 `family = "straditize"` 与 `family = "sans"` 的产物逐字节相同（同尺寸 996 个暗像素，中文全成方框），必须直接传真实字体名 `family = "SimHei"`（7528 个暗像素、SVG 813B → 9.3KB 字形轮廓）。脚本按 `SimHei` → `Microsoft YaHei` → `Noto Sans CJK SC` 探测，一个都没有就 `stop()` 报错，不静默画方框；非 Windows 走 `sysfonts::font_add`，缺包时把「标签可能是方框」写进 `warnings`。
+- **前端**：下拉 `jpeg` / `svg`；预览固定 JPEG（所见即所得，SVG 的渲染依赖字体可用性，与下载到的东西不一致）；选 SVG 下载时按 SVG **现场重出**再存，绝不把 jpeg 字节存成 `.svg`。
+- **文档**：`docs/JSON_RPC_SPECIFICATION.md` 新增 §4.13 `plot.render`（此前这个方法没有 spec 条目，格式枚举无处可对账）。
+- **测试**：`test_plot_render.py` 判据 7 改为 jpeg/svg（`<?xml` 开头 + 含 `<svg` + > 5KB），新增判据 8「中文标签走已注册字体」——同一中文列名渲染两次（真字体 vs 强制 `sans`），比较标签带墨迹比例（≥1.5×）；反向验证：`pdf` 加回枚举 → 判据 7 红，设备调用去掉 `family` → 判据 8 红（实测 0.0053 vs 0.0053）。
 ### 导出弹窗版面返工：footer 钉住、单滚动容器、字号归位、预览不再顶掉设置
 
 - **根因**：出图预览、y 轴范围、列量程三块原来是 `.ui-modal` 里 body 与 footer 的**兄弟节点**，预览一出现就把 footer 顶出视口（1366×768 实测 footer 底边 1156px > 768px，y 轴范围与列量程也被挤出首屏）。

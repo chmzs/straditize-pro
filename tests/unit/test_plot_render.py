@@ -4,16 +4,19 @@
 
 1. 显式配置了不存在的 Rscript 路径 → 探测失败并说明缺什么（不静默回退到别的 R）；
 2. system.updateConfig 填不存在的路径 → 当场报错，配置里的旧值原样保留；
-3. 真跑一次出图：产物存在、字节头是真图片（JPEG / PDF）、大小 > 0；
+3. 真跑一次出图：产物存在、字节头是真图片（JPEG）/ 真矢量（SVG）、大小 > 0；
 4. R 缺失 / R 跑挂 → JsonRpcError 带可执行提示，绝不返回空图；
 5. **产物去向**：默认不落盘（`path` 为 None），图以 `data_url` 交回前端；
    只有显式传 `output_path` 才写文件。旧行为默认写 `~/.straditize/plots`，
    用户点完按钮只拿到一句路径——那不是出图。
 6. 回退如实报告：只装了 rioja 时 `unsupported` 必须列出没生效的开关（Italicise /
    Break long / Exaggeration / Min-max / 标签旋转），不许假装全应用了。
-7. **格式枚举只有两种**（jpeg / pdf）：`SUPPORTED_PLOT_FORMATS` 精确等于
-   `("jpeg", "pdf")`；请求 `svg` / `png` 一律 -32602，且错误消息点名可用值；
-   `format="pdf"` 交回的 data URL 解出来的字节以 `%PDF` 开头。
+7. **格式枚举只有两种**（jpeg / svg）：`SUPPORTED_PLOT_FORMATS` 精确等于
+   `("jpeg", "svg")`；请求 `pdf` / `png` / `jpg` / `webp` 一律 -32602，且错误消息点名
+   可用值（不静默回落成 jpeg）；`format="svg"` 交回的字节以 `<?xml` 开头、含 `<svg`、> 5KB。
+8. **中文字体真的接上了**：R 脚本注册了 Windows 字体（`windowsFonts(straditize = …)`）并把
+   `family` 传给 jpeg/svg 两个设备；同一个中文列名，用真字体渲染的标签区墨迹明显多于
+   `family = "sans"` 的对照（cairo 只认真实字体名，别名会静默退化成方框——见脚本注释）。
 
 ## 反向验证
 
@@ -21,7 +24,8 @@
 把 updateConfig 的路径校验删掉 → 判据 2 变红（坏路径被写进配置）。
 把 plot_render 的 data_url 去掉、改回只返回 path → 判据 5 变红。
 把 unsupported 恒置为空列表 → 判据 6 在只有 rioja 的机器上变红。
-把 "svg" 加回 SUPPORTED_PLOT_FORMATS → 判据 7 的枚举与拒绝两条同时变红。
+把 "pdf" 加回 SUPPORTED_PLOT_FORMATS → 判据 7 的枚举与拒绝两条同时变红。
+把设备调用里的 `family = font_family` 删掉 → 判据 8 的墨迹对照变红（中文退化成方框/空白）。
 """
 
 from __future__ import annotations
@@ -196,31 +200,31 @@ def test_unsupported_format_is_rejected() -> None:
     assert "不支持的出图格式" in str(excinfo.value)
 
 
-def test_supported_format_enum_is_exactly_jpeg_and_pdf() -> None:
-    # 前后端同一份口径：多一个格式就要在前端下拉、文档、测试里各维护一遍，而用户
-    # 裁决"前后端一致支持两种就行了，jpg 和 pdf，没必要冗余"。
-    assert SUPPORTED_PLOT_FORMATS == ("jpeg", "pdf"), SUPPORTED_PLOT_FORMATS
-    assert set(MIME_BY_FORMAT) == {"jpeg", "pdf"}, MIME_BY_FORMAT
+def test_supported_format_enum_is_exactly_jpeg_and_svg() -> None:
+    # 前后端同一份口径：多一个格式就要在前端下拉、文档、测试里各维护一遍。用户裁决
+    # 「出图只提供 jpg 与 svg 两种」（PDF 字体处理麻烦，砍掉）。
+    assert SUPPORTED_PLOT_FORMATS == ("jpeg", "svg"), SUPPORTED_PLOT_FORMATS
+    assert set(MIME_BY_FORMAT) == {"jpeg", "svg"}, MIME_BY_FORMAT
 
 
-@pytest.mark.parametrize("dropped", ["svg", "png", "jpg", "webp"])
+@pytest.mark.parametrize("dropped", ["pdf", "png", "jpg", "webp"])
 def test_dropped_formats_are_rejected_with_the_supported_list(dropped: str) -> None:
     # 不许静默回落到 jpeg：请求 svg 却拿到一张 jpeg，用户会以为拿到了矢量图。
     with pytest.raises(JsonRpcError) as excinfo:
         _session().plot_render(format=dropped)
     message = str(excinfo.value)
     assert "不支持的出图格式" in message, message
-    assert "jpeg" in message and "pdf" in message, "错误消息必须点名可用的两个格式"
+    assert "jpeg" in message and "svg" in message, "错误消息必须点名可用的两个格式"
     assert dropped not in message.replace("不支持的出图格式", ""), (
         "被拒的格式不得出现在「可用」列表里：" + message
     )
 
 
 @pytest.mark.skipif(RSCRIPT is None, reason="本机没有 Rscript")
-def test_render_writes_a_readable_pdf(tmp_path) -> None:
+def test_render_writes_a_readable_svg(tmp_path) -> None:
     csv_path = tmp_path / "in.csv"
     csv_path.write_text("depth,col01\n10,10\n20,50\n30,90\n", encoding="utf-8")
-    out_path = tmp_path / "strat.pdf"
+    out_path = tmp_path / "strat.svg"
 
     if not _has_rioja():
         with pytest.raises(RuntimeError) as excinfo:
@@ -239,7 +243,8 @@ def test_render_writes_a_readable_pdf(tmp_path) -> None:
     assert info["size_bytes"] == out_path.stat().st_size
     assert info["engine"] in ("riojaPlot", "rioja")
     with open(out_path, "rb") as handle:
-        assert handle.read(5) == b"%PDF-", "产物必须是能被 PDF 读器打开的 PDF"
+        assert handle.read(5) == b"<?xml", "产物必须是能被浏览器/矢量软件打开的 SVG"
+    assert b"<svg" in out_path.read_bytes()
 
 
 @pytest.mark.skipif(RSCRIPT is None or not _has_rioja(), reason="本机没有 R + rioja")
@@ -277,18 +282,85 @@ def test_plot_render_persists_only_when_asked(tmp_path) -> None:
 
 
 @pytest.mark.skipif(RSCRIPT is None or not _has_rioja(), reason="本机没有 R + rioja")
-def test_pdf_format_returns_real_pdf_bytes(tmp_path) -> None:
-    out_path = tmp_path / "p.pdf"
-    result = _session().plot_render(format="pdf", output_path=str(out_path))
+def test_svg_format_returns_real_svg_bytes(tmp_path) -> None:
+    out_path = tmp_path / "p.svg"
+    result = _session().plot_render(format="svg", output_path=str(out_path))
 
-    assert result["format"] == "pdf"
-    assert result["mime"] == "application/pdf"
-    assert str(result["data_url"]).startswith("data:application/pdf;base64,"), (
-        "PDF 必须以 application/pdf 的 data URL 交回前端"
+    assert result["format"] == "svg"
+    assert result["mime"] == "image/svg+xml"
+    assert str(result["data_url"]).startswith("data:image/svg+xml;base64,"), (
+        "SVG 必须以 image/svg+xml 的 data URL 交回前端"
     )
     payload = base64.b64decode(str(result["data_url"]).split(",", 1)[1])
-    assert payload[:4] == b"%PDF", "交回的字节必须是真的 PDF（前端按所选扩展名保存）"
-    assert out_path.read_bytes()[:4] == b"%PDF"
+    head = payload[:200].decode("utf-8", "ignore").lstrip()
+    assert head.startswith("<?xml"), head[:80]
+    assert b"<svg" in payload, "SVG 里必须有 <svg 根元素"
+    assert len(payload) > 5 * 1024, f"SVG 只有 {len(payload)} 字节，不像一张真图"
+    assert out_path.read_bytes()[:5] == b"<?xml"
+
+
+def _ink_ratio(path, band=(0.0, 0.0, 1.0, 1.0)) -> float:
+    """图片（可裁一条横带）里暗像素占比。用来判断「那一块到底画了东西没有」。"""
+    from PIL import Image
+
+    with Image.open(path) as image:
+        gray = image.convert("L")
+        width, height = gray.size
+        left, top, right, bottom = band
+        gray = gray.crop(
+            (int(left * width), int(top * height), int(right * width), int(bottom * height))
+        )
+        pixels = list(gray.getdata())
+    dark = sum(1 for value in pixels if value < 128)
+    return dark / max(1, len(pixels))
+
+
+CJK_LABEL_CSV = "depth,蒿属\n10,10\n20,50\n30,90\n"
+
+
+@pytest.mark.skipif(RSCRIPT is None or not _has_rioja(), reason="本机没有 R + rioja")
+def test_cjk_labels_are_drawn_with_the_registered_font(tmp_path, monkeypatch) -> None:
+    """判据 8：中文标签必须走已注册字体，不能静默退化成方框。
+
+    同一个中文列名渲染两次：一次走脚本里的字体逻辑（Windows 上是 SimHei /
+    Microsoft YaHei），一次把 `font_family` 强制成 `"sans"`。标签画在图顶的标签带里，
+    比较那一带的墨迹比例：真字体是复杂字形（笔画多），sans 没有中日韩字形，cairo 只会
+    画方框或干脆空白，墨迹显著更少。这是像素级判据，不是「文件非空」。
+
+    反向验证：把设备调用里的 `family = font_family` 删掉 → 与这里的 sans 对照同形，
+    两条断言里至少一条变红。
+    """
+    from straditize_core import strat_plot as strat_plot_module
+
+    csv_path = tmp_path / "cjk.csv"
+    csv_path.write_text(CJK_LABEL_CSV, encoding="utf-8")
+    size = {"width_px": 900, "height_px": 700, "dpi": 150}
+    label_band = (0.0, 0.0, 1.0, 0.22)
+
+    real_path = tmp_path / "cjk-real.jpeg"
+    render_strat_diagram(
+        csv_path=str(csv_path), out_path=str(real_path), rscript=str(RSCRIPT), settings=size
+    )
+    real_ink = _ink_ratio(real_path, label_band)
+
+    sans_script = strat_plot_module.STRAT_PLOT_SCRIPT.replace(
+        "font_family <- cn_font", 'font_family <- "sans"'
+    )
+    assert sans_script != strat_plot_module.STRAT_PLOT_SCRIPT, (
+        "脚本里找不到 `font_family <- cn_font`：字体接线被改掉了，这条判据失去对照组"
+    )
+    monkeypatch.setattr(strat_plot_module, "STRAT_PLOT_SCRIPT", sans_script)
+    sans_path = tmp_path / "cjk-sans.jpeg"
+    render_strat_diagram(
+        csv_path=str(csv_path), out_path=str(sans_path), rscript=str(RSCRIPT), settings=size
+    )
+    sans_ink = _ink_ratio(sans_path, label_band)
+
+    assert real_ink > 0.002, f"中文标签带几乎没有墨迹（{real_ink:.4f}）：标签可能没画出来"
+    assert real_ink >= sans_ink * 1.5, (
+        f"真字体与 sans 的标签墨迹没拉开（{real_ink:.4f} vs {sans_ink:.4f}）："
+        "family 可能没真的传给设备（cairo 只认真实字体名，不认 windowsFonts 别名）"
+    )
 
 
 def test_default_settings_match_requested_switches() -> None:
@@ -444,7 +516,7 @@ def test_plot_render_rejects_unknown_column_in_scale_mode() -> None:
     RSCRIPT is None or not _has_pkg("riojaPlot"),
     reason="固定量程走 riojaPlot 的 scale.minmax（rioja 回退没有这个能力）",
 )
-@pytest.mark.parametrize("fmt", ["pdf", "jpeg"])
+@pytest.mark.parametrize("fmt", ["svg", "jpeg"])
 def test_plot_scale_mode_changes_artifact_bytes(tmp_path, fmt: str) -> None:
     """开关前后产物必须不同；PDF 与 JPEG 两条路径都要生效。"""
     session = _session()

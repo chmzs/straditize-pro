@@ -324,9 +324,9 @@ export class ExportModal {
               <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; flex-wrap: nowrap;">
                 <label style="font-size: var(--font-size-sm); font-weight: bold; color: var(--accent-blue); white-space: nowrap;">本机出图预览</label>
                 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;">
-                  <select id="sel-wpd-plot-format" class="sample-select" style="font-size: var(--font-size-sm);" title="下载格式：JPEG 位图，直接分享；PDF 矢量，适合排版放大（只影响下载，预览固定 JPEG）">
+                  <select id="sel-wpd-plot-format" class="sample-select" style="font-size: var(--font-size-sm);" title="下载格式：JPEG 位图，直接分享；SVG 矢量，适合排版放大（只影响下载，预览固定 JPEG）">
                     <option value="jpeg" selected>JPEG（位图 · 直接分享）</option>
-                    <option value="pdf">PDF（矢量 · 排版放大）</option>
+                    <option value="svg">SVG（矢量 · 排版放大）</option>
                   </select>
                   <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-plot-download" disabled>下载图片</button>
                   <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-wpd-plot-close" title="关闭预览并释放图片数据">✕ 关闭</button>
@@ -900,8 +900,8 @@ export class ExportModal {
 
     /** 出图（唯一入口）：本机出图按钮与「按所选格式下载」都走这里。失败直接抛。 */
     const renderPlot = async (fmt: string, options: { quiet?: boolean; preview?: boolean } = {}) => {
-      // `preview: false` = 只为下载出图（PDF 无法塞进 <img>，塞进去就是一张碎图 +
-      // 一条控制台报错）。预览永远是 JPEG，下载按所选格式现场出图。
+      // `preview: false` = 只为下载出图（SVG 塞进 <img> 虽能显示，但渲染依赖字体可用性，
+      // 与下载到的东西不一致；预览固定用设备端烘焙好的 JPEG）。下载按所选格式现场出图。
       const preview = options.preview !== false;
       // y 轴范围三格：三项都填才发给后端（后端同一口径，只给一部分会被整套忽略并提示）。
       const readNum = (selector: string): number | null => {
@@ -983,15 +983,15 @@ export class ExportModal {
       );
     };
 
-    // 下载：按**所选扩展名**保存（手里是预览 JPEG，选 PDF 时现场重出，见下）。
+    // 下载：按**所选扩展名**保存（手里是预览 JPEG，选 SVG 时现场重出，见下）。
     plotDownload?.addEventListener('click', async () => {
       if (!lastPlot) return;
       const selected = plotFormat?.value || 'jpeg';
       const btn = plotDownload;
       btn.disabled = true;
       try {
-        // 手里这份是预览用的 JPEG；选 PDF 时必须按 PDF 现场重出，再把 PDF 字节存成
-        // .pdf —— 直接把 jpeg 字节存成 .pdf，用户会拿到一个打不开的文件。
+        // 手里这份是预览用的 JPEG；选 SVG 时必须按 SVG 现场重出，再把 SVG 字节存成
+        // .svg —— 直接把 jpeg 字节存成 .svg，用户会拿到一个打不开的文件。
         const plot = selected === 'jpeg' && lastPlot.format === 'jpeg'
           ? lastPlot
           : await renderPlot(selected, { quiet: true, preview: false });
@@ -1012,7 +1012,7 @@ export class ExportModal {
       btn.disabled = true;
       btn.textContent = '出图中…';
       try {
-        // 预览固定 JPEG：PDF 无法内嵌显示；所选格式只决定「下载图片」写出的扩展名。
+        // 预览固定 JPEG（所见即所得）；所选格式只决定「下载图片」写出的扩展名。
         // 列量程由 renderPlot 统一收集（预览与下载共用同一条入口，不能只在一处生效）。
         await renderPlot('jpeg');
       } catch (err: any) {

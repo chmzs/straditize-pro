@@ -767,6 +767,24 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
 > `normalize_grid_line_strength` 抛错、并被占位表保底吞掉的。
 > 回归钉子：`tests/unit/test_degrid_strength_validation.py`。
 
+### 4.13 `plot.render` — 本机出图（R + riojaPlot/rioja）
+
+把当前主 ROI 的导出表交给本机 R 画地层图，**默认不落盘**，图以 data URL 交回前端。
+
+**请求参数**
+
+| 参数 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `format` | string | `"jpeg"` | 只接受 `jpeg` / `svg`（`SUPPORTED_PLOT_FORMATS`）。其余取值 → `-32602`，消息里点名这两个值，**不静默回落**。`pdf` / `png` / `jpg` / `webp` 已下线。 |
+| `output_path` | string \| null | `null` | 显式给才落盘（`path` 返回真实路径）；不给就只在内存里。 |
+| `title` | string \| null | `null` | 图标题，覆盖 `settings.title`。 |
+| `settings` | object \| null | `null` | 出图开关（`percent` / `silhouette` / `bar` / `line` / `rev_y` / `exaggeration` / `minmax` / `italicise` / `break_long` / `font_scale` / `width_px` / `height_px` / `dpi` / `y_axis` …）。未知键 → `-32602`。 |
+
+**响应字段**：`success` / `engine`（`riojaPlot` \| `rioja`）/ `format` / `mime` / `size_bytes` / `data_url` / `path` / `rows_count` / `columns_count` / `settings` / `warnings` / `unsupported` / `rscript` / `source`。
+
+- `data_url` 前缀随 `format`：`data:image/jpeg;base64,` 或 `data:image/svg+xml;base64,`。前端预览固定用 jpeg（设备端烘焙好，所见即所得），下载按用户所选格式现场重出。
+- 中文标签依赖 Windows 字体注册（`windowsFonts`）；cairo 设备只认真实字体名，脚本里 `family` 传的是 `SimHei` / `Microsoft YaHei` 这类真名。找不到 CJK 字体时整条命令 `stop()`，返回 `-32000`（EXPORT_ERROR）并带补救提示，不产出方框图。
+- 失败分三类：`r_missing`（没装 R / 路径错）、`r_failed`（R 跑挂，附 stderr）、`-32002`（没有可画的数据）。
 ## 4A. 年代-深度模型与年代集合（`agedepth.*` / `ensemble.*`）
 
 > 本节是全量清单，不是示例：后端 `rpc_methods/agedepth.py` 注册的 12 个方法逐一在此展开。

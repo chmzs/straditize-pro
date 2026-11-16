@@ -134,12 +134,12 @@ depth <- raw[[1]]
 taxa <- as.matrix(sapply(raw[, -1, drop = FALSE], as.numeric))
 
 ext <- tolower(tools::file_ext(out_path))
-if (ext == "jpeg" || ext == "jpg") {
+if (ext == "jpeg") {
   jpeg(out_path, width = 1800, height = 1300, res = 150, quality = 95)
-} else if (ext == "pdf") {
-  pdf(out_path, width = 12, height = 8)
+} else if (ext == "svg") {
+  svg(out_path, width = 12, height = 8)
 } else {
-  stop("unsupported plot format: ", ext, " (jpeg / pdf)")
+  stop("unsupported plot format: ", ext, " (jpeg / svg)")
 }
 rioja::strat.plot(
   d = taxa,
