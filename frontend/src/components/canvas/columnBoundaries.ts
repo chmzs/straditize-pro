@@ -17,6 +17,7 @@
  * `startX`（红线已画）；再画一条会让用户无法判断哪条才是真正的分界。
  */
 import { resolveAxisStroke } from '../../core/axisStroke';
+import { resolveColumnGroup } from '../../core/columnGroup';
 import { groupBandRect } from './groupBandRect';
 import { formatCalibNumber, getGroupCalibMark } from './groupCalibMarks';
 import type { DataRoi, TaxaColumn } from '../../types/pollen';
@@ -95,7 +96,10 @@ function drawGroupBands(env: ColumnBoundaryEnv): void {
   ctx.save();
   for (const col of columns) {
     if (!col.visible) continue;
-    const gid = col.x_group_id ?? roi.default_group_id ?? groups[0]?.id ?? '';
+    // 组归属统一走 `resolveColumnGroup`（与画绿线的那处同一个 helper）：
+    // 两处各写一套回退，会在「列没有 x_group_id」的工程里给出两个不同的组。
+    const groupOfCol = resolveColumnGroup(col, roi);
+    const gid = groupOfCol?.id ?? '';
     const idx = Math.max(0, groups.findIndex((g) => g.id === gid));
     const color = GROUP_BAND_PALETTE[idx % GROUP_BAND_PALETTE.length];
 
@@ -140,7 +144,9 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
       // 前提是 `col.startX` 保持"轴线左缘"语义——`detect_columns` 的右缘锚定
       // （`anchor_zero_at_axis_right`）默认关闭就是为了这个；一旦开启，start 变成
       // 右缘，这里再加轴粗即双偏移（实测事故见 ARCHITECTURE §6.4）。
-      const groupOfCol = roi.x_groups?.find((g) => g.id === col.x_group_id);
+      // 列 → 组：`col.x_group_id` → ROI 的 `default_group_id` → 第一个组。
+      // 旧实现只做精确匹配，列上没有 `x_group_id` 时组轴粗被忽略、恒回落缺省 5。
+      const groupOfCol = resolveColumnGroup(col, roi);
       // 一个单位刻度的像素长度 = 组级斜率的倒数（value_per_px = 每像素多少单位）。
       // 斜率只由用户「点一个齿 + 填它的数字」写入（ARCHITECTURE §6.4）；未标定 → null → 一条齿都不画。
       // 自动检测的刻距不参与：实测同图各列差 1–2px，且从未经用户确认（§6.4:254）。

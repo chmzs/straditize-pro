@@ -2,6 +2,7 @@ import type { DiagramData } from '../types/pollen';
 // 显式带 .ts：本模块被 node 单测直接 import（`test-tick-routing.mjs`），
 // node 的 ESM 解析不做扩展名补全，而 tsc 已开 allowImportingTsExtensions。
 import { resolveAxisStroke } from './axisStroke.ts';
+import { resolveColumnGroup } from './columnGroup.ts';
 
 /** 单列 0 点 = 列左缘 + 轴粗（与画布绿线、后端 `resolve_column_scale` 同源，ARCHITECTURE §6.4）。 */
 export function zeroXOfColumn(
@@ -10,7 +11,7 @@ export function zeroXOfColumn(
 ): number {
   const roi =
     data?.rois?.find((r) => r.id === (col.roi_id ?? data?.active_roi_id)) ?? data?.rois?.[0];
-  const group = roi?.x_groups?.find((g) => g.id === col.x_group_id) ?? roi?.x_groups?.[0];
+  const group = resolveColumnGroup(col, roi);
   return Number(col.startX) + resolveAxisStroke(col as never, group as never);
 }
 

@@ -1,6 +1,7 @@
 import { DiagramData, TaxaColumn } from '../types/pollen';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { resolvePlotType } from '../core/plotType';
+import { resolveColumnGroup } from '../core/columnGroup';
 import { t, onLocaleChange } from '../i18n';
 import { notifyError } from '../ui/feedback';
 
@@ -298,7 +299,7 @@ export class Sidebar {
     }
 
     const roi = this.data.rois?.find((r) => r.id === col.roi_id) || this.data.rois?.[0];
-    const groupName = roi?.x_groups?.find((g) => g.id === col.x_group_id)?.name || '默认组';
+    const groupName = resolveColumnGroup(col, roi)?.name || '默认组';
 
     if (this.isCompactView) {
       return `

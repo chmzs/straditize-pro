@@ -10,6 +10,7 @@ import {
 } from './XTicksDroppedNotice';
 import { renderOtherSuspectColumnsSummary } from './SuspectBlockNotice';
 import { resolveAxisStroke } from '../../core/axisStroke';
+import { resolveColumnGroup } from '../../core/columnGroup';
 import { resolveColumnAtX } from '../../core/tickRouting';
 import { setGroupCalibMark } from '../canvas/groupCalibMarks';
 
@@ -22,8 +23,6 @@ interface XTicksPanelState {
   isBatchAssignOpen: boolean;
   /** 「列组」折叠区是否展开。必须存进 state：面板每次重渲染都会重建 DOM。 */
   groupsFoldOpen: boolean;
-
-  axisStrokeOverride: number | null;
 }
 
 const INITIAL_XTICKS_STATE: XTicksPanelState = {
@@ -35,8 +34,6 @@ const INITIAL_XTICKS_STATE: XTicksPanelState = {
   // 列组**默认展开**（用户偏好：分组与单位是量纲工作的入口，不该先藏一层）。
   // 折叠行为不变：点一次即收起，状态存进 state 以便本次会话内保持（面板每次重渲染会重建 DOM）。
   groupsFoldOpen: true,
-
-  axisStrokeOverride: null,
 };
 
 /** 步骤 6 面板的可变状态。
@@ -362,7 +359,13 @@ export function render(data: DiagramData): string {
           <!-- 轴线粗：决定绿线「0 点 = 左缘 + 轴粗」的位置，同时给刻度检测定轴右缘。 -->
           <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px;">
             <label for="inp-axis-stroke" style="font-size: var(--font-size-sm); color: var(--text-muted);">轴线粗细:</label>
-            <input type="number" id="inp-axis-stroke" value="${currentGroup && Number(currentGroup.axis_stroke_px) > 0 ? String(Number(currentGroup.axis_stroke_px)) : state.axisStrokeOverride != null ? String(state.axisStrokeOverride) : ''}" placeholder="5" min="1" max="20" step="1"
+            <!-- 显示值**只认当前组自己的** axis_stroke_px。
+                 曾经这里还有一个 state.axisStrokeOverride 兜底（全局变量、「全图共用」），
+                 于是给 grp2 填 1 之后切到 grp1/grp3，那两个输入框会显示 1 —— 用户读作
+                 「已经接过值了」就不再手动设，后端其实仍是 None、绿线回落缺省 5
+                 （用户原话：「其他两组的线粗框自动就显示 1 了，我以为它直接接过值了」）。
+                 本组没值就**显示空**，缺省 5 只出现在 placeholder 里。 -->
+            <input type="number" id="inp-axis-stroke" value="${currentGroup && Number(currentGroup.axis_stroke_px) > 0 ? String(Number(currentGroup.axis_stroke_px)) : ''}" placeholder="5（缺省）" min="1" max="20" step="1"
                    title="Y 轴轴线的描边宽度（像素）。0 点 = 左缘 + 它。填了就不再从像素里猜。目视估读即可（1–20px）。"
                    style="width: 66px; font-size: var(--font-size-sm); padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
             <span style="font-size: var(--font-size-xs); color: var(--text-muted);">px</span>
@@ -571,7 +574,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     }
     const col = hit.col;
     const roi = data?.rois?.find((r) => r.id === (col.roi_id ?? data?.active_roi_id));
-    const g = roi?.x_groups?.find((x) => x.id === col.x_group_id) ?? roi?.x_groups?.[0];
+    const g = resolveColumnGroup(col, roi);
     // 0 点 = 列左缘 + 轴线粗（与画布绿线同源，见 ARCHITECTURE §6.4）。
     // `start` 是轴线左缘（列切分线），轴粗取组参数，缺省 5。
     const stroke = resolveAxisStroke(col, g);
@@ -602,27 +605,27 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
 
   // 标尺输入：轴线粗（组/列）、单位刻度长度、检测刻距
   const wireRulerInputs = (): void => {
-    // 轴线粗细覆盖：用户量一次、全图共用。它决定绿线「0 点 = 左缘 + 轴粗」的位置，
-    // 同时作为刻度检测时 `_find_axis_x` 的右缘判据。
+    // 轴线粗细：**组级参数**，写当前生效的那一组（`effectiveGroupId`）。
+    // 它决定绿线「0 点 = 左缘 + 轴粗」的位置，同时作为刻度检测时 `_find_axis_x` 的右缘判据。
+    //
+    // 显示与写入都以**本组自己的** `axis_stroke_px` 为准，不再有跨组的全局兜底：
+    // 乐观显示走「把这一个组对象上的值先改掉，再整块重渲染」——组是镜像里的真实对象，
+    // 写失败就回滚它。这样 grp2 填 1 不会让 grp1/grp3 的输入框跟着显示 1。
     root.querySelector('#inp-axis-stroke')?.addEventListener('change', (e) => {
       const raw = (e.target as HTMLInputElement).value.trim();
       const parsed = raw === '' ? null : Number.parseFloat(raw);
-      state.axisStrokeOverride =
-        parsed != null && Number.isFinite(parsed) && parsed > 0
-          ? Math.min(parsed, 20)
-          : null;
-      // 同时落库：绿线「0 点 = 左缘 + 轴线粗」靠它，而 `state.axisStrokeOverride` 只是前端内存。
-      //
-      // 这里**不能**再自己调 `ctx.onDataChange()`：`onDataChange`（main.ts:251）只是
-      // 拿本地镜像重画一遍、**不重拉后端**，于是组值还没回来就被旧值重画——输入框
-      // 立刻回落到 placeholder（用户原话「显示数字会跳没」），绿线也停在旧位置。
-      // 真正的刷新由 `onScaleMutated`（scaleSync，120ms 防抖）完成：它拉
-      // `getDiagramData` 并把 `rois` 一起回填。这期间输入框的显示值由
-      // `state.axisStrokeOverride` 顶住（见 render 的 value 表达式）。
-      void patchGroup({ axis_stroke_px: state.axisStrokeOverride }).then((ok) => {
-        // 写失败就把乐观值撤掉：继续显示 1 等于骗用户"已经设上了"。
+      const next =
+        parsed != null && Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 20) : null;
+      const group = activeRoi()?.x_groups?.find((g) => g.id === effectiveGroupId());
+      if (!group) return;
+      const previous = group.axis_stroke_px ?? null;
+      group.axis_stroke_px = next ?? undefined;
+      ctx.onDataChange?.();
+      void patchGroup({ axis_stroke_px: next }).then((ok) => {
+        // 写失败必须把本组的值撤回原样：继续显示 1 等于骗用户「已经设上了」。
+        // （`patchGroup` 自己已经 `notifyError` 冒泡过失败原因。）
         if (!ok) {
-          state.axisStrokeOverride = null;
+          group.axis_stroke_px = previous ?? undefined;
           ctx.onDataChange?.();
         }
       });
