@@ -16,9 +16,10 @@
 //
 // 运行：node --experimental-strip-types test-zero-point.mjs
 import assert from 'node:assert';
+import { readFileSync } from 'node:fs';
 
 const { CoordinateSystem } = await import('./src/core/CoordinateSystem.ts');
-const { groupBandRect } = await import('./src/components/canvas/groupBandRect.ts');
+const { groupBandRect, zeroSpanOfColumn } = await import('./src/components/canvas/groupBandRect.ts');
 
 console.log('--- 0 点一致性测试 ---');
 
@@ -82,4 +83,34 @@ assert.equal(band.x, ABS_PX0, '组归属条左端必须是 ' + ABS_PX0 + '（0 �
 assert.notEqual(band.x, START_X, '组归属条左端不得等于列左缘（红线）');
 assert.equal(band.width, END_X - ABS_PX0, '组归属条宽度必须到列右界为止');
 
-console.log('OK：0 点换算与组归属条一致');
+// 第 4 组：面积填充 / 柱条 / 幽灵叠加的左边界必须同样是 0 点。
+//
+// 这些填充画在数据区里，左边界一旦退回 `col.startX`，半透明色就把轴线本身涂进去
+// （用户视觉：「青绿色遮罩包住轴线」）。几何统一由 zeroSpanOfColumn 给出，
+// 这里既断言几何，也断言三个绘制点没有绕过它各写一遍 `col.startX`。
+const span = zeroSpanOfColumn({ startX: START_X, endX: END_X, axis_stroke_px: STROKE }, null);
+assert.equal(span.x, ABS_PX0, '填充左端必须是 ' + ABS_PX0 + '（0 点），实得 ' + span.x);
+assert.notEqual(span.x, START_X, '填充左端不得等于列左缘（红线）');
+assert.equal(span.width, END_X - ABS_PX0, '填充宽度必须到列右界为止');
+
+assert.equal(
+  zeroSpanOfColumn({ startX: START_X, endX: START_X + 2, axis_stroke_px: STROKE }, null),
+  null,
+  '0 点落在列右界之外（宽度 ≤ 0）时必须返回 null，调用方跳过绘制'
+);
+assert.equal(
+  zeroSpanOfColumn({ startX: START_X, endX: END_X, axis_stroke_px: 9 }, { axis_stroke_px: STROKE }).x,
+  START_X + 9,
+  '列级轴粗覆盖必须优先于组级（否则填充左端与绿线差 1~2px）'
+);
+
+// 绘制点不得绕过 helper：源码级判据，把左边界改回 `col.startX` 即变红。
+const readSrc = (rel) => readFileSync(new URL(rel, import.meta.url), 'utf8');
+const curveSrc = readSrc('./src/components/canvas/pollenCurves.ts');
+assert.ok(!/fillRect\(\s*col\.startX/.test(curveSrc), '柱条不得从 col.startX 起画');
+assert.ok(!/buildAreaPath\([^)]*col\.startX/.test(curveSrc), '面积填充基线不得是 col.startX');
+assert.ok(/zeroSpanOfColumn/.test(curveSrc), 'pollenCurves 必须走 zeroSpanOfColumn 取 0 点');
+const canvasSrc = readSrc('./src/components/GeologyCanvas.ts');
+assert.ok(!/buildAreaPath\([^)]*col\.startX/.test(canvasSrc), '幽灵叠加基线不得是 col.startX');
+
+console.log('OK：0 点换算、组归属条与面积/柱条填充一致');

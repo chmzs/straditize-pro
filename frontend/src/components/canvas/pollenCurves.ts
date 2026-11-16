@@ -10,12 +10,18 @@
  */
 import { SplineInterpolator } from '../../core/SplineInterpolator';
 import type { TaxaColumn } from '../../types/pollen';
+import { zeroSpanOfColumn } from './groupBandRect';
 
 export interface PollenCurveEnv {
   ctx: CanvasRenderingContext2D;
   scale: number;
   columns: TaxaColumn[];
   activeTaxaId: string | null;
+  /**
+   * 列所属的 x 组（组级 `axis_stroke_px` 是列级覆盖的初值）。取不到时按缺省轴粗处理——
+   * 0 点仍然不等于列左缘。
+   */
+  groupOfColumn?: (col: TaxaColumn) => { axis_stroke_px?: number | null } | undefined;
 }
 
 export function drawPollenCurvesOverlay(env: PollenCurveEnv): void {
@@ -26,18 +32,25 @@ export function drawPollenCurvesOverlay(env: PollenCurveEnv): void {
     if (!col.visible || col.controlPoints.length === 0) return;
 
     const isActive = col.id === activeTaxaId;
+    // 0 点 = 列左缘 + 轴粗（画布绿线，ARCHITECTURE §6.4）。所有从基线出发的填充都必须
+    // 从这里起：从 `col.startX` 起等于把轴线涂进数据区，用户看到的就是「遮罩包住轴线」。
+    // 宽度 ≤ 0 时 `zero` 为 null：只跳过填充，曲线照画。
+    const zero = zeroSpanOfColumn(col, env.groupOfColumn?.(col));
     const sortedPoints = [...col.controlPoints].sort((a, b) => a.y - b.y);
     const pType = col.plotType || 'area';
 
     if (pType === 'bar') {
-      // 柱状图：从 startX 向右延伸水平柱条
+      // 柱状图：从 0 点向右延伸水平柱条（起点是绿线，不是列左缘）
+      if (!zero) return;
       ctx.fillStyle = col.color;
       ctx.strokeStyle = col.color;
       const barThickness = Math.max(1.5, 3.0 / scale);
 
       sortedPoints.forEach((pt) => {
-        const barWidth = Math.max(0, pt.x - col.startX);
-        ctx.fillRect(col.startX, pt.y - barThickness / 2, barWidth, barThickness);
+        const barWidth = Math.max(0, pt.x - zero.x);
+        if (barWidth > 0) {
+          ctx.fillRect(zero.x, pt.y - barThickness / 2, barWidth, barThickness);
+        }
       });
     } else if (pType === 'symbol') {
       // 散点符号标记图（存在/缺失）
@@ -55,8 +68,8 @@ export function drawPollenCurvesOverlay(env: PollenCurveEnv): void {
       });
     } else {
       // 面积图或纯折线图
-      if (pType === 'area') {
-        const areaPath = SplineInterpolator.buildAreaPath(sortedPoints, col.startX);
+      if (pType === 'area' && zero) {
+        const areaPath = SplineInterpolator.buildAreaPath(sortedPoints, zero.x);
         ctx.fillStyle = isActive ? `${col.color}44` : `${col.color}1a`;
         ctx.fill(areaPath);
       }
