@@ -37,6 +37,26 @@ from ..protocol import (
 from .agedepth import attach_windowed_rates, build_age_depth_frame
 from .xscale import read_column_values, resolve_column_scale
 
+#: 视为「百分比类」的单位写法。**其余一律按该列自身量程画** —— 炭屑（counts）、
+#: 花粉浓度（粒/cm2/yr）这类绝对值列若按百分比画，会被压成一条平线。
+#:
+#: 注意 percent 分支的语义：rioja 的 `scale.percent = TRUE` 是**每列按本列最大值**
+#: 归一后画满宽（花粉图惯例），不是所有列共用一把 0–100 的尺。
+PERCENT_UNITS = ("%", "％", "percent", "pct")
+
+
+def is_percent_unit(unit: Any) -> bool:
+    """该单位是否属于百分比族（只有这些才用 `scale.percent = TRUE`）。"""
+    return str(unit or "").strip().lower() in PERCENT_UNITS
+
+
+def _r_string_vector(names: Sequence[str]) -> str:
+    """把列名写成 R 的 c("a", "b")：引号/反斜杠转义，属种名带标点时脚本语法不坏。"""
+    quoted = [
+        '"' + str(n).replace("\\", "\\\\").replace('"', '\\"') + '"' for n in names
+    ]
+    return "c(" + ", ".join(quoted) + ")"
+
 
 
 def _column_row_window(
@@ -414,6 +434,31 @@ class ExportMixin:
             },
         }
 
+    def _roi_column_units(self) -> dict[str, dict[str, str]]:
+        """ROI 名 → {列名: unit}，列名规则与 `data/<roi>.csv` 同源。
+
+        为什么要按 ROI 分开：两个 ROI 里可以各有同名 `col01`，量纲却不同；
+        一张全局 name→unit 的表会让它们互相覆盖（`data.csv` 那处就踩过这个坑）。
+        """
+        roi_name_by_id = {
+            r.get("id"): r.get("name") for r in (getattr(self, "rois", None) or [])
+        }
+        taxa_names = getattr(self, "taxa_names", None) or []
+        out: dict[str, dict[str, str]] = {}
+        for idx, col in enumerate(getattr(self, "columns", []) or []):
+            c_idx = col.get("col_index", idx)
+            name = (
+                taxa_names[c_idx]
+                if (taxa_names and c_idx < len(taxa_names) and taxa_names[c_idx])
+                else (col.get("name") or col.get("species") or f"col{c_idx + 1:02d}")
+            )
+            roi_name = roi_name_by_id.get(col.get("roi_id"))
+            if not roi_name:
+                continue
+            out.setdefault(roi_name, {})[name] = resolve_column_scale(self, col, c_idx).unit
+        return out
+
+
     def export_multi_tar(self, output_path: str | None = None) -> dict[str, Any]:
         """Exports standard POSIX UStar .tar project archive with multi-ROI support."""
         roi_dfs = self.get_roi_dataframes()
@@ -426,6 +471,17 @@ class ExportMixin:
             list(roi_dfs.keys())[0] if roi_dfs else "pollen",
         )
 
+        # 量纲：`data.csv` 里只有数值、没有单位位，所以单位必须在这里落一份，
+        # 否则炭屑/浓度与百分比列在下游长得一模一样（用户实测 28 列全 %）。
+        units_by_roi = self._roi_column_units()
+        group_units = {
+            f"{r.get('name', r.get('id'))}": {
+                g.get("name"): g.get("unit")
+                for g in (r.get("x_groups") or [])
+            }
+            for r in rois
+        }
+
         manifest = {
             "version": "2.0.0",
             "tool": "straditize pro",
@@ -434,6 +490,10 @@ class ExportMixin:
             "primary_roi_id": primary_roi_id,
             "primary_roi": primary_roi_name,
             "rois": [r.get("name", r.get("id")) for r in rois],
+            # 每列量纲（按 ROI 分组；同名不同 ROI 的列不会互相覆盖）
+            "column_units": units_by_roi,
+            # 每组量纲（用户编辑的源头，见步骤 6「单位」输入）
+            "group_units": group_units,
         }
 
         tar_bio = io.BytesIO()
@@ -494,15 +554,42 @@ class ExportMixin:
                 if roi_name == primary_roi_name:
                     primary_csv_bytes = csv_bytes
 
+                roi_units = units_by_roi.get(roi_name, {})
+                pct_cols = sorted(c for c, u in roi_units.items() if is_percent_unit(u))
+                fixed_cols = sorted(c for c, u in roi_units.items() if not is_percent_unit(u))
                 r_scripts.append(f"# --- ROI: {roi_name} ---")
+                if fixed_cols:
+                    # 这一行是给人看的：脚本里为什么有两次 strat.plot 调用。
+                    detail = ", ".join(f"{c}({roi_units[c]})" for c in fixed_cols)
+                    r_scripts.append(f"# 非百分比列（按自身量程画）：{detail}")
                 r_scripts.append(f"if (file.exists('{csv_filename}')) {{")
                 r_scripts.append(
                     f"  df_{roi_name} <- read.csv('{csv_filename}', check.names = FALSE)"
                 )
                 r_scripts.append(f"  if (ncol(df_{roi_name}) > 1) {{")
-                r_scripts.append(
-                    f"    strat.plot(df_{roi_name}[-1], yvar = df_{roi_name}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.line = TRUE, title = '{roi_name}')"
-                )
+                if fixed_cols:
+                    # 百分比列与绝对值列不能共用 0–100 基准：rioja::strat.plot 的
+                    # `scale.percent` 是整张表一个开关，所以分成两次调用，第二次 `add = TRUE`。
+                    r_scripts.append(
+                        f"    pct_cols <- intersect({_r_string_vector(pct_cols)}, names(df_{roi_name}))"
+                    )
+                    r_scripts.append(
+                        f"    fixed_cols <- intersect({_r_string_vector(fixed_cols)}, names(df_{roi_name}))"
+                    )
+                    r_scripts.append("    if (length(pct_cols) > 0) {")
+                    r_scripts.append(
+                        f"      strat.plot(df_{roi_name}[, pct_cols, drop = FALSE], yvar = df_{roi_name}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.line = TRUE, title = '{roi_name}')"
+                    )
+                    r_scripts.append("    }")
+                    r_scripts.append("    if (length(fixed_cols) > 0) {")
+                    r_scripts.append(
+                        f"      strat.plot(df_{roi_name}[, fixed_cols, drop = FALSE], yvar = df_{roi_name}[[1]], y.rev = TRUE, scale.percent = FALSE, plot.line = TRUE, add = length(pct_cols) > 0, title = '{roi_name}')"
+                    )
+                    r_scripts.append("    }")
+                else:
+                    r_scripts.append(
+                        f"    strat.plot(df_{roi_name}[-1], yvar = df_{roi_name}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.line = TRUE, title = '{roi_name}')"
+                    )
                 r_scripts.append("  }")
                 r_scripts.append("}\n")
 
@@ -534,6 +621,20 @@ class ExportMixin:
                 f"data/<roi>.csv       - Per-ROI isolated scientific CSV tables\n"
                 f"plot_strat.R         - R plotting script with sections for each ROI\n"
                 f"manifest.json        - Version metadata and ROI hierarchy\n"
+                + "\nUnits (authoritative copy: manifest.json -> column_units):\n"
+                + (
+                    "\n".join(
+                        f"  {roi_name}/{col_name}: {unit}"
+                        for roi_name, cols in units_by_roi.items()
+                        for col_name, unit in cols.items()
+                    )
+                    or "  (no columns)"
+                )
+                + "\n  % columns use rioja scale.percent = TRUE: each column is normalized"
+                + " to its own\n  maximum (a 0-100 axis per column), NOT a single shared"
+                + " 0-100 axis.\n"
+                + "  Non-% columns use scale.percent = FALSE: plotted on their own"
+                + " min..max range.\n"
             ).encode("utf-8") + b"\n" + CSV_MISSING_NOTICE
             ti_readme = tarfile.TarInfo(name="README.txt")
             ti_readme.size = len(readme)

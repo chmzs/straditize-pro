@@ -104,6 +104,21 @@ class PlottingMixin:
                 "没有可绘制的数据：先把列数字化并完成步骤 3（深度标定）与步骤 6（列刻度）。",
             )
 
+        # plot_scale_mode 的列名必须真在导出表里：拼错的列名会让「固定量程」静默不生效，
+        # 用户以为调过了而图上什么都没变。这里当场拒绝并列出可用列。
+        scale_modes = merged.get("plot_scale_mode") or {}
+        table_columns = [str(col) for col in frame.columns]
+        unknown_scale_cols = sorted(set(scale_modes) - set(table_columns))
+        if unknown_scale_cols:
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                "plot_scale_mode 指定了导出表里没有的列："
+                + ", ".join(unknown_scale_cols)
+                + "（可用列："
+                + ", ".join(table_columns)
+                + "）",
+            )
+
         with tempfile.TemporaryDirectory(prefix="straditize-plot-") as tmp_dir:
             csv_tmp = Path(tmp_dir) / "plot_input.csv"
             frame.to_csv(csv_tmp, index=False, na_rep="NA")

@@ -32,7 +32,9 @@ const INITIAL_XTICKS_STATE: XTicksPanelState = {
   pendingTick: null,
   onTickPickedExternal: null,
   isBatchAssignOpen: false,
-  groupsFoldOpen: false,
+  // 列组**默认展开**（用户偏好：分组与单位是量纲工作的入口，不该先藏一层）。
+  // 折叠行为不变：点一次即收起，状态存进 state 以便本次会话内保持（面板每次重渲染会重建 DOM）。
+  groupsFoldOpen: true,
 
   axisStrokeOverride: null,
 };
@@ -191,14 +193,19 @@ export function render(data: DiagramData): string {
       </div>
 
       <!--
-        组管理收进折叠区（设计系统 §1.4 渐进披露 / §6 高级配置默认折叠）：
-        首屏只留「进度 → 检测 → 点齿 → 主动作」。分组只在需要分治单位/量程时才打开。
+        组管理放在折叠区，但**默认展开**：分组与单位是量纲工作的入口（炭屑/浓度与百分比列
+        分属不同组），先藏一层等于让用户去猜它在哪。用户点 summary 即可收起，收起状态
+        由 state.groupsFoldOpen 在本次会话内保持。
         summary 里不放按钮——点了会连带折叠/展开。
       -->
       <details class="inspector-section" data-role="groups-fold" ${state.groupsFoldOpen ? 'open' : ''} style="padding: 8px 10px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--border-color);">
         <summary style="font-size: 11.5px; font-weight: 700; color: var(--text-heading); cursor: pointer;" title="同单位、同量程的列共用一个标度。分组只影响标定，不改列几何">
           列组 · ${groups.length} 组${currentGroup ? ` · 当前 ${currentGroup.name}` : ''}
         </summary>
+        <!-- 默认展开后必须限高：组一多（hoya 3 组 / 28 列）展开区会把「进度 → 点齿 → 主动作」
+             挤出首屏。这里给展开内容一个上限 + 内部滚动，折叠行为本身不变。
+             实测 1280×720：限高前 panel 650px（可用 560）→ 主按钮掉到 844px（视口 720）。 -->
+        <div data-role="groups-fold-body" style="max-height: 132px; overflow-y: auto; padding-right: 2px;">
         <div style="display: flex; justify-content: flex-end; align-items: center; margin: 8px 0;">
           <div style="display: flex; gap: 4px;">
             <button id="btn-create-new-group" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 1px 6px; color: var(--accent-blue);" title="新建一个列组：点它之后在图上点选属于该组的属种列（Shift 连选），其余列自动留在默认组">+ 分组</button>
@@ -237,9 +244,17 @@ export function render(data: DiagramData): string {
             <div style="color: var(--text-primary); font-weight: 600;">
               当前组: <span style="color: var(--accent-blue);">${currentGroup?.name}</span>
             </div>
-            <div style="font-size: 10px; color: var(--text-muted);">
-              单位: <strong>${groupUnit}</strong>
-            </div>
+            <!-- 单位是「组」属性，也是下游判量纲的唯一依据：列载荷 unit、LiPD units、
+                 随包 plot_strat.R 的 scale.percent 都读它。此前这里只显示不可编辑，
+                 于是 28 列全是 % —— 炭屑/浓度也按百分比画。 -->
+            <label for="grp-unit-inp" style="display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-muted);" title="本组量纲标签（默认 %）。% 的组按 rioja 惯例画（每列按本列最大值归一、画满宽）；非 % 的组按自身量程（min..max）画。">
+              单位:
+              <input id="grp-unit-inp" type="text" value="${String(groupUnit).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" list="grp-unit-options" style="width: 68px; font-size: 10px; padding: 1px 4px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 3px;" />
+              <datalist id="grp-unit-options">
+                <option value="%"></option><option value="‰"></option><option value="counts"></option>
+                <option value="粒/g"></option><option value="粒/cm2/yr"></option><option value="10^3 粒/cm3"></option>
+              </datalist>
+            </label>
           </div>
 
           <!-- 组级参数：图形形态与尺度类型都是**组**的属性（同一组的列共用），
@@ -323,6 +338,7 @@ export function render(data: DiagramData): string {
               : ''
           }
         </div>
+        </div><!-- /groups-fold-body -->
       </details>
 
       <!-- 标定：检测结果 + 轴线粗 + 点齿（首屏主体） -->
@@ -436,7 +452,9 @@ export function render(data: DiagramData): string {
 
 
       <!-- 阶段提交按钮 -->
-      <button id="btn-apply-xticks-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+      <!-- 主动作固定在可视区底部：默认展开的列组会把面板撑高（实测 1280×720 时 panel 596px、
+           可用 560px），不粘住它就会被挤到首屏之外。粘住 + 折叠区限高，两者一起才够。 -->
+      <button id="btn-apply-xticks-next" class="ui-btn ui-btn--primary" style="position: sticky; bottom: 0; z-index: 3; width: 100%; padding: 8px 12px; font-size: 12px; box-shadow: 0 -6px 10px rgba(0,0,0,0.12);">
         ${t('step6.next')}
       </button>
     </div>
@@ -471,10 +489,32 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     );
   };
 
-  // 组级写入的唯一通路：形态 / 尺度 / 单位刻度长度 / 轴线粗 都是组的属性。
+  /**
+   * 真正生效的组 id。
+   *
+   * `selectedGroupId` 只在用户点过组 Tab 之后才有值；首屏（含默认组）它是 null。
+   * 旧写法直接拿它去写，于是「没切过 Tab 就点形态/单位」是**静默无操作** —— 按钮
+   * 看着能点，点了什么都不发生。回退规则必须与 `render()` 解析 currentGroup 的那套一致。
+   */
+  const effectiveGroupId = (): string | undefined => {
+    const roi = activeRoi();
+    return state.selectedGroupId || roi?.default_group_id || roi?.x_groups?.[0]?.id;
+  };
+
+  /** 生效组当前的单位（空串/缺省一律按 % 显示，与后端默认一致）。 */
+  const effectiveGroupUnit = (): string => {
+    const roi = activeRoi();
+    const gid = effectiveGroupId();
+    return roi?.x_groups?.find((g) => g.id === gid)?.unit || '%';
+  };
+
+  // 组级写入的唯一通路：形态 / 尺度 / 单位 / 单位刻度长度 / 轴线粗 都是组的属性。
   // **放在所有使用点之前** —— 之前它在 axis-stroke 的 handler 之后，直接引用会撞 TDZ。
+  // #37 把这里改成 async + notifyError（失败必须冒泡）；本分支补上生效组回退。
+  // 两者必须同时存在：只取 #37 版会让首屏点形态/单位继续静默无操作，
+  // 只取本分支版会把 #37 的失败冒泡丢掉。
   const patchGroup = async (field: Record<string, unknown>): Promise<boolean> => {
-    const gid = state.selectedGroupId;
+    const gid = effectiveGroupId();
     const roiId = activeRoi()?.id;
     const client = ctx.rpcClient as
       | { roiGroupUpdate?: (r: string, g: string, p: Record<string, unknown>) => Promise<unknown> }
@@ -668,6 +708,24 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         const t = btn.getAttribute('data-scaletype');
         if (t) patchGroup({ scale_type: t });
       });
+    });
+
+    // 组单位：回车即提交（不等 blur），空串就地回填并提示（后端也会拒）。
+    const unitInput = root.querySelector<HTMLInputElement>('#grp-unit-inp');
+    if (!unitInput) return;
+    unitInput.addEventListener('keydown', (ev) => {
+      if ((ev as KeyboardEvent).key === 'Enter') unitInput.blur();
+    });
+    unitInput.addEventListener('change', () => {
+      const raw = (unitInput.value || '').trim();
+      const current = effectiveGroupUnit();
+      if (!raw) {
+        unitInput.value = current;
+        notifyError('单位不能为空：它决定导出与随包 R 脚本按不按百分比画。');
+        return;
+      }
+      if (raw === current) return;
+      patchGroup({ unit: raw });
     });
   };
   wireGroupAttributes();

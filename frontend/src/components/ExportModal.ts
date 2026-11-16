@@ -15,6 +15,15 @@ import { copyText } from '../ui/clipboard';
 
 let activeExportRefresh: (() => void) | null = null;
 
+/**
+ * 与后端 `export.py::PERCENT_UNITS` 同一口径：只有百分比族才走 0–100 基准。
+ *
+ * 两处必须一致，否则「跟随单位」在界面上说的和脚本里画的是两回事。
+ */
+const PERCENT_UNITS = new Set(['%', '％', 'percent', 'pct']);
+const isPercentUnit = (unit?: string | null): boolean =>
+  PERCENT_UNITS.has(String(unit ?? '').trim().toLowerCase());
+
 /** 刷新当前打开的导出面板（未打开时为空操作）。 */
 export function refreshOpenExportModal(): void {
   activeExportRefresh?.();
@@ -44,12 +53,51 @@ export class ExportModal {
   }
 
   /**
+   * 出图的数据源是**主有效区**（后端 `_primary_roi_export_frame`），所以列量程只列
+   * 该区的组。按组而不是按列：组已经是量纲与形态的归属单位，28 列逐列勾没人受得了。
+   */
+  private plotScaleGroups(): Array<{ gid: string; name: string; unit: string; columns: string[] }> {
+    const rois = this.data.rois ?? [];
+    const roi = rois.find((r) => r.id === this.data.primary_roi_id) ?? rois[0];
+    const groups = roi?.x_groups ?? [];
+    const fallbackGid = roi?.default_group_id || groups[0]?.id;
+    const columns = this.data.columns ?? [];
+    return groups.map((group) => ({
+      gid: group.id,
+      name: group.name,
+      unit: group.unit || '%',
+      columns: columns
+        .filter((col) => (col.x_group_id || fallbackGid) === group.id)
+        .map((col) => col.name),
+    }));
+  }
+
+  /**
    * 导出界面打开 (对齐 WebPlotDigitizer / WPD 专业科学数据导出面板，支持排序、格式化、复制、下载与在线成图)
    */
   public open(_initialContent: string = '', _format: 'csv' | 'json' = 'csv'): void {
     const modal = document.createElement('div');
     modal.className = 'modal-backdrop';
     const readiness = computeExportReadiness(this.data);
+    // 列量程行：按组列，默认「跟随单位」（unit 是唯一事实源，这里只做覆盖）。
+    const scaleGroups = this.plotScaleGroups();
+    const scaleRowsHtml = scaleGroups.length
+      ? scaleGroups
+          .map((group) => {
+            const follow = isPercentUnit(group.unit) ? '按列归一' : '自身量程';
+            return `
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 10.5px;">
+                <span style="min-width: 110px; color: var(--text-primary);">${group.name}</span>
+                <span style="color: var(--text-muted); min-width: 150px;">单位 ${group.unit} · ${group.columns.length} 列</span>
+                <select class="sel-wpd-scale-mode" data-group-id="${group.gid}" data-group-unit="${group.unit}" style="font-size: 10.5px;">
+                  <option value="follow" selected>跟随单位（${follow}）</option>
+                  <option value="normalize">强制按列归一</option>
+                  <option value="fixed">强制自身量程</option>
+                </select>
+              </label>`;
+          })
+          .join('')
+      : '<span style="font-size: 10px; color: var(--text-muted);">当前有效区没有分组。</span>';
 
     modal.innerHTML = `
       <div class="modal-dialog wpd-export-dialog ui-modal" style="--modal-width: 1180px;"
@@ -269,6 +317,24 @@ export class ExportModal {
             <input type="number" id="inp-wpd-y-interval" placeholder="间隔" style="width: 72px; font-size: 11px;" />
             <span id="wpd-plot-y-hint" style="font-size: 10px; color: var(--status-warning);"></span>
           </div>
+
+          <!-- 列量程（按组）：默认跟随单位——非 % 的组按自身量程画，不与百分比列共用
+               0–100 基准。这里只做覆盖，不改组的单位（unit 是唯一事实源）。 -->
+          <details id="wpd-scale-mode-box" style="margin-top: 8px;">
+            <summary style="font-size: 11px; color: var(--text-muted); cursor: pointer;" title="默认「跟随单位」：unit 是百分比族就按 rioja 惯例画（每列按本列最大值归一、画满宽），否则按该组自身量程画">
+              列量程（按组，默认跟随单位）
+            </summary>
+            <div style="font-size: 10px; color: var(--text-muted); margin: 4px 0 6px; line-height: 1.6;">
+              百分比组：<strong>每列按本列最大值归一后画满宽</strong>（花粉图惯例）。
+              它不是「所有列共用一把 0–100 的尺」—— A 列 max 20%、B 列 max 5%，归一后两者都画满宽；
+              要按 0–100 固定尺画，请选「强制自身量程」并显式给量程。
+              <br />非 <code>%</code> 的组按自身量程（min..max）画（炭屑 / 花粉浓度这类绝对值列）。
+              这里的覆盖只影响本次出图，不改组的单位。
+            </div>
+            <div id="wpd-scale-mode-rows" style="display: flex; flex-direction: column; gap: 4px;">
+              ${scaleRowsHtml}
+            </div>
+          </details>
         </div>
 
         <div class="ui-modal__footer export-modal-footer">
@@ -845,9 +911,28 @@ export class ExportModal {
       } else if (yHint) {
         yHint.textContent = '';
       }
+      // 列量程：把组选择展开成「列名 → normalize|fixed」（后端只认列名，组只是批量入口）。
+      // 规则：follow 时按单位解析——百分比族 = normalize（后端默认，不必发），其余 = fixed；
+      // 显式覆盖照发。只发「与默认不同」的项，纯 % 工程的请求与以前一字不差。
+      // 放在 renderPlot 里而不是按钮 handler 里：#35 把出图收敛成唯一入口后，
+      // 预览与「按所选格式下载」都走这里，漏一处就会出现「预览对、下载错」。
+      const plotScaleMode: Record<string, string> = {};
+      modal.querySelectorAll<HTMLSelectElement>('.sel-wpd-scale-mode').forEach((sel) => {
+        const unit = sel.dataset.groupUnit ?? '%';
+        const byUnit = isPercentUnit(unit) ? 'normalize' : 'fixed';
+        const mode = sel.value === 'follow' ? byUnit : sel.value;
+        if (mode !== 'normalize' && mode !== 'fixed') return;
+        if (mode === 'normalize' && byUnit === 'normalize') return; // 与后端默认相同，不必发
+        const gid = sel.dataset.groupId ?? '';
+        const group = scaleGroups.find((g) => g.gid === gid);
+        for (const colName of group?.columns ?? []) plotScaleMode[colName] = mode;
+      });
+      const plotSettings: Record<string, unknown> = {};
+      if (yAxis) plotSettings.y_axis = yAxis;
+      if (Object.keys(plotScaleMode).length) plotSettings.plot_scale_mode = plotScaleMode;
       const res: any = await this.rpcClient.call<any, any>('plot.render', {
         format: fmt,
-        ...(yAxis ? { settings: { y_axis: yAxis } } : {}),
+        ...(Object.keys(plotSettings).length ? { settings: plotSettings } : {}),
       });
       if (!res?.data_url) throw new Error('后端没有返回图片数据（data_url 为空）');
       const plot = { dataUrl: String(res.data_url), format: String(res.format || fmt) };
@@ -910,6 +995,7 @@ export class ExportModal {
       btn.textContent = '出图中…';
       try {
         // 预览固定 JPEG：PDF 无法内嵌显示；所选格式只决定「下载图片」写出的扩展名。
+        // 列量程由 renderPlot 统一收集（预览与下载共用同一条入口，不能只在一处生效）。
         await renderPlot('jpeg');
       } catch (err: any) {
         reportPlotError(err);

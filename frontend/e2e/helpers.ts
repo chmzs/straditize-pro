@@ -463,8 +463,8 @@ export async function activeTool(page: Page): Promise<{ footer: string; palette:
 /**
  * 展开步骤 6 的「列组」折叠区（`<details data-role="groups-fold">`）。
  *
- * 组管理默认折叠（设计系统 §6「高级配置默认折叠」）：分组按钮、组 Tab、批量归组抽屉都在里面，
- * 不先展开就会以 not visible 失败——这是折叠的必然结果，不是产品缺陷。
+ * 组管理现在**默认展开**（2026-11-16 用户偏好），所以这里通常什么都不做；保留成幂等步骤：
+ * 若某个用例先把它收起了（或将来默认值再变），这里会点开并断言真的打开。
  */
 export async function openStep6GroupsFold(page: Page): Promise<void> {
   const fold = page.locator('.step-panel[data-step="6"] details[data-role="groups-fold"]');

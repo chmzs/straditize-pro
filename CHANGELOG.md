@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### 混合量纲（二）：组单位可编辑 + 导出按单位画
+
+- **组单位可编辑**（`frontend/src/components/steps/XTicksPanel.ts`）：步骤 6 组卡片原来只显示「单位: %」不可改，28 列因此全是 `%`（炭屑、花粉浓度也被标成百分比）。现为文本输入（默认 `%`，带 `%` / `‰` / `counts` / `粒/g` 等候选），写入 `roi.groupUpdate{unit}`。
+- **顺带修掉一个静默无操作**：`patchGroup` 原先直接用 `state.selectedGroupId`，而它只在点过组 Tab 后才有值 —— 首屏点「形态 / 尺度」是**看着能点、点了什么都不发生**。现按渲染时同一套回退规则解析生效组。
+- **写入端校验**（`roi.py::_normalize_group_unit`）：`unit` 去空白，空串当场 `-32602`（空单位会让下游无法判「是不是百分比」，三个出口只能各自猜）。
+- **manifest / README 记量纲**：随包 `manifest.json` 新增 `column_units`（按 ROI，同名不同 ROI 不互相覆盖）与 `group_units`（按组）；`README.txt` 增「Units」段并写明「非 % 列按自身量程画」。`data.csv` **一个字节都没动**。
+- **随包 `plot_strat.R` 按单位画**：非 % 列不再硬写 `scale.percent = TRUE`，改为单独一次 `strat.plot(..., scale.percent = FALSE, add = TRUE)`（rioja 的 `scale.percent` 是整表开关，混排只能分两次画）。全 % 的工程生成的脚本与以前完全一致。
+- **测试**：`tests/unit/test_group_unit_editable.py`（4 条：落库 / 列载荷 / LiPD / 空串拒绝）与 `tests/unit/test_export_script_units.py`（6 条：脚本参数、manifest、README、三处字符串一致、全 % 零回归、生成脚本真能被 R 跑通）。反向验证：`is_percent_unit` 恒 `True` → 1 条红；`_normalize_group_unit` 恒返回 `%` → 4 条红。
+- **未做**：独立单表模板 `export_r()` 仍写 `scale.percent = TRUE`（拿不到逐列量纲，属已知剩余出口）；`plot_scale_mode` 的 UI 未接。
+
+### 混合量纲：每列可退出「默认缩放」（`plot_scale_mode`）
+
+- **开关**：`plot.render` 的 `settings.plot_scale_mode = {列名: "normalize" | "fixed"}`，默认 `{}`（全部列走百分比基准 = 历史行为，脚本与产物一字不变）。`fixed` = 该列按自身量程画、不与其他列共用缩放基准，用于炭屑 / 花粉浓度这类绝对值列。
+- **语义（写清，别让用户误以为共用一把尺）**：`normalize` = rioja `scale.percent` 的**逐列归一**——每列各自按**本列最大值**归一后画满宽（花粉图惯例）。A 列 max 20%、B 列 max 5%，归一后两者都画满宽；若想要「所有列共用固定 0–100 轴」，那是 `fixed` + 显式量程，不是 `normalize`。`fixed` = 按该列自身 min..max 画。
+- **R 侧**：settings.tsv 里逐列写 `scale_mode.<列名>`；任一行 `fixed` 时走 riojaPlot 的 `scale.minmax`——先把 `normalize` 列按本列最大值缩到 0–100（复刻 rioja 的 `scale.percent` 算法，观感与纯 percent 模式一致），矩阵里这些列填 0/100、`fixed` 列填该列自身 min/max。riojaPlot 里 `scale.percent` 与 `scale.minmax` 是 if/else 互斥分支，混排只能靠这个矩阵表达。全部 `normalize` 时仍走原百分比路径，产物不变。
+- **校验**：取值不是 `normalize` / `fixed` → `-32602`；列名不在导出表里 → `-32602` 并列出可用列（拼错的列名会让开关静默不生效，用户以为调过了而图上什么都没变）。
+- **降级**：只有 `rioja` 时 `plot_scale_mode` 进 `unsupported`，提示里点名「每列独立量程」未应用。
+- **测试**：`tests/unit/test_plot_render.py` 新增 9 条（默认不出现 scale_mode 行 / 翻开关只多一行且该行不同 / 非法取值拒绝 / 未知列名拒绝 / PDF 与 JPEG 产物字节随开关变化）。反向验证：让 `resolve_settings` 恒忽略该键 → 10 条红。
+- **UI（按组，默认跟随单位）**：导出弹窗「列量程（按组）」折叠块，每行一个组（组名 · 单位 · 列数）+ 三态下拉「跟随单位 / 强制按列归一 / 强制自身量程」。`unit` 是唯一事实源，覆盖只做例外；覆盖按组展开成列名发给后端（后端只认列名）。只发「与默认不同」的项，纯 % 工程的出图请求与以前一字不差。
+- **导出侧**：见下一节（已按裁决实施方案 A+B）。
+
 ### 一键出图：图直接回来，不再只给一个隐藏目录里的路径
 
 - **产物去向**：`plot.render` 默认**不落盘**，图以 `data_url` 交回前端（导出弹窗里直接预览 + 「下载图片」浏览器下载事件）。旧行为默认写 `~/.straditize/plots`，用户点完按钮只拿到一句路径，人还得自己去那个目录找 —— 那不是出图。只有显式传 `output_path` 才写文件。
