@@ -578,10 +578,28 @@ warns <- tryCatch(
       for (mode_col in intersect(names(scale_modes), colnames(taxa))) {
         is_fixed[[mode_col]] <- identical(scale_modes[[mode_col]], "fixed")
       }
-      # 列宽向量：显式参数（colwidth.<列>）> 按值缩放开关 > 默认 1:1。
-      # 默认 1:1 与 riojaPlot vignette 的 graph.widths 用法一致（`widths <- rep(1, n)`，
-      # 需要加宽的列手工调大）；percent=FALSE 时 colM <- graph.widths（:174-175），
-      # 于是列宽完全由我们给的向量决定，不再由 rioja 内部按最大值隐式计算。
+      # ── 多段拼接（riojaPlot 官方 vignette 的做法）─────────────────────────────
+      # 百分比列 = 主块（scale.percent = TRUE ⇒ 段内宽度 ∝ 各列最大值，即用户要的
+      # 「按值缩放」）；每个非百分比列（或连续的非 % 列）各自成段，用 `riojaPlot=`
+      # 拼到上一段右侧，段宽固定（fixed_span），**不随该列数值大小变化** ——
+      # 浓度列因此不参与主块的宽度分配（此前实测它吃掉 73% 画布）。
+      # 依据：.riojaPlot2:167-171 只在**同一段内**按 max 分配宽度；段间由 xRight 切分。
+      # 注意：`riojaPlot=` 存在时 `style` 会被忽略（包内会 warning），所以第 2 段起的
+      # scale.* / minmax / plot.* 一律作为**直接参数**传入。
+      y_df <- data.frame(depth)
+      names(y_df) <- txt("ylabel", "Depth")
+      runs <- rle(as.logical(is_fixed))
+      ends <- cumsum(runs$lengths)
+      starts <- c(1, utils::head(ends, -1) + 1)
+      seg_idx <- lapply(seq_along(runs$lengths), function(k) starts[k]:ends[k])
+      seg_fixed <- runs$values
+      n_fixed_seg <- sum(seg_fixed)
+      n_seg <- length(seg_idx)
+      gap <- num("x_gap", 0.01)
+      fixed_span <- num("fixed_span", 0.08)
+      right_edge <- num("x_right", 0.99)
+      pct_span <- max(0.2, right_edge - fixed_span * n_fixed_seg - gap * max(0, n_seg - 1))
+      # 列宽向量（显式参数 > 按值缩放开关 > 默认 1:1）
       maxs <- apply(taxa, 2, function(v) max(v, na.rm = TRUE))
       maxs[!is.finite(maxs) | maxs <= 0] <- 1
       w <- stats::setNames(rep(1, ncol(taxa)), colnames(taxa))
@@ -594,14 +612,45 @@ warns <- tryCatch(
         ov <- num(paste0("colwidth.", w_name), NA_real_)
         if (!is.na(ov) && ov > 0) w[[w_name]] <- ov
       }
-      style$scale.percent <- FALSE
-      style$scale.minmax <- flag("minmax", FALSE)
-      if (flag("minmax", FALSE)) style$minmax <- cbind(rep(0, ncol(taxa)), maxs)
-      style$graph.widths <- as.numeric(w)
-      y_df <- data.frame(depth)
-      names(y_df) <- txt("ylabel", "Depth")
-      riojaPlot::riojaPlot(x = taxa, y = y_df, style = style,
-                           yvar.name = names(y_df)[1])
+      rp <- NULL
+      cursor <- 0
+      for (k in seq_len(n_seg)) {
+        idx <- seg_idx[[k]]
+        seg_style <- style
+        if (seg_fixed[k]) {
+          seg_style$scale.percent <- FALSE
+          seg_style$scale.minmax <- TRUE
+          seg_max <- apply(taxa[, idx, drop = FALSE], 2, function(v) max(v, na.rm = TRUE))
+          seg_max[!is.finite(seg_max) | seg_max <= 0] <- 1
+          seg_style$minmax <- cbind(rep(0, length(idx)), seg_max)
+        } else {
+          seg_style$scale.percent <- TRUE
+          seg_style$scale.minmax <- FALSE
+          seg_style$min.width.pc <- 0.02
+        }
+        # 段内列宽：默认全 1（与 riojaPlot vignette 的 graph.widths 默认一致 = 等宽）；
+        # 显式参数（colwidth.<列>）优先；开关 width_by_value=TRUE 时 % 列按
+        # max/mean(max) 缩放并夹到 [0.5, 4]（避免极端值把别的列压没）。
+        seg_w <- w[idx]
+        seg_style$graph.widths <- as.numeric(seg_w)
+        if (k > 1) seg_style$plot.yaxis <- FALSE
+        cursor <- min(right_edge, cursor + (if (seg_fixed[k]) fixed_span else pct_span))
+        args <- list(x = taxa[, idx, drop = FALSE], y = y_df, style = seg_style,
+                     yvar.name = names(y_df)[1], xRight = cursor)
+        if (!is.null(rp)) {
+          args$riojaPlot <- rp
+          args$xGap <- gap
+          args$scale.percent <- seg_style$scale.percent
+          args$scale.minmax <- seg_style$scale.minmax
+          if (!is.null(seg_style$minmax)) args$minmax <- seg_style$minmax
+          args$graph.widths <- as.numeric(seg_w)
+          args$plot.line <- flag("line", TRUE)
+          args$plot.bar <- flag("bar", TRUE)
+          args$plot.poly <- flag("silhouette", TRUE)
+        }
+        rp <- do.call(riojaPlot::riojaPlot, args)
+        cursor <- cursor + gap
+      }
     } else {
       rioja::strat.plot(
         d = as.matrix(taxa),
