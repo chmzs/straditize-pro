@@ -1421,15 +1421,8 @@ class ProjectSessionMixin:
                 ti_notice.mtime = int(time.time())
                 tf.addfile(ti_notice, io.BytesIO(notice))
 
-            # 5. plot_strat.R
-            r_script = (
-                b"# Straditize Pro - Geological Stratigraphic Pollen Diagram Plotting Script\n"
-                b"# Generated automatically by Straditize v2.0 (straditize pro)\n"
-                b"if (!requireNamespace('rioja', quietly=TRUE)) install.packages('rioja')\n"
-                b"library(rioja)\n"
-                b"df <- read.csv('data.csv', check.names=FALSE)\n"
-                b"strat.plot(df[-1], yvar=df[[1]], y.rev=TRUE, scale.percent=TRUE, plot.line=TRUE, title='Stratigraphic Pollen Diagram (Straditize Pro)')\n"
-            )
+            # 5. plot_strat.R —— 与「R 脚本」下载逐字节相同（同一个生成器）。
+            r_script = self.strat_plot_r_script().encode("utf-8")
             ti_r = tarfile.TarInfo(name="plot_strat.R")
             ti_r.size = len(r_script)
             ti_r.mtime = int(time.time())

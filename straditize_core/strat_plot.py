@@ -18,7 +18,7 @@ from __future__ import annotations
 import base64
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 #: 默认出图设置：对齐 riojaPlot shiny 的常用组合（Silhouette % + show bar + Exaggeration
 #: + Rev. Y + 标签斜体/45°/20 字符折行 + 底部刻度轴）。
@@ -224,6 +224,100 @@ def _settings_tsv(settings: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+#: 视为「百分比类」的单位写法（与 `export.py` 共用同一份口径）。
+PERCENT_UNITS = ("%", "％", "percent", "pct")
+
+
+def is_percent_unit(unit: Any) -> bool:
+    """该单位是否属于百分比族（只有这些才按「每列自身量程」画）。"""
+    return str(unit or "").strip().lower() in PERCENT_UNITS
+
+
+def _r_string_vector(names: Sequence[str]) -> str:
+    """把列名写成 R 的 c("a", "b")：引号/反斜杠转义，属种名带标点时脚本语法不坏。"""
+    quoted = ['"' + str(n).replace("\\", "\\\\").replace('"', '\\"') + '"' for n in names]
+    return "c(" + ", ".join(quoted) + ")"
+
+
+def build_strat_plot_r_script(
+    entries: Sequence[tuple[str, str, Mapping[str, str]]],
+) -> str:
+    """**唯一的**导出用 R 脚本生成器（rioja::strat.plot）。
+
+    `entries` 里每项是 `(标签, CSV 相对路径, {列名: unit})`。tar 内的 `plot_strat.R`、
+    导出弹窗「R 脚本」下载、以及任何别的出口都必须调这一个函数 —— 三处各写一份模板，
+    就是「用户拿到的脚本还是旧版」的成因（`project.py` 与 `export_r` 曾各自硬编码）。
+
+    量纲：
+    - 百分比列：按**本列最大值**铺满自己的面板（`scale.percent = TRUE` 在 rioja 里会让
+      面板宽度与该列最大值成正比，一个 800 的浓度列会把 27 个百分比列挤成细条，
+      所以这里用 `scale.percent = FALSE` + `scale.minmax = TRUE` + 逐列 `minmax` 矩阵，
+      等价且等宽 —— 依据见 `rioja::strat.plot` 源码 :149-158 / :312-320 / :400。
+    - 非百分比列：`scale.percent = FALSE`，按该列自身 min..max 画。
+    """
+    lines: list[str] = [
+        "# ==============================================================================",
+        "# Straditize Pro - Stratigraphic Diagram Plotting Script",
+        "# Generated automatically by Straditize v2.0 (straditize pro)",
+        "# Requires R package 'rioja' (install.packages('rioja'))",
+        "#",
+        "# 量纲：% 列按本列最大值铺满自己的面板；非 % 列按自身 min..max 画。",
+        "# 每列的面板宽度相等（scale.percent = FALSE），xlim 由 minmax 矩阵逐列给出。",
+        "#",
+        "# 空单元格 = 该行不在这一列的取数窗口内（未测），**不是 0 丰度**。",
+        "# 本脚本**保留 NA**：rioja::strat.plot 会把 NA 画成空白/缺口。",
+        "# 下游统计若确实需要一个数，请显式处理（na.omit / 按缺失模型插补），不要替用户决定。",
+        "# ==============================================================================",
+        "",
+        "if (!requireNamespace('rioja', quietly = TRUE)) install.packages('rioja')",
+        "library(rioja)",
+        "",
+    ]
+    for label, csv_path, units in entries:
+        pct_cols = sorted(c for c, u in units.items() if is_percent_unit(u))
+        fixed_cols = sorted(c for c, u in units.items() if not is_percent_unit(u))
+        lines.append(f"# --- ROI: {label} ---")
+        if fixed_cols:
+            detail = ", ".join(f"{c}({units[c]})" for c in fixed_cols)
+            lines.append(f"# 非百分比列（按自身量程画）：{detail}")
+        lines.append(f"if (file.exists('{csv_path}')) {{")
+        lines.append(f"  df <- read.csv('{csv_path}', check.names = FALSE)")
+        lines.append("  if (ncol(df) > 1) {")
+        if fixed_cols:
+            lines.append(f"    pct_cols <- intersect({_r_string_vector(pct_cols)}, names(df))")
+            lines.append(f"    fixed_cols <- intersect({_r_string_vector(fixed_cols)}, names(df))")
+            lines.append("    all_cols <- c(pct_cols, fixed_cols)")
+            lines.append("    d <- df[, all_cols, drop = FALSE]")
+            lines.append("    lo <- apply(d, 2, function(v) min(v, na.rm = TRUE))")
+            lines.append("    hi <- apply(d, 2, function(v) max(v, na.rm = TRUE))")
+            lines.append("    lo[pct_cols] <- 0  # 百分比列从 0 起，铺满到本列最大值")
+            lines.append("    hi[!is.finite(hi) | hi <= lo] <- lo[!is.finite(hi) | hi <= lo] + 1")
+            lines.append("    # 面板宽度：% 列按 max/最大 max 缩放（值大列宽）；非 % 列固定权重（% 列宽度中位数），")
+            lines.append("    # 不让 800 粒/g 的浓度列按自己的单位霸占画布。")
+            lines.append("    gw <- rep(1, ncol(d)); names(gw) <- names(d)")
+            lines.append("    ref <- max(hi[pct_cols], na.rm = TRUE); if (!is.finite(ref) || ref <= 0) ref <- 1")
+            lines.append("    gw[pct_cols] <- pmax(hi[pct_cols]/ref, 0.02)")
+            lines.append("    gw[fixed_cols] <- if (length(pct_cols)) stats::median(gw[pct_cols]) else 1")
+            lines.append(
+                f"    strat.plot(d, yvar = df[[1]], y.rev = TRUE, scale.percent = FALSE, scale.minmax = TRUE, minmax = cbind(lo, hi), graph.widths = gw, plot.line = TRUE, title = '{label}')"
+            )
+        else:
+            lines.append("    d <- df[, -1, drop = FALSE]")
+            lines.append("    lo <- rep(0, ncol(d))")
+            lines.append("    hi <- apply(d, 2, function(v) max(v, na.rm = TRUE))")
+            lines.append("    hi[!is.finite(hi) | hi <= 0] <- 1")
+            lines.append("    # 面板宽度 ∝ 该列最大值（与出图同一口径）")
+            lines.append("    ref <- max(hi, na.rm = TRUE); if (!is.finite(ref) || ref <= 0) ref <- 1")
+            lines.append("    gw <- pmax(hi/ref, 0.02)")
+            lines.append(
+                f"    strat.plot(d, yvar = df[[1]], y.rev = TRUE, scale.percent = FALSE, scale.minmax = TRUE, minmax = cbind(lo, hi), graph.widths = gw, plot.line = TRUE, title = '{label}')"
+            )
+        lines.append("  }")
+        lines.append("}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 #: R 侧脚本。写成纯文本而不是 f-string：里面全是 R 的花括号，任何格式化都会出事。
 STRAT_PLOT_SCRIPT = r'''# Generated by straditize: stratigraphic diagram (riojaPlot preferred, rioja fallback)
 args <- commandArgs(trailingOnly = TRUE)
@@ -383,27 +477,49 @@ warns <- tryCatch(
       for (mode_col in intersect(names(scale_modes), colnames(taxa))) {
         is_fixed[[mode_col]] <- identical(scale_modes[[mode_col]], "fixed")
       }
-      if (any(is_fixed)) {
-        # riojaPlot 里 scale.percent 与 scale.minmax 走 if/else，是互斥的：
-        # 要 Min/max 就必须关百分比刻度，否则 Min/max 会被静默忽略。
-        style$scale.percent <- FALSE
-        style$scale.minmax <- TRUE
-        # riojaPlot 走 minmax 时按每列的 (min,max) 定 xlim。为了让 normalize 列与
-        # scale.percent 下的观感完全一致（0-100 轴、每列画满宽），先把这些列按**本列
-        # 最大值**缩到 0-100 —— 这正是 rioja 内部 scale.percent 干的事（每列除以本列 max）。
-        col_max <- apply(taxa, 2, function(v) max(v, na.rm = TRUE))
-        col_max[!is.finite(col_max) | col_max <= 0] <- 1
-        pct_names <- colnames(taxa)[!is_fixed]
-        if (length(pct_names) > 0) {
-          taxa[, pct_names] <- sweep(taxa[, pct_names, drop = FALSE], 2, col_max[pct_names], "/") * 100
-        }
-        mins <- apply(taxa, 2, function(v) min(v, na.rm = TRUE))
-        maxs <- apply(taxa, 2, function(v) max(v, na.rm = TRUE))
-        # normalize 列统一到 0-100（已按本列最大值缩放），fixed 列保留自身量程。
-        mins[!is_fixed] <- 0
-        maxs[!is_fixed] <- 100
-        style$minmax <- cbind(mins, maxs)
+      # 每列的 xlim 一律由 minmax 矩阵给出，**不用** scale.percent 定几何。
+      #
+      # 为什么：.riojaPlot2:167-171 在 percent=TRUE 时把 colM 设成「该列最大值」，而
+      # 面板宽度 `inc2 <- inc * colM[i]`（:421-422）与 colM 成正比 —— 一个 max=800 的
+      # 浓度列会把 27 个百分比列挤成细条（实测 2200px 画布：6px vs 1608px，27 列合计
+      # 只占 0.3% 宽）。这就是用户说的「整块糊在一起」。
+      # percent=FALSE 时 colM <- graph.widths（:174-175，默认全 1）⇒ 每列等宽，
+      # xlim 由 minmax 矩阵逐列给出（:548-551），归一化列 (0, 本列 max) 铺满自己的面板。
+      #
+      # scale.percent 与 scale.minmax 本身**不互斥**（前者定 xlim/宽度，后者 :650-661
+      # 只决定底/顶轴标端点还是画默认刻度）；互斥的是两条 xlim 来源。
+      style$scale.percent <- FALSE
+      style$scale.minmax <- TRUE
+      mins <- apply(taxa, 2, function(v) min(v, na.rm = TRUE))
+      maxs <- apply(taxa, 2, function(v) max(v, na.rm = TRUE))
+      mins[!is_fixed] <- 0
+      style$minmax <- cbind(mins, maxs)
+      # 面板宽度：复现 rioja percent 语义（宽度 ∝ 该列最大值），但**不让非百分比列**
+      # 用自己的单位霸占画布（800 粒/g 与 100% 不可比）。
+      # `.riojaPlot2:167-171` 里 `colM <- colM * graph.widths`、`:421-422` `inc2 <- inc*colM[i]`，
+      # 而 percent=FALSE 时 `colM <- graph.widths`（:174-175）⇒ 宽度由 graph.widths 逐列决定；
+      # `.riojaPlot1:361` 把它从 style 取（`graph.widths = style$graph.widths`），所以这里赋值即可。
+      w <- stats::setNames(rep(1, ncol(taxa)), colnames(taxa))
+      pct_idx <- !is_fixed
+      if (any(pct_idx)) {
+        pct_max <- maxs[pct_idx]
+        ref <- max(pct_max, na.rm = TRUE)
+        if (!is.finite(ref) || ref <= 0) ref <- 1
+        # 线性宽度 ∝ 该列最大值，**下限 0.02**：
+        #   - 只为让「占最大列 <2% 的极小列」仍有可点的面板；≥2% 的列宽度比严格 ∝ max；
+        #   - 为什么是 0.02 而不是 0.01 / 0.05：0.01 在 2200px 画布上约 9px，低于曲线
+        #     线宽的可见阈值；0.05 会把 5% 以下的列全部拉平（hoya 实测有 12 列落在
+        #     1%–2% 区间），等于重新制造「等宽」这个缺陷；
+        #   - 地板只抬「被压到下限的那些列自己」：实测把某列 max 从 0.5 改到 0.51，
+        #     大列宽度一字不变（1079 / 534 px）。跨过门槛时 sum(w) 会变，所有列按
+        #     1/sum 等比微调（<0.2%），这是比例布局的固有性质，不是地板与比例耦合。
+        w[pct_idx] <- pmax(pct_max / ref, 0.02)
       }
+      if (any(is_fixed)) {
+        # 非百分比列：固定权重 = 百分比列宽度的中位数（不随自己的单位缩放）
+        w[is_fixed] <- if (any(pct_idx)) stats::median(w[pct_idx]) else 1
+      }
+      style$graph.widths <- as.numeric(w)
       # 把 y 列命名成用户要的轴标题：riojaPlot 用 yvar.name 选列，同时把它当轴标签。
       y_df <- data.frame(depth)
       names(y_df) <- txt("ylabel", "Depth")

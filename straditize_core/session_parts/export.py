@@ -35,19 +35,11 @@ from ..protocol import (
     JsonRpcError,
 )
 from .agedepth import attach_windowed_rates, build_age_depth_frame
+from ..strat_plot import build_strat_plot_r_script
 from .xscale import read_column_values, resolve_column_scale
 
-#: 视为「百分比类」的单位写法。**其余一律按该列自身量程画** —— 炭屑（counts）、
-#: 花粉浓度（粒/cm2/yr）这类绝对值列若按百分比画，会被压成一条平线。
-#:
-#: 注意 percent 分支的语义：rioja 的 `scale.percent = TRUE` 是**每列按本列最大值**
-#: 归一后画满宽（花粉图惯例），不是所有列共用一把 0–100 的尺。
-PERCENT_UNITS = ("%", "％", "percent", "pct")
-
-
-def is_percent_unit(unit: Any) -> bool:
-    """该单位是否属于百分比族（只有这些才用 `scale.percent = TRUE`）。"""
-    return str(unit or "").strip().lower() in PERCENT_UNITS
+# `is_percent_unit` / `PERCENT_UNITS` 的唯一实现在 `strat_plot.py`（与出图共用同一口径），
+# 这里只 import，不再留第二份。
 
 
 def _r_string_vector(names: Sequence[str]) -> str:
@@ -515,15 +507,6 @@ class ExportMixin:
                 tf.addfile(ti_img, io.BytesIO(img_data))
 
             primary_csv_bytes: bytes = b""
-            r_scripts: list[str] = [
-                "# ==============================================================================",
-                "# Straditize Pro - Multi-ROI Stratigraphic Diagram Plotting Script",
-                "# Generated automatically by Straditize v2.0 (straditize pro)",
-                "# Requires R package 'rioja' (install.packages('rioja'))",
-                "# ==============================================================================\n",
-                "if (!requireNamespace('rioja', quietly = TRUE)) install.packages('rioja')",
-                "library(rioja)\n",
-            ]
 
             # 每个 ROI 的 CSV 文件名规则：用户显式命名的用名字，未命名的用
             # `data_roi_<序号>`（序号按 roi_dfs 顺序从 1 起）。用名字时保留可读性，
@@ -554,58 +537,17 @@ class ExportMixin:
                 if roi_name == primary_roi_name:
                     primary_csv_bytes = csv_bytes
 
-                roi_units = units_by_roi.get(roi_name, {})
-                pct_cols = sorted(c for c, u in roi_units.items() if is_percent_unit(u))
-                fixed_cols = sorted(c for c, u in roi_units.items() if not is_percent_unit(u))
-                r_scripts.append(f"# --- ROI: {roi_name} ---")
-                if fixed_cols:
-                    # 这一行是给人看的：脚本里为什么有两次 strat.plot 调用。
-                    detail = ", ".join(f"{c}({roi_units[c]})" for c in fixed_cols)
-                    r_scripts.append(f"# 非百分比列（按自身量程画）：{detail}")
-                r_scripts.append(f"if (file.exists('{csv_filename}')) {{")
-                r_scripts.append(
-                    f"  df_{roi_name} <- read.csv('{csv_filename}', check.names = FALSE)"
-                )
-                r_scripts.append(f"  if (ncol(df_{roi_name}) > 1) {{")
-                if fixed_cols:
-                    # 百分比列与绝对值列不能共用 0–100 基准：rioja::strat.plot 的
-                    # `scale.percent` 是整张表一个开关，所以分成两次调用，第二次 `add = TRUE`。
-                    r_scripts.append(
-                        f"    pct_cols <- intersect({_r_string_vector(pct_cols)}, names(df_{roi_name}))"
-                    )
-                    r_scripts.append(
-                        f"    fixed_cols <- intersect({_r_string_vector(fixed_cols)}, names(df_{roi_name}))"
-                    )
-                    r_scripts.append("    if (length(pct_cols) > 0) {")
-                    r_scripts.append(
-                        f"      strat.plot(df_{roi_name}[, pct_cols, drop = FALSE], yvar = df_{roi_name}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.line = TRUE, title = '{roi_name}')"
-                    )
-                    r_scripts.append("    }")
-                    r_scripts.append("    if (length(fixed_cols) > 0) {")
-                    r_scripts.append(
-                        f"      strat.plot(df_{roi_name}[, fixed_cols, drop = FALSE], yvar = df_{roi_name}[[1]], y.rev = TRUE, scale.percent = FALSE, plot.line = TRUE, add = length(pct_cols) > 0, title = '{roi_name}')"
-                    )
-                    r_scripts.append("    }")
-                else:
-                    r_scripts.append(
-                        f"    strat.plot(df_{roi_name}[-1], yvar = df_{roi_name}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.line = TRUE, title = '{roi_name}')"
-                    )
-                r_scripts.append("  }")
-                r_scripts.append("}\n")
-
-            if not primary_csv_bytes and roi_dfs:
-                primary_csv_bytes = (
-                    list(roi_dfs.values())[0]
-                    .to_csv(index=False, na_rep="NA")
-                    .encode("utf-8")
-                )
+                # R 脚本不再在这里拼：tar 成员与「R 脚本」下载都走
+                # `strat_plot.py::build_strat_plot_r_script`（唯一生成器，逐字节同源）。
 
             ti_data_csv = tarfile.TarInfo(name="data.csv")
             ti_data_csv.size = len(primary_csv_bytes)
             ti_data_csv.mtime = int(time.time())
             tf.addfile(ti_data_csv, io.BytesIO(primary_csv_bytes))
+            ti_data_csv.mtime = int(time.time())
+            tf.addfile(ti_data_csv, io.BytesIO(primary_csv_bytes))
 
-            r_script_bytes = "\n".join(r_scripts).encode("utf-8")
+            r_script_bytes = self.strat_plot_r_script().encode("utf-8")
             ti_r = tarfile.TarInfo(name="plot_strat.R")
             ti_r.size = len(r_script_bytes)
             ti_r.mtime = int(time.time())
@@ -619,7 +561,7 @@ class ExportMixin:
                 f"Files:\n"
                 f"data.csv             - Primary ROI dataset ({primary_roi_name})\n"
                 f"data/<roi>.csv       - Per-ROI isolated scientific CSV tables\n"
-                f"plot_strat.R         - R plotting script with sections for each ROI\n"
+                f"plot_strat.R         - R plotting script (primary ROI, unit-aware)\n"
                 f"manifest.json        - Version metadata and ROI hierarchy\n"
                 + "\nUnits (authoritative copy: manifest.json -> column_units):\n"
                 + (
@@ -1671,37 +1613,28 @@ class ExportMixin:
         """Exports standard POSIX UStar tar project archive."""
         return self.project_save(output_path=output_path, format="tar")
 
+    def _strat_script_entries(self) -> list[tuple[str, str, dict[str, str]]]:
+        """R 脚本的唯一输入：主有效区 + `data.csv`。
+
+        tar 内的 `plot_strat.R` 与「R 脚本」下载必须喂**同一份** entries，否则内容会分叉
+        —— 之前 tar 用 `project.py` 的硬编码模板、下载用 `export_r` 的硬编码模板，
+        用户拿到的脚本和界面里说的不是一回事。
+        """
+        roi_dfs = self.get_roi_dataframes()
+        if not roi_dfs:
+            return []
+        name = self._primary_roi_sheet_name(roi_dfs)
+        units = self._roi_column_units().get(name, {})
+        return [(name, "data.csv", dict(units))]
+
+    def strat_plot_r_script(self) -> str:
+        """导出用 R 脚本（唯一出口）。tar 成员与「R 脚本」下载都调它。"""
+        return build_strat_plot_r_script(self._strat_script_entries())
+
     def export_r(self, output_path: str | None = None) -> str | dict[str, Any]:
         """Generates R plotting template script using rioja::strat.plot."""
-        r_script = (
-            "# ==============================================================================\n"
-            "# Straditize Pro - Geological Stratigraphic Pollen Diagram Plotting Script\n"
-            "# Generated automatically by Straditize v2.0 (straditize pro)\n"
-            "# Requires R package 'rioja' (install.packages('rioja'))\n"
-            "# ==============================================================================\n\n"
-            "if (!requireNamespace('rioja', quietly = TRUE)) {\n"
-            "  install.packages('rioja', repos = 'https://cloud.r-project.org')\n"
-            "}\n"
-            "library(rioja)\n\n"
-            "data_file <- if (file.exists('data.csv')) 'data.csv' else list.files(pattern = '\\\\.csv$')[1]\n"
-            "df <- read.csv(data_file, check.names = FALSE, stringsAsFactors = FALSE)\n"
-            "depth <- df[[1]]\n"
-            "taxa_data <- as.matrix(sapply(df[, -1, drop = FALSE], as.numeric))\n"
-            "# 空单元格 = 该行不在这一列的取数窗口内（未测），**不是 0 丰度**。\n# 旧模板曾在这一步把 NA 静默填成 0，等于把「没测」画成「测到 0」，会被当成科学结论。\n# 这里**保留 NA**：rioja::strat.plot 会把 NA 画成空白/缺口。\n# 下游统计若确实需要一个数，请显式处理（na.omit / 按缺失模型插补），不要替用户决定。\n\n\n"
-            "pdf('stratigraphic_diagram.pdf', width = 12, height = 8)\n"
-            "strat.plot(\n"
-            "  d = taxa_data,\n"
-            "  yvar = depth,\n"
-            "  y.rev = TRUE,\n"
-            "  ylabel = 'Depth (cm)',\n"
-            "  scale.percent = TRUE,\n"
-            "  plot.poly = TRUE,\n"
-            "  plot.line = TRUE,\n"
-            "  title = 'Stratigraphic Pollen Diagram (Straditize Pro)'\n"
-            ")\n"
-            "dev.off()\n"
-            "message('Diagram successfully rendered: stratigraphic_diagram.pdf')\n"
-        )
+        # 唯一生成器：与 tar 内的 plot_strat.R 逐字节相同（同一个函数、同一份 entries）。
+        r_script = self.strat_plot_r_script()
         if output_path:
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(r_script)
