@@ -14,6 +14,7 @@ import { CoordinateSystem } from '../core/CoordinateSystem';
 import { controlPointsForWriteback } from '../core/controlPointWriteback';
 import { AXIS_STROKE_MAX_PX, AXIS_STROKE_MIN_PX, resolveAxisStroke } from '../core/axisStroke';
 import { resolvePlotType } from '../core/plotType';
+import { resolveColumnGroup } from '../core/columnGroup';
 import { columnPick, setPickedColumnIds } from './steps/columnPick';
 import {
   STAGE,
@@ -1690,7 +1691,8 @@ private pointer: PointerState = {
   /** 列所属的 x 组（组级 `axis_stroke_px` 是列级覆盖的初值）。 */
   private groupOfColumn(col: TaxaColumn) {
     for (const roi of this.data.rois ?? []) {
-      const group = (roi.x_groups ?? []).find((g) => g.id === col.x_group_id);
+      // 与画布绘制同源：`resolveColumnGroup` 带 `default_group_id` 回退。
+      const group = resolveColumnGroup(col, roi);
       if (group) return group;
     }
     return undefined;
