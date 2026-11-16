@@ -20,15 +20,19 @@ import subprocess
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-#: 默认出图设置：对齐 riojaPlot shiny 的常用组合（Silhouette % + show bar + Exaggeration
-#: + Rev. Y + 标签斜体/45°/20 字符折行 + 底部刻度轴）。
+#: 默认出图设置：对齐 riojaPlot vignette（allen1999 版式）——**只开 silhouette**，
+#: 不开 bar/line（横条纹 + 轮廓发毛的来源），字号不放大，齿长 tcl=-0.1，列间留 0.01 白缝。
+#: 需要更粗/更大的观感时由用户调 settings，不做默认放大。
 DEFAULT_PLOT_SETTINGS: dict[str, Any] = {
     "percent": True,
     "silhouette": True,
-    "bar": True,
-    "line": True,
+    # 参考图（vignette allen1999）只开 silhouette；bar 会画等距横条纹、line 让边缘发毛。
+    "bar": False,
+    "line": False,
     "rev_y": True,
-    "exaggeration": True,
+    # exaggeration：参考图没有这个概念，3× 列内放大会压到相邻面板、也与 minmax 轴标签打架。
+    # 默认关；需要时用户开 settings.exaggeration。
+    "exaggeration": False,
     "exag_mult": 3.0,
     "exag_alpha": 0.15,
     "minmax": False,
@@ -47,9 +51,13 @@ DEFAULT_PLOT_SETTINGS: dict[str, Any] = {
     "break_long": True,
     "break_n": 20,
     "label_rotate": 45,
-    # 轴与标签字号倍率：riojaPlot 默认（cex.xlabel 0.9 / yaxis 0.7 / xaxis 0.6 /
-    # ylabel 0.9）在 2200px 宽的成品图上偏小，缩到屏幕上看不清；默认放大 2 倍。
-    "font_scale": 2.0,
+    # 字号倍率：1.0 = riojaPlot 默认（cex.xlabel 0.9 / yaxis 0.7 / xaxis 0.6 / ylabel 0.9）。
+    # 参考图同样是宽图，用小字号反而清爽；嫌小请自己调这个值，不做默认放大。
+    "font_scale": 1.0,
+    # 齿长 / 底部留白 / 列间距：与参考图一致（tcl -0.1、yBottom 0.06、xSpace 0.01）。
+    "tcl": -0.1,
+    "y_bottom": 0.06,
+    "x_space": 0.01,
     "axis": True,
     "ylabel": "Depth",
     "title": "",
@@ -479,7 +487,7 @@ warns <- tryCatch(
         # 齿长 tcl 与「标签离轴距离」在 riojaPlot 里是绑死的：内部 spc <- -tclx，
         # 标签起点正好落在齿末端。所以把 tcl 调大只会让**刻度齿穿过数字**
         # （实测 -1.3 时 10/20/30 被齿线穿过）。帮助页写 tcl 默认 -0.3，保持默认。
-        tcl = num("tcl", -0.3),
+        tcl = num("tcl", -0.1),
         lwd.axis = num("axis_lwd", 4),
         plot.bottom.axis = flag("axis", TRUE),
         plot.top.axis = FALSE,
@@ -503,7 +511,9 @@ warns <- tryCatch(
         # 底部拥挤：字号放大 2 倍后，x 轴刻度数字与面板底边、与相邻列都贴在一起。
         # 把绘图区底边上抬（默认 0.05 → 0.12），给刻度一整行的高度。
         # tcl 回到默认后齿不再需要大留白；0.15 会在底部留下一整块空白（实测）。
-        yBottom = num("y_bottom", 0.08),
+        yBottom = num("y_bottom", 0.06),
+        # 列间留白：参考图 0.01；0 会让面板贴在一起（看不出分栏）。
+        xSpace = num("x_space", 0.01),
         # ylabPos 不覆盖：留空让 riojaPlot 按刻度实际宽度自己算。
         # 列名角度 +45°（逆时针上倾）+ 斜体；y.rev 时列名画在图顶，
         # 不再强制居中——居中会把长属种名挤到邻列上。
