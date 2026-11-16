@@ -18,12 +18,20 @@ export interface RoiOverlayEnv {
   isRoiMode: boolean;
   /** 手柄边长（屏幕 px）。 */
   handleSizeScreen: number;
+  /**
+   * 是否画 8 个调整手柄。
+   *
+   * 只有该步骤真的能拖手柄时才画（`WorkflowStage.canHitRoiHandle`）：后续步骤里
+   * ROI 矩形仍作参考绘制，但手柄既不画也点不到——画了却点不到会让用户以为手柄坏了。
+   */
+  showHandles: boolean;
   hoveredHandle: RoiHandle | null;
   draggingHandle: RoiHandle | null;
 }
 
 export function drawRoiOverlay(env: RoiOverlayEnv): void {
-  const { ctx, isLight, roi, scale, isRoiMode, handleSizeScreen, hoveredHandle, draggingHandle } = env;
+  const { ctx, isLight, roi, scale, isRoiMode, handleSizeScreen, showHandles, hoveredHandle, draggingHandle } =
+    env;
   ctx.save();
 
   const boxW = roi.xMax - roi.xMin;
@@ -59,7 +67,7 @@ export function drawRoiOverlay(env: RoiOverlayEnv): void {
   };
 
   ctx.setLineDash([]);
-  for (const [key, pt] of Object.entries(handles)) {
+  for (const [key, pt] of showHandles ? Object.entries(handles) : []) {
     const isHovered = hoveredHandle === key || draggingHandle === key;
     const hSize = isHovered ? handleSize * 1.3 : handleSize;
 

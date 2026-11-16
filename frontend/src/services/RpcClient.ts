@@ -529,6 +529,11 @@ export class RpcClient {
    */
   public async updateRoi(roi: DataRoi): Promise<void> {
     await this.call('roi.update', {
+      // 显式带上 roi_id：后端在**没收到** roi_id 时改的是它自己的 active_roi_id。
+      // 前端镜像与后端指针一旦错位（切换活动区失败、撤销恢复旧快照、另一个标签页
+      // 改了活动区……），省略 roi_id 就会把用户眼前这个框的拖拽写进另一个 ROI，
+      // 而界面上看不出任何异常。手柄拖拽只该作用在用户正在看的那个 ROI 上。
+      ...(roi.id ? { roi_id: roi.id } : {}),
       x0: Math.round(roi.xMin),
       x1: Math.round(roi.xMax),
       y0: Math.round(roi.yMin),

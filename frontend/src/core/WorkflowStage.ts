@@ -42,13 +42,20 @@ export function showsRoiOverlay(stage: number): boolean {
 }
 
 /**
- * 步骤 2 起才允许命中 ROI 手柄。
+ * 是否绘制并允许命中 ROI 的 8 个调整手柄。
  *
- * 与 showsRoiOverlay 必须同真同假：绘制了却点不到、或点得到却看不见，
- * 都会让用户以为手柄坏了。
+ * **只有步骤 2**：手柄是「改取数区」的抓手，而 ROI 工具只在步骤 2 放行
+ * （`GeologyCanvas.getAllowedTools`）。后续步骤里 ROI 矩形仍作为参考绘制，
+ * 但手柄既不画也点不到——绘制了却点不到、或点得到却看不见，都会让用户以为
+ * 手柄坏了（用户原话：「roi 选择步骤，有时候 roi 会没法拖动改变范围」）。
  */
+export function showsRoiHandles(stage: number): boolean {
+  return stage === STAGE.ROI;
+}
+
+/** 允许命中 ROI 手柄 ⇔ 画了手柄；两者必须同真同假。 */
 export function canHitRoiHandle(stage: number): boolean {
-  return showsRoiOverlay(stage);
+  return showsRoiHandles(stage);
 }
 
 /**

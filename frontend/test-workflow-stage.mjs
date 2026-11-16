@@ -44,12 +44,20 @@ for (let stage = 0; stage <= 8; stage++) {
   const pick = S.canPickYCalibMark(stage, 'select');
   const draw = S.showsYCalibMarks(stage);
   assert.ok(!pick || draw, `步骤 ${stage}：允许拾取 Y 标定点就必须绘制该标记`);
+  // 手柄是「改取数区」的抓手：画出来就必须点得到。ROI 矩形（参考框）仍从步骤 2 起
+  // 常驻，但手柄只在 ROI 工具放行的步骤 2 画、也只在步骤 2 命中。
   assert.equal(
-    S.showsRoiOverlay(stage),
+    S.showsRoiHandles(stage),
     S.canHitRoiHandle(stage),
-    `步骤 ${stage}：ROI「看得见手柄」与「点得中手柄」必须同真同假`,
+    `步骤 ${stage}：ROI 手柄「画出来」与「点得中」必须同真同假`,
+  );
+  assert.ok(
+    !S.canHitRoiHandle(stage) || S.showsRoiOverlay(stage),
+    `步骤 ${stage}：能点中 ROI 手柄就必须画了 ROI 框`,
   );
 }
+assert.equal(S.canHitRoiHandle(S.STAGE.ROI), true, '步骤 2 必须能拖 ROI 手柄');
+assert.equal(S.canHitRoiHandle(S.STAGE.Y_CALIB), false, '步骤 3 不画也不命中 ROI 手柄（ROI 工具未放行）');
 assert.equal(S.canPickYCalibMark(S.STAGE.CLEANUP, 'ycalib'), false, '步骤4 清理不允许再拾取 Y 点');
 assert.equal(S.showsYCalibMarks(S.STAGE.CLEANUP), false, '步骤4 保持工作区干净，不绘制临时标定盒');
 console.log('✔ 「能点 ⟹ 能画」成立，且 ROI 手柄绘制/命中成对');

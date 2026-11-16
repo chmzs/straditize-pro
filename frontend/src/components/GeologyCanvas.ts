@@ -1182,6 +1182,26 @@ private pointer: PointerState = {
       }
     }
 
+    // ROI 手柄优先于工具模式：手柄画出来了就必须点得到（WorkflowStage.canHitRoiHandle）。
+    //
+    // 进入步骤 2 后默认工具是 roi，但用户按过 H、点过浮动条的抓手之后，模式会停在
+    // pan：旧实现里这时手柄既拖不动也没有任何提示（光标还是 grab），画布看起来像坏了
+    // ——用户原话「有时候 roi 会没法拖动改变范围，即使我还没调好和确定好 roi」。
+    // 这里在按下时先认手柄：命中就把工具切回 roi 并照常开始拖拽，用户不必先猜
+    // 「要先切回 ROI 工具」。空格临时平移仍然优先（按住空格 = 明确要平移）。
+    if (e.button === 0 && !this.isSpaceDown && canHitRoiHandle(this.workflowStage)) {
+      const roiHandleHit = this.findHitRoiHandle(screenPt);
+      if (roiHandleHit) {
+        if (mode !== 'roi') {
+          this.setToolMode('roi');
+          this.notifyNotice('已切回 ROI 工具：拖动手柄即可调整取数区范围');
+        }
+        const worldPt = this.viewport.screenToWorld(screenPt);
+        this.toolStrategies.get('roi')?.onMouseDown?.(e, screenPt, worldPt, this.getToolContext());
+        return;
+      }
+    }
+
     // 鼠标右键 (2)、鼠标中键 (1)、空格键按住、或处于 pan 抓手模式：一律进入视口平移
     if (e.button === 2 || e.button === 1 || (e.button === 0 && (this.isSpaceDown || mode === 'pan'))) {
       this.isPanning = true;
@@ -1227,6 +1247,14 @@ private pointer: PointerState = {
 
     const worldPt = this.viewport.screenToWorld(screenPt);
     this.hoverWorldPt = { x: worldPt.x, y: worldPt.y };
+
+    // 手柄拖拽期间指针可能移出画布（mouseleave 不再中断拖拽，见 onMouseLeave）。
+    // 若用户在窗口外松开左键，这里按「按键已松开」补一次收尾，避免 ROI 继续跟着
+    // 鼠标跑却不落库。按住左键时 e.buttons 为 1。
+    const roiStrategy = this.toolStrategies.get('roi') as RoiToolStrategy | undefined;
+    if (roiStrategy?.getDraggingHandle() && e.buttons === 0) {
+      roiStrategy.onMouseUp(e, screenPt, worldPt, this.getToolContext());
+    }
 
     if (this.isPanning) {
       this.viewport.panBy(deltaX, deltaY);
@@ -1340,6 +1368,15 @@ private pointer: PointerState = {
   private onMouseLeave(e: MouseEvent): void {
     this.isMouseDown = false;
     this.isPanning = false;
+    // ROI 手柄拖拽是「按住-移动」的模态操作：指针一旦滑出画布（拖到画布边界外），
+    // 旧实现会在这里清掉拖拽状态，鼠标抬起时既不提交也不回写，用户看到的是
+    // 「拖到一半拖不动」。此时保留拖拽状态，收尾交给 window 的 mouseup
+    // （onMouseMove 里 e.buttons===0 兜住「在窗口外松手」这一种）。
+    const roiStrat = this.toolStrategies.get('roi') as RoiToolStrategy | undefined;
+    if (roiStrat?.getDraggingHandle()) {
+      this.updateCursor();
+      return;
+    }
     const mode = this.toolModeManager.getMode();
     this.toolStrategies.get(mode)?.onMouseLeave?.(e, this.getToolContext());
     this.updateCursor();
@@ -1599,11 +1636,17 @@ private pointer: PointerState = {
     const mode = this.toolModeManager.getMode();
     const strategy = this.toolStrategies.get(mode);
     const isPanMode = this.isPanning || this.isSpaceDown || mode === 'pan';
-    const roiStrat = strategy instanceof RoiToolStrategy ? strategy : undefined;
+    // 手柄拖拽态必须从 **roi 策略**取，与当前工具无关：pan 模式下按在手柄上会
+    // 自动切回 roi（见 onMouseDown），拖动期间光标得一直是 resize。
+    const roiStrat = this.toolStrategies.get('roi') as RoiToolStrategy | undefined;
+    // 只有真在平移（左键按下拖动 / 空格临时平移）才让抓手优先；pan 工具本身不再
+    // 吞掉手柄光标——旧实现把 roiHandle 在 pan 模式下一律置空，于是手柄高亮着、
+    // 光标却是抓手，点下去只平移，用户以为手柄坏了。
+    const panning = this.isPanning || this.isSpaceDown;
     this.canvas.style.cursor = resolveCanvasCursor({
       defaultCursor: this.toolModeManager.getToolDescription(mode).cursor,
       strategyCursor: isPanMode ? null : strategy?.getCursor?.(this.getToolContext()),
-      roiHandle: isPanMode ? null : roiStrat?.getDraggingHandle() || this.pointer.roiHandle,
+      roiHandle: panning ? null : roiStrat?.getDraggingHandle() ?? this.pointer.roiHandle,
       hasAnchor: Boolean(this.pointer.anchor),
       hasBoundary: Boolean(this.pointer.boundary),
       isPanning: this.isPanning,
@@ -1908,6 +1951,8 @@ private pointer: PointerState = {
       roi: this.data.roi,
       scale: this.viewport.scale,
       isRoiMode: this.toolModeManager.getMode() === 'roi',
+      // 画手柄与命中手柄同一判据：画了就一定点得到（canHitRoiHandle 即此语义）。
+      showHandles: canHitRoiHandle(this.workflowStage),
       handleSizeScreen: this.ROI_HANDLE_SIZE_SCREEN,
       hoveredHandle: this.pointer.roiHandle,
       draggingHandle: roiStrat?.getDraggingHandle() ?? null,
