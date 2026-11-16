@@ -1,6 +1,7 @@
 import { DiagramData } from '../types/pollen';
 import { RpcClient } from '../services/RpcClient';
 import { ProjectManager } from '../core/ProjectManager';
+import { base64ToBlob, requireExportBase64, triggerDownload } from '../core/exportPayload';
 import { computeExportReadiness, renderExportReadiness } from './steps/ExportReadinessPanel';
 import {
   aggregateHeadline,
@@ -1142,21 +1143,11 @@ export class ExportModal {
           include_ensemble_names: selectedEnsembles,
           include_readme: chkReadme,
         });
-        if (res && res.base64) {
-          const byteCharacters = atob(res.base64);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `straditize_scientific_${Date.now()}.xlsx`;
-          a.click();
-          URL.revokeObjectURL(url);
-        }
+        const blob = base64ToBlob(
+          requireExportBase64(res, '导出 XLSX'),
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        );
+        triggerDownload(blob, `straditize_scientific_${Date.now()}.xlsx`);
       } catch (err: any) {
         notifyError(`导出 XLSX 失败: ${err.message || err}`);
       }
@@ -1177,21 +1168,8 @@ export class ExportModal {
           include_age_depth: chkAgeDepth,
           include_ensemble_names: selectedEnsembles,
         });
-        if (res && res.base64) {
-          const byteCharacters = atob(res.base64);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const blob = new Blob([byteArray], { type: 'application/zip' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `straditize_lipdverse_${Date.now()}.lpd`;
-          a.click();
-          URL.revokeObjectURL(url);
-        }
+        const blob = base64ToBlob(requireExportBase64(res, '导出 LiPD'), 'application/zip');
+        triggerDownload(blob, `straditize_lipdverse_${Date.now()}.lpd`);
       } catch (err: any) {
         notifyError(`导出 LiPD 失败: ${err.message || err}`);
       }

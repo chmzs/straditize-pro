@@ -811,18 +811,31 @@ class ExportMixin:
             depth_unit=getattr(self, "depth_unit", "cm") or "cm",
         )
 
+        # 返回口径与 export_advanced_xlsx 完全一致（同一套浏览器下载契约）：
+        # - 写盘模式：落盘 .lpd 包，base64 为 None；
+        # - 浏览器下载模式：**必须**给 base64（zip 字节），否则前端拿不到文件。
+        #
+        # 旧实现两条分支都只返回 lipd 字典、且写盘时写的是**纯 JSON 文本**：
+        # 前端判 res.base64 恒为 undefined → 点「LiPD」既不下载也不报错（用户实测）。
+        # 这里改用与 tar 出口同一个打包函数，保证 .lpd 是真 zip（PK 头）。
+        pkg_bytes = export_lipd_package(lipd_jsonld, output_path=output_path)
         if output_path:
-            out_dir = os.path.dirname(os.path.abspath(output_path))
-            os.makedirs(out_dir, exist_ok=True)
-            with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(lipd_jsonld, f, indent=2, ensure_ascii=False)
             return {
                 "success": True,
+                "size_bytes": len(pkg_bytes),
                 "output_path": os.path.abspath(output_path),
+                "base64": None,
                 "lipd": lipd_jsonld,
             }
 
-        return {"success": True, "lipd": lipd_jsonld}
+        b64 = base64.b64encode(pkg_bytes).decode("ascii")
+        return {
+            "success": True,
+            "size_bytes": len(pkg_bytes),
+            "output_path": None,
+            "base64": b64,
+            "lipd": lipd_jsonld,
+        }
 
     def calibrate_axes(
         self,

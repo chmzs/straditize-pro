@@ -723,6 +723,19 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
 
 ---
 
+### 4.11b " + BT + "export.exportLipd" + BT + " / " + BT + "export.exportXlsx" + BT + " — 浏览器下载必须给 " + BT + "base64" + BT + "
+
+两个「文件型」导出共用同一套返回契约（2026-11-16 起 LiPD 与 XLSX 对齐）：
+
+| 模式 | 返回 |
+| :--- | :--- |
+| 浏览器下载（不传 " + BT + "output_path" + BT + "） | " + BT + "base64" + BT + "（非空字符串）+ " + BT + "size_bytes" + BT + "；" + BT + "output_path: null" + BT + " |
+| 写盘（传 " + BT + "output_path" + BT + "） | " + BT + "output_path" + BT + "（绝对路径）+ " + BT + "size_bytes" + BT + "；" + BT + "base64: null" + BT + " |
+
+" + BT + "export.exportLipd" + BT + " 额外保留 " + BT + "lipd" + BT + "（JSON-LD 字典）供元数据核对；包体是 " + BT + "export_lipd_package" + BT + " 生成的 **zip**（" + BT + "PK\x03\x04" + BT + " 头），与 " + BT + "export.tar" + BT + " 同源。
+
+**缺陷案底**：LiPD 曾两条分支都只回 " + BT + "lipd" + BT + "、写盘还写纯 JSON 文本，前端 " + BT + "if (res && res.base64)" + BT + " 恒不成立且无 else —— 点按钮既不下载也不报错。前端现已改为 " + BT + "requireExportBase64(res, label)" + BT + "：拿不到就抛错，消息里带后端实际返回的键名。
+
 ### 4.12 `project.save` — 工程包导出（含占位表标记）
 
 请求：`{output_path?, format?: "tar" | "json"}`。`output_path` 缺省时 tar 以 base64 返回。
