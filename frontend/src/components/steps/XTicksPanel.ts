@@ -338,8 +338,8 @@ export function render(data: DiagramData): string {
           <!-- 轴线粗：决定绿线「0 点 = 左缘 + 轴粗」的位置，同时给刻度检测定轴右缘。 -->
           <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px;">
             <label for="inp-axis-stroke" style="font-size: 10.5px; color: var(--text-muted);">轴线粗细:</label>
-            <input type="number" id="inp-axis-stroke" value="${currentGroup && Number(currentGroup.axis_stroke_px) > 0 ? String(Number(currentGroup.axis_stroke_px)) : ''}" placeholder="5" min="1" max="20" step="1"
-                   title="Y 轴轴线的描边宽度（像素）。0 点 = 左缘 + 它。填了就不再从像素里猜。"
+            <input type="number" id="inp-axis-stroke" value="${currentGroup && Number(currentGroup.axis_stroke_px) > 0 ? String(Number(currentGroup.axis_stroke_px)) : state.axisStrokeOverride != null ? String(state.axisStrokeOverride) : ''}" placeholder="5" min="1" max="20" step="1"
+                   title="Y 轴轴线的描边宽度（像素）。0 点 = 左缘 + 它。填了就不再从像素里猜。目视估读即可（1–20px）。"
                    style="width: 66px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
             <span style="font-size: 9.5px; color: var(--text-muted);">px</span>
            <!-- 单列覆盖：组值是初值，逐列差异真实存在（实测 beginner 3/5/5/5），
@@ -350,6 +350,10 @@ export function render(data: DiagramData): string {
                     title="只改当前这一列的 0 点位置。留空 = 跟随组值。"
                     style="width: 66px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
              <span style="font-size: 9.5px; color: var(--text-muted);">px（留空 = 跟随组）</span>
+             <!-- 「留空」是隐性操作：用户看不出它等于清除覆盖。给一个显式入口。 -->
+             ${axisStrokeColOverride != null
+               ? `<button type="button" id="btn-clear-col-axis-stroke" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 1px 6px;" title="清除本列的轴粗覆盖，回到组值（发 axis_stroke_px: null）">回到组值</button>`
+               : ''}
            </div>
           </div>
           <!-- 轴线粗的来源必须明示（用户原话：「y 轴轴线粗细不需要我提供，就自动给出绿色线吗？」）：
@@ -362,7 +366,7 @@ export function render(data: DiagramData): string {
                 ? `本列覆盖 <strong>${axisStrokeColOverride}px</strong>（组值 ${Number(currentGroup?.axis_stroke_px) > 0 ? `${Number(currentGroup?.axis_stroke_px)}px` : "缺省 5px"}）· 绿线 = 列左缘 + ${axisStrokePx}`
                 : Number(currentGroup?.axis_stroke_px) > 0
                   ? `轴线粗实测 <strong>${axisStrokePx}px</strong> · 绿线 = 列左缘 + ${axisStrokePx}`
-                  : '轴线粗<strong>无法自动测量</strong>（这几列的左边不是灰度均匀的竖轴），当前按 <strong>5px</strong> 估算 —— 绿线可能偏，请量一下实际粗细后填入上面的输入框'
+                  : '轴线粗<strong>无法自动测量</strong>（这几列的左边不是灰度均匀的竖轴），当前按 <strong>5px</strong> 估算 —— 绿线可能偏。<strong>目视估读即可</strong>：把你在图上看到的轴宽（1–20px）填进上面的「轴线粗细」，改完绿线立刻按「左缘 + 轴粗」重画，不必精确到亚像素'
             }
           </div>
 
@@ -469,14 +473,23 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
 
   // 组级写入的唯一通路：形态 / 尺度 / 单位刻度长度 / 轴线粗 都是组的属性。
   // **放在所有使用点之前** —— 之前它在 axis-stroke 的 handler 之后，直接引用会撞 TDZ。
-  const patchGroup = (field: Record<string, unknown>) => {
+  const patchGroup = async (field: Record<string, unknown>): Promise<boolean> => {
     const gid = state.selectedGroupId;
     const roiId = activeRoi()?.id;
     const client = ctx.rpcClient as
       | { roiGroupUpdate?: (r: string, g: string, p: Record<string, unknown>) => Promise<unknown> }
       | undefined;
-    if (!gid || !roiId || !client?.roiGroupUpdate) return;
-    void client.roiGroupUpdate(roiId, gid, field).then(() => ctx.onDataChange?.());
+    if (!gid || !roiId || !client?.roiGroupUpdate) return false;
+    try {
+      await client.roiGroupUpdate(roiId, gid, field);
+    } catch (err) {
+      // 失败必须冒泡：旧实现是 `void client.roiGroupUpdate(...).then(...)`，没有
+      // `.catch` —— 后端拒绝时用户看到的是"点了没反应"，连一条提示都没有。
+      notifyError(`保存列组属性失败：${err instanceof Error ? err.message : String(err)}`);
+      return false;
+    }
+    ctx.onDataChange?.();
+    return true;
   };
 
   // 画布点选齿 → 记录"距本列 0 点多少"。判定在面板侧，画布只报坐标。
@@ -552,8 +565,20 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
           ? Math.min(parsed, 20)
           : null;
       // 同时落库：绿线「0 点 = 左缘 + 轴线粗」靠它，而 `state.axisStrokeOverride` 只是前端内存。
-      patchGroup({ axis_stroke_px: state.axisStrokeOverride });
-      ctx.onDataChange?.();
+      //
+      // 这里**不能**再自己调 `ctx.onDataChange()`：`onDataChange`（main.ts:251）只是
+      // 拿本地镜像重画一遍、**不重拉后端**，于是组值还没回来就被旧值重画——输入框
+      // 立刻回落到 placeholder（用户原话「显示数字会跳没」），绿线也停在旧位置。
+      // 真正的刷新由 `onScaleMutated`（scaleSync，120ms 防抖）完成：它拉
+      // `getDiagramData` 并把 `rois` 一起回填。这期间输入框的显示值由
+      // `state.axisStrokeOverride` 顶住（见 render 的 value 表达式）。
+      void patchGroup({ axis_stroke_px: state.axisStrokeOverride }).then((ok) => {
+        // 写失败就把乐观值撤掉：继续显示 1 等于骗用户"已经设上了"。
+        if (!ok) {
+          state.axisStrokeOverride = null;
+          ctx.onDataChange?.();
+        }
+      });
     });
 
     // 单列覆盖：只改当前列的 0 点位置（组值仍是初值）。留空 = 清掉覆盖、回到组值。
@@ -571,6 +596,22 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       void ctx.rpcClient
         .updateColumn(columnIndex(col), { axis_stroke_px: parsed })
         .then(() => ctx.onDataChange?.());
+    });
+
+    // 清除本列覆盖：显式入口（`null` = 回到组值）。
+    // 不写 0：后端 `column.update` 会当场拒绝 0/负数（那会把绿线压到红线上，
+    // 整列读数系统性偏小一个轴粗），见 tests/unit/test_edit_and_export_api.py。
+    root.querySelector('#btn-clear-col-axis-stroke')?.addEventListener('click', () => {
+      const col = activeColumn();
+      if (!col) return;
+      void ctx.rpcClient
+        .updateColumn(columnIndex(col), { axis_stroke_px: null })
+        .then(() => ctx.onDataChange?.())
+        .catch((err: unknown) =>
+          notifyError(
+            `清除本列轴粗覆盖失败：${err instanceof Error ? err.message : String(err)}`
+          )
+        );
     });
 
     // 单位刻度长度（cell_px）：标定的几何锚点。刻度位置 = 0 点 + k × 它。

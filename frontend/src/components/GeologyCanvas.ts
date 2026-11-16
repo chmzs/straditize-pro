@@ -12,7 +12,8 @@ import { HistoryManager } from '../core/HistoryManager';
 import { ToolModeManager } from '../core/ToolModeManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { controlPointsForWriteback } from '../core/controlPointWriteback';
-import { resolveAxisStroke } from '../core/axisStroke';
+import { AXIS_STROKE_MAX_PX, AXIS_STROKE_MIN_PX, resolveAxisStroke } from '../core/axisStroke';
+import { resolvePlotType } from '../core/plotType';
 import { columnPick, setPickedColumnIds } from './steps/columnPick';
 import {
   STAGE,
@@ -1238,9 +1239,15 @@ private pointer: PointerState = {
       const col = this.data.columns.find((c) => c.id === this.zeroDrag!.colId);
       if (col) {
         const span = Math.max(1, Math.round(col.endX - col.startX));
-        const next = Math.min(
-          span - 1,
-          Math.max(1, Math.round(worldPt.x - this.zeroDrag.leftEdgeX))
+        // 三重钳制：① 后端只接受 1–20px（越界会被 -32602 拒绝并回滚）；
+        // ② 不越过列右界（0 点落进下一列就等于改列宽）；③ 至少 1px。
+        const next = Math.max(
+          AXIS_STROKE_MIN_PX,
+          Math.min(
+            AXIS_STROKE_MAX_PX,
+            span - 1,
+            Math.round(worldPt.x - this.zeroDrag.leftEdgeX)
+          )
         );
         this.zeroDrag.stroke = next;
         col.axis_stroke_px = next;
@@ -1972,7 +1979,8 @@ private pointer: PointerState = {
       scale: this.viewport.scale,
       columns: this.data.columns,
       activeTaxaId: this.data.activeTaxaId ?? null,
-      // 面积/柱条的左边界是 0 点，取轴粗要靠组参数。
+      // 组参数统一走这里：`axis_stroke_px` 决定 0 点（面积/柱条的左边界），
+      // `plot_type` 决定形态（组是单一事实源，不传就只能退回列上的旧快照）。
       groupOfColumn: (col) => this.groupOfColumn(col),
     });
   }
@@ -2150,6 +2158,8 @@ private pointer: PointerState = {
     // 列边界线从**分列（步骤 5）**起就画（drawColumnBoundaries 无 stage 门槛），
     // 图例若只在 6 起显示，就会出现「step 5 有彩色线但没有图例」——图例必须同步。
     this.canvasLegend?.classList.toggle('is-visible', stage >= STAGE.SPLIT);
+    // 步骤 6 专属提示（拖绿线 = 改本列 / 组参数 = 改整组）只在这一步露出来。
+    this.canvasLegend?.classList.toggle('is-step6', stage === STAGE.CALIBRATE_COLUMNS);
     const allowed = this.getAllowedTools(stage);
     this.floatingToolbar.querySelectorAll('[data-fmode]').forEach((btn) => {
       const mode = btn.getAttribute('data-fmode') as ToolMode;
@@ -2170,7 +2180,8 @@ private pointer: PointerState = {
     this.data.columns.forEach((col) => {
       if (!col.visible || col.controlPoints.length === 0) return;
       const sorted = [...col.controlPoints].sort((a, b) => a.y - b.y);
-      const pType = col.plotType || 'area';
+      // 组级 `plot_type` 是单一事实源，列上那份只是显式覆盖（见 `core/plotType.ts`）。
+      const pType = resolvePlotType(col, this.groupOfColumn(col));
 
       if (pType === 'area') {
         // 幽灵叠加也是「从基线起填充」：基线必须是 0 点（绿线），不是列左缘。

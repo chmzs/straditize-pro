@@ -263,6 +263,18 @@ CV=16.7%（那个 22.5 是伪刻线），但 5/6 列高度一致；用 CV 会让
 | `axis_stroke_px` | 轴线粗**组级初值**（缺省 5） | 分列时 `measure_axis_stroke` 逐列实测、过半列可测才写中位数；组上已有正数不覆盖。单列可用列级 `axis_stroke_px` 覆盖 |
 | `plot_type` / `scale_type` | 图形形态 / 线性或对数 | 用户选 |
 
+**`plot_type` 的单一事实源是组，列级只放显式覆盖**。解析顺序与轴粗同构：
+`列级 plot_type → 组级 plot_type → 'area'`（后端 `xscale._resolve_column_visual`、
+前端 `core/plotType.ts` 的 `resolvePlotType` 逐字对齐）。分列/载入期写进列里的那份是
+从组值抄来的**快照**，不是用户意图；写组 `plot_type` 时后端会清掉组内各列的旧快照
+（`roi.groupUpdate`，语义与 `value_per_px` 清 `x_ticks` 一致），否则列级快照会永久压住
+组值 —— 用户实测「这个分组我想切换为折线不成功」。列级**显式覆盖**仍可用
+（`column.update` 的 `plot_type`，侧栏形态图标的第五档「跟随组」发 `null` 清除）。
+
+**组参数写入后，前端必须整份重取 `rois`**（`app/scaleSync.ts` 的 `applyGroupSnapshot`）。
+`onDataChange` 只重画本地镜像、不重拉后端；少了这一步，`roi.groupUpdate` 成功后输入框会
+回落 placeholder、绿线与曲线形态都不动 —— 用户实测「输入 1，数字跳没，0 线也没更新」。
+
 #### 派生量（每列算，不存）
 
 ```

@@ -3685,6 +3685,10 @@ body.theme-light .ad-pane-splitter {
 }
 .canvas-legend.is-visible { display: flex; }
 .canvas-legend-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+/* 步骤 6 专属提示行：只在「列标定」这一步出现（GeologyCanvas 切 is-step6）。
+ * 默认 display:none，避免在步骤 5 就占地方说一件还不能做的事。 */
+.legend-hint-zero-drag { display: none; color: var(--text-muted); }
+.canvas-legend.is-step6 .legend-hint-zero-drag { display: flex; }
 .legend-sw { display: inline-block; width: 18px; height: 0; border-top-width: 2px; border-top-style: solid; }
 /* 三条色块的颜色**逐字取自** `GeologyCanvas.drawColumnBoundaries` 的 strokeStyle，
  * 不是另调一套好看的色：图例的用途是"看到画布上那条线时知道它是什么"，色差一大
