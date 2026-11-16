@@ -1640,6 +1640,39 @@ class ExportMixin:
         units = self._roi_column_units().get(name, {})
         return [(name, "data.csv", dict(units))]
 
+    def _column_source_widths(self, frame: Any) -> dict[str, float]:
+        """列宽权重 ∝ 原图列宽（endX - startX）。
+
+        原图列宽本身就是作者按丰度给的版式（实测与列 max 的秩相关 0.663，按宽度前 5
+        与按 max 前 5 是同一批列），所以直接沿用源图，不再按 max 重算、也不设地板。
+        没有几何的列（新建列 / 宽度为 0）→ 该工程有几何列宽度的中位数；全无几何 → 1。
+        """
+        taxa_names = getattr(self, "taxa_names", None) or []
+        columns = [str(c) for c in getattr(frame, "columns", [])]
+        raw: dict[str, float] = {}
+        for idx, col in enumerate(getattr(self, "columns", []) or []):
+            c_idx = col.get("col_index", idx)
+            name = (
+                taxa_names[c_idx]
+                if (taxa_names and c_idx < len(taxa_names) and taxa_names[c_idx])
+                else (col.get("name") or col.get("species") or f"col{c_idx + 1:02d}")
+            )
+            if str(name) not in columns:
+                continue
+            start = col.get("startX")
+            end = col.get("endX")
+            try:
+                width = float(end) - float(start)
+            except (TypeError, ValueError):
+                continue
+            if width > 0:
+                raw[str(name)] = width
+        if not raw:
+            return {c: 1.0 for c in columns if c != str(frame.columns[0])}
+        ordered = sorted(raw.values())
+        median = ordered[len(ordered) // 2]
+        return {c: raw.get(c, median) for c in columns if c != str(frame.columns[0])}
+
     def _column_widths_from_frame(
         self, frame: Any, units: dict[str, str], *, min_column_max: float = 5.0
     ) -> dict[str, float]:
@@ -1680,7 +1713,7 @@ class ExportMixin:
             if entries:
                 _label, _csv, units = entries[0]
                 frame = self._primary_roi_export_frame(strict=False)
-                widths = self._column_widths_from_frame(frame, units)
+                widths = self._column_source_widths(frame)
         return build_strat_plot_r_script(self._strat_script_entries(), widths=widths)
 
     def export_r(self, output_path: str | None = None) -> str | dict[str, Any]:

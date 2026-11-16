@@ -42,14 +42,7 @@ DEFAULT_PLOT_SETTINGS: dict[str, Any] = {
     #   百分比列 ∝ 该列最大值；非百分比列/段 = 固定占比。
     # 用户可在这里覆盖任何一列，宽度会以**字面数字**写进导出的 R 脚本，便于手工改。
     "plot_column_widths": {},
-    # 是否用多段拼接（riojaPlot vignette 的做法）。默认 False：单次调用 + 计算宽度即可；
-    # True 时非 % 列各自成段、段宽由 xRight 固定（非 % 列想单独成块时才需要）。
-    "plot_segments": False,
-    # 非百分比列的固定权重（None = 取 % 列权重的中位数，与自身数值无关）
-    "plot_nonpercent_width": None,
-    # % 列宽度公式里的下限（与 rioja 的 min.width.pc 同值同义，默认 5）：
-    # max_i 小于它的列会被抬到同一档宽度 —— 稀有属种也要有地方画，形状靠 exaggeration。
-    "plot_min_column_max": 5.0,
+
     "italicise": True,
     "break_long": True,
     "break_n": 20,
@@ -245,16 +238,7 @@ def _settings_tsv(settings: dict[str, Any]) -> str:
                 lines.append("y_max\t" + repr(float(value["max"])))
                 lines.append("y_interval\t" + repr(float(value["interval"])))
             continue
-        if key == "plot_segments":
-            lines.append("plot_segments\t" + ("true" if value else "false"))
-            continue
-        if key == "plot_min_column_max":
-            lines.append("min_column_max\t" + repr(float(value)))
-            continue
-        if key == "plot_nonpercent_width":
-            if value is not None:
-                lines.append("nonpct_width\t" + repr(float(value)))
-            continue
+
         if key == "plot_column_widths":
             # 每列一行：colwidth.<列名><TAB><权重>（字面数字，R 侧直接用）
             for col, weight in value.items():
@@ -292,57 +276,6 @@ def _r_string_vector(names: Sequence[str]) -> str:
     quoted = ['"' + str(n).replace("\\", "\\\\").replace('"', '\\"') + '"' for n in names]
     return "c(" + ", ".join(quoted) + ")"
 
-
-def plan_plot_segments(
-    columns: Sequence[tuple[str, str]],
-    *,
-    percent_xright: float = 0.99,
-    fixed_span: float = 0.08,
-    gap: float = 0.01,
-) -> list[dict[str, Any]]:
-    """把列切成「主块 + 各非百分比段」的拼接计划（riojaPlot 的多段拼接法）。
-
-    `columns` 是按画布顺序排好的 `(列名, unit)`。返回按**列顺序**排的段列表：
-    每个 dict 形如 `{"kind": "percent"|"fixed", "cols": [...], "xright": float}`。
-
-    为什么拼接：`scale.percent = TRUE` 会把**所有**列的宽度按各自最大值分配，一个
-    max=800 的浓度列会把 27 个百分比列挤成细条。riojaPlot 官方 vignette 的做法是
-    把不同量纲拆成独立段、用 `riojaPlot=` 逐段拼接（`xRight` 定段宽），浓度列因此
-    不参与主块的宽度分配。
-    """
-    percent_cols = [name for name, unit in columns if is_percent_unit(unit)]
-    fixed_groups: list[list[str]] = []
-    for name, unit in columns:
-        if is_percent_unit(unit):
-            continue
-        if fixed_groups and False:
-            fixed_groups[-1].append(name)
-        else:
-            fixed_groups.append([name])
-    # 非百分比列按「连续同组」聚段；这里没有组信息，退化成每列一段（与画布顺序一致）
-    order: list[tuple[int, str, list[str]]] = []
-    if percent_cols:
-        first = min(i for i, (n, u) in enumerate(columns) if is_percent_unit(u))
-        order.append((first, "percent", percent_cols))
-    for group in fixed_groups:
-        first = min(i for i, (n, u) in enumerate(columns) if n == group[0])
-        order.append((first, "fixed", group))
-    order.sort(key=lambda item: item[0])
-
-    total_fixed = sum(1 for _, kind, _ in order if kind == "fixed")
-    n_segments = len(order)
-    fixed_total = fixed_span * total_fixed
-    gaps = gap * max(0, n_segments - 1)
-    percent_span = max(0.2, percent_xright - fixed_total - gaps)
-
-    segments: list[dict[str, Any]] = []
-    cursor = 0.0
-    for _, kind, cols in order:
-        span = percent_span if kind == "percent" else fixed_span
-        cursor = min(percent_xright, cursor + span)
-        segments.append({"kind": kind, "cols": cols, "xright": round(cursor, 4)})
-        cursor += gap
-    return segments
 
 
 def build_strat_plot_r_script(
@@ -412,6 +345,9 @@ def build_strat_plot_r_script(
         width_pairs = ", ".join(
             f'"{c}" = {float(explicit_widths.get(c, 1.0))!r}' for c in ordered
         )
+        if widths:
+            note = "; ".join(f"{c}={widths[c]:.0f}px" for c in ordered if c in widths)
+            lines.append(f"    # 列宽 = 原图列宽（endX-startX）占比：{note}")
         lines.append(f"    col_widths <- c({width_pairs})")
         lines.append("    for (i in seq_along(segments)) {")
         lines.append("      seg <- segments[[i]]")
@@ -591,98 +527,29 @@ warns <- tryCatch(
       for (mode_col in intersect(names(scale_modes), colnames(taxa))) {
         is_fixed[[mode_col]] <- identical(scale_modes[[mode_col]], "fixed")
       }
-      # ── 列宽：按数据算（公式照抄 riojaPlot 的 percent 分支）──────────────────
-      # `.riojaPlot2:167-171` 的 percent 分支就是 `colM <- apply(d, 2, max)`，
-      # 宽度 ∝ 各列最大值。这里我们自己算同一个量，把结果喂给 graph.widths，
-      # 而不是让包内部再乘一次（那样它会把「浓度列」也算进来，吃掉画布）。
-      #   % 列：w_i = max(max_i, min_width) / mean(max(max_j, min_width))，min_width 默认 5
-      #        —— 与 rioja 的 `min.width.pc` 同值同义：稀有属种也有足够横向空间，
-      #        列内形状由 exaggeration 负责（两者分工，别互相替代）。
-      #   非 % 列：固定权重 = % 列 w 的中位数（与自身数值无关），可用 nonpct_width 覆盖
+      # ── 列宽：∝ 原图列宽（endX - startX），全部列统一 ─────────────────────
+      # 原图列宽本身就是作者按丰度给的版式（实测宽度与列 max 的秩相关 0.663，
+      # 按宽度前 5 与按 max 前 5 是同一批列），所以直接沿用源图版式：
+      # 不按 max 重算、不设地板。权重由 Python 侧算好，写成字面量 colwidth.<列>。
       maxs <- apply(taxa, 2, function(v) max(v, na.rm = TRUE))
       maxs[!is.finite(maxs) | maxs <= 0] <- 1
       w <- stats::setNames(rep(1, ncol(taxa)), colnames(taxa))
-      pct_cols_v <- !is_fixed
-      if (any(pct_cols_v)) {
-        min_col_max <- num("min_column_max", 5)
-        eff <- pmax(maxs, min_col_max)
-        ref <- mean(eff[pct_cols_v], na.rm = TRUE)
-        if (!is.finite(ref) || ref <= 0) ref <- 1
-        w[pct_cols_v] <- eff[pct_cols_v] / ref
-      }
-      if (any(is_fixed)) {
-        fixed_w <- num("nonpct_width", NA_real_)
-        if (is.na(fixed_w) || fixed_w <= 0) {
-          fixed_w <- if (any(pct_cols_v)) stats::median(w[pct_cols_v]) else 1
-        }
-        w[is_fixed] <- fixed_w
-      }
       for (w_name in names(w)) {
         ov <- num(paste0("colwidth.", w_name), NA_real_)
         if (!is.na(ov) && ov > 0) w[[w_name]] <- ov
       }
       y_df <- data.frame(depth)
       names(y_df) <- txt("ylabel", "Depth")
-      if (flag("plot_segments", FALSE)) {
-        # 可选路径：非 % 列想单独成块时用多段拼接（riojaPlot vignette 的做法）。
-        # 段间用 xRight 切分、riojaPlot= 递连；注意给了 riojaPlot= 后 style 被忽略，
-        # 第 2 段起的 scale.*/minmax/graph.widths/plot.* 必须作为直接参数传。
-        runs <- rle(as.logical(is_fixed))
-        ends <- cumsum(runs$lengths)
-        starts <- c(1, utils::head(ends, -1) + 1)
-        seg_idx <- lapply(seq_along(runs$lengths), function(k) starts[k]:ends[k])
-        seg_fixed <- runs$values
-        n_fixed_seg <- sum(seg_fixed)
-        n_seg <- length(seg_idx)
-        gap <- num("x_gap", 0.01)
-        fixed_span <- num("fixed_span", 0.08)
-        right_edge <- num("x_right", 0.99)
-        pct_span <- max(0.2, right_edge - fixed_span * n_fixed_seg - gap * max(0, n_seg - 1))
-        rp <- NULL
-        cursor <- 0
-        for (k in seq_len(n_seg)) {
-          idx <- seg_idx[[k]]
-          seg_style <- style
-          if (seg_fixed[k]) {
-            seg_style$scale.percent <- FALSE
-            seg_style$scale.minmax <- TRUE
-            seg_style$minmax <- cbind(rep(0, length(idx)), maxs[idx])
-          } else {
-            seg_style$scale.percent <- TRUE
-            seg_style$scale.minmax <- FALSE
-          }
-          seg_w <- w[idx]
-          seg_style$graph.widths <- as.numeric(seg_w)
-          if (k > 1) seg_style$plot.yaxis <- FALSE
-          cursor <- min(right_edge, cursor + (if (seg_fixed[k]) fixed_span else pct_span))
-          args <- list(x = taxa[, idx, drop = FALSE], y = y_df, style = seg_style,
-                       yvar.name = names(y_df)[1], xRight = cursor)
-          if (!is.null(rp)) {
-            args$riojaPlot <- rp
-            args$xGap <- gap
-            args$scale.percent <- seg_style$scale.percent
-            args$scale.minmax <- seg_style$scale.minmax
-            if (!is.null(seg_style$minmax)) args$minmax <- seg_style$minmax
-            args$graph.widths <- as.numeric(seg_w)
-            args$plot.line <- flag("line", TRUE)
-            args$plot.bar <- flag("bar", TRUE)
-            args$plot.poly <- flag("silhouette", TRUE)
-          }
-          rp <- do.call(riojaPlot::riojaPlot, args)
-          cursor <- cursor + gap
-        }
-      } else {
-        # 默认路径：单次调用。scale.percent=FALSE 让宽度完全由我们算的 w 决定，
-        # minmax 矩阵让每列铺满自己的面板（% 列 (0, max)、非 % 列 (min, max)）。
-        mins <- apply(taxa, 2, function(v) min(v, na.rm = TRUE))
-        mins[!is_fixed] <- 0
-        style$scale.percent <- FALSE
-        style$scale.minmax <- TRUE
-        style$minmax <- cbind(mins, maxs)
-        style$graph.widths <- as.numeric(w)
-        riojaPlot::riojaPlot(x = taxa, y = y_df, style = style,
-                             yvar.name = names(y_df)[1])
-      }
+      # 单次调用：scale.percent=FALSE 让宽度完全由 w 决定；
+      # minmax 让每列铺满自己的面板（% 列 (0, max)、非 % 列 (min, max)）。
+      mins <- apply(taxa, 2, function(v) min(v, na.rm = TRUE))
+      mins[!is_fixed] <- 0
+      style$scale.percent <- FALSE
+      style$scale.minmax <- TRUE
+      style$minmax <- cbind(mins, maxs)
+      style$graph.widths <- as.numeric(w)
+      riojaPlot::riojaPlot(x = taxa, y = y_df, style = style,
+                           yvar.name = names(y_df)[1])
     } else {
       rioja::strat.plot(
         d = as.matrix(taxa),

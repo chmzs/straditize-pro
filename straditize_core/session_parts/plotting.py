@@ -119,6 +119,10 @@ class PlottingMixin:
                 + "）",
             )
 
+        # 列宽 ∝ 原图列宽（endX - startX）；用户显式给了 plot_column_widths 就用用户的。
+        if not merged.get("plot_column_widths"):
+            merged["plot_column_widths"] = self._column_source_widths(frame)
+
         with tempfile.TemporaryDirectory(prefix="straditize-plot-") as tmp_dir:
             csv_tmp = Path(tmp_dir) / "plot_input.csv"
             frame.to_csv(csv_tmp, index=False, na_rep="NA")

@@ -578,22 +578,19 @@ digitize 用 ink & ~grid_line_mask & roi_mask
 | `app/draftRecovery.ts` | 草稿恢复（必须落到后端，B-05） | 依赖对象显式列出五个组件 |
 | `main.ts` `bootstrap()` | 850 → **701** 行 | `wc -l`；下一步目标 ≤400（组件装配对象化） |
 
-## 11. 出图（`plot.render`）：多段拼接与列宽（2026-11-16）
+## 11. 出图（`plot.render`）：单次调用 + 原图列宽（2026-11-16）
 
-**结构**：百分比列 = 主块（`scale.percent = TRUE`，段内宽度 ∝ 各列最大值）；每个非百分比列
-（或连续非 % 列）各自成段，用 `riojaPlot = 上一段` 递连、`xRight` 切段宽（`fixed_span = 0.08`）、
-`xGap = 0.01`。段宽不随该列数值变化 —— 浓度列因此不参与主块的宽度分配（此前实测它吃掉 73% 画布）。
+**结构**：单次 `riojaPlot()` 调用，`scale.percent = FALSE`（宽度完全由我们给的 `graph.widths`
+决定）+ 逐列 `minmax = cbind(lo, hi)`（每列铺满自己的面板）。
 
-**列宽**：`settings.plot_column_widths = {列名: 倍数}`（默认全 1，与 riojaPlot vignette 的
-`widths <- rep(1, n)` 一致）；`plot_width_by_value = true` 时 % 列按 `max/mean(max)` 缩放并夹到
-`[0.5, 4]`。宽度以**字面数字**写进导出的 R 脚本（`col_widths <- c("a" = 1.0, ...)`），用户可手工改。
+**列宽 ∝ 原图列宽（`endX - startX`），全部列统一**：源图版式本身就是作者按丰度给的
+（实测宽度与列 max 的秩相关 0.663，按宽度前 5 与按 max 前 5 是同一批列），所以直接沿用，
+不再按 max 重算、也不设地板。无几何的列退回「该工程有几何列宽的中位数」，全无几何则全 1。
+`settings.plot_column_widths = {列名: 权重}` 可手工覆盖（vignette 语义）；
+宽度以**字面数字**写进导出的 R 脚本，并在上一行注释逐列标出来源 px。
 
-**实测坑（别再踩）**：调用里给了 `riojaPlot=` 时，包内会 warning
+**实测坑（别再踩，通用知识）**：调用里给了 `riojaPlot=` 时，包内会 warning
 「Argument to style ignored when argument riojaPlot is given」——**`style` 里的参数被静默忽略**。
-所以第 2 段起的 `scale.percent` / `scale.minmax` / `minmax` / `graph.widths` / `plot.line|bar|poly`
-必须作为**直接参数**传入，塞进 `style` 不生效且不报错。
-
-**段数判据**：生成的 R 脚本里写死字面段列表
-`segments <- list(list(cols = c(...), percent = TRUE), ...)`，判据在生成期断言
-（段数 == 组数、percent 标志与单位一致、各段列集合的并集 == 全列且两两不相交），不依赖 R 运行期日志。
+将来若做多段拼接（岩性柱 / 年代曲线 / 分区带，代码保存在分支 `feat/plot-segments-wip`），
+第 2 段起的 `scale.*` / `minmax` / `graph.widths` / `plot.*` 必须作为**直接参数**传入。
 

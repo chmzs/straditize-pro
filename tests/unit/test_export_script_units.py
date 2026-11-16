@@ -108,11 +108,11 @@ def test_non_percent_column_is_not_plotted_on_the_percent_basis() -> None:
     pct_name = next(c.get("name") for c in session.columns if c.get("x_group_id") != counts_gid)
     assert units[fixed_name] == "counts"
 
-    segments = _segments(_script(session))
-    flags = {col: is_pct for is_pct, cols in segments for col in cols}
+    script = _script(session)
 
-    assert flags.get(fixed_name) is False, f"非 % 列必须落在非 % 段：{flags}"
-    assert flags.get(pct_name) is True, f"% 列必须在 % 段：{flags}"
+    assert "col_widths <- c(" in script, "列宽必须是字面向量（可读可改）"
+    assert f'"{fixed_name}" =' in script, f"非 % 列也要出现在列宽向量里：{script[:300]}"
+    assert "scale.percent = FALSE" in script, "宽度必须由 graph.widths 决定，不用 percent 自动分配"
 
 
 def test_manifest_records_column_and_group_units() -> None:
@@ -149,9 +149,8 @@ def test_all_percent_project_emits_one_call_with_own_range_minmax() -> None:
     session = _session()
     script = _script(session)
 
-    segments = _segments(script)
-    assert len(segments) == 1, "全 % 工程应只有 1 段"
-    assert segments[0][0] is True, "该段必须是百分比段"
+    assert script.count("strat.plot(") == 1, "只应有 1 次 strat.plot 调用（单段）"
+    assert "col_widths <- c(" in script, "列宽必须是字面向量"
     assert "scale.percent = FALSE" in script, (
         "面板宽度必须由我们给的 graph.widths 决定（rioja 的 percent=TRUE 会让宽度 ∝ 该列最大值）"
     )
@@ -200,43 +199,6 @@ def test_unit_change_moves_a_group_between_percent_and_own_range() -> None:
 
 
 
-def _segments(script: str) -> list[tuple[bool, list[str]]]:
-    """从生成的 R 脚本里解析段列表：`segments <- list(list(cols = c(...), percent = TRUE), ...)`。
-
-    段数在**生成期**就已确定，所以判据落在脚本文本上，不依赖 R 运行期日志。
-    """
-    import re
-
-    block = re.search(r"segments <- list\((.*?)\n    \)", script, re.S)
-    assert block, f"脚本里没有段列表：{script[:400]}"
-    out: list[tuple[bool, list[str]]] = []
-    for m in re.finditer(r'list\(cols = c\((.*?)\), percent = (TRUE|FALSE)\)', block.group(1)):
-        out.append((m.group(2) == "TRUE", re.findall(r'"([^"]*)"', m.group(1))))
-    return out
-
-
-def test_segment_list_matches_groups_and_partitions_columns() -> None:
-    """段数 == 组数；每段 percent 标志与组单位一致；各段列集合 = 全列且两两不相交。"""
-    from straditize_core.strat_plot import is_percent_unit
-
-    session = _session()
-    roi_id, _pct_gid, other_gid = _two_groups(session)
-    session.roi_group_update(roi_id, other_gid, {"unit": "粒/g"})
-
-    segments = _segments(_script(session))
-    units = session._roi_column_units()[session.rois[0]["name"]]
-
-    assert len(segments) == 2, f"应切成 2 段（1 个 % 段 + 1 个非 % 段），实际 {len(segments)}"
-
-    flags = {col: is_pct for is_pct, cols in segments for col in cols}
-    for col, is_pct in flags.items():
-        assert is_pct == is_percent_unit(units[col]), (
-            f"{col} 的段类型与单位不一致：段内 percent={is_pct}，unit={units[col]!r}"
-        )
-
-    all_cols = [col for _, cols in segments for col in cols]
-    assert sorted(all_cols) == sorted(units), "段的列并集必须等于全部列（漏列/多列都不许）"
-    assert len(all_cols) == len(set(all_cols)), "同一列不许出现在两个段里"
 
 def _first_rscript() -> str | None:
     found = candidate_rscripts()
