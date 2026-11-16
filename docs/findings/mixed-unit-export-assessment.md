@@ -77,8 +77,18 @@
 | 随包 `plot_strat.R` 按单位画 | 非 % 列单独一次 `strat.plot(..., scale.percent = FALSE, add = TRUE)`；全 % 时保持原来的一次调用（字节不变） | `test_non_percent_column_is_not_plotted_on_the_percent_basis` + `test_all_percent_project_keeps_the_single_call_template` |
 | 三处字符串一致 | 列载荷 `unit` / LiPD `units` / manifest `column_units` | `test_three_places_agree_on_the_same_unit_string`（同一组设成 `粒/g`，三处全等） |
 | 脚本真能跑 | 把生成物原样交给 R（合成数值覆盖 NA 表） | `test_generated_script_actually_runs_on_a_mixed_project`（skipif 无 R/rioja） |
+| 组 → percent/fixed 的分裂 | 两组都是 `%` → 一次 percent 调用；把一组改成 `粒/g` → 只有该组列进 `fixed_cols`，另一组仍在 `pct_cols` | `test_two_percent_groups_both_go_percent_then_one_unit_splits_them` |
+| 出图侧 UI 按组 | 导出弹窗「列量程（按组）」三态下拉，默认跟随单位；覆盖按组展开成列名 | 由 `tsc` + 元素 id 门禁兜底（无 e2e） |
 
-反向验证（已实跑）：`is_percent_unit` 改成恒 `True` → `test_non_percent_column_...` 变红；
-`_normalize_group_unit` 改成恒返回 `"%"` → 组单位 4 条全红。
+### 6.1 `normalize` 到底是什么意思（必须说清）
+
+rioja 的 `scale.percent = TRUE` 是**逐列归一**：内部 `colM <- apply(d, 2, max)`，每列除以
+**本列最大值**（`rioja::strat.plot` 源码），所以 A 列 max 20% 与 B 列 max 5% 归一后都画满宽。
+它不是「所有列共用一把 0–100 的尺」。要共用固定 0–100 轴，得用 `fixed` 并显式给量程。
+出图侧混排时（部分列 `fixed`）走 riojaPlot 的 `scale.minmax`，所以脚本里先把 `normalize`
+列按本列最大值缩到 0–100 再填 (0,100)，观感与纯 percent 模式一致。
+
+反向验证（已实跑）：`is_percent_unit` 改成恒 `True` → `test_non_percent_column_...` 与
+`test_two_percent_groups_...` 两条变红；`_normalize_group_unit` 改成恒返回 `"%"` → 组单位 4 条全红。
 
 剩余出口：`export_r()` 的独立单表模板仍写 `scale.percent = TRUE`（见 §4），未处理。

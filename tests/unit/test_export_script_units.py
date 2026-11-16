@@ -145,7 +145,8 @@ def test_readme_documents_units_and_the_scale_rule() -> None:
 
     assert "column_units" in readme, "README 必须指明权威副本在哪"
     assert "counts" in readme, "README 必须列出实际单位"
-    assert "own scale" in readme, "README 必须写明非 % 列按自身量程画"
+    assert "min..max" in readme, "README 必须写明非 % 列按自身量程画"
+    assert "normalized" in readme, "README 必须写明 % 列是逐列归一（不是共用 0-100 轴）"
 
 
 def test_all_percent_project_keeps_the_single_call_template() -> None:
@@ -177,6 +178,34 @@ def test_three_places_agree_on_the_same_unit_string() -> None:
     assert payload_unit == lipd_unit == manifest_unit == "粒/g", (
         f"三处不一致：payload={payload_unit!r} lipd={lipd_unit!r} manifest={manifest_unit!r}"
     )
+
+def test_two_percent_groups_both_go_percent_then_one_unit_splits_them() -> None:
+    """两个组都是 % → 两列都走 percent；把其中一组改成 粒/g → 只有该组落到 fixed。"""
+    session = _session()
+    roi_id, pct_gid, other_gid = _two_groups(session)
+    session.roi_group_update(roi_id, other_gid, {"unit": "%"})
+
+    other_col = next(c.get("name") for c in session.columns if c.get("x_group_id") == other_gid)
+    pct_col = next(c.get("name") for c in session.columns if c.get("x_group_id") == pct_gid)
+
+    both_pct = _script(session)
+    assert "fixed_cols" not in both_pct, "两个组都是 % 时不该出现 fixed 分支"
+    assert both_pct.count("strat.plot(") == 1, "两个 % 组应共用同一次 percent 调用"
+    call_line = next(line for line in both_pct.splitlines() if "strat.plot(" in line)
+    assert "scale.percent = TRUE" in call_line
+    # 全 % 时脚本把整张表（df[-1]）交给同一次 percent 调用，列名不出现在行里
+    assert "[-1]" in call_line, f"两个 % 列必须都在同一次 percent 调用里：{call_line}"
+
+    # 只改一个组的单位 → 只有该组的列落到 fixed 分支
+    session.roi_group_update(roi_id, other_gid, {"unit": "粒/g"})
+    split = _script(session)
+
+    fixed_line = next(line for line in split.splitlines() if "fixed_cols <- intersect(" in line)
+    pct_line = next(line for line in split.splitlines() if "pct_cols <- intersect(" in line)
+    assert f'"{other_col}"' in fixed_line, f"非 % 组的列没落到 fixed：{fixed_line}"
+    assert f'"{other_col}"' not in pct_line
+    assert f'"{pct_col}"' in pct_line, f"% 组的列不该被拖进 fixed：{pct_line}"
+    assert "scale.percent = FALSE" in split
 
 def _first_rscript() -> str | None:
     found = candidate_rscripts()

@@ -38,7 +38,10 @@ from .agedepth import attach_windowed_rates, build_age_depth_frame
 from .xscale import read_column_values, resolve_column_scale
 
 #: 视为「百分比类」的单位写法。**其余一律按该列自身量程画** —— 炭屑（counts）、
-#: 花粉浓度（粒/cm2/yr）这类绝对值列若按 0–100 百分比基准画，会被压成一条平线。
+#: 花粉浓度（粒/cm2/yr）这类绝对值列若按百分比画，会被压成一条平线。
+#:
+#: 注意 percent 分支的语义：rioja 的 `scale.percent = TRUE` 是**每列按本列最大值**
+#: 归一后画满宽（花粉图惯例），不是所有列共用一把 0–100 的尺。
 PERCENT_UNITS = ("%", "％", "percent", "pct")
 
 
@@ -627,9 +630,11 @@ class ExportMixin:
                     )
                     or "  (no columns)"
                 )
-                + "\n  Columns whose unit is not % are plotted on their own scale"
-                + " in plot_strat.R (scale.percent = FALSE), not on the shared 0-100\n"
-                + "  percent basis.\n"
+                + "\n  % columns use rioja scale.percent = TRUE: each column is normalized"
+                + " to its own\n  maximum (a 0-100 axis per column), NOT a single shared"
+                + " 0-100 axis.\n"
+                + "  Non-% columns use scale.percent = FALSE: plotted on their own"
+                + " min..max range.\n"
             ).encode("utf-8") + b"\n" + CSV_MISSING_NOTICE
             ti_readme = tarfile.TarInfo(name="README.txt")
             ti_readme.size = len(readme)

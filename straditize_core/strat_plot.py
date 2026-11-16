@@ -33,8 +33,9 @@ DEFAULT_PLOT_SETTINGS: dict[str, Any] = {
     "exag_alpha": 0.15,
     "minmax": False,
     # 每列是否参与「默认缩放」：{列名: "normalize" | "fixed"}。
-    # normalize（默认）= 与其他列共用百分比 0–100 基准；fixed = 按该列自身量程画，
-    # 不与其他列共用缩放基准（炭屑 / 花粉浓度这类绝对值列用它）。
+    # normalize（默认）= rioja 的 scale.percent 语义：**每列按本列最大值**归一后画满宽
+    #   （不是共用一把 0–100 的尺）；fixed = 按该列自身量程（min..max）画，
+    #   炭屑 / 花粉浓度这类绝对值列用它。
     # 空 dict = 全部 normalize，即历史行为（scale.percent），脚本与产物都不变。
     "plot_scale_mode": {},
     "italicise": True,
@@ -147,11 +148,12 @@ SCALE_MODES = ("normalize", "fixed")
 def validate_plot_scale_mode(value: Any) -> dict[str, str]:
     """把「每列是否参与默认缩放」归一成 {列名: "normalize" | "fixed"}。
 
-    - 留空（None / 空 dict）→ {}：全部列走百分比基准，即历史行为；
+    - 留空（None / 空 dict）→ {}：全部列走 normalize，即历史行为；
     - 取值只接受 normalize / fixed，其他取值一律 ValueError（拼错的开关不静默吞掉）；
     - 列名是否存在由调用方（plot_render，它手上有导出表）负责核对。
 
-    fixed 的语义是**不与其他列共用缩放基准**：该列按自身量程画。
+    normalize = rioja 的 scale.percent 语义：**每列按本列最大值**归一后画满宽（不是
+    共用一把 0–100 的尺）。fixed = 按该列自身量程（min..max）画。
     """
     if value is None or value == {}:
         return {}
@@ -364,8 +366,10 @@ warns <- tryCatch(
         centre.xlabel = FALSE
       )
       # 每列是否参与「默认缩放」：settings 里 scale_mode.<列名><TAB>normalize|fixed。
-      # fixed = 该列按自身量程画、不与其他列共用缩放基准；normalize = 与其他列共用
-      # 百分比基准（0-100）。两条都没有（空表 + minmax=FALSE）→ 历史路径，字节不变。
+      # normalize = 与 rioja 的 scale.percent **同一算法**：每列各自按**本列最大值**归一
+      # （不是共用一把 0-100 的尺：A 列 max 20% 与 B 列 max 5% 都画满宽）。
+      # fixed = 按该列自身量程画（min..max），炭屑 / 花粉浓度这类绝对值列用它。
+      # 两条都没有（空表 + minmax=FALSE）→ 历史路径，字节不变。
       scale_mode_keys <- names(s)[startsWith(names(s), "scale_mode.")]
       scale_modes <- if (length(scale_mode_keys) == 0) {
         character(0)
@@ -384,9 +388,18 @@ warns <- tryCatch(
         # 要 Min/max 就必须关百分比刻度，否则 Min/max 会被静默忽略。
         style$scale.percent <- FALSE
         style$scale.minmax <- TRUE
+        # riojaPlot 走 minmax 时按每列的 (min,max) 定 xlim。为了让 normalize 列与
+        # scale.percent 下的观感完全一致（0-100 轴、每列画满宽），先把这些列按**本列
+        # 最大值**缩到 0-100 —— 这正是 rioja 内部 scale.percent 干的事（每列除以本列 max）。
+        col_max <- apply(taxa, 2, function(v) max(v, na.rm = TRUE))
+        col_max[!is.finite(col_max) | col_max <= 0] <- 1
+        pct_names <- colnames(taxa)[!is_fixed]
+        if (length(pct_names) > 0) {
+          taxa[, pct_names] <- sweep(taxa[, pct_names, drop = FALSE], 2, col_max[pct_names], "/") * 100
+        }
         mins <- apply(taxa, 2, function(v) min(v, na.rm = TRUE))
         maxs <- apply(taxa, 2, function(v) max(v, na.rm = TRUE))
-        # normalize 列沿用百分比基准（0-100），fixed 列保留自身量程。
+        # normalize 列统一到 0-100（已按本列最大值缩放），fixed 列保留自身量程。
         mins[!is_fixed] <- 0
         maxs[!is_fixed] <- 100
         style$minmax <- cbind(mins, maxs)

@@ -240,7 +240,7 @@ export function render(data: DiagramData): string {
             <!-- 单位是「组」属性，也是下游判量纲的唯一依据：列载荷 unit、LiPD units、
                  随包 plot_strat.R 的 scale.percent 都读它。此前这里只显示不可编辑，
                  于是 28 列全是 % —— 炭屑/浓度也按百分比画。 -->
-            <label for="grp-unit-inp" style="display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-muted);" title="本组量纲标签（默认 %）。非 % 的组在出图与随包 R 脚本里按自身量程画，不与其他列共用百分比基准。">
+            <label for="grp-unit-inp" style="display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-muted);" title="本组量纲标签（默认 %）。% 的组按 rioja 惯例画（每列按本列最大值归一、画满宽）；非 % 的组按自身量程（min..max）画。">
               单位:
               <input id="grp-unit-inp" type="text" value="${String(groupUnit).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" list="grp-unit-options" style="width: 68px; font-size: 10px; padding: 1px 4px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 3px;" />
               <datalist id="grp-unit-options">

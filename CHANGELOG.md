@@ -15,11 +15,13 @@
 ### 混合量纲：每列可退出「默认缩放」（`plot_scale_mode`）
 
 - **开关**：`plot.render` 的 `settings.plot_scale_mode = {列名: "normalize" | "fixed"}`，默认 `{}`（全部列走百分比基准 = 历史行为，脚本与产物一字不变）。`fixed` = 该列按自身量程画、不与其他列共用缩放基准，用于炭屑 / 花粉浓度这类绝对值列。
-- **R 侧**：settings.tsv 里逐列写 `scale_mode.<列名>`；任一行 `fixed` 时走 riojaPlot 的 `scale.minmax`，矩阵中 `normalize` 列填 0–100、`fixed` 列填该列自身 min/max —— riojaPlot 里 `scale.percent` 与 `scale.minmax` 是 if/else 互斥分支，混排只能靠这个矩阵表达。全部 `normalize` 时仍走原百分比路径，产物不变。
+- **语义（写清，别让用户误以为共用一把尺）**：`normalize` = rioja `scale.percent` 的**逐列归一**——每列各自按**本列最大值**归一后画满宽（花粉图惯例）。A 列 max 20%、B 列 max 5%，归一后两者都画满宽；若想要「所有列共用固定 0–100 轴」，那是 `fixed` + 显式量程，不是 `normalize`。`fixed` = 按该列自身 min..max 画。
+- **R 侧**：settings.tsv 里逐列写 `scale_mode.<列名>`；任一行 `fixed` 时走 riojaPlot 的 `scale.minmax`——先把 `normalize` 列按本列最大值缩到 0–100（复刻 rioja 的 `scale.percent` 算法，观感与纯 percent 模式一致），矩阵里这些列填 0/100、`fixed` 列填该列自身 min/max。riojaPlot 里 `scale.percent` 与 `scale.minmax` 是 if/else 互斥分支，混排只能靠这个矩阵表达。全部 `normalize` 时仍走原百分比路径，产物不变。
 - **校验**：取值不是 `normalize` / `fixed` → `-32602`；列名不在导出表里 → `-32602` 并列出可用列（拼错的列名会让开关静默不生效，用户以为调过了而图上什么都没变）。
 - **降级**：只有 `rioja` 时 `plot_scale_mode` 进 `unsupported`，提示里点名「每列独立量程」未应用。
 - **测试**：`tests/unit/test_plot_render.py` 新增 9 条（默认不出现 scale_mode 行 / 翻开关只多一行且该行不同 / 非法取值拒绝 / 未知列名拒绝 / PDF 与 JPEG 产物字节随开关变化）。反向验证：让 `resolve_settings` 恒忽略该键 → 10 条红。
-- **导出侧只评估不改**：`data.csv` 全列 `unit` 仍是 `%`，根因在数据模型；方案与影响面见 `docs/findings/mixed-unit-export-assessment.md`，等裁决。
+- **UI（按组，默认跟随单位）**：导出弹窗「列量程（按组）」折叠块，每行一个组（组名 · 单位 · 列数）+ 三态下拉「跟随单位 / 强制按列归一 / 强制自身量程」。`unit` 是唯一事实源，覆盖只做例外；覆盖按组展开成列名发给后端（后端只认列名）。只发「与默认不同」的项，纯 % 工程的出图请求与以前一字不差。
+- **导出侧**：见下一节（已按裁决实施方案 A+B）。
 
 ### 一键出图：图直接回来，不再只给一个隐藏目录里的路径
 
