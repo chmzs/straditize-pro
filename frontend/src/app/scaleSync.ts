@@ -37,6 +37,8 @@ export interface ScaleSnapshotTarget {
    */
   plot_type?: unknown;
   plotType?: unknown;
+  /** 列级轴粗覆盖（`null` = 跟随组）。拖绿线改的就是它，面板「仅本列」直接读这个字段。 */
+  axis_stroke_px?: unknown;
 }
 
 /**
@@ -71,6 +73,8 @@ export function applyScaleSnapshot<T extends ScaleSnapshotTarget>(
     // 否则 `resolvePlotType` 会在两个别名上读出两个答案。
     target.plot_type = freshCol.plot_type;
     target.plotType = freshCol.plot_type ?? undefined;
+    // 列级轴粗同理：拖完绿线后端已经写进去了，镜像不跟就会让「仅本列」停在旧值。
+    target.axis_stroke_px = freshCol.axis_stroke_px;
     applied += 1;
   }
   return applied;

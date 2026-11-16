@@ -21,6 +21,10 @@ const SCALE_MUTATING_METHODS = new Set<string>([
   'roi.groupUpdate',
   'column.calibrateXTicks',
   'column.clearXTicks',
+  // 列级轴粗（`axis_stroke_px`）与列级形态覆盖都走 `column.update`：前者直接改
+  // 0 点，后者改绘制分支。不广播的话，拖完绿线 / 点完侧栏形态图标后，右侧面板的
+  // 「仅本列」与侧栏仍显示旧值，直到下一次无关的数据变化才刷新。
+  'column.update',
 ]);
 
 /** 后端 ocr.getTaxaDict 的返回结构 */

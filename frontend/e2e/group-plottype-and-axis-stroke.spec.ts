@@ -62,6 +62,7 @@ async function readColumns(
     col_index: number | null;
     x_group_id?: string;
     plot_type?: string | null;
+    axis_stroke_px?: number | null;
   }>
 > {
   const dg = await backendRpc<any>(page, 'straditize.getDiagramData');
@@ -71,6 +72,7 @@ async function readColumns(
     col_index: c.col_index ?? null,
     x_group_id: c.x_group_id,
     plot_type: c.plot_type ?? null,
+    axis_stroke_px: c.axis_stroke_px ?? null,
   }));
 }
 
@@ -133,6 +135,35 @@ async function toHundred(page: Page): Promise<void> {
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur?.());
   await page.keyboard.press('Control+1');
   await page.waitForTimeout(150);
+}
+
+
+/** 在画布上把 columns[0] 的绿线（0 点）往右拖 `worldDelta` 个世界像素。 */
+async function dragGreenLine(page: Page, worldDelta: number): Promise<void> {
+  const view = await page.evaluate(() => {
+    const api = (window as unknown as { __straditize: { getState: () => any } }).__straditize;
+    const s = api.getState();
+    return {
+      startX: Number(s.columns[0].startX),
+      imageHeight: Number(s.image.height),
+      scale: Number(s.viewport.scale),
+      panX: Number(s.viewport.panX),
+      panY: Number(s.viewport.panY),
+    };
+  });
+  const groups = await readGroups(page);
+  const cols = await readColumns(page);
+  const groupStroke =
+    Number(groups.groups.find((g) => g.id === cols[0].x_group_id)?.axis_stroke_px ?? 5) || 5;
+  const box = await page.locator('#geology-canvas').boundingBox();
+  if (!box) throw new Error('画布未布局');
+  const zeroWorld = view.startX + groupStroke;
+  const screenX = box.x + zeroWorld * view.scale + view.panX;
+  const screenY = box.y + (view.imageHeight / 2) * view.scale + view.panY;
+  await page.mouse.move(screenX, screenY);
+  await page.mouse.down();
+  await page.mouse.move(screenX + worldDelta * view.scale, screenY, { steps: 6 });
+  await page.mouse.up();
 }
 
 test.describe('组形态与轴线粗：写入后界面必须跟着变', () => {
@@ -266,6 +297,220 @@ test.describe('组形态与轴线粗：写入后界面必须跟着变', () => {
       Math.abs(measured - expected),
       `绿线必须落在 startX(${target.startX}) + 1 = ${expected}；实测 ${measured.toFixed(2)}`
     ).toBeLessThanOrEqual(0.6);
+  });
+
+  test('S3 拖绿线改轴粗 → 后端落库、绿线跟着走、面板「仅本列」立即显示新值', async ({
+    page,
+  }) => {
+    const before = await readColumns(page);
+    const col0 = before[0];
+    const startStroke = Number(
+      (await readGroups(page)).groups.find((g) => g.id === col0.x_group_id)?.axis_stroke_px ?? 5
+    ) || 5;
+
+    const view = await page.evaluate(() => {
+      const api = (window as unknown as { __straditize: { getState: () => any } }).__straditize;
+      const s = api.getState();
+      return {
+        startX: Number(s.columns[0].startX),
+        imageHeight: Number(s.image.height),
+        scale: Number(s.viewport.scale),
+        panX: Number(s.viewport.panX),
+        panY: Number(s.viewport.panY),
+      };
+    });
+    const box = await page.locator('#geology-canvas').boundingBox();
+    if (!box) throw new Error('画布未布局');
+
+    const dragWorld = 5;
+    const zeroWorld = view.startX + startStroke;
+    const screenX = box.x + zeroWorld * view.scale + view.panX;
+    const screenY = box.y + (view.imageHeight / 2) * view.scale + view.panY;
+
+    await page.mouse.move(screenX, screenY);
+    await page.mouse.down();
+    await page.mouse.move(screenX + dragWorld * view.scale, screenY, { steps: 6 });
+    await page.mouse.up();
+
+    // 屏幕→世界取整会吃掉 1px（fit 视口 scale≈0.44，5 世界 px 只有 2.2 屏幕 px），
+    // 所以**以后端实际落库值为准**做后续断言：本用例判的是「界面跟不跟得上」，
+    // 不是「鼠标位移换算精确到 1px」。
+    await expect
+      .poll(
+        async () => (await readColumns(page))[0]?.axis_stroke_px ?? null,
+        { message: '拖完绿线后列级 axis_stroke_px 必须落库', timeout: 15_000 }
+      )
+      .not.toBeNull();
+    const actual = Number((await readColumns(page))[0]?.axis_stroke_px);
+    expect(actual, '拖完必须真的比拖之前大（否则本用例测的是「没拖」）').toBeGreaterThan(
+      startStroke
+    );
+    expect(actual, '拖动量应在 +3…+5px 之间（屏幕取整会少 1px）').toBeLessThanOrEqual(
+      startStroke + dragWorld
+    );
+    const expected = actual;
+
+    // ③ 面板「仅本列」必须**自己**跟上（旧实现只 push history，面板停在旧值）
+    await expect
+      .poll(() => page.locator('#inp-col-axis-stroke').inputValue(), {
+        message: '拖完绿线后「仅本列」输入框必须显示新值，不需要用户再点一次',
+        timeout: 15_000,
+      })
+      .toBe(String(expected));
+
+    // ② 画布绿线 = startX + 新轴粗
+    const measured = await greenLineWorldX(page, view.startX + actual);
+    console.log(
+      `[S3] 轴粗 ${startStroke}→${actual}px；绿线世界 x 实测 ${measured.toFixed(2)}（期望 ${view.startX + actual}）`
+    );
+    expect(
+      Math.abs(measured - (view.startX + actual)),
+      `绿线必须落在 startX(${view.startX}) + ${actual}；实测 ${measured.toFixed(2)}`
+    ).toBeLessThanOrEqual(1.2);
+  });
+
+  test('S4 拖到列宽边界必须停在 20px（不发越界值给后端）', async ({ page }) => {
+    const before = await readColumns(page);
+    const col0 = before[0];
+    const startStroke = Number(
+      (await readGroups(page)).groups.find((g) => g.id === col0.x_group_id)?.axis_stroke_px ?? 5
+    ) || 5;
+
+    const sent: Array<Record<string, unknown>> = [];
+    page.on('request', (req) => {
+      if (!req.url().endsWith('/rpc') || req.method() !== 'POST') return;
+      const raw = req.postData();
+      if (!raw) return;
+      try {
+        const body = JSON.parse(raw) as { method?: string; params?: any };
+        if (body.method === 'column.update') sent.push(body.params);
+      } catch {
+        /* 非 JSON 不参与本断言 */
+      }
+    });
+
+    const view = await page.evaluate(() => {
+      const api = (window as unknown as { __straditize: { getState: () => any } }).__straditize;
+      const s = api.getState();
+      return {
+        startX: Number(s.columns[0].startX),
+        endX: Number(s.columns[0].endX),
+        imageHeight: Number(s.image.height),
+        scale: Number(s.viewport.scale),
+        panX: Number(s.viewport.panX),
+        panY: Number(s.viewport.panY),
+      };
+    });
+    const box = await page.locator('#geology-canvas').boundingBox();
+    if (!box) throw new Error('画布未布局');
+    // 前置：列宽必须 > 21px，否则「拖到右界」本身就到不了 20px，断言没有判别力。
+    expect(Math.round(view.endX - view.startX), '前置：列宽必须 > 21px').toBeGreaterThan(21);
+
+    const zeroWorld = view.startX + startStroke;
+    const screenX = box.x + zeroWorld * view.scale + view.panX;
+    const screenY = box.y + (view.imageHeight / 2) * view.scale + view.panY;
+
+    // 往右拖 40 个世界像素：远超 20px 上限，也接近列右界。
+    await page.mouse.move(screenX, screenY);
+    await page.mouse.down();
+    await page.mouse.move(screenX + 40 * view.scale, screenY, { steps: 8 });
+    await page.mouse.up();
+
+    await expect
+      .poll(async () => (await readColumns(page))[0]?.axis_stroke_px, {
+        message: '拖到边界应停在 20px',
+        timeout: 15_000,
+      })
+      .toBe(20);
+
+    // 发出去的每一个值都必须在 1–20 内（后端会拒越界值，那会变成"拖到一半弹回去"）。
+    const strokes = sent
+      .map((params) => (params.updates as Record<string, unknown> | undefined)?.axis_stroke_px)
+      .filter((value) => value !== undefined);
+    expect(strokes.length, '前置：必须真的发出过 column.update').toBeGreaterThan(0);
+    expect(
+      strokes.filter((value) => Number(value) > 20 || Number(value) < 1),
+      `发出去的 axis_stroke_px 必须都在 1–20 内；实发 ${JSON.stringify(strokes)}`
+    ).toEqual([]);
+
+    // 且不得因为越界被后端拒绝（拒绝会弹「调整 0 点失败」）。
+    const bodyText = await page.evaluate(() => document.body.innerText);
+    expect(bodyText.includes('调整 0 点（轴线粗）失败'), '不得出现"调整 0 点失败"的报错').toBe(
+      false
+    );
+  });
+
+  test('S5 「回到组值」清空本列覆盖 → 后端字段被清、绿线回到组轴粗', async ({ page }) => {
+    // 先造出真实的列级覆盖（走用户主路径：拖绿线），而不是直接调 RPC。
+    await dragGreenLine(page, 5);
+    await expect
+      .poll(async () => (await readColumns(page))[0]?.axis_stroke_px ?? null, {
+        message: '前置：拖绿线后必须产生列级覆盖',
+        timeout: 15_000,
+      })
+      .not.toBeNull();
+    const override = Number((await readColumns(page))[0]?.axis_stroke_px);
+
+    const groups = await readGroups(page);
+    const cols = await readColumns(page);
+    const groupStroke =
+      Number(groups.groups.find((g) => g.id === cols[0].x_group_id)?.axis_stroke_px ?? 5) || 5;
+    expect(override, '前置：覆盖值必须与组值不同，否则「回到组值」看不出变化').not.toBe(groupStroke);
+
+    const btn = page.locator('#btn-clear-col-axis-stroke');
+    await expect(btn, '有列级覆盖时必须给出显式的「回到组值」入口').toBeVisible();
+    await btn.click();
+
+    // ① 后端字段被清成 null（不是写 0）
+    await expect
+      .poll(async () => (await readColumns(page))[0]?.axis_stroke_px ?? null, {
+        message: '点「回到组值」后列级 axis_stroke_px 必须被清空（null）',
+        timeout: 15_000,
+      })
+      .toBeNull();
+
+    // ② 面板「仅本列」跟着清空，且按钮自己消失（已无覆盖可清）
+    await expect(page.locator('#inp-col-axis-stroke')).toHaveValue('');
+    await expect(page.locator('#btn-clear-col-axis-stroke')).toHaveCount(0);
+
+    // ③ 绿线回到 startX + 组轴粗
+    const view = await page.evaluate(() => {
+      const api = (window as unknown as { __straditize: { getState: () => any } }).__straditize;
+      const s = api.getState();
+      return { startX: Number(s.columns[0].startX) };
+    });
+    const measured = await greenLineWorldX(page, view.startX + groupStroke);
+    console.log(
+      `[S5] 覆盖 ${override}→null；绿线世界 x 实测 ${measured.toFixed(2)}（期望 ${view.startX + groupStroke}）`
+    );
+    expect(
+      Math.abs(measured - (view.startX + groupStroke)),
+      `清除覆盖后绿线必须回到 startX(${view.startX}) + 组轴粗(${groupStroke})`
+    ).toBeLessThanOrEqual(1.2);
+  });
+
+  test('S6 步骤 6 的画布图例里有一句「拖绿线改本列 / 组参数改整组」', async ({ page }) => {
+    const hint = page.locator('.canvas-legend [data-role="hint-zero-drag"]');
+    await expect(hint, '步骤 6 必须在画布内给出两级轴粗的提示').toBeVisible();
+    await expect(hint).toContainText('本列');
+    await expect(hint).toContainText('整组');
+
+    // 必须落在画布容器内（不是面板里），且不拦截鼠标（pointer-events: none）。
+    const placement = await page.evaluate(() => {
+      const hintEl = document.querySelector('.canvas-legend [data-role="hint-zero-drag"]');
+      const legend = document.querySelector('.canvas-legend');
+      const canvas = document.querySelector('#geology-canvas');
+      return {
+        insideCanvasContainer: Boolean(hintEl && canvas && canvas.parentElement?.contains(hintEl)),
+        pointerEvents: legend ? getComputedStyle(legend).pointerEvents : '',
+      };
+    });
+    expect(placement.insideCanvasContainer, '提示必须在画布容器内').toBe(true);
+    expect(placement.pointerEvents, '图例不得拦截画布上的鼠标（否则拖不动绿线）').toBe('none');
+
+    // 负向对照：步骤 5 还不该讲这件只有步骤 6 能做的事。
+    await gotoStage(page, 5);
+    await expect(hint).toBeHidden();
   });
 
 });

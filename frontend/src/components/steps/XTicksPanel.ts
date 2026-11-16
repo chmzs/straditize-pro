@@ -350,6 +350,10 @@ export function render(data: DiagramData): string {
                     title="只改当前这一列的 0 点位置。留空 = 跟随组值。"
                     style="width: 66px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
              <span style="font-size: 9.5px; color: var(--text-muted);">px（留空 = 跟随组）</span>
+             <!-- 「留空」是隐性操作：用户看不出它等于清除覆盖。给一个显式入口。 -->
+             ${axisStrokeColOverride != null
+               ? `<button type="button" id="btn-clear-col-axis-stroke" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 1px 6px;" title="清除本列的轴粗覆盖，回到组值（发 axis_stroke_px: null）">回到组值</button>`
+               : ''}
            </div>
           </div>
           <!-- 轴线粗的来源必须明示（用户原话：「y 轴轴线粗细不需要我提供，就自动给出绿色线吗？」）：
@@ -592,6 +596,22 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       void ctx.rpcClient
         .updateColumn(columnIndex(col), { axis_stroke_px: parsed })
         .then(() => ctx.onDataChange?.());
+    });
+
+    // 清除本列覆盖：显式入口（`null` = 回到组值）。
+    // 不写 0：后端 `column.update` 会当场拒绝 0/负数（那会把绿线压到红线上，
+    // 整列读数系统性偏小一个轴粗），见 tests/unit/test_edit_and_export_api.py。
+    root.querySelector('#btn-clear-col-axis-stroke')?.addEventListener('click', () => {
+      const col = activeColumn();
+      if (!col) return;
+      void ctx.rpcClient
+        .updateColumn(columnIndex(col), { axis_stroke_px: null })
+        .then(() => ctx.onDataChange?.())
+        .catch((err: unknown) =>
+          notifyError(
+            `清除本列轴粗覆盖失败：${err instanceof Error ? err.message : String(err)}`
+          )
+        );
     });
 
     // 单位刻度长度（cell_px）：标定的几何锚点。刻度位置 = 0 点 + k × 它。

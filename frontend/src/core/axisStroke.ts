@@ -12,6 +12,16 @@ export interface AxisStrokeHolder {
   axis_stroke_px?: number | null;
 }
 
+/**
+ * 轴粗的合法区间，与后端 `column.update` 的校验（1–20px）逐字对齐。
+ *
+ * 画布拖动必须钳在这里：只按「不越过列右界」钳（span − 1，实测列宽 58px）会把
+ * 45px 这种值发出去，后端当场 `-32602` 拒绝 → 画布回滚 + 弹错，用户看到的是
+ * 「拖到一半自己弹回去了」。
+ */
+export const AXIS_STROKE_MIN_PX = 1;
+export const AXIS_STROKE_MAX_PX = 20;
+
 export function resolveAxisStroke(
   col: AxisStrokeHolder | null | undefined,
   group: AxisStrokeHolder | null | undefined
