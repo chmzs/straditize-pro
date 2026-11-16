@@ -21,6 +21,7 @@ from typing import Any
 from ..plotting import detect_rscript
 from ..protocol import EXPORT_ERROR, INVALID_PARAMS, STATE_ERROR, JsonRpcError
 from ..strat_plot import (
+    probe_cjk_font,
     SUPPORTED_PLOT_FORMATS,
     resolve_settings,
     read_as_data_url,
@@ -122,6 +123,19 @@ class PlottingMixin:
         # 列宽 ∝ 原图列宽（endX - startX）；用户显式给了 plot_column_widths 就用用户的。
         if not merged.get("plot_column_widths"):
             merged["plot_column_widths"] = self._column_source_widths(frame)
+
+        # 中文字体：系统探测优先、随包 OFL 字体兜底；找不到如实报错（不静默画方框）。
+        font_path, font_source = probe_cjk_font()
+        if font_path is None:
+            raise JsonRpcError(
+                EXPORT_ERROR,
+                "未找到中文字体（simhei / msyh / Noto Sans SC / 文泉驿均不可用）："
+                "中文标签会显示为方框。请安装任一中文字体后重试。",
+                {"reason": "font_missing"},
+            )
+        merged["font_path"] = font_path
+        if font_source:
+            merged["font_source"] = font_source
 
         with tempfile.TemporaryDirectory(prefix="straditize-plot-") as tmp_dir:
             csv_tmp = Path(tmp_dir) / "plot_input.csv"

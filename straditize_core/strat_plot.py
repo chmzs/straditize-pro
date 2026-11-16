@@ -63,11 +63,40 @@ DEFAULT_PLOT_SETTINGS: dict[str, Any] = {
     "title": "",
     "width_px": 2200,
     "height_px": 1500,
-    "dpi": 150,
+    "dpi": 300,
     # y 轴范围三格（min / max / interval）。None = 自动（数据范围 + pretty 刻度）。
     # 三格必须同时给：只给一部分会「半生效」，所以整套忽略并如实提示。
     "y_axis": None,
+    # 中文字体：Python 侧探测后写入（系统优先、随包 OFL 兜底）。
+    # 必须在这里登记，否则 resolve_settings 会以「未知的出图设置」拒绝。
+    "font_path": "",
+    "font_source": "",
 }
+
+#: 中文字体候选（**系统探测优先**，仓库打包的 OFL 字体兜底）。
+#: 注意：`simhei.ttf`（中易黑体）与 `msyh.ttc`（微软雅黑）是**专有字体，不可随包分发**，
+#: 这里只是在本机探测使用；仓库内随包的必须是 OFL 许可的字体（Noto Sans SC / 思源黑体）。
+CJK_FONT_CANDIDATES = (
+    ("C:/Windows/Fonts/simhei.ttf", "中易黑体（专有，仅本机使用）"),
+    ("C:/Windows/Fonts/msyh.ttc", "微软雅黑（专有，仅本机使用）"),
+    ("C:/Windows/Fonts/NotoSansSC-Regular.ttf", "Noto Sans SC（OFL）"),
+    ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "Noto Sans CJK（OFL）"),
+    ("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", "文泉驿正黑（GPL+FE）"),
+)
+
+
+def probe_cjk_font() -> tuple[str | None, str | None]:
+    """探测可用的中文字体，返回 (路径, 来源说明)；找不到返回 (None, None)。
+
+    调用方必须把「找不到」如实报给用户（中文标签会变方框），不许静默降级。
+    """
+    for path, source in CJK_FONT_CANDIDATES:
+        if Path(path).is_file():
+            return path, source
+    bundled = Path(__file__).parent / "assets" / "fonts" / "NotoSansSC-Regular.ttf"
+    if bundled.is_file():
+        return str(bundled), "随包 Noto Sans SC（OFL）"
+    return None, None
 
 #: 只有 riojaPlot 才有的开关；回退到 rioja 时这些不生效，必须报告。
 RIOJAPLOT_ONLY_KEYS = (
@@ -425,13 +454,13 @@ if (ncol(taxa) == 0) stop("STRADITIZE_ERROR: 所有属种列都是空的（全 N
 fmt <- tolower(tools::file_ext(out_path))
 W <- num("width_px", 2200)
 H <- num("height_px", 1500)
-DPI <- num("dpi", 150)
+DPI <- num("dpi", 300)
 
 open_device <- function() {
   if (fmt == "jpeg") {
     grDevices::jpeg(out_path, width = W, height = H, res = DPI, quality = 95, type = "cairo")
   } else if (fmt == "pdf") {
-    grDevices::pdf(out_path, width = W / DPI, height = H / DPI)
+    grDevices::cairo_pdf(out_path, width = W / DPI, height = H / DPI, family = "straditize")
   } else {
     stop("STRADITIZE_ERROR: 不支持的输出格式 ", fmt, "（支持 jpeg/pdf）")
   }
@@ -460,6 +489,20 @@ engine <- if (use_riojaplot) "riojaPlot" else "rioja"
 open_device()
 # 轴与刻度齿的线宽：axis() 不接收 lwd 形参，只认 par("lwd")。放这里只影响轴/齿，
 # 不影响曲线（riojaPlot 画线时显式传了 lwd.line）。
+# ── 中文字体：sysfonts + showtext（PDF 走 cairo_pdf）────────────────────────
+# 字体路径由 Python 侧探测后写进 settings（系统字体优先，随包 OFL 字体兜底）。
+# 找不到就**报错退出**，不静默画成方框/空白。
+font_path <- txt("font_path", "")
+if (!nzchar(font_path) || !file.exists(font_path)) {
+  stop("STRADITIZE_ERROR: 未找到中文字体（simhei/msyh/Noto/文泉驿），中文标签会显示为方框；请安装任一中文字体或在设置里指定。")
+}
+if (requireNamespace("sysfonts", quietly = TRUE) && requireNamespace("showtext", quietly = TRUE)) {
+  sysfonts::font_add("straditize", regular = font_path)
+  showtext::showtext_auto()
+} else {
+  stop("STRADITIZE_ERROR: 缺少 sysfonts / showtext 包，无法注册中文字体（install.packages(c(\"sysfonts\", \"showtext\"))）。")
+}
+par(family = "straditize")
 par(lwd = num("axis_lwd", 4))
 warns <- tryCatch(
   collect_warnings({
