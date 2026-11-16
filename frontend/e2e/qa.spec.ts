@@ -29,7 +29,11 @@ import {
 import type { QaSummary } from '../src/types/pollen';
 
 const ROI_X0 = 100;
-const ROI_X1 = 200;
+/**
+ * 右缘留 10px 余量：0 点 = 列左缘 + 轴粗（本用例实测 5px），而控制点的最大 x
+ * 是 0 点 + 103.2%，必须仍落在列内。
+ */
+const ROI_X1 = 210;
 /**
  * ROI 的 y 范围直接决定 digitize / updateControlPoint 逐行重建曲线的行区间，
  * 必须与 76 个层位行 100,105,...,475 完全重合，否则 qa 在层位行上取不到读数。
@@ -43,7 +47,7 @@ const ROW_STEP = 5;
  * 旧测试的目标和值：前 72 层各 96%，其余依次 92%、103.2%、0%、0%。
  *
  * 两个 0 是"无墨迹读数"的空层位；103.2% 越过 100% + 2 的容差，必须触发红条。
- * 该列的像素→百分比映射为 value = raw_x - 100，所以钉 x = 100 + 目标和值即可。
+ * 该列的像素→百分比映射为 value = raw_x - (列左缘 + 轴粗)，所以钉 x = 0 点 + 目标和值即可。
  */
 const TARGET_SUMS: number[] = [...new Array<number>(72).fill(96), 92, 103.2, 0, 0];
 
@@ -81,7 +85,17 @@ test.describe('Step 8 QA 诊断门禁', () => {
     expect(created.roi.ylim, 'ROI 的 y 范围就是逐行重建曲线的行区间').toEqual([ROI_Y0, ROI_Y1]);
 
     await rpc(page, 'column.add', { column: { name: 'Pinus', startX: ROI_X0, endX: ROI_X1 } });
+    // 0 点 = 列左缘 + 轴粗（与后端 xscale.resolve_axis_stroke 同源：列级 > 组级 > 5）。
+    // 后端现在拒绝落在 0 点左侧的手工控制点（-32602 读数不能为负），而 x_ticks 分支
+    // 会把 abs_px0 直接取成这里的 px —— 写 startX 就等于宣称"0 点在列左缘"，
+    // 随后把控制点压到 0% 必然被拒（实测 x=100 vs 真 0 点 105）。
+    const { columns: freshCols } = await rpc<{ columns: Array<{ axis_stroke_px?: number }> }>(
+      page,
+      'straditize.getDiagramData'
+    );
+    const ZERO_X = ROI_X0 + (freshCols[0]?.axis_stroke_px ?? 5);
     // x_ticks 既是像素→百分比的映射依据，也是契约里"声明最大丰度"的唯一来源。
+    // 映射取 1%/px（ZERO_X → 0%，ZERO_X + 100 → 100%），于是目标和值直接等于 x 偏移量。
     await rpc(page, 'column.update', {
       col_index: 0,
       updates: {
@@ -90,8 +104,8 @@ test.describe('Step 8 QA 诊断门禁', () => {
         startValue: 0,
         tickValue: 100,
         x_ticks: [
-          { px: ROI_X0, value: 0 },
-          { px: ROI_X1, value: 100 },
+          { px: ZERO_X, value: 0 },
+          { px: ZERO_X + 100, value: 100 },
         ],
       },
     });
@@ -103,7 +117,7 @@ test.describe('Step 8 QA 诊断门禁', () => {
       await rpc(page, 'core.updateControlPoint', {
         col_index: 0,
         row: ROI_Y0 + i * ROW_STEP,
-        x: ROI_X0 + TARGET_SUMS[i],
+        x: ZERO_X + TARGET_SUMS[i],
       });
     }
 

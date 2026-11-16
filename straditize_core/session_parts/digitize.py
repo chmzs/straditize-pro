@@ -16,7 +16,12 @@ try:
 except ImportError:
     find_peaks = None
 
-from ..curve import detect_stratigraphic_turning_points
+from ..curve import (
+    VERTICAL_TOLERANCE_PX,
+    detect_turning_points_vertical,
+    enforce_error_bound,
+    prune_axis_pileups,
+)
 from ..digitize import (
     _axis_ink_offsets,
     _band_components,
@@ -26,6 +31,7 @@ from ..digitize import (
     _without_axis_ink,
     interpolate_hlines,
 )
+from .xscale import _resolve_column_group, resolve_axis_stroke
 from ..protocol import (
     INVALID_PARAMS,
     STATE_ERROR,
@@ -138,7 +144,7 @@ class DigitizeSessionMixin:
         self._interpolate_across_hlines(points, c_start)
 
         control_points, ctrl_pts_list = self._turning_control_points(
-            points, c_start, y0, y1, col_index
+            points, c_start, y0, y1, col_index, float(c_end - c_start), resolve_axis_stroke(col, None)
         )
 
         # 重建只产出**算法**拐点；用户手工点原样并入（不删、不移动）。
@@ -384,6 +390,34 @@ class DigitizeSessionMixin:
                 for p_idx, new_v in enumerate(interp_vals):
                     points[p_idx]["x"] = float(c_start + new_v)
 
+    def _zero_point_x(self, col_index: int) -> float | None:
+        """该列的 0 点像素（列左缘 + 轴粗）。取不到返回 None。"""
+        cols = getattr(self, "columns", None) or []
+        if col_index < 0 or col_index >= len(cols):
+            return None
+        col = cols[col_index]
+        c_start = float(col.get("startX", col.get("start", 0.0)) or 0.0)
+        try:
+            group = _resolve_column_group(self, col)
+        except Exception:  # pragma: no cover - 组结构异常时退化为无轴粗
+            group = None
+        return c_start + float(resolve_axis_stroke(col, group))
+
+    def _reject_below_zero_point(self, col_index: int, row: int, x: float) -> None:
+        """手工点落在 0 点左侧时拒绝（不静默钳制：那是用户亲手放的点）。
+
+        x == 0 点允许——丰度 0 是合法数据；只有严格小于 0 点才是负读数。
+        """
+        zero = self._zero_point_x(col_index)
+        if zero is None:
+            return
+        if float(x) < zero - 1e-9:
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                f"读数不能为负：该列 0 点在 x={zero:.6g}，"
+                f"你给的点（row {row}, x={float(x):.6g}）在它左侧。",
+            )
+
     def _turning_control_points(
         self,
         points: list[dict[str, float]],
@@ -391,18 +425,48 @@ class DigitizeSessionMixin:
         y0: int,
         y1: int,
         col_index: int,
+        col_width: float,
+        zero_offset: float = 0.0,
     ) -> tuple[dict[int, float], list[dict[str, Any]]]:
-        """按地形显著度抽拐点，再补首末两个端点控制点，返回 (行号→x 字典, 控制点列表)。"""
+        """按垂直误差界抽拐点，再补首末两个端点控制点，返回 (行号→x 字典, 控制点列表)。
+
+        判据是**垂直距离**（见 straditize_core.curve.detect_turning_points_vertical）：
+        显著极值（凸点/凹点/肩部）作为强制锚点先保留，锚点之间再用垂直 RDP 加密到
+        VERTICAL_TOLERANCE_PX 的误差界，因此"重构 vs 逐行轮廓"的 P95/max 误差
+        有上界，而不是靠调阈值碰运气。
+
+        三条旧启发式**已删除**，它们都只在"看不出错"的地方悄悄丢点：
+        ① 只在锚点区间长度 > 6 行时才跑 RDP（短区间完全不复核）——实测列底
+           172→5 的一行台阶因此被拉成 3 行斜坡，单点误差 110px；
+        ② 丢弃 |v| <= baseline_px 的近基线点——台阶脚恰好落在基线附近；
+        ③ max_points 上限裁剪。
+        """
         control_points: dict[int, float] = {}
-        # Advanced peak extraction: using topological prominence and local extrema
-        curve_profile = np.array([p["x"] - c_start for p in points], dtype=float)
-        turning_rows, turning_vals, is_mand = detect_stratigraphic_turning_points(
-            curve_profile, prominence=1.5, min_distance=3, epsilon=1.0, max_points=32
+        # 0 点是轴线右缘（列左缘 + 轴粗）：控制点落在它左侧等于给出负读数，
+        # 因此曲线宽度的下限取轴粗，而不是 0。
+        min_width = max(0.0, float(zero_offset))
+        curve_profile = np.clip(
+            np.array([p["x"] - c_start for p in points], dtype=float), min_width, None
         )
-        ctrl_pts_list = []
-        for r_rel, v_rel, _mand in zip(turning_rows, turning_vals, is_mand):
+        # 显著度随列宽缩放：绝对显著度在宽列上会把抗锯齿与基线抖动当作拐点。
+        # 垂直容差是**绝对** 2px：它就是重构误差判据本身，不随列宽放宽。
+        prominence_px = max(2.0, 0.005 * float(col_width))
+        turning_rows, turning_vals, is_mandatory = detect_turning_points_vertical(
+            curve_profile,
+            epsilon=VERTICAL_TOLERANCE_PX,
+            prominence=prominence_px,
+            min_distance=3,
+        )
+        kept_rows, kept_vals = prune_axis_pileups(turning_rows, turning_vals, is_mandatory)
+        # 兜底：去堆叠的两点并一点可能把误差顶起来，这里把超差行补回去。
+        kept_rows, kept_vals = enforce_error_bound(
+            np.arange(len(curve_profile), dtype=float), curve_profile, kept_rows, kept_vals
+        )
+
+        ctrl_pts_list: list[dict[str, Any]] = []
+        for r_rel, v_rel in zip(kept_rows, kept_vals):
             r_int = int(y0 + r_rel)
-            x_val = float(c_start + v_rel)
+            x_val = float(c_start + max(min_width, float(v_rel)))
             control_points[r_int] = x_val
             ctrl_pts_list.append(
                 {
@@ -415,8 +479,8 @@ class DigitizeSessionMixin:
             )
 
         # Ensure endpoints exist
-        y0_x = float(points[0]["x"])
-        y1_x = float(points[-1]["x"])
+        y0_x = float(c_start + max(min_width, points[0]["x"] - c_start))
+        y1_x = float(c_start + max(min_width, points[-1]["x"] - c_start))
         control_points[y0] = y0_x
         control_points[y1] = y1_x
 
@@ -499,6 +563,7 @@ class DigitizeSessionMixin:
                     INVALID_PARAMS, "No control points available to remove"
                 )
         else:
+            self._reject_below_zero_point(col_index, int(row), float(x))
             ctrls[int(row)] = float(x)
             # 这里的每一次写都是用户在图上的显式编辑 → 记为手工点
             manual[int(row)] = {"x": float(x), "kind": "manual"}
@@ -580,6 +645,7 @@ class DigitizeSessionMixin:
                     "控制点必须同时带 row 与 x：收到 " + repr(point),
                 )
             row = int(round(float(row_raw)))
+            self._reject_below_zero_point(c_idx, row, float(x_raw))
             ctrls[row] = float(x_raw)
             if point.get("manual", True):
                 manual[row] = {"x": float(x_raw), "kind": "manual"}
