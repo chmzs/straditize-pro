@@ -2,8 +2,10 @@
  * 画布光标决策（纯函数，可直接单测）。
  *
  * 优先级是产品行为，不是随便排的：
- * 1. 平移中 / 空格 / pan 工具 → grab / grabbing（此时什么都不该抢光标）；
- * 2. ROI 手柄 → 四向 resize（拖手柄时最明确的反馈）；
+ * 1. 平移中 / 空格 → grab / grabbing（此时什么都不该抢光标）；
+ * 2. ROI 手柄 → 四向 resize（拖手柄时最明确的反馈；pan 工具下也优先，
+ *    因为按在手柄上拖的是 ROI，不是画布）；
+ * 2.5 pan 工具本身 → grab；
  * 3. 锚点 → move（可拖的圆点）；
  * 4. 列边界 → col-resize（拖列宽）；
  * 5. 工具自带光标（如 pickTick 的 crosshair）；
@@ -41,11 +43,12 @@ function cursorForRoiHandle(handle: RoiHandle): string {
 }
 
 export function resolveCanvasCursor(env: CursorEnv): string {
-  if (env.isPanning || env.isSpaceDown || env.modeIsPan) {
-    // 平移优先级最高：拖图时光标必须始终是 grab/grabbing，别让 hover 抢走。
+  if (env.isPanning || env.isSpaceDown) {
+    // 真在平移（左键已按下拖动 / 空格临时平移）：光标必须是 grab/grabbing。
     return env.isMouseDown ? 'grabbing' : 'grab';
   }
   if (env.roiHandle) return cursorForRoiHandle(env.roiHandle);
+  if (env.modeIsPan) return env.isMouseDown ? 'grabbing' : 'grab';
   if (env.hasAnchor || env.strategyCursor === 'move') return 'move';
   // 0 点（绿线）与列边界（红线）是两条不同的线：前者调轴线粗、后者调列宽，光标必须能区分。
   if (env.hasZeroLine) return 'ew-resize';
