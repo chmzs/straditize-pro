@@ -32,7 +32,9 @@ const INITIAL_XTICKS_STATE: XTicksPanelState = {
   pendingTick: null,
   onTickPickedExternal: null,
   isBatchAssignOpen: false,
-  groupsFoldOpen: false,
+  // 列组**默认展开**（用户偏好：分组与单位是量纲工作的入口，不该先藏一层）。
+  // 折叠行为不变：点一次即收起，状态存进 state 以便本次会话内保持（面板每次重渲染会重建 DOM）。
+  groupsFoldOpen: true,
 
   axisStrokeOverride: null,
 };
@@ -191,14 +193,19 @@ export function render(data: DiagramData): string {
       </div>
 
       <!--
-        组管理收进折叠区（设计系统 §1.4 渐进披露 / §6 高级配置默认折叠）：
-        首屏只留「进度 → 检测 → 点齿 → 主动作」。分组只在需要分治单位/量程时才打开。
+        组管理放在折叠区，但**默认展开**：分组与单位是量纲工作的入口（炭屑/浓度与百分比列
+        分属不同组），先藏一层等于让用户去猜它在哪。用户点 summary 即可收起，收起状态
+        由 state.groupsFoldOpen 在本次会话内保持。
         summary 里不放按钮——点了会连带折叠/展开。
       -->
       <details class="inspector-section" data-role="groups-fold" ${state.groupsFoldOpen ? 'open' : ''} style="padding: 8px 10px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--border-color);">
         <summary style="font-size: 11.5px; font-weight: 700; color: var(--text-heading); cursor: pointer;" title="同单位、同量程的列共用一个标度。分组只影响标定，不改列几何">
           列组 · ${groups.length} 组${currentGroup ? ` · 当前 ${currentGroup.name}` : ''}
         </summary>
+        <!-- 默认展开后必须限高：组一多（hoya 3 组 / 28 列）展开区会把「进度 → 点齿 → 主动作」
+             挤出首屏。这里给展开内容一个上限 + 内部滚动，折叠行为本身不变。
+             实测 1280×720：限高前 panel 650px（可用 560）→ 主按钮掉到 844px（视口 720）。 -->
+        <div data-role="groups-fold-body" style="max-height: 132px; overflow-y: auto; padding-right: 2px;">
         <div style="display: flex; justify-content: flex-end; align-items: center; margin: 8px 0;">
           <div style="display: flex; gap: 4px;">
             <button id="btn-create-new-group" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 10px; padding: 1px 6px; color: var(--accent-blue);" title="新建一个列组：点它之后在图上点选属于该组的属种列（Shift 连选），其余列自动留在默认组">+ 分组</button>
@@ -331,6 +338,7 @@ export function render(data: DiagramData): string {
               : ''
           }
         </div>
+        </div><!-- /groups-fold-body -->
       </details>
 
       <!-- 标定：检测结果 + 轴线粗 + 点齿（首屏主体） -->
@@ -444,7 +452,9 @@ export function render(data: DiagramData): string {
 
 
       <!-- 阶段提交按钮 -->
-      <button id="btn-apply-xticks-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+      <!-- 主动作固定在可视区底部：默认展开的列组会把面板撑高（实测 1280×720 时 panel 596px、
+           可用 560px），不粘住它就会被挤到首屏之外。粘住 + 折叠区限高，两者一起才够。 -->
+      <button id="btn-apply-xticks-next" class="ui-btn ui-btn--primary" style="position: sticky; bottom: 0; z-index: 3; width: 100%; padding: 8px 12px; font-size: 12px; box-shadow: 0 -6px 10px rgba(0,0,0,0.12);">
         ${t('step6.next')}
       </button>
     </div>
