@@ -30,6 +30,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -113,10 +114,31 @@ def _collect() -> dict:
     }
 
 
+def _digest_curve_points(payload: dict) -> dict:
+    """把每列的 curvePoints 换成 {count, sha256} 摘要再入基线。
+
+    为什么是摘要而不是整条数组：16 列 x 637 点 x 2 案例约 +80k 行（+4.3MB）。
+    为什么不只存前 8 个点：那会放过「中间某个点被改」，是**削弱判据**；
+    摘要覆盖全量 637 个 x（取整到 4 位），任何一点变化都会变红。
+    """
+    cases = payload.values() if "columns" not in payload else [payload]
+    for case_payload in cases:
+        for column in case_payload.get("columns") or []:
+            points = column.get("curvePoints")
+            if not isinstance(points, list):
+                continue
+            joined = ",".join(f"{float(point['x']):.4f}" for point in points)
+            column["curvePoints"] = {
+                "count": len(points),
+                "sha256": hashlib.sha256(joined.encode("utf-8")).hexdigest(),
+            }
+    return payload
+
+
 def test_diagram_payload_snapshot_is_stable() -> None:
     # 载荷是**线格式**：先过一遍 JSON，让元组/整型键与文件里的形状一致。
     # 否则 `x_ticks_dropped` 里的 tuple 与 fixture 的 list 会让基线永远红。
-    snapshot = json.loads(json.dumps(_collect()))
+    snapshot = _digest_curve_points(json.loads(json.dumps(_collect())))
 
     if os.environ.get("UPDATE_DIAGRAM_PAYLOAD_GOLDEN") == "1":
         GOLDEN.parent.mkdir(parents=True, exist_ok=True)

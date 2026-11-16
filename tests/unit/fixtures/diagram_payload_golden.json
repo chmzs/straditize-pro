@@ -193,6 +193,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "4e0c103d7b49bd31318e6846785cdd1fcc6388f458d4a488c704dddddc556b7f"
+    },
     "curveType": "linear",
     "endX": 370,
     "exaggeration_mult": null,
@@ -329,6 +334,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "cfc8ce0cecaaf2fbce457928782498e6bd3458842db490f05f0c96a7165b710b"
+    },
     "curveType": "linear",
     "endX": 407,
     "exaggeration_mult": null,
@@ -433,6 +443,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "12c557710dc4633bd0d431c19ca33efde210b802719984da190f4680a2b92cc9"
+    },
     "curveType": "linear",
     "endX": 444,
     "exaggeration_mult": null,
@@ -761,6 +776,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "0834662cfd5fa3a58bbf8e47becc86f6887fb08f3ac46189bce529464b533ff9"
+    },
     "curveType": "linear",
     "endX": 482,
     "exaggeration_mult": null,
@@ -1169,6 +1189,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "8a8c761f58cdb2e4f47c0d4bc6a310d247f69860305efa069fb96910fca3cd3a"
+    },
     "curveType": "linear",
     "endX": 519,
     "exaggeration_mult": null,
@@ -2009,6 +2034,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "11e4ca71a8b6072cb874b2ea1d321f27d55f54a476101727072bb7db344cbc17"
+    },
     "curveType": "linear",
     "endX": 582,
     "exaggeration_mult": null,
@@ -2361,6 +2391,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "d3d376299e298c497b89dfa2f4773e4779b34d9dff2cf2d4b56276e5b052956a"
+    },
     "curveType": "linear",
     "endX": 619,
     "exaggeration_mult": null,
@@ -2609,6 +2644,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "bbb32add21d598673ef70919a60084f0c283c5847a3e537dc461f01b92b54d58"
+    },
     "curveType": "linear",
     "endX": 656,
     "exaggeration_mult": null,
@@ -2817,6 +2857,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "9dcf6dc88edd23b8ba432bcb1de4100598c3a6d6e457d45b6eae9e09f156f6ff"
+    },
     "curveType": "linear",
     "endX": 694,
     "exaggeration_mult": null,
@@ -4161,6 +4206,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "404fb616b4e2fd10addb0e307b0d1b837d791b5f0bdbce8e372ad9b8b271c980"
+    },
     "curveType": "linear",
     "endX": 906,
     "exaggeration_mult": null,
@@ -5569,6 +5619,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "75f89224c9be9f51dd646e996112d4a3e3392450ed47d9db6179c1df2c084d8f"
+    },
     "curveType": "linear",
     "endX": 1093,
     "exaggeration_mult": null,
@@ -6361,6 +6416,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "a0300d01f7c0e5aea97a3fef68d956a74506e1d848ecd4ddffd26218d7f13571"
+    },
     "curveType": "linear",
     "endX": 1130,
     "exaggeration_mult": null,
@@ -7265,6 +7325,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "31fcda5f7f21c0c2cda985e2a9396aa452762d5caca84599d555f85036af0818"
+    },
     "curveType": "linear",
     "endX": 1193,
     "exaggeration_mult": null,
@@ -7433,6 +7498,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "7cde16885a8c5e6287a8cfa2df1870af0bc54c99a35837f16199bd840fa403ec"
+    },
     "curveType": "linear",
     "endX": 1231,
     "exaggeration_mult": null,
@@ -7753,6 +7823,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "2a6ea9f5bc30d68b2d9d49684cc3b3984091d18906f0a6c6fbab816985969363"
+    },
     "curveType": "linear",
     "endX": 1279,
     "exaggeration_mult": null,
@@ -7825,6 +7900,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "0ef68bf732d09e57d107dc8ba286b4258acbdd52af00a7030dadd916400756e5"
+    },
     "curveType": "linear",
     "endX": 1330,
     "exaggeration_mult": null,
@@ -8150,6 +8230,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "4e0c103d7b49bd31318e6846785cdd1fcc6388f458d4a488c704dddddc556b7f"
+    },
     "curveType": "linear",
     "endX": 370,
     "exaggeration_mult": null,
@@ -8302,6 +8387,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "cfc8ce0cecaaf2fbce457928782498e6bd3458842db490f05f0c96a7165b710b"
+    },
     "curveType": "linear",
     "endX": 407,
     "exaggeration_mult": null,
@@ -8406,6 +8496,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "12c557710dc4633bd0d431c19ca33efde210b802719984da190f4680a2b92cc9"
+    },
     "curveType": "linear",
     "endX": 444,
     "exaggeration_mult": null,
@@ -8734,6 +8829,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "0834662cfd5fa3a58bbf8e47becc86f6887fb08f3ac46189bce529464b533ff9"
+    },
     "curveType": "linear",
     "endX": 482,
     "exaggeration_mult": null,
@@ -9142,6 +9242,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "8a8c761f58cdb2e4f47c0d4bc6a310d247f69860305efa069fb96910fca3cd3a"
+    },
     "curveType": "linear",
     "endX": 519,
     "exaggeration_mult": null,
@@ -9982,6 +10087,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "11e4ca71a8b6072cb874b2ea1d321f27d55f54a476101727072bb7db344cbc17"
+    },
     "curveType": "linear",
     "endX": 582,
     "exaggeration_mult": null,
@@ -10334,6 +10444,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "d3d376299e298c497b89dfa2f4773e4779b34d9dff2cf2d4b56276e5b052956a"
+    },
     "curveType": "linear",
     "endX": 619,
     "exaggeration_mult": null,
@@ -10582,6 +10697,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "bbb32add21d598673ef70919a60084f0c283c5847a3e537dc461f01b92b54d58"
+    },
     "curveType": "linear",
     "endX": 656,
     "exaggeration_mult": null,
@@ -10790,6 +10910,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "9dcf6dc88edd23b8ba432bcb1de4100598c3a6d6e457d45b6eae9e09f156f6ff"
+    },
     "curveType": "linear",
     "endX": 694,
     "exaggeration_mult": null,
@@ -12134,6 +12259,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "404fb616b4e2fd10addb0e307b0d1b837d791b5f0bdbce8e372ad9b8b271c980"
+    },
     "curveType": "linear",
     "endX": 906,
     "exaggeration_mult": null,
@@ -13542,6 +13672,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "75f89224c9be9f51dd646e996112d4a3e3392450ed47d9db6179c1df2c084d8f"
+    },
     "curveType": "linear",
     "endX": 1093,
     "exaggeration_mult": null,
@@ -14334,6 +14469,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "a0300d01f7c0e5aea97a3fef68d956a74506e1d848ecd4ddffd26218d7f13571"
+    },
     "curveType": "linear",
     "endX": 1130,
     "exaggeration_mult": null,
@@ -15238,6 +15378,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "31fcda5f7f21c0c2cda985e2a9396aa452762d5caca84599d555f85036af0818"
+    },
     "curveType": "linear",
     "endX": 1193,
     "exaggeration_mult": null,
@@ -15406,6 +15551,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "7cde16885a8c5e6287a8cfa2df1870af0bc54c99a35837f16199bd840fa403ec"
+    },
     "curveType": "linear",
     "endX": 1231,
     "exaggeration_mult": null,
@@ -15726,6 +15876,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "2a6ea9f5bc30d68b2d9d49684cc3b3984091d18906f0a6c6fbab816985969363"
+    },
     "curveType": "linear",
     "endX": 1279,
     "exaggeration_mult": null,
@@ -15798,6 +15953,11 @@
       "y": 869
      }
     ],
+    "curveError": null,
+    "curvePoints": {
+     "count": 637,
+     "sha256": "0ef68bf732d09e57d107dc8ba286b4258acbdd52af00a7030dadd916400756e5"
+    },
     "curveType": "linear",
     "endX": 1330,
     "exaggeration_mult": null,

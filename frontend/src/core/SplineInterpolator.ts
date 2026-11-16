@@ -52,6 +52,91 @@ export class SplineInterpolator {
   }
 
   /**
+   * 稠密点列在视口 y 区间内的切片（二分查找，两端各留 1 点，跨界线段不断裂）。
+   *
+   * 为什么要裁剪：28 列 x 1249 行 = 35k 点/帧，全量建路径会把重绘时间花在
+   * 屏幕外的点上；二分是 O(log n)，不随缩放变化。
+   */
+  private static denseSlice(
+    points: ReadonlyArray<{ x: number; y: number }>,
+    yMin: number,
+    yMax: number
+  ): { start: number; end: number } {
+    const n = points.length;
+    if (n === 0) return { start: 0, end: 0 };
+    let lo = 0;
+    let hi = n - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (points[mid].y < yMin) lo = mid + 1;
+      else hi = mid;
+    }
+    const start = Math.max(0, lo - 1);
+    lo = 0;
+    hi = n - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (points[mid].y <= yMax) lo = mid;
+      else hi = mid - 1;
+    }
+    return { start, end: Math.min(n, lo + 2) };
+  }
+
+  /**
+   * 稠密折线：**一次 Path2D**、一个 moveTo + 连续 lineTo，不逐点开关路径。
+   *
+   * makePath 可注入（node 单测里没有 Path2D）：性能与调用次数因此可被断言，
+   * 而不是只能靠肉眼。
+   */
+  public static buildDensePath(
+    points: ReadonlyArray<{ x: number; y: number }>,
+    view: { yMin: number; yMax: number },
+    makePath: () => Path2D = () => new Path2D(),
+    stride = 1
+  ): Path2D {
+    const path = makePath();
+    const { start, end } = SplineInterpolator.denseSlice(points, view.yMin, view.yMax);
+    if (end - start < 2) return path;
+    const step = Math.max(1, Math.floor(stride));
+    path.moveTo(points[start].x, points[start].y);
+    for (let index = start + step; index < end; index += step) {
+      path.lineTo(points[index].x, points[index].y);
+    }
+    // 末点必须落在裁剪区末尾，否则线段会短一截。
+    const lastIndex = end - 1;
+    if ((lastIndex - start) % step !== 0) {
+      path.lineTo(points[lastIndex].x, points[lastIndex].y);
+    }
+    return path;
+  }
+
+  /** 稠密面积多边形：基线 -> 曲线 -> 基线闭合，同样一次 Path2D。 */
+  public static buildDenseAreaPath(
+    points: ReadonlyArray<{ x: number; y: number }>,
+    baselineX: number,
+    view: { yMin: number; yMax: number },
+    makePath: () => Path2D = () => new Path2D(),
+    stride = 1
+  ): Path2D {
+    const path = makePath();
+    const { start, end } = SplineInterpolator.denseSlice(points, view.yMin, view.yMax);
+    if (end - start < 2) return path;
+    const step = Math.max(1, Math.floor(stride));
+    path.moveTo(baselineX, points[start].y);
+    path.lineTo(points[start].x, points[start].y);
+    for (let index = start + step; index < end; index += step) {
+      path.lineTo(points[index].x, points[index].y);
+    }
+    const lastIndex = end - 1;
+    if ((lastIndex - start) % step !== 0) {
+      path.lineTo(points[lastIndex].x, points[lastIndex].y);
+    }
+    path.lineTo(baselineX, points[lastIndex].y);
+    path.closePath();
+    return path;
+  }
+
+  /**
    * 按照地层深度步长进行密集重采样，生成数值化表格数据
    */
   public static resample(points: Point2D[], stepY: number = 2): Point2D[] {

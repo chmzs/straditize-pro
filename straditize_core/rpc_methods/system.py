@@ -277,8 +277,24 @@ def _payload_column(session: Any, c: dict[str, Any]) -> dict[str, Any]:
     c_end = int(c["end"])
     name = c.get("name", f"Col {c_idx}")
 
+    # 种子：这一列一个点都没有时先数字化（新图第一次打开必须有点可画）。
+    # 这一步是**生产者**（digitize 产出逐行墨迹）；取点/补点的唯一**解析器**是下面的
+    # _ensure_export_column_points —— 两者不是两条取点路径。
     if c_idx not in session.column_points:
-        session.digitize(c_idx, "area")
+        try:
+            session.digitize(c_idx, "area")
+        except Exception:  # noqa: BLE001 - 无图会话由下面的补点解析器兜住
+            pass
+
+    # 画布主渲染用与导出同一条曲线（column_points）：按导出的补点规则补齐后原样下发。
+    # 不许在这里另造一条曲线：那正是「画布 23.44 / 导出 23.77」的来源。
+    curve_error: str | None = None
+    try:
+        session._ensure_export_column_points()
+    except Exception as exc:  # noqa: BLE001 - 取不到就报错，不画替代曲线
+        curve_error = str(exc)
+    if not session.column_points.get(c_idx) and curve_error is None:
+        curve_error = "本列没有任何可渲染的读数（未数字化且没有控制点）"
 
     ctrls = session.control_points.get(c_idx, {})
     # 「哪些点是用户手工给/改的」是会话自己的事实（`session.manual_points`），
@@ -391,6 +407,15 @@ def _payload_column(session: Any, c: dict[str, Any]) -> dict[str, Any]:
         "visible": True,
         "isLocked": False,
         "controlPoints": pts,
+        # 稠密逐行读数（= 导出读的那条曲线）。空数组 ⇔ 这一列没有可渲染的点，
+        # 前端据此回退控制点折线并在画布上标「控制点近似」。
+        "curvePoints": [
+            {"y": int(p["row"]), "x": float(p["x"])}
+            for p in (session.column_points.get(c_idx) or [])
+        ],
+        # 画布只有一条路径：稠密曲线。取不到就带出原因，前端在画布上写明，
+        # 绝不画一条"看起来像数据"的折线（仓库不变量：取不到就报错停在原地）。
+        "curveError": curve_error,
         "roi_id": c.get("roi_id"),
     }
 

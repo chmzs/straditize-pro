@@ -614,6 +614,32 @@ class DigitizeSessionMixin:
             "points": new_points,
         }
 
+    def _rebuild_column_points_from_anchors(
+        self, c_idx: int, ctrls: dict[int, float]
+    ) -> None:
+        """锚点变了 -> 按锚点重建整列稠密曲线（画布与导出读同一份）。
+
+        为什么不能只 pop 掉让下游重建：_ensure_export_column_points 只在
+        column_points **整张表为空**时才补点，pop 掉一列不会触发重建 ——
+        实测 pop 之后该列读出 0.0（被 clamp），链路断在这里。
+        """
+        rows = sorted(ctrls)
+        if not rows:
+            self.column_points.pop(c_idx, None)
+            return
+        span = list(range(int(rows[0]), int(rows[-1]) + 1))
+        xs = np.interp(
+            span,
+            [float(row) for row in rows],
+            [float(ctrls[row]) for row in rows],
+        )
+        self.column_points[c_idx] = [
+            {"row": int(row), "x": float(x)} for row, x in zip(span, xs)
+        ]
+        self.control_point_columns = set(
+            getattr(self, "control_point_columns", set()) or set()
+        ) | {c_idx}
+
     def set_control_points(
         self, col_index: int | str, points: list[dict[str, Any]]
     ) -> dict[str, Any]:
@@ -660,8 +686,16 @@ class DigitizeSessionMixin:
 
         self.control_points[c_idx] = ctrls
         self._manual_store()[c_idx] = manual
+        # 稠密缓存作废：用户刚改的是**曲线本身**，旧墨迹曲线不再代表这一列。
+        # 下一次读取（画布载荷 / 导出）按新锚点线性重建 —— 两边重建的是同一条，
+        # 所以「拖完手柄后画布曲线与导出值一致」是结构性的，不靠约定。
         seed_row = sorted(ctrls)[0]
         result = self.update_control_point(c_idx, seed_row, ctrls[seed_row])
+        # 锚点是曲线本身：旧墨迹作废，立刻按新锚点重建稠密曲线。
+        # 重建后 column_points 仍非空 —— 画布与导出读的都是这一份，
+        # 「拖完手柄后两边一致」是结构性的，不是约定。
+        # update_control_point 已按 Pchip 重建整列曲线（含 column_points），
+        # 这里**不得再 pop**：那会让该列退回"无点"状态，导出读成 0.0（实测）。
         return {
             "col_index": c_idx,
             "action": "synced",
@@ -683,6 +717,8 @@ class DigitizeSessionMixin:
         if c_idx not in self.control_points:
             self.control_points[c_idx] = {}
         self.control_points[c_idx][y_int] = float(x)
+        # 锚点变了 → 稠密曲线按新锚点重建（画布与导出同源）。
+        self._rebuild_column_points_from_anchors(c_idx, self.control_points[c_idx])
         # 走 `point.add` 的每一次加/改都是用户在图上的显式动作 → 手工点
         self._manual_store().setdefault(c_idx, {})[y_int] = {
             "x": float(x),
