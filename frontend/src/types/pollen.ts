@@ -377,7 +377,8 @@ export interface ExclusionRegion {
 export interface SampleHorizon {
   row_px: number;
   depth: number | null; // 未标定必须是 null，不得填 0
-  source: 'auto' | 'paste' | 'manual'; // 必须存活到导出元数据
+  // `grid` = samples.fromDepthGrid 生成的等距网格层位（与拐点共识 / 粘贴 / 手工并列）。
+  source: 'auto' | 'paste' | 'manual' | 'grid'; // 必须存活到导出元数据
 }
 
 export interface ImageMeta {

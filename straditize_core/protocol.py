@@ -159,6 +159,7 @@ ALL_RPC_METHODS: tuple[str, ...] = (
     "roi.update",
     "samples.clear",
     "samples.extractConsensus",
+    "samples.fromDepthGrid",
     "samples.list",
     "samples.pasteDepths",
     "samples.set",
