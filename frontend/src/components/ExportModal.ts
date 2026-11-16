@@ -11,6 +11,7 @@ import {
 } from '../core/qaVerdict';
 import type { QaSummary } from '../types/pollen';
 import { notify, notifyError } from '../ui/feedback';
+import { copyText } from '../ui/clipboard';
 
 let activeExportRefresh: (() => void) | null = null;
 
@@ -268,7 +269,6 @@ export class ExportModal {
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-lipd" title="导出符合 LiPD / LinkedEarth 规范的数据包">LiPD</button>
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-r" title="下载 rioja::strat.plot 绘图脚本">R 脚本</button>
             <button class="ui-btn ui-btn--primary ui-btn--sm" id="btn-wpd-plot-oneclick" title="用本机 R 的 rioja::strat.plot 直接出图（不联网）">本机出图</button>
-            <button class="ui-btn ui-btn--quiet ui-btn--sm" id="btn-wpd-riojaplot-web" title="把当前 CSV 复制到剪贴板并打开 riojaPlot 网页；需手动上传，不是本地出图">riojaPlot 网页</button>
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-tar" title="下载包含数据、原图与脚本的项目归档">TAR 归档</button>
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-json">JSON</button>
           </div>
@@ -641,10 +641,16 @@ export class ExportModal {
     // 自检行只复述后端结论，所以必须真的去问一次后端（不能等用户点按钮）。
     void refreshQa();
 
-    // 复制到剪贴板
+    // 复制到剪贴板：非安全上下文（局域网 http 访问）下 navigator.clipboard 不存在，
+    // 旧写法直接 await 会抛 `Cannot read properties of undefined (reading 'writeText')`，
+    // 用户看到的是「功能坏了」。copyText 内部判空 + execCommand 回退，失败如实告知。
     const copyBtn = modal.querySelector('#btn-wpd-copy') as HTMLButtonElement;
     copyBtn?.addEventListener('click', async () => {
-      await navigator.clipboard.writeText(textarea.value);
+      const ok = await copyText(textarea.value);
+      if (!ok) {
+        notifyError('这个地址下浏览器不允许自动复制：请手动全选数据框内容复制。');
+        return;
+      }
       copyBtn.textContent = '已复制';
       setTimeout(() => (copyBtn.textContent = '复制当前数据'), 1500);
     });
@@ -739,16 +745,6 @@ export class ExportModal {
       }
     });
 
-    // 兜底路线：riojaPlot 网页。**不是本地出图**——用户要自己把 CSV 上传上去。
-    modal.querySelector('#btn-wpd-riojaplot-web')?.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(textarea.value);
-        window.open('https://nsj3.shinyapps.io/riojaPlot/', '_blank', 'noopener');
-        notify('已复制当前 CSV 到剪贴板，并打开 riojaPlot 网页：需要在网页里手动上传，不是本地出图。', 'info', 9000);
-      } catch (err: any) {
-        notifyError('打开 riojaPlot 网页失败：' + String(err?.message || err));
-      }
-    });
 
     modal.querySelector('#btn-wpd-download-csv')?.addEventListener('click', () => {
       if (currentRows.length === 0) {

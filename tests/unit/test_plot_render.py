@@ -173,7 +173,8 @@ def test_plot_render_without_r_gives_install_hint(monkeypatch) -> None:
     data = excinfo.value.data or {}
     assert data.get("reason") == "r_missing"
     assert "install.packages" in str(excinfo.value)
-    assert str(data.get("rioja_plot_url", "")).startswith("https://")
+    assert "rioja_plot_url" not in data, "riojaPlot 网页兜底已下线，错误载荷不得再带该字段"
+    assert "shinyapps" not in str(excinfo.value), "提示里不得再引网页兜底"
 
 
 def test_unknown_setting_is_rejected_not_ignored() -> None:

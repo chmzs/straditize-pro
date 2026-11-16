@@ -2,7 +2,7 @@
 
 ## 为什么单开一个模块
 
-出图有三条路（本机 R / Python 复刻 / riojaPlot 网页），三者的**数据来源必须是同一个**：
+出图有两条路（本机 R / Python 复刻），两者的**数据来源必须是同一个**：
 ExportMixin._primary_roi_export_frame（= data.csv 那一张表）。任何一条自己拼表，
 用户就会拿到画出来和图不一样的数据。
 

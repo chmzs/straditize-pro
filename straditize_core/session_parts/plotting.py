@@ -28,16 +28,12 @@ from ..strat_plot import (
     render_strat_diagram,
 )
 
-#: riojaPlot 的公开实例：兜底路线，需要用户手动上传 CSV（不是本地出图）。
-RIOJA_PLOT_URL = "https://nsj3.shinyapps.io/riojaPlot/"
-
 #: R 缺失 / R 失败时给用户的下一步动作，随错误消息一起返回。
 R_MISSING_HINT = (
     "本机出图需要 R + rioja 包：安装 R（https://cran.r-project.org/）后，"
     "在 R 里执行 install.packages('rioja')；要在图上启用 Italicise / Break long / "
     "Exaggeration / Min-max 这些开关，还需 install.packages('riojaPlot', "
     "repos = 'https://nsj3.r-universe.dev')；或在设置页填写 Rscript 路径。"
-    "也可以改用 riojaPlot 网页：把导出的 CSV 手动上传到 " + RIOJA_PLOT_URL
 )
 
 
@@ -99,7 +95,6 @@ class PlottingMixin:
                     "reason": "r_missing",
                     "candidates": detected.get("candidates", []),
                     "configured": detected.get("configured", ""),
-                    "rioja_plot_url": RIOJA_PLOT_URL,
                 },
             )
 
@@ -140,7 +135,6 @@ class PlottingMixin:
                     {
                         "reason": "r_failed",
                         "rscript": detected.get("path"),
-                        "rioja_plot_url": RIOJA_PLOT_URL,
                     },
                 ) from exc
 

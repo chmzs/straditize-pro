@@ -13,6 +13,11 @@
 - **y 轴标题**：按帮助页用 `yvar.name`（`name of the variable to use for primary y-axis`）—— 它是 chron 数据框的**列名**，把该列命名成想要的标题即可（`names(y_df) <- ylabel`），不再用 `style$ylabel`（后者在 `y.rev` 下会被算到画布外，此前 `Depth` 一直不显示就是这个原因）。
 - **y 轴范围三格（可选）**：`settings.y_axis = {min, max, interval}`，默认 `None`（留空 = 自动范围）。规则：三项都填才写进 R 设置并传给 `riojaPlot` 的 `ymin/ymax/yinterval`；只填 1~2 项 → **整套忽略**并在 `warnings` 里说明「需要三项都填才生效」，不做半生效；三项齐全但 `min>=max` / `interval<=0` / `(max-min)/interval > 200` / 非数字 → 当场 `-32602` 拒绝。前端在同一位置给三格输入 + 当场提示。
 - **测试**：`tests/unit/test_plot_render.py` 共 22 条（含 y 轴三格的 ①合法写入 ②非法拒绝 ③留空自动，以及「旁路校验则非法用例必须变红」的反向验证），新增「默认不落盘且返回 data URL」「显式 output_path 才写文件」「JPEG/PNG 魔术字节」「未知设置键报错」「默认开关逐个断言」。
+### 出图：砍掉 riojaPlot 网页兜底；剪贴板在非安全上下文不再崩
+
+- **删除「riojaPlot 网页」按钮**（`#btn-wpd-riojaplot-web`）及其 handler：该站不支持一键上传，只能把 CSV 手动上传，产品决定不再提供这条兜底路线。同步删除后端 `RIOJA_PLOT_URL`、错误载荷里的 `rioja_plot_url` 字段，并把「R 缺失」提示收敛到可执行的补救（装 R / `install.packages('rioja')` / 设置页填 Rscript 路径）；`SettingsModal` 两处文案同步。
+- **修剪贴板崩溃**：点该按钮时若 `navigator.clipboard` 不存在（局域网 http 访问属非安全上下文），旧代码 `await navigator.clipboard.writeText(...)` 直接抛 `Cannot read properties of undefined (reading 'writeText')`，而它与「开网页」串在同一个 `try` 里 —— 用户看到「打开 riojaPlot 网页失败」，实际网页根本没开。新增 `frontend/src/ui/clipboard.ts`：`copyText()` 先判空、失败回退 `execCommand('copy')`，两者都失败返回 `false` 由调用方如实提示；「复制当前数据」按钮改用它，失败时说「请手动全选复制」。
+- **测试**：`test_plot_render.py` 的失败提示断言改为钉「仍给可执行补救」且「不再出现 shinyapps」。
 
 ### 步骤 6 只做手动标定
 
