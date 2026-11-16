@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### 混合量纲：每列可退出「默认缩放」（`plot_scale_mode`）
+
+- **开关**：`plot.render` 的 `settings.plot_scale_mode = {列名: "normalize" | "fixed"}`，默认 `{}`（全部列走百分比基准 = 历史行为，脚本与产物一字不变）。`fixed` = 该列按自身量程画、不与其他列共用缩放基准，用于炭屑 / 花粉浓度这类绝对值列。
+- **R 侧**：settings.tsv 里逐列写 `scale_mode.<列名>`；任一行 `fixed` 时走 riojaPlot 的 `scale.minmax`，矩阵中 `normalize` 列填 0–100、`fixed` 列填该列自身 min/max —— riojaPlot 里 `scale.percent` 与 `scale.minmax` 是 if/else 互斥分支，混排只能靠这个矩阵表达。全部 `normalize` 时仍走原百分比路径，产物不变。
+- **校验**：取值不是 `normalize` / `fixed` → `-32602`；列名不在导出表里 → `-32602` 并列出可用列（拼错的列名会让开关静默不生效，用户以为调过了而图上什么都没变）。
+- **降级**：只有 `rioja` 时 `plot_scale_mode` 进 `unsupported`，提示里点名「每列独立量程」未应用。
+- **测试**：`tests/unit/test_plot_render.py` 新增 9 条（默认不出现 scale_mode 行 / 翻开关只多一行且该行不同 / 非法取值拒绝 / 未知列名拒绝 / PDF 与 JPEG 产物字节随开关变化）。反向验证：让 `resolve_settings` 恒忽略该键 → 10 条红。
+- **导出侧只评估不改**：`data.csv` 全列 `unit` 仍是 `%`，根因在数据模型；方案与影响面见 `docs/findings/mixed-unit-export-assessment.md`，等裁决。
+
 ### 一键出图：图直接回来，不再只给一个隐藏目录里的路径
 
 - **产物去向**：`plot.render` 默认**不落盘**，图以 `data_url` 交回前端（导出弹窗里直接预览 + 「下载图片」浏览器下载事件）。旧行为默认写 `~/.straditize/plots`，用户点完按钮只拿到一句路径，人还得自己去那个目录找 —— 那不是出图。只有显式传 `output_path` 才写文件。

@@ -369,3 +369,99 @@ def test_plot_render_with_explicit_y_axis() -> None:
     assert result["warnings"] == []
     assert str(result["data_url"]).startswith("data:image/jpeg;base64,")
 
+
+# ---- 混合量纲：每列是否参与默认缩放（plot_scale_mode）----
+# 判据：①默认（空）= 历史行为，R 参数通道里不出现任何 scale_mode 行；
+#      ②同一份数据只翻开关 → R 侧参数在该列上不同（字符串断言），其余参数一字不动；
+#      ③非法取值 / 表里没有的列名 → 当场拒绝，不静默不生效；
+#      ④真出图：PDF 与 JPEG 两条路径的产物字节都随开关变化。
+# 反向验证：把 resolve_settings 里的 validate_plot_scale_mode 调用改成恒返回 {} →
+#          ②③④ 全红（下面逐条跑过，见 PR 说明）。
+
+
+def test_plot_scale_mode_default_is_empty_so_history_is_unchanged() -> None:
+    assert DEFAULT_PLOT_SETTINGS["plot_scale_mode"] == {}, "默认必须全部列参与缩放"
+
+    merged, warnings = resolve_settings(None)
+
+    assert merged["plot_scale_mode"] == {}
+    assert warnings == []
+    tsv = _settings_tsv(merged)
+    assert "scale_mode." not in tsv, "默认不得给 R 传任何每列量程参数"
+    assert "minmax\tfalse" in tsv, "默认仍走百分比刻度这条历史路径"
+
+
+def test_plot_scale_mode_fixed_column_changes_r_parameters() -> None:
+    """同一份数据、只翻开关：R 侧参数通道在该列上必须不同（字符串断言）。"""
+    off, _ = resolve_settings(None)
+    on, _ = resolve_settings({"plot_scale_mode": {"col01": "fixed"}})
+
+    off_lines = set(_settings_tsv(off).splitlines())
+    on_lines = set(_settings_tsv(on).splitlines())
+
+    assert "scale_mode.col01" not in _settings_tsv(off)
+    assert "scale_mode.col01\tfixed" in _settings_tsv(on)
+    assert on["plot_scale_mode"] == {"col01": "fixed"}
+    # 只许多出这一行：别的参数不许被顺手改动（否则「开关前后差异」不可归因）
+    assert on_lines - off_lines == {"scale_mode.col01\tfixed"}
+    assert off_lines - on_lines == set()
+
+
+def test_plot_scale_mode_normalize_column_keeps_percent_basis() -> None:
+    merged, _ = resolve_settings({"plot_scale_mode": {"col28": "normalize"}})
+
+    tsv = _settings_tsv(merged)
+    assert "scale_mode.col28\tnormalize" in tsv
+    assert merged["plot_scale_mode"] == {"col28": "normalize"}
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"col01": "log"},  # 不在白名单的取值
+        {"col01": ""},  # 空取值
+        {"col01": None},  # None 不是合法模式
+        {"": "fixed"},  # 空列名
+        ["col01"],  # 不是映射
+    ],
+)
+def test_plot_scale_mode_illegal_value_is_rejected(bad: object) -> None:
+    with pytest.raises(ValueError):
+        resolve_settings({"plot_scale_mode": bad})
+
+
+@pytest.mark.skipif(RSCRIPT is None, reason="本机没有 Rscript")
+def test_plot_render_rejects_unknown_column_in_scale_mode() -> None:
+    # 拼错的列名会让「固定量程」静默不生效：必须当场拒绝，并列出可用列。
+    with pytest.raises(JsonRpcError) as excinfo:
+        _session().plot_render(settings={"plot_scale_mode": {"col99": "fixed"}})
+
+    assert "col99" in str(excinfo.value)
+    assert "col01" in str(excinfo.value), "拒绝时要把可用列列出来，用户才知道该填什么"
+
+
+@pytest.mark.skipif(
+    RSCRIPT is None or not _has_pkg("riojaPlot"),
+    reason="固定量程走 riojaPlot 的 scale.minmax（rioja 回退没有这个能力）",
+)
+@pytest.mark.parametrize("fmt", ["pdf", "jpeg"])
+def test_plot_scale_mode_changes_artifact_bytes(tmp_path, fmt: str) -> None:
+    """开关前后产物必须不同；PDF 与 JPEG 两条路径都要生效。"""
+    session = _session()
+    off_path = tmp_path / ("off." + fmt)
+    on_path = tmp_path / ("on." + fmt)
+
+    off = session.plot_render(format=fmt, output_path=str(off_path))
+    on = session.plot_render(
+        format=fmt,
+        output_path=str(on_path),
+        settings={"plot_scale_mode": {"col01": "fixed"}},
+    )
+
+    assert off["settings"]["plot_scale_mode"] == {}
+    assert on["settings"]["plot_scale_mode"] == {"col01": "fixed"}
+    assert off_path.is_file() and on_path.is_file()
+    assert off_path.read_bytes() != on_path.read_bytes(), (
+        f"{fmt}：把 col01 设成 fixed 之后产物必须变化（字节不同即可）"
+    )
+

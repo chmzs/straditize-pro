@@ -32,6 +32,11 @@ DEFAULT_PLOT_SETTINGS: dict[str, Any] = {
     "exag_mult": 3.0,
     "exag_alpha": 0.15,
     "minmax": False,
+    # 每列是否参与「默认缩放」：{列名: "normalize" | "fixed"}。
+    # normalize（默认）= 与其他列共用百分比 0–100 基准；fixed = 按该列自身量程画，
+    # 不与其他列共用缩放基准（炭屑 / 花粉浓度这类绝对值列用它）。
+    # 空 dict = 全部 normalize，即历史行为（scale.percent），脚本与产物都不变。
+    "plot_scale_mode": {},
     "italicise": True,
     "break_long": True,
     "break_n": 20,
@@ -51,7 +56,17 @@ DEFAULT_PLOT_SETTINGS: dict[str, Any] = {
 }
 
 #: 只有 riojaPlot 才有的开关；回退到 rioja 时这些不生效，必须报告。
-RIOJAPLOT_ONLY_KEYS = ("italicise", "break_long", "break_n", "exaggeration", "exag_mult", "exag_alpha", "minmax", "label_rotate")
+RIOJAPLOT_ONLY_KEYS = (
+    "italicise",
+    "break_long",
+    "break_n",
+    "exaggeration",
+    "exag_mult",
+    "exag_alpha",
+    "minmax",
+    "plot_scale_mode",
+    "label_rotate",
+)
 
 #: 出图格式只有两种，前后端同一份枚举（用户裁决："前后端一致支持两种就行了，
 #: jpg 和 pdf，没必要冗余"）。jpeg = 位图，直接分享；pdf = 矢量，适合排版放大。
@@ -125,6 +140,39 @@ def validate_y_axis(value: Any) -> tuple[dict[str, float] | None, str | None]:
     return {"min": ymin, "max": ymax, "interval": interval}, None
 
 
+#: 「每列是否参与默认缩放」的两个合法取值。
+SCALE_MODES = ("normalize", "fixed")
+
+
+def validate_plot_scale_mode(value: Any) -> dict[str, str]:
+    """把「每列是否参与默认缩放」归一成 {列名: "normalize" | "fixed"}。
+
+    - 留空（None / 空 dict）→ {}：全部列走百分比基准，即历史行为；
+    - 取值只接受 normalize / fixed，其他取值一律 ValueError（拼错的开关不静默吞掉）；
+    - 列名是否存在由调用方（plot_render，它手上有导出表）负责核对。
+
+    fixed 的语义是**不与其他列共用缩放基准**：该列按自身量程画。
+    """
+    if value is None or value == {}:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(
+            'plot_scale_mode 需要 {列名: "normalize" | "fixed"}，收到 ' + type(value).__name__
+        )
+    out: dict[str, str] = {}
+    for raw_col, raw_mode in value.items():
+        col = str(raw_col).strip()
+        if not col:
+            raise ValueError("plot_scale_mode 里有空列名")
+        mode = str(raw_mode).strip().lower()
+        if mode not in SCALE_MODES:
+            raise ValueError(
+                f"plot_scale_mode[{col}] 只接受 " + " / ".join(SCALE_MODES) + f"，收到 {raw_mode!r}"
+            )
+        out[col] = mode
+    return out
+
+
 def resolve_settings(settings: dict[str, Any] | None) -> tuple[dict[str, Any], list[str]]:
     """归一化设置，并返回「已经如实告知、但没生效」的提示列表。
 
@@ -142,6 +190,7 @@ def resolve_settings(settings: dict[str, Any] | None) -> tuple[dict[str, Any], l
     merged["y_axis"] = y_axis
     if hint:
         warnings.append(hint)
+    merged["plot_scale_mode"] = validate_plot_scale_mode(merged.get("plot_scale_mode"))
     return merged, warnings
 
 
@@ -155,6 +204,13 @@ def _settings_tsv(settings: dict[str, Any]) -> str:
                 lines.append("y_min\t" + repr(float(value["min"])))
                 lines.append("y_max\t" + repr(float(value["max"])))
                 lines.append("y_interval\t" + repr(float(value["interval"])))
+            continue
+        if key == "plot_scale_mode":
+            # 每列一行：scale_mode.<列名><TAB><mode>。用键前缀而不是把整张表塞进一行，
+            # 列名里出现分隔符也不会串味（R 侧按键前缀收集）。
+            for col, mode in value.items():
+                safe = str(col).replace("\t", " ").replace("\r", " ").replace("\n", " ")
+                lines.append("scale_mode." + safe + "\t" + str(mode))
             continue
         if isinstance(value, bool):
             text = "true" if value else "false"
@@ -307,13 +363,32 @@ warns <- tryCatch(
         # 不再强制居中——居中会把长属种名挤到邻列上。
         centre.xlabel = FALSE
       )
-      if (flag("minmax", FALSE)) {
+      # 每列是否参与「默认缩放」：settings 里 scale_mode.<列名><TAB>normalize|fixed。
+      # fixed = 该列按自身量程画、不与其他列共用缩放基准；normalize = 与其他列共用
+      # 百分比基准（0-100）。两条都没有（空表 + minmax=FALSE）→ 历史路径，字节不变。
+      scale_mode_keys <- names(s)[startsWith(names(s), "scale_mode.")]
+      scale_modes <- if (length(scale_mode_keys) == 0) {
+        character(0)
+      } else {
+        stats::setNames(
+          vapply(scale_mode_keys, function(k) tolower(s[[k]]), character(1)),
+          substring(scale_mode_keys, nchar("scale_mode.") + 1)
+        )
+      }
+      is_fixed <- stats::setNames(rep(flag("minmax", FALSE), ncol(taxa)), colnames(taxa))
+      for (mode_col in intersect(names(scale_modes), colnames(taxa))) {
+        is_fixed[[mode_col]] <- identical(scale_modes[[mode_col]], "fixed")
+      }
+      if (any(is_fixed)) {
         # riojaPlot 里 scale.percent 与 scale.minmax 走 if/else，是互斥的：
         # 要 Min/max 就必须关百分比刻度，否则 Min/max 会被静默忽略。
         style$scale.percent <- FALSE
         style$scale.minmax <- TRUE
         mins <- apply(taxa, 2, function(v) min(v, na.rm = TRUE))
         maxs <- apply(taxa, 2, function(v) max(v, na.rm = TRUE))
+        # normalize 列沿用百分比基准（0-100），fixed 列保留自身量程。
+        mins[!is_fixed] <- 0
+        maxs[!is_fixed] <- 100
         style$minmax <- cbind(mins, maxs)
       }
       # 把 y 列命名成用户要的轴标题：riojaPlot 用 yvar.name 选列，同时把它当轴标签。
@@ -407,7 +482,8 @@ def render_strat_diagram(
         unsupported = [k for k in RIOJAPLOT_ONLY_KEYS if merged.get(k) not in (False, None, "", 0)]
         warnings = warnings + [
             "本机只装了 rioja（没有 riojaPlot）：Italicise / Break long / Exaggeration / "
-            "Min/max / 标签旋转 这些开关在 rioja::strat.plot 里没有，本图未应用。"
+            "Min/max / 每列独立量程（plot_scale_mode）/ 标签旋转 这些开关在 "
+            "rioja::strat.plot 里没有，本图未应用。"
         ]
 
     return {
