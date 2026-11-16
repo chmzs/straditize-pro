@@ -4,13 +4,16 @@
 
 1. 显式配置了不存在的 Rscript 路径 → 探测失败并说明缺什么（不静默回退到别的 R）；
 2. system.updateConfig 填不存在的路径 → 当场报错，配置里的旧值原样保留；
-3. 真跑一次出图：产物存在、字节头是真图片（JPEG/PNG）、大小 > 0；
+3. 真跑一次出图：产物存在、字节头是真图片（JPEG / PDF）、大小 > 0；
 4. R 缺失 / R 跑挂 → JsonRpcError 带可执行提示，绝不返回空图；
 5. **产物去向**：默认不落盘（`path` 为 None），图以 `data_url` 交回前端；
    只有显式传 `output_path` 才写文件。旧行为默认写 `~/.straditize/plots`，
    用户点完按钮只拿到一句路径——那不是出图。
 6. 回退如实报告：只装了 rioja 时 `unsupported` 必须列出没生效的开关（Italicise /
    Break long / Exaggeration / Min-max / 标签旋转），不许假装全应用了。
+7. **格式枚举只有两种**（jpeg / pdf）：`SUPPORTED_PLOT_FORMATS` 精确等于
+   `("jpeg", "pdf")`；请求 `svg` / `png` 一律 -32602，且错误消息点名可用值；
+   `format="pdf"` 交回的 data URL 解出来的字节以 `%PDF` 开头。
 
 ## 反向验证
 
@@ -18,10 +21,12 @@
 把 updateConfig 的路径校验删掉 → 判据 2 变红（坏路径被写进配置）。
 把 plot_render 的 data_url 去掉、改回只返回 path → 判据 5 变红。
 把 unsupported 恒置为空列表 → 判据 6 在只有 rioja 的机器上变红。
+把 "svg" 加回 SUPPORTED_PLOT_FORMATS → 判据 7 的枚举与拒绝两条同时变红。
 """
 
 from __future__ import annotations
 
+import base64
 import subprocess
 
 import pytest
@@ -31,6 +36,8 @@ from straditize_core.protocol import JsonRpcError
 from straditize_core.session import StraditizeSession
 from straditize_core.strat_plot import (
     DEFAULT_PLOT_SETTINGS,
+    MIME_BY_FORMAT,
+    SUPPORTED_PLOT_FORMATS,
     _settings_tsv,
     render_strat_diagram,
     resolve_settings,
@@ -189,6 +196,26 @@ def test_unsupported_format_is_rejected() -> None:
     assert "不支持的出图格式" in str(excinfo.value)
 
 
+def test_supported_format_enum_is_exactly_jpeg_and_pdf() -> None:
+    # 前后端同一份口径：多一个格式就要在前端下拉、文档、测试里各维护一遍，而用户
+    # 裁决"前后端一致支持两种就行了，jpg 和 pdf，没必要冗余"。
+    assert SUPPORTED_PLOT_FORMATS == ("jpeg", "pdf"), SUPPORTED_PLOT_FORMATS
+    assert set(MIME_BY_FORMAT) == {"jpeg", "pdf"}, MIME_BY_FORMAT
+
+
+@pytest.mark.parametrize("dropped", ["svg", "png", "jpg", "webp"])
+def test_dropped_formats_are_rejected_with_the_supported_list(dropped: str) -> None:
+    # 不许静默回落到 jpeg：请求 svg 却拿到一张 jpeg，用户会以为拿到了矢量图。
+    with pytest.raises(JsonRpcError) as excinfo:
+        _session().plot_render(format=dropped)
+    message = str(excinfo.value)
+    assert "不支持的出图格式" in message, message
+    assert "jpeg" in message and "pdf" in message, "错误消息必须点名可用的两个格式"
+    assert dropped not in message.replace("不支持的出图格式", ""), (
+        "被拒的格式不得出现在「可用」列表里：" + message
+    )
+
+
 @pytest.mark.skipif(RSCRIPT is None, reason="本机没有 Rscript")
 def test_render_writes_a_readable_pdf(tmp_path) -> None:
     csv_path = tmp_path / "in.csv"
@@ -250,10 +277,18 @@ def test_plot_render_persists_only_when_asked(tmp_path) -> None:
 
 
 @pytest.mark.skipif(RSCRIPT is None or not _has_rioja(), reason="本机没有 R + rioja")
-def test_png_format_is_supported(tmp_path) -> None:
-    result = _session().plot_render(format="png", output_path=str(tmp_path / "p.png"))
-    assert result["mime"] == "image/png"
-    assert str(result["data_url"]).startswith("data:image/png;base64,")
+def test_pdf_format_returns_real_pdf_bytes(tmp_path) -> None:
+    out_path = tmp_path / "p.pdf"
+    result = _session().plot_render(format="pdf", output_path=str(out_path))
+
+    assert result["format"] == "pdf"
+    assert result["mime"] == "application/pdf"
+    assert str(result["data_url"]).startswith("data:application/pdf;base64,"), (
+        "PDF 必须以 application/pdf 的 data URL 交回前端"
+    )
+    payload = base64.b64decode(str(result["data_url"]).split(",", 1)[1])
+    assert payload[:4] == b"%PDF", "交回的字节必须是真的 PDF（前端按所选扩展名保存）"
+    assert out_path.read_bytes()[:4] == b"%PDF"
 
 
 def test_default_settings_match_requested_switches() -> None:

@@ -21,7 +21,6 @@ from typing import Any
 from ..plotting import detect_rscript
 from ..protocol import EXPORT_ERROR, INVALID_PARAMS, STATE_ERROR, JsonRpcError
 from ..strat_plot import (
-    PNG_TRANSCODE_FORMATS,
     SUPPORTED_PLOT_FORMATS,
     resolve_settings,
     read_as_data_url,
@@ -108,8 +107,7 @@ class PlottingMixin:
         with tempfile.TemporaryDirectory(prefix="straditize-plot-") as tmp_dir:
             csv_tmp = Path(tmp_dir) / "plot_input.csv"
             frame.to_csv(csv_tmp, index=False, na_rep="NA")
-            render_fmt = "png" if fmt in PNG_TRANSCODE_FORMATS else fmt
-            out_tmp = Path(tmp_dir) / ("strat_plot." + render_fmt)
+            out_tmp = Path(tmp_dir) / ("strat_plot." + fmt)
 
             try:
                 info = render_strat_diagram(
@@ -118,16 +116,6 @@ class PlottingMixin:
                     rscript=str(detected["path"]),
                     settings=merged,
                 )
-
-                if fmt in PNG_TRANSCODE_FORMATS:
-                    # R 没有 webp 图形设备：PNG 落地后用 Pillow 转码，字节仍是真图。
-                    from PIL import Image
-
-                    transcoded = Path(tmp_dir) / ("strat_plot." + fmt)
-                    with Image.open(info["path"]) as img:
-                        img.save(transcoded, fmt.upper(), quality=92)
-                    info["path"] = str(transcoded)
-                    info["size_bytes"] = transcoded.stat().st_size
             except RuntimeError as exc:
                 raise JsonRpcError(
                     EXPORT_ERROR,
