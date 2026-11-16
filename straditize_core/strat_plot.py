@@ -184,7 +184,12 @@ def resolve_settings(settings: dict[str, Any] | None) -> tuple[dict[str, Any], l
     merged = dict(DEFAULT_PLOT_SETTINGS)
     warnings: list[str] = []
     if settings:
-        unknown = sorted(set(settings) - set(DEFAULT_PLOT_SETTINGS))
+        # seg_left.<列> / seg_right.<列>：拼接法分段标记，键名依赖数据，按前缀放行。
+        unknown = sorted(
+            k
+            for k in set(settings) - set(DEFAULT_PLOT_SETTINGS)
+            if not (str(k).startswith("seg_left.") or str(k).startswith("seg_right."))
+        )
         if unknown:
             raise ValueError("未知的出图设置：" + ", ".join(unknown))
         merged.update(settings)
@@ -407,8 +412,39 @@ warns <- tryCatch(
       # 把 y 列命名成用户要的轴标题：riojaPlot 用 yvar.name 选列，同时把它当轴标签。
       y_df <- data.frame(depth)
       names(y_df) <- txt("ylabel", "Depth")
-      riojaPlot::riojaPlot(x = taxa, y = y_df, style = style,
+      # ── 拼接法：非 % 列各自成段，% 列一段 ────────────────────────────────
+      # 段宽：非 % 段 = % 块里最宽那一列的宽度（同一套单位，数学上相等）。
+      # riojaPlot= 存在时 style 会被静默忽略 → 第 2 段起参数必须直接传。
+      seg_l <- substring(names(s)[startsWith(names(s), "seg_left.")], 10)
+      seg_r <- substring(names(s)[startsWith(names(s), "seg_right.")], 11)
+      seg_l <- intersect(seg_l, colnames(taxa)); seg_r <- intersect(seg_r, colnames(taxa))
+      if (length(seg_l) + length(seg_r) > 0) {
+        pct_cols <- setdiff(colnames(taxa), c(seg_l, seg_r))
+        cmax <- apply(taxa[, pct_cols, drop = FALSE], 2, max, na.rm = TRUE)
+        wmax <- max(cmax); n_side <- length(seg_l) + length(seg_r)
+        f_side <- wmax / (sum(cmax) + n_side * wmax)
+        f_pct <- sum(cmax) / (sum(cmax) + n_side * wmax)
+        segs <- c(as.list(seg_l), list(pct_cols), as.list(seg_r))
+        rp <- NULL; xr <- 0
+        for (cols in segs) {
+          xr <- xr + if (length(cols) == length(pct_cols) && all(cols == pct_cols)) f_pct else f_side
+          if (is.null(rp)) {
+            rp <- riojaPlot::riojaPlot(taxa[, cols, drop = FALSE], y_df, style = style,
+                                       yvar.name = names(y_df)[1], xRight = xr)
+          } else {
+            rp <- riojaPlot::riojaPlot(taxa[, cols, drop = FALSE], y_df,
+                                       yvar.name = names(y_df)[1], riojaPlot = rp,
+                                       xGap = 0.01, xRight = xr,
+                                       scale.percent = FALSE, scale.minmax = FALSE,
+                                       minmax = cbind(0, apply(taxa[, cols, drop = FALSE], 2, max, na.rm = TRUE)),
+                                       plot.poly = FALSE, plot.bar = FALSE, plot.line = TRUE,
+                                       srt.xlabel = num("label_rotate", 45),
+                                       tcl = num("tcl", -0.3))
+          }
+        }
+      } else {      riojaPlot::riojaPlot(x = taxa, y = y_df, style = style,
                            yvar.name = names(y_df)[1])
+      }
     } else {
       rioja::strat.plot(
         d = as.matrix(taxa),

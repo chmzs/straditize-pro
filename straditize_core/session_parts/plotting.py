@@ -119,6 +119,29 @@ class PlottingMixin:
                 + "）",
             )
 
+        # 拼接法：非 % 列各自成段；列序在第一个 % 列之前 → 左侧段，否则右侧段。
+        from ..strat_plot import PERCENT_UNITS
+        from ..xscale import resolve_column_scale
+
+        _taxa = getattr(self, "taxa_names", None) or []
+        _resolved: list[tuple[str, str]] = []
+        for _i, _col in enumerate(getattr(self, "columns", []) or []):
+            _c = int(_col.get("col_index", _i))
+            _nm = (
+                _taxa[_c]
+                if (_taxa and _c < len(_taxa) and _taxa[_c])
+                else (_col.get("name") or _col.get("species") or f"col{_c + 1:02d}")
+            )
+            _resolved.append((str(_nm), str(resolve_column_scale(self, _col, _c).unit or "")))
+        _cols = [str(c) for c in frame.columns[1:]]
+        _resolved = [(n, u) for n, u in _resolved if n in _cols]
+        _pct = [i for i, (_, u) in enumerate(_resolved) if u.strip() in PERCENT_UNITS]
+        if _pct:
+            _first = min(_pct)
+            for _i, (_n, _u) in enumerate(_resolved):
+                if _u.strip() in PERCENT_UNITS:
+                    continue
+                merged[("seg_left." if _i < _first else "seg_right.") + _n] = "1"
         with tempfile.TemporaryDirectory(prefix="straditize-plot-") as tmp_dir:
             csv_tmp = Path(tmp_dir) / "plot_input.csv"
             frame.to_csv(csv_tmp, index=False, na_rep="NA")
