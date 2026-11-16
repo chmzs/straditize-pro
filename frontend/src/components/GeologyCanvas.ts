@@ -48,6 +48,7 @@ import { drawDepthGridOverlay } from './canvas/depthGrid';
 // getColumnCalibX 随命中测试与列边界绘制一起搬到 canvas/ 下，画布类已不再直接用它。
 import { drawColumnBoundariesOverlay } from './canvas/columnBoundaries';
 import { drawAnchorsOverlay, drawPollenCurvesOverlay } from './canvas/pollenCurves';
+import { zeroSpanOfColumn } from './canvas/groupBandRect';
 import { resolveCanvasCursor } from './canvas/cursor';
 import { assertNoDuplicateBindings, matchesKeyBinding } from './canvas/keyBindings';
 import type { KeyBinding } from './canvas/keyBindings';
@@ -1967,6 +1968,8 @@ private pointer: PointerState = {
       scale: this.viewport.scale,
       columns: this.data.columns,
       activeTaxaId: this.data.activeTaxaId ?? null,
+      // 面积/柱条的左边界是 0 点，取轴粗要靠组参数。
+      groupOfColumn: (col) => this.groupOfColumn(col),
     });
   }
 
@@ -2166,7 +2169,10 @@ private pointer: PointerState = {
       const pType = col.plotType || 'area';
 
       if (pType === 'area') {
-        const areaPath = SplineInterpolator.buildAreaPath(sorted, col.startX, col.curveType);
+        // 幽灵叠加也是「从基线起填充」：基线必须是 0 点（绿线），不是列左缘。
+        const zero = zeroSpanOfColumn(col, this.groupOfColumn(col));
+        if (!zero) return;
+        const areaPath = SplineInterpolator.buildAreaPath(sorted, zero.x, col.curveType);
         ctx.fillStyle = tokens.color.ghost.overlayFill;
         ctx.fill(areaPath);
 
