@@ -47,6 +47,9 @@ DEFAULT_PLOT_SETTINGS: dict[str, Any] = {
     "plot_segments": False,
     # 非百分比列的固定权重（None = 取 % 列权重的中位数，与自身数值无关）
     "plot_nonpercent_width": None,
+    # % 列宽度公式里的下限（与 rioja 的 min.width.pc 同值同义，默认 5）：
+    # max_i 小于它的列会被抬到同一档宽度 —— 稀有属种也要有地方画，形状靠 exaggeration。
+    "plot_min_column_max": 5.0,
     "italicise": True,
     "break_long": True,
     "break_n": 20,
@@ -244,6 +247,9 @@ def _settings_tsv(settings: dict[str, Any]) -> str:
             continue
         if key == "plot_segments":
             lines.append("plot_segments\t" + ("true" if value else "false"))
+            continue
+        if key == "plot_min_column_max":
+            lines.append("min_column_max\t" + repr(float(value)))
             continue
         if key == "plot_nonpercent_width":
             if value is not None:
@@ -589,16 +595,20 @@ warns <- tryCatch(
       # `.riojaPlot2:167-171` 的 percent 分支就是 `colM <- apply(d, 2, max)`，
       # 宽度 ∝ 各列最大值。这里我们自己算同一个量，把结果喂给 graph.widths，
       # 而不是让包内部再乘一次（那样它会把「浓度列」也算进来，吃掉画布）。
-      #   % 列：w_i = max_i / mean(max of % cols)（单调于 max，不 floor、不 clip）
+      #   % 列：w_i = max(max_i, min_width) / mean(max(max_j, min_width))，min_width 默认 5
+      #        —— 与 rioja 的 `min.width.pc` 同值同义：稀有属种也有足够横向空间，
+      #        列内形状由 exaggeration 负责（两者分工，别互相替代）。
       #   非 % 列：固定权重 = % 列 w 的中位数（与自身数值无关），可用 nonpct_width 覆盖
       maxs <- apply(taxa, 2, function(v) max(v, na.rm = TRUE))
       maxs[!is.finite(maxs) | maxs <= 0] <- 1
       w <- stats::setNames(rep(1, ncol(taxa)), colnames(taxa))
       pct_cols_v <- !is_fixed
       if (any(pct_cols_v)) {
-        ref <- mean(maxs[pct_cols_v], na.rm = TRUE)
+        min_col_max <- num("min_column_max", 5)
+        eff <- pmax(maxs, min_col_max)
+        ref <- mean(eff[pct_cols_v], na.rm = TRUE)
         if (!is.finite(ref) || ref <= 0) ref <- 1
-        w[pct_cols_v] <- maxs[pct_cols_v] / ref
+        w[pct_cols_v] <- eff[pct_cols_v] / ref
       }
       if (any(is_fixed)) {
         fixed_w <- num("nonpct_width", NA_real_)
