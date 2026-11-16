@@ -1886,7 +1886,7 @@ class CoreMixin:
                                 INVALID_PARAMS,
                                 f"轴线粗必须是 1–20 之间的数值，收到 {v!r}。",
                             )
-                        if not (1.0 <= stroke <= 20.0):
+                        if not (0.0 <= stroke <= 20.0):
                             raise JsonRpcError(
                                 INVALID_PARAMS,
                                 f"轴线粗必须在 1–20px 之间，收到 {stroke}。",
