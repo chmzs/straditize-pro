@@ -1351,6 +1351,61 @@ class ProjectSessionMixin:
         )
         return text.encode("utf-8")
 
+    def _plot_strat_script_for_csv(
+        self, csv_data: bytes, columns: list[dict[str, Any]] | None = None
+    ) -> bytes:
+        """按 `data.csv` 的列顺序与**列量纲**生成 `plot_strat.R`（与导出同一生成器）。"""
+        from .export import is_percent_unit
+        from .export_docs import strat_plot_script_lines
+        from .xscale import resolve_column_scale
+
+        header = csv_data.split(b"\n", 1)[0].decode("utf-8", "replace").lstrip("\ufeff")
+        names = [name for name in header.split(",")[1:] if name]
+
+        # 量纲：**按位置**对齐 csv 列与 ROI 列（csv 就是这么排的），不按名字查表 ——
+        # 同名不同 ROI / 用户改过列名都会让名字查表悄悄错位，而量纲错位正是本函数
+        # 存在的理由（A/C 与 Concentration 被按百分比画）。
+        units: dict[str, str] = {}
+        cols = list(columns or [])
+        primary_id = getattr(self, "primary_roi_id", None)
+        primary_cols = [c for c in cols if c.get("roi_id") in (None, primary_id)]
+        if primary_cols:
+            cols = primary_cols
+        for pos, name in enumerate(names):
+            unit = ""
+            if pos < len(cols):
+                unit = str(resolve_column_scale(self, cols[pos], pos).unit or "")
+            units[name] = unit
+
+        pct_cols = [n for n in names if is_percent_unit(units[n])]
+        fixed_cols = [n for n in names if not is_percent_unit(units[n])]
+        roi_name = "pollen"
+        primary_id = getattr(self, "primary_roi_id", None)
+        for roi in getattr(self, "rois", None) or []:
+            if roi.get("id") == primary_id:
+                roi_name = roi.get("name") or roi.get("id") or roi_name
+                break
+
+        lines = [
+            "# Straditize Pro - Geological Stratigraphic Pollen Diagram Plotting Script",
+            "# Generated automatically by Straditize v2.0 (straditize pro)",
+            "# 列量纲来自工程里的列组单位：% 列按 rioja 的 scale.percent 归一，",
+            "# 非 % 列（比值 / 浓度 / 粒数）按该列自身量程画，两种不能共用一把尺。",
+            "if (!requireNamespace('rioja', quietly=TRUE)) install.packages('rioja')",
+            "library(rioja)\n",
+        ]
+        lines.extend(
+            strat_plot_script_lines(
+                df_var="df",
+                csv_filename="data.csv",
+                roi_name=roi_name,
+                pct_cols=pct_cols,
+                fixed_cols=fixed_cols,
+                units=units,
+            )
+        )
+        return ("\n".join(lines) + "\n").encode("utf-8")
+
     def _build_project_tar(
         self,
         project_json: dict[str, Any],
@@ -1422,14 +1477,12 @@ class ProjectSessionMixin:
                 tf.addfile(ti_notice, io.BytesIO(notice))
 
             # 5. plot_strat.R
-            r_script = (
-                b"# Straditize Pro - Geological Stratigraphic Pollen Diagram Plotting Script\n"
-                b"# Generated automatically by Straditize v2.0 (straditize pro)\n"
-                b"if (!requireNamespace('rioja', quietly=TRUE)) install.packages('rioja')\n"
-                b"library(rioja)\n"
-                b"df <- read.csv('data.csv', check.names=FALSE)\n"
-                b"strat.plot(df[-1], yvar=df[[1]], y.rev=TRUE, scale.percent=TRUE, plot.line=TRUE, title='Stratigraphic Pollen Diagram (Straditize Pro)')\n"
-            )
+            #
+            # 这个脚本必须按**列量纲**分调用（与 `export.py` 的 `data/`-tarball 同一份
+            # 生成器）。此前这里硬编码一行 `scale.percent = TRUE` 画全表：A/C（比值）
+            # 与 Concentration（counts/粒）也被归一成 0–100 % 画，用户拿到的脚本
+            # 与 `data.csv` 必然对不上（实测 `docs/findings/recon-20261117.md` S5）。
+            r_script = self._plot_strat_script_for_csv(csv_data, columns)
             ti_r = tarfile.TarInfo(name="plot_strat.R")
             ti_r.size = len(r_script)
             ti_r.mtime = int(time.time())
@@ -1444,7 +1497,7 @@ class ProjectSessionMixin:
                 b"image/original.png - Original stratigraphic diagram\n"
                 b"straditize.json    - Full vector model\n"
                 b"data.csv           - Calibrated matrix (Depth in 1st col, unobserved = 0.0)\n"
-                b"plot_strat.R       - rioja::strat.plot plotting template\n"
+                b"plot_strat.R       - rioja::strat.plot script (per-column units: % -> scale.percent, others -> own range)\n"
                 b"README.txt         - Documentation\n\n"
                 + CSV_MISSING_NOTICE
             )

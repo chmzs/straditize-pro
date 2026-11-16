@@ -8,7 +8,7 @@ Strictly adheres to:
 
 from __future__ import annotations
 
-from .export_docs import CSV_MISSING_NOTICE
+from .export_docs import CSV_MISSING_NOTICE, strat_plot_script_lines
 
 import base64
 import io
@@ -50,12 +50,6 @@ def is_percent_unit(unit: Any) -> bool:
     return str(unit or "").strip().lower() in PERCENT_UNITS
 
 
-def _r_string_vector(names: Sequence[str]) -> str:
-    """把列名写成 R 的 c("a", "b")：引号/反斜杠转义，属种名带标点时脚本语法不坏。"""
-    quoted = [
-        '"' + str(n).replace("\\", "\\\\").replace('"', '\\"') + '"' for n in names
-    ]
-    return "c(" + ", ".join(quoted) + ")"
 
 
 
@@ -557,41 +551,16 @@ class ExportMixin:
                 roi_units = units_by_roi.get(roi_name, {})
                 pct_cols = sorted(c for c, u in roi_units.items() if is_percent_unit(u))
                 fixed_cols = sorted(c for c, u in roi_units.items() if not is_percent_unit(u))
-                r_scripts.append(f"# --- ROI: {roi_name} ---")
-                if fixed_cols:
-                    # 这一行是给人看的：脚本里为什么有两次 strat.plot 调用。
-                    detail = ", ".join(f"{c}({roi_units[c]})" for c in fixed_cols)
-                    r_scripts.append(f"# 非百分比列（按自身量程画）：{detail}")
-                r_scripts.append(f"if (file.exists('{csv_filename}')) {{")
-                r_scripts.append(
-                    f"  df_{roi_name} <- read.csv('{csv_filename}', check.names = FALSE)"
+                r_scripts.extend(
+                    strat_plot_script_lines(
+                        df_var=f"df_{roi_name}",
+                        csv_filename=csv_filename,
+                        roi_name=roi_name,
+                        pct_cols=pct_cols,
+                        fixed_cols=fixed_cols,
+                        units=roi_units,
+                    )
                 )
-                r_scripts.append(f"  if (ncol(df_{roi_name}) > 1) {{")
-                if fixed_cols:
-                    # 百分比列与绝对值列不能共用 0–100 基准：rioja::strat.plot 的
-                    # `scale.percent` 是整张表一个开关，所以分成两次调用，第二次 `add = TRUE`。
-                    r_scripts.append(
-                        f"    pct_cols <- intersect({_r_string_vector(pct_cols)}, names(df_{roi_name}))"
-                    )
-                    r_scripts.append(
-                        f"    fixed_cols <- intersect({_r_string_vector(fixed_cols)}, names(df_{roi_name}))"
-                    )
-                    r_scripts.append("    if (length(pct_cols) > 0) {")
-                    r_scripts.append(
-                        f"      strat.plot(df_{roi_name}[, pct_cols, drop = FALSE], yvar = df_{roi_name}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.line = TRUE, title = '{roi_name}')"
-                    )
-                    r_scripts.append("    }")
-                    r_scripts.append("    if (length(fixed_cols) > 0) {")
-                    r_scripts.append(
-                        f"      strat.plot(df_{roi_name}[, fixed_cols, drop = FALSE], yvar = df_{roi_name}[[1]], y.rev = TRUE, scale.percent = FALSE, plot.line = TRUE, add = length(pct_cols) > 0, title = '{roi_name}')"
-                    )
-                    r_scripts.append("    }")
-                else:
-                    r_scripts.append(
-                        f"    strat.plot(df_{roi_name}[-1], yvar = df_{roi_name}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.line = TRUE, title = '{roi_name}')"
-                    )
-                r_scripts.append("  }")
-                r_scripts.append("}\n")
 
             if not primary_csv_bytes and roi_dfs:
                 primary_csv_bytes = (
