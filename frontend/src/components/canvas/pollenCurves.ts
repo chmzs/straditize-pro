@@ -7,7 +7,9 @@
  * column_points（同一个字段，同一个 _ensure_export_column_points 产出）。
  *
  * 填充左端是 **0 点（绿线 = 列左缘 + 轴粗）**，不是列左缘 —— 从列左缘起等于把轴线
- * 涂进数据区（#31 的判据）。两者正交：0 点决定「从哪起」，稠密曲线决定「画到哪」。
+ * 涂进数据区（#31 的判据）。三件事正交：
+ * 0 点决定「从哪起」（`zeroSpanOfColumn`），稠密曲线决定「画到哪」（#33），
+ * 形态决定「走哪条分支」（`resolvePlotType`，组级参数，列上那份只是显式覆盖）。
  *
  * **没有回退**：稠密点缺失时不画折线、不插值、不猜 —— 画布上直接写
  * 「本列无法取数：<原因>」（原因由后端 curveError 给出）。仓库不变量：
@@ -16,6 +18,8 @@
  * symbol 例外：它的语义就是"控制点处的存在/缺失标记"，与曲线读数无关。
  */
 import { SplineInterpolator } from '../../core/SplineInterpolator.ts';
+import { resolvePlotType } from '../../core/plotType.ts';
+import type { PlotTypeHolder } from '../../core/plotType.ts';
 import type { TaxaColumn } from '../../types/pollen';
 import { zeroSpanOfColumn } from './groupBandRect.ts';
 
@@ -25,10 +29,20 @@ export interface PollenCurveEnv {
   columns: TaxaColumn[];
   activeTaxaId: string | null;
   /**
-   * 列所属的 x 组（组级 axis_stroke_px 是列级覆盖的初值）。取不到时按缺省轴粗处理 ——
-   * 0 点仍然不等于列左缘。
+   * 列所属的 x 组。组上挂着**两个组级参数**，两者都必须从这里取：
+   *
+   * - `axis_stroke_px` → 0 点（`zeroSpanOfColumn`，填充/柱条的左边界）；
+   * - `plot_type` → 图形形态（`resolvePlotType`）。
+   *
+   * 为什么形态也必须走组：`plot_type` 按 ARCHITECTURE §6.4 是**组级参数**，列上那份
+   * 是分列期从组值抄来的快照。画布此前只读 `col.plotType`，于是用户在步骤 6 把组切
+   * 「折线」后照旧画面积（"改了不生效"）。
+   *
+   * 取不到组时按缺省处理：轴粗 5（0 点仍然不等于列左缘）、形态 `area`。
    */
-  groupOfColumn?: (col: TaxaColumn) => { axis_stroke_px?: number | null } | undefined;
+  groupOfColumn?: (
+    col: TaxaColumn
+  ) => (PlotTypeHolder & { axis_stroke_px?: number | null }) | undefined;
   /** 视口 y 区间（图像像素）。不给时按 ctx 当前变换反解，保证裁剪总是生效。 */
   viewY?: { min: number; max: number };
 }
@@ -60,10 +74,18 @@ const pathCache = new Map<
   { signature: string; curve: Path2D; area: Path2D | null }
 >();
 
+/**
+ * 路径缓存的签名。
+ *
+ * `plotType` 必须是**解析后**的形态（`resolvePlotType`），不能是 `col.plotType`：
+ * 形态由组决定时，用户把组从面积切成折线，列字段可能一个字都没变 —— 签名不变就会
+ * 复用缓存里那条**已经建好的 area 路径**，画布继续填充，等于没切。
+ */
 function curveSignature(
   col: TaxaColumn,
   view: { min: number; max: number },
-  zeroX: number
+  zeroX: number,
+  plotType: string
 ): string {
   const points = col.curvePoints as Array<{ y: number; x: number }>;
   let sum = 0;
@@ -77,7 +99,7 @@ function curveSignature(
     view.min.toFixed(2),
     view.max.toFixed(2),
     zeroX.toFixed(2),
-    col.plotType || 'area',
+    plotType,
   ].join('|');
 }
 
@@ -118,11 +140,15 @@ export function drawPollenCurvesOverlay(env: PollenCurveEnv): PollenCurveResult 
     if (!col.visible) return;
 
     const isActive = col.id === activeTaxaId;
-    const pType = col.plotType || 'area';
+    // 组上挂着两个组级参数：`axis_stroke_px` → 0 点；`plot_type` → 形态。
+    const group = env.groupOfColumn?.(col);
     // 0 点 = 列左缘 + 轴粗（画布绿线，ARCHITECTURE §6.4）。所有从基线出发的填充都必须
     // 从这里起：从 col.startX 起等于把轴线涂进数据区，用户看到的就是「遮罩包住轴线」。
     // 宽度 ≤ 0 时 zero 为 null：只跳过填充，曲线照画。
-    const zero = zeroSpanOfColumn(col, env.groupOfColumn?.(col));
+    const zero = zeroSpanOfColumn(col, group);
+    // 列级显式覆盖 > 组级 > 'area'（与 `resolveAxisStroke` 同构的唯一入口）。
+    // 形态只决定「走哪条分支」，稠密曲线决定「画到哪」——两者正交，互不替代。
+    const pType = resolvePlotType(col, group);
     const sortedControl = [...col.controlPoints].sort((a, b) => a.y - b.y);
 
     if (pType === 'symbol') {
@@ -168,7 +194,7 @@ export function drawPollenCurvesOverlay(env: PollenCurveEnv): PollenCurveResult 
     }
 
     const zeroX = zero ? zero.x : col.startX;
-    const signature = curveSignature(col, view, zeroX);
+    const signature = curveSignature(col, view, zeroX, pType);
     let cached = pathCache.get(col.id);
     if (!cached || cached.signature !== signature) {
       cached = {

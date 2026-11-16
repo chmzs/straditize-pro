@@ -191,8 +191,14 @@ export interface Column {
   /** 后端权威列序号：前端寻址列级 RPC 用它（不要用数组下标——列增删后不等价）。 */
   col_index?: number;
 
-  /** 逐列具体值（不是继承） */
-  plot_type?: 'area' | 'bar' | 'line' | 'symbol';
+  /**
+   * 列级**显式覆盖**（`null` / 缺省 = 跟随组）。
+   *
+   * `plot_type` 按 ARCHITECTURE §6.4 是**组级参数**；列上这个字段只允许放用户
+   * 显式覆盖（`column.update` 的 `plot_type`，`None` = 清除覆盖回到组值）。
+   * 解析顺序见 `core/plotType.ts` 的 `resolvePlotType`。
+   */
+  plot_type?: 'area' | 'bar' | 'line' | 'symbol' | null;
   scale_type?: 'linear' | 'log';
   unit: string;
   exaggeration_mult?: number | null; // 唯一的放大倍数（null = 无局部放大）

@@ -59,17 +59,37 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
     },
     onChangePlotType: (taxaId: string, plotType: any) => {
       const col = p.canvasComponent.data.columns.find((c) => c.id === taxaId);
-      if (col) {
-        col.plotType = plotType;
+      if (!col) return;
+      // 必须落库。旧实现只改本地镜像 `col.plotType`，下一次 `getDiagramData`
+      // 回填就把它抹掉（用户看到的正是「点了形态又变回去」）。
+      // `null` = 清除列级覆盖、回到组级形态（组是单一事实源）。
+      const colIndex = col.col_index ?? p.canvasComponent.data.columns.indexOf(col);
+      void (async () => {
+        try {
+          await p.rpcClient.updateColumn(colIndex, { plot_type: plotType });
+        } catch (err) {
+          reportBackendFailure('保存属种形态', err);
+          p.getSidebar()?.updateData(p.canvasComponent.data);
+          return;
+        }
+        col.plot_type = plotType;
+        col.plotType = plotType ?? undefined;
         p.canvasComponent.history.push(
-          `Change ${col.name} Plot Type to ${plotType}`,
+          plotType
+            ? `Change ${col.name} Plot Type to ${plotType}`
+            : `Reset ${col.name} Plot Type to group`,
           p.canvasComponent.data.columns,
           p.canvasComponent.data.activeTaxaId
         );
         p.canvasComponent.requestRender();
+        p.getSidebar()?.updateData(p.canvasComponent.data);
         p.getInspector()?.updateData(p.canvasComponent.data);
-        p.setHudNotice(`已将属种 [${col.name}] 图形形态切换为: ${plotType.toUpperCase()}`);
-      }
+        p.setHudNotice(
+          plotType
+            ? `已将属种 [${col.name}] 图形形态切换为: ${String(plotType).toUpperCase()}`
+            : `属种 [${col.name}] 已改为跟随组形态`
+        );
+      })();
     },
     onRenameTaxa: (taxaId: string, newName: string) => {
       const col = p.canvasComponent.data.columns.find((c) => c.id === taxaId);

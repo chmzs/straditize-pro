@@ -30,6 +30,13 @@ export interface ScaleSnapshotTarget {
   x_ticks_dropped?: unknown;
   scaleCalib?: unknown;
   scale_provenance?: unknown;
+  /**
+   * 列级形态覆盖（`null` = 跟随组）。必须同批回填：后端在写组形态时会清掉组内
+   * 各列的旧快照（`roi.py` 的 plot_type 分支），前端镜像若不同步，画布会继续按
+   * 旧快照画面积 —— 用户看到的正是「切了折线，图没变」。
+   */
+  plot_type?: unknown;
+  plotType?: unknown;
 }
 
 /**
@@ -60,9 +67,46 @@ export function applyScaleSnapshot<T extends ScaleSnapshotTarget>(
     target.x_ticks_dropped = freshCol.x_ticks_dropped;
     target.scaleCalib = freshCol.scaleCalib;
     target.scale_provenance = freshCol.scale_provenance;
+    // 形态覆盖是后端权威字段：镜像里的 `plotType` 别名一并跟着改，
+    // 否则 `resolvePlotType` 会在两个别名上读出两个答案。
+    target.plot_type = freshCol.plot_type;
+    target.plotType = freshCol.plot_type ?? undefined;
     applied += 1;
   }
   return applied;
+}
+
+/**
+ * 把后端权威的列组（`rois[].x_groups[]`）整体搬到画布镜像上，返回是否搬了。
+ *
+ * 为什么必须做：组级参数（`plot_type` / `axis_stroke_px` / `value_per_px`）只活在
+ * `rois` 里，而 `applyScaleSnapshot` 只回填**列级**标度。少了这一步，
+ * `roi.groupUpdate` 成功后界面毫无反应——用户实测「轴线粗输入 1，数字跳没，
+ * 绿线也不动」，而后端其实已经写进去了（`roi.list` 里就是 1）。
+ *
+ * 只替换 `rois` 一个键：不动 `columns` / `activeTaxaId`，所以不会打断步骤 6 的选中列。
+ */
+export function applyGroupSnapshot(
+  target: { rois?: unknown; roi?: unknown; active_roi_id?: unknown },
+  fresh: unknown
+): boolean {
+  const rois = (fresh as { rois?: unknown } | null)?.rois;
+  if (!Array.isArray(rois)) return false;
+  target.rois = rois;
+  // `data.roi` 是 RpcClient 从 `rois` 里 shallow-copy 出来的**活跃区**（RpcClient.ts:484），
+  // 它自己挂着一份 `x_groups`。只换 `rois` 而不换它，画布就继续用旧组值——
+  // `columnBoundaries` 的绿线读的正是 `roi.x_groups`（columnBoundaries.ts:143），
+  // 于是「轴粗设 1px，绿线不动」（用户实测）。
+  const activeId = (target.active_roi_id ?? (fresh as { active_roi_id?: unknown }).active_roi_id) as
+    | string
+    | undefined;
+  const list = rois as Array<Record<string, unknown>>;
+  const activeRoi = list.find((r) => r.id === activeId) ?? list[0];
+  if (activeRoi && target.roi && typeof target.roi === 'object') {
+    // 保留 xMin/xMax/yMin/yMax 这类派生键（`activeRoi` 只带 xlim/ylim）。
+    Object.assign(target.roi as Record<string, unknown>, activeRoi);
+  }
+  return true;
 }
 
 /** 注册 `onScaleMutated`：120ms 防抖后拉一次权威数据并逐列回填。 */
@@ -79,6 +123,11 @@ export function setupScaleSync(deps: ScaleSyncDeps): void {
           const fresh = await rpcClient.getDiagramData();
           const canvasComponent = getCanvas();
           applyScaleSnapshot(canvasComponent.data.columns, fresh);
+          // 组级参数（形态 / 轴粗 / 组斜率）同样必须回填，否则绿线与曲线形态不跟着动。
+          applyGroupSnapshot(
+            canvasComponent.data as { rois?: unknown; roi?: unknown; active_roi_id?: unknown },
+            fresh
+          );
           canvasComponent.requestRender();
           getInspector()?.updateData(canvasComponent.data);
           getSidebar()?.updateData(canvasComponent.data);

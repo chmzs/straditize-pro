@@ -467,6 +467,19 @@ class RoiMixin:
             # 每列的 0 点各自算 = 左缘 + 轴线粗（见 ARCHITECTURE §6.4）。
             "value_per_px",
         )
+        # 组形态一旦写入，组内各列的 `plot_type` 必须清掉。
+        #
+        # `plot_type` 按 ARCHITECTURE §6.4 是**组级参数**（与 `scale_type` 并列）。
+        # 列上那份是分列/载入期从组值抄来的**快照**，不是用户意图；留着它就是两个
+        # 事实源，用户把组切成折线后画布仍按旧快照画面积 —— 用户实测的「改了不生效」。
+        # 语义与下面的 `value_per_px` 分支同源：组级写入即整组重设，列的旧值作废。
+        # 列级**显式覆盖**仍可用（`column.update` 的 `plot_type`），但要用户重新设。
+        if "plot_type" in updates:
+            for col in getattr(self, "columns", []) or []:
+                if col.get("x_group_id") == group_id:
+                    col.pop("plot_type", None)
+                    col.pop("plotType", None)
+
         # 组级斜率一旦写入，组内各列的 `x_ticks` 必须清掉：它们是旧的"每列两点"，
         # 与"组标定"是两个事实源，留着会让 resolve_column_scale 出现两种答案。
         if "value_per_px" in updates:

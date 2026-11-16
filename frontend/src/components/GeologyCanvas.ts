@@ -13,6 +13,7 @@ import { ToolModeManager } from '../core/ToolModeManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { controlPointsForWriteback } from '../core/controlPointWriteback';
 import { resolveAxisStroke } from '../core/axisStroke';
+import { resolvePlotType } from '../core/plotType';
 import { columnPick, setPickedColumnIds } from './steps/columnPick';
 import {
   STAGE,
@@ -1972,7 +1973,8 @@ private pointer: PointerState = {
       scale: this.viewport.scale,
       columns: this.data.columns,
       activeTaxaId: this.data.activeTaxaId ?? null,
-      // 面积/柱条的左边界是 0 点，取轴粗要靠组参数。
+      // 组参数统一走这里：`axis_stroke_px` 决定 0 点（面积/柱条的左边界），
+      // `plot_type` 决定形态（组是单一事实源，不传就只能退回列上的旧快照）。
       groupOfColumn: (col) => this.groupOfColumn(col),
     });
   }
@@ -2170,7 +2172,8 @@ private pointer: PointerState = {
     this.data.columns.forEach((col) => {
       if (!col.visible || col.controlPoints.length === 0) return;
       const sorted = [...col.controlPoints].sort((a, b) => a.y - b.y);
-      const pType = col.plotType || 'area';
+      // 组级 `plot_type` 是单一事实源，列上那份只是显式覆盖（见 `core/plotType.ts`）。
+      const pType = resolvePlotType(col, this.groupOfColumn(col));
 
       if (pType === 'area') {
         // 幽灵叠加也是「从基线起填充」：基线必须是 0 点（绿线），不是列左缘。

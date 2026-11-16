@@ -1,5 +1,6 @@
 import { DiagramData, TaxaColumn } from '../types/pollen';
 import { CoordinateSystem } from '../core/CoordinateSystem';
+import { resolvePlotType } from '../core/plotType';
 import { t, onLocaleChange } from '../i18n';
 import { notifyError } from '../ui/feedback';
 
@@ -13,7 +14,8 @@ export interface SidebarCallbacks {
   onSelectTaxa: (taxaId: string) => void;
   onToggleVisible: (taxaId: string) => void;
   onUpdateTaxaColor: (taxaId: string, color: string) => void;
-  onChangePlotType?: (taxaId: string, plotType: 'area' | 'bar' | 'line' | 'symbol') => void;
+  /** `null` = 清除列级覆盖、回到组级形态。 */
+  onChangePlotType?: (taxaId: string, plotType: 'area' | 'bar' | 'line' | 'symbol' | null) => void;
   onRenameTaxa?: (taxaId: string, newName: string) => void;
   onInsertGapColumn?: (afterTaxaId: string) => void;
   onToggleCollapse?: (collapsed: boolean) => void;
@@ -250,16 +252,28 @@ export class Sidebar {
       .join('');
   }
 
+  /** 列所属的 x 组（组级 `plot_type` 是形态的单一事实源）。 */
+  private groupOfColumn(col: TaxaColumn) {
+    for (const roi of this.data.rois ?? []) {
+      const group = (roi.x_groups ?? []).find((g) => g.id === col.x_group_id);
+      if (group) return group;
+    }
+    return undefined;
+  }
+
   private renderTaxaItem(col: TaxaColumn, isActive: boolean): string {
     const totalCount = col.controlPoints.length;
-    const pType = col.plotType || 'area';
+    // 形态：列级显式覆盖 > 组级 > 'area'（组级是单一事实源，见 `core/plotType.ts`）。
+    // 直接读 `col.plotType` 会把从组值抄来的旧快照当用户意图，改组后界面不跟着变。
+    const pType = resolvePlotType(col, this.groupOfColumn(col));
+    const colOverride = col.plot_type ?? col.plotType ?? null;
     const typeLabels: Record<string, string> = {
       area: '面积',
       bar: '柱状',
       line: '折线',
       symbol: '符号',
     };
-    const typeLabel = typeLabels[pType] || typeLabels.area;
+    const typeLabel = `${typeLabels[pType] || typeLabels.area}${colOverride ? '·覆盖' : ''}`;
 
     // 实测峰值与满刻度只在**真标定**后才有意义。判据与画布同源（x_ticks），
     // 标度解析走 CoordinateSystem.resolveColumnScale（唯一入口，优先 x_ticks）。
@@ -496,10 +510,20 @@ export class Sidebar {
         e.stopPropagation();
         const col = this.data.columns.find((c) => c.id === taxaId);
         if (col) {
-          const sequence: ('area' | 'bar' | 'line' | 'symbol')[] = ['area', 'bar', 'line', 'symbol'];
-          const curIdx = sequence.indexOf(col.plotType || 'area');
+          // 四档形态 + 第五档「跟随组」（清除列级覆盖）。
+          // 少了第五档，用户一旦点过这个图标就再也回不到组值——那正是
+          // 「组形态改了不生效」的第二条成因。
+          const sequence: Array<'area' | 'bar' | 'line' | 'symbol' | null> = [
+            'area',
+            'bar',
+            'line',
+            'symbol',
+            null,
+          ];
+          const curIdx = sequence.indexOf(resolvePlotType(col, this.groupOfColumn(col)));
           const nextType = sequence[(curIdx + 1) % sequence.length];
-          col.plotType = nextType;
+          col.plot_type = nextType;
+          col.plotType = nextType ?? undefined;
           this.callbacks.onChangePlotType?.(taxaId, nextType);
           this.render();
         }
