@@ -492,7 +492,11 @@ class CleanupMixin:
                 x_max = max(0, min(w, int(round(max(xs)))))
                 y_min = max(0, min(h, int(round(min(ys)))))
                 y_max = max(0, min(h, int(round(max(ys)))))
-                mask[y_min:y_max, x_min:x_max] = True
+                # 闭区间：用户画的矩形，四条边上的像素都属于它。这里原来写排他切片，与
+                # _refuse_if_column_ink_was_erased 的闭区间口径（rows 取 y0..y1+1）不一致：
+                # 排除区正好压在 ROI 下/右边界时，末行末列没被排除，该列「墨迹被整列删掉」
+                # 就检不出来（kept_count 仍 > 0 → 放行 → 本该 -32001 的场景静默出数）。
+                mask[y_min : y_max + 1, x_min : x_max + 1] = True
             elif kind == "poly" and len(pts) >= 3:
                 from PIL import ImageDraw
 
