@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { gotoStage, openApp } from './helpers';
+import { gotoStage, openApp, resetBaseline } from './helpers';
 
 /**
  * 导出面板的「缺测填充」默认值必须是 `NA`。
@@ -21,6 +21,15 @@ test.describe('导出缺测填充默认值', () => {
       // 这也是本场景的被测行为：用户必须看到为什么没有数据。
       notice: [/读取 .* 数据集失败/],
     },
+  });
+
+  // 隔离缺口：本用例假设"会话尚未标定"（断言 caption 指向步骤 3），但只调了
+  // openApp，没有 resetBaseline —— 后端 webServer 是同一个会话，前面任何一条
+  // 标定过会话的 spec（如 export-file-download）都会让它读到已标定的状态而红。
+  // 全仓其它 spec 都在 beforeEach 里 resetBaseline；这里补齐是为了让本判据可信，
+  // 不改任何断言与 staging。
+  test.beforeEach(async ({ page }) => {
+    await resetBaseline(page);
   });
 
   test('打开导出面板时默认就是 NA，不是 0.0', async ({ page }) => {
