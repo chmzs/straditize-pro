@@ -339,7 +339,7 @@ export function render(data: DiagramData): string {
           <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px;">
             <label for="inp-axis-stroke" style="font-size: 10.5px; color: var(--text-muted);">轴线粗细:</label>
             <input type="number" id="inp-axis-stroke" value="${currentGroup && Number(currentGroup.axis_stroke_px) > 0 ? String(Number(currentGroup.axis_stroke_px)) : state.axisStrokeOverride != null ? String(state.axisStrokeOverride) : ''}" placeholder="5" min="1" max="20" step="1"
-                   title="Y 轴轴线的描边宽度（像素）。0 点 = 左缘 + 它。填了就不再从像素里猜。"
+                   title="Y 轴轴线的描边宽度（像素）。0 点 = 左缘 + 它。填了就不再从像素里猜。目视估读即可（1–20px）。"
                    style="width: 66px; font-size: 11px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
             <span style="font-size: 9.5px; color: var(--text-muted);">px</span>
            <!-- 单列覆盖：组值是初值，逐列差异真实存在（实测 beginner 3/5/5/5），
@@ -362,7 +362,7 @@ export function render(data: DiagramData): string {
                 ? `本列覆盖 <strong>${axisStrokeColOverride}px</strong>（组值 ${Number(currentGroup?.axis_stroke_px) > 0 ? `${Number(currentGroup?.axis_stroke_px)}px` : "缺省 5px"}）· 绿线 = 列左缘 + ${axisStrokePx}`
                 : Number(currentGroup?.axis_stroke_px) > 0
                   ? `轴线粗实测 <strong>${axisStrokePx}px</strong> · 绿线 = 列左缘 + ${axisStrokePx}`
-                  : '轴线粗<strong>无法自动测量</strong>（这几列的左边不是灰度均匀的竖轴），当前按 <strong>5px</strong> 估算 —— 绿线可能偏，请量一下实际粗细后填入上面的输入框'
+                  : '轴线粗<strong>无法自动测量</strong>（这几列的左边不是灰度均匀的竖轴），当前按 <strong>5px</strong> 估算 —— 绿线可能偏。<strong>目视估读即可</strong>：把你在图上看到的轴宽（1–20px）填进上面的「轴线粗细」，改完绿线立刻按「左缘 + 轴粗」重画，不必精确到亚像素'
             }
           </div>
 
