@@ -1627,9 +1627,13 @@ class ExportMixin:
         units = self._roi_column_units().get(name, {})
         return [(name, "data.csv", dict(units))]
 
-    def strat_plot_r_script(self) -> str:
-        """导出用 R 脚本（唯一出口）。tar 成员与「R 脚本」下载都调它。"""
-        return build_strat_plot_r_script(self._strat_script_entries())
+    def strat_plot_r_script(self, widths: dict[str, float] | None = None) -> str:
+        """导出用 R 脚本（唯一出口）。tar 成员与「R 脚本」下载都调它。
+
+        `widths` 是显式列宽（相对权重）；给空时由生成器按「% 列 ∝ 本列最大值」
+        的规则在脚本里算，非空项以**字面数字**写进脚本，用户可手工改。
+        """
+        return build_strat_plot_r_script(self._strat_script_entries(), widths=widths)
 
     def export_r(self, output_path: str | None = None) -> str | dict[str, Any]:
         """Generates R plotting template script using rioja::strat.plot."""
