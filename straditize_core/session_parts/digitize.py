@@ -59,14 +59,25 @@ _READER_ALIASES: dict[str, str] = {"bars": "bar"}
 #                                19–33px，落在 8px 之外 → 不会被当成断线补倍率
 #   _INNER_WIDTH_MEDIAN_FACTOR   单段宽度 ≤ 1.5 × 内线宽中位数（见下"基准"）
 #   _OUTER_DIST_SLACK_PX         比值判据余量：内线距 ≤ 中位(外线距/内线距) × 内线距 + 2px
+#   _BROKEN_MIN_INNER_DIST_PX    **可分辨性下界**：内线距 0 点 < 4px 的行一律不改
+#                                （见下"为什么小值行必须放着不动"）
+#   _BROKEN_OUTER_CLEARANCE_PX   外线该在的位置必须真的空出 4px 以上余量，否则不改
 #
 # 宽中位数的基准：优先取**有外线的行**（两段行）的内线宽；整列都没有外线时退化为
 # 全列首段宽度。后者对应"这一列的外线整条断裂"——此时"外线缺失"在每一行都成立，
 # 不能因为没有一行带外线就不补（合成图用例 2 钉的就是这个分支）。
+#
+# 为什么小值行必须放着不动（可分辨性下界）：值很小时内线距 0 点只有 1–3px，放大
+# mult 倍后外线也只偏 5–15px，两条线在扫描件上常常被抗锯齿并成**一段**——此时"外线
+# 断了"和"内外线贴在一起"在像素上不可分。把它当断线补偿等于把 1px 的小值乘成 5px，
+# 比不补更错（这是判据唯一的错误方向，必须堵死）。所以内线距 < 4px 的行只登记进
+# `ambiguous_rows`、不改读数：它们的读数由"最右墨迹"给出，外线在就仍然正确。
 _INNER_RUN_START_TOL_PX = 5
 _BROKEN_INNER_MAX_WIDTH_PX = 8
 _INNER_WIDTH_MEDIAN_FACTOR = 1.5
 _OUTER_DIST_SLACK_PX = 2.0
+_BROKEN_MIN_INNER_DIST_PX = 4.0
+_BROKEN_OUTER_CLEARANCE_PX = 4.0
 
 
 def _ink_runs(row_pixels: np.ndarray) -> list[tuple[int, int]]:
@@ -172,11 +183,12 @@ class DigitizeSessionMixin:
                 "points": [],
                 "control_points_count": 0,
                 "broken_rows": [],
+                "ambiguous_rows": [],
             }
 
         # 夸大列里外线断开的那几行，最右墨迹会退化成内线 → 先折回"不除倍率"的等价位置。
         # 必须在横线插值之前：插值要在同一物理量的空间里做（见该方法 docstring）。
-        broken_rows = self._compensate_broken_inner_rows(
+        broken_rows, ambiguous_rows = self._compensate_broken_inner_rows(
             mask, col, c_start, c_end, points, col_index
         )
 
@@ -215,6 +227,7 @@ class DigitizeSessionMixin:
             "control_points": ctrl_pts_list,
             "control_points_count": len(control_points),
             "broken_rows": broken_rows,
+            "ambiguous_rows": ambiguous_rows,
         }
 
     # ---- digitize 的分段实现 ----
@@ -423,8 +436,8 @@ class DigitizeSessionMixin:
         c_end: int,
         points: list[dict[str, float]],
         col_index: int,
-    ) -> list[int]:
-        """把"外线断开"的行从内线补回外线位置，返回被判定的行号（升序）。
+    ) -> tuple[list[int], list[int]]:
+        """把"外线断开"的行从内线补回外线位置，返回 `(broken_rows, ambiguous_rows)`。
 
         ## 物理事实（recon-20261117，用户已确认，此处不复述论证）
 
@@ -454,10 +467,22 @@ class DigitizeSessionMixin:
         3. 段宽 ≤ `_INNER_WIDTH_MEDIAN_FACTOR` × 同列"两段行"的内线宽中位数，且
            `x_in − z0 ≤ 中位(外线距/内线距) × (x_in − z0) + _OUTER_DIST_SLACK_PX`。
 
-        兜底判据：只有一段且段宽 `< _BROKEN_INNER_MAX_WIDTH_PX` 也算 broken。它与上面三条
+        兜底判据：只有一段且段宽 `< _BROKEN_INNER_MAX_WIDTH_PX` 也算候选。它与上面三条
         在本图量级下等价——内线 = 轴线（≤5px）+ 贴轴曲线（1–2px）恒 < 8px；而"内外线相接"
         造成的单段实测 ≥ 19px，永远落不进 8px。误判方向：**厚轴图（轴粗 ≥ 8px）会漏判**
         （读数偏小 1/mult，与现状相同），不会反向误补。
+
+        候选行还要过**可分辨性**这一关，否则不改：
+
+        * `内线距 < _BROKEN_MIN_INNER_DIST_PX`（4px）→ 判不出。值这么小时内线只有 1–3px，
+          放大后外线也只偏 5–15px，两条线被抗锯齿并成一段就分不清"外线断了"和
+          "内外线贴在一起"，硬补等于把 1px 的小值乘成 5px；
+        * `外线该在的位置 − 本行墨迹右缘 < _BROKEN_OUTER_CLEARANCE_PX`（4px）→ 本行墨迹
+          已经压在外线位置上，没有"缺失"可言。
+
+        这两关拒掉的行进 `ambiguous_rows`（不补偿，`source="ambiguous"`）；另有"内线小到
+        判不出"的非候选行（外线在、只是贴得近）也进 `ambiguous_rows`，但读数不动、
+        `source` 仍是 `"read"` —— 该列表回答的是"这一行有没有判别力"，不是"改了什么"。
 
         倍率取 `resolve_column_scale(...).exaggeration_mult`——唯一解析入口（列级 > 组级 >
         历史键，`<=1` 视为未放大），且它正是 `px_to_value` 要除的那个数；两处取同一个值，
@@ -468,7 +493,7 @@ class DigitizeSessionMixin:
         scale = resolve_column_scale(self, col, col_index)
         mult = scale.exaggeration_mult
         if mult is None or mult <= 1.0:
-            return []
+            return [], []
         zero = float(scale.abs_px0)
 
         row_segments: list[tuple[dict[str, float], list[tuple[int, int]]]] = []
@@ -503,40 +528,60 @@ class DigitizeSessionMixin:
                 if segments and segments[0][0] <= _INNER_RUN_START_TOL_PX
             ]
         if not inner_widths:
-            return []
+            return [], []
         median_inner_width = float(np.median(inner_widths))
 
         broken_rows: list[int] = []
+        ambiguous_rows: list[int] = []
         for point, segments in row_segments:
-            if len(segments) != 1:
-                point["source"] = "read"
+            row_int = int(point["row"])
+            # 内线距：本行最左侧那段（贴轴的那段）的右缘到 0 点的距离。
+            inner_dist: float | None = None
+            if segments and segments[0][0] <= _INNER_RUN_START_TOL_PX:
+                inner_dist = (c_start + segments[0][1]) - zero
+            candidate = len(segments) == 1 and inner_dist is not None and inner_dist > 0
+            if candidate:
+                run_end = segments[0][1]
+                width = float(run_end - segments[0][0] + 1)
+                narrow_enough = (
+                    width <= _INNER_WIDTH_MEDIAN_FACTOR * median_inner_width
+                )
+                # 比值判据：整列没有一行带外线时无基准可比，按"成立"处理（此时每一行都
+                # 只有内线，"外线缺失"没有反例可反驳）。
+                inside_envelope = median_outer_ratio is None or (
+                    inner_dist
+                    <= median_outer_ratio * inner_dist + _OUTER_DIST_SLACK_PX
+                )
+                # 单段太窄就是"只剩内线"：宽 < 8px 的兜底判据（见 docstring）。
+                candidate = (narrow_enough and inside_envelope) or (
+                    width < _BROKEN_INNER_MAX_WIDTH_PX
+                )
+            if candidate:
+                # 可分辨性：内线太小 / 本行墨迹已经压到外线该在的位置 → 判不出，不改。
+                # 后一条对单段行恒等于 (mult−1)×inner_dist，所以起作用的是前一条；
+                # 留着它是为了让"外线位置必须真的空着"这条前提在代码里显式成立。
+                outer_position = zero + inner_dist * mult
+                clearance = outer_position - float(c_start + segments[0][1])
+                if (
+                    inner_dist < _BROKEN_MIN_INNER_DIST_PX
+                    or clearance < _BROKEN_OUTER_CLEARANCE_PX
+                ):
+                    point["source"] = "ambiguous"
+                    ambiguous_rows.append(row_int)
+                    continue
+                # 内线 × 倍率 = 外线该在的位置；px_to_value 再除以同一个倍率 → 等于不除。
+                point["x"] = float(outer_position)
+                point["source"] = "broken_inner"
+                broken_rows.append(row_int)
                 continue
-            run_start, run_end = segments[0]
-            if run_start > _INNER_RUN_START_TOL_PX:
-                point["source"] = "read"
-                continue
-            inner_dist = (c_start + run_end) - zero
-            width = float(run_end - run_start + 1)
-            narrow_enough = width <= _INNER_WIDTH_MEDIAN_FACTOR * median_inner_width
-            # 比值判据：整列没有一行带外线时无基准可比，按"成立"处理（此时每一行都
-            # 只有内线，"外线缺失"没有反例可反驳）。
-            inside_envelope = median_outer_ratio is None or (
-                inner_dist <= median_outer_ratio * inner_dist + _OUTER_DIST_SLACK_PX
-            )
-            # 单段太窄就是"只剩内线"：宽 < 8px 的兜底判据（见 docstring）。
-            only_inner = (narrow_enough and inside_envelope) or (
-                width < _BROKEN_INNER_MAX_WIDTH_PX
-            )
-            if not only_inner or inner_dist <= 0:
-                point["source"] = "read"
-                continue
-            # 内线 × 倍率 = 外线该在的位置；px_to_value 再除以同一个倍率 → 等于不除。
-            point["x"] = float(zero + inner_dist * mult)
-            point["source"] = "broken_inner"
-            broken_rows.append(int(point["row"]))
+            # 非候选行读数不动；内线小到判不出的行只登记，供下游知道"这一行没有判别力"。
+            point["source"] = "read"
+            if inner_dist is not None and 0 < inner_dist < _BROKEN_MIN_INNER_DIST_PX:
+                ambiguous_rows.append(row_int)
 
         broken_rows.sort()
-        return broken_rows
+        ambiguous_rows.sort()
+        return broken_rows, ambiguous_rows
 
     def _interpolate_across_hlines(
         self, points: list[dict[str, float]], c_start: int
