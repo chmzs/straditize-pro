@@ -1773,6 +1773,106 @@ class ExportMixin:
             return {"path": output_path, "success": True}
         return r_script
 
+    def export_bundle_zip(self) -> dict[str, Any]:
+        """一次性交付：`data.csv` + `plot_strat.R` + `plot_strat.jpg` + `README.txt`。
+
+        ## 为什么是整包而不是单个 `.R`
+
+        导出面板此前给的 `plot_strat.R` 里写着 `if (file.exists('data.csv'))`：用户只拿到
+        脚本、没有 csv 时，整段绘图被**静默跳过**，产物是一张空 PDF。整包把脚本、数据、
+        成品图放在一起，解压即可 `Rscript plot_strat.R`。
+
+        ## 脚本形态
+
+        - 无参可跑：`csv_path` / `out_path` 都有默认值，仍可用命令行覆盖
+          （`Rscript plot_strat.R my.csv my.pdf`）；
+        - 缺 `data.csv` 时 `stop()`，不再静默出空图；
+        - 绘图调用段来自 `export_docs.strat_plot_script_lines`（唯一生成器），
+          因此 % 列与非 % 列的量纲口径与归档脚本一致。
+
+        ## 表头去 `\\r`
+
+        列名尾部带 `\\r` 时，`read.csv` 后 `intersect()` 匹配不上，整列会被静默丢掉。
+        写 csv 前统一 strip，脚本侧也用同一批干净列名。
+        """
+        import base64
+        import tempfile
+        import zipfile
+
+        from .export_docs import CSV_MISSING_NOTICE, strat_plot_script_lines
+
+        frame = self._primary_roi_export_frame(strict=False)
+        frame = frame.rename(columns=lambda col: str(col).strip("\r\n"))
+        names = [str(name) for name in list(frame.columns)[1:]]
+        units = self._primary_roi_units_for(names)
+        pct_cols = [name for name in names if is_percent_unit(units.get(name))]
+        fixed_cols = [name for name in names if not is_percent_unit(units.get(name))]
+        csv_bytes = frame.to_csv(index=False, na_rep="NA").encode("utf-8")
+
+        script_lines = [
+            "# ==============================================================================",
+            "# Straditize Pro - 地层图出图包（单 ROI）",
+            "# 用法：与本文件同目录下 `Rscript plot_strat.R`（可选：Rscript plot_strat.R 表.csv 图.pdf）",
+            "# 依赖：install.packages('rioja')",
+            "# ==============================================================================",
+
+            "args <- commandArgs(trailingOnly = TRUE)",
+            "csv_path <- if (length(args) >= 1 && nzchar(args[[1]])) args[[1]] else 'data.csv'",
+            "out_path <- if (length(args) >= 2 && nzchar(args[[2]])) args[[2]] else 'plot_strat.pdf'",
+            "if (!requireNamespace('rioja', quietly = TRUE)) stop('缺 rioja 包：install.packages(\"rioja\")')",
+            "library(rioja)",
+            "pdf(out_path, width = 12, height = 8)",
+
+        ]
+        script_lines.extend(
+            strat_plot_script_lines(
+                df_var="df",
+                csv_filename="data.csv",
+                roi_name=self._primary_roi_name(),
+                pct_cols=pct_cols,
+                fixed_cols=fixed_cols,
+                units=units,
+                csv_expr="csv_path",
+                require_file=True,
+            )
+        )
+        script_lines.extend(["dev.off()", "message('已输出: ', out_path)", ""])
+
+        readme_lines = [
+            "Straditize 出图包",
+            "================",
+            "",
+            "文件：",
+            "  data.csv       本工程的数字化数据（NA = 无数据，不是 0）",
+            "  plot_strat.R   rioja::strat.plot 出图脚本（与本目录的 data.csv 配套）",
+            "  plot_strat.jpg 同一份数据、同一生成器的成品图",
+            "",
+            "运行：",
+            "  cd 到本目录，然后  Rscript plot_strat.R",
+            "  可选覆盖：       Rscript plot_strat.R my.csv my.pdf",
+            "",
+        ]
+        readme_lines.append(CSV_MISSING_NOTICE.decode("utf-8"))
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as bundle:
+            bundle.writestr("data.csv", csv_bytes)
+            bundle.writestr("plot_strat.R", "\n".join(script_lines).encode("utf-8"))
+            bundle.writestr("README.txt", "\n".join(readme_lines).encode("utf-8"))
+            with tempfile.TemporaryDirectory(prefix="straditize-bundle-") as tmp_dir:
+                shot_path = os.path.join(tmp_dir, "plot_strat.jpg")
+                self.plot_render(format="jpeg", output_path=shot_path)
+                with open(shot_path, "rb") as shot:
+                    bundle.writestr("plot_strat.jpg", shot.read())
+
+        payload = buffer.getvalue()
+        return {
+            "success": True,
+            "filename": f"strat_export_{int(time.time())}.zip",
+            "mime": "application/zip",
+            "base64": base64.b64encode(payload).decode("ascii"),
+            "size_bytes": len(payload),
+        }
     def _primary_roi_name(self) -> str:
         """主 ROI 的显示名（与 `data.csv` 同一 ROI）。"""
         primary_id = getattr(self, "primary_roi_id", None)
