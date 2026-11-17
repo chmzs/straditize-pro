@@ -119,6 +119,24 @@ def test_project_script_all_percent_stays_one_call() -> None:
     assert "scale.percent = TRUE" in script
 
 
+def test_export_r_rpc_also_splits_by_unit() -> None:
+    """导出面板「R 脚本」按钮（RPC `export.r`）也必须是按量纲分调用。
+
+    现场：这个按钮此前返回一份**独立硬编码模板**（整表 `scale.percent = TRUE`、
+    纵轴写死 `Depth (cm)`），是用户最容易走的那条路径，也是 S5 的第三个分叉点。
+    """
+    session = _session()
+    roi_id, _, counts_gid = _two_groups(session)
+    session.roi_group_update(roi_id, counts_gid, {"unit": "counts"})
+
+    script = session.export_r()
+    assert isinstance(script, str) and "strat.plot" in script
+    assert script.count("strat.plot(") == 2, script
+    assert "scale.percent = FALSE" in script
+    # 纵轴不得写死单位：本会话标定单位是 cm，但分组单位可能是 counts/粒-g。
+    assert "Depth (cm)" not in script
+
+
 def test_project_script_names_only_columns_present_in_data_csv() -> None:
     """脚本与 `data.csv` 同源：点名的每一列都必须真的在表头里。"""
     session = _session()

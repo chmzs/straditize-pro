@@ -1654,41 +1654,107 @@ class ExportMixin:
         return self.project_save(output_path=output_path, format="tar")
 
     def export_r(self, output_path: str | None = None) -> str | dict[str, Any]:
-        """Generates R plotting template script using rioja::strat.plot."""
-        r_script = (
-            "# ==============================================================================\n"
-            "# Straditize Pro - Geological Stratigraphic Pollen Diagram Plotting Script\n"
-            "# Generated automatically by Straditize v2.0 (straditize pro)\n"
-            "# Requires R package 'rioja' (install.packages('rioja'))\n"
-            "# ==============================================================================\n\n"
-            "if (!requireNamespace('rioja', quietly = TRUE)) {\n"
-            "  install.packages('rioja', repos = 'https://cloud.r-project.org')\n"
-            "}\n"
-            "library(rioja)\n\n"
-            "data_file <- if (file.exists('data.csv')) 'data.csv' else list.files(pattern = '\\\\.csv$')[1]\n"
-            "df <- read.csv(data_file, check.names = FALSE, stringsAsFactors = FALSE)\n"
-            "depth <- df[[1]]\n"
-            "taxa_data <- as.matrix(sapply(df[, -1, drop = FALSE], as.numeric))\n"
-            "# 空单元格 = 该行不在这一列的取数窗口内（未测），**不是 0 丰度**。\n# 旧模板曾在这一步把 NA 静默填成 0，等于把「没测」画成「测到 0」，会被当成科学结论。\n# 这里**保留 NA**：rioja::strat.plot 会把 NA 画成空白/缺口。\n# 下游统计若确实需要一个数，请显式处理（na.omit / 按缺失模型插补），不要替用户决定。\n\n\n"
-            "pdf('stratigraphic_diagram.pdf', width = 12, height = 8)\n"
-            "strat.plot(\n"
-            "  d = taxa_data,\n"
-            "  yvar = depth,\n"
-            "  y.rev = TRUE,\n"
-            "  ylabel = 'Depth (cm)',\n"
-            "  scale.percent = TRUE,\n"
-            "  plot.poly = TRUE,\n"
-            "  plot.line = TRUE,\n"
-            "  title = 'Stratigraphic Pollen Diagram (Straditize Pro)'\n"
-            ")\n"
-            "dev.off()\n"
-            "message('Diagram successfully rendered: stratigraphic_diagram.pdf')\n"
+        """导出面板「R 脚本」按钮的 `plot_strat.R`：**按列量纲**分调用（与归档同一生成器）。
+
+        ## 现场缺陷（recon-20261117，S5）
+
+        本方法此前是一份**独立硬编码模板**：整表 `scale.percent = TRUE`，还把纵轴写死成
+        `ylabel = 'Depth (cm)'`（本工程的轴是 `ka`）。于是同一份工程，三处给出的脚本互不相同：
+
+        | 入口 | 修复前 | 修复后 |
+        |:--|:--|:--|
+        | 导出数据 tar（`export_multi_tar`） | 按量纲分两次调用 | 不变 |
+        | 导出面板「R 脚本」（本方法） | 整表 `scale.percent = TRUE` | 与归档同源 |
+        | 保存工程包（`project.save`） | 硬编码一行 `scale.percent=TRUE` | 与归档同源 |
+
+        用户点「R 脚本」拿到的脚本把 A/C（比值）与 Concentration（259.74 value/px）都画成
+        0–100 %，与 `data.csv` 必然对不上 —— 而这是导出面板上最显眼的那条路径。
+
+        ## 形态
+
+        保留"一次跑出 PDF"的便利（`pdf(...)` 包住调用 + `dev.off()`），但绘图调用段改为
+        `strat_plot_script_lines` 生成，因此：`%` 列用 `scale.percent = TRUE`、非 `%` 列
+        用该列自身量程（`add = TRUE` 叠加），与归档脚本口径一致。
+        """
+        from .export_docs import strat_plot_script_lines
+
+        frame = self._primary_roi_export_frame(strict=False)
+        names = [str(name) for name in list(getattr(frame, "columns", []))[1:]]
+        units = self._primary_roi_units_for(names)
+        pct_cols = [name for name in names if is_percent_unit(units.get(name))]
+        fixed_cols = [name for name in names if not is_percent_unit(units.get(name))]
+
+        lines = [
+            "# ==============================================================================",
+            "# Straditize Pro - Geological Stratigraphic Pollen Diagram Plotting Script",
+            "# Generated automatically by Straditize v2.0 (straditize pro)",
+            "# Requires R package 'rioja' (install.packages('rioja'))",
+            "# ==============================================================================",
+            "",
+            "if (!requireNamespace('rioja', quietly = TRUE)) {",
+            "  install.packages('rioja', repos = 'https://cloud.r-project.org')",
+            "}",
+            "library(rioja)",
+            "",
+            "# 空单元格 = 该行不在这一列的取数窗口内（未测），**不是 0 丰度**；脚本保留 NA。",
+            "# 下游统计若确实需要一个数，请显式处理（na.omit / 按缺失模型插补），不要替用户决定。",
+            "# 列量纲来自工程里的列组单位：% 列按 rioja 的 scale.percent 各自归一，",
+            "# 非 % 列（比值 / 浓度 / 粒数）按该列自身量程画，两种不能共用一把尺。",
+            "",
+            "pdf('stratigraphic_diagram.pdf', width = 12, height = 8)",
+        ]
+        lines.extend(
+            strat_plot_script_lines(
+                df_var="df",
+                csv_filename="data.csv",
+                roi_name=self._primary_roi_name(),
+                pct_cols=pct_cols,
+                fixed_cols=fixed_cols,
+                units=units,
+            )
         )
+        lines.extend(
+            [
+                "dev.off()",
+                "message('Diagram successfully rendered: stratigraphic_diagram.pdf')",
+                "",
+            ]
+        )
+        r_script = "\n".join(lines)
+
         if output_path:
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(r_script)
             return {"path": output_path, "success": True}
         return r_script
+
+    def _primary_roi_name(self) -> str:
+        """主 ROI 的显示名（与 `data.csv` 同一 ROI）。"""
+        primary_id = getattr(self, "primary_roi_id", None)
+        for roi in getattr(self, "rois", None) or []:
+            if roi.get("id") == primary_id:
+                return str(roi.get("name") or roi.get("id"))
+        return "pollen"
+
+    def _primary_roi_units_for(self, names: list[str]) -> dict[str, str]:
+        """按**位置**把 `data.csv` 的列名对到列单位（不按名字查表：同名不同 ROI 会错位）。"""
+        from .xscale import resolve_column_scale
+
+        primary_id = getattr(self, "primary_roi_id", None)
+        columns = [
+            col
+            for col in (getattr(self, "columns", None) or [])
+            if col.get("roi_id") in (None, primary_id)
+        ] or list(getattr(self, "columns", None) or [])
+        units: dict[str, str] = {}
+        for position, name in enumerate(names):
+            unit = ""
+            if position < len(columns):
+                unit = str(
+                    resolve_column_scale(self, columns[position], position).unit or ""
+                )
+            units[name] = unit
+        return units
 
     def export_advanced_xlsx(
         self,
