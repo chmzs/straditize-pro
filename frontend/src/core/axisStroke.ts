@@ -19,7 +19,7 @@ export interface AxisStrokeHolder {
  * 45px 这种值发出去，后端当场 `-32602` 拒绝 → 画布回滚 + 弹错，用户看到的是
  * 「拖到一半自己弹回去了」。
  */
-export const AXIS_STROKE_MIN_PX = 1;
+export const AXIS_STROKE_MIN_PX = 0;
 export const AXIS_STROKE_MAX_PX = 20;
 
 export function resolveAxisStroke(
@@ -27,8 +27,11 @@ export function resolveAxisStroke(
   group: AxisStrokeHolder | null | undefined
 ): number {
   const colStroke = Number(col?.axis_stroke_px);
-  if (Number.isFinite(colStroke) && colStroke > 0) return colStroke;
+  // 显式判 null：Number(null) === 0，不判会把「没有覆盖」误当成「覆盖为 0」。
+  if (col?.axis_stroke_px != null && Number.isFinite(colStroke) && colStroke >= 0)
+    return colStroke;
   const groupStroke = Number(group?.axis_stroke_px);
-  if (Number.isFinite(groupStroke) && groupStroke > 0) return groupStroke;
+  if (group?.axis_stroke_px != null && Number.isFinite(groupStroke) && groupStroke >= 0)
+    return groupStroke;
   return 5;
 }

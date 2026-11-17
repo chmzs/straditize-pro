@@ -119,6 +119,40 @@ class PlottingMixin:
                 + "）",
             )
 
+        # 拼接法：按「组」切段 —— 组是用户定义的量纲/形态归属，比单位字符串可靠。
+        # 列数最多的组当主块（% 块），其余组各自成段；列序在主块之前的放左、之后的放右。
+        _PCT_UNITS = ("%", "％", "percent", "pct")
+        from .xscale import resolve_column_scale
+
+        _taxa = getattr(self, "taxa_names", None) or []
+        _resolved: list[tuple[str, str, str]] = []
+        for _i, _col in enumerate(getattr(self, "columns", []) or []):
+            _c = int(_col.get("col_index", _i))
+            _nm = (
+                _taxa[_c]
+                if (_taxa and _c < len(_taxa) and _taxa[_c])
+                else (_col.get("name") or _col.get("species") or f"col{_c + 1:02d}")
+            )
+            _unit = str(resolve_column_scale(self, _col, _c).unit or "")
+            _gid = str(_col.get("x_group_id") or "g0")
+            _resolved.append((str(_nm), _unit, _gid))
+        _cols = [str(c) for c in frame.columns[1:]]
+        _resolved = [t for t in _resolved if t[0] in _cols]
+        _by_gid: dict[str, list[str]] = {}
+        for _n, _u, _g in _resolved:
+            _by_gid.setdefault(_g, []).append(_n)
+        _seg_flag = merged.get("plot_segments")
+        _seg_on = len(_by_gid) > 1 if _seg_flag is None else bool(_seg_flag)
+        if _seg_on and len(_by_gid) > 1:
+            _main_gid = max(_by_gid, key=lambda g: len(_by_gid[g]))
+            _order = [t[0] for t in _resolved]
+            _main_first = min(_order.index(x) for x in _by_gid[_main_gid])
+            for _n, _u, _g in _resolved:
+                if _g == _main_gid:
+                    continue
+                _first = min(_order.index(x) for x in _by_gid[_g])
+                _pre = "seg_left." if _first < _main_first else "seg_right."
+                merged[_pre + _g + "." + _n] = "1"
         with tempfile.TemporaryDirectory(prefix="straditize-plot-") as tmp_dir:
             csv_tmp = Path(tmp_dir) / "plot_input.csv"
             frame.to_csv(csv_tmp, index=False, na_rep="NA")
