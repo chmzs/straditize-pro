@@ -25,8 +25,34 @@ from .image import _detect_linear_structures
 #: 0.0015 留一点余量。更大的比例（如 0.004）会把大量纵向纹理误收为候选。
 _AUTO_WIDTH_RATIO = 0.0015
 
-#: 自适应线宽下限：再小的图也不低于 3px，否则抗锯齿边缘会被当成结构线。
-_AUTO_WIDTH_FLOOR = 3
+#: 自适应线宽下限：再小的图也不低于 **5px**。
+#:
+#: 原先写 3，理由是"再小的图也不低于 3px，否则抗锯齿边缘会被当成结构线"（抗锯齿只有
+#: 1px，3 已经够）。但 3 会把**清晰可见的 4px 区带线**判成"太厚"，实测一张
+#: 3591×2003 的孢粉图谱（ROI 2097×1521，自适应 = max(3, round(2097*0.0015)) = 3）：
+#:
+#:   max_width:   3    4    5    6    8
+#:   横线候选:    1    4    4    4    4（另有 2 条竖线误收）
+#:   命中 y:    671  671/1039/1297/1667 …（与目视四条区带线一致）
+#:
+#: 即：`3` 只检到 1 条，`4` 起四条齐全，`8` 开始把纵向纹理误收为候选。所以下限取 5——
+#: 比实测需要的 4 留 1px 余量（同一批扫描件里抗锯齿会让同一条线在 4/5px 之间浮动），
+#: 又远离 8 那个误收起点。
+#:
+#: 放宽的唯一风险是"把文字笔画当线"，但候选还要求**该行/列被墨迹覆盖 fraction 以上**
+#: （`line_fraction_h=0.75`），短笔画不满足，所以厚度上限放宽不会引入文字误检——
+#: 上面 8px 那档误收的是**贯穿整幅的纵向纹理**，不是文字。
+_AUTO_WIDTH_FLOOR_H = 5
+
+#: 竖线（Kind B 网格线 / Kind C 列内刻度齿）的下限仍是 **3**。
+#:
+#: 横竖分开是因为两类线的典型厚度本来就不同：贯穿区带线是**印刷的整幅横线**，
+#: 在 2000px 级扫描件上 4–6px；竖线是轴线、刻度齿、网格线，普遍 1–3px。
+#: 用同一个 3 对横线偏薄（漏 4px 真线，见上），用同一个 5 对竖线偏厚 ——
+#: 实测 hoya（ROI 1712×808）把上限从 3 放到 4/5，竖线候选 **15 → 20 条**
+#: （多出的 5 条是粗竖纹，不是结构线），横线候选 3 条不变。
+#: 所以下限按方向分开取，两边都用实测值，不做"折中一个数"。
+_AUTO_WIDTH_FLOOR_V = 3
 
 #: 与列左缘重合多少像素以内的竖线算"这一列的轴线"。
 #:
@@ -65,15 +91,26 @@ def _is_column_axis(at: int, axis_positions: Sequence[int]) -> bool:
     )
 
 
-def resolve_width_max(sub_shape: Sequence[int], line_width_max: int | None) -> int:
+def resolve_width_max(
+    sub_shape: Sequence[int],
+    line_width_max: int | None,
+    *,
+    axis: str = "h",
+) -> int:
     """把 ``line_width_max`` 解析成实际像素上限。
 
-    ``None`` 表示按 ROI 尺寸自适应（见 :data:`_AUTO_WIDTH_RATIO`）。
+    ``None`` 表示按 ROI 尺寸自适应（见 :data:`_AUTO_WIDTH_RATIO`）；
+    下限按方向取不同值（见 :data:`_AUTO_WIDTH_FLOOR_H` / :data:`_AUTO_WIDTH_FLOOR_V`）：
+    横线是印刷的整幅区带线（实测 4–6px），竖线是轴线/刻度齿/网格（实测 1–3px）。
+
+    ``axis`` 默认 ``"h"``：区带线是用户最常检测、也最容易被漏掉的一类。
+    显式传入 ``line_width_max`` 时方向不影响结果。
     """
     if line_width_max is not None:
         return int(line_width_max)
+    floor = _AUTO_WIDTH_FLOOR_V if str(axis).lower().startswith("v") else _AUTO_WIDTH_FLOOR_H
     long_side = max(int(sub_shape[0]), int(sub_shape[1]))
-    return max(_AUTO_WIDTH_FLOOR, int(round(long_side * _AUTO_WIDTH_RATIO)))
+    return max(floor, int(round(long_side * _AUTO_WIDTH_RATIO)))
 
 
 def _projection_line_rows(
@@ -170,7 +207,10 @@ def detect_line_candidates(
         return []
 
     candidates: list[dict[str, Any]] = []
-    resolved_max = resolve_width_max((sub_h, sub_w), line_width_max)
+    # 竖线口径（Kind B / Kind C）：下限 3，与历史基线一致。
+    resolved_max = resolve_width_max((sub_h, sub_w), line_width_max, axis="v")
+    # 横线口径（Kind A）：下限 5，见 _AUTO_WIDTH_FLOOR_H 的实测表。
+    resolved_max_h = resolve_width_max((sub_h, sub_w), line_width_max, axis="h")
     max_thick = int(resolved_max)
     min_span_v = max(1, int(round(line_fraction_v * sub_h)))
     # 列轴线位置：**结构判据**，与列几何绑定（`columns[].start ±2px`），
@@ -186,7 +226,7 @@ def detect_line_candidates(
             sub_ink,
             fraction=line_fraction_h,
             min_width=line_width_min,
-            max_width=resolved_max,
+            max_width=resolved_max_h,
         )
         if include_horizontal
         else np.array([], dtype=int)
