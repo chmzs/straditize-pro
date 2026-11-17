@@ -141,7 +141,7 @@ class PlottingMixin:
             for _i, (_n, _u, _g) in enumerate(_resolved):
                 if _u.strip() in _PCT_UNITS:
                     continue
-                merged[("seg_left." if _i < _first else "seg_right.") + _n] = "1"
+                merged[("seg_left." if _i < _first else "seg_right.") + _g + "." + _n] = "1"
         with tempfile.TemporaryDirectory(prefix="straditize-plot-") as tmp_dir:
             csv_tmp = Path(tmp_dir) / "plot_input.csv"
             frame.to_csv(csv_tmp, index=False, na_rep="NA")
