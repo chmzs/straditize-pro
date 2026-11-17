@@ -1,3 +1,4 @@
+
 /**
  * 列边界与刻度的绘制（红 / 绿 / 蓝三条线的唯一绘制点）。
  *
@@ -16,6 +17,7 @@
  * 注意：**列结束位置不画**。rioja / Tilia 的列首尾相接，`endX` 恒等于下一列的
  * `startX`（红线已画）；再画一条会让用户无法判断哪条才是真正的分界。
  */
+import { shouldDrawColumnLabel } from './labelLayout';
 import { resolveAxisStroke } from '../../core/axisStroke';
 import { resolveColumnGroup } from '../../core/columnGroup';
 import { groupBandRect } from './groupBandRect';
@@ -94,6 +96,7 @@ function drawGroupBands(env: ColumnBoundaryEnv): void {
   let prevGid: string | null = null;
 
   ctx.save();
+
   for (const col of columns) {
     if (!col.visible) continue;
     // 组归属统一走 `resolveColumnGroup`（与画绿线的那处同一个 helper）：
@@ -127,6 +130,8 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
     const bottomY = Math.min(maxH, roi.yMax + 30);
 
     ctx.save();
+
+    let lastLabeledCenterX = Number.NEGATIVE_INFINITY;
 
     columns.forEach((col) => {
       if (!col.visible) return;
@@ -252,6 +257,7 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
       // 属种名称与刻度防重叠渲染
       const colWidth = col.endX - col.startX;
       if (isActive) {
+        lastLabeledCenterX = centerX;
         ctx.save();
         const fontSize = Math.max(10, 12 / scale);
         ctx.font = `bold ${fontSize}px sans-serif`;
@@ -274,8 +280,10 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
         ctx.fillText(col.name, centerX, topY - 16 / scale);
         ctx.restore();
 
-      } else {
-        // 未激活列：若列较窄（< 40px），名称以 45 度优雅斜角呈现，杜绝多列名称横向重叠！
+      } else if (shouldDrawColumnLabel(centerX, lastLabeledCenterX, scale)) {
+        // 未激活列：若列较窄（< 40px），名称以 45 度斜角呈现；间距不足时**跳过这一列的名称**
+        // （斜排也救不了 20px 列间距 + 10 字长名），只画能画下的那些，避免叠成一团。
+        lastLabeledCenterX = centerX;
         ctx.save();
         ctx.fillStyle = isLight ? '#475569' : 'rgba(255, 255, 255, 0.75)';
         const fontSize = Math.max(9, 10.5 / scale);
