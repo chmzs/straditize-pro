@@ -1,16 +1,16 @@
 /**
  * 出图预览的交互与格式（用户原话：图片预览缺可缩放、平移；默认应填充显示全貌；
- * 下载只提供 jpg 和 pdf；预览应有显式关闭按钮）。
+ * 下载只提供 jpg 和 svg；预览应有显式关闭按钮）。
  *
  * ## 为什么用 stub 而不是真跑 R
  *
  * 本文件的判据全部落在**前端**：预览框几何、缩放锚点、关闭后释放、下载扩展名与字节头。
  * 真正的出图（R + rioja）由 `tests/unit/test_plot_render.py` 覆盖，那里能直接断言
- * 「format=pdf 交回的字节以 %PDF 开头」。e2e 若也真跑 R，CI 上没装 R 就整条跳过、
+ * 「format=svg 交回的字节以 <?xml 开头且含 <svg」。e2e 若也真跑 R，CI 上没装 R 就整条跳过、
  * 装了 R 又因 R 版本差异变红——那测的是 R 环境，不是这里要守的交互。
  *
  * 因此 `plot.render` 用一个**只替换这一个方法**的 route 拦下：返回真 JPEG（画布现场生成，
- * 所以 naturalWidth/naturalHeight 是真的）或真 PDF 字节；其余 RPC 一律透传，避免
+ * 所以 naturalWidth/naturalHeight 是真的）或真 SVG 字节；其余 RPC 一律透传，避免
  * 「到处都坏」的无差别场景（同 `error-surfacing.spec.ts` 的做法）。
  *
  * ## 判据与反向验证
@@ -20,9 +20,9 @@
  *    把 img 的 object-fit 改成 fill → 判据 1 变红。
  * 2. 关闭预览：预览框 display:none 且 img.src 为空字符串（src 属性已移除，data URL 释放）。
  *    反向验证：把 removeAttribute('src') 改回 src=''（属性保留）→ 判据 2 变红。
- * 3. 下载格式：下拉集合精确等于 {jpeg, pdf}；选 jpeg 得到 0xFF 0xD8 0xFF 开头的 .jpeg，
- *    选 pdf 得到 %PDF 开头的 .pdf。反向验证：让下载固定用 lastPlot.format（不按所选重出）
- *    → 选 pdf 时扩展名仍是 .jpeg，判据 3 变红。
+ * 3. 下载格式：下拉集合精确等于 {jpeg, svg}；选 jpeg 得到 0xFF 0xD8 0xFF 开头的 .jpeg，
+ *    选 svg 得到含 <svg 的 .svg。反向验证：让下载固定用 lastPlot.format（不按所选重出）
+ *    → 选 svg 时扩展名仍是 .jpeg，判据 3 变红。
  * 4. 滚轮缩放以**光标**为锚点：缩放前后光标下的那个图像点位移 <= 1px（按缩放后的画面
  *    宽度折算成像素）。反向验证：把 zoomPlotAt 换成「以框中心缩放」→ 判据 4 变红。
  */
@@ -35,8 +35,14 @@ import { openApp } from './helpers';
 const JPEG_W = 600;
 const JPEG_H = 2400;
 
-/** 伪 PDF 字节：前端职责只是「把后端给的字节按所选扩展名存出去」，不解析 PDF。 */
-const PDF_BYTES = Buffer.from('%PDF-1.4\n% straditize e2e stub\n%%EOF\n', 'ascii');
+/** 伪 SVG 字节：前端职责只是「把后端给的字节按所选扩展名存出去」，不解析 SVG。 */
+const SVG_BYTES = Buffer.from(
+  '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="2400">' +
+    '<rect width="600" height="2400" fill="#f2f2f2"/>' +
+    '<text x="20" y="60" font-size="24">蒿属</text></svg>\n',
+  'utf8',
+);
 
 interface PlotGeometry {
   /** transform 的 scale（矩阵 a）。 */
@@ -170,14 +176,14 @@ async function openPreview(page: Page): Promise<void> {
     }
     const format = String(body?.params?.format ?? 'jpeg');
     const result =
-      format === 'pdf'
+      format === 'svg'
         ? {
             success: true,
             engine: 'stub',
-            format: 'pdf',
-            mime: 'application/pdf',
-            size_bytes: PDF_BYTES.length,
-            data_url: 'data:application/pdf;base64,' + PDF_BYTES.toString('base64'),
+            format: 'svg',
+            mime: 'image/svg+xml',
+            size_bytes: SVG_BYTES.length,
+            data_url: 'data:image/svg+xml;base64,' + SVG_BYTES.toString('base64'),
             path: null,
             rows_count: 3,
             columns_count: 2,
@@ -298,7 +304,7 @@ test.describe('出图预览：缩放 / 平移 / 关闭 / 下载格式', () => {
     expect(after.downloadDisabled, '关掉预览后下载按钮应回到禁用态').toBe(true);
   });
 
-  test('下拉只列 jpeg / pdf，且下载按所选扩展名与真字节保存', async ({ page }) => {
+  test('下拉只列 jpeg / svg，且下载按所选扩展名与真字节保存', async ({ page }) => {
     await openPreview(page);
 
     const options = await page.locator('#sel-wpd-plot-format option').evaluateAll((nodes) =>
@@ -307,12 +313,12 @@ test.describe('出图预览：缩放 / 平移 / 关闭 / 下载格式', () => {
         return { value: option.value, text: option.textContent ?? '' };
       }),
     );
-    expect(options.map((o) => o.value).sort(), '格式集合必须精确等于 {jpeg, pdf}').toEqual(['jpeg', 'pdf']);
+    expect(options.map((o) => o.value).sort(), '格式集合必须精确等于 {jpeg, svg}').toEqual(['jpeg', 'svg']);
     // 每项都要写清用途，否则用户只能靠猜。
     const jpegText = options.find((o) => o.value === 'jpeg')!.text;
-    const pdfText = options.find((o) => o.value === 'pdf')!.text;
+    const svgText = options.find((o) => o.value === 'svg')!.text;
     expect(jpegText).toMatch(/位图|直接分享/);
-    expect(pdfText).toMatch(/矢量|排版/);
+    expect(svgText).toMatch(/矢量|排版/);
 
     // ---- JPEG：字节头 0xFF 0xD8 0xFF ----
     await page.locator('#sel-wpd-plot-format').selectOption('jpeg');
@@ -324,19 +330,20 @@ test.describe('出图预览：缩放 / 平移 / 关闭 / 下载格式', () => {
     const jpegBytes = readFileSync(await jpegDownload.path());
     expect([jpegBytes[0], jpegBytes[1], jpegBytes[2]], 'JPEG 魔术字节').toEqual([0xff, 0xd8, 0xff]);
 
-    // ---- PDF：字节头 %PDF ----
-    // 预览里那份是 JPEG；选 PDF 时必须按 PDF 现场重出，否则存下来的 .pdf 里是 JPEG 字节。
-    await page.locator('#sel-wpd-plot-format').selectOption('pdf');
-    const [pdfDownload] = await Promise.all([
+    // ---- SVG：内容必须含 <svg ----
+    // 预览里那份是 JPEG；选 SVG 时必须按 SVG 现场重出，否则存下来的 .svg 里是 JPEG 字节。
+    await page.locator('#sel-wpd-plot-format').selectOption('svg');
+    const [svgDownload] = await Promise.all([
       page.waitForEvent('download'),
       page.locator('#btn-wpd-plot-download').click(),
     ]);
-    expect(pdfDownload.suggestedFilename()).toMatch(/\.pdf$/);
-    const pdfBytes = readFileSync(await pdfDownload.path());
-    expect(pdfBytes.subarray(0, 4).toString('ascii'), 'PDF 必须真的以 %PDF 开头').toBe('%PDF');
-    // 预览仍是那张可显示的 JPEG（PDF 塞不进 img）。
+    expect(svgDownload.suggestedFilename()).toMatch(/\.svg$/);
+    const svgBytes = readFileSync(await svgDownload.path());
+    expect(svgBytes.toString('utf8'), 'SVG 必须真的含 <svg 根元素').toContain('<svg');
+    expect(svgBytes.subarray(0, 5).toString('utf8'), 'SVG 必须以 <?xml 开头').toBe('<?xml');
+    // 预览仍是那张可显示的 JPEG（预览固定 jpeg，所见即所得）。
     const geometry = await plotGeometry(page);
-    expect(geometry!.natural.width, 'PDF 下载不得把预览图换掉').toBe(JPEG_W);
+    expect(geometry!.natural.width, 'SVG 下载不得把预览图换掉').toBe(JPEG_W);
   });
 
   test('滚轮缩放以光标为锚点：缩放前后光标下的图像点位移 <= 1px', async ({ page }) => {

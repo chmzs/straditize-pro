@@ -54,6 +54,12 @@ DEFAULT_PLOT_SETTINGS: dict[str, Any] = {
     # y 轴范围三格（min / max / interval）。None = 自动（数据范围 + pretty 刻度）。
     # 三格必须同时给：只给一部分会「半生效」，所以整套忽略并如实提示。
     "y_axis": None,
+    # 拼接法开关：默认关（单块出图行为不变）。
+    "plot_segments": None,
+    # 分段布局三参数（R 侧 num() 读取，必须在这里登记否则被当成未知设置拒绝）。
+    "seg_left_margin": 0.05,
+    "seg_side_min": 0.07,
+    "seg_side_cap": 0.35,
 }
 
 #: 只有 riojaPlot 才有的开关；回退到 rioja 时这些不生效，必须报告。
@@ -69,15 +75,15 @@ RIOJAPLOT_ONLY_KEYS = (
     "label_rotate",
 )
 
-#: 出图格式只有两种，前后端同一份枚举（用户裁决："前后端一致支持两种就行了，
-#: jpg 和 pdf，没必要冗余"）。jpeg = 位图，直接分享；pdf = 矢量，适合排版放大。
-#: 曾同时支持 png / jpg / webp / svg，四份冗余枚举要在前端下拉、RPC 校验、文档与测试
-#: 四处各维护一遍，且没有任何一种带来 jpeg/pdf 之外的用途。
-SUPPORTED_PLOT_FORMATS = ("jpeg", "pdf")
+#: 出图格式只有两种，前后端同一份枚举（用户裁决：jpg + svg；PDF 字体处理麻烦，砍掉）。
+#: jpeg = 位图，设备端烘焙好，所见即所得（预览固定用它）；svg = 矢量，适合排版放大。
+#: 曾先后支持过 png / jpg / webp / pdf：每多一种就要在前端下拉、RPC 校验、R 设备分支、
+#: 文档与测试五处各维护一遍，而用户实际只用得上位图与矢量两种。
+SUPPORTED_PLOT_FORMATS = ("jpeg", "svg")
 
 MIME_BY_FORMAT = {
     "jpeg": "image/jpeg",
-    "pdf": "application/pdf",
+    "svg": "image/svg+xml",
 }
 
 
@@ -184,7 +190,12 @@ def resolve_settings(settings: dict[str, Any] | None) -> tuple[dict[str, Any], l
     merged = dict(DEFAULT_PLOT_SETTINGS)
     warnings: list[str] = []
     if settings:
-        unknown = sorted(set(settings) - set(DEFAULT_PLOT_SETTINGS))
+        # seg_left./seg_right.：拼接法分段标记，键名依赖数据，按前缀放行。
+        unknown = sorted(
+            k
+            for k in set(settings) - set(DEFAULT_PLOT_SETTINGS)
+            if not (str(k).startswith("seg_left.") or str(k).startswith("seg_right."))
+        )
         if unknown:
             raise ValueError("未知的出图设置：" + ", ".join(unknown))
         merged.update(settings)
@@ -275,13 +286,70 @@ W <- num("width_px", 2200)
 H <- num("height_px", 1500)
 DPI <- num("dpi", 150)
 
+# ---- 中文字体：cairo 设备只认**真实字体名**，R 的 windowsFonts 别名它不认 ----------
+# 用户的写法是 windowsFonts(straditize = windowsFont("SimHei")) 再 family = "straditize"。
+# 实测（本机 R 4.x + cairo）：别名在 jpeg()/svg() 里**不生效** —— family = "straditize"
+# 的产物与 family = "sans" 逐字节相同（同尺寸 996 个暗像素），中文全成方框；
+# 直接传真实字体名 family = "SimHei" 才有字（7528 个暗像素，SVG 813B → 9.3KB 的字形轮廓）。
+# 所以两件事都做：注册别名（pdf/postscript 那类设备认它），并记住真实名给 cairo 用。
+CN_FONT_NAMES <- c("SimHei", "Microsoft YaHei", "Noto Sans CJK SC")
+CN_FONT_FILES <- c(
+  "SimHei" = "simhei.ttf",
+  "Microsoft YaHei" = "msyh.ttc",
+  "Noto Sans CJK SC" = "NotoSansCJK-Regular.ttc"
+)
+font_installed <- function(name) {
+  if (requireNamespace("systemfonts", quietly = TRUE)) {
+    hit <- systemfonts::match_fonts(name)
+    return(nzchar(hit$path[[1]]) && file.exists(hit$path[[1]]))
+  }
+  file_name <- CN_FONT_FILES[[name]]
+  if (is.null(file_name)) return(FALSE)
+  file.exists(file.path(Sys.getenv("WINDIR", "C:/Windows"), "Fonts", file_name))
+}
+font_family <- "sans"
+font_warnings <- character(0)
+if (.Platform$OS.type == "windows") {
+  cn_font <- NULL
+  for (candidate in CN_FONT_NAMES) {
+    if (font_installed(candidate)) { cn_font <- candidate; break }
+  }
+  if (is.null(cn_font)) {
+    stop("STRADITIZE_ERROR: 没找到可用的中文字体（试过 ", paste(CN_FONT_NAMES, collapse = " / "),
+         "）：请安装其中任一款后重试 —— 静默回退 sans 会把中文标签画成方框。")
+  }
+  grDevices::windowsFonts(straditize = grDevices::windowsFont(cn_font))
+  font_family <- cn_font
+} else if (requireNamespace("sysfonts", quietly = TRUE) && requireNamespace("systemfonts", quietly = TRUE)) {
+  for (candidate in CN_FONT_NAMES) {
+    hit <- systemfonts::match_fonts(candidate)
+    if (nzchar(hit$path[[1]]) && file.exists(hit$path[[1]])) {
+      sysfonts::font_add("straditize", regular = hit$path[[1]])
+      font_family <- "straditize"
+      break
+    }
+  }
+  if (font_family == "sans") {
+    font_warnings <- c(font_warnings, paste0(
+      "非 Windows 且没找到中文字体（sysfonts / systemfonts）：",
+      "标签可能显示为方框。装 Noto Sans CJK 或 SimHei 后重试。"
+    ))
+  }
+} else {
+  font_warnings <- c(font_warnings, paste0(
+    "非 Windows 且缺少 sysfonts/systemfonts 包：中文字体未注册，标签可能显示为方框。"
+  ))
+}
+
 open_device <- function() {
   if (fmt == "jpeg") {
-    grDevices::jpeg(out_path, width = W, height = H, res = DPI, quality = 95, type = "cairo")
-  } else if (fmt == "pdf") {
-    grDevices::pdf(out_path, width = W / DPI, height = H / DPI)
+    grDevices::jpeg(out_path, width = W, height = H, res = DPI, quality = 95,
+                    type = "cairo", family = font_family)
+  } else if (fmt == "svg") {
+    # 尺寸与 jpeg 同口径：像素 / dpi = 英寸（2200/150 × 1500/150 = 14.67in × 10in）。
+    grDevices::svg(out_path, width = W / DPI, height = H / DPI, family = font_family)
   } else {
-    stop("STRADITIZE_ERROR: 不支持的输出格式 ", fmt, "（支持 jpeg/pdf）")
+    stop("STRADITIZE_ERROR: 不支持的输出格式 ", fmt, "（支持 jpeg/svg）")
   }
 }
 
@@ -312,58 +380,14 @@ par(lwd = num("axis_lwd", 4))
 warns <- tryCatch(
   collect_warnings({
     if (use_riojaplot) {
+      # 参数与用户实测脚本一致：riojaPlot 默认 + 这 5 项 —— 字号不再放大，标签不重叠。
       style <- riojaPlot::makeStyles(
-        scale.percent = flag("percent", TRUE),
-        plot.poly = flag("silhouette", TRUE),
-        plot.bar = flag("bar", TRUE),
-        plot.line = flag("line", TRUE),
-        y.rev = flag("rev_y", TRUE),
-        ymin = ymin_v,
-        ymax = ymax_v,
-        yinterval = yint_v,
-        plot.exag = flag("exaggeration", TRUE),
-        exag.mult = num("exag_mult", 5),
-        exag.alpha = num("exag_alpha", 0.2),
-        labels.italicise = flag("italicise", TRUE),
-        labels.break.long = flag("break_long", TRUE),
-        labels.break.n = as.integer(num("break_n", 20)),
-        srt.xlabel = num("label_rotate", 45),
-        cex.xlabel = 0.9 * fs,
-        cex.xaxis = 0.6 * fs,
-        cex.yaxis = 0.7 * fs,
-        cex.ylabel = 0.9 * fs,
-        # 齿长 tcl 与「标签离轴距离」在 riojaPlot 里是绑死的：内部 spc <- -tclx，
-        # 标签起点正好落在齿末端。所以把 tcl 调大只会让**刻度齿穿过数字**
-        # （实测 -1.3 时 10/20/30 被齿线穿过）。帮助页写 tcl 默认 -0.3，保持默认。
-        tcl = num("tcl", -0.3),
-        lwd.axis = num("axis_lwd", 4),
-        plot.bottom.axis = flag("axis", TRUE),
-        plot.top.axis = FALSE,
-        plot.yaxis = TRUE,
-        x.pc.omit0 = TRUE,
-        # y 轴标题走 yvar.name（帮助页：name of the variable to use for primary
-        # y-axis），它是 **chron 数据框的列名**；把该列命名成想要的标题即可，
-        # 见下面调用处的 names(y_df)。style$ylabel 在 y.rev 下会被算到画布外，别用。
-        # 配色与留白：默认的深灰填充 + 黑竖线在打印/投影上都显脏，这里降一档对比度。
-        col.poly = "#C9CFD8",
-        col.bar = "#3B4453",
-        col.line = "#1F2937",
-        col.exag = grDevices::adjustcolor("#C9CFD8", alpha.f = num("exag_alpha", 0.2)),
-        # 列名位置：y.rev 时列名画在图顶，默认 xlabPos 0.1 会在顶部留出一大块空白；
-        # y 轴标签同理，默认会压在刻度数字上（实测 "Depth" 与 10/20/30 重叠）。
-        # 字放大后需要更多留白，否则列名顶到画布边缘、y 轴标题被裁掉（实测）。
-        xlabPos = num("xlab_pos", 0.12),
-        # 列名是 +45° 斜排且字号被放大 2 倍，仅靠 xlabPos 不够：
-        # 实测斜体字母上缘会顶到画布边。显式下移绘图区顶端，给标签留出实体空间。
-        yTop = num("y_top", 0.86),
-        # 底部拥挤：字号放大 2 倍后，x 轴刻度数字与面板底边、与相邻列都贴在一起。
-        # 把绘图区底边上抬（默认 0.05 → 0.12），给刻度一整行的高度。
-        # tcl 回到默认后齿不再需要大留白；0.15 会在底部留下一整块空白（实测）。
-        yBottom = num("y_bottom", 0.08),
-        # ylabPos 不覆盖：留空让 riojaPlot 按刻度实际宽度自己算。
-        # 列名角度 +45°（逆时针上倾）+ 斜体；y.rev 时列名画在图顶，
-        # 不再强制居中——居中会把长属种名挤到邻列上。
-        centre.xlabel = FALSE
+        cex.xlabel = 0.7,
+        srt.xlabel = 45,
+        labels.break.n = 25,
+        cex.yaxis = 0.7,
+        symb.cex = 0.3,
+        plot.poly = TRUE   # makeStyles 默认 poly=FALSE，我们的图要填充
       )
       # 每列是否参与「默认缩放」：settings 里 scale_mode.<列名><TAB>normalize|fixed。
       # normalize = 与 rioja 的 scale.percent **同一算法**：每列各自按**本列最大值**归一
@@ -407,8 +431,57 @@ warns <- tryCatch(
       # 把 y 列命名成用户要的轴标题：riojaPlot 用 yvar.name 选列，同时把它当轴标签。
       y_df <- data.frame(depth)
       names(y_df) <- txt("ylabel", "Depth")
-      riojaPlot::riojaPlot(x = taxa, y = y_df, style = style,
-                           yvar.name = names(y_df)[1])
+      seg_parse <- function(pre) {
+        keys <- names(s)[startsWith(names(s), pre)]
+        if (!length(keys)) return(list())
+        parts <- strsplit(substring(keys, nchar(pre) + 1L), '.', fixed = TRUE)
+        gid <- vapply(parts, `[[`, character(1), 1)
+        col <- vapply(parts, function(p) paste(p[-1], collapse = '.'), character(1))
+        split(col, factor(gid, levels = unique(gid)))
+      }
+      left_grp <- seg_parse('seg_left.')
+      right_grp <- seg_parse('seg_right.')
+      side_grp <- c(left_grp, right_grp)
+      if (length(side_grp) > 0 && length(setdiff(colnames(taxa), unlist(side_grp, use.names = FALSE))) > 0) {
+        pct_cols <- setdiff(colnames(taxa), unlist(side_grp, use.names = FALSE))
+        cmax <- apply(taxa[, pct_cols, drop = FALSE], 2, max, na.rm = TRUE)
+        cmax[!is.finite(cmax) | cmax <= 0] <- 1  # 全 NA 列 max 是 -Inf，会让段宽变 NA
+        # 非 % 段宽 = 一个「平均 % 列」的宽度（用 max 会让它比多数列胖一圈）。
+        r_w <- mean(cmax) / sum(cmax)
+        n_side <- length(side_grp)
+        # 左边距：riojaPlot 的默认 xLeft 由 y 轴标签宽度决定（约 0.15）。
+        # 我们自己按数值排布时必须留出这块，否则首段宽度为负 → "Too many variables"。
+        seg_m <- num('seg_left_margin', 0.05)
+        seg_r <- 0.99
+        avail <- max(0.2, seg_r - seg_m)
+        f_side <- min(max(r_w / (1 + n_side * r_w) * avail, num('seg_side_min', 0.07)), num('seg_side_cap', 0.35) / n_side * avail)
+        f_pct <- avail - n_side * f_side
+        segs <- append(side_grp, list(pct_cols), after = length(left_grp))
+        rp <- NULL
+        xr <- seg_m
+        for (k in seq_along(segs)) {
+          cols <- segs[[k]]
+          is_pct <- identical(cols, pct_cols)
+          x0 <- xr
+          xr <- xr + if (is_pct) f_pct else f_side
+          if (is.null(rp)) {
+            rp <- riojaPlot::riojaPlot(taxa[, cols, drop = FALSE], y_df, style = style,
+                                       yvar.name = names(y_df)[1], xLeft = x0, xRight = xr,
+                                       scale.percent = is_pct)
+          } else {
+            rp <- riojaPlot::riojaPlot(taxa[, cols, drop = FALSE], y_df,
+                                       yvar.name = names(y_df)[1], riojaPlot = rp,
+                                       xGap = 0.01, xLeft = x0, xRight = xr,
+                                       xSpace = num('x_space', 0.01),
+                                       scale.percent = is_pct,
+                                       scale.minmax = FALSE,
+                                       minmax = cbind(0, apply(taxa[, cols, drop = FALSE], 2, max, na.rm = TRUE)))
+          }
+        }
+      } else {
+        riojaPlot::riojaPlot(x = taxa, y = y_df, style = style,
+                             yvar.name = names(y_df)[1])
+      }
     } else {
       rioja::strat.plot(
         d = as.matrix(taxa),
@@ -435,7 +508,7 @@ invisible(grDevices::dev.off())
 if (!file.exists(out_path)) stop("STRADITIZE_ERROR: R 没有产出文件：", out_path)
 
 cat(sprintf("STRADITIZE_ENGINE\t%s\n", engine))
-for (w in unique(warns)) {
+for (w in unique(c(font_warnings, warns))) {
   cat(sprintf("STRADITIZE_WARN\t%s\n", gsub("[\r\n]+", " ", w)))
 }
 '''

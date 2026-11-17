@@ -162,10 +162,13 @@ export function render(data: DiagramData): string {
   // 组上的正数来自分列实测（`measure_axis_stroke`）或用户手填；列上的正数只可能是
   // 用户显式覆盖。两者都必须让用户看得见——静默用一个猜的值会让绿线（0 点）偏掉几像素。
   const axisStrokeColOverride =
-    Number(activeCol?.axis_stroke_px) > 0 ? Number(activeCol?.axis_stroke_px) : null;
+    activeCol?.axis_stroke_px != null && Number(activeCol.axis_stroke_px) >= 0
+      ? Number(activeCol.axis_stroke_px)
+      : null;
   const axisStrokePx = resolveAxisStroke(activeCol, currentGroup);
   const axisStrokeMeasured =
-    Number(currentGroup?.axis_stroke_px) > 0 || axisStrokeColOverride != null;
+    (currentGroup?.axis_stroke_px != null && Number(currentGroup.axis_stroke_px) >= 0) ||
+    axisStrokeColOverride != null;
 
   const groupUnit = currentGroup?.unit || '%';
   // 0 点是**实测轴线右缘**，不是列切分给的 startX：后者实测可偏离轴线 6–20px。
@@ -365,15 +368,15 @@ export function render(data: DiagramData): string {
                  「已经接过值了」就不再手动设，后端其实仍是 None、绿线回落缺省 5
                  （用户原话：「其他两组的线粗框自动就显示 1 了，我以为它直接接过值了」）。
                  本组没值就**显示空**，缺省 5 只出现在 placeholder 里。 -->
-            <input type="number" id="inp-axis-stroke" value="${currentGroup && Number(currentGroup.axis_stroke_px) > 0 ? String(Number(currentGroup.axis_stroke_px)) : ''}" placeholder="5（缺省）" min="1" max="20" step="1"
-                   title="Y 轴轴线的描边宽度（像素）。0 点 = 左缘 + 它。填了就不再从像素里猜。目视估读即可（1–20px）。"
+            <input type="number" id="inp-axis-stroke" value="${currentGroup?.axis_stroke_px != null && Number(currentGroup.axis_stroke_px) >= 0 ? String(Number(currentGroup.axis_stroke_px)) : ''}" placeholder="5（缺省）" min="0" max="20" step="1"
+                   title="Y 轴轴线的描边宽度（像素）。0 点 = 左缘 + 它。填了就不再从像素里猜。目视估读即可（0–20px）。"
                    style="width: 66px; font-size: var(--font-size-sm); padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
             <span style="font-size: var(--font-size-xs); color: var(--text-muted);">px</span>
            <!-- 单列覆盖：组值是初值，逐列差异真实存在（实测 beginner 3/5/5/5），
                 只调某列时不该把整组一起改。留空 = 跟随组。 -->
            <div style="display: flex; align-items: center; gap: 6px; width: 100%; margin-bottom: 6px;">
              <label for="inp-col-axis-stroke" style="font-size: var(--font-size-sm); color: var(--text-muted);">仅本列:</label>
-             <input type="number" id="inp-col-axis-stroke" value="${axisStrokeColOverride != null ? String(axisStrokeColOverride) : ''}" placeholder="${Number(currentGroup?.axis_stroke_px) > 0 ? String(Number(currentGroup?.axis_stroke_px)) : '5'}" min="1" max="20" step="1"
+             <input type="number" id="inp-col-axis-stroke" value="${axisStrokeColOverride != null ? String(axisStrokeColOverride) : ''}" placeholder="${currentGroup?.axis_stroke_px != null && Number(currentGroup.axis_stroke_px) >= 0 ? String(Number(currentGroup.axis_stroke_px)) : '5'}" min="0" max="20" step="1"
                     title="只改当前这一列的 0 点位置。留空 = 跟随组值。"
                     style="width: 66px; font-size: var(--font-size-sm); padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
              <span style="font-size: var(--font-size-xs); color: var(--text-muted);">px（留空 = 跟随组）</span>
@@ -390,10 +393,10 @@ export function render(data: DiagramData): string {
                style="font-size: var(--font-size-xs); line-height: 1.45; margin: -2px 0 6px 0; color: ${axisStrokeMeasured ? 'var(--text-muted)' : 'var(--status-warning)'};">
             ${
               axisStrokeColOverride != null
-                ? `本列覆盖 <strong>${axisStrokeColOverride}px</strong>（组值 ${Number(currentGroup?.axis_stroke_px) > 0 ? `${Number(currentGroup?.axis_stroke_px)}px` : "缺省 5px"}）· 绿线 = 列左缘 + ${axisStrokePx}`
-                : Number(currentGroup?.axis_stroke_px) > 0
+                ? `本列覆盖 <strong>${axisStrokeColOverride}px</strong>（组值 ${currentGroup?.axis_stroke_px != null && Number(currentGroup.axis_stroke_px) >= 0 ? `${Number(currentGroup.axis_stroke_px)}px` : "缺省 5px"}）· 绿线 = 列左缘 + ${axisStrokePx}`
+                : currentGroup?.axis_stroke_px != null && Number(currentGroup.axis_stroke_px) >= 0
                   ? `轴线粗实测 <strong>${axisStrokePx}px</strong> · 绿线 = 列左缘 + ${axisStrokePx}`
-                  : '轴线粗<strong>无法自动测量</strong>（这几列的左边不是灰度均匀的竖轴），当前按 <strong>5px</strong> 估算 —— 绿线可能偏。<strong>目视估读即可</strong>：把你在图上看到的轴宽（1–20px）填进上面的「轴线粗细」，改完绿线立刻按「左缘 + 轴粗」重画，不必精确到亚像素'
+                  : '轴线粗<strong>无法自动测量</strong>（这几列的左边不是灰度均匀的竖轴），当前按 <strong>5px</strong> 估算 —— 绿线可能偏。<strong>目视估读即可</strong>：把你在图上看到的轴宽（0–20px，0 表示 0 点就在列左缘）填进上面的「轴线粗细」，改完绿线立刻按「左缘 + 轴粗」重画，不必精确到亚像素'
             }
           </div>
 

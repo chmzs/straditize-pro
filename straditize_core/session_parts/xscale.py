@@ -44,14 +44,15 @@ def resolve_axis_stroke(col: dict[str, Any] | None, group: dict[str, Any] | None
         col_stroke = float(raw_col) if raw_col is not None else None
     except (TypeError, ValueError):
         col_stroke = None
-    if col_stroke is not None and col_stroke > 0:
+    # 0 合法：0 点落在列左缘（绿线与红线重合）。负数/非数值才算未覆盖。
+    if col_stroke is not None and col_stroke >= 0:
         return col_stroke
     raw_group = (group or {}).get("axis_stroke_px")
     try:
         group_stroke = float(raw_group) if raw_group is not None else None
     except (TypeError, ValueError):
         group_stroke = None
-    if group_stroke is not None and group_stroke > 0:
+    if group_stroke is not None and group_stroke >= 0:
         return group_stroke
     return 5.0
 

@@ -391,16 +391,25 @@ def test_column_axis_stroke_overrides_group() -> None:
     )
 
 
-def test_invalid_column_axis_stroke_falls_back_to_group() -> None:
-    """列级值非法（0 / 负数 / 非数值 / None）一律回落组值，绝不静默取 0。
+def test_zero_column_axis_stroke_is_valid() -> None:
+    """列级轴粗 0 是合法值：0 点落在列左缘（绿线与红线重合）。
 
-    取 0 会把绿线压到列左缘上，读数整体偏小一个轴粗 —— 而且用户看不出来。
+    有些图的轴线本来贴在列左缘上，强制最小 1px 会让这些列整体偏一个轴粗。
     """
-    for bad in (0, -2, "abc", None):
+    session, _group, col = _make_group_session(0.5, 7.0)
+    col["axis_stroke_px"] = 0
+    scale = resolve_column_scale(session, col)
+    assert scale.abs_px0 == 140.0, (
+        "0 必须生效（0 点 = 列左缘 140），实得 %s" % (scale.abs_px0,)
+    )
+
+
+def test_invalid_column_axis_stroke_falls_back_to_group() -> None:
+    """负数 / 非数值 / None 回落组值（它们无法表达 0 点在哪）。"""
+    for bad in (-2, "abc", None):
         session, _group, col = _make_group_session(0.5, 7.0)
         col["axis_stroke_px"] = bad
         scale = resolve_column_scale(session, col)
         assert scale.abs_px0 == 147.0, (
             "列级值 %r 必须回落组值 7（0 点 147），实得 %s" % (bad, scale.abs_px0)
         )
-
