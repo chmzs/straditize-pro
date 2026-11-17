@@ -17,6 +17,7 @@ from ..protocol import (
     STATE_ERROR,
     JsonRpcError,
 )
+from .digitize import normalize_reader_type
 from .xscale import store_exaggeration
 
 #: 「填满整列的色块/空框」的判据阈值（task-21）。
@@ -1861,6 +1862,18 @@ class CoreMixin:
                     col["endX"] = v
                 elif k in ("plot_type", "plotType"):
                     col["plot_type"] = v
+                elif k == "reader_type":
+                    # 逐列读法：这是**取数入口**，非法值必须当场拒绝。
+                    # 不能落到下面的 `col[k] = v` 兜底：那样 `column.update(reader_type="不存在")`
+                    # 会返回 success 并把一个不存在的读法写进工程包，`digitize` 到导出时才炸
+                    # （或者更糟：某条分支静默回落 `area`，列上写 A 实际读 B）。
+                    canonical_reader = normalize_reader_type(v)
+                    col["reader_type"] = canonical_reader
+                    # 会话级映射 `self.reader_types` 由列字典派生，两处同时改，
+                    # 免得"列上写 5、映射里还是旧值"两套口径各说各话（导出读映射）。
+                    if not isinstance(getattr(self, "reader_types", None), dict):
+                        self.reader_types = {}
+                    self.reader_types[target_idx] = canonical_reader
                 elif k in (
                     "exaggeration_mult",
                     "exaggerationMult",

@@ -28,6 +28,7 @@ from ..digitize import (
     _band_is_filled,
     _line_own_offset,
     _own_run_last_offset,
+    _run_bounds,
     _without_axis_ink,
     interpolate_hlines,
 )
@@ -38,12 +39,64 @@ from ..protocol import (
     JsonRpcError,
 )
 
-#: 唯一支持的读取器类型。与 `plot_type`、底层 `digitize_column` 共用同一套**单数**命名。
-READER_TYPES: tuple[str, ...] = ("area", "line", "bar")
+#: 三种**画法**。与 `plot_type`、底层 `digitize_column` 共用同一套**单数**命名。
+PLOT_TYPES: tuple[str, ...] = ("area", "line", "bar")
+
+#: 支持的读取器类型 = 三种画法 + 一种读取**策略**。
+#:
+#: 两类名字在 2026-11 之前恰好同集，本仓首次让它们分叉：`area_exaggerated` 读的
+#: 仍然是一张**面积图**（画法不变，`plot_type` 仍写 `"area"`），只是同一列被画了
+#: 两层——内线是真实值、外线是同一个数放大后的参考线，于是"读哪一层"成了独立的
+#: 决策，画法表达不了它。把它塞进 `plot_type` 会让渲染层见到一个它不认识的画法。
+READER_TYPES: tuple[str, ...] = PLOT_TYPES + ("area_exaggerated",)
 
 #: 历史别名 → 规范名。只在此处出现一次：让别名集中在一个入口被消解，
 #: 而不是散进每个分支判断（那样 `bar` 曾静默落到 else 走均值，P-04）。
 _READER_ALIASES: dict[str, str] = {"bars": "bar"}
+
+# ---- `area_exaggerated` 的判据常量（全部是像素/比值，没有可调"手感"参数）----
+#
+# 这些数字来自取证组在四列 6080 行上的实测（Picea/Pinus/Betula/Quercus），不是估的：
+#
+#   合并 ratio 中位 4.17（p5–p95 = 3.00–5.25，93.5% 落在 [3.0, 5.5]）
+#   逐列中位：Picea 4.50 / Pinus 3.75 / Betula 4.42 / Quercus 4.00
+#
+# 倍率**不是恒定 5**，所以局部倍率一律取"本列 sep 行的中位数"，不写常数、不跨列借。
+
+#: 内线起点与列左缘的距离上限：内线是贴着列轴画的填充区，起点必然在轴粗范围内。
+#: 轴粗 1–20px，取 5 覆盖常见 6px 轴被 `_without_axis_ink` 扣掉之后剩下的残端。
+_EXAG_INNER_ANCHOR_TOL_PX = 5
+
+#: 外线起点必须比内线右缘更靠右这么多，才算"另一段"（抗锯齿会留 1px 毛边）。
+_EXAG_OUTER_MIN_GAP_PX = 2
+
+#: 倍率的**放大原点**：`z0 = startX + 1`。取证组用 ratio 离散度扫描验证过——
+#: 以 k=1 处的 IQR/中位衡量，z0=startX+1 时离散度最小（0.23），z0 取 startX+k
+#: （k≥2）都变大，说明放大线的原点确实在列左缘右侧 1px，而不是读数用的 0 点
+#: （列左缘 + 轴粗）。两个原点不是一回事：本读取器的**读数**仍按读数的 0 点换算，
+#: `z0` 只用来算"外线距 / 内线距"的比值。
+#:
+#: 另注意：读数仍含 +4px 常数底（两层曲线都带，那是 S1 的另一半，本 PR 不修，
+#: 见 issue #46 的次要项）。
+_EXAG_RATIO_ORIGIN_OFFSET_PX = 1.0
+
+#: sep 判据：内线宽（段内像素数）小于这个值的一行，量不出可信的右缘。
+_EXAG_INNER_MIN_WIDTH_PX = 4.0
+
+#: sep 判据：倍率必须落在这个区间，否则那段"外线"更可能是邻列基线/图框线。
+_EXAG_SEP_RATIO_RANGE = (2.0, 7.0)
+
+#: 自检带宽：`k` 落在区间外只标记 `outer_inconsistent`，不改值。
+#: 下限取 3.0（不是 4.0）：实测 p5 = 3.00，收紧到 4.0 会误杀约 1/3 的可分行。
+_EXAG_SELFCHECK_RANGE = (3.0, 5.5)
+
+#: 邻域行数：broken/glue 的判据阈值只从**本行 ±10 行内**的 sep 行取，
+#: 因为内线宽度沿深度会变，整列一个分位数会把上下的层位差异混进来。
+_EXAG_NEIGHBOUR_ROWS = 10
+
+#: 外线右缘距列右界至少这么多像素：贴到界上的那一"段"通常是邻列的基线或图框线，
+#: 把它当外线会让整列读数被邻列污染（同 `-1px` 排除列右边界的那条教训）。
+_EXAG_OUTER_EDGE_MARGIN_PX = 3.0
 
 
 def normalize_reader_type(value: str | None) -> str:
@@ -86,17 +139,24 @@ class DigitizeSessionMixin:
     def digitize(
         self,
         col_index: int,
-        reader_type: str = "area",
+        reader_type: str | None = None,
         mode: str | None = None,
         method: str | None = None,
     ) -> dict[str, Any]:
-        """Digitizes curve or bars in the specified column to extract data points."""
+        """Digitizes curve or bars in the specified column to extract data points.
+
+        未显式传 `reader_type`（也没有 `mode` / `method` 覆盖）时，读法是**该列自己声明的**
+        `reader_type`（`column.update` 可写、工程包里持久化），列上也没有才回落 `"area"`。
+        这条回落顺序是导出链唯一的读法入口：`_ensure_export_column_points` 调
+        `digitize(col_index)` 不传读法，若这里硬编码 `"area"`，列上声明的读法永远不生效。
+        """
         if method is not None:
             reader_type = method
         elif mode is not None:
             reader_type = mode
-        # 归一化一次，后面所有分支只面对规范名单数名。
-        reader_type = normalize_reader_type(reader_type)
+        # 显式值当场归一化：报错时点与旧实现一致（先骂读法，再骂列）。
+        if reader_type is not None:
+            reader_type = normalize_reader_type(reader_type)
         if not getattr(self, "columns", None):
             raise JsonRpcError(
                 STATE_ERROR,
@@ -111,6 +171,9 @@ class DigitizeSessionMixin:
             )
 
         col = columns[col_index]
+        if reader_type is None:
+            # 列字典是唯一真源（工程包里持久化的就是它）；列上没声明 → `"area"`。
+            reader_type = normalize_reader_type(col.get("reader_type") or "area")
         col_roi_id = col.get("roi_id")
         c_start, c_end, y0, y1 = self._digitize_column_window(
             col, col_roi_id, col_index
@@ -130,15 +193,36 @@ class DigitizeSessionMixin:
             mask, col, c_start, c_end, y0, y1, col_index
         )
 
+        # 0 点（列左缘 + 轴粗）：`area_exaggerated` 只用它标"空行读到 0"的位置，
+        # 读数的换算在 `resolve_column_scale` 那一层（同一个 0 点）。
+        zero_x = self._zero_point_x(col_index)
         points = self._read_column_profile(
-            mask, c_start, c_end, y0, y1, reader_type
+            mask,
+            c_start,
+            c_end,
+            y0,
+            y1,
+            reader_type,
+            zero_x=float(c_start) if zero_x is None else float(zero_x),
         )
+        # `area_exaggerated` 会**跳过**判不出内线的行（留空，不是 0）。把那些行号报出来：
+        # 只看 "points 里缺了谁" 分不清"这一行没数据"和"这一行有墨但读法判不出"，
+        # 而后者是要人看一眼的。其它读取器逐行必有点，这个键恒为空。
+        unreadable_rows: list[int] = []
+        if reader_type == "area_exaggerated":
+            emitted = {int(p["row"]) for p in points}
+            unreadable_rows = [
+                row
+                for row in range(y0, min(y1, self.height - 1) + 1)
+                if row not in emitted
+            ]
         if not points:
             return {
                 "col_index": col_index,
                 "reader_type": reader_type,
                 "points": [],
                 "control_points_count": 0,
+                "unreadable_rows": unreadable_rows,
             }
 
         self._interpolate_across_hlines(points, c_start)
@@ -175,6 +259,7 @@ class DigitizeSessionMixin:
             "points": points,
             "control_points": ctrl_pts_list,
             "control_points_count": len(control_points),
+            "unreadable_rows": unreadable_rows,
         }
 
     # ---- digitize 的分段实现 ----
@@ -296,8 +381,22 @@ class DigitizeSessionMixin:
         y0: int,
         y1: int,
         reader_type: str,
-    ) -> list[dict[str, float]]:
-        """逐行把墨迹变成特征 x：area 读本列墨迹右缘、line 读曲线中心或填充顶边、bar 读柱子右缘。"""
+        *,
+        zero_x: float | None = None,
+    ) -> list[dict[str, Any]]:
+        """逐行把墨迹变成特征 x：area 读本列墨迹右缘、line 读曲线中心或填充顶边、bar 读柱子右缘。
+
+        `zero_x` 只有 `area_exaggerated` 用（0 点像素），其余读取器不碰它。
+        """
+        if reader_type == "area_exaggerated":
+            return self._read_exaggerated_profile(
+                mask,
+                c_start,
+                c_end,
+                y0,
+                y1,
+                float(c_start) if zero_x is None else float(zero_x),
+            )
         points: list[dict[str, float]] = []
 
         # The column's own curve is identified by connected-component size; the
@@ -375,12 +474,215 @@ class DigitizeSessionMixin:
             points.append({"row": row_y, "x": feat_x, "y": float(row_y)})
         return points
 
+    def _read_exaggerated_profile(
+        self,
+        mask: np.ndarray,
+        c_start: int,
+        c_end: int,
+        y0: int,
+        y1: int,
+        zero_x: float,
+    ) -> list[dict[str, Any]]:
+        """`area_exaggerated`：同一列画了两层时的取数——读**内线**，外线只做自检。
+
+        ## 为什么不能沿用"整行最右墨迹"
+
+        实地图上（一张孢粉图谱的 Picea/Pinus/Betula/Quercus 四列）同一条数据被画了两次：
+        贴着列轴的填充区是**真实值**（内线），它外侧另有一条细线是**放大后的同一条数据**
+        （外线，倍率中位 4.17，逐列中位 3.75–4.50）。`area` 读"本列连通域的最右墨迹"，
+        于是取到外线 = 夸大值；外线在断行处又不存在，读数就掉回内线，整列在 ×1 与 ×4 之间跳。
+
+        ## 行分类（四分；取证组口径，实测覆盖率上限见下）
+
+        逐行只看**该行的段结构**（列窗内连续墨迹段），先定内线再判类型：
+
+        * **内线** = 起点离列左缘 ≤ `_EXAG_INNER_ANCHOR_TOL_PX` 的那一段（面积图的填充区
+          必然贴轴，外线浮在值上、不贴轴）。
+        * **sep**（可分行，读内线）：本行另有独立外段，且内线宽 ≥ 4px，且
+          `ratio = 外线距 / 内线距 ∈ [2, 7]`，且外线右缘 ≤ 列右界 −3px。读数 = 内线右缘。
+        * **broken**（外线断行，读内线）：单段行，段宽 ≤ **本行 ±10 行内 sep 行内线宽的 p75**
+          —— 段太窄，不可能是"内外线粘连"的那一块，就只能是内线本身。
+        * **glue**（内外线粘连，反算）：单段行，段右缘距放大原点 ≥ **本行 ±10 行内 sep 行
+          外线距的 p25** —— 段一直长到外线处，说明两线连成一块，内线右缘无从量起；
+          用邻域 sep 行 `ratio` 的中位数反算 `x = z0 + (段右缘 − z0) / k`，
+          标 `source="derived_from_outer"`。
+        * **undet**（判不出）：其余单段行 / 没有贴轴段的行 —— **不给数**，行号进
+          `digitize()["unreadable_rows"]`。实测这类行很多（Picea 459/1520、
+          Quercus 1048/1520），**不插值**：插值会造出"看起来像实测"的数，
+          违反 `docs/ARCHITECTURE.md` §2 的第一不变量。留给后续显式插值功能。
+
+        实测可读行数（sep∪broken）应约为 Picea 770 / Pinus 819 / Betula 938 / Quercus 223
+        （各列 1520 行）。**跑出 100% 就是错的**：那说明 undet 被当成了可读行。
+
+        ## 自检与口径
+
+        * `k` 只用于**自检**（`_EXAG_SELFCHECK_RANGE` 外标 `flags=["outer_inconsistent"]`，
+          不改值）和**粘连行反算**，不参与 sep/broken 行的读数。
+        * 倍率不是常数：局部 `k` 一律取本列（本邻域）sep 行的中位数，不写死 5、不跨列借。
+        * 本读法量到的内线**就是真实值**，因此 `exaggeration_mult` 必须按 1 处理 ——
+          再除一次等于把同一个倍数罚两次。
+        * 读数仍含 +4px 常数底（两层都带，S1 的另一半，见 issue #46 的次要项）。
+        """
+        points: list[dict[str, Any]] = []
+        band = mask[y0 : y1 + 1, c_start:c_end]
+        if band.size == 0:
+            return points
+        band_axis_offsets = _axis_ink_offsets(band)
+        # 放大原点（比值分母的原点）：`z0 = startX + 1`，见 `_EXAG_RATIO_ORIGIN_OFFSET_PX`。
+        origin = float(c_start) + _EXAG_RATIO_ORIGIN_OFFSET_PX
+
+        # 第一遍只做**逐行分类**，不掺任何统计量：分类只依赖该行自己的段结构，
+        # 统计量（邻域分位数）留到第二遍。
+        rows: list[tuple[int, str, dict[str, float]]] = []
+        for row_y in range(y0, y1 + 1):
+            if row_y >= self.height:
+                break
+            local_y = row_y - y0
+            if local_y < 0 or local_y >= band.shape[0]:
+                break
+            fg_indices = np.where(band[local_y])[0]
+            # 轴线墨迹不是数据（P-02）。整行只剩轴线时退回全墨迹：那几列此时就是数据本身。
+            data_indices = _without_axis_ink(fg_indices, band_axis_offsets)
+            if not len(data_indices):
+                data_indices = fg_indices
+            if not len(data_indices):
+                rows.append((row_y, "empty", {}))
+                continue
+            starts, ends = _run_bounds(data_indices)
+            spans = [
+                (int(data_indices[si]), int(data_indices[ei]))
+                for si, ei in zip(starts, ends)
+            ]
+            anchored = [span for span in spans if span[0] <= _EXAG_INNER_ANCHOR_TOL_PX]
+            if not anchored:
+                # 没有任何一段贴轴：既判不出内线，也就无从判断哪一段是真实值。
+                rows.append((row_y, "undet", {}))
+                continue
+            inner_start, inner_end = max(anchored, key=lambda span: span[1])
+            inner_span = float(inner_end - inner_start + 1)
+            outer_spans = [
+                span for span in spans if span[0] > inner_end + _EXAG_OUTER_MIN_GAP_PX
+            ]
+            sep_payload: dict[str, float] | None = None
+            if outer_spans:
+                outer_end = max(span[1] for span in outer_spans)
+                inner_px = c_start + inner_end
+                outer_px = c_start + outer_end
+                distance_in = inner_px - origin
+                ratio = (outer_px - origin) / distance_in if distance_in > 0 else None
+                if (
+                    inner_span >= _EXAG_INNER_MIN_WIDTH_PX
+                    and ratio is not None
+                    and _EXAG_SEP_RATIO_RANGE[0] <= ratio <= _EXAG_SEP_RATIO_RANGE[1]
+                    and outer_px <= c_end - _EXAG_OUTER_EDGE_MARGIN_PX
+                ):
+                    sep_payload = {
+                        "inner_px": float(inner_px),
+                        "inner_span": inner_span,
+                        "outer_extent": float(outer_px - origin),
+                        "ratio": float(ratio),
+                    }
+            if sep_payload is not None:
+                rows.append((row_y, "sep", sep_payload))
+                continue
+            # 单段行，或"多出来的段"不满足 sep 判据（更像邻列/图框的噪声）——
+            # 一律按"本行只有内线"处理，读数取内线右缘；是否粘连留给第二遍的邻域判据。
+            rows.append(
+                (
+                    row_y,
+                    "single",
+                    {
+                        "end": float(c_start + inner_end),
+                        "span": inner_span,
+                        "extent": float(c_start + inner_end - origin),
+                    },
+                )
+            )
+
+        # 第二遍：邻域统计量只从**sep 行**取（内线宽 p75 / 外线距 p25 / ratio 中位）。
+        sep_rows = [(row_y, payload) for row_y, kind, payload in rows if kind == "sep"]
+
+        for row_y, kind, payload in rows:
+            flags: list[str] = []
+            if kind == "empty":
+                # 空行读到 0 点是合法读数（这一层没有该物种），不是兜底。
+                points.append(
+                    {"row": row_y, "x": float(zero_x), "y": float(row_y), "source": "read"}
+                )
+                continue
+            if kind == "undet":
+                # 判不出 ⇒ 该行不给数（缺席 ⇒ 导出为空，行号进 `unreadable_rows`）。
+                continue
+            if kind == "sep":
+                if not (
+                    _EXAG_SELFCHECK_RANGE[0]
+                    <= payload["ratio"]
+                    <= _EXAG_SELFCHECK_RANGE[1]
+                ):
+                    flags.append("outer_inconsistent")
+                points.append(
+                    {
+                        "row": row_y,
+                        "x": payload["inner_px"],
+                        "y": float(row_y),
+                        "source": "read",
+                        **({"flags": flags} if flags else {}),
+                    }
+                )
+                continue
+
+            # kind == "single"：靠**本行 ±10 行内**的 sep 行决定是内线还是粘连块。
+            neighbours = [
+                payload_sep
+                for row_sep, payload_sep in sep_rows
+                if abs(row_sep - row_y) <= _EXAG_NEIGHBOUR_ROWS
+            ]
+            if not neighbours:
+                # 邻域里一条可分行都没有 ⇒ 无从比较 ⇒ 判不出（不是 0，也不是内线）。
+                continue
+            inner_p75 = float(np.percentile([p["inner_span"] for p in neighbours], 75))
+            outer_p25 = float(np.percentile([p["outer_extent"] for p in neighbours], 25))
+            if payload["span"] <= inner_p75:
+                # broken：段宽不超过邻域内线宽 —— 它就是内线本身（外线这一行没画）。
+                feat_x = payload["end"]
+                if feat_x <= zero_x:
+                    # 只有轴线墨迹（该行读数为 0）：回 0 点，别把轴粗算成负读数。
+                    feat_x = float(zero_x)
+                points.append(
+                    {"row": row_y, "x": feat_x, "y": float(row_y), "source": "read"}
+                )
+                continue
+            if payload["extent"] >= outer_p25:
+                # glue：段一直长到（或超过）邻域外线距 —— 内外线粘连，用邻域 ratio 中位反算。
+                k_local = float(np.median([p["ratio"] for p in neighbours]))
+                if k_local <= 0:
+                    continue
+                points.append(
+                    {
+                        "row": row_y,
+                        "x": float(origin + payload["extent"] / k_local),
+                        "y": float(row_y),
+                        "source": "derived_from_outer",
+                    }
+                )
+                continue
+            # 既不是内线、也不是粘连块 ⇒ undet。
+
+        return points
+
     def _interpolate_across_hlines(
         self, points: list[dict[str, float]], c_start: int
     ) -> None:
         """跨横线插值：横线所在行会被读成 100% 尖峰，按相邻行线性补回来（就地改 points）。"""
         # Interpolate across pervasive horizontal grid lines to eliminate artificial 100% spikes
         if hasattr(self, "hline_rows") and self.hline_rows:
+            # 这里把 `hline_rows` 的行号当**数组下标**用，前提是 points 逐行连续。
+            # `area_exaggerated` 会对判不出的行**不产出点**（留空而不是编一个数），
+            # 于是下标与行号错位；错位时宁可跳过插值，也不要把某一行的高斯峰搬到
+            # 另一行上去（那是往数据里注入一个不存在的尖峰）。
+            point_rows = [int(p["row"]) for p in points]
+            if any(b - a != 1 for a, b in zip(point_rows, point_rows[1:])):
+                return
             raw_vals = np.array([p["x"] - c_start for p in points], dtype=float)
             rel_hlines = [hr for hr in self.hline_rows if 0 <= hr < len(raw_vals)]
             if rel_hlines:
@@ -464,8 +766,17 @@ class DigitizeSessionMixin:
         )
 
         ctrl_pts_list: list[dict[str, Any]] = []
+        # `kept_rows` 是**数组下标**，行号要经 points 转一次：`area_exaggerated` 会
+        # 跳过判不出的行，此时 `y0 + 下标` 已经不是那一行的行号。逐行连续的读取器下
+        # `point_rows[i] == y0 + i`，与旧写法逐字节等价。
+        point_rows = [int(round(float(p["row"]))) for p in points]
         for r_rel, v_rel in zip(kept_rows, kept_vals):
-            r_int = int(y0 + r_rel)
+            pos = int(r_rel)
+            r_int = (
+                point_rows[pos]
+                if 0 <= pos < len(point_rows)
+                else int(y0 + r_rel)
+            )
             x_val = float(c_start + max(min_width, float(v_rel)))
             control_points[r_int] = x_val
             ctrl_pts_list.append(

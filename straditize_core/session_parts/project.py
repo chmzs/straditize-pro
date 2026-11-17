@@ -765,6 +765,12 @@ class ProjectSessionMixin:
                 "x_ticks": x_ticks,
                 "startValue": c.get("startValue", 0),
                 "tickValue": c.get("tickValue", 100),
+                # 逐列读法：`digitize` 不传读法时**只**看列字典这一个键，所以它必须在这里
+                # 落进 `col_dict`。只写进 `self.reader_types` 是不够的——那是派生的会话映射，
+                # 载入完成后 `digitize(col_index)` 会读不到读法，静默回落 `area`
+                # （用户设的 `area_exaggerated` 打开工程就失效）。老包没有该键 → None
+                # → `digitize` 回落 `"area"`，行为与今天一致。
+                "reader_type": c.get("reader_type"),
                 "tickEndX": c.get("tickEndX", c.get("endX", 100)),
                 # 列级轴粗覆盖（ARCHITECTURE §6.4）：**只放用户显式设的值**，
                 # 没设过就是 None（= 回落组值）。

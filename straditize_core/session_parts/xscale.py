@@ -550,7 +550,10 @@ def _scale_from_group_slope(
         unit=str(_group.get("unit") or col_dict.get("unit") or "%"),
         plot_type=str(_group.get("plot_type") or col_dict.get("plot_type") or "area"),
         scale_type=str(_group.get("scale_type") or "linear"),
-        exaggeration_mult=_group.get("exaggeration_mult"),
+        # 列级优先：`_resolve_exaggeration` 已经按「列 > 组」解析好了，这里不能再直接
+        # 读 `_group["exaggeration_mult"]`——那条路径把**列级**设置静默丢掉（实测给 4 列
+        # 各设 5，导出数值一字未变，因为组上没有该键），是本条 bug 的直接成因。
+        exaggeration_mult=exaggeration_mult,
         calibrated=True,
         source="group_slope",
     )

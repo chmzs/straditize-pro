@@ -22,7 +22,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | `mode` | §4.2 `core.extractForeground` | 默认 `"otsu"`；`"otsu"`/`"binary"`/`"adaptive"` | `core.py:716/743/745` 三分支，其余 `INVALID_PARAMS`；默认只在 `core.py:663` 声明（D-6 后包装层不重复） | 一致 |
 | `extraction_mode` | §4.2（D-5 新补） | 默认 `"standard"`；5 个规范值 | `image.py::EXTRACTION_MODES` 的 values；未命中 → `INVALID_PARAMS` | 一致（文档此前**没有这个参数**） |
-| `reader_type` | §4.4 `core.digitize` | 默认 `"area"`；`"area"`/`"line"`/`"bar"` | `digitize.py:28 READER_TYPES` | 一致（由 `test_rpc_spec_reader_types.py` 覆盖，本文件不重复） |
+| `reader_type` | §4.4 `core.digitize` | 默认 `null`（取该列声明的 `reader_type`，列上也没有才 `"area"`）；`"area"`/`"line"`/`"bar"`/`"area_exaggerated"` | `digitize.py::READER_TYPES`（= `PLOT_TYPES` + 读取策略名） | 一致（由 `test_rpc_spec_reader_types.py` 覆盖，本文件不重复；2026-11 默认值从字面量改为列声明） |
 | `unit` | §4.6 `core.calibrateAxes` | 默认 `"cm"`；**自由文本**，刻意不做枚举 | 默认 `session.py:127`；`export.py:636` 只 `strip()` | 一致（按自由文本断言） |
 | `primary_axis` | §4.6 | 默认 `"depth"`；只接受 `"depth"`/`"age"` | `export.py:603` 白名单；默认 `session.py:133`；形参默认 `None` | 一致 |
 | `strength` | §4.8 `algorithm.degrid` | 默认 `"medium"`；`"off"`/`"weak"`/`"medium"`/`"strong"` | `image.py::GRID_LINE_PRESETS` + `core.py:1503` 的 `"off"` 清空分支 | 一致 |
@@ -30,7 +30,7 @@
 | `format` | §4.9 `core.exportData` | 默认 `"csv"`；`"csv"`/`"parquet"` | `export.py:731` 白名单；形参默认 `"csv"` | 一致 |
 | `sample_key` | §4.1 `core.loadImage` | `hoya`/`verification`/`beginner` | `core.py:159-169` 字典，未命中 → `INVALID_PARAMS` | 一致 |
 | `scale_type` | §4.10 `column.calibrateXTicks`；§4.11 组同源 | `"linear"`/`"log"`，其它 `-32602` | `xscale.py::SCALE_TYPES` + `normalize_scale_type`；**写入端**（`xticks.py`、`roi.py` groupCreate/groupUpdate）与**解析端**（`ColumnScale.__post_init__`、`resolve_column_scale`）双重校验 | 一致（两端都拒绝） |
-| `plot_type` | §4.10（D-4 补取值） | `"area"`/`"line"`/`"bar"` | 与 `READER_TYPES` 同名，但不参与计算分支、也**不校验** | 取值一致；校验仍缺（§8） |
+| `plot_type` | §4.10（D-4 补取值） | `"area"`/`"line"`/`"bar"` | 与 `PLOT_TYPES` 同集（**不再与 `READER_TYPES` 同集**：后者多一个读取策略名 `area_exaggerated`），但不参与计算分支、也**不校验** | 取值一致；校验仍缺（§8） |
 | `curve_channel` | §4A.2 `agedepth.extractAndInspect` | `"auto"`/`"chroma"`/`"darkness"` | `age_depth_tracer.py:634` 白名单；两层默认都是 `"auto"` | 一致 |
 | `cc` | §4A.6 `agedepth.generateBaconScript` | `0`/`1`/`2`/`3`（D-3 补 0） | 不校验、透传进 rbacon 脚本；代码 docstring 亦声明 0–3 | 一致（弱绑定，§4） |
 

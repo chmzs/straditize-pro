@@ -1018,7 +1018,7 @@
   },
   "unknown_reader_type": {
    "code": -32602,
-   "message": "未知的读取方式 'mean'：只支持 area / line / bar。"
+   "message": "未知的读取方式 'mean'：只支持 area / line / bar / area_exaggerated。"
   }
  },
  "scan_col23_area": {

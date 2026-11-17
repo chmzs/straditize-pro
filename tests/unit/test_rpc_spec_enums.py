@@ -38,7 +38,7 @@ from straditize_core.image import (
 )
 from straditize_core.protocol import INVALID_PARAMS, JsonRpcError
 from straditize_core.session import StraditizeSession
-from straditize_core.session_parts.digitize import READER_TYPES
+from straditize_core.session_parts.digitize import PLOT_TYPES, READER_TYPES
 from straditize_core.session_parts.xscale import (
     SCALE_TYPES,
     ColumnScale,
@@ -572,13 +572,25 @@ def test_documented_extraction_mode_matches_code() -> None:
     assert _doc_default(section, "extraction_mode") == normalize_extraction_mode(None)
 
 
-def test_documented_plot_type_matches_reader_types() -> None:
-    """§4.10 `plot_type`（审计 D-4）：与 `READER_TYPES` 是同一套单数命名。"""
+def test_documented_plot_type_matches_plot_types() -> None:
+    """§4.10 `plot_type`（审计 D-4）：与 `PLOT_TYPES` 是同一套单数命名。
+
+    2026-11 之前这条断言的是 `plot_type` 文档取值 == `READER_TYPES`，**那是因为两者
+    恰好同集**。本 PR 首次让它们分叉：`plot_type` 管**画法**（渲染画什么），
+    `reader_type` 管**取数**（从这一列的墨迹里读哪一层）。同一列被画了两层曲线时，
+    画法仍是面积图，读法多出 `area_exaggerated` 一种 —— 它不是画法，
+    塞进 `plot_type` 会让渲染层见到不认识的形态。所以判据改成"文档 == `PLOT_TYPES`"
+    加"`PLOT_TYPES` ⊂ `READER_TYPES`"：既钉住画法取值，也钉住两者不许各长各的名字。
+    """
     documented = _doc_values(
         _section("### 4.10 `column.calibrateXTicks`", "### 4.10b"), "plot_type"
     )
-    assert documented == set(READER_TYPES), (
-        f"plot_type：文档声明 {sorted(documented)}，READER_TYPES = {sorted(READER_TYPES)}"
+    assert documented == set(PLOT_TYPES), (
+        f"plot_type：文档声明 {sorted(documented)}，PLOT_TYPES = {sorted(PLOT_TYPES)}"
+    )
+    assert set(PLOT_TYPES) < set(READER_TYPES), (
+        f"画法名必须全部是合法读法名：PLOT_TYPES={sorted(PLOT_TYPES)}，"
+        f"READER_TYPES={sorted(READER_TYPES)}"
     )
 
 
