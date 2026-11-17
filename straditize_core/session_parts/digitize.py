@@ -28,10 +28,11 @@ from ..digitize import (
     _band_is_filled,
     _line_own_offset,
     _own_run_last_offset,
+    _run_bounds,
     _without_axis_ink,
     interpolate_hlines,
 )
-from .xscale import _resolve_column_group, resolve_axis_stroke
+from .xscale import _resolve_column_group, resolve_axis_stroke, resolve_column_scale
 from ..protocol import (
     INVALID_PARAMS,
     STATE_ERROR,
@@ -44,6 +45,37 @@ READER_TYPES: tuple[str, ...] = ("area", "line", "bar")
 #: 历史别名 → 规范名。只在此处出现一次：让别名集中在一个入口被消解，
 #: 而不是散进每个分支判断（那样 `bar` 曾静默落到 else 走均值，P-04）。
 _READER_ALIASES: dict[str, str] = {"bars": "bar"}
+
+# 夸大列"外线断开"判据的常量（全部可判定，没有"大致/适当"）。
+#
+# 现场（`.recon_20261117`，3591×2003 孢粉图）：Picea/Pinus/Betula/Quercus 四列把同一组
+# 数据画了两层——贴轴的填充/曲线（**内线** = 真值，宽 4–8px）与外侧放大曲线（**外线**
+# = 真值 × mult）。取数读"本行最右墨迹"，外线断开的那几行就退化成内线（recon 实测
+# Quercus y=1212–1221 连续 10 行；轴墨迹跨 939..943 即 5px，曲线静止位 x=944）。
+#
+# 每个常量的含义：
+#   _INNER_RUN_START_TOL_PX      内线贴轴：段起点距列左缘 ≤ 5px（轴芯 1–5px + 填充）
+#   _BROKEN_INNER_MAX_WIDTH_PX   内线（轴 + 填充）宽度上界 8px；内外线相接时的单段实测
+#                                19–33px，落在 8px 之外 → 不会被当成断线补倍率
+#   _INNER_WIDTH_MEDIAN_FACTOR   单段宽度 ≤ 1.5 × 内线宽中位数（见下"基准"）
+#   _OUTER_DIST_SLACK_PX         比值判据余量：内线距 ≤ 中位(外线距/内线距) × 内线距 + 2px
+#
+# 宽中位数的基准：优先取**有外线的行**（两段行）的内线宽；整列都没有外线时退化为
+# 全列首段宽度。后者对应"这一列的外线整条断裂"——此时"外线缺失"在每一行都成立，
+# 不能因为没有一行带外线就不补（合成图用例 2 钉的就是这个分支）。
+_INNER_RUN_START_TOL_PX = 5
+_BROKEN_INNER_MAX_WIDTH_PX = 8
+_INNER_WIDTH_MEDIAN_FACTOR = 1.5
+_OUTER_DIST_SLACK_PX = 2.0
+
+
+def _ink_runs(row_pixels: np.ndarray) -> list[tuple[int, int]]:
+    """一行墨迹的连续段 ``[(起点, 终点)]``（0 基偏移、含端点，按 x 升序）。"""
+    offsets = np.flatnonzero(row_pixels)
+    if not offsets.size:
+        return []
+    starts, ends = _run_bounds(offsets)
+    return [(int(offsets[s]), int(offsets[e])) for s, e in zip(starts, ends)]
 
 
 def normalize_reader_type(value: str | None) -> str:
@@ -139,7 +171,14 @@ class DigitizeSessionMixin:
                 "reader_type": reader_type,
                 "points": [],
                 "control_points_count": 0,
+                "broken_rows": [],
             }
+
+        # 夸大列里外线断开的那几行，最右墨迹会退化成内线 → 先折回"不除倍率"的等价位置。
+        # 必须在横线插值之前：插值要在同一物理量的空间里做（见该方法 docstring）。
+        broken_rows = self._compensate_broken_inner_rows(
+            mask, col, c_start, c_end, points, col_index
+        )
 
         self._interpolate_across_hlines(points, c_start)
 
@@ -175,6 +214,7 @@ class DigitizeSessionMixin:
             "points": points,
             "control_points": ctrl_pts_list,
             "control_points_count": len(control_points),
+            "broken_rows": broken_rows,
         }
 
     # ---- digitize 的分段实现 ----
@@ -374,6 +414,129 @@ class DigitizeSessionMixin:
 
             points.append({"row": row_y, "x": feat_x, "y": float(row_y)})
         return points
+
+    def _compensate_broken_inner_rows(
+        self,
+        mask: np.ndarray,
+        col: dict[str, Any],
+        c_start: int,
+        c_end: int,
+        points: list[dict[str, float]],
+        col_index: int,
+    ) -> list[int]:
+        """把"外线断开"的行从内线补回外线位置，返回被判定的行号（升序）。
+
+        ## 物理事实（recon-20261117，用户已确认，此处不复述论证）
+
+        这批列把同一组数据画了两层：贴轴的填充/曲线（**内线** = 真值）与外侧放大曲线
+        （**外线** = 真值 × `exaggeration_mult`）。取数口径是"本行最右墨迹"，正常行读到
+        外线，`px_to_value` 再除以倍率得真值。外线在部分行**断开**，这些行的最右墨迹退化
+        成内线，除倍率后只有真值的 1/mult —— 图上因此出现并不存在的低谷。
+
+        ## 修法（用户拍板）：内线 × 倍率
+
+        行级特例只能改 x：`x ← z0 + (x_in − z0) × mult`，于是
+        `(x − z0) × slope / mult ≡ (x_in − z0) × slope`，恒等于"这一行不除倍率"，与换算
+        侧零耦合。`z0` 必须与 `px_to_value` 用同一个 0 点（`scale.abs_px0`）；换成别的 0 点
+        会让两种口径差一个轴粗、再被乘 mult。
+
+        补 x 发生在 `_interpolate_across_hlines` **之前**：横线行的插值因此发生在"已折算成
+        同一物理量"的空间里（断线行的 `z0 + mult·d` 与正常行的外线位置本就重合），
+        若在插值之后再补，横线行会把内线与外线混在一起平均。
+
+        ## 判据与常量
+
+        逐行取列窗内的连续墨迹段，**三条同时成立**才判 broken：
+
+        1. **只有一段**——有外线的行一定有第二段（外线与填充之间隔着空白）；
+        2. 该段**贴轴**（起点 ≤ `c_start + _INNER_RUN_START_TOL_PX`）→ 它是内线，
+           右缘记 `x_in`；
+        3. 段宽 ≤ `_INNER_WIDTH_MEDIAN_FACTOR` × 同列"两段行"的内线宽中位数，且
+           `x_in − z0 ≤ 中位(外线距/内线距) × (x_in − z0) + _OUTER_DIST_SLACK_PX`。
+
+        兜底判据：只有一段且段宽 `< _BROKEN_INNER_MAX_WIDTH_PX` 也算 broken。它与上面三条
+        在本图量级下等价——内线 = 轴线（≤5px）+ 贴轴曲线（1–2px）恒 < 8px；而"内外线相接"
+        造成的单段实测 ≥ 19px，永远落不进 8px。误判方向：**厚轴图（轴粗 ≥ 8px）会漏判**
+        （读数偏小 1/mult，与现状相同），不会反向误补。
+
+        倍率取 `resolve_column_scale(...).exaggeration_mult`——唯一解析入口（列级 > 组级 >
+        历史键，`<=1` 视为未放大），且它正是 `px_to_value` 要除的那个数；两处取同一个值，
+        补偿与除法才会精确抵消。解析不到或 ≤1 时整条逻辑不启动：没有倍率就没有"两层"，
+        硬补会把普通单层列的读数放大 mult 倍。此时也**不写 `source` 字段**——普通列的点
+        字典必须与改动前逐字节相同（`tests/unit/test_digitize_golden.py` 钉着 x 序列）。
+        """
+        scale = resolve_column_scale(self, col, col_index)
+        mult = scale.exaggeration_mult
+        if mult is None or mult <= 1.0:
+            return []
+        zero = float(scale.abs_px0)
+
+        row_segments: list[tuple[dict[str, float], list[tuple[int, int]]]] = []
+        for point in points:
+            row_y = int(point["row"])
+            if row_y < 0 or row_y >= mask.shape[0]:
+                continue
+            row_segments.append((point, _ink_runs(mask[row_y, c_start:c_end])))
+
+        # 先量这一列的两层几何：内线宽中位数与"外线距/内线距"中位数。
+        inner_widths: list[float] = []
+        outer_ratios: list[float] = []
+        for _point, segments in row_segments:
+            if len(segments) < 2:
+                continue
+            run_start, run_end = segments[0]
+            if run_start > _INNER_RUN_START_TOL_PX:
+                continue
+            inner_dist = (c_start + run_end) - zero
+            outer_dist = (c_start + segments[-1][1]) - zero
+            inner_widths.append(float(run_end - run_start + 1))
+            if inner_dist > 0 and outer_dist > inner_dist:
+                outer_ratios.append(outer_dist / inner_dist)
+        median_outer_ratio: float | None = (
+            float(np.median(outer_ratios)) if outer_ratios else None
+        )
+        if not inner_widths:
+            # 整列看不到外线：宽基准退化为全列首段宽度（见常量处的说明）。
+            inner_widths = [
+                float(segments[0][1] - segments[0][0] + 1)
+                for _point, segments in row_segments
+                if segments and segments[0][0] <= _INNER_RUN_START_TOL_PX
+            ]
+        if not inner_widths:
+            return []
+        median_inner_width = float(np.median(inner_widths))
+
+        broken_rows: list[int] = []
+        for point, segments in row_segments:
+            if len(segments) != 1:
+                point["source"] = "read"
+                continue
+            run_start, run_end = segments[0]
+            if run_start > _INNER_RUN_START_TOL_PX:
+                point["source"] = "read"
+                continue
+            inner_dist = (c_start + run_end) - zero
+            width = float(run_end - run_start + 1)
+            narrow_enough = width <= _INNER_WIDTH_MEDIAN_FACTOR * median_inner_width
+            # 比值判据：整列没有一行带外线时无基准可比，按"成立"处理（此时每一行都
+            # 只有内线，"外线缺失"没有反例可反驳）。
+            inside_envelope = median_outer_ratio is None or (
+                inner_dist <= median_outer_ratio * inner_dist + _OUTER_DIST_SLACK_PX
+            )
+            # 单段太窄就是"只剩内线"：宽 < 8px 的兜底判据（见 docstring）。
+            only_inner = (narrow_enough and inside_envelope) or (
+                width < _BROKEN_INNER_MAX_WIDTH_PX
+            )
+            if not only_inner or inner_dist <= 0:
+                point["source"] = "read"
+                continue
+            # 内线 × 倍率 = 外线该在的位置；px_to_value 再除以同一个倍率 → 等于不除。
+            point["x"] = float(zero + inner_dist * mult)
+            point["source"] = "broken_inner"
+            broken_rows.append(int(point["row"]))
+
+        broken_rows.sort()
+        return broken_rows
 
     def _interpolate_across_hlines(
         self, points: list[dict[str, float]], c_start: int
