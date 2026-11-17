@@ -801,6 +801,15 @@ class ProjectSessionMixin:
             else:
                 self.manual_points.pop(idx, None)
 
+        # 「掩膜变了、点集作废」标记在**载入**后必须清空。
+        #
+        # 包里的点集与包里的掩膜是**同一时刻的快照**：标记记录的是"当前会话的掩膜
+        # 变过，逐行点需要按新墨迹重建"，而刚载入的会话没有"变过"这回事。
+        # 留着它有两个后果：`_ensure_export_column_points` 白重建一遍（慢，但结果可能
+        # 对）；以及**重建覆盖包里恢复的手工点**——后者是静默的，用户只会看到
+        # "我调好的点又回去了"。与 `core.reset` 的处置同一口径（见 `#71`）。
+        self.__dict__.pop("_points_invalidated", None)
+
     def _audit_restored_tick_end(self, col_dict: dict[str, Any]) -> None:
         """载入期自检：包里的 `tickEndX` 与**该列实际生效的**轴粗是否自洽（Triage 建议）。
 
