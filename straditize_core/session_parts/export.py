@@ -528,7 +528,7 @@ class ExportMixin:
                 # 未标定列整列不给数：写 CSV 时用显式 `NA`，不要留空。
                 # 空单元格在下游读入器里既可能是缺失也可能是 0，`NA` 是无歧义的
                 # "没有这个数"（避免虚假数据）。
-                csv_str = df.to_csv(index=False, na_rep="NA")
+                csv_str = df.to_csv(index=False, na_rep="NA", lineterminator="\n")
                 csv_bytes = csv_str.encode("utf-8")
 
                 meta = roi_meta_by_name.get(roi_name) or {}
@@ -565,7 +565,7 @@ class ExportMixin:
             if not primary_csv_bytes and roi_dfs:
                 primary_csv_bytes = (
                     list(roi_dfs.values())[0]
-                    .to_csv(index=False, na_rep="NA")
+                    .to_csv(index=False, na_rep="NA", lineterminator="\n")
                     .encode("utf-8")
                 )
 
@@ -1462,7 +1462,7 @@ class ExportMixin:
         if fmt == "csv":
             # 缺测写成语义无歧义的 NA：空单元格在下游读入器里既可能是缺失也可能是 0，
             # 与 export_multi_tar 的两处 to_csv 保持同一口径。
-            csv_string = df.to_csv(index=False, na_rep="NA")
+            csv_string = df.to_csv(index=False, na_rep="NA", lineterminator="\n")
             # `-0.0` 的符号位会被 pandas 原样渲染，CSV 里就成了字面量 `-0.0`
             # （pandas 对 `float(-0.0)` 一律输出 `-0.0`，加 0.0 也抹不掉符号位）。
             # 下游 R / Excel / 严格校验的读入器会把它当**负深度**，而它实际就是 0。

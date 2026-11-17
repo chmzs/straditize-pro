@@ -851,8 +851,8 @@
  },
  "tar_csv_branch": {
   "data_csv": {
-   "digest": "2a3ccafb20ae",
-   "size": 155
+   "digest": "db09d2c647cb",
+   "size": 152
   },
   "data_csv_head": [
    "depth,age_est,age_min_95,age_max_95,Pinus,Betula,Quercus",
@@ -887,14 +887,14 @@
     "size": 280
    },
    {
-    "digest": "2a3ccafb20ae",
+    "digest": "db09d2c647cb",
     "name": "data.csv",
-    "size": 155
+    "size": 152
    },
    {
-    "digest": "b5f8e2a5d6e5",
+    "digest": "4a12a23d7a66",
     "name": "plot_strat.R",
-    "size": 1148
+    "size": 1146
    },
    {
     "digest": "8a618c6df400",
@@ -917,7 +917,7 @@
    "depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
    "0.0,6.8421,6.5789,6.5789,6.8421,6.5789,13.4211,6.5789,6.8421,6.8421,52.6316,46.0526,6.8421,13.4211,6.8421,10.0,12.8947"
   ],
-  "data_csv_size": 74947,
+  "data_csv_size": 74309,
   "members": [
    "manifest.json",
    "straditize.json",
