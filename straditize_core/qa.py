@@ -34,6 +34,19 @@ def compute_qa_summary(
     """
     n_horizons = len(horizons)
 
+    # 总和门只累加**百分比列**：`include_in_sum` 由调用方按列单位给出（`is_percent_unit`）。
+    # 不设这个掩码时，一张同时含 `%` 与 `粒/g` 的剖面会把浓度（量级 1e4）加进"百分比总和"，
+    # 于是本该是"超过 100% 的严肃告警"恒为假阳性（现场实测最大总和 87135.2%），
+    # 用户会永久忽略这条告警。缺键时默认 True —— 老调用方与"全 % 工程"行为不变。
+    sum_mask = [
+        bool(col.get("include_in_sum", True)) for col in list(columns_info or [])
+    ]
+    excluded_columns = [
+        str(col.get("name", ""))
+        for col in list(columns_info or [])
+        if not bool(col.get("include_in_sum", True))
+    ]
+
     # Empty ROI / zero horizons case: return complete structure with 0 counts without error
     if n_horizons == 0:
         return {
@@ -49,6 +62,7 @@ def compute_qa_summary(
             "violations_over": [],
             "shortfall": {"min": 0.0, "max": 0.0, "mean": 0.0},
             "per_column_max": [],
+            "sum_excluded_columns": excluded_columns,
         }
 
     empty_horizons: list[dict[str, Any]] = []
@@ -56,7 +70,10 @@ def compute_qa_summary(
 
     for h in horizons:
         vals = h.get("values", [])
-        row_sum = float(sum(vals)) if vals else 0.0
+        if vals and len(sum_mask) == len(vals):
+            row_sum = float(sum(v for v, keep in zip(vals, sum_mask) if keep))
+        else:
+            row_sum = float(sum(vals)) if vals else 0.0
         sums.append(row_sum)
 
         # Check for empty horizon (all zero / no ink read)
@@ -153,4 +170,5 @@ def compute_qa_summary(
         "per_column_max": per_column_max,
         "n_uncalibrated": len(uncalibrated_columns),
         "uncalibrated_columns": uncalibrated_columns,
+        "sum_excluded_columns": excluded_columns,
     }

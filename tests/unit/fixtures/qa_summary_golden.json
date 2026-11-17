@@ -48,6 +48,7 @@
     "min": 0.0,
     "p50": 10.7
    },
+   "sum_excluded_columns": [],
    "tolerance": 2.0,
    "uncalibrated_columns": [],
    "violations_over": [
@@ -91,6 +92,7 @@
     "min": 0.0,
     "p50": 0.0
    },
+   "sum_excluded_columns": [],
    "tolerance": 2.0,
    "violations_over": []
   }
@@ -138,6 +140,7 @@
      "min": 0.0,
      "p50": 2.6
     },
+    "sum_excluded_columns": [],
     "tolerance": 2.0,
     "uncalibrated_columns": [],
     "violations_over": [
@@ -198,6 +201,7 @@
      "min": 0.0,
      "p50": 16.0
     },
+    "sum_excluded_columns": [],
     "tolerance": 2.0,
     "uncalibrated_columns": [],
     "violations_over": [
@@ -261,6 +265,7 @@
     "min": 5.3,
     "p50": 10.7
    },
+   "sum_excluded_columns": [],
    "tolerance": 2.0,
    "uncalibrated_columns": [],
    "violations_over": []
