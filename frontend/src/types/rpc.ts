@@ -133,6 +133,7 @@ export type RpcMethod =
   | 'roi.update'
   | 'samples.clear'
   | 'samples.extractConsensus'
+  | 'samples.fromDepthGrid'
   | 'samples.list'
   | 'samples.pasteDepths'
   | 'samples.set'

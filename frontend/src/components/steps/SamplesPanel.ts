@@ -1,7 +1,7 @@
 import { DiagramData } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
-import { notifyError } from '../../ui/feedback';
+import { notify, notifyError } from '../../ui/feedback';
 
 export const step = 7;
 export const title = '7. 拐点与采样层位';
@@ -14,6 +14,7 @@ export function render(data: DiagramData): string {
   const autoCount = samples.filter((s) => s.source === 'auto').length;
   const pasteCount = samples.filter((s) => s.source === 'paste').length;
   const manualCount = samples.filter((s) => s.source === 'manual').length;
+  const gridCount = samples.filter((s) => s.source === 'grid').length;
 
   // 深度分辨率：1 像素对应多少深度。粘贴的深度最终只能落到**整数行**上，
   // 所以这个数就是「导入精度」的量化说明——必须显示出来，否则用户会以为深度是精确对齐的。
@@ -30,6 +31,10 @@ export function render(data: DiagramData): string {
     spanPx > 0 && spanValue > 0
       ? `${(spanValue / spanPx).toFixed(3)} ${cal?.unit || 'cm'}/px`
       : t('step7.resolutionUnknown');
+
+  // 默认步长：把标定区间切成约 200 层，取 3 位小数（用户可改）。
+  const defaultGridStep =
+    spanValue > 0 ? Number((spanValue / 200).toFixed(3)) : 0.05;
 
   return `
     <div class="step-panel" data-step="7">
@@ -56,7 +61,7 @@ export function render(data: DiagramData): string {
           <button id="btn-clear-horizons" class="icon-btn btn-subaction" style="font-size: 10px; padding: 1px 4px;" title="${t('step7.clearTitle')}">${t('step7.clear')}</button>
         </div>
         <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 6px;">
-          Auto: ${autoCount} | Paste: ${pasteCount} | Manual: ${manualCount}
+          Auto: ${autoCount} | Paste: ${pasteCount} | Manual: ${manualCount} | Grid: ${gridCount}
         </div>
 
       <!-- 导入自定义深度：步骤 7 的职责是把「在哪些深度出数」定下来 -->
@@ -70,6 +75,20 @@ export function render(data: DiagramData): string {
           </span>
         </div>
         <p style="font-size: 10px; color: var(--text-muted); margin: 6px 0 0 0; line-height: 1.4;">${t('step7.pasteDesc')}</p>
+      </div>
+
+      <!-- 等距网格层位：钻孔真实采样间隔是等距的，拐点共识给不出这个密度（S4） -->
+      <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border-color);">
+        <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">${t('step7.gridTitle')}</div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <input id="input-grid-step" type="number" min="0" step="any" value="${defaultGridStep}"
+                 style="width: 84px; padding: 4px 6px; font-size: 11px; font-family: var(--font-mono); background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px;" />
+          <span style="font-size: 9.5px; color: var(--text-muted);">${cal?.unit || 'cm'} / ${t('step7.gridStepSuffix')}</span>
+          <button id="btn-grid-samples" class="ui-btn ui-btn--secondary" style="flex: 1; font-size: 11px; padding: 5px;">
+            ${t('step7.gridBtn')}
+          </button>
+        </div>
+        <p id="grid-step-hint" style="font-size: 10px; color: var(--text-muted); margin: 6px 0 0 0; line-height: 1.4;">${t('step7.gridDesc')}</p>
       </div>
         <div id="horizons-list-container" style="max-height: 140px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px; padding: 4px; background: var(--bg-card); font-size: 10px; font-family: monospace;">
           ${
@@ -110,6 +129,33 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   // 导入自定义深度（步骤 7 的职责：决定「在哪些深度出数」）
   root.querySelector('#btn-paste-depths')?.addEventListener('click', () => {
     openPasteDepthsModal(ctx);
+  });
+
+  // 等距网格层位（samples.fromDepthGrid）：与共识层位并列的另一种行集
+  root.querySelector('#btn-grid-samples')?.addEventListener('click', async () => {
+    const input = root.querySelector('#input-grid-step') as HTMLInputElement | null;
+    const raw = input ? Number(input.value) : NaN;
+    if (!Number.isFinite(raw) || raw <= 0) {
+      notifyError(t('step7.gridInvalid'));
+      return;
+    }
+    if (!ctx.rpcClient) return;
+    try {
+      const res = (await ctx.rpcClient.call('samples.fromDepthGrid', { step: raw })) as {
+        count?: number;
+        row_step_px?: number;
+      };
+      notify(
+        t('step7.gridDone', {
+          count: String(res?.count ?? '?'),
+          px: String(res?.row_step_px ?? '?'),
+        }),
+        'info',
+      );
+      ctx.onDataChange?.();
+    } catch (err) {
+      notifyError(err instanceof Error ? err.message : String(err));
+    }
   });
 
   // 单行层位删除 (同步后端 samples.set)

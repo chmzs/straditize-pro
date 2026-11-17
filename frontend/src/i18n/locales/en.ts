@@ -343,6 +343,13 @@ export const en = {
   'step7.pasteDesc':
     'Paste real depth values from Excel or text (one per line, or comma/semicolon separated). Each depth is converted to a pixel row with the current Y calibration, and the reading comes from that row.',
   'step7.pasteConfirm': 'Import and replace horizons',
+  'step7.gridTitle': 'Uniform depth grid (by sampling interval)',
+  'step7.gridDesc':
+    'Build horizons at a fixed interval: real cores are sampled at equal spacing, which turning-point consensus cannot reproduce. Grid and consensus are two different row sets and replace each other; the interval is clamped to the Y calibration range (never extrapolated).',
+  'step7.gridStepSuffix': 'per horizon',
+  'step7.gridBtn': 'Build grid horizons',
+  'step7.gridInvalid': 'The interval must be a number greater than 0.',
+  'step7.gridDone': 'Created {count} horizons (row step {px} px)',
   'step7.resolution': 'Depth resolution',
   'step7.resolutionUnknown': 'Not calibrated (cannot convert depth to pixel row)',
   'step7.next': 'Complete Extraction, Proceed to QA (Step 8)',

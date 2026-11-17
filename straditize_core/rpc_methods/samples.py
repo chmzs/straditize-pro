@@ -12,3 +12,6 @@ def register(dispatcher: Any, session: Any) -> None:
     dispatcher.register_method("samples.clear", session.samples_clear)
     dispatcher.register_method("samples.extractConsensus", session.samples_extract_consensus)
     dispatcher.register_method("samples.pasteDepths", session.samples_paste_depths)
+    dispatcher.register_method(
+        "samples.fromDepthGrid", session.samples_from_depth_grid
+    )

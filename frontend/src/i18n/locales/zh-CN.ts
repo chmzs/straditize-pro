@@ -346,6 +346,13 @@ export const zhCN = {
   'step7.pasteDesc':
     '从 Excel 或文本粘贴真实深度序列（每行一个数，也可用逗号 / 分号分隔）。每个深度按当前 Y 轴标定换算成像素行，取值就用该行的实测读数。',
   'step7.pasteConfirm': '导入并替换层位',
+  'step7.gridTitle': '等距网格层位（按采样间隔生成）',
+  'step7.gridDesc':
+    '按固定间隔生成层位：真实钻孔是等距取样的，拐点共识给不出这个密度。与共识层位是两种行集，会互相替换；区间自动夹到 Y 轴标定范围内（不外推）。',
+  'step7.gridStepSuffix': '每层',
+  'step7.gridBtn': '按间隔生成层位',
+  'step7.gridInvalid': '间隔必须是大于 0 的数值。',
+  'step7.gridDone': '已生成 {count} 个层位（行距 {px} px）',
   'step7.resolution': '深度分辨率',
   'step7.resolutionUnknown': '未标定（无法把深度换算成像素行）',
   'step7.next': '完成提取，进入全剖面地学校验 (步骤 8)',

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, Sequence
-from ..protocol import JsonRpcError
+from ..protocol import INVALID_PARAMS, STATE_ERROR, JsonRpcError
 
 
 class SamplesMixin:
@@ -50,7 +51,9 @@ class SamplesMixin:
             depth_val = float(given_depth) if given_depth is not None else calc_depth
 
             s_source = s.get("source", source)
-            if s_source not in ("auto", "paste", "manual"):
+            # `grid` = `samples.fromDepthGrid` 生成的等距网格层位（与拐点共识 `auto`、
+            # 粘贴 `paste`、手工 `manual` 并列）。未知取值仍落 `manual`（既有行为）。
+            if s_source not in ("auto", "paste", "manual", "grid"):
                 s_source = "manual"
 
             valid_samples.append({
@@ -156,3 +159,136 @@ class SamplesMixin:
             })
 
         return self.samples_set(new_samples, source="paste")
+
+    def samples_from_depth_grid(
+        self,
+        step: float,
+        start_depth: float | None = None,
+        end_depth: float | None = None,
+        replace: bool = True,
+    ) -> dict[str, Any]:
+        """按**等距网格**生成层位（S4：钻孔 600+ 样品，拐点共识给不出这个密度）。
+
+        ## 为什么需要它
+
+        `samples_extract_consensus` 的行集是「多列拐点聚类」的结果，点密度由拐点数决定
+        而不是采样方案决定：同一张图，数字化从稀疏控制点换成稠密逐行曲线后点数
+        203 → 355（实测，见 `docs/findings/recon-20261117.md` §5）。用户要的
+        「按采样间隔出数」是另一种行集，不能靠调共识参数得到。
+
+        ## 与既有行集的关系
+
+        写进 `self.depth_grid`（`dataset=depth_grid` 的那份）**与** `self.samples`
+        （默认导出行集）—— 两条通道同一批数，避免"导出面板选网格 / 默认导出"给出
+        两套行位。
+
+        ## 什么都不静默兜底
+
+        - 未标定 → `STATE_ERROR`（没有深度就没有网格，不给行号冒充深度）；
+        - `step <= 0` → `INVALID_PARAMS`；
+        - 显式区间越出标定区间 → `INVALID_PARAMS`，消息带上真实标定区间。
+          （本工程深度标定只覆盖 y 592..984，而 ROI 是 316..1836；按 ROI 外推会给出
+          一批假年龄，见报告 §9 相邻发现 1。）
+        - 步长细于图像行分辨率（多个深度落到同一行）→ `INVALID_PARAMS`，消息给出
+          该图的 `x{unit}/px` 分辨率与最小可用步长。**不**静默去重：那会让用户以为
+          自己拿到了 N 个层位，实际拿到更少。
+        """
+        if not getattr(self, "is_calibrated", False) or getattr(self, "y_scale", None) is None:
+            raise JsonRpcError(
+                STATE_ERROR,
+                "前置状态缺失：等距网格需要 Y 轴标定。请先在【步骤 3: Y轴标定】完成两点标定。",
+            )
+        slope = float(self.y_scale.get("slope", 0.0))
+        intercept = float(self.y_scale.get("intercept", 0.0))
+        if abs(slope) < 1e-12:
+            raise JsonRpcError(
+                STATE_ERROR,
+                "算法解算中断：当前 Y 轴标定斜率为 0，无法把深度映射回像素行。请重新标定。",
+            )
+        try:
+            step_value = float(step)
+        except (TypeError, ValueError) as exc:
+            raise JsonRpcError(
+                INVALID_PARAMS, f"步长必须是数值（收到 {step!r}）。"
+            ) from exc
+        if not (step_value > 0):
+            raise JsonRpcError(
+                INVALID_PARAMS, f"步长必须 > 0（收到 {step_value}）。"
+            )
+
+        calib = getattr(self, "depth_calib", None) or {}
+        cal_lo = calib.get("top_cm")
+        cal_hi = calib.get("bottom_cm")
+        unit = str(calib.get("unit") or getattr(self, "depth_unit", "") or "")
+        if cal_lo is None or cal_hi is None:
+            raise JsonRpcError(
+                STATE_ERROR,
+                "前置状态缺失：缺少深度标定区间（top_cm/bottom_cm），无法约束网格范围。",
+            )
+        cal_lo, cal_hi = sorted((float(cal_lo), float(cal_hi)))
+
+        # 默认区间 = ROI 深度范围 ∩ 标定区间：ROI 之外没有墨迹，标定之外没有深度。
+        roi_lo, roi_hi = cal_lo, cal_hi
+        ylim = getattr(self, "data_ylim", None)
+        if ylim and len(ylim) >= 2 and ylim[0] is not None and ylim[1] is not None:
+            y_lo, y_hi = sorted((float(ylim[0]), float(ylim[1])))
+            roi_lo = slope * y_lo + intercept
+            roi_hi = slope * y_hi + intercept
+            roi_lo, roi_hi = sorted((roi_lo, roi_hi))
+        lo = max(cal_lo, roi_lo) if start_depth is None else float(start_depth)
+        hi = min(cal_hi, roi_hi) if end_depth is None else float(end_depth)
+        if start_depth is not None or end_depth is not None:
+            if lo < cal_lo - 1e-9 or hi > cal_hi + 1e-9:
+                raise JsonRpcError(
+                    INVALID_PARAMS,
+                    f"区间 [{lo}, {hi}] 越出 Y 轴标定区间 [{cal_lo}, {cal_hi}] {unit}："
+                    "标定之外没有真实深度，不做外推。",
+                )
+        lo, hi = sorted((lo, hi))
+        if hi - lo <= 0:
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                f"区间为空（[{lo}, {hi}]）：请检查 ROI 与 Y 轴标定是否重叠。",
+            )
+
+        # 浮点保护：`hi - lo` 由标定斜率的乘加得到，100.0 常常是 99.9999999999986，
+        # 直接 int() 会少一个层位（实测：0..100 每 1cm 只出 100 层而不是 101 层）。
+        span = hi - lo
+        count = int(math.floor(span / step_value + 1e-9)) + 1
+        if count < 2:
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                f"步长 {step_value} 与区间 [{lo}, {hi}] 不足以生成两个层位（只有 {count} 个）。",
+            )
+        depths = [round(lo + index * step_value, 6) for index in range(count)]
+
+        rows = [int(round((depth - intercept) / slope)) for depth in depths]
+        if len(set(rows)) != len(rows):
+            resolution = abs(slope)
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                f"步长 {step_value} {unit} 细于图像行分辨率 {resolution:.5f} {unit}/px："
+                f"{len(depths)} 个深度会落到 {len(set(rows))} 行上。"
+                f"该图最小可用步长约 {resolution:.3f} {unit}（1 px）。",
+            )
+
+        if replace:
+            self.samples = []
+        result = self.samples_set(
+            [
+                {"row_px": row, "depth": depth, "source": "grid"}
+                for row, depth in zip(rows, depths)
+            ],
+            source="grid",
+        )
+        self.depth_grid = list(depths)
+        result.update(
+            {
+                "step": step_value,
+                "start": lo,
+                "end": hi,
+                "unit": unit,
+                "row_step_px": (rows[1] - rows[0]) if len(rows) > 1 else 0,
+            }
+        )
+        return result
