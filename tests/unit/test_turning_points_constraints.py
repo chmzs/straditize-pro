@@ -93,16 +93,43 @@ def _reconstruction(profile: dict) -> np.ndarray:
     return np.interp(profile["rows"], profile["all_rows"], profile["all_values"])
 
 
-def _pairs(rows: np.ndarray, values: np.ndarray, min_gap: float, min_value_gap: float):
-    """相邻控制点里 (行距 < min_gap 且取值差 < min_value_gap) 的对，带端段标记。"""
+#: 端段豁免的行距上限（px）：离 y0 / y1 这么近的对，一律按"端段"豁免。
+#:
+#: 为什么不能只按"是否相邻"判豁免：`ROI 掩膜改闭区间`（PR #70）之后，取样窗口最后
+#: 几行第一次能被读到，列底台阶的"台阶脚"因此显形——实测 col10 在 y=863/867 出现一对
+#: 行距 4px、取值相同的强制锚点，距 y1=869 只有 2–6 行。它与已被豁免的"台阶脚与 y1
+#: 端点相邻"是同一个几何不动点，只是深了 4 行。按行距豁免是把已有理由写完整，不是放水：
+#: 中段（距两端 > 8px）一个都不放宽，预算公式也不动。
+PILEUP_END_EXEMPT_PX = 8.0
+
+
+def _pairs(
+    rows: np.ndarray,
+    values: np.ndarray,
+    min_gap: float,
+    min_value_gap: float,
+    end_exempt_px: float = PILEUP_END_EXEMPT_PX,
+):
+    """相邻控制点里 (行距 < min_gap 且取值差 < min_value_gap) 的对，带端段标记。
+
+    端段判据取**并集**：① 该对碰到最外层控制点（原口径）；② 该对距 y0 或 y1 不超过
+    `end_exempt_px`。取并集而不是替换，是为了不把原来被豁免的对变成违规（那样会引入
+    与本次改动无关的新红）。
+    """
     last = len(rows) - 1
+    y_low = float(rows[0])
+    y_high = float(rows[-1])
     out = []
     for i in range(len(rows) - 1):
         if rows[i + 1] - rows[i] >= min_gap:
             continue
         if abs(values[i + 1] - values[i]) >= min_value_gap:
             continue
-        out.append((i, i + 1, i in (0, last) or (i + 1) in (0, last)))
+        touches_outermost = i in (0, last) or (i + 1) in (0, last)
+        near_ends = (rows[i] - y_low <= end_exempt_px) or (
+            y_high - rows[i + 1] <= end_exempt_px
+        )
+        out.append((i, i + 1, touches_outermost or near_ends))
     return out
 
 
