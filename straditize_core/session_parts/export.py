@@ -1809,7 +1809,7 @@ class ExportMixin:
         units = self._primary_roi_units_for(names)
         pct_cols = [name for name in names if is_percent_unit(units.get(name))]
         fixed_cols = [name for name in names if not is_percent_unit(units.get(name))]
-        csv_bytes = frame.to_csv(index=False, na_rep="NA").encode("utf-8")
+        csv_bytes = frame.to_csv(index=False, na_rep="NA", lineterminator="\n").encode("utf-8")
 
         script_lines = [
             "# ==============================================================================",
