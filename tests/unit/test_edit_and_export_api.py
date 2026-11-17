@@ -315,8 +315,16 @@ class TestColumnAxisStrokeOverride(unittest.TestCase):
         self.assertNotIn("axis_stroke_px", self.session.columns[self.idx])
         self.assertAlmostEqual(self._zero(), start + 7.0, places=6)
 
+    def test_zero_is_accepted_and_puts_the_zero_point_on_the_left_edge(self) -> None:
+        """轴粗 0 合法：0 点 = 列左缘（有些图的轴线就贴在列左缘上）。"""
+        start = float(self.session.columns[self.idx]["start"])
+        self.session.column_update(self.idx, {"axis_stroke_px": 0})
+        self.assertAlmostEqual(self._zero(), start, places=6)
+        self.assertIn("axis_stroke_px", self.session.columns[self.idx])
+
     def test_out_of_range_or_non_numeric_is_rejected(self) -> None:
-        for bad in (0, -3, 25, "abc"):
+        # 0 不再算非法（0 点落在列左缘）；负数、超上限、非数值仍当场拒绝。
+        for bad in (-3, 25, "abc"):
             with self.assertRaises(JsonRpcError) as ctx:
                 self.session.column_update(self.idx, {"axis_stroke_px": bad})
             self.assertEqual(ctx.exception.code, -32602, f"{bad!r} 必须当场拒绝")
