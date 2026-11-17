@@ -36,6 +36,8 @@ def strat_plot_script_lines(
     df_var: str,
     csv_filename: str,
     roi_name: str,
+    csv_expr: str | None = None,
+    require_file: bool = False,
     pct_cols: Sequence[str],
     fixed_cols: Sequence[str],
     units: Mapping[str, Any],
@@ -70,8 +72,22 @@ def strat_plot_script_lines(
         # 这一行是给人看的：脚本里为什么有两次 strat.plot 调用。
         detail = ", ".join(f"{c}({units.get(c, '')})" for c in fixed)
         lines.append(f"# 非百分比列（按自身量程画）：{detail}")
-    lines.append(f"if (file.exists('{csv_filename}')) {{")
-    lines.append(f"  {df_var} <- read.csv('{csv_filename}', check.names = FALSE)")
+    # `csv_expr` 决定「读哪个路径表达式」：归档脚本写死文件名（老行为，零回归），
+    # 单文件包（zip 那份）传 `csv_path`，好在脚本开头从命令行参数取默认值。
+    # `require_file=True` 时缺文件当场 stop：否则整段绘图被静默跳过，用户拿到一张空 PDF。
+    read_target = csv_expr if csv_expr is not None else f"'{csv_filename}'"
+    if require_file:
+        lines.append(
+            f"if (!file.exists({read_target})) stop("
+            f"\"\u627e\u4e0d\u5230 {csv_filename}\uff1a\u8bf7\u628a\u5b83\u4e0e\u811a\u672c\u653e\u5728\u540c\u4e00\u76ee\u5f55\u3002\")"
+        )
+        lines.append(f"{df_var} <- read.csv({read_target}, check.names = FALSE)")
+        # 后面的绘图段以 `if (ncol(df) > 1) {` 开头、并以收尾的 `}` 关闭外层块；
+        # 这里补一个裸块 `{`，让缺文件时走 stop、文件在时括号仍配平。
+        lines.append("{")
+    else:
+        lines.append(f"if (file.exists({read_target})) {{")
+        lines.append(f"  {df_var} <- read.csv({read_target}, check.names = FALSE)")
     lines.append(f"  if (ncol({df_var}) > 1) {{")
     if fixed:
         # 百分比列与绝对值列不能共用 0–100 基准：rioja::strat.plot 的

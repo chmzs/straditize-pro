@@ -1,6 +1,14 @@
 # 变更记录（CHANGELOG）
 
 ## [Unreleased]
+### 出图整包：`export.bundleZip`（data.csv + plot_strat.R + plot_strat.jpg + README.txt）
+
+- **现场缺陷**：导出面板的「R 脚本」只给一个 `.R`，里面写着 `if (file.exists('data.csv'))` —— 用户手里没有 csv 时**整段绘图被静默跳过**，拿到一张 3448 B 的空 PDF，且无任何报错。
+- **形态**：新增 RPC `export.bundleZip`，一次交付四个文件，解压后 `Rscript plot_strat.R` 直接出图；`export.r` 保留不动（旧调用方不受影响），两者共用 `export_docs.strat_plot_script_lines` 这一份生成器（S5 教训：不许各写一套模板）。
+- **脚本三条契约**：① 无参可跑（`csv_path`/`out_path` 有默认值，命令行仍可覆盖）；② 缺 `data.csv` 当场 `stop()` 并给中文提示；③ 表头去掉尾部 `\r` —— 列名带 `\r` 时 `read.csv` 后 `intersect()` 匹配不上，整列被静默丢掉。
+- **前端**：按钮由「R 脚本」改为「出图包」，调 `export.bundleZip` 后按 `application/zip` 下载；仍在后端取脚本，前端不自造替代脚本。
+- **门禁**：`tests/unit/test_export_bundle_zip.py`（zip 条目恰好四个 / 表头无 `\r` / 脚本无参可跑且缺文件 `stop` / jpg 是真 JPEG / README 写明 `NA` ≠ 0）。
+- **实测**：解压后 `Rscript plot_strat.R` → rc=0、PDF 4489 B；删掉 `data.csv` 再跑 → rc=1、`Error: 找不到 data.csv：请把它与脚本放在同一目录。`
 ### 导出弹窗版面返工：footer 钉住、单滚动容器、字号归位、预览不再顶掉设置
 
 - **根因**：出图预览、y 轴范围、列量程三块原来是 `.ui-modal` 里 body 与 footer 的**兄弟节点**，预览一出现就把 footer 顶出视口（1366×768 实测 footer 底边 1156px > 768px，y 轴范围与列量程也被挤出首屏）。

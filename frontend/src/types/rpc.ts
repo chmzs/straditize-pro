@@ -91,6 +91,7 @@ export type RpcMethod =
   | 'export.exportXlsx'
   | 'export.getReadiness'
   | 'export.r'
+  | 'export.bundleZip'
   | 'export.tar'
   | 'history.redo'
   | 'history.undo'

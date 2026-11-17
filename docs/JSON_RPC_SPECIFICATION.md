@@ -736,6 +736,40 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
 
 **缺陷案底**：LiPD 曾两条分支都只回 " + BT + "lipd" + BT + "、写盘还写纯 JSON 文本，前端 " + BT + "if (res && res.base64)" + BT + " 恒不成立且无 else —— 点按钮既不下载也不报错。前端现已改为 " + BT + "requireExportBase64(res, label)" + BT + "：拿不到就抛错，消息里带后端实际返回的键名。
 
+### 4.11c `export.bundleZip` — 出图整包（zip，2026-11-17）
+
+把「脚本 + 数据 + 成品图」一次交齐，解压即可出图。
+
+**请求**：无参数。
+
+**返回**：
+
+| 字段 | 含义 |
+|:--|:--|
+| `base64` | zip 包体（`PK\x03\x04` 头），前端用 `base64ToBlob` 落地 |
+| `filename` | `strat_export_<unix>.zip` |
+| `mime` | `application/zip` |
+| `size_bytes` | 包体字节数 |
+
+**包内四个文件**（缺任何一个都算回归，见 `tests/unit/test_export_bundle_zip.py`）：
+
+| 文件 | 说明 |
+|:--|:--|
+| `data.csv` | 主 ROI 的表，与 `export.tar` 里 `data.csv` 同源；列名去掉尾部 `\r` |
+| `plot_strat.R` | 绘图调用段来自 `export_docs.strat_plot_script_lines`（唯一生成器） |
+| `plot_strat.jpg` | 与后端 `plot.render` 同一份数据的成品图 |
+| `README.txt` | 用法 + 缺测语义（`NA` ≠ 0） |
+
+**脚本契约**（三条都是现场踩出来的）：
+
+1. **无参可跑**：`csv_path` / `out_path` 有默认值（`data.csv` / `plot_strat.pdf`），
+   `Rscript plot_strat.R` 直接出图；仍可用 `Rscript plot_strat.R 表.csv 图.pdf` 覆盖。
+2. **缺 `data.csv` 当场 `stop()`**：此前用 `if (file.exists(...))` 守卫，缺文件时整段绘图被
+   静默跳过，产物是一张空 PDF（实测 3448 B）。
+3. **表头去 `\r`**：列名带 `\r` 时 `read.csv` 后 `intersect()` 匹配不上，整列被静默丢掉。
+
+**与 `export.r` 的关系**：`export.r` 仍返回单个脚本（旧调用方保持可用）；本方法是
+「下载即能跑」的整包形态，两者共用同一份绘图调用生成器，不各写一套模板（S5 教训）。
 ### 4.12 `project.save` — 工程包导出（含占位表标记）
 
 请求：`{output_path?, format?: "tar" | "json"}`。`output_path` 缺省时 tar 以 base64 返回。

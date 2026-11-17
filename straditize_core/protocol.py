@@ -117,6 +117,7 @@ ALL_RPC_METHODS: tuple[str, ...] = (
     "export.exportXlsx",
     "export.getReadiness",
     "export.r",
+    "export.bundleZip",
     "export.tar",
     "history.redo",
     "history.undo",

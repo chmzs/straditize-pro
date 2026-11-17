@@ -351,7 +351,7 @@ export class ExportModal {
           <div class="export-format-actions">
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-csv">CSV</button>
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-lipd" title="导出符合 LiPD / LinkedEarth 规范的数据包">LiPD</button>
-            <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-r" title="下载 rioja::strat.plot 绘图脚本">R 脚本</button>
+            <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-r" title="下载出图整包（zip）：data.csv + plot_strat.R + plot_strat.jpg + README.txt，解压后 Rscript plot_strat.R 即可复现">出图包</button>
             <button class="ui-btn ui-btn--primary ui-btn--sm" id="btn-wpd-plot-oneclick" title="用本机 R 的 rioja::strat.plot 直接出图（不联网）">本机出图</button>
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-tar" title="下载包含数据、原图与脚本的项目归档">TAR 归档</button>
             <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-wpd-download-json">JSON</button>
@@ -1063,28 +1063,22 @@ export class ExportModal {
       URL.revokeObjectURL(url);
     });
 
-    // 下载配套 R 语言地层图绘图脚本 (直连后端 export.r)
+    // 下载出图整包 (.zip)：data.csv + plot_strat.R + plot_strat.jpg + README.txt
+    //
+    // 为什么不再单发一个 .R：脚本里 `if (file.exists('data.csv'))` 缺文件时整段绘图被静默
+    // 跳过，用户拿到一张空 PDF（实测）。整包解压即可 `Rscript plot_strat.R`。
+    // 后端 export.bundleZip 用同一个生成器（export_docs.strat_plot_script_lines）出脚本，
+    // 前端不造替代脚本：造出来的那份看不到列组单位，只会整表 scale.percent = TRUE。
     modal.querySelector('#btn-wpd-download-r')?.addEventListener('click', async () => {
       try {
-        const res = await this.rpcClient.call<any, any>('export.r');
-        const rStr = typeof res === 'string' ? res : (res?.r || res?.script || '');
-        // 后端没给脚本时**不在前端自造**：`ProjectManager.generateRScript` 看不到列组单位，
-        // 只会给出整表 `scale.percent = TRUE` 的脚本 —— 那正是 S5「表与图不对应」的来源
-        // （`docs/findings/recon-20261117.md` §6.1）。宁可报错，也不给一份错脚本。
-        if (!rStr) {
-          notifyError('后端未返回 R 脚本：导出已中止（不在前端生成替代脚本）。');
-          return;
-        }
-        const scriptToUse = rStr;
-        const blob = new Blob([scriptToUse], { type: 'text/plain;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'plot_strat.R';
-        a.click();
-        URL.revokeObjectURL(url);
+        const res = await this.rpcClient.call<any, any>('export.bundleZip');
+        const blob = base64ToBlob(
+          requireExportBase64(res, '导出出图包'),
+          'application/zip'
+        );
+        triggerDownload(blob, String(res?.filename || `strat_export_${Date.now()}.zip`));
       } catch (err: any) {
-        notifyError(`导出 R 脚本失败: ${err.message || err}`);
+        notifyError(`导出出图包失败: ${err.message || err}`);
       }
     });
 

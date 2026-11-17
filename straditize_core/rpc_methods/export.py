@@ -15,6 +15,7 @@ def register(dispatcher: Any, session: Any) -> None:
     dispatcher.register_method("export.csv", session.export_csv)
     dispatcher.register_method("export.tar", session.export_multi_tar)
     dispatcher.register_method("export.r", session.export_r)
+    dispatcher.register_method("export.bundleZip", session.export_bundle_zip)
     dispatcher.register_method("export.exportXlsx", session.export_multi_xlsx)
     dispatcher.register_method("export.exportLipd", session.export_multi_lipd)
     dispatcher.register_method("export.getReadiness", session.get_export_readiness)
