@@ -16,6 +16,14 @@
 - **判据**：`tests/unit/test_plot_column_types.py`（settings 每列都有 key；脚本含向量接线；把一列改 `line`、另一列改 `symbol` 后产物字节必须变化）。
 - **实测**：col01 改 `line`、col28 改 `symbol` → 596 547 B → 587 863 B，图上 col01 变细线、col28 变点。
 - **反向验证**：把四处 `plot.poly = poly_v...` 换成标量 → 判据变红（1 failed）。
+
+### 导出 CSV 统一 LF 行尾（issue #58）
+
+- **根因**：`pandas.DataFrame.to_csv()` 在 Windows 上 `lineterminator=None` → 用 `os.linesep` = CRLF。自制解析器按 `split('\n')` 切时把 `\r` 吃进**最后一个列名**（列名本身干净，脏的是行尾），出图包脚本里的 `intersect()` 因此静默丢列。
+- **改动**：全部写出点显式 `lineterminator="\n"`（`export.py` 4 处，含出图包 zip 那处；`plotting.py` 1 处；`exporter_lipd.py` 1 处）。
+- **门禁**：`tests/unit/test_csv_lf_terminator.py`（运行时：`export_data()['csv']` 不含 `\r`、行数 = `rows_count+1`；源码级：每个 `to_csv(` 都传 `lineterminator`）+ `test_csv_line_endings.py` 契约改为「一个 CR 都不许有」+ `test_export_bundle_zip` 的断言从「只看 header」改成「整份字节不含 `\r`」——`splitlines()` 会在 `\r\n` 处切开，只看 header 抓不到 CRLF，这是原判据的漏洞。
+- **反向验证**：去掉任一处的 `lineterminator` → 对应判据变红（实测）。
+
 ### 出图整包：`export.bundleZip`（data.csv + plot_strat.R + plot_strat.jpg + README.txt）
 
 - **现场缺陷**：导出面板的「R 脚本」只给一个 `.R`，里面写着 `if (file.exists('data.csv'))` —— 用户手里没有 csv 时**整段绘图被静默跳过**，拿到一张 3448 B 的空 PDF，且无任何报错。
