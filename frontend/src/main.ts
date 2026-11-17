@@ -173,10 +173,28 @@ async function bootstrap() {
   const getDefaultHudText = () =>
     canvasComponent.workflowStage === STAGE.CLEANUP ? t('hud.cleanup') : t('hud.default');
 
+  /**
+   * 有新内容就把淡化动画**重头放一遍**（恢复完全不透明，6 秒后再淡）。
+   *
+   * 不做 `classList.add/is-dim` + 定时器：DOM 重建会换掉 `#canvas-hud` 节点，旧节点上的
+   * class 随节点一起消失（实测出现过"class 加上了、页面上没变"）。动画跟着元素走，
+   * 重放靠 `animation: none` → 强制回流 → 复原，节点重建后也自然重新计时。
+   */
+  function wakeHud(): void {
+    const hud = document.getElementById('canvas-hud');
+    if (!hud) return;
+    hud.style.animation = 'none';
+    // 强制回流，否则同一帧内改回 animation 不会重启动画
+    void hud.offsetWidth;
+    hud.style.animation = '';
+  }
+
   function setHudNotice(text: string, duration: number = 3000) {
     const hudTextEl = document.getElementById('hud-text');
     if (!hudTextEl) return;
     hudTextEl.textContent = text;
+
+    wakeHud();
 
     if (hudTimer) clearTimeout(hudTimer);
     hudTimer = window.setTimeout(() => {
@@ -184,6 +202,9 @@ async function bootstrap() {
       hudTimer = null;
     }, duration);
   }
+
+  // 启动即排一次淡化：默认帮助文本不该永久压在图上。
+  wakeHud();
 
   const footer = createFooterDom(initialData);
 
