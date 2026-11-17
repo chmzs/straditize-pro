@@ -37,7 +37,26 @@ def _rscript() -> str | None:
 RSCRIPT = _rscript()
 
 
-@pytest.mark.skipif(RSCRIPT is None, reason="plot_render 需要 R")
+def _has_rioja() -> bool:
+    """CI 上有 R 但没有 rioja 包：只探测 Rscript 会让这两条转成运行期报错，而不是 skip。"""
+    if not RSCRIPT:
+        return False
+    import subprocess
+
+    try:
+        out = subprocess.run(
+            [RSCRIPT, "-e", 'cat(requireNamespace("rioja", quietly = TRUE))'],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return out.stdout.strip().upper() == "TRUE"
+
+
+@pytest.mark.skipif(not _has_rioja(), reason="plot_render 需要 R + rioja")
 def test_every_column_carries_a_plot_type_key() -> None:
     from straditize_core.session import StraditizeSession
 
@@ -79,7 +98,7 @@ def test_template_wires_vectors_for_every_call() -> None:
     assert "symb_v[[.ptype_col]] <- identical(.ptype_val, 'symbol')" in STRAT_PLOT_SCRIPT
 
 
-@pytest.mark.skipif(RSCRIPT is None, reason="本机没有 Rscript")
+@pytest.mark.skipif(not _has_rioja(), reason="本机没有 R + rioja")
 def test_plot_type_changes_the_artifact(tmp_path) -> None:
     csv_path = tmp_path / "in.csv"
     csv_path.write_text(CSV, encoding="utf-8")
