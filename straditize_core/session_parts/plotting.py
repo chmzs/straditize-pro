@@ -155,7 +155,7 @@ class PlottingMixin:
                 merged[_pre + _g + "." + _n] = "1"
         with tempfile.TemporaryDirectory(prefix="straditize-plot-") as tmp_dir:
             csv_tmp = Path(tmp_dir) / "plot_input.csv"
-            frame.to_csv(csv_tmp, index=False, na_rep="NA")
+            frame.to_csv(csv_tmp, index=False, na_rep="NA", lineterminator="\n")
             out_tmp = Path(tmp_dir) / ("strat_plot." + fmt)
 
             try:

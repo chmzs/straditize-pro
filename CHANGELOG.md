@@ -1,6 +1,12 @@
 # 变更记录（CHANGELOG）
 
 ## [Unreleased]
+### 导出 CSV 统一 LF 行尾（issue #58）
+
+- **根因**：`pandas.DataFrame.to_csv()` 在 Windows 上 `lineterminator=None` → 用 `os.linesep` = CRLF。自制解析器按 `split('\n')` 切时把 `\r` 吃进**最后一个列名**，`df['Concentration']` 查不到列（列名本身干净，脏的是行尾）。
+- **改动**：5 处写出点全部显式 `lineterminator="\n"`（`export.py` 4 处 + `plotting.py` 1 处）。
+- **门禁**：`tests/unit/test_export_csv_line_endings.py`（`_write_export_file` 交回的 csv 文本不含 `\r`）；`test_export_bundle_zip` 的断言从「只看 header」改成「整份字节不含 `\r`」——`splitlines()` 会在 `\r\n` 处切开，只看 header 抓不到 CRLF，这是原判据的漏洞。
+- **反向验证**：把 `lineterminator` 去掉 → 两条判据都变红（实测 rc=1）。
 ### 出图整包：`export.bundleZip`（data.csv + plot_strat.R + plot_strat.jpg + README.txt）
 
 - **现场缺陷**：导出面板的「R 脚本」只给一个 `.R`，里面写着 `if (file.exists('data.csv'))` —— 用户手里没有 csv 时**整段绘图被静默跳过**，拿到一张 3448 B 的空 PDF，且无任何报错。
