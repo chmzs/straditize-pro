@@ -892,14 +892,14 @@
     "size": 155
    },
    {
-    "digest": "4cad30896ad0",
+    "digest": "b5f8e2a5d6e5",
     "name": "plot_strat.R",
-    "size": 406
+    "size": 1148
    },
    {
-    "digest": "126009081513",
+    "digest": "8a618c6df400",
     "name": "README.txt",
-    "size": 912
+    "size": 961
    }
   ],
   "result_keys": [

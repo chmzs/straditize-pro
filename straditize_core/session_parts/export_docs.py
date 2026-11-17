@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+from typing import Any, Mapping, Sequence
+
 # data.csv 的缺测语义。**必须**同时讲清"窗口内 0.0"与"整列 NA"：
 # 旧文案写的是「unobserved taxa are strictly 0.0 (never NA)」，把两种情况混成一句，
 # 用户会把"没测到"当成"测到 0 丰度"拿去算百分比与对数和。
@@ -19,3 +21,81 @@ CSV_MISSING_NOTICE = (
     b"     linear interpolation (endpoint-clamped); uncalibrated columns stay NA = NO DATA.\n"
     b"  4) never treat NA as 0; handle NA before log transforms, then add a pseudocount.\n"
 )
+
+
+def r_string_vector(names: Sequence[str]) -> str:
+    """把列名写成 R 的 c("a", "b")：引号/反斜杠转义，属种名带标点时脚本语法不坏。"""
+    quoted = [
+        '"' + str(n).replace("\\", "\\\\").replace('"', '\\"') + '"' for n in names
+    ]
+    return "c(" + ", ".join(quoted) + ")"
+
+
+def strat_plot_script_lines(
+    *,
+    df_var: str,
+    csv_filename: str,
+    roi_name: str,
+    pct_cols: Sequence[str],
+    fixed_cols: Sequence[str],
+    units: Mapping[str, Any],
+) -> list[str]:
+    """一个 ROI 的 `strat.plot` 调用段（**唯一的生成处**）。
+
+    ## 为什么要抽出来
+
+    `plot_strat.R` 有两个写入点：导出数据 tar（`export.py`）与保存工程包
+    （`project.py`）。前者按列量纲分两次调用（`scale.percent` 只对百分比列生效），
+    后者此前**硬编码**一行 `scale.percent = TRUE` 画全表 —— 于是同一份工程，
+    "导出数据"给的脚本是对的，"保存工程包"给的是错的，而 README 里那段
+    「非 % 列按自身量程画」的说明只在导出包里成立。
+
+    实测（`docs/findings/recon-20261117.md` S5）：用户工程包里 A/C（比值，单位还被
+    写成 `粒/g`）与 Concentration（259.74 value/px）都被按 0–100 % 画，图与
+    `data.csv` 必然对不上。
+
+    ## 语义
+
+    - `pct_cols` / `fixed_cols` 由调用方按自己的量纲判定拆好再传进来（不在这里
+      判单位）：量纲的真源是 `resolve_column_scale(...).unit`，脚本生成不该另立一套；
+    - `fixed_cols` 非空时生成**两次** `strat.plot`，第二次 `add = TRUE`——
+      `rioja::strat.plot` 的 `scale.percent` 是整张表一个开关；
+    - `fixed_cols` 为空时**只生成一次**调用，文本与引入本函数之前逐字节相同
+      （`tests/unit/test_export_script_units.py` 的零回归判据）。
+    """
+    pct = list(pct_cols)
+    fixed = list(fixed_cols)
+    lines: list[str] = [f"# --- ROI: {roi_name} ---"]
+    if fixed:
+        # 这一行是给人看的：脚本里为什么有两次 strat.plot 调用。
+        detail = ", ".join(f"{c}({units.get(c, '')})" for c in fixed)
+        lines.append(f"# 非百分比列（按自身量程画）：{detail}")
+    lines.append(f"if (file.exists('{csv_filename}')) {{")
+    lines.append(f"  {df_var} <- read.csv('{csv_filename}', check.names = FALSE)")
+    lines.append(f"  if (ncol({df_var}) > 1) {{")
+    if fixed:
+        # 百分比列与绝对值列不能共用 0–100 基准：rioja::strat.plot 的
+        # `scale.percent` 是整张表一个开关，所以分成两次调用，第二次 `add = TRUE`。
+        lines.append(
+            f"    pct_cols <- intersect({r_string_vector(pct)}, names({df_var}))"
+        )
+        lines.append(
+            f"    fixed_cols <- intersect({r_string_vector(fixed)}, names({df_var}))"
+        )
+        lines.append("    if (length(pct_cols) > 0) {")
+        lines.append(
+            f"      strat.plot({df_var}[, pct_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.line = TRUE, title = '{roi_name}')"
+        )
+        lines.append("    }")
+        lines.append("    if (length(fixed_cols) > 0) {")
+        lines.append(
+            f"      strat.plot({df_var}[, fixed_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = FALSE, plot.line = TRUE, add = length(pct_cols) > 0, title = '{roi_name}')"
+        )
+        lines.append("    }")
+    else:
+        lines.append(
+            f"    strat.plot({df_var}[-1], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.line = TRUE, title = '{roi_name}')"
+        )
+    lines.append("  }")
+    lines.append("}\n")
+    return lines

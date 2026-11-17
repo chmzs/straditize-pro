@@ -1068,7 +1068,14 @@ export class ExportModal {
       try {
         const res = await this.rpcClient.call<any, any>('export.r');
         const rStr = typeof res === 'string' ? res : (res?.r || res?.script || '');
-        const scriptToUse = rStr || ProjectManager.generateRScript(this.data.columns, this.data.calibration.unit || 'cm');
+        // 后端没给脚本时**不在前端自造**：`ProjectManager.generateRScript` 看不到列组单位，
+        // 只会给出整表 `scale.percent = TRUE` 的脚本 —— 那正是 S5「表与图不对应」的来源
+        // （`docs/findings/recon-20261117.md` §6.1）。宁可报错，也不给一份错脚本。
+        if (!rStr) {
+          notifyError('后端未返回 R 脚本：导出已中止（不在前端生成替代脚本）。');
+          return;
+        }
+        const scriptToUse = rStr;
         const blob = new Blob([scriptToUse], { type: 'text/plain;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
