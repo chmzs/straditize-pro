@@ -91,8 +91,23 @@ def register(dispatcher: Any, session: Any) -> None:
 
     dispatcher.register_method("core.getStatus", get_status)
 
+    #: reset 之后必须消失的「惰性属性」。
+    #:
+    #: 它们**不在 `Session.__init__` 里**（只在首次用到时创建），而 `core.reset` 的实现就是
+    #: 重跑 `__init__` —— 于是这些属性会作为「额外属性」留到下一张图：
+    #: - `samples`：`export_data` 直接拿它当 depth 列，换图后会把上一张图的层位写进新 CSV；
+    #: - `manual_points`：按 col_index 存的手点锚点，换图后索引指向别的列；
+    #: - `tick_band`：上一张图的刻度带像素范围；
+    #: - `_points_invalidated`：被作废的列名集合，换图后无意义。
+    #:
+    #: 用「删掉」而不是「置空」：新会话本来就没有这些属性，删掉才能与 `Session()` 逐属性一致
+    #: （`hasattr` 守卫在两侧都已存在）。
+    _LAZY_STATE_ATTRS = ("samples", "manual_points", "tick_band", "_points_invalidated")
+
     def reset_session() -> dict[str, bool]:
         session.reset() if hasattr(session, "reset") else session.__init__()
+        for attr in _LAZY_STATE_ATTRS:
+            session.__dict__.pop(attr, None)
         return {"reset": True}
 
     dispatcher.register_method("core.reset", reset_session)
