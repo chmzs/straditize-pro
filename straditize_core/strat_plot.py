@@ -302,7 +302,7 @@ collect_warnings <- function(expr) {
   seen
 }
 
-fs <- num("font_scale", 2)
+fs <- num("font_scale", 1)
 # y 轴范围三格：Python 侧只有三项齐备才写这三行；缺行 → NA → riojaPlot 用自动范围。
 ymin_v <- num("y_min", NA_real_)
 ymax_v <- num("y_max", NA_real_)
@@ -435,6 +435,7 @@ warns <- tryCatch(
             rp <- riojaPlot::riojaPlot(taxa[, cols, drop = FALSE], y_df,
                                        yvar.name = names(y_df)[1], riojaPlot = rp,
                                        xGap = 0.01, xRight = xr,
+                                       xSpace = num("x_space", 0.01),
                                        scale.percent = FALSE, scale.minmax = FALSE,
                                        minmax = cbind(0, apply(taxa[, cols, drop = FALSE], 2, max, na.rm = TRUE)),
                                        plot.poly = FALSE, plot.bar = FALSE, plot.line = TRUE,
