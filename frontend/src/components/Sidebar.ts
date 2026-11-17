@@ -1,6 +1,10 @@
 import { DiagramData, TaxaColumn } from '../types/pollen';
 import { CoordinateSystem } from '../core/CoordinateSystem';
-import { peakValueFromScale } from '../core/scaleDisplay';
+import {
+  exaggerationOf,
+  fullScaleAtColumnEdge,
+  peakValueFromScale,
+} from '../core/scaleDisplay';
 import { resolvePlotType } from '../core/plotType';
 import { resolveColumnGroup } from '../core/columnGroup';
 import { t, onLocaleChange } from '../i18n';
@@ -310,7 +314,17 @@ export class Sidebar {
             <!-- X 刻度状态徽章 -->
             ${
               scale
-                ? `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(16, 185, 129, 0.15); color: var(--status-success); font-weight: 600;" title="X 刻度: ${formatScaleValue(scale.val0)} ~ ${formatScaleValue(scale.val1)} ${scale.unit}">${formatScaleValue(scale.val1)}${scale.unit}</span>`
+                ? `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(16, 185, 129, 0.15); color: var(--status-success); font-weight: 600;" title="${
+                    isSlopeScale
+                      ? `满刻度（列右缘）= (${formatScaleValue(scale.px1 - scale.px0)}px/刻度) × ${formatScaleValue(scale.val1)}${scale.unit}${
+                          exaggerationOf(scale) > 1 ? ' ÷ ' + exaggerationOf(scale) + '×' : ''
+                        }`
+                      : `X 刻度: ${formatScaleValue(scale.val0)} ~ ${formatScaleValue(scale.val1)} ${scale.unit}`
+                  }">${
+                    isSlopeScale
+                      ? `${formatScaleValue(fullScaleAtColumnEdge(scale, col.endX))}${scale.unit}`
+                      : `${formatScaleValue(scale.val1)}${scale.unit}`
+                  }</span>`
                 : `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(245, 158, 11, 0.15); color: var(--status-warning);" title="X 刻度尚未标定">未定标</span>`
             }
 

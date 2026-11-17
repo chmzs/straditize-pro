@@ -61,3 +61,14 @@ export function fullScaleValueFromScale(scale: PeakScaleLike): number {
   if (px1 === null) return 0;
   return peakValueFromScale(scale, px1);
 }
+
+/**
+ * 该列在**列右缘**处的真实读数（已除放大倍率）。
+ *
+ * 为什么需要它：组斜率模型的 `val1` 是"每像素单位数"而不是满刻度，直接把它当刻度显示
+ * 就会出现「0.2%」这种数字（现场：列宽 60px、斜率 0.2381%/px，侧栏却显示 0.2%）。
+ * 满刻度 = (列右缘 − 0点) × 斜率 ÷ 倍率。
+ */
+export function fullScaleAtColumnEdge(scale: PeakScaleLike, endX: number): number {
+  return peakValueFromScale(scale, Number(endX));
+}

@@ -12,9 +12,8 @@
 // 运行：node --experimental-strip-types test-sidebar-peak-exaggeration.mjs
 import assert from 'node:assert';
 
-const { peakValueFromScale, fullScaleValueFromScale, exaggerationOf } = await import(
-  './src/core/scaleDisplay.ts'
-);
+const { peakValueFromScale, fullScaleValueFromScale, fullScaleAtColumnEdge, exaggerationOf } =
+  await import('./src/core/scaleDisplay.ts');
 
 console.log('--- 侧栏峰值：放大倍数换算 ---');
 
@@ -53,3 +52,17 @@ assert.equal(exaggerationOf({ ...slopeScale, exaggerationMult: undefined }), 1);
 assert.equal(exaggerationOf(slopeScale), 5);
 
 console.log('OK：峰值/满刻度都按 exaggeration_mult 换算，未放大与脏值不改变读数');
+
+// 8. 组斜率模型下"满刻度"必须按**列右缘**算，不能把 val1（每像素斜率）当刻度显示。
+//    现场缺陷：列宽 60px、斜率 0.2381%/px → 侧栏 compact 徽章显示「0.2%」（那是斜率，
+//    不是刻度）；正确值是 (995-940)*0.2381 = 13.0955，5× 列再除 5 → 2.6191。
+assert.ok(
+  Math.abs(fullScaleAtColumnEdge(slopeScale, 995) - rawPeak / 5) < 1e-9,
+  `列右缘满刻度应为 ${rawPeak / 5}，实际 ${fullScaleAtColumnEdge(slopeScale, 995)}`
+);
+// 9. 未设倍率时列右缘满刻度就是图上刻度（零回归）
+assert.ok(Math.abs(fullScaleAtColumnEdge(slopeScaleNoExag, 995) - rawPeak) < 1e-9);
+// 10. 列宽为 0 的退化输入不许抛，也不许返回负值
+assert.equal(fullScaleAtColumnEdge({ ...slopeScale, px1: 940 }, 940), 0);
+
+console.log('OK：列右缘满刻度按 (endX−0点)×斜率÷倍率 计算');
