@@ -1472,9 +1472,11 @@ class ExportMixin:
             if output_path:
                 out_dir = os.path.dirname(os.path.abspath(output_path))
                 os.makedirs(out_dir, exist_ok=True)
-                # newline="" 必须显式给：pandas 的 to_csv 已经用 "\r\n" 结尾，
-                # 文本模式默认还会把 "\n" 再翻译成 "\r\n"，落盘就成了 "\r\r\n"。
-                # 下游 R/Excel 读到行尾多余 \r 会把最后一列的值/列名带上控制符。
+                # newline="" 必须显式给：行尾由 `to_csv(lineterminator="\n")` 单点决定，
+                # 文本模式不能再翻译一遍。历史上漏了这个参数，pandas 写 "\r\n"、文本模式再把
+                # "\n" 翻成 "\r\n"，落盘成了 "\r\r\n"（R/Excel 会把最后一列的值与列名带上
+                # 控制符，实测 35 行的表按 splitlines() 数出 71 行）。现在两头都钉死：
+                # 终止符只有一处来源（pandas 参数），文件层不做任何翻译。
                 with open(output_path, "w", encoding="utf-8", newline="") as f:
                     f.write(csv_string)
                 saved_path = os.path.abspath(output_path)
