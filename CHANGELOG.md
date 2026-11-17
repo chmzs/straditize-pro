@@ -1,6 +1,13 @@
 # 变更记录（CHANGELOG）
 
 ## [Unreleased]
+### 出图逐列形态：`plot_type` → `plot.poly/bar/line/symb` 逻辑向量
+
+- **缺陷**：画布上每列可选 `area / bar / line / symbol`，但 R 模板只有 `silhouette/bar/line` 三个**全局** flag——画布改了形态，出图仍是老样子。
+- **做法**：`plot_type.<列名>` 写进 settings（每列都写，默认 `area`），R 侧拼成与列数等长的逻辑向量传给 `riojaPlot`——`.riojaPlot2:401` 本来就是 `plot.line[i]` 逐列取值，所以向量天然支持。缺 key 的列退回全局开关，老脚本字节不变。
+- **判据**：`tests/unit/test_plot_column_types.py`（settings 每列都有 key；脚本含向量接线；把一列改 `line`、另一列改 `symbol` 后产物字节必须变化）。
+- **实测**：col01 改 `line`、col28 改 `symbol` → 596 547 B → 587 863 B，图上 col01 变细线、col28 变点。
+- **反向验证**：把四处 `plot.poly = poly_v...` 换成标量 → 判据变红（1 failed）。
 ### 出图整包：`export.bundleZip`（data.csv + plot_strat.R + plot_strat.jpg + README.txt）
 
 - **现场缺陷**：导出面板的「R 脚本」只给一个 `.R`，里面写着 `if (file.exists('data.csv'))` —— 用户手里没有 csv 时**整段绘图被静默跳过**，拿到一张 3448 B 的空 PDF，且无任何报错。
