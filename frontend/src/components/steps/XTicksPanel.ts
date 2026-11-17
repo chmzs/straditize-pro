@@ -13,6 +13,11 @@ import { resolveAxisStroke } from '../../core/axisStroke';
 import { resolveColumnGroup } from '../../core/columnGroup';
 import { resolveColumnAtX } from '../../core/tickRouting';
 import { setGroupCalibMark } from '../canvas/groupCalibMarks';
+import {
+  exaggerationRange,
+  isGroupExaggerated,
+  normalizeGroupExaggeration,
+} from './exaggerationGroupInput';
 
 /** 步骤 6 面板的全部可变状态。 */
 interface XTicksPanelState {
@@ -171,6 +176,22 @@ export function render(data: DiagramData): string {
     axisStrokeColOverride != null;
 
   const groupUnit = currentGroup?.unit || '%';
+
+  // 组级放大倍数：**组是真源**（后端解析顺序：组级 > 列级 > 历史键）。这里的输入框
+  // 写的是本组所有列的倍率；列级那个输入（Inspector）在组 >1 时置灰。
+  const groupExagMult = isGroupExaggerated(currentGroup?.exaggeration_mult)
+    ? normalizeGroupExaggeration(currentGroup?.exaggeration_mult)
+    : null;
+  const groupExagInputValue = groupExagMult === null ? '' : String(groupExagMult);
+  // 换算用的列宽：本组各列取数带宽度的均值（缺几何的列不参与，避免被 0 拉低）。
+  const groupWidths = groupCols
+    .map((c) => Number(c.endX ?? 0) - Number(c.startX ?? 0))
+    .filter((w) => Number.isFinite(w) && w > 0);
+  const groupAvgWidth = groupWidths.length
+    ? groupWidths.reduce((sum, w) => sum + w, 0) / groupWidths.length
+    : 0;
+  // 图上满刻度 = 斜率 × 列宽；真实 = 图上 ÷ 倍率。数值全部由现有数据算，不写死。
+  const exagRange = exaggerationRange(currentGroup?.value_per_px, groupAvgWidth, groupExagMult);
   // 0 点是**实测轴线右缘**，不是列切分给的 startX：后者实测可偏离轴线 6–20px。
   // 面板显示的像素必须与实际标定用的是同一个数，否则用户照着它校正会自造偏差。
 
@@ -285,6 +306,26 @@ export function render(data: DiagramData): string {
                     }</button>`
                 )
                 .join('')}
+            </div>
+
+            <!-- 组级放大倍数：论文里"某些类群 ×5、另一些 ×3"就是一组一个倍率。
+                 列级那个输入（Inspector）保留但会在本组 >1 时置灰——组才是真相源。 -->
+            <label for="grp-exag-inp" style="font-size: var(--font-size-xs); color: var(--text-muted);" title="${t('step6.groupExagTitle')}">${t('step6.groupExagLabel')}</label>
+            <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+              <input id="grp-exag-inp" type="number" min="1" max="100" step="0.5" value="${groupExagInputValue}" placeholder="1"
+                     title="${t('step6.groupExagTitle')}"
+                     style="height: var(--control-h-sm); width: 72px; box-sizing: border-box; font-size: var(--font-size-xs); padding: 0 6px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px; text-align: right;" />
+              <span style="font-size: var(--font-size-xs); color: var(--text-muted);">×</span>
+              ${([3, 5, 10] as const)
+                .map(
+                  (v) =>
+                    `<button class="ui-btn ui-btn--quiet ui-btn--xs grp-exag-btn" data-exag="${v}" style="padding: 1px 7px; font-size: var(--font-size-xs);" title="${t('step6.groupExagTitle')}">${v}×</button>`
+                )
+                .join('')}
+              ${groupExagMult === null ? '' : `<span data-role="exag-active-badge" style="font-size: var(--font-size-xs); color: var(--accent-violet); font-weight: 600;">${groupExagMult}× 启用</span>`}
+            </div>
+            <div data-role="exag-hint" style="grid-column: 1 / -1; font-size: var(--font-size-xs); line-height: 1.45; color: var(--text-muted); margin-top: -2px;">
+              ${t('step6.groupExagHint')}
             </div>
           </div>
           <datalist id="grp-unit-options">
@@ -413,6 +454,20 @@ export function render(data: DiagramData): string {
                   : '<span style="font-size: var(--font-size-xs); color: var(--status-warning);">未标定</span>'
               }
             </div>
+            <!-- 防双重折算：这组列画的是放大后的高度，图上满刻度 = 真实量程 × 倍率。
+                 只写一句"注意别重复乘"没用，必须给出换算后的真实量程——两个数都由
+                 组斜率、本组平均列宽、组倍率现算。 -->
+            ${exagRange === null ? '' : `
+            <div data-role="exag-range-hint" style="font-size: var(--font-size-xs); line-height: 1.5; margin-bottom: 5px; padding: 4px 6px; border-radius: 4px; background: rgba(139,92,246,0.10); border: 1px dashed rgba(139,92,246,0.45); color: var(--text-secondary);">
+              <strong style="color: var(--accent-violet);">${t('step6.groupExagRangeTitle')}</strong>
+              <div>${t('step6.groupExagRangeValues', {
+                figure: exagRange.onFigure.toFixed(3),
+                real: exagRange.real.toFixed(3),
+                unit: groupUnit,
+                slope: Number(currentGroup?.value_per_px).toFixed(4),
+                width: groupAvgWidth.toFixed(0),
+              })}</div>
+            </div>`}
             ${
               state.pendingTick
                 ? `
@@ -722,6 +777,50 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         if (t) patchGroup({ scale_type: t });
       });
     });
+
+    // 组级放大倍数：输入框（留空 = 清除）+ 3×/5×/10× 快捷键。
+    // 写的是**组**上的 `exaggeration_mult`（组是真源），走 `patchGroup` 这唯一通路
+    // —— 它负责 `roi.groupUpdate(roi_id, group_id, {...})`、失败冒泡与 onDataChange。
+    const exagInput = root.querySelector<HTMLInputElement>('#grp-exag-inp');
+    const currentGroupExag = (): number | null => {
+      const roi = activeRoi();
+      const gid = effectiveGroupId();
+      const group = roi?.x_groups?.find((g) => g.id === gid);
+      return isGroupExaggerated(group?.exaggeration_mult)
+        ? normalizeGroupExaggeration(group?.exaggeration_mult)
+        : null;
+    };
+    const writeGroupExag = (value: number | null): void => {
+      void patchGroup({ exaggeration_mult: value });
+    };
+    root.querySelectorAll('.grp-exag-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const value = normalizeGroupExaggeration(btn.getAttribute('data-exag'));
+        if (value !== null) writeGroupExag(value);
+      });
+    });
+    if (exagInput) {
+      exagInput.addEventListener('keydown', (ev) => {
+        if ((ev as KeyboardEvent).key === 'Enter') exagInput.blur();
+      });
+      exagInput.addEventListener('change', () => {
+        const raw = exagInput.value.trim();
+        // 清空 = 取消放大（发 null）；不写 1——1 等于没放大，留着只会让人以为设过。
+        if (raw === '') {
+          writeGroupExag(null);
+          return;
+        }
+        const parsed = normalizeGroupExaggeration(raw);
+        if (parsed === null) {
+          // 就地回填旧值，不重建 DOM：重建会让用户看不到自己刚才填了什么。
+          const previous = currentGroupExag();
+          exagInput.value = previous === null ? '' : String(previous);
+          notifyError(t('step6.groupExagInvalid'));
+          return;
+        }
+        writeGroupExag(parsed);
+      });
+    }
 
     // 组单位：回车即提交（不等 blur），空串就地回填并提示（后端也会拒）。
     const unitInput = root.querySelector<HTMLInputElement>('#grp-unit-inp');

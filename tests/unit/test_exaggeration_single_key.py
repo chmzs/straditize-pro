@@ -37,6 +37,7 @@ from straditize_core.rpc_methods import cleanup as cleanup_methods
 from straditize_core.rpc_methods import columns as columns_methods
 from straditize_core.rpc_methods import system as system_methods
 from straditize_core.session import StraditizeSession
+from straditize_core.session_parts.xscale import resolve_column_scale
 
 PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
 ALIASES = ("exaggeration_multiplier", "has_exaggeration", "mult_source")
@@ -151,4 +152,23 @@ def test_project_load_normalises_a_legacy_pack() -> None:
     fresh.load_image(image_path=PLATE)
     fresh.project_load(payload)
 
-    _assert_single_key(fresh.columns[0], 7.0)
+    column = fresh.columns[0]
+    # 历史键不许留下任何一个名字（列、组两处都查）。
+    assert [k for k in ALIASES if k in column] == [], (
+        "库里还留着历史名：一个概念存多份，迟早互相打架"
+    )
+    group = next(
+        g
+        for roi in fresh.rois
+        for g in roi.get("x_groups") or []
+        if g.get("id") == column.get("x_group_id")
+    )
+    assert [k for k in ALIASES if k in group] == []
+    # 2026-11-17 起放大倍数的真源是**组**：载入迁移把列上的 7× 搬到组上、并清空列级
+    # （`project._migrate_column_exaggeration_to_group`）。这里判"搬完只有一处有值"。
+    assert group["exaggeration_mult"] == 7.0, group.get("exaggeration_mult")
+    assert column.get("exaggeration_mult") is None, (
+        "列级副本必须清空，否则组被清空后它会静默复活"
+    )
+    # 后果层：读数仍按 ÷7 —— 搬家的目的是"行为不变、只剩一个真源"，不是改数。
+    assert resolve_column_scale(fresh, column).exaggeration_mult == 7.0
