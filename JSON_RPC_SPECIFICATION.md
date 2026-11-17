@@ -767,6 +767,27 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
 > `normalize_grid_line_strength` 抛错、并被占位表保底吞掉的。
 > 回归钉子：`tests/unit/test_degrid_strength_validation.py`。
 
+### 4.13 `samples.fromDepthGrid` — 等距网格层位（S4，2026-11-17）
+
+步骤 7 的第三种行集来源。前两种是拐点共识（`samples.extractConsensus`，行集由拐点数决定）
+与手工/粘贴；钻孔的真实取样间隔是等距的，共识给不出那个密度（实测同图 203 → 355，
+随数字化密度漂移，见 `docs/findings/recon-20261117.md` §5）。
+
+- **入参**：`{"step": <number> 必填, "start_depth": <number|null>, "end_depth": <number|null>, "replace": <bool>}`。
+- **出参**：`{"samples": [...], "count": N, "step", "start", "end", "unit", "row_step_px"}`。
+  每个 layer 的 `source` 为 `"grid"`（`auto`/`paste`/`manual` 之外的第四个合法取值）。
+- **区间**：默认 `ROI 深度范围 ∩ Y 轴标定区间`；显式给 `start_depth`/`end_depth` 时必须落在
+  标定区间内，否则 `INVALID_PARAMS`（**不外推**：标定之外没有真实深度）。
+- **行数**：`floor((end-start)/step) + 1`。
+- **副作用**：`depth_grid` 与 `samples` 写同一批数（`dataset=depth_grid` 与默认导出同源）。
+- **错误**（都不静默兜底）：
+  - 未标定 / 缺 `top_cm,bottom_cm` → `STATE_ERROR`；
+  - `step <= 0` → `INVALID_PARAMS`；
+  - 区间越出标定区间 → `INVALID_PARAMS`，消息带真实区间；
+  - 步长细于行分辨率（多个深度落到同一行）→ `INVALID_PARAMS`，消息给出该图的分辨率与
+    最小可用步长（实测本工程：0.00765 ka/px ⇒ 标定段内最多 393 层）。
+- **回归钉子**：`tests/unit/test_samples_depth_grid.py`（6 条）。
+
 ## 4A. 年代-深度模型与年代集合（`agedepth.*` / `ensemble.*`）
 
 > 本节是全量清单，不是示例：后端 `rpc_methods/agedepth.py` 注册的 12 个方法逐一在此展开。
