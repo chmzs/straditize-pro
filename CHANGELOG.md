@@ -1,6 +1,19 @@
 # 变更记录（CHANGELOG）
 
 ## [Unreleased]
+### 设置页不再抹掉 Rscript 路径（#104）+ 出图包的脚本改 svg 且补填充（#105）
+
+**#104 配置被静默清空**：设置页保存时**无条件**发送 `rscript_path`。两种无关情形都会被后端读成「用户要清空」——配置还没加载出原值、或类型里缺该字段读到 `undefined`——于是 `config.json` 里已存的路径被抹掉。
+
+- `SystemConfig` 补 `rscript_path?: string`（原先前端靠 `as any` 读，类型上根本没有这个字段）；
+- 保存判定抽成纯函数 `services/configUpdates.ts::rscriptPathUpdate(initial, current)`：**未改动不发**、**清空照发**（后端约定 `""` = 回到自动探测）、首尾空白不算修改；
+- 判据 `frontend/test-rscript-path-update.mjs`（已接进 `npm test` 链）：五条覆盖未改动/新填/改路径/清空/空白。
+
+**#105 出图包里的图与预览是两张脸**：`plot_strat.R` 用 R 原生 `pdf()`，无 cairo、字体不嵌入、没传 `plot.poly` 所以无填充、`title` 传了两次叠印。
+
+- 默认设备改 `grDevices::svg()`（cairo，字形轮廓，不依赖字体），默认输出名 `plot_strat.svg`；
+- 两个 `strat.plot` 调用补 `plot.poly = TRUE`；`title` 只传第一次（`add = TRUE` 那次去掉，避免叠印）；
+- 实测：合成工程导出 → 解压 → `Rscript plot_strat.R` → rc=0，`plot_strat.svg` 42 524 B、75 个 `<path>`、0 个 `<text>`。
 ### 分段拼接与「列量程」统一口径（三情景），不再静默失效
 
 - **缺陷**：分段只看「组数 ≥2」，与 `plot_scale_mode`（normalize / fixed）互不知情。用户把某列标成 `fixed` 后，图上仍按百分比归一画——设置看起来生效、实际没有。

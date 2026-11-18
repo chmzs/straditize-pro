@@ -2,6 +2,7 @@ import { RpcClient, SystemConfig } from '../services/RpcClient';
 import { notifyError } from '../ui/feedback';
 import { getLocale, setLocale, Locale, t } from '../i18n';
 import { AboutModal } from './AboutModal';
+import { rscriptPathUpdate } from '../services/configUpdates';
 
 export class SettingsModal {
   private container: HTMLElement;
@@ -397,7 +398,10 @@ export class SettingsModal {
     const detectRBtn = modal.querySelector('#btn-settings-detect-r') as HTMLButtonElement | null;
     const rHint = modal.querySelector('#settings-r-hint') as HTMLElement | null;
     const rPathInput = modal.querySelector('#settings-rscript-path') as HTMLInputElement | null;
-    if (rPathInput) rPathInput.value = String((config as any).rscript_path || '');
+    // 记住打开时的原值：保存时只在**用户真的改过**时才发送 rscript_path。
+    // 无条件发送会把「输入框还没加载/config 缺字段」变成一次静默清空（issue #104 的真实危险面）。
+    const initialRscriptPath = String(config.rscript_path ?? '');
+    if (rPathInput) rPathInput.value = initialRscriptPath;
     detectRBtn?.addEventListener('click', async () => {
       detectRBtn.disabled = true;
       try {
@@ -472,8 +476,9 @@ export class SettingsModal {
           }
           const rscriptInput = modal.querySelector('#settings-rscript-path') as HTMLInputElement | null;
           const rscriptVal = rscriptInput?.value?.trim() ?? '';
-          // 空串 = 清空配置回到自动探测；非空则交给后端校验（不存在会当场报错）。
-          updates.rscript_path = rscriptVal;
+          // 只在改过时才发：空串本身是合法语义（清空 → 回到自动探测），但不能因为
+          // 「没加载出原值」就把已存的路径抹掉。判定抽在 `rscriptPathUpdate` 里，有单测。
+          Object.assign(updates, rscriptPathUpdate(initialRscriptPath, rscriptVal));
           await this.rpcClient.updateSystemConfig(updates);
         }
       } catch (err) {

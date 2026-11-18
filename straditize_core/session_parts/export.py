@@ -1820,10 +1820,12 @@ class ExportMixin:
 
             "args <- commandArgs(trailingOnly = TRUE)",
             "csv_path <- if (length(args) >= 1 && nzchar(args[[1]])) args[[1]] else 'data.csv'",
-            "out_path <- if (length(args) >= 2 && nzchar(args[[2]])) args[[2]] else 'plot_strat.pdf'",
+            "out_path <- if (length(args) >= 2 && nzchar(args[[2]])) args[[2]] else 'plot_strat.svg'",
             "if (!requireNamespace('rioja', quietly = TRUE)) stop('缺 rioja 包：install.packages(\"rioja\")')",
             "library(rioja)",
-            "pdf(out_path, width = 12, height = 8)",
+            # 设备用 cairo 的 svg：R 原生 pdf() 不嵌入字体、也没有 cairo 的抗锯齿，
+            # 同一份数据出来的图与应用内 jpeg/svg 完全是两张脸（issue #105）。
+            "grDevices::svg(out_path, width = 12, height = 8)",
 
         ]
         script_lines.extend(

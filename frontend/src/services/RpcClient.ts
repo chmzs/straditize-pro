@@ -116,6 +116,8 @@ export interface SystemConfig {
   server_bound_port?: number;
   is_desktop_mode?: boolean;
   connected?: boolean;
+  /** Rscript 绝对路径；空串 = 回到自动探测（`system.updateConfig` 里 `""` 表示清除）。 */
+  rscript_path?: string;
 }
 
 export class RpcClient {
