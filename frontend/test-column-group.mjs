@@ -120,12 +120,12 @@ function greenZeroX(col, roi) {
 // A. 组有值：grp3 = 1 → 1775
 assert.equal(greenZeroX(column(), ROI), 1775, 'grp3 轴粗 1 → 0 点 = startX + 1');
 
-// B. 组值清空：回落缺省 5 → 1779
+// B. 组值清空：回落兜底 DEFAULT_AXIS_STROKE_PX = 2 → 1776（2026-11-19 由 5 改 2）
 const roiNoStroke = {
   ...ROI,
   x_groups: GROUPS.map((g) => (g.id === 'roi_1_grp3' ? { ...g, axis_stroke_px: null } : g)),
 };
-assert.equal(greenZeroX(column(), roiNoStroke), 1779, '组值清空 → 回落缺省 5');
+assert.equal(greenZeroX(column(), roiNoStroke), 1776, '组值清空 → 回落兜底 2px');
 
 // C. **列上没有 x_group_id**：必须用默认组的轴粗（3），而不是缺省 5。
 const colNoGroup = column({ id: 'taxa_0', name: 'col02', startX: 497, endX: 728, x_group_id: undefined });

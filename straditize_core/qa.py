@@ -12,7 +12,7 @@ Strictly adheres to Frozen Contracts v1.3 §2.7 (QaSummary) and §4 (Derived Qua
 | `FLAG_AXIS_BLIND` | `0 ≤ raw_span_px ≤ axis_stroke_px` | 逐行 x、0 点、轴宽 |
 | `FLAG_TRUNCATED` | 触列右端 **且** 相邻行 |Δspan| ≤ 2px（平台，≥2 行） | 逐行 x、列右端 |
 | `FLAG_COLLISION` | 触列右端 **且** 相邻行 |Δspan| 全部 > 2px（孤立单行突刺） | 同上 |
-| `FLAG_EXAGG_RATIO` | `(outer−z0)/(inner−z0) ∉ [3.0, 5.5]` | **内线/外线成对读数（当前不存在，永远 skipped）** |
+| `FLAG_EXAGG_RATIO` | `(outer−z0)/(inner−z0) ∉ [3.0, 5.5]` | 内线/外线成对读数（`inner_xs_px` / `outer_xs_px`） |
 
 `FLAG_COLLISION` 的降级规则见 `_is_full_scale_bar_row`：满量程横柱触边是合法几何，
 必须用「该列是否逐行等宽（柱状）」+「该行是否满量程」两个结构条件放行，否则每一根
@@ -20,10 +20,24 @@ Strictly adheres to Frozen Contracts v1.3 §2.7 (QaSummary) and §4 (Derived Qua
 
 ## 逐行序列的来历
 
-`columns_info[i]` 的 `rows_px` / `xs_px` 由 `session_parts/qa.py::_qa_column_values`
-从 `column_points` 原样搬来。**由控制点插值合成**的列（`control_point_columns`）拿不到
-实测像素，这些列的旗标一律标 `skipped`（reason=`points_synthesized_from_control_points`），
-不给"看起来正常"的结论——插值出来的 x 不是读数。
+`columns_info[i]` 的 `rows_px` / `xs_px` / `inner_xs_px` / `outer_xs_px` 由
+`session_parts/qa.py::_qa_column_values` 从 `column_points` 原样搬来。**由控制点插值
+合成**的列（`control_point_columns`）拿不到实测像素，这些列的旗标一律标 `skipped`
+（reason=`points_synthesized_from_control_points`），不给"看起来正常"的结论——插值
+出来的 x 不是读数。
+
+`inner_xs_px` / `outer_xs_px` 是 **#99 之前不存在的数据源**，落库键契约见
+`session_parts/layers.py` 的模块 docstring：只有 `exaggeration_mult > 1` 的列、且只有
+同一行墨迹里**两条线都在**的行才有这对读数。因此下列情况都是**正常的"没有读数"**，
+整列标 `skipped`，绝不补 0：
+
+- 单层列（没有倍率 → 没有"两层"这件事）；
+- 外线整列断裂（每一行都只剩内线，外线位置是算出来的，不是测出来的）；
+- 旧工程载入后还没重新数字化（工程包存控制点，稠密点不入库）；
+- 控制点插值合成的列。
+
+补 0 会得到 `ratio = 0`（或 `0/0`），把"没有读数"伪装成一条 `FLAG_EXAGG_RATIO` 假告警；
+全 None 的数组则会伪装成"已判定、零告警"。两种都是把缺失当结论，故一律不写键。
 """
 
 from __future__ import annotations
@@ -161,7 +175,12 @@ def compute_qa_flags(columns_info: Sequence[dict[str, Any]]) -> dict[str, dict[s
     - `anchor_edited`：该列有没有被锚点编辑过（只进 `structure` 明细，供人复核）；
     - `origin_suspect`：0 点是否被写偏（`ColumnScale.origin_suspect`）。真则**不做**
       `FLAG_AXIS_BLIND`：0 点不可信时，`span = x − 0点` 整个偏一个轴宽，
-      真实工程与 baseline 图上都会变成"几乎每行都落在轴线里"的假告警。
+      真实工程与 baseline 图上都会变成"几乎每行都落在轴线里"的假告警；
+    - `inner_xs_px` / `outer_xs_px`：内线 / 外线**同一行各自的右缘绝对像素**，与
+      `rows_px` 逐位对齐，没有成对读数的行该位置是 `None`。**整列没有这对键就是
+      "没有读数"**（单层列 / 外线整列断裂 / 旧工程未重新数字化），整列标 `skipped`；
+      键在但一行数值都没有，同样按 `skipped` 处理——不拿 `None`/0 顶替算出一个
+      `ratio`。落库与键契约见 `session_parts/layers.py`。
 
     缺 `rows_px` / `xs_px` / `zero_px` / `right_px` 的列整列跳过（`skipped_columns`），
     不按 0 或列宽兜底 —— 兜底出来的旗标和兜底出来的读数一样不可信。
@@ -196,11 +215,16 @@ def compute_qa_flags(columns_info: Sequence[dict[str, Any]]) -> dict[str, dict[s
             reason = "no_row_series" if series is None else "column_geometry_missing"
             blind_skipped.append({"column": name, "reason": reason})
             edge_skipped.append({"column": name, "reason": reason})
+            # 没有逐行序列 / 没有列几何，同样没有内外线成对读数可言：四块旗标的
+            # `columns_evaluated` 必须用同一份"能不能判"的口径，否则这块会把"判不了"
+            # 的列算成"判过了、零告警"。
+            exagg_skipped.append({"column": name, "reason": reason})
             continue
         if str(col.get("points_provenance") or "measured") != "measured":
             reason = "points_synthesized_from_control_points"
             blind_skipped.append({"column": name, "reason": reason})
             edge_skipped.append({"column": name, "reason": reason})
+            exagg_skipped.append({"column": name, "reason": reason})
             continue
 
         zero = float(zero_px)
@@ -298,21 +322,34 @@ def compute_qa_flags(columns_info: Sequence[dict[str, Any]]) -> dict[str, dict[s
                 }
             )
 
-        # --- FLAG_EXAGG_RATIO：需要内外线成对读数（当前无人提供）----------------
+        # --- FLAG_EXAGG_RATIO：内线 / 外线成对读数（#99）------------------------
+        # 数据源是 `column_points` 点字典上的 `inner_xs_px` / `outer_xs_px`（键契约与
+        # 落库位置见 `session_parts/layers.py`）：只有"同一行墨迹里两条线都在"的行才有
+        # 这对读数，没有读数的行**不写键**。因此"缺这对键"与"键在但没有一行带数值"
+        # 都表示**没有读数**，整列标 skipped —— 补 0 会得到 ratio = 0 的假告警，
+        # 补 None 会得到"已判定、零告警"，两种都是把缺失当结论。
         inner = col.get("inner_xs_px")
         outer = col.get("outer_xs_px")
-        if inner is None or outer is None or len(inner) != len(outer):
+        rows = col.get("rows_px") or []
+        if (
+            inner is None
+            or outer is None
+            or len(inner) != len(outer)
+            or len(inner) != len(rows)
+        ):
             exagg_skipped.append(
                 {"column": name, "reason": "no_paired_inner_outer_readings"}
             )
         else:
-            for row, inner_x, outer_x in zip(col.get("rows_px") or [], inner, outer):
+            n_pairs = 0
+            for row, inner_x, outer_x in zip(rows, inner, outer):
                 if not (_is_number(inner_x) and _is_number(outer_x)):
                     continue
                 inner_dist = float(inner_x) - zero
                 outer_dist = float(outer_x) - zero
                 if inner_dist <= 0.0:
                     continue
+                n_pairs += 1
                 ratio = outer_dist / inner_dist
                 if EXAGG_RATIO_RANGE[0] <= ratio <= EXAGG_RATIO_RANGE[1]:
                     continue
@@ -325,6 +362,10 @@ def compute_qa_flags(columns_info: Sequence[dict[str, Any]]) -> dict[str, dict[s
                         "inner_span_px": round(inner_dist, 2),
                         "outer_span_px": round(outer_dist, 2),
                     }
+                )
+            if n_pairs == 0:
+                exagg_skipped.append(
+                    {"column": name, "reason": "no_paired_inner_outer_readings"}
                 )
 
     n_columns = len(columns)
@@ -439,6 +480,8 @@ def compute_qa_summary(
         - "col_values": Sequence[float] (values for this column across all horizons)
         以下键供逐行旗标使用（`compute_qa_flags`，缺列即该列整列跳过，不兜底）：
         - "rows_px" / "xs_px": 逐行行号与原始像素 x
+        - "inner_xs_px" / "outer_xs_px": 内线 / 外线逐行右缘（与 `rows_px` 逐位对齐，
+          没有成对读数的行是 None；**整列没有这对键 = 没有读数**，见 `compute_qa_flags`）
         - "zero_px" / "right_px" / "axis_px": 0 点 / 列右端 / 轴宽（绝对像素）
         - "plot_type" / "points_provenance" / "anchor_edited" / "exaggeration_mult"
     - tolerance: Allowed excess percentage for composition gate (default 2.0%).

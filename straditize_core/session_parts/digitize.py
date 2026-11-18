@@ -32,6 +32,7 @@ from ..digitize import (
     _without_axis_ink,
     interpolate_hlines,
 )
+from .layers import store_layer_pair
 from .xscale import _resolve_column_group, resolve_axis_stroke, resolve_column_scale
 from ..protocol import (
     INVALID_PARAMS,
@@ -538,6 +539,25 @@ class DigitizeSessionMixin:
         补偿与除法才会精确抵消。解析不到或 ≤1 时整条逻辑不启动：没有倍率就没有"两层"，
         硬补会把普通单层列的读数放大 mult 倍。此时也**不写 `source` 字段**——普通列的点
         字典必须与改动前逐字节相同（`tests/unit/test_digitize_golden.py` 钉着 x 序列）。
+
+        ## 顺带落库：内线 / 外线右缘（issue #99）
+
+        本方法本来就要量两条线各自的右缘（判"外线断开"必须知道内线右缘，判"外线在哪"
+        要末段右缘），此前用完即弃。现在**同时看到两条线段**的行把这两个数写进点字典
+        `inner_xs_px` / `outer_xs_px`（键名与写入口在 `layers.py`，唯一一处定义），
+        供 `FLAG_EXAGG_RATIO` 逐行算 `(outer−z0)/(inner−z0)`。
+
+        - **哪些列**：`exaggeration_mult > 1` 的列（上面的早退决定了这一点：没有倍率
+          就不进入本方法，一个键都不写，点字典与 #99 之前逐字节相同）。
+        - **哪些行**：列窗内 ≥2 段连续墨迹、首段贴轴（起点 ≤ `c_start + 5px`）、
+          且末段右缘严格在首段右缘外侧的行。
+        - **哪些行不写**：① 外线整行断裂的行——它只有内线一段，没有外线可测，`x` 由
+          "内线 × 倍率"补出，那个位置是算出来的，拿它当外线读数算 ratio 恒等于倍率，
+          属自证循环；② 内线不贴轴的行（首段离轴太远，分不清哪条是内线）。
+        - **缺省不写键**：没有成对读数的行**不写这两个键**，绝不写 0 —— 0 会算出
+          `ratio = 0`，把"没有读数"变成一条假告警。
+        - **旧工程**：工程包存的是控制点，稠密点不入库，载入后重新数字化之前没有任何
+          逐行读数；"点字典没有这两个键"因此是正常状态，`qa.py` 据此整列标 `skipped`。
         """
         scale = resolve_column_scale(self, col, col_index)
         mult = scale.exaggeration_mult
@@ -627,6 +647,19 @@ class DigitizeSessionMixin:
             point["source"] = "read"
             if inner_dist is not None and 0 < inner_dist < _BROKEN_MIN_INNER_DIST_PX:
                 ambiguous_rows.append(row_int)
+            # 双层读数落库（issue #99）：这一行墨迹里**两条线都在**——首段贴轴是内线，
+            # 末段是外线，两个右缘各自独立可测，成对写进点字典。
+            #
+            # 只有两段及以上的行才写：断线行（只有内线一段）的"外线位置"是下面按
+            # `zero + inner_dist × mult` 算出来的，拿它当外线读数去算 ratio 恒等于倍率，
+            # 是自证循环。哪一列、哪些行会带这两个键，见 `layers.py` 的模块 docstring。
+            if len(segments) >= 2 and inner_dist is not None and inner_dist > 0.0:
+                inner_right = float(c_start + segments[0][1])
+                outer_right = float(c_start + segments[-1][1])
+                if outer_right > inner_right:
+                    store_layer_pair(
+                        point, inner_x=inner_right, outer_x=outer_right
+                    )
 
         broken_rows.sort()
         ambiguous_rows.sort()

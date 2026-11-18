@@ -281,6 +281,7 @@ export const zhCN = {
   'step3.ref2': '② 基准点 Y2 (下方):',
   'step3.apply': '应用标定',
   'step3.unit': '单位',
+  'step3.unitUnset': '单位未定',
   'step3.next': '确认标尺，进入干扰线清理 (步骤 4)',
 
   // ===== 步骤 4：清理面板 =====
@@ -369,7 +370,6 @@ export const zhCN = {
   'step7.gridConfirmTitle': '替换现有层位？',
   'step7.gridConfirmBody': '按间隔生成会替换当前 {count} 条层位（共识层位与粘贴的深度都会丢）。',
   'step7.gridConfirmOk': '替换并生成',
-  'step7.unitUnknown': '单位未定（Y 轴未标定）',
   'step7.resolution': '深度分辨率',
   'step7.resolutionUnknown': '未标定（无法把深度换算成像素行）',
   'step7.next': '完成提取，进入全剖面地学校验 (步骤 8)',

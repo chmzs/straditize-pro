@@ -278,6 +278,7 @@ export const en = {
   'step3.ref2': '② Reference Point Y2 (Bottom):',
   'step3.apply': 'Apply Calibration',
   'step3.unit': 'Unit',
+  'step3.unitUnset': 'unit unset',
   'step3.next': 'Confirm Scale, Proceed to Clean (Step 4)',
 
   // ===== Step 4: Clean Panel =====
@@ -368,7 +369,6 @@ export const en = {
   'step7.gridConfirmBody':
     'Building the grid replaces the current {count} horizons (consensus horizons and pasted depths are discarded).',
   'step7.gridConfirmOk': 'Replace and build',
-  'step7.unitUnknown': 'unit unset (Y axis not calibrated)',
   'step7.resolution': 'Depth resolution',
   'step7.resolutionUnknown': 'Not calibrated (cannot convert depth to pixel row)',
   'step7.next': 'Complete Extraction, Proceed to QA (Step 8)',

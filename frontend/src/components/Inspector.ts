@@ -2,6 +2,7 @@ import { DataRoi, DiagramData, TaxaColumn, ControlPoint, DiagramCalibration } fr
 import { STAGE } from '../core/WorkflowStage';
 import { HistoryManager } from '../core/HistoryManager';
 import { CoordinateSystem } from '../core/CoordinateSystem';
+import { calUnitLabel } from '../core/calUnit';
 import { DeletePointCommand } from '../core/Commands';
 import { getStepPanel } from './steps/_registry';
 import { renderActiveColumnSuspectNotice } from './steps/SuspectBlockNotice';
@@ -325,11 +326,11 @@ export class Inspector {
           </div>
           <div class="prop-row">
             <span class="prop-label">深度跨度:</span>
-            <span class="prop-val">${bounds ? `${bounds.topValue} ~ ${bounds.bottomValue} ${cal.unit}` : '<span style="color:var(--status-warning);">未标定（步骤 3 两点标定）</span>'}</span>
+            <span class="prop-val">${bounds ? `${bounds.topValue} ~ ${bounds.bottomValue} ${calUnitLabel(cal)}` : '<span style="color:var(--status-warning);">未标定（步骤 3 两点标定）</span>'}</span>
           </div>
           <div class="prop-row">
             <span class="prop-label">标准层位采样点:</span>
-            <span class="prop-val">${numHorizons !== null ? `${numHorizons} 层 (Δ=${interval}${cal.unit})` : '--'}</span>
+            <span class="prop-val">${numHorizons !== null ? `${numHorizons} 层 (Δ=${interval} ${calUnitLabel(cal)})` : '--'}</span>
           </div>
         </div>
       </div>
@@ -492,7 +493,7 @@ export class Inspector {
           </div>
           <div class="prop-row">
             <span class="prop-label">地层深度:</span>
-            <span class="prop-val">${depth !== undefined ? depth.toFixed(2) : '--'} ${this.data.calibration.unit}</span>
+            <span class="prop-val">${depth !== undefined ? depth.toFixed(2) : '--'} ${calUnitLabel(this.data.calibration)}</span>
           </div>
           <div class="prop-row">
             <span class="prop-label">物理丰度:</span>

@@ -2,6 +2,7 @@ import { DiagramData } from '../../types/pollen';
 import { SAMPLE_SOURCE_ORDER, sampleSourceColor } from '../canvas/SampleOverlay';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
+import { calUnitLabel } from '../../core/calUnit';
 import { notify, notifyError } from '../../ui/feedback';
 import { showConfirmDialog } from '../../ui/confirm';
 
@@ -48,11 +49,10 @@ export function render(data: DiagramData): string {
   // 深度分辨率：1 像素对应多少深度。粘贴的深度最终只能落到**整数行**上，
   // 所以这个数就是「导入精度」的量化说明——必须显示出来，否则用户会以为深度是精确对齐的。
   const cal = data.calibration;
-  // Y 轴单位**只认后端标定载荷**：`calibration.unit` = 后端 `session.depth_unit`，
-  // 由 `core.calibrateAxes` 的 `unit` 参数或工程包的 `depth_calibration.unit` 写入
-  // （`project.py::_apply_depth_calibration`）。取不到就明说未标定，**不回落成 `cm`**：
-  // 本项目用户的轴可以是 `ka` / `cal BP` / `m`，显示错单位会让"间隔 0.5"被读成 0.5 cm。
-  const unitLabel = cal?.unit ? cal.unit : t('step7.unitUnknown');
+  // 单位文案走**唯一入口** `core/calUnit`：缺单位一律显示"单位未定"，与页脚、属性面板、
+  // 画布徽标、步骤 3 面板说同一句话，不回落成 `cm`。本项目用户的轴可以是
+  // `ka` / `cal BP` / `m`，显示错单位会让"间隔 0.5"被读成 0.5 cm。
+  const unitLabel = calUnitLabel(cal);
   const spanPx =
     cal?.top_px !== null && cal?.bottom_px !== null
       ? Math.abs(Number(cal.bottom_px) - Number(cal.top_px))

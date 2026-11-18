@@ -11,12 +11,14 @@ from __future__ import annotations
 from .export_docs import CSV_MISSING_NOTICE, strat_plot_script_lines
 
 import base64
+import inspect
 import io
 import json
 import math
 import os
 import tarfile
 import time
+from dataclasses import dataclass
 from typing import Any, Collection, Sequence
 
 import numpy as np
@@ -197,6 +199,108 @@ def _normalize_negative_zero_depth(csv_string: str) -> str:
     return "\n".join(out)
 
 
+# ---------------------------------------------------------------------------
+# 行集身份（issue #113 / #100）
+# ---------------------------------------------------------------------------
+
+#: `rowset["provenance"]` 的**全部**取值。RPC 返回、归档 `manifest.json`、
+#: 归档 README 与 `docs/ARCHITECTURE.md` 都引用这一组字面量：行集的"身份"
+#: 只有这一处定义，不在各处另写同义词。
+#:
+#: `samples` 是唯一一种"这 N 行各是一个样品层位"的行集；其余四种都不是样品，
+#: 行数由数字化密度 / 标尺间隔 / 拐点数决定，而不是由取样设计决定。
+ROWSET_SAMPLES = "samples"
+ROWSET_PIXEL_ROWS = "pixel_rows"
+ROWSET_CONTROL_POINTS = "control_points"
+ROWSET_DEPTH_GRID = "depth_grid"
+ROWSET_TURNING_POINTS = "turning_points"
+
+
+def serialize_export_frame(frame: Any) -> str:
+    """DataFrame → 导出 CSV 文本（**唯一**序列化入口，四路出口共用）。
+
+    ## 为什么必须只有一处（2026-11-19 实测）
+
+    修前 `to_csv` 有四个调用点，其中三个（`export_multi_tar` 的
+    `data/<roi>.csv`、它的兜底分支、`export_bundle_zip` 的 `data.csv`）**不**做
+    `-0.0` 规整，只有 `_write_export_file`（面板下载）做。于是同一份工程：
+
+    | 出口 | 首列顶行 |
+    |:--|:--|
+    | 面板 / `core.exportData` | `0.0` |
+    | 归档 `data.csv` | `-0.0` |
+
+    两者字节不同，"归档是本轮导出的字节复本"这条判据直接不成立。收敛到本函数后，
+    `na_rep` / 行尾 / `-0.0` 三个口径只有一处可改。
+    """
+    # `lineterminator` 必须显式给：pandas 默认 `os.linesep`，Windows 上落盘成 CRLF
+    # （`tests/unit/test_csv_lf_terminator.py` 有源码级门禁钉住这一条）。
+    text = frame.to_csv(index=False, na_rep="NA", lineterminator="\n")
+    return _normalize_negative_zero_depth(text)
+
+
+@dataclass(frozen=True)
+class RowSet:
+    """一个导出行集的**身份**：行从哪来、是不是样品层位、为什么。
+
+    issue #100 的本体是"并集分支答不上来『这些行凭什么算样品』"。把答案做成
+    字段之后，这个问题变成可判定的：`provenance == ROWSET_SAMPLES` ⇔ 行确实来自
+    用户设定的层位（`samples`）；否则 `is_sample_rows` 为假，任何出口都不得把它
+    标成「共识层位 / 样品」。
+    """
+
+    #: 像素行号（与 `column_points[...]["row"]` / `samples[...]["row_px"]` 同域）。
+    rows: tuple[Any, ...]
+    #: 与 `rows` 等长的首列值（深度 / 年代）。未标定时就是行号本身 —— 那条路径
+    #: 走不到 `export_data`（深度标定守卫），但出图/QA 也读本结构。
+    depths: tuple[Any, ...]
+    #: 见模块级 `ROWSET_*` 常量。
+    provenance: str
+    #: 会话里 `samples` 的条数（`provenance != samples` 时用于解释"为什么是空"）。
+    samples_count: int
+    #: 一句话说明"这些行凭什么算样品"，直接进 RPC 返回与归档 manifest。
+    why: str
+
+    @property
+    def rows_count(self) -> int:
+        return len(self.rows)
+
+    @property
+    def is_sample_rows(self) -> bool:
+        """行集是否**就是**样品层位（唯一可以标成「共识层位」的情形）。"""
+        return self.provenance == ROWSET_SAMPLES
+
+    @property
+    def describe(self) -> str:
+        """给人看的一句话（面板/README/错误文案共用）。
+
+        名字不叫 `label`：`support/consistency_check.py` 的 Check A 按**尾名**匹配
+        调用点，本仓里 `ndimage.label(...)` / `ndi.label(...)` / `skim.label(...)`
+        会被判成"调用了这里的签名"，整项校验直接变红（实测 5 处误报）。
+        为一条误报去放松校验等于把门禁拆掉，所以改名字。
+        """
+        if self.is_sample_rows:
+            return f"样品层位（samples，{self.samples_count} 条）"
+        if self.provenance == ROWSET_PIXEL_ROWS:
+            return f"逐列数字化的像素行并集（{self.rows_count} 行，不是样品层位）"
+        if self.provenance == ROWSET_CONTROL_POINTS:
+            return f"控制点（拐点）层位并集（{self.rows_count} 行）"
+        if self.provenance == ROWSET_DEPTH_GRID:
+            return f"按深度间隔重采样的规则层位（{self.rows_count} 行）"
+        return f"拐点原始坐标（{self.rows_count} 行，长表）"
+
+    def as_dict(self) -> dict[str, Any]:
+        """RPC 返回 / `manifest.json` 用的机器可读形式。"""
+        return {
+            "provenance": self.provenance,
+            "is_sample_rows": self.is_sample_rows,
+            "rows_count": self.rows_count,
+            "samples_count": self.samples_count,
+            "label": self.describe,
+            "why": self.why,
+        }
+
+
 class ExportMixin:
     """Session mixin for multi-ROI chunked tabular exports (CSV/TSV/LiPD/XLSX/TAR)."""
 
@@ -217,6 +321,101 @@ class ExportMixin:
         """
         return _y_column_label(
             getattr(self, "primary_axis", None), legacy=legacy_column_name
+        )
+
+    def _row_depths(
+        self, rows: Sequence[Any], raw_depths: Sequence[Any] | None = None
+    ) -> list[Any]:
+        """像素行 → 首列值（深度 / 年代）的**唯一**换算。
+
+        既有语义原样保留（这是 `get_roi_dataframes` 与 `_export_rows_and_depths`
+        两份实现的合并，两者此前逐字等价）：
+
+        - 用户给了层位深度（`samples[i]["depth"]`）就**原样用**，不再二次取整；
+        - 没给（`None`）时，已标定 → `y_scale` 线性换算并 round 4；未标定 → 给行号。
+
+        未标定给行号的那条分支不会被 `export_data` 放行（那里有深度标定守卫），
+        但 `get_roi_dataframes` 同时服务出图与 QA，仍需要一个不自称"深度"的返回值。
+        """
+        y_scale = getattr(self, "y_scale", None)
+        calibrated = bool(getattr(self, "is_calibrated", False)) and y_scale is not None
+        raw = list(raw_depths) if raw_depths is not None else [None] * len(rows)
+        slope = float(y_scale.get("slope", 0.0)) if calibrated else 0.0
+        intercept = float(y_scale.get("intercept", 0.0)) if calibrated else 0.0
+
+        out: list[Any] = []
+        for row, depth in zip(rows, raw):
+            if depth is not None:
+                out.append(depth)
+            elif calibrated:
+                out.append(round(slope * row + intercept, 4))
+            else:
+                out.append(row)
+        return out
+
+    def _resolve_rowset(
+        self, *, column_indices: Collection[int] | None = None
+    ) -> RowSet:
+        """**唯一**行集来源：面板预览 / CSV 下载 / 归档 `data.csv` 都从这里取行。
+
+        ## 两条分支，身份不同（issue #113 / #100）
+
+        | `samples` | 行 = | `provenance` | 行数是"样品数"吗 |
+        |:--|:--|:--|:--|
+        | 非空 | `samples[i]["row_px"]`，逐条对应 | `samples` | 是（== `len(samples)`） |
+        | 空 | 这些列逐行数字化点的像素行并集 | `pixel_rows` | **不是**，随数字化密度变化 |
+
+        第二分支保留（出图与 `data.csv` 仍要能导原始曲线），但它**永远不再自称
+        样品**：`as_dict()` 里的 `is_sample_rows=False` + `why` 就是"凭什么"的答案
+        ——答案是"它们不是样品"。真正要按样品导的地方（面板「共识层位」、
+        `dataset="samples"`）在 `_dataset_frame` 里直接拒绝，见那里的注释。
+
+        `column_indices`：多 ROI 时只取该 ROI 的列（行集按 ROI 分开，与
+        `data/<roi>.csv` 的表内容一致）。
+        """
+        samples = list(getattr(self, "samples", None) or [])
+        if samples:
+            rows = [int(round(float(s.get("row_px", 0)))) for s in samples]
+            depths = self._row_depths(rows, [s.get("depth") for s in samples])
+            return RowSet(
+                rows=tuple(rows),
+                depths=tuple(depths),
+                provenance=ROWSET_SAMPLES,
+                samples_count=len(samples),
+                why=(
+                    f"用户设定了 {len(samples)} 个样品层位（步骤 7）：第 i 行的 row_px "
+                    "取自 samples[i]，层位序列由用户给定，不由数字化密度推出。"
+                ),
+            )
+
+        points = getattr(self, "column_points", None) or {}
+        indices = (
+            set(column_indices)
+            if column_indices is not None
+            else set(points.keys())
+        )
+        row_values = {
+            point["row"]
+            for index in indices
+            for point in (points.get(index) or [])
+            if "row" in point
+        }
+        rows = sorted(row_values) if row_values else [0]
+        why = (
+            "未设样品层位（samples 为空）：行取自这些列逐行数字化点的像素行并集，"
+            "行数随图像高度与数字化密度变化 —— 它们是**像素行**，不是样品层位。"
+        )
+        if not row_values:
+            why = (
+                "未设样品层位（samples 为空），且这些列没有任何逐行数字化点："
+                "当前只有一行占位行 0 —— 它既不是样品，也不是读数。"
+            )
+        return RowSet(
+            rows=tuple(rows),
+            depths=tuple(self._row_depths(rows)),
+            provenance=ROWSET_PIXEL_ROWS,
+            samples_count=0,
+            why=why,
         )
 
     def get_roi_dataframes(
@@ -242,8 +441,6 @@ class ExportMixin:
         all_columns = getattr(self, "columns", [])
         samples = getattr(self, "samples", [])
         column_points = getattr(self, "column_points", {})
-        is_calibrated = getattr(self, "is_calibrated", False)
-        y_scale = getattr(self, "y_scale", None)
 
         roi_dfs: dict[str, pd.DataFrame] = {}
         y_col = self._y_col_label(legacy_column_name)
@@ -277,38 +474,13 @@ class ExportMixin:
                     roi_dfs[roi_name] = pd.DataFrame({y_col: []})
                 continue
 
-            if samples:
-                row_list = [int(round(s.get("row_px", 0))) for s in samples]
-                depth_list = [s.get("depth") for s in samples]
-                if is_calibrated and y_scale:
-                    depth_list = [
-                        d
-                        if d is not None
-                        else round(
-                            y_scale.get("slope", 0.0) * r
-                            + y_scale.get("intercept", 0.0),
-                            4,
-                        )
-                        for r, d in zip(row_list, depth_list)
-                    ]
-            else:
-                c_indices = {c.get("col_index", idx) for idx, c in enumerate(roi_cols)}
-                pts_rows = set()
-                for c_idx in c_indices:
-                    if c_idx in column_points:
-                        pts_rows.update(p["row"] for p in column_points[c_idx])
-                row_list = sorted(pts_rows) if pts_rows else [0]
-                if is_calibrated and y_scale:
-                    depth_list = [
-                        round(
-                            y_scale.get("slope", 0.0) * r
-                            + y_scale.get("intercept", 0.0),
-                            4,
-                        )
-                        for r in row_list
-                    ]
-                else:
-                    depth_list = row_list
+            # 行集只从 `_resolve_rowset` 来（issue #113）：面板预览、CSV 下载、
+            # 归档 data.csv 与 XLSX/LiPD 全部走这里，不允许再各算一套。
+            # `pts_rows` 为空时它给的那一行占位行 0 也由它自己标记（`why` 里写清）。
+            c_indices = {c.get("col_index", idx) for idx, c in enumerate(roi_cols)}
+            rowset = self._resolve_rowset(column_indices=c_indices)
+            row_list = list(rowset.rows)
+            depth_list = list(rowset.depths)
 
             data_dict: dict[str, Any] = {y_col: depth_list}
 
@@ -341,12 +513,22 @@ class ExportMixin:
                     p_dict,
                 )
 
-            roi_dfs[roi_name] = pd.DataFrame(data_dict)
+            frame = pd.DataFrame(data_dict)
+            # 行集身份随表带走：下游（归档 README / manifest / 测试）不必重新推断
+            # "这 N 行是什么"。pandas `attrs` 不参与相等比较，也不进 CSV 字节。
+            frame.attrs["rowset"] = rowset.as_dict()
+            roi_dfs[roi_name] = frame
 
         return roi_dfs
 
-    def get_export_readiness(self) -> dict[str, Any]:
+    def get_export_readiness(self, dataset: str | None = None) -> dict[str, Any]:
         """Compute the Export Readiness checklist for all ROIs.
+
+        `dataset`（可选，2026-11-19，issue #100）：面板按当前下拉取值调用本方法，
+        拿到的 `rowset.label` 就是**这一行集**的人话名字（「样品层位」/「逐列数字化的
+        像素行并集（625 行，不是样品层位）」…）。不传 = `data.csv` 那条语义
+        （samples 优先，samples 为空则像素行）。这样面板标题不必在前端按 dataset 名
+        写死一套同义词——那正是 `samples=0` 时把像素行标成「按共识层位」的来源。
 
         ## 标定检查（B-12）
 
@@ -383,6 +565,15 @@ class ExportMixin:
         `readiness_missing` 仍只记 ROI 级缺项（未命名 / 无列），**不**把"有未标定
         列"算进去——否则同一个 ROI 名会重复出现，前端按名字展示会变成两条。
         """
+        # 非法 dataset 名先报：`rowset` 的身份与行数都由它选，静默当 None 处理
+        # 会让面板标题显示"样品层位"而表却是别的行集。
+        dataset_key = (dataset or "").strip().lower()
+        if dataset_key and dataset_key not in self.EXPORT_DATASETS:
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                f"Unsupported dataset '{dataset}'. Use one of: {', '.join(self.EXPORT_DATASETS)}.",
+            )
+
         rois = getattr(self, "rois", [])
         if not rois:
             rois = [{"id": "pollen", "name": "pollen", "name_source": "default"}]
@@ -448,6 +639,12 @@ class ExportMixin:
                 "column_count": len(all_columns),
                 "sources": source_counts,
             },
+            # 行集身份 + 质量指标（issue #100）：面板打开时就能拿到"这次导出会
+            # 交付什么行集、多少行、支持列数中位、要不要重跑共识"，不必先导一次。
+            # 与 `core.exportData` / 归档 manifest 是同一个构造函数，不会各说一套。
+            "rowset": self._rowset_report(
+                dataset_key or None, self._rowset_rows_estimate(dataset_key or None)
+            ),
         }
 
     def _roi_column_units(self) -> dict[str, dict[str, str]]:
@@ -498,6 +695,26 @@ class ExportMixin:
             for r in rois
         }
 
+        # 行集身份（issue #113 / #100）：每张表都说明"这 N 行是什么、凭什么"。
+        # 记录来自 `get_roi_dataframes` → `_resolve_rowset`，与写进 data.csv 的
+        # 那张表同源，所以这份元数据不会与字节脱节。`samples` 为空时它明说
+        # "是逐列像素行，不是样品层位"——这就是 #100 要求能答上来的那句话。
+        rowset_by_roi = {
+            name: {
+                **dict(frame.attrs.get("rowset") or {}),
+                # 质量指标随行集一起落盘：层位数 / 支持列数中位 / 容差。
+                # 用户拿归档时不用回跑软件就能判断"要不要重跑共识优化"。
+                "quality": self._rowset_quality(
+                    len(frame),
+                    is_sample_rows=bool(
+                        (frame.attrs.get("rowset") or {}).get("is_sample_rows")
+                    ),
+                ),
+            }
+            for name, frame in roi_dfs.items()
+        }
+        primary_rowset = rowset_by_roi.get(primary_roi_name) or {}
+
         manifest = {
             "version": "2.0.0",
             "tool": "straditize pro",
@@ -506,6 +723,10 @@ class ExportMixin:
             "primary_roi_id": primary_roi_id,
             "primary_roi": primary_roi_name,
             "rois": [r.get("name", r.get("id")) for r in rois],
+            # data.csv 的行集身份（`provenance` / `is_sample_rows` / `why`）。
+            # 机器可读的那一份；人读的那一份在 README.txt。
+            "data_csv_rowset": primary_rowset,
+            "rowset_by_roi": rowset_by_roi,
             # 每列量纲（按 ROI 分组；同名不同 ROI 的列不会互相覆盖）
             "column_units": units_by_roi,
             # 每组量纲（用户编辑的源头，见步骤 6「单位」输入）
@@ -547,11 +768,9 @@ class ExportMixin:
             roi_meta_by_name = {r.get("name"): r for r in (getattr(self, "rois", None) or [])}
             unnamed_seq = 0
             for roi_name, df in roi_dfs.items():
-                # 未标定列整列不给数：写 CSV 时用显式 `NA`，不要留空。
-                # 空单元格在下游读入器里既可能是缺失也可能是 0，`NA` 是无歧义的
-                # "没有这个数"（避免虚假数据）。
-                csv_str = df.to_csv(index=False, na_rep="NA", lineterminator="\n")
-                csv_bytes = csv_str.encode("utf-8")
+                # 序列化只走 `serialize_export_frame`：与面板下载**逐字节相同**的
+                # 前提正是 na_rep / LF / `-0.0` 三项口径只有一处（判据 4）。
+                csv_bytes = serialize_export_frame(df).encode("utf-8")
 
                 meta = roi_meta_by_name.get(roi_name) or {}
                 if meta.get("name_source") == "user":
@@ -585,11 +804,9 @@ class ExportMixin:
                 )
 
             if not primary_csv_bytes and roi_dfs:
-                primary_csv_bytes = (
+                primary_csv_bytes = serialize_export_frame(
                     list(roi_dfs.values())[0]
-                    .to_csv(index=False, na_rep="NA", lineterminator="\n")
-                    .encode("utf-8")
-                )
+                ).encode("utf-8")
 
             ti_data_csv = tarfile.TarInfo(name="data.csv")
             ti_data_csv.size = len(primary_csv_bytes)
@@ -602,12 +819,42 @@ class ExportMixin:
             ti_r.mtime = int(time.time())
             tf.addfile(ti_r, io.BytesIO(r_script_bytes))
 
+            # 行集来源标记（issue #100）：打开归档第一眼就要知道 data.csv 那 N 行
+            # 是不是样品层位。人读的这份在 README，机器读的那份在
+            # `manifest.json -> data_csv_rowset`，两份都来自 `_resolve_rowset`。
+            quality = primary_rowset.get("quality") or {}
+            rowset_notice = (
+                f"data.csv row set : {primary_rowset.get('label', 'unknown')}\n"
+                f"  provenance     : {primary_rowset.get('provenance', 'unknown')}\n"
+                f"  is samples     : {primary_rowset.get('is_sample_rows')}\n"
+                f"  rows / samples : {primary_rowset.get('rows_count')} / "
+                f"{primary_rowset.get('samples_count')}\n"
+                f"  why            : {primary_rowset.get('why', '')}\n"
+                f"  quality        : support_columns_median="
+                f"{quality.get('support_columns_median')} (n={quality.get('support_columns_n')}, "
+                f"min..max {quality.get('support_columns_min')}.."
+                f"{quality.get('support_columns_max')})\n"
+                f"                   tolerance_px={quality.get('tolerance_px')} "
+                f"(default {quality.get('default_tolerance_px')}) "
+                f"roi_height_px={quality.get('roi_height_px')} "
+                f"rows_equal_roi_height={quality.get('rows_equal_roi_height')}\n"
+            )
+            if primary_rowset and not primary_rowset.get("is_sample_rows"):
+                rowset_notice += (
+                    "WARNING: samples is empty -> data.csv rows are digitized PIXEL "
+                    "ROWS, not sample horizons.\n"
+                    "警告：本工程未设样品层位（samples 为空），data.csv 的行是逐列数字化的"
+                    "像素行，不是样品层位——\n"
+                    "      行数由图像高度与数字化密度决定，不能当作「样品数」引用。\n"
+                )
+
             readme = (
                 f"Straditize Pro - Stratigraphic Project Archive (POSIX UStar .tar)\n"
                 f"================================================================\n"
                 f"Primary ROI: {primary_roi_name}\n"
                 f"Total ROIs: {len(roi_dfs)}\n\n"
-                f"Files:\n"
+                + rowset_notice
+                + "\nFiles:\n"
                 f"data.csv             - Primary ROI dataset ({primary_roi_name})\n"
                 f"data/<roi>.csv       - Per-ROI isolated scientific CSV tables\n"
                 f"plot_strat.R         - R plotting script with sections for each ROI\n"
@@ -1033,6 +1280,21 @@ class ExportMixin:
         # 看起来像「这张图没数据」，而不是「你卡在步骤 6」。
         # 不传 dataset（data.csv / tar / xlsx 出口）不受此守卫约束（那条契约不变）。
         if key == "samples":
+            # 「共识层位」的实际行集由 `_resolve_rowset` 决定：
+            #   samples 非空 → 就是样品层位（行数 == len(samples)）；
+            #   samples 为空 → 逐列数字化点的像素行并集（`provenance="pixel_rows"`）。
+            #
+            # ## 为什么空 samples 时**不拒绝**（2026-11-19 产品口径）
+            #
+            # 默认路径必须能自己给出结果：面板一打开就拿到表，不要求用户先做一步
+            # 前置动作。所以这里照常出行，**不允许**把行集默默说成样品 ——
+            # 身份由 `export_data` 的 `rowset` 字段（`provenance` / `is_sample_rows`
+            # / `samples_count` / `why`）、`export.getReadiness.rowset`、归档
+            # `manifest.json -> data_csv_rowset` 与 README 的 WARNING 段共同标注。
+            # 面板 caption 需要把 `rowset.label` 显示出来（前端改动，另单）。
+            #
+            # 反向的硬判据在 `export_data` 里：`is_sample_rows=True` 时
+            # 行数**必须**等于 samples 条数，否则整份表不交付。
             return self._primary_roi_export_frame(
                 strict=strict, legacy_column_name=legacy_column_name
             )
@@ -1042,6 +1304,186 @@ class ExportMixin:
             return self._depth_grid_frame(legacy_column_name=legacy_column_name)
         # 只剩 turning_points（上面已校验取值）
         return self._turning_points_frame(legacy_column_name=legacy_column_name)
+
+    #: 判"要不要优化"用的默认容差来源：直接读共识 RPC 的签名默认值，不在此另写
+    #: 一个字面量（改了 RPC 默认值这里自动跟）。
+    def _rowset_rows_estimate(self, dataset: str | None) -> int:
+        """不建表就估出该 `dataset` 的行数（`export.getReadiness` 用）。
+
+        只用于面板标题/身份的"共 N 行"，**不参与任何数值计算**；面板真正渲染的行数
+        永远来自 `export.csv` 返回的那张表。两者应当一致，行集来源同一处
+        （`_resolve_rowset` / `_control_point_rows` / 深度网格 / 拐点清单）。
+        """
+        key = (dataset or "").strip().lower()
+        if not key or key == "samples":
+            points = getattr(self, "column_points", None) or {}
+            if points:
+                return len(self._resolve_rowset().rows)
+            # 逐行点还没补齐（刚打开的工程）：`export_data` 会先走
+            # `_fill_missing_column_points` 的"整表为空 → 按控制点合成"分支，
+            # 行集就是控制点的 row 并集。这里按同一规则估，否则标题写 1 行
+            # （占位行 0）、表面却是控制点行数，标题与表又对不上。
+            if any((getattr(self, "control_points", None) or {}).values()):
+                return len(self._control_point_rows())
+            return len(self._resolve_rowset().rows)
+        if key == "union_points":
+            return len(self._control_point_rows())
+        if key == "depth_grid":
+            depths = getattr(self, "depth_grid", None) or self._uniform_depth_list()
+            return len(list(depths))
+        # turning_points：一行 = 一个控制点
+        return sum(
+            len(pts) for pts in (getattr(self, "control_points", None) or {}).values()
+        )
+
+    def _default_tolerance_px(self) -> float | None:
+        extractor = getattr(self, "samples_extract_consensus", None)
+        if extractor is None:
+            return None
+        parameter = inspect.signature(extractor).parameters.get("tolerance_px")
+        if parameter is None or not isinstance(parameter.default, (int, float)):
+            return None
+        return float(parameter.default)
+
+    def _rowset_quality(self, rows_count: int, *, is_sample_rows: bool) -> dict[str, Any]:
+        """本次导出的**质量指标**：层位数 / 支持列数中位 / 当前 tolerance_px。
+
+        为什么必须有（issue #100）：只报一个行数，用户无法判断"这 625 行该不该
+        接受"。三个量给出来，他才有判断依据——
+
+        - `rows` = 层位数（这个表有多少行）；
+        - `support_columns_median` = 每层有多少列给了值的中位数（与画布上
+          「8 列共振 / 1 列孤峰」同一口径；`samples` 侧优先读层位自带的
+          `support_columns`，pixel_rows 侧现场按 `column_points` 数）；
+        - `tolerance_px` = **产生这批层位时**的容差；没跑过共识（或该工程在这
+          项诊断量落地之前生成）就是 `None`，不编造。`default_tolerance_px` 给出
+          "改跑一次共识会按多少容差"，那是可选优化入口，不是前置条件。
+
+        `rows_equal_roi_height`：行数恰等于 ROI 高度时，行集几乎一定来自逐像素
+        数字化 —— 这是"625 行不是 625 个样品"最直接的物证。
+        """
+        samples = list(getattr(self, "samples", None) or [])
+        points = getattr(self, "column_points", None) or {}
+
+        support: list[int] = []
+        support_source: str | None = None
+        if is_sample_rows:
+            from_samples = [
+                int(sample["support_columns"])
+                for sample in samples
+                if sample.get("support_columns") is not None
+            ]
+            if from_samples:
+                support = from_samples
+                support_source = "samples.support_columns"
+        else:
+            per_row: dict[Any, int] = {}
+            for pts in points.values():
+                for point in pts:
+                    if "row" in point:
+                        per_row[point["row"]] = per_row.get(point["row"], 0) + 1
+            if per_row:
+                support = list(per_row.values())
+                support_source = "column_points"
+
+        roi_height = self._primary_roi_height_px()
+        return {
+            "rows": int(rows_count),
+            "samples": len(samples),
+            "support_columns_median": (
+                float(np.median(support)) if support else None
+            ),
+            "support_columns_min": (min(support) if support else None),
+            "support_columns_max": (max(support) if support else None),
+            "support_columns_n": len(support),
+            "support_columns_source": support_source,
+            # 产生这批层位用的容差：samples 未随层位落盘该字段（#83 之前生成的
+            # 工程一个都没有），所以这里如实给 None，不拿默认值冒充实际值。
+            "tolerance_px": None,
+            "default_tolerance_px": self._default_tolerance_px(),
+            "roi_height_px": roi_height,
+            "rows_equal_roi_height": (
+                roi_height is not None and int(rows_count) == int(roi_height)
+            ),
+        }
+
+    def _primary_roi_height_px(self) -> int | None:
+        """主 ROI 的像素高度（没有 ROI 记账时退回 `data_ylim`）。"""
+        primary_id = getattr(self, "primary_roi_id", None)
+        for roi in getattr(self, "rois", None) or []:
+            ylim = roi.get("ylim")
+            if ylim and (primary_id is None or roi.get("id") == primary_id):
+                return int(round(float(ylim[1]) - float(ylim[0])))
+        ylim = getattr(self, "data_ylim", None)
+        if ylim:
+            return int(round(float(ylim[1]) - float(ylim[0])))
+        return None
+
+    def _rowset_report(self, dataset: str | None, rows_count: int) -> dict[str, Any]:
+        """本次导出**实际交付的行集身份**（RPC 返回 + 归档 manifest 共用一份）。
+
+        `rows_count` 由调用方从真正产出的 DataFrame 传入，不在这里重算：判据是
+        「面板行数 == 下载行数 == 归档行数 == `len(samples)`」，只认那张表。
+        """
+        key = (dataset or "").strip().lower()
+        samples_count = len(getattr(self, "samples", None) or [])
+        if not key or key == "samples":
+            report = self._resolve_rowset().as_dict()
+            report["rows_count"] = int(rows_count)
+            report["dataset"] = key or None
+            report["quality"] = self._rowset_quality(
+                rows_count, is_sample_rows=bool(report["is_sample_rows"])
+            )
+            return report
+
+        if key == "union_points":
+            controls = {
+                index: pts
+                for index, pts in (getattr(self, "control_points", None) or {}).items()
+                if pts
+            }
+            if controls:
+                provenance = ROWSET_CONTROL_POINTS
+                caption = "控制点（拐点）层位并集"
+                why = (
+                    f"行取自 {len(controls)} 列控制点的 row 去重并集（用户手调/算法判定的"
+                    "拐点）；行数与 samples 无关。"
+                )
+            else:
+                # `_control_point_rows` 在控制点为空时会回退到 column_points（既有行为，
+                # 不在这里改）。回退必须**说出来**：否则面板写着「拐点并集」，实际是
+                # 逐列像素行 —— 又回到 issue #100 那种"答不上来凭什么"的形态。
+                provenance = ROWSET_PIXEL_ROWS
+                caption = "逐列数字化的像素行并集（控制点为空的退化行集）"
+                why = (
+                    "本工程没有任何控制点：`union_points` 退化成逐列数字化点的像素行"
+                    "并集。这些行既不是拐点，也不是样品层位。"
+                )
+        elif key == "depth_grid":
+            provenance = ROWSET_DEPTH_GRID
+            caption = "按深度间隔重采样的规则层位"
+            why = (
+                "行 = 按 `depth_interval` 在深度标尺上切出的均匀层位，与数字化密度、"
+                "与 samples 都无关。"
+            )
+        else:
+            provenance = ROWSET_TURNING_POINTS
+            caption = "拐点原始坐标（长表）"
+            why = (
+                "一行 = 一个控制点（taxon / type / depth / value / x / y 六列），"
+                "是点清单而不是层位矩阵。"
+            )
+
+        return {
+            "provenance": provenance,
+            "is_sample_rows": False,
+            "rows_count": int(rows_count),
+            "samples_count": samples_count,
+            "label": caption,
+            "why": why,
+            "dataset": key,
+            "quality": self._rowset_quality(rows_count, is_sample_rows=False),
+        }
 
     def _export_column_scale_summary(self) -> tuple[int, int]:
         """(参与导出的列数, 其中已标定 X 刻度的列数)。
@@ -1283,14 +1725,34 @@ class ExportMixin:
                 [df[[y_col]], age_frame, df.drop(columns=[y_col])], axis=1
             )
 
+        # 行集身份 + 判据门禁（issue #113）：`samples` 语义下**行数必须等于 samples
+        # 条数**。这不再是"测试里比一比"，而是后端在交付前自己拒绝不一致的表。
+        rows_count = len(df)
+        rowset_report = self._rowset_report(dataset, rows_count)
+        if rowset_report["is_sample_rows"] and rows_count != rowset_report["samples_count"]:
+            raise JsonRpcError(
+                EXPORT_ERROR,
+                "行集与样品层位不一致：本工程 samples "
+                f"{rowset_report['samples_count']} 条，但导出行数是 {rows_count}。"
+                "两者必须相等（每一行对应一个样品层位），这份表不会交付。",
+                {
+                    "reason": "rowset_mismatch",
+                    "samples": rowset_report["samples_count"],
+                    "rows": rows_count,
+                },
+            )
+
         csv_string, saved_path = self._write_export_file(fmt, df, output_path)
 
         return {
             "format": fmt,
             "strict": strict,
-            "rows_count": len(df),
+            "rows_count": rows_count,
             "columns_count": len(df.columns),
             "columns": list(df.columns),
+            # 行集身份：`provenance` / `is_sample_rows` / `samples_count` / `why`。
+            # 判据「这些行为什么算样品」的答案就在这里，不放注释里。
+            "rowset": rowset_report,
             "data": self._json_safe_records(df.head(50)),
             "file_path": saved_path,
             "path": saved_path,
@@ -1420,47 +1882,20 @@ class ExportMixin:
                 + "。请先在步骤 5/7 数字化这些列，或补控制点后再导出。",
             )
 
-    def _export_rows_and_depths(self) -> tuple[list[int], list]:
-        """导出用的行号序列与深度列。
+    def _export_rows_and_depths(self) -> tuple[list[Any], list[Any]]:
+        """导出用的行号序列与首列值 —— **薄封装**，行集来自 `_resolve_rowset`。
 
-        有采样层就以采样层为准（用户显式标定的深度优先），否则取各列逐行点的并集；
-        已标定时深度由 y_scale 换算（round 4），未标定直接给行号。
+        本方法此前自己算一遍（samples 优先，否则各列逐行点并集），与
+        `get_roi_dataframes` 里的另一份实现逐字重复：这就是 issue #113「面板与导出
+        各算一套」的根。现在两者共用 `_resolve_rowset`（再往下共用 `_row_depths`），
+        本方法只为既有调用方保留签名。
+
+        差异备注：旧实现会把用户给定的 `samples[i]["depth"]` 再 round 到 4 位，
+        现在**不再二次取整**（用户给的数原样用）；生产代码已无调用方（`export_data`
+        走 `_dataset_frame`），此改动不影响任何出口的字节。
         """
-        samples = getattr(self, "samples", None) or []
-        if samples:
-            all_rows = [int(round(s.get("row_px", 0))) for s in samples]
-            raw_depths = [s.get("depth") for s in samples]
-            if (
-                getattr(self, "is_calibrated", False)
-                and getattr(self, "y_scale", None) is not None
-            ):
-                sy = self.y_scale["slope"]
-                iy = self.y_scale["intercept"]
-                depth_series = [
-                    round(float(d), 4) if d is not None else round(sy * r + iy, 4)
-                    for r, d in zip(all_rows, raw_depths)
-                ]
-            else:
-                depth_series = [
-                    d if d is not None else r for r, d in zip(all_rows, raw_depths)
-                ]
-        else:
-            all_rows = sorted(
-                {p["row"] for pts in self.column_points.values() for p in pts}
-            )
-            if not all_rows:
-                all_rows = [0]
-
-            if (
-                getattr(self, "is_calibrated", False)
-                and getattr(self, "y_scale", None) is not None
-            ):
-                sy = self.y_scale["slope"]
-                iy = self.y_scale["intercept"]
-                depth_series = [round(sy * r + iy, 4) for r in all_rows]
-            else:
-                depth_series = all_rows
-        return all_rows, depth_series
+        rowset = self._resolve_rowset()
+        return list(rowset.rows), list(rowset.depths)
 
     def _export_value_columns(
         self, all_rows: list[int], strict: bool
@@ -1513,15 +1948,11 @@ class ExportMixin:
         saved_path: str | None = None
 
         if fmt == "csv":
-            # 缺测写成语义无歧义的 NA：空单元格在下游读入器里既可能是缺失也可能是 0，
-            # 与 export_multi_tar 的两处 to_csv 保持同一口径。
-            csv_string = df.to_csv(index=False, na_rep="NA", lineterminator="\n")
-            # `-0.0` 的符号位会被 pandas 原样渲染，CSV 里就成了字面量 `-0.0`
-            # （pandas 对 `float(-0.0)` 一律输出 `-0.0`，加 0.0 也抹不掉符号位）。
-            # 下游 R / Excel / 严格校验的读入器会把它当**负深度**，而它实际就是 0。
-            # 这里在**字符串层**把列首的 `-0.0` 规整成 `0.0`：
-            # 只替换行首（深度列）出现的 `-0.0`，不碰其它数值列。
-            csv_string = _normalize_negative_zero_depth(csv_string)
+            # 序列化只有一处（`serialize_export_frame`）：缺测写 `NA`、行尾 LF、
+            # 首列 `-0.0` 规整三项口径与归档 `data.csv` **同源**。修前归档那三处
+            # `to_csv` 没做 `-0.0` 规整，于是同一份工程面板给 `0.0`、归档给 `-0.0`，
+            # 字节不同（见 `serialize_export_frame` 的说明）。
+            csv_string = serialize_export_frame(df)
             if output_path:
                 out_dir = os.path.dirname(os.path.abspath(output_path))
                 os.makedirs(out_dir, exist_ok=True)
@@ -1870,7 +2301,7 @@ class ExportMixin:
         units = self._primary_roi_units_for(names)
         pct_cols = [name for name in names if is_percent_unit(units.get(name))]
         fixed_cols = [name for name in names if not is_percent_unit(units.get(name))]
-        csv_bytes = frame.to_csv(index=False, na_rep="NA", lineterminator="\n").encode("utf-8")
+        csv_bytes = serialize_export_frame(frame).encode("utf-8")
 
         script_lines = [
             "# ==============================================================================",
@@ -1917,6 +2348,34 @@ class ExportMixin:
             "  可选覆盖：       Rscript plot_strat.R my.csv my.pdf",
             "",
         ]
+        # 行集身份进 README（issue #100）：`samples` 为空时这张 data.csv 的行是
+        # 逐列像素行，不能当样品数引用；同一条记录也在 `core.exportData` 的
+        # `rowset` 字段里，两边都来自 `_resolve_rowset`。
+        rowset = self._resolve_rowset()
+        quality = self._rowset_quality(rowset.rows_count, is_sample_rows=rowset.is_sample_rows)
+        readme_lines.extend(
+            [
+                "data.csv 行集来源：",
+                f"  来源(provenance) : {rowset.provenance}",
+                f"  是否样品层位     : {rowset.is_sample_rows}",
+                f"  行数 / samples   : {rowset.rows_count} / {rowset.samples_count}",
+                f"  为什么           : {rowset.why}",
+                "  质量指标（判断要不要重跑共识优化用）：",
+                f"    支持列数中位   : {quality['support_columns_median']}"
+                f"（n={quality['support_columns_n']}，"
+                f"{quality['support_columns_min']}..{quality['support_columns_max']}）",
+                f"    tolerance_px   : {quality['tolerance_px']}"
+                f"（默认 {quality['default_tolerance_px']}）",
+                f"    ROI 高度 / 行数: {quality['roi_height_px']} / {quality['rows']}"
+                f"（行数==ROI 高度：{quality['rows_equal_roi_height']}）",
+            ]
+        )
+        if not rowset.is_sample_rows:
+            readme_lines.append(
+                "  注意：本工程 samples 为空 → 这些行是逐列数字化的**像素行**，不是样品"
+                "层位；行数由图像高度与数字化密度决定，不能当作「样品数」引用。"
+            )
+        readme_lines.append("")
         readme_lines.append(CSV_MISSING_NOTICE.decode("utf-8"))
 
         buffer = io.BytesIO()

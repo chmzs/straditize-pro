@@ -13,11 +13,11 @@
  * 问题在显示：`XTicksPanel` 的输入框 value 有一个**跨组**的全局兜底
  * （`state.axisStrokeOverride`，注释写着「用户量一次、全图共用」）。于是
  * 给 grp2 填 1 之后切到 grp1/grp3，那两个框也显示 1 —— 用户读作「已经接过值了」，
- * 不再手动设，后端仍是 None、绿线回落缺省 5。属于「界面编造状态」。
+ * 不再手动设，后端仍是 None、绿线回落兜底值。属于「界面编造状态」。
  *
  * ## 判据
  *
- * - 给 grp2 设 1 → 切 grp1 / grp3：输入框 value 必须是 ''（缺省 5 只出现在 placeholder）；
+ * - 给 grp2 设 1 → 切 grp1 / grp3：输入框 value 必须是 ''（兜底值只出现在 placeholder）；
  * - 切回 grp2：value === '1'；
  * - `project.save` → `project.load` 重载后，三组分别显示 '' / '1' / ''；
  * - 反向验证：把 value 的兜底改回全局变量 → 第一条立刻红（实测显示 '1'）。

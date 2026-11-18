@@ -12,7 +12,7 @@
 | 案例 | 断言 |
 | --- | --- |
 | `axis_blind` | `0 ≤ span ≤ 轴宽` 报，`span > 轴宽` 不报，`span < 0`（无墨迹）**不**报 |
-| `axis_width_unset` | 列与组都没写 `axis_stroke_px` → 整列 skipped，不拿默认 5.0 判 |
+| `axis_width_unset` | 列与组都没写 `axis_stroke_px` → 整列 skipped，不拿兜底值（2.0）判 |
 | `axis_origin_suspect` | 0 点落进轴线带（`origin_suspect`）→ 不判盲区（span 整体偏一个轴宽） |
 | `truncated` | 触边（`span ≥ full−1`）+ 相邻两行 |Δ| ≤ 2 → 报 |
 | `collision` | 触边但相邻行全都离得远（孤立单行突刺）→ 报，且不进 truncated |

@@ -158,7 +158,7 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
       const groupSlope = Number(groupOfCol?.value_per_px);
       const cellPx =
         Number.isFinite(groupSlope) && groupSlope !== 0 ? 1 / Math.abs(groupSlope) : null;
-      // 列级覆盖 > 组级初值 > 缺省 5（与后端 xscale.resolve_axis_stroke 同语义）。
+      // 列级覆盖 > 组级初值 > 兜底 `DEFAULT_AXIS_STROKE_PX`（与后端 xscale 同语义）。
       const axisStrokePx = resolveAxisStroke(col, groupOfCol);
       const leftEdgeX = col.startX;
       const zeroX = leftEdgeX + axisStrokePx;

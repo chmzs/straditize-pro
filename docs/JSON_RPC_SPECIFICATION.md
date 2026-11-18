@@ -533,6 +533,59 @@
 
 行集大小是定义的一部分：同一会话下三者行数必然不同（实测 298 / 21 / 896）。前端导出面板的下拉与本参数一一对应，且面板只渲染本接口返回的数据——不得由前端另算一套。
 
+#### `rowset`：行集身份与质量指标（2026-11-19，issue #113 / #100）
+
+`core.exportData` 与 `export.getReadiness` 的返回里新增 `rowset`，回答**"这些行凭什么算样品"**。
+它是判定量而不是注释：`is_sample_rows == true` ⇔ 行确实来自用户设定的样品层位。
+
+```json
+{
+  "rowset": {
+    "dataset": "samples",
+    "provenance": "pixel_rows",
+    "is_sample_rows": false,
+    "rows_count": 625,
+    "samples_count": 0,
+    "label": "逐列数字化的像素行并集（625 行，不是样品层位）",
+    "why": "未设样品层位（samples 为空）：行取自这些列逐行数字化点的像素行并集……",
+    "quality": {
+      "rows": 625,
+      "samples": 0,
+      "support_columns_median": 19.0,
+      "support_columns_min": 1,
+      "support_columns_max": 19,
+      "support_columns_n": 625,
+      "support_columns_source": "column_points",
+      "tolerance_px": null,
+      "default_tolerance_px": 2.5,
+      "roi_height_px": 625,
+      "rows_equal_roi_height": true
+    }
+  }
+}
+```
+
+`provenance` 取值只有五个：`samples` / `pixel_rows` / `control_points` / `depth_grid` /
+`turning_points`（常量在 `straditize_core/session_parts/export.py` 的 `ROWSET_*`）。
+只有第一个表示"这些行是样品层位"。
+
+**口径（2026-11-19 拍板）**
+
+- `samples` 非空 → `provenance="samples"`，且**行数必须等于 `len(samples)`**；不相等时
+  `core.exportData` 抛 `-32002 EXPORT_ERROR`（`data.reason="rowset_mismatch"`），整份表不交付。
+- `samples` 为空 → `provenance="pixel_rows"`，行 = 逐列数字化点的像素行并集。**不静默**：
+  身份写进本字段、`export.getReadiness.rowset`、归档 `manifest.json -> data_csv_rowset`、
+  `README.txt` 的 `WARNING` 段，以及 `core.exportData` 的返回。行数常恰等于 ROI 像素高度
+  （现场：625 行 / 625 px），`quality.rows_equal_roi_height` 是这一条的机器可读形式。
+- **不把"先填样品数 N"当前置条件**：`N` 属可选二次优化，默认路径必须能自给出结果。
+  `quality.tolerance_px` 只报"产生这批层位时用的容差"，没跑过共识、或该工程生成于 #83
+  之前时如实为 `null`（不拿默认值冒充）；`quality.default_tolerance_px` 是"若重跑一次
+  共识会按多少容差"，直接读 `samples.extractConsensus` 的签名默认值。
+- 质量指标缺失即 `null`、不填 0：`support_columns_*` 在层位未携带 `support_columns`
+  （#83 之前生成的工程）时全为 `null`，`support_columns_n` 说明有多少行带该信息。
+- **不把 `N` 当正确性判据**：`rows_count` 与论文样品数不同不构成错误（实测 206 vs 159），
+  它只是"要不要重跑共识优化"的判断依据。
+
 #### `curvePoints` / `curveError`：画布的稠密曲线（2026-11-16）
 
 画布与导出**必须画/读同一条曲线**。`straditize.getDiagramData` 的每列新增两个字段，取点走与导出完全相同的 `_ensure_export_column_points()`（控制点优先 > 现场数字化 > 等距采样）：

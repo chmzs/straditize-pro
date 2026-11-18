@@ -851,13 +851,13 @@
  },
  "tar_csv_branch": {
   "data_csv": {
-   "digest": "db09d2c647cb",
-   "size": 152
+   "digest": "2e3d6dd36bb7",
+   "size": 158
   },
   "data_csv_head": [
    "depth,age_est,age_min_95,age_max_95,Pinus,Betula,Quercus",
-   "10.0,500.0,450.0,550.0,0.0,0.0,0.0",
-   "60.0,3000.0,3344.73684210526,2588.4615384615486,0.0,0.0,0.0"
+   "10.0,500.0,450.0,550.0,0.0,2.9167,0.0",
+   "60.0,3000.0,3344.73684210526,2588.4615384615486,0.0,2.9167,0.0"
   ],
   "digitized": true
  },
@@ -887,9 +887,9 @@
     "size": 280
    },
    {
-    "digest": "db09d2c647cb",
+    "digest": "2e3d6dd36bb7",
     "name": "data.csv",
-    "size": 152
+    "size": 158
    },
    {
     "digest": "b882fb2e0935",

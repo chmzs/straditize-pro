@@ -1446,7 +1446,8 @@ private pointer: PointerState = {
     // 拖动 / 微调（去抖 500ms）/ 删除 / 新增 都走这里，所以只需要这一处。
     // 0 点用**几何规则**算，不读 col.scaleCalib.originX：换标定后前端镜像里的
     // scaleCalib 可能还是旧值（实测 319 vs 后端 324），那样钳制等于没钳。
-    // 规则与后端 xscale.resolve_axis_stroke 同源：列级 axis_stroke_px > 组级 > 5。
+    // 规则与后端 xscale.resolve_axis_stroke 同源：列级 axis_stroke_px > 组级 > 兜底
+    // （`DEFAULT_AXIS_STROKE_PX`，不在本文件写数）。
     const zeroX = col.startX + resolveAxisStroke(col, this.groupOfColumn(col));
     const points = controlPointsForWriteback(col.controlPoints, zeroX);
     // 锚点变了 → 稠密缓存作废（后端 setControlPoints 会按 Pchip 重建）。

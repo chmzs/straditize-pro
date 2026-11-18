@@ -9,7 +9,7 @@ import {
   renderOtherLostColumnsSummary,
 } from './XTicksDroppedNotice';
 import { renderOtherSuspectColumnsSummary } from './SuspectBlockNotice';
-import { resolveAxisStroke } from '../../core/axisStroke';
+import { DEFAULT_AXIS_STROKE_PX, resolveAxisStroke } from '../../core/axisStroke';
 import { resolveColumnGroup } from '../../core/columnGroup';
 import { resolveColumnAtX } from '../../core/tickRouting';
 import { setGroupCalibMark } from '../canvas/groupCalibMarks';
@@ -171,7 +171,7 @@ export function render(data: DiagramData): string {
   // 「删除本组」恒常渲染，但默认组 / 只有一个组时不可用：位置固定，禁用态即状态。
   const canDeleteGroup = groups.length > 1 && currentGroupId !== activeRoi?.default_group_id;
 
-  // 轴线粗的生效值：**列级覆盖 > 组级初值 > 缺省 5**（ARCHITECTURE §6.4）。
+  // 轴线粗的生效值：**列级覆盖 > 组级初值 > 兜底 `DEFAULT_AXIS_STROKE_PX`**（ARCHITECTURE §6.4）。
   // 组上的正数来自分列实测（`measure_axis_stroke`）或用户手填；列上的正数只可能是
   // 用户显式覆盖。两者都必须让用户看得见——静默用一个猜的值会让绿线（0 点）偏掉几像素。
   const axisStrokeColOverride =
@@ -430,10 +430,10 @@ export function render(data: DiagramData): string {
             <!-- 显示值**只认当前组自己的** axis_stroke_px。
                  曾经这里还有一个 state.axisStrokeOverride 兜底（全局变量、「全图共用」），
                  于是给 grp2 填 1 之后切到 grp1/grp3，那两个输入框会显示 1 —— 用户读作
-                 「已经接过值了」就不再手动设，后端其实仍是 None、绿线回落缺省 5
+                 「已经接过值了」就不再手动设，后端其实仍是 None、绿线回落兜底值
                  （用户原话：「其他两组的线粗框自动就显示 1 了，我以为它直接接过值了」）。
-                 本组没值就**显示空**，缺省 5 只出现在 placeholder 里。 -->
-            <input type="number" id="inp-axis-stroke" value="${currentGroup?.axis_stroke_px != null && Number(currentGroup.axis_stroke_px) >= 0 ? String(Number(currentGroup.axis_stroke_px)) : ''}" placeholder="5（缺省）" min="0" max="20" step="1"
+                 本组没值就**显示空**，兜底值只出现在 placeholder 里。 -->
+            <input type="number" id="inp-axis-stroke" value="${currentGroup?.axis_stroke_px != null && Number(currentGroup.axis_stroke_px) >= 0 ? String(Number(currentGroup.axis_stroke_px)) : ''}" placeholder="${DEFAULT_AXIS_STROKE_PX}（兜底）" min="0" max="20" step="1"
                    title="Y 轴轴线的描边宽度（像素）。0 点 = 左缘 + 它。填了就不再从像素里猜。目视估读即可（0–20px）。"
                    style="width: 66px; font-size: var(--font-size-sm); padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
             <span style="font-size: var(--font-size-xs); color: var(--text-muted);">px</span>
@@ -458,10 +458,10 @@ export function render(data: DiagramData): string {
                style="font-size: var(--font-size-xs); line-height: 1.45; margin: -2px 0 6px 0; color: ${axisStrokeMeasured ? 'var(--text-muted)' : 'var(--status-warning)'};">
             ${
               axisStrokeColOverride != null
-                ? `本列覆盖 <strong>${axisStrokeColOverride}px</strong>（组值 ${currentGroup?.axis_stroke_px != null && Number(currentGroup.axis_stroke_px) >= 0 ? `${Number(currentGroup.axis_stroke_px)}px` : "缺省 5px"}）· 绿线 = 列左缘 + ${axisStrokePx}`
+                ? `本列覆盖 <strong>${axisStrokeColOverride}px</strong>（组值 ${currentGroup?.axis_stroke_px != null && Number(currentGroup.axis_stroke_px) >= 0 ? `${Number(currentGroup.axis_stroke_px)}px` : `兜底 ${DEFAULT_AXIS_STROKE_PX}px`}）· 绿线 = 列左缘 + ${axisStrokePx}`
                 : currentGroup?.axis_stroke_px != null && Number(currentGroup.axis_stroke_px) >= 0
                   ? `轴线粗实测 <strong>${axisStrokePx}px</strong> · 绿线 = 列左缘 + ${axisStrokePx}`
-                  : '轴线粗<strong>无法自动测量</strong>（这几列的左边不是灰度均匀的竖轴），当前按 <strong>5px</strong> 估算 —— 绿线可能偏。<strong>目视估读即可</strong>：把你在图上看到的轴宽（0–20px，0 表示 0 点就在列左缘）填进上面的「轴线粗细」，改完绿线立刻按「左缘 + 轴粗」重画，不必精确到亚像素'
+                  : `轴线粗<strong>无法自动测量</strong>（这几列的左边不是灰度均匀的竖轴），当前按 <strong>${DEFAULT_AXIS_STROKE_PX}px</strong> 估算（兜底值，未实测） —— 绿线可能偏。<strong>目视估读即可</strong>：把你在图上看到的轴宽（0–20px，0 表示 0 点就在列左缘）填进上面的「轴线粗细」，改完绿线立刻按「左缘 + 轴粗」重画，不必精确到亚像素`
             }
           </div>
 
@@ -658,7 +658,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     const roi = data?.rois?.find((r) => r.id === (col.roi_id ?? data?.active_roi_id));
     const g = resolveColumnGroup(col, roi);
     // 0 点 = 列左缘 + 轴线粗（与画布绿线同源，见 ARCHITECTURE §6.4）。
-    // `start` 是轴线左缘（列切分线），轴粗取组参数，缺省 5。
+    // `start` 是轴线左缘（列切分线），轴粗取组参数，兜底 `DEFAULT_AXIS_STROKE_PX`。
     const stroke = resolveAxisStroke(col, g);
     const start = Number(
       (col as unknown as Record<string, number>).startX ??

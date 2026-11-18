@@ -1,6 +1,7 @@
 import { Column, DataRoi, DiagramCalibration, DiagramData } from '../types/pollen';
 import { RpcClient } from '../services/RpcClient';
 import { CoordinateSystem } from '../core/CoordinateSystem';
+import { calUnitLabel } from '../core/calUnit';
 import { ExportModal } from './ExportModal';
 import { ProjectManager } from '../core/ProjectManager';
 
@@ -50,6 +51,8 @@ export class PropertyPanel {
     const cal = this.data.calibration;
     const roi = this.data.roi;
     const bounds = CoordinateSystem.calibrationBounds(cal);
+    // 单位显示的唯一入口：缺单位是"单位未定"，不是 cm、也不是 undefined。
+    const unitLabel = calUnitLabel(cal);
 
     modal.innerHTML = `
       <div class="modal-dialog calib-dialog ui-modal">
@@ -80,8 +83,8 @@ export class PropertyPanel {
             <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.7;">
               ${
                 bounds
-                  ? `① Y=${bounds.topPx}px → <strong>${bounds.topValue} ${cal.unit}</strong><br>
-                     ② Y=${bounds.bottomPx}px → <strong>${bounds.bottomValue} ${cal.unit}</strong>`
+                  ? `① Y=${bounds.topPx}px → <strong>${bounds.topValue} ${unitLabel}</strong><br>
+                     ② Y=${bounds.bottomPx}px → <strong>${bounds.bottomValue} ${unitLabel}</strong>`
                   : '<span style="color: var(--status-warning); font-weight: 700;">尚未标定</span> —— 深度一律显示为 --'
               }
             </div>
@@ -92,9 +95,9 @@ export class PropertyPanel {
             <label>剖面标准采样间隔 (Depth Grid Interval):</label>
             <div class="input-row">
               <input type="number" id="cal-depth-interval" value="${cal.depthInterval ?? 2}" step="any" min="0.01" />
-              <span class="unit-label">${cal.unit} / 层位</span>
+              <span class="unit-label">${unitLabel} / 层位</span>
             </div>
-            <small>设定剖面采样间隔（例如从 ${bounds ? bounds.topValue : '?'} 到 ${bounds ? bounds.bottomValue : '?'} ${cal.unit}，每隔 ${cal.depthInterval ?? 2} ${cal.unit} 作为一个标准层位）</small>
+            <small>设定剖面采样间隔（例如从 ${bounds ? bounds.topValue : '?'} 到 ${bounds ? bounds.bottomValue : '?'} ${unitLabel}，每隔 ${cal.depthInterval ?? 2} ${unitLabel} 作为一个标准层位）</small>
           </div>
 
           <div class="form-group">

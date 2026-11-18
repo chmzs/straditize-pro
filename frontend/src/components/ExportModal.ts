@@ -4,6 +4,11 @@ import { ProjectManager } from '../core/ProjectManager';
 import { base64ToBlob, requireExportBase64, triggerDownload } from '../core/exportPayload';
 import { computeExportReadiness, renderExportReadiness } from './steps/ExportReadinessPanel';
 import {
+  buildRowSetCaption,
+  buildRowSetQualityHint,
+  type RowSetIdentityLike,
+} from './exportRowSetCaption';
+import {
   aggregateHeadline,
   aggregateQaScope,
   QA_DEFAULT_TOLERANCE,
@@ -388,18 +393,19 @@ export class ExportModal {
     const sizeLabel = modal.querySelector('#wpd-data-size-label') as HTMLElement;
     const rowSetCaptionEl = modal.querySelector('#wpd-rowset-caption') as HTMLElement | null;
 
-    /** 数据集 → 行集来源的人话名字（与 `#wpd-dataset-select` 的选项一一对应）。 */
-    const ROWSET_SOURCE: Record<string, string> = {
-      samples: '按共识层位（samples）',
-      union_points: '按各列拐点并集（无拐点处插值）',
-      depth_grid: '按深度间隔重采样（高级）',
-      turning_points: '按拐点原始坐标表',
-    };
-
     // 动态表格数据模型与手动微调记录
     let currentHeaders: string[] = [];
     let currentRows: Array<string[]> = [];
     const userEdits = new Map<string, string>(); // key: `${rowIdx}_${colIdx}` -> editedValue
+
+    /**
+     * 当前行集的**身份**，只从后端来（`export.getReadiness {dataset}` 的 `rowset`）。
+     *
+     * 这里不再有 `ROWSET_SOURCE[dataset]` 那种按 dataset 名写死的前端同义词表：
+     * `samples` 为空时后端交付的是像素行，前端按名字猜就会写成「按共识层位」——
+     * 那正是 issue #100 的现场（用户把 625 个像素行当成 625 个样品）。
+     */
+    let currentRowSet: RowSetIdentityLike | null = null;
 
     /** 后端返回的原始 CSV；**没有用户编辑时**界面与下载都用它，保证逐字节一致。 */
     let backendCsvText = '';
@@ -621,6 +627,28 @@ export class ExportModal {
       subEl.textContent = `${agg.nChecked} 层位被检验`;
     };
 
+    /**
+     * 取"这一行集是什么"的**后端供词**（`export.getReadiness {dataset}` 的 `rowset`）。
+     *
+     * 失败不阻塞表格：拿不到身份就退回中性文案（`buildRowSetCaption` 的
+     * `NEUTRAL_SOURCE`），**绝不**按 dataset 名在前端猜一个来源——猜出来的
+     * 「按共识层位」正是 issue #100 里把像素行说成样品的那句话。
+     */
+    const fetchRowSetIdentity = async (
+      dataset: string,
+      requestToken: number
+    ): Promise<RowSetIdentityLike | null> => {
+      try {
+        const readiness = await this.rpcClient.call<any, any>('export.getReadiness', { dataset });
+        if (requestToken !== displayToken) return null;
+        const rowset = readiness?.rowset;
+        return rowset && typeof rowset === 'object' ? (rowset as RowSetIdentityLike) : null;
+      } catch (err) {
+        console.warn('[export] rowset identity unavailable', err);
+        return null;
+      }
+    };
+
     const updateFullDisplay = async () => {
       // 行集与数值**全部由后端产出**（`export.csv{dataset}`）：面板只是它的渲染。
       // 这样「预览看到的数」与「点 CSV 下载到的数」由构造保证同源，不再让前端
@@ -638,6 +666,9 @@ export class ExportModal {
         currentHeaders = [];
         currentRows = [];
         backendCsvText = '';
+        // 行集没取到 → 身份作废，下一次成功刷新时重取；不要让上一次的行集名
+        // 留在标题里配着空表。
+        currentRowSet = null;
         renderTableGrid();
         syncSerializedText();
         updateSumCheck();
@@ -680,14 +711,21 @@ export class ExportModal {
       renderTableGrid();
       syncSerializedText();
       updateSumCheck();
+      // 表的行数以**渲染出来的这份**为准（`currentRows.length`）；身份另取后端供词。
+      currentRowSet = await fetchRowSetIdentity(dataset, requestToken);
+      if (requestToken !== displayToken) return;
       updateRowSetCaption();
     };
 
     /**
-     * 选择器下方那行"当前行集是哪来的、有多少行"。
+     * 选择器下方那行"当前行集是哪来的、有多少行、质量如何"。
      *
-     * 界面必须同时说明两件事：来源（控制点并集 / 标尺均匀 / 拐点清单）与行数。
-     * 用户原来只看到「预览 125 行」，下载却是 35 行，没有任何一处文字解释这个差异。
+     * 三件事必须同时说清（issue #113 / #100）：
+     * 1. **来源**：从后端 `rowset.label` 取（「样品层位」/「逐列数字化的像素行并集，
+     *    不是样品层位」…）。前端不再按 dataset 名写死同义词；
+     * 2. **行数**：用**面板实际渲染**的行数，与用户眼前那张表一致；
+     * 3. **质量指标**：层位数 / 支持列数中位 / 容差 —— 让用户判断"要不要重跑共识优化"。
+     *    `samples` 为空时整块转成警告色，因为那批行不是样品层位。
      */
     const updateRowSetCaption = () => {
       if (!rowSetCaptionEl) return;
@@ -697,9 +735,23 @@ export class ExportModal {
           '当前行集为空（0 行）：这个数据集在当前图谱上没有可用层位。请先在步骤 3 完成 Y 轴标定，或换一个数据集。';
         return;
       }
-      const source = ROWSET_SOURCE[datasetSelect.value] ?? '按当前数据集';
-      rowSetCaptionEl.style.color = 'var(--text-muted)';
-      rowSetCaptionEl.textContent = `${source}（${currentRows.length} 行）· 预览、复制与 CSV 下载都按此行集导出`;
+      const caption = buildRowSetCaption(currentRowSet, currentRows.length);
+      const hint = buildRowSetQualityHint(currentRowSet);
+      rowSetCaptionEl.textContent = '';
+      const primary = document.createElement('div');
+      primary.textContent = caption.text;
+      rowSetCaptionEl.appendChild(primary);
+      if (hint) {
+        const secondary = document.createElement('div');
+        secondary.className = 'wpd-rowset-quality';
+        secondary.style.fontSize = 'var(--font-size-xs)';
+        secondary.style.opacity = '0.85';
+        secondary.textContent = hint;
+        rowSetCaptionEl.appendChild(secondary);
+      }
+      rowSetCaptionEl.style.color = caption.warning
+        ? 'var(--status-warning)'
+        : 'var(--text-muted)';
     };
 
     // 还原按钮
