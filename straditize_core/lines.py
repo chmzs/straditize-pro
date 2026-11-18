@@ -40,7 +40,7 @@ _AUTO_WIDTH_RATIO = 0.0015
 #: 又远离 8 那个误收起点。
 #:
 #: 放宽的唯一风险是"把文字笔画当线"，但候选还要求**该行/列被墨迹覆盖 fraction 以上**
-#: （`line_fraction_h=0.75`），短笔画不满足，所以厚度上限放宽不会引入文字误检——
+#: （`line_fraction_h`，见 :data:`DEFAULT_LINE_FRACTION_H`），短笔画不满足，所以厚度上限放宽不会引入文字误检——
 #: 上面 8px 那档误收的是**贯穿整幅的纵向纹理**，不是文字。
 _AUTO_WIDTH_FLOOR_H = 5
 
@@ -53,6 +53,43 @@ _AUTO_WIDTH_FLOOR_H = 5
 #: （多出的 5 条是粗竖纹，不是结构线），横线候选 3 条不变。
 #: 所以下限按方向分开取，两边都用实测值，不做"折中一个数"。
 _AUTO_WIDTH_FLOOR_V = 3
+
+#: 横线候选的**贯穿率**判据：该行墨迹覆盖必须超过 ROI 宽度的这个比例。
+#:
+#: ## 现场（issue #101，`Han2026_Fig3_pollen`，图 2132×928，ROI 1798×478）
+#:
+#: 用户目测有 1–2px 的区带横线，`detect_line_candidates()` 一条 Kind A 候选都不返回。
+#: ROI 内逐行墨迹投影的实测值（只列出覆盖率 > 0.4 的行，全 ROI 共 4 行）：
+#:
+#:   y=266  cov=0.709  厚 1px   ← 压在 ROI 上边界，被 edge_margin 挡（正确）
+#:   y=359  cov=0.691  厚 1px   ← 真区带线（IV/III 界）
+#:   y=594  cov=0.714  厚 1px   ← 真区带线（III/II 界）
+#:   y=743  cov=0.702  厚 1px   ← 压在 ROI 下边界，被 edge_margin 挡（正确）
+#:
+#: 两条真线的灰度跨度分别是 ROI 宽度的 0.928 / 0.988（灰度剖面上 dip>10 的列范围），
+#: 即**线本身是贯通的**，但墨迹只覆盖 0.69 / 0.71：该图 Otsu=138，而线的灰度在
+#: 156–202 之间浮动，浅的那几段跨在 two-axis 分层的 solid/pale 边界上，被判进
+#: `shadow` 层、不进 `foreground_mask`。于是检测器看到的是一条"1px 厚、带 22% 洞
+#: 的线"，0.75 的贯穿率要求把它整体挡在门外。
+#:
+#: ## 取值
+#:
+#: 0.65 = 实测最差一条（0.6908）留 0.04 余量（1798px 宽的 ROI 上约 72px 的额外
+#: 空洞容忍，正好覆盖"线跨过一次浅色区带"的量级）。
+#:
+#: 四张实测图的横线候选数（0.75 → 0.65）：
+#:
+#:   本图 roi_1        0 → 2      （y=359、594，正是目视的两条）
+#:   `.recon_20261117` 4 → 4      （3591×2003 扫描件，四条 4px 线，位置与厚度不变）
+#:   hoya              3 → 3
+#:   beginner-tutorial 0 → 0
+#:
+#: 往下放到 0.45 这三张也不再**多出**候选，但 `.recon` 的第 4 条线会从
+#: `at=1667/厚 4px` 变成 `at=1668/厚 5px`（相邻的 1px 弱行被并进簇）—— 候选几何
+#: 开始漂移。所以取 0.65（够到现场 0.6908，且四张图的几何一个像素都不动），
+#: 不取更低。噪声另有闸门：文字笔画/填充顶边够不到 2/3 幅宽，厚带由
+#: `line_width_max` 挡（见 `_AUTO_WIDTH_FLOOR_H`）。
+DEFAULT_LINE_FRACTION_H = 0.65
 
 #: 与列左缘重合多少像素以内的竖线算"这一列的轴线"。
 #:
@@ -158,7 +195,7 @@ def detect_line_candidates(
     roi: Sequence[float] | dict[str, Any],
     columns: Sequence[dict[str, Any]] | None = None,
     *,
-    line_fraction_h: float = 0.75,
+    line_fraction_h: float = DEFAULT_LINE_FRACTION_H,
     line_fraction_v: float = 0.30,
     line_width_min: int = 1,
     line_width_max: int | None = 2,

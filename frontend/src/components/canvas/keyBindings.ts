@@ -50,6 +50,54 @@ export function matchesKeyBinding(b: KeyBinding, e: KeyboardEvent): boolean {
 }
 
 /**
+ * 键盘平移：一次按键把视口挪多少**屏幕像素**（issue #106）。
+ *
+ * 用屏幕像素而不是世界像素：平移是视口操作，与缩放无关。放大到 800% 时按一次仍然
+ * 挪 40px 屏幕距离，手感与"拖拽 40px"一致（拖拽也按屏幕 delta 计）。
+ */
+export const PAN_KEY_STEP_PX = 40;
+
+/** 平移键：方向键 + `Alt`。 */
+export const PAN_KEY_CODES = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] as const;
+
+/**
+ * 方向键 → 视口平移位移（屏幕像素）。`null` = 这个组合不是平移。
+ *
+ * ## 为什么是 `Alt`+方向键，而不是裸方向键
+ *
+ * 裸方向键在这里已经**有主**：几何编辑态（步骤 4 选中候选线 / 选中控制点）下它们是
+ * "1px 精调选中实体"（`Shift` 10px），见 `docs/ARCHITECTURE.md` 的几何编辑一节。
+ * 把它挪到"无选中时才平移"也跑得通，但代价有两处：① 有选中时按方向键会**静默改动
+ * 几何**，用户以为在平移；② 裸方向键在面板滚动容器里是原生滚动键，绑定后会把侧栏
+ * 滚动抢走。改用 `Alt` 后两种手势在任何选中态下都互斥——平移看不到选中，微调看不到
+ * `Alt`——且没有任何数据被意外改写。
+ *
+ * ## 方向约定
+ *
+ * 与既有的 `Alt`+滚轮（垂直）/`Shift`+滚轮（水平）一致：按 `→` = 视点右移、内容左移，
+ * 即 `panBy(-step)`。同一个物理动作，键盘与滚轮给出同一个方向，用户不必背两套。
+ */
+export function panDeltaFromArrowKey(
+  e: Pick<KeyboardEvent, 'code' | 'altKey' | 'ctrlKey' | 'metaKey'>,
+  step: number = PAN_KEY_STEP_PX,
+): { dx: number; dy: number } | null {
+  if (!e.altKey || e.ctrlKey || e.metaKey) return null;
+  const span = Number.isFinite(step) && step > 0 ? step : PAN_KEY_STEP_PX;
+  switch (e.code) {
+    case 'ArrowLeft':
+      return { dx: span, dy: 0 };
+    case 'ArrowRight':
+      return { dx: -span, dy: 0 };
+    case 'ArrowUp':
+      return { dx: 0, dy: span };
+    case 'ArrowDown':
+      return { dx: 0, dy: -span };
+    default:
+      return null;
+  }
+}
+
+/**
  * 重复绑定立刻抛错。
  *
  * 不是 console.warn：重复绑定的表现是「后加的功能静默失效」，

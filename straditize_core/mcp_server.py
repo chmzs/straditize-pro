@@ -136,7 +136,7 @@ WEBMCP_TOOLS: list[dict[str, Any]] = [
                 "roi_id": {"type": "string", "description": "Target ROI ID."},
                 "line_fraction_h": {
                     "type": "number",
-                    "description": "Horizontal span fraction threshold (default 0.75).",
+                    "description": "Horizontal span fraction threshold (default 0.65).",
                 },
                 "line_fraction_v": {
                     "type": "number",
@@ -148,7 +148,7 @@ WEBMCP_TOOLS: list[dict[str, Any]] = [
                 },
                 "line_width_max": {
                     "type": "integer",
-                    "description": "Maximum stroke thickness in px (default 3).",
+                    "description": "Maximum stroke thickness in px (default: adaptive, derived from the ROI long side).",
                 },
             },
             "required": ["roi_id"],

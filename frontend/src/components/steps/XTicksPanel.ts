@@ -13,6 +13,8 @@ import { resolveAxisStroke } from '../../core/axisStroke';
 import { resolveColumnGroup } from '../../core/columnGroup';
 import { resolveColumnAtX } from '../../core/tickRouting';
 import { setGroupCalibMark } from '../canvas/groupCalibMarks';
+// 组色的唯一取色点：画布「组归属条」也 import 这个函数，两处逐字节同色（issue #108）。
+import { groupColorAt } from '../canvas/groupColor';
 import {
   exaggerationRange,
   isGroupExaggerated,
@@ -28,6 +30,11 @@ interface XTicksPanelState {
   isBatchAssignOpen: boolean;
   /** 「列组」折叠区是否展开。必须存进 state：面板每次重渲染都会重建 DOM。 */
   groupsFoldOpen: boolean;
+  /**
+   * 用户点过 `×1` 的组 id。`×1` 在模型里等价于 `null`（未放大），但这个选择必须
+   * 在输入框里**显示成字面 1**，否则每次重渲染都回到空白（issue #107）。
+   */
+  explicitOneGroupIds: string[];
 }
 
 const INITIAL_XTICKS_STATE: XTicksPanelState = {
@@ -39,6 +46,7 @@ const INITIAL_XTICKS_STATE: XTicksPanelState = {
   // 列组**默认展开**（用户偏好：分组与单位是量纲工作的入口，不该先藏一层）。
   // 折叠行为不变：点一次即收起，状态存进 state 以便本次会话内保持（面板每次重渲染会重建 DOM）。
   groupsFoldOpen: true,
+  explicitOneGroupIds: [],
 };
 
 /** 步骤 6 面板的可变状态。
@@ -182,7 +190,13 @@ export function render(data: DiagramData): string {
   const groupExagMult = isGroupExaggerated(currentGroup?.exaggeration_mult)
     ? normalizeGroupExaggeration(currentGroup?.exaggeration_mult)
     : null;
-  const groupExagInputValue = groupExagMult === null ? '' : String(groupExagMult);
+  // `×1` 是一个**显式**的"未放大"选择（issue #107）：模型里它等价于 null ——
+  // 后端 `store_exaggeration` 把 1 归一成 None —— 但输入框必须显示用户点的那个 `1`。
+  // 否则点完 ×1、面板一重渲染，格子又变回空白，用户读成"这个组没设过"。
+  // state 记的是"用户点过 ×1"，不是第二份数据：真值仍是组上的 exaggeration_mult。
+  const exagShownAsOne = state.explicitOneGroupIds.includes(currentGroupId ?? '');
+  const groupExagInputValue =
+    groupExagMult !== null ? String(groupExagMult) : exagShownAsOne ? '1' : '';
   // 换算用的列宽：本组各列取数带宽度的均值（缺几何的列不参与，避免被 0 拉低）。
   const groupWidths = groupCols
     .map((c) => Number(c.endX ?? 0) - Number(c.startX ?? 0))
@@ -244,18 +258,23 @@ export function render(data: DiagramData): string {
         <!-- 组 Tab 选择器 -->
         <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;">
           ${groups
-            .map((g) => {
+            .map((g, gIdx) => {
               const isSelected = g.id === currentGroupId;
               const gCols = cols.filter((c) => (c.x_group_id || activeRoi?.default_group_id) === g.id);
               const gCalibrated = gCols.filter((c) => c.x_ticks && c.x_ticks.length === 2).length;
               const isFullCalib = gCols.length > 0 && gCalibrated === gCols.length;
+              // 组色与画布「组归属条」同源（`canvas/groupColor.ts` 是唯一取色点，
+              // issue #108）：同一个组，按钮上的色块/描边与画布那条横带逐字节相同，
+              // 用户才可能把"第几个按钮"对上"画布上哪一段"。
+              const groupColor = groupColorAt(gIdx);
               return `
                 <button
                   type="button"
                   class="btn-switch-group-tab ui-btn ${isSelected ? 'ui-btn--primary' : 'ui-btn--quiet'}"
                   data-group-id="${g.id}"
-                  style="font-size: var(--font-size-sm); padding: 3px 8px; border-radius: 4px; display: flex; align-items: center; gap: 4px; border: 1px solid ${isSelected ? 'var(--accent-blue)' : 'var(--border-color)'};"
+                  style="font-size: var(--font-size-sm); padding: 3px 8px; border-radius: 4px; display: flex; align-items: center; gap: 4px; border: 1px solid ${groupColor}; border-left: 3px solid ${groupColor};"
                 >
+                  <span aria-hidden="true" style="display: inline-block; width: 9px; height: 9px; border-radius: 2px; background: ${groupColor}; border: 1px solid rgba(0, 0, 0, 0.18);" title="本组在画布上的组色带颜色"></span>
                   <span>${g.name}</span>
                   <span style="font-size: var(--font-size-xs); opacity: 0.85; background: rgba(0,0,0,0.15); padding: 0 4px; border-radius: 3px;">${gCols.length}列</span>
                   <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${isFullCalib ? 'var(--status-success)' : 'var(--status-warning)'};" title="${isFullCalib ? '组内所有列已定标' : '待定标或部分定标'}"></span>
@@ -316,6 +335,11 @@ export function render(data: DiagramData): string {
                      title="${t('step6.groupExagTitle')}"
                      style="height: var(--control-h-sm); width: 72px; box-sizing: border-box; font-size: var(--font-size-xs); padding: 0 6px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px; text-align: right;" />
               <span style="font-size: var(--font-size-xs); color: var(--text-muted);">×</span>
+              <!-- ×1 = 明确的"未放大"（issue #107）。「留空」是隐性写法，用户看不出它等
+                   于取消放大；给一个显式入口，点它把输入框填成字面 1（不是清空）。
+                   后端把 1 归一成 null（store_exaggeration），所以写 1 与写空在库里
+                   等价——差别只在用户看见的是"1"还是"一个空格子"。 -->
+              <button class="ui-btn ui-btn--quiet ui-btn--xs" id="btn-group-exag-one" style="padding: 1px 7px; font-size: var(--font-size-xs);" title="${t('step6.groupExagOneTitle')}">×1</button>
               ${([3, 5, 10] as const)
                 .map(
                   (v) =>
@@ -790,8 +814,21 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         ? normalizeGroupExaggeration(group?.exaggeration_mult)
         : null;
     };
-    const writeGroupExag = (value: number | null): void => {
-      void patchGroup({ exaggeration_mult: value });
+    // 「×1 显示成字面 1」的标记：按组记，任何非 ×1 的写入都把它清掉。
+    const markExplicitOne = (gid: string | undefined, on: boolean): void => {
+      if (!gid) return;
+      state.explicitOneGroupIds = on
+        ? Array.from(new Set([...state.explicitOneGroupIds, gid]))
+        : state.explicitOneGroupIds.filter((id) => id !== gid);
+    };
+    const writeGroupExag = (value: number | null, opts: { keepOne?: boolean } = {}): void => {
+      const gid = effectiveGroupId();
+      const showOne = opts.keepOne === true && value === null;
+      markExplicitOne(gid, showOne);
+      void patchGroup({ exaggeration_mult: value }).then((ok) => {
+        // 写失败就不能继续显示用户刚点的 1：面板会按组上的真值重渲染。
+        if (!ok && showOne) markExplicitOne(gid, false);
+      });
     };
     root.querySelectorAll('.grp-exag-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -799,19 +836,33 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         if (value !== null) writeGroupExag(value);
       });
     });
+    // ×1：把输入框填成字面 1 并取消放大。写 null 而不是写 1——后端把 1 归一成 None，
+    // 两者在库里等价，但只有 null 能保证不留下一个会被 `px_to_value` 真除的因子。
+    root.querySelector('#btn-group-exag-one')?.addEventListener('click', () => {
+      writeGroupExag(null, { keepOne: true });
+    });
     if (exagInput) {
       exagInput.addEventListener('keydown', (ev) => {
         if ((ev as KeyboardEvent).key === 'Enter') exagInput.blur();
       });
       exagInput.addEventListener('change', () => {
         const raw = exagInput.value.trim();
-        // 清空 = 取消放大（发 null）；不写 1——1 等于没放大，留着只会让人以为设过。
+        // 清空 = 取消放大（发 null）。留空仍是合法状态，既有工程不受影响（issue #107）。
         if (raw === '') {
           writeGroupExag(null);
           return;
         }
         const parsed = normalizeGroupExaggeration(raw);
         if (parsed === null) {
+          // 手敲 `1`（以及任何 ≤1，**含 0 与负数**）必须和点 ×1 等价（issue #107）：
+          // 倍率 ≤1 物理上就等于"不放大"——×1 是恒等变换、×0 把整列刻度压成一条线、
+          // 负数在丰度/计数上没有含义；后端 `store_exaggeration` 也一律落成"未放大"。
+          // 旧实现把手敲的 1 当非法输入弹错，于是"按钮说 1 合法、手输 1 报错"。
+          const numeric = Number(raw);
+          if (Number.isFinite(numeric) && numeric <= 1) {
+            writeGroupExag(null, { keepOne: true });
+            return;
+          }
           // 就地回填旧值，不重建 DOM：重建会让用户看不到自己刚才填了什么。
           const previous = currentGroupExag();
           exagInput.value = previous === null ? '' : String(previous);

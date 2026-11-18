@@ -1,12 +1,22 @@
 import { DiagramData } from '../../types/pollen';
+import { SAMPLE_SOURCE_ORDER, sampleSourceColor } from '../canvas/SampleOverlay';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
 import { notify, notifyError } from '../../ui/feedback';
+import { showConfirmDialog } from '../../ui/confirm';
 
 export const step = 7;
 export const title = '7. 拐点与采样层位';
 
 let cachedSamplesData: DiagramData | null = null;
+
+/**
+ * 「等距网格层位」折叠区是否展开。
+ *
+ * 面板每次重渲染都重建 DOM，`<details>` 的展开态存进 DOM 就会被重置：用户点开 →
+ * 生成 → 面板刷新 → 折叠区又合上，刚生成的结果直接看不见（issue #103）。
+ */
+let gridFoldOpen = false;
 
 export function render(data: DiagramData): string {
   cachedSamplesData = data;
@@ -16,9 +26,33 @@ export function render(data: DiagramData): string {
   const manualCount = samples.filter((s) => s.source === 'manual').length;
   const gridCount = samples.filter((s) => s.source === 'grid').length;
 
+  // 统计行同时也是**色标**（issue #85）：画布四种来源的颜色由
+  // `canvas/SampleOverlay.ts::SAMPLE_SOURCE_COLORS` 单点定义，这里按同一顺序取色，
+  // 保证面板色块与画布线条一一对应。文案仍全部来自 i18n 模板，按 `|` 切段，
+  // 不新增键、不硬编码任何语言的字面量；切段数不符（模板被改）时退回整行纯文本。
+  const statsText = t('step7.samplesStats', {
+    auto: autoCount,
+    paste: pasteCount,
+    manual: manualCount,
+    grid: gridCount,
+  });
+  const statsSegments = statsText.split('|').map((segment) => segment.trim());
+  const legendHtml =
+    statsSegments.length === SAMPLE_SOURCE_ORDER.length
+      ? SAMPLE_SOURCE_ORDER.map((source, idx) => {
+          const swatch = `<span aria-hidden="true" style="display: inline-block; width: 9px; height: 9px; border-radius: 2px; background: ${sampleSourceColor(source)}; border: 1px solid rgba(0, 0, 0, 0.18);"></span>`;
+          return `<span style="display: inline-flex; align-items: center; gap: 4px;">${swatch}${statsSegments[idx]}</span>`;
+        }).join('')
+      : null;
+
   // 深度分辨率：1 像素对应多少深度。粘贴的深度最终只能落到**整数行**上，
   // 所以这个数就是「导入精度」的量化说明——必须显示出来，否则用户会以为深度是精确对齐的。
   const cal = data.calibration;
+  // Y 轴单位**只认后端标定载荷**：`calibration.unit` = 后端 `session.depth_unit`，
+  // 由 `core.calibrateAxes` 的 `unit` 参数或工程包的 `depth_calibration.unit` 写入
+  // （`project.py::_apply_depth_calibration`）。取不到就明说未标定，**不回落成 `cm`**：
+  // 本项目用户的轴可以是 `ka` / `cal BP` / `m`，显示错单位会让"间隔 0.5"被读成 0.5 cm。
+  const unitLabel = cal?.unit ? cal.unit : t('step7.unitUnknown');
   const spanPx =
     cal?.top_px !== null && cal?.bottom_px !== null
       ? Math.abs(Number(cal.bottom_px) - Number(cal.top_px))
@@ -29,7 +63,7 @@ export function render(data: DiagramData): string {
       : 0;
   const resolutionText =
     spanPx > 0 && spanValue > 0
-      ? `${(spanValue / spanPx).toFixed(3)} ${cal?.unit || 'cm'}/px`
+      ? `${(spanValue / spanPx).toFixed(3)} ${unitLabel}/px`
       : t('step7.resolutionUnknown');
 
   // 默认步长：把标定区间切成约 200 层，取 3 位小数（用户可改）。
@@ -60,8 +94,8 @@ export function render(data: DiagramData): string {
           <span style="font-size: 11px; font-weight: 700;">${t('step7.listTitle', { count: samples.length })}</span>
           <button id="btn-clear-horizons" class="icon-btn btn-subaction" style="font-size: 10px; padding: 1px 4px;" title="${t('step7.clearTitle')}">${t('step7.clear')}</button>
         </div>
-        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 6px;">
-          ${t('step7.samplesStats', { auto: autoCount, paste: pasteCount, manual: manualCount, grid: gridCount })}
+        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 6px;${legendHtml ? ' display: flex; flex-wrap: wrap; gap: 10px;' : ''}">
+          ${legendHtml ?? statsText}
         </div>
 
       <!-- 导入自定义深度：步骤 7 的职责是把「在哪些深度出数」定下来 -->
@@ -77,19 +111,27 @@ export function render(data: DiagramData): string {
         <p style="font-size: 10px; color: var(--text-muted); margin: 6px 0 0 0; line-height: 1.4;">${t('step7.pasteDesc')}</p>
       </div>
 
-      <!-- 等距网格层位：钻孔真实采样间隔是等距的，拐点共识给不出这个密度（S4） -->
-      <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border-color);">
-        <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">${t('step7.gridTitle')}</div>
+      <!-- 等距网格层位：sample_grid 四个来源里唯一「用户已知取样间隔」的入口。
+           默认**折叠**（issue #103）：它是备选路径而非主干，无条件铺开等于替用户
+           宣称"等距取样是标准做法"。文案只描述它做什么，不评价钻孔怎么采样。 -->
+      <details id="fold-grid-samples" class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border-color);" ${gridFoldOpen ? 'open' : ''}>
+        <summary style="font-size: 11px; font-weight: 700; cursor: pointer;" title="${t('step7.gridDesc')}">${t('step7.gridTitle')}</summary>
+        <p id="grid-step-hint" style="font-size: 10px; color: var(--text-muted); margin: 6px 0; line-height: 1.4;">${t('step7.gridDesc')}</p>
         <div style="display: flex; align-items: center; gap: 6px;">
           <input id="input-grid-step" type="number" min="0" step="any" value="${defaultGridStep}"
                  style="width: 84px; padding: 4px 6px; font-size: 11px; font-family: var(--font-mono); background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px;" />
-          <span style="font-size: 9.5px; color: var(--text-muted);">${cal?.unit || 'cm'} / ${t('step7.gridStepSuffix')}</span>
+          <span style="font-size: 9.5px; color: var(--text-muted);">${unitLabel} / ${t('step7.gridStepSuffix')}</span>
           <button id="btn-grid-samples" class="ui-btn ui-btn--secondary" style="flex: 1; font-size: 11px; padding: 5px;">
             ${t('step7.gridBtn')}
           </button>
         </div>
-        <p id="grid-step-hint" style="font-size: 10px; color: var(--text-muted); margin: 6px 0 0 0; line-height: 1.4;">${t('step7.gridDesc')}</p>
-      </div>
+        <!-- 替换后果写死在按钮下方：samples.fromDepthGrid 是**静默替换**，用户点之前
+             必须知道会丢掉现有的哪一批层位（含共识层位、粘贴的深度）。N=0 时不提"替换"，
+             免得凭空吓一次。 -->
+        <p id="grid-replace-hint" style="font-size: 10px; color: var(--status-warning); margin: 6px 0 0 0; line-height: 1.4;">
+          ${samples.length > 0 ? t('step7.gridReplaceHint', { count: samples.length }) : t('step7.gridReplaceHintEmpty')}
+        </p>
+      </details>
         <div id="horizons-list-container" style="max-height: 140px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px; padding: 4px; background: var(--bg-card); font-size: 10px; font-family: monospace;">
           ${
             samples.length === 0
@@ -99,7 +141,7 @@ export function render(data: DiagramData): string {
                     (s, idx) => `
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 3px 6px; border-bottom: 1px solid rgba(0,0,0,0.04);">
                   <span>#${idx + 1} Y=${s.row_px}px</span>
-                  <span>${s.depth !== null ? `<strong>${s.depth}</strong> ${data.calibration?.unit || 'cm'}` : '[--]'}</span>
+                  <span>${s.depth !== null ? `<strong>${s.depth}</strong> ${unitLabel}` : '[--]'}</span>
                   <button class="icon-btn btn-delete-sample" data-sample-idx="${idx}" title="删除该层位" style="color: var(--accent-red); font-size: 12px; padding: 0 4px; background: none; border: none; cursor: pointer;">&times;</button>
                 </div>
               `
@@ -131,7 +173,14 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     openPasteDepthsModal(ctx);
   });
 
-  // 等距网格层位（samples.fromDepthGrid）：与共识层位并列的另一种行集
+  // 等距网格层位（samples.fromDepthGrid）：与共识层位并列的另一种行集。
+  // 后端默认 `replace=True` —— 生成即**替换**现有全部层位（共识层位、粘贴的深度都算），
+  // 所以这里先给一次明确确认，再调后端；旧实现是静默替换（issue #103）。
+  const gridFold = root.querySelector<HTMLDetailsElement>('#fold-grid-samples');
+  gridFold?.addEventListener('toggle', () => {
+    gridFoldOpen = gridFold.open;
+  });
+
   root.querySelector('#btn-grid-samples')?.addEventListener('click', async () => {
     const input = root.querySelector('#input-grid-step') as HTMLInputElement | null;
     const raw = input ? Number(input.value) : NaN;
@@ -140,6 +189,15 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       return;
     }
     if (!ctx.rpcClient) return;
+    const replacing = (cachedSamplesData?.samples ?? []).length;
+    if (replacing > 0) {
+      const ok = await showConfirmDialog(
+        t('step7.gridConfirmTitle'),
+        t('step7.gridConfirmBody', { count: replacing }),
+        { destructive: true, confirmText: t('step7.gridConfirmOk') },
+      );
+      if (!ok) return;
+    }
     try {
       const res = (await ctx.rpcClient.call('samples.fromDepthGrid', { step: raw })) as {
         count?: number;

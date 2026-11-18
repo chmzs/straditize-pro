@@ -379,6 +379,16 @@ export interface SampleHorizon {
   depth: number | null; // 未标定必须是 null，不得填 0
   // `grid` = samples.fromDepthGrid 生成的等距网格层位（与拐点共识 / 粘贴 / 手工并列）。
   source: 'auto' | 'paste' | 'manual' | 'grid'; // 必须存活到导出元数据
+  /**
+   * 拐点共识的诊断量（issue #83），只有 `source === 'auto'` 的层位带这些字段：
+   * 后端 `extract_horizon_consensus` 逐层回传，用于区分「8 列共振」与「1 列孤峰」。
+   *
+   * 缺失（`undefined` / `null`）是**正常状态**——粘贴、手工、网格层位没有共识度，
+   * 渲染必须按"无信息"处理，不得编造一个中间值。
+   */
+  support_columns?: number | null; // 该簇去重后的列数
+  cluster_span_px?: number | null; // 簇内行号 max − min
+  member_count?: number | null; // 簇内拐点总数
 }
 
 export interface ImageMeta {
@@ -528,6 +538,76 @@ export interface QaColumnMax {
 }
 
 /**
+ * 逐行诊断旗标名（`straditize_core/qa.py::FLAG_NAMES`，issue #91/#92）。
+ *
+ * 后端只在 `qa.py` 一处定名，这里镜像；`FLAG_SUM_ERR`（百分比总和门）尚未作为逐行
+ * 旗标输出——它现在由 `violations_over` / `shortfall` 表达，故不在本联合里。
+ */
+export type QaFlagName =
+  | 'FLAG_AXIS_BLIND'
+  | 'FLAG_TRUNCATED'
+  | 'FLAG_COLLISION'
+  | 'FLAG_EXAGG_RATIO';
+
+/** 一条逐行旗标。字段随旗标而异（`ratio` 只有 `FLAG_EXAGG_RATIO` 有）。 */
+export interface QaFlagRow {
+  flag?: QaFlagName;
+  column: string;
+  row_px: number;
+  /** 原始跨度 = x − 0 点（px）。`FLAG_AXIS_BLIND` / `FLAG_TRUNCATED` / `FLAG_COLLISION` 用。 */
+  span_px?: number;
+  axis_px?: number;
+  full_span_px?: number;
+  /** 上下相邻行（行号差 1）的 |Δx|；缺行时该侧不出现。 */
+  neighbour_delta_px?: number[];
+  plot_type?: string;
+  zero_step_fraction?: number;
+  ratio?: number;
+  inner_span_px?: number;
+  outer_span_px?: number;
+}
+
+/** 整列没参与判定时的原因（插值合成列、缺几何、轴宽未填…）。 */
+export interface QaFlagSkippedColumn {
+  column: string;
+  reason: string;
+}
+
+/** 触边降级（#92）的审计明细：这一列凭什么算/不算"满量程柱状"。 */
+export interface QaFlagStructure {
+  column: string;
+  plot_type: string;
+  zero_step_fraction: number;
+  bar_structure: boolean;
+  anchor_edited: boolean;
+  full_span_px: number;
+}
+
+/**
+ * 一块旗标。**四块旗标字段完全相同**（`straditize_core/qa.py::_flag_block`），
+ * 消费端不需要按块分支；`status` 表达"判了没有"，`skipped_columns` 表达"哪些列
+ * 判不了、为什么"，`count` / `by_column` 是完整计数（`rows` 只带前 50 条明细）。
+ */
+export interface QaFlagBlock {
+  flag: QaFlagName;
+  status: 'computed' | 'skipped';
+  criterion: string;
+  count: number;
+  by_column: Record<string, number>;
+  rows: QaFlagRow[];
+  rows_omitted: number;
+  skipped_columns: QaFlagSkippedColumn[];
+  structure: QaFlagStructure[];
+  downgraded_low_priority: number;
+  columns_evaluated: number;
+  reason: string;
+  missing: string[];
+}
+
+/** 四块旗标，键集恒定。 */
+export type QaFlags = Record<QaFlagName, QaFlagBlock>;
+
+/**
  * `qa.summarize` 单个分区的返回（Frozen Contract v1.3 §2.7）。
  *
  * **全仓唯一一份定义**：`core/qaVerdict.ts` 的聚合、`components/steps/QaPanel.ts`
@@ -549,6 +629,9 @@ export interface QaColumnMax {
  * 所以只有 `n_uncalibrated` / `uncalibrated_columns` 是"空集路径确实不给"⇒ 可选，
  * 消费端用 `?.` 是对的。其余字段一律必填：消费端不得用 `?.` / `?? ` 把
  * "后端没给"兜成 0——那是契约破损，必须报错（#14、#16）。
+ *
+ * 唯一的第二个例外是 `flags`（#91/#92），它不是"后端可能不给"，而是
+ * `QaPanel.ts::mergedView` 的聚合视图不携带逐行明细；单个分区返回里它恒在。
  */
 export interface QaSummary {
   roi_id: string;
@@ -563,6 +646,8 @@ export interface QaSummary {
   violations_over: QaHorizonSummary[];
   shortfall: { min: number; max: number; mean: number };
   per_column_max: QaColumnMax[];
+  /** 逐行诊断旗标（#91/#92）。后端两条出口都给；可选性的来由见上方类注释。 */
+  flags?: QaFlags;
   n_uncalibrated?: number;
   uncalibrated_columns?: string[];
 }
