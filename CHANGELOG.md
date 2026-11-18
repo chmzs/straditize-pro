@@ -1,6 +1,13 @@
 # 变更记录（CHANGELOG）
 
 ## [Unreleased]
+### `roi.update` 半截坐标参数不再静默忽略（issue #13 剩余部分）
+
+- **现场复核**：issue 原文说的「`y0/y1` 完全被忽略」在当前 main **已不成立**——实测 `roi_update(y0=511, y1=1300)` 会把 `ylim` 改成 `[511, 1300]`，`x0/x1` 同理（`roi.py:242-257` 两条路径都在）。
+- **仍然存在的缺陷**：只给一半（`y0=511` 不给 `y1`、或只给 `x0`）时返回 `success: True`、ROI 原地不动——静默忽略，与 issue「接口形状不一致 + 静默」同源。
+- **修法**：`roi_update` 入口先校验成对性，半截参数抛 `-32602`，消息点名「要成对给，或改用 `xlim`/`ylim`」。
+- **判据**：`tests/unit/test_roi_update_partial_pair.py`（四个方向各一条：只给 `x0`/`x1`/`y0`/`y1` 都拒绝，且拒绝后坐标一字未变；负向对照：成对给与列表形式行为不变）。
+- **反向验证**：把成对性校验短路（`if False:`）→ 4 failed。
 ### `core.reset` 清掉「惰性属性」残留（samples / manual_points / tick_band / `_points_invalidated`）
 
 - **根因**：`core.reset` 的实现是重跑 `Session.__init__()`（`rpc_methods/system.py:94`），而上述四个属性**只在首次用到时创建**，`__init__` 里没有 → reset 后它们作为「额外属性」留到下一张图。

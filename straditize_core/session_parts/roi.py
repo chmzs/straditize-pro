@@ -227,6 +227,21 @@ class RoiMixin:
 
         roi = self._get_roi(roi_id)
 
+        # 半截坐标参数**不许静默忽略**：只给 `x0` 或只给 `y0` 时下面的分支要求成对，
+        # 于是 ROI 原地不动却返回 success —— 调用方以为改了（issue #13 现场：v2.0.4 上
+        # `roi_update(y0=511, y1=1300)` 不生效，改 `ylim` 才对）。成对给现在已生效，
+        # 但「只给一半」仍会被静默丢掉；宁可当场拒绝并说清替代写法。
+        for pair_label, first_value, second_value, list_alias in (
+            ("x0/x1", x0, x1, "xlim"),
+            ("y0/y1", y0, y1, "ylim"),
+        ):
+            if (first_value is None) != (second_value is None):
+                raise JsonRpcError(
+                    INVALID_PARAMS,
+                    f"roi.update 的 {pair_label} 必须成对给：只给一个时 ROI 不会变化，"
+                    f"属于静默忽略。两个都给，或改用 {list_alias}（例如 {list_alias}=[a, b]）。",
+                )
+
         # Coordinate changes
         coord_changed = False
         new_xlim = list(roi["xlim"])
