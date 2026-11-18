@@ -199,7 +199,11 @@ def test_same_anchor_batch_twice_is_idempotent(tmp_path) -> None:
 
 
 def test_window_never_leaves_data_ylim(tmp_path) -> None:
-    """判据 3：改首/末锚点时窗口只能向内，不越出 data_ylim。"""
+    """判据 3：改首/末锚点时窗口只能向内，不越出被检视的行集 `[y0, y1)`。
+
+    末行用 `y1 - 1` 而不是 `y1`：`y1` 那一行属图框/轴齿，不算层位（issue #60，
+    用户 2026-11-18 拍板），行集、插值域、窗口上界一律收在 `y1 - 1`。
+    """
     session = _session(tmp_path)
     y0, y1 = int(session.data_ylim[0]), int(session.data_ylim[1])
     anchors = _coarse_anchors(session)
@@ -215,12 +219,12 @@ def test_window_never_leaves_data_ylim(tmp_path) -> None:
     assert all(start >= y0 and end <= y1 for start, end in intervals), intervals
 
     last_row = max(moved)
-    assert last_row == y1
+    assert last_row == y1 - 1, f"粗手柄集的末行应是 y1-1，实得 {last_row}"
     moved[last_row] -= 15.0
     result = session.set_control_points(0, _payload(moved))
     intervals = result["patched_rows"]
-    assert intervals[-1][1] == y1, f"末段越出了上界：{intervals}"
-    assert all(start >= y0 and end <= y1 for start, end in intervals), intervals
+    assert intervals[-1][1] == y1 - 1, f"末段越出了上界：{intervals}"
+    assert all(start >= y0 and end <= y1 - 1 for start, end in intervals), intervals
 
 
 def test_rows_outside_window_are_bit_identical(tmp_path) -> None:

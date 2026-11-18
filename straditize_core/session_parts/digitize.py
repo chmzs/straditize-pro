@@ -830,9 +830,13 @@ class DigitizeSessionMixin:
             action = "updated"
         self._manual_store()[col_index] = manual
 
-        # Ensure boundary anchor points exist。插值域是 `[y0, y1)`（下边界行属图框，
-        # 见 `_read_column_profile` 里同一口径），所以末端锚点落在 `y1 - 1` 而不是 `y1`：
-        # 落在域外的锚点不会参与插值，却会在画布上留一个拖得动、改了没反应的手柄。
+        # Ensure boundary anchor points exist。
+        #
+        # 末端锚点取 `y1 - 1`（最后一行的实测点），与 `_digitize_column` 写下的锚点集
+        # 一致：`y1` 那一行属图框、不在行集里，若这里仍注 `y1`，每次同步都会被判成
+        # "删掉 y1 那枚、加上 y1-1 那枚"，凭空多一个 ±25 行的窗口。
+        # 除了这两个端点，不注入调用方没给的其它行 —— 本方法的契约是
+        # "`points` 就是这一列现在全部锚点"，多补一枚会让"同一批锚点连发两次"退化成 rebuild。
         last_row = max(int(y0), int(y1) - 1)
         if y0 not in ctrls:
             ctrls[y0] = float(usable_xs[0])
@@ -969,10 +973,15 @@ class DigitizeSessionMixin:
                 "该列缺少可读点（点的 x 全为空）：请先重新数字化该列，再编辑控制点。",
             )
         y0, y1 = sorted((round(float(ylim[0])), round(float(ylim[1]))))
+        # 末端锚点取 `y1 - 1`（最后一行的实测点），与 `_digitize_column` 写下的锚点集
+        # 一致：`y1` 那一行属图框、不在行集里（见 `_read_column_profile`）。若这里仍注
+        # `y1`，每一次同步都会被判成"删掉 y1 那枚、加上 y1-1 那枚"，凭空多一个窗口，
+        # 而且 `_rebuild_column_points_from_anchors` 会顺着它把行集撑回 y1。
+        last_row = max(int(y0), int(y1) - 1)
         if y0 not in ctrls:
             ctrls[y0] = float(usable_xs[0])
-        if y1 not in ctrls:
-            ctrls[y1] = float(usable_xs[-1])
+        if last_row not in ctrls:
+            ctrls[last_row] = float(usable_xs[-1])
         # 历史脏值：值为 None 的锚点喂给插值会抛 float() 型错误 → 直接剔除。
         for dirty_row in [r for r, v in list(ctrls.items()) if v is None]:
             ctrls.pop(dirty_row, None)
@@ -1029,7 +1038,9 @@ class DigitizeSessionMixin:
         # 窗口再收缩到「原本就有点的行」：局部重写只覆盖实测过的行，
         # 不给这一列从没数字化过的行编数（取数窗口比实测行宽时才会遇到）。
         patch_low = max(y0, min(original)) if original else y0
-        patch_high = min(y1, max(original)) if original else y1
+        # 上界收到 `y1 - 1`：`y1` 那一行属图框、不在行集里，窗口覆盖它只会
+        # 给一个没有实测点的行编数（见 `_read_column_profile`）。
+        patch_high = min(last_row, max(original)) if original else last_row
         patched_rows = _merge_row_windows(changed_rows, patch_low, patch_high)
         for start, end in patched_rows:
             rows = np.arange(start, end + 1)
