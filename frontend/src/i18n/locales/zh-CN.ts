@@ -332,6 +332,15 @@ export const zhCN = {
   'step6.applyToGroupEmpty': '当前组内无其他可用属种列。',
   'step6.next': '确认列刻度，提取拐点与采样层位 (步骤 7)',
 
+  // ----- 组级放大倍数（论文里「某些类群 ×5、另一些 ×3」的对应做法）-----
+  'step6.groupExagLabel': '放大',
+  'step6.groupExagTitle': '本组列的放大倍数：图上刻度 = 真实值 × 倍率。留空 = 未放大（×1）。',
+  'step6.groupExagHint': '图上刻度 = 真实值 × 倍率。留空 = 未放大（×1）。',
+  'step6.groupExagInvalid': '放大倍数必须是大于 1、不超过 100 的数值；留空 = 未放大。',
+  'step6.groupExagRangeTitle': '图上满刻度 = 真实量程 × 倍率',
+  'step6.groupExagRangeValues': '图上 {figure} {unit} → 真实 {real} {unit}（组斜率 {slope} {unit}/px × 本组平均列宽 {width}px）',
+  'step6.columnExagOverriddenByGroup': '以组级 {mult}× 为准（列级设置已忽略）',
+
   // ===== 步骤 7：采样层位面板 =====
   'step7.title': '7. 拐点与采样层位',
   'step7.desc': '管理剖面历史取样层位线（导出数据表的行基准）。',

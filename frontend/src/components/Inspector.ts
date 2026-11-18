@@ -5,9 +5,22 @@ import { CoordinateSystem } from '../core/CoordinateSystem';
 import { DeletePointCommand } from '../core/Commands';
 import { getStepPanel } from './steps/_registry';
 import { renderActiveColumnSuspectNotice } from './steps/SuspectBlockNotice';
-import { t, onLocaleChange } from '../i18n';
+import {
+  columnExagNotice,
+  isColumnExagDisabled,
+  isGroupExaggerated,
+  normalizeGroupExaggeration,
+} from './steps/exaggerationGroupInput';
+import { t, onLocaleChange, type MessageKey } from '../i18n';
 import { RpcClient } from '../services/RpcClient';
 import { notify, notifyCaught, notifyError } from '../ui/feedback';
+
+/**
+ * `exaggerationGroupInput` 的纯函数只认 `(key: string, params?) => string`，
+ * i18n 的键是强类型 `MessageKey`；这个适配器是两者之间唯一的一次转换。
+ */
+const translate = (key: string, params?: Record<string, string | number>): string =>
+  t(key as MessageKey, params);
 
 export interface InspectorCallbacks {
   onDataChange: () => void;
@@ -323,6 +336,28 @@ export class Inspector {
     `;
   }
 
+  /**
+   * 该列所属**组**的放大倍数（>1 才算，否则 null）。
+   *
+   * 组是真源：后端的解析顺序是「组级 > 列级 > 历史键」。载入时后端还会把老工程包里
+   * 写在列上的倍率搬到组上（`project._migrate_column_exaggeration_to_group`），
+   * 所以这里只认组即可，不用再兜列级。
+   */
+  private columnGroupExaggeration(col: TaxaColumn): number | null {
+    const groupId = col.x_group_id;
+    if (!groupId) return null;
+    for (const roi of this.data.rois ?? []) {
+      for (const group of roi.x_groups ?? []) {
+        if (group.id === groupId) {
+          return isGroupExaggerated(group.exaggeration_mult)
+            ? normalizeGroupExaggeration(group.exaggeration_mult)
+            : null;
+        }
+      }
+    }
+    return null;
+  }
+
   private renderColumnInspector(col: TaxaColumn): string {
     const resolved = CoordinateSystem.resolveColumnScale(col);
     // 面板预填：已标定才填真实端点；未标定时端点为**空**，由用户填或不填。
@@ -343,6 +378,13 @@ export class Inspector {
     const exagMult = resolved.exaggerationMult;
     const hasExag = exagMult !== null;
     const exagInputValue = exagMult === null ? '' : String(exagMult);
+
+    // 组级倍率 >1 时组是真相源（后端 `_resolve_exaggeration`：组级 > 列级 > 历史键）。
+    // 列级这份保留存档但不生效，所以**置灰 + 说明**：留着可点会让人以为改了列级就能
+    // 覆盖组，而实际整列读数仍按组倍率除。
+    const groupExagMult = this.columnGroupExaggeration(col);
+    const exagLockedByGroup = isColumnExagDisabled(groupExagMult);
+    const exagDisabledAttr = exagLockedByGroup ? 'disabled' : '';
 
     return `
       <div class="inspector-section">
@@ -380,7 +422,7 @@ export class Inspector {
         <div class="form-group" style="margin-top: 8px; padding: 6px 8px; background: rgba(148,163,184,0.06); border-radius: 4px; border: 1px dashed rgba(148,163,184,0.25);">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <label style="font-size: 11px; display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0;">
-              <input type="checkbox" id="chk-has-exag" ${hasExag ? 'checked' : ''} style="cursor: pointer;" />
+              <input type="checkbox" id="chk-has-exag" ${hasExag ? 'checked' : ''} ${exagDisabledAttr} style="cursor: pointer;" />
               <span style="font-weight: 500;">局部放大曲线 (Exaggeration)</span>
             </label>
             <span style="font-size: 10px; color: var(--accent-violet); font-weight: 600;">${hasExag ? `${exagMult}× 启用` : '未启用'}</span>
@@ -388,13 +430,19 @@ export class Inspector {
           <!-- 输入框常显：先有数字才谈得上启用。空值时勾选框不写库，只提示。 -->
           <div style="margin-top: 6px; display: flex; align-items: center; gap: 6px;">
             <span style="font-size: 10px; color: var(--text-secondary);">放大倍数:</span>
-            <input type="number" id="inp-exag-mult" value="${exagInputValue}" min="1" max="100" placeholder="必填" data-edit-preserve="1" style="width: 50px; font-size: 11px; padding: 2px 4px;" />
+            <input type="number" id="inp-exag-mult" value="${exagInputValue}" min="1" max="100" placeholder="必填" data-edit-preserve="1" ${exagDisabledAttr} style="width: 50px; font-size: 11px; padding: 2px 4px;" />
             <div class="btn-group" style="display: flex; gap: 2px; flex: 1;">
-              <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="3" style="flex: 1; font-size: 9px; padding: 2px;">3×</button>
-              <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="5" style="flex: 1; font-size: 9px; padding: 2px;">5×</button>
-              <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="10" style="flex: 1; font-size: 9px; padding: 2px;">10×</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="3" ${exagDisabledAttr} style="flex: 1; font-size: 9px; padding: 2px;">3×</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="5" ${exagDisabledAttr} style="flex: 1; font-size: 9px; padding: 2px;">5×</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs quick-exag-btn" data-exag="10" ${exagDisabledAttr} style="flex: 1; font-size: 9px; padding: 2px;">10×</button>
             </div>
           </div>
+          <!-- 组倍率 >1 时列级输入不生效：说明原因并指向真正的入口（步骤 6 的组参数）。 -->
+          ${exagLockedByGroup ? `
+          <div data-role="exag-group-override-notice" style="margin-top: 5px; font-size: 10px; line-height: 1.45; color: var(--status-warning);">
+            ${columnExagNotice(groupExagMult, translate)}
+            <div style="color: var(--text-muted);">改倍率请到步骤 6 →「列组」→ 本组参数的「${t('step6.groupExagLabel')}」。</div>
+          </div>` : ''}
         </div>
 
         <div style="display: flex; gap: 8px; margin-top: 10px;">
@@ -571,6 +619,13 @@ export class Inspector {
     const writeExaggeration = async (value: number | null): Promise<void> => {
       const activeCol = this.data.columns.find((c) => c.id === this.data.activeTaxaId);
       if (!activeCol) return;
+      // 组倍率 >1 时列级写进去也不生效（解析是组优先）。控件已置灰，这里是最后一道
+      // 拦截：不给"点了没反应"留任何入口。
+      const groupMult = this.columnGroupExaggeration(activeCol);
+      if (isColumnExagDisabled(groupMult)) {
+        notifyError(columnExagNotice(groupMult, translate));
+        return;
+      }
       if (this.callbacks.rpcClient) {
         try {
           await this.callbacks.rpcClient.updateColumn(getColIdx(activeCol), {

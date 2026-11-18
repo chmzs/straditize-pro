@@ -452,6 +452,9 @@ class ProjectSessionMixin:
         # 告警在**下一次 project_save** 时出现在 manifest.json 里。
         self._load_axis_stroke_warnings = []
         self._restore_columns(raw_cols, primary_roi)
+        # 列级 → 组级的放大倍数迁移：必须紧跟 `_restore_columns`（列与组此刻才都存在），
+        # 且要在任何 `resolve_column_scale` 消费者之前跑完（导出/图数据都在 load 之后）。
+        self._migrate_column_exaggeration_to_group()
         self._restore_reader_types(raw_cols)
         self._restore_embedded_image(project_data)
         self._restore_aux_fields(project_data)
@@ -809,6 +812,103 @@ class ProjectSessionMixin:
         # 对）；以及**重建覆盖包里恢复的手工点**——后者是静默的，用户只会看到
         # "我调好的点又回去了"。与 `core.reset` 的处置同一口径（见 `#71`）。
         self.__dict__.pop("_points_invalidated", None)
+
+    def _migrate_column_exaggeration_to_group(self) -> None:
+        """载入迁移：把历史写在**列**上的放大倍数搬到它所在**组**上（组是唯一真源）。
+
+        ## 为什么必须搬
+
+        `_resolve_exaggeration` 现在是"组级 > 列级"（组是论文的放大单位）。老工程包把
+        倍率存在列上、组上是 `null`，若原样载入，"组优先"不会生效（组空）→ 读数照旧，
+        但只要用户动一下组上的输入框，组就成了新的真源，而列上那个 3 还留着——一旦组被
+        清空，列级 3 会**静默复活**，把本该 ÷5 的列放大 1.67 倍。搬完之后只有一个真源。
+
+        ## 判据（同组多列不同值时怎么办）
+
+        - 组上**已有**倍率 → 组不再改写（它已经是真源）。与组值**相同**的列级副本
+          （老包自动建组时被抄一份到组上）清掉；与组值**不同**的列级值原样保留；
+        - 组上为空、列上取值唯一 → 组取该值，列上清空；
+        - 组上为空、列上有多个值 → 取**出现次数最多**的那个；若次数并列，取其中较大者
+          （确定性且与列顺序无关：同一份工程包重排列不该搬出不同的倍率）。被采纳的值从
+          列上清掉，其余列的倍率**原样保留**并记一条 warning——保留是为了不把用户填的数
+          悄悄扔掉，warning 是为了不让"你的 3 现在不生效"变成看不见的事实。
+
+        ## 不做的事
+
+        不猜"哪个列值才对"、不按比例折中、不写回包里的 `columns` 字段以外的任何位置。
+        迁移只发生在载入，不触发保存；下一次 `project_save` 才把组值落盘。
+        """
+        rois = getattr(self, "rois", None) or []
+        groups_by_id: dict[str, dict[str, Any]] = {}
+        for roi in rois:
+            for group in roi.get("x_groups") or []:
+                gid = group.get("id")
+                if gid and gid not in groups_by_id:
+                    groups_by_id[gid] = group
+
+        columns_by_group: dict[str, list[dict[str, Any]]] = {}
+        for col in self.columns:
+            if col.get("exaggeration_mult") is None:
+                continue
+            gid = col.get("x_group_id")
+            if not gid or gid not in groups_by_id:
+                continue
+            columns_by_group.setdefault(gid, []).append(col)
+
+        for gid, cols in columns_by_group.items():
+            group = groups_by_id[gid]
+            if group.get("exaggeration_mult") is not None:
+                # 组已经是真源。与组值**相同**的列级副本直接清掉（`_restore_columns`
+                # 给老包自动建组时会把列值抄一份到组上，留着就是同一个数的两个副本）；
+                # 与组值**不同**的列级值原样保留：它是用户的显式覆盖，现在被组盖住，
+                # 但不能因为载入就把它删掉。
+                try:
+                    group_value = float(group["exaggeration_mult"])
+                except (TypeError, ValueError):
+                    continue
+                for col in cols:
+                    try:
+                        col_value = float(col["exaggeration_mult"])
+                    except (TypeError, ValueError):
+                        continue
+                    if col_value == group_value:
+                        store_exaggeration(col, None)
+                continue
+
+            counts: dict[float, int] = {}
+            for col in cols:
+                try:
+                    value = float(col["exaggeration_mult"])
+                except (TypeError, ValueError):
+                    continue
+                counts[value] = counts.get(value, 0) + 1
+            if not counts:
+                continue
+
+            chosen = max(counts.items(), key=lambda item: (item[1], item[0]))[0]
+            group["exaggeration_mult"] = chosen
+
+            kept: list[str] = []
+            for col in cols:
+                raw_value = col.get("exaggeration_mult")
+                try:
+                    value = float(raw_value)
+                except (TypeError, ValueError):
+                    value = None
+                if value == chosen:
+                    store_exaggeration(col, None)
+                else:
+                    label = col.get("name") or col.get("id")
+                    kept.append(f"{label}={raw_value}×")
+
+            if kept:
+                logger.warning(
+                    "列组 %s 的放大倍数在列上不一致，已按众数取 %g× 作为组值；"
+                    "下列列的列级倍率被保留但不生效（组级优先）：%s",
+                    gid,
+                    chosen,
+                    "、".join(kept),
+                )
 
     def _audit_restored_tick_end(self, col_dict: dict[str, Any]) -> None:
         """载入期自检：包里的 `tickEndX` 与**该列实际生效的**轴粗是否自洽（Triage 建议）。

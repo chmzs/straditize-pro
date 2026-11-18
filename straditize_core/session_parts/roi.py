@@ -8,7 +8,7 @@ import re
 from typing import Any
 
 from ..protocol import INVALID_PARAMS, JsonRpcError
-from .xscale import normalize_scale_type
+from .xscale import normalize_scale_type, store_exaggeration
 
 ROI_NAME_PATTERN = re.compile(r"^[\w\u4e00-\u9fa5-]{1,31}$")
 
@@ -536,6 +536,13 @@ class RoiMixin:
                 # 同 `roi_group_create`：写入端校验，别让错拼的标度先存住、
                 # 等到某列回落到该组时才在读取端报 -32602（审计 D-1）。
                 value = normalize_scale_type(value)
+            if field == "exaggeration_mult":
+                # 倍率 >1 才有意义：走列级同一个归一入口（`store_exaggeration`），
+                # 于是 `null` / 0 / 1 / 非数值一律落成"未放大"，库里不会留下
+                # 一个会被 `px_to_value` 真除的坏因子。清空写的就是 None。
+                holder: dict[str, Any] = {}
+                store_exaggeration(holder, value)
+                value = holder.get("exaggeration_mult")
             target[field] = value
 
         return {"roi_id": roi_id, "group": target}

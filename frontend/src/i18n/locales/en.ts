@@ -329,6 +329,15 @@ export const en = {
   'step6.applyToGroupEmpty': 'No other columns found in this group.',
   'step6.next': 'Confirm Scales, Extract Points & Horizons (Step 7)',
 
+  // ----- Group-level exaggeration (paper says "some taxa ×5, others ×3") -----
+  'step6.groupExagLabel': 'Exag.',
+  'step6.groupExagTitle': 'Exaggeration factor for this group: plotted tick = true value × factor. Empty = no exaggeration (×1).',
+  'step6.groupExagHint': 'Plotted tick value = true value × factor. Empty = no exaggeration (×1).',
+  'step6.groupExagInvalid': 'The factor must be greater than 1 and at most 100. Empty = no exaggeration.',
+  'step6.groupExagRangeTitle': 'Plotted full scale = true range × factor',
+  'step6.groupExagRangeValues': 'Plotted {figure} {unit} → true {real} {unit} (group slope {slope} {unit}/px × mean column width {width}px)',
+  'step6.columnExagOverriddenByGroup': 'Group {mult}× wins (the per-column setting is ignored)',
+
   // ===== Step 7: Samples Panel =====
   'step7.title': '7. Points & Sampling Horizons',
   'step7.desc': 'Manage profile historical sampling horizon lines (rows for export).',
