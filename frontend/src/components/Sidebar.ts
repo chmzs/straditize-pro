@@ -1,5 +1,10 @@
 import { DiagramData, TaxaColumn } from '../types/pollen';
 import { CoordinateSystem } from '../core/CoordinateSystem';
+import {
+  exaggerationOf,
+  fullScaleAtColumnEdge,
+  peakValueFromScale,
+} from '../core/scaleDisplay';
 import { resolvePlotType } from '../core/plotType';
 import { resolveColumnGroup } from '../core/columnGroup';
 import { t, onLocaleChange } from '../i18n';
@@ -290,12 +295,9 @@ export class Sidebar {
     let maxValStr = scale ? `${formatScaleValue(scale.val1)}${scale.unit}` : '未标定';
     if (scale && col.controlPoints && col.controlPoints.length > 0) {
       const maxX = Math.max(...col.controlPoints.map((p) => p.x));
-      const span = Math.max(1, scale.px1 - scale.px0);
-      const measuredMax = Math.max(
-        0,
-        scale.val0 + ((maxX - scale.px0) / span) * (scale.val1 - scale.val0)
-      );
-      maxValStr = `${measuredMax.toFixed(1)}${scale.unit}`;
+      // 峰值必须与导出表同口径：`peakValueFromScale` 里除掉了 exaggeration_mult。
+      // 不除的话，5× 放大的列在侧栏显示 13.6%、在 data.csv 里是 2.7%（实测缺陷）。
+      maxValStr = `${peakValueFromScale(scale, maxX).toFixed(1)}${scale.unit}`;
     }
 
     const roi = this.data.rois?.find((r) => r.id === col.roi_id) || this.data.rois?.[0];
@@ -312,7 +314,17 @@ export class Sidebar {
             <!-- X 刻度状态徽章 -->
             ${
               scale
-                ? `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(16, 185, 129, 0.15); color: var(--status-success); font-weight: 600;" title="X 刻度: ${formatScaleValue(scale.val0)} ~ ${formatScaleValue(scale.val1)} ${scale.unit}">${formatScaleValue(scale.val1)}${scale.unit}</span>`
+                ? `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(16, 185, 129, 0.15); color: var(--status-success); font-weight: 600;" title="${
+                    isSlopeScale
+                      ? `满刻度（列右缘）= (${formatScaleValue(scale.px1 - scale.px0)}px/刻度) × ${formatScaleValue(scale.val1)}${scale.unit}${
+                          exaggerationOf(scale) > 1 ? ' ÷ ' + exaggerationOf(scale) + '×' : ''
+                        }`
+                      : `X 刻度: ${formatScaleValue(scale.val0)} ~ ${formatScaleValue(scale.val1)} ${scale.unit}`
+                  }">${
+                    isSlopeScale
+                      ? `${formatScaleValue(fullScaleAtColumnEdge(scale, col.endX))}${scale.unit}`
+                      : `${formatScaleValue(scale.val1)}${scale.unit}`
+                  }</span>`
                 : `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(245, 158, 11, 0.15); color: var(--status-warning);" title="X 刻度尚未标定">未定标</span>`
             }
 

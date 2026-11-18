@@ -1,6 +1,21 @@
 # 变更记录（CHANGELOG）
 
 ## [Unreleased]
+### `core.reset` 清掉「惰性属性」残留（samples / manual_points / tick_band / `_points_invalidated`）
+
+- **根因**：`core.reset` 的实现是重跑 `Session.__init__()`（`rpc_methods/system.py:94`），而上述四个属性**只在首次用到时创建**，`__init__` 里没有 → reset 后它们作为「额外属性」留到下一张图。
+- **后果**（`samples` 最直接）：`export_data` 直接拿 `samples` 当 depth 列，换图后导出仍写上一张图的层位；`manual_points` 按 col_index 存，换图后索引指向别的列。
+- **修法**：reset 结束后 `session.__dict__.pop(attr, None)` 显式删除（4 个属性、一行循环）。用「删」而不是「置空」——新会话本来就没有它们，删掉才能与 `Session()` 逐属性一致（`hasattr` 守卫两侧都已存在），也不会改动 `project_load` 的既有状态快照。
+- **判据**：`tests/unit/test_core_reset_clears_state.py` 用**对比新会话属性集**的方式判定（`RESIDUE == []`），所以将来再新增惰性属性这条会自己变红，不用逐条列举。
+- **反向验证**：把清理循环改成空元组 → 判据 1 failed。
+- **回归面**：`project_load` / `project_save` / `export_data` / `lipd` 四条 golden **6 passed**（未改基线与 `__init__`，因此无字节漂移）。
+### 出图逐列形态：`plot_type` → `plot.poly/bar/line/symb` 逻辑向量
+
+- **缺陷**：画布上每列可选 `area / bar / line / symbol`，但 R 模板只有 `silhouette/bar/line` 三个**全局** flag——画布改了形态，出图仍是老样子。
+- **做法**：`plot_type.<列名>` 写进 settings（每列都写，默认 `area`），R 侧拼成与列数等长的逻辑向量传给 `riojaPlot`——`.riojaPlot2:401` 本来就是 `plot.line[i]` 逐列取值，所以向量天然支持。缺 key 的列退回全局开关，老脚本字节不变。
+- **判据**：`tests/unit/test_plot_column_types.py`（settings 每列都有 key；脚本含向量接线；把一列改 `line`、另一列改 `symbol` 后产物字节必须变化）。
+- **实测**：col01 改 `line`、col28 改 `symbol` → 596 547 B → 587 863 B，图上 col01 变细线、col28 变点。
+- **反向验证**：把四处 `plot.poly = poly_v...` 换成标量 → 判据变红（1 failed）。
 ### 出图整包：`export.bundleZip`（data.csv + plot_strat.R + plot_strat.jpg + README.txt）
 
 - **现场缺陷**：导出面板的「R 脚本」只给一个 `.R`，里面写着 `if (file.exists('data.csv'))` —— 用户手里没有 csv 时**整段绘图被静默跳过**，拿到一张 3448 B 的空 PDF，且无任何报错。

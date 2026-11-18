@@ -133,9 +133,14 @@ class PlottingMixin:
                 if (_taxa and _c < len(_taxa) and _taxa[_c])
                 else (_col.get("name") or _col.get("species") or f"col{_c + 1:02d}")
             )
-            _unit = str(resolve_column_scale(self, _col, _c).unit or "")
+            _scale = resolve_column_scale(self, _col, _c)
+            _unit = str(_scale.unit or "")
             _gid = str(_col.get("x_group_id") or "g0")
             _resolved.append((str(_nm), _unit, _gid))
+            # 逐列形态：画布上每列可以是 area / bar / line / symbol，出图必须同口径。
+            # 默认值是 "area"（= 填充 + 条纹 + 轮廓，与全局开关一致），仍按列写出去，
+            # 免得 R 侧再猜「这一列没写是不是没设」。
+            merged[f"plot_type.{_nm}"] = str(_scale.plot_type or "area")
         _cols = [str(c) for c in frame.columns[1:]]
         _resolved = [t for t in _resolved if t[0] in _cols]
         _by_gid: dict[str, list[str]] = {}

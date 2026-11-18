@@ -12,6 +12,14 @@ from ..qa import compute_qa_summary
 from .xscale import READ_PROFILE_QA, read_column_values, resolve_column_scale
 
 
+def _is_percent_unit(unit: Any) -> bool:
+    """百分比单位判定：**唯一实现在 `session_parts/export.py::is_percent_unit`**，
+    这里在函数内转发（模块级 import 会与 export 形成环：export 也 import xscale/agedepth）。"""
+    from .export import is_percent_unit
+
+    return is_percent_unit(unit)
+
+
 class QaMixin:
     """Session mixin for composition sum check and consistency validation."""
 
@@ -218,6 +226,10 @@ class QaMixin:
                     "declared_max": declared_max,
                     "col_values": c_vals,
                     "calibrated": scale.calibrated,
+                    # 只有百分比列进"总和 ≤ 100%"这道门：浓度/粒数/比值的量级完全不同，
+                    # 混进来会让告警恒为假阳性（现场：最大总和 87135.2%）。
+                    # 判据见 `tests/unit/test_qa_composition_units.py`。
+                    "include_in_sum": _is_percent_unit(scale.unit),
                 }
             )
         return columns_info, col_values_by_column

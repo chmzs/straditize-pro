@@ -551,7 +551,11 @@ def _scale_from_group_slope(
         unit=str(_group.get("unit") or col_dict.get("unit") or "%"),
         plot_type=str(_group.get("plot_type") or col_dict.get("plot_type") or "area"),
         scale_type=str(_group.get("scale_type") or "linear"),
-        exaggeration_mult=_group.get("exaggeration_mult"),
+        # 用**已经解析过**的形参，不重读组字典：`_resolve_exaggeration` 的优先级是
+        # 列级 > 组级 > 历史键，这里再读一次组值会把列级倍率丢掉 —— 组斜率标定是
+        # 真实工程的默认路径（recon-20261117 四列 `source="group_slope"`），丢掉列级
+        # 倍率就等于整列从不做除法，用户手填的 5 完全不生效。
+        exaggeration_mult=exaggeration_mult,
         calibrated=True,
         source="group_slope",
     )

@@ -194,7 +194,11 @@ def resolve_settings(settings: dict[str, Any] | None) -> tuple[dict[str, Any], l
         unknown = sorted(
             k
             for k in set(settings) - set(DEFAULT_PLOT_SETTINGS)
-            if not (str(k).startswith("seg_left.") or str(k).startswith("seg_right."))
+            if not (
+            str(k).startswith("seg_left.")
+            or str(k).startswith("seg_right.")
+            or str(k).startswith("plot_type.")
+        )
         )
         if unknown:
             raise ValueError("未知的出图设置：" + ", ".join(unknown))
@@ -431,6 +435,22 @@ warns <- tryCatch(
       # 把 y 列命名成用户要的轴标题：riojaPlot 用 yvar.name 选列，同时把它当轴标签。
       y_df <- data.frame(depth)
       names(y_df) <- txt("ylabel", "Depth")
+      # 逐列形态：settings 里 plot_type.<列名> = area|bar|line|symbol。
+      # riojaPlot 的 plot.poly/bar/line/symb 都是**按列索引取标量**（.riojaPlot2:401 `plot.line[i]`），
+      # 所以传逻辑向量就逐列生效。缺 key 的列退回全局开关 —— 老脚本（无 plot_type.* ）字节不变。
+      poly_v <- stats::setNames(rep(flag('silhouette', TRUE), ncol(taxa)), colnames(taxa))
+      bar_v <- stats::setNames(rep(flag('bar', TRUE), ncol(taxa)), colnames(taxa))
+      line_v <- stats::setNames(rep(flag('line', TRUE), ncol(taxa)), colnames(taxa))
+      symb_v <- stats::setNames(rep(FALSE, ncol(taxa)), colnames(taxa))
+      for (.ptype_col in colnames(taxa)) {
+        .ptype_key <- paste0('plot_type.', .ptype_col)
+        if (is.null(s[[.ptype_key]])) next
+        .ptype_val <- tolower(as.character(s[[.ptype_key]]))
+        poly_v[[.ptype_col]] <- identical(.ptype_val, 'area')
+        bar_v[[.ptype_col]] <- .ptype_val %in% c('area', 'bar')
+        line_v[[.ptype_col]] <- !identical(.ptype_val, 'symbol')
+        symb_v[[.ptype_col]] <- identical(.ptype_val, 'symbol')
+      }
       seg_parse <- function(pre) {
         keys <- names(s)[startsWith(names(s), pre)]
         if (!length(keys)) return(list())
@@ -467,7 +487,9 @@ warns <- tryCatch(
           if (is.null(rp)) {
             rp <- riojaPlot::riojaPlot(taxa[, cols, drop = FALSE], y_df, style = style,
                                        yvar.name = names(y_df)[1], xLeft = x0, xRight = xr,
-                                       scale.percent = is_pct)
+                                       scale.percent = is_pct,
+                                       plot.poly = poly_v[cols], plot.bar = bar_v[cols],
+                                       plot.line = line_v[cols], plot.symb = symb_v[cols])
           } else {
             rp <- riojaPlot::riojaPlot(taxa[, cols, drop = FALSE], y_df,
                                        yvar.name = names(y_df)[1], riojaPlot = rp,
@@ -475,12 +497,16 @@ warns <- tryCatch(
                                        xSpace = num('x_space', 0.01),
                                        scale.percent = is_pct,
                                        scale.minmax = FALSE,
-                                       minmax = cbind(0, apply(taxa[, cols, drop = FALSE], 2, max, na.rm = TRUE)))
+                                       minmax = cbind(0, apply(taxa[, cols, drop = FALSE], 2, max, na.rm = TRUE)),
+                                       plot.poly = poly_v[cols], plot.bar = bar_v[cols],
+                                       plot.line = line_v[cols], plot.symb = symb_v[cols])
           }
         }
       } else {
         riojaPlot::riojaPlot(x = taxa, y = y_df, style = style,
-                             yvar.name = names(y_df)[1])
+                             yvar.name = names(y_df)[1],
+                             plot.poly = poly_v, plot.bar = bar_v,
+                             plot.line = line_v, plot.symb = symb_v)
       }
     } else {
       rioja::strat.plot(

@@ -28,10 +28,11 @@ from ..digitize import (
     _band_is_filled,
     _line_own_offset,
     _own_run_last_offset,
+    _run_bounds,
     _without_axis_ink,
     interpolate_hlines,
 )
-from .xscale import _resolve_column_group, resolve_axis_stroke
+from .xscale import _resolve_column_group, resolve_axis_stroke, resolve_column_scale
 from ..protocol import (
     INVALID_PARAMS,
     STATE_ERROR,
@@ -44,6 +45,53 @@ READER_TYPES: tuple[str, ...] = ("area", "line", "bar")
 #: 历史别名 → 规范名。只在此处出现一次：让别名集中在一个入口被消解，
 #: 而不是散进每个分支判断（那样 `bar` 曾静默落到 else 走均值，P-04）。
 _READER_ALIASES: dict[str, str] = {"bars": "bar"}
+
+# 夸大列"外线断开"判据的常量（全部可判定，没有"大致/适当"）。
+#
+# 现场（`.recon_20261117`，3591×2003 孢粉图）：Picea/Pinus/Betula/Quercus 四列把同一组
+# 数据画了两层——贴轴的填充/曲线（**内线** = 真值，宽 4–8px）与外侧放大曲线（**外线**
+# = 真值 × mult）。取数读"本行最右墨迹"，外线断开的那几行就退化成内线（recon 实测
+# Quercus y=1212–1221 连续 10 行；轴墨迹跨 939..943 即 5px，曲线静止位 x=944）。
+#
+# 每个常量的含义：
+#   _INNER_RUN_START_TOL_PX      内线贴轴：段起点距列左缘 ≤ 5px（轴芯 1–5px + 填充）
+#   _BROKEN_INNER_MAX_WIDTH_PX   内线（轴 + 填充）宽度上界 8px；内外线相接时的单段实测
+#                                19–33px，落在 8px 之外 → 不会被当成断线补倍率
+#   _INNER_WIDTH_MEDIAN_FACTOR   单段宽度 ≤ 1.5 × 内线宽中位数（见下"基准"）
+#   _OUTER_DIST_SLACK_PX         比值判据余量：内线距 ≤ 中位(外线距/内线距) × 内线距 + 2px
+#   _BROKEN_MIN_INNER_DIST_PX    **可分辨性下界**：内线距 0 点 < 4px 的行一律不改
+#                                （见下"为什么小值行必须放着不动"）
+#   _BROKEN_OUTER_CLEARANCE_PX   外线该在的位置必须真的空出 4px 以上余量，否则不改
+#
+# 宽中位数的基准：优先取**有外线的行**（两段行）的内线宽；整列都没有外线时退化为
+# 全列首段宽度。后者对应"这一列的外线整条断裂"——此时"外线缺失"在每一行都成立，
+# 不能因为没有一行带外线就不补（合成图用例 2 钉的就是这个分支）。
+#
+# 为什么小值行必须放着不动（可分辨性下界）：值很小时内线距 0 点只有 1–3px，放大
+# mult 倍后外线也只偏 5–15px，两条线在扫描件上常常被抗锯齿并成**一段**——此时"外线
+# 断了"和"内外线贴在一起"在像素上不可分。把它当断线补偿等于把 1px 的小值乘成 5px，
+# 比不补更错（这是判据唯一的错误方向，必须堵死）。所以内线距 < 4px 的行只登记进
+# `ambiguous_rows`、不改读数：它们的读数由"最右墨迹"给出，外线在就仍然正确。
+# 下界取 4 不是拍的：现场图上对这些候选行，把"外线应在位置"（0 点 + 5×内线距）逐行取样，
+# 灰度 p10/p50/p90 = 255/255/255，**100% 是纯白**（Picea 229 行、Pinus 221、Betula 58、
+# Quercus 484）—— 外线是真没画，不是浅到二值阈值 200 以下。所以"外线缺失"的判断成立，
+# 补偿不是把噪声当信号。反过来说：判据一旦把下界抬到 5px，就会漏掉这些确实断线的行
+# （实测 Picea 139 → 69）。
+_INNER_RUN_START_TOL_PX = 5
+_BROKEN_INNER_MAX_WIDTH_PX = 8
+_INNER_WIDTH_MEDIAN_FACTOR = 1.5
+_OUTER_DIST_SLACK_PX = 2.0
+_BROKEN_MIN_INNER_DIST_PX = 4.0
+_BROKEN_OUTER_CLEARANCE_PX = 4.0
+
+
+def _ink_runs(row_pixels: np.ndarray) -> list[tuple[int, int]]:
+    """一行墨迹的连续段 ``[(起点, 终点)]``（0 基偏移、含端点，按 x 升序）。"""
+    offsets = np.flatnonzero(row_pixels)
+    if not offsets.size:
+        return []
+    starts, ends = _run_bounds(offsets)
+    return [(int(offsets[s]), int(offsets[e])) for s, e in zip(starts, ends)]
 
 
 def normalize_reader_type(value: str | None) -> str:
@@ -60,6 +108,45 @@ def normalize_reader_type(value: str | None) -> str:
             f"未知的读取方式 {value!r}：只支持 {' / '.join(READER_TYPES)}。",
         )
     return key
+
+#: 局部改锚点时的行窗口半径。
+#:
+#: 依据（真实工程 `.recon_20261117`）：1521 个逐行点 / 436 个自动拐点，锚点平均间隔
+#: 约 3.5 行。25 行 ≈ 7 个锚点间隔，窗口内的锚点密度足以让重算曲线在窗口边缘收敛回
+#: 原墨迹；再放大就等于又换掉了整列形状（原缺陷 max|Δx| = 47px 的来源）。
+_ANCHOR_PATCH_WINDOW_ROWS = 25
+
+
+def _merge_row_windows(
+    rows: list[int] | tuple[int, ...],
+    y0: int | None = None,
+    y1: int | None = None,
+    radius: int = _ANCHOR_PATCH_WINDOW_ROWS,
+) -> list[tuple[int, int]]:
+    """把「改动过的锚点行」扩成 ±radius 的行窗口，裁剪到 ``[y0, y1]`` 后合并区间。
+
+    端点保护就是这里的裁剪：改首/末锚点时窗口只能向内，不越出取数区。
+    相邻或重叠的窗口合并成一段，避免同一段行被重写两次。
+    """
+    windows: list[tuple[int, int]] = []
+    for row in rows:
+        start = int(row) - radius
+        end = int(row) + radius
+        if y0 is not None:
+            start = max(start, int(y0))
+        if y1 is not None:
+            end = min(end, int(y1))
+        if start <= end:
+            windows.append((start, end))
+    windows.sort()
+    merged: list[tuple[int, int]] = []
+    for start, end in windows:
+        if merged and start <= merged[-1][1] + 1:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
 
 # The column-curve membership rule (connected-component identity + size) lives in
 # ``straditize_core.digitize`` together with its measured rationale, so that this
@@ -139,7 +226,15 @@ class DigitizeSessionMixin:
                 "reader_type": reader_type,
                 "points": [],
                 "control_points_count": 0,
+                "broken_rows": [],
+                "ambiguous_rows": [],
             }
+
+        # 夸大列里外线断开的那几行，最右墨迹会退化成内线 → 先折回"不除倍率"的等价位置。
+        # 必须在横线插值之前：插值要在同一物理量的空间里做（见该方法 docstring）。
+        broken_rows, ambiguous_rows = self._compensate_broken_inner_rows(
+            mask, col, c_start, c_end, points, col_index
+        )
 
         self._interpolate_across_hlines(points, c_start)
 
@@ -175,6 +270,8 @@ class DigitizeSessionMixin:
             "points": points,
             "control_points": ctrl_pts_list,
             "control_points_count": len(control_points),
+            "broken_rows": broken_rows,
+            "ambiguous_rows": ambiguous_rows,
         }
 
     # ---- digitize 的分段实现 ----
@@ -374,6 +471,161 @@ class DigitizeSessionMixin:
 
             points.append({"row": row_y, "x": feat_x, "y": float(row_y)})
         return points
+
+    def _compensate_broken_inner_rows(
+        self,
+        mask: np.ndarray,
+        col: dict[str, Any],
+        c_start: int,
+        c_end: int,
+        points: list[dict[str, float]],
+        col_index: int,
+    ) -> tuple[list[int], list[int]]:
+        """把"外线断开"的行从内线补回外线位置，返回 `(broken_rows, ambiguous_rows)`。
+
+        ## 物理事实（recon-20261117，用户已确认，此处不复述论证）
+
+        这批列把同一组数据画了两层：贴轴的填充/曲线（**内线** = 真值）与外侧放大曲线
+        （**外线** = 真值 × `exaggeration_mult`）。取数口径是"本行最右墨迹"，正常行读到
+        外线，`px_to_value` 再除以倍率得真值。外线在部分行**断开**，这些行的最右墨迹退化
+        成内线，除倍率后只有真值的 1/mult —— 图上因此出现并不存在的低谷。
+
+        ## 修法（用户拍板）：内线 × 倍率
+
+        行级特例只能改 x：`x ← z0 + (x_in − z0) × mult`，于是
+        `(x − z0) × slope / mult ≡ (x_in − z0) × slope`，恒等于"这一行不除倍率"，与换算
+        侧零耦合。`z0` 必须与 `px_to_value` 用同一个 0 点（`scale.abs_px0`）；换成别的 0 点
+        会让两种口径差一个轴粗、再被乘 mult。
+
+        补 x 发生在 `_interpolate_across_hlines` **之前**：横线行的插值因此发生在"已折算成
+        同一物理量"的空间里（断线行的 `z0 + mult·d` 与正常行的外线位置本就重合），
+        若在插值之后再补，横线行会把内线与外线混在一起平均。
+
+        ## 判据与常量
+
+        逐行取列窗内的连续墨迹段，**三条同时成立**才判 broken：
+
+        1. **只有一段**——有外线的行一定有第二段（外线与填充之间隔着空白）；
+        2. 该段**贴轴**（起点 ≤ `c_start + _INNER_RUN_START_TOL_PX`）→ 它是内线，
+           右缘记 `x_in`；
+        3. 段宽 ≤ `_INNER_WIDTH_MEDIAN_FACTOR` × 同列"两段行"的内线宽中位数，且
+           `x_in − z0 ≤ 中位(外线距/内线距) × (x_in − z0) + _OUTER_DIST_SLACK_PX`。
+
+        兜底判据：只有一段且段宽 `< _BROKEN_INNER_MAX_WIDTH_PX` 也算候选。它与上面三条
+        在本图量级下等价——内线 = 轴线（≤5px）+ 贴轴曲线（1–2px）恒 < 8px；而"内外线相接"
+        造成的单段实测 ≥ 19px，永远落不进 8px。误判方向：**厚轴图（轴粗 ≥ 8px）会漏判**
+        （读数偏小 1/mult，与现状相同），不会反向误补。
+
+        候选行还要过**可分辨性**这一关，否则不改：
+
+        * `内线距 < _BROKEN_MIN_INNER_DIST_PX`（4px）→ 判不出。值这么小时内线只有 1–3px，
+          放大后外线也只偏 5–15px，两条线被抗锯齿并成一段就分不清"外线断了"和
+          "内外线贴在一起"，硬补等于把 1px 的小值乘成 5px；
+        * `外线该在的位置 − 本行墨迹右缘 < _BROKEN_OUTER_CLEARANCE_PX`（4px）→ 本行墨迹
+          已经压在外线位置上，没有"缺失"可言。
+
+        这两关拒掉的行进 `ambiguous_rows`（不补偿，`source="ambiguous"`）；另有"内线小到
+        判不出"的非候选行（外线在、只是贴得近）也进 `ambiguous_rows`，但读数不动、
+        `source` 仍是 `"read"` —— 该列表回答的是"这一行有没有判别力"，不是"改了什么"。
+
+        倍率取 `resolve_column_scale(...).exaggeration_mult`——唯一解析入口（列级 > 组级 >
+        历史键，`<=1` 视为未放大），且它正是 `px_to_value` 要除的那个数；两处取同一个值，
+        补偿与除法才会精确抵消。解析不到或 ≤1 时整条逻辑不启动：没有倍率就没有"两层"，
+        硬补会把普通单层列的读数放大 mult 倍。此时也**不写 `source` 字段**——普通列的点
+        字典必须与改动前逐字节相同（`tests/unit/test_digitize_golden.py` 钉着 x 序列）。
+        """
+        scale = resolve_column_scale(self, col, col_index)
+        mult = scale.exaggeration_mult
+        if mult is None or mult <= 1.0:
+            return [], []
+        zero = float(scale.abs_px0)
+
+        row_segments: list[tuple[dict[str, float], list[tuple[int, int]]]] = []
+        for point in points:
+            row_y = int(point["row"])
+            if row_y < 0 or row_y >= mask.shape[0]:
+                continue
+            row_segments.append((point, _ink_runs(mask[row_y, c_start:c_end])))
+
+        # 先量这一列的两层几何：内线宽中位数与"外线距/内线距"中位数。
+        inner_widths: list[float] = []
+        outer_ratios: list[float] = []
+        for _point, segments in row_segments:
+            if len(segments) < 2:
+                continue
+            run_start, run_end = segments[0]
+            if run_start > _INNER_RUN_START_TOL_PX:
+                continue
+            inner_dist = (c_start + run_end) - zero
+            outer_dist = (c_start + segments[-1][1]) - zero
+            inner_widths.append(float(run_end - run_start + 1))
+            if inner_dist > 0 and outer_dist > inner_dist:
+                outer_ratios.append(outer_dist / inner_dist)
+        median_outer_ratio: float | None = (
+            float(np.median(outer_ratios)) if outer_ratios else None
+        )
+        if not inner_widths:
+            # 整列看不到外线：宽基准退化为全列首段宽度（见常量处的说明）。
+            inner_widths = [
+                float(segments[0][1] - segments[0][0] + 1)
+                for _point, segments in row_segments
+                if segments and segments[0][0] <= _INNER_RUN_START_TOL_PX
+            ]
+        if not inner_widths:
+            return [], []
+        median_inner_width = float(np.median(inner_widths))
+
+        broken_rows: list[int] = []
+        ambiguous_rows: list[int] = []
+        for point, segments in row_segments:
+            row_int = int(point["row"])
+            # 内线距：本行最左侧那段（贴轴的那段）的右缘到 0 点的距离。
+            inner_dist: float | None = None
+            if segments and segments[0][0] <= _INNER_RUN_START_TOL_PX:
+                inner_dist = (c_start + segments[0][1]) - zero
+            candidate = len(segments) == 1 and inner_dist is not None and inner_dist > 0
+            if candidate:
+                run_end = segments[0][1]
+                width = float(run_end - segments[0][0] + 1)
+                narrow_enough = (
+                    width <= _INNER_WIDTH_MEDIAN_FACTOR * median_inner_width
+                )
+                # 比值判据：整列没有一行带外线时无基准可比，按"成立"处理（此时每一行都
+                # 只有内线，"外线缺失"没有反例可反驳）。
+                inside_envelope = median_outer_ratio is None or (
+                    inner_dist
+                    <= median_outer_ratio * inner_dist + _OUTER_DIST_SLACK_PX
+                )
+                # 单段太窄就是"只剩内线"：宽 < 8px 的兜底判据（见 docstring）。
+                candidate = (narrow_enough and inside_envelope) or (
+                    width < _BROKEN_INNER_MAX_WIDTH_PX
+                )
+            if candidate:
+                # 可分辨性：内线太小 / 本行墨迹已经压到外线该在的位置 → 判不出，不改。
+                # 后一条对单段行恒等于 (mult−1)×inner_dist，所以起作用的是前一条；
+                # 留着它是为了让"外线位置必须真的空着"这条前提在代码里显式成立。
+                outer_position = zero + inner_dist * mult
+                clearance = outer_position - float(c_start + segments[0][1])
+                if (
+                    inner_dist < _BROKEN_MIN_INNER_DIST_PX
+                    or clearance < _BROKEN_OUTER_CLEARANCE_PX
+                ):
+                    point["source"] = "ambiguous"
+                    ambiguous_rows.append(row_int)
+                    continue
+                # 内线 × 倍率 = 外线该在的位置；px_to_value 再除以同一个倍率 → 等于不除。
+                point["x"] = float(outer_position)
+                point["source"] = "broken_inner"
+                broken_rows.append(row_int)
+                continue
+            # 非候选行读数不动；内线小到判不出的行只登记，供下游知道"这一行没有判别力"。
+            point["source"] = "read"
+            if inner_dist is not None and 0 < inner_dist < _BROKEN_MIN_INNER_DIST_PX:
+                ambiguous_rows.append(row_int)
+
+        broken_rows.sort()
+        ambiguous_rows.sort()
+        return broken_rows, ambiguous_rows
 
     def _interpolate_across_hlines(
         self, points: list[dict[str, float]], c_start: int
@@ -647,12 +899,15 @@ class DigitizeSessionMixin:
 
         `points` = [{"row": int, "x": float, "manual": bool}]，语义是「这一列现在就是这些
         锚点」——整列替换，不是增量。存在的理由：画布编辑一次可能同时改好几个锚点，
-        走单点接口 `core.updateControlPoint` 要逐点往返，且每个点都重算整列插值。
+        走单点接口 `core.updateControlPoint` 要逐点往返。
 
-        与单点接口共用 `update_control_point` 的守卫 + 插值实现（只调一次、种子取排序后
-        的第一个锚点），避免两条链各写一套插值后给出不同曲线。
+        **只重写改动锚点的邻域**（`_ANCHOR_PATCH_WINDOW_ROWS` 行窗口）：
+        用户拖的是一个手柄，改的却必须是整列形状 —— 旧实现按"436 个锚点的分段线性
+        插值"整列重写，把 1521 行稠密轮廓换成插值折线（实测 mean|Δx| = 0.68px、
+        max|Δx| = 47px，只有锚点所在行 Δ = 0），于是"一编辑就退回拐点"。
+        现在窗口外的行**逐值保留**原 `column_points`（墨迹曲线），窗口内才按新锚点
+        线性重算；窗口外的行若原本不存在，仍然不存在（不给没测过的行编数）。
         """
-        self._record_history("Sync control points")
         c_idx = self._resolve_col_index(col_index)
         if c_idx not in self.column_points:
             raise JsonRpcError(
@@ -684,23 +939,108 @@ class DigitizeSessionMixin:
                 "控制点列表为空：至少要保留两个端点，否则这一列没有可插值的曲线。",
             )
 
+        # 端点锚点与插值域：与单点接口同口径（本方法不再经 `update_control_point`，
+        # 否则它会把整列重写成插值）。
+        ylim = getattr(self, "data_ylim", None)
+        if not ylim or len(ylim) < 2 or ylim[0] is None or ylim[1] is None:
+            raise JsonRpcError(
+                STATE_ERROR,
+                "缺少可读数据范围（data_ylim 为空）：请先在步骤 2 确认有效区，再编辑控制点。",
+            )
+        usable_xs = [
+            p.get("x")
+            for p in (self.column_points.get(c_idx) or [])
+            if p.get("x") is not None
+        ]
+        if not usable_xs:
+            raise JsonRpcError(
+                STATE_ERROR,
+                "该列缺少可读点（点的 x 全为空）：请先重新数字化该列，再编辑控制点。",
+            )
+        y0, y1 = sorted((round(float(ylim[0])), round(float(ylim[1]))))
+        if y0 not in ctrls:
+            ctrls[y0] = float(usable_xs[0])
+        if y1 not in ctrls:
+            ctrls[y1] = float(usable_xs[-1])
+        # 历史脏值：值为 None 的锚点喂给插值会抛 float() 型错误 → 直接剔除。
+        for dirty_row in [r for r, v in list(ctrls.items()) if v is None]:
+            ctrls.pop(dirty_row, None)
+        if len(ctrls) < 2:
+            raise JsonRpcError(
+                STATE_ERROR,
+                "该列的控制点不足（剔除无效值后少于 2 个）：请重新数字化该列，或重新添加控制点。",
+            )
+
+        old_ctrls = {
+            int(r): float(v)
+            for r, v in (self.control_points.get(c_idx) or {}).items()
+            if v is not None
+        }
+        changed_rows = sorted(
+            row
+            for row in set(old_ctrls) | set(ctrls)
+            if row not in old_ctrls
+            or row not in ctrls
+            or float(ctrls[row]) != old_ctrls[row]
+        )
+
+        # 幂等：同一批锚点连发（前端微调去抖后重发、双击触发两次 commit）不重写任何行，
+        # 也不推一条空的撤销项 —— 用户没改动，撤销栈就不该多一格。
+        if not changed_rows:
+            self.control_points[c_idx] = ctrls
+            self._manual_store()[c_idx] = manual
+            return {
+                "col_index": c_idx,
+                "action": "unchanged",
+                "unchanged": True,
+                "patched_rows": [],
+                "control_points_count": len(ctrls),
+                "points": self.column_points.get(c_idx) or [],
+            }
+
+        self._record_history("Sync control points")
         self.control_points[c_idx] = ctrls
         self._manual_store()[c_idx] = manual
-        # 稠密缓存作废：用户刚改的是**曲线本身**，旧墨迹曲线不再代表这一列。
-        # 下一次读取（画布载荷 / 导出）按新锚点线性重建 —— 两边重建的是同一条，
-        # 所以「拖完手柄后画布曲线与导出值一致」是结构性的，不靠约定。
-        seed_row = sorted(ctrls)[0]
-        result = self.update_control_point(c_idx, seed_row, ctrls[seed_row])
-        # 锚点是曲线本身：旧墨迹作废，立刻按新锚点重建稠密曲线。
-        # 重建后 column_points 仍非空 —— 画布与导出读的都是这一份，
-        # 「拖完手柄后两边一致」是结构性的，不是约定。
-        # update_control_point 已按 Pchip 重建整列曲线（含 column_points），
-        # 这里**不得再 pop**：那会让该列退回"无点"状态，导出读成 0.0（实测）。
+
+        # 只重写改动锚点的邻域；窗口外逐值保留原墨迹曲线。
+        anchor_rows = np.array(sorted(ctrls), dtype=float)
+        anchor_xs = np.array([float(ctrls[int(r)]) for r in sorted(ctrls)], dtype=float)
+        original = {
+            int(p["row"]): p
+            for p in (self.column_points.get(c_idx) or [])
+            if p.get("row") is not None
+        }
+        patched_x = {
+            int(row): float(point["x"])
+            for row, point in original.items()
+            if point.get("x") is not None
+        }
+        # 窗口再收缩到「原本就有点的行」：局部重写只覆盖实测过的行，
+        # 不给这一列从没数字化过的行编数（取数窗口比实测行宽时才会遇到）。
+        patch_low = max(y0, min(original)) if original else y0
+        patch_high = min(y1, max(original)) if original else y1
+        patched_rows = _merge_row_windows(changed_rows, patch_low, patch_high)
+        for start, end in patched_rows:
+            rows = np.arange(start, end + 1)
+            xs = np.interp(rows, anchor_rows, anchor_xs)
+            for row_val, x_val in zip(rows, xs):
+                patched_x[int(row_val)] = float(x_val)
+
+        rebuilt = []
+        for row in sorted(patched_x):
+            entry = dict(original.get(row) or {})
+            entry["row"] = int(row)
+            entry["x"] = float(patched_x[row])
+            rebuilt.append(entry)
+        self.column_points[c_idx] = rebuilt
+
         return {
             "col_index": c_idx,
-            "action": "synced",
-            "control_points_count": result["control_points_count"],
-            "points": result["points"],
+            "action": "patched",
+            "unchanged": False,
+            "patched_rows": [[start, end] for start, end in patched_rows],
+            "control_points_count": len(ctrls),
+            "points": rebuilt,
         }
 
     def point_add(
