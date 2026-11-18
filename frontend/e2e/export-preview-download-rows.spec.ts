@@ -334,10 +334,16 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
     // ---- 切到另一项数据集：预览与下载必须一起变 ----
     await selectDataset(page, 'depth_grid');
     const gridPreview = await readPreview(page);
+    // 比**行集内容**，不比行数：控制点并集是"拐点所在行"，均匀层位是等差行，
+    // 两者行数可能恰好相等（本工程 171 = 171）。旧断言比长度，靠的正是
+    // "并集多出 ROI 下边界那一行"这个巧合 —— 那一行按 issue #60 已不算层位，
+    // 巧合消失，断言随之失去判别力。改成比深度序列才是在测"来源换了"。
+    const gridDepths = gridPreview.rows.map((row) => Number.parseFloat(row[0]));
     expect(
-      gridPreview.rows.length,
-      `切换数据集后预览行数必须变化（控制点并集 ${preview.rows.length} → 均匀层位 ${gridPreview.rows.length}）`
-    ).not.toBe(preview.rows.length);
+      gridDepths.join(','),
+      `切换数据集后预览行集必须变化（控制点并集 ${preview.rows.length} 行 → 均匀层位 ${gridPreview.rows.length} 行，`
+        + `但深度序列完全相同，说明来源没换）`
+    ).not.toBe(depths.join(','));
     const gridCaption = await rowSetCaption(page);
     expect(gridCaption, '切换后行集说明必须跟着更新').toContain(String(gridPreview.rows.length));
     // depth_grid 的文案已改成「按深度间隔重采样（高级）」，不再叫「标尺均匀层位」。
