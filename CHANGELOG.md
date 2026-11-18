@@ -1,6 +1,14 @@
 # 变更记录（CHANGELOG）
 
 ## [Unreleased]
+### 分段拼接与「列量程」统一口径（三情景），不再静默失效
+
+- **缺陷**：分段只看「组数 ≥2」，与 `plot_scale_mode`（normalize / fixed）互不知情。用户把某列标成 `fixed` 后，图上仍按百分比归一画——设置看起来生效、实际没有。
+- **三情景**（用户拍板）：A 只有 normalize → **不分段**，单块归一；B 混排 → `% 块` + 侧段（fixed 列各成段，按自身量程）；C 全部 fixed → 没有 `% 块`，所有列进侧段。没有显式 `plot_scale_mode` 时保留「按组切段」老口径。
+- **情景 C 的列等宽**：`graph.widths` 在这条路径上不生效（设进 style 与当直接参数传都无效，产物字节不变），改为**每列自成一个段**——段宽按 `avail / 列数` 定，单列段铺满，于是所有列等宽（实测 28 列落在 66–79px，差异来自轴线检测噪声）。
+- **两处连带修复**（实测撞出来的）：① R 侧整表 `minmax` 预处理与段内子集冲突（`number of rows of minmax should equal number of curves`），有段时跳过；② 首段与后续段一样显式传 `minmax`；③ R 侧允许「没有 % 块」。
+- **判据**：`tests/unit/test_plot_scale_mode_segments.py` 四条（A 无段键 / B 只有 fixed 列进段 / C 每列独占一段 / 无 `plot_scale_mode` 时退回组口径）；渲染被打桩，不需要 R，CI 不会 skip。
+- **反向验证**：把 `_fixed_cols` 短路成 `[]` → 2 failed；把「每列一段」短路 → 1 failed。
 ### 行集口径钉成 `[y0, y1)`：下边界行不算被检视的层位（issue #60，取代 PR #70）
 
 - **口径**（用户 2026-11-18 拍板 A）：ROI 的下边界行是图框/轴齿，不是层位。QA 的「被检视层位」、导出的行集、控制点的插值域一律 `[y0, y1)`。
