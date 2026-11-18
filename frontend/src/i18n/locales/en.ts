@@ -287,6 +287,7 @@ export const en = {
   'step4.spanV': 'Vertical Span Ratio (B):',
   'step4.maxWidth': 'Max Line Thickness:',
   'step4.rescan': 'Rescan Candidates',
+  'step7.samplesStats': 'Auto {auto} | Paste {paste} | Manual {manual} | Grid {grid}',
   'step4.candidates': 'Candidate Lines ({count})',
   'step4.selected': 'Selected:',
   'step4.noCandidates': 'No lines detected',

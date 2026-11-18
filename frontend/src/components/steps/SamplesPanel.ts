@@ -61,7 +61,7 @@ export function render(data: DiagramData): string {
           <button id="btn-clear-horizons" class="icon-btn btn-subaction" style="font-size: 10px; padding: 1px 4px;" title="${t('step7.clearTitle')}">${t('step7.clear')}</button>
         </div>
         <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 6px;">
-          Auto: ${autoCount} | Paste: ${pasteCount} | Manual: ${manualCount} | Grid: ${gridCount}
+          ${t('step7.samplesStats', { auto: autoCount, paste: pasteCount, manual: manualCount, grid: gridCount })}
         </div>
 
       <!-- 导入自定义深度：步骤 7 的职责是把「在哪些深度出数」定下来 -->

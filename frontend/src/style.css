@@ -1595,10 +1595,22 @@ body.theme-light .icon-btn.panel-toggle {
   font-size: 12px;
   color: var(--text-secondary);
   pointer-events: none;
+  /* 闲置后淡化：这行是常驻帮助文本，不淡下去会永久压在图上（pointer-events:none
+     只保证不挡点击，挡不住视觉遮挡）。
+     用 **CSS 动画**而不是 JS 定时器：DOM 重建会换掉 #canvas-hud 节点，JS 定时器捕获的
+     旧节点上的 class 会连同节点一起消失（实测：加了 class，页面上那个节点没变）。
+     动画跟着元素走，节点重建后自然重新计时。`both` 保证结束后停在 to 帧。 */
+  opacity: 1;
+  animation: hud-idle-dim 0.35s ease 6s both;
   display: flex;
   align-items: center;
   gap: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+@keyframes hud-idle-dim {
+  from { opacity: 1; }
+  to   { opacity: 0.3; }
 }
 
 body.theme-light .canvas-hud {

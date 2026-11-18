@@ -290,6 +290,7 @@ export const zhCN = {
   'step4.spanV': '纵向跨度比 (B类):',
   'step4.maxWidth': '最大线宽上限:',
   'step4.rescan': '重新扫描候选线',
+  'step7.samplesStats': '自动 {auto} | 粘贴 {paste} | 手动 {manual} | 网格 {grid}',
   'step4.candidates': '候选线 ({count} 条)',
   'step4.selected': '已选:',
   'step4.noCandidates': '无检测到的干扰线',
