@@ -399,7 +399,12 @@ class DigitizeSessionMixin:
 
         # The column's own curve is identified by connected-component size; the
         # labelling is built once for the whole band rather than per row.
-        band = mask[y0 : y1 + 1, c_start:c_end]
+        # ROI 的下边界行**不属于被检视的层位**（用户 2026-11-18 拍板）：那一行是
+        # 图框/轴齿所在，`_roi_mask` 按 `[y0, y1)` 右开区间给掩膜，若这里仍读到
+        # `y1` 就拿到一整行 False —— 逐行逻辑退化成 `feat_x = c_start`，整列底部凭空
+        # 多出一个"读数落在列左缘"的点（issue #60：读数回落列左缘、整列锚点同步报
+        # 「读数不能为负」）。所以扫描范围与掩膜同口径，一律 `[y0, y1)`。
+        band = mask[y0:y1, c_start:c_end]
         band_labels, band_label_areas = _band_components(band)
         # 面板自身的 Y 轴线不是数据（benchmark P-02）：曲线画法下它与曲线不相连，
         # 且是整个 band 里最大的分量（Empetrum 1303/1606 px、贯穿 481/482 行），
@@ -411,7 +416,7 @@ class DigitizeSessionMixin:
             _band_is_filled(band, band_axis_offsets) if reader_type == "line" else False
         )
 
-        for row_y in range(y0, y1 + 1):
+        for row_y in range(y0, y1):
             if row_y >= self.height:
                 break
             row_pixels = mask[row_y, c_start:c_end]
@@ -730,11 +735,14 @@ class DigitizeSessionMixin:
                 }
             )
 
-        # Ensure endpoints exist
+        # Ensure endpoints exist。末端锚点落在**最后一行的实测点**上，不落在 `y1`：
+        # `y1` 是 ROI 下边界，那一行属图框、不在行集里（见 `_read_column_profile`），
+        # 拿它当锚点会在数据末行下方 1px 留一个拖得动却没有数据支撑的手柄。
+        last_row = int(round(float(points[-1].get("row", points[-1]["y"]))))
         y0_x = float(c_start + max(min_width, points[0]["x"] - c_start))
         y1_x = float(c_start + max(min_width, points[-1]["x"] - c_start))
         control_points[y0] = y0_x
-        control_points[y1] = y1_x
+        control_points[last_row] = y1_x
 
         if not any(p["y"] == float(y0) for p in ctrl_pts_list):
             ctrl_pts_list.insert(
@@ -747,12 +755,12 @@ class DigitizeSessionMixin:
                     "isManual": False,
                 },
             )
-        if not any(p["y"] == float(y1) for p in ctrl_pts_list):
+        if not any(p["y"] == float(last_row) for p in ctrl_pts_list):
             ctrl_pts_list.append(
                 {
-                    "id": f"pt_{col_index}_{y1}",
+                    "id": f"pt_{col_index}_{last_row}",
                     "x": y1_x,
-                    "y": float(y1),
+                    "y": float(last_row),
                     "type": "trough",
                     "isManual": False,
                 }
@@ -822,11 +830,14 @@ class DigitizeSessionMixin:
             action = "updated"
         self._manual_store()[col_index] = manual
 
-        # Ensure boundary anchor points exist
+        # Ensure boundary anchor points exist。插值域是 `[y0, y1)`（下边界行属图框，
+        # 见 `_read_column_profile` 里同一口径），所以末端锚点落在 `y1 - 1` 而不是 `y1`：
+        # 落在域外的锚点不会参与插值，却会在画布上留一个拖得动、改了没反应的手柄。
+        last_row = max(int(y0), int(y1) - 1)
         if y0 not in ctrls:
             ctrls[y0] = float(usable_xs[0])
-        if y1 not in ctrls:
-            ctrls[y1] = float(usable_xs[-1])
+        if last_row not in ctrls:
+            ctrls[last_row] = float(usable_xs[-1])
 
         # 脏状态：`ctrls` 里可能有值为 None 的历史条目（例如组标度被清空后旧控制点残留）。
         # 直接喂给 PchipInterpolator 会抛 `float() argument must be ... not 'NoneType'`，
@@ -844,7 +855,7 @@ class DigitizeSessionMixin:
         sorted_rows = sorted(ctrls.keys())
         sorted_x = [float(ctrls[r]) for r in sorted_rows]
 
-        all_rows = np.arange(y0, y1 + 1)
+        all_rows = np.arange(y0, last_row + 1)
         if len(sorted_rows) >= 3 and PchipInterpolator is not None:
             interpolator = PchipInterpolator(sorted_rows, sorted_x)
             interpolated_x = interpolator(all_rows)

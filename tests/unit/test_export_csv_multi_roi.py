@@ -242,8 +242,10 @@ def test_single_roi_csv_unchanged_structure() -> None:
 
     res = _ok(_rpc(create_rpc_dispatcher(session), "export.csv"), "导出 CSV")
     frame = _csv_frame(res)
-    assert frame.shape == (801, 1 + len(session.columns)), (
-        f"单 ROI 形状必须不变：{frame.shape} vs 期望 (801, {1 + len(session.columns)})"
+    # 800 = `data_ylim [511, 1311)` 的行数：行集按 `[y0, y1)` 给（下边界行属图框，
+    # 不算被检视的层位，issue #60 / 用户 2026-11-18 拍板），旧值是 801（含 y1）。
+    assert frame.shape == (800, 1 + len(session.columns)), (
+        f"单 ROI 形状必须不变：{frame.shape} vs 期望 (800, {1 + len(session.columns)})"
     )
     assert list(frame.columns)[0] == "depth"
     assert frame.drop(columns=["depth"]).notna().sum().sum() > 0
