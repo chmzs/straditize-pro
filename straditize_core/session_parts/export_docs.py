@@ -100,17 +100,17 @@ def strat_plot_script_lines(
         )
         lines.append("    if (length(pct_cols) > 0) {")
         lines.append(
-            f"      strat.plot({df_var}[, pct_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.line = TRUE, title = '{roi_name}')"
+            f"      strat.plot({df_var}[, pct_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE, title = '{roi_name}')"
         )
         lines.append("    }")
         lines.append("    if (length(fixed_cols) > 0) {")
         lines.append(
-            f"      strat.plot({df_var}[, fixed_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = FALSE, plot.line = TRUE, add = length(pct_cols) > 0, title = '{roi_name}')"
+            f"      strat.plot({df_var}[, fixed_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = FALSE, plot.poly = TRUE, plot.line = TRUE, add = length(pct_cols) > 0)"
         )
         lines.append("    }")
     else:
         lines.append(
-            f"    strat.plot({df_var}[-1], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.line = TRUE, title = '{roi_name}')"
+            f"    strat.plot({df_var}[-1], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE, title = '{roi_name}')"
         )
     lines.append("  }")
     lines.append("}\n")
