@@ -7,6 +7,20 @@ from typing import Any, Sequence
 from ..protocol import INVALID_PARAMS, STATE_ERROR, JsonRpcError
 
 
+#: 拐点共识层位的诊断量（issue #83）。只有 `source == 'auto'` 的层位带这些键，
+#: 其余来源缺失是正常状态——缺失即"无共识度信息"，渲染与导出一律不得编造取值。
+_SAMPLE_DIAGNOSTIC_KEYS = ("support_columns", "cluster_span_px", "member_count")
+
+
+def _sample_diagnostics(sample: dict[str, Any]) -> dict[str, Any]:
+    """把层位自带的共识诊断量原样带过去（缺省不写键，不填 0）。"""
+    return {
+        key: int(sample[key])
+        for key in _SAMPLE_DIAGNOSTIC_KEYS
+        if sample.get(key) is not None
+    }
+
+
 class SamplesMixin:
     """Session mixin for sample horizons and consensus extraction."""
 
@@ -35,7 +49,9 @@ class SamplesMixin:
         {
           "row_px": int | float,
           "depth": float | None,
-          "source": 'auto' | 'paste' | 'manual',
+          "source": 'auto' | 'paste' | 'manual' | 'grid',
+          # 可选，仅 `auto` 层位带：拐点共识诊断量（#83）
+          "support_columns"?: int, "cluster_span_px"?: int, "member_count"?: int,
         }
         Uncalibrated sessions enforce depth === None.
         """
@@ -56,11 +72,14 @@ class SamplesMixin:
             if s_source not in ("auto", "paste", "manual", "grid"):
                 s_source = "manual"
 
-            valid_samples.append({
-                "row_px": int(round(row_px)),
-                "depth": depth_val,
-                "source": s_source,
-            })
+            valid_samples.append(
+                {
+                    "row_px": int(round(row_px)),
+                    "depth": depth_val,
+                    "source": s_source,
+                    **_sample_diagnostics(s),
+                }
+            )
 
         # Sort by row_px ascending
         valid_samples.sort(key=lambda item: item["row_px"])
@@ -117,14 +136,21 @@ class SamplesMixin:
             tolerance_px=tolerance_px, min_taxa_support=min_taxa_support
         )
         pixel_y = res.get("pixel_y", [])
+        # #83：把逐层共识诊断量（support_columns / cluster_span_px / member_count）
+        # 一并落到 samples 上，否则画布无法区分「8 列共振」与「1 列孤峰」。
+        diagnostics = {h["row_px"]: h for h in (res.get("horizons") or [])}
 
         new_samples = []
         for row in pixel_y:
-            new_samples.append({
+            entry: dict[str, Any] = {
                 "row_px": row,
                 "depth": self._depth_for_row_px(row),
                 "source": "auto",
-            })
+            }
+            layer = diagnostics.get(row)
+            if layer is not None:
+                entry.update(_sample_diagnostics(layer))
+            new_samples.append(entry)
 
         return self.samples_set(new_samples, source="auto")
 

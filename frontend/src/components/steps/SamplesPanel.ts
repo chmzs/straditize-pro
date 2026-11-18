@@ -1,4 +1,5 @@
 import { DiagramData } from '../../types/pollen';
+import { SAMPLE_SOURCE_ORDER, sampleSourceColor } from '../canvas/SampleOverlay';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
 import { notify, notifyError } from '../../ui/feedback';
@@ -15,6 +16,25 @@ export function render(data: DiagramData): string {
   const pasteCount = samples.filter((s) => s.source === 'paste').length;
   const manualCount = samples.filter((s) => s.source === 'manual').length;
   const gridCount = samples.filter((s) => s.source === 'grid').length;
+
+  // 统计行同时也是**色标**（issue #85）：画布四种来源的颜色由
+  // `canvas/SampleOverlay.ts::SAMPLE_SOURCE_COLORS` 单点定义，这里按同一顺序取色，
+  // 保证面板色块与画布线条一一对应。文案仍全部来自 i18n 模板，按 `|` 切段，
+  // 不新增键、不硬编码任何语言的字面量；切段数不符（模板被改）时退回整行纯文本。
+  const statsText = t('step7.samplesStats', {
+    auto: autoCount,
+    paste: pasteCount,
+    manual: manualCount,
+    grid: gridCount,
+  });
+  const statsSegments = statsText.split('|').map((segment) => segment.trim());
+  const legendHtml =
+    statsSegments.length === SAMPLE_SOURCE_ORDER.length
+      ? SAMPLE_SOURCE_ORDER.map((source, idx) => {
+          const swatch = `<span aria-hidden="true" style="display: inline-block; width: 9px; height: 9px; border-radius: 2px; background: ${sampleSourceColor(source)}; border: 1px solid rgba(0, 0, 0, 0.18);"></span>`;
+          return `<span style="display: inline-flex; align-items: center; gap: 4px;">${swatch}${statsSegments[idx]}</span>`;
+        }).join('')
+      : null;
 
   // 深度分辨率：1 像素对应多少深度。粘贴的深度最终只能落到**整数行**上，
   // 所以这个数就是「导入精度」的量化说明——必须显示出来，否则用户会以为深度是精确对齐的。
@@ -60,8 +80,8 @@ export function render(data: DiagramData): string {
           <span style="font-size: 11px; font-weight: 700;">${t('step7.listTitle', { count: samples.length })}</span>
           <button id="btn-clear-horizons" class="icon-btn btn-subaction" style="font-size: 10px; padding: 1px 4px;" title="${t('step7.clearTitle')}">${t('step7.clear')}</button>
         </div>
-        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 6px;">
-          ${t('step7.samplesStats', { auto: autoCount, paste: pasteCount, manual: manualCount, grid: gridCount })}
+        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 6px;${legendHtml ? ' display: flex; flex-wrap: wrap; gap: 10px;' : ''}">
+          ${legendHtml ?? statsText}
         </div>
 
       <!-- 导入自定义深度：步骤 7 的职责是把「在哪些深度出数」定下来 -->

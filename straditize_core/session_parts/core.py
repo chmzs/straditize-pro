@@ -1930,7 +1930,17 @@ class CoreMixin:
         tolerance_px: float = 2.5,
         min_taxa_support: int = 1,
     ) -> dict[str, Any]:
-        """Discovers authentic historical sampling horizons by clustering turning points across all taxa."""
+        """Discovers authentic historical sampling horizons by clustering turning points across all taxa.
+
+        **`min_taxa_support` 的实际语义是「支持列数」**：一个簇内**去重后**的列数，
+        不是簇内拐点个数。同一列在 `tolerance_px` 内出现多个相邻峰（同一条曲线上的
+        密集起伏）只贡献 1 个支持列，不再被误算成多个属种共振。
+        默认 `1` 等价于不过滤。
+
+        返回 `horizons` 数组逐层给出诊断量（`row_px` / `support_columns` /
+        `cluster_span_px` / `member_count`），用于区分「8 列共振」与「1 列孤峰」；
+        旧的 `pixel_y` 与 `depths` 字段取值口径不变（既有下游消费者依赖它们）。
+        """
         if not getattr(self, "columns", None):
             raise JsonRpcError(STATE_ERROR, "No columns detected.")
 
@@ -1943,7 +1953,9 @@ class CoreMixin:
         except ImportError:
             find_peaks = None
 
-        all_turning_rows: list[int] = []
+        # 池子存 `(row, col_idx)` 二元组：列 ID 必须跟着行号一起进池，
+        # 否则「支持度」只能按行号个数统计（详见 issue #82）。
+        all_turning_points: list[tuple[int, int]] = []
 
         for _c_idx, pts in self.column_points.items():
             if not pts or len(pts) < 5:
@@ -1963,23 +1975,45 @@ class CoreMixin:
                 valleys_idx = list(v_idx)
 
             turning_rows = list(rows[peaks_idx]) + list(rows[valleys_idx])
-            all_turning_rows.extend(turning_rows)
+            for _row in turning_rows:
+                all_turning_points.append((int(_row), int(_c_idx)))
 
-        if not all_turning_rows:
-            return {"horizons_count": 0, "pixel_y": [], "depths": []}
+        if not all_turning_points:
+            return {"horizons_count": 0, "pixel_y": [], "depths": [], "horizons": []}
 
-        all_turning_rows.sort()
-        clusters: list[list[int]] = []
-        for r in all_turning_rows:
-            if not clusters or abs(r - float(np.mean(clusters[-1]))) > tolerance_px:
-                clusters.append([r])
+        all_turning_points.sort(key=lambda _p: _p[0])
+        clusters: list[list[tuple[int, int]]] = []
+        for _row, _col in all_turning_points:
+            if (
+                not clusters
+                or abs(_row - float(np.mean([_r for _r, _c in clusters[-1]])))
+                > tolerance_px
+            ):
+                clusters.append([(_row, _col)])
             else:
-                clusters[-1].append(r)
+                clusters[-1].append((_row, _col))
+
+        # 支持度 = 簇内**去重后**的列数（issue #82）。
+        supported_clusters = [
+            _cl for _cl in clusters if len({_c for _r, _c in _cl}) >= min_taxa_support
+        ]
 
         consensus_rows = [
-            int(round(float(np.mean(cl))))
-            for cl in clusters
-            if len(cl) >= min_taxa_support
+            int(round(float(np.mean([_r for _r, _c in _cl]))))
+            for _cl in supported_clusters
+        ]
+
+        # 逐层诊断量（issue #83）：让用户能区分「8 列共振」与「1 列孤峰」。
+        horizons: list[dict[str, Any]] = [
+            {
+                "row_px": _row,
+                "support_columns": len({_c for _r, _c in _cl}),
+                "cluster_span_px": int(
+                    max(_r for _r, _c in _cl) - min(_r for _r, _c in _cl)
+                ),
+                "member_count": len(_cl),
+            }
+            for _cl, _row in zip(supported_clusters, consensus_rows, strict=True)
         ]
 
         depths: list[float] = []
@@ -1992,6 +2026,7 @@ class CoreMixin:
             "horizons_count": len(consensus_rows),
             "pixel_y": consensus_rows,
             "depths": depths,
+            "horizons": horizons,
         }
 
     def algorithm_degrid(
