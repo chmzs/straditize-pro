@@ -411,7 +411,12 @@ warns <- tryCatch(
       for (mode_col in intersect(names(scale_modes), colnames(taxa))) {
         is_fixed[[mode_col]] <- identical(scale_modes[[mode_col]], "fixed")
       }
-      if (any(is_fixed)) {
+      # 分段模式下每段自己带 minmax，这里的「整表 minmax」会与段内子集冲突
+      # （实测：`number of rows of minmax should equal number of curves`）。
+      # 所以有段时不走这条预处理 —— 段内的 minmax 才是权威。
+      .has_segments <- length(names(s)[startsWith(names(s), 'seg_left.')]) > 0 ||
+        length(names(s)[startsWith(names(s), 'seg_right.')]) > 0
+      if (any(is_fixed) && !.has_segments) {
         # riojaPlot 里 scale.percent 与 scale.minmax 走 if/else，是互斥的：
         # 要 Min/max 就必须关百分比刻度，否则 Min/max 会被静默忽略。
         style$scale.percent <- FALSE
@@ -462,21 +467,40 @@ warns <- tryCatch(
       left_grp <- seg_parse('seg_left.')
       right_grp <- seg_parse('seg_right.')
       side_grp <- c(left_grp, right_grp)
-      if (length(side_grp) > 0 && length(setdiff(colnames(taxa), unlist(side_grp, use.names = FALSE))) > 0) {
+      if (length(side_grp) > 0) {
         pct_cols <- setdiff(colnames(taxa), unlist(side_grp, use.names = FALSE))
-        cmax <- apply(taxa[, pct_cols, drop = FALSE], 2, max, na.rm = TRUE)
-        cmax[!is.finite(cmax) | cmax <= 0] <- 1  # 全 NA 列 max 是 -Inf，会让段宽变 NA
-        # 非 % 段宽 = 一个「平均 % 列」的宽度（用 max 会让它比多数列胖一圈）。
-        r_w <- mean(cmax) / sum(cmax)
         n_side <- length(side_grp)
         # 左边距：riojaPlot 的默认 xLeft 由 y 轴标签宽度决定（约 0.15）。
         # 我们自己按数值排布时必须留出这块，否则首段宽度为负 → "Too many variables"。
         seg_m <- num('seg_left_margin', 0.05)
         seg_r <- 0.99
         avail <- max(0.2, seg_r - seg_m)
-        f_side <- min(max(r_w / (1 + n_side * r_w) * avail, num('seg_side_min', 0.07)), num('seg_side_cap', 0.35) / n_side * avail)
-        f_pct <- avail - n_side * f_side
-        segs <- append(side_grp, list(pct_cols), after = length(left_grp))
+        # 情景 C（没有 % 块，全是 fixed 列）：**列等宽**。
+        # rioja 的面板宽度 ∝ colM = max(列) × graph.widths，把 graph.widths 设成 1/max
+        # 就抵消掉量纲差异（刻度仍按各自 0..max 标）。有 % 块时保持默认（∝ max）。
+        gw_all <- stats::setNames(rep(1, ncol(taxa)), colnames(taxa))
+        if (length(pct_cols) == 0) {
+          cmax_all <- apply(taxa, 2, function(v) max(v, na.rm = TRUE))
+          cmax_all[!is.finite(cmax_all) | cmax_all <= 0] <- 1
+          gw_all <- 1 / cmax_all
+          # riojaPlot 只在**没有** `riojaPlot=` 的首次调用里读 style；段宽
+          # 因此要写进 style（后续段从 rp 继承），只当直接参数传会被忽略。
+          style$graph.widths <- unname(gw_all)
+        }
+        if (length(pct_cols) > 0) {
+          cmax <- apply(taxa[, pct_cols, drop = FALSE], 2, max, na.rm = TRUE)
+          cmax[!is.finite(cmax) | cmax <= 0] <- 1  # 全 NA 列 max 是 -Inf，会让段宽变 NA
+          # 非 % 段宽 = 一个「平均 % 列」的宽度（用 max 会让它比多数列胖一圈）。
+          r_w <- mean(cmax) / sum(cmax)
+          f_side <- min(max(r_w / (1 + n_side * r_w) * avail, num('seg_side_min', 0.07)), num('seg_side_cap', 0.35) / n_side * avail)
+          f_pct <- avail - n_side * f_side
+          segs <- append(side_grp, list(pct_cols), after = length(left_grp))
+        } else {
+          # 情景 C：全是 fixed 列，没有 % 块 —— 侧段平分可用宽度，循环里没有 pct 段。
+          f_side <- avail / n_side
+          f_pct <- 0
+          segs <- side_grp
+        }
         rp <- NULL
         xr <- seg_m
         for (k in seq_along(segs)) {
@@ -487,7 +511,10 @@ warns <- tryCatch(
           if (is.null(rp)) {
             rp <- riojaPlot::riojaPlot(taxa[, cols, drop = FALSE], y_df, style = style,
                                        yvar.name = names(y_df)[1], xLeft = x0, xRight = xr,
+                                       graph.widths = gw_all[cols],
                                        scale.percent = is_pct,
+                                       scale.minmax = FALSE,
+                                       minmax = cbind(0, apply(taxa[, cols, drop = FALSE], 2, max, na.rm = TRUE)),
                                        plot.poly = poly_v[cols], plot.bar = bar_v[cols],
                                        plot.line = line_v[cols], plot.symb = symb_v[cols])
           } else {
@@ -495,6 +522,7 @@ warns <- tryCatch(
                                        yvar.name = names(y_df)[1], riojaPlot = rp,
                                        xGap = 0.01, xLeft = x0, xRight = xr,
                                        xSpace = num('x_space', 0.01),
+                                       graph.widths = gw_all[cols],
                                        scale.percent = is_pct,
                                        scale.minmax = FALSE,
                                        minmax = cbind(0, apply(taxa[, cols, drop = FALSE], 2, max, na.rm = TRUE)),

@@ -143,21 +143,52 @@ class PlottingMixin:
             merged[f"plot_type.{_nm}"] = str(_scale.plot_type or "area")
         _cols = [str(c) for c in frame.columns[1:]]
         _resolved = [t for t in _resolved if t[0] in _cols]
-        _by_gid: dict[str, list[str]] = {}
-        for _n, _u, _g in _resolved:
-            _by_gid.setdefault(_g, []).append(_n)
+        # 分段口径。三种情景由 `plot_scale_mode` 决定，不再让「列量程」静默失效：
+        #   A. 全是 normalize（没有 fixed）→ **不分段**，单块用 scale.percent 归一；
+        #   B. 混排 → `% 块`（normalize 列）+ 侧段（fixed 列各成段，按自身量程画）；
+        #   C. 全是 fixed → 没有 `% 块`，所有列都在侧段（R 侧 pct 为空）。
+        # 没有显式 `plot_scale_mode` 时退回「按组切段」的老口径（组数 ≥2 才分段）。
+        _scale_modes = {
+            str(_k): str(_v).lower()
+            for _k, _v in (merged.get("plot_scale_mode") or {}).items()
+        }
+        _order = [t[0] for t in _resolved]
+        _fixed_cols = [_n for _n in _order if _scale_modes.get(_n) == "fixed"]
+        _main_names = [_n for _n in _order if _n not in _fixed_cols]
         _seg_flag = merged.get("plot_segments")
-        _seg_on = len(_by_gid) > 1 if _seg_flag is None else bool(_seg_flag)
-        if _seg_on and len(_by_gid) > 1:
-            _main_gid = max(_by_gid, key=lambda g: len(_by_gid[g]))
-            _order = [t[0] for t in _resolved]
-            _main_first = min(_order.index(x) for x in _by_gid[_main_gid])
+        _by_gid: dict[str, list[str]] = {}
+        _main_gid: str | None = None
+        if _fixed_cols:
             for _n, _u, _g in _resolved:
-                if _g == _main_gid:
+                if _n in _fixed_cols:
+                    _by_gid.setdefault(_g, []).append(_n)
+            _seg_on = True if _seg_flag is None else bool(_seg_flag)
+            _main_first = _order.index(_main_names[0]) if _main_names else len(_order)
+        else:
+            for _n, _u, _g in _resolved:
+                _by_gid.setdefault(_g, []).append(_n)
+            # 显式给了 plot_scale_mode 且没有 fixed 列 → 情景 A：不分段（全部按归一画）。
+            _auto_seg = (len(_by_gid) > 1) and not _scale_modes
+            _seg_on = _auto_seg if _seg_flag is None else bool(_seg_flag)
+            if _by_gid:
+                _main_gid = max(_by_gid, key=lambda g: len(_by_gid[g]))
+                _main_first = min(_order.index(x) for x in _by_gid[_main_gid])
+            else:
+                _main_first = 0
+        if _seg_on and _by_gid:
+            if not _main_names:
+                # 情景 C（全 fixed）：**列等宽**。riojaPlot 的面板宽度 ∝ 各列 max，
+                # 而 `graph.widths` 在这条路径上不生效（实测设进 style 与当直接参数传都
+                # 无效，产物字节不变）。所以让**每列自成一个段**：段宽我们说了算
+                # （avail / 列数），单列段必然铺满，于是所有列等宽。
+                _by_gid = {f"{_g}__{_n}": [_n] for _n, _u, _g in _resolved if _n in _fixed_cols}
+            for _g, _names in _by_gid.items():
+                if not _fixed_cols and _g == _main_gid:
                     continue
-                _first = min(_order.index(x) for x in _by_gid[_g])
+                _first = min(_order.index(x) for x in _names)
                 _pre = "seg_left." if _first < _main_first else "seg_right."
-                merged[_pre + _g + "." + _n] = "1"
+                for _n in _names:
+                    merged[_pre + _g + "." + _n] = "1"
         with tempfile.TemporaryDirectory(prefix="straditize-plot-") as tmp_dir:
             csv_tmp = Path(tmp_dir) / "plot_input.csv"
             frame.to_csv(csv_tmp, index=False, na_rep="NA", lineterminator="\n")
