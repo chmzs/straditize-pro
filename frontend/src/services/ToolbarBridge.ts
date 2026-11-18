@@ -1,4 +1,5 @@
 import { RpcClient } from './RpcClient';
+import { compensationNote } from '../core/compensationNote';
 import { GeologyCanvas } from '../components/GeologyCanvas';
 import { Toolbar } from '../components/Toolbar';
 import { Sidebar } from '../components/Sidebar';
@@ -114,7 +115,7 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
       const activeCol = p.canvasComponent.getActiveColumn();
       if (!activeCol) return;
       try {
-        const points = await p.rpcClient.digitizeColumn(activeCol.id);
+        const { points, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(activeCol.id);
         if (points.length > 0) {
           activeCol.controlPoints = points;
           p.canvasComponent.history.push(
@@ -124,6 +125,10 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
           );
           p.canvasComponent.requestRender();
           p.getSidebar()?.updateData(p.canvasComponent.data);
+          const note = compensationNote({ brokenRows, ambiguousRows });
+          if (note) {
+            p.setHudNotice(`属种 ${activeCol.name} 轮廓已重新识别。${note}`, 6000);
+          }
         }
       } catch (err) {
         p.reportBackendFailure('属种轮廓重识别', err);
