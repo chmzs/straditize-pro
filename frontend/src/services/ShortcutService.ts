@@ -102,6 +102,7 @@ export class ShortcutService {
           <div class="help-grid">
             <div class="help-row"><span class="help-key">Arrow Keys</span><span class="help-desc">1px Precision Nudge</span></div>
             <div class="help-row"><span class="help-key">Shift + Arrow Keys</span><span class="help-desc">10px Fast Nudge</span></div>
+            <div class="help-row"><span class="help-key">Alt + Arrow Keys</span><span class="help-desc">Pan the view 40px (same direction as Alt/Shift + Wheel; never nudges a selection)</span></div>
             <div class="help-row"><span class="help-key">F</span><span class="help-desc">Fit to Screen</span></div>
             <div class="help-row"><span class="help-key">Ctrl+1</span><span class="help-desc">100% 1:1 Scale</span></div>
             <div class="help-row"><span class="help-key">+ / -</span><span class="help-desc">Smooth Zoom In / Out</span></div>
@@ -160,6 +161,7 @@ export class ShortcutService {
           <div class="help-grid">
             <div class="help-row"><span class="help-key">↑ ↓ ← →</span><span class="help-desc">1 像素高精度微调 (1px Nudge)</span></div>
             <div class="help-row"><span class="help-key">Shift + 方向键</span><span class="help-desc">10 像素快速微调 (10px Nudge)</span></div>
+            <div class="help-row"><span class="help-key">Alt + 方向键</span><span class="help-desc">平移视图 40px（与 Alt / Shift + 滚轮同向；有选中时只平移，不动几何）</span></div>
             <div class="help-row"><span class="help-key">F</span><span class="help-desc">视图全图自适应屏幕居中 (Fit to Screen)</span></div>
             <div class="help-row"><span class="help-key">Ctrl+1</span><span class="help-desc">100% 原始物理分辨率 (1:1)</span></div>
             <div class="help-row"><span class="help-key">+ / -</span><span class="help-desc">平滑放大 / 缩小视图</span></div>

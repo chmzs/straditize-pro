@@ -25,7 +25,7 @@ import numpy as np
 from PIL import Image
 
 from ..image import rasterize_strokes
-from ..lines import detect_line_candidates
+from ..lines import DEFAULT_LINE_FRACTION_H, detect_line_candidates
 from ..protocol import INVALID_PARAMS, JsonRpcError
 
 CANDIDATE = "candidate"
@@ -512,7 +512,7 @@ class CleanupMixin:
     def detect_line_candidates(
         self,
         roi_id: str | None = None,
-        line_fraction_h: float = 0.75,
+        line_fraction_h: float = DEFAULT_LINE_FRACTION_H,
         line_fraction_v: float = 0.30,
         line_width_min: int = 1,
         line_width_max: int | None = None,
@@ -531,6 +531,10 @@ class CleanupMixin:
         work across image sizes: the same zone line is ~2px on a 1600px tutorial
         figure but ~6px on a 6126px scan, so a hard-coded 2 detects nothing at
         all on real scans.
+
+        ``line_fraction_h`` 的缺省值在这里**只引用**不重写（
+        :data:`straditize_core.lines.DEFAULT_LINE_FRACTION_H`）：同一条判据写
+        两个字面量，下一次调整必然漏掉一处，而漏掉的那处正是前端走的口子。
 
         Detected geometry enters as ``status='candidate'``: the projection
         detector proposes, the user disposes. Nothing is removed until the

@@ -1,4 +1,5 @@
 import { Viewport } from '../../core/Viewport';
+import { panDeltaFromArrowKey } from '../canvas/keyBindings';
 import {
   AgeDepthModelInspectionData,
   CalibKind,
@@ -1122,6 +1123,18 @@ export class AgeDepthCanvas {
       if (e.code === 'Space' && !this.isSpaceDown) {
         this.isSpaceDown = true;
         canvas.style.cursor = 'grab';
+      }
+      // Alt+方向键平移（issue #106）：与主画布同一个入口、同一个步长、同一个方向
+      // （`canvas/keyBindings.ts::panDeltaFromArrowKey`）。全画布一致是硬不变量——
+      // 只在主画布生效会让本弹窗成为"这里按键没反应"的那一个。
+      // 焦点在输入框里时不抢：年代/深度那几个 number 输入要能用 Alt+方向键选词。
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      const pan = panDeltaFromArrowKey(e);
+      if (pan) {
+        e.preventDefault();
+        this.viewport.panBy(pan.dx, pan.dy);
+        this.renderCanvas();
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {

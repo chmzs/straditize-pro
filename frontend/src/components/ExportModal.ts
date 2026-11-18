@@ -136,7 +136,16 @@ export class ExportModal {
             </div>
 
             <!-- 视图 1: 交互式表格视图 (支持直接点选单元格修改数字) -->
-            <div id="wpd-table-wrapper" class="wpd-table-wrapper" style="flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--border-light); border-radius: 6px;">
+            <!--
+              纵向必须 auto，不能 hidden：本容器由 flex: 1 + min-height: 0 压成
+              「弹窗剩余高度」（1366×768 实测 392px），而表格的自然高度是 5305px。
+              hidden 时下面 189 行被裁掉，且滚轮手势落在这里会穿透到 .ui-modal__body
+              （实测 wTop 恒 0、body.scrollTop 339），用户永远看不到第 15 行以后。
+              改成 auto 后本表自己成为纵向滚动口；th 的 sticky 规则（style.css
+              .wpd-preview-table th position: sticky / top: 0）随之生效，表头固定，
+              弹窗总高不变（仍是 736px，未溢出视口）。
+            -->
+            <div id="wpd-table-wrapper" class="wpd-table-wrapper" style="flex: 1; min-height: 0; overflow-x: auto; overflow-y: auto; border: 1px solid var(--border-light); border-radius: 6px;">
               <table id="wpd-preview-table" class="wpd-preview-table">
                 <!-- 动态填充 thead 与 tbody -->
               </table>
