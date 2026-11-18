@@ -109,6 +109,45 @@ def normalize_reader_type(value: str | None) -> str:
         )
     return key
 
+#: 局部改锚点时的行窗口半径。
+#:
+#: 依据（真实工程 `.recon_20261117`）：1521 个逐行点 / 436 个自动拐点，锚点平均间隔
+#: 约 3.5 行。25 行 ≈ 7 个锚点间隔，窗口内的锚点密度足以让重算曲线在窗口边缘收敛回
+#: 原墨迹；再放大就等于又换掉了整列形状（原缺陷 max|Δx| = 47px 的来源）。
+_ANCHOR_PATCH_WINDOW_ROWS = 25
+
+
+def _merge_row_windows(
+    rows: list[int] | tuple[int, ...],
+    y0: int | None = None,
+    y1: int | None = None,
+    radius: int = _ANCHOR_PATCH_WINDOW_ROWS,
+) -> list[tuple[int, int]]:
+    """把「改动过的锚点行」扩成 ±radius 的行窗口，裁剪到 ``[y0, y1]`` 后合并区间。
+
+    端点保护就是这里的裁剪：改首/末锚点时窗口只能向内，不越出取数区。
+    相邻或重叠的窗口合并成一段，避免同一段行被重写两次。
+    """
+    windows: list[tuple[int, int]] = []
+    for row in rows:
+        start = int(row) - radius
+        end = int(row) + radius
+        if y0 is not None:
+            start = max(start, int(y0))
+        if y1 is not None:
+            end = min(end, int(y1))
+        if start <= end:
+            windows.append((start, end))
+    windows.sort()
+    merged: list[tuple[int, int]] = []
+    for start, end in windows:
+        if merged and start <= merged[-1][1] + 1:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
 # The column-curve membership rule (connected-component identity + size) lives in
 # ``straditize_core.digitize`` together with its measured rationale, so that this
 # path and the batch ``trace_area_profile`` reader cannot drift apart.
@@ -860,12 +899,15 @@ class DigitizeSessionMixin:
 
         `points` = [{"row": int, "x": float, "manual": bool}]，语义是「这一列现在就是这些
         锚点」——整列替换，不是增量。存在的理由：画布编辑一次可能同时改好几个锚点，
-        走单点接口 `core.updateControlPoint` 要逐点往返，且每个点都重算整列插值。
+        走单点接口 `core.updateControlPoint` 要逐点往返。
 
-        与单点接口共用 `update_control_point` 的守卫 + 插值实现（只调一次、种子取排序后
-        的第一个锚点），避免两条链各写一套插值后给出不同曲线。
+        **只重写改动锚点的邻域**（`_ANCHOR_PATCH_WINDOW_ROWS` 行窗口）：
+        用户拖的是一个手柄，改的却必须是整列形状 —— 旧实现按"436 个锚点的分段线性
+        插值"整列重写，把 1521 行稠密轮廓换成插值折线（实测 mean|Δx| = 0.68px、
+        max|Δx| = 47px，只有锚点所在行 Δ = 0），于是"一编辑就退回拐点"。
+        现在窗口外的行**逐值保留**原 `column_points`（墨迹曲线），窗口内才按新锚点
+        线性重算；窗口外的行若原本不存在，仍然不存在（不给没测过的行编数）。
         """
-        self._record_history("Sync control points")
         c_idx = self._resolve_col_index(col_index)
         if c_idx not in self.column_points:
             raise JsonRpcError(
@@ -897,23 +939,108 @@ class DigitizeSessionMixin:
                 "控制点列表为空：至少要保留两个端点，否则这一列没有可插值的曲线。",
             )
 
+        # 端点锚点与插值域：与单点接口同口径（本方法不再经 `update_control_point`，
+        # 否则它会把整列重写成插值）。
+        ylim = getattr(self, "data_ylim", None)
+        if not ylim or len(ylim) < 2 or ylim[0] is None or ylim[1] is None:
+            raise JsonRpcError(
+                STATE_ERROR,
+                "缺少可读数据范围（data_ylim 为空）：请先在步骤 2 确认有效区，再编辑控制点。",
+            )
+        usable_xs = [
+            p.get("x")
+            for p in (self.column_points.get(c_idx) or [])
+            if p.get("x") is not None
+        ]
+        if not usable_xs:
+            raise JsonRpcError(
+                STATE_ERROR,
+                "该列缺少可读点（点的 x 全为空）：请先重新数字化该列，再编辑控制点。",
+            )
+        y0, y1 = sorted((round(float(ylim[0])), round(float(ylim[1]))))
+        if y0 not in ctrls:
+            ctrls[y0] = float(usable_xs[0])
+        if y1 not in ctrls:
+            ctrls[y1] = float(usable_xs[-1])
+        # 历史脏值：值为 None 的锚点喂给插值会抛 float() 型错误 → 直接剔除。
+        for dirty_row in [r for r, v in list(ctrls.items()) if v is None]:
+            ctrls.pop(dirty_row, None)
+        if len(ctrls) < 2:
+            raise JsonRpcError(
+                STATE_ERROR,
+                "该列的控制点不足（剔除无效值后少于 2 个）：请重新数字化该列，或重新添加控制点。",
+            )
+
+        old_ctrls = {
+            int(r): float(v)
+            for r, v in (self.control_points.get(c_idx) or {}).items()
+            if v is not None
+        }
+        changed_rows = sorted(
+            row
+            for row in set(old_ctrls) | set(ctrls)
+            if row not in old_ctrls
+            or row not in ctrls
+            or float(ctrls[row]) != old_ctrls[row]
+        )
+
+        # 幂等：同一批锚点连发（前端微调去抖后重发、双击触发两次 commit）不重写任何行，
+        # 也不推一条空的撤销项 —— 用户没改动，撤销栈就不该多一格。
+        if not changed_rows:
+            self.control_points[c_idx] = ctrls
+            self._manual_store()[c_idx] = manual
+            return {
+                "col_index": c_idx,
+                "action": "unchanged",
+                "unchanged": True,
+                "patched_rows": [],
+                "control_points_count": len(ctrls),
+                "points": self.column_points.get(c_idx) or [],
+            }
+
+        self._record_history("Sync control points")
         self.control_points[c_idx] = ctrls
         self._manual_store()[c_idx] = manual
-        # 稠密缓存作废：用户刚改的是**曲线本身**，旧墨迹曲线不再代表这一列。
-        # 下一次读取（画布载荷 / 导出）按新锚点线性重建 —— 两边重建的是同一条，
-        # 所以「拖完手柄后画布曲线与导出值一致」是结构性的，不靠约定。
-        seed_row = sorted(ctrls)[0]
-        result = self.update_control_point(c_idx, seed_row, ctrls[seed_row])
-        # 锚点是曲线本身：旧墨迹作废，立刻按新锚点重建稠密曲线。
-        # 重建后 column_points 仍非空 —— 画布与导出读的都是这一份，
-        # 「拖完手柄后两边一致」是结构性的，不是约定。
-        # update_control_point 已按 Pchip 重建整列曲线（含 column_points），
-        # 这里**不得再 pop**：那会让该列退回"无点"状态，导出读成 0.0（实测）。
+
+        # 只重写改动锚点的邻域；窗口外逐值保留原墨迹曲线。
+        anchor_rows = np.array(sorted(ctrls), dtype=float)
+        anchor_xs = np.array([float(ctrls[int(r)]) for r in sorted(ctrls)], dtype=float)
+        original = {
+            int(p["row"]): p
+            for p in (self.column_points.get(c_idx) or [])
+            if p.get("row") is not None
+        }
+        patched_x = {
+            int(row): float(point["x"])
+            for row, point in original.items()
+            if point.get("x") is not None
+        }
+        # 窗口再收缩到「原本就有点的行」：局部重写只覆盖实测过的行，
+        # 不给这一列从没数字化过的行编数（取数窗口比实测行宽时才会遇到）。
+        patch_low = max(y0, min(original)) if original else y0
+        patch_high = min(y1, max(original)) if original else y1
+        patched_rows = _merge_row_windows(changed_rows, patch_low, patch_high)
+        for start, end in patched_rows:
+            rows = np.arange(start, end + 1)
+            xs = np.interp(rows, anchor_rows, anchor_xs)
+            for row_val, x_val in zip(rows, xs):
+                patched_x[int(row_val)] = float(x_val)
+
+        rebuilt = []
+        for row in sorted(patched_x):
+            entry = dict(original.get(row) or {})
+            entry["row"] = int(row)
+            entry["x"] = float(patched_x[row])
+            rebuilt.append(entry)
+        self.column_points[c_idx] = rebuilt
+
         return {
             "col_index": c_idx,
-            "action": "synced",
-            "control_points_count": result["control_points_count"],
-            "points": result["points"],
+            "action": "patched",
+            "unchanged": False,
+            "patched_rows": [[start, end] for start, end in patched_rows],
+            "control_points_count": len(ctrls),
+            "points": rebuilt,
         }
 
     def point_add(
