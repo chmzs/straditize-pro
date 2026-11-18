@@ -278,7 +278,7 @@
    ],
    "columns_count": 20,
    "csv_content_equals_csv": true,
-   "csv_digest": "27c1524dfa694ae8",
+   "csv_digest": "0c5e1da31db9b10d",
    "csv_head": [
     "depth,age_est,age_min_95,age_max_95,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
     "16.5,59.23754375,55.28045993534482,63.19912300403226,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
@@ -355,7 +355,7 @@
    "file_path": null,
    "format": "csv",
    "path_matches_file_path": true,
-   "rows_count": 637,
+   "rows_count": 636,
    "strict": false
   }
  },
@@ -495,7 +495,7 @@
    ],
    "columns_count": 17,
    "csv_content_equals_csv": true,
-   "csv_digest": "90bf2db95f80ebab",
+   "csv_digest": "010ed70b381dd6de",
    "csv_head": [
     "depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
     "16.5,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
@@ -563,7 +563,7 @@
    "file_path": null,
    "format": "csv",
    "path_matches_file_path": true,
-   "rows_count": 637,
+   "rows_count": 636,
    "strict": false
   }
  }

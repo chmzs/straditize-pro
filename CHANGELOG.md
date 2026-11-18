@@ -1,6 +1,16 @@
 # 变更记录（CHANGELOG）
 
 ## [Unreleased]
+### 行集口径钉成 `[y0, y1)`：下边界行不算被检视的层位（issue #60，取代 PR #70）
+
+- **口径**（用户 2026-11-18 拍板 A）：ROI 的下边界行是图框/轴齿，不是层位。QA 的「被检视层位」、导出的行集、控制点的插值域一律 `[y0, y1)`。
+- **根因**：`_roi_mask` 按右开区间给掩膜（`mask[y0:y1]`），而 `_read_column_profile` 却扫到 `y1`（`mask[y0:y1+1]`、`range(y0, y1+1)`）。那一行掩膜恒 `False` → 逐行逻辑退化为 `feat_x = c_start`，整列底部凭空多一个「读数落在列左缘」的点（issue #60 原文：读数回落列左缘、整列锚点同步报「读数不能为负」）。
+- **修法**：四处同口径——`_read_column_profile` 的带切片与行循环、`set_control_points` 的插值域与窗口上界（`patch_high`）、`_digitize_column` 的端点锚点、`update_control_point` 的端点锚点。末端锚点一律取 `y1 - 1`（最后一行的实测点）：留在 `y1` 会让每次同步都被判成「删掉 y1 那枚、加上 y1-1 那枚」，凭空多一个 ±25 行窗口。
+- **为什么不是 PR #70 的闭区间**：#70 把掩膜改成闭区间，让那一行「有墨」——但用户判定图框行不是层位，闭区间等于把一个图框行算成一个层位，E2E `qa-banner-truth` 因此红（`n_horizons_with_data: 801` 而非 0）。本条按 A 走，改动量更小且不改语义。
+- **判据**：`test_digitize_reads_only_inside_the_roi`（末点 `y1` → `y1-1`，新增 `len(points) == y1-y0`）、`test_export_csv_multi_roi`（`(801,k)` → `(800,k)`）、`test_window_never_leaves_data_ylim`（末行 `y1` → `y1-1`）、`tests/integration/test_rpc.py`（`len(points) == y1-y0`）。改的都是口径，不是容差。
+- **金基线**：`digitize` / `export_data` / `qa_payload` / `diagram_payload` / `project_save` 五条按新行集与锚点集重生成；逐列核对 `point_count 637→636`、`last_point 869→868`。
+- **回归面**：`pytest tests/unit tests/integration` → **977 passed, 5 skipped**（唯一 fail 是 `test_06_frontend_bundle_readiness`：worktree 没有 `frontend/dist`，CI 先 build，属环境不属代码）。
+
 ### 数字化补偿不再静默：HUD 报出「补回多少行 / 判不准多少行」
 
 - **现象**：`core.digitize` 一直返回 `broken_rows`（外线断开、按「内线 × 放大倍数」补回的行）与 `ambiguous_rows`（内线太窄、判不准、读数保持原样）。真机 `recon-20261117` 四列分别是 139 / 254 / 87 / 298 行——界面一个字都没有，用户看到的曲线里有多少格是补出来的无从得知。
@@ -9,6 +19,7 @@
 - **文案**：`frontend/src/core/compensationNote.ts`——0/0 时返回空串（不报"补偿 0 行"，否则真提示会被常驻噪声淹没）；有补偿时"补回"与"判不准"必须分开写，因为后者读数未被修改。
 - **判据**：`frontend/test-compensation-note.mjs`（5 项：0/0 空串、只有补回、只有判不准、两者都有且顺序固定、累加）；已挂进 `npm test`。
 - **未覆盖（留待下一步）**：QA 横幅还没汇总这两份计数。要做需要后端把逐列计数存到会话态（`qa.summarize` 载荷加 `compensation` 字段），否则刷新页面后计数随 digitize 响应一起消失。
+
 ### `roi.update` 半截坐标参数不再静默忽略（issue #13 剩余部分）
 
 - **现场复核**：issue 原文说的「`y0/y1` 完全被忽略」在当前 main **已不成立**——实测 `roi_update(y0=511, y1=1300)` 会把 `ylim` 改成 `[511, 1300]`，`x0/x1` 同理（`roi.py:242-257` 两条路径都在）。

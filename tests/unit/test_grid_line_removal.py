@@ -388,11 +388,15 @@ class TestRoiCalibrationSeparation(unittest.TestCase):
         self.assertTrue(all(p["x"] >= 200 for p in points))
 
     def test_digitize_reads_only_inside_the_roi(self) -> None:
+        """行集 = `[y0, y1)`：下边界行属图框/轴齿，不算被检视的层位（issue #60，
+        用户 2026-11-18 拍板）。旧断言要求末点 = `y1`，那正是把整行 ROI 掩膜读成
+        `False`、读数回落列左缘的来源，改的是口径不是容差。"""
         self.session.algorithm_degrid(strength="medium", remove_vertical=False)
         points = self.session.digitize(0, "area")["points"]
         y0, y1 = self.session._roi_box()[1], self.session._roi_box()[3]
         self.assertAlmostEqual(points[0]["row"], round(y0))
-        self.assertAlmostEqual(points[-1]["row"], round(y1))
+        self.assertAlmostEqual(points[-1]["row"], round(y1) - 1)
+        self.assertEqual(len(points), round(y1) - round(y0))
 
 
 if __name__ == "__main__":

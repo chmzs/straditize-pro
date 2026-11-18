@@ -2,14 +2,9 @@
  "column_points_based": {
   "ok": {
    "composition": true,
-   "empty_horizons": [
-    {
-     "depth": null,
-     "reason": "no ink read"
-    }
-   ],
-   "n_horizons": 637,
-   "n_horizons_empty": 1,
+   "empty_horizons": [],
+   "n_horizons": 636,
+   "n_horizons_empty": 0,
    "n_horizons_with_data": 636,
    "n_uncalibrated": 0,
    "per_column_max": [
@@ -38,14 +33,14 @@
    "roi_id": "roi_1",
    "roi_name": "pollen",
    "shortfall": {
-    "max": 97.3,
+    "max": 94.7,
     "mean": 86.3,
     "min": 0.0
    },
    "sum": {
     "max": 203.6,
     "mean": 14.3,
-    "min": 0.0,
+    "min": 5.3,
     "p50": 10.7
    },
    "sum_excluded_columns": [],
@@ -101,14 +96,9 @@
   "primary": {
    "ok": {
     "composition": true,
-    "empty_horizons": [
-     {
-      "depth": null,
-      "reason": "no ink read"
-     }
-    ],
-    "n_horizons": 637,
-    "n_horizons_empty": 1,
+    "empty_horizons": [],
+    "n_horizons": 636,
+    "n_horizons_empty": 0,
     "n_horizons_with_data": 636,
     "n_uncalibrated": 0,
     "per_column_max": [
@@ -130,14 +120,14 @@
     "roi_id": "roi_1",
     "roi_name": "pollen",
     "shortfall": {
-     "max": 98.7,
+     "max": 97.4,
      "mean": 93.0,
      "min": 0.0
     },
     "sum": {
      "max": 136.0,
      "mean": 7.2,
-     "min": 0.0,
+     "min": 2.6,
      "p50": 2.6
     },
     "sum_excluded_columns": [],
@@ -162,14 +152,9 @@
   "second": {
    "ok": {
     "composition": true,
-    "empty_horizons": [
-     {
-      "depth": null,
-      "reason": "no ink read"
-     }
-    ],
-    "n_horizons": 637,
-    "n_horizons_empty": 1,
+    "empty_horizons": [],
+    "n_horizons": 636,
+    "n_horizons_empty": 0,
     "n_horizons_with_data": 636,
     "n_uncalibrated": 0,
     "per_column_max": [
@@ -191,14 +176,14 @@
     "roi_id": "roi_2",
     "roi_name": "second",
     "shortfall": {
-     "max": 97.3,
+     "max": 94.7,
      "mean": 82.2,
      "min": 0.0
     },
     "sum": {
      "max": 136.0,
      "mean": 18.0,
-     "min": 0.0,
+     "min": 5.3,
      "p50": 16.0
     },
     "sum_excluded_columns": [],

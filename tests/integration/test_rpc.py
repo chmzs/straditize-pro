@@ -254,7 +254,9 @@ class TestStraditizeRpcProtocol(unittest.TestCase):
         self.assertIn("result", resp4)
         points = resp4["result"]["points"]
         self.assertIsInstance(points, list)
-        self.assertEqual(len(points), ref_ylim[1] - ref_ylim[0] + 1)
+        # 行集 = `[y0, y1)`：下边界行属图框，不算被检视的层位（issue #60，
+        # 用户 2026-11-18 拍板）。旧断言是 `+ 1`（含 y1）。
+        self.assertEqual(len(points), ref_ylim[1] - ref_ylim[0])
         self.assertIn("row", points[0])
         self.assertIn("x", points[0])
 
