@@ -34,8 +34,13 @@ from ..protocol import (
     STATE_ERROR,
     JsonRpcError,
 )
+#: 导出表首列的名字**只从** `strat_plot._y_column_label` 来（issue #114）：列名必须
+#: 跟随 `primary_axis`，`primary_axis="age"` 时首列是 `age` 而不是 `depth`。
+#: 本模块所有构造首列的地方都走 `_y_col_label`，不在各处另写 `if primary_axis == "age"`。
+from ..strat_plot import _y_column_label
 from .agedepth import attach_windowed_rates, build_age_depth_frame
 from .xscale import read_column_values, resolve_column_scale
+
 
 #: 视为「百分比类」的单位写法。**其余一律按该列自身量程画** —— 炭屑（counts）、
 #: 花粉浓度（粒/cm2/yr）这类绝对值列若按百分比画，会被压成一条平线。
@@ -203,11 +208,27 @@ class ExportMixin:
         """
         self.control_point_columns: set[int] = set()
 
-    def get_roi_dataframes(self, strict: bool = False) -> dict[str, pd.DataFrame]:
+    def _y_col_label(self, legacy_column_name: bool = False) -> str:
+        """导出表**首列**的列名（本模块唯一的取名入口）。
+
+        跟着 `self.primary_axis` 走：`"age"` → `age`，`"depth"` → `depth`。
+        派生逻辑在 `strat_plot._y_column_label`，这里只是一层带会话状态的薄包装，
+        好让四路出口（CSV / TAR / XLSX / LiPD）与三个行集构造器都用同一个名字。
+        """
+        return _y_column_label(
+            getattr(self, "primary_axis", None), legacy=legacy_column_name
+        )
+
+    def get_roi_dataframes(
+        self, strict: bool = False, *, legacy_column_name: bool = False
+    ) -> dict[str, pd.DataFrame]:
         """Construct a pandas DataFrame for each ROI.
 
         `strict` 透传给 `read_column_values`：CSV 与 XLSX/LiPD/TAR 共用本入口后，
         这个开关必须能一路传到唯一的换算函数，否则"严格模式"只剩一半语义。
+
+        `legacy_column_name` 只改**首列名**（`age` → `depth`），不改任何数值；给按旧
+        列名读的下游脚本一个过渡口。首列名本身来自 `_y_col_label`（唯一来源）。
         """
         rois = getattr(self, "rois", [])
         # 手工构造的会话（测试、CLI 直调）常常没有 ROI 记账，但列上仍带着某个 roi_id。
@@ -225,6 +246,7 @@ class ExportMixin:
         y_scale = getattr(self, "y_scale", None)
 
         roi_dfs: dict[str, pd.DataFrame] = {}
+        y_col = self._y_col_label(legacy_column_name)
 
         for roi in rois:
             roi_id = roi["id"]
@@ -250,9 +272,9 @@ class ExportMixin:
             if not roi_cols:
                 if samples:
                     depths = [s.get("depth", s.get("row_px")) for s in samples]
-                    roi_dfs[roi_name] = pd.DataFrame({"depth": depths})
+                    roi_dfs[roi_name] = pd.DataFrame({y_col: depths})
                 else:
-                    roi_dfs[roi_name] = pd.DataFrame({"depth": []})
+                    roi_dfs[roi_name] = pd.DataFrame({y_col: []})
                 continue
 
             if samples:
@@ -288,7 +310,7 @@ class ExportMixin:
                 else:
                     depth_list = row_list
 
-            data_dict: dict[str, Any] = {"depth": depth_list}
+            data_dict: dict[str, Any] = {y_col: depth_list}
 
             taxa_names = getattr(self, "taxa_names", None) or []
             for idx, col in enumerate(roi_cols):
@@ -647,8 +669,9 @@ class ExportMixin:
         age_depth_df = None
         if include_age_depth and age_depth_model is not None and roi_dfs:
             first_df = list(roi_dfs.values())[0]
-            if "depth" in first_df.columns:
-                depths = first_df["depth"].tolist()
+            y_col = self._y_col_label()
+            if y_col in first_df.columns:
+                depths = first_df[y_col].tolist()
                 pred = age_depth_model.predict_age(depths)
                 age_depth_df = pd.DataFrame(
                     {
@@ -739,8 +762,9 @@ class ExportMixin:
         age_depth_df = None
         if include_age_depth and age_depth_model is not None and roi_dfs:
             first_df = list(roi_dfs.values())[0]
-            if "depth" in first_df.columns:
-                depths = first_df["depth"].tolist()
+            y_col = self._y_col_label()
+            if y_col in first_df.columns:
+                depths = first_df[y_col].tolist()
                 pred = age_depth_model.predict_age(depths)
                 age_depth_df = pd.DataFrame(
                     {
@@ -928,7 +952,9 @@ class ExportMixin:
                     return name
         return next(iter(frames))
 
-    def _primary_roi_export_frame(self, *, strict: bool) -> Any:
+    def _primary_roi_export_frame(
+        self, *, strict: bool, legacy_column_name: bool = False
+    ) -> Any:
         """`data.csv` 用的数据帧 = **主 ROI 的那一张表**（`get_roi_dataframes` 同一入口）。
 
         ## 为什么不能"把各 ROI 的列拼平"（2026-11-10 实测）
@@ -949,7 +975,9 @@ class ExportMixin:
         「`data.csv` 逐字节等于 `data/<主 ROI>.csv`」一致，也与 HUD 文案
         「已将 <roi> 设为主有效区（对应导出 data.csv）」一致。
         """
-        frames = self.get_roi_dataframes(strict=strict)
+        frames = self.get_roi_dataframes(
+            strict=strict, legacy_column_name=legacy_column_name
+        )
         if not frames:
             raise JsonRpcError(STATE_ERROR, "No ROI sheets available to export.")
         name = self._primary_roi_sheet_name(frames)
@@ -966,7 +994,13 @@ class ExportMixin:
     #: 大多数列没有拐点——把它的缺行填 0 会把「没测」写成「测到 0」。
     EXPORT_DATASETS = ("samples", "union_points", "depth_grid", "turning_points")
 
-    def _dataset_frame(self, dataset: str | None, *, strict: bool) -> Any:
+    def _dataset_frame(
+        self,
+        dataset: str | None,
+        *,
+        strict: bool,
+        legacy_column_name: bool = False,
+    ) -> Any:
         """按 dataset 产出一张表；**三种行集共用同一取数口径**。
 
         `dataset=None`（未传）保持既有行为：`_primary_roi_export_frame`（samples 优先）。
@@ -983,7 +1017,9 @@ class ExportMixin:
         """
         key = (dataset or "").strip().lower()
         if not key:
-            return self._primary_roi_export_frame(strict=strict)
+            return self._primary_roi_export_frame(
+                strict=strict, legacy_column_name=legacy_column_name
+            )
         # 参数错误必须先报：非法 dataset 名不该被"还没标定"这条前置条件盖住。
         if key not in self.EXPORT_DATASETS:
             raise JsonRpcError(
@@ -997,12 +1033,15 @@ class ExportMixin:
         # 看起来像「这张图没数据」，而不是「你卡在步骤 6」。
         # 不传 dataset（data.csv / tar / xlsx 出口）不受此守卫约束（那条契约不变）。
         if key == "samples":
-            return self._primary_roi_export_frame(strict=strict)
+            return self._primary_roi_export_frame(
+                strict=strict, legacy_column_name=legacy_column_name
+            )
         if key == "union_points":
-            return self._union_points_frame()
+            return self._union_points_frame(legacy_column_name=legacy_column_name)
         if key == "depth_grid":
-            return self._depth_grid_frame()
-        return self._turning_points_frame()  # 只剩 turning_points（上面已校验取值）
+            return self._depth_grid_frame(legacy_column_name=legacy_column_name)
+        # 只剩 turning_points（上面已校验取值）
+        return self._turning_points_frame(legacy_column_name=legacy_column_name)
 
     def _export_column_scale_summary(self) -> tuple[int, int]:
         """(参与导出的列数, 其中已标定 X 刻度的列数)。
@@ -1063,11 +1102,12 @@ class ExportMixin:
             }
         return sorted(rows)
 
-    def _union_points_frame(self) -> Any:
+    def _union_points_frame(self, *, legacy_column_name: bool = False) -> Any:
         """控制点并集行集：行取自 `control_points`，值经 `extract_grid_values` 取。"""
+        y_col = self._y_col_label(legacy_column_name)
         rows = self._control_point_rows()
         if not rows:
-            return pd.DataFrame({"depth": []})
+            return pd.DataFrame({y_col: []})
         y_scale = getattr(self, "y_scale", None)
         calibrated = bool(getattr(self, "is_calibrated", False)) and y_scale is not None
         if calibrated:
@@ -1084,7 +1124,7 @@ class ExportMixin:
                 CALIBRATION_ERROR,
                 "导出需要深度标定：请先完成步骤 3 的 Y 轴两点标定（当前 is_calibrated=false）。",
             )
-        data: dict[str, Any] = {"depth": [round(float(d), 4) for d in grid["depths"]]}
+        data: dict[str, Any] = {y_col: [round(float(d), 4) for d in grid["depths"]]}
         for idx, taxon in enumerate(grid["taxa"]):
             data[str(taxon)] = [row[idx] for row in grid["matrix"]]
         return pd.DataFrame(data)
@@ -1107,8 +1147,9 @@ class ExportMixin:
         count = int(round((hi - lo) / step)) + 1
         return [round(lo + i * step, 4) for i in range(max(count, 1))]
 
-    def _depth_grid_frame(self) -> Any:
+    def _depth_grid_frame(self, *, legacy_column_name: bool = False) -> Any:
         """标尺均匀层位：直接复用 `extract_grid_values` 的取值口径。"""
+        y_col = self._y_col_label(legacy_column_name)
         depths = list(getattr(self, "depth_grid", None) or self._uniform_depth_list())
         if not depths:
             raise JsonRpcError(
@@ -1116,17 +1157,21 @@ class ExportMixin:
                 "No depth grid available: set Y calibration or call core.applyDepthGrid first.",
             )
         grid = self.extract_grid_values(depths=depths)
-        data: dict[str, Any] = {"depth": [round(float(d), 4) for d in grid["depths"]]}
+        data: dict[str, Any] = {y_col: [round(float(d), 4) for d in grid["depths"]]}
         for idx, taxon in enumerate(grid["taxa"]):
             data[str(taxon)] = [row[idx] for row in grid["matrix"]]
         return pd.DataFrame(data)
 
-    def _turning_points_frame(self) -> Any:
-        """离散拐点长表：每个**控制点**一行（taxon / type / depth / value / x / y）。
+    def _turning_points_frame(self, *, legacy_column_name: bool = False) -> Any:
+        """离散拐点长表：每个**控制点**一行（taxon / type / <Y 轴量> / value / x / y）。
 
         行的来源是 `control_points` —— 用户眼里的"拐点"就是它们；
         `column_points` 是数字化出的逐行曲线（行数完全不同），两者不能混。
+
+        第 3 列的列名跟随 Y 轴性质（`depth` / `age`），与矩阵表首列**同一来源**
+        （`_y_col_label`）：它装的就是 Y 轴上那个量，写 `depth` 而装 `ka` 会让人误读。
         """
+        y_col = self._y_col_label(legacy_column_name)
         columns = getattr(self, "columns", []) or []
         taxa_names = getattr(self, "taxa_names", []) or []
         y_scale = getattr(self, "y_scale", None)
@@ -1151,14 +1196,14 @@ class ExportMixin:
                     {
                         "taxon": name,
                         "type": "peak",
-                        "depth": depth,
+                        y_col: depth,
                         "value": value,
                         "x": float(x_px),
                         "y": row_px,
                     }
                 )
         return pd.DataFrame(
-            records, columns=["taxon", "type", "depth", "value", "x", "y"]
+            records, columns=["taxon", "type", y_col, "value", "x", "y"]
         )
 
     def export_data(
@@ -1167,6 +1212,7 @@ class ExportMixin:
         strict: bool = False,
         output_path: str | None = None,
         dataset: str | None = None,
+        legacy_column_name: bool = False,
     ) -> dict[str, Any]:
         """Exports the calibrated data matrix to CSV or Parquet format.
 
@@ -1174,6 +1220,10 @@ class ExportMixin:
         `union_points`（控制点并集）/ `depth_grid`（标尺均匀层位）/
         `turning_points`（离散拐点长表）。**不传（None）保持既有行为**（samples 优先），
         `data.csv` / 工程包走的就是这条路，两种语义不能混。
+
+        `legacy_column_name`（默认 `False`）：`True` 时把首列名强制回 `depth`，给按旧
+        列名读的下游脚本一个过渡口。它**只改列名，一个数值都不动**，也不并列输出两列
+        —— 两列会让人无法判断哪一列才是真的（issue #114）。
         """
         self._ensure_export_column_points()
 
@@ -1212,13 +1262,16 @@ class ExportMixin:
         # `_export_rows_and_depths` / `_export_value_columns` 保留给单 ROI 的既有调用与
         # 各自的判据，但 CSV 不再走它们——两条链在"行集 + 列名 + 补点时机"上各写一套
         # 正是本缺陷的来源。
-        df = self._dataset_frame(dataset, strict=strict)
-        depth_series = df["depth"].tolist()
+        df = self._dataset_frame(
+            dataset, strict=strict, legacy_column_name=legacy_column_name
+        )
+        y_col = self._y_col_label(legacy_column_name)
+        depth_series = df[y_col].tolist()
         all_rows = list(range(len(depth_series)))
 
         if getattr(self, "age_depth_model", None) is not None:
             age_pred = self.age_depth_model.predict_age(depth_series)
-            # 列序必须与旧实现一致：depth, age_est, age_min_95, age_max_95, 各属种列。
+            # 列序必须与旧实现一致：<Y 轴量>, age_est, age_min_95, age_max_95, 各属种列。
             age_frame = pd.DataFrame(
                 {
                     "age_est": age_pred["age_est"],
@@ -1227,7 +1280,7 @@ class ExportMixin:
                 }
             )
             df = pd.concat(
-                [df[["depth"]], age_frame, df.drop(columns=["depth"])], axis=1
+                [df[[y_col]], age_frame, df.drop(columns=[y_col])], axis=1
             )
 
         csv_string, saved_path = self._write_export_file(fmt, df, output_path)
@@ -1685,13 +1738,21 @@ class ExportMixin:
         depths: list[float] | None = None,
         output_path: str | None = None,
         dataset: str | None = None,
+        legacy_column_name: bool = False,
     ) -> str | dict[str, Any]:
-        """Generates stratigraphic CSV: depth in 1st col, unobserved taxa = 0.0 (Section 八).
+        """Generates stratigraphic CSV: Y axis in 1st col, unobserved taxa = 0.0 (Section 八).
 
         `dataset` 透传给 `export_data`，取值见 `EXPORT_DATASETS`。
         不传（None）保持既有调用字节不变（samples 优先，即 `data.csv` 的语义）。
+
+        `legacy_column_name` 同样透传：`True` 时首列名强制回 `depth`（只改名，不改值）。
         """
-        res = self.export_data("csv", output_path=output_path, dataset=dataset)
+        res = self.export_data(
+            "csv",
+            output_path=output_path,
+            dataset=dataset,
+            legacy_column_name=legacy_column_name,
+        )
         if output_path:
             return {"path": output_path, "success": True}
         return res.get("csv", "") if isinstance(res, dict) else str(res)
@@ -1916,15 +1977,16 @@ class ExportMixin:
         pollen_csv = (
             pollen_res.get("csv") if isinstance(pollen_res, dict) else str(pollen_res)
         )
-        pollen_df = pd.read_csv(io.StringIO(pollen_csv or "depth\n0\n"))
+        y_col = self._y_col_label()
+        pollen_df = pd.read_csv(io.StringIO(pollen_csv or f"{y_col}\n0\n"))
 
         age_depth_df = None
         if (
             include_age_depth
             and getattr(self, "age_depth_model", None) is not None
-            and "depth" in pollen_df.columns
+            and y_col in pollen_df.columns
         ):
-            depths = pollen_df["depth"].tolist()
+            depths = pollen_df[y_col].tolist()
             pred = self.age_depth_model.predict_age(depths)
             pred = attach_windowed_rates(
                 pred, self.age_depth_model, getattr(self, "age_depth_rate_columns", [])
@@ -1972,15 +2034,16 @@ class ExportMixin:
         pollen_csv = (
             pollen_res.get("csv") if isinstance(pollen_res, dict) else str(pollen_res)
         )
-        pollen_df = pd.read_csv(io.StringIO(pollen_csv or "depth\n0\n"))
+        y_col = self._y_col_label()
+        pollen_df = pd.read_csv(io.StringIO(pollen_csv or f"{y_col}\n0\n"))
 
         age_depth_df = None
         if (
             include_age_depth
             and getattr(self, "age_depth_model", None) is not None
-            and "depth" in pollen_df.columns
+            and y_col in pollen_df.columns
         ):
-            depths = pollen_df["depth"].tolist()
+            depths = pollen_df[y_col].tolist()
             pred = self.age_depth_model.predict_age(depths)
             pred = attach_windowed_rates(
                 pred, self.age_depth_model, getattr(self, "age_depth_rate_columns", [])

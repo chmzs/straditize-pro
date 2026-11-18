@@ -46,7 +46,10 @@ DEFAULT_PLOT_SETTINGS: dict[str, Any] = {
     # ylabel 0.9）在 2200px 宽的成品图上偏小，缩到屏幕上看不清；默认放大 2 倍。
     "font_scale": 2.0,
     "axis": True,
-    "ylabel": "Depth",
+    # 空串 = 「由 Y 轴性质派生」：`plot_render` 出图前用 `_y_axis_label(primary_axis, unit)`
+    # 填进来，用户显式给了才用用户的。这里**不留任何轴名常量**——列名与轴标签只有
+    # `_y_column_label` / `_y_axis_label` 两个来源（issue #114）。
+    "ylabel": "",
     "title": "",
     "width_px": 2200,
     "height_px": 1500,
@@ -85,6 +88,61 @@ MIME_BY_FORMAT = {
     "jpeg": "image/jpeg",
     "svg": "image/svg+xml",
 }
+
+
+#: `primary_axis` 的两个合法取值。`calibrate_axes` 已经拒绝其它值，这里是第二道口：
+#: 直接构造出来的会话（测试、CLI、导入）可能没有该属性或带着脏值。
+PRIMARY_AXES = ("depth", "age")
+
+#: 「单位里已经写明年代基准」的记号。`primary_axis="age"` 且单位不含其中任何一个时
+#: 补 ` BP`（`ka` → `ka BP`）；含了说明用户写完整了，原样用，不再叠加。
+ERA_UNIT_MARKERS = ("BP", "AD", "BC", "CE", "BCE")
+
+
+def _normalize_primary_axis(primary_axis: Any) -> str:
+    """把 `primary_axis` 归一成 `"depth"` / `"age"`；缺省与脏值一律按 `"depth"`。"""
+    axis = str(primary_axis or "").strip().lower()
+    return axis if axis in PRIMARY_AXES else "depth"
+
+
+def _y_column_label(primary_axis: Any = None, legacy: bool = False) -> str:
+    """导出表**首列**的列名：跟随 Y 轴实际测的量，不是永远写 `depth`（issue #114）。
+
+    首列装的是 Y 轴上的那个量，所以它的名字必须与 `primary_axis` 一致：
+    `"age"` → `age`，`"depth"` → `depth`。只有一列，绝不并列输出两列——两列会让
+    读的人无法判断哪一列才是真的。
+
+    `legacy=True` 强制回 `depth`，给按旧列名读的下游脚本一个过渡口（RPC 参数
+    `legacy_column_name`）；它**不改数值**，只改列名。
+
+    这是列名的**唯一来源**：`get_roi_dataframes` 与三个行集构造器都调它。
+    """
+    if legacy:
+        return "depth"
+    return _normalize_primary_axis(primary_axis)
+
+
+def _y_axis_label(primary_axis: Any = None, unit: Any = None) -> str:
+    """出图 Y 轴标题：`Depth (cm)` / `Age (ka BP)` / `Age (cal BP)`。
+
+    ## 唯一的补语义点
+
+    `primary_axis="age"` 且单位不含 `BP`/`AD`/`BC`/`CE`/`BCE`（大小写不敏感）时补
+    ` BP`：`ka` → `ka BP`。写 `cal BP` / `AD` 这类完整单位的原样用，不再叠加成
+    `cal BP BP`。深度轴不补任何东西——`cm` / `m` 本身没有年代基准的歧义。
+
+    单位为空时只给轴名（`Depth` / `Age`），不编一个单位。
+
+    这是轴标签的**唯一来源**：`render_strat_diagram` 用它填 `settings["ylabel"]`。
+    """
+    axis = _normalize_primary_axis(primary_axis)
+    title = "Age" if axis == "age" else "Depth"
+    text = str(unit or "").strip()
+    if not text:
+        return title
+    if axis == "age" and not any(marker in text.upper() for marker in ERA_UNIT_MARKERS):
+        text = f"{text} BP"
+    return f"{title} ({text})"
 
 
 def normalize_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
@@ -277,8 +335,12 @@ txt <- function(key, default) {
 }
 
 raw <- utils::read.csv(csv_path, check.names = FALSE, na.strings = c("NA", "", "NaN"))
-if (ncol(raw) < 2) stop("STRADITIZE_ERROR: 导出的表只有深度列，没有可画的属种列。")
+if (ncol(raw) < 2) stop("STRADITIZE_ERROR: 导出的表只有 Y 轴列，没有可画的属种列。")
 depth <- suppressWarnings(as.numeric(raw[[1]]))
+# Y 轴标题的**兜底值**就是首列的列名。首列名由 Python 侧的 `_y_column_label` 按
+# `primary_axis` 给出（`age` / `depth`），所以这里不需要、也不允许再写一个轴名常量：
+# `tests/unit/test_y_axis_column_label.py` 断言本脚本里不出现轴名字面量。
+y_var_name <- names(raw)[[1]]
 taxa <- raw[, -1, drop = FALSE]
 taxa[] <- lapply(taxa, function(v) suppressWarnings(as.numeric(v)))
 usable <- vapply(taxa, function(v) any(is.finite(v)), logical(1))
@@ -439,7 +501,7 @@ warns <- tryCatch(
       }
       # 把 y 列命名成用户要的轴标题：riojaPlot 用 yvar.name 选列，同时把它当轴标签。
       y_df <- data.frame(depth)
-      names(y_df) <- txt("ylabel", "Depth")
+      names(y_df) <- txt("ylabel", y_var_name)
       # 逐列形态：settings 里 plot_type.<列名> = area|bar|line|symbol。
       # riojaPlot 的 plot.poly/bar/line/symb 都是**按列索引取标量**（.riojaPlot2:401 `plot.line[i]`），
       # 所以传逻辑向量就逐列生效。缺 key 的列退回全局开关 —— 老脚本（无 plot_type.* ）字节不变。
@@ -541,7 +603,7 @@ warns <- tryCatch(
         d = as.matrix(taxa),
         yvar = depth,
         y.rev = flag("rev_y", TRUE),
-        ylabel = txt("ylabel", "Depth"),
+        ylabel = txt("ylabel", y_var_name),
         plot.poly = flag("silhouette", TRUE),
         plot.bar = flag("bar", TRUE),
         plot.line = flag("line", TRUE),
@@ -585,10 +647,19 @@ def render_strat_diagram(
     out_path: str,
     rscript: str,
     settings: dict[str, Any] | None = None,
+    primary_axis: Any = None,
+    unit: Any = None,
     timeout: float = 180.0,
 ) -> dict[str, Any]:
-    """跑 R 出图；失败抛 RuntimeError（消息里带 R 自己的 stderr）。"""
+    """跑 R 出图；失败抛 RuntimeError（消息里带 R 自己的 stderr）。
+
+    `primary_axis` / `unit` 只用于派生 Y 轴标题：用户没在 `settings` 里显式给
+    `ylabel` 时，用 `_y_axis_label(primary_axis, unit)` 填进去（issue #114）。
+    显式给了 `ylabel` 就尊重用户，不做「按轴改写」。
+    """
     merged = normalize_settings(settings)
+    if not str(merged.get("ylabel") or "").strip():
+        merged["ylabel"] = _y_axis_label(primary_axis, unit)
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
 

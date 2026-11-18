@@ -478,6 +478,7 @@
   - `format` (string, 可选, 默认 `"csv"`): `"csv"` 或 `"parquet"`。
   - `strict` (boolean, 可选, 默认 `false`): 严格模式。若为 `true`，则必须已完成坐标标定，否则返回错误码 `-32003`。
   - `output_path` (string, 可选): 导出文件保存的目标路径。若未提供且 format 为 csv，则在响应对象中返回 `csv_content` 字符串。
+  - `legacy_column_name` (boolean, 可选, 默认 `false`, 2026-11-18, issue #114): 首列**列名**开关。见下方「首列名跟随 Y 轴性质」。
 - **返回 (result)**：
   ```json
   {
@@ -496,6 +497,26 @@
   ```
 
 ---
+
+#### 首列名跟随 Y 轴性质（2026-11-18，issue #114）
+
+首列装的是 **Y 轴上那个量**，所以它的名字必须等于 Y 轴的性质（`core.calibrateAxes` 的
+`primary_axis`），不是永远写 `depth`：
+
+| `primary_axis` | 首列名 |
+| :--- | :--- |
+| `depth`（默认） | `depth` |
+| `age` | `age` |
+
+- **只改列名，不改任何数值**：同一工程 `legacy_column_name` 两种取值下，全部数据单元格
+  逐字节相同（`tests/unit/test_y_axis_column_label.py` 的零回归判据）。
+- **不并列输出两列**：两列（`depth` + `age`）会让人无法判断哪一列才是真的。
+- `legacy_column_name: true` 强制回 `depth`，给按旧列名读的下游脚本一个过渡口。
+  它只作用于本方法与 `export.csv`；`export.tar` / `export.exportXlsx` / `export.exportLipd`
+  同样按 Y 轴性质命名首列，但没有该开关（它们不是脚本消费面）。
+- `primary_axis="age"` 时出图 Y 轴标题为 `Age (<unit>)`；单位不含 `BP`/`AD`/`BC`/`CE`/`BCE`
+  时补 ` BP`（`ka` → `Age (ka BP)`，`cal BP` → `Age (cal BP)`）。派生逻辑单点在
+  `straditize_core/strat_plot.py` 的 `_y_column_label` / `_y_axis_label`。
 
 #### `dataset` 参数（2026-11-12，U-ROWS-01）
 
