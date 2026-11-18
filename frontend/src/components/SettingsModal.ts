@@ -2,6 +2,7 @@ import { RpcClient, SystemConfig } from '../services/RpcClient';
 import { notifyError } from '../ui/feedback';
 import { getLocale, setLocale, Locale, t } from '../i18n';
 import { AboutModal } from './AboutModal';
+import { rscriptPathUpdate } from '../services/configUpdates';
 
 export class SettingsModal {
   private container: HTMLElement;
@@ -241,13 +242,25 @@ export class SettingsModal {
     if (this.rpcClient.getStatus().connected) {
       this.rpcClient.getSystemConfig().then((remoteCfg) => {
         if (!remoteCfg || !this.modalElement) return;
+        // 回填后端已持久化的 Rscript 路径（#104 的另一半）。
+        // 不回填时用户重开设置页看到空框，会以为「填了没保存」；而本地 `config`
+        // 是表单初值、不含该键，所以必须以后端返回值为准，且同步给 `initialRscriptPath`
+        // —— 否则「未改动就不发送」的判定会把一个真实存着的路径当成空值。
+        const storedRscript =
+          typeof (remoteCfg as any).rscript_path === 'string'
+            ? ((remoteCfg as any).rscript_path as string)
+            : '';
+        const rScriptInput = modal.querySelector(
+          '#settings-rscript-path'
+        ) as HTMLInputElement | null;
+        if (rScriptInput) rScriptInput.value = storedRscript;
+        initialRscriptPath = storedRscript;
         if (typeof remoteCfg.remote_access_enabled === 'boolean') {
           remoteToggle.checked = remoteCfg.remote_access_enabled;
           remoteToggle.dispatchEvent(new Event('change'));
         }
         if (remoteCfg.allowed_hosts) {
-          const hostsArea = modal.querySelector('#settings-allowed-hosts') as HTMLTextAreaElement;
-          if (hostsArea) {
+          const hostsArea = modal.querySelector('#settings-allowed-hosts') as HTMLTextAreaElement;          if (hostsArea) {
             hostsArea.value = Array.isArray(remoteCfg.allowed_hosts)
               ? remoteCfg.allowed_hosts.join(', ')
               : String(remoteCfg.allowed_hosts);
@@ -397,7 +410,12 @@ export class SettingsModal {
     const detectRBtn = modal.querySelector('#btn-settings-detect-r') as HTMLButtonElement | null;
     const rHint = modal.querySelector('#settings-r-hint') as HTMLElement | null;
     const rPathInput = modal.querySelector('#settings-rscript-path') as HTMLInputElement | null;
-    if (rPathInput) rPathInput.value = String((config as any).rscript_path || '');
+    // 记住打开时的原值：保存时只在**用户真的改过**时才发送 rscript_path。
+    // 无条件发送会把「输入框还没加载/config 缺字段」变成一次静默清空（issue #104 的真实危险面）。
+    // 用 `let`：真实值来自后端异步回填（见下方 `getSystemConfig().then`）。`config` 是
+    // 本地构造的表单初值，**不含** `rscript_path`，所以初值只能是空串。
+    let initialRscriptPath = String((config as any).rscript_path ?? '');
+    if (rPathInput) rPathInput.value = initialRscriptPath;
     detectRBtn?.addEventListener('click', async () => {
       detectRBtn.disabled = true;
       try {
@@ -472,8 +490,9 @@ export class SettingsModal {
           }
           const rscriptInput = modal.querySelector('#settings-rscript-path') as HTMLInputElement | null;
           const rscriptVal = rscriptInput?.value?.trim() ?? '';
-          // 空串 = 清空配置回到自动探测；非空则交给后端校验（不存在会当场报错）。
-          updates.rscript_path = rscriptVal;
+          // 只在改过时才发：空串本身是合法语义（清空 → 回到自动探测），但不能因为
+          // 「没加载出原值」就把已存的路径抹掉。判定抽在 `rscriptPathUpdate` 里，有单测。
+          Object.assign(updates, rscriptPathUpdate(initialRscriptPath, rscriptVal));
           await this.rpcClient.updateSystemConfig(updates);
         }
       } catch (err) {
