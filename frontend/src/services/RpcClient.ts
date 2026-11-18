@@ -1044,11 +1044,46 @@ export class RpcClient {
     return !!res;
   }
 
-  public async digitizeColumn(taxaId: string): Promise<ControlPoint[]> {
+  /**
+   * `core.digitize`，同时带回补偿明细（行数）。
+   *
+   * 后端返回 `broken_rows` / `ambiguous_rows` 两份行号，此前前端一个消费者都没有：
+   * 用户看到的是曲线，看不到"这几百行是补出来的"。调用方用
+   * `core/compensationNote.ts` 把它翻成一句话放进 HUD。
+   */
+  public async digitizeColumnWithStats(taxaId: string): Promise<{
+    points: ControlPoint[];
+    brokenRows: number;
+    ambiguousRows: number;
+  }> {
     const colIndex = this.currentDiagramData.columns.findIndex((c) => c.id === taxaId);
-    const res = await this.call<{ col_index: number }, { points: ControlPoint[]; control_points?: ControlPoint[] }>('core.digitize', {
+    const res = await this.call<
+      { col_index: number },
+      {
+        points: ControlPoint[];
+        control_points?: ControlPoint[];
+        broken_rows?: number[];
+        ambiguous_rows?: number[];
+      }
+    >('core.digitize', {
       col_index: Math.max(0, colIndex),
     });
+    const points = this.pickControlPoints(res);
+    return {
+      points,
+      brokenRows: (res.broken_rows ?? []).length,
+      ambiguousRows: (res.ambiguous_rows ?? []).length,
+    };
+  }
+
+  public async digitizeColumn(taxaId: string): Promise<ControlPoint[]> {
+    return (await this.digitizeColumnWithStats(taxaId)).points;
+  }
+
+  private pickControlPoints(res: {
+    points?: ControlPoint[];
+    control_points?: ControlPoint[];
+  }): ControlPoint[] {
     // 优先采用后端拓扑显著性抽稀后的关键控制拐点 (15~32 个波峰波谷)，严禁直接把几百个逐像素行点作为手柄
     if (res.control_points && res.control_points.length > 0) {
       return res.control_points;

@@ -1,6 +1,14 @@
 # 变更记录（CHANGELOG）
 
 ## [Unreleased]
+### 数字化补偿不再静默：HUD 报出「补回多少行 / 判不准多少行」
+
+- **现象**：`core.digitize` 一直返回 `broken_rows`（外线断开、按「内线 × 放大倍数」补回的行）与 `ambiguous_rows`（内线太窄、判不准、读数保持原样）。真机 `recon-20261117` 四列分别是 139 / 254 / 87 / 298 行——界面一个字都没有，用户看到的曲线里有多少格是补出来的无从得知。
+- **根因**：前端 `RpcClient.digitizeColumn` 的返回类型只声明 `points` / `control_points`，两份行号到前端即丢；`git grep 'ambiguous_rows|broken_rows' frontend/src` 零命中。属"静默替用户改数据"。
+- **修法**：`digitizeColumn` 拆成 `digitizeColumnWithStats`（带回 `brokenRows` / `ambiguousRows`）+ 兼容旧签名的薄包装；三个调用点（检查器"重新识别"两条、工具栏"数字化"、步骤 7 批量数字化）把计数翻成一句话进 HUD。批量路径按列累加，只报一条总数（逐列刷屏等于没提示）。
+- **文案**：`frontend/src/core/compensationNote.ts`——0/0 时返回空串（不报"补偿 0 行"，否则真提示会被常驻噪声淹没）；有补偿时"补回"与"判不准"必须分开写，因为后者读数未被修改。
+- **判据**：`frontend/test-compensation-note.mjs`（5 项：0/0 空串、只有补回、只有判不准、两者都有且顺序固定、累加）；已挂进 `npm test`。
+- **未覆盖（留待下一步）**：QA 横幅还没汇总这两份计数。要做需要后端把逐列计数存到会话态（`qa.summarize` 载荷加 `compensation` 字段），否则刷新页面后计数随 digitize 响应一起消失。
 ### `roi.update` 半截坐标参数不再静默忽略（issue #13 剩余部分）
 
 - **现场复核**：issue 原文说的「`y0/y1` 完全被忽略」在当前 main **已不成立**——实测 `roi_update(y0=511, y1=1300)` 会把 `ylim` 改成 `[511, 1300]`，`x0/x1` 同理（`roi.py:242-257` 两条路径都在）。

@@ -1,4 +1,5 @@
 import { RpcClient } from './RpcClient';
+import { compensationNote, addCompensation } from '../core/compensationNote';
 import { showConfirmDialog } from '../ui/confirm';
 import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
 import { makeRenameUndo } from '../core/undoActions';
@@ -47,7 +48,7 @@ export function createInspectorCallbacks(
       const activeCol = canvasComponent.getActiveColumn();
       if (!activeCol) return;
       try {
-        const points = await rpcClient.digitizeColumn(activeCol.id);
+        const { points, brokenRows, ambiguousRows } = await rpcClient.digitizeColumnWithStats(activeCol.id);
         if (points.length > 0) {
           activeCol.controlPoints = points;
           canvasComponent.history.push(
@@ -58,7 +59,11 @@ export function createInspectorCallbacks(
           canvasComponent.requestRender();
           getSidebar()?.updateData(canvasComponent.data);
           getInspector()?.updateData(canvasComponent.data);
-          callbacks.setHudNotice(`属种 ${activeCol.name} 轮廓已重新识别。`);
+          callbacks.setHudNotice(
+            `属种 ${activeCol.name} 轮廓已重新识别。`
+            + compensationNote({ brokenRows, ambiguousRows }),
+            compensationNote({ brokenRows, ambiguousRows }) ? 6000 : 3000
+          );
         }
       } catch (err) {
         callbacks.reportBackendFailure('属种轮廓重识别', err);
@@ -79,14 +84,18 @@ export function createInspectorCallbacks(
       const activeCol = canvasComponent.getActiveColumn();
       if (!activeCol) return;
       try {
-        const points = await rpcClient.digitizeColumn(activeCol.id);
+        const { points, brokenRows, ambiguousRows } = await rpcClient.digitizeColumnWithStats(activeCol.id);
         if (points.length > 0) {
           activeCol.controlPoints = points;
           canvasComponent.history.push(`Re-digitize ${activeCol.name}`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
           canvasComponent.requestRender();
           getSidebar()?.updateData(canvasComponent.data);
           getInspector()?.updateData(canvasComponent.data);
-          callbacks.setHudNotice(`属种 ${activeCol.name} 轮廓已重新识别。`);
+          callbacks.setHudNotice(
+            `属种 ${activeCol.name} 轮廓已重新识别。`
+            + compensationNote({ brokenRows, ambiguousRows }),
+            compensationNote({ brokenRows, ambiguousRows }) ? 6000 : 3000
+          );
         }
       } catch (err) {
         callbacks.reportBackendFailure('属种轮廓重识别', err);
@@ -506,10 +515,14 @@ export function createInspectorCallbacks(
     onExtractConsensusHorizons: async () => {
       try {
         const cols = canvasComponent.data.columns || [];
+        // 批量数字化会把每一列的补偿行数累加成一条提示：逐列弹 HUD 会刷屏，
+        // 而一条都不弹就是静默改数据。
+        let compensation = { brokenRows: 0, ambiguousRows: 0 };
         for (const col of cols) {
           if (!col.controlPoints || col.controlPoints.length === 0) {
-            const pts = await rpcClient.digitizeColumn(col.id);
-            if (pts.length > 0) col.controlPoints = pts;
+            const { points, brokenRows, ambiguousRows } = await rpcClient.digitizeColumnWithStats(col.id);
+            if (points.length > 0) col.controlPoints = points;
+            compensation = addCompensation(compensation, { brokenRows, ambiguousRows });
           }
         }
         const res = await rpcClient.call<any, any>('samples.extractConsensus', { tolerance_px: 4.0, min_taxa_support: 1 });
@@ -517,7 +530,11 @@ export function createInspectorCallbacks(
           canvasComponent.data.samples = res.samples;
           getInspector()?.updateData(canvasComponent.data);
           canvasComponent.requestRender();
-          callbacks.setHudNotice(`已提取 ${res.samples.length} 个跨属种拐点共识采样层位。`, 4000);
+          callbacks.setHudNotice(
+            `已提取 ${res.samples.length} 个跨属种拐点共识采样层位。`
+            + compensationNote(compensation),
+            4000
+          );
         }
       } catch (err) {
         callbacks.reportBackendFailure('提取采样层位', err);
