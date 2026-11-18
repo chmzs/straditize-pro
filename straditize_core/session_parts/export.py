@@ -528,7 +528,7 @@ class ExportMixin:
                 # 未标定列整列不给数：写 CSV 时用显式 `NA`，不要留空。
                 # 空单元格在下游读入器里既可能是缺失也可能是 0，`NA` 是无歧义的
                 # "没有这个数"（避免虚假数据）。
-                csv_str = df.to_csv(index=False, na_rep="NA")
+                csv_str = df.to_csv(index=False, na_rep="NA", lineterminator="\n")
                 csv_bytes = csv_str.encode("utf-8")
 
                 meta = roi_meta_by_name.get(roi_name) or {}
@@ -565,7 +565,7 @@ class ExportMixin:
             if not primary_csv_bytes and roi_dfs:
                 primary_csv_bytes = (
                     list(roi_dfs.values())[0]
-                    .to_csv(index=False, na_rep="NA")
+                    .to_csv(index=False, na_rep="NA", lineterminator="\n")
                     .encode("utf-8")
                 )
 
@@ -1462,7 +1462,7 @@ class ExportMixin:
         if fmt == "csv":
             # 缺测写成语义无歧义的 NA：空单元格在下游读入器里既可能是缺失也可能是 0，
             # 与 export_multi_tar 的两处 to_csv 保持同一口径。
-            csv_string = df.to_csv(index=False, na_rep="NA")
+            csv_string = df.to_csv(index=False, na_rep="NA", lineterminator="\n")
             # `-0.0` 的符号位会被 pandas 原样渲染，CSV 里就成了字面量 `-0.0`
             # （pandas 对 `float(-0.0)` 一律输出 `-0.0`，加 0.0 也抹不掉符号位）。
             # 下游 R / Excel / 严格校验的读入器会把它当**负深度**，而它实际就是 0。
@@ -1472,9 +1472,11 @@ class ExportMixin:
             if output_path:
                 out_dir = os.path.dirname(os.path.abspath(output_path))
                 os.makedirs(out_dir, exist_ok=True)
-                # newline="" 必须显式给：pandas 的 to_csv 已经用 "\r\n" 结尾，
-                # 文本模式默认还会把 "\n" 再翻译成 "\r\n"，落盘就成了 "\r\r\n"。
-                # 下游 R/Excel 读到行尾多余 \r 会把最后一列的值/列名带上控制符。
+                # newline="" 必须显式给：行尾由 `to_csv(lineterminator="\n")` 单点决定，
+                # 文本模式不能再翻译一遍。历史上漏了这个参数，pandas 写 "\r\n"、文本模式再把
+                # "\n" 翻成 "\r\n"，落盘成了 "\r\r\n"（R/Excel 会把最后一列的值与列名带上
+                # 控制符，实测 35 行的表按 splitlines() 数出 71 行）。现在两头都钉死：
+                # 终止符只有一处来源（pandas 参数），文件层不做任何翻译。
                 with open(output_path, "w", encoding="utf-8", newline="") as f:
                     f.write(csv_string)
                 saved_path = os.path.abspath(output_path)
@@ -1807,7 +1809,7 @@ class ExportMixin:
         units = self._primary_roi_units_for(names)
         pct_cols = [name for name in names if is_percent_unit(units.get(name))]
         fixed_cols = [name for name in names if not is_percent_unit(units.get(name))]
-        csv_bytes = frame.to_csv(index=False, na_rep="NA").encode("utf-8")
+        csv_bytes = frame.to_csv(index=False, na_rep="NA", lineterminator="\n").encode("utf-8")
 
         script_lines = [
             "# ==============================================================================",

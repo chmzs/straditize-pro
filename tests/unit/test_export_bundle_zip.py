@@ -91,9 +91,11 @@ def test_bundle_contains_four_files_and_runnable_script() -> None:
         names = set(bundle.namelist())
         assert names == {"data.csv", "plot_strat.R", "plot_strat.jpg", "README.txt"}, names
 
-        csv_text = bundle.read("data.csv").decode("utf-8")
-        header = csv_text.splitlines()[0]
-        assert "\r" not in header, f"表头带 \\r 会让 read.csv 后的 intersect 丢列：{header!r}"
+        csv_bytes = bundle.read("data.csv")
+        # 断言整份字节没有 \r：`splitlines()` 会在 \r\n 处切开，只看 header 抓不到 CRLF 行尾
+        # （issue #58：pandas 在 Windows 默认用 os.linesep，自制解析器把 \r 吃进末列名）。
+        assert b"\r" not in csv_bytes, "data.csv 必须是 LF 行尾：CRLF 会让自制解析器把 \\r 吃进末列名"
+        header = csv_bytes.decode("utf-8").split("\n")[0]
 
         script = bundle.read("plot_strat.R").decode("utf-8")
         assert "csv_path <- if (length(args) >= 1" in script, "脚本必须无参可跑"

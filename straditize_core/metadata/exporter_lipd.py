@@ -327,7 +327,7 @@ def package_lipd_archive(
             }
             if data_dict:
                 df = pd.DataFrame(data_dict)
-                csv_bytes = df.to_csv(index=False).encode("utf-8")
+                csv_bytes = df.to_csv(index=False, lineterminator="\n").encode("utf-8")
                 zf.writestr(f"{t_name}.csv", csv_bytes)
 
     zip_bytes = bio.getvalue()
