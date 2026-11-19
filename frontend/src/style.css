@@ -1322,6 +1322,11 @@ body.theme-light .sidebar-actions-bar .btn-sidebar-action:hover {
   box-shadow: 0 0 12px rgba(56, 189, 248, 0.15);
 }
 
+.taxa-card.batch-selected {
+  border-color: var(--accent-blue);
+  background: color-mix(in srgb, var(--accent-blue) 8%, transparent);
+}
+
 .taxa-card.compact-taxa-row.active {
   flex-direction: column;
   align-items: stretch;

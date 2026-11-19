@@ -10,7 +10,7 @@ import { reportBackendFailure } from './ProvenanceGate';
 import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
 import { STAGE } from '../core/WorkflowStage';
 import { makeRenameUndo } from '../core/undoActions';
-import { compensationNote } from '../core/compensationNote';
+import { compensationNote, addCompensation } from '../core/compensationNote';
 
 export interface SidebarBridgeParams {
   rpcClient: RpcClient;
@@ -268,6 +268,95 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
         p.getInspector()?.updateData(p.canvasComponent.data);
         p.updateFooter();
         p.setHudNotice(`已删除属种列 [${col.name}]。`);
+      }
+    },
+    onBatchChangePlotType: async (taxaIds: string[], plotType: any) => {
+      if (!taxaIds || taxaIds.length === 0) return;
+      try {
+        for (const tid of taxaIds) {
+          const col = p.canvasComponent.data.columns.find((c) => c.id === tid);
+          if (!col) continue;
+          const colIndex = col.col_index ?? p.canvasComponent.data.columns.indexOf(col);
+          await p.rpcClient.updateColumn(colIndex, { plot_type: plotType });
+          col.plot_type = plotType;
+          col.plotType = plotType ?? undefined;
+        }
+        p.canvasComponent.history.push(
+          `Batch change plot type to ${plotType} for ${taxaIds.length} columns`,
+          p.canvasComponent.data.columns,
+          p.canvasComponent.data.activeTaxaId
+        );
+        p.canvasComponent.requestRender();
+        p.getSidebar()?.updateData(p.canvasComponent.data);
+        p.getInspector()?.updateData(p.canvasComponent.data);
+        const typeName = plotType ? String(plotType).toUpperCase() : '跟随组';
+        p.setHudNotice(`已将所选 ${taxaIds.length} 列形态批量切换为: ${typeName}`, 3000);
+      } catch (err) {
+        reportBackendFailure('批量切换形态', err);
+      }
+    },
+    onBatchDigitizeColumns: async (taxaIds: string[]) => {
+      if (!taxaIds || taxaIds.length === 0) return;
+      let totalComp = { brokenRows: 0, ambiguousRows: 0 };
+      let successCount = 0;
+      try {
+        for (const tid of taxaIds) {
+          const col = p.canvasComponent.data.columns.find((c) => c.id === tid);
+          if (!col) continue;
+          const { points, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(col.id);
+          col.controlPoints = points;
+          totalComp = addCompensation(totalComp, { brokenRows, ambiguousRows });
+          successCount++;
+        }
+        p.canvasComponent.history.push(
+          `Batch re-digitize ${successCount} columns`,
+          p.canvasComponent.data.columns,
+          p.canvasComponent.data.activeTaxaId
+        );
+        p.canvasComponent.requestRender();
+        p.getSidebar()?.updateData(p.canvasComponent.data);
+        p.getInspector()?.updateData(p.canvasComponent.data);
+        p.setHudNotice(
+          `已完成 ${successCount} 列批量数字化取数。` + compensationNote(totalComp),
+          compensationNote(totalComp) ? 6000 : 3500
+        );
+      } catch (err) {
+        reportBackendFailure('批量取数', err);
+      }
+    },
+    onBatchExtractTurningPoints: async (taxaIds: string[]) => {
+      if (!taxaIds || taxaIds.length === 0) return;
+      let successCount = 0;
+      try {
+        for (const tid of taxaIds) {
+          const col = p.canvasComponent.data.columns.find((c) => c.id === tid);
+          if (!col) continue;
+          const colIndex = col.col_index ?? p.canvasComponent.data.columns.indexOf(col);
+          const res = await p.rpcClient.call<
+            { col_index?: number },
+            { success?: boolean; columns_updated?: number[]; message?: string }
+          >('algorithm.extractTurningPoints', { col_index: colIndex });
+          if (res?.success === true) successCount++;
+        }
+        const fresh = await p.rpcClient.getDiagramData();
+        for (const tid of taxaIds) {
+          const col = p.canvasComponent.data.columns.find((c) => c.id === tid);
+          const freshCol = fresh.columns?.find((c: any) => c.id === tid);
+          if (col && freshCol && freshCol.controlPoints) {
+            col.controlPoints = freshCol.controlPoints;
+          }
+        }
+        p.canvasComponent.history.push(
+          `Batch extract turning points for ${successCount} columns`,
+          p.canvasComponent.data.columns,
+          p.canvasComponent.data.activeTaxaId
+        );
+        p.canvasComponent.requestRender();
+        p.getSidebar()?.updateData(p.canvasComponent.data);
+        p.getInspector()?.updateData(p.canvasComponent.data);
+        p.setHudNotice(`已为所选 ${successCount} 列批量自动提取峰谷控制点（手工点保留）。`, 3500);
+      } catch (err) {
+        reportBackendFailure('批量提取峰谷', err);
       }
     },
   };

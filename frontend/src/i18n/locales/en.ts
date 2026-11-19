@@ -186,6 +186,14 @@ export const en = {
   'sidebar.searchPlaceholder': 'Search taxa',
   'sidebar.emptyTitle': 'No Columns Detected',
   'sidebar.emptyDesc': 'After defining and cleaning the data region, detect columns in Step 5.',
+  'sidebar.batchSelected': '{count} columns selected',
+  'sidebar.selectAll': 'Select All',
+  'sidebar.clearSelection': 'Clear',
+  'sidebar.batchPlotType': 'Batch Plot Type:',
+  'sidebar.batchDigitize': 'Batch Digitize',
+  'sidebar.batchDigitizeTitle': 'Re-digitize all selected columns',
+  'sidebar.batchTurningPoints': 'Batch Turning Points',
+  'sidebar.batchTurningPointsTitle': 'Extract turning points for all selected columns',
 
   // ===== Inspector =====
   'inspector.title': 'Property Inspector',

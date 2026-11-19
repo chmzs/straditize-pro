@@ -29,6 +29,12 @@ export interface SidebarCallbacks {
   onDigitizeColumn?: (taxaId: string) => Promise<void> | void;
   onExtractTurningPoints?: (taxaId: string) => Promise<void> | void;
   onDeleteColumn?: (taxaId: string) => Promise<void> | void;
+  /** 批量形态修改 */
+  onBatchChangePlotType?: (taxaIds: string[], plotType: 'area' | 'bar' | 'line' | 'symbol' | null) => Promise<void> | void;
+  /** 批量重新数字化取数 */
+  onBatchDigitizeColumns?: (taxaIds: string[]) => Promise<void> | void;
+  /** 批量提取峰谷控制点 */
+  onBatchExtractTurningPoints?: (taxaIds: string[]) => Promise<void> | void;
 }
 
 export class Sidebar {
@@ -39,6 +45,8 @@ export class Sidebar {
   private isCompactView: boolean = true; // 默认紧凑列表，极大提升大剖面属种浏览检索效率
   private searchQuery: string = '';      // 属种快速搜索关键词
   private collapsedRois: Set<string> = new Set(); // 折叠的 ROI 分组
+  private selectedColumnIds: Set<string> = new Set(); // 多选列 ID 集合 (#126)
+  private lastClickedColId: string | null = null;     // 用于 Shift 连选
   /** 正在把焦点还给重建后的行内改名输入框；此期间必须忽略 focusin，否则重渲染递归。 */
   private restoringInlineEdit = false;
   private delArmedAt: number = 0;
@@ -174,6 +182,34 @@ export class Sidebar {
         <div class="sidebar-search">
           <input type="text" id="inp-search-taxa" class="ui-field" placeholder="${t('sidebar.searchPlaceholder')}" value="${this.searchQuery}" />
         </div>
+        ${this.selectedColumnIds.size >= 2 ? `
+          <div class="sidebar-batch-bar" style="padding: 6px 8px; background: color-mix(in srgb, var(--accent-blue) 12%, transparent); border-radius: 4px; margin: 0 8px 8px 8px; border: 1px solid var(--accent-blue);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-size: 11px; font-weight: 700; color: var(--accent-blue);">${t('sidebar.batchSelected', { count: this.selectedColumnIds.size })}</span>
+              <div style="display: flex; gap: 4px;">
+                <button type="button" id="btn-batch-select-all" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 1px 4px;">${t('sidebar.selectAll')}</button>
+                <button type="button" id="btn-batch-clear-selection" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 1px 4px;">${t('sidebar.clearSelection')}</button>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <span style="font-size: 9.5px; color: var(--text-secondary);">${t('sidebar.batchPlotType')}</span>
+              <div class="btn-group" style="display: flex; gap: 2px;">
+                <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs btn-batch-plottype" data-type="area" style="font-size: 9px; padding: 1px 4px;">面积</button>
+                <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs btn-batch-plottype" data-type="bar" style="font-size: 9px; padding: 1px 4px;">柱状</button>
+                <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs btn-batch-plottype" data-type="line" style="font-size: 9px; padding: 1px 4px;">折线</button>
+                <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs btn-batch-plottype" data-type="symbol" style="font-size: 9px; padding: 1px 4px;">符号</button>
+              </div>
+            </div>
+            <div style="display: flex; gap: 4px;">
+              <button type="button" id="btn-batch-digitize" class="ui-btn ui-btn--primary ui-btn--xs" style="flex: 1; font-size: 10px; padding: 3px 2px;" title="${t('sidebar.batchDigitizeTitle')}">
+                ${t('sidebar.batchDigitize')}
+              </button>
+              <button type="button" id="btn-batch-turning-points" class="ui-btn ui-btn--secondary ui-btn--xs" style="flex: 1; font-size: 10px; padding: 3px 2px;" title="${t('sidebar.batchTurningPointsTitle')}">
+                ${t('sidebar.batchTurningPoints')}
+              </button>
+            </div>
+          </div>
+        ` : ''}
       ` : ''}
 
       <div class="taxa-list" id="taxa-list-container">
@@ -339,11 +375,14 @@ export class Sidebar {
       </div>
     `;
 
+    const isBatchSelected = this.selectedColumnIds.has(col.id);
+
     if (this.isCompactView) {
       return `
-        <div class="taxa-card compact-taxa-row ${isActive ? 'active' : ''}" data-taxa-id="${col.id}">
+        <div class="taxa-card compact-taxa-row ${isActive ? 'active' : ''} ${isBatchSelected ? 'batch-selected' : ''}" data-taxa-id="${col.id}">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; width: 100%;">
-            <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+            <div style="display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1;">
+              <input type="checkbox" class="taxa-select-checkbox" data-col-id="${col.id}" ${isBatchSelected ? 'checked' : ''} style="cursor: pointer; width: 12px; height: 12px; margin: 0; flex-shrink: 0;" title="勾选多选列" />
               <span class="color-dot" style="background-color: ${col.color}; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;"></span>
               <input type="text" class="taxa-name-inline-input" data-col-id="${col.id}" data-action="inline-rename" value="${col.name}" style="font-size: 11px; font-weight: ${isActive ? '600' : '400'}; border: none; background: transparent; color: inherit; width: 100%; text-overflow: ellipsis; overflow: hidden; padding: 1px 2px;" title="点击直接改名，获得焦点时画布高亮该列" />
             </div>
@@ -390,9 +429,10 @@ export class Sidebar {
     }
 
     return `
-      <div class="taxa-card ${isActive ? 'active' : ''}" data-taxa-id="${col.id}">
+      <div class="taxa-card ${isActive ? 'active' : ''} ${isBatchSelected ? 'batch-selected' : ''}" data-taxa-id="${col.id}">
         <div class="taxa-header">
-          <div class="taxa-title-row">
+          <div class="taxa-title-row" style="display: flex; align-items: center; gap: 4px;">
+            <input type="checkbox" class="taxa-select-checkbox" data-col-id="${col.id}" ${isBatchSelected ? 'checked' : ''} style="cursor: pointer; width: 13px; height: 13px; margin: 0; flex-shrink: 0;" title="勾选多选列" />
             <span class="color-dot" style="background-color: ${col.color};"></span>
             <input type="text" class="taxa-name-inline-input" data-col-id="${col.id}" data-action="inline-rename" value="${col.name}" title="点击可直接编辑此属种名称，获得焦点时画布高亮该列" />
           </div>
@@ -466,6 +506,38 @@ export class Sidebar {
       this.callbacks.onInsertGapColumn?.(this.data.activeTaxaId);
     });
 
+    // 批量操作工具栏事件绑定 (#126)
+    this.element.querySelector('#btn-batch-select-all')?.addEventListener('click', () => {
+      this.visibleColumns().forEach((c) => this.selectedColumnIds.add(c.id));
+      this.renderPreservingInlineEdit();
+    });
+
+    this.element.querySelector('#btn-batch-clear-selection')?.addEventListener('click', () => {
+      this.selectedColumnIds.clear();
+      this.renderPreservingInlineEdit();
+    });
+
+    this.element.querySelectorAll('.btn-batch-plottype').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const type = btn.getAttribute('data-type') as 'area' | 'bar' | 'line' | 'symbol';
+        if (type && this.selectedColumnIds.size > 0) {
+          this.callbacks.onBatchChangePlotType?.(Array.from(this.selectedColumnIds), type);
+        }
+      });
+    });
+
+    this.element.querySelector('#btn-batch-digitize')?.addEventListener('click', () => {
+      if (this.selectedColumnIds.size > 0) {
+        this.callbacks.onBatchDigitizeColumns?.(Array.from(this.selectedColumnIds));
+      }
+    });
+
+    this.element.querySelector('#btn-batch-turning-points')?.addEventListener('click', () => {
+      if (this.selectedColumnIds.size > 0) {
+        this.callbacks.onBatchExtractTurningPoints?.(Array.from(this.selectedColumnIds));
+      }
+    });
+
     // ROI 分组折叠切换
     this.element.querySelectorAll('[data-toggle-roi]').forEach((hdr) => {
       hdr.addEventListener('click', () => {
@@ -518,9 +590,22 @@ export class Sidebar {
       }
     });
 
-    // 行内即时改名事件绑定 (检查 ROI 内唯一性)
+    // 列勾选多选事件绑定与行内即时改名事件绑定
     list.addEventListener('change', (e) => {
       const target = e.target as HTMLInputElement;
+      if (target && target.classList.contains('taxa-select-checkbox')) {
+        const colId = target.getAttribute('data-col-id');
+        if (colId) {
+          if (target.checked) {
+            this.selectedColumnIds.add(colId);
+            this.lastClickedColId = colId;
+          } else {
+            this.selectedColumnIds.delete(colId);
+          }
+          this.renderPreservingInlineEdit();
+        }
+        return;
+      }
       if (target && target.getAttribute('data-action') === 'inline-rename') {
         const card = target.closest('.taxa-card') as HTMLElement;
         const taxaId = card?.getAttribute('data-taxa-id');
@@ -639,6 +724,12 @@ export class Sidebar {
         return;
       }
 
+      // 复选框点击时阻止向上冒泡触发卡片单选（change 事件处理多选）
+      if (target.closest('.taxa-select-checkbox')) {
+        e.stopPropagation();
+        return;
+      }
+
       // 切换显隐按钮
       if (target.closest('[data-action="toggle-visible"]')) {
         e.stopPropagation();
@@ -646,7 +737,46 @@ export class Sidebar {
         return;
       }
 
-      // 单击卡片选中该属种
+      const me = e as MouseEvent;
+      const isCtrl = me.ctrlKey || me.metaKey;
+      const isShift = me.shiftKey;
+
+      // Ctrl + 点击：切换加入/移出多选集合
+      if (isCtrl) {
+        e.stopPropagation();
+        if (this.selectedColumnIds.has(taxaId)) {
+          this.selectedColumnIds.delete(taxaId);
+        } else {
+          this.selectedColumnIds.add(taxaId);
+          this.lastClickedColId = taxaId;
+        }
+        this.renderPreservingInlineEdit();
+        return;
+      }
+
+      // Shift + 点击：区间连续多选
+      if (isShift && this.lastClickedColId) {
+        e.stopPropagation();
+        const cols = this.visibleColumns();
+        const idx1 = cols.findIndex((c) => c.id === this.lastClickedColId);
+        const idx2 = cols.findIndex((c) => c.id === taxaId);
+        if (idx1 !== -1 && idx2 !== -1) {
+          const start = Math.min(idx1, idx2);
+          const end = Math.max(idx1, idx2);
+          for (let i = start; i <= end; i++) {
+            this.selectedColumnIds.add(cols[i].id);
+          }
+          this.renderPreservingInlineEdit();
+          return;
+        }
+      }
+
+      // 普通单击卡片：记录锚点，若处于无多选状态则同步选中态
+      this.lastClickedColId = taxaId;
+      if (this.selectedColumnIds.size <= 1) {
+        this.selectedColumnIds.clear();
+        this.selectedColumnIds.add(taxaId);
+      }
       this.callbacks.onSelectTaxa(taxaId);
     });
   }

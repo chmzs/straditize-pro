@@ -187,6 +187,14 @@ export const zhCN = {
   'sidebar.searchPlaceholder': '搜索属种',
   'sidebar.emptyTitle': '尚未检测分列',
   'sidebar.emptyDesc': '完成数据有效区与清理后，在步骤 5 检测分列。',
+  'sidebar.batchSelected': '已选 {count} 列',
+  'sidebar.selectAll': '全选',
+  'sidebar.clearSelection': '取消',
+  'sidebar.batchPlotType': '批量形态:',
+  'sidebar.batchDigitize': '批量重新取数',
+  'sidebar.batchDigitizeTitle': '对所选全部列重新数字化取数',
+  'sidebar.batchTurningPoints': '批量提取峰谷',
+  'sidebar.batchTurningPointsTitle': '对所选全部列自动提取峰谷控制点',
 
   // ===== 检查器 Inspector =====
   'inspector.title': '属性检查器',
