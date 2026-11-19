@@ -110,6 +110,7 @@ def normalize_reader_type(value: str | None) -> str:
         )
     return key
 
+
 #: 局部改锚点时的行窗口半径。
 #:
 #: 依据（真实工程 `.recon_20261117`）：1521 个逐行点 / 436 个自动拐点，锚点平均间隔
@@ -218,9 +219,7 @@ class DigitizeSessionMixin:
             mask, col, c_start, c_end, y0, y1, col_index
         )
 
-        points = self._read_column_profile(
-            mask, c_start, c_end, y0, y1, reader_type
-        )
+        points = self._read_column_profile(mask, c_start, c_end, y0, y1, reader_type)
         if not points:
             return {
                 "col_index": col_index,
@@ -240,7 +239,13 @@ class DigitizeSessionMixin:
         self._interpolate_across_hlines(points, c_start)
 
         control_points, ctrl_pts_list = self._turning_control_points(
-            points, c_start, y0, y1, col_index, float(c_end - c_start), resolve_axis_stroke(col, None)
+            points,
+            c_start,
+            y0,
+            y1,
+            col_index,
+            float(c_end - c_start),
+            resolve_axis_stroke(col, None),
         )
 
         # 重建只产出**算法**拐点；用户手工点原样并入（不删、不移动）。
@@ -371,11 +376,7 @@ class DigitizeSessionMixin:
         if kept_count > 0:
             return
 
-        name = (
-            col.get("species")
-            or col.get("name")
-            or f"col{col_index + 1:02d}"
-        )
+        name = col.get("species") or col.get("name") or f"col{col_index + 1:02d}"
         raise JsonRpcError(
             STATE_ERROR,
             f"列 '{name}'（x {c_start}..{c_end}）的 {raw_count} 个墨迹像素被步骤 4 的"
@@ -612,14 +613,11 @@ class DigitizeSessionMixin:
             if candidate:
                 run_end = segments[0][1]
                 width = float(run_end - segments[0][0] + 1)
-                narrow_enough = (
-                    width <= _INNER_WIDTH_MEDIAN_FACTOR * median_inner_width
-                )
+                narrow_enough = width <= _INNER_WIDTH_MEDIAN_FACTOR * median_inner_width
                 # 比值判据：整列没有一行带外线时无基准可比，按"成立"处理（此时每一行都
                 # 只有内线，"外线缺失"没有反例可反驳）。
                 inside_envelope = median_outer_ratio is None or (
-                    inner_dist
-                    <= median_outer_ratio * inner_dist + _OUTER_DIST_SLACK_PX
+                    inner_dist <= median_outer_ratio * inner_dist + _OUTER_DIST_SLACK_PX
                 )
                 # 单段太窄就是"只剩内线"：宽 < 8px 的兜底判据（见 docstring）。
                 candidate = (narrow_enough and inside_envelope) or (
@@ -657,9 +655,7 @@ class DigitizeSessionMixin:
                 inner_right = float(c_start + segments[0][1])
                 outer_right = float(c_start + segments[-1][1])
                 if outer_right > inner_right:
-                    store_layer_pair(
-                        point, inner_x=inner_right, outer_x=outer_right
-                    )
+                    store_layer_pair(point, inner_x=inner_right, outer_x=outer_right)
 
         broken_rows.sort()
         ambiguous_rows.sort()
@@ -739,18 +735,24 @@ class DigitizeSessionMixin:
             np.array([p["x"] - c_start for p in points], dtype=float), min_width, None
         )
         # 显著度随列宽缩放：绝对显著度在宽列上会把抗锯齿与基线抖动当作拐点。
-        # 垂直容差是**绝对** 2px：它就是重构误差判据本身，不随列宽放宽。
-        prominence_px = max(2.0, 0.005 * float(col_width))
+        # 下限设为 2.5px：贴轴处 2.0px 的量化与抗锯齿抖动不作为 mandatory 极值，
+        # 避免生成密集的贴轴伪拐点；垂直容差仍为绝对 2px，重构误差由误差界兜底。
+        prominence_px = max(2.5, 0.005 * float(col_width))
         turning_rows, turning_vals, is_mandatory = detect_turning_points_vertical(
             curve_profile,
             epsilon=VERTICAL_TOLERANCE_PX,
             prominence=prominence_px,
             min_distance=3,
         )
-        kept_rows, kept_vals = prune_axis_pileups(turning_rows, turning_vals, is_mandatory)
+        kept_rows, kept_vals = prune_axis_pileups(
+            turning_rows, turning_vals, is_mandatory
+        )
         # 兜底：去堆叠的两点并一点可能把误差顶起来，这里把超差行补回去。
         kept_rows, kept_vals = enforce_error_bound(
-            np.arange(len(curve_profile), dtype=float), curve_profile, kept_rows, kept_vals
+            np.arange(len(curve_profile), dtype=float),
+            curve_profile,
+            kept_rows,
+            kept_vals,
         )
 
         ctrl_pts_list: list[dict[str, Any]] = []
@@ -826,7 +828,9 @@ class DigitizeSessionMixin:
                 "缺少可读数据范围（data_ylim 为空）：请先在步骤 2 确认有效区，再增删控制点。",
             )
         usable_xs = [
-            p.get("x") for p in (self.column_points.get(col_index) or []) if p.get("x") is not None
+            p.get("x")
+            for p in (self.column_points.get(col_index) or [])
+            if p.get("x") is not None
         ]
         if not usable_xs:
             raise JsonRpcError(

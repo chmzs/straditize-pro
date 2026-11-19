@@ -3,6 +3,7 @@
 Enables interactive or automated curve editing, point reduction, and smoothing.
 Pure Python/NumPy/SciPy implementation without GUI or Matplotlib.
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -55,14 +56,22 @@ def detect_stratigraphic_turning_points(
     if isinstance(series_or_values, pd.Series):
         valid = series_or_values.dropna()
         if valid.empty:
-            return np.array([], dtype=float), np.array([], dtype=float), np.array([], dtype=bool)
+            return (
+                np.array([], dtype=float),
+                np.array([], dtype=float),
+                np.array([], dtype=bool),
+            )
         all_rows = valid.index.values.astype(float)
         all_vals = valid.values.astype(float)
     else:
         arr = np.asarray(series_or_values, dtype=float)
         valid_idx = np.where(np.isfinite(arr))[0]
         if not len(valid_idx):
-            return np.array([], dtype=float), np.array([], dtype=float), np.array([], dtype=bool)
+            return (
+                np.array([], dtype=float),
+                np.array([], dtype=float),
+                np.array([], dtype=bool),
+            )
         all_rows = valid_idx.astype(float)
         all_vals = arr[valid_idx]
 
@@ -110,7 +119,9 @@ def detect_stratigraphic_turning_points(
 
         # If points exceed max_points, progressively increase epsilon for non-mandatory points
         if max_points is not None and len(sorted_indices) > max_points:
-            non_mandatory = [idx for idx in sorted_indices if idx not in mandatory_indices]
+            non_mandatory = [
+                idx for idx in sorted_indices if idx not in mandatory_indices
+            ]
             # Prune non-mandatory points with smallest RDP deviations
             excess = len(sorted_indices) - max_points
             if excess > 0 and len(non_mandatory) > 0:
@@ -150,17 +161,21 @@ def _abs_error(rows: np.ndarray, values: np.ndarray, keep: Sequence[int]) -> np.
     return np.abs(np.interp(rows, rows[idx], values[idx]) - values)
 
 
-def _error_stats(rows: np.ndarray, values: np.ndarray, keep: Sequence[int]) -> tuple[float, float]:
+def _error_stats(
+    rows: np.ndarray, values: np.ndarray, keep: Sequence[int]
+) -> tuple[float, float]:
     err = _abs_error(rows, values, keep)
     return float(np.percentile(err, 95)), float(err.max())
 
 
-def count_axis_pileups(rows: Sequence[float],
-                       values: Sequence[float],
-                       keep: Sequence[int],
-                       min_gap: float = AXIS_PILEUP_MIN_GAP_PX,
-                       min_value_gap: float = AXIS_PILEUP_MIN_VALUE_GAP_PX,
-                       exclude_endpoint_pairs: bool = False) -> int:
+def count_axis_pileups(
+    rows: Sequence[float],
+    values: Sequence[float],
+    keep: Sequence[int],
+    min_gap: float = AXIS_PILEUP_MIN_GAP_PX,
+    min_value_gap: float = AXIS_PILEUP_MIN_VALUE_GAP_PX,
+    exclude_endpoint_pairs: bool = False,
+) -> int:
     """数「贴轴密点」：相邻控制点行距 < min_gap 且取值差 < min_value_gap。
 
     Parameters
@@ -178,7 +193,7 @@ def count_axis_pileups(rows: Sequence[float],
     for left, right in pairwise(keep):
         if rows[right] - rows[left] >= min_gap:
             continue
-        if abs(values[right] - values[left]) >= min_value_gap:
+        if abs(values[right] - values[left]) > min_value_gap + 1e-6:
             continue
         if exclude_endpoint_pairs and (left in (0, last) or right in (0, last)):
             continue
@@ -186,9 +201,9 @@ def count_axis_pileups(rows: Sequence[float],
     return total
 
 
-def rdp_vertical(x: Sequence[float],
-                 y: Sequence[float],
-                 epsilon: float = VERTICAL_TOLERANCE_PX) -> list[int]:
+def rdp_vertical(
+    x: Sequence[float], y: Sequence[float], epsilon: float = VERTICAL_TOLERANCE_PX
+) -> list[int]:
     """Ramer-Douglas-Peucker with VERTICAL distance.
 
     与 rdp_indices 的区别只在距离定义：这里量的是点到弦的**竖直**偏差，
@@ -216,8 +231,8 @@ def rdp_vertical(x: Sequence[float],
         span = x[end] - x[start]
         if span == 0:
             continue
-        chord = y[start] + (y[end] - y[start]) * (x[start + 1:end] - x[start]) / span
-        dev = np.abs(y[start + 1:end] - chord)
+        chord = y[start] + (y[end] - y[start]) * (x[start + 1 : end] - x[start]) / span
+        dev = np.abs(y[start + 1 : end] - chord)
         best = int(np.argmax(dev))
         if dev[best] > epsilon:
             mid = start + 1 + best
@@ -297,7 +312,9 @@ def detect_turning_points_vertical(
         for start, end in pairwise(anchors):
             if end - start < 2:
                 continue
-            sub = rdp_vertical(seg_rows[start:end + 1], seg_vals[start:end + 1], epsilon)
+            sub = rdp_vertical(
+                seg_rows[start : end + 1], seg_vals[start : end + 1], epsilon
+            )
             keep.update(start + i for i in sub)
 
         for i in sorted(keep):
@@ -313,14 +330,15 @@ def detect_turning_points_vertical(
     )
 
 
-def prune_axis_pileups(rows: Sequence[float],
-                       values: Sequence[float],
-                       mandatory: Sequence[bool] | None = None,
-                       min_gap: float = AXIS_PILEUP_MIN_GAP_PX,
-                       min_value_gap: float = AXIS_PILEUP_MIN_VALUE_GAP_PX,
-                       tolerance: float = VERTICAL_TOLERANCE_PX,
-                       max_drop_error: float = AXIS_PILEUP_MAX_ERROR_PX,
-                       ) -> tuple[np.ndarray, np.ndarray]:
+def prune_axis_pileups(
+    rows: Sequence[float],
+    values: Sequence[float],
+    mandatory: Sequence[bool] | None = None,
+    min_gap: float = AXIS_PILEUP_MIN_GAP_PX,
+    min_value_gap: float = AXIS_PILEUP_MIN_VALUE_GAP_PX,
+    tolerance: float = VERTICAL_TOLERANCE_PX,
+    max_drop_error: float = AXIS_PILEUP_MAX_ERROR_PX,
+) -> tuple[np.ndarray, np.ndarray]:
     """Remove control points that pile up against the axis, under an error guard.
 
     一次删除只在**两个条件同时成立**时被接受：
@@ -362,7 +380,7 @@ def prune_axis_pileups(rows: Sequence[float],
         if count_axis_pileups(rows, values, trial, min_gap, min_value_gap) > before:
             return False
         err = _abs_error(rows, values, trial)
-        if float(err[lo:hi + 1].max()) > cap + 1e-9:
+        if float(err[lo : hi + 1].max()) > cap + 1e-9:
             return False
         inside = [i for i in mandatory_idx if lo <= i <= hi]
         if inside and float(err[inside].max()) > tolerance + 1e-9:
@@ -374,7 +392,8 @@ def prune_axis_pileups(rows: Sequence[float],
         pairs = [
             (left, right)
             for left, right in pairwise(keep)
-            if rows[right] - rows[left] < min_gap and abs(values[right] - values[left]) < min_value_gap
+            if rows[right] - rows[left] < min_gap
+            and abs(values[right] - values[left]) <= min_value_gap + 1e-6
         ]
         pending = [pair for pair in pairs if pair not in tried]
         if not pending:
@@ -407,9 +426,11 @@ def prune_axis_pileups(rows: Sequence[float],
         hi = keep[pos + 2] if pos + 2 < len(keep) else right
         best_row, best_local = None, np.inf
         for candidate_row in range(left, right + 1):
-            trial = sorted(set([i for i in keep if i not in (left, right)] + [candidate_row]))
+            trial = sorted(
+                set([i for i in keep if i not in (left, right)] + [candidate_row])
+            )
             err = _abs_error(rows, values, trial)
-            local = float(err[lo:hi + 1].max())
+            local = float(err[lo : hi + 1].max())
             if local < best_local:
                 best_local, best_row = local, candidate_row
         trial = sorted(set([i for i in keep if i not in (left, right)] + [best_row]))
@@ -422,12 +443,14 @@ def prune_axis_pileups(rows: Sequence[float],
     return rows[idx], values[idx]
 
 
-def enforce_error_bound(rows: Sequence[float],
-                        values: Sequence[float],
-                        ctrl_rows: Sequence[float],
-                        ctrl_values: Sequence[float],
-                        tolerance: float = VERTICAL_TOLERANCE_PX,
-                        max_passes: int = 4) -> tuple[np.ndarray, np.ndarray]:
+def enforce_error_bound(
+    rows: Sequence[float],
+    values: Sequence[float],
+    ctrl_rows: Sequence[float],
+    ctrl_values: Sequence[float],
+    tolerance: float = VERTICAL_TOLERANCE_PX,
+    max_passes: int = 4,
+) -> tuple[np.ndarray, np.ndarray]:
     """把违背误差界的行补回控制点集合（结构性的兜底，不是可调参数）。
 
     正常路径上 detect_turning_points_vertical 已经保证 max <= epsilon，本函数只在
@@ -458,9 +481,9 @@ def enforce_error_bound(rows: Sequence[float],
     return ctrl_rows, ctrl_values
 
 
-def rdp_indices(x: Sequence[float],
-                y: Sequence[float],
-                epsilon: float = 1.0) -> list[int]:
+def rdp_indices(
+    x: Sequence[float], y: Sequence[float], epsilon: float = 1.0
+) -> list[int]:
     """Calculate point indices to keep using the Ramer-Douglas-Peucker algorithm.
 
     Parameters
@@ -503,14 +526,16 @@ def rdp_indices(x: Sequence[float],
         return [0, n - 1]
 
     split = imax + 1
-    left = rdp_indices(x[:split + 1], y[:split + 1], epsilon)
+    left = rdp_indices(x[: split + 1], y[: split + 1], epsilon)
     right = rdp_indices(x[split:], y[split:], epsilon)
     return left[:-1] + [i + split for i in right]
 
 
-def extract_control_points(series_or_values: pd.Series | np.ndarray,
-                           epsilon: float = 1.0,
-                           max_points: int | None = 24) -> tuple[np.ndarray, np.ndarray]:
+def extract_control_points(
+    series_or_values: pd.Series | np.ndarray,
+    epsilon: float = 1.0,
+    max_points: int | None = 24,
+) -> tuple[np.ndarray, np.ndarray]:
     """Extract key turning/control points from a 1D curve.
 
     Preserves segment endpoints and significant geometric turning points.
@@ -582,10 +607,12 @@ def extract_control_points(series_or_values: pd.Series | np.ndarray,
     return unique_rows, np.asarray(out_vals, dtype=float)[idx]
 
 
-def reconstruct_curve(rows: Sequence[float],
-                      values: Sequence[float],
-                      target_rows: Sequence[float],
-                      method: str = 'linear') -> np.ndarray:
+def reconstruct_curve(
+    rows: Sequence[float],
+    values: Sequence[float],
+    target_rows: Sequence[float],
+    method: str = "linear",
+) -> np.ndarray:
     """Reconstruct a full curve from sparse control points across target rows.
 
     Parameters
@@ -628,42 +655,48 @@ def reconstruct_curve(rows: Sequence[float],
         return np.full_like(target, values[0], dtype=float)
 
     method = method.lower()
-    if method == 'linear':
+    if method == "linear":
         return np.interp(target, rows, values)
-    elif method in ('pchip', 'monotonic'):
+    elif method in ("pchip", "monotonic"):
         # Monotone cubic interpolation prevents overshoot
         if len(rows) >= 2:
             interp = PchipInterpolator(rows, values, extrapolate=True)
             return interp(target)
         return np.interp(target, rows, values)
-    elif method in ('spline', 'cubic'):
+    elif method in ("spline", "cubic"):
         if len(rows) >= 4:
-            cs = CubicSpline(rows, values, bc_type='natural', extrapolate=True)
+            cs = CubicSpline(rows, values, bc_type="natural", extrapolate=True)
             return cs(target)
         elif len(rows) >= 2:
             interp = PchipInterpolator(rows, values, extrapolate=True)
             return interp(target)
         return np.interp(target, rows, values)
-    elif method == 'nearest':
-        f = interp1d(rows, values, kind='nearest', fill_value='extrapolate')
+    elif method == "nearest":
+        f = interp1d(rows, values, kind="nearest", fill_value="extrapolate")
         return f(target)
     else:
-        raise ValueError(f"Unknown interpolation method: '{method}'. Choose from 'linear', 'pchip', 'spline', 'nearest'.")
+        raise ValueError(
+            f"Unknown interpolation method: '{method}'. Choose from 'linear', 'pchip', 'spline', 'nearest'."
+        )
 
 
 @dataclass
 class ControlPointSet:
     """Manages control points for a single curve column."""
+
     rows: list[float] = field(default_factory=list)
     values: list[float] = field(default_factory=list)
 
     @classmethod
-    def from_curve(cls,
-                   series_or_values: pd.Series | np.ndarray,
-                   epsilon: float = 1.0,
-                   max_points: int = 24) -> ControlPointSet:
+    def from_curve(
+        cls,
+        series_or_values: pd.Series | np.ndarray,
+        epsilon: float = 1.0,
+        max_points: int = 24,
+    ) -> ControlPointSet:
         r, v = extract_control_points(
-            series_or_values, epsilon=epsilon, max_points=max_points)
+            series_or_values, epsilon=epsilon, max_points=max_points
+        )
         return cls(rows=list(r), values=list(v))
 
     def add_or_update(self, row: float, value: float) -> None:
@@ -693,6 +726,8 @@ class ControlPointSet:
             return True
         return False
 
-    def reconstruct(self, target_rows: Sequence[float], method: str = 'linear') -> np.ndarray:
+    def reconstruct(
+        self, target_rows: Sequence[float], method: str = "linear"
+    ) -> np.ndarray:
         """Reconstruct values along target_rows."""
         return reconstruct_curve(self.rows, self.values, target_rows, method=method)
