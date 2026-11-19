@@ -3,6 +3,7 @@ import { CoordinateSystem } from '../core/CoordinateSystem';
 import { peakValueFromScale } from '../core/scaleDisplay';
 import { resolvePlotType } from '../core/plotType';
 import { resolveColumnGroup } from '../core/columnGroup';
+import { groupColorAt } from './canvas/groupColor';
 import { t, onLocaleChange } from '../i18n';
 import { notifyError } from '../ui/feedback';
 import { renderActiveColumnSuspectNotice } from './steps/SuspectBlockNotice';
@@ -369,7 +370,10 @@ export class Sidebar {
     }
 
     const roi = this.data.rois?.find((r) => r.id === col.roi_id) || this.data.rois?.[0];
-    const groupName = resolveColumnGroup(col, roi)?.name || '默认组';
+    const group = resolveColumnGroup(col, roi);
+    const groupName = group?.name || '默认组';
+    const gIdx = roi?.x_groups?.findIndex((g) => g.id === group?.id) ?? 0;
+    const gColor = groupColorAt(gIdx >= 0 ? gIdx : 0);
 
     const activeDetailHtml = `
       <div class="active-column-detail" style="margin-top: 6px; padding: 6px 8px; background: rgba(148,163,184,0.08); border-radius: 4px; border: 1px solid rgba(148,163,184,0.2);">
@@ -412,7 +416,10 @@ export class Sidebar {
         <div class="taxa-meta">
           <div class="meta-item">
             <span>所属组:</span>
-            <span class="badge" style="font-size: 9.5px; padding: 1px 4px;">${groupName} (${typeLabels[pType] || '面积'})</span>
+            <span class="badge" style="font-size: 9.5px; padding: 1px 5px; border-left: 3px solid ${gColor}; background: rgba(148, 163, 184, 0.12); display: inline-flex; align-items: center; gap: 4px;">
+              <span style="width: 6px; height: 6px; border-radius: 50%; background: ${gColor}; display: inline-block;"></span>
+              <span>${groupName} (${typeLabels[pType] || '面积'})</span>
+            </span>
           </div>
           <div class="meta-item">
             <span>X 刻度:</span>

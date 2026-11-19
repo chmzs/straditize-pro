@@ -5,7 +5,10 @@ import { t } from '../../i18n';
 export const step = 2;
 export const title = '2. 数据有效区 (ROI)';
 
+let cachedRoiData: DiagramData | null = null;
+
 export function render(data: DiagramData): string {
+  cachedRoiData = data;
   const rois = data.rois && data.rois.length > 0
     ? data.rois
     : [{ id: 'roi_1', name: 'pollen', name_source: 'default', composition: true, visible: true, xlim: [data.roi.xMin, data.roi.xMax], ylim: [data.roi.yMin, data.roi.yMax], columns_stale: false, form_defaults: null }];
@@ -86,6 +89,23 @@ export function render(data: DiagramData): string {
             <div>${t('step2.pixelY')} <strong>[${Math.round(activeRoi.ylim ? activeRoi.ylim[0] : data.roi.yMin)} ~ ${Math.round(activeRoi.ylim ? activeRoi.ylim[1] : data.roi.yMax)}]</strong></div>
             <div>${t('step2.assignedCols')} <strong>${currentColumns.length}</strong> ${t('step2.cols')}</div>
           </div>
+          <div style="margin-top: 6px; padding: 6px 8px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 4px;">
+            <div style="font-size: 10px; font-weight: 700; color: var(--accent-blue); margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center;">
+              <span>快速聚焦微调</span>
+              <span style="font-size: 8.5px; color: var(--text-muted); font-weight: 400;">(快捷键: 1 / 2 / F)</span>
+            </div>
+            <div style="display: flex; gap: 4px;">
+              <button type="button" id="btn-focus-roi-tl" class="ui-btn ui-btn--quiet ui-btn--xs" style="flex: 1; font-size: 9.5px; padding: 3px 2px;" title="放大并居中对齐到 ROI 左上角 (快捷键: 1)，方便精准对齐顶部边缘与首列">
+                左上角
+              </button>
+              <button type="button" id="btn-focus-roi-br" class="ui-btn ui-btn--quiet ui-btn--xs" style="flex: 1; font-size: 9.5px; padding: 3px 2px;" title="放大并居中对齐到 ROI 右下角 (快捷键: 2)，方便精准对齐底部边缘与末列">
+                右下角
+              </button>
+              <button type="button" id="btn-focus-roi-fit" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 3px 6px;" title="适应整屏视野居中 (快捷键: F)">
+                全图
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -155,6 +175,32 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     if (ctx.onUpdateRoiComposition) {
       ctx.onUpdateRoiComposition(compChk.checked);
     }
+  });
+
+  // 快速聚焦角点微调
+  const getActiveCoords = () => {
+    const d = cachedRoiData;
+    if (!d) return { rx0: 0, ry0: 0, rx1: 1000, ry1: 800 };
+    const rois = d.rois && d.rois.length > 0 ? d.rois : [{ id: 'roi_1', xlim: [d.roi.xMin, d.roi.xMax], ylim: [d.roi.yMin, d.roi.yMax] }];
+    const activeId = d.active_roi_id || (d as any).activeRoiId || rois[0]?.id;
+    const active = rois.find((r) => r.id === activeId) || rois[0];
+    const rx0 = active.xlim ? active.xlim[0] : d.roi.xMin;
+    const rx1 = active.xlim ? active.xlim[1] : d.roi.xMax;
+    const ry0 = active.ylim ? active.ylim[0] : d.roi.yMin;
+    const ry1 = active.ylim ? active.ylim[1] : d.roi.yMax;
+    return { rx0, ry0, rx1, ry1 };
+  };
+
+  root.querySelector('#btn-focus-roi-tl')?.addEventListener('click', () => {
+    const { rx0, ry0 } = getActiveCoords();
+    ctx.onFocusWorldPoint?.({ x: rx0, y: ry0 }, 2.0);
+  });
+  root.querySelector('#btn-focus-roi-br')?.addEventListener('click', () => {
+    const { rx1, ry1 } = getActiveCoords();
+    ctx.onFocusWorldPoint?.({ x: rx1, y: ry1 }, 2.0);
+  });
+  root.querySelector('#btn-focus-roi-fit')?.addEventListener('click', () => {
+    ctx.onFitToScreen?.();
   });
 
   // 下一步

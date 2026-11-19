@@ -17,6 +17,10 @@ export interface StepContext {
   onClearXTicks?: (colIndex: number) => void;
   /** 切换画布工具模式（如切到 measure 测距工具） */
   onSetToolMode?: (mode: any) => void;
+  /** 快速跳转并放大到指定的图像世界坐标点 */
+  onFocusWorldPoint?: (worldPt: { x: number; y: number }, targetScale?: number) => void;
+  /** 视口重置适应屏幕居中 */
+  onFitToScreen?: () => void;
   [key: string]: any;
 }
 

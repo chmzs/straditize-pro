@@ -29,6 +29,8 @@ export interface InspectorCallbacks {
   onToggleCollapse: (collapsed: boolean) => void;
   onDigitizeActiveColumn: () => Promise<void>;
   onAdvanceWorkflowStage?: (targetStage: number) => void;
+  onFocusWorldPoint?: (worldPt: { x: number; y: number }, targetScale?: number) => void;
+  onFitToScreen?: () => void;
   onOpenDataViewer?: () => void;
   /** 打开 OCR 复核模态；由步骤 5 面板的【自动识别属种名】按钮调用。 */
   onOpenOcrReviewModal?: () => void;

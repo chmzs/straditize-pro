@@ -41,6 +41,12 @@ export function createInspectorCallbacks(
       canvasComponent.setToolMode(mode);
       getToolbar()?.setToolMode(mode);
     },
+    onFocusWorldPoint: (worldPt: { x: number; y: number }, targetScale?: number) => {
+      canvasComponent.focusWorldPoint(worldPt, targetScale);
+    },
+    onFitToScreen: () => {
+      canvasComponent.fitToScreen();
+    },
     onToggleCollapse: (collapsed: boolean) => {
       callbacks.setInspectorCollapsed?.(collapsed);
     },

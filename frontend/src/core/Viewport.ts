@@ -164,6 +164,23 @@ export class Viewport {
   }
 
   /**
+   * 将某个世界坐标点（如 ROI 顶点）定位到屏幕中心，并缩放到指定目标比例。
+   */
+  public focusWorldPoint(
+    worldPt: Point2D,
+    canvasW: number,
+    canvasH: number,
+    targetScale: number = 2.0
+  ): void {
+    if (canvasW <= 0 || canvasH <= 0) return;
+    const newScale = Math.min(Math.max(targetScale, this.minScale), this.maxScale);
+    this.scale = newScale;
+    this.panX = canvasW / 2 - worldPt.x * newScale;
+    this.panY = canvasH / 2 - worldPt.y * newScale;
+    this.fittedToScreen = false;
+  }
+
+  /**
    * 应用变换矩阵到 CanvasRenderingContext2D (已包含 DPR 处理)
    */
   public applyTransform(ctx: CanvasRenderingContext2D): void {

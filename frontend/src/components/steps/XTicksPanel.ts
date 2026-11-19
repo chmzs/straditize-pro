@@ -272,7 +272,7 @@ export function render(data: DiagramData): string {
                   type="button"
                   class="btn-switch-group-tab ui-btn ${isSelected ? 'ui-btn--primary' : 'ui-btn--quiet'}"
                   data-group-id="${g.id}"
-                  style="font-size: var(--font-size-sm); padding: 3px 8px; border-radius: 4px; display: flex; align-items: center; gap: 4px; border: 1px solid ${groupColor}; border-left: 3px solid ${groupColor};"
+                  style="font-size: var(--font-size-sm); padding: 3px 8px; border-radius: 4px; display: flex; align-items: center; gap: 4px; border: 1px solid ${groupColor}; border-left: 3px solid ${groupColor}; ${isSelected ? `box-shadow: 0 0 0 1px ${groupColor};` : ''}"
                 >
                   <span aria-hidden="true" style="display: inline-block; width: 9px; height: 9px; border-radius: 2px; background: ${groupColor}; border: 1px solid rgba(0, 0, 0, 0.18);" title="本组在画布上的组色带颜色"></span>
                   <span>${g.name}</span>

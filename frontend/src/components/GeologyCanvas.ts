@@ -546,6 +546,13 @@ private pointer: PointerState = {
     this.requestRender();
   }
 
+  public focusWorldPoint(worldPt: Point2D, targetScale: number = 2.0): void {
+    const rect = this.container.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    this.viewport.focusWorldPoint(worldPt, rect.width, rect.height, targetScale);
+    this.requestRender();
+  }
+
   /**
    * 同步画布后备缓冲尺寸到当前容器，并在「视口仍是适应屏幕取景」时重新适配。
    *
@@ -943,6 +950,36 @@ private pointer: PointerState = {
         }
       },
       label: 'Esc 取消/回选择',
+    },
+    {
+      codes: ['Digit1', 'Numpad1'],
+      plain: true,
+      when: () => this.workflowStage === STAGE.ROI,
+      run: () => {
+        const rois = this.data.rois && this.data.rois.length > 0 ? this.data.rois : [this.data.roi];
+        const activeId = this.data.active_roi_id || (this.data as any).activeRoiId || rois[0]?.id;
+        const roi = (this.data.rois || []).find((r) => r.id === activeId) || this.data.roi;
+        const x = roi.xlim ? roi.xlim[0] : (roi as any).xMin ?? 0;
+        const y = roi.ylim ? roi.ylim[0] : (roi as any).yMin ?? 0;
+        this.focusWorldPoint({ x, y }, 2.0);
+        this.notifyNotice('聚焦 ROI 左上角 (1) - 方便对齐顶部边缘与起始列');
+      },
+      label: '1 聚焦 ROI 左上角',
+    },
+    {
+      codes: ['Digit2', 'Numpad2'],
+      plain: true,
+      when: () => this.workflowStage === STAGE.ROI,
+      run: () => {
+        const rois = this.data.rois && this.data.rois.length > 0 ? this.data.rois : [this.data.roi];
+        const activeId = this.data.active_roi_id || (this.data as any).activeRoiId || rois[0]?.id;
+        const roi = (this.data.rois || []).find((r) => r.id === activeId) || this.data.roi;
+        const x = roi.xlim ? roi.xlim[1] : (roi as any).xMax ?? 1000;
+        const y = roi.ylim ? roi.ylim[1] : (roi as any).yMax ?? 800;
+        this.focusWorldPoint({ x, y }, 2.0);
+        this.notifyNotice('聚焦 ROI 右下角 (2) - 方便对齐底部边缘与末尾列');
+      },
+      label: '2 聚焦 ROI 右下角',
     },
     {
       codes: ['KeyF'],
