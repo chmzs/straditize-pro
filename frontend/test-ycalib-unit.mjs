@@ -99,8 +99,12 @@ register('data:text/javascript,' + encodeURIComponent(RESOLVE_HOOK));
 
 const panel = await import('./src/components/steps/YCalibPanel.ts');
 const { normalizeProject, ProjectManager } = await import('./src/core/ProjectManager.ts');
+const { setLocale } = await import('./src/i18n/index.ts');
 const zhCN = (await import('./src/i18n/locales/zh-CN.ts')).zhCN;
 const en = (await import('./src/i18n/locales/en.ts')).en;
+
+// 无论运行环境默认语言为何（如 CI 上的 en-US），显示层断言针对中文词典，必须显式设为 zh-CN
+setLocale('zh-CN');
 
 // 后端下发载荷：端点齐全、`unit` 缺失（老工程或草稿丢字段时的真实形态）。
 const CAL_WITHOUT_UNIT = {
