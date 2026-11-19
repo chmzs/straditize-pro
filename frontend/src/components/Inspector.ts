@@ -221,7 +221,7 @@ export class Inspector {
       } else {
         contentHtml = this.renderStagePanel(activeCol, cal);
       }
-    } else if (selected?.type === 'column' && activeCol && (this.currentStage === STAGE.SPLIT || this.currentStage === STAGE.SPEARS_AND_SAMPLES)) {
+    } else if (selected?.type === 'column' && activeCol && this.currentStage === STAGE.SPLIT) {
       contentHtml = this.renderColumnInspector(activeCol);
     } else {
       contentHtml = this.renderStagePanel(activeCol, cal);

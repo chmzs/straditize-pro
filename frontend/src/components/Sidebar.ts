@@ -9,6 +9,7 @@ import { resolvePlotType } from '../core/plotType';
 import { resolveColumnGroup } from '../core/columnGroup';
 import { t, onLocaleChange } from '../i18n';
 import { notifyError } from '../ui/feedback';
+import { renderActiveColumnSuspectNotice } from './steps/SuspectBlockNotice';
 
 /** 标度值显示：整数原样，非整数保留 1 位小数。
  *  实测几何算出来的满刻度常是 49.799196787148595 这种，直接显示等于把浮点误差当读数。 */
@@ -25,6 +26,9 @@ export interface SidebarCallbacks {
   onRenameTaxa?: (taxaId: string, newName: string) => void;
   onInsertGapColumn?: (afterTaxaId: string) => void;
   onToggleCollapse?: (collapsed: boolean) => void;
+  onDigitizeColumn?: (taxaId: string) => Promise<void> | void;
+  onExtractTurningPoints?: (taxaId: string) => Promise<void> | void;
+  onDeleteColumn?: (taxaId: string) => Promise<void> | void;
 }
 
 export class Sidebar {
@@ -37,6 +41,8 @@ export class Sidebar {
   private collapsedRois: Set<string> = new Set(); // 折叠的 ROI 分组
   /** 正在把焦点还给重建后的行内改名输入框；此期间必须忽略 focusin，否则重渲染递归。 */
   private restoringInlineEdit = false;
+  private delArmedAt: number = 0;
+  private delArmedColId: string = '';
 
   constructor(data: DiagramData, callbacks: SidebarCallbacks) {
     this.data = data;
@@ -303,49 +309,82 @@ export class Sidebar {
     const roi = this.data.rois?.find((r) => r.id === col.roi_id) || this.data.rois?.[0];
     const groupName = resolveColumnGroup(col, roi)?.name || '默认组';
 
+    const activeDetailHtml = `
+      <div class="active-column-detail" style="margin-top: 6px; padding: 6px 8px; background: rgba(148,163,184,0.08); border-radius: 4px; border: 1px solid rgba(148,163,184,0.2);">
+        ${renderActiveColumnSuspectNotice(col)}
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <span style="font-size: 10px; color: var(--text-secondary); font-weight: 500;">读取形态:</span>
+          <div class="btn-group" style="display: flex; gap: 2px;">
+            ${(['area', 'bar', 'line', 'symbol'] as const)
+              .map(
+                (pt) =>
+                  `<button type="button" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-plottype-pill ${
+                    pType === pt ? 'ui-btn--active active' : ''
+                  }" data-col-id="${col.id}" data-type="${pt}" style="font-size: 9px; padding: 1px 5px;">${typeLabels[pt]}</button>`
+              )
+              .join('')}
+          </div>
+        </div>
+        <div style="display: flex; gap: 4px;">
+          <button type="button" id="btn-col-digitize" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-digitize" data-col-id="${col.id}" style="flex: 1; font-size: 10px; padding: 4px 2px; color: var(--accent-blue); border-color: rgba(2,132,199,0.3); background: rgba(2,132,199,0.06);" title="重新数字化取数此列">
+            重新取数
+          </button>
+          <button type="button" id="btn-extract-turning-points" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-turning-points" data-col-id="${col.id}" style="flex: 1; font-size: 10px; padding: 4px 2px; color: var(--accent-violet); border-color: rgba(139,92,246,0.3); background: rgba(139,92,246,0.06);" title="按几何曲线自动提取峰/谷控制点（保留已有手工点）">
+            提取峰谷
+          </button>
+          <button type="button" id="btn-col-delete" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-delete-col" data-col-id="${col.id}" style="font-size: 10px; padding: 4px 6px; color: var(--accent-red); border-color: rgba(220,38,38,0.3); background: rgba(220,38,38,0.04);" title="删除此列">
+            删除列
+          </button>
+        </div>
+      </div>
+    `;
+
     if (this.isCompactView) {
       return `
         <div class="taxa-card compact-taxa-row ${isActive ? 'active' : ''}" data-taxa-id="${col.id}">
-          <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
-            <span class="color-dot" style="background-color: ${col.color}; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;"></span>
-            <input type="text" class="taxa-name-inline-input" data-col-id="${col.id}" data-action="inline-rename" value="${col.name}" style="font-size: 11px; font-weight: ${isActive ? '600' : '400'}; border: none; background: transparent; color: inherit; width: 100%; text-overflow: ellipsis; overflow: hidden; padding: 1px 2px;" title="点击直接改名，获得焦点时画布高亮该列" />
-          </div>
-          <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
-            <!-- X 刻度状态徽章 -->
-            ${
-              scale
-                ? `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(16, 185, 129, 0.15); color: var(--status-success); font-weight: 600;" title="${
-                    isSlopeScale
-                      ? `满刻度（列右缘）= (${formatScaleValue(scale.px1 - scale.px0)}px/刻度) × ${formatScaleValue(scale.val1)}${scale.unit}${
-                          exaggerationOf(scale) > 1 ? ' ÷ ' + exaggerationOf(scale) + '×' : ''
-                        }`
-                      : `X 刻度: ${formatScaleValue(scale.val0)} ~ ${formatScaleValue(scale.val1)} ${scale.unit}`
-                  }">${
-                    isSlopeScale
-                      ? `${formatScaleValue(fullScaleAtColumnEdge(scale, col.endX))}${scale.unit}`
-                      : `${formatScaleValue(scale.val1)}${scale.unit}`
-                  }</span>`
-                : `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(245, 158, 11, 0.15); color: var(--status-warning);" title="X 刻度尚未标定">未定标</span>`
-            }
-
-            <!-- 最大实测峰值呈现 (一眼识别优势种) -->
-            <span class="taxa-peak-badge" style="font-size: 9.5px; font-weight: 700; color: ${isActive ? 'var(--accent-blue)' : 'var(--text-secondary)'}; font-family: var(--font-mono); min-width: 34px; text-align: right;" title="实测最大丰度峰值: ${maxValStr}">
-              ${maxValStr}
-            </span>
-
-            <!-- 就地快速切换形态微图标 [///] -->
-            <button class="icon-btn plot-type-btn" data-action="cycle-plot-type" title="当前形态: ${pType.toUpperCase()} (点击切换形态: 面积/柱状/折线/符号)" style="padding: 1px 4px; font-size: 10px; line-height: 1.2; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 3px; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;">
-              <span>${typeLabel}</span><span style="font-size: 7px; opacity: 0.6;">▾</span>
-            </button>
-
-            <button class="icon-btn toggle-visibility ${col.visible ? 'visible' : 'hidden'}" data-action="toggle-visible" title="显隐属种" style="padding: 2px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; width: 100%;">
+            <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+              <span class="color-dot" style="background-color: ${col.color}; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;"></span>
+              <input type="text" class="taxa-name-inline-input" data-col-id="${col.id}" data-action="inline-rename" value="${col.name}" style="font-size: 11px; font-weight: ${isActive ? '600' : '400'}; border: none; background: transparent; color: inherit; width: 100%; text-overflow: ellipsis; overflow: hidden; padding: 1px 2px;" title="点击直接改名，获得焦点时画布高亮该列" />
+            </div>
+            <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
+              <!-- X 刻度状态徽章 -->
               ${
-                col.visible
-                  ? `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
-                  : `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
+                scale
+                  ? `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(16, 185, 129, 0.15); color: var(--status-success); font-weight: 600;" title="${
+                      isSlopeScale
+                        ? `满刻度（列右缘）= (${formatScaleValue(scale.px1 - scale.px0)}px/刻度) × ${formatScaleValue(scale.val1)}${scale.unit}${
+                            exaggerationOf(scale) > 1 ? ' ÷ ' + exaggerationOf(scale) + '×' : ''
+                          }`
+                        : `X 刻度: ${formatScaleValue(scale.val0)} ~ ${formatScaleValue(scale.val1)} ${scale.unit}`
+                    }">${
+                      isSlopeScale
+                        ? `${formatScaleValue(fullScaleAtColumnEdge(scale, col.endX))}${scale.unit}`
+                        : `${formatScaleValue(scale.val1)}${scale.unit}`
+                    }</span>`
+                  : `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(245, 158, 11, 0.15); color: var(--status-warning);" title="X 刻度尚未标定">未定标</span>`
               }
-            </button>
+
+              <!-- 最大实测峰值呈现 (一眼识别优势种) -->
+              <span class="taxa-peak-badge" style="font-size: 9.5px; font-weight: 700; color: ${isActive ? 'var(--accent-blue)' : 'var(--text-secondary)'}; font-family: var(--font-mono); min-width: 34px; text-align: right;" title="实测最大丰度峰值: ${maxValStr}">
+                ${maxValStr}
+              </span>
+
+              <!-- 就地快速切换形态微图标 [///] -->
+              <button class="icon-btn plot-type-btn" data-action="cycle-plot-type" title="当前形态: ${pType.toUpperCase()} (点击切换形态: 面积/柱状/折线/符号)" style="padding: 1px 4px; font-size: 10px; line-height: 1.2; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 3px; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;">
+                <span>${typeLabel}</span><span style="font-size: 7px; opacity: 0.6;">▾</span>
+              </button>
+
+              <button class="icon-btn toggle-visibility ${col.visible ? 'visible' : 'hidden'}" data-action="toggle-visible" title="显隐属种" style="padding: 2px;">
+                ${
+                  col.visible
+                    ? `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
+                    : `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
+                }
+              </button>
+            </div>
           </div>
+          ${isActive ? activeDetailHtml : ''}
         </div>
       `;
     }
@@ -405,6 +444,7 @@ export class Sidebar {
             <span>${totalCount} 点</span>
           </div>
         </div>
+        ${isActive ? activeDetailHtml : ''}
       </div>
     `;
   }
@@ -540,6 +580,62 @@ export class Sidebar {
           this.callbacks.onChangePlotType?.(taxaId, nextType);
           this.render();
         }
+        return;
+      }
+
+      // 单列读取形态药丸按钮
+      const pillBtn = target.closest('.sidebar-plottype-pill') as HTMLElement | null;
+      if (pillBtn) {
+        e.stopPropagation();
+        const pType = pillBtn.getAttribute('data-type') as 'area' | 'bar' | 'line' | 'symbol';
+        const col = this.data.columns.find((c) => c.id === taxaId);
+        if (col && pType) {
+          col.plot_type = pType;
+          col.plotType = pType;
+          this.callbacks.onChangePlotType?.(taxaId, pType);
+          this.render();
+        }
+        return;
+      }
+
+      // 重新取数按钮
+      if (target.closest('#btn-col-digitize')) {
+        e.stopPropagation();
+        this.callbacks.onDigitizeColumn?.(taxaId);
+        return;
+      }
+
+      // 提取峰谷按钮
+      if (target.closest('#btn-extract-turning-points')) {
+        e.stopPropagation();
+        this.callbacks.onExtractTurningPoints?.(taxaId);
+        return;
+      }
+
+      // 删除列按钮（3秒二次确认上膛机制）
+      const delBtn = target.closest('#btn-col-delete') as HTMLButtonElement | null;
+      if (delBtn) {
+        e.stopPropagation();
+        const now = Date.now();
+        if (now - this.delArmedAt > 3000 || this.delArmedColId !== taxaId) {
+          this.delArmedAt = now;
+          this.delArmedColId = taxaId;
+          delBtn.textContent = '再点一次确认';
+          delBtn.dataset.armed = '1';
+          window.setTimeout(() => {
+            if (this.delArmedColId === taxaId && delBtn.dataset.armed === '1') {
+              this.delArmedAt = 0;
+              this.delArmedColId = '';
+              delBtn.textContent = '删除列';
+              delete delBtn.dataset.armed;
+            }
+          }, 3000);
+          return;
+        }
+
+        this.delArmedAt = 0;
+        this.delArmedColId = '';
+        this.callbacks.onDeleteColumn?.(taxaId);
         return;
       }
 
