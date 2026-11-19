@@ -16,9 +16,11 @@ import io
 import json
 import math
 import os
+import re
 import tarfile
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Collection, Sequence
 
 import numpy as np
@@ -36,6 +38,7 @@ from ..protocol import (
     STATE_ERROR,
     JsonRpcError,
 )
+
 #: 导出表首列的名字**只从** `strat_plot._y_column_label` 来（issue #114）：列名必须
 #: 跟随 `primary_axis`，`primary_axis="age"` 时首列是 `age` 而不是 `depth`。
 #: 本模块所有构造首列的地方都走 `_y_col_label`，不在各处另写 `if primary_axis == "age"`。
@@ -57,7 +60,83 @@ def is_percent_unit(unit: Any) -> bool:
     return str(unit or "").strip().lower() in PERCENT_UNITS
 
 
+def sanitize_filename_stem(stem: Any) -> str:
+    """Sanitizes a filename stem by replacing illegal characters with underscores,
+    collapsing multiple underscores, and stripping leading/trailing dots and underscores.
+    Falls back to 'straditize' if the result is empty.
+    """
+    if stem is None:
+        return "straditize"
+    s = str(stem).strip()
+    if not s:
+        return "straditize"
+    cleaned = re.sub(r'[\\/*?:"<>|\s]+', "_", s).strip("._")
+    cleaned = re.sub(r"_+", "_", cleaned)
+    return cleaned or "straditize"
 
+
+def resolve_project_name(session: Any = None, explicit_name: str | None = None) -> str:
+    """Resolves project name according to priority:
+    1. User-configured project_name (explicit_name parameter or session.project_name)
+    2. Base image main filename (derived from image path, stripped of upload:// or archive:// and ext,
+       ignoring generic names like 'original' or 'diagram')
+    3. Default fallback: 'straditize'
+    """
+    if explicit_name is not None and str(explicit_name).strip():
+        cleaned = re.sub(r'[\\/*?:"<>|\s]+', "_", str(explicit_name).strip()).strip(
+            "._"
+        )
+        cleaned = re.sub(r"_+", "_", cleaned)
+        if cleaned:
+            return cleaned
+
+    session_proj = None
+    if session is not None:
+        if isinstance(session, dict):
+            session_proj = session.get("project_name")
+        else:
+            session_proj = getattr(session, "project_name", None)
+    if session_proj is not None and str(session_proj).strip():
+        cleaned = re.sub(r'[\\/*?:"<>|\s]+', "_", str(session_proj).strip()).strip("._")
+        cleaned = re.sub(r"_+", "_", cleaned)
+        if cleaned:
+            return cleaned
+
+    image_path = None
+    if session is not None:
+        if isinstance(session, dict):
+            image_path = session.get("image_path")
+        else:
+            image_path = getattr(session, "image_path", None)
+    if image_path and isinstance(image_path, str) and image_path.strip():
+        clean = image_path.replace("upload://", "").replace("archive://", "")
+        clean = clean.replace("\\", "/")
+        base_with_ext = os.path.basename(clean)
+        base, _ = os.path.splitext(base_with_ext)
+        base = base.strip()
+        if base and base.lower() not in ("original", "diagram"):
+            cleaned = re.sub(r'[\\/*?:"<>|\s]+', "_", base).strip("._")
+            cleaned = re.sub(r"_+", "_", cleaned)
+            if cleaned:
+                return cleaned
+
+    return "straditize"
+
+
+def format_export_filename(
+    project_name: str,
+    suffix: str,
+    ext: str,
+    dt: datetime | None = None,
+) -> str:
+    """Formats export filename as {project_name}{suffix}_{YYYYMMDD_HHmmss}.{ext}."""
+    if dt is None:
+        dt = datetime.now()
+    dt_str = dt.strftime("%Y%m%d_%H%M%S")
+    clean_suffix = f"_{suffix.lstrip('_')}" if suffix else ""
+    clean_ext = ext.lstrip(".")
+    stem = sanitize_filename_stem(project_name)
+    return f"{stem}{clean_suffix}_{dt_str}.{clean_ext}"
 
 
 def _column_row_window(
@@ -390,9 +469,7 @@ class ExportMixin:
 
         points = getattr(self, "column_points", None) or {}
         indices = (
-            set(column_indices)
-            if column_indices is not None
-            else set(points.keys())
+            set(column_indices) if column_indices is not None else set(points.keys())
         )
         row_values = {
             point["row"]
@@ -429,7 +506,23 @@ class ExportMixin:
         `legacy_column_name` 只改**首列名**（`age` → `depth`），不改任何数值；给按旧
         列名读的下游脚本一个过渡口。首列名本身来自 `_y_col_label`（唯一来源）。
         """
-        self._ensure_export_column_points()
+        # 若 column_points 尚未从控制点合成（例如刚从 .tar 工程包载入），
+        # 且存在 control_points，则自动从 control_points 填充 column_points，
+        # 确保真实数据不会因点集未合成而退化为空点集。
+        controls = getattr(self, "control_points", None) or {}
+        points = getattr(self, "column_points", None)
+        if points is None:
+            self.column_points = points = {}
+        if not points and any(controls.values()):
+            columns = list(getattr(self, "columns", None) or [])
+            for position, col in enumerate(columns):
+                idx = col.get("col_index", position)
+                ctrls = controls.get(idx, {}) or {}
+                if ctrls:
+                    points[idx] = [
+                        {"row": int(round(float(row))), "x": float(x)}
+                        for row, x in sorted(ctrls.items())
+                    ]
 
         rois = getattr(self, "rois", [])
         # 手工构造的会话（测试、CLI 直调）常常没有 ROI 记账，但列上仍带着某个 roi_id。
@@ -670,11 +763,17 @@ class ExportMixin:
             roi_name = roi_name_by_id.get(col.get("roi_id"))
             if not roi_name:
                 continue
-            out.setdefault(roi_name, {})[name] = resolve_column_scale(self, col, c_idx).unit
+            out.setdefault(roi_name, {})[name] = resolve_column_scale(
+                self, col, c_idx
+            ).unit
         return out
 
-
-    def export_multi_tar(self, output_path: str | None = None) -> dict[str, Any]:
+    def export_multi_tar(
+        self,
+        output_path: str | None = None,
+        project_name: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """Exports standard POSIX UStar .tar project archive with multi-ROI support."""
         roi_dfs = self.get_roi_dataframes()
         rois = getattr(self, "rois", [])
@@ -691,8 +790,7 @@ class ExportMixin:
         units_by_roi = self._roi_column_units()
         group_units = {
             f"{r.get('name', r.get('id'))}": {
-                g.get("name"): g.get("unit")
-                for g in (r.get("x_groups") or [])
+                g.get("name"): g.get("unit") for g in (r.get("x_groups") or [])
             }
             for r in rois
         }
@@ -767,7 +865,9 @@ class ExportMixin:
             # 每个 ROI 的 CSV 文件名规则：用户显式命名的用名字，未命名的用
             # `data_roi_<序号>`（序号按 roi_dfs 顺序从 1 起）。用名字时保留可读性，
             # 未命名时不把 `roi_1` 这类内部 ID 暴露给下游脚本。
-            roi_meta_by_name = {r.get("name"): r for r in (getattr(self, "rois", None) or [])}
+            roi_meta_by_name = {
+                r.get("name"): r for r in (getattr(self, "rois", None) or [])
+            }
             unnamed_seq = 0
             for roi_name, df in roi_dfs.items():
                 # 序列化只走 `serialize_export_frame`：与面板下载**逐字节相同**的
@@ -793,7 +893,9 @@ class ExportMixin:
 
                 roi_units = units_by_roi.get(roi_name, {})
                 pct_cols = sorted(c for c, u in roi_units.items() if is_percent_unit(u))
-                fixed_cols = sorted(c for c, u in roi_units.items() if not is_percent_unit(u))
+                fixed_cols = sorted(
+                    c for c, u in roi_units.items() if not is_percent_unit(u)
+                )
                 r_scripts.extend(
                     strat_plot_script_lines(
                         df_var=f"df_{roi_name}",
@@ -851,37 +953,41 @@ class ExportMixin:
                 )
 
             readme = (
-                f"Straditize Pro - Stratigraphic Project Archive (POSIX UStar .tar)\n"
-                f"================================================================\n"
-                f"Primary ROI: {primary_roi_name}\n"
-                f"Total ROIs: {len(roi_dfs)}\n\n"
-                + rowset_notice
-                + "\nFiles:\n"
-                f"data.csv             - Primary ROI dataset ({primary_roi_name})\n"
-                f"data/<roi>.csv       - Per-ROI isolated scientific CSV tables\n"
-                f"plot_strat.R         - R plotting script with sections for each ROI\n"
-                f"manifest.json        - Version metadata and ROI hierarchy\n"
-                + "\nUnits (authoritative copy: manifest.json -> column_units):\n"
-                + (
-                    "\n".join(
-                        f"  {roi_name}/{col_name}: {unit}"
-                        for roi_name, cols in units_by_roi.items()
-                        for col_name, unit in cols.items()
+                (
+                    f"Straditize Pro - Stratigraphic Project Archive (POSIX UStar .tar)\n"
+                    f"================================================================\n"
+                    f"Primary ROI: {primary_roi_name}\n"
+                    f"Total ROIs: {len(roi_dfs)}\n\n" + rowset_notice + "\nFiles:\n"
+                    f"data.csv             - Primary ROI dataset ({primary_roi_name})\n"
+                    f"data/<roi>.csv       - Per-ROI isolated scientific CSV tables\n"
+                    f"plot_strat.R         - R plotting script with sections for each ROI\n"
+                    f"manifest.json        - Version metadata and ROI hierarchy\n"
+                    + "\nUnits (authoritative copy: manifest.json -> column_units):\n"
+                    + (
+                        "\n".join(
+                            f"  {roi_name}/{col_name}: {unit}"
+                            for roi_name, cols in units_by_roi.items()
+                            for col_name, unit in cols.items()
+                        )
+                        or "  (no columns)"
                     )
-                    or "  (no columns)"
-                )
-                + "\n  % columns use rioja scale.percent = TRUE: each column is normalized"
-                + " to its own\n  maximum (a 0-100 axis per column), NOT a single shared"
-                + " 0-100 axis.\n"
-                + "  Non-% columns use scale.percent = FALSE: plotted on their own"
-                + " min..max range.\n"
-            ).encode("utf-8") + b"\n" + CSV_MISSING_NOTICE
+                    + "\n  % columns use rioja scale.percent = TRUE: each column is normalized"
+                    + " to its own\n  maximum (a 0-100 axis per column), NOT a single shared"
+                    + " 0-100 axis.\n"
+                    + "  Non-% columns use scale.percent = FALSE: plotted on their own"
+                    + " min..max range.\n"
+                ).encode("utf-8")
+                + b"\n"
+                + CSV_MISSING_NOTICE
+            )
             ti_readme = tarfile.TarInfo(name="README.txt")
             ti_readme.size = len(readme)
             ti_readme.mtime = int(time.time())
             tf.addfile(ti_readme, io.BytesIO(readme))
 
         tar_bytes = tar_bio.getvalue()
+        proj = resolve_project_name(self, project_name)
+        filename = format_export_filename(proj, "_project", "tar")
         if output_path:
             out_dir = os.path.dirname(os.path.abspath(output_path))
             os.makedirs(out_dir, exist_ok=True)
@@ -889,12 +995,14 @@ class ExportMixin:
                 f.write(tar_bytes)
             return {
                 "path": os.path.abspath(output_path),
+                "filename": filename,
                 "size": len(tar_bytes),
                 "success": True,
             }
 
         b64_tar = base64.b64encode(tar_bytes).decode("ascii")
         return {
+            "filename": filename,
             "data": b64_tar,
             "tar_base64": b64_tar,
             "size": len(tar_bytes),
@@ -908,6 +1016,8 @@ class ExportMixin:
         include_age_depth: bool = True,
         include_ensemble_names: list[str] | None = None,
         include_readme: bool = True,
+        project_name: str | None = None,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Exports calibrated multi-ROI sheets into an Excel workbook."""
         roi_dfs = self.get_roi_dataframes()
@@ -963,11 +1073,15 @@ class ExportMixin:
             output_path=output_path,
         )
 
+        proj = resolve_project_name(self, project_name)
+        filename = format_export_filename(proj, "_report", "xlsx")
+
         if output_path:
             # 写盘模式：文件已落盘，返回路径即可，不回传内容（避免同一份数据
             # 既写文件又塞进 JSON-RPC 响应）。
             return {
                 "success": True,
+                "filename": filename,
                 "size_bytes": len(xlsx_bytes),
                 "output_path": os.path.abspath(output_path),
                 "base64": None,
@@ -990,6 +1104,7 @@ class ExportMixin:
         b64_xlsx = base64.b64encode(xlsx_bytes).decode("ascii")
         return {
             "success": True,
+            "filename": filename,
             "size_bytes": len(xlsx_bytes),
             "output_path": None,
             "base64": b64_xlsx,
@@ -1001,6 +1116,8 @@ class ExportMixin:
         output_path: str | None = None,
         include_age_depth: bool = True,
         include_ensemble_names: list[str] | None = None,
+        project_name: str | None = None,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Exports Linked Paleo Data (LiPD) JSON-LD structure with per-ROI measurement tables."""
         roi_dfs = self.get_roi_dataframes()
@@ -1061,9 +1178,12 @@ class ExportMixin:
         # 前端判 res.base64 恒为 undefined → 点「LiPD」既不下载也不报错（用户实测）。
         # 这里改用与 tar 出口同一个打包函数，保证 .lpd 是真 zip（PK 头）。
         pkg_bytes = export_lipd_package(lipd_jsonld, output_path=output_path)
+        proj = resolve_project_name(self, project_name)
+        filename = format_export_filename(proj, "_lipd", "lpd")
         if output_path:
             return {
                 "success": True,
+                "filename": filename,
                 "size_bytes": len(pkg_bytes),
                 "output_path": os.path.abspath(output_path),
                 "base64": None,
@@ -1073,6 +1193,7 @@ class ExportMixin:
         b64 = base64.b64encode(pkg_bytes).decode("ascii")
         return {
             "success": True,
+            "filename": filename,
             "size_bytes": len(pkg_bytes),
             "output_path": None,
             "base64": b64,
@@ -1311,7 +1432,9 @@ class ExportMixin:
             return None
         return float(parameter.default)
 
-    def _rowset_quality(self, rows_count: int, *, is_sample_rows: bool) -> dict[str, Any]:
+    def _rowset_quality(
+        self, rows_count: int, *, is_sample_rows: bool
+    ) -> dict[str, Any]:
         """本次导出的**质量指标**：层位数 / 支持列数中位 / 当前 tolerance_px。
 
         为什么必须有（issue #100）：只报一个行数，用户无法判断"这 625 行该不该
@@ -1356,9 +1479,7 @@ class ExportMixin:
         return {
             "rows": int(rows_count),
             "samples": len(samples),
-            "support_columns_median": (
-                float(np.median(support)) if support else None
-            ),
+            "support_columns_median": (float(np.median(support)) if support else None),
             "support_columns_min": (min(support) if support else None),
             "support_columns_max": (max(support) if support else None),
             "support_columns_n": len(support),
@@ -1530,6 +1651,8 @@ class ExportMixin:
         output_path: str | None = None,
         dataset: str | None = None,
         legacy_column_name: bool = False,
+        project_name: str | None = None,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Exports the calibrated data matrix to CSV or Parquet format.
 
@@ -1596,15 +1719,16 @@ class ExportMixin:
                     "age_max_95": age_pred["age_max"],
                 }
             )
-            df = pd.concat(
-                [df[[y_col]], age_frame, df.drop(columns=[y_col])], axis=1
-            )
+            df = pd.concat([df[[y_col]], age_frame, df.drop(columns=[y_col])], axis=1)
 
         # 行集身份 + 判据门禁（issue #113）：`samples` 语义下**行数必须等于 samples
         # 条数**。这不再是"测试里比一比"，而是后端在交付前自己拒绝不一致的表。
         rows_count = len(df)
         rowset_report = self._rowset_report(dataset, rows_count)
-        if rowset_report["is_sample_rows"] and rows_count != rowset_report["samples_count"]:
+        if (
+            rowset_report["is_sample_rows"]
+            and rows_count != rowset_report["samples_count"]
+        ):
             raise JsonRpcError(
                 EXPORT_ERROR,
                 "行集与样品层位不一致：本工程 samples "
@@ -1618,10 +1742,13 @@ class ExportMixin:
             )
 
         csv_string, saved_path = self._write_export_file(fmt, df, output_path)
+        proj = resolve_project_name(self, project_name)
+        filename = format_export_filename(proj, "_matrix", fmt)
 
         return {
             "format": fmt,
             "strict": strict,
+            "filename": filename,
             "rows_count": rows_count,
             "columns_count": len(df.columns),
             "columns": list(df.columns),
@@ -1647,14 +1774,18 @@ class ExportMixin:
 
         这里把缺测转成 `None`（JSON `null`），与"缺测 ≠ 0"的既有语义一致。
         """
-        records = frame.astype(object).where(frame.notnull(), None).to_dict(
-            orient="records"
+        records = (
+            frame.astype(object).where(frame.notnull(), None).to_dict(orient="records")
         )
         # `inf`/`-inf` 也是非法 JSON（`allow_nan=False` 会抛 Out of range）。
         # 它们同样表示"这个数没有意义"，按缺测处理。
         return [
             {
-                key: (None if isinstance(value, float) and not math.isfinite(value) else value)
+                key: (
+                    None
+                    if isinstance(value, float) and not math.isfinite(value)
+                    else value
+                )
                 for key, value in record.items()
             }
             for record in records
@@ -2142,7 +2273,12 @@ class ExportMixin:
             return {"path": output_path, "success": True}
         return r_script
 
-    def export_bundle_zip(self) -> dict[str, Any]:
+    def export_bundle_zip(
+        self,
+        output_path: str | None = None,
+        project_name: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """一次性交付：`data.csv` + `plot_strat.R` + `plot_strat.jpg` + `README.txt`。
 
         ## 为什么是整包而不是单个 `.R`
@@ -2184,7 +2320,6 @@ class ExportMixin:
             "# 用法：与本文件同目录下 `Rscript plot_strat.R`（可选：Rscript plot_strat.R 表.csv 图.pdf）",
             "# 依赖：install.packages('rioja')",
             "# ==============================================================================",
-
             "args <- commandArgs(trailingOnly = TRUE)",
             "csv_path <- if (length(args) >= 1 && nzchar(args[[1]])) args[[1]] else 'data.csv'",
             "out_path <- if (length(args) >= 2 && nzchar(args[[2]])) args[[2]] else 'plot_strat.svg'",
@@ -2193,7 +2328,6 @@ class ExportMixin:
             # 设备用 cairo 的 svg：R 原生 pdf() 不嵌入字体、也没有 cairo 的抗锯齿，
             # 同一份数据出来的图与应用内 jpeg/svg 完全是两张脸（issue #105）。
             "grDevices::svg(out_path, width = 12, height = 8)",
-
         ]
         script_lines.extend(
             strat_plot_script_lines(
@@ -2227,7 +2361,9 @@ class ExportMixin:
         # 逐列像素行，不能当样品数引用；同一条记录也在 `core.exportData` 的
         # `rowset` 字段里，两边都来自 `_resolve_rowset`。
         rowset = self._resolve_rowset()
-        quality = self._rowset_quality(rowset.rows_count, is_sample_rows=rowset.is_sample_rows)
+        quality = self._rowset_quality(
+            rowset.rows_count, is_sample_rows=rowset.is_sample_rows
+        )
         readme_lines.extend(
             [
                 "data.csv 行集来源：",
@@ -2265,13 +2401,28 @@ class ExportMixin:
                     bundle.writestr("plot_strat.jpg", shot.read())
 
         payload = buffer.getvalue()
+        proj = resolve_project_name(self, project_name)
+        filename = format_export_filename(proj, "_plot_bundle", "zip")
+        if output_path:
+            with open(output_path, "wb") as f:
+                f.write(payload)
+            return {
+                "success": True,
+                "filename": filename,
+                "output_path": os.path.abspath(output_path),
+                "path": os.path.abspath(output_path),
+                "mime": "application/zip",
+                "size_bytes": len(payload),
+            }
+
         return {
             "success": True,
-            "filename": f"strat_export_{int(time.time())}.zip",
+            "filename": filename,
             "mime": "application/zip",
             "base64": base64.b64encode(payload).decode("ascii"),
             "size_bytes": len(payload),
         }
+
     def _primary_roi_name(self) -> str:
         """主 ROI 的显示名（与 `data.csv` 同一 ROI）。"""
         primary_id = getattr(self, "primary_roi_id", None)
