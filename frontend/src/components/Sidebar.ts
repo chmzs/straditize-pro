@@ -1,10 +1,6 @@
 import { DiagramData, TaxaColumn } from '../types/pollen';
 import { CoordinateSystem } from '../core/CoordinateSystem';
-import {
-  exaggerationOf,
-  fullScaleAtColumnEdge,
-  peakValueFromScale,
-} from '../core/scaleDisplay';
+import { peakValueFromScale } from '../core/scaleDisplay';
 import { resolvePlotType } from '../core/plotType';
 import { resolveColumnGroup } from '../core/columnGroup';
 import { t, onLocaleChange } from '../i18n';
@@ -42,7 +38,6 @@ export class Sidebar {
   private data: DiagramData;
   private callbacks: SidebarCallbacks;
   private isCollapsed: boolean = false;
-  private isCompactView: boolean = true; // 默认紧凑列表，极大提升大剖面属种浏览检索效率
   private searchQuery: string = '';      // 属种快速搜索关键词
   private collapsedRois: Set<string> = new Set(); // 折叠的 ROI 分组
   private selectedColumnIds: Set<string> = new Set(); // 多选列 ID 集合 (#126)
@@ -159,11 +154,6 @@ export class Sidebar {
         </div>
         <div class="sidebar-header-actions">
           <span class="badge">${this.data.columns.length}</span>
-          ${this.data.columns.length > 0 ? `
-            <button id="btn-toggle-compact" class="ui-icon-btn ui-btn--sm" aria-label="${t('sidebar.viewToggleTitle')}" title="${t('sidebar.viewToggleTitle')}">
-              ${this.isCompactView ? '▦' : '☰'}
-            </button>
-          ` : ''}
           <button id="btn-collapse-sidebar" class="ui-icon-btn panel-toggle" aria-label="${t('sidebar.collapseTitle')}" title="${t('sidebar.collapseTitle')}">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 18 9 12 15 6"/>
@@ -314,14 +304,12 @@ export class Sidebar {
     // 形态：列级显式覆盖 > 组级 > 'area'（组级是单一事实源，见 `core/plotType.ts`）。
     // 直接读 `col.plotType` 会把从组值抄来的旧快照当用户意图，改组后界面不跟着变。
     const pType = resolvePlotType(col, this.groupOfColumn(col));
-    const colOverride = col.plot_type ?? col.plotType ?? null;
     const typeLabels: Record<string, string> = {
       area: '面积',
       bar: '柱状',
       line: '折线',
       symbol: '符号',
     };
-    const typeLabel = `${typeLabels[pType] || typeLabels.area}${colOverride ? '·覆盖' : ''}`;
 
     // 实测峰值与满刻度只在**真标定**后才有意义。判据与画布同源（x_ticks），
     // 标度解析走 CoordinateSystem.resolveColumnScale（唯一入口，优先 x_ticks）。
@@ -348,19 +336,6 @@ export class Sidebar {
     const activeDetailHtml = `
       <div class="active-column-detail" style="margin-top: 6px; padding: 6px 8px; background: rgba(148,163,184,0.08); border-radius: 4px; border: 1px solid rgba(148,163,184,0.2);">
         ${renderActiveColumnSuspectNotice(col)}
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-          <span style="font-size: 10px; color: var(--text-secondary); font-weight: 500;">读取形态:</span>
-          <div class="btn-group" style="display: flex; gap: 2px;">
-            ${(['area', 'bar', 'line', 'symbol'] as const)
-              .map(
-                (pt) =>
-                  `<button type="button" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-plottype-pill ${
-                    pType === pt ? 'ui-btn--active active' : ''
-                  }" data-col-id="${col.id}" data-type="${pt}" style="font-size: 9px; padding: 1px 5px;">${typeLabels[pt]}</button>`
-              )
-              .join('')}
-          </div>
-        </div>
         <div style="display: flex; gap: 4px;">
           <button type="button" id="btn-col-digitize" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-digitize" data-col-id="${col.id}" style="flex: 1; font-size: 10px; padding: 4px 2px; color: var(--accent-blue); border-color: rgba(2,132,199,0.3); background: rgba(2,132,199,0.06);" title="重新数字化取数此列">
             重新取数
@@ -377,57 +352,6 @@ export class Sidebar {
 
     const isBatchSelected = this.selectedColumnIds.has(col.id);
 
-    if (this.isCompactView) {
-      return `
-        <div class="taxa-card compact-taxa-row ${isActive ? 'active' : ''} ${isBatchSelected ? 'batch-selected' : ''}" data-taxa-id="${col.id}">
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; width: 100%;">
-            <div style="display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1;">
-              <input type="checkbox" class="taxa-select-checkbox" data-col-id="${col.id}" ${isBatchSelected ? 'checked' : ''} style="cursor: pointer; width: 12px; height: 12px; margin: 0; flex-shrink: 0;" title="勾选多选列" />
-              <span class="color-dot" style="background-color: ${col.color}; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;"></span>
-              <input type="text" class="taxa-name-inline-input" data-col-id="${col.id}" data-action="inline-rename" value="${col.name}" style="font-size: 11px; font-weight: ${isActive ? '600' : '400'}; border: none; background: transparent; color: inherit; width: 100%; text-overflow: ellipsis; overflow: hidden; padding: 1px 2px;" title="点击直接改名，获得焦点时画布高亮该列" />
-            </div>
-            <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
-              <!-- X 刻度状态徽章 -->
-              ${
-                scale
-                  ? `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(16, 185, 129, 0.15); color: var(--status-success); font-weight: 600;" title="${
-                      isSlopeScale
-                        ? `满刻度（列右缘）= (${formatScaleValue(scale.px1 - scale.px0)}px/刻度) × ${formatScaleValue(scale.val1)}${scale.unit}${
-                            exaggerationOf(scale) > 1 ? ' ÷ ' + exaggerationOf(scale) + '×' : ''
-                          }`
-                        : `X 刻度: ${formatScaleValue(scale.val0)} ~ ${formatScaleValue(scale.val1)} ${scale.unit}`
-                    }">${
-                      isSlopeScale
-                        ? `${formatScaleValue(fullScaleAtColumnEdge(scale, col.endX))}${scale.unit}`
-                        : `${formatScaleValue(scale.val1)}${scale.unit}`
-                    }</span>`
-                  : `<span class="badge" style="font-size: 9px; padding: 1px 4px; background: rgba(245, 158, 11, 0.15); color: var(--status-warning);" title="X 刻度尚未标定">未定标</span>`
-              }
-
-              <!-- 最大实测峰值呈现 (一眼识别优势种) -->
-              <span class="taxa-peak-badge" style="font-size: 9.5px; font-weight: 700; color: ${isActive ? 'var(--accent-blue)' : 'var(--text-secondary)'}; font-family: var(--font-mono); min-width: 34px; text-align: right;" title="实测最大丰度峰值: ${maxValStr}">
-                ${maxValStr}
-              </span>
-
-              <!-- 就地快速切换形态微图标 [///] -->
-              <button class="icon-btn plot-type-btn" data-action="cycle-plot-type" title="当前形态: ${pType.toUpperCase()} (点击切换形态: 面积/柱状/折线/符号)" style="padding: 1px 4px; font-size: 10px; line-height: 1.2; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 3px; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;">
-                <span>${typeLabel}</span><span style="font-size: 7px; opacity: 0.6;">▾</span>
-              </button>
-
-              <button class="icon-btn toggle-visibility ${col.visible ? 'visible' : 'hidden'}" data-action="toggle-visible" title="显隐属种" style="padding: 2px;">
-                ${
-                  col.visible
-                    ? `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
-                    : `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
-                }
-              </button>
-            </div>
-          </div>
-          ${isActive ? activeDetailHtml : ''}
-        </div>
-      `;
-    }
-
     return `
       <div class="taxa-card ${isActive ? 'active' : ''} ${isBatchSelected ? 'batch-selected' : ''}" data-taxa-id="${col.id}">
         <div class="taxa-header">
@@ -437,9 +361,6 @@ export class Sidebar {
             <input type="text" class="taxa-name-inline-input" data-col-id="${col.id}" data-action="inline-rename" value="${col.name}" title="点击可直接编辑此属种名称，获得焦点时画布高亮该列" />
           </div>
           <div style="display: flex; align-items: center; gap: 4px;">
-            <button class="icon-btn plot-type-btn" data-action="cycle-plot-type" title="当前形态: ${pType.toUpperCase()} (点击切换形态: 面积/柱状/折线/符号)" style="font-size: 10px; padding: 2px 4px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 3px; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;">
-              <span>${typeLabel}</span><span style="font-size: 8px; opacity: 0.6;">▾</span>
-            </button>
             <button class="icon-btn toggle-visibility ${col.visible ? 'visible' : 'hidden'}" data-action="toggle-visible" title="显隐属种">
               ${
                 col.visible
@@ -453,7 +374,7 @@ export class Sidebar {
         <div class="taxa-meta">
           <div class="meta-item">
             <span>所属组:</span>
-            <span class="badge" style="font-size: 9.5px; padding: 1px 4px;">${groupName}</span>
+            <span class="badge" style="font-size: 9.5px; padding: 1px 4px;">${groupName} (${typeLabels[pType] || '面积'})</span>
           </div>
           <div class="meta-item">
             <span>X 刻度:</span>
@@ -490,14 +411,9 @@ export class Sidebar {
   }
 
   private bindEvents(): void {
-    // 0. 折叠侧边栏与紧凑/卡片视图切换
+    // 0. 折叠侧边栏
     this.element.querySelector('#btn-collapse-sidebar')?.addEventListener('click', () => {
       this.callbacks.onToggleCollapse?.(true);
-    });
-
-    this.element.querySelector('#btn-toggle-compact')?.addEventListener('click', () => {
-      this.isCompactView = !this.isCompactView;
-      this.render();
     });
 
     // 在当前列后添加空白列；无列状态下入口不渲染。
@@ -642,46 +558,6 @@ export class Sidebar {
 
       const taxaId = card.getAttribute('data-taxa-id');
       if (!taxaId) return;
-
-      // 循环就地切换形态微图标 [///]
-      if (target.closest('[data-action="cycle-plot-type"]')) {
-        e.stopPropagation();
-        const col = this.data.columns.find((c) => c.id === taxaId);
-        if (col) {
-          // 四档形态 + 第五档「跟随组」（清除列级覆盖）。
-          // 少了第五档，用户一旦点过这个图标就再也回不到组值——那正是
-          // 「组形态改了不生效」的第二条成因。
-          const sequence: Array<'area' | 'bar' | 'line' | 'symbol' | null> = [
-            'area',
-            'bar',
-            'line',
-            'symbol',
-            null,
-          ];
-          const curIdx = sequence.indexOf(resolvePlotType(col, this.groupOfColumn(col)));
-          const nextType = sequence[(curIdx + 1) % sequence.length];
-          col.plot_type = nextType;
-          col.plotType = nextType ?? undefined;
-          this.callbacks.onChangePlotType?.(taxaId, nextType);
-          this.render();
-        }
-        return;
-      }
-
-      // 单列读取形态药丸按钮
-      const pillBtn = target.closest('.sidebar-plottype-pill') as HTMLElement | null;
-      if (pillBtn) {
-        e.stopPropagation();
-        const pType = pillBtn.getAttribute('data-type') as 'area' | 'bar' | 'line' | 'symbol';
-        const col = this.data.columns.find((c) => c.id === taxaId);
-        if (col && pType) {
-          col.plot_type = pType;
-          col.plotType = pType;
-          this.callbacks.onChangePlotType?.(taxaId, pType);
-          this.render();
-        }
-        return;
-      }
 
       // 重新取数按钮
       if (target.closest('#btn-col-digitize')) {

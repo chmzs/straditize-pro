@@ -429,6 +429,8 @@ export interface DiagramData {
   imageSrc: string;
   imageWidth: number;
   imageHeight: number;
+  project_name?: string;
+  image_name?: string;
 
   /** 多 ROI 列表与指针（严格冻结契约 v1.3 §2.6） */
   rois: DataRoi[];

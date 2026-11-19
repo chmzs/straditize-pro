@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from .export import (
+    format_export_filename,
+    resolve_project_name,
+    sanitize_filename_stem,
+)
 from .export_docs import CSV_MISSING_NOTICE
 
 import base64
@@ -12,6 +17,7 @@ import logging
 import os
 import tarfile
 import time
+import zipfile
 from typing import Any
 
 import numpy as np
@@ -34,9 +40,12 @@ def _payload_exaggeration(raw_column: dict[str, Any]) -> Any:
     canonical = raw_column.get("exaggeration_mult")
     if canonical is not None:
         return canonical
-    if not bool(raw_column.get("has_exaggeration", raw_column.get("hasExaggeration", False))):
+    if not bool(
+        raw_column.get("has_exaggeration", raw_column.get("hasExaggeration", False))
+    ):
         return None
     return raw_column.get("exaggeration_multiplier", raw_column.get("exaggerationMult"))
+
 
 def _canonical_degrid_strength(raw: Any, *, origin: str) -> str | None:
     """把去线强度收敛到唯一合法域：{weak, medium, strong} ∪ {None}。
@@ -236,9 +245,10 @@ class ProjectSessionMixin:
         没有像素时（还没载图）无法合成：把派生掩膜全部置空，宁可"没有掩膜"，
         也绝不留下与恢复状态不符的旧掩膜。
         """
-        if getattr(self, "image", None) is None or getattr(
-            self, "foreground_mask", None
-        ) is None:
+        if (
+            getattr(self, "image", None) is None
+            or getattr(self, "foreground_mask", None) is None
+        ):
             self.candidate_line_mask = None
             self.exclusion_mask = None
             self.manual_restore_mask = None
@@ -299,6 +309,7 @@ class ProjectSessionMixin:
         self.chron_events = []
         self.undo_stack = []
         self.redo_stack = []
+        self.project_name = None
         self._init_rois()
 
         if clear_image:
@@ -537,10 +548,89 @@ class ProjectSessionMixin:
                         self.age_depth_image_path = "archive://image/age_depth.png"
 
                 return parsed
+        elif path.endswith(".zip") or zipfile.is_zipfile(path):
+            try:
+                with zipfile.ZipFile(path, "r") as zf:
+                    names = zf.namelist()
+                    json_member = None
+                    img_member = None
+                    ad_img_member = None
+                    for n in names:
+                        nl = n.lower()
+                        if nl.endswith("straditize.json") or (
+                            nl.endswith(".json")
+                            and "manifest" not in nl
+                            and "info" not in nl
+                        ):
+                            json_member = n
+                        elif "age_depth" in nl and nl.endswith(
+                            (".png", ".jpg", ".jpeg")
+                        ):
+                            ad_img_member = n
+                        elif nl.endswith((".png", ".jpg", ".jpeg")):
+                            img_member = n
+
+                    if not json_member:
+                        filename = os.path.basename(path)
+                        if (
+                            "strat_export" in filename
+                            or "export" in filename
+                            or any(
+                                "plot_strat" in n.lower() or "data.csv" in n.lower()
+                                for n in names
+                            )
+                        ):
+                            raise JsonRpcError(
+                                INVALID_PARAMS,
+                                f"'{filename}' 为导出出图包 (plot bundle) 而非项目归档，未包含 straditize.json。",
+                            )
+                        raise JsonRpcError(
+                            INVALID_PARAMS,
+                            f"'{filename}' 为无效的 zip 压缩包，未包含 straditize.json 项目配置文件。",
+                        )
+
+                    with zf.open(json_member) as f_json:
+                        parsed = json.loads(f_json.read().decode("utf-8"))
+
+                    if img_member:
+                        with zf.open(img_member) as f_img:
+                            img_bytes = f_img.read()
+                            img_obj = Image.open(io.BytesIO(img_bytes))
+                            img_obj.load()
+                            self.image = img_obj
+                            self.width, self.height = img_obj.size
+                            self.format = img_obj.format or "PNG"
+                            self.mode = img_obj.mode
+
+                    if ad_img_member:
+                        with zf.open(ad_img_member) as f_ad:
+                            ad_bytes = f_ad.read()
+                            ad_obj = Image.open(io.BytesIO(ad_bytes))
+                            ad_obj.load()
+                            self.age_depth_image = ad_obj
+                            self.age_depth_image_path = "archive://image/age_depth.png"
+
+                    return parsed
+            except zipfile.BadZipFile as e:
+                raise JsonRpcError(
+                    INVALID_PARAMS,
+                    f"损坏的 zip 文件 '{os.path.basename(path)}': {e}",
+                ) from e
         else:
-            with open(path, "r", encoding="utf-8") as f:
-                parsed = json.load(f)
-            return parsed
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    parsed = json.load(f)
+                return parsed
+            except UnicodeDecodeError as e:
+                raise JsonRpcError(
+                    INVALID_PARAMS,
+                    f"无法解析项目文件 '{os.path.basename(path)}'：非文本或不受支持的二进制格式。",
+                ) from e
+            except json.JSONDecodeError as e:
+                raise JsonRpcError(
+                    INVALID_PARAMS,
+                    f"项目文件 '{os.path.basename(path)}' 不是合法的 JSON 格式: {e}",
+                ) from e
 
     def _reset_loaded_state(self, roi: dict[str, Any]) -> None:
         """按 payload 的 roi 重算 data 范围，并清掉上一份工程留下的标度/掩膜状态。"""
@@ -643,6 +733,7 @@ class ProjectSessionMixin:
         老包只有 `roi` 字典时按它 `roi_create` 出一个默认 ROI —— 这条分支是
         **唯一**给老工程包兜底的地方，删掉会让老包载入后没有 ROI。
         """
+        self.project_name = None
         self._init_rois()
         saved_rois = project_data.get("rois")
         if saved_rois and isinstance(saved_rois, list):
@@ -1049,6 +1140,7 @@ class ProjectSessionMixin:
 
     def _restore_aux_fields(self, project_data: dict[str, Any]) -> None:
         """回填论文元数据、样本、候选线（含 status 兼容视图）、集合表。"""
+        self.project_name = project_data.get("project_name")
         if project_data.get("paper_metadata"):
             self.metadata_update(project_data["paper_metadata"])
         if project_data.get("samples") is not None:
@@ -1130,8 +1222,15 @@ class ProjectSessionMixin:
         self,
         output_path: str | None = None,
         format: str = "tar",
+        project_name: str | None = None,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Saves project to POSIX UStar .tar archive or JSON per Section 八."""
+        fmt_lower = format.lower()
+        ext = "json" if fmt_lower == "json" else "tar"
+        proj = resolve_project_name(self, project_name)
+        filename = format_export_filename(proj, "_project", ext)
+
         manifest = {
             "version": "2.0.0",
             "tool": "straditize pro",
@@ -1153,8 +1252,10 @@ class ProjectSessionMixin:
         ad_export = self._build_age_depth_export()
         project_json = self._build_project_json(calib, roi, cols_export, ad_export)
 
-        if format.lower() == "json":
-            return self._save_project_json(project_json, ad_export, output_path)
+        if fmt_lower == "json":
+            return self._save_project_json(
+                project_json, ad_export, output_path, filename=filename
+            )
 
         tar_bytes, csv_reason = self._build_project_tar(project_json, manifest, columns)
         placeholder = {
@@ -1166,6 +1267,7 @@ class ProjectSessionMixin:
                 f.write(tar_bytes)
             return {
                 "path": output_path,
+                "filename": filename,
                 "size": len(tar_bytes),
                 "success": True,
                 **placeholder,
@@ -1173,10 +1275,18 @@ class ProjectSessionMixin:
 
         return {
             "tar_base64": base64.b64encode(tar_bytes).decode("ascii"),
+            "filename": filename,
             "size": len(tar_bytes),
             "success": True,
             **placeholder,
         }
+
+    def set_project_name(self, name: str | None) -> dict[str, Any]:
+        """Sets user-configured project name."""
+        self.project_name = (
+            sanitize_filename_stem(name) if name and str(name).strip() else None
+        )
+        return {"success": True, "project_name": self.project_name}
 
     save_project = project_save
 
@@ -1242,7 +1352,9 @@ class ProjectSessionMixin:
             # 点全变成算法点，页脚「锚点: N 手动 / M 总计」归零，后续重分列/重提取
             # 会把这些点当自动结果重算掉（用户手工劳动静默丢失，2026-11-10）。
             manual_store = getattr(self, "manual_points", None) or {}
-            manual = manual_store.get(c_idx, {}) if isinstance(manual_store, dict) else {}
+            manual = (
+                manual_store.get(c_idx, {}) if isinstance(manual_store, dict) else {}
+            )
             pts = []
             for y_r, x_c in ctrls.items():
                 rec = manual.get(int(y_r)) or manual.get(y_r) or {}
@@ -1365,14 +1477,14 @@ class ProjectSessionMixin:
             "samples": getattr(self, "samples", []),
             # 取样深度网格（P0-A）：它是**输入参数**而不是结果——用户指定在哪些深度
             # 出数，直接决定交付数据的行集。逐项 float 化，避免 numpy 标量进 JSON。
-            "depth_grid": [
-                float(d) for d in (getattr(self, "depth_grid", []) or [])
-            ],
+            "depth_grid": [float(d) for d in (getattr(self, "depth_grid", []) or [])],
             "paper_metadata": getattr(self, "paper_metadata", {}),
             "age_depth": ad_export,
             "ensemble_tables": getattr(self, "ensemble_tables", []),
             "columns": cols_export,
         }
+        if getattr(self, "project_name", None) is not None:
+            project_json["project_name"] = self.project_name
         return project_json
 
     def _save_project_json(
@@ -1380,6 +1492,7 @@ class ProjectSessionMixin:
         project_json: dict[str, Any],
         ad_export: dict[str, Any] | None,
         output_path: str | None,
+        filename: str | None = None,
     ) -> dict[str, Any]:
         """json 分支：带路径时把底图/年代-深度图内嵌成 base64 再落盘。"""
         if output_path:
@@ -1402,8 +1515,8 @@ class ProjectSessionMixin:
         if output_path:
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(json_str)
-            return {"path": output_path, "success": True}
-        return {"data": project_json, "success": True}
+            return {"path": output_path, "filename": filename, "success": True}
+        return {"data": project_json, "filename": filename, "success": True}
 
     def _export_csv_or_placeholder(
         self, columns: list[dict[str, Any]]
@@ -1607,8 +1720,7 @@ class ProjectSessionMixin:
                 b"straditize.json    - Full vector model\n"
                 b"data.csv           - Calibrated matrix (Depth in 1st col, unobserved = 0.0)\n"
                 b"plot_strat.R       - rioja::strat.plot script (per-column units: % -> scale.percent, others -> own range)\n"
-                b"README.txt         - Documentation\n\n"
-                + CSV_MISSING_NOTICE
+                b"README.txt         - Documentation\n\n" + CSV_MISSING_NOTICE
             )
             ti_readme = tarfile.TarInfo(name="README.txt")
             ti_readme.size = len(readme)

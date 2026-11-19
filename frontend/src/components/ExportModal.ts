@@ -2,6 +2,7 @@ import { DiagramData } from '../types/pollen';
 import { RpcClient } from '../services/RpcClient';
 import { ProjectManager } from '../core/ProjectManager';
 import { base64ToBlob, requireExportBase64, triggerDownload } from '../core/exportPayload';
+import { resolveExportFilename } from '../utils/exportNaming';
 import { computeExportReadiness, renderExportReadiness } from './steps/ExportReadinessPanel';
 import {
   buildRowSetCaption,
@@ -1070,7 +1071,12 @@ export class ExportModal {
           : await renderPlot(selected, { quiet: true, preview: false });
         const a = document.createElement('a');
         a.href = plot.dataUrl;
-        a.download = `straditize_strat_diagram_${Date.now()}.${plot.format}`;
+        a.download = resolveExportFilename(
+          this.data.project_name,
+          this.data.image_name || this.data.imageSrc,
+          '_strat_diagram',
+          plot.format
+        );
         a.click();
       } catch (err: any) {
         reportPlotError(err);
@@ -1116,7 +1122,12 @@ export class ExportModal {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `straditize_${this.data.primary_roi_id || 'data'}_${Date.now()}.csv`;
+        a.download = resolveExportFilename(
+          this.data.project_name,
+          this.data.image_name || this.data.imageSrc,
+          '_matrix',
+          'csv'
+        );
         a.click();
         URL.revokeObjectURL(url);
       } catch (err: any) {
@@ -1131,7 +1142,12 @@ export class ExportModal {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `straditize_data_${Date.now()}.json`;
+      a.download = resolveExportFilename(
+        this.data.project_name,
+        this.data.image_name || this.data.imageSrc,
+        '_project',
+        'json'
+      );
       a.click();
       URL.revokeObjectURL(url);
     });
@@ -1149,7 +1165,18 @@ export class ExportModal {
           requireExportBase64(res, '导出出图包'),
           'application/zip'
         );
-        triggerDownload(blob, String(res?.filename || `strat_export_${Date.now()}.zip`));
+        triggerDownload(
+          blob,
+          String(
+            res?.filename ||
+              resolveExportFilename(
+                this.data.project_name,
+                this.data.image_name || this.data.imageSrc,
+                '_plot_bundle',
+                'zip'
+              )
+          )
+        );
       } catch (err: any) {
         notifyError(`导出出图包失败: ${err.message || err}`);
       }
@@ -1221,7 +1248,18 @@ export class ExportModal {
           requireExportBase64(res, '导出 XLSX'),
           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         );
-        triggerDownload(blob, `straditize_scientific_${Date.now()}.xlsx`);
+        triggerDownload(
+          blob,
+          String(
+            res?.filename ||
+              resolveExportFilename(
+                this.data.project_name,
+                this.data.image_name || this.data.imageSrc,
+                '_report',
+                'xlsx'
+              )
+          )
+        );
       } catch (err: any) {
         notifyError(`导出 XLSX 失败: ${err.message || err}`);
       }
@@ -1243,7 +1281,18 @@ export class ExportModal {
           include_ensemble_names: selectedEnsembles,
         });
         const blob = base64ToBlob(requireExportBase64(res, '导出 LiPD'), 'application/zip');
-        triggerDownload(blob, `straditize_lipdverse_${Date.now()}.lpd`);
+        triggerDownload(
+          blob,
+          String(
+            res?.filename ||
+              resolveExportFilename(
+                this.data.project_name,
+                this.data.image_name || this.data.imageSrc,
+                '_lipd',
+                'lpd'
+              )
+          )
+        );
       } catch (err: any) {
         notifyError(`导出 LiPD 失败: ${err.message || err}`);
       }

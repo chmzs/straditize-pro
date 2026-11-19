@@ -6,6 +6,7 @@ import { SplineInterpolator } from './SplineInterpolator';
 import { CoordinateSystem } from './CoordinateSystem';
 import { TarArchive } from './TarArchive';
 import { notifyError } from '../ui/feedback';
+import { resolveExportFilename } from '../utils/exportNaming';
 
 export interface ProjectManagerCallbacks {
   onProjectLoad?: (projectData: DiagramData) => void;
@@ -415,7 +416,14 @@ export class ProjectManager {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `straditize_project_${Date.now()}.tar`;
+          a.download =
+            res?.filename ||
+            resolveExportFilename(
+              this.data.project_name,
+              this.data.image_name || this.data.imageSrc,
+              '_project',
+              'tar'
+            );
           a.click();
           URL.revokeObjectURL(url);
           return true;

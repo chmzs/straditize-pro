@@ -207,6 +207,14 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
     await calibrateColumnsX(page);
     await calibrateDepth(page);
 
+    // 显式数字化各列，建立真实轮廓线（第一不变量：未数字化列不造假读数，故必须数字化才有轮廓墨迹）
+    const diagram = (await rpc(page, 'straditize.getDiagramData', {})) as {
+      columns?: Array<{ col_index: number }>;
+    };
+    for (const col of diagram.columns ?? []) {
+      await rpc(page, 'core.digitize', { col_index: col.col_index });
+    }
+
     await openExport(page);
     await expect(
       page.locator('#wpd-dataset-select'),
@@ -240,6 +248,14 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
     });
     await calibrateColumnsX(page);
     await calibrateDepth(page);
+
+    // 显式数字化各列，建立真实轮廓线（第一不变量：未数字化列不造假读数，故必须数字化才有轮廓墨迹）
+    const diagram = (await rpc(page, 'straditize.getDiagramData', {})) as {
+      columns?: Array<{ col_index: number }>;
+    };
+    for (const col of diagram.columns ?? []) {
+      await rpc(page, 'core.digitize', { col_index: col.col_index });
+    }
 
     await openExport(page);
     const preview = await readPreview(page);

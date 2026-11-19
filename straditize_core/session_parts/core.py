@@ -1913,8 +1913,8 @@ class CoreMixin:
         self,
         tolerance_px: float = 2.5,
         min_taxa_support: int = 1,
-        mode: str = "mixed",
-        adaptive_window: bool = False,
+        mode: str = "dual",
+        adaptive_window: bool = True,
     ) -> dict[str, Any]:
         """Discovers authentic historical sampling horizons by clustering turning points across all taxa.
 
@@ -1933,6 +1933,12 @@ class CoreMixin:
         不是簇内拐点个数。同一列在窗口内出现多个相邻拐点只贡献 1 个支持列（issue #82）。
         默认 `1` 等价于不过滤。
         """
+        if mode not in ("dual", "peaks", "mixed"):
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                f"Invalid mode '{mode}'. Expected 'dual', 'peaks', or 'mixed'.",
+            )
+
         if not getattr(self, "columns", None):
             raise JsonRpcError(STATE_ERROR, "No columns detected.")
 

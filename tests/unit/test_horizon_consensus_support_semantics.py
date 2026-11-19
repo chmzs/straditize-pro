@@ -53,13 +53,17 @@ def test_single_column_adjacent_peaks_are_not_support():
     """单列 3 个相邻峰（同一容差窗口内）→ support_columns == 1 → support=3 必须过滤。"""
     sess = _session({0: _peak_rows((100.0, 106.0, 112.0))})
 
-    kept = sess.extract_horizon_consensus(tolerance_px=8.0, min_taxa_support=1)
+    kept = sess.extract_horizon_consensus(
+        tolerance_px=8.0, min_taxa_support=1, mode="mixed", adaptive_window=False
+    )
     assert kept["horizons_count"] == 1, kept["pixel_y"]
     assert kept["horizons"][0]["support_columns"] == 1, kept["horizons"][0]
     # 拐点成员数确实 ≥3（这正是修正前被误判为「3 列支持」的来源）
     assert kept["horizons"][0]["member_count"] >= 3, kept["horizons"][0]
 
-    filtered = sess.extract_horizon_consensus(tolerance_px=8.0, min_taxa_support=3)
+    filtered = sess.extract_horizon_consensus(
+        tolerance_px=8.0, min_taxa_support=3, mode="mixed", adaptive_window=False
+    )
     assert filtered["horizons_count"] == 0, filtered["pixel_y"]
     assert filtered["pixel_y"] == []
     assert filtered["horizons"] == []
