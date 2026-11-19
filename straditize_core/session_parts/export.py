@@ -429,6 +429,8 @@ class ExportMixin:
         `legacy_column_name` 只改**首列名**（`age` → `depth`），不改任何数值；给按旧
         列名读的下游脚本一个过渡口。首列名本身来自 `_y_col_label`（唯一来源）。
         """
+        self._ensure_export_column_points()
+
         rois = getattr(self, "rois", [])
         # 手工构造的会话（测试、CLI 直调）常常没有 ROI 记账，但列上仍带着某个 roi_id。
         # 此时下面的 `roi_cols` 过滤会把整张表判空（roi_id 对不上合成出来的 "pollen"）。
