@@ -200,8 +200,8 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
     // 钉住「不选时行数 = 自己标定的样品层位数」，而不是各列拐点 y 的并集。
     const SAMPLE_ROWS = [
       { row_px: 300, depth: 10.0, source: 'manual' },
-      { row_px: 420, depth: 20.0, source: 'manual' },
-      { row_px: 540, depth: 30.0, source: 'manual' },
+      { row_px: 400, depth: 20.0, source: 'manual' },
+      { row_px: 500, depth: 30.0, source: 'manual' },
     ];
     await backendRpc(page, 'samples.set', { samples: SAMPLE_ROWS });
     await calibrateColumnsX(page);
@@ -234,8 +234,8 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
     await backendRpc(page, 'samples.set', {
       samples: [
         { row_px: 300, depth: 10.0, source: 'manual' },
-        { row_px: 420, depth: 20.0, source: 'manual' },
-        { row_px: 540, depth: 30.0, source: 'manual' },
+        { row_px: 400, depth: 20.0, source: 'manual' },
+        { row_px: 500, depth: 30.0, source: 'manual' },
       ],
     });
     await calibrateColumnsX(page);
