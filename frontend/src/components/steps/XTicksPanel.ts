@@ -295,9 +295,21 @@ export function render(data: DiagramData): string {
                不同高），三件事看起来互不相干；现在三行左边界与控件高度都统一。
                单位是「组」属性，也是下游判量纲的唯一依据：列载荷 unit、LiPD units、
                随包 plot_strat.R 的 scale.percent 都读它。 -->
-          <div data-role="group-param-grid" style="display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 6px 8px;">
-            <label for="grp-unit-inp" style="font-size: var(--font-size-xs); color: var(--text-muted);" title="本组量纲标签（默认 %）。% 的组按 rioja 惯例画（每列按本列最大值归一、画满宽）；非 % 的组按自身量程（min..max）画。">单位</label>
-            <input id="grp-unit-inp" type="text" value="${String(groupUnit).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" list="grp-unit-options" style="height: var(--control-h-sm); width: 100%; box-sizing: border-box; font-size: var(--font-size-xs); padding: 0 6px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px;" />
+          <div data-role="group-param-grid" style="display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: start; gap: 6px 8px;">
+            <label for="grp-unit-inp" style="font-size: var(--font-size-xs); color: var(--text-muted); padding-top: 5px;" title="本组量纲标签（默认 %）。% 的组按 rioja 惯例画（每列按本列最大值归一、画满宽）；非 % 的组按自身量程（min..max）画。">单位</label>
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+              <input id="grp-unit-inp" type="text" value="${String(groupUnit).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" placeholder="输入或点击下方预设" style="height: var(--control-h-sm); width: 100%; box-sizing: border-box; font-size: var(--font-size-xs); padding: 0 6px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px;" />
+              <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                ${(['%', '‰', 'counts', '粒/g', '粒/cm²', '10³ 粒/cm³'] as const)
+                  .map(
+                    (u) =>
+                      `<button type="button" class="ui-btn ui-btn--quiet ui-btn--xs grp-unit-pill ${
+                        groupUnit === u ? 'active-mode' : ''
+                      }" data-unit="${u}" style="padding: 1px 7px; font-size: var(--font-size-xs);">${u}</button>`
+                  )
+                  .join('')}
+              </div>
+            </div>
 
             <span style="font-size: var(--font-size-xs); color: var(--text-muted);">形态</span>
             <div style="display: flex; flex-wrap: wrap; gap: 4px;">
@@ -352,10 +364,6 @@ export function render(data: DiagramData): string {
               ${t('step6.groupExagHint')}
             </div>
           </div>
-          <datalist id="grp-unit-options">
-            <option value="%"></option><option value="‰"></option><option value="counts"></option>
-            <option value="粒/g"></option><option value="粒/cm2/yr"></option><option value="10^3 粒/cm3"></option>
-          </datalist>
 
           <!-- 组内属种与批量划组管理 -->
           ${
@@ -889,6 +897,18 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       }
       if (raw === current) return;
       patchGroup({ unit: raw });
+    });
+
+    // 预设单位药丸点击：点击即写组单位
+    root.querySelectorAll<HTMLButtonElement>('.grp-unit-pill').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const u = btn.getAttribute('data-unit');
+        if (!u) return;
+        const current = effectiveGroupUnit();
+        if (u === current) return;
+        unitInput.value = u;
+        patchGroup({ unit: u });
+      });
     });
   };
   wireGroupAttributes();
