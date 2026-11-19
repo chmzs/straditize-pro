@@ -13,29 +13,44 @@
 | 4 | **同 row set 两套取值**（本次实测） | 换 `dataset` 参数 | **82.33% 单元格不同** |
 | 5 | **两个零点入口**（`axis-stroke` 发现） | 改兜底常量 | `scaleCalib.originX` 不变、`controlPoints` 全变 |
 
-## 2. 第四面的实测（`.recon_20261117`，19 列，数字化 28880 点，`samples` 清空）
+## 2. 第四面的实测（`.recon_20261117`，19 列 / 1 ROI / age / ka，控制点 6530 点 / 1467 个不同 row）
+
+### 主场景：`samples = 203`（载入时的真实状态）
 
 ```python
-a = session._dataset_frame(None, strict=False)            # data.csv / 归档语义
+a = session._dataset_frame(None, strict=False)            # data.csv / 归档语义 → samples 优先
 b = session._dataset_frame("union_points", strict=False)  # 面板「控制点并集」
 ```
 
 ```
-ds=None      : (1520, 20)   ← 全像素行（1520 = ROI 高度）
+ds=None      : (203, 20)    ← 共识层位（203 条）
 union_points : (1467, 20)   ← 控制点并集
-共同行: 1467
-可比单元格 27873 | 有差异 22948 (82.33%)
-差异 p50/p95/max: [0.477, 33.1949, 83895.6884]
-最大差异列: {'Concentration': 83895.7, 'Amaranthaceae': 62.4, 'Artemisia': 31.9}
-NA: A 侧 0 | B 侧 0
+共同行 203 | 可比单元格 3857 | 有差异 3459 (89.66%)
+差异 p50 1.187 / p95 779.25
 ```
 
-两条链的差别不是"行集不同导致的对不齐"——**共同行上的值也大面积不同**：
+**行数差 7 倍，共同行上近九成值不同。**
 
-- `ds=None` → `get_roi_dataframes` → `read_column_values`：**读该像素行的真实墨迹**
+### 对照：`samples = 0`（清空后，隔离"取值口径"这一个变量）
+
+```
+ds=None      : (1520, 20)   ← 全像素行（= ROI 高度）
+union_points : (1467, 20)   ← 控制点并集
+共同行 1467 | 可比单元格 27873 | 有差异 22948 (82.33%)
+差异 p50 0.477 / p95 33.19 / max 83895.7（Concentration）
+```
+
+清空 `samples` 后两条路径的行集接近（1520 vs 1467），差异更纯粹地反映"取值口径"；
+而**真实场景（`samples=203`）下，行集与取值同时分叉**，所以 89.66% 比 82.33% 更严重。
+
+### 两条链的差别不是"行集不同导致对不齐"
+
+即使在共同行上，值也大面积不同：
+
+- `ds=None` → `read_column_values`：**读该像素行的真实墨迹**
 - `union_points` → `extract_grid_values` → `np.interp`：**在 depth 轴上插值**
 
-一个是"读"，一个是"算"。插值端点 clamp 在 `Concentration` 这种量级 1e4 的列上放大成 83895 的偏差。
+一个"读"、一个"算"。插值端点 clamp 在量级 1e3–1e4 的浓度列上放大成两位数以上的偏差（`samples=0` 时 max 达 83895.7）。
 
 **而 `_dataset_frame` 的 docstring 写着"三种行集共用同一取数口径"。这句是错的。** 声称统一，实现是两条路。
 
