@@ -454,7 +454,7 @@ test.describe('组形态与轴线粗：写入后界面必须跟着变', () => {
     const groups = await readGroups(page);
     const cols = await readColumns(page);
     const groupStroke =
-      Number(groups.groups.find((g) => g.id === cols[0].x_group_id)?.axis_stroke_px ?? 5) || 5;
+      Number(groups.groups.find((g) => g.id === cols[0].x_group_id)?.axis_stroke_px ?? 2) || 2;
     expect(override, '前置：覆盖值必须与组值不同，否则「回到组值」看不出变化').not.toBe(groupStroke);
 
     const btn = page.locator('#btn-clear-col-axis-stroke');

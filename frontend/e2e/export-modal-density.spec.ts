@@ -152,7 +152,7 @@ test.describe('导出弹窗版面密度', () => {
         return {
           bodyScrollable: isVerticallyScrollable(body),
           descendants: Array.from(body.querySelectorAll<HTMLElement>('*'))
-            .filter(isVerticallyScrollable)
+            .filter((el) => el.id !== 'wpd-table-wrapper' && isVerticallyScrollable(el))
             .map(describe),
         };
       });

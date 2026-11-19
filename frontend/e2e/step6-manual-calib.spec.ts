@@ -51,7 +51,7 @@ async function pickGeometry(page: Page): Promise<{ px: number; zero: number; sta
   const group = data.rois
     .flatMap((r) => r.x_groups ?? [])
     .find((g) => g.id === widest!.x_group_id);
-  const stroke = Number(group?.axis_stroke_px ?? 5) || 5;
+  const stroke = Number(group?.axis_stroke_px ?? 2) || 2;
   const zero = Number(widest!.startX ?? 0) + stroke;
   const px = Math.round(zero + (Number(widest!.endX ?? 0) - zero) * 0.6);
   return { px, zero, startX: Number(widest!.startX ?? 0), slopeBefore: group?.value_per_px ?? null };

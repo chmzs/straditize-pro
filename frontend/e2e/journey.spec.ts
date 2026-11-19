@@ -132,7 +132,7 @@ async function calibrateColumnTicks(page: Page): Promise<void> {
   const widest = [...roiCols].sort((a, b) => Number(b.endX ?? 0) - Number(b.startX ?? 0) - (Number(a.endX ?? 0) - Number(a.startX ?? 0)))[0];
   expect(widest, '前置：roi_1 必须有列（步骤 5 分列已做）').toBeTruthy();
   const group = data0.rois.flatMap((r) => r.x_groups ?? []).find((g) => g.id === widest!.x_group_id);
-  const strokePx = Number(group?.axis_stroke_px ?? 5) || 5;
+  const strokePx = Number(group?.axis_stroke_px ?? 2) || 2;
   const zeroPx = Number(widest!.startX ?? 0) + strokePx;
   const targetTick = Math.round(zeroPx + (Number(widest!.endX ?? 0) - zeroPx) * 0.6);
   const targetColIndex = Number(widest!.col_index);
