@@ -71,50 +71,45 @@ export class ShortcutService {
       </div>
       <div class="help-panel-body">
         <div class="help-section">
-          <div class="help-section-title">Mouse Operations</div>
+          <div class="help-section-title">Viewport Navigation</div>
           <div class="help-grid">
             <div class="help-row"><span class="help-key">Right-drag / Mid-drag / Space+Left</span><span class="help-desc">Unified Viewport Pan</span></div>
             <div class="help-row"><span class="help-key">Wheel Scroll</span><span class="help-desc">Zoom centered on cursor (10%~1000%); Ctrl speeds up</span></div>
             <div class="help-row"><span class="help-key">Shift / Alt + Wheel</span><span class="help-desc">Horizontal Pan (Shift) / Vertical Pan (Alt)</span></div>
-            <div class="help-row"><span class="help-key">Left Click</span><span class="help-desc">Select element / Insert anchor / Deselect on empty</span></div>
-            <div class="help-row"><span class="help-key">Double Click</span><span class="help-desc">Fit to screen (empty) / Focus anchor</span></div>
-            <div class="help-row"><span class="help-key">Left Drag</span><span class="help-desc">Nudge anchor coords / Adjust column tick / Resize ROI</span></div>
-            <div class="help-row"><span class="help-key">Right Click</span><span class="help-desc">Exit active tool, return to Adjust (S) / Deselect</span></div>
-          </div>
-        </div>
-        <div class="help-section">
-          <div class="help-section-title">Manual Extraction Modes</div>
-          <div class="help-grid">
-            <div class="help-row"><span class="help-key">A</span><span class="help-desc">Add Control Point</span></div>
-            <div class="help-row"><span class="help-key">S / V</span><span class="help-desc">Select & Adjust Point</span></div>
-            <div class="help-row"><span class="help-key">D</span><span class="help-desc">Delete Control Point</span></div>
-            <div class="help-row"><span class="help-key">C</span><span class="help-desc">Add Column Baseline</span></div>
-            <div class="help-row"><span class="help-key">H</span><span class="help-desc">Hand Pan Mode</span></div>
-            <div class="help-row"><span class="help-key">R</span><span class="help-desc">Data ROI Bounding Box</span></div>
-            <div class="help-row"><span class="help-key">K</span><span class="help-desc">Line Mask Correction Brush</span></div>
-            <div class="help-row"><span class="help-key">Y</span><span class="help-desc">Y-Axis Two-Point Calibration</span></div>
-            <div class="help-row"><span class="help-key">T</span><span class="help-desc">Pick an X-Axis Ruler Tick (step 6 group calibration)</span></div>
-            <div class="help-row"><span class="help-key">Esc</span><span class="help-desc">Return to Adjust (S) / Deselect</span></div>
-          </div>
-        </div>
-        <div class="help-section">
-          <div class="help-section-title">Navigation & Nudge</div>
-          <div class="help-grid">
-            <div class="help-row"><span class="help-key">Arrow Keys</span><span class="help-desc">1px Precision Nudge</span></div>
-            <div class="help-row"><span class="help-key">Shift + Arrow Keys</span><span class="help-desc">10px Fast Nudge</span></div>
-            <div class="help-row"><span class="help-key">Alt + Arrow Keys</span><span class="help-desc">Pan the view 40px (same direction as Alt/Shift + Wheel; never nudges a selection)</span></div>
-            <div class="help-row"><span class="help-key">F</span><span class="help-desc">Fit to Screen</span></div>
+            <div class="help-row"><span class="help-key">Alt + Arrow Keys</span><span class="help-desc">Pan view 40px (never nudges selected elements)</span></div>
+            <div class="help-row"><span class="help-key">F / Double Click</span><span class="help-desc">Fit to Screen (empty canvas)</span></div>
             <div class="help-row"><span class="help-key">Ctrl+1</span><span class="help-desc">100% 1:1 Scale</span></div>
             <div class="help-row"><span class="help-key">+ / -</span><span class="help-desc">Smooth Zoom In / Out</span></div>
-            <div class="help-row"><span class="help-key">B / I / C</span><span class="help-desc">Binary Overlay (B) / Invert (I) / Contrast (C)</span></div>
           </div>
         </div>
         <div class="help-section">
-          <div class="help-section-title">History & Layout</div>
+          <div class="help-section-title">Workflow Tools</div>
           <div class="help-grid">
+            <div class="help-row"><span class="help-key">R</span><span class="help-desc">Step 2 · ROI Bounding Box</span></div>
+            <div class="help-row"><span class="help-key">Y</span><span class="help-desc">Step 3 · Y-Axis Two-Point Calibration</span></div>
+            <div class="help-row"><span class="help-key">K</span><span class="help-desc">Step 4 · Line Mask Correction Brush</span></div>
+            <div class="help-row"><span class="help-key">C</span><span class="help-desc">Step 5 · Add Column Baseline</span></div>
+            <div class="help-row"><span class="help-key">T</span><span class="help-desc">Step 6 · Pick an X-Axis Ruler Tick</span></div>
+            <div class="help-row"><span class="help-key">A / S / D</span><span class="help-desc">Step 7 · Add (A) / Adjust (S) / Delete (D) Control Point</span></div>
+          </div>
+        </div>
+        <div class="help-section">
+          <div class="help-section-title">Element Editing & Nudge</div>
+          <div class="help-grid">
+            <div class="help-row"><span class="help-key">Left Click</span><span class="help-desc">Select element / Insert anchor / Deselect on empty</span></div>
+            <div class="help-row"><span class="help-key">Left Drag</span><span class="help-desc">Nudge anchor coords / Adjust column tick / Resize ROI</span></div>
+            <div class="help-row"><span class="help-key">Arrow Keys</span><span class="help-desc">1px Precision Nudge for selected element</span></div>
+            <div class="help-row"><span class="help-key">Shift + Arrow Keys</span><span class="help-desc">10px Fast Nudge for selected element</span></div>
+            <div class="help-row"><span class="help-key">Delete / Backspace</span><span class="help-desc">Delete selected point, column, or geometry</span></div>
+            <div class="help-row"><span class="help-key">Esc / Right Click</span><span class="help-desc">Exit active tool, return to Adjust (S) / Deselect</span></div>
+          </div>
+        </div>
+        <div class="help-section">
+          <div class="help-section-title">Display, History & System</div>
+          <div class="help-grid">
+            <div class="help-row"><span class="help-key">B / I / C</span><span class="help-desc">Binary Overlay (B) / Invert (I) / Contrast (C)</span></div>
             <div class="help-row"><span class="help-key">Ctrl+Z / Ctrl+Y</span><span class="help-desc">Undo / Redo</span></div>
-            <div class="help-row"><span class="help-key">Delete</span><span class="help-desc">Delete selected point or column</span></div>
-            <div class="help-row"><span class="help-key">Ctrl+[ / Ctrl+]</span><span class="help-desc">Collapse/Expand Left/Right Drawers</span></div>
+            <div class="help-row"><span class="help-key">Ctrl+[ / Ctrl+]</span><span class="help-desc">Collapse/Expand Left / Right Panels</span></div>
             <div class="help-row"><span class="help-key">Ctrl+,</span><span class="help-desc">Preferences & Settings</span></div>
             <div class="help-row"><span class="help-key">F1</span><span class="help-desc">Toggle Help Panel</span></div>
           </div>
@@ -130,52 +125,47 @@ export class ShortcutService {
       </div>
       <div class="help-panel-body">
         <div class="help-section">
-          <div class="help-section-title">鼠标交互规范</div>
+          <div class="help-section-title">视口与画布导航</div>
           <div class="help-grid">
             <div class="help-row"><span class="help-key">右键拖拽 / 中键 / 空格+左键</span><span class="help-desc">全系统绝对统一视口平移 (Pan)</span></div>
             <div class="help-row"><span class="help-key">滚轮滚动</span><span class="help-desc">以光标为中心缩放 (10%~1000%)；Ctrl 加速</span></div>
             <div class="help-row"><span class="help-key">Shift / Alt + 滚轮</span><span class="help-desc">水平平移 (Shift) / 垂直平移 (Alt)</span></div>
-            <div class="help-row"><span class="help-key">左键单击</span><span class="help-desc">选中图元 / 插入锚点拉伸轮廓 / 空白取消选中</span></div>
-            <div class="help-row"><span class="help-key">左键双击</span><span class="help-desc">空白处快速适应屏幕 (Fit) / 锚点聚焦</span></div>
-            <div class="help-row"><span class="help-key">左键拖拽</span><span class="help-desc">微调锚点坐标 / 调整列基线刻度 / 调整 ROI</span></div>
-            <div class="help-row"><span class="help-key">右键单击</span><span class="help-desc">退出临时工具返回微调 (S) / 取消选中</span></div>
-          </div>
-        </div>
-        <div class="help-section">
-          <div class="help-section-title">手动提取模式</div>
-          <div class="help-grid">
-            <div class="help-row"><span class="help-key">A</span><span class="help-desc">添加控制点模式 (Add Point)</span></div>
-            <div class="help-row"><span class="help-key">S / V</span><span class="help-desc">微调与选择模式 (Adjust Point)</span></div>
-            <div class="help-row"><span class="help-key">D</span><span class="help-desc">删除控制点模式 (Delete Point)</span></div>
-            <div class="help-row"><span class="help-key">C</span><span class="help-desc">添加属种分列线 (Add Column)</span></div>
-            <div class="help-row"><span class="help-key">H</span><span class="help-desc">抓手平移模式 (Hand / Pan)</span></div>
-            <div class="help-row"><span class="help-key">R</span><span class="help-desc">ROI 矩形取数区模式（只框定取数范围，与深度无关）</span></div>
-            <div class="help-row"><span class="help-key">K</span><span class="help-desc">线掩膜人工修正笔刷（涂抹擦掉误标 / 补回漏标）</span></div>
-            <div class="help-row"><span class="help-key">Y</span><span class="help-desc">Y 轴两点标定（点两个已知刻度所在的行，再填真实值）</span></div>
-            <div class="help-row"><span class="help-key">T</span><span class="help-desc">点选 X 轴刻度齿（步骤 6 组级标定：点一个齿，再填它的数字）</span></div>
-            <div class="help-row"><span class="help-key">Esc</span><span class="help-desc">退出当前工具返回微调 (S) / 取消选中</span></div>
-          </div>
-        </div>
-        <div class="help-section">
-          <div class="help-section-title">方向键微调与视图导航</div>
-          <div class="help-grid">
-            <div class="help-row"><span class="help-key">↑ ↓ ← →</span><span class="help-desc">1 像素高精度微调 (1px Nudge)</span></div>
-            <div class="help-row"><span class="help-key">Shift + 方向键</span><span class="help-desc">10 像素快速微调 (10px Nudge)</span></div>
-            <div class="help-row"><span class="help-key">Alt + 方向键</span><span class="help-desc">平移视图 40px（与 Alt / Shift + 滚轮同向；有选中时只平移，不动几何）</span></div>
-            <div class="help-row"><span class="help-key">F</span><span class="help-desc">视图全图自适应屏幕居中 (Fit to Screen)</span></div>
+            <div class="help-row"><span class="help-key">Alt + 方向键</span><span class="help-desc">平移视图 40px（不影响任何选中图元）</span></div>
+            <div class="help-row"><span class="help-key">F / 双击空白</span><span class="help-desc">视图全图自适应屏幕居中 (Fit to Screen)</span></div>
             <div class="help-row"><span class="help-key">Ctrl+1</span><span class="help-desc">100% 原始物理分辨率 (1:1)</span></div>
             <div class="help-row"><span class="help-key">+ / -</span><span class="help-desc">平滑放大 / 缩小视图</span></div>
-            <div class="help-row"><span class="help-key">B / I / C</span><span class="help-desc">二值化透视遮罩 (B) / 反相 (I) / 对比度 (C)</span></div>
           </div>
         </div>
         <div class="help-section">
-          <div class="help-section-title">编辑历史与界面布局</div>
+          <div class="help-section-title">各步骤专用工具</div>
           <div class="help-grid">
-            <div class="help-row"><span class="help-key">Ctrl+Z / Ctrl+Y</span><span class="help-desc">撤销 / 重做</span></div>
-            <div class="help-row"><span class="help-key">Delete</span><span class="help-desc">删除当前选中的控制点或属种分列</span></div>
-            <div class="help-row"><span class="help-key">Ctrl+[ / Ctrl+]</span><span class="help-desc">展开 / 折叠左侧属种分列列表 / 右侧属性检查器</span></div>
+            <div class="help-row"><span class="help-key">R</span><span class="help-desc">步骤 2 · ROI 矩形取数区框定模式</span></div>
+            <div class="help-row"><span class="help-key">Y</span><span class="help-desc">步骤 3 · Y 轴两点物理标定模式</span></div>
+            <div class="help-row"><span class="help-key">K</span><span class="help-desc">步骤 4 · 干扰线掩膜人工修复笔刷</span></div>
+            <div class="help-row"><span class="help-key">C</span><span class="help-desc">步骤 5 · 添加属种分列线模式</span></div>
+            <div class="help-row"><span class="help-key">T</span><span class="help-desc">步骤 6 · 点选 X 轴刻度齿标定模式</span></div>
+            <div class="help-row"><span class="help-key">A / S / D</span><span class="help-desc">步骤 7 · 添加 (A) / 微调选择 (S) / 删除 (D) 控制点</span></div>
+          </div>
+        </div>
+        <div class="help-section">
+          <div class="help-section-title">图元编辑与精调</div>
+          <div class="help-grid">
+            <div class="help-row"><span class="help-key">左键单击</span><span class="help-desc">选中图元 / 插入锚点；空白处取消选中</span></div>
+            <div class="help-row"><span class="help-key">左键拖拽</span><span class="help-desc">微调锚点坐标 / 调整列基线刻度 / 调整 ROI</span></div>
+            <div class="help-row"><span class="help-key">↑ ↓ ← →</span><span class="help-desc">选中图元 1 像素高精度微调 (1px Nudge)</span></div>
+            <div class="help-row"><span class="help-key">Shift + 方向键</span><span class="help-desc">选中图元 10 像素快速微调 (10px Nudge)</span></div>
+            <div class="help-row"><span class="help-key">Delete / Backspace</span><span class="help-desc">删除选中的控制点、分列线或干扰线几何</span></div>
+            <div class="help-row"><span class="help-key">Esc / 右键单击</span><span class="help-desc">退出当前工具返回选择微调 (S) / 取消选中</span></div>
+          </div>
+        </div>
+        <div class="help-section">
+          <div class="help-section-title">底图滤镜与全局系统</div>
+          <div class="help-grid">
+            <div class="help-row"><span class="help-key">B / I / C</span><span class="help-desc">二值化透视遮罩 (B) / 底图反相 (I) / 增强对比度 (C)</span></div>
+            <div class="help-row"><span class="help-key">Ctrl+Z / Ctrl+Y</span><span class="help-desc">撤销 / 重做 (Undo / Redo)</span></div>
+            <div class="help-row"><span class="help-key">Ctrl+[ / Ctrl+]</span><span class="help-desc">展开 / 折叠左侧属种列表 / 右侧属性检查器</span></div>
             <div class="help-row"><span class="help-key">Ctrl+,</span><span class="help-desc">呼出全局偏好与系统设置 (Settings)</span></div>
-            <div class="help-row"><span class="help-key">F1</span><span class="help-desc">呼出 / 关闭本交互系统与快捷键速查中心</span></div>
+            <div class="help-row"><span class="help-key">F1</span><span class="help-desc">呼出 / 关闭本速查指南</span></div>
           </div>
         </div>
       </div>
