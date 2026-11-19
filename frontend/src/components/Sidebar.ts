@@ -87,6 +87,37 @@ export class Sidebar {
   }
 
   /**
+   * 联动滚动：将当前激活的属种列卡片滚动到侧边栏可见区域 (#131)。
+   * 如果该列所属的 ROI 分组处于折叠状态，先解除折叠。
+   */
+  public scrollToActiveColumn(smooth = true): void {
+    if (!this.data.activeTaxaId) return;
+    const activeCol = this.data.columns?.find((c) => c.id === this.data.activeTaxaId);
+    if (!activeCol) return;
+
+    const rois = this.data.rois && this.data.rois.length > 0 ? this.data.rois : [{ id: 'pollen', name: 'pollen' }];
+    const primaryId = this.data.primary_roi_id || rois[0]?.id || 'pollen';
+    const roiId = activeCol.roi_id || primaryId;
+    if (this.collapsedRois.has(roiId)) {
+      this.collapsedRois.delete(roiId);
+      this.renderPreservingInlineEdit();
+    }
+
+    const listEl = this.element.querySelector<HTMLElement>('#taxa-list-container');
+    if (!listEl) return;
+    const activeCard = listEl.querySelector<HTMLElement>(
+      `.taxa-card[data-taxa-id="${CSS.escape(this.data.activeTaxaId)}"]`
+    );
+    if (activeCard) {
+      activeCard.scrollIntoView({
+        behavior: smooth ? 'smooth' : 'auto',
+        block: 'nearest',
+        inline: 'nearest',
+      });
+    }
+  }
+
+  /**
    * 重渲染侧栏，但**不打断正在进行的行内改名**。
    *
    * `render()` 会整体重写 `innerHTML`。而用户点开改名输入框时，`focusin` 会经由

@@ -265,8 +265,11 @@ async function bootstrap() {
     onGeometryCommit: cleanupManager.handleGeometryCommit,
     onGeometryDelete: cleanupManager.handleGeometryDelete,
     onGeometrySelected: cleanupManager.handleGeometrySelected,
-    onTaxaChange: (_taxaId) => {
+    onTaxaChange: (taxaId) => {
       sidebar?.updateData(canvasComponent.data);
+      if (taxaId) {
+        sidebar?.scrollToActiveColumn();
+      }
       inspector?.updateData(canvasComponent.data);
       updateFooter();
     },
