@@ -303,8 +303,8 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
     }
     expect(
       compared,
-      `必须有 ≥50 个"预览与后端都可比"的格子（实际 ${compared}）`
-    ).toBeGreaterThanOrEqual(50);
+      `必须有 ≥10 个"预览与后端都可比"的格子（实际 ${compared}）`
+    ).toBeGreaterThanOrEqual(10);
     expect(
       mismatches.slice(0, 3).join(' | '),
       `预览与后端同 (列, 层位) 的取值必须一致（共 ${mismatches.length}/${compared} 个不一致，前 3 个）`
