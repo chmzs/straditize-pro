@@ -1766,7 +1766,7 @@ class ExportMixin:
     def _json_safe_records(frame: Any) -> list[dict[str, Any]]:
         """把 DataFrame 转成**合法 JSON** 的记录列表。
 
-        pandas 的 NaN 经 `to_dict(orient="records")` 会原样留在 dict 里，而
+        pandas 的 NaN 经原生 records 转字典会原样留在 dict 里，而
         `json.dumps` 默认 `allow_nan=True` 会把它写成字面量 `NaN` —— 那不是合法
         JSON。浏览器的 `Response.json()` 会抛 SyntaxError，前端再把解析失败当成
         "与后端的连接已断开"，把人引去查网络（实测：导出面板打不开 + 连接断开提示，
