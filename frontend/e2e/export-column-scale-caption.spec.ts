@@ -88,7 +88,7 @@ test.describe('caption：缺列刻度 → 步骤 6', () => {
     // 后端契约：这条路径必须明确拒绝，而不是给一张整表空白的 CSV。
     const body = await page.request
       .post('/rpc', {
-        data: { jsonrpc: '2.0', id: 1, method: 'export.csv', params: { dataset: 'depth_grid' } },
+        data: { jsonrpc: '2.0', id: 1, method: 'export.csv', params: { dataset: 'samples' } },
       })
       .then((res) => res.json() as Promise<{ error?: { code: number; message: string } }>);
     expect(body.error?.code, '全列未标定时后端必须拒绝导出').toBe(-32003);

@@ -1236,10 +1236,9 @@ class ExportMixin:
     # ---- dataset 行集（与前端面板下拉同义，三种都从 column_points 取值）----
 
     #: `export_data(dataset=...)` 允许的取值，顺序即产品下拉顺序。
-    #: 第一项是默认行集：共识层位（= samples），与 data.csv 同源。
-    #: union_points 是**各列拐点 y 的并集**，行数必然多于共识层位，且并集行上
-    #: 大多数列没有拐点——把它的缺行填 0 会把「没测」写成「测到 0」。
-    EXPORT_DATASETS = ("samples", "union_points", "depth_grid", "turning_points")
+    #: 第一项是丰度矩阵表（samples 优先，无 samples 时退化为全像素行）。
+    #: 第二项是拐点原始坐标长表（纯几何记录，不拼假插值矩阵）。
+    EXPORT_DATASETS = ("samples", "turning_points")
 
     def _dataset_frame(
         self,
@@ -1248,19 +1247,11 @@ class ExportMixin:
         strict: bool,
         legacy_column_name: bool = False,
     ) -> Any:
-        """按 dataset 产出一张表；**三种行集共用同一取数口径**。
+        """按 dataset 产出一张表。
 
-        `dataset=None`（未传）保持既有行为：`_primary_roi_export_frame`（samples 优先）。
-        这是 `data.csv` / 工程包那条出口的语义，**不能**跟面板下拉混为一谈。
-
-        面板显式传三值时：
-        - `union_points` = **控制点并集**（所有 `control_points` 的 row 去重排序），
-          即下拉里「真实物理拐点共振层位 [推荐]」；
-        - `depth_grid` = 标尺均匀层位；
-        - `turning_points` = 离散拐点长表。
-
-        取值一律经 `extract_grid_values` / `read_column_values`，与顶栏导出同一套换算，
-        不让前端再用样条造第二套数。
+        `dataset=None` 或 `samples`：`_primary_roi_export_frame`（数据转录矩阵，
+        CSV/TAR/XLSX/LiPD/预览统一走 `read_column_values` 真实读数，不插值）。
+        `dataset="turning_points"`：离散拐点长表。
         """
         key = (dataset or "").strip().lower()
         if not key:
@@ -1273,35 +1264,13 @@ class ExportMixin:
                 INVALID_PARAMS,
                 f"Unsupported dataset '{dataset}'. Use one of: {', '.join(self.EXPORT_DATASETS)}.",
             )
-        # 面板三张表都以「读数」为内容：一列都没标定 X 刻度时它们只能给出整表空白，
+        # 面板两张表都以「读数」为内容：一列都没标定 X 刻度时它们只能给出整表空白，
         # 那看起来像"这张图没数据"，而不是"你还没做步骤 6"。
         self._assert_export_column_scale()
-        # 面板上「共识层位」同样要过列标度守卫：全列未标定时它只会给一整张 NA 表，
-        # 看起来像「这张图没数据」，而不是「你卡在步骤 6」。
-        # 不传 dataset（data.csv / tar / xlsx 出口）不受此守卫约束（那条契约不变）。
         if key == "samples":
-            # 「共识层位」的实际行集由 `_resolve_rowset` 决定：
-            #   samples 非空 → 就是样品层位（行数 == len(samples)）；
-            #   samples 为空 → 逐列数字化点的像素行并集（`provenance="pixel_rows"`）。
-            #
-            # ## 为什么空 samples 时**不拒绝**（2026-11-19 产品口径）
-            #
-            # 默认路径必须能自己给出结果：面板一打开就拿到表，不要求用户先做一步
-            # 前置动作。所以这里照常出行，**不允许**把行集默默说成样品 ——
-            # 身份由 `export_data` 的 `rowset` 字段（`provenance` / `is_sample_rows`
-            # / `samples_count` / `why`）、`export.getReadiness.rowset`、归档
-            # `manifest.json -> data_csv_rowset` 与 README 的 WARNING 段共同标注。
-            # 面板 caption 需要把 `rowset.label` 显示出来（前端改动，另单）。
-            #
-            # 反向的硬判据在 `export_data` 里：`is_sample_rows=True` 时
-            # 行数**必须**等于 samples 条数，否则整份表不交付。
             return self._primary_roi_export_frame(
                 strict=strict, legacy_column_name=legacy_column_name
             )
-        if key == "union_points":
-            return self._union_points_frame(legacy_column_name=legacy_column_name)
-        if key == "depth_grid":
-            return self._depth_grid_frame(legacy_column_name=legacy_column_name)
         # 只剩 turning_points（上面已校验取值）
         return self._turning_points_frame(legacy_column_name=legacy_column_name)
 
@@ -1326,11 +1295,6 @@ class ExportMixin:
             if any((getattr(self, "control_points", None) or {}).values()):
                 return len(self._control_point_rows())
             return len(self._resolve_rowset().rows)
-        if key == "union_points":
-            return len(self._control_point_rows())
-        if key == "depth_grid":
-            depths = getattr(self, "depth_grid", None) or self._uniform_depth_list()
-            return len(list(depths))
         # turning_points：一行 = 一个控制点
         return sum(
             len(pts) for pts in (getattr(self, "control_points", None) or {}).values()
@@ -1427,7 +1391,7 @@ class ExportMixin:
         """
         key = (dataset or "").strip().lower()
         samples_count = len(getattr(self, "samples", None) or [])
-        if not key or key == "samples":
+        if key != "turning_points":
             report = self._resolve_rowset().as_dict()
             report["rows_count"] = int(rows_count)
             report["dataset"] = key or None
@@ -1436,43 +1400,12 @@ class ExportMixin:
             )
             return report
 
-        if key == "union_points":
-            controls = {
-                index: pts
-                for index, pts in (getattr(self, "control_points", None) or {}).items()
-                if pts
-            }
-            if controls:
-                provenance = ROWSET_CONTROL_POINTS
-                caption = "控制点（拐点）层位并集"
-                why = (
-                    f"行取自 {len(controls)} 列控制点的 row 去重并集（用户手调/算法判定的"
-                    "拐点）；行数与 samples 无关。"
-                )
-            else:
-                # `_control_point_rows` 在控制点为空时会回退到 column_points（既有行为，
-                # 不在这里改）。回退必须**说出来**：否则面板写着「拐点并集」，实际是
-                # 逐列像素行 —— 又回到 issue #100 那种"答不上来凭什么"的形态。
-                provenance = ROWSET_PIXEL_ROWS
-                caption = "逐列数字化的像素行并集（控制点为空的退化行集）"
-                why = (
-                    "本工程没有任何控制点：`union_points` 退化成逐列数字化点的像素行"
-                    "并集。这些行既不是拐点，也不是样品层位。"
-                )
-        elif key == "depth_grid":
-            provenance = ROWSET_DEPTH_GRID
-            caption = "按深度间隔重采样的规则层位"
-            why = (
-                "行 = 按 `depth_interval` 在深度标尺上切出的均匀层位，与数字化密度、"
-                "与 samples 都无关。"
-            )
-        else:
-            provenance = ROWSET_TURNING_POINTS
-            caption = "拐点原始坐标（长表）"
-            why = (
-                "一行 = 一个控制点（taxon / type / depth / value / x / y 六列），"
-                "是点清单而不是层位矩阵。"
-            )
+        provenance = ROWSET_TURNING_POINTS
+        caption = "拐点原始坐标（长表）"
+        why = (
+            "一行 = 一个控制点（taxon / type / depth / value / x / y 六列），"
+            "是点清单而不是层位矩阵。"
+        )
 
         return {
             "provenance": provenance,
@@ -1543,66 +1476,6 @@ class ExportMixin:
                 for p in pts
             }
         return sorted(rows)
-
-    def _union_points_frame(self, *, legacy_column_name: bool = False) -> Any:
-        """控制点并集行集：行取自 `control_points`，值经 `extract_grid_values` 取。"""
-        y_col = self._y_col_label(legacy_column_name)
-        rows = self._control_point_rows()
-        if not rows:
-            return pd.DataFrame({y_col: []})
-        y_scale = getattr(self, "y_scale", None)
-        calibrated = bool(getattr(self, "is_calibrated", False)) and y_scale is not None
-        if calibrated:
-            slope = float(y_scale["slope"])
-            intercept = float(y_scale["intercept"])
-            depths = [round(slope * row + intercept, 4) for row in rows]
-        else:
-            depths = [float(row) for row in rows]
-        grid = self.extract_grid_values(depths=depths)
-        if not calibrated:
-            # 未标定一律不出数（守卫在 `export_data` 的入口，这里再挡一次，
-            # 防止有人绕过入口直接调用数据集构造器）。
-            raise JsonRpcError(
-                CALIBRATION_ERROR,
-                "导出需要深度标定：请先完成步骤 3 的 Y 轴两点标定（当前 is_calibrated=false）。",
-            )
-        data: dict[str, Any] = {y_col: [round(float(d), 4) for d in grid["depths"]]}
-        for idx, taxon in enumerate(grid["taxa"]):
-            data[str(taxon)] = [row[idx] for row in grid["matrix"]]
-        return pd.DataFrame(data)
-
-    def _uniform_depth_list(self) -> list[float]:
-        """按 `depth_calib` + `depth_interval` 生成均匀层位（标尺网格）。"""
-        calib = getattr(self, "depth_calib", None) or {}
-        top = calib.get("top_cm")
-        bottom = calib.get("bottom_cm")
-        if top is None or bottom is None:
-            return []
-        step_raw = getattr(self, "depth_interval", None)
-        try:
-            step = float(step_raw) if step_raw else 2.0
-        except (TypeError, ValueError):
-            step = 2.0
-        if step <= 0:
-            step = 2.0
-        lo, hi = sorted((float(top), float(bottom)))
-        count = int(round((hi - lo) / step)) + 1
-        return [round(lo + i * step, 4) for i in range(max(count, 1))]
-
-    def _depth_grid_frame(self, *, legacy_column_name: bool = False) -> Any:
-        """标尺均匀层位：直接复用 `extract_grid_values` 的取值口径。"""
-        y_col = self._y_col_label(legacy_column_name)
-        depths = list(getattr(self, "depth_grid", None) or self._uniform_depth_list())
-        if not depths:
-            raise JsonRpcError(
-                STATE_ERROR,
-                "No depth grid available: set Y calibration or call core.applyDepthGrid first.",
-            )
-        grid = self.extract_grid_values(depths=depths)
-        data: dict[str, Any] = {y_col: [round(float(d), 4) for d in grid["depths"]]}
-        for idx, taxon in enumerate(grid["taxa"]):
-            data[str(taxon)] = [row[idx] for row in grid["matrix"]]
-        return pd.DataFrame(data)
 
     def _turning_points_frame(self, *, legacy_column_name: bool = False) -> Any:
         """离散拐点长表：每个**控制点**一行（taxon / type / <Y 轴量> / value / x / y）。

@@ -228,8 +228,6 @@ def test_shared_roi_entry_used_by_tar_xlsx_lipd_also_follows_axis() -> None:
     [
         (None, 0),
         ("samples", 0),
-        ("union_points", 0),
-        ("depth_grid", 0),
         # 拐点长表的 Y 量在第 3 列（前两列是 taxon / type），同样跟随轴性质
         ("turning_points", 2),
     ],

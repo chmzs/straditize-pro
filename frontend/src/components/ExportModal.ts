@@ -165,7 +165,7 @@ export class ExportModal {
           </div>
 
           <!-- 右侧：WPD 风格的控制面板 (Dataset, Sort, Format, Visualize) 并列排布 -->
-          <div class="wpd-right-controls" style="width: 270px; min-width: 270px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; background: var(--bg-tertiary); padding: 12px; border-radius: 6px; border: 1px solid var(--border-light); box-sizing: border-box;">
+          <div class="wpd-right-controls" style="width: 270px; min-width: 270px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; background: var(--bg-tertiary); padding: 10px; border-radius: 6px; border: 1px solid var(--border-light); box-sizing: border-box;">
             <!-- 导出就绪状态清单 (T10) -->
             ${renderExportReadiness(this.data)}
 
@@ -173,16 +173,8 @@ export class ExportModal {
             <div class="form-group" style="margin: 0;">
               <label style="font-size: var(--font-size-sm); font-weight: bold; color: var(--text-primary);">Dataset (数据集形态):</label>
               <select id="wpd-dataset-select" class="sample-select" style="width: 100%; font-size: var(--font-size-sm);">
-                <option value="samples" selected>1. 共识层位 —— 每个采样层位一行；与 data.csv / TAR / XLSX 同源</option>
-                <option value="union_points">2. 各列拐点并集 —— 所有列的拐点深度合并去重成行；某列在该深度没有拐点则按其曲线线性插值（不是 0）</option>
-                <option value="turning_points">3. 拐点原始坐标表 —— 长表，一行一个拐点（taxon/type/depth/value/x/y）；不能与上面两张矩阵表混用</option>
-                <!-- 缺值口径必须写在面板上：插值 vs NA 是两种完全不同的数，用户看不到就会误读。 -->
-                <div style="margin-top: 4px; font-size: var(--font-size-xs); line-height: 1.45; color: var(--text-muted);">
-                  共识层位上某列没有拐点时：<b>已标定列</b>按该列曲线线性插值填充；<b>未标定列</b>仍为 NA（不给数）。
-                </div>
-                <optgroup label="高级">
-                  <option value="depth_grid">按深度间隔重采样 —— 按设置里的深度间隔生成规则层位（调试/等距辅助用，不是共识层位）</option>
-                </optgroup>
+                <option value="samples" selected>1. 丰度矩阵表 —— 采样层位矩阵；与 data.csv / TAR / XLSX 同源</option>
+                <option value="turning_points">2. 拐点坐标长表 —— 一行一个拐点（taxon/type/depth/value/x/y）</option>
               </select>
               <!--
                 行集说明：用户必须先知道"这 N 行是哪来的"。
@@ -238,15 +230,9 @@ export class ExportModal {
               </div>
             </div>
 
-            <!--
-              工作簿类导出的行集来源必须写在界面上。
-              后端 export.exportXlsx / export.exportLipd / export.tar 都没有"指定层位"
-              参数（export.csv 的 depths 形参实际未被使用），它们固定按 samples 采样层位
-              出表，与上方数据集选择器的行集是两回事。写成静态说明而不是悄悄不同
-              （U-ROWS-01 的根因就是"隐性另搞一套"）。
-            -->
-            <div id="wpd-workbook-rowset-note" style="font-size: var(--font-size-xs); line-height: 1.5; color: var(--status-warning); padding: 6px 8px; border-radius: 4px; background: rgba(245, 158, 11, 0.10); border: 1px solid rgba(245, 158, 11, 0.35);">
-              XLSX / LiPD / TAR 由后端生成，固定按「样品层位」出表（与上方预览的行集可能不同）。
+            <!-- 工作簿类导出与 CSV 全出口同源同值说明 -->
+            <div id="wpd-workbook-rowset-note" style="font-size: var(--font-size-xs); line-height: 1.45; color: var(--text-muted); padding: 5px 8px; border-radius: 4px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2);">
+              丰度矩阵表在 CSV / XLSX / LiPD / TAR 全出口同源同值。
             </div>
 
             <div class="divider" style="margin: 2px 0;"></div>

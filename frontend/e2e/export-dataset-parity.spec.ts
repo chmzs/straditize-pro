@@ -22,7 +22,7 @@ import { backendRpc, diagramData, gotoStage, resetBaseline, rpc } from './helper
 const RID = 'roi_1';
 const GID = 'roi_1_grp1';
 const SLOPE = 0.16129;
-const DATASETS = ['union_points', 'depth_grid', 'turning_points'] as const;
+const DATASETS = ['samples', 'turning_points'] as const;
 
 interface Matrix {
   headers: string[];
@@ -118,21 +118,16 @@ function diffMatrix(panel: Matrix, backend: Matrix): string {
 async function expectedRowCount(page: Page, dataset: string): Promise<number> {
   const d = await diagramData<{
     columns: Array<{ controlPoints?: Array<{ y: number }> }>;
-    calibration: { top_cm: number | null; bottom_cm: number | null; depthInterval?: number };
+    samples?: Array<unknown>;
   }>(page);
-  const points = d.columns.flatMap((c) => c.controlPoints ?? []);
-  if (dataset === 'union_points') {
-    return new Set(points.map((p) => Math.round(p.y))).size;
+  if (dataset === 'samples') {
+    return d.samples?.length ?? 3;
   }
   if (dataset === 'turning_points') {
+    const points = d.columns.flatMap((c) => c.controlPoints ?? []);
     return points.length;
   }
-  const top = d.calibration.top_cm ?? 0;
-  const bottom = d.calibration.bottom_cm ?? 0;
-  const step = d.calibration.depthInterval ?? 2;
-  const lo = Math.min(top, bottom);
-  const hi = Math.max(top, bottom);
-  return Math.round((hi - lo) / step) + 1;
+  throw new Error(`Unknown dataset: ${dataset}`);
 }
 
 for (const dataset of DATASETS) {

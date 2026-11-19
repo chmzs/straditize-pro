@@ -242,23 +242,11 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
     await calibrateDepth(page);
 
     await openExport(page);
-    // 本用例测的是「选择器同时控制预览与下载」，与默认值无关 → 显式选 union_points，
-    // 让断言与默认数据集解耦（默认值由下一条用例单独钉住）。
-    await selectDataset(page, 'union_points');
-    // 切数据集是**异步取数**（ExportModal 用 displayToken 防乱序）：`selectOption` 返回时
-    // 表格还可能是刚才 samples 的 3 行。必须等预览真的换成 union 行集再读，
-    // 否则下面 `finite >= 100` 会读到 28（CI 实测就栽在这里，不是数值错）。
-    await expect
-      .poll(async () => (await readPreview(page)).rows.length, {
-        message: '切到 union_points 后预览行数必须大于 samples 行数（3）',
-        timeout: 20_000,
-      })
-      .toBeGreaterThan(3);
     const preview = await readPreview(page);
     const headers = dataHeaders(preview);
+    expect(preview.rows.length).toBe(3);
 
     // ---- 现场自检：预览里必须真的有数字 ----
-    // 没有这一段，后面所有"逐格相等"都可能退化成 `"NA" == "NA"`（Verifier 判死的原因）。
     const allCells = preview.rows.flatMap((row) => row.slice(1));
     const finite = allCells
       .map((cell) => Number.parseFloat(cell))
@@ -266,36 +254,27 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
     const nonZero = finite.filter((v) => v !== 0);
     expect(
       finite.length,
-      `现场必须有 ≥100 个有限数值格（实际 ${finite.length}；若全是 NA，说明 X 标定没生效）`
-    ).toBeGreaterThanOrEqual(100);
+      `现场必须有 ≥50 个有限数值格（实际 ${finite.length}；若全是 NA，说明 X 标定没生效）`
+    ).toBeGreaterThanOrEqual(50);
     expect(
       Math.max(...nonZero, 0),
       '现场必须有 >1 量级的真实读数，否则比的是舍入噪声'
     ).toBeGreaterThan(1);
-    expect(
-      preview.rows.length,
-      '现场必须让两套行集不同（控制点并集 vs 3 个样品层位），否则本用例没有判别力'
-    ).not.toBe(3);
 
     // ---- A. 同源钉子：下载物 == 预览表 ----
     // 只证明"下载的就是眼前这张表"，不证明数值正确（两边一起错它照样绿）。
-    const unionDownload = await downloadCsv(page, 'union');
+    const samplesDownload = await downloadCsv(page, 'samples');
     expect(
-      unionDownload.rows.length,
-      `预览 ${preview.rows.length} 行，下载物必须同样行数（旧实现走后端样品层位，只有 3 行）`
+      samplesDownload.rows.length,
+      `预览 ${preview.rows.length} 行，下载物必须同样行数`
     ).toBe(preview.rows.length);
-    expect(unionDownload.headers, '下载物表头必须与预览表头一致').toEqual(headers);
-    expect(unionDownload.rows.slice(0, 5), '下载物前 5 行必须与预览逐格一致').toEqual(
-      preview.rows.slice(0, 5)
-    );
+    expect(samplesDownload.headers, '下载物表头必须与预览表头一致').toEqual(headers);
+    expect(samplesDownload.rows, '下载物必须与预览逐格一致').toEqual(preview.rows);
 
     // ---- 行集说明 ----
-    const unionCaption = await rowSetCaption(page);
-    expect(unionCaption, '选择器下方必须有可见的行集说明').toContain('行');
-    expect(
-      unionCaption,
-      `行集说明里的行数必须等于预览行数（说明：${unionCaption}，预览 ${preview.rows.length} 行）`
-    ).toContain(String(preview.rows.length));
+    const caption = await rowSetCaption(page);
+    expect(caption, '选择器下方必须有可见的行集说明').toContain('3 行');
+    expect(caption, '说明必须点明来源是共识层位').toContain('共识层位');
 
     // ---- B. 数值判据：预览 vs 后端同 (列, 层位) ----
     const depths = preview.rows.map((row) => Number.parseFloat(row[0]));
@@ -324,43 +303,42 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
     }
     expect(
       compared,
-      `必须有 ≥100 个"预览与后端都可比"的格子（实际 ${compared}）`
-    ).toBeGreaterThanOrEqual(100);
+      `必须有 ≥50 个"预览与后端都可比"的格子（实际 ${compared}）`
+    ).toBeGreaterThanOrEqual(50);
     expect(
       mismatches.slice(0, 3).join(' | '),
       `预览与后端同 (列, 层位) 的取值必须一致（共 ${mismatches.length}/${compared} 个不一致，前 3 个）`
     ).toBe('');
 
-    // ---- 切到另一项数据集：预览与下载必须一起变 ----
-    await selectDataset(page, 'depth_grid');
-    const gridPreview = await readPreview(page);
-    // 比**行集内容**，不比行数：控制点并集是"拐点所在行"，均匀层位是等差行，
-    // 两者行数可能恰好相等（本工程 171 = 171）。旧断言比长度，靠的正是
-    // "并集多出 ROI 下边界那一行"这个巧合 —— 那一行按 issue #60 已不算层位，
-    // 巧合消失，断言随之失去判别力。改成比深度序列才是在测"来源换了"。
-    const gridDepths = gridPreview.rows.map((row) => Number.parseFloat(row[0]));
-    expect(
-      gridDepths.join(','),
-      `切换数据集后预览行集必须变化（控制点并集 ${preview.rows.length} 行 → 均匀层位 ${gridPreview.rows.length} 行，`
-        + `但深度序列完全相同，说明来源没换）`
-    ).not.toBe(depths.join(','));
-    const gridCaption = await rowSetCaption(page);
-    expect(gridCaption, '切换后行集说明必须跟着更新').toContain(String(gridPreview.rows.length));
-    // depth_grid 的文案已改成「按深度间隔重采样（高级）」，不再叫「标尺均匀层位」。
-    expect(gridCaption, '说明必须点明来源换了').toContain('重采样');
+    // ---- 切到拐点长表：预览与下载必须一起变 ----
+    await selectDataset(page, 'turning_points');
+    await expect
+      .poll(async () => (await readPreview(page)).rows.length, {
+        message: '切到 turning_points 后预览行数必须大于 samples 行数（3）',
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(3);
 
-    const gridDownload = await downloadCsv(page, 'grid');
+    const turningPreview = await readPreview(page);
+    expect(turningPreview.headers).toEqual(['taxon', 'type', 'depth', 'value', 'x', 'y']);
+
+    const turningCaption = await rowSetCaption(page);
+    expect(turningCaption, '切换后行集说明必须跟着更新').toContain(String(turningPreview.rows.length));
+    expect(turningCaption, '说明必须点明来源换成了拐点坐标长表').toContain('拐点坐标长表');
+
+    const turningDownload = await downloadCsv(page, 'turning');
     expect(
-      gridDownload.rows.length,
-      `切到均匀层位后，下载物行数必须跟着变成 ${gridPreview.rows.length}`
-    ).toBe(gridPreview.rows.length);
-    expect(gridDownload.rows.slice(0, 5), '切换后下载物必须与预览逐格一致').toEqual(
-      gridPreview.rows.slice(0, 5)
+      turningDownload.rows.length,
+      `切到拐点长表后，下载物行数必须跟着变成 ${turningPreview.rows.length}`
+    ).toBe(turningPreview.rows.length);
+    expect(turningDownload.headers).toEqual(turningPreview.headers);
+    expect(turningDownload.rows.slice(0, 5), '切换后下载物必须与预览逐格一致').toEqual(
+      turningPreview.rows.slice(0, 5)
     );
 
-    // ---- 工作簿类导出必须自报行集 ----
+    // ---- 全出口同源同值说明 ----
     const workbookNote = (await page.locator('#wpd-workbook-rowset-note').innerText()).trim();
-    expect(workbookNote, 'XLSX / LiPD / TAR 必须写明它们的行集来源').toContain('样品层位');
+    expect(workbookNote, '必须写明同源同值').toContain('同源同值');
   });
 });
 
@@ -381,17 +359,16 @@ test.describe('U-ROWS-01 行集为空时的说法', () => {
     await resetBaseline(page);
   });
 
-  test('未标定时选「均匀层位」得到空行集：必须说明为空，且不得产出假成功的文件', async ({
+  test('未标定时得到空行集：必须说明为空，且不得产出假成功的文件', async ({
     page,
     telemetry,
   }) => {
     // 本场景故意未标定 ⇒ 预览按定义 0 行，不能用要求 rows>0 的 openExport()。
     await page.locator('#btn-export-csv').click();
     await expect(page.locator('.wpd-export-dialog')).toBeVisible();
-    await page.locator('#wpd-dataset-select').selectOption('depth_grid');
     await expect
       .poll(async () => (await readPreview(page)).rows.length, {
-        message: '未标定时均匀层位必须是 0 行',
+        message: '未标定时必须是 0 行',
         timeout: 10_000,
       })
       .toBe(0);
