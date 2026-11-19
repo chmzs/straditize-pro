@@ -134,7 +134,7 @@ export class ExportModal {
                 <button id="tab-btn-text" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: var(--font-size-sm); padding: 4px 10px;" title="原始 CSV 文本，可复制或手工调整">原始文本</button>
               </div>
               <div style="font-size: var(--font-size-sm); color: var(--text-muted); display: flex; gap: 10px; align-items: center;">
-                <span>Variables: <strong id="wpd-vars-label" style="color: var(--accent-blue);">Depth, 29 Taxa</strong></span>
+                <span>Variables: <strong id="wpd-vars-label" style="color: var(--accent-blue);">--</strong></span>
                 <span id="wpd-data-size-label">0 KB</span>
                 <button id="btn-wpd-reset-edits" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: var(--font-size-xs); padding: 2px 7px; color: var(--text-muted);" title="清除所有手动微调，还原为图谱自动提取值">还原提取值</button>
               </div>
@@ -173,8 +173,8 @@ export class ExportModal {
             <div class="form-group" style="margin: 0;">
               <label style="font-size: var(--font-size-sm); font-weight: bold; color: var(--text-primary);">Dataset (数据集形态):</label>
               <select id="wpd-dataset-select" class="sample-select" style="width: 100%; font-size: var(--font-size-sm);">
-                <option value="samples" selected>1. 丰度矩阵表 —— 采样层位矩阵；与 data.csv / TAR / XLSX 同源</option>
-                <option value="turning_points">2. 拐点坐标长表 —— 一行一个拐点（taxon/type/depth/value/x/y）</option>
+                <option value="samples" selected>丰度矩阵表 (samples · 采样层位)</option>
+                <option value="turning_points">拐点坐标长表 (turning_points · 原始几何)</option>
               </select>
               <!--
                 行集说明：用户必须先知道"这 N 行是哪来的"。
@@ -377,6 +377,7 @@ export class ExportModal {
     const colSepSelect = modal.querySelector('#wpd-col-sep') as HTMLSelectElement;
     const naFillSelect = modal.querySelector('#wpd-na-fill') as HTMLSelectElement;
     const sizeLabel = modal.querySelector('#wpd-data-size-label') as HTMLElement;
+    const varsLabel = modal.querySelector('#wpd-vars-label') as HTMLElement | null;
     const rowSetCaptionEl = modal.querySelector('#wpd-rowset-caption') as HTMLElement | null;
 
     // 动态表格数据模型与手动微调记录
@@ -446,6 +447,8 @@ export class ExportModal {
     const renderTableGrid = () => {
       previewTable.innerHTML = '';
 
+      const isTurning = datasetSelect.value === 'turning_points';
+
       // Thead
       const thead = document.createElement('thead');
       const trHead = document.createElement('tr');
@@ -456,7 +459,15 @@ export class ExportModal {
 
       currentHeaders.forEach((h, cIdx) => {
         const th = document.createElement('th');
-        if (cIdx === 0) th.className = 'col-depth';
+        if (!isTurning && cIdx === 0) {
+          th.className = 'col-depth';
+        } else if (isTurning) {
+          if (cIdx < 2) th.style.textAlign = 'left';
+          const lower = h.toLowerCase();
+          if (lower === 'depth' || lower === 'age') {
+            th.style.color = 'var(--status-success)';
+          }
+        }
         th.textContent = h;
         trHead.appendChild(th);
       });
@@ -476,12 +487,15 @@ export class ExportModal {
 
         row.forEach((cellVal, cIdx) => {
           const td = document.createElement('td');
-          if (cIdx === 0) {
+          if (!isTurning && cIdx === 0) {
             td.className = 'col-depth';
             td.textContent = cellVal;
           } else {
             const input = document.createElement('input');
             input.className = 'wpd-cell-input';
+            if (isTurning && cIdx < 2) {
+              input.style.textAlign = 'left';
+            }
             const editKey = `${rIdx}_${cIdx}`;
             if (userEdits.has(editKey)) {
               input.classList.add('user-modified');
@@ -515,6 +529,18 @@ export class ExportModal {
         : backendCsvText || serializeMatrixToText(currentHeaders, currentRows);
       textarea.value = dataStr;
       sizeLabel.textContent = `${(dataStr.length / 1024).toFixed(1)} KB (${currentRows.length} rows)`;
+
+      if (varsLabel) {
+        if (currentHeaders.length === 0) {
+          varsLabel.textContent = '0 变量';
+        } else if (datasetSelect.value === 'turning_points') {
+          varsLabel.textContent = `${currentHeaders.length} 字段 (${currentHeaders.slice(0, 3).join(', ')}...)`;
+        } else {
+          const yName = currentHeaders[0] || 'depth';
+          const nTaxa = Math.max(0, currentHeaders.length - 1);
+          varsLabel.textContent = `${yName}, ${nTaxa} Taxa`;
+        }
+      }
     };
 
     /**
