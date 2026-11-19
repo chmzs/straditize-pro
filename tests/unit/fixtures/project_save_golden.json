@@ -412,6 +412,7 @@
   "file_embeds_age_depth_png": true,
   "file_embeds_png": true,
   "result_keys": [
+   "filename",
    "path",
    "success"
   ],
@@ -828,6 +829,7 @@
   },
   "result_keys": [
    "data",
+   "filename",
    "success"
   ]
  },
@@ -844,6 +846,7 @@
   "result_keys": [
    "data_csv_placeholder",
    "data_csv_placeholder_reason",
+   "filename",
    "size",
    "success",
    "tar_base64"
@@ -905,6 +908,7 @@
   "result_keys": [
    "data_csv_placeholder",
    "data_csv_placeholder_reason",
+   "filename",
    "path",
    "size",
    "success"
@@ -931,6 +935,7 @@
   "result_keys": [
    "data_csv_placeholder",
    "data_csv_placeholder_reason",
+   "filename",
    "path",
    "size",
    "success"
@@ -965,6 +970,7 @@
   "result_keys": [
    "data_csv_placeholder",
    "data_csv_placeholder_reason",
+   "filename",
    "path",
    "size",
    "success"

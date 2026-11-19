@@ -300,7 +300,7 @@ export function render(data: DiagramData): string {
             <div style="display: flex; flex-direction: column; gap: 5px;">
               <input id="grp-unit-inp" type="text" value="${String(groupUnit).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" placeholder="输入或点击下方预设" style="height: var(--control-h-sm); width: 100%; box-sizing: border-box; font-size: var(--font-size-xs); padding: 0 6px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px;" />
               <div style="display: flex; flex-wrap: wrap; gap: 4px;">
-                ${(['%', '‰', 'counts', '粒/g', '粒/cm²', '10³ 粒/cm³'] as const)
+                ${(['%', '‰', 'counts', '粒/g', '粒/cm³'] as const)
                   .map(
                     (u) =>
                       `<button type="button" class="ui-btn ui-btn--quiet ui-btn--xs grp-unit-pill ${

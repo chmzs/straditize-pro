@@ -6,6 +6,7 @@ import { SplineInterpolator } from './SplineInterpolator';
 import { CoordinateSystem } from './CoordinateSystem';
 import { TarArchive } from './TarArchive';
 import { notifyError } from '../ui/feedback';
+import { resolveExportFilename } from '../utils/exportNaming';
 
 export interface ProjectManagerCallbacks {
   onProjectLoad?: (projectData: DiagramData) => void;
@@ -181,7 +182,7 @@ export function draftToProjectPayload(draft: DiagramData): DraftRestorePayload {
         top_cm: draft.calibration?.top_cm ?? null,
         bottom_px: draft.calibration?.bottom_px ?? null,
         bottom_cm: draft.calibration?.bottom_cm ?? null,
-        unit: draft.calibration?.unit || 'cm',
+        unit: draft.calibration?.unit || undefined,
       },
       calibration: {
         isCalibrated: !!draft.calibration?.isCalibrated,
@@ -189,7 +190,7 @@ export function draftToProjectPayload(draft: DiagramData): DraftRestorePayload {
         top_cm: draft.calibration?.top_cm ?? null,
         bottom_px: draft.calibration?.bottom_px ?? null,
         bottom_cm: draft.calibration?.bottom_cm ?? null,
-        unit: draft.calibration?.unit || 'cm',
+        unit: draft.calibration?.unit || undefined,
       },
       // 清理几何三个键：`project_load` 一律 `is not None` 判定，传 `[]` 等于
       // **主动清空**后端。旧草稿（无这些键）不能因此把后端的候选线抹掉，
@@ -415,7 +416,14 @@ export class ProjectManager {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `straditize_project_${Date.now()}.tar`;
+          a.download =
+            res?.filename ||
+            resolveExportFilename(
+              this.data.project_name,
+              this.data.image_name || this.data.imageSrc,
+              '_project',
+              'tar'
+            );
           a.click();
           URL.revokeObjectURL(url);
           return true;
@@ -559,7 +567,7 @@ message("Finished! Stratigraphic plot generated successfully.")
   public generateRScript(columns?: Column[], unit?: string): string {
     return ProjectManager.generateRScript(
       columns || this.data.columns,
-      unit || this.data.calibration.unit || 'cm'
+      (unit || this.data.calibration.unit || '').trim()
     );
   }
 

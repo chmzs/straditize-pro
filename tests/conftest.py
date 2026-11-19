@@ -14,12 +14,23 @@
     pytest 记 XPASS(strict) 并让门禁变红，强制把条目从隔离区删掉。
     也就是说隔离区是自清理的：条目只减不增，且新增必须有人签字。
 """
+
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+# 保证本地测试回环（127.0.0.1 / localhost）不受本机网络代理环境变量干扰
+for _k in ("NO_PROXY", "no_proxy"):
+    _existing = os.environ.get(_k, "")
+    _parts = [p.strip() for p in _existing.split(",") if p.strip()]
+    for _h in ("127.0.0.1", "localhost", "::1"):
+        if _h not in _parts:
+            _parts.append(_h)
+    os.environ[_k] = ",".join(_parts)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:

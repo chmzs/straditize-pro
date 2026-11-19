@@ -287,7 +287,7 @@ export interface DepthCalibration {
   top_cm: number | null; // 上方参考点的真实值 (cm / m / cal yr BP ...)
   bottom_px: number | null; // 下方参考点的图像像素 Y
   bottom_cm: number | null; // 下方参考点的真实值
-  unit: string;
+  unit?: string;
   /**
    * What the Y axis MEASURES. Declared by the user, never inferred from `unit`:
    * "cm"/"m" imply depth and "cal BP"/"ka" imply age only for the conventional
@@ -391,6 +391,7 @@ export interface SampleHorizon {
   support_columns?: number | null; // 该簇去重后的列数
   cluster_span_px?: number | null; // 簇内行号 max − min
   member_count?: number | null; // 簇内拐点总数
+  polarity?: 'peak' | 'valley' | 'mixed' | null; // 双轨极性：峰 / 谷 / 融合 (#124)
 }
 
 export interface ImageMeta {
@@ -428,6 +429,8 @@ export interface DiagramData {
   imageSrc: string;
   imageWidth: number;
   imageHeight: number;
+  project_name?: string;
+  image_name?: string;
 
   /** 多 ROI 列表与指针（严格冻结契约 v1.3 §2.6） */
   rois: DataRoi[];
@@ -513,7 +516,7 @@ export interface HistorySnapshot {
 
 export interface DepthHorizon {
   depth: number;
-  unit: string;
+  unit?: string;
   y: number;
   values: Record<string, number>;
 }

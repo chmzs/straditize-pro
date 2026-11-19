@@ -36,12 +36,18 @@
 col09 P95 5.84 / max 97.50，col10 P95 5.08 / max 85.00，col12 端段内贴轴密点 16 处，
 col06 / col11 / col12 各有 3 / 7 / 7 个极值被吞。
 """
+
 from __future__ import annotations
 
 import numpy as np
 import pytest
 from scipy.signal import find_peaks
 
+from straditize_core.curve import (
+    count_axis_pileups,
+    detect_turning_points_vertical,
+    prune_axis_pileups,
+)
 from straditize_core.session import StraditizeSession
 from straditize_core.session_parts.xscale import resolve_axis_stroke
 
@@ -73,9 +79,13 @@ def _column(session: StraditizeSession, col_index: int) -> dict:
     c_start = round(col.get("start"))
     zero = float(resolve_axis_stroke(col, None))
     rows = np.asarray([p["row"] for p in points], dtype=float)
-    values = np.clip(np.asarray([p["x"] for p in points], dtype=float) - c_start, zero, None)
+    values = np.clip(
+        np.asarray([p["x"] for p in points], dtype=float) - c_start, zero, None
+    )
     manual = set(getattr(session, "_manual_store", lambda: {})().get(col_index, {}))
-    ctrl = {int(r): float(x) - c_start for r, x in session.control_points[col_index].items()}
+    ctrl = {
+        int(r): float(x) - c_start for r, x in session.control_points[col_index].items()
+    }
     auto_rows = sorted(r for r in ctrl if r not in manual)
     return dict(
         rows=rows,
@@ -123,7 +133,11 @@ def test_no_control_point_left_of_zero_point(plate):
     offenders = {}
     for col_index in range(len(plate.columns)):
         profile = _column(plate, col_index)
-        bad = [round(float(v), 2) for v in profile["all_values"] if v < profile["zero"] - 1e-9]
+        bad = [
+            round(float(v), 2)
+            for v in profile["all_values"]
+            if v < profile["zero"] - 1e-9
+        ]
         if bad:
             offenders[col_index] = bad[:5]
     assert offenders == {}, f"落在 0 点左侧的控制点：{offenders}"
@@ -181,8 +195,10 @@ def test_no_axis_pileups_between_endpoints(plate):
     for col_index in range(len(plate.columns)):
         profile = _column(plate, col_index)
         pairs = _pairs(
-            profile["auto_rows"], profile["auto_values"],
-            PILEUP_MIN_GAP_PX, IDENTICAL_VALUE_PX,
+            profile["auto_rows"],
+            profile["auto_values"],
+            PILEUP_MIN_GAP_PX,
+            IDENTICAL_VALUE_PX,
         )
         inside = [
             (int(profile["auto_rows"][i]), int(profile["auto_rows"][j]))
@@ -191,7 +207,11 @@ def test_no_axis_pileups_between_endpoints(plate):
         ]
         budget = _pileup_budget(len(profile["auto_values"]))
         if len(inside) > budget:
-            offenders[col_index] = {"count": len(inside), "budget": budget, "pairs": inside[:5]}
+            offenders[col_index] = {
+                "count": len(inside),
+                "budget": budget,
+                "pairs": inside[:5],
+            }
     assert offenders == {}, f"贴轴密点超出预算：{offenders}"
 
 
@@ -205,3 +225,72 @@ def test_both_endpoints_are_control_points(plate):
         if first not in have or last not in have:
             offenders[col_index] = (first, last, sorted(have)[:2], sorted(have)[-2:])
     assert offenders == {}, f"缺少端点的列：{offenders}"
+
+
+def test_prune_axis_pileups_boundary_condition():
+    """Issue #127: 贴轴点对去堆叠边界包含等值点 (abs(v2 - v1) == min_value_gap)。
+
+    在 <= min_value_gap + 1e-6 判定下，刚好相差 min_value_gap (2.0px) 且行距 < 7px 的
+    点对应被判定为 pileup 并执行去堆叠修剪；当差值严格大于 2.0px 时不应作为贴轴堆叠被剪。
+    """
+    rows = np.array([0.0, 10.0, 13.0, 30.0])
+    values_boundary = np.array([0.0, 5.0, 7.0, 5.0])  # abs(7.0 - 5.0) == 2.0
+    values_outside = np.array([0.0, 5.0, 7.1, 5.0])  # abs(7.1 - 5.0) == 2.1 > 2.0
+
+    # 边界点对 (10.0, 13.0) 差值刚好为 2.0px
+    pileup_cnt = count_axis_pileups(
+        rows, values_boundary, range(len(rows)), min_gap=7.0, min_value_gap=2.0
+    )
+    assert pileup_cnt == 1
+
+    kept_rows, kept_vals = prune_axis_pileups(
+        rows, values_boundary, min_gap=7.0, min_value_gap=2.0
+    )
+    # 冗余点 row=13.0 应当被剪除，仅保留首末端点和 row=10.0
+    assert len(kept_rows) == 3
+    assert 13.0 not in kept_rows
+    assert (
+        count_axis_pileups(
+            kept_rows, kept_vals, range(len(kept_rows)), min_gap=7.0, min_value_gap=2.0
+        )
+        == 0
+    )
+
+    # 超过边界的点对 (2.1px) 不应被视为贴轴堆叠
+    pileup_cnt_outside = count_axis_pileups(
+        rows, values_outside, range(len(rows)), min_gap=7.0, min_value_gap=2.0
+    )
+    assert pileup_cnt_outside == 0
+    kept_outside_rows, _ = prune_axis_pileups(
+        rows, values_outside, min_gap=7.0, min_value_gap=2.0
+    )
+    assert len(kept_outside_rows) == 4
+
+
+def test_baseline_ripple_prominence_floor_suppression():
+    """Issue #127: 基线处 2.0px 显著度的抗锯齿与量化抖动在 2.5px 下限下不作为强制极值。
+
+    旧实现下限 2.0px 会把 2.0px 的基线抖动当作 mandatory 锚点锁死，导致去堆叠无法消除；
+    新实现将显著度下限提至 2.5px，2.0px 抖动不再被标记为 mandatory。
+    """
+    profile = np.zeros(40, dtype=float)
+    profile[15] = 2.0  # 2.0px 显著度抖动峰值
+
+    # 旧 2.0px 下限：row 15 被识别为 mandatory 极值
+    rows_old, vals_old, mand_old = detect_turning_points_vertical(
+        profile, epsilon=2.0, prominence=2.0
+    )
+    assert 15.0 in rows_old
+    idx_old = list(rows_old).index(15.0)
+    assert bool(mand_old[idx_old]) is True
+
+    # 新 2.5px 下限：row 15 不再作为 mandatory 极值锁定
+    rows_new, vals_new, mand_new = detect_turning_points_vertical(
+        profile, epsilon=2.0, prominence=2.5
+    )
+    if 15.0 in rows_new:
+        idx_new = list(rows_new).index(15.0)
+        assert bool(mand_new[idx_new]) is False
+    else:
+        # 在 epsilon=2.0 垂直误差容差下，2.0px 抖动在直线 [0, 39] 误差范围内，无需作为控制点
+        assert 15.0 not in rows_new

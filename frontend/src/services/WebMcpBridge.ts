@@ -174,7 +174,11 @@ export function registerWebMcpAndInspectionHandles(p: WebMcpBridgeParams): void 
       p.canvasComponent.data.selectedEntity = { type: 'column', id: colId };
       p.canvasComponent.data.activeTaxaId = colId;
       p.getInspector()?.updateData(p.canvasComponent.data);
-      p.getSidebar()?.updateData(p.canvasComponent.data);
+      const sb = p.getSidebar();
+      if (sb) {
+        sb.updateData(p.canvasComponent.data);
+        sb.scrollToActiveColumn();
+      }
     },
     openCalibrationModal: () => p.propertyPanel.openCalibrationModal(),
     openRpcConfigModal: (onRefresh?: () => void) =>

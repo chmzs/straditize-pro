@@ -632,7 +632,7 @@ export class RpcClient {
   ): Promise<{ canvas: DepthCalibration }> {
     const res = await this.call<
       { y_marks: Array<{ pixel: number; val: number }>; unit: string; primary_axis: string },
-      { status: string; y_scale: { slope: number; intercept: number }; primary_axis?: string }
+      { status: string; y_scale: { slope: number; intercept: number }; primary_axis?: string; unit?: string }
     >('core.calibrateAxes', {
       y_marks: marks.map((m) => ({ pixel: m.pixel, val: m.value })),
       unit,
@@ -642,6 +642,7 @@ export class RpcClient {
       throw new Error(tError(-32603, 'core.calibrateAxes returned no y_scale'));
     }
     const ordered = [...marks].sort((a, b) => a.pixel - b.pixel);
+    const resolvedUnit = (res.unit ?? unit ?? '').trim();
     return {
       canvas: {
         isCalibrated: true,
@@ -649,7 +650,7 @@ export class RpcClient {
         top_cm: ordered[0].value,
         bottom_px: ordered[ordered.length - 1].pixel,
         bottom_cm: ordered[ordered.length - 1].value,
-        unit,
+        unit: resolvedUnit || undefined,
         // Trust the backend's echo, not our own request: a rejected override must not be
         // displayed as if it had been accepted.
         primaryAxis: res.primary_axis === 'age' ? 'age' : 'depth',

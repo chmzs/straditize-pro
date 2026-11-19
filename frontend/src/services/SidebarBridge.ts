@@ -10,6 +10,7 @@ import { reportBackendFailure } from './ProvenanceGate';
 import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
 import { STAGE } from '../core/WorkflowStage';
 import { makeRenameUndo } from '../core/undoActions';
+import { compensationNote, addCompensation } from '../core/compensationNote';
 
 export interface SidebarBridgeParams {
   rpcClient: RpcClient;
@@ -27,15 +28,9 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
   return {
     onSelectTaxa: (taxaId: string) => {
       p.canvasComponent.setActiveTaxa(taxaId);
-      // 侧栏点选一列 = 选中"列"实体，让属性检查器切到**列属性**面板。
-      // 历史缺陷：只有"画布上用选择工具(S)点列边界"才会设置 selectedEntity，
-      // 而【删除列】按钮就在列属性面板里 ⇒ 从侧栏根本走不到，用户以为没有删除功能。
-      // 分列/命名阶段（STAGE.SPLIT）例外：那时右侧面板是"命名核对"，用户点一列是为了
-      // 看**命名进度与逐列高亮**，把面板整块换成"列属性"会把它顶掉（实测导致
-      // `#naming-sequential-highlight` 找不到，命名核对功能等于失效）。
-      // 其它阶段仍然点选即看列属性——那是 U6 给【删除列】开入口的做法。
-      // 列属性面板只在步骤 7（拐点与采样层位）出现：步骤 6 点列只高亮，不换面板。
-      if (p.canvasComponent.workflowStage === STAGE.SPLIT || p.canvasComponent.workflowStage === STAGE.SPEARS_AND_SAMPLES) {
+      // 侧栏点选一列只在高亮该列。步骤 7（拐点与层位）右侧面板恒定为层位发现，不再整块换掉。
+      // 分列/命名阶段（STAGE.SPLIT）例外：右侧若需响应列点选才同步 selectedEntity。
+      if (p.canvasComponent.workflowStage === STAGE.SPLIT) {
         p.canvasComponent.data.selectedEntity = { type: 'column', id: taxaId };
         p.getInspector()?.updateData(p.canvasComponent.data);
       }
@@ -195,6 +190,174 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
       p.getToolbar()?.updateHistoryState();
       p.updateFooter();
       p.setHudNotice(`已插入空白间隔列: ${newCol.name}`);
+    },
+    onDigitizeColumn: async (taxaId: string) => {
+      const col = p.canvasComponent.data.columns.find((c) => c.id === taxaId);
+      if (!col) return;
+      try {
+        const { points, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(col.id);
+        if (points.length > 0) {
+          col.controlPoints = points;
+          p.canvasComponent.history.push(
+            `Re-digitize ${col.name}`,
+            p.canvasComponent.data.columns,
+            p.canvasComponent.data.activeTaxaId
+          );
+          p.canvasComponent.requestRender();
+          p.getSidebar()?.updateData(p.canvasComponent.data);
+          p.getInspector()?.updateData(p.canvasComponent.data);
+          p.setHudNotice(
+            `属种 [${col.name}] 轮廓已重新取数识别。`
+            + compensationNote({ brokenRows, ambiguousRows }),
+            compensationNote({ brokenRows, ambiguousRows }) ? 6000 : 3000
+          );
+        }
+      } catch (err) {
+        reportBackendFailure('属种轮廓重识别', err);
+      }
+    },
+    onExtractTurningPoints: async (taxaId: string) => {
+      const col = p.canvasComponent.data.columns.find((c) => c.id === taxaId);
+      if (!col) return;
+      const colIndex = col.col_index ?? p.canvasComponent.data.columns.indexOf(col);
+      try {
+        const res = await p.rpcClient.call<
+          { col_index?: number },
+          { success?: boolean; columns_updated?: number[]; message?: string }
+        >('algorithm.extractTurningPoints', { col_index: colIndex });
+        if (res?.success !== true) {
+          throw new Error(res?.message || 'algorithm.extractTurningPoints 未返回 success=true');
+        }
+        const fresh = await p.rpcClient.getDiagramData();
+        const freshCol = fresh.columns?.find((c: any) => c.id === col.id);
+        if (freshCol && freshCol.controlPoints) {
+          col.controlPoints = freshCol.controlPoints;
+        }
+        p.canvasComponent.history.push(
+          `Extract turning points for ${col.name}`,
+          p.canvasComponent.data.columns,
+          p.canvasComponent.data.activeTaxaId
+        );
+        p.canvasComponent.requestRender();
+        p.getSidebar()?.updateData(p.canvasComponent.data);
+        p.getInspector()?.updateData(p.canvasComponent.data);
+        p.setHudNotice(`已为属种 [${col.name}] 自动提取峰谷控制点（手工点保留）。`);
+      } catch (err) {
+        reportBackendFailure('自动提取峰谷', err);
+      }
+    },
+    onDeleteColumn: async (taxaId: string) => {
+      const col = p.canvasComponent.data.columns.find((c) => c.id === taxaId);
+      if (!col || p.canvasComponent.data.columns.length <= 1) return;
+      const colIndex = col.col_index ?? p.canvasComponent.data.columns.indexOf(col);
+      try {
+        await p.rpcClient.removeColumn(colIndex);
+      } catch (err) {
+        reportBackendFailure('删除列', err);
+        return;
+      }
+      const idx = p.canvasComponent.data.columns.findIndex((c) => c.id === col.id);
+      if (idx !== -1) {
+        p.canvasComponent.data.columns.splice(idx, 1);
+        p.canvasComponent.data.columns.forEach((c, i) => {
+          c.col_index = i;
+        });
+        p.canvasComponent.data.activeTaxaId = p.canvasComponent.data.columns[0]?.id || '';
+        p.canvasComponent.requestRender();
+        p.getSidebar()?.updateData(p.canvasComponent.data);
+        p.getInspector()?.updateData(p.canvasComponent.data);
+        p.updateFooter();
+        p.setHudNotice(`已删除属种列 [${col.name}]。`);
+      }
+    },
+    onBatchChangePlotType: async (taxaIds: string[], plotType: any) => {
+      if (!taxaIds || taxaIds.length === 0) return;
+      try {
+        for (const tid of taxaIds) {
+          const col = p.canvasComponent.data.columns.find((c) => c.id === tid);
+          if (!col) continue;
+          const colIndex = col.col_index ?? p.canvasComponent.data.columns.indexOf(col);
+          await p.rpcClient.updateColumn(colIndex, { plot_type: plotType });
+          col.plot_type = plotType;
+          col.plotType = plotType ?? undefined;
+        }
+        p.canvasComponent.history.push(
+          `Batch change plot type to ${plotType} for ${taxaIds.length} columns`,
+          p.canvasComponent.data.columns,
+          p.canvasComponent.data.activeTaxaId
+        );
+        p.canvasComponent.requestRender();
+        p.getSidebar()?.updateData(p.canvasComponent.data);
+        p.getInspector()?.updateData(p.canvasComponent.data);
+        const typeName = plotType ? String(plotType).toUpperCase() : '跟随组';
+        p.setHudNotice(`已将所选 ${taxaIds.length} 列形态批量切换为: ${typeName}`, 3000);
+      } catch (err) {
+        reportBackendFailure('批量切换形态', err);
+      }
+    },
+    onBatchDigitizeColumns: async (taxaIds: string[]) => {
+      if (!taxaIds || taxaIds.length === 0) return;
+      let totalComp = { brokenRows: 0, ambiguousRows: 0 };
+      let successCount = 0;
+      try {
+        for (const tid of taxaIds) {
+          const col = p.canvasComponent.data.columns.find((c) => c.id === tid);
+          if (!col) continue;
+          const { points, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(col.id);
+          col.controlPoints = points;
+          totalComp = addCompensation(totalComp, { brokenRows, ambiguousRows });
+          successCount++;
+        }
+        p.canvasComponent.history.push(
+          `Batch re-digitize ${successCount} columns`,
+          p.canvasComponent.data.columns,
+          p.canvasComponent.data.activeTaxaId
+        );
+        p.canvasComponent.requestRender();
+        p.getSidebar()?.updateData(p.canvasComponent.data);
+        p.getInspector()?.updateData(p.canvasComponent.data);
+        p.setHudNotice(
+          `已完成 ${successCount} 列批量数字化取数。` + compensationNote(totalComp),
+          compensationNote(totalComp) ? 6000 : 3500
+        );
+      } catch (err) {
+        reportBackendFailure('批量取数', err);
+      }
+    },
+    onBatchExtractTurningPoints: async (taxaIds: string[]) => {
+      if (!taxaIds || taxaIds.length === 0) return;
+      let successCount = 0;
+      try {
+        for (const tid of taxaIds) {
+          const col = p.canvasComponent.data.columns.find((c) => c.id === tid);
+          if (!col) continue;
+          const colIndex = col.col_index ?? p.canvasComponent.data.columns.indexOf(col);
+          const res = await p.rpcClient.call<
+            { col_index?: number },
+            { success?: boolean; columns_updated?: number[]; message?: string }
+          >('algorithm.extractTurningPoints', { col_index: colIndex });
+          if (res?.success === true) successCount++;
+        }
+        const fresh = await p.rpcClient.getDiagramData();
+        for (const tid of taxaIds) {
+          const col = p.canvasComponent.data.columns.find((c) => c.id === tid);
+          const freshCol = fresh.columns?.find((c: any) => c.id === tid);
+          if (col && freshCol && freshCol.controlPoints) {
+            col.controlPoints = freshCol.controlPoints;
+          }
+        }
+        p.canvasComponent.history.push(
+          `Batch extract turning points for ${successCount} columns`,
+          p.canvasComponent.data.columns,
+          p.canvasComponent.data.activeTaxaId
+        );
+        p.canvasComponent.requestRender();
+        p.getSidebar()?.updateData(p.canvasComponent.data);
+        p.getInspector()?.updateData(p.canvasComponent.data);
+        p.setHudNotice(`已为所选 ${successCount} 列批量自动提取峰谷控制点（手工点保留）。`, 3500);
+      } catch (err) {
+        reportBackendFailure('批量提取峰谷', err);
+      }
     },
   };
 }

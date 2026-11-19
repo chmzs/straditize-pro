@@ -63,6 +63,7 @@ class StraditizeSession(
 
     def __init__(self) -> None:
         self.image_path: str | None = None
+        self.project_name: str | None = None
         #: 真实存储位，只由 `image` 这一个 property 的 setter 写入。
         self._image: Image.Image | None = None
         self._image_fingerprint_cache: str | None = None

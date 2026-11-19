@@ -106,14 +106,14 @@ test.describe('导出面板：LiPD / XLSX 必须真的下载到文件', () => {
   test('点 LiPD → 下载到 .lpd 文件，PK 头，非空', async ({ page }) => {
     await openExportModal(page);
     const { name, size } = await expectZipDownload(page, '#btn-wpd-download-lipd', '.lpd');
-    expect(name).toContain('straditize_lipdverse_');
+    expect(name).toMatch(/_lipd_\d{8}_\d{6}\.lpd$/);
     expect(size, '一个只含 JSON-LD 的包也应有几百字节').toBeGreaterThan(100);
   });
 
   test('点 XLSX → 下载到 .xlsx 文件，PK 头，非空', async ({ page }) => {
     await openExportModal(page);
     const { name, size } = await expectZipDownload(page, '#btn-wpd-download-xlsx', '.xlsx');
-    expect(name).toContain('straditize_scientific_');
+    expect(name).toMatch(/_report_\d{8}_\d{6}\.xlsx$/);
     expect(size).toBeGreaterThan(100);
   });
 });
