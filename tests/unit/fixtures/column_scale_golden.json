@@ -39,7 +39,7 @@
   "val1": 100.0
  },
  "group": {
-  "abs_px0": 105.0,
+  "abs_px0": 102.0,
   "abs_px1": 200.0,
   "calibrated": true,
   "exaggeration_mult": null,
@@ -130,7 +130,7 @@
   "val1": 0.5
  },
  "roi_group_fallback": {
-  "abs_px0": 25.0,
+  "abs_px0": 22.0,
   "abs_px1": 120.0,
   "calibrated": true,
   "exaggeration_mult": null,

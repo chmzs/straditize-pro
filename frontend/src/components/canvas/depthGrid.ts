@@ -11,6 +11,7 @@
  * 留在 2853 行的画布类里时，每次改它都要重新理解整条渲染管线。
  */
 import { CoordinateSystem } from '../../core/CoordinateSystem';
+import { calUnitLabel } from '../../core/calUnit';
 import { SplineInterpolator } from '../../core/SplineInterpolator';
 import type { DataRoi, DiagramCalibration, TaxaColumn } from '../../types/pollen';
 
@@ -115,10 +116,10 @@ export function drawDepthGridOverlay(env: DepthGridEnv): boolean {
 
   if (env.hoveringRulerBadge) {
     ctx.fillStyle = isLight ? '#0284c7' : '#38bdf8';
-    ctx.fillText(`标尺: ${interval}${cal.unit} [点击修改]`, badgeX, badgeY);
+    ctx.fillText(`标尺: ${interval} ${calUnitLabel(cal)} [点击修改]`, badgeX, badgeY);
   } else {
     ctx.fillStyle = isLight ? 'rgba(2, 132, 199, 0.9)' : 'rgba(56, 189, 248, 0.85)';
-    ctx.fillText(`Depth (${cal.unit}) [Δ=${interval}]`, badgeX, badgeY);
+    ctx.fillText(`Depth (${calUnitLabel(cal)}) [Δ=${interval}]`, badgeX, badgeY);
   }
 
   ctx.restore();

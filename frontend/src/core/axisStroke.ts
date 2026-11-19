@@ -1,5 +1,5 @@
 /**
- * 轴线粗解析：**列级覆盖 > 组级初值 > 缺省 5**（ARCHITECTURE §6.4）。
+ * 轴线粗解析：**列级覆盖 > 组级初值 > 缺省 2**（ARCHITECTURE §6.4）。
  *
  * 组的 `axis_stroke_px` 是初值（分列时后端 `measure_axis_stroke` 实测中位数，
  * 或用户在步骤 6 手填）；列的 `axis_stroke_px` 只放用户显式覆盖，分列不写它。
@@ -11,6 +11,16 @@
 export interface AxisStrokeHolder {
   axis_stroke_px?: number | null;
 }
+
+/**
+ * 轴粗的兜底值（列级与组级都没设时用），单位 px。
+ *
+ * **必须与后端 `straditize_core/session_parts/xscale.py::DEFAULT_AXIS_STROKE_PX`
+ * 取同一个数**（两边常量同名，就是为了 `grep DEFAULT_AXIS_STROKE_PX` 能一次找全）。
+ * 前端不硬编码在解析函数里，是为了让"改兜底"只有一个可搜索的落点 —— 2026-11-19
+ * 由 5 改 2 时，正是两处各写一个 5 导致画布绿线与 0 点差 3px。
+ */
+export const DEFAULT_AXIS_STROKE_PX = 2;
 
 /**
  * 轴粗的合法区间，与后端 `column.update` 的校验（1–20px）逐字对齐。
@@ -33,5 +43,5 @@ export function resolveAxisStroke(
   const groupStroke = Number(group?.axis_stroke_px);
   if (group?.axis_stroke_px != null && Number.isFinite(groupStroke) && groupStroke >= 0)
     return groupStroke;
-  return 5;
+  return DEFAULT_AXIS_STROKE_PX;
 }

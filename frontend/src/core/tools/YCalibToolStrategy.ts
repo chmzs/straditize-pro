@@ -1,6 +1,7 @@
 import { Point2D, ToolMode } from '../../types/pollen';
 import { canPickYCalibMark, STAGE } from '../WorkflowStage';
 import { ToolContext, ToolStrategy } from './ToolStrategy';
+import { calUnitLabel } from '../calUnit';
 
 export class YCalibToolStrategy implements ToolStrategy {
   public readonly mode: ToolMode = 'ycalib';
@@ -171,9 +172,10 @@ export class YCalibToolStrategy implements ToolStrategy {
       ctx.lineWidth = 2 / scale;
       ctx.stroke();
 
+      // 药丸上的单位走唯一入口：缺单位显示"单位未定"，与侧栏面板一致，不再猜 cm。
       const label =
         item.val !== null && item.val !== undefined
-          ? `${item.tag}: ${item.val} ${cal.unit || 'cm'} (${item.y}px)`
+          ? `${item.tag}: ${item.val} ${calUnitLabel(cal)} (${item.y}px)`
           : `${item.tag}: ${item.y}px`;
       drawPill(label, item.x + 10 / scale, item.y, item.color, item.color, true);
     }

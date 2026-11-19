@@ -200,6 +200,10 @@ class PlottingMixin:
                     out_path=str(out_tmp),
                     rscript=str(detected["path"]),
                     settings=merged,
+                    # Y 轴标题跟随轴的实际性质（issue #114）：`depth`/`cm` → `Depth (cm)`，
+                    # `age`/`ka` → `Age (ka BP)`。派生逻辑只在 `strat_plot._y_axis_label`。
+                    primary_axis=getattr(self, "primary_axis", None),
+                    unit=getattr(self, "depth_unit", None),
                 )
             except RuntimeError as exc:
                 raise JsonRpcError(

@@ -21,6 +21,7 @@ import { shouldDrawColumnLabel } from './labelLayout';
 import { resolveAxisStroke } from '../../core/axisStroke';
 import { resolveColumnGroup } from '../../core/columnGroup';
 import { groupBandRect } from './groupBandRect';
+import { groupColorAt } from './groupColor';
 import { formatCalibNumber, getGroupCalibMark } from './groupCalibMarks';
 import type { DataRoi, TaxaColumn } from '../../types/pollen';
 
@@ -82,10 +83,9 @@ export function getColumnCalibVal(col: TaxaColumn): number {
  * 一条色带 + 每个连续段首列写一次组名，扫一眼就知道组边界在哪。
  *
  * 只在 ≥2 组时画：单组时是全图同色的纯噪声，侧栏已经写明组名。
- * 颜色按组在 `roi.x_groups` 中的顺序取固定调色板：同组同色、不随列变。
+ * 颜色按组在 `roi.x_groups` 中的顺序取：**唯一取色入口**是 `./groupColor.ts`，
+ * 步骤 6 的组按钮用同一个函数，面板与画布逐字节同色（issue #108）。
  */
-const GROUP_BAND_PALETTE = ['#0ea5e9', '#f59e0b', '#a855f7', '#10b981', '#ef4444', '#64748b'];
-
 function drawGroupBands(env: ColumnBoundaryEnv): void {
   const { ctx, columns, roi, scale } = env;
   const groups = roi.x_groups ?? [];
@@ -104,7 +104,7 @@ function drawGroupBands(env: ColumnBoundaryEnv): void {
     const groupOfCol = resolveColumnGroup(col, roi);
     const gid = groupOfCol?.id ?? '';
     const idx = Math.max(0, groups.findIndex((g) => g.id === gid));
-    const color = GROUP_BAND_PALETTE[idx % GROUP_BAND_PALETTE.length];
+    const color = groupColorAt(idx);
 
     ctx.fillStyle = color;
     const band = groupBandRect(col.startX, col.endX, resolveAxisStroke(col, groups[idx]));
@@ -158,7 +158,7 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
       const groupSlope = Number(groupOfCol?.value_per_px);
       const cellPx =
         Number.isFinite(groupSlope) && groupSlope !== 0 ? 1 / Math.abs(groupSlope) : null;
-      // 列级覆盖 > 组级初值 > 缺省 5（与后端 xscale.resolve_axis_stroke 同语义）。
+      // 列级覆盖 > 组级初值 > 兜底 `DEFAULT_AXIS_STROKE_PX`（与后端 xscale 同语义）。
       const axisStrokePx = resolveAxisStroke(col, groupOfCol);
       const leftEdgeX = col.startX;
       const zeroX = leftEdgeX + axisStrokePx;

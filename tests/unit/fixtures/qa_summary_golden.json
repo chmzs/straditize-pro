@@ -3,6 +3,97 @@
   "ok": {
    "composition": true,
    "empty_horizons": [],
+   "flags": {
+    "FLAG_AXIS_BLIND": {
+     "by_column": {},
+     "columns_evaluated": 0,
+     "count": 0,
+     "criterion": "0 <= raw_span_px <= axis_stroke_px",
+     "downgraded_low_priority": 0,
+     "flag": "FLAG_AXIS_BLIND",
+     "missing": [],
+     "reason": "no_evaluable_column",
+     "rows": [],
+     "rows_omitted": 0,
+     "skipped_columns": [
+      {
+       "column": "col01",
+       "reason": "zero_point_suspect"
+      },
+      {
+       "column": "col02",
+       "reason": "zero_point_suspect"
+      },
+      {
+       "column": "col03",
+       "reason": "zero_point_suspect"
+      }
+     ],
+     "status": "skipped",
+     "structure": []
+    },
+    "FLAG_COLLISION": {
+     "by_column": {},
+     "columns_evaluated": 3,
+     "count": 0,
+     "criterion": "span_px >= full_span_px - 1px AND all neighbour |dx| > 2px",
+     "downgraded_low_priority": 0,
+     "flag": "FLAG_COLLISION",
+     "missing": [],
+     "reason": "",
+     "rows": [],
+     "rows_omitted": 0,
+     "skipped_columns": [],
+     "status": "computed",
+     "structure": []
+    },
+    "FLAG_EXAGG_RATIO": {
+     "by_column": {},
+     "columns_evaluated": 0,
+     "count": 0,
+     "criterion": "ratio = (outer_px - z0) / (inner_px - z0) NOT IN [3.0, 5.5]",
+     "downgraded_low_priority": 0,
+     "flag": "FLAG_EXAGG_RATIO",
+     "missing": [
+      "per-row inner-line x (inner_xs_px)",
+      "per-row outer-line x (outer_xs_px)"
+     ],
+     "reason": "no_paired_inner_outer_readings",
+     "rows": [],
+     "rows_omitted": 0,
+     "skipped_columns": [
+      {
+       "column": "col01",
+       "reason": "no_paired_inner_outer_readings"
+      },
+      {
+       "column": "col02",
+       "reason": "no_paired_inner_outer_readings"
+      },
+      {
+       "column": "col03",
+       "reason": "no_paired_inner_outer_readings"
+      }
+     ],
+     "status": "skipped",
+     "structure": []
+    },
+    "FLAG_TRUNCATED": {
+     "by_column": {},
+     "columns_evaluated": 3,
+     "count": 0,
+     "criterion": "span_px >= full_span_px - 1px AND any neighbour |dx| <= 2px",
+     "downgraded_low_priority": 0,
+     "flag": "FLAG_TRUNCATED",
+     "missing": [],
+     "reason": "",
+     "rows": [],
+     "rows_omitted": 0,
+     "skipped_columns": [],
+     "status": "computed",
+     "structure": []
+    }
+   },
    "n_horizons": 636,
    "n_horizons_empty": 0,
    "n_horizons_with_data": 636,
@@ -70,6 +161,71 @@
   "ok": {
    "composition": true,
    "empty_horizons": [],
+   "flags": {
+    "FLAG_AXIS_BLIND": {
+     "by_column": {},
+     "columns_evaluated": 0,
+     "count": 0,
+     "criterion": "0 <= raw_span_px <= axis_stroke_px",
+     "downgraded_low_priority": 0,
+     "flag": "FLAG_AXIS_BLIND",
+     "missing": [],
+     "reason": "roi_has_no_columns",
+     "rows": [],
+     "rows_omitted": 0,
+     "skipped_columns": [],
+     "status": "skipped",
+     "structure": []
+    },
+    "FLAG_COLLISION": {
+     "by_column": {},
+     "columns_evaluated": 0,
+     "count": 0,
+     "criterion": "span_px >= full_span_px - 1px AND all neighbour |dx| > 2px",
+     "downgraded_low_priority": 0,
+     "flag": "FLAG_COLLISION",
+     "missing": [],
+     "reason": "roi_has_no_columns",
+     "rows": [],
+     "rows_omitted": 0,
+     "skipped_columns": [],
+     "status": "skipped",
+     "structure": []
+    },
+    "FLAG_EXAGG_RATIO": {
+     "by_column": {},
+     "columns_evaluated": 0,
+     "count": 0,
+     "criterion": "ratio = (outer_px - z0) / (inner_px - z0) NOT IN [3.0, 5.5]",
+     "downgraded_low_priority": 0,
+     "flag": "FLAG_EXAGG_RATIO",
+     "missing": [
+      "per-row inner-line x (inner_xs_px)",
+      "per-row outer-line x (outer_xs_px)"
+     ],
+     "reason": "roi_has_no_columns",
+     "rows": [],
+     "rows_omitted": 0,
+     "skipped_columns": [],
+     "status": "skipped",
+     "structure": []
+    },
+    "FLAG_TRUNCATED": {
+     "by_column": {},
+     "columns_evaluated": 0,
+     "count": 0,
+     "criterion": "span_px >= full_span_px - 1px AND any neighbour |dx| <= 2px",
+     "downgraded_low_priority": 0,
+     "flag": "FLAG_TRUNCATED",
+     "missing": [],
+     "reason": "roi_has_no_columns",
+     "rows": [],
+     "rows_omitted": 0,
+     "skipped_columns": [],
+     "status": "skipped",
+     "structure": []
+    }
+   },
    "n_horizons": 0,
    "n_horizons_empty": 0,
    "n_horizons_with_data": 0,
@@ -97,6 +253,89 @@
    "ok": {
     "composition": true,
     "empty_horizons": [],
+    "flags": {
+     "FLAG_AXIS_BLIND": {
+      "by_column": {},
+      "columns_evaluated": 0,
+      "count": 0,
+      "criterion": "0 <= raw_span_px <= axis_stroke_px",
+      "downgraded_low_priority": 0,
+      "flag": "FLAG_AXIS_BLIND",
+      "missing": [],
+      "reason": "no_evaluable_column",
+      "rows": [],
+      "rows_omitted": 0,
+      "skipped_columns": [
+       {
+        "column": "col01",
+        "reason": "zero_point_suspect"
+       },
+       {
+        "column": "col02",
+        "reason": "zero_point_suspect"
+       }
+      ],
+      "status": "skipped",
+      "structure": []
+     },
+     "FLAG_COLLISION": {
+      "by_column": {},
+      "columns_evaluated": 2,
+      "count": 0,
+      "criterion": "span_px >= full_span_px - 1px AND all neighbour |dx| > 2px",
+      "downgraded_low_priority": 0,
+      "flag": "FLAG_COLLISION",
+      "missing": [],
+      "reason": "",
+      "rows": [],
+      "rows_omitted": 0,
+      "skipped_columns": [],
+      "status": "computed",
+      "structure": []
+     },
+     "FLAG_EXAGG_RATIO": {
+      "by_column": {},
+      "columns_evaluated": 0,
+      "count": 0,
+      "criterion": "ratio = (outer_px - z0) / (inner_px - z0) NOT IN [3.0, 5.5]",
+      "downgraded_low_priority": 0,
+      "flag": "FLAG_EXAGG_RATIO",
+      "missing": [
+       "per-row inner-line x (inner_xs_px)",
+       "per-row outer-line x (outer_xs_px)"
+      ],
+      "reason": "no_paired_inner_outer_readings",
+      "rows": [],
+      "rows_omitted": 0,
+      "skipped_columns": [
+       {
+        "column": "col01",
+        "reason": "no_paired_inner_outer_readings"
+       },
+       {
+        "column": "col02",
+        "reason": "no_paired_inner_outer_readings"
+       }
+      ],
+      "status": "skipped",
+      "structure": []
+     },
+     "FLAG_TRUNCATED": {
+      "by_column": {},
+      "columns_evaluated": 2,
+      "count": 0,
+      "criterion": "span_px >= full_span_px - 1px AND any neighbour |dx| <= 2px",
+      "downgraded_low_priority": 0,
+      "flag": "FLAG_TRUNCATED",
+      "missing": [],
+      "reason": "",
+      "rows": [],
+      "rows_omitted": 0,
+      "skipped_columns": [],
+      "status": "computed",
+      "structure": []
+     }
+    },
     "n_horizons": 636,
     "n_horizons_empty": 0,
     "n_horizons_with_data": 636,
@@ -153,6 +392,89 @@
    "ok": {
     "composition": true,
     "empty_horizons": [],
+    "flags": {
+     "FLAG_AXIS_BLIND": {
+      "by_column": {},
+      "columns_evaluated": 0,
+      "count": 0,
+      "criterion": "0 <= raw_span_px <= axis_stroke_px",
+      "downgraded_low_priority": 0,
+      "flag": "FLAG_AXIS_BLIND",
+      "missing": [],
+      "reason": "no_evaluable_column",
+      "rows": [],
+      "rows_omitted": 0,
+      "skipped_columns": [
+       {
+        "column": "col03",
+        "reason": "zero_point_suspect"
+       },
+       {
+        "column": "col04",
+        "reason": "zero_point_suspect"
+       }
+      ],
+      "status": "skipped",
+      "structure": []
+     },
+     "FLAG_COLLISION": {
+      "by_column": {},
+      "columns_evaluated": 2,
+      "count": 0,
+      "criterion": "span_px >= full_span_px - 1px AND all neighbour |dx| > 2px",
+      "downgraded_low_priority": 0,
+      "flag": "FLAG_COLLISION",
+      "missing": [],
+      "reason": "",
+      "rows": [],
+      "rows_omitted": 0,
+      "skipped_columns": [],
+      "status": "computed",
+      "structure": []
+     },
+     "FLAG_EXAGG_RATIO": {
+      "by_column": {},
+      "columns_evaluated": 0,
+      "count": 0,
+      "criterion": "ratio = (outer_px - z0) / (inner_px - z0) NOT IN [3.0, 5.5]",
+      "downgraded_low_priority": 0,
+      "flag": "FLAG_EXAGG_RATIO",
+      "missing": [
+       "per-row inner-line x (inner_xs_px)",
+       "per-row outer-line x (outer_xs_px)"
+      ],
+      "reason": "no_paired_inner_outer_readings",
+      "rows": [],
+      "rows_omitted": 0,
+      "skipped_columns": [
+       {
+        "column": "col03",
+        "reason": "no_paired_inner_outer_readings"
+       },
+       {
+        "column": "col04",
+        "reason": "no_paired_inner_outer_readings"
+       }
+      ],
+      "status": "skipped",
+      "structure": []
+     },
+     "FLAG_TRUNCATED": {
+      "by_column": {},
+      "columns_evaluated": 2,
+      "count": 0,
+      "criterion": "span_px >= full_span_px - 1px AND any neighbour |dx| <= 2px",
+      "downgraded_low_priority": 0,
+      "flag": "FLAG_TRUNCATED",
+      "missing": [],
+      "reason": "",
+      "rows": [],
+      "rows_omitted": 0,
+      "skipped_columns": [],
+      "status": "computed",
+      "structure": []
+     }
+    },
     "n_horizons": 636,
     "n_horizons_empty": 0,
     "n_horizons_with_data": 636,
@@ -210,6 +532,97 @@
   "ok": {
    "composition": true,
    "empty_horizons": [],
+   "flags": {
+    "FLAG_AXIS_BLIND": {
+     "by_column": {},
+     "columns_evaluated": 0,
+     "count": 0,
+     "criterion": "0 <= raw_span_px <= axis_stroke_px",
+     "downgraded_low_priority": 0,
+     "flag": "FLAG_AXIS_BLIND",
+     "missing": [],
+     "reason": "no_evaluable_column",
+     "rows": [],
+     "rows_omitted": 0,
+     "skipped_columns": [
+      {
+       "column": "col01",
+       "reason": "zero_point_suspect"
+      },
+      {
+       "column": "col02",
+       "reason": "zero_point_suspect"
+      },
+      {
+       "column": "col03",
+       "reason": "zero_point_suspect"
+      }
+     ],
+     "status": "skipped",
+     "structure": []
+    },
+    "FLAG_COLLISION": {
+     "by_column": {},
+     "columns_evaluated": 3,
+     "count": 0,
+     "criterion": "span_px >= full_span_px - 1px AND all neighbour |dx| > 2px",
+     "downgraded_low_priority": 0,
+     "flag": "FLAG_COLLISION",
+     "missing": [],
+     "reason": "",
+     "rows": [],
+     "rows_omitted": 0,
+     "skipped_columns": [],
+     "status": "computed",
+     "structure": []
+    },
+    "FLAG_EXAGG_RATIO": {
+     "by_column": {},
+     "columns_evaluated": 0,
+     "count": 0,
+     "criterion": "ratio = (outer_px - z0) / (inner_px - z0) NOT IN [3.0, 5.5]",
+     "downgraded_low_priority": 0,
+     "flag": "FLAG_EXAGG_RATIO",
+     "missing": [
+      "per-row inner-line x (inner_xs_px)",
+      "per-row outer-line x (outer_xs_px)"
+     ],
+     "reason": "no_paired_inner_outer_readings",
+     "rows": [],
+     "rows_omitted": 0,
+     "skipped_columns": [
+      {
+       "column": "col01",
+       "reason": "no_paired_inner_outer_readings"
+      },
+      {
+       "column": "col02",
+       "reason": "no_paired_inner_outer_readings"
+      },
+      {
+       "column": "col03",
+       "reason": "no_paired_inner_outer_readings"
+      }
+     ],
+     "status": "skipped",
+     "structure": []
+    },
+    "FLAG_TRUNCATED": {
+     "by_column": {},
+     "columns_evaluated": 3,
+     "count": 0,
+     "criterion": "span_px >= full_span_px - 1px AND any neighbour |dx| <= 2px",
+     "downgraded_low_priority": 0,
+     "flag": "FLAG_TRUNCATED",
+     "missing": [],
+     "reason": "",
+     "rows": [],
+     "rows_omitted": 0,
+     "skipped_columns": [],
+     "status": "computed",
+     "structure": []
+    }
+   },
    "n_horizons": 3,
    "n_horizons_empty": 0,
    "n_horizons_with_data": 3,

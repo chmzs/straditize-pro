@@ -1,5 +1,6 @@
 import { DiagramData } from '../../types/pollen';
 import { CoordinateSystem } from '../../core/CoordinateSystem';
+import { calUnitLabel } from '../../core/calUnit';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
 import { notifyError } from '../../ui/feedback';
@@ -16,7 +17,13 @@ export function render(data: DiagramData): string {
   const topVal = bounds ? bounds.topValue : (cal.top_cm ?? '');
   const botPx = bounds ? bounds.bottomPx : (cal.bottom_px ?? '');
   const botVal = bounds ? bounds.bottomValue : (cal.bottom_cm ?? '');
-  const unit = cal.unit || 'cm';
+  // 单位只取自后端下发值或用户输入。缺失就是缺失（显示"单位未定"），绝不填一个
+  // "看起来合理"的默认值：Y 轴可能就是 ka，猜成 cm 既不会报错，又会把整柱样品
+  // 按 cm 解释后写回模型，错得很安静（#111）。
+  const unit = (cal.unit ?? '').trim();
+  // 文案与"未定"的判定走共享入口（core/calUnit）：页脚、属性面板、画布徽标与本面板
+  // 必须说同一句话。本面板只决定排版（占位符、提示行、比值后缀）。
+  const unitLabel = calUnitLabel(cal);
   // What the Y axis MEASURES. Declared, never inferred from `unit`: "cm"/"m" imply depth
   // and "cal BP"/"ka" imply age only for conventional spellings, and a wrong guess moves
   // every sample in the core to a plausible-but-wrong position with no error to notice.
@@ -25,7 +32,8 @@ export function render(data: DiagramData): string {
   let ratioStr = '--';
   if (bounds && Math.abs(bounds.bottomPx - bounds.topPx) > 0) {
     const ratio = Math.abs((bounds.bottomValue - bounds.topValue) / (bounds.bottomPx - bounds.topPx));
-    ratioStr = `${ratio.toFixed(4)} ${unit}/px`;
+    // 单位未知时只报纯比值，不留一个假单位。
+    ratioStr = unit === '' ? `${ratio.toFixed(4)}/px` : `${ratio.toFixed(4)} ${unit}/px`;
   }
 
   return `
@@ -83,16 +91,17 @@ export function render(data: DiagramData): string {
           </div>
         </div>
 
-        <!-- 单位与比例 -->
+        <!-- 单位与比例：单位框留空即"单位未定"，绝不预填 cm（预填的 cm 会随提交写回模型） -->
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 2px; font-size: 10.5px;">
           <div style="display: flex; align-items: center; gap: 4px;">
             <label style="color: var(--text-muted);">${t('step3.unit')}:</label>
-            <input type="text" id="ycal-inp-unit" value="${unit}" style="width: 50px; font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
+            <input type="text" id="ycal-inp-unit" value="${unit}" placeholder="${unitLabel}" style="width: 50px; font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);" />
           </div>
           <div style="color: var(--text-muted);">
             Ratio: <strong id="lbl-ycal-ratio" style="color: var(--accent-green); font-family: monospace;">${ratioStr}</strong>
           </div>
         </div>
+        ${unit === '' ? `<div style="font-size: 9.5px; color: var(--status-warning); padding: 0 2px 4px;">${unitLabel}</div>` : ''}
 
         <!-- 主轴语义：显式声明 Y 轴测的是什么 -->
         <div style="display: flex; align-items: center; gap: 5px; padding: 4px 2px; font-size: 10.5px;"
@@ -154,7 +163,15 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     const topVal = num('#ycal-inp-top-val');
     const botPx = num('#ycal-inp-bot-px');
     const botVal = num('#ycal-inp-bot-val');
-    const unit = raw('#ycal-inp-unit') || 'cm';
+    /**
+     * 单位原样透传，**不做任何默认值**（#111）。
+     *
+     * 空串直接送到 `core.calibrateAxes`：后端 `calibrate_axes` 的写法是
+     * `if unit: self.depth_unit = str(unit).strip() or self.depth_unit`，空串为假 ⇒
+     * 保留 `depth_unit` 原值。于是"用户没给单位"与"改个单位"被区分开：前者不写回，
+     * 后者才写。老代码这里是 `|| 'cm'`，缺一次就把 ka 轴静默改成 cm。
+     */
+    const unit = raw('#ycal-inp-unit');
     const axisRaw = (root.querySelector('#ycal-sel-primary-axis') as HTMLSelectElement)?.value;
     const primaryAxis: 'depth' | 'age' = axisRaw === 'age' ? 'age' : 'depth';
 

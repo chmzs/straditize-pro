@@ -478,6 +478,7 @@
   - `format` (string, 可选, 默认 `"csv"`): `"csv"` 或 `"parquet"`。
   - `strict` (boolean, 可选, 默认 `false`): 严格模式。若为 `true`，则必须已完成坐标标定，否则返回错误码 `-32003`。
   - `output_path` (string, 可选): 导出文件保存的目标路径。若未提供且 format 为 csv，则在响应对象中返回 `csv_content` 字符串。
+  - `legacy_column_name` (boolean, 可选, 默认 `false`, 2026-11-18, issue #114): 首列**列名**开关。见下方「首列名跟随 Y 轴性质」。
 - **返回 (result)**：
   ```json
   {
@@ -497,6 +498,26 @@
 
 ---
 
+#### 首列名跟随 Y 轴性质（2026-11-18，issue #114）
+
+首列装的是 **Y 轴上那个量**，所以它的名字必须等于 Y 轴的性质（`core.calibrateAxes` 的
+`primary_axis`），不是永远写 `depth`：
+
+| `primary_axis` | 首列名 |
+| :--- | :--- |
+| `depth`（默认） | `depth` |
+| `age` | `age` |
+
+- **只改列名，不改任何数值**：同一工程 `legacy_column_name` 两种取值下，全部数据单元格
+  逐字节相同（`tests/unit/test_y_axis_column_label.py` 的零回归判据）。
+- **不并列输出两列**：两列（`depth` + `age`）会让人无法判断哪一列才是真的。
+- `legacy_column_name: true` 强制回 `depth`，给按旧列名读的下游脚本一个过渡口。
+  它只作用于本方法与 `export.csv`；`export.tar` / `export.exportXlsx` / `export.exportLipd`
+  同样按 Y 轴性质命名首列，但没有该开关（它们不是脚本消费面）。
+- `primary_axis="age"` 时出图 Y 轴标题为 `Age (<unit>)`；单位不含 `BP`/`AD`/`BC`/`CE`/`BCE`
+  时补 ` BP`（`ka` → `Age (ka BP)`，`cal BP` → `Age (cal BP)`）。派生逻辑单点在
+  `straditize_core/strat_plot.py` 的 `_y_column_label` / `_y_axis_label`。
+
 #### `dataset` 参数（2026-11-12，U-ROWS-01）
 
 `core.exportData` / `export.csv` / `export.data` 接受可选 `dataset`，它选择**行集**（不是格式化方式）：
@@ -511,6 +532,59 @@
 非法值 → `-32602`，错误信息列出允许值。
 
 行集大小是定义的一部分：同一会话下三者行数必然不同（实测 298 / 21 / 896）。前端导出面板的下拉与本参数一一对应，且面板只渲染本接口返回的数据——不得由前端另算一套。
+
+#### `rowset`：行集身份与质量指标（2026-11-19，issue #113 / #100）
+
+`core.exportData` 与 `export.getReadiness` 的返回里新增 `rowset`，回答**"这些行凭什么算样品"**。
+它是判定量而不是注释：`is_sample_rows == true` ⇔ 行确实来自用户设定的样品层位。
+
+```json
+{
+  "rowset": {
+    "dataset": "samples",
+    "provenance": "pixel_rows",
+    "is_sample_rows": false,
+    "rows_count": 625,
+    "samples_count": 0,
+    "label": "逐列数字化的像素行并集（625 行，不是样品层位）",
+    "why": "未设样品层位（samples 为空）：行取自这些列逐行数字化点的像素行并集……",
+    "quality": {
+      "rows": 625,
+      "samples": 0,
+      "support_columns_median": 19.0,
+      "support_columns_min": 1,
+      "support_columns_max": 19,
+      "support_columns_n": 625,
+      "support_columns_source": "column_points",
+      "tolerance_px": null,
+      "default_tolerance_px": 2.5,
+      "roi_height_px": 625,
+      "rows_equal_roi_height": true
+    }
+  }
+}
+```
+
+`provenance` 取值只有五个：`samples` / `pixel_rows` / `control_points` / `depth_grid` /
+`turning_points`（常量在 `straditize_core/session_parts/export.py` 的 `ROWSET_*`）。
+只有第一个表示"这些行是样品层位"。
+
+**口径（2026-11-19 拍板）**
+
+- `samples` 非空 → `provenance="samples"`，且**行数必须等于 `len(samples)`**；不相等时
+  `core.exportData` 抛 `-32002 EXPORT_ERROR`（`data.reason="rowset_mismatch"`），整份表不交付。
+- `samples` 为空 → `provenance="pixel_rows"`，行 = 逐列数字化点的像素行并集。**不静默**：
+  身份写进本字段、`export.getReadiness.rowset`、归档 `manifest.json -> data_csv_rowset`、
+  `README.txt` 的 `WARNING` 段，以及 `core.exportData` 的返回。行数常恰等于 ROI 像素高度
+  （现场：625 行 / 625 px），`quality.rows_equal_roi_height` 是这一条的机器可读形式。
+- **不把"先填样品数 N"当前置条件**：`N` 属可选二次优化，默认路径必须能自给出结果。
+  `quality.tolerance_px` 只报"产生这批层位时用的容差"，没跑过共识、或该工程生成于 #83
+  之前时如实为 `null`（不拿默认值冒充）；`quality.default_tolerance_px` 是"若重跑一次
+  共识会按多少容差"，直接读 `samples.extractConsensus` 的签名默认值。
+- 质量指标缺失即 `null`、不填 0：`support_columns_*` 在层位未携带 `support_columns`
+  （#83 之前生成的工程）时全为 `null`，`support_columns_n` 说明有多少行带该信息。
+- **不把 `N` 当正确性判据**：`rows_count` 与论文样品数不同不构成错误（实测 206 vs 159），
+  它只是"要不要重跑共识优化"的判断依据。
 
 #### `curvePoints` / `curveError`：画布的稠密曲线（2026-11-16）
 

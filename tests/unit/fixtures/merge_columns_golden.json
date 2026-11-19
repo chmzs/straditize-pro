@@ -301,7 +301,7 @@
   ],
   "groups": {
    "roi_1/roi_1_grp1": {
-    "axis_stroke_px": 1,
+    "axis_stroke_px": 2,
     "ref_span_px": null
    }
   },
@@ -511,7 +511,7 @@
   ],
   "groups": {
    "roi_1/roi_1_grp1": {
-    "axis_stroke_px": 1,
+    "axis_stroke_px": 2,
     "ref_span_px": null
    }
   },
@@ -841,7 +841,7 @@
   ],
   "groups": {
    "roi_1/roi_1_grp1": {
-    "axis_stroke_px": 1,
+    "axis_stroke_px": 2,
     "ref_span_px": null
    }
   },

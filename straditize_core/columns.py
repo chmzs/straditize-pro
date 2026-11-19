@@ -394,7 +394,7 @@ def measure_axis_stroke(gray: np.ndarray,
     8px 探针内根本不"断开"。实测 beginner 4 列返回 `[0, 7, 0, 0]`：
     3 列判成"无轴"、1 列报的 7 其实是"轴线 6px + 1px 填充" —— 不是 0 就是错的。
 
-    ## 本函数的判据：灰度层次，而不是墨迹密度
+    ## 本函数的判据：墨芯锚点 + 半高宽（FWHM）+ 同层约束
 
     轴线是**同一个灰度层**的实心条，填充/曲线是另一个灰度层。实测 beginner：
 
@@ -404,8 +404,32 @@ def measure_axis_stroke(gray: np.ndarray,
     | 沿 y 标准差 | 2.8 ~ 6.6 | 27 ~ 30 |
     | RGB | (0,0,0) | (38,122,181) |
 
-    所以从 `start` 起，只要**灰度均值与首列相差 ≤ level_tol 且沿 y 足够均匀**就还在
-    轴线上，第一次跳层即轴线结束。101 级的跳变远大于容差，与阈值松紧无关。
+    由 `start` 起往右走，只要**灰度均值与墨芯相差 ≤ level_tol 且沿 y 足够均匀**
+    就还在轴线上，第一次跳层即轴线结束。101 级的跳变远大于容差，与阈值松紧无关。
+
+    ### 为什么锚点必须是"墨芯"而不是"第一个合格列"（#46）
+
+    轴线左缘常带一列抗锯齿过渡（S1 实测：`start` 那列灰度 168，右侧墨芯 13）。
+    过渡列同样满足 std/contrast 两道门，旧实现因此在 `base+0` 就定锚，`level`
+    取成 168；往右第一列就是 13，跳变 155 > `level_tol` 立刻断开 → 轴宽量成 1px，
+    0 点比轴线右缘左偏 2px（S1 每列 +0.48%，`value_per_px`=0.238 ⇒ +0.48%）。
+    **取 `base±2` 内灰度最深的一列作锚**，`level` 才是轴线自身的灰度层。
+
+    ### 为什么宽度按"半深"截断
+
+    锚点定下来后，向右侧扩的停止条件加一条**半高宽**：`paper - mean(x) < 半深`
+    即停。轴线的横剖面是一条线（墨芯 → AA 衰减 → 纸白），半深正是"线边缘"的
+    通行定义，能容下 +1~+3 级 AA 过渡列——而这些列与墨芯的灰度差往往 >`level_tol`
+    （S1 col1：168/35/13/19/34，墨芯 13，半深 121），只靠同层约束会把它们判成
+    跳层、把宽度压回 1~3px。两条约束各管一件事：同层约束挡"填充/曲线"，半深
+    约束定"线边缘"。
+
+    ### 实测（三张图，逐列前后值见 tests/unit/test_axis_stroke_fwhm.py）
+
+    S1（19 列）中位数 1 → **4**；真值（图中刻度标签区的孤立轴线，无数据覆盖）
+    3~4px，中位 3.5。beginner 4/6/6/6 不变。fig3 由 1 变 2 的 7 列是"`start`
+    落在 AA 列、墨芯在 +1"，右缘因此从 `start+1` 移到 `start+2`（图版轴线核心
+    实测 1px、连带 AA 共 2px）。
 
     ## 返回值的语义
 
@@ -433,6 +457,10 @@ def measure_axis_stroke(gray: np.ndarray,
 
     band = arr.astype(float)
     paper = float(np.median(band))
+    # 逐列灰度统计先算一遍：锚点要在 base±2 之间比较 5 列，逐次 slice 求均值/方差
+    # 会让每列重复算 5 遍（19 列 × 5 × 1520 行）。
+    col_mean = band.mean(axis=0)
+    col_std = band.std(axis=0)
     widths: list[int] = []
 
     for start in starts:
@@ -441,33 +469,47 @@ def measure_axis_stroke(gray: np.ndarray,
             widths.append(0)
             continue
 
-        # 轴线起点：容忍 ±2px 对齐误差，与 `has_measurable_axis` 同口径。
+        # ① 墨芯锚点：在 base±2 内取**灰度均值最深**的一列，而不是"第一个合格列"。
+        #    抗锯齿过渡列（左缘那列浅灰）同样满足 std/contrast 两道门，但它的灰度
+        #    不是轴线本身的灰度层；用它作 `level` 会让右侧真正的墨芯成为"跳层"，
+        #    宽度只剩 1px（#46）。取最深列即取墨芯，`level` 才是轴线自己的灰度。
         axis_x: int | None = None
+        darkest = 0.0
         for shift in (0, 1, 2, -1, -2):
             x = base + shift
             if x < 0 or x >= width:
                 continue
-            col = band[:, x]
-            if float(col.std()) > std_limit:
+            if col_std[x] > std_limit:
                 continue
-            if paper - float(col.mean()) < contrast_min:
+            if paper - col_mean[x] < contrast_min:
                 continue
-            axis_x = x
-            break
+            if axis_x is None or col_mean[x] < darkest:
+                axis_x = x
+                darkest = float(col_mean[x])
         if axis_x is None:
             widths.append(0)
             continue
 
-        level = float(band[:, axis_x].mean())
+        level = float(col_mean[axis_x])
+        half = (paper - level) / 2.0
         run_end = axis_x
         hit_cap = False
         while run_end + 1 < width and (run_end + 1 - base) < max_width:
-            nxt = band[:, run_end + 1]
-            if float(nxt.std()) > std_limit:
+            x = run_end + 1
+            if col_std[x] > std_limit:
                 break
-            if abs(float(nxt.mean()) - level) > level_tol:
+            if paper - col_mean[x] < contrast_min:
                 break
-            if paper - float(nxt.mean()) < contrast_min:
+            # ② 半高宽（FWHM）：从墨芯向右侧扩到**深度掉到一半**为止。
+            #    轴线是一条线的剖面，两侧墨色随距离衰减；按"半深"截断比按"与
+            #    墨芯灰度同层"截断稳：AA 过渡列与墨芯差 100+ 级，一步就被判成
+            #    跳层，而半深判据容得下它们作为线的边缘（实测 S1 col1：
+            #    x939..943 的灰度 168/35/13/19/34，墨芯 13，半深 121 ⇒ 右缘 942）。
+            if paper - col_mean[x] < half:
+                break
+            # ③ 同层约束：灰度仍属于墨芯那一层。填充/曲线的灰色层若与轴线不同，
+            #    这一条把它挡在外面（实测 beginner：轴线 0.2、灰色填充 155）。
+            if abs(float(col_mean[x]) - level) > level_tol:
                 break
             run_end += 1
             if (run_end - base) + 1 >= max_width:

@@ -9,7 +9,39 @@ from typing import Any
 
 from ..protocol import JsonRpcError
 from ..qa import compute_qa_summary
-from .xscale import READ_PROFILE_QA, read_column_values, resolve_column_scale
+from .layers import INNER_XS_KEY, OUTER_XS_KEY, paired_layer_xs
+from .xscale import (
+    READ_PROFILE_QA,
+    _resolve_column_group,
+    read_column_values,
+    resolve_axis_stroke,
+    resolve_column_scale,
+)
+
+
+def _explicit_axis_stroke(
+    col: dict[str, Any], group_obj: dict[str, Any] | None
+) -> tuple[float | None, str]:
+    """轴宽像素 + 它从哪来；**`None` 表示列与组都没写**，不是 0。
+
+    `resolve_axis_stroke` 在两边都缺时会回落 5.0（`xscale.py:58`）——那是为了防止
+    0 点算偏而设的显示兜底，**不是实测值**。旗标拿这个 5.0 去判"这一行是否落在轴线
+    覆盖范围内"，等于用一个没人测过的数下结论，违反"取不到就不给数"的不变量。
+    所以这里只认显式写入的值：有就用（数值一律走 `resolve_axis_stroke`，保持单一来源），
+    没有就返回 `None`，由旗标层整列标 `skipped(axis_width_unset)`。
+    """
+    for source, holder in (("column", col), ("group", group_obj or {})):
+        raw = holder.get("axis_stroke_px")
+        if raw is None or isinstance(raw, bool):
+            continue
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if value >= 0.0:
+            return resolve_axis_stroke(col, group_obj), source
+    return None, "unset"
+
 
 
 def _is_percent_unit(unit: Any) -> bool:
@@ -189,6 +221,17 @@ class QaMixin:
         """逐列取值。这里 require_calibrated=False 是**有意**的：QA 要能对未标定列粗算，
 
         好让"该列没标定/总和偏离"的提醒能被触发；导出路径对未标定列一律给 None，两者不通。
+
+        同时把逐行旗标（#91/#92）需要的几何搬进 `columns_info`：逐行原始像素、0 点、
+        列右端、轴宽、`plot_type`、点的来历。**旗标判的是逐像素行，不是层位行** ——
+        触边/盲区是"这一行墨迹顶到哪儿"的物理事实，`_qa_horizons` 给的采样层位
+        （可能每隔 5–10 行一个）会把平台与突刺的关系抹掉，所以这里搬的是
+        `column_points` 的完整行序列，不是 `horizon_rows`。
+
+        #99 的内线/外线成对读数（`inner_xs_px` / `outer_xs_px`）也在这里搬：它们是
+        `column_points` 点字典上的同名键（落库与键契约见 `session_parts/layers.py`），
+        与 `rows_px` 逐位对齐；**整列一行都没有时这两个键根本不出现**，旗标层据此整列
+        标 `skipped`，而不是拿一份全 None 的数组算出"零告警"。
         """
         columns_info: list[dict[str, Any]] = []
         col_values_by_column: list[list[float]] = []
@@ -220,16 +263,58 @@ class QaMixin:
             )
 
             col_values_by_column.append(c_vals)
-            columns_info.append(
-                {
-                    "name": c_name,
-                    "declared_max": declared_max,
-                    "col_values": c_vals,
-                    "calibrated": scale.calibrated,
-                    # 只有百分比列进"总和 ≤ 100%"这道门：浓度/粒数/比值的量级完全不同，
-                    # 混进来会让告警恒为假阳性（现场：最大总和 87135.2%）。
-                    # 判据见 `tests/unit/test_qa_composition_units.py`。
-                    "include_in_sum": _is_percent_unit(scale.unit),
-                }
+
+            # 逐行旗标（#91/#92）的几何输入。**只搬已有事实，不补任何默认值**：
+            # 缺一个键，`compute_qa_flags` 就把该列整列跳过，而不是拿列宽或 0 顶替。
+            ctrl_cols = set(getattr(self, "control_point_columns", None) or ())
+            anchor_cols = set(getattr(self, "control_points", None) or ())
+            axis_px, _axis_source = _explicit_axis_stroke(
+                col, _resolve_column_group(self, col)
             )
+            right_raw = col.get("endX", col.get("end"))
+            # 逐行序列只用**有 x 的行**：没有 x 的行本来就不参与任何几何判定。
+            # 成对读数（#99）按同一份行集摊平，两个列表因此与 `rows_px` 逐位对齐。
+            measured_pts = [p for p in pts if p.get("x") is not None]
+            inner_xs, outer_xs = paired_layer_xs(measured_pts)
+
+            column_info: dict[str, Any] = {
+                "name": c_name,
+                "declared_max": declared_max,
+                "col_values": c_vals,
+                "calibrated": scale.calibrated,
+                # 只有百分比列进"总和 ≤ 100%"这道门：浓度/粒数/比值的量级完全不同，
+                # 混进来会让告警恒为假阳性（现场：最大总和 87135.2%）。
+                # 判据见 `tests/unit/test_qa_composition_units.py`。
+                "include_in_sum": _is_percent_unit(scale.unit),
+                # --- 以下供逐行旗标使用（`straditize_core/qa.py::compute_qa_flags`）---
+                # 原始像素序列。由控制点插值合成的列（`_rebuild_column_points_from_anchors`
+                # 写进 `control_point_columns`）x 是 `np.interp` 出来的，不是读数；
+                # 拿它算跨度会得到"看起来正常"的假跨度，所以整列标成 control_point，
+                # 旗标层据此整列 skipped。
+                "rows_px": [int(p["row"]) for p in measured_pts],
+                "xs_px": [float(p["x"]) for p in measured_pts],
+                "points_provenance": (
+                    "control_point" if c_idx in ctrl_cols else "measured"
+                ),
+                "anchor_edited": c_idx in anchor_cols,
+                "zero_px": baseline_px,
+                # 0 点落在轴线带内 = 0 点被人为写偏（`_scale_from_ticks` 的判据）。
+                # 盲区旗标拿它当分母，这种列整列标 skipped，原因见 `qa.py`。
+                "origin_suspect": bool(scale.origin_suspect),
+                "right_px": (
+                    float(right_raw) if right_raw is not None else None
+                ),
+                "axis_px": axis_px,
+                "plot_type": scale.plot_type,
+                "exaggeration_mult": scale.exaggeration_mult,
+            }
+            # 内线 / 外线成对读数（#99）：**整列一行都没有时省略这两个键**。
+            # 全 None 的数组会被旗标层算成"已判定、零告警"，与"没有读数"混为一谈；
+            # 省略键则整列标 `skipped(no_paired_inner_outer_readings)`。
+            # 缺失（单层列 / 外线整列断裂 / 旧工程未重新数字化 / 控制点插值列）是
+            # 正常状态，见 `layers.py` 的模块 docstring。
+            if any(value is not None for value in inner_xs):
+                column_info[INNER_XS_KEY] = inner_xs
+                column_info[OUTER_XS_KEY] = outer_xs
+            columns_info.append(column_info)
         return columns_info, col_values_by_column

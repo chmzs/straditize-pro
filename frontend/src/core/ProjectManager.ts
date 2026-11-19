@@ -256,7 +256,11 @@ export function normalizeProject(
     top_cm: cal.top_cm ?? null,
     bottom_px: cal.bottom_px ?? null,
     bottom_cm: cal.bottom_cm ?? null,
-    unit: cal.unit || 'cm',
+    // 缺单位就是缺，不归一化成 'cm'（#111 的源头就在这一行：缺 unit 的载荷一进
+    // 前端镜像就变 cm，面板读到 cm 再提交，后端就被改写成 cm）。运行期允许缺席，
+    // 由各消费点自行判断。类型上 `DepthCalibration.unit` 仍是必填 string —— 放宽它
+    // 会让 SplineInterpolator.ts:326 报错（另开票范围），这里先保持契约不变。
+    unit: cal.unit || undefined,
     depthInterval: cal.depthInterval ?? cal.depth_interval ?? 2,
     // 默认**关**：这条浅色网格线不承载任何判定信息，是纯视觉噪声（用户明确要求删）。
     // 之前这里写 `?? true`，与 `GeologyCanvas` 的初始值 `depthGridEnabled: false` 打架 ——
@@ -436,7 +440,10 @@ export class ProjectManager {
     const cal = this.data.calibration;
     const visibleCols = this.data.columns.filter((c) => c.visible);
     const { depths, yPositions } = SplineInterpolator.getStandardDepthHorizons(cal);
-    const headers = [`Depth_${cal.unit || 'cm'}`, ...visibleCols.map((c) => `"${c.name}"`)];
+    // 列名里的单位只能来自真实输入。缺单位时写 `Depth_?`：既保住 `Depth_` 前缀
+    // （既有脚本按前缀取列），又让人一眼看出"单位未定，先补标定再用"。
+    // 曾经这里兜底成 `Depth_cm`，于是 ka 年代轴导出的表头也自称 cm（#111）。
+    const headers = [`Depth_${cal.unit || '?'}`, ...visibleCols.map((c) => `"${c.name}"`)];
     const rows: string[] = [headers.join(',')];
 
     for (let i = 0; i < depths.length; i++) {

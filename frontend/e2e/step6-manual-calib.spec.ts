@@ -51,7 +51,7 @@ async function pickGeometry(page: Page): Promise<{ px: number; zero: number; sta
   const group = data.rois
     .flatMap((r) => r.x_groups ?? [])
     .find((g) => g.id === widest!.x_group_id);
-  const stroke = Number(group?.axis_stroke_px ?? 5) || 5;
+  const stroke = Number(group?.axis_stroke_px ?? 2) || 2;
   const zero = Number(widest!.startX ?? 0) + stroke;
   const px = Math.round(zero + (Number(widest!.endX ?? 0) - zero) * 0.6);
   return { px, zero, startX: Number(widest!.startX ?? 0), slopeBefore: group?.value_per_px ?? null };
@@ -101,10 +101,19 @@ test.describe('步骤 6 手动标定（不依赖检测）', () => {
   test('② 点在 0 点或左侧必须被拒：不出现数字输入框，组斜率不变', async ({ page }) => {
     await resetBaseline(page);
     await gotoStage(page, 6);
-    const { zero, slopeBefore } = await pickGeometry(page);
+    const data = await diagramData<Geom>(page);
+    const activeId = (await diagramData<{ activeRoiId?: string }>(page)).activeRoiId;
+    const cols = data.columns.filter((c) => !activeId || (c.roi_id ?? activeId) === activeId);
+    const firstCol = cols[0];
+    const group = data.rois
+      .flatMap((r) => r.x_groups ?? [])
+      .find((g) => g.id === firstCol.x_group_id);
+    const stroke = Number(group?.axis_stroke_px ?? 2) || 2;
+    const zero = Number(firstCol.startX ?? 0) + stroke;
+    const slopeBefore = group?.value_per_px ?? null;
 
     await page.locator(`${STEP6} #btn-pick-tick`).click();
-    await clickWorldX(page, Math.round(zero) - 1);
+    await clickWorldX(page, zero);
 
     await expect(
       page.locator(`${STEP6} #inp-tick-value`),

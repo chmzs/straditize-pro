@@ -140,12 +140,12 @@ class AgeDepthSessionMixin:
         Three sources in priority order: the pollen diagram's Y readings, an explicit
         depth grid, then a thinned sample of the model's own horizons.
 
-        The Y readings are only *depths* when the diagram's Y axis measures depth. When
-        the user declared ``primary_axis = "age"`` the readings are ages, so their depths
-        must be recovered by inverting the age-depth model. Treating them as depths anyway
-        would place every sample at a wrong-but-plausible position with no error to notice
-        -- which is exactly why the axis has to be declared rather than guessed from the
-        unit string.
+        The first two sources are only *depths* when the diagram's Y axis measures depth.
+        When the user declared ``primary_axis = "age"`` they are ages, so their depths must
+        be recovered by inverting the age-depth model. Treating them as depths anyway would
+        place every sample at a wrong-but-plausible position with no error to notice --
+        which is exactly why the axis has to be declared rather than guessed from the unit
+        string. The third source is the model's own horizons, already depths by definition.
         """
         model_depths = getattr(model, "depths", None) if model is not None else None
 
@@ -175,6 +175,24 @@ class AgeDepthSessionMixin:
             }
 
         if self.depth_grid:
+            # Same axis semantics as the Y-reading branch above. A grid generated under an
+            # age axis (``fromGrid``) holds ages, so its depths must come from inverting
+            # the model rather than from the grid values themselves.
+            axis = getattr(self, "primary_axis", "depth") or "depth"
+            if axis == "age":
+                if model is None:
+                    raise JsonRpcError(
+                        STATE_ERROR,
+                        "The diagram's Y axis is declared as age, but no age-depth model "
+                        "is loaded to invert, so sample depths cannot be recovered.",
+                    )
+                inverse = model.predict_depth([float(d) for d in self.depth_grid])
+                return [round(float(d), 2) for d in inverse["depth_est"]], {
+                    "primary_axis": "age",
+                    "depth_source": "sample grid read as age; depths inverted from the model",
+                    "inverse_extrapolated_count": int(sum(inverse["extrapolated"])),
+                    "observed_age_range": inverse["observed_age_range"],
+                }
             return [round(float(d), 2) for d in self.depth_grid], {
                 "primary_axis": "depth",
                 "depth_source": "explicit depth grid",
@@ -598,13 +616,29 @@ class AgeDepthSessionMixin:
             # This path keeps its historical priority (explicit depth grid first) rather
             # than unifying with the extraction path: changing it would silently alter
             # which horizons a Bacon run reports, which is outside this change.
+            axis = getattr(self, "primary_axis", "depth") or "depth"
             depth_provenance: dict[str, Any] = {
                 "primary_axis": "depth",
                 "depth_source": "explicit depth grid" if self.depth_grid else "none",
             }
             sample_depths: list[float] = []
             if self.depth_grid:
-                sample_depths = [round(float(d), 2) for d in self.depth_grid]
+                if axis == "age":
+                    # An age-axis grid holds ages, so the model has to invert them first;
+                    # feeding the grid through as depths would put every sample at a
+                    # wrong-but-plausible position with no error to notice.
+                    inverse = model.predict_depth([float(d) for d in self.depth_grid])
+                    sample_depths = [round(float(d), 2) for d in inverse["depth_est"]]
+                    depth_provenance = {
+                        "primary_axis": "age",
+                        "depth_source": (
+                            "sample grid read as age; depths inverted from the model"
+                        ),
+                        "inverse_extrapolated_count": int(sum(inverse["extrapolated"])),
+                        "observed_age_range": inverse["observed_age_range"],
+                    }
+                else:
+                    sample_depths = [round(float(d), 2) for d in self.depth_grid]
             elif self.column_points and self.is_calibrated and self.y_scale:
                 # Same Y-axis semantics as the extraction path: with the axis declared as
                 # age, the model is inverted to recover the samples' depths.
@@ -709,7 +743,19 @@ class AgeDepthSessionMixin:
                 self.age_depth_model
             )
         elif self.depth_grid:
-            sample_depths = self.depth_grid
+            # An age-axis grid holds ages, so the model has to invert them; feeding the
+            # grid through as depths would report every horizon at a wrong-but-plausible
+            # level. Deliberately not routed through ``sample_depths_for_model``: that
+            # helper thins the fallback branch, and an explicit ensemble request must
+            # still cover the whole curve here.
+            axis = getattr(self, "primary_axis", "depth") or "depth"
+            if axis == "age":
+                inverse = self.age_depth_model.predict_depth(
+                    [float(d) for d in self.depth_grid]
+                )
+                sample_depths = [float(d) for d in inverse["depth_est"]]
+            else:
+                sample_depths = self.depth_grid
         else:
             sample_depths = self.age_depth_model.depths.tolist()
 

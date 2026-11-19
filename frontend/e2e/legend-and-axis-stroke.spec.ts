@@ -300,7 +300,7 @@ test.describe('轴线粗自动实测（任务 2）', () => {
     ).toBeLessThanOrEqual(0.3);
   });
 
-  test('A4 测不出时不静默用 5：面板明确说"无法自动测量 / 按 5px 估算"', async ({ page }) => {
+  test('A4 测不出时不静默用一个数：面板明确说"无法自动测量 / 按兜底值估算"', async ({ page }) => {
     // hoya 基线：29 列里只有 8 列（28%）左缘是灰度均匀的轴，未过半 → 不写组参数。
     await page.setViewportSize({ width: 1680, height: 1050 });
     await resetBaseline(page);

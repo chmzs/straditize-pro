@@ -10,6 +10,7 @@ import { Sidebar } from './components/Sidebar';
 import { PropertyPanel } from './components/PropertyPanel';
 import { ExportModal } from './components/ExportModal';
 import { ProjectManager } from './core/ProjectManager';
+import { calUnitLabel } from './core/calUnit';
 import { Inspector } from './components/Inspector';
 import { ResizeRoiCommand } from './core/Commands';
 import { AgeDepthModal } from './components/AgeDepthModal';
@@ -307,7 +308,10 @@ async function bootstrap() {
         inspector?.updateData(canvasComponent.data);
         canvasComponent.requestRender();
         if (cal.top_cm !== null && cal.top_cm !== undefined && cal.bottom_cm !== null && cal.bottom_cm !== undefined) {
-          void applyDepthCalibration(marks, [Number(cal.top_cm), Number(cal.bottom_cm)], cal.unit || 'cm');
+          // 图上选完两点后的自动复标：单位原样透传，缺就送空串（后端 `calibrate_axes`
+          // 的 `if unit:` 会保留既有 depth_unit）。这里曾把缺单位补成 cm —— Y 轴若是
+          // ka，缺一次单位就把 cm 种进模型（#111 的实际写回入口）。
+          void applyDepthCalibration(marks, [Number(cal.top_cm), Number(cal.bottom_cm)], cal.unit ?? '');
         } else {
           setHudNotice(`已拾取两点像素行 (Y1=${Math.round(topPx)}px, Y2=${Math.round(botPx)}px)。在右侧侧栏填入对应真实数值后点【应用标定】。`, 5000);
         }
@@ -324,7 +328,8 @@ async function bootstrap() {
       if (info) {
         if (cursorEl) cursorEl.innerHTML = `${t('footer.coords')}: <code>X:${info.worldX} Y:${info.worldY}</code>`;
         if (depthEl) {
-          const unit = canvasComponent.data.calibration.unit;
+          // 单位显示走唯一入口：缺单位显示"单位未定"，不再打出 `undefined`（更不再猜 cm）。
+          const unit = calUnitLabel(canvasComponent.data.calibration);
           if (info.horizonDepth !== undefined && info.horizonDepth !== null) {
             depthEl.innerHTML = `${t('footer.depth')}: <code>${info.depth !== undefined ? info.depth + ' ' + unit : '--'}</code> <strong style="color: var(--accent-blue); margin-left: 6px;">[${t('footer.horizon')}: ${info.horizonDepth} ${unit}]</strong>`;
           } else {

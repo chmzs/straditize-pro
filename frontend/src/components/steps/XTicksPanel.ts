@@ -9,10 +9,12 @@ import {
   renderOtherLostColumnsSummary,
 } from './XTicksDroppedNotice';
 import { renderOtherSuspectColumnsSummary } from './SuspectBlockNotice';
-import { resolveAxisStroke } from '../../core/axisStroke';
+import { DEFAULT_AXIS_STROKE_PX, resolveAxisStroke } from '../../core/axisStroke';
 import { resolveColumnGroup } from '../../core/columnGroup';
 import { resolveColumnAtX } from '../../core/tickRouting';
 import { setGroupCalibMark } from '../canvas/groupCalibMarks';
+// 组色的唯一取色点：画布「组归属条」也 import 这个函数，两处逐字节同色（issue #108）。
+import { groupColorAt } from '../canvas/groupColor';
 import {
   exaggerationRange,
   isGroupExaggerated,
@@ -28,6 +30,11 @@ interface XTicksPanelState {
   isBatchAssignOpen: boolean;
   /** 「列组」折叠区是否展开。必须存进 state：面板每次重渲染都会重建 DOM。 */
   groupsFoldOpen: boolean;
+  /**
+   * 用户点过 `×1` 的组 id。`×1` 在模型里等价于 `null`（未放大），但这个选择必须
+   * 在输入框里**显示成字面 1**，否则每次重渲染都回到空白（issue #107）。
+   */
+  explicitOneGroupIds: string[];
 }
 
 const INITIAL_XTICKS_STATE: XTicksPanelState = {
@@ -39,6 +46,7 @@ const INITIAL_XTICKS_STATE: XTicksPanelState = {
   // 列组**默认展开**（用户偏好：分组与单位是量纲工作的入口，不该先藏一层）。
   // 折叠行为不变：点一次即收起，状态存进 state 以便本次会话内保持（面板每次重渲染会重建 DOM）。
   groupsFoldOpen: true,
+  explicitOneGroupIds: [],
 };
 
 /** 步骤 6 面板的可变状态。
@@ -163,7 +171,7 @@ export function render(data: DiagramData): string {
   // 「删除本组」恒常渲染，但默认组 / 只有一个组时不可用：位置固定，禁用态即状态。
   const canDeleteGroup = groups.length > 1 && currentGroupId !== activeRoi?.default_group_id;
 
-  // 轴线粗的生效值：**列级覆盖 > 组级初值 > 缺省 5**（ARCHITECTURE §6.4）。
+  // 轴线粗的生效值：**列级覆盖 > 组级初值 > 兜底 `DEFAULT_AXIS_STROKE_PX`**（ARCHITECTURE §6.4）。
   // 组上的正数来自分列实测（`measure_axis_stroke`）或用户手填；列上的正数只可能是
   // 用户显式覆盖。两者都必须让用户看得见——静默用一个猜的值会让绿线（0 点）偏掉几像素。
   const axisStrokeColOverride =
@@ -182,7 +190,13 @@ export function render(data: DiagramData): string {
   const groupExagMult = isGroupExaggerated(currentGroup?.exaggeration_mult)
     ? normalizeGroupExaggeration(currentGroup?.exaggeration_mult)
     : null;
-  const groupExagInputValue = groupExagMult === null ? '' : String(groupExagMult);
+  // `×1` 是一个**显式**的"未放大"选择（issue #107）：模型里它等价于 null ——
+  // 后端 `store_exaggeration` 把 1 归一成 None —— 但输入框必须显示用户点的那个 `1`。
+  // 否则点完 ×1、面板一重渲染，格子又变回空白，用户读成"这个组没设过"。
+  // state 记的是"用户点过 ×1"，不是第二份数据：真值仍是组上的 exaggeration_mult。
+  const exagShownAsOne = state.explicitOneGroupIds.includes(currentGroupId ?? '');
+  const groupExagInputValue =
+    groupExagMult !== null ? String(groupExagMult) : exagShownAsOne ? '1' : '';
   // 换算用的列宽：本组各列取数带宽度的均值（缺几何的列不参与，避免被 0 拉低）。
   const groupWidths = groupCols
     .map((c) => Number(c.endX ?? 0) - Number(c.startX ?? 0))
@@ -244,18 +258,23 @@ export function render(data: DiagramData): string {
         <!-- 组 Tab 选择器 -->
         <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;">
           ${groups
-            .map((g) => {
+            .map((g, gIdx) => {
               const isSelected = g.id === currentGroupId;
               const gCols = cols.filter((c) => (c.x_group_id || activeRoi?.default_group_id) === g.id);
               const gCalibrated = gCols.filter((c) => c.x_ticks && c.x_ticks.length === 2).length;
               const isFullCalib = gCols.length > 0 && gCalibrated === gCols.length;
+              // 组色与画布「组归属条」同源（`canvas/groupColor.ts` 是唯一取色点，
+              // issue #108）：同一个组，按钮上的色块/描边与画布那条横带逐字节相同，
+              // 用户才可能把"第几个按钮"对上"画布上哪一段"。
+              const groupColor = groupColorAt(gIdx);
               return `
                 <button
                   type="button"
                   class="btn-switch-group-tab ui-btn ${isSelected ? 'ui-btn--primary' : 'ui-btn--quiet'}"
                   data-group-id="${g.id}"
-                  style="font-size: var(--font-size-sm); padding: 3px 8px; border-radius: 4px; display: flex; align-items: center; gap: 4px; border: 1px solid ${isSelected ? 'var(--accent-blue)' : 'var(--border-color)'};"
+                  style="font-size: var(--font-size-sm); padding: 3px 8px; border-radius: 4px; display: flex; align-items: center; gap: 4px; border: 1px solid ${groupColor}; border-left: 3px solid ${groupColor};"
                 >
+                  <span aria-hidden="true" style="display: inline-block; width: 9px; height: 9px; border-radius: 2px; background: ${groupColor}; border: 1px solid rgba(0, 0, 0, 0.18);" title="本组在画布上的组色带颜色"></span>
                   <span>${g.name}</span>
                   <span style="font-size: var(--font-size-xs); opacity: 0.85; background: rgba(0,0,0,0.15); padding: 0 4px; border-radius: 3px;">${gCols.length}列</span>
                   <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${isFullCalib ? 'var(--status-success)' : 'var(--status-warning)'};" title="${isFullCalib ? '组内所有列已定标' : '待定标或部分定标'}"></span>
@@ -276,9 +295,21 @@ export function render(data: DiagramData): string {
                不同高），三件事看起来互不相干；现在三行左边界与控件高度都统一。
                单位是「组」属性，也是下游判量纲的唯一依据：列载荷 unit、LiPD units、
                随包 plot_strat.R 的 scale.percent 都读它。 -->
-          <div data-role="group-param-grid" style="display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 6px 8px;">
-            <label for="grp-unit-inp" style="font-size: var(--font-size-xs); color: var(--text-muted);" title="本组量纲标签（默认 %）。% 的组按 rioja 惯例画（每列按本列最大值归一、画满宽）；非 % 的组按自身量程（min..max）画。">单位</label>
-            <input id="grp-unit-inp" type="text" value="${String(groupUnit).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" list="grp-unit-options" style="height: var(--control-h-sm); width: 100%; box-sizing: border-box; font-size: var(--font-size-xs); padding: 0 6px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px;" />
+          <div data-role="group-param-grid" style="display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: start; gap: 6px 8px;">
+            <label for="grp-unit-inp" style="font-size: var(--font-size-xs); color: var(--text-muted); padding-top: 5px;" title="本组量纲标签（默认 %）。% 的组按 rioja 惯例画（每列按本列最大值归一、画满宽）；非 % 的组按自身量程（min..max）画。">单位</label>
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+              <input id="grp-unit-inp" type="text" value="${String(groupUnit).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" placeholder="输入或点击下方预设" style="height: var(--control-h-sm); width: 100%; box-sizing: border-box; font-size: var(--font-size-xs); padding: 0 6px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px;" />
+              <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                ${(['%', '‰', 'counts', '粒/g', '粒/cm²', '10³ 粒/cm³'] as const)
+                  .map(
+                    (u) =>
+                      `<button type="button" class="ui-btn ui-btn--quiet ui-btn--xs grp-unit-pill ${
+                        groupUnit === u ? 'active-mode' : ''
+                      }" data-unit="${u}" style="padding: 1px 7px; font-size: var(--font-size-xs);">${u}</button>`
+                  )
+                  .join('')}
+              </div>
+            </div>
 
             <span style="font-size: var(--font-size-xs); color: var(--text-muted);">形态</span>
             <div style="display: flex; flex-wrap: wrap; gap: 4px;">
@@ -316,6 +347,11 @@ export function render(data: DiagramData): string {
                      title="${t('step6.groupExagTitle')}"
                      style="height: var(--control-h-sm); width: 72px; box-sizing: border-box; font-size: var(--font-size-xs); padding: 0 6px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px; text-align: right;" />
               <span style="font-size: var(--font-size-xs); color: var(--text-muted);">×</span>
+              <!-- ×1 = 明确的"未放大"（issue #107）。「留空」是隐性写法，用户看不出它等
+                   于取消放大；给一个显式入口，点它把输入框填成字面 1（不是清空）。
+                   后端把 1 归一成 null（store_exaggeration），所以写 1 与写空在库里
+                   等价——差别只在用户看见的是"1"还是"一个空格子"。 -->
+              <button class="ui-btn ui-btn--quiet ui-btn--xs" id="btn-group-exag-one" style="padding: 1px 7px; font-size: var(--font-size-xs);" title="${t('step6.groupExagOneTitle')}">×1</button>
               ${([3, 5, 10] as const)
                 .map(
                   (v) =>
@@ -328,10 +364,6 @@ export function render(data: DiagramData): string {
               ${t('step6.groupExagHint')}
             </div>
           </div>
-          <datalist id="grp-unit-options">
-            <option value="%"></option><option value="‰"></option><option value="counts"></option>
-            <option value="粒/g"></option><option value="粒/cm2/yr"></option><option value="10^3 粒/cm3"></option>
-          </datalist>
 
           <!-- 组内属种与批量划组管理 -->
           ${
@@ -406,10 +438,10 @@ export function render(data: DiagramData): string {
             <!-- 显示值**只认当前组自己的** axis_stroke_px。
                  曾经这里还有一个 state.axisStrokeOverride 兜底（全局变量、「全图共用」），
                  于是给 grp2 填 1 之后切到 grp1/grp3，那两个输入框会显示 1 —— 用户读作
-                 「已经接过值了」就不再手动设，后端其实仍是 None、绿线回落缺省 5
+                 「已经接过值了」就不再手动设，后端其实仍是 None、绿线回落兜底值
                  （用户原话：「其他两组的线粗框自动就显示 1 了，我以为它直接接过值了」）。
-                 本组没值就**显示空**，缺省 5 只出现在 placeholder 里。 -->
-            <input type="number" id="inp-axis-stroke" value="${currentGroup?.axis_stroke_px != null && Number(currentGroup.axis_stroke_px) >= 0 ? String(Number(currentGroup.axis_stroke_px)) : ''}" placeholder="5（缺省）" min="0" max="20" step="1"
+                 本组没值就**显示空**，兜底值只出现在 placeholder 里。 -->
+            <input type="number" id="inp-axis-stroke" value="${currentGroup?.axis_stroke_px != null && Number(currentGroup.axis_stroke_px) >= 0 ? String(Number(currentGroup.axis_stroke_px)) : ''}" placeholder="${DEFAULT_AXIS_STROKE_PX}（兜底）" min="0" max="20" step="1"
                    title="Y 轴轴线的描边宽度（像素）。0 点 = 左缘 + 它。填了就不再从像素里猜。目视估读即可（0–20px）。"
                    style="width: 66px; font-size: var(--font-size-sm); padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); text-align: right;" />
             <span style="font-size: var(--font-size-xs); color: var(--text-muted);">px</span>
@@ -434,10 +466,10 @@ export function render(data: DiagramData): string {
                style="font-size: var(--font-size-xs); line-height: 1.45; margin: -2px 0 6px 0; color: ${axisStrokeMeasured ? 'var(--text-muted)' : 'var(--status-warning)'};">
             ${
               axisStrokeColOverride != null
-                ? `本列覆盖 <strong>${axisStrokeColOverride}px</strong>（组值 ${currentGroup?.axis_stroke_px != null && Number(currentGroup.axis_stroke_px) >= 0 ? `${Number(currentGroup.axis_stroke_px)}px` : "缺省 5px"}）· 绿线 = 列左缘 + ${axisStrokePx}`
+                ? `本列覆盖 <strong>${axisStrokeColOverride}px</strong>（组值 ${currentGroup?.axis_stroke_px != null && Number(currentGroup.axis_stroke_px) >= 0 ? `${Number(currentGroup.axis_stroke_px)}px` : `兜底 ${DEFAULT_AXIS_STROKE_PX}px`}）· 绿线 = 列左缘 + ${axisStrokePx}`
                 : currentGroup?.axis_stroke_px != null && Number(currentGroup.axis_stroke_px) >= 0
                   ? `轴线粗实测 <strong>${axisStrokePx}px</strong> · 绿线 = 列左缘 + ${axisStrokePx}`
-                  : '轴线粗<strong>无法自动测量</strong>（这几列的左边不是灰度均匀的竖轴），当前按 <strong>5px</strong> 估算 —— 绿线可能偏。<strong>目视估读即可</strong>：把你在图上看到的轴宽（0–20px，0 表示 0 点就在列左缘）填进上面的「轴线粗细」，改完绿线立刻按「左缘 + 轴粗」重画，不必精确到亚像素'
+                  : `轴线粗<strong>无法自动测量</strong>（这几列的左边不是灰度均匀的竖轴），当前按 <strong>${DEFAULT_AXIS_STROKE_PX}px</strong> 估算（兜底值，未实测） —— 绿线可能偏。<strong>目视估读即可</strong>：把你在图上看到的轴宽（0–20px，0 表示 0 点就在列左缘）填进上面的「轴线粗细」，改完绿线立刻按「左缘 + 轴粗」重画，不必精确到亚像素`
             }
           </div>
 
@@ -634,7 +666,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     const roi = data?.rois?.find((r) => r.id === (col.roi_id ?? data?.active_roi_id));
     const g = resolveColumnGroup(col, roi);
     // 0 点 = 列左缘 + 轴线粗（与画布绿线同源，见 ARCHITECTURE §6.4）。
-    // `start` 是轴线左缘（列切分线），轴粗取组参数，缺省 5。
+    // `start` 是轴线左缘（列切分线），轴粗取组参数，兜底 `DEFAULT_AXIS_STROKE_PX`。
     const stroke = resolveAxisStroke(col, g);
     const start = Number(
       (col as unknown as Record<string, number>).startX ??
@@ -790,8 +822,21 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         ? normalizeGroupExaggeration(group?.exaggeration_mult)
         : null;
     };
-    const writeGroupExag = (value: number | null): void => {
-      void patchGroup({ exaggeration_mult: value });
+    // 「×1 显示成字面 1」的标记：按组记，任何非 ×1 的写入都把它清掉。
+    const markExplicitOne = (gid: string | undefined, on: boolean): void => {
+      if (!gid) return;
+      state.explicitOneGroupIds = on
+        ? Array.from(new Set([...state.explicitOneGroupIds, gid]))
+        : state.explicitOneGroupIds.filter((id) => id !== gid);
+    };
+    const writeGroupExag = (value: number | null, opts: { keepOne?: boolean } = {}): void => {
+      const gid = effectiveGroupId();
+      const showOne = opts.keepOne === true && value === null;
+      markExplicitOne(gid, showOne);
+      void patchGroup({ exaggeration_mult: value }).then((ok) => {
+        // 写失败就不能继续显示用户刚点的 1：面板会按组上的真值重渲染。
+        if (!ok && showOne) markExplicitOne(gid, false);
+      });
     };
     root.querySelectorAll('.grp-exag-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -799,19 +844,33 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         if (value !== null) writeGroupExag(value);
       });
     });
+    // ×1：把输入框填成字面 1 并取消放大。写 null 而不是写 1——后端把 1 归一成 None，
+    // 两者在库里等价，但只有 null 能保证不留下一个会被 `px_to_value` 真除的因子。
+    root.querySelector('#btn-group-exag-one')?.addEventListener('click', () => {
+      writeGroupExag(null, { keepOne: true });
+    });
     if (exagInput) {
       exagInput.addEventListener('keydown', (ev) => {
         if ((ev as KeyboardEvent).key === 'Enter') exagInput.blur();
       });
       exagInput.addEventListener('change', () => {
         const raw = exagInput.value.trim();
-        // 清空 = 取消放大（发 null）；不写 1——1 等于没放大，留着只会让人以为设过。
+        // 清空 = 取消放大（发 null）。留空仍是合法状态，既有工程不受影响（issue #107）。
         if (raw === '') {
           writeGroupExag(null);
           return;
         }
         const parsed = normalizeGroupExaggeration(raw);
         if (parsed === null) {
+          // 手敲 `1`（以及任何 ≤1，**含 0 与负数**）必须和点 ×1 等价（issue #107）：
+          // 倍率 ≤1 物理上就等于"不放大"——×1 是恒等变换、×0 把整列刻度压成一条线、
+          // 负数在丰度/计数上没有含义；后端 `store_exaggeration` 也一律落成"未放大"。
+          // 旧实现把手敲的 1 当非法输入弹错，于是"按钮说 1 合法、手输 1 报错"。
+          const numeric = Number(raw);
+          if (Number.isFinite(numeric) && numeric <= 1) {
+            writeGroupExag(null, { keepOne: true });
+            return;
+          }
           // 就地回填旧值，不重建 DOM：重建会让用户看不到自己刚才填了什么。
           const previous = currentGroupExag();
           exagInput.value = previous === null ? '' : String(previous);
@@ -838,6 +897,18 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       }
       if (raw === current) return;
       patchGroup({ unit: raw });
+    });
+
+    // 预设单位药丸点击：点击即写组单位
+    root.querySelectorAll<HTMLButtonElement>('.grp-unit-pill').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const u = btn.getAttribute('data-unit');
+        if (!u) return;
+        const current = effectiveGroupUnit();
+        if (u === current) return;
+        unitInput.value = u;
+        patchGroup({ unit: u });
+      });
     });
   };
   wireGroupAttributes();

@@ -7,7 +7,7 @@
  * 为什么必须收敛：`components/canvas/columnBoundaries.ts` 里画**组色带**用了一套
  * （`col.x_group_id ?? default_group_id ?? groups[0]`），画**绿线**（0 点 =
  * 列左缘 + 组轴粗）用的是另一套（只按 `col.x_group_id` 精确匹配、无回退）。
- * 列上没有 `x_group_id` 的工程里两套给出不同答案：绿线回落缺省 5，色带用的却是组值
+ * 列上没有 `x_group_id` 的工程里两套给出不同答案：绿线回落兜底值，色带用的却是组值
  * —— 同一张图上两个 0 点。
  */
 export interface ColumnGroupRef {

@@ -192,12 +192,11 @@ test.describe('步骤 8 QA 覆盖范围：所有"有列"的分区', () => {
       .poll(() => qaCalls.length, { message: '应聚合两个分区', timeout: 20_000 })
       .toBe(2);
 
-    const text = (await banner.innerText()).replace(/\s+/g, ' ');
-    expect(text, `横幅必须声明校验范围，实际：${text}`).toContain('已校验 2 个分区');
-    expect(text, `范围必须点名两个分区，实际：${text}`).toMatch(/dirty/);
-    expect(text, `范围必须点名两个分区，实际：${text}`).toMatch(/clean/);
-    expect(text, `横幅不得判通过，实际：${text}`).not.toMatch(/门禁通过/);
-    expect(text, `必须计入脏分区的超标层位数，实际：${text}`).toMatch(/6/);
+    await expect(banner).toContainText('已校验 2 个分区', { timeout: 20_000 });
+    await expect(banner).toContainText('dirty');
+    await expect(banner).toContainText('clean');
+    await expect(banner).not.toContainText('门禁通过');
+    await expect(banner).toContainText('6');
     await expect(banner).toHaveAttribute('data-level', 'red');
 
     // 请求计数：一次进入步骤 8 = 有列分区数（2），不是 3×N

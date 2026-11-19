@@ -52,7 +52,7 @@ import { drawColumnBoundariesOverlay } from './canvas/columnBoundaries';
 import { drawAnchorsOverlay, drawPollenCurvesOverlay } from './canvas/pollenCurves';
 import { zeroSpanOfColumn } from './canvas/groupBandRect';
 import { resolveCanvasCursor } from './canvas/cursor';
-import { assertNoDuplicateBindings, matchesKeyBinding } from './canvas/keyBindings';
+import { assertNoDuplicateBindings, matchesKeyBinding, panDeltaFromArrowKey } from './canvas/keyBindings';
 import type { KeyBinding } from './canvas/keyBindings';
 import { findHitAnchorAt, findHitBoundaryAt, findHitRoiHandleAt } from './canvas/hitTest';
 import { findHitGeometryAt } from './canvas/geometryHitTest';
@@ -748,8 +748,13 @@ private pointer: PointerState = {
    */
   private readonly keyBindings: KeyBinding[] = [
     // 1. 方向键微调（无选中目标时不拦截，交给浏览器）
+    //
+    // `plain` = 不接受 Ctrl / Meta / Alt（Shift 仍可用于 10px 步）。加上它不是收紧
+    // 体验，而是把 `Alt+方向键`（下面的视口平移）从这条规则里**结构性地**摘出去：
+    // 旧写法没声明修饰键，Alt+方向键也会命中微调，于是"平移"会静默改动几何。
     {
       codes: ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'],
+      plain: true,
       when: () =>
         Boolean(this.data.selectedEntity) ||
         (this.workflowStage === STAGE.CLEANUP && Boolean(this.selectedGeometryId)),
@@ -769,6 +774,23 @@ private pointer: PointerState = {
         }
       },
       label: '方向键微调',
+    },
+    // 1b. Alt+方向键：平移视口（issue #106）。
+    //
+    // 与上一条互斥：微调要求 `plain`（无 Alt），平移要求 Alt。所以两者在任何选中态下
+    // 都不会同时命中——有选中时按 Alt+方向键只平移，不会改到几何。
+    // 步长是**屏幕像素**（`PAN_KEY_STEP_PX` = 40），与缩放无关；更新入口与拖拽平移
+    // 完全相同：`viewport.panBy()` + 重绘。方向约定见 `panDeltaFromArrowKey`。
+    {
+      codes: ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'],
+      when: (e) => e.altKey && !e.ctrlKey && !e.metaKey,
+      run: (e) => {
+        const delta = panDeltaFromArrowKey(e);
+        if (!delta) return;
+        this.viewport.panBy(delta.dx, delta.dy);
+        this.requestRender();
+      },
+      label: 'Alt+方向键平移',
     },
     // 2. 删除：几何优先（步骤 4 无「删点」工具，不该被 eraser 门禁吞掉）
     {
@@ -1424,7 +1446,8 @@ private pointer: PointerState = {
     // 拖动 / 微调（去抖 500ms）/ 删除 / 新增 都走这里，所以只需要这一处。
     // 0 点用**几何规则**算，不读 col.scaleCalib.originX：换标定后前端镜像里的
     // scaleCalib 可能还是旧值（实测 319 vs 后端 324），那样钳制等于没钳。
-    // 规则与后端 xscale.resolve_axis_stroke 同源：列级 axis_stroke_px > 组级 > 5。
+    // 规则与后端 xscale.resolve_axis_stroke 同源：列级 axis_stroke_px > 组级 > 兜底
+    // （`DEFAULT_AXIS_STROKE_PX`，不在本文件写数）。
     const zeroX = col.startX + resolveAxisStroke(col, this.groupOfColumn(col));
     const points = controlPointsForWriteback(col.controlPoints, zeroX);
     // 锚点变了 → 稠密缓存作废（后端 setControlPoints 会按 Pchip 重建）。

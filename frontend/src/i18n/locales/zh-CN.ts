@@ -167,10 +167,10 @@ export const zhCN = {
   'draft.restore': '恢复草稿',
   'draft.ignore': '忽略',
   'draft.restored': '已恢复上次自动暂存的草稿。',
-  'hud.default': '就绪：A 加点 | S 微调 (方向键 1px 精调) | D 删点 | 右键/中键拖拽平移 | 滚轮缩放 | F1 帮助',
+  'hud.default': '就绪：A 加点 | S 微调 (方向键 1px 精调) | D 删点 | 右键/中键拖拽或 Alt+方向键 平移 | 滚轮缩放 | F1 帮助',
   // 步骤 4 的工具集与全局默认不同（只有 微调/修线/平移，没有 A 加点、D 也不是"删点"），
   // 全局提示会教用户按不存在的键，所以单列一条按阶段切换。
-  'hud.cleanup': '就绪：S 微调/选择 | 点选候选线 · 拖动整体移动 · 拖端点改范围 | 方向键 1px 精调 | Delete 删除选中几何 | M 测量尺 | ＋横向/＋竖向 新建 | 右键/中键拖拽平移 | 滚轮缩放 | F1 帮助',
+  'hud.cleanup': '就绪：S 微调/选择 | 点选候选线 · 拖动整体移动 · 拖端点改范围 | 方向键 1px 精调 | Delete 删除选中几何 | M 测量尺 | ＋横向/＋竖向 新建 | 右键/中键拖拽或 Alt+方向键 平移 | 滚轮缩放 | F1 帮助',
   'hud.sidebarCollapsed': '属种分列列表已收起 (Ctrl+[ 或点击左侧拉手展开)',
   'hud.sidebarExpanded': '属种分列列表已展开',
   'hud.inspectorCollapsed': '属性检查器已收起 (Ctrl+] 或点击右侧拉手展开)',
@@ -202,7 +202,7 @@ export const zhCN = {
   'tool.pan': '平移 (H)',
   'tool.panName': '抓手平移',
   'tool.panShortcut': 'H / 右键 / 空格',
-  'tool.panHint': '右键拖拽 / 中键拖拽 / 按住空格+左键平移图谱',
+  'tool.panHint': '右键拖拽 / 中键拖拽 / 按住空格+左键 / Alt+方向键 平移图谱',
   'tool.roi': 'ROI (R)',
   'tool.roiName': 'ROI 矩形数据区',
   'tool.roiShortcut': 'R',
@@ -281,6 +281,7 @@ export const zhCN = {
   'step3.ref2': '② 基准点 Y2 (下方):',
   'step3.apply': '应用标定',
   'step3.unit': '单位',
+  'step3.unitUnset': '单位未定',
   'step3.next': '确认标尺，进入干扰线清理 (步骤 4)',
 
   // ===== 步骤 4：清理面板 =====
@@ -338,6 +339,7 @@ export const zhCN = {
   'step6.groupExagTitle': '本组列的放大倍数：图上刻度 = 真实值 × 倍率。留空 = 未放大（×1）。',
   'step6.groupExagHint': '图上刻度 = 真实值 × 倍率。留空 = 未放大（×1）。',
   'step6.groupExagInvalid': '放大倍数必须是大于 1、不超过 100 的数值；留空 = 未放大。',
+  'step6.groupExagOneTitle': '×1 = 未放大：点它把输入框填成 1（与留空等价，但看得见）',
   'step6.groupExagRangeTitle': '图上满刻度 = 真实量程 × 倍率',
   'step6.groupExagRangeValues': '图上 {figure} {unit} → 真实 {real} {unit}（组斜率 {slope} {unit}/px × 本组平均列宽 {width}px）',
   'step6.columnExagOverriddenByGroup': '以组级 {mult}× 为准（列级设置已忽略）',
@@ -356,13 +358,18 @@ export const zhCN = {
   'step7.pasteDesc':
     '从 Excel 或文本粘贴真实深度序列（每行一个数，也可用逗号 / 分号分隔）。每个深度按当前 Y 轴标定换算成像素行，取值就用该行的实测读数。',
   'step7.pasteConfirm': '导入并替换层位',
-  'step7.gridTitle': '等距网格层位（按采样间隔生成）',
+  'step7.gridTitle': '等距网格层位（按给定间隔生成候选行位）',
   'step7.gridDesc':
-    '按固定间隔生成层位：真实钻孔是等距取样的，拐点共识给不出这个密度。与共识层位是两种行集，会互相替换；区间自动夹到 Y 轴标定范围内（不外推）。',
+    '按你给定的间隔生成候选行位。适用：已知取样间隔（等距取样只是其中一种特例，不是常态）。与共识层位是两种行集，会互相替换；区间自动夹到 Y 轴标定范围内（不外推）。',
   'step7.gridStepSuffix': '每层',
   'step7.gridBtn': '按间隔生成层位',
   'step7.gridInvalid': '间隔必须是大于 0 的数值。',
   'step7.gridDone': '已生成 {count} 个层位（行距 {px} px）',
+  'step7.gridReplaceHint': '生成会替换当前 {count} 条层位（含共识 / 粘贴 / 手工），不是追加。',
+  'step7.gridReplaceHintEmpty': '当前没有层位；生成后会得到一整批新层位。',
+  'step7.gridConfirmTitle': '替换现有层位？',
+  'step7.gridConfirmBody': '按间隔生成会替换当前 {count} 条层位（共识层位与粘贴的深度都会丢）。',
+  'step7.gridConfirmOk': '替换并生成',
   'step7.resolution': '深度分辨率',
   'step7.resolutionUnknown': '未标定（无法把深度换算成像素行）',
   'step7.next': '完成提取，进入全剖面地学校验 (步骤 8)',

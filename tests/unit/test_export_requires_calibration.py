@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import pytest
 
-from straditize_core.protocol import CALIBRATION_ERROR, JsonRpcError
+from straditize_core.protocol import CALIBRATION_ERROR, INVALID_PARAMS, JsonRpcError
 from straditize_core.session import StraditizeSession
 
 PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
@@ -59,11 +59,19 @@ def _session(calibrated: bool) -> StraditizeSession:
 UNGUARDED_CALLS = [
     ("export_data(csv)", lambda s: s.export_data("csv")),
     ("export_data(csv, samples)", lambda s: s.export_data("csv", dataset="samples")),
-    ("export_data(csv, union_points)", lambda s: s.export_data("csv", dataset="union_points")),
-    ("export_data(csv, depth_grid)", lambda s: s.export_data("csv", dataset="depth_grid")),
     ("export_data(csv, turning_points)", lambda s: s.export_data("csv", dataset="turning_points")),
     ("export_csv()", lambda s: s.export_csv()),
 ]
+
+
+def test_removed_datasets_raise_invalid_params() -> None:
+    """已废除的 union_points 与 depth_grid 必须明确报 INVALID_PARAMS，不再静默处理。"""
+    session = _session(calibrated=True)
+    for ds in ("union_points", "depth_grid"):
+        with pytest.raises(JsonRpcError) as excinfo:
+            session.export_data("csv", dataset=ds)
+        assert excinfo.value.code == INVALID_PARAMS
+        assert f"Unsupported dataset '{ds}'" in excinfo.value.message
 
 
 @pytest.mark.parametrize("label,call", UNGUARDED_CALLS)

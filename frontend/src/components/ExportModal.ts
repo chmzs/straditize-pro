@@ -4,6 +4,11 @@ import { ProjectManager } from '../core/ProjectManager';
 import { base64ToBlob, requireExportBase64, triggerDownload } from '../core/exportPayload';
 import { computeExportReadiness, renderExportReadiness } from './steps/ExportReadinessPanel';
 import {
+  buildRowSetCaption,
+  buildRowSetQualityHint,
+  type RowSetIdentityLike,
+} from './exportRowSetCaption';
+import {
   aggregateHeadline,
   aggregateQaScope,
   QA_DEFAULT_TOLERANCE,
@@ -129,14 +134,23 @@ export class ExportModal {
                 <button id="tab-btn-text" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: var(--font-size-sm); padding: 4px 10px;" title="原始 CSV 文本，可复制或手工调整">原始文本</button>
               </div>
               <div style="font-size: var(--font-size-sm); color: var(--text-muted); display: flex; gap: 10px; align-items: center;">
-                <span>Variables: <strong id="wpd-vars-label" style="color: var(--accent-blue);">Depth, 29 Taxa</strong></span>
+                <span>Variables: <strong id="wpd-vars-label" style="color: var(--accent-blue);">--</strong></span>
                 <span id="wpd-data-size-label">0 KB</span>
                 <button id="btn-wpd-reset-edits" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: var(--font-size-xs); padding: 2px 7px; color: var(--text-muted);" title="清除所有手动微调，还原为图谱自动提取值">还原提取值</button>
               </div>
             </div>
 
             <!-- 视图 1: 交互式表格视图 (支持直接点选单元格修改数字) -->
-            <div id="wpd-table-wrapper" class="wpd-table-wrapper" style="flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--border-light); border-radius: 6px;">
+            <!--
+              纵向必须 auto，不能 hidden：本容器由 flex: 1 + min-height: 0 压成
+              「弹窗剩余高度」（1366×768 实测 392px），而表格的自然高度是 5305px。
+              hidden 时下面 189 行被裁掉，且滚轮手势落在这里会穿透到 .ui-modal__body
+              （实测 wTop 恒 0、body.scrollTop 339），用户永远看不到第 15 行以后。
+              改成 auto 后本表自己成为纵向滚动口；th 的 sticky 规则（style.css
+              .wpd-preview-table th position: sticky / top: 0）随之生效，表头固定，
+              弹窗总高不变（仍是 736px，未溢出视口）。
+            -->
+            <div id="wpd-table-wrapper" class="wpd-table-wrapper" style="flex: 1; min-height: 0; overflow-x: auto; overflow-y: auto; border: 1px solid var(--border-light); border-radius: 6px;">
               <table id="wpd-preview-table" class="wpd-preview-table">
                 <!-- 动态填充 thead 与 tbody -->
               </table>
@@ -151,7 +165,7 @@ export class ExportModal {
           </div>
 
           <!-- 右侧：WPD 风格的控制面板 (Dataset, Sort, Format, Visualize) 并列排布 -->
-          <div class="wpd-right-controls" style="width: 270px; min-width: 270px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; background: var(--bg-tertiary); padding: 12px; border-radius: 6px; border: 1px solid var(--border-light); box-sizing: border-box;">
+          <div class="wpd-right-controls" style="width: 270px; min-width: 270px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; background: var(--bg-tertiary); padding: 10px; border-radius: 6px; border: 1px solid var(--border-light); box-sizing: border-box;">
             <!-- 导出就绪状态清单 (T10) -->
             ${renderExportReadiness(this.data)}
 
@@ -159,16 +173,8 @@ export class ExportModal {
             <div class="form-group" style="margin: 0;">
               <label style="font-size: var(--font-size-sm); font-weight: bold; color: var(--text-primary);">Dataset (数据集形态):</label>
               <select id="wpd-dataset-select" class="sample-select" style="width: 100%; font-size: var(--font-size-sm);">
-                <option value="samples" selected>1. 共识层位 —— 每个采样层位一行；与 data.csv / TAR / XLSX 同源</option>
-                <option value="union_points">2. 各列拐点并集 —— 所有列的拐点深度合并去重成行；某列在该深度没有拐点则按其曲线线性插值（不是 0）</option>
-                <option value="turning_points">3. 拐点原始坐标表 —— 长表，一行一个拐点（taxon/type/depth/value/x/y）；不能与上面两张矩阵表混用</option>
-                <!-- 缺值口径必须写在面板上：插值 vs NA 是两种完全不同的数，用户看不到就会误读。 -->
-                <div style="margin-top: 4px; font-size: var(--font-size-xs); line-height: 1.45; color: var(--text-muted);">
-                  共识层位上某列没有拐点时：<b>已标定列</b>按该列曲线线性插值填充；<b>未标定列</b>仍为 NA（不给数）。
-                </div>
-                <optgroup label="高级">
-                  <option value="depth_grid">按深度间隔重采样 —— 按设置里的深度间隔生成规则层位（调试/等距辅助用，不是共识层位）</option>
-                </optgroup>
+                <option value="samples" selected>丰度矩阵表 (samples · 采样层位)</option>
+                <option value="turning_points">拐点坐标长表 (turning_points · 原始几何)</option>
               </select>
               <!--
                 行集说明：用户必须先知道"这 N 行是哪来的"。
@@ -224,15 +230,9 @@ export class ExportModal {
               </div>
             </div>
 
-            <!--
-              工作簿类导出的行集来源必须写在界面上。
-              后端 export.exportXlsx / export.exportLipd / export.tar 都没有"指定层位"
-              参数（export.csv 的 depths 形参实际未被使用），它们固定按 samples 采样层位
-              出表，与上方数据集选择器的行集是两回事。写成静态说明而不是悄悄不同
-              （U-ROWS-01 的根因就是"隐性另搞一套"）。
-            -->
-            <div id="wpd-workbook-rowset-note" style="font-size: var(--font-size-xs); line-height: 1.5; color: var(--status-warning); padding: 6px 8px; border-radius: 4px; background: rgba(245, 158, 11, 0.10); border: 1px solid rgba(245, 158, 11, 0.35);">
-              XLSX / LiPD / TAR 由后端生成，固定按「样品层位」出表（与上方预览的行集可能不同）。
+            <!-- 工作簿类导出与 CSV 全出口同源同值说明 -->
+            <div id="wpd-workbook-rowset-note" style="font-size: var(--font-size-xs); line-height: 1.45; color: var(--text-muted); padding: 5px 8px; border-radius: 4px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2);">
+              丰度矩阵表在 CSV / XLSX / LiPD / TAR 全出口同源同值。
             </div>
 
             <div class="divider" style="margin: 2px 0;"></div>
@@ -377,20 +377,22 @@ export class ExportModal {
     const colSepSelect = modal.querySelector('#wpd-col-sep') as HTMLSelectElement;
     const naFillSelect = modal.querySelector('#wpd-na-fill') as HTMLSelectElement;
     const sizeLabel = modal.querySelector('#wpd-data-size-label') as HTMLElement;
+    const varsLabel = modal.querySelector('#wpd-vars-label') as HTMLElement | null;
     const rowSetCaptionEl = modal.querySelector('#wpd-rowset-caption') as HTMLElement | null;
-
-    /** 数据集 → 行集来源的人话名字（与 `#wpd-dataset-select` 的选项一一对应）。 */
-    const ROWSET_SOURCE: Record<string, string> = {
-      samples: '按共识层位（samples）',
-      union_points: '按各列拐点并集（无拐点处插值）',
-      depth_grid: '按深度间隔重采样（高级）',
-      turning_points: '按拐点原始坐标表',
-    };
 
     // 动态表格数据模型与手动微调记录
     let currentHeaders: string[] = [];
     let currentRows: Array<string[]> = [];
     const userEdits = new Map<string, string>(); // key: `${rowIdx}_${colIdx}` -> editedValue
+
+    /**
+     * 当前行集的**身份**，只从后端来（`export.getReadiness {dataset}` 的 `rowset`）。
+     *
+     * 这里不再有 `ROWSET_SOURCE[dataset]` 那种按 dataset 名写死的前端同义词表：
+     * `samples` 为空时后端交付的是像素行，前端按名字猜就会写成「按共识层位」——
+     * 那正是 issue #100 的现场（用户把 625 个像素行当成 625 个样品）。
+     */
+    let currentRowSet: RowSetIdentityLike | null = null;
 
     /** 后端返回的原始 CSV；**没有用户编辑时**界面与下载都用它，保证逐字节一致。 */
     let backendCsvText = '';
@@ -445,6 +447,8 @@ export class ExportModal {
     const renderTableGrid = () => {
       previewTable.innerHTML = '';
 
+      const isTurning = datasetSelect.value === 'turning_points';
+
       // Thead
       const thead = document.createElement('thead');
       const trHead = document.createElement('tr');
@@ -455,7 +459,15 @@ export class ExportModal {
 
       currentHeaders.forEach((h, cIdx) => {
         const th = document.createElement('th');
-        if (cIdx === 0) th.className = 'col-depth';
+        if (!isTurning && cIdx === 0) {
+          th.className = 'col-depth';
+        } else if (isTurning) {
+          if (cIdx < 2) th.style.textAlign = 'left';
+          const lower = h.toLowerCase();
+          if (lower === 'depth' || lower === 'age') {
+            th.style.color = 'var(--status-success)';
+          }
+        }
         th.textContent = h;
         trHead.appendChild(th);
       });
@@ -475,12 +487,15 @@ export class ExportModal {
 
         row.forEach((cellVal, cIdx) => {
           const td = document.createElement('td');
-          if (cIdx === 0) {
+          if (!isTurning && cIdx === 0) {
             td.className = 'col-depth';
             td.textContent = cellVal;
           } else {
             const input = document.createElement('input');
             input.className = 'wpd-cell-input';
+            if (isTurning && cIdx < 2) {
+              input.style.textAlign = 'left';
+            }
             const editKey = `${rIdx}_${cIdx}`;
             if (userEdits.has(editKey)) {
               input.classList.add('user-modified');
@@ -514,6 +529,18 @@ export class ExportModal {
         : backendCsvText || serializeMatrixToText(currentHeaders, currentRows);
       textarea.value = dataStr;
       sizeLabel.textContent = `${(dataStr.length / 1024).toFixed(1)} KB (${currentRows.length} rows)`;
+
+      if (varsLabel) {
+        if (currentHeaders.length === 0) {
+          varsLabel.textContent = '0 变量';
+        } else if (datasetSelect.value === 'turning_points') {
+          varsLabel.textContent = `${currentHeaders.length} 字段 (${currentHeaders.slice(0, 3).join(', ')}...)`;
+        } else {
+          const yName = currentHeaders[0] || 'depth';
+          const nTaxa = Math.max(0, currentHeaders.length - 1);
+          varsLabel.textContent = `${yName}, ${nTaxa} Taxa`;
+        }
+      }
     };
 
     /**
@@ -612,6 +639,28 @@ export class ExportModal {
       subEl.textContent = `${agg.nChecked} 层位被检验`;
     };
 
+    /**
+     * 取"这一行集是什么"的**后端供词**（`export.getReadiness {dataset}` 的 `rowset`）。
+     *
+     * 失败不阻塞表格：拿不到身份就退回中性文案（`buildRowSetCaption` 的
+     * `NEUTRAL_SOURCE`），**绝不**按 dataset 名在前端猜一个来源——猜出来的
+     * 「按共识层位」正是 issue #100 里把像素行说成样品的那句话。
+     */
+    const fetchRowSetIdentity = async (
+      dataset: string,
+      requestToken: number
+    ): Promise<RowSetIdentityLike | null> => {
+      try {
+        const readiness = await this.rpcClient.call<any, any>('export.getReadiness', { dataset });
+        if (requestToken !== displayToken) return null;
+        const rowset = readiness?.rowset;
+        return rowset && typeof rowset === 'object' ? (rowset as RowSetIdentityLike) : null;
+      } catch (err) {
+        console.warn('[export] rowset identity unavailable', err);
+        return null;
+      }
+    };
+
     const updateFullDisplay = async () => {
       // 行集与数值**全部由后端产出**（`export.csv{dataset}`）：面板只是它的渲染。
       // 这样「预览看到的数」与「点 CSV 下载到的数」由构造保证同源，不再让前端
@@ -629,6 +678,9 @@ export class ExportModal {
         currentHeaders = [];
         currentRows = [];
         backendCsvText = '';
+        // 行集没取到 → 身份作废，下一次成功刷新时重取；不要让上一次的行集名
+        // 留在标题里配着空表。
+        currentRowSet = null;
         renderTableGrid();
         syncSerializedText();
         updateSumCheck();
@@ -671,14 +723,21 @@ export class ExportModal {
       renderTableGrid();
       syncSerializedText();
       updateSumCheck();
+      // 表的行数以**渲染出来的这份**为准（`currentRows.length`）；身份另取后端供词。
+      currentRowSet = await fetchRowSetIdentity(dataset, requestToken);
+      if (requestToken !== displayToken) return;
       updateRowSetCaption();
     };
 
     /**
-     * 选择器下方那行"当前行集是哪来的、有多少行"。
+     * 选择器下方那行"当前行集是哪来的、有多少行、质量如何"。
      *
-     * 界面必须同时说明两件事：来源（控制点并集 / 标尺均匀 / 拐点清单）与行数。
-     * 用户原来只看到「预览 125 行」，下载却是 35 行，没有任何一处文字解释这个差异。
+     * 三件事必须同时说清（issue #113 / #100）：
+     * 1. **来源**：从后端 `rowset.label` 取（「样品层位」/「逐列数字化的像素行并集，
+     *    不是样品层位」…）。前端不再按 dataset 名写死同义词；
+     * 2. **行数**：用**面板实际渲染**的行数，与用户眼前那张表一致；
+     * 3. **质量指标**：层位数 / 支持列数中位 / 容差 —— 让用户判断"要不要重跑共识优化"。
+     *    `samples` 为空时整块转成警告色，因为那批行不是样品层位。
      */
     const updateRowSetCaption = () => {
       if (!rowSetCaptionEl) return;
@@ -688,9 +747,23 @@ export class ExportModal {
           '当前行集为空（0 行）：这个数据集在当前图谱上没有可用层位。请先在步骤 3 完成 Y 轴标定，或换一个数据集。';
         return;
       }
-      const source = ROWSET_SOURCE[datasetSelect.value] ?? '按当前数据集';
-      rowSetCaptionEl.style.color = 'var(--text-muted)';
-      rowSetCaptionEl.textContent = `${source}（${currentRows.length} 行）· 预览、复制与 CSV 下载都按此行集导出`;
+      const caption = buildRowSetCaption(currentRowSet, currentRows.length);
+      const hint = buildRowSetQualityHint(currentRowSet);
+      rowSetCaptionEl.textContent = '';
+      const primary = document.createElement('div');
+      primary.textContent = caption.text;
+      rowSetCaptionEl.appendChild(primary);
+      if (hint) {
+        const secondary = document.createElement('div');
+        secondary.className = 'wpd-rowset-quality';
+        secondary.style.fontSize = 'var(--font-size-xs)';
+        secondary.style.opacity = '0.85';
+        secondary.textContent = hint;
+        rowSetCaptionEl.appendChild(secondary);
+      }
+      rowSetCaptionEl.style.color = caption.warning
+        ? 'var(--status-warning)'
+        : 'var(--text-muted)';
     };
 
     // 还原按钮
