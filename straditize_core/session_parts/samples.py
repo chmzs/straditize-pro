@@ -7,18 +7,24 @@ from typing import Any, Sequence
 from ..protocol import INVALID_PARAMS, STATE_ERROR, JsonRpcError
 
 
-#: 拐点共识层位的诊断量（issue #83）。只有 `source == 'auto'` 的层位带这些键，
+#: 拐点共识层位的诊断量（issue #83, #124）。只有 `source == 'auto'` 的层位带这些键，
 #: 其余来源缺失是正常状态——缺失即"无共识度信息"，渲染与导出一律不得编造取值。
-_SAMPLE_DIAGNOSTIC_KEYS = ("support_columns", "cluster_span_px", "member_count")
+_SAMPLE_DIAGNOSTIC_KEYS = (
+    "support_columns",
+    "cluster_span_px",
+    "member_count",
+    "polarity",
+)
 
 
 def _sample_diagnostics(sample: dict[str, Any]) -> dict[str, Any]:
     """把层位自带的共识诊断量原样带过去（缺省不写键，不填 0）。"""
-    return {
-        key: int(sample[key])
-        for key in _SAMPLE_DIAGNOSTIC_KEYS
-        if sample.get(key) is not None
-    }
+    out: dict[str, Any] = {}
+    for key in _SAMPLE_DIAGNOSTIC_KEYS:
+        val = sample.get(key)
+        if val is not None:
+            out[key] = str(val) if key == "polarity" else int(val)
+    return out
 
 
 class SamplesMixin:
@@ -32,7 +38,10 @@ class SamplesMixin:
 
     def _depth_for_row_px(self, row_px: float) -> float | None:
         """Calculate real physical depth for pixel row, or return None if uncalibrated."""
-        if getattr(self, "is_calibrated", False) and getattr(self, "y_scale", None) is not None:
+        if (
+            getattr(self, "is_calibrated", False)
+            and getattr(self, "y_scale", None) is not None
+        ):
             slope = self.y_scale.get("slope", 0.0)
             intercept = self.y_scale.get("intercept", 0.0)
             return round(slope * float(row_px) + intercept, 4)
@@ -127,14 +136,27 @@ class SamplesMixin:
         self,
         tolerance_px: float = 2.5,
         min_taxa_support: int = 1,
+        mode: str = "dual",
+        adaptive_window: bool = True,
     ) -> dict[str, Any]:
         """Discover sample horizons by consensus of turning points across taxa and set them into samples."""
         if not hasattr(self, "extract_horizon_consensus"):
-            raise JsonRpcError(-32603, "extract_horizon_consensus method not available on session.")
+            raise JsonRpcError(
+                -32603, "extract_horizon_consensus method not available on session."
+            )
 
         res = self.extract_horizon_consensus(
-            tolerance_px=tolerance_px, min_taxa_support=min_taxa_support
+            tolerance_px=tolerance_px,
+            min_taxa_support=min_taxa_support,
+            mode=mode,
+            adaptive_window=adaptive_window,
         )
+        self._last_consensus_config = {
+            "tolerance_px": tolerance_px,
+            "min_taxa_support": min_taxa_support,
+            "mode": mode,
+            "adaptive_window": adaptive_window,
+        }
         pixel_y = res.get("pixel_y", [])
         # #83：把逐层共识诊断量（support_columns / cluster_span_px / member_count）
         # 一并落到 samples 上，否则画布无法区分「8 列共振」与「1 列孤峰」。
@@ -159,7 +181,10 @@ class SamplesMixin:
 
         Requires Y-axis calibration to map depths back to pixel rows.
         """
-        if not getattr(self, "is_calibrated", False) or getattr(self, "y_scale", None) is None:
+        if (
+            not getattr(self, "is_calibrated", False)
+            or getattr(self, "y_scale", None) is None
+        ):
             raise JsonRpcError(
                 -32001,
                 "前置状态缺失：无法映射外部粘贴深度。当前图谱尚未建立 Y 轴标定，请先前往【步骤 3: Y轴标定】完成两点深度标定。",
@@ -178,11 +203,13 @@ class SamplesMixin:
             d_val = float(d)
             # depth = slope * row + intercept -> row = (depth - intercept) / slope
             row_px = (d_val - intercept) / slope
-            new_samples.append({
-                "row_px": int(round(row_px)),
-                "depth": round(d_val, 4),
-                "source": "paste",
-            })
+            new_samples.append(
+                {
+                    "row_px": int(round(row_px)),
+                    "depth": round(d_val, 4),
+                    "source": "paste",
+                }
+            )
 
         return self.samples_set(new_samples, source="paste")
 
@@ -219,7 +246,10 @@ class SamplesMixin:
           该图的 `x{unit}/px` 分辨率与最小可用步长。**不**静默去重：那会让用户以为
           自己拿到了 N 个层位，实际拿到更少。
         """
-        if not getattr(self, "is_calibrated", False) or getattr(self, "y_scale", None) is None:
+        if (
+            not getattr(self, "is_calibrated", False)
+            or getattr(self, "y_scale", None) is None
+        ):
             raise JsonRpcError(
                 STATE_ERROR,
                 "前置状态缺失：等距网格需要 Y 轴标定。请先在【步骤 3: Y轴标定】完成两点标定。",
@@ -238,9 +268,7 @@ class SamplesMixin:
                 INVALID_PARAMS, f"步长必须是数值（收到 {step!r}）。"
             ) from exc
         if not (step_value > 0):
-            raise JsonRpcError(
-                INVALID_PARAMS, f"步长必须 > 0（收到 {step_value}）。"
-            )
+            raise JsonRpcError(INVALID_PARAMS, f"步长必须 > 0（收到 {step_value}）。")
 
         calib = getattr(self, "depth_calib", None) or {}
         cal_lo = calib.get("top_cm")

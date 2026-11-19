@@ -94,6 +94,7 @@ def test_diagnostics_align_with_pixel_y():
             "support_columns",
             "cluster_span_px",
             "member_count",
+            "polarity",
         }
         assert 1 <= horizon["support_columns"] <= len(sess.columns)
         assert 0 <= horizon["cluster_span_px"] <= horizon["member_count"]

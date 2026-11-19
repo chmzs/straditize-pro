@@ -295,9 +295,7 @@ def _resolve_existing_image_path(image_path: str) -> str:
     return os.path.abspath(image_path)
 
 
-def _open_raster_image(
-    resolved_path: str, image_path: str
-) -> tuple[Image.Image, str]:
+def _open_raster_image(resolved_path: str, image_path: str) -> tuple[Image.Image, str]:
     """打开位图并定格式；失败时把用户给的路径和真实原因一起报出来。"""
     try:
         img = Image.open(resolved_path)
@@ -857,12 +855,8 @@ class CoreMixin:
         ext_mode = normalize_extraction_mode(extraction_mode)
         gray = np.array(self.image.convert("L"))
 
-        actual_thresh = self._resolve_foreground_threshold(
-            gray, threshold, mode
-        )
-        mask = self._build_foreground_mask(
-            gray, actual_thresh, ext_mode, column_edges
-        )
+        actual_thresh = self._resolve_foreground_threshold(gray, threshold, mode)
+        mask = self._build_foreground_mask(gray, actual_thresh, ext_mode, column_edges)
 
         self.foreground_mask = mask
         self.threshold = actual_thresh
@@ -1307,9 +1301,7 @@ class CoreMixin:
             if preserve_state:
                 self._inherit_column_state(col, old_roi_cols[k], def_grp_id)
             else:
-                self._reset_column_group_after_relayout(
-                    col, old_c_for_name, def_grp_id
-                )
+                self._reset_column_group_after_relayout(col, old_c_for_name, def_grp_id)
 
         self._apply_measured_axis_stroke(
             gray_sub, bounds, detected_cols, def_grp_id, target_roi
@@ -1409,9 +1401,7 @@ class CoreMixin:
             if x_group_id:
                 for r_item in getattr(self, "rois", []):
                     for grp in r_item.get("x_groups", []):
-                        if grp.get("id") == x_group_id and grp.get(
-                            "ref_span_px"
-                        ):
+                        if grp.get("id") == x_group_id and grp.get("ref_span_px"):
                             ref_span = max(ref_span, float(grp["ref_span_px"]))
             max_span = max(
                 c_max - c_min + 15.0,
@@ -1422,11 +1412,7 @@ class CoreMixin:
             px1 = t[1].get("px", 0) if len(t) == 2 else -999
             p_min = min(px0, px1)
             p_max = max(px0, px1)
-            if (
-                len(t) == 2
-                and lo <= p_min <= c_max + 15.0
-                and c_min < p_max <= hi
-            ):
+            if len(t) == 2 and lo <= p_min <= c_max + 15.0 and c_min < p_max <= hi:
                 col["x_ticks"] = t
             else:
                 # B-02：守卫失败曾是**静默**丢弃——用户标定凭空消失、
@@ -1469,10 +1455,7 @@ class CoreMixin:
         if old_c is not None and old_c.get("x_ticks"):
             col["x_ticks_dropped"] = {
                 "reason": "column_layout_changed",
-                "px": tuple(
-                    tick.get("px", 0)
-                    for tick in old_c.get("x_ticks") or []
-                ),
+                "px": tuple(tick.get("px", 0) for tick in old_c.get("x_ticks") or []),
                 "band": (col["start"], col["end"]),
             }
 
@@ -1930,17 +1913,25 @@ class CoreMixin:
         self,
         tolerance_px: float = 2.5,
         min_taxa_support: int = 1,
+        mode: str = "mixed",
+        adaptive_window: bool = False,
     ) -> dict[str, Any]:
         """Discovers authentic historical sampling horizons by clustering turning points across all taxa.
 
-        **`min_taxa_support` 的实际语义是「支持列数」**：一个簇内**去重后**的列数，
-        不是簇内拐点个数。同一列在 `tolerance_px` 内出现多个相邻峰（同一条曲线上的
-        密集起伏）只贡献 1 个支持列，不再被误算成多个属种共振。
-        默认 `1` 等价于不过滤。
+        **`mode` (双轨 / 峰谷极性分离)**：
+        - `"dual"`（默认）：波峰（极大值，属种爆发）与波谷（极小值，属种低谷）独立聚类，
+          杜绝峰谷混同削峰填谷；微小相距（<=1px）无损融合并标记为 mixed，其余保留各自极性。
+        - `"peaks"`：仅聚类波峰，提取纯粹的优势层位与事件面。
+        - `"mixed"`：历史兼容模式，峰谷混聚。
 
-        返回 `horizons` 数组逐层给出诊断量（`row_px` / `support_columns` /
-        `cluster_span_px` / `member_count`），用于区分「8 列共振」与「1 列孤峰」；
-        旧的 `pixel_y` 与 `depths` 字段取值口径不变（既有下游消费者依赖它们）。
+        **`adaptive_window` (局部密度自适应容差)**：
+        - `True`（默认）：根据局部点间距中位数动态计算容差 tol(y) ∈ [1.2, max(3.5, tolerance_px)]，
+          密集段高分辨率分层（防过度合并），稀疏段允许跨列适度对齐。
+        - `False`：使用用户指定的固定 `tolerance_px`。
+
+        **`min_taxa_support` 的实际语义是「支持列数」**：一个簇内**去重后**的列数，
+        不是簇内拐点个数。同一列在窗口内出现多个相邻拐点只贡献 1 个支持列（issue #82）。
+        默认 `1` 等价于不过滤。
         """
         if not getattr(self, "columns", None):
             raise JsonRpcError(STATE_ERROR, "No columns detected.")
@@ -1954,9 +1945,8 @@ class CoreMixin:
         except ImportError:
             find_peaks = None
 
-        # 池子存 `(row, col_idx)` 二元组：列 ID 必须跟着行号一起进池，
-        # 否则「支持度」只能按行号个数统计（详见 issue #82）。
-        all_turning_points: list[tuple[int, int]] = []
+        peaks_points: list[tuple[int, int]] = []
+        valleys_points: list[tuple[int, int]] = []
 
         for _c_idx, pts in self.column_points.items():
             if not pts or len(pts) < 5:
@@ -1975,48 +1965,128 @@ class CoreMixin:
                 peaks_idx = list(p_idx)
                 valleys_idx = list(v_idx)
 
-            turning_rows = list(rows[peaks_idx]) + list(rows[valleys_idx])
-            for _row in turning_rows:
-                all_turning_points.append((int(_row), int(_c_idx)))
+            for _row in rows[peaks_idx]:
+                peaks_points.append((int(_row), int(_c_idx)))
+            for _row in rows[valleys_idx]:
+                valleys_points.append((int(_row), int(_c_idx)))
 
-        if not all_turning_points:
+        def _calc_tol(
+            r: float,
+            sorted_rows: np.ndarray,
+            base_tol: float,
+            adaptive: bool,
+            min_tol: float = 1.2,
+            max_tol: float = 3.5,
+        ) -> float:
+            if not adaptive or len(sorted_rows) < 2:
+                return base_tol
+            idx_min = int(np.searchsorted(sorted_rows, r - 30.0, side="left"))
+            idx_max = int(np.searchsorted(sorted_rows, r + 30.0, side="right"))
+            sub = sorted_rows[idx_min:idx_max]
+            if len(sub) >= 2:
+                diffs = np.diff(sub)
+                pos = diffs[diffs > 0]
+                if len(pos) >= 1:
+                    d_local = float(np.median(pos))
+                    return float(np.clip(0.35 * d_local, min_tol, max_tol))
+            diffs = np.diff(sorted_rows)
+            pos = diffs[diffs > 0]
+            if len(pos) >= 1:
+                d_global = float(np.median(pos))
+                return float(np.clip(0.35 * d_global, min_tol, max_tol))
+            return base_tol
+
+        def _cluster_track(
+            pts: list[tuple[int, int]],
+            track_polarity: str,
+        ) -> list[dict[str, Any]]:
+            if not pts:
+                return []
+            pts_sorted = sorted(pts, key=lambda p: p[0])
+            sorted_rows = np.array([p[0] for p in pts_sorted], dtype=float)
+            clusters: list[list[tuple[int, int]]] = []
+
+            for row, col in pts_sorted:
+                tol = _calc_tol(float(row), sorted_rows, tolerance_px, adaptive_window)
+                if not clusters:
+                    clusters.append([(row, col)])
+                else:
+                    curr = clusters[-1]
+                    cluster_mean = float(np.mean([r for r, c in curr]))
+                    cluster_min = min(r for r, c in curr)
+                    if (
+                        abs(row - cluster_mean) <= tol
+                        and (row - cluster_min) <= 2.0 * tol
+                    ):
+                        curr.append((row, col))
+                    else:
+                        clusters.append([(row, col)])
+
+            out: list[dict[str, Any]] = []
+            for cl in clusters:
+                cols = {_c for _r, _c in cl}
+                if len(cols) < min_taxa_support:
+                    continue
+                row_px = int(round(float(np.mean([_r for _r, _c in cl]))))
+                out.append(
+                    {
+                        "row_px": row_px,
+                        "support_columns": len(cols),
+                        "cluster_span_px": int(
+                            max(_r for _r, _c in cl) - min(_r for _r, _c in cl)
+                        ),
+                        "member_count": len(cl),
+                        "polarity": track_polarity,
+                        "_cols": cols,
+                    }
+                )
+            return out
+
+        if mode == "peaks":
+            horizons = _cluster_track(peaks_points, "peak")
+        elif mode == "mixed":
+            horizons = _cluster_track(peaks_points + valleys_points, "mixed")
+        else:  # "dual" (default)
+            h_peaks = _cluster_track(peaks_points, "peak")
+            h_valleys = _cluster_track(valleys_points, "valley")
+            combined = sorted(h_peaks + h_valleys, key=lambda h: h["row_px"])
+            merged: list[dict[str, Any]] = []
+            for h in combined:
+                if not merged:
+                    merged.append(h)
+                else:
+                    prev = merged[-1]
+                    if abs(h["row_px"] - prev["row_px"]) <= 1:
+                        merged_cols = prev["_cols"] | h["_cols"]
+                        chosen_row = (
+                            prev["row_px"]
+                            if prev["polarity"] == "peak"
+                            else h["row_px"]
+                        )
+                        span = max(
+                            prev["cluster_span_px"],
+                            h["cluster_span_px"],
+                            abs(h["row_px"] - prev["row_px"]),
+                        )
+                        merged[-1] = {
+                            "row_px": chosen_row,
+                            "support_columns": len(merged_cols),
+                            "cluster_span_px": int(span),
+                            "member_count": prev["member_count"] + h["member_count"],
+                            "polarity": "mixed",
+                            "_cols": merged_cols,
+                        }
+                    else:
+                        merged.append(h)
+            horizons = merged
+
+        for h in horizons:
+            h.pop("_cols", None)
+
+        if not horizons:
             return {"horizons_count": 0, "pixel_y": [], "depths": [], "horizons": []}
 
-        all_turning_points.sort(key=lambda _p: _p[0])
-        clusters: list[list[tuple[int, int]]] = []
-        for _row, _col in all_turning_points:
-            if (
-                not clusters
-                or abs(_row - float(np.mean([_r for _r, _c in clusters[-1]])))
-                > tolerance_px
-            ):
-                clusters.append([(_row, _col)])
-            else:
-                clusters[-1].append((_row, _col))
-
-        # 支持度 = 簇内**去重后**的列数（issue #82）。
-        supported_clusters = [
-            _cl for _cl in clusters if len({_c for _r, _c in _cl}) >= min_taxa_support
-        ]
-
-        consensus_rows = [
-            int(round(float(np.mean([_r for _r, _c in _cl]))))
-            for _cl in supported_clusters
-        ]
-
-        # 逐层诊断量（issue #83）：让用户能区分「8 列共振」与「1 列孤峰」。
-        horizons: list[dict[str, Any]] = [
-            {
-                "row_px": _row,
-                "support_columns": len({_c for _r, _c in _cl}),
-                "cluster_span_px": int(
-                    max(_r for _r, _c in _cl) - min(_r for _r, _c in _cl)
-                ),
-                "member_count": len(_cl),
-            }
-            for _cl, _row in zip(supported_clusters, consensus_rows, strict=True)
-        ]
-
+        consensus_rows = [h["row_px"] for h in horizons]
         depths: list[float] = []
         if self.is_calibrated and self.y_scale is not None:
             sy = self.y_scale["slope"]

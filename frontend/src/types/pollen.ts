@@ -391,6 +391,7 @@ export interface SampleHorizon {
   support_columns?: number | null; // 该簇去重后的列数
   cluster_span_px?: number | null; // 簇内行号 max − min
   member_count?: number | null; // 簇内拐点总数
+  polarity?: 'peak' | 'valley' | 'mixed' | null; // 双轨极性：峰 / 谷 / 融合 (#124)
 }
 
 export interface ImageMeta {

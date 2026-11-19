@@ -19,6 +19,12 @@ let cachedSamplesData: DiagramData | null = null;
  */
 let gridFoldOpen = false;
 
+/** 自动共识提取参数状态缓存（避免面板重刷时丢失） */
+let consensusMode: 'dual' | 'peaks' | 'mixed' = 'dual';
+let consensusAdaptive: boolean = true;
+let consensusTolerancePx: number = 2.5;
+let consensusMinSupport: number = 1;
+
 export function render(data: DiagramData): string {
   cachedSamplesData = data;
   const samples = data.samples || [];
@@ -83,6 +89,49 @@ export function render(data: DiagramData): string {
         <p style="font-size: 10px; color: var(--text-muted); margin: 0 0 8px 0; line-height: 1.4;">
           ${t('step7.consensusDesc')}
         </p>
+
+        <!-- 模式选择药丸 (双轨 / 仅波峰 / 混合) -->
+        <div style="margin-bottom: 8px;">
+          <div style="font-size: 10px; font-weight: 600; margin-bottom: 4px; color: var(--text-primary);">${t('step7.modeLabel')}</div>
+          <div style="display: flex; gap: 4px;">
+            <button type="button" class="ui-btn ui-btn--sm ${consensusMode === 'dual' ? 'ui-btn--primary' : 'ui-btn--quiet'} btn-consensus-mode" data-mode="dual" style="flex: 1; font-size: 10px; padding: 3px 4px;" title="${t('step7.modeDualDesc')}">
+              ${t('step7.modeDual')}
+            </button>
+            <button type="button" class="ui-btn ui-btn--sm ${consensusMode === 'peaks' ? 'ui-btn--primary' : 'ui-btn--quiet'} btn-consensus-mode" data-mode="peaks" style="flex: 1; font-size: 10px; padding: 3px 4px;" title="${t('step7.modePeaksDesc')}">
+              ${t('step7.modePeaks')}
+            </button>
+            <button type="button" class="ui-btn ui-btn--sm ${consensusMode === 'mixed' ? 'ui-btn--primary' : 'ui-btn--quiet'} btn-consensus-mode" data-mode="mixed" style="flex: 1; font-size: 10px; padding: 3px 4px;" title="${t('step7.modeMixedDesc')}">
+              ${t('step7.modeMixed')}
+            </button>
+          </div>
+        </div>
+
+        <!-- 自适应密度容差与固定容差微调 -->
+        <div style="margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px;">
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer;">
+            <input type="checkbox" id="chk-consensus-adaptive" ${consensusAdaptive ? 'checked' : ''} style="cursor: pointer;" />
+            <span>${t('step7.adaptiveLabel')}</span>
+          </label>
+          <div id="row-fixed-tol" style="display: ${consensusAdaptive ? 'none' : 'flex'}; align-items: center; gap: 6px; margin-left: 18px;">
+            <span style="font-size: 9.5px; color: var(--text-muted);">${t('step7.fixedTolLabel')}:</span>
+            <input id="input-consensus-tol" type="number" min="0.5" max="20" step="0.5" value="${consensusTolerancePx}"
+                   style="width: 55px; padding: 2px 4px; font-size: 10px; font-family: var(--font-mono); background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px;" />
+          </div>
+        </div>
+
+        <!-- 共振门槛 (支持列数) -->
+        <div style="margin-bottom: 8px;">
+          <div style="font-size: 10px; font-weight: 600; margin-bottom: 4px; color: var(--text-primary);">${t('step7.minSupportLabel')}</div>
+          <div style="display: flex; gap: 4px;">
+            <button type="button" class="ui-btn ui-btn--sm ${consensusMinSupport === 1 ? 'ui-btn--primary' : 'ui-btn--quiet'} btn-consensus-support" data-support="1" style="flex: 1; font-size: 10px; padding: 3px 4px;">
+              ${t('step7.minSupport1')}
+            </button>
+            <button type="button" class="ui-btn ui-btn--sm ${consensusMinSupport === 2 ? 'ui-btn--primary' : 'ui-btn--quiet'} btn-consensus-support" data-support="2" style="flex: 1; font-size: 10px; padding: 3px 4px;">
+              ${t('step7.minSupport2')}
+            </button>
+          </div>
+        </div>
+
         <button id="btn-extract-consensus" class="ui-btn ui-btn--secondary" style="width: 100%; font-size: 11px; padding: 5px;">
           ${t('step7.consensusBtn')}
         </button>
@@ -138,13 +187,34 @@ export function render(data: DiagramData): string {
               ? '<div style="color: var(--text-muted); text-align: center; padding: 12px; font-family: sans-serif;">-- 暂无层位 --</div>'
               : samples
                   .map(
-                    (s, idx) => `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 3px 6px; border-bottom: 1px solid rgba(0,0,0,0.04);">
-                  <span>#${idx + 1} Y=${s.row_px}px</span>
-                  <span>${s.depth !== null ? `<strong>${s.depth}</strong> ${unitLabel}` : '[--]'}</span>
-                  <button class="icon-btn btn-delete-sample" data-sample-idx="${idx}" title="删除该层位" style="color: var(--accent-red); font-size: 12px; padding: 0 4px; background: none; border: none; cursor: pointer;">&times;</button>
-                </div>
-              `
+                    (s, idx) => {
+                      const polarityBadge = s.polarity
+                        ? `<span style="font-size: 8.5px; padding: 0 3px; border-radius: 2px; ${
+                            s.polarity === 'peak'
+                              ? 'background: color-mix(in srgb, var(--status-success) 15%, transparent); color: var(--status-success);'
+                              : s.polarity === 'valley'
+                              ? 'background: color-mix(in srgb, var(--accent-blue) 15%, transparent); color: var(--accent-blue);'
+                              : 'background: color-mix(in srgb, var(--accent-violet) 15%, transparent); color: var(--accent-violet);'
+                          }">${s.polarity === 'peak' ? t('step7.polarityPeak') : s.polarity === 'valley' ? t('step7.polarityValley') : t('step7.polarityMixed')}</span>`
+                        : '';
+                      const supportText =
+                        s.support_columns && s.support_columns > 1
+                          ? `<span style="font-size: 8.5px; color: var(--text-muted);">${s.support_columns}列</span>`
+                          : '';
+                      return `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 3px 6px; border-bottom: 1px solid rgba(0,0,0,0.04);">
+                          <div style="display: flex; align-items: center; gap: 4px;">
+                            <span>#${idx + 1} Y=${s.row_px}px</span>
+                            ${polarityBadge}
+                            ${supportText}
+                          </div>
+                          <div style="display: flex; align-items: center; gap: 6px;">
+                            <span>${s.depth !== null ? `<strong>${s.depth}</strong> ${unitLabel}` : '[--]'}</span>
+                            <button class="icon-btn btn-delete-sample" data-sample-idx="${idx}" title="删除该层位" style="color: var(--accent-red); font-size: 12px; padding: 0 4px; background: none; border: none; cursor: pointer;">&times;</button>
+                          </div>
+                        </div>
+                      `;
+                    }
                   )
                   .join('')
           }
@@ -160,8 +230,50 @@ export function render(data: DiagramData): string {
 }
 
 export function mount(root: HTMLElement, ctx: StepContext): void {
+  // 模式切换药丸
+  root.querySelectorAll('.btn-consensus-mode').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mode = btn.getAttribute('data-mode') as 'dual' | 'peaks' | 'mixed';
+      if (mode) {
+        consensusMode = mode;
+        ctx.onDataChange?.();
+      }
+    });
+  });
+
+  // 自适应容差勾选框
+  const chkAdaptive = root.querySelector('#chk-consensus-adaptive') as HTMLInputElement | null;
+  chkAdaptive?.addEventListener('change', () => {
+    consensusAdaptive = chkAdaptive.checked;
+    const rowFixed = root.querySelector('#row-fixed-tol') as HTMLElement | null;
+    if (rowFixed) rowFixed.style.display = consensusAdaptive ? 'none' : 'flex';
+  });
+
+  // 固定容差输入
+  const inputTol = root.querySelector('#input-consensus-tol') as HTMLInputElement | null;
+  inputTol?.addEventListener('change', () => {
+    const val = Number(inputTol.value);
+    if (Number.isFinite(val) && val > 0) consensusTolerancePx = val;
+  });
+
+  // 共振门槛切换
+  root.querySelectorAll('.btn-consensus-support').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const sup = Number(btn.getAttribute('data-support'));
+      if (sup === 1 || sup === 2) {
+        consensusMinSupport = sup;
+        ctx.onDataChange?.();
+      }
+    });
+  });
+
   root.querySelector('#btn-extract-consensus')?.addEventListener('click', () => {
-    ctx.onExtractConsensusHorizons?.();
+    ctx.onExtractConsensusHorizons?.({
+      mode: consensusMode,
+      adaptive_window: consensusAdaptive,
+      tolerance_px: consensusTolerancePx,
+      min_taxa_support: consensusMinSupport,
+    });
   });
 
   root.querySelector('#btn-clear-horizons')?.addEventListener('click', () => {

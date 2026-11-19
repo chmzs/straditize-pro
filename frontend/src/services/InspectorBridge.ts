@@ -512,7 +512,12 @@ export function createInspectorCallbacks(
         callbacks.reportBackendFailure('清空列 X 刻度', err);
       }
     },
-    onExtractConsensusHorizons: async () => {
+    onExtractConsensusHorizons: async (params?: {
+      mode?: string;
+      adaptive_window?: boolean;
+      tolerance_px?: number;
+      min_taxa_support?: number;
+    }) => {
       try {
         const cols = canvasComponent.data.columns || [];
         // 批量数字化会把每一列的补偿行数累加成一条提示：逐列弹 HUD 会刷屏，
@@ -525,13 +530,21 @@ export function createInspectorCallbacks(
             compensation = addCompensation(compensation, { brokenRows, ambiguousRows });
           }
         }
-        const res = await rpcClient.call<any, any>('samples.extractConsensus', { tolerance_px: 4.0, min_taxa_support: 1 });
+        const callParams = {
+          mode: params?.mode ?? 'dual',
+          adaptive_window: params?.adaptive_window ?? true,
+          tolerance_px: params?.tolerance_px ?? 2.5,
+          min_taxa_support: params?.min_taxa_support ?? 1,
+        };
+        const res = await rpcClient.call<any, any>('samples.extractConsensus', callParams);
         if (res?.samples) {
           canvasComponent.data.samples = res.samples;
           getInspector()?.updateData(canvasComponent.data);
           canvasComponent.requestRender();
+          const modeLabel = callParams.mode === 'peaks' ? '仅波峰' : callParams.mode === 'dual' ? '双轨极性分离' : '混合兼容';
+          const tolLabel = callParams.adaptive_window ? '自适应容差' : `容差 ${callParams.tolerance_px}px`;
           callbacks.setHudNotice(
-            `已提取 ${res.samples.length} 个跨属种拐点共识采样层位。`
+            `已提取 ${res.samples.length} 个跨属种拐点共识采样层位（${modeLabel} · ${tolLabel}）。`
             + compensationNote(compensation),
             4000
           );
