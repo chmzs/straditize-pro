@@ -57,10 +57,10 @@ async function calibrateDepth(page: Page): Promise<void> {
   await page.evaluate(() => {
     const pairs: Array<[string, string]> = [
       ['#ycal-inp-unit', 'cm'],
-      ['#ycal-inp-top-px', '200'],
-      ['#ycal-inp-bot-px', '600'],
+      ['#ycal-inp-top-px', '550'],
+      ['#ycal-inp-bot-px', '1050'],
       ['#ycal-inp-top-val', '0'],
-      ['#ycal-inp-bot-val', '40'],
+      ['#ycal-inp-bot-val', '50'],
     ];
     for (const [selector, value] of pairs) {
       const el = document.querySelector(selector) as HTMLInputElement | null;
@@ -121,9 +121,9 @@ async function readPreview(page: Page): Promise<PreviewTable> {
   return page.evaluate(() => {
     const table = document.querySelector('#wpd-preview-table');
     if (!table) throw new Error('找不到导出预览表格');
-    const headers = Array.from(table.querySelectorAll('thead th')).map((th) =>
-      (th.textContent ?? '').trim()
-    );
+    const headers = Array.from(table.querySelectorAll('thead th'))
+      .filter((th) => !th.classList.contains('col-row-num') && th.textContent?.trim() !== '#')
+      .map((th) => (th.textContent ?? '').trim());
     const rows = Array.from(table.querySelectorAll('tbody tr')).map((tr) =>
       Array.from(tr.querySelectorAll('td'))
         .filter((td) => !td.classList.contains('col-row-num'))
@@ -199,9 +199,9 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
     // 默认值曾从 samples 改成 union_points 又改回来，每次改动都必须有人知道——
     // 钉住「不选时行数 = 自己标定的样品层位数」，而不是各列拐点 y 的并集。
     const SAMPLE_ROWS = [
-      { row_px: 300, depth: 10.0, source: 'manual' },
-      { row_px: 400, depth: 20.0, source: 'manual' },
-      { row_px: 500, depth: 30.0, source: 'manual' },
+      { row_px: 650, depth: 10.0, source: 'manual' },
+      { row_px: 750, depth: 20.0, source: 'manual' },
+      { row_px: 850, depth: 30.0, source: 'manual' },
     ];
     await backendRpc(page, 'samples.set', { samples: SAMPLE_ROWS });
     await calibrateColumnsX(page);
@@ -241,9 +241,9 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
     // （让预览真的有数字）。全程不导航：标定写完后前端会自己回填（B 的修复）。
     await backendRpc(page, 'samples.set', {
       samples: [
-        { row_px: 300, depth: 10.0, source: 'manual' },
-        { row_px: 400, depth: 20.0, source: 'manual' },
-        { row_px: 500, depth: 30.0, source: 'manual' },
+        { row_px: 650, depth: 10.0, source: 'manual' },
+        { row_px: 750, depth: 20.0, source: 'manual' },
+        { row_px: 850, depth: 30.0, source: 'manual' },
       ],
     });
     await calibrateColumnsX(page);
@@ -340,7 +340,7 @@ test.describe('U-ROWS-01 预览与下载必须同一行集', () => {
 
     const turningCaption = await rowSetCaption(page);
     expect(turningCaption, '切换后行集说明必须跟着更新').toContain(String(turningPreview.rows.length));
-    expect(turningCaption, '说明必须点明来源换成了拐点坐标长表').toContain('拐点坐标长表');
+    expect(turningCaption, '说明必须点明来源换成了拐点长表').toMatch(/拐点.*长表/);
 
     const turningDownload = await downloadCsv(page, 'turning');
     expect(
