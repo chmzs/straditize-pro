@@ -506,7 +506,23 @@ class ExportMixin:
         `legacy_column_name` 只改**首列名**（`age` → `depth`），不改任何数值；给按旧
         列名读的下游脚本一个过渡口。首列名本身来自 `_y_col_label`（唯一来源）。
         """
-        self._ensure_export_column_points()
+        # 若 column_points 尚未从控制点合成（例如刚从 .tar 工程包载入），
+        # 且存在 control_points，则自动从 control_points 填充 column_points，
+        # 确保真实数据不会因点集未合成而退化为空点集。
+        controls = getattr(self, "control_points", None) or {}
+        points = getattr(self, "column_points", None)
+        if points is None:
+            self.column_points = points = {}
+        if not points and any(controls.values()):
+            columns = list(getattr(self, "columns", None) or [])
+            for position, col in enumerate(columns):
+                idx = col.get("col_index", position)
+                ctrls = controls.get(idx, {}) or {}
+                if ctrls:
+                    points[idx] = [
+                        {"row": int(round(float(row))), "x": float(x)}
+                        for row, x in sorted(ctrls.items())
+                    ]
 
         rois = getattr(self, "rois", [])
         # 手工构造的会话（测试、CLI 直调）常常没有 ROI 记账，但列上仍带着某个 roi_id。

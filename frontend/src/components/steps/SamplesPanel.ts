@@ -20,7 +20,7 @@ let cachedSamplesData: DiagramData | null = null;
 let gridFoldOpen = false;
 
 /** 自动共识提取参数状态缓存（避免面板重刷时丢失） */
-let consensusMode: 'dual' | 'peaks' | 'mixed' = 'dual';
+let consensusMode: 'dual' | 'peaks' = 'dual';
 let consensusAdaptive: boolean = true;
 let consensusTolerancePx: number = 2.5;
 let consensusMinSupport: number = 1;
@@ -90,7 +90,7 @@ export function render(data: DiagramData): string {
           ${t('step7.consensusDesc')}
         </p>
 
-        <!-- 模式选择药丸 (双轨 / 仅波峰 / 混合) -->
+        <!-- 模式选择药丸 (双轨 / 仅波峰) -->
         <div style="margin-bottom: 8px;">
           <div style="font-size: 10px; font-weight: 600; margin-bottom: 4px; color: var(--text-primary);">${t('step7.modeLabel')}</div>
           <div style="display: flex; gap: 4px;">
@@ -99,9 +99,6 @@ export function render(data: DiagramData): string {
             </button>
             <button type="button" class="ui-btn ui-btn--sm ${consensusMode === 'peaks' ? 'ui-btn--primary' : 'ui-btn--quiet'} btn-consensus-mode" data-mode="peaks" style="flex: 1; font-size: 10px; padding: 3px 4px;" title="${t('step7.modePeaksDesc')}">
               ${t('step7.modePeaks')}
-            </button>
-            <button type="button" class="ui-btn ui-btn--sm ${consensusMode === 'mixed' ? 'ui-btn--primary' : 'ui-btn--quiet'} btn-consensus-mode" data-mode="mixed" style="flex: 1; font-size: 10px; padding: 3px 4px;" title="${t('step7.modeMixedDesc')}">
-              ${t('step7.modeMixed')}
             </button>
           </div>
         </div>
@@ -233,7 +230,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   // 模式切换药丸
   root.querySelectorAll('.btn-consensus-mode').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const mode = btn.getAttribute('data-mode') as 'dual' | 'peaks' | 'mixed';
+      const mode = btn.getAttribute('data-mode') as 'dual' | 'peaks';
       if (mode) {
         consensusMode = mode;
         ctx.onDataChange?.();

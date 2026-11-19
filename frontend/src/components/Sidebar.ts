@@ -163,10 +163,17 @@ export class Sidebar {
       </div>
 
       ${this.data.columns.length > 0 ? `
-        <div class="sidebar-actions-bar">
-          <button id="btn-insert-gap-col" class="ui-btn ui-btn--secondary ui-btn--sm" title="${t('sidebar.insertGapTitle')}">
+        <div class="sidebar-actions-bar" style="display: flex; gap: 6px;">
+          <button id="btn-insert-gap-col" class="ui-btn ui-btn--secondary ui-btn--sm" style="flex: 1;" title="${t('sidebar.insertGapTitle')}">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             <span>${t('sidebar.insertGap')}</span>
+          </button>
+          <button id="btn-toggle-batch-select" class="ui-btn ${this.selectedColumnIds.size > 0 ? 'ui-btn--primary' : 'ui-btn--secondary'} ui-btn--sm" title="${t('sidebar.batchSelectTitle')}">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 11 12 14 22 4" />
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+            <span>${this.selectedColumnIds.size > 0 ? t('sidebar.batchExit') : t('sidebar.batchSelect')}</span>
           </button>
         </div>
         <div class="sidebar-search">
@@ -420,6 +427,16 @@ export class Sidebar {
     this.element.querySelector('#btn-insert-gap-col')?.addEventListener('click', () => {
       if (this.data.columns.length === 0) return;
       this.callbacks.onInsertGapColumn?.(this.data.activeTaxaId);
+    });
+
+    // 快捷批量多选切换：已选时清空，未选时全选
+    this.element.querySelector('#btn-toggle-batch-select')?.addEventListener('click', () => {
+      if (this.selectedColumnIds.size > 0) {
+        this.selectedColumnIds.clear();
+      } else {
+        this.visibleColumns().forEach((c) => this.selectedColumnIds.add(c.id));
+      }
+      this.renderPreservingInlineEdit();
     });
 
     // 批量操作工具栏事件绑定 (#126)
