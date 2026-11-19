@@ -1310,6 +1310,7 @@ class ExportMixin:
             # Echoed so the caller can confirm what the axis will be read as, instead of
             # trusting that its request was accepted.
             "primary_axis": resolved_axis,
+            "unit": self.depth_unit,
         }
 
     def _primary_roi_sheet_name(self, frames: dict[str, Any]) -> str:

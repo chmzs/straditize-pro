@@ -287,7 +287,7 @@ export interface DepthCalibration {
   top_cm: number | null; // 上方参考点的真实值 (cm / m / cal yr BP ...)
   bottom_px: number | null; // 下方参考点的图像像素 Y
   bottom_cm: number | null; // 下方参考点的真实值
-  unit: string;
+  unit?: string;
   /**
    * What the Y axis MEASURES. Declared by the user, never inferred from `unit`:
    * "cm"/"m" imply depth and "cal BP"/"ka" imply age only for the conventional
@@ -516,7 +516,7 @@ export interface HistorySnapshot {
 
 export interface DepthHorizon {
   depth: number;
-  unit: string;
+  unit?: string;
   y: number;
   values: Record<string, number>;
 }

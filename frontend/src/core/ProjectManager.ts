@@ -182,7 +182,7 @@ export function draftToProjectPayload(draft: DiagramData): DraftRestorePayload {
         top_cm: draft.calibration?.top_cm ?? null,
         bottom_px: draft.calibration?.bottom_px ?? null,
         bottom_cm: draft.calibration?.bottom_cm ?? null,
-        unit: draft.calibration?.unit || 'cm',
+        unit: draft.calibration?.unit || undefined,
       },
       calibration: {
         isCalibrated: !!draft.calibration?.isCalibrated,
@@ -190,7 +190,7 @@ export function draftToProjectPayload(draft: DiagramData): DraftRestorePayload {
         top_cm: draft.calibration?.top_cm ?? null,
         bottom_px: draft.calibration?.bottom_px ?? null,
         bottom_cm: draft.calibration?.bottom_cm ?? null,
-        unit: draft.calibration?.unit || 'cm',
+        unit: draft.calibration?.unit || undefined,
       },
       // 清理几何三个键：`project_load` 一律 `is not None` 判定，传 `[]` 等于
       // **主动清空**后端。旧草稿（无这些键）不能因此把后端的候选线抹掉，
@@ -567,7 +567,7 @@ message("Finished! Stratigraphic plot generated successfully.")
   public generateRScript(columns?: Column[], unit?: string): string {
     return ProjectManager.generateRScript(
       columns || this.data.columns,
-      unit || this.data.calibration.unit || 'cm'
+      (unit || this.data.calibration.unit || '').trim()
     );
   }
 
