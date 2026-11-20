@@ -3,6 +3,7 @@ import { notifyError } from '../ui/feedback';
 import { getLocale, setLocale, Locale, t } from '../i18n';
 import { AboutModal } from './AboutModal';
 import { rscriptPathUpdate } from '../services/configUpdates';
+import { ErrorReporter } from '../services/ErrorReporter';
 
 export class SettingsModal {
   private container: HTMLElement;
@@ -216,6 +217,42 @@ export class SettingsModal {
               </div>
             </div>
           </div>
+
+          <!-- 四、运行日志与错误诊断 -->
+          <div class="settings-section" style="background: var(--bg-tertiary); border: 1px solid var(--border-light); border-radius: 8px; padding: 14px 16px;">
+            <div style="font-weight: 700; font-size: 13px; color: var(--text-heading); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-blue);">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+                <span>${t('settings.logsAndDiagnostics')}</span>
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <button type="button" id="btn-settings-open-log-dir" class="ui-btn ui-btn--quiet ui-btn--xs" style="padding: 3px 8px; font-size: 11px;">
+                  ${t('settings.openLogDir')}
+                </button>
+                <button type="button" id="btn-settings-copy-diag" class="ui-btn ui-btn--quiet ui-btn--xs" style="padding: 3px 8px; font-size: 11px;">
+                  ${t('settings.copyDiagnostic')}
+                </button>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 8px; font-size: 11.5px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <span style="color: var(--text-muted); white-space: nowrap;">• ${t('settings.logPath')}:</span>
+                <code id="settings-log-filepath" style="background: var(--bg-card); padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border-color); color: var(--text-primary); font-size: 10.5px; font-family: var(--font-mono); max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  ...
+                </code>
+              </div>
+              <div style="font-size: 10.5px; color: var(--text-muted); line-height: 1.4;">
+                • ${t('settings.logPolicy')}
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="ui-modal__footer">
@@ -348,8 +385,38 @@ export class SettingsModal {
     modal.querySelector('#settings-close-btn')?.addEventListener('click', closeModal);
     modal.querySelector('#btn-settings-cancel')?.addEventListener('click', closeModal);
     modal.querySelector('#btn-settings-about')?.addEventListener('click', () => {
-      new AboutModal(this.container).open();
+      new AboutModal(this.container, this.rpcClient).open();
     });
+
+    // 运行日志与故障诊断
+    modal.querySelector('#btn-settings-open-log-dir')?.addEventListener('click', async () => {
+      try {
+        await this.rpcClient.openLogDir();
+      } catch (err) {
+        notifyError('打开日志目录失败: ' + String(err));
+      }
+    });
+
+    modal.querySelector('#btn-settings-copy-diag')?.addEventListener('click', async () => {
+      await ErrorReporter.copyDiagnosticReport(this.rpcClient);
+    });
+
+    if (this.rpcClient.getStatus().connected) {
+      this.rpcClient
+        .getLogInfo()
+        .then((info) => {
+          const el = modal.querySelector('#settings-log-filepath');
+          if (el) {
+            const sizeKb = (info.file_size_bytes / 1024).toFixed(1);
+            el.textContent = `${info.log_file} (${sizeKb} KB)`;
+            el.setAttribute('title', info.log_file);
+          }
+        })
+        .catch(() => {
+          const el = modal.querySelector('#settings-log-filepath');
+          if (el) el.textContent = '暂无法获取后端日志路径';
+        });
+    }
 
     // 主题即时渲染预览
     const lightRadio = modal.querySelector('#theme-light-radio') as HTMLInputElement;

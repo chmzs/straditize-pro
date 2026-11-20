@@ -1560,11 +1560,12 @@ body.theme-light .icon-btn.panel-toggle {
   image-rendering: -webkit-optimize-contrast;
 }
 
-/* 底部画布视口栏（缩放 / 透视）：贴在画布底部右侧，紧邻雷达图左侧的空白带 */
+/* 底部画布视口栏（缩放 / 适应 / 滤镜 / 透视）：居中放置在画布下部 */
 .canvas-view-bar {
   position: absolute;
   bottom: 16px;
-  right: 192px;      /* = 雷达图 right 16 + 宽 170 + 间隙 6（左留 7px 给工具条） */
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 45;
   display: flex;
   align-items: center;
@@ -3726,28 +3727,41 @@ body.theme-light .ad-pane-splitter {
   user-select: text;
 }
 
-/* 画布图例（步骤 5 分列起显示）：说明画布上那两条线的实际含义。
+/* 画布图例（步骤 5 分列起显示）：说明画布上那两条线的实际含义，放置在画布右下角。
  * 类名必须与 GeologyCanvas 里的 innerHTML 一致——旧类名（baseline/tick2/native）
  * 在源码换文案后没有同步，三条色块全部退化成 currentColor（灰），图例等于没写。 */
 .canvas-legend {
   position: absolute;
-  left: 12px;
-  bottom: 68px;
-  z-index: 6;
+  right: 16px;
+  bottom: 16px;
+  z-index: 40;
   display: none;
   flex-direction: column;
-  gap: 3px;
-  padding: 6px 9px;
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  gap: 4px;
+  max-width: 320px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--border-color);
-  font-size: 10px;
-  line-height: 1.3;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  font-size: 11px;
+  line-height: 1.45;
   color: var(--text-secondary);
   pointer-events: none;
 }
 .canvas-legend.is-visible { display: flex; }
-.canvas-legend-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.canvas-legend-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  white-space: normal;
+  word-break: break-word;
+}
+.canvas-legend-row .legend-sw {
+  flex-shrink: 0;
+  margin-top: 6px;
+}
 /* 步骤 6 专属提示行：只在「列标定」这一步出现（GeologyCanvas 切 is-step6）。
  * 默认 display:none，避免在步骤 5 就占地方说一件还不能做的事。 */
 .legend-hint-zero-drag { display: none; color: var(--text-muted); }

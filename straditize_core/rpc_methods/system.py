@@ -27,6 +27,39 @@ def register(dispatcher: Any, session: Any) -> None:
         "system.ping", lambda: {"pong": True, "timestamp": time.time()}
     )
 
+    from ..logging_config import get_log_dir, get_log_file_path, open_log_dir
+
+    def rpc_get_log_info() -> dict[str, Any]:
+        log_file = get_log_file_path()
+        size = log_file.stat().st_size if log_file.exists() else 0
+        return {
+            "log_dir": str(get_log_dir()),
+            "log_file": str(log_file),
+            "file_size_bytes": size,
+        }
+
+    def rpc_open_log_dir() -> dict[str, Any]:
+        ok = open_log_dir()
+        return {"success": ok, "log_dir": str(get_log_dir())}
+
+    def rpc_log_client_error(
+        message: str,
+        stack: str | None = None,
+        url: str | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        import logging
+        clogger = logging.getLogger("straditize_client")
+        extra_info = f" | url={url}" if url else ""
+        if context:
+            extra_info += f" | context={context}"
+        clogger.error(f"[FrontendError] {message}{extra_info}\nStack: {stack or 'None'}")
+        return {"logged": True}
+
+    dispatcher.register_method("system.getLogInfo", rpc_get_log_info)
+    dispatcher.register_method("system.openLogDir", rpc_open_log_dir)
+    dispatcher.register_method("system.logClientError", rpc_log_client_error)
+
     def cleanup_payload() -> dict[str, Any]:
         """Cleanup keys that MUST travel with every diagram payload.
 

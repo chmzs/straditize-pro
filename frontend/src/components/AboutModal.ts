@@ -1,5 +1,7 @@
 import { APP_VERSION, compareVersions } from '../core/appVersion';
-import { notify } from '../ui/feedback';
+import { notify, notifyError } from '../ui/feedback';
+import { RpcClient } from '../services/RpcClient';
+import { ErrorReporter } from '../services/ErrorReporter';
 
 // 版本号**不在这里定义**：唯一事实源是 `frontend/package.json` 的 `version`，
 // 由 `vite.config.ts` 在构建期注入（见 `src/core/appVersion.ts`）。
@@ -20,11 +22,13 @@ const CITATION_BIBTEX = `@software{straditize_pro_2026,
 
 export class AboutModal {
   private container: HTMLElement;
+  private rpcClient?: RpcClient;
   private modalElement: HTMLElement | null = null;
   private checkingUpdate: boolean = false;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, rpcClient?: RpcClient) {
     this.container = container;
+    this.rpcClient = rpcClient;
   }
 
   public open(): void {
@@ -142,13 +146,15 @@ export class AboutModal {
         </div>
 
         <div class="ui-modal__footer" style="justify-content: space-between;">
-          <div style="display: flex; align-items: center; gap: 12px; font-size: 11px;">
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 11px;">
             <a href="https://chmzs.github.io/straditize-pro/" target="_blank" rel="noopener noreferrer" style="color: var(--accent-blue); text-decoration: none; display: flex; align-items: center; gap: 4px;">
               <span>官方主页</span>
             </a>
             <a href="https://github.com/chmzs/straditize-pro" target="_blank" rel="noopener noreferrer" style="color: var(--accent-blue); text-decoration: none; display: flex; align-items: center; gap: 4px;">
               <span>GitHub 源码</span>
             </a>
+            <button id="btn-about-open-log-dir" class="ui-btn ui-btn--quiet ui-btn--xs" style="padding: 2px 6px; font-size: 10.5px;">打开日志目录</button>
+            <button id="btn-about-copy-diag" class="ui-btn ui-btn--quiet ui-btn--xs" style="padding: 2px 6px; font-size: 10.5px;">复制诊断信息</button>
           </div>
           <button class="ui-btn ui-btn--primary ui-btn--sm" id="about-confirm-btn">确定</button>
         </div>
@@ -190,6 +196,19 @@ export class AboutModal {
     // 检查更新
     modal.querySelector('#btn-check-update')?.addEventListener('click', () => {
       void this.handleCheckUpdate(modal);
+    });
+
+    // 日志与诊断
+    modal.querySelector('#btn-about-open-log-dir')?.addEventListener('click', () => {
+      if (this.rpcClient) {
+        this.rpcClient.openLogDir().catch((err) => {
+          notifyError('打开日志目录失败: ' + String(err));
+        });
+      }
+    });
+
+    modal.querySelector('#btn-about-copy-diag')?.addEventListener('click', () => {
+      void ErrorReporter.copyDiagnosticReport(this.rpcClient);
     });
   }
 

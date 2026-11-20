@@ -38,15 +38,12 @@ from .gateway import (
     start_desktop_mode,
     start_serve_mode,
 )
+from .logging_config import setup_logging
 from .protocol import JsonRpcDispatcher
 from .session import StraditizeSession
 
-# Configure logging to sys.stderr so stdout stays clean for stdio JSON-RPC protocol
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(asctime)s] %(levelname)s [%(name)s]: %(message)s",
-    stream=sys.stderr,
-)
+# Configure structured logging to sys.stderr and rotating file (%LOCALAPPDATA%/straditize/logs)
+setup_logging()
 logger = logging.getLogger("straditize_rpc")
 
 

@@ -64,6 +64,12 @@ export const zhCN = {
   'settings.save': '保存并应用配置',
   'settings.cancel': '取消',
   'settings.saved': '设置已保存，已生效。',
+  'settings.logsAndDiagnostics': '运行日志与故障诊断',
+  'settings.logPath': '日志存放路径',
+  'settings.logPolicy': '单文件上限 5MB，最多保留 3 个备份（≤15MB），启动自动清理 >7 天日志',
+  'settings.openLogDir': '打开日志文件夹',
+  'settings.copyDiagnostic': '复制诊断信息',
+  'settings.copyDiagnosticSuccess': '诊断信息已复制到剪贴板，可粘贴反馈给开发者或 AI',
 
   // ===== 顶栏按钮与菜单 =====
   'toolbar.diagram': '打开图谱',

@@ -684,7 +684,8 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     }
     state.pendingTick = { px: Math.round(pt.x), dist: pt.x - zero };
     // 只在**吸附成功**后切换选中列：点在空处不该改选中，否则用户以为点中了。
-    if (col.id !== data?.activeTaxaId) ctx.onSelectTaxa?.(col.id);
+    // 画布点齿标定期间严禁触发 scrollToColumn 强行重置视口（避免视口突然跳动并中断拖拽平移）。
+    if (col.id !== data?.activeTaxaId) ctx.onSelectTaxa?.(col.id, { skipScroll: true });
     ctx.onDataChange?.();
   });
 

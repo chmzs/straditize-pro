@@ -82,9 +82,11 @@ export function createInspectorCallbacks(
       getToolbar()?.updateHistoryState();
       callbacks.updateFooter();
     },
-    onSelectTaxa: (taxaId: string) => {
+    onSelectTaxa: (taxaId: string, options?: { skipScroll?: boolean }) => {
       canvasComponent.setActiveTaxa(taxaId);
-      canvasComponent.scrollToColumn(taxaId);
+      if (!options?.skipScroll) {
+        canvasComponent.scrollToColumn(taxaId);
+      }
       callbacks.updateFooter();
     },
     onRedigitizeColumn: async () => {

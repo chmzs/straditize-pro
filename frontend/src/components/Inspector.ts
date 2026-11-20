@@ -25,7 +25,7 @@ const translate = (key: string, params?: Record<string, string | number>): strin
 
 export interface InspectorCallbacks {
   onDataChange: () => void;
-  onSelectTaxa: (taxaId: string) => void;
+  onSelectTaxa: (taxaId: string, options?: { skipScroll?: boolean }) => void;
   onToggleCollapse: (collapsed: boolean) => void;
   onDigitizeActiveColumn: () => Promise<void>;
   onAdvanceWorkflowStage?: (targetStage: number) => void;

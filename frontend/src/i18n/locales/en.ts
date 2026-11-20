@@ -63,6 +63,12 @@ export const en = {
   'settings.save': 'Save & Apply',
   'settings.cancel': 'Cancel',
   'settings.saved': 'Settings saved and applied successfully!',
+  'settings.logsAndDiagnostics': 'Logs & Diagnostics',
+  'settings.logPath': 'Log File Path',
+  'settings.logPolicy': 'Max 5MB per file, up to 3 backups (≤15MB), auto-purge logs >7 days on startup',
+  'settings.openLogDir': 'Open Log Folder',
+  'settings.copyDiagnostic': 'Copy Diagnostic Info',
+  'settings.copyDiagnosticSuccess': 'Diagnostic info copied to clipboard. You can paste it to share with developers or AI.',
 
   // ===== Toolbar Buttons & Menus =====
   'toolbar.diagram': 'Open Diagram',

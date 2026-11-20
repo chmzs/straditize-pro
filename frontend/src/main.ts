@@ -51,6 +51,7 @@ import {
   mountProvenanceBanner,
 } from './services/ProvenanceGate';
 import { installDiagRecorder } from './devtools/diagRecorder';
+import { ErrorReporter } from './services/ErrorReporter';
 export { reportBackendFailure };
 
 async function bootstrap() {
@@ -65,6 +66,7 @@ async function bootstrap() {
   applyTheme();
 
   const rpcClient = new RpcClient();
+  ErrorReporter.install(rpcClient);
   let authModalInstance: AuthModal | null = null;
   rpcClient.onAuthRequired(() => {
     const gate = document.getElementById('provenance-gate');
@@ -368,6 +370,7 @@ async function bootstrap() {
       shortcutService.toggleHelpPanel();
     },
     onToolModeChange: (mode) => {
+      ErrorReporter.log('info', 'ToolMode', `Tool mode changed to: ${mode}`);
       const desc = canvasComponent.toolModeManager.getToolDescription(mode);
       const footerModeEl = document.getElementById('footer-tool-mode');
       if (footerModeEl) {
@@ -475,9 +478,20 @@ async function bootstrap() {
     }
   );
 
-  const aboutModal = new AboutModal(document.body);
+  const aboutModal = new AboutModal(document.body, rpcClient);
+
+  ErrorReporter.registerStateExtractor(() => ({
+    stage: workflowController.getCurrentStage(),
+    primary_roi_id: canvasComponent.data.primary_roi_id,
+    active_taxa_id: canvasComponent.data.activeTaxaId,
+    rois_count: canvasComponent.data.rois.length,
+    columns_count: canvasComponent.data.columns.length,
+    samples_count: canvasComponent.data.samples.length,
+    tool_mode: canvasComponent.getToolMode(),
+  }));
 
   const onProjectLoad = (projectData: DiagramData) => {
+    ErrorReporter.log('info', 'Project', `已载入项目包: ${projectData.project_name || 'untitled'}`);
     canvasComponent.loadNewDiagram(projectData);
     history.reset(projectData.columns, projectData.activeTaxaId, projectData.calibration, projectData.roi);
     workflowController.setCurrentStage(STAGE.Y_CALIB);

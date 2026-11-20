@@ -1283,4 +1283,21 @@ export class RpcClient {
       updates
     );
   }
+
+  public async getLogInfo(): Promise<{ log_dir: string; log_file: string; file_size_bytes: number }> {
+    return this.call('system.getLogInfo');
+  }
+
+  public async openLogDir(): Promise<{ success: boolean; log_dir: string }> {
+    return this.call('system.openLogDir');
+  }
+
+  public async logClientError(params: {
+    message: string;
+    stack?: string;
+    url?: string;
+    context?: Record<string, unknown>;
+  }): Promise<{ logged: boolean }> {
+    return this.call('system.logClientError', params);
+  }
 }

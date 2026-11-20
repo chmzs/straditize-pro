@@ -154,6 +154,7 @@ export class GeologyCanvas {
   private isSpaceDown: boolean = false;
   private isMouseDown: boolean = false;
   private isPanning: boolean = false;
+  private hasPannedDuringMouseDown: boolean = false;
   private lastMouseScreen: Point2D = { x: 0, y: 0 };
 
   // 策略化工具注册表
@@ -258,6 +259,10 @@ private pointer: PointerState = {
     onLocaleChange(() => {
       this.createFloatingToolbar();
     });
+  }
+
+  public getToolMode(): ToolMode {
+    return this.toolModeManager.getMode();
   }
 
   public setToolMode(mode: ToolMode): void {
@@ -1139,7 +1144,18 @@ private pointer: PointerState = {
 
   private onKeyDown(e: KeyboardEvent): void {
     const targetTag = (e.target as HTMLElement)?.tagName;
-    if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT') {
+    const isInput = targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT';
+
+    // Alt + 方向键是全局视口平移导航手势（issue #106 / 统一交互规范 §4），
+    // 即使当前焦点停在属性面板或顶栏输入框中也必须放行平移，严禁一刀切拦截；
+    // 纯方向键在输入框中保留为光标文本移动，继续由 isInput 拦截。
+    const isAltPan =
+      e.altKey &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      (e.code === 'ArrowUp' || e.code === 'ArrowDown' || e.code === 'ArrowLeft' || e.code === 'ArrowRight');
+
+    if (isInput && !isAltPan) {
       return;
     }
 
@@ -1240,6 +1256,7 @@ private pointer: PointerState = {
     const screenPt = this.getCanvasPoint(e);
     this.lastMouseScreen = screenPt;
     this.isMouseDown = true;
+    this.hasPannedDuringMouseDown = false;
 
     const mode = this.toolModeManager.getMode();
 
@@ -1347,6 +1364,9 @@ private pointer: PointerState = {
     }
 
     if (this.isPanning) {
+      if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+        this.hasPannedDuringMouseDown = true;
+      }
       this.viewport.panBy(deltaX, deltaY);
       this.requestRender();
       return;
@@ -1664,6 +1684,13 @@ private pointer: PointerState = {
 
   private onContextMenu(e: MouseEvent): void {
     e.preventDefault();
+
+    // 如果鼠标右键拖拽期间实际产生过视口平移位移，松手触发的 contextmenu 仅做默认阻止，
+    // 严禁误判为「原地点击右键」去重置工具模式或取消选中！
+    if (this.hasPannedDuringMouseDown) {
+      this.hasPannedDuringMouseDown = false;
+      return;
+    }
 
     // 右键原地点击（非拖动平移）：退出当前模式或取消选中
     if (this.toolModeManager.getMode() !== 'select') {
