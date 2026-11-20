@@ -562,6 +562,21 @@ digitize 用 ink & ~grid_line_mask & roi_mask
     用户看到的是「改了不生效」（实测缺陷：编辑锚点后导出表完全不变）。
     配套两处：导出面板 `btn-wpd-refresh` 手动刷新 + 打开期间由 `onDataChange` 触发
     `refreshOpenExportModal()`，否则面板开着看不到新数。
+22. **项目名称全流程单一事实源与双向贯穿**：顶栏（Toolbar）与导出面板（ExportModal）
+    的项目名称输入框双向同步内存与 `project.setName` RPC；所有导出下载产物（`.tar`, `.csv`,
+    `.xlsx`, `.zip`）动态采用该前缀；工程导入自动解析 `*_project_*.tar` 恢复前缀，杜绝
+    `original.png` 等文件名黑名单退化为 `straditize`；工程包内部 `straditize.json` 持久化 `project_name`。
+23. **柱状图（Bar）单峰中心取数与基线 0 墨迹过滤**：柱状图数字化必须提取水平方波物理正中行
+    （`best_rows[len // 2]`）作为单点几何中心，严禁顶底多行同时取数造成单柱双点；在 0 值（基线）处的
+    像素控制点 100% 滤除，不得在 0 处伪造锚点。
+24. **工程导入去线掩膜无条件确定性重建**：载入已保存工程后，必须按原项目已确认的干扰线
+    （`status == "removed"`）、排除区与笔迹无条件重建派生墨迹掩膜，严禁因像素掩膜未落盘或惰性解耦
+    导致重开工程后横竖干扰线复活。
+25. **组级形态与单位无损继承**：工程载入与新建列时，组形态（`plot_type`）与单位（`unit`）向列无损穿透，
+    禁止列级默认写入 `"area"` 覆盖组形态；R 脚本出图模板必须按列动态下发 `plot.poly`, `plot.bar`,
+    `plot.line`, `plot.symb`，当组单位为 `%` 时自动注入 `style$scale.percent <- TRUE`。
+26. **导出 CSV 换行符全平台收敛为标准 LF**：无论运行在 Windows、Linux 还是 macOS，所有 CSV 导出
+    （单表导出、多 ROI 归档、LiPD 序列化）必须显式指定 `lineterminator="\n"`，杜绝 Windows 平台二次翻译导致 `\r\r\n`。
 
 
 ---
