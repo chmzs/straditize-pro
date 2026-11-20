@@ -178,6 +178,9 @@ def test_group_plot_type_inheritance_and_cleanup_recompose():
 
         sess2 = StraditizeSession()
         sess2.project_load(proj)
+        assert len(sess2.line_candidates) > 0
+        assert any(c.get("status") == "removed" for c in sess2.line_candidates)
+        sess2.apply_line_removal()
         assert sess2.grid_line_mask is not None, "grid_line_mask must be restored"
         assert sess2.grid_line_mask.sum() > 0, "grid_line_mask must contain removed pixels"
 

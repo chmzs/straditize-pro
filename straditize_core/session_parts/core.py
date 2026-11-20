@@ -1667,16 +1667,22 @@ class CoreMixin:
         # 走到 `algorithm_degrid` 抛 ValueError，再被导出侧的保底逻辑吞成一份全 0 的占位 CSV。
         # 读写两个边界都会把非法值收敛成 None 并告警；这里再挡一次，保证任何入口都炸不到取数。
         degrid_strength = getattr(self, "degrid_strength", None)
-        if (
-            getattr(self, "grid_line_mask", None) is None
-            and is_supported_grid_line_strength(degrid_strength)
-            and self._roi_box(roi_id=roi_id) is not None
-        ):
-            self.algorithm_degrid(
-                strength=degrid_strength,
-                corrections=getattr(self, "line_corrections", []),
-                remove_vertical=getattr(self, "degrid_remove_vertical", True),
-            )
+        if getattr(self, "grid_line_mask", None) is None:
+            if (
+                getattr(self, "line_candidates", None)
+                or getattr(self, "line_strokes", None)
+                or getattr(self, "exclusion_regions", None)
+            ):
+                self._rebuild_cleanup_masks_after_restore()
+            elif (
+                is_supported_grid_line_strength(degrid_strength)
+                and self._roi_box(roi_id=roi_id) is not None
+            ):
+                self.algorithm_degrid(
+                    strength=degrid_strength,
+                    corrections=getattr(self, "line_corrections", []),
+                    remove_vertical=getattr(self, "degrid_remove_vertical", True),
+                )
         if getattr(self, "grid_line_mask", None) is not None:
             mask = mask & ~self.grid_line_mask
         return mask & self._roi_mask(roi_id=roi_id)

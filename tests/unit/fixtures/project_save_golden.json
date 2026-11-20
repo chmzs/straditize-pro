@@ -96,7 +96,24 @@
      "id": "col_a",
      "name": "Pinus",
      "plot_type": "area",
-     "points": [],
+     "points": [
+      {
+       "isManual": false,
+       "kind": "peak",
+       "valid_segment": true,
+       "value": 11.5,
+       "x": 11.5,
+       "y": 20
+      },
+      {
+       "isManual": false,
+       "kind": "peak",
+       "valid_segment": true,
+       "value": 12.25,
+       "x": 12.25,
+       "y": 41
+      }
+     ],
      "reader_type": null,
      "roi_id": "roi_1",
      "scale_type": "linear",
@@ -163,7 +180,16 @@
      "id": "col_c",
      "name": "Quercus",
      "plot_type": "area",
-     "points": [],
+     "points": [
+      {
+       "isManual": false,
+       "kind": "peak",
+       "valid_segment": true,
+       "value": 131.0,
+       "x": 131.0,
+       "y": 22
+      }
+     ],
      "reader_type": null,
      "roi_id": "roi_1",
      "scale_type": "linear",
@@ -300,7 +326,7 @@
    },
    "rois": [
     {
-     "columns_stale": true,
+     "columns_stale": false,
      "composition": true,
      "default_group_id": "roi_1_grp1",
      "form_defaults": null,
@@ -490,7 +516,24 @@
      "id": "col_a",
      "name": "Pinus",
      "plot_type": "area",
-     "points": [],
+     "points": [
+      {
+       "isManual": false,
+       "kind": "peak",
+       "valid_segment": true,
+       "value": 11.5,
+       "x": 11.5,
+       "y": 20
+      },
+      {
+       "isManual": false,
+       "kind": "peak",
+       "valid_segment": true,
+       "value": 12.25,
+       "x": 12.25,
+       "y": 41
+      }
+     ],
      "reader_type": null,
      "roi_id": "roi_1",
      "scale_type": "linear",
@@ -557,7 +600,16 @@
      "id": "col_c",
      "name": "Quercus",
      "plot_type": "area",
-     "points": [],
+     "points": [
+      {
+       "isManual": false,
+       "kind": "peak",
+       "valid_segment": true,
+       "value": 131.0,
+       "x": 131.0,
+       "y": 22
+      }
+     ],
      "reader_type": null,
      "roi_id": "roi_1",
      "scale_type": "linear",
@@ -693,7 +745,7 @@
    },
    "rois": [
     {
-     "columns_stale": true,
+     "columns_stale": false,
      "composition": true,
      "default_group_id": "roi_1_grp1",
      "form_defaults": null,
@@ -825,9 +877,9 @@
     "name": "manifest.json"
    },
    {
-    "digest": "759e01db320d",
+    "digest": "d3fbf1618fb2",
     "name": "straditize.json",
-    "size": 7375
+    "size": 7910
    },
    {
     "digest": "36238134d819",

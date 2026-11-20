@@ -483,17 +483,6 @@ class ProjectSessionMixin:
         self._restore_aux_fields(project_data)
         self._restore_age_depth(project_data)
 
-        # 恢复清理几何后的掩膜派生合成（解决重新导入工程后 step4 清理丢失、横线复活问题）
-        if getattr(self, "image", None) is not None:
-            if getattr(self, "foreground_mask", None) is None:
-                self._extract_foreground_from_settings()
-            if (
-                getattr(self, "line_candidates", None)
-                or getattr(self, "line_strokes", None)
-                or getattr(self, "exclusion_regions", None)
-            ):
-                self._rebuild_cleanup_masks_after_restore()
-
         return {
             "success": True,
             "columns_count": len(self.columns),
