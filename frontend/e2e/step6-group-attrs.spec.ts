@@ -56,9 +56,9 @@ test.describe('步骤 6 属性层级', () => {
     expect(groupUpdate?.params?.updates?.plot_type, '载荷必须携带 plot_type=bar').toBe('bar');
 
     // 局部放大（exaggeration）仍是**列**属性：入口留在列属性面板。
-    // 但列属性面板只在步骤 5 与 7 出现（`Inspector.ts:210`）：步骤 6 有自己的组参数
-    // 面板，点列只高亮、不换面板（本 PR 的设计变更），所以先跳到步骤 7 再验列级控件。
-    await gotoStage(page, 7);
+    // 但列属性面板只在步骤 5 出现（`Inspector.ts:226`）：步骤 6 有自己的组参数
+    // 面板，点列只高亮、不换面板（本 PR 的设计变更），所以跳到步骤 5 再验列级控件。
+    await gotoStage(page, 5);
     await page.evaluate(() => {
       const api = (window as unknown as {
         __straditize: { getState: () => any; selectColumn: (id: string) => void };

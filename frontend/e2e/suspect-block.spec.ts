@@ -138,7 +138,7 @@ test.describe('P1 suspect_block 色块列必须在界面上可见', () => {
         window as unknown as { __straditize: { selectColumn: (id: string) => Promise<void> } }
       ).__straditize.selectColumn(id);
     }, col.id);
-    const notice = page.locator('[data-suspect-reason]');
+    const notice = page.locator('.inspector-panel [data-suspect-reason], aside.app-inspector [data-suspect-reason]').first();
     await expect(notice).toBeVisible({ timeout: 20_000 });
     await expect(notice).toHaveAttribute('data-col-id', col.id);
     await expect(notice).toHaveAttribute('data-suspect-reason', col.suspect_block!.reason!);
