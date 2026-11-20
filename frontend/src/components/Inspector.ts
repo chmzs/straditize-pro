@@ -755,6 +755,11 @@ export class Inspector {
         if (res?.success !== true) {
           throw new Error(res?.message || 'algorithm.extractTurningPoints 未返回 success=true');
         }
+        const fresh = await this.callbacks.rpcClient.getDiagramData();
+        const freshCol = fresh.columns?.find((c: any) => c.id === activeCol.id);
+        if (freshCol && freshCol.controlPoints) {
+          activeCol.controlPoints = freshCol.controlPoints;
+        }
         const updated = res.columns_updated ?? [];
         // 结果必须让用户看见：控制点变多/变少都会改曲线形状，静默完成等于让用户猜。
         notify(`已自动提取峰谷：更新 ${updated.length} 列控制点（手工点保留）`);

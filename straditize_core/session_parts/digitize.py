@@ -1274,8 +1274,9 @@ class DigitizeSessionMixin:
                 valid_valleys = [v for v in valleys_idx if p_x[v] > noise_cutoff]
                 detected_rows = set(p_rows[peaks_idx]).union(set(p_rows[valid_valleys]))
 
-            # 全新构建本列控制点：算法点按最新检测生成，严格保留用户手工点 (manual)
-            merged_ctrls: dict[int, float] = {}
+            # 合并控制点：峰谷算法点合并进已有控制点，严格保留原有控制点与用户手工点 (manual)
+            existing_ctrls = self.control_points.get(c_idx, {})
+            merged_ctrls: dict[int, float] = dict(existing_ctrls)
             if detected_rows_map is not None:
                 for r, x_val in detected_rows_map.items():
                     merged_ctrls[int(r)] = float(x_val)

@@ -379,13 +379,13 @@ export class Sidebar {
       <div class="active-column-detail" style="margin-top: 6px; padding: 6px 8px; background: rgba(148,163,184,0.08); border-radius: 4px; border: 1px solid rgba(148,163,184,0.2);">
         ${renderActiveColumnSuspectNotice(col)}
         <div style="display: flex; gap: 4px;">
-          <button type="button" id="btn-col-digitize" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-digitize" data-col-id="${col.id}" style="flex: 1; font-size: 10px; padding: 4px 2px; color: var(--accent-blue); border-color: rgba(2,132,199,0.3); background: rgba(2,132,199,0.06);" title="重新数字化取数此列">
+          <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-digitize" data-col-id="${col.id}" style="flex: 1; font-size: 10px; padding: 4px 2px; color: var(--accent-blue); border-color: rgba(2,132,199,0.3); background: rgba(2,132,199,0.06);" title="重新数字化取数此列">
             重新取数
           </button>
-          <button type="button" id="btn-extract-turning-points" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-turning-points" data-col-id="${col.id}" style="flex: 1; font-size: 10px; padding: 4px 2px; color: var(--accent-violet); border-color: rgba(139,92,246,0.3); background: rgba(139,92,246,0.06);" title="按几何曲线自动提取峰/谷控制点（保留已有手工点）">
+          <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-turning-points" data-col-id="${col.id}" style="flex: 1; font-size: 10px; padding: 4px 2px; color: var(--accent-violet); border-color: rgba(139,92,246,0.3); background: rgba(139,92,246,0.06);" title="按几何曲线自动提取峰/谷控制点（保留已有手工点）">
             提取峰谷
           </button>
-          <button type="button" id="btn-col-delete" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-delete-col" data-col-id="${col.id}" style="font-size: 10px; padding: 4px 6px; color: var(--accent-red); border-color: rgba(220,38,38,0.3); background: rgba(220,38,38,0.04);" title="删除此列">
+          <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-delete-col" data-col-id="${col.id}" style="font-size: 10px; padding: 4px 6px; color: var(--accent-red); border-color: rgba(220,38,38,0.3); background: rgba(220,38,38,0.04);" title="删除此列">
             删除列
           </button>
         </div>
@@ -615,21 +615,21 @@ export class Sidebar {
       if (!taxaId) return;
 
       // 重新取数按钮
-      if (target.closest('#btn-col-digitize')) {
+      if (target.closest('.sidebar-btn-digitize, #btn-col-digitize')) {
         e.stopPropagation();
         this.callbacks.onDigitizeColumn?.(taxaId);
         return;
       }
 
       // 提取峰谷按钮
-      if (target.closest('#btn-extract-turning-points')) {
+      if (target.closest('.sidebar-btn-turning-points, #btn-extract-turning-points')) {
         e.stopPropagation();
         this.callbacks.onExtractTurningPoints?.(taxaId);
         return;
       }
 
       // 删除列按钮（3秒二次确认上膛机制）
-      const delBtn = target.closest('#btn-col-delete') as HTMLButtonElement | null;
+      const delBtn = target.closest('.sidebar-btn-delete-col, #btn-col-delete') as HTMLButtonElement | null;
       if (delBtn) {
         e.stopPropagation();
         const now = Date.now();

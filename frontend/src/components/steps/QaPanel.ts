@@ -366,7 +366,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   });
 
   root.querySelector('#btn-qa-export')?.addEventListener('click', () => {
-    const topbarExportBtn = document.querySelector('#btn-export-csv, #btn-export, [title*="导出"], [title*="Export"]') as HTMLButtonElement | null;
+    const topbarExportBtn = document.querySelector('#btn-export-csv, button#btn-export') as HTMLButtonElement | null;
     if (topbarExportBtn) {
       topbarExportBtn.click();
     } else if (ctx.onOpenDataViewer) {
