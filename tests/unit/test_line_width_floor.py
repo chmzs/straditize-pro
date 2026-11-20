@@ -83,7 +83,11 @@ def _session_with_bands(tmp_path, rows, thickness):
 
 def _horizontal_rows(candidates):
     return sorted(
-        {int(round(float(c.get("at", c.get("y", 0))))) for c in candidates if c.get("kind") == "A"}
+        {
+            int(round(float(c.get("at", c.get("y", 0)))))
+            for c in candidates
+            if c.get("kind") == "A"
+        }
     )
 
 
@@ -113,7 +117,9 @@ def test_four_px_bands_detected_with_auto_width(tmp_path) -> None:
     )
 
     # 反向：把上限压回 3（旧自适应值）⇒ 只能检到 ≤1 条 —— 差异确实来自这个下限
-    strict = session.detect_line_candidates(roi_id="roi_1", line_width_max=3)["candidates"]
+    strict = session.detect_line_candidates(roi_id="roi_1", line_width_max=3)[
+        "candidates"
+    ]
     assert len(_horizontal_rows(strict)) <= 1, (
         f"max_width=3 时不应检出四条（实得 {_horizontal_rows(strict)}）——"
         "若这里也全检出，说明本判据没在测厚度上限"
@@ -123,5 +129,7 @@ def test_four_px_bands_detected_with_auto_width(tmp_path) -> None:
 def test_thick_band_is_not_a_line(tmp_path) -> None:
     """12px 全幅厚带不是区带线：自适应上限（5）必须把它挡住。"""
     session = _session_with_bands(tmp_path, (700,), 12)
-    rows = _horizontal_rows(session.detect_line_candidates(roi_id="roi_1")["candidates"])
+    rows = _horizontal_rows(
+        session.detect_line_candidates(roi_id="roi_1")["candidates"]
+    )
     assert rows == [], f"12px 厚带被当成线：{rows}"

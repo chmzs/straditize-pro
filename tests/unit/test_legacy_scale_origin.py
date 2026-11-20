@@ -15,16 +15,20 @@ rel0 = 0 时 abs_px0 = c_start —— 比真 0 点少一个轴粗。影响：每
 反向验证：把 legacy 分支改回 abs_px0 = c_start + rel0 x (c_end - c_start)，
 第一条断言必须红。
 """
+
 from __future__ import annotations
 
 import pytest
 
-from straditize_core.session_parts.xscale import resolve_column_scale, resolve_axis_stroke
+from straditize_core.session_parts.xscale import (
+    resolve_column_scale,
+    resolve_axis_stroke,
+)
 
 START = 1576.0
 END = 1808.0
 STROKE = 6.0
-SLOPE = 100.0 / (END - START - STROKE)   # 量程 100% 张满绘图区
+SLOPE = 100.0 / (END - START - STROKE)  # 量程 100% 张满绘图区
 
 
 class _SessionStub:
@@ -60,7 +64,12 @@ def _legacy_group():
 
 
 def _slope_group():
-    return {"id": "roi_1_grp1", "unit": "%", "axis_stroke_px": STROKE, "value_per_px": SLOPE}
+    return {
+        "id": "roi_1_grp1",
+        "unit": "%",
+        "axis_stroke_px": STROKE,
+        "value_per_px": SLOPE,
+    }
 
 
 def test_legacy_layout_origin_is_start_plus_axis_stroke():
@@ -68,7 +77,8 @@ def test_legacy_layout_origin_is_start_plus_axis_stroke():
     scale = resolve_column_scale(_SessionStub(_legacy_group()), col, 3)
     expected = START + STROKE
     assert scale.abs_px0 == pytest.approx(expected), (
-        "legacy 分支的 0 点必须是 列左缘 + 轴粗 = %.1f，实得 %.1f" % (expected, scale.abs_px0)
+        "legacy 分支的 0 点必须是 列左缘 + 轴粗 = %.1f，实得 %.1f"
+        % (expected, scale.abs_px0)
     )
     assert resolve_axis_stroke(col, _legacy_group()) == pytest.approx(STROKE)
     # 另一端仍在列右界（rel = 1 ⇒ 绘图区右端 = c_end）
@@ -91,7 +101,9 @@ def test_legacy_and_group_slope_agree_within_tolerance():
 
 def test_xticks_origin_at_left_edge_is_flagged_suspect():
     """写入方若把列左缘写进 x_ticks[0].px，必须打 origin_suspect（不静默偏大）。"""
-    col_ok = _col(x_ticks=[{"px": START + STROKE, "value": 0}, {"px": END, "value": 100}])
+    col_ok = _col(
+        x_ticks=[{"px": START + STROKE, "value": 0}, {"px": END, "value": 100}]
+    )
     col_bad = _col(x_ticks=[{"px": START, "value": 0}, {"px": END, "value": 100}])
     # 组斜率优先于 x_ticks，所以这条用例用"只有组轴粗、没有组斜率"的组，才会走 x_ticks 分支。
     plain_group = {"id": "roi_1_grp1", "unit": "%", "axis_stroke_px": STROKE}

@@ -104,7 +104,9 @@ def _session() -> StraditizeSession:
             for row in DENSE_ROWS
         ]
     session.control_points = {
-        index: {row: next(p["x"] for p in pts if p["row"] == row) for row in (400, 500, 599)}
+        index: {
+            row: next(p["x"] for p in pts if p["row"] == row) for row in (400, 500, 599)
+        }
         for index, pts in session.column_points.items()
     }
     return session
@@ -247,4 +249,7 @@ def test_zero_point_is_start_plus_axis_stroke() -> None:
             session.columns[index], group
         )
         assert column["scaleCalib"]["originX"] == expected
-        assert resolve_column_scale(session, session.columns[index], index).abs_px0 == expected
+        assert (
+            resolve_column_scale(session, session.columns[index], index).abs_px0
+            == expected
+        )

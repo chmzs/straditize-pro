@@ -95,7 +95,9 @@ def test_every_column_carries_a_plot_type_key() -> None:
 def test_template_wires_vectors_for_every_call() -> None:
     # 四处接线：段内首段 / 段内后续 / 不分段 / 向量构造
     assert STRAT_PLOT_SCRIPT.count("plot.poly = poly_v") >= 3
-    assert "symb_v[[.ptype_col]] <- identical(.ptype_val, 'symbol')" in STRAT_PLOT_SCRIPT
+    assert (
+        "symb_v[[.ptype_col]] <- identical(.ptype_val, 'symbol')" in STRAT_PLOT_SCRIPT
+    )
 
 
 @pytest.mark.skipif(not _has_rioja(), reason="本机没有 R + rioja")

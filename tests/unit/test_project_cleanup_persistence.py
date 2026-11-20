@@ -44,7 +44,12 @@ STROKES = [
     {"mode": "erase", "radius": 6, "points": [[200, 640], [230, 660]]},
     {"mode": "restore", "radius": 4, "points": [[300, 700], [330, 720]]},
 ]
-STAT_KEYS = ("exclusion_area_pixels", "exclusion_pixels", "manual_erase_pixels", "manual_restore_pixels")
+STAT_KEYS = (
+    "exclusion_area_pixels",
+    "exclusion_pixels",
+    "manual_erase_pixels",
+    "manual_restore_pixels",
+)
 
 
 def _rpc(dispatcher, method: str, **params) -> dict:
@@ -196,7 +201,10 @@ def test_old_package_without_cleanup_keys_stays_empty(tmp_path: Path) -> None:
     assert session.exclusion_regions, "前置：A 包必须带排除区"
 
     _ok(_rpc(dispatcher, "project.new"), "清空项目（不复位，验证不串值）")
-    _ok(_rpc(dispatcher, "project.load", project_data=str(pack_b)), "载入无清理劳动的老包")
+    _ok(
+        _rpc(dispatcher, "project.load", project_data=str(pack_b)),
+        "载入无清理劳动的老包",
+    )
 
     assert session.exclusion_regions == [], (
         f"老包没有排除区，载入后必须为空，实际 {session.exclusion_regions!r}"

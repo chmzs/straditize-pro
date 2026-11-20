@@ -2,6 +2,7 @@
 
 Pure Python/NumPy/SciPy/pandas/Pillow/scikit-image pipeline without GUI or Matplotlib.
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -49,11 +50,13 @@ class StraditizePipeline:
         self.raw_image = load_image(source)
         return self
 
-    def preprocess(self,
-                   threshold: float = 230 * 3,
-                   extraction_mode: str = 'standard',
-                   segmentation_mode: str = 'auto',
-                   target_colors: Any = None) -> StraditizePipeline:
+    def preprocess(
+        self,
+        threshold: float = 230 * 3,
+        extraction_mode: str = "standard",
+        segmentation_mode: str = "auto",
+        target_colors: Any = None,
+    ) -> StraditizePipeline:
         """Extract foreground and convert the loaded image to binary array."""
         if self.raw_image is None:
             raise ValueError("No image loaded. Call load() first.")
@@ -62,14 +65,17 @@ class StraditizePipeline:
             threshold=threshold,
             extraction_mode=extraction_mode,
             segmentation_mode=segmentation_mode,
-            target_colors=target_colors)
+            target_colors=target_colors,
+        )
         return self
 
-    def detect_columns(self,
-                       threshold: float = 0.1,
-                       min_col_width_ratio: float = 0.01,
-                       compact: bool = False,
-                       column_names: Sequence[str] | None = None) -> StraditizePipeline:
+    def detect_columns(
+        self,
+        threshold: float = 0.1,
+        min_col_width_ratio: float = 0.01,
+        compact: bool = False,
+        column_names: Sequence[str] | None = None,
+    ) -> StraditizePipeline:
         """Detect column bounds across the binary image."""
         if self.binary is None:
             raise ValueError("Binary image not available. Call preprocess() first.")
@@ -77,35 +83,44 @@ class StraditizePipeline:
             self.binary,
             threshold=threshold,
             min_col_width_ratio=min_col_width_ratio,
-            compact=compact)
+            compact=compact,
+        )
 
         n_cols = len(self.column_bounds)
         if column_names is not None:
             if len(column_names) != n_cols:
-                raise ValueError(f"Length of column_names ({len(column_names)}) != detected columns ({n_cols})")
+                raise ValueError(
+                    f"Length of column_names ({len(column_names)}) != detected columns ({n_cols})"
+                )
             self.column_names = list(column_names)
         else:
             self.column_names = [f"col{i + 1:02d}" for i in range(n_cols)]
         return self
 
-    def set_column_bounds(self,
-                          bounds: Sequence[tuple[int, int]],
-                          column_names: Sequence[str] | None = None) -> StraditizePipeline:
+    def set_column_bounds(
+        self,
+        bounds: Sequence[tuple[int, int]],
+        column_names: Sequence[str] | None = None,
+    ) -> StraditizePipeline:
         """Explicitly override column bounds."""
         self.column_bounds = [(int(s), int(e)) for s, e in bounds]
         n_cols = len(self.column_bounds)
         if column_names is not None:
             if len(column_names) != n_cols:
-                raise ValueError(f"Length of column_names ({len(column_names)}) != bounds ({n_cols})")
+                raise ValueError(
+                    f"Length of column_names ({len(column_names)}) != bounds ({n_cols})"
+                )
             self.column_names = list(column_names)
         else:
             self.column_names = [f"col{i + 1:02d}" for i in range(n_cols)]
         return self
 
-    def digitize(self,
-                 method: str | Sequence[str] = 'area',
-                 hline_locs: Sequence[int] | None = None,
-                 **kwargs: Any) -> StraditizePipeline:
+    def digitize(
+        self,
+        method: str | Sequence[str] = "area",
+        hline_locs: Sequence[int] | None = None,
+        **kwargs: Any,
+    ) -> StraditizePipeline:
         """Digitize all columns into a pixel-scale DataFrame."""
         if self.binary is None:
             raise ValueError("Binary image not available. Call preprocess() first.")
@@ -118,27 +133,33 @@ class StraditizePipeline:
             method=method,
             column_names=self.column_names,
             hline_locs=hline_locs,
-            **kwargs)
+            **kwargs,
+        )
         # Reset control points cache on re-digitization
         self._control_points.clear()
         return self
 
-    def calibrate(self,
-                  y_px: Sequence[float],
-                  y_data: Sequence[float],
-                  x_scale: float | dict[str, float] | None = None,
-                  x_calibration: LinearCalibration | dict[str, LinearCalibration] | None = None,
-                  y_name: str = "Depth") -> StraditizePipeline:
+    def calibrate(
+        self,
+        y_px: Sequence[float],
+        y_data: Sequence[float],
+        x_scale: float | dict[str, float] | None = None,
+        x_calibration: LinearCalibration | dict[str, LinearCalibration] | None = None,
+        y_name: str = "Depth",
+    ) -> StraditizePipeline:
         """Set up scientific coordinate calibration."""
         y_cal = LinearCalibration(y_px, y_data, name=y_name)
         self.calibration = StratigraphicCalibration(
             y_calibration=y_cal,
             x_scale=x_scale,
             x_calibration=x_calibration,
-            y_name=y_name)
+            y_name=y_name,
+        )
         return self
 
-    def set_calibration(self, calibration: StratigraphicCalibration) -> StraditizePipeline:
+    def set_calibration(
+        self, calibration: StratigraphicCalibration
+    ) -> StraditizePipeline:
         """Directly set a StratigraphicCalibration object."""
         self.calibration = calibration
         return self
@@ -146,36 +167,46 @@ class StraditizePipeline:
     def get_dataframe(self, calibrated: bool = True) -> pd.DataFrame:
         """Return the digitized data as a pandas DataFrame."""
         if self.df_pixels is None:
-            raise ValueError("Digitization has not been performed yet. Call digitize() first.")
+            raise ValueError(
+                "Digitization has not been performed yet. Call digitize() first."
+            )
         if calibrated:
             if self.calibration is None:
-                raise ValueError("Calibration not set. Call calibrate() or pass calibrated=False.")
+                raise ValueError(
+                    "Calibration not set. Call calibrate() or pass calibrated=False."
+                )
             return self.calibration.transform_dataframe(self.df_pixels)
         return self.df_pixels.copy()
 
-    def get_control_points(self,
-                           col: str,
-                           epsilon: float = 1.0,
-                           max_points: int = 24) -> tuple[np.ndarray, np.ndarray]:
+    def get_control_points(
+        self, col: str, epsilon: float = 1.0, max_points: int = 24
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Extract or retrieve sparse control points for a specific column."""
         if self.df_pixels is None:
             raise ValueError("No digitized data available. Call digitize() first.")
         if col not in self.df_pixels.columns:
-            raise KeyError(f"Column '{col}' not found in digitized columns: {list(self.df_pixels.columns)}")
+            raise KeyError(
+                f"Column '{col}' not found in digitized columns: {list(self.df_pixels.columns)}"
+            )
 
         if col not in self._control_points:
             series = self.df_pixels[col]
             self._control_points[col] = ControlPointSet.from_curve(
-                series, epsilon=epsilon, max_points=max_points)
+                series, epsilon=epsilon, max_points=max_points
+            )
         cpset = self._control_points[col]
-        return np.asarray(cpset.rows, dtype=float), np.asarray(cpset.values, dtype=float)
+        return np.asarray(cpset.rows, dtype=float), np.asarray(
+            cpset.values, dtype=float
+        )
 
-    def update_control_point(self,
-                             col: str,
-                             row: float,
-                             value: float,
-                             rebuild: bool = True,
-                             rebuild_method: str = 'linear') -> StraditizePipeline:
+    def update_control_point(
+        self,
+        col: str,
+        row: float,
+        value: float,
+        rebuild: bool = True,
+        rebuild_method: str = "linear",
+    ) -> StraditizePipeline:
         """Add or update a control point for a column, optionally rebuilding the column curve."""
         if self.df_pixels is None:
             raise ValueError("No digitized data available.")
@@ -184,16 +215,20 @@ class StraditizePipeline:
         cpset = self._control_points[col]
         cpset.add_or_update(row, value)
         if rebuild:
-            new_curve = cpset.reconstruct(self.df_pixels.index.values, method=rebuild_method)
+            new_curve = cpset.reconstruct(
+                self.df_pixels.index.values, method=rebuild_method
+            )
             self.df_pixels[col] = new_curve
         return self
 
-    def remove_control_point(self,
-                             col: str,
-                             row: float,
-                             tol: float = 1.0,
-                             rebuild: bool = True,
-                             rebuild_method: str = 'linear') -> bool:
+    def remove_control_point(
+        self,
+        col: str,
+        row: float,
+        tol: float = 1.0,
+        rebuild: bool = True,
+        rebuild_method: str = "linear",
+    ) -> bool:
         """Remove a control point closest to row, optionally rebuilding the column curve."""
         if self.df_pixels is None:
             raise ValueError("No digitized data available.")
@@ -201,6 +236,8 @@ class StraditizePipeline:
         cpset = self._control_points[col]
         removed = cpset.remove_at(row, tol=tol)
         if removed and rebuild:
-            new_curve = cpset.reconstruct(self.df_pixels.index.values, method=rebuild_method)
+            new_curve = cpset.reconstruct(
+                self.df_pixels.index.values, method=rebuild_method
+            )
             self.df_pixels[col] = new_curve
         return removed

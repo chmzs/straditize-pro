@@ -3,6 +3,7 @@
 
 Uses authentic Bacon and Bchron age-depth plots from real scientific literature.
 """
+
 from pathlib import Path
 import unittest
 import numpy as np
@@ -23,8 +24,12 @@ class AgeDepthModelRecognitionTest(unittest.TestCase):
     def setUp(self):
         self.bacon_img_path = AGE_MODELS_DIR / "bacon_szek.png"
         self.bchron_img_path = AGE_MODELS_DIR / "bchron_stepped.png"
-        self.assertTrue(self.bacon_img_path.exists(), "Missing bacon_szek.png test figure")
-        self.assertTrue(self.bchron_img_path.exists(), "Missing bchron_stepped.png test figure")
+        self.assertTrue(
+            self.bacon_img_path.exists(), "Missing bacon_szek.png test figure"
+        )
+        self.assertTrue(
+            self.bchron_img_path.exists(), "Missing bchron_stepped.png test figure"
+        )
 
     def test_01_bacon_szek_model_extraction(self):
         """Verify feature line and 95% confidence envelope extraction from Bacon szek plot."""
@@ -137,10 +142,12 @@ class AgeDepthModelRecognitionTest(unittest.TestCase):
             {"id": "C14_3", "age": 4500, "error": 60, "depth": 140.0, "thickness": 2},
         ]
         sample_depths = [10.0, 25.0, 50.0, 75.0, 100.0]
-        r_code = generate_bacon_script("TestLake", dates, thickness=5, cc=1, sample_depths=sample_depths)
+        r_code = generate_bacon_script(
+            "TestLake", dates, thickness=5, cc=1, sample_depths=sample_depths
+        )
 
         self.assertIn("library(rbacon)", r_code)
-        self.assertIn("Bacon(\"TestLake\"", r_code)
+        self.assertIn('Bacon("TestLake"', r_code)
         self.assertIn("TestLake_depths.txt", r_code)
         self.assertIn("C14_1,850,30,25.0,1", r_code)
 
@@ -184,7 +191,9 @@ class TestSedimentationRateEstimate(unittest.TestCase):
         res = model.estimate_sedimentation_rate(depths)
         se = [v for v in res["sed_rate_se"] if v is not None]
         self.assertEqual(len(se), depths.size)
-        self.assertTrue(all(v > 0 for v in se), "a rate without an error bar is unusable")
+        self.assertTrue(
+            all(v > 0 for v in se), "a rate without an error bar is unusable"
+        )
         rel = np.asarray(se) / np.asarray([v for v in res["sed_rate"] if v is not None])
         # The synthetic core carries a +/-40 yr envelope, so the envelope-derived relative
         # standard error bottoms out near 57/40/25 = 5.7% no matter how wide the window gets.
@@ -198,7 +207,8 @@ class TestSedimentationRateEstimate(unittest.TestCase):
         ols = [v for v in res["sed_rate_se_ols"] if v is not None]
         self.assertGreater(len(ols), 0)
         self.assertGreater(
-            float(np.median(se)), float(np.median(ols)),
+            float(np.median(se)),
+            float(np.median(ols)),
             "the reported error must not be the optimistic OLS-only figure",
         )
 
@@ -257,14 +267,15 @@ class TestSedimentationRateEstimate(unittest.TestCase):
         """
         depths = np.arange(0.0, 201.0, 5.0)
         ages = depths * 25.0
-        ages[20:] -= 300.0          # offset, but still rising at 25 yr/cm
+        ages[20:] -= 300.0  # offset, but still rising at 25 yr/cm
         model = AgeDepthModel(
             depths=depths, ages=ages, age_min=ages - 40, age_max=ages + 40
         )
         res = model.estimate_sedimentation_rate(depths)
         n_ok = sum(1 for st in res["status"] if st == "ok")
         self.assertGreater(
-            n_ok, len(depths) // 2,
+            n_ok,
+            len(depths) // 2,
             "an offset horizon sequence still has a positive slope and a valid rate",
         )
 

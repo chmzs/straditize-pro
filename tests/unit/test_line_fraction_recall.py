@@ -106,7 +106,11 @@ def _canvas(rows, coverage: float, thickness: int = 1) -> np.ndarray:
 
 def _rows(candidates) -> list[int]:
     return sorted(
-        {int(round(float(c.get("at", c.get("y", 0))))) for c in candidates if c.get("kind") == "A"}
+        {
+            int(round(float(c.get("at", c.get("y", 0)))))
+            for c in candidates
+            if c.get("kind") == "A"
+        }
     )
 
 
@@ -122,16 +126,22 @@ def test_field_coverage_is_below_the_old_gate() -> None:
 def test_holey_thin_line_is_detected_and_old_gate_is_proven_red() -> None:
     ink = _canvas(FIELD_ROWS, FIELD_COVERAGE)
     detected = _rows(detect_line_candidates(ink, _roi()))
-    assert detected == list(FIELD_ROWS), f"1px 区带线（墨迹覆盖 0.69）应检出，实得 {detected}"
+    assert detected == list(FIELD_ROWS), (
+        f"1px 区带线（墨迹覆盖 0.69）应检出，实得 {detected}"
+    )
 
     # 反向：把判据退回旧值，同样两条线必须消失 —— 否则本判据没在测这个比例
     strict = _rows(detect_line_candidates(ink, _roi(), line_fraction_h=0.75))
-    assert strict == [], f"line_fraction_h=0.75 下不该检出（实得 {strict}）——判据失去判别力"
+    assert strict == [], (
+        f"line_fraction_h=0.75 下不该检出（实得 {strict}）——判据失去判别力"
+    )
 
 
 def test_sparse_row_is_still_rejected() -> None:
     ink = _canvas((200,), 0.55)
-    assert _rows(detect_line_candidates(ink, _roi())) == [], "覆盖率 0.55 的行不该算横线"
+    assert _rows(detect_line_candidates(ink, _roi())) == [], (
+        "覆盖率 0.55 的行不该算横线"
+    )
 
 
 def test_holey_thick_band_is_still_rejected() -> None:
@@ -146,7 +156,9 @@ def test_full_width_line_still_detected() -> None:
 
 def test_session_and_detector_share_one_default() -> None:
     """传递链只许有一处定义：前端走的是 session 的缺省值。"""
-    default = inspect.signature(StraditizeSession.detect_line_candidates).parameters[
-        "line_fraction_h"
-    ].default
+    default = (
+        inspect.signature(StraditizeSession.detect_line_candidates)
+        .parameters["line_fraction_h"]
+        .default
+    )
     assert default is DEFAULT_LINE_FRACTION_H

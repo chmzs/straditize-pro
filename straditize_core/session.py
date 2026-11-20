@@ -125,6 +125,7 @@ class StraditizeSession(
         # ``data_ylim`` -- the ROI is a digitising region, not a timescale.
         self.is_calibrated: bool = False
         self.y_scale: dict[str, float] | None = None  # slope, intercept
+        self.y_marks: list[dict[str, float]] | None = None
         self.x_scales: dict[int, dict[str, float]] = {}  # col_index -> slope, intercept
         self.depth_calib: dict[str, Any] | None = None
         self.depth_unit: str = "cm"

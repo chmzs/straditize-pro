@@ -27,12 +27,35 @@ from straditize_core.session import StraditizeSession
 
 RIOJAPLOT = os.path.join("tests", "data", "figures", "riojaplot")
 CURVE_IMAGE = os.path.join(RIOJAPLOT, "pollen_curves_riojaplot.png")
-POLLEN_GOLDEN = os.path.join("tests", "data", "figures", "bench", "golden", "abernethy_pollen.json")
+POLLEN_GOLDEN = os.path.join(
+    "tests", "data", "figures", "bench", "golden", "abernethy_pollen.json"
+)
 
 #: Panel left axes measured from the pixels (identical on all three pollen styles;
 #: see ``docs/findings/bench-pollen.md`` §1).
-SPINES = [112, 213, 332, 345, 359, 378, 423, 474, 525, 544, 601, 652, 691, 704,
-          717, 812, 825, 839, 896, 909, 929]
+SPINES = [
+    112,
+    213,
+    332,
+    345,
+    359,
+    378,
+    423,
+    474,
+    525,
+    544,
+    601,
+    652,
+    691,
+    704,
+    717,
+    812,
+    825,
+    839,
+    896,
+    909,
+    929,
+]
 
 #: Row of each printed depth tick on the bar/curve layouts (depth 300 -> row 82,
 #: 540 -> row 543; the y axis is linear in age, not in depth).
@@ -70,6 +93,7 @@ def _row_for_depth(depth: float) -> int:
 
 # --- P-01: a close pair of candidates is resolved by vertical coverage ---------
 
+
 def test_axis_beats_curve_first_ink_within_the_minimum_column_width():
     """Candidate 20 is the panel axis (ink in every row); candidate 28 only holds
     the curve's first ink (20 % of rows). They are 8 px apart, i.e. closer than
@@ -78,10 +102,10 @@ def test_axis_beats_curve_first_ink_within_the_minimum_column_width():
     the right — the whole P-01 defect.
     """
     binary = np.zeros((100, 1000), dtype=bool)
-    binary[0, 10] = True            # stray speck, keeps x=20 out of the first run
-    binary[:, 20] = True            # panel axis: 100/100 rows
-    binary[10:30, 28:31] = True     # curve's first ink: 20/100 rows, 8 px to the right
-    binary[:, 500] = True           # next panel's axis
+    binary[0, 10] = True  # stray speck, keeps x=20 out of the first run
+    binary[:, 20] = True  # panel axis: 100/100 rows
+    binary[10:30, 28:31] = True  # curve's first ink: 20/100 rows, 8 px to the right
+    binary[:, 500] = True  # next panel's axis
 
     starts = detect_column_starts(binary, threshold=0.10, min_col_width_ratio=0.01)
 
@@ -119,15 +143,20 @@ def test_curve_style_three_columns_within_five_percent_points():
     targets = {9: 5.00, 10: 5.00, 16: 5.00}  # Empetrum, Gramineae, Ononis-type
     measured = {}
     for index, limit in targets.items():
-        column = min(range(len(columns)),
-                     key=lambda k: abs(columns[k]["start"] - SPINES[index]))
+        column = min(
+            range(len(columns)), key=lambda k: abs(columns[k]["start"] - SPINES[index])
+        )
         session.calibrate_column_xticks(
             column,
-            ticks=[{"px": SPINES[index], "value": 0.0},
-                   {"px": SPINES[index + 1], "value": _axis_max(taxa[index])}],
+            ticks=[
+                {"px": SPINES[index], "value": 0.0},
+                {"px": SPINES[index + 1], "value": _axis_max(taxa[index])},
+            ],
         )
-        read = {int(p["row"]): float(p["x"])
-                for p in session.digitize(column, "area")["points"]}
+        read = {
+            int(p["row"]): float(p["x"])
+            for p in session.digitize(column, "area")["points"]
+        }
         errors = []
         for depth, truth in zip(depths, taxa[index]["values"]):
             if truth is None:
@@ -135,9 +164,11 @@ def test_curve_style_three_columns_within_five_percent_points():
             row = _row_for_depth(depth)
             if row not in read:
                 continue
-            value = ((read[row] - SPINES[index])
-                     / (SPINES[index + 1] - SPINES[index])
-                     * _axis_max(taxa[index]))
+            value = (
+                (read[row] - SPINES[index])
+                / (SPINES[index + 1] - SPINES[index])
+                * _axis_max(taxa[index])
+            )
             errors.append(abs(value - float(truth)))
         measured[taxa[index]["name"]] = float(np.mean(errors))
         assert measured[taxa[index]["name"]] <= limit, measured
@@ -145,12 +176,13 @@ def test_curve_style_three_columns_within_five_percent_points():
 
 # --- P-02: the panel's own Y axis is not data --------------------------------
 
+
 def test_panel_axis_stroke_is_not_read_as_the_curve():
     """A 1-px axis that spans the band must be ignored; the row's only data ink
     is the curve at offsets 40..43, so the reading is 44 (= 43 + 1 px width)."""
     band = np.zeros((100, 60), dtype=bool)
-    band[:, 0] = True          # axis: 100/100 rows
-    band[50, 40:44] = True     # the row's only data ink
+    band[:, 0] = True  # axis: 100/100 rows
+    band[50, 40:44] = True  # the row's only data ink
 
     profile = trace_area_profile(band)
 
@@ -168,8 +200,9 @@ def test_empetrum_row_502_is_read_off_the_axis():
     session.columns[column]["start"] = 544.0
     session.columns[column]["end"] = 601.0
 
-    read = {int(p["row"]): float(p["x"])
-            for p in session.digitize(column, "area")["points"]}
+    read = {
+        int(p["row"]): float(p["x"]) for p in session.digitize(column, "area")["points"]
+    }
 
     assert 586.0 <= read[502] <= 590.0, read[502]
 
@@ -187,17 +220,21 @@ def test_empetrum_true_bounds_within_two_and_a_half_percent_points():
     depths = [float(d) for d in golden["depth_cm"]]
 
     index = 9  # Empetrum
-    column = next(k for k, c in enumerate(columns)
-                  if abs(c["start"] - SPINES[index]) <= 2)
+    column = next(
+        k for k, c in enumerate(columns) if abs(c["start"] - SPINES[index]) <= 2
+    )
     session.columns[column]["start"] = float(SPINES[index])
     session.columns[column]["end"] = float(SPINES[index + 1])
     session.calibrate_column_xticks(
         column,
-        ticks=[{"px": SPINES[index], "value": 0.0},
-               {"px": SPINES[index + 1], "value": _axis_max(taxes[index])}],
+        ticks=[
+            {"px": SPINES[index], "value": 0.0},
+            {"px": SPINES[index + 1], "value": _axis_max(taxes[index])},
+        ],
     )
-    read = {int(p["row"]): float(p["x"])
-            for p in session.digitize(column, "area")["points"]}
+    read = {
+        int(p["row"]): float(p["x"]) for p in session.digitize(column, "area")["points"]
+    }
 
     errors = []
     for depth, truth in zip(depths, taxes[index]["values"]):
@@ -206,9 +243,11 @@ def test_empetrum_true_bounds_within_two_and_a_half_percent_points():
         row = _row_for_depth(depth)
         if row not in read:
             continue
-        value = ((read[row] - SPINES[index])
-                 / (SPINES[index + 1] - SPINES[index])
-                 * _axis_max(taxes[index]))
+        value = (
+            (read[row] - SPINES[index])
+            / (SPINES[index + 1] - SPINES[index])
+            * _axis_max(taxes[index])
+        )
         errors.append(abs(value - float(truth)))
 
     assert float(np.mean(errors)) <= 2.50, float(np.mean(errors))

@@ -19,7 +19,10 @@ import pytest
 
 from straditize_core.protocol import JsonRpcError
 from straditize_core.session import StraditizeSession
-from straditize_core.session_parts.xscale import resolve_axis_stroke, resolve_column_scale
+from straditize_core.session_parts.xscale import (
+    resolve_axis_stroke,
+    resolve_column_scale,
+)
 
 
 def test_roi_create_initializes_default_group() -> None:
@@ -200,12 +203,20 @@ def test_multi_roi_project_save_and_load_round_trip() -> None:
     and loads it back into a clean session, asserting that all structures survive intact.
     """
     session = StraditizeSession()
-    r1 = session.roi_create(name="pollen", x0=100, x1=500, y0=500, y1=1000, composition=True)["roi"]
-    r2 = session.roi_create(name="charcoal", x0=600, x1=900, y0=500, y1=1000, composition=False)["roi"]
+    r1 = session.roi_create(
+        name="pollen", x0=100, x1=500, y0=500, y1=1000, composition=True
+    )["roi"]
+    r2 = session.roi_create(
+        name="charcoal", x0=600, x1=900, y0=500, y1=1000, composition=False
+    )["roi"]
 
     # Customize groups
-    grp_p = session.roi_group_create(r1["id"], name="花粉-百分比", unit="%", plot_type="area")["group"]
-    grp_c = session.roi_group_create(r2["id"], name="炭屑-浓度", unit="grains/cm³", plot_type="bar")["group"]
+    grp_p = session.roi_group_create(
+        r1["id"], name="花粉-百分比", unit="%", plot_type="area"
+    )["group"]
+    grp_c = session.roi_group_create(
+        r2["id"], name="炭屑-浓度", unit="grains/cm³", plot_type="bar"
+    )["group"]
     gr_id = grp_c["id"]
 
     session.columns = [
@@ -343,7 +354,10 @@ def test_full_portable_tar_archive_round_trips_age_depth_and_metadata(
     session.metadata_update(
         {
             "site": {"site_name": "Lake Gahai", "collection_date": "2008-05"},
-            "technical": {"investigators": "Jiawu Zhang", "affiliation": "Lanzhou Univ"},
+            "technical": {
+                "investigators": "Jiawu Zhang",
+                "affiliation": "Lanzhou Univ",
+            },
         }
     )
     session.load_age_depth_diagram(sample_key="bacon")
@@ -372,4 +386,3 @@ def test_full_portable_tar_archive_round_trips_age_depth_and_metadata(
     assert peer.paper_metadata["site"]["collection_date"] == "2008-05"
     assert len(peer.samples) == 1
     assert len(peer.ensemble_tables) >= 1
-

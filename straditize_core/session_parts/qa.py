@@ -43,7 +43,6 @@ def _explicit_axis_stroke(
     return None, "unset"
 
 
-
 def _is_percent_unit(unit: Any) -> bool:
     """百分比单位判定：**唯一实现在 `session_parts/export.py::is_percent_unit`**，
     这里在函数内转发（模块级 import 会与 export 形成环：export 也 import xscale/agedepth）。"""
@@ -301,9 +300,7 @@ class QaMixin:
                 # 0 点落在轴线带内 = 0 点被人为写偏（`_scale_from_ticks` 的判据）。
                 # 盲区旗标拿它当分母，这种列整列标 skipped，原因见 `qa.py`。
                 "origin_suspect": bool(scale.origin_suspect),
-                "right_px": (
-                    float(right_raw) if right_raw is not None else None
-                ),
+                "right_px": (float(right_raw) if right_raw is not None else None),
                 "axis_px": axis_px,
                 "plot_type": scale.plot_type,
                 "exaggeration_mult": scale.exaggeration_mult,

@@ -42,7 +42,9 @@ TICK_VAL = 100.0
 # ---------------------------------------------------------------------------
 
 
-def _group(exaggeration_mult: float | None, value_per_px: float | None = None) -> dict[str, Any]:
+def _group(
+    exaggeration_mult: float | None, value_per_px: float | None = None
+) -> dict[str, Any]:
     group: dict[str, Any] = {
         "id": GRP_ID,
         "name": "木本组",
@@ -116,7 +118,9 @@ def _column(
 def _read_at_full_scale(session: StraditizeSession, col: dict[str, Any]) -> float:
     """读"图上满刻度"那一点：`px_to_value` 的唯一出口，含 ÷倍率。"""
     scale = resolve_column_scale(session, col)
-    return scale.px_to_value(TICK_PX, baseline_px=scale.abs_px0, require_calibrated=True)
+    return scale.px_to_value(
+        TICK_PX, baseline_px=scale.abs_px0, require_calibrated=True
+    )
 
 
 PATHS = ("x_ticks", "group_slope")
@@ -148,7 +152,10 @@ def test_group_mult_resolves_and_divides(path: str) -> None:
     expected = round(total / 5.0, 4)
     assert _read_at_full_scale(session, col) == pytest.approx(expected, abs=1e-9)
     # 判别力自证：把倍率当 1 算，读数必须不同（否则这条判据测不到除法）
-    assert _read_at_full_scale(session, col) != pytest.approx(round(total, 4)) or total == 0
+    assert (
+        _read_at_full_scale(session, col) != pytest.approx(round(total, 4))
+        or total == 0
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +179,9 @@ def test_group_wins_over_column_on_both_paths(path: str) -> None:
     )
 
     total = TICK_VAL if path == "x_ticks" else GROUP_SLOPE * (TICK_PX - scale.abs_px0)
-    assert _read_at_full_scale(session, col) == pytest.approx(round(total / 5.0, 4), abs=1e-9)
+    assert _read_at_full_scale(session, col) == pytest.approx(
+        round(total / 5.0, 4), abs=1e-9
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +199,9 @@ def test_column_mult_still_applies_when_group_is_empty(path: str) -> None:
     assert scale.exaggeration_mult == 3.0
 
     total = TICK_VAL if path == "x_ticks" else GROUP_SLOPE * (TICK_PX - scale.abs_px0)
-    assert _read_at_full_scale(session, col) == pytest.approx(round(total / 3.0, 4), abs=1e-9)
+    assert _read_at_full_scale(session, col) == pytest.approx(
+        round(total / 3.0, 4), abs=1e-9
+    )
 
 
 @pytest.mark.parametrize("raw", [None, 0, 1, 1.0, "abc", float("nan")])
@@ -311,9 +322,15 @@ def test_load_conflict_takes_mode_and_keeps_other_with_warning(
     group = session.rois[0]["x_groups"][0]
     assert group["exaggeration_mult"] == 5.0
     assert session.columns[0].get("exaggeration_mult") is None, "被采纳的那列要清空"
-    assert session.columns[1]["exaggeration_mult"] == 3.0, "未采纳的列级值必须保留（不静默丢弃）"
+    assert session.columns[1]["exaggeration_mult"] == 3.0, (
+        "未采纳的列级值必须保留（不静默丢弃）"
+    )
 
-    warnings = [r for r in caplog.records if r.levelno == logging.WARNING and GRP_ID in r.getMessage()]
+    warnings = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and GRP_ID in r.getMessage()
+    ]
     assert warnings, "冲突必须留下 warning，否则用户永远不知道自己的 3 不生效"
     assert "3" in warnings[0].getMessage()
 

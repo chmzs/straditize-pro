@@ -676,9 +676,9 @@ def test_invalid_scale_type_is_rejected_for_roi_groups() -> None:
     with pytest.raises(JsonRpcError) as create_err:
         session.roi_group_create(roi_id, name="g", scale_type="sqrt")
     assert create_err.value.code == INVALID_PARAMS
-    assert not [g for g in session.rois[0].get("x_groups", []) if g.get("name") == "g"], (
-        "非法 scale_type 仍然建出了组"
-    )
+    assert not [
+        g for g in session.rois[0].get("x_groups", []) if g.get("name") == "g"
+    ], "非法 scale_type 仍然建出了组"
 
     created = session.roi_group_create(roi_id, name="ok", scale_type=" LOG ")
     assert created["group"]["scale_type"] == "log"
@@ -771,8 +771,7 @@ def test_legacy_backfill_is_idempotent_across_save_and_reload() -> None:
 
     resaved = second.project_save(format="json")["data"]
     assert (
-        resaved["line_removal"]["corrections"]
-        == saved["line_removal"]["corrections"]
+        resaved["line_removal"]["corrections"] == saved["line_removal"]["corrections"]
     ), "第二遍保存改变了笔迹字段 —— 补齐不是幂等的"
 
 

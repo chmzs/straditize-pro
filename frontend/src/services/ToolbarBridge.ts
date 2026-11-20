@@ -195,6 +195,10 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
     onOpenProjectFile: (file: File) => {
       p.projectManager.openProjectFile(file);
     },
+    onProjectNameChange: (name: string) => {
+      p.projectManager.setProjectName(name || undefined);
+      p.rpcClient.call('project.setName', { name: name || null }).catch(() => {});
+    },
     /**
      * 【重置全部操作】归零前端与后端。
      *

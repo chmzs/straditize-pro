@@ -4,6 +4,7 @@ import {
   formatExportTimestamp,
   resolveProjectName,
   resolveExportFilename,
+  extractProjectNameFromFilename,
 } from './src/utils/exportNaming.ts';
 
 console.log('--- 运行 Standardized Export File Naming 单元测试 ---');
@@ -134,6 +135,33 @@ assert.equal(
 assert.equal(
   resolveExportFilename('suigetsu', null, '_lipd', 'lpd', testDate),
   'suigetsu_lipd_20261119_143045.lpd'
+);
+
+// 6. extractProjectNameFromFilename: 导入文件名项目名前缀提取
+assert.equal(
+  extractProjectNameFromFilename('pollen_bars_riojaplot_project_20261120_120034.tar'),
+  'pollen_bars_riojaplot',
+  'Must extract prefix before _project timestamp'
+);
+assert.equal(
+  extractProjectNameFromFilename('pollen_bars_riojaplot_project.tar'),
+  'pollen_bars_riojaplot',
+  'Must extract prefix before _project'
+);
+assert.equal(
+  extractProjectNameFromFilename('my_lake_core.tar'),
+  'my_lake_core',
+  'Must extract clean stem if no _project suffix'
+);
+assert.equal(
+  extractProjectNameFromFilename('pollen_bars_riojaplot_matrix_20261120_120034.csv'),
+  'pollen_bars_riojaplot',
+  'Must extract prefix before _matrix timestamp'
+);
+assert.equal(
+  extractProjectNameFromFilename('straditize_project_20261120_120034.tar'),
+  null,
+  'straditize default generic fallback should return null'
 );
 
 console.log('✔ 全部 exportNaming 真实模块命名规则与边界字符测试顺利通过！');

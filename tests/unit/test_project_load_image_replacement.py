@@ -34,6 +34,7 @@
 本文件四个角度全钉：空白会话要换、已有图会话**也必须**换、
 无 base64 时不许弄没、tar 与 json 两条路径结果一致。
 """
+
 from __future__ import annotations
 
 import hashlib

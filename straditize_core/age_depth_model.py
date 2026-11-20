@@ -449,9 +449,7 @@ class AgeDepthModel:
 
     # ---- estimate_sedimentation_rate 的分段实现 ----
 
-    def _infer_age_scale(
-        self, age_span: float, depth_span: float
-    ) -> tuple[float, str]:
+    def _infer_age_scale(self, age_span: float, depth_span: float) -> tuple[float, str]:
         """由量级推断一个年龄单位代表多少真实年（0..9 的轴是 ka，0..9000 才是 a）。
 
         标签不可靠：0..9000 cal BP 与 0..9 ka 都可能被标成 cal BP，只有跨度能区分。
@@ -509,8 +507,10 @@ class AgeDepthModel:
         # the age difference across the window is uncertain by roughly the half-widths
         # at its two ends added in quadrature.
         if self.analysis_age_max is not None and self.analysis_age_min is not None:
-            half_w = (np.asarray(self.analysis_age_max)[mask]
-                      - np.asarray(self.analysis_age_min)[mask]) / 2.0
+            half_w = (
+                np.asarray(self.analysis_age_max)[mask]
+                - np.asarray(self.analysis_age_min)[mask]
+            ) / 2.0
             half_w = half_w[np.isfinite(half_w)]
             if half_w.size:
                 u_ends = float(np.sqrt(half_w[0] ** 2 + half_w[-1] ** 2))
@@ -611,11 +611,13 @@ class AgeDepthModel:
             # delta(1/b) = se(b) / b**2, carried through the same unit scaling.
             se_ols_sed = (
                 (se_ols * years_per_age_unit) / (slope_years**2)
-                if np.isfinite(se_ols) else None
+                if np.isfinite(se_ols)
+                else None
             )
             se_env_sed = (
                 (se_env * years_per_age_unit) / (slope_years**2)
-                if np.isfinite(se_env) else None
+                if np.isfinite(se_env)
+                else None
             )
             # Report the larger of the two: the OLS figure is a lower bound because the
             # curve is an interpolant, so the envelope-derived figure is the honest one
@@ -623,14 +625,10 @@ class AgeDepthModel:
             candidates = [v for v in (se_ols_sed, se_env_sed) if v is not None]
             status_out.append(status)
             acc_out.append(float(slope_years) if np.isfinite(slope_years) else None)
-            acc_se_out.append(
-                float(max(candidates)) if candidates else None
-            )
+            acc_se_out.append(float(max(candidates)) if candidates else None)
             sed_out.append(float(sed))
             sed_se_out.append(float(max(candidates)) if candidates else None)
-            sed_se_ols_out.append(
-                float(se_ols_sed) if se_ols_sed is not None else None
-            )
+            sed_se_ols_out.append(float(se_ols_sed) if se_ols_sed is not None else None)
 
         return (
             sed_out,
@@ -641,7 +639,6 @@ class AgeDepthModel:
             status_out,
             window_out,
         )
-
 
     def _median_rate(self, grid: np.ndarray) -> np.ndarray:
         """Median accumulation rate da/ddepth on ``grid``, floored strictly positive."""
@@ -1028,9 +1025,7 @@ class AgeDepthModel:
 
         rate_stats = None
         if return_diagnostics:
-            rate_stats = self._rate_posterior_stats(
-                ages_grid, grid, d_arr, n_ensembles
-            )
+            rate_stats = self._rate_posterior_stats(ages_grid, grid, d_arr, n_ensembles)
 
         result: dict[str, Any] = {"name": name, "columns": columns, "data": rows}
         if return_diagnostics:
@@ -1084,9 +1079,7 @@ class AgeDepthModel:
             "envelope_mismatch_vs_extracted": round(raw_mismatch, 4),
             "shared_offset_sigma": round(float(s_shift), 3),
             "age_reversal_rate": reversal_rate,
-            "simulated_envelope_median": round(
-                float(np.median(simulated_width)), 2
-            ),
+            "simulated_envelope_median": round(float(np.median(simulated_width)), 2),
             "target_envelope_median": round(float(np.median(target_width)), 2),
             "median_curve_max_deviation": round(
                 float(
@@ -1458,7 +1451,9 @@ class AgeDepthModel:
         # exported sed_rate column read 960.5 where the truth was 0.96. The scale is read
         # from the ages themselves and reported, never assumed from the unit string.
         age_span = float(np.nanmax(self.analysis_ages) - np.nanmin(self.analysis_ages))
-        depth_span = float(np.nanmax(self.analysis_depths) - np.nanmin(self.analysis_depths))
+        depth_span = float(
+            np.nanmax(self.analysis_depths) - np.nanmin(self.analysis_depths)
+        )
         years_per_age_unit = 1.0
         if age_span > 0 and depth_span > 0 and age_span / depth_span < 0.35:
             years_per_age_unit = 1000.0

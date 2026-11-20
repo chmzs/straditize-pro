@@ -32,9 +32,13 @@ REAL_PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jp
 S1_IMAGE = ".recon_20261117/image/original.png"
 
 
-def _band(levels: list[float], *, height: int = 200,
-          noisy: dict[int, float] | None = None,
-          paper_cols: int = 6) -> np.ndarray:
+def _band(
+    levels: list[float],
+    *,
+    height: int = 200,
+    noisy: dict[int, float] | None = None,
+    paper_cols: int = 6,
+) -> np.ndarray:
     """按列灰度造一张假图；`noisy` 指定的列加起伏（模拟数据曲线那一列）。
 
     末尾补 `paper_cols` 列纸白：`measure_axis_stroke` 的 `paper` 取整幅中位数，
@@ -83,14 +87,18 @@ class TestGreyFillIsNotSwallowed:
 
     def test_black_axis_before_grey_fill(self) -> None:
         """beginner 实测：轴线 0.2（4px）、AA 82、灰色填充 155（std 27）。"""
-        band = _band([0.2, 0.2, 0.2, 0.2, 82, 155, 155, 155], noisy={5: 27.0, 6: 27.0, 7: 27.0})
+        band = _band(
+            [0.2, 0.2, 0.2, 0.2, 82, 155, 155, 155], noisy={5: 27.0, 6: 27.0, 7: 27.0}
+        )
         widths = measure_axis_stroke(band, [0])
         assert widths == [4], (
             f"灰色填充（155）不是轴线的一部分，轴宽应为 4；实得 {widths}"
         )
 
     def test_six_pixel_axis_stays_six(self) -> None:
-        band = _band([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 115, 155, 155], noisy={7: 27.0, 8: 27.0})
+        band = _band(
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 115, 155, 155], noisy={7: 27.0, 8: 27.0}
+        )
         assert measure_axis_stroke(band, [0]) == [6]
 
 
@@ -127,8 +135,13 @@ class TestFig3RealPlate:
         session.load_image(image_path=str(Path(REAL_PLATE)))
         if not getattr(session, "rois", None):
             session._init_rois()
-            session.roi_create(name="probe", x0=0.0, x1=float(session.width),
-                               y0=0.0, y1=float(session.height))
+            session.roi_create(
+                name="probe",
+                x0=0.0,
+                x1=float(session.width),
+                y0=0.0,
+                y1=float(session.height),
+            )
         _, _, _, _, gray, _mask, bounds = session._prepare_detection_masks(
             330, 1330, 233, 869
         )
@@ -139,8 +152,7 @@ class TestFig3RealPlate:
         widths, bounds = self._widths()
         assert len(widths) == 16, f"fig3 应检出 16 列，实得 {len(widths)}"
         assert set(widths) <= {1, 2}, (
-            "fig3 的轴线是 1px 核心 + 1px 抗锯齿，轴宽只允许 1~2；"
-            f"实得 {widths}"
+            f"fig3 的轴线是 1px 核心 + 1px 抗锯齿，轴宽只允许 1~2；实得 {widths}"
         )
 
     def test_coverage_is_total(self) -> None:
@@ -167,8 +179,13 @@ class TestS1RealPlate:
         session.load_image(image_path=str(Path(S1_IMAGE)))
         if not getattr(session, "rois", None):
             session._init_rois()
-            session.roi_create(name="probe", x0=0.0, x1=float(session.width),
-                               y0=0.0, y1=float(session.height))
+            session.roi_create(
+                name="probe",
+                x0=0.0,
+                x1=float(session.width),
+                y0=0.0,
+                y1=float(session.height),
+            )
         _, _, _, _, gray, _mask, bounds = session._prepare_detection_masks(
             934, 3030, 316, 1836
         )

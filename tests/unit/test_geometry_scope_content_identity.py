@@ -33,6 +33,7 @@
 3. **(b) 换图后包内几何必须失效**——只有 (a) 绿等于把 B-03 修回去了；
 4. **旧格式工程包不被放宽**：只记 `image_path` 的几何仍按旧判据比对。
 """
+
 from __future__ import annotations
 
 import io
@@ -193,9 +194,9 @@ class TestFingerprintFollowsTheImage:
         session.rotate_image(2.0)
 
         assert session._image_fingerprint() != before
-        assert not any(session._geometry_in_scope(g) for g in session.line_candidates), (
-            "旋转后几何仍被判为属于当前图 —— 它的坐标是旋转前的像素坐标"
-        )
+        assert not any(
+            session._geometry_in_scope(g) for g in session.line_candidates
+        ), "旋转后几何仍被判为属于当前图 —— 它的坐标是旋转前的像素坐标"
 
     def test_cached_fingerprint_is_actually_reused(self) -> None:
         """缓存必须真的生效：`_geometry_mask` 逐几何调用 scope，不能每条都算 sha256。
@@ -298,8 +299,7 @@ class TestCrossImageDefenceStillHolds:
         loaded.image_path = "upload://another-figure-same-size.png"
 
         assert not any(loaded._geometry_in_scope(g) for g in loaded.line_candidates), (
-            "换成同尺寸的另一张图后，包内几何仍被判为在范围内 —— "
-            "跨图残留回归（B-03）"
+            "换成同尺寸的另一张图后，包内几何仍被判为在范围内 —— 跨图残留回归（B-03）"
         )
         assert _removed_pixels(loaded) == 0, "旧图几何在新图上仍然剔除了像素"
 
@@ -393,9 +393,7 @@ class TestLegacyShapeIsNotLoosened:
         session = StraditizeSession()
         session._init_cleanup()
         session.load_image(sample_key="hoya")
-        session.line_candidates = [
-            self._legacy_geometry(session, session.image_path)
-        ]
+        session.line_candidates = [self._legacy_geometry(session, session.image_path)]
         assert all(session._geometry_in_scope(g) for g in session.line_candidates)
 
     def test_legacy_scope_from_another_path_stays_out(self) -> None:
@@ -405,9 +403,9 @@ class TestLegacyShapeIsNotLoosened:
         session.line_candidates = [
             self._legacy_geometry(session, "E:/someone-elses/hoya.png")
         ]
-        assert not any(session._geometry_in_scope(g) for g in session.line_candidates), (
-            "旧格式几何换了路径仍被判在范围内 —— 新判据把旧格式一起放宽了"
-        )
+        assert not any(
+            session._geometry_in_scope(g) for g in session.line_candidates
+        ), "旧格式几何换了路径仍被判在范围内 —— 新判据把旧格式一起放宽了"
 
     def test_legacy_scope_with_different_size_stays_out(self) -> None:
         session = StraditizeSession()

@@ -1,6 +1,11 @@
 """Metadata semi-automatic extraction, synthesis, and export module for Straditize Pro."""
 
-from .doi import fetch_doi_metadata, normalize_doi, query_crossref, query_semantic_scholar
+from .doi import (
+    fetch_doi_metadata,
+    normalize_doi,
+    query_crossref,
+    query_semantic_scholar,
+)
 from .exporter_lipd import export_lipd_jsonld, export_lipd_package
 from .exporter_xlsx import export_scientific_xlsx
 from .llm_extractor import (

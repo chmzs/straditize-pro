@@ -3,6 +3,7 @@
 Extract numerical profiles from binary column images (Area, Line, Bar).
 Pure Python/NumPy/SciPy/scikit-image implementation without GUI or Matplotlib.
 """
+
 from __future__ import annotations
 
 import itertools
@@ -33,8 +34,9 @@ def _fill_short_gaps(values: np.ndarray, max_gap: int = 4) -> np.ndarray:
         gap = right - left - 1
         if gap <= 0 or gap > max_gap:
             continue
-        values[left + 1:right] = np.linspace(
-            values[left], values[right], gap + 2)[1:-1]
+        values[left + 1 : right] = np.linspace(values[left], values[right], gap + 2)[
+            1:-1
+        ]
     return values
 
 
@@ -90,7 +92,9 @@ def _band_components(band: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     labels, count = ndimage.label(band, structure=np.ones((3, 3), dtype=bool))
     if not count:
         return np.zeros(band.shape, dtype=int), np.zeros(1, dtype=float)
-    areas = np.asarray(ndimage.sum(band, labels, index=np.arange(1, count + 1)), dtype=float)
+    areas = np.asarray(
+        ndimage.sum(band, labels, index=np.arange(1, count + 1)), dtype=float
+    )
     return labels, np.concatenate(([0.0], areas))
 
 
@@ -314,8 +318,9 @@ def trace_area_profile(section_mask: np.ndarray) -> np.ndarray:
     return values
 
 
-def trace_line_center(section_mask: np.ndarray,
-                      prune_iterations: int = 2) -> np.ndarray:
+def trace_line_center(
+    section_mask: np.ndarray, prune_iterations: int = 2
+) -> np.ndarray:
     """Trace stable centerline X-coordinates from a binary line column.
 
     Parameters
@@ -343,7 +348,7 @@ def trace_line_center(section_mask: np.ndarray,
     if skeleton.any():
         kernel = np.ones((3, 3), dtype=int)
         for _ in range(max(0, int(prune_iterations))):
-            neigh = convolve(skeleton.astype(int), kernel, mode='constant', cval=0)
+            neigh = convolve(skeleton.astype(int), kernel, mode="constant", cval=0)
             endpoints = skeleton & (neigh <= 2)
             if not endpoints.any():
                 break
@@ -387,10 +392,12 @@ def trace_line_center(section_mask: np.ndarray,
     return _fill_short_gaps(centers, max_gap=max(8, height))
 
 
-def trace_bar_profile(section_mask: np.ndarray,
-                      boundary_pad: int = 1,
-                      closing_width: int = 3,
-                      max_gap: int = 1) -> np.ndarray:
+def trace_bar_profile(
+    section_mask: np.ndarray,
+    boundary_pad: int = 1,
+    closing_width: int = 3,
+    max_gap: int = 1,
+) -> np.ndarray:
     """Trace a bar profile while preferring the left-anchored foreground."""
     section_mask = np.asarray(section_mask, dtype=bool)
     height = section_mask.shape[0]
@@ -398,8 +405,8 @@ def trace_bar_profile(section_mask: np.ndarray,
         return np.zeros(height, dtype=float)
 
     cleaned = skim.closing(
-        section_mask,
-        footprint=np.ones((1, max(1, int(closing_width))), dtype=bool))
+        section_mask, footprint=np.ones((1, max(1, int(closing_width))), dtype=bool)
+    )
     values = np.zeros(cleaned.shape[0], dtype=float)
     prev_end = None
 
@@ -418,9 +425,13 @@ def trace_bar_profile(section_mask: np.ndarray,
             return min(candidates, key=lambda run: (run[0], -(run[1] - run[0])))
         return min(
             candidates,
-            key=lambda run: (run[0] > boundary_pad,
-                             abs(run[1] - prev_end),
-                             run[0], -(run[1] - run[0])))
+            key=lambda run: (
+                run[0] > boundary_pad,
+                abs(run[1] - prev_end),
+                run[0],
+                -(run[1] - run[0]),
+            ),
+        )
 
     for row in range(cleaned.shape[0]):
         runs = iter_runs(cleaned[row])
@@ -437,8 +448,10 @@ def trace_bar_profile(section_mask: np.ndarray,
     for row, value in enumerate(values):
         if value < suspect_threshold:
             continue
-        neigh = values[max(0, row - 1):row].tolist() + \
-            values[row + 1:min(len(values), row + 2)].tolist()
+        neigh = (
+            values[max(0, row - 1) : row].tolist()
+            + values[row + 1 : min(len(values), row + 2)].tolist()
+        )
         neigh = np.asarray([v for v in neigh if v > 0], dtype=float)
         if not len(neigh):
             continue
@@ -451,9 +464,9 @@ def trace_bar_profile(section_mask: np.ndarray,
     return values
 
 
-def digitize_column(binary_section: np.ndarray,
-                    method: str = 'area',
-                    **kwargs: Any) -> np.ndarray:
+def digitize_column(
+    binary_section: np.ndarray, method: str = "area", **kwargs: Any
+) -> np.ndarray:
     """Digitize a single column section into a 1D numerical profile.
 
     Parameters
@@ -470,25 +483,26 @@ def digitize_column(binary_section: np.ndarray,
     """
     section = np.asarray(binary_section, dtype=bool)
     method = method.lower()
-    if method == 'area':
+    if method == "area":
         return trace_area_profile(section)
-    elif method == 'area_sum':
+    elif method == "area_sum":
         return np.nansum(section, axis=1).astype(float)
-    elif method == 'line':
+    elif method == "line":
         centers = trace_line_center(section, **kwargs)
         # Convert NaN to 0.0 or leave as NaN depending on usage
         valid = np.isfinite(centers)
         vals = np.zeros(len(centers), dtype=float)
         vals[valid] = centers[valid] + 1.0
         return vals
-    elif method == 'bar':
+    elif method == "bar":
         return trace_bar_profile(section, **kwargs)
     else:
-        raise ValueError(f"Unknown digitization method: '{method}'. Choose from 'area', 'area_sum', 'line', 'bar'.")
+        raise ValueError(
+            f"Unknown digitization method: '{method}'. Choose from 'area', 'area_sum', 'line', 'bar'."
+        )
 
 
-def interpolate_hlines(values_2d: np.ndarray,
-                      hline_locs: Sequence[int]) -> np.ndarray:
+def interpolate_hlines(values_2d: np.ndarray, hline_locs: Sequence[int]) -> np.ndarray:
     """Interpolate across horizontal artifact lines (e.g. grid lines, axes) in digitized profiles."""
     if not len(hline_locs):
         return values_2d
@@ -501,17 +515,19 @@ def interpolate_hlines(values_2d: np.ndarray,
     data = vals[np.ix_(valid_indices, list(range(n_cols)))]
     for i in range(n_cols):
         vals[:, i] = interp1d(
-            y[valid_indices], data[:, i], bounds_error=False,
-            fill_value='extrapolate')(y)
+            y[valid_indices], data[:, i], bounds_error=False, fill_value="extrapolate"
+        )(y)
     return vals
 
 
-def digitize_columns(binary: np.ndarray,
-                     column_bounds: Sequence[tuple[int, int]],
-                     method: str | Sequence[str] = 'area',
-                     column_names: Sequence[str] | None = None,
-                     hline_locs: Sequence[int] | None = None,
-                     **kwargs: Any) -> pd.DataFrame:
+def digitize_columns(
+    binary: np.ndarray,
+    column_bounds: Sequence[tuple[int, int]],
+    method: str | Sequence[str] = "area",
+    column_names: Sequence[str] | None = None,
+    hline_locs: Sequence[int] | None = None,
+    **kwargs: Any,
+) -> pd.DataFrame:
     """Digitize multiple columns from a 2D binary image into a pandas DataFrame.
 
     Parameters
@@ -539,14 +555,18 @@ def digitize_columns(binary: np.ndarray,
     if column_names is None:
         column_names = [f"col{i + 1:02d}" for i in range(n_cols)]
     elif len(column_names) != n_cols:
-        raise ValueError(f"column_names length ({len(column_names)}) != column_bounds length ({n_cols})")
+        raise ValueError(
+            f"column_names length ({len(column_names)}) != column_bounds length ({n_cols})"
+        )
 
     if isinstance(method, str):
         methods = [method] * n_cols
     else:
         methods = list(method)
         if len(methods) != n_cols:
-            raise ValueError(f"methods length ({len(methods)}) != column_bounds length ({n_cols})")
+            raise ValueError(
+                f"methods length ({len(methods)}) != column_bounds length ({n_cols})"
+            )
 
     vals = np.zeros((height, n_cols), dtype=float)
     for i, ((vmin, vmax), m) in enumerate(zip(column_bounds, methods)):

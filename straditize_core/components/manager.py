@@ -11,6 +11,7 @@ Key principles:
 6. Offline manual ZIP import support.
 7. Seamless hot-plugging with component.ready event notifications.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -44,7 +45,13 @@ def get_base_components_dir() -> Path:
         app_data = os.getenv("APPDATA") or str(Path.home() / "AppData" / "Roaming")
         base_dir = Path(app_data) / "Straditize" / "components"
     elif sys.platform == "darwin":
-        base_dir = Path.home() / "Library" / "Application Support" / "Straditize" / "components"
+        base_dir = (
+            Path.home()
+            / "Library"
+            / "Application Support"
+            / "Straditize"
+            / "components"
+        )
     else:
         # Linux / Unix
         xdg_data = os.getenv("XDG_DATA_HOME")
@@ -96,7 +103,9 @@ class ComponentManager:
         self._lock = threading.Lock()
         self._ready_callbacks: list[Callable[[str, dict[str, Any]], None]] = []
 
-    def register_ready_callback(self, callback: Callable[[str, dict[str, Any]], None]) -> None:
+    def register_ready_callback(
+        self, callback: Callable[[str, dict[str, Any]], None]
+    ) -> None:
         """Register a callback to be notified when a component is ready."""
         with self._lock:
             if callback not in self._ready_callbacks:
@@ -116,18 +125,24 @@ class ComponentManager:
 
     def get_status(self, component_name: str = "age-modeling") -> dict[str, Any]:
         """Returns the current installation and readiness status of a component."""
-        comp_meta = DEFAULT_COMPONENTS.get(component_name, {
-            "name": component_name,
-            "title": component_name,
-            "version": "1.0.0",
-            "size_bytes": 0,
-            "description": "",
-        })
+        comp_meta = DEFAULT_COMPONENTS.get(
+            component_name,
+            {
+                "name": component_name,
+                "title": component_name,
+                "version": "1.0.0",
+                "size_bytes": 0,
+                "description": "",
+            },
+        )
 
         target_dir = self.base_dir / component_name
         webr_dir = self.base_dir / "webr"
         installed_info_path = target_dir / "installed.json"
-        if not installed_info_path.is_file() and (webr_dir / "installed.json").is_file():
+        if (
+            not installed_info_path.is_file()
+            and (webr_dir / "installed.json").is_file()
+        ):
             installed_info_path = webr_dir / "installed.json"
 
         is_installed = False
@@ -142,7 +157,9 @@ class ComponentManager:
                     installed_at = info.get("installed_at")
                     is_installed = True
             except Exception as e:
-                logger.warning("Failed to parse installed.json for %s: %s", component_name, e)
+                logger.warning(
+                    "Failed to parse installed.json for %s: %s", component_name, e
+                )
 
         # Check in-flight download progress
         progress_info = None
@@ -161,7 +178,8 @@ class ComponentManager:
             "installed_at": installed_at,
             "target_dir": str(target_dir),
             "webr_dir": str(webr_dir),
-            "downloading": progress_info is not None and progress_info.get("status") == "downloading",
+            "downloading": progress_info is not None
+            and progress_info.get("status") == "downloading",
             "progress": progress_info,
         }
 
@@ -206,7 +224,9 @@ class ComponentManager:
             for member in zf.namelist():
                 member_path = (temp_dir / member).resolve()
                 if not str(member_path).startswith(str(resolved_dest)):
-                    raise ValueError(f"Security Alert: Malicious Zip-Slip path detected in archive: {member}")
+                    raise ValueError(
+                        f"Security Alert: Malicious Zip-Slip path detected in archive: {member}"
+                    )
 
             zf.extractall(temp_dir)
         finally:
@@ -243,7 +263,9 @@ class ComponentManager:
             except Exception as e:
                 logger.debug("Failed copying webr alias: %s", e)
 
-        logger.info("Component '%s' successfully installed to %s", component_name, target_dir)
+        logger.info(
+            "Component '%s' successfully installed to %s", component_name, target_dir
+        )
 
         result = {
             "success": True,
@@ -289,7 +311,11 @@ class ComponentManager:
         with self._lock:
             cur = self._active_downloads.get(component_name)
             if cur and cur.get("status") == "downloading":
-                return {"success": True, "message": "Download already in progress", "progress": cur}
+                return {
+                    "success": True,
+                    "message": "Download already in progress",
+                    "progress": cur,
+                }
 
             self._active_downloads[component_name] = {
                 "status": "downloading",
@@ -310,7 +336,9 @@ class ComponentManager:
         thread.start()
         return {"success": True, "status": "started"}
 
-    def _run_download_worker(self, component_name: str, custom_url: str | None = None) -> None:
+    def _run_download_worker(
+        self, component_name: str, custom_url: str | None = None
+    ) -> None:
         """Worker thread executing streaming download with speed calculation across mirrors."""
         meta = DEFAULT_COMPONENTS.get(component_name, {})
         urls = [custom_url] if custom_url else meta.get("download_urls", [])
@@ -341,7 +369,9 @@ class ComponentManager:
                         url,
                         stream=True,
                         timeout=(10.0, 30.0),
-                        headers={"User-Agent": "StraditizePro/2.0 (ComponentDownloader)"},
+                        headers={
+                            "User-Agent": "StraditizePro/2.0 (ComponentDownloader)"
+                        },
                     ) as resp:
                         resp.raise_for_status()
                         content_len = resp.headers.get("Content-Length")
@@ -362,19 +392,35 @@ class ComponentManager:
                                     speed = (downloaded - last_downloaded) / dt
                                     last_downloaded = downloaded
                                     last_time = now
-                                    pct = round((downloaded / total_len) * 100.0, 1) if total_len > 0 else 50.0
+                                    pct = (
+                                        round((downloaded / total_len) * 100.0, 1)
+                                        if total_len > 0
+                                        else 50.0
+                                    )
 
                                     with self._lock:
-                                        self._active_downloads[component_name]["downloaded_bytes"] = downloaded
-                                        self._active_downloads[component_name]["total_bytes"] = total_len
-                                        self._active_downloads[component_name]["progress_percent"] = min(99.0, pct)
-                                        self._active_downloads[component_name]["speed_bps"] = speed
-                                        self._active_downloads[component_name]["speed_str"] = format_speed(speed)
+                                        self._active_downloads[component_name][
+                                            "downloaded_bytes"
+                                        ] = downloaded
+                                        self._active_downloads[component_name][
+                                            "total_bytes"
+                                        ] = total_len
+                                        self._active_downloads[component_name][
+                                            "progress_percent"
+                                        ] = min(99.0, pct)
+                                        self._active_downloads[component_name][
+                                            "speed_bps"
+                                        ] = speed
+                                        self._active_downloads[component_name][
+                                            "speed_str"
+                                        ] = format_speed(speed)
                 else:
                     # 2. Fallback to urllib streaming download
                     req = urllib.request.Request(
                         url,
-                        headers={"User-Agent": "StraditizePro/2.0 (ComponentDownloader)"},
+                        headers={
+                            "User-Agent": "StraditizePro/2.0 (ComponentDownloader)"
+                        },
                     )
                     with urllib.request.urlopen(req, timeout=20.0) as resp:
                         content_len = resp.headers.get("Content-Length")
@@ -393,14 +439,28 @@ class ComponentManager:
                                     speed = (downloaded - last_downloaded) / dt
                                     last_downloaded = downloaded
                                     last_time = now
-                                    pct = round((downloaded / total_len) * 100.0, 1) if total_len > 0 else 50.0
+                                    pct = (
+                                        round((downloaded / total_len) * 100.0, 1)
+                                        if total_len > 0
+                                        else 50.0
+                                    )
 
                                     with self._lock:
-                                        self._active_downloads[component_name]["downloaded_bytes"] = downloaded
-                                        self._active_downloads[component_name]["total_bytes"] = total_len
-                                        self._active_downloads[component_name]["progress_percent"] = min(99.0, pct)
-                                        self._active_downloads[component_name]["speed_bps"] = speed
-                                        self._active_downloads[component_name]["speed_str"] = format_speed(speed)
+                                        self._active_downloads[component_name][
+                                            "downloaded_bytes"
+                                        ] = downloaded
+                                        self._active_downloads[component_name][
+                                            "total_bytes"
+                                        ] = total_len
+                                        self._active_downloads[component_name][
+                                            "progress_percent"
+                                        ] = min(99.0, pct)
+                                        self._active_downloads[component_name][
+                                            "speed_bps"
+                                        ] = speed
+                                        self._active_downloads[component_name][
+                                            "speed_str"
+                                        ] = format_speed(speed)
 
                 computed_sha = hasher.hexdigest()
                 # SHA256 integrity verification
@@ -410,7 +470,11 @@ class ComponentManager:
                     )
 
                 # Extract and verify
-                self.install_from_zip(temp_zip_path, component_name=component_name, expected_sha256=expected_sha)
+                self.install_from_zip(
+                    temp_zip_path,
+                    component_name=component_name,
+                    expected_sha256=expected_sha,
+                )
                 success = True
                 break
             except Exception as e:

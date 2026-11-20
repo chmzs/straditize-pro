@@ -26,6 +26,7 @@ prod-gate 实测：后端完全不发这两个字段时，步骤 6 的显示**�
 
 外加：**下发值必须随状态变**——在载荷层写死 provenance 会被 D7 那条抓红。
 """
+
 from __future__ import annotations
 
 import json
@@ -176,9 +177,7 @@ class TestProvenanceTracksStateChanges:
             ],
             unit="%",
         )
-        assert _diagram_payload(session)["columns"][0]["scale_provenance"][
-            "calibrated"
-        ]
+        assert _diagram_payload(session)["columns"][0]["scale_provenance"]["calibrated"]
 
         session.clear_column_xticks(0)
 

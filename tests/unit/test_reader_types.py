@@ -6,6 +6,7 @@ P-04 是一次实测事故：session 层只认复数 `"bars"`，而底层 `digit
 柱状图读数系统性只有真值一半（Betula@430cm 真值 73.91 → 36.44），
 返回结果里的 `reader_type` 却仍回显 `"bar"`（元数据说谎）。
 """
+
 from __future__ import annotations
 
 from pathlib import Path

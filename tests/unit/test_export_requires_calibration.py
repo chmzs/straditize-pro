@@ -59,7 +59,10 @@ def _session(calibrated: bool) -> StraditizeSession:
 UNGUARDED_CALLS = [
     ("export_data(csv)", lambda s: s.export_data("csv")),
     ("export_data(csv, samples)", lambda s: s.export_data("csv", dataset="samples")),
-    ("export_data(csv, turning_points)", lambda s: s.export_data("csv", dataset="turning_points")),
+    (
+        "export_data(csv, turning_points)",
+        lambda s: s.export_data("csv", dataset="turning_points"),
+    ),
     ("export_csv()", lambda s: s.export_csv()),
 ]
 

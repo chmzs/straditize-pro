@@ -705,7 +705,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       const raw = (e.target as HTMLInputElement).value.trim();
       const parsed = raw === '' ? null : Number.parseFloat(raw);
       const next =
-        parsed != null && Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 20) : null;
+        parsed != null && Number.isFinite(parsed) && parsed >= 0 ? Math.min(parsed, 20) : null;
       const group = activeRoi()?.x_groups?.find((g) => g.id === effectiveGroupId());
       if (!group) return;
       const previous = group.axis_stroke_px ?? null;
@@ -727,8 +727,8 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     root.querySelector('#inp-col-axis-stroke')?.addEventListener('change', (e) => {
       const raw = (e.target as HTMLInputElement).value.trim();
       const parsed = raw === '' ? null : Number.parseFloat(raw);
-      if (parsed != null && (!Number.isFinite(parsed) || parsed <= 0 || parsed > 20)) {
-        notifyError('单列轴线粗必须是 1–20 之间的正数；要清除覆盖请留空。');
+      if (parsed != null && (!Number.isFinite(parsed) || parsed < 0 || parsed > 20)) {
+        notifyError('单列轴线粗必须是 0–20 之间的数值；要清除覆盖请留空。');
         return;
       }
       const col = activeColumn();

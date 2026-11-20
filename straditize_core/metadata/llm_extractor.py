@@ -6,6 +6,7 @@ Strict constraints:
 3. Multi-chunk merging with conflict detection (candidates list).
 4. Graceful fallback if no LLM API key configured (DOI indexing remains functional).
 """
+
 from __future__ import annotations
 
 import json
@@ -89,15 +90,29 @@ def call_openai_compatible_api(
     timeout: float = 30.0,
 ) -> dict[str, Any] | None:
     """Executes a standard OpenAI-compatible chat completions call."""
-    key = api_key or os.getenv("OPENAI_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or os.getenv("LLM_API_KEY")
+    key = (
+        api_key
+        or os.getenv("OPENAI_API_KEY")
+        or os.getenv("DEEPSEEK_API_KEY")
+        or os.getenv("LLM_API_KEY")
+    )
     if not key:
         logger.info("No LLM API key provided or found in environment variables.")
         return None
 
-    raw_base = base_url or os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_BASE_URL") or "https://api.openai.com/v1"
+    raw_base = (
+        base_url
+        or os.getenv("OPENAI_BASE_URL")
+        or os.getenv("LLM_BASE_URL")
+        or "https://api.openai.com/v1"
+    )
     endpoint = raw_base.rstrip("/") + "/chat/completions"
 
-    sys_content = system_prompt.strip() if system_prompt and system_prompt.strip() else EXTRACTION_SYSTEM_PROMPT
+    sys_content = (
+        system_prompt.strip()
+        if system_prompt and system_prompt.strip()
+        else EXTRACTION_SYSTEM_PROMPT
+    )
 
     payload = {
         "model": model,
@@ -105,7 +120,10 @@ def call_openai_compatible_api(
         "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": sys_content},
-            {"role": "user", "content": f"Extract explicit metadata from this scientific paper text snippet:\n\n{prompt}"},
+            {
+                "role": "user",
+                "content": f"Extract explicit metadata from this scientific paper text snippet:\n\n{prompt}",
+            },
         ],
     }
 
@@ -155,7 +173,9 @@ def merge_chunk_extractions(
                 if val:
                     conf = entry.get("confidence", "medium")
                     quote = entry.get("quote", "")
-                    all_values.append({"value": val, "confidence": conf, "quote": quote})
+                    all_values.append(
+                        {"value": val, "confidence": conf, "quote": quote}
+                    )
 
         if not all_values:
             merged[field] = {
@@ -226,7 +246,9 @@ def extract_metadata_from_chunks(
     for chunk in chunks:
         txt = chunk["text"].strip()
         # Heuristic speedup: skip chunks that contain only References/Bibliography
-        if txt.lower().startswith("[page") and ("references\n" in txt.lower() or "bibliography\n" in txt.lower()):
+        if txt.lower().startswith("[page") and (
+            "references\n" in txt.lower() or "bibliography\n" in txt.lower()
+        ):
             if len(txt) < 3000:
                 continue
 
@@ -337,15 +359,23 @@ def parse_external_llm_metadata(raw_text: str) -> dict[str, Any]:
     # Support unwrapping if top-level key is "paper_metadata" or "metadata"
     if "paper_metadata" in parsed and isinstance(parsed["paper_metadata"], dict):
         parsed = parsed["paper_metadata"]
-    elif "metadata" in parsed and isinstance(parsed["metadata"], dict) and (
-        "publication" in parsed["metadata"] or "site" in parsed["metadata"]
+    elif (
+        "metadata" in parsed
+        and isinstance(parsed["metadata"], dict)
+        and ("publication" in parsed["metadata"] or "site" in parsed["metadata"])
     ):
         parsed = parsed["metadata"]
 
-    pub_in = parsed.get("publication") if isinstance(parsed.get("publication"), dict) else {}
+    pub_in = (
+        parsed.get("publication") if isinstance(parsed.get("publication"), dict) else {}
+    )
     site_in = parsed.get("site") if isinstance(parsed.get("site"), dict) else {}
-    chron_in = parsed.get("chronology") if isinstance(parsed.get("chronology"), dict) else {}
-    tech_in = parsed.get("technical") if isinstance(parsed.get("technical"), dict) else {}
+    chron_in = (
+        parsed.get("chronology") if isinstance(parsed.get("chronology"), dict) else {}
+    )
+    tech_in = (
+        parsed.get("technical") if isinstance(parsed.get("technical"), dict) else {}
+    )
     qual_in = parsed.get("quality") if isinstance(parsed.get("quality"), dict) else {}
 
     def pick(section: dict[str, Any], key: str, default: Any = "") -> Any:
@@ -376,7 +406,9 @@ def parse_external_llm_metadata(raw_text: str) -> dict[str, Any]:
             year_val = None
 
     raw_doi = str(pick(pub_in, "doi", "")).strip()
-    raw_doi = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", raw_doi, flags=re.IGNORECASE).strip()
+    raw_doi = re.sub(
+        r"^https?://(?:dx\.)?doi\.org/", "", raw_doi, flags=re.IGNORECASE
+    ).strip()
 
     normalized: dict[str, Any] = {
         "publication": {
@@ -397,30 +429,38 @@ def parse_external_llm_metadata(raw_text: str) -> dict[str, Any]:
             "elevation_m": str(pick(site_in, "elevation_m", "")).strip(),
             "water_depth_m": str(pick(site_in, "water_depth_m", "")).strip(),
             "core_length_m": str(pick(site_in, "core_length_m", "")).strip(),
-            "archive_type": str(pick(site_in, "archive_type", "lake sediment")).strip() or "lake sediment",
+            "archive_type": str(pick(site_in, "archive_type", "lake sediment")).strip()
+            or "lake sediment",
             "collection_date": str(pick(site_in, "collection_date", "")).strip(),
             "source": "External LLM",
         },
         "chronology": {
             "age_model": str(pick(chron_in, "age_model", "Bacon")).strip() or "Bacon",
             "age_range": str(pick(chron_in, "age_range", "")).strip(),
-            "dating_method": str(pick(chron_in, "dating_method", "14C AMS")).strip() or "14C AMS",
-            "cal_curve": str(pick(chron_in, "cal_curve", "IntCal20")).strip() or "IntCal20",
+            "dating_method": str(pick(chron_in, "dating_method", "14C AMS")).strip()
+            or "14C AMS",
+            "cal_curve": str(pick(chron_in, "cal_curve", "IntCal20")).strip()
+            or "IntCal20",
             "source": "External LLM",
         },
         "technical": {
-            "pollen_extraction_method": str(pick(tech_in, "pollen_extraction_method", "")).strip(),
+            "pollen_extraction_method": str(
+                pick(tech_in, "pollen_extraction_method", "")
+            ).strip(),
             "laboratory": str(pick(tech_in, "laboratory", "")).strip(),
             "investigators": str(pick(tech_in, "investigators", "")).strip(),
             "digitizer": str(pick(tech_in, "digitizer", "")).strip(),
             "affiliation": str(pick(tech_in, "affiliation", "")).strip(),
             "digitization_date": str(pick(tech_in, "digitization_date", "")).strip(),
-            "sampling_interval_cm": str(pick(tech_in, "sampling_interval_cm", "")).strip(),
+            "sampling_interval_cm": str(
+                pick(tech_in, "sampling_interval_cm", "")
+            ).strip(),
             "source": "External LLM",
         },
         "quality": {
             "quality_notes": str(pick(qual_in, "quality_notes", "")).strip(),
-            "dataset_version": str(pick(qual_in, "dataset_version", "1.0.0")).strip() or "1.0.0",
+            "dataset_version": str(pick(qual_in, "dataset_version", "1.0.0")).strip()
+            or "1.0.0",
             "original_data_url": str(pick(qual_in, "original_data_url", "")).strip(),
             "source": "External LLM",
         },

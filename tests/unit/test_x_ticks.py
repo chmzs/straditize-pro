@@ -10,7 +10,9 @@ import pytest
 from straditize_core.protocol import JsonRpcError
 from straditize_core.session import StraditizeSession
 
-BELL_IMG_PATH = Path("straditize_core/assets/tutorials/beginner-tutorial.png") # fallback / probe path
+BELL_IMG_PATH = Path(
+    "straditize_core/assets/tutorials/beginner-tutorial.png"
+)  # fallback / probe path
 TRUTH_DIR = Path("tests/data/truth")
 
 
@@ -18,7 +20,14 @@ def test_two_endpoints_arbitrary_order_mapping():
     """Two endpoints in arbitrary order establish valid calibration; identical px or out-of-bounds raises -32602."""
     session = StraditizeSession()
     session.columns = [
-        {"col_index": 0, "id": "col_1", "startX": 100.0, "endX": 250.0, "name": "Pinus", "roi_id": "roi_1"}
+        {
+            "col_index": 0,
+            "id": "col_1",
+            "startX": 100.0,
+            "endX": 250.0,
+            "name": "Pinus",
+            "roi_id": "roi_1",
+        }
     ]
 
     # Order 1: px 100 -> 0, px 200 -> 50
@@ -27,7 +36,10 @@ def test_two_endpoints_arbitrary_order_mapping():
         ticks=[{"px": 100.0, "value": 0.0}, {"px": 200.0, "value": 50.0}],
     )
     assert res1["px_per_unit"] == 2.0
-    assert session.columns[0]["x_ticks"] == [{"px": 100.0, "value": 0.0}, {"px": 200.0, "value": 50.0}]
+    assert session.columns[0]["x_ticks"] == [
+        {"px": 100.0, "value": 0.0},
+        {"px": 200.0, "value": 50.0},
+    ]
 
     # Order 2: reversed order (px 200 -> 50, px 100 -> 0)
     res2 = session.calibrate_column_xticks(
@@ -62,9 +74,13 @@ def test_tick_interval_independence_no_false_alarm():
     ]
 
     # Column 0: step = 10, px 100->0, px 150->10 (5 px per unit)
-    res0 = session.calibrate_column_xticks(0, [{"px": 100.0, "value": 0.0}, {"px": 150.0, "value": 10.0}])
+    res0 = session.calibrate_column_xticks(
+        0, [{"px": 100.0, "value": 0.0}, {"px": 150.0, "value": 10.0}]
+    )
     # Column 1: step = 5, px 200->0, px 250->5 (10 px per unit)
-    res1 = session.calibrate_column_xticks(1, [{"px": 200.0, "value": 0.0}, {"px": 250.0, "value": 5.0}])
+    res1 = session.calibrate_column_xticks(
+        1, [{"px": 200.0, "value": 0.0}, {"px": 250.0, "value": 5.0}]
+    )
 
     assert res0["px_per_unit"] == 5.0
     assert res1["px_per_unit"] == 10.0
@@ -77,5 +93,6 @@ def test_no_tickvalue_divided_by_colwidth_in_code():
     bad_pattern = "tickValue / col"
     for py_file in core_dir.rglob("*.py"):
         text = py_file.read_text(encoding="utf-8")
-        assert bad_pattern not in text, f"Forbidden formula '{bad_pattern}' found in {py_file}"
-
+        assert bad_pattern not in text, (
+            f"Forbidden formula '{bad_pattern}' found in {py_file}"
+        )

@@ -10,6 +10,7 @@ def register(dispatcher: Any, session: Any) -> None:
     dispatcher.register_method("project.new", session.project_new)
     dispatcher.register_method("project.load", session.project_load)
     dispatcher.register_method("project.save", session.project_save)
+    dispatcher.register_method("project.setName", session.set_project_name)
 
     dispatcher.register_method("core.loadImage", session.load_image)
     dispatcher.register_method("image.load", session.load_image)

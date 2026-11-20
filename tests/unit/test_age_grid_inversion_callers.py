@@ -11,6 +11,7 @@
 
 判据用 10 倍差异：正确反演得 [0, 2, 4]，误用得 [0, 20, 40]，不存在混淆空间。
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -56,9 +57,7 @@ class _RecordingEnsemble:
         self.sample_depths = None
 
     def __call__(self, *args, **kwargs):
-        self.sample_depths = kwargs.get(
-            "sample_depths", args[0] if args else None
-        )
+        self.sample_depths = kwargs.get("sample_depths", args[0] if args else None)
         return {
             "name": kwargs.get("name") or "Age_Ensemble",
             "columns": ["depth", "age", "age_min", "age_max", "rate"],
@@ -125,7 +124,9 @@ def stub_bacon(monkeypatch):
     )
 
 
-def test_bacon_grid_under_age_axis_is_inverted_and_honest(stub_bacon, recording_ensemble):
+def test_bacon_grid_under_age_axis_is_inverted_and_honest(
+    stub_bacon, recording_ensemble
+):
     """age 轴：Bacon 路径同样反演，并把 primary_axis 如实写成 age。
 
     predict_age(反演深度) 回到 [0, 20, 40]；若误把网格当深度会得到 [0, 200, 400]。

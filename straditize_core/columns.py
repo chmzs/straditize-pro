@@ -2,6 +2,7 @@
 
 Pure Python/NumPy implementation without GUI or Matplotlib.
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -13,6 +14,7 @@ import numpy as np
 @dataclass(frozen=True)
 class ColumnBound:
     """Represents the horizontal span of a diagram column in pixel coordinates."""
+
     start: int
     end: int
     index: int = 0
@@ -51,9 +53,9 @@ def groupby_arr(arr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return keys, bounds
 
 
-def detect_column_starts(binary: np.ndarray,
-                         threshold: float = 0.1,
-                         min_col_width_ratio: float = 0.01) -> np.ndarray:
+def detect_column_starts(
+    binary: np.ndarray, threshold: float = 0.1, min_col_width_ratio: float = 0.01
+) -> np.ndarray:
     """Detect horizontal starting pixel coordinates for each column.
 
     Parameters
@@ -103,7 +105,7 @@ def detect_column_starts(binary: np.ndarray,
     increased: list[int] = []
     if len(increasing):
         from0 = int(not increasing[0])
-        starts_ends = zip(bounds[from0::2], bounds[1 + from0::2])
+        starts_ends = zip(bounds[from0::2], bounds[1 + from0 :: 2])
         increased = [
             s + 1
             for s, e in starts_ends
@@ -160,10 +162,12 @@ def detect_column_starts(binary: np.ndarray,
     return np.asarray(keep, dtype=int)
 
 
-def detect_column_bounds(binary: np.ndarray,
-                         threshold: float = 0.1,
-                         min_col_width_ratio: float = 0.01,
-                         compact: bool = False) -> list[tuple[int, int]]:
+def detect_column_bounds(
+    binary: np.ndarray,
+    threshold: float = 0.1,
+    min_col_width_ratio: float = 0.01,
+    compact: bool = False,
+) -> list[tuple[int, int]]:
     """Detect (start, end) bounding intervals for all columns in a binary image.
 
     Parameters
@@ -189,7 +193,8 @@ def detect_column_bounds(binary: np.ndarray,
 
     _height, width = binary.shape
     starts = detect_column_starts(
-        binary, threshold=threshold, min_col_width_ratio=min_col_width_ratio)
+        binary, threshold=threshold, min_col_width_ratio=min_col_width_ratio
+    )
     if len(starts) == 0:
         return []
 
@@ -269,20 +274,22 @@ def has_measurable_axis(
             continue
         col = band[:, x_at]
         if float(col.std()) > std_limit:
-            continue          # 沿 y 起伏大 → 是曲线/纹理，不是均匀直线
+            continue  # 沿 y 起伏大 → 是曲线/纹理，不是均匀直线
         if abs(float(col.mean()) - paper) < contrast_min:
-            continue          # 与纸白无差 → 就是纸面
+            continue  # 与纸白无差 → 就是纸面
         return True
     return False
 
 
-def measure_axis_right_edge(rgb: np.ndarray,
-                            binary: np.ndarray,
-                            starts: Sequence[int],
-                            solid_ratio: float = 0.9,
-                            max_probe: int = 8,
-                            max_axis_width: int = 8,
-                            max_color_ratio: float = 0.15) -> list[int]:
+def measure_axis_right_edge(
+    rgb: np.ndarray,
+    binary: np.ndarray,
+    starts: Sequence[int],
+    solid_ratio: float = 0.9,
+    max_probe: int = 8,
+    max_axis_width: int = 8,
+    max_color_ratio: float = 0.15,
+) -> list[int]:
     """每个列起点处 Y 轴基线的右缘偏移量（相对起点，单位 px）。
 
     ## 用途
@@ -371,12 +378,14 @@ def measure_axis_right_edge(rgb: np.ndarray,
     return offsets
 
 
-def measure_axis_stroke(gray: np.ndarray,
-                        starts: Sequence[int],
-                        max_width: int = 24,
-                        level_tol: float = 25.0,
-                        std_limit: float = 30.0,
-                        contrast_min: float = 25.0) -> list[int]:
+def measure_axis_stroke(
+    gray: np.ndarray,
+    starts: Sequence[int],
+    max_width: int = 24,
+    level_tol: float = 25.0,
+    std_limit: float = 30.0,
+    contrast_min: float = 25.0,
+) -> list[int]:
     """每列左缘处**竖直轴线本身的粗细**（px），测不出返回 0。
 
     ## 要解决什么
@@ -525,8 +534,9 @@ def measure_axis_stroke(gray: np.ndarray,
     return widths
 
 
-def slice_columns(image_or_binary: np.ndarray,
-                  bounds: Sequence[tuple[int, int]]) -> list[np.ndarray]:
+def slice_columns(
+    image_or_binary: np.ndarray, bounds: Sequence[tuple[int, int]]
+) -> list[np.ndarray]:
     """Slice 2D or 3D array into column sections based on (start, end) bounds."""
     arr = np.asarray(image_or_binary)
     return [arr[:, s:e] for s, e in bounds]

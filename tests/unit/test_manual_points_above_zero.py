@@ -7,6 +7,7 @@
 两条入口各一条用例：core.updateControlPoint（单点）、column.setControlPoints（整列）。
 反向验证：去掉 _reject_below_zero_point 调用，两条必须红。
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -18,7 +19,7 @@ from straditize_core.session import StraditizeSession
 
 W, H = 140, 200
 AXIS_X0, AXIS_W = 10, 6
-ZERO_X = AXIS_X0 + AXIS_W          # 16
+ZERO_X = AXIS_X0 + AXIS_W  # 16
 BLOCK_X1 = 55
 Y0, Y1 = 50, 150
 ROW = Y0 + 10
@@ -27,8 +28,8 @@ ROW = Y0 + 10
 def _session(tmp_path):
     plate = tmp_path / "block.png"
     img = np.full((H, W), 255, dtype=np.uint8)
-    img[:, AXIS_X0:AXIS_X0 + AXIS_W] = 0
-    img[:, ZERO_X:BLOCK_X1 + 1] = 0
+    img[:, AXIS_X0 : AXIS_X0 + AXIS_W] = 0
+    img[:, ZERO_X : BLOCK_X1 + 1] = 0
     Image.fromarray(img).save(plate)
     session = StraditizeSession()
     session._init_cleanup()

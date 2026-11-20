@@ -15,6 +15,7 @@ ARCHITECTURE §2「取不到就报错，绝不给替代数据」要禁止的那�
 `foreground_mask`（分列用的同一个自适应 mask）后 25/25 全部可测。
 所以本文件同时钉住"判据与分列同源"这一点。
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -41,7 +42,9 @@ def test_diatom_all_columns_have_measurable_axis() -> None:
     """
     flags = _flags(path=DIATOM)
     assert len(flags) == 25
-    assert all(flags), f"diatom 应有 25/25 可测，实际 {sum(flags)}/25 —— 判据退回硬阈值了吗？"
+    assert all(flags), (
+        f"diatom 应有 25/25 可测，实际 {sum(flags)}/25 —— 判据退回硬阈值了吗？"
+    )
 
 
 def test_beginner_all_columns_have_measurable_axis() -> None:

@@ -19,11 +19,11 @@ let cachedSamplesData: DiagramData | null = null;
  */
 let gridFoldOpen = false;
 
-/** 自动共识提取参数状态缓存（避免面板重刷时丢失） */
-let consensusMode: 'dual' | 'peaks' = 'dual';
+/** 自动共识提取参数状态缓存（默认按地学用户实测黄金组合：仅波峰 + 强共振(≥2列) + 自适应密度） */
+let consensusMode: 'dual' | 'peaks' = 'peaks';
 let consensusAdaptive: boolean = true;
 let consensusTolerancePx: number = 2.5;
-let consensusMinSupport: number = 1;
+let consensusMinSupport: number = 2;
 
 export function render(data: DiagramData): string {
   cachedSamplesData = data;

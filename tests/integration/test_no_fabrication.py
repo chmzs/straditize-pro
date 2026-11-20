@@ -17,7 +17,6 @@ looked like a result:
 * a trace built from a handful of rows was gap-interpolated into a smooth invented curve.
 """
 
-
 import unittest
 
 import numpy as np
@@ -25,6 +24,7 @@ import numpy as np
 from straditize_core.age_depth import AgeDepthModel, AgeDepthAxisCalibrator
 from straditize_core.protocol import JsonRpcError
 from straditize_core.session import StraditizeSession
+
 
 def _bacon_calibrator():
     return AgeDepthAxisCalibrator(
@@ -46,8 +46,10 @@ class TestNoSilentDataSourceSubstitution(unittest.TestCase):
         self.assertIsNone(session.age_depth_image)
         with self.assertRaises(JsonRpcError) as ctx:
             session.calibrate_and_extract_age_depth(
-                depth_px=[32.0, 668.0], depth_vals=[0.0, 150.0],
-                age_px=[110.0, 803.5], age_vals=[3000.0, 0.0],
+                depth_px=[32.0, 668.0],
+                depth_vals=[0.0, 150.0],
+                age_px=[110.0, 803.5],
+                age_vals=[3000.0, 0.0],
             )
         self.assertIn("No age-depth diagram is loaded", str(ctx.exception))
         # And it must not have silently loaded one as a side effect.
@@ -68,7 +70,9 @@ class TestNoSilentDataSourceSubstitution(unittest.TestCase):
             # Empty session: 404 even when a sample is named, and still empty afterwards.
             for suffix in ("", "?sample=bacon"):
                 with self.assertRaises(urllib.error.HTTPError) as ctx:
-                    urllib.request.urlopen(f"{base}/image/agedepth{suffix}", timeout=3.0)
+                    urllib.request.urlopen(
+                        f"{base}/image/agedepth{suffix}", timeout=3.0
+                    )
                 self.assertEqual(ctx.exception.code, 404)
             self.assertIsNone(
                 session.age_depth_image,
@@ -87,7 +91,9 @@ class TestNoSilentDataSourceSubstitution(unittest.TestCase):
 class TestNoPlaceholderNumbers(unittest.TestCase):
     def test_predict_age_on_a_degenerate_model_refuses(self):
         """A model with <2 horizons used to report age = depth."""
-        model = AgeDepthModel(depths=[10.0], ages=[500.0], age_min=[400.0], age_max=[600.0])
+        model = AgeDepthModel(
+            depths=[10.0], ages=[500.0], age_min=[400.0], age_max=[600.0]
+        )
         with self.assertRaises(ValueError) as ctx:
             model.predict_age([5.0, 10.0])
         self.assertIn("fewer than two horizons", str(ctx.exception))
@@ -120,11 +126,16 @@ class TestNoPlaceholderNumbers(unittest.TestCase):
         session = StraditizeSession()
         session.load_age_depth_diagram(sample_key="bacon")
         session.calibrate_and_extract_age_depth(
-            depth_px=[32.0, 668.0], depth_vals=[0.0, 150.0],
-            age_px=[110.0, 803.5], age_vals=[3000.0, 0.0],
+            depth_px=[32.0, 668.0],
+            depth_vals=[0.0, 150.0],
+            age_px=[110.0, 803.5],
+            age_vals=[3000.0, 0.0],
             depth_range=[0.0, 160.0],
         )
-        lo, hi = session.age_depth_model.depths.min(), session.age_depth_model.depths.max()
+        lo, hi = (
+            session.age_depth_model.depths.min(),
+            session.age_depth_model.depths.max(),
+        )
         probe = [float(lo) - 40.0, float((lo + hi) / 2), float(hi) + 40.0]
         pred = session.age_depth_model.predict_age(probe)
 
@@ -142,8 +153,10 @@ class TestNoPlaceholderNumbers(unittest.TestCase):
         session = StraditizeSession()
         session.load_age_depth_diagram(sample_key="bacon")
         session.calibrate_and_extract_age_depth(
-            depth_px=[32.0, 668.0], depth_vals=[0.0, 150.0],
-            age_px=[110.0, 803.5], age_vals=[3000.0, 0.0],
+            depth_px=[32.0, 668.0],
+            depth_vals=[0.0, 150.0],
+            age_px=[110.0, 803.5],
+            age_vals=[3000.0, 0.0],
             depth_range=[0.0, 160.0],
         )
         model = session.age_depth_model

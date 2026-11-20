@@ -148,6 +148,7 @@ ALL_RPC_METHODS: tuple[str, ...] = (
     "project.load",
     "project.new",
     "project.save",
+    "project.setName",
     "qa.summarize",
     "roi.create",
     "roi.groupCreate",
@@ -305,9 +306,7 @@ class JsonRpcDispatcher:
         with self._request_lock:
             return self._execute_request_locked(request)
 
-    def _execute_request_locked(
-        self, request: JsonRpcRequest
-    ) -> dict[str, Any] | None:
+    def _execute_request_locked(self, request: JsonRpcRequest) -> dict[str, Any] | None:
         """The body of :meth:`execute_request`; caller already holds the lock."""
         if request.method not in self._methods:
             if request.is_notification:
@@ -467,7 +466,8 @@ class JsonRpcDispatcher:
             err_resp = {
                 "jsonrpc": "2.0",
                 "error": JsonRpcError(
-                    PARSE_ERROR, f"Parse error: JSON 语法解析失败: {e!s}。请核对请求字符串。"
+                    PARSE_ERROR,
+                    f"Parse error: JSON 语法解析失败: {e!s}。请核对请求字符串。",
                 ).to_dict(),
                 "id": None,
             }

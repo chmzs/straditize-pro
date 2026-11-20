@@ -87,8 +87,10 @@ def test_all_percent_project_unchanged() -> None:
 
 def test_missing_key_defaults_to_included() -> None:
     """缺 `include_in_sum` 键（老调用方 / 手工构造）→ 仍按老口径全加，不静默丢列。"""
-    info = [{"name": "a", "declared_max": 100.0, "calibrated": True},
-            {"name": "b", "declared_max": 100.0, "calibrated": True}]
+    info = [
+        {"name": "a", "declared_max": 100.0, "calibrated": True},
+        {"name": "b", "declared_max": 100.0, "calibrated": True},
+    ]
     summary = compute_qa_summary(
         roi_id="roi_1",
         roi_name="pollen",

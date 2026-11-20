@@ -38,7 +38,11 @@ def test_notice_does_not_claim_never_na() -> None:
 
 def test_xlsx_readme_does_not_claim_never_na() -> None:
     """XLSX 的 readme 页与 tar 的 README.txt 必须同一口径（源码级防回归）。"""
-    src = (_REPO / "straditize_core" / "metadata" / "exporter_xlsx.py").read_text(encoding="utf-8")
+    src = (_REPO / "straditize_core" / "metadata" / "exporter_xlsx.py").read_text(
+        encoding="utf-8"
+    )
     executable = [ln for ln in src.splitlines() if not ln.lstrip().startswith("#")]
-    offenders = [ln for ln in executable if "never NA" in ln or "strictly filled as 0.00" in ln]
+    offenders = [
+        ln for ln in executable if "never NA" in ln or "strictly filled as 0.00" in ln
+    ]
     assert not offenders, offenders

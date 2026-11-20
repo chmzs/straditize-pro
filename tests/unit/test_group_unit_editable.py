@@ -45,7 +45,9 @@ def _two_groups(session: StraditizeSession) -> tuple[str, str, str]:
     """
     roi_id = session.rois[0]["id"]
     pct_gid = session.roi_group_create(roi_id, name="pollen", unit="%")["group"]["id"]
-    counts_gid = session.roi_group_create(roi_id, name="charcoal", unit="counts")["group"]["id"]
+    counts_gid = session.roi_group_create(roi_id, name="charcoal", unit="counts")[
+        "group"
+    ]["id"]
     for idx, col in enumerate(session.columns):
         col["x_group_id"] = counts_gid if idx == 0 else pct_gid
     session.roi_group_update(roi_id, pct_gid, {"value_per_px": 0.5})
@@ -102,7 +104,11 @@ def test_group_unit_reaches_the_diagram_payload() -> None:
     counts_columns = [c for c in session.columns if c.get("x_group_id") == counts_gid]
     assert counts_columns, "前置：第 0 列必须已划给 counts 组"
     names = {c.get("name") or c.get("id") for c in counts_columns}
-    sent = {c.get("name"): c.get("unit") for c in payload["columns"] if c.get("name") in names}
+    sent = {
+        c.get("name"): c.get("unit")
+        for c in payload["columns"]
+        if c.get("name") in names
+    }
 
     assert sent, "列载荷里找不到这些列"
     assert set(sent.values()) == {"counts"}, f"侧边栏拿到的单位不对：{sent}"

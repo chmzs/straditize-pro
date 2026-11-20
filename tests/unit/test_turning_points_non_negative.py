@@ -10,6 +10,7 @@
 ① 曲线宽度被钳到 ≥ 0（含端点）；
 ② 任何控制点的取值都 ≥ 列左缘。
 """
+
 from __future__ import annotations
 
 from straditize_core.session_parts.digitize import DigitizeMixin
@@ -44,4 +45,6 @@ def test_control_points_are_never_negative():
     assert ctrl_pts, "该曲线有真实拐点，控制点不应为空"
     offenders = {p["y"]: p["x"] for p in ctrl_pts if p["x"] < c_start + 6.0}
     assert offenders == {}, f"控制点落在 0 点（绿线）左侧，等于负读数：{offenders}"
-    assert all(v >= c_start + 6.0 for v in rows_to_x.values()), "行→x 表里出现 0 点左侧的取值"
+    assert all(v >= c_start + 6.0 for v in rows_to_x.values()), (
+        "行→x 表里出现 0 点左侧的取值"
+    )

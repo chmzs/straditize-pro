@@ -21,6 +21,7 @@
 把组斜率分支的 _zero = c_start + _stroke 改回 _zero = c_start，本文件必须变红
 （第一组断言与第二组行为断言同时红）。
 """
+
 from __future__ import annotations
 
 import pytest
@@ -56,7 +57,12 @@ def _col(**over):
 
 
 def _group(**over):
-    group = {"id": "roi_1_grp1", "value_per_px": SLOPE, "axis_stroke_px": STROKE, "unit": "%"}
+    group = {
+        "id": "roi_1_grp1",
+        "value_per_px": SLOPE,
+        "axis_stroke_px": STROKE,
+        "unit": "%",
+    }
     group.update(over)
     return group
 

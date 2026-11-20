@@ -8,6 +8,7 @@ ValueError，被 dispatcher 兜成 -32603 内部错误而不是干净的 -32602 
 
 本文件按「标注即契约」断言：传 int 要能用，传列 id 也要能用。
 """
+
 from __future__ import annotations
 
 import unittest
@@ -232,8 +233,11 @@ class TestExportReadinessAndOutputs(unittest.TestCase):
         self.assertEqual(created["name_source"], "default")
 
         r = s.get_export_readiness()
-        self.assertIn(created["name"], r["readiness_missing"],
-                      "默认命名的 ROI 必须出现在 readiness_missing")
+        self.assertIn(
+            created["name"],
+            r["readiness_missing"],
+            "默认命名的 ROI 必须出现在 readiness_missing",
+        )
         self.assertFalse(r["ready"])
 
     def test_export_csv_header_matches_columns(self) -> None:
@@ -247,8 +251,9 @@ class TestExportReadinessAndOutputs(unittest.TestCase):
         csv_text = self.session.export_csv()
         header = csv_text.splitlines()[0].split(",")
         self.assertEqual(header[0], "depth", "CSV 首列必须是深度")
-        self.assertEqual(len(header), len(self.session.columns) + 1,
-                         "表头列数 = 深度 + 分列数")
+        self.assertEqual(
+            len(header), len(self.session.columns) + 1, "表头列数 = 深度 + 分列数"
+        )
 
     def test_export_tar_roundtrips_through_base64(self) -> None:
         """export.tar 走 base64；解码后必须是可解析的 UStar 包。"""
@@ -299,7 +304,9 @@ class TestColumnAxisStrokeOverride(unittest.TestCase):
     def _zero(self) -> float:
         from straditize_core.session_parts.xscale import resolve_column_scale
 
-        return resolve_column_scale(self.session, self.session.columns[self.idx]).abs_px0
+        return resolve_column_scale(
+            self.session, self.session.columns[self.idx]
+        ).abs_px0
 
     def test_valid_override_moves_zero_point(self) -> None:
         start = float(self.session.columns[self.idx]["start"])
@@ -333,4 +340,3 @@ class TestColumnAxisStrokeOverride(unittest.TestCase):
                 self.session.columns[self.idx],
                 f"{bad!r} 不得静默落库",
             )
-

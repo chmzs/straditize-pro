@@ -29,13 +29,22 @@ def test_zero_state_emits_both_spellings_as_none() -> None:
     session._init_cleanup()
     payload = _payload(session)
 
-    for camel, snake in (("primaryRoiId", "primary_roi_id"), ("activeRoiId", "active_roi_id")):
+    for camel, snake in (
+        ("primaryRoiId", "primary_roi_id"),
+        ("activeRoiId", "active_roi_id"),
+    ):
         assert camel in payload, f"缺少 {camel}"
         assert snake in payload, f"缺少兼容别名 {snake}"
         assert payload[camel] is None and payload[snake] is None
 
 
-_IMAGE = Path(__file__).resolve().parents[2] / "straditize_core" / "assets" / "tutorials" / "hoya-del-castillo.png"
+_IMAGE = (
+    Path(__file__).resolve().parents[2]
+    / "straditize_core"
+    / "assets"
+    / "tutorials"
+    / "hoya-del-castillo.png"
+)
 
 
 def test_primary_and_active_reflected_in_both_spellings() -> None:

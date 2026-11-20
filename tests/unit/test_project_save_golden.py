@@ -104,7 +104,9 @@ def _real_plate_session() -> StraditizeSession:
     """
     session = StraditizeSession()
     session._init_cleanup()
-    session.load_image(image_path="tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg")
+    session.load_image(
+        image_path="tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
+    )
     session.detect_columns(data_xlim=[330, 1330], data_ylim=[233, 869])
     for column in session.columns:
         session.digitize(column["col_index"])
@@ -226,7 +228,9 @@ def _build_snapshots(tmp_dir: Path) -> dict:
     # flag、reason、manifest 里的 zeros_are_not_measurements。
     uncalibrated = _real_plate_session()
     refusal_tar = tmp_dir / "uncalibrated.tar"
-    refusal_result = uncalibrated.project_save(output_path=str(refusal_tar), format="tar")
+    refusal_result = uncalibrated.project_save(
+        output_path=str(refusal_tar), format="tar"
+    )
     with tarfile.open(refusal_tar, "r") as archive:
         refusal_members = archive.getnames()
         refusal_manifest = json.loads(archive.extractfile("manifest.json").read())
@@ -248,7 +252,9 @@ def _build_snapshots(tmp_dir: Path) -> dict:
     # 无路径的 tar 走 base64 返回：只钉成员清单，不钉整包摘要（含 mtime）
     session = _session()
     mem_tar = session.project_save(format="tar")
-    with tarfile.open(fileobj=io.BytesIO(__import__("base64").b64decode(mem_tar["tar_base64"]))) as archive:
+    with tarfile.open(
+        fileobj=io.BytesIO(__import__("base64").b64decode(mem_tar["tar_base64"]))
+    ) as archive:
         out["tar_base64"] = {
             "result_keys": sorted(mem_tar),
             "member_names": [m.name for m in archive.getmembers()],

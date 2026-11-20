@@ -2277,8 +2277,8 @@ body.theme-light .reset-all-btn:hover {
 
 .wpd-right-controls {
   /* 不再自己滚：控制栏的长内容交给 body 的滚动条，避免嵌套滚动容器。 */
-  width: 270px;
-  min-width: 270px;
+  width: 290px;
+  min-width: 290px;
   overflow: visible;
   box-sizing: border-box;
 }

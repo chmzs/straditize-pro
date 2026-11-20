@@ -15,6 +15,7 @@ defects motivated the rewrite:
 These tests pin the replacement's guarantees: monotone by construction, invariant to the
 output sampling step, and faithful to the extracted envelope's magnitude.
 """
+
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -37,9 +38,7 @@ def _bacon():
         age_px=[110.0, 803.5],
         age_vals=[3000.0, 0.0],
     )
-    return extract_age_depth_model(
-        img, cal, depth_range=(0.0, 160.0)
-    )
+    return extract_age_depth_model(img, cal, depth_range=(0.0, 160.0))
 
 
 def _ensemble_matrix(model, n=400, **kw):
@@ -77,7 +76,9 @@ class TestAgeEnsemble(unittest.TestCase):
         """The realised 95% band must match the extracted envelope in magnitude."""
         model = _bacon()
         _depths, arr, ens = _ensemble_matrix(model, return_diagnostics=True)
-        sim = np.median(np.percentile(arr, 97.5, axis=1) - np.percentile(arr, 2.5, axis=1))
+        sim = np.median(
+            np.percentile(arr, 97.5, axis=1) - np.percentile(arr, 2.5, axis=1)
+        )
         tgt = ens["diagnostics"]["target_envelope_median"]
         self.assertLess(
             abs(sim - tgt) / tgt,
@@ -120,7 +121,9 @@ class TestAgeEnsemble(unittest.TestCase):
             crossing.append(float(np.mean(hits)))
 
         self.assertEqual(
-            len(set(lengths)), 1, f"fitted correlation length varies with step: {lengths}"
+            len(set(lengths)),
+            1,
+            f"fitted correlation length varies with step: {lengths}",
         )
         # The earlier index-space AR(1) moved this by 4 cm across the same steps.
         self.assertLess(
@@ -146,14 +149,22 @@ class TestAgeEnsemble(unittest.TestCase):
 
         long_l = shared_fraction(80.0)
         short_l = shared_fraction(2.0)
-        self.assertGreater(long_l, short_l + 0.1, "long L did not increase curve coherence")
-        self.assertGreater(long_l, 0.5, "a long L should make most variance a shared shift")
+        self.assertGreater(
+            long_l, short_l + 0.1, "long L did not increase curve coherence"
+        )
+        self.assertGreater(
+            long_l, 0.5, "a long L should make most variance a shared shift"
+        )
 
     def test_06_explicit_correlation_length_honoured(self):
         model = _bacon()
         depths = np.asarray(model.depths, dtype=float)
         ens = model.generate_age_ensemble(
-            depths, n_ensembles=200, name="t", correlation_length=25.0, return_diagnostics=True
+            depths,
+            n_ensembles=200,
+            name="t",
+            correlation_length=25.0,
+            return_diagnostics=True,
         )
         diag = ens["diagnostics"]
         self.assertAlmostEqual(diag["correlation_length"], 25.0, places=6)

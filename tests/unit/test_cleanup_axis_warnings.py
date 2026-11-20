@@ -127,9 +127,7 @@ def test_confirmed_vertical_geometry_on_the_axis_is_reported() -> None:
         roi_id, line_fraction_h=0.7, line_fraction_v=0.3, line_width_max=2
     )["candidates"]
     assert not [
-        c
-        for c in candidates
-        if c["axis"] == "v" and abs(c["at"] - axis_x) <= 2
+        c for c in candidates if c["axis"] == "v" and abs(c["at"] - axis_x) <= 2
     ], (
         "前置：自动检测不得再提出列轴 —— 否则本用例会在任务① 的回归上继续变绿，"
         f"掩盖「检测→全选→删除」整条危险路径（候选：{[(c['axis'], c['at']) for c in candidates]}）"
@@ -143,6 +141,6 @@ def test_confirmed_vertical_geometry_on_the_axis_is_reported() -> None:
     )
 
     warnings = result.get("warnings") or []
-    assert any(w.get("kind") == "confirmed_line_covers_column_axis" for w in warnings), (
-        f"确认了落在 col01 轴线上的竖线（x={axis_x}），返回里没有警告：{warnings}"
-    )
+    assert any(
+        w.get("kind") == "confirmed_line_covers_column_axis" for w in warnings
+    ), f"确认了落在 col01 轴线上的竖线（x={axis_x}），返回里没有警告：{warnings}"

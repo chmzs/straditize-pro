@@ -47,7 +47,15 @@ def test_synthetic_candidate_classification():
     ink[60:100, 30] = True
 
     roi = {"xlim": [0, 200], "ylim": [0, 200]}
-    cands = detect_line_candidates(ink, roi, columns=columns, line_fraction_h=0.75, line_fraction_v=0.30, line_width_min=1, line_width_max=2)
+    cands = detect_line_candidates(
+        ink,
+        roi,
+        columns=columns,
+        line_fraction_h=0.75,
+        line_fraction_v=0.30,
+        line_width_min=1,
+        line_width_max=2,
+    )
 
     kinds = [c["kind"] for c in cands]
     assert kinds.count("A") == 1
@@ -63,11 +71,15 @@ def test_line_width_max_filter():
 
     roi = {"xlim": [0, 100], "ylim": [0, 100]}
     # With max=2, 3px line must be excluded
-    cands_filtered = detect_line_candidates(ink, roi, line_fraction_v=0.30, line_width_min=1, line_width_max=2)
+    cands_filtered = detect_line_candidates(
+        ink, roi, line_fraction_v=0.30, line_width_min=1, line_width_max=2
+    )
     assert len(cands_filtered) == 0
 
     # With max=None, it enters
-    cands_all = detect_line_candidates(ink, roi, line_fraction_v=0.30, line_width_min=1, line_width_max=None)
+    cands_all = detect_line_candidates(
+        ink, roi, line_fraction_v=0.30, line_width_min=1, line_width_max=None
+    )
     assert len(cands_all) == 1
     assert cands_all[0]["width"] == 3
 
@@ -99,11 +111,24 @@ def test_adaptive_width_max_scales_with_roi_resolution():
     big = build(4000)
 
     # 小图（长边 400 -> 自适应上限 3）：6px 线超限
-    assert len(detect_line_candidates(small, {"xlim": [0, 400], "ylim": [0, 400]},
-                                      line_fraction_h=0.5, line_width_max=2)) == 0
+    assert (
+        len(
+            detect_line_candidates(
+                small,
+                {"xlim": [0, 400], "ylim": [0, 400]},
+                line_fraction_h=0.5,
+                line_width_max=2,
+            )
+        )
+        == 0
+    )
     # 大图（长边 4000 -> 自适应上限 16）：同样的 6px 线必须被检出
-    big_cands = detect_line_candidates(big, {"xlim": [0, 4000], "ylim": [0, 4000]},
-                                       line_fraction_h=0.5, line_width_max=None)
+    big_cands = detect_line_candidates(
+        big,
+        {"xlim": [0, 4000], "ylim": [0, 4000]},
+        line_fraction_h=0.5,
+        line_width_max=None,
+    )
     assert [c["kind"] for c in big_cands].count("A") == 1
 
 
@@ -115,7 +140,7 @@ def test_exclusion_absolute_priority():
     # A candidate line at row 50
     ink[50, 10:90] = True
     session.foreground_mask = ink
-    session.image = object() # mock loaded
+    session.image = object()  # mock loaded
     session._init_rois()
     roi = session.roi_create(name="pollen", x0=0, x1=100, y0=0, y1=100)["roi"]
 
@@ -125,20 +150,24 @@ def test_exclusion_absolute_priority():
     cand_id = session.line_candidates[0]["id"]
 
     # Cover row 50 with an exclusion box
-    exclusion = [{
-        "id": "ex_1",
-        "roi_id": roi["id"],
-        "kind": "rect",
-        "points": [[20, 45], [60, 45], [60, 55], [20, 55]],
-    }]
+    exclusion = [
+        {
+            "id": "ex_1",
+            "roi_id": roi["id"],
+            "kind": "rect",
+            "points": [[20, 45], [60, 45], [60, 55], [20, 55]],
+        }
+    ]
 
     # Also try to draw a restore stroke in the exact same area
-    restore_stroke = [{
-        "id": "stroke_1",
-        "mode": "restore",
-        "radius": 5,
-        "points": [[30, 50], [40, 50]],
-    }]
+    restore_stroke = [
+        {
+            "id": "stroke_1",
+            "mode": "restore",
+            "radius": 5,
+            "points": [[30, 50], [40, 50]],
+        }
+    ]
 
     res = session.apply_line_removal(
         roi_id=roi["id"],
@@ -208,10 +237,15 @@ def test_hoya_real_regression():
 
     # Pinus column spans approximately x: 500-650 in Hoya
     pinus_ink_before = session.foreground_mask[511:1311, 500:650].sum()
-    pinus_removed = (session.foreground_mask[511:1311, 500:650] & session.grid_line_mask[511:1311, 500:650]).sum()
+    pinus_removed = (
+        session.foreground_mask[511:1311, 500:650]
+        & session.grid_line_mask[511:1311, 500:650]
+    ).sum()
 
     removed_ratio = pinus_removed / max(1, pinus_ink_before)
-    print(f"\nHoya Pinus ink removal ratio: {removed_ratio * 100:.2f}% (removed {pinus_removed} / {pinus_ink_before})")
+    print(
+        f"\nHoya Pinus ink removal ratio: {removed_ratio * 100:.2f}% (removed {pinus_removed} / {pinus_ink_before})"
+    )
     assert removed_ratio < 0.01, f"Pinus removal ratio {removed_ratio:.4f} exceeded 1%!"
 
 
@@ -240,7 +274,9 @@ def test_set_line_thickness_keeps_centre_and_is_uniform():
             },
         )
         new = next(
-            c for c in res["candidates"] if c["source"] == "manual" and c["at"] == centre
+            c
+            for c in res["candidates"]
+            if c["source"] == "manual" and c["at"] == centre
         )
         ids.append(new["id"])
 

@@ -654,6 +654,7 @@ export class RpcClient {
         // Trust the backend's echo, not our own request: a rejected override must not be
         // displayed as if it had been accepted.
         primaryAxis: res.primary_axis === 'age' ? 'age' : 'depth',
+        marks: ordered.map((m) => ({ pixel: m.pixel, val: m.value })),
       },
     };
   }

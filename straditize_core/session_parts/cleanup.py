@@ -384,16 +384,21 @@ class CleanupMixin:
             covered = float(band_hit.mean())
             if covered < AXIS_ERASURE_MIN_COVERAGE:
                 continue
-            by_exclusion = float(
-                exclusion_mask[y0:y1, x0:x1].any(axis=1).mean()
-            ) >= AXIS_ERASURE_MIN_COVERAGE
+            by_exclusion = (
+                float(exclusion_mask[y0:y1, x0:x1].any(axis=1).mean())
+                >= AXIS_ERASURE_MIN_COVERAGE
+            )
             geometry_hit = geometry_mask[y0:y1, x0:x1].any()
             kind = (
                 "exclusion_covers_column_axis"
                 if by_exclusion
                 else "confirmed_line_covers_column_axis"
             )
-            name = col.get("name") or col.get("species") or f"col{col.get('col_index', 0) + 1:02d}"
+            name = (
+                col.get("name")
+                or col.get("species")
+                or f"col{col.get('col_index', 0) + 1:02d}"
+            )
             warnings.append(
                 {
                     "kind": kind,
@@ -748,9 +753,13 @@ class CleanupMixin:
 
         roi_id, _ = self._roi_for(roi_id)
         if candidate_id is None:
-            targets = [c for c in self.line_candidates if str(c.get("roi_id")) == str(roi_id)]
+            targets = [
+                c for c in self.line_candidates if str(c.get("roi_id")) == str(roi_id)
+            ]
         else:
-            targets = [c for c in self.line_candidates if str(c.get("id")) == str(candidate_id)]
+            targets = [
+                c for c in self.line_candidates if str(c.get("id")) == str(candidate_id)
+            ]
             if not targets:
                 raise JsonRpcError(
                     INVALID_PARAMS, f"unknown geometry id: {candidate_id}"
@@ -767,7 +776,13 @@ class CleanupMixin:
                 centre = (x0 + x1) // 2
                 x0 = centre - half
                 x1 = x0 + thickness - 1
-            target["geometry"] = {"type": "rect", "x0": x0, "y0": y0, "x1": x1, "y1": y1}
+            target["geometry"] = {
+                "type": "rect",
+                "x0": x0,
+                "y0": y0,
+                "x1": x1,
+                "y1": y1,
+            }
             _apply_derived_fields(target)
 
         return self._recompose(roi_id)
@@ -823,9 +838,10 @@ class CleanupMixin:
         if not hasattr(self, "line_candidates") or self.line_candidates is None:
             self._init_cleanup()
 
-        if getattr(self, "image", None) is None or getattr(
-            self, "foreground_mask", None
-        ) is None:
+        if (
+            getattr(self, "image", None) is None
+            or getattr(self, "foreground_mask", None) is None
+        ):
             self._extract_foreground_from_settings()
 
         roi_id, _ = self._roi_for(roi_id)
@@ -899,7 +915,9 @@ class CleanupMixin:
                 hit = True
             if hit:
                 dropped.append(
-                    str(column.get("name") or column.get("species") or f"col{index:02d}")
+                    str(
+                        column.get("name") or column.get("species") or f"col{index:02d}"
+                    )
                 )
                 invalidated.add(index)
         self._points_invalidated = invalidated

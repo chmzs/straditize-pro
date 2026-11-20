@@ -38,15 +38,15 @@ PAPER = (255, 255, 255)
 #: 本图版（Han et al. 2026 Fig.3）实测的九种颜色簇。前三档是"只淡一档"的
 #: 5× 包络，后六档才是读数。
 HAN_CLUSTERS = {
-    'paper': ((255, 255, 255), 'paper'),
-    'pink_envelope': ((244, 226, 226), 'shadow'),
-    'blue_envelope': ((218, 226, 237), 'shadow'),
-    'grey_envelope': ((229, 229, 229), 'shadow'),
-    'mid_grey_solid': ((182, 182, 182), 'solid'),
-    'dark_grey_solid': ((167, 167, 167), 'solid'),
-    'deep_red_solid': ((180, 60, 60), 'solid'),
-    'deep_blue_solid': ((0, 62, 137), 'solid'),
-    'black_solid': ((0, 0, 0), 'solid'),
+    "paper": ((255, 255, 255), "paper"),
+    "pink_envelope": ((244, 226, 226), "shadow"),
+    "blue_envelope": ((218, 226, 237), "shadow"),
+    "grey_envelope": ((229, 229, 229), "shadow"),
+    "mid_grey_solid": ((182, 182, 182), "solid"),
+    "dark_grey_solid": ((167, 167, 167), "solid"),
+    "deep_red_solid": ((180, 60, 60), "solid"),
+    "deep_blue_solid": ((0, 62, 137), "solid"),
+    "black_solid": ((0, 0, 0), "solid"),
 }
 
 
@@ -94,15 +94,17 @@ class TestColourClustersOfTheRealFigure(unittest.TestCase):
             solid, shadow = split_by_colour_and_luminance(canvas)
             got_solid = bool(solid[10, 10])
             got_shadow = bool(shadow[10, 10])
-            if expected == 'paper':
+            if expected == "paper":
                 ok = not got_solid and not got_shadow
-            elif expected == 'shadow':
+            elif expected == "shadow":
                 ok = got_shadow and not got_solid
             else:
                 ok = got_solid and not got_shadow
             if not ok:
-                wrong.append(f'{name} expected={expected} solid={got_solid} shadow={got_shadow}')
-        self.assertEqual(wrong, [], '色簇判错：' + '; '.join(wrong))
+                wrong.append(
+                    f"{name} expected={expected} solid={got_solid} shadow={got_shadow}"
+                )
+        self.assertEqual(wrong, [], "色簇判错：" + "; ".join(wrong))
 
     def test_solid_and_shadow_are_mutually_exclusive(self):
         canvas = _three_layer_figure(PAPER, (182, 182, 182), (229, 229, 229))
@@ -118,7 +120,7 @@ class TestColourClustersOfTheRealFigure(unittest.TestCase):
 
 
 @pytest.mark.parametrize(
-    'shadow_colour',
+    "shadow_colour",
     [
         (244, 226, 226),  # 浅粉包络
         (218, 226, 237),  # 浅蓝包络
@@ -126,35 +128,44 @@ class TestColourClustersOfTheRealFigure(unittest.TestCase):
         (214, 222, 236),  # 淡紫包络（实测极差 34，横跨"灰/彩"边界）
         (210, 232, 240),  # 淡青包络
     ],
-    ids=['pink', 'blue', 'light-grey', 'lavender', 'cyan'],
+    ids=["pink", "blue", "light-grey", "lavender", "cyan"],
 )
 def test_five_envelope_colours_never_enter_the_solid_mask(shadow_colour):
     """每一种 5× 包络色：进入 solid = 0 像素，且必须落进 shadow。"""
     canvas = _three_layer_figure(PAPER, (0, 62, 137), shadow_colour)
     solid, shadow = split_by_colour_and_luminance(canvas)
-    assert _coverage(solid, SHADOW_BOX) == 0.0, f'包络 {shadow_colour} 漏进读数'
-    assert _coverage(shadow, SHADOW_BOX) == 1.0, f'包络 {shadow_colour} 未被识别为阴影'
+    assert _coverage(solid, SHADOW_BOX) == 0.0, f"包络 {shadow_colour} 漏进读数"
+    assert _coverage(shadow, SHADOW_BOX) == 1.0, f"包络 {shadow_colour} 未被识别为阴影"
 
 
 @pytest.mark.parametrize(
-    'solid_colour',
+    "solid_colour",
     [
         (182, 182, 182),  # 中灰——本轮缺陷本体
         (167, 167, 167),  # 深灰
         (208, 207, 191),  # Caryophyllaceae 实际主填充色（暖灰）
-        (180, 60, 60),    # 深红
-        (0, 62, 137),     # 深蓝
-        (255, 177, 34),   # 橙（高明度彩色实心）
+        (180, 60, 60),  # 深红
+        (0, 62, 137),  # 深蓝
+        (255, 177, 34),  # 橙（高明度彩色实心）
         (250, 220, 150),  # 淡琥珀（明度 224 的釉料实心）
-        (0, 0, 0),        # 纯黑
+        (0, 0, 0),  # 纯黑
     ],
-    ids=['mid-grey', 'dark-grey', 'warm-grey', 'red', 'blue', 'orange', 'amber', 'black'],
+    ids=[
+        "mid-grey",
+        "dark-grey",
+        "warm-grey",
+        "red",
+        "blue",
+        "orange",
+        "amber",
+        "black",
+    ],
 )
 def test_eight_solid_colours_are_fully_read(solid_colour):
     """每一种实心色：solid 覆盖率 = 100%，且不落进 shadow。"""
     canvas = _three_layer_figure(PAPER, solid_colour, (229, 229, 229))
     solid, shadow = split_by_colour_and_luminance(canvas)
-    assert _coverage(solid, SOLID_BOX) == 1.0, f'实心 {solid_colour} 被丢弃'
+    assert _coverage(solid, SOLID_BOX) == 1.0, f"实心 {solid_colour} 被丢弃"
     assert _coverage(shadow, SOLID_BOX) == 0.0
 
 
@@ -169,11 +180,13 @@ def test_grey_and_colour_columns_are_treated_in_the_same_direction():
     g_solid, g_shadow = split_by_colour_and_luminance(grey)
     c_solid, c_shadow = split_by_colour_and_luminance(colour)
 
-    for label, solid, shadow in (('grey', g_solid, g_shadow),
-                                 ('colour', c_solid, c_shadow)):
-        assert _coverage(solid, SOLID_BOX) == 1.0, f'{label} 实心层丢失'
-        assert _coverage(shadow, SHADOW_BOX) == 1.0, f'{label} 阴影层丢失'
-        assert _coverage(solid, SHADOW_BOX) == 0.0, f'{label} 阴影漏进读数'
+    for label, solid, shadow in (
+        ("grey", g_solid, g_shadow),
+        ("colour", c_solid, c_shadow),
+    ):
+        assert _coverage(solid, SOLID_BOX) == 1.0, f"{label} 实心层丢失"
+        assert _coverage(shadow, SHADOW_BOX) == 1.0, f"{label} 阴影层丢失"
+        assert _coverage(solid, SHADOW_BOX) == 0.0, f"{label} 阴影漏进读数"
 
 
 class TestPaperIsMeasuredPerFigure(unittest.TestCase):
@@ -193,8 +206,8 @@ class TestPaperIsMeasuredPerFigure(unittest.TestCase):
         # 同一套配色放在奶油纸上，判定结果必须与白纸一致。
         cream = _three_layer_figure((240, 238, 230), (182, 182, 182), (229, 229, 229))
         solid, shadow = split_by_colour_and_luminance(cream)
-        self.assertEqual(_coverage(solid, SOLID_BOX), 1.0, '奶油纸上实心被丢弃')
-        self.assertEqual(_coverage(solid, SHADOW_BOX), 0.0, '奶油纸上阴影漏进读数')
+        self.assertEqual(_coverage(solid, SOLID_BOX), 1.0, "奶油纸上实心被丢弃")
+        self.assertEqual(_coverage(solid, SHADOW_BOX), 0.0, "奶油纸上阴影漏进读数")
 
 
 class TestBoundaryIsNotTunedToOneFigure(unittest.TestCase):
@@ -216,7 +229,7 @@ class TestBoundaryIsNotTunedToOneFigure(unittest.TestCase):
         for shadow_grey in (229, 220, 215, 205, 190, 170):
             canvas = _three_layer_figure(PAPER, (120, 120, 120), (shadow_grey,) * 3)
             solid, _shadow = split_by_colour_and_luminance(canvas)
-            self.assertEqual(_coverage(solid, SOLID_BOX), 1.0, '实心被丢弃')
+            self.assertEqual(_coverage(solid, SOLID_BOX), 1.0, "实心被丢弃")
             leaks[shadow_grey] = _coverage(solid, SHADOW_BOX)
 
         # 2026-10-20 更新：**该局限已消除**。
@@ -229,9 +242,12 @@ class TestBoundaryIsNotTunedToOneFigure(unittest.TestCase):
         # 保留这条测试的意义变了：它现在守的是"别把边界退回固定比例"。
         # 若有人把 `_resolve_solid_ratio` 改回纯 `solid_ratio`，这里会立刻红。
         for grey in (215, 205, 190, 170):
-            self.assertEqual(leaks[grey], 0.0,
-                             f'明度 {grey} 的阴影漏进了读数 —— '
-                             '判据可能退回了固定比例（应改为峰间切分）')
+            self.assertEqual(
+                leaks[grey],
+                0.0,
+                f"明度 {grey} 的阴影漏进了读数 —— "
+                "判据可能退回了固定比例（应改为峰间切分）",
+            )
 
     def test_faint_figure_keeps_its_layers_apart(self):
         """整张图都很淡（影印/低对比）：纸 238 / 实心 170 / 阴影 226。"""
@@ -256,8 +272,11 @@ class TestBoundaryIsNotTunedToOneFigure(unittest.TestCase):
         """
         canvas = _three_layer_figure(PAPER, (215, 215, 215), (238, 238, 238))
         solid, _shadow = split_by_colour_and_luminance(canvas)
-        self.assertEqual(_coverage(solid, SHADOW_BOX), 0.0,
-                         '不可分图的阴影漏进了读数——这是多读方向，必须禁止')
+        self.assertEqual(
+            _coverage(solid, SHADOW_BOX),
+            0.0,
+            "不可分图的阴影漏进了读数——这是多读方向，必须禁止",
+        )
 
     def test_low_chroma_overlay_on_dark_ink_never_leaks(self):
         """已知失效边界②：极低极差包络叠在深色实心上时退回单档切分。
@@ -266,15 +285,14 @@ class TestBoundaryIsNotTunedToOneFigure(unittest.TestCase):
         """
         canvas = _three_layer_figure(PAPER, (0, 62, 137), (204, 208, 211))
         solid, _shadow = split_by_colour_and_luminance(canvas)
-        self.assertEqual(_coverage(solid, SOLID_BOX), 1.0, '实心不得被丢弃')
+        self.assertEqual(_coverage(solid, SOLID_BOX), 1.0, "实心不得被丢弃")
         # 已知边界②：包络在直方图里不成峰，判据退回单档切分，因此包络会
         # 整块漏进读数。这一条**不是可接受行为**，而是当前实现的公开缺陷；
         # 断言写成"记录现状"而不是"认可现状"——一旦修复，这里会失败，
         # 提醒把断言收紧为 0.0 并删除本注释。
         leaked = _coverage(solid, SHADOW_BOX)
         # 2026-10-20 更新：判据改动后该失效边界已被消除，断言按提示收紧为 0.0。
-        self.assertEqual(leaked, 0.0,
-                         '边界②的行为已改变：请把断言收紧为 == 0.0')
+        self.assertEqual(leaked, 0.0, "边界②的行为已改变：请把断言收紧为 == 0.0")
 
 
 class TestStandardPathRegressions(unittest.TestCase):
@@ -296,41 +314,47 @@ class TestStandardPathRegressions(unittest.TestCase):
         # 2026-10-20 更新：判据收紧后 beginner 的补进从 15880 降到 773
         # （`removed` 仍为 0 —— 关键安全属性未变：没有削掉任何墨）。
         # 降幅来自"不再把 15k 浅色像素当墨"，属改善而非回归。
-        expected_added = {'hoya': 11579, 'beginner': 773}
-        for sample in ('hoya', 'beginner'):
+        expected_added = {"hoya": 11579, "beginner": 773}
+        for sample in ("hoya", "beginner"):
             with self.subTest(sample=sample):
                 session = StraditizeSession()
                 session._init_cleanup()
                 session.load_image(sample_key=sample)
                 result = session.extract_foreground()
 
-                gray = np.array(session.image.convert('L'))
-                otsu = gray < result['threshold']
+                gray = np.array(session.image.convert("L"))
+                otsu = gray < result["threshold"]
                 mask = session.foreground_mask
 
                 removed = int((otsu & ~mask).sum())
                 added = int((mask & ~otsu).sum())
-                self.assertEqual(removed, 0,
-                                 f'{sample}: 新判据削掉了 {removed} px 原本的墨')
                 self.assertEqual(
-                    added, expected_added[sample],
-                    f'{sample}: 补进 {added} px，与记录的 {expected_added[sample]} 不符'
-                    '（若判据改动，需重新核对每一块的来源）')
+                    removed, 0, f"{sample}: 新判据削掉了 {removed} px 原本的墨"
+                )
+                self.assertEqual(
+                    added,
+                    expected_added[sample],
+                    f"{sample}: 补进 {added} px，与记录的 {expected_added[sample]} 不符"
+                    "（若判据改动，需重新核对每一块的来源）",
+                )
 
     def test_standard_path_survives_a_mid_grey_fill(self):
         """合成图走 build_foreground 的 standard 分支，中灰填充必须被读到。"""
         canvas = _three_layer_figure(PAPER, (182, 182, 182), (229, 229, 229))
         rgba = np.dstack([canvas, np.full(canvas.shape[:2], 255, dtype=np.uint8)])
-        mask = build_foreground(rgba, threshold=138.0 * 3, extraction_mode='standard')
-        self.assertEqual(_coverage(mask, SOLID_BOX), 1.0, '中灰填充被 standard 路径丢弃')
-        self.assertEqual(_coverage(mask, SHADOW_BOX), 0.0, '阴影漏进前景掩膜')
+        mask = build_foreground(rgba, threshold=138.0 * 3, extraction_mode="standard")
+        self.assertEqual(
+            _coverage(mask, SOLID_BOX), 1.0, "中灰填充被 standard 路径丢弃"
+        )
+        self.assertEqual(_coverage(mask, SHADOW_BOX), 0.0, "阴影漏进前景掩膜")
 
     def test_legacy_absolute_threshold_is_still_reachable(self):
         """旧行为必须可显式取回，供对照与回退；这不是死代码。"""
         canvas = _three_layer_figure(PAPER, (182, 182, 182), (229, 229, 229))
         rgba = np.dstack([canvas, np.full(canvas.shape[:2], 255, dtype=np.uint8)])
         legacy = build_foreground(
-            rgba, threshold=138.0 * 3, extraction_mode='standard', two_axis=False)
+            rgba, threshold=138.0 * 3, extraction_mode="standard", two_axis=False
+        )
         self.assertLess(float(legacy.sum()), float(rgba.shape[0] * rgba.shape[1]))
 
 
@@ -340,7 +364,7 @@ class TestRealFigureAcceptance(unittest.TestCase):
     # 指向**已入库**的那张。原路径 output/han2026_ngamring/fig3_raw.jpeg 被
     # .gitignore:68 的 `output/` 排除，CI 上不存在 → 本类三条验收一直静默 skip。
     # 两张图 sha256 完全相同（927231034b9865bb…），换路径不改判据。
-    FIGURE = 'tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg'
+    FIGURE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
 
     def _load(self):
         from pathlib import Path
@@ -349,48 +373,51 @@ class TestRealFigureAcceptance(unittest.TestCase):
 
         path = Path(self.FIGURE)
         if not path.exists():
-            self.skipTest(f'真实图版不在仓库内：{path}（仅本地验收用）')
-        return np.array(Image.open(path).convert('RGB'))
+            self.skipTest(f"真实图版不在仓库内：{path}（仅本地验收用）")
+        return np.array(Image.open(path).convert("RGB"))
 
     def test_mid_grey_fill_is_no_longer_dropped(self):
         rgb = self._load()
         solid, _shadow = split_by_colour_and_luminance(rgb)
 
-        mid_grey = (np.abs(rgb.astype(int) - np.array([182, 182, 182])).max(axis=-1) <= 8)
+        mid_grey = np.abs(rgb.astype(int) - np.array([182, 182, 182])).max(axis=-1) <= 8
         n = int(mid_grey.sum())
-        self.assertGreater(n, 1000, '该图版应含中灰填充像素')
+        self.assertGreater(n, 1000, "该图版应含中灰填充像素")
         coverage = float((mid_grey & solid).sum()) / n
-        self.assertGreaterEqual(coverage, 0.95,
-                                f'中灰填充覆盖率 {coverage:.1%} < 95%')
+        self.assertGreaterEqual(coverage, 0.95, f"中灰填充覆盖率 {coverage:.1%} < 95%")
 
     def test_envelopes_stay_out_of_the_reading(self):
         rgb = self._load()
         solid, shadow = split_by_colour_and_luminance(rgb)
-        for name, colour in (('pink', (244, 226, 226)),
-                             ('blue', (218, 226, 237)),
-                             ('light-grey', (229, 229, 229))):
-            sel = (np.abs(rgb.astype(int) - np.array(colour)).max(axis=-1) <= 8)
+        for name, colour in (
+            ("pink", (244, 226, 226)),
+            ("blue", (218, 226, 237)),
+            ("light-grey", (229, 229, 229)),
+        ):
+            sel = np.abs(rgb.astype(int) - np.array(colour)).max(axis=-1) <= 8
             n = int(sel.sum())
             if n == 0:
                 continue
             leaked = float((sel & solid).sum()) / n
-            assert leaked == 0.0, f'{name} 包络有 {leaked:.1%} 漏进读数'
+            assert leaked == 0.0, f"{name} 包络有 {leaked:.1%} 漏进读数"
             # 同时确认它们没有被静默丢成"既不是实心也不是阴影"
             captured = float((sel & shadow).sum()) / n
-            assert captured > 0.99, f'{name} 包络只有 {captured:.1%} 被识别为阴影'
+            assert captured > 0.99, f"{name} 包络只有 {captured:.1%} 被识别为阴影"
 
     def test_dark_solids_are_fully_read(self):
         rgb = self._load()
         solid, _shadow = split_by_colour_and_luminance(rgb)
-        for name, colour in (('deep-red', (180, 60, 60)),
-                             ('deep-blue', (0, 62, 137)),
-                             ('black', (0, 0, 0))):
-            sel = (np.abs(rgb.astype(int) - np.array(colour)).max(axis=-1) <= 8)
+        for name, colour in (
+            ("deep-red", (180, 60, 60)),
+            ("deep-blue", (0, 62, 137)),
+            ("black", (0, 0, 0)),
+        ):
+            sel = np.abs(rgb.astype(int) - np.array(colour)).max(axis=-1) <= 8
             n = int(sel.sum())
             if n == 0:
                 continue
             coverage = float((sel & solid).sum()) / n
-            assert coverage == 1.0, f'{name} 实心覆盖率退化到 {coverage:.1%}'
+            assert coverage == 1.0, f"{name} 实心覆盖率退化到 {coverage:.1%}"
 
 
 class TestMeasuredWithTheSameProxiesItReplaced(unittest.TestCase):
@@ -406,11 +433,14 @@ class TestMeasuredWithTheSameProxiesItReplaced(unittest.TestCase):
         """
         canvas = _three_layer_figure(PAPER, (182, 182, 182), (229, 229, 229))
         lum = grey_matrix(canvas)
-        self.assertEqual(int(np.unique(lum).size), 3, '构造图应恰好三层亮度')
+        self.assertEqual(int(np.unique(lum).size), 3, "构造图应恰好三层亮度")
         # 一条 138 的绝对线（Han2026 的 Otsu 值）会把 182 与 229 一起判为背景
         otsu_like = lum < 138.0
-        self.assertEqual(_coverage(otsu_like, SOLID_BOX), 0.0,
-                         '这正是本轮缺陷：138 的绝对线丢弃中灰填充')
+        self.assertEqual(
+            _coverage(otsu_like, SOLID_BOX),
+            0.0,
+            "这正是本轮缺陷：138 的绝对线丢弃中灰填充",
+        )
 
     def test_colour_alone_cannot_separate_grey_tiers(self):
         """只用颜色：灰阶三层的通道极差全为 0，颜色提供的信息量为零。"""
@@ -418,7 +448,7 @@ class TestMeasuredWithTheSameProxiesItReplaced(unittest.TestCase):
             canvas = np.zeros((4, 4, 3), dtype=np.uint8)
             canvas[...] = colour
             chroma = int(canvas.max()) - int(canvas.min())
-            self.assertEqual(chroma, 0, f'{colour} 应为纯灰（极差 0）')
+            self.assertEqual(chroma, 0, f"{colour} 应为纯灰（极差 0）")
 
     def test_the_two_axes_answer_different_questions(self):
         """双轴的正当性：灰阶靠亮度、彩色靠颜色，谁也替代不了谁。"""
@@ -431,9 +461,12 @@ class TestMeasuredWithTheSameProxiesItReplaced(unittest.TestCase):
         # "淡釉料实心"上翻车；这里证明颜色轴确实救回了它。
         amber = _three_layer_figure(PAPER, (250, 220, 150), (252, 240, 220))
         a_solid, _ = split_by_colour_and_luminance(amber)
-        self.assertEqual(_coverage(a_solid, SOLID_BOX), 1.0,
-                         '明度 224 的淡琥珀实心被丢弃——颜色轴没有生效')
+        self.assertEqual(
+            _coverage(a_solid, SOLID_BOX),
+            1.0,
+            "明度 224 的淡琥珀实心被丢弃——颜色轴没有生效",
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

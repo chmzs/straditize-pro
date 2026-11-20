@@ -37,6 +37,7 @@ from straditize_core.session import StraditizeSession
 
 _REPO = Path(__file__).resolve().parents[2]
 
+
 def _strip_js_comments(source: str) -> str:
     """去掉 JS/TS 的行注释与块注释。
 
@@ -155,4 +156,3 @@ def test_export_modal_refreshes_without_reopen() -> None:
     assert "export function refreshOpenExportModal" in modal
     assert "btn-wpd-refresh" in modal, "缺「刷新数据」按钮"
     assert "refreshOpenExportModal()" in main_ts, "onDataChange 必须触发面板刷新"
-

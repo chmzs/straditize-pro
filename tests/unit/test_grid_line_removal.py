@@ -34,7 +34,15 @@ from straditize_core.image import (
 from straditize_core.session import StraditizeSession
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-HOYA = REPO_ROOT / "straditize" / "straditize" / "widgets" / "tutorial" / "hoya-del-castillo" / "hoya-del-castillo.png"
+HOYA = (
+    REPO_ROOT
+    / "straditize"
+    / "straditize"
+    / "widgets"
+    / "tutorial"
+    / "hoya-del-castillo"
+    / "hoya-del-castillo.png"
+)
 #: The figure's own data region (the tutorial's canonical box).
 HOYA_ROI = (315, 511, 1946, 1311)
 
@@ -48,7 +56,7 @@ def _synthetic_diagram() -> np.ndarray:
     for y in range(50, 250):  # filled bell silhouette the line passes through
         t = (y - 50) / 199
         half = int(60 * np.sin(np.pi * t) ** 0.8) + 1
-        ink[y, 120 - half:120 + half] = True
+        ink[y, 120 - half : 120 + half] = True
     xs = np.arange(380, 560)  # thin polyline proxy
     ink[np.round(120 + 40 * np.sin(xs / 25)).astype(int), xs] = True
     return ink
@@ -70,7 +78,9 @@ class TestThinnessBound(unittest.TestCase):
 
     def test_filled_bell_survives_a_line_running_through_it(self) -> None:
         ink = _synthetic_diagram()
-        horizontal, vertical, info = detect_grid_lines(ink, strength="medium", roi=(0, 0, 600, 300))
+        horizontal, vertical, info = detect_grid_lines(
+            ink, strength="medium", roi=(0, 0, 600, 300)
+        )
 
         # The genuine lines are found...
         self.assertEqual(info["horizontal_rows"], [150])
@@ -89,7 +99,9 @@ class TestThinnessBound(unittest.TestCase):
 
     def test_thin_polyline_is_not_eaten(self) -> None:
         ink = _synthetic_diagram()
-        horizontal, vertical, _ = detect_grid_lines(ink, strength="medium", roi=(0, 0, 600, 300))
+        horizontal, vertical, _ = detect_grid_lines(
+            ink, strength="medium", roi=(0, 0, 600, 300)
+        )
         polyline = np.zeros_like(ink)
         polyline[np.ix_(range(70, 181), range(375, 565))] = True
         polyline[150, :] = False  # the true grid line legitimately crosses here
@@ -107,8 +119,10 @@ class TestThinnessBound(unittest.TestCase):
         for y in range(20, 280):
             t = (y - 20) / 259
             half = int(60 * np.sin(np.pi * t) ** 0.8) + 1
-            ink[y, 100 - half:100 + half] = True
-        _, vertical, _ = detect_grid_lines(ink, strength="medium", roi=(0, 0, width, height))
+            ink[y, 100 - half : 100 + half] = True
+        _, vertical, _ = detect_grid_lines(
+            ink, strength="medium", roi=(0, 0, width, height)
+        )
         self.assertEqual(int(vertical.sum()), 0)
 
 
@@ -144,7 +158,9 @@ class TestHoyaRegression(unittest.TestCase):
         roi_ink = int(self.ink[y0:y1, x0:x1].sum())
         for strength in GRID_LINE_PRESETS:
             with self.subTest(strength=strength):
-                _, _, info = detect_grid_lines(self.ink, strength=strength, roi=HOYA_ROI)
+                _, _, info = detect_grid_lines(
+                    self.ink, strength=strength, roi=HOYA_ROI
+                )
                 ratio = info["horizontal_pixels"] + info["vertical_pixels"]
                 self.assertLess(
                     ratio / roi_ink,
@@ -156,7 +172,9 @@ class TestHoyaRegression(unittest.TestCase):
         """Pinus is the widest filled taxon; the old rule erased 99% of it."""
         x0, y0, x1, y1 = HOYA_ROI
         pinus = self.ink[y0:y1, 490:660]
-        self.assertGreater(int(pinus.sum()), 50_000, "test region no longer covers Pinus")
+        self.assertGreater(
+            int(pinus.sum()), 50_000, "test region no longer covers Pinus"
+        )
         _, line_mask, _ = remove_grid_lines(
             self.ink, strength="weak", roi=HOYA_ROI, remove_vertical=False
         )
@@ -197,7 +215,8 @@ class TestManualCorrection(unittest.TestCase):
 
     def test_strokes_outside_the_image_are_clipped_not_fatal(self) -> None:
         restore, erase = rasterize_strokes(
-            (20, 20), [{"mode": "erase", "radius": 5, "points": [[-50, -50], [200, 200]]}]
+            (20, 20),
+            [{"mode": "erase", "radius": 5, "points": [[-50, -50], [200, 200]]}],
         )
         self.assertEqual(restore.shape, (20, 20))
         self.assertEqual(erase.dtype, np.bool_)
@@ -219,7 +238,9 @@ class TestManualCorrection(unittest.TestCase):
 class TestOverlayPayload(unittest.TestCase):
     def test_overlay_is_a_png_data_url_with_both_classes(self) -> None:
         ink = _synthetic_diagram()
-        _, line_mask, _ = remove_grid_lines(ink, strength="medium", roi=(0, 0, 600, 300))
+        _, line_mask, _ = remove_grid_lines(
+            ink, strength="medium", roi=(0, 0, 600, 300)
+        )
         url = mask_overlay_data_url(ink, line_mask)
         self.assertTrue(url.startswith("data:image/png;base64,"))
         self.assertGreater(len(url), 100)
@@ -231,7 +252,9 @@ class TestRoiCalibrationSeparation(unittest.TestCase):
     def setUp(self) -> None:
         self.session = StraditizeSession()
         self.session.load_image(sample_key="hoya")
-        self.session.detect_columns([HOYA_ROI[0], HOYA_ROI[2]], [HOYA_ROI[1], HOYA_ROI[3]])
+        self.session.detect_columns(
+            [HOYA_ROI[0], HOYA_ROI[2]], [HOYA_ROI[1], HOYA_ROI[3]]
+        )
 
     def test_load_image_suggests_a_region_and_no_calibration(self) -> None:
         info = self.session.load_image(sample_key="hoya")
@@ -242,7 +265,8 @@ class TestRoiCalibrationSeparation(unittest.TestCase):
 
     def test_roi_update_never_touches_the_depth_axis(self) -> None:
         self.session.calibrate_axes(
-            y_marks=[{"pixel": 556, "val": 1500}, {"pixel": 1311, "val": 4500}], unit="mm"
+            y_marks=[{"pixel": 556, "val": 1500}, {"pixel": 1311, "val": 4500}],
+            unit="mm",
         )
         before = dict(self.session.depth_calib)
         roi_x0, roi_x1 = self.session._roi_box()[0], self.session._roi_box()[2]
@@ -261,7 +285,9 @@ class TestRoiCalibrationSeparation(unittest.TestCase):
         )
         self.assertEqual(self.session._roi_box(), roi_before)
 
-    def test_two_marks_are_stored_in_pixel_order_regardless_of_click_order(self) -> None:
+    def test_two_marks_are_stored_in_pixel_order_regardless_of_click_order(
+        self,
+    ) -> None:
         self.session.calibrate_axes(
             y_marks=[{"pixel": 1200, "val": 300}, {"pixel": 600, "val": 0}]
         )
@@ -290,13 +316,16 @@ class TestRoiCalibrationSeparation(unittest.TestCase):
 
     def test_project_round_trip_keeps_the_two_concepts_apart(self) -> None:
         self.session.calibrate_axes(
-            y_marks=[{"pixel": 556, "val": 1500}, {"pixel": 1311, "val": 4500}], unit="mm"
+            y_marks=[{"pixel": 556, "val": 1500}, {"pixel": 1311, "val": 4500}],
+            unit="mm",
         )
         roi_x0, roi_x1 = self.session._roi_box()[0], self.session._roi_box()[2]
         self.session.roi_update(y0=560, y1=1300)
         self.session.algorithm_degrid(
             strength="medium",
-            corrections=[{"mode": "erase", "radius": 5, "points": [[320, 600], [320, 900]]}],
+            corrections=[
+                {"mode": "erase", "radius": 5, "points": [[320, 600], [320, 900]]}
+            ],
         )
         saved = self.session.project_save(format="json")["data"]
 
@@ -354,7 +383,7 @@ class TestRoiCalibrationSeparation(unittest.TestCase):
         self.assertFalse(bool(mask[:, 0].any()))
 
     def test_degrid_off_clears_the_session_mask(self) -> None:
-        """"off" must clear the mask, not merely stop drawing it.
+        """ "off" must clear the mask, not merely stop drawing it.
 
         Otherwise the previous mask keeps being subtracted on the digitising path
         after the user turned line removal off.

@@ -24,6 +24,7 @@
 按规矩写。代价实测（hoya 28 列 + 727 控制点）：浅拷贝 0.02ms → 深拷贝 ~1.04ms/次，
 撤销栈上限 500 格，可接受。
 """
+
 from __future__ import annotations
 
 import copy
@@ -194,7 +195,9 @@ class TestSnapshotIndependence:
         restored[0]["value"] = 555.0
 
         for index, snapshot in enumerate(session.undo_stack):
-            ticks = snapshot["columns"][0].get("x_ticks") if snapshot["columns"] else None
+            ticks = (
+                snapshot["columns"][0].get("x_ticks") if snapshot["columns"] else None
+            )
             if ticks:
                 assert ticks[0]["value"] != 555.0, (
                     f"undo_stack[{index}] 的快照被回填后的实时编辑改掉了"
@@ -300,7 +303,10 @@ class TestSnapshotHelperIsDeep:
 
     def test_snapshot_helper_deep_copies_nested_values(self) -> None:
         session, _band_start, _band_end = _calibrated_session()
-        session.columns[0]["x_ticks"] = [{"px": 1.0, "value": 0.0}, {"px": 2.0, "value": 9.0}]
+        session.columns[0]["x_ticks"] = [
+            {"px": 1.0, "value": 0.0},
+            {"px": 2.0, "value": 9.0},
+        ]
         session.columns[0]["x_values"] = [0.0, 9.0]
 
         snapshot = session._snapshot_editable_state()

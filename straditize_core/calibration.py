@@ -4,6 +4,7 @@ Supports linear and piecewise calibration between image pixel coordinates
 and real-world scientific units (depth, age, abundance %, concentration).
 Pure Python/NumPy/SciPy/pandas implementation without GUI or Matplotlib.
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -26,15 +27,19 @@ class LinearCalibration:
     Supports either 2-point specification or multiple points fitted with linear regression.
     """
 
-    def __init__(self,
-                 px_points: Sequence[float],
-                 data_points: Sequence[float],
-                 name: str = "axis"):
+    def __init__(
+        self,
+        px_points: Sequence[float],
+        data_points: Sequence[float],
+        name: str = "axis",
+    ):
         px = np.asarray(px_points, dtype=float)
         data = np.asarray(data_points, dtype=float)
 
         if len(px) != len(data):
-            raise ValueError(f"Length of px_points ({len(px)}) != data_points ({len(data)})")
+            raise ValueError(
+                f"Length of px_points ({len(px)}) != data_points ({len(data)})"
+            )
         if len(px) < 2:
             raise ValueError("At least 2 points are required for linear calibration.")
 
@@ -90,15 +95,19 @@ class LogCalibration:
       - abs(s - t) > 1e-12 (start value and tick value cannot be equal)
     """
 
-    def __init__(self,
-                 px_points: Sequence[float],
-                 data_points: Sequence[float],
-                 name: str = "log_axis"):
+    def __init__(
+        self,
+        px_points: Sequence[float],
+        data_points: Sequence[float],
+        name: str = "log_axis",
+    ):
         px = np.asarray(px_points, dtype=float)
         data = np.asarray(data_points, dtype=float)
 
         if len(px) != len(data):
-            raise ValueError(f"Length of px_points ({len(px)}) != data_points ({len(data)})")
+            raise ValueError(
+                f"Length of px_points ({len(px)}) != data_points ({len(data)})"
+            )
         if len(px) < 2:
             raise ValueError("At least 2 points are required for log calibration.")
 
@@ -143,7 +152,9 @@ class LogCalibration:
         """Convert scientific data values back to pixel coordinates."""
         d_arr = np.asarray(data, dtype=float)
         if np.any(d_arr <= 0):
-            raise ValueError("Cannot map non-positive values to logarithmic pixel coordinates.")
+            raise ValueError(
+                "Cannot map non-positive values to logarithmic pixel coordinates."
+            )
         ln_val = np.log(d_arr)
         frac = (ln_val - self._ln_start) / self._ln_diff
         res = self.x0 + frac * self._px_diff
@@ -155,17 +166,21 @@ class LogCalibration:
         return self.px2data(px)
 
     def __repr__(self) -> str:
-        return (f"LogCalibration({self.name!r}, x0={self.x0:.6g}, x1={self.x1:.6g}, "
-                f"start_val={self.start_val:.6g}, tick_val={self.tick_val:.6g})")
+        return (
+            f"LogCalibration({self.name!r}, x0={self.x0:.6g}, x1={self.x1:.6g}, "
+            f"start_val={self.start_val:.6g}, tick_val={self.tick_val:.6g})"
+        )
 
 
 class PiecewiseCalibration:
     """Bi-directional piecewise linear mapping for non-linear depth-age models."""
 
-    def __init__(self,
-                 px_points: Sequence[float],
-                 data_points: Sequence[float],
-                 name: str = "piecewise"):
+    def __init__(
+        self,
+        px_points: Sequence[float],
+        data_points: Sequence[float],
+        name: str = "piecewise",
+    ):
         px = np.asarray(px_points, dtype=float)
         data = np.asarray(data_points, dtype=float)
 
@@ -178,16 +193,19 @@ class PiecewiseCalibration:
         self.name = name
 
         self._forward = interp1d(
-            self.px, self.data, kind='linear', fill_value='extrapolate')
+            self.px, self.data, kind="linear", fill_value="extrapolate"
+        )
 
         # For inverse mapping, data must be strictly monotonic
         diff = np.diff(self.data)
         if np.all(diff > 0):
             self._backward = interp1d(
-                self.data, self.px, kind='linear', fill_value='extrapolate')
+                self.data, self.px, kind="linear", fill_value="extrapolate"
+            )
         elif np.all(diff < 0):
             self._backward = interp1d(
-                self.data[::-1], self.px[::-1], kind='linear', fill_value='extrapolate')
+                self.data[::-1], self.px[::-1], kind="linear", fill_value="extrapolate"
+            )
         else:
             self._backward = None
 
@@ -196,7 +214,9 @@ class PiecewiseCalibration:
 
     def data2px(self, data: np.ndarray | float) -> np.ndarray | float:
         if self._backward is None:
-            raise ValueError("Data points are not strictly monotonic; inverse mapping is ambiguous.")
+            raise ValueError(
+                "Data points are not strictly monotonic; inverse mapping is ambiguous."
+            )
         return self._backward(np.asarray(data, dtype=float))
 
 
@@ -207,11 +227,17 @@ class StratigraphicCalibration:
     horizontal calibration (abundance percentage, count, or concentration along X-axis).
     """
 
-    def __init__(self,
-                 y_calibration: LinearCalibration | PiecewiseCalibration,
-                 x_scale: float | dict[str, float] | None = None,
-                 x_calibration: LinearCalibration | LogCalibration | PiecewiseCalibration | dict[str, LinearCalibration | LogCalibration | PiecewiseCalibration] | None = None,
-                 y_name: str = "Depth"):
+    def __init__(
+        self,
+        y_calibration: LinearCalibration | PiecewiseCalibration,
+        x_scale: float | dict[str, float] | None = None,
+        x_calibration: LinearCalibration
+        | LogCalibration
+        | PiecewiseCalibration
+        | dict[str, LinearCalibration | LogCalibration | PiecewiseCalibration]
+        | None = None,
+        y_name: str = "Depth",
+    ):
         """
         Parameters
         ----------
@@ -238,14 +264,19 @@ class StratigraphicCalibration:
         """Convert scientific depth/age values to Y pixel rows."""
         return self.y_calibration.data2px(y_val)
 
-    def px2data_x(self, x_px: np.ndarray | float, col_name: str | None = None) -> np.ndarray | float:
+    def px2data_x(
+        self, x_px: np.ndarray | float, col_name: str | None = None
+    ) -> np.ndarray | float:
         """Convert column pixel values (width from origin) to scientific data values."""
         if self.x_calibration is not None:
             if isinstance(self.x_calibration, dict):
                 cal = self.x_calibration.get(col_name) if col_name else None
                 if cal is not None:
                     return cal.px2data(x_px)
-            elif isinstance(self.x_calibration, (LinearCalibration, LogCalibration, PiecewiseCalibration)):
+            elif isinstance(
+                self.x_calibration,
+                (LinearCalibration, LogCalibration, PiecewiseCalibration),
+            ):
                 return self.x_calibration.px2data(x_px)
 
         if self.x_scale is not None:
@@ -258,14 +289,19 @@ class StratigraphicCalibration:
         # Default fallback: 1 pixel = 1 unit
         return np.asarray(x_px, dtype=float)
 
-    def data2px_x(self, x_val: np.ndarray | float, col_name: str | None = None) -> np.ndarray | float:
+    def data2px_x(
+        self, x_val: np.ndarray | float, col_name: str | None = None
+    ) -> np.ndarray | float:
         """Convert scientific data values back to column pixel widths."""
         if self.x_calibration is not None:
             if isinstance(self.x_calibration, dict):
                 cal = self.x_calibration.get(col_name) if col_name else None
                 if cal is not None:
                     return cal.data2px(x_val)
-            elif isinstance(self.x_calibration, (LinearCalibration, LogCalibration, PiecewiseCalibration)):
+            elif isinstance(
+                self.x_calibration,
+                (LinearCalibration, LogCalibration, PiecewiseCalibration),
+            ):
                 return self.x_calibration.data2px(x_val)
 
         if self.x_scale is not None:

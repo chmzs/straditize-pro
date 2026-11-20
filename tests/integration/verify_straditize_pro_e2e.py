@@ -86,14 +86,18 @@ class TestStraditizeProFullE2E(unittest.TestCase):
         print("\n--- [E2E 1/6] Testing Dual Launch Modes & Security ---")
 
         # A. Desktop mode reports is_desktop_mode=True
-        req = urllib.request.Request(f"http://127.0.0.1:{self.desktop_server.actual_port}/status")
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{self.desktop_server.actual_port}/status"
+        )
         with urllib.request.urlopen(req) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             self.assertEqual(data["status"], "ok")
             self.assertTrue(data["is_desktop_mode"])
 
         # B. Server mode reports is_desktop_mode=False
-        req_srv = urllib.request.Request(f"http://127.0.0.1:{self.server_server.actual_port}/status")
+        req_srv = urllib.request.Request(
+            f"http://127.0.0.1:{self.server_server.actual_port}/status"
+        )
         with urllib.request.urlopen(req_srv) as resp:
             data_srv = json.loads(resp.read().decode("utf-8"))
             self.assertEqual(data_srv["status"], "ok")
@@ -156,11 +160,11 @@ class TestStraditizeProFullE2E(unittest.TestCase):
 
         # 3. Log hard constraint validation (must raise ValueError)
         invalid_configs = [
-            ([100.0, 300.0], [0.0, 10.0]),     # startVal <= 0
-            ([100.0, 300.0], [-1.0, 50.0]),    # startVal < 0
-            ([100.0, 300.0], [10.0, 0.0]),     # tickVal <= 0
-            ([100.0, 300.0], [10.0, 10.0]),    # startVal == tickVal
-            ([200.0, 200.0], [1.0, 100.0]),    # zero pixel span
+            ([100.0, 300.0], [0.0, 10.0]),  # startVal <= 0
+            ([100.0, 300.0], [-1.0, 50.0]),  # startVal < 0
+            ([100.0, 300.0], [10.0, 0.0]),  # tickVal <= 0
+            ([100.0, 300.0], [10.0, 10.0]),  # startVal == tickVal
+            ([200.0, 200.0], [1.0, 100.0]),  # zero pixel span
         ]
         for px_pts, data_pts in invalid_configs:
             with self.assertRaises(ValueError):
@@ -174,15 +178,17 @@ class TestStraditizeProFullE2E(unittest.TestCase):
 
         # 4. Session export_data integration with log scale column
         test_session = StraditizeSession()
-        test_session.column_add({
-            "name": "ConcentrationLog",
-            "startX": 100.0,
-            "endX": 300.0,
-            "tickEndX": 300.0,
-            "scale_type": "log",
-            "startValue": 1.0,
-            "tickValue": 100.0,
-        })
+        test_session.column_add(
+            {
+                "name": "ConcentrationLog",
+                "startX": 100.0,
+                "endX": 300.0,
+                "tickEndX": 300.0,
+                "scale_type": "log",
+                "startValue": 1.0,
+                "tickValue": 100.0,
+            }
+        )
         test_session.point_add(0, y=50.0, x=200.0)
         test_session.is_calibrated = True
         test_session.y_scale = {"slope": 1.0, "intercept": 0.0}
@@ -210,7 +216,9 @@ class TestStraditizeProFullE2E(unittest.TestCase):
 
     def test_03_extreme_large_image_performance(self):
         """Verify decompression bomb safety, tile slicing, and preview endpoints."""
-        print("\n--- [E2E 3/6] Testing Extreme Large Image Safety & Slice Endpoints ---")
+        print(
+            "\n--- [E2E 3/6] Testing Extreme Large Image Safety & Slice Endpoints ---"
+        )
         self.assertIsNone(Image.MAX_IMAGE_PIXELS)
 
         # Create synthetic large image (4200x4000 = 16.8M px > 16M threshold)
@@ -240,7 +248,9 @@ class TestStraditizeProFullE2E(unittest.TestCase):
             port = self.server_server.actual_port
 
             # Test /image/slice HTTP endpoint
-            req_slice = urllib.request.Request(f"http://127.0.0.1:{port}/image/slice?x=100&y=200&w=256&h=128")
+            req_slice = urllib.request.Request(
+                f"http://127.0.0.1:{port}/image/slice?x=100&y=200&w=256&h=128"
+            )
             with urllib.request.urlopen(req_slice) as resp:
                 self.assertEqual(resp.status, 200)
                 self.assertEqual(resp.headers.get("Content-Type"), "image/png")
@@ -252,7 +262,9 @@ class TestStraditizeProFullE2E(unittest.TestCase):
             with urllib.request.urlopen(req_prev) as resp:
                 self.assertEqual(resp.status, 200)
                 self.assertEqual(resp.headers.get("Content-Type"), "image/png")
-            print("  -> Passed: Extreme large image memory safety and slice endpoints verified.")
+            print(
+                "  -> Passed: Extreme large image memory safety and slice endpoints verified."
+            )
         finally:
             try:
                 os.remove(tf_path)
@@ -262,7 +274,9 @@ class TestStraditizeProFullE2E(unittest.TestCase):
     def test_04_full_scientific_digitization_pipeline(self):
         """Verify genuine pollen diagram digitization, 0.0 unobserved taxa, and CSV export."""
         print("\n--- [E2E 4/6] Testing Full Scientific Digitization Pipeline ---")
-        hoya_img = os.path.abspath("straditize_core/assets/tutorials/hoya-del-castillo.png")
+        hoya_img = os.path.abspath(
+            "straditize_core/assets/tutorials/hoya-del-castillo.png"
+        )
         self.assertTrue(os.path.exists(hoya_img), f"Sample image not found: {hoya_img}")
 
         session = StraditizeSession()
@@ -287,7 +301,9 @@ class TestStraditizeProFullE2E(unittest.TestCase):
         # 3. Batch set species names
         taxa = ["Pinus canariensis", "Juniperus", "Quercus", "Olea", "Betula"]
         session.batch_set_taxa(taxa)
-        self.assertEqual(session.taxa_names[:3], ["Pinus canariensis", "Juniperus", "Quercus"])
+        self.assertEqual(
+            session.taxa_names[:3], ["Pinus canariensis", "Juniperus", "Quercus"]
+        )
 
         # 4a. X 轴标定：未标定列不再给数（导出记 NA），所以先标定第 0 列。
         col0 = session.columns[0]
@@ -373,18 +389,26 @@ class TestStraditizeProFullE2E(unittest.TestCase):
 
         try:
             # Build sample components for all 6 required files
-            info_json = json.dumps({
-                "project": "Straditize Pro",
-                "version": "2.0.0",
-                "timestamp": time.time(),
-                "calibration": {"depthTop": 0, "depthBottom": 150, "unit": "cm"},
-            }, indent=2).encode("utf-8")
+            info_json = json.dumps(
+                {
+                    "project": "Straditize Pro",
+                    "version": "2.0.0",
+                    "timestamp": time.time(),
+                    "calibration": {"depthTop": 0, "depthBottom": 150, "unit": "cm"},
+                },
+                indent=2,
+            ).encode("utf-8")
 
-            straditize_json = json.dumps({
-                "version": "2.0",
-                "columns": [{"id": "col_0", "name": "Pinus", "scale_type": "linear"}],
-                "calibration": {"top_cm": 0, "bottom_cm": 150},
-            }, indent=2).encode("utf-8")
+            straditize_json = json.dumps(
+                {
+                    "version": "2.0",
+                    "columns": [
+                        {"id": "col_0", "name": "Pinus", "scale_type": "linear"}
+                    ],
+                    "calibration": {"top_cm": 0, "bottom_cm": 150},
+                },
+                indent=2,
+            ).encode("utf-8")
 
             data_csv = b"depth,Pinus,Quercus,Betula\n0.0,12.5,0.0,3.2\n5.0,15.1,0.0,2.8\n10.0,8.4,1.1,0.0\n"
 
@@ -396,7 +420,9 @@ taxa[is.na(taxa)] <- 0
 strat.plot(taxa, yvar=depth, y.rev=TRUE, plot.poly=TRUE, plot.line=TRUE)
 """
 
-            readme_txt = b"Straditize Pro - Stratigraphic Project Archive (POSIX UStar .tar)\n"
+            readme_txt = (
+                b"Straditize Pro - Stratigraphic Project Archive (POSIX UStar .tar)\n"
+            )
 
             png_buf = io.BytesIO()
             Image.new("RGB", (100, 100), (120, 160, 200)).save(png_buf, format="PNG")
@@ -404,6 +430,7 @@ strat.plot(taxa, yvar=depth, y.rev=TRUE, plot.poly=TRUE, plot.line=TRUE)
 
             # Pack POSIX UStar tar
             with tarfile.open(tar_path, "w", format=tarfile.USTAR_FORMAT) as tar:
+
                 def add_bytes(name, content):
                     ti = tarfile.TarInfo(name=name)
                     ti.size = len(content)
@@ -421,7 +448,14 @@ strat.plot(taxa, yvar=depth, y.rev=TRUE, plot.poly=TRUE, plot.line=TRUE)
             # Unpack and verify all 6 files
             with tarfile.open(tar_path, "r") as tar:
                 names = tar.getnames()
-                expected = ["info.json", "straditize.json", "diagram.png", "data.csv", "plot_strat.R", "README.txt"]
+                expected = [
+                    "info.json",
+                    "straditize.json",
+                    "diagram.png",
+                    "data.csv",
+                    "plot_strat.R",
+                    "README.txt",
+                ]
                 for exp in expected:
                     self.assertIn(exp, names)
 
@@ -435,7 +469,9 @@ strat.plot(taxa, yvar=depth, y.rev=TRUE, plot.poly=TRUE, plot.line=TRUE)
                 r_code = tar.extractfile("plot_strat.R").read().decode("utf-8")
                 self.assertIn("strat.plot", r_code)
                 self.assertIn("rioja", r_code)
-            print("  -> Passed: POSIX UStar project archive packing and unpacking verified.")
+            print(
+                "  -> Passed: POSIX UStar project archive packing and unpacking verified."
+            )
         finally:
             try:
                 os.remove(tar_path)
@@ -450,15 +486,21 @@ strat.plot(taxa, yvar=depth, y.rev=TRUE, plot.poly=TRUE, plot.line=TRUE)
         if not os.path.exists(dist_index) and os.path.exists(demo_index):
             os.makedirs(os.path.dirname(dist_index), exist_ok=True)
             import shutil
+
             shutil.copytree("docs/demo", "frontend/dist", dirs_exist_ok=True)
-        self.assertTrue(os.path.exists(dist_index), "frontend/dist/index.html not found! Run npm run build.")
+        self.assertTrue(
+            os.path.exists(dist_index),
+            "frontend/dist/index.html not found! Run npm run build.",
+        )
 
         # Request index.html from HTTP server
-        req = urllib.request.Request(f"http://127.0.0.1:{self.server_server.actual_port}/")
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{self.server_server.actual_port}/"
+        )
         with urllib.request.urlopen(req) as resp:
             self.assertEqual(resp.status, 200)
             content = resp.read().decode("utf-8")
-            self.assertIn("<div id=\"app\">", content)
+            self.assertIn('<div id="app">', content)
             self.assertIn("Straditize", content)
         print("  -> Passed: Frontend distribution served with 200 OK.")
 

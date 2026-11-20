@@ -78,7 +78,13 @@ LIST_ATTRS = [
     "redo_stack",
 ]
 
-DICT_ATTRS = ["column_points", "control_points", "reader_types", "x_scales", "cleanup_stats"]
+DICT_ATTRS = [
+    "column_points",
+    "control_points",
+    "reader_types",
+    "x_scales",
+    "cleanup_stats",
+]
 
 
 def _path_label(value):
@@ -93,7 +99,9 @@ def _path_label(value):
 def _png_data_url() -> str:
     buffer = io.BytesIO()
     Image.new("RGB", (240, 180), (200, 40, 40)).save(buffer, format="PNG")
-    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode(
+        "ascii"
+    )
 
 
 def _jsonable(value):
@@ -112,7 +120,11 @@ def _jsonable(value):
 
 def _snapshot(session: StraditizeSession, result: dict) -> dict:
     rois = [
-        {"id": roi.get("id"), "xlim": _jsonable(roi.get("xlim")), "ylim": _jsonable(roi.get("ylim"))}
+        {
+            "id": roi.get("id"),
+            "xlim": _jsonable(roi.get("xlim")),
+            "ylim": _jsonable(roi.get("ylim")),
+        }
         for roi in getattr(session, "rois", []) or []
     ]
     return {
@@ -137,17 +149,24 @@ def _snapshot(session: StraditizeSession, result: dict) -> dict:
         },
         "image_array": {
             "is_none": session.image_array is None,
-            "shape": list(session.image_array.shape) if session.image_array is not None else None,
+            "shape": list(session.image_array.shape)
+            if session.image_array is not None
+            else None,
         },
         "is_calibrated": session.is_calibrated,
         "selected_candidate_ids": _jsonable(session.selected_candidate_ids),
-        "cleared": {attr: _jsonable(getattr(session, attr, "<absent>")) for attr in CLEARED_ATTRS},
+        "cleared": {
+            attr: _jsonable(getattr(session, attr, "<absent>"))
+            for attr in CLEARED_ATTRS
+        },
         "lists": {attr: len(getattr(session, attr, []) or []) for attr in LIST_ATTRS},
         "dicts": {attr: _jsonable(getattr(session, attr, {})) for attr in DICT_ATTRS},
         "pdf_cache": {
             "has_pdf_data": getattr(session, "cached_pdf_data", None) is not None,
             "cached_pdf_path_is_pdf": bool(
-                (getattr(session, "cached_pdf_path", None) or "").lower().endswith(".pdf")
+                (getattr(session, "cached_pdf_path", None) or "")
+                .lower()
+                .endswith(".pdf")
             ),
             "pdf_info": _jsonable(getattr(session, "pdf_info", None)),
         },
@@ -163,7 +182,9 @@ def _collect(tmp_dir: Path) -> dict:
 
     session = StraditizeSession()
     session._init_cleanup()
-    out["sample_beginner"] = _snapshot(session, session.load_image(sample_key="beginner"))
+    out["sample_beginner"] = _snapshot(
+        session, session.load_image(sample_key="beginner")
+    )
 
     session = StraditizeSession()
     session._init_cleanup()
@@ -194,7 +215,12 @@ def _collect(tmp_dir: Path) -> dict:
     session.grid_line_mask = np.zeros((8, 8), dtype=bool)
     session.is_calibrated = True
     session.y_scale = {"slope": 1.0, "intercept": 0.0}
-    session.depth_calib = {"top_px": 0.0, "bottom_px": 10.0, "top_cm": 0.0, "bottom_cm": 5.0}
+    session.depth_calib = {
+        "top_px": 0.0,
+        "bottom_px": 10.0,
+        "top_cm": 0.0,
+        "bottom_cm": 5.0,
+    }
     session.taxa_names = ["Stale"]
     session.depth_grid = [0.0, 10.0]
     session.cleanup_stats = {"removed": 1}

@@ -5,6 +5,7 @@ Features:
 2. Section-aware sliding-window chunking (chunk size <= 4000 tokens, 200 tokens overlap).
 3. Identifies paleoecology/stratigraphy relevant sections (Site, Chronology, Methods) for prioritization.
 """
+
 from __future__ import annotations
 
 import io
@@ -83,11 +84,13 @@ def chunk_text_by_tokens(
                 s_tokens = approximate_tokens(sent)
                 if current_token_count + s_tokens > max_tokens and current_paras:
                     chunk_str = "\n\n".join(current_paras)
-                    chunks.append({
-                        "chunk_index": len(chunks),
-                        "text": chunk_str,
-                        "token_est": current_token_count,
-                    })
+                    chunks.append(
+                        {
+                            "chunk_index": len(chunks),
+                            "text": chunk_str,
+                            "token_est": current_token_count,
+                        }
+                    )
                     # Keep overlap
                     overlap_paras = []
                     overlap_count = 0
@@ -107,11 +110,13 @@ def chunk_text_by_tokens(
 
         if current_token_count + p_tokens > max_tokens and current_paras:
             chunk_str = "\n\n".join(current_paras)
-            chunks.append({
-                "chunk_index": len(chunks),
-                "text": chunk_str,
-                "token_est": current_token_count,
-            })
+            chunks.append(
+                {
+                    "chunk_index": len(chunks),
+                    "text": chunk_str,
+                    "token_est": current_token_count,
+                }
+            )
             # Overlap backward accumulation
             overlap_paras = []
             overlap_count = 0
@@ -129,10 +134,12 @@ def chunk_text_by_tokens(
         current_token_count += p_tokens
 
     if current_paras:
-        chunks.append({
-            "chunk_index": len(chunks),
-            "text": "\n\n".join(current_paras),
-            "token_est": current_token_count,
-        })
+        chunks.append(
+            {
+                "chunk_index": len(chunks),
+                "text": "\n\n".join(current_paras),
+                "token_est": current_token_count,
+            }
+        )
 
     return chunks

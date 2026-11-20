@@ -33,6 +33,7 @@ def _row(offsets: list[int], areas: list[float]):
 
 # --- the rule itself ---------------------------------------------------------
 
+
 def test_filled_row_reads_the_fill_top_edge_not_its_middle():
     """Ink runs from the baseline (offset 0) to offset 10: the value is 10 px,
     not the 5 px that the legacy average reported."""
@@ -60,6 +61,7 @@ def test_floating_stroke_reads_its_centre():
 
 # --- the benchmark figure ----------------------------------------------------
 
+
 @pytest.mark.skipif(not os.path.exists(DIATOM_IMAGE), reason="benchmark figure missing")
 def test_line_and_area_agree_on_the_filled_diatom_profiles():
     """D-08 acceptance: on a filled profile ``line`` and ``area`` must report the
@@ -71,10 +73,12 @@ def test_line_and_area_agree_on_the_filled_diatom_profiles():
     ratios = {}
     for index, column in enumerate(columns):
         width = float(column["end"]) - float(column["start"])
-        area = np.array([p["x"] for p in session.digitize(index, "area")["points"]],
-                        dtype=float)
-        line = np.array([p["x"] for p in session.digitize(index, "line")["points"]],
-                        dtype=float)
+        area = np.array(
+            [p["x"] for p in session.digitize(index, "area")["points"]], dtype=float
+        )
+        line = np.array(
+            [p["x"] for p in session.digitize(index, "line")["points"]], dtype=float
+        )
         if float(np.ptp(area)) < 0.1 * width:  # panel too flat to be informative
             continue
         ratios[index] = float(line.max() - area.min()) / float(area.max() - area.min())

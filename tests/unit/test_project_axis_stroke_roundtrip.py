@@ -51,7 +51,10 @@ import pytest
 
 from straditize_core.rpc_server import create_rpc_dispatcher
 from straditize_core.session import StraditizeSession
-from straditize_core.session_parts.xscale import read_column_values, resolve_column_scale
+from straditize_core.session_parts.xscale import (
+    read_column_values,
+    resolve_column_scale,
+)
 
 # 载图/分列用与既有 e2e 一致的真值参数，保证列几何可复现。
 ROI_XLIM = [315, 1946]
@@ -294,7 +297,9 @@ def test_column_without_override_still_uses_group_stroke(saved_pack: Path) -> No
     assert after["values"] == before["values"], "对照列读数不该变"
 
 
-def test_explicitly_cleared_override_falls_back_to_group(saved_pack: Path, tmp_path: Path) -> None:
+def test_explicitly_cleared_override_falls_back_to_group(
+    saved_pack: Path, tmp_path: Path
+) -> None:
     """④负向对照：列级被显式清空（`None`）后，存/取都回落组值。"""
     session, dispatcher = _session_with_overrides()
 

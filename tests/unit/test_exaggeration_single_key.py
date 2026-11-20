@@ -74,14 +74,17 @@ def _column(session: StraditizeSession, index: int = 0) -> dict:
 def _assert_single_key(column: dict, expected: float | None) -> None:
     assert column.get("exaggeration_mult") == expected, column.get("exaggeration_mult")
     leftovers = [k for k in ALIASES if k in column]
-    assert leftovers == [], (
-        f"库里还留着 {leftovers}：一个概念存多份，迟早互相打架"
-    )
+    assert leftovers == [], f"库里还留着 {leftovers}：一个概念存多份，迟早互相打架"
 
 
 def test_update_stores_only_the_canonical_key() -> None:
     session = _session()
-    _call(_dispatcher(session), "column.update", col_index=0, updates={"exaggeration_mult": 5})
+    _call(
+        _dispatcher(session),
+        "column.update",
+        col_index=0,
+        updates={"exaggeration_mult": 5},
+    )
 
     _assert_single_key(_column(session), 5.0)
 
@@ -97,7 +100,12 @@ def test_null_clears_the_multiplier() -> None:
 
 def test_value_not_above_one_counts_as_unset() -> None:
     session = _session()
-    _call(_dispatcher(session), "column.update", col_index=0, updates={"exaggeration_mult": 1.0})
+    _call(
+        _dispatcher(session),
+        "column.update",
+        col_index=0,
+        updates={"exaggeration_mult": 1.0},
+    )
 
     _assert_single_key(_column(session), None)
 
@@ -125,12 +133,19 @@ def test_payload_exposes_only_the_canonical_key() -> None:
     assert "exaggerationMult" not in column, (
         "payload 同时发两个名字，前端就只能靠约定记住读哪个"
     )
-    assert "hasExaggeration" not in column, "布尔可由 exaggeration_mult 是否为 null 推出"
+    assert "hasExaggeration" not in column, (
+        "布尔可由 exaggeration_mult 是否为 null 推出"
+    )
 
 
 def test_project_save_does_not_write_the_boolean() -> None:
     session = _session()
-    _call(_dispatcher(session), "column.update", col_index=0, updates={"exaggeration_mult": 5})
+    _call(
+        _dispatcher(session),
+        "column.update",
+        col_index=0,
+        updates={"exaggeration_mult": 5},
+    )
 
     payload = session.project_save(format="json")["data"]
 

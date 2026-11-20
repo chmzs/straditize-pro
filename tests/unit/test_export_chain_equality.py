@@ -72,7 +72,9 @@ def _tar_cell(session: StraditizeSession, row: int, name: str = "col01"):
     return df.iloc[row][name], df.iloc[row]["depth"]
 
 
-def _xlsx_cell(session: StraditizeSession, row: int, name: str = "col01", tmp_path=None):
+def _xlsx_cell(
+    session: StraditizeSession, row: int, name: str = "col01", tmp_path=None
+):
     path = tmp_path / "out.xlsx"
     session.export_multi_xlsx(output_path=str(path))
     sheet = pd.read_excel(path, sheet_name="pollen")

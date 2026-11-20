@@ -145,7 +145,11 @@ def resolve_width_max(
     """
     if line_width_max is not None:
         return int(line_width_max)
-    floor = _AUTO_WIDTH_FLOOR_V if str(axis).lower().startswith("v") else _AUTO_WIDTH_FLOOR_H
+    floor = (
+        _AUTO_WIDTH_FLOOR_V
+        if str(axis).lower().startswith("v")
+        else _AUTO_WIDTH_FLOOR_H
+    )
     long_side = max(int(sub_shape[0]), int(sub_shape[1]))
     return max(floor, int(round(long_side * _AUTO_WIDTH_RATIO)))
 
@@ -230,10 +234,21 @@ def detect_line_candidates(
             rx0, rx1 = int(round(roi["xlim"][0])), int(round(roi["xlim"][1]))
             ry0, ry1 = int(round(roi["ylim"][0])), int(round(roi["ylim"][1]))
         else:
-            rx0, rx1 = int(round(roi.get("xMin", 0))), int(round(roi.get("xMax", width)))
-            ry0, ry1 = int(round(roi.get("yMin", 0))), int(round(roi.get("yMax", height)))
+            rx0, rx1 = (
+                int(round(roi.get("xMin", 0))),
+                int(round(roi.get("xMax", width))),
+            )
+            ry0, ry1 = (
+                int(round(roi.get("yMin", 0))),
+                int(round(roi.get("yMax", height))),
+            )
     else:
-        rx0, rx1, ry0, ry1 = int(round(roi[0])), int(round(roi[1])), int(round(roi[2])), int(round(roi[3]))
+        rx0, rx1, ry0, ry1 = (
+            int(round(roi[0])),
+            int(round(roi[1])),
+            int(round(roi[2])),
+            int(round(roi[3])),
+        )
 
     rx0, rx1 = sorted((max(0, min(width, rx0)), max(0, min(width, rx1))))
     ry0, ry1 = sorted((max(0, min(height, ry0)), max(0, min(height, ry1))))
@@ -292,23 +307,25 @@ def detect_line_candidates(
             continue
         at_global = ry0 + at_local
         seq += 1
-        candidates.append({
-            "id": f"line_h_{seq}",
-            "kind": "A",
-            "axis": "h",
-            "at": at_global,
-            "span": [rx0, rx1 - 1],
-            "width": len(cluster),
-            "geometry": {
-                "type": "rect",
-                "x0": rx0,
-                "y0": at_global - len(cluster) // 2,
-                "x1": rx1 - 1,
-                "y1": at_global + (len(cluster) - 1) // 2,
-            },
-            "roi_id": roi_id,
-            "column_index": None,
-        })
+        candidates.append(
+            {
+                "id": f"line_h_{seq}",
+                "kind": "A",
+                "axis": "h",
+                "at": at_global,
+                "span": [rx0, rx1 - 1],
+                "width": len(cluster),
+                "geometry": {
+                    "type": "rect",
+                    "x0": rx0,
+                    "y0": at_global - len(cluster) // 2,
+                    "x1": rx1 - 1,
+                    "y1": at_global + (len(cluster) - 1) // 2,
+                },
+                "roi_id": roi_id,
+                "column_index": None,
+            }
+        )
 
     # 2. Kind B: Cross-ROI vertical axes/grid lines (legacy projection semantics).
     #
@@ -350,23 +367,25 @@ def detect_line_candidates(
         if _is_column_axis(at_global, axis_positions):
             continue
         seq += 1
-        candidates.append({
-            "id": f"line_v_{seq}",
-            "kind": "B",
-            "axis": "v",
-            "at": at_global,
-            "span": [ry0, ry1 - 1],
-            "width": len(cluster),
-            "geometry": {
-                "type": "rect",
-                "x0": at_global - len(cluster) // 2,
-                "y0": ry0,
-                "x1": at_global + (len(cluster) - 1) // 2,
-                "y1": ry1 - 1,
-            },
-            "roi_id": roi_id,
-            "column_index": None,
-        })
+        candidates.append(
+            {
+                "id": f"line_v_{seq}",
+                "kind": "B",
+                "axis": "v",
+                "at": at_global,
+                "span": [ry0, ry1 - 1],
+                "width": len(cluster),
+                "geometry": {
+                    "type": "rect",
+                    "x0": at_global - len(cluster) // 2,
+                    "y0": ry0,
+                    "x1": at_global + (len(cluster) - 1) // 2,
+                    "y1": ry1 - 1,
+                },
+                "roi_id": roi_id,
+                "column_index": None,
+            }
+        )
 
     mask_v = np.zeros_like(sub_ink, dtype=bool)
     if len(cols_v):
@@ -415,16 +434,18 @@ def detect_line_candidates(
                         ink_rows = np.where(np.any(col_mask_c[:, cluster], axis=1))[0]
                         if len(ink_rows) > 0 and len(ink_rows) < min_span_v:
                             span = [int(ry0 + ink_rows[0]), int(ry0 + ink_rows[-1])]
-                            candidates.append({
-                                "id": f"line_c_{at_global}_{len(cluster)}px",
-                                "kind": "C",
-                                "axis": "v",
-                                "at": at_global,
-                                "span": span,
-                                "width": len(cluster),
-                                "roi_id": roi_id,
-                                "column_index": col_idx,
-                            })
+                            candidates.append(
+                                {
+                                    "id": f"line_c_{at_global}_{len(cluster)}px",
+                                    "kind": "C",
+                                    "axis": "v",
+                                    "at": at_global,
+                                    "span": span,
+                                    "width": len(cluster),
+                                    "roi_id": roi_id,
+                                    "column_index": col_idx,
+                                }
+                            )
 
     return candidates
 

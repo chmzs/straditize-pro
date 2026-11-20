@@ -96,24 +96,7 @@
      "id": "col_a",
      "name": "Pinus",
      "plot_type": "area",
-     "points": [
-      {
-       "isManual": false,
-       "kind": "peak",
-       "valid_segment": true,
-       "value": 11.5,
-       "x": 11.5,
-       "y": 20
-      },
-      {
-       "isManual": false,
-       "kind": "peak",
-       "valid_segment": true,
-       "value": 12.25,
-       "x": 12.25,
-       "y": 41
-      }
-     ],
+     "points": [],
      "reader_type": null,
      "roi_id": "roi_1",
      "scale_type": "linear",
@@ -180,16 +163,7 @@
      "id": "col_c",
      "name": "Quercus",
      "plot_type": "area",
-     "points": [
-      {
-       "isManual": false,
-       "kind": "peak",
-       "valid_segment": true,
-       "value": 131.0,
-       "x": 131.0,
-       "y": 22
-      }
-     ],
+     "points": [],
      "reader_type": null,
      "roi_id": "roi_1",
      "scale_type": "linear",
@@ -317,6 +291,7 @@
     }
    },
    "primary_roi_id": "roi_1",
+   "project_name": "straditize",
    "roi": {
     "h": 300.0,
     "w": 400.0,
@@ -325,7 +300,7 @@
    },
    "rois": [
     {
-     "columns_stale": false,
+     "columns_stale": true,
      "composition": true,
      "default_group_id": "roi_1_grp1",
      "form_defaults": null,
@@ -354,7 +329,7 @@
        "exaggeration_mult": null,
        "id": "roi_1_grp_1",
        "name": "Pinus组",
-       "plot_type": "area",
+       "plot_type": null,
        "scale_type": "linear",
        "tick_layout": [
         {
@@ -515,24 +490,7 @@
      "id": "col_a",
      "name": "Pinus",
      "plot_type": "area",
-     "points": [
-      {
-       "isManual": false,
-       "kind": "peak",
-       "valid_segment": true,
-       "value": 11.5,
-       "x": 11.5,
-       "y": 20
-      },
-      {
-       "isManual": false,
-       "kind": "peak",
-       "valid_segment": true,
-       "value": 12.25,
-       "x": 12.25,
-       "y": 41
-      }
-     ],
+     "points": [],
      "reader_type": null,
      "roi_id": "roi_1",
      "scale_type": "linear",
@@ -599,16 +557,7 @@
      "id": "col_c",
      "name": "Quercus",
      "plot_type": "area",
-     "points": [
-      {
-       "isManual": false,
-       "kind": "peak",
-       "valid_segment": true,
-       "value": 131.0,
-       "x": 131.0,
-       "y": 22
-      }
-     ],
+     "points": [],
      "reader_type": null,
      "roi_id": "roi_1",
      "scale_type": "linear",
@@ -735,6 +684,7 @@
     }
    },
    "primary_roi_id": "roi_1",
+   "project_name": "straditize",
    "roi": {
     "h": 300.0,
     "w": 400.0,
@@ -743,7 +693,7 @@
    },
    "rois": [
     {
-     "columns_stale": false,
+     "columns_stale": true,
      "composition": true,
      "default_group_id": "roi_1_grp1",
      "form_defaults": null,
@@ -772,7 +722,7 @@
        "exaggeration_mult": null,
        "id": "roi_1_grp_1",
        "name": "Pinus组",
-       "plot_type": "area",
+       "plot_type": null,
        "scale_type": "linear",
        "tick_layout": [
         {
@@ -854,13 +804,13 @@
  },
  "tar_csv_branch": {
   "data_csv": {
-   "digest": "2e3d6dd36bb7",
-   "size": 158
+   "digest": "db09d2c647cb",
+   "size": 152
   },
   "data_csv_head": [
    "depth,age_est,age_min_95,age_max_95,Pinus,Betula,Quercus",
-   "10.0,500.0,450.0,550.0,0.0,2.9167,0.0",
-   "60.0,3000.0,3344.73684210526,2588.4615384615486,0.0,2.9167,0.0"
+   "10.0,500.0,450.0,550.0,0.0,0.0,0.0",
+   "60.0,3000.0,3344.73684210526,2588.4615384615486,0.0,0.0,0.0"
   ],
   "digitized": true
  },
@@ -875,9 +825,9 @@
     "name": "manifest.json"
    },
    {
-    "digest": "cd6874c37b65",
+    "digest": "759e01db320d",
     "name": "straditize.json",
-    "size": 7881
+    "size": 7375
    },
    {
     "digest": "36238134d819",
@@ -890,9 +840,9 @@
     "size": 280
    },
    {
-    "digest": "2e3d6dd36bb7",
+    "digest": "db09d2c647cb",
     "name": "data.csv",
-    "size": 158
+    "size": 152
    },
    {
     "digest": "b882fb2e0935",

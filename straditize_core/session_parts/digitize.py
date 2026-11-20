@@ -1155,6 +1155,70 @@ class DigitizeSessionMixin:
             return {"success": True, "removed_y": y_int}
         return {"success": False, "message": "Point not found"}
 
+    @staticmethod
+    def _extract_bar_centers_map(
+        pts: list[dict[str, float]],
+        c_start: float,
+        noise_margin: float = 1.5,
+    ) -> dict[int, float]:
+        """对水平柱状图 (bar) 提取各个柱体的垂直中心行 (centerline y) 与柱端读数 (max x)。
+
+        杜绝方波平顶上下边缘双点问题，确保每个柱体只有 1 个位于几何正中心的控制点。
+        """
+        if not pts:
+            return {}
+        p_rows = np.array([p["row"] for p in pts], dtype=int)
+        p_x = np.array([p["x"] for p in pts], dtype=float)
+
+        dyn_range = float(np.ptp(p_x)) if len(p_x) > 0 else 0.0
+        if dyn_range < 1.0:
+            return {}
+
+        threshold = c_start + max(noise_margin, dyn_range * 0.04)
+        is_bar = p_x > threshold
+
+        centers_map: dict[int, float] = {}
+        in_bar = False
+        start_idx = 0
+
+        for i in range(len(is_bar)):
+            if is_bar[i] and not in_bar:
+                in_bar = True
+                start_idx = i
+            elif not is_bar[i] and in_bar:
+                in_bar = False
+                bar_rows = p_rows[start_idx:i]
+                bar_xs = p_x[start_idx:i]
+                max_x = float(np.max(bar_xs))
+                best_rows = bar_rows[bar_xs >= max_x - 0.5]
+                center_y = int(best_rows[len(best_rows) // 2])
+                centers_map[center_y] = max_x
+
+        if in_bar:
+            bar_rows = p_rows[start_idx:]
+            bar_xs = p_x[start_idx:]
+            max_x = float(np.max(bar_xs))
+            best_rows = bar_rows[bar_xs >= max_x - 0.5]
+            center_y = int(best_rows[len(best_rows) // 2])
+            centers_map[center_y] = max_x
+
+        return centers_map
+
+    def _resolve_col_plot_type(self, col: dict[str, Any]) -> str:
+        """解析列的绘图形态，优先使用列显式覆盖，未显式覆盖时从所属组继承 (ARCHITECTURE §6.4)。"""
+        pt = col.get("plot_type") or col.get("reader_type")
+        if pt:
+            return pt
+        gid = col.get("x_group_id")
+        if gid and hasattr(self, "rois") and self.rois:
+            for r in self.rois:
+                for g in r.get("x_groups", []):
+                    if g.get("id") == gid:
+                        gpt = g.get("plot_type")
+                        if gpt:
+                            return gpt
+        return "area"
+
     def algorithm_extract_turning_points(
         self,
         col_index: int | None = None,
@@ -1170,8 +1234,11 @@ class DigitizeSessionMixin:
             return {"success": False, "message": "No columns available"}
 
         for c_idx in target_cols:
+            col = self.columns[c_idx] if c_idx < len(self.columns) else {}
+            col_plot_type = self._resolve_col_plot_type(col)
             if c_idx not in self.column_points:
-                self.digitize(c_idx, "area")
+                r_type = col_plot_type if col_plot_type in READER_TYPES else "area"
+                self.digitize(c_idx, r_type)
 
         updated = []
         for c_idx in target_cols:
@@ -1179,30 +1246,56 @@ class DigitizeSessionMixin:
             if not pts:
                 continue
 
-            existing_ctrls = self.control_points.get(c_idx, {})
+            col = self.columns[c_idx] if c_idx < len(self.columns) else {}
+            col_plot_type = self._resolve_col_plot_type(col)
+
             p_rows = np.array([p["row"] for p in pts], dtype=int)
             p_x = np.array([p["x"] for p in pts], dtype=float)
-
             dyn_range = float(np.ptp(p_x)) if len(p_x) > 0 else 1.0
-            prominence = max(1.0, dyn_range * prominence_ratio)
+            c_start = float(col.get("start", col.get("startX", np.min(p_x))))
+            noise_cutoff = c_start + max(1.5, dyn_range * 0.04)
 
-            peaks_idx = []
-            valleys_idx = []
-            if find_peaks is not None and len(p_x) > 5:
-                peaks_idx, _ = find_peaks(p_x, prominence=prominence)
-                valleys_idx, _ = find_peaks(-p_x, prominence=prominence)
+            is_bar_like = col_plot_type == "bar"
 
-            detected_rows = set(p_rows[peaks_idx]).union(set(p_rows[valleys_idx]))
+            detected_rows_map: dict[int, float] | None = None
+            if is_bar_like:
+                detected_rows_map = self._extract_bar_centers_map(pts, c_start)
+                detected_rows = set(detected_rows_map.keys())
+            else:
+                prominence = max(1.0, dyn_range * prominence_ratio)
 
-            merged_ctrls = dict(existing_ctrls)
+                peaks_idx = []
+                valleys_idx = []
+                if find_peaks is not None and len(p_x) > 5:
+                    peaks_idx, _ = find_peaks(p_x, prominence=prominence)
+                    valleys_idx, _ = find_peaks(-p_x, prominence=prominence)
+
+                # 曲线波谷中过滤基线点（基线 0 值平地不是有效数据拐点，杜绝基线打出一排无意义点）
+                valid_valleys = [v for v in valleys_idx if p_x[v] > noise_cutoff]
+                detected_rows = set(p_rows[peaks_idx]).union(set(p_rows[valid_valleys]))
+
+            # 全新构建本列控制点：算法点按最新检测生成，严格保留用户手工点 (manual)
+            merged_ctrls: dict[int, float] = {}
+            if detected_rows_map is not None:
+                for r, x_val in detected_rows_map.items():
+                    merged_ctrls[int(r)] = float(x_val)
+            else:
+                for r in detected_rows:
+                    idx_arr = np.where(p_rows == r)[0]
+                    if len(idx_arr) > 0:
+                        merged_ctrls[int(r)] = float(p_x[idx_arr[0]])
+
             manual = self._manual_store().get(c_idx, {})
-            for r in detected_rows:
-                # 用户手工点不接受算法改写（重提取只补/改自动点）
-                if int(r) in manual:
-                    continue
-                idx_arr = np.where(p_rows == r)[0]
-                if len(idx_arr) > 0:
-                    merged_ctrls[int(r)] = float(p_x[idx_arr[0]])
+            for r, rec in manual.items():
+                r_int = int(r)
+                if "x" in rec:
+                    merged_ctrls[r_int] = float(rec["x"])
+                elif r_int in merged_ctrls:
+                    pass
+                else:
+                    idx_arr = np.where(p_rows == r_int)[0]
+                    if len(idx_arr) > 0:
+                        merged_ctrls[r_int] = float(p_x[idx_arr[0]])
 
             self.control_points[c_idx] = merged_ctrls
             updated.append(c_idx)

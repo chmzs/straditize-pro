@@ -9,6 +9,7 @@
 
 文档是契约的单一事实源：文档写错，代码就会跟着分叉。
 """
+
 from __future__ import annotations
 
 import re

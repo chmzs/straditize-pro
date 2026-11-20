@@ -65,7 +65,9 @@ def _snapshot(result: dict) -> dict:
         "rows_count": result["rows_count"],
         "columns_count": result["columns_count"],
         "columns": result["columns"],
-        "file_path": os.path.basename(result["file_path"]) if result["file_path"] else None,
+        "file_path": os.path.basename(result["file_path"])
+        if result["file_path"]
+        else None,
         "path_matches_file_path": result["path"] == result["file_path"],
         "csv_content_equals_csv": result["csv_content"] == result["csv"],
         "csv_digest": hashlib.sha256(csv_text.encode("utf-8")).hexdigest()[:16],
@@ -92,10 +94,14 @@ def _collect(tmp_dir: Path) -> dict:
     ]
     out["csv_calibrated_with_samples"] = _case(lambda: session.export_data("csv"))
     out["csv_with_file"] = _case(
-        lambda: session.export_data("csv", output_path=str(tmp_dir / "out" / "data.csv"))
+        lambda: session.export_data(
+            "csv", output_path=str(tmp_dir / "out" / "data.csv")
+        )
     )
 
-    out["csv_uncalibrated"] = _case(lambda: _session(calibrated=False).export_data("csv"))
+    out["csv_uncalibrated"] = _case(
+        lambda: _session(calibrated=False).export_data("csv")
+    )
 
     model = AgeDepthModel(
         depths=[0.0, 100.0, 200.0, 320.0],
@@ -131,7 +137,10 @@ def _collect(tmp_dir: Path) -> dict:
             {"px": float(column["start"]), "value": 0.0},
             {"px": float(column["end"]), "value": 100.0},
         ]
-    calibrated_cols.samples = [{"row_px": 300, "depth": 10.0}, {"row_px": 700, "depth": 210.0}]
+    calibrated_cols.samples = [
+        {"row_px": 300, "depth": 10.0},
+        {"row_px": 700, "depth": 210.0},
+    ]
     out["csv_calibrated_columns"] = _case(lambda: calibrated_cols.export_data("csv"))
 
     errors = {}

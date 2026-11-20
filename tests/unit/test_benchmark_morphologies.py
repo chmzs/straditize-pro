@@ -20,12 +20,16 @@ from straditize_core.calibration import LinearCalibration, LogCalibration
 
 
 class TestPollenMorphologyBenchmarks(unittest.TestCase):
-    BENCHMARK_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "figures", "bench")
+    BENCHMARK_DIR = os.path.join(
+        os.path.dirname(__file__), "..", "data", "figures", "bench"
+    )
 
     def _get_image_path(self, filename: str) -> str:
         path = os.path.join(self.BENCHMARK_DIR, filename)
         if not os.path.exists(path):
-            self.skipTest(f"Benchmark asset {filename} not found in {self.BENCHMARK_DIR}")
+            self.skipTest(
+                f"Benchmark asset {filename} not found in {self.BENCHMARK_DIR}"
+            )
         return path
 
     def test_silhouette_filled_abernethy(self):
@@ -41,7 +45,9 @@ class TestPollenMorphologyBenchmarks(unittest.TestCase):
         self.assertLess(fg_res["foreground_ratio"], 0.70)
 
         # Detect columns within core diagram bounds
-        cols = session.detect_columns([50, info["width"] - 50], [50, info["height"] - 50])
+        cols = session.detect_columns(
+            [50, info["width"] - 50], [50, info["height"] - 50]
+        )
         self.assertGreaterEqual(len(cols), 1)
 
         # Digitize first column
@@ -60,7 +66,9 @@ class TestPollenMorphologyBenchmarks(unittest.TestCase):
         self.assertGreater(fg_res["foreground_pixels"], 0)
 
         # Detect columns across the diagram area
-        cols = session.detect_columns([100, info["width"] - 50], [80, info["height"] - 80])
+        cols = session.detect_columns(
+            [100, info["width"] - 50], [80, info["height"] - 80]
+        )
         self.assertGreaterEqual(len(cols), 1)
 
     def test_bars_discrete_bell(self):
@@ -73,7 +81,9 @@ class TestPollenMorphologyBenchmarks(unittest.TestCase):
         fg_res = session.extract_foreground(mode="otsu")
         self.assertGreater(fg_res["foreground_pixels"], 0)
 
-        cols = session.detect_columns([100, info["width"] - 50], [80, info["height"] - 80])
+        cols = session.detect_columns(
+            [100, info["width"] - 50], [80, info["height"] - 80]
+        )
         self.assertGreaterEqual(len(cols), 1)
 
     def test_line_pure_proxy(self):
@@ -116,7 +126,9 @@ class TestPollenMorphologyBenchmarks(unittest.TestCase):
             ]
         )
         self.assertEqual(cal_res["status"], "calibrated")
-        self.assertAlmostEqual(session.y_scale["intercept"], -80.0 * session.y_scale["slope"], delta=1.0)
+        self.assertAlmostEqual(
+            session.y_scale["intercept"], -80.0 * session.y_scale["slope"], delta=1.0
+        )
 
 
 if __name__ == "__main__":

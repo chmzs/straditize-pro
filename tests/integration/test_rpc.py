@@ -1,4 +1,5 @@
 from pathlib import Path
+
 """Comprehensive Integration and Unit Tests for Straditize JSON-RPC 2.0 Server."""
 
 import io
@@ -24,11 +25,16 @@ from straditize_core import (
     run_stdio_server,
 )
 
+
 def get_test_image_path() -> str:
     """Locate the hoya-del-castillo.png test image reliably."""
     repo_root = Path(__file__).resolve().parents[2]
     candidates = [
-        repo_root / "straditize_core" / "assets" / "tutorials" / "hoya-del-castillo.png",
+        repo_root
+        / "straditize_core"
+        / "assets"
+        / "tutorials"
+        / "hoya-del-castillo.png",
         repo_root / "frontend" / "public" / "hoya-del-castillo.png",
         repo_root / "docs" / "demo" / "hoya-del-castillo.png",
     ]
@@ -513,7 +519,9 @@ class TestStraditizeRpcProtocol(unittest.TestCase):
         self.assertIn("Quercus", res["data"][0])
         # 未标定列不得给数：整列必须是 None（导出记 NA），
         # 不能拿列宽归一估算出来的百分比冒充读数。
-        self.assertIsNone(res["data"][0]["Pinus"], "未标定列必须返回 None，不得编造数值")
+        self.assertIsNone(
+            res["data"][0]["Pinus"], "未标定列必须返回 None，不得编造数值"
+        )
         self.assertIsNone(res["data"][0]["Quercus"], "未标定列必须返回 None")
 
 
@@ -587,7 +595,10 @@ class TestStraditizeHttpTransport(unittest.TestCase):
         for method in ("OPTIONS", "POST"):
             kwargs = {
                 "method": method,
-                "headers": {"Origin": "http://evil.example", "Content-Type": "application/json"},
+                "headers": {
+                    "Origin": "http://evil.example",
+                    "Content-Type": "application/json",
+                },
             }
             if method == "POST":
                 kwargs["data"] = b'{"jsonrpc":"2.0","method":"system.ping","id":1}'
@@ -614,7 +625,10 @@ class TestStraditizeHttpTransport(unittest.TestCase):
     def test_allowlisted_origin_is_echoed(self):
         """An explicitly allow-listed origin gets its own origin echoed back (never '*')."""
         import threading
-        from straditize_core.rpc_server import find_available_port, StraditizeRpcHttpServer
+        from straditize_core.rpc_server import (
+            find_available_port,
+            StraditizeRpcHttpServer,
+        )
 
         port = find_available_port(8990)
         srv = StraditizeRpcHttpServer(
@@ -630,9 +644,12 @@ class TestStraditizeHttpTransport(unittest.TestCase):
             with urllib.request.urlopen(req, timeout=5.0) as resp:
                 self.assertEqual(resp.status, 204)
                 self.assertEqual(
-                    resp.headers.get("Access-Control-Allow-Origin"), "http://localhost:5173"
+                    resp.headers.get("Access-Control-Allow-Origin"),
+                    "http://localhost:5173",
                 )
-                self.assertIn("POST", resp.headers.get("Access-Control-Allow-Methods", ""))
+                self.assertIn(
+                    "POST", resp.headers.get("Access-Control-Allow-Methods", "")
+                )
         finally:
             srv.stop()
 
@@ -842,12 +859,14 @@ class TestStraditizeHttpTransport(unittest.TestCase):
         """Verify straditize.getDiagramData includes isDesktopMode boolean flag."""
         req = urllib.request.Request(
             f"{self.base_url}/rpc",
-            data=json.dumps({
-                "jsonrpc": "2.0",
-                "method": "straditize.getDiagramData",
-                "params": {},
-                "id": "diag-test",
-            }).encode("utf-8"),
+            data=json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "straditize.getDiagramData",
+                    "params": {},
+                    "id": "diag-test",
+                }
+            ).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
@@ -861,7 +880,11 @@ class TestStraditizeHttpTransport(unittest.TestCase):
     def test_http_shutdown_allowed_in_desktop_mode(self):
         """Verify POST /shutdown returns 200 and invokes exit callback in desktop mode."""
         import threading
-        from straditize_core.rpc_server import find_available_port, StraditizeRpcHttpServer
+        from straditize_core.rpc_server import (
+            find_available_port,
+            StraditizeRpcHttpServer,
+        )
+
         port = find_available_port(8950)
         shutdown_called = threading.Event()
 
@@ -894,7 +917,9 @@ class TestStraditizeHttpTransport(unittest.TestCase):
         self.server.session.load_image(img_path)
 
         # 1. Test /image/slice?x=10&y=10&w=50&h=40
-        req_slice = urllib.request.Request(f"{self.base_url}/image/slice?x=10&y=10&w=50&h=40")
+        req_slice = urllib.request.Request(
+            f"{self.base_url}/image/slice?x=10&y=10&w=50&h=40"
+        )
         with urllib.request.urlopen(req_slice) as resp:
             self.assertEqual(resp.status, 200)
             self.assertEqual(resp.headers.get("Content-Type"), "image/png")
@@ -961,7 +986,9 @@ class TestStraditizeHttpTransport(unittest.TestCase):
             return_value=base_dir,
         ):
             # 1. Access via /components/webr/test_module.wasm
-            req1 = urllib.request.Request(f"{self.base_url}/components/webr/test_module.wasm")
+            req1 = urllib.request.Request(
+                f"{self.base_url}/components/webr/test_module.wasm"
+            )
             with urllib.request.urlopen(req1, timeout=3.0) as resp1:
                 self.assertEqual(resp1.status, 200)
                 self.assertEqual(resp1.headers.get("Content-Type"), "application/wasm")
@@ -975,7 +1002,9 @@ class TestStraditizeHttpTransport(unittest.TestCase):
 
             # 3. Path traversal attack blocked
             with self.assertRaises(urllib.error.HTTPError) as ctx:
-                bad_req = urllib.request.Request(f"{self.base_url}/components/../../etc/passwd")
+                bad_req = urllib.request.Request(
+                    f"{self.base_url}/components/../../etc/passwd"
+                )
                 urllib.request.urlopen(bad_req, timeout=3.0)
             self.assertEqual(ctx.exception.code, 403)
 
@@ -1008,7 +1037,9 @@ class TestSectionFiveJsonRpcMethods(unittest.TestCase):
         # 1. Load image and detect columns
         self.rpc_call("image.load", {"image_path": self.image_path})
         self.rpc_call("roi.update", {"x0": 315, "x1": 1946, "y0": 511, "y1": 1311})
-        self.rpc_call("algorithm.detectColumns", {"xlim": [315, 1946], "ylim": [511, 1311]})
+        self.rpc_call(
+            "algorithm.detectColumns", {"xlim": [315, 1946], "ylim": [511, 1311]}
+        )
         self.session.apply_depth_grid(start_depth=0, end_depth=150, step=2)
 
         # 2. Save project as .tar archive
@@ -1016,7 +1047,9 @@ class TestSectionFiveJsonRpcMethods(unittest.TestCase):
             tar_path = tf.name
 
         try:
-            res_save = self.rpc_call("project.save", {"output_path": tar_path, "format": "tar"})
+            res_save = self.rpc_call(
+                "project.save", {"output_path": tar_path, "format": "tar"}
+            )
             self.assertTrue(res_save["success"])
             self.assertTrue(os.path.exists(tar_path))
             self.assertGreater(os.path.getsize(tar_path), 1000)
@@ -1065,7 +1098,12 @@ class TestSectionFiveJsonRpcMethods(unittest.TestCase):
             res_load = self.rpc_call("project.load", {"project_data": tar_path})
             self.assertTrue(res_load["success"])
             self.assertGreater(len(self.session.columns), 0)
-            self.assertEqual(self.session.columns[0]["species"], "Pinus" if "Pinus" in self.session.taxa_names else self.session.columns[0]["name"])
+            self.assertEqual(
+                self.session.columns[0]["species"],
+                "Pinus"
+                if "Pinus" in self.session.taxa_names
+                else self.session.columns[0]["name"],
+            )
         finally:
             if os.path.exists(tar_path):
                 os.remove(tar_path)
@@ -1073,14 +1111,17 @@ class TestSectionFiveJsonRpcMethods(unittest.TestCase):
     def test_section_five_column_and_point_manipulation_with_undo(self):
         """Tests column.add/remove/update, point.add/move/remove, and history.undo/redo."""
         # 1. Add column
-        res_col = self.rpc_call("column.add", {
-            "column": {
-                "species": "Betula",
-                "startX": 100,
-                "endX": 250,
-                "scale_type": "linear",
-            }
-        })
+        res_col = self.rpc_call(
+            "column.add",
+            {
+                "column": {
+                    "species": "Betula",
+                    "startX": 100,
+                    "endX": 250,
+                    "scale_type": "linear",
+                }
+            },
+        )
         self.assertEqual(res_col["column"]["species"], "Betula")
         self.assertEqual(len(self.session.columns), 1)
 
@@ -1152,16 +1193,20 @@ class TestSectionFiveJsonRpcMethods(unittest.TestCase):
         # 所以先在**真实 RPC** 上做 Y 两点标定，让它跑到内容层；断言一字未改。
         self.rpc_call("image.load", {"image_path": self.image_path})
         self.rpc_call("roi.update", {"x0": 315, "x1": 1946, "y0": 511, "y1": 1311})
-        self.rpc_call("algorithm.detectColumns", {"xlim": [315, 1946], "ylim": [511, 1311]})
+        self.rpc_call(
+            "algorithm.detectColumns", {"xlim": [315, 1946], "ylim": [511, 1311]}
+        )
         self.session.calibrate_axes(
             y_marks=[{"pixel": 511.0, "val": 0.0}, {"pixel": 1311.0, "val": 150.0}],
             unit="cm",
         )
 
-        with tempfile.NamedTemporaryFile(suffix=".tar", delete=False) as tf_tar, \
-             tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tf_out_tar, \
-             tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tf_json, \
-             tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tf_out_json:
+        with (
+            tempfile.NamedTemporaryFile(suffix=".tar", delete=False) as tf_tar,
+            tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tf_out_tar,
+            tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tf_json,
+            tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tf_out_json,
+        ):
             tar_path = tf_tar.name
             out_tar_csv = tf_out_tar.name
             json_path = tf_json.name
@@ -1208,12 +1253,16 @@ class TestSectionFiveJsonRpcMethods(unittest.TestCase):
 
         self.rpc_call("image.load", {"image_path": self.image_path})
         self.rpc_call("roi.update", {"x0": 315, "x1": 1946, "y0": 511, "y1": 1311})
-        self.rpc_call("algorithm.detectColumns", {"xlim": [315, 1946], "ylim": [511, 1311]})
+        self.rpc_call(
+            "algorithm.detectColumns", {"xlim": [315, 1946], "ylim": [511, 1311]}
+        )
         # 刻意**不做** Y 标定：本用例测的就是未标定这条拒绝路径。
         self.assertFalse(getattr(self.session, "is_calibrated", False))
 
-        with tempfile.NamedTemporaryFile(suffix=".tar", delete=False) as tf_tar, \
-             tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tf_out:
+        with (
+            tempfile.NamedTemporaryFile(suffix=".tar", delete=False) as tf_tar,
+            tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tf_out,
+        ):
             tar_path = tf_tar.name
             out_csv = tf_out.name
         try:
@@ -1238,13 +1287,29 @@ class TestSectionFiveJsonRpcMethods(unittest.TestCase):
     def test_agedepth_bacon_modeling_rpc(self):
         """Verify agedepth.runBaconModeling hierarchy RPC invocation."""
         dates = [
-            {"id": "14C_1", "depth": 10.0, "age": 200, "error": 30, "thickness": 1, "cc": 1},
-            {"id": "14C_2", "depth": 50.0, "age": 1000, "error": 40, "thickness": 1, "cc": 1},
+            {
+                "id": "14C_1",
+                "depth": 10.0,
+                "age": 200,
+                "error": 30,
+                "thickness": 1,
+                "cc": 1,
+            },
+            {
+                "id": "14C_2",
+                "depth": 50.0,
+                "age": 1000,
+                "error": 40,
+                "thickness": 1,
+                "cc": 1,
+            },
         ]
-        res = self.rpc_call("agedepth.runBaconModeling", {"dates": dates, "core_name": "TestCore", "thickness": 5.0})
+        res = self.rpc_call(
+            "agedepth.runBaconModeling",
+            {"dates": dates, "core_name": "TestCore", "thickness": 5.0},
+        )
         self.assertTrue(res.get("success") or res.get("need_installation"))
 
 
 if __name__ == "__main__":
     unittest.main()
-

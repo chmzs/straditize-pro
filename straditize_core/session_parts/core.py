@@ -1868,12 +1868,12 @@ class CoreMixin:
                         except (TypeError, ValueError):
                             raise JsonRpcError(
                                 INVALID_PARAMS,
-                                f"轴线粗必须是 1–20 之间的数值，收到 {v!r}。",
+                                f"轴线粗必须是 0–20 之间的数值，收到 {v!r}。",
                             )
                         if not (0.0 <= stroke <= 20.0):
                             raise JsonRpcError(
                                 INVALID_PARAMS,
-                                f"轴线粗必须在 1–20px 之间，收到 {stroke}。",
+                                f"轴线粗必须在 0–20px 之间，收到 {stroke}。",
                             )
                         col["axis_stroke_px"] = stroke
                 else:
@@ -1942,9 +1942,17 @@ class CoreMixin:
         if not getattr(self, "columns", None):
             raise JsonRpcError(STATE_ERROR, "No columns detected.")
 
+        is_bar_diagram = False
         for c_idx in range(len(self.columns)):
+            col = self.columns[c_idx] if c_idx < len(self.columns) else {}
+            col_plot_type = self._resolve_col_plot_type(col)
+            if col_plot_type == "bar":
+                is_bar_diagram = True
             if c_idx not in self.column_points:
-                self.digitize(c_idx, "area")
+                from .digitize import READER_TYPES
+
+                r_type = col_plot_type if col_plot_type in READER_TYPES else "area"
+                self.digitize(c_idx, r_type)
 
         try:
             from scipy.signal import find_peaks
@@ -1954,13 +1962,29 @@ class CoreMixin:
         peaks_points: list[tuple[int, int]] = []
         valleys_points: list[tuple[int, int]] = []
 
+        from .digitize import DigitizeSessionMixin
+
         for _c_idx, pts in self.column_points.items():
             if not pts or len(pts) < 5:
                 continue
+            col = self.columns[_c_idx] if _c_idx < len(self.columns) else {}
+            col_plot_type = self._resolve_col_plot_type(col)
+
             rows = np.array([p["row"] for p in pts], dtype=int)
             xs = np.array([p["x"] for p in pts], dtype=float)
 
             dyn_range = float(np.ptp(xs)) if len(xs) > 0 else 1.0
+            c_start = float(col.get("start", col.get("startX", 0.0)))
+            noise_cutoff = c_start + max(1.5, dyn_range * 0.04)
+            is_bar_like = col_plot_type == "bar"
+
+            if is_bar_like:
+                is_bar_diagram = True
+                centers = DigitizeSessionMixin._extract_bar_centers_map(pts, c_start)
+                for _row in centers.keys():
+                    peaks_points.append((int(_row), int(_c_idx)))
+                continue
+
             prominence = max(1.0, dyn_range * 0.04)
 
             peaks_idx: list[int] = []
@@ -2014,6 +2038,10 @@ class CoreMixin:
 
             for row, col in pts_sorted:
                 tol = _calc_tol(float(row), sorted_rows, tolerance_px, adaptive_window)
+                if is_bar_diagram:
+                    tol = min(tol, 2.0)
+                max_span = 3.5 if is_bar_diagram else 2.0 * tol
+
                 if not clusters:
                     clusters.append([(row, col)])
                 else:
@@ -2022,7 +2050,7 @@ class CoreMixin:
                     cluster_min = min(r for r, c in curr)
                     if (
                         abs(row - cluster_mean) <= tol
-                        and (row - cluster_min) <= 2.0 * tol
+                        and (row - cluster_min) <= max_span
                     ):
                         curr.append((row, col))
                     else:
@@ -2033,7 +2061,17 @@ class CoreMixin:
                 cols = {_c for _r, _c in cl}
                 if len(cols) < min_taxa_support:
                     continue
-                row_px = int(round(float(np.mean([_r for _r, _c in cl]))))
+                from collections import Counter
+
+                r_list = [_r for _r, _c in cl]
+                counts = Counter(r_list)
+                most_common = counts.most_common()
+                # 众数投票机制：优先吸附到最多属种共振的物理整数中心行，杜绝小数均值抖动
+                if len(most_common) == 1 or most_common[0][1] > most_common[1][1]:
+                    row_px = int(most_common[0][0])
+                else:
+                    med = float(np.median(r_list))
+                    row_px = int(np.floor(med + 0.5))
                 out.append(
                     {
                         "row_px": row_px,

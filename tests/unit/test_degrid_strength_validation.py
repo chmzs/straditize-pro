@@ -79,9 +79,9 @@ def test_load_drops_invalid_strength_with_warning(caplog, bad) -> None:
         "非法强度被带进了运行时——它会一路走到 normalize_grid_line_strength 抛错"
     )
     messages = [record.getMessage() for record in caplog.records]
-    assert any(WARNING_KEY in message and repr(bad) in message for message in messages), (
-        f"丢弃必须留痕（写清丢的是什么），否则用户无从知道自己的去线设置没了：{messages}"
-    )
+    assert any(
+        WARNING_KEY in message and repr(bad) in message for message in messages
+    ), f"丢弃必须留痕（写清丢的是什么），否则用户无从知道自己的去线设置没了：{messages}"
 
 
 @pytest.mark.parametrize("raw", ["Strong", " weak ", "medium"])

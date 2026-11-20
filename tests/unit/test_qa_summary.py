@@ -17,9 +17,7 @@ import pytest
 
 from straditize_core.session import StraditizeSession
 
-HOYA_PATH = Path(
-    "straditize_core/assets/tutorials/hoya-del-castillo.png"
-)
+HOYA_PATH = Path("straditize_core/assets/tutorials/hoya-del-castillo.png")
 
 
 def test_qa_criterion_1_composition_gate_and_empty_horizons():
@@ -229,9 +227,9 @@ def test_qa_l3_hoya_pollen_roi():
     # load_image 已自动建了一个默认 ROI（会占掉 roi_1）；本用例要按精确边界建自己的
     # 取数区，先清空再建，并使用返回的真实 id 而不是写死 "roi_1"。
     session._init_rois()
-    roi_id = session.roi_create(
-        name="pollen", x0=315, x1=1946, y0=511, y1=1311
-    )["roi"]["id"]
+    roi_id = session.roi_create(name="pollen", x0=315, x1=1946, y0=511, y1=1311)["roi"][
+        "id"
+    ]
     session.detect_columns([315, 1946], [511, 1311], roi_id=roi_id)
 
     # Digitize columns so turning points and data exist

@@ -26,6 +26,7 @@ export interface ToolbarCallbacks {
   onDeleteSelected?: () => void;
   onSaveProject?: () => void;
   onOpenProjectFile?: (file: File) => void;
+  onProjectNameChange?: (name: string) => void;
   onOpenAgeDepthModal?: () => void;
   onOpenMetadataModal?: () => void;
   onOpenOcrReviewModal?: () => void;
@@ -235,6 +236,17 @@ export class Toolbar {
             <span>${t('toolbar.openProj')}</span>
           </button>
           <input type="file" id="file-input-project" accept=".tar,.json,.tar.gz" hidden />
+
+          <div class="project-name-bar" style="display: inline-flex; align-items: center; gap: 4px; margin-left: 2px;">
+            <input
+              type="text"
+              id="inp-toolbar-project-name"
+              class="ui-input ui-input--sm project-name-input"
+              style="width: 120px; font-size: 11px; padding: 2px 6px; height: 24px; border-radius: 4px;"
+              placeholder="项目名称..."
+              title="当前项目名称（用作导出与工程包文件名前缀，留空跟随图像名）"
+            />
+          </div>
 
           <select id="select-sample-diagram" class="sample-select" title="${t('toolbar.sampleTitle')}">
             <option value="" disabled selected>${t('toolbar.sample')}</option>
@@ -457,6 +469,11 @@ export class Toolbar {
       }
     });
 
+    const projectInput = this.element.querySelector('#inp-toolbar-project-name') as HTMLInputElement | null;
+    projectInput?.addEventListener('change', () => {
+      this.callbacks.onProjectNameChange?.(projectInput.value.trim());
+    });
+
     // 打开文件相关
     const fileInput = this.element.querySelector('#file-input-image') as HTMLInputElement;
     const openBtn = this.element.querySelector('#btn-open-file');
@@ -493,5 +510,12 @@ export class Toolbar {
     modeSelect?.addEventListener('change', () => {
       this.callbacks.onChangeImageMode(modeSelect.value as ImageDisplayMode);
     });
+  }
+
+  public setProjectName(name: string): void {
+    const projectInput = this.element.querySelector('#inp-toolbar-project-name') as HTMLInputElement | null;
+    if (projectInput) {
+      projectInput.value = name || '';
+    }
   }
 }

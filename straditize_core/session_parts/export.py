@@ -75,6 +75,35 @@ def sanitize_filename_stem(stem: Any) -> str:
     return cleaned or "straditize"
 
 
+def extract_project_name_from_filename(filename: str | None) -> str | None:
+    """从导入的工程/归档文件名中提取项目定义名前缀。
+    例如：'pollen_bars_riojaplot_project_20261120_120034.tar' -> 'pollen_bars_riojaplot'。
+    """
+    if not filename:
+        return None
+    clean = os.path.basename(str(filename).strip().replace("\\", "/"))
+    for ext in (".tar.gz", ".tar", ".zip", ".json", ".csv", ".xlsx", ".lpd"):
+        if clean.lower().endswith(ext):
+            clean = clean[: -len(ext)]
+            break
+    m = re.match(r"^(.*?)(?:_project(?:_\d{8}_\d{6}|\d+)?)$", clean, flags=re.IGNORECASE)
+    stem = m.group(1) if (m and m.group(1)) else clean
+    m2 = re.match(
+        r"^(.*?)(?:_(?:matrix|report|plot_bundle|lipd|strat_diagram)(?:_\d{8}_\d{6}|\d+)?)$",
+        stem,
+        flags=re.IGNORECASE,
+    )
+    if m2 and m2.group(1):
+        stem = m2.group(1)
+    m3 = re.match(r"^(.*?)(?:_\d{8}_\d{6})$", stem)
+    if m3 and m3.group(1):
+        stem = m3.group(1)
+    cleaned = sanitize_filename_stem(stem)
+    if not cleaned or cleaned.lower() in ("straditize", "original", "diagram"):
+        return None
+    return cleaned
+
+
 def resolve_project_name(session: Any = None, explicit_name: str | None = None) -> str:
     """Resolves project name according to priority:
     1. User-configured project_name (explicit_name parameter or session.project_name)
@@ -1253,11 +1282,13 @@ class ExportMixin:
         ordered = sorted(
             zip(y_pixels.tolist(), y_vals.tolist()), key=lambda pair: pair[0]
         )
+        self.y_marks = [{"pixel": float(p), "val": float(v)} for p, v in ordered]
         self.depth_calib = {
             "top_px": float(ordered[0][0]),
             "top_cm": float(ordered[0][1]),
             "bottom_px": float(ordered[-1][0]),
             "bottom_cm": float(ordered[-1][1]),
+            "marks": self.y_marks,
         }
         if unit:
             self.depth_unit = str(unit).strip() or self.depth_unit
@@ -1311,6 +1342,7 @@ class ExportMixin:
             # trusting that its request was accepted.
             "primary_axis": resolved_axis,
             "unit": self.depth_unit,
+            "marks": getattr(self, "y_marks", None),
         }
 
     def _primary_roi_sheet_name(self, frames: dict[str, Any]) -> str:

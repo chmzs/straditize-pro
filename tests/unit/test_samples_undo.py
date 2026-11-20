@@ -31,6 +31,7 @@ columns 同为可编辑实体。粘错一批却撤不回来，用户会以为撤
 
 (d) 是反向哨兵：samples 未变时，撤销其它操作不得影响 samples。
 """
+
 from __future__ import annotations
 
 import copy

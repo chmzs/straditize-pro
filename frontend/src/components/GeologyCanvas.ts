@@ -626,6 +626,36 @@ private pointer: PointerState = {
     }
   }
 
+  /**
+   * 平移视口使指定列在画布中水平居中，必要时将对应 ROI 纵向拉回视野。
+   */
+  public scrollToColumn(taxaId: string): void {
+    const col = this.data.columns.find((c) => c.id === taxaId);
+    if (!col) return;
+    const rect = this.canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    // 列中心水平世界坐标
+    const colCenterX = (col.startX + col.endX) / 2;
+    // 保持当前用户设置的缩放 scale，将列水平居中
+    this.viewport.panX = rect.width / 2 - colCenterX * this.viewport.scale;
+
+    // 检查纵向 (Y) 视口是否已经包含该列所属的 ROI
+    const roi = this.data.rois?.find((r) => r.id === col.roi_id) || this.data.roi;
+    if (roi) {
+      const viewYTop = -this.viewport.panY / this.viewport.scale;
+      const viewYBottom = (rect.height - this.viewport.panY) / this.viewport.scale;
+      const overlaps = viewYBottom >= roi.yMin && viewYTop <= roi.yMax;
+      if (!overlaps) {
+        const roiCenterY = (roi.yMin + roi.yMax) / 2;
+        this.viewport.panY = rect.height / 2 - roiCenterY * this.viewport.scale;
+      }
+    }
+
+    this.viewport.fittedToScreen = false;
+    this.requestRender();
+  }
+
   public getActiveColumn(): TaxaColumn | undefined {
     return this.data.columns.find((c) => c.id === this.data.activeTaxaId);
   }

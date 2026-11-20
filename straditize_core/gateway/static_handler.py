@@ -170,9 +170,13 @@ class StaticAssetHandler:
                     self.handler.send_header("Pragma", "no-cache")
                     self.handler.send_header("Expires", "0")
                 elif "/assets/" in raw_path or clean_path.startswith("assets/"):
-                    self.handler.send_header("Cache-Control", "public, max-age=31536000, immutable")
+                    self.handler.send_header(
+                        "Cache-Control", "public, max-age=31536000, immutable"
+                    )
                 else:
-                    self.handler.send_header("Cache-Control", "no-cache, must-revalidate")
+                    self.handler.send_header(
+                        "Cache-Control", "no-cache, must-revalidate"
+                    )
                 self.handler._send_cors_headers()
                 self.handler.end_headers()
                 self.handler.wfile.write(content)
@@ -185,7 +189,9 @@ class StaticAssetHandler:
                 self.handler.send_response(200)
                 self.handler.send_header("Content-Type", "text/html; charset=utf-8")
                 self.handler.send_header("Content-Length", str(len(content)))
-                self.handler.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.handler.send_header(
+                    "Cache-Control", "no-cache, no-store, must-revalidate"
+                )
                 self.handler.send_header("Pragma", "no-cache")
                 self.handler.send_header("Expires", "0")
                 self.handler._send_cors_headers()

@@ -93,9 +93,7 @@ def test_axis_blind_boundary_inclusive_and_skips_inkless_rows() -> None:
 
 def test_axis_blind_skipped_when_axis_width_unset() -> None:
     """两处都没写轴宽 -> 不判、不拿 `resolve_axis_stroke` 的 5.0 默认值顶替。"""
-    flags = _flags(
-        [_column(axis_px=None, rows=[(10, ZERO_PX), (11, ZERO_PX + 1.0)])]
-    )
+    flags = _flags([_column(axis_px=None, rows=[(10, ZERO_PX), (11, ZERO_PX + 1.0)])])
     block = flags[FLAG_AXIS_BLIND]
     assert block["status"] == "skipped"
     assert block["count"] == 0
@@ -219,7 +217,13 @@ def test_same_shape_with_area_plot_type_is_reported() -> None:
     rows += _bar_rows(ZERO_PX + 10.0, range(10, 15))
     rows += _bar_rows(RIGHT_PX - 1.0, range(15, 20))
     flags = _flags([_column(plot_type="area", rows=rows)])
-    assert [row["row_px"] for row in flags[FLAG_TRUNCATED]["rows"]] == [15, 16, 17, 18, 19]
+    assert [row["row_px"] for row in flags[FLAG_TRUNCATED]["rows"]] == [
+        15,
+        16,
+        17,
+        18,
+        19,
+    ]
     assert flags[FLAG_COLLISION]["count"] == 0
     assert flags[FLAG_COLLISION]["downgraded_low_priority"] == 0
 

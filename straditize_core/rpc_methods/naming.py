@@ -128,9 +128,7 @@ def register(dispatcher: Any, session: Any) -> None:
             session.taxa_names = taxa_names
         for i in range(len(taxa_names), len(columns)):
             taxa_names.append(
-                columns[i].get("name")
-                or columns[i].get("species")
-                or f"col{i + 1:02d}"
+                columns[i].get("name") or columns[i].get("species") or f"col{i + 1:02d}"
             )
         taxa_names[idx] = clean_name
 

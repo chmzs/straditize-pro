@@ -8,6 +8,7 @@ Y 轴声明为年代（``primary_axis="age"``）且样品来自 ``fromGrid`` 生
 
 本文件同时锁定修复后的分支 ①／③ 行为，防止为修 ② 而改动其他分支。
 """
+
 from __future__ import annotations
 
 import numpy as np

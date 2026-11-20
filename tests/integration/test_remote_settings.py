@@ -53,12 +53,14 @@ def test_config_defaults_and_persistence(monkeypatch, tmp_path):
     assert cfg["theme"] == "light"
 
     # Save updates
-    updated = save_config({
-        "remote_access_enabled": True,
-        "allowed_hosts": ["192.168.1.*", "100.*", "my-workstation.lan"],
-        "locale": "en",
-        "theme": "dark",
-    })
+    updated = save_config(
+        {
+            "remote_access_enabled": True,
+            "allowed_hosts": ["192.168.1.*", "100.*", "my-workstation.lan"],
+            "locale": "en",
+            "theme": "dark",
+        }
+    )
     assert updated["remote_access_enabled"] is True
     assert "192.168.1.*" in updated["allowed_hosts"]
     assert updated["locale"] == "en"
@@ -107,17 +109,19 @@ def test_rpc_system_config_methods(monkeypatch, tmp_path):
     assert cfg["webmcp_endpoint"] == "/mcp"
 
     # 2. system.updateConfig
-    req_up = json.dumps({
-        "jsonrpc": "2.0",
-        "method": "system.updateConfig",
-        "params": {
-            "remote_access_enabled": True,
-            "allowed_hosts": "192.168.1.*, 100.*",
-            "locale": "en",
-            "theme": "dark",
-        },
-        "id": 2,
-    })
+    req_up = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "method": "system.updateConfig",
+            "params": {
+                "remote_access_enabled": True,
+                "allowed_hosts": "192.168.1.*, 100.*",
+                "locale": "en",
+                "theme": "dark",
+            },
+            "id": 2,
+        }
+    )
     res_up = json.loads(dispatcher.handle_text(req_up))
     assert res_up["result"]["success"] is True
     saved_cfg = res_up["result"]["config"]
@@ -146,7 +150,9 @@ def test_http_remote_access_blocking_and_dynamic_whitelist(monkeypatch, tmp_path
 
     time.sleep(0.2)
 
-    def make_request(host_header: str, origin: str | None = None) -> tuple[int, dict | str]:
+    def make_request(
+        host_header: str, origin: str | None = None
+    ) -> tuple[int, dict | str]:
         req = urllib.request.Request(
             f"http://127.0.0.1:{port}/status",
             headers={"Host": host_header} if host_header else {},
@@ -177,15 +183,17 @@ def test_http_remote_access_blocking_and_dynamic_whitelist(monkeypatch, tmp_path
         assert status == 403
 
         # 2. Dynamically update config via system.updateConfig
-        req_up = json.dumps({
-            "jsonrpc": "2.0",
-            "method": "system.updateConfig",
-            "params": {
-                "remote_access_enabled": True,
-                "allowed_hosts": ["192.168.1.*", "100.*", "my-workstation.lan"],
-            },
-            "id": 10,
-        })
+        req_up = json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "method": "system.updateConfig",
+                "params": {
+                    "remote_access_enabled": True,
+                    "allowed_hosts": ["192.168.1.*", "100.*", "my-workstation.lan"],
+                },
+                "id": 10,
+            }
+        )
         res_up = json.loads(server.dispatcher.handle_text(req_up))
         assert res_up["result"]["success"] is True
 
@@ -216,7 +224,10 @@ def test_http_remote_access_blocking_and_dynamic_whitelist(monkeypatch, tmp_path
         )
         with urllib.request.urlopen(req_cors, timeout=1.0) as resp:
             assert resp.status == 200
-            assert resp.headers.get("Access-Control-Allow-Origin") == "http://192.168.1.100:5173"
+            assert (
+                resp.headers.get("Access-Control-Allow-Origin")
+                == "http://192.168.1.100:5173"
+            )
 
     finally:
         server.stop()
@@ -231,16 +242,18 @@ def test_remote_password_protection_and_api_auth():
 
     try:
         # 1. Update config: enable remote access with password
-        req_up = json.dumps({
-            "jsonrpc": "2.0",
-            "method": "system.updateConfig",
-            "params": {
-                "remote_access_enabled": True,
-                "remote_password": "MySecretLabPassword2026",
-                "allowed_hosts": ["192.168.1.*"],
-            },
-            "id": 1,
-        })
+        req_up = json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "method": "system.updateConfig",
+                "params": {
+                    "remote_access_enabled": True,
+                    "remote_password": "MySecretLabPassword2026",
+                    "allowed_hosts": ["192.168.1.*"],
+                },
+                "id": 1,
+            }
+        )
         res_up = json.loads(server.dispatcher.handle_text(req_up))
         assert res_up["result"]["success"] is True
         assert res_up["result"]["config"]["has_remote_password"] is True
@@ -269,11 +282,13 @@ def test_remote_password_protection_and_api_auth():
             assert data["has_remote_password"] is True
 
         # 4. Remote unauthenticated request to /rpc is blocked with 401
-        rpc_payload = json.dumps({
-            "jsonrpc": "2.0",
-            "method": "system.ping",
-            "id": 2,
-        }).encode("utf-8")
+        rpc_payload = json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "method": "system.ping",
+                "id": 2,
+            }
+        ).encode("utf-8")
         req_unauth = urllib.request.Request(
             f"http://127.0.0.1:{port}/rpc",
             data=rpc_payload,
@@ -303,7 +318,9 @@ def test_remote_password_protection_and_api_auth():
         assert exc_info.value.code == 401
 
         # 6. Correct password to /api/auth returns 200 with auth token
-        auth_correct = json.dumps({"password": "MySecretLabPassword2026"}).encode("utf-8")
+        auth_correct = json.dumps({"password": "MySecretLabPassword2026"}).encode(
+            "utf-8"
+        )
         req_auth_ok = urllib.request.Request(
             f"http://127.0.0.1:{port}/api/auth",
             data=auth_correct,
@@ -371,5 +388,3 @@ def test_remote_password_protection_and_api_auth():
 
     finally:
         server.stop()
-
-

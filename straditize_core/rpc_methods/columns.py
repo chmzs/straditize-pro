@@ -11,4 +11,6 @@ def register(dispatcher: Any, session: Any) -> None:
     dispatcher.register_method("column.remove", session.column_remove)
     dispatcher.register_method("column.update", session.column_update)
     dispatcher.register_method("core.detectColumns", session.detect_columns)
-    dispatcher.register_method("algorithm.detectColumns", session.algorithm_detect_columns)
+    dispatcher.register_method(
+        "algorithm.detectColumns", session.algorithm_detect_columns
+    )

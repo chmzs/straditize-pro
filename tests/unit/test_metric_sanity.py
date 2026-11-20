@@ -51,9 +51,9 @@ from straditize_core.image import (
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-GREY_FILL = (182, 182, 182)          # the colour that defeats Otsu(138)
-PINK_SHADOW = (244, 226, 226)        # 5x exaggerated envelope, warm hue
-BLUE_SHADOW = (218, 226, 237)        # 5x exaggerated envelope, cool hue
+GREY_FILL = (182, 182, 182)  # the colour that defeats Otsu(138)
+PINK_SHADOW = (244, 226, 226)  # 5x exaggerated envelope, warm hue
+BLUE_SHADOW = (218, 226, 237)  # 5x exaggerated envelope, cool hue
 
 
 def make_bar_figure(
@@ -80,16 +80,22 @@ def make_bar_figure(
     for spec in bar_specs:
         w = int(spec["width_px"])
         colour = np.array(spec["colour"], dtype=np.uint8)
-        arr[:, x:x + w] = colour
+        arr[:, x : x + w] = colour
         if spec.get("shadow") is not None:
             # the shadow layer sits on top and is drawn wider, as in the real
             # figure where the exaggerated envelope extends past the solid bar
             sh = np.array(spec["shadow"], dtype=np.uint8)
             sw = w + 3
-            arr[:, x:x + sw] = sh
-            arr[:, x:x + w] = colour
-        truth.append({"x0": x, "width_px": w, "colour": spec["colour"],
-                      "shadow": spec.get("shadow")})
+            arr[:, x : x + sw] = sh
+            arr[:, x : x + w] = colour
+        truth.append(
+            {
+                "x0": x,
+                "width_px": w,
+                "colour": spec["colour"],
+                "shadow": spec.get("shadow"),
+            }
+        )
         x += w + gap
 
     img = Image.fromarray(arr)
@@ -118,18 +124,18 @@ def test_measurement_recovers_known_fill_area():
 
     If this fails, every downstream number in this file is meaningless.
     """
-    specs = [{"width_px": 40, "colour": BLACK},
-             {"width_px": 25, "colour": BLACK}]
+    specs = [{"width_px": 40, "colour": BLACK}, {"width_px": 25, "colour": BLACK}]
     img, truth = make_bar_figure(specs, height=200)
     for t in truth:
         expected = t["width_px"] * 200
         got = measure_fill_width_by_colour(img, t["colour"])
         # both bars are the same colour, so count per-bar by x-range instead
         a = np.asarray(img.convert("RGB"), dtype=int)
-        band = a[:, t["x0"]:t["x0"] + t["width_px"]]
+        band = a[:, t["x0"] : t["x0"] + t["width_px"]]
         got = int((np.abs(band - np.array(t["colour"])).max(-1) <= 2).sum())
         assert got == expected, (
-            f"synthetic ground truth not recovered: expected {expected}, got {got}")
+            f"synthetic ground truth not recovered: expected {expected}, got {got}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -151,8 +157,8 @@ def test_darkest_decile_proxy_is_invalid_on_antialiased_bars():
     # a bar whose fill is a mid grey, with a darker outline (as real figures have)
     arr = np.full((200, 60, 3), 255, dtype=np.uint8)
     arr[:, 20:50] = GREY_FILL
-    arr[:, 20:22] = BLACK       # left stroke
-    arr[:, 48:50] = BLACK       # right stroke
+    arr[:, 20:22] = BLACK  # left stroke
+    arr[:, 48:50] = BLACK  # right stroke
     img = Image.fromarray(arr)
     a = np.asarray(img, dtype=float)
     lum = a.mean(-1)
@@ -165,14 +171,18 @@ def test_darkest_decile_proxy_is_invalid_on_antialiased_bars():
 
     # the proxy claims the fill is "the darkest 10%" -- which are the strokes
     assert proxy_px < true_fill_px, (
-        "proxy selected fewer pixels than the fill, so it cannot represent it")
+        "proxy selected fewer pixels than the fill, so it cannot represent it"
+    )
     # and those pixels are NOT the fill colour
     proxy_mask = np.zeros(lum.shape, dtype=bool)
     proxy_mask[:, 20:50] = col <= thr
-    proxy_is_grey = bool((np.abs(a - np.array(GREY_FILL)).max(-1) <= 2)[proxy_mask].mean() > 0.5)
+    proxy_is_grey = bool(
+        (np.abs(a - np.array(GREY_FILL)).max(-1) <= 2)[proxy_mask].mean() > 0.5
+    )
     assert not proxy_is_grey, (
         "the 'darkest 10%' pixels are not the fill: proxy measures strokes, "
-        "not the solid layer")
+        "not the solid layer"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -195,8 +205,9 @@ def test_otsu_threshold_misses_grey_fill_on_synthetic_figure():
     assert true_fill == t["width_px"] * 300, "ground truth must be exact"
 
     # what the product's standard path does with threshold = 138
-    fg = build_foreground(np.asarray(img.convert("RGBA")), threshold=138.0,
-                          extraction_mode="standard")
+    fg = build_foreground(
+        np.asarray(img.convert("RGBA")), threshold=138.0, extraction_mode="standard"
+    )
     kept = int((fg & (np.abs(arr - np.array(GREY_FILL)).max(-1) <= 2)).sum())
     coverage = 100.0 * kept / true_fill
 
@@ -207,7 +218,8 @@ def test_otsu_threshold_misses_grey_fill_on_synthetic_figure():
     # 这条断言就会红。这正是它该做的事。
     assert coverage > 95.0, (
         f"灰色填充（{GREY_FILL}）应被标准路径正确提取，实际覆盖率仅 {coverage:.1f}% —— "
-        "疑似分层判据退回单阈值（中灰 luminance 182 > Otsu 138 会被整体丢弃）")
+        "疑似分层判据退回单阈值（中灰 luminance 182 > Otsu 138 会被整体丢弃）"
+    )
 
 
 def test_colour_based_measurement_is_immune_to_the_otsu_choice():
@@ -238,7 +250,7 @@ def test_split_solid_and_shadow_separates_two_layers_with_zero_overlap():
     arr = np.full((200, 120, 3), 255, dtype=np.uint8)
     # solid bar 20..60, shadow envelope 20..70 (5x exaggeration drawn wider)
     arr[:, 20:70] = PINK_SHADOW
-    arr[:, 20:60] = (178, 58, 59)          # deep red solid
+    arr[:, 20:60] = (178, 58, 59)  # deep red solid
     img = Image.fromarray(arr)
     a = np.asarray(img, dtype=float)
 
@@ -254,7 +266,8 @@ def test_split_solid_and_shadow_separates_two_layers_with_zero_overlap():
 
     # the solid mask must recover the solid rectangle, not more and not less
     assert int(solid.sum()) == solid_truth, (
-        f"solid mask {int(solid.sum())} != ground truth {solid_truth}")
+        f"solid mask {int(solid.sum())} != ground truth {solid_truth}"
+    )
     # the shadow mask must not contain any solid pixel
     assert int((shadow & (np.abs(a - np.array([178, 58, 59])).max(-1) <= 2)).sum()) == 0
 
@@ -268,6 +281,7 @@ def test_light_overlay_mask_misclassifies_a_real_shadow_colour():
     here as a *sensitivity*, with the ground truth (the pixel is a shadow, not
     an ink) stated explicitly.
     """
+
     def sat(c):
         mx, mn = max(c), min(c)
         return (mx - mn) / mx if mx else 0.0
@@ -276,22 +290,26 @@ def test_light_overlay_mask_misclassifies_a_real_shadow_colour():
     # saturation sits just ABOVE the 0.08 threshold (0.08017), i.e. within
     # 0.0002 of the cut -- a one-unit channel change crosses it
     assert 0.0 < sat(shadow) - 0.08 < 0.001, (
-        f"boundary case expected within 0.001 of the threshold, got {sat(shadow)}")
+        f"boundary case expected within 0.001 of the threshold, got {sat(shadow)}"
+    )
 
     arr = np.array([[[*shadow]]], dtype=float)
     assert bool(light_overlay_colored_mask(arr)[0, 0]) is True, (
-        "this exact colour is classified as coloured")
+        "this exact colour is classified as coloured"
+    )
 
     # nudge blue down by one unit: saturation drops below the threshold
     nudged = np.array([[[218, 226, 236]]], dtype=float)
     assert bool(light_overlay_colored_mask(nudged)[0, 0]) is False, (
-        "a 1-unit channel change flips the classification")
+        "a 1-unit channel change flips the classification"
+    )
 
     # and the warm shadow is NOT detected, despite being the same kind of object
     warm = np.array([[[*PINK_SHADOW]]], dtype=float)
     assert bool(light_overlay_colored_mask(warm)[0, 0]) is False, (
         "warm shadow is missed while cool shadow is caught: the two layers of "
-        "the same figure are treated inconsistently")
+        "the same figure are treated inconsistently"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -321,8 +339,8 @@ def test_otsu_path_coverage_is_reported_per_column_not_aggregated():
     report them separately and must not average them into one number.
     """
     specs = [
-        {"width_px": 40, "colour": BLACK},        # dark: Otsu keeps it
-        {"width_px": 40, "colour": GREY_FILL},    # grey: Otsu rejects it
+        {"width_px": 40, "colour": BLACK},  # dark: Otsu keeps it
+        {"width_px": 40, "colour": GREY_FILL},  # grey: Otsu rejects it
     ]
     img, truth = make_bar_figure(specs, height=200)
     arr = np.asarray(img.convert("RGB"), dtype=int)
@@ -332,17 +350,21 @@ def test_otsu_path_coverage_is_reported_per_column_not_aggregated():
     # 见 docs/findings/spec-column-semantics.md。
     cols = []
     for t in truth:
-        sel_t = (np.abs(arr - np.array(t["colour"])).max(-1) <= 2)
+        sel_t = np.abs(arr - np.array(t["colour"])).max(-1) <= 2
         xs = np.where(sel_t.any(axis=0))[0]
         cols.append((int(xs.min()), int(xs.max()) + 1))
     edges = [c[0] for c in cols] + [cols[-1][1]]
 
-    fg = build_foreground(np.asarray(img.convert("RGBA")), threshold=138.0,
-                          extraction_mode="standard", column_edges=edges)
+    fg = build_foreground(
+        np.asarray(img.convert("RGBA")),
+        threshold=138.0,
+        extraction_mode="standard",
+        column_edges=edges,
+    )
 
     per_col = []
     for t in truth:
-        m = (np.abs(arr - np.array(t["colour"])).max(-1) <= 2)
+        m = np.abs(arr - np.array(t["colour"])).max(-1) <= 2
         per_col.append(100.0 * int((fg & m).sum()) / int(m.sum()))
 
     # 2026-10-21 更新：**两列都应被提取**。
@@ -369,10 +391,11 @@ def test_otsu_path_coverage_is_reported_per_column_not_aggregated():
     ]
     img2, truth2 = make_bar_figure(specs_unequal, height=200)
     arr2 = np.asarray(img2.convert("RGB"), dtype=int)
-    fg2 = build_foreground(np.asarray(img2.convert("RGBA")), threshold=138.0,
-                           extraction_mode="standard")
-    col_black = (np.abs(arr2 - np.array(BLACK)).max(-1) <= 2)
-    col_grey = (np.abs(arr2 - np.array(GREY_FILL)).max(-1) <= 2)
+    fg2 = build_foreground(
+        np.asarray(img2.convert("RGBA")), threshold=138.0, extraction_mode="standard"
+    )
+    col_black = np.abs(arr2 - np.array(BLACK)).max(-1) <= 2
+    col_grey = np.abs(arr2 - np.array(GREY_FILL)).max(-1) <= 2
     per_black = 100.0 * int((fg2 & col_black).sum()) / max(int(col_black.sum()), 1)
     per_grey = 100.0 * int((fg2 & col_grey).sum()) / max(int(col_grey.sum()), 1)
     agg2 = 100.0 * int(fg2.sum()) / max(int(col_black.sum() + col_grey.sum()), 1)

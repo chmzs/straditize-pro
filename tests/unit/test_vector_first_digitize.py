@@ -1,6 +1,10 @@
 import numpy as np
 import pytest
-from straditize_core.digitize import extract_vector_polygon, slice_vector_polygon_at_depths
+from straditize_core.digitize import (
+    extract_vector_polygon,
+    slice_vector_polygon_at_depths,
+)
+
 
 def test_extract_vector_polygon_and_slicing():
     # Construct a synthetic triangular bump of height 60, width 30

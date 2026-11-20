@@ -14,11 +14,19 @@ from ..protocol import INVALID_PARAMS, JsonRpcError
 
 def register(dispatcher: Any, session: Any) -> None:
     """Register age-depth operations."""
-    dispatcher.register_method("agedepth.loadModelDiagram", session.load_age_depth_diagram)
-    dispatcher.register_method("agedepth.extractAndInspect", session.calibrate_and_extract_age_depth)
-    dispatcher.register_method("agedepth.getInspection", session.get_age_depth_inspection)
+    dispatcher.register_method(
+        "agedepth.loadModelDiagram", session.load_age_depth_diagram
+    )
+    dispatcher.register_method(
+        "agedepth.extractAndInspect", session.calibrate_and_extract_age_depth
+    )
+    dispatcher.register_method(
+        "agedepth.getInspection", session.get_age_depth_inspection
+    )
     dispatcher.register_method("agedepth.updateModel", session.update_age_depth_model)
-    dispatcher.register_method("agedepth.generateEnsemble", session.generate_age_ensemble)
+    dispatcher.register_method(
+        "agedepth.generateEnsemble", session.generate_age_ensemble
+    )
 
     def _generate_bacon_script(
         dates: list[dict[str, Any]],
@@ -59,11 +67,18 @@ def register(dispatcher: Any, session: Any) -> None:
     dispatcher.register_method("agedepth.generateBaconScript", _generate_bacon_script)
     dispatcher.register_method(
         "agedepth.generateGeoChronRScript",
-        lambda lipd_file_name, site_name="PollenSite", thickness=5.0, hiatus_depths=None: generate_geochronr_script(
-            lipd_file_name=lipd_file_name, site_name=site_name, thickness=thickness, hiatus_depths=hiatus_depths,
+        lambda lipd_file_name, site_name="PollenSite", thickness=5.0, hiatus_depths=None: (
+            generate_geochronr_script(
+                lipd_file_name=lipd_file_name,
+                site_name=site_name,
+                thickness=thickness,
+                hiatus_depths=hiatus_depths,
+            )
         ),
     )
-    dispatcher.register_method("agedepth.checkREnvironment", lambda: check_local_r_environment())
+    dispatcher.register_method(
+        "agedepth.checkREnvironment", lambda: check_local_r_environment()
+    )
     dispatcher.register_method("agedepth.runLocalBacon", session.run_local_bacon)
     dispatcher.register_method("agedepth.runBaconModeling", session.run_age_modeling)
     dispatcher.register_method("ensemble.add", session.ensemble_add)

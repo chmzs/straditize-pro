@@ -86,6 +86,30 @@ assert.strictEqual(CoordinateSystem.imageYToDepth(200, ageAxis), 5000);
 assert.strictEqual(CoordinateSystem.imageYToDepth(1000, ageAxis), 1000);
 assert.strictEqual(CoordinateSystem.imageYToDepth(600, ageAxis), 3000);
 
+// 5.1 多点分段标定：在每个已知刻度点处误差严格为 0
+const multiCalib = {
+  isCalibrated: true,
+  top_px: 82,
+  top_cm: 300,
+  bottom_px: 543,
+  bottom_cm: 540,
+  unit: 'cm',
+  marks: [
+    { pixel: 82, val: 300 },
+    { pixel: 181, val: 360 },
+    { pixel: 279, val: 420 },
+    { pixel: 404, val: 480 },
+    { pixel: 543, val: 540 },
+  ],
+};
+assert.strictEqual(CoordinateSystem.imageYToDepth(82, multiCalib), 300);
+assert.strictEqual(CoordinateSystem.imageYToDepth(181, multiCalib), 360);
+assert.strictEqual(CoordinateSystem.imageYToDepth(279, multiCalib), 420);
+assert.strictEqual(CoordinateSystem.imageYToDepth(404, multiCalib), 480);
+assert.strictEqual(CoordinateSystem.imageYToDepth(543, multiCalib), 540);
+assert.strictEqual(CoordinateSystem.depthToImageY(300, multiCalib), 82);
+assert.strictEqual(CoordinateSystem.depthToImageY(540, multiCalib), 543);
+
 // 6. 未标定时层位标尺为空 —— 不生成一组假的 0/50/100 刻度线
 assert.deepStrictEqual(
   SplineInterpolator.getStandardDepthHorizons(uncalibrated),

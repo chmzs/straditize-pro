@@ -61,15 +61,15 @@ from straditize_core.session_parts.xscale import resolve_column_scale
 
 W, H = 120, 200
 AXIS_X0, AXIS_W = 10, 6
-ZERO_X = AXIS_X0 + AXIS_W               # 16 —— 0 点（轴线右缘）
-INNER_DIST = 10                         # 内线右缘距 0 点 10px
-OUTER_DIST = 50                         # 外线距 0 点 50px
+ZERO_X = AXIS_X0 + AXIS_W  # 16 —— 0 点（轴线右缘）
+INNER_DIST = 10  # 内线右缘距 0 点 10px
+OUTER_DIST = 50  # 外线距 0 点 50px
 Y0, Y1 = 40, 160
 #: 参与断言的行（去掉取样窗口最后一行，见模块 docstring）。
 ASSERTED_ROWS = range(Y0, Y1)
-SLOPE = 1.0                             # %/px
+SLOPE = 1.0  # %/px
 MULT = 5.0
-TRUE_VALUE = 10.0                       # = INNER_DIST × SLOPE
+TRUE_VALUE = 10.0  # = INNER_DIST × SLOPE
 SAMPLE_ROWS = (Y0, Y0 + 1, (Y0 + Y1) // 2, Y1 - 1)
 
 
@@ -109,7 +109,10 @@ def _session(
     mult=None,
     mult_on="column",
 ):
-    plate = tmp_path / f"plate_{mult_on}_{inner_dist}_{outer_dist}_{len(outer_rows or ())}.png"
+    plate = (
+        tmp_path
+        / f"plate_{mult_on}_{inner_dist}_{outer_dist}_{len(outer_rows or ())}.png"
+    )
     _draw_plate(
         plate,
         inner_dist=inner_dist,
@@ -225,9 +228,9 @@ def test_missing_outer_line_falls_back_to_inner_times_multiplier(tmp_path, mult_
             f"row {row}: 读数 {values[row]} 期望 {TRUE_VALUE}（补偿缺失时是 2.0）"
         )
         assert points[row]["source"] == "broken_inner"
-        assert points[row]["x"] == pytest.approx(
-            float(ZERO_X + INNER_DIST * MULT)
-        ), "x 必须等于外线该在的位置 z0 + (x_in − z0) × mult"
+        assert points[row]["x"] == pytest.approx(float(ZERO_X + INNER_DIST * MULT)), (
+            "x 必须等于外线该在的位置 z0 + (x_in − z0) × mult"
+        )
 
 
 @pytest.mark.parametrize("mult_on", MULT_LOCATIONS)
@@ -277,7 +280,7 @@ def test_small_value_two_layer_row_stays_ambiguous(tmp_path):
         inner_dist=1,
         outer_dist=5,
         outer_rows=set(range(Y0, Y1 + 1)),
-        connector_rows={Y0},   # 仅为了让两层同属一个连通域（现场图画法）
+        connector_rows={Y0},  # 仅为了让两层同属一个连通域（现场图画法）
         mult=MULT,
     )
     values, broken_rows, ambiguous_rows, points = _read_rows(session)
@@ -335,8 +338,8 @@ def test_group_slope_path_keeps_column_level_multiplier():
         "plot_type": "area",
         "scale_type": "linear",
         "axis_stroke_px": AXIS_W,
-        "value_per_px": 0.5,          # 组级斜率标定：0.5 单位/px
-        "exaggeration_mult": None,     # 倍率只写在列上
+        "value_per_px": 0.5,  # 组级斜率标定：0.5 单位/px
+        "exaggeration_mult": None,  # 倍率只写在列上
     }
     session.rois = [
         {"id": "roi_1", "x_groups": [group], "default_group_id": "roi_1_grp1"}

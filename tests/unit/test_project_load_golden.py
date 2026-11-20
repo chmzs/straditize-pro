@@ -114,7 +114,15 @@ COLUMN_KEYS = [
 ]
 
 ROI_KEYS = ["id", "xlim", "ylim", "default_group_id"]
-GROUP_KEYS = ["id", "name", "unit", "plot_type", "scale_type", "exaggeration_mult", "tick_layout"]
+GROUP_KEYS = [
+    "id",
+    "name",
+    "unit",
+    "plot_type",
+    "scale_type",
+    "exaggeration_mult",
+    "tick_layout",
+]
 
 
 def _png_bytes(size: tuple[int, int], color: tuple[int, int, int]) -> bytes:
@@ -328,7 +336,9 @@ def _snapshot(session: StraditizeSession, result: dict) -> dict:
             "px_x_curve": _jsonable(getattr(model, "px_x_curve", None)),
         }
 
-    snapshot = {attr: _jsonable(getattr(session, attr, "<absent>")) for attr in SCALAR_ATTRS}
+    snapshot = {
+        attr: _jsonable(getattr(session, attr, "<absent>")) for attr in SCALAR_ATTRS
+    }
     snapshot["rois"] = rois
     snapshot["roi_count"] = len(rois)
     snapshot["columns"] = columns
@@ -338,8 +348,12 @@ def _snapshot(session: StraditizeSession, result: dict) -> dict:
     }
     snapshot["image"] = {
         "size": list(session.image.size) if getattr(session, "image", None) else None,
-        "mode": getattr(session, "image", None).mode if getattr(session, "image", None) else None,
-        "format": getattr(session, "image", None).format if getattr(session, "image", None) else None,
+        "mode": getattr(session, "image", None).mode
+        if getattr(session, "image", None)
+        else None,
+        "format": getattr(session, "image", None).format
+        if getattr(session, "image", None)
+        else None,
         "digest": _digest(getattr(session, "image", None)),
         "width": getattr(session, "width", None),
         "height": getattr(session, "height", None),

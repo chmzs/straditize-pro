@@ -75,7 +75,9 @@ def register(dispatcher: Any, session: Any) -> None:
         return {
             "available": True,
             "extraction_mode": session.extraction_mode,
-            "overlay_png": mask_overlay_data_url(ink, shadow) if ink is not None else None,
+            "overlay_png": mask_overlay_data_url(ink, shadow)
+            if ink is not None
+            else None,
             "shadow_pixels": int(shadow.sum()),
             "solid_pixels": int(ink.sum()) if ink is not None else 0,
             "layers": getattr(session, "solid_layers", None),
@@ -89,5 +91,9 @@ def register(dispatcher: Any, session: Any) -> None:
     dispatcher.register_method("point.add", session.point_add)
     dispatcher.register_method("point.move", session.point_move)
     dispatcher.register_method("point.remove", session.point_remove)
-    dispatcher.register_method("algorithm.extractTurningPoints", session.algorithm_extract_turning_points)
-    dispatcher.register_method("algorithm.extractHorizonConsensus", session.extract_horizon_consensus)
+    dispatcher.register_method(
+        "algorithm.extractTurningPoints", session.algorithm_extract_turning_points
+    )
+    dispatcher.register_method(
+        "algorithm.extractHorizonConsensus", session.extract_horizon_consensus
+    )

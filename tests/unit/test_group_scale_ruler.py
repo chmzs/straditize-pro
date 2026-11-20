@@ -28,7 +28,9 @@ def _setup_narrow_column_session():
     s._init_cleanup()
     s.load_image(sample_key="hoya")
     s._init_rois()
-    roi = s.roi_create(name="pollen", x0=300, x1=600, y0=200, y1=600, composition=True)["roi"]
+    roi = s.roi_create(name="pollen", x0=300, x1=600, y0=200, y1=600, composition=True)[
+        "roi"
+    ]
     # 手动注入一个 14px 宽的狭窄列模拟真实古生态紧凑图版
     s.columns = [
         {

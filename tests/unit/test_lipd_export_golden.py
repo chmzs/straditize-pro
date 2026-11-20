@@ -87,7 +87,9 @@ def _meta(full: bool = True) -> dict:
 
 
 def _age_depth_df() -> pd.DataFrame:
-    return pd.DataFrame({"Depth (cm)": [0.0, 10.0, 20.0], "Age (yr BP)": [0.0, 500.0, 1000.0]})
+    return pd.DataFrame(
+        {"Depth (cm)": [0.0, 10.0, 20.0], "Age (yr BP)": [0.0, 500.0, 1000.0]}
+    )
 
 
 def _ensemble_tables() -> list[dict]:
@@ -117,8 +119,13 @@ def _collect() -> dict:
     bad = _meta()
     bad["site"] = dict(bad["site"])
     bad["site"].update(
-        {"latitude": "n/a", "longitude": "", "elevation_m": "unknown",
-         "water_depth_m": "deep", "core_length_m": "long"}
+        {
+            "latitude": "n/a",
+            "longitude": "",
+            "elevation_m": "unknown",
+            "water_depth_m": "deep",
+            "core_length_m": "long",
+        }
     )
     out["bad_geo_values"] = export_lipd_jsonld(meta_info=bad, roi_dfs=_roi_dfs())
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from typing import Any, Sequence
+import numpy as np
 from ..protocol import INVALID_PARAMS, STATE_ERROR, JsonRpcError
 
 
@@ -38,10 +39,29 @@ class SamplesMixin:
 
     def _depth_for_row_px(self, row_px: float) -> float | None:
         """Calculate real physical depth for pixel row, or return None if uncalibrated."""
-        if (
-            getattr(self, "is_calibrated", False)
-            and getattr(self, "y_scale", None) is not None
-        ):
+        if not getattr(self, "is_calibrated", False):
+            return None
+        marks = getattr(self, "y_marks", None)
+        if marks and len(marks) >= 2:
+            pixels = [float(m["pixel"]) for m in marks]
+            vals = [float(m["val"]) for m in marks]
+            r = float(row_px)
+            if r <= pixels[0]:
+                s0 = (
+                    (vals[1] - vals[0]) / (pixels[1] - pixels[0])
+                    if pixels[1] != pixels[0]
+                    else 0.0
+                )
+                return round(vals[0] + s0 * (r - pixels[0]), 4)
+            if r >= pixels[-1]:
+                s1 = (
+                    (vals[-1] - vals[-2]) / (pixels[-1] - pixels[-2])
+                    if pixels[-1] != pixels[-2]
+                    else 0.0
+                )
+                return round(vals[-1] + s1 * (r - pixels[-1]), 4)
+            return round(float(np.interp(r, pixels, vals)), 4)
+        if getattr(self, "y_scale", None) is not None:
             slope = self.y_scale.get("slope", 0.0)
             intercept = self.y_scale.get("intercept", 0.0)
             return round(slope * float(row_px) + intercept, 4)
@@ -135,8 +155,8 @@ class SamplesMixin:
     def samples_extract_consensus(
         self,
         tolerance_px: float = 2.5,
-        min_taxa_support: int = 1,
-        mode: str = "dual",
+        min_taxa_support: int = 2,
+        mode: str = "peaks",
         adaptive_window: bool = True,
     ) -> dict[str, Any]:
         """Discover sample horizons by consensus of turning points across taxa and set them into samples."""
@@ -199,10 +219,66 @@ class SamplesMixin:
             )
 
         new_samples = []
+        marks = getattr(self, "y_marks", None)
         for d in depths:
             d_val = float(d)
-            # depth = slope * row + intercept -> row = (depth - intercept) / slope
-            row_px = (d_val - intercept) / slope
+            if marks and len(marks) >= 2:
+                pixels = [float(m["pixel"]) for m in marks]
+                vals = [float(m["val"]) for m in marks]
+                if vals[-1] >= vals[0]:
+                    if d_val <= vals[0]:
+                        s0 = (
+                            (vals[1] - vals[0]) / (pixels[1] - pixels[0])
+                            if pixels[1] != pixels[0]
+                            else 1.0
+                        )
+                        row_px = (
+                            pixels[0] + (d_val - vals[0]) / s0 if s0 != 0 else pixels[0]
+                        )
+                    elif d_val >= vals[-1]:
+                        s1 = (
+                            (vals[-1] - vals[-2]) / (pixels[-1] - pixels[-2])
+                            if pixels[-1] != pixels[-2]
+                            else 1.0
+                        )
+                        row_px = (
+                            pixels[-1] + (d_val - vals[-1]) / s1
+                            if s1 != 0
+                            else pixels[-1]
+                        )
+                    else:
+                        row_px = float(np.interp(d_val, vals, pixels))
+                else:
+                    rev_vals = vals[::-1]
+                    rev_pixels = pixels[::-1]
+                    if d_val <= rev_vals[0]:
+                        s0 = (
+                            (rev_vals[1] - rev_vals[0])
+                            / (rev_pixels[1] - rev_pixels[0])
+                            if rev_pixels[1] != rev_pixels[0]
+                            else 1.0
+                        )
+                        row_px = (
+                            rev_pixels[0] + (d_val - rev_vals[0]) / s0
+                            if s0 != 0
+                            else rev_pixels[0]
+                        )
+                    elif d_val >= rev_vals[-1]:
+                        s1 = (
+                            (rev_vals[-1] - rev_vals[-2])
+                            / (rev_pixels[-1] - rev_pixels[-2])
+                            if rev_pixels[-1] != rev_pixels[-2]
+                            else 1.0
+                        )
+                        row_px = (
+                            rev_pixels[-1] + (d_val - rev_vals[-1]) / s1
+                            if s1 != 0
+                            else rev_pixels[-1]
+                        )
+                    else:
+                        row_px = float(np.interp(d_val, rev_vals, rev_pixels))
+            else:
+                row_px = (d_val - intercept) / slope
             new_samples.append(
                 {
                     "row_px": int(round(row_px)),

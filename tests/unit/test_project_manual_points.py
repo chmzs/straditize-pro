@@ -154,12 +154,13 @@ def test_manual_point_roundtrip_and_rebuild_protection(tmp_path: Path) -> None:
 
     # ② 工程包必须把它写进去（现状：project_save 不写 isManual）
     pack = tmp_path / "manual.tar"
-    _ok(_rpc(dispatcher, "project.save", output_path=str(pack), format="tar"), "保存工程包")
+    _ok(
+        _rpc(dispatcher, "project.save", output_path=str(pack), format="tar"),
+        "保存工程包",
+    )
     saved_payload = _read_tar_json(pack)
     saved_pts = saved_payload["columns"][COLUMN]["points"]
-    saved_point = _find_point(
-        [dict(p, y=p.get("y")) for p in saved_pts], row
-    )
+    saved_point = _find_point([dict(p, y=p.get("y")) for p in saved_pts], row)
     assert saved_point is not None, "包里的列段应包含该行控制点"
     assert saved_point.get("isManual") is True, "包里的手工点必须带 isManual: true"
     assert saved_point.get("kind") == "manual", "kind 也必须落盘（前端靠它区分形状）"
@@ -171,7 +172,9 @@ def test_manual_point_roundtrip_and_rebuild_protection(tmp_path: Path) -> None:
     point2 = _find_point(_points(payload2, COLUMN), row)
     assert point2 is not None, "载入后该行控制点应存在"
     assert point2["isManual"] is True, "载入后手工点必须仍是 isManual=true"
-    assert float(point2["x"]) == pytest.approx(x_val, abs=1e-9), "手工点的 x 不得被载入改写"
+    assert float(point2["x"]) == pytest.approx(x_val, abs=1e-9), (
+        "手工点的 x 不得被载入改写"
+    )
 
     # ④ 承重：重跑分列后手工点仍在、x 不变（现状：digitize 整体替换控制点）
     _ok(
@@ -186,7 +189,9 @@ def test_manual_point_roundtrip_and_rebuild_protection(tmp_path: Path) -> None:
     payload3 = _ok(_rpc(dispatcher, "straditize.getDiagramData"), "重分列后读取载荷")
     point3 = _find_point(_points(payload3, COLUMN), row)
     assert point3 is not None, "重跑分列不得删掉手工点（用户劳动不可重建）"
-    assert float(point3["x"]) == pytest.approx(x_val, abs=1e-9), "重跑分列不得移动手工点"
+    assert float(point3["x"]) == pytest.approx(x_val, abs=1e-9), (
+        "重跑分列不得移动手工点"
+    )
     assert point3["isManual"] is True, "重跑分列后手工点必须仍标记为手工"
 
 
@@ -205,7 +210,10 @@ def test_non_manual_points_are_still_rebuilt(tmp_path: Path) -> None:
         "新增手工点",
     )
     pack = tmp_path / "manual2.tar"
-    _ok(_rpc(dispatcher, "project.save", output_path=str(pack), format="tar"), "保存工程包")
+    _ok(
+        _rpc(dispatcher, "project.save", output_path=str(pack), format="tar"),
+        "保存工程包",
+    )
 
     payload = _read_tar_json(pack)
     stale_row = int(ROI_YLIM[0]) - 5  # ROI 之外，重建不可能产出
@@ -244,7 +252,10 @@ def test_legacy_pack_without_is_manual_defaults_to_false(tmp_path: Path) -> None
     """向后兼容：老包没有 `isManual` 字段 → 按 false 处理，且保存时显式写 false。"""
     session, dispatcher = _session()
     pack = tmp_path / "legacy.tar"
-    _ok(_rpc(dispatcher, "project.save", output_path=str(pack), format="tar"), "保存工程包")
+    _ok(
+        _rpc(dispatcher, "project.save", output_path=str(pack), format="tar"),
+        "保存工程包",
+    )
 
     payload = _read_tar_json(pack)
     for col in payload["columns"]:
@@ -261,7 +272,12 @@ def test_legacy_pack_without_is_manual_defaults_to_false(tmp_path: Path) -> None
     )
 
     reassaved = _ok(
-        _rpc(dispatcher, "project.save", output_path=str(tmp_path / "legacy2.tar"), format="tar"),
+        _rpc(
+            dispatcher,
+            "project.save",
+            output_path=str(tmp_path / "legacy2.tar"),
+            format="tar",
+        ),
         "再次保存",
     )
     assert reassaved["success"] is True

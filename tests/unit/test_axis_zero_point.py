@@ -51,9 +51,7 @@ class TestMeasureAxisRightEdge:
     """纯函数层：轴线宽度测量与实心块排除。"""
 
     def test_thin_axis_returns_its_width(self) -> None:
-        """细轴线：偏移量 = 轴线宽度，零点落在右缘。
-
-        """
+        """细轴线：偏移量 = 轴线宽度，零点落在右缘。"""
         binary = np.zeros((20, 40), dtype=bool)
         binary[:, 0:3] = True
 
@@ -85,7 +83,7 @@ class TestMeasureAxisRightEdge:
     def test_per_column_widths_are_independent(self) -> None:
         """逐列宽度不同时必须逐列测量，不能用同一个固定偏移。"""
         binary = np.zeros((20, 80), dtype=bool)
-        binary[:, 0:2] = True    # 第 1 列轴线宽 2
+        binary[:, 0:2] = True  # 第 1 列轴线宽 2
         binary[:, 40:43] = True  # 第 2 列轴线宽 3
 
         offsets = measure_axis_right_edge(_as_rgb(binary), binary, [0, 40])
@@ -93,8 +91,15 @@ class TestMeasureAxisRightEdge:
         assert offsets == [2, 3], f"逐列宽度必须各自测量，实得 {offsets}"
 
     def test_empty_input_is_safe(self) -> None:
-        assert measure_axis_right_edge(np.zeros((0, 0, 3), dtype=np.uint8), np.zeros((0, 0), dtype=bool), []) == []
-        assert measure_axis_right_edge(np.zeros((5, 0, 3), dtype=np.uint8), np.zeros((5, 0), dtype=bool), [0]) == [0]
+        assert (
+            measure_axis_right_edge(
+                np.zeros((0, 0, 3), dtype=np.uint8), np.zeros((0, 0), dtype=bool), []
+            )
+            == []
+        )
+        assert measure_axis_right_edge(
+            np.zeros((5, 0, 3), dtype=np.uint8), np.zeros((5, 0), dtype=bool), [0]
+        ) == [0]
 
 
 REAL_PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
@@ -157,9 +162,7 @@ class TestRealPlateZeroPoint:
         # 这类列条件 3（右侧必须断开）不成立，保持左缘——判定为"不是孤立基线"。
         # 实测 fig3 的 col6（5px）、col12（7px）属此情况（单/双层混合区，
         # 曲线紧贴基线生长）。强制右移会把数据首段切掉。
-        hard_offenders = [
-            item for item in offenders if item["solid_width"] < 5
-        ]
+        hard_offenders = [item for item in offenders if item["solid_width"] < 5]
 
         assert hard_offenders == [], (
             f"零点仍落在细灰线内部（未推到右缘）：{hard_offenders}。"
@@ -199,8 +202,9 @@ def test_column_start_stays_at_axis_left_edge() -> None:
         end = float(col["end"])
         zero = start + stroke
         if not (0.0 <= stroke <= 20.0) or not (zero < end):
-            offenders.append({"col": index, "start": start, "stroke": stroke, "end": end})
+            offenders.append(
+                {"col": index, "start": start, "stroke": stroke, "end": end}
+            )
     assert offenders == [], (
         "0 点（左缘 + 轴粗）必须落在列内且轴粗在 1–20px：{0}".format(offenders)
     )
-

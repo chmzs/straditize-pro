@@ -50,7 +50,9 @@ def test_nan_becomes_null_and_payload_is_valid_json() -> None:
 
 
 def test_export_preview_uses_json_safe_entry_only() -> None:
-    src = (_REPO / "straditize_core" / "session_parts" / "export.py").read_text(encoding="utf-8")
+    src = (_REPO / "straditize_core" / "session_parts" / "export.py").read_text(
+        encoding="utf-8"
+    )
     hits = [ln.strip() for ln in src.splitlines() if 'to_dict(orient="records")' in ln]
     # 只允许出现在 _json_safe_records 内部（该方法自身那一行）
     assert len(hits) == 1, hits

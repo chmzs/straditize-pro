@@ -58,6 +58,40 @@ export function formatExportTimestamp(d: Date = new Date()): string {
 }
 
 /**
+ * 从导入的文件名中提取项目前缀名称。
+ * 例如：
+ * - "pollen_bars_riojaplot_project_20261120_120034.tar" -> "pollen_bars_riojaplot"
+ * - "pollen_bars_riojaplot_project.tar" -> "pollen_bars_riojaplot"
+ * - "my_lake_core.tar" -> "my_lake_core"
+ * - "straditize_project_20261120_120034.tar" -> null
+ */
+export function extractProjectNameFromFilename(filename: string | null | undefined): string | null {
+  if (!filename) return null;
+  let clean = filename.trim().replace(/^.*[\\/]/, '');
+  for (const ext of ['.tar.gz', '.tar', '.zip', '.json', '.csv', '.xlsx', '.lpd']) {
+    if (clean.toLowerCase().endsWith(ext)) {
+      clean = clean.substring(0, clean.length - ext.length);
+      break;
+    }
+  }
+  const matchProject = clean.match(/^(.*?)(?:_project(?:_\d{8}_\d{6}|\d+)?)$/i);
+  let stem = matchProject && matchProject[1] ? matchProject[1] : clean;
+  const matchOther = stem.match(/^(.*?)(?:_(?:matrix|report|plot_bundle|lipd|strat_diagram)(?:_\d{8}_\d{6}|\d+)?)$/i);
+  if (matchOther && matchOther[1]) {
+    stem = matchOther[1];
+  }
+  const matchTimestamp = stem.match(/^(.*?)(?:_\d{8}_\d{6})$/);
+  if (matchTimestamp && matchTimestamp[1]) {
+    stem = matchTimestamp[1];
+  }
+  const sanitized = sanitizeFilenameStem(stem);
+  if (!sanitized || ['straditize', 'original', 'diagram'].includes(sanitized.toLowerCase())) {
+    return null;
+  }
+  return sanitized;
+}
+
+/**
  * Resolves the project name following precedence:
  * 1. User-configured project_name
  * 2. Base image main filename (ignoring 'original' and 'diagram')

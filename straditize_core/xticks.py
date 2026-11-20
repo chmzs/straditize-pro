@@ -64,11 +64,23 @@ def _strokes_in_band(
 def _spacing_uniformity(ticks: list[int]) -> dict[str, Any]:
     """Gap statistics for one sequence of ticks within a column."""
     if len(ticks) < 3:
-        return {"n": len(ticks), "gaps": 0, "median": None, "cv": None, "frac_within_15pct": None}
+        return {
+            "n": len(ticks),
+            "gaps": 0,
+            "median": None,
+            "cv": None,
+            "frac_within_15pct": None,
+        }
     gaps = np.diff(np.asarray(sorted(ticks), dtype=float))
     med = float(np.median(gaps))
     if med <= 0:
-        return {"n": len(ticks), "gaps": len(gaps), "median": 0.0, "cv": None, "frac_within_15pct": 0.0}
+        return {
+            "n": len(ticks),
+            "gaps": len(gaps),
+            "median": 0.0,
+            "cv": None,
+            "frac_within_15pct": 0.0,
+        }
     return {
         "n": len(ticks),
         "gaps": int(len(gaps)),
@@ -76,4 +88,3 @@ def _spacing_uniformity(ticks: list[int]) -> dict[str, Any]:
         "cv": round(float(gaps.std() / gaps.mean()), 4),
         "frac_within_15pct": round(float((np.abs(gaps - med) <= 0.15 * med).mean()), 4),
     }
-

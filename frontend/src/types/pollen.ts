@@ -297,7 +297,7 @@ export interface DepthCalibration {
   primaryAxis?: 'depth' | 'age';
   depthInterval?: number;
   depthGridEnabled?: boolean;
-
+  marks?: Array<{ pixel: number; val: number }>;
 }
 
 export interface LineCandidate {

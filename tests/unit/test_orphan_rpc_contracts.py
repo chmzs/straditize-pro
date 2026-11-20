@@ -115,6 +115,7 @@ def test_spec_documents_every_result_key_of_get_shadow_layer() -> None:
     undocumented = [key for key in result if f"`{key}`" not in section]
     assert undocumented == [], f"这些返回键没写进 spec §4.2b：{undocumented}"
 
+
 def _call_system(session: StraditizeSession, method: str, **params) -> dict:
     dispatcher = JsonRpcDispatcher()
     from straditize_core.rpc_methods import agedepth as agedepth_methods
@@ -176,7 +177,10 @@ def test_ensemble_add_then_list_roundtrip() -> None:
     listed_again = _call_system(session, "ensemble.list")["result"]
     assert listed_again["count"] == 1
 
-def _call_component_and_agedepth(session: StraditizeSession, method: str, **params) -> dict:
+
+def _call_component_and_agedepth(
+    session: StraditizeSession, method: str, **params
+) -> dict:
     dispatcher = JsonRpcDispatcher()
     from straditize_core.rpc_methods import agedepth as agedepth_methods
     from straditize_core.rpc_methods import components as component_methods
@@ -214,7 +218,9 @@ def test_generate_bacon_script_rejects_empty_dates() -> None:
     """
     session = _session()
 
-    response = _call_component_and_agedepth(session, "agedepth.generateBaconScript", dates=[])
+    response = _call_component_and_agedepth(
+        session, "agedepth.generateBaconScript", dates=[]
+    )
 
     assert response["error"]["code"] == INVALID_PARAMS, (
         "空测年必须被拒，否则用户会拿到一个没有任何测年约束的年龄模型"
@@ -243,7 +249,9 @@ def test_component_uninstall_rejects_path_traversal() -> None:
     session = _session()
 
     for evil in ("../evil", "..", "a/b", "age-modeling/../../x", ""):
-        response = _call_component_and_agedepth(session, "component.uninstall", name=evil)
+        response = _call_component_and_agedepth(
+            session, "component.uninstall", name=evil
+        )
         assert response["error"]["code"] == INVALID_PARAMS, (
             f"name={evil!r} 必须被拒；现在会走到 rmtree"
         )
@@ -253,11 +261,9 @@ def test_component_uninstall_is_idempotent_for_a_valid_name() -> None:
     """合法但不存在时返回 removed=False（幂等），不得报错——卸载入口允许被重复点。"""
     session = _session()
 
-    result = _call_component_and_agedepth(session, "component.uninstall", name="definitely-absent")[
-        "result"
-    ]
+    result = _call_component_and_agedepth(
+        session, "component.uninstall", name="definitely-absent"
+    )["result"]
 
     assert result["success"] is True
     assert result["removed"] is False
-
-

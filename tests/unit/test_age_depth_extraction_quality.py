@@ -40,9 +40,9 @@ def _truth_sigma(depth: np.ndarray) -> np.ndarray:
 
 
 def _depth_to_y(depth: np.ndarray) -> np.ndarray:
-    return FRAME_Y0 + (np.asarray(depth) - DEPTH_AT_Y0) / (DEPTH_AT_Y1 - DEPTH_AT_Y0) * (
-        FRAME_Y1 - FRAME_Y0
-    )
+    return FRAME_Y0 + (np.asarray(depth) - DEPTH_AT_Y0) / (
+        DEPTH_AT_Y1 - DEPTH_AT_Y0
+    ) * (FRAME_Y1 - FRAME_Y0)
 
 
 def _age_to_x(age: np.ndarray) -> np.ndarray:
@@ -63,7 +63,10 @@ def _make_calibrator() -> AgeDepthAxisCalibrator:
 
 
 def _render_cloud_diagram(
-    *, grid_lines: bool = False, inline_label: bool = False, dashed_outline: bool = False
+    *,
+    grid_lines: bool = False,
+    inline_label: bool = False,
+    dashed_outline: bool = False,
 ) -> Image.Image:
     """Renders a Bacon-style filled grey confidence cloud with a dark median line."""
     img = Image.new("RGB", (900, 1100), (255, 255, 255))
@@ -78,26 +81,40 @@ def _render_cloud_diagram(
         # Real Bacon / Bchron renderings outline the envelope with a *lighter*, dashed
         # grey rule while the median line stays the darkest stroke. The dashes leave
         # white gaps, so a per-row scan must bridge them vertically.
-        left_pts = [(float(_age_to_x(ages + 1.96 * sigma)[i]), float(ys[i])) for i in range(len(ys))]
-        right_pts = [(float(_age_to_x(ages - 1.96 * sigma)[i]), float(ys[i])) for i in range(len(ys))]
+        left_pts = [
+            (float(_age_to_x(ages + 1.96 * sigma)[i]), float(ys[i]))
+            for i in range(len(ys))
+        ]
+        right_pts = [
+            (float(_age_to_x(ages - 1.96 * sigma)[i]), float(ys[i]))
+            for i in range(len(ys))
+        ]
         for i in range(0, len(ys) - 1, 4):
             for pts in (left_pts, right_pts):
                 end = min(i + 2, len(ys) - 1)
                 draw.line([pts[i], pts[end]], fill=(140, 140, 140), width=2)
     else:
         polygon = [
-            (float(_age_to_x(ages - 1.96 * sigma)[i]), float(ys[i])) for i in range(len(ys))
+            (float(_age_to_x(ages - 1.96 * sigma)[i]), float(ys[i]))
+            for i in range(len(ys))
         ] + [
-            (float(_age_to_x(ages + 1.96 * sigma)[i]), float(ys[i])) for i in range(len(ys) - 1, -1, -1)
+            (float(_age_to_x(ages + 1.96 * sigma)[i]), float(ys[i]))
+            for i in range(len(ys) - 1, -1, -1)
         ]
         draw.polygon(polygon, fill=(205, 205, 205))
         draw.line(
-            [(float(_age_to_x(ages + 1.96 * sigma)[i]), float(ys[i])) for i in range(len(ys))],
+            [
+                (float(_age_to_x(ages + 1.96 * sigma)[i]), float(ys[i]))
+                for i in range(len(ys))
+            ],
             fill=(150, 150, 150),
             width=3,
         )
         draw.line(
-            [(float(_age_to_x(ages - 1.96 * sigma)[i]), float(ys[i])) for i in range(len(ys))],
+            [
+                (float(_age_to_x(ages - 1.96 * sigma)[i]), float(ys[i]))
+                for i in range(len(ys))
+            ],
             fill=(150, 150, 150),
             width=3,
         )
@@ -112,7 +129,9 @@ def _render_cloud_diagram(
             draw.line([(FRAME_X0, y), (FRAME_X1, y)], fill=(150, 150, 150), width=2)
 
     if inline_label:
-        draw.text((FRAME_X0 + 40, FRAME_Y0 + 470), "Bacon 3.2.0 median", fill=(20, 20, 20))
+        draw.text(
+            (FRAME_X0 + 40, FRAME_Y0 + 470), "Bacon 3.2.0 median", fill=(20, 20, 20)
+        )
 
     # Plot frame drawn last so it is a solid rule on top of everything
     draw.rectangle([FRAME_X0, FRAME_Y0, FRAME_X1, FRAME_Y1], outline=(0, 0, 0), width=3)
@@ -122,7 +141,9 @@ def _render_cloud_diagram(
         y = int(FRAME_Y0 + frac * (FRAME_Y1 - FRAME_Y0))
         draw.text((20, y - 6), f"{int(frac * DEPTH_AT_Y1)}", fill=(0, 0, 0))
         x = int(FRAME_X0 + frac * (FRAME_X1 - FRAME_X0))
-        draw.text((x - 12, FRAME_Y1 + 20), f"{int(AGE_AT_X0 * (1 - frac))}", fill=(0, 0, 0))
+        draw.text(
+            (x - 12, FRAME_Y1 + 20), f"{int(AGE_AT_X0 * (1 - frac))}", fill=(0, 0, 0)
+        )
     draw.text((320, FRAME_Y1 + 50), "Age (cal BP)", fill=(0, 0, 0))
     draw.text((20, 20), "Depth (cm)", fill=(0, 0, 0))
     return img
@@ -162,7 +183,9 @@ class TestAgeDepthExtractionQuality(unittest.TestCase):
         lo = np.asarray(model.age_min, dtype=float)
         hi = np.asarray(model.age_max, dtype=float)
         inside = (truth[mask] >= lo[mask] * 0.9) & (truth[mask] <= hi[mask] * 1.1)
-        self.assertGreater(float(inside.mean()), 0.95, "envelope fails to bracket ground truth")
+        self.assertGreater(
+            float(inside.mean()), 0.95, "envelope fails to bracket ground truth"
+        )
 
     def test_01_filled_cloud_extraction(self):
         """Bacon-style filled cloud: median line recovered within tolerance."""
@@ -186,7 +209,9 @@ class TestAgeDepthExtractionQuality(unittest.TestCase):
         model = extract_age_depth_model(_render_cloud_diagram(), self.calibrator)
         order = np.argsort(np.asarray(model.depths, dtype=float))
         ages = np.asarray(model.ages, dtype=float)[order]
-        self.assertTrue(np.all(np.diff(ages) >= -1e-6), "extracted ages are not monotonic")
+        self.assertTrue(
+            np.all(np.diff(ages) >= -1e-6), "extracted ages are not monotonic"
+        )
 
     def test_05_depth_range_clipping(self):
         """depth_range clips the extracted section independently of the calibration."""
@@ -214,7 +239,9 @@ class TestAgeDepthExtractionQuality(unittest.TestCase):
         self.assertTrue(
             np.all(np.diff(np.asarray(baseline.ages, dtype=float)[order_b]) >= -1e-6)
         )
-        self.assertTrue(np.all(np.diff(np.asarray(erased.ages, dtype=float)[order_e]) >= -1e-6))
+        self.assertTrue(
+            np.all(np.diff(np.asarray(erased.ages, dtype=float)[order_e]) >= -1e-6)
+        )
         self._assert_close_to_truth(erased)
 
     def test_08_log_calibration_axis(self):
@@ -244,9 +271,13 @@ class TestAgeDepthExtractionQuality(unittest.TestCase):
         self.assertGreater(n, 0)
         # A single index must address all parallel arrays consistently.
         for key in ("depths", "ages", "age_min", "age_max"):
-            self.assertEqual(len(payload[key]), n, f"{key} length differs from px_points.y")
+            self.assertEqual(
+                len(payload[key]), n, f"{key} length differs from px_points.y"
+            )
         for key in ("x_curve", "x_min", "x_max"):
-            self.assertEqual(len(px[key]), n, f"px_points.{key} length differs from px_points.y")
+            self.assertEqual(
+                len(px[key]), n, f"px_points.{key} length differs from px_points.y"
+            )
 
     def test_09b_tracks_align_with_depths(self):
         """Pixel tracks keep the same length as the depth array, and map back to it.

@@ -78,7 +78,9 @@ def _session() -> StraditizeSession:
         "primary_axis": "depth",
     }
     session.depth_unit = "cm"
-    session.samples = [{"row_px": row, "depth": None, "source": "auto"} for row in (400, 500)]
+    session.samples = [
+        {"row_px": row, "depth": None, "source": "auto"} for row in (400, 500)
+    ]
     session.column_points = {0: [{"row": 400, "x": 300.0}, {"row": 500, "x": 340.0}]}
     session.control_points = {0: {400: 300.0, 500: 340.0}}
     return session

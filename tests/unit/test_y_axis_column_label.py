@@ -232,18 +232,25 @@ def test_shared_roi_entry_used_by_tar_xlsx_lipd_also_follows_axis() -> None:
         ("turning_points", 2),
     ],
 )
-@pytest.mark.parametrize(("legacy", "age_label", "depth_label"), [
-    (False, "age", "depth"),
-    (True, "depth", "depth"),
-])
+@pytest.mark.parametrize(
+    ("legacy", "age_label", "depth_label"),
+    [
+        (False, "age", "depth"),
+        (True, "depth", "depth"),
+    ],
+)
 def test_every_dataset_rowset_names_its_y_column_by_axis(
     dataset, y_index, legacy, age_label, depth_label
 ) -> None:
     frame_kwargs = {} if dataset is None else {"dataset": dataset}
     kwargs = {**frame_kwargs, "legacy_column_name": legacy}
 
-    age_header = _csv_text(_session("age", "ka BP"), **kwargs).splitlines()[0].split(",")
-    depth_header = _csv_text(_session("depth", "cm"), **kwargs).splitlines()[0].split(",")
+    age_header = (
+        _csv_text(_session("age", "ka BP"), **kwargs).splitlines()[0].split(",")
+    )
+    depth_header = (
+        _csv_text(_session("depth", "cm"), **kwargs).splitlines()[0].split(",")
+    )
 
     assert age_header[y_index] == age_label, (
         f"dataset={dataset!r} legacy={legacy}：age 轴的表头应为 {age_label!r}，实得 {age_header!r}"
@@ -349,9 +356,13 @@ def test_settings_sent_to_r_carry_derived_ylabel(
     assert len(calls) == 1, "应当只调一次 R"
     settings_tsv = Path(calls[0][4]).read_text(encoding="utf-8")
     ylabel_lines = [
-        line.split("\t", 1) for line in settings_tsv.splitlines() if line.startswith("ylabel")
+        line.split("\t", 1)
+        for line in settings_tsv.splitlines()
+        if line.startswith("ylabel")
     ]
-    assert len(ylabel_lines) == 1, f"settings 里必须恰好一行 ylabel，实得：{settings_tsv!r}"
+    assert len(ylabel_lines) == 1, (
+        f"settings 里必须恰好一行 ylabel，实得：{settings_tsv!r}"
+    )
     assert ylabel_lines[0][1] == expected, (
         f"交给 R 的 ylabel 应为 {expected!r}，实得 {ylabel_lines[0][1]!r}"
     )
@@ -394,6 +405,7 @@ def test_plot_render_rpc_derives_ylabel_from_axis() -> None:
 # 判据 8：派生标签真的画进了产物（不是只把字符串传过去）
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(RSCRIPT is None, reason="本机没有 Rscript")
 def test_derived_label_reaches_the_artifact(tmp_path) -> None:
     """派生路径与「显式写死同一个标签」必须产出**逐字节相同**的图。
@@ -411,14 +423,19 @@ def test_derived_label_reaches_the_artifact(tmp_path) -> None:
         out = tmp_path / f"{name}.svg"
         try:
             render_strat_diagram(
-                csv_path=str(csv_path), out_path=str(out), rscript=str(RSCRIPT), **kwargs
+                csv_path=str(csv_path),
+                out_path=str(out),
+                rscript=str(RSCRIPT),
+                **kwargs,
             )
         except RuntimeError as exc:  # rioja 没装：本机跑不了这条判据
             pytest.skip(f"本机 R 缺 rioja：{exc}")
         return out.read_bytes()
 
     derived = _render("derived", settings={}, primary_axis="age", unit="ka")
-    explicit = _render("explicit", settings={"ylabel": "Age (ka BP)"}, primary_axis="age", unit="ka")
+    explicit = _render(
+        "explicit", settings={"ylabel": "Age (ka BP)"}, primary_axis="age", unit="ka"
+    )
     depth_axis = _render("depth", settings={}, primary_axis="depth", unit="cm")
 
     assert derived == explicit, (
@@ -428,4 +445,3 @@ def test_derived_label_reaches_the_artifact(tmp_path) -> None:
     assert derived != depth_axis, (
         "age 轴与 depth 轴的产物相同 → 判据对标签不敏感，这条断言语义失效"
     )
-

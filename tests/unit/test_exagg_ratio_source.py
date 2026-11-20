@@ -50,12 +50,12 @@ from straditize_core.session_parts.xscale import resolve_column_scale
 
 W, H = 140, 200
 AXIS_X0, AXIS_W = 10, 6
-ZERO_X = AXIS_X0 + AXIS_W          # 16 —— 0 点（轴线右缘，也是 x_ticks 的 0 点）
-INNER_DIST = 10                    # 内线右缘距 0 点 10px
-OUTER_DIST = 50                    # 外线距 0 点 50px → ratio = 5.0
+ZERO_X = AXIS_X0 + AXIS_W  # 16 —— 0 点（轴线右缘，也是 x_ticks 的 0 点）
+INNER_DIST = 10  # 内线右缘距 0 点 10px
+OUTER_DIST = 50  # 外线距 0 点 50px → ratio = 5.0
 Y0, Y1 = 40, 160
-ASSERTED_ROWS = range(Y0, Y1)      # 取样窗口最后一行不参与断言（见既有测试同款说明）
-SLOPE = 1.0                        # %/px
+ASSERTED_ROWS = range(Y0, Y1)  # 取样窗口最后一行不参与断言（见既有测试同款说明）
+SLOPE = 1.0  # %/px
 MULT = 5.0
 
 
@@ -153,9 +153,7 @@ def test_pairs_are_written_for_rows_with_two_ink_runs(tmp_path) -> None:
 def test_rows_without_outer_line_have_no_keys(tmp_path) -> None:
     """只有内线一段的行：两个键**都不存在**（不写 0、不写 None）。"""
     broken = set(range(Y0 + 40, Y0 + 50))
-    session = _session(
-        tmp_path, outer_rows=set(range(Y0, Y1 + 1)) - broken
-    )
+    session = _session(tmp_path, outer_rows=set(range(Y0, Y1 + 1)) - broken)
     session.digitize(0, reader_type="area")
     points = _points(session)
     for row in broken:
@@ -222,8 +220,10 @@ def test_old_project_without_keys_skips_the_column(tmp_path) -> None:
     session = _session(tmp_path, outer_rows=set(range(Y0, Y1 + 1)))
     # 手工铺逐行点：只有 row/x，没有 #99 的两个键
     session.column_points = {
-        0: [{"row": row, "x": float(ZERO_X + OUTER_DIST), "y": float(row)}
-            for row in range(Y0, Y1 + 1)]
+        0: [
+            {"row": row, "x": float(ZERO_X + OUTER_DIST), "y": float(row)}
+            for row in range(Y0, Y1 + 1)
+        ]
     }
     block = _exagg_block(session)
     assert block["status"] == "skipped"

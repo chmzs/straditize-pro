@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .export import (
+    extract_project_name_from_filename,
     format_export_filename,
     resolve_project_name,
     sanitize_filename_stem,
@@ -412,6 +413,17 @@ class ProjectSessionMixin:
 
         if isinstance(project_data, str):
             return self.project_load(self._decode_project_file(project_data))
+        if isinstance(project_data, dict) and "tar_base64" in project_data:
+            tar_bytes = base64.b64decode(project_data["tar_base64"])
+            with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r") as tf:
+                parsed = self._extract_tar_members(tf)
+                if not parsed.get("project_name") and project_data.get("filename"):
+                    inferred = extract_project_name_from_filename(
+                        project_data["filename"]
+                    )
+                    if inferred:
+                        parsed["project_name"] = inferred
+                return self.project_load(parsed)
 
         self._check_project_schema_version(project_data)
 
@@ -471,6 +483,17 @@ class ProjectSessionMixin:
         self._restore_aux_fields(project_data)
         self._restore_age_depth(project_data)
 
+        # 恢复清理几何后的掩膜派生合成（解决重新导入工程后 step4 清理丢失、横线复活问题）
+        if getattr(self, "image", None) is not None:
+            if getattr(self, "foreground_mask", None) is None:
+                self._extract_foreground_from_settings()
+            if (
+                getattr(self, "line_candidates", None)
+                or getattr(self, "line_strokes", None)
+                or getattr(self, "exclusion_regions", None)
+            ):
+                self._rebuild_cleanup_masks_after_restore()
+
         return {
             "success": True,
             "columns_count": len(self.columns),
@@ -484,6 +507,59 @@ class ProjectSessionMixin:
 
     # ---- project_load 的分段实现（调用顺序即载荷顺序，不可重排）----
 
+    def _extract_tar_members(self, tf: tarfile.TarFile) -> dict[str, Any]:
+        """从已打开的 tarfile 对象中解包 straditize.json 并挂载底图与年代深度图。"""
+        json_member = None
+        img_member = None
+        ad_img_member = None
+        for m in tf.getmembers():
+            nl = m.name.lower()
+            if nl.endswith("straditize.json") or (
+                nl.endswith(".json")
+                and "manifest" not in nl
+                and "info" not in nl
+            ):
+                json_member = m
+            elif "age_depth" in nl and nl.endswith((".png", ".jpg", ".jpeg")):
+                ad_img_member = m
+            elif nl.endswith((".png", ".jpg", ".jpeg")):
+                img_member = m
+
+        if not json_member:
+            raise JsonRpcError(
+                INVALID_PARAMS, "No straditize.json found in .tar archive."
+            )
+
+        f_json = tf.extractfile(json_member)
+        if not f_json:
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                "Could not extract straditize.json from archive.",
+            )
+        parsed = json.loads(f_json.read().decode("utf-8"))
+
+        if img_member:
+            f_img = tf.extractfile(img_member)
+            if f_img:
+                img_bytes = f_img.read()
+                img_obj = Image.open(io.BytesIO(img_bytes))
+                img_obj.load()
+                self.image = img_obj
+                self.width, self.height = img_obj.size
+                self.format = img_obj.format or "PNG"
+                self.mode = img_obj.mode
+
+        if ad_img_member:
+            f_ad = tf.extractfile(ad_img_member)
+            if f_ad:
+                ad_bytes = f_ad.read()
+                ad_obj = Image.open(io.BytesIO(ad_bytes))
+                ad_obj.load()
+                self.age_depth_image = ad_obj
+                self.age_depth_image_path = "archive://image/age_depth.png"
+
+        return parsed
+
     def _decode_project_file(self, project_data: str) -> dict[str, Any]:
         """把工程文件（.json / .tar）读成 payload 字典，tar 里的图顺手挂进会话。
 
@@ -496,58 +572,10 @@ class ProjectSessionMixin:
         if not os.path.exists(path):
             raise JsonRpcError(FILE_NOT_FOUND_ERROR, f"Project file not found: {path}")
 
+        parsed: dict[str, Any]
         if path.endswith(".tar") or tarfile.is_tarfile(path):
             with tarfile.open(path, "r") as tf:
-                json_member = None
-                img_member = None
-                ad_img_member = None
-                for m in tf.getmembers():
-                    nl = m.name.lower()
-                    if nl.endswith("straditize.json") or (
-                        nl.endswith(".json")
-                        and "manifest" not in nl
-                        and "info" not in nl
-                    ):
-                        json_member = m
-                    elif "age_depth" in nl and nl.endswith((".png", ".jpg", ".jpeg")):
-                        ad_img_member = m
-                    elif nl.endswith((".png", ".jpg", ".jpeg")):
-                        img_member = m
-
-                if not json_member:
-                    raise JsonRpcError(
-                        INVALID_PARAMS, "No straditize.json found in .tar archive."
-                    )
-
-                f_json = tf.extractfile(json_member)
-                if not f_json:
-                    raise JsonRpcError(
-                        INVALID_PARAMS,
-                        "Could not extract straditize.json from archive.",
-                    )
-                parsed = json.loads(f_json.read().decode("utf-8"))
-
-                if img_member:
-                    f_img = tf.extractfile(img_member)
-                    if f_img:
-                        img_bytes = f_img.read()
-                        img_obj = Image.open(io.BytesIO(img_bytes))
-                        img_obj.load()
-                        self.image = img_obj
-                        self.width, self.height = img_obj.size
-                        self.format = img_obj.format or "PNG"
-                        self.mode = img_obj.mode
-
-                if ad_img_member:
-                    f_ad = tf.extractfile(ad_img_member)
-                    if f_ad:
-                        ad_bytes = f_ad.read()
-                        ad_obj = Image.open(io.BytesIO(ad_bytes))
-                        ad_obj.load()
-                        self.age_depth_image = ad_obj
-                        self.age_depth_image_path = "archive://image/age_depth.png"
-
-                return parsed
+                parsed = self._extract_tar_members(tf)
         elif path.endswith(".zip") or zipfile.is_zipfile(path):
             try:
                 with zipfile.ZipFile(path, "r") as zf:
@@ -610,7 +638,7 @@ class ProjectSessionMixin:
                             self.age_depth_image = ad_obj
                             self.age_depth_image_path = "archive://image/age_depth.png"
 
-                    return parsed
+                    pass
             except zipfile.BadZipFile as e:
                 raise JsonRpcError(
                     INVALID_PARAMS,
@@ -620,7 +648,6 @@ class ProjectSessionMixin:
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     parsed = json.load(f)
-                return parsed
             except UnicodeDecodeError as e:
                 raise JsonRpcError(
                     INVALID_PARAMS,
@@ -629,8 +656,14 @@ class ProjectSessionMixin:
             except json.JSONDecodeError as e:
                 raise JsonRpcError(
                     INVALID_PARAMS,
-                    f"项目文件 '{os.path.basename(path)}' 不是合法的 JSON 格式: {e}",
+                    f"项目文件 '{os.path.basename(path)}' 不是合法的 JSON格式: {e}",
                 ) from e
+
+        if isinstance(parsed, dict) and not parsed.get("project_name"):
+            inferred = extract_project_name_from_filename(path)
+            if inferred:
+                parsed["project_name"] = inferred
+        return parsed
 
     def _reset_loaded_state(self, roi: dict[str, Any]) -> None:
         """按 payload 的 roi 重算 data 范围，并清掉上一份工程留下的标度/掩膜状态。"""
@@ -832,7 +865,7 @@ class ProjectSessionMixin:
                     "id": grp_id,
                     "name": f"{name}组",
                     "unit": c.get("unit", "%"),
-                    "plot_type": c.get("plot_type") or c.get("plotType") or "area",
+                    "plot_type": c.get("plot_type") or c.get("plotType"),
                     "scale_type": c.get("scale_type", "linear"),
                     "exaggeration_mult": c.get("exaggeration_mult"),
                     "tick_layout": [{"rel": rel0}, {"rel": rel1}],
@@ -853,7 +886,7 @@ class ProjectSessionMixin:
                 "end": c.get("endX", c.get("end", 100)),
                 "endX": c.get("endX", c.get("end", 100)),
                 "scale_type": c.get("scale_type", "linear"),
-                "plot_type": c.get("plot_type") or c.get("plotType") or "area",
+                "plot_type": c.get("plot_type") or c.get("plotType"),
                 "unit": c.get("unit", "%"),
                 "exaggeration_mult": _payload_exaggeration(c),
                 "x_ticks": x_ticks,
@@ -1229,6 +1262,8 @@ class ProjectSessionMixin:
         fmt_lower = format.lower()
         ext = "json" if fmt_lower == "json" else "tar"
         proj = resolve_project_name(self, project_name)
+        if not getattr(self, "project_name", None):
+            self.project_name = proj
         filename = format_export_filename(proj, "_project", ext)
 
         manifest = {

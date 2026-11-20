@@ -170,7 +170,9 @@ def register(dispatcher: Any, session: Any) -> None:
         if allowed_hosts is not None:
             if isinstance(allowed_hosts, str):
                 parsed = [
-                    h.strip() for h in re.split(r"[,;\n\r]+", allowed_hosts) if h.strip()
+                    h.strip()
+                    for h in re.split(r"[,;\n\r]+", allowed_hosts)
+                    if h.strip()
                 ]
                 updates["allowed_hosts"] = parsed
             elif isinstance(allowed_hosts, list):
@@ -237,9 +239,7 @@ _COLUMN_PALETTE: tuple[str, ...] = (
 )
 
 
-def _payload_zero_state(
-    session: Any, cleanup: dict[str, Any]
-) -> dict[str, Any]:
+def _payload_zero_state(session: Any, cleanup: dict[str, Any]) -> dict[str, Any]:
     """没载图时的零状态载荷。必须与正常载荷共用 cleanup 的键。
 
     历史上两条分支各写一份，零状态因此少了五个键，载图前步骤 4 面板的结构与之后不同。
@@ -476,6 +476,7 @@ def _payload_loaded(
             "primaryAxis": getattr(session, "primary_axis", "depth"),
             "depthInterval": 2,
             "depthGridEnabled": False,
+            "marks": depth_calib.get("marks") or getattr(session, "y_marks", None),
         },
         "lineRemoval": {
             "strength": session.degrid_strength,

@@ -8,6 +8,7 @@ Conforms to Section 4 & 8 of the Incremental Addon Specification (方式2：轻�
 4. Component removal / uninstallation.
 5. In-process download task management with status reporting.
 """
+
 from pathlib import Path
 
 import io
@@ -41,9 +42,14 @@ class TestComponentManagerSuite(unittest.TestCase):
         # Create a synthetic mock age-modeling.zip
         bio = io.BytesIO()
         with zipfile.ZipFile(bio, "w") as zf:
-            zf.writestr("manifest.json", json.dumps({"name": "age-modeling", "version": "1.0.0"}))
+            zf.writestr(
+                "manifest.json",
+                json.dumps({"name": "age-modeling", "version": "1.0.0"}),
+            )
             zf.writestr("webr/webr-runtime.wasm", "mock_wasm_bytes")
-            zf.writestr("r-library/rbacon/DESCRIPTION", "Package: rbacon\nVersion: 3.2.0")
+            zf.writestr(
+                "r-library/rbacon/DESCRIPTION", "Package: rbacon\nVersion: 3.2.0"
+            )
 
         zip_bytes = bio.getvalue()
 
@@ -94,6 +100,7 @@ class TestComponentManagerSuite(unittest.TestCase):
     def test_05_sha256_checksum_verification(self):
         """Verify strict SHA256 validation prevents corrupted packages."""
         import hashlib
+
         bio = io.BytesIO()
         with zipfile.ZipFile(bio, "w") as zf:
             zf.writestr("test.txt", "valid content")
@@ -102,12 +109,16 @@ class TestComponentManagerSuite(unittest.TestCase):
         bad_sha = "0000000000000000000000000000000000000000000000000000000000000000"
 
         # Correct SHA should succeed
-        res = self.mgr.install_from_zip(zip_bytes, component_name="age-modeling", expected_sha256=correct_sha)
+        res = self.mgr.install_from_zip(
+            zip_bytes, component_name="age-modeling", expected_sha256=correct_sha
+        )
         self.assertTrue(res["success"])
 
         # Mismatched SHA should fail loudly
         with self.assertRaises(ValueError) as ctx:
-            self.mgr.install_from_zip(zip_bytes, component_name="age-modeling", expected_sha256=bad_sha)
+            self.mgr.install_from_zip(
+                zip_bytes, component_name="age-modeling", expected_sha256=bad_sha
+            )
         self.assertIn("SHA256 checksum mismatch", str(ctx.exception))
 
     def test_06_ready_callback_trigger(self):

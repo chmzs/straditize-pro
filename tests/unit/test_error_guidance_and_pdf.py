@@ -134,7 +134,9 @@ def test_multi_page_pdf_page_selection():
     out_bio = io.BytesIO()
     writer.write(out_bio)
     pdf_bytes = out_bio.getvalue()
-    b64_pdf = "data:application/pdf;base64," + base64.b64encode(pdf_bytes).decode("ascii")
+    b64_pdf = "data:application/pdf;base64," + base64.b64encode(pdf_bytes).decode(
+        "ascii"
+    )
 
     session = StraditizeSession()
 
@@ -149,4 +151,3 @@ def test_multi_page_pdf_page_selection():
         session.load_image(image_data=b64_pdf, page_number=5)
     assert exc_info.value.code == INVALID_PARAMS
     assert "共有 3 页" in exc_info.value.message
-

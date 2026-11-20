@@ -21,6 +21,7 @@
 
 规格见 `docs/findings/spec-column-semantics.md`。
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -71,7 +72,8 @@ class TestSingleLayerColumns:
         canvas, edges = _column_figure([(10, 50, (182, 182, 182))])
         solid, shadow = split_by_colour_and_luminance(canvas, column_edges=edges)
         assert _coverage(solid, (5, 55, 10, 50)) == pytest.approx(1.0), (
-            "单层灰列应整列进 solid —— 它只有一个墨层峰，没有包络")
+            "单层灰列应整列进 solid —— 它只有一个墨层峰，没有包络"
+        )
         assert _coverage(shadow, (5, 55, 10, 50)) == pytest.approx(0.0)
 
     @pytest.mark.parametrize("grey", [0, 60, 120, 182, 215])
@@ -79,15 +81,19 @@ class TestSingleLayerColumns:
         canvas, edges = _column_figure([(10, 50, (grey,) * 3)])
         solid, _shadow = split_by_colour_and_luminance(canvas, column_edges=edges)
         assert _coverage(solid, (5, 55, 10, 50)) == pytest.approx(1.0), (
-            f"单层灰列（明度 {grey}）应被完整提取")
+            f"单层灰列（明度 {grey}）应被完整提取"
+        )
 
     def test_two_independent_single_columns(self) -> None:
         """黑列 + 灰列各自单层：两列都必须被提取（这是 V5 的场景）。"""
-        canvas, edges = _column_figure([(10, 50, (0, 0, 0)), (60, 100, (182, 182, 182))])
+        canvas, edges = _column_figure(
+            [(10, 50, (0, 0, 0)), (60, 100, (182, 182, 182))]
+        )
         solid, _shadow = split_by_colour_and_luminance(canvas, column_edges=edges)
         assert _coverage(solid, (5, 55, 10, 50)) == pytest.approx(1.0)
         assert _coverage(solid, (5, 55, 60, 100)) == pytest.approx(1.0), (
-            "灰列与黑列分属不同列带，灰列不该因为'比黑列淡'而被判成阴影")
+            "灰列与黑列分属不同列带，灰列不该因为'比黑列淡'而被判成阴影"
+        )
 
 
 class TestDoubleLayerColumns:
@@ -103,13 +109,14 @@ class TestDoubleLayerColumns:
         solid, _shadow = split_by_colour_and_luminance(canvas, column_edges=[10, 50])
         assert _coverage(solid, (5, 55, 10, 30)) == pytest.approx(1.0), "实心应被提取"
         assert _coverage(solid, (5, 55, 30, 50)) == pytest.approx(0.0), (
-            "包络不得漏进读数（×5 放大方向）")
+            "包络不得漏进读数（×5 放大方向）"
+        )
 
     def test_coloured_solid_with_coloured_envelope(self) -> None:
         canvas = np.zeros((60, 60, 3), dtype=np.uint8)
         canvas[...] = PAPER
-        canvas[5:55, 10:50] = (218, 226, 237)   # 浅蓝包络
-        canvas[5:55, 10:30] = (0, 62, 137)      # 深蓝实心
+        canvas[5:55, 10:50] = (218, 226, 237)  # 浅蓝包络
+        canvas[5:55, 10:30] = (0, 62, 137)  # 深蓝实心
         solid, _shadow = split_by_colour_and_luminance(canvas, column_edges=[10, 50])
         assert _coverage(solid, (5, 55, 10, 30)) == pytest.approx(1.0)
         assert _coverage(solid, (5, 55, 30, 50)) == pytest.approx(0.0)
@@ -134,7 +141,8 @@ class TestMixedFigure:
         assert _coverage(solid, (5, 55, 5, 35)) == pytest.approx(1.0), "单层黑列"
         assert _coverage(solid, (5, 55, 45, 65)) == pytest.approx(1.0), "双层列的实心"
         assert _coverage(solid, (5, 55, 65, 85)) == pytest.approx(0.0), (
-            "双层列的包络不得漏入")
+            "双层列的包络不得漏入"
+        )
         assert _coverage(solid, (5, 55, 95, 125)) == pytest.approx(1.0), "单层灰列"
 
     def test_envelope_crossing_into_neighbour_band(self) -> None:
@@ -147,14 +155,15 @@ class TestMixedFigure:
         """
         canvas = np.zeros((60, 160, 3), dtype=np.uint8)
         canvas[...] = PAPER
-        canvas[5:55, 10:90] = (229, 229, 229)   # 包络跨到列1 的边界右侧
-        canvas[5:55, 10:40] = (182, 182, 182)   # 实心只在列0 左段
+        canvas[5:55, 10:90] = (229, 229, 229)  # 包络跨到列1 的边界右侧
+        canvas[5:55, 10:40] = (182, 182, 182)  # 实心只在列0 左段
         edges = [10, 60, 110, 150]
         solid, _shadow = split_by_colour_and_luminance(canvas, column_edges=edges)
         # 列0 内：实心完整、包络被排除
         assert _coverage(solid, (5, 55, 10, 40)) == pytest.approx(1.0)
         assert _coverage(solid, (5, 55, 40, 60)) == pytest.approx(0.0), (
-            "列0 自己的包络不得漏入读数")
+            "列0 自己的包络不得漏入读数"
+        )
 
 
 class TestLayerCounting:
@@ -164,7 +173,9 @@ class TestLayerCounting:
         canvas, _edges = _column_figure([(10, 50, (182, 182, 182))])
         rel = grey_matrix(canvas) / paper_white(canvas)
         peaks = _luminance_peaks(rel, rel < 0.985, 0.985, 0.02)
-        assert len(peaks) == 1, f"单层列应只有一个峰，实际 {[round(p * 255) for p in peaks]}"
+        assert len(peaks) == 1, (
+            f"单层列应只有一个峰，实际 {[round(p * 255) for p in peaks]}"
+        )
 
     def test_two_ink_tiers_yield_two_peaks(self) -> None:
         canvas = np.zeros((60, 60, 3), dtype=np.uint8)
@@ -173,7 +184,9 @@ class TestLayerCounting:
         canvas[5:55, 30:50] = (229, 229, 229)
         rel = grey_matrix(canvas) / paper_white(canvas)
         peaks = _luminance_peaks(rel, rel < 0.985, 0.985, 0.02)
-        assert len(peaks) == 2, f"双层列应有两个峰，实际 {[round(p * 255) for p in peaks]}"
+        assert len(peaks) == 2, (
+            f"双层列应有两个峰，实际 {[round(p * 255) for p in peaks]}"
+        )
 
     def test_pure_black_is_detected(self) -> None:
         """回归钉子：`range(1,256)` 曾漏掉 bin 0（纯黑）。"""
@@ -181,7 +194,8 @@ class TestLayerCounting:
         rel = grey_matrix(canvas) / paper_white(canvas)
         peaks = _luminance_peaks(rel, rel < 0.985, 0.985, 0.02)
         assert peaks and peaks[0] == pytest.approx(0.0), (
-            "纯黑是最常见的墨色，必须被检出")
+            "纯黑是最常见的墨色，必须被检出"
+        )
 
 
 class TestWithoutColumnEdges:
@@ -201,8 +215,10 @@ class TestStandardPathIntegration:
     def test_column_edges_reach_the_splitter(self) -> None:
         canvas, edges = _column_figure([(10, 50, (182, 182, 182))])
         rgba = np.dstack([canvas, np.full(canvas.shape[:2], 255, dtype=np.uint8)])
-        fg = build_foreground(rgba, threshold=138.0 * 3,
-                              extraction_mode="standard", column_edges=edges)
+        fg = build_foreground(
+            rgba, threshold=138.0 * 3, extraction_mode="standard", column_edges=edges
+        )
         assert _coverage(fg, (5, 55, 10, 50)) == pytest.approx(1.0), (
             "build_foreground 必须把 column_edges 传给 split_by_colour_and_luminance；"
-            "不透传则按列分支永不生效（这正是灰列 0% 的原因）")
+            "不透传则按列分支永不生效（这正是灰列 0% 的原因）"
+        )

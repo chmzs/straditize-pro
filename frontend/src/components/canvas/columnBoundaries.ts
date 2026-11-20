@@ -131,6 +131,9 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
 
     ctx.save();
 
+    // 组归属条：先画在数据区上方的窄带作为背景带，随后列线与 45° 属种标签覆盖其上。
+    drawGroupBands(env);
+
     let lastLabeledCenterX = Number.NEGATIVE_INFINITY;
 
     columns.forEach((col) => {
@@ -250,63 +253,67 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
         ctx.stroke();
       }
 
-      // 5. 属种名称与端点数值标签
+      // 5. 属种名称（统一 45° 斜向右上排布，彻底杜绝相邻列水平堆叠遮挡）
       const width = col.endX - col.startX;
       const centerX = col.startX + width / 2;
 
-      // 属种名称与刻度防重叠渲染
-      const colWidth = col.endX - col.startX;
       if (isActive) {
         lastLabeledCenterX = centerX;
         ctx.save();
         const fontSize = Math.max(10, 12 / scale);
-        ctx.font = `bold ${fontSize}px sans-serif`;
-        const textMetrics = ctx.measureText(col.name);
-        const badgeW = textMetrics.width + 16 / scale;
-        const badgeH = 20 / scale;
+        ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif`;
+        const displayName = col.name.length > 28 ? col.name.substring(0, 26) + '…' : col.name;
+        const textMetrics = ctx.measureText(displayName);
+        const badgeW = textMetrics.width + 10 / scale;
+        const badgeH = 18 / scale;
+
+        ctx.translate(centerX, topY - 6 / scale);
+        ctx.rotate(-Math.PI / 4); // 逆时针 45 度斜向右上
+
         ctx.fillStyle = isLight ? '#0284c7' : '#38bdf8';
-        const bx = centerX - badgeW / 2;
-        const by = topY - 26 / scale;
+        const bx = -2 / scale;
+        const by = -badgeH / 2;
         ctx.beginPath();
         if (typeof ctx.roundRect === 'function') {
-          ctx.roundRect(bx, by, badgeW, badgeH, 4 / scale);
+          ctx.roundRect(bx, by, badgeW, badgeH, 3 / scale);
         } else {
           ctx.rect(bx, by, badgeW, badgeH);
         }
         ctx.fill();
+
         ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'center';
+        ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(col.name, centerX, topY - 16 / scale);
+        ctx.fillText(displayName, 3 / scale, 0);
         ctx.restore();
 
       } else if (shouldDrawColumnLabel(centerX, lastLabeledCenterX, scale)) {
-        // 未激活列：若列较窄（< 40px），名称以 45 度斜角呈现；间距不足时**跳过这一列的名称**
-        // （斜排也救不了 20px 列间距 + 10 字长名），只画能画下的那些，避免叠成一团。
+        // 未激活列：一律 45 度斜排，高密度全景下按视口像素抽稀避免过密
         lastLabeledCenterX = centerX;
         ctx.save();
-        ctx.fillStyle = isLight ? '#475569' : 'rgba(255, 255, 255, 0.75)';
         const fontSize = Math.max(9, 10.5 / scale);
         ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif`;
-        if (colWidth < 42 && scale < 1.0) {
-          ctx.translate(centerX, topY - 6 / scale);
-          ctx.rotate(-Math.PI / 4); // 逆时针 45 度斜排
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'middle';
-          const shortName = col.name.length > 12 ? col.name.substring(0, 10) + '…' : col.name;
-          ctx.fillText(shortName, 0, 0);
-        } else {
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'bottom';
-          const displayName = col.name.length > 12 ? col.name.substring(0, 10) + '…' : col.name;
-          ctx.fillText(displayName, centerX, topY - 4 / scale);
+
+        ctx.translate(centerX, topY - 6 / scale);
+        ctx.rotate(-Math.PI / 4); // 逆时针 45 度斜向右上
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+
+        const displayName = col.name.length > 28 ? col.name.substring(0, 26) + '…' : col.name;
+
+        // 微弱文字描边，保证在深浅/彩色地层背景上均清晰可读
+        if (typeof ctx.strokeText === 'function') {
+          ctx.strokeStyle = isLight ? 'rgba(255, 255, 255, 0.9)' : 'rgba(15, 23, 42, 0.9)';
+          ctx.lineWidth = 2.5 / scale;
+          ctx.lineJoin = 'round';
+          ctx.strokeText(displayName, 2 / scale, 0);
         }
+
+        ctx.fillStyle = isLight ? '#334155' : 'rgba(255, 255, 255, 0.88)';
+        ctx.fillText(displayName, 2 / scale, 0);
         ctx.restore();
       }
     });
-
-    // 组归属条画在所有列之后：它只在数据区上方的一条窄带里，不遮挡任何列内容。
-    drawGroupBands(env);
 
     ctx.restore();
 }

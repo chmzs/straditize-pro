@@ -16,6 +16,7 @@
 把 _turning_control_points 里 np.clip(profile, min_width, None) 的下界改成 0.0，
 本文件必须变红（那些"只有轴线"的行会产出 x = c_start + 5 < c_start + 6 的控制点）。
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -34,10 +35,10 @@ Y0, Y1 = 20, 120
 def _plate(path) -> None:
     """轴 6px；row 20..120 有填充到 x=60；其余行只有轴线（读数应为 0 = 0 点）。"""
     img = np.full((H, W), 255, dtype=np.uint8)
-    img[:, AXIS_X0:AXIS_X0 + AXIS_W] = 0
+    img[:, AXIS_X0 : AXIS_X0 + AXIS_W] = 0
     # 填充只覆盖 60..100 行：20..59 行整行只有轴线 ⇒ 读数应恰好是 0 点，
     # 这正是"控制点落进轴线区间"最容易出现的地方。
-    img[60:101, AXIS_X0:FILL_END + 1] = 0
+    img[60:101, AXIS_X0 : FILL_END + 1] = 0
     Image.fromarray(img).save(path)
 
 

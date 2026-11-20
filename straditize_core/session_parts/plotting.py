@@ -181,7 +181,9 @@ class PlottingMixin:
                 # 而 `graph.widths` 在这条路径上不生效（实测设进 style 与当直接参数传都
                 # 无效，产物字节不变）。所以让**每列自成一个段**：段宽我们说了算
                 # （avail / 列数），单列段必然铺满，于是所有列等宽。
-                _by_gid = {f"{_g}__{_n}": [_n] for _n, _u, _g in _resolved if _n in _fixed_cols}
+                _by_gid = {
+                    f"{_g}__{_n}": [_n] for _n, _u, _g in _resolved if _n in _fixed_cols
+                }
             for _g, _names in _by_gid.items():
                 if not _fixed_cols and _g == _main_gid:
                     continue
@@ -241,4 +243,3 @@ class PlottingMixin:
             "rscript": info["rscript"],
             "source": "data.csv（主 ROI 当前导出表）",
         }
-

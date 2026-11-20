@@ -32,6 +32,7 @@
 状态**必须存活**——它们是用户几分钟 MCMC 的成果或论文元数据，换图不该毁掉。
 只钉"该清的清了"会让实现退化成"换图就全清"，那是另一种数据破坏。
 """
+
 from __future__ import annotations
 
 import base64
@@ -70,9 +71,9 @@ def _three_page_pdf_data_url() -> str:
         page_bio.seek(0)
         writer.add_page(pypdf.PdfReader(page_bio).pages[0])
     writer.write(out_bio)
-    return "data:application/pdf;base64," + base64.b64encode(
-        out_bio.getvalue()
-    ).decode("ascii")
+    return "data:application/pdf;base64," + base64.b64encode(out_bio.getvalue()).decode(
+        "ascii"
+    )
 
 
 class TestLoadImageClearsSamples:
@@ -127,7 +128,9 @@ class TestLoadImageClearsSamples:
 
         session.switch_pdf_page(2)
 
-        assert session.samples == [], "PDF 换页后 samples 未清（B-11，走 load_image 同一路径）"
+        assert session.samples == [], (
+            "PDF 换页后 samples 未清（B-11，走 load_image 同一路径）"
+        )
         assert session.pdf_info == {"total_pages": 3, "current_page": 2}
 
 
@@ -176,7 +179,9 @@ class TestLoadImageClearsColumnDerivedState:
         session.load_image(sample_key="beginner")
 
         surviving_from_old = [
-            snap for snap in session.undo_stack if len(snap.get("columns") or []) == old_col_count
+            snap
+            for snap in session.undo_stack
+            if len(snap.get("columns") or []) == old_col_count
         ]
         assert not surviving_from_old, (
             f"换图后仍有 {len(surviving_from_old)} 条旧图快照留在撤销栈里"

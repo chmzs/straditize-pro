@@ -6,7 +6,7 @@ import { SplineInterpolator } from './SplineInterpolator';
 import { CoordinateSystem } from './CoordinateSystem';
 import { TarArchive } from './TarArchive';
 import { notifyError } from '../ui/feedback';
-import { resolveExportFilename } from '../utils/exportNaming';
+import { extractProjectNameFromFilename, resolveExportFilename } from '../utils/exportNaming';
 
 export interface ProjectManagerCallbacks {
   onProjectLoad?: (projectData: DiagramData) => void;
@@ -316,8 +316,8 @@ export function normalizeProject(
       curveType: c.curveType || 'linear',
       visible: c.visible !== false,
       scale_type: c.scale_type || 'linear',
-      plot_type: c.plot_type || c.plotType || 'area',
-      plotType: c.plot_type || c.plotType || 'area',
+      plot_type: c.plot_type || c.plotType || undefined,
+      plotType: c.plot_type || c.plotType || undefined,
       exaggeration_mult: exagMult,
       hasExaggeration: exagMult != null && exagMult > 1,
       exaggerationMult: exagMult,
@@ -345,6 +345,8 @@ export function normalizeProject(
 
   return {
     imageSrc: resolvedImageSrc,
+    project_name: parsed.project_name || fallbackData?.project_name,
+    image_name: parsed.image_name || fallbackData?.image_name,
     imageWidth: parsed.image?.width || parsed.imageWidth || fallbackData?.imageWidth || 0,
     imageHeight: parsed.image?.height || parsed.imageHeight || fallbackData?.imageHeight || 0,
     rois: parsed.rois || (normalizedRoi ? [normalizedRoi] : []),
@@ -388,6 +390,14 @@ export class ProjectManager {
 
   public updateData(data: DiagramData): void {
     this.data = data;
+  }
+
+  public setProjectName(name: string | undefined): void {
+    this.data.project_name = name;
+  }
+
+  public getProjectName(): string | undefined {
+    return this.data.project_name;
   }
 
   /**
@@ -748,6 +758,13 @@ message("Finished! Stratigraphic plot generated successfully.")
 
           if (jsonContent) {
             const parsed = JSON.parse(jsonContent);
+            const inferred = extractProjectNameFromFilename(file.name);
+            if (!parsed.project_name && inferred) {
+              parsed.project_name = inferred;
+            }
+            if (parsed.project_name) {
+              this.data.project_name = parsed.project_name;
+            }
             // 将内嵌的底图与年代深度图一并同步至后端会话，保证前后端权威状态一致
             if (mainImgEntry) {
               parsed.image = parsed.image || {};
@@ -789,6 +806,13 @@ message("Finished! Stratigraphic plot generated successfully.")
       try {
         const text = (e.target?.result as string) || '';
         const parsed = JSON.parse(text);
+        const inferred = extractProjectNameFromFilename(file.name);
+        if (!parsed.project_name && inferred) {
+          parsed.project_name = inferred;
+        }
+        if (parsed.project_name) {
+          this.data.project_name = parsed.project_name;
+        }
         try {
           await this.rpcClient.call('project.load', { project_data: parsed });
         } catch {

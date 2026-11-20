@@ -121,7 +121,9 @@ def test_missing_explicit_path_is_reported_not_silently_replaced() -> None:
     assert "不存在" in (report["error"] or ""), report
 
 
-def test_update_config_rejects_missing_rscript_and_keeps_old_value(tmp_path, monkeypatch) -> None:
+def test_update_config_rejects_missing_rscript_and_keeps_old_value(
+    tmp_path, monkeypatch
+) -> None:
     monkeypatch.setenv("STRADITIZE_CONFIG_PATH", str(tmp_path / "config.json"))
 
     from straditize_core.config import load_config, save_config
@@ -155,7 +157,9 @@ def test_plot_render_failure_is_actionable(monkeypatch) -> None:
     monkeypatch.setattr(
         plotting_part,
         "render_strat_diagram",
-        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("R 出图失败（返回码 1）：boom")),
+        lambda **kwargs: (_ for _ in ()).throw(
+            RuntimeError("R 出图失败（返回码 1）：boom")
+        ),
     )
 
     with pytest.raises(JsonRpcError) as excinfo:
@@ -184,7 +188,9 @@ def test_plot_render_without_r_gives_install_hint(monkeypatch) -> None:
     data = excinfo.value.data or {}
     assert data.get("reason") == "r_missing"
     assert "install.packages" in str(excinfo.value)
-    assert "rioja_plot_url" not in data, "riojaPlot 网页兜底已下线，错误载荷不得再带该字段"
+    assert "rioja_plot_url" not in data, (
+        "riojaPlot 网页兜底已下线，错误载荷不得再带该字段"
+    )
     assert "shinyapps" not in str(excinfo.value), "提示里不得再引网页兜底"
 
 
@@ -235,7 +241,10 @@ def test_render_writes_a_readable_svg(tmp_path) -> None:
         return
 
     info = render_strat_diagram(
-        csv_path=str(csv_path), out_path=str(out_path), rscript=str(RSCRIPT), settings={"title": "t"}
+        csv_path=str(csv_path),
+        out_path=str(out_path),
+        rscript=str(RSCRIPT),
+        settings={"title": "t"},
     )
 
     assert out_path.is_file(), "出图必须真的落盘（这是直接调渲染层，不是 RPC）"
@@ -248,10 +257,14 @@ def test_render_writes_a_readable_svg(tmp_path) -> None:
 
 
 @pytest.mark.skipif(RSCRIPT is None or not _has_rioja(), reason="本机没有 R + rioja")
-def test_plot_render_returns_inline_image_and_writes_nothing(tmp_path, monkeypatch) -> None:
+def test_plot_render_returns_inline_image_and_writes_nothing(
+    tmp_path, monkeypatch
+) -> None:
     # 把默认落盘目录指到 tmp：一旦实现又偷偷写文件，这条会立刻抓到。
     monkeypatch.setattr(
-        StraditizeSession, "_plot_output_dir", lambda self: tmp_path / "should_not_be_used"
+        StraditizeSession,
+        "_plot_output_dir",
+        lambda self: tmp_path / "should_not_be_used",
     )
 
     result = _session().plot_render()
@@ -308,7 +321,12 @@ def _ink_ratio(path, band=(0.0, 0.0, 1.0, 1.0)) -> float:
         width, height = gray.size
         left, top, right, bottom = band
         gray = gray.crop(
-            (int(left * width), int(top * height), int(right * width), int(bottom * height))
+            (
+                int(left * width),
+                int(top * height),
+                int(right * width),
+                int(bottom * height),
+            )
         )
         pixels = list(gray.getdata())
     dark = sum(1 for value in pixels if value < 128)
@@ -339,7 +357,10 @@ def test_cjk_labels_are_drawn_with_the_registered_font(tmp_path, monkeypatch) ->
 
     real_path = tmp_path / "cjk-real.jpeg"
     render_strat_diagram(
-        csv_path=str(csv_path), out_path=str(real_path), rscript=str(RSCRIPT), settings=size
+        csv_path=str(csv_path),
+        out_path=str(real_path),
+        rscript=str(RSCRIPT),
+        settings=size,
     )
     real_ink = _ink_ratio(real_path, label_band)
 
@@ -352,11 +373,16 @@ def test_cjk_labels_are_drawn_with_the_registered_font(tmp_path, monkeypatch) ->
     monkeypatch.setattr(strat_plot_module, "STRAT_PLOT_SCRIPT", sans_script)
     sans_path = tmp_path / "cjk-sans.jpeg"
     render_strat_diagram(
-        csv_path=str(csv_path), out_path=str(sans_path), rscript=str(RSCRIPT), settings=size
+        csv_path=str(csv_path),
+        out_path=str(sans_path),
+        rscript=str(RSCRIPT),
+        settings=size,
     )
     sans_ink = _ink_ratio(sans_path, label_band)
 
-    assert real_ink > 0.002, f"中文标签带几乎没有墨迹（{real_ink:.4f}）：标签可能没画出来"
+    assert real_ink > 0.002, (
+        f"中文标签带几乎没有墨迹（{real_ink:.4f}）：标签可能没画出来"
+    )
     # 墨迹对照在本机没有判别力：实测「真字体」与「不存在的族名」标签带墨迹几乎相同
     # （0.0529 vs 0.0524），因为 cairo 对任何族名都会回退到含中日韩字形的字体。
     # 因此这里改成结构性判据：两个设备调用必须带 family，且 font_family 指向真实字体名。
@@ -373,17 +399,18 @@ def test_cjk_labels_are_drawn_with_the_registered_font(tmp_path, monkeypatch) ->
 
 
 def test_default_settings_match_requested_switches() -> None:
-    assert DEFAULT_PLOT_SETTINGS["percent"] is True       # Style = Silhouette %
+    assert DEFAULT_PLOT_SETTINGS["percent"] is True  # Style = Silhouette %
     assert DEFAULT_PLOT_SETTINGS["silhouette"] is True
-    assert DEFAULT_PLOT_SETTINGS["bar"] is True            # show bar
-    assert DEFAULT_PLOT_SETTINGS["exaggeration"] is True   # Exaggeration Show
-    assert DEFAULT_PLOT_SETTINGS["rev_y"] is True          # Rev. Y
-    assert DEFAULT_PLOT_SETTINGS["italicise"] is True      # Label extras: Italicise
-    assert DEFAULT_PLOT_SETTINGS["label_rotate"] == 45     # Rotate 45
-    assert DEFAULT_PLOT_SETTINGS["break_long"] is True     # Break long
-    assert DEFAULT_PLOT_SETTINGS["break_n"] == 20          # 20 chars
-    assert DEFAULT_PLOT_SETTINGS["axis"] is True           # 底部刻度轴
-    assert DEFAULT_PLOT_SETTINGS["y_axis"] is None         # y 轴范围默认留空 = 自动
+    assert DEFAULT_PLOT_SETTINGS["bar"] is True  # show bar
+    assert DEFAULT_PLOT_SETTINGS["exaggeration"] is True  # Exaggeration Show
+    assert DEFAULT_PLOT_SETTINGS["rev_y"] is True  # Rev. Y
+    assert DEFAULT_PLOT_SETTINGS["italicise"] is True  # Label extras: Italicise
+    assert DEFAULT_PLOT_SETTINGS["label_rotate"] == 45  # Rotate 45
+    assert DEFAULT_PLOT_SETTINGS["break_long"] is True  # Break long
+    assert DEFAULT_PLOT_SETTINGS["break_n"] == 20  # 20 chars
+    assert DEFAULT_PLOT_SETTINGS["axis"] is True  # 底部刻度轴
+    assert DEFAULT_PLOT_SETTINGS["y_axis"] is None  # y 轴范围默认留空 = 自动
+
 
 # ---- y 轴范围三格（min / max / interval）----
 # 判据：①三项合法 → 写进 R 设置且与输入一致；②任一项非法 → 拒绝，且不产生这三项；
@@ -414,11 +441,11 @@ def test_y_axis_partial_is_ignored_with_hint() -> None:
 @pytest.mark.parametrize(
     "bad",
     [
-        {"min": 60, "max": 10, "interval": 10},   # min >= max
-        {"min": 10, "max": 10, "interval": 10},   # min == max
-        {"min": 10, "max": 60, "interval": 0},    # interval <= 0
-        {"min": 10, "max": 60, "interval": -5},   # interval < 0
-        {"min": 0, "max": 500, "interval": 1},    # 500 格 > MAX_Y_TICKS(200)
+        {"min": 60, "max": 10, "interval": 10},  # min >= max
+        {"min": 10, "max": 10, "interval": 10},  # min == max
+        {"min": 10, "max": 60, "interval": 0},  # interval <= 0
+        {"min": 10, "max": 60, "interval": -5},  # interval < 0
+        {"min": 0, "max": 500, "interval": 1},  # 500 格 > MAX_Y_TICKS(200)
         {"min": "abc", "max": 60, "interval": 10},  # 非数字
     ],
 )
@@ -438,13 +465,17 @@ def test_y_axis_empty_keeps_auto_range() -> None:
 def test_plot_render_rejects_illegal_y_axis() -> None:
     # 走 RPC 层：非法值必须当场 -32602，而不是静默回落成自动范围。
     with pytest.raises(JsonRpcError) as excinfo:
-        _session().plot_render(settings={"y_axis": {"min": 60, "max": 10, "interval": 10}})
+        _session().plot_render(
+            settings={"y_axis": {"min": 60, "max": 10, "interval": 10}}
+        )
     assert "min" in str(excinfo.value)
 
 
 @pytest.mark.skipif(RSCRIPT is None or not _has_rioja(), reason="本机没有 R + rioja")
 def test_plot_render_with_explicit_y_axis() -> None:
-    result = _session().plot_render(settings={"y_axis": {"min": 0, "max": 100, "interval": 20}})
+    result = _session().plot_render(
+        settings={"y_axis": {"min": 0, "max": 100, "interval": 20}}
+    )
 
     assert result["settings"]["y_axis"] == {"min": 0.0, "max": 100.0, "interval": 20.0}
     assert result["warnings"] == []
@@ -545,4 +576,3 @@ def test_plot_scale_mode_changes_artifact_bytes(tmp_path, fmt: str) -> None:
     assert off_path.read_bytes() != on_path.read_bytes(), (
         f"{fmt}：把 col01 设成 fixed 之后产物必须变化（字节不同即可）"
     )
-

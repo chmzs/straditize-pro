@@ -158,7 +158,9 @@ class TestRealPlatePairing:
         session._init_cleanup()
         session.load_image(image_path=REAL_PDF, page_number=5)
         session._init_rois()
-        session.roi_create(name="pollen", x0=330, x1=1330, y0=233, y1=869, composition=True)
+        session.roi_create(
+            name="pollen", x0=330, x1=1330, y0=233, y1=869, composition=True
+        )
         session.detect_columns(data_xlim=[330, 1330], data_ylim=[233, 869])
 
         n_columns = len(session.columns)

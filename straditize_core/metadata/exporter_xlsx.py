@@ -292,7 +292,9 @@ _META_ROWS: tuple[_MetaRowSpec, ...] = (
         "Quality Notes",
         "quality",
         "quality_notes",
-        default=("In-window gaps are 0.00 (true zero). Never-digitized / uncalibrated columns are EMPTY = no data, NOT zero."),
+        default=(
+            "In-window gaps are 0.00 (true zero). Never-digitized / uncalibrated columns are EMPTY = no data, NOT zero."
+        ),
         source="User",
         confidence="high",
     ),

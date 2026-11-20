@@ -79,11 +79,21 @@ def _loaded() -> StraditizeSession:
     session.control_points[0] = {300: 120.0, 400: 140.0}
     session.digitize(0, "area")
     session.line_candidates = [
-        {"id": "cand_a", "axis": "h", "x": 10.0, "status": "removed", "roi_id": roi["id"]}
+        {
+            "id": "cand_a",
+            "axis": "h",
+            "x": 10.0,
+            "status": "removed",
+            "roi_id": roi["id"],
+        }
     ]
     session.selected_candidate_ids = {"cand_a"}
-    session.exclusion_regions = [{"id": "region_a", "x0": 1.0, "x1": 2.0, "y0": 3.0, "y1": 4.0}]
-    session.line_strokes = [{"id": "stroke_a", "mode": "erase", "points": [[1, 2], [3, 4]]}]
+    session.exclusion_regions = [
+        {"id": "region_a", "x0": 1.0, "x1": 2.0, "y0": 3.0, "y1": 4.0}
+    ]
+    session.line_strokes = [
+        {"id": "stroke_a", "mode": "erase", "points": [[1, 2], [3, 4]]}
+    ]
     session.cleanup_stats = {"removed_pixels": 3}
     return session
 
@@ -148,7 +158,9 @@ def test_diagram_payload_snapshot_is_stable() -> None:
         )
         return
 
-    assert GOLDEN.exists(), f"缺少基线 {GOLDEN}；用 UPDATE_DIAGRAM_PAYLOAD_GOLDEN=1 生成"
+    assert GOLDEN.exists(), (
+        f"缺少基线 {GOLDEN}；用 UPDATE_DIAGRAM_PAYLOAD_GOLDEN=1 生成"
+    )
     expected = json.loads(GOLDEN.read_text(encoding="utf-8"))
     assert snapshot.keys() == expected.keys()
 

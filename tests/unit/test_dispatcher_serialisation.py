@@ -45,6 +45,7 @@ dispatch **真的会重入**，不是理论可能：
 `scripts/lock_probe/probe_b08_dispatcher_lock.py`（2026-11-04 已归档，见 tag `audit-2026-11-04`），
 那是投产验收用的独立脚本。）
 """
+
 from __future__ import annotations
 
 import contextlib

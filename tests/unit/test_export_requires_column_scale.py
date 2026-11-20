@@ -78,9 +78,7 @@ def test_all_columns_uncalibrated_grid_is_blank() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "dataset", ["samples", "turning_points"]
-)
+@pytest.mark.parametrize("dataset", ["samples", "turning_points"])
 def test_all_columns_uncalibrated_export_is_rejected(dataset: str) -> None:
     session = _session()
     with pytest.raises(JsonRpcError) as excinfo:
@@ -121,6 +119,7 @@ def test_samples_dataset_is_guarded_by_column_scale() -> None:
     assert "列" in message and "步骤 6" in message, message
     assert "深度标定" not in message, message
     assert excinfo.value.data["reason"] == "column_scale"
+
 
 @pytest.mark.parametrize("dataset", ["samples"])
 def test_one_calibrated_column_exports_real_values_and_blanks_the_rest(

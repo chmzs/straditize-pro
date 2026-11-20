@@ -163,4 +163,3 @@ class TestRealBenchmark:
         assert sug["xMax"] >= 1055 - 3, f"右界 {sug['xMax']} 裁掉了数据（真值 1055）"
         assert abs(sug["yMin"] - 93) <= 3, f"上沿 {sug['yMin']}，真值 93"
         assert abs(sug["yMax"] - 568) <= 3, f"下沿 {sug['yMax']}，真值 568"
-

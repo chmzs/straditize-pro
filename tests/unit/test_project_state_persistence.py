@@ -186,8 +186,14 @@ def test_primary_axis_does_not_leak_across_packages(tmp_path: Path) -> None:
     _load(dispatcher, session, pack_a)
     assert session.primary_axis == "age", "前置：A 包必须把会话设成 age"
 
-    _ok(_rpc(dispatcher, "project.new"), "清空项目（**不**复位，模拟「开着 A 包直接开 B 包」）")
-    _ok(_rpc(dispatcher, "project.load", project_data=str(pack_b)), "载入 B 包（无 primary_axis）")
+    _ok(
+        _rpc(dispatcher, "project.new"),
+        "清空项目（**不**复位，模拟「开着 A 包直接开 B 包」）",
+    )
+    _ok(
+        _rpc(dispatcher, "project.load", project_data=str(pack_b)),
+        "载入 B 包（无 primary_axis）",
+    )
 
     assert session.primary_axis == "depth", (
         "B 包没有声明 Y 轴语义，必须回到默认 depth；为 age 就是**跨包串值**——"
@@ -218,7 +224,9 @@ def test_depth_grid_survives_roundtrip_and_keeps_grid_values(tmp_path: Path) -> 
     session, dispatcher = _base_session()
     _ok(_rpc(dispatcher, "core.applyDepthGrid", depths=list(GRID)), "设置取样深度网格")
     before_depths = _grid_depths(session, dispatcher)
-    assert before_depths == GRID, f"前置：网格取值必须回显用户设的网格，实际 {before_depths}"
+    assert before_depths == GRID, (
+        f"前置：网格取值必须回显用户设的网格，实际 {before_depths}"
+    )
 
     pack = tmp_path / "grid.tar"
     _save(dispatcher, pack)

@@ -132,9 +132,7 @@ def test_calibrated_gap_is_linear_interpolation_not_zero_or_na() -> None:
         "已标定列缺行必须是该列两侧锚点的线性插值（(10+90)/2 = 50），"
         f"实得 {by_row.loc[150.0, 'col02']}；给 0 或 NA 都不符合口径"
     )
-    assert raw[150.0][2] == "NA", (
-        f"未标定列必须整列 NA（缺测），实得 {raw[150.0][2]!r}"
-    )
+    assert raw[150.0][2] == "NA", f"未标定列必须整列 NA（缺测），实得 {raw[150.0][2]!r}"
 
 
 def test_interpolation_does_not_fabricate_a_zero() -> None:
@@ -189,4 +187,3 @@ def test_uncalibrated_columns_stay_na_on_every_consensus_row() -> None:
     for depth, cells in raw.items():
         assert cells[1] == "NA", f"未标定列在第 {depth} 层必须是 NA，实得 {cells[1]!r}"
     assert raw[150.0][0] != "NA", "已标定列照常出数（对照，防「整表都 NA」也算过）"
-

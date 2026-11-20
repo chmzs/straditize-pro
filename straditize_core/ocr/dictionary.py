@@ -13,6 +13,7 @@ Sources:
    (114 genera, 金德祥 1982). See ``support/harvest_diatom_genera.py`` and
    ``data/diatom_genera.json``.
 """
+
 from __future__ import annotations
 
 import difflib
@@ -59,87 +60,348 @@ DEFAULT_POLLEN_DICT: dict[str, dict[str, str]] = {
     "落叶松属": {"latin": "Larix", "group": "针叶树木 (Conifer)", "family": "Pinaceae"},
     "雪松属": {"latin": "Cedrus", "group": "针叶树木 (Conifer)", "family": "Pinaceae"},
     "红豆杉属": {"latin": "Taxus", "group": "针叶树木 (Conifer)", "family": "Taxaceae"},
-    "柏木属": {"latin": "Cupressus", "group": "针叶树木 (Conifer)", "family": "Cupressaceae"},
-    "圆柏属": {"latin": "Sabina", "group": "针叶树木 (Conifer)", "family": "Cupressaceae"},
-    "刺柏属": {"latin": "Juniperus", "group": "针叶树木 (Conifer)", "family": "Cupressaceae"},
-    "侧柏属": {"latin": "Platycladus", "group": "针叶树木 (Conifer)", "family": "Cupressaceae"},
-    "柳杉属": {"latin": "Cryptomeria", "group": "针叶树木 (Conifer)", "family": "Cupressaceae"},
-    "水杉属": {"latin": "Metasequoia", "group": "针叶树木 (Conifer)", "family": "Cupressaceae"},
-    "银杏属": {"latin": "Ginkgo", "group": "裸子植物 (Gymnosperm)", "family": "Ginkgoaceae"},
-    "麻黄属": {"latin": "Ephedra", "group": "旱生灌木 (Shrub)", "family": "Ephedraceae"},
-    "双穗麻黄": {"latin": "Ephedra distachya", "group": "旱生灌木 (Shrub)", "family": "Ephedraceae"},
-    "双穗麻黄型": {"latin": "Ephedra distachya-type", "group": "旱生灌木 (Shrub)", "family": "Ephedraceae"},
-    "易碎麻黄": {"latin": "Ephedra fragilis", "group": "旱生灌木 (Shrub)", "family": "Ephedraceae"},
-
+    "柏木属": {
+        "latin": "Cupressus",
+        "group": "针叶树木 (Conifer)",
+        "family": "Cupressaceae",
+    },
+    "圆柏属": {
+        "latin": "Sabina",
+        "group": "针叶树木 (Conifer)",
+        "family": "Cupressaceae",
+    },
+    "刺柏属": {
+        "latin": "Juniperus",
+        "group": "针叶树木 (Conifer)",
+        "family": "Cupressaceae",
+    },
+    "侧柏属": {
+        "latin": "Platycladus",
+        "group": "针叶树木 (Conifer)",
+        "family": "Cupressaceae",
+    },
+    "柳杉属": {
+        "latin": "Cryptomeria",
+        "group": "针叶树木 (Conifer)",
+        "family": "Cupressaceae",
+    },
+    "水杉属": {
+        "latin": "Metasequoia",
+        "group": "针叶树木 (Conifer)",
+        "family": "Cupressaceae",
+    },
+    "银杏属": {
+        "latin": "Ginkgo",
+        "group": "裸子植物 (Gymnosperm)",
+        "family": "Ginkgoaceae",
+    },
+    "麻黄属": {
+        "latin": "Ephedra",
+        "group": "旱生灌木 (Shrub)",
+        "family": "Ephedraceae",
+    },
+    "双穗麻黄": {
+        "latin": "Ephedra distachya",
+        "group": "旱生灌木 (Shrub)",
+        "family": "Ephedraceae",
+    },
+    "双穗麻黄型": {
+        "latin": "Ephedra distachya-type",
+        "group": "旱生灌木 (Shrub)",
+        "family": "Ephedraceae",
+    },
+    "易碎麻黄": {
+        "latin": "Ephedra fragilis",
+        "group": "旱生灌木 (Shrub)",
+        "family": "Ephedraceae",
+    },
     # 阔叶乔木 (Broadleaved Trees)
-    "栎属": {"latin": "Quercus", "group": "阔叶乔木 (Broadleaved)", "family": "Fagaceae"},
-    "冬青栎型": {"latin": "Quercus ilex-type", "group": "常绿阔叶 (Evergreen)", "family": "Fagaceae"},
-    "栓皮栎型": {"latin": "Quercus suber-type", "group": "常绿阔叶 (Evergreen)", "family": "Fagaceae"},
-    "落叶栎": {"latin": "Quercus (deciduous)", "group": "阔叶乔木 (Broadleaved)", "family": "Fagaceae"},
-    "常绿栎": {"latin": "Quercus (evergreen)", "group": "常绿阔叶 (Evergreen)", "family": "Fagaceae"},
-    "油橄榄属": {"latin": "Olea", "group": "木本植物 (Tree/Shrub)", "family": "Oleaceae"},
-    "木犀属": {"latin": "Osmanthus", "group": "常绿阔叶 (Evergreen)", "family": "Oleaceae"},
-    "青冈属": {"latin": "Cyclobalanopsis", "group": "常绿阔叶 (Evergreen)", "family": "Fagaceae"},
-    "栗属": {"latin": "Castanea", "group": "阔叶乔木 (Broadleaved)", "family": "Fagaceae"},
-    "锥栗属": {"latin": "Castanopsis", "group": "常绿阔叶 (Evergreen)", "family": "Fagaceae"},
-    "水青冈属": {"latin": "Fagus", "group": "阔叶乔木 (Broadleaved)", "family": "Fagaceae"},
-    "桦木属": {"latin": "Betula", "group": "阔叶乔木 (Broadleaved)", "family": "Betulaceae"},
-    "桤木属": {"latin": "Alnus", "group": "阔叶乔木 (Broadleaved)", "family": "Betulaceae"},
-    "鹅耳枥属": {"latin": "Carpinus", "group": "阔叶乔木 (Broadleaved)", "family": "Betulaceae"},
-    "鹅耳枥型": {"latin": "Carpinus-type", "group": "阔叶乔木 (Broadleaved)", "family": "Betulaceae"},
+    "栎属": {
+        "latin": "Quercus",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Fagaceae",
+    },
+    "冬青栎型": {
+        "latin": "Quercus ilex-type",
+        "group": "常绿阔叶 (Evergreen)",
+        "family": "Fagaceae",
+    },
+    "栓皮栎型": {
+        "latin": "Quercus suber-type",
+        "group": "常绿阔叶 (Evergreen)",
+        "family": "Fagaceae",
+    },
+    "落叶栎": {
+        "latin": "Quercus (deciduous)",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Fagaceae",
+    },
+    "常绿栎": {
+        "latin": "Quercus (evergreen)",
+        "group": "常绿阔叶 (Evergreen)",
+        "family": "Fagaceae",
+    },
+    "油橄榄属": {
+        "latin": "Olea",
+        "group": "木本植物 (Tree/Shrub)",
+        "family": "Oleaceae",
+    },
+    "木犀属": {
+        "latin": "Osmanthus",
+        "group": "常绿阔叶 (Evergreen)",
+        "family": "Oleaceae",
+    },
+    "青冈属": {
+        "latin": "Cyclobalanopsis",
+        "group": "常绿阔叶 (Evergreen)",
+        "family": "Fagaceae",
+    },
+    "栗属": {
+        "latin": "Castanea",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Fagaceae",
+    },
+    "锥栗属": {
+        "latin": "Castanopsis",
+        "group": "常绿阔叶 (Evergreen)",
+        "family": "Fagaceae",
+    },
+    "水青冈属": {
+        "latin": "Fagus",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Fagaceae",
+    },
+    "桦木属": {
+        "latin": "Betula",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Betulaceae",
+    },
+    "桤木属": {
+        "latin": "Alnus",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Betulaceae",
+    },
+    "鹅耳枥属": {
+        "latin": "Carpinus",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Betulaceae",
+    },
+    "鹅耳枥型": {
+        "latin": "Carpinus-type",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Betulaceae",
+    },
     "榛属": {"latin": "Corylus", "group": "落叶灌木/乔木", "family": "Betulaceae"},
-    "铁木属": {"latin": "Ostrya", "group": "阔叶乔木 (Broadleaved)", "family": "Betulaceae"},
-    "胡桃属": {"latin": "Juglans", "group": "阔叶乔木 (Broadleaved)", "family": "Juglandaceae"},
-    "枫杨属": {"latin": "Pterocarya", "group": "阔叶乔木 (Broadleaved)", "family": "Juglandaceae"},
-    "山核桃属": {"latin": "Carya", "group": "阔叶乔木 (Broadleaved)", "family": "Juglandaceae"},
+    "铁木属": {
+        "latin": "Ostrya",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Betulaceae",
+    },
+    "胡桃属": {
+        "latin": "Juglans",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Juglandaceae",
+    },
+    "枫杨属": {
+        "latin": "Pterocarya",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Juglandaceae",
+    },
+    "山核桃属": {
+        "latin": "Carya",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Juglandaceae",
+    },
     "榆属": {"latin": "Ulmus", "group": "阔叶乔木 (Broadleaved)", "family": "Ulmaceae"},
-    "朴属": {"latin": "Celtis", "group": "阔叶乔木 (Broadleaved)", "family": "Cannabaceae"},
-    "榉属": {"latin": "Zelkova", "group": "阔叶乔木 (Broadleaved)", "family": "Ulmaceae"},
-    "椴树属": {"latin": "Tilia", "group": "阔叶乔木 (Broadleaved)", "family": "Malvaceae"},
-    "柳属": {"latin": "Salix", "group": "灌木/乔木 (Shrub/Tree)", "family": "Salicaceae"},
-    "杨属": {"latin": "Populus", "group": "阔叶乔木 (Broadleaved)", "family": "Salicaceae"},
-    "枫香树属": {"latin": "Liquidambar", "group": "阔叶乔木 (Broadleaved)", "family": "Altingiaceae"},
-    "槭树属": {"latin": "Acer", "group": "阔叶乔木 (Broadleaved)", "family": "Sapindaceae"},
-    "梣属": {"latin": "Fraxinus", "group": "阔叶乔木 (Broadleaved)", "family": "Oleaceae"},
+    "朴属": {
+        "latin": "Celtis",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Cannabaceae",
+    },
+    "榉属": {
+        "latin": "Zelkova",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Ulmaceae",
+    },
+    "椴树属": {
+        "latin": "Tilia",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Malvaceae",
+    },
+    "柳属": {
+        "latin": "Salix",
+        "group": "灌木/乔木 (Shrub/Tree)",
+        "family": "Salicaceae",
+    },
+    "杨属": {
+        "latin": "Populus",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Salicaceae",
+    },
+    "枫香树属": {
+        "latin": "Liquidambar",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Altingiaceae",
+    },
+    "槭树属": {
+        "latin": "Acer",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Sapindaceae",
+    },
+    "梣属": {
+        "latin": "Fraxinus",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Oleaceae",
+    },
     "女贞属": {"latin": "Ligustrum", "group": "灌木 (Shrub)", "family": "Oleaceae"},
-    "悬铃木属": {"latin": "Platanus", "group": "阔叶乔木 (Broadleaved)", "family": "Platanaceae"},
-
+    "悬铃木属": {
+        "latin": "Platanus",
+        "group": "阔叶乔木 (Broadleaved)",
+        "family": "Platanaceae",
+    },
     # 灌木 (Shrubs)
-    "杜鹃花科": {"latin": "Ericaceae", "group": "酸性灌丛 (Shrub)", "family": "Ericaceae"},
-    "木贼麻黄": {"latin": "Ephedra equisetina", "group": "旱生灌木 (Shrub)", "family": "Ephedraceae"},
-    "沙棘属": {"latin": "Hippophae", "group": "落叶灌木 (Shrub)", "family": "Elaeagnaceae"},
-    "胡颓子属": {"latin": "Elaeagnus", "group": "灌木 (Shrub)", "family": "Elaeagnaceae"},
-    "白刺属": {"latin": "Nitraria", "group": "荒漠灌木 (Shrub)", "family": "Nitrariaceae"},
-    "柽柳属": {"latin": "Tamarix", "group": "荒漠灌木 (Shrub)", "family": "Tamaricaceae"},
+    "杜鹃花科": {
+        "latin": "Ericaceae",
+        "group": "酸性灌丛 (Shrub)",
+        "family": "Ericaceae",
+    },
+    "木贼麻黄": {
+        "latin": "Ephedra equisetina",
+        "group": "旱生灌木 (Shrub)",
+        "family": "Ephedraceae",
+    },
+    "沙棘属": {
+        "latin": "Hippophae",
+        "group": "落叶灌木 (Shrub)",
+        "family": "Elaeagnaceae",
+    },
+    "胡颓子属": {
+        "latin": "Elaeagnus",
+        "group": "灌木 (Shrub)",
+        "family": "Elaeagnaceae",
+    },
+    "白刺属": {
+        "latin": "Nitraria",
+        "group": "荒漠灌木 (Shrub)",
+        "family": "Nitrariaceae",
+    },
+    "柽柳属": {
+        "latin": "Tamarix",
+        "group": "荒漠灌木 (Shrub)",
+        "family": "Tamaricaceae",
+    },
     "绣线菊属": {"latin": "Spiraea", "group": "灌木 (Shrub)", "family": "Rosaceae"},
     "蔷薇科": {"latin": "Rosaceae", "group": "灌木/草本", "family": "Rosaceae"},
-
     # --- 草本植物 (Non-Arboreal Pollen - NAP) ---
     "蒿属": {"latin": "Artemisia", "group": "草本植物 (Herb)", "family": "Asteraceae"},
-    "春黄菊型": {"latin": "Anthemis-type", "group": "草本植物 (Herb)", "family": "Asteraceae"},
-    "薄荷型": {"latin": "Mentha-type", "group": "草本植物 (Herb)", "family": "Lamiaceae"},
-    "蚊子草属": {"latin": "Filipendula", "group": "草本植物 (Herb)", "family": "Rosaceae"},
-    "藜科": {"latin": "Chenopodiaceae", "group": "草本植物 (Herb)", "family": "Amaranthaceae"},
-    "苋科": {"latin": "Amaranthaceae", "group": "草本植物 (Herb)", "family": "Amaranthaceae"},
+    "春黄菊型": {
+        "latin": "Anthemis-type",
+        "group": "草本植物 (Herb)",
+        "family": "Asteraceae",
+    },
+    "薄荷型": {
+        "latin": "Mentha-type",
+        "group": "草本植物 (Herb)",
+        "family": "Lamiaceae",
+    },
+    "蚊子草属": {
+        "latin": "Filipendula",
+        "group": "草本植物 (Herb)",
+        "family": "Rosaceae",
+    },
+    "藜科": {
+        "latin": "Chenopodiaceae",
+        "group": "草本植物 (Herb)",
+        "family": "Amaranthaceae",
+    },
+    "苋科": {
+        "latin": "Amaranthaceae",
+        "group": "草本植物 (Herb)",
+        "family": "Amaranthaceae",
+    },
     "禾本科": {"latin": "Poaceae", "group": "草本植物 (Herb)", "family": "Poaceae"},
-    "禾本科<40um": {"latin": "Gramineae <40um", "group": "草本植物 (Herb)", "family": "Poaceae"},
-    "禾本科>40<50um": {"latin": "Gramineae >40<50um", "group": "禾谷类农作物", "family": "Poaceae"},
-    "禾本科>50<60um": {"latin": "Gramineae >50<60um", "group": "禾谷类农作物", "family": "Poaceae"},
-    "禾本科>60um": {"latin": "Gramineae >60um", "group": "禾谷类农作物", "family": "Poaceae"},
-    "莎草科": {"latin": "Cyperaceae", "group": "湿生草本 (Wetland)", "family": "Cyperaceae"},
+    "禾本科<40um": {
+        "latin": "Gramineae <40um",
+        "group": "草本植物 (Herb)",
+        "family": "Poaceae",
+    },
+    "禾本科>40<50um": {
+        "latin": "Gramineae >40<50um",
+        "group": "禾谷类农作物",
+        "family": "Poaceae",
+    },
+    "禾本科>50<60um": {
+        "latin": "Gramineae >50<60um",
+        "group": "禾谷类农作物",
+        "family": "Poaceae",
+    },
+    "禾本科>60um": {
+        "latin": "Gramineae >60um",
+        "group": "禾谷类农作物",
+        "family": "Poaceae",
+    },
+    "莎草科": {
+        "latin": "Cyperaceae",
+        "group": "湿生草本 (Wetland)",
+        "family": "Cyperaceae",
+    },
     "菊科": {"latin": "Asteraceae", "group": "草本植物 (Herb)", "family": "Asteraceae"},
-    "蒲公英属": {"latin": "Taraxacum", "group": "草本植物 (Herb)", "family": "Asteraceae"},
-    "舌状花亚科": {"latin": "Liguliflorae", "group": "菊科舌状花", "family": "Asteraceae"},
-    "管状花亚科": {"latin": "Asteroideae", "group": "草本植物 (Herb)", "family": "Asteraceae"},
-    "蓼属": {"latin": "Polygonum", "group": "草本植物 (Herb)", "family": "Polygonaceae"},
+    "蒲公英属": {
+        "latin": "Taraxacum",
+        "group": "草本植物 (Herb)",
+        "family": "Asteraceae",
+    },
+    "舌状花亚科": {
+        "latin": "Liguliflorae",
+        "group": "菊科舌状花",
+        "family": "Asteraceae",
+    },
+    "管状花亚科": {
+        "latin": "Asteroideae",
+        "group": "草本植物 (Herb)",
+        "family": "Asteraceae",
+    },
+    "蓼属": {
+        "latin": "Polygonum",
+        "group": "草本植物 (Herb)",
+        "family": "Polygonaceae",
+    },
     "大黄属": {"latin": "Rheum", "group": "草本植物 (Herb)", "family": "Polygonaceae"},
-    "车前属": {"latin": "Plantago", "group": "杂草伴人 (Weed)", "family": "Plantaginaceae"},
-    "车前草型": {"latin": "Plantago coronopus", "group": "杂草伴人 (Weed)", "family": "Plantaginaceae"},
-    "长叶车前": {"latin": "Plantago lanceolata", "group": "杂草伴人 (Weed)", "family": "Plantaginaceae"},
-    "毛茛科": {"latin": "Ranunculaceae", "group": "草本植物 (Herb)", "family": "Ranunculaceae"},
-    "唐松草属": {"latin": "Thalictrum", "group": "草本植物 (Herb)", "family": "Ranunculaceae"},
-    "十字花科": {"latin": "Brassicaceae", "group": "草本植物 (Herb)", "family": "Brassicaceae"},
-    "石竹科": {"latin": "Caryophyllaceae", "group": "草本植物 (Herb)", "family": "Caryophyllaceae"},
+    "车前属": {
+        "latin": "Plantago",
+        "group": "杂草伴人 (Weed)",
+        "family": "Plantaginaceae",
+    },
+    "车前草型": {
+        "latin": "Plantago coronopus",
+        "group": "杂草伴人 (Weed)",
+        "family": "Plantaginaceae",
+    },
+    "长叶车前": {
+        "latin": "Plantago lanceolata",
+        "group": "杂草伴人 (Weed)",
+        "family": "Plantaginaceae",
+    },
+    "毛茛科": {
+        "latin": "Ranunculaceae",
+        "group": "草本植物 (Herb)",
+        "family": "Ranunculaceae",
+    },
+    "唐松草属": {
+        "latin": "Thalictrum",
+        "group": "草本植物 (Herb)",
+        "family": "Ranunculaceae",
+    },
+    "十字花科": {
+        "latin": "Brassicaceae",
+        "group": "草本植物 (Herb)",
+        "family": "Brassicaceae",
+    },
+    "石竹科": {
+        "latin": "Caryophyllaceae",
+        "group": "草本植物 (Herb)",
+        "family": "Caryophyllaceae",
+    },
     "伞形科": {"latin": "Apiaceae", "group": "草本植物 (Herb)", "family": "Apiaceae"},
     "唇形科": {"latin": "Lamiaceae", "group": "草本植物 (Herb)", "family": "Lamiaceae"},
     "豆科": {"latin": "Fabaceae", "group": "草本植物 (Herb)", "family": "Fabaceae"},
@@ -149,17 +411,52 @@ DEFAULT_POLLEN_DICT: dict[str, dict[str, str]] = {
     "啤酒花属": {"latin": "Humulus", "group": "经济藤本植物", "family": "Cannabaceae"},
     "香蒲属": {"latin": "Typha", "group": "水生草本 (Aquatic)", "family": "Typhaceae"},
     "水生植物": {"latin": "Aquatics", "group": "湿地生态", "family": "Mixed"},
-    "狐尾藻属": {"latin": "Myriophyllum", "group": "沉水草本 (Aquatic)", "family": "Haloragaceae"},
-
+    "狐尾藻属": {
+        "latin": "Myriophyllum",
+        "group": "沉水草本 (Aquatic)",
+        "family": "Haloragaceae",
+    },
     # --- 蕨类孢子与微体指标 ---
-    "水龙骨科": {"latin": "Polypodiaceae", "group": "蕨类孢子 (Fern)", "family": "Polypodiaceae"},
-    "蕨属": {"latin": "Pteridium", "group": "蕨类孢子 (Fern)", "family": "Dennstaedtiaceae"},
-    "凤尾蕨属": {"latin": "Pteris", "group": "蕨类孢子 (Fern)", "family": "Pteridaceae"},
+    "水龙骨科": {
+        "latin": "Polypodiaceae",
+        "group": "蕨类孢子 (Fern)",
+        "family": "Polypodiaceae",
+    },
+    "蕨属": {
+        "latin": "Pteridium",
+        "group": "蕨类孢子 (Fern)",
+        "family": "Dennstaedtiaceae",
+    },
+    "凤尾蕨属": {
+        "latin": "Pteris",
+        "group": "蕨类孢子 (Fern)",
+        "family": "Pteridaceae",
+    },
     "真蕨纲": {"latin": "Filicales", "group": "蕨类孢子 (Fern)", "family": "Filicales"},
-    "炭屑": {"latin": "Charcoal", "group": "火事件/微体指标", "family": "Proxy", "cls": "npp"},
-    "微炭屑": {"latin": "Micro-charcoal", "group": "火环境指标", "family": "Proxy", "cls": "npp"},
-    "花粉浓度": {"latin": "Pollen Concentration", "group": "沉积通量指标", "family": "Metric", "cls": "metric"},
-    "花粉总数": {"latin": "Total Pollen Sum", "group": "统计基数", "family": "Metric", "cls": "metric"},
+    "炭屑": {
+        "latin": "Charcoal",
+        "group": "火事件/微体指标",
+        "family": "Proxy",
+        "cls": "npp",
+    },
+    "微炭屑": {
+        "latin": "Micro-charcoal",
+        "group": "火环境指标",
+        "family": "Proxy",
+        "cls": "npp",
+    },
+    "花粉浓度": {
+        "latin": "Pollen Concentration",
+        "group": "沉积通量指标",
+        "family": "Metric",
+        "cls": "metric",
+    },
+    "花粉总数": {
+        "latin": "Total Pollen Sum",
+        "group": "统计基数",
+        "family": "Metric",
+        "cls": "metric",
+    },
 }
 
 
@@ -169,102 +466,429 @@ DEFAULT_POLLEN_DICT: dict[str, dict[str, str]] = {
 # ==============================================================================
 DEFAULT_NPP_DICT: dict[str, dict[str, str]] = {
     # --- 绿藻类 (Green algae / Chlorophyta) ---
-    "盘星藻属": {"latin": "Pediastrum", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "盘星藻": {"latin": "Pediastrum boryanum", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
+    "盘星藻属": {
+        "latin": "Pediastrum",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "盘星藻": {
+        "latin": "Pediastrum boryanum",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
     # 盘星藻种下分类单元 (Pediastrum infraspecific taxa) —— 中国与蒙古西部湖泊/水库
     # 表层沉积物常见类群，按图版 I / 图版 II 收录。
-    "简单盘星藻": {"latin": "Pediastrum simplex var. simplex", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "斯图姆简单盘星藻": {"latin": "Pediastrum simplex var. sturmmi", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "格栅简单盘星藻": {"latin": "Pediastrum simplex var. clathratum", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "琵琶简单盘星藻": {"latin": "Pediastrum simplex var. biwaense", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "刺简单盘星藻": {"latin": "Pediastrum simplex var. echinulatum", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "二角盘星藻": {"latin": "Pediastrum duplex var. duplex", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "纤细二角盘星藻": {"latin": "Pediastrum duplex var. gracillim", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "皱褶二角盘星藻": {"latin": "Pediastrum duplex var. rugulosum", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "四角盘星藻": {"latin": "Pediastrum tetras", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
+    "简单盘星藻": {
+        "latin": "Pediastrum simplex var. simplex",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "斯图姆简单盘星藻": {
+        "latin": "Pediastrum simplex var. sturmmi",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "格栅简单盘星藻": {
+        "latin": "Pediastrum simplex var. clathratum",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "琵琶简单盘星藻": {
+        "latin": "Pediastrum simplex var. biwaense",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "刺简单盘星藻": {
+        "latin": "Pediastrum simplex var. echinulatum",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "二角盘星藻": {
+        "latin": "Pediastrum duplex var. duplex",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "纤细二角盘星藻": {
+        "latin": "Pediastrum duplex var. gracillim",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "皱褶二角盘星藻": {
+        "latin": "Pediastrum duplex var. rugulosum",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "四角盘星藻": {
+        "latin": "Pediastrum tetras",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
     # 图版 II：boryanum 复合体及其余常见盘星藻分类单元
-    "博里盘星藻": {"latin": "Pediastrum boryanum var. boryanum", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "长角博里盘星藻型1": {"latin": "Pediastrum boryanum var. longicorne type 1", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "长角博里盘星藻型2": {"latin": "Pediastrum boryanum var. longicorne type 2", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "阿根廷盘星藻相似种": {"latin": "Pediastrum cf. argentinense", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "交替盘星藻": {"latin": "Pediastrum alternans", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "短角博里盘星藻": {"latin": "Pediastrum boryanum var. brevicorne", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "卡氏盘星藻": {"latin": "Pediastrum kawraiskyi", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "角状盘星藻": {"latin": "Pediastrum angulosum var. angulosum", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "不对称盘星藻": {"latin": "Pediastrum asymmetricum", "group": "绿藻类 (Green algae / NPP)", "family": "Hydrodictyaceae"},
-    "葡萄藻属": {"latin": "Botryococcus", "group": "绿藻类 (Green algae / NPP)", "family": "Botryococcaceae"},
-    "葡萄藻": {"latin": "Botryococcus braunii", "group": "绿藻类 (Green algae / NPP)", "family": "Botryococcaceae"},
-    "双星藻属": {"latin": "Zygnema", "group": "绿藻类 (Green algae / NPP)", "family": "Zygnemataceae"},
-    "双星藻型": {"latin": "Zygnema-type", "group": "绿藻类 (Green algae / NPP)", "family": "Zygnemataceae"},
-    "水绵属": {"latin": "Spirogyra", "group": "绿藻类 (Green algae / NPP)", "family": "Zygnemataceae"},
-    "转板藻属": {"latin": "Mougeotia", "group": "绿藻类 (Green algae / NPP)", "family": "Zygnemataceae"},
-    "鼓藻属": {"latin": "Cosmarium", "group": "绿藻类 (Green algae / NPP)", "family": "Desmidiaceae"},
-    "角星鼓藻属": {"latin": "Staurastrum", "group": "绿藻类 (Green algae / NPP)", "family": "Desmidiaceae"},
-    "栅藻属": {"latin": "Scenedesmus", "group": "绿藻类 (Green algae / NPP)", "family": "Scenedesmaceae"},
-    "绿藻类": {"latin": "Green algae", "group": "绿藻类 (Green algae / NPP)", "family": "Chlorophyta"},
-
+    "博里盘星藻": {
+        "latin": "Pediastrum boryanum var. boryanum",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "长角博里盘星藻型1": {
+        "latin": "Pediastrum boryanum var. longicorne type 1",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "长角博里盘星藻型2": {
+        "latin": "Pediastrum boryanum var. longicorne type 2",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "阿根廷盘星藻相似种": {
+        "latin": "Pediastrum cf. argentinense",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "交替盘星藻": {
+        "latin": "Pediastrum alternans",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "短角博里盘星藻": {
+        "latin": "Pediastrum boryanum var. brevicorne",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "卡氏盘星藻": {
+        "latin": "Pediastrum kawraiskyi",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "角状盘星藻": {
+        "latin": "Pediastrum angulosum var. angulosum",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "不对称盘星藻": {
+        "latin": "Pediastrum asymmetricum",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Hydrodictyaceae",
+    },
+    "葡萄藻属": {
+        "latin": "Botryococcus",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Botryococcaceae",
+    },
+    "葡萄藻": {
+        "latin": "Botryococcus braunii",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Botryococcaceae",
+    },
+    "双星藻属": {
+        "latin": "Zygnema",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Zygnemataceae",
+    },
+    "双星藻型": {
+        "latin": "Zygnema-type",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Zygnemataceae",
+    },
+    "水绵属": {
+        "latin": "Spirogyra",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Zygnemataceae",
+    },
+    "转板藻属": {
+        "latin": "Mougeotia",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Zygnemataceae",
+    },
+    "鼓藻属": {
+        "latin": "Cosmarium",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Desmidiaceae",
+    },
+    "角星鼓藻属": {
+        "latin": "Staurastrum",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Desmidiaceae",
+    },
+    "栅藻属": {
+        "latin": "Scenedesmus",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Scenedesmaceae",
+    },
+    "绿藻类": {
+        "latin": "Green algae",
+        "group": "绿藻类 (Green algae / NPP)",
+        "family": "Chlorophyta",
+    },
     # --- 硅藻类 (Diatoms / Bacillariophyta) ---
-    "硅藻": {"latin": "Diatom", "group": "硅藻类 (Diatom / NPP)", "family": "Bacillariophyta"},
-    "硅藻类": {"latin": "Diatoms", "group": "硅藻类 (Diatom / NPP)", "family": "Bacillariophyta"},
-    "硅藻壳体": {"latin": "Diatom frustule", "group": "硅藻类 (Diatom / NPP)", "family": "Bacillariophyta"},
-    "直链藻属": {"latin": "Melosira", "group": "硅藻类 (Diatom / NPP)", "family": "Melosiraceae"},
-    "小环藻属": {"latin": "Cyclotella", "group": "硅藻类 (Diatom / NPP)", "family": "Stephanodiscaceae"},
-    "舟形藻属": {"latin": "Navicula", "group": "硅藻类 (Diatom / NPP)", "family": "Naviculaceae"},
-    "羽纹藻属": {"latin": "Pinnularia", "group": "硅藻类 (Diatom / NPP)", "family": "Pinnulariaceae"},
-    "桥弯藻属": {"latin": "Cymbella", "group": "硅藻类 (Diatom / NPP)", "family": "Cymbellaceae"},
-    "脆杆藻属": {"latin": "Fragilaria", "group": "硅藻类 (Diatom / NPP)", "family": "Fragilariaceae"},
-    "星杆藻属": {"latin": "Asterionella", "group": "硅藻类 (Diatom / NPP)", "family": "Fragilariaceae"},
-    "针杆藻属": {"latin": "Synedra", "group": "硅藻类 (Diatom / NPP)", "family": "Fragilariaceae"},
-    "平板藻属": {"latin": "Tabellaria", "group": "硅藻类 (Diatom / NPP)", "family": "Tabellariaceae"},
-    "异极藻属": {"latin": "Gomphonema", "group": "硅藻类 (Diatom / NPP)", "family": "Gomphonemataceae"},
-    "菱形藻属": {"latin": "Nitzschia", "group": "硅藻类 (Diatom / NPP)", "family": "Bacillariaceae"},
-    "圆筛藻属": {"latin": "Coscinodiscus", "group": "硅藻类 (Diatom / NPP)", "family": "Coscinodiscaceae"},
-
+    "硅藻": {
+        "latin": "Diatom",
+        "group": "硅藻类 (Diatom / NPP)",
+        "family": "Bacillariophyta",
+    },
+    "硅藻类": {
+        "latin": "Diatoms",
+        "group": "硅藻类 (Diatom / NPP)",
+        "family": "Bacillariophyta",
+    },
+    "硅藻壳体": {
+        "latin": "Diatom frustule",
+        "group": "硅藻类 (Diatom / NPP)",
+        "family": "Bacillariophyta",
+    },
+    "直链藻属": {
+        "latin": "Melosira",
+        "group": "硅藻类 (Diatom / NPP)",
+        "family": "Melosiraceae",
+    },
+    "小环藻属": {
+        "latin": "Cyclotella",
+        "group": "硅藻类 (Diatom / NPP)",
+        "family": "Stephanodiscaceae",
+    },
+    "舟形藻属": {
+        "latin": "Navicula",
+        "group": "硅藻类 (Diatom / NPP)",
+        "family": "Naviculaceae",
+    },
+    "羽纹藻属": {
+        "latin": "Pinnularia",
+        "group": "硅藻类 (Diatom / NPP)",
+        "family": "Pinnulariaceae",
+    },
+    "桥弯藻属": {
+        "latin": "Cymbella",
+        "group": "硅藻类 (Diatom / NPP)",
+        "family": "Cymbellaceae",
+    },
+    "脆杆藻属": {
+        "latin": "Fragilaria",
+        "group": "硅藻类 (Diatom / NPP)",
+        "family": "Fragilariaceae",
+    },
+    "星杆藻属": {
+        "latin": "Asterionella",
+        "group": "硅藻类 (Diatom / NPP)",
+        "family": "Fragilariaceae",
+    },
+    "针杆藻属": {
+        "latin": "Synedra",
+        "group": "硅藻类 (Diatom / NPP)",
+        "family": "Fragilariaceae",
+    },
+    "平板藻属": {
+        "latin": "Tabellaria",
+        "group": "硅藻类 (Diatom / NPP)",
+        "family": "Tabellariaceae",
+    },
+    "异极藻属": {
+        "latin": "Gomphonema",
+        "group": "硅藻类 (Diatom / NPP)",
+        "family": "Gomphonemataceae",
+    },
+    "菱形藻属": {
+        "latin": "Nitzschia",
+        "group": "硅藻类 (Diatom / NPP)",
+        "family": "Bacillariaceae",
+    },
+    "圆筛藻属": {
+        "latin": "Coscinodiscus",
+        "group": "硅藻类 (Diatom / NPP)",
+        "family": "Coscinodiscaceae",
+    },
     # --- 摇蚊 (Chironomidae) ---
-    "摇蚊": {"latin": "Chironomidae", "group": "摇蚊 (Chironomid / NPP)", "family": "Chironomidae"},
-    "摇蚊头壳": {"latin": "Chironomid head capsule", "group": "摇蚊 (Chironomid / NPP)", "family": "Chironomidae"},
-    "摇蚊幼虫": {"latin": "Chironomid larva", "group": "摇蚊 (Chironomid / NPP)", "family": "Chironomidae"},
-    "摇蚊属": {"latin": "Chironomus", "group": "摇蚊 (Chironomid / NPP)", "family": "Chironomidae"},
-    "直突摇蚊属": {"latin": "Orthocladius", "group": "摇蚊 (Chironomid / NPP)", "family": "Chironomidae"},
-
+    "摇蚊": {
+        "latin": "Chironomidae",
+        "group": "摇蚊 (Chironomid / NPP)",
+        "family": "Chironomidae",
+    },
+    "摇蚊头壳": {
+        "latin": "Chironomid head capsule",
+        "group": "摇蚊 (Chironomid / NPP)",
+        "family": "Chironomidae",
+    },
+    "摇蚊幼虫": {
+        "latin": "Chironomid larva",
+        "group": "摇蚊 (Chironomid / NPP)",
+        "family": "Chironomidae",
+    },
+    "摇蚊属": {
+        "latin": "Chironomus",
+        "group": "摇蚊 (Chironomid / NPP)",
+        "family": "Chironomidae",
+    },
+    "直突摇蚊属": {
+        "latin": "Orthocladius",
+        "group": "摇蚊 (Chironomid / NPP)",
+        "family": "Chironomidae",
+    },
     # --- 介形虫 (Ostracoda) ---
-    "介形虫": {"latin": "Ostracoda", "group": "介形虫 (Ostracod / NPP)", "family": "Ostracoda"},
-    "介形类": {"latin": "Ostracod", "group": "介形虫 (Ostracod / NPP)", "family": "Ostracoda"},
-    "介形虫壳体": {"latin": "Ostracod valve", "group": "介形虫 (Ostracod / NPP)", "family": "Ostracoda"},
-    "土星介属": {"latin": "Ilyocypris", "group": "介形虫 (Ostracod / NPP)", "family": "Ilyocyprididae"},
-    "玻璃介属": {"latin": "Candona", "group": "介形虫 (Ostracod / NPP)", "family": "Candonidae"},
-    "真星介属": {"latin": "Eucypris", "group": "介形虫 (Ostracod / NPP)", "family": "Cyprididae"},
-    "湖花介属": {"latin": "Limnocythere", "group": "介形虫 (Ostracod / NPP)", "family": "Limnocytheridae"},
-    "白花介属": {"latin": "Leucocythere", "group": "介形虫 (Ostracod / NPP)", "family": "Limnocytheridae"},
-    "达尔文介属": {"latin": "Darwinula", "group": "介形虫 (Ostracod / NPP)", "family": "Darwinulidae"},
-    "小玻璃介属": {"latin": "Candoniella", "group": "介形虫 (Ostracod / NPP)", "family": "Candonidae"},
-
+    "介形虫": {
+        "latin": "Ostracoda",
+        "group": "介形虫 (Ostracod / NPP)",
+        "family": "Ostracoda",
+    },
+    "介形类": {
+        "latin": "Ostracod",
+        "group": "介形虫 (Ostracod / NPP)",
+        "family": "Ostracoda",
+    },
+    "介形虫壳体": {
+        "latin": "Ostracod valve",
+        "group": "介形虫 (Ostracod / NPP)",
+        "family": "Ostracoda",
+    },
+    "土星介属": {
+        "latin": "Ilyocypris",
+        "group": "介形虫 (Ostracod / NPP)",
+        "family": "Ilyocyprididae",
+    },
+    "玻璃介属": {
+        "latin": "Candona",
+        "group": "介形虫 (Ostracod / NPP)",
+        "family": "Candonidae",
+    },
+    "真星介属": {
+        "latin": "Eucypris",
+        "group": "介形虫 (Ostracod / NPP)",
+        "family": "Cyprididae",
+    },
+    "湖花介属": {
+        "latin": "Limnocythere",
+        "group": "介形虫 (Ostracod / NPP)",
+        "family": "Limnocytheridae",
+    },
+    "白花介属": {
+        "latin": "Leucocythere",
+        "group": "介形虫 (Ostracod / NPP)",
+        "family": "Limnocytheridae",
+    },
+    "达尔文介属": {
+        "latin": "Darwinula",
+        "group": "介形虫 (Ostracod / NPP)",
+        "family": "Darwinulidae",
+    },
+    "小玻璃介属": {
+        "latin": "Candoniella",
+        "group": "介形虫 (Ostracod / NPP)",
+        "family": "Candonidae",
+    },
     # --- 粪生真菌孢子 (Coprophilous fungal spores) ---
-    "粪生菌孢": {"latin": "Coprophilous fungal spore", "group": "粪生真菌孢子 (Coprophilous fungi / NPP)", "family": "Fungi"},
-    "粪生真菌孢子": {"latin": "Coprophilous fungi", "group": "粪生真菌孢子 (Coprophilous fungi / NPP)", "family": "Fungi"},
-    "粪球壳孢": {"latin": "Sporormiella", "group": "粪生真菌孢子 (Coprophilous fungi / NPP)", "family": "Sporormiaceae"},
-    "粪球壳孢型": {"latin": "Sporormiella-type", "group": "粪生真菌孢子 (Coprophilous fungi / NPP)", "family": "Sporormiaceae"},
-    "粪壳科": {"latin": "Sordariaceae", "group": "粪生真菌孢子 (Coprophilous fungi / NPP)", "family": "Sordariaceae"},
-    "粪壳属": {"latin": "Sordaria", "group": "粪生真菌孢子 (Coprophilous fungi / NPP)", "family": "Sordariaceae"},
-    "粪盘菌属": {"latin": "Cercophora", "group": "粪生真菌孢子 (Coprophilous fungi / NPP)", "family": "Lasiosphaeriaceae"},
-    "三角孢属": {"latin": "Delitschia", "group": "粪生真菌孢子 (Coprophilous fungi / NPP)", "family": "Delitschiaceae"},
-    "黑团壳孢": {"latin": "Podospora", "group": "粪生真菌孢子 (Coprophilous fungi / NPP)", "family": "Lasiosphaeriaceae"},
-    "毛球壳孢": {"latin": "Chaetomium", "group": "粪生真菌孢子 (Coprophilous fungi / NPP)", "family": "Chaetomiaceae"},
-    "炭角菌属": {"latin": "Xylaria", "group": "粪生真菌孢子 (Coprophilous fungi / NPP)", "family": "Xylariaceae"},
-    "轮层炭壳属": {"latin": "Daldinia", "group": "粪生真菌孢子 (Coprophilous fungi / NPP)", "family": "Hypoxylaceae"},
-    "皱球壳孢": {"latin": "Coniochaeta", "group": "粪生真菌孢子 (Coprophilous fungi / NPP)", "family": "Coniochaetaceae"},
-    "炭质真菌孢子": {"latin": "Carbonicolous fungal spore", "group": "粪生真菌孢子 (Coprophilous fungi / NPP)", "family": "Fungi"},
-
+    "粪生菌孢": {
+        "latin": "Coprophilous fungal spore",
+        "group": "粪生真菌孢子 (Coprophilous fungi / NPP)",
+        "family": "Fungi",
+    },
+    "粪生真菌孢子": {
+        "latin": "Coprophilous fungi",
+        "group": "粪生真菌孢子 (Coprophilous fungi / NPP)",
+        "family": "Fungi",
+    },
+    "粪球壳孢": {
+        "latin": "Sporormiella",
+        "group": "粪生真菌孢子 (Coprophilous fungi / NPP)",
+        "family": "Sporormiaceae",
+    },
+    "粪球壳孢型": {
+        "latin": "Sporormiella-type",
+        "group": "粪生真菌孢子 (Coprophilous fungi / NPP)",
+        "family": "Sporormiaceae",
+    },
+    "粪壳科": {
+        "latin": "Sordariaceae",
+        "group": "粪生真菌孢子 (Coprophilous fungi / NPP)",
+        "family": "Sordariaceae",
+    },
+    "粪壳属": {
+        "latin": "Sordaria",
+        "group": "粪生真菌孢子 (Coprophilous fungi / NPP)",
+        "family": "Sordariaceae",
+    },
+    "粪盘菌属": {
+        "latin": "Cercophora",
+        "group": "粪生真菌孢子 (Coprophilous fungi / NPP)",
+        "family": "Lasiosphaeriaceae",
+    },
+    "三角孢属": {
+        "latin": "Delitschia",
+        "group": "粪生真菌孢子 (Coprophilous fungi / NPP)",
+        "family": "Delitschiaceae",
+    },
+    "黑团壳孢": {
+        "latin": "Podospora",
+        "group": "粪生真菌孢子 (Coprophilous fungi / NPP)",
+        "family": "Lasiosphaeriaceae",
+    },
+    "毛球壳孢": {
+        "latin": "Chaetomium",
+        "group": "粪生真菌孢子 (Coprophilous fungi / NPP)",
+        "family": "Chaetomiaceae",
+    },
+    "炭角菌属": {
+        "latin": "Xylaria",
+        "group": "粪生真菌孢子 (Coprophilous fungi / NPP)",
+        "family": "Xylariaceae",
+    },
+    "轮层炭壳属": {
+        "latin": "Daldinia",
+        "group": "粪生真菌孢子 (Coprophilous fungi / NPP)",
+        "family": "Hypoxylaceae",
+    },
+    "皱球壳孢": {
+        "latin": "Coniochaeta",
+        "group": "粪生真菌孢子 (Coprophilous fungi / NPP)",
+        "family": "Coniochaetaceae",
+    },
+    "炭质真菌孢子": {
+        "latin": "Carbonicolous fungal spore",
+        "group": "粪生真菌孢子 (Coprophilous fungi / NPP)",
+        "family": "Fungi",
+    },
     # --- 其他微体指标 (Other NPP) ---
-    "苔藓孢子": {"latin": "Bryophyte spore", "group": "其他微体指标 (Other NPP)", "family": "Bryophyta"},
-    "泥炭藓孢子": {"latin": "Sphagnum spore", "group": "其他微体指标 (Other NPP)", "family": "Sphagnaceae"},
-    "金藻孢囊": {"latin": "Chrysophyte cyst", "group": "其他微体指标 (Other NPP)", "family": "Chrysophyceae"},
-    "海绵骨针": {"latin": "Sponge spicule", "group": "其他微体指标 (Other NPP)", "family": "Porifera"},
-    "枝角类": {"latin": "Cladocera", "group": "其他微体指标 (Other NPP)", "family": "Cladocera"},
-    "变形虫壳": {"latin": "Testate amoeba", "group": "其他微体指标 (Other NPP)", "family": "Amoebozoa"},
-    "轮虫": {"latin": "Rotifera", "group": "其他微体指标 (Other NPP)", "family": "Rotifera"},
-    "昆虫残体": {"latin": "Insect remains", "group": "其他微体指标 (Other NPP)", "family": "Insecta"},
-    "植物残体": {"latin": "Plant tissue", "group": "其他微体指标 (Other NPP)", "family": "Plantae"},
+    "苔藓孢子": {
+        "latin": "Bryophyte spore",
+        "group": "其他微体指标 (Other NPP)",
+        "family": "Bryophyta",
+    },
+    "泥炭藓孢子": {
+        "latin": "Sphagnum spore",
+        "group": "其他微体指标 (Other NPP)",
+        "family": "Sphagnaceae",
+    },
+    "金藻孢囊": {
+        "latin": "Chrysophyte cyst",
+        "group": "其他微体指标 (Other NPP)",
+        "family": "Chrysophyceae",
+    },
+    "海绵骨针": {
+        "latin": "Sponge spicule",
+        "group": "其他微体指标 (Other NPP)",
+        "family": "Porifera",
+    },
+    "枝角类": {
+        "latin": "Cladocera",
+        "group": "其他微体指标 (Other NPP)",
+        "family": "Cladocera",
+    },
+    "变形虫壳": {
+        "latin": "Testate amoeba",
+        "group": "其他微体指标 (Other NPP)",
+        "family": "Amoebozoa",
+    },
+    "轮虫": {
+        "latin": "Rotifera",
+        "group": "其他微体指标 (Other NPP)",
+        "family": "Rotifera",
+    },
+    "昆虫残体": {
+        "latin": "Insect remains",
+        "group": "其他微体指标 (Other NPP)",
+        "family": "Insecta",
+    },
+    "植物残体": {
+        "latin": "Plant tissue",
+        "group": "其他微体指标 (Other NPP)",
+        "family": "Plantae",
+    },
 }
 
 
@@ -358,7 +982,11 @@ class PollenDictionary:
             canonical = alias_lower.get(latin.lower(), latin)
             entry = grouped.setdefault(
                 canonical,
-                {"zh": "", "habitat": str(item.get("habitat") or "inland"), "family": ""},
+                {
+                    "zh": "",
+                    "habitat": str(item.get("habitat") or "inland"),
+                    "family": "",
+                },
             )
             zh = str(item.get("zh") or "").strip()
             if zh and not entry["zh"]:
@@ -372,7 +1000,9 @@ class PollenDictionary:
 
         for canonical, meta in sorted(grouped.items()):
             habitat = meta["habitat"]
-            group = self.DIATOM_HABITAT_LABEL.get(habitat, self.DIATOM_HABITAT_LABEL["inland"])
+            group = self.DIATOM_HABITAT_LABEL.get(
+                habitat, self.DIATOM_HABITAT_LABEL["inland"]
+            )
             # Entries are keyed by Chinese name, so two genera sharing one Chinese
             # label would silently overwrite each other (the source key uses
             # 四棘藻属 for both Acanthoceras and Attheya). Fall back to the Latin
@@ -458,16 +1088,22 @@ class PollenDictionary:
     @staticmethod
     def strip_plate_key(segment: str) -> str:
         """Strips a leading plate/panel letter key from a figure-caption segment."""
-        return re.sub(r"^[a-zA-Z]\s*[)\].、]\s*(?=[A-Z\u4e00-\u9fff])", "", segment.strip())
+        return re.sub(
+            r"^[a-zA-Z]\s*[)\].、]\s*(?=[A-Z\u4e00-\u9fff])", "", segment.strip()
+        )
 
     # Plate key: a *standalone* single letter followed by ) ] 、 or '.'.
     # The (?<![A-Za-z]) lookbehind is essential: without it the 'f.' inside
     # 'Pediastrum cf. argentinense' would be treated as a panel key, as would the
     # 'g.' in 'Fig. 2' or the 'r.' in 'var.'.
-    _PLATE_KEY_RE = re.compile(r"(?<![A-Za-z])[a-zA-Z]\s*(?:[)\]\u3001]|\.(?=\s+[A-Z]))")
+    _PLATE_KEY_RE = re.compile(
+        r"(?<![A-Za-z])[a-zA-Z]\s*(?:[)\]\u3001]|\.(?=\s+[A-Z]))"
+    )
     _SEGMENT_SPLIT_RE = re.compile(r"[;；]+")
     # Lines that are a bare taxonomic rank qualifier, not a taxon name
-    _QUALIFIER_ONLY_RE = re.compile(r"^(var|cf|aff|sp|spp|subsp|f|type)\.?[\s\d]*$", re.IGNORECASE)
+    _QUALIFIER_ONLY_RE = re.compile(
+        r"^(var|cf|aff|sp|spp|subsp|f|type)\.?[\s\d]*$", re.IGNORECASE
+    )
 
     @classmethod
     def extract_caption_taxa(cls, text: str) -> list[str]:
@@ -517,7 +1153,13 @@ class PollenDictionary:
         caption_taxa = cls.extract_caption_taxa(text)
         if caption_taxa:
             for name in caption_taxa:
-                out.append({"zh_name": name, "latin_name": name, "group": "用户自定义 (User Custom)"})
+                out.append(
+                    {
+                        "zh_name": name,
+                        "latin_name": name,
+                        "group": "用户自定义 (User Custom)",
+                    }
+                )
             return out
 
         for raw_line in text.splitlines():
@@ -530,17 +1172,23 @@ class PollenDictionary:
                     continue
                 parts = [p.strip() for p in re.split(r"[,，\t]+", segment) if p.strip()]
                 if len(parts) >= 2:
-                    out.append({
-                        "zh_name": parts[0],
-                        "latin_name": parts[1],
-                        "group": parts[2] if len(parts) >= 3 else "用户自定义 (User Custom)",
-                    })
+                    out.append(
+                        {
+                            "zh_name": parts[0],
+                            "latin_name": parts[1],
+                            "group": parts[2]
+                            if len(parts) >= 3
+                            else "用户自定义 (User Custom)",
+                        }
+                    )
                 elif len(parts) == 1:
-                    out.append({
-                        "zh_name": parts[0],
-                        "latin_name": parts[0],
-                        "group": "用户自定义 (User Custom)",
-                    })
+                    out.append(
+                        {
+                            "zh_name": parts[0],
+                            "latin_name": parts[0],
+                            "group": "用户自定义 (User Custom)",
+                        }
+                    )
         return out
 
     def load_custom_txt(self, path: str) -> int:
@@ -574,9 +1222,13 @@ class PollenDictionary:
         for item in self.custom_entries.values():
             # 分组名中的中英文逗号都会破坏 CSV 行结构（解析端需同时支持半角/全角逗号），
             # 统一替换为顿号后再写入。
-            group = (item.get("group") or "").replace(",", "、").replace("，", "、").strip()
+            group = (
+                (item.get("group") or "").replace(",", "、").replace("，", "、").strip()
+            )
             zh = (item.get("zh") or "").replace(",", "、").replace("，", "、").strip()
-            latin = (item.get("latin") or "").replace(",", " ").replace("，", " ").strip()
+            latin = (
+                (item.get("latin") or "").replace(",", " ").replace("，", " ").strip()
+            )
             if not zh or not latin:
                 continue
             if group and group != "用户自定义 (User Custom)":
@@ -614,7 +1266,9 @@ class PollenDictionary:
         return prev[-1]
 
     @classmethod
-    def _latin_candidate_plausible(cls, query_low: str, candidate_low: str, ratio: float) -> bool:
+    def _latin_candidate_plausible(
+        cls, query_low: str, candidate_low: str, ratio: float
+    ) -> bool:
         """Guards against false positives during Latin fuzzy matching.
 
         Two failure modes are blocked here:
@@ -684,8 +1338,16 @@ class PollenDictionary:
             }
 
         # 0. Strip leading/trailing edge noise artifacts from OCR
-        cleaned_query = re.sub(r"^[<>\/\\\|\~\`\!@\#\$\%\^\&\*\(\)\_\+\-\=\[\]\{\}\;\:\'\"\?\,\.\d\s\uFFFD\u25A0-\u25FFkK]+", "", query)
-        cleaned_query = re.sub(r"[<>\/\\\|\~\`\!@\#\$\%\^\&\*\(\)\_\+\-\=\[\]\{\}\;\:\'\"\?\,\.\s\uFFFD\u25A0-\u25FF]+$", "", cleaned_query).strip()
+        cleaned_query = re.sub(
+            r"^[<>\/\\\|\~\`\!@\#\$\%\^\&\*\(\)\_\+\-\=\[\]\{\}\;\:\'\"\?\,\.\d\s\uFFFD\u25A0-\u25FFkK]+",
+            "",
+            query,
+        )
+        cleaned_query = re.sub(
+            r"[<>\/\\\|\~\`\!@\#\$\%\^\&\*\(\)\_\+\-\=\[\]\{\}\;\:\'\"\?\,\.\s\uFFFD\u25A0-\u25FF]+$",
+            "",
+            cleaned_query,
+        ).strip()
         if not cleaned_query:
             cleaned_query = query
 
@@ -762,7 +1424,9 @@ class PollenDictionary:
         #    OCR slip changes at most one character, never the name's length class.
         all_zh = list(self.entries.keys())
         cutoff_zh = 0.65 if len(cleaned_query) <= 3 else threshold_med
-        matches_zh = difflib.get_close_matches(cleaned_query, all_zh, n=5, cutoff=cutoff_zh)
+        matches_zh = difflib.get_close_matches(
+            cleaned_query, all_zh, n=5, cutoff=cutoff_zh
+        )
         for best_zh in matches_zh:
             if abs(len(cleaned_query) - len(best_zh)) > 1:
                 continue
@@ -781,7 +1445,9 @@ class PollenDictionary:
 
         # 6. Fuzzy matching on Latin candidate names (guarded against cross-class hits)
         all_latin_low = list(self.latin_index.keys())
-        matches_latin = difflib.get_close_matches(query_low, all_latin_low, n=5, cutoff=threshold_med)
+        matches_latin = difflib.get_close_matches(
+            query_low, all_latin_low, n=5, cutoff=threshold_med
+        )
         for best_low in matches_latin:
             ratio = difflib.SequenceMatcher(None, query_low, best_low).ratio()
             if not self._latin_candidate_plausible(query_low, best_low, ratio):

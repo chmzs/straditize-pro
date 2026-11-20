@@ -150,9 +150,7 @@ def _lipd_paleo_columns(
         clean_vals = [float(v) if pd.notna(v) else None for v in vals]
         is_depth = col_name.lower().startswith("depth")
         resolved_unit = (
-            (depth_unit or "cm")
-            if is_depth
-            else (col_unit_map.get(col_name) or "%")
+            (depth_unit or "cm") if is_depth else (col_unit_map.get(col_name) or "%")
         )
         paleo_columns.append(
             {
@@ -227,7 +225,9 @@ def _lipd_chron_table(age_depth_df: pd.DataFrame | None) -> list[dict[str, Any]]
     return chron_measurement_table
 
 
-def _lipd_ensemble_tables(ensemble_tables: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+def _lipd_ensemble_tables(
+    ensemble_tables: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
     """集合表段（Section 9）：每条集合表 → 一张 measurement 表。"""
     ensemble_measurement_table = []
     if ensemble_tables:

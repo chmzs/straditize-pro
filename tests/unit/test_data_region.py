@@ -9,6 +9,7 @@
 判据用物理结构：数据区上沿 = 面板竖直轴线的顶端。三张 pollen 图 + 硅藻图的真值
 由像素独立测得（填充色分段与轴线检测两条路径互验，误差 ≤1px）。
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -29,7 +30,9 @@ BENCHMARKS = [
 
 
 @pytest.mark.parametrize(("filename", "y_top", "y_bottom"), BENCHMARKS)
-def test_vertical_span_matches_axis_spine(filename: str, y_top: int, y_bottom: int) -> None:
+def test_vertical_span_matches_axis_spine(
+    filename: str, y_top: int, y_bottom: int
+) -> None:
     session = StraditizeSession()
     info = session.load_image(image_path=str(FIGURES / filename))
     roi = info["suggested_roi"]

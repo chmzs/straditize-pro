@@ -9,6 +9,7 @@ import {
   buildRowSetQualityHint,
   type RowSetIdentityLike,
 } from './exportRowSetCaption';
+import { transformMatrix } from './exportTransform';
 import {
   aggregateHeadline,
   aggregateQaScope,
@@ -107,7 +108,7 @@ export class ExportModal {
       : '<span style="font-size: var(--font-size-xs); color: var(--text-muted);">当前有效区没有分组。</span>';
 
     modal.innerHTML = `
-      <div class="modal-dialog wpd-export-dialog ui-modal" style="--modal-width: 1180px;"
+      <div class="modal-dialog wpd-export-dialog ui-modal" style="--modal-width: 1200px;"
            data-sheets="${readiness.sheets.join(',')}"
            data-primary="${readiness.primaryRoi}"
            data-readiness-missing="${readiness.readinessMissing.join(',')}">
@@ -166,9 +167,22 @@ export class ExportModal {
           </div>
 
           <!-- 右侧：WPD 风格的控制面板 (Dataset, Sort, Format, Visualize) 并列排布 -->
-          <div class="wpd-right-controls" style="width: 270px; min-width: 270px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; background: var(--bg-tertiary); padding: 10px; border-radius: 6px; border: 1px solid var(--border-light); box-sizing: border-box;">
+          <div class="wpd-right-controls" style="width: 290px; min-width: 290px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; background: var(--bg-tertiary); padding: 10px; border-radius: 6px; border: 1px solid var(--border-light); box-sizing: border-box;">
             <!-- 导出就绪状态清单 (T10) -->
             ${renderExportReadiness(this.data)}
+
+            <!-- 项目名称 Project Name -->
+            <div class="form-group" style="margin: 0;">
+              <label style="font-size: var(--font-size-sm); font-weight: bold; color: var(--text-primary);">项目名称 (Project Name):</label>
+              <input
+                type="text"
+                id="wpd-project-name"
+                class="ui-input"
+                style="width: 100%; box-sizing: border-box; font-size: var(--font-size-sm); padding: 4px 8px; margin-top: 4px; border-radius: 4px;"
+                placeholder="留空则跟随图像名"
+                title="自定义项目命名前缀，导出文件（.tar, .csv, .xlsx, .zip）将自动以此命名"
+              />
+            </div>
 
             <!-- 数据集选择 -->
             <div class="form-group" style="margin: 0;">
@@ -215,17 +229,6 @@ export class ExportModal {
                     <option value="\t">Tab (\\t)</option>
                     <option value=";">分号 (;)</option>
                     <option value=" ">空格 ( )</option>
-                  </select>
-                </div>
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                  <span style="color: var(--text-muted);">缺测填充:</span>
-                  <select id="wpd-na-fill" class="sample-select" style="width: 80px; font-size: var(--font-size-sm);">
-                    <!-- 默认必须是 NA：缺测（未测到）不是"零丰度"。
-                         曾经默认选中 0.0，等于教用户把"没测"当成"测到 0"写进结果。 -->
-                    <option value="0.0">0.0（当成真实零丰度，慎用）</option>
-                    <option value="NaN">NaN</option>
-                    <option value="NA" selected>NA（推荐）</option>
-                    <option value="">(空)</option>
                   </select>
                 </div>
               </div>
@@ -322,22 +325,21 @@ export class ExportModal {
                  仍能让 footer 与设置项留在首屏；更大的图交给缩放/平移看。
                  工具行只放控件与百分比，长说明进 title 与下方 meta 行，避免窄栏折成碎片。 -->
             <div class="form-group" id="wpd-plot-preview-box" style="display: none; margin: 12px 0 0;">
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
-                <label style="font-size: var(--font-size-sm); font-weight: bold; color: var(--accent-blue); white-space: nowrap;">本机出图预览</label>
-                <button class="ui-btn ui-btn--quiet ui-btn--xs" id="btn-wpd-plot-close" title="关闭预览并释放图片数据">✕ 关闭</button>
-              </div>
-              <div id="wpd-plot-toolbar" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; flex-wrap: nowrap; font-size: var(--font-size-xs); color: var(--text-muted); line-height: 24px;">
-                <div style="display: flex; align-items: center; gap: 6px;">
+              <div id="wpd-plot-toolbar" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; padding: 4px 8px; background: var(--bg-tertiary); border: 1px solid var(--border-light); border-radius: 4px; font-size: var(--font-size-xs); color: var(--text-muted); line-height: 24px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <label style="font-size: var(--font-size-sm); font-weight: bold; color: var(--accent-blue); white-space: nowrap; margin: 0;">本机出图预览</label>
+                  <span style="color: var(--border-color); opacity: 0.6;">|</span>
                   <button class="ui-btn ui-btn--quiet ui-btn--xs" id="btn-wpd-plot-fit" title="整图缩放到预览框内（默认）">适应窗口</button>
                   <button class="ui-btn ui-btn--quiet ui-btn--xs" id="btn-wpd-plot-actual" title="按图片原始像素 1:1 显示，超出部分拖拽查看">1:1</button>
-                  <span id="wpd-plot-zoom-label" style="min-width: 36px; text-align: right;">100%</span>
+                  <span id="wpd-plot-zoom-label" style="min-width: 36px; text-align: center;">100%</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px;">
-                  <select id="sel-wpd-plot-format" class="sample-select" style="font-size: var(--font-size-xs); height: 22px; padding: 1px 6px;" title="下载格式：JPEG 位图，直接分享；SVG 矢量，适合排版放大（只影响下载，预览固定 JPEG）">
+                  <select id="sel-wpd-plot-format" class="sample-select" style="font-size: var(--font-size-xs); height: 24px; padding: 1px 6px;" title="下载格式：JPEG 位图，直接分享；SVG 矢量，适合排版放大（只影响下载，预览固定 JPEG）">
                     <option value="jpeg" selected>JPEG (位图 · 分享)</option>
                     <option value="svg">SVG (矢量 · 排版)</option>
                   </select>
                   <button class="ui-btn ui-btn--secondary ui-btn--xs" id="btn-wpd-plot-download" disabled>下载图片</button>
+                  <button class="ui-btn ui-btn--quiet ui-btn--xs" id="btn-wpd-plot-close" title="关闭预览并释放图片数据">✕ 关闭</button>
                 </div>
               </div>
               <div id="wpd-plot-frame" title="滚轮缩放（以光标为锚点）· 拖拽平移 · 双击复位" style="position: relative; border: 1px solid var(--border-light); border-radius: 6px; background: var(--bg-tertiary); padding: 0; height: min(34vh, 360px); overflow: hidden; cursor: grab; touch-action: none;">
@@ -378,15 +380,28 @@ export class ExportModal {
     const sortOrderSelect = modal.querySelector('#wpd-sort-order') as HTMLSelectElement;
     const digitsInp = modal.querySelector('#wpd-digits') as HTMLInputElement;
     const colSepSelect = modal.querySelector('#wpd-col-sep') as HTMLSelectElement;
-    const naFillSelect = modal.querySelector('#wpd-na-fill') as HTMLSelectElement;
     const sizeLabel = modal.querySelector('#wpd-data-size-label') as HTMLElement;
     const varsLabel = modal.querySelector('#wpd-vars-label') as HTMLElement | null;
     const rowSetCaptionEl = modal.querySelector('#wpd-rowset-caption') as HTMLElement | null;
+    const projectNameInp = modal.querySelector('#wpd-project-name') as HTMLInputElement | null;
+    if (projectNameInp) {
+      projectNameInp.value = this.data.project_name || '';
+      projectNameInp.addEventListener('change', () => {
+        const val = projectNameInp.value.trim();
+        this.data.project_name = val || undefined;
+        const tbInp = document.getElementById('inp-toolbar-project-name') as HTMLInputElement | null;
+        if (tbInp) tbInp.value = val;
+        this.rpcClient?.call('project.setName', { name: val || null }).catch(() => {});
+      });
+    }
 
     // 动态表格数据模型与手动微调记录
+    let rawHeaders: string[] = [];
+    let rawRows: Array<string[]> = [];
     let currentHeaders: string[] = [];
     let currentRows: Array<string[]> = [];
-    const userEdits = new Map<string, string>(); // key: `${rowIdx}_${colIdx}` -> editedValue
+    let rowOrigIndices: number[] = [];
+    const userEdits = new Map<string, string>(); // key: `${origIdx}_${colIdx}` -> editedValue
 
     /**
      * 当前行集的**身份**，只从后端来（`export.getReadiness {dataset}` 的 `rowset`）。
@@ -397,8 +412,7 @@ export class ExportModal {
      */
     let currentRowSet: RowSetIdentityLike | null = null;
 
-    /** 后端返回的原始 CSV；**没有用户编辑时**界面与下载都用它，保证逐字节一致。 */
-    let backendCsvText = '';
+
     /** 异步取数的乱序保护：同一个面板只有最后一次 dataset 请求可以落地。 */
     let displayToken = 0;
 
@@ -434,8 +448,6 @@ export class ExportModal {
       textarea.style.display = 'block';
     });
 
-    // 重新计算原始提取数据矩阵
-
     // 将当前内存矩阵格式化为文本 (包含用户编辑覆盖项)
     const serializeMatrixToText = (headers: string[], rows: Array<string[]>): string => {
       const sep = colSepSelect.value === '\t' ? '\t' : colSepSelect.value;
@@ -444,6 +456,25 @@ export class ExportModal {
         lines.push(row.join(sep));
       }
       return lines.join('\n');
+    };
+
+    // 应用精度格式化与排序变换
+    const applyTransformations = () => {
+      const rawDigits = digitsInp?.value?.trim() ?? '';
+      const digits =
+        rawDigits !== '' && !isNaN(Number(rawDigits)) ? parseInt(rawDigits, 10) : 2;
+      const sortBy = (sortBySelect?.value || 'depth') as 'depth' | 'raw';
+      const sortOrder = (sortOrderSelect?.value || 'asc') as 'asc' | 'desc';
+
+      const result = transformMatrix(rawHeaders, rawRows, userEdits, {
+        digits,
+        sortBy,
+        sortOrder,
+      });
+
+      currentHeaders = result.headers;
+      currentRows = result.rows;
+      rowOrigIndices = result.rowOrigIndices;
     };
 
     // 渲染可交互表格
@@ -481,6 +512,7 @@ export class ExportModal {
       const tbody = document.createElement('tbody');
       currentRows.forEach((row, rIdx) => {
         const tr = document.createElement('tr');
+        const origIdx = rowOrigIndices[rIdx] ?? rIdx;
 
         // 行号
         const tdNum = document.createElement('td');
@@ -499,7 +531,7 @@ export class ExportModal {
             if (isTurning && cIdx < 2) {
               input.style.textAlign = 'left';
             }
-            const editKey = `${rIdx}_${cIdx}`;
+            const editKey = `${origIdx}_${cIdx}`;
             if (userEdits.has(editKey)) {
               input.classList.add('user-modified');
               input.value = userEdits.get(editKey)!;
@@ -525,11 +557,7 @@ export class ExportModal {
     };
 
     const syncSerializedText = () => {
-      // 无编辑时直接用后端的原文：这样「面板里看到的」与「点 CSV 下载到的」
-      // 是同一串字节，不经过任何前端再序列化（U-ROWS-01 的判据就钉在这里）。
-      const dataStr = userEdits.size > 0
-        ? serializeMatrixToText(currentHeaders, currentRows)
-        : backendCsvText || serializeMatrixToText(currentHeaders, currentRows);
+      const dataStr = serializeMatrixToText(currentHeaders, currentRows);
       textarea.value = dataStr;
       sizeLabel.textContent = `${(dataStr.length / 1024).toFixed(1)} KB (${currentRows.length} rows)`;
 
@@ -545,6 +573,8 @@ export class ExportModal {
         }
       }
     };
+
+
 
     /**
      * QA 结论的唯一数据源：后端 `qa.summarize`。
@@ -678,9 +708,12 @@ export class ExportModal {
         if (requestToken !== displayToken) return;
         // 后端明确说没有可导出行集（`STATE_ERROR`）时，**面板本身**必须说明，
         // 不能只剩一条 toast + 一张空表 —— 空表看起来像"这张图没数据"。
+        rawHeaders = [];
+        rawRows = [];
+        rowOrigIndices = [];
         currentHeaders = [];
         currentRows = [];
-        backendCsvText = '';
+
         // 行集没取到 → 身份作废，下一次成功刷新时重取；不要让上一次的行集名
         // 留在标题里配着空表。
         currentRowSet = null;
@@ -714,15 +747,11 @@ export class ExportModal {
       // 快速切换 dataset 时，只有最后一次请求的结果可以落到界面上。
       if (requestToken !== displayToken) return;
 
-      backendCsvText = csvText;
+
       const parsed = parseDelimitedMatrix(csvText);
-      currentHeaders = parsed.headers;
-      currentRows = parsed.rows.map((row, rIdx) =>
-        row.map((cell, cIdx) => {
-          const key = `${rIdx}_${cIdx}`;
-          return userEdits.has(key) ? userEdits.get(key)! : cell;
-        })
-      );
+      rawHeaders = parsed.headers;
+      rawRows = parsed.rows;
+      applyTransformations();
       renderTableGrid();
       syncSerializedText();
       updateSumCheck();
@@ -772,7 +801,10 @@ export class ExportModal {
     // 还原按钮
     resetEditsBtn?.addEventListener('click', () => {
       userEdits.clear();
-      void updateFullDisplay();
+      applyTransformations();
+      renderTableGrid();
+      syncSerializedText();
+      updateSumCheck();
     });
 
     // 刷新：画布上改过锚点后立刻重拉，不关面板也能看到新数。
@@ -791,11 +823,25 @@ export class ExportModal {
       userEdits.clear();
       void updateFullDisplay();
     });
-    sortBySelect.addEventListener('change', () => void updateFullDisplay());
-    sortOrderSelect.addEventListener('change', () => void updateFullDisplay());
-    digitsInp.addEventListener('input', () => void updateFullDisplay());
+    sortBySelect.addEventListener('change', () => {
+      applyTransformations();
+      renderTableGrid();
+      syncSerializedText();
+      updateSumCheck();
+    });
+    sortOrderSelect.addEventListener('change', () => {
+      applyTransformations();
+      renderTableGrid();
+      syncSerializedText();
+      updateSumCheck();
+    });
+    digitsInp.addEventListener('input', () => {
+      applyTransformations();
+      renderTableGrid();
+      syncSerializedText();
+      updateSumCheck();
+    });
     colSepSelect.addEventListener('change', syncSerializedText);
-    naFillSelect.addEventListener('change', () => void updateFullDisplay());
 
     void updateFullDisplay();
     // 自检行只复述后端结论，所以必须真的去问一次后端（不能等用户点按钮）。

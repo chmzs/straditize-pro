@@ -32,6 +32,7 @@
 推给后端的正是这种粗集，后端稠密点则是逐行墨迹），两者相差最大 50px 以上，
 所以"整列插值"与"墨迹曲线"在本图上是可分辨的两条线。
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -42,13 +43,13 @@ from straditize_core.session import StraditizeSession
 
 W, H = 200, 320
 AXIS_X0, AXIS_W = 10, 6
-ZERO_X = AXIS_X0 + AXIS_W          # 16
-Y0, Y1 = 40, 255                   # 取数区（data_ylim）
-INK_Y1 = 265                       # 墨迹比对取数区多画几行，避开窗口末端读数
+ZERO_X = AXIS_X0 + AXIS_W  # 16
+Y0, Y1 = 40, 255  # 取数区（data_ylim）
+INK_Y1 = 265  # 墨迹比对取数区多画几行，避开窗口末端读数
 AMPLITUDE, PERIOD = 35.0, 60.0
 STAIR_PERIOD, STAIR_AMPLITUDE = 9, 14.0
-COARSE_STEP = 20                   # 粗手柄集的行间隔
-WINDOW = 25                        # = digitize.py 的 _ANCHOR_PATCH_WINDOW_ROWS
+COARSE_STEP = 20  # 粗手柄集的行间隔
+WINDOW = 25  # = digitize.py 的 _ANCHOR_PATCH_WINDOW_ROWS
 
 
 def _curve_x(row: int) -> float:
@@ -65,9 +66,9 @@ def _curve_x(row: int) -> float:
 
 def _synthetic_plate(path) -> None:
     img = np.full((H, W), 255, dtype=np.uint8)
-    img[:, AXIS_X0:AXIS_X0 + AXIS_W] = 0          # 列轴线
+    img[:, AXIS_X0 : AXIS_X0 + AXIS_W] = 0  # 列轴线
     for row in range(Y0, INK_Y1 + 1):
-        img[row, ZERO_X:int(round(_curve_x(row))) + 1] = 0   # 填充剖面
+        img[row, ZERO_X : int(round(_curve_x(row))) + 1] = 0  # 填充剖面
     Image.fromarray(img).save(path)
 
 
@@ -182,9 +183,7 @@ def test_edit_only_touches_anchor_neighbourhood(tmp_path) -> None:
 def test_same_anchor_batch_twice_is_idempotent(tmp_path) -> None:
     """判据 2：同一批锚点连发两次，第二次不重建、列值逐值不变。"""
     session = _session(tmp_path)
-    anchors = {
-        int(row): float(x) for row, x in session.control_points[0].items()
-    }
+    anchors = {int(row): float(x) for row, x in session.control_points[0].items()}
     middle = sorted(anchors)[len(anchors) // 2]
     anchors[middle] += 10.0
 
@@ -238,7 +237,7 @@ def test_rows_outside_window_are_bit_identical(tmp_path) -> None:
     moved = dict(anchors)
     moved[edit_row] += 20.0
     result = session.set_control_points(0, _payload(moved))
-    (start, end), = result["patched_rows"]
+    ((start, end),) = result["patched_rows"]
     assert start == edit_row - WINDOW and end == edit_row + WINDOW
 
     after = _dense(session)

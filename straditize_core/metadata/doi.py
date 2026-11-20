@@ -6,6 +6,7 @@ Sources:
 
 Zero LLM hallucination - purely authoritative structured API retrieval.
 """
+
 from __future__ import annotations
 
 import json
@@ -56,7 +57,11 @@ def query_crossref(doi: str, timeout: float = 8.0) -> dict[str, Any] | None:
                 for a in message.get("author", []):
                     given = a.get("given", "").strip()
                     family = a.get("family", "").strip()
-                    name = f"{given} {family}".strip() if given or family else a.get("name", "").strip()
+                    name = (
+                        f"{given} {family}".strip()
+                        if given or family
+                        else a.get("name", "").strip()
+                    )
                     if name:
                         authors.append(name)
 
@@ -109,7 +114,11 @@ def query_semantic_scholar(doi: str, timeout: float = 8.0) -> dict[str, Any] | N
                 data = json.loads(resp.read().decode("utf-8"))
 
                 title = data.get("title", "")
-                authors = [a.get("name", "").strip() for a in data.get("authors", []) if a.get("name")]
+                authors = [
+                    a.get("name", "").strip()
+                    for a in data.get("authors", [])
+                    if a.get("name")
+                ]
                 journal = data.get("venue", "")
                 year = data.get("year")
 

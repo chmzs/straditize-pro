@@ -81,7 +81,8 @@ def _case(session: StraditizeSession, col_index: int, reader: str) -> dict:
         "last_point": {k: _round(points[-1][k]) for k in ("row", "x", "y")},
         "control_point_count": result["control_points_count"],
         "control_points": {
-            str(k): _round(v) for k, v in sorted(session.control_points[col_index].items())
+            str(k): _round(v)
+            for k, v in sorted(session.control_points[col_index].items())
         },
         "ctrl_ids": [pt["id"] for pt in result["control_points"]],
         "ctrl_types": [pt["type"] for pt in result["control_points"]],

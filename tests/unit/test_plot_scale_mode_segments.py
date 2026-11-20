@@ -44,10 +44,16 @@ def stubbed(monkeypatch):
         {"col_index": 2, "name": "col03", "roi_id": "roi_1", "x_group_id": "grp1"},
     ]
     frame = pd.DataFrame(
-        {"depth": [10.0, 20.0, 30.0], "col01": [1.0, 2.0, 3.0], "col02": [4.0, 5.0, 6.0], "col03": [7.0, 8.0, 9.0]}
+        {
+            "depth": [10.0, 20.0, 30.0],
+            "col01": [1.0, 2.0, 3.0],
+            "col02": [4.0, 5.0, 6.0],
+            "col03": [7.0, 8.0, 9.0],
+        }
     )
     session._plot_source_frame = lambda: frame  # type: ignore[method-assign]
     session.plot_detect_r = lambda: {"path": "/stub/Rscript"}  # type: ignore[method-assign]
+
     def _stub_render(**kwargs):
         # 桩必须真的落一个文件并回 path：plot_render 之后会 read_as_data_url(path)。
         out = Path(str(kwargs["out_path"]))
@@ -85,7 +91,9 @@ def test_scenario_a_normalize_only_does_not_segment(stubbed) -> None:
 
 
 def test_scenario_b_mixed_puts_fixed_columns_in_side_segments(stubbed) -> None:
-    result = stubbed.plot_render(format="jpeg", settings={"plot_scale_mode": {"col01": "fixed"}})
+    result = stubbed.plot_render(
+        format="jpeg", settings={"plot_scale_mode": {"col01": "fixed"}}
+    )
 
     keys = _seg_keys(result["settings"])
     assert len(keys) == 1, keys
@@ -95,7 +103,9 @@ def test_scenario_b_mixed_puts_fixed_columns_in_side_segments(stubbed) -> None:
 def test_scenario_c_all_fixed_puts_every_column_in_side_segments(stubbed) -> None:
     result = stubbed.plot_render(
         format="jpeg",
-        settings={"plot_scale_mode": {"col01": "fixed", "col02": "fixed", "col03": "fixed"}},
+        settings={
+            "plot_scale_mode": {"col01": "fixed", "col02": "fixed", "col03": "fixed"}
+        },
     )
 
     keys = _seg_keys(result["settings"])

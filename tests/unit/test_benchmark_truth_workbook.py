@@ -70,13 +70,18 @@ class TestBenchmarkTruthWorkbook:
         workbook = openpyxl.load_workbook(TRUTH_XLSX, data_only=True)
         sheet = workbook["Abernethy_Pollen"]
 
-        assert sheet.max_row == 50, f"Pollen 应有 50 行（1 表头 + 49 样品），实为 {sheet.max_row}"
+        assert sheet.max_row == 50, (
+            f"Pollen 应有 50 行（1 表头 + 49 样品），实为 {sheet.max_row}"
+        )
         assert sheet.max_column == 39, f"Pollen 应有 39 列，实为 {sheet.max_column}"
 
         header = [sheet.cell(1, c).value for c in range(1, 5)]
-        assert header == ["Depth (cm)", "Age (14C years BP)", "Age (years BP)", "Betula"], (
-            f"表头不符: {header}"
-        )
+        assert header == [
+            "Depth (cm)",
+            "Age (14C years BP)",
+            "Age (years BP)",
+            "Betula",
+        ], f"表头不符: {header}"
 
         # 首行真实数值（与原始文件逐格核对过）
         first_row = [sheet.cell(2, c).value for c in range(1, 5)]
@@ -88,7 +93,9 @@ class TestBenchmarkTruthWorkbook:
         workbook = openpyxl.load_workbook(TRUTH_XLSX, data_only=True)
         sheet = workbook["RLGH_Diatoms"]
 
-        assert sheet.max_row == 21, f"Diatom 应有 21 行（1 表头 + 20 样品），实为 {sheet.max_row}"
+        assert sheet.max_row == 21, (
+            f"Diatom 应有 21 行（1 表头 + 20 样品），实为 {sheet.max_row}"
+        )
         assert sheet.max_column == 43, f"Diatom 应有 43 列，实为 {sheet.max_column}"
 
     def test_no_dangling_relationship_targets(self) -> None:
@@ -112,9 +119,13 @@ class TestBenchmarkTruthWorkbook:
             for target in re.findall(r'Target="([^"]+)"', content):
                 if target.startswith("http"):
                     continue
-                resolved = target.lstrip("/") if is_root else os.path.normpath(
-                    os.path.join(base, target).replace("\\", "/")
-                ).replace("\\", "/")
+                resolved = (
+                    target.lstrip("/")
+                    if is_root
+                    else os.path.normpath(
+                        os.path.join(base, target).replace("\\", "/")
+                    ).replace("\\", "/")
+                )
                 if resolved not in names:
                     dangling.append((member, target))
 

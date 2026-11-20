@@ -97,7 +97,10 @@ def _session() -> tuple[StraditizeSession, Any]:
 
 
 def _roundtrip_through_pack(session: StraditizeSession, dispatcher, pack: Path) -> None:
-    _ok(_rpc(dispatcher, "project.save", output_path=str(pack), format="tar"), "保存工程包")
+    _ok(
+        _rpc(dispatcher, "project.save", output_path=str(pack), format="tar"),
+        "保存工程包",
+    )
     with tarfile.open(pack) as tf:
         payload = json.loads(tf.extractfile("straditize.json").read().decode("utf-8"))
     assert [r["id"] for r in payload["rois"]] == ["roi_1"], (
@@ -163,11 +166,15 @@ def test_three_consecutive_creates_are_all_distinct(tmp_path: Path) -> None:
     _roundtrip_through_pack(session, dispatcher, tmp_path / "one-roi.tar")
 
     for i in range(3):
-        _ok(_rpc(dispatcher, "roi.create", x0=0, x1=0, y0=0, y1=0), f"第 {i + 1} 次新建")
+        _ok(
+            _rpc(dispatcher, "roi.create", x0=0, x1=0, y0=0, y1=0), f"第 {i + 1} 次新建"
+        )
         ids = [r["id"] for r in session.rois]
         names = [r["name"] for r in session.rois]
         assert len(set(ids)) == len(ids), f"第 {i + 1} 次新建后 ROI id 重复：{ids}"
-        assert len(set(names)) == len(names), f"第 {i + 1} 次新建后 ROI 名字重复：{names}"
+        assert len(set(names)) == len(names), (
+            f"第 {i + 1} 次新建后 ROI 名字重复：{names}"
+        )
         assert session.primary_roi_id in ids, (
             f"primary_roi_id={session.primary_roi_id!r} 不指向任何存在的 ROI：{ids}"
         )
@@ -193,7 +200,9 @@ def test_deleting_empty_roi_does_not_shrink_other_roi_columns(tmp_path: Path) ->
     session, dispatcher = _session()
     _roundtrip_through_pack(session, dispatcher, tmp_path / "one-roi.tar")
 
-    empty = _ok(_rpc(dispatcher, "roi.create", x0=0, x1=0, y0=0, y1=0), "新建空 ROI")["roi"]
+    empty = _ok(_rpc(dispatcher, "roi.create", x0=0, x1=0, y0=0, y1=0), "新建空 ROI")[
+        "roi"
+    ]
     before = _column_counts_by_roi(session)
     total_before = len(session.columns)
     # 这里**刻意不**断言"新 ROI 拥有 0 列"：撞 id 时 `empty["id"]` 就是原 ROI 的 id，
@@ -227,7 +236,9 @@ def test_remove_roi_with_columns_requires_explicit_confirmation(tmp_path: Path) 
     resp = _rpc(dispatcher, "roi.remove", roi_id=self_id)
     assert "error" in resp, "删除有列的 ROI 未确认时必须报错，实际静默成功"
     err = resp["error"]
-    assert err.get("code") == -32002, f"错误码应为 -32002（需要确认），实际 {err.get('code')}"
+    assert err.get("code") == -32002, (
+        f"错误码应为 -32002（需要确认），实际 {err.get('code')}"
+    )
     message = err.get("message") or ""
     assert str(n_cols) in message, f"错误文案必须说清会删掉几列，实际：{message!r}"
     assert "confirm_drop_columns" in message, (
@@ -253,7 +264,9 @@ def test_removing_empty_roi_needs_no_confirmation(tmp_path: Path) -> None:
     session, dispatcher = _session()
     _roundtrip_through_pack(session, dispatcher, tmp_path / "one-roi.tar")
 
-    empty = _ok(_rpc(dispatcher, "roi.create", x0=0, x1=0, y0=0, y1=0), "新建空 ROI")["roi"]
+    empty = _ok(_rpc(dispatcher, "roi.create", x0=0, x1=0, y0=0, y1=0), "新建空 ROI")[
+        "roi"
+    ]
     _ok(_rpc(dispatcher, "roi.remove", roi_id=empty["id"]), "删除空 ROI（无需确认）")
     assert [r["id"] for r in session.rois] != [], "原 ROI 必须还在"
     assert len(session.columns) > 0, "原 ROI 的列必须还在"

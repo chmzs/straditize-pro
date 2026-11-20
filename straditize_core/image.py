@@ -2,6 +2,7 @@
 
 Pure Python/NumPy/SciPy/scikit-image/Pillow pipeline without GUI or Matplotlib.
 """
+
 from __future__ import annotations
 
 import base64
@@ -20,54 +21,54 @@ from skimage.filters import threshold_otsu
 from .protocol import INVALID_PARAMS, JsonRpcError
 
 EXTRACTION_MODES: dict[str, str] = {
-    'standard': 'standard',
-    'light-overlay-white': 'light-overlay-white',
-    'light overlay on white background': 'light-overlay-white',
-    'dark-ink-light': 'dark-ink-light',
-    'dark ink on light background': 'dark-ink-light',
-    'light-ink-dark': 'light-ink-dark',
-    'light ink on dark background': 'light-ink-dark',
+    "standard": "standard",
+    "light-overlay-white": "light-overlay-white",
+    "light overlay on white background": "light-overlay-white",
+    "dark-ink-light": "dark-ink-light",
+    "dark ink on light background": "dark-ink-light",
+    "light-ink-dark": "light-ink-dark",
+    "light ink on dark background": "light-ink-dark",
     # 「实心层 + 夸张阴影层」双层彩色图（花粉百分比图常见）。
-    'solid-over-shadow': 'solid-over-shadow',
-    'solid over shadow': 'solid-over-shadow',
-    '双层分离': 'solid-over-shadow',
+    "solid-over-shadow": "solid-over-shadow",
+    "solid over shadow": "solid-over-shadow",
+    "双层分离": "solid-over-shadow",
 }
 
 SEGMENTATION_MODES: dict[str, str] = {
-    'auto': 'auto',
-    'guided': 'guided',
+    "auto": "auto",
+    "guided": "guided",
     # 「实心层 / 夸张阴影层」两层的图：只取实心层。
-    'two-layer': 'two-layer',
-    'two layer': 'two-layer',
-    '双层': 'two-layer',
+    "two-layer": "two-layer",
+    "two layer": "two-layer",
+    "双层": "two-layer",
 }
 
 EXAGGERATION_MERGE_MODES: dict[str, str] = {
-    'selected-priority': 'selected-priority',
-    'selected region priority': 'selected-priority',
-    'threshold-legacy': 'threshold-legacy',
-    'threshold merge (legacy)': 'threshold-legacy',
+    "selected-priority": "selected-priority",
+    "selected region priority": "selected-priority",
+    "threshold-legacy": "threshold-legacy",
+    "threshold merge (legacy)": "threshold-legacy",
 }
 
 
 def load_image(source: str | Path | Image.Image | np.ndarray) -> Image.Image:
     """Load an image source into a PIL RGBA Image."""
     if isinstance(source, Image.Image):
-        return source.convert('RGBA')
+        return source.convert("RGBA")
     if isinstance(source, (str, Path)):
         img = Image.open(source)
-        return img.convert('RGBA')
+        return img.convert("RGBA")
     if isinstance(source, np.ndarray):
         arr = np.asarray(source)
         if arr.ndim == 2:
-            return Image.fromarray(arr).convert('RGBA')
+            return Image.fromarray(arr).convert("RGBA")
         if arr.ndim == 3:
             if arr.shape[2] == 4:
-                return Image.fromarray(arr.astype(np.uint8)).convert('RGBA')
+                return Image.fromarray(arr.astype(np.uint8)).convert("RGBA")
             if arr.shape[2] == 3:
-                return Image.fromarray(arr.astype(np.uint8)).convert('RGBA')
+                return Image.fromarray(arr.astype(np.uint8)).convert("RGBA")
             if arr.shape[2] == 1:
-                return Image.fromarray(arr[:, :, 0].astype(np.uint8)).convert('RGBA')
+                return Image.fromarray(arr[:, :, 0].astype(np.uint8)).convert("RGBA")
     raise TypeError(f"Unsupported image source type: {type(source)}")
 
 
@@ -92,7 +93,7 @@ def _iter_color_tokens(target_colors: Any) -> Iterable[str]:
         text = str(color).strip()
         if not text:
             continue
-        for token in re.split(r'[\s,;]+', text):
+        for token in re.split(r"[\s,;]+", text):
             token = token.strip()
             if token:
                 yield token
@@ -101,7 +102,7 @@ def _iter_color_tokens(target_colors: Any) -> Iterable[str]:
 def normalize_extraction_mode(extraction_mode: str | None) -> str:
     """Normalize extraction mode string."""
     if extraction_mode is None:
-        extraction_mode = 'standard'
+        extraction_mode = "standard"
     key = str(extraction_mode).strip().lower()
     try:
         return EXTRACTION_MODES[key]
@@ -120,17 +121,27 @@ def normalize_extraction_mode(extraction_mode: str | None) -> str:
 #: the "weak" preset was >= 4 px thick real silhouette, and 99% of the *Pinus*
 #: column was erased).
 GRID_LINE_PRESETS: dict[str, dict[str, float]] = {
-    'weak': {'run_frac': 0.55, 'span_frac': 0.80, 'min_run_px': 55, 'max_thickness': 2},
-    'medium': {'run_frac': 0.40, 'span_frac': 0.65, 'min_run_px': 35, 'max_thickness': 3},
-    'strong': {'run_frac': 0.25, 'span_frac': 0.45, 'min_run_px': 20, 'max_thickness': 5},
+    "weak": {"run_frac": 0.55, "span_frac": 0.80, "min_run_px": 55, "max_thickness": 2},
+    "medium": {
+        "run_frac": 0.40,
+        "span_frac": 0.65,
+        "min_run_px": 35,
+        "max_thickness": 3,
+    },
+    "strong": {
+        "run_frac": 0.25,
+        "span_frac": 0.45,
+        "min_run_px": 20,
+        "max_thickness": 5,
+    },
 }
 
 
 def normalize_grid_line_strength(strength: str | None) -> str:
     """Normalize a grid-line removal strength label; unknown values raise."""
-    key = str(strength or 'medium').strip().lower()
+    key = str(strength or "medium").strip().lower()
     if key not in GRID_LINE_PRESETS:
-        raise ValueError(f'Unknown grid-line removal strength: {strength}')
+        raise ValueError(f"Unknown grid-line removal strength: {strength}")
     return key
 
 
@@ -222,7 +233,9 @@ def _detect_linear_structures(
     return candidate & accepted[:, np.newaxis]
 
 
-def _clip_roi(shape: tuple[int, int], roi: Sequence[float] | None) -> tuple[int, int, int, int]:
+def _clip_roi(
+    shape: tuple[int, int], roi: Sequence[float] | None
+) -> tuple[int, int, int, int]:
     """Clip ``roi`` (x0, y0, x1, y1) to the image, defaulting to the whole image."""
     height, width = shape
     if roi is None:
@@ -236,7 +249,7 @@ def _clip_roi(shape: tuple[int, int], roi: Sequence[float] | None) -> tuple[int,
 def detect_grid_lines(
     binary: np.ndarray,
     *,
-    strength: str = 'medium',
+    strength: str = "medium",
     roi: Sequence[float] | None = None,
     remove_vertical: bool = True,
     max_thickness: int | None = None,
@@ -269,21 +282,27 @@ def detect_grid_lines(
     height, width = binary.shape
     empty = np.zeros_like(binary)
     if binary.ndim != 2 or binary.size == 0:
-        return empty, np.zeros_like(binary), {'strength': strength, 'roi': None}
+        return empty, np.zeros_like(binary), {"strength": strength, "roi": None}
 
     preset = GRID_LINE_PRESETS[normalize_grid_line_strength(strength)]
-    thickness_bound = int(preset['max_thickness'] if max_thickness is None else max_thickness)
+    thickness_bound = int(
+        preset["max_thickness"] if max_thickness is None else max_thickness
+    )
 
     x0, y0, x1, y1 = _clip_roi(binary.shape, roi)
     sub = binary[y0:y1, x0:x1]
     if sub.size == 0:
-        return empty, np.zeros_like(binary), {'strength': strength, 'roi': [x0, y0, x1, y1]}
+        return (
+            empty,
+            np.zeros_like(binary),
+            {"strength": strength, "roi": [x0, y0, x1, y1]},
+        )
 
     sub_width, sub_height = sub.shape[1], sub.shape[0]
     horizontal = _detect_linear_structures(
         sub,
-        run_length=max(preset['min_run_px'], preset['run_frac'] * sub_width),
-        min_span=max(preset['min_run_px'], preset['span_frac'] * sub_width),
+        run_length=max(preset["min_run_px"], preset["run_frac"] * sub_width),
+        min_span=max(preset["min_run_px"], preset["span_frac"] * sub_width),
         max_thickness=thickness_bound,
         vertical=False,
     )
@@ -297,8 +316,8 @@ def detect_grid_lines(
     if remove_vertical:
         vertical = _detect_linear_structures(
             sub,
-            run_length=max(preset['min_run_px'], preset['run_frac'] * sub_height),
-            min_span=max(preset['min_run_px'], preset['span_frac'] * sub_height),
+            run_length=max(preset["min_run_px"], preset["run_frac"] * sub_height),
+            min_span=max(preset["min_run_px"], preset["span_frac"] * sub_height),
             max_thickness=thickness_bound,
             vertical=True,
         )
@@ -309,14 +328,14 @@ def detect_grid_lines(
     vertical_mask[y0:y1, x0:x1] = vertical
 
     info = {
-        'strength': normalize_grid_line_strength(strength),
-        'roi': [x0, y0, x1, y1],
-        'max_thickness': thickness_bound,
-        'removed_vertical': bool(remove_vertical),
-        'horizontal_rows': sorted(np.unique(np.nonzero(horizontal)[0] + y0).tolist()),
-        'vertical_cols': sorted(np.unique(np.nonzero(vertical)[1] + x0).tolist()),
-        'horizontal_pixels': int(horizontal.sum()),
-        'vertical_pixels': int(vertical.sum()),
+        "strength": normalize_grid_line_strength(strength),
+        "roi": [x0, y0, x1, y1],
+        "max_thickness": thickness_bound,
+        "removed_vertical": bool(remove_vertical),
+        "horizontal_rows": sorted(np.unique(np.nonzero(horizontal)[0] + y0).tolist()),
+        "vertical_cols": sorted(np.unique(np.nonzero(vertical)[1] + x0).tolist()),
+        "horizontal_pixels": int(horizontal.sum()),
+        "vertical_pixels": int(vertical.sum()),
     }
     return horizontal_mask, vertical_mask, info
 
@@ -324,7 +343,7 @@ def detect_grid_lines(
 def remove_grid_lines(
     binary: np.ndarray,
     *,
-    strength: str = 'medium',
+    strength: str = "medium",
     roi: Sequence[float] | None = None,
     remove_vertical: bool = True,
     max_thickness: int | None = None,
@@ -341,7 +360,7 @@ def remove_grid_lines(
         max_thickness=max_thickness,
     )
     line_mask = horizontal | vertical
-    info['removed_pixels'] = int(line_mask.sum())
+    info["removed_pixels"] = int(line_mask.sum())
     return np.asarray(binary, dtype=bool) & ~line_mask, line_mask, info
 
 
@@ -434,7 +453,7 @@ def remove_horizontal_grid_lines(
 #: 历史断点：``rasterize_strokes`` 只判 ``== 'restore'``，其余一律进 erase 桶。
 #: 于是把 ``'restore'`` 拼错的用户会**得到擦除**——方向相反的静默兜底，
 #: 损坏的是已有掩膜，不会有任何报错提示他刚才做的事和想做的事正好相反。
-STROKE_MODES: tuple[str, str] = ('erase', 'restore')
+STROKE_MODES: tuple[str, str] = ("erase", "restore")
 
 
 def normalize_stroke_mode(mode: Any, *, index: int | None = None) -> str:
@@ -481,9 +500,9 @@ def rasterize_strokes(
         # `line_corrections`，`project_save` 再把它写进工程包。若只校验"可画"的笔迹，
         # 一条没有点的、缺 `mode` 的笔迹就会绕过校验落盘，成为下一个"缺 mode 的
         # corrections"来源——那种数据本该只有旧工程才有。index 用于报错点名第几笔。
-        mode = normalize_stroke_mode(stroke.get('mode'), index=index)
+        mode = normalize_stroke_mode(stroke.get("mode"), index=index)
         points: list[tuple[float, float]] = []
-        for point in stroke.get('points') or ():
+        for point in stroke.get("points") or ():
             if not isinstance(point, (list, tuple)) or len(point) < 2:
                 continue
             try:
@@ -494,13 +513,15 @@ def rasterize_strokes(
                 continue
         if not points:
             continue
-        target = restore if mode == 'restore' else erase
-        radius = max(1.0, float(stroke.get('radius', 4)))
+        target = restore if mode == "restore" else erase
+        radius = max(1.0, float(stroke.get("radius", 4)))
         _draw_polyline(target, points, radius)
     return restore, erase
 
 
-def _draw_polyline(canvas: np.ndarray, points: list[tuple[float, float]], radius: float) -> None:
+def _draw_polyline(
+    canvas: np.ndarray, points: list[tuple[float, float]], radius: float
+) -> None:
     """Stamp a disc of ``radius`` along a polyline directly into ``canvas``."""
     height, width = canvas.shape
     if len(points) == 1:
@@ -540,25 +561,24 @@ def mask_overlay_data_url(ink: np.ndarray, line_mask: np.ndarray) -> str:
     rgba[ink & ~line_mask] = (255, 255, 255, 255)
     rgba[line_mask] = (239, 68, 68, 235)
     buffer = io.BytesIO()
-    Image.fromarray(rgba).save(buffer, format='PNG', optimize=True)
-    encoded = base64.b64encode(buffer.getvalue()).decode('ascii')
-    return 'data:image/png;base64,' + encoded
+    Image.fromarray(rgba).save(buffer, format="PNG", optimize=True)
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return "data:image/png;base64," + encoded
 
 
 def normalize_segmentation_mode(segmentation_mode: str | None) -> str:
     """Normalize segmentation mode string."""
     if segmentation_mode is None:
-        segmentation_mode = 'auto'
+        segmentation_mode = "auto"
     key = str(segmentation_mode).strip().lower()
     try:
         return SEGMENTATION_MODES[key]
     except KeyError:
         raise ValueError(f"Unknown segmentation mode: {segmentation_mode}")
 
-
     """Normalize segmentation mode string."""
     if segmentation_mode is None:
-        segmentation_mode = 'auto'
+        segmentation_mode = "auto"
     key = str(segmentation_mode).strip().lower()
     try:
         return SEGMENTATION_MODES[key]
@@ -569,7 +589,7 @@ def normalize_segmentation_mode(segmentation_mode: str | None) -> str:
 def normalize_exaggeration_merge_mode(merge_mode: str | None) -> str:
     """Normalize exaggeration merge mode string."""
     if merge_mode is None:
-        merge_mode = 'selected-priority'
+        merge_mode = "selected-priority"
     key = str(merge_mode).strip().lower()
     try:
         return EXAGGERATION_MERGE_MODES[key]
@@ -581,10 +601,10 @@ def normalize_target_colors(target_colors: Any) -> list[str]:
     """Parse and normalize a collection of hex color strings into #RRGGBB format."""
     normalized = []
     for token in _iter_color_tokens(target_colors):
-        text = token.removeprefix('#')
-        if len(text) != 6 or re.search(r'[^0-9A-Fa-f]', text):
+        text = token.removeprefix("#")
+        if len(text) != 6 or re.search(r"[^0-9A-Fa-f]", text):
             raise ValueError(f"Invalid target color: {token}")
-        normalized.append('#' + text.upper())
+        normalized.append("#" + text.upper())
     return _unique_preserve_order(normalized)
 
 
@@ -593,18 +613,26 @@ def target_color_rgb(target_colors: Any) -> np.ndarray:
     norm_colors = normalize_target_colors(target_colors)
     if not norm_colors:
         return np.zeros((0, 3), dtype=float)
-    return np.asarray([
-        [int(color[i:i + 2], 16) for i in (1, 3, 5)]
-        for color in norm_colors], dtype=float) / 255.0
+    return (
+        np.asarray(
+            [[int(color[i : i + 2], 16) for i in (1, 3, 5)] for color in norm_colors],
+            dtype=float,
+        )
+        / 255.0
+    )
 
 
-def circular_hue_distance(hue: np.ndarray | float, reference: np.ndarray | float) -> np.ndarray:
+def circular_hue_distance(
+    hue: np.ndarray | float, reference: np.ndarray | float
+) -> np.ndarray:
     """Compute circular distance between two hues in [0, 1]."""
     diff = np.abs(np.asarray(hue) - np.asarray(reference))
     return np.minimum(diff, 1.0 - diff)
 
 
-def dominant_overlay_hue(hue: np.ndarray, sat: np.ndarray, mask: np.ndarray) -> tuple[float | None, float]:
+def dominant_overlay_hue(
+    hue: np.ndarray, sat: np.ndarray, mask: np.ndarray
+) -> tuple[float | None, float]:
     """Compute the weighted circular mean hue and its directional coherence."""
     weights = sat[mask] + 1e-6
     if not len(weights):
@@ -646,18 +674,18 @@ def guided_target_color_mask(rgb: np.ndarray, target_colors: Any) -> np.ndarray:
     sat = hsv[..., 1][..., np.newaxis]
     val = hsv[..., 2][..., np.newaxis]
     deltas = rgb[..., np.newaxis, :] - colors[np.newaxis, np.newaxis, ...]
-    dist = np.sqrt(np.sum(deltas ** 2, axis=-1))
-    hue_dist = circular_hue_distance(
-        hsv[..., 0][..., np.newaxis], target_hsv[:, 0])
+    dist = np.sqrt(np.sum(deltas**2, axis=-1))
+    hue_dist = circular_hue_distance(hsv[..., 0][..., np.newaxis], target_hsv[:, 0])
     sat_delta = np.abs(sat - target_hsv[:, 1])
     val_delta = np.abs(val - target_hsv[:, 2])
     mask = (
-        (dist <= 0.20) &
-        (hue_dist <= 0.08) &
-        (sat >= 0.03) &
-        (sat_delta <= 0.25) &
-        (val_delta <= 0.18) &
-        (val <= 0.995))
+        (dist <= 0.20)
+        & (hue_dist <= 0.08)
+        & (sat >= 0.03)
+        & (sat_delta <= 0.25)
+        & (val_delta <= 0.18)
+        & (val <= 0.995)
+    )
     return mask.any(axis=-1)
 
 
@@ -671,8 +699,7 @@ def guided_target_hue_family_mask(rgb: np.ndarray, target_colors: Any) -> np.nda
         rgb = rgb / 255.0
     hsv = rgb_to_hsv_array(rgb)
     target_hsv = rgb_to_hsv_array(colors.reshape(1, -1, 3)).reshape(-1, 3)
-    hue_dist = circular_hue_distance(
-        hsv[..., 0][..., np.newaxis], target_hsv[:, 0])
+    hue_dist = circular_hue_distance(hsv[..., 0][..., np.newaxis], target_hsv[:, 0])
     sat = hsv[..., 1][..., np.newaxis]
     val = hsv[..., 2][..., np.newaxis]
     return ((hue_dist <= 0.10) & (sat >= 0.03) & (val <= 0.995)).any(axis=-1)
@@ -684,8 +711,8 @@ def light_overlay_colored_mask(rgb: np.ndarray) -> np.ndarray:
     maxc = rgb.max(axis=-1)
     minc = rgb.min(axis=-1)
     saturation = np.divide(
-        maxc - minc, maxc,
-        out=np.zeros_like(maxc, dtype=float), where=maxc > 0)
+        maxc - minc, maxc, out=np.zeros_like(maxc, dtype=float), where=maxc > 0
+    )
     return saturation >= 0.08
 
 
@@ -694,8 +721,7 @@ def remove_objects_smaller_than(arr: np.ndarray, min_size: int) -> np.ndarray:
     min_size = int(min_size)
     if min_size <= 1:
         return np.asarray(arr, dtype=bool)
-    return skim.remove_small_objects(
-        np.asarray(arr, dtype=bool), max_size=min_size - 1)
+    return skim.remove_small_objects(np.asarray(arr, dtype=bool), max_size=min_size - 1)
 
 
 # ---------------------------------------------------------------------------
@@ -775,7 +801,9 @@ TWO_AXIS_PEAK_SMOOTHING = 5
 TWO_AXIS_PAPER_PERCENTILE = 97.5
 
 
-def paper_white(rgb: np.ndarray, percentile: float = TWO_AXIS_PAPER_PERCENTILE) -> float:
+def paper_white(
+    rgb: np.ndarray, percentile: float = TWO_AXIS_PAPER_PERCENTILE
+) -> float:
     """Luminance of this figure's own paper (0-255).
 
     Every threshold in :func:`split_by_colour_and_luminance` is a ratio of this
@@ -811,7 +839,7 @@ def _luminance_peaks(
     bins = np.clip((values * 255.0).astype(int), 0, 255)
     hist = np.bincount(bins, minlength=256).astype(float)
     total = float(values.size)
-    smooth = ndi.uniform_filter1d(hist, size=TWO_AXIS_PEAK_SMOOTHING, mode='nearest')
+    smooth = ndi.uniform_filter1d(hist, size=TWO_AXIS_PEAK_SMOOTHING, mode="nearest")
     # Local maxima of the smoothed histogram, with a minimum separation.
     peaks: list[float] = []
     floor = smooth.max() * min_fraction
@@ -1047,8 +1075,11 @@ def split_by_colour_and_luminance(
         rgb_arr = np.dstack([rgb_arr, rgb_arr, rgb_arr])
     elif rgb_arr.ndim == 3 and rgb_arr.shape[-1] < 3:
         # 通道数不足（含 HxWx2 这类退化输入）：按灰度广播成 3 通道。
-        grey_2d = rgb_arr[..., 0] if rgb_arr.shape[-1] >= 1 else rgb_arr.reshape(
-            rgb_arr.shape[0], -1)
+        grey_2d = (
+            rgb_arr[..., 0]
+            if rgb_arr.shape[-1] >= 1
+            else rgb_arr.reshape(rgb_arr.shape[0], -1)
+        )
         rgb_arr = np.dstack([grey_2d, grey_2d, grey_2d])
     elif rgb_arr.ndim != 3:
         raise ValueError(
@@ -1101,7 +1132,8 @@ def split_by_colour_and_luminance(
     # 保留实现供将来"按 ROI（而非按列）分组"时复用；默认不启用。
     if not column_edges or len(column_edges) < 2:
         boundary, _tier_count = _resolve_solid_ratio(
-            rel, vivid, paper_ratio, solid_ratio, min_solid_ratio, min_peak_fraction)
+            rel, vivid, paper_ratio, solid_ratio, min_solid_ratio, min_peak_fraction
+        )
         pale_tier = ~is_paper & (rel >= boundary)
         solid = (rel < boundary) | (pale_tier & vivid)
         return solid, pale_tier & ~vivid
@@ -1137,14 +1169,21 @@ def split_by_colour_and_luminance(
         # 重复写一套 `ink_floor` 过滤（那会引入"同一判据两处实现"的漂移风险，
         # 且 `ink_floor` 只是该函数的参数、并非模块常量）。
         boundary_derived, tier_count = _resolve_solid_ratio(
-            band_rel, vivid[:, x0:x1], paper_ratio, solid_ratio,
-            min_solid_ratio, min_peak_fraction)
+            band_rel,
+            vivid[:, x0:x1],
+            paper_ratio,
+            solid_ratio,
+            min_solid_ratio,
+            min_peak_fraction,
+        )
         ink_peaks = _luminance_peaks(
-            band_rel, band_non_paper, paper_ratio, min_peak_fraction)
+            band_rel, band_non_paper, paper_ratio, min_peak_fraction
+        )
         ink_peaks = [p for p in ink_peaks if p < TWO_AXIS_INK_FLOOR]
         if not ink_peaks:
             ink_peaks = _luminance_peaks(
-                band_rel, band_non_paper, paper_ratio, min_peak_fraction)
+                band_rel, band_non_paper, paper_ratio, min_peak_fraction
+            )
 
         if tier_count >= 2:
             # 双层列：最亮峰是包络，其余是实心。
@@ -1153,8 +1192,7 @@ def split_by_colour_and_luminance(
             # 分支**同一套判据**，不出现两处实现漂移。
             boundary = boundary_derived
             band_pale = band_non_paper & (band_rel >= boundary)
-            solid[:, x0:x1] = (band_rel < boundary) | (
-                band_pale & vivid[:, x0:x1])
+            solid[:, x0:x1] = (band_rel < boundary) | (band_pale & vivid[:, x0:x1])
             shadow[:, x0:x1] = band_pale & ~vivid[:, x0:x1]
         else:
             # 单层列：唯一的墨层峰就是实心，该列没有包络。
@@ -1181,7 +1219,8 @@ def split_by_colour_and_luminance(
     tail = min(width, edges[-1])
     if tail < width:
         boundary, _tier_count = _resolve_solid_ratio(
-            rel, vivid, paper_ratio, solid_ratio, min_solid_ratio, min_peak_fraction)
+            rel, vivid, paper_ratio, solid_ratio, min_solid_ratio, min_peak_fraction
+        )
         tail_rel = rel[:, tail:]
         tail_pale = ~(tail_rel >= 1.0) & (tail_rel >= boundary)
         solid[:, tail:] = (tail_rel < boundary) | (tail_pale & vivid[:, tail:])
@@ -1190,16 +1229,25 @@ def split_by_colour_and_luminance(
     return solid, shadow
 
 
-def _derived_boundary(rel: np.ndarray, chroma: np.ndarray, *,
-                      paper_ratio: float = TWO_AXIS_PAPER_RATIO,
-                      solid_ratio: float = TWO_AXIS_SOLID_RATIO,
-                      vivid_chroma: float = TWO_AXIS_VIVID_CHROMA,
-                      min_solid_ratio: float = TWO_AXIS_MIN_SOLID_RATIO,
-                      min_peak_fraction: float = TWO_AXIS_MIN_PEAK_FRACTION) -> float:
+def _derived_boundary(
+    rel: np.ndarray,
+    chroma: np.ndarray,
+    *,
+    paper_ratio: float = TWO_AXIS_PAPER_RATIO,
+    solid_ratio: float = TWO_AXIS_SOLID_RATIO,
+    vivid_chroma: float = TWO_AXIS_VIVID_CHROMA,
+    min_solid_ratio: float = TWO_AXIS_MIN_SOLID_RATIO,
+    min_peak_fraction: float = TWO_AXIS_MIN_PEAK_FRACTION,
+) -> float:
     """The ``boundary`` :func:`split_by_colour_and_luminance` would use here."""
     boundary, _tiers = _resolve_solid_ratio(
-        rel, chroma >= vivid_chroma, paper_ratio, solid_ratio,
-        min_solid_ratio, min_peak_fraction)
+        rel,
+        chroma >= vivid_chroma,
+        paper_ratio,
+        solid_ratio,
+        min_solid_ratio,
+        min_peak_fraction,
+    )
     return boundary
 
 
@@ -1380,8 +1428,10 @@ def _near_hue_solid(
         r, g, b = arr[..., 0][nz], arr[..., 1][nz], arr[..., 2][nz]
         mx, d = maxc[nz], delta[nz]
         h = np.where(
-            mx == r, ((g - b) / d) % 6.0,
-            np.where(mx == g, (b - r) / d + 2.0, (r - g) / d + 4.0))
+            mx == r,
+            ((g - b) / d) % 6.0,
+            np.where(mx == g, (b - r) / d + 2.0, (r - g) / d + 4.0),
+        )
         hue[nz] = h / 6.0
 
     lum = grey_matrix(arr)
@@ -1402,7 +1452,11 @@ def _near_hue_solid(
         # 「淡版」的定量判据：同色相实心在该邻域内的明度，远低于候选像素。
         # 只有真正被"淡化"的像素才算包络；橙实心的抗锯齿晕圈色相相邻，
         # 但它与实心只差 60–120 个明度级，达不到 lighten_ratio。
-        ref = float(np.median(lum[same_hue & near])) if (same_hue & near).any()             else float(np.median(lum[same_hue]))
+        ref = (
+            float(np.median(lum[same_hue & near]))
+            if (same_hue & near).any()
+            else float(np.median(lum[same_hue]))
+        )
         out |= cand & (lum >= lighten_ratio * max(ref, 1.0))
     return out
 
@@ -1460,9 +1514,12 @@ def column_white_points(
     edges = [int(e) for e in edges]
     out: list[float] = []
     for a, b in zip(edges[:-1], edges[1:]):
-        band = bright[:, max(0, a):max(0, b)]
-        out.append(float(np.percentile(lum[:, max(0, a):max(0, b)][band], 95))
-                   if band.any() else fallback)
+        band = bright[:, max(0, a) : max(0, b)]
+        out.append(
+            float(np.percentile(lum[:, max(0, a) : max(0, b)][band], 95))
+            if band.any()
+            else fallback
+        )
     return np.asarray(out, dtype=float)
 
 
@@ -1506,8 +1563,11 @@ def two_layer_split(
     neutral = chroma <= neutral_chroma_tol
 
     if column_edges is None:
-        ref = float(np.percentile(lum[neutral & (lum >= 180.0)], 95)) \
-            if (neutral & (lum >= 180.0)).any() else 255.0
+        ref = (
+            float(np.percentile(lum[neutral & (lum >= 180.0)], 95))
+            if (neutral & (lum >= 180.0)).any()
+            else 255.0
+        )
     else:
         edges = [int(e) for e in column_edges]
         if len(edges) < 2:
@@ -1515,8 +1575,9 @@ def two_layer_split(
         else:
             # 逐带白点 → 逐像素（向量化：把带号映射回列）。
             centres = [(a + b) // 2 for a, b in zip(edges[:-1], edges[1:])]
-            white_pts = column_white_points(rgb, edges,
-                                            neutral_chroma_tol=neutral_chroma_tol)
+            white_pts = column_white_points(
+                rgb, edges, neutral_chroma_tol=neutral_chroma_tol
+            )
             col_of = np.searchsorted(np.asarray(centres), np.arange(rgb.shape[1]))
             col_of = np.clip(col_of, 0, len(white_pts) - 1)
             ref = white_pts[col_of][None, :]
@@ -1593,10 +1654,10 @@ def two_layer_split(
     background = paper | structure
     solid = ~background & ~shadow
     return {
-        'background': background,
-        'shadow': shadow,
-        'solid': solid,
-        'content_neutral': solid & neutral,
+        "background": background,
+        "shadow": shadow,
+        "solid": solid,
+        "content_neutral": solid & neutral,
     }
 
 
@@ -1649,9 +1710,9 @@ def two_layer_consistency(
     lum = grey_matrix(arr * 255.0)
     chroma = arr.max(axis=-1) - arr.min(axis=-1)
     neutral = chroma <= neutral_chroma_tol
-    solid = parts['solid']
-    shadow = parts['shadow']
-    background = parts['background']
+    solid = parts["solid"]
+    shadow = parts["shadow"]
+    background = parts["background"]
     total = float(arr.shape[0] * arr.shape[1])
 
     # 候选 = 不是纸、不是深墨、且成片的淡层。深墨阈值 150 与验收口径一致。
@@ -1668,9 +1729,11 @@ def two_layer_consistency(
         r, g, b = arr[..., 0], arr[..., 1], arr[..., 2]
         d = delta[nz]
         mx = maxc[nz]
-        h = np.where(mx == r[nz], ((g[nz] - b[nz]) / d) % 6.0,
-                     np.where(mx == g[nz], (b[nz] - r[nz]) / d + 2.0,
-                              (r[nz] - g[nz]) / d + 4.0))
+        h = np.where(
+            mx == r[nz],
+            ((g[nz] - b[nz]) / d) % 6.0,
+            np.where(mx == g[nz], (b[nz] - r[nz]) / d + 2.0, (r[nz] - g[nz]) / d + 4.0),
+        )
         hue[nz] = h / 6.0
 
     # 分组用**色相本身**，不用 `neutral`（通道极差 ≤ 32 就算中性）：本图粉
@@ -1702,13 +1765,15 @@ def two_layer_consistency(
         in_shadow = float((layer & shadow).sum() / count)
         if in_solid < 0.10 and in_shadow < 0.10:
             continue
-        layers.append({
-            "group": name,
-            "pixels": count,
-            "solid_share": round(in_solid, 3),
-            "shadow_share": round(in_shadow, 3),
-            "largest_blob": blob,
-        })
+        layers.append(
+            {
+                "group": name,
+                "pixels": count,
+                "solid_share": round(in_solid, 3),
+                "shadow_share": round(in_shadow, 3),
+                "largest_blob": blob,
+            }
+        )
 
     if len(layers) < 2:
         return {"consistent": True, "layers": layers, "reason": None}
@@ -1741,7 +1806,7 @@ def split_solid_and_shadow(
     must never reach a reading.
     """
     parts = two_layer_split(rgb, **kwargs)
-    return parts['solid'], parts['shadow']
+    return parts["solid"], parts["shadow"]
 
 
 def shadow_layers(rgb: np.ndarray, **kwargs: Any) -> dict[str, np.ndarray]:
@@ -1755,18 +1820,19 @@ def shadow_layers(rgb: np.ndarray, **kwargs: Any) -> dict[str, np.ndarray]:
     压成一个掩膜后，用户再也分不清哪个数是读出来的。
     """
     parts = two_layer_split(rgb, **kwargs)
-    tol = kwargs.get('neutral_chroma_tol', NEUTRAL_CHROMA_TOL)
+    tol = kwargs.get("neutral_chroma_tol", NEUTRAL_CHROMA_TOL)
     rgb_arr = np.asarray(rgb, dtype=float)[..., :3]
     neutral = (rgb_arr.max(axis=-1) - rgb_arr.min(axis=-1)) <= tol
     return {
-        'solid_neutral': parts['solid'] & neutral,
-        'solid_color': parts['solid'] & ~neutral,
-        'shadow': parts['shadow'],
+        "solid_neutral": parts["solid"] & neutral,
+        "solid_color": parts["solid"] & ~neutral,
+        "shadow": parts["shadow"],
     }
 
 
-def _standard_foreground(rgb: np.ndarray, threshold: float,
-                         column_edges: list[int] | None = None) -> np.ndarray:
+def _standard_foreground(
+    rgb: np.ndarray, threshold: float, column_edges: list[int] | None = None
+) -> np.ndarray:
     """The ``standard`` path: two-axis layered, absolute threshold as a floor.
 
     Why the two are combined rather than one replacing the other:
@@ -1786,8 +1852,7 @@ def _standard_foreground(rgb: np.ndarray, threshold: float,
     """
     # `column_edges` 必须透传：按列判定"单层 / 双层"是本轮修复的核心，
     # 不透传则按列分支永不生效（实测灰列覆盖率仍为 0%）。
-    solid, shadow = split_by_colour_and_luminance(
-        rgb, column_edges=column_edges)
+    solid, shadow = split_by_colour_and_luminance(rgb, column_edges=column_edges)
     abs_ink = rgb.sum(axis=-1) <= threshold
     lum = grey_matrix(rgb)
     paper = paper_white(rgb)
@@ -1798,14 +1863,16 @@ def _standard_foreground(rgb: np.ndarray, threshold: float,
     return (solid | abs_ink) & ~shell
 
 
-def build_foreground(arr: np.ndarray,
-                     threshold: float = 230 * 3,
-                     extraction_mode: str = 'standard',
-                     segmentation_mode: str = 'auto',
-                     target_colors: Any = None,
-                     guided_min_pixels: int = 12,
-                     column_edges: Any = None,
-                     two_axis: bool = True) -> np.ndarray:
+def build_foreground(
+    arr: np.ndarray,
+    threshold: float = 230 * 3,
+    extraction_mode: str = "standard",
+    segmentation_mode: str = "auto",
+    target_colors: Any = None,
+    guided_min_pixels: int = 12,
+    column_edges: Any = None,
+    two_axis: bool = True,
+) -> np.ndarray:
     """Return a foreground boolean mask for an image array.
 
     ``column_edges`` is only used by the ``solid-over-shadow`` /
@@ -1823,35 +1890,38 @@ def build_foreground(arr: np.ndarray,
     seg_mode = normalize_segmentation_mode(segmentation_mode)
     t_colors = normalize_target_colors(target_colors)
     two_layer_kwargs: dict[str, Any] = (
-        {} if column_edges is None else {'column_edges': column_edges})
+        {} if column_edges is None else {"column_edges": column_edges}
+    )
     arr = np.asarray(arr)
     rgb = arr[..., :3]
-    alpha = arr[..., -1] > 0 if arr.shape[-1] > 3 else np.ones(
-        arr.shape[:2], dtype=bool)
+    alpha = (
+        arr[..., -1] > 0 if arr.shape[-1] > 3 else np.ones(arr.shape[:2], dtype=bool)
+    )
 
-    if ext_mode == 'solid-over-shadow' or seg_mode == 'two-layer':
+    if ext_mode == "solid-over-shadow" or seg_mode == "two-layer":
         # 双层图：只取实心层。阴影层是 5× 视效，不得进入读数。
         # 两个入口指向同一实现——`extraction_mode` 是前端暴露的旋钮，
         # `segmentation_mode='two-layer'` 是内部/测试用的精确选择器。
         solid, _shadow = split_solid_and_shadow(rgb, **two_layer_kwargs)
         return alpha & solid
 
-    if ext_mode in ['standard', 'dark-ink-light']:
+    if ext_mode in ["standard", "dark-ink-light"]:
         if two_axis:
             auto_foreground = alpha & _standard_foreground(
-                rgb, threshold, column_edges=column_edges)
+                rgb, threshold, column_edges=column_edges
+            )
         else:
             auto_foreground = alpha & (rgb.sum(axis=-1) <= threshold)
-    elif ext_mode == 'light-ink-dark':
+    elif ext_mode == "light-ink-dark":
         auto_foreground = alpha & (rgb.sum(axis=-1) >= threshold)
-    elif ext_mode == 'light-overlay-white':
+    elif ext_mode == "light-overlay-white":
         bright = rgb.sum(axis=-1) > threshold
         colored = light_overlay_colored_mask(rgb)
         auto_foreground = alpha & (~bright | colored)
     else:
         auto_foreground = alpha & (rgb.sum(axis=-1) <= threshold)
 
-    if seg_mode != 'guided' or not t_colors:
+    if seg_mode != "guided" or not t_colors:
         return auto_foreground
 
     rgb_float = np.asarray(rgb, dtype=float)
@@ -1864,8 +1934,7 @@ def build_foreground(arr: np.ndarray,
     labels = skim.label(target_mask, connectivity=2)
     if labels.max() == 0:
         return guided
-    dilated_auto = skim.dilation(
-        auto_foreground, footprint=np.ones((3, 3), dtype=bool))
+    dilated_auto = skim.dilation(auto_foreground, footprint=np.ones((3, 3), dtype=bool))
     touching = labels[dilated_auto & (labels > 0)]
     touching = np.unique(touching[touching > 0])
     if not len(touching):
@@ -1878,43 +1947,55 @@ def build_foreground(arr: np.ndarray,
     return guided
 
 
-def to_grey(image: Image.Image | np.ndarray,
-            threshold: float = 230 * 3,
-            extraction_mode: str = 'standard',
-            segmentation_mode: str = 'auto',
-            target_colors: Any = None) -> np.ndarray:
+def to_grey(
+    image: Image.Image | np.ndarray,
+    threshold: float = 230 * 3,
+    extraction_mode: str = "standard",
+    segmentation_mode: str = "auto",
+    target_colors: Any = None,
+) -> np.ndarray:
     """Convert an image to a masked greyscale numpy array."""
     pil_img = load_image(image)
     arr = np.asarray(pil_img, dtype=int)
     foreground = build_foreground(
-        arr, threshold=threshold, extraction_mode=extraction_mode,
+        arr,
+        threshold=threshold,
+        extraction_mode=extraction_mode,
         segmentation_mode=segmentation_mode,
-        target_colors=target_colors)
-    grey = np.array(pil_img.convert('L'), dtype=int) + 1
+        target_colors=target_colors,
+    )
+    grey = np.array(pil_img.convert("L"), dtype=int) + 1
     grey[(~foreground) | (grey > 255)] = 0
     return grey
 
 
-def to_binary(image: Image.Image | np.ndarray,
-              threshold: float = 230 * 3,
-              extraction_mode: str = 'standard',
-              segmentation_mode: str = 'auto',
-              target_colors: Any = None) -> np.ndarray:
+def to_binary(
+    image: Image.Image | np.ndarray,
+    threshold: float = 230 * 3,
+    extraction_mode: str = "standard",
+    segmentation_mode: str = "auto",
+    target_colors: Any = None,
+) -> np.ndarray:
     """Convert an image to a clean binary numpy array (0 for background, 1 for foreground)."""
     grey = to_grey(
-        image, threshold=threshold, extraction_mode=extraction_mode,
+        image,
+        threshold=threshold,
+        extraction_mode=extraction_mode,
         segmentation_mode=segmentation_mode,
-        target_colors=target_colors)
+        target_colors=target_colors,
+    )
     binary = np.zeros_like(grey, dtype=np.uint8)
     binary[grey > 0] = 1
     return binary
 
 
-def split_primary_exagg(rgb: np.ndarray,
-                        base_mask: np.ndarray,
-                        overlay_mask: np.ndarray,
-                        bounds: Sequence[tuple[int, int]],
-                        focus_mask: np.ndarray | None = None) -> np.ndarray:
+def split_primary_exagg(
+    rgb: np.ndarray,
+    base_mask: np.ndarray,
+    overlay_mask: np.ndarray,
+    bounds: Sequence[tuple[int, int]],
+    focus_mask: np.ndarray | None = None,
+) -> np.ndarray:
     """Suggest pale same-hue exaggeration pixels using spatial constraints."""
     base_mask = np.asarray(base_mask, dtype=bool)
     overlay_mask = np.asarray(overlay_mask, dtype=bool)
@@ -1941,13 +2022,15 @@ def split_primary_exagg(rgb: np.ndarray,
         if section_overlay.sum() < 12 or section_colored.sum() < 12:
             continue
         dom_hue, confidence = dominant_overlay_hue(
-            hue[section], sat[section], section_colored)
+            hue[section], sat[section], section_colored
+        )
         if dom_hue is None or confidence < 0.45:
             continue
 
-        family_source = focus_mask[section] if focus_mask is not None else section_overlay
-        family = family_source & (circular_hue_distance(
-            hue[section], dom_hue) <= 0.10)
+        family_source = (
+            focus_mask[section] if focus_mask is not None else section_overlay
+        )
+        family = family_source & (circular_hue_distance(hue[section], dom_hue) <= 0.10)
         family_current = family & base_mask[section]
         section_candidate = family & ~base_mask[section]
         if family_current.sum() < 12:
@@ -1967,28 +2050,32 @@ def split_primary_exagg(rgb: np.ndarray,
                 light_inside = family_current & (score[section] >= thresh)
                 dark_inside = family_current & (~light_inside)
                 split_ok = (
-                    light_inside.sum() >= 8 and dark_inside.sum() >= 8 and
-                    light_inside.sum() < 0.8 * family_current.sum() and
-                    (val[section][light_inside].mean() >
-                     val[section][dark_inside].mean() + 0.05) and
-                    (sat[section][light_inside].mean() <
-                     sat[section][dark_inside].mean() - 0.03))
+                    light_inside.sum() >= 8
+                    and dark_inside.sum() >= 8
+                    and light_inside.sum() < 0.8 * family_current.sum()
+                    and (
+                        val[section][light_inside].mean()
+                        > val[section][dark_inside].mean() + 0.05
+                    )
+                    and (
+                        sat[section][light_inside].mean()
+                        < sat[section][dark_inside].mean() - 0.03
+                    )
+                )
                 if split_ok:
                     primary = dark_inside
                     layered |= light_inside
         if not layered.any():
             continue
 
-        expanded_primary = skim.dilation(
-            primary, footprint=np.ones((3, 3), dtype=bool))
+        expanded_primary = skim.dilation(primary, footprint=np.ones((3, 3), dtype=bool))
         if not split_ok:
             layered &= expanded_primary | section_candidate
 
         light_x = np.where(light_inside)[1]
         dark_x = np.where(primary)[1]
         if split_ok and len(light_x) and len(dark_x):
-            preferred_side = (
-                1 if np.nanmedian(light_x) >= np.nanmedian(dark_x) else -1)
+            preferred_side = 1 if np.nanmedian(light_x) >= np.nanmedian(dark_x) else -1
         elif section_candidate.any():
             preferred_side = 1
         else:
@@ -2033,16 +2120,19 @@ def estimate_deskew_angle(pil_img: Image.Image, max_angle: float = 7.0) -> float
     import warnings
     from skimage.transform import radon
 
-    gray = pil_img.convert('L')
+    gray = pil_img.convert("L")
     max_d = 260
     if max(gray.width, gray.height) > max_d:
         s = max_d / max(gray.width, gray.height)
-        gray = gray.resize((max(1, int(gray.width * s)), max(1, int(gray.height * s))), Image.Resampling.BILINEAR)
+        gray = gray.resize(
+            (max(1, int(gray.width * s)), max(1, int(gray.height * s))),
+            Image.Resampling.BILINEAR,
+        )
     arr = np.array(gray)
     binary = (arr < (np.mean(arr) * 0.9)).astype(float)
 
     with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
+        warnings.simplefilter("ignore")
         # Stage 1: Coarse search step 0.5 deg
         theta_coarse = np.arange(90 - max_angle, 90 + max_angle + 0.5, 0.5)
         sino1 = radon(binary, theta=theta_coarse)
@@ -2058,4 +2148,3 @@ def estimate_deskew_angle(pil_img: Image.Image, max_angle: float = 7.0) -> float
     if abs(skew) < 0.25:
         return 0.0
     return round(float(skew), 2)
-

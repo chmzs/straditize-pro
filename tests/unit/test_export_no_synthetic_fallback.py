@@ -54,7 +54,10 @@ def test_source_has_no_synthetic_fallback_pattern() -> None:
     from pathlib import Path
 
     source = (
-        Path(__file__).resolve().parents[2] / "straditize_core" / "session_parts" / "export.py"
+        Path(__file__).resolve().parents[2]
+        / "straditize_core"
+        / "session_parts"
+        / "export.py"
     ).read_text(encoding="utf-8")
     executable = [ln for ln in source.splitlines() if not ln.lstrip().startswith("#")]
 
@@ -65,6 +68,7 @@ def test_source_has_no_synthetic_fallback_pattern() -> None:
     start = source.index("def _ensure_export_column_points")
     end = source.index("def _export_rows_and_depths")
     segment = source[start:end]
-    assert "except (ValueError, KeyError, RuntimeError, JsonRpcError):\n                        pass" not in segment, (
-        "数字化失败又被静默吞掉了"
-    )
+    assert (
+        "except (ValueError, KeyError, RuntimeError, JsonRpcError):\n                        pass"
+        not in segment
+    ), "数字化失败又被静默吞掉了"

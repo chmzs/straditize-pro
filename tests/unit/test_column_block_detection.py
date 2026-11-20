@@ -28,6 +28,7 @@
 1. **不得误伤真实 bar 列**（任务书点名的最大风险点）；
 2. **反向哨兵**：五张图上除命中列外，其余列一个都不许被标。
 """
+
 from __future__ import annotations
 
 import io

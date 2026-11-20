@@ -110,9 +110,11 @@ def _session(*, samples: int = 0, dense_points: bool = True) -> StraditizeSessio
     session.primary_axis = "age"
     session.depth_unit = "ka"
     session.samples = [
-        {"row_px": ROI_TOP + round(i * (ROI_HEIGHT - 1) / max(samples - 1, 1)),
-         "depth": None,
-         "source": "auto"}
+        {
+            "row_px": ROI_TOP + round(i * (ROI_HEIGHT - 1) / max(samples - 1, 1)),
+            "depth": None,
+            "source": "auto",
+        }
         for i in range(samples)
     ]
     return session
@@ -193,7 +195,9 @@ def test_three_exits_are_byte_identical_pixel_rows() -> None:
     download = session.export_data("csv")["csv"]
     archive_csv, _, _ = _archive_csv(session)
 
-    assert panel == download, "面板（export.csv{dataset:'samples'}）与下载必须逐字节相同"
+    assert panel == download, (
+        "面板（export.csv{dataset:'samples'}）与下载必须逐字节相同"
+    )
     assert archive_csv == download.encode("utf-8"), "归档 data.csv 必须是下载的字节复本"
     assert _sha(panel) == _sha(archive_csv)
 
@@ -229,9 +233,7 @@ def test_rowcount_samplecount_mismatch_is_refused(monkeypatch) -> None:
     def _inflated(dataset, *, strict, legacy_column_name=False):
         import pandas as pd
 
-        frame = original(
-            dataset, strict=strict, legacy_column_name=legacy_column_name
-        )
+        frame = original(dataset, strict=strict, legacy_column_name=legacy_column_name)
         return pd.concat([frame, frame], ignore_index=True)
 
     monkeypatch.setattr(session, "_dataset_frame", _inflated)

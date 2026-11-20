@@ -122,6 +122,7 @@ export type RpcMethod =
   | 'project.load'
   | 'project.new'
   | 'project.save'
+  | 'project.setName'
   | 'qa.summarize'
   | 'roi.create'
   | 'roi.groupCreate'

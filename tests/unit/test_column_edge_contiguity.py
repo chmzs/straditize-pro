@@ -54,7 +54,9 @@ from straditize_core.session import StraditizeSession
 CONTIGUITY_TOLERANCE_PX = 2
 
 
-def _session(sample_key: str, bounds: tuple[list[int], list[int]] | None) -> StraditizeSession:
+def _session(
+    sample_key: str, bounds: tuple[list[int], list[int]] | None
+) -> StraditizeSession:
     session = StraditizeSession()
     session._init_cleanup()
     session.load_image(sample_key=sample_key)
@@ -93,9 +95,7 @@ def test_columns_are_contiguous_so_the_left_axis_rule_covers_the_right_edge(
         (i, round(float(cols[i]["end"])) - round(float(cols[i + 1]["start"])))
         for i in range(len(cols) - 1)
     ]
-    offenders = [
-        (i, gap) for i, gap in gaps if abs(gap) > CONTIGUITY_TOLERANCE_PX
-    ]
+    offenders = [(i, gap) for i, gap in gaps if abs(gap) > CONTIGUITY_TOLERANCE_PX]
 
     assert offenders == [], (
         f"{sample_key} 的列不再首尾相接：{offenders}（列号, end[i]-start[i+1]）。"

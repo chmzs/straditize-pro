@@ -62,13 +62,13 @@ def test_redetection_keeps_confirmed_erasures() -> None:
     first = _detect(session, roi_id)
     vertical = next(c for c in first if c["axis"] == "v")
     session.set_line_geometry_status(vertical["id"], "removed", roi_id=roi_id)
-    assert session.grid_line_mask[10, vertical["at"]], "前置条件：确认后该列像素应被扣掉"
+    assert session.grid_line_mask[10, vertical["at"]], (
+        "前置条件：确认后该列像素应被扣掉"
+    )
 
     second = _detect(session, roi_id)
     same = [
-        c
-        for c in second
-        if c["axis"] == "v" and c["geometry"] == vertical["geometry"]
+        c for c in second if c["axis"] == "v" and c["geometry"] == vertical["geometry"]
     ]
     assert same, "重检没检回同一条竖线（几何应当幂等）"
     assert same[0]["status"] == "removed", (

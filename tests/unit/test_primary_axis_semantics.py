@@ -9,6 +9,7 @@
 本文件的判据都是**两值差异显著**的形式：反查值与被误用值相差一个数量级，任何
 一侧走错都会立刻变红，不存在"看起来差不多"的假绿。
 """
+
 from __future__ import annotations
 
 import unittest
@@ -36,9 +37,13 @@ class TestPrimaryAxisCalibration(unittest.TestCase):
     def _session(self) -> StraditizeSession:
         session = StraditizeSession()
         # y_scale: reading = pixel * 1 + 0，于是"Y 读数"就等于我们给的 row 值。
-        session.calibrate_axes([{"pixel": 0.0, "val": 0.0}, {"pixel": 1000.0, "val": 1000.0}])
+        session.calibrate_axes(
+            [{"pixel": 0.0, "val": 0.0}, {"pixel": 1000.0, "val": 1000.0}]
+        )
         # 4 个样品层位，Row 值即 Y 轴读数（下面按主轴语义分别解释）。
-        session.column_points = {0: [{"row": r, "x": 10} for r in (0.0, 250.0, 500.0, 750.0)]}
+        session.column_points = {
+            0: [{"row": r, "x": 10} for r in (0.0, 250.0, 500.0, 750.0)]
+        }
         session.age_depth_model = _linear_model()
         return session
 

@@ -227,7 +227,9 @@ def test_four_export_formats_and_grid_and_qa_produce_identical_values(
     parquet_path = tmp_path / "out.parquet"
     captured_parquet_dfs: list[pd.DataFrame] = []
 
-    def _capture_to_parquet(self_df: pd.DataFrame, path: Any, index: bool = False, **kwargs: Any) -> None:
+    def _capture_to_parquet(
+        self_df: pd.DataFrame, path: Any, index: bool = False, **kwargs: Any
+    ) -> None:
         captured_parquet_dfs.append(self_df.copy())
         Path(path).write_bytes(b"PAR1")
 
@@ -240,7 +242,9 @@ def test_four_export_formats_and_grid_and_qa_produce_identical_values(
     # 3. XLSX export (`export_multi_xlsx`)
     #    `base64` 是 P1-A 修复后的权威字段（`data` 保留为同一 base64 串）。
     #    旧实现返回原始 bytes，json.dumps 无法序列化 → RPC 断连。
-    xlsx_res = session.export_multi_xlsx(include_meta_sheets=False, include_readme=False)
+    xlsx_res = session.export_multi_xlsx(
+        include_meta_sheets=False, include_readme=False
+    )
     wb = openpyxl.load_workbook(io.BytesIO(base64.b64decode(xlsx_res["base64"])))
     ws = wb["pollen"]
     rows = list(ws.iter_rows(values_only=True))
@@ -254,10 +258,18 @@ def test_four_export_formats_and_grid_and_qa_produce_identical_values(
     df_lipd = pd.DataFrame(lipd_cols)[["depth", "Pinus", "Betula", "Charcoal"]]
 
     for col_name, exp_vals in expected.items():
-        assert df_csv[col_name].tolist() == pytest.approx(exp_vals), f"CSV mismatch on {col_name}"
-        assert df_parquet[col_name].tolist() == pytest.approx(exp_vals), f"Parquet mismatch on {col_name}"
-        assert df_xlsx[col_name].tolist() == pytest.approx(exp_vals), f"XLSX mismatch on {col_name}"
-        assert df_lipd[col_name].tolist() == pytest.approx(exp_vals), f"LiPD mismatch on {col_name}"
+        assert df_csv[col_name].tolist() == pytest.approx(exp_vals), (
+            f"CSV mismatch on {col_name}"
+        )
+        assert df_parquet[col_name].tolist() == pytest.approx(exp_vals), (
+            f"Parquet mismatch on {col_name}"
+        )
+        assert df_xlsx[col_name].tolist() == pytest.approx(exp_vals), (
+            f"XLSX mismatch on {col_name}"
+        )
+        assert df_lipd[col_name].tolist() == pytest.approx(exp_vals), (
+            f"LiPD mismatch on {col_name}"
+        )
 
     # 5. Step 7 (`extract_grid_values`) at depths [10.0, 20.0]
     grid_res = session.extract_grid_values(depths=[10.0, 20.0])
@@ -358,7 +370,6 @@ def test_group_slope_zero_point_is_start_plus_axis_stroke() -> None:
     assert (scale.abs_px1, scale.val1) == (148.0, 0.5)
 
 
-
 def _make_group_session(value_per_px, group_stroke):
     session = StraditizeSession()
     roi = session.roi_create(name="pollen", composition=True)["roi"]
@@ -399,8 +410,8 @@ def test_zero_column_axis_stroke_is_valid() -> None:
     session, _group, col = _make_group_session(0.5, 7.0)
     col["axis_stroke_px"] = 0
     scale = resolve_column_scale(session, col)
-    assert scale.abs_px0 == 140.0, (
-        "0 必须生效（0 点 = 列左缘 140），实得 %s" % (scale.abs_px0,)
+    assert scale.abs_px0 == 140.0, "0 必须生效（0 点 = 列左缘 140），实得 %s" % (
+        scale.abs_px0,
     )
 
 

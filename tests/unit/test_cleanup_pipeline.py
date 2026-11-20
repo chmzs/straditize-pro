@@ -25,7 +25,9 @@ def _session_with_crossed_artifacts() -> tuple[StraditizeSession, str]:
     return session, roi["id"]
 
 
-def test_auto_and_candidate_masks_are_composed_and_can_be_cleared_independently() -> None:
+def test_auto_and_candidate_masks_are_composed_and_can_be_cleared_independently() -> (
+    None
+):
     """Automatic horizontal removal must not erase a selected candidate mask."""
     session, roi_id = _session_with_crossed_artifacts()
     candidates = session.detect_line_candidates(
@@ -45,7 +47,9 @@ def test_auto_and_candidate_masks_are_composed_and_can_be_cleared_independently(
     assert session.grid_line_mask[10, 40]
     assert not session.grid_line_mask[20, 10]
     encoded = candidate_result["overlay_png"].split(",", 1)[1]
-    preview = np.asarray(Image.open(io.BytesIO(base64.b64decode(encoded))).convert("RGBA"))
+    preview = np.asarray(
+        Image.open(io.BytesIO(base64.b64decode(encoded))).convert("RGBA")
+    )
     assert tuple(preview[20, 10])[:3] == (245, 158, 11)
     assert tuple(preview[10, 40])[:3] == (239, 68, 68)
     assert candidate_result["overlay_legend"]["candidate"] == "#f59e0b"
@@ -95,7 +99,9 @@ def test_cleanup_geometry_survives_a_diagram_data_refresh() -> None:
 
     # 1. The flat arrays the canvas overlay reads must be populated.
     assert payload["line_candidates"], "getDiagramData dropped line_candidates"
-    assert payload["selected_candidate_ids"], "getDiagramData dropped selected_candidate_ids"
+    assert payload["selected_candidate_ids"], (
+        "getDiagramData dropped selected_candidate_ids"
+    )
     assert horizontal["id"] in payload["selected_candidate_ids"]
 
     by_id = {c["id"]: c for c in payload["line_candidates"]}

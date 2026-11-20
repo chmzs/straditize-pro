@@ -84,6 +84,7 @@ export function createInspectorCallbacks(
     },
     onSelectTaxa: (taxaId: string) => {
       canvasComponent.setActiveTaxa(taxaId);
+      canvasComponent.scrollToColumn(taxaId);
       callbacks.updateFooter();
     },
     onRedigitizeColumn: async () => {

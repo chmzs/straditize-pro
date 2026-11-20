@@ -62,7 +62,9 @@ def _hoya_session() -> tuple[StraditizeSession, str, object]:
     session._init_cleanup()
     session.load_image(sample_key="hoya")
     roi_id = session.rois[0]["id"]
-    session.detect_columns(data_xlim=HOYA_X_BOUNDS, data_ylim=HOYA_Y_BOUNDS, roi_id=roi_id)
+    session.detect_columns(
+        data_xlim=HOYA_X_BOUNDS, data_ylim=HOYA_Y_BOUNDS, roi_id=roi_id
+    )
     roi = session._roi_for(roi_id)[1]
     return session, roi_id, roi
 
@@ -79,7 +81,9 @@ def _session_vertical_rich() -> tuple[StraditizeSession, str]:
 # ----------------------------------------------------------------------
 
 
-def _assert_vertical_off_keeps_horizontals(session: StraditizeSession, roi_id: str) -> None:
+def _assert_vertical_off_keeps_horizontals(
+    session: StraditizeSession, roi_id: str
+) -> None:
     """判据体（金丝雀复用同一段，保证"红的确实是这条判据"）。"""
     baseline = session.detect_line_candidates(roi_id)["candidates"]
     base_kinds = _kinds(baseline)
@@ -87,7 +91,9 @@ def _assert_vertical_off_keeps_horizontals(session: StraditizeSession, roi_id: s
         f"前置：默认调用必须真有竖线候选可关（实测 {base_kinds}）—— "
         "否则本条判据恒绿、零信息量"
     )
-    assert base_kinds.get("A", 0) > 0, f"前置：默认调用必须真有横向候选（实测 {base_kinds}）"
+    assert base_kinds.get("A", 0) > 0, (
+        f"前置：默认调用必须真有横向候选（实测 {base_kinds}）"
+    )
 
     off = session.detect_line_candidates(roi_id, include_vertical=False)["candidates"]
     off_kinds = _kinds(off)
@@ -97,8 +103,7 @@ def _assert_vertical_off_keeps_horizontals(session: StraditizeSession, roi_id: s
         "开关必须在**生成阶段**生效，不是生成后过滤"
     )
     assert off_kinds.get("A", 0) == base_kinds.get("A", 0), (
-        f"关掉竖线影响了横线条数：{base_kinds} → {off_kinds} —— "
-        "两个开关必须互不干扰"
+        f"关掉竖线影响了横线条数：{base_kinds} → {off_kinds} —— 两个开关必须互不干扰"
     )
     # 逐条核对：剩下的必须全是 A（不含任何 axis="v"）
     assert [c for c in off if c.get("axis") == "v"] == [], (
@@ -205,9 +210,7 @@ def test_omitted_switches_equal_explicit_true_pair() -> None:
     explicit = detect_line_candidates(
         ink, roi, include_horizontal=True, include_vertical=True, **kwargs
     )
-    assert omitted == explicit, (
-        "不传开关与显式 True/True 的返回不一致——默认值被改动了"
-    )
+    assert omitted == explicit, "不传开关与显式 True/True 的返回不一致——默认值被改动了"
 
     # 真图同一件事：**集合相等**，不是条数相等。
     #
@@ -334,7 +337,9 @@ def test_rpc_method_accepts_the_switches_and_omission() -> None:
 # ----------------------------------------------------------------------
 
 
-def test_canary_ignored_switch_makes_criterion_red(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_canary_ignored_switch_makes_criterion_red(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """把转发处改成恒 `True`（等于"这个参数被忽略"），判据 1 必须变红。
 
     只替换 `session_parts.cleanup` 全局里那个转发函数，不改判据本身：判据体
@@ -347,7 +352,9 @@ def test_canary_ignored_switch_makes_criterion_red(monkeypatch: pytest.MonkeyPat
     def ignore_vertical_switch(*args, **kwargs):
         return original(*args, **{**kwargs, "include_vertical": True})
 
-    monkeypatch.setattr(cleanup_module, "detect_line_candidates", ignore_vertical_switch)
+    monkeypatch.setattr(
+        cleanup_module, "detect_line_candidates", ignore_vertical_switch
+    )
 
     with pytest.raises(AssertionError) as excinfo:
         _assert_vertical_off_keeps_horizontals(session, roi_id)

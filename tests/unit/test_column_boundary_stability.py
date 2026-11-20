@@ -45,7 +45,9 @@ def test_column_left_edges_do_not_move_with_the_roi_y_range() -> None:
 
     for ylim in YLIMS[1:]:
         starts = _starts(ylim)
-        assert len(starts) == len(baseline), f"{ylim} 的列数变了：{len(starts)} vs {len(baseline)}"
+        assert len(starts) == len(baseline), (
+            f"{ylim} 的列数变了：{len(starts)} vs {len(baseline)}"
+        )
         drift = [abs(a - b) for a, b in zip(baseline, starts)]
         assert max(drift) <= 1, (
             f"{ylim}：列起点相对默认 ROI 漂移 {max(drift)}px（上限 1px）。列起点就是 "
@@ -70,7 +72,8 @@ def test_horizons_outside_the_roi_export_as_empty_not_zero() -> None:
     for i, c in enumerate(cols):
         left, right = float(c["start"]), float(c["end"])
         session.calibrate_column_xticks(
-            i, [{"px": left, "value": 0.0}, {"px": right, "value": (right - left) / 3.80}]
+            i,
+            [{"px": left, "value": 0.0}, {"px": right, "value": (right - left) / 3.80}],
         )
         session.digitize(i)
 
@@ -88,4 +91,3 @@ def test_horizons_outside_the_roi_export_as_empty_not_zero() -> None:
     )
     inside = df[df["depth"] <= 500]
     assert inside.iloc[:, 1:].notna().any().any(), "窗口内的层位必须真的读到数"
-

@@ -45,7 +45,9 @@ class TestAberPollenAccuracyBenchmark(unittest.TestCase):
         )
 
         assert os.path.exists(cls.image_path), f"Missing test image {cls.image_path}"
-        assert os.path.exists(cls.gt_csv_path), f"Missing ground truth {cls.gt_csv_path}"
+        assert os.path.exists(cls.gt_csv_path), (
+            f"Missing ground truth {cls.gt_csv_path}"
+        )
 
         cls.gt_df = pd.read_csv(cls.gt_csv_path)
         cls.depths = cls.gt_df["Depth"].to_numpy(dtype=float)
@@ -71,12 +73,16 @@ class TestAberPollenAccuracyBenchmark(unittest.TestCase):
         # of ink collapses it and only 35 of 36 taxa are detected. This single off-by-one
         # is what made this benchmark fail with "35 != 36" and go unnoticed.
         columns = session.detect_columns([70, 756], [140, 476])
-        self.assertEqual(len(columns), 36, "Should accurately detect all 36 distinct taxa columns")
+        self.assertEqual(
+            len(columns), 36, "Should accurately detect all 36 distinct taxa columns"
+        )
 
         # Y axis calibration mapping:
         # Top tick (Depth 300 cm) is at Y=142.5 px
         # Bottom tick (Depth 550 cm) is at Y=475.0 px
-        y_calib = LinearCalibration(px_points=[142.5, 475.0], data_points=[300.0, 550.0], name="depth")
+        y_calib = LinearCalibration(
+            px_points=[142.5, 475.0], data_points=[300.0, 550.0], name="depth"
+        )
 
         # Depth array to pixel Y coordinates
         sample_ys = y_calib.data2px(self.depths)
@@ -132,29 +138,35 @@ class TestAberPollenAccuracyBenchmark(unittest.TestCase):
             # Correlation coefficient
             if np.std(extracted_vals) > 1e-4 and np.std(gt_values) > 1e-4:
                 corr = float(np.corrcoef(extracted_vals, gt_values)[0, 1])
-                r2 = corr ** 2
+                r2 = corr**2
             else:
                 r2 = 1.0 if np.allclose(extracted_vals, gt_values, atol=2.0) else 0.0
 
-            results.append({
-                "col_index": col_idx,
-                "taxon": taxon_name,
-                "max_gt": max_gt,
-                "col_width_px": round(col_width_px, 1),
-                "mae": round(mae, 2),
-                "rmse": round(rmse, 2),
-                "r2": round(r2, 4)
-            })
+            results.append(
+                {
+                    "col_index": col_idx,
+                    "taxon": taxon_name,
+                    "max_gt": max_gt,
+                    "col_width_px": round(col_width_px, 1),
+                    "mae": round(mae, 2),
+                    "rmse": round(rmse, 2),
+                    "r2": round(r2, 4),
+                }
+            )
 
         print("\n" + "=" * 78)
         print("  STRADITIZE ABERNETHY FOREST GROUND TRUTH BENCHMARK REPORT")
         print("=" * 78)
-        print(f" {'Idx':<4} {'Taxon Name':<24} {'Max %':<8} {'Col W':<8} {'MAE %':<8} {'RMSE %':<8} {'R^2':<8}")
+        print(
+            f" {'Idx':<4} {'Taxon Name':<24} {'Max %':<8} {'Col W':<8} {'MAE %':<8} {'RMSE %':<8} {'R^2':<8}"
+        )
         print("-" * 78)
 
         high_abundance_r2 = []
         for r in results:
-            print(f" {r['col_index']:<4} {r['taxon'][:22]:<24} {r['max_gt']:<8.1f} {r['col_width_px']:<8.1f} {r['mae']:<8.2f} {r['rmse']:<8.2f} {r['r2']:<8.4f}")
+            print(
+                f" {r['col_index']:<4} {r['taxon'][:22]:<24} {r['max_gt']:<8.1f} {r['col_width_px']:<8.1f} {r['mae']:<8.2f} {r['rmse']:<8.2f} {r['r2']:<8.4f}"
+            )
             if r["max_gt"] >= 10.0:
                 high_abundance_r2.append(r["r2"])
 
@@ -170,8 +182,9 @@ class TestAberPollenAccuracyBenchmark(unittest.TestCase):
             mean_r2 = float(np.mean(high_abundance_r2))
             print(f"Mean R^2 for dominant taxa (>10% abundance): {mean_r2:.4f}")
             self.assertGreater(
-                mean_r2, 0.90,
-                f"Mean R^2 for dominant taxa should exceed 0.90, got {mean_r2:.4f}"
+                mean_r2,
+                0.90,
+                f"Mean R^2 for dominant taxa should exceed 0.90, got {mean_r2:.4f}",
             )
 
 

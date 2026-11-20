@@ -77,6 +77,7 @@ def test_missing_row_exports_zero_not_interpolated() -> None:
     assert values[10.0] == 10.0
     assert values[20.0] == 50.0
 
+
 def test_row_outside_the_data_window_exports_none() -> None:
     """窗口**之外**的层位不在本列读数范围内，必须给 None——不能给 0。
 
@@ -85,9 +86,9 @@ def test_row_outside_the_data_window_exports_none() -> None:
     """
     session = _session()
     session.samples = [
-        {"row_px": 5, "depth": 5.0},   # 窗口 [10, 30] 之外
+        {"row_px": 5, "depth": 5.0},  # 窗口 [10, 30] 之外
         {"row_px": 15, "depth": 15.0},  # 窗口内、无墨迹
-]
+    ]
 
     df = pd.read_csv(io.StringIO(session.export_data("csv")["csv"]))
     values = dict(zip(df["depth"], df["col01"]))
@@ -96,4 +97,3 @@ def test_row_outside_the_data_window_exports_none() -> None:
     assert pd.isna(values[5.0]), (
         f"窗口外的层位必须是空值，实得 {values[5.0]}；给 0 等于声称这一层读到了零丰度"
     )
-

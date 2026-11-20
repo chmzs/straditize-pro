@@ -86,6 +86,29 @@ export class CoordinateSystem {
    * 时间轴 —— 拖动 ROI 就静默改写深度，这正是本次修复的核心缺陷。
    */
   public static imageYToDepth(y: number, cal: DepthCalibration): number | undefined {
+    if (cal.marks && cal.marks.length >= 2) {
+      const marks = cal.marks;
+      if (y <= marks[0].pixel) {
+        const s0 = (marks[1].val - marks[0].val) / (marks[1].pixel - marks[0].pixel || 1);
+        return Number((marks[0].val + s0 * (y - marks[0].pixel)).toFixed(3));
+      }
+      if (y >= marks[marks.length - 1].pixel) {
+        const last = marks[marks.length - 1];
+        const prev = marks[marks.length - 2];
+        const s1 = (last.val - prev.val) / (last.pixel - prev.pixel || 1);
+        return Number((last.val + s1 * (y - last.pixel)).toFixed(3));
+      }
+      let idx = 0;
+      while (idx < marks.length - 1 && marks[idx + 1].pixel < y) {
+        idx++;
+      }
+      const p0 = marks[idx];
+      const p1 = marks[idx + 1];
+      const t = (y - p0.pixel) / (p1.pixel - p0.pixel || 1);
+      const depth = p0.val + t * (p1.val - p0.val);
+      return Number(depth.toFixed(3));
+    }
+
     const bounds = CoordinateSystem.calibrationBounds(cal);
     if (!bounds) return undefined;
 
@@ -98,6 +121,30 @@ export class CoordinateSystem {
    * 4. 真实地层物理深度 -> 图像物理 Y 像素
    */
   public static depthToImageY(depth: number, cal: DepthCalibration): number | undefined {
+    if (cal.marks && cal.marks.length >= 2) {
+      const marks = cal.marks;
+      const isAsc = marks[marks.length - 1].val >= marks[0].val;
+      const sortedByVal = isAsc ? marks : [...marks].reverse();
+      if (depth <= sortedByVal[0].val) {
+        const s0 = (sortedByVal[1].val - sortedByVal[0].val) / (sortedByVal[1].pixel - sortedByVal[0].pixel || 1);
+        return Math.round(sortedByVal[0].pixel + (depth - sortedByVal[0].val) / (s0 || 1));
+      }
+      if (depth >= sortedByVal[sortedByVal.length - 1].val) {
+        const last = sortedByVal[sortedByVal.length - 1];
+        const prev = sortedByVal[sortedByVal.length - 2];
+        const s1 = (last.val - prev.val) / (last.pixel - prev.pixel || 1);
+        return Math.round(last.pixel + (depth - last.val) / (s1 || 1));
+      }
+      let idx = 0;
+      while (idx < sortedByVal.length - 1 && sortedByVal[idx + 1].val < depth) {
+        idx++;
+      }
+      const p0 = sortedByVal[idx];
+      const p1 = sortedByVal[idx + 1];
+      const t = (depth - p0.val) / (p1.val - p0.val || 1);
+      return Math.round(p0.pixel + t * (p1.pixel - p0.pixel));
+    }
+
     const bounds = CoordinateSystem.calibrationBounds(cal);
     if (!bounds) return undefined;
 

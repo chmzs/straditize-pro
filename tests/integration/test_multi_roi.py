@@ -22,7 +22,9 @@ def get_hoya_session() -> StraditizeSession:
     """Helper to load Hoya figure with sha256 assertion."""
     assert HOYA_PATH.exists(), f"Hoya figure missing at {HOYA_PATH}"
     actual_sha = hashlib.sha256(HOYA_PATH.read_bytes()).hexdigest()
-    assert actual_sha == HOYA_SHA256, f"Hoya sha256 mismatch: {actual_sha} != {HOYA_SHA256}"
+    assert actual_sha == HOYA_SHA256, (
+        f"Hoya sha256 mismatch: {actual_sha} != {HOYA_SHA256}"
+    )
     session = StraditizeSession()
     session.load_image(str(HOYA_PATH))
     return session
@@ -61,7 +63,9 @@ def test_roi_create_name_validation():
     with pytest.raises(JsonRpcError) as exc_info:
         session.roi_create(name="charcoal", x0=100, x1=200, y0=100, y1=200)
     assert exc_info.value.code == -32002
-    assert "已存在" in exc_info.value.message or "already exists" in exc_info.value.message
+    assert (
+        "已存在" in exc_info.value.message or "already exists" in exc_info.value.message
+    )
 
     # Name containing slash '/' raises -32602
     with pytest.raises(JsonRpcError) as exc_info:
@@ -91,8 +95,12 @@ def test_multi_roi_column_detection_isolation():
 
     # Create 3 distinct ROIs
     r_char = session.roi_create(name="charcoal", x0=315, x1=485, y0=511, y1=1311)["roi"]
-    r_pollen = session.roi_create(name="pollen", x0=485, x1=1200, y0=511, y1=1311)["roi"]
-    r_conc = session.roi_create(name="concentration", x0=1200, x1=1600, y0=511, y1=1311)["roi"]
+    r_pollen = session.roi_create(name="pollen", x0=485, x1=1200, y0=511, y1=1311)[
+        "roi"
+    ]
+    r_conc = session.roi_create(
+        name="concentration", x0=1200, x1=1600, y0=511, y1=1311
+    )["roi"]
 
     # Detect columns for charcoal
     cols_char = session.detect_columns(roi_id=r_char["id"])
@@ -105,8 +113,12 @@ def test_multi_roi_column_detection_isolation():
     assert all(c["roi_id"] == r_conc["id"] for c in cols_conc)
 
     # Snapshot charcoal and concentration columns before detecting pollen
-    char_snapshot = [copy.deepcopy(c) for c in session.columns if c["roi_id"] == r_char["id"]]
-    conc_snapshot = [copy.deepcopy(c) for c in session.columns if c["roi_id"] == r_conc["id"]]
+    char_snapshot = [
+        copy.deepcopy(c) for c in session.columns if c["roi_id"] == r_char["id"]
+    ]
+    conc_snapshot = [
+        copy.deepcopy(c) for c in session.columns if c["roi_id"] == r_conc["id"]
+    ]
 
     # Now detect columns for pollen
     cols_pollen = session.detect_columns(roi_id=r_pollen["id"])
@@ -121,13 +133,17 @@ def test_multi_roi_column_detection_isolation():
     for c_orig, c_now in zip(char_snapshot, char_after):
         for k in c_orig:
             if k != "col_index":
-                assert c_orig[k] == c_now[k], f"Field {k} altered in charcoal column: {c_orig[k]} != {c_now[k]}"
+                assert c_orig[k] == c_now[k], (
+                    f"Field {k} altered in charcoal column: {c_orig[k]} != {c_now[k]}"
+                )
 
     assert len(conc_after) == len(conc_snapshot)
     for c_orig, c_now in zip(conc_snapshot, conc_after):
         for k in c_orig:
             if k != "col_index":
-                assert c_orig[k] == c_now[k], f"Field {k} altered in concentration column: {c_orig[k]} != {c_now[k]}"
+                assert c_orig[k] == c_now[k], (
+                    f"Field {k} altered in concentration column: {c_orig[k]} != {c_now[k]}"
+                )
 
 
 def test_multi_roi_column_names_follow_global_col_index():
@@ -279,7 +295,9 @@ def test_columns_stale_is_per_roi():
     roi_b_curr = session._get_roi(r_b["id"])
 
     assert roi_a_curr["columns_stale"] is True, "ROI A must be marked columns_stale"
-    assert roi_b_curr["columns_stale"] is False, "ROI B must NOT be infected with columns_stale"
+    assert roi_b_curr["columns_stale"] is False, (
+        "ROI B must NOT be infected with columns_stale"
+    )
 
 
 def test_rpc_extension_point_auto_discovery(monkeypatch):
@@ -307,13 +325,17 @@ def test_rpc_extension_point_auto_discovery(monkeypatch):
             yield item
         # Yield a synthetic module info
         from collections import namedtuple
+
         ModInfo = namedtuple("ModInfo", ["module_finder", "name", "ispkg"])
         yield ModInfo(None, "custom_plugin", False)
 
     monkeypatch.setattr(rpc_pkg.pkgutil, "iter_modules", fake_iter)
 
     import sys
-    monkeypatch.setitem(sys.modules, "straditize_core.rpc_methods.custom_plugin", FakeModule)
+
+    monkeypatch.setitem(
+        sys.modules, "straditize_core.rpc_methods.custom_plugin", FakeModule
+    )
 
     new_disp = JsonRpcDispatcher()
     registered = register_all(new_disp, StraditizeSession())
@@ -341,7 +363,9 @@ def test_l3_hoya_three_rois():
     cols2 = session.detect_columns(roi_id=r2["id"])
     cols3 = session.detect_columns(roi_id=r3["id"])
 
-    print(f"\n[L3 Hoya] charcoal cols: {len(cols1)}, main_pollen cols: {len(cols2)}, minor_taxa cols: {len(cols3)}")
+    print(
+        f"\n[L3 Hoya] charcoal cols: {len(cols1)}, main_pollen cols: {len(cols2)}, minor_taxa cols: {len(cols3)}"
+    )
     assert len(cols1) > 0
     assert len(cols2) > 0
     assert len(cols3) > 0

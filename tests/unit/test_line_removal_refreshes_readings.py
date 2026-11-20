@@ -36,7 +36,9 @@ W, H = 120, 200
 AXIS_X0, AXIS_W = 10, 6
 ZERO_X = AXIS_X0 + AXIS_W  # 16
 BLOCK_X1 = 40  # 实心块右缘（真值 24.0，斜率 1.0）
-LINE_X0 = 30  # 区带线左端：**压在块体上**（与曲线相连 ⇒ 同一个连通域，才会真的污染读数）
+LINE_X0 = (
+    30  # 区带线左端：**压在块体上**（与曲线相连 ⇒ 同一个连通域，才会真的污染读数）
+)
 LINE_X1 = 90  # 区带线右端：越过块体 50px ⇒ 脏读数 74.0
 LINE_Y0, LINE_Y1 = 100, 102
 SLOPE = 1.0
@@ -126,7 +128,9 @@ def test_removing_a_line_changes_the_exported_reading(tmp_path) -> None:
     before = _readings(session)
 
     # 脏读数：线把"整行最右墨迹"顶到 x=90 ⇒ (90-16)*1.0 = 74
-    assert float(before["50.5"]) == 74.0, f"前置：线所在的层位应先读到脏值，实际 {before}"
+    assert float(before["50.5"]) == 74.0, (
+        f"前置：线所在的层位应先读到脏值，实际 {before}"
+    )
 
     session.upsert_line_geometry(
         roi_id=None,

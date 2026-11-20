@@ -97,7 +97,6 @@ def _merge_adjacent(columns: Sequence[int], gap: int = 2) -> list[int]:
 class XTicksMixin:
     """Session mixin for X-ticks detection and per-column calibration."""
 
-
     def _init_xticks(self) -> None:
         """Initialize xticks state."""
 
@@ -189,7 +188,9 @@ class XTicksMixin:
                 for grp in r_item.get("x_groups", []):
                     if grp.get("id") == x_group_id and grp.get("ref_span_px"):
                         ref_span = max(ref_span, float(grp["ref_span_px"]))
-        max_span = max(c_max - c_min + 15.0, (ref_span + 15.0) if ref_span > 0 else 80.0)
+        max_span = max(
+            c_max - c_min + 15.0, (ref_span + 15.0) if ref_span > 0 else 80.0
+        )
         hi = min(c_min + max_span, max_img_w)
 
         p_left = min(px0, px1)
@@ -213,7 +214,9 @@ class XTicksMixin:
         # 否则用户点一次越界会得到一格什么都不做的历史。
         record_history = getattr(self, "_record_history", None)
         if callable(record_history):
-            record_history(f"Calibrate X-Ticks for {col.get('name', f'col_{resolved}')}")
+            record_history(
+                f"Calibrate X-Ticks for {col.get('name', f'col_{resolved}')}"
+            )
 
         # Set sole source of truth
         col["x_ticks"] = [{"px": px0, "value": val0}, {"px": px1, "value": val1}]
@@ -270,7 +273,9 @@ class XTicksMixin:
         if col.get("x_ticks") is not None:
             record_history = getattr(self, "_record_history", None)
             if callable(record_history):
-                record_history(f"Clear X-Ticks for {col.get('name', f'col_{resolved}')}")
+                record_history(
+                    f"Clear X-Ticks for {col.get('name', f'col_{resolved}')}"
+                )
 
         had_ticks = col.pop("x_ticks", None) is not None
         # 用户主动清除标定 = 他自己知道现在没标定，不需要再挂一条

@@ -25,6 +25,7 @@
 
 `scripts/prod_gate/b12_provenance_probe.py` 的 B12a/b/c 是同一组判据的外部版本。
 """
+
 from __future__ import annotations
 
 from straditize_core.session import StraditizeSession
@@ -121,9 +122,7 @@ class TestFullyCalibratedStaysReady:
 
         readiness = session.get_export_readiness()
 
-        assert readiness["ready"] is True, (
-            "全部列已标定却 ready=False —— 矫枉过正了"
-        )
+        assert readiness["ready"] is True, "全部列已标定却 ready=False —— 矫枉过正了"
         assert readiness["calibrated_count"] == len(session.columns)
         assert readiness["uncalibrated_columns"] == []
         assert readiness["provenance"]["all_calibrated"] is True
@@ -172,7 +171,9 @@ class TestExistingContractFieldsArePreserved:
         ):
             assert field in readiness, f"既有字段 {field} 丢了"
 
-        assert readiness["sheets"] == [roi.get("name", roi["id"]) for roi in session.rois]
+        assert readiness["sheets"] == [
+            roi.get("name", roi["id"]) for roi in session.rois
+        ]
         assert readiness["primary_roi_id"] == session.primary_roi_id
         assert readiness["total_rois"] == len(session.rois)
         assert readiness["readiness_missing"] == [], (

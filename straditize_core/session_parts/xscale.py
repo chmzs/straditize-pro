@@ -41,7 +41,9 @@ SCALE_TYPES: tuple[str, str] = ("linear", "log")
 DEFAULT_AXIS_STROKE_PX = 2.0
 
 
-def resolve_axis_stroke(col: dict[str, Any] | None, group: dict[str, Any] | None) -> float:
+def resolve_axis_stroke(
+    col: dict[str, Any] | None, group: dict[str, Any] | None
+) -> float:
     """轴线粗解析：**列级覆盖 > 组级初值 > 缺省 2**（ARCHITECTURE §6.4）。
 
     组的 `axis_stroke_px` 是初值（分列时 `measure_axis_stroke` 实测中位数，或用户在手填）；
@@ -362,7 +364,7 @@ def resolve_column_scale(
 def _resolve_column_group(
     session: Any, col_dict: dict[str, Any]
 ) -> dict[str, Any] | None:
-    """定位列所属的 x 组：列上的 roi_id → 该 ROI；没有则回落活跃/主 ROI，再回落第一个。    组的选择同理：列上的 x_group_id → 该组；没有则用 ROI 的 default_group_id；再没有用第一个组。    """
+    """定位列所属的 x 组：列上的 roi_id → 该 ROI；没有则回落活跃/主 ROI，再回落第一个。    组的选择同理：列上的 x_group_id → 该组；没有则用 ROI 的 default_group_id；再没有用第一个组。"""
     # Look up ROI and X-Group if session has multi-ROI context (Design 2026-09-29 P2)
     roi_obj: dict[str, Any] | None = None
     group_obj: dict[str, Any] | None = None
@@ -401,9 +403,7 @@ def _resolve_column_visual(
         or "linear"
     )
     unit = str(
-        col_dict.get("unit")
-        or (group_obj.get("unit") if group_obj else None)
-        or "%"
+        col_dict.get("unit") or (group_obj.get("unit") if group_obj else None) or "%"
     )
     plot_type = str(
         col_dict.get("plot_type")
@@ -660,7 +660,9 @@ def _scale_from_fallback(
         col_dict.get(k) is not None for k in ("startValue", "tickValue", "tickEndX")
     )
     x_scales = getattr(session, "x_scales", None) if session is not None else None
-    is_calib = bool(getattr(session, "is_calibrated", False)) if session is not None else False
+    is_calib = (
+        bool(getattr(session, "is_calibrated", False)) if session is not None else False
+    )
 
     if (
         not has_legacy

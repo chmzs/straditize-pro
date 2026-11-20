@@ -486,6 +486,7 @@ async function bootstrap() {
     inspector?.updateData(canvasComponent.data);
     toolbar?.updateHistoryState();
     toolbar?.updateScale(canvasComponent.viewport.scale);
+    toolbar?.setProjectName(projectData.project_name || '');
     updateFooter();
     void cleanupManager.recomposeCleanupState('载入项目后重算清理掩膜');
     setHudNotice('已载入项目包 (.tar)：属种列、刻度齿与控制点已从包内恢复。', 4500);

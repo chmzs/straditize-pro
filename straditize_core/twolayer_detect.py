@@ -26,6 +26,7 @@
 两条都不依赖直方图形状、不依赖调参。判据不成立时返回 `False`，
 调用方继续走原来的全局 Otsu —— 内建教程图的行为因此完全不变。
 """
+
 from __future__ import annotations
 
 from typing import Any, Sequence
@@ -82,7 +83,7 @@ def band_is_two_layer(
     padded = np.pad(same_tier.astype(np.int16), 1)
     for dy in (0, 1, 2):
         for dx in (0, 1, 2):
-            packed += padded[dy:dy + same_tier.shape[0], dx:dx + same_tier.shape[1]]
+            packed += padded[dy : dy + same_tier.shape[0], dx : dx + same_tier.shape[1]]
     same_tier &= packed >= min_pack
     if same_tier.sum() < min_share * total:
         return False
@@ -91,7 +92,7 @@ def band_is_two_layer(
     height = lum.shape[0]
     if height < 8:
         return False
-    mid = rows[height // 4: height - height // 4]
+    mid = rows[height // 4 : height - height // 4]
     mid_cover = float((mid > 0).mean()) if mid.size else 0.0
     return mid_cover >= min_mid_rows
 

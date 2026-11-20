@@ -17,6 +17,7 @@
 
 第 2 层比第 1 层重要：只靠"记得清理"是脆弱的，任何新增字段都可能再次漏清。
 """
+
 from __future__ import annotations
 
 import pytest
@@ -63,7 +64,9 @@ class TestLoadImageClearsCleanupState:
 
     def test_load_image_clears_exclusion_regions(self) -> None:
         s = _session_on_hoya_with_geometry()
-        s.exclusion_regions.append({"id": "ex_1", "roi_id": s.rois[0]["id"], "points": []})
+        s.exclusion_regions.append(
+            {"id": "ex_1", "roi_id": s.rois[0]["id"], "points": []}
+        )
         assert s.exclusion_regions
         s.load_image(sample_key="beginner")
         assert s.exclusion_regions == []
@@ -87,7 +90,9 @@ class TestProjectNewClearsCleanupState:
 
     def test_project_new_clears_all_three(self) -> None:
         s = _session_on_hoya_with_geometry()
-        s.exclusion_regions.append({"id": "ex_1", "roi_id": s.rois[0]["id"], "points": []})
+        s.exclusion_regions.append(
+            {"id": "ex_1", "roi_id": s.rois[0]["id"], "points": []}
+        )
         s.line_strokes.append({"id": "s_1", "roi_id": s.rois[0]["id"], "points": []})
         assert s.line_candidates and s.exclusion_regions and s.line_strokes
 

@@ -56,8 +56,10 @@ def _group(**overrides) -> dict:
 
 def _scale(session, col, col_index=None) -> dict:
     scale = resolve_column_scale(session, col, col_index)
-    return {k: (round(v, 6) if isinstance(v, float) else v)
-            for k, v in dataclasses.asdict(scale).items()}
+    return {
+        k: (round(v, 6) if isinstance(v, float) else v)
+        for k, v in dataclasses.asdict(scale).items()
+    }
 
 
 def _collect() -> dict:
@@ -68,8 +70,13 @@ def _collect() -> dict:
     # 1. group：组 tick_layout + 列 x_values（组管位置，列管数值）
     out["group"] = _scale(
         _session(rois=[roi], active_roi_id="roi_1", primary_roi_id="roi_1"),
-        {"startX": 100.0, "endX": 200.0, "x_values": [0.0, 40.0],
-         "roi_id": "roi_1", "x_group_id": "g1"},
+        {
+            "startX": 100.0,
+            "endX": 200.0,
+            "x_values": [0.0, 40.0],
+            "roi_id": "roi_1",
+            "x_group_id": "g1",
+        },
         0,
     )
 
@@ -88,8 +95,11 @@ def _collect() -> dict:
     # 3. x_ticks：显式两点
     out["x_ticks"] = _scale(
         _session(),
-        {"startX": 100.0, "endX": 200.0,
-         "x_ticks": [{"px": 110.0, "value": 5.0}, {"px": 190.0, "value": 45.0}]},
+        {
+            "startX": 100.0,
+            "endX": 200.0,
+            "x_ticks": [{"px": 110.0, "value": 5.0}, {"px": 190.0, "value": 45.0}],
+        },
         2,
     )
 
@@ -103,8 +113,15 @@ def _collect() -> dict:
     # 5. legacy：三件套；同时验历史夸张键
     out["legacy"] = _scale(
         _session(),
-        {"startX": 100.0, "endX": 200.0, "startValue": 2.5, "tickValue": 22.5,
-         "tickEndX": 180.0, "has_exaggeration": True, "exaggeration_multiplier": 3.0},
+        {
+            "startX": 100.0,
+            "endX": 200.0,
+            "startValue": 2.5,
+            "tickValue": 22.5,
+            "tickEndX": 180.0,
+            "has_exaggeration": True,
+            "exaggeration_multiplier": 3.0,
+        },
         4,
     )
 
@@ -112,13 +129,20 @@ def _collect() -> dict:
     out["default"] = _scale(_session(), {"startX": 10.0, "endX": 60.0}, 5)
 
     # 7. log 默认：起点必须是 1.0
-    out["default_log"] = _scale(_session(), {"startX": 10.0, "endX": 60.0, "scale_type": "log"}, 6)
+    out["default_log"] = _scale(
+        _session(), {"startX": 10.0, "endX": 60.0, "scale_type": "log"}, 6
+    )
 
     # 8. tickEndX 与起点重合 → 兜底到列右缘
     out["degenerate_tick_end"] = _scale(
         _session(),
-        {"startX": 100.0, "endX": 200.0, "startValue": 0.0, "tickValue": 100.0,
-         "tickEndX": 100.0},
+        {
+            "startX": 100.0,
+            "endX": 200.0,
+            "startValue": 0.0,
+            "tickValue": 100.0,
+            "tickEndX": 100.0,
+        },
         7,
     )
 
@@ -129,15 +153,21 @@ def _collect() -> dict:
         "x_groups": [_group(id="g_first", unit="‰", plot_type="bar")],
     }
     out["roi_group_fallback"] = _scale(
-        _session(rois=[{"id": "roi_0", "x_groups": []}, fallback_roi],
-                 active_roi_id="roi_9", primary_roi_id="roi_0"),
+        _session(
+            rois=[{"id": "roi_0", "x_groups": []}, fallback_roi],
+            active_roi_id="roi_9",
+            primary_roi_id="roi_0",
+        ),
         {"startX": 20.0, "endX": 120.0, "x_values": [1.0, 9.0]},
         8,
     )
 
     # 10. 组级夸张倍数
-    exag_roi = {"id": "roi_1", "default_group_id": "g1",
-                "x_groups": [_group(exaggeration_mult=2.5)]}
+    exag_roi = {
+        "id": "roi_1",
+        "default_group_id": "g1",
+        "x_groups": [_group(exaggeration_mult=2.5)],
+    }
     out["group_exaggeration"] = _scale(
         _session(rois=[exag_roi], active_roi_id="roi_1"),
         {"startX": 0.0, "endX": 100.0, "roi_id": "roi_1", "x_group_id": "g1"},
@@ -152,11 +182,13 @@ def _collect() -> dict:
     # 但前面 11 个案例各自只给一种来源，谁也测不出顺序被调换。
     out["priority_group_slope_over_ticks"] = _scale(
         _session(
-            rois=[{
-                "id": "roi_1",
-                "default_group_id": "g1",
-                "x_groups": [_group(value_per_px=0.5, axis_stroke_px=6)],
-            }],
+            rois=[
+                {
+                    "id": "roi_1",
+                    "default_group_id": "g1",
+                    "x_groups": [_group(value_per_px=0.5, axis_stroke_px=6)],
+                }
+            ],
             active_roi_id="roi_1",
         ),
         {
@@ -171,11 +203,13 @@ def _collect() -> dict:
 
     out["priority_group_layout_over_slope"] = _scale(
         _session(
-            rois=[{
-                "id": "roi_1",
-                "default_group_id": "g1",
-                "x_groups": [_group(value_per_px=0.5, axis_stroke_px=6)],
-            }],
+            rois=[
+                {
+                    "id": "roi_1",
+                    "default_group_id": "g1",
+                    "x_groups": [_group(value_per_px=0.5, axis_stroke_px=6)],
+                }
+            ],
             active_roi_id="roi_1",
         ),
         {

@@ -132,9 +132,7 @@ def build_age_depth_frame(
 class AgeDepthSessionMixin:
     """Age-depth model diagram loading, calibration, extraction, and Bacon modeling."""
 
-    def sample_depths_for_model(
-        self, model: Any
-    ) -> tuple[list[float], dict[str, Any]]:
+    def sample_depths_for_model(self, model: Any) -> tuple[list[float], dict[str, Any]]:
         """Depths of the pollen samples, plus how they were obtained.
 
         Three sources in priority order: the pollen diagram's Y readings, an explicit
@@ -150,7 +148,9 @@ class AgeDepthSessionMixin:
         model_depths = getattr(model, "depths", None) if model is not None else None
 
         if self.column_points and self.is_calibrated and self.y_scale:
-            rows = sorted({p["row"] for pts in self.column_points.values() for p in pts})
+            rows = sorted(
+                {p["row"] for pts in self.column_points.values() for p in pts}
+            )
             sy = self.y_scale["slope"]
             iy = self.y_scale["intercept"]
             readings = [sy * r + iy for r in rows]

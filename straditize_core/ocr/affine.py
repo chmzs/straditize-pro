@@ -6,6 +6,7 @@ Features:
 3. Mathematically rigorous bi-directional coordinate mapping conforming to SciPy rotate convention.
 4. Computes the baseline anchor point (lowest Y position in original image) for spatial column snapping.
 """
+
 from __future__ import annotations
 
 from typing import Any

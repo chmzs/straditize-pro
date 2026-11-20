@@ -103,7 +103,14 @@ def test_module2_bacon_u1000_export(tmp_path, monkeypatch):
     session.load_image(sample_key="hoya")
 
     session.columns = [
-        {"id": "col_1", "name": "Pinus", "startX": 320, "endX": 380, "col_index": 0, "roi_id": "roi_1"}
+        {
+            "id": "col_1",
+            "name": "Pinus",
+            "startX": 320,
+            "endX": 380,
+            "col_index": 0,
+            "roi_id": "roi_1",
+        }
     ]
     session.column_points = {
         0: [{"row": 550, "x": 330}, {"row": 800, "x": 350}, {"row": 1100, "x": 320}]

@@ -31,6 +31,7 @@
 
 不写清除就是**永久假警报**：用户重新标定完，面板还在喊"标定已清空"。
 """
+
 from __future__ import annotations
 
 import json
@@ -102,9 +103,7 @@ class TestOutOfBandDropIsExplicit:
 
         assert len(session.columns) != column_count_before, "前置：这一分支应改变列数"
         flagged = _flagged_columns(session)
-        assert flagged, (
-            "列数变化时旧标定被整块跳过、静默消失（B-02 的另一半）"
-        )
+        assert flagged, "列数变化时旧标定被整块跳过、静默消失（B-02 的另一半）"
         assert flagged[0]["x_ticks_dropped"]["reason"] == "column_layout_changed", (
             "两个分支的 reason 必须可区分：用户要做的动作不同"
             "（越界=同一列重标；列数变化=列本身已不同）"
@@ -170,8 +169,7 @@ class TestDropRecordClears:
         )
 
         assert not _flagged_columns(session), (
-            "用户重新标定成功后提示仍挂着 —— 面板会一直喊"
-            "'标定已清空'，用户以为没保存上"
+            "用户重新标定成功后提示仍挂着 —— 面板会一直喊'标定已清空'，用户以为没保存上"
         )
         assert session.columns[0]["x_ticks"]
 

@@ -22,9 +22,7 @@ import pytest
 
 from straditize_core.session import StraditizeSession
 
-HOYA_PATH = Path(
-    "straditize_core/assets/tutorials/hoya-del-castillo.png"
-)
+HOYA_PATH = Path("straditize_core/assets/tutorials/hoya-del-castillo.png")
 
 
 def _setup_two_rois_session() -> StraditizeSession:

@@ -104,7 +104,9 @@ def test_same_vertical_lines_still_proposed_when_columns_are_unknown() -> None:
         f"没有列信息时竖向候选只剩 {len(verticals)} 条 —— 说明竖线是被阈值滤掉的，"
         "而不是被列结构判据排除的；后者才是本修复的方式"
     )
-    on_axis = [at for at in verticals if any(abs(at - x) <= AXIS_TOLERANCE_PX for x in axis_x)]
+    on_axis = [
+        at for at in verticals if any(abs(at - x) <= AXIS_TOLERANCE_PX for x in axis_x)
+    ]
     assert len(on_axis) == len(verticals), (
         f"没有列信息时提出的竖线 {verticals} 里有 {len(verticals) - len(on_axis)} 条"
         f"不在列轴上（列左缘={axis_x}）—— 前提变了，本判据需要重新核对"

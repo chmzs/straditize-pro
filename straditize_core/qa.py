@@ -158,7 +158,9 @@ def _column_series(col: dict[str, Any]) -> list[tuple[int, float]] | None:
     return series
 
 
-def compute_qa_flags(columns_info: Sequence[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def compute_qa_flags(
+    columns_info: Sequence[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
     """逐行诊断旗标。**只读**：不改读数，不改 `columns_info`。
 
     每个列字典需要的键（其余键忽略）：
@@ -270,8 +272,7 @@ def compute_qa_flags(columns_info: Sequence[dict[str, Any]]) -> dict[str, dict[s
             sum(1 for step in steps if step <= 1e-9) / len(steps) if steps else 0.0
         )
         bar_structure = (
-            plot_type in BAR_PLOT_TYPES
-            and zero_step_fraction >= BAR_ZERO_STEP_FRACTION
+            plot_type in BAR_PLOT_TYPES and zero_step_fraction >= BAR_ZERO_STEP_FRACTION
         )
 
         # --- FLAG_TRUNCATED / FLAG_COLLISION：触边后的两种形态 ------------------

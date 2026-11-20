@@ -65,8 +65,13 @@ def _session_two_rois() -> tuple[StraditizeSession, object, str, str]:
     """roi_1（已标定）+ roi_2（同名列、未标定）——正是"吞列 + 看起来全空"的现场。"""
     session = StraditizeSession()
     session.load_image(sample_key="hoya")
-    session.detect_columns(data_xlim=[ROI1_BOX["x0"], ROI1_BOX["x1"]], data_ylim=[ROI1_BOX["y0"], ROI1_BOX["y1"]])
-    session.calibrate_axes(y_marks=[dict(m) for m in Y_MARKS], unit="cm", primary_axis="depth")
+    session.detect_columns(
+        data_xlim=[ROI1_BOX["x0"], ROI1_BOX["x1"]],
+        data_ylim=[ROI1_BOX["y0"], ROI1_BOX["y1"]],
+    )
+    session.calibrate_axes(
+        y_marks=[dict(m) for m in Y_MARKS], unit="cm", primary_axis="depth"
+    )
     group = session.rois[0]["x_groups"][0]
     group["value_per_px"] = 0.16129
     group["axis_stroke_px"] = 6
@@ -107,7 +112,9 @@ def _session_two_rois() -> tuple[StraditizeSession, object, str, str]:
         roi1_id: sum(1 for c in session.columns if c.get("roi_id") == roi1_id),
         roi2_id: sum(1 for c in session.columns if c.get("roi_id") == roi2_id),
     }
-    assert counts[roi1_id] > 0 and counts[roi2_id] > 0, f"前置：两个 ROI 都要有列，实际 {counts}"
+    assert counts[roi1_id] > 0 and counts[roi2_id] > 0, (
+        f"前置：两个 ROI 都要有列，实际 {counts}"
+    )
     names1 = {c.get("name") for c in session.columns if c.get("roi_id") == roi1_id}
     names2 = {c.get("name") for c in session.columns if c.get("roi_id") == roi2_id}
     assert names1 & names2, "前置：必须存在跨 ROI 同名列（本用例的触发条件）"
@@ -152,7 +159,9 @@ def test_csv_multi_roi_has_values_and_matches_primary_sheet() -> None:
         "CSV 的列必须等于主 ROI 分表的列（顺序也要一致）："
         f"CSV={list(frame.columns)[:6]}… 分表={list(sheet.columns)[:6]}…"
     )
-    assert frame.shape == sheet.shape, f"形状必须一致：CSV={frame.shape} 分表={sheet.shape}"
+    assert frame.shape == sheet.shape, (
+        f"形状必须一致：CSV={frame.shape} 分表={sheet.shape}"
+    )
 
     # 逐格比对（NaN 要按"同为缺失"处理，不能用 == ）
     a = frame.to_numpy(dtype=object)
@@ -169,7 +178,10 @@ def test_csv_multi_roi_has_values_and_matches_primary_sheet() -> None:
                 except ValueError:
                     pass
             if (x is None) != (y is None) and not (
-                isinstance(x, float) and isinstance(y, float) and pd.isna(x) and pd.isna(y)
+                isinstance(x, float)
+                and isinstance(y, float)
+                and pd.isna(x)
+                and pd.isna(y)
             ):
                 mismatches.append((r, c, x, y))
             elif x is not None and y is not None and x != pytest.approx(y):
@@ -182,7 +194,9 @@ def test_no_column_is_silently_swallowed() -> None:
     session, _, roi1_id, roi2_id = _session_two_rois()
     session.primary_roi_id = roi1_id
 
-    frame = _csv_frame(_ok(_rpc(create_rpc_dispatcher(session), "export.csv"), "导出 CSV"))
+    frame = _csv_frame(
+        _ok(_rpc(create_rpc_dispatcher(session), "export.csv"), "导出 CSV")
+    )
     primary_cols = [c for c in session.columns if c.get("roi_id") == roi1_id]
 
     assert len(frame.columns) - 1 == len(primary_cols), (
@@ -206,9 +220,12 @@ def test_csv_does_not_mix_roi_columns_across_same_names() -> None:
     session, _, roi1_id, roi2_id = _session_two_rois()
     session.primary_roi_id = roi1_id
 
-    frame = _csv_frame(_ok(_rpc(create_rpc_dispatcher(session), "export.csv"), "导出 CSV"))
+    frame = _csv_frame(
+        _ok(_rpc(create_rpc_dispatcher(session), "export.csv"), "导出 CSV")
+    )
     shared = [
-        c for c in session.columns
+        c
+        for c in session.columns
         if c.get("roi_id") == roi1_id
         and any(
             o.get("roi_id") == roi2_id and (o.get("name") == c.get("name"))
@@ -233,7 +250,9 @@ def test_single_roi_csv_unchanged_structure() -> None:
     session = StraditizeSession()
     session.load_image(sample_key="hoya")
     session.detect_columns(data_xlim=[315, 1946], data_ylim=[511, 1311])
-    session.calibrate_axes(y_marks=[dict(m) for m in Y_MARKS], unit="cm", primary_axis="depth")
+    session.calibrate_axes(
+        y_marks=[dict(m) for m in Y_MARKS], unit="cm", primary_axis="depth"
+    )
     group = session.rois[0]["x_groups"][0]
     group["value_per_px"] = 0.16129
     group["axis_stroke_px"] = 6
@@ -271,9 +290,9 @@ def test_export_r_script_keeps_na() -> None:
         "R 模板的可执行行把 NA 改写成 0，等于把「未测」画成「零丰度」——"
         f"用户看到的是科学结论，而实际是没有读数。违规行：{offenders[:2]}"
     )
-    assert any(
-        "NA" in ln for ln in script.split("\n") if ln.strip().startswith("#")
-    ), "脚本必须显式说明缺测语义（为什么保留 NA）"
+    assert any("NA" in ln for ln in script.split("\n") if ln.strip().startswith("#")), (
+        "脚本必须显式说明缺测语义（为什么保留 NA）"
+    )
 
 
 def test_packaged_r_script_keeps_na(tmp_path: Path) -> None:

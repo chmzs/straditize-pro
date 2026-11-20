@@ -79,7 +79,7 @@ def strat_plot_script_lines(
     if require_file:
         lines.append(
             f"if (!file.exists({read_target})) stop("
-            f"\"\u627e\u4e0d\u5230 {csv_filename}\uff1a\u8bf7\u628a\u5b83\u4e0e\u811a\u672c\u653e\u5728\u540c\u4e00\u76ee\u5f55\u3002\")"
+            f'"\u627e\u4e0d\u5230 {csv_filename}\uff1a\u8bf7\u628a\u5b83\u4e0e\u811a\u672c\u653e\u5728\u540c\u4e00\u76ee\u5f55\u3002")'
         )
         lines.append(f"{df_var} <- read.csv({read_target}, check.names = FALSE)")
         # 后面的绘图段以 `if (ncol(df) > 1) {` 开头、并以收尾的 `}` 关闭外层块；

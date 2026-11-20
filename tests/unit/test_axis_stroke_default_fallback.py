@@ -35,12 +35,16 @@ def test_default_fallback_is_two_pixels() -> None:
 
 def test_unset_everywhere_returns_the_fallback() -> None:
     assert resolve_axis_stroke({}, {}) == pytest.approx(2.0)
-    assert resolve_axis_stroke({"axis_stroke_px": None}, {"axis_stroke_px": None}) == pytest.approx(2.0)
+    assert resolve_axis_stroke(
+        {"axis_stroke_px": None}, {"axis_stroke_px": None}
+    ) == pytest.approx(2.0)
     assert resolve_axis_stroke(None, None) == pytest.approx(2.0)
 
 
 def test_column_override_wins_over_group_and_fallback() -> None:
-    assert resolve_axis_stroke({"axis_stroke_px": 7}, {"axis_stroke_px": 3}) == pytest.approx(7.0)
+    assert resolve_axis_stroke(
+        {"axis_stroke_px": 7}, {"axis_stroke_px": 3}
+    ) == pytest.approx(7.0)
 
 
 def test_group_value_wins_over_fallback() -> None:
@@ -49,12 +53,16 @@ def test_group_value_wins_over_fallback() -> None:
 
 def test_zero_is_a_legal_override() -> None:
     """0 点落在列左缘是合法选择（绿线与红线重合），不得被当成"未设置"。"""
-    assert resolve_axis_stroke({"axis_stroke_px": 0}, {"axis_stroke_px": 3}) == pytest.approx(0.0)
+    assert resolve_axis_stroke(
+        {"axis_stroke_px": 0}, {"axis_stroke_px": 3}
+    ) == pytest.approx(0.0)
 
 
 @pytest.mark.parametrize("bad", [-1, -0.5, "abc", "", object()])
 def test_invalid_column_value_falls_back_to_group(bad: object) -> None:
-    assert resolve_axis_stroke({"axis_stroke_px": bad}, {"axis_stroke_px": 4}) == pytest.approx(4.0)
+    assert resolve_axis_stroke(
+        {"axis_stroke_px": bad}, {"axis_stroke_px": 4}
+    ) == pytest.approx(4.0)
 
 
 @pytest.mark.parametrize("bad", [-2, "x", object()])
@@ -62,7 +70,9 @@ def test_invalid_group_value_falls_back_to_default(bad: object) -> None:
     assert resolve_axis_stroke({}, {"axis_stroke_px": bad}) == pytest.approx(2.0)
 
 
-def test_explicit_values_are_immune_to_the_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_explicit_values_are_immune_to_the_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """把兜底换成一个离谱的值，显式设置过的列/组必须一动不动。
 
     这是"改兜底不会改动用户手填值"的判别力所在：只断言 `== 旧值` 无法区分

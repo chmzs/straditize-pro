@@ -4,6 +4,7 @@ Completely independent of Qt and Matplotlib.
 Verifies image binarization, column boundary detection, column digitization,
 curve control points (RDP and spline reconstruction), and coordinate calibrations.
 """
+
 import subprocess
 import sys
 import unittest
@@ -74,8 +75,9 @@ class PureCoreIsolationTest(unittest.TestCase):
             check=False,
         )
         self.assertEqual(
-            proc.returncode, 0,
-            f"straditize_core isolation check failed in clean subprocess:\nSTDOUT: {proc.stdout}\nSTDERR: {proc.stderr}"
+            proc.returncode,
+            0,
+            f"straditize_core isolation check failed in clean subprocess:\nSTDOUT: {proc.stdout}\nSTDERR: {proc.stderr}",
         )
         self.assertIn("ISOLATION_OK", proc.stdout)
 
@@ -88,7 +90,7 @@ class ImageBinarizationTest(unittest.TestCase):
         arr2d = np.zeros((20, 20), dtype=np.uint8)
         img1 = load_image(arr2d)
         self.assertIsInstance(img1, Image.Image)
-        self.assertEqual(img1.mode, 'RGBA')
+        self.assertEqual(img1.mode, "RGBA")
         self.assertEqual(img1.size, (20, 20))
 
         # 2. NumPy 3D RGB array
@@ -100,13 +102,13 @@ class ImageBinarizationTest(unittest.TestCase):
         basic_path = TEST_FIGURES_DIR / "basic_diagram.png"
         if basic_path.exists():
             img3 = load_image(basic_path)
-            self.assertEqual(img3.mode, 'RGBA')
+            self.assertEqual(img3.mode, "RGBA")
 
     def test_to_binary_and_to_grey(self):
         # White background (255, 255, 255), black stroke (0, 0, 0)
         img_arr = np.full((10, 10, 3), 255, dtype=np.uint8)
         img_arr[3:7, 3:7, :] = 0  # 4x4 black box
-        img = Image.fromarray(img_arr).convert('RGB')
+        img = Image.fromarray(img_arr).convert("RGB")
 
         binary = to_binary(img, threshold=200 * 3)
         self.assertEqual(binary.shape, (10, 10))
@@ -122,12 +124,15 @@ class ImageBinarizationTest(unittest.TestCase):
     def test_guided_segmentation_target_colors(self):
         # Red foreground vs Green unwanted lines
         arr = np.full((15, 15, 4), 255, dtype=np.uint8)
-        arr[2:8, 2:5, :3] = [220, 20, 20]    # Red target
+        arr[2:8, 2:5, :3] = [220, 20, 20]  # Red target
         arr[9:12, 2:5, :3] = [20, 220, 20]  # Green background mark
 
         mask = build_foreground(
-            arr, extraction_mode='standard', segmentation_mode='guided',
-            target_colors=['#DC1414'])
+            arr,
+            extraction_mode="standard",
+            segmentation_mode="guided",
+            target_colors=["#DC1414"],
+        )
         self.assertTrue(mask[2:8, 2:5].all())
         self.assertFalse(mask[9:12, 2:5].any())
 
@@ -211,7 +216,7 @@ class DigitizationTest(unittest.TestCase):
         section[0, :3] = True  # width = 3
         section[1, :7] = True  # width = 7
         section[2, :] = False  # width = 0
-        section[3, 2:5] = True # max pixel = 4, width = 5
+        section[3, 2:5] = True  # max pixel = 4, width = 5
         section[4, :1] = True  # width = 1
 
         profile = trace_area_profile(section)
@@ -252,8 +257,7 @@ class DigitizationTest(unittest.TestCase):
         section[5, :5] = False
         values = trace_bar_profile(section, max_gap=1)
         # Should bridge single missing row
-        np.testing.assert_array_equal(
-            values, [0, 0, 5, 5, 5, 5, 5, 5, 0, 0])
+        np.testing.assert_array_equal(values, [0, 0, 5, 5, 5, 5, 5, 5, 0, 0])
 
     def test_digitize_columns_and_interpolate_hlines(self):
         binary = np.zeros((20, 30), dtype=np.uint8)
@@ -267,14 +271,18 @@ class DigitizationTest(unittest.TestCase):
 
         bounds = [(0, 15), (15, 30)]
         df = digitize_columns(
-            binary, bounds, method='area', column_names=['PollenA', 'PollenB'],
-            hline_locs=[10])
+            binary,
+            bounds,
+            method="area",
+            column_names=["PollenA", "PollenB"],
+            hline_locs=[10],
+        )
 
-        self.assertEqual(list(df.columns), ['PollenA', 'PollenB'])
+        self.assertEqual(list(df.columns), ["PollenA", "PollenB"])
         self.assertEqual(len(df), 20)
         # Because row 10 was interpolated, PollenA should remain around 5 and PollenB around 8
-        self.assertAlmostEqual(df['PollenA'].iloc[10], 5.0, delta=0.5)
-        self.assertAlmostEqual(df['PollenB'].iloc[10], 8.0, delta=0.5)
+        self.assertAlmostEqual(df["PollenA"].iloc[10], 5.0, delta=0.5)
+        self.assertAlmostEqual(df["PollenB"].iloc[10], 8.0, delta=0.5)
 
 
 class CurveControlPointTest(unittest.TestCase):
@@ -304,19 +312,19 @@ class CurveControlPointTest(unittest.TestCase):
         target = np.arange(11)
 
         # Linear
-        rec_lin = reconstruct_curve(rows, values, target, method='linear')
+        rec_lin = reconstruct_curve(rows, values, target, method="linear")
         self.assertAlmostEqual(rec_lin[5], 10.0)
         self.assertAlmostEqual(rec_lin[2], 4.0)
 
         # Pchip (monotonic Hermite)
-        rec_pchip = reconstruct_curve(rows, values, target, method='pchip')
+        rec_pchip = reconstruct_curve(rows, values, target, method="pchip")
         self.assertAlmostEqual(rec_pchip[5], 10.0)
         self.assertTrue(np.all(rec_pchip >= 0.0))  # No negative overshoot
 
         # Spline
         rows_4 = [0, 3, 7, 10]
         vals_4 = [0.0, 5.0, 8.0, 0.0]
-        rec_spline = reconstruct_curve(rows_4, vals_4, target, method='spline')
+        rec_spline = reconstruct_curve(rows_4, vals_4, target, method="spline")
         self.assertEqual(len(rec_spline), 11)
         self.assertAlmostEqual(rec_spline[3], 5.0, delta=1e-5)
 
@@ -338,7 +346,9 @@ class ScientificCalibrationTest(unittest.TestCase):
 
     def test_linear_calibration_forward_and_backward(self):
         # Pixel row 0 -> Depth 10.0 cm; Pixel row 500 -> Depth 110.0 cm
-        cal = LinearCalibration(px_points=[0, 500], data_points=[10.0, 110.0], name="Depth")
+        cal = LinearCalibration(
+            px_points=[0, 500], data_points=[10.0, 110.0], name="Depth"
+        )
 
         self.assertAlmostEqual(cal.px2data(0), 10.0)
         self.assertAlmostEqual(cal.px2data(250), 60.0)
@@ -359,22 +369,27 @@ class ScientificCalibrationTest(unittest.TestCase):
     def test_stratigraphic_calibration_dataframe(self):
         y_cal = LinearCalibration([0, 100], [50.0, 150.0], name="Depth (cm)")
         # 1 px width = 0.5 % abundance
-        strat_cal = StratigraphicCalibration(y_calibration=y_cal, x_scale=0.5, y_name="Depth (cm)")
+        strat_cal = StratigraphicCalibration(
+            y_calibration=y_cal, x_scale=0.5, y_name="Depth (cm)"
+        )
 
-        df_px = pd.DataFrame({
-            'Pinus': [10.0, 20.0, 30.0],
-            'Betula': [4.0, 6.0, 8.0],
-        }, index=[0, 50, 100])
+        df_px = pd.DataFrame(
+            {
+                "Pinus": [10.0, 20.0, 30.0],
+                "Betula": [4.0, 6.0, 8.0],
+            },
+            index=[0, 50, 100],
+        )
 
         df_sci = strat_cal.transform_dataframe(df_px)
         np.testing.assert_allclose(df_sci.index.values, [50.0, 100.0, 150.0])
-        np.testing.assert_allclose(df_sci['Pinus'].values, [5.0, 10.0, 15.0])
-        np.testing.assert_allclose(df_sci['Betula'].values, [2.0, 3.0, 4.0])
+        np.testing.assert_allclose(df_sci["Pinus"].values, [5.0, 10.0, 15.0])
+        np.testing.assert_allclose(df_sci["Betula"].values, [2.0, 3.0, 4.0])
 
         # Invert back to pixel domain
         df_roundtrip = strat_cal.inverse_transform_dataframe(df_sci)
         np.testing.assert_allclose(df_roundtrip.index.values, df_px.index.values)
-        np.testing.assert_allclose(df_roundtrip['Pinus'].values, df_px['Pinus'].values)
+        np.testing.assert_allclose(df_roundtrip["Pinus"].values, df_px["Pinus"].values)
 
 
 class LogCalibrationTest(unittest.TestCase):
@@ -434,7 +449,7 @@ class StraditizePipelineEndToEndTest(unittest.TestCase):
         # Column 0: x=10..30, curve width expands from 2 to 12
         for r in range(height):
             w = int(2 + 10 * (r / height))
-            img_arr[r, 10:10 + w, :3] = 0
+            img_arr[r, 10 : 10 + w, :3] = 0
         # Column 1: x=40..70, curve width constant 8
         img_arr[:, 40:48, :3] = 0
 
@@ -444,11 +459,13 @@ class StraditizePipelineEndToEndTest(unittest.TestCase):
         pipeline.preprocess(threshold=200 * 3)
         self.assertIsNotNone(pipeline.binary)
 
-        pipeline.set_column_bounds([(10, 40), (40, 75)], column_names=['TaxonA', 'TaxonB'])
-        pipeline.digitize(method='area')
+        pipeline.set_column_bounds(
+            [(10, 40), (40, 75)], column_names=["TaxonA", "TaxonB"]
+        )
+        pipeline.digitize(method="area")
 
         self.assertIsNotNone(pipeline.df_pixels)
-        self.assertEqual(list(pipeline.df_pixels.columns), ['TaxonA', 'TaxonB'])
+        self.assertEqual(list(pipeline.df_pixels.columns), ["TaxonA", "TaxonB"])
         self.assertEqual(len(pipeline.df_pixels), height)
 
         # 3. Scientific calibration
@@ -466,14 +483,14 @@ class StraditizePipelineEndToEndTest(unittest.TestCase):
         self.assertAlmostEqual(df_final.index[-1], 200.0)
 
         # 4. Interactive control point edit on TaxonA
-        rows, vals = pipeline.get_control_points('TaxonA')
+        rows, vals = pipeline.get_control_points("TaxonA")
         self.assertGreater(len(rows), 1)
         self.assertEqual(len(rows), len(vals))
 
         # Modify a control point and check curve rebuilding
-        pipeline.update_control_point('TaxonA', row=30, value=25.0, rebuild=True)
-        self.assertEqual(pipeline.df_pixels['TaxonA'].iloc[30], 25.0)
+        pipeline.update_control_point("TaxonA", row=30, value=25.0, rebuild=True)
+        self.assertEqual(pipeline.df_pixels["TaxonA"].iloc[30], 25.0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

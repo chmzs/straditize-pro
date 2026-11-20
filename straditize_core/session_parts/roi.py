@@ -124,9 +124,17 @@ class RoiMixin:
         max_w = float(getattr(self, "width", 0) or 100000.0)
         max_h = float(getattr(self, "height", 0) or 100000.0)
         min_x = max(0.0, min(float(x0), float(x1)))
-        max_x = min(max_w, max(float(x0), float(x1))) if max_w > 0 else max(float(x0), float(x1))
+        max_x = (
+            min(max_w, max(float(x0), float(x1)))
+            if max_w > 0
+            else max(float(x0), float(x1))
+        )
         min_y = max(0.0, min(float(y0), float(y1)))
-        max_y = min(max_h, max(float(y0), float(y1))) if max_h > 0 else max(float(y0), float(y1))
+        max_y = (
+            min(max_h, max(float(y0), float(y1)))
+            if max_h > 0
+            else max(float(y0), float(y1))
+        )
         xlim = [min_x, max_x]
         ylim = [min_y, max_y]
 
@@ -198,8 +206,16 @@ class RoiMixin:
             if any(v is not None for v in (x0, x1, y0, y1, xlim, ylim, x, y, w, h)):
                 sug = (
                     self.suggest_data_region()
-                    if (hasattr(self, "suggest_data_region") and getattr(self, "image", None) is not None)
-                    else {"xMin": 0.0, "xMax": getattr(self, "width", 100.0), "yMin": 0.0, "yMax": getattr(self, "height", 100.0)}
+                    if (
+                        hasattr(self, "suggest_data_region")
+                        and getattr(self, "image", None) is not None
+                    )
+                    else {
+                        "xMin": 0.0,
+                        "xMax": getattr(self, "width", 100.0),
+                        "yMin": 0.0,
+                        "yMax": getattr(self, "height", 100.0),
+                    }
                 )
                 curr_x = getattr(self, "data_xlim", None) or [sug["xMin"], sug["xMax"]]
                 curr_y = getattr(self, "data_ylim", None) or [sug["yMin"], sug["yMax"]]
@@ -220,7 +236,12 @@ class RoiMixin:
                     "roi": r_created,
                     "data_xlim": r_created["xlim"],
                     "data_ylim": r_created["ylim"],
-                    "roi_box": (r_created["xlim"][0], r_created["ylim"][0], r_created["xlim"][1], r_created["ylim"][1]),
+                    "roi_box": (
+                        r_created["xlim"][0],
+                        r_created["ylim"][0],
+                        r_created["xlim"][1],
+                        r_created["ylim"][1],
+                    ),
                     "success": True,
                 }
             raise JsonRpcError(-32602, f"ROI '{roi_id}' not found.")
@@ -251,23 +272,39 @@ class RoiMixin:
 
         if xlim is not None and len(xlim) == 2:
             min_x = max(0.0, min(float(xlim[0]), float(xlim[1])))
-            max_x = min(max_w, max(float(xlim[0]), float(xlim[1]))) if max_w > 0 else max(float(xlim[0]), float(xlim[1]))
+            max_x = (
+                min(max_w, max(float(xlim[0]), float(xlim[1])))
+                if max_w > 0
+                else max(float(xlim[0]), float(xlim[1]))
+            )
             new_xlim = [min_x, max_x]
             coord_changed = True
         elif x0 is not None and x1 is not None:
             min_x = max(0.0, min(float(x0), float(x1)))
-            max_x = min(max_w, max(float(x0), float(x1))) if max_w > 0 else max(float(x0), float(x1))
+            max_x = (
+                min(max_w, max(float(x0), float(x1)))
+                if max_w > 0
+                else max(float(x0), float(x1))
+            )
             new_xlim = [min_x, max_x]
             coord_changed = True
 
         if ylim is not None and len(ylim) == 2:
             min_y = max(0.0, min(float(ylim[0]), float(ylim[1])))
-            max_y = min(max_h, max(float(ylim[0]), float(ylim[1]))) if max_h > 0 else max(float(ylim[0]), float(ylim[1]))
+            max_y = (
+                min(max_h, max(float(ylim[0]), float(ylim[1])))
+                if max_h > 0
+                else max(float(ylim[0]), float(ylim[1]))
+            )
             new_ylim = [min_y, max_y]
             coord_changed = True
         elif y0 is not None and y1 is not None:
             min_y = max(0.0, min(float(y0), float(y1)))
-            max_y = min(max_h, max(float(y0), float(y1))) if max_h > 0 else max(float(y0), float(y1))
+            max_y = (
+                min(max_h, max(float(y0), float(y1)))
+                if max_h > 0
+                else max(float(y0), float(y1))
+            )
             new_ylim = [min_y, max_y]
             coord_changed = True
 
@@ -311,7 +348,9 @@ class RoiMixin:
             "success": True,
         }
 
-    def roi_remove(self, roi_id: str, confirm_drop_columns: bool = False) -> dict[str, Any]:
+    def roi_remove(
+        self, roi_id: str, confirm_drop_columns: bool = False
+    ) -> dict[str, Any]:
         """Remove an ROI and cascade-delete its columns.
 
         ## 为什么要显式确认（2026-11-10 用户缺陷）
@@ -384,7 +423,9 @@ class RoiMixin:
                 self.primary_roi_id = None
 
         if self.active_roi_id:
-            active_roi = next((r for r in self.rois if r["id"] == self.active_roi_id), None)
+            active_roi = next(
+                (r for r in self.rois if r["id"] == self.active_roi_id), None
+            )
             if active_roi:
                 self.data_xlim = list(active_roi["xlim"])
                 self.data_ylim = list(active_roi["ylim"])
@@ -479,7 +520,9 @@ class RoiMixin:
         groups = roi.setdefault("x_groups", [])
         target = next((g for g in groups if g.get("id") == group_id), None)
         if not target:
-            raise JsonRpcError(-32602, f"Group '{group_id}' not found in ROI '{roi_id}'.")
+            raise JsonRpcError(
+                -32602, f"Group '{group_id}' not found in ROI '{roi_id}'."
+            )
 
         allowed_fields = (
             "name",
@@ -578,7 +621,9 @@ class RoiMixin:
 
         target = next((g for g in groups if g.get("id") == group_id), None)
         if not target:
-            raise JsonRpcError(-32602, f"Group '{group_id}' not found in ROI '{roi_id}'.")
+            raise JsonRpcError(
+                -32602, f"Group '{group_id}' not found in ROI '{roi_id}'."
+            )
 
         groups.remove(target)
         if roi.get("default_group_id") == group_id:

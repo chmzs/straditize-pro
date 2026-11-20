@@ -11,7 +11,6 @@ Conforms to Section 3 of the OCR & Review Specification:
 7. End-to-end Session RPC workflow integration.
 """
 
-
 import os
 import tempfile
 import unittest
@@ -68,7 +67,9 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
 
     def test_03_custom_user_dictionary_import(self):
         """Verify importing domain-specific taxa from plain .txt file."""
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".txt", delete=False) as f:
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", suffix=".txt", delete=False
+        ) as f:
             f.write("新疆落叶松,Larix sibirica,地方特有种\n")
             f.write("准噶尔乌头,Aconitum soongaricum,高山草甸\n")
             custom_txt_path = f.name
@@ -103,8 +104,12 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
                 self.assertEqual(res["cls"], expected_cls)
 
         # Latin names must also resolve directly
-        self.assertEqual(self.dict.match_text("Sporormiella")["suggested_name"], "Sporormiella")
-        self.assertEqual(self.dict.match_text("Ostracoda")["suggested_name"], "Ostracoda")
+        self.assertEqual(
+            self.dict.match_text("Sporormiella")["suggested_name"], "Sporormiella"
+        )
+        self.assertEqual(
+            self.dict.match_text("Ostracoda")["suggested_name"], "Ostracoda"
+        )
 
     def test_08_no_cross_class_false_positive(self):
         """An unknown NPP name must never be 'corrected' into an unrelated pollen family.
@@ -127,8 +132,12 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
 
         # OCR typos of known taxa must still be repaired
         self.assertEqual(self.dict.match_text("Querous")["suggested_name"], "Quercus")
-        self.assertEqual(self.dict.match_text("Artemesia")["suggested_name"], "Artemisia")
-        self.assertEqual(self.dict.match_text("Pediastrm")["suggested_name"], "Pediastrum")
+        self.assertEqual(
+            self.dict.match_text("Artemesia")["suggested_name"], "Artemisia"
+        )
+        self.assertEqual(
+            self.dict.match_text("Pediastrm")["suggested_name"], "Pediastrum"
+        )
 
     def test_09_session_custom_taxa_dict_persistence(self):
         """Verify Session-level custom vocabulary save/load round-trip via RPC."""
@@ -138,7 +147,9 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
             os.environ["STRADITIZE_TAXA_DICT"] = dict_path
             try:
                 session = StraditizeSession()
-                self.assertEqual(session.user_taxa_dict_path(), os.path.abspath(dict_path))
+                self.assertEqual(
+                    session.user_taxa_dict_path(), os.path.abspath(dict_path)
+                )
 
                 empty = session.ocr_get_taxa_dict()
                 self.assertEqual(empty["custom_count"], 0)
@@ -147,8 +158,16 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
 
                 saved = session.ocr_save_custom_taxa(
                     entries=[
-                        {"zh_name": "四角藻属", "latin_name": "Tetraedron", "group": "绿藻类"},
-                        {"zh_name": "新疆落叶松", "latin_name": "Larix sibirica", "group": "地方特有种"},
+                        {
+                            "zh_name": "四角藻属",
+                            "latin_name": "Tetraedron",
+                            "group": "绿藻类",
+                        },
+                        {
+                            "zh_name": "新疆落叶松",
+                            "latin_name": "Larix sibirica",
+                            "group": "地方特有种",
+                        },
                     ]
                 )
                 self.assertEqual(saved["added"], 2)
@@ -159,14 +178,26 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
 
                 # Reloaded dictionary must contain the custom entries
                 merged = PollenDictionary(custom_dict_path=dict_path)
-                self.assertEqual(merged.match_text("四角藻属")["suggested_name"], "Tetraedron")
-                self.assertEqual(merged.match_text("新疆落叶松")["suggested_name"], "Larix sibirica")
+                self.assertEqual(
+                    merged.match_text("四角藻属")["suggested_name"], "Tetraedron"
+                )
+                self.assertEqual(
+                    merged.match_text("新疆落叶松")["suggested_name"], "Larix sibirica"
+                )
                 # Built-in NPP entries remain available alongside custom ones
-                self.assertEqual(merged.match_text("盘星藻属")["suggested_name"], "Pediastrum")
+                self.assertEqual(
+                    merged.match_text("盘星藻属")["suggested_name"], "Pediastrum"
+                )
 
                 # Replace mode drops previous custom entries
                 replaced = session.ocr_save_custom_taxa(
-                    entries=[{"zh_name": "水绵属", "latin_name": "Spirogyra", "group": "绿藻类"}],
+                    entries=[
+                        {
+                            "zh_name": "水绵属",
+                            "latin_name": "Spirogyra",
+                            "group": "绿藻类",
+                        }
+                    ],
                     mode="replace",
                 )
                 self.assertEqual(replaced["custom_count"], 1)
@@ -176,10 +207,18 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
                 # correction glossary from it with replace semantics, so a response
                 # that only echoed the newly added rows would silently leave
                 # deleted entries alive on the client.
-                self.assertEqual([e["latin"] for e in replaced["entries"]], ["Spirogyra"])
+                self.assertEqual(
+                    [e["latin"] for e in replaced["entries"]], ["Spirogyra"]
+                )
 
                 appended_again = session.ocr_save_custom_taxa(
-                    entries=[{"zh_name": "四角藻属", "latin_name": "Tetraedron", "group": "绿藻类"}]
+                    entries=[
+                        {
+                            "zh_name": "四角藻属",
+                            "latin_name": "Tetraedron",
+                            "group": "绿藻类",
+                        }
+                    ]
                 )
                 self.assertEqual(
                     sorted(e["latin"] for e in appended_again["entries"]),
@@ -258,7 +297,11 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
 
         # Infra-generic guard: unlisted epithets must stay unanswered,
         # NOT be greedily reassigned to a listed congener.
-        for unlisted in ["Pediastrum integrum", "Pediastrum muticum", "Pediastrum angulosum"]:
+        for unlisted in [
+            "Pediastrum integrum",
+            "Pediastrum muticum",
+            "Pediastrum angulosum",
+        ]:
             with self.subTest(unlisted=unlisted):
                 res = self.dict.match_text(unlisted)
                 self.assertEqual(res["status"], "unrecognized")
@@ -284,14 +327,19 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
         self.assertEqual(PollenDictionary.extract_caption_taxa(caption_plate2), plate2)
 
         # 'cf.' inside a name must survive; it is not a panel key
-        self.assertIn("Pediastrum cf. argentinense", PollenDictionary.extract_caption_taxa(caption_plate2))
+        self.assertIn(
+            "Pediastrum cf. argentinense",
+            PollenDictionary.extract_caption_taxa(caption_plate2),
+        )
 
         # parse_taxa_text routes captions to the caption parser
         parsed = PollenDictionary.parse_taxa_text(caption_plate1)
         self.assertEqual([p["latin_name"] for p in parsed], plate1)
 
         # A plain name list must NOT be mistaken for a caption
-        plain = PollenDictionary.parse_taxa_text("水绵属,Spirogyra,绿藻类\n新疆落叶松,Larix sibirica")
+        plain = PollenDictionary.parse_taxa_text(
+            "水绵属,Spirogyra,绿藻类\n新疆落叶松,Larix sibirica"
+        )
         self.assertEqual(len(plain), 2)
         self.assertEqual(plain[0]["latin_name"], "Spirogyra")
         self.assertEqual(plain[1]["group"], "用户自定义 (User Custom)")
@@ -335,7 +383,9 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
                     )
                 # Built-in plate taxa remain available alongside the custom entries
                 self.assertEqual(
-                    merged.match_text("Pediastrum duplex var. rugulosum")["suggested_name"],
+                    merged.match_text("Pediastrum duplex var. rugulosum")[
+                        "suggested_name"
+                    ],
                     "Pediastrum duplex var. rugulosum",
                 )
             finally:
@@ -355,14 +405,24 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
         aliases = data.get("aliases", {})
 
         # Both keys were harvested and the union is complete
-        self.assertGreaterEqual(len(genera), 227, f"expected >=227 genera, got {len(genera)}")
+        self.assertGreaterEqual(
+            len(genera), 227, f"expected >=227 genera, got {len(genera)}"
+        )
         habitats = {g["habitat"] for g in genera}
         self.assertIn("inland", habitats)
         self.assertIn("marine", habitats)
-        self.assertIn("both", habitats, "genera listed in both keys must be marked 'both'")
+        self.assertIn(
+            "both", habitats, "genera listed in both keys must be marked 'both'"
+        )
 
         # Latin names resolve, with a diatom group label
-        for latin in ("Aulacoseira", "Cocconeis", "Surirella", "Nitzschia", "Chaetoceros"):
+        for latin in (
+            "Aulacoseira",
+            "Cocconeis",
+            "Surirella",
+            "Nitzschia",
+            "Chaetoceros",
+        ):
             with self.subTest(latin=latin):
                 res = self.dict.match_text(latin)
                 self.assertEqual(res["suggested_name"], latin)
@@ -371,7 +431,11 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
                 self.assertIn("硅藻", res["group"])
 
         # Chinese genus names resolve to the matching Latin name
-        for zh, latin in (("小环藻属", "Cyclotella"), ("直链藻属", "Melosira"), ("菱形藻属", "Nitzschia")):
+        for zh, latin in (
+            ("小环藻属", "Cyclotella"),
+            ("直链藻属", "Melosira"),
+            ("菱形藻属", "Nitzschia"),
+        ):
             with self.subTest(zh=zh):
                 res = self.dict.match_text(zh)
                 self.assertEqual(res["suggested_name"], latin)
@@ -392,7 +456,9 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
                     f"source slip {slip} must not be a canonical entry",
                 )
         self.assertIn("Thalasiosira", aliases)
-        self.assertEqual(self.dict.match_text("Thalasiosira")["suggested_name"], "Thalassiosira")
+        self.assertEqual(
+            self.dict.match_text("Thalasiosira")["suggested_name"], "Thalassiosira"
+        )
         self.assertIn("硅藻", self.dict.match_text("Thalasiosira")["group"])
 
         # Entries are keyed by Chinese name, so a Chinese label shared by two
@@ -410,13 +476,20 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
 
         # Every canonical genus in the data file must be reachable in the dictionary
         canonical = {
-            g["latin"] for g in genera if g["latin"].lower() not in {a.lower() for a in aliases}
+            g["latin"]
+            for g in genera
+            if g["latin"].lower() not in {a.lower() for a in aliases}
         }
         missing = sorted(
-            c for c in canonical
-            if not any(m["latin"].lower() == c.lower() for m in self.dict.entries.values())
+            c
+            for c in canonical
+            if not any(
+                m["latin"].lower() == c.lower() for m in self.dict.entries.values()
+            )
         )
-        self.assertEqual(missing, [], f"diatom genera missing from the dictionary: {missing}")
+        self.assertEqual(
+            missing, [], f"diatom genera missing from the dictionary: {missing}"
+        )
 
     def test_13_diatom_typos_still_repair_without_intra_genus_conflation(self):
         """The enlarged diatom vocabulary must not make distinct genera collide."""
@@ -432,16 +505,27 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
                 self.assertEqual(self.dict.match_text(typo)["suggested_name"], expected)
 
         # Look-alike but distinct genera must not be silently merged
-        for name in ("Navicula", "Navicymbula", "Gomphonema", "Gomphoneis",
-                     "Achnanthes", "Achnanthidium", "Fragilaria", "Fragilariforma",
-                     "Staurosira", "Staurosirella"):
+        for name in (
+            "Navicula",
+            "Navicymbula",
+            "Gomphonema",
+            "Gomphoneis",
+            "Achnanthes",
+            "Achnanthidium",
+            "Fragilaria",
+            "Fragilariforma",
+            "Staurosira",
+            "Staurosirella",
+        ):
             with self.subTest(name=name):
                 self.assertEqual(self.dict.match_text(name)["suggested_name"], name)
 
         # A non-existent genus must stay unanswered rather than land on a neighbour
         for unknown in ("Naviculopsis", "Melosiropsis", "Coscinodiscopsis"):
             with self.subTest(unknown=unknown):
-                self.assertEqual(self.dict.match_text(unknown)["status"], "unrecognized")
+                self.assertEqual(
+                    self.dict.match_text(unknown)["status"], "unrecognized"
+                )
 
         # A real but unlisted neighbour sitting 2 edits away is inherently
         # ambiguous: it may be suggested, but never as a silent confident 'auto'.
@@ -449,7 +533,8 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
             with self.subTest(neighbour=neighbour):
                 res = self.dict.match_text(neighbour)
                 self.assertNotEqual(
-                    res["status"], "auto",
+                    res["status"],
+                    "auto",
                     f"{neighbour} must not be auto-accepted as {res['suggested_name']}",
                 )
                 self.assertIn(res["status"], ("confirm", "unrecognized"))
@@ -478,7 +563,7 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
                 "anchor_y": 70.0,
                 "associated_column_id": None,
                 "associated_column_index": None,
-            }
+            },
         ]
         columns = [
             {"id": "taxa_0", "col_index": 0, "name": "Col_1", "startX": 140.0},
@@ -499,7 +584,9 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
         session.detect_columns([315, 1946], [511, 1311])
 
         # Execute OCR recognition on top header region
-        ocr_res = session.ocr_recognize_labels(label_row_bbox=[315, 200, 1946, 510], angle_deg=-45.0)
+        ocr_res = session.ocr_recognize_labels(
+            label_row_bbox=[315, 200, 1946, 510], angle_deg=-45.0
+        )
         self.assertTrue(ocr_res["success"])
         data = ocr_res["data"]
         self.assertIn("labels", data)
@@ -509,9 +596,21 @@ class TestOcrTaxaRecognitionSuite(unittest.TestCase):
 
         # Apply reviewed labels to columns
         sample_confirmed = [
-            {"associated_column_id": "taxa_0", "suggested_name": "Pinus", "ocr_text": "松属"},
-            {"associated_column_id": "taxa_1", "suggested_name": "Abies", "ocr_text": "冷杉属"},
-            {"associated_column_id": "taxa_2", "suggested_name": "Picea", "ocr_text": "云杉属"},
+            {
+                "associated_column_id": "taxa_0",
+                "suggested_name": "Pinus",
+                "ocr_text": "松属",
+            },
+            {
+                "associated_column_id": "taxa_1",
+                "suggested_name": "Abies",
+                "ocr_text": "冷杉属",
+            },
+            {
+                "associated_column_id": "taxa_2",
+                "suggested_name": "Picea",
+                "ocr_text": "云杉属",
+            },
         ]
         apply_res = session.ocr_apply_labels(sample_confirmed)
         self.assertTrue(apply_res["success"])

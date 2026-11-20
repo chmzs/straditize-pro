@@ -5,6 +5,7 @@ import { Toolbar } from '../components/Toolbar';
 import { Sidebar } from '../components/Sidebar';
 import { Inspector } from '../components/Inspector';
 import { HistoryManager } from '../core/HistoryManager';
+import { extractProjectNameFromFilename } from '../utils/exportNaming';
 import { t } from '../i18n';
 
 export interface FileLoaderCallbacks {
@@ -179,6 +180,15 @@ export class FileLoaderService {
 
         // 进入 S1 时清空：ROI、所有列、所有点、深度标定、撤销栈、选中状态
         this.canvasComponent.loadNewDiagram(newDiagramData);
+        const inferred = extractProjectNameFromFilename(file.name);
+        if (inferred) {
+          this.canvasComponent.data.project_name = inferred;
+          this.canvasComponent.data.image_name = file.name;
+          this.getToolbar()?.setProjectName(inferred);
+          this.rpcClient.call('project.setName', { name: inferred }).catch(() => {});
+        } else {
+          this.getToolbar()?.setProjectName('');
+        }
         this.history.reset([], '');
         this.callbacks.setCurrentStage(1);
         this.callbacks.updateWorkflowBar();
