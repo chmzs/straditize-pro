@@ -29,9 +29,8 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
     onSelectTaxa: (taxaId: string) => {
       p.canvasComponent.setActiveTaxa(taxaId);
       p.canvasComponent.scrollToColumn(taxaId);
-      // 侧栏点选一列只在高亮该列。步骤 7（拐点与层位）右侧面板恒定为层位发现，不再整块换掉。
-      // 分列/命名阶段（STAGE.SPLIT）例外：右侧若需响应列点选才同步 selectedEntity。
-      if (p.canvasComponent.workflowStage === STAGE.SPLIT) {
+      // 侧栏点选一列在高亮该列的同时，步骤 5（分列/命名）与步骤 7（拐点与层位）响应列点选同步 selectedEntity 以渲染单列属性面板。
+      if (p.canvasComponent.workflowStage === STAGE.SPLIT || p.canvasComponent.workflowStage === STAGE.SPEARS_AND_SAMPLES) {
         p.canvasComponent.data.selectedEntity = { type: 'column', id: taxaId };
         p.getInspector()?.updateData(p.canvasComponent.data);
       }

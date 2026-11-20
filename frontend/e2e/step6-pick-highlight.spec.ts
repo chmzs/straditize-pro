@@ -71,7 +71,7 @@ test.describe('步骤 6：画布像素判据', () => {
     const insideYs = Array.from({ length: 21 }, (_, i) =>
       toCssY(roi.yMin + ((roi.yMax - roi.yMin) * (i + 0.5)) / 21) - box.y
     );
-    const aboveYs = [roi.yMin - 80, roi.yMin - 60, roi.yMin - 45].map((y) => toCssY(y) - box.y);
+    const aboveYs = [roi.yMin - 80, roi.yMin - 65, roi.yMin - 55].map((y) => toCssY(y) - box.y);
 
     const beforeInside = await sampleColumn(page, localX, insideYs);
     const beforeAbove = await sampleColumn(page, localX, aboveYs);
