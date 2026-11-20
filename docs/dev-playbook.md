@@ -113,6 +113,30 @@ pixi run dev                       # == pixi run python support/dev_up.py；后�
   3. 跑 e2e 前必须 `npm --prefix frontend run build`，且**先看 BUILD 的退出码**：
      `BUILD≠0` 时 e2e 的"通过"是旧 `dist` 给的假绿（已实测踩过两次）。
 
+### 3-9 步骤 7 侧栏选列与单列 Inspector 挂载解耦陷阱（2026-11-20 实测）
+
+- **症状**：E2E 测试报 `locator('#btn-col-delete') element(s) not found` 或 `#btn-col-digitize` 找不到。
+- **真因**：重构步骤 7 时，右侧面板恒定为「样品层位发现」；`SidebarBridge.ts` 在点击侧栏属种列时，未同步设置 `selectedEntity = { type: 'column', id: taxaId }`。当需要单列删除或重新取数时，单列属性检查器根本没有被挂载到 DOM 中。
+- **正确做法**：`SidebarBridge.ts` 在 `STAGE.SPEARS_AND_SAMPLES`（步骤 7）点击属种列时，必须同步触发 `selectedEntity` 并通知 Inspector 重绘；`Inspector.ts` 条件中放开步骤 7 的单列渲染。
+
+### 3-10 E2E 像素判据与 Canvas 描边抗锯齿羽化假红（2026-11-20 实测）
+
+- **症状**：`step6-pick-highlight.spec.ts` 报 `ROI 上方 40px 之外不许被高亮染到 Expected: 0, Received: 1`（RGB `[255, 255, 255]` 变成 `[247, 251, 253]`）。
+- **真因**：高亮边框以 `1.5 * k` 宽度描边，向上外扩半线宽，Canvas 还会产生 1–2px 的羽化抗锯齿过渡；而在低缩放比（例如 `scale = 0.43`）下，世界坐标 5px 换算为屏幕坐标仅 2.1px，直接踩中了描边的抗锯齿羽化带，并非高亮大范围溢出。
+- **正确做法**：断言非目标区域未受污染时，采样点距离动态几何边框必须预留合理的物理像素安全缓冲（例如世界坐标距边框 $\ge 15\text{px}$），防止亚像素与抗锯齿带来假阳性。
+
+### 3-11 按钮选择器贪婪匹配顶栏 Input title 冲突（2026-11-20 实测）
+
+- **症状**：测试中点击【打开导出面板】按钮，导出模态框无反应或报未显示。
+- **真因**：选择器写为 `[title*="导出"]`，而顶栏的项目名称输入框 title 也包含“导出”（`title="当前项目名称（用作导出与工程包文件名前缀...）"`），Playwright 误命中了该文本框而非按钮。
+- **正确做法**：操作按钮必须使用精准的选择器（如 `#btn-export-csv` 或限定标签 `button#btn-export`），严禁使用宽松的通配属性选择器。
+
+### 3-12 列表卡片循环中禁止使用静态 DOM ID（2026-11-20 实测）
+
+- **症状**：`locator('#btn-col-delete') resolved to 2 elements` 严格模式报错。
+- **真因**：在侧边栏属种卡片循环渲染的 HTML 模板中写死了静态 `id="btn-col-delete"`，导致页面上存在 N 个同名 ID，与检查器中的按钮冲突。
+- **正确做法**：循环生成的列表元素一律使用 class（如 `class="btn-col-delete-action"`）并走父级事件委托，静态 `id` 仅保留给全局唯一的检查器或工具栏控件。
+
 ## 4 端口分配约定
 
 | 端口 | 用途 | 谁在用 | 备注 |
