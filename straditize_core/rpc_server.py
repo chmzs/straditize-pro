@@ -344,6 +344,15 @@ class StraditizeRpcHttpServer:
             self._server.auth_token = self.auth_token
             self._server.allowed_hosts = self.user_allowed_hosts
 
+        if self.remote_access_enabled:
+            from .gateway.lifecycle import get_remote_display_urls
+
+            r_urls = get_remote_display_urls(self.user_allowed_hosts, self.actual_port)
+            if r_urls:
+                logger.info(
+                    "Remote access whitelist active for: %s", ", ".join(r_urls)
+                )
+
     def start(self) -> None:
         StraditizeRpcHttpServer._active_instance = self
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)

@@ -233,6 +233,7 @@ def test_http_remote_access_blocking_and_dynamic_whitelist(monkeypatch, tmp_path
         server.stop()
 
 
+
 def test_remote_password_protection_and_api_auth():
     """Verify password protection for remote connections, auth token generation, and loopback bypass."""
     port = get_free_port()
@@ -388,3 +389,49 @@ def test_remote_password_protection_and_api_auth():
 
     finally:
         server.stop()
+
+
+def test_get_remote_display_urls(monkeypatch):
+    """Test resolution of remote access URLs from allowed_hosts whitelist."""
+    from straditize_core.gateway.lifecycle import get_remote_display_urls
+
+    # 1. Empty / None cases
+    assert get_remote_display_urls(None, 8765) == []
+    assert get_remote_display_urls([], 8765) == []
+
+    # 2. Loopback-only cases
+    loopback_only = ["127.0.0.1", "localhost", "::1", "0.0.0.0"]
+    assert get_remote_display_urls(loopback_only, 8765) == []
+
+    # 3. Explicit IP and hostname list (user actual scenario)
+    whitelist = ["127.0.0.1", "localhost", "192.168.0.100", "100.64.0.1", "my-nas.lan:9999"]
+    urls = get_remote_display_urls(whitelist, 8765)
+    assert urls == [
+        "http://192.168.0.100:8765",
+        "http://100.64.0.1:8765",
+        "http://my-nas.lan:8765",
+    ]
+
+    # 4. Wildcard matching against local network interfaces
+    monkeypatch.setattr(
+        "straditize_core.gateway.lifecycle.detect_local_ips",
+        lambda: ["192.168.1.120", "10.0.0.5"],
+    )
+    wildcard_list = ["192.168.1.*", "172.16.*"]
+    wildcard_urls = get_remote_display_urls(wildcard_list, 8888)
+    assert wildcard_urls == ["http://192.168.1.120:8888"]
+
+    # 5. Wildcard "*" matches all detected interfaces
+    all_urls = get_remote_display_urls(["*"], 8000)
+    assert all_urls == ["http://192.168.1.120:8000", "http://10.0.0.5:8000"]
+
+    # 6. IPv6 address handling
+    ipv6_whitelist = ["::1", "[::1]:8765", "2001:db8::1", "[2001:db8::2]:9000"]
+    ipv6_urls = get_remote_display_urls(ipv6_whitelist, 8765)
+    assert ipv6_urls == [
+        "http://[2001:db8::1]:8765",
+        "http://[2001:db8::2]:8765",
+    ]
+
+
+
