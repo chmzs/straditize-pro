@@ -6,7 +6,6 @@ P-04 是一次实测事故：session 层只认复数 `"bars"`，而底层 `digit
 柱状图读数系统性只有真值一半（Betula@430cm 真值 73.91 → 36.44），
 返回结果里的 `reader_type` 却仍回显 `"bar"`（元数据说谎）。
 """
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -83,11 +82,16 @@ def test_reader_types_are_single_named_and_aliases_normalized() -> None:
     `digitize_column` 只会用其中一种（P-04 的成因）。
     """
     from straditize_core.session_parts.digitize import (
+        PLOT_TYPES,
         READER_TYPES,
         normalize_reader_type,
     )
 
-    assert READER_TYPES == ("area", "line", "bar")
+    # 三种画法 + 一种读取策略（`area_exaggerated`）。这条断言是"命名不许分叉"的钉子：
+    # 读法集合要么等于画法集合，要么在画法集合之后**追加**策略名，不许出现
+    # 画法里没有、读法里也没有的第三种写法（P-04 那类静默回落就是这么长出来的）。
+    assert PLOT_TYPES == ("area", "line", "bar")
+    assert READER_TYPES == PLOT_TYPES + ("area_exaggerated",)
     for alias in ("bars", "BARS", " Bar "):
         assert normalize_reader_type(alias) == "bar"
     for canonical in READER_TYPES:

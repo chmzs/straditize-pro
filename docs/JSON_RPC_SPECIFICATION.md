@@ -313,26 +313,49 @@
 
 - **参数 (params)**：
   - `col_index` (integer, 必填): 目标列索引。
-  - `reader_type` (string, 可选, 默认 `"area"`): 数值化识别器类型。
-    **规范名只有三个单数**：`"area"` / `"line"` / `"bar"`，与 `plot_type`、
-    `digitize_column` 共用同一套命名。历史别名 `"bars"` 只在入口归一化为 `"bar"`
-    （见 `session_parts/digitize.py::normalize_reader_type`），不得成为第四条分支。
-    未知值返回 `-32602` —— **不静默退化为均值**：那会让柱状图读数只有真值一半，
+  - `reader_type` (string, 可选, 默认 `null`): 数值化识别器类型。未传时取**该列自己声明的**
+    `reader_type`（`column.update` 可写，工程包里持久化的也是它），列上也没有才按 `"area"`。
+    **规范名四个**：`"area"` / `"line"` / `"bar"` / `"area_exaggerated"`。前三个是**画法名**，
+    与 `plot_type`、`digitize_column` 共用同一套命名（`session_parts/digitize.py::PLOT_TYPES`）；
+    `"area_exaggerated"` 是**读取策略名**，不是画法：同一列被画了两层时用它（贴轴的填充区
+    = 真实值「内线」，其外侧一条独立细线 = 同一条数据放大 3.0–5.5 倍的「外线」，实测
+    合并中位 4.17）。逐行四分：
+    - **sep**（读内线右缘）：本行另有独立外段，内线宽 ≥ 4px，`k = 外线距 / 内线距 ∈ [2, 7]`，
+      外线右缘 ≤ 列右界 −3px；
+    - **broken**（读该段右缘）：单段行，段宽 ≤ 本行 ±10 行内 sep 行内线宽的 p75；
+    - **glue**（反算）：单段行且段右缘距放大原点 ≥ 本行 ±10 行内 sep 行外线距的 p25
+      ⇒ `x = z0 + (段右缘 − z0) / k`，`k` 取邻域 sep 行 `ratio` 的中位，
+      `source` 记 `"derived_from_outer"`；
+    - **undet**：其余行 ⇒ **不给数**，行号进返回体的 `unreadable_rows`（导出留空，不是 0）。
+    放大原点 `z0 = startX + 1`（取证组用 `k` 的离散度扫描验证），与读数用的 0 点
+    （`startX + 轴粗`）不是同一个点：`z0` 只进比值。`k` 落在 `[3.0, 5.5]` 之外时给该点挂
+    `flags: ["outer_inconsistent"]`，**只标记不改值**。实测覆盖率上限：sep∪broken 约占
+    列的 15%–62%（Picea 770/1520、Quercus 223/1520），跑出 100% 说明 undet 被当成了可读行。
+    该读法量到的内线**就是真实值**，因此 `exaggeration_mult` 必须按 1 处理 —— 再除一次
+    等于把同一个放大倍数罚两次。读数仍含 +4px 常数底（两层都带，S1 的另一半，见 #46）。
+    历史别名 `"bars"` 只在入口归一化为 `"bar"`
+    （见 `session_parts/digitize.py::normalize_reader_type`），不构成第五个规范名。
+    未知值返回 `-32602` —— **不静默退化**：那会让柱状图读数只有真值一半，
     而返回体里的 `reader_type` 仍回显用户传的名字（元数据说谎，详见
     `docs/findings/bench-issues/bench-pollen.md` P-04）。
 - **返回 (result)**：
   ```json
   {
     "col_index": 0,
-    "reader_type": "area",
+    "reader_type": "area_exaggerated",
     "control_points_count": 16,
     "points": [
-      { "row": 511, "x": 315.0, "y": 511.0 },
-      { "row": 512, "x": 317.5, "y": 512.0 },
+      { "row": 511, "x": 315.0, "y": 511.0, "source": "read" },
+      { "row": 512, "x": 317.5, "y": 512.0, "source": "derived_from_outer" },
       "..."
-    ]
+    ],
+    "unreadable_rows": [513, 514]
   }
   ```
+  `points[].source` 与 `unreadable_rows` 只对 `reader_type="area_exaggerated"` 有意义
+  （其余读取器逐行必有点，`unreadable_rows` 恒为空）：`source` 取值 `"read"`（量到的
+  内线）与 `"derived_from_outer"`（粘连行反算）；`unreadable_rows` 是判不出内线而**没有
+  产出点**的行号，导出时这些格子为空。
 - **契约要点**：数字化是**纯像素几何**，不需要标定；但取数范围受 ROI 约束。
   若某列 `[start, end]` 与 ROI 的 X 范围**完全不相交**，本方法返回 `-32602`，
   而不是产出一整列静默的 0 —— 列落在取数区之外意味着"没有数据"，不等于"数据为零"。
@@ -478,7 +501,6 @@
   - `format` (string, 可选, 默认 `"csv"`): `"csv"` 或 `"parquet"`。
   - `strict` (boolean, 可选, 默认 `false`): 严格模式。若为 `true`，则必须已完成坐标标定，否则返回错误码 `-32003`。
   - `output_path` (string, 可选): 导出文件保存的目标路径。若未提供且 format 为 csv，则在响应对象中返回 `csv_content` 字符串。
-  - `legacy_column_name` (boolean, 可选, 默认 `false`, 2026-11-18, issue #114): 首列**列名**开关。见下方「首列名跟随 Y 轴性质」。
 - **返回 (result)**：
   ```json
   {
@@ -498,26 +520,6 @@
 
 ---
 
-#### 首列名跟随 Y 轴性质（2026-11-18，issue #114）
-
-首列装的是 **Y 轴上那个量**，所以它的名字必须等于 Y 轴的性质（`core.calibrateAxes` 的
-`primary_axis`），不是永远写 `depth`：
-
-| `primary_axis` | 首列名 |
-| :--- | :--- |
-| `depth`（默认） | `depth` |
-| `age` | `age` |
-
-- **只改列名，不改任何数值**：同一工程 `legacy_column_name` 两种取值下，全部数据单元格
-  逐字节相同（`tests/unit/test_y_axis_column_label.py` 的零回归判据）。
-- **不并列输出两列**：两列（`depth` + `age`）会让人无法判断哪一列才是真的。
-- `legacy_column_name: true` 强制回 `depth`，给按旧列名读的下游脚本一个过渡口。
-  它只作用于本方法与 `export.csv`；`export.tar` / `export.exportXlsx` / `export.exportLipd`
-  同样按 Y 轴性质命名首列，但没有该开关（它们不是脚本消费面）。
-- `primary_axis="age"` 时出图 Y 轴标题为 `Age (<unit>)`；单位不含 `BP`/`AD`/`BC`/`CE`/`BCE`
-  时补 ` BP`（`ka` → `Age (ka BP)`，`cal BP` → `Age (cal BP)`）。派生逻辑单点在
-  `straditize_core/strat_plot.py` 的 `_y_column_label` / `_y_axis_label`。
-
 #### `dataset` 参数（2026-11-12，U-ROWS-01）
 
 `core.exportData` / `export.csv` / `export.data` 接受可选 `dataset`，它选择**行集**（不是格式化方式）：
@@ -532,59 +534,6 @@
 非法值 → `-32602`，错误信息列出允许值。
 
 行集大小是定义的一部分：同一会话下三者行数必然不同（实测 298 / 21 / 896）。前端导出面板的下拉与本参数一一对应，且面板只渲染本接口返回的数据——不得由前端另算一套。
-
-#### `rowset`：行集身份与质量指标（2026-11-19，issue #113 / #100）
-
-`core.exportData` 与 `export.getReadiness` 的返回里新增 `rowset`，回答**"这些行凭什么算样品"**。
-它是判定量而不是注释：`is_sample_rows == true` ⇔ 行确实来自用户设定的样品层位。
-
-```json
-{
-  "rowset": {
-    "dataset": "samples",
-    "provenance": "pixel_rows",
-    "is_sample_rows": false,
-    "rows_count": 625,
-    "samples_count": 0,
-    "label": "逐列数字化的像素行并集（625 行，不是样品层位）",
-    "why": "未设样品层位（samples 为空）：行取自这些列逐行数字化点的像素行并集……",
-    "quality": {
-      "rows": 625,
-      "samples": 0,
-      "support_columns_median": 19.0,
-      "support_columns_min": 1,
-      "support_columns_max": 19,
-      "support_columns_n": 625,
-      "support_columns_source": "column_points",
-      "tolerance_px": null,
-      "default_tolerance_px": 2.5,
-      "roi_height_px": 625,
-      "rows_equal_roi_height": true
-    }
-  }
-}
-```
-
-`provenance` 取值只有五个：`samples` / `pixel_rows` / `control_points` / `depth_grid` /
-`turning_points`（常量在 `straditize_core/session_parts/export.py` 的 `ROWSET_*`）。
-只有第一个表示"这些行是样品层位"。
-
-**口径（2026-11-19 拍板）**
-
-- `samples` 非空 → `provenance="samples"`，且**行数必须等于 `len(samples)`**；不相等时
-  `core.exportData` 抛 `-32002 EXPORT_ERROR`（`data.reason="rowset_mismatch"`），整份表不交付。
-- `samples` 为空 → `provenance="pixel_rows"`，行 = 逐列数字化点的像素行并集。**不静默**：
-  身份写进本字段、`export.getReadiness.rowset`、归档 `manifest.json -> data_csv_rowset`、
-  `README.txt` 的 `WARNING` 段，以及 `core.exportData` 的返回。行数常恰等于 ROI 像素高度
-  （现场：625 行 / 625 px），`quality.rows_equal_roi_height` 是这一条的机器可读形式。
-- **不把"先填样品数 N"当前置条件**：`N` 属可选二次优化，默认路径必须能自给出结果。
-  `quality.tolerance_px` 只报"产生这批层位时用的容差"，没跑过共识、或该工程生成于 #83
-  之前时如实为 `null`（不拿默认值冒充）；`quality.default_tolerance_px` 是"若重跑一次
-  共识会按多少容差"，直接读 `samples.extractConsensus` 的签名默认值。
-- 质量指标缺失即 `null`、不填 0：`support_columns_*` 在层位未携带 `support_columns`
-  （#83 之前生成的工程）时全为 `null`，`support_columns_n` 说明有多少行带该信息。
-- **不把 `N` 当正确性判据**：`rows_count` 与论文样品数不同不构成错误（实测 206 vs 159），
-  它只是"要不要重跑共识优化"的判断依据。
 
 #### `curvePoints` / `curveError`：画布的稠密曲线（2026-11-16）
 
@@ -708,19 +657,6 @@ abs_px0（绿线 / 0 点） = startX（红线 / 列切分线） + axis_stroke_px
 > `scale.abs_px1`，拿它和 `start + 轴粗 + 1` 比是循环论证，永远相等，红不了。
 > 只有"包里的 `tickEndX`"这个来自文件的值才可能和当前轴粗矛盾。
 
----
-
-### 4.10b-3 `straditize.getDiagramData` — ROI 标识的两种拼写
-
-`primaryRoiId` / `activeRoiId` 是**权威拼写**；`primary_roi_id` / `active_roi_id` 是**兼容别名**，
-两者在同一载荷里同时存在且值相等（`tests/unit/test_diagram_payload_roi_keys.py` 钉住）。
-
-之所以要同时给：`roi.list` 返回的是 snake（`primary_roi_id`），而本载荷曾只有 camel，
-外部读者各按一种拼写读，读到不存在的那个就得到 `undefined`，把"值没变"误判成"功能没生效"
-（本轮实测产生过两次假警报：一次前端 e2e、一次独立黑盒核验）。
-
-新增标识字段时：**两种拼写同批加**，不要只加一种；判定"某动作是否生效"必须读与本动作
-同一来源的那个键，不要跨方法混读。
 
 ---
 
@@ -823,40 +759,6 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
 
 **缺陷案底**：LiPD 曾两条分支都只回 " + BT + "lipd" + BT + "、写盘还写纯 JSON 文本，前端 " + BT + "if (res && res.base64)" + BT + " 恒不成立且无 else —— 点按钮既不下载也不报错。前端现已改为 " + BT + "requireExportBase64(res, label)" + BT + "：拿不到就抛错，消息里带后端实际返回的键名。
 
-### 4.11c `export.bundleZip` — 出图整包（zip，2026-11-17）
-
-把「脚本 + 数据 + 成品图」一次交齐，解压即可出图。
-
-**请求**：无参数。
-
-**返回**：
-
-| 字段 | 含义 |
-|:--|:--|
-| `base64` | zip 包体（`PK\x03\x04` 头），前端用 `base64ToBlob` 落地 |
-| `filename` | `strat_export_<unix>.zip` |
-| `mime` | `application/zip` |
-| `size_bytes` | 包体字节数 |
-
-**包内四个文件**（缺任何一个都算回归，见 `tests/unit/test_export_bundle_zip.py`）：
-
-| 文件 | 说明 |
-|:--|:--|
-| `data.csv` | 主 ROI 的表，与 `export.tar` 里 `data.csv` 同源；列名去掉尾部 `\r` |
-| `plot_strat.R` | 绘图调用段来自 `export_docs.strat_plot_script_lines`（唯一生成器） |
-| `plot_strat.jpg` | 与后端 `plot.render` 同一份数据的成品图 |
-| `README.txt` | 用法 + 缺测语义（`NA` ≠ 0） |
-
-**脚本契约**（三条都是现场踩出来的）：
-
-1. **无参可跑**：`csv_path` / `out_path` 有默认值（`data.csv` / `plot_strat.pdf`），
-   `Rscript plot_strat.R` 直接出图；仍可用 `Rscript plot_strat.R 表.csv 图.pdf` 覆盖。
-2. **缺 `data.csv` 当场 `stop()`**：此前用 `if (file.exists(...))` 守卫，缺文件时整段绘图被
-   静默跳过，产物是一张空 PDF（实测 3448 B）。
-3. **表头去 `\r`**：列名带 `\r` 时 `read.csv` 后 `intersect()` 匹配不上，整列被静默丢掉。
-
-**与 `export.r` 的关系**：`export.r` 仍返回单个脚本（旧调用方保持可用）；本方法是
-「下载即能跑」的整包形态，两者共用同一份绘图调用生成器，不各写一套模板（S5 教训）。
 ### 4.12 `project.save` — 工程包导出（含占位表标记）
 
 请求：`{output_path?, format?: "tar" | "json"}`。`output_path` 缺省时 tar 以 base64 返回。
@@ -887,27 +789,6 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
 > 不做「数字 → 预设」映射。2026-11-06 的实测里，一个 `strength=0.6` 正是通过这条链让
 > `normalize_grid_line_strength` 抛错、并被占位表保底吞掉的。
 > 回归钉子：`tests/unit/test_degrid_strength_validation.py`。
-
-### 4.13 `samples.fromDepthGrid` — 等距网格层位（S4，2026-11-17）
-
-步骤 7 的第三种行集来源。前两种是拐点共识（`samples.extractConsensus`，行集由拐点数决定）
-与手工/粘贴；钻孔的真实取样间隔是等距的，共识给不出那个密度（实测同图 203 → 355，
-随数字化密度漂移，见 `docs/findings/recon-20261117.md` §5）。
-
-- **入参**：`{"step": <number> 必填, "start_depth": <number|null>, "end_depth": <number|null>, "replace": <bool>}`。
-- **出参**：`{"samples": [...], "count": N, "step", "start", "end", "unit", "row_step_px"}`。
-  每个 layer 的 `source` 为 `"grid"`（`auto`/`paste`/`manual` 之外的第四个合法取值）。
-- **区间**：默认 `ROI 深度范围 ∩ Y 轴标定区间`；显式给 `start_depth`/`end_depth` 时必须落在
-  标定区间内，否则 `INVALID_PARAMS`（**不外推**：标定之外没有真实深度）。
-- **行数**：`floor((end-start)/step) + 1`。
-- **副作用**：`depth_grid` 与 `samples` 写同一批数（`dataset=depth_grid` 与默认导出同源）。
-- **错误**（都不静默兜底）：
-  - 未标定 / 缺 `top_cm,bottom_cm` → `STATE_ERROR`；
-  - `step <= 0` → `INVALID_PARAMS`；
-  - 区间越出标定区间 → `INVALID_PARAMS`，消息带真实区间；
-  - 步长细于行分辨率（多个深度落到同一行）→ `INVALID_PARAMS`，消息给出该图的分辨率与
-    最小可用步长（实测本工程：0.00765 ka/px ⇒ 标定段内最多 393 层）。
-- **回归钉子**：`tests/unit/test_samples_depth_grid.py`（6 条）。
 
 ## 4A. 年代-深度模型与年代集合（`agedepth.*` / `ensemble.*`）
 
@@ -1282,89 +1163,6 @@ se(\text{sed}) = \frac{se(b)\cdot s}{(b s)^2}$$
 
 ---
 
-## 4B. 系统状态、配置与日志诊断接口 (`system.*` / `shutdown`)
-
-维护服务端生命周期、用户持久化配置及双端日志诊断闭环的标准接口。
-
-### 4B.1 `system.ping`
-轻量级心跳探针，供前端判断同源/本地服务是否存活。
-
-- **参数 (params)**：无
-- **返回 (result)**：
-  ```json
-  {
-    "pong": true,
-    "timestamp": 1732165200.123
-  }
-  ```
-
-### 4B.2 `system.getConfig` 与 `system.updateConfig`
-用户首选项与服务端运行环境配置。配置项持久化于用户主目录配置中心（见 `config.py`）。
-
-- **`system.getConfig`**：
-  - **参数 (params)**：无
-  - **返回 (result)**：
-    ```json
-    {
-      "remote_access_enabled": false,
-      "has_remote_password": true,
-      "allowed_hosts": ["127.0.0.1", "localhost"],
-      "locale": "zh-CN",
-      "theme": "light",
-      "llm_base_url": "https://api.openai.com/v1",
-      "llm_api_key": "sk-...",
-      "llm_model": "gpt-4o",
-      "llm_prompt_template": "",
-      "rscript_path": "",
-      "rpc_endpoint": "http://127.0.0.1:8765/rpc",
-      "webmcp_endpoint": "/mcp",
-      "server_bound_host": "127.0.0.1",
-      "server_bound_port": 8765,
-      "is_desktop_mode": false,
-      "connected": true
-    }
-    ```
-- **`system.updateConfig`**：
-  - **参数 (params)**：键值对字典（如 `{"theme": "dark", "locale": "en-US", "remote_access_enabled": true}`）。
-  - **返回 (result)**：更新后的全量配置对象。
-
-### 4B.3 `system.getLogInfo` 与 `system.openLogDir`
-服务端轮转诊断日志查询与本地资源管理器联动（ARCHITECTURE 不变量 27）。
-
-- **`system.getLogInfo`**：
-  - **参数 (params)**：无
-  - **返回 (result)**：
-    ```json
-    {
-      "log_dir": "C:\\Users\\...\\AppData\\Local\\straditize\\logs",
-      "log_file": "C:\\Users\\...\\AppData\\Local\\straditize\\logs\\straditize.log",
-      "file_size_bytes": 102400
-    }
-    ```
-- **`system.openLogDir`**：
-  - **参数 (params)**：无
-  - **返回 (result)**：`{"success": true, "log_dir": "..."}`。在宿主操作系统图形文件管理器中直接激活并打开日志所在目录。
-
-### 4B.4 `system.logClientError`
-前端未捕获异常直通上报接口。让 SPA 客户端的 Crash/网络断连与后端服务日志统筹在单一时间轴中。
-
-- **参数 (params)**：
-  - `message` (string, 必填): 错误摘要。
-  - `stack` (string, 可选): 前端调用栈 trace。
-  - `url` (string, 可选): 发生报错时的浏览器 URL。
-  - `context` (object, 可选): 附加上下文（如当前步骤、active ROI id）。
-- **返回 (result)**：`{"logged": true}`。后端以 `[FrontendError]` 前缀记入 `straditize.log`。
-
-### 4B.5 `shutdown`
-请求关闭桌面后端服务。
-
-- **参数 (params)**：无
-- **权限与限制**：**仅允许桌面模式**（`session.is_desktop_mode == true`）。在 Web/远程模式下调用直接返回错误：
-  `-32000 / 403 Forbidden: "Shutdown is only permitted in desktop mode."`。
-- **返回 (result)**：`{"success": true, "message": "Server shutting down..."}`。后端启动 0.5s 延迟后优雅退出进程。
-
----
-
 ## 5. 服务端启动与调用示例
 
 ### 5.1 启动方式
@@ -1400,3 +1198,15 @@ async function rpcCall(method: string, params: Record<string, any> = {}) {
 const imageInfo = await rpcCall("core.loadImage", { image_path: "path/to/img.png" });
 const columns = await rpcCall("core.detectColumns", { data_xlim: [300, 1800], data_ylim: [500, 1300] });
 ```
+
+### 4.10c `straditize.getDiagramData` — ROI 标识的两种拼写
+
+`primaryRoiId` / `activeRoiId` 是**权威拼写**；`primary_roi_id` / `active_roi_id` 是**兼容别名**，
+两者在同一载荷里同时存在且值相等（`tests/unit/test_diagram_payload_roi_keys.py` 钉住）。
+
+之所以要同时给：`roi.list` 返回的是 snake（`primary_roi_id`），而本载荷曾只有 camel，
+外部读者各按一种拼写读，读到不存在的那个就得到 `undefined`，把"值没变"误判成"功能没生效"
+（本轮实测产生过两次假警报：一次前端 e2e、一次独立黑盒核验）。
+
+新增标识字段时：**两种拼写同批加**，不要只加一种；判定"某动作是否生效"必须读与本动作
+同一来源的那个键，不要跨方法混读。

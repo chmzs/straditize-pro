@@ -7,7 +7,6 @@ calibration produce identical scientific values everywhere.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import Any, Iterator, Sequence
 
@@ -29,22 +28,8 @@ __all__ = [
 SCALE_TYPES: tuple[str, str] = ("linear", "log")
 
 
-#: 轴线粗的兜底值（列级与组级都没设时用）。单位 px。
-#:
-#: 为什么是 2 而不是 5：5 是"轴线看起来有多粗"的直觉值，而这条兜底真正要回答的是
-#: **0 点该放在列左缘右边几个像素**。实测四张图（S1 / Gahai / beginner / fig3）的
-#: 轴线核心 1~4px，其中"未写轴粗"的工程（`output/zhou_2024_gahai`）实际放大原点在
-#: `startX + 1`；兜底 5 会把 0 点推右 4px，`inner_dist` 被压到 1~2px，
-#: `(outer−z0)/(inner−z0)` 从 4.18 涨到 12.5，`FLAG_EXAGG_RATIO` 483 行里误报 449。
-#: 换句话说兜底值偏大时，**错的是零点的锚、不是曲线**，而误差会以放大倍率的形状
-#: 出现在比值上。取 2 = 「轴线细（1~2px）+ 留 1px 抗锯齿余量」，是"量不出时最不坏"的猜测。
-DEFAULT_AXIS_STROKE_PX = 2.0
-
-
-def resolve_axis_stroke(
-    col: dict[str, Any] | None, group: dict[str, Any] | None
-) -> float:
-    """轴线粗解析：**列级覆盖 > 组级初值 > 缺省 2**（ARCHITECTURE §6.4）。
+def resolve_axis_stroke(col: dict[str, Any] | None, group: dict[str, Any] | None) -> float:
+    """轴线粗解析：**列级覆盖 > 组级初值 > 缺省 5**（ARCHITECTURE §6.4）。
 
     组的 `axis_stroke_px` 是初值（分列时 `measure_axis_stroke` 实测中位数，或用户在手填）；
     列的 `axis_stroke_px` 只放**用户显式覆盖** —— 分列从不写它，所以它一旦存在就是人填的值，
@@ -59,17 +44,16 @@ def resolve_axis_stroke(
         col_stroke = float(raw_col) if raw_col is not None else None
     except (TypeError, ValueError):
         col_stroke = None
-    # 0 合法：0 点落在列左缘（绿线与红线重合）。负数/非数值才算未覆盖。
-    if col_stroke is not None and col_stroke >= 0:
+    if col_stroke is not None and col_stroke > 0:
         return col_stroke
     raw_group = (group or {}).get("axis_stroke_px")
     try:
         group_stroke = float(raw_group) if raw_group is not None else None
     except (TypeError, ValueError):
         group_stroke = None
-    if group_stroke is not None and group_stroke >= 0:
+    if group_stroke is not None and group_stroke > 0:
         return group_stroke
-    return DEFAULT_AXIS_STROKE_PX
+    return 5.0
 
 
 def normalize_scale_type(scale_type: Any) -> str:
@@ -364,7 +348,7 @@ def resolve_column_scale(
 def _resolve_column_group(
     session: Any, col_dict: dict[str, Any]
 ) -> dict[str, Any] | None:
-    """定位列所属的 x 组：列上的 roi_id → 该 ROI；没有则回落活跃/主 ROI，再回落第一个。    组的选择同理：列上的 x_group_id → 该组；没有则用 ROI 的 default_group_id；再没有用第一个组。"""
+    """定位列所属的 x 组：列上的 roi_id → 该 ROI；没有则回落活跃/主 ROI，再回落第一个。    组的选择同理：列上的 x_group_id → 该组；没有则用 ROI 的 default_group_id；再没有用第一个组。    """
     # Look up ROI and X-Group if session has multi-ROI context (Design 2026-09-29 P2)
     roi_obj: dict[str, Any] | None = None
     group_obj: dict[str, Any] | None = None
@@ -403,7 +387,9 @@ def _resolve_column_visual(
         or "linear"
     )
     unit = str(
-        col_dict.get("unit") or (group_obj.get("unit") if group_obj else None) or "%"
+        col_dict.get("unit")
+        or (group_obj.get("unit") if group_obj else None)
+        or "%"
     )
     plot_type = str(
         col_dict.get("plot_type")
@@ -448,53 +434,33 @@ def store_exaggeration(column: dict[str, Any], raw: Any) -> None:
     column["exaggeration_mult"] = value
 
 
-def _coerce_exaggeration(raw: Any) -> float | None:
-    """把任意入参收敛成「有效的放大倍数」：只有有限的、>1 的数才算放大，其余一律 None。
-
-    <=1 等于没放大（`px_to_value` 也只在 >1 时才除）；非数值**丢弃而不是转 0**——
-    宁可没有放大，也不能留下一个会把整列读数除错的因子。NaN/inf 同属"不是可用的倍率"。
-    """
-    if raw is None:
-        return None
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return None
-    if not math.isfinite(value) or value <= 1.0:
-        return None
-    return value
-
-
 def _resolve_exaggeration(
     col_dict: dict[str, Any], group_obj: dict[str, Any] | None
 ) -> float | None:
-    """放大倍数：**组级 > 列级 > 历史键**（`has_exaggeration` + multiplier）；<=1 一律视为未放大。
-
-    为什么组在前（2026-11-17 变更）：论文里的夸大曲线是**按类群组**给的——一张图里
-    "某些类群 ×5、另一些 ×3、其余不放大"，软件里的对应做法就是"把放大过的列编成一组"。
-    组是论文的放大单位，列级字段只是历史遗留的单列覆盖手段。两者并存时必须只有一个是
-    真相源，否则同一个物理量在库里有两个答案，而 `px_to_value` 会真的除以它——一个
-    过期的列级 3 就能让本该 ÷5 的整列读数放大 1.67 倍，界面上看不出任何异常。
-
-    旧工程包里写在列上的倍率不会因此丢失：载入时 `project._migrate_column_exaggeration_to_group`
-    会把它搬到组上（见那里的判据），所以"组优先"对老包同样成立。
-    """
-    group_mult = _coerce_exaggeration(
-        group_obj.get("exaggeration_mult") if group_obj else None
-    )
-    if group_mult is not None:
-        return group_mult
-
-    col_mult = _coerce_exaggeration(col_dict.get("exaggeration_mult"))
-    if col_mult is not None:
-        return col_mult
-
-    # 历史键：`has_exaggeration` 为真才读 multiplier（老包的开关 + 数值是分开存的两列）。
-    if bool(col_dict.get("has_exaggeration", col_dict.get("hasExaggeration", False))):
-        return _coerce_exaggeration(
-            col_dict.get("exaggeration_multiplier", col_dict.get("exaggerationMult"))
+    """夸张倍数：现代键 > 历史键（has_exaggeration + multiplier）> 组级；<=1 一律视为未夸张。"""
+    # Resolve exaggeration multiplier across both modern (`exaggeration_mult`)
+    # and legacy (`has_exaggeration` + `exaggeration_multiplier` / `exaggerationMult`) keys.
+    exaggeration_mult: float | None = None
+    if col_dict.get("exaggeration_mult") is not None:
+        raw_exag = float(col_dict["exaggeration_mult"])
+        if raw_exag > 1.0:
+            exaggeration_mult = raw_exag
+    elif bool(
+        col_dict.get("has_exaggeration", col_dict.get("hasExaggeration", False))
+    ):
+        raw_exag = float(
+            col_dict.get(
+                "exaggeration_multiplier", col_dict.get("exaggerationMult", 1.0)
+            )
+            or 1.0
         )
-    return None
+        if raw_exag > 1.0:
+            exaggeration_mult = raw_exag
+    elif group_obj and group_obj.get("exaggeration_mult") is not None:
+        raw_exag = float(group_obj["exaggeration_mult"])
+        if raw_exag > 1.0:
+            exaggeration_mult = raw_exag
+    return exaggeration_mult
 
 
 def _scale_from_group_layout(
@@ -584,12 +550,9 @@ def _scale_from_group_slope(
         unit=str(_group.get("unit") or col_dict.get("unit") or "%"),
         plot_type=str(_group.get("plot_type") or col_dict.get("plot_type") or "area"),
         scale_type=str(_group.get("scale_type") or "linear"),
-        # 用**已经解析过**的形参，不重读组字典：
-        #   * `_resolve_exaggeration` 现在是"组级 > 列级 > 历史键"，组是唯一真源；
-        #   * 这里再读一次 `_group.get(...)` 会绕过解析 —— 既丢掉列级倍率（组斜率路径
-        #     是真实工程默认路径，`recon-20261117` 四列 `source="group_slope"`），
-        #     又让"组=null、列=3"的老工程在两条路径上给出两个答案（x_ticks 保留、组斜率丢弃）。
-        # 统一走形参后，同一个倍率在两条路径上只有一个答案。
+        # 列级优先：`_resolve_exaggeration` 已经按「列 > 组」解析好了，这里不能再直接
+        # 读 `_group["exaggeration_mult"]`——那条路径把**列级**设置静默丢掉（实测给 4 列
+        # 各设 5，导出数值一字未变，因为组上没有该键），是本条 bug 的直接成因。
         exaggeration_mult=exaggeration_mult,
         calibrated=True,
         source="group_slope",
@@ -660,9 +623,7 @@ def _scale_from_fallback(
         col_dict.get(k) is not None for k in ("startValue", "tickValue", "tickEndX")
     )
     x_scales = getattr(session, "x_scales", None) if session is not None else None
-    is_calib = (
-        bool(getattr(session, "is_calibrated", False)) if session is not None else False
-    )
+    is_calib = bool(getattr(session, "is_calibrated", False)) if session is not None else False
 
     if (
         not has_legacy

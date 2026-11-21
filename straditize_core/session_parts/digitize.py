@@ -40,12 +40,27 @@ from ..protocol import (
     JsonRpcError,
 )
 
-#: 唯一支持的读取器类型。与 `plot_type`、底层 `digitize_column` 共用同一套**单数**命名。
-READER_TYPES: tuple[str, ...] = ("area", "line", "bar")
+#: 三种画法。与 `plot_type`、底层 `digitize_column` 共用同一套单数命名。
+PLOT_TYPES: tuple[str, ...] = ("area", "line", "bar")
+
+#: 支持的读取器类型 = 三种画法 + 一种读取策略。
+#: `area_exaggerated` 读的仍是面积图，但同一列被画了两层（内线真实值，外线夸大参考线），
+#: 采用五态双轨互补读取器实现高精度提取与防截断削边回退。
+READER_TYPES: tuple[str, ...] = PLOT_TYPES + ("area_exaggerated",)
 
 #: 历史别名 → 规范名。只在此处出现一次：让别名集中在一个入口被消解，
 #: 而不是散进每个分支判断（那样 `bar` 曾静默落到 else 走均值，P-04）。
 _READER_ALIASES: dict[str, str] = {"bars": "bar"}
+
+# ---- `area_exaggerated` 的五态判据常量 ----
+_EXAG_INNER_ANCHOR_TOL_PX = 5
+_EXAG_OUTER_MIN_GAP_PX = 2
+_EXAG_RATIO_ORIGIN_OFFSET_PX = 1.0
+_EXAG_INNER_MIN_WIDTH_PX = 4
+_EXAG_OUTER_EDGE_MARGIN_PX = 3
+_EXAG_SEP_RATIO_RANGE = (2.0, 7.0)
+_EXAG_SELFCHECK_RANGE = (3.0, 5.5)
+_EXAG_NEIGHBOUR_ROWS = 10
 
 # 夸大列"外线断开"判据的常量（全部可判定，没有"大致/适当"）。
 #
@@ -175,7 +190,7 @@ class DigitizeSessionMixin:
     def digitize(
         self,
         col_index: int,
-        reader_type: str = "area",
+        reader_type: str | None = None,
         mode: str | None = None,
         method: str | None = None,
     ) -> dict[str, Any]:
@@ -184,8 +199,8 @@ class DigitizeSessionMixin:
             reader_type = method
         elif mode is not None:
             reader_type = mode
-        # 归一化一次，后面所有分支只面对规范名单数名。
-        reader_type = normalize_reader_type(reader_type)
+        if reader_type is not None:
+            reader_type = normalize_reader_type(reader_type)
         if not getattr(self, "columns", None):
             raise JsonRpcError(
                 STATE_ERROR,
@@ -200,6 +215,8 @@ class DigitizeSessionMixin:
             )
 
         col = columns[col_index]
+        if reader_type is None:
+            reader_type = normalize_reader_type(col.get("reader_type") or "area")
         col_roi_id = col.get("roi_id")
         c_start, c_end, y0, y1 = self._digitize_column_window(
             col, col_roi_id, col_index
@@ -219,22 +236,44 @@ class DigitizeSessionMixin:
             mask, col, c_start, c_end, y0, y1, col_index
         )
 
-        points = self._read_column_profile(mask, c_start, c_end, y0, y1, reader_type)
+        if reader_type == "area_exaggerated":
+            group = _resolve_column_group(self, col)
+            zero_stroke = resolve_axis_stroke(col, group)
+            zero_x = float(c_start + zero_stroke)
+            points = self._read_exaggerated_profile(
+                mask, c_start, c_end, y0, y1, zero_x, col
+            )
+            broken_rows, ambiguous_rows = [], []
+        else:
+            points = self._read_column_profile(
+                mask, c_start, c_end, y0, y1, reader_type
+            )
+            if points:
+                broken_rows, ambiguous_rows = self._compensate_broken_inner_rows(
+                    mask, col, c_start, c_end, points, col_index
+                )
+            else:
+                broken_rows, ambiguous_rows = [], []
+
+        unreadable_rows: list[int] = []
+        if reader_type == "area_exaggerated":
+            emitted = {int(p["row"]) for p in points}
+            unreadable_rows = [
+                row
+                for row in range(y0, min(y1, self.height - 1) + 1)
+                if row not in emitted
+            ]
+
         if not points:
             return {
                 "col_index": col_index,
                 "reader_type": reader_type,
                 "points": [],
                 "control_points_count": 0,
-                "broken_rows": [],
-                "ambiguous_rows": [],
+                "broken_rows": broken_rows,
+                "ambiguous_rows": ambiguous_rows,
+                "unreadable_rows": unreadable_rows,
             }
-
-        # 夸大列里外线断开的那几行，最右墨迹会退化成内线 → 先折回"不除倍率"的等价位置。
-        # 必须在横线插值之前：插值要在同一物理量的空间里做（见该方法 docstring）。
-        broken_rows, ambiguous_rows = self._compensate_broken_inner_rows(
-            mask, col, c_start, c_end, points, col_index
-        )
 
         self._interpolate_across_hlines(points, c_start)
 
@@ -278,7 +317,179 @@ class DigitizeSessionMixin:
             "control_points_count": len(control_points),
             "broken_rows": broken_rows,
             "ambiguous_rows": ambiguous_rows,
+            "unreadable_rows": unreadable_rows,
         }
+
+    def _read_exaggerated_profile(
+        self,
+        mask: np.ndarray,
+        c_start: int,
+        c_end: int,
+        y0: int,
+        y1: int,
+        zero_x: float,
+        col_dict: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """`area_exaggerated`：五态双轨互补读取器（高精度外线取数 + 防削边回退内线 + 残差自校准）。"""
+        points: list[dict[str, Any]] = []
+        band = mask[y0 : y1 + 1, c_start:c_end]
+        if band.size == 0:
+            return points
+        band_axis_offsets = _axis_ink_offsets(band)
+        origin = float(c_start) + _EXAG_RATIO_ORIGIN_OFFSET_PX
+
+        # 第一遍扫描：逐行分类与残差样本收集
+        rows: list[tuple[int, str, dict[str, float]]] = []
+        residual_samples: list[float] = []
+
+        for row_y in range(y0, y1 + 1):
+            if row_y >= self.height:
+                break
+            local_y = row_y - y0
+            if local_y < 0 or local_y >= band.shape[0]:
+                break
+            fg_indices = np.where(band[local_y])[0]
+            data_indices = _without_axis_ink(fg_indices, band_axis_offsets)
+            if not len(data_indices):
+                data_indices = fg_indices
+            if not len(data_indices):
+                rows.append((row_y, "empty", {}))
+                continue
+            starts, ends = _run_bounds(data_indices)
+            spans = [
+                (int(data_indices[si]), int(data_indices[ei]))
+                for si, ei in zip(starts, ends)
+            ]
+            anchored = [span for span in spans if span[0] <= _EXAG_INNER_ANCHOR_TOL_PX]
+            if not anchored:
+                rows.append((row_y, "undet", {}))
+                continue
+            inner_start, inner_end = max(anchored, key=lambda span: span[1])
+            inner_span = float(inner_end - inner_start + 1)
+            outer_spans = [
+                span for span in spans if span[0] > inner_end + _EXAG_OUTER_MIN_GAP_PX
+            ]
+            sep_payload: dict[str, float] | None = None
+            if outer_spans:
+                outer_span = max(outer_spans, key=lambda s: s[1])
+                outer_center = (outer_span[0] + outer_span[1]) / 2.0
+                outer_end = outer_span[1]
+                inner_px = c_start + inner_end
+                outer_px = c_start + outer_end
+                outer_center_px = c_start + outer_center
+                distance_in = inner_px - origin
+                distance_out = outer_center_px - origin
+                ratio = distance_out / distance_in if distance_in > 0 else None
+                if (
+                    inner_span >= _EXAG_INNER_MIN_WIDTH_PX
+                    and ratio is not None
+                    and _EXAG_SEP_RATIO_RANGE[0] <= ratio <= _EXAG_SEP_RATIO_RANGE[1]
+                ):
+                    is_clipped = bool(outer_px >= c_end - _EXAG_OUTER_EDGE_MARGIN_PX)
+                    sep_payload = {
+                        "inner_px": float(inner_px),
+                        "inner_span": inner_span,
+                        "outer_extent": float(outer_px - origin),
+                        "outer_center_extent": float(outer_center_px - origin),
+                        "ratio": float(ratio),
+                        "is_clipped": 1.0 if is_clipped else 0.0,
+                    }
+                    if not is_clipped:
+                        residual_samples.append(distance_in - distance_out / ratio)
+
+            if sep_payload is not None:
+                rows.append((row_y, "sep", sep_payload))
+                continue
+
+            rows.append(
+                (
+                    row_y,
+                    "single",
+                    {
+                        "end": float(c_start + inner_end),
+                        "span": inner_span,
+                        "extent": float(c_start + inner_end - origin),
+                    },
+                )
+            )
+
+        # 全局动态残差中位数 Δb（消除接缝阶跃）
+        delta_b = float(np.median(residual_samples)) if residual_samples else 0.0
+
+        # 第二遍：基于邻域统计量产出精准读数
+        sep_rows = [(row_y, payload) for row_y, kind, payload in rows if kind == "sep"]
+
+        for row_y, kind, payload in rows:
+            flags: list[str] = []
+            if kind == "empty":
+                points.append(
+                    {"row": row_y, "x": float(zero_x), "y": float(row_y), "source": "read"}
+                )
+                continue
+            if kind == "undet":
+                continue
+            if kind == "sep":
+                if not (
+                    _EXAG_SELFCHECK_RANGE[0]
+                    <= payload["ratio"]
+                    <= _EXAG_SELFCHECK_RANGE[1]
+                ):
+                    flags.append("outer_inconsistent")
+
+                # 若外线撞列边界削边，安全回退到内线 - Δb；未撞边时优先取外线高精度除以倍率
+                if payload.get("is_clipped", 0.0) > 0.5:
+                    feat_x = float(payload["inner_px"] - delta_b)
+                    source_tag = "fallback_inner_clipped"
+                else:
+                    feat_x = float(origin + payload["outer_center_extent"] / payload["ratio"])
+                    source_tag = "outer_scaled"
+
+                points.append(
+                    {
+                        "row": row_y,
+                        "x": feat_x,
+                        "y": float(row_y),
+                        "source": "read",
+                        **({"flags": flags} if flags else {}),
+                    }
+                )
+                continue
+
+            # kind == "single"
+            neighbours = [
+                payload_sep
+                for row_sep, payload_sep in sep_rows
+                if abs(row_sep - row_y) <= _EXAG_NEIGHBOUR_ROWS
+            ]
+            if not neighbours:
+                continue
+            inner_p75 = float(np.percentile([p["inner_span"] for p in neighbours], 75))
+            outer_p25 = float(np.percentile([p["outer_extent"] for p in neighbours], 25))
+            if payload["span"] <= inner_p75:
+                # broken：外线断行，取内线
+                feat_x = float(payload["end"] - delta_b)
+                if feat_x <= zero_x:
+                    feat_x = float(zero_x)
+                points.append(
+                    {"row": row_y, "x": feat_x, "y": float(row_y), "source": "read"}
+                )
+                continue
+            if payload["extent"] >= outer_p25:
+                # glue：内外线粘连，反算
+                k_local = float(np.median([p["ratio"] for p in neighbours]))
+                if k_local <= 0:
+                    continue
+                points.append(
+                    {
+                        "row": row_y,
+                        "x": float(origin + (payload["extent"] - delta_b) / k_local),
+                        "y": float(row_y),
+                        "source": "derived_from_outer",
+                    }
+                )
+                continue
+
+        return points
 
     # ---- digitize 的分段实现 ----
 
@@ -755,9 +966,21 @@ class DigitizeSessionMixin:
             kept_vals,
         )
 
+        removed_hl_bands = []
+        for cand in getattr(self, "line_candidates", []):
+            if cand.get("axis") == "h" and cand.get("status") == "removed":
+                cy = int(round(float(cand.get("y", 0))))
+                th = int(round(float(cand.get("thickness", 3))))
+                removed_hl_bands.append((cy - th // 2 - 1, cy + th // 2 + 1))
+
+        def _in_removed_hl(row_val: int) -> bool:
+            return any(b0 <= row_val <= b1 for b0, b1 in removed_hl_bands)
+
         ctrl_pts_list: list[dict[str, Any]] = []
         for r_rel, v_rel in zip(kept_rows, kept_vals):
             r_int = int(y0 + r_rel)
+            if _in_removed_hl(r_int):
+                continue
             x_val = float(c_start + max(min_width, float(v_rel)))
             control_points[r_int] = x_val
             ctrl_pts_list.append(
@@ -1277,9 +1500,23 @@ class DigitizeSessionMixin:
                     peaks_idx, _ = find_peaks(p_x, prominence=prominence)
                     valleys_idx, _ = find_peaks(-p_x, prominence=prominence)
 
-                # 曲线波谷中过滤基线点（基线 0 值平地不是有效数据拐点，杜绝基线打出一排无意义点）
-                valid_valleys = [v for v in valleys_idx if p_x[v] > noise_cutoff]
-                detected_rows = set(p_rows[peaks_idx]).union(set(p_rows[valid_valleys]))
+                # 收集已移除的水平横线带，屏蔽横线边缘毛刺被误检为波峰/波谷
+                removed_hl_bands = []
+                for cand in getattr(self, "line_candidates", []):
+                    if cand.get("axis") == "h" and cand.get("status") == "removed":
+                        cy = int(round(float(cand.get("y", 0))))
+                        th = int(round(float(cand.get("thickness", 3))))
+                        removed_hl_bands.append((cy - th // 2 - 1, cy + th // 2 + 1))
+
+                def _in_removed_hl(row_val: int) -> bool:
+                    return any(b0 <= row_val <= b1 for b0, b1 in removed_hl_bands)
+
+                valid_peaks = [p for p in peaks_idx if not _in_removed_hl(p_rows[p])]
+                valid_valleys = [
+                    v for v in valleys_idx
+                    if p_x[v] > noise_cutoff and not _in_removed_hl(p_rows[v])
+                ]
+                detected_rows = set(p_rows[valid_peaks]).union(set(p_rows[valid_valleys]))
 
             # 合并控制点：峰谷算法点合并进已有控制点，严格保留原有控制点与用户手工点 (manual)
             existing_ctrls = self.control_points.get(c_idx, {})
