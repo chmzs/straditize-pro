@@ -222,6 +222,11 @@ export function render(data: DiagramData): string {
       <button id="btn-apply-samples-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
         ${t('step7.next')}
       </button>
+
+      <!-- 重设本步 -->
+      <button id="btn-reset-step7-samples" class="ui-btn ui-btn--quiet ui-btn--sm" style="width: 100%; margin-top: 6px; font-size: 10px; color: var(--text-muted);" title="清空已提取或导入的全部采样层位">
+        重设本步：清空采样层位
+      </button>
     </div>
   `;
 }
@@ -346,6 +351,11 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
 
   root.querySelector('#btn-apply-samples-next')?.addEventListener('click', () => {
     ctx.onAdvanceWorkflowStage?.(8);
+  });
+
+  root.querySelector('#btn-reset-step7-samples')?.addEventListener('click', async () => {
+    if (!window.confirm('确定清空当前已提取或导入的全部采样层位吗？')) return;
+    await ctx.onClearHorizons?.();
   });
 }
 

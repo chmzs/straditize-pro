@@ -511,9 +511,12 @@ async function bootstrap() {
     const hasCalibratedColumns = (projectData.columns || []).some(
       (c) => c.x_ticks && c.x_ticks.length > 0
     );
-    const hasColumns = (projectData.columns || []).length > 0;
-    if (hasCalibratedColumns || hasColumns) {
+    if (hasCalibratedColumns) {
       return STAGE.CALIBRATE_COLUMNS;
+    }
+    const hasColumns = (projectData.columns || []).length > 0;
+    if (hasColumns) {
+      return STAGE.CLEANUP;
     }
     const hasYCalib = Boolean(
       projectData.calibration?.isCalibrated ||
@@ -521,7 +524,7 @@ async function bootstrap() {
         projectData.calibration?.bottom_px != null
     );
     if (hasYCalib) {
-      return STAGE.CLEANUP;
+      return STAGE.SPLIT;
     }
     const hasRois =
       (projectData.rois || []).length > 0 ||

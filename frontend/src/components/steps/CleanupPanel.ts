@@ -13,8 +13,8 @@ import {
   toDetectPayload,
 } from '../../core/detectOrientation';
 
-export const step = 4;
-export const title = '4. 干扰清理';
+export const step = 5;
+export const title = '5. 干扰清理';
 
 /**
  * 把后端统计翻译成一句人话。
@@ -100,12 +100,12 @@ export function render(data: DiagramData): string {
   };
 
   return `
-    <div class="step-panel" data-step="4" data-selected-cand-id="${selectedId ?? ''}"
+    <div class="step-panel" data-step="5" data-selected-cand-id="${selectedId ?? ''}"
          data-horizontal-candidates="${orientationCounts.horizontal}"
          data-vertical-candidates="${orientationCounts.vertical}">
-      <div class="step-title">${t('step4.title')}</div>
+      <div class="step-title">${t('step5.title')}</div>
       <div class="step-desc">
-        ${t('step4.forRoi')}<strong style="color: var(--accent-blue);">${roiName}</strong>
+        ${t('step5.forRoi')}<strong style="color: var(--accent-blue);">${roiName}</strong>
       </div>
 
       ${
@@ -149,7 +149,7 @@ export function render(data: DiagramData): string {
           </label>
         </div>
         <button id="btn-detect-candidates" class="ui-btn ui-btn--secondary" style="width: 100%; font-size: 11px; padding: 5px;">
-          ${t('step4.rescan')}
+          ${t('step5.rescan')}
         </button>
         <div style="font-size: 9.5px; color: var(--text-muted); line-height: 1.45; margin-top: 5px;">
           <strong>横线</strong>是贯穿 ROI 的坐标线；<strong>竖线</strong>含<strong>贯穿网格线</strong>与
@@ -166,13 +166,13 @@ export function render(data: DiagramData): string {
       <!-- 2. 几何清单：确认 / 撤回 / 选中编辑 / 删除 -->
       <div class="inspector-section" style="margin-bottom: 10px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 11px; font-weight: 700;">② ${t('step4.candidates', { count: cands.length })}</span>
+          <span style="font-size: 11px; font-weight: 700;">② ${t('step5.candidates', { count: cands.length })}</span>
           <span style="font-size: 10px; color: var(--text-muted);">已确认 ${selectedCount}</span>
         </div>
         <div id="cleanup-candidates-list" style="max-height: 132px; overflow-y: auto; font-size: 10px; border: 1px solid var(--border-color); border-radius: 4px; padding: 4px; background: var(--bg-card);">
           ${
             cands.length === 0
-              ? `<div style="color: var(--text-muted); text-align: center; padding: 8px;">${t('step4.noCandidates')}</div>`
+              ? `<div style="color: var(--text-muted); text-align: center; padding: 8px;">${t('step5.noCandidates')}</div>`
               : cands.map(rowOf).join('')
           }
         </div>
@@ -211,10 +211,10 @@ export function render(data: DiagramData): string {
 
       <!-- 5. 局部修正与排除区 -->
       <div class="inspector-section" style="margin-bottom: 10px;">
-        <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">③ ${t('step4.exclusions', { count: exclusionCount })}</div>
+        <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">③ ${t('step5.exclusions', { count: exclusionCount })}</div>
         <div style="display: flex; gap: 6px; margin-bottom: 6px;">
           <button id="btn-add-exclusion-rect" class="ui-btn ui-btn--secondary" style="flex: 1; font-size: 10.5px; padding: 5px;">
-            ⬚ ${t('step4.addExclusion')}
+            ⬚ ${t('step5.addExclusion')}
           </button>
         </div>
         <div style="display: flex; gap: 6px; margin-bottom: 6px;">
@@ -249,14 +249,19 @@ export function render(data: DiagramData): string {
         <div id="cleanup-stats" style="font-size: 10px; color: var(--text-secondary); line-height: 1.5;">
           ${statsLine(data)}
         </div>
-        <button id="btn-clear-cleanup-edits" class="ui-btn ui-btn--secondary" style="width:100%; margin-top:6px; font-size:10px; padding:4px;">
-          清空本步全部几何 / 排除区 / 笔迹
+        <button id="btn-clear-cleanup-edits" class="ui-btn ui-btn--quiet ui-btn--sm" style="width:100%; margin-top:6px; font-size:10px; padding:4px; color: var(--text-muted);" title="清空本步全部检测候选线、人工排除区与笔迹修正">
+          重设本步：清空全部几何 / 排除区 / 笔迹
         </button>
       </div>
 
       <!-- 7. 推进到下一步 -->
       <button id="btn-apply-cleanup-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
-        ${t('step4.next')}
+        ${t('step5.next')}
+      </button>
+
+      <!-- 重设本步 -->
+      <button id="btn-reset-step5-cleanup" class="ui-btn ui-btn--quiet ui-btn--sm" style="width: 100%; margin-top: 6px; font-size: 10px; color: var(--text-muted);" title="清空本步全部清理编辑（几何、排除区与笔迹）并重新自动检测">
+        重设本步：清空清理并重新检测
       </button>
     </div>
   `;
@@ -378,6 +383,13 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onClearCleanupEdits?.();
   });
 
+  // 重设本步
+  root.querySelector('#btn-reset-step5-cleanup')?.addEventListener('click', async () => {
+    if (!window.confirm('确定清空本步全部清理编辑（几何、排除区与笔迹）并重新自动检测吗？')) return;
+    await ctx.onClearCleanupEdits?.();
+    ctx.onDetectLineCandidates?.(toDetectPayload(getDetectOrientation()));
+  });
+
   const applyBtn = root.querySelector('#btn-apply-cleanup-next') as HTMLButtonElement | null;
   applyBtn?.addEventListener('click', async () => {
     if (applyBtn.disabled) return;
@@ -385,9 +397,9 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     applyBtn.disabled = true;
     applyBtn.style.opacity = '0.75';
     applyBtn.style.cursor = 'wait';
-    applyBtn.innerHTML = '正在切分属种基线，请稍候...';
+    applyBtn.innerHTML = '正在推进到列标定，请稍候...';
     try {
-      await ctx.onAdvanceWorkflowStage?.(5);
+      await ctx.onAdvanceWorkflowStage?.(6);
     } finally {
       applyBtn.disabled = false;
       applyBtn.style.opacity = '1';

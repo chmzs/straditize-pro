@@ -518,6 +518,70 @@ export function createInspectorCallbacks(
         callbacks.reportBackendFailure('清空列 X 刻度', err);
       }
     },
+    onClearAllXTicks: async () => {
+      const cols = canvasComponent.data.columns || [];
+      const calibratedCols = cols.filter((c) => c.x_ticks && c.x_ticks.length > 0 && c.col_index != null);
+      if (calibratedCols.length === 0) {
+        callbacks.setHudNotice('当前没有任何已标定 X 刻度的列');
+        return;
+      }
+      try {
+        for (const col of calibratedCols) {
+          await rpcClient.clearColumnXTicks(col.col_index!);
+          col.x_ticks = null;
+        }
+        canvasComponent.history.push(
+          'Clear all X-Ticks',
+          canvasComponent.data.columns,
+          canvasComponent.data.activeTaxaId
+        );
+        callbacks.setHudNotice(`已清空 ${calibratedCols.length} 个列的 X 标度（全部回到未标定）`);
+        canvasComponent.requestRender();
+        getInspector()?.updateData(canvasComponent.data);
+        getSidebar()?.updateData(canvasComponent.data);
+        getToolbar()?.updateHistoryState();
+        callbacks.updateFooter();
+        callbacks.scheduleAutosave();
+      } catch (err) {
+        callbacks.reportBackendFailure('清空全部列刻度', err);
+      }
+    },
+    onRedetectColumns: async () => {
+      const activeRoi =
+        canvasComponent.data.rois?.find((r) => r.id === canvasComponent.data.active_roi_id) ||
+        canvasComponent.data.rois?.[0];
+      if (!activeRoi) {
+        callbacks.reportBackendFailure('重新分列', new Error('未找到有效的数据区域 (ROI)'));
+        return;
+      }
+      const xlim = activeRoi.xlim || [canvasComponent.data.roi.xMin, canvasComponent.data.roi.xMax];
+      const ylim = activeRoi.ylim || [canvasComponent.data.roi.yMin, canvasComponent.data.roi.yMax];
+      try {
+        callbacks.setHudNotice('正在重新自动分列，请稍候...', 2000);
+        const cols = await rpcClient.detectColumnsInRoi({
+          ...activeRoi,
+          xMin: xlim[0],
+          xMax: xlim[1],
+          yMin: ylim[0],
+          yMax: ylim[1],
+        });
+        canvasComponent.data.columns = cols;
+        canvasComponent.history.push(
+          'Redetect Columns',
+          canvasComponent.data.columns,
+          canvasComponent.data.activeTaxaId
+        );
+        callbacks.setHudNotice(`已重新分列：共识别出 ${cols.length} 个属种列。`, 4000);
+        canvasComponent.requestRender();
+        getInspector()?.updateData(canvasComponent.data);
+        getSidebar()?.updateData(canvasComponent.data);
+        getToolbar()?.updateHistoryState();
+        callbacks.updateFooter();
+        callbacks.scheduleAutosave();
+      } catch (err) {
+        callbacks.reportBackendFailure('重新分列', err);
+      }
+    },
     onExtractConsensusHorizons: async (params?: {
       mode?: string;
       adaptive_window?: boolean;
@@ -596,6 +660,23 @@ export function createInspectorCallbacks(
         unit,
         primaryAxis
       );
+    },
+    onClearYCalibration: () => {
+      canvasComponent.setYCalibMarks([]);
+      canvasComponent.data.calibration = {
+        top_px: null,
+        top_cm: null,
+        bottom_px: null,
+        bottom_cm: null,
+        unit: canvasComponent.data.calibration?.unit ?? '',
+        primaryAxis: canvasComponent.data.calibration?.primaryAxis ?? 'depth',
+        isCalibrated: false,
+      };
+      canvasComponent.requestRender();
+      getInspector()?.updateData(canvasComponent.data);
+      getSidebar()?.updateData(canvasComponent.data);
+      callbacks.updateFooter();
+      callbacks.setHudNotice('Y 轴标定已重设（清空回到未标定）');
     },
     onRoiCommitted: (roi: DataRoi) => {
       void cleanupManager.commitRoi(roi);

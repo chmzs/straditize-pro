@@ -113,6 +113,11 @@ export function render(data: DiagramData): string {
       <button id="btn-apply-roi-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
         ${t('step2.next')}
       </button>
+
+      <!-- 重设本步 -->
+      <button id="btn-reset-step2-roi" class="ui-btn ui-btn--quiet ui-btn--sm" style="width: 100%; margin-top: 6px; font-size: 10px; color: var(--text-muted);" title="将当前有效区 (ROI) 重设回整张图谱范围">
+        重设本步：恢复全图有效区
+      </button>
     </div>
   `;
 }
@@ -206,5 +211,22 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   // 下一步
   root.querySelector('#btn-apply-roi-next')?.addEventListener('click', () => {
     ctx.onAdvanceWorkflowStage?.(3);
+  });
+
+  // 重设本步
+  root.querySelector('#btn-reset-step2-roi')?.addEventListener('click', () => {
+    if (!window.confirm('确定将当前数据有效区重设回整张图谱的初始全图范围吗？')) return;
+    const d = cachedRoiData;
+    if (!d) return;
+    const rois = d.rois && d.rois.length > 0 ? d.rois : [{ id: 'roi_1', name: 'pollen', name_source: 'default', composition: true, visible: true, xlim: [d.roi.xMin, d.roi.xMax], ylim: [d.roi.yMin, d.roi.yMax], columns_stale: false, form_defaults: null }];
+    const activeId = d.active_roi_id || (d as any).activeRoiId || rois[0]?.id || 'roi_1';
+    const activeRoi = rois.find((r) => r.id === activeId) || rois[0];
+    if (activeRoi) {
+      const fullW = d.imageWidth || 1000;
+      const fullH = d.imageHeight || 1000;
+      activeRoi.xlim = [0, fullW];
+      activeRoi.ylim = [0, fullH];
+      ctx.onRoiCommitted?.(activeRoi);
+    }
   });
 }

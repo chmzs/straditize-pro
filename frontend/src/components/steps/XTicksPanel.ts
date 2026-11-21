@@ -561,6 +561,11 @@ export function render(data: DiagramData): string {
       <button id="btn-apply-xticks-next" data-role="step-primary-action" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: var(--font-size-md);">
         ${t('step6.next')}
       </button>
+
+      <!-- 重设本步 -->
+      <button id="btn-reset-step6-xticks" data-role="step-secondary-action" class="ui-btn ui-btn--quiet ui-btn--sm" style="width: 100%; margin-top: 6px; font-size: 10px; color: var(--text-muted);" title="清空全部已标定的列 X 刻度，回到未标定状态">
+        重设本步：清空全部列刻度
+      </button>
     </div>
   `;
 }
@@ -694,7 +699,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   });
 
   root.querySelector('#btn-goto-step5-split')?.addEventListener('click', () => {
-    ctx.onAdvanceWorkflowStage?.(5);
+    ctx.onAdvanceWorkflowStage?.(4);
   });
 
 
@@ -1163,5 +1168,10 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
 
   root.querySelector('#btn-apply-xticks-next')?.addEventListener('click', () => {
     ctx.onAdvanceWorkflowStage?.(7);
+  });
+
+  root.querySelector('#btn-reset-step6-xticks')?.addEventListener('click', async () => {
+    if (!window.confirm('确定清空所有属种列的 X 刻度标定吗？全部列将回到未标定状态。')) return;
+    await ctx.onClearAllXTicks?.();
   });
 }

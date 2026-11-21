@@ -99,10 +99,12 @@ export class AddPointToolStrategy implements ToolStrategy {
     _worldPt: Point2D,
     ctx: ToolContext
   ): boolean {
-    if (this.draggingAnchor && this.hasDraggedAnchor && this.dragInitialPointPos) {
+    if (this.draggingAnchor) {
       const col = ctx.data.columns.find((c) => c.id === this.draggingAnchor!.taxaId);
       if (col) {
-        ctx.history.push(`Move Anchor in ${col.name}`, ctx.data.columns, ctx.data.activeTaxaId);
+        if (this.hasDraggedAnchor && this.dragInitialPointPos) {
+          ctx.history.push(`Move Anchor in ${col.name}`, ctx.data.columns, ctx.data.activeTaxaId);
+        }
         ctx.commitControlPoints(col.id);
         ctx.callbacks.onDataChange?.();
       }

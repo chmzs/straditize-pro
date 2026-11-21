@@ -125,6 +125,11 @@ export function render(data: DiagramData): string {
       <button id="btn-apply-ycalib-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
         ${t('step3.next')}
       </button>
+
+      <!-- 重设本步 -->
+      <button id="btn-reset-step3-ycalib" class="ui-btn ui-btn--quiet ui-btn--sm" style="width: 100%; margin-top: 6px; font-size: 10px; color: var(--text-muted);" title="重设本步：清空两点像素与标定参数">
+        重设本步：清空两点标定
+      </button>
     </div>
   `;
 }
@@ -231,5 +236,20 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   root.querySelector('#btn-apply-ycalib-next')?.addEventListener('click', () => {
     commitCalibration(false);
     ctx.onAdvanceWorkflowStage?.(4);
+  });
+
+  // 重设本步
+  root.querySelector('#btn-reset-step3-ycalib')?.addEventListener('click', () => {
+    if (!window.confirm('确定清空当前 Y 轴两点标定吗？')) return;
+    const tPx = root.querySelector('#ycal-inp-top-px') as HTMLInputElement | null;
+    const tVal = root.querySelector('#ycal-inp-top-val') as HTMLInputElement | null;
+    const bPx = root.querySelector('#ycal-inp-bot-px') as HTMLInputElement | null;
+    const bVal = root.querySelector('#ycal-inp-bot-val') as HTMLInputElement | null;
+    if (tPx) tPx.value = '';
+    if (tVal) tVal.value = '';
+    if (bPx) bPx.value = '';
+    if (bVal) bVal.value = '';
+    ctx.onPreviewYCalibrationPx?.(null, null);
+    ctx.onClearYCalibration?.();
   });
 }

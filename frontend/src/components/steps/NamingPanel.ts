@@ -5,8 +5,8 @@ import { notifyError } from '../../ui/feedback';
 import { renderSplitLostXTicksNotice } from './XTicksDroppedNotice';
 import { renderSplitSuspectNotice } from './SuspectBlockNotice';
 
-export const step = 5;
-export const title = '5. 自动分列与属种命名';
+export const step = 4;
+export const title = '4. 自动分列与属种命名';
 
 export interface LabelReconciliation {
   columns_without_label: string[];
@@ -47,15 +47,15 @@ export function render(data: DiagramData): string {
   const suspectNotice = renderSplitSuspectNotice(columns);
 
   return `
-    <div class="step-panel" data-step="5"
+    <div class="step-panel" data-step="4"
          data-label-assign="${assignPairs.join(',')}"
          data-without-label="${recon.columns_without_label.join(',')}"
          data-without-column="${recon.labels_without_column.join(',')}"
          data-lost-x-ticks="${lostTicksNotice ? 'true' : 'false'}"
          data-highlight-col="${activeColId}">
-      <div class="step-title">${t('step5.title')}</div>
+      <div class="step-title">${t('step4.title')}</div>
       <div class="step-desc">
-        ${t('step5.desc')}
+        ${t('step4.desc')}
       </div>
 
       ${suspectNotice}
@@ -63,8 +63,8 @@ export function render(data: DiagramData): string {
 
       <!-- OCR 属种识别：按钮常驻（主操作），说明文字收进 title，不再占版面 -->
       <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-        <button id="btn-trigger-ocr" class="ui-btn ui-btn--secondary" style="flex: 1; font-size: 11px; padding: 5px;" title="${t('step5.ocrDesc')}">
-          ${t('step5.ocrBtn')}
+        <button id="btn-trigger-ocr" class="ui-btn ui-btn--secondary" style="flex: 1; font-size: 11px; padding: 5px;" title="${t('step4.ocrDesc')}">
+          ${t('step4.ocrBtn')}
         </button>
       </div>
 
@@ -73,7 +73,7 @@ export function render(data: DiagramData): string {
            几行（用户实测反馈"表格浏览留着这么小的空间"）。 -->
       <details class="inspector-section" style="margin-bottom: 6px; padding: 3px 8px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 4px;">
         <summary style="font-size: 10px; font-weight: 600; color: var(--text-secondary); cursor: pointer; list-style: none; display: flex; align-items: center; gap: 4px;">
-          <span style="flex-shrink: 0;">${t('step5.reconTitle')}</span>
+          <span style="flex-shrink: 0;">${t('step4.reconTitle')}</span>
           <span style="color: ${recon.columns_without_label.length > 0 || recon.labels_without_column.length > 0 ? 'var(--status-warning)' : 'var(--text-muted)'}; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
             ${recon.columns_without_label.length > 0 || recon.labels_without_column.length > 0 ? '有未配对项，点击展开' : '全部已配对'}
           </span>
@@ -83,13 +83,18 @@ export function render(data: DiagramData): string {
           <div>• 缺标签列: <span id="lbl-without-label" style="color: ${recon.columns_without_label.length > 0 ? 'var(--status-warning)' : 'inherit'}; font-weight: 600;">${withoutLabelGrammar}</span></div>
           <div>• 列外标签: <span id="lbl-without-column" style="color: ${recon.labels_without_column.length > 0 ? 'var(--accent-red)' : 'inherit'}; font-weight: 600;">${withoutColumnGrammar}</span></div>
           <div>• 跨界/歧义: <span>[${recon.ambiguous.join(',')}]</span></div>
-          <div style="margin-top: 4px; color: var(--text-muted);">${t('step5.sequentialTitle')} ${t('step5.selectedCol')} <strong id="naming-sequential-highlight" style="color: var(--accent-green);">${activeColId}</strong> — ${t('step5.sequentialDesc')}</div>
+          <div style="margin-top: 4px; color: var(--text-muted);">${t('step4.sequentialTitle')} ${t('step4.selectedCol')} <strong id="naming-sequential-highlight" style="color: var(--accent-green);">${activeColId}</strong> — ${t('step4.sequentialDesc')}</div>
         </div>
       </details>
 
       <!-- 阶段提交按钮 -->
       <button id="btn-apply-naming-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
-        ${t('step5.next')}
+        ${t('step4.next')}
+      </button>
+
+      <!-- 重设本步 -->
+      <button id="btn-reset-step4-split" class="ui-btn ui-btn--quiet ui-btn--sm" style="width: 100%; margin-top: 6px; font-size: 10px; color: var(--text-muted);" title="清空全部已切分的属种分列线并重新自动切分">
+        重设本步：清空并重新分列
       </button>
     </div>
   `;
@@ -97,11 +102,6 @@ export function render(data: DiagramData): string {
 
 export function mount(root: HTMLElement, ctx: StepContext): void {
   root.querySelector('#btn-trigger-ocr')?.addEventListener('click', () => {
-    // 旧实现是去顶栏"碰"按钮：`#btn-open-ocr`、`#topbar-btn-ocr`、`[title*="OCR"]`
-    // 这三个选择器在整个仓库里一个都不存在（顶栏真实按钮是 `#btn-ocr-review-modal`，
-    // 其 title 为"自动识别图谱顶部属种名并为各列匹配新列名"，不含 "OCR"），
-    // 于是永远走 else 分支只弹一句提示 —— 这个按钮从来没有打开过 OCR 模态。
-    // 步骤 5 e2e 实测：点击后可见的 `[id^="ocr-"]` 元素数为 0，弹窗是那句提示。
     if (ctx.onOpenOcrReviewModal) {
       ctx.onOpenOcrReviewModal();
       return;
@@ -110,6 +110,15 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   });
 
   root.querySelector('#btn-apply-naming-next')?.addEventListener('click', () => {
-    ctx.onAdvanceWorkflowStage?.(6);
+    ctx.onAdvanceWorkflowStage?.(5);
+  });
+
+  root.querySelector('#btn-reset-step4-split')?.addEventListener('click', async () => {
+    if (!window.confirm('确定清空当前所有属种列吗？已有的列边界与命名将被重置。')) return;
+    if (ctx.onRedetectColumns) {
+      await ctx.onRedetectColumns();
+    } else {
+      ctx.onAdvanceWorkflowStage?.(4);
+    }
   });
 }
