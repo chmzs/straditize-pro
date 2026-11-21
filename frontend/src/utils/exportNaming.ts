@@ -2,7 +2,7 @@
  * Standardized export filename resolution and formatting.
  *
  * Requirements:
- * 1. Format: `{project_name}{suffix}_{YYYYMMDD_HHmmss}.{ext}`
+ * 1. Format: `{project_name}_stradpro_{suffix}_{YYYYMMDD_HHmm}.{ext}`
  * 2. Precedence:
  *    - User-configured `project_name` (session or method parameter)
  *    - Base image main filename (stripped of `upload://` / `archive://` and extension,
@@ -13,11 +13,12 @@
  *    - Collapse consecutive underscores
  *    - Remove leading/trailing dots and underscores
  * 4. Standardized Suffixes & Extensions:
- *    - Project package: `_project` (`.tar`)
- *    - Data matrix: `_matrix` (`.csv`)
- *    - Excel report: `_report` (`.xlsx`)
- *    - Plot bundle: `_plot_bundle` (`.zip`)
- *    - LiPD container: `_lipd` (`.lpd`)
+ *    - Project package: `_project` (`.tar`) -> `_stradpro_project_...`
+ *    - Data matrix: `_matrix` (`.csv`) -> `_stradpro_matrix_...`
+ *    - Excel report: `_report` (`.xlsx`) -> `_stradpro_report_...`
+ *    - Plot bundle: `_plot_bundle` (`.zip`) -> `_stradpro_plot_bundle_...`
+ *    - LiPD container: `_lipd` (`.lpd`) -> `_stradpro_lipd_...`
+ *    - Stratigraphic diagram: `_strat_diagram` (`.png/.svg`) -> `_stradpro_strat_diagram_...`
  */
 
 export type ExportTypeSuffix =
@@ -44,7 +45,7 @@ export function sanitizeFilenameStem(stem: string | null | undefined): string {
 }
 
 /**
- * Formats a Date object into YYYYMMDD_HHmmss.
+ * Formats a Date object into YYYYMMDD_HHmm (精简至分钟).
  */
 export function formatExportTimestamp(d: Date = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -53,17 +54,16 @@ export function formatExportTimestamp(d: Date = new Date()): string {
   const dd = pad(d.getDate());
   const hh = pad(d.getHours());
   const mi = pad(d.getMinutes());
-  const ss = pad(d.getSeconds());
-  return `${yyyy}${mm}${dd}_${hh}${mi}${ss}`;
+  return `${yyyy}${mm}${dd}_${hh}${mi}`;
 }
 
 /**
  * 从导入的文件名中提取项目前缀名称。
  * 例如：
+ * - "pollen_bars_riojaplot_stradpro_project_20261120_1200.tar" -> "pollen_bars_riojaplot"
  * - "pollen_bars_riojaplot_project_20261120_120034.tar" -> "pollen_bars_riojaplot"
- * - "pollen_bars_riojaplot_project.tar" -> "pollen_bars_riojaplot"
  * - "my_lake_core.tar" -> "my_lake_core"
- * - "straditize_project_20261120_120034.tar" -> null
+ * - "straditize_stradpro_project_20261120_1200.tar" -> null
  */
 export function extractProjectNameFromFilename(filename: string | null | undefined): string | null {
   if (!filename) return null;
@@ -74,15 +74,19 @@ export function extractProjectNameFromFilename(filename: string | null | undefin
       break;
     }
   }
-  const matchProject = clean.match(/^(.*?)(?:_project(?:_\d{8}_\d{6}|\d+)?)$/i);
+  const matchProject = clean.match(/^(.*?)(?:_(?:stradpro_)?project(?:_\d{8}_(?:\d{4}|\d{6})|\d+)?)$/i);
   let stem = matchProject && matchProject[1] ? matchProject[1] : clean;
-  const matchOther = stem.match(/^(.*?)(?:_(?:matrix|report|plot_bundle|lipd|strat_diagram)(?:_\d{8}_\d{6}|\d+)?)$/i);
+  const matchOther = stem.match(/^(.*?)(?:_(?:stradpro_)?(?:matrix|report|plot_bundle|lipd|strat_diagram)(?:_\d{8}_(?:\d{4}|\d{6})|\d+)?)$/i);
   if (matchOther && matchOther[1]) {
     stem = matchOther[1];
   }
-  const matchTimestamp = stem.match(/^(.*?)(?:_\d{8}_\d{6})$/);
+  const matchTimestamp = stem.match(/^(.*?)(?:_\d{8}_(?:\d{4}|\d{6}))$/);
   if (matchTimestamp && matchTimestamp[1]) {
     stem = matchTimestamp[1];
+  }
+  const matchStradproTail = stem.match(/^(.*?)_stradpro$/i);
+  if (matchStradproTail && matchStradproTail[1]) {
+    stem = matchStradproTail[1];
   }
   const sanitized = sanitizeFilenameStem(stem);
   if (!sanitized || ['straditize', 'original', 'diagram'].includes(sanitized.toLowerCase())) {
@@ -138,7 +142,7 @@ export function resolveProjectName(
 }
 
 /**
- * Formats full export filename: `{project_name}{suffix}_{YYYYMMDD_HHmmss}.{ext}`
+ * Formats full export filename: `{project_name}_stradpro_{suffix}_{YYYYMMDD_HHmm}.{ext}`
  */
 export function resolveExportFilename(
   projectName: string | null | undefined,
@@ -148,8 +152,11 @@ export function resolveExportFilename(
   date: Date = new Date()
 ): string {
   const stem = resolveProjectName(projectName, imageSrcOrName);
-  const cleanSuffix = suffix ? (suffix.startsWith('_') ? suffix : `_${suffix}`) : '';
+  const cleanSuffix = suffix ? suffix.replace(/^_+/, '') : '';
   const cleanExt = ext.replace(/^\./, '');
   const timestamp = formatExportTimestamp(date);
-  return `${stem}${cleanSuffix}_${timestamp}.${cleanExt}`;
+  if (cleanSuffix) {
+    return `${stem}_stradpro_${cleanSuffix}_${timestamp}.${cleanExt}`;
+  }
+  return `${stem}_stradpro_${timestamp}.${cleanExt}`;
 }

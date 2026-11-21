@@ -169,30 +169,30 @@ def test_format_export_filename_pattern():
 
     # Project package (.tar)
     fn_tar = format_export_filename("suigetsu", "_project", "tar", dt=fixed_dt)
-    assert fn_tar == "suigetsu_project_20261119_143045.tar"
+    assert fn_tar == "suigetsu_stradpro_project_20261119_1430.tar"
 
     # Data matrix (.csv)
     fn_csv = format_export_filename("suigetsu", "_matrix", "csv", dt=fixed_dt)
-    assert fn_csv == "suigetsu_matrix_20261119_143045.csv"
+    assert fn_csv == "suigetsu_stradpro_matrix_20261119_1430.csv"
 
     # Excel report (.xlsx)
     fn_xlsx = format_export_filename("suigetsu", "_report", "xlsx", dt=fixed_dt)
-    assert fn_xlsx == "suigetsu_report_20261119_143045.xlsx"
+    assert fn_xlsx == "suigetsu_stradpro_report_20261119_1430.xlsx"
 
     # Plot bundle (.zip)
     fn_zip = format_export_filename("suigetsu", "_plot_bundle", "zip", dt=fixed_dt)
-    assert fn_zip == "suigetsu_plot_bundle_20261119_143045.zip"
+    assert fn_zip == "suigetsu_stradpro_plot_bundle_20261119_1430.zip"
 
     # LiPD container (.lpd)
     fn_lpd = format_export_filename("suigetsu", "_lipd", "lpd", dt=fixed_dt)
-    assert fn_lpd == "suigetsu_lipd_20261119_143045.lpd"
+    assert fn_lpd == "suigetsu_stradpro_lipd_20261119_1430.lpd"
 
 
 def test_format_export_filename_normalizes_suffix_and_extension():
     fixed_dt = datetime(2026, 11, 19, 14, 30, 45)
     # suffix without leading underscore, extension with leading dot
     fn = format_export_filename("lake", "report", ".xlsx", dt=fixed_dt)
-    assert fn == "lake_report_20261119_143045.xlsx"
+    assert fn == "lake_stradpro_report_20261119_1430.xlsx"
 
 
 # ==============================================================================
@@ -261,13 +261,13 @@ def test_export_multi_tar_returns_standardized_filename(
     res = calibrated_session.export_multi_tar()
     assert res["success"] is True
     assert "filename" in res
-    # Image is lake_core_data.png -> filename should start with lake_core_data_project_
-    assert re.match(r"^lake_core_data_project_\d{8}_\d{6}\.tar$", res["filename"])
+    # Image is lake_core_data.png -> filename should start with lake_core_data_stradpro_project_
+    assert re.match(r"^lake_core_data_stradpro_project_\d{8}_\d{4}\.tar$", res["filename"])
 
     # Overridden by explicit project_name
     res_override = calibrated_session.export_multi_tar(project_name="CustomProject")
     assert re.match(
-        r"^CustomProject_project_\d{8}_\d{6}\.tar$", res_override["filename"]
+        r"^CustomProject_stradpro_project_\d{8}_\d{4}\.tar$", res_override["filename"]
     )
 
 
@@ -277,14 +277,14 @@ def test_export_multi_xlsx_returns_standardized_filename(
     res = calibrated_session.export_multi_xlsx(include_meta_sheets=False)
     assert res["success"] is True
     assert "filename" in res
-    assert re.match(r"^lake_core_data_report_\d{8}_\d{6}\.xlsx$", res["filename"])
+    assert re.match(r"^lake_core_data_stradpro_report_\d{8}_\d{4}\.xlsx$", res["filename"])
 
     # Overridden by explicit project_name
     res_override = calibrated_session.export_multi_xlsx(
         include_meta_sheets=False, project_name="ExportSurvey"
     )
     assert re.match(
-        r"^ExportSurvey_report_\d{8}_\d{6}\.xlsx$", res_override["filename"]
+        r"^ExportSurvey_stradpro_report_\d{8}_\d{4}\.xlsx$", res_override["filename"]
     )
 
 
@@ -294,11 +294,11 @@ def test_export_multi_lipd_returns_standardized_filename(
     res = calibrated_session.export_multi_lipd()
     assert res["success"] is True
     assert "filename" in res
-    assert re.match(r"^lake_core_data_lipd_\d{8}_\d{6}\.lpd$", res["filename"])
+    assert re.match(r"^lake_core_data_stradpro_lipd_\d{8}_\d{4}\.lpd$", res["filename"])
 
     # Overridden by explicit project_name
     res_override = calibrated_session.export_multi_lipd(project_name="LipdRecord")
-    assert re.match(r"^LipdRecord_lipd_\d{8}_\d{6}\.lpd$", res_override["filename"])
+    assert re.match(r"^LipdRecord_stradpro_lipd_\d{8}_\d{4}\.lpd$", res_override["filename"])
 
 
 def test_export_bundle_zip_returns_standardized_filename(
@@ -310,13 +310,13 @@ def test_export_bundle_zip_returns_standardized_filename(
         assert res["success"] is True
         assert "filename" in res
         assert re.match(
-            r"^lake_core_data_plot_bundle_\d{8}_\d{6}\.zip$", res["filename"]
+            r"^lake_core_data_stradpro_plot_bundle_\d{8}_\d{4}\.zip$", res["filename"]
         )
     except Exception as e:
         # If R/rioja is not installed or available in this test environment, verify filename resolution logic directly
         proj = resolve_project_name(calibrated_session)
         fn = format_export_filename(proj, "_plot_bundle", "zip")
-        assert re.match(r"^lake_core_data_plot_bundle_\d{8}_\d{6}\.zip$", fn)
+        assert re.match(r"^lake_core_data_stradpro_plot_bundle_\d{8}_\d{4}\.zip$", fn)
 
 
 def test_project_save_returns_standardized_filename(
@@ -326,13 +326,13 @@ def test_project_save_returns_standardized_filename(
     res_tar = calibrated_session.project_save()
     assert res_tar["success"] is True
     assert "filename" in res_tar
-    assert re.match(r"^lake_core_data_project_\d{8}_\d{6}\.tar$", res_tar["filename"])
+    assert re.match(r"^lake_core_data_stradpro_project_\d{8}_\d{4}\.tar$", res_tar["filename"])
 
     # JSON format
     res_json = calibrated_session.project_save(format="json")
     assert res_json["success"] is True
     assert "filename" in res_json
-    assert re.match(r"^lake_core_data_project_\d{8}_\d{6}\.json$", res_json["filename"])
+    assert re.match(r"^lake_core_data_stradpro_project_\d{8}_\d{4}\.json$", res_json["filename"])
 
 
 def test_session_project_name_roundtrip_save_and_load(
@@ -343,7 +343,7 @@ def test_session_project_name_roundtrip_save_and_load(
     save_res = calibrated_session.project_save(output_path=save_file)
     assert save_res["success"] is True
     assert re.match(
-        r"^PreservedLakeStudy_project_\d{8}_\d{6}\.tar$", save_res["filename"]
+        r"^PreservedLakeStudy_stradpro_project_\d{8}_\d{4}\.tar$", save_res["filename"]
     )
 
     # Load into a new session
@@ -355,5 +355,5 @@ def test_session_project_name_roundtrip_save_and_load(
     # Export on new session should inherit the restored project_name
     tar_res = new_sess.export_multi_tar()
     assert re.match(
-        r"^PreservedLakeStudy_project_\d{8}_\d{6}\.tar$", tar_res["filename"]
+        r"^PreservedLakeStudy_stradpro_project_\d{8}_\d{4}\.tar$", tar_res["filename"]
     )

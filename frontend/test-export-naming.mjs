@@ -103,45 +103,55 @@ assert.equal(resolveProjectName('', ''), 'straditize');
 
 // 5. formatExportTimestamp 与 resolveExportFilename 测试
 const testDate = new Date(2026, 10, 19, 14, 30, 45); // 2026-11-19 14:30:45
-assert.equal(formatExportTimestamp(testDate), '20261119_143045');
+assert.equal(formatExportTimestamp(testDate), '20261119_1430');
 
 // 5a. resolveExportFilename 固定时间断言
 assert.equal(
   resolveExportFilename('...___my_project___...', null, '_report', 'xlsx', testDate),
-  'my_project_report_20261119_143045.xlsx'
+  'my_project_stradpro_report_20261119_1430.xlsx'
 );
 
 // 5b. resolveExportFilename 当前时间正则断言
 const liveFilename = resolveExportFilename('...___my_project___...', null, '_report', 'xlsx');
 assert.match(
   liveFilename,
-  /^my_project_report_\d{8}_\d{6}\.xlsx$/,
-  'Generated live filename must match pattern {project_name}{suffix}_{YYYYMMDD_HHmmss}.{ext}'
+  /^my_project_stradpro_report_\d{8}_\d{4}\.xlsx$/,
+  'Generated live filename must match pattern {project_name}_stradpro_{suffix}_{YYYYMMDD_HHmm}.{ext}'
 );
 
 // 5c. 各标准导出类型后缀格式验证
 assert.equal(
   resolveExportFilename('suigetsu', null, '_project', 'tar', testDate),
-  'suigetsu_project_20261119_143045.tar'
+  'suigetsu_stradpro_project_20261119_1430.tar'
 );
 assert.equal(
   resolveExportFilename('suigetsu', null, '_matrix', 'csv', testDate),
-  'suigetsu_matrix_20261119_143045.csv'
+  'suigetsu_stradpro_matrix_20261119_1430.csv'
 );
 assert.equal(
   resolveExportFilename('suigetsu', null, '_plot_bundle', 'zip', testDate),
-  'suigetsu_plot_bundle_20261119_143045.zip'
+  'suigetsu_stradpro_plot_bundle_20261119_1430.zip'
 );
 assert.equal(
   resolveExportFilename('suigetsu', null, '_lipd', 'lpd', testDate),
-  'suigetsu_lipd_20261119_143045.lpd'
+  'suigetsu_stradpro_lipd_20261119_1430.lpd'
 );
 
 // 6. extractProjectNameFromFilename: 导入文件名项目名前缀提取
 assert.equal(
+  extractProjectNameFromFilename('pollen_bars_riojaplot_stradpro_project_20261120_1200.tar'),
+  'pollen_bars_riojaplot',
+  'Must extract prefix before _stradpro_project timestamp'
+);
+assert.equal(
+  extractProjectNameFromFilename('pollen_bars_riojaplot_stradpro_matrix_20261120_1200.csv'),
+  'pollen_bars_riojaplot',
+  'Must extract prefix before _stradpro_matrix timestamp'
+);
+assert.equal(
   extractProjectNameFromFilename('pollen_bars_riojaplot_project_20261120_120034.tar'),
   'pollen_bars_riojaplot',
-  'Must extract prefix before _project timestamp'
+  'Must extract prefix before legacy _project timestamp'
 );
 assert.equal(
   extractProjectNameFromFilename('pollen_bars_riojaplot_project.tar'),
@@ -156,10 +166,10 @@ assert.equal(
 assert.equal(
   extractProjectNameFromFilename('pollen_bars_riojaplot_matrix_20261120_120034.csv'),
   'pollen_bars_riojaplot',
-  'Must extract prefix before _matrix timestamp'
+  'Must extract prefix before legacy _matrix timestamp'
 );
 assert.equal(
-  extractProjectNameFromFilename('straditize_project_20261120_120034.tar'),
+  extractProjectNameFromFilename('straditize_stradpro_project_20261120_1200.tar'),
   null,
   'straditize default generic fallback should return null'
 );

@@ -77,7 +77,7 @@ def sanitize_filename_stem(stem: Any) -> str:
 
 def extract_project_name_from_filename(filename: str | None) -> str | None:
     """从导入的工程/归档文件名中提取项目定义名前缀。
-    例如：'pollen_bars_riojaplot_project_20261120_120034.tar' -> 'pollen_bars_riojaplot'。
+    例如：'pollen_bars_riojaplot_stradpro_project_20261120_1200.tar' -> 'pollen_bars_riojaplot'。
     """
     if not filename:
         return None
@@ -86,18 +86,25 @@ def extract_project_name_from_filename(filename: str | None) -> str | None:
         if clean.lower().endswith(ext):
             clean = clean[: -len(ext)]
             break
-    m = re.match(r"^(.*?)(?:_project(?:_\d{8}_\d{6}|\d+)?)$", clean, flags=re.IGNORECASE)
+    m = re.match(
+        r"^(.*?)(?:_(?:stradpro_)?project(?:_\d{8}_(?:\d{4}|\d{6})|\d+)?)$",
+        clean,
+        flags=re.IGNORECASE,
+    )
     stem = m.group(1) if (m and m.group(1)) else clean
     m2 = re.match(
-        r"^(.*?)(?:_(?:matrix|report|plot_bundle|lipd|strat_diagram)(?:_\d{8}_\d{6}|\d+)?)$",
+        r"^(.*?)(?:_(?:stradpro_)?(?:matrix|report|plot_bundle|lipd|strat_diagram)(?:_\d{8}_(?:\d{4}|\d{6})|\d+)?)$",
         stem,
         flags=re.IGNORECASE,
     )
     if m2 and m2.group(1):
         stem = m2.group(1)
-    m3 = re.match(r"^(.*?)(?:_\d{8}_\d{6})$", stem)
+    m3 = re.match(r"^(.*?)(?:_\d{8}_(?:\d{4}|\d{6}))$", stem)
     if m3 and m3.group(1):
         stem = m3.group(1)
+    m4 = re.match(r"^(.*?)_stradpro$", stem, flags=re.IGNORECASE)
+    if m4 and m4.group(1):
+        stem = m4.group(1)
     cleaned = sanitize_filename_stem(stem)
     if not cleaned or cleaned.lower() in ("straditize", "original", "diagram"):
         return None
@@ -158,14 +165,16 @@ def format_export_filename(
     ext: str,
     dt: datetime | None = None,
 ) -> str:
-    """Formats export filename as {project_name}{suffix}_{YYYYMMDD_HHmmss}.{ext}."""
+    """Formats export filename as {project_name}_stradpro_{suffix}_{YYYYMMDD_HHmm}.{ext}."""
     if dt is None:
         dt = datetime.now()
-    dt_str = dt.strftime("%Y%m%d_%H%M%S")
-    clean_suffix = f"_{suffix.lstrip('_')}" if suffix else ""
+    dt_str = dt.strftime("%Y%m%d_%H%M")
+    clean_suffix = suffix.strip("_") if suffix else ""
     clean_ext = ext.lstrip(".")
     stem = sanitize_filename_stem(project_name)
-    return f"{stem}{clean_suffix}_{dt_str}.{clean_ext}"
+    if clean_suffix:
+        return f"{stem}_stradpro_{clean_suffix}_{dt_str}.{clean_ext}"
+    return f"{stem}_stradpro_{dt_str}.{clean_ext}"
 
 
 def _column_row_window(

@@ -708,6 +708,19 @@ abs_px0（绿线 / 0 点） = startX（红线 / 列切分线） + axis_stroke_px
 > `scale.abs_px1`，拿它和 `start + 轴粗 + 1` 比是循环论证，永远相等，红不了。
 > 只有"包里的 `tickEndX`"这个来自文件的值才可能和当前轴粗矛盾。
 
+---
+
+### 4.10b-3 `straditize.getDiagramData` — ROI 标识的两种拼写
+
+`primaryRoiId` / `activeRoiId` 是**权威拼写**；`primary_roi_id` / `active_roi_id` 是**兼容别名**，
+两者在同一载荷里同时存在且值相等（`tests/unit/test_diagram_payload_roi_keys.py` 钉住）。
+
+之所以要同时给：`roi.list` 返回的是 snake（`primary_roi_id`），而本载荷曾只有 camel，
+外部读者各按一种拼写读，读到不存在的那个就得到 `undefined`，把"值没变"误判成"功能没生效"
+（本轮实测产生过两次假警报：一次前端 e2e、一次独立黑盒核验）。
+
+新增标识字段时：**两种拼写同批加**，不要只加一种；判定"某动作是否生效"必须读与本动作
+同一来源的那个键，不要跨方法混读。
 
 ---
 
@@ -1269,6 +1282,89 @@ se(\text{sed}) = \frac{se(b)\cdot s}{(b s)^2}$$
 
 ---
 
+## 4B. 系统状态、配置与日志诊断接口 (`system.*` / `shutdown`)
+
+维护服务端生命周期、用户持久化配置及双端日志诊断闭环的标准接口。
+
+### 4B.1 `system.ping`
+轻量级心跳探针，供前端判断同源/本地服务是否存活。
+
+- **参数 (params)**：无
+- **返回 (result)**：
+  ```json
+  {
+    "pong": true,
+    "timestamp": 1732165200.123
+  }
+  ```
+
+### 4B.2 `system.getConfig` 与 `system.updateConfig`
+用户首选项与服务端运行环境配置。配置项持久化于用户主目录配置中心（见 `config.py`）。
+
+- **`system.getConfig`**：
+  - **参数 (params)**：无
+  - **返回 (result)**：
+    ```json
+    {
+      "remote_access_enabled": false,
+      "has_remote_password": true,
+      "allowed_hosts": ["127.0.0.1", "localhost"],
+      "locale": "zh-CN",
+      "theme": "light",
+      "llm_base_url": "https://api.openai.com/v1",
+      "llm_api_key": "sk-...",
+      "llm_model": "gpt-4o",
+      "llm_prompt_template": "",
+      "rscript_path": "",
+      "rpc_endpoint": "http://127.0.0.1:8765/rpc",
+      "webmcp_endpoint": "/mcp",
+      "server_bound_host": "127.0.0.1",
+      "server_bound_port": 8765,
+      "is_desktop_mode": false,
+      "connected": true
+    }
+    ```
+- **`system.updateConfig`**：
+  - **参数 (params)**：键值对字典（如 `{"theme": "dark", "locale": "en-US", "remote_access_enabled": true}`）。
+  - **返回 (result)**：更新后的全量配置对象。
+
+### 4B.3 `system.getLogInfo` 与 `system.openLogDir`
+服务端轮转诊断日志查询与本地资源管理器联动（ARCHITECTURE 不变量 27）。
+
+- **`system.getLogInfo`**：
+  - **参数 (params)**：无
+  - **返回 (result)**：
+    ```json
+    {
+      "log_dir": "C:\\Users\\...\\AppData\\Local\\straditize\\logs",
+      "log_file": "C:\\Users\\...\\AppData\\Local\\straditize\\logs\\straditize.log",
+      "file_size_bytes": 102400
+    }
+    ```
+- **`system.openLogDir`**：
+  - **参数 (params)**：无
+  - **返回 (result)**：`{"success": true, "log_dir": "..."}`。在宿主操作系统图形文件管理器中直接激活并打开日志所在目录。
+
+### 4B.4 `system.logClientError`
+前端未捕获异常直通上报接口。让 SPA 客户端的 Crash/网络断连与后端服务日志统筹在单一时间轴中。
+
+- **参数 (params)**：
+  - `message` (string, 必填): 错误摘要。
+  - `stack` (string, 可选): 前端调用栈 trace。
+  - `url` (string, 可选): 发生报错时的浏览器 URL。
+  - `context` (object, 可选): 附加上下文（如当前步骤、active ROI id）。
+- **返回 (result)**：`{"logged": true}`。后端以 `[FrontendError]` 前缀记入 `straditize.log`。
+
+### 4B.5 `shutdown`
+请求关闭桌面后端服务。
+
+- **参数 (params)**：无
+- **权限与限制**：**仅允许桌面模式**（`session.is_desktop_mode == true`）。在 Web/远程模式下调用直接返回错误：
+  `-32000 / 403 Forbidden: "Shutdown is only permitted in desktop mode."`。
+- **返回 (result)**：`{"success": true, "message": "Server shutting down..."}`。后端启动 0.5s 延迟后优雅退出进程。
+
+---
+
 ## 5. 服务端启动与调用示例
 
 ### 5.1 启动方式
@@ -1304,15 +1400,3 @@ async function rpcCall(method: string, params: Record<string, any> = {}) {
 const imageInfo = await rpcCall("core.loadImage", { image_path: "path/to/img.png" });
 const columns = await rpcCall("core.detectColumns", { data_xlim: [300, 1800], data_ylim: [500, 1300] });
 ```
-
-### 4.10c `straditize.getDiagramData` — ROI 标识的两种拼写
-
-`primaryRoiId` / `activeRoiId` 是**权威拼写**；`primary_roi_id` / `active_roi_id` 是**兼容别名**，
-两者在同一载荷里同时存在且值相等（`tests/unit/test_diagram_payload_roi_keys.py` 钉住）。
-
-之所以要同时给：`roi.list` 返回的是 snake（`primary_roi_id`），而本载荷曾只有 camel，
-外部读者各按一种拼写读，读到不存在的那个就得到 `undefined`，把"值没变"误判成"功能没生效"
-（本轮实测产生过两次假警报：一次前端 e2e、一次独立黑盒核验）。
-
-新增标识字段时：**两种拼写同批加**，不要只加一种；判定"某动作是否生效"必须读与本动作
-同一来源的那个键，不要跨方法混读。
