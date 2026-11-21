@@ -18,17 +18,21 @@ frontend/  (TypeScript + Vite, 无框架)
    ├── components/  Canvas 主画布、工具栏、侧边栏、属性检查器、各弹窗
    ├── core/        Viewport(坐标变换) · HistoryManager(撤销) · SplineInterpolator · TarArchive
    ├── services/    RpcClient (JSON-RPC over HTTP)
+   ├── utils/       ErrorReporter(未捕获异常直通) · exportNaming(规范化导出命名)
    └── i18n/        中英文字典与运行时
 
 straditize_core/  (Python 3.12 + NumPy/SciPy/scikit-image, 无 GUI 依赖)
-   ├── session.py      会话状态机与业务编排
-   ├── rpc_server.py   HTTP/Stdio 双协议 · 访问控制 · 静态资源托管
-   ├── columns.py      分列基线探测
-   ├── curve.py        拐点提取与轮廓压缩
-   ├── calibration.py  两点式标定 (Linear / Log)
-   ├── age_depth.py    年代-深度识别、提取与不确定性
-   ├── ocr/            OCR 与科属词典
-   └── image.py        去网格 · 二值化 · Radon 倾斜检测
+   ├── session.py        会话状态机与业务编排
+   ├── rpc_server.py     HTTP/Stdio 双协议 · 访问控制 · 静态资源托管
+   ├── logging_config.py 结构化轮转日志 (≤15MB) 与日志目录管理
+   ├── config.py         用户持久化首选项配置管理
+   ├── mcp_server.py     WebMCP / MCP 自动化操作协议服务
+   ├── columns.py        分列基线探测
+   ├── curve.py          拐点提取与轮廓压缩
+   ├── calibration.py    两点式标定 (Linear / Log)
+   ├── age_depth.py      年代-深度识别、提取与不确定性
+   ├── ocr/              OCR 与科属词典
+   └── image.py          去网格 · 二值化 · Radon 倾斜检测
 
 straditize/  (上游第三方 PyQt5 原版, 本项目不维护)
    └── 仅作为内置范例的图片资源被引用
@@ -64,26 +68,25 @@ straditize/  (上游第三方 PyQt5 原版, 本项目不维护)
 
 ## 3. 访问控制与远程访问
 
-后端**没有任何认证**，安全边界由"只监听回环 + 以下两道校验"构成。
+系统支持**单机本地回环（默认免密）**与**受控局域网/Tailscale 远程网关**两种安全模式，由 `SecurityMiddleware` 统筹安全边界：
 
 | 校验 | 目的 |
 | --- | --- |
-| `Host` 必须是回环（或显式绑定的主机） | 阻断 **DNS rebinding**：攻击者域名解析到 127.0.0.1 时 Origin 与 Host 会同时是攻击者域名，仅比对二者会被绕过 |
+| `Host` 必须是回环（或显式绑定的主机/白名单 IP） | 阻断 **DNS rebinding**：攻击者域名解析到 127.0.0.1 时 Origin 与 Host 会同时是攻击者域名，仅比对二者会被绕过 |
 | `Origin` 若存在，必须与请求自身 Host 同源（或命中白名单） | 阻断 **CSRF**；浏览器对**同源 POST 也会发送 Origin**，故同源必须放行 |
 | 绝不回显 `Access-Control-Allow-Origin: *` | 该头一旦存在，**用户浏览的任意网页都能读写本机后端**（CORS 允许读取响应） |
+| 远程密码校验（`remote_password`） | 开启局域网/远程访问时，客户端首次连接必须输入密码鉴权，未鉴权前拦截一切业务 RPC 并弹出 `AuthModal` 门禁 |
 
-**远程使用（前后端不同机器）——推荐 SSH 隧道：**
+**远程使用方式：**
+1. **轻薄本/平板局域网访问（内置网关）**：在【设置】中开启「远程连接」并设置「访问保护密码」，后端安全放行内网网段（或 Tailscale IP）。
+2. **公网远程访问（推荐 SSH 隧道）**：
+   ```bash
+   ssh -L 8765:127.0.0.1:8765 用户@远端主机
+   # 本机浏览器打开 http://127.0.0.1:8765/
+   ```
+   隧道方案下浏览器看到的是同源回环地址，无需配置防火墙且链路加密。
 
-```bash
-ssh -L 8765:127.0.0.1:8765 用户@远端主机
-# 然后本机浏览器打开 http://127.0.0.1:8765/
-```
-
-隧道方案下浏览器看到的是**同源回环地址**，因此**不需要 token、不需要 `--host`、不需要放行防火墙**，
-且流量加密。**不要**用 `--host 0.0.0.0` 直接暴露到局域网。
-
-**为什么不做账号 / 密码 / token**：这是单用户单会话工具（`StraditizeSession` 为单例，多人会互相覆盖状态），
-账号体系意味着改密 / 找回 / 哈希存储 / 会话管理等纯负债。真正需要多人的场景应各自跑一个后端。
+**单用户单会话架构定位**：`StraditizeSession` 本质是单会话内存状态机，多人并发访问同一后端会相互覆盖画布状态。多用户独立科研作业时应分别启动各自的后端实例。
 
 ---
 
@@ -562,10 +565,20 @@ digitize 用 ink & ~grid_line_mask & roi_mask
     用户看到的是「改了不生效」（实测缺陷：编辑锚点后导出表完全不变）。
     配套两处：导出面板 `btn-wpd-refresh` 手动刷新 + 打开期间由 `onDataChange` 触发
     `refreshOpenExportModal()`，否则面板开着看不到新数。
-22. **项目名称全流程单一事实源与双向贯穿**：顶栏（Toolbar）与导出面板（ExportModal）
-    的项目名称输入框双向同步内存与 `project.setName` RPC；所有导出下载产物（`.tar`, `.csv`,
-    `.xlsx`, `.zip`）动态采用该前缀；工程导入自动解析 `*_project_*.tar` 恢复前缀，杜绝
-    `original.png` 等文件名黑名单退化为 `straditize`；工程包内部 `straditize.json` 持久化 `project_name`。
+22. **项目名称全流程单一事实源与标准化导出命名规范**：
+    - **全链路贯穿**：顶栏（Toolbar）与导出面板（ExportModal）的项目名称输入框双向同步内存与 `project.setName` RPC；工程包内部 `straditize.json` 持久化 `project_name`；导入工程自动解析前缀恢复工程名，杜绝退化为 `original.png` 等泛称。
+    - **标准化文件命名公式**：
+      $$\mathbf{\{project\_name\}\_stradpro\_\{suffix\}\_\{YYYYMMDD\_HHmm\}.\{ext\}}$$
+    - **类型后缀与扩展名规格表**：
+      | 导出类型 | 类型后缀（`suffix`） | 扩展名（`ext`） | 文件名范例 |
+      | :--- | :--- | :--- | :--- |
+      | 项目存档包 | `_project` | `.tar` | `Ngamring_Co_stradpro_project_20261121_1244.tar` |
+      | 数据矩阵表 | `_matrix` | `.csv` | `Ngamring_Co_stradpro_matrix_20261121_1244.csv` |
+      | Excel 综合报告 | `_report` | `.xlsx` | `Ngamring_Co_stradpro_report_20261121_1244.xlsx` |
+      | 绘图与脚本包 | `_plot_bundle` | `.zip` | `Ngamring_Co_stradpro_plot_bundle_20261121_1244.zip` |
+      | 古气候 LiPD 容器 | `_lipd` | `.lpd` | `Ngamring_Co_stradpro_lipd_20261121_1244.lpd` |
+      | 地层分列图谱 | `_strat_diagram` | `.png` / `.svg` | `Ngamring_Co_stradpro_strat_diagram_20261121_1244.png` |
+    - **时间戳与前缀优先级**：时间戳精简至分钟（`YYYYMMDD_HHmm`，13 字符），提升科研文件整洁度；项目名按「用户指定 > 底图主名（排除 original/diagram）> 兜底 straditize」三级解析，操作系统非法字符 `[\\/*?:"<>|\s]+` 统一清洗为单下划线。
 23. **柱状图（Bar）单峰中心取数与基线 0 墨迹过滤**：柱状图数字化必须提取水平方波物理正中行
     （`best_rows[len // 2]`）作为单点几何中心，严禁顶底多行同时取数造成单柱双点；在 0 值（基线）处的
     像素控制点 100% 滤除，不得在 0 处伪造锚点。
@@ -577,6 +590,7 @@ digitize 用 ink & ~grid_line_mask & roi_mask
     `plot.line`, `plot.symb`，当组单位为 `%` 时自动注入 `style$scale.percent <- TRUE`。
 26. **导出 CSV 换行符全平台收敛为标准 LF**：无论运行在 Windows、Linux 还是 macOS，所有 CSV 导出
     （单表导出、多 ROI 归档、LiPD 序列化）必须显式指定 `lineterminator="\n"`，杜绝 Windows 平台二次翻译导致 `\r\r\n`。
+27. **结构化自动轮转日志与错误直通不变量**：后端统一落盘到 `%LOCALAPPDATA%/straditize/logs/straditize.log`（单文件 5MB、保留 3 个备份上限 $\le 15\text{MB}$，启动自动清理 >7 天日志）；前端 `ErrorReporter` 捕获全部未捕获异常并通过 RPC `system.logClientError` 直通后端，严禁吞掉异常或以不可定位的纯弹窗静默掩盖；界面统一提供【打开日志文件夹】与【复制诊断信息】入口。
 
 
 ---
