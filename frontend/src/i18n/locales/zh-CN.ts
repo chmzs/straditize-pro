@@ -200,10 +200,14 @@ export const zhCN = {
   'sidebar.selectAll': '全选',
   'sidebar.clearSelection': '取消',
   'sidebar.batchPlotType': '批量形态:',
+  'sidebar.batchRedigitize': '批量重新识别',
+  'sidebar.batchRedigitizeTitle': '对所选全部列重新从图像识别轮廓并提取峰谷拐点',
   'sidebar.batchDigitize': '批量重新取数',
   'sidebar.batchDigitizeTitle': '对所选全部列重新数字化取数',
   'sidebar.batchTurningPoints': '批量提取峰谷',
   'sidebar.batchTurningPointsTitle': '对所选全部列自动提取峰谷控制点',
+  'sidebar.redigitize': '重新识别',
+  'sidebar.redigitizeTitle': '重新从图像识别该列轮廓线与峰谷控制点（保留已有手工点）',
 
   // ===== 检查器 Inspector =====
   'inspector.title': '属性检查器',

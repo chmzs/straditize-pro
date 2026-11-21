@@ -24,12 +24,15 @@ export interface SidebarCallbacks {
   onInsertGapColumn?: (afterTaxaId: string) => void;
   onToggleCollapse?: (collapsed: boolean) => void;
   onDigitizeColumn?: (taxaId: string) => Promise<void> | void;
+  onRedigitizeColumn?: (taxaId: string) => Promise<void> | void;
   onExtractTurningPoints?: (taxaId: string) => Promise<void> | void;
   onDeleteColumn?: (taxaId: string) => Promise<void> | void;
   /** 批量形态修改 */
   onBatchChangePlotType?: (taxaIds: string[], plotType: 'area' | 'bar' | 'line' | 'symbol' | null) => Promise<void> | void;
   /** 批量重新数字化取数 */
   onBatchDigitizeColumns?: (taxaIds: string[]) => Promise<void> | void;
+  /** 批量重新识别轮廓与拐点 */
+  onBatchRedigitizeColumns?: (taxaIds: string[]) => Promise<void> | void;
   /** 批量提取峰谷控制点 */
   onBatchExtractTurningPoints?: (taxaIds: string[]) => Promise<void> | void;
   /** 全量重设所有列轮廓与拐点 */
@@ -197,24 +200,17 @@ export class Sidebar {
       </div>
 
       ${this.data.columns.length > 0 ? `
-        <div class="sidebar-actions-bar" style="display: flex; gap: 4px; align-items: center;">
+        <div class="sidebar-actions-bar" style="display: flex; gap: 6px; align-items: center;">
           <button id="btn-insert-gap-col" class="ui-btn ui-btn--secondary ui-btn--xs" style="flex: 1;" title="${t('sidebar.insertGapTitle')}">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             <span>${t('sidebar.insertGap')}</span>
           </button>
-          <button id="btn-toggle-batch-select" class="ui-btn ${this.selectedColumnIds.size > 0 ? 'ui-btn--primary' : 'ui-btn--secondary'} ui-btn--xs" title="${t('sidebar.batchSelectTitle')}">
+          <button id="btn-toggle-batch-select" class="ui-btn ${this.selectedColumnIds.size > 0 ? 'ui-btn--primary' : 'ui-btn--secondary'} ui-btn--xs" style="flex: 1;" title="${t('sidebar.batchSelectTitle')}">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="9 11 12 14 22 4" />
               <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
             </svg>
             <span>${this.selectedColumnIds.size > 0 ? t('sidebar.batchExit') : t('sidebar.batchSelect')}</span>
-          </button>
-          <button id="btn-sidebar-reset-all-profiles" class="ui-btn-reset" style="padding: 2px 6px; font-size: 10px;" title="重设所有列轮廓与拐点：清空手工调整，重新从图像自动识别全部轮廓线与峰谷拐点">
-            <svg class="ui-btn-reset-icon" viewBox="0 0 16 16" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9L2 6.2"/>
-              <path d="M2 2.5v3.8h3.8"/>
-            </svg>
-            <span>重设轮廓</span>
           </button>
         </div>
         <div class="sidebar-search">
@@ -238,12 +234,9 @@ export class Sidebar {
                 <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs btn-batch-plottype" data-type="symbol" style="font-size: 9px; padding: 1px 4px;">符号</button>
               </div>
             </div>
-            <div style="display: flex; gap: 4px;">
-              <button type="button" id="btn-batch-digitize" class="ui-btn ui-btn--primary ui-btn--xs" style="flex: 1; font-size: 10px; padding: 3px 2px;" title="${t('sidebar.batchDigitizeTitle')}">
-                ${t('sidebar.batchDigitize')}
-              </button>
-              <button type="button" id="btn-batch-turning-points" class="ui-btn ui-btn--secondary ui-btn--xs" style="flex: 1; font-size: 10px; padding: 3px 2px;" title="${t('sidebar.batchTurningPointsTitle')}">
-                ${t('sidebar.batchTurningPoints')}
+            <div>
+              <button type="button" id="btn-batch-redigitize" class="ui-btn ui-btn--primary ui-btn--xs" style="width: 100%; font-size: 10.5px; padding: 5px 4px; font-weight: 600;" title="${t('sidebar.batchRedigitizeTitle')}">
+                ${t('sidebar.batchRedigitize')}
               </button>
             </div>
           </div>
@@ -388,8 +381,8 @@ export class Sidebar {
       <div class="active-column-detail" style="margin-top: 6px; padding: 6px 8px; background: rgba(148,163,184,0.08); border-radius: 4px; border: 1px solid rgba(148,163,184,0.2);">
         ${renderActiveColumnSuspectNotice(col)}
         <div style="display: flex; gap: 4px;">
-          <button type="button" id="btn-col-digitize" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-digitize" data-col-id="${col.id}" style="flex: 1; font-size: 10px; padding: 4px 2px; color: var(--accent-blue); border-color: rgba(2,132,199,0.3); background: rgba(2,132,199,0.06);" title="重新数字化取数此列">
-            重新取数
+          <button type="button" id="btn-col-digitize" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-digitize sidebar-btn-redigitize" data-col-id="${col.id}" style="flex: 1; font-size: 10px; padding: 4px 2px; color: var(--accent-blue); border-color: rgba(2,132,199,0.3); background: rgba(2,132,199,0.06);" title="${t('sidebar.redigitizeTitle')}">
+            ${t('sidebar.redigitize')}
           </button>
           <button type="button" id="btn-extract-turning-points" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-turning-points" data-col-id="${col.id}" style="flex: 1; font-size: 10px; padding: 4px 2px; color: var(--accent-violet); border-color: rgba(139,92,246,0.3); background: rgba(139,92,246,0.06);" title="按几何曲线自动提取峰/谷控制点（保留已有手工点）">
             提取峰谷
@@ -476,12 +469,6 @@ export class Sidebar {
       this.callbacks.onInsertGapColumn?.(this.data.activeTaxaId);
     });
 
-    // 重设所有列轮廓与拐点
-    this.element.querySelector('#btn-sidebar-reset-all-profiles')?.addEventListener('click', async () => {
-      if (!window.confirm('确定清空手工调整，重新从图像自动识别所有属种列的轮廓线与拐点吗？')) return;
-      await this.callbacks.onRedigitizeAllColumns?.(true);
-    });
-
     // 快捷批量多选切换：已选时清空，未选时全选
     this.element.querySelector('#btn-toggle-batch-select')?.addEventListener('click', () => {
       if (this.selectedColumnIds.size > 0) {
@@ -512,15 +499,10 @@ export class Sidebar {
       });
     });
 
-    this.element.querySelector('#btn-batch-digitize')?.addEventListener('click', () => {
+    this.element.querySelector('#btn-batch-redigitize, #btn-batch-digitize')?.addEventListener('click', () => {
       if (this.selectedColumnIds.size > 0) {
-        this.callbacks.onBatchDigitizeColumns?.(Array.from(this.selectedColumnIds));
-      }
-    });
-
-    this.element.querySelector('#btn-batch-turning-points')?.addEventListener('click', () => {
-      if (this.selectedColumnIds.size > 0) {
-        this.callbacks.onBatchExtractTurningPoints?.(Array.from(this.selectedColumnIds));
+        const ids = Array.from(this.selectedColumnIds);
+        (this.callbacks.onBatchRedigitizeColumns || this.callbacks.onBatchDigitizeColumns)?.(ids);
       }
     });
 
@@ -629,10 +611,10 @@ export class Sidebar {
       const taxaId = card.getAttribute('data-taxa-id');
       if (!taxaId) return;
 
-      // 重新取数按钮
-      if (target.closest('.sidebar-btn-digitize, #btn-col-digitize')) {
+      // 重新取数/重新识别按钮
+      if (target.closest('.sidebar-btn-redigitize, .sidebar-btn-digitize, #btn-col-digitize')) {
         e.stopPropagation();
-        this.callbacks.onDigitizeColumn?.(taxaId);
+        (this.callbacks.onRedigitizeColumn || this.callbacks.onDigitizeColumn)?.(taxaId);
         return;
       }
 

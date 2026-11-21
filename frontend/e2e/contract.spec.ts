@@ -249,8 +249,8 @@ test.describe('前后端契约（真实 payload 对 TS 声明）', () => {
   });
 
   test('候选几何：扫描出的 LineCandidate 覆盖其必填字段', async ({ page }) => {
-    // 走真实用户路径（步骤 4 的扫描按钮），而不是直接戳后端
-    await gotoStage(page, 4);
+    // 走真实用户路径（步骤 5 清理的扫描按钮），而不是直接戳后端
+    await gotoStage(page, 5);
     await page.click('#btn-detect-candidates');
 
     await expect

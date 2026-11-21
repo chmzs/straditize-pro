@@ -199,10 +199,14 @@ export const en = {
   'sidebar.selectAll': 'Select All',
   'sidebar.clearSelection': 'Clear',
   'sidebar.batchPlotType': 'Batch Plot Type:',
+  'sidebar.batchRedigitize': 'Batch Re-identify',
+  'sidebar.batchRedigitizeTitle': 'Re-digitize curve profile and extract turning points for all selected columns',
   'sidebar.batchDigitize': 'Batch Digitize',
   'sidebar.batchDigitizeTitle': 'Re-digitize all selected columns',
   'sidebar.batchTurningPoints': 'Batch Turning Points',
   'sidebar.batchTurningPointsTitle': 'Extract turning points for all selected columns',
+  'sidebar.redigitize': 'Re-identify',
+  'sidebar.redigitizeTitle': 'Re-digitize curve profile and extract turning points from image (manual points preserved)',
 
   // ===== Inspector =====
   'inspector.title': 'Property Inspector',
