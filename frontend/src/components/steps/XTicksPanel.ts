@@ -18,6 +18,7 @@ import { resolveColumnAtX } from '../../core/tickRouting';
 import { setGroupCalibMark } from '../canvas/groupCalibMarks';
 // 组色的唯一取色点：画布「组归属条」也 import 这个函数，两处逐字节同色（issue #108）。
 import { groupColorAt } from '../canvas/groupColor';
+import { renderResetButton } from '../../ui/resetButton';
 import {
   exaggerationRange,
   isGroupExaggerated,
@@ -558,14 +559,18 @@ export function render(data: DiagramData): string {
       <!-- 阶段提交按钮：由 Inspector 在挂载后提到滚动容器之外（data-role="step-primary-action"）。
            贴在滚动区里的 sticky 按钮必然盖住它下方的内容：1280×720 实测与分组按钮的矩形相交，
            用户既看不见也点不着。挪进 .inspector-footer 后既恒定可见，又与任何控件不相交。 -->
-      <button id="btn-apply-xticks-next" data-role="step-primary-action" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: var(--font-size-md);">
+      <button id="btn-apply-xticks-next" data-role="step-primary-action" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: var(--font-size-md); font-weight: 600;">
         ${t('step6.next')}
       </button>
 
-      <!-- 重设本步 -->
-      <button id="btn-reset-step6-xticks" data-role="step-secondary-action" class="ui-btn ui-btn--quiet ui-btn--sm" style="width: 100%; margin-top: 6px; font-size: 10px; color: var(--text-muted);" title="清空全部已标定的列 X 刻度，回到未标定状态">
-        重设本步：清空全部列刻度
-      </button>
+      <!-- 重设本步 (图2样式) -->
+      <div style="display: flex; justify-content: center; margin-top: 8px;">
+        ${renderResetButton({
+          id: 'btn-reset-step6-xticks',
+          title: '清空全部已标定的列 X 刻度，回到未标定状态',
+          label: '重设列刻度',
+        })}
+      </div>
     </div>
   `;
 }

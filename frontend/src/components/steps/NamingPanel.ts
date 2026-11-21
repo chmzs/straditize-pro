@@ -4,6 +4,7 @@ import { t } from '../../i18n';
 import { notifyError } from '../../ui/feedback';
 import { renderSplitLostXTicksNotice } from './XTicksDroppedNotice';
 import { renderSplitSuspectNotice } from './SuspectBlockNotice';
+import { renderResetButton } from '../../ui/resetButton';
 
 export const step = 4;
 export const title = '4. 自动分列与属种命名';
@@ -88,14 +89,18 @@ export function render(data: DiagramData): string {
       </details>
 
       <!-- 阶段提交按钮 -->
-      <button id="btn-apply-naming-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+      <button id="btn-apply-naming-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px; font-weight: 600;">
         ${t('step4.next')}
       </button>
 
-      <!-- 重设本步 -->
-      <button id="btn-reset-step4-split" class="ui-btn ui-btn--quiet ui-btn--sm" style="width: 100%; margin-top: 6px; font-size: 10px; color: var(--text-muted);" title="清空全部已切分的属种分列线并重新自动切分">
-        重设本步：清空并重新分列
-      </button>
+      <!-- 重设本步 (图2样式) -->
+      <div style="display: flex; justify-content: center; margin-top: 8px;">
+        ${renderResetButton({
+          id: 'btn-reset-step4-split',
+          title: '清空全部已切分的属种分列线并重新自动切分',
+          label: '重新切分列',
+        })}
+      </div>
     </div>
   `;
 }

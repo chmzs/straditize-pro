@@ -38,6 +38,9 @@ export interface InspectorCallbacks {
   onStartLineFix?: (mode: 'erase' | 'restore') => void;
   /** 清空全部人工修正笔迹并重新合成清理掩膜。 */
   onClearLineFix?: () => void;
+  onConfirmAllCandidates?: () => Promise<void>;
+  onRevertAllCandidates?: () => Promise<void>;
+  onRedigitizeAllColumns?: (resetManual?: boolean) => Promise<void>;
   /** 启动 Y 轴两点标定（由画布收点，再弹窗收真实值）。 */
   onStartYCalibration?: () => void;
   /** 手动输入两点数值重新标定（兜底：不使用画布点选）。 */

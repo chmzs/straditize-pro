@@ -4,6 +4,7 @@ import { calUnitLabel } from '../../core/calUnit';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
 import { notifyError } from '../../ui/feedback';
+import { renderResetButton } from '../../ui/resetButton';
 
 export const step = 3;
 export const title = '3. Y 轴物理标定';
@@ -122,14 +123,18 @@ export function render(data: DiagramData): string {
       </div>
 
       <!-- 推进到 Step 4 -->
-      <button id="btn-apply-ycalib-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+      <button id="btn-apply-ycalib-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px; font-weight: 600;">
         ${t('step3.next')}
       </button>
 
-      <!-- 重设本步 -->
-      <button id="btn-reset-step3-ycalib" class="ui-btn ui-btn--quiet ui-btn--sm" style="width: 100%; margin-top: 6px; font-size: 10px; color: var(--text-muted);" title="重设本步：清空两点像素与标定参数">
-        重设本步：清空两点标定
-      </button>
+      <!-- 重设本步 (图2样式) -->
+      <div style="display: flex; justify-content: center; margin-top: 8px;">
+        ${renderResetButton({
+          id: 'btn-reset-step3-ycalib',
+          title: '清空两点像素与标定参数，回到未标定状态',
+          label: '重设标定',
+        })}
+      </div>
     </div>
   `;
 }

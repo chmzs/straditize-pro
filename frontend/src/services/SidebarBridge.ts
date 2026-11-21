@@ -239,6 +239,21 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
         reportBackendFailure('自动提取峰谷', err);
       }
     },
+    onRedigitizeAllColumns: async (resetManual: boolean = false) => {
+      try {
+        const res = await p.rpcClient.redigitizeAllColumns(resetManual);
+        if (res && res.success) {
+          const freshData = await p.rpcClient.getDiagramData();
+          p.canvasComponent.loadNewDiagram(freshData);
+          p.getSidebar()?.updateData(p.canvasComponent.data);
+          p.getInspector()?.updateData(p.canvasComponent.data);
+          p.canvasComponent.requestRender();
+          p.setHudNotice(`已重设全部 ${res.columns_count} 列的轮廓线与拐点。`, 4000);
+        }
+      } catch (err) {
+        reportBackendFailure('重设所有列轮廓与拐点', err);
+      }
+    },
     onDeleteColumn: async (taxaId: string) => {
       const col = p.canvasComponent.data.columns.find((c) => c.id === taxaId);
       if (!col || p.canvasComponent.data.columns.length <= 1) return;

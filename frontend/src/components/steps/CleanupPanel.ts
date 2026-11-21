@@ -2,9 +2,7 @@ import { DiagramData, LineCandidate } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
 import { axisWarningHeadline, axisWarningNote } from '../../core/axisWarnings';
-// 勾选状态与文案都在 `core/detectOrientation.ts`（纯逻辑，可脱浏览器跑判据）。
-// 状态住在模块级而不是 `render()` 的局部变量：本面板每次 `applyCleanupState`
-// 之后都会整块重建，局部状态会在重建时被重置回默认值。
+import { renderResetButton } from '../../ui/resetButton';
 import {
   countByOrientation,
   getDetectOrientation,
@@ -16,11 +14,6 @@ import {
 export const step = 5;
 export const title = '5. 干扰清理';
 
-/**
- * 把后端统计翻译成一句人话。
- *
- * 数字全部来自后端返回的 `cleanup_stats`，前端不估算、不四舍五入成整数糊弄。
- */
 function statsLine(data: DiagramData): string {
   const s = data.cleanup_stats;
   if (!s) return '尚未计算。点"重新检测"或调整几何后自动更新。';
@@ -51,8 +44,6 @@ export function render(data: DiagramData): string {
   const orientationCounts = countByOrientation(cands);
   const orientationHint = orientationNotice(orientationCounts, orientation);
 
-  // 统一厚度输入框的默认值：优先取选中几何的实际宽度，否则取出现次数最多的宽度。
-  // 这样用户点一条线再看侧栏，输入框里就是那条线的真实厚度。
   const suggestedThickness = (() => {
     const sel = cands.find((c) => c.id === selectedId);
     if (sel) return sel.width;
@@ -87,15 +78,15 @@ export function render(data: DiagramData): string {
            style="display:flex;align-items:center;gap:5px;padding:3px 4px;border-radius:3px;margin-bottom:2px;
                   background:${isSelected ? 'rgba(56,189,248,0.18)' : 'transparent'};
                   border:1px solid ${isSelected ? 'var(--accent-blue)' : 'transparent'};">
-        <span title="在水印图上选中并拖动编辑" class="btn-select-geometry" data-cand-id="${c.id}"
+        <span title="在图上选中并拖动编辑" class="btn-select-geometry" data-cand-id="${c.id}"
               style="cursor:pointer;font-family:monospace;color:var(--text-muted);flex:1;font-size:9.5px;">
-          ${c.axis === 'h' ? '↔' : ''} ${range} <span style="opacity:.7;">(${c.width}px, ${src})</span>
+          ${c.axis === 'h' ? '[横]' : '[竖]'} ${range} <span style="opacity:.7;">(${c.width}px, ${src})</span>
         </span>
         ${badge}
-        <button class="btn-toggle-geometry" data-cand-id="${c.id}" data-next="${isRemoved ? 'candidate' : 'removed'}"
+        <button class="btn-toggle-geometry ui-btn ui-btn--xs ${isRemoved ? 'ui-btn--quiet' : 'ui-btn--primary'}" data-cand-id="${c.id}" data-next="${isRemoved ? 'candidate' : 'removed'}"
                 style="font-size:9px;padding:1px 5px;">${isRemoved ? '撤回' : '确认去除'}</button>
-        <button class="btn-delete-geometry" data-cand-id="${c.id}"
-                style="font-size:9px;padding:1px 4px;">删除</button>
+        <button class="btn-delete-geometry ui-btn ui-btn--xs ui-btn--quiet" data-cand-id="${c.id}"
+                style="font-size:9px;padding:1px 4px;color:var(--accent-red);">删除</button>
       </div>`;
   };
 
@@ -103,9 +94,18 @@ export function render(data: DiagramData): string {
     <div class="step-panel" data-step="5" data-selected-cand-id="${selectedId ?? ''}"
          data-horizontal-candidates="${orientationCounts.horizontal}"
          data-vertical-candidates="${orientationCounts.vertical}">
-      <div class="step-title">${t('step5.title')}</div>
-      <div class="step-desc">
-        ${t('step5.forRoi')}<strong style="color: var(--accent-blue);">${roiName}</strong>
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;">
+        <div>
+          <div class="step-title" style="margin-bottom:2px;">${t('step5.title')}</div>
+          <div class="step-desc" style="margin-bottom:0;">
+            ${t('step5.forRoi')}<strong style="color: var(--accent-blue);">${roiName}</strong>
+          </div>
+        </div>
+        ${renderResetButton({
+          id: 'btn-reset-step5-cleanup',
+          title: '清空本步全部清理编辑（几何、排除区与笔迹）并重新自动检测',
+          label: '重置',
+        })}
       </div>
 
       ${
@@ -129,47 +129,43 @@ export function render(data: DiagramData): string {
             </div>`
       }
 
-      <!-- 1. 检测：唯一条目（无"灵敏度"旋钮，档位模型已下线） -->
-      <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border-color);">
-        <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px; color: var(--text-primary);">① 检测干扰线</div>
-        <div style="display: flex; gap: 14px; align-items: center; margin-bottom: 6px;">
-          <label for="chk-detect-horizontal"
-                 title="贯穿 ROI 的横向坐标线（Kind A）"
-                 style="display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--text-secondary); cursor: pointer;">
-            <input id="chk-detect-horizontal" type="checkbox" ${orientation.horizontal ? 'checked' : ''}
-                   style="margin: 0; cursor: pointer;" />
-            检测横线
-          </label>
-          <label for="chk-detect-vertical"
-                 title="竖线含贯穿网格线与列内短竖线（Kind B / Kind C）"
-                 style="display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--text-secondary); cursor: pointer;">
-            <input id="chk-detect-vertical" type="checkbox" ${orientation.vertical ? 'checked' : ''}
-                   style="margin: 0; cursor: pointer;" />
-            检测竖线
-          </label>
+      <!-- 1. 检测与候选几何卡片 -->
+      <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 8px; border: 1px solid var(--border-color);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <div style="font-size: 11px; font-weight: 700; color: var(--text-primary);">① 干扰线识别与清单</div>
+          <span style="font-size: 10px; color: var(--text-muted);">共 ${cands.length} 条 · <strong style="color:var(--accent-red);">${selectedCount} 已确认</strong></span>
         </div>
-        <button id="btn-detect-candidates" class="ui-btn ui-btn--secondary" style="width: 100%; font-size: 11px; padding: 5px;">
-          ${t('step5.rescan')}
-        </button>
-        <div style="font-size: 9.5px; color: var(--text-muted); line-height: 1.45; margin-top: 5px;">
-          <strong>横线</strong>是贯穿 ROI 的坐标线；<strong>竖线</strong>含<strong>贯穿网格线</strong>与
-          <strong>列内短竖线</strong>（刻度齿/基线），两者共用一个开关。取消勾选只影响
-          <strong>下一次检测</strong>，已检出的候选不会被删掉。
-        </div>
-        <div id="cleanup-orientation-hint" class="cleanup-orientation-hint"
-             style="font-size: 10px; color: var(--status-warning); line-height: 1.45; margin-top: 5px;">${orientationHint}</div>
-        <div style="font-size: 10px; color: var(--text-muted); line-height: 1.45; margin-top: 6px;">
-          检测出的几何一律为<strong style="color:var(--status-warning);">待确认</strong>：不点"确认去除"就不会动任何一个像素。
-        </div>
-      </div>
 
-      <!-- 2. 几何清单：确认 / 撤回 / 选中编辑 / 删除 -->
-      <div class="inspector-section" style="margin-bottom: 10px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 11px; font-weight: 700;">② ${t('step5.candidates', { count: cands.length })}</span>
-          <span style="font-size: 10px; color: var(--text-muted);">已确认 ${selectedCount}</span>
+        <div style="display: flex; justify-content:space-between; align-items: center; margin-bottom: 6px;">
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <label for="chk-detect-horizontal" title="贯穿 ROI 的横向坐标线（Kind A）" style="display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-secondary); cursor: pointer;">
+              <input id="chk-detect-horizontal" type="checkbox" ${orientation.horizontal ? 'checked' : ''} style="margin: 0; cursor: pointer;" />
+              横线
+            </label>
+            <label for="chk-detect-vertical" title="竖线含贯穿网格线与列内短竖线（Kind B / Kind C）" style="display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-secondary); cursor: pointer;">
+              <input id="chk-detect-vertical" type="checkbox" ${orientation.vertical ? 'checked' : ''} style="margin: 0; cursor: pointer;" />
+              竖线
+            </label>
+          </div>
+          <button id="btn-detect-candidates" class="ui-btn ui-btn--secondary ui-btn--xs" style="font-size: 10px; padding: 2px 8px;">
+            ${t('step5.rescan')}
+          </button>
         </div>
-        <div id="cleanup-candidates-list" style="max-height: 132px; overflow-y: auto; font-size: 10px; border: 1px solid var(--border-color); border-radius: 4px; padding: 4px; background: var(--bg-card);">
+
+        ${orientationHint ? `<div id="cleanup-orientation-hint" class="cleanup-orientation-hint" style="font-size: 9.5px; color: var(--status-warning); line-height: 1.4; margin-bottom: 6px;">${orientationHint}</div>` : ''}
+
+        <!-- 批量确认/撤回工具条 -->
+        <div style="display: flex; gap: 4px; margin-bottom: 6px;">
+          <button id="btn-confirm-all-candidates" class="ui-btn ui-btn--xs" style="flex: 1; font-size: 10px; padding: 3px 6px; background: rgba(239,68,68,0.12); color: var(--accent-red); border: 1px solid rgba(239,68,68,0.35);" title="将清单中的全部干扰线确认为实际剔除">
+            全部确认去除
+          </button>
+          <button id="btn-revert-all-candidates" class="ui-btn ui-btn--xs ui-btn--secondary" style="flex: 1; font-size: 10px; padding: 3px 6px;" title="全部撤回为待确认（不剔除）">
+            全部撤回
+          </button>
+        </div>
+
+        <!-- 候选列表 -->
+        <div id="cleanup-candidates-list" style="max-height: 120px; overflow-y: auto; font-size: 10px; border: 1px solid var(--border-color); border-radius: 4px; padding: 4px; background: var(--bg-card); margin-bottom: 6px;">
           ${
             cands.length === 0
               ? `<div style="color: var(--text-muted); text-align: center; padding: 8px;">${t('step5.noCandidates')}</div>`
@@ -177,91 +173,64 @@ export function render(data: DiagramData): string {
           }
         </div>
 
-        <!-- 3. 手动添加：在图上拖拽，不再输入四至值 -->
-        <div style="display:flex; gap:6px; margin-top:6px;">
-          <button id="btn-add-horizontal-geometry" class="ui-btn ui-btn--secondary" style="flex:1; font-size:10px; padding:4px;">＋横向（图上拖出）</button>
-          <button id="btn-add-vertical-geometry" class="ui-btn ui-btn--secondary" style="flex:1; font-size:10px; padding:4px;">＋竖向（图上拖出）</button>
-        </div>
-        <div style="font-size:9.5px;color:var(--text-muted);line-height:1.45;margin-top:5px;">
-          点按钮后在图上<strong>按住左键拖出一段</strong>即可。选中几何后可整体拖动、
-          拖<strong>白色方块</strong>改长度、拖<strong>青色圆点</strong>改厚度、方向键 1px 精调、按 Delete 删除。
+        <!-- 手动画线与厚度微调 -->
+        <div style="display:flex; gap:4px; margin-bottom:4px;">
+          <button id="btn-add-horizontal-geometry" class="ui-btn ui-btn--secondary ui-btn--xs" style="flex:1; font-size:9.5px; padding:3px;" title="在画布上按住左键拖出横向清理矩形（默认直接剔除）">＋横向(拖出)</button>
+          <button id="btn-add-vertical-geometry" class="ui-btn ui-btn--secondary ui-btn--xs" style="flex:1; font-size:9.5px; padding:3px;" title="在画布上按住左键拖出竖向清理矩形（默认直接剔除）">＋竖向(拖出)</button>
         </div>
 
-        <!-- 4. 统一厚度：先用测量 (M) 量出真实粗细，填进来统一 -->
-        <div style="display:flex; gap:6px; margin-top:8px; align-items:center;">
-          <label for="cleanup-thickness-input" style="font-size:10px;color:var(--text-secondary);white-space:nowrap;">统一厚度</label>
+        <div style="display:flex; gap:4px; align-items:center;">
+          <span style="font-size:9.5px;color:var(--text-secondary);white-space:nowrap;">统一厚度</span>
           <input id="cleanup-thickness-input" type="number" min="1" max="500" step="1" value="${suggestedThickness}"
-                 style="width:52px;font-size:10px;padding:3px 4px;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-color);border-radius:4px;" />
-          <span style="font-size:10px;color:var(--text-muted);">px</span>
-          <button id="btn-apply-thickness-selected" class="ui-btn ui-btn--secondary" style="flex:1;font-size:10px;padding:4px;" ${selectedId ? '' : 'disabled'}>应用到选中</button>
-          <button id="btn-apply-thickness-all" class="ui-btn ui-btn--secondary" style="flex:1;font-size:10px;padding:4px;">应用到全部</button>
-        </div>
-        <div style="font-size:9.5px;color:var(--text-muted);line-height:1.45;margin-top:4px;">
-          用工具栏<strong>测量 (M)</strong>在图上量出干扰线的实际粗细，填进来即可统一改成该值（中心行不动）。
+                 style="width:42px;font-size:10px;padding:2px 3px;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-color);border-radius:4px;" />
+          <span style="font-size:9.5px;color:var(--text-muted);">px</span>
+          <button id="btn-apply-thickness-selected" class="ui-btn ui-btn--secondary ui-btn--xs" style="flex:1;font-size:9.5px;padding:2px 4px;" ${selectedId ? '' : 'disabled'}>改选中</button>
+          <button id="btn-apply-thickness-all" class="ui-btn ui-btn--secondary ui-btn--xs" style="flex:1;font-size:9.5px;padding:2px 4px;">改全部</button>
         </div>
       </div>
 
-      <!-- 4. 颜色图例：与后端 overlay_legend 一致 -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; font-size: 10px; margin-bottom: 10px;">
-        <span><i style="display:inline-block;width:9px;height:9px;background:var(--overlay-pending);border-radius:2px;margin-right:4px;"></i>待确认（不剔除）</span>
-        <span><i style="display:inline-block;width:9px;height:9px;background:var(--accent-red);border-radius:2px;margin-right:4px;"></i>已确认（实际剔除）</span>
-        <span><i style="display:inline-block;width:9px;height:9px;background:var(--overlay-excluded);border-radius:2px;margin-right:4px;"></i>排除区（绝对剔除）</span>
-        <span><i style="display:inline-block;width:9px;height:9px;background:var(--overlay-kept-bg);border:1px solid var(--overlay-kept-border);border-radius:2px;margin-right:4px;"></i>保留墨迹</span>
-      </div>
+      <!-- 2. 局部修正与排除区卡片 -->
+      <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 8px; border: 1px solid var(--border-color);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <div style="font-size: 11px; font-weight: 700; color: var(--text-primary);">② 排除区与人工修正</div>
+          <span style="font-size: 10px; color: var(--text-muted);">${exclusionCount} 排除区 · ${strokeCount} 笔迹</span>
+        </div>
 
-      <!-- 5. 局部修正与排除区 -->
-      <div class="inspector-section" style="margin-bottom: 10px;">
-        <div style="font-size: 11px; font-weight: 700; margin-bottom: 6px;">③ ${t('step5.exclusions', { count: exclusionCount })}</div>
-        <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-          <button id="btn-add-exclusion-rect" class="ui-btn ui-btn--secondary" style="flex: 1; font-size: 10.5px; padding: 5px;">
+        <div style="display: flex; gap: 4px; margin-bottom: 6px;">
+          <button id="btn-add-exclusion-rect" class="ui-btn ui-btn--secondary ui-btn--xs" style="flex: 1; font-size: 10px; padding: 4px;" title="框定绝对不取数的干扰遮挡区">
             ⬚ ${t('step5.addExclusion')}
           </button>
-        </div>
-        <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-          <button id="btn-trigger-linefix" class="ui-btn ui-btn--secondary" style="flex: 1; font-size: 10.5px; padding: 5px;"
-                  title="按住左键涂抹，把被误标成线的数据擦回来">
+          <button id="btn-trigger-linefix" class="ui-btn ui-btn--secondary ui-btn--xs" style="flex: 1; font-size: 10px; padding: 4px;" title="按住左键涂抹，把被误标成线的数据擦回来">
             擦掉误标
           </button>
-          <button id="btn-linefix-restore" class="ui-btn ui-btn--secondary" style="flex: 1; font-size: 10.5px; padding: 5px;"
-                  title="按住左键涂抹，手工补上算法漏掉的线">
+          <button id="btn-linefix-restore" class="ui-btn ui-btn--secondary ui-btn--xs" style="flex: 1; font-size: 10px; padding: 4px;" title="按住左键涂抹，手工补上算法漏掉的线">
             补回漏标
           </button>
         </div>
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px;">
-          <span style="font-size: 10px; color: var(--text-secondary);">
-            人工修正笔迹: <strong>${strokeCount}</strong> 条
+
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:9.5px; color:var(--text-muted);">
+            按 <strong>B</strong> 键切换二值遮罩预览（红=剔除，白=保留）
           </span>
-          <button id="btn-linefix-clear" class="ui-btn ui-btn--secondary"
-                  style="font-size: 9.5px; padding: 2px 6px; ${strokeCount ? '' : 'opacity: 0.45; pointer-events: none;'}"
+          <button id="btn-linefix-clear" class="ui-btn ui-btn--quiet ui-btn--xs"
+                  style="font-size: 9.5px; padding: 1px 5px; ${strokeCount ? '' : 'opacity: 0.45; pointer-events: none;'}"
                   ${strokeCount ? '' : 'disabled'}>
             清空笔迹
           </button>
         </div>
-        <div style="font-size:10px;color:var(--text-muted);line-height:1.45;">
-          几何用于整条横/竖线；画笔只修补几何漏标或误标的<strong>局部像元</strong>，不替代几何。
-          按键盘 <strong>B</strong> 叠加查看掩膜（<span style="color:var(--overlay-removed);">红色</span>=实际剔除的像素，<span style="color:var(--overlay-kept-text);">白色</span>=保留的墨迹）。
-        </div>
       </div>
 
-      <!-- 6. 统计（后端真实数字） -->
-      <div class="inspector-section" style="padding: 7px 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border-color);">
-        <div style="font-size: 11px; font-weight: 700; margin-bottom: 4px;">④ 本次清理统计</div>
-        <div id="cleanup-stats" style="font-size: 10px; color: var(--text-secondary); line-height: 1.5;">
+      <!-- 3. 清理统计卡片 -->
+      <div class="inspector-section" style="padding: 7px 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 8px; border: 1px solid var(--border-color);">
+        <div style="font-size: 11px; font-weight: 700; margin-bottom: 3px;">③ 本次清理统计</div>
+        <div id="cleanup-stats" style="font-size: 10px; color: var(--text-secondary); line-height: 1.4;">
           ${statsLine(data)}
         </div>
-        <button id="btn-clear-cleanup-edits" class="ui-btn ui-btn--quiet ui-btn--sm" style="width:100%; margin-top:6px; font-size:10px; padding:4px; color: var(--text-muted);" title="清空本步全部检测候选线、人工排除区与笔迹修正">
-          重设本步：清空全部几何 / 排除区 / 笔迹
-        </button>
       </div>
 
-      <!-- 7. 推进到下一步 -->
-      <button id="btn-apply-cleanup-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+      <!-- 4. 推进到下一步 -->
+      <button id="btn-apply-cleanup-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px; font-weight: 600;">
         ${t('step5.next')}
-      </button>
-
-      <!-- 重设本步 -->
-      <button id="btn-reset-step5-cleanup" class="ui-btn ui-btn--quiet ui-btn--sm" style="width: 100%; margin-top: 6px; font-size: 10px; color: var(--text-muted);" title="清空本步全部清理编辑（几何、排除区与笔迹）并重新自动检测">
-        重设本步：清空清理并重新检测
       </button>
     </div>
   `;
@@ -270,8 +239,7 @@ export function render(data: DiagramData): string {
 export function mount(root: HTMLElement, ctx: StepContext): void {
   const panel = root.querySelector('.step-panel') as HTMLElement | null;
   const hintBox = root.querySelector('#cleanup-orientation-hint') as HTMLElement | null;
-  // 当前列表里各类候选的条数由 `render()` 写进面板的 data 属性：勾选变化要
-  // 立刻更新提示，而 mount 手里没有 DiagramData。
+
   const refreshHint = (): void => {
     if (!hintBox || !panel) return;
     hintBox.textContent = orientationNotice(
@@ -292,9 +260,17 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     refreshHint();
   });
 
-  // 检测（单一入口）：勾选状态作为参数送到后端，只影响这一次检测。
+  // 检测（单一入口）
   root.querySelector('#btn-detect-candidates')?.addEventListener('click', () => {
     ctx.onDetectLineCandidates?.(toDetectPayload(getDetectOrientation()));
+  });
+
+  // 批量确认 / 撤回
+  root.querySelector('#btn-confirm-all-candidates')?.addEventListener('click', () => {
+    ctx.onConfirmAllCandidates?.();
+  });
+  root.querySelector('#btn-revert-all-candidates')?.addEventListener('click', () => {
+    ctx.onRevertAllCandidates?.();
   });
 
   // 手动添加：进入画布拖拽模式
@@ -305,7 +281,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onAddLineGeometry?.('v');
   });
 
-  // 选中（在图上高亮并可拖动）
+  // 选中
   root.querySelectorAll('.btn-select-geometry').forEach((button) => {
     button.addEventListener('click', () => {
       const id = (button as HTMLElement).dataset.candId;
@@ -313,7 +289,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     });
   });
 
-  // 确认 / 撤回
+  // 单条确认 / 撤回
   root.querySelectorAll('.btn-toggle-geometry').forEach((button) => {
     button.addEventListener('click', () => {
       const el = button as HTMLElement;
@@ -336,8 +312,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onAddExclusionRect?.();
   });
 
-  // 局部像元修正画笔：擦掉误标 / 补回漏标 两种笔，外加只清笔迹
-  // （与下方「清空本步全部几何/排除区/笔迹」区分开——那个会连几何一起清）。
+  // 局部修正笔刷
   root.querySelector('#btn-trigger-linefix')?.addEventListener('click', () => {
     ctx.onStartLineFix?.('erase');
   });
@@ -348,26 +323,18 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onClearLineFix?.();
   });
 
-  // 统一厚度（P4）：中心行不动，只改带宽
+  // 统一厚度
   const thicknessInput = root.querySelector('#cleanup-thickness-input') as HTMLInputElement | null;
   const selectedCandId =
     root.querySelector('.step-panel')?.getAttribute('data-selected-cand-id') || undefined;
   const applyThickness = (candidateId?: string) => {
     const raw = Number(thicknessInput?.value);
     if (!Number.isFinite(raw) || raw < 1 || raw > 500) {
-      // 越界不静默：把输入框标红，用户一眼知道是输入的问题。
-      //
-      // 必须带 `!important`。日间模式有一条"强兜底安全网"
-      // （`style.css`：`body.theme-light input[type="number"] { border-color: … !important }`），
-      // 普通内联样式会被它压掉 —— 标红写了但**用户看不到**。内联的 `!important`
-      // 优先级高于作者样式表的 `!important`，这是唯一能穿透那条安全网的写法。
       if (thicknessInput) {
         thicknessInput.style.setProperty('border-color', '#ef4444', 'important');
       }
       return;
     }
-    // 复位用 removeProperty：连 `!important` 优先级一起清掉，
-    // 让样式表（含主题兜底）重新接管，而不是留一个普通内联值。
     if (thicknessInput) thicknessInput.style.removeProperty('border-color');
     ctx.onSetLineThickness?.(Math.round(raw), candidateId);
   };
@@ -378,11 +345,6 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     applyThickness(undefined);
   });
 
-  // 清空本步编辑
-  root.querySelector('#btn-clear-cleanup-edits')?.addEventListener('click', () => {
-    ctx.onClearCleanupEdits?.();
-  });
-
   // 重设本步
   root.querySelector('#btn-reset-step5-cleanup')?.addEventListener('click', async () => {
     if (!window.confirm('确定清空本步全部清理编辑（几何、排除区与笔迹）并重新自动检测吗？')) return;
@@ -390,6 +352,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onDetectLineCandidates?.(toDetectPayload(getDetectOrientation()));
   });
 
+  // 推进到下一步（核心修复：若未确认则自动全部确认为剔除，并触发全列轮廓与拐点重算）
   const applyBtn = root.querySelector('#btn-apply-cleanup-next') as HTMLButtonElement | null;
   applyBtn?.addEventListener('click', async () => {
     if (applyBtn.disabled) return;
@@ -397,8 +360,13 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     applyBtn.disabled = true;
     applyBtn.style.opacity = '0.75';
     applyBtn.style.cursor = 'wait';
-    applyBtn.innerHTML = '正在推进到列标定，请稍候...';
+    applyBtn.innerHTML = '正在应用清理并更新属种轮廓...';
     try {
+      // 1. 若用户未确认任何一项，自动将当前待确认候选线全部设为实际剔除
+      await ctx.onConfirmAllCandidates?.();
+      // 2. 核心：在离开本步前，全量重新从去除横线后的二值图中提取所有列的轮廓线与拐点
+      await ctx.onRedigitizeAllColumns?.(false);
+      // 3. 推进到步骤 6
       await ctx.onAdvanceWorkflowStage?.(6);
     } finally {
       applyBtn.disabled = false;

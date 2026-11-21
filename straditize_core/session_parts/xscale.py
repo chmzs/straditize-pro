@@ -28,8 +28,22 @@ __all__ = [
 SCALE_TYPES: tuple[str, str] = ("linear", "log")
 
 
-def resolve_axis_stroke(col: dict[str, Any] | None, group: dict[str, Any] | None) -> float:
-    """轴线粗解析：**列级覆盖 > 组级初值 > 缺省 5**（ARCHITECTURE §6.4）。
+#: 轴线粗的兜底值（列级与组级都没设时用）。单位 px。
+#:
+#: 为什么是 2 而不是 5：5 是"轴线看起来有多粗"的直觉值，而这条兜底真正要回答的是
+#: **0 点该放在列左缘右边几个像素**。实测四张图（S1 / Gahai / beginner / fig3）的
+#: 轴线核心 1~4px，其中"未写轴粗"的工程（`output/zhou_2024_gahai`）实际放大原点在
+#: `startX + 1`；兜底 5 会把 0 点推右 4px，`inner_dist` 被压到 1~2px，
+#: `(outer−z0)/(inner−z0)` 从 4.18 涨到 12.5，`FLAG_EXAGG_RATIO` 483 行里误报 449。
+#: 换句话说兜底值偏大时，**错的是零点的锚、不是曲线**，而误差会以放大倍率的形状
+#: 出现在比值上。取 2 = 「轴线细（1~2px）+ 留 1px 抗锯齿余量」，是"量不出时最不坏"的猜测。
+DEFAULT_AXIS_STROKE_PX = 2.0
+
+
+def resolve_axis_stroke(
+    col: dict[str, Any] | None, group: dict[str, Any] | None
+) -> float:
+    """轴线粗解析：**列级覆盖 > 组级初值 > 缺省 2**（ARCHITECTURE §6.4）。
 
     组的 `axis_stroke_px` 是初值（分列时 `measure_axis_stroke` 实测中位数，或用户在手填）；
     列的 `axis_stroke_px` 只放**用户显式覆盖** —— 分列从不写它，所以它一旦存在就是人填的值，
@@ -44,16 +58,17 @@ def resolve_axis_stroke(col: dict[str, Any] | None, group: dict[str, Any] | None
         col_stroke = float(raw_col) if raw_col is not None else None
     except (TypeError, ValueError):
         col_stroke = None
-    if col_stroke is not None and col_stroke > 0:
+    # 0 合法：0 点落在列左缘（绿线与红线重合）。负数/非数值才算未覆盖。
+    if col_stroke is not None and col_stroke >= 0:
         return col_stroke
     raw_group = (group or {}).get("axis_stroke_px")
     try:
         group_stroke = float(raw_group) if raw_group is not None else None
     except (TypeError, ValueError):
         group_stroke = None
-    if group_stroke is not None and group_stroke > 0:
+    if group_stroke is not None and group_stroke >= 0:
         return group_stroke
-    return 5.0
+    return DEFAULT_AXIS_STROKE_PX
 
 
 def normalize_scale_type(scale_type: Any) -> str:

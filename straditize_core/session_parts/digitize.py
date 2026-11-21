@@ -969,9 +969,15 @@ class DigitizeSessionMixin:
         removed_hl_bands = []
         for cand in getattr(self, "line_candidates", []):
             if cand.get("axis") == "h" and cand.get("status") == "removed":
-                cy = int(round(float(cand.get("y", 0))))
-                th = int(round(float(cand.get("thickness", 3))))
-                removed_hl_bands.append((cy - th // 2 - 1, cy + th // 2 + 1))
+                geom = cand.get("geometry")
+                w = int(round(float(cand.get("width", cand.get("thickness", 3)))))
+                if isinstance(geom, dict):
+                    y_min = min(geom.get("y0", 0), geom.get("y1", 0))
+                    y_max = max(geom.get("y0", 0), geom.get("y1", 0))
+                    removed_hl_bands.append((int(y_min) - w // 2 - 1, int(y_max) + w // 2 + 1))
+                else:
+                    cy = int(round(float(cand.get("y", 0))))
+                    removed_hl_bands.append((cy - w // 2 - 1, cy + w // 2 + 1))
 
         def _in_removed_hl(row_val: int) -> bool:
             return any(b0 <= row_val <= b1 for b0, b1 in removed_hl_bands)
@@ -1504,9 +1510,15 @@ class DigitizeSessionMixin:
                 removed_hl_bands = []
                 for cand in getattr(self, "line_candidates", []):
                     if cand.get("axis") == "h" and cand.get("status") == "removed":
-                        cy = int(round(float(cand.get("y", 0))))
-                        th = int(round(float(cand.get("thickness", 3))))
-                        removed_hl_bands.append((cy - th // 2 - 1, cy + th // 2 + 1))
+                        geom = cand.get("geometry")
+                        w = int(round(float(cand.get("width", cand.get("thickness", 3)))))
+                        if isinstance(geom, dict):
+                            y_min = min(geom.get("y0", 0), geom.get("y1", 0))
+                            y_max = max(geom.get("y0", 0), geom.get("y1", 0))
+                            removed_hl_bands.append((int(y_min) - w // 2 - 1, int(y_max) + w // 2 + 1))
+                        else:
+                            cy = int(round(float(cand.get("y", 0))))
+                            removed_hl_bands.append((cy - w // 2 - 1, cy + w // 2 + 1))
 
                 def _in_removed_hl(row_val: int) -> bool:
                     return any(b0 <= row_val <= b1 for b0, b1 in removed_hl_bands)
@@ -1547,6 +1559,36 @@ class DigitizeSessionMixin:
 
         self._record_history("Extract turning points")
         return {"success": True, "columns_updated": updated}
+
+    def redigitize_all_columns(self, reset_manual: bool = False) -> dict[str, Any]:
+        """Redigitize all columns and regenerate turning control points based on the latest mask.
+
+        If reset_manual is True, wipes manual control points before regeneration.
+        """
+        if not getattr(self, "columns", None):
+            return {
+                "success": False,
+                "message": "No columns available",
+                "columns_count": 0,
+            }
+
+        if reset_manual:
+            self.manual_points = {}
+
+        # Reset cached points to guarantee fresh extraction from _extraction_mask
+        self.column_points = {}
+        self.control_points = {}
+
+        for c_idx in range(len(self.columns)):
+            col = self.columns[c_idx]
+            col_plot_type = self._resolve_col_plot_type(col)
+            r_type = col_plot_type if col_plot_type in READER_TYPES else "area"
+            self.digitize(c_idx, reader_type=r_type)
+
+        self.algorithm_extract_turning_points()
+        self._record_history("Redigitize all columns")
+        return {"success": True, "columns_count": len(self.columns)}
+
 
 
 DigitizeMixin = DigitizeSessionMixin

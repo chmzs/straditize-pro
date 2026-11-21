@@ -1,6 +1,7 @@
 import { DiagramData } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
+import { renderResetButton } from '../../ui/resetButton';
 
 export const step = 2;
 export const title = '2. 数据有效区 (ROI)';
@@ -110,14 +111,18 @@ export function render(data: DiagramData): string {
       </div>
 
       <!-- 推进到 Step 3 -->
-      <button id="btn-apply-roi-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+      <button id="btn-apply-roi-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px; font-weight: 600;">
         ${t('step2.next')}
       </button>
 
-      <!-- 重设本步 -->
-      <button id="btn-reset-step2-roi" class="ui-btn ui-btn--quiet ui-btn--sm" style="width: 100%; margin-top: 6px; font-size: 10px; color: var(--text-muted);" title="将当前有效区 (ROI) 重设回整张图谱范围">
-        重设本步：恢复全图有效区
-      </button>
+      <!-- 重设本步 (图2样式) -->
+      <div style="display: flex; justify-content: center; margin-top: 8px;">
+        ${renderResetButton({
+          id: 'btn-reset-step2-roi',
+          title: '将当前有效区 (ROI) 重设回整张图谱范围',
+          label: '重设有效区',
+        })}
+      </div>
     </div>
   `;
 }

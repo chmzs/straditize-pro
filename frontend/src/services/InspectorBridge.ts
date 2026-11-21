@@ -408,6 +408,43 @@ export function createInspectorCallbacks(
     },
     onGeometryCommit: cleanupManager.handleGeometryCommit,
     onGeometryDelete: cleanupManager.handleGeometryDelete,
+    onConfirmAllCandidates: async () => {
+      const cands = canvasComponent.data.line_candidates || [];
+      const pending = cands.filter((c) => c.status !== 'removed');
+      if (pending.length === 0) return;
+      for (const c of pending) {
+        await cleanupManager.runCleanupAction('批量确认候选线', () =>
+          rpcClient.setGeometryStatus(c.id, 'removed')
+        );
+      }
+      callbacks.setHudNotice(`已将全部 ${pending.length} 条候选干扰线确认为实际剔除。`);
+    },
+    onRevertAllCandidates: async () => {
+      const cands = canvasComponent.data.line_candidates || [];
+      const removed = cands.filter((c) => c.status === 'removed');
+      if (removed.length === 0) return;
+      for (const c of removed) {
+        await cleanupManager.runCleanupAction('批量撤回候选线', () =>
+          rpcClient.setGeometryStatus(c.id, 'candidate')
+        );
+      }
+      callbacks.setHudNotice(`已将全部 ${removed.length} 条干扰线撤回为待确认。`);
+    },
+    onRedigitizeAllColumns: async (resetManual: boolean = false) => {
+      try {
+        const res = await rpcClient.redigitizeAllColumns(resetManual);
+        if (res && res.success) {
+          const freshData = await rpcClient.getDiagramData();
+          canvasComponent.loadNewDiagram(freshData);
+          getSidebar()?.updateData(canvasComponent.data);
+          getInspector()?.updateData(canvasComponent.data);
+          canvasComponent.requestRender();
+          callbacks.setHudNotice(`已重设全部 ${res.columns_count} 列的轮廓线与拐点。`, 4000);
+        }
+      } catch (err) {
+        callbacks.reportBackendFailure('重设所有列轮廓与拐点', err);
+      }
+    },
     onClearCleanupEdits: async () => {
       await cleanupManager.runCleanupAction('清空清理编辑', async () => {
         const roiId = cleanupManager.activeCleanupRoiId();

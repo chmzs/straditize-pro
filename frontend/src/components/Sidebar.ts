@@ -32,6 +32,8 @@ export interface SidebarCallbacks {
   onBatchDigitizeColumns?: (taxaIds: string[]) => Promise<void> | void;
   /** 批量提取峰谷控制点 */
   onBatchExtractTurningPoints?: (taxaIds: string[]) => Promise<void> | void;
+  /** 全量重设所有列轮廓与拐点 */
+  onRedigitizeAllColumns?: (resetManual?: boolean) => Promise<void> | void;
 }
 
 export class Sidebar {
@@ -195,17 +197,24 @@ export class Sidebar {
       </div>
 
       ${this.data.columns.length > 0 ? `
-        <div class="sidebar-actions-bar" style="display: flex; gap: 6px;">
-          <button id="btn-insert-gap-col" class="ui-btn ui-btn--secondary ui-btn--sm" style="flex: 1;" title="${t('sidebar.insertGapTitle')}">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <div class="sidebar-actions-bar" style="display: flex; gap: 4px; align-items: center;">
+          <button id="btn-insert-gap-col" class="ui-btn ui-btn--secondary ui-btn--xs" style="flex: 1;" title="${t('sidebar.insertGapTitle')}">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             <span>${t('sidebar.insertGap')}</span>
           </button>
-          <button id="btn-toggle-batch-select" class="ui-btn ${this.selectedColumnIds.size > 0 ? 'ui-btn--primary' : 'ui-btn--secondary'} ui-btn--sm" title="${t('sidebar.batchSelectTitle')}">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+          <button id="btn-toggle-batch-select" class="ui-btn ${this.selectedColumnIds.size > 0 ? 'ui-btn--primary' : 'ui-btn--secondary'} ui-btn--xs" title="${t('sidebar.batchSelectTitle')}">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="9 11 12 14 22 4" />
               <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
             </svg>
             <span>${this.selectedColumnIds.size > 0 ? t('sidebar.batchExit') : t('sidebar.batchSelect')}</span>
+          </button>
+          <button id="btn-sidebar-reset-all-profiles" class="ui-btn-reset" style="padding: 2px 6px; font-size: 10px;" title="重设所有列轮廓与拐点：清空手工调整，重新从图像自动识别全部轮廓线与峰谷拐点">
+            <svg class="ui-btn-reset-icon" viewBox="0 0 16 16" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9L2 6.2"/>
+              <path d="M2 2.5v3.8h3.8"/>
+            </svg>
+            <span>重设轮廓</span>
           </button>
         </div>
         <div class="sidebar-search">
@@ -465,6 +474,12 @@ export class Sidebar {
     this.element.querySelector('#btn-insert-gap-col')?.addEventListener('click', () => {
       if (this.data.columns.length === 0) return;
       this.callbacks.onInsertGapColumn?.(this.data.activeTaxaId);
+    });
+
+    // 重设所有列轮廓与拐点
+    this.element.querySelector('#btn-sidebar-reset-all-profiles')?.addEventListener('click', async () => {
+      if (!window.confirm('确定清空手工调整，重新从图像自动识别所有属种列的轮廓线与拐点吗？')) return;
+      await this.callbacks.onRedigitizeAllColumns?.(true);
     });
 
     // 快捷批量多选切换：已选时清空，未选时全选
