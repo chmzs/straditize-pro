@@ -40,32 +40,27 @@ async function readEditState(page: import('@playwright/test').Page): Promise<Edi
 }
 
 test.describe('Inspector 重渲染保输入', () => {
-  test('属种名输入框：重渲染后焦点、值、光标都还在', async ({ page }) => {
+  test('输入框：重渲染后焦点、值、光标都还在', async ({ page }) => {
     await resetBaseline(page);
-    // 列属性面板只在步骤 5 出现（`Inspector.ts:226`）：本用例断言的是列属性
-    // 面板的重渲染保输入，先把工作流推进到步骤 5，否则面板根本不渲染。
-    await gotoStage(page, 5);
-    const colId = await page.evaluate(
-      () => (window as unknown as { __straditize: { getState: () => any } }).__straditize.getState().columns[0].id
-    );
-    await page.evaluate(
-      (id) => (window as unknown as { __straditize: { selectColumn: (i: string) => void } }).__straditize.selectColumn(id),
-      colId
-    );
+    // 步骤 6 面板里的组单位输入框带 data-edit-preserve="1"
+    await gotoStage(page, 6);
 
-    const input = page.locator('#inp-col-name');
+    const input = page.locator('#grp-unit-inp');
     await expect(input).toBeVisible();
     const original = await input.inputValue();
 
     await input.click();
     await input.press('End');
-    await page.keyboard.type('Pinus', { delay: 30 });
-    const typed = original + 'Pinus';
+    await page.keyboard.type('_test', { delay: 30 });
+    const typed = original + '_test';
 
     // 打标记：重渲染后这个属性会随旧节点一起消失（这就是"真的重渲染了"的证据）。
-    await page.evaluate(() => document.getElementById('inp-col-name')?.setAttribute('data-epoch', 'marker'));
+    await page.evaluate(() => document.getElementById('grp-unit-inp')?.setAttribute('data-epoch', 'marker'));
 
     // 同一列再选中一次：走 onSelectTaxa → onDataChange → updateData → Inspector.render()
+    const colId = await page.evaluate(
+      () => (window as unknown as { __straditize: { getState: () => any } }).__straditize.getState().columns[0].id
+    );
     await page.evaluate(
       (id) => (window as unknown as { __straditize: { selectColumn: (i: string) => void } }).__straditize.selectColumn(id),
       colId
@@ -74,7 +69,7 @@ test.describe('Inspector 重渲染保输入', () => {
 
     const state = await readEditState(page);
     expect(state.epochPresent, '触发动作没有引起重渲染——这条判据会假绿，先修触发方式').toBe(false);
-    expect(state.activeId, '重渲染把焦点丢了：activeElement 不再是该输入框').toBe('inp-col-name');
+    expect(state.activeId, '重渲染把焦点丢了：activeElement 不再是该输入框').toBe('grp-unit-inp');
     expect(state.value, '重渲染后未提交的输入被清掉了').toBe(typed);
     expect(state.caret, '光标位置没保住，继续打字会跳回开头').toBe(typed.length);
   });

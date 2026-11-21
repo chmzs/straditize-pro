@@ -8,7 +8,6 @@ import { Toolbar } from '../components/Toolbar';
 // "Cannot access before initialization"。定义在 ProvenanceGate，main 只是转发。
 import { reportBackendFailure } from './ProvenanceGate';
 import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
-import { STAGE } from '../core/WorkflowStage';
 import { makeRenameUndo } from '../core/undoActions';
 import { compensationNote, addCompensation } from '../core/compensationNote';
 
@@ -28,12 +27,6 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
   return {
     onSelectTaxa: (taxaId: string) => {
       p.canvasComponent.setActiveTaxa(taxaId);
-      p.canvasComponent.scrollToColumn(taxaId);
-      // 侧栏点选一列在高亮该列的同时，步骤 5（分列/命名）与步骤 7（拐点与层位）响应列点选同步 selectedEntity 以渲染单列属性面板。
-      if (p.canvasComponent.workflowStage === STAGE.SPLIT || p.canvasComponent.workflowStage === STAGE.SPEARS_AND_SAMPLES) {
-        p.canvasComponent.data.selectedEntity = { type: 'column', id: taxaId };
-        p.getInspector()?.updateData(p.canvasComponent.data);
-      }
       p.updateFooter();
     },
     onToggleVisible: (taxaId: string) => {

@@ -78,23 +78,26 @@ export const PAN_KEY_CODES = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
  * 即 `panBy(-step)`。同一个物理动作，键盘与滚轮给出同一个方向，用户不必背两套。
  */
 export function panDeltaFromArrowKey(
-  e: Pick<KeyboardEvent, 'code' | 'altKey' | 'ctrlKey' | 'metaKey'>,
+  e: Pick<KeyboardEvent, 'code' | 'altKey' | 'ctrlKey' | 'metaKey'> & { key?: string },
   step: number = PAN_KEY_STEP_PX,
 ): { dx: number; dy: number } | null {
   if (!e.altKey || e.ctrlKey || e.metaKey) return null;
   const span = Number.isFinite(step) && step > 0 ? step : PAN_KEY_STEP_PX;
-  switch (e.code) {
-    case 'ArrowLeft':
-      return { dx: span, dy: 0 };
-    case 'ArrowRight':
-      return { dx: -span, dy: 0 };
-    case 'ArrowUp':
-      return { dx: 0, dy: span };
-    case 'ArrowDown':
-      return { dx: 0, dy: -span };
-    default:
-      return null;
+  const code = e.code || '';
+  const key = e.key || '';
+  if (code === 'ArrowLeft' || key === 'ArrowLeft') {
+    return { dx: span, dy: 0 };
   }
+  if (code === 'ArrowRight' || key === 'ArrowRight') {
+    return { dx: -span, dy: 0 };
+  }
+  if (code === 'ArrowUp' || key === 'ArrowUp') {
+    return { dx: 0, dy: span };
+  }
+  if (code === 'ArrowDown' || key === 'ArrowDown') {
+    return { dx: 0, dy: -span };
+  }
+  return null;
 }
 
 /**

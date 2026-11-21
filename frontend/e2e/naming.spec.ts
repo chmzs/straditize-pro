@@ -152,20 +152,14 @@ test.describe('Step 5 分列与属种命名', () => {
     // Step 5 一重新分列就没了，所以那个 focus 永远落空；这里用真实列 id。
     const other = data.columns.find((c) => c.id !== highlight);
     if (!other) throw new Error(`后端只给出了 1 列（${highlight}），无法验证点名切换`);
-    const sidebarValue = await page
-      .locator(`input.taxa-name-inline-input[data-col-id="${other.id}"]`)
-      .inputValue();
     await page.locator(`input.taxa-name-inline-input[data-col-id="${other.id}"]`).focus();
 
-    // 判据按 step6 的设计变更改写：步骤 5 与 7 上「点列即看列属性面板」
-    // （`SidebarBridge.onSelectTaxa` + `Inspector.ts:210`），右侧面板会从「命名核对」
-    // 整块换成「属种列属性」，`#naming-sequential-highlight` 因此不再在 DOM 里。
-    // 所以「焦点切列」改钉到面板契约上：列属性面板必须出现，且显示的正是该列。
-    const colNameInput = page.locator('#inp-col-name');
-    await expect(colNameInput, '侧栏点名后，右侧面板必须换成该列的属性面板').toBeVisible({
-      timeout: 10_000,
-    });
-    await expect(colNameInput, '属性面板显示的必须是刚点名的那一列').toHaveValue(sidebarValue);
-
+    // 激活态断言：右侧保持步骤 5 命名核对面板，左侧属种卡片进入 active，面板上高亮列属性同步
+    await expect(panel, '右侧必须保持步骤 5 面板，严禁被属性检查器劫持').toBeVisible();
+    await expect(panel).toHaveAttribute('data-highlight-col', other.id);
+    await expect(
+      page.locator(`.taxa-card[data-taxa-id="${other.id}"]`),
+      '侧栏对应属种卡片必须高亮激活'
+    ).toHaveClass(/active/);
   });
 });

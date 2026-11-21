@@ -1040,12 +1040,12 @@ export class RpcClient {
   public async setControlPoints(
     colIndex: number,
     points: Array<{ row: number; x: number; manual?: boolean }>
-  ): Promise<boolean> {
-    const res = await this.call<{ col_index: number; points: unknown[] }>(
-      'column.setControlPoints',
-      { col_index: colIndex, points }
-    );
-    return !!res;
+  ): Promise<{ col_index: number; points: Array<{ row?: number; y?: number; x: number }> } | null> {
+    const res = await this.call<
+      { col_index: number; points: Array<{ row: number; x: number; manual?: boolean }> },
+      { col_index: number; points: Array<{ row?: number; y?: number; x: number }> }
+    >('column.setControlPoints', { col_index: colIndex, points });
+    return res;
   }
 
   /**

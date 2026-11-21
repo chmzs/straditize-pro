@@ -776,30 +776,37 @@ class DigitizeSessionMixin:
         last_row = int(round(float(points[-1].get("row", points[-1]["y"]))))
         y0_x = float(c_start + max(min_width, points[0]["x"] - c_start))
         y1_x = float(c_start + max(min_width, points[-1]["x"] - c_start))
-        control_points[y0] = y0_x
-        control_points[last_row] = y1_x
 
-        if not any(p["y"] == float(y0) for p in ctrl_pts_list):
-            ctrl_pts_list.insert(
-                0,
-                {
-                    "id": f"pt_{col_index}_{y0}",
-                    "x": y0_x,
-                    "y": float(y0),
-                    "type": "trough",
-                    "isManual": False,
-                },
-            )
-        if not any(p["y"] == float(last_row) for p in ctrl_pts_list):
-            ctrl_pts_list.append(
-                {
-                    "id": f"pt_{col_index}_{last_row}",
-                    "x": y1_x,
-                    "y": float(last_row),
-                    "type": "trough",
-                    "isManual": False,
-                }
-            )
+        # 仅在非空且真实有必要闭合时设置首末端点；
+        # 若首行/末行本身就是无墨迹行（未探测到有效数据），严禁在空行强塞伪拐点拽回 0 轴（issue: 边缘多出一个点收到 0 处）！
+        has_ink_0 = bool(points[0]["x"] > c_start + min_width)
+        has_ink_1 = bool(points[-1]["x"] > c_start + min_width)
+
+        if has_ink_0 or len(ctrl_pts_list) == 0:
+            control_points[y0] = y0_x
+            if not any(p["y"] == float(y0) for p in ctrl_pts_list):
+                ctrl_pts_list.insert(
+                    0,
+                    {
+                        "id": f"pt_{col_index}_{y0}",
+                        "x": y0_x,
+                        "y": float(y0),
+                        "type": "trough" if y0_x <= c_start + min_width + 1.0 else "transition",
+                        "isManual": False,
+                    },
+                )
+        if has_ink_1 or len(ctrl_pts_list) == 0:
+            control_points[last_row] = y1_x
+            if not any(p["y"] == float(last_row) for p in ctrl_pts_list):
+                ctrl_pts_list.append(
+                    {
+                        "id": f"pt_{col_index}_{last_row}",
+                        "x": y1_x,
+                        "y": float(last_row),
+                        "type": "trough" if y1_x <= c_start + min_width + 1.0 else "transition",
+                        "isManual": False,
+                    },
+                )
 
         ctrl_pts_list.sort(key=lambda p: p["y"])
         return control_points, ctrl_pts_list

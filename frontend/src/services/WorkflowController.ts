@@ -89,6 +89,7 @@ export class WorkflowController {
   public setCurrentStage(stage: WorkflowStage): void {
     this.currentStage = stage;
     this.callbacks.onStageChange?.(this.currentStage);
+    this.updateWorkflowBar();
   }
 
   public async advanceToWorkflowStage(targetStage: WorkflowStage): Promise<void> {
@@ -141,15 +142,20 @@ export class WorkflowController {
         4500
       );
     } else if (targetStage === STAGE.SPLIT) {
-      const wfNextBtn = document.querySelector('#btn-wf-next') as HTMLButtonElement | null;
-      if (wfNextBtn) {
-        wfNextBtn.disabled = true;
-        wfNextBtn.textContent = '正在切分属种基线...';
-      }
-      this.callbacks.setHudNotice(
-        '正在基于数据有效区与清理后墨迹切分属种垂直基线，请稍候...',
-        5000
-      );
+      const authoritative = await this.rpcClient.getDiagramData();
+      const existingCols = authoritative.columns ?? [];
+      // 只有在当前尚无任何列时，推进到步骤 5 才自动触发初始检测；
+      // 已有列时严禁自动重跑 detectColumnsInRoi，避免冲毁已有的列命名、标度与控制点！
+      if (existingCols.length === 0) {
+        const wfNextBtn = document.querySelector('#btn-wf-next') as HTMLButtonElement | null;
+        if (wfNextBtn) {
+          wfNextBtn.disabled = true;
+          wfNextBtn.textContent = '正在切分属种基线...';
+        }
+        this.callbacks.setHudNotice(
+          '正在基于数据有效区与清理后墨迹切分属种垂直基线，请稍候...',
+          5000
+        );
       try {
         // 分列参数必须取**后端权威 ROI**，不能用 `canvasComponent.data.rois`
         // 这份前端镜像（B-04）。后端 `detect_columns` 收到 data_xlim/data_ylim 后
@@ -199,6 +205,7 @@ export class WorkflowController {
         this.callbacks.setHudNotice('分列识别失败，已停留在步骤 4。请检查有效区后重试。', 6000);
         return;
       }
+    }
       this.currentStage = STAGE.SPLIT;
       this.callbacks.onStageChange?.(this.currentStage);
       this.canvasComponent.setToolMode('select');
