@@ -1177,6 +1177,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
 
   root.querySelector('#btn-reset-step6-xticks')?.addEventListener('click', async () => {
     if (!window.confirm('确定清空所有属种列的 X 刻度标定吗？全部列将回到未标定状态。')) return;
+    state.pendingTick = null;
     await ctx.onClearAllXTicks?.();
   });
 }

@@ -1,4 +1,5 @@
 import { RpcClient } from './RpcClient';
+import { setGroupCalibMark } from '../components/canvas/groupCalibMarks';
 import { compensationNote, addCompensation } from '../core/compensationNote';
 import { showConfirmDialog } from '../ui/confirm';
 import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
@@ -558,21 +559,48 @@ export function createInspectorCallbacks(
     onClearAllXTicks: async () => {
       const cols = canvasComponent.data.columns || [];
       const calibratedCols = cols.filter((c) => c.x_ticks && c.x_ticks.length > 0 && c.col_index != null);
-      if (calibratedCols.length === 0) {
-        callbacks.setHudNotice('当前没有任何已标定 X 刻度的列');
+      const rois = canvasComponent.data.rois || [];
+      let resetGroupsCount = 0;
+
+      for (const roi of rois) {
+        for (const group of roi.x_groups || []) {
+          if (group.value_per_px != null) {
+            resetGroupsCount++;
+          }
+        }
+      }
+
+      if (calibratedCols.length === 0 && resetGroupsCount === 0) {
+        callbacks.setHudNotice('当前没有任何已标定 X 刻度的列或组');
         return;
       }
+
       try {
+        // 1. 清空所有组的组级刻度与画布标记
+        for (const roi of rois) {
+          if (!roi.id) continue;
+          for (const group of roi.x_groups || []) {
+            if (!group.id) continue;
+            setGroupCalibMark(group.id, null);
+            if (group.value_per_px != null) {
+              group.value_per_px = undefined;
+              await rpcClient.roiGroupUpdate(roi.id, group.id, { value_per_px: null });
+            }
+          }
+        }
+
+        // 2. 清空列级刻度
         for (const col of calibratedCols) {
           await rpcClient.clearColumnXTicks(col.col_index!);
           col.x_ticks = null;
         }
+
         canvasComponent.history.push(
           'Clear all X-Ticks',
           canvasComponent.data.columns,
           canvasComponent.data.activeTaxaId
         );
-        callbacks.setHudNotice(`已清空 ${calibratedCols.length} 个列的 X 标度（全部回到未标定）`);
+        callbacks.setHudNotice('已清空全部列与组的 X 刻度标定（回到未标定状态）');
         canvasComponent.requestRender();
         getInspector()?.updateData(canvasComponent.data);
         getSidebar()?.updateData(canvasComponent.data);

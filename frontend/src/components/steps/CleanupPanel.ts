@@ -352,7 +352,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onDetectLineCandidates?.(toDetectPayload(getDetectOrientation()));
   });
 
-  // 推进到下一步（核心修复：若未确认则自动全部确认为剔除，并触发全列轮廓与拐点重算）
+  // 推进到下一步（若未确认则自动全部确认为剔除）
   const applyBtn = root.querySelector('#btn-apply-cleanup-next') as HTMLButtonElement | null;
   applyBtn?.addEventListener('click', async () => {
     if (applyBtn.disabled) return;
@@ -360,13 +360,11 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     applyBtn.disabled = true;
     applyBtn.style.opacity = '0.75';
     applyBtn.style.cursor = 'wait';
-    applyBtn.innerHTML = '正在应用清理并更新属种轮廓...';
+    applyBtn.innerHTML = '正在应用清理...';
     try {
       // 1. 若用户未确认任何一项，自动将当前待确认候选线全部设为实际剔除
       await ctx.onConfirmAllCandidates?.();
-      // 2. 核心：在离开本步前，全量重新从去除横线后的二值图中提取所有列的轮廓线与拐点
-      await ctx.onRedigitizeAllColumns?.(false);
-      // 3. 推进到步骤 6
+      // 2. 推进到步骤 6（刻度标定；属种轮廓与拐点提取集中交由步骤 7）
       await ctx.onAdvanceWorkflowStage?.(6);
     } finally {
       applyBtn.disabled = false;

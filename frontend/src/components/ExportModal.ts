@@ -501,6 +501,23 @@ export class ExportModal {
 
       // Tbody
       const tbody = document.createElement('tbody');
+      tbody.addEventListener('input', (e) => {
+        const target = e.target as HTMLInputElement;
+        if (!target || !target.classList.contains('wpd-cell-input')) return;
+        const editKey = target.dataset.editKey;
+        if (!editKey) return;
+        const [rIdxStr, cIdxStr] = editKey.split('_');
+        const rIdx = Number(rIdxStr);
+        const cIdx = Number(cIdxStr);
+        userEdits.set(editKey, target.value);
+        target.classList.add('user-modified');
+        if (currentRows[rIdx]) {
+          currentRows[rIdx][cIdx] = target.value;
+        }
+        syncSerializedText();
+        updateSumCheck();
+      });
+
       currentRows.forEach((row, rIdx) => {
         const tr = document.createElement('tr');
 
@@ -522,20 +539,13 @@ export class ExportModal {
               input.style.textAlign = 'left';
             }
             const editKey = `${rIdx}_${cIdx}`;
+            input.dataset.editKey = editKey;
             if (userEdits.has(editKey)) {
               input.classList.add('user-modified');
               input.value = userEdits.get(editKey)!;
             } else {
               input.value = cellVal;
             }
-
-            input.addEventListener('input', () => {
-              userEdits.set(editKey, input.value);
-              input.classList.add('user-modified');
-              currentRows[rIdx][cIdx] = input.value;
-              syncSerializedText();
-              updateSumCheck();
-            });
 
             td.appendChild(input);
           }
