@@ -147,3 +147,82 @@ def find_available_port(
     raise RuntimeError(
         f"No available port found in range {start_port}-{start_port + max_attempts}"
     )
+
+
+def detect_local_ips() -> list[str]:
+    """Detect local machine non-loopback IPv4 addresses across network interfaces."""
+    ips: list[str] = []
+
+    # 1. Primary outbound interface via UDP routing check
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            primary_ip = s.getsockname()[0]
+            if (
+                primary_ip
+                and not primary_ip.startswith("127.")
+                and primary_ip != "0.0.0.0"
+            ):
+                ips.append(primary_ip)
+    except Exception:
+        pass
+
+    # 2. Hostname resolution for all bound interface IPs (including LAN, VPN, Tailscale)
+    try:
+        hostname = socket.gethostname()
+        for ip in socket.gethostbyname_ex(hostname)[2]:
+            if ip and not ip.startswith("127.") and ip != "0.0.0.0" and ip not in ips:
+                ips.append(ip)
+    except Exception:
+        pass
+
+    return ips
+
+
+def get_remote_display_urls(
+    allowed_hosts: list[str] | None, port: int
+) -> list[str]:
+    """Generate display URLs (e.g. http://100.64.0.1:8765) for whitelisted remote hosts.
+
+    Excludes loopback addresses (127.0.0.1, localhost, ::1, 0.0.0.0, ::).
+    For wildcard patterns (e.g. 192.168.0.* or *), resolves matched local interface IPs.
+    """
+    from ..config import match_host_pattern
+
+    if not allowed_hosts:
+        return []
+
+    local_ips = detect_local_ips()
+    urls: dict[str, None] = {}
+    loopback_hosts = {"127.0.0.1", "localhost", "::1", "0.0.0.0", "::"}
+
+    for raw_host in allowed_hosts:
+        host = raw_host.strip()
+        if not host:
+            continue
+
+        # Extract host, safely handling IPv6 brackets and bare addresses
+        if host.startswith("["):
+            idx = host.find("]")
+            clean_host = host[1:idx].strip().lower() if idx != -1 else host[1:].strip().lower()
+        elif host.count(":") >= 2:
+            clean_host = host.lower()
+        else:
+            clean_host = host.split(":")[0].strip().lower()
+
+        if not clean_host or clean_host in loopback_hosts:
+            continue
+
+        if "*" in clean_host:
+            for local_ip in local_ips:
+                if match_host_pattern(local_ip, clean_host):
+                    urls[f"http://{local_ip}:{port}"] = None
+        else:
+            if ":" in clean_host:
+                urls[f"http://[{clean_host}]:{port}"] = None
+            else:
+                urls[f"http://{clean_host}:{port}"] = None
+
+    return list(urls.keys())
+
+

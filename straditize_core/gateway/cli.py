@@ -12,6 +12,7 @@ from typing import Any
 
 from .lifecycle import (
     find_available_port,
+    get_remote_display_urls,
     graceful_shutdown,
     is_port_in_use,
     setup_signal_handlers,
@@ -78,6 +79,17 @@ def start_serve_mode(args: Any) -> None:
     print(
         f"Server mode running on http://{bind_host}:{args.port} (Press Ctrl+C to stop)"
     )
+    is_remote = (
+        getattr(server, "remote_access_enabled", False)
+        or getattr(args, "remote", False)
+        or bind_host in ("0.0.0.0", "::")
+    )
+    if is_remote:
+        remote_urls = get_remote_display_urls(
+            getattr(server, "user_allowed_hosts", []), args.port
+        )
+        for r_url in remote_urls:
+            print(f"Remote access running on {r_url}")
     try:
         while True:
             time.sleep(1)
@@ -135,6 +147,25 @@ def start_desktop_mode(args: Any) -> None:
 
     url = f"http://127.0.0.1:{server.actual_port}"
     logger.info("Straditize Pro running on %s", url)
+
+    is_remote = (
+        getattr(server, "remote_access_enabled", False)
+        or getattr(args, "remote", False)
+        or bind_host in ("0.0.0.0", "::")
+    )
+    if is_remote:
+        remote_urls = get_remote_display_urls(
+            getattr(server, "user_allowed_hosts", []), server.actual_port
+        )
+        if remote_urls:
+            for r_url in remote_urls:
+                logger.info("Straditize Pro remote access on %s", r_url)
+        else:
+            logger.warning(
+                "Remote access is enabled, but allowed_hosts only contains loopback addresses (127.0.0.1, localhost). "
+                "Add client or host IP addresses in Settings to allow remote connections."
+            )
+
     if not args.no_browser:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
 
