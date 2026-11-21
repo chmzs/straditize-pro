@@ -189,12 +189,15 @@ def test_project_name_preservation_and_customization():
     """Verify that project_name is extracted from archive filename, preserved on load, and customizable."""
     from straditize_core.session_parts.export import extract_project_name_from_filename
 
-    # 1. Extraction from standard project archive filename
-    fn = "pollen_bars_riojaplot_project_20261120_120034.tar"
-    assert extract_project_name_from_filename(fn) == "pollen_bars_riojaplot"
+    # 1. Extraction from standard project archive filename (legacy & modern stradpro)
+    fn_legacy = "pollen_bars_riojaplot_project_20261120_120034.tar"
+    assert extract_project_name_from_filename(fn_legacy) == "pollen_bars_riojaplot"
+    fn_modern = "pollen_bars_riojaplot_stradpro_project_20261121_1200.tar"
+    assert extract_project_name_from_filename(fn_modern) == "pollen_bars_riojaplot"
     assert extract_project_name_from_filename("pollen_bars_riojaplot_project.tar") == "pollen_bars_riojaplot"
     assert extract_project_name_from_filename("my_lake_core.tar") == "my_lake_core"
     assert extract_project_name_from_filename("straditize_project_20261120_120034.tar") is None
+    assert extract_project_name_from_filename("straditize_stradpro_project_20261121_1200.tar") is None
 
     # 2. Session set_project_name
     sess = StraditizeSession()
@@ -213,6 +216,6 @@ def test_project_name_preservation_and_customization():
 
     # 4. Project save retains project_name
     saved = sess2.project_save()
-    assert "pollen_bars_riojaplot_project_" in saved["filename"]
+    assert "pollen_bars_riojaplot_stradpro_project_" in saved["filename"]
 
 
