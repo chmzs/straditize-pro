@@ -863,6 +863,14 @@ async function bootstrap() {
     setHudNotice,
   });
 
+  // 点击任何按钮后立即失焦，避免残留焦点导致按空格（平移视口）时误触发该按钮的原生 click
+  window.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement)?.closest('button');
+    if (btn) {
+      btn.blur();
+    }
+  });
+
   console.log('Straditize Modern Frontend Initialized Successfully');
 }
 

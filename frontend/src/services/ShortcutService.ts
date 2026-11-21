@@ -107,7 +107,7 @@ export class ShortcutService {
         <div class="help-section">
           <div class="help-section-title">Display, History & System</div>
           <div class="help-grid">
-            <div class="help-row"><span class="help-key">B / I / C</span><span class="help-desc">Binary Overlay (B) / Invert (I) / Contrast (C)</span></div>
+            <div class="help-row"><span class="help-key">B / I</span><span class="help-desc">Binary Overlay (B) / Invert (I)</span></div>
             <div class="help-row"><span class="help-key">Ctrl+Z / Ctrl+Y</span><span class="help-desc">Undo / Redo</span></div>
             <div class="help-row"><span class="help-key">Ctrl+[ / Ctrl+]</span><span class="help-desc">Collapse/Expand Left / Right Panels</span></div>
             <div class="help-row"><span class="help-key">Ctrl+,</span><span class="help-desc">Preferences & Settings</span></div>
@@ -161,7 +161,7 @@ export class ShortcutService {
         <div class="help-section">
           <div class="help-section-title">底图滤镜与全局系统</div>
           <div class="help-grid">
-            <div class="help-row"><span class="help-key">B / I / C</span><span class="help-desc">二值化透视遮罩 (B) / 底图反相 (I) / 增强对比度 (C)</span></div>
+            <div class="help-row"><span class="help-key">B / I</span><span class="help-desc">二值化透视遮罩 (B) / 底图反相 (I)</span></div>
             <div class="help-row"><span class="help-key">Ctrl+Z / Ctrl+Y</span><span class="help-desc">撤销 / 重做 (Undo / Redo)</span></div>
             <div class="help-row"><span class="help-key">Ctrl+[ / Ctrl+]</span><span class="help-desc">展开 / 折叠左侧属种列表 / 右侧属性检查器</span></div>
             <div class="help-row"><span class="help-key">Ctrl+,</span><span class="help-desc">呼出全局偏好与系统设置 (Settings)</span></div>

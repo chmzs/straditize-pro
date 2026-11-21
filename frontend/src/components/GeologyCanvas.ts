@@ -682,8 +682,11 @@ private pointer: PointerState = {
       this.resizeObserver.observe(this.container);
     }
 
-    window.addEventListener('keydown', (e) => this.onKeyDown(e));
-    window.addEventListener('keyup', (e) => this.onKeyUp(e));
+    // 全局键盘监听采用捕获阶段（capture: true）：
+    // 1. 彻底切断任何残留在按钮上的焦点因按「空格键（临时平移）」被浏览器当作原生 click 误触发（如误跳步骤 5 等恶性缺陷）；
+    // 2. 文本输入框通过 isInput 守卫放行，非文本输入的全局快捷键（S/A/D/Alt+方向键等）一律优先由画布接管。
+    window.addEventListener('keydown', (e) => this.onKeyDown(e), { capture: true });
+    window.addEventListener('keyup', (e) => this.onKeyUp(e), { capture: true });
 
     this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
     this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
@@ -1181,6 +1184,19 @@ private pointer: PointerState = {
       return;
     }
 
+    // 空格键平移必须在捕获阶段最高优先级阻断：
+    // 当焦点残留在任意 HTML 按钮上时，浏览器默认行为是将 Space 翻译为对该按钮的 click！
+    // 导致用户按空格平移画布时被误跳步骤（如跳到步骤 5）。
+    if (e.code === 'Space') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!this.isSpaceDown) {
+        this.isSpaceDown = true;
+        this.updateCursor();
+      }
+      return;
+    }
+
     for (const binding of this.keyBindings) {
       if (!matchesKeyBinding(binding, e)) continue;
       if (binding.when && !binding.when(e)) continue;
@@ -1192,6 +1208,8 @@ private pointer: PointerState = {
 
   private onKeyUp(e: KeyboardEvent): void {
     if (e.code === 'Space') {
+      e.preventDefault();
+      e.stopPropagation();
       this.isSpaceDown = false;
       this.isPanning = false;
       this.updateCursor();
