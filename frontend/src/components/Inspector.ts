@@ -313,7 +313,7 @@ export class Inspector {
   private renderPointMiniHud(col: TaxaColumn, pt: ControlPoint): string {
     const depth = CoordinateSystem.imageYToDepth(pt.y, this.data.calibration);
     const percent = CoordinateSystem.hasRealCalibration(col)
-      ? CoordinateSystem.imageXToPercent(pt.x, col)
+      ? CoordinateSystem.imageXToValue(pt.x, col)
       : undefined;
 
     const typeLabels: Record<string, { text: string; color: string }> = {

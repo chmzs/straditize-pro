@@ -267,7 +267,8 @@ export function createInspectorCallbacks(
             composition: true,
           });
         } else {
-          const activeId = canvasComponent.data.active_roi_id || (canvasComponent.data as any).activeRoiId || rois[0]?.id;
+          const activeId = canvasComponent.data.active_roi_id || rois[0]?.id;
+          if (!activeId) return;
           const prevName = (rois.find((r) => r.id === activeId)?.name ?? '') as string;
           await rpcClient.call('roi.update', { roi_id: activeId, name: newName });
           // U3b：ROI 改名同样登记为可撤销动作（逆操作 = 用同一个 roi.update 写回旧名）
@@ -286,9 +287,9 @@ export function createInspectorCallbacks(
                   getInspector()?.updateData(canvasComponent.data);
                 },
                 async () => {
-                  const fresh = (await rpcClient.getDiagramData()) as any;
-                  const roi = (fresh.rois || []).find((r: any) => r.id === activeId);
-                  return (roi?.name ?? '') as string;
+                  const fresh = await rpcClient.getDiagramData();
+                  const roi = (fresh.rois || []).find((r) => r.id === activeId);
+                  return roi?.name ?? '';
                 }
               )
             );

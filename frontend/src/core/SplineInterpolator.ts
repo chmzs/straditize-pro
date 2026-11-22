@@ -6,7 +6,7 @@ export class SplineInterpolator {
    * 对一组控制点（按 Y 升序排列）构建折线路径
    * @param points 控制点列表（已按 y 升序）
    */
-  public static buildPath(points: Point2D[], _type?: 'linear' | 'bezier'): Path2D {
+  public static buildPath(points: Point2D[]): Path2D {
     const path = new Path2D();
     if (points.length === 0) return path;
 
@@ -28,7 +28,7 @@ export class SplineInterpolator {
   /**
    * 构建花粉面积多边形路径（从基线 baselineX 出发，沿真实折线拐点前进，最后回到基线）
    */
-  public static buildAreaPath(points: Point2D[], baselineX: number, _type?: 'linear' | 'bezier'): Path2D {
+  public static buildAreaPath(points: Point2D[], baselineX: number): Path2D {
     const path = new Path2D();
     if (points.length < 2) return path;
 

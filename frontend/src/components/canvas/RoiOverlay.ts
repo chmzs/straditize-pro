@@ -8,7 +8,7 @@ export function draw(ctx: CanvasRenderingContext2D, data: DiagramData, vp: Viewp
   if (!data.rois || data.rois.length === 0) return;
 
   const scale = vp.scale || 1;
-  const activeId = data.active_roi_id || (data as any).activeRoiId || data.rois[0]?.id;
+  const activeId = data.active_roi_id || data.rois[0]?.id;
 
   for (const roi of data.rois) {
     if (!roi.visible) continue;

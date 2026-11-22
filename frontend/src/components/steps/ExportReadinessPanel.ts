@@ -16,7 +16,7 @@ export function computeExportReadiness(data: DiagramData): ExportReadinessState 
       ? data.rois
       : [{ id: 'pollen', name: 'pollen', name_source: 'default', visible: true, xlim: [0, 100], ylim: [0, 100], columns_stale: false, form_defaults: null }];
 
-  const primaryRoiId: string = data.primary_roi_id || (data as any).primaryRoiId || rois[0].id || 'pollen';
+  const primaryRoiId: string = data.primary_roi_id || rois[0].id || 'pollen';
   const primaryRoiObj = rois.find((r) => r.id === primaryRoiId) || rois[0];
   const primaryRoi: string = primaryRoiObj.name || primaryRoiObj.id || 'pollen';
 

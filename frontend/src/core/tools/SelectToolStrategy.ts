@@ -74,7 +74,7 @@ export class SelectToolStrategy implements ToolStrategy {
       return true;
     }
 
-    // 3. 检查垂直分界标线 / 刻度钉
+    // 3. 检查垂直分界标线 (startX / endX)
     const hitBoundary = ctx.findHitBoundary(screenPt);
     if (hitBoundary) {
       this.draggingBoundary = {
@@ -182,7 +182,7 @@ export class SelectToolStrategy implements ToolStrategy {
       return true;
     }
 
-    // C. 拖拽垂直边界或刻度钉
+    // C. 拖拽垂直边界 (startX / endX)
     if (this.draggingBoundary) {
       const { taxaId, type } = this.draggingBoundary;
       const colIndex = ctx.data.columns.findIndex((c) => c.id === taxaId);

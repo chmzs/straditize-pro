@@ -310,9 +310,7 @@ export class CoordinateSystem {
     if (scale.scaleType === 'log') {
       const check = this.validateLogScale(col);
       if (!check.valid) {
-        // Log 约束不满足时安全退回线性并输出
-        const linearVal = startVal + t * (tickVal - startVal);
-        return Number(linearVal.toFixed(2));
+        return undefined;
       }
       const lnStart = Math.log(startVal);
       const lnTick = Math.log(tickVal);
@@ -324,13 +322,6 @@ export class CoordinateSystem {
     // Linear 默认模式
     const linearVal = startVal + t * (tickVal - startVal);
     return Number(linearVal.toFixed(2));
-  }
-
-  /**
-   * 兼容别名方法
-   */
-  public static imageXToPercent(x: number, col: Column): number | undefined {
-    return this.imageXToValue(x, col);
   }
 
   /**
@@ -348,9 +339,7 @@ export class CoordinateSystem {
     if (scale.scaleType === 'log') {
       const check = this.validateLogScale(col);
       if (!check.valid || value <= 0) {
-        const dVal = tickVal - startVal || 1;
-        const t = (value - startVal) / dVal;
-        return Math.round(startX + t * spanPx);
+        return undefined;
       }
       const lnStart = Math.log(startVal);
       const lnTick = Math.log(tickVal);
@@ -363,13 +352,6 @@ export class CoordinateSystem {
     const dVal = tickVal - startVal || 1;
     const t = (value - startVal) / dVal;
     return Math.round(startX + t * spanPx);
-  }
-
-  /**
-   * 兼容别名方法
-   */
-  public static percentToImageX(percent: number, col: Column): number | undefined {
-    return this.valueToImageX(percent, col);
   }
 
   /**

@@ -259,15 +259,11 @@ export class Sidebar {
    */
   private visibleColumns(): TaxaColumn[] {
     const all = this.data.columns || [];
-    const rois = (this.data as unknown as { rois?: { id: string }[] }).rois;
+    const rois = this.data.rois;
     if (!rois || rois.length <= 1) return all;
-    const d = this.data as unknown as { active_roi_id?: string; activeRoiId?: string };
-    const activeId = d.active_roi_id || d.activeRoiId;
+    const activeId = this.data.active_roi_id;
     if (!activeId) return all;
-    return all.filter((c) => {
-      const rid = (c as unknown as { roi_id?: string }).roi_id;
-      return !rid || rid === activeId;
-    });
+    return all.filter((c) => !c.roi_id || c.roi_id === activeId);
   }
 
   private renderColumnsList(): string {

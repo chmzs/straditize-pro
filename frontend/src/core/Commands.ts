@@ -1,47 +1,9 @@
-import type { ControlPoint, DataRoi, DiagramCalibration, DiagramData, Point2D, TaxaColumn } from '../types/pollen.ts';
-import type { Command } from './CommandManager.ts';
+import type { ControlPoint, DataRoi, DiagramData } from '../types/pollen.ts';
 
-/**
- * 拖动/微调单个拐点命令
- */
-export class MovePointCommand implements Command {
-  public readonly description: string;
-  private colId: string;
-  private pointId: string;
-  private oldPos: Point2D;
-  private newPos: Point2D;
-
-  constructor(colId: string, pointId: string, oldPos: Point2D, newPos: Point2D, taxaName: string) {
-    this.colId = colId;
-    this.pointId = pointId;
-    this.oldPos = { ...oldPos };
-    this.newPos = { ...newPos };
-    this.description = `移动 ${taxaName} 拐点至 (X:${newPos.x}, Y:${newPos.y})`;
-  }
-
-  public execute(data: DiagramData): void {
-    const col = data.columns.find((c) => c.id === this.colId);
-    if (!col) return;
-    const pt = col.controlPoints.find((p) => p.id === this.pointId);
-    if (!pt) return;
-
-    pt.x = this.newPos.x;
-    pt.y = this.newPos.y;
-    pt.type = 'manual';
-    col.isLocked = true;
-    col.controlPoints.sort((a, b) => a.y - b.y);
-  }
-
-  public undo(data: DiagramData): void {
-    const col = data.columns.find((c) => c.id === this.colId);
-    if (!col) return;
-    const pt = col.controlPoints.find((p) => p.id === this.pointId);
-    if (!pt) return;
-
-    pt.x = this.oldPos.x;
-    pt.y = this.oldPos.y;
-    col.controlPoints.sort((a, b) => a.y - b.y);
-  }
+export interface Command {
+  readonly description: string;
+  execute(data: DiagramData): void;
+  undo(data: DiagramData): void;
 }
 
 /**
@@ -103,46 +65,6 @@ export class DeletePointCommand implements Command {
 }
 
 /**
- * 拖动调整分列线 (基线 / 隔离边界) 命令
- */
-export class MoveColumnBoundaryCommand implements Command {
-  public readonly description: string;
-  private colId: string;
-  private oldStartX: number;
-  private newStartX: number;
-  private oldEndX: number;
-  private newEndX: number;
-
-  constructor(
-    col: TaxaColumn,
-    newStartX: number,
-    newEndX: number
-  ) {
-    this.colId = col.id;
-    this.oldStartX = col.startX;
-    this.newStartX = newStartX;
-    this.oldEndX = col.endX;
-    this.newEndX = newEndX;
-    this.description = `调整 ${col.name} 列宽`;
-  }
-
-  public execute(data: DiagramData): void {
-    const col = data.columns.find((c) => c.id === this.colId);
-    if (!col) return;
-    col.startX = this.newStartX;
-    col.endX = this.newEndX;
-    col.isLocked = true;
-  }
-
-  public undo(data: DiagramData): void {
-    const col = data.columns.find((c) => c.id === this.colId);
-    if (!col) return;
-    col.startX = this.oldStartX;
-    col.endX = this.oldEndX;
-  }
-}
-
-/**
  * 调整地质数据有效区 (ROI) 边界命令。
  *
  * 只动 `data.roi`：取数区域与 Y 轴标定是两个独立概念，本命令绝不触碰
@@ -182,49 +104,5 @@ export class ResizeRoiCommand implements Command {
     data.roi = { ...this.oldRoi };
     const target = data.rois?.find((r) => r.id === data.active_roi_id) || data.rois?.[0];
     if (target) copyRoiBounds(target, this.oldRoi);
-  }
-}
-
-/**
- * 设置 Y 轴两点标定命令。
- */
-export class SetDepthCalibrationCommand implements Command {
-  public readonly description: string = '设置 Y 轴两点标定';
-  private oldCal: DiagramCalibration;
-  private newCal: DiagramCalibration;
-
-  constructor(oldCal: DiagramCalibration, newCal: DiagramCalibration) {
-    this.oldCal = JSON.parse(JSON.stringify(oldCal));
-    this.newCal = JSON.parse(JSON.stringify(newCal));
-  }
-
-  public execute(data: DiagramData): void {
-    data.calibration = JSON.parse(JSON.stringify(this.newCal));
-  }
-
-  public undo(data: DiagramData): void {
-    data.calibration = JSON.parse(JSON.stringify(this.oldCal));
-  }
-}
-
-/**
- * 批量更新属种名称与分列命令
- */
-export class BatchUpdateTaxaCommand implements Command {
-  public readonly description: string = '批量导入属种名单';
-  private oldColumns: TaxaColumn[];
-  private newColumns: TaxaColumn[];
-
-  constructor(oldCols: TaxaColumn[], newCols: TaxaColumn[]) {
-    this.oldColumns = JSON.parse(JSON.stringify(oldCols));
-    this.newColumns = JSON.parse(JSON.stringify(newCols));
-  }
-
-  public execute(data: DiagramData): void {
-    data.columns = JSON.parse(JSON.stringify(this.newColumns));
-  }
-
-  public undo(data: DiagramData): void {
-    data.columns = JSON.parse(JSON.stringify(this.oldColumns));
   }
 }

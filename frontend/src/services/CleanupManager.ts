@@ -282,9 +282,7 @@ export class CleanupManager {
           this.canvasComponent.requestRender();
         },
         verify: async (dir) => {
-          const data = (await this.rpcClient.getDiagramData()) as unknown as {
-            line_strokes?: unknown[];
-          };
+          const data = await this.rpcClient.getDiagramData();
           const expected = dir === 'inverse' ? strokesBefore.length : strokesAfter.length;
           return (data.line_strokes?.length ?? 0) === expected;
         },

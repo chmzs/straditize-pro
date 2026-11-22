@@ -218,9 +218,9 @@ assert.strictEqual(
   'provenance.calibrated=false 时，即使载荷带 tickEndX/maxPercent 也判未标定'
 );
 assert.strictEqual(
-  CoordinateSystem.imageXToPercent(340, colGuessOnly),
+  CoordinateSystem.imageXToValue(340, colGuessOnly),
   undefined,
-  '未标定列换算不出百分比（不拿猜测端点凑数）'
+  '未标定列换算不出数值（不拿猜测端点凑数）'
 );
 assert.strictEqual(
   SplineInterpolator.interpolatePercentAtY(colGuessOnly, 700),

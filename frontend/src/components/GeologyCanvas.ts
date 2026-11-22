@@ -649,8 +649,8 @@ private pointer: PointerState = {
     // 检查纵向 (Y) 视口是否已经包含该列所属的 ROI
     const roi = this.data.rois?.find((r) => r.id === col.roi_id) || this.data.roi;
     if (roi) {
-      const y0 = roi.ylim ? roi.ylim[0] : ((roi as any).yMin ?? 0);
-      const y1 = roi.ylim ? roi.ylim[1] : ((roi as any).yMax ?? (this.data.imageHeight || 1000));
+      const y0 = roi.ylim ? roi.ylim[0] : roi.yMin;
+      const y1 = roi.ylim ? roi.ylim[1] : (roi.yMax ?? (this.data.imageHeight || 1000));
       const viewYTop = -this.viewport.panY / this.viewport.scale;
       const viewYBottom = (rect.height - this.viewport.panY) / this.viewport.scale;
       const overlaps = viewYBottom >= y0 && viewYTop <= y1;
@@ -1025,10 +1025,10 @@ private pointer: PointerState = {
       when: () => this.workflowStage === STAGE.ROI,
       run: () => {
         const rois = this.data.rois && this.data.rois.length > 0 ? this.data.rois : [this.data.roi];
-        const activeId = this.data.active_roi_id || (this.data as any).activeRoiId || rois[0]?.id;
+        const activeId = this.data.active_roi_id || rois[0]?.id;
         const roi = (this.data.rois || []).find((r) => r.id === activeId) || this.data.roi;
-        const x = roi.xlim ? roi.xlim[0] : (roi as any).xMin ?? 0;
-        const y = roi.ylim ? roi.ylim[0] : (roi as any).yMin ?? 0;
+        const x = roi.xlim ? roi.xlim[0] : roi.xMin;
+        const y = roi.ylim ? roi.ylim[0] : roi.yMin;
         this.focusWorldPoint({ x, y }, 2.0);
         this.notifyNotice('聚焦 ROI 左上角 (1) - 方便对齐顶部边缘与起始列');
       },
@@ -1040,10 +1040,10 @@ private pointer: PointerState = {
       when: () => this.workflowStage === STAGE.ROI,
       run: () => {
         const rois = this.data.rois && this.data.rois.length > 0 ? this.data.rois : [this.data.roi];
-        const activeId = this.data.active_roi_id || (this.data as any).activeRoiId || rois[0]?.id;
+        const activeId = this.data.active_roi_id || rois[0]?.id;
         const roi = (this.data.rois || []).find((r) => r.id === activeId) || this.data.roi;
-        const x = roi.xlim ? roi.xlim[1] : (roi as any).xMax ?? 1000;
-        const y = roi.ylim ? roi.ylim[1] : (roi as any).yMax ?? 800;
+        const x = roi.xlim ? roi.xlim[1] : roi.xMax;
+        const y = roi.ylim ? roi.ylim[1] : roi.yMax;
         this.focusWorldPoint({ x, y }, 2.0);
         this.notifyNotice('聚焦 ROI 右下角 (2) - 方便对齐底部边缘与末尾列');
       },
@@ -2436,11 +2436,11 @@ private pointer: PointerState = {
         // 幽灵叠加也是「从基线起填充」：基线必须是 0 点（绿线），不是列左缘。
         const zero = zeroSpanOfColumn(col, this.groupOfColumn(col));
         if (!zero) return;
-        const areaPath = SplineInterpolator.buildAreaPath(sorted, zero.x, 'linear');
+        const areaPath = SplineInterpolator.buildAreaPath(sorted, zero.x);
         ctx.fillStyle = tokens.color.ghost.overlayFill;
         ctx.fill(areaPath);
 
-        const curvePath = SplineInterpolator.buildPath(sorted, 'linear');
+        const curvePath = SplineInterpolator.buildPath(sorted);
         ctx.strokeStyle = tokens.color.ghost.overlayStroke;
         ctx.lineWidth = 1.6 / scale;
         ctx.setLineDash([4 / scale, 3 / scale]);

@@ -14,9 +14,9 @@ export function render(data: DiagramData): string {
     ? data.rois
     : [{ id: 'roi_1', name: 'pollen', name_source: 'default', composition: true, visible: true, xlim: [data.roi.xMin, data.roi.xMax], ylim: [data.roi.yMin, data.roi.yMax], columns_stale: false, form_defaults: null }];
 
-  const activeId = data.active_roi_id || (data as any).activeRoiId || rois[0]?.id || 'roi_1';
+  const activeId = data.active_roi_id || rois[0]?.id || 'roi_1';
   const activeRoi = rois.find((r) => r.id === activeId) || rois[0];
-  const primaryId = data.primary_roi_id || (data as any).primaryRoiId || rois[0]?.id;
+  const primaryId = data.primary_roi_id || rois[0]?.id;
 
   const currentColumns = (data.columns || []).filter((c) => c.roi_id === activeRoi.id);
 
@@ -192,7 +192,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     const d = cachedRoiData;
     if (!d) return { rx0: 0, ry0: 0, rx1: 1000, ry1: 800 };
     const rois = d.rois && d.rois.length > 0 ? d.rois : [{ id: 'roi_1', xlim: [d.roi.xMin, d.roi.xMax], ylim: [d.roi.yMin, d.roi.yMax] }];
-    const activeId = d.active_roi_id || (d as any).activeRoiId || rois[0]?.id;
+    const activeId = d.active_roi_id || rois[0]?.id;
     const active = rois.find((r) => r.id === activeId) || rois[0];
     const rx0 = active.xlim ? active.xlim[0] : d.roi.xMin;
     const rx1 = active.xlim ? active.xlim[1] : d.roi.xMax;
@@ -224,7 +224,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     const d = cachedRoiData;
     if (!d) return;
     const rois = d.rois && d.rois.length > 0 ? d.rois : [{ id: 'roi_1', name: 'pollen', name_source: 'default', composition: true, visible: true, xlim: [d.roi.xMin, d.roi.xMax], ylim: [d.roi.yMin, d.roi.yMax], columns_stale: false, form_defaults: null }];
-    const activeId = d.active_roi_id || (d as any).activeRoiId || rois[0]?.id || 'roi_1';
+    const activeId = d.active_roi_id || rois[0]?.id || 'roi_1';
     const activeRoi = rois.find((r) => r.id === activeId) || rois[0];
     if (activeRoi) {
       const fullW = d.imageWidth || 1000;

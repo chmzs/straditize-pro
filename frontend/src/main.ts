@@ -626,7 +626,7 @@ async function bootstrap() {
     const cal = canvasComponent.data.calibration;
     // 撤销用的"改前快照"取**后端权威值**，不取前端镜像：镜像由 `res.canvas` 拼成，
     // 未必带 `isCalibrated`（实测撤销按钮 title 始终是静态文案 ⇒ 没入栈 ⇒ 守卫误判"未标定"）。
-    const calBefore = ((await rpcClient.getDiagramData()) as any)?.calibration;
+    const calBefore = (await rpcClient.getDiagramData()).calibration;
     try {
       const res = await rpcClient.calibrateDepthAxis(
         [
@@ -687,7 +687,7 @@ async function bootstrap() {
                   patch.primaryAxis,
                   false
                 ),
-              async () => snap(((await rpcClient.getDiagramData()) as any).calibration)
+              async () => snap((await rpcClient.getDiagramData()).calibration)
             )
           );
         }

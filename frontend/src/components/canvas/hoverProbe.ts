@@ -76,7 +76,7 @@ export function probeHover(env: HoverProbeEnv): HoverProbe {
   // 未标定列的换算只会给出猜测标度下的数字，宁可留空也不编造丰度。
   const percent =
     activeColumn && CoordinateSystem.hasRealCalibration(activeColumn)
-      ? CoordinateSystem.imageXToPercent(worldPt.x, activeColumn)
+      ? CoordinateSystem.imageXToValue(worldPt.x, activeColumn)
       : undefined;
 
   return {

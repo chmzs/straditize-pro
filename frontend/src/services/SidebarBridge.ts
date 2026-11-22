@@ -102,7 +102,7 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
           // 只有后端确认写入成功后才 push；逆操作自己刷后端状态，verify 也读后端。
           if (prevName && prevName !== newName) {
             const refreshFromBackend = async () => {
-              const fresh = (await p.rpcClient.getDiagramData()) as any;
+              const fresh = await p.rpcClient.getDiagramData();
               p.canvasComponent.loadNewDiagram(fresh);
               p.getSidebar()?.updateData(p.canvasComponent.data);
               p.getInspector()?.updateData(p.canvasComponent.data);
@@ -119,9 +119,9 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
                   await refreshFromBackend();
                 },
                 async () => {
-                  const fresh = (await p.rpcClient.getDiagramData()) as any;
-                  const col = (fresh.columns || []).find((c: any) => c.id === taxaId);
-                  return (col?.name ?? '') as string;
+                  const fresh = await p.rpcClient.getDiagramData();
+                  const col = (fresh.columns || []).find((c) => c.id === taxaId);
+                  return col?.name ?? '';
                 }
               )
             );

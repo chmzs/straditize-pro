@@ -690,11 +690,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     // 0 点 = 列左缘 + 轴线粗（与画布绿线同源，见 ARCHITECTURE §6.4）。
     // `start` 是轴线左缘（列切分线），轴粗取组参数，兜底 `DEFAULT_AXIS_STROKE_PX`。
     const stroke = resolveAxisStroke(col, g);
-    const start = Number(
-      (col as unknown as Record<string, number>).startX ??
-        (col as unknown as Record<string, number>).start ??
-        0
-    );
+    const start = col.startX;
     const zero = start + stroke;
 
     // 位置完全由用户决定：不吸附任何检测结果。点错了照样记下来，再点一次即覆盖
