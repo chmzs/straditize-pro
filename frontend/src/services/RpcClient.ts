@@ -1040,12 +1040,12 @@ export class RpcClient {
   public async setControlPoints(
     colIndex: number,
     points: Array<{ row: number; x: number; manual?: boolean }>
-  ): Promise<boolean> {
-    const res = await this.call<{ col_index: number; points: unknown[] }>(
-      'column.setControlPoints',
-      { col_index: colIndex, points }
-    );
-    return !!res;
+  ): Promise<{ col_index: number; points: Array<{ row?: number; y?: number; x: number }> } | null> {
+    const res = await this.call<
+      { col_index: number; points: Array<{ row: number; x: number; manual?: boolean }> },
+      { col_index: number; points: Array<{ row?: number; y?: number; x: number }> }
+    >('column.setControlPoints', { col_index: colIndex, points });
+    return res;
   }
 
   /**
@@ -1082,6 +1082,16 @@ export class RpcClient {
 
   public async digitizeColumn(taxaId: string): Promise<ControlPoint[]> {
     return (await this.digitizeColumnWithStats(taxaId)).points;
+  }
+
+  public async redigitizeAllColumns(resetManual: boolean = false): Promise<{
+    success: boolean;
+    columns_count: number;
+  }> {
+    return await this.call<{ reset_manual?: boolean }, { success: boolean; columns_count: number }>(
+      'column.redigitizeAll',
+      { reset_manual: resetManual }
+    );
   }
 
   private pickControlPoints(res: {

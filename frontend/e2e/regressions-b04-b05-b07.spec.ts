@@ -175,7 +175,7 @@ test.describe('B-07 重置全部操作', () => {
 // B-04
 // ---------------------------------------------------------------------------
 test.describe('B-04 重分列不得回滚后端 ROI', () => {
-  test('后端 ROI 被改窄后，步骤 5 重分列必须用新边界、不得写回旧值', async ({ page }) => {
+  test('后端 ROI 被改窄后，步骤 4 重分列必须用新边界、不得写回旧值', async ({ page }) => {
     await resetBaseline(page);
 
     const original = (await wire(page)).rois[0];
@@ -208,8 +208,8 @@ test.describe('B-04 重分列不得回滚后端 ROI', () => {
       origX1,
     ]);
 
-    // 3. 走真实 UI 推进到步骤 5（触发重分列）。
-    await gotoStage(page, 5);
+    // 3. 走真实 UI 推进到步骤 4（触发重分列）。
+    await gotoStage(page, 4);
 
     // 4. 关键判据：后端 ROI 必须**保持**改窄后的值。
     //    旧实现会把它写回 [origX0, origX1]。
@@ -223,12 +223,12 @@ test.describe('B-04 重分列不得回滚后端 ROI', () => {
     expect((await wire(page)).columns.length, '重分列应产出列').toBeGreaterThan(0);
 
     // 6. 前端镜像此时也必须与后端一致（分列后的 getDiagramData 回填）。
-    const mirrorAfter = await page.evaluate(() => {
+    const mirrorAfter = await page.evaluate((targetId: string) => {
       const api = (window as unknown as { __straditize?: { getState: () => Record<string, unknown> } })
         .__straditize;
       const rois = (api?.getState()?.rois ?? []) as Array<{ id: string; xlim?: [number, number] }>;
-      return rois.find((r) => r.id === 'roi_1')?.xlim ?? null;
-    });
+      return rois.find((r) => r.id === targetId)?.xlim ?? null;
+    }, original.id);
     expect(mirrorAfter, '分列后前端镜像应回到后端权威值').toEqual(narrowed);
   });
 });

@@ -38,6 +38,6 @@ export function installModalEscape(target: Document = document): () => void {
     }
   };
 
-  target.addEventListener('keydown', onKeyDown);
-  return () => target.removeEventListener('keydown', onKeyDown);
+  target.addEventListener('keydown', onKeyDown, { capture: true });
+  return () => target.removeEventListener('keydown', onKeyDown, { capture: true });
 }

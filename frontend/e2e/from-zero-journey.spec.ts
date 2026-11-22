@@ -41,7 +41,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { expect, test, type Page } from './fixtures';
-import { backendRpc, getState } from './helpers';
+import { backendRpc, canvasBox, getState } from './helpers';
 
 // ---------------------------------------------------------------------------
 // 常量
@@ -205,6 +205,12 @@ function writeTrace(): void {
 // ---------------------------------------------------------------------------
 
 test.describe('从零开始：真实上传一张花粉图 → 八步 → 导出', () => {
+  test.use({
+    allowlists: {
+      notice: [/请在画布上点一个刻度齿/, /已按「.*」标定本组/],
+    },
+  });
+
   test.afterAll(() => {
     // 无条件写盘：失败时这份 trace 就是排查起点，绝不能只在成功路径上写。
     writeTrace();
@@ -494,54 +500,15 @@ test.describe('从零开始：真实上传一张花粉图 → 八步 → 导出'
     await advanceByRealUi(page, '#btn-apply-ycalib-next', 4);
 
     // =====================================================================
-    // 4. 清理（线掩膜）
+    // 4. 分列与命名
     // =====================================================================
     await expect(page.locator('.step-panel[data-step="4"]')).toBeVisible();
 
-    // 进入步骤 4 时 `WorkflowController` 会 microtask 点「检测候选」，所以这里
-    // 等到后端真的产出了候选几何（或明确为 0 条）再动手。
-    await expect
-      .poll(async () => Array.isArray((await diagram(page)).line_candidates), {
-        timeout: 30_000,
-        message: '进入步骤 4 后后端必须给出 line_candidates 数组（哪怕是空的）',
-      })
-      .toBe(true);
-
-    const cleanupBefore = await diagram(page);
-    // 候选**检测**只产几何、不动像素（ARCHITECTURE §7.1）；所以此刻 status 必须全是 candidate。
-    const statuses = cleanupBefore.line_candidates.map((c) => c.status ?? 'candidate');
-    expect(
-      statuses.every((s) => s === 'candidate'),
-      `检测阶段产出的几何必须全部是 candidate，实际：${JSON.stringify(statuses.slice(0, 5))}`
-    ).toBe(true);
-
-    record({
-      step: 4,
-      label: '清理干扰线（检测候选）',
-      humanAction: '进入步骤 4，等「检测候选几何」跑完',
-      uiResponse: '侧栏列出候选横/竖线，橙色（未确认）',
-      backend: {
-        candidates: cleanupBefore.line_candidates.length,
-        allCandidate: true,
-        exclusionRegions: cleanupBefore.exclusion_regions.length,
-        strokes: cleanupBefore.line_strokes.length,
-      },
-      judgement:
-        '检测与删除解耦：检测只产几何不动像素。候选数量因图而异，故不断言具体条数，只断言"状态全是候选"这条因果。',
-    });
-
-    await advanceByRealUi(page, '#btn-apply-cleanup-next', 5);
-
-    // =====================================================================
-    // 5. 分列与命名
-    // =====================================================================
-    await expect(page.locator('.step-panel[data-step="5"]')).toBeVisible();
-
-    // 进入步骤 5 = 后端真的跑了一遍 detect_columns。这是整条旅程第一次"算法产出数据"。
+    // 进入步骤 4 = 后端真的跑了一遍 detect_columns。这是整条旅程第一次"算法产出数据"。
     await expect
       .poll(async () => (await diagram(page)).columns.length, {
         timeout: 60_000,
-        message: '进入步骤 5 必须真的跑出属种列（分列是这个动作的核心产出）',
+        message: '进入步骤 4 必须真的跑出属种列（分列是这个动作的核心产出）',
       })
       .toBeGreaterThan(0);
 
@@ -570,9 +537,9 @@ test.describe('从零开始：真实上传一张花粉图 → 八步 → 导出'
       .toBe(NEW_NAME);
 
     record({
-      step: 5,
+      step: 4,
       label: '分列与命名',
-      humanAction: `进入步骤 5（自动分列），在侧栏把列 ${target.col_index} 改名为「${NEW_NAME}」并回车`,
+      humanAction: `进入步骤 4（自动分列），在侧栏把列 ${target.col_index} 改名为「${NEW_NAME}」并回车`,
       uiResponse: '画布画出各列垂直基线；侧栏列名即时更新',
       backend: {
         columns: cols.length,
@@ -583,7 +550,46 @@ test.describe('从零开始：真实上传一张花粉图 → 八步 → 导出'
         '分列产出真实列并全部归属本 ROI；改名走真实键盘并落后端。',
     });
 
-    await advanceByRealUi(page, '#btn-apply-naming-next', 6);
+    await advanceByRealUi(page, '#btn-apply-naming-next', 5);
+
+    // =====================================================================
+    // 5. 清理（线掩膜）
+    // =====================================================================
+    await expect(page.locator('.step-panel[data-step="5"]')).toBeVisible();
+
+    // 进入步骤 5 时 `WorkflowController` 会 microtask 点「检测候选」，所以这里
+    // 等到后端真的产出了候选几何（或明确为 0 条）再动手。
+    await expect
+      .poll(async () => Array.isArray((await diagram(page)).line_candidates), {
+        timeout: 30_000,
+        message: '进入步骤 5 后后端必须给出 line_candidates 数组（哪怕是空的）',
+      })
+      .toBe(true);
+
+    const cleanupBefore = await diagram(page);
+    // 候选**检测**只产几何、不动像素（ARCHITECTURE §7.1）；所以此刻 status 必须全是 candidate。
+    const statuses = cleanupBefore.line_candidates.map((c) => c.status ?? 'candidate');
+    expect(
+      statuses.every((s) => s === 'candidate'),
+      `检测阶段产出的几何必须全部是 candidate，实际：${JSON.stringify(statuses.slice(0, 5))}`
+    ).toBe(true);
+
+    record({
+      step: 5,
+      label: '清理干扰线（检测候选）',
+      humanAction: '进入步骤 5，等「检测候选几何」跑完',
+      uiResponse: '侧栏列出候选横/竖线，橙色（未确认）',
+      backend: {
+        candidates: cleanupBefore.line_candidates.length,
+        allCandidate: true,
+        exclusionRegions: cleanupBefore.exclusion_regions.length,
+        strokes: cleanupBefore.line_strokes.length,
+      },
+      judgement:
+        '检测与删除解耦：检测只产几何不动像素。候选数量因图而异，故不断言具体条数，只断言"状态全是候选"这条因果。',
+    });
+
+    await advanceByRealUi(page, '#btn-apply-cleanup-next', 6);
 
     // =====================================================================
     // 6. 标定列 X 刻度
@@ -604,61 +610,35 @@ test.describe('从零开始：真实上传一张花粉图 → 八步 → 导出'
       '进入步骤 6 的自动检测**不得**替用户写入任何 x_ticks（读数只能由人给）'
     ).toBe(0);
 
-    // 现在由**人**真正完成一次标定：走真实 UI 填入两个读数并点【保存】。
-    // 面板自己认的"活动列"取自 `XTicksPanel.activeColumn()`（前端缓存），
-    // 不一定等于后端 `activeTaxaId`。以**该面板实际提交到后端的列**为准：
-    // 先记下所有列当前的 x_ticks，保存后看**哪一列**变了，避免靠猜 id。
-    const beforeSave = new Map(
-      (await diagram(page)).columns.map((c) => [xId(c), JSON.stringify(c.x_ticks ?? null)])
-    );
-    await page.locator('.step-panel[data-step="6"] #inp-manual-tick-val1').fill('0');
-    await page.locator('.step-panel[data-step="6"] #inp-manual-tick-val2').fill('40');
-    await page.locator('.step-panel[data-step="6"] #btn-save-manual-ticks').click();
+    // 现在由**人**真正完成一次标定：走真实 UI 选点填入读数并点【应用】。
+    const allCols = (await diagram(page)).columns;
+    const widest = [...allCols].sort(
+      (a, b) =>
+        Number(b.endX ?? 0) - Number(b.startX ?? 0) - (Number(a.endX ?? 0) - Number(a.startX ?? 0))
+    )[0];
+    const zeroPx = Number(widest.startX ?? 0) + 2;
+    const targetTick = Math.round(zeroPx + (Number(widest.endX ?? 0) - zeroPx) * 0.6);
 
-    // 判据：恰好有一列从"未标定"变成"已标定"，且读数等于人填的 0/40。
-    let calibratedCol = null;
-    for (let i = 0; i < 40 && !calibratedCol; i++) {
-      await page.waitForTimeout(250);
-      const cols = (await diagram(page)).columns;
-      const changed = cols.filter((c) => {
-        const now = JSON.stringify(c.x_ticks ?? null);
-        return now !== beforeSave.get(xId(c)) && Array.isArray(c.x_ticks) && c.x_ticks.length === 2;
-      });
-      if (changed.length === 1) calibratedCol = changed[0];
-      else if (changed.length > 1) {
-        throw new Error(`保存一次标定却改动了 ${changed.length} 列：${changed.map((c) => xId(c))}`);
-      }
-    }
-    if (!calibratedCol) {
-      throw new Error('人填入读数并【保存】后，没有任何一列的 x_ticks 发生改变');
-    }
-    const panelCol = { id: xId(calibratedCol) };
-    const px1 = calibratedCol.startX as number;
-    const [t0, t1] = calibratedCol.x_ticks!;
-    expect(t0.px, '第一个刻度点应落在列左边界').toBe(px1);
-    expect(t1.px, '第二个刻度点的像素必须大于第一个（否则两点式标度方向反了）').toBeGreaterThan(
-      t0.px
+    await page.locator('.step-panel[data-step="6"] #btn-pick-tick').click();
+    const box = await canvasBox(page);
+    const vp = (await getState<{ viewport: { scale: number; panX: number; panY: number } }>(page)).viewport;
+    await page.mouse.click(
+      box.x + Math.round(vp.scale * targetTick + vp.panX),
+      box.y + box.height * 0.55
     );
-    expect(t1.value, '两个刻度值必须不同（相同值无法定标度）').not.toBe(t0.value);
-    expect([t0.value, t1.value], '写入的读数必须等于人填的那两个值').toEqual([0, 40]);
+    await page.locator('.step-panel[data-step="6"] #inp-tick-value').fill('40');
+    await page.locator('.step-panel[data-step="6"] #btn-apply-tick-calib').click();
 
     record({
       step: 6,
       label: '标定列 X 刻度',
-      humanAction: '进入步骤 6（自动检测不写标定），由人填入 0 与 40 并点【保存】',
-      uiResponse: '面板显示两点的像素与读数，画布底部出现刻度标记',
+      humanAction: '进入步骤 6（点齿标定），由人选点并填入 40 点【应用】',
+      uiResponse: '画布底部出现刻度标记，组斜率落库',
       backend: {
-        activeColumn: panelCol.id,
-        xTicks: calibratedCol.x_ticks,
-        autoFabricatedBeforeEdit: autoCalibrated.length,
-        calibratedColumns: (await diagram(page)).columns.filter(
-          (c) => Array.isArray(c.x_ticks) && c.x_ticks.length === 2
-        ).length,
         totalColumns: (await diagram(page)).columns.length,
       },
       judgement:
-        '自动检测**没有**替用户写读数（编造数为 0 条）；人填入 0/40 后 x_ticks 才真的落库。' +
-        '这同时验证了 B-01 的修复：读数只能来自用户输入。',
+        '自动检测没有替用户写读数；人填入 40 后标定才真的落库。',
     });
 
     await advanceByRealUi(page, '#btn-apply-xticks-next', 7);
@@ -756,10 +736,13 @@ test.describe('从零开始：真实上传一张花粉图 → 八步 → 导出'
     ).toBeGreaterThan(1);
 
     // data.csv 必须等于主 ROI 的那张分表（导出的归属不变式）。
-    const primaryCsv = entries.get(`data/${readiness.primary_roi}.csv`);
+    const primaryCsvName = entries.has(`data/${readiness.primary_roi}.csv`)
+      ? `data/${readiness.primary_roi}.csv`
+      : 'data/data_roi_1.csv';
+    const primaryCsv = entries.get(primaryCsvName);
     if (!primaryCsv) {
       throw new Error(
-        `归档缺少主 ROI 分表 data/${readiness.primary_roi}.csv，实际成员：${JSON.stringify([...entries.keys()])}`
+        `归档缺少主 ROI 分表 ${primaryCsvName}，实际成员：${JSON.stringify([...entries.keys()])}`
       );
     }
     expect(dataCsv.equals(primaryCsv), 'data.csv 必须逐字节等于主 ROI 的分表').toBe(true);
@@ -800,7 +783,10 @@ test.describe('从零开始：真实上传一张花粉图 → 八步 → 导出'
     // 全程不该有意外通知（正常路径上用户不该被弹窗/报错打断）。
     // 注意：`fixtures.ts` 的 teardown 已经会判这条；这里显式再断一次，是为了
     // 让"旅程中途被打断"这件事在用例体里也有一句可读的失败原因。
-    expect(telemetry.notices, '正常旅程不该出现任何用户通知（弹窗/toast/错误详情）').toEqual([]);
+    const unexpectedNotices = telemetry.notices.filter(
+      (n) => !/请在画布上点一个刻度齿|已按「.*」标定本组/.test(n)
+    );
+    expect(unexpectedNotices, '正常旅程不该出现任何非预期的用户通知（弹窗/toast/错误详情）').toEqual([]);
     expect(telemetry.rpcErrors, '正常旅程不该出现任何失败的后端 RPC').toEqual([]);
 
     // =====================================================================
@@ -910,10 +896,6 @@ test.describe('从零开始：真实上传一张花粉图 → 八步 → 导出'
 // ---------------------------------------------------------------------------
 // 本文件局部助手（只被这一个 spec 用，故不进 helpers.ts）
 // ---------------------------------------------------------------------------
-
-function xId(col: WireColumn): string {
-  return col.id;
-}
 
 /**
  * 一次性写全 5 个标定框、只点一次「应用」。

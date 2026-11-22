@@ -530,6 +530,7 @@ class RoiMixin:
             "plot_type",
             "scale_type",
             "exaggeration_mult",
+            "exagg_style",
             "tick_layout",
             # 组标度记忆：用户填的「每根齿单位数」是**输入量**、不是派生量，
             # 所以单独存一个字段（`ref_val_*` 是它乘格数后的派生值，反算会失真）。
@@ -601,6 +602,15 @@ class RoiMixin:
                 holder: dict[str, Any] = {}
                 store_exaggeration(holder, value)
                 value = holder.get("exaggeration_mult")
+            if field == "exagg_style":
+                if value is not None:
+                    val_str = str(value).lower()
+                    if val_str not in ("line", "area"):
+                        raise JsonRpcError(
+                            INVALID_PARAMS,
+                            f"exagg_style 必须是 'line' 或 'area'，收到 {value!r}",
+                        )
+                    value = val_str
             target[field] = value
 
         return {"roi_id": roi_id, "group": target}

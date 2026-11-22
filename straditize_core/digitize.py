@@ -148,6 +148,11 @@ def _own_run_span(
             if label_at(start) == own_label:
                 result = (int(fg_indices[start]), int(fg_indices[end]))
     if result is None:
+        # 若整行起始墨迹贴近基线，说明本列曲线锚定在基线上；
+        # 绝不跨越空白贪婪取到最右侧邻列/残渣墨迹（避免附图第 3 列横贯直插右边界）。
+        if len(starts) > 0 and int(fg_indices[0]) <= baseline_tol:
+            return int(fg_indices[starts[0]]), int(fg_indices[ends[0]])
+        # 仅当整行完全脱离基线（漂浮线）且无锚定时，才保留历史兜底取最右端墨迹
         return int(fg_indices[0]), int(fg_indices[-1])
     return result
 

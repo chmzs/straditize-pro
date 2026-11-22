@@ -15,6 +15,12 @@ export interface StepContext {
   ) => void;
   /** 步骤 6：清空该列的 X 标度，回到「未标定」。 */
   onClearXTicks?: (colIndex: number) => void;
+  /** 步骤 6：清空全部列的 X 标度。 */
+  onClearAllXTicks?: () => Promise<void>;
+  /** 步骤 4：清空并重新自动分列。 */
+  onRedetectColumns?: () => Promise<void>;
+  /** 步骤 3：清空 Y 轴两点标定。 */
+  onClearYCalibration?: () => void;
   /** 切换画布工具模式（如切到 measure 测距工具） */
   onSetToolMode?: (mode: any) => void;
   /** 快速跳转并放大到指定的图像世界坐标点 */

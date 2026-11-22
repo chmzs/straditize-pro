@@ -15,6 +15,7 @@ export interface Point {
   isManual?: boolean;
   createdAt?: number;
   type?: string; // 兼容老版本代码
+  source?: string; // 点来源：如 'exagg_5x', 'main_1x', 'read'
 }
 
 export type ScaleType = 'linear' | 'log';
@@ -101,6 +102,7 @@ export interface ColumnGroup {
   plot_type: 'area' | 'bar' | 'line' | 'symbol';
   scale_type: 'linear' | 'log';
   exaggeration_mult?: number | null;
+  exagg_style?: 'line' | 'area';
   tick_layout: Array<{ rel: number }>;
   /** 组参考标尺物理跨度 (px)，例如 38.5px 对应 20% */
   ref_span_px?: number;
@@ -118,7 +120,7 @@ export interface ColumnGroup {
    * 组内所有列共用它，每列的 0 点各自算。写入时后端会清掉组内各列的
    * `x_ticks`，保证单一事实源。`resolve_column_scale` 的 source 记为 `group_slope`。
    */
-  value_per_px?: number;
+  value_per_px?: number | null;
   /**
    * 用户填的「每根齿单位数」——**输入量**，不是派生量。
    *

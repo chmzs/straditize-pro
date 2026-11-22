@@ -87,8 +87,8 @@ export class ShortcutService {
           <div class="help-grid">
             <div class="help-row"><span class="help-key">R</span><span class="help-desc">Step 2 · ROI Bounding Box</span></div>
             <div class="help-row"><span class="help-key">Y</span><span class="help-desc">Step 3 · Y-Axis Two-Point Calibration</span></div>
-            <div class="help-row"><span class="help-key">K</span><span class="help-desc">Step 4 · Line Mask Correction Brush</span></div>
-            <div class="help-row"><span class="help-key">C</span><span class="help-desc">Step 5 · Add Column Baseline</span></div>
+            <div class="help-row"><span class="help-key">C</span><span class="help-desc">Step 4 · Add Column Baseline</span></div>
+            <div class="help-row"><span class="help-key">K</span><span class="help-desc">Step 5 · Line Mask Correction Brush</span></div>
             <div class="help-row"><span class="help-key">T</span><span class="help-desc">Step 6 · Pick an X-Axis Ruler Tick</span></div>
             <div class="help-row"><span class="help-key">A / S / D</span><span class="help-desc">Step 7 · Add (A) / Adjust (S) / Delete (D) Control Point</span></div>
           </div>
@@ -107,7 +107,7 @@ export class ShortcutService {
         <div class="help-section">
           <div class="help-section-title">Display, History & System</div>
           <div class="help-grid">
-            <div class="help-row"><span class="help-key">B / I / C</span><span class="help-desc">Binary Overlay (B) / Invert (I) / Contrast (C)</span></div>
+            <div class="help-row"><span class="help-key">B / I</span><span class="help-desc">Binary Overlay (B) / Invert (I)</span></div>
             <div class="help-row"><span class="help-key">Ctrl+Z / Ctrl+Y</span><span class="help-desc">Undo / Redo</span></div>
             <div class="help-row"><span class="help-key">Ctrl+[ / Ctrl+]</span><span class="help-desc">Collapse/Expand Left / Right Panels</span></div>
             <div class="help-row"><span class="help-key">Ctrl+,</span><span class="help-desc">Preferences & Settings</span></div>
@@ -141,9 +141,9 @@ export class ShortcutService {
           <div class="help-grid">
             <div class="help-row"><span class="help-key">R</span><span class="help-desc">步骤 2 · ROI 矩形取数区框定模式</span></div>
             <div class="help-row"><span class="help-key">Y</span><span class="help-desc">步骤 3 · Y 轴两点物理标定模式</span></div>
-            <div class="help-row"><span class="help-key">K</span><span class="help-desc">步骤 4 · 干扰线掩膜人工修复笔刷</span></div>
-            <div class="help-row"><span class="help-key">C</span><span class="help-desc">步骤 5 · 添加属种分列线模式</span></div>
-            <div class="help-row"><span class="help-key">T</span><span class="help-desc">步骤 6 · 点选 X 轴刻度齿标定模式</span></div>
+            <div class="help-row"><span class="help-key">C</span><span class="help-desc">步骤 4 · 添加属种分列线模式</span></div>
+            <div class="help-row"><span class="help-key">K</span><span class="help-desc">步骤 5 · 干扰线掩膜人工修复笔刷</span></div>
+            <div class="help-row"><span class="help-key">T</span><span class="help-desc">步骤 6 · 点选 X 轴刻度齿 (列标定模式)</span></div>
             <div class="help-row"><span class="help-key">A / S / D</span><span class="help-desc">步骤 7 · 添加 (A) / 微调选择 (S) / 删除 (D) 控制点</span></div>
           </div>
         </div>
@@ -161,7 +161,7 @@ export class ShortcutService {
         <div class="help-section">
           <div class="help-section-title">底图滤镜与全局系统</div>
           <div class="help-grid">
-            <div class="help-row"><span class="help-key">B / I / C</span><span class="help-desc">二值化透视遮罩 (B) / 底图反相 (I) / 增强对比度 (C)</span></div>
+            <div class="help-row"><span class="help-key">B / I</span><span class="help-desc">二值化透视遮罩 (B) / 底图反相 (I)</span></div>
             <div class="help-row"><span class="help-key">Ctrl+Z / Ctrl+Y</span><span class="help-desc">撤销 / 重做 (Undo / Redo)</span></div>
             <div class="help-row"><span class="help-key">Ctrl+[ / Ctrl+]</span><span class="help-desc">展开 / 折叠左侧属种列表 / 右侧属性检查器</span></div>
             <div class="help-row"><span class="help-key">Ctrl+,</span><span class="help-desc">呼出全局偏好与系统设置 (Settings)</span></div>

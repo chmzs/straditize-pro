@@ -240,7 +240,7 @@ export function renderActiveColumnLostNotice(col: Column): string {
           <span style="flex-shrink: 0;">${cause.headline}</span>
           <span style="color: var(--text-secondary); font-weight: 400;">（需重新标定）</span>
         </summary>
-        <div style="font-size: 9.5px; line-height: 1.45; color: var(--text-secondary); padding: 4px 0 2px 0;">
+        <div style="font-size: 10px; line-height: 1.45; color: var(--text-secondary); padding: 4px 0 2px 0;">
           <div><strong>①</strong> ${cause.body}</div>
           <div style="margin-top: 2px;"><strong>②</strong> 原刻度像素：<code>${formatOriginalPx(dropped)}</code>；该列现在的列范围：<code>${columnBand}</code>${allEndpointsOutsideBand(dropped) ? '（两端点都在允许区间外）' : ''}。</div>
           ${
@@ -275,7 +275,7 @@ export function renderOtherLostColumnsSummary(
           <span style="flex-shrink: 0;">另有 ${others.length} 列同样丢了标定：</span>
           <span style="color: var(--text-secondary); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${names}</span>
         </summary>
-        <div style="font-size: 9.5px; line-height: 1.45; color: var(--text-secondary); padding: 4px 0 2px 0;">
+        <div style="font-size: 10px; line-height: 1.45; color: var(--text-secondary); padding: 4px 0 2px 0;">
           ${others.map((c) => describeLostColumn(c)).join('<br>')}
         </div>
       </details>
@@ -297,12 +297,12 @@ export function renderSplitLostXTicksNotice(cols: Column[]): string {
   return `
       <!-- 重新分列导致的标定丢失（B-02）：必须在分列这一步就报出来，不能等用户走到步骤 6 才发现。 -->
       <div class="inspector-section x-ticks-lost-notice" role="alert"
-           data-panel="step5" data-lost-count="${lost.length}"
+           data-panel="step4" data-lost-count="${lost.length}"
            style="padding: 9px 10px; background: color-mix(in srgb, var(--status-warning) 8%, transparent); border: 1px solid var(--status-warning); border-left: 3px solid var(--status-warning); border-radius: 6px; margin-bottom: 12px;">
-        <div style="font-size: 11.5px; font-weight: 700; color: var(--status-warning); margin-bottom: 6px;">
+        <div style="font-size: 12px; font-weight: 700; color: var(--status-warning); margin-bottom: 6px;">
           ${head}
         </div>
-        <div style="font-size: 10.5px; line-height: 1.55; color: var(--text-secondary);">
+        <div style="font-size: 11px; line-height: 1.55; color: var(--text-secondary);">
           ${lost.map((c) => describeLostColumn(c)).join('<br>')}
           <div style="margin-top: 5px;">
             这些列现在处于「未标定」状态：原来填入的刻度读数已随列边界变动失效，需要你在步骤 6 重新填入真实读数。齿位检测不等于标定，系统不会替你填数。

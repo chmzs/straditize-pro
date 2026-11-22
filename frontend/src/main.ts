@@ -27,7 +27,7 @@ import {
 } from './types/pollen';
 import { onLocaleChange, applyLocaleToDocument, t } from './i18n';
 import { STAGE } from './core/WorkflowStage';
-import { WorkflowStage } from './types/workflow';
+import { WorkflowStage, WORKFLOW_STAGES } from './types/workflow';
 import { ShortcutService } from './services/ShortcutService';
 import { FileLoaderService } from './services/FileLoaderService';
 import { WorkflowController } from './services/WorkflowController';
@@ -256,7 +256,17 @@ async function bootstrap() {
     onControlPointsCommit: (colIndex, points) => {
       void (async () => {
         try {
-          await rpcClient.setControlPoints(colIndex, points);
+          const res = await rpcClient.setControlPoints(colIndex, points);
+          if (res?.points) {
+            const col = canvasComponent.data.columns[colIndex];
+            if (col) {
+              col.curvePoints = res.points.map((p) => ({
+                y: Number(p.row ?? p.y),
+                x: Number(p.x),
+              }));
+              canvasComponent.requestRender();
+            }
+          }
         } catch (err) {
           notifyError(
             `控制点同步失败（col ${colIndex}）：${err instanceof Error ? err.message : String(err)}`
@@ -490,11 +500,50 @@ async function bootstrap() {
     tool_mode: canvasComponent.getToolMode(),
   }));
 
+  function inferProjectStage(projectData: DiagramData): WorkflowStage {
+    const hasSamples = (projectData.samples || []).length > 0;
+    const hasControlPoints = (projectData.columns || []).some(
+      (c) => (c.controlPoints || []).length > 0
+    );
+    if (hasSamples || hasControlPoints) {
+      return STAGE.SPEARS_AND_SAMPLES;
+    }
+    const hasCalibratedColumns = (projectData.columns || []).some(
+      (c) => c.x_ticks && c.x_ticks.length > 0
+    );
+    if (hasCalibratedColumns) {
+      return STAGE.CALIBRATE_COLUMNS;
+    }
+    const hasColumns = (projectData.columns || []).length > 0;
+    if (hasColumns) {
+      return STAGE.CLEANUP;
+    }
+    const hasYCalib = Boolean(
+      projectData.calibration?.isCalibrated ||
+        projectData.calibration?.top_px != null ||
+        projectData.calibration?.bottom_px != null
+    );
+    if (hasYCalib) {
+      return STAGE.SPLIT;
+    }
+    const hasRois =
+      (projectData.rois || []).length > 0 ||
+      ((projectData.roi?.xMax ?? 0) > (projectData.roi?.xMin ?? 0));
+    if (hasRois) {
+      return STAGE.Y_CALIB;
+    }
+    if (projectData.imageSrc) {
+      return STAGE.ROI;
+    }
+    return STAGE.LOAD;
+  }
+
   const onProjectLoad = (projectData: DiagramData) => {
     ErrorReporter.log('info', 'Project', `已载入项目包: ${projectData.project_name || 'untitled'}`);
     canvasComponent.loadNewDiagram(projectData);
     history.reset(projectData.columns, projectData.activeTaxaId, projectData.calibration, projectData.roi);
-    workflowController.setCurrentStage(STAGE.Y_CALIB);
+    const initialStage = inferProjectStage(projectData);
+    workflowController.setCurrentStage(initialStage);
     workflowController.updateWorkflowBar();
     sidebar?.updateData(canvasComponent.data);
     inspector?.updateData(canvasComponent.data);
@@ -503,7 +552,11 @@ async function bootstrap() {
     toolbar?.setProjectName(projectData.project_name || '');
     updateFooter();
     void cleanupManager.recomposeCleanupState('载入项目后重算清理掩膜');
-    setHudNotice('已载入项目包 (.tar)：属种列、刻度齿与控制点已从包内恢复。', 4500);
+    const stageMeta = WORKFLOW_STAGES[initialStage];
+    setHudNotice(
+      `已载入项目包 (.tar)：属种列、刻度齿与控制点已恢复，当前进入步骤 ${initialStage}：${stageMeta.stepName}。`,
+      4500
+    );
   };
 
   const projectManager = new ProjectManager(
@@ -811,6 +864,14 @@ async function bootstrap() {
     updateFooter: () => updateFooter(),
     scheduleAutosave: () => scheduleAutosave(),
     setHudNotice,
+  });
+
+  // 点击任何按钮后立即失焦，避免残留焦点导致按空格（平移视口）时误触发该按钮的原生 click
+  window.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement)?.closest('button');
+    if (btn) {
+      btn.blur();
+    }
   });
 
   console.log('Straditize Modern Frontend Initialized Successfully');

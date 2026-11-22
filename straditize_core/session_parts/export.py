@@ -245,6 +245,7 @@ def _read_row_values(
     strict: bool,
     col_name: str,
     missing_is_na: bool,
+    sources_dict: dict[int, str] | None = None,
 ) -> list[Any]:
     """按行读一列读数；缺行怎么补由该列的来历决定。
 
@@ -258,6 +259,7 @@ def _read_row_values(
     """
     baseline_px = float(scale.abs_px0)
     px = [p_dict.get(r) for r in rows]
+    srcs = [sources_dict.get(r) if sources_dict else None for r in rows]
     if missing_is_na:
         filled = _interpolate_missing_px(px, rows, p_dict)
         values = read_column_values(
@@ -265,6 +267,7 @@ def _read_row_values(
             [baseline_px if p is None else p for p in filled],
             strict=strict,
             col_name=col_name,
+            sources=srcs,
         )
         return [None if p is None else v for p, v in zip(filled, values)]
     values = read_column_values(
@@ -272,6 +275,7 @@ def _read_row_values(
         [baseline_px if p is None else p for p in px],
         strict=strict,
         col_name=col_name,
+        sources=srcs,
     )
     return list(values)
 
@@ -630,6 +634,7 @@ class ExportMixin:
                 scale = resolve_column_scale(self, col, c_idx)
                 pts = column_points.get(c_idx, [])
                 p_dict = {p["row"]: p["x"] for p in pts}
+                sources_dict = {p["row"]: p.get("source") for p in pts}
                 # 未标定整列不给数在 read_column_values 里判；缺行给 0 还是 NA 由
                 # 该列是不是「控制点合成」决定（与 _export_value_columns 同一入口）。
                 data_dict[col_name] = _mask_outside_window(
@@ -641,6 +646,7 @@ class ExportMixin:
                         strict=strict,
                         col_name=col_name,
                         missing_is_na=c_idx in _control_point_only_columns(self),
+                        sources_dict=sources_dict,
                     ),
                     _column_row_window(self, col, c_idx),
                     p_dict,
@@ -1970,6 +1976,7 @@ class ExportMixin:
 
             pts = self.column_points[c_idx]
             p_dict = {p["row"]: p["x"] for p in pts}
+            sources_dict = {p["row"]: p.get("source") for p in pts}
             scale = resolve_column_scale(self, col_def, c_idx)
             # 未标定整列不给数在 read_column_values 里判；缺行给 0 点（无墨迹 = 真零）
             # 还是 None（控制点合成列 = 没有这一行的读数），由该列的来历决定。
@@ -1982,6 +1989,7 @@ class ExportMixin:
                     strict=strict,
                     col_name=col_name,
                     missing_is_na=c_idx in sparse_columns,
+                    sources_dict=sources_dict,
                 ),
                 _column_row_window(self, col_def, c_idx),
                 p_dict,

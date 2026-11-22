@@ -1,6 +1,7 @@
 import { DiagramData } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
+import { renderResetButton } from '../../ui/resetButton';
 
 export const step = 2;
 export const title = '2. 数据有效区 (ROI)';
@@ -110,9 +111,18 @@ export function render(data: DiagramData): string {
       </div>
 
       <!-- 推进到 Step 3 -->
-      <button id="btn-apply-roi-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+      <button id="btn-apply-roi-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px; font-weight: 600;">
         ${t('step2.next')}
       </button>
+
+      <!-- 重设本步 (图2样式) -->
+      <div style="display: flex; justify-content: center; margin-top: 8px;">
+        ${renderResetButton({
+          id: 'btn-reset-step2-roi',
+          title: '将当前有效区 (ROI) 重设回整张图谱范围',
+          label: '重设有效区',
+        })}
+      </div>
     </div>
   `;
 }
@@ -206,5 +216,22 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   // 下一步
   root.querySelector('#btn-apply-roi-next')?.addEventListener('click', () => {
     ctx.onAdvanceWorkflowStage?.(3);
+  });
+
+  // 重设本步
+  root.querySelector('#btn-reset-step2-roi')?.addEventListener('click', () => {
+    if (!window.confirm('确定将当前数据有效区重设回整张图谱的初始全图范围吗？')) return;
+    const d = cachedRoiData;
+    if (!d) return;
+    const rois = d.rois && d.rois.length > 0 ? d.rois : [{ id: 'roi_1', name: 'pollen', name_source: 'default', composition: true, visible: true, xlim: [d.roi.xMin, d.roi.xMax], ylim: [d.roi.yMin, d.roi.yMax], columns_stale: false, form_defaults: null }];
+    const activeId = d.active_roi_id || (d as any).activeRoiId || rois[0]?.id || 'roi_1';
+    const activeRoi = rois.find((r) => r.id === activeId) || rois[0];
+    if (activeRoi) {
+      const fullW = d.imageWidth || 1000;
+      const fullH = d.imageHeight || 1000;
+      activeRoi.xlim = [0, fullW];
+      activeRoi.ylim = [0, fullH];
+      ctx.onRoiCommitted?.(activeRoi);
+    }
   });
 }

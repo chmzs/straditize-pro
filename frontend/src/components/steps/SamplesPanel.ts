@@ -5,6 +5,7 @@ import { t } from '../../i18n';
 import { calUnitLabel } from '../../core/calUnit';
 import { notify, notifyError } from '../../ui/feedback';
 import { showConfirmDialog } from '../../ui/confirm';
+import { renderResetButton } from '../../ui/resetButton';
 
 export const step = 7;
 export const title = '7. 拐点与采样层位';
@@ -219,9 +220,18 @@ export function render(data: DiagramData): string {
       </div>
 
       <!-- 阶段提交按钮 -->
-      <button id="btn-apply-samples-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px;">
+      <button id="btn-apply-samples-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px; font-weight: 600;">
         ${t('step7.next')}
       </button>
+
+      <!-- 重设操作区 (图2样式) -->
+      <div style="display: flex; justify-content: center; margin-top: 8px;">
+        ${renderResetButton({
+          id: 'btn-reset-step7-samples',
+          title: '清空已提取或导入的全部采样层位',
+          label: '重设采样层位',
+        })}
+      </div>
     </div>
   `;
 }
@@ -346,6 +356,11 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
 
   root.querySelector('#btn-apply-samples-next')?.addEventListener('click', () => {
     ctx.onAdvanceWorkflowStage?.(8);
+  });
+
+  root.querySelector('#btn-reset-step7-samples')?.addEventListener('click', async () => {
+    if (!window.confirm('确定清空当前已提取或导入的全部采样层位吗？')) return;
+    await ctx.onClearHorizons?.();
   });
 }
 

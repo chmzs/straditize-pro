@@ -7,7 +7,6 @@ calibration produce identical scientific values everywhere.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import Any, Iterator, Sequence
 
@@ -107,6 +106,7 @@ class ColumnScale:
     #: 列左缘 + 轴粗；若写入方把列左缘当 0 点写进 x_ticks[0].px，读数会整体偏大
     #: 轴粗 x 斜率。下游据此提示/拒绝，而不是静默给出偏大的数。
     origin_suspect: bool = False
+    exagg_style: str = "line"
 
     def __post_init__(self) -> None:
         """构造时一次性归一化，使下游只需面对两个已知取值。
@@ -115,6 +115,10 @@ class ColumnScale:
         ``px_to_value`` 里的 ``else`` 分支恒等于线性，不再可能悄悄兜住第三个值。
         """
         object.__setattr__(self, "scale_type", normalize_scale_type(self.scale_type))
+        style = str(getattr(self, "exagg_style", "line") or "line").lower()
+        if style not in ("line", "area"):
+            style = "line"
+        object.__setattr__(self, "exagg_style", style)
 
     def __iter__(self) -> Iterator[Any]:
         """Support tuple unpacking; field order is the yield order below."""
@@ -144,6 +148,7 @@ class ColumnScale:
         col_name: str = "column",
         ndigits: int | None = 4,
         require_calibrated: bool = True,
+        is_1x: bool = False,
     ) -> float:
         """Convert an image X pixel coordinate to scientific abundance/value.
 
@@ -209,6 +214,7 @@ class ColumnScale:
 
         if (
             apply_exaggeration
+            and not is_1x
             and self.exaggeration_mult is not None
             and self.exaggeration_mult > 1.0
         ):
@@ -245,6 +251,7 @@ def read_column_values(
     profile: str = READ_PROFILE_EXPORT,
     strict: bool = False,
     col_name: str = "",
+    sources: Sequence[str | None] | None = None,
 ) -> list[float | None]:
     """把一串像素读成读数——**唯一入口**，出口差异只由 `profile` 表达。
 
@@ -256,6 +263,7 @@ def read_column_values(
     - 基线固定取 `scale.abs_px0`（= 列左缘 + 轴线粗，ARCHITECTURE §6.4）。画布绿线画在
       0 点，换算基准必须同源，否则缺控制点的行会落进轴内算出负值再被 clamp；
     - `null_when_uncalibrated` 由 profile 决定，而不是各调用方自己 `if scale.calibrated`。
+    - `sources` 支持区分外线 (exagg_Nx, 需除以 N) 与回退截断内线 (main_1x, 已经是 1x 原值，不再除以 N)。
     """
     policy = _READ_PROFILES.get(profile)
     if policy is None:
@@ -263,6 +271,7 @@ def read_column_values(
     if policy["null_when_uncalibrated"] and not scale.calibrated:
         return [None] * len(rows_px)
     baseline = float(scale.abs_px0)
+    src_list = list(sources) if sources is not None else [None] * len(rows_px)
     return [
         scale.px_to_value(
             x,
@@ -271,8 +280,9 @@ def read_column_values(
             col_name=col_name,
             require_calibrated=policy["require_calibrated"],
             ndigits=policy["ndigits"],
+            is_1x=(src == "main_1x"),
         )
-        for x in rows_px
+        for x, src in zip(rows_px, src_list)
     ]
 
 
@@ -299,6 +309,9 @@ def resolve_column_scale(
     group_obj = _resolve_column_group(session, col_dict)
     scale_type, unit, plot_type = _resolve_column_visual(col_dict, group_obj)
     exaggeration_mult = _resolve_exaggeration(col_dict, group_obj)
+    exagg_style = str((group_obj or {}).get("exagg_style") or col_dict.get("exagg_style") or "line").lower()
+    if exagg_style not in ("line", "area"):
+        exagg_style = "line"
 
     # Case A1: Resolved via group tick_layout and column x_values (D1: 组管位置，列管数值)
     x_values = col_dict.get("x_values")
@@ -313,6 +326,7 @@ def resolve_column_scale(
             plot_type=plot_type,
             scale_type=scale_type,
             exaggeration_mult=exaggeration_mult,
+            exagg_style=exagg_style,
         )
 
     # 组级斜率（点齿标定的结果，ARCHITECTURE §6.4）优先于 x_ticks：
@@ -331,6 +345,7 @@ def resolve_column_scale(
             plot_type=plot_type,
             scale_type=scale_type,
             exaggeration_mult=exaggeration_mult,
+            exagg_style=exagg_style,
         )
 
     # Case A2: Explicit x_ticks (transition SSOT)
@@ -346,6 +361,7 @@ def resolve_column_scale(
             plot_type=plot_type,
             scale_type=scale_type,
             exaggeration_mult=exaggeration_mult,
+            exagg_style=exagg_style,
         )
 
     return _scale_from_fallback(
@@ -358,13 +374,14 @@ def resolve_column_scale(
         unit=unit,
         plot_type=plot_type,
         exaggeration_mult=exaggeration_mult,
+        exagg_style=exagg_style,
     )
 
 
 def _resolve_column_group(
     session: Any, col_dict: dict[str, Any]
 ) -> dict[str, Any] | None:
-    """定位列所属的 x 组：列上的 roi_id → 该 ROI；没有则回落活跃/主 ROI，再回落第一个。    组的选择同理：列上的 x_group_id → 该组；没有则用 ROI 的 default_group_id；再没有用第一个组。"""
+    """定位列所属的 x 组：列上的 roi_id → 该 ROI；没有则回落活跃/主 ROI，再回落第一个。    组的选择同理：列上的 x_group_id → 该组；没有则用 ROI 的 default_group_id；再没有用第一个组。    """
     # Look up ROI and X-Group if session has multi-ROI context (Design 2026-09-29 P2)
     roi_obj: dict[str, Any] | None = None
     group_obj: dict[str, Any] | None = None
@@ -403,7 +420,9 @@ def _resolve_column_visual(
         or "linear"
     )
     unit = str(
-        col_dict.get("unit") or (group_obj.get("unit") if group_obj else None) or "%"
+        col_dict.get("unit")
+        or (group_obj.get("unit") if group_obj else None)
+        or "%"
     )
     plot_type = str(
         col_dict.get("plot_type")
@@ -448,52 +467,47 @@ def store_exaggeration(column: dict[str, Any], raw: Any) -> None:
     column["exaggeration_mult"] = value
 
 
-def _coerce_exaggeration(raw: Any) -> float | None:
-    """把任意入参收敛成「有效的放大倍数」：只有有限的、>1 的数才算放大，其余一律 None。
-
-    <=1 等于没放大（`px_to_value` 也只在 >1 时才除）；非数值**丢弃而不是转 0**——
-    宁可没有放大，也不能留下一个会把整列读数除错的因子。NaN/inf 同属"不是可用的倍率"。
-    """
-    if raw is None:
-        return None
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return None
-    if not math.isfinite(value) or value <= 1.0:
-        return None
-    return value
-
-
 def _resolve_exaggeration(
     col_dict: dict[str, Any], group_obj: dict[str, Any] | None
 ) -> float | None:
-    """放大倍数：**组级 > 列级 > 历史键**（`has_exaggeration` + multiplier）；<=1 一律视为未放大。
+    """夸张倍数：组级 > 现代列级 > 历史键；<=1 一律视为未夸张。"""
+    # 1. 组级优先（组是单一事实源，组上设了倍率则组内列一律遵循）
+    if group_obj and group_obj.get("exaggeration_mult") is not None:
+        try:
+            raw_exag = float(group_obj["exaggeration_mult"])
+            if raw_exag > 1.0:
+                return raw_exag
+        except (ValueError, TypeError):
+            pass
 
-    为什么组在前（2026-11-17 变更）：论文里的夸大曲线是**按类群组**给的——一张图里
-    "某些类群 ×5、另一些 ×3、其余不放大"，软件里的对应做法就是"把放大过的列编成一组"。
-    组是论文的放大单位，列级字段只是历史遗留的单列覆盖手段。两者并存时必须只有一个是
-    真相源，否则同一个物理量在库里有两个答案，而 `px_to_value` 会真的除以它——一个
-    过期的列级 3 就能让本该 ÷5 的整列读数放大 1.67 倍，界面上看不出任何异常。
+    # 2. 列级显式设置
+    if col_dict.get("exaggeration_mult") is not None:
+        try:
+            raw_exag = float(col_dict["exaggeration_mult"])
+            if raw_exag > 1.0:
+                return raw_exag
+        except (ValueError, TypeError):
+            pass
 
-    旧工程包里写在列上的倍率不会因此丢失：载入时 `project._migrate_column_exaggeration_to_group`
-    会把它搬到组上（见那里的判据），所以"组优先"对老包同样成立。
-    """
-    group_mult = _coerce_exaggeration(
-        group_obj.get("exaggeration_mult") if group_obj else None
-    )
-    if group_mult is not None:
-        return group_mult
+    if col_dict.get("reader_type") == "area_exaggerated":
+        return 5.0
 
-    col_mult = _coerce_exaggeration(col_dict.get("exaggeration_mult"))
-    if col_mult is not None:
-        return col_mult
+    # 3. 历史键
+    if bool(
+        col_dict.get("has_exaggeration", col_dict.get("hasExaggeration", False))
+    ):
+        try:
+            raw_exag = float(
+                col_dict.get(
+                    "exaggeration_multiplier", col_dict.get("exaggerationMult", 1.0)
+                )
+                or 1.0
+            )
+            if raw_exag > 1.0:
+                return raw_exag
+        except (ValueError, TypeError):
+            pass
 
-    # 历史键：`has_exaggeration` 为真才读 multiplier（老包的开关 + 数值是分开存的两列）。
-    if bool(col_dict.get("has_exaggeration", col_dict.get("hasExaggeration", False))):
-        return _coerce_exaggeration(
-            col_dict.get("exaggeration_multiplier", col_dict.get("exaggerationMult"))
-        )
     return None
 
 
@@ -508,6 +522,7 @@ def _scale_from_group_layout(
     plot_type: str,
     scale_type: str,
     exaggeration_mult: float | None,
+    exagg_style: str = "line",
 ) -> ColumnScale:
     """组管位置、列管数值：组的 tick_layout 给出两个端点的相对位置，列的 x_values 给出数值。
 
@@ -539,6 +554,7 @@ def _scale_from_group_layout(
         exaggeration_mult=exaggeration_mult,
         calibrated=True,
         source="group",
+        exagg_style=exagg_style,
     )
 
 
@@ -563,6 +579,7 @@ def _scale_from_group_slope(
     plot_type: str,
     scale_type: str,
     exaggeration_mult: float | None,
+    exagg_style: str = "line",
 ) -> ColumnScale:
     """组级斜率标定：组内共用斜率，每列的 0 点 = 列左缘 + 轴线粗（ARCHITECTURE §6.4）。"""
     _group = group_obj or {}
@@ -584,15 +601,13 @@ def _scale_from_group_slope(
         unit=str(_group.get("unit") or col_dict.get("unit") or "%"),
         plot_type=str(_group.get("plot_type") or col_dict.get("plot_type") or "area"),
         scale_type=str(_group.get("scale_type") or "linear"),
-        # 用**已经解析过**的形参，不重读组字典：
-        #   * `_resolve_exaggeration` 现在是"组级 > 列级 > 历史键"，组是唯一真源；
-        #   * 这里再读一次 `_group.get(...)` 会绕过解析 —— 既丢掉列级倍率（组斜率路径
-        #     是真实工程默认路径，`recon-20261117` 四列 `source="group_slope"`），
-        #     又让"组=null、列=3"的老工程在两条路径上给出两个答案（x_ticks 保留、组斜率丢弃）。
-        # 统一走形参后，同一个倍率在两条路径上只有一个答案。
+        # 列级优先：`_resolve_exaggeration` 已经按「列 > 组」解析好了，这里不能再直接
+        # 读 `_group["exaggeration_mult"]`——那条路径把**列级**设置静默丢掉（实测给 4 列
+        # 各设 5，导出数值一字未变，因为组上没有该键），是本条 bug 的直接成因。
         exaggeration_mult=exaggeration_mult,
         calibrated=True,
         source="group_slope",
+        exagg_style=exagg_style,
     )
 
 
@@ -607,6 +622,7 @@ def _scale_from_ticks(
     plot_type: str,
     scale_type: str,
     exaggeration_mult: float | None,
+    exagg_style: str = "line",
 ) -> ColumnScale:
     """列自己的两点刻度（迁移期的单一事实源）：px 与 value 直接取用。
 
@@ -633,6 +649,7 @@ def _scale_from_ticks(
         calibrated=True,
         source="x_ticks",
         origin_suspect=origin_suspect,
+        exagg_style=exagg_style,
     )
 
 
@@ -647,6 +664,7 @@ def _scale_from_fallback(
     unit: str,
     plot_type: str,
     exaggeration_mult: float | None,
+    exagg_style: str = "line",
 ) -> ColumnScale:
     """兜底三选一：session.x_scales（已标定）> 历史三件套 > 纯缺省；结果 calibrated=False。"""
     # Fallback: legacy three-piece fields or session.x_scales
@@ -660,9 +678,7 @@ def _scale_from_fallback(
         col_dict.get(k) is not None for k in ("startValue", "tickValue", "tickEndX")
     )
     x_scales = getattr(session, "x_scales", None) if session is not None else None
-    is_calib = (
-        bool(getattr(session, "is_calibrated", False)) if session is not None else False
-    )
+    is_calib = bool(getattr(session, "is_calibrated", False)) if session is not None else False
 
     if (
         not has_legacy
@@ -701,4 +717,5 @@ def _scale_from_fallback(
         exaggeration_mult=exaggeration_mult,
         calibrated=False,
         source=source,
+        exagg_style=exagg_style,
     )

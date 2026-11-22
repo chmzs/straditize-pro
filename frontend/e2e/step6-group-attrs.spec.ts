@@ -31,13 +31,9 @@ function watchRpc(page: Page): string[] {
 }
 
 test.describe('步骤 6 属性层级', () => {
-  // 空倍数勾选会当场提示（见下方判据一），那是**预期**通知，不是缺陷。
-  test.use({ allowlists: { notice: [/放大倍数/] } });
-
-  test('形态经 roi.groupUpdate、放大经 column.update，都必须真发 RPC', async ({ page, telemetry }) => {
-    const notices = telemetry.notices;
+  test('形态与放大倍率经 roi.groupUpdate 都必须真发 RPC', async ({ page }) => {
     await resetBaseline(page);
-    await gotoStage(page, 5);
+    await gotoStage(page, 4);
     await gotoStage(page, 6);
 
     const rpc = watchRpc(page);
@@ -55,46 +51,23 @@ test.describe('步骤 6 属性层级', () => {
     expect(groupUpdate, '形态必须经 roi.groupUpdate 发出').toBeTruthy();
     expect(groupUpdate?.params?.updates?.plot_type, '载荷必须携带 plot_type=bar').toBe('bar');
 
-    // 局部放大（exaggeration）仍是**列**属性：入口留在列属性面板。
-    // 但列属性面板只在步骤 5 出现（`Inspector.ts:226`）：步骤 6 有自己的组参数
-    // 面板，点列只高亮、不换面板（本 PR 的设计变更），所以跳到步骤 5 再验列级控件。
-    await gotoStage(page, 5);
-    await page.evaluate(() => {
-      const api = (window as unknown as {
-        __straditize: { getState: () => any; selectColumn: (id: string) => void };
-      }).__straditize;
-      api.selectColumn(api.getState().columns[0].id);
-    });
-    const inspector = page.locator('.app-inspector');
-
-    // 判据一：**勾选但没填数字**不得写库。旧的实现勾一下就写 5（`|| 5` 兜底），
-    // 而 px_to_value 会真的除以它——用户只是点了一下，整列读数就缩小 5 倍。
-    await inspector.locator('#chk-has-exag').check();
+    // 组级放大倍数（exaggeration_mult）：入口在步骤 6 的组参数面板里。
+    // 点击 5× 按钮，必须经由 roi.groupUpdate 发出，并更新后端组的 exaggeration_mult
+    await panel.locator('.grp-exag-btn[data-exag="5"]').click();
     await page.waitForTimeout(500);
-    await expect
-      .poll(
-        // 读**后端**权威载荷：前端镜像要等 onDataChange 才刷新，用它会写成假红。
-        async () => {
-          const cols = (await diagramData<{ columns: Array<Record<string, unknown>> }>(page)).columns;
-          return cols[0].exaggeration_mult ?? null;
-        },
-        { timeout: 10_000 }
-      )
-      .toBeNull();
-    expect(notices.join('\n'), '空倍数必须当场提示，不能静默不生效').toMatch(/放大倍数/);
 
-    // 判据二：填了数字才生效，且真的发 RPC。
-    await inspector.locator('#inp-exag-mult').fill('5');
-    await inspector.locator('#inp-exag-mult').press('Tab');
+    const groupUpdateExag = payloads.filter((x) => x.method === 'roi.groupUpdate').pop();
+    expect(groupUpdateExag, '组放大倍数必须经 roi.groupUpdate 发出').toBeTruthy();
+    expect(groupUpdateExag?.params?.updates?.exaggeration_mult, '载荷必须携带 exaggeration_mult=5').toBe(5);
+
     await expect
       .poll(
         async () => {
-          const cols = (await diagramData<{ columns: Array<Record<string, unknown>> }>(page)).columns;
-          return cols[0].exaggeration_mult ?? null;
+          const res = await diagramData<{ rois: Array<{ x_groups?: Array<Record<string, unknown>> }> }>(page);
+          return res.rois?.[0]?.x_groups?.[0]?.exaggeration_mult ?? null;
         },
         { timeout: 10_000 }
       )
       .toBe(5);
-    expect(rpc, '局部放大必须真发 RPC').toContain('column.update');
   });
 });

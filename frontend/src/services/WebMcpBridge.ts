@@ -171,9 +171,7 @@ export function registerWebMcpAndInspectionHandles(p: WebMcpBridgeParams): void 
     rpc: (method: string, params: Record<string, unknown> = {}) =>
       p.rpcClient.call(method, params),
     selectColumn: (colId: string) => {
-      p.canvasComponent.data.selectedEntity = { type: 'column', id: colId };
-      p.canvasComponent.data.activeTaxaId = colId;
-      p.getInspector()?.updateData(p.canvasComponent.data);
+      p.canvasComponent.setActiveTaxa(colId);
       const sb = p.getSidebar();
       if (sb) {
         sb.updateData(p.canvasComponent.data);

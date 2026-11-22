@@ -64,9 +64,37 @@ def _by_id(session: StraditizeSession, candidate_id: str) -> dict:
     return matches[0]
 
 
-def _pixel_of(candidate: dict) -> tuple[int, int]:
-    """候选矩形中心的一个像素（行, 列）。"""
+def _pixel_of(candidate: dict, session: StraditizeSession | None = None) -> tuple[int, int]:
+    """候选矩形内一个有墨迹且会被剔除的像素（避开列轴线保护与垂直贯通数据保护）。"""
     geom = candidate["geometry"]
+    if session is not None and getattr(session, "foreground_mask", None) is not None:
+        import numpy as np
+        ink = session.foreground_mask
+        h, w = ink.shape
+        y0, y1 = int(geom["y0"]), int(geom["y1"])
+        x0, x1 = int(geom["x0"]), int(geom["x1"])
+        r0, r1 = max(0, min(h, y0)), max(0, min(h, y1 + 1))
+        y_up = max(0, r0 - 2)
+        y_down = min(h - 1, r1 + 1)
+        columns = getattr(session, "columns", [])
+        for col in columns:
+            c_start = int(round(float(col.get("start", col.get("startX", 0)))))
+            c_end = int(round(float(col.get("end", col.get("endX", 0)))))
+            w_axis = 4
+            cl_x0 = max(x0, c_start + w_axis // 2)
+            cl_x1 = min(x1 + 1, c_end - 1)
+            for y in range(r0, r1):
+                for x in range(cl_x0, cl_x1):
+                    if not ink[y, x]:
+                        continue
+                    up_ink = np.any(ink[y_up:r0, max(0, x - 1) : min(w, x + 2)])
+                    down_ink = np.any(ink[r1 : y_down + 1, max(0, x - 1) : min(w, x + 2)])
+                    if not (up_ink and down_ink):
+                        return y, x
+        for y in range(r0, r1):
+            for x in range(max(0, x0), min(w, x1 + 1)):
+                if ink[y, x]:
+                    return y, x
     return (
         (int(geom["y0"]) + int(geom["y1"])) // 2,
         (int(geom["x0"]) + int(geom["x1"])) // 2,
@@ -91,10 +119,10 @@ def _inked_candidate(session: StraditizeSession, roi_id: str) -> dict:
     assert candidates, "前置：hoya 应检出干扰线候选"
     ink = session.foreground_mask
     for cand in candidates:
-        row, col = _pixel_of(cand)
+        row, col = _pixel_of(cand, session)
         if 0 <= row < ink.shape[0] and 0 <= col < ink.shape[1] and ink[row, col]:
             return cand
-    pytest.fail("前置：未找到中心有墨迹的候选，检测口径变了，先核对再改判据")
+    pytest.fail("前置：未找到有墨迹且会被剔除的候选像素，检测口径变了，先核对再改判据")
 
 
 # ----------------------------------------------------------------------
@@ -111,7 +139,7 @@ def test_undo_restores_a_confirmed_line_and_its_mask() -> None:
     session, roi_id = _session()
     target = _inked_candidate(session, roi_id)
     candidate_id = str(target["id"])
-    row, col = _pixel_of(target)
+    row, col = _pixel_of(target, session)
     ink = session.foreground_mask
     assert ink[row, col], "前置：候选中心必须有墨迹，否则掩膜判据无判别力"
     assert not _mask_at(session, row, col), "前置：确认之前这条线不该被剔除"

@@ -154,6 +154,7 @@ export class GeologyCanvas {
   private isSpaceDown: boolean = false;
   private isMouseDown: boolean = false;
   private isPanning: boolean = false;
+  private panningPointerId: number | null = null;
   private hasPannedDuringMouseDown: boolean = false;
   private lastMouseScreen: Point2D = { x: 0, y: 0 };
 
@@ -648,14 +649,39 @@ private pointer: PointerState = {
     // 检查纵向 (Y) 视口是否已经包含该列所属的 ROI
     const roi = this.data.rois?.find((r) => r.id === col.roi_id) || this.data.roi;
     if (roi) {
+      const y0 = roi.ylim ? roi.ylim[0] : ((roi as any).yMin ?? 0);
+      const y1 = roi.ylim ? roi.ylim[1] : ((roi as any).yMax ?? (this.data.imageHeight || 1000));
       const viewYTop = -this.viewport.panY / this.viewport.scale;
       const viewYBottom = (rect.height - this.viewport.panY) / this.viewport.scale;
-      const overlaps = viewYBottom >= roi.yMin && viewYTop <= roi.yMax;
-      if (!overlaps) {
-        const roiCenterY = (roi.yMin + roi.yMax) / 2;
+      const overlaps = viewYBottom >= y0 && viewYTop <= y1;
+      if (!overlaps && Number.isFinite(y0) && Number.isFinite(y1)) {
+        const roiCenterY = (y0 + y1) / 2;
         this.viewport.panY = rect.height / 2 - roiCenterY * this.viewport.scale;
       }
     }
+
+    this.viewport.fittedToScreen = false;
+    this.requestRender();
+  }
+
+  /**
+   * 平移视口使指定候选干扰线在画布中居中，并适当缩放以便看清局部干扰线。
+   */
+  public scrollToCandidate(candidateId: string): void {
+    const cand = this.data.line_candidates?.find((c) => c.id === candidateId);
+    if (!cand) return;
+    const rect = this.canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const g = cand.geometry;
+    const centerX = (g.x0 + g.x1) / 2;
+    const centerY = (g.y0 + g.y1) / 2;
+
+    // 缩放到舒适的局部观察比例（至少 0.9，若当前已更大则维持当前缩放）
+    const targetScale = Math.max(this.viewport.scale, 0.9);
+    this.viewport.scale = targetScale;
+    this.viewport.panX = rect.width / 2 - centerX * targetScale;
+    this.viewport.panY = rect.height / 2 - centerY * targetScale;
 
     this.viewport.fittedToScreen = false;
     this.requestRender();
@@ -679,10 +705,16 @@ private pointer: PointerState = {
       this.resizeObserver.observe(this.container);
     }
 
-    window.addEventListener('keydown', (e) => this.onKeyDown(e));
-    window.addEventListener('keyup', (e) => this.onKeyUp(e));
+    // 全局键盘监听采用捕获阶段（capture: true）：
+    // 1. 彻底切断任何残留在按钮上的焦点因按「空格键（临时平移）」被浏览器当作原生 click 误触发（如误跳步骤 5 等恶性缺陷）；
+    // 2. 文本输入框通过 isInput 守卫放行，非文本输入的全局快捷键（S/A/D/Alt+方向键等）一律优先由画布接管。
+    window.addEventListener('keydown', (e) => this.onKeyDown(e), { capture: true });
+    window.addEventListener('keyup', (e) => this.onKeyUp(e), { capture: true });
 
     this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
+    this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+    this.canvas.addEventListener('pointerup', (e) => this.onPointerUp(e));
+    this.canvas.addEventListener('pointercancel', (e) => this.onPointerUp(e));
     this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
     this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
     this.canvas.addEventListener('mouseleave', (e) => this.onMouseLeave(e));
@@ -825,6 +857,7 @@ private pointer: PointerState = {
     // 完全相同：`viewport.panBy()` + 重绘。方向约定见 `panDeltaFromArrowKey`。
     {
       codes: ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'],
+      keys: ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'],
       when: (e) => e.altKey && !e.ctrlKey && !e.metaKey,
       run: (e) => {
         const delta = panDeltaFromArrowKey(e);
@@ -1143,19 +1176,51 @@ private pointer: PointerState = {
   ];
 
   private onKeyDown(e: KeyboardEvent): void {
+    if (document.querySelector('.modal-backdrop')) {
+      return;
+    }
+
     const targetTag = (e.target as HTMLElement)?.tagName;
     const isInput = targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT';
 
     // Alt + 方向键是全局视口平移导航手势（issue #106 / 统一交互规范 §4），
     // 即使当前焦点停在属性面板或顶栏输入框中也必须放行平移，严禁一刀切拦截；
     // 纯方向键在输入框中保留为光标文本移动，继续由 isInput 拦截。
-    const isAltPan =
-      e.altKey &&
-      !e.ctrlKey &&
-      !e.metaKey &&
-      (e.code === 'ArrowUp' || e.code === 'ArrowDown' || e.code === 'ArrowLeft' || e.code === 'ArrowRight');
+    const code = e.code || '';
+    const key = e.key || '';
+    const isArrow =
+      code === 'ArrowUp' || code === 'ArrowDown' || code === 'ArrowLeft' || code === 'ArrowRight' ||
+      key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight';
+    const isAltPan = e.altKey && !e.ctrlKey && !e.metaKey && isArrow;
 
-    if (isInput && !isAltPan) {
+    if (isAltPan) {
+      // 必须立刻阻止默认行为，防止 Chromium/Windows 触发历史回退或菜单激活
+      e.preventDefault();
+      e.stopPropagation();
+      // 用户制度：Alt + 方向键 在 window 层处理并 blur 输入框，确保视口平移绝不受输入框死锁
+      if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
+        document.activeElement.blur();
+      }
+      const delta = panDeltaFromArrowKey(e);
+      if (delta) {
+        this.viewport.panBy(delta.dx, delta.dy);
+        this.requestRender();
+      }
+      return;
+    } else if (isInput) {
+      return;
+    }
+
+    // 空格键平移必须在捕获阶段最高优先级阻断：
+    // 当焦点残留在任意 HTML 按钮上时，浏览器默认行为是将 Space 翻译为对该按钮的 click！
+    // 导致用户按空格平移画布时被误跳步骤（如跳到步骤 5）。
+    if (e.code === 'Space') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!this.isSpaceDown) {
+        this.isSpaceDown = true;
+        this.updateCursor();
+      }
       return;
     }
 
@@ -1170,6 +1235,8 @@ private pointer: PointerState = {
 
   private onKeyUp(e: KeyboardEvent): void {
     if (e.code === 'Space') {
+      e.preventDefault();
+      e.stopPropagation();
       this.isSpaceDown = false;
       this.isPanning = false;
       this.updateCursor();
@@ -1252,6 +1319,28 @@ private pointer: PointerState = {
     };
   }
 
+  private onPointerDown(e: PointerEvent): void {
+    const mode = this.toolModeManager.getMode();
+    // 用户制度：右键平移用 setPointerCapture（严禁使用 Pointer Lock），确保指针移出画布时平移依然顺畅持续
+    if (e.button === 2 || e.button === 1 || (e.button === 0 && (this.isSpaceDown || mode === 'pan'))) {
+      try {
+        this.canvas.setPointerCapture(e.pointerId);
+        this.panningPointerId = e.pointerId;
+      } catch {}
+    }
+  }
+
+  private onPointerUp(e: PointerEvent): void {
+    if (this.panningPointerId !== null && this.panningPointerId === e.pointerId) {
+      try {
+        if (this.canvas.hasPointerCapture(this.panningPointerId)) {
+          this.canvas.releasePointerCapture(this.panningPointerId);
+        }
+      } catch {}
+      this.panningPointerId = null;
+    }
+  }
+
   private onMouseDown(e: MouseEvent): void {
     const screenPt = this.getCanvasPoint(e);
     this.lastMouseScreen = screenPt;
@@ -1311,6 +1400,7 @@ private pointer: PointerState = {
 
     // 鼠标右键 (2)、鼠标中键 (1)、空格键按住、或处于 pan 抓手模式：一律进入视口平移
     if (e.button === 2 || e.button === 1 || (e.button === 0 && (this.isSpaceDown || mode === 'pan'))) {
+      e.preventDefault();
       this.isPanning = true;
       this.updateCursor();
       return;
@@ -1361,6 +1451,15 @@ private pointer: PointerState = {
     const roiStrategy = this.toolStrategies.get('roi') as RoiToolStrategy | undefined;
     if (roiStrategy?.getDraggingHandle() && e.buttons === 0) {
       roiStrategy.onMouseUp(e, screenPt, worldPt, this.getToolContext());
+    }
+
+    // 若在窗口外部松开了鼠标按键，安全清理平移态
+    if (this.isPanning && e.buttons === 0) {
+      this.isPanning = false;
+      this.isMouseDown = false;
+      this.updateCursor();
+      this.requestRender();
+      return;
     }
 
     if (this.isPanning) {
@@ -1457,6 +1556,14 @@ private pointer: PointerState = {
     if (this.isPanning) {
       this.isPanning = false;
       this.isMouseDown = false;
+      if (this.panningPointerId !== null) {
+        try {
+          if (this.canvas.hasPointerCapture(this.panningPointerId)) {
+            this.canvas.releasePointerCapture(this.panningPointerId);
+          }
+        } catch {}
+        this.panningPointerId = null;
+      }
       this.updateCursor();
       this.requestRender();
       return;
@@ -1476,17 +1583,16 @@ private pointer: PointerState = {
   }
 
   private onMouseLeave(e: MouseEvent): void {
-    this.isMouseDown = false;
-    this.isPanning = false;
-    // ROI 手柄拖拽是「按住-移动」的模态操作：指针一旦滑出画布（拖到画布边界外），
-    // 旧实现会在这里清掉拖拽状态，鼠标抬起时既不提交也不回写，用户看到的是
-    // 「拖到一半拖不动」。此时保留拖拽状态，收尾交给 window 的 mouseup
-    // （onMouseMove 里 e.buttons===0 兜住「在窗口外松手」这一种）。
+    // 拖拽平移、拖动 0 点或 ROI 手柄是模态按住操作：指针滑出画布（例如滑过浮层工具栏/图例）时，
+    // 严禁在此处粗暴中止平移与拖拽状态，否则鼠标稍快就会直接卡死！
+    // 收尾由 window 上的 mousemove（e.buttons === 0）与 mouseup 全局监听兜底。
     const roiStrat = this.toolStrategies.get('roi') as RoiToolStrategy | undefined;
-    if (roiStrat?.getDraggingHandle()) {
+    if (this.isPanning || this.zeroDrag || roiStrat?.getDraggingHandle() || (this.isMouseDown && e.buttons !== 0)) {
       this.updateCursor();
       return;
     }
+    this.isMouseDown = false;
+    this.isPanning = false;
     const mode = this.toolModeManager.getMode();
     this.toolStrategies.get(mode)?.onMouseLeave?.(e, this.getToolContext());
     this.updateCursor();
@@ -1537,10 +1643,8 @@ private pointer: PointerState = {
     // （`DEFAULT_AXIS_STROKE_PX`，不在本文件写数）。
     const zeroX = col.startX + resolveAxisStroke(col, this.groupOfColumn(col));
     const points = controlPointsForWriteback(col.controlPoints, zeroX);
-    // 锚点变了 → 稠密缓存作废（后端 setControlPoints 会按 Pchip 重建）。
-    // 立刻按手柄折线重画，用户看到的就是刚拖出来的形状；下一次载荷/导出
-    // 按同一批锚点重建稠密曲线，两边仍是同一条。
-    col.curvePoints = undefined;
+    // 提交控制点给后端同步。前端保留当前 curvePoints 避免白屏蒸发，
+    // 后端 setControlPoints 重建邻域点集后，将在 onControlPointsCommit 回调中就地更新。
     this.callbacks.onControlPointsCommit?.(idx, points);
   }
 
@@ -2300,12 +2404,12 @@ private pointer: PointerState = {
   /** 各工具被阶段门禁拦下时的提示文案 */
   private static readonly TOOL_STAGE_HINT: Partial<Record<ToolMode, string>> = {
     roi: '提示: ROI 框选在步骤 2 (ROI) 启用',
-    addCol: '提示: 添加属种列在步骤 5 (分列) 启用',
+    addCol: '提示: 添加属种列在步骤 4 (分列) 启用',
     addPoint: '提示: 控制点编辑在步骤 7 (拐点与采样) 启用',
-    eraser: '提示: 删除操作在步骤 5 起启用',
+    eraser: '提示: 删除操作在步骤 4 起启用',
     ycalib: '提示: Y 轴两点标定在步骤 3 (Y标定) 启用',
-    linefix: '提示: 线掩膜人工修正在步骤 4 (清理) 启用',
-    pickTick: '提示: 点选刻度齿在步骤 6 (标定列) 启用',
+    linefix: '提示: 线掩膜人工修正在步骤 5 (清理) 启用',
+    pickTick: '提示: 点选刻度齿在步骤 6 (列标定) 启用',
   };
 
   /** 统一门禁：不允许时给出阶段提示并返回 false，允许时返回 true */

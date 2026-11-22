@@ -617,6 +617,59 @@ body.theme-light .ui-btn--success:hover:not(:disabled) {
   box-shadow: 0 0 6px currentColor;
 }
 
+/* ================= 统一重置/重设按钮风格 (对齐危险轻量操作图2) ================= */
+.ui-btn-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.38);
+  color: #dc2626;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.2;
+  transition: all 0.15s ease-in-out;
+  user-select: none;
+}
+
+body.theme-light .ui-btn-reset {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+.ui-btn-reset:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.65);
+  color: #b91c1c;
+  box-shadow: 0 1px 3px rgba(239, 68, 68, 0.15);
+}
+
+body.theme-light .ui-btn-reset:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #f87171;
+  color: #b91c1c;
+}
+
+.ui-btn-reset:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.ui-btn-reset-icon {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+}
+
 /* ================= 工作区主体 Workspace ================= */
 .app-workspace {
   display: flex;
@@ -756,7 +809,7 @@ body.theme-light .floating-help-panel {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 10.5px;
+  font-size: 11px;
   padding: 2px 0;
 }
 
@@ -1532,7 +1585,7 @@ body.theme-light .icon-btn.panel-toggle {
 
 .tip-list {
   list-style: none;
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--text-secondary);
   display: flex;
   flex-direction: column;
@@ -1654,7 +1707,7 @@ body.theme-light .canvas-hud {
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
   z-index: 20;
@@ -1869,7 +1922,7 @@ body.theme-light .step-title {
 .info-callout {
   padding: 8px 10px;
   border-radius: 6px;
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.5;
   color: var(--text-secondary);
   background: var(--bg-card);
