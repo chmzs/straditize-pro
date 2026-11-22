@@ -192,9 +192,9 @@ def get_remote_display_urls(
     if not allowed_hosts:
         return []
 
-    local_ips = detect_local_ips()
     urls: dict[str, None] = {}
     loopback_hosts = {"127.0.0.1", "localhost", "::1", "0.0.0.0", "::"}
+    local_ips: list[str] | None = None
 
     for raw_host in allowed_hosts:
         host = raw_host.strip()
@@ -214,6 +214,8 @@ def get_remote_display_urls(
             continue
 
         if "*" in clean_host:
+            if local_ips is None:
+                local_ips = detect_local_ips()
             for local_ip in local_ips:
                 if match_host_pattern(local_ip, clean_host):
                     urls[f"http://{local_ip}:{port}"] = None

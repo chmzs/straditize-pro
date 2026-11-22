@@ -1830,22 +1830,6 @@ private pointer: PointerState = {
         this.callbacks.onDataChange?.();
         this.notifyNotice(`已删除 ${col.name} 的锚点 [Y:${pt ? pt.y : '--'}]`);
       }
-    } else if (this.data.selectedEntity.type === 'column') {
-      const colId = this.data.selectedEntity.id;
-      const colIdx = this.data.columns.findIndex((c) => c.id === colId);
-      if (colIdx !== -1 && this.data.columns.length > 1) {
-        const deleted = this.data.columns.splice(colIdx, 1)[0];
-        this.data.selectedEntity = null;
-        this.data.activeTaxaId = this.data.columns[Math.max(0, colIdx - 1)].id;
-        // 删除列不可撤销（后端无恢复通道），不压历史：压了只会让撤销按钮亮而无效。
-
-        this.pointer.boundary = null;
-        this.updateCursor();
-        this.requestRender();
-        this.callbacks.onDataChange?.();
-        this.callbacks.onTaxaChange?.(this.data.activeTaxaId);
-        this.notifyNotice(`已删除属种列: ${deleted.name}`);
-      }
     }
   }
 

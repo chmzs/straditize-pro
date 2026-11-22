@@ -188,9 +188,12 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
       const col = p.canvasComponent.data.columns.find((c) => c.id === taxaId);
       if (!col) return;
       try {
-        const { points, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(col.id);
+        const { points, curvePoints, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(col.id);
         if (points.length > 0) {
           col.controlPoints = points;
+          if (curvePoints && curvePoints.length > 0) {
+            col.curvePoints = curvePoints;
+          }
           p.canvasComponent.history.push(
             `Re-digitize ${col.name}`,
             p.canvasComponent.data.columns,
@@ -213,9 +216,12 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
       const col = p.canvasComponent.data.columns.find((c) => c.id === taxaId);
       if (!col) return;
       try {
-        const { points, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(col.id);
+        const { points, curvePoints, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(col.id);
         if (points.length > 0) {
           col.controlPoints = points;
+          if (curvePoints && curvePoints.length > 0) {
+            col.curvePoints = curvePoints;
+          }
           p.canvasComponent.history.push(
             `Re-digitize ${col.name}`,
             p.canvasComponent.data.columns,
@@ -336,8 +342,11 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
         for (const tid of taxaIds) {
           const col = p.canvasComponent.data.columns.find((c) => c.id === tid);
           if (!col) continue;
-          const { points, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(col.id);
+          const { points, curvePoints, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(col.id);
           col.controlPoints = points;
+          if (curvePoints && curvePoints.length > 0) {
+            col.curvePoints = curvePoints;
+          }
           totalComp = addCompensation(totalComp, { brokenRows, ambiguousRows });
           successCount++;
         }
@@ -383,8 +392,11 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
         for (const tid of taxaIds) {
           const col = p.canvasComponent.data.columns.find((c) => c.id === tid);
           if (!col) continue;
-          const { points, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(col.id);
+          const { points, curvePoints, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(col.id);
           col.controlPoints = points;
+          if (curvePoints && curvePoints.length > 0) {
+            col.curvePoints = curvePoints;
+          }
           totalComp = addCompensation(totalComp, { brokenRows, ambiguousRows });
           successCount++;
         }

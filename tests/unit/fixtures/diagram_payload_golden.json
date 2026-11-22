@@ -58,28 +58,140 @@
       "y": 237
      },
      {
-      "createdAt": 1700000000482,
-      "id": "pt_0_482",
+      "createdAt": 1700000000251,
+      "id": "pt_0_251",
       "isManual": false,
       "type": "peak",
       "x": 334,
-      "y": 482
+      "y": 251
      },
      {
-      "createdAt": 1700000000739,
-      "id": "pt_0_739",
+      "createdAt": 1700000000265,
+      "id": "pt_0_265",
       "isManual": false,
       "type": "peak",
       "x": 334,
-      "y": 739
+      "y": 265
      },
      {
-      "createdAt": 1700000000761,
-      "id": "pt_0_761",
+      "createdAt": 1700000000266,
+      "id": "pt_0_266",
+      "isManual": false,
+      "type": "peak",
+      "x": 368,
+      "y": 266
+     },
+     {
+      "createdAt": 1700000000267,
+      "id": "pt_0_267",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 267
+     },
+     {
+      "createdAt": 1700000000312,
+      "id": "pt_0_312",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 312
+     },
+     {
+      "createdAt": 1700000000358,
+      "id": "pt_0_358",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 358
+     },
+     {
+      "createdAt": 1700000000359,
+      "id": "pt_0_359",
+      "isManual": false,
+      "type": "peak",
+      "x": 368,
+      "y": 359
+     },
+     {
+      "createdAt": 1700000000360,
+      "id": "pt_0_360",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 360
+     },
+     {
+      "createdAt": 1700000000476,
+      "id": "pt_0_476",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 476
+     },
+     {
+      "createdAt": 1700000000593,
+      "id": "pt_0_593",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 593
+     },
+     {
+      "createdAt": 1700000000594,
+      "id": "pt_0_594",
+      "isManual": false,
+      "type": "peak",
+      "x": 368,
+      "y": 594
+     },
+     {
+      "createdAt": 1700000000595,
+      "id": "pt_0_595",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 595
+     },
+     {
+      "createdAt": 1700000000661,
+      "id": "pt_0_661",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 661
+     },
+     {
+      "createdAt": 1700000000742,
+      "id": "pt_0_742",
+      "isManual": false,
+      "type": "peak",
+      "x": 335,
+      "y": 742
+     },
+     {
+      "createdAt": 1700000000743,
+      "id": "pt_0_743",
+      "isManual": false,
+      "type": "peak",
+      "x": 368,
+      "y": 743
+     },
+     {
+      "createdAt": 1700000000744,
+      "id": "pt_0_744",
+      "isManual": false,
+      "type": "peak",
+      "x": 335,
+      "y": 744
+     },
+     {
+      "createdAt": 1700000000763,
+      "id": "pt_0_763",
       "isManual": false,
       "type": "peak",
       "x": 337,
-      "y": 761
+      "y": 763
      },
      {
       "createdAt": 1700000000774,
@@ -202,18 +314,26 @@
       "y": 863
      },
      {
+      "createdAt": 1700000000867,
+      "id": "pt_0_867",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 867
+     },
+     {
       "createdAt": 1700000000868,
       "id": "pt_0_868",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 357,
       "y": 868
      }
     ],
     "curveError": null,
     "curvePoints": {
      "count": 636,
-     "sha256": "a578990f0d2b0f6230306085ee1110d9411e70b9a0f76b1a0018b716def24fe3"
+     "sha256": "d7042c4b8d7e8cb7f9e68c74f8d33d51b49aee3a3178be1ec76c0cf28da3bc78"
     },
     "curveType": "linear",
     "endX": 370,
@@ -1065,28 +1185,140 @@
       "y": 237
      },
      {
-      "createdAt": 1700000000482,
-      "id": "pt_0_482",
+      "createdAt": 1700000000251,
+      "id": "pt_0_251",
       "isManual": false,
       "type": "peak",
       "x": 334,
-      "y": 482
+      "y": 251
      },
      {
-      "createdAt": 1700000000739,
-      "id": "pt_0_739",
+      "createdAt": 1700000000265,
+      "id": "pt_0_265",
       "isManual": false,
       "type": "peak",
       "x": 334,
-      "y": 739
+      "y": 265
      },
      {
-      "createdAt": 1700000000761,
-      "id": "pt_0_761",
+      "createdAt": 1700000000266,
+      "id": "pt_0_266",
+      "isManual": false,
+      "type": "peak",
+      "x": 368,
+      "y": 266
+     },
+     {
+      "createdAt": 1700000000267,
+      "id": "pt_0_267",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 267
+     },
+     {
+      "createdAt": 1700000000312,
+      "id": "pt_0_312",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 312
+     },
+     {
+      "createdAt": 1700000000358,
+      "id": "pt_0_358",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 358
+     },
+     {
+      "createdAt": 1700000000359,
+      "id": "pt_0_359",
+      "isManual": false,
+      "type": "peak",
+      "x": 368,
+      "y": 359
+     },
+     {
+      "createdAt": 1700000000360,
+      "id": "pt_0_360",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 360
+     },
+     {
+      "createdAt": 1700000000476,
+      "id": "pt_0_476",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 476
+     },
+     {
+      "createdAt": 1700000000593,
+      "id": "pt_0_593",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 593
+     },
+     {
+      "createdAt": 1700000000594,
+      "id": "pt_0_594",
+      "isManual": false,
+      "type": "peak",
+      "x": 368,
+      "y": 594
+     },
+     {
+      "createdAt": 1700000000595,
+      "id": "pt_0_595",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 595
+     },
+     {
+      "createdAt": 1700000000661,
+      "id": "pt_0_661",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 661
+     },
+     {
+      "createdAt": 1700000000742,
+      "id": "pt_0_742",
+      "isManual": false,
+      "type": "peak",
+      "x": 335,
+      "y": 742
+     },
+     {
+      "createdAt": 1700000000743,
+      "id": "pt_0_743",
+      "isManual": false,
+      "type": "peak",
+      "x": 368,
+      "y": 743
+     },
+     {
+      "createdAt": 1700000000744,
+      "id": "pt_0_744",
+      "isManual": false,
+      "type": "peak",
+      "x": 335,
+      "y": 744
+     },
+     {
+      "createdAt": 1700000000763,
+      "id": "pt_0_763",
       "isManual": false,
       "type": "peak",
       "x": 337,
-      "y": 761
+      "y": 763
      },
      {
       "createdAt": 1700000000774,
@@ -1209,18 +1441,26 @@
       "y": 863
      },
      {
+      "createdAt": 1700000000867,
+      "id": "pt_0_867",
+      "isManual": false,
+      "type": "peak",
+      "x": 334,
+      "y": 867
+     },
+     {
       "createdAt": 1700000000868,
       "id": "pt_0_868",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 357,
       "y": 868
      }
     ],
     "curveError": null,
     "curvePoints": {
      "count": 636,
-     "sha256": "a578990f0d2b0f6230306085ee1110d9411e70b9a0f76b1a0018b716def24fe3"
+     "sha256": "d7042c4b8d7e8cb7f9e68c74f8d33d51b49aee3a3178be1ec76c0cf28da3bc78"
     },
     "curveType": "linear",
     "endX": 370,

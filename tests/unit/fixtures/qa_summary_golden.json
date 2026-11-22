@@ -104,33 +104,33 @@
      "declared_max": 100.0,
      "name": "col01",
      "over": false,
-     "peak": 68.4
+     "peak": 94.7
     },
     {
      "calibrated": true,
      "declared_max": 100.0,
      "name": "col02",
      "over": false,
-     "peak": 67.6
+     "peak": 94.6
     },
     {
      "calibrated": true,
      "declared_max": 100.0,
      "name": "col03",
      "over": false,
-     "peak": 67.6
+     "peak": 94.6
     }
    ],
    "roi_id": "roi_1",
    "roi_name": "pollen",
    "shortfall": {
     "max": 94.7,
-    "mean": 86.3,
+    "mean": 85.5,
     "min": 0.0
    },
    "sum": {
-    "max": 203.6,
-    "mean": 14.3,
+    "max": 283.9,
+    "mean": 16.4,
     "min": 5.3,
     "p50": 10.7
    },
@@ -153,6 +153,26 @@
     {
      "depth": null,
      "sum": 169.3
+    },
+    {
+     "depth": null,
+     "sum": 283.9
+    },
+    {
+     "depth": null,
+     "sum": 283.9
+    },
+    {
+     "depth": null,
+     "sum": 283.9
+    },
+    {
+     "depth": null,
+     "sum": 283.9
+    },
+    {
+     "depth": null,
+     "sum": 200.9
     }
    ]
   }
@@ -346,26 +366,26 @@
       "declared_max": 100.0,
       "name": "col01",
       "over": false,
-      "peak": 68.4
+      "peak": 94.7
      },
      {
       "calibrated": true,
       "declared_max": 100.0,
       "name": "col02",
       "over": false,
-      "peak": 67.6
+      "peak": 94.6
      }
     ],
     "roi_id": "roi_1",
     "roi_name": "pollen",
     "shortfall": {
      "max": 97.4,
-     "mean": 93.0,
+     "mean": 92.2,
      "min": 0.0
     },
     "sum": {
-     "max": 136.0,
-     "mean": 7.2,
+     "max": 189.3,
+     "mean": 8.5,
      "min": 2.6,
      "p50": 2.6
     },
@@ -384,6 +404,26 @@
      {
       "depth": null,
       "sum": 136.0
+     },
+     {
+      "depth": null,
+      "sum": 189.3
+     },
+     {
+      "depth": null,
+      "sum": 189.3
+     },
+     {
+      "depth": null,
+      "sum": 189.3
+     },
+     {
+      "depth": null,
+      "sum": 189.3
+     },
+     {
+      "depth": null,
+      "sum": 133.4
      }
     ]
    }
@@ -485,26 +525,26 @@
       "declared_max": 100.0,
       "name": "col03",
       "over": false,
-      "peak": 67.6
+      "peak": 94.6
      },
      {
       "calibrated": true,
       "declared_max": 100.0,
       "name": "col04",
       "over": false,
-      "peak": 68.4
+      "peak": 94.7
      }
     ],
     "roi_id": "roi_2",
     "roi_name": "second",
     "shortfall": {
      "max": 94.7,
-     "mean": 82.2,
+     "mean": 81.5,
      "min": 0.0
     },
     "sum": {
-     "max": 136.0,
-     "mean": 18.0,
+     "max": 189.3,
+     "mean": 19.2,
      "min": 5.3,
      "p50": 16.0
     },
@@ -523,6 +563,26 @@
      {
       "depth": null,
       "sum": 136.0
+     },
+     {
+      "depth": null,
+      "sum": 189.3
+     },
+     {
+      "depth": null,
+      "sum": 120.9
+     },
+     {
+      "depth": null,
+      "sum": 189.3
+     },
+     {
+      "depth": null,
+      "sum": 189.3
+     },
+     {
+      "depth": null,
+      "sum": 133.4
      }
     ]
    }

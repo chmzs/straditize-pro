@@ -301,6 +301,8 @@ class ProjectSessionMixin:
         self.line_strokes = []
         self.selected_candidate_ids = set()
         self.taxa_names = []
+        self.manual_points = {}
+        self.active_column_index = 0
         self.depth_grid = []
         self.samples = []
         self.age_depth_model = None

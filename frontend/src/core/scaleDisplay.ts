@@ -40,14 +40,18 @@ export function exaggerationOf(scale: PeakScaleLike | null | undefined): number 
  * 与 `xscale.px_to_value` 用同一套参数（0 点、标定点、倍率），只是在前端做展示用。
  * 负值钳到 0：曲线不该越过 0 点，真出现了说明标定或锚点有问题，显示 0 比显示负丰度诚实。
  */
-export function peakValueFromScale(scale: PeakScaleLike, maxX: number): number {
+export function peakValueFromScale(
+  scale: PeakScaleLike,
+  maxX: number,
+  is1x: boolean = false
+): number {
   const px0 = Number(scale.px0);
   const val0 = Number(scale.val0);
   const px1 = scale.px1 === null ? px0 : Number(scale.px1);
   const val1 = scale.val1 === null ? val0 : Number(scale.val1);
   const span = Math.max(1, px1 - px0);
   const raw = val0 + ((maxX - px0) / span) * (val1 - val0);
-  return Math.max(0, raw) / exaggerationOf(scale);
+  return is1x ? Math.max(0, raw) : Math.max(0, raw) / exaggerationOf(scale);
 }
 
 /**

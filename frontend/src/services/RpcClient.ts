@@ -1057,6 +1057,7 @@ export class RpcClient {
    */
   public async digitizeColumnWithStats(taxaId: string): Promise<{
     points: ControlPoint[];
+    curvePoints: Array<{ x: number; y: number }>;
     brokenRows: number;
     ambiguousRows: number;
   }> {
@@ -1064,7 +1065,7 @@ export class RpcClient {
     const res = await this.call<
       { col_index: number },
       {
-        points: ControlPoint[];
+        points: Array<{ row?: number; y?: number; x: number }>;
         control_points?: ControlPoint[];
         broken_rows?: number[];
         ambiguous_rows?: number[];
@@ -1072,9 +1073,16 @@ export class RpcClient {
     >('core.digitize', {
       col_index: Math.max(0, colIndex),
     });
-    const points = this.pickControlPoints(res);
+    const points = this.pickControlPoints(res as any);
+    const curvePoints = Array.isArray(res.points)
+      ? res.points.map((p) => ({
+          y: Number(p.row ?? p.y),
+          x: Number(p.x),
+        }))
+      : [];
     return {
       points,
+      curvePoints,
       brokenRows: (res.broken_rows ?? []).length,
       ambiguousRows: (res.ambiguous_rows ?? []).length,
     };
@@ -1279,6 +1287,10 @@ export class RpcClient {
 
   public async removeColumn(colIndex: number | string): Promise<{ success: boolean; removed: number }> {
     return this.call('column.remove', { col_index: colIndex });
+  }
+
+  public async clearAllColumns(): Promise<{ success: boolean; count: number }> {
+    return this.call('column.clearAll', {});
   }
 
   public async getSystemConfig(): Promise<SystemConfig> {

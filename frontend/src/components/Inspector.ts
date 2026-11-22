@@ -31,6 +31,7 @@ export interface InspectorCallbacks {
   onClearAllXTicks?: () => Promise<void>;
   /** 步骤 4：清空并重新自动分列。 */
   onRedetectColumns?: () => Promise<void>;
+  onClearAllColumns?: () => Promise<void>;
   /** 步骤 3：清空 Y 轴两点标定。 */
   onClearYCalibration?: () => void;
   onToggleLayerVisibility?: (layer: string, visible: boolean) => void;

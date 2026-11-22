@@ -19,6 +19,8 @@ export interface StepContext {
   onClearAllXTicks?: () => Promise<void>;
   /** 步骤 4：清空并重新自动分列。 */
   onRedetectColumns?: () => Promise<void>;
+  /** 步骤 4：清空全部属种列。 */
+  onClearAllColumns?: () => Promise<void>;
   /** 步骤 3：清空 Y 轴两点标定。 */
   onClearYCalibration?: () => void;
   /** 切换画布工具模式（如切到 measure 测距工具） */

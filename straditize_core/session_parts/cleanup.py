@@ -41,6 +41,17 @@ AXIS_BAND_PX = 2
 AXIS_ERASURE_MIN_COVERAGE = 0.5
 
 
+def _row_runs(row_pixels: np.ndarray) -> list[tuple[int, int]]:
+    """一行墨迹的连续段 [(起点, 终点)]（0 基偏移、含端点，按 x 升序）。"""
+    offsets = np.flatnonzero(row_pixels)
+    if not offsets.size:
+        return []
+    breaks = np.where(np.diff(offsets) > 1)[0]
+    starts = np.insert(breaks + 1, 0, 0)
+    ends = np.append(breaks, offsets.size - 1)
+    return [(int(offsets[s]), int(offsets[e])) for s, e in zip(starts, ends)]
+
+
 def _rect_of(candidate: dict[str, Any]) -> tuple[int, int, int, int]:
     """Return ``(x0, y0, x1, y1)`` for a candidate.
 
@@ -480,32 +491,27 @@ class CleanupMixin:
             r0, r1 = max(0, min(h, y0)), max(0, min(h, y1 + 1))
             if r1 <= r0 or c1 <= c0:
                 continue
-            # 方案 2.1：分列后列内横向贯通清理（两端贯通至 startX + W_axis/2 到 endX - 1，带垂直邻域保护）
+            # 方案 2.1：仅清除数据轮廓右侧空白区的孤立横线，保留实心面积黑块内部的连通性
+            region = (slice(r0, r1), slice(c0, c1))
+            mask[region] |= raw_ink[region]
             if cand.get("axis") == "h" and columns:
+                y_up = max(0, r0 - 2)
+                y_down = min(h - 1, r1 + 1)
                 for col in columns:
                     col_start = int(round(float(col.get("start", col.get("startX", 0)))))
                     col_end = int(round(float(col.get("end", col.get("endX", 0)))))
-                    w_axis = 4
-                    cl_x0 = max(c0, col_start + w_axis // 2)
-                    cl_x1 = min(c1, col_end - 1)
+                    cl_x0 = max(c0, col_start)
+                    cl_x1 = min(c1, col_end)
                     if cl_x1 <= cl_x0:
                         continue
-                    # 垂直邻域保护：检测正上方 r0-2 与正下方 r1+2 处。仅当上下均为前景数据时保留
                     for y in range(r0, r1):
                         for x in range(cl_x0, cl_x1):
                             if not raw_ink[y, x]:
                                 continue
-                            y_up = max(0, r0 - 2)
-                            y_down = min(h - 1, r1 + 1)
                             up_ink = np.any(raw_ink[y_up:r0, max(0, x - 1) : min(w, x + 2)])
                             down_ink = np.any(raw_ink[r1 : y_down + 1, max(0, x - 1) : min(w, x + 2)])
                             if up_ink and down_ink:
-                                pass
-                            else:
-                                mask[y, x] = True
-            else:
-                region = (slice(r0, r1), slice(c0, c1))
-                mask[region] |= raw_ink[region]
+                                mask[y, x] = False
         return mask
 
     def _exclusion_mask(self, shape: tuple[int, int], roi_id: str) -> np.ndarray:

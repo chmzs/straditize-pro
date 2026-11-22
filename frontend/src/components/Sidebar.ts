@@ -357,9 +357,8 @@ export class Sidebar {
     let maxValStr = scale ? `${formatScaleValue(scale.val1)}${scale.unit}` : '未标定';
     if (scale && col.controlPoints && col.controlPoints.length > 0) {
       const maxX = Math.max(...col.controlPoints.map((p) => p.x));
-      // 峰值必须与导出表同口径：`peakValueFromScale` 里除掉了 exaggeration_mult。
-      // 不除的话，5× 放大的列在侧栏显示 13.6%、在 data.csv 里是 2.7%（实测缺陷）。
-      maxValStr = `${peakValueFromScale(scale, maxX).toFixed(1)}${scale.unit}`;
+      // 峰值必须与导出表同口径：controlPoints 全链路输出 1x 坐标，传 is1x=true
+      maxValStr = `${peakValueFromScale(scale, maxX, true).toFixed(1)}${scale.unit}`;
     }
 
     const roi = this.data.rois?.find((r) => r.id === col.roi_id) || this.data.rois?.[0];

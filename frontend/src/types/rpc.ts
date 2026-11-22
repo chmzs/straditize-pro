@@ -63,6 +63,7 @@ export type RpcMethod =
   | 'algorithm.upsertLineGeometry'
   | 'column.add'
   | 'column.calibrateXTicks'
+  | 'column.clearAll'
   | 'column.clearXTicks'
   | 'column.redigitizeAll'
   | 'column.remove'
