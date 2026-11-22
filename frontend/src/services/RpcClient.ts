@@ -1,7 +1,7 @@
 import { BackendStatus, JsonRpcRequest, JsonRpcResponse } from '../types/rpc';
 import { tError } from '../i18n/errorCodes';
 import { t } from '../i18n';
-import { Column, ColumnGroup, ControlPoint, CleanupResult, DataRoi, DepthCalibration, DiagramData, LEGACY_FULL_SCALE, LineMaskStroke, Tick } from '../types/pollen';
+import { Column, ColumnGroup, ControlPoint, CleanupResult, DataRoi, DepthCalibration, DiagramData, LineMaskStroke, Tick } from '../types/pollen';
 import { PollenGlossary } from '../core/PollenGlossary';
 
 /**
@@ -905,20 +905,14 @@ export class RpcClient {
             name: colName,
             species: c.species || colName,
             color: palette[i % palette.length],
-            startX: c.start,
-            endX: c.end,
-            maxPercent: 100,
-            tickEndX: c.tickEndX || c.end,
+            startX: c.startX ?? c.start,
+            endX: c.endX ?? c.end,
             unit: '%',
             isLocked: false,
-            curveType: 'linear',
             visible: true,
             controlPoints: [],
             scale_type: c.scale_type || 'linear',
-            startValue: c.startValue || 0,
-            // legacy 占位（不是读数）：见 LEGACY_FULL_SCALE 的注释。
-            tickValue: c.tickValue || LEGACY_FULL_SCALE,
-            plotType: c.plot_type || 'area',
+            plot_type: c.plot_type || 'area',
             exaggeration_mult: c.exaggeration_mult ?? null,
           };
         });
@@ -1106,26 +1100,12 @@ export class RpcClient {
     points?: ControlPoint[];
     control_points?: ControlPoint[];
   }): ControlPoint[] {
-    // 优先采用后端拓扑显著性抽稀后的关键控制拐点 (15~32 个波峰波谷)，严禁直接把几百个逐像素行点作为手柄
+    // 采用后端显著性抽稀后的关键控制拐点 (15~32 个波峰波谷)
     if (res.control_points && res.control_points.length > 0) {
       return res.control_points;
     }
-    // 如果只有全量 points，前端自动进行特征抽稀降噪至约 25 个控制点
-    const rawPts = res.points || [];
-    if (rawPts.length <= 35) return rawPts;
-    return this.downsampleControlPoints(rawPts, 25);
-  }
-
-  private downsampleControlPoints(pts: ControlPoint[], targetCount: number = 25): ControlPoint[] {
-    if (pts.length <= targetCount) return pts;
-    const sorted = [...pts].sort((a, b) => a.y - b.y);
-    const step = Math.floor(sorted.length / (targetCount - 1));
-    const result: ControlPoint[] = [sorted[0]];
-    for (let i = step; i < sorted.length - 1; i += step) {
-      result.push(sorted[i]);
-    }
-    result.push(sorted[sorted.length - 1]);
-    return result;
+    // 后端未返回有效控制点时如实报错，绝不越权前端启发式降采样造数 (ARCHITECTURE §2)
+    throw new Error('后端未返回有效控制点(control_points)，数字化无法继续');
   }
 
   public async exportData(format: 'csv' | 'json' = 'csv'): Promise<string> {

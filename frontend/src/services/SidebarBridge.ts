@@ -61,7 +61,6 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
           return;
         }
         col.plot_type = plotType;
-        col.plotType = plotType ?? undefined;
         p.canvasComponent.history.push(
           plotType
             ? `Change ${col.name} Plot Type to ${plotType}`
@@ -163,12 +162,12 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
         color: '#94a3b8',
         startX: startX,
         endX: endX,
-        maxPercent: 20,
         unit: '%',
-        curveType: 'linear' as const,
         visible: true,
         isLocked: false,
         controlPoints: [],
+        plot_type: 'area' as const,
+        scale_type: 'linear' as const,
       };
       cols.splice(insertAt, 0, newCol);
       p.canvasComponent.history.push(
@@ -318,7 +317,6 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
           const colIndex = col.col_index ?? p.canvasComponent.data.columns.indexOf(col);
           await p.rpcClient.updateColumn(colIndex, { plot_type: plotType });
           col.plot_type = plotType;
-          col.plotType = plotType ?? undefined;
         }
         p.canvasComponent.history.push(
           `Batch change plot type to ${plotType} for ${taxaIds.length} columns`,

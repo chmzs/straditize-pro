@@ -74,7 +74,7 @@ export interface ToolContext {
 
   // --- 命中探测方法 ---
   findHitAnchor: (screenPt: Point2D) => { taxaId: string; pointId: string } | null;
-  findHitBoundary: (screenPt: Point2D) => { taxaId: string; type: 'start' | 'end' | 'tick' } | null;
+  findHitBoundary: (screenPt: Point2D) => { taxaId: string; type: 'start' | 'end' } | null;
   findHitRoiHandle: (screenPt: Point2D) => RoiHandle | null;
   findHitColumn: (worldPt: Point2D) => TaxaColumn | null;
   findHitGeometry: (worldPt: Point2D) => { id: string; handle: 'move' | 'start' | 'end' | 'thick0' | 'thick1' } | null;

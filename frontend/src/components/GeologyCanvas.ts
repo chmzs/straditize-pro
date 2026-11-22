@@ -70,7 +70,7 @@ import type { AnchorHit, BoundaryHit, HitTestEnv } from './canvas/hitTest';
  */
 interface PointerState {
   anchor: { taxaId: string; pointId: string } | null;
-  boundary: { taxaId: string; type: 'start' | 'tick' | 'end'; x: number } | null;
+  boundary: { taxaId: string; type: 'start' | 'end'; x: number } | null;
   roiHandle: RoiHandle | null;
   depthHorizon: number | null;
   rulerBadge: boolean;
@@ -1688,9 +1688,6 @@ private pointer: PointerState = {
           if (col.scaleCalib) {
             col.scaleCalib.originX = col.startX + resolveAxisStroke(col, this.groupOfColumn(col));
           }
-        } else if (part === 'tick') {
-          col.tickEndX = (col.tickEndX ?? col.endX) + dx;
-          if (col.scaleCalib) col.scaleCalib.calibX = col.tickEndX;
         } else {
           col.endX += dx;
         }
@@ -2439,11 +2436,11 @@ private pointer: PointerState = {
         // 幽灵叠加也是「从基线起填充」：基线必须是 0 点（绿线），不是列左缘。
         const zero = zeroSpanOfColumn(col, this.groupOfColumn(col));
         if (!zero) return;
-        const areaPath = SplineInterpolator.buildAreaPath(sorted, zero.x, col.curveType);
+        const areaPath = SplineInterpolator.buildAreaPath(sorted, zero.x, 'linear');
         ctx.fillStyle = tokens.color.ghost.overlayFill;
         ctx.fill(areaPath);
 
-        const curvePath = SplineInterpolator.buildPath(sorted, col.curveType);
+        const curvePath = SplineInterpolator.buildPath(sorted, 'linear');
         ctx.strokeStyle = tokens.color.ghost.overlayStroke;
         ctx.lineWidth = 1.6 / scale;
         ctx.setLineDash([4 / scale, 3 / scale]);

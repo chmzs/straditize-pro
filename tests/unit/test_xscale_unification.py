@@ -319,7 +319,7 @@ def test_diagram_payload_projects_scale_from_resolve_column_scale() -> None:
 
     assert col_payload["unit"] == "粒/cm³"
     assert col_payload["plot_type"] == "bar"
-    assert col_payload["plotType"] == "bar"
+    assert "plotType" not in col_payload, "驼峰别名已删除：payload 里只留一个 plot_type"
     assert col_payload["exaggeration_mult"] == 5.0
     assert "hasExaggeration" not in col_payload, (
         "布尔由 exaggeration_mult 是否为 null 推出，不再单独下发"

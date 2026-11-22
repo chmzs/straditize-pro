@@ -202,7 +202,7 @@ export class CoordinateSystem {
     const scaleType: 'linear' | 'log' = col.scale_type === 'log' ? 'log' : 'linear';
     const sc = col.scaleCalib;
     const unit = col.unit || sc?.unit || '%';
-    const plotType = col.plot_type || col.plotType || 'area';
+    const plotType = col.plot_type || 'area';
 
     // 只有一个来源：`exaggeration_mult`（>1 才算放大）。历史上这里还有一条
     // `hasExaggeration + exaggerationMult` 的兜底，两个名字容易各说各话，已删除。

@@ -12,7 +12,6 @@
 import type { DataRoi, Point2D, TaxaColumn } from '../../types/pollen';
 import type { Viewport } from '../../core/Viewport';
 import type { RoiHandle } from '../../core/tools';
-import { getColumnCalibX } from './columnBoundaries';
 
 export interface HitTestEnv {
   screenPt: Point2D;
@@ -35,7 +34,7 @@ export interface AnchorHit {
 
 export interface BoundaryHit {
   taxaId: string;
-  type: 'start' | 'tick' | 'end';
+  type: 'start' | 'end';
   /** 世界坐标 x（调用方拖拽时直接用）。 */
   x: number;
 }
@@ -67,7 +66,7 @@ export function findHitAnchorAt(env: HitTestEnv): AnchorHit | null {
   return null;
 }
 
-/** 列起点（红）/ 刻度端点（蓝）/ 列终点（仅悬停）。 */
+/** 列起点（红）/ 列终点（仅悬停高亮）。 */
 export function findHitBoundaryAt(env: HitTestEnv): BoundaryHit | null {
   const { screenPt, viewport, columns, boundaryHitWidth } = env;
   for (const col of columns) {
@@ -78,18 +77,9 @@ export function findHitBoundaryAt(env: HitTestEnv): BoundaryHit | null {
       return { taxaId: col.id, type: 'start', x: col.startX };
     }
 
-    const actualTickX = getColumnCalibX(col);
-    const tickScreenX = viewport.worldToScreen({ x: actualTickX, y: 0 }).x;
-    if (Math.abs(screenPt.x - tickScreenX) <= boundaryHitWidth) {
-      return { taxaId: col.id, type: 'tick', x: actualTickX };
-    }
-
-    // 列终点只在它明显大于刻度端点时才可命中（否则两者重叠，拖拽会打架）。
-    if (col.endX > actualTickX + 4) {
-      const endScreenX = viewport.worldToScreen({ x: col.endX, y: 0 }).x;
-      if (Math.abs(screenPt.x - endScreenX) <= boundaryHitWidth) {
-        return { taxaId: col.id, type: 'end', x: col.endX };
-      }
+    const endScreenX = viewport.worldToScreen({ x: col.endX, y: 0 }).x;
+    if (Math.abs(screenPt.x - endScreenX) <= boundaryHitWidth) {
+      return { taxaId: col.id, type: 'end', x: col.endX };
     }
   }
   return null;

@@ -36,7 +36,6 @@ export interface ScaleSnapshotTarget {
    * 旧快照画面积 —— 用户看到的正是「切了折线，图没变」。
    */
   plot_type?: unknown;
-  plotType?: unknown;
   /** 列级轴粗覆盖（`null` = 跟随组）。拖绿线改的就是它，面板「仅本列」直接读这个字段。 */
   axis_stroke_px?: unknown;
 }
@@ -69,10 +68,8 @@ export function applyScaleSnapshot<T extends ScaleSnapshotTarget>(
     target.x_ticks_dropped = freshCol.x_ticks_dropped;
     target.scaleCalib = freshCol.scaleCalib;
     target.scale_provenance = freshCol.scale_provenance;
-    // 形态覆盖是后端权威字段：镜像里的 `plotType` 别名一并跟着改，
-    // 否则 `resolvePlotType` 会在两个别名上读出两个答案。
+    // 形态覆盖是后端权威字段：更新 plot_type
     target.plot_type = freshCol.plot_type;
-    target.plotType = freshCol.plot_type ?? undefined;
     // 列级轴粗同理：拖完绿线后端已经写进去了，镜像不跟就会让「仅本列」停在旧值。
     target.axis_stroke_px = freshCol.axis_stroke_px;
     applied += 1;

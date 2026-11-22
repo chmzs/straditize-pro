@@ -103,7 +103,7 @@ export class DeletePointCommand implements Command {
 }
 
 /**
- * 拖动调整分列线 (基线 / 刻度线 / 隔离边界) 命令
+ * 拖动调整分列线 (基线 / 隔离边界) 命令
  */
 export class MoveColumnBoundaryCommand implements Command {
   public readonly description: string;
@@ -112,23 +112,18 @@ export class MoveColumnBoundaryCommand implements Command {
   private newStartX: number;
   private oldEndX: number;
   private newEndX: number;
-  private oldTickEndX: number;
-  private newTickEndX: number;
 
   constructor(
     col: TaxaColumn,
     newStartX: number,
-    newEndX: number,
-    newTickEndX?: number
+    newEndX: number
   ) {
     this.colId = col.id;
     this.oldStartX = col.startX;
     this.newStartX = newStartX;
     this.oldEndX = col.endX;
     this.newEndX = newEndX;
-    this.oldTickEndX = col.tickEndX ?? col.endX;
-    this.newTickEndX = newTickEndX ?? newEndX;
-    this.description = `调整 ${col.name} 列宽与标尺`;
+    this.description = `调整 ${col.name} 列宽`;
   }
 
   public execute(data: DiagramData): void {
@@ -136,7 +131,6 @@ export class MoveColumnBoundaryCommand implements Command {
     if (!col) return;
     col.startX = this.newStartX;
     col.endX = this.newEndX;
-    col.tickEndX = this.newTickEndX;
     col.isLocked = true;
   }
 
@@ -145,7 +139,6 @@ export class MoveColumnBoundaryCommand implements Command {
     if (!col) return;
     col.startX = this.oldStartX;
     col.endX = this.oldEndX;
-    col.tickEndX = this.oldTickEndX;
   }
 }
 

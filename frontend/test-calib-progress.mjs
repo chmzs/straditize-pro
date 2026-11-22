@@ -43,7 +43,7 @@ const base = {
   startX: 300,
   endX: 420,
   visible: true,
-  plotType: 'area',
+  plot_type: 'area',
   unit: '%',
   controlPoints: [],
   // resolveColumnScale 的 calibrated 分支要求端点齐备（scaleCalib），否则退回未标定

@@ -22,10 +22,9 @@ export class AddColToolStrategy implements ToolStrategy {
       color: '#38bdf8',
       startX: newX,
       endX: newX + colWidth,
-      tickEndX: newX + colWidth,
-      maxPercent: 50,
       unit: '%',
-      curveType: 'linear',
+      plot_type: 'area',
+      scale_type: 'linear',
       visible: true,
       isLocked: true,
       controlPoints: [

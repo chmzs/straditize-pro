@@ -25,8 +25,8 @@ import { groupColorAt } from './groupColor';
 import { formatCalibNumber, getGroupCalibMark } from './groupCalibMarks';
 import type { DataRoi, TaxaColumn } from '../../types/pollen';
 
-/** 边界类型：列起点（红）/ 刻度端点（蓝尺）/ 列终点（仅悬停高亮）。 */
-export type BoundaryKind = 'start' | 'tick' | 'end';
+/** 边界类型：列起点（红）/ 列终点（仅悬停高亮）。 */
+export type BoundaryKind = 'start' | 'end';
 
 export interface BoundaryFocus {
   taxaId: string;
@@ -47,31 +47,7 @@ export interface ColumnBoundaryEnv {
   dragging: BoundaryFocus | null;
 }
 
-/** 该列标定端点的像素 x：x_ticks[1] → tickEndX → scaleCalib.calibX → 猜测值。 */
-export function getColumnCalibX(col: TaxaColumn): number {
-  if (col.x_ticks && col.x_ticks.length >= 2 && col.x_ticks[1].px > col.startX) {
-    return col.x_ticks[1].px;
-  }
-  if (col.tickEndX && col.tickEndX > col.startX) {
-    return col.tickEndX;
-  }
-  if (col.scaleCalib?.calibX && col.scaleCalib.calibX > col.startX) {
-    return col.scaleCalib.calibX;
-  }
-  const span = col.endX - col.startX;
-  return col.startX + Math.max(20, Math.min(span * 0.65, 80));
-}
 
-/** 该列标定端点的读数：x_ticks[1] → scaleCalib.calibVal → maxPercent/tickValue → 20。 */
-export function getColumnCalibVal(col: TaxaColumn): number {
-  if (col.x_ticks && col.x_ticks.length >= 2) {
-    return col.x_ticks[1].value;
-  }
-  if (col.scaleCalib?.calibVal !== undefined) {
-    return col.scaleCalib.calibVal;
-  }
-  return col.maxPercent ?? col.tickValue ?? 20;
-}
 
 /** 只有用户确认过的两点标定才算数（判据单一源在 CoordinateSystem）。 */
 
@@ -209,10 +185,6 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
         ctx.restore();
       }
 
-      const isCalibHovered =
-        (hovered?.taxaId === col.id && hovered.type === 'tick') ||
-        (dragging?.taxaId === col.id && dragging.type === 'tick');
-
       const isEndHovered =
         (hovered?.taxaId === col.id && hovered.type === 'end') ||
         (dragging?.taxaId === col.id && dragging.type === 'end');
@@ -227,13 +199,10 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
           ctx.beginPath();
           ctx.moveTo(tickX, topY);
           ctx.lineTo(tickX, bottomY);
-          const highlight = isCalibHovered && k === 1;
-          ctx.strokeStyle = highlight
-            ? '#f97316'
-            : isLight
-              ? 'rgba(37, 99, 235, 0.55)'
-              : 'rgba(96, 165, 250, 0.65)';
-          ctx.lineWidth = (highlight ? 2.4 : 1.0) / scale;
+          ctx.strokeStyle = isLight
+            ? 'rgba(37, 99, 235, 0.55)'
+            : 'rgba(96, 165, 250, 0.65)';
+          ctx.lineWidth = 1.0 / scale;
           ctx.setLineDash([]);
           ctx.stroke();
         }

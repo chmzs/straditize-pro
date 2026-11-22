@@ -1,4 +1,4 @@
-import { Column, DataRoi, DiagramCalibration, DiagramData } from '../types/pollen';
+import { DataRoi, DiagramCalibration, DiagramData } from '../types/pollen';
 import { RpcClient } from '../services/RpcClient';
 import { CoordinateSystem } from '../core/CoordinateSystem';
 import { calUnitLabel } from '../core/calUnit';
@@ -163,21 +163,7 @@ export class PropertyPanel {
   }
 
   /**
-   * 4. 生成地学标准 CSV 表格 (委托至 ProjectManager)
-   */
-  public generateStandardCsv(): string {
-    return this.projectManager.generateStandardCsv();
-  }
-
-  /**
-   * 5. 生成针对当前图谱与属种列的 R 语言绘图脚本 (委托至 ProjectManager)
-   */
-  public static generateRScript(columns: Column[], unit: string = 'cm'): string {
-    return ProjectManager.generateRScript(columns, unit);
-  }
-
-  /**
-   * 6. 打开已有项目 (委托至 ProjectManager)
+   * 4. 打开已有项目 (委托至 ProjectManager)
    */
   public openProjectFile(file: File): void {
     this.projectManager.openProjectFile(file);

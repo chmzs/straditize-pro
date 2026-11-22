@@ -121,6 +121,16 @@ const PAYLOAD_ONLY_FIELDS: Record<string, string> = {
     'camel 兼容别名，与 active_roi_id 同值；前端只读 snake，别名留给外部客户端',
   'DiagramData.primaryRoiId':
     'camel 兼容别名，与 primary_roi_id 同值；前端只读 snake，别名留给外部客户端',
+  'Column.curveType':
+    '后端遗留曲线样式类型；前端已统一采用单一真实渲染管线',
+  'Column.maxPercent':
+    '后端遗留满刻度猜测；前端已完全剥离列级伪标定，统一由组斜率/x_ticks驱动',
+  'Column.startValue':
+    '后端遗留标度起测值；前端已由 scale_provenance/x_ticks 权威驱动',
+  'Column.tickEndX':
+    '后端遗留标尺端点像素；前端已由组级标度系统与 0 点绿线接管',
+  'Column.tickValue':
+    '后端遗留标度端点读数；前端已由 scale_provenance/x_ticks 权威驱动',
 };
 const NOT_SENT_BY_DESIGN: Record<string, string> = {
   'DataRoi.xMin': 'rois[] 元素是会话 ROI 记录（xlim/ylim）；坐标别名只出现在单数 data.roi 上',

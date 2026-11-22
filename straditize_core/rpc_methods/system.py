@@ -380,7 +380,6 @@ def _payload_column(session: Any, c: dict[str, Any]) -> dict[str, Any]:
         "endX": c_end,
         "scale_type": scale.scale_type,
         "plot_type": scale.plot_type,
-        "plotType": scale.plot_type,
         # 放大倍数只发这一个键：布尔与驼峰别名都已删除（前端读 `exaggeration_mult`）。
         "exaggeration_mult": scale.exaggeration_mult,
         # 标度的唯一事实源：两个真实刻度端点。null = 未标定。

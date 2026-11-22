@@ -1081,7 +1081,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         const res = await ctx.rpcClient.roiGroupCreate(roi.id, {
           name,
           unit: activeCol?.unit || '%',
-          plot_type: activeCol?.plot_type || activeCol?.plotType || 'area',
+          plot_type: activeCol?.plot_type || 'area',
           scale_type: activeCol?.scale_type || 'linear',
         });
         roi.x_groups = roi.x_groups || [];

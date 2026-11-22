@@ -1,9 +1,7 @@
-import { Column, ControlPoint, DataRoi, DiagramCalibration, DiagramData, LEGACY_FULL_SCALE } from '../types/pollen';
+import { ControlPoint, DataRoi, DiagramCalibration, DiagramData } from '../types/pollen';
 import { applyScaleSnapshot } from '../app/scaleSync';
 import { draftColumnXValues } from './draftPayload';
 import { RpcClient } from '../services/RpcClient';
-import { SplineInterpolator } from './SplineInterpolator';
-import { CoordinateSystem } from './CoordinateSystem';
 import { TarArchive } from './TarArchive';
 import { notifyError } from '../ui/feedback';
 import { extractProjectNameFromFilename, resolveExportFilename } from '../utils/exportNaming';
@@ -104,13 +102,9 @@ export function draftToProjectPayload(draft: DiagramData): DraftRestorePayload {
       rel1 = (Number(c.x_ticks[1].px) - start) / span;
       xValues = draftColumnXValues(c);
     } else {
-      // 未标定：起点在列左边界，终点取后端下发的 tickEndX
-      // （它已经是后端 `resolve_column_scale` 算出的绝对像素，不是自造值）。
-      const tickEndX = c.tickEndX ?? c.endX;
+      // 未标定：起点在列左边界，终点取列右边界
       rel0 = 0;
-      rel1 = (Number(tickEndX) - start) / span;
-      // 未标定：不写 x_values（`draftColumnXValues` 返回 null）。见该函数的注释：
-      // 填了占位值，后端就会把这些列判成已标定并开始出数。
+      rel1 = 1;
       xValues = draftColumnXValues(c);
     }
     if (!Number.isFinite(rel0) || !Number.isFinite(rel1)) {
@@ -127,7 +121,7 @@ export function draftToProjectPayload(draft: DiagramData): DraftRestorePayload {
         id: groupId,
         name: `${c.name ?? c.id}组`,
         unit: c.unit || '%',
-        plot_type: c.plot_type || c.plotType || 'area',
+        plot_type: c.plot_type || 'area',
         scale_type: c.scale_type || 'linear',
         exaggeration_mult: c.exaggeration_mult ?? null,
         tick_layout: [{ rel: rel0 }, { rel: rel1 }],
@@ -272,10 +266,7 @@ export function normalizeProject(
   const normalizedCols = rawCols.map((c: any, idx: number) => {
     const name = c.name || c.species || `Col ${idx + 1}`;
     const startX = c.startX ?? (c.start ?? 0);
-    const tickEndX = c.tickEndX ?? (c.scaleCalib?.calibX ?? c.endX ?? c.end ?? startX + 50);
-    const endX = c.endX ?? (c.end ?? tickEndX);
-    const startVal = c.startValue ?? (c.scaleCalib?.originVal ?? 0);
-    const tickVal = c.tickValue ?? (c.scaleCalib?.calibVal ?? c.maxPercent ?? LEGACY_FULL_SCALE);
+    const endX = c.endX ?? (c.end ?? startX + 50);
     const rawPts = c.controlPoints || c.points || [];
 
     const pts: ControlPoint[] = rawPts.map((p: any, pIdx: number) => ({
@@ -309,23 +300,14 @@ export function normalizeProject(
       color: c.color || '#38bdf8',
       startX,
       endX,
-      maxPercent: tickVal,
-      tickEndX,
       unit: c.unit || '%',
       isLocked: c.isLocked || false,
-      curveType: c.curveType || 'linear',
       visible: c.visible !== false,
       scale_type: c.scale_type || 'linear',
       plot_type: c.plot_type || c.plotType || undefined,
-      plotType: c.plot_type || c.plotType || undefined,
       exaggeration_mult: exagMult,
-      hasExaggeration: exagMult != null && exagMult > 1,
-      exaggerationMult: exagMult,
       x_ticks: xTicks,
-      startValue: startVal,
-      tickValue: tickVal,
       controlPoints: pts,
-      points: pts,
       // 缺 scaleCalib 就**不给**这个字段：CoordinateSystem.resolveColumnScale 会走
       // 未标定分支（界面显示"未标定"）。绝不能拿 startX 冒充 0 点 —— 0 点的定义是
       // startX + 轴粗（ARCHITECTURE §6.4），用列左缘会让每列读数系统性偏大
@@ -370,8 +352,6 @@ export function normalizeProject(
  * 职责：
  * 1. saveProjectFile: 打包导出为开放标准 .tar 归档 (POSIX UStar)
  * 2. openProjectFile: 读取并解析已有的 .tar 或 .json 科学项目归档并还原前后端状态
- * 3. generateStandardCsv: 生成符合地学标准的无 NA 丰度表 CSV
- * 4. generateRScript: 生成符合 rioja::strat.plot 规范的可复现绘图 R 脚本
  */
 export class ProjectManager {
   private data: DiagramData;
@@ -448,136 +428,6 @@ export class ProjectManager {
       // 旧实现只 notifyError 就返回，于是顶栏照样报"已打包导出成功"。
       return false;
     }
-  }
-
-  /**
-   * 生成地学标准 CSV 表格 (首列深度，未观察属种严格输出 0.0)
-   */
-  public generateStandardCsv(): string {
-    const cal = this.data.calibration;
-    const visibleCols = this.data.columns.filter((c) => c.visible);
-    const { depths, yPositions } = SplineInterpolator.getStandardDepthHorizons(cal);
-    // 列名里的单位只能来自真实输入。缺单位时写 `Depth_?`：既保住 `Depth_` 前缀
-    // （既有脚本按前缀取列），又让人一眼看出"单位未定，先补标定再用"。
-    // 曾经这里兜底成 `Depth_cm`，于是 ka 年代轴导出的表头也自称 cm（#111）。
-    const headers = [`Depth_${cal.unit || '?'}`, ...visibleCols.map((c) => `"${c.name}"`)];
-    const rows: string[] = [headers.join(',')];
-
-    for (let i = 0; i < depths.length; i++) {
-      const d = depths[i];
-      const y = yPositions[i];
-      const rowVals: string[] = [d.toFixed(2)];
-      for (const col of visibleCols) {
-        let v = SplineInterpolator.interpolatePercentAtY(col, y);
-        if (v !== undefined && !isNaN(v)) {
-          // 统一经 CoordinateSystem.resolveColumnScale 读取放大倍数（兼容 exaggeration_mult 与 legacy 字段）
-          const scale = CoordinateSystem.resolveColumnScale(col);
-          if (scale.calibrated && scale.exaggerationMult && scale.exaggerationMult > 1) {
-            v = v / scale.exaggerationMult;
-          }
-          rowVals.push(v.toFixed(2));
-        } else {
-          // 未标定 / 无控制点不给数：以前这里写 '0.00'，等于把"没数字化"
-          // 报成"该层确实 0%"，导出表上两者无法区分。
-          rowVals.push('NA');
-        }
-      }
-      rows.push(rowVals.join(','));
-    }
-    return rows.join('\n');
-  }
-
-  /**
-   * 生成针对当前图谱与属种列的 R 语言绘图脚本 (基于 rioja::strat.plot)
-   */
-  public static generateRScript(columns: Column[], unit: string = 'cm'): string {
-    const visibleCols = columns.filter((c) => c.visible);
-    const polyVec = visibleCols.map((c) => (c.plotType === 'bar' || c.plotType === 'line' || c.plotType === 'symbol' ? 'FALSE' : 'TRUE')).join(', ');
-    const barVec = visibleCols.map((c) => (c.plotType === 'bar' ? 'TRUE' : 'FALSE')).join(', ');
-    const lineVec = visibleCols.map((c) => (c.plotType === 'line' ? 'TRUE' : 'FALSE')).join(', ');
-    // 放大倍数只有 `exaggeration_mult` 一个来源；没有就**不生成** exag 参数。
-    // 旧实现里 `Math.max(5, …)` 会在无人设置时也画成 5×——脚本与数据不一致。
-    const exagMults = visibleCols
-      .map((c) => c.exaggeration_mult)
-      .filter((m): m is number => typeof m === 'number' && m > 1);
-    const hasAnyExag = exagMults.length > 0;
-    const maxExagMult = hasAnyExag ? Math.max(...exagMults) : 0;
-    const exagVec = visibleCols
-      .map((c) => (typeof c.exaggeration_mult === 'number' && c.exaggeration_mult > 1 ? 'TRUE' : 'FALSE'))
-      .join(', ');
-
-    const exagParam = hasAnyExag
-      ? `  exag = plot_exag,\n  exag.mult = ${maxExagMult},\n  col.exag = "auto",\n  exag.alpha = 0.5,\n`
-      : '';
-
-    return `# ==============================================================================
-# Straditize Pro - Geological Stratigraphic Pollen Diagram Plotting Script
-# Generated automatically by Straditize v2.0 (straditize pro)
-# Requires R package 'rioja' (install.packages("rioja"))
-# ==============================================================================
-
-if (!requireNamespace("rioja", quietly = TRUE)) {
-  message("Installing required package 'rioja' from CRAN...")
-  install.packages("rioja", repos = "https://cloud.r-project.org")
-}
-library(rioja)
-
-# 1. Locate and load exported stratigraphic CSV table
-data_file <- "data.csv"
-if (!file.exists(data_file)) {
-  csv_candidates <- list.files(pattern = "\\\\.csv$", full.names = TRUE)
-  if (length(csv_candidates) > 0) {
-    data_file <- csv_candidates[1]
-  } else {
-    stop("Cannot find data.csv in current directory.")
-  }
-}
-
-message("Loading stratigraphic dataset from: ", data_file)
-df <- read.csv(data_file, check.names = FALSE, stringsAsFactors = FALSE)
-
-# Extract depth horizon (first column) and taxa abundance matrix
-depth <- df[[1]]
-taxa_data <- df[, -1, drop = FALSE]
-
-# Ensure matrix is strictly numeric, replace any residual NAs with 0
-taxa_matrix <- as.matrix(sapply(taxa_data, as.numeric))
-taxa_matrix[is.na(taxa_matrix)] <- 0
-
-# 2. Configure per-column plot styles based on user selections in Straditize Pro
-plot_poly <- c(${polyVec})
-plot_bar  <- c(${barVec})
-plot_line <- c(${lineVec})
-${hasAnyExag ? `plot_exag <- c(${exagVec})` : ''}
-
-# 3. Render stratigraphic plot using rioja::strat.plot
-message("Rendering stratigraphic pollen profile...")
-strat.plot(
-  d = taxa_matrix,
-  yvar = depth,
-  y.rev = TRUE,             # Depth increases downwards (standard geological convention)
-  ylabel = paste0("Depth (", "${unit}", ")"),
-  plot.poly = plot_poly,    # Silhouette area fill
-  plot.line = plot_line,    # Pure line curves
-  plot.bar = plot_bar,      # Discrete horizontal bars
-  col.poly = "grey35",
-  col.line = "black",
-  lwd.line = 1.0,
-  scale.percent = TRUE,     # Percentage scale labels
-${exagParam}  xRight = 0.95,
-  yTop = 0.88,
-  title = "Stratigraphic Pollen Diagram (Straditize Pro)"
-)
-
-message("Finished! Stratigraphic plot generated successfully.")
-`;
-  }
-
-  public generateRScript(columns?: Column[], unit?: string): string {
-    return ProjectManager.generateRScript(
-      columns || this.data.columns,
-      (unit || this.data.calibration.unit || '').trim()
-    );
   }
 
   /**

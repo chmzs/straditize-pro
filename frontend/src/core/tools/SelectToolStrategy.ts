@@ -10,9 +10,9 @@ export class SelectToolStrategy implements ToolStrategy {
 
   private draggingBoundary: {
     taxaId: string;
-    type: 'start' | 'end' | 'tick';
+    type: 'start' | 'end';
   } | null = null;
-  private dragInitialColumn: { startX: number; endX: number; tickEndX: number } | null = null;
+  private dragInitialColumn: { startX: number; endX: number } | null = null;
 
   private geometryDrag: {
     id: string;
@@ -25,7 +25,7 @@ export class SelectToolStrategy implements ToolStrategy {
     return this.draggingAnchor;
   }
 
-  public getDraggingBoundary(): { taxaId: string; type: 'start' | 'end' | 'tick' } | null {
+  public getDraggingBoundary(): { taxaId: string; type: 'start' | 'end' } | null {
     return this.draggingBoundary;
   }
 
@@ -85,45 +85,15 @@ export class SelectToolStrategy implements ToolStrategy {
       ctx.data.selectedEntity = { type: 'column', id: hitBoundary.taxaId, part: hitBoundary.type };
       const col = ctx.data.columns.find((c) => c.id === hitBoundary.taxaId);
       if (col) {
-        this.dragInitialColumn = { startX: col.startX, endX: col.endX, tickEndX: col.tickEndX ?? col.endX };
+        this.dragInitialColumn = { startX: col.startX, endX: col.endX };
       }
       ctx.callbacks.onTaxaChange?.(hitBoundary.taxaId);
       ctx.updateCursor();
       return true;
     }
 
-    // 4. 点击属种列区域 (在步骤 6 时，底端刻度尺区域点击直接拾取/吸附 X2 刻度齿)
+    // 4. 点击属种列区域
     const hitCol = ctx.findHitColumn(worldPt);
-    if (ctx.workflowStage === 6) {
-      const col = hitCol || ctx.getActiveColumn();
-      const bottomY = Math.min(ctx.data.imageHeight || 12000, ctx.data.roi.yMax + 30);
-      const isNearBottomRuler =
-        worldPt.y >= ctx.data.roi.yMax - 30 / ctx.viewport.scale &&
-        worldPt.y <= bottomY + 35 / ctx.viewport.scale;
-
-      if (col && isNearBottomRuler && worldPt.x >= col.startX - 5 && worldPt.x <= col.endX + 5) {
-        ctx.data.activeTaxaId = col.id;
-        ctx.data.selectedEntity = { type: 'column', id: col.id, part: 'tick' };
-        let targetX = Math.round(worldPt.x);
-        targetX = Math.max(col.startX + 5, targetX);
-        col.tickEndX = targetX;
-        if (col.scaleCalib) {
-          col.scaleCalib.calibX = targetX;
-        }
-        if (col.x_ticks && col.x_ticks.length >= 2) {
-          col.x_ticks[1].px = targetX;
-        }
-        ctx.history.push(`Set Tick End for ${col.name}`, ctx.data.columns, ctx.data.activeTaxaId);
-        ctx.callbacks.onTaxaChange?.(col.id);
-        ctx.callbacks.onDataChange?.();
-
-
-        ctx.notifyNotice(`已将 ${col.name} 的刻度端点 X2 吸附至 X=${targetX}px (请在右侧输入数值后按 Enter 保存)`);
-        ctx.requestRender();
-        return true;
-      }
-    }
-
     if (hitCol) {
       ctx.data.activeTaxaId = hitCol.id;
       ctx.data.selectedEntity = { type: 'column', id: hitCol.id };
@@ -227,15 +197,6 @@ export class SelectToolStrategy implements ToolStrategy {
           }
           if (colIndex > 0) {
             ctx.data.columns[colIndex - 1].endX = newX;
-          }
-        } else if (type === 'tick') {
-          let targetX = newX;
-          targetCol.tickEndX = Math.max(targetCol.startX + 5, targetX);
-          if (targetCol.scaleCalib) {
-            targetCol.scaleCalib.calibX = targetCol.tickEndX;
-          }
-          if (targetCol.x_ticks && targetCol.x_ticks.length >= 2) {
-            targetCol.x_ticks[1].px = targetCol.tickEndX;
           }
         } else {
           targetCol.endX = newX;

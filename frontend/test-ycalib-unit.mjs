@@ -250,27 +250,15 @@ const normalizedEmptyString = normalizeProject(
 );
 assert.equal(normalizedEmptyString.calibration.unit, undefined, '空字符串单位等同未定，不得原样留在镜像里');
 
-console.log('--- 6. 导出表头：缺单位写 Depth_?，不写 Depth_cm ---');
-const csvFor = (calibration) => {
-  // 一列未数字化的属种（controlPoints 为空 → 数据行写 NA），只为看表头。
-  const manager = new ProjectManager(
-    { calibration, columns: [{ visible: true, name: 'Pinus', controlPoints: [] }] },
-    null
-  );
-  return manager.generateStandardCsv();
-};
-const headerOf = (csv) => csv.split('\n')[0];
+console.log('--- 6. 单位标签唯一入口：缺单位返回单位未定，不写 cm ---');
+const { calUnitLabel } = await import('./src/core/calUnit.ts');
 
+assert.equal(calUnitLabel(CAL_WITHOUT_UNIT), '单位未定', '缺单位时必须让人看出单位未定，不得自称 cm');
+assert.equal(calUnitLabel(CAL_WITH_KA), 'ka', '已知单位时返回真实单位');
 assert.equal(
-  headerOf(csvFor(CAL_WITHOUT_UNIT)),
-  'Depth_?,"Pinus"',
-  '缺单位时表头必须让人看出单位未定（Depth_?），不得自称 Depth_cm'
-);
-assert.equal(headerOf(csvFor(CAL_WITH_KA)), 'Depth_ka,"Pinus"', '已知单位时表头带真实单位');
-assert.equal(
-  headerOf(csvFor({ ...CAL_WITHOUT_UNIT, unit: 'cm' })),
-  'Depth_cm,"Pinus"',
-  'cm 只有用户真填了才写'
+  calUnitLabel({ ...CAL_WITHOUT_UNIT, unit: 'cm' }),
+  'cm',
+  'cm 只有用户真填了才返回'
 );
 
 console.log('--- 7. main.ts 自动复标：单位缺失送空串（文本级锁） ---');
@@ -301,7 +289,7 @@ console.log('--- 8. 共享 helper：单位文案的唯一实现 ---');
     .map(([key]) => key);
   assert.deepEqual(enCarrierKeys, ['step3.unitUnset'], `英文同理，实际: ${enCarrierKeys.join('、')}`);
 }
-const { calUnitLabel } = await import('./src/core/calUnit.ts');
+
 assert.equal(calUnitLabel(CAL_WITHOUT_UNIT), UNIT_UNSET, '缺单位 → i18n 的「单位未定」');
 assert.equal(calUnitLabel(CAL_WITH_KA), 'ka', '有真单位 → 原样返回');
 assert.equal(calUnitLabel({ ...CAL_WITHOUT_UNIT, unit: '  cm  ' }), 'cm', '首尾空白不去猜、只去空白');

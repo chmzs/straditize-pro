@@ -34,7 +34,6 @@ const history = new HistoryManager();
 /**
  * 列夹具。`color` / `unit` / `controlPoints` 是 `Column` 的必填字段，本判据不读它们
  * （HistoryManager 只做 JSON 深拷贝快照），填中性值只为让夹具满足 `Column` 的形状。
- * `maxPercent` 是可选字段，保留原值。
  * @param {number} n
  * @returns {import('./src/types/pollen.ts').Column[]}
  */
@@ -44,7 +43,6 @@ const cols = (n) => [
     name: `Col${n}`,
     startX: 100,
     endX: 200,
-    maxPercent: 40,
     visible: true,
     color: '#888',
     unit: '%',

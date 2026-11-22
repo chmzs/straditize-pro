@@ -207,9 +207,6 @@ export interface Column {
   unit: string;
   exaggeration_mult?: number | null; // 唯一的放大倍数（null = 无局部放大）
 
-  control_points?: Point[];
-
-  // 严格保持向后兼容过渡别名（确保现有渲染组件与算法不挂）
   controlPoints: Point[];
   /**
    * 稠密逐行读数（后端 column_points：逐行墨迹，或按锚点重建的折线）。
@@ -224,12 +221,6 @@ export interface Column {
   curveError?: string | null;
   species?: string;
   isLocked?: boolean;
-  maxPercent?: number;
-  tickEndX?: number;
-  curveType?: 'linear' | 'bezier';
-  plotType?: 'area' | 'bar' | 'line' | 'symbol';
-  startValue?: number;
-  tickValue?: number;
 
   scaleCalib?: {
     originX: number;
@@ -244,7 +235,6 @@ export interface Column {
    * 只存在于后端一处），否则载入工程后会出现"后端已标定、前端未标定"。
    */
   scale_provenance?: { calibrated: boolean; source: string } | null;
-  points?: Point[];
   symbolType?: 'continuous' | 'presence_absence' | 'count';
 }
 
@@ -488,7 +478,7 @@ export interface DiagramData {
   isDesktopMode?: boolean; // 桌面模式显示右上角 [退出] 按钮，服务器模式隐藏
   selectedEntity:
     | { type: 'roi'; handle?: string }
-    | { type: 'column'; id: string; part?: 'start' | 'tick' | 'end' }
+    | { type: 'column'; id: string; part?: 'start' | 'end' }
     | { type: 'point'; colId: string; pointId: string }
     | null;
 
@@ -663,15 +653,4 @@ export type ControlPoint = Point;
 export type TaxaColumn = Column;
 export type DiagramCalibration = DepthCalibration;
 
-
-/**
- * legacy 满量程缺省（0–100%）。
- *
- * **这不是读数**：`startValue` / `tickValue` 是分列期写入的占位契约，真正的标度一律经
- * 后端 `resolve_column_scale`（未标定列在后端直接不给数，见 ARCHITECTURE 不变量 15）。
- *
- * 放在 types 层而不是某个 service 里，是因为 `ProjectManager` 与 `RpcClient` 都要用，
- * 而这两者互相 import——常量放任一侧都会造出循环依赖。
- */
-export const LEGACY_FULL_SCALE = 100;
 
