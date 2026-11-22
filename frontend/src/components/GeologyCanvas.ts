@@ -664,6 +664,29 @@ private pointer: PointerState = {
     this.requestRender();
   }
 
+  /**
+   * 平移视口使指定候选干扰线在画布中居中，并适当缩放以便看清局部干扰线。
+   */
+  public scrollToCandidate(candidateId: string): void {
+    const cand = this.data.line_candidates?.find((c) => c.id === candidateId);
+    if (!cand) return;
+    const rect = this.canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const g = cand.geometry;
+    const centerX = (g.x0 + g.x1) / 2;
+    const centerY = (g.y0 + g.y1) / 2;
+
+    // 缩放到舒适的局部观察比例（至少 0.9，若当前已更大则维持当前缩放）
+    const targetScale = Math.max(this.viewport.scale, 0.9);
+    this.viewport.scale = targetScale;
+    this.viewport.panX = rect.width / 2 - centerX * targetScale;
+    this.viewport.panY = rect.height / 2 - centerY * targetScale;
+
+    this.viewport.fittedToScreen = false;
+    this.requestRender();
+  }
+
   public getActiveColumn(): TaxaColumn | undefined {
     return this.data.columns.find((c) => c.id === this.data.activeTaxaId);
   }

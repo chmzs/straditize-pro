@@ -318,21 +318,14 @@
     **规范名四个**：`"area"` / `"line"` / `"bar"` / `"area_exaggerated"`。前三个是**画法名**，
     与 `plot_type`、`digitize_column` 共用同一套命名（`session_parts/digitize.py::PLOT_TYPES`）；
     `"area_exaggerated"` 是**读取策略名**，不是画法：同一列被画了两层时用它（贴轴的填充区
-    = 真实值「内线」，其外侧一条独立细线 = 同一条数据放大 3.0–5.5 倍的「外线」，实测
-    合并中位 4.17）。逐行四分：
-    - **sep**（读内线右缘）：本行另有独立外段，内线宽 ≥ 4px，`k = 外线距 / 内线距 ∈ [2, 7]`，
-      外线右缘 ≤ 列右界 −3px；
-    - **broken**（读该段右缘）：单段行，段宽 ≤ 本行 ±10 行内 sep 行内线宽的 p75；
-    - **glue**（反算）：单段行且段右缘距放大原点 ≥ 本行 ±10 行内 sep 行外线距的 p25
-      ⇒ `x = z0 + (段右缘 − z0) / k`，`k` 取邻域 sep 行 `ratio` 的中位，
-      `source` 记 `"derived_from_outer"`；
-    - **undet**：其余行 ⇒ **不给数**，行号进返回体的 `unreadable_rows`（导出留空，不是 0）。
-    放大原点 `z0 = startX + 1`（取证组用 `k` 的离散度扫描验证），与读数用的 0 点
-    （`startX + 轴粗`）不是同一个点：`z0` 只进比值。`k` 落在 `[3.0, 5.5]` 之外时给该点挂
-    `flags: ["outer_inconsistent"]`，**只标记不改值**。实测覆盖率上限：sep∪broken 约占
-    列的 15%–62%（Picea 770/1520、Quercus 223/1520），跑出 100% 说明 undet 被当成了可读行。
-    该读法量到的内线**就是真实值**，因此 `exaggeration_mult` 必须按 1 处理 —— 再除一次
-    等于把同一个放大倍数罚两次。读数仍含 +4px 常数底（两层都带，S1 的另一半，见 #46）。
+    = 真实值「内线」，其外侧一条独立细线或淡色填充 = 同一条数据放大 N 倍的「外线」）。
+    采用**最外缘优先 + 真实物理截断回退内线模型**（详见 `docs/findings/exaggerated-reader-physical-model.md`）：
+    - **常态（外线）**：提取最外侧轮廓（若组级 `exagg_style="line"` 计入线宽取骨架中心 `(start+end)/2.0`；若 `"area"` 取最外右缘），
+      `points[].source` 记为 `"exagg_{N}x"`（画布呈经典黄点，导出与数值计算由 `read_column_values` 统一自动 ÷ N）；
+    - **真实物理截断（回退内线）**：仅当内线实心黑块自身宽度占列宽大部分（`inner_width >= 0.45 * W_col`）且贴死列右分割线时，
+      才判定为外线飞出边界的真实截断，回退抓取内线实心黑块右缘作为 1x 原值，`points[].source` 记为 `"main_1x"`
+      （画布呈科技蓝点，数值已是 1x 原值，不再除以 N）；
+    - **低丰度与零值保护**：正常大峰触碰右边界不削峰、低谷起伏与近零值 100% 保留为外线点，杜绝断崖式误判。
     历史别名 `"bars"` 只在入口归一化为 `"bar"`
     （见 `session_parts/digitize.py::normalize_reader_type`），不构成第五个规范名。
     未知值返回 `-32602` —— **不静默退化**：那会让柱状图读数只有真值一半，
@@ -345,17 +338,15 @@
     "reader_type": "area_exaggerated",
     "control_points_count": 16,
     "points": [
-      { "row": 511, "x": 315.0, "y": 511.0, "source": "read" },
-      { "row": 512, "x": 317.5, "y": 512.0, "source": "derived_from_outer" },
+      { "row": 511, "x": 315.0, "y": 511.0, "source": "exagg_5x" },
+      { "row": 512, "x": 317.5, "y": 512.0, "source": "main_1x" },
       "..."
     ],
-    "unreadable_rows": [513, 514]
+    "unreadable_rows": []
   }
   ```
-  `points[].source` 与 `unreadable_rows` 只对 `reader_type="area_exaggerated"` 有意义
-  （其余读取器逐行必有点，`unreadable_rows` 恒为空）：`source` 取值 `"read"`（量到的
-  内线）与 `"derived_from_outer"`（粘连行反算）；`unreadable_rows` 是判不出内线而**没有
-  产出点**的行号，导出时这些格子为空。
+  `points[].source` 支持区分点位来源（`"exagg_{N}x"`、`"main_1x"` 或 `"manual"`）；
+  `control_points` 中的点亦继承相应 `source` 标记，用于前端多色渲染与导出换算。
 - **契约要点**：数字化是**纯像素几何**，不需要标定；但取数范围受 ROI 约束。
   若某列 `[start, end]` 与 ROI 的 X 范围**完全不相交**，本方法返回 `-32602`，
   而不是产出一整列静默的 0 —— 列落在取数区之外意味着"没有数据"，不等于"数据为零"。

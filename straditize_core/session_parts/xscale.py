@@ -106,6 +106,7 @@ class ColumnScale:
     #: 列左缘 + 轴粗；若写入方把列左缘当 0 点写进 x_ticks[0].px，读数会整体偏大
     #: 轴粗 x 斜率。下游据此提示/拒绝，而不是静默给出偏大的数。
     origin_suspect: bool = False
+    exagg_style: str = "line"
 
     def __post_init__(self) -> None:
         """构造时一次性归一化，使下游只需面对两个已知取值。
@@ -114,6 +115,10 @@ class ColumnScale:
         ``px_to_value`` 里的 ``else`` 分支恒等于线性，不再可能悄悄兜住第三个值。
         """
         object.__setattr__(self, "scale_type", normalize_scale_type(self.scale_type))
+        style = str(getattr(self, "exagg_style", "line") or "line").lower()
+        if style not in ("line", "area"):
+            style = "line"
+        object.__setattr__(self, "exagg_style", style)
 
     def __iter__(self) -> Iterator[Any]:
         """Support tuple unpacking; field order is the yield order below."""
@@ -143,6 +148,7 @@ class ColumnScale:
         col_name: str = "column",
         ndigits: int | None = 4,
         require_calibrated: bool = True,
+        is_1x: bool = False,
     ) -> float:
         """Convert an image X pixel coordinate to scientific abundance/value.
 
@@ -208,6 +214,7 @@ class ColumnScale:
 
         if (
             apply_exaggeration
+            and not is_1x
             and self.exaggeration_mult is not None
             and self.exaggeration_mult > 1.0
         ):
@@ -244,6 +251,7 @@ def read_column_values(
     profile: str = READ_PROFILE_EXPORT,
     strict: bool = False,
     col_name: str = "",
+    sources: Sequence[str | None] | None = None,
 ) -> list[float | None]:
     """把一串像素读成读数——**唯一入口**，出口差异只由 `profile` 表达。
 
@@ -255,6 +263,7 @@ def read_column_values(
     - 基线固定取 `scale.abs_px0`（= 列左缘 + 轴线粗，ARCHITECTURE §6.4）。画布绿线画在
       0 点，换算基准必须同源，否则缺控制点的行会落进轴内算出负值再被 clamp；
     - `null_when_uncalibrated` 由 profile 决定，而不是各调用方自己 `if scale.calibrated`。
+    - `sources` 支持区分外线 (exagg_Nx, 需除以 N) 与回退截断内线 (main_1x, 已经是 1x 原值，不再除以 N)。
     """
     policy = _READ_PROFILES.get(profile)
     if policy is None:
@@ -262,6 +271,7 @@ def read_column_values(
     if policy["null_when_uncalibrated"] and not scale.calibrated:
         return [None] * len(rows_px)
     baseline = float(scale.abs_px0)
+    src_list = list(sources) if sources is not None else [None] * len(rows_px)
     return [
         scale.px_to_value(
             x,
@@ -270,8 +280,9 @@ def read_column_values(
             col_name=col_name,
             require_calibrated=policy["require_calibrated"],
             ndigits=policy["ndigits"],
+            is_1x=(src == "main_1x"),
         )
-        for x in rows_px
+        for x, src in zip(rows_px, src_list)
     ]
 
 
@@ -298,6 +309,9 @@ def resolve_column_scale(
     group_obj = _resolve_column_group(session, col_dict)
     scale_type, unit, plot_type = _resolve_column_visual(col_dict, group_obj)
     exaggeration_mult = _resolve_exaggeration(col_dict, group_obj)
+    exagg_style = str((group_obj or {}).get("exagg_style") or col_dict.get("exagg_style") or "line").lower()
+    if exagg_style not in ("line", "area"):
+        exagg_style = "line"
 
     # Case A1: Resolved via group tick_layout and column x_values (D1: 组管位置，列管数值)
     x_values = col_dict.get("x_values")
@@ -312,6 +326,7 @@ def resolve_column_scale(
             plot_type=plot_type,
             scale_type=scale_type,
             exaggeration_mult=exaggeration_mult,
+            exagg_style=exagg_style,
         )
 
     # 组级斜率（点齿标定的结果，ARCHITECTURE §6.4）优先于 x_ticks：
@@ -330,6 +345,7 @@ def resolve_column_scale(
             plot_type=plot_type,
             scale_type=scale_type,
             exaggeration_mult=exaggeration_mult,
+            exagg_style=exagg_style,
         )
 
     # Case A2: Explicit x_ticks (transition SSOT)
@@ -345,6 +361,7 @@ def resolve_column_scale(
             plot_type=plot_type,
             scale_type=scale_type,
             exaggeration_mult=exaggeration_mult,
+            exagg_style=exagg_style,
         )
 
     return _scale_from_fallback(
@@ -357,6 +374,7 @@ def resolve_column_scale(
         unit=unit,
         plot_type=plot_type,
         exaggeration_mult=exaggeration_mult,
+        exagg_style=exagg_style,
     )
 
 
@@ -452,30 +470,45 @@ def store_exaggeration(column: dict[str, Any], raw: Any) -> None:
 def _resolve_exaggeration(
     col_dict: dict[str, Any], group_obj: dict[str, Any] | None
 ) -> float | None:
-    """夸张倍数：现代键 > 历史键（has_exaggeration + multiplier）> 组级；<=1 一律视为未夸张。"""
-    # Resolve exaggeration multiplier across both modern (`exaggeration_mult`)
-    # and legacy (`has_exaggeration` + `exaggeration_multiplier` / `exaggerationMult`) keys.
-    exaggeration_mult: float | None = None
+    """夸张倍数：组级 > 现代列级 > 历史键；<=1 一律视为未夸张。"""
+    # 1. 组级优先（组是单一事实源，组上设了倍率则组内列一律遵循）
+    if group_obj and group_obj.get("exaggeration_mult") is not None:
+        try:
+            raw_exag = float(group_obj["exaggeration_mult"])
+            if raw_exag > 1.0:
+                return raw_exag
+        except (ValueError, TypeError):
+            pass
+
+    # 2. 列级显式设置
     if col_dict.get("exaggeration_mult") is not None:
-        raw_exag = float(col_dict["exaggeration_mult"])
-        if raw_exag > 1.0:
-            exaggeration_mult = raw_exag
-    elif bool(
+        try:
+            raw_exag = float(col_dict["exaggeration_mult"])
+            if raw_exag > 1.0:
+                return raw_exag
+        except (ValueError, TypeError):
+            pass
+
+    if col_dict.get("reader_type") == "area_exaggerated":
+        return 5.0
+
+    # 3. 历史键
+    if bool(
         col_dict.get("has_exaggeration", col_dict.get("hasExaggeration", False))
     ):
-        raw_exag = float(
-            col_dict.get(
-                "exaggeration_multiplier", col_dict.get("exaggerationMult", 1.0)
+        try:
+            raw_exag = float(
+                col_dict.get(
+                    "exaggeration_multiplier", col_dict.get("exaggerationMult", 1.0)
+                )
+                or 1.0
             )
-            or 1.0
-        )
-        if raw_exag > 1.0:
-            exaggeration_mult = raw_exag
-    elif group_obj and group_obj.get("exaggeration_mult") is not None:
-        raw_exag = float(group_obj["exaggeration_mult"])
-        if raw_exag > 1.0:
-            exaggeration_mult = raw_exag
-    return exaggeration_mult
+            if raw_exag > 1.0:
+                return raw_exag
+        except (ValueError, TypeError):
+            pass
+
+    return None
 
 
 def _scale_from_group_layout(
@@ -489,6 +522,7 @@ def _scale_from_group_layout(
     plot_type: str,
     scale_type: str,
     exaggeration_mult: float | None,
+    exagg_style: str = "line",
 ) -> ColumnScale:
     """组管位置、列管数值：组的 tick_layout 给出两个端点的相对位置，列的 x_values 给出数值。
 
@@ -520,6 +554,7 @@ def _scale_from_group_layout(
         exaggeration_mult=exaggeration_mult,
         calibrated=True,
         source="group",
+        exagg_style=exagg_style,
     )
 
 
@@ -544,6 +579,7 @@ def _scale_from_group_slope(
     plot_type: str,
     scale_type: str,
     exaggeration_mult: float | None,
+    exagg_style: str = "line",
 ) -> ColumnScale:
     """组级斜率标定：组内共用斜率，每列的 0 点 = 列左缘 + 轴线粗（ARCHITECTURE §6.4）。"""
     _group = group_obj or {}
@@ -571,6 +607,7 @@ def _scale_from_group_slope(
         exaggeration_mult=exaggeration_mult,
         calibrated=True,
         source="group_slope",
+        exagg_style=exagg_style,
     )
 
 
@@ -585,6 +622,7 @@ def _scale_from_ticks(
     plot_type: str,
     scale_type: str,
     exaggeration_mult: float | None,
+    exagg_style: str = "line",
 ) -> ColumnScale:
     """列自己的两点刻度（迁移期的单一事实源）：px 与 value 直接取用。
 
@@ -611,6 +649,7 @@ def _scale_from_ticks(
         calibrated=True,
         source="x_ticks",
         origin_suspect=origin_suspect,
+        exagg_style=exagg_style,
     )
 
 
@@ -625,6 +664,7 @@ def _scale_from_fallback(
     unit: str,
     plot_type: str,
     exaggeration_mult: float | None,
+    exagg_style: str = "line",
 ) -> ColumnScale:
     """兜底三选一：session.x_scales（已标定）> 历史三件套 > 纯缺省；结果 calibrated=False。"""
     # Fallback: legacy three-piece fields or session.x_scales
@@ -677,4 +717,5 @@ def _scale_from_fallback(
         exaggeration_mult=exaggeration_mult,
         calibrated=False,
         source=source,
+        exagg_style=exagg_style,
     )

@@ -361,6 +361,11 @@ export const en = {
   'step6.groupExagRangeTitle': 'Plotted full scale = true range × factor',
   'step6.groupExagRangeValues': 'Plotted {figure} {unit} → true {real} {unit} (group slope {slope} {unit}/px × mean column width {width}px)',
   'step6.columnExagOverriddenByGroup': 'Group {mult}× wins (the per-column setting is ignored)',
+  'step6.exaggStyleLabel': 'Exagg Style',
+  'step6.exaggStyleLine': 'Line',
+  'step6.exaggStyleArea': 'Area',
+  'step6.exaggStyleLineDesc': 'Outer curve is line (e.g. Gahai)',
+  'step6.exaggStyleAreaDesc': 'Outer curve is filled area (e.g. Rioja)',
 
   // ===== Step 7: Samples Panel =====
   'step7.title': '7. Points & Sampling Horizons',

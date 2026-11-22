@@ -354,6 +354,7 @@ export function createInspectorCallbacks(
       const cand = canvasComponent.data.line_candidates?.find((item) => item.id === candidateId);
       if (!cand) return;
       canvasComponent.setSelectedGeometryId(candidateId);
+      canvasComponent.scrollToCandidate(candidateId);
       callbacks.setHudNotice(
         `已选中 ${cand.axis === 'h' ? '横向' : '竖向'}几何：拖动整体移动，拖端点手柄改范围，Delete 删除。`,
         6000

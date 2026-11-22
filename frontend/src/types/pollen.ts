@@ -15,6 +15,7 @@ export interface Point {
   isManual?: boolean;
   createdAt?: number;
   type?: string; // 兼容老版本代码
+  source?: string; // 点来源：如 'exagg_5x', 'main_1x', 'read'
 }
 
 export type ScaleType = 'linear' | 'log';
@@ -101,6 +102,7 @@ export interface ColumnGroup {
   plot_type: 'area' | 'bar' | 'line' | 'symbol';
   scale_type: 'linear' | 'log';
   exaggeration_mult?: number | null;
+  exagg_style?: 'line' | 'area';
   tick_layout: Array<{ rel: number }>;
   /** 组参考标尺物理跨度 (px)，例如 38.5px 对应 20% */
   ref_span_px?: number;

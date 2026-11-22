@@ -101,11 +101,6 @@ export function render(data: DiagramData): string {
             ${t('step5.forRoi')}<strong style="color: var(--accent-blue);">${roiName}</strong>
           </div>
         </div>
-        ${renderResetButton({
-          id: 'btn-reset-step5-cleanup',
-          title: '清空本步全部清理编辑（几何、排除区与笔迹）并重新自动检测',
-          label: '重置',
-        })}
       </div>
 
       ${
@@ -232,6 +227,15 @@ export function render(data: DiagramData): string {
       <button id="btn-apply-cleanup-next" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: 12px; font-weight: 600;">
         ${t('step5.next')}
       </button>
+
+      <!-- 重设本步 (图2规范：底部居中浅红重设按钮) -->
+      <div style="display: flex; justify-content: center; margin-top: 8px;">
+        ${renderResetButton({
+          id: 'btn-reset-step5-cleanup',
+          title: '清空本步全部清理编辑（几何、排除区与笔迹）并重新自动检测',
+          label: '重设干扰清理',
+        })}
+      </div>
     </div>
   `;
 }
@@ -281,10 +285,12 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onAddLineGeometry?.('v');
   });
 
-  // 选中
-  root.querySelectorAll('.btn-select-geometry').forEach((button) => {
-    button.addEventListener('click', () => {
-      const id = (button as HTMLElement).dataset.candId;
+  // 选中：点击清单项或坐标文本时，在画布高亮并平移缩放聚焦到该几何线段
+  root.querySelectorAll('.btn-select-geometry, .cleanup-row').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      // 避免点击确认/撤回或删除按钮时触发平移
+      if ((e.target as HTMLElement).closest('.btn-toggle-geometry, .btn-delete-geometry')) return;
+      const id = (el as HTMLElement).dataset.candId;
       if (id) ctx.onEditLineGeometry?.(id);
     });
   });

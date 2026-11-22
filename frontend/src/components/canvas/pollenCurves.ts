@@ -256,29 +256,45 @@ export function drawAnchorsOverlay(env: AnchorEnv): void {
     if (isHovered || isDragging) {
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, radius + 3.5 / scale, 0, Math.PI * 2);
-      ctx.fillStyle = isDragging ? 'rgba(249, 115, 22, 0.4)' : 'rgba(56, 189, 248, 0.35)';
+      ctx.fillStyle =
+        pt.isManual || pt.type === 'manual'
+          ? 'rgba(217, 70, 239, 0.45)'
+          : isDragging
+            ? 'rgba(249, 115, 22, 0.4)'
+            : 'rgba(56, 189, 248, 0.35)';
       ctx.fill();
     }
 
     ctx.beginPath();
     ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
 
-    if (pt.type === 'peak') {
-      ctx.fillStyle = isDragging ? '#f97316' : '#fbbf24';
+    // 控制点多色语义化：
+    // 1. 人工介入点：鲜明品红 (#d946ef) + 纯白描边，与黄/蓝拉开绝对色差
+    // 2. 截断内线点：蓝色 (#3b82f6) + 深蓝描边，代表外线截断回退抓内线
+    // 3. 常规外线点：默认黄色 (峰值 #fbbf24 / 谷值 #f59e0b)，直接画在外线上供视觉核验
+    if (pt.isManual || pt.type === 'manual') {
+      ctx.fillStyle = isDragging ? '#c026d3' : '#d946ef';
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.0 / scale;
+      ctx.stroke();
+    } else if (pt.source === 'main_1x') {
+      // 蓝色：截断内线点 (main_1x)
+      ctx.fillStyle = isDragging ? '#2563eb' : '#3b82f6';
+      ctx.fill();
+      ctx.strokeStyle = '#1e3a8a';
+      ctx.lineWidth = 1.8 / scale;
+      ctx.stroke();
+    } else if (pt.type === 'peak') {
+      ctx.fillStyle = isDragging ? '#d97706' : '#fbbf24';
       ctx.fill();
       ctx.strokeStyle = '#111827';
       ctx.lineWidth = 1.8 / scale;
       ctx.stroke();
     } else if (pt.type === 'trough') {
-      ctx.fillStyle = isDragging ? '#f97316' : '#f59e0b';
+      ctx.fillStyle = isDragging ? '#d97706' : '#f59e0b';
       ctx.fill();
       ctx.strokeStyle = '#111827';
-      ctx.lineWidth = 1.8 / scale;
-      ctx.stroke();
-    } else if (pt.type === 'manual' || pt.isManual) {
-      ctx.fillStyle = isDragging ? '#f97316' : '#38bdf8';
-      ctx.fill();
-      ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.8 / scale;
       ctx.stroke();
     } else {

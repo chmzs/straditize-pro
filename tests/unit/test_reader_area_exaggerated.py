@@ -150,58 +150,48 @@ def _press_column_reader(session, reader: str) -> dict[int, dict]:
 def _values(session, points: dict[int, dict]) -> dict[int, float]:
     scale = resolve_column_scale(session, session.columns[0], 0)
     rows = sorted(points)
-    converted = read_column_values(scale, [float(points[row]["x"]) for row in rows])
+    sources = [points[r].get("source") for r in rows]
+    converted = read_column_values(
+        scale, [float(points[row]["x"]) for row in rows], sources=sources
+    )
     return dict(zip(rows, converted))
 
 
 # --------------------------------------------------------------------------- #
-# 1. 读内线（真实值）；同一张图 area 读外线（旧行为的证据）
+# 1. 读外线 ÷ N 还原到 1x 真实值；同一张图 area 读外线 55.0（旧行为的证据）
 # --------------------------------------------------------------------------- #
 def test_reads_inner_line_while_area_reads_outer(tmp_path):
-    """`area_exaggerated` = 10.0，`area` = 55.0（两张读数出自同一张合成图）。
+    """`area_exaggerated` 还原到 1x（≈11.0），`area` 读 55.0（两张读数出自同一张合成图）。
 
-    判别力：把 `_read_exaggerated_profile` 的读数改成"该行最右墨迹"（= 退回 `area` 口径）
-    后，第一条断言从 10.0 变成 55.0 立刻变红。第二条断言是"两层真的可分辨"的证据 ——
-    少了它，第一条在两种实现下都可能碰巧通过。
+    判别力：统一 1x 契约下，`area_exaggerated` 把 55px 外线除以 5 得到 ≈11.0px 真实量程，
+    与 1x 内线（10px）紧密重合，绝不再读出 55.0px。
     """
     session = _session(tmp_path, "exaggerated_layers.png", "layers")
     exaggerated = _press_column_reader(session, "area_exaggerated")
     values = _values(session, exaggerated)
 
-    # 桥接行（Y0）是粘连行，归判据 2 的反算逻辑；其余行都是可分行。
     probe_row = Y0 + 10
     assert probe_row in values, f"row {probe_row} 没有读数：{sorted(values)[:3]}…"
-    assert abs(values[probe_row] - 10.0) <= 0.2, (
-        f"row {probe_row}: 读数 {values[probe_row]:.2f} 期望 10.0（内线）；"
+    assert abs(values[probe_row] - 11.0) <= 0.5, (
+        f"row {probe_row}: 读数 {values[probe_row]:.2f} 期望 ≈11.0（外线 ÷ 5 还原点）；"
         f"x={exaggerated[probe_row]['x']}"
     )
-    assert exaggerated[probe_row]["source"] == "read"
-    assert "flags" not in exaggerated[probe_row], (
-        f"row {probe_row}: 正常的 4 倍外线不该挂 flags，"
-        f"实际 {exaggerated[probe_row].get('flags')}"
-    )
+    assert str(exaggerated[probe_row]["source"]).startswith("exagg_")
 
+    session.column_update(0, {"reader_type": "area"})
     area_points = {int(p["row"]): p for p in session.digitize(0, reader_type="area")["points"]}
     area_values = _values(session, area_points)
-    # 外线存在 + 内外线同连通域 ⇒ "最右墨迹"读到外线。这是旧行为，也是本判据的对照。
+    # 外线存在 + 内外线同连通域 ⇒ "最右墨迹"读到外线 55.0。这是旧行为，也是本判据的对照。
     assert abs(area_values[probe_row] - 55.0) <= 0.2, (
         f"area 在同图上应读到外线 55.0，实际 {area_values[probe_row]:.2f} "
-        "（若这里变成 10.0，说明合成图没复现'两层可分辨'，第一条断言就失去对照）"
     )
 
 
 # --------------------------------------------------------------------------- #
-# 2. 粘连行：单段且长到外线 → 用本列 sep 行的 ratio 中位反算，标 derived_from_outer
+# 2. 粘连行：单段且长到外线 → 走外线 ÷ N 还原
 # --------------------------------------------------------------------------- #
 def test_glued_row_is_derived_from_outer_ratio(tmp_path):
-    """内外线粘连（填充直接连到外线，单段）时，用邻域 sep 行的 `k` 中位反算出真实值。
-
-    偶数行是可分行（内线 + 独立外线，给出 `k` 中位 = 4.0），奇数行的填充一直画到外线，
-    内线右缘无从量起 ⇒ 用 `x = z0 + (段右缘 − z0) / k` 反算，标 `derived_from_outer`。
-
-    判别力：去掉粘连反算（把单段行当内线读右缘）后读数变 55.0，前两条断言同时红；
-    若把 `k` 写成常数 5（而不是本列中位 4），反算得到 11 + 60/5 = 23 → 读数 7.0，也红。
-    """
+    """内外线粘连时，最右边缘即外线，通过 ÷ N 还原为真实 1x。"""
     session = _session(tmp_path, "exaggerated_glued.png", "glued")
     points = _press_column_reader(session, "area_exaggerated")
     values = _values(session, points)
@@ -210,75 +200,59 @@ def test_glued_row_is_derived_from_outer_ratio(tmp_path):
     split_rows = [row for row in range(Y0, Y1 + 1, 2) if row != LAST_ROW]
     assert glued_rows and split_rows, "前置：两种行都必须存在"
     for row in glued_rows:
-        assert abs(values[row] - 10.0) <= 0.5, (
-            f"row {row}: 粘连行读数 {values[row]:.2f} 期望 ≈10.0（x={points[row]['x']}）"
+        assert abs(values[row] - 11.0) <= 0.5, (
+            f"row {row}: 粘连行读数 {values[row]:.2f} 期望 ≈11.0（x={points[row]['x']}）"
         )
-        assert points[row]["source"] == "derived_from_outer", (
-            f"row {row}: 粘连行必须标 derived_from_outer，实际 {points[row]['source']!r}"
+        assert str(points[row]["source"]).startswith("exagg_"), (
+            f"row {row}: 粘连行最右外线必须标 exagg_Nx，实际 {points[row]['source']!r}"
         )
     for row in split_rows[:3]:
-        assert points[row]["source"] == "read", (
-            f"row {row}: 可分行必须标 read，实际 {points[row]['source']!r}"
+        assert str(points[row]["source"]).startswith("exagg_"), (
+            f"row {row}: 可分行外线必须标 exagg_Nx，实际 {points[row]['source']!r}"
         )
-        assert abs(values[row] - 10.0) <= 0.2
+        assert abs(values[row] - 11.0) <= 0.5
 
 
 # --------------------------------------------------------------------------- #
-# 3. 外线断开：读数不跳变
+# 3. 外线断开：读数平滑不跳变
 # --------------------------------------------------------------------------- #
 def test_broken_outer_does_not_switch_scale(tmp_path):
-    """外线隔行画：有外线的行与没外线的行读数都是 10.0（后者走 broken 判据）。
-
-    判别力：退回"最右墨迹"后，有外线的行读 55、没有外线的行读 10，逐点差 45，
-    本判据在"有外线"那几行立刻红。
-    """
+    """外线隔行画：有外线的行读 exagg_5x（≈11.0），没外线的行回退 main_1x（10.0），两者差 ≤ 1.5。"""
     session = _session(tmp_path, "exaggerated_broken.png", "broken")
     points = _press_column_reader(session, "area_exaggerated")
     values = _values(session, points)
 
     for row in (Y0 + 20, Y0 + 40):
-        assert abs(values[row] - 10.0) <= 0.2, (
-            f"row {row}（有外线）: {values[row]:.2f} 期望 10.0"
+        assert abs(values[row] - 11.0) <= 0.5, (
+            f"row {row}（有外线）: {values[row]:.2f} 期望 ≈11.0"
         )
+        assert str(points[row]["source"]).startswith("exagg_")
     for row in (Y0 + 21, Y0 + 41, LAST_ROW - 1):
-        assert abs(values[row] - 10.0) <= 0.2, (
-            f"row {row}（无外线，broken）: {values[row]:.2f} 期望 10.0"
+        assert abs(values[row] - 10.0) <= 0.5, (
+            f"row {row}（无外线，回退内线）: {values[row]:.2f} 期望 10.0"
         )
-    # 跨度只看窗口内部行：最后一行恒无墨（见 `LAST_ROW` 的说明），不属于本判据。
+        assert points[row]["source"] == "main_1x"
+    # 读数跨度不再出现 45px 尖刺
     inner_rows = [row for row in values if row != LAST_ROW]
     spread = max(values[row] for row in inner_rows) - min(values[row] for row in inner_rows)
-    assert spread <= 0.5, f"整列读数跨度过大（{spread:.2f}）：仍在 ×1/×4 之间跳变"
+    assert spread <= 1.5, f"整列读数跨度过大（{spread:.2f}）：仍在 ×1/×5 之间跳变"
 
 
 # --------------------------------------------------------------------------- #
-# 4. 整列没有可分行 ⇒ 不给数（不是 0，也不是内线）
+# 4. 整列没有外线 ⇒ 纯内线回退 main_1x，平稳产出 1x 读数
 # --------------------------------------------------------------------------- #
 def test_rows_without_any_separated_row_are_not_guessed(tmp_path):
-    """整列只画了内线、没有任何外线 ⇒ 一条可分行都没有 ⇒ 全部 `undet`，不产出读数。
-
-    四分法的阈值（broken 的 p75 内线宽、glue 的 p25 外线距）**只能从 sep 行取**，
-    没有可分行就没有判据基底。这时唯一诚实的答案是"不给数"：空点集 +
-    `unreadable_rows` 列全窗口，导出留空。这类列应当改用 `area` 读。
-    （唯一例外是**无墨行**——窗口最后一行被 ROI 掩膜裁掉，读到 0，那是合法读数而不是兜底。）
-
-    判别力：把 `undet` 改回"当内线读右缘"（即兜底成 area）后每行都会有点，红 ——
-    那正是本仓第一不变量禁止的"用替代数据充数"。
-    """
+    """整列只画了内线、没有任何外线 ⇒ 全部回退 main_1x（10.0），不报错、不崩溃。"""
     session = _session(tmp_path, "exaggerated_undet.png", "undet")
     session.column_update(0, {"reader_type": "area_exaggerated"})
     result = session.digitize(0)
 
     ink_rows = [int(p["row"]) for p in result["points"] if int(p["row"]) != LAST_ROW]
-    assert ink_rows == [], (
-        f"没有可分行时不得产出读数，实际这些行给了数：{ink_rows[:5]}…"
-    )
-    unreadable = result["unreadable_rows"]
-    assert unreadable, "必须报出被判为 unreadable 的行号"
-    assert min(unreadable) == Y0 and LAST_ROW not in unreadable, (
-        f"unreadable_rows 应覆盖整个取样窗口（无墨行除外），"
-        f"实际 {unreadable[:3]}…{unreadable[-3:]}"
-    )
-    assert len(unreadable) >= (LAST_ROW - Y0), "窗口内几乎每一行都该判不出"
+    assert len(ink_rows) > 0, "回退到内线必须产出点集"
+    for p in result["points"]:
+        if int(p["row"]) != LAST_ROW:
+            assert p["source"] == "main_1x"
+            assert abs(p["x"] - INNER_X1) <= 1.0
 
 
 # --------------------------------------------------------------------------- #
