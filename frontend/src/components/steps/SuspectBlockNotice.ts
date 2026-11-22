@@ -138,10 +138,10 @@ export function renderActiveColumnSuspectNotice(col: Column): string {
       <div class="inspector-section suspect-block-notice" role="alert"
            data-panel="step6" data-col-id="${col.id}" data-suspect-reason="${block.reason ?? ''}"
            style="padding: 9px 10px; background: color-mix(in srgb, var(--status-warning) 8%, transparent); border: 1px solid var(--status-warning); border-left: 3px solid var(--status-warning); border-radius: 6px; margin-bottom: 10px;">
-        <div style="font-size: 11.5px; font-weight: 700; color: var(--status-warning); margin-bottom: 6px;">
+        <div style="font-size: 12px; font-weight: 700; color: var(--status-warning); margin-bottom: 6px;">
           列「${label}」可能是色块或填充带，不是曲线
         </div>
-        <div style="font-size: 10.5px; line-height: 1.55; color: var(--text-secondary);">
+        <div style="font-size: 11px; line-height: 1.55; color: var(--text-secondary);">
           <div><strong>①</strong> 后端从像素结构判断这一列被墨迹填满，宽度几乎不随层位变化——它更像一块色块/填充带，而不是有起伏的曲线。</div>
           <div style="margin-top: 3px;"><strong>②</strong> 判据依据：${describeBlockEvidence(block)}</div>
           <div style="margin-top: 3px;"><strong>③</strong> 请在下方确认该列的真实含义：如果它确实是色块/岩性柱而非属种数据，用本面板底部的【删除列】把它从读数中剔除；如果它本来就是你要的信息，可以保留——系统不会自动删除它，也不会替你改写读数。</div>
@@ -175,7 +175,7 @@ export function renderOtherSuspectColumnsSummary(
           <span style="flex-shrink: 0;">另有 ${others.length} 列可能是色块：</span>
           <span style="color: var(--text-secondary); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${names}</span>
         </summary>
-        <div style="font-size: 9.5px; line-height: 1.45; color: var(--text-secondary); padding: 4px 0 2px 0;">
+        <div style="font-size: 10px; line-height: 1.45; color: var(--text-secondary); padding: 4px 0 2px 0;">
           ${others.map((c) => describeSuspectColumn(c)).join('<br>')}
         </div>
       </details>
@@ -200,13 +200,13 @@ export function renderSplitSuspectNotice(cols: Column[]): string {
   return `
       <!-- 分列产出的色块标记（P1 suspect_block）：在分列这一步就报出来。 -->
       <details class="suspect-block-notice" role="alert"
-           data-panel="step5" data-suspect-count="${suspect.length}"
+           data-panel="step4" data-suspect-count="${suspect.length}"
            style="margin-bottom: 6px; background: color-mix(in srgb, var(--status-warning) 8%, transparent); border: 1px solid var(--status-warning); border-left: 3px solid var(--status-warning); border-radius: 4px; padding: 3px 8px;">
         <summary style="font-size: 10px; font-weight: 600; color: var(--status-warning); cursor: pointer; list-style: none; display: flex; align-items: center; gap: 4px;">
           <span style="flex-shrink: 0;">${head}：</span>
           <span style="color: var(--text-secondary); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${names}</span>
         </summary>
-        <div style="font-size: 9.5px; line-height: 1.45; color: var(--text-secondary); padding: 4px 0 2px 0;">
+        <div style="font-size: 10px; line-height: 1.45; color: var(--text-secondary); padding: 4px 0 2px 0;">
           ${suspect.map((c) => describeSuspectColumn(c)).join('<br>')}
           <div style="margin-top: 4px;">读数照原样进入导出，系统不会自动剔除；请在步骤 6 逐列确认是否保留。</div>
         </div>
@@ -235,7 +235,7 @@ export function renderExportSuspectBlockRow(data: DiagramData): string {
            data-export-suspect-count="${suspect.length}"
            data-export-suspect-cols="${suspect.map((c) => columnLabel(c)).join(',')}"
            style="margin-top: 6px; padding: 7px 9px; background: color-mix(in srgb, var(--status-warning) 8%, transparent); border: 1px solid var(--status-warning); border-left: 3px solid var(--status-warning); border-radius: 6px; line-height: 1.5;">
-        <div style="font-size: 10.5px; font-weight: 700; color: var(--status-warning); margin-bottom: 3px;">
+        <div style="font-size: 11px; font-weight: 700; color: var(--status-warning); margin-bottom: 3px;">
           有 ${suspect.length} 列可能是色块，不是曲线：${names}
         </div>
         <div style="font-size: 10px; color: var(--text-secondary);">

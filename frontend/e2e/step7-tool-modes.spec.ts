@@ -46,7 +46,7 @@ test('微调模式点击不加点；加点模式才加点', async ({ page }) => 
       { timeout: 30_000, message: '需要带列的真实图谱' }
     )
     .toEqual([1923, 1796]);
-  await gotoStage(page, 5);
+  await gotoStage(page, 4);
   await gotoStage(page, 7);
 
   const data = await diagramData<Payload>(page);

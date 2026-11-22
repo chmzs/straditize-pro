@@ -171,6 +171,7 @@ async function openBeginnerStep(page: Page, step: 5 | 6): Promise<void> {
       { timeout: 30_000 }
     )
     .toMatchObject({ width: 1923 });
+  await gotoStage(page, 4);
   await gotoStage(page, 5);
   if (step === 6) await gotoStage(page, 6);
 }

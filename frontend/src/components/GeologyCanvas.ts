@@ -1176,6 +1176,10 @@ private pointer: PointerState = {
   ];
 
   private onKeyDown(e: KeyboardEvent): void {
+    if (document.querySelector('.modal-backdrop')) {
+      return;
+    }
+
     const targetTag = (e.target as HTMLElement)?.tagName;
     const isInput = targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT';
 

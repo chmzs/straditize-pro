@@ -179,6 +179,8 @@ export class WorkflowController {
           this.callbacks.setHudNotice('分列识别失败，已停留在步骤 3。请检查有效区后重试。', 6000);
           return;
         }
+      } else {
+        this.canvasComponent.loadNewDiagram(authoritative);
       }
       this.currentStage = STAGE.SPLIT;
       this.callbacks.onStageChange?.(this.currentStage);

@@ -147,7 +147,7 @@ export function render(data: DiagramData): string {
           </button>
         </div>
 
-        ${orientationHint ? `<div id="cleanup-orientation-hint" class="cleanup-orientation-hint" style="font-size: 9.5px; color: var(--status-warning); line-height: 1.4; margin-bottom: 6px;">${orientationHint}</div>` : ''}
+        <div id="cleanup-orientation-hint" class="cleanup-orientation-hint" style="font-size: 10px; color: var(--status-warning); line-height: 1.4; margin-bottom: 6px; display: ${orientationHint ? 'block' : 'none'};">${orientationHint}</div>
 
         <!-- 批量确认/撤回工具条 -->
         <div style="display: flex; gap: 4px; margin-bottom: 6px;">
@@ -221,6 +221,9 @@ export function render(data: DiagramData): string {
         <div id="cleanup-stats" style="font-size: 10px; color: var(--text-secondary); line-height: 1.4;">
           ${statsLine(data)}
         </div>
+        <button id="btn-clear-cleanup-edits" class="ui-btn ui-btn--quiet ui-btn--sm" style="width:100%; margin-top:6px; font-size:10px; padding:4px; color: var(--text-muted);" title="清空本步全部检测候选线、人工排除区与笔迹修正">
+          清空全部几何 / 排除区 / 笔迹
+        </button>
       </div>
 
       <!-- 4. 推进到下一步 -->
@@ -246,13 +249,15 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
 
   const refreshHint = (): void => {
     if (!hintBox || !panel) return;
-    hintBox.textContent = orientationNotice(
+    const text = orientationNotice(
       {
         horizontal: Number(panel.dataset.horizontalCandidates || '0'),
         vertical: Number(panel.dataset.verticalCandidates || '0'),
       },
       getDetectOrientation()
     );
+    hintBox.textContent = text;
+    hintBox.style.display = text ? 'block' : 'none';
   };
 
   root.querySelector('#chk-detect-horizontal')?.addEventListener('change', (event) => {
@@ -349,6 +354,11 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   });
   root.querySelector('#btn-apply-thickness-all')?.addEventListener('click', () => {
     applyThickness(undefined);
+  });
+
+  // 清空本步编辑
+  root.querySelector('#btn-clear-cleanup-edits')?.addEventListener('click', () => {
+    ctx.onClearCleanupEdits?.();
   });
 
   // 重设本步

@@ -196,8 +196,8 @@ async function calibrateColumnTicks(page: Page): Promise<void> {
     .toBe(true);
   expect((await calibrated()).source, '标定来源必须标明是组斜率').toBe('group_slope');
 
-  // 切回主区（herb_pollen）继续步骤 7/8：本旅程后续断言与从前一样跑在它上面。
-  await switchActiveRoi(page, 'roi_2');
+  // 切回主区（tree_pollen）继续步骤 7/8：本旅程后续断言跑在它上面。
+  await switchActiveRoi(page, 'roi_1');
 }
 
 /** 极简 POSIX UStar 读取器（同 export.spec.ts：engine 里的 TarArchive 没有挂到 window）。 */
@@ -309,14 +309,22 @@ test.describe('八步黄金旅程（全 DOM 点击驱动）', () => {
     if (!herb) throw new Error('后端缺少 herb_pollen');
     expect(afterRename.primaryRoiId, '基线的 roi_1 仍是主区').not.toBe(herb.id);
 
+    // 产品决策 ③：新建出来的 herb_pollen 是待框选的空区域，先框出来再去分列。
+    await frameActiveRoi(page, 1900, 1300);
+
     // `.btn-set-primary` 只渲染在非主区卡片上，所以 .first() 是 herb_pollen 的按钮。
     // 旧注释写的是 "Set tree_pollen as primary"，与按钮实际归属相反；这里断言真实语义。
     await page.locator('.btn-set-primary').first().click();
     const afterPrimary = await diagramData<DiagramData>(page);
     expect(afterPrimary.primaryRoiId, '点非主区卡片上的按钮应把该 ROI 提升为主区').toBe(herb.id);
 
-    // 产品决策 ③：新建出来的 herb_pollen 是待框选的空区域，先框出来再去分列。
-    await frameActiveRoi(page, 1900, 1300);
+    // 把 tree_pollen 设回主区并激活：后续的分列、标定与导出都在 tree_pollen 上进行
+    await page.locator('.btn-set-primary').first().click();
+    const restoredPrimary = await diagramData<DiagramData>(page);
+    const tree = restoredPrimary.rois.find((r) => r.name === 'tree_pollen');
+    expect(restoredPrimary.primaryRoiId, '把 tree_pollen 设回主区').toBe(tree?.id);
+    await page.locator('.roi-item-card').first().click();
+    await expect.poll(async () => (await diagramData<DiagramData>(page)).activeRoiId).toBe(tree?.id);
 
     await page.locator('#btn-apply-roi-next').click();
     await waitStage(page, 3);
@@ -352,17 +360,15 @@ test.describe('八步黄金旅程（全 DOM 点击驱动）', () => {
     expect(calibrated.calibration.bottom_px).toBe(1311);
     expect(calibrated.calibration.unit).toBe('cm');
 
-    // ===== Step 4：候选线清理 → 分列 =====
-    await page.locator('#btn-detect-candidates').click();
-    await page.locator('#btn-apply-cleanup-next').click();
-    // 进入 Step 5 会真的跑一遍后端分列，且 currentStage 在分列完成后才落定，
-    // 所以 waitStage(5) 同时是"分列结果已回到前端"的屏障。
-    await waitStage(page, 5);
+    // ===== Step 4：分列 → 清理 =====
     const split = await diagramData<DiagramData>(page);
     expect(split.columns.length, '分列必须真的产出属种列').toBeGreaterThan(0);
-
-    // ===== Step 5 → 6 → 7 =====
     await page.locator('#btn-apply-naming-next').click();
+    await waitStage(page, 5);
+
+    // ===== Step 5：候选线清理 → 列标定 =====
+    await page.locator('#btn-detect-candidates').click();
+    await page.locator('#btn-apply-cleanup-next').click();
     await waitStage(page, 6);
 
     // Step 6：X 刻度标定（检测刻齿 → 点一个齿 → 填读数 → 应用）。缺了它，
@@ -371,11 +377,20 @@ test.describe('八步黄金旅程（全 DOM 点击驱动）', () => {
     await page.locator('#btn-apply-xticks-next').click();
     await waitStage(page, 7);
     await page.locator('#btn-extract-consensus').click();
+    await expect
+      .poll(async () => (await rpc<{ count: number }>(page, 'samples.list', {})).count, {
+        timeout: 60_000,
+        message: '提取共识后后端应产生采样层位',
+      })
+      .toBeGreaterThan(0);
     await page.locator('#btn-apply-samples-next').click();
     await waitStage(page, 8);
 
     // 采样必须真的产出层位，否则 data.csv 只有表头 —— 旧测试是等到解包 tar 才发现的行数问题。
-    const qa = await rpc<{ n_horizons: number }>(page, 'qa.summarize', {});
+    const treeRoi = calibrated.rois.find((r) => r.name === 'tree_pollen');
+    const qa = await rpc<{ n_horizons: number }>(page, 'qa.summarize', {
+      roi_id: treeRoi?.id ?? 'roi_1',
+    });
     expect(qa.n_horizons, '共识层位必须真的写进后端').toBeGreaterThan(0);
 
     // ===== Step 8 → 导出 =====

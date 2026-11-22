@@ -628,7 +628,7 @@ body.theme-light .ui-btn--success:hover:not(:disabled) {
   background: rgba(239, 68, 68, 0.08);
   border: 1px solid rgba(239, 68, 68, 0.38);
   color: #dc2626;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   line-height: 1.2;
@@ -809,7 +809,7 @@ body.theme-light .floating-help-panel {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 10.5px;
+  font-size: 11px;
   padding: 2px 0;
 }
 
@@ -1585,7 +1585,7 @@ body.theme-light .icon-btn.panel-toggle {
 
 .tip-list {
   list-style: none;
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--text-secondary);
   display: flex;
   flex-direction: column;
@@ -1707,7 +1707,7 @@ body.theme-light .canvas-hud {
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
   z-index: 20;
@@ -1922,7 +1922,7 @@ body.theme-light .step-title {
 .info-callout {
   padding: 8px 10px;
   border-radius: 6px;
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.5;
   color: var(--text-secondary);
   background: var(--bg-card);
