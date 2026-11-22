@@ -17,6 +17,7 @@ from ..protocol import (
     STATE_ERROR,
     JsonRpcError,
 )
+from .digitize import normalize_reader_type
 from .xscale import store_exaggeration
 
 #: 「填满整列的色块/空框」的判据阈值（task-21）。
@@ -1851,6 +1852,10 @@ class CoreMixin:
                     col["endX"] = v
                 elif k in ("plot_type", "plotType"):
                     col["plot_type"] = v
+                elif k == "reader_type":
+                    canonical_reader = normalize_reader_type(v)
+                    col["reader_type"] = canonical_reader
+                    self.reader_types[target_idx] = canonical_reader
                 elif k in (
                     "exaggeration_mult",
                     "exaggerationMult",

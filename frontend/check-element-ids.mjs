@@ -45,6 +45,7 @@ const defined = new Set();
 const REF_SEL = /querySelector(?:All)?(?:<[^>]*>)?\(\s*['"]#([A-Za-z][\w-]*)/g;
 const REF_GET = /getElementById\(\s*['"]([A-Za-z][\w-]*)['"]/g;
 const DEF_ID = /\bid\s*=\s*['"]([A-Za-z][\w-]*)['"]/g;
+const DEF_RENDER = /renderResetButton\(\s*\{[^}]*?\bid:\s*['"]([A-Za-z][\w-]*)['"]/g;
 
 for (const f of files) {
   const src = readFileSync(f, 'utf8');
@@ -53,9 +54,11 @@ for (const f of files) {
     let m;
     while ((m = re.exec(src))) referenced.set(m[1], f.replace(/\\/g, '/'));
   }
-  DEF_ID.lastIndex = 0;
-  let d;
-  while ((d = DEF_ID.exec(src))) defined.add(d[1]);
+  for (const re of [DEF_ID, DEF_RENDER]) {
+    re.lastIndex = 0;
+    let d;
+    while ((d = re.exec(src))) defined.add(d[1]);
+  }
 }
 
 const missing = [...referenced.entries()]

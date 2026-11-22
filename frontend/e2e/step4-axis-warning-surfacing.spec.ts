@@ -45,7 +45,7 @@ interface Roi {
   ylim: [number, number];
 }
 
-const PANEL = '.step-panel[data-step="4"]';
+const PANEL = '.step-panel[data-step="5"]';
 const WARNINGS = '#cleanup-axis-warnings';
 
 /** 与 `InspectorBridge.onAddExclusionRect` 完全同一套算式（面板按钮放哪块）。 */
@@ -78,7 +78,7 @@ test.describe('排除区盖住整列：轴线告警必须到界面', () => {
 
   test('面板显示列名 + 「排除区」 + 覆盖比例 + 建议', async ({ page }) => {
     await resetBaseline(page);
-    await gotoStage(page, 4);
+    await gotoStage(page, 5);
     await expect(page.locator(PANEL)).toBeVisible({ timeout: 20_000 });
 
     const state = await readState(page);
@@ -132,7 +132,7 @@ test.describe('点取数被拒：后端原文必须到界面', () => {
 
   test('整列墨迹被排除区擦光 → 弹窗里有「墨迹像素」「请检查」', async ({ page }) => {
     await resetBaseline(page);
-    await gotoStage(page, 4);
+    await gotoStage(page, 5);
     await expect(page.locator(PANEL)).toBeVisible({ timeout: 20_000 });
 
     const state = await readState(page);

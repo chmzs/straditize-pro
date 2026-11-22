@@ -664,6 +664,29 @@ private pointer: PointerState = {
     this.requestRender();
   }
 
+  /**
+   * 平移视口使指定候选干扰线在画布中居中，并适当缩放以便看清局部干扰线。
+   */
+  public scrollToCandidate(candidateId: string): void {
+    const cand = this.data.line_candidates?.find((c) => c.id === candidateId);
+    if (!cand) return;
+    const rect = this.canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const g = cand.geometry;
+    const centerX = (g.x0 + g.x1) / 2;
+    const centerY = (g.y0 + g.y1) / 2;
+
+    // 缩放到舒适的局部观察比例（至少 0.9，若当前已更大则维持当前缩放）
+    const targetScale = Math.max(this.viewport.scale, 0.9);
+    this.viewport.scale = targetScale;
+    this.viewport.panX = rect.width / 2 - centerX * targetScale;
+    this.viewport.panY = rect.height / 2 - centerY * targetScale;
+
+    this.viewport.fittedToScreen = false;
+    this.requestRender();
+  }
+
   public getActiveColumn(): TaxaColumn | undefined {
     return this.data.columns.find((c) => c.id === this.data.activeTaxaId);
   }
@@ -1153,6 +1176,10 @@ private pointer: PointerState = {
   ];
 
   private onKeyDown(e: KeyboardEvent): void {
+    if (document.querySelector('.modal-backdrop')) {
+      return;
+    }
+
     const targetTag = (e.target as HTMLElement)?.tagName;
     const isInput = targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT';
 
@@ -2377,12 +2404,12 @@ private pointer: PointerState = {
   /** 各工具被阶段门禁拦下时的提示文案 */
   private static readonly TOOL_STAGE_HINT: Partial<Record<ToolMode, string>> = {
     roi: '提示: ROI 框选在步骤 2 (ROI) 启用',
-    addCol: '提示: 添加属种列在步骤 5 (分列) 启用',
+    addCol: '提示: 添加属种列在步骤 4 (分列) 启用',
     addPoint: '提示: 控制点编辑在步骤 7 (拐点与采样) 启用',
-    eraser: '提示: 删除操作在步骤 5 起启用',
+    eraser: '提示: 删除操作在步骤 4 起启用',
     ycalib: '提示: Y 轴两点标定在步骤 3 (Y标定) 启用',
-    linefix: '提示: 线掩膜人工修正在步骤 4 (清理) 启用',
-    pickTick: '提示: 点选刻度齿在步骤 6 (标定列) 启用',
+    linefix: '提示: 线掩膜人工修正在步骤 5 (清理) 启用',
+    pickTick: '提示: 点选刻度齿在步骤 6 (列标定) 启用',
   };
 
   /** 统一门禁：不允许时给出阶段提示并返回 false，允许时返回 true */

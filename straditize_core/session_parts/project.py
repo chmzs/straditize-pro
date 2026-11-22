@@ -891,6 +891,8 @@ class ProjectSessionMixin:
                 # 界面上看不出任何异常。老包没有这个键 → `.get` 得 None → 行为与今天一致。
                 "axis_stroke_px": c.get("axis_stroke_px"),
             }
+            if c.get("reader_type"):
+                col_dict["reader_type"] = c.get("reader_type")
             store_exaggeration(col_dict, col_dict.get("exaggeration_mult"))
             self.columns.append(col_dict)
             self._audit_restored_tick_end(col_dict)

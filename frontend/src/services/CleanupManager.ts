@@ -314,7 +314,7 @@ export class CleanupManager {
         axis,
         candidate_id: id,
         geometry: rect,
-        status: 'candidate',
+        status: id ? 'candidate' : 'removed',
       });
       if (!id && res.candidates?.length) {
         const created = res.candidates[res.candidates.length - 1];

@@ -88,13 +88,13 @@ async function renameViaUI(page: Page, colId: string, text: string): Promise<voi
   await input.press('Enter');
 }
 
-test.describe('步骤 5 分列与命名', () => {
+test.describe('步骤 4 分列与命名', () => {
   test.beforeEach(async ({ page }) => {
     await resetBaseline(page);
   });
 
   test('T1 行内改名可用：点开后焦点与键盘输入都不被重渲染吃掉', async ({ page, telemetry }) => {
-    await gotoStage(page, 5);
+    await gotoStage(page, 4);
     const { columns: cols, activeTaxaId } = await diagramData<{
       columns: BackendColumn[];
       activeTaxaId: string;
@@ -119,7 +119,7 @@ test.describe('步骤 5 分列与命名', () => {
   });
 
   test('T2 改名写进后端权威字段，并且经得起一次真实的重新分列', async ({ page, telemetry }) => {
-    await gotoStage(page, 5);
+    await gotoStage(page, 4);
     const cols = await columns(page);
     const col = cols[1];
     const origin = col.name;
@@ -160,7 +160,7 @@ test.describe('步骤 5 分列与命名', () => {
     test.use({ allowlists: { notice: [/列名必须唯一/] } });
 
     test('T3 同有效区内重名：当场拦下并回滚，后端不被惊动', async ({ page, telemetry }) => {
-      await gotoStage(page, 5);
+      await gotoStage(page, 4);
       const cols = await columns(page);
       const target = cols[0];
       const other = cols[1];
@@ -190,7 +190,7 @@ test.describe('步骤 5 分列与命名', () => {
     });
 
     test('T4 非法字符被后端拒绝 → 输入回滚到原名 + 错误冒泡到用户', async ({ page, telemetry }) => {
-      await gotoStage(page, 5);
+      await gotoStage(page, 4);
       const col = (await columns(page))[0];
       const origin = col.name ?? '';
 
@@ -210,10 +210,10 @@ test.describe('步骤 5 分列与命名', () => {
 
   test.describe('T5 面板 OCR 入口', () => {
     test('T5 面板【自动识别属种名】按钮真的会打开 OCR 复核模态', async ({ page, telemetry }) => {
-      await gotoStage(page, 5);
+      await gotoStage(page, 4);
       await expect(page.locator('[id^="ocr-"]:visible')).toHaveCount(0);
 
-      await page.locator('.step-panel[data-step="5"] #btn-trigger-ocr').click();
+      await page.locator('.step-panel[data-step="4"] #btn-trigger-ocr').click();
 
       await expect(page.locator('#ocr-close-btn'), '该按钮必须打开 OCR 模态').toBeVisible();
       expect(telemetry.notices, '按钮不该退化成一句"请使用顶栏按钮"的提示').toEqual([]);
@@ -222,7 +222,7 @@ test.describe('步骤 5 分列与命名', () => {
 
   test.describe('T6 侧栏属性列滚动位置保持', () => {
     test('点击下方属性列后，列表必须保持在当前滚动位置，不得自动滚回顶部', async ({ page }) => {
-      await gotoStage(page, 5);
+      await gotoStage(page, 4);
 
       const listContainer = page.locator('#taxa-list-container');
       await expect(listContainer).toBeVisible();

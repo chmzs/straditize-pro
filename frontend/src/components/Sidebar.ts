@@ -24,14 +24,19 @@ export interface SidebarCallbacks {
   onInsertGapColumn?: (afterTaxaId: string) => void;
   onToggleCollapse?: (collapsed: boolean) => void;
   onDigitizeColumn?: (taxaId: string) => Promise<void> | void;
+  onRedigitizeColumn?: (taxaId: string) => Promise<void> | void;
   onExtractTurningPoints?: (taxaId: string) => Promise<void> | void;
   onDeleteColumn?: (taxaId: string) => Promise<void> | void;
   /** 批量形态修改 */
   onBatchChangePlotType?: (taxaIds: string[], plotType: 'area' | 'bar' | 'line' | 'symbol' | null) => Promise<void> | void;
   /** 批量重新数字化取数 */
   onBatchDigitizeColumns?: (taxaIds: string[]) => Promise<void> | void;
+  /** 批量重新识别轮廓与拐点 */
+  onBatchRedigitizeColumns?: (taxaIds: string[]) => Promise<void> | void;
   /** 批量提取峰谷控制点 */
   onBatchExtractTurningPoints?: (taxaIds: string[]) => Promise<void> | void;
+  /** 全量重设所有列轮廓与拐点 */
+  onRedigitizeAllColumns?: (resetManual?: boolean) => Promise<void> | void;
 }
 
 export class Sidebar {
@@ -195,13 +200,13 @@ export class Sidebar {
       </div>
 
       ${this.data.columns.length > 0 ? `
-        <div class="sidebar-actions-bar" style="display: flex; gap: 6px;">
-          <button id="btn-insert-gap-col" class="ui-btn ui-btn--secondary ui-btn--sm" style="flex: 1;" title="${t('sidebar.insertGapTitle')}">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <div class="sidebar-actions-bar" style="display: flex; gap: 6px; align-items: center;">
+          <button id="btn-insert-gap-col" class="ui-btn ui-btn--secondary ui-btn--xs" style="flex: 1;" title="${t('sidebar.insertGapTitle')}">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             <span>${t('sidebar.insertGap')}</span>
           </button>
-          <button id="btn-toggle-batch-select" class="ui-btn ${this.selectedColumnIds.size > 0 ? 'ui-btn--primary' : 'ui-btn--secondary'} ui-btn--sm" title="${t('sidebar.batchSelectTitle')}">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+          <button id="btn-toggle-batch-select" class="ui-btn ${this.selectedColumnIds.size > 0 ? 'ui-btn--primary' : 'ui-btn--secondary'} ui-btn--xs" style="flex: 1;" title="${t('sidebar.batchSelectTitle')}">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="9 11 12 14 22 4" />
               <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
             </svg>
@@ -212,29 +217,17 @@ export class Sidebar {
           <input type="text" id="inp-search-taxa" class="ui-field" placeholder="${t('sidebar.searchPlaceholder')}" value="${this.searchQuery}" />
         </div>
         ${this.selectedColumnIds.size >= 2 ? `
-          <div class="sidebar-batch-bar" style="padding: 6px 8px; background: color-mix(in srgb, var(--accent-blue) 12%, transparent); border-radius: 4px; margin: 0 8px 8px 8px; border: 1px solid var(--accent-blue);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <div class="sidebar-batch-bar" style="padding: 7px 8px; background: color-mix(in srgb, var(--accent-blue) 12%, transparent); border-radius: 6px; margin: 0 8px 8px 8px; border: 1px solid rgba(56,189,248,0.4);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px;">
               <span style="font-size: 11px; font-weight: 700; color: var(--accent-blue);">${t('sidebar.batchSelected', { count: this.selectedColumnIds.size })}</span>
-              <div style="display: flex; gap: 4px;">
-                <button type="button" id="btn-batch-select-all" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 1px 4px;">${t('sidebar.selectAll')}</button>
-                <button type="button" id="btn-batch-clear-selection" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 1px 4px;">${t('sidebar.clearSelection')}</button>
+              <div style="display: flex; gap: 5px;">
+                <button type="button" id="btn-batch-select-all" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(56,189,248,0.35); background: rgba(56,189,248,0.08); color: var(--accent-blue); font-weight: 500; cursor: pointer;">${t('sidebar.selectAll')}</button>
+                <button type="button" id="btn-batch-clear-selection" class="ui-btn ui-btn--quiet ui-btn--xs" style="font-size: 9.5px; padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(148,163,184,0.35); background: rgba(148,163,184,0.08); color: var(--text-secondary); font-weight: 500; cursor: pointer;">${t('sidebar.clearSelection')}</button>
               </div>
             </div>
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-              <span style="font-size: 9.5px; color: var(--text-secondary);">${t('sidebar.batchPlotType')}</span>
-              <div class="btn-group" style="display: flex; gap: 2px;">
-                <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs btn-batch-plottype" data-type="area" style="font-size: 9px; padding: 1px 4px;">面积</button>
-                <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs btn-batch-plottype" data-type="bar" style="font-size: 9px; padding: 1px 4px;">柱状</button>
-                <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs btn-batch-plottype" data-type="line" style="font-size: 9px; padding: 1px 4px;">折线</button>
-                <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs btn-batch-plottype" data-type="symbol" style="font-size: 9px; padding: 1px 4px;">符号</button>
-              </div>
-            </div>
-            <div style="display: flex; gap: 4px;">
-              <button type="button" id="btn-batch-digitize" class="ui-btn ui-btn--primary ui-btn--xs" style="flex: 1; font-size: 10px; padding: 3px 2px;" title="${t('sidebar.batchDigitizeTitle')}">
-                ${t('sidebar.batchDigitize')}
-              </button>
-              <button type="button" id="btn-batch-turning-points" class="ui-btn ui-btn--secondary ui-btn--xs" style="flex: 1; font-size: 10px; padding: 3px 2px;" title="${t('sidebar.batchTurningPointsTitle')}">
-                ${t('sidebar.batchTurningPoints')}
+            <div>
+              <button type="button" id="btn-batch-redigitize" class="ui-btn ui-btn--primary ui-btn--xs" style="width: 100%; font-size: 11px; padding: 6px 8px; font-weight: 600; display: flex; align-items: center; justify-content: center; text-align: center; gap: 4px;" title="${t('sidebar.batchRedigitizeTitle')}">
+                <span>${t('sidebar.batchRedigitize')}</span>
               </button>
             </div>
           </div>
@@ -378,14 +371,11 @@ export class Sidebar {
     const activeDetailHtml = `
       <div class="active-column-detail" style="margin-top: 6px; padding: 6px 8px; background: rgba(148,163,184,0.08); border-radius: 4px; border: 1px solid rgba(148,163,184,0.2);">
         ${renderActiveColumnSuspectNotice(col)}
-        <div style="display: flex; gap: 4px;">
-          <button type="button" id="btn-col-digitize" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-digitize" data-col-id="${col.id}" style="flex: 1; font-size: 10px; padding: 4px 2px; color: var(--accent-blue); border-color: rgba(2,132,199,0.3); background: rgba(2,132,199,0.06);" title="重新数字化取数此列">
-            重新取数
+        <div style="display: flex; gap: 6px;">
+          <button type="button" id="btn-col-digitize" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-digitize sidebar-btn-redigitize" data-col-id="${col.id}" style="flex: 1; font-size: 10.5px; font-weight: 600; padding: 4px 8px; color: var(--accent-blue); border-color: rgba(2,132,199,0.35); background: rgba(2,132,199,0.08); display: flex; align-items: center; justify-content: center; text-align: center;" title="${t('sidebar.redigitizeTitle')}">
+            ${t('sidebar.redigitize')}
           </button>
-          <button type="button" id="btn-extract-turning-points" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-turning-points" data-col-id="${col.id}" style="flex: 1; font-size: 10px; padding: 4px 2px; color: var(--accent-violet); border-color: rgba(139,92,246,0.3); background: rgba(139,92,246,0.06);" title="按几何曲线自动提取峰/谷控制点（保留已有手工点）">
-            提取峰谷
-          </button>
-          <button type="button" id="btn-col-delete" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-delete-col" data-col-id="${col.id}" style="font-size: 10px; padding: 4px 6px; color: var(--accent-red); border-color: rgba(220,38,38,0.3); background: rgba(220,38,38,0.04);" title="删除此列">
+          <button type="button" id="btn-col-delete" class="ui-btn ui-btn--quiet ui-btn--xs sidebar-btn-delete-col" data-col-id="${col.id}" style="font-size: 10px; padding: 4px 10px; color: var(--accent-red); border-color: rgba(220,38,38,0.35); background: rgba(220,38,38,0.06); display: flex; align-items: center; justify-content: center;" title="删除此列">
             删除列
           </button>
         </div>
@@ -488,24 +478,10 @@ export class Sidebar {
       this.renderPreservingInlineEdit();
     });
 
-    this.element.querySelectorAll('.btn-batch-plottype').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const type = btn.getAttribute('data-type') as 'area' | 'bar' | 'line' | 'symbol';
-        if (type && this.selectedColumnIds.size > 0) {
-          this.callbacks.onBatchChangePlotType?.(Array.from(this.selectedColumnIds), type);
-        }
-      });
-    });
-
-    this.element.querySelector('#btn-batch-digitize')?.addEventListener('click', () => {
+    this.element.querySelector('#btn-batch-redigitize, #btn-batch-digitize')?.addEventListener('click', () => {
       if (this.selectedColumnIds.size > 0) {
-        this.callbacks.onBatchDigitizeColumns?.(Array.from(this.selectedColumnIds));
-      }
-    });
-
-    this.element.querySelector('#btn-batch-turning-points')?.addEventListener('click', () => {
-      if (this.selectedColumnIds.size > 0) {
-        this.callbacks.onBatchExtractTurningPoints?.(Array.from(this.selectedColumnIds));
+        const ids = Array.from(this.selectedColumnIds);
+        (this.callbacks.onBatchRedigitizeColumns || this.callbacks.onBatchDigitizeColumns)?.(ids);
       }
     });
 
@@ -614,17 +590,10 @@ export class Sidebar {
       const taxaId = card.getAttribute('data-taxa-id');
       if (!taxaId) return;
 
-      // 重新取数按钮
-      if (target.closest('.sidebar-btn-digitize, #btn-col-digitize')) {
+      // 重新取数/重新识别按钮
+      if (target.closest('.sidebar-btn-redigitize, .sidebar-btn-digitize, #btn-col-digitize')) {
         e.stopPropagation();
-        this.callbacks.onDigitizeColumn?.(taxaId);
-        return;
-      }
-
-      // 提取峰谷按钮
-      if (target.closest('.sidebar-btn-turning-points, #btn-extract-turning-points')) {
-        e.stopPropagation();
-        this.callbacks.onExtractTurningPoints?.(taxaId);
+        (this.callbacks.onRedigitizeColumn || this.callbacks.onDigitizeColumn)?.(taxaId);
         return;
       }
 

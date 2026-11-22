@@ -1084,6 +1084,16 @@ export class RpcClient {
     return (await this.digitizeColumnWithStats(taxaId)).points;
   }
 
+  public async redigitizeAllColumns(resetManual: boolean = false): Promise<{
+    success: boolean;
+    columns_count: number;
+  }> {
+    return await this.call<{ reset_manual?: boolean }, { success: boolean; columns_count: number }>(
+      'column.redigitizeAll',
+      { reset_manual: resetManual }
+    );
+  }
+
   private pickControlPoints(res: {
     points?: ControlPoint[];
     control_points?: ControlPoint[];

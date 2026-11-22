@@ -28,14 +28,12 @@ async function controlPoints(page: import('@playwright/test').Page): Promise<str
   return (data.columns[0]?.controlPoints ?? []).map((p) => String(p.id ?? p.y));
 }
 
-test.describe('列属性面板：自动提取峰谷', () => {
+test.describe('单列卡片：重新识别', () => {
   // 提取成功会弹一条**预期**提示（结果必须让用户看见），故登记豁免。
-  test.use({ allowlists: { notice: [/已自动提取峰谷/] } });
+  test.use({ allowlists: { notice: [/已重新识别|已自动提取峰谷/] } });
 
-  test('点按钮 → 发 algorithm.extractTurningPoints → 已有控制点不丢', async ({ page }) => {
+  test('点按钮 → 发 core.digitize → 控制点提取生效', async ({ page }) => {
     await resetBaseline(page);
-    // 列属性面板只在步骤 5 与 7 出现（`Inspector.ts:210`）：【自动提取峰谷】的
-    // 入口就在这个面板里，先把工作流推进到步骤 7，否则按钮无法渲染。
     await gotoStage(page, 7);
 
     const methods: string[] = [];
@@ -57,22 +55,21 @@ test.describe('列属性面板：自动提取峰谷', () => {
       colId
     );
 
-    const button = page.locator('#btn-extract-turning-points');
-    await expect(button, '入口必须出现在列属性面板里').toBeVisible();
+    const button = page.locator('#btn-col-digitize');
+    await expect(button, '重新识别入口必须出现在单列卡片里').toBeVisible();
 
     const before = await controlPoints(page);
-    expect(before.length, '基线列应当已有控制点，否则这条判据测不到"合并"').toBeGreaterThan(0);
+    expect(before.length, '基线列应当已有控制点').toBeGreaterThan(0);
 
     await button.click();
 
     await expect
-      .poll(() => methods.filter((m) => m === 'algorithm.extractTurningPoints').length, {
+      .poll(() => methods.filter((m) => m === 'core.digitize').length, {
         timeout: 20_000,
       })
       .toBeGreaterThan(0);
 
     const after = await controlPoints(page);
-    const lost = before.filter((id) => !after.includes(id));
-    expect(lost, '自动提取不得丢掉已有控制点（尤其是手工点）').toEqual([]);
+    expect(after.length, '重新识别后控制点正常存在').toBeGreaterThan(0);
   });
 });

@@ -48,8 +48,8 @@ test.describe('步骤面板与阶段工具门禁', () => {
       1: { visible: ['pan'], active: 'pan' },
       2: { visible: ['pan'], active: null },
       3: { visible: ['pan'], active: null },
-      4: { visible: ['linefix', 'measure', 'pan', 'select'], active: 'select' },
-      5: { visible: ['addCol', 'eraser', 'pan', 'select'], active: 'addCol' },
+      4: { visible: ['addCol', 'eraser', 'pan', 'select'], active: 'addCol' },
+      5: { visible: ['linefix', 'measure', 'pan', 'select'], active: 'select' },
       6: { visible: ['addCol', 'eraser', 'pan', 'select'], active: 'select' },
       7: { visible: ['addPoint', 'eraser', 'pan', 'select'], active: 'select' },
     };
@@ -62,23 +62,23 @@ test.describe('步骤面板与阶段工具门禁', () => {
     }
   });
 
-  test('步骤 4 清理：先清空、再点扫描，候选真的由这个按钮产出', async ({ page }) => {
-    await gotoStage(page, 4);
-    await expect(page.locator('.step-panel[data-step="4"]')).toBeVisible();
+  test('步骤 5 清理：先清空、再点扫描，候选真的由这个按钮产出', async ({ page }) => {
+    await gotoStage(page, 5);
+    await expect(page.locator('.step-panel[data-step="5"]')).toBeVisible();
     for (const id of [
       '#btn-detect-candidates',
       '#btn-add-exclusion-rect',
       '#btn-trigger-linefix',
       '#btn-apply-cleanup-next',
     ]) {
-      await expect(page.locator(id), `${id} 应存在于步骤 4`).toBeVisible();
+      await expect(page.locator(id), `${id} 应存在于步骤 5`).toBeVisible();
     }
 
     const readCandidates = () =>
       rpc<{ line_candidates: { status: string; kind: string }[] }>(page, 'straditize.getDiagramData');
 
     const roiId = (await rpc<{ rois: { id: string }[] }>(page, 'straditize.getDiagramData')).rois[0].id;
-    // 等待进入步骤 4 时的初始任务落定，显式清空作为因果断言的前提
+    // 等待进入步骤 5 时的初始任务落定，显式清空作为因果断言的前提
     await page.waitForTimeout(500);
     await rpc(page, 'algorithm.clearCleanupEdits', { roi_id: roiId });
     await expect
@@ -124,20 +124,20 @@ test.describe('步骤面板与阶段工具门禁', () => {
     ).toBe(true);
   });
 
-  test('步骤 4 笔刷：涂抹落库到 line_strokes，两种笔与清空都真的改变后端掩膜', async ({ page }) => {
+  test('步骤 5 笔刷：涂抹落库到 line_strokes，两种笔与清空都真的改变后端掩膜', async ({ page }) => {
     // 这条用例钉住的是"笔迹属于**当前**清理模型"这一事实。
     //
     // 旧实现里笔刷把笔迹写进的是**已下线**的档位模型字段（`lineCorrections`），
     // 而当前模型的 `line_strokes` 恒空——两者在类型系统里都"看着正常"，
     // 因为 `?.` 与 `?? []` 把断裂全吃掉了。所以这里一律断言**后端权威状态**：
     // `line_strokes` 真的多了一条、`stats.manual_*_pixels` 真的动起来。
-    await gotoStage(page, 4);
-    await expect(page.locator('.step-panel[data-step="4"]')).toBeVisible();
+    await gotoStage(page, 5);
+    await expect(page.locator('.step-panel[data-step="5"]')).toBeVisible();
 
     // 三件套缺一不可：旧的擦除/补回/清空按钮死在 Inspector 的死监听里，
     // 只有 id 存在才证明它们被恢复到了**这一步**的面板上。
     for (const id of ['#btn-trigger-linefix', '#btn-linefix-restore', '#btn-linefix-clear']) {
-      await expect(page.locator(id), `${id} 应存在于步骤 4`).toBeVisible();
+      await expect(page.locator(id), `${id} 应存在于步骤 5`).toBeVisible();
     }
 
     interface CleanupData {

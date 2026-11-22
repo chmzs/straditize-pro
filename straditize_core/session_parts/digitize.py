@@ -40,12 +40,27 @@ from ..protocol import (
     JsonRpcError,
 )
 
-#: 唯一支持的读取器类型。与 `plot_type`、底层 `digitize_column` 共用同一套**单数**命名。
-READER_TYPES: tuple[str, ...] = ("area", "line", "bar")
+#: 三种画法。与 `plot_type`、底层 `digitize_column` 共用同一套单数命名。
+PLOT_TYPES: tuple[str, ...] = ("area", "line", "bar")
+
+#: 支持的读取器类型 = 三种画法 + 一种读取策略。
+#: `area_exaggerated` 读的仍是面积图，但同一列被画了两层（内线真实值，外线夸大参考线），
+#: 采用五态双轨互补读取器实现高精度提取与防截断削边回退。
+READER_TYPES: tuple[str, ...] = PLOT_TYPES + ("area_exaggerated",)
 
 #: 历史别名 → 规范名。只在此处出现一次：让别名集中在一个入口被消解，
 #: 而不是散进每个分支判断（那样 `bar` 曾静默落到 else 走均值，P-04）。
 _READER_ALIASES: dict[str, str] = {"bars": "bar"}
+
+# ---- `area_exaggerated` 的五态判据常量 ----
+_EXAG_INNER_ANCHOR_TOL_PX = 5
+_EXAG_OUTER_MIN_GAP_PX = 2
+_EXAG_RATIO_ORIGIN_OFFSET_PX = 1.0
+_EXAG_INNER_MIN_WIDTH_PX = 4
+_EXAG_OUTER_EDGE_MARGIN_PX = 3
+_EXAG_SEP_RATIO_RANGE = (2.0, 7.0)
+_EXAG_SELFCHECK_RANGE = (3.0, 5.5)
+_EXAG_NEIGHBOUR_ROWS = 10
 
 # 夸大列"外线断开"判据的常量（全部可判定，没有"大致/适当"）。
 #
@@ -175,17 +190,18 @@ class DigitizeSessionMixin:
     def digitize(
         self,
         col_index: int,
-        reader_type: str = "area",
+        reader_type: str | None = None,
         mode: str | None = None,
         method: str | None = None,
     ) -> dict[str, Any]:
         """Digitizes curve or bars in the specified column to extract data points."""
+        explicit_reader = (reader_type is not None) or (mode is not None) or (method is not None)
         if method is not None:
             reader_type = method
         elif mode is not None:
             reader_type = mode
-        # 归一化一次，后面所有分支只面对规范名单数名。
-        reader_type = normalize_reader_type(reader_type)
+        if reader_type is not None:
+            reader_type = normalize_reader_type(reader_type)
         if not getattr(self, "columns", None):
             raise JsonRpcError(
                 STATE_ERROR,
@@ -200,6 +216,15 @@ class DigitizeSessionMixin:
             )
 
         col = columns[col_index]
+        scale = resolve_column_scale(self, col, col_index)
+        mult = scale.exaggeration_mult
+
+        if not explicit_reader:
+            if mult is not None and mult > 1.0:
+                reader_type = "area_exaggerated"
+            else:
+                reader_type = normalize_reader_type(col.get("reader_type") or col.get("plot_type") or "area")
+
         col_roi_id = col.get("roi_id")
         c_start, c_end, y0, y1 = self._digitize_column_window(
             col, col_roi_id, col_index
@@ -219,22 +244,51 @@ class DigitizeSessionMixin:
             mask, col, c_start, c_end, y0, y1, col_index
         )
 
-        points = self._read_column_profile(mask, c_start, c_end, y0, y1, reader_type)
+        if reader_type == "area_exaggerated":
+            effective_mult = mult if (mult is not None and mult > 1.0) else 5.0
+            zero_x = float(scale.abs_px0)
+            points = self._read_exaggerated_profile(
+                mask,
+                c_start,
+                c_end,
+                y0,
+                y1,
+                zero_x,
+                effective_mult,
+                col,
+                exagg_style=getattr(scale, "exagg_style", "line"),
+            )
+            broken_rows, ambiguous_rows = [], []
+        else:
+            points = self._read_column_profile(
+                mask, c_start, c_end, y0, y1, reader_type
+            )
+            if points:
+                broken_rows, ambiguous_rows = self._compensate_broken_inner_rows(
+                    mask, col, c_start, c_end, points, col_index
+                )
+            else:
+                broken_rows, ambiguous_rows = [], []
+
+        unreadable_rows: list[int] = []
+        if reader_type == "area_exaggerated":
+            emitted = {int(p["row"]) for p in points}
+            unreadable_rows = [
+                row
+                for row in range(y0, min(y1, self.height - 1) + 1)
+                if row not in emitted
+            ]
+
         if not points:
             return {
                 "col_index": col_index,
                 "reader_type": reader_type,
                 "points": [],
                 "control_points_count": 0,
-                "broken_rows": [],
-                "ambiguous_rows": [],
+                "broken_rows": broken_rows,
+                "ambiguous_rows": ambiguous_rows,
+                "unreadable_rows": unreadable_rows,
             }
-
-        # 夸大列里外线断开的那几行，最右墨迹会退化成内线 → 先折回"不除倍率"的等价位置。
-        # 必须在横线插值之前：插值要在同一物理量的空间里做（见该方法 docstring）。
-        broken_rows, ambiguous_rows = self._compensate_broken_inner_rows(
-            mask, col, c_start, c_end, points, col_index
-        )
 
         self._interpolate_across_hlines(points, c_start)
 
@@ -255,6 +309,7 @@ class DigitizeSessionMixin:
         for m_row, rec in manual.items():
             control_points[int(m_row)] = float(rec["x"])
         if manual:
+            existing_sources = {p["id"]: p.get("source") for p in ctrl_pts_list}
             ctrl_pts_list = [
                 {
                     "id": f"pt_{col_index}_{row_int}",
@@ -262,6 +317,7 @@ class DigitizeSessionMixin:
                     "y": float(row_int),
                     "type": str(manual.get(row_int, {}).get("kind") or "peak"),
                     "isManual": row_int in manual,
+                    "source": "manual" if row_int in manual else existing_sources.get(f"pt_{col_index}_{row_int}", "read"),
                 }
                 for row_int, x_val in sorted(control_points.items())
             ]
@@ -278,7 +334,133 @@ class DigitizeSessionMixin:
             "control_points_count": len(control_points),
             "broken_rows": broken_rows,
             "ambiguous_rows": ambiguous_rows,
+            "unreadable_rows": unreadable_rows,
         }
+
+    def _read_exaggerated_profile(
+        self,
+        mask: np.ndarray,
+        c_start: int,
+        c_end: int,
+        y0: int,
+        y1: int,
+        zero_x: float,
+        mult: float = 5.0,
+        col_dict: dict[str, Any] | None = None,
+        exagg_style: str = "line",
+    ) -> list[dict[str, Any]]:
+        """`area_exaggerated`：二选一最外缘优先 + 撞界回退内线模型。
+
+        统一 1x 契约：内部完成所有 ÷ N 换算，curvePoints、控制点坐标全部统一输出真实 1x 像素坐标。
+        - 常态（未截断）：最右前景游程未撞右分割线，按 exagg_style 提取外线，来源记为 exagg_Nx。
+          - exagg_style == 'line'（默认）：外层为细折线，计入线宽，取骨架中心 (start+end)/2.0；
+          - exagg_style == 'area'：外层为浅色填充，取最右轮廓边缘。
+        - 截断回退：外线撞右分割线削边或消失时，取 zero_x 向右第一段连续实心黑块右缘作为 1x 原值输出（不再除以 N），来源记为 main_1x。
+        """
+        points: list[dict[str, Any]] = []
+        W_col = c_end - c_start
+        axis_offset = max(0.0, zero_x - c_start)
+        N = max(1.0, float(mult))
+        tag_exagg = f"exagg_{int(round(N))}x"
+        border_threshold = W_col - 1
+
+        # 第一遍扫描：收集逐行游程与确凿的独立外线位置
+        row_runs: dict[int, list[tuple[int, int]]] = {}
+        confirmed_outer_rows: list[int] = []
+        confirmed_outer_xs: list[float] = []
+
+        for row_y in range(y0, y1 + 1):
+            if row_y < 0 or row_y >= mask.shape[0]:
+                continue
+            row_pixels = mask[row_y, c_start:c_end]
+            if not np.any(row_pixels):
+                continue
+            runs = _ink_runs(row_pixels)
+            row_runs[row_y] = runs
+            if len(runs) >= 2:
+                last_run = runs[-1]
+                if last_run[1] < border_threshold and last_run[0] > axis_offset + 3:
+                    confirmed_outer_rows.append(row_y)
+                    confirmed_outer_xs.append(c_start + (last_run[0] + last_run[1]) / 2.0)
+            elif len(runs) == 1:
+                r = runs[0]
+                if r[0] > axis_offset + 5 and r[1] < border_threshold:
+                    confirmed_outer_rows.append(row_y)
+                    confirmed_outer_xs.append(c_start + (r[0] + r[1]) / 2.0)
+
+        has_outer_curve = len(confirmed_outer_rows) > 0
+
+        for row_y in range(y0, y1 + 1):
+            if row_y < 0 or row_y >= mask.shape[0]:
+                continue
+            runs = row_runs.get(row_y, [])
+            if not runs:
+                points.append(
+                    {"row": row_y, "x": float(zero_x), "y": float(row_y), "source": "main_1x"}
+                )
+                continue
+
+            last_run = runs[-1]
+            run_start, run_end = last_run
+
+            # 真正截断的判据：
+            # 只有当贴轴内线黑块自身宽度已经占据了列宽的大部分 (>= 0.45 * W_col)，
+            # 且最右墨迹撞死在右边界（外线飞出列界被削断/不画），
+            # 此时内线自身的起伏明显，才正式回退抓内线实心黑块作为 1x 原值输出，并打上蓝色点。
+            first_run = runs[0]
+            inner_width = (first_run[1] - first_run[0]) if first_run[0] <= axis_offset + 2 else 0.0
+
+            is_true_truncation = (inner_width >= 0.45 * W_col) and (run_end >= border_threshold)
+
+            if not has_outer_curve or is_true_truncation:
+                # 真实截断：回退抓贴轴内线实心黑块右缘作为 1x 原值
+                inner_candidates = [r for r in runs if r[0] <= axis_offset + 2]
+                if inner_candidates:
+                    inner_run = inner_candidates[0]
+                    x_pos = c_start + inner_run[1]
+                else:
+                    x_pos = zero_x
+                tag = "main_1x"
+            else:
+                # 正常外线（包括触碰边界的外线大峰顶）
+                if len(runs) >= 2 or run_start > axis_offset + 5:
+                    # 独立外线游程
+                    x_pos = (
+                        c_start + (run_start + run_end) / 2.0
+                        if exagg_style != "area"
+                        else c_start + run_end
+                    )
+                    tag = tag_exagg
+                else:
+                    actual_right_edge = c_start + run_end
+                    act_span = actual_right_edge - (c_start + axis_offset)
+                    expected_outer_x = float(
+                        np.interp(row_y, confirmed_outer_rows, confirmed_outer_xs)
+                    )
+                    exp_span = expected_outer_x - (c_start + axis_offset)
+                    # 仅当外线跨度很大 (>= 30px)，而该行突然暴跌到 < 0.4 且差距 >= 20px 时，才属于断线回退内线；
+                    # 正常花粉曲线的低谷或贴轴零值（小起伏）保持为外线点，绝不误打为蓝色截断点
+                    if exp_span >= 30.0 and act_span < 0.4 * exp_span and (expected_outer_x - actual_right_edge) >= 20.0:
+                        x_pos = actual_right_edge
+                        tag = "main_1x"
+                    else:
+                        # 粘连延伸到了外线，或外线自身平缓小起伏
+                        x_pos = actual_right_edge - (0.5 if exagg_style != "area" else 0.0)
+                        tag = tag_exagg
+
+            x_final = float(max(zero_x, x_pos))
+            pt_dict = {"row": row_y, "x": x_final, "y": float(row_y), "source": tag}
+            if len(runs) >= 2 and tag == tag_exagg:
+                try:
+                    inner_x = float(c_start + runs[0][1])
+                    outer_x = float(c_start + runs[-1][1])
+                    if outer_x > inner_x:
+                        store_layer_pair(pt_dict, inner_x=inner_x, outer_x=outer_x)
+                except Exception:
+                    pass
+            points.append(pt_dict)
+
+        return points
 
     # ---- digitize 的分段实现 ----
 
@@ -755,11 +937,35 @@ class DigitizeSessionMixin:
             kept_vals,
         )
 
+        removed_hl_bands = []
+        for cand in getattr(self, "line_candidates", []):
+            if cand.get("axis") == "h" and cand.get("status") == "removed":
+                geom = cand.get("geometry")
+                w = int(round(float(cand.get("width", cand.get("thickness", 3)))))
+                if isinstance(geom, dict):
+                    y_min = min(geom.get("y0", 0), geom.get("y1", 0))
+                    y_max = max(geom.get("y0", 0), geom.get("y1", 0))
+                    removed_hl_bands.append((int(y_min) - w // 2 - 1, int(y_max) + w // 2 + 1))
+                else:
+                    cy = int(round(float(cand.get("y", 0))))
+                    removed_hl_bands.append((cy - w // 2 - 1, cy + w // 2 + 1))
+
+        def _in_removed_hl(row_val: int) -> bool:
+            return any(b0 <= row_val <= b1 for b0, b1 in removed_hl_bands)
+
+        row_source_map = {
+            int(round(float(p.get("row", p["y"])))): str(p.get("source") or "read")
+            for p in points
+        }
+
         ctrl_pts_list: list[dict[str, Any]] = []
         for r_rel, v_rel in zip(kept_rows, kept_vals):
             r_int = int(y0 + r_rel)
+            if _in_removed_hl(r_int):
+                continue
             x_val = float(c_start + max(min_width, float(v_rel)))
             control_points[r_int] = x_val
+            pt_source = row_source_map.get(r_int, "read")
             ctrl_pts_list.append(
                 {
                     "id": f"pt_{col_index}_{r_int}",
@@ -767,6 +973,7 @@ class DigitizeSessionMixin:
                     "y": float(r_int),
                     "type": "peak" if v_rel > 1.0 else "trough",
                     "isManual": False,
+                    "source": pt_source,
                 }
             )
 
@@ -793,6 +1000,7 @@ class DigitizeSessionMixin:
                         "y": float(y0),
                         "type": "trough" if y0_x <= c_start + min_width + 1.0 else "transition",
                         "isManual": False,
+                        "source": row_source_map.get(int(y0), "read"),
                     },
                 )
         if has_ink_1 or len(ctrl_pts_list) == 0:
@@ -805,6 +1013,7 @@ class DigitizeSessionMixin:
                         "y": float(last_row),
                         "type": "trough" if y1_x <= c_start + min_width + 1.0 else "transition",
                         "isManual": False,
+                        "source": row_source_map.get(last_row, "read"),
                     },
                 )
 
@@ -1277,9 +1486,29 @@ class DigitizeSessionMixin:
                     peaks_idx, _ = find_peaks(p_x, prominence=prominence)
                     valleys_idx, _ = find_peaks(-p_x, prominence=prominence)
 
-                # 曲线波谷中过滤基线点（基线 0 值平地不是有效数据拐点，杜绝基线打出一排无意义点）
-                valid_valleys = [v for v in valleys_idx if p_x[v] > noise_cutoff]
-                detected_rows = set(p_rows[peaks_idx]).union(set(p_rows[valid_valleys]))
+                # 收集已移除的水平横线带，屏蔽横线边缘毛刺被误检为波峰/波谷
+                removed_hl_bands = []
+                for cand in getattr(self, "line_candidates", []):
+                    if cand.get("axis") == "h" and cand.get("status") == "removed":
+                        geom = cand.get("geometry")
+                        w = int(round(float(cand.get("width", cand.get("thickness", 3)))))
+                        if isinstance(geom, dict):
+                            y_min = min(geom.get("y0", 0), geom.get("y1", 0))
+                            y_max = max(geom.get("y0", 0), geom.get("y1", 0))
+                            removed_hl_bands.append((int(y_min) - w // 2 - 1, int(y_max) + w // 2 + 1))
+                        else:
+                            cy = int(round(float(cand.get("y", 0))))
+                            removed_hl_bands.append((cy - w // 2 - 1, cy + w // 2 + 1))
+
+                def _in_removed_hl(row_val: int) -> bool:
+                    return any(b0 <= row_val <= b1 for b0, b1 in removed_hl_bands)
+
+                valid_peaks = [p for p in peaks_idx if not _in_removed_hl(p_rows[p])]
+                valid_valleys = [
+                    v for v in valleys_idx
+                    if p_x[v] > noise_cutoff and not _in_removed_hl(p_rows[v])
+                ]
+                detected_rows = set(p_rows[valid_peaks]).union(set(p_rows[valid_valleys]))
 
             # 合并控制点：峰谷算法点合并进已有控制点，严格保留原有控制点与用户手工点 (manual)
             existing_ctrls = self.control_points.get(c_idx, {})
@@ -1310,6 +1539,36 @@ class DigitizeSessionMixin:
 
         self._record_history("Extract turning points")
         return {"success": True, "columns_updated": updated}
+
+    def redigitize_all_columns(self, reset_manual: bool = False) -> dict[str, Any]:
+        """Redigitize all columns and regenerate turning control points based on the latest mask.
+
+        If reset_manual is True, wipes manual control points before regeneration.
+        """
+        if not getattr(self, "columns", None):
+            return {
+                "success": False,
+                "message": "No columns available",
+                "columns_count": 0,
+            }
+
+        if reset_manual:
+            self.manual_points = {}
+
+        # Reset cached points to guarantee fresh extraction from _extraction_mask
+        self.column_points = {}
+        self.control_points = {}
+
+        for c_idx in range(len(self.columns)):
+            col = self.columns[c_idx]
+            col_plot_type = self._resolve_col_plot_type(col)
+            r_type = col_plot_type if col_plot_type in READER_TYPES else "area"
+            self.digitize(c_idx, reader_type=r_type)
+
+        self.algorithm_extract_turning_points()
+        self._record_history("Redigitize all columns")
+        return {"success": True, "columns_count": len(self.columns)}
+
 
 
 DigitizeMixin = DigitizeSessionMixin

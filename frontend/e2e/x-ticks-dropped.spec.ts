@@ -66,9 +66,9 @@ interface BackendGroup {
 }
 
 const PANEL6 = '.step-panel[data-step="6"]';
-const PANEL5 = '.step-panel[data-step="5"]';
+const PANEL4 = '.step-panel[data-step="4"]';
 const LOST6 = `${PANEL6} .x-ticks-lost-notice`;
-const LOST5 = `${PANEL5} .x-ticks-lost-notice`;
+const LOST4 = `${PANEL4} .x-ticks-lost-notice`;
 
 /** 契约文档里给出的示例结构，逐字用它当构造数据，保证前后端对同一个形状。 */
 const CONTRACT_EXAMPLE = {
@@ -318,15 +318,15 @@ test.describe('B-02 丢失的 X 刻度标定必须在界面上可见', () => {
 
   });
 
-  test('T4 步骤 5 分列面板同样报出丢标定（挪 ROI 就发生在这步，不能等走到步骤 6）', async ({
+  test('T4 步骤 4 分列面板同样报出丢标定（挪 ROI 就发生在这步，不能等走到步骤 6）', async ({
     page,
   }) => {
     await stubDroppedKey(page);
     await reloadFresh(page);
-    await gotoStage(page, 5);
+    await gotoStage(page, 4);
 
-    const notice = page.locator(LOST5);
-    await expect(notice, '步骤 5 面板必须报出标定丢失').toBeVisible({ timeout: 10_000 });
+    const notice = page.locator(LOST4);
+    await expect(notice, '步骤 4 面板必须报出标定丢失').toBeVisible({ timeout: 10_000 });
     // textContent 而非 innerText：这些提示渲染在折叠的 `<details>` 里，
     // Chrome 的 innerText 对折叠内容返回空串（naming / suspect-block 同一个陷阱）。
     const text = ((await notice.textContent()) ?? '').replace(/\s+/g, ' ');

@@ -464,6 +464,10 @@ class CleanupMixin:
         """
         h, w = raw_ink.shape
         mask = np.zeros((h, w), dtype=bool)
+        columns = [
+            c for c in getattr(self, "columns", [])
+            if c.get("roi_id") in (None, roi_id)
+        ]
         for cand in self.line_candidates:
             if cand.get("roi_id") != roi_id:
                 continue
@@ -476,8 +480,32 @@ class CleanupMixin:
             r0, r1 = max(0, min(h, y0)), max(0, min(h, y1 + 1))
             if r1 <= r0 or c1 <= c0:
                 continue
-            region = (slice(r0, r1), slice(c0, c1))
-            mask[region] |= raw_ink[region]
+            # 方案 2.1：分列后列内横向贯通清理（两端贯通至 startX + W_axis/2 到 endX - 1，带垂直邻域保护）
+            if cand.get("axis") == "h" and columns:
+                for col in columns:
+                    col_start = int(round(float(col.get("start", col.get("startX", 0)))))
+                    col_end = int(round(float(col.get("end", col.get("endX", 0)))))
+                    w_axis = 4
+                    cl_x0 = max(c0, col_start + w_axis // 2)
+                    cl_x1 = min(c1, col_end - 1)
+                    if cl_x1 <= cl_x0:
+                        continue
+                    # 垂直邻域保护：检测正上方 r0-2 与正下方 r1+2 处。仅当上下均为前景数据时保留
+                    for y in range(r0, r1):
+                        for x in range(cl_x0, cl_x1):
+                            if not raw_ink[y, x]:
+                                continue
+                            y_up = max(0, r0 - 2)
+                            y_down = min(h - 1, r1 + 1)
+                            up_ink = np.any(raw_ink[y_up:r0, max(0, x - 1) : min(w, x + 2)])
+                            down_ink = np.any(raw_ink[r1 : y_down + 1, max(0, x - 1) : min(w, x + 2)])
+                            if up_ink and down_ink:
+                                pass
+                            else:
+                                mask[y, x] = True
+            else:
+                region = (slice(r0, r1), slice(c0, c1))
+                mask[region] |= raw_ink[region]
         return mask
 
     def _exclusion_mask(self, shape: tuple[int, int], roi_id: str) -> np.ndarray:

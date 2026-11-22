@@ -200,7 +200,32 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
           p.getSidebar()?.updateData(p.canvasComponent.data);
           p.getInspector()?.updateData(p.canvasComponent.data);
           p.setHudNotice(
-            `属种 [${col.name}] 轮廓已重新取数识别。`
+            `属种 [${col.name}] 轮廓与拐点已重新识别。`
+            + compensationNote({ brokenRows, ambiguousRows }),
+            compensationNote({ brokenRows, ambiguousRows }) ? 6000 : 3000
+          );
+        }
+      } catch (err) {
+        reportBackendFailure('属种轮廓重识别', err);
+      }
+    },
+    onRedigitizeColumn: async (taxaId: string) => {
+      const col = p.canvasComponent.data.columns.find((c) => c.id === taxaId);
+      if (!col) return;
+      try {
+        const { points, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(col.id);
+        if (points.length > 0) {
+          col.controlPoints = points;
+          p.canvasComponent.history.push(
+            `Re-digitize ${col.name}`,
+            p.canvasComponent.data.columns,
+            p.canvasComponent.data.activeTaxaId
+          );
+          p.canvasComponent.requestRender();
+          p.getSidebar()?.updateData(p.canvasComponent.data);
+          p.getInspector()?.updateData(p.canvasComponent.data);
+          p.setHudNotice(
+            `属种 [${col.name}] 轮廓与拐点已重新识别。`
             + compensationNote({ brokenRows, ambiguousRows }),
             compensationNote({ brokenRows, ambiguousRows }) ? 6000 : 3000
           );
@@ -237,6 +262,21 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
         p.setHudNotice(`已为属种 [${col.name}] 自动提取峰谷控制点（手工点保留）。`);
       } catch (err) {
         reportBackendFailure('自动提取峰谷', err);
+      }
+    },
+    onRedigitizeAllColumns: async (resetManual: boolean = false) => {
+      try {
+        const res = await p.rpcClient.redigitizeAllColumns(resetManual);
+        if (res && res.success) {
+          const freshData = await p.rpcClient.getDiagramData();
+          p.canvasComponent.loadNewDiagram(freshData);
+          p.getSidebar()?.updateData(p.canvasComponent.data);
+          p.getInspector()?.updateData(p.canvasComponent.data);
+          p.canvasComponent.requestRender();
+          p.setHudNotice(`已重设全部 ${res.columns_count} 列的轮廓线与拐点。`, 4000);
+        }
+      } catch (err) {
+        reportBackendFailure('重设所有列轮廓与拐点', err);
       }
     },
     onDeleteColumn: async (taxaId: string) => {
@@ -315,6 +355,53 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
         );
       } catch (err) {
         reportBackendFailure('批量取数', err);
+      }
+    },
+    onBatchRedigitizeColumns: async (taxaIds: string[]) => {
+      if (!taxaIds || taxaIds.length === 0) return;
+      const allCols = p.canvasComponent.data.columns;
+      if (taxaIds.length === allCols.length && taxaIds.length > 2) {
+        try {
+          const res = await p.rpcClient.redigitizeAllColumns(false);
+          if (res && res.success) {
+            const freshData = await p.rpcClient.getDiagramData();
+            p.canvasComponent.loadNewDiagram(freshData);
+            p.getSidebar()?.updateData(p.canvasComponent.data);
+            p.getInspector()?.updateData(p.canvasComponent.data);
+            p.canvasComponent.requestRender();
+            p.setHudNotice(`已为全部 ${allCols.length} 列批量重新识别轮廓与拐点。`, 3500);
+            return;
+          }
+        } catch {
+          // fallback
+        }
+      }
+
+      let totalComp = { brokenRows: 0, ambiguousRows: 0 };
+      let successCount = 0;
+      try {
+        for (const tid of taxaIds) {
+          const col = p.canvasComponent.data.columns.find((c) => c.id === tid);
+          if (!col) continue;
+          const { points, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(col.id);
+          col.controlPoints = points;
+          totalComp = addCompensation(totalComp, { brokenRows, ambiguousRows });
+          successCount++;
+        }
+        p.canvasComponent.history.push(
+          `Batch re-digitize ${successCount} columns`,
+          p.canvasComponent.data.columns,
+          p.canvasComponent.data.activeTaxaId
+        );
+        p.canvasComponent.requestRender();
+        p.getSidebar()?.updateData(p.canvasComponent.data);
+        p.getInspector()?.updateData(p.canvasComponent.data);
+        p.setHudNotice(
+          `已为所选 ${successCount} 列批量重新识别轮廓与拐点。` + compensationNote(totalComp),
+          compensationNote(totalComp) ? 6000 : 3500
+        );
+      } catch (err) {
+        reportBackendFailure('批量重新识别轮廓与拐点', err);
       }
     },
     onBatchExtractTurningPoints: async (taxaIds: string[]) => {

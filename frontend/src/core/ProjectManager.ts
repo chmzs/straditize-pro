@@ -417,11 +417,10 @@ export class ProjectManager {
         const b64 = res.tar_base64 || (typeof res.data === 'string' ? res.data : '');
         if (b64) {
           const byteCharacters = atob(b64);
-          const byteNumbers = new Array(byteCharacters.length);
+          const byteArray = new Uint8Array(byteCharacters.length);
           for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
+            byteArray[i] = byteCharacters.charCodeAt(i);
           }
-          const byteArray = new Uint8Array(byteNumbers);
           const blob = new Blob([byteArray], { type: 'application/x-tar' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');

@@ -18,6 +18,7 @@ import { resolveColumnAtX } from '../../core/tickRouting';
 import { setGroupCalibMark } from '../canvas/groupCalibMarks';
 // 组色的唯一取色点：画布「组归属条」也 import 这个函数，两处逐字节同色（issue #108）。
 import { groupColorAt } from '../canvas/groupColor';
+import { renderResetButton } from '../../ui/resetButton';
 import {
   exaggerationRange,
   isGroupExaggerated,
@@ -367,6 +368,16 @@ export function render(data: DiagramData): string {
             <div data-role="exag-hint" style="grid-column: 1 / -1; font-size: var(--font-size-xs); line-height: 1.45; color: var(--text-muted); margin-top: -2px;">
               ${t('step6.groupExagHint')}
             </div>
+            ${groupExagMult !== null ? `
+            <div data-role="exag-style-row" style="grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--border-color);">
+              <span style="font-size: var(--font-size-xs); color: var(--text-secondary);">${t('step6.exaggStyleLabel')}:</span>
+              <div style="display: inline-flex; border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden;">
+                <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs grp-exagg-style-btn ${currentGroup?.exagg_style !== 'area' ? 'ui-btn--primary' : ''}" data-style="line" style="padding: 1px 8px; font-size: var(--font-size-xs); border-radius: 0;">${t('step6.exaggStyleLine')}</button>
+                <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs grp-exagg-style-btn ${currentGroup?.exagg_style === 'area' ? 'ui-btn--primary' : ''}" data-style="area" style="padding: 1px 8px; font-size: var(--font-size-xs); border-radius: 0;">${t('step6.exaggStyleArea')}</button>
+              </div>
+              <span style="font-size: var(--font-size-xs); color: var(--text-muted);">${currentGroup?.exagg_style === 'area' ? t('step6.exaggStyleAreaDesc') : t('step6.exaggStyleLineDesc')}</span>
+            </div>
+            ` : ''}
           </div>
 
           <!-- 组内属种与批量划组管理 -->
@@ -558,9 +569,18 @@ export function render(data: DiagramData): string {
       <!-- 阶段提交按钮：由 Inspector 在挂载后提到滚动容器之外（data-role="step-primary-action"）。
            贴在滚动区里的 sticky 按钮必然盖住它下方的内容：1280×720 实测与分组按钮的矩形相交，
            用户既看不见也点不着。挪进 .inspector-footer 后既恒定可见，又与任何控件不相交。 -->
-      <button id="btn-apply-xticks-next" data-role="step-primary-action" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: var(--font-size-md);">
+      <button id="btn-apply-xticks-next" data-role="step-primary-action" class="ui-btn ui-btn--primary" style="width: 100%; padding: 8px 12px; font-size: var(--font-size-md); font-weight: 600;">
         ${t('step6.next')}
       </button>
+
+      <!-- 重设本步 (图2样式) -->
+      <div style="display: flex; justify-content: center; margin-top: 8px;">
+        ${renderResetButton({
+          id: 'btn-reset-step6-xticks',
+          title: '清空全部已标定的列 X 刻度，回到未标定状态',
+          label: '重设列刻度',
+        })}
+      </div>
     </div>
   `;
 }
@@ -694,7 +714,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   });
 
   root.querySelector('#btn-goto-step5-split')?.addEventListener('click', () => {
-    ctx.onAdvanceWorkflowStage?.(5);
+    ctx.onAdvanceWorkflowStage?.(4);
   });
 
 
@@ -853,6 +873,14 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     // 两者在库里等价，但只有 null 能保证不留下一个会被 `px_to_value` 真除的因子。
     root.querySelector('#btn-group-exag-one')?.addEventListener('click', () => {
       writeGroupExag(null, { keepOne: true });
+    });
+    root.querySelectorAll('.grp-exagg-style-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const style = btn.getAttribute('data-style');
+        if (style === 'line' || style === 'area') {
+          void patchGroup({ exagg_style: style as 'line' | 'area' });
+        }
+      });
     });
     if (exagInput) {
       exagInput.addEventListener('keydown', (ev) => {
@@ -1163,5 +1191,11 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
 
   root.querySelector('#btn-apply-xticks-next')?.addEventListener('click', () => {
     ctx.onAdvanceWorkflowStage?.(7);
+  });
+
+  root.querySelector('#btn-reset-step6-xticks')?.addEventListener('click', async () => {
+    if (!window.confirm('确定清空所有属种列的 X 刻度标定吗？全部列将回到未标定状态。')) return;
+    state.pendingTick = null;
+    await ctx.onClearAllXTicks?.();
   });
 }

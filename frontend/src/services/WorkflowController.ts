@@ -128,6 +128,72 @@ export class WorkflowController {
         '已进入步骤 3：Y 轴标定。在图上点选两点，或在右侧侧栏填入已知刻度与真实深度值。',
         5000
       );
+    } else if (targetStage === STAGE.SPLIT) {
+      const authoritative = await this.rpcClient.getDiagramData();
+      const existingCols = authoritative.columns ?? [];
+      // 只有在当前尚无任何列时，推进到步骤 4 才自动触发初始检测；
+      // 已有列时严禁自动重跑 detectColumnsInRoi，避免冲毁已有的列命名、标度与控制点！
+      if (existingCols.length === 0) {
+        const wfNextBtn = document.querySelector('#btn-wf-next') as HTMLButtonElement | null;
+        if (wfNextBtn) {
+          wfNextBtn.disabled = true;
+          wfNextBtn.textContent = '正在切分属种基线...';
+        }
+        this.callbacks.setHudNotice(
+          '正在基于数据有效区切分各属种垂直基线，请稍候...',
+          5000
+        );
+        try {
+          const authoritative = await this.rpcClient.getDiagramData();
+          const rois = authoritative.rois ?? [];
+          const targets = rois.length > 0 ? rois : [];
+          if (targets.length === 0) {
+            throw new Error(
+              t('error.unknown') +
+                '：后端当前没有任何 ROI，无法分列。请回到步骤 2 先框定数据有效区。'
+            );
+          }
+          for (const r of targets) {
+            const xlim = r.xlim;
+            const ylim = r.ylim;
+            if (!xlim || !ylim) {
+              throw new Error(
+                `后端 ROI ${r.id ?? '(无 id)'} 缺少 xlim/ylim，无法分列。请回到步骤 2 重新框定该有效区。`
+              );
+            }
+            await this.rpcClient.detectColumnsInRoi({
+              ...r,
+              xMin: xlim[0],
+              xMax: xlim[1],
+              yMin: ylim[0],
+              yMax: ylim[1],
+            });
+          }
+          const freshData = await this.rpcClient.getDiagramData();
+          this.canvasComponent.loadNewDiagram(freshData);
+        } catch (err) {
+          if (wfNextBtn) {
+            wfNextBtn.disabled = false;
+          }
+          this.callbacks.reportBackendFailure('分列识别', err);
+          this.callbacks.setHudNotice('分列识别失败，已停留在步骤 3。请检查有效区后重试。', 6000);
+          return;
+        }
+      } else {
+        this.canvasComponent.loadNewDiagram(authoritative);
+      }
+      this.currentStage = STAGE.SPLIT;
+      this.callbacks.onStageChange?.(this.currentStage);
+      this.canvasComponent.setToolMode('select');
+      this.getSidebar()?.updateData(this.canvasComponent.data);
+      this.getInspector()?.updateData(this.canvasComponent.data);
+      this.updateWorkflowBar();
+      this.callbacks.updateFooter();
+      this.canvasComponent.requestRender();
+      this.callbacks.setHudNotice(
+        `已进入步骤 4：属种分列。已切分 ${this.canvasComponent.data.columns.length} 个属种列。可点 OCR 识别，或在左栏输入各列名称。`,
+        5000
+      );
     } else if (targetStage === STAGE.CLEANUP) {
       this.currentStage = STAGE.CLEANUP;
       this.callbacks.onStageChange?.(this.currentStage);
@@ -138,85 +204,8 @@ export class WorkflowController {
         (document.querySelector('#btn-detect-candidates') as HTMLButtonElement | null)?.click();
       });
       this.callbacks.setHudNotice(
-        '已进入步骤 4：干扰清理。候选线正在生成：橙色待确认，红色已去除。',
+        '已进入步骤 5：干扰清理。基于已分列边界生成列内候选线：橙色待确认，红色已去除。',
         4500
-      );
-    } else if (targetStage === STAGE.SPLIT) {
-      const authoritative = await this.rpcClient.getDiagramData();
-      const existingCols = authoritative.columns ?? [];
-      // 只有在当前尚无任何列时，推进到步骤 5 才自动触发初始检测；
-      // 已有列时严禁自动重跑 detectColumnsInRoi，避免冲毁已有的列命名、标度与控制点！
-      if (existingCols.length === 0) {
-        const wfNextBtn = document.querySelector('#btn-wf-next') as HTMLButtonElement | null;
-        if (wfNextBtn) {
-          wfNextBtn.disabled = true;
-          wfNextBtn.textContent = '正在切分属种基线...';
-        }
-        this.callbacks.setHudNotice(
-          '正在基于数据有效区与清理后墨迹切分属种垂直基线，请稍候...',
-          5000
-        );
-      try {
-        // 分列参数必须取**后端权威 ROI**，不能用 `canvasComponent.data.rois`
-        // 这份前端镜像（B-04）。后端 `detect_columns` 收到 data_xlim/data_ylim 后
-        // 会覆写 `rois[].xlim`（`session_parts/core.py` 里 target_roi["xlim"] = …），
-        // 所以镜像一旦落后（另一标签页改了 ROI、Inspector 表单改了半径但
-        // commitRoi 尚未落库、撤销把 ROI 恢复成旧值……），这次分列就会把用户
-        // 刚被后端接受的新取数区**静默改回旧值**，而界面照样报"分列成功"。
-        //
-        // 先 getDiagramData 再构造参数，代价是一次往返，换掉一整类静默回滚。
-        // 注意 B-10：`loadImage` 先写 width/height、约 350ms 后才建 ROI，
-        // 但这里等的是**已完成的一次 getDiagramData 应答**，不是轮询尺寸，
-        // 所以不会读到"有图无 ROI"的中间态；rois 为空即如实报错停在原地。
-        const authoritative = await this.rpcClient.getDiagramData();
-        const rois = authoritative.rois ?? [];
-        // 只对仍有列的 ROI 重跑；`columns_stale` 为真的 ROI 提示分列已失效，
-        // 但重分列本身是幂等的，这里不据此跳过（跳过会让分区永远补不回来）。
-        const targets = rois.length > 0 ? rois : [];
-        if (targets.length === 0) {
-          throw new Error(
-            t('error.unknown') +
-              '：后端当前没有任何 ROI，无法分列。请回到步骤 2 先框定数据有效区。'
-          );
-        }
-        for (const r of targets) {
-          const xlim = r.xlim;
-          const ylim = r.ylim;
-          if (!xlim || !ylim) {
-            throw new Error(
-              `后端 ROI ${r.id ?? '(无 id)'} 缺少 xlim/ylim，无法分列。请回到步骤 2 重新框定该有效区。`
-            );
-          }
-          await this.rpcClient.detectColumnsInRoi({
-            ...r,
-            xMin: xlim[0],
-            xMax: xlim[1],
-            yMin: ylim[0],
-            yMax: ylim[1],
-          });
-        }
-        const freshData = await this.rpcClient.getDiagramData();
-        this.canvasComponent.loadNewDiagram(freshData);
-      } catch (err) {
-        if (wfNextBtn) {
-          wfNextBtn.disabled = false;
-        }
-        this.callbacks.reportBackendFailure('分列识别', err);
-        this.callbacks.setHudNotice('分列识别失败，已停留在步骤 4。请检查有效区后重试。', 6000);
-        return;
-      }
-    }
-      this.currentStage = STAGE.SPLIT;
-      this.callbacks.onStageChange?.(this.currentStage);
-      this.canvasComponent.setToolMode('select');
-      this.getSidebar()?.updateData(this.canvasComponent.data);
-      this.getInspector()?.updateData(this.canvasComponent.data);
-      this.updateWorkflowBar();
-      this.callbacks.updateFooter();
-      this.canvasComponent.requestRender();
-      this.callbacks.setHudNotice(
-        `已切分 ${this.canvasComponent.data.columns.length} 个属种列。可点 OCR 识别，或在左栏输入各列名称。`,
-        5000
       );
     } else if (targetStage === STAGE.CALIBRATE_COLUMNS) {
       this.currentStage = STAGE.CALIBRATE_COLUMNS;
@@ -224,7 +213,7 @@ export class WorkflowController {
       this.canvasComponent.setToolMode('select');
       this.updateWorkflowBar();
       this.getInspector()?.updateData(this.canvasComponent.data);
-      this.callbacks.setHudNotice('已进入步骤 6：标定列。在底端刻度尺上点锯齿即可吸附第二个刻度点。', 4500);
+      this.callbacks.setHudNotice('已进入步骤 6：列标定。在底端刻度尺上点锯齿即可吸附第二个刻度点。', 4500);
     } else if (targetStage === STAGE.SPEARS_AND_SAMPLES) {
       this.currentStage = STAGE.SPEARS_AND_SAMPLES;
       this.callbacks.onStageChange?.(this.currentStage);

@@ -27,11 +27,20 @@ export interface InspectorCallbacks {
   ) => void;
   /** 步骤 6：清空该列的 X 标度，回到「未标定」。 */
   onClearXTicks?: (colIndex: number) => void;
+  /** 步骤 6：清空全部列的 X 标度。 */
+  onClearAllXTicks?: () => Promise<void>;
+  /** 步骤 4：清空并重新自动分列。 */
+  onRedetectColumns?: () => Promise<void>;
+  /** 步骤 3：清空 Y 轴两点标定。 */
+  onClearYCalibration?: () => void;
   onToggleLayerVisibility?: (layer: string, visible: boolean) => void;
   /** 进入线掩膜人工修正笔刷（erase=擦掉误标 / restore=补回漏标）。 */
   onStartLineFix?: (mode: 'erase' | 'restore') => void;
   /** 清空全部人工修正笔迹并重新合成清理掩膜。 */
   onClearLineFix?: () => void;
+  onConfirmAllCandidates?: () => Promise<void>;
+  onRevertAllCandidates?: () => Promise<void>;
+  onRedigitizeAllColumns?: (resetManual?: boolean) => Promise<void>;
   /** 启动 Y 轴两点标定（由画布收点，再弹窗收真实值）。 */
   onStartYCalibration?: () => void;
   /** 手动输入两点数值重新标定（兜底：不使用画布点选）。 */
@@ -247,6 +256,10 @@ export class Inspector {
       this.element.appendChild(footer);
     }
     footer.appendChild(action);
+    const secondaryAction = bodyEl.querySelector<HTMLElement>('[data-role="step-secondary-action"]');
+    if (secondaryAction) {
+      footer.appendChild(secondaryAction);
+    }
   }
 
   private renderStagePanel(cal: DiagramCalibration): string {

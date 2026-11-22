@@ -112,21 +112,21 @@ test.describe('Step 5 分列与属种命名', () => {
     expect(crossing.reconciliation.ambiguous).toEqual(['label_002']);
     expect(crossing.labels[1].associated_column_id, '跨界标签仍归锚点所在列').toBe('col_4');
 
-    // 不传 columns 时必须退回到会话里的真实列。先真的推进到 Step 5（会触发后端重新分列），
+    // 不传 columns 时必须退回到会话里的真实列。先真的推进到 Step 4（会触发后端重新分列），
     // 再断言"缺标签列"恰好等于后端当前的列集合 —— 这条把函数与真实会话绑在一起。
-    await gotoStage(page, 5);
+    await gotoStage(page, 4);
     const live = await diagramData<{ columns: { id: string }[] }>(page);
     const liveIds = live.columns.map((c) => c.id).sort();
-    expect(liveIds.length, 'Step 5 重新分列后应至少有一列').toBeGreaterThan(0);
+    expect(liveIds.length, 'Step 4 重新分列后应至少有一列').toBeGreaterThan(0);
     const noLabels = await rpc<SnapResult>(page, 'naming.snapLabels', { labels: [] });
     expect(noLabels.reconciliation.columns_without_label).toEqual(liveIds);
 
   });
 
-  test('Step 5 面板：逐列点名高亮必须指向后端当前真实存在的列', async ({ page }) => {
-    await gotoStage(page, 5);
+  test('Step 4 面板：逐列点名高亮必须指向后端当前真实存在的列', async ({ page }) => {
+    await gotoStage(page, 4);
 
-    const panel = page.locator('.step-panel[data-step="5"]');
+    const panel = page.locator('.step-panel[data-step="4"]');
     await expect(panel).toBeVisible();
 
     const data = await diagramData<{ columns: { id: string }[]; activeTaxaId: string }>(page);
@@ -154,8 +154,8 @@ test.describe('Step 5 分列与属种命名', () => {
     if (!other) throw new Error(`后端只给出了 1 列（${highlight}），无法验证点名切换`);
     await page.locator(`input.taxa-name-inline-input[data-col-id="${other.id}"]`).focus();
 
-    // 激活态断言：右侧保持步骤 5 命名核对面板，左侧属种卡片进入 active，面板上高亮列属性同步
-    await expect(panel, '右侧必须保持步骤 5 面板，严禁被属性检查器劫持').toBeVisible();
+    // 激活态断言：右侧保持步骤 4 命名核对面板，左侧属种卡片进入 active，面板上高亮列属性同步
+    await expect(panel, '右侧必须保持步骤 4 面板，严禁被属性检查器劫持').toBeVisible();
     await expect(panel).toHaveAttribute('data-highlight-col', other.id);
     await expect(
       page.locator(`.taxa-card[data-taxa-id="${other.id}"]`),

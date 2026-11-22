@@ -40,7 +40,7 @@ interface DiagramData {
   line_candidates: LineCandidate[];
 }
 
-const PANEL = '.step-panel[data-step="4"]';
+const PANEL = '.step-panel[data-step="5"]';
 const read = (page: Parameters<typeof rpc>[0]) => rpc<DiagramData>(page, 'straditize.getDiagramData');
 
 /** 竖线 = `kind` 为 B（贯穿网格线）或 C（列内短竖线）；横线 = A。 */
@@ -73,7 +73,7 @@ async function openStep4WithVerticals(page: Parameters<typeof rpc>[0]): Promise<
   for (let i = 0; i < columns.length; i += 1) {
     await rpc(page, 'column.remove', { col_index: 0 });
   }
-  await gotoStage(page, 4);
+  await gotoStage(page, 5);
   await expect(page.locator(PANEL)).toBeVisible();
   await settle(page);
 }

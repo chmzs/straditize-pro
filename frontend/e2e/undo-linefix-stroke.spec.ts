@@ -17,7 +17,7 @@ import { canvasBox, gotoStage, openApp, rpc } from './helpers';
 test.describe('撤销人工修正笔迹', () => {
   test('涂一笔 → 撤销 → 后端笔迹数回退；重做 → 再回来', async ({ page }) => {
     await openApp(page);
-    await gotoStage(page, 4);
+    await gotoStage(page, 5);
 
     const strokes = async () => {
       const d = (await rpc(page, 'straditize.getDiagramData', {})) as any;

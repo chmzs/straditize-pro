@@ -65,7 +65,7 @@ interface DiagramData {
   cleanup: { stats: Record<string, number> };
 }
 
-const PANEL = '.step-panel[data-step="4"]';
+const PANEL = '.step-panel[data-step="5"]';
 
 const read = (page: Parameters<typeof rpc>[0]) =>
   rpc<DiagramData>(page, 'straditize.getDiagramData');
@@ -108,9 +108,9 @@ async function settle(page: Parameters<typeof rpc>[0]): Promise<void> {
     .toBe(true);
 }
 
-/** 进入步骤 4 并等前端把初始状态画完。 */
+/** 进入步骤 5 并等前端把初始状态画完。 */
 async function openStep4(page: Parameters<typeof rpc>[0]): Promise<void> {
-  await gotoStage(page, 4);
+  await gotoStage(page, 5);
   await expect(page.locator(PANEL)).toBeVisible();
   await settle(page);
 }
@@ -298,7 +298,7 @@ test.describe('步骤 4 干扰清理', () => {
     expect(newH, '必须能在后端找到新落库的横向几何').toBeTruthy();
     expect(newH!.axis, '横向拖拽落库的 axis 必须是 h').toBe('h');
     expect(newH!.source, '手动画出来的 source 必须是 manual').toBe('manual');
-    expect(newH!.status, '手动几何默认应是待确认，不能自动剔除').toBe('candidate');
+    expect(newH!.status, '手动几何默认应是 removed（直接剔除）').toBe('removed');
     expect(newH!.roi_id, '新几何必须归属当前有效区').toBe(roi);
     expect(
       newH!.geometry.x1 - newH!.geometry.x0,
@@ -459,7 +459,7 @@ test.describe('步骤 4 干扰清理', () => {
     expect(beforeClear.line_candidates.length, '前置：应有几何待清空').toBeGreaterThan(0);
     expect((await statsOf(page)).manual_erase_pixels, '前置：应有笔迹待清空').toBeGreaterThan(0);
     await expect(page.locator(PANEL), '前置：面板应显示 1 个排除区').toContainText(
-      '排除区 (1 个)'
+      '1 排除区'
     );
 
     // 真实用户路径：点这个按钮。
@@ -487,7 +487,7 @@ test.describe('步骤 4 干扰清理', () => {
     // 因为 `_recompose` 的返回体不含 `exclusion_regions`，`applyCleanupState`
     // 也就无从覆盖前端镜像。按钮骗人比按钮坏了更糟：用户会以为没清掉。
     await expect(page.locator(PANEL), '后端排除区已清零，面板不得再宣称存在排除区').toContainText(
-      '排除区 (0 个)'
+      '0 排除区'
     );
     expect(await rowCount(page), '面板候选行也必须清空').toBe(0);
     expect(await page.locator('#cleanup-stats').innerText(), '统计行必须显示 0 条几何').toContain(

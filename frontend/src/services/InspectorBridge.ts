@@ -1,4 +1,5 @@
 import { RpcClient } from './RpcClient';
+import { setGroupCalibMark } from '../components/canvas/groupCalibMarks';
 import { compensationNote, addCompensation } from '../core/compensationNote';
 import { showConfirmDialog } from '../ui/confirm';
 import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
@@ -353,6 +354,7 @@ export function createInspectorCallbacks(
       const cand = canvasComponent.data.line_candidates?.find((item) => item.id === candidateId);
       if (!cand) return;
       canvasComponent.setSelectedGeometryId(candidateId);
+      canvasComponent.scrollToCandidate(candidateId);
       callbacks.setHudNotice(
         `已选中 ${cand.axis === 'h' ? '横向' : '竖向'}几何：拖动整体移动，拖端点手柄改范围，Delete 删除。`,
         6000
@@ -408,6 +410,43 @@ export function createInspectorCallbacks(
     },
     onGeometryCommit: cleanupManager.handleGeometryCommit,
     onGeometryDelete: cleanupManager.handleGeometryDelete,
+    onConfirmAllCandidates: async () => {
+      const cands = canvasComponent.data.line_candidates || [];
+      const pending = cands.filter((c) => c.status !== 'removed');
+      if (pending.length === 0) return;
+      for (const c of pending) {
+        await cleanupManager.runCleanupAction('批量确认候选线', () =>
+          rpcClient.setGeometryStatus(c.id, 'removed')
+        );
+      }
+      callbacks.setHudNotice(`已将全部 ${pending.length} 条候选干扰线确认为实际剔除。`);
+    },
+    onRevertAllCandidates: async () => {
+      const cands = canvasComponent.data.line_candidates || [];
+      const removed = cands.filter((c) => c.status === 'removed');
+      if (removed.length === 0) return;
+      for (const c of removed) {
+        await cleanupManager.runCleanupAction('批量撤回候选线', () =>
+          rpcClient.setGeometryStatus(c.id, 'candidate')
+        );
+      }
+      callbacks.setHudNotice(`已将全部 ${removed.length} 条干扰线撤回为待确认。`);
+    },
+    onRedigitizeAllColumns: async (resetManual: boolean = false) => {
+      try {
+        const res = await rpcClient.redigitizeAllColumns(resetManual);
+        if (res && res.success) {
+          const freshData = await rpcClient.getDiagramData();
+          canvasComponent.loadNewDiagram(freshData);
+          getSidebar()?.updateData(canvasComponent.data);
+          getInspector()?.updateData(canvasComponent.data);
+          canvasComponent.requestRender();
+          callbacks.setHudNotice(`已重设全部 ${res.columns_count} 列的轮廓线与拐点。`, 4000);
+        }
+      } catch (err) {
+        callbacks.reportBackendFailure('重设所有列轮廓与拐点', err);
+      }
+    },
     onClearCleanupEdits: async () => {
       await cleanupManager.runCleanupAction('清空清理编辑', async () => {
         const roiId = cleanupManager.activeCleanupRoiId();
@@ -518,6 +557,97 @@ export function createInspectorCallbacks(
         callbacks.reportBackendFailure('清空列 X 刻度', err);
       }
     },
+    onClearAllXTicks: async () => {
+      const cols = canvasComponent.data.columns || [];
+      const calibratedCols = cols.filter((c) => c.x_ticks && c.x_ticks.length > 0 && c.col_index != null);
+      const rois = canvasComponent.data.rois || [];
+      let resetGroupsCount = 0;
+
+      for (const roi of rois) {
+        for (const group of roi.x_groups || []) {
+          if (group.value_per_px != null) {
+            resetGroupsCount++;
+          }
+        }
+      }
+
+      if (calibratedCols.length === 0 && resetGroupsCount === 0) {
+        callbacks.setHudNotice('当前没有任何已标定 X 刻度的列或组');
+        return;
+      }
+
+      try {
+        // 1. 清空所有组的组级刻度与画布标记
+        for (const roi of rois) {
+          if (!roi.id) continue;
+          for (const group of roi.x_groups || []) {
+            if (!group.id) continue;
+            setGroupCalibMark(group.id, null);
+            if (group.value_per_px != null) {
+              group.value_per_px = undefined;
+              await rpcClient.roiGroupUpdate(roi.id, group.id, { value_per_px: null });
+            }
+          }
+        }
+
+        // 2. 清空列级刻度
+        for (const col of calibratedCols) {
+          await rpcClient.clearColumnXTicks(col.col_index!);
+          col.x_ticks = null;
+        }
+
+        canvasComponent.history.push(
+          'Clear all X-Ticks',
+          canvasComponent.data.columns,
+          canvasComponent.data.activeTaxaId
+        );
+        callbacks.setHudNotice('已清空全部列与组的 X 刻度标定（回到未标定状态）');
+        canvasComponent.requestRender();
+        getInspector()?.updateData(canvasComponent.data);
+        getSidebar()?.updateData(canvasComponent.data);
+        getToolbar()?.updateHistoryState();
+        callbacks.updateFooter();
+        callbacks.scheduleAutosave();
+      } catch (err) {
+        callbacks.reportBackendFailure('清空全部列刻度', err);
+      }
+    },
+    onRedetectColumns: async () => {
+      const activeRoi =
+        canvasComponent.data.rois?.find((r) => r.id === canvasComponent.data.active_roi_id) ||
+        canvasComponent.data.rois?.[0];
+      if (!activeRoi) {
+        callbacks.reportBackendFailure('重新分列', new Error('未找到有效的数据区域 (ROI)'));
+        return;
+      }
+      const xlim = activeRoi.xlim || [canvasComponent.data.roi.xMin, canvasComponent.data.roi.xMax];
+      const ylim = activeRoi.ylim || [canvasComponent.data.roi.yMin, canvasComponent.data.roi.yMax];
+      try {
+        callbacks.setHudNotice('正在重新自动分列，请稍候...', 2000);
+        const cols = await rpcClient.detectColumnsInRoi({
+          ...activeRoi,
+          xMin: xlim[0],
+          xMax: xlim[1],
+          yMin: ylim[0],
+          yMax: ylim[1],
+        });
+        canvasComponent.data.columns = cols;
+        canvasComponent.history.push(
+          'Redetect Columns',
+          canvasComponent.data.columns,
+          canvasComponent.data.activeTaxaId
+        );
+        callbacks.setHudNotice(`已重新分列：共识别出 ${cols.length} 个属种列。`, 4000);
+        canvasComponent.requestRender();
+        getInspector()?.updateData(canvasComponent.data);
+        getSidebar()?.updateData(canvasComponent.data);
+        getToolbar()?.updateHistoryState();
+        callbacks.updateFooter();
+        callbacks.scheduleAutosave();
+      } catch (err) {
+        callbacks.reportBackendFailure('重新分列', err);
+      }
+    },
     onExtractConsensusHorizons: async (params?: {
       mode?: string;
       adaptive_window?: boolean;
@@ -596,6 +726,23 @@ export function createInspectorCallbacks(
         unit,
         primaryAxis
       );
+    },
+    onClearYCalibration: () => {
+      canvasComponent.setYCalibMarks([]);
+      canvasComponent.data.calibration = {
+        top_px: null,
+        top_cm: null,
+        bottom_px: null,
+        bottom_cm: null,
+        unit: canvasComponent.data.calibration?.unit ?? '',
+        primaryAxis: canvasComponent.data.calibration?.primaryAxis ?? 'depth',
+        isCalibrated: false,
+      };
+      canvasComponent.requestRender();
+      getInspector()?.updateData(canvasComponent.data);
+      getSidebar()?.updateData(canvasComponent.data);
+      callbacks.updateFooter();
+      callbacks.setHudNotice('Y 轴标定已重设（清空回到未标定）');
     },
     onRoiCommitted: (roi: DataRoi) => {
       void cleanupManager.commitRoi(roi);

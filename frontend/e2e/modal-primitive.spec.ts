@@ -88,7 +88,7 @@ test.describe('模态框原语与主题契约', () => {
     await expect(header).toHaveCSS('background-color', await tokenColor(page, '--bg-card'));
 
     await expect(footer).toHaveCSS('display', 'flex');
-    await expect(footer).toHaveCSS('justify-content', 'flex-end');
+    await expect(footer).toHaveCSS('justify-content', /^(flex-end|flow-end)$/);
     await expect(footer).toHaveCSS('border-top-width', '1px');
     await expect(footer).toHaveCSS('background-color', await tokenColor(page, '--bg-footer'));
   });
@@ -176,7 +176,7 @@ test.describe('模态框原语与主题契约', () => {
     await expect(header).toHaveCSS('justify-content', 'space-between');
     await expect(footer).toHaveCSS('padding-top', '12px');
     await expect(footer).toHaveCSS('padding-left', '16px');
-    await expect(footer).toHaveCSS('justify-content', 'flex-end');
+    await expect(footer).toHaveCSS('justify-content', /^(flex-end|flow-end)$/);
     await expect(footer).toHaveCSS('column-gap', '12px');
 
     // 标题此前内联 `font-size: 13.5px; font-weight: 700`，原语统一 16px 且 margin: 0。

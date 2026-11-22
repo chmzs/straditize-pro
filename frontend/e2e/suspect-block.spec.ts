@@ -106,7 +106,7 @@ test.describe('P1 suspect_block 色块列必须在界面上可见', () => {
     await resetBaseline(page);
   });
 
-  test('T1 真实图版：带标记的列在步骤 5 / 步骤 6 / 导出就绪清单三处都被点名', async ({
+  test('T1 真实图版：带标记的列在步骤 4 / 步骤 6 / 导出就绪清单三处都被点名', async ({
     page,
   }) => {
     const flagged = await loadBenchmarkProductPath(page);
@@ -116,23 +116,28 @@ test.describe('P1 suspect_block 色块列必须在界面上可见', () => {
     const col = flagged[0];
     const colName = col.name;
 
-    // ---- 步骤 5：分列刚跑完就该报出来 ----
+    // ---- 步骤 4：分列刚跑完就该报出来 ----
     await page.evaluate(async () => {
       await (
         window as unknown as { __straditize: { gotoStage: (s: number) => Promise<void> } }
-      ).__straditize.gotoStage(5);
+      ).__straditize.gotoStage(4);
     });
-    const step5 = page.locator('[data-panel="step5"][data-suspect-count]');
-    await expect(step5).toBeVisible({ timeout: 20_000 });
-    await expect(step5).toHaveAttribute('data-suspect-count', String(flagged.length));
+    const step4 = page.locator('[data-panel="step4"][data-suspect-count]');
+    await expect(step4).toBeVisible({ timeout: 20_000 });
+    await expect(step4).toHaveAttribute('data-suspect-count', String(flagged.length));
     // textContent 而非 innerText：这句「系统不会自动剔除」在折叠的 `<details>`
     // 内容里，Chrome 的 innerText 对折叠内容返回空串（与 naming.spec 同一个陷阱）。
-    const step5Text = (((await step5.textContent()) ?? '')).replace(/\s+/g, ' ');
-    expect(step5Text, '步骤 5 提示必须点名该列').toContain(colName);
-    expect(step5Text).toContain('色块');
-    expect(step5Text, '必须说明系统不会自动剔除').toMatch(/不会自动剔除|不会自动删除/);
+    const step4Text = (((await step4.textContent()) ?? '')).replace(/\s+/g, ' ');
+    expect(step4Text, '步骤 4 提示必须点名该列').toContain(colName);
+    expect(step4Text).toContain('色块');
+    expect(step4Text, '必须说明系统不会自动剔除').toMatch(/不会自动剔除|不会自动删除/);
 
     // ---- 步骤 6：点选该列（走 renderColumnInspector），提示 + 删除列按钮都要在 ----
+    await page.evaluate(async () => {
+      await (
+        window as unknown as { __straditize: { gotoStage: (s: number) => Promise<void> } }
+      ).__straditize.gotoStage(6);
+    });
     await page.evaluate(async (id: string) => {
       await (
         window as unknown as { __straditize: { selectColumn: (id: string) => Promise<void> } }
@@ -173,7 +178,7 @@ test.describe('P1 suspect_block 色块列必须在界面上可见', () => {
     await page.evaluate(async () => {
       await (
         window as unknown as { __straditize: { gotoStage: (s: number) => Promise<void> } }
-      ).__straditize.gotoStage(5);
+      ).__straditize.gotoStage(4);
     });
     await page.evaluate(async (id: string) => {
       await (
@@ -200,6 +205,11 @@ test.describe('P1 suspect_block 色块列必须在界面上可见', () => {
     );
     expect(clean, '前提：应存在未被标记的列').toBeTruthy();
 
+    await page.evaluate(async () => {
+      await (
+        window as unknown as { __straditize: { gotoStage: (s: number) => Promise<void> } }
+      ).__straditize.gotoStage(6);
+    });
     await page.evaluate(async (id: string) => {
       await (
         window as unknown as { __straditize: { selectColumn: (id: string) => Promise<void> } }
