@@ -89,6 +89,7 @@ ALL_RPC_METHODS: tuple[str, ...] = (
     "algorithm.upsertLineGeometry",
     "column.add",
     "column.calibrateXTicks",
+    "column.clearAll",
     "column.clearXTicks",
     "column.redigitizeAll",
     "column.remove",

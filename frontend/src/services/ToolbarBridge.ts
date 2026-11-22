@@ -115,9 +115,12 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
       const activeCol = p.canvasComponent.getActiveColumn();
       if (!activeCol) return;
       try {
-        const { points, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(activeCol.id);
+        const { points, curvePoints, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(activeCol.id);
         if (points.length > 0) {
           activeCol.controlPoints = points;
+          if (curvePoints && curvePoints.length > 0) {
+            activeCol.curvePoints = curvePoints;
+          }
           p.canvasComponent.history.push(
             `Re-digitize ${activeCol.name}`,
             p.canvasComponent.data.columns,

@@ -365,8 +365,8 @@ export const zhCN = {
   'step6.groupExagRangeValues': '图上 {figure} {unit} → 真实 {real} {unit}（组斜率 {slope} {unit}/px × 本组平均列宽 {width}px）',
   'step6.columnExagOverriddenByGroup': '以组级 {mult}× 为准（列级设置已忽略）',
   'step6.exaggStyleLabel': '夸大样式',
-  'step6.exaggStyleLine': '线条 (Line)',
-  'step6.exaggStyleArea': '填充 (Area)',
+  'step6.exaggStyleLine': '细折线 (Line)',
+  'step6.exaggStyleArea': '浅色面积 (Area)',
   'step6.exaggStyleLineDesc': '外层细折线（如 Gahai）',
   'step6.exaggStyleAreaDesc': '外层浅色填充（如 Rioja）',
 

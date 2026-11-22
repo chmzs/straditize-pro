@@ -280,7 +280,7 @@ def read_column_values(
             col_name=col_name,
             require_calibrated=policy["require_calibrated"],
             ndigits=policy["ndigits"],
-            is_1x=(src == "main_1x"),
+            is_1x=(src == "main_1x" or str(src).startswith("exagg_")),
         )
         for x, src in zip(rows_px, src_list)
     ]
@@ -433,26 +433,12 @@ def _resolve_column_visual(
     return scale_type, unit, plot_type
 
 
-#: 放大倍数只允许存在这一个键（None = 未放大）。
-#:
-#: 历史遗留的三个名字（`exaggeration_multiplier` / `has_exaggeration` / `mult_source`）只在
-#: **入口**被接受，落库前一律归一：同一个物理量在库里存三份就会互相打架，而
-#: `px_to_value` 会真的除以它——一份过期的 5 能让整列读数缩小 5 倍。
-_LEGACY_EXAGGERATION_KEYS: tuple[str, ...] = (
-    "exaggeration_multiplier",
-    "has_exaggeration",
-    "mult_source",
-)
-
-
 def store_exaggeration(column: dict[str, Any], raw: Any) -> None:
-    """把入参归一成唯一键 `exaggeration_mult`，并清掉历史名。
+    """把入参归一成唯一键 `exaggeration_mult`。
 
     `None`、非数值、以及 <=1 一律当作"未放大"：放大 1 倍等于没放大，`px_to_value` 也
-    只在 >1 时才除。非数值**丢弃而不是转 0**——宁可没有放大，也不能留下一个错的因子。
+    只在 >1 时才除。非数值丢弃而不是转 0——宁可没有放大，也不能留下一个错的因子。
     """
-    for legacy in _LEGACY_EXAGGERATION_KEYS:
-        column.pop(legacy, None)
     if raw is None:
         column.pop("exaggeration_mult", None)
         return
@@ -667,7 +653,7 @@ def _scale_from_fallback(
     exagg_style: str = "line",
 ) -> ColumnScale:
     """兜底三选一：session.x_scales（已标定）> 历史三件套 > 纯缺省；结果 calibrated=False。"""
-    # Fallback: legacy three-piece fields or session.x_scales
+    # Fallback: session.x_scales or default uncalibrated scale
     abs_px0 = c_start
     raw_tick_end = col_dict.get("tickEndX")
     abs_px1 = float(raw_tick_end) if raw_tick_end is not None else c_end

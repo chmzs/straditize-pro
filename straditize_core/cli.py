@@ -121,7 +121,7 @@ def cmd_extract(args: argparse.Namespace) -> int:
             session.batch_set_taxa(names)
 
     for c in session.columns:
-        session.digitize(c["col_index"], mode=args.mode)
+        session.digitize(c["col_index"], reader_type=args.mode)
 
     if args.depth:
         try:

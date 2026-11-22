@@ -368,14 +368,12 @@ export function render(data: DiagramData): string {
             <div data-role="exag-hint" style="grid-column: 1 / -1; font-size: var(--font-size-xs); line-height: 1.45; color: var(--text-muted); margin-top: -2px;">
               ${t('step6.groupExagHint')}
             </div>
-            ${groupExagMult !== null ? `
-            <div data-role="exag-style-row" style="grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--border-color);">
-              <span style="font-size: var(--font-size-xs); color: var(--text-secondary);">${t('step6.exaggStyleLabel')}:</span>
-              <div style="display: inline-flex; border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden;">
-                <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs grp-exagg-style-btn ${currentGroup?.exagg_style !== 'area' ? 'ui-btn--primary' : ''}" data-style="line" style="padding: 1px 8px; font-size: var(--font-size-xs); border-radius: 0;">${t('step6.exaggStyleLine')}</button>
-                <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs grp-exagg-style-btn ${currentGroup?.exagg_style === 'area' ? 'ui-btn--primary' : ''}" data-style="area" style="padding: 1px 8px; font-size: var(--font-size-xs); border-radius: 0;">${t('step6.exaggStyleArea')}</button>
-              </div>
-              <span style="font-size: var(--font-size-xs); color: var(--text-muted);">${currentGroup?.exagg_style === 'area' ? t('step6.exaggStyleAreaDesc') : t('step6.exaggStyleLineDesc')}</span>
+            ${groupExagMult !== null && groupExagMult > 1 ? `
+            <span style="font-size: var(--font-size-xs); color: var(--text-muted);">${t('step6.exaggStyleLabel')}</span>
+            <div data-role="exag-style-row" style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+              <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs grp-exagg-style-btn ${currentGroup?.exagg_style !== 'area' ? 'active-mode' : ''}" data-style="line" style="padding: 1px 7px; font-size: var(--font-size-xs);" title="${t('step6.exaggStyleLineDesc')}">${t('step6.exaggStyleLine')}</button>
+              <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs grp-exagg-style-btn ${currentGroup?.exagg_style === 'area' ? 'active-mode' : ''}" data-style="area" style="padding: 1px 7px; font-size: var(--font-size-xs);" title="${t('step6.exaggStyleAreaDesc')}">${t('step6.exaggStyleArea')}</button>
+              <span style="font-size: var(--font-size-xs); color: var(--text-muted); margin-left: 2px;">${currentGroup?.exagg_style === 'area' ? '浅色填充 ÷N' : '外线骨架 ÷N'}</span>
             </div>
             ` : ''}
           </div>

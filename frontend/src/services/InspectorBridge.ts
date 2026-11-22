@@ -55,9 +55,12 @@ export function createInspectorCallbacks(
       const activeCol = canvasComponent.getActiveColumn();
       if (!activeCol) return;
       try {
-        const { points, brokenRows, ambiguousRows } = await rpcClient.digitizeColumnWithStats(activeCol.id);
+        const { points, curvePoints, brokenRows, ambiguousRows } = await rpcClient.digitizeColumnWithStats(activeCol.id);
         if (points.length > 0) {
           activeCol.controlPoints = points;
+          if (curvePoints && curvePoints.length > 0) {
+            activeCol.curvePoints = curvePoints;
+          }
           canvasComponent.history.push(
             `Re-digitize ${activeCol.name}`,
             canvasComponent.data.columns,
@@ -91,9 +94,12 @@ export function createInspectorCallbacks(
       const activeCol = canvasComponent.getActiveColumn();
       if (!activeCol) return;
       try {
-        const { points, brokenRows, ambiguousRows } = await rpcClient.digitizeColumnWithStats(activeCol.id);
+        const { points, curvePoints, brokenRows, ambiguousRows } = await rpcClient.digitizeColumnWithStats(activeCol.id);
         if (points.length > 0) {
           activeCol.controlPoints = points;
+          if (curvePoints && curvePoints.length > 0) {
+            activeCol.curvePoints = curvePoints;
+          }
           canvasComponent.history.push(`Re-digitize ${activeCol.name}`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
           canvasComponent.requestRender();
           getSidebar()?.updateData(canvasComponent.data);
@@ -612,6 +618,26 @@ export function createInspectorCallbacks(
         callbacks.reportBackendFailure('清空全部列刻度', err);
       }
     },
+    onClearAllColumns: async () => {
+      try {
+        await rpcClient.clearAllColumns();
+        canvasComponent.data.columns = [];
+        canvasComponent.data.activeTaxaId = '';
+        canvasComponent.history.push(
+          'Clear all columns',
+          canvasComponent.data.columns,
+          canvasComponent.data.activeTaxaId
+        );
+        canvasComponent.requestRender();
+        getInspector()?.updateData(canvasComponent.data);
+        getSidebar()?.updateData(canvasComponent.data);
+        getToolbar()?.updateHistoryState();
+        callbacks.scheduleAutosave();
+        callbacks.setHudNotice('已清空全部属种列', 2000);
+      } catch (err) {
+        callbacks.reportBackendFailure('清空全部列', err);
+      }
+    },
     onRedetectColumns: async () => {
       const activeRoi =
         canvasComponent.data.rois?.find((r) => r.id === canvasComponent.data.active_roi_id) ||
@@ -661,8 +687,13 @@ export function createInspectorCallbacks(
         let compensation = { brokenRows: 0, ambiguousRows: 0 };
         for (const col of cols) {
           if (!col.controlPoints || col.controlPoints.length === 0) {
-            const { points, brokenRows, ambiguousRows } = await rpcClient.digitizeColumnWithStats(col.id);
-            if (points.length > 0) col.controlPoints = points;
+            const { points, curvePoints, brokenRows, ambiguousRows } = await rpcClient.digitizeColumnWithStats(col.id);
+            if (points.length > 0) {
+              col.controlPoints = points;
+              if (curvePoints && curvePoints.length > 0) {
+                col.curvePoints = curvePoints;
+              }
+            }
             compensation = addCompensation(compensation, { brokenRows, ambiguousRows });
           }
         }

@@ -1156,6 +1156,8 @@ class CoreMixin:
                         "startValue": 0.0,
                         "tickValue": 20.0,
                         "tickEndX": round(c_start + init_tick_w, 1),
+                        "plot_type": "area",
+                        "exaggeration_mult": None,
                     }
                 )
 
@@ -1186,7 +1188,7 @@ class CoreMixin:
         from ..columns import detect_column_bounds
         from ..image import remove_horizontal_grid_lines
 
-        cleaned_sub_mask, self.hline_rows = remove_horizontal_grid_lines(
+        cleaned_sub_mask, _ = remove_horizontal_grid_lines(
             sub_mask, min_length=35, min_row_occupancy_ratio=0.30
         )
 
@@ -1822,6 +1824,20 @@ class CoreMixin:
             self._reindex_columns(sync_taxa_names=False)
             return {"success": True, "removed": target_idx}
         raise JsonRpcError(INVALID_PARAMS, f"Column index out of bounds: {target_idx}")
+
+    def column_clear_all(self) -> dict[str, Any]:
+        """Clear all detected/manual columns and their associated digitization state."""
+        self._record_history("Clear all columns")
+        self.columns = []
+        self.column_points = {}
+        self.control_points = {}
+        self.reader_types = {}
+        self.active_column_index = 0
+        if hasattr(self, "manual_points"):
+            self.manual_points = {}
+        if hasattr(self, "taxa_names"):
+            self.taxa_names = []
+        return {"success": True, "count": 0}
 
     def column_update(
         self, col_index: int | str, updates: dict[str, Any]

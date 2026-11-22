@@ -191,15 +191,9 @@ class DigitizeSessionMixin:
         self,
         col_index: int,
         reader_type: str | None = None,
-        mode: str | None = None,
-        method: str | None = None,
     ) -> dict[str, Any]:
         """Digitizes curve or bars in the specified column to extract data points."""
-        explicit_reader = (reader_type is not None) or (mode is not None) or (method is not None)
-        if method is not None:
-            reader_type = method
-        elif mode is not None:
-            reader_type = mode
+        explicit_reader = reader_type is not None
         if reader_type is not None:
             reader_type = normalize_reader_type(reader_type)
         if not getattr(self, "columns", None):
@@ -424,12 +418,13 @@ class DigitizeSessionMixin:
             else:
                 # 正常外线（包括触碰边界的外线大峰顶）
                 if len(runs) >= 2 or run_start > axis_offset + 5:
-                    # 独立外线游程
-                    x_pos = (
+                    # 独立外线游程：Line 取质心 ÷ N，Area 取浅色填充最右缘 ÷ N
+                    x_feat = (
                         c_start + (run_start + run_end) / 2.0
                         if exagg_style != "area"
                         else c_start + run_end
                     )
+                    x_pos = zero_x + max(0.0, x_feat - zero_x) / N
                     tag = tag_exagg
                 else:
                     actual_right_edge = c_start + run_end
@@ -445,7 +440,8 @@ class DigitizeSessionMixin:
                         tag = "main_1x"
                     else:
                         # 粘连延伸到了外线，或外线自身平缓小起伏
-                        x_pos = actual_right_edge - (0.5 if exagg_style != "area" else 0.0)
+                        x_feat = actual_right_edge - (0.5 if exagg_style != "area" else 0.0)
+                        x_pos = zero_x + max(0.0, x_feat - zero_x) / N
                         tag = tag_exagg
 
             x_final = float(max(zero_x, x_pos))
@@ -846,17 +842,35 @@ class DigitizeSessionMixin:
     def _interpolate_across_hlines(
         self, points: list[dict[str, float]], c_start: int
     ) -> None:
-        """跨横线插值：横线所在行会被读成 100% 尖峰，按相邻行线性补回来（就地改 points）。"""
-        # Interpolate across pervasive horizontal grid lines to eliminate artificial 100% spikes
-        if hasattr(self, "hline_rows") and self.hline_rows:
+        """跨横线插值：以 Step 5 确认的横线几何区间 [y0, y1] 为唯一事实源，按相邻行线性补回来（就地改 points）。"""
+        removed_rows: set[int] = set()
+        for cand in getattr(self, "line_candidates", []) or []:
+            if cand.get("axis") == "h" and cand.get("status") == "removed":
+                geom = cand.get("geometry")
+                if isinstance(geom, dict):
+                    y_min = min(int(geom.get("y0", 0)), int(geom.get("y1", 0)))
+                    y_max = max(int(geom.get("y0", 0)), int(geom.get("y1", 0)))
+                else:
+                    cy = int(round(float(cand.get("at", cand.get("y", 0)))))
+                    w = int(round(float(cand.get("width", cand.get("thickness", 1)))))
+                    y_min = cy - w // 2
+                    y_max = y_min + w - 1
+                for r in range(y_min, y_max + 1):
+                    removed_rows.add(r)
+
+        if removed_rows and points:
             raw_vals = np.array([p["x"] - c_start for p in points], dtype=float)
-            rel_hlines = [hr for hr in self.hline_rows if 0 <= hr < len(raw_vals)]
+            rel_hlines = [
+                idx
+                for idx, p in enumerate(points)
+                if int(round(float(p.get("row", p.get("y", 0))))) in removed_rows
+            ]
             if rel_hlines:
                 interp_vals = interpolate_hlines(raw_vals[:, np.newaxis], rel_hlines)[
                     :, 0
                 ]
-                for p_idx, new_v in enumerate(interp_vals):
-                    points[p_idx]["x"] = float(c_start + new_v)
+                for p_idx in rel_hlines:
+                    points[p_idx]["x"] = float(c_start + interp_vals[p_idx])
 
     def _zero_point_x(self, col_index: int) -> float | None:
         """该列的 0 点像素（列左缘 + 轴粗）。取不到返回 None。"""
@@ -938,17 +952,19 @@ class DigitizeSessionMixin:
         )
 
         removed_hl_bands = []
-        for cand in getattr(self, "line_candidates", []):
+        for cand in getattr(self, "line_candidates", []) or []:
             if cand.get("axis") == "h" and cand.get("status") == "removed":
                 geom = cand.get("geometry")
-                w = int(round(float(cand.get("width", cand.get("thickness", 3)))))
                 if isinstance(geom, dict):
-                    y_min = min(geom.get("y0", 0), geom.get("y1", 0))
-                    y_max = max(geom.get("y0", 0), geom.get("y1", 0))
-                    removed_hl_bands.append((int(y_min) - w // 2 - 1, int(y_max) + w // 2 + 1))
+                    y_min = min(int(geom.get("y0", 0)), int(geom.get("y1", 0)))
+                    y_max = max(int(geom.get("y0", 0)), int(geom.get("y1", 0)))
                 else:
-                    cy = int(round(float(cand.get("y", 0))))
-                    removed_hl_bands.append((cy - w // 2 - 1, cy + w // 2 + 1))
+                    cy = int(round(float(cand.get("at", cand.get("y", 0)))))
+                    w = int(round(float(cand.get("width", cand.get("thickness", 1)))))
+                    y_min = cy - w // 2
+                    y_max = y_min + w - 1
+                # [y0 - 1, y1 + 1] 屏蔽伪拐点
+                removed_hl_bands.append((y_min - 1, y_max + 1))
 
         def _in_removed_hl(row_val: int) -> bool:
             return any(b0 <= row_val <= b1 for b0, b1 in removed_hl_bands)

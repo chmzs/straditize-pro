@@ -288,6 +288,12 @@ class TestStraditizeProFullE2E(unittest.TestCase):
         cols_res = session.detect_columns([315, 1946], [511, 1311])
         self.assertGreater(len(cols_res), 10)
 
+        # 1b. Step 5 cleanup: detect and remove horizontal grid lines
+        cand_res = session.detect_line_candidates()
+        for c in cand_res.get("candidates", []):
+            if c.get("axis") == "h":
+                session.set_line_geometry_status(c["id"], "removed")
+
         # 2. Digitize column 0
         dig_res = session.digitize(0, "area")
         self.assertGreater(len(dig_res["points"]), 100)
