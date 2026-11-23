@@ -161,10 +161,12 @@ def _values(session, points: dict[int, dict]) -> dict[int, float]:
 # 1. 读外线 ÷ N 还原到 1x 真实值；同一张图 area 读外线 55.0（旧行为的证据）
 # --------------------------------------------------------------------------- #
 def test_reads_inner_line_while_area_reads_outer(tmp_path):
-    """`area_exaggerated` 还原到 1x（≈11.0），`area` 读 55.0（两张读数出自同一张合成图）。
+    """`area_exaggerated`：Canvas 物理像素描绘真实外线（71px），导出换算到 1x（≈11.0），`area` 读 55.0。
 
-    判别力：统一 1x 契约下，`area_exaggerated` 把 55px 外线除以 5 得到 ≈11.0px 真实量程，
-    与 1x 内线（10px）紧密重合，绝不再读出 55.0px。
+    判别力：
+    1. 画布视觉层：exaggerated[probe_row]["x"] 必须直接落在真实外线（OUTER_X=71px）上供肉眼核验，
+       黄色控制点和绿轮廓直接描外线；
+    2. 数值出口层：read_column_values 统一除以 5 得到 ≈11.0px 真实 1x 读数。
     """
     session = _session(tmp_path, "exaggerated_layers.png", "layers")
     exaggerated = _press_column_reader(session, "area_exaggerated")
@@ -172,8 +174,11 @@ def test_reads_inner_line_while_area_reads_outer(tmp_path):
 
     probe_row = Y0 + 10
     assert probe_row in values, f"row {probe_row} 没有读数：{sorted(values)[:3]}…"
+    assert abs(exaggerated[probe_row]["x"] - OUTER_X) <= 1.0, (
+        f"row {probe_row}: 画布物理像素 x={exaggerated[probe_row]['x']} 必须描在外线 {OUTER_X} 处"
+    )
     assert abs(values[probe_row] - 11.0) <= 0.5, (
-        f"row {probe_row}: 读数 {values[probe_row]:.2f} 期望 ≈11.0（外线 ÷ 5 还原点）；"
+        f"row {probe_row}: 导出换算读数 {values[probe_row]:.2f} 期望 ≈11.0（外线 ÷ 5 还原点）；"
         f"x={exaggerated[probe_row]['x']}"
     )
     assert str(exaggerated[probe_row]["source"]).startswith("exagg_")
@@ -226,10 +231,16 @@ def test_broken_outer_does_not_switch_scale(tmp_path):
         assert abs(values[row] - 11.0) <= 0.5, (
             f"row {row}（有外线）: {values[row]:.2f} 期望 ≈11.0"
         )
+        assert abs(points[row]["x"] - OUTER_X) <= 1.0, (
+            f"row {row}（有外线）: 画布物理像素 x={points[row]['x']} 期望落在外线 {OUTER_X}"
+        )
         assert str(points[row]["source"]).startswith("exagg_")
     for row in (Y0 + 21, Y0 + 41, LAST_ROW - 1):
         assert abs(values[row] - 10.0) <= 0.5, (
             f"row {row}（无外线，回退内线）: {values[row]:.2f} 期望 10.0"
+        )
+        assert abs(points[row]["x"] - INNER_X1) <= 1.0, (
+            f"row {row}（无外线，回退内线）: 画布物理像素 x={points[row]['x']} 期望落在内线右缘 {INNER_X1}"
         )
         assert points[row]["source"] == "main_1x"
     # 读数跨度不再出现 45px 尖刺
@@ -347,3 +358,46 @@ def test_legal_reader_type_is_stored_on_column_and_used(tmp_path):
     assert session.columns[0]["reader_type"] == "bar"
     assert session.reader_types[0] == "bar"
     assert session.digitize(0)["reader_type"] == "bar"
+
+
+def test_step7_control_points_visual_inspection_parity(tmp_path):
+    """Step 7 视觉核验与控制点颜色/位置契约钉子：
+    1. 外线控制点必须落在扫描图物理外线上（≈OUTER_X），source 为 exagg_Nx（前端渲染黄点）；
+    2. 回退内线点必须落在贴轴内线右缘（≈INNER_X1），source 为 main_1x（前端渲染蓝点）；
+    3. Step 7 后的 export 读数统一除以倍率换算为 1x（≈10.0 ~ 11.0），绝不暴跳为 55.0。
+    """
+    session = _session(tmp_path, "exaggerated_broken_ctrl.png", "broken")
+    session.column_update(0, {"reader_type": "area_exaggerated"})
+    res = session.digitize(0)
+    ctrl_pts = res["control_points"]
+    assert len(ctrl_pts) >= 2, "必须成功生成控制点"
+
+    has_outer_ctrl = False
+    has_inner_ctrl = False
+    for pt in ctrl_pts:
+        if int(round(float(pt["y"]))) == LAST_ROW:
+            continue
+        src = pt.get("source")
+        if src and src.startswith("exagg_"):
+            has_outer_ctrl = True
+            # 外线控制点在扫描件外线上，方便肉眼视觉核对
+            assert abs(pt["x"] - OUTER_X) <= 1.0, f"外线控制点 x={pt['x']} 必须在 {OUTER_X} 处"
+        elif src == "main_1x":
+            has_inner_ctrl = True
+            # 回退内线控制点在贴轴内线上
+            assert abs(pt["x"] - INNER_X1) <= 1.0, f"内线控制点 x={pt['x']} 必须在 {INNER_X1} 处"
+
+    assert has_outer_ctrl, "断线图中必须包含外线控制点 (黄色点)"
+    assert has_inner_ctrl, "断线图中必须包含回退内线控制点 (科技蓝点)"
+
+    # 导出 CSV 统一换算为 1x
+    session.is_calibrated = True
+    session.y_scale = {"slope": 1.0, "intercept": 0.0}
+    csv_str = session.export_data("csv")["csv"]
+    assert "Picea" in csv_str
+    # 读数均在 10.0 ~ 11.0 附近，绝不允许出现 55.0（末尾行 LAST_ROW 为开区间无墨行 0.0）
+    vals = [float(line.split(",")[1]) for line in csv_str.strip().splitlines()[1:] if line.strip()]
+    assert len(vals) > 10
+    for val in vals[:-1]:
+        assert 9.5 <= val <= 11.5, f"导出科学读数必须换算为 1x，实际读出: {val}"
+

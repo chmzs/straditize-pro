@@ -280,7 +280,7 @@ def read_column_values(
             col_name=col_name,
             require_calibrated=policy["require_calibrated"],
             ndigits=policy["ndigits"],
-            is_1x=(src == "main_1x" or str(src).startswith("exagg_")),
+            is_1x=(src == "main_1x"),
         )
         for x, src in zip(rows_px, src_list)
     ]

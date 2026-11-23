@@ -345,11 +345,18 @@ class DigitizeSessionMixin:
     ) -> list[dict[str, Any]]:
         """`area_exaggerated`：二选一最外缘优先 + 撞界回退内线模型。
 
-        统一 1x 契约：内部完成所有 ÷ N 换算，curvePoints、控制点坐标全部统一输出真实 1x 像素坐标。
-        - 常态（未截断）：最右前景游程未撞右分割线，按 exagg_style 提取外线，来源记为 exagg_Nx。
-          - exagg_style == 'line'（默认）：外层为细折线，计入线宽，取骨架中心 (start+end)/2.0；
-          - exagg_style == 'area'：外层为浅色填充，取最右轮廓边缘。
-        - 截断回退：外线撞右分割线削边或消失时，取 zero_x 向右第一段连续实心黑块右缘作为 1x 原值输出（不再除以 N），来源记为 main_1x。
+        【Step 7 视觉核验与科学换算契约】：
+        1. Canvas 视觉层（供用户肉眼检查）：
+           - 常态（未截断外线）：提取扫描图上外线的真实物理像素位置（不提前除以 N），
+             来源记为 exagg_Nx（如 exagg_5x），黄色控制点与轮廓直接描绘外线！
+             - exagg_style == 'line'（默认）：外层为细折线，计入线宽，取骨架中心 (start+end)/2.0；
+             - exagg_style == 'area'：外层为浅色填充，取最右轮廓边缘。
+           - 截断/断线回退：外线撞右分割线削边或彻底丢失时，取贴轴实心黑块右缘物理像素，
+             来源记为 main_1x，蓝色控制点与轮廓描绘内线！
+        2. 数值换算层（Step 7 之后：导出 CSV / 侧栏读数 / QA 质检）：
+           - 由 read_column_values / px_to_value 统一换算为 1x 科学值：
+             - main_1x 点（截断内线）：已经是 1x 原值，不再除以 N；
+             - exagg_Nx 点（外线）：按 self.exaggeration_mult 除以 N 换算为 1x 值。
         """
         points: list[dict[str, Any]] = []
         W_col = c_end - c_start
@@ -358,10 +365,12 @@ class DigitizeSessionMixin:
         tag_exagg = f"exagg_{int(round(N))}x"
         border_threshold = W_col - 1
 
-        # 第一遍扫描：收集逐行游程与确凿的独立外线位置
+        # 第一遍扫描：收集逐行游程、确凿的独立外线位置，以及确凿的内线右缘
         row_runs: dict[int, list[tuple[int, int]]] = {}
         confirmed_outer_rows: list[int] = []
         confirmed_outer_xs: list[float] = []
+        confirmed_inner_rows: list[int] = []
+        confirmed_inner_xs: list[float] = []
 
         for row_y in range(y0, y1 + 1):
             if row_y < 0 or row_y >= mask.shape[0]:
@@ -371,6 +380,14 @@ class DigitizeSessionMixin:
                 continue
             runs = _ink_runs(row_pixels)
             row_runs[row_y] = runs
+
+            # 收集确凿内线（贴轴黑块右缘未撞列右边界）
+            first_run = runs[0]
+            if first_run[0] <= axis_offset + 2 and first_run[1] < border_threshold:
+                confirmed_inner_rows.append(row_y)
+                confirmed_inner_xs.append(c_start + float(first_run[1]))
+
+            # 收集确凿外线
             if len(runs) >= 2:
                 last_run = runs[-1]
                 if last_run[1] < border_threshold and last_run[0] > axis_offset + 3:
@@ -407,24 +424,28 @@ class DigitizeSessionMixin:
             is_true_truncation = (inner_width >= 0.45 * W_col) and (run_end >= border_threshold)
 
             if not has_outer_curve or is_true_truncation:
-                # 真实截断：回退抓贴轴内线实心黑块右缘作为 1x 原值
+                # 真实截断：回退抓贴轴内线实心黑块右缘作为 1x 原值，打上科技蓝点 (main_1x)
                 inner_candidates = [r for r in runs if r[0] <= axis_offset + 2]
                 if inner_candidates:
                     inner_run = inner_candidates[0]
-                    x_pos = c_start + inner_run[1]
+                    # 防横线噪点把截断内线拉到右边界：若 inner_run[1] 贯穿整个列宽且有参考内线，做插值保护
+                    if inner_run[1] >= border_threshold and confirmed_inner_rows:
+                        x_pos = float(np.interp(row_y, confirmed_inner_rows, confirmed_inner_xs))
+                    else:
+                        x_pos = float(c_start + inner_run[1])
                 else:
-                    x_pos = zero_x
+                    x_pos = float(zero_x)
                 tag = "main_1x"
             else:
                 # 正常外线（包括触碰边界的外线大峰顶）
                 if len(runs) >= 2 or run_start > axis_offset + 5:
-                    # 独立外线游程：Line 取质心 ÷ N，Area 取浅色填充最右缘 ÷ N
+                    # 独立外线游程：Line 取骨架中心，Area 取最右缘，物理像素直接输出供视觉核验
                     x_feat = (
                         c_start + (run_start + run_end) / 2.0
                         if exagg_style != "area"
                         else c_start + run_end
                     )
-                    x_pos = zero_x + max(0.0, x_feat - zero_x) / N
+                    x_pos = float(x_feat)
                     tag = tag_exagg
                 else:
                     actual_right_edge = c_start + run_end
@@ -436,12 +457,12 @@ class DigitizeSessionMixin:
                     # 仅当外线跨度很大 (>= 30px)，而该行突然暴跌到 < 0.4 且差距 >= 20px 时，才属于断线回退内线；
                     # 正常花粉曲线的低谷或贴轴零值（小起伏）保持为外线点，绝不误打为蓝色截断点
                     if exp_span >= 30.0 and act_span < 0.4 * exp_span and (expected_outer_x - actual_right_edge) >= 20.0:
-                        x_pos = actual_right_edge
+                        x_pos = float(actual_right_edge)
                         tag = "main_1x"
                     else:
                         # 粘连延伸到了外线，或外线自身平缓小起伏
                         x_feat = actual_right_edge - (0.5 if exagg_style != "area" else 0.0)
-                        x_pos = zero_x + max(0.0, x_feat - zero_x) / N
+                        x_pos = float(x_feat)
                         tag = tag_exagg
 
             x_final = float(max(zero_x, x_pos))

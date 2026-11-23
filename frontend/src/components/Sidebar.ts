@@ -352,9 +352,14 @@ export class Sidebar {
       resolved.source === 'group_slope' || resolved.source === 'group';
     let maxValStr = scale ? `${formatScaleValue(scale.val1)}${scale.unit}` : '未标定';
     if (scale && col.controlPoints && col.controlPoints.length > 0) {
-      const maxX = Math.max(...col.controlPoints.map((p) => p.x));
-      // 峰值必须与导出表同口径：controlPoints 全链路输出 1x 坐标，传 is1x=true
-      maxValStr = `${peakValueFromScale(scale, maxX, true).toFixed(1)}${scale.unit}`;
+      // 峰值必须与导出表同口径：逐点根据是否为截断内线 (main_1x) 换算为科学读数后取最大值
+      let maxVal = 0;
+      for (const pt of col.controlPoints) {
+        const is1x = pt.source === 'main_1x';
+        const val = peakValueFromScale(scale, pt.x, is1x);
+        if (val > maxVal) maxVal = val;
+      }
+      maxValStr = `${maxVal.toFixed(1)}${scale.unit}`;
     }
 
     const roi = this.data.rois?.find((r) => r.id === col.roi_id) || this.data.rois?.[0];

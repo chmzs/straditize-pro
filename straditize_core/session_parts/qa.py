@@ -249,6 +249,7 @@ class QaMixin:
                 else []
             )
             p_dict = {p["row"]: p["x"] for p in pts}
+            sources_dict = {p["row"]: p.get("source") for p in pts}
 
             # 与导出同一个读取入口，差异只由 profile 表达：QA 允许未标定列粗算
             # （否则"该列没标定"这条提醒永远不触发）且保留全精度（门限判定不该被取整影响）。
@@ -259,6 +260,7 @@ class QaMixin:
                 [p_dict.get(r, baseline_px) for r in horizon_rows],
                 profile=READ_PROFILE_QA,
                 col_name=c_name,
+                sources=[sources_dict.get(r) for r in horizon_rows],
             )
 
             col_values_by_column.append(c_vals)
