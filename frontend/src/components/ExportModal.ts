@@ -213,8 +213,8 @@ export class ExportModal {
                   <label style="font-size: var(--font-size-xs); font-weight: 600; color: var(--text-primary); margin-bottom: 4px; display: block;">排序 (Sort):</label>
                   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
                     <select id="wpd-sort-by" class="sample-select" style="font-size: var(--font-size-xs); padding: 4px 6px;">
-                      <option value="depth" selected>Depth (深度/年代)</option>
-                      <option value="raw">Raw (原始采样顺序)</option>
+                      <option value="raw" selected>Raw (原始采样顺序)</option>
+                      <option value="depth">Depth (深度/年代)</option>
                     </select>
                     <select id="wpd-sort-order" class="sample-select" style="font-size: var(--font-size-xs); padding: 4px 6px;">
                       <option value="asc" selected>升序 (顶 -> 底)</option>
@@ -229,7 +229,7 @@ export class ExportModal {
                   <div style="display: flex; flex-direction: column; gap: 6px; font-size: var(--font-size-xs);">
                     <div style="display: flex; align-items: center; justify-content: space-between;">
                       <span style="color: var(--text-muted);">浮点精度 (Digits):</span>
-                      <input type="number" id="wpd-digits" value="2" min="0" max="6" style="width: 60px; font-size: var(--font-size-xs); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);" />
+                      <input type="number" id="wpd-digits" placeholder="原始" min="0" max="6" style="width: 60px; font-size: var(--font-size-xs); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);" />
                     </div>
                     <div style="display: flex; align-items: center; justify-content: space-between;">
                       <span style="color: var(--text-muted);">列分隔符 (Delimiter):</span>
@@ -281,7 +281,7 @@ export class ExportModal {
                 </div>
 
                 <!-- 规范说明小贴士 -->
-                <div style="font-size: var(--font-size-xs); color: var(--text-muted); line-height: 1.45; padding: 6px 8px; border-radius: 4px; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.15);">
+                <div id="wpd-workbook-rowset-note" style="font-size: var(--font-size-xs); color: var(--text-muted); line-height: 1.45; padding: 6px 8px; border-radius: 4px; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.15);">
                   丰度矩阵在 CSV / XLSX / LiPD / TAR 全出口同源同值；未出现属种严格填报 <code>0.00</code>。
                 </div>
               </div>
@@ -511,10 +511,27 @@ export class ExportModal {
       }
 
       currentHeaders = [...rawBackendHeaders];
-      const sortBy = sortBySelect?.value || 'depth';
+      const isCustomized =
+        userEdits.size > 0 ||
+        (sortBySelect && sortBySelect.value !== 'raw') ||
+        (sortOrderSelect && sortOrderSelect.value !== 'asc') ||
+        (digitsInp && digitsInp.value.trim() !== '') ||
+        (colSepSelect && colSepSelect.value !== ',') ||
+        (naFillSelect && naFillSelect.value !== 'NA');
+
+      if (!isCustomized) {
+        currentRows = rawBackendRows.map((row) => [...row]);
+        renderTableGrid();
+        syncSerializedText();
+        updateSumCheck();
+        return;
+      }
+
+      const sortBy = sortBySelect?.value || 'raw';
       const isDesc = sortOrderSelect?.value === 'desc';
-      const digitsRaw = digitsInp ? parseInt(digitsInp.value, 10) : 2;
-      const validDigits = isNaN(digitsRaw) ? 2 : Math.max(0, Math.min(6, digitsRaw));
+      const digitsStr = digitsInp?.value.trim() ?? '';
+      const digitsRaw = digitsStr !== '' ? parseInt(digitsStr, 10) : NaN;
+      const validDigits = !isNaN(digitsRaw) ? Math.max(0, Math.min(6, digitsRaw)) : null;
       const naStr = naFillSelect ? naFillSelect.value : 'NA';
 
       // 结合用户单元格编辑项并应用精度与缺测值
@@ -526,7 +543,7 @@ export class ExportModal {
             const trimmed = val.trim();
             if (trimmed === '' || trimmed.toUpperCase() === 'NA' || trimmed.toUpperCase() === 'NAN') {
               val = naStr;
-            } else {
+            } else if (validDigits !== null) {
               const num = parseFloat(trimmed);
               if (!isNaN(num)) {
                 val = num.toFixed(validDigits);
@@ -659,9 +676,9 @@ export class ExportModal {
       // 一旦用户编辑或更改了排序、精度、分隔符、缺测填充，立即按格式化规则重序列化。
       const isCustomized =
         userEdits.size > 0 ||
-        (sortBySelect && sortBySelect.value !== 'depth') ||
+        (sortBySelect && sortBySelect.value !== 'raw') ||
         (sortOrderSelect && sortOrderSelect.value !== 'asc') ||
-        (digitsInp && digitsInp.value !== '2') ||
+        (digitsInp && digitsInp.value.trim() !== '') ||
         (colSepSelect && colSepSelect.value !== ',') ||
         (naFillSelect && naFillSelect.value !== 'NA');
 
@@ -905,6 +922,11 @@ export class ExportModal {
     // 还原按钮
     resetEditsBtn?.addEventListener('click', () => {
       userEdits.clear();
+      if (sortBySelect) sortBySelect.value = 'raw';
+      if (sortOrderSelect) sortOrderSelect.value = 'asc';
+      if (digitsInp) digitsInp.value = '';
+      if (colSepSelect) colSepSelect.value = ',';
+      if (naFillSelect) naFillSelect.value = 'NA';
       void updateFullDisplay();
     });
 
