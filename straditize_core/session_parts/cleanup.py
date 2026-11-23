@@ -66,8 +66,8 @@ def _rect_of(candidate: dict[str, Any]) -> tuple[int, int, int, int]:
             int(geometry["x1"]),
             int(geometry["y1"]),
         )
-    at = int(candidate["at"])
-    span = candidate["span"]
+    at = int(candidate.get("at", candidate.get("y", candidate.get("x", 0))))
+    span = candidate.get("span", (0, 0))
     width = int(candidate.get("width", 1))
     half = width // 2
     if candidate.get("axis") == "h":

@@ -1679,7 +1679,7 @@ class CoreMixin:
                 or getattr(self, "line_strokes", None)
                 or getattr(self, "exclusion_regions", None)
             ):
-                self._rebuild_cleanup_masks_after_restore()
+                self._rebuild_cleanup_masks_after_restore(invalidate_points=False)
             elif (
                 is_supported_grid_line_strength(degrid_strength)
                 and self._roi_box(roi_id=roi_id) is not None

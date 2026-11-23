@@ -496,12 +496,6 @@ class ProjectSessionMixin:
         self._restore_aux_fields(project_data)
         self._restore_age_depth(project_data)
 
-        if getattr(self, "image", None) is not None:
-            if getattr(self, "foreground_mask", None) is None:
-                self._extract_foreground_from_settings()
-            self._rebuild_cleanup_masks_after_restore(invalidate_points=False)
-            self.__dict__.pop("_points_invalidated", None)
-
         return {
             "success": True,
             "columns_count": len(self.columns),

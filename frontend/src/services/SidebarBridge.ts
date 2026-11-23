@@ -273,8 +273,17 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
       try {
         const res = await p.rpcClient.redigitizeAllColumns(resetManual);
         if (res && res.success) {
+          const currentActiveId = p.canvasComponent.data.activeTaxaId;
           const freshData = await p.rpcClient.getDiagramData();
+          if (currentActiveId && freshData.columns.some((c) => c.id === currentActiveId)) {
+            freshData.activeTaxaId = currentActiveId;
+          }
           p.canvasComponent.loadNewDiagram(freshData);
+          p.canvasComponent.history.push(
+            `Reset all ${res.columns_count} columns`,
+            p.canvasComponent.data.columns,
+            p.canvasComponent.data.activeTaxaId
+          );
           p.getSidebar()?.updateData(p.canvasComponent.data);
           p.getInspector()?.updateData(p.canvasComponent.data);
           p.canvasComponent.requestRender();
@@ -371,8 +380,17 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
         try {
           const res = await p.rpcClient.redigitizeAllColumns(false);
           if (res && res.success) {
+            const currentActiveId = p.canvasComponent.data.activeTaxaId;
             const freshData = await p.rpcClient.getDiagramData();
+            if (currentActiveId && freshData.columns.some((c) => c.id === currentActiveId)) {
+              freshData.activeTaxaId = currentActiveId;
+            }
             p.canvasComponent.loadNewDiagram(freshData);
+            p.canvasComponent.history.push(
+              `Batch re-digitize ${allCols.length} columns`,
+              p.canvasComponent.data.columns,
+              p.canvasComponent.data.activeTaxaId
+            );
             p.getSidebar()?.updateData(p.canvasComponent.data);
             p.getInspector()?.updateData(p.canvasComponent.data);
             p.canvasComponent.requestRender();

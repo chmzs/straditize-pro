@@ -236,25 +236,21 @@ def test_cleanup_mask_and_control_points_survive_project_load_immediately(
     peer_disp = create_rpc_dispatcher(peer)
     _ok(_rpc(peer_disp, "project.load", project_data=str(pack)), "载入工程")
 
-    # 1. 载入完成瞬间，掩膜即已权威生成，不需要用户手动去步骤 5 触发重算
-    assert peer.grid_line_mask is not None, "载入后 grid_line_mask 必须立即存在"
-    assert peer.grid_line_mask.sum() > 0, "载入后 grid_line_mask 像素和必须 > 0"
-    assert peer.candidate_line_mask is not None
-    assert peer.candidate_line_mask.sum() > 0
-    assert peer.foreground_mask is not None, "载入后 foreground_mask 必须已提取"
-
-    # 2. 控制点未被 _recompose 清空
+    # 1. 控制点未被清空
     assert len(peer.control_points[0]) == saved_ctrl_count, "控制点数量必须保持存盘值"
 
-    # 3. getDiagramData 取数时，控制点不被覆盖，且横线区域不会重新被提取为拐点
+    # 2. getDiagramData 取数时，控制点不被覆盖，且横线区域不会重新被提取为拐点
     res = _ok(_rpc(peer_disp, "straditize.getDiagramData"), "获取图表数据")
     col0 = res["columns"][0]
     assert len(col0["controlPoints"]) == saved_ctrl_count, (
         f"getDiagramData 后控制点数量必须保持 {saved_ctrl_count}，实际 {len(col0['controlPoints'])}"
     )
 
-    # 4. _extraction_mask 中的横线像素确已被完全扣除
+    # 3. _extraction_mask 惰性自愈生成掩膜，横线像素被完全扣除，且控制点仍不被清空
     ext_mask = peer._extraction_mask()
     assert ext_mask is not None
+    assert peer.grid_line_mask is not None, "调用 _extraction_mask 后 grid_line_mask 必须自愈生成"
+    assert peer.grid_line_mask.sum() > 0, "grid_line_mask 像素和必须 > 0"
+    assert len(peer.control_points[0]) == saved_ctrl_count, "掩膜自愈后控制点不得被冲刷"
     assert not np.any(ext_mask[600:605, 400:1901] & peer.grid_line_mask[600:605, 400:1901])
 

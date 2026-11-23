@@ -401,3 +401,47 @@ def test_step7_control_points_visual_inspection_parity(tmp_path):
     for val in vals[:-1]:
         assert 9.5 <= val <= 11.5, f"导出科学读数必须换算为 1x，实际读出: {val}"
 
+
+def test_redigitize_all_columns_matches_single_column_digitize(tmp_path):
+    """批量重新识别 (redigitize_all_columns) 与单列重新识别 (digitize) 行为必须 100% 同构：
+    1. 夸大线列在批量重新识别时必须自动走 area_exaggerated，绝不可退化成 area；
+    2. 批量重新识别产出的控制点 (control_points) 与稠密曲线点 (column_points) 必须与单列识别逐点相等；
+    3. 严禁二次跑 algorithm_extract_turning_points 篡改拐点。
+    """
+    session = _session(tmp_path, "exagg_batch_match.png", "broken")
+    session.column_update(0, {"reader_type": "area_exaggerated"})
+
+    # 1. 运行单列重新识别作为基准真值
+    single_res = session.digitize(0)
+    assert single_res["reader_type"] == "area_exaggerated"
+    baseline_pts = [dict(p) for p in session.column_points[0]]
+    baseline_ctrls = dict(session.control_points[0])
+
+    # 2. 运行批量全部列重新识别
+    batch_res = session.redigitize_all_columns(reset_manual=False)
+    assert batch_res["success"] is True
+
+    # 3. 断言批量识别后，该列控制点与逐行轮廓与单列识别逐点完全相同
+    after_pts = session.column_points[0]
+    after_ctrls = session.control_points[0]
+
+    assert len(after_pts) == len(baseline_pts)
+    for p_after, p_base in zip(after_pts, baseline_pts):
+        assert p_after["row"] == p_base["row"]
+        assert abs(p_after["x"] - p_base["x"]) < 1e-6
+
+    assert len(after_ctrls) == len(baseline_ctrls)
+    assert after_ctrls.keys() == baseline_ctrls.keys()
+    for row, x_val in baseline_ctrls.items():
+        assert abs(after_ctrls[row] - x_val) < 1e-6
+
+    # 4. 关键：外线断开处的控制点绝不应像普通 area 那样向右横向飞出到 OUTER_X 未经折算
+    # 在批量重识别后导出 CSV，读数仍必须是 1x (10.0 左右)，而不是 55.0
+    session.is_calibrated = True
+    session.y_scale = {"slope": 1.0, "intercept": 0.0}
+    csv_str = session.export_data("csv")["csv"]
+    vals = [float(line.split(",")[1]) for line in csv_str.strip().splitlines()[1:] if line.strip()]
+    for val in vals[:-1]:
+        assert 9.5 <= val <= 11.5, f"批量重新识别后读数出现未折算的异常夸大值: {val}"
+
+

@@ -1493,11 +1493,8 @@ class DigitizeSessionMixin:
             return {"success": False, "message": "No columns available"}
 
         for c_idx in target_cols:
-            col = self.columns[c_idx] if c_idx < len(self.columns) else {}
-            col_plot_type = self._resolve_col_plot_type(col)
             if c_idx not in self.column_points:
-                r_type = col_plot_type if col_plot_type in READER_TYPES else "area"
-                self.digitize(c_idx, r_type)
+                self.digitize(c_idx)
 
         updated = []
         for c_idx in target_cols:
@@ -1603,12 +1600,8 @@ class DigitizeSessionMixin:
         self.control_points = {}
 
         for c_idx in range(len(self.columns)):
-            col = self.columns[c_idx]
-            col_plot_type = self._resolve_col_plot_type(col)
-            r_type = col_plot_type if col_plot_type in READER_TYPES else "area"
-            self.digitize(c_idx, reader_type=r_type)
+            self.digitize(c_idx)
 
-        self.algorithm_extract_turning_points()
         self._record_history("Redigitize all columns")
         return {"success": True, "columns_count": len(self.columns)}
 
