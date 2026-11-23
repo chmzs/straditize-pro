@@ -4,6 +4,7 @@ import { HistoryManager } from './core/HistoryManager';
 import { undoStack } from './core/undoRuntime';
 import { makeCalibrationUndo } from './core/undoActions';
 import { GeologyCanvas } from './components/GeologyCanvas';
+import { setGroupCalibMark } from './components/canvas/groupCalibMarks';
 import { handleTickPicked } from './components/steps/XTicksPanel';
 import { Toolbar } from './components/Toolbar';
 import { Sidebar } from './components/Sidebar';
@@ -540,6 +541,15 @@ async function bootstrap() {
 
   const onProjectLoad = (projectData: DiagramData) => {
     ErrorReporter.log('info', 'Project', `已载入项目包: ${projectData.project_name || 'untitled'}`);
+    if (projectData.rois && Array.isArray(projectData.rois)) {
+      for (const r of projectData.rois) {
+        for (const g of r.x_groups || []) {
+          if (g.id && g.calib_mark) {
+            setGroupCalibMark(g.id, g.calib_mark);
+          }
+        }
+      }
+    }
     canvasComponent.loadNewDiagram(projectData);
     history.reset(projectData.columns, projectData.activeTaxaId, projectData.calibration, projectData.roi);
     const initialStage = inferProjectStage(projectData);

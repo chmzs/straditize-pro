@@ -590,9 +590,10 @@ export function createInspectorCallbacks(
           for (const group of roi.x_groups || []) {
             if (!group.id) continue;
             setGroupCalibMark(group.id, null);
+            group.calib_mark = null;
             if (group.value_per_px != null) {
               group.value_per_px = undefined;
-              await rpcClient.roiGroupUpdate(roi.id, group.id, { value_per_px: null });
+              await rpcClient.roiGroupUpdate(roi.id, group.id, { value_per_px: null, calib_mark: null });
             }
           }
         }

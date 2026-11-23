@@ -15,6 +15,8 @@ Verifies:
 from __future__ import annotations
 
 import json
+from pathlib import Path
+from PIL import Image
 import pytest
 
 from straditize_core.protocol import JsonRpcError
@@ -386,3 +388,37 @@ def test_full_portable_tar_archive_round_trips_age_depth_and_metadata(
     assert peer.paper_metadata["site"]["collection_date"] == "2008-05"
     assert len(peer.samples) == 1
     assert len(peer.ensemble_tables) >= 1
+
+
+def test_group_calib_mark_roundtrip(tmp_path: Path) -> None:
+    """Manual tick calibration mark on column group is saved and restored."""
+    session = StraditizeSession()
+    session.image = Image.new("RGB", (400, 300), color="white")
+    session.is_calibrated = True
+    session.depth_calib = {
+        "top_px": 10.0,
+        "bottom_px": 290.0,
+        "top_cm": 0.0,
+        "bottom_cm": 100.0,
+    }
+
+    roi_res = session.roi_create(name="pollen", x0=10, x1=390, y0=10, y1=290)
+    roi_id = roi_res["roi"]["id"]
+    group_id = roi_res["roi"]["x_groups"][0]["id"]
+
+    mark = {"px": 120.0, "reading": 10.0, "dist": 45.0, "col_id": "col_1"}
+    session.roi_group_update(
+        roi_id=roi_id,
+        group_id=group_id,
+        updates={"value_per_px": 0.2222, "calib_mark": mark},
+    )
+
+    assert session.rois[0]["x_groups"][0]["calib_mark"] == mark
+
+    tar_path = str(tmp_path / "calib_mark_proj.tar")
+    session.project_save(output_path=tar_path, format="tar")
+
+    peer = StraditizeSession()
+    res = peer.project_load(tar_path)
+    assert res["success"] is True
+    assert peer.rois[0]["x_groups"][0]["calib_mark"] == mark

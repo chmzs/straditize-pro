@@ -22,7 +22,7 @@ import { resolveAxisStroke } from '../../core/axisStroke';
 import { resolveColumnGroup } from '../../core/columnGroup';
 import { groupBandRect } from './groupBandRect';
 import { groupColorAt } from './groupColor';
-import { formatCalibNumber, getGroupCalibMark } from './groupCalibMarks';
+import { formatCalibNumber, getGroupCalibMark, setGroupCalibMark } from './groupCalibMarks';
 import { STAGE } from '../../core/WorkflowStage';
 import type { DataRoi, TaxaColumn } from '../../types/pollen';
 
@@ -39,6 +39,7 @@ export interface ColumnBoundaryEnv {
   isLight: boolean;
   columns: TaxaColumn[];
   roi: DataRoi;
+  rois?: DataRoi[];
   imageHeight: number;
   scale: number;
   activeTaxaId: string | null;
@@ -135,7 +136,8 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
       // 右缘，这里再加轴粗即双偏移（实测事故见 ARCHITECTURE §6.4）。
       // 列 → 组：`col.x_group_id` → ROI 的 `default_group_id` → 第一个组。
       // 旧实现只做精确匹配，列上没有 `x_group_id` 时组轴粗被忽略、恒回落缺省 5。
-      const groupOfCol = resolveColumnGroup(col, roi);
+      const roiOfCol = (env.rois || []).find((r) => r.id === col.roi_id) || roi;
+      const groupOfCol = resolveColumnGroup(col, roiOfCol);
       // 一个单位刻度的像素长度 = 组级斜率的倒数（value_per_px = 每像素多少单位）。
       // 斜率只由用户「点一个齿 + 填它的数字」写入（ARCHITECTURE §6.4）；未标定 → null → 一条齿都不画。
       // 自动检测的刻距不参与：实测同图各列差 1–2px，且从未经用户确认（§6.4:254）。
@@ -169,8 +171,38 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
 
       // 手动标定的两个锚点：0 点落绿线（轴线右缘），用户点的那条齿落在它自己的像素上。
       // 只有该组真的标定过才画；未标定列一个标记都没有（ARCHITECTURE §6.4）。
-      const calibMark = getGroupCalibMark(groupOfCol?.id);
-      if (calibMark) {
+      const isCalibrated = Number.isFinite(groupSlope) && groupSlope !== 0;
+      let calibMark = getGroupCalibMark(groupOfCol?.id, groupOfCol);
+
+      // 兼容旧工程：若组已标定（有 value_per_px）但未存 calib_mark，智能推导刻度齿
+      if (!calibMark && isCalibrated) {
+        let reading = Number(groupOfCol?.ref_val_end);
+        if (!Number.isFinite(reading) || reading <= 0) {
+          if (Array.isArray(col.x_values) && Number.isFinite(Number(col.x_values[1]))) {
+            reading = Number(col.x_values[1]);
+          }
+        }
+        if (!Number.isFinite(reading) || reading <= 0) {
+          const colW = Math.max(10, col.endX - zeroX);
+          const maxVal = colW * Math.abs(groupSlope);
+          const candidates = [100, 50, 20, 10, 5, 2, 1, 0.5, 0.2, 0.1];
+          reading = candidates.find((c) => c <= maxVal * 0.95 && c >= maxVal * 0.15) ?? (maxVal > 1 ? Math.floor(maxVal) : Number(maxVal.toFixed(1)));
+        }
+        if (Number.isFinite(reading) && reading > 0) {
+          const dist = reading / Math.abs(groupSlope);
+          calibMark = {
+            px: zeroX + dist,
+            reading,
+            dist,
+            col_id: col.id,
+          };
+          if (groupOfCol?.id) {
+            setGroupCalibMark(groupOfCol.id, calibMark);
+          }
+        }
+      }
+
+      if (isCalibrated) {
         ctx.save();
         ctx.font = "600 " + String(Math.max(9, 10 / scale)) + "px monospace";
         ctx.textBaseline = "top";
@@ -186,7 +218,15 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
           ctx.fillText(label, x, bottomY + 12 / scale);
         };
         drawCalibMark(zeroX, "0", "#22c55e");
-        drawCalibMark(calibMark.px, formatCalibNumber(calibMark.reading), isLight ? "#0284c7" : "#38bdf8");
+        if (calibMark) {
+          const isMatchingCol = calibMark.col_id
+            ? calibMark.col_id === col.id
+            : (calibMark.px >= leftEdgeX - 2 && calibMark.px <= col.endX + 2);
+          if (isMatchingCol) {
+            const markX = calibMark.dist ? zeroX + calibMark.dist : calibMark.px;
+            drawCalibMark(markX, formatCalibNumber(calibMark.reading), isLight ? "#0284c7" : "#38bdf8");
+          }
+        }
         ctx.restore();
       }
 

@@ -12,6 +12,10 @@ export interface GroupCalibMark {
   px: number;
   /** 用户为它填的读数（如图上标签 10）。 */
   reading: number;
+  /** 距本列 0 点的距离（像素）。 */
+  dist?: number;
+  /** 点选齿所在的列 id。 */
+  col_id?: string;
 }
 
 const marks = new Map<string, GroupCalibMark>();
@@ -37,8 +41,23 @@ export function setGroupCalibMark(
   requestRedraw?.();
 }
 
-export function getGroupCalibMark(groupId: string | null | undefined): GroupCalibMark | null {
-  return groupId ? marks.get(groupId) ?? null : null;
+export function getGroupCalibMark(
+  groupId: string | null | undefined,
+  group?: { calib_mark?: GroupCalibMark | null } | null
+): GroupCalibMark | null {
+  if (!groupId) return null;
+  const mark = marks.get(groupId);
+  if (mark) return mark;
+  if (group?.calib_mark) {
+    marks.set(groupId, group.calib_mark);
+    return group.calib_mark;
+  }
+  return null;
+}
+
+export function clearAllGroupCalibMarks(): void {
+  marks.clear();
+  requestRedraw?.();
 }
 
 /** 画布标签统一 3 位小数以内（0.1724137931034483 → 0.172）。 */

@@ -2213,6 +2213,7 @@ private pointer: PointerState = {
       isLight,
       columns: this.data.columns,
       roi: this.data.roi,
+      rois: this.data.rois,
       imageHeight: this.data.imageHeight || 12000,
       scale: this.viewport.scale,
       activeTaxaId: this.data.activeTaxaId ?? null,

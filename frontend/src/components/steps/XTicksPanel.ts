@@ -15,7 +15,7 @@ import {
 import { DEFAULT_AXIS_STROKE_PX, resolveAxisStroke } from '../../core/axisStroke';
 import { resolveColumnGroup } from '../../core/columnGroup';
 import { resolveColumnAtX } from '../../core/tickRouting';
-import { setGroupCalibMark } from '../canvas/groupCalibMarks';
+import { clearAllGroupCalibMarks, setGroupCalibMark } from '../canvas/groupCalibMarks';
 // 组色的唯一取色点：画布「组归属条」也 import 这个函数，两处逐字节同色（issue #108）。
 import { groupColorAt } from '../canvas/groupColor';
 import { renderResetButton } from '../../ui/resetButton';
@@ -29,7 +29,7 @@ import {
 interface XTicksPanelState {
   cachedData: DiagramData | null;
   selectedGroupId: string | null;
-  pendingTick: { px: number; dist: number } | null;
+  pendingTick: { px: number; dist: number; col_id?: string } | null;
   onTickPickedExternal: ((pt: { x: number; y: number }) => void) | null;
   isBatchAssignOpen: boolean;
   /** 「列组」折叠区是否展开。必须存进 state：面板每次重渲染都会重建 DOM。 */
@@ -642,6 +642,10 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       | { roiGroupUpdate?: (r: string, g: string, p: Record<string, unknown>) => Promise<unknown> }
       | undefined;
     if (!gid || !roiId || !client?.roiGroupUpdate) return false;
+    const group = activeRoi()?.x_groups?.find((g) => g.id === gid);
+    if (group) {
+      Object.assign(group, field);
+    }
     try {
       await client.roiGroupUpdate(roiId, gid, field);
     } catch (err) {
@@ -700,7 +704,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       notifyError('请点在绿线（0 点）右侧的刻度上；0 点及其左侧无法确定斜率。');
       return;
     }
-    state.pendingTick = { px: Math.round(pt.x), dist: pt.x - zero };
+    state.pendingTick = { px: Math.round(pt.x), dist: pt.x - zero, col_id: col.id };
     // 只在**吸附成功**后切换选中列：点在空处不该改选中，否则用户以为点中了。
     // 画布点齿标定期间严禁触发 scrollToColumn 强行重置视口（避免视口突然跳动并中断拖拽平移）。
     if (col.id !== data?.activeTaxaId) ctx.onSelectTaxa?.(col.id, { skipScroll: true });
@@ -805,8 +809,15 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       // 斜率 = 值 / 距 0 点像素。0 点 = 左缘 + 轴线粗（见 ARCHITECTURE §6.4）。
       const pickedDist = state.pendingTick.dist;
       const slope = value / pickedDist;
-      setGroupCalibMark(state.selectedGroupId, { px: state.pendingTick.px, reading: value });
-      patchGroup({ value_per_px: slope });
+      const targetGroupId = effectiveGroupId();
+      const calibMark = {
+        px: state.pendingTick.px,
+        reading: value,
+        dist: pickedDist,
+        col_id: state.pendingTick.col_id,
+      };
+      setGroupCalibMark(targetGroupId, calibMark);
+      void patchGroup({ value_per_px: slope, calib_mark: calibMark });
       state.pendingTick = null;
       notify(`已按「${value} 对应 ${pickedDist.toFixed(0)}px」标定本组：斜率 ${slope.toFixed(3)}`, 'info');
     });
@@ -1190,6 +1201,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   root.querySelector('#btn-reset-step6-xticks')?.addEventListener('click', async () => {
     if (!window.confirm('确定清空所有属种列的 X 刻度标定吗？全部列将回到未标定状态。')) return;
     state.pendingTick = null;
+    clearAllGroupCalibMarks();
     await ctx.onClearAllXTicks?.();
   });
 }

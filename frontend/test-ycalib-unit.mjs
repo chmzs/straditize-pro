@@ -99,6 +99,11 @@ register('data:text/javascript,' + encodeURIComponent(RESOLVE_HOOK));
 
 const panel = await import('./src/components/steps/YCalibPanel.ts');
 const { normalizeProject, ProjectManager } = await import('./src/core/ProjectManager.ts');
+const {
+  getGroupCalibMark,
+  setGroupCalibMark,
+  clearAllGroupCalibMarks,
+} = await import('./src/components/canvas/groupCalibMarks.ts');
 const { setLocale } = await import('./src/i18n/index.ts');
 const zhCN = (await import('./src/i18n/locales/zh-CN.ts')).zhCN;
 const en = (await import('./src/i18n/locales/en.ts')).en;
@@ -382,3 +387,83 @@ assert.ok(
 );
 
 console.log('✔ 单位不再兜底为 cm：显示 / 提交 / 镜像 / 导出表头 / 自动复标 / 五处界面');
+
+console.log('--- 11. 刻度标定记忆与恢复：groupCalibMarks 内存/对象回退 与 normalizeProject 保持 x_groups / calib_mark ---');
+clearAllGroupCalibMarks();
+const gid = 'roi_1_grp1';
+assert.strictEqual(getGroupCalibMark(gid, null), null, '无标记且无组对象时返回 null');
+
+const testMark = { px: 450, reading: 10, dist: 45, col_id: 'col_2' };
+const groupWithMark = {
+  id: gid,
+  name: '默认组',
+  value_per_px: 0.2222,
+  calib_mark: testMark,
+};
+
+// 内存无命中时从 group.calib_mark 恢复并回填到 Map
+const recovered = getGroupCalibMark(gid, groupWithMark);
+assert.deepStrictEqual(recovered, testMark, '应从 group.calib_mark 成功恢复标记');
+assert.deepStrictEqual(getGroupCalibMark(gid), testMark, '恢复后应存入内存缓存 Map');
+
+// 清空全部标记
+clearAllGroupCalibMarks();
+assert.strictEqual(getGroupCalibMark(gid), null, 'clearAllGroupCalibMarks 应清空 Map');
+
+// normalizeProject 对 x_groups 与 calib_mark 的完整继承
+const parsedProject = {
+  project_name: 'test_project',
+  primary_roi_id: 'roi_1',
+  active_roi_id: 'roi_1',
+  roi: { x: 100, y: 50, w: 500, h: 400 },
+  rois: [
+    {
+      id: 'roi_1',
+      xlim: [100, 600],
+      ylim: [50, 450],
+      default_group_id: 'roi_1_grp1',
+      x_groups: [groupWithMark],
+    },
+  ],
+  columns: [
+    {
+      id: 'col_1',
+      col_index: 0,
+      startX: 100,
+      endX: 180,
+      roi_id: 'roi_1',
+      x_group_id: 'roi_1_grp1',
+    },
+  ],
+  depth_calibration: {
+    is_calibrated: true,
+    top_px: 50,
+    top_cm: 0,
+    bottom_px: 450,
+    bottom_cm: 100,
+  },
+};
+
+const normalized = normalizeProject(parsedProject, null);
+assert.ok(normalized, 'normalizeProject 应该返回非空 DiagramData');
+assert.ok(normalized.roi, 'normalized.roi 应该存在');
+assert.strictEqual(normalized.roi.xMin, 100);
+assert.strictEqual(normalized.roi.xMax, 600);
+assert.strictEqual(normalized.roi.yMin, 50);
+assert.strictEqual(normalized.roi.yMax, 450);
+assert.ok(Array.isArray(normalized.roi.x_groups), 'normalized.roi 必须继承 x_groups');
+assert.strictEqual(normalized.roi.x_groups.length, 1);
+assert.deepStrictEqual(
+  normalized.roi.x_groups[0].calib_mark,
+  testMark,
+  'normalized.roi.x_groups 必须包含 calib_mark'
+);
+
+assert.ok(Array.isArray(normalized.rois), 'normalized.rois 必须包含 rois 列表');
+assert.deepStrictEqual(
+  normalized.rois[0].x_groups[0].calib_mark,
+  testMark,
+  'normalized.rois[0].x_groups 必须包含 calib_mark'
+);
+
+console.log('✔ 刻度标定记忆与恢复验证通过');

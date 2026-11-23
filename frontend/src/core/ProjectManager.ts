@@ -1,5 +1,5 @@
 import { ControlPoint, DataRoi, DiagramCalibration, DiagramData } from '../types/pollen';
-import { applyScaleSnapshot } from '../app/scaleSync';
+import { applyGroupSnapshot, applyScaleSnapshot } from '../app/scaleSync';
 import { draftColumnXValues } from './draftPayload';
 import { RpcClient } from '../services/RpcClient';
 import { TarArchive } from './TarArchive';
@@ -241,6 +241,27 @@ export function normalizeProject(
           yMax: rawRoi.yMax ?? 0,
         }
     : { xMin: 0, xMax: 0, yMin: 0, yMax: 0 };
+
+  const activeRoiId = parsed.active_roi_id || parsed.primary_roi_id || 'roi_1';
+  const matchingRoiFromList = Array.isArray(parsed.rois)
+    ? parsed.rois.find((r: any) => r.id === activeRoiId) || parsed.rois[0]
+    : null;
+  if (matchingRoiFromList) {
+    Object.assign(normalizedRoi, matchingRoiFromList);
+    if (rawRoi) {
+      if ('w' in rawRoi) {
+        normalizedRoi.xMin = rawRoi.x ?? 0;
+        normalizedRoi.yMin = rawRoi.y ?? 0;
+        normalizedRoi.xMax = (rawRoi.x ?? 0) + (rawRoi.w ?? 0);
+        normalizedRoi.yMax = (rawRoi.y ?? 0) + (rawRoi.h ?? 0);
+      } else {
+        if (rawRoi.xMin != null) normalizedRoi.xMin = rawRoi.xMin;
+        if (rawRoi.xMax != null) normalizedRoi.xMax = rawRoi.xMax;
+        if (rawRoi.yMin != null) normalizedRoi.yMin = rawRoi.yMin;
+        if (rawRoi.yMax != null) normalizedRoi.yMax = rawRoi.yMax;
+      }
+    }
+  }
 
   const cal = rawCal || {};
   const hasBothMarks =
@@ -545,6 +566,10 @@ export class ProjectManager {
     }
 
     const applied = applyScaleSnapshot(columns, fresh);
+    applyGroupSnapshot(
+      projectData as { rois?: unknown; roi?: unknown; active_roi_id?: unknown },
+      fresh
+    );
     const freshColCount = ((fresh as { columns?: unknown[] } | null)?.columns ?? []).length;
     // 只有"后端确实有列、却一列都对不上"才是真问题；后端本来就没有列（例如离线/空会话）
     // 属于另一种状态，不在这里报警。

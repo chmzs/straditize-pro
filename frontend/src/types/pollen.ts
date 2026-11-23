@@ -132,6 +132,8 @@ export interface ColumnGroup {
   ref_val_start?: number;
   /** 组参考标尺终止读数 (例如 20) */
   ref_val_end?: number;
+  /** 组级手动标定齿标记（0 点 + 用户点选的那条齿） */
+  calib_mark?: { px: number; reading: number; dist?: number; col_id?: string } | null;
 }
 
 export interface Column {
