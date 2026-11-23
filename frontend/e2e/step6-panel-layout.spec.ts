@@ -56,17 +56,33 @@ async function groupActionBoxes(
   await expect(row, '分组动作行必须恒定存在').toBeVisible();
   const buttons = row.locator('button');
   await expect(buttons, '分组动作行必须恒有三个按钮').toHaveCount(3);
-  const rowBox = await row.boundingBox();
-  if (!rowBox) throw new Error('分组动作行缺少 boundingBox');
-  const boxes: Box[] = [];
-  const disabled: boolean[] = [];
   for (let i = 0; i < 3; i++) {
-    const b = await buttons.nth(i).boundingBox();
-    if (!b) throw new Error('第 ' + (i + 1) + ' 个分组按钮缺少 boundingBox');
-    boxes.push(b);
-    disabled.push(await buttons.nth(i).isDisabled());
+    await expect(buttons.nth(i), `第 ${i + 1} 个分组按钮必须可见`).toBeVisible();
   }
-  return { row: rowBox, buttons: boxes, disabled };
+
+  let result: { row: Box; buttons: Box[]; disabled: boolean[] } | null = null;
+  await expect
+    .poll(
+      async () => {
+        const rowBox = await row.boundingBox();
+        if (!rowBox) return null;
+        const boxes: Box[] = [];
+        const disabled: boolean[] = [];
+        for (let i = 0; i < 3; i++) {
+          const b = await buttons.nth(i).boundingBox();
+          if (!b) return null;
+          boxes.push(b);
+          disabled.push(await buttons.nth(i).isDisabled());
+        }
+        result = { row: rowBox, buttons: boxes, disabled };
+        return true;
+      },
+      { message: '等待分组动作行与三个按钮稳定渲染', timeout: 5000 }
+    )
+    .toBe(true);
+
+  if (!result) throw new Error('未能稳定获取分组动作行或按钮 boundingBox');
+  return result;
 }
 
 function expectSameBox(actual: Box, expected: Box, label: string): void {

@@ -212,9 +212,9 @@ test.describe('步骤 8 QA 覆盖范围：所有"有列"的分区', () => {
     await page.locator('#btn-export-csv').click();
     const sumText = page.locator('#wpd-sum-check-text');
     await expect(sumText).toBeVisible();
+    await expect(sumText, '自检行必须说清范围并完成分析计算').toContainText('已校验 2 个分区');
     const exportText = (await sumText.innerText()).replace(/\s+/g, ' ');
     expect(exportText, `自检行不得判达标，实际：${exportText}`).not.toMatch(/门禁通过/);
-    expect(exportText, `自检行必须说清范围，实际：${exportText}`).toContain('已校验 2 个分区');
     expect(exportText, `自检行不得再出现哨兵数值，实际：${exportText}`).not.toMatch(/999999/);
   });
 
