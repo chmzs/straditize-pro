@@ -1661,7 +1661,10 @@ class CoreMixin:
     def _extraction_mask(self, roi_id: str | None = None) -> np.ndarray | None:
         """Ink actually offered to the digitizer: inside the ROI, minus grid lines."""
         if getattr(self, "foreground_mask", None) is None:
-            return None
+            if getattr(self, "image", None) is not None:
+                self._extract_foreground_from_settings()
+            else:
+                return None
         from ..image import is_supported_grid_line_strength
 
         mask = self.foreground_mask

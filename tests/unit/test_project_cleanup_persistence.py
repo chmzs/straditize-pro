@@ -30,6 +30,8 @@ import json
 import tarfile
 from pathlib import Path
 
+import numpy as np
+
 from straditize_core.rpc_server import create_rpc_dispatcher
 from straditize_core.session import StraditizeSession
 
@@ -216,3 +218,43 @@ def test_old_package_without_cleanup_keys_stays_empty(tmp_path: Path) -> None:
     assert stats["exclusion_area_pixels"] == 0
     assert stats["manual_erase_pixels"] == 0
     assert stats["manual_restore_pixels"] == 0
+
+
+def test_cleanup_mask_and_control_points_survive_project_load_immediately(
+    tmp_path: Path,
+) -> None:
+    """载入工程后：清理掩膜立即权威生效且控制点不被冲掉，横线不被提取为轮廓或拐点。"""
+    session, dispatcher = _session_with_cleanup()
+    session.digitize(0, "area")
+    saved_ctrl_count = len(session.control_points[0])
+    assert saved_ctrl_count > 0, "前置：第 0 列在存盘前已有控制点"
+
+    pack = tmp_path / "project_with_mask.tar"
+    _save(dispatcher, pack)
+
+    peer = StraditizeSession()
+    peer_disp = create_rpc_dispatcher(peer)
+    _ok(_rpc(peer_disp, "project.load", project_data=str(pack)), "载入工程")
+
+    # 1. 载入完成瞬间，掩膜即已权威生成，不需要用户手动去步骤 5 触发重算
+    assert peer.grid_line_mask is not None, "载入后 grid_line_mask 必须立即存在"
+    assert peer.grid_line_mask.sum() > 0, "载入后 grid_line_mask 像素和必须 > 0"
+    assert peer.candidate_line_mask is not None
+    assert peer.candidate_line_mask.sum() > 0
+    assert peer.foreground_mask is not None, "载入后 foreground_mask 必须已提取"
+
+    # 2. 控制点未被 _recompose 清空
+    assert len(peer.control_points[0]) == saved_ctrl_count, "控制点数量必须保持存盘值"
+
+    # 3. getDiagramData 取数时，控制点不被覆盖，且横线区域不会重新被提取为拐点
+    res = _ok(_rpc(peer_disp, "straditize.getDiagramData"), "获取图表数据")
+    col0 = res["columns"][0]
+    assert len(col0["controlPoints"]) == saved_ctrl_count, (
+        f"getDiagramData 后控制点数量必须保持 {saved_ctrl_count}，实际 {len(col0['controlPoints'])}"
+    )
+
+    # 4. _extraction_mask 中的横线像素确已被完全扣除
+    ext_mask = peer._extraction_mask()
+    assert ext_mask is not None
+    assert not np.any(ext_mask[600:605, 400:1901] & peer.grid_line_mask[600:605, 400:1901])
+

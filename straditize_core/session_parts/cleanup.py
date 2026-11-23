@@ -480,7 +480,7 @@ class CleanupMixin:
             if c.get("roi_id") in (None, roi_id)
         ]
         for cand in self.line_candidates:
-            if cand.get("roi_id") != roi_id:
+            if cand.get("roi_id") not in (None, roi_id):
                 continue
             if not self._geometry_in_scope(cand):
                 continue
@@ -957,7 +957,7 @@ class CleanupMixin:
         self._points_invalidated = invalidated
         return dropped
 
-    def _recompose(self, roi_id: str) -> dict[str, Any]:
+    def _recompose(self, roi_id: str, invalidate_points: bool = True) -> dict[str, Any]:
         """Rebuild geometry/exclusion/brush masks, statistics and preview."""
         if getattr(self, "foreground_mask", None) is None:
             self._extract_foreground_from_settings()
@@ -987,18 +987,19 @@ class CleanupMixin:
             else np.zeros((h, w), dtype=bool)
         )
 
-        roi_candidates = [c for c in self.line_candidates if c.get("roi_id") == roi_id]
+        roi_candidates = [c for c in self.line_candidates if c.get("roi_id") in (None, roi_id)]
         removed_count = sum(1 for c in roi_candidates if c.get("status") == REMOVED)
 
         # The mask changed, so this ROI's columns were derived from stale ink.
         # Only this ROI: a sibling ROI's columns stay valid.
         roi_ref = self._get_roi(roi_id) if hasattr(self, "_get_roi") else None
-        if roi_ref is not None:
+        if roi_ref is not None and invalidate_points:
             roi_ref["columns_stale"] = True
         # 光置标记不够：取数读的是 `column_points`，它不会因为掩膜变了而自己失效
         # （实测：删掉 11335 个线像素后导出读数一字不变，见
         # `docs/findings/recon-20261117.md` §3.2）。作废受影响列，下一次取数按新墨迹重建。
-        self._invalidate_digitized_points(roi_id)
+        if invalidate_points:
+            self._invalidate_digitized_points(roi_id)
 
         overlay = np.zeros((h, w, 4), dtype=np.uint8)
         kept = raw_ink & ~final_mask & ~exclusion_mask

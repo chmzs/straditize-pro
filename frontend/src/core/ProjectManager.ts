@@ -361,6 +361,8 @@ export function normalizeProject(
     selected_candidate_ids: parsed.selected_candidate_ids || [],
     line_strokes: parsed.line_strokes || [],
     exclusion_regions: parsed.exclusion_regions || [],
+    cleanup_stats: parsed.cleanup_stats || parsed.cleanup?.stats || undefined,
+    cleanup_warnings: parsed.cleanup_warnings || undefined,
     samples: parsed.samples || [],
     columns: normalizedCols,
     activeTaxaId: parsed.activeTaxaId || normalizedCols[0]?.id || '',

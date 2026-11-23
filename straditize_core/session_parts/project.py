@@ -235,7 +235,9 @@ class ProjectSessionMixin:
         if restored_cleanup:
             self._rebuild_cleanup_masks_after_restore()
 
-    def _rebuild_cleanup_masks_after_restore(self) -> None:
+    def _rebuild_cleanup_masks_after_restore(
+        self, invalidate_points: bool = True
+    ) -> None:
         """把清理几何回填之后，必须重算派生掩膜。
 
         只回填列表是不够的：`grid_line_mask` 是撤销**之前**那版合成结果，而
@@ -244,20 +246,29 @@ class ProjectSessionMixin:
         "撤销"看起来成功了，数据没回来。这正是本项目最怕的静默错。
 
         没有像素时（还没载图）无法合成：把派生掩膜全部置空，宁可"没有掩膜"，
-        也绝不留下与恢复状态不符的旧掩膜。
+        也绝不留下与恢复状态不符的旧掩膜。若底图存在但尚未提取前景，自愈提取前景。
         """
-        if (
-            getattr(self, "image", None) is None
-            or getattr(self, "foreground_mask", None) is None
-        ):
+        if getattr(self, "image", None) is None:
             self.candidate_line_mask = None
             self.exclusion_mask = None
             self.manual_restore_mask = None
             self.manual_erase_mask = None
             self.grid_line_mask = None
             return
+
+        if getattr(self, "foreground_mask", None) is None:
+            self._extract_foreground_from_settings()
+
+        if getattr(self, "foreground_mask", None) is None:
+            self.candidate_line_mask = None
+            self.exclusion_mask = None
+            self.manual_restore_mask = None
+            self.manual_erase_mask = None
+            self.grid_line_mask = None
+            return
+
         roi_id, _ = self._roi_for(None)
-        self._recompose(roi_id)
+        self._recompose(roi_id, invalidate_points=invalidate_points)
 
     def history_redo(self) -> dict[str, Any]:
         """Redo last undone command."""
@@ -484,6 +495,12 @@ class ProjectSessionMixin:
         self._restore_embedded_image(project_data)
         self._restore_aux_fields(project_data)
         self._restore_age_depth(project_data)
+
+        if getattr(self, "image", None) is not None:
+            if getattr(self, "foreground_mask", None) is None:
+                self._extract_foreground_from_settings()
+            self._rebuild_cleanup_masks_after_restore(invalidate_points=False)
+            self.__dict__.pop("_points_invalidated", None)
 
         return {
             "success": True,

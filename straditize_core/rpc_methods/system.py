@@ -328,7 +328,7 @@ def _payload_column(session: Any, c: dict[str, Any]) -> dict[str, Any]:
     # 种子：这一列一个点都没有时先数字化（新图第一次打开必须有点可画）。
     # 这一步是**生产者**（digitize 产出逐行墨迹）；取点/补点的唯一**解析器**是下面的
     # _ensure_export_column_points —— 两者不是两条取点路径。
-    if c_idx not in session.column_points:
+    if c_idx not in session.column_points and not session.control_points.get(c_idx):
         try:
             session.digitize(c_idx, "area")
         except Exception:  # noqa: BLE001 - 无图会话由下面的补点解析器兜住
