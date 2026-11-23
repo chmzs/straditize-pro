@@ -1066,10 +1066,13 @@ class DigitizeSessionMixin:
     ) -> dict[str, Any]:
         """Adds, updates, or removes a control point and recalculates interpolated curve."""
         if col_index not in self.column_points:
-            raise JsonRpcError(
-                STATE_ERROR,
-                f"Column {col_index} has not been digitized yet. Call core.digitize first.",
-            )
+            try:
+                self._digitize_column(col_index)
+            except Exception:
+                raise JsonRpcError(
+                    STATE_ERROR,
+                    f"Column {col_index} has not been digitized yet. Call core.digitize first.",
+                )
 
         # 入口守卫：这两样都可能为空，缺了就直接 500（实测 `float() argument must be
         # a string or a real number, not 'NoneType'` 冒成 -32603，用户只会看到
@@ -1215,10 +1218,13 @@ class DigitizeSessionMixin:
         """
         c_idx = self._resolve_col_index(col_index)
         if c_idx not in self.column_points:
-            raise JsonRpcError(
-                STATE_ERROR,
-                f"Column {c_idx} has not been digitized yet. Call core.digitize first.",
-            )
+            try:
+                self._digitize_column(c_idx)
+            except Exception:
+                raise JsonRpcError(
+                    STATE_ERROR,
+                    f"Column {c_idx} has not been digitized yet. Call core.digitize first.",
+                )
 
         ctrls: dict[int, float] = {}
         manual = dict(self._manual_store().get(c_idx, {}))

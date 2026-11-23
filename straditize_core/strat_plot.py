@@ -253,6 +253,7 @@ def resolve_settings(
     warnings: list[str] = []
     if settings:
         # seg_left./seg_right.：拼接法分段标记，键名依赖数据，按前缀放行。
+        # plot_type./exag.：逐列形态与逐列夸大外线倍率，按前缀放行。
         unknown = sorted(
             k
             for k in set(settings) - set(DEFAULT_PLOT_SETTINGS)
@@ -260,6 +261,7 @@ def resolve_settings(
                 str(k).startswith("seg_left.")
                 or str(k).startswith("seg_right.")
                 or str(k).startswith("plot_type.")
+                or str(k).startswith("exag.")
             )
         )
         if unknown:
