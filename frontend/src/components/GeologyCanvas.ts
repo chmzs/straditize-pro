@@ -2218,6 +2218,8 @@ private pointer: PointerState = {
       activeTaxaId: this.data.activeTaxaId ?? null,
       hovered: this.pointer.boundary,
       dragging: selectStrategy?.getDraggingBoundary() ?? null,
+      workflowStage: this.workflowStage,
+      showTicks: this.viewport.showTicks,
     });
   }
 

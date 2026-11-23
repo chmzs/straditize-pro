@@ -21,6 +21,8 @@ export interface ToolbarCallbacks {
   onLoadSample: (sampleKey: string) => void;
   onChangeImageMode: (mode: ImageDisplayMode) => void;
   onToggleBinaryOverlay: () => void;
+  onToggleTicks?: () => void;
+  onToggleSamples?: () => void;
   onSelectToolMode?: (mode: ToolMode) => void;
   onAddColumn?: () => void;
   onDeleteSelected?: () => void;
@@ -48,6 +50,8 @@ export class Toolbar {
   private currentScaleText: string = '100%';
   private currentImageMode: ImageDisplayMode = 'normal';
   private isBinaryOverlayActive: boolean = false;
+  private isTicksActive: boolean = true;
+  private isSamplesActive: boolean = true;
   private currentWorkflowStep: number = 3;
   private isDesktopMode: boolean = false;
   private viewControlsHost: HTMLElement | null = null;
@@ -334,6 +338,18 @@ export class Toolbar {
             </svg>
             <span>${t('toolbar.binary')}</span>
           </button>
+          <button id="btn-toggle-ticks" class="ui-btn ui-btn--quiet ui-btn--xs ${this.isTicksActive ? 'active' : ''}" title="${t('toolbar.ticksTitle')}" style="padding: 3px 6px; font-size: 10.5px; display: ${this.currentWorkflowStep === 6 ? 'inline-flex' : 'none'};">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M3 12h18M3 18h18M8 6v12M13 6v12M18 6v12"/>
+            </svg>
+            <span>${t('toolbar.ticks')}</span>
+          </button>
+          <button id="btn-toggle-samples" class="ui-btn ui-btn--quiet ui-btn--xs ${this.isSamplesActive ? 'active' : ''}" title="${t('toolbar.samplesTitle')}" style="padding: 3px 6px; font-size: 10.5px; display: ${this.currentWorkflowStep === 7 ? 'inline-flex' : 'none'};">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 8h18M3 16h18" stroke-dasharray="3 3"/>
+            </svg>
+            <span>${t('toolbar.samples')}</span>
+          </button>
         </div>
 
         <!-- 论文与站点 FAIR / LiPD 元数据提取与录入入口 -->
@@ -506,10 +522,38 @@ export class Toolbar {
       this.callbacks.onToggleBinaryOverlay();
     });
 
+    // 步骤 6 单位刻度线开关
+    const ticksBtn = this.element.querySelector('#btn-toggle-ticks');
+    ticksBtn?.addEventListener('click', () => {
+      this.callbacks.onToggleTicks?.();
+    });
+
+    // 步骤 7 采样层位线开关
+    const samplesBtn = this.element.querySelector('#btn-toggle-samples');
+    samplesBtn?.addEventListener('click', () => {
+      this.callbacks.onToggleSamples?.();
+    });
+
     const modeSelect = this.element.querySelector('#select-image-mode') as HTMLSelectElement;
     modeSelect?.addEventListener('change', () => {
       this.callbacks.onChangeImageMode(modeSelect.value as ImageDisplayMode);
     });
+  }
+
+  public updateTicksState(active: boolean): void {
+    this.isTicksActive = active;
+    const btn =
+      (this.element.querySelector('#btn-toggle-ticks') as HTMLElement | null) ||
+      (this.viewControlsHost?.querySelector('#btn-toggle-ticks') as HTMLElement | null);
+    btn?.classList.toggle('active', active);
+  }
+
+  public updateSamplesState(active: boolean): void {
+    this.isSamplesActive = active;
+    const btn =
+      (this.element.querySelector('#btn-toggle-samples') as HTMLElement | null) ||
+      (this.viewControlsHost?.querySelector('#btn-toggle-samples') as HTMLElement | null);
+    btn?.classList.toggle('active', active);
   }
 
   public setProjectName(name: string): void {

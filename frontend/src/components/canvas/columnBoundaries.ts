@@ -23,6 +23,7 @@ import { resolveColumnGroup } from '../../core/columnGroup';
 import { groupBandRect } from './groupBandRect';
 import { groupColorAt } from './groupColor';
 import { formatCalibNumber, getGroupCalibMark } from './groupCalibMarks';
+import { STAGE } from '../../core/WorkflowStage';
 import type { DataRoi, TaxaColumn } from '../../types/pollen';
 
 /** 边界类型：列起点（红）/ 列终点（仅悬停高亮）。 */
@@ -45,6 +46,10 @@ export interface ColumnBoundaryEnv {
   hovered: BoundaryFocus | null;
   /** 正在拖拽的边界（null = 无）。与 hovered 分开：拖拽时鼠标可能已离开该条线。 */
   dragging: BoundaryFocus | null;
+  /** 当前工作流步骤编号（步骤 6 之前不绘制等距外推刻度线）。 */
+  workflowStage?: number;
+  /** 是否开启单位刻度线显示。 */
+  showTicks?: boolean;
 }
 
 
@@ -190,8 +195,11 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
         (dragging?.taxaId === col.id && dragging.type === 'end');
 
       // 刻度 = 蓝实线，按组级 `cell_px` **等距外推**（0 点已经用绿线画好，不重复画）。
-      // k=0 落 0 点、k=1 是第二个刻度……与检测齿的数量/位置无关。
-      if (cellPx && cellPx > 2) {
+      // 约束：只在步骤 6（STAGE.CALIBRATE_COLUMNS）且 showTicks 不为 false 时显示！其他步骤不呈现，防止干扰视觉。
+      const canShowTicks =
+        (env.workflowStage === undefined || env.workflowStage === STAGE.CALIBRATE_COLUMNS) &&
+        env.showTicks !== false;
+      if (canShowTicks && cellPx && cellPx > 2) {
         const kMax = Math.floor((col.endX - zeroX) / cellPx);
         for (let k = 1; k <= kMax; k += 1) {
           const tickX = zeroX + k * cellPx;

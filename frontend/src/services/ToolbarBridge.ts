@@ -332,6 +332,18 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
           : '透视遮罩: [关闭]'
       );
     },
+    onToggleTicks: () => {
+      const active = p.canvasComponent.viewport.toggleTicks();
+      p.canvasComponent.requestRender();
+      p.getToolbar()?.updateTicksState(active);
+      p.setHudNotice(active ? '单位刻度线: [已开启]' : '单位刻度线: [已关闭]');
+    },
+    onToggleSamples: () => {
+      const active = p.canvasComponent.viewport.toggleSamples();
+      p.canvasComponent.requestRender();
+      p.getToolbar()?.updateSamplesState(active);
+      p.setHudNotice(active ? '采样层位线: [已开启]' : '采样层位线: [已关闭]');
+    },
     onSelectToolMode: (mode: any) => {
       p.canvasComponent.setToolMode(mode);
       p.getToolbar()?.setToolMode(mode);

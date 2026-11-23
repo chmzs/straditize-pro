@@ -1,5 +1,6 @@
 import { DiagramData, SampleHorizon } from '../../types/pollen';
 import { Viewport } from '../../core/Viewport';
+import { STAGE } from '../../core/WorkflowStage';
 
 export const id = 'sample-horizons-overlay';
 export const z = 30;
@@ -70,9 +71,13 @@ export function supportWeight(supportColumns: number | null | undefined): number
  * 1 列支持的孤峰画得细而淡，8 列以上的共振画得粗而实（#83）。
  * 没有 `support_columns` 的层位（粘贴 / 手工 / 网格）保持 1px 与本色不变。
  */
-export function draw(ctx: CanvasRenderingContext2D, data: DiagramData, vp: Viewport): void {
+export function draw(ctx: CanvasRenderingContext2D, data: DiagramData, vp: Viewport, stage?: number): void {
   const samples = data.samples || [];
   if (samples.length === 0) return;
+
+  // 约束：只在步骤 7（STAGE.SPEARS_AND_SAMPLES）呈现，且用户未手动关闭；其他步骤不呈现，防止干扰视觉。
+  if (stage !== undefined && stage !== STAGE.SPEARS_AND_SAMPLES) return;
+  if (vp.showSamples === false) return;
 
   const inv = 1 / (vp.scale || 1);
   const roi = data.rois?.find((r) => r.id === data.active_roi_id) || data.rois?.[0];
