@@ -231,8 +231,8 @@ export function render(data: DiagramData): string {
       <!-- 重设本步 (图2规范：底部居中浅红重设按钮) -->
       <div style="display: flex; justify-content: center; margin-top: 8px;">
         ${renderResetButton({
-          id: 'btn-reset-step5-cleanup',
-          title: '清空本步全部清理编辑（几何、排除区与笔迹）并重新自动检测',
+          id: 'btn-clear-cleanup-edits',
+          title: '清空本步全部清理编辑（几何、排除区与笔迹）',
           label: '重设干扰清理',
         })}
       </div>
@@ -353,11 +353,9 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     applyThickness(undefined);
   });
 
-  // 重设本步
-  root.querySelector('#btn-reset-step5-cleanup')?.addEventListener('click', async () => {
-    if (!window.confirm('确定清空本步全部清理编辑（几何、排除区与笔迹）并重新自动检测吗？')) return;
-    await ctx.onClearCleanupEdits?.();
-    ctx.onDetectLineCandidates?.(toDetectPayload(getDetectOrientation()));
+  // 清空本步编辑 / 重设本步
+  root.querySelector('#btn-clear-cleanup-edits')?.addEventListener('click', () => {
+    ctx.onClearCleanupEdits?.();
   });
 
   // 推进到下一步（严格尊重用户对候选线的剔除/保留配置，不搞暗箱全选）

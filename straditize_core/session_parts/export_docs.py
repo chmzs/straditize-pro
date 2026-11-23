@@ -41,6 +41,7 @@ def strat_plot_script_lines(
     pct_cols: Sequence[str],
     fixed_cols: Sequence[str],
     units: Mapping[str, Any],
+    exag_cols: Mapping[str, float] | Sequence[str] | None = None,
 ) -> list[str]:
     """一个 ROI 的 `strat.plot` 调用段（**唯一的生成处**）。
 
@@ -56,14 +57,10 @@ def strat_plot_script_lines(
     写成 `粒/g`）与 Concentration（259.74 value/px）都被按 0–100 % 画，图与
     `data.csv` 必然对不上。
 
-    ## 语义
-
-    - `pct_cols` / `fixed_cols` 由调用方按自己的量纲判定拆好再传进来（不在这里
-      判单位）：量纲的真源是 `resolve_column_scale(...).unit`，脚本生成不该另立一套；
-    - `fixed_cols` 非空时生成**两次** `strat.plot`，第二次 `add = TRUE`——
-      `rioja::strat.plot` 的 `scale.percent` 是整张表一个开关；
-    - `fixed_cols` 为空时**只生成一次**调用，文本与引入本函数之前逐字节相同
-      （`tests/unit/test_export_script_units.py` 的零回归判据）。
+    ## 夸大线支持（按列标记精准开启）
+    - 仅对工程中标记了夸大的列（`exaggeration_mult > 1`）开启 `plot.exag`；
+    - 全表未标记时保持关闭（零回归）；
+    - 部分列标记时传逻辑向量（`pct_cols %in% c(...)`）与标量 `exag.mult`。
     """
     pct = list(pct_cols)
     fixed = list(fixed_cols)
@@ -72,6 +69,34 @@ def strat_plot_script_lines(
         # 这一行是给人看的：脚本里为什么有两次 strat.plot 调用。
         detail = ", ".join(f"{c}({units.get(c, '')})" for c in fixed)
         lines.append(f"# 非百分比列（按自身量程画）：{detail}")
+
+    if isinstance(exag_cols, Mapping):
+        exag_taxa = [k for k, v in exag_cols.items() if v is not None and float(v) > 1.0]
+        mult_candidates = [
+            float(v) for v in exag_cols.values() if v is not None and float(v) > 1.0
+        ]
+        exag_mult_val = (
+            int(mult_candidates[0])
+            if mult_candidates and mult_candidates[0].is_integer()
+            else (mult_candidates[0] if mult_candidates else 5)
+        )
+    elif exag_cols:
+        exag_taxa = list(exag_cols)
+        exag_mult_val = 5
+    else:
+        exag_taxa = []
+        exag_mult_val = 5
+
+    def _exag_str(group_cols: list[str], var_expr: str) -> str:
+        if not exag_taxa:
+            return ""
+        in_group = [c for c in group_cols if c in exag_taxa]
+        if not in_group:
+            return ""
+        if len(in_group) == len(group_cols):
+            return f", plot.exag = TRUE, exag.mult = {exag_mult_val}"
+        return f", plot.exag = {var_expr} %in% {r_string_vector(in_group)}, exag.mult = {exag_mult_val}"
+
     # `csv_expr` 决定「读哪个路径表达式」：归档脚本写死文件名（老行为，零回归），
     # 单文件包（zip 那份）传 `csv_path`，好在脚本开头从命令行参数取默认值。
     # `require_file=True` 时缺文件当场 stop：否则整段绘图被静默跳过，用户拿到一张空 PDF。
@@ -79,7 +104,7 @@ def strat_plot_script_lines(
     if require_file:
         lines.append(
             f"if (!file.exists({read_target})) stop("
-            f'"\u627e\u4e0d\u5230 {csv_filename}\uff1a\u8bf7\u628a\u5b83\u4e0e\u811a\u672c\u653e\u5728\u540c\u4e00\u76ee\u5f55\u3002")'
+            f'"找不到 {csv_filename}：请把它与脚本放在同一目录。")'
         )
         lines.append(f"{df_var} <- read.csv({read_target}, check.names = FALSE)")
         # 后面的绘图段以 `if (ncol(df) > 1) {` 开头、并以收尾的 `}` 关闭外层块；
@@ -99,18 +124,21 @@ def strat_plot_script_lines(
             f"    fixed_cols <- intersect({r_string_vector(fixed)}, names({df_var}))"
         )
         lines.append("    if (length(pct_cols) > 0) {")
+        pct_ex = _exag_str(pct, "pct_cols")
         lines.append(
-            f"      strat.plot({df_var}[, pct_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE, title = '{roi_name}')"
+            f"      strat.plot({df_var}[, pct_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE{pct_ex}, title = '{roi_name}')"
         )
         lines.append("    }")
         lines.append("    if (length(fixed_cols) > 0) {")
+        fixed_ex = _exag_str(fixed, "fixed_cols")
         lines.append(
-            f"      strat.plot({df_var}[, fixed_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = FALSE, plot.poly = TRUE, plot.line = TRUE, add = length(pct_cols) > 0)"
+            f"      strat.plot({df_var}[, fixed_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = FALSE, plot.poly = TRUE, plot.line = TRUE{fixed_ex}, add = length(pct_cols) > 0)"
         )
         lines.append("    }")
     else:
+        all_ex = _exag_str(pct, f"names({df_var})[-1]")
         lines.append(
-            f"    strat.plot({df_var}[-1], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE, title = '{roi_name}')"
+            f"    strat.plot({df_var}[-1], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE{all_ex}, title = '{roi_name}')"
         )
     lines.append("  }")
     lines.append("}\n")

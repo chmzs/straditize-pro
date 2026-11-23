@@ -1644,6 +1644,8 @@ class ProjectSessionMixin:
             "if (!requireNamespace('rioja', quietly=TRUE)) install.packages('rioja')",
             "library(rioja)\n",
         ]
+        exag_getter = getattr(self, "_roi_column_exaggerations", None)
+        roi_exag = exag_getter().get(roi_name, {}) if callable(exag_getter) else {}
         lines.extend(
             strat_plot_script_lines(
                 df_var="df",
@@ -1652,6 +1654,7 @@ class ProjectSessionMixin:
                 pct_cols=pct_cols,
                 fixed_cols=fixed_cols,
                 units=units,
+                exag_cols=roi_exag,
             )
         )
         return ("\n".join(lines) + "\n").encode("utf-8")

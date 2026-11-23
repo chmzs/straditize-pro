@@ -126,6 +126,7 @@ class PlottingMixin:
 
         _taxa = getattr(self, "taxa_names", None) or []
         _resolved: list[tuple[str, str, str]] = []
+        _exag_cols: dict[str, float] = {}
         for _i, _col in enumerate(getattr(self, "columns", []) or []):
             _c = int(_col.get("col_index", _i))
             _nm = (
@@ -141,6 +142,16 @@ class PlottingMixin:
             # 默认值是 "area"（= 填充 + 条纹 + 轮廓，与全局开关一致），仍按列写出去，
             # 免得 R 侧再猜「这一列没写是不是没设」。
             merged[f"plot_type.{_nm}"] = str(_scale.plot_type or "area")
+            if _scale.exaggeration_mult is not None and _scale.exaggeration_mult > 1.0:
+                _exag_cols[str(_nm)] = float(_scale.exaggeration_mult)
+                merged[f"exag.{_nm}"] = str(_scale.exaggeration_mult)
+
+        if _exag_cols:
+            merged["exaggeration"] = True
+            merged["exag_mult"] = next(iter(_exag_cols.values()))
+        else:
+            merged["exaggeration"] = False
+
         _cols = [str(c) for c in frame.columns[1:]]
         _resolved = [t for t in _resolved if t[0] in _cols]
         # 分段口径。三种情景由 `plot_scale_mode` 决定，不再让「列量程」静默失效：

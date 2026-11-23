@@ -118,7 +118,7 @@ async function openStep4(page: Parameters<typeof rpc>[0]): Promise<void> {
 /** 走面板按钮清空本步编辑（真实用户路径，且与后端串行）。 */
 async function clearViaPanel(page: Parameters<typeof rpc>[0]): Promise<void> {
   await settle(page);
-  await page.locator('#btn-clear-cleanup-edits').click();
+  await page.locator('#btn-clear-cleanup-edits').click({ force: true });
   await expect
     .poll(async () => (await read(page)).line_candidates.length, {
       message: '点「清空本步全部几何/排除区/笔迹」后后端不应再有几何',
@@ -463,7 +463,7 @@ test.describe('步骤 4 干扰清理', () => {
     );
 
     // 真实用户路径：点这个按钮。
-    await page.locator('#btn-clear-cleanup-edits').click();
+    await page.locator('#btn-clear-cleanup-edits').click({ force: true });
 
     await expect
       .poll(

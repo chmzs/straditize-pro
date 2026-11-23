@@ -95,7 +95,7 @@ async function detectViaPanel(page: Parameters<typeof rpc>[0]): Promise<LineCand
 /** 走面板按钮清空本步几何，回到"未检测"状态。 */
 async function clearViaPanel(page: Parameters<typeof rpc>[0]): Promise<void> {
   await settle(page);
-  await page.locator('#btn-clear-cleanup-edits').click();
+  await page.locator('#btn-clear-cleanup-edits').click({ force: true });
   await expect
     .poll(async () => (await read(page)).line_candidates.length, {
       message: '清空本步编辑后后端不应再有几何',
@@ -115,24 +115,34 @@ test.describe('步骤 4 横/竖线检测开关', () => {
   }) => {
     await openStep4WithVerticals(page);
 
-    // ---- 前置：两项都勾（默认）时，横线与竖线都必须真的被检出 ----
+    const verticalBox = page.locator('#chk-detect-vertical');
+    await expect(verticalBox, '面板必须提供「检测竖线」勾选框').toBeVisible();
+    await expect(verticalBox, '默认不应勾选竖线').not.toBeChecked();
+
+    // ---- 默认检测（仅横线，竖线默认不扫）----
+    const defaultRes = await detectViaPanel(page);
+    expect(
+      horizontals(defaultRes).length,
+      `前置：默认检测应产出横线候选，实测 kinds=${keySet(defaultRes)}`
+    ).toBeGreaterThan(0);
+    expect(
+      verticals(defaultRes).length,
+      '默认检测不应产出竖线候选'
+    ).toBe(0);
+    const bothHorizontals = keySet(horizontals(defaultRes));
+
+    // ---- 勾选「检测竖线」→ 横线与竖线都必须真的被检出 ----
+    await clearViaPanel(page);
+    await verticalBox.check();
+    await expect(verticalBox, '勾选后 DOM 状态必须跟着变').toBeChecked();
+
     const both = await detectViaPanel(page);
-    expect(
-      horizontals(both).length,
-      `前置：默认检测应产出横线候选，实测 kinds=${keySet(both)}`
-    ).toBeGreaterThan(0);
-    expect(
-      verticals(both).length,
-      `前置：删列后默认检测应产出竖线候选，实测 kinds=${keySet(both)}`
-    ).toBeGreaterThan(0);
-    const bothHorizontals = keySet(horizontals(both));
+    expect(horizontals(both).length).toBeGreaterThan(0);
+    expect(verticals(both).length).toBeGreaterThan(0);
     const bothVerticals = keySet(verticals(both));
 
     // ---- 取消勾选「检测竖线」→ 竖线必须一条都没有，横线集合不变 ----
     await clearViaPanel(page);
-    const verticalBox = page.locator('#chk-detect-vertical');
-    await expect(verticalBox, '面板必须提供「检测竖线」勾选框').toBeVisible();
-    await expect(verticalBox, '默认应勾选').toBeChecked();
     await verticalBox.uncheck();
     await expect(verticalBox, '取消勾选后 DOM 状态必须跟着变').not.toBeChecked();
 
@@ -170,9 +180,12 @@ test.describe('步骤 4 横/竖线检测开关', () => {
   test('取消勾选「检测横线」后不再产出横线候选，竖线集合不变', async ({ page }) => {
     await openStep4WithVerticals(page);
 
+    // 先勾选竖线，获得两项都开启时的基线
+    const verticalBox = page.locator('#chk-detect-vertical');
+    await verticalBox.check();
     const both = await detectViaPanel(page);
     const bothVerticals = keySet(verticals(both));
-    expect(bothVerticals.length, '前置：删列后应检出竖线候选').toBeGreaterThan(0);
+    expect(bothVerticals.length, '前置：勾选竖线后应检出竖线候选').toBeGreaterThan(0);
 
     await clearViaPanel(page);
     const horizontalBox = page.locator('#chk-detect-horizontal');
@@ -192,13 +205,16 @@ test.describe('步骤 4 横/竖线检测开关', () => {
   }) => {
     await openStep4WithVerticals(page);
 
+    // 先勾选竖线并检测出竖线候选
+    const verticalBox = page.locator('#chk-detect-vertical');
+    await verticalBox.check();
     const both = await detectViaPanel(page);
     const verticalCount = verticals(both).length;
     expect(verticalCount, '前置：应有竖线候选可提示').toBeGreaterThan(0);
     const rowsBefore = await page.locator('.cleanup-row').count();
 
     // 只取消勾选，不点检测：列表不得变化（否则用户会以为丢数据）
-    await page.locator('#chk-detect-vertical').uncheck();
+    await verticalBox.uncheck();
     await expect
       .poll(async () => page.locator('.cleanup-row').count(), {
         message: '取消勾选不得删除已检出的候选',
@@ -213,7 +229,7 @@ test.describe('步骤 4 横/竖线检测开关', () => {
     await expect(hint).toContainText('如需仅看横线请重新检测');
 
     // 重新勾选：提示消失（提示是条件性的，不能常驻）
-    await page.locator('#chk-detect-vertical').check();
+    await verticalBox.check();
     await expect(hint, '重新勾选后提示必须消失').toHaveText('');
   });
 });

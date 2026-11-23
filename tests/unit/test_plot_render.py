@@ -403,6 +403,7 @@ def test_default_settings_match_requested_switches() -> None:
     assert DEFAULT_PLOT_SETTINGS["silhouette"] is True
     assert DEFAULT_PLOT_SETTINGS["bar"] is True  # show bar
     assert DEFAULT_PLOT_SETTINGS["exaggeration"] is True  # Exaggeration Show
+    assert DEFAULT_PLOT_SETTINGS["exag_mult"] == 5.0  # Exaggeration Mult 默认 5
     assert DEFAULT_PLOT_SETTINGS["rev_y"] is True  # Rev. Y
     assert DEFAULT_PLOT_SETTINGS["italicise"] is True  # Label extras: Italicise
     assert DEFAULT_PLOT_SETTINGS["label_rotate"] == 45  # Rotate 45

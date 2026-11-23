@@ -812,6 +812,28 @@ class ExportMixin:
             ).unit
         return out
 
+    def _roi_column_exaggerations(self) -> dict[str, dict[str, float]]:
+        """ROI 名 → {列名: exaggeration_mult}，仅记录倍率 > 1.0 的列。"""
+        roi_name_by_id = {
+            r.get("id"): r.get("name") for r in (getattr(self, "rois", None) or [])
+        }
+        taxa_names = getattr(self, "taxa_names", None) or []
+        out: dict[str, dict[str, float]] = {}
+        for idx, col in enumerate(getattr(self, "columns", []) or []):
+            c_idx = col.get("col_index", idx)
+            name = (
+                taxa_names[c_idx]
+                if (taxa_names and c_idx < len(taxa_names) and taxa_names[c_idx])
+                else (col.get("name") or col.get("species") or f"col{c_idx + 1:02d}")
+            )
+            roi_name = roi_name_by_id.get(col.get("roi_id"))
+            if not roi_name:
+                continue
+            scale = resolve_column_scale(self, col, c_idx)
+            if scale.exaggeration_mult is not None and scale.exaggeration_mult > 1.0:
+                out.setdefault(roi_name, {})[name] = float(scale.exaggeration_mult)
+        return out
+
     def export_multi_tar(
         self,
         output_path: str | None = None,
@@ -832,6 +854,7 @@ class ExportMixin:
         # 量纲：`data.csv` 里只有数值、没有单位位，所以单位必须在这里落一份，
         # 否则炭屑/浓度与百分比列在下游长得一模一样（用户实测 28 列全 %）。
         units_by_roi = self._roi_column_units()
+        exag_by_roi = self._roi_column_exaggerations()
         group_units = {
             f"{r.get('name', r.get('id'))}": {
                 g.get("name"): g.get("unit") for g in (r.get("x_groups") or [])
@@ -936,6 +959,7 @@ class ExportMixin:
                     primary_csv_bytes = csv_bytes
 
                 roi_units = units_by_roi.get(roi_name, {})
+                roi_exag = exag_by_roi.get(roi_name, {})
                 pct_cols = sorted(c for c, u in roi_units.items() if is_percent_unit(u))
                 fixed_cols = sorted(
                     c for c, u in roi_units.items() if not is_percent_unit(u)
@@ -948,6 +972,7 @@ class ExportMixin:
                         pct_cols=pct_cols,
                         fixed_cols=fixed_cols,
                         units=roi_units,
+                        exag_cols=roi_exag,
                     )
                 )
 
@@ -2306,6 +2331,9 @@ class ExportMixin:
                 pct_cols=pct_cols,
                 fixed_cols=fixed_cols,
                 units=units,
+                exag_cols=self._roi_column_exaggerations().get(
+                    self._primary_roi_name(), {}
+                ),
             )
         )
         lines.extend(
@@ -2389,6 +2417,9 @@ class ExportMixin:
                 units=units,
                 csv_expr="csv_path",
                 require_file=True,
+                exag_cols=self._roi_column_exaggerations().get(
+                    self._primary_roi_name(), {}
+                ),
             )
         )
         script_lines.extend(["dev.off()", "message('已输出: ', out_path)", ""])

@@ -29,7 +29,7 @@ DEFAULT_PLOT_SETTINGS: dict[str, Any] = {
     "line": True,
     "rev_y": True,
     "exaggeration": True,
-    "exag_mult": 3.0,
+    "exag_mult": 5.0,
     "exag_alpha": 0.15,
     "minmax": False,
     # 每列是否参与「默认缩放」：{列名: "normalize" | "fixed"}。
@@ -70,9 +70,6 @@ RIOJAPLOT_ONLY_KEYS = (
     "italicise",
     "break_long",
     "break_n",
-    "exaggeration",
-    "exag_mult",
-    "exag_alpha",
     "minmax",
     "plot_scale_mode",
     "label_rotate",
@@ -462,6 +459,8 @@ warns <- tryCatch(
         symb.cex = 0.3,
         plot.poly = TRUE   # makeStyles 默认 poly=FALSE，我们的图要填充
       )
+      style$plot.exag <- flag("exaggeration", TRUE)
+      style$exag.mult <- num("exag_mult", 5)
       style$scale.percent <- flag("percent", TRUE)
       # 每列是否参与「默认缩放」：settings 里 scale_mode.<列名><TAB>normalize|fixed。
       # normalize = 与 rioja 的 scale.percent 一致：各列按最大值比例分配宽度（优势种宽、微量种窄，共享统一百分比比例尺）。
@@ -525,6 +524,16 @@ warns <- tryCatch(
         line_v[[.ptype_col]] <- .ptype_val %in% c('area', 'line')
         symb_v[[.ptype_col]] <- identical(.ptype_val, 'symbol')
       }
+      # 逐列夸大：settings 里 exag.<列名> = 5.0。仅对标记了夸大的列绘制外线。
+      exag_keys <- names(s)[startsWith(names(s), 'exag.')]
+      if (length(exag_keys) > 0) {
+        exag_taxa <- substring(exag_keys, nchar('exag.') + 1)
+        exag_v <- stats::setNames(colnames(taxa) %in% exag_taxa, colnames(taxa))
+      } else {
+        exag_v <- stats::setNames(rep(flag('exaggeration', FALSE), ncol(taxa)), colnames(taxa))
+      }
+      style$plot.exag <- unname(exag_v)
+      style$exag.mult <- num("exag_mult", 5)
       seg_parse <- function(pre) {
         keys <- names(s)[startsWith(names(s), pre)]
         if (!length(keys)) return(list())
@@ -585,7 +594,9 @@ warns <- tryCatch(
                                        scale.minmax = FALSE,
                                        minmax = cbind(0, apply(taxa[, cols, drop = FALSE], 2, max, na.rm = TRUE)),
                                        plot.poly = poly_v[cols], plot.bar = bar_v[cols],
-                                       plot.line = line_v[cols], plot.symb = symb_v[cols])
+                                       plot.line = line_v[cols], plot.symb = symb_v[cols],
+                                       plot.exag = exag_v[cols],
+                                       exag.mult = num("exag_mult", 5))
           } else {
             rp <- riojaPlot::riojaPlot(taxa[, cols, drop = FALSE], y_df,
                                        yvar.name = names(y_df)[1], riojaPlot = rp,
@@ -596,14 +607,18 @@ warns <- tryCatch(
                                        scale.minmax = FALSE,
                                        minmax = cbind(0, apply(taxa[, cols, drop = FALSE], 2, max, na.rm = TRUE)),
                                        plot.poly = poly_v[cols], plot.bar = bar_v[cols],
-                                       plot.line = line_v[cols], plot.symb = symb_v[cols])
+                                       plot.line = line_v[cols], plot.symb = symb_v[cols],
+                                       plot.exag = exag_v[cols],
+                                       exag.mult = num("exag_mult", 5))
           }
         }
       } else {
         riojaPlot::riojaPlot(x = taxa, y = y_df, style = style,
                              yvar.name = names(y_df)[1],
                              plot.poly = poly_v, plot.bar = bar_v,
-                             plot.line = line_v, plot.symb = symb_v)
+                             plot.line = line_v, plot.symb = symb_v,
+                             plot.exag = exag_v,
+                             exag.mult = num("exag_mult", 5))
       }
     } else {
       rioja::strat.plot(
@@ -615,6 +630,8 @@ warns <- tryCatch(
         plot.bar = bar_v,
         plot.line = line_v,
         plot.symb = symb_v,
+        plot.exag = exag_v,
+        exag.mult = num("exag_mult", 5),
         scale.percent = flag("percent", TRUE),
         srt.xlabel = num("label_rotate", 45),
         mgp = c(3, 0.45 * fs, 0.3),
@@ -709,11 +726,12 @@ def render_strat_diagram(
         unsupported = [
             k for k in RIOJAPLOT_ONLY_KEYS if merged.get(k) not in (False, None, "", 0)
         ]
-        warnings = warnings + [
-            "本机只装了 rioja（没有 riojaPlot）：Italicise / Break long / Exaggeration / "
-            "Min/max / 每列独立量程（plot_scale_mode）/ 标签旋转 这些开关在 "
-            "rioja::strat.plot 里没有，本图未应用。"
-        ]
+        if unsupported:
+            warnings = warnings + [
+                "本机只装了 rioja（没有 riojaPlot）：Italicise / Break long / "
+                "Min/max / 每列独立量程（plot_scale_mode）/ 标签旋转 这些开关在 "
+                "rioja::strat.plot 里没有，本图未应用。"
+            ]
 
     return {
         "path": str(out.resolve()),

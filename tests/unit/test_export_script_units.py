@@ -295,3 +295,22 @@ def test_generated_script_actually_runs_on_a_mixed_project(tmp_path) -> None:
 
     assert proc.returncode == 0, proc.stderr or proc.stdout
     assert (tmp_path / "Rplots.pdf").is_file(), "脚本必须真的画出图来"
+
+
+def test_export_script_includes_exaggeration_only_for_marked_columns() -> None:
+    """仅对标记了夸大的列在生成的 R 脚本中开启 plot.exag 与其倍率。"""
+    session = _session()
+    _two_groups(session)
+    col1 = session.columns[1]
+    col2 = session.columns[2]
+    name1 = col1.get("name") or "col02"
+    name2 = col2.get("name") or "col03"
+    col1["exaggeration_mult"] = 5.0
+    col2["exaggeration_mult"] = 5.0
+
+    script = _script(session)
+    assert "plot.exag = pct_cols %in% c(" in script
+    assert f'"{name1}"' in script
+    assert f'"{name2}"' in script
+    assert "exag.mult = 5" in script
+
