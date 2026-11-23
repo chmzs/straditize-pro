@@ -591,6 +591,14 @@ digitize 用 ink & ~grid_line_mask & roi_mask
 26. **导出 CSV 换行符全平台收敛为标准 LF**：无论运行在 Windows、Linux 还是 macOS，所有 CSV 导出
     （单表导出、多 ROI 归档、LiPD 序列化）必须显式指定 `lineterminator="\n"`，杜绝 Windows 平台二次翻译导致 `\r\r\n`。
 27. **结构化自动轮转日志与错误直通不变量**：后端统一落盘到 `%LOCALAPPDATA%/straditize/logs/straditize.log`（单文件 5MB、保留 3 个备份上限 $\le 15\text{MB}$，启动自动清理 >7 天日志）；前端 `ErrorReporter` 捕获全部未捕获异常并通过 RPC `system.logClientError` 直通后端，严禁吞掉异常或以不可定位的纯弹窗静默掩盖；界面统一提供【打开日志文件夹】与【复制诊断信息】入口。
+28. **步骤 7 夸大线物理模型与科学值导出 1x 换算契约**：
+    - **视觉核验像素归位**：配置了夸大倍数（`exaggeration_mult > 1`）的列，正常行提取到的控制点为外线真实物理像素，黄色控制点与绿色轮廓直接贴在原图外线（最右侧墨迹）上；
+    - **截断行内线回退**：被邻列遮挡/截断的部分回退贴轴内线，并以蓝色控制点（`source === "main_1x"`）与黄色外线控制点明确视觉区分，便于快速核验；
+    - **统一步骤后科学值换算出口**：外线点统一在步骤 7 之后由 `xscale.py:read_column_values` / `px_to_value` 除以倍率折算为 1x 真实科学值（内线点本身即为 1x 真实值，不重复除以倍率），侧边栏读数与导出表统一得到准确 1x 丰度。
+29. **地层图出图与导出 R 脚本夸大线按列精准启用**：
+    - 本地出图（`strat_plot.py`）与导出的 R 脚本包（`export.py`、`project.py` 中的 `plot_strat.R`）严格遵循工程列标记；
+    - 仅对工程中显式标记了夸大的列（`exaggeration_mult > 1`）开启 `plot.exag` 与其对应倍率（部分列夸大时下发 `cols %in% c(...)` 逻辑向量与标量倍数）；
+    - 全表无夸大列时不画外线，彻底清剿“全表无差别兜底画 5x”的场景 B 双轨逻辑，保障出图简洁、严谨、不飞跨邻列。
 
 
 ---
