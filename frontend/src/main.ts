@@ -550,6 +550,10 @@ async function bootstrap() {
     toolbar?.updateHistoryState();
     toolbar?.updateScale(canvasComponent.viewport.scale);
     toolbar?.setProjectName(projectData.project_name || '');
+    exportModal.updateData(canvasComponent.data);
+    exportModal.setProjectName(projectData.project_name || '');
+    projectManager.updateData(canvasComponent.data);
+    projectManager.setProjectName(projectData.project_name || undefined);
     updateFooter();
     void cleanupManager.recomposeCleanupState('载入项目后重算清理掩膜');
     const stageMeta = WORKFLOW_STAGES[initialStage];
@@ -569,7 +573,12 @@ async function bootstrap() {
     document.body,
     canvasComponent.data,
     rpcClient,
-    projectManager
+    projectManager,
+    (name: string) => {
+      canvasComponent.data.project_name = name || undefined;
+      toolbar?.setProjectName(name);
+      rpcClient.call('project.setName', { name: name || null }).catch(() => {});
+    }
   );
 
   const propertyPanel = new PropertyPanel(

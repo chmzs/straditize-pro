@@ -938,6 +938,31 @@ check(
   'i18n 必须在 zh-CN.ts 与 en.ts 同步提供 step1.title',
 );
 
+// ---- 24. 项目名称双向同步门禁（Toolbar ↔ ExportModal ↔ 后端会话）-----------
+const toolbarBridgeSrc = read('./src/services/ToolbarBridge.ts');
+check(
+  toolbar.includes('getProjectName(): string') && toolbar.includes('setProjectName(name: string)'),
+  'Toolbar 必须导出 getProjectName 与 setProjectName 方法支持项目名读取与同步',
+);
+check(
+  toolbar.includes("projectInput.addEventListener('input', emitProjectName)"),
+  'Toolbar 项目名称输入框必须监听实时 input 事件',
+);
+check(
+  exportModal.includes('setProjectName(name: string)'),
+  'ExportModal 必须提供 setProjectName 方法以便响应外部项目名称同步',
+);
+check(
+  exportModal.includes("projectNameInp.addEventListener('input', onProjectInput)"),
+  'ExportModal 项目名称输入框必须监听实时 input 事件',
+);
+check(
+  toolbarBridgeSrc.includes('p.exportModal.setProjectName') &&
+  toolbarBridgeSrc.includes('p.projectManager.setProjectName') &&
+  toolbarBridgeSrc.includes('p.canvasComponent.data.project_name ='),
+  'ToolbarBridge.onProjectNameChange 必须同时同步 canvasComponent.data、projectManager 与 exportModal',
+);
+
 if (failures.length > 0) {
   console.error(`✘ UI 一致性门禁失败（${failures.length} 项）:`);
   for (const failure of failures) console.error(`  - ${failure}`);

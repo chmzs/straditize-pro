@@ -41,22 +41,35 @@ export class ExportModal {
   private data: DiagramData;
   private rpcClient: RpcClient;
   private projectManager?: ProjectManager;
+  private onProjectNameChange?: (name: string) => void;
 
   constructor(
     container: HTMLElement,
     data: DiagramData,
     rpcClient: RpcClient,
-    projectManager?: ProjectManager
+    projectManager?: ProjectManager,
+    onProjectNameChange?: (name: string) => void
   ) {
     this.container = container;
     this.data = data;
     this.rpcClient = rpcClient;
     this.projectManager = projectManager;
+    this.onProjectNameChange = onProjectNameChange;
   }
 
   public updateData(data: DiagramData): void {
     this.data = data;
     this.projectManager?.updateData(data);
+  }
+
+  public setProjectName(name: string): void {
+    const trimmed = name.trim();
+    this.data.project_name = trimmed || undefined;
+    this.projectManager?.setProjectName(trimmed || undefined);
+    const projectNameInp = this.container.querySelector('#wpd-project-name') as HTMLInputElement | null;
+    if (projectNameInp && projectNameInp.value !== trimmed) {
+      projectNameInp.value = trimmed;
+    }
   }
 
   /**
@@ -395,11 +408,15 @@ export class ExportModal {
     const projectNameInp = modal.querySelector('#wpd-project-name') as HTMLInputElement | null;
     if (projectNameInp) {
       projectNameInp.value = this.data.project_name || '';
-      projectNameInp.addEventListener('input', () => {
+      const onProjectInput = () => {
         const val = projectNameInp.value.trim();
         this.data.project_name = val || undefined;
         this.projectManager?.setProjectName(val || undefined);
-      });
+        this.onProjectNameChange?.(val);
+        this.rpcClient.call('project.setName', { name: val || null }).catch(() => {});
+      };
+      projectNameInp.addEventListener('input', onProjectInput);
+      projectNameInp.addEventListener('change', onProjectInput);
     }
     const sizeLabel = modal.querySelector('#wpd-data-size-label') as HTMLElement;
     const varsLabel = modal.querySelector('#wpd-vars-label') as HTMLElement | null;

@@ -30,7 +30,15 @@ export class PropertyPanel {
     this.onRoiSave = onRoiSave;
 
     this.projectManager = new ProjectManager(data, rpcClient, onProjectLoad);
-    this.exportModal = new ExportModal(container, data, rpcClient, this.projectManager);
+    this.exportModal = new ExportModal(
+      container,
+      data,
+      rpcClient,
+      this.projectManager,
+      (name) => {
+        this.data.project_name = name || undefined;
+      }
+    );
   }
 
   public updateData(data: DiagramData): void {

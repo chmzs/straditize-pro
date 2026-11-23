@@ -187,7 +187,10 @@ export class FileLoaderService {
           this.getToolbar()?.setProjectName(inferred);
           this.rpcClient.call('project.setName', { name: inferred }).catch(() => {});
         } else {
+          this.canvasComponent.data.project_name = undefined;
+          this.canvasComponent.data.image_name = file.name;
           this.getToolbar()?.setProjectName('');
+          this.rpcClient.call('project.setName', { name: null }).catch(() => {});
         }
         this.history.reset([], '');
         this.callbacks.setCurrentStage(1);
@@ -300,6 +303,10 @@ export class FileLoaderService {
     }
 
     this.canvasComponent.loadNewDiagram(newDiagramData);
+    const sampleProjectName = newDiagramData.project_name || sampleKey;
+    this.canvasComponent.data.project_name = sampleProjectName;
+    this.getToolbar()?.setProjectName(sampleProjectName);
+    this.rpcClient.call('project.setName', { name: sampleProjectName }).catch(() => {});
     this.history.reset(newDiagramData.columns, newDiagramData.activeTaxaId);
     this.callbacks.setCurrentStage(1);
     this.callbacks.updateWorkflowBar();

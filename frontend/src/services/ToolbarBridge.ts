@@ -138,7 +138,17 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
       }
     },
     onExport: async (format: 'csv' | 'json') => {
+      const tbName = p.getToolbar()?.getProjectName();
+      if (tbName && !p.canvasComponent.data.project_name) {
+        p.canvasComponent.data.project_name = tbName;
+      } else if (p.canvasComponent.data.project_name && !tbName) {
+        p.getToolbar()?.setProjectName(p.canvasComponent.data.project_name);
+      }
       p.exportModal.updateData(p.canvasComponent.data);
+      p.projectManager.updateData(p.canvasComponent.data);
+      if (p.canvasComponent.data.project_name) {
+        p.exportModal.setProjectName(p.canvasComponent.data.project_name);
+      }
       const cols = p.canvasComponent.data.columns || [];
       const hasPoints = cols.some((c) => c.controlPoints && c.controlPoints.length > 0);
 
@@ -183,6 +193,11 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
       // 旧实现是"发出去就报成功"（void + 立刻 setHudNotice）：后端失败也照样显示
       // "已打包导出"，用户无法区分存了没存。现在必须等结果再说话。
       try {
+        const tbName = p.getToolbar()?.getProjectName();
+        if (tbName && !p.canvasComponent.data.project_name) {
+          p.canvasComponent.data.project_name = tbName;
+        }
+        p.projectManager.updateData(p.canvasComponent.data);
         const ok = await p.projectManager.saveProjectFile();
         if (ok) {
           p.setHudNotice('工程包已保存（straditize.json + data.csv + R 脚本）。', 4000);
@@ -199,8 +214,11 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
       p.projectManager.openProjectFile(file);
     },
     onProjectNameChange: (name: string) => {
-      p.projectManager.setProjectName(name || undefined);
-      p.rpcClient.call('project.setName', { name: name || null }).catch(() => {});
+      const trimmed = name.trim();
+      p.canvasComponent.data.project_name = trimmed || undefined;
+      p.projectManager.setProjectName(trimmed || undefined);
+      p.exportModal.setProjectName(trimmed);
+      p.rpcClient.call('project.setName', { name: trimmed || null }).catch(() => {});
     },
     /**
      * 【重置全部操作】归零前端与后端。
@@ -275,6 +293,11 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
         }
       }
 
+      p.canvasComponent.data.project_name = undefined;
+      p.getToolbar()?.setProjectName('');
+      p.exportModal.setProjectName('');
+      p.exportModal.updateData(p.canvasComponent.data);
+      p.projectManager.updateData(p.canvasComponent.data);
       p.workflowController.setCurrentStage(1);
       p.workflowController.updateWorkflowBar();
       p.getSidebar()?.updateData(p.canvasComponent.data);

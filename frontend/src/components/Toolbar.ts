@@ -55,6 +55,16 @@ export class Toolbar {
   private currentWorkflowStep: number = 3;
   private isDesktopMode: boolean = false;
   private viewControlsHost: HTMLElement | null = null;
+  private currentProjectName: string = '';
+
+  private escapeHtml(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
 
   constructor(
     history: HistoryManager,
@@ -249,6 +259,7 @@ export class Toolbar {
               style="width: 120px; font-size: 11px; padding: 2px 6px; height: 24px; border-radius: 4px;"
               placeholder="项目名称..."
               title="当前项目名称（用作导出与工程包文件名前缀，留空跟随图像名）"
+              value="${this.escapeHtml(this.currentProjectName)}"
             />
           </div>
 
@@ -486,9 +497,15 @@ export class Toolbar {
     });
 
     const projectInput = this.element.querySelector('#inp-toolbar-project-name') as HTMLInputElement | null;
-    projectInput?.addEventListener('change', () => {
-      this.callbacks.onProjectNameChange?.(projectInput.value.trim());
-    });
+    if (projectInput) {
+      projectInput.value = this.currentProjectName;
+      const emitProjectName = () => {
+        this.currentProjectName = projectInput.value.trim();
+        this.callbacks.onProjectNameChange?.(this.currentProjectName);
+      };
+      projectInput.addEventListener('input', emitProjectName);
+      projectInput.addEventListener('change', emitProjectName);
+    }
 
     // 打开文件相关
     const fileInput = this.element.querySelector('#file-input-image') as HTMLInputElement;
@@ -557,9 +574,15 @@ export class Toolbar {
   }
 
   public setProjectName(name: string): void {
+    this.currentProjectName = name || '';
     const projectInput = this.element.querySelector('#inp-toolbar-project-name') as HTMLInputElement | null;
-    if (projectInput) {
-      projectInput.value = name || '';
+    if (projectInput && projectInput.value !== this.currentProjectName) {
+      projectInput.value = this.currentProjectName;
     }
+  }
+
+  public getProjectName(): string {
+    const projectInput = this.element.querySelector('#inp-toolbar-project-name') as HTMLInputElement | null;
+    return (projectInput ? projectInput.value.trim() : this.currentProjectName) || this.currentProjectName;
   }
 }
