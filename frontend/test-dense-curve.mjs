@@ -60,7 +60,7 @@ function denseColumn(id, startX, rows, xOf) {
     endX: startX + 600,
     color: '#38bdf8',
     visible: true,
-    plotType: 'line',
+    plot_type: 'line',
     controlPoints: [{ id: 'p0', x: xOf(rows[0]), y: rows[0] }],
     curvePoints: rows.map((y) => ({ y, x: xOf(y) })),
     curveError: null,
@@ -108,7 +108,7 @@ function testMissingDenseIsExplicit() {
     endX: 1500,
     color: '#38bdf8',
     visible: true,
-    plotType: 'line',
+    plot_type: 'line',
     controlPoints: [
       { id: 'p0', x: 940, y: 400 },
       { id: 'p1', x: 1000, y: 500 },
@@ -142,7 +142,7 @@ function testSymbolStillUsesControlPoints() {
     endX: 800,
     color: '#38bdf8',
     visible: true,
-    plotType: 'symbol',
+    plot_type: 'symbol',
     controlPoints: [
       { id: 'p0', x: 300, y: 400 },
       { id: 'p1', x: 320, y: 420 },
@@ -191,7 +191,7 @@ function testPerf() {
     const rows = Array.from({ length: POINTS }, (_, i) => 400 + i);
     const startX = 259 + c * 200;
     const col = denseColumn('c' + c, startX, rows, (y) => startX + 6 + 30 + ((y * 7) % 90));
-    col.plotType = 'area';
+    col.plot_type = 'area';
     // 旧渲染的输入：每列 58 个控制点（峰谷 + 手工点）
     col.controlPoints = Array.from({ length: 58 }, (_, i) => {
       const y = 400 + Math.round((i * (POINTS - 1)) / 57);

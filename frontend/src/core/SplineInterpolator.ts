@@ -1,4 +1,4 @@
-import type { Point2D, TaxaColumn, DiagramCalibration, DepthHorizon } from '../types/pollen';
+import type { Point2D, TaxaColumn, DiagramCalibration } from '../types/pollen';
 import { CoordinateSystem } from './CoordinateSystem.ts';
 
 export class SplineInterpolator {
@@ -134,42 +134,6 @@ export class SplineInterpolator {
     path.lineTo(baselineX, points[lastIndex].y);
     path.closePath();
     return path;
-  }
-
-  /**
-   * 按照地层深度步长进行密集重采样，生成数值化表格数据
-   */
-  public static resample(points: Point2D[], stepY: number = 2): Point2D[] {
-    if (points.length === 0) return [];
-    if (points.length === 1) return [{ ...points[0] }];
-
-    const result: Point2D[] = [];
-    const minY = points[0].y;
-    const maxY = points[points.length - 1].y;
-
-    for (let curY = minY; curY <= maxY; curY += stepY) {
-      // 寻找对应的区间 [i, i+1]
-      let idx = 0;
-      while (idx < points.length - 1 && points[idx + 1].y < curY) {
-        idx++;
-      }
-
-      if (idx >= points.length - 1) {
-        result.push({ x: points[points.length - 1].x, y: curY });
-        continue;
-      }
-
-      const p1 = points[idx];
-      const p2 = points[idx + 1];
-      const t = (curY - p1.y) / (p2.y - p1.y || 1);
-      const clampedT = Math.max(0, Math.min(1, t));
-
-      // 线性插值
-      const interpolatedX = p1.x + (p2.x - p1.x) * clampedT;
-      result.push({ x: interpolatedX, y: curY });
-    }
-
-    return result;
   }
 
   /**
@@ -312,34 +276,5 @@ export class SplineInterpolator {
     return { depths, yPositions };
   }
 
-  /**
-   * 提取所有属种完全锚定在固定深度层位上的全量结构化数据表格
-   * 彻底杜绝属种间层位错位
-   */
-  public static extractAnchoredDepthTable(
-    columns: TaxaColumn[],
-    cal: DiagramCalibration
-  ): DepthHorizon[] {
-    const { depths, yPositions } = this.getStandardDepthHorizons(cal);
-    const activeColumns = columns.filter((c) => c.visible);
 
-    return depths.map((depth, idx) => {
-      const y = yPositions[idx];
-      const values: Record<string, number> = {};
-
-      for (const col of activeColumns) {
-        // 未标定 / 无控制点的列不出现在记录里（不写 0，不写 null）：
-        // 下游要区分"该层 0 花粉"与"该层没数字化"，只能靠 key 是否出现。
-        const value = this.interpolatePercentAtY(col, y);
-        if (value !== undefined) values[col.name] = value;
-      }
-
-      return {
-        depth,
-        unit: cal.unit,
-        y,
-        values,
-      };
-    });
-  }
 }

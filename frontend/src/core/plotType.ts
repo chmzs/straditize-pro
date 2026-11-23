@@ -14,7 +14,6 @@ export type PlotType = 'area' | 'bar' | 'line' | 'symbol';
 /** 参与解析的最小结构：列与组都满足（组只认 `plot_type`）。 */
 export interface PlotTypeHolder {
   plot_type?: PlotType | null;
-  plotType?: PlotType | null;
 }
 
 const PLOT_TYPES: readonly PlotType[] = ['area', 'bar', 'line', 'symbol'];
@@ -32,7 +31,6 @@ export function resolvePlotType(
 ): PlotType {
   return (
     normalizePlotType(col?.plot_type) ??
-    normalizePlotType(col?.plotType) ??
     normalizePlotType(group?.plot_type) ??
     'area'
   );

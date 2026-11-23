@@ -450,7 +450,6 @@ def _payload_column(session: Any, c: dict[str, Any]) -> dict[str, Any]:
         "tickEndX": scale.abs_px1,
         "maxPercent": max(scale.val0, scale.val1),
         "unit": scale.unit,
-        "curveType": "linear",
         "visible": True,
         "isLocked": False,
         "controlPoints": pts,

@@ -304,7 +304,7 @@ export function normalizeProject(
       isLocked: c.isLocked || false,
       visible: c.visible !== false,
       scale_type: c.scale_type || 'linear',
-      plot_type: c.plot_type || c.plotType || undefined,
+      plot_type: c.plot_type || undefined,
       exaggeration_mult: exagMult,
       x_ticks: xTicks,
       controlPoints: pts,

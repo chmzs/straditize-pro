@@ -235,7 +235,6 @@ export interface Column {
    * 只存在于后端一处），否则载入工程后会出现"后端已标定、前端未标定"。
    */
   scale_provenance?: { calibrated: boolean; source: string } | null;
-  symbolType?: 'continuous' | 'presence_absence' | 'count';
 }
 
 export interface XScaleForm {
@@ -504,13 +503,6 @@ export interface HistorySnapshot {
   primary_roi_id?: string;
   active_roi_id?: string;
   roi?: DataRoi;
-}
-
-export interface DepthHorizon {
-  depth: number;
-  unit?: string;
-  y: number;
-  values: Record<string, number>;
 }
 
 /**

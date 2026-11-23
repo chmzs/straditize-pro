@@ -39,7 +39,7 @@ export type ResolvedColumnScale =
       val0: number;
       val1: number;
       unit: string;
-      plotType: 'area' | 'bar' | 'line' | 'symbol';
+      plot_type: 'area' | 'bar' | 'line' | 'symbol';
       scaleType: 'linear' | 'log';
       exaggerationMult: number | null;
       source: ScaleSource;
@@ -51,7 +51,7 @@ export type ResolvedColumnScale =
       val0: null;
       val1: null;
       unit: string;
-      plotType: 'area' | 'bar' | 'line' | 'symbol';
+      plot_type: 'area' | 'bar' | 'line' | 'symbol';
       scaleType: 'linear' | 'log';
       exaggerationMult: number | null;
       source: ScaleSource;
@@ -202,7 +202,7 @@ export class CoordinateSystem {
     const scaleType: 'linear' | 'log' = col.scale_type === 'log' ? 'log' : 'linear';
     const sc = col.scaleCalib;
     const unit = col.unit || sc?.unit || '%';
-    const plotType = col.plot_type || 'area';
+    const plot_type = col.plot_type || 'area';
 
     // 只有一个来源：`exaggeration_mult`（>1 才算放大）。历史上这里还有一条
     // `hasExaggeration + exaggerationMult` 的兜底，两个名字容易各说各话，已删除。
@@ -224,7 +224,7 @@ export class CoordinateSystem {
         px1: Number(sc.calibX),
         val1: Number(sc.calibVal),
         unit,
-        plotType,
+        plot_type,
         scaleType,
         exaggerationMult,
         calibrated: true,
@@ -240,7 +240,7 @@ export class CoordinateSystem {
       val0: null,
       val1: null,
       unit,
-      plotType,
+      plot_type,
       scaleType,
       exaggerationMult,
       calibrated: false,

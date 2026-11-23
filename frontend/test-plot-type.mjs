@@ -162,7 +162,6 @@ assert.equal(resolvePlotType(null, null), 'area', '两级都缺省时回落 area
 assert.equal(resolvePlotType({}, undefined), 'area', '空对象同样回落 area');
 assert.equal(resolvePlotType({ plot_type: null }, { plot_type: 'symbol' }), 'symbol', 'null 视为未设置，让组级生效');
 assert.equal(resolvePlotType({ plot_type: 'bar' }, { plot_type: 'symbol' }), 'bar', '列级显式覆盖优先');
-assert.equal(resolvePlotType({ plotType: 'line' }, { plot_type: 'area' }), 'line', '兼容旧别名 plotType');
 assert.equal(resolvePlotType({ plot_type: 'LINE' }, { plot_type: 'area' }), 'area', '拼错的字面量不得当覆盖');
 assert.equal(resolvePlotType({}, { plot_type: 'LINE' }), 'area', '组级拼错同样回落 area');
 assert.equal(resolvePlotType({ plot_type: 'line' }, undefined), 'line', '没有组时列级覆盖仍然有效');

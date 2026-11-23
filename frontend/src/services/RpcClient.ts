@@ -587,13 +587,13 @@ export class RpcClient {
     colIndex: number | string,
     ticks: Array<{ px?: number; value: number }>,
     unit?: string,
-    plotType?: string,
+    plot_type?: string,
     scaleType?: string,
     exaggerationMult?: number | null
   ): Promise<{ x_ticks: [Tick, Tick]; px_per_unit: number }> {
     const params: Record<string, any> = { col_index: colIndex, ticks };
     if (unit !== undefined) params.unit = unit;
-    if (plotType !== undefined) params.plot_type = plotType;
+    if (plot_type !== undefined) params.plot_type = plot_type;
     if (scaleType !== undefined) params.scale_type = scaleType;
     if (exaggerationMult !== undefined) params.exaggeration_mult = exaggerationMult;
 

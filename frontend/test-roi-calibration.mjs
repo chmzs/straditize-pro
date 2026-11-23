@@ -139,13 +139,6 @@ assert.deepStrictEqual(
   'customDepths 已删除：误传该字段不得改变层位（唯一入口是 samples.pasteDepths）'
 );
 
-// 9. 未标定时锚定表为空，而不是给出错位的伪数据
-assert.deepStrictEqual(
-  SplineInterpolator.extractAnchoredDepthTable([], uncalibrated),
-  [],
-  '未标定不得产出任何层位数据行'
-);
-
 // 10. 列 X 标度唯一读取入口：**只读后端下发的 scale_provenance + scaleCalib**。
 //
 // 两条判据对应两类真实不一致：

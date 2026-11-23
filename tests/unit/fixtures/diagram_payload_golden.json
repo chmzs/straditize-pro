@@ -335,7 +335,6 @@
      "count": 636,
      "sha256": "d7042c4b8d7e8cb7f9e68c74f8d33d51b49aee3a3178be1ec76c0cf28da3bc78"
     },
-    "curveType": "linear",
     "endX": 370,
     "exaggeration_mult": null,
     "id": "roi_1_col01",
@@ -378,7 +377,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 407,
     "exaggeration_mult": null,
     "id": "roi_1_col02",
@@ -421,7 +419,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 444,
     "exaggeration_mult": null,
     "id": "roi_1_col03",
@@ -464,7 +461,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 482,
     "exaggeration_mult": null,
     "id": "roi_1_col04",
@@ -507,7 +503,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 519,
     "exaggeration_mult": null,
     "id": "roi_1_col05",
@@ -550,7 +545,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 582,
     "exaggeration_mult": null,
     "id": "roi_1_col06",
@@ -593,7 +587,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 619,
     "exaggeration_mult": null,
     "id": "roi_1_col07",
@@ -636,7 +629,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 656,
     "exaggeration_mult": null,
     "id": "roi_1_col08",
@@ -679,7 +671,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 694,
     "exaggeration_mult": null,
     "id": "roi_1_col09",
@@ -722,7 +713,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 906,
     "exaggeration_mult": null,
     "id": "roi_1_col10",
@@ -765,7 +755,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 1093,
     "exaggeration_mult": null,
     "id": "roi_1_col11",
@@ -808,7 +797,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 1130,
     "exaggeration_mult": null,
     "id": "roi_1_col12",
@@ -851,7 +839,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 1193,
     "exaggeration_mult": null,
     "id": "roi_1_col13",
@@ -894,7 +881,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 1231,
     "exaggeration_mult": null,
     "id": "roi_1_col14",
@@ -937,7 +923,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 1279,
     "exaggeration_mult": null,
     "id": "roi_1_col15",
@@ -980,7 +965,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 1330,
     "exaggeration_mult": null,
     "id": "roi_1_col16",
@@ -1446,7 +1430,6 @@
      "count": 636,
      "sha256": "d7042c4b8d7e8cb7f9e68c74f8d33d51b49aee3a3178be1ec76c0cf28da3bc78"
     },
-    "curveType": "linear",
     "endX": 370,
     "exaggeration_mult": null,
     "id": "roi_1_col01",
@@ -1505,7 +1488,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 407,
     "exaggeration_mult": null,
     "id": "roi_1_col02",
@@ -1548,7 +1530,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 444,
     "exaggeration_mult": null,
     "id": "roi_1_col03",
@@ -1591,7 +1572,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 482,
     "exaggeration_mult": null,
     "id": "roi_1_col04",
@@ -1634,7 +1614,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 519,
     "exaggeration_mult": null,
     "id": "roi_1_col05",
@@ -1677,7 +1656,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 582,
     "exaggeration_mult": null,
     "id": "roi_1_col06",
@@ -1720,7 +1698,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 619,
     "exaggeration_mult": null,
     "id": "roi_1_col07",
@@ -1763,7 +1740,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 656,
     "exaggeration_mult": null,
     "id": "roi_1_col08",
@@ -1806,7 +1782,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 694,
     "exaggeration_mult": null,
     "id": "roi_1_col09",
@@ -1849,7 +1824,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 906,
     "exaggeration_mult": null,
     "id": "roi_1_col10",
@@ -1892,7 +1866,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 1093,
     "exaggeration_mult": null,
     "id": "roi_1_col11",
@@ -1935,7 +1908,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 1130,
     "exaggeration_mult": null,
     "id": "roi_1_col12",
@@ -1978,7 +1950,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 1193,
     "exaggeration_mult": null,
     "id": "roi_1_col13",
@@ -2021,7 +1992,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 1231,
     "exaggeration_mult": null,
     "id": "roi_1_col14",
@@ -2064,7 +2034,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 1279,
     "exaggeration_mult": null,
     "id": "roi_1_col15",
@@ -2107,7 +2076,6 @@
      "count": 0,
      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
-    "curveType": "linear",
     "endX": 1330,
     "exaggeration_mult": null,
     "id": "roi_1_col16",
