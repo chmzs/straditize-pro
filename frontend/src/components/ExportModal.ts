@@ -1023,11 +1023,7 @@ export class ExportModal {
     /** 预览区的手势说明（只出现在 meta 行与 title 里，不占工具行）。 */
     const PLOT_GESTURE_HINT = '滚轮缩放（以光标为锚点）· 拖拽平移 · 双击复位 · 预览固定 JPEG，下载按所选格式';
 
-    /** 出图（唯一入口）：本机出图按钮与「按所选格式下载」都走这里。失败直接抛。 */
-    const renderPlot = async (fmt: string, options: { quiet?: boolean; preview?: boolean } = {}) => {
-      // `preview: false` = 只为下载出图（SVG 塞进 <img> 虽能显示，但渲染依赖字体可用性，
-      // 与下载到的东西不一致；预览固定用设备端烘焙好的 JPEG）。下载按所选格式现场出图。
-      const preview = options.preview !== false;
+    const readPlotSettings = (): Record<string, unknown> => {
       // y 轴范围三格：三项都填才发给后端（后端同一口径，只给一部分会被整套忽略并提示）。
       const readNum = (selector: string): number | null => {
         const el = modal.querySelector(selector) as HTMLInputElement | null;
@@ -1044,9 +1040,15 @@ export class ExportModal {
       let yAxis: { min: number; max: number; interval: number } | null = null;
       if (yGiven === 3) {
         yAxis = { min: yMin as number, max: yMax as number, interval: yStep as number };
-        if (yHint) yHint.textContent = '';
+        if ((yMin as number) >= (yMax as number)) {
+          if (yHint) yHint.textContent = 'min 必须小于 max';
+        } else if ((yStep as number) <= 0) {
+          if (yHint) yHint.textContent = '间隔必须大于 0';
+        } else if (yHint) {
+          yHint.textContent = '';
+        }
       } else if (yGiven > 0) {
-        if (yHint) yHint.textContent = '需要三项都填才生效（本次已忽略，按数据自动）';
+        if (yHint) yHint.textContent = '需要三项都填才生效（留空=按数据自动）';
       } else if (yHint) {
         yHint.textContent = '';
       }
@@ -1069,6 +1071,21 @@ export class ExportModal {
       const plotSettings: Record<string, unknown> = {};
       if (yAxis) plotSettings.y_axis = yAxis;
       if (Object.keys(plotScaleMode).length) plotSettings.plot_scale_mode = plotScaleMode;
+      return plotSettings;
+    };
+
+    ['#inp-wpd-y-min', '#inp-wpd-y-max', '#inp-wpd-y-interval'].forEach((sel) => {
+      modal.querySelector(sel)?.addEventListener('input', () => {
+        readPlotSettings();
+      });
+    });
+
+    /** 出图（唯一入口）：本机出图按钮与「按所选格式下载」都走这里。失败直接抛。 */
+    const renderPlot = async (fmt: string, options: { quiet?: boolean; preview?: boolean } = {}) => {
+      // `preview: false` = 只为下载出图（SVG 塞进 <img> 虽能显示，但渲染依赖字体可用性，
+      // 与下载到的东西不一致；预览固定用设备端烘焙好的 JPEG）。下载按所选格式现场出图。
+      const preview = options.preview !== false;
+      const plotSettings = readPlotSettings();
       const res: any = await this.rpcClient.call<any, any>('plot.render', {
         format: fmt,
         ...(Object.keys(plotSettings).length ? { settings: plotSettings } : {}),
@@ -1211,7 +1228,10 @@ export class ExportModal {
     // 前端不造替代脚本：造出来的那份看不到列组单位，只会整表 scale.percent = TRUE。
     modal.querySelector('#btn-wpd-download-r')?.addEventListener('click', async () => {
       try {
-        const res = await this.rpcClient.call<any, any>('export.bundleZip');
+        const plotSettings = readPlotSettings();
+        const res = await this.rpcClient.call<any, any>('export.bundleZip', {
+          ...(Object.keys(plotSettings).length ? { settings: plotSettings } : {}),
+        });
         const blob = base64ToBlob(
           requireExportBase64(res, '导出出图包'),
           'application/zip'

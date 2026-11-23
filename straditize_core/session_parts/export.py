@@ -2273,7 +2273,12 @@ class ExportMixin:
         """Exports standard POSIX UStar tar project archive."""
         return self.project_save(output_path=output_path, format="tar")
 
-    def export_r(self, output_path: str | None = None) -> str | dict[str, Any]:
+    def export_r(
+        self,
+        output_path: str | None = None,
+        settings: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> str | dict[str, Any]:
         """导出面板「R 脚本」按钮的 `plot_strat.R`：**按列量纲**分调用（与归档同一生成器）。
 
         ## 现场缺陷（recon-20261117，S5）
@@ -2334,6 +2339,7 @@ class ExportMixin:
                 exag_cols=self._roi_column_exaggerations().get(
                     self._primary_roi_name(), {}
                 ),
+                y_axis=(settings or {}).get("y_axis") if settings else None,
             )
         )
         lines.extend(
@@ -2355,6 +2361,7 @@ class ExportMixin:
         self,
         output_path: str | None = None,
         project_name: str | None = None,
+        settings: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """一次性交付：`data.csv` + `plot_strat.R` + `plot_strat.jpg` + `README.txt`。
@@ -2420,6 +2427,7 @@ class ExportMixin:
                 exag_cols=self._roi_column_exaggerations().get(
                     self._primary_roi_name(), {}
                 ),
+                y_axis=(settings or {}).get("y_axis") if settings else None,
             )
         )
         script_lines.extend(["dev.off()", "message('已输出: ', out_path)", ""])
@@ -2477,7 +2485,7 @@ class ExportMixin:
             bundle.writestr("README.txt", "\n".join(readme_lines).encode("utf-8"))
             with tempfile.TemporaryDirectory(prefix="straditize-bundle-") as tmp_dir:
                 shot_path = os.path.join(tmp_dir, "plot_strat.jpg")
-                self.plot_render(format="jpeg", output_path=shot_path)
+                self.plot_render(format="jpeg", output_path=shot_path, settings=settings)
                 with open(shot_path, "rb") as shot:
                     bundle.writestr("plot_strat.jpg", shot.read())
 

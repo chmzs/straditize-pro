@@ -474,13 +474,18 @@ def test_plot_render_rejects_illegal_y_axis() -> None:
 
 @pytest.mark.skipif(RSCRIPT is None or not _has_rioja(), reason="本机没有 R + rioja")
 def test_plot_render_with_explicit_y_axis() -> None:
-    result = _session().plot_render(
-        settings={"y_axis": {"min": 0, "max": 100, "interval": 20}}
+    session = _session()
+    auto_res = session.plot_render(format="svg")
+    result = session.plot_render(
+        format="svg",
+        settings={"y_axis": {"min": 0, "max": 12000, "interval": 2000}},
     )
 
-    assert result["settings"]["y_axis"] == {"min": 0.0, "max": 100.0, "interval": 20.0}
+    assert result["settings"]["y_axis"] == {"min": 0.0, "max": 12000.0, "interval": 2000.0}
     assert result["warnings"] == []
-    assert str(result["data_url"]).startswith("data:image/jpeg;base64,")
+    assert str(result["data_url"]).startswith("data:image/svg+xml;base64,")
+    # 自定义 y 轴必须切实改变渲染结果，产物字节必须不同
+    assert auto_res["data_url"] != result["data_url"]
 
 
 # ---- 混合量纲：每列是否参与默认缩放（plot_scale_mode）----

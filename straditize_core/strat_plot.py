@@ -461,6 +461,16 @@ warns <- tryCatch(
         symb.cex = 0.3,
         plot.poly = TRUE   # makeStyles 默认 poly=FALSE，我们的图要填充
       )
+      if (is.finite(ymin_v) && is.finite(ymax_v)) {
+        style$ymin <- ymin_v
+        style$ymax <- ymax_v
+      }
+      if (is.finite(yint_v) && yint_v > 0) {
+        style$yinterval <- yint_v
+        if (is.finite(ymin_v) && is.finite(ymax_v)) {
+          style$ytks1 <- seq(ymin_v, ymax_v, by = yint_v)
+        }
+      }
       style$plot.exag <- flag("exaggeration", TRUE)
       style$exag.mult <- num("exag_mult", 5)
       style$scale.percent <- flag("percent", TRUE)
@@ -623,9 +633,17 @@ warns <- tryCatch(
                              exag.mult = num("exag_mult", 5))
       }
     } else {
+      y_lim <- if (is.finite(ymin_v) && is.finite(ymax_v)) c(ymin_v, ymax_v) else NULL
+      y_tks <- if (is.finite(ymin_v) && is.finite(ymax_v) && is.finite(yint_v) && yint_v > 0) {
+        seq(ymin_v, ymax_v, by = yint_v)
+      } else {
+        NULL
+      }
       rioja::strat.plot(
         d = as.matrix(taxa),
         yvar = depth,
+        ylim = y_lim,
+        y.tks = y_tks,
         y.rev = flag("rev_y", TRUE),
         ylabel = txt("ylabel", y_var_name),
         plot.poly = poly_v,

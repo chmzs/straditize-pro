@@ -42,6 +42,7 @@ def strat_plot_script_lines(
     fixed_cols: Sequence[str],
     units: Mapping[str, Any],
     exag_cols: Mapping[str, float] | Sequence[str] | None = None,
+    y_axis: Mapping[str, Any] | None = None,
 ) -> list[str]:
     """一个 ROI 的 `strat.plot` 调用段（**唯一的生成处**）。
 
@@ -97,6 +98,22 @@ def strat_plot_script_lines(
             return f", plot.exag = TRUE, exag.mult = {exag_mult_val}"
         return f", plot.exag = {var_expr} %in% {r_string_vector(in_group)}, exag.mult = {exag_mult_val}"
 
+    y_axis_args = ""
+    if y_axis and isinstance(y_axis, (dict, Mapping)):
+        ymin = y_axis.get("min")
+        ymax = y_axis.get("max")
+        yint = y_axis.get("interval")
+        if ymin is not None and ymax is not None:
+            try:
+                ymin_f = float(ymin)
+                ymax_f = float(ymax)
+                y_axis_args += f", ylim = c({ymin_f:g}, {ymax_f:g})"
+                if yint is not None and float(yint) > 0:
+                    yint_f = float(yint)
+                    y_axis_args += f", y.tks = seq({ymin_f:g}, {ymax_f:g}, by = {yint_f:g})"
+            except (ValueError, TypeError):
+                pass
+
     # `csv_expr` 决定「读哪个路径表达式」：归档脚本写死文件名（老行为，零回归），
     # 单文件包（zip 那份）传 `csv_path`，好在脚本开头从命令行参数取默认值。
     # `require_file=True` 时缺文件当场 stop：否则整段绘图被静默跳过，用户拿到一张空 PDF。
@@ -126,19 +143,19 @@ def strat_plot_script_lines(
         lines.append("    if (length(pct_cols) > 0) {")
         pct_ex = _exag_str(pct, "pct_cols")
         lines.append(
-            f"      strat.plot({df_var}[, pct_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE{pct_ex}, title = '{roi_name}')"
+            f"      strat.plot({df_var}[, pct_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE{pct_ex}{y_axis_args}, title = '{roi_name}')"
         )
         lines.append("    }")
         lines.append("    if (length(fixed_cols) > 0) {")
         fixed_ex = _exag_str(fixed, "fixed_cols")
         lines.append(
-            f"      strat.plot({df_var}[, fixed_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = FALSE, plot.poly = TRUE, plot.line = TRUE{fixed_ex}, add = length(pct_cols) > 0)"
+            f"      strat.plot({df_var}[, fixed_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = FALSE, plot.poly = TRUE, plot.line = TRUE{fixed_ex}{y_axis_args}, add = length(pct_cols) > 0)"
         )
         lines.append("    }")
     else:
         all_ex = _exag_str(pct, f"names({df_var})[-1]")
         lines.append(
-            f"    strat.plot({df_var}[-1], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE{all_ex}, title = '{roi_name}')"
+            f"    strat.plot({df_var}[-1], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE{all_ex}{y_axis_args}, title = '{roi_name}')"
         )
     lines.append("  }")
     lines.append("}\n")

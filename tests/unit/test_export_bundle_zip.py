@@ -113,3 +113,27 @@ def test_bundle_contains_four_files_and_runnable_script() -> None:
 
         readme = bundle.read("README.txt").decode("utf-8")
         assert "NA" in readme and "Rscript plot_strat.R" in readme
+
+
+@pytest.mark.skipif(not _has_rioja(), reason="整包要出一张 jpg，需要 R + rioja")
+def test_bundle_passes_custom_y_axis_to_script_and_render() -> None:
+    session = _session()
+    auto_payload = session.export_bundle_zip()
+    custom_payload = session.export_bundle_zip(
+        settings={"y_axis": {"min": 0, "max": 12000, "interval": 2000}}
+    )
+
+    auto_data = base64.b64decode(auto_payload["base64"])
+    custom_data = base64.b64decode(custom_payload["base64"])
+    with zipfile.ZipFile(io.BytesIO(custom_data)) as bundle:
+        script = bundle.read("plot_strat.R").decode("utf-8")
+        assert "ylim = c(0, 12000)" in script, "脚本必须包含用户设置的 ylim"
+        assert "y.tks = seq(0, 12000, by = 2000)" in script, "脚本必须包含用户设置的 y.tks"
+        shot = bundle.read("plot_strat.jpg")
+        assert shot[:3] == b"\xff\xd8\xff"
+
+    with zipfile.ZipFile(io.BytesIO(auto_data)) as auto_bundle:
+        auto_shot = auto_bundle.read("plot_strat.jpg")
+        # 烘焙的成品图在自定义 Y 轴后必须有不同的像素/字节
+        assert auto_shot != shot
+
