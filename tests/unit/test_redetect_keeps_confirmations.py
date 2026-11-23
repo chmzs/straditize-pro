@@ -54,6 +54,7 @@ def _detect(session: StraditizeSession, roi_id: str) -> list[dict]:
         line_fraction_v=0.7,
         line_width_min=1,
         line_width_max=2,
+        include_vertical=True,
     )["candidates"]
 
 

@@ -331,7 +331,7 @@ export const zhCN = {
   'step5.exclusions': '排除区 ({count} 个)',
   'step5.addExclusion': '+ 划定排除区',
   'step5.brush': '人工修复画笔',
-  'step5.next': '确认清理，进入列与 X 刻度标定 (步骤 6)',
+  'step5.next': '完成清理，进入列与 X 刻度标定 (步骤 6)',
 
   // ===== 步骤 6：X 刻度面板 =====
   'step6.title': '6. 标定列与 X 轴刻度',

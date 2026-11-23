@@ -96,7 +96,11 @@ def test_same_vertical_lines_still_proposed_when_columns_are_unknown() -> None:
     _rid, roi = session._roi_for(roi_id)
 
     unknown = detect_line_candidates(
-        session.foreground_mask, roi, columns=None, roi_id=roi_id
+        session.foreground_mask,
+        roi,
+        columns=None,
+        roi_id=roi_id,
+        include_vertical=True,
     )
     verticals = [c["at"] for c in unknown if c.get("axis") == "v"]
 
@@ -135,6 +139,7 @@ def test_synthetic_axis_is_suppressed_but_real_strokes_are_kept() -> None:
         line_fraction_v=0.30,
         line_width_min=1,
         line_width_max=3,
+        include_vertical=True,
     )
     horizontal = [c for c in candidates if c.get("axis") == "h"]
     vertical = [c for c in candidates if c.get("axis") == "v"]

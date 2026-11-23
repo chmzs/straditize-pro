@@ -36,6 +36,7 @@ def test_auto_and_candidate_masks_are_composed_and_can_be_cleared_independently(
         line_fraction_v=0.7,
         line_width_min=1,
         line_width_max=2,
+        include_vertical=True,
     )["candidates"]
     vertical = next(candidate for candidate in candidates if candidate["axis"] == "v")
 
@@ -87,6 +88,7 @@ def test_cleanup_geometry_survives_a_diagram_data_refresh() -> None:
         line_fraction_v=0.7,
         line_width_min=1,
         line_width_max=2,
+        include_vertical=True,
     )["candidates"]
     assert candidates, "detection produced no candidates to round-trip"
 

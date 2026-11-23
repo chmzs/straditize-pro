@@ -37,10 +37,10 @@ export interface DetectOrientation {
   vertical: boolean;
 }
 
-/** 默认两项都勾，与引入开关之前的行为一致。 */
+/** 默认仅扫描横线，竖线默认不扫描（地层图以横线为主，竖线多为干扰）。 */
 export const DEFAULT_DETECT_ORIENTATION: DetectOrientation = {
   horizontal: true,
-  vertical: true,
+  vertical: false,
 };
 
 let detectOrientation: DetectOrientation = { ...DEFAULT_DETECT_ORIENTATION };

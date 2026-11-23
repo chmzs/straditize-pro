@@ -55,6 +55,7 @@ def test_synthetic_candidate_classification():
         line_fraction_v=0.30,
         line_width_min=1,
         line_width_max=2,
+        include_vertical=True,
     )
 
     kinds = [c["kind"] for c in cands]
@@ -72,13 +73,23 @@ def test_line_width_max_filter():
     roi = {"xlim": [0, 100], "ylim": [0, 100]}
     # With max=2, 3px line must be excluded
     cands_filtered = detect_line_candidates(
-        ink, roi, line_fraction_v=0.30, line_width_min=1, line_width_max=2
+        ink,
+        roi,
+        line_fraction_v=0.30,
+        line_width_min=1,
+        line_width_max=2,
+        include_vertical=True,
     )
     assert len(cands_filtered) == 0
 
     # With max=None, it enters
     cands_all = detect_line_candidates(
-        ink, roi, line_fraction_v=0.30, line_width_min=1, line_width_max=None
+        ink,
+        roi,
+        line_fraction_v=0.30,
+        line_width_min=1,
+        line_width_max=None,
+        include_vertical=True,
     )
     assert len(cands_all) == 1
     assert cands_all[0]["width"] == 3

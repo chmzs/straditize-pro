@@ -85,14 +85,14 @@ def _assert_vertical_off_keeps_horizontals(
     session: StraditizeSession, roi_id: str
 ) -> None:
     """判据体（金丝雀复用同一段，保证"红的确实是这条判据"）。"""
-    baseline = session.detect_line_candidates(roi_id)["candidates"]
+    baseline = session.detect_line_candidates(roi_id, include_vertical=True)["candidates"]
     base_kinds = _kinds(baseline)
     assert base_kinds.get("B", 0) + base_kinds.get("C", 0) > 0, (
-        f"前置：默认调用必须真有竖线候选可关（实测 {base_kinds}）—— "
+        f"前置：显式开启竖线必须真有竖线候选可关（实测 {base_kinds}）—— "
         "否则本条判据恒绿、零信息量"
     )
     assert base_kinds.get("A", 0) > 0, (
-        f"前置：默认调用必须真有横向候选（实测 {base_kinds}）"
+        f"前置：必须真有横向候选（实测 {base_kinds}）"
     )
 
     off = session.detect_line_candidates(roi_id, include_vertical=False)["candidates"]
@@ -123,10 +123,10 @@ def test_vertical_switch_off_removes_all_vertical_candidates() -> None:
 
 def test_horizontal_switch_off_removes_all_horizontal_candidates() -> None:
     session, roi_id = _session_vertical_rich()
-    baseline = session.detect_line_candidates(roi_id)["candidates"]
+    baseline = session.detect_line_candidates(roi_id, include_vertical=True)["candidates"]
     base_kinds = _kinds(baseline)
 
-    off = session.detect_line_candidates(roi_id, include_horizontal=False)["candidates"]
+    off = session.detect_line_candidates(roi_id, include_horizontal=False, include_vertical=True)["candidates"]
     off_kinds = _kinds(off)
 
     assert off_kinds.get("A", 0) == 0, (
@@ -168,9 +168,9 @@ def test_column_internal_verticals_are_gated_by_the_same_switch() -> None:
         line_width_max=3,
     )
 
-    on = detect_line_candidates(ink, roi, **kwargs)
+    on = detect_line_candidates(ink, roi, include_vertical=True, **kwargs)
     assert _kinds(on) == {"A": 1, "C": 1}, (
-        f"前置：合成图应产出 1 条横线 + 1 条列内竖线，实测 {_kinds(on)}"
+        f"前置：显式开启竖线时合成图应产出 1 条横线 + 1 条列内竖线，实测 {_kinds(on)}"
     )
 
     off = detect_line_candidates(ink, roi, include_vertical=False, **kwargs)
@@ -178,7 +178,9 @@ def test_column_internal_verticals_are_gated_by_the_same_switch() -> None:
         f"`include_vertical=False` 未关掉列内竖线（Kind C），实测 {_kinds(off)}"
     )
 
-    off_h = detect_line_candidates(ink, roi, include_horizontal=False, **kwargs)
+    off_h = detect_line_candidates(
+        ink, roi, include_horizontal=False, include_vertical=True, **kwargs
+    )
     assert _kinds(off_h) == {"C": 1}, (
         f"`include_horizontal=False` 未关掉横线，实测 {_kinds(off_h)}"
     )
@@ -189,13 +191,8 @@ def test_column_internal_verticals_are_gated_by_the_same_switch() -> None:
 # ----------------------------------------------------------------------
 
 
-def test_omitted_switches_equal_explicit_true_pair() -> None:
-    """不传开关 == 显式 True/True，逐条逐字段相同。
-
-    这条钉住"默认值没被顺手改掉"。若哪天有人把 `include_vertical` 的默认写成
-    `False`，或让某一类默认不生成，这里立刻红，而不会被"关掉后为 0"那两条
-    判据（它们只检查关掉时）掩盖。
-    """
+def test_omitted_switches_equal_default_pair() -> None:
+    """不传开关 == 显式 True/False（横线开、竖线关），逐条逐字段相同。"""
     ink, columns = _synthetic_ink()
     roi = {"xlim": [0, 400], "ylim": [0, 400]}
     kwargs = dict(
@@ -208,22 +205,15 @@ def test_omitted_switches_equal_explicit_true_pair() -> None:
 
     omitted = detect_line_candidates(ink, roi, **kwargs)
     explicit = detect_line_candidates(
-        ink, roi, include_horizontal=True, include_vertical=True, **kwargs
+        ink, roi, include_horizontal=True, include_vertical=False, **kwargs
     )
-    assert omitted == explicit, "不传开关与显式 True/True 的返回不一致——默认值被改动了"
+    assert omitted == explicit, "不传开关与显式 True/False 的返回不一致——默认值被改动了"
 
     # 真图同一件事：**集合相等**，不是条数相等。
-    #
-    # 比较口径按 (kind, at, 矩形) 排序后逐字段比。排序抹掉迭代顺序，逐字段比
-    # 才能发现"掉一条又补一条"（条数相同、集合不同）。
-    #
-    # `id` 必须剔除：session 层每次调用都用 `_next_candidate_id` 铸**新的**会话级
-    # id（见 `session_parts/cleanup.py` 里 "Ids are OPAQUE and positional" 的注释），
-    # id 本来就不跨调用稳定。被钉住的是"检出了哪些几何"，不是计数器走到第几格。
     session, roi_id = _session_vertical_rich()
     baseline = session.detect_line_candidates(roi_id)["candidates"]
-    explicit_true = session.detect_line_candidates(
-        roi_id, include_horizontal=True, include_vertical=True
+    explicit_default = session.detect_line_candidates(
+        roi_id, include_horizontal=True, include_vertical=False
     )["candidates"]
 
     def _canonical(candidates: list[dict]) -> list[dict]:
@@ -241,26 +231,18 @@ def test_omitted_switches_equal_explicit_true_pair() -> None:
             ),
         )
 
-    assert _canonical(baseline) == _canonical(explicit_true), (
-        "真图上前置：缺省调用与显式 True/True 的候选**集合**必须相等"
+    assert _canonical(baseline) == _canonical(explicit_default), (
+        "真图上前置：缺省调用与显式 True/False 的候选**集合**必须相等"
         "（排序后逐字段）—— 条数相同不算同一条判据"
     )
     base_kinds = _kinds(baseline)
-    assert base_kinds.get("A", 0) > 0 and base_kinds.get("B", 0) > 0, (
-        f"前置：这条对照必须覆盖两类候选，实测 {base_kinds}"
+    assert base_kinds.get("A", 0) > 0 and base_kinds.get("B", 0) == 0, (
+        f"前置：默认不扫竖线，覆盖横线，实测 {base_kinds}"
     )
 
 
 def test_default_detection_set_matches_pre_switch_baseline() -> None:
-    """默认调用的候选**集合** == 引入开关之前（`c9261a0`）实测的集合。
-
-    上面那条"缺省 == 显式 True/True"只能证明两个后置路径一致；若有人把**默认值**
-    改成 `False` 而不改另一处，两个后置路径仍会一致地一起变。所以这里再钉死一组
-    绝对集合（`(kind, at)` 排序后逐项相等，不是条数相等）。
-
-    数字来源：`c9261a0` 的 `lines.py` 与新实现在同一张 hoya、同一 ROI 上的差分
-    （默认路径逐字段完全一致）。检出量真变了就必须重测并在这里写明原因。
-    """
+    """默认调用的候选**集合**：横线开、竖线关。"""
     session, roi_id, _roi = _hoya_session()
     with_columns = session.detect_line_candidates(roi_id)["candidates"]
     assert sorted((c["kind"], c["at"]) for c in with_columns) == [
@@ -270,12 +252,22 @@ def test_default_detection_set_matches_pre_switch_baseline() -> None:
     ], (
         "已分列状态的默认候选集合变了："
         f"{sorted((c['kind'], c['at']) for c in with_columns)}"
-        "（改动前是 3 条横线，竖线全被列轴判据排除）"
     )
 
     session, roi_id = _session_vertical_rich()
     unknown_columns = session.detect_line_candidates(roi_id)["candidates"]
     assert sorted((c["kind"], c["at"]) for c in unknown_columns) == [
+        ("A", 818),
+        ("A", 1128),
+        ("A", 1306),
+    ], (
+        "列未知状态的默认候选集合应仅含 3 条横线（竖线默认不扫描）："
+        f"{sorted((c['kind'], c['at']) for c in unknown_columns)}"
+    )
+
+    # 显式传 include_vertical=True 时才产出竖线
+    with_vert = session.detect_line_candidates(roi_id, include_vertical=True)["candidates"]
+    assert sorted((c["kind"], c["at"]) for c in with_vert) == [
         ("A", 818),
         ("A", 1128),
         ("A", 1306),
@@ -294,9 +286,8 @@ def test_default_detection_set_matches_pre_switch_baseline() -> None:
         ("B", 1742),
         ("B", 1774),
     ], (
-        "列未知状态的默认候选集合变了："
-        f"{sorted((c['kind'], c['at']) for c in unknown_columns)}"
-        "（改动前是 3 条横线 + 14 条贯穿竖线）"
+        "显式 include_vertical=True 时产出的完整候选集合变了："
+        f"{sorted((c['kind'], c['at']) for c in with_vert)}"
     )
 
 
@@ -317,8 +308,13 @@ def test_rpc_method_accepts_the_switches_and_omission() -> None:
     detect = dispatcher._methods["algorithm.detectLineCandidates"]
 
     default = detect(roi_id=roi_id)["candidates"]
-    assert _kinds(default).get("B", 0) > 0, (
-        f"前置：缺省调用应产出 B 类竖线（实测 {_kinds(default)}）"
+    assert _kinds(default).get("B", 0) == 0 and _kinds(default).get("A", 0) > 0, (
+        f"前置：缺省调用应默认不产出 B 类竖线（实测 {_kinds(default)}）"
+    )
+
+    on = detect(roi_id=roi_id, include_vertical=True)["candidates"]
+    assert _kinds(on).get("B", 0) > 0, (
+        f"显式传 include_vertical=True 应产出竖线（实测 {_kinds(on)}）"
     )
 
     off = detect(roi_id=roi_id, include_vertical=False)["candidates"]

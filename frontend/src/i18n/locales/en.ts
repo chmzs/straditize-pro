@@ -328,7 +328,7 @@ export const en = {
   'step5.exclusions': 'Exclusion Zones ({count})',
   'step5.addExclusion': '+ Add Exclusion Zone',
   'step5.brush': 'Manual Fix Brush',
-  'step5.next': 'Confirm Cleaning, Proceed to Column Scaling (Step 6)',
+  'step5.next': 'Complete Cleanup & Proceed to Column Scaling (Step 6)',
 
   // ===== Step 6: X-Scale Panel =====
   'step6.title': '6. Column Scaling & X-Ticks',

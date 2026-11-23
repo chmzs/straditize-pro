@@ -556,14 +556,14 @@ class CleanupMixin:
         line_width_min: int = 1,
         line_width_max: int | None = None,
         include_horizontal: bool = True,
-        include_vertical: bool = True,
+        include_vertical: bool = False,
     ) -> dict[str, Any]:
         """Detect disturbance-line geometry for an ROI.
 
-        ``include_horizontal`` / ``include_vertical`` 是步骤 4 面板上的两个
+        ``include_horizontal`` / ``include_vertical`` 是步骤 5 面板上的两个
         勾选框：关掉的一类**不生成**候选（详见
-        :func:`straditize_core.lines.detect_line_candidates`）。默认都 ``True``，
-        与引入开关之前逐字节一致。
+        :func:`straditize_core.lines.detect_line_candidates`）。默认
+        ``include_horizontal=True``、``include_vertical=False``（竖线默认不扫描）。
 
         ``line_width_max=None`` means "derive from the ROI resolution" (see
         :func:`straditize_core.lines.resolve_width_max`). A fixed bound cannot

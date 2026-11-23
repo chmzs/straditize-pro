@@ -34,36 +34,36 @@ function ok(label) {
   console.log(`ok ${n} - ${label}`);
 }
 
-// ---- 1. 默认两项都勾 ----
+// ---- 1. 默认仅勾选横线，竖线默认不扫描 ----
 resetDetectOrientation();
 assert.deepEqual(
   getDetectOrientation(),
-  { horizontal: true, vertical: true },
-  '默认必须两项都勾（与引入开关之前一致）'
+  { horizontal: true, vertical: false },
+  '默认横线勾选、竖线不勾选'
 );
-assert.deepEqual(DEFAULT_DETECT_ORIENTATION, { horizontal: true, vertical: true });
-ok('默认两项都勾');
+assert.deepEqual(DEFAULT_DETECT_ORIENTATION, { horizontal: true, vertical: false });
+ok('默认仅勾选横线，竖线默认不扫描');
 
 // ---- 2. 状态跨重渲染保持（多次读取不被重置） ----
-setDetectOrientation({ vertical: false });
+setDetectOrientation({ vertical: true });
 for (let render = 0; render < 3; render += 1) {
   assert.deepEqual(
     getDetectOrientation(),
-    { horizontal: true, vertical: false },
+    { horizontal: true, vertical: true },
     `第 ${render + 1} 次重渲染后勾选状态被重置了——状态不能住在 render() 的局部`
   );
 }
-ok('取消勾选竖线后，重渲染不把状态打回默认');
+ok('勾选竖线后，重渲染不把状态打回默认');
 
 // 返回的是副本：外部改动不得污染模块内部状态（否则每次 render 都可能被改）
 const snapshot = getDetectOrientation();
-snapshot.vertical = true;
-assert.equal(getDetectOrientation().vertical, false, 'getDetectOrientation 必须返回副本');
+snapshot.vertical = false;
+assert.equal(getDetectOrientation().vertical, true, 'getDetectOrientation 必须返回副本');
 ok('getDetectOrientation 返回副本，外部改写不污染状态');
 
 // 复位（等价于新开会话）
 resetDetectOrientation();
-assert.deepEqual(getDetectOrientation(), { horizontal: true, vertical: true });
+assert.deepEqual(getDetectOrientation(), { horizontal: true, vertical: false });
 ok('resetDetectOrientation 回到默认');
 
 // ---- 3. 统计按 kind ----

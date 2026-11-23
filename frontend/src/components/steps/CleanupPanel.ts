@@ -70,8 +70,8 @@ export function render(data: DiagramData): string {
         ? `y=${Math.min(g.y0, g.y1)}–${Math.max(g.y0, g.y1)} · x=${Math.min(g.x0, g.x1)}–${Math.max(g.x0, g.x1)}`
         : `x=${Math.min(g.x0, g.x1)}–${Math.max(g.x0, g.x1)} · y=${Math.min(g.y0, g.y1)}–${Math.max(g.y0, g.y1)}`;
     const badge = isRemoved
-      ? '<span style="color:var(--accent-red);font-weight:700;">已确认</span>'
-      : '<span style="color:var(--status-warning);font-weight:700;">待确认</span>';
+      ? '<span style="color:var(--accent-red);font-weight:700;">已剔除</span>'
+      : '<span style="color:var(--text-muted);font-weight:600;">已保留</span>';
     const src = c.source === 'manual' ? '手动' : '自动';
     return `
       <div class="cleanup-row" data-cand-id="${c.id}" data-cand-kind="${c.kind}"
@@ -84,7 +84,7 @@ export function render(data: DiagramData): string {
         </span>
         ${badge}
         <button class="btn-toggle-geometry ui-btn ui-btn--xs ${isRemoved ? 'ui-btn--quiet' : 'ui-btn--primary'}" data-cand-id="${c.id}" data-next="${isRemoved ? 'candidate' : 'removed'}"
-                style="font-size:9px;padding:1px 5px;">${isRemoved ? '撤回' : '确认去除'}</button>
+                style="font-size:9px;padding:1px 5px;">${isRemoved ? '保留' : '剔除'}</button>
         <button class="btn-delete-geometry ui-btn ui-btn--xs ui-btn--quiet" data-cand-id="${c.id}"
                 style="font-size:9px;padding:1px 4px;color:var(--accent-red);">删除</button>
       </div>`;
@@ -128,7 +128,7 @@ export function render(data: DiagramData): string {
       <div class="inspector-section" style="padding: 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 8px; border: 1px solid var(--border-color);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <div style="font-size: 11px; font-weight: 700; color: var(--text-primary);">① 干扰线识别与清单</div>
-          <span style="font-size: 10px; color: var(--text-muted);">共 ${cands.length} 条 · <strong style="color:var(--accent-red);">${selectedCount} 已确认</strong></span>
+          <span style="font-size: 10px; color: var(--text-muted);">共 ${cands.length} 条 · <strong style="color:var(--accent-red);">${selectedCount} 条剔除</strong></span>
         </div>
 
         <div style="display: flex; justify-content:space-between; align-items: center; margin-bottom: 6px;">
@@ -149,13 +149,13 @@ export function render(data: DiagramData): string {
 
         <div id="cleanup-orientation-hint" class="cleanup-orientation-hint" style="font-size: 10px; color: var(--status-warning); line-height: 1.4; margin-bottom: 6px; display: ${orientationHint ? 'block' : 'none'};">${orientationHint}</div>
 
-        <!-- 批量确认/撤回工具条 -->
+        <!-- 批量剔除/保留工具条 -->
         <div style="display: flex; gap: 4px; margin-bottom: 6px;">
-          <button id="btn-confirm-all-candidates" class="ui-btn ui-btn--xs" style="flex: 1; font-size: 10px; padding: 3px 6px; background: rgba(239,68,68,0.12); color: var(--accent-red); border: 1px solid rgba(239,68,68,0.35);" title="将清单中的全部干扰线确认为实际剔除">
-            全部确认去除
+          <button id="btn-confirm-all-candidates" class="ui-btn ui-btn--xs" style="flex: 1; font-size: 10px; padding: 3px 6px; background: rgba(239,68,68,0.12); color: var(--accent-red); border: 1px solid rgba(239,68,68,0.35);" title="将清单中的全部干扰线设为实际剔除">
+            全部设为剔除
           </button>
-          <button id="btn-revert-all-candidates" class="ui-btn ui-btn--xs ui-btn--secondary" style="flex: 1; font-size: 10px; padding: 3px 6px;" title="全部撤回为待确认（不剔除）">
-            全部撤回
+          <button id="btn-revert-all-candidates" class="ui-btn ui-btn--xs ui-btn--secondary" style="flex: 1; font-size: 10px; padding: 3px 6px;" title="全部保留（不作为干扰线剔除）">
+            全部保留
           </button>
         </div>
 
@@ -217,13 +217,10 @@ export function render(data: DiagramData): string {
 
       <!-- 3. 清理统计卡片 -->
       <div class="inspector-section" style="padding: 7px 8px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 8px; border: 1px solid var(--border-color);">
-        <div style="font-size: 11px; font-weight: 700; margin-bottom: 3px;">③ 本次清理统计</div>
+        <div style="font-size: 11px; font-weight: 700; margin-bottom: 3px;">③ 本步清理统计</div>
         <div id="cleanup-stats" style="font-size: 10px; color: var(--text-secondary); line-height: 1.4;">
           ${statsLine(data)}
         </div>
-        <button id="btn-clear-cleanup-edits" class="ui-btn ui-btn--quiet ui-btn--sm" style="width:100%; margin-top:6px; font-size:10px; padding:4px; color: var(--text-muted);" title="清空本步全部检测候选线、人工排除区与笔迹修正">
-          清空全部几何 / 排除区 / 笔迹
-        </button>
       </div>
 
       <!-- 4. 推进到下一步 -->
@@ -356,11 +353,6 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     applyThickness(undefined);
   });
 
-  // 清空本步编辑
-  root.querySelector('#btn-clear-cleanup-edits')?.addEventListener('click', () => {
-    ctx.onClearCleanupEdits?.();
-  });
-
   // 重设本步
   root.querySelector('#btn-reset-step5-cleanup')?.addEventListener('click', async () => {
     if (!window.confirm('确定清空本步全部清理编辑（几何、排除区与笔迹）并重新自动检测吗？')) return;
@@ -368,7 +360,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     ctx.onDetectLineCandidates?.(toDetectPayload(getDetectOrientation()));
   });
 
-  // 推进到下一步（若未确认则自动全部确认为剔除）
+  // 推进到下一步（严格尊重用户对候选线的剔除/保留配置，不搞暗箱全选）
   const applyBtn = root.querySelector('#btn-apply-cleanup-next') as HTMLButtonElement | null;
   applyBtn?.addEventListener('click', async () => {
     if (applyBtn.disabled) return;
@@ -376,11 +368,9 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     applyBtn.disabled = true;
     applyBtn.style.opacity = '0.75';
     applyBtn.style.cursor = 'wait';
-    applyBtn.innerHTML = '正在应用清理...';
+    applyBtn.innerHTML = '正在推进工作流...';
     try {
-      // 1. 若用户未确认任何一项，自动将当前待确认候选线全部设为实际剔除
-      await ctx.onConfirmAllCandidates?.();
-      // 2. 推进到步骤 6（刻度标定；属种轮廓与拐点提取集中交由步骤 7）
+      // 推进到步骤 6（刻度标定；属种轮廓与拐点提取集中交由步骤 7）
       await ctx.onAdvanceWorkflowStage?.(6);
     } finally {
       applyBtn.disabled = false;

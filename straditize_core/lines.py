@@ -205,7 +205,7 @@ def detect_line_candidates(
     line_width_max: int | None = 2,
     roi_id: str = "roi_1",
     include_horizontal: bool = True,
-    include_vertical: bool = True,
+    include_vertical: bool = False,
 ) -> list[dict[str, Any]]:
     """Detect structured line candidates inside the declared ROI.
 
@@ -220,8 +220,8 @@ def detect_line_candidates(
       这个集合，拆成两个开关只会让人猜。
 
     关掉的一类**不进入生成流程**（不是生成后过滤）：Kind C 的逐列
-    ``_detect_linear_structures`` 也一并跳过。默认两个都是 ``True``，因而
-    不传时行为与引入开关之前**逐字节相同**。
+    ``_detect_linear_structures`` 也一并跳过。默认 ``include_horizontal=True``、
+    ``include_vertical=False``（地层图以横向区带线为主，竖线默认不扫描）。
     """
     ink = np.asarray(ink, dtype=bool)
     if ink.ndim != 2 or ink.size == 0:
