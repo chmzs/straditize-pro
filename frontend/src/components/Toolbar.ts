@@ -5,6 +5,7 @@ import { ToolMode } from '../types/pollen';
 import { WORKFLOW_STEP_ITEMS } from '../types/workflow';
 import { t } from '../i18n';
 import { refreshUndoButtons } from '../core/undoRuntime';
+import { showsSampleHorizons } from '../core/WorkflowStage';
 
 export interface ToolbarCallbacks {
   onFit: () => void;
@@ -355,7 +356,7 @@ export class Toolbar {
             </svg>
             <span>${t('toolbar.ticks')}</span>
           </button>
-          <button id="btn-toggle-samples" class="ui-btn ui-btn--quiet ui-btn--xs ${this.isSamplesActive ? 'active' : ''}" title="${t('toolbar.samplesTitle')}" style="padding: 3px 6px; font-size: 10.5px; display: ${this.currentWorkflowStep === 7 ? 'inline-flex' : 'none'};">
+          <button id="btn-toggle-samples" class="ui-btn ui-btn--quiet ui-btn--xs ${this.isSamplesActive ? 'active' : ''}" title="${t('toolbar.samplesTitle')}" style="padding: 3px 6px; font-size: 10.5px; display: ${showsSampleHorizons(this.currentWorkflowStep) ? 'inline-flex' : 'none'};">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 8h18M3 16h18" stroke-dasharray="3 3"/>
             </svg>

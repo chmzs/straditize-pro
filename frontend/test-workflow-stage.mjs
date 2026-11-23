@@ -107,10 +107,25 @@ assert.equal(S.showsCleanupOverlay(S.STAGE.ROI), false, '步骤2 尚未清理不
 console.log('✔ 去线清理标记仅在步骤 5 出现');
 
 // ---------------------------------------------------------------------------
+// 4.6 采样层位共识横线：只在步骤 7（拐点与采样层位）和步骤 8（校验）呈现
+//     （用户反馈：「抱歉，请把step8也加入显示，即在step7和step8」）
+// ---------------------------------------------------------------------------
+assert.equal(S.showsSampleHorizons(S.STAGE.LOAD), false);
+assert.equal(S.showsSampleHorizons(S.STAGE.ROI), false);
+assert.equal(S.showsSampleHorizons(S.STAGE.Y_CALIB), false);
+assert.equal(S.showsSampleHorizons(S.STAGE.SPLIT), false);
+assert.equal(S.showsSampleHorizons(S.STAGE.CLEANUP), false);
+assert.equal(S.showsSampleHorizons(S.STAGE.CALIBRATE_COLUMNS), false);
+assert.equal(S.showsSampleHorizons(S.STAGE.SPEARS_AND_SAMPLES), true, '步骤7 采样层位必须呈现');
+assert.equal(S.showsSampleHorizons(S.STAGE.QA), true, '步骤8 校验必须呈现');
+console.log('✔ 采样层位横线在步骤 7 与步骤 8 呈现');
+
+// ---------------------------------------------------------------------------
 // 5. visibleLayers：给 e2e / 调试句柄用的权威能力清单
 // ---------------------------------------------------------------------------
 const layersAt5 = S.visibleLayers(S.STAGE.CLEANUP, { hasImage: true, columnCount: 0 });
 assert.ok(layersAt5.includes('cleanupOverlay'), '步骤5 应含 cleanupOverlay');
+assert.ok(!layersAt5.includes('sampleHorizons'), '步骤5 不得含 sampleHorizons');
 
 const layersAt4 = S.visibleLayers(S.STAGE.SPLIT, { hasImage: true, columnCount: 9 });
 assert.ok(layersAt4.includes('background'), '步骤4 底图必须在');
@@ -122,6 +137,10 @@ assert.ok(!layersAt4.includes('anchors'), '步骤4 不得含 anchors');
 const layersAt7 = S.visibleLayers(S.STAGE.SPEARS_AND_SAMPLES, { hasImage: true, columnCount: 9 });
 assert.ok(layersAt7.includes('pollenCurves'), '步骤7 应含 pollenCurves');
 assert.ok(layersAt7.includes('depthGrid'), '步骤7 应含 depthGrid');
+assert.ok(layersAt7.includes('sampleHorizons'), '步骤7 应含 sampleHorizons');
+
+const layersAt8 = S.visibleLayers(S.STAGE.QA, { hasImage: true, columnCount: 9 });
+assert.ok(layersAt8.includes('sampleHorizons'), '步骤8 应含 sampleHorizons');
 console.log('✔ visibleLayers 权威能力清单正确');
 
 console.log('\n🎉 工作流步骤→能力映射回归测试通过！');

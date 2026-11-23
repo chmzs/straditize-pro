@@ -116,6 +116,13 @@ export function showsPollenCurves(stage: number, columnCount: number): boolean {
 }
 
 /**
+ * 采样层位横线与切换按钮：在步骤 7（拐点与采样层位）和步骤 8（校验）呈现。
+ */
+export function showsSampleHorizons(stage: number): boolean {
+  return stage === STAGE.SPEARS_AND_SAMPLES || stage === STAGE.QA;
+}
+
+/**
  * 供调试句柄（window.__straditize.getState().layers）与 e2e 断言使用：
  * 返回"当前步骤下会绘制哪些层"，让 UI 验证可以直接断言能力，而不是去数像素。
  */
@@ -132,6 +139,9 @@ export function visibleLayers(
   if (showsColumnBoundaries(stage, opts.columnCount)) layers.push('columnBoundaries');
   if (showsPollenCurves(stage, opts.columnCount)) {
     layers.push('pollenCurves', 'anchors', 'ghosting');
+  }
+  if (showsSampleHorizons(stage)) {
+    layers.push('sampleHorizons');
   }
   return layers;
 }

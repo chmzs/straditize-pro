@@ -1,6 +1,6 @@
 import { DiagramData, SampleHorizon } from '../../types/pollen';
 import { Viewport } from '../../core/Viewport';
-import { STAGE } from '../../core/WorkflowStage';
+import { showsSampleHorizons } from '../../core/WorkflowStage';
 
 export const id = 'sample-horizons-overlay';
 export const z = 30;
@@ -75,8 +75,8 @@ export function draw(ctx: CanvasRenderingContext2D, data: DiagramData, vp: Viewp
   const samples = data.samples || [];
   if (samples.length === 0) return;
 
-  // 约束：只在步骤 7（STAGE.SPEARS_AND_SAMPLES）呈现，且用户未手动关闭；其他步骤不呈现，防止干扰视觉。
-  if (stage !== undefined && stage !== STAGE.SPEARS_AND_SAMPLES) return;
+  // 约束：只在步骤 7 和步骤 8（STAGE.SPEARS_AND_SAMPLES / STAGE.QA）呈现，且用户未手动关闭；其他步骤不呈现，防止干扰视觉。
+  if (stage !== undefined && !showsSampleHorizons(stage)) return;
   if (vp.showSamples === false) return;
 
   const inv = 1 / (vp.scale || 1);

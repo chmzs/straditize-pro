@@ -27,7 +27,7 @@ export class Viewport {
   public showBinaryOverlay: boolean = false; // B 键快速透视遮罩
   public showGhosting: boolean = true;        // 原位逆向重叠质检覆盖层 (Ghosting)
   public showTicks: boolean = true;           // 步骤 6+ 蓝色单位刻度外推竖线显示开关
-  public showSamples: boolean = true;         // 步骤 7+ 采样层位水平线显示开关
+  public showSamples: boolean = true;         // 步骤 7 & 8 采样层位水平线显示开关
   public binaryThreshold: number = 138;      // 墨迹灰度阈值
 
   constructor() {
