@@ -87,9 +87,8 @@ MIME_BY_FORMAT = {
 }
 
 
-#: `primary_axis` 的两个合法取值。`calibrate_axes` 已经拒绝其它值，这里是第二道口：
-#: 直接构造出来的会话（测试、CLI、导入）可能没有该属性或带着脏值。
-PRIMARY_AXES = ("depth", "age")
+#: `primary_axis` 的预设合法取值。`calibrate_axes` 校验预设值与合法自定义标识符：
+PRIMARY_AXES = ("depth", "age", "code")
 
 #: 「单位里已经写明年代基准」的记号。`primary_axis="age"` 且单位不含其中任何一个时
 #: 补 ` BP`（`ka` → `ka BP`）；含了说明用户写完整了，原样用，不再叠加。
@@ -97,17 +96,25 @@ ERA_UNIT_MARKERS = ("BP", "AD", "BC", "CE", "BCE")
 
 
 def _normalize_primary_axis(primary_axis: Any) -> str:
-    """把 `primary_axis` 归一成 `"depth"` / `"age"`；缺省与脏值一律按 `"depth"`。"""
+    """把 `primary_axis` 归一成合法轴名（age/depth/code 或合法的自定义标识符）；缺省与脏值一律按 "depth"（空/缺省）。"""
+    import re
+
     axis = str(primary_axis or "").strip().lower()
-    return axis if axis in PRIMARY_AXES else "depth"
+    if axis.startswith("custom:"):
+        axis = axis.split("custom:", 1)[1].strip()
+    if axis in PRIMARY_AXES:
+        return axis
+    if re.match(r"^[a-z][a-z0-9_-]{0,31}$", axis):
+        return axis
+    return "depth"
 
 
 def _y_column_label(primary_axis: Any = None, legacy: bool = False) -> str:
     """导出表**首列**的列名：跟随 Y 轴实际测的量，不是永远写 `depth`（issue #114）。
 
     首列装的是 Y 轴上的那个量，所以它的名字必须与 `primary_axis` 一致：
-    `"age"` → `age`，`"depth"` → `depth`。只有一列，绝不并列输出两列——两列会让
-    读的人无法判断哪一列才是真的。
+    `"age"` → `age`，`"depth"` → `depth`，`"code"` → `code`，自定义 → 用户标识符（如 `elev`）。
+    只有一列，绝不并列输出两列——两列会让读的人无法判断哪一列才是真的。
 
     `legacy=True` 强制回 `depth`，给按旧列名读的下游脚本一个过渡口（RPC 参数
     `legacy_column_name`）；它**不改数值**，只改列名。
@@ -120,7 +127,7 @@ def _y_column_label(primary_axis: Any = None, legacy: bool = False) -> str:
 
 
 def _y_axis_label(primary_axis: Any = None, unit: Any = None) -> str:
-    """出图 Y 轴标题：`Depth (cm)` / `Age (ka BP)` / `Age (cal BP)`。
+    """出图 Y 轴标题：`Depth (cm)` / `Age (ka BP)` / `Sample Code` / `Elev (m)`。
 
     ## 唯一的补语义点
 
@@ -128,12 +135,20 @@ def _y_axis_label(primary_axis: Any = None, unit: Any = None) -> str:
     ` BP`：`ka` → `ka BP`。写 `cal BP` / `AD` 这类完整单位的原样用，不再叠加成
     `cal BP BP`。深度轴不补任何东西——`cm` / `m` 本身没有年代基准的歧义。
 
-    单位为空时只给轴名（`Depth` / `Age`），不编一个单位。
+    单位为空时只给轴名（`Depth` / `Age` / `Sample Code` / `Elev`），不编一个单位。
 
     这是轴标签的**唯一来源**：`render_strat_diagram` 用它填 `settings["ylabel"]`。
     """
     axis = _normalize_primary_axis(primary_axis)
-    title = "Age" if axis == "age" else "Depth"
+    if axis == "age":
+        title = "Age"
+    elif axis == "depth":
+        title = "Depth"
+    elif axis == "code":
+        title = "Sample Code"
+    else:
+        title = axis.capitalize()
+
     text = str(unit or "").strip()
     if not text:
         return title

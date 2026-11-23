@@ -306,6 +306,7 @@ export const zhCN = {
   'step3.ref2': '② 基准点 Y2 (下方):',
   'step3.apply': '应用标定',
   'step3.unit': '单位',
+  'step3.value': '刻度值',
   'step3.unitUnset': '单位未定',
   'step3.next': '确认标尺，进入自动分列 (步骤 4)',
 

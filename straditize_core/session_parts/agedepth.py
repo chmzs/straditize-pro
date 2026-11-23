@@ -169,10 +169,16 @@ class AgeDepthSessionMixin:
                     "inverse_extrapolated_count": int(sum(inverse["extrapolated"])),
                     "observed_age_range": inverse["observed_age_range"],
                 }
-            return [round(float(v), 2) for v in readings], {
-                "primary_axis": "depth",
-                "depth_source": "Y axis read as depth",
-            }
+            elif axis == "depth":
+                return [round(float(v), 2) for v in readings], {
+                    "primary_axis": "depth",
+                    "depth_source": "Y axis read as depth",
+                }
+            else:
+                return [], {
+                    "primary_axis": axis,
+                    "depth_source": f"Y axis is {axis} (incompatible with age-depth model)",
+                }
 
         if self.depth_grid:
             # Same axis semantics as the Y-reading branch above. A grid generated under an
@@ -193,10 +199,16 @@ class AgeDepthSessionMixin:
                     "inverse_extrapolated_count": int(sum(inverse["extrapolated"])),
                     "observed_age_range": inverse["observed_age_range"],
                 }
-            return [round(float(d), 2) for d in self.depth_grid], {
-                "primary_axis": "depth",
-                "depth_source": "explicit depth grid",
-            }
+            elif axis == "depth":
+                return [round(float(d), 2) for d in self.depth_grid], {
+                    "primary_axis": "depth",
+                    "depth_source": "explicit depth grid",
+                }
+            else:
+                return [], {
+                    "primary_axis": axis,
+                    "depth_source": f"sample grid is {axis} (incompatible with age-depth model)",
+                }
 
         if model_depths is not None and len(model_depths) > 0:
             step_stride = max(1, len(model_depths) // 30)

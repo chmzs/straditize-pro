@@ -28,9 +28,10 @@ export function computeExportReadiness(data: DiagramData): ExportReadinessState 
     const nameSource = r.name_source || 'default';
     const cols = (data.columns || []).filter((c) => c.roi_id === r.id);
 
-    // 判断"是否已命名"读 DataRoi.name_source（不得靠"名字是否等于 pollen"猜）
-    // 无列 ROI 必须在就绪清单里列出而非静默跳过
-    if (nameSource === 'default' || cols.length === 0) {
+    // 仅在多 ROI 且仍为默认名，或任何 ROI 无属种列时记入未就绪
+    // 单 ROI 项目使用默认名 'pollen' 是标准且完备的，不作未就绪阻拦
+    const isUnnamed = rois.length > 1 ? nameSource === 'default' : false;
+    if (isUnnamed || cols.length === 0) {
       readinessMissing.push(rName);
     }
   }
@@ -61,26 +62,38 @@ export function renderExportReadiness(data: DiagramData): string {
          data-sheets="${state.sheets.join(',')}"
          data-primary="${state.primaryRoi}"
          data-readiness-missing="${state.readinessMissing.join(',')}"
-         style="padding: 10px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light); margin-bottom: 12px; font-size: 11px;">
-      <div style="font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-        <span>导出就绪状态清单 (Export Readiness)</span>
-        <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; ${state.allReady ? 'background: var(--pill-success-bg); color: var(--pill-success-text);' : 'background: var(--pill-warning-bg); color: var(--pill-warning-text);'}">
-          ${state.allReady ? '✓ 全部就绪' : `待完善 (${state.readinessMissing.length})`}
+         style="padding: 10px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light); margin-bottom: 0;">
+      <div style="font-weight: 600; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: var(--font-size-sm); color: var(--text-primary);">数据就绪状态</span>
+        <span style="font-size: var(--font-size-xs); padding: 2px 8px; border-radius: 9999px; font-weight: 500; ${state.allReady ? 'background: var(--pill-success-bg); color: var(--pill-success-text);' : 'background: var(--pill-warning-bg); color: var(--pill-warning-text);'}">
+          ${state.allReady ? '✓ 已就绪' : `待完善 (${state.readinessMissing.length})`}
         </span>
       </div>
 
-      <div style="line-height: 1.6; font-size: var(--font-size-sm);">
-        <div>• 导出分表 (SHEETS): <strong id="lbl-export-sheets" style="color: var(--accent-blue);">${sheetsStr}</strong></div>
-        <div>• 主工作区 (PRIMARY_ROI): <strong id="lbl-export-primary" style="color: var(--accent-green);">${state.primaryRoi}</strong> (对应归档 <code>data.csv</code>)</div>
-        <div>• 根数据归属: <span id="lbl-export-data-csv-owner">data.csv ← 主 ROI（由后端生成，导出时逐字节校验）</span></div>
-        <div>• 属种刻度标定: <span id="lbl-export-calibration-status">${calibratedCount} 列已标定${uncalibratedCount > 0 ? ` / <strong style="color: var(--status-warning);">${uncalibratedCount} 列未标定</strong> (未标定列不出数，导出记为空)` : ' (全部已标定)'}</span></div>
-        <div>• 未就绪清单 (READINESS_MISSING): <strong id="lbl-export-missing" style="color: ${state.readinessMissing.length > 0 ? 'var(--accent-red)' : 'var(--text-muted)'};">${missingStr}</strong></div>
+      <div style="display: flex; flex-direction: column; gap: 4px; font-size: var(--font-size-xs); color: var(--text-secondary); line-height: 1.5;">
+        <div style="display: flex; justify-content: space-between; gap: 6px;">
+          <span>导出分表:</span>
+          <strong id="lbl-export-sheets" style="color: var(--accent-blue); font-weight: 600;">${sheetsStr}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 6px;">
+          <span>主工作区:</span>
+          <span><strong id="lbl-export-primary" style="color: var(--status-success); font-weight: 600;">${state.primaryRoi}</strong></span>
+        </div>
+        <div style="display: none;"><span id="lbl-export-data-csv-owner">data.csv ← 主 ROI（由后端生成，导出时逐字节校验）</span></div>
+        <div style="display: flex; justify-content: space-between; gap: 6px;">
+          <span>属种标定:</span>
+          <span id="lbl-export-calibration-status">${calibratedCount} 列已标定${uncalibratedCount > 0 ? ` / <strong style="color: var(--status-warning); font-weight: 600;">${uncalibratedCount} 列未标定</strong>` : ''}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 6px;">
+          <span>缺失清单:</span>
+          <strong id="lbl-export-missing" style="color: ${state.readinessMissing.length > 0 ? 'var(--status-danger)' : 'var(--text-muted)'}; font-weight: ${state.readinessMissing.length > 0 ? '600' : 'normal'};">${missingStr}</strong>
+        </div>
       </div>
       ${renderExportSuspectBlockRow(data)}
       ${
         state.readinessMissing.length > 0
-          ? `<div style="margin-top: 6px; font-size: 10px; color: var(--status-warning); line-height: 1.4;">
-               提示：未命名（使用默认名）或无属种列的 ROI 将列在未就绪清单中。请在步骤 2 中命名或为其划分属种列。
+          ? `<div style="margin-top: 6px; font-size: var(--font-size-xs); color: var(--status-warning); line-height: 1.4; padding: 4px 6px; background: rgba(245, 158, 11, 0.08); border-radius: 4px;">
+               提示：存在未命名或无属种列的分区，已列入缺失清单。
              </div>`
           : ''
       }

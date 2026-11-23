@@ -463,13 +463,15 @@ class ExportMixin:
         raw = list(raw_depths) if raw_depths is not None else [None] * len(rows)
         slope = float(y_scale.get("slope", 0.0)) if calibrated else 0.0
         intercept = float(y_scale.get("intercept", 0.0)) if calibrated else 0.0
+        is_code = getattr(self, "primary_axis", None) == "code"
 
         out: list[Any] = []
         for row, depth in zip(rows, raw):
             if depth is not None:
-                out.append(depth)
+                out.append(int(round(float(depth))) if is_code else depth)
             elif calibrated:
-                out.append(round(slope * row + intercept, 4))
+                val = slope * row + intercept
+                out.append(int(round(float(val))) if is_code else round(val, 4))
             else:
                 out.append(row)
         return out
@@ -1100,15 +1102,24 @@ class ExportMixin:
             y_col = self._y_col_label()
             if y_col in first_df.columns:
                 depths = first_df[y_col].tolist()
-                pred = age_depth_model.predict_age(depths)
-                age_depth_df = pd.DataFrame(
-                    {
-                        "depth": depths,
-                        "age_est": pred.get("age_est", []),
-                        "age_min": pred.get("age_min", []),
-                        "age_max": pred.get("age_max", []),
-                    }
-                )
+                if getattr(self, "primary_axis", None) == "age":
+                    pred = age_depth_model.predict_depth(depths)
+                    age_depth_df = pd.DataFrame(
+                        {
+                            "age": depths,
+                            "depth_est": pred.get("depth_est", []),
+                        }
+                    )
+                elif getattr(self, "primary_axis", None) == "depth":
+                    pred = age_depth_model.predict_age(depths)
+                    age_depth_df = pd.DataFrame(
+                        {
+                            "depth": depths,
+                            "age_est": pred.get("age_est", []),
+                            "age_min": pred.get("age_min", []),
+                            "age_max": pred.get("age_max", []),
+                        }
+                    )
                 if getattr(age_depth_model, "has_envelope", False) and not any(
                     t.get("name") == "Age_Uncertainty_U1000" for t in ensemble_tables
                 ):
@@ -1200,15 +1211,24 @@ class ExportMixin:
             y_col = self._y_col_label()
             if y_col in first_df.columns:
                 depths = first_df[y_col].tolist()
-                pred = age_depth_model.predict_age(depths)
-                age_depth_df = pd.DataFrame(
-                    {
-                        "depth": depths,
-                        "age_est": pred.get("age_est", []),
-                        "age_min": pred.get("age_min", []),
-                        "age_max": pred.get("age_max", []),
-                    }
-                )
+                if getattr(self, "primary_axis", None) == "age":
+                    pred = age_depth_model.predict_depth(depths)
+                    age_depth_df = pd.DataFrame(
+                        {
+                            "age": depths,
+                            "depth_est": pred.get("depth_est", []),
+                        }
+                    )
+                elif getattr(self, "primary_axis", None) == "depth":
+                    pred = age_depth_model.predict_age(depths)
+                    age_depth_df = pd.DataFrame(
+                        {
+                            "depth": depths,
+                            "age_est": pred.get("age_est", []),
+                            "age_min": pred.get("age_min", []),
+                            "age_max": pred.get("age_max", []),
+                        }
+                    )
 
         selected_ensembles = None
         if include_ensemble_names:
@@ -1292,15 +1312,24 @@ class ExportMixin:
             )
 
         if primary_axis is None:
-            resolved_axis = self.primary_axis
+            resolved_axis = getattr(self, "primary_axis", "depth")
         else:
             candidate = str(primary_axis).strip().lower()
-            if candidate not in ("depth", "age"):
+            if candidate.startswith("custom:"):
+                custom_name = candidate.split("custom:", 1)[1].strip()
+                if not re.match(r"^[a-z][a-z0-9_-]{0,31}$", custom_name):
+                    raise JsonRpcError(
+                        INVALID_PARAMS,
+                        f"primary_axis 自定义标识符必须以字母开头且仅含小写字母/数字/下划线（收到 {custom_name!r}）。",
+                    )
+                resolved_axis = custom_name
+            elif candidate in ("depth", "age", "code"):
+                resolved_axis = candidate
+            else:
                 raise JsonRpcError(
                     INVALID_PARAMS,
-                    f"primary_axis must be 'depth' or 'age' (got {primary_axis!r}).",
+                    f"primary_axis must be 'depth', 'age', 'code', or 'custom:<name>' (got {primary_axis!r}).",
                 )
-            resolved_axis = candidate
 
         y_pixels = np.array(
             [m.get("pixel") if "pixel" in m else m.get("px") for m in y_marks],
@@ -1783,16 +1812,28 @@ class ExportMixin:
         all_rows = list(range(len(depth_series)))
 
         if getattr(self, "age_depth_model", None) is not None:
-            age_pred = self.age_depth_model.predict_age(depth_series)
-            # 列序必须与旧实现一致：<Y 轴量>, age_est, age_min_95, age_max_95, 各属种列。
-            age_frame = pd.DataFrame(
-                {
-                    "age_est": age_pred["age_est"],
-                    "age_min_95": age_pred["age_min"],
-                    "age_max_95": age_pred["age_max"],
-                }
-            )
-            df = pd.concat([df[[y_col]], age_frame, df.drop(columns=[y_col])], axis=1)
+            primary_axis = getattr(self, "primary_axis", None)
+            if primary_axis == "age":
+                # Y 轴为 age 时，模型通过 predict_depth 反查产出各层位的真实深度
+                depth_pred = self.age_depth_model.predict_depth(depth_series)
+                pred_frame = pd.DataFrame(
+                    {
+                        "depth_est": depth_pred["depth_est"],
+                    }
+                )
+                df = pd.concat([df[[y_col]], pred_frame, df.drop(columns=[y_col])], axis=1)
+            elif primary_axis == "depth":
+                # Y 轴为 depth 时，模型通过 predict_age 产出各层位的年代估算
+                age_pred = self.age_depth_model.predict_age(depth_series)
+                pred_frame = pd.DataFrame(
+                    {
+                        "age_est": age_pred["age_est"],
+                        "age_min_95": age_pred["age_min"],
+                        "age_max_95": age_pred["age_max"],
+                    }
+                )
+                df = pd.concat([df[[y_col]], pred_frame, df.drop(columns=[y_col])], axis=1)
+            # code 或自定义物理量（如 elev）：年代-深度模型只能处理 depth 或 age 输入，不参与其他轴类型的追加运算
 
         # 行集身份 + 判据门禁（issue #113）：`samples` 语义下**行数必须等于 samples
         # 条数**。这不再是"测试里比一比"，而是后端在交付前自己拒绝不一致的表。
@@ -2563,16 +2604,25 @@ class ExportMixin:
             and y_col in pollen_df.columns
         ):
             depths = pollen_df[y_col].tolist()
-            pred = self.age_depth_model.predict_age(depths)
-            pred = attach_windowed_rates(
-                pred, self.age_depth_model, getattr(self, "age_depth_rate_columns", [])
-            )
-            age_depth_df = build_age_depth_frame(
-                pred,
-                getattr(self, "age_depth_rate_columns", []),
-                self.age_depth_model.age_unit,
-                self.age_depth_model.depth_unit,
-            )
+            if getattr(self, "primary_axis", None) == "age":
+                pred = self.age_depth_model.predict_depth(depths)
+                age_depth_df = pd.DataFrame(
+                    {
+                        "age": depths,
+                        "depth_est": pred.get("depth_est", []),
+                    }
+                )
+            elif getattr(self, "primary_axis", None) == "depth":
+                pred = self.age_depth_model.predict_age(depths)
+                pred = attach_windowed_rates(
+                    pred, self.age_depth_model, getattr(self, "age_depth_rate_columns", [])
+                )
+                age_depth_df = build_age_depth_frame(
+                    pred,
+                    getattr(self, "age_depth_rate_columns", []),
+                    self.age_depth_model.age_unit,
+                    self.age_depth_model.depth_unit,
+                )
 
         selected_ensembles = None
         if include_ensemble_names:
@@ -2620,16 +2670,25 @@ class ExportMixin:
             and y_col in pollen_df.columns
         ):
             depths = pollen_df[y_col].tolist()
-            pred = self.age_depth_model.predict_age(depths)
-            pred = attach_windowed_rates(
-                pred, self.age_depth_model, getattr(self, "age_depth_rate_columns", [])
-            )
-            age_depth_df = build_age_depth_frame(
-                pred,
-                getattr(self, "age_depth_rate_columns", []),
-                self.age_depth_model.age_unit,
-                self.age_depth_model.depth_unit,
-            )
+            if getattr(self, "primary_axis", None) == "age":
+                pred = self.age_depth_model.predict_depth(depths)
+                age_depth_df = pd.DataFrame(
+                    {
+                        "age": depths,
+                        "depth_est": pred.get("depth_est", []),
+                    }
+                )
+            elif getattr(self, "primary_axis", None) == "depth":
+                pred = self.age_depth_model.predict_age(depths)
+                pred = attach_windowed_rates(
+                    pred, self.age_depth_model, getattr(self, "age_depth_rate_columns", [])
+                )
+                age_depth_df = build_age_depth_frame(
+                    pred,
+                    getattr(self, "age_depth_rate_columns", []),
+                    self.age_depth_model.age_unit,
+                    self.age_depth_model.depth_unit,
+                )
 
         selected_ensembles = None
         if include_ensemble_names:

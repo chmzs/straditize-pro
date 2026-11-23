@@ -639,7 +639,7 @@ async function bootstrap() {
     marks: Point2D[],
     values: number[],
     unit: string,
-    primaryAxis: 'depth' | 'age' = 'depth',
+    primaryAxis: string = 'age',
     recordUndo = true
   ): Promise<void> {
     const cal = canvasComponent.data.calibration;
@@ -675,7 +675,7 @@ async function bootstrap() {
           bottomPx: Number(o?.bottom_px ?? o?.bottomPx ?? 0),
           bottomValue: Number(o?.bottom_cm ?? o?.bottomValue ?? 0),
           unit: String(o?.unit ?? unit),
-          primaryAxis: (o?.primaryAxis ?? o?.primary_axis ?? primaryAxis) as 'depth' | 'age',
+          primaryAxis: String(o?.primaryAxis ?? o?.primary_axis ?? primaryAxis),
         });
         const prevSnap = snap(calBefore ?? previous);
         const nextSnap = snap(res.canvas);
@@ -687,7 +687,7 @@ async function bootstrap() {
           prevSnap.bottomPx === nextSnap.bottomPx &&
           prevSnap.bottomValue === nextSnap.bottomValue &&
           prevSnap.unit === nextSnap.unit &&
-          (prevSnap.primaryAxis ?? 'depth') === (nextSnap.primaryAxis ?? 'depth');
+          (prevSnap.primaryAxis ?? 'age') === (nextSnap.primaryAxis ?? 'age');
         // 「标定前本来没标定」这种情况**没有逆操作**：后端没有"清除标定"的 RPC，
         // 用 0/0 去反标只会造出一组伪造读数。按设计不入栈（撤销按钮回落到旧行为）。
         if (!sameCal && prevSnap.isCalibrated) {

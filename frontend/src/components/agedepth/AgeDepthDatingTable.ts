@@ -286,7 +286,7 @@ export class AgeDepthDatingTable {
       const ms = this.mappedSamples;
       for (let i = 0; i < ms.depths.length; i++) {
         const tr = document.createElement('tr');
-        const minVal = ms.age_min ? ms.age_min[i] : Math.max(0, ms.age_est[i] - 100);
+        const minVal = ms.age_min ? ms.age_min[i] : ms.age_est[i] - 100;
         const maxVal = ms.age_max ? ms.age_max[i] : ms.age_est[i] + 100;
         tr.innerHTML = `
           <td style="font-weight: 600; color: var(--accent-blue); padding: 1px 2px;">${ms.depths[i]} cm</td>
@@ -434,7 +434,7 @@ export class AgeDepthDatingTable {
         const tr = document.createElement('tr');
         const d = ms.depths[i];
         const a = ms.age_est[i];
-        const mi = ms.age_min ? ms.age_min[i] : Math.max(0, a - 100);
+        const mi = ms.age_min ? ms.age_min[i] : a - 100;
         const ma = ms.age_max ? ms.age_max[i] : a + 100;
         const width = Math.abs(ma - mi);
         // Windowed rate (cm/yr) + its standard error in separate cells, mirroring the
@@ -538,7 +538,7 @@ export class AgeDepthDatingTable {
       const tr = document.createElement('tr');
       const depth = d[i];
       const age = a[i];
-      const minVal = mi[i] !== undefined ? mi[i] : Math.max(0, age - 100);
+      const minVal = mi[i] !== undefined ? mi[i] : age - 100;
       const maxVal = ma[i] !== undefined ? ma[i] : age + 100;
       const width = Math.abs(maxVal - minVal);
       // Inversion is a property of the chronology (deeper = older), so it is evaluated
@@ -839,7 +839,7 @@ export class AgeDepthDatingTable {
       newDepth = Math.round((lastD + stepD) * 10) / 10;
       newAge = Math.round(lastA + stepA);
     }
-    const newMin = Math.max(0, newAge - 100);
+    const newMin = newAge - 100;
     const newMax = newAge + 100;
 
     d.push(newDepth);
@@ -978,7 +978,7 @@ export class AgeDepthDatingTable {
       if (tokens.length >= 2) {
         const d = tokens[0];
         const a = tokens[1];
-        const mi = tokens.length >= 3 ? tokens[2] : Math.max(0, a - 100);
+        const mi = tokens.length >= 3 ? tokens[2] : a - 100;
         const ma = tokens.length >= 4 ? tokens[3] : a + 100;
         newDepths.push(d);
         newAges.push(a);

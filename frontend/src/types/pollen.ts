@@ -287,7 +287,7 @@ export interface DepthCalibration {
    * spellings, and a wrong guess moves every sample to a plausible-but-wrong position.
    * `"age"` means sample depths are recovered by inverting the age-depth model.
    */
-  primaryAxis?: 'depth' | 'age';
+  primaryAxis?: 'depth' | 'age' | 'code' | (string & {});
   depthInterval?: number;
   depthGridEnabled?: boolean;
   marks?: Array<{ pixel: number; val: number }>;

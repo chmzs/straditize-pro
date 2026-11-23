@@ -985,7 +985,7 @@ export class AgeDepthCanvas {
         const newPoint: DatingPoint = {
           id: `14C_${this.datingPoints.length + 1}`,
           depth: Math.max(0, pickedDepth),
-          age: Math.max(0, pickedAge),
+          age: pickedAge,
           error: 30,
           thickness: 1,
           cc: 1,

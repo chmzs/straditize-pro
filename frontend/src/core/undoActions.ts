@@ -23,7 +23,7 @@ export interface DepthCalibrationPatch {
   bottomPx: number;
   bottomValue: number;
   unit: string;
-  primaryAxis?: 'depth' | 'age';
+  primaryAxis?: string;
 }
 
 export interface CalibrationSnapshot extends DepthCalibrationPatch {
@@ -51,7 +51,7 @@ export function makeCalibrationUndo(
     a.bottomPx === b.bottomPx &&
     a.bottomValue === b.bottomValue &&
     a.unit === b.unit &&
-    (a.primaryAxis ?? 'depth') === (b.primaryAxis ?? 'depth');
+    (a.primaryAxis ?? 'age') === (b.primaryAxis ?? 'age');
 
   return {
     label: `标定 ${prev.topValue}${prev.unit} → ${next.topValue}${next.unit}（Y 轴）`,

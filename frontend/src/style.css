@@ -2292,33 +2292,124 @@ body.theme-light .reset-all-btn:hover {
    WPD 导出表格预览与交互编辑样式
    ============================================================================== */
 .modal-dialog.wpd-export-dialog {
-  /* 宽度由 --modal-width 决定（ExportModal 内联设为 1180px）；这里只压上限。
-     高度改成「按内容、封顶视口」：旧值 86vh 在 1366×768 下是 660px，
-     与 footer/设置项抢空间；现在由 body 滚动，弹窗自身不再撑满。 */
-  max-width: 1180px;
-  height: auto;
-  max-height: calc(100dvh - 48px);
+  /* 宽度由 --modal-width 决定（ExportModal 内联设为 1180px）；设置稳定的大气高度与视口安全边距 */
+  width: min(1180px, 94vw);
+  height: min(840px, 88vh);
+  min-height: 600px;
+  max-height: calc(100dvh - 36px);
   display: flex;
   flex-direction: column;
+}
+
+/* 现代分段药丸选项卡容器 (Segmented Control) */
+.wpd-tab-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  margin: var(--space-3) var(--space-4) 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  align-self: flex-start;
+  flex-shrink: 0;
+}
+
+.wpd-tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  padding: 5px 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+  line-height: 1.4;
+}
+
+.wpd-tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.wpd-tab-btn.active {
+  background: var(--bg-card);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--accent-blue);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+body.theme-light .wpd-tab-strip {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+body.theme-light .wpd-tab-btn {
+  color: #64748b;
+}
+
+body.theme-light .wpd-tab-btn:hover {
+  color: #0f172a;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+body.theme-light .wpd-tab-btn.active {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0284c7;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.wpd-tab-pane {
+  width: 100%;
+  min-height: 0;
+}
+
+.wpd-plot-main {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 16px;
+  width: 100%;
+  min-height: 0;
+}
+
+.wpd-plot-left-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wpd-plot-right-controls {
+  width: 310px;
+  min-width: 310px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 /* `.wpd-modal-body` 已下移至文件末尾 `.ui-modal__body` 之后（批次 G-d）。
    该变体必须晚于原语声明，否则 gap:16px / padding:16px / flex-direction:row
    会被原语的堆叠契约覆盖。 */
 
-/* 主区：左表格 + 右控制栏横向并列；出图设置与预览在 .wpd-export-extras 里全宽。
+/* 主区：左表格与出图 + 右控制栏横向并列。
    整体高度由内容决定，纵向滚动**只**发生在 .ui-modal__body（单滚动容器）。 */
 .wpd-export-main {
   display: flex;
   flex-direction: row;
+  align-items: flex-start;
   gap: 16px;
   min-height: 0;
-}
-
-.wpd-export-extras {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  width: 100%;
 }
 
 .wpd-left-area {
@@ -2326,31 +2417,33 @@ body.theme-light .reset-all-btn:hover {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .wpd-right-controls {
   /* 不再自己滚：控制栏的长内容交给 body 的滚动条，避免嵌套滚动容器。 */
-  width: 290px;
-  min-width: 290px;
+  width: 310px;
+  min-width: 310px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   overflow: visible;
   box-sizing: border-box;
 }
 
 .wpd-table-wrapper {
-  /* 只做**横向**滚动（29 列），纵向不滚：表格高度随行数增长，
-     纵向滚动统一交给 .ui-modal__body。th 的 sticky 仍贴在 body 的滚动口上。 */
+  /* 完整支持横向与纵向双向滚动，表头与首列 sticky 吸附 */
   flex: 1;
-  height: auto !important;
-  min-height: 0;
-  max-height: none;
+  min-height: 360px;
+  max-height: 520px;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
   border: 1px solid var(--border-light);
   border-radius: 6px;
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--bg-card);
   scrollbar-width: thin;
-  scrollbar-color: rgba(56, 189, 248, 0.3) rgba(15, 23, 42, 0.6);
+  scrollbar-color: rgba(56, 189, 248, 0.4) var(--bg-tertiary);
 }
 
 .wpd-preview-table {
@@ -2359,47 +2452,87 @@ body.theme-light .reset-all-btn:hover {
   border-spacing: 0;
   font-family: var(--font-mono, monospace);
   font-size: 11px;
-  color: var(--text-primary, #f1f5f9);
+  color: var(--text-primary);
 }
 
 .wpd-preview-table th {
   position: sticky;
   top: 0;
   z-index: 5;
-  background: #0f172a;
+  background: var(--bg-tertiary);
   color: var(--accent-blue);
   font-weight: 700;
   padding: 6px 8px;
-  border-bottom: 2px solid #334155;
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 2px solid var(--border-color);
+  border-right: 1px solid var(--border-light);
   white-space: nowrap;
   text-align: right;
+}
+
+body.theme-light .wpd-preview-table th {
+  background: #f1f5f9;
+  color: #0369a1;
+  border-bottom: 2px solid #cbd5e1;
+  border-right: 1px solid #e2e8f0;
 }
 
 .wpd-preview-table th.col-row-num,
 .wpd-preview-table td.col-row-num {
   text-align: center;
-  color: #64748b;
-  width: 40px;
-  min-width: 40px;
+  color: var(--text-muted);
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
   position: sticky;
   left: 0;
-  background: #0f172a;
   z-index: 6;
-  border-right: 1px solid #334155;
+  background: var(--bg-card);
+  border-right: 1px solid var(--border-light);
+}
+
+.wpd-preview-table th.col-row-num {
+  z-index: 10;
+  background: var(--bg-tertiary);
+}
+
+body.theme-light .wpd-preview-table th.col-row-num {
+  background: #f1f5f9;
+}
+
+body.theme-light .wpd-preview-table td.col-row-num {
+  background: #ffffff;
 }
 
 .wpd-preview-table th.col-depth,
 .wpd-preview-table td.col-depth {
-  color: #34d399;
-  font-weight: 700;
   position: sticky;
-  left: 40px;
-  background: #0f172a;
+  left: 44px;
   z-index: 6;
-  border-right: 2px solid #334155;
+  background: var(--bg-card);
+  font-weight: 700;
+  color: var(--status-success);
+  border-right: 2px solid var(--border-color);
   text-align: right;
-  min-width: 75px;
+  min-width: 88px;
+  padding: 3px 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wpd-preview-table th.col-depth {
+  z-index: 10;
+  background: var(--bg-tertiary);
+}
+
+body.theme-light .wpd-preview-table th.col-depth {
+  background: #f1f5f9;
+  color: #059669;
+  border-right: 2px solid #cbd5e1;
+}
+
+body.theme-light .wpd-preview-table td.col-depth {
+  background: #ffffff;
+  color: #059669;
+  border-right: 2px solid #cbd5e1;
 }
 
 .wpd-preview-table td {
@@ -2417,28 +2550,29 @@ body.theme-light .reset-all-btn:hover {
 
 .wpd-cell-input {
   width: 100%;
-  min-width: 60px;
+  min-width: 80px;
   background: transparent;
   border: 1px solid transparent;
   color: inherit;
   font-family: inherit;
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
   text-align: right;
-  padding: 3px 5px;
+  padding: 3px 6px;
   border-radius: 3px;
-  transition: all 0.15s;
+  transition: all 0.15s ease;
 }
 
 .wpd-cell-input:hover {
   border-color: rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .wpd-cell-input:focus {
   outline: none;
   background: rgba(56, 189, 248, 0.15);
   border-color: var(--accent-blue);
-  box-shadow: 0 0 6px rgba(56, 189, 248, 0.3);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
   color: #fff;
 }
 
@@ -2446,7 +2580,7 @@ body.theme-light .reset-all-btn:hover {
   color: #f59e0b;
   font-weight: 600;
   background: rgba(245, 158, 11, 0.1);
-  border-color: rgba(245, 158, 11, 0.3);
+  border-color: rgba(245, 158, 11, 0.35);
 }
 
 /* ==================== 花粉属种名 OCR 识别与审核汇总表弹窗 ==================== */
@@ -2787,8 +2921,8 @@ body.theme-light .wpd-cell-input {
 }
 
 body.theme-light .wpd-cell-input:hover {
-  border-color: #94a3b8 !important;
-  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: #cbd5e1 !important;
+  background: #f8fafc !important;
 }
 
 body.theme-light .wpd-cell-input:focus {
@@ -2796,6 +2930,24 @@ body.theme-light .wpd-cell-input:focus {
   border-color: #0284c7 !important;
   color: #0f172a !important;
   box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15) !important;
+}
+
+body.theme-light .wpd-cell-input.user-modified {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
+body.theme-light .wpd-qa-banner--ok {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+body.theme-light .wpd-qa-banner--warn {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
 }
 
 /* 2. 测年与深度模型向导 (AgeDepthModal) 日间治愈 */

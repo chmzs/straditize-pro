@@ -628,7 +628,7 @@ export class RpcClient {
   public async calibrateDepthAxis(
     marks: Array<{ pixel: number; value: number }>,
     unit: string,
-    primaryAxis: 'depth' | 'age' = 'depth'
+    primaryAxis: string = 'age'
   ): Promise<{ canvas: DepthCalibration }> {
     const res = await this.call<
       { y_marks: Array<{ pixel: number; val: number }>; unit: string; primary_axis: string },
@@ -653,7 +653,7 @@ export class RpcClient {
         unit: resolvedUnit || undefined,
         // Trust the backend's echo, not our own request: a rejected override must not be
         // displayed as if it had been accepted.
-        primaryAxis: res.primary_axis === 'age' ? 'age' : 'depth',
+        primaryAxis: res.primary_axis || primaryAxis,
         marks: ordered.map((m) => ({ pixel: m.pixel, val: m.value })),
       },
     };

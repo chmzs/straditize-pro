@@ -303,6 +303,7 @@ export const en = {
   'step3.ref2': '② Reference Point Y2 (Bottom):',
   'step3.apply': 'Apply Calibration',
   'step3.unit': 'Unit',
+  'step3.value': 'Value',
   'step3.unitUnset': 'unit unset',
   'step3.next': 'Confirm Scale, Proceed to Clean (Step 4)',
 
