@@ -390,16 +390,18 @@
   - `unit` (string, 可选, 默认 `"cm"`): 深度/年代单位自由文本（`cm` / `m` / `mm` / `cal yr BP` / `ka`）。
     刻意不做枚举：强行枚举会迫使用户误报自己的坐标轴。数值可向下递增（深度）或向上递增（年代），
     方向由 `val` 本身决定。
-  - `primary_axis` (string, 可选, 默认 `"depth"`): **Y 轴测的是什么**，只接受 `"depth"` / `"age"`，
-    非法值返回 `-32602`。这一项**不能由 `unit` 推断**：`cm`/`m` 只在常规写法下才暗示深度，
+  - `primary_axis` (string, 可选, 默认 `"depth"`): **Y 轴测的是什么**，只接受 `"depth"` / `"age"` / `"code"`，
+    或有效自定义标识符（如 `elev`，以字母开头的小写字母/数字/下划线组合），非法值返回 `-32602`。这一项**不能由 `unit` 推断**：`cm`/`m` 只在常规写法下才暗示深度，
     `cal BP`/`ka` 只在常规写法下才暗示年代；猜错会把整根岩芯的样品放到"看起来合理但错误"的位置，
     且没有任何报错可察觉。
-    - `"depth"`（默认）：Y 读数即深度，行为与历史版本完全一致。
-    - `"age"`：Y 读数是年代，样品**深度由年代-深度模型反查**（`AgeDepthModel.predict_depth`，
+    - `"age"`：Y 读数是年代（配单位 `yrBP`，允许负年代如 -61 yrBP 表示 2011 AD），样品**深度由年代-深度模型反查**（`AgeDepthModel.predict_depth`，
       PCHIP 单调反演）。超出实测年龄范围的点会被标记；反查数量与范围随
       `mapped_samples.depth_provenance` 返回：
       `{"primary_axis":"age","depth_source":"…","inverse_extrapolated_count":N,"observed_age_range":[a,b]}`。
       此时若尚未载入年代-深度模型，反查无源，后端如实报 `STATE_ERROR`。
+    - `"depth"`（默认）：Y 读数即深度（配单位 `cm`），行为与历史版本完全一致。
+    - `"code"`：编号型，取值为从 1 开始的整数编号（1, 2, 3...，配单位 `#` 或无单位）。
+    - 自定义（如 `"elev"` 配单位 `m`）：导出表首列以该标识符命名，R 出图标题自动为 `Elev (m)`。
 - **返回 (result)**：
   ```json
   {
