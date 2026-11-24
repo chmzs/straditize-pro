@@ -59,25 +59,41 @@ def _create_session_with_model() -> StraditizeSession:
     return session
 
 
-def test_data_csv_purity_with_horizon_id_and_no_age_columns():
-    """验证 data.csv 首列为 horizon_id，且不掺杂任何模型衍生列。"""
+def _has_rioja() -> bool:
+    from straditize_core.plotting import candidate_rscripts
+    import subprocess
+
+    found = candidate_rscripts()
+    if not found:
+        return False
+    try:
+        out = subprocess.run(
+            [found[0], "-e", 'cat(requireNamespace("rioja", quietly = TRUE))'],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return out.stdout.strip().upper() == "TRUE"
+
+
+def test_data_csv_purity_and_no_age_columns():
+    """验证 data.csv 纯粹性：首列为 depth，且绝不掺杂任何年代模型衍生列。"""
     session = _create_session_with_model()
     res = session.export_data("csv")
     cols = res["columns"]
 
-    # 首列必须为 horizon_id，次列为 depth
-    assert cols[0] == "horizon_id"
-    assert cols[1] == "depth"
+    # 首列必须为 depth
+    assert cols[0] == "depth"
 
     # 严禁出现年代模型衍生列
-    forbidden = {"age_est", "age_lower_95", "age_upper_95", "depth_est", "sed_rate"}
-    assert forbidden.isdisjoint(cols), f"data.csv 被模型衍生列污染: {forbidden.intersection(cols)}"
+    forbidden = {"age_est", "age_lower_95", "age_upper_95", "depth_est", "sed_rate", "horizon_id"}
+    assert forbidden.isdisjoint(cols), f"data.csv 被模型衍生列或主键污染: {forbidden.intersection(cols)}"
 
     # 验证行数与内容
     assert res["rows_count"] == 3
-    assert res["data"][0]["horizon_id"] == "H0001"
-    assert res["data"][1]["horizon_id"] == "H0002"
-    assert res["data"][2]["horizon_id"] == "H0003"
 
 
 def test_age_depth_dataframe_and_dataset_export():
@@ -117,12 +133,13 @@ def test_archive_tar_and_bundle_zip_include_age_depth():
     manifest = json.loads(manifest_file.read().decode("utf-8"))
     assert manifest.get("age_depth_csv") == "data/age_depth.csv"
 
-    # 2. ZIP 出图包
-    zip_res = session.export_bundle_zip()
-    import base64
-    zf = zipfile.ZipFile(io.BytesIO(base64.b64decode(zip_res["base64"])))
-    z_names = zf.namelist()
-    assert "data.csv" in z_names
-    assert "age_depth.csv" in z_names
-    readme_text = zf.read("README.txt").decode("utf-8")
-    assert "age_depth.csv" in readme_text
+    # 2. ZIP 出图包（需要 R + rioja）
+    if _has_rioja():
+        zip_res = session.export_bundle_zip()
+        import base64
+        zf = zipfile.ZipFile(io.BytesIO(base64.b64decode(zip_res["base64"])))
+        z_names = zf.namelist()
+        assert "data.csv" in z_names
+        assert "age_depth.csv" in z_names
+        readme_text = zf.read("README.txt").decode("utf-8")
+        assert "age_depth.csv" in readme_text

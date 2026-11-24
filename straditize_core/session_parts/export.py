@@ -735,14 +735,7 @@ class ExportMixin:
             row_list = list(rowset.rows)
             depth_list = list(rowset.depths)
 
-            data_dict: dict[str, Any] = {}
-            if rowset.is_sample_rows and samples:
-                horizon_ids = [
-                    s.get("horizon_id") or f"H{idx + 1:04d}"
-                    for idx, s in enumerate(samples)
-                ]
-                data_dict["horizon_id"] = horizon_ids
-            data_dict[y_col] = depth_list
+            data_dict: dict[str, Any] = {y_col: depth_list}
 
             taxa_names = getattr(self, "taxa_names", None) or []
             for idx, col in enumerate(roi_cols):
@@ -2502,11 +2495,10 @@ class ExportMixin:
         from .export_docs import strat_plot_script_lines
 
         frame = self._primary_roi_export_frame(strict=False)
-        exclude_cols = {"horizon_id", self._y_col_label()}
         names = [
             str(name)
             for name in list(getattr(frame, "columns", []))
-            if str(name) not in exclude_cols
+            if str(name) != self._y_col_label()
         ]
         units = self._primary_roi_units_for(names)
         pct_cols = [name for name in names if is_percent_unit(units.get(name))]
@@ -2598,9 +2590,10 @@ class ExportMixin:
 
         frame = self._primary_roi_export_frame(strict=False)
         frame = frame.rename(columns=lambda col: str(col).strip("\r\n"))
-        exclude_cols = {"horizon_id", self._y_col_label()}
         names = [
-            str(name) for name in list(frame.columns) if str(name) not in exclude_cols
+            str(name)
+            for name in list(frame.columns)
+            if str(name) != self._y_col_label()
         ]
         units = self._primary_roi_units_for(names)
         pct_cols = [name for name in names if is_percent_unit(units.get(name))]

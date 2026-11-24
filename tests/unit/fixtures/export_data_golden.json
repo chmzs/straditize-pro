@@ -78,7 +78,6 @@
  "csv_calibrated_columns": {
   "ok": {
    "columns": [
-    "horizon_id",
     "depth",
     "col01",
     "col02",
@@ -97,13 +96,13 @@
     "col15",
     "col16"
    ],
-   "columns_count": 18,
+   "columns_count": 17,
    "csv_content_equals_csv": true,
-   "csv_digest": "d4cb23ce8171cb38",
+   "csv_digest": "c6a8da6e013b517d",
    "csv_head": [
-    "horizon_id,depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
-    "H0001,10.0,2.6316,0.0,8.1081,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
-    "H0002,210.0,2.6316,0.0,2.7027,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA"
+    "depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
+    "10.0,2.6316,0.0,8.1081,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
+    "210.0,2.6316,0.0,2.7027,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA"
    ],
    "data_head": [
     {
@@ -123,8 +122,7 @@
      "col14": null,
      "col15": null,
      "col16": null,
-     "depth": 10.0,
-     "horizon_id": "H0001"
+     "depth": 10.0
     },
     {
      "col01": 2.6316,
@@ -143,8 +141,7 @@
      "col14": null,
      "col15": null,
      "col16": null,
-     "depth": 210.0,
-     "horizon_id": "H0002"
+     "depth": 210.0
     }
    ],
    "file_path": null,
@@ -157,7 +154,6 @@
  "csv_calibrated_with_samples": {
   "ok": {
    "columns": [
-    "horizon_id",
     "depth",
     "col01",
     "col02",
@@ -176,13 +172,13 @@
     "col15",
     "col16"
    ],
-   "columns_count": 18,
+   "columns_count": 17,
    "csv_content_equals_csv": true,
-   "csv_digest": "c16d4e549974b154",
+   "csv_digest": "6043835c5b31a03b",
    "csv_head": [
-    "horizon_id,depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
-    "H0001,50.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
-    "H0002,150.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA"
+    "depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
+    "50.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
+    "150.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA"
    ],
    "data_head": [
     {
@@ -202,8 +198,7 @@
      "col14": null,
      "col15": null,
      "col16": null,
-     "depth": 50.0,
-     "horizon_id": "H0001"
+     "depth": 50.0
     },
     {
      "col01": null,
@@ -222,8 +217,7 @@
      "col14": null,
      "col15": null,
      "col16": null,
-     "depth": 150.0,
-     "horizon_id": "H0002"
+     "depth": 150.0
     },
     {
      "col01": null,
@@ -242,8 +236,7 @@
      "col14": null,
      "col15": null,
      "col16": null,
-     "depth": 250.0,
-     "horizon_id": "H0003"
+     "depth": 250.0
     }
    ],
    "file_path": null,
@@ -357,7 +350,6 @@
  "csv_with_file": {
   "ok": {
    "columns": [
-    "horizon_id",
     "depth",
     "col01",
     "col02",
@@ -376,13 +368,13 @@
     "col15",
     "col16"
    ],
-   "columns_count": 18,
+   "columns_count": 17,
    "csv_content_equals_csv": true,
-   "csv_digest": "c16d4e549974b154",
+   "csv_digest": "6043835c5b31a03b",
    "csv_head": [
-    "horizon_id,depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
-    "H0001,50.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
-    "H0002,150.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA"
+    "depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
+    "50.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
+    "150.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA"
    ],
    "data_head": [
     {
@@ -402,8 +394,7 @@
      "col14": null,
      "col15": null,
      "col16": null,
-     "depth": 50.0,
-     "horizon_id": "H0001"
+     "depth": 50.0
     },
     {
      "col01": null,
@@ -422,8 +413,7 @@
      "col14": null,
      "col15": null,
      "col16": null,
-     "depth": 150.0,
-     "horizon_id": "H0002"
+     "depth": 150.0
     },
     {
      "col01": null,
@@ -442,8 +432,7 @@
      "col14": null,
      "col15": null,
      "col16": null,
-     "depth": 250.0,
-     "horizon_id": "H0003"
+     "depth": 250.0
     }
    ],
    "file_path": "data.csv",
