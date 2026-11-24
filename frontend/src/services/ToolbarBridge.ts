@@ -322,7 +322,7 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
     },
     onOpenOcrReviewModal: p.openOcrReviewModal,
     onOpenAgeDepthModal: () => {
-      p.ageDepthModal.open();
+      p.ageDepthModal.open(p.canvasComponent.data);
     },
     onOpenSettings: () => {
       p.settingsModal.open();

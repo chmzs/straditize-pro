@@ -1001,8 +1001,8 @@ export class AgeDepthDatingTable {
         metadata: this.inspectionData?.metadata || {
           curve_type: 'median',
           envelope_type: '95_hpd',
-          depth_unit: 'cm',
-          age_unit: 'cal BP',
+          depth_unit: (this.container.querySelector('#ad-inp-depth-unit') as HTMLInputElement | null)?.value?.trim() || 'cm',
+          age_unit: (this.container.querySelector('#ad-inp-age-unit') as HTMLInputElement | null)?.value?.trim() || 'cal BP',
           calibration_curve: 'IntCal20',
         },
       };

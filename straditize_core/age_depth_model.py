@@ -1591,17 +1591,33 @@ class AgeDepthModel:
                 "Extracted age-depth relationship is degenerate (flat ages)."
             )
 
+        observed_min_a = float(np.min(unique_a))
+        observed_max_a = float(np.max(unique_a))
+        extrapolated = (a_arr < observed_min_a) | (a_arr > observed_max_a)
+
         from scipy.interpolate import PchipInterpolator
 
         try:
             inv_pchip = PchipInterpolator(unique_a, unique_d)
-            pred_d = inv_pchip(a_arr)
+            pred_d = np.asarray(inv_pchip(a_arr), dtype=float)
+            low_mask = a_arr < observed_min_a
+            if np.any(low_mask):
+                slope_lo = (unique_d[1] - unique_d[0]) / (unique_a[1] - unique_a[0])
+                pred_d[low_mask] = unique_d[0] + slope_lo * (a_arr[low_mask] - observed_min_a)
+            high_mask = a_arr > observed_max_a
+            if np.any(high_mask):
+                slope_hi = (unique_d[-1] - unique_d[-2]) / (unique_a[-1] - unique_a[-2])
+                pred_d[high_mask] = unique_d[-1] + slope_hi * (a_arr[high_mask] - observed_max_a)
         except Exception:
             pred_d = np.interp(a_arr, unique_a, unique_d)
-
-        observed_min_a = float(np.min(unique_a))
-        observed_max_a = float(np.max(unique_a))
-        extrapolated = (a_arr < observed_min_a) | (a_arr > observed_max_a)
+            low_mask = a_arr < observed_min_a
+            if np.any(low_mask):
+                slope_lo = (unique_d[1] - unique_d[0]) / (unique_a[1] - unique_a[0])
+                pred_d[low_mask] = unique_d[0] + slope_lo * (a_arr[low_mask] - observed_min_a)
+            high_mask = a_arr > observed_max_a
+            if np.any(high_mask):
+                slope_hi = (unique_d[-1] - unique_d[-2]) / (unique_a[-1] - unique_a[-2])
+                pred_d[high_mask] = unique_d[-1] + slope_hi * (a_arr[high_mask] - observed_max_a)
 
         return {
             "ages": _report_list(a_arr),

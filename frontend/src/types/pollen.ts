@@ -385,6 +385,10 @@ export interface SampleHorizon {
   cluster_span_px?: number | null; // 簇内行号 max − min
   member_count?: number | null; // 簇内拐点总数
   polarity?: 'peak' | 'valley' | 'mixed' | null; // 双轨极性：峰 / 谷 / 融合 (#124)
+  /** 关联年代模型后插值/反演出的估算年代及置信区间 */
+  age?: number | null;
+  age_min?: number | null;
+  age_max?: number | null;
 }
 
 export interface ImageMeta {
@@ -474,6 +478,9 @@ export interface DiagramData {
 
   /** 采样层位扁平列表 */
   samples: SampleHorizon[];
+
+  /** 年代-深度模型检查数据（关联后存在） */
+  age_depth_model?: any;
 
   activeTaxaId: string;
   isDesktopMode?: boolean; // 桌面模式显示右上角 [退出] 按钮，服务器模式隐藏

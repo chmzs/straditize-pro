@@ -182,16 +182,24 @@ export function createAgeDepthModalHtml(): string {
               </div>
             </div>
 
-            <!-- ============ 步骤 1b：单位约定（固定） ============ -->
-            <div class="form-group" style="margin: 0; padding: 8px; border-radius: 4px; border-left: 3px solid var(--accent-amber); background: rgba(245,158,11,0.07);">
-              <div style="font-size: 10.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 3px;">
-                ①b 单位固定为 <code>cm</code> 与 <code>cal BP</code>
+            <!-- ============ 步骤 1b：物理量单位与 Y 轴对接 ============ -->
+            <div class="form-group" style="margin: 0; padding: 8px; border-radius: 4px; border-left: 3px solid var(--accent-blue); background: var(--bg-card); border: 1px solid var(--border-light);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <span style="font-size: 10.5px; font-weight: 700; color: var(--text-primary);">①b 物理量单位与 Y 轴对接</span>
+                <span id="ad-ycal-sync-badge" style="font-size: 9.5px; padding: 1px 6px; border-radius: 3px; background: rgba(59, 130, 246, 0.1); color: var(--accent-blue); font-weight: 600;">未对接</span>
               </div>
-              <div style="font-size: 9.5px; color: var(--text-secondary); line-height: 1.55;">
-                本工具只认这两个单位，不做任何单位换算。<br>
-                原图若用 <b>ka</b>（如 0–12 ka），请自己乘 1000 后填入标定值（0 / 12000）；<br>
-                原图若用 <b>AD/CE</b>，请自己换成 BP（<code>BP = 1950 − AD</code>），否则年代方向相反。<br>
-                <b>未校正 ¹⁴C BP</b> 不是时间轴，需先过校正曲线，本工具不做校正。
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 10px;">
+                <div>
+                  <label style="color: var(--text-muted); display: block; margin-bottom: 2px;">深度单位 (Depth Unit):</label>
+                  <input type="text" id="ad-inp-depth-unit" value="cm" placeholder="如 cm / m" style="width: 100%; font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);" />
+                </div>
+                <div>
+                  <label style="color: var(--text-muted); display: block; margin-bottom: 2px;">年代单位 (Age Unit):</label>
+                  <input type="text" id="ad-inp-age-unit" value="cal BP" placeholder="如 cal BP / yrBP" style="width: 100%; font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);" />
+                </div>
+              </div>
+              <div id="ad-ycal-sync-hint" style="font-size: 9.5px; color: var(--text-muted); line-height: 1.45; margin-top: 5px;">
+                单位默认自动与当前图谱 Y 轴（步骤 3）标定单位联动。原图若用 ka 轴可将单位设为 ka BP 或乘 1000 换算为 cal BP。
               </div>
             </div>
 

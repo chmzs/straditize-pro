@@ -458,4 +458,35 @@ assert.equal(
 );
 console.log('✔ 标定框已删、读数 3 位小数');
 
+// ---------------------------------------------------------------------------
+// 11. 动态深度与年代单位输入与 Y 轴物理标定状态对接
+// ---------------------------------------------------------------------------
+assert.ok(
+  /id="ad-inp-depth-unit"/.test(tplUpload),
+  '必须提供深度单位输入框 #ad-inp-depth-unit，禁止硬编码 cm',
+);
+assert.ok(
+  /id="ad-inp-age-unit"/.test(tplUpload),
+  '必须提供年代单位输入框 #ad-inp-age-unit，禁止硬编码 cal BP',
+);
+assert.ok(
+  /id="ad-ycal-sync-badge"/.test(tplUpload),
+  '必须包含 Y 轴对接状态徽标 #ad-ycal-sync-badge',
+);
+assert.equal(
+  /depth_unit:\s*['"]cm['"]\s*,/.test(controllerSource),
+  false,
+  'AgeDepthController 不得硬编码 depth_unit 为 cm，必须读取输入框',
+);
+assert.equal(
+  /age_unit:\s*['"]cal BP['"]\s*,/.test(controllerSource),
+  false,
+  'AgeDepthController 不得硬编码 age_unit 为 cal BP，必须读取输入框',
+);
+assert.ok(
+  /syncFromPollenData\(/.test(modalSource),
+  'AgeDepthModal 必须实现 syncFromPollenData 对接 Y 轴标定与单位',
+);
+console.log('✔ Y 轴物理量对接与单位动态透传断言通过');
+
 console.log('\n年代-深度同步回归测试全部通过');
