@@ -232,6 +232,11 @@ calibration: { isCalibrated, top_px, top_cm,
    导出预览不再渲染 NA 行集——"没有这个数"表现为**拒绝导出并说明原因**，
    而不是一排 NA 冒充数据；「个别层位缺测按 naFill」仍是地学惯例的 0，两者语义不同。
 
+### 6.2.1 夸大线 QA 诊断旗标自适应规则 (issue #120)
+
+- **物理背景**：`FLAG_EXAGG_RATIO` 针对双层夸大列（内线贴轴，外线放大 M 倍）逐行校验 `(outer - z0) / (inner - z0)` 是否合理。真实钻孔（如 Gahai）由于印刷版面与扫描量化，轴宽或零点常存在 ±1~2px 微小偏移；若使用硬编码固定阈值 `[3.0, 5.5]`，每 1px 零点偏差会引起比值 p50 剧烈抬升（4.28 -> 6.60），造成 77.9% 假告警。
+- **自适应可信区间**：判据与列声明的 `exaggeration_mult` 强绑定。若列声明了倍率 $M$（如 $M=5.0$ 或 $M=10.0$），可信容差区间动态定义为 $[M \times 0.55, M \times 1.45]$（$5\times$ 对应 $[2.75, 7.25]$），将零点微弱漂移与印刷线宽波动解耦，杜绝大规模误报，同时对真正的倍率失真（如实测仅 $1\times$ 或高达 $16.5\times$）保持 100% 严苛捕获。未显式声明时回退基础常数 `EXAGG_RATIO_RANGE = (3.0, 5.5)`。
+
 ### 6.3 无横轴列：两种制图约定与各自的折算
 
 测试图由 rioja 1.0.7 `strat.plot` 生成，源码三条参数共同决定"这一列画不画横轴"：
@@ -495,7 +500,12 @@ digitize 用 ink & ~grid_line_mask & roi_mask
 | `algorithm.setLineThickness` | 把选中(`candidate_id`)/本 ROI 全部几何统一成指定像素厚度，中心行不动 | 清理状态 |
 | `algorithm.clearCleanupEdits` | 清空本 ROI 的几何 + 排除区 + 笔迹 | 清理状态 |
 | `algorithm.applyLineRemoval` | 重新合成掩膜；可选 `strokes` **全量覆盖**笔迹 | 清理状态 |
-| ~~`algorithm.degrid`~~ | **已下线**，后端保留但前端无调用方（见上文 ⚠️） | `DegridResult` |
+| `algorithm.degrid` | 外部 RPC / WebMCP 兼容接口（形态学连续段模型，详见下文双轨规则） | `DegridResult` |
+
+#### 横线检测双轨模型与差集规则 (issue #110)
+- `algorithm.degrid` 基于形态学开运算（`morphological_continuous`），只检出强连续实线，若横线存在浅灰或空洞（如真实扫描区带线）则会在开运算阶段被过滤（返回 0 条）；返回值附带 `detection_model` 与 `disclaimer` 说明；
+- `algorithm.detectLineCandidates` 基于行投影贯穿率模型（`line_fraction_h=0.65`），专为真实古生态图谱设计，可完整召回含空洞或浅色印刷区带横线；
+- 外部客户端与 MCP 统一明确这一差集规则，避免黑箱判定分歧。
 
 「清理状态」= `{roi_id, stats, candidates, selected_ids, overlay_png, overlay_legend}`，
 **这六项必须整体回灌前端**。`stats` 是面板显示的唯一数字来源。

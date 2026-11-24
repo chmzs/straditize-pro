@@ -2408,4 +2408,6 @@ class CoreMixin:
             "manual_erase_pixels": int((auto & erase).sum()),
             "roi": list(roi),
             "overlay_png": mask_overlay_data_url(ink, self.grid_line_mask),
+            "detection_model": "morphological_continuous",
+            "disclaimer": "Detects strictly continuous solid lines via opening; for faint or zone lines with voids use algorithm.detectLineCandidates",
         }

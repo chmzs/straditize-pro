@@ -323,7 +323,7 @@ def compute_qa_flags(
                 }
             )
 
-        # --- FLAG_EXAGG_RATIO：内线 / 外线成对读数（#99）------------------------
+        # --- FLAG_EXAGG_RATIO：内线 / 外线成对读数（#99, #120）------------------------
         # 数据源是 `column_points` 点字典上的 `inner_xs_px` / `outer_xs_px`（键契约与
         # 落库位置见 `session_parts/layers.py`）：只有"同一行墨迹里两条线都在"的行才有
         # 这对读数，没有读数的行**不写键**。因此"缺这对键"与"键在但没有一行带数值"
@@ -332,6 +332,17 @@ def compute_qa_flags(
         inner = col.get("inner_xs_px")
         outer = col.get("outer_xs_px")
         rows = col.get("rows_px") or []
+        mult = col.get("exaggeration_mult")
+
+        # 自适应可信区间（issue #120）：与列声明的 exaggeration_mult 挂钩。
+        # 默认 5x 对应 [2.75, 7.25]（容忍 ±1~2px 轴宽/零点微小漂移引起的 ratio 涨落，避免 Gahai 77.9% 假告警）。
+        # 若未指定或 ≤1.0，回退至基础常数 EXAGG_RATIO_RANGE。
+        if mult is not None and _is_number(mult) and float(mult) > 1.0:
+            m_val = float(mult)
+            ratio_min, ratio_max = m_val * 0.55, m_val * 1.45
+        else:
+            ratio_min, ratio_max = EXAGG_RATIO_RANGE
+
         if (
             inner is None
             or outer is None
@@ -352,7 +363,7 @@ def compute_qa_flags(
                     continue
                 n_pairs += 1
                 ratio = outer_dist / inner_dist
-                if EXAGG_RATIO_RANGE[0] <= ratio <= EXAGG_RATIO_RANGE[1]:
+                if ratio_min <= ratio <= ratio_max:
                     continue
                 exagg_rows.append(
                     {
