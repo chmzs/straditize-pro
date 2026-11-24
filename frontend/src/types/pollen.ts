@@ -277,13 +277,13 @@ export interface DataRoi {
 export interface DepthCalibration {
   isCalibrated: boolean;
   top_px: number | null; // 上方参考点的图像像素 Y
-  top_cm: number | null; // 上方参考点的真实值 (cm / m / cal yr BP ...)
+  top_cm: number | null; // 上方参考点的真实值 (cm / cal yrBP ...)
   bottom_px: number | null; // 下方参考点的图像像素 Y
   bottom_cm: number | null; // 下方参考点的真实值
   unit?: string;
   /**
    * What the Y axis MEASURES. Declared by the user, never inferred from `unit`:
-   * "cm"/"m" imply depth and "cal BP"/"ka" imply age only for the conventional
+   * "cm" implies depth and "cal yrBP"/"ka" imply age only for the conventional
    * spellings, and a wrong guess moves every sample to a plausible-but-wrong position.
    * `"age"` means sample depths are recovered by inverting the age-depth model.
    */
@@ -370,6 +370,7 @@ export interface ExclusionRegion {
 }
 
 export interface SampleHorizon {
+  horizon_id?: string; // 规范化 4 位定长层位主键 (H0001, H0002, ...)
   row_px: number;
   depth: number | null; // 未标定必须是 null，不得填 0
   // `grid` = samples.fromDepthGrid 生成的等距网格层位（与拐点共识 / 粘贴 / 手工并列）。
@@ -387,6 +388,9 @@ export interface SampleHorizon {
   polarity?: 'peak' | 'valley' | 'mixed' | null; // 双轨极性：峰 / 谷 / 融合 (#124)
   /** 关联年代模型后插值/反演出的估算年代及置信区间 */
   age?: number | null;
+  age_est?: number | null;
+  age_lower?: number | null;
+  age_upper?: number | null;
   age_min?: number | null;
   age_max?: number | null;
 }

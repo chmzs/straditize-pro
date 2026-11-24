@@ -104,10 +104,26 @@ class PlottingMixin:
                 "没有可绘制的数据：先把列数字化并完成步骤 3（深度标定）与步骤 6（列刻度）。",
             )
 
-        # 过滤非属种列（如 age, age_min, age_max, sample_code 等），防止年代数值作为花粉属种污染图谱
-        _non_taxa = {"age", "age_min", "age_max", "sample_code", "sample_id", "row_px"}
+        # 过滤非属种列（如 horizon_id, age, age_min/max, age_lower/upper, depth_est, sample_code 等），防止年代数值与层位主键污染图谱
+        _non_taxa = {
+            "horizon_id",
+            "age",
+            "age_est",
+            "age_min",
+            "age_max",
+            "age_lower",
+            "age_upper",
+            "age_lower_95",
+            "age_upper_95",
+            "depth",
+            "depth_est",
+            "sample_code",
+            "sample_id",
+            "row_px",
+        }
         _valid_cols = [frame.columns[0]] + [
-            c for c in frame.columns[1:]
+            c
+            for c in frame.columns[1:]
             if str(c).strip().lower() not in _non_taxa
         ]
         if len(_valid_cols) > 1:

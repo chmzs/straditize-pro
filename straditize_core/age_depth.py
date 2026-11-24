@@ -19,6 +19,7 @@ from .age_depth_model import (
     SIGMA_LOG_RATE_CAP,
     _cumulative_trapezoid,
     check_local_r_environment,
+    export_bacon_package,
     find_rscript,
     generate_bacon_script,
     generate_geochronr_script,
@@ -48,5 +49,6 @@ __all__ = [
     "generate_geochronr_script",
     "find_rscript",
     "check_local_r_environment",
+    "export_bacon_package",
     "run_local_bacon",
 ]

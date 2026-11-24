@@ -77,9 +77,12 @@ def register(dispatcher: Any, session: Any) -> None:
         ),
     )
     dispatcher.register_method(
-        "agedepth.checkREnvironment", lambda: check_local_r_environment()
+        "agedepth.checkREnvironment",
+        lambda: check_local_r_environment(session.config.get("rscript_path")),
     )
     dispatcher.register_method("agedepth.runLocalBacon", session.run_local_bacon)
     dispatcher.register_method("agedepth.runBaconModeling", session.run_age_modeling)
+    dispatcher.register_method("agedepth.exportBaconPackage", session.export_bacon_package)
+    dispatcher.register_method("agedepth.syncToSamples", session.sync_to_samples)
     dispatcher.register_method("ensemble.add", session.ensemble_add)
     dispatcher.register_method("ensemble.list", session.ensemble_list)

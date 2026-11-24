@@ -43,6 +43,9 @@ def strat_plot_script_lines(
     units: Mapping[str, Any],
     exag_cols: Mapping[str, float] | Sequence[str] | None = None,
     y_axis: Mapping[str, Any] | None = None,
+    primary_axis: str | None = None,
+    unit: str | None = None,
+    rev_y: bool | None = None,
 ) -> list[str]:
     """一个 ROI 的 `strat.plot` 调用段（**唯一的生成处**）。
 
@@ -99,10 +102,12 @@ def strat_plot_script_lines(
         return f", plot.exag = {var_expr} %in% {r_string_vector(in_group)}, exag.mult = {exag_mult_val}"
 
     y_axis_args = ""
+    y_label: str | None = None
     if y_axis and isinstance(y_axis, (dict, Mapping)):
         ymin = y_axis.get("min")
         ymax = y_axis.get("max")
         yint = y_axis.get("interval")
+        y_label = y_axis.get("ylabel") or y_axis.get("label")
         if ymin is not None and ymax is not None:
             try:
                 ymin_f = float(ymin)
@@ -113,6 +118,23 @@ def strat_plot_script_lines(
                     y_axis_args += f", y.tks = seq({ymin_f:g}, {ymax_f:g}, by = {yint_f:g})"
             except (ValueError, TypeError):
                 pass
+
+    if y_label:
+        safe_ylabel = str(y_label).replace("'", "\\'")
+        y_axis_args += f", ylabel = '{safe_ylabel}'"
+
+    # Y 轴反向控制 (y.rev)
+    # 深度 (cm) 与年代 (cal yrBP) 默认 y.rev = TRUE（深层/古老在下）
+    # 高程 (elev / m) 默认 y.rev = FALSE（高层在顶）
+    is_rev = True
+    if rev_y is not None:
+        is_rev = bool(rev_y)
+    elif y_axis and isinstance(y_axis, (dict, Mapping)) and "rev_y" in y_axis:
+        is_rev = bool(y_axis["rev_y"])
+    elif primary_axis in ("elev", "elevation", "height"):
+        is_rev = False
+
+    rev_str = "TRUE" if is_rev else "FALSE"
 
     # `csv_expr` 决定「读哪个路径表达式」：归档脚本写死文件名（老行为，零回归），
     # 单文件包（zip 那份）传 `csv_path`，好在脚本开头从命令行参数取默认值。
@@ -143,19 +165,19 @@ def strat_plot_script_lines(
         lines.append("    if (length(pct_cols) > 0) {")
         pct_ex = _exag_str(pct, "pct_cols")
         lines.append(
-            f"      strat.plot({df_var}[, pct_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE{pct_ex}{y_axis_args}, title = '{roi_name}')"
+            f"      strat.plot({df_var}[, pct_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = {rev_str}, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE{pct_ex}{y_axis_args}, title = '{roi_name}')"
         )
         lines.append("    }")
         lines.append("    if (length(fixed_cols) > 0) {")
         fixed_ex = _exag_str(fixed, "fixed_cols")
         lines.append(
-            f"      strat.plot({df_var}[, fixed_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = FALSE, plot.poly = TRUE, plot.line = TRUE{fixed_ex}{y_axis_args}, add = length(pct_cols) > 0)"
+            f"      strat.plot({df_var}[, fixed_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = {rev_str}, scale.percent = FALSE, plot.poly = TRUE, plot.line = TRUE{fixed_ex}{y_axis_args}, add = length(pct_cols) > 0)"
         )
         lines.append("    }")
     else:
         all_ex = _exag_str(pct, f"names({df_var})[-1]")
         lines.append(
-            f"    strat.plot({df_var}[-1], yvar = {df_var}[[1]], y.rev = TRUE, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE{all_ex}{y_axis_args}, title = '{roi_name}')"
+            f"    strat.plot({df_var}[-1], yvar = {df_var}[[1]], y.rev = {rev_str}, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE{all_ex}{y_axis_args}, title = '{roi_name}')"
         )
     lines.append("  }")
     lines.append("}\n")

@@ -41,6 +41,7 @@ export interface BackendStatus {
  */
 export type RpcMethod =
   | 'agedepth.checkREnvironment'
+  | 'agedepth.exportBaconPackage'
   | 'agedepth.extractAndInspect'
   | 'agedepth.generateBaconScript'
   | 'agedepth.generateEnsemble'
@@ -49,6 +50,7 @@ export type RpcMethod =
   | 'agedepth.loadModelDiagram'
   | 'agedepth.runBaconModeling'
   | 'agedepth.runLocalBacon'
+  | 'agedepth.syncToSamples'
   | 'agedepth.updateModel'
   | 'algorithm.applyLineRemoval'
   | 'algorithm.clearCleanupEdits'

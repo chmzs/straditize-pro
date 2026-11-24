@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +39,7 @@ class AgeDepthAxisCalibrator:
         age_px: list[float],
         age_vals: list[float],
         depth_unit: str = "cm",
-        age_unit: str = "cal BP",
+        age_unit: str = "cal yrBP",
         depth_log: bool = False,
         age_log: bool = False,
     ):
@@ -110,22 +109,26 @@ class AgeDepthModel:
         self,
         depths: np.ndarray,
         ages: np.ndarray,
+        age_lower: np.ndarray | None = None,
+        age_upper: np.ndarray | None = None,
         age_min: np.ndarray | None = None,
         age_max: np.ndarray | None = None,
-        curve_type: str = "median",
+        curve_type: str = "mean",
         envelope_type: str = "95_hpd",
         depth_unit: str = "cm",
-        age_unit: str = "cal BP",
+        age_unit: str = "cal yrBP",
         cal_curve: str = "IntCal20",
         calibration_curve: str | None = None,
         notes: str = "",
         analysis_depths: np.ndarray | None = None,
         analysis_ages: np.ndarray | None = None,
+        analysis_age_lower: np.ndarray | None = None,
+        analysis_age_upper: np.ndarray | None = None,
         analysis_age_min: np.ndarray | None = None,
         analysis_age_max: np.ndarray | None = None,
         **kwargs: Any,
     ):
-        """Builds a model over ``depths``/``ages``.
+        """Builds a model over ``depths``/``ages``, with 95% confidence bounds ``age_lower``/``age_upper``.
 
         ``analysis_*`` optionally supplies a *finer* sampling of the same underlying curve.
         The interpolators, and therefore everything derived from them (point predictions
@@ -140,25 +143,29 @@ class AgeDepthModel:
         self.depths = np.asarray(depths, dtype=float)[sort_idx]
         self.ages = np.asarray(ages, dtype=float)[sort_idx]
 
+        # Resolve lower / upper (retaining age_min / age_max compatibility)
+        eff_lower = age_lower if age_lower is not None else age_min
+        eff_upper = age_upper if age_upper is not None else age_max
+
         # A missing envelope is tracked as missing rather than silently defaulted to the
-        # median. `self.age_min = self.ages.copy()` would describe a ZERO-WIDTH envelope,
+        # mean. `self.age_lower = self.ages.copy()` would describe a ZERO-WIDTH envelope,
         # i.e. a chronology claimed to be exact, and every downstream consumer (the age
         # ensemble, the rate posterior, the exported 95% CI column) would report that
         # certainty as if it had been measured.
-        if age_min is not None:
-            self.age_min = np.asarray(age_min, dtype=float)[sort_idx]
+        if eff_lower is not None:
+            self._age_lower = np.asarray(eff_lower, dtype=float)[sort_idx]
         else:
-            self.age_min = self.ages.copy()
+            self._age_lower = self.ages.copy()
 
-        if age_max is not None:
-            self.age_max = np.asarray(age_max, dtype=float)[sort_idx]
+        if eff_upper is not None:
+            self._age_upper = np.asarray(eff_upper, dtype=float)[sort_idx]
         else:
-            self.age_max = self.ages.copy()
+            self._age_upper = self.ages.copy()
 
-        self.has_envelope = age_min is not None and age_max is not None
+        self.has_envelope = eff_lower is not None and eff_upper is not None
 
         self.curve_type = (
-            curve_type  # 'median' | 'weighted_mean' | 'mode' | 'best_fit' | 'custom'
+            curve_type  # 'mean' | 'median' | 'weighted_mean' | 'mode' | 'best_fit' | 'custom'
         )
         self.envelope_type = envelope_type  # '95_hpd' | '68_ci' | 'custom'
         self.depth_unit = depth_unit
@@ -167,8 +174,8 @@ class AgeDepthModel:
         self.notes = notes
         self.px_y: np.ndarray | None = None
         self.px_x_curve: np.ndarray | None = None
-        self.px_x_min: np.ndarray | None = None
-        self.px_x_max: np.ndarray | None = None
+        self._px_x_lower: np.ndarray | None = None
+        self._px_x_upper: np.ndarray | None = None
         #: Which response channel located the median line ("chroma" or "darkness").
         self.curve_channel: str = "darkness"
         self.curve_channel_reason: str = ""
@@ -187,30 +194,106 @@ class AgeDepthModel:
         self.has_envelope: bool
 
         # Interpolators are built from the finest sampling available.
+        eff_an_lower = (
+            analysis_age_lower
+            if analysis_age_lower is not None
+            else analysis_age_min
+        )
+        eff_an_upper = (
+            analysis_age_upper
+            if analysis_age_upper is not None
+            else analysis_age_max
+        )
         if analysis_depths is not None and np.asarray(analysis_depths).size >= 2:
             a_idx = np.argsort(analysis_depths)
             fit_depths = np.asarray(analysis_depths, dtype=float)[a_idx]
             fit_ages = np.asarray(analysis_ages, dtype=float)[a_idx]
-            fit_min = np.asarray(analysis_age_min, dtype=float)[a_idx]
-            fit_max = np.asarray(analysis_age_max, dtype=float)[a_idx]
+            fit_lower = np.asarray(eff_an_lower, dtype=float)[a_idx] if eff_an_lower is not None else fit_ages
+            fit_upper = np.asarray(eff_an_upper, dtype=float)[a_idx] if eff_an_upper is not None else fit_ages
         else:
             fit_depths, fit_ages = self.depths, self.ages
-            fit_min, fit_max = self.age_min, self.age_max
+            fit_lower, fit_upper = self._age_lower, self._age_upper
 
         self.analysis_depths = fit_depths
         self.analysis_ages = fit_ages
-        self.analysis_age_min = fit_min
-        self.analysis_age_max = fit_max
+        self.analysis_age_lower = fit_lower
+        self.analysis_age_upper = fit_upper
+        self.analysis_age_min = fit_lower
+        self.analysis_age_max = fit_upper
 
         # Monotonic-preserving PCHIP interpolators
         if len(fit_depths) >= 2:
             self._interp_age = PchipInterpolator(fit_depths, fit_ages, extrapolate=True)
-            self._interp_min = PchipInterpolator(fit_depths, fit_min, extrapolate=True)
-            self._interp_max = PchipInterpolator(fit_depths, fit_max, extrapolate=True)
+            self._interp_min = PchipInterpolator(fit_depths, fit_lower, extrapolate=True)
+            self._interp_max = PchipInterpolator(fit_depths, fit_upper, extrapolate=True)
         else:
             self._interp_age = None
             self._interp_min = None
             self._interp_max = None
+
+    @property
+    def age_lower(self) -> np.ndarray:
+        return self._age_lower
+
+    @age_lower.setter
+    def age_lower(self, val: np.ndarray) -> None:
+        self._age_lower = val
+
+    @property
+    def age_upper(self) -> np.ndarray:
+        return self._age_upper
+
+    @age_upper.setter
+    def age_upper(self, val: np.ndarray) -> None:
+        self._age_upper = val
+
+    @property
+    def age_min(self) -> np.ndarray:
+        return self._age_lower
+
+    @age_min.setter
+    def age_min(self, val: np.ndarray) -> None:
+        self._age_lower = val
+
+    @property
+    def age_max(self) -> np.ndarray:
+        return self._age_upper
+
+    @age_max.setter
+    def age_max(self, val: np.ndarray) -> None:
+        self._age_upper = val
+
+    @property
+    def px_x_lower(self) -> np.ndarray | None:
+        return self._px_x_lower
+
+    @px_x_lower.setter
+    def px_x_lower(self, val: np.ndarray | None) -> None:
+        self._px_x_lower = val
+
+    @property
+    def px_x_upper(self) -> np.ndarray | None:
+        return self._px_x_upper
+
+    @px_x_upper.setter
+    def px_x_upper(self, val: np.ndarray | None) -> None:
+        self._px_x_upper = val
+
+    @property
+    def px_x_min(self) -> np.ndarray | None:
+        return self._px_x_lower
+
+    @px_x_min.setter
+    def px_x_min(self, val: np.ndarray | None) -> None:
+        self._px_x_lower = val
+
+    @property
+    def px_x_max(self) -> np.ndarray | None:
+        return self._px_x_upper
+
+    @px_x_max.setter
+    def px_x_max(self, val: np.ndarray | None) -> None:
+        self._px_x_upper = val
 
     def to_inspection_data(self) -> dict[str, Any]:
         """Serializes curves, pixel coordinates, and metadata for visual overlay check in UI.
@@ -229,8 +312,10 @@ class AgeDepthModel:
             px_dict = {
                 "y": _report_list(self.px_y[::step]),
                 "x_curve": _report_list(self.px_x_curve[::step]),
-                "x_min": _report_list(self.px_x_min[::step]),
-                "x_max": _report_list(self.px_x_max[::step]),
+                "x_lower": _report_list(self.px_x_lower[::step]) if self.px_x_lower is not None else None,
+                "x_upper": _report_list(self.px_x_upper[::step]) if self.px_x_upper is not None else None,
+                "x_min": _report_list(self.px_x_min[::step]) if self.px_x_min is not None else None,
+                "x_max": _report_list(self.px_x_max[::step]) if self.px_x_max is not None else None,
             }
 
         # Attach the windowed rate + its error bar to THIS row set, decimated with the same
@@ -253,6 +338,8 @@ class AgeDepthModel:
         return {
             "depths": _report_list(self.depths[::step]),
             "ages": _report_list(self.ages[::step]),
+            "age_lower": _report_list(self.age_lower[::step]),
+            "age_upper": _report_list(self.age_upper[::step]),
             "age_min": _report_list(self.age_min[::step]),
             "age_max": _report_list(self.age_max[::step]),
             "sed_rate": sed_rate,
@@ -1518,6 +1605,8 @@ class AgeDepthModel:
         return {
             "depths": _report_list(d_arr),
             "age_est": _report_list(age_est),
+            "age_lower": _report_list(age_min),
+            "age_upper": _report_list(age_max),
             "age_min": _report_list(age_min),
             "age_max": _report_list(age_max),
             "acc_rate_yr_per_depth": _clean(slope),
@@ -1811,35 +1900,21 @@ message("Updated LiPD container with MCMC age ensembles successfully saved!")
 """
 
 
-def find_rscript() -> str | None:
-    """Finds Rscript executable via PATH or common Windows / Unix installation paths."""
-    import shutil
-    import sys
+def find_rscript(explicit: str | None = None) -> str | None:
+    """Finds Rscript executable via unified plotting detection."""
+    from .plotting import detect_rscript
 
-    p = shutil.which("Rscript")
-    if p:
-        return p
-    if sys.platform == "win32":
-        candidates = [
-            r"D:\Program Files\R\R\bin\Rscript.exe",
-            r"C:\Program Files\R\R\bin\Rscript.exe",
-            r"D:\Program Files\R\R-4.5.3\bin\Rscript.exe",
-            r"C:\Program Files\R\R-4.5.3\bin\Rscript.exe",
-            r"C:\Program Files\R\R-4.5.0\bin\Rscript.exe",
-            r"C:\Program Files\R\R-4.4.2\bin\Rscript.exe",
-            r"C:\Program Files\R\R-4.4.0\bin\Rscript.exe",
-        ]
-        for cand in candidates:
-            if os.path.isfile(cand):
-                return cand
-    return None
+    detection = detect_rscript(explicit)
+    return detection.get("path")
 
 
-def check_local_r_environment() -> dict[str, Any]:
+def check_local_r_environment(explicit_rscript: str | None = None) -> dict[str, Any]:
     """Detects local R installation and available geochronology packages (rbacon, geoChronR)."""
     import subprocess
+    from .plotting import detect_rscript
 
-    rscript_path = find_rscript()
+    detection = detect_rscript(explicit_rscript)
+    rscript_path = detection.get("path")
     if not rscript_path:
         return {
             "has_r": False,
@@ -1847,6 +1922,7 @@ def check_local_r_environment() -> dict[str, Any]:
             "has_rbacon": False,
             "has_geochronr": False,
             "r_version": None,
+            "error": detection.get("error"),
         }
 
     cmd = [
@@ -1871,13 +1947,14 @@ def check_local_r_environment() -> dict[str, Any]:
             "has_geochronr": has_geochronr,
             "r_version": version_line,
         }
-    except Exception:
+    except Exception as e:
         return {
             "has_r": True,
             "rscript_path": rscript_path,
             "has_rbacon": False,
             "has_geochronr": False,
             "r_version": "Unknown",
+            "error": str(e),
         }
 
 
@@ -1893,18 +1970,22 @@ def run_local_bacon(
     depth_min: float = 0.0,
     depth_max: float = 150.0,
     depth_step: float = 1.0,
+    explicit_rscript: str | None = None,
 ) -> dict[str, Any]:
     """Runs native rbacon MCMC simulation via local system Rscript (2~3s native speed)."""
     import subprocess
     import tempfile
 
-    r_env = check_local_r_environment()
+    r_env = check_local_r_environment(explicit_rscript)
     if not r_env.get("has_r") or not r_env.get("has_rbacon"):
         return {
             "success": False,
             "has_local_r": r_env.get("has_r", False),
             "has_rbacon": r_env.get("has_rbacon", False),
-            "error": "本地未安装 R 或缺少 rbacon 包，请通过增量包使用内置 WebR 算力。",
+            "error": (
+                r_env.get("error")
+                or "本地未安装 R 或缺少 rbacon 包，请在设置页检查 R 路径或在 R 中运行 install.packages('rbacon')。"
+            ),
         }
 
     rscript_path = r_env["rscript_path"]
@@ -1965,22 +2046,23 @@ tryCatch({{
     ages_mat <- sapply(d_seq, function(d) {{
         ag <- tryCatch(Bacon.Age.d(d, BCAD=FALSE), error=function(e) numeric(0))
         if(length(ag) < 2) return(c(NA, NA, NA))
-        c(stats::median(ag, na.rm=TRUE), stats::quantile(ag, probs=c(0.025, 0.975), na.rm=TRUE))
+        # Bacon's central red line (mn.col="red") is the MEAN age model:
+        c(mean(ag, na.rm=TRUE), stats::quantile(ag, probs=c(0.025, 0.975), na.rm=TRUE))
     }})
 
     df_out <- data.frame(
         depth=d_seq,
         age=as.numeric(ages_mat[1, ]),
-        age_min=as.numeric(ages_mat[2, ]),
-        age_max=as.numeric(ages_mat[3, ])
+        age_lower=as.numeric(ages_mat[2, ]),
+        age_upper=as.numeric(ages_mat[3, ])
     )
 
     if(any(is.na(df_out$age))) {{
         valid_idx <- which(!is.na(df_out$age))
         if(length(valid_idx) >= 2) {{
             df_out$age <- stats::approx(df_out$depth[valid_idx], df_out$age[valid_idx], xout=df_out$depth, rule=2)$y
-            df_out$age_min <- stats::approx(df_out$depth[valid_idx], df_out$age_min[valid_idx], xout=df_out$depth, rule=2)$y
-            df_out$age_max <- stats::approx(df_out$depth[valid_idx], df_out$age_max[valid_idx], xout=df_out$depth, rule=2)$y
+            df_out$age_lower <- stats::approx(df_out$depth[valid_idx], df_out$age_lower[valid_idx], xout=df_out$depth, rule=2)$y
+            df_out$age_upper <- stats::approx(df_out$depth[valid_idx], df_out$age_upper[valid_idx], xout=df_out$depth, rule=2)$y
         }}
     }}
 
@@ -1998,7 +2080,7 @@ tryCatch({{
                 cmd, capture_output=True, text=True, timeout=30.0, check=False
             )
             if out_tsv_path.is_file():
-                depths, ages, age_min, age_max = [], [], [], []
+                depths, ages, age_lower, age_upper = [], [], [], []
                 lines = out_tsv_path.read_text(encoding="utf-8").strip().splitlines()
                 if len(lines) > 1:
                     for line in lines[1:]:
@@ -2007,8 +2089,8 @@ tryCatch({{
                             try:
                                 depths.append(round(float(parts[0]), 1))
                                 ages.append(round(float(parts[1]), 1))
-                                age_min.append(round(float(parts[2]), 1))
-                                age_max.append(round(float(parts[3]), 1))
+                                age_lower.append(round(float(parts[2]), 1))
+                                age_upper.append(round(float(parts[3]), 1))
                             except ValueError:
                                 continue
 
@@ -2019,15 +2101,17 @@ tryCatch({{
                         "engine": f"rbacon native ({r_env['r_version']})",
                         "depths": depths,
                         "ages": ages,
-                        "age_min": age_min,
-                        "age_max": age_max,
+                        "age_lower": age_lower,
+                        "age_upper": age_upper,
+                        "age_min": age_lower,
+                        "age_max": age_upper,
                         "metadata": {
-                            "curve_type": "median",
+                            "curve_type": "mean",
                             "envelope_type": "95_hpd",
                             "engine": "rbacon (native R)",
                             "r_version": r_env["r_version"],
                             "depth_unit": "cm",
-                            "age_unit": "cal BP",
+                            "age_unit": "cal yrBP",
                             "calibration_curve": "IntCal20" if cc == 1 else f"cc_{cc}",
                         },
                     }
@@ -2041,3 +2125,66 @@ tryCatch({{
             return {"success": False, "error": f"R execution failed: {e}"}
 
     return {"success": False, "error": "Bacon execution produced no output"}
+
+
+def export_bacon_package(
+    dates: list[dict[str, Any]],
+    core_name: str = "MyCore",
+    thickness: float = 5.0,
+    cc: int = 1,
+    sample_depths: list[float] | None = None,
+    hiatus_depths: list[float] | None = None,
+    hiatus_max: float | None = None,
+    slumps: list[list[float]] | list[tuple[float, float]] | None = None,
+    d_r: float | None = None,
+    d_std: float | None = None,
+) -> dict[str, Any]:
+    """Generates standard Bacon project package (core.csv + run_core.R + optional depths.txt in zip)."""
+    import base64
+    import io
+    import re
+    import zipfile
+
+    safe_name = re.sub(r"[^\w\-.]", "_", core_name).strip("._") or "MyCore"
+    csv_rows = ["id,age,error,depth,cc"]
+    for d in dates:
+        d_id = str(d.get("id", "14C")).replace(",", "_")
+        d_age = float(d.get("age", 0))
+        d_err = float(d.get("error", 30))
+        d_depth = float(d.get("depth", 0))
+        d_cc = int(d.get("cc", cc))
+        csv_rows.append(f"{d_id},{d_age},{d_err},{d_depth},{d_cc}")
+    core_csv = "\n".join(csv_rows) + "\n"
+
+    core_r = generate_bacon_script(
+        core_name=safe_name,
+        dates=dates,
+        thickness=thickness,
+        cc=cc,
+        sample_depths=sample_depths,
+        hiatus_depths=hiatus_depths,
+        hiatus_max=hiatus_max,
+        slumps=slumps,
+        d_r=d_r,
+        d_std=d_std,
+    )
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"Cores/{safe_name}/{safe_name}.csv", core_csv)
+        zf.writestr(f"run_{safe_name}.R", core_r)
+        if sample_depths:
+            depths_txt = "\n".join(str(round(d, 2)) for d in sample_depths) + "\n"
+            zf.writestr(f"Cores/{safe_name}/{safe_name}_depths.txt", depths_txt)
+
+    zip_bytes = buf.getvalue()
+    zip_b64 = base64.b64encode(zip_bytes).decode("ascii")
+
+    return {
+        "core_name": safe_name,
+        "filename": f"{safe_name}_bacon_package.zip",
+        "core_csv": core_csv,
+        "core_r": core_r,
+        "zip_base64": zip_b64,
+        "size_bytes": len(zip_bytes),
+    }

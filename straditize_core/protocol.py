@@ -67,6 +67,7 @@ ERROR_MESSAGES = {
 #: `docs/rpc-call-evidence.json` 里的调用证据与判据。
 ALL_RPC_METHODS: tuple[str, ...] = (
     "agedepth.checkREnvironment",
+    "agedepth.exportBaconPackage",
     "agedepth.extractAndInspect",
     "agedepth.generateBaconScript",
     "agedepth.generateEnsemble",
@@ -75,6 +76,7 @@ ALL_RPC_METHODS: tuple[str, ...] = (
     "agedepth.loadModelDiagram",
     "agedepth.runBaconModeling",
     "agedepth.runLocalBacon",
+    "agedepth.syncToSamples",
     "agedepth.updateModel",
     "algorithm.applyLineRemoval",
     "algorithm.clearCleanupEdits",

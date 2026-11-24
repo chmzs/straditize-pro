@@ -487,8 +487,8 @@ async function bootstrap() {
       canvasComponent.data.age_depth_model = extractedModel;
       const depths = extractedModel.depths || [];
       const ages = extractedModel.ages || [];
-      const ageMin = extractedModel.age_min || [];
-      const ageMax = extractedModel.age_max || [];
+      const ageLower = extractedModel.age_lower || extractedModel.age_min || [];
+      const ageUpper = extractedModel.age_upper || extractedModel.age_max || [];
 
       if (depths.length >= 2 && ages.length >= 2 && canvasComponent.data.samples) {
         const rawAxis = (canvasComponent.data.calibration?.primaryAxis ?? 'age').trim().toLowerCase();
@@ -505,11 +505,13 @@ async function bootstrap() {
               }
             } else {
               sample.age = interpolate1D(sample.depth, depths, ages);
-              if (ageMin.length === depths.length) {
-                sample.age_min = interpolate1D(sample.depth, depths, ageMin);
+              if (ageLower.length === depths.length) {
+                sample.age_lower = interpolate1D(sample.depth, depths, ageLower);
+                sample.age_min = sample.age_lower;
               }
-              if (ageMax.length === depths.length) {
-                sample.age_max = interpolate1D(sample.depth, depths, ageMax);
+              if (ageUpper.length === depths.length) {
+                sample.age_upper = interpolate1D(sample.depth, depths, ageUpper);
+                sample.age_max = sample.age_upper;
               }
             }
           }
@@ -522,6 +524,13 @@ async function bootstrap() {
       scheduleAutosave();
       canvasComponent.requestRender();
       setHudNotice('年代-深度模型已成功对接至 Y 轴与采样层位。', 4500);
+    },
+    () => {
+      sidebar?.updateData(canvasComponent.data);
+      inspector?.updateData(canvasComponent.data);
+      updateFooter();
+      scheduleAutosave();
+      canvasComponent.requestRender();
     }
   );
 

@@ -16,6 +16,7 @@ from ..age_depth import (
     AgeDepthAxisCalibrator,
     AgeDepthModel,
     check_local_r_environment,
+    export_bacon_package as export_bacon_package_func,
     extract_age_depth_model,
     run_local_bacon as run_local_bacon_func,
 )
@@ -54,7 +55,7 @@ AGE_DEPTH_RATE_COLUMNS: dict[str, str] = {
 #: Non-rate columns an age-depth export always carries. Everything not listed here and not
 #: in AGE_DEPTH_RATE_COLUMNS is dropped, so a unit-less legacy alias such as
 #: ``sed_rate_yr_per_cm`` cannot slip into the dataset as a duplicate of ``acc_rate``.
-AGE_DEPTH_BASE_COLUMNS: tuple[str, ...] = ("depths", "age_est", "age_min", "age_max")
+AGE_DEPTH_BASE_COLUMNS: tuple[str, ...] = ("horizon_id", "depths", "age_est", "age_lower", "age_upper")
 
 
 def attach_windowed_rates(
@@ -112,6 +113,10 @@ def build_age_depth_frame(
     for key in AGE_DEPTH_BASE_COLUMNS:
         if key in clean:
             renamed[key] = clean[key]
+        elif key == "age_lower" and "age_min" in clean:
+            renamed[key] = clean["age_min"]
+        elif key == "age_upper" and "age_max" in clean:
+            renamed[key] = clean["age_max"]
     for key, template in AGE_DEPTH_RATE_COLUMNS.items():
         if key in selected and key in clean:
             renamed[template.format(age_unit=age_unit, depth_unit=depth_unit)] = clean[
@@ -131,6 +136,19 @@ def build_age_depth_frame(
 
 class AgeDepthSessionMixin:
     """Age-depth model diagram loading, calibration, extraction, and Bacon modeling."""
+
+    def _attach_horizon_ids(self, mapped_samples: dict[str, Any] | None) -> None:
+        """Attach standardized 4-digit horizon_id (H0001, H0002, ...) to mapped_samples."""
+        if not mapped_samples or not mapped_samples.get("depths"):
+            return
+        samples = getattr(self, "samples", None)
+        n_depths = len(mapped_samples["depths"])
+        if samples and len(samples) == n_depths:
+            mapped_samples["horizon_id"] = [
+                s.get("horizon_id", f"H{idx + 1:04d}") for idx, s in enumerate(samples)
+            ]
+        else:
+            mapped_samples["horizon_id"] = [f"H{idx + 1:04d}" for idx in range(n_depths)]
 
     def sample_depths_for_model(self, model: Any) -> tuple[list[float], dict[str, Any]]:
         """Depths of the pollen samples, plus how they were obtained.
@@ -312,7 +330,7 @@ class AgeDepthSessionMixin:
         curve_type: str = "median",
         envelope_type: str = "95_hpd",
         depth_unit: str = "cm",
-        age_unit: str = "cal BP",
+        age_unit: str = "cal yrBP",
         cal_curve: str = "IntCal20",
         notes: str = "",
         depth_range: list[float] | tuple[float, float] | None = None,
@@ -400,6 +418,8 @@ class AgeDepthSessionMixin:
         mapped_samples = model.predict_age(sample_depths) if sample_depths else None
         if mapped_samples:
             mapped_samples["depth_provenance"] = depth_provenance
+            self._attach_horizon_ids(mapped_samples)
+            self._attach_horizon_ids(mapped_samples)
 
         ensemble_info = None
         if sample_depths and not age_is_calendar_year:
@@ -500,6 +520,8 @@ class AgeDepthSessionMixin:
         self,
         depths: list[float],
         ages: list[float],
+        age_lower: list[float] | None = None,
+        age_upper: list[float] | None = None,
         age_min: list[float] | None = None,
         age_max: list[float] | None = None,
         metadata: dict[str, Any] | None = None,
@@ -515,15 +537,17 @@ class AgeDepthSessionMixin:
                 INVALID_PARAMS,
                 f"Depths count ({len(depths)}) does not match ages count ({len(ages)}).",
             )
-        if age_min is not None and len(age_min) != len(depths):
+        eff_lower = age_lower if age_lower is not None else age_min
+        eff_upper = age_upper if age_upper is not None else age_max
+        if eff_lower is not None and len(eff_lower) != len(depths):
             raise JsonRpcError(
                 INVALID_PARAMS,
-                f"age_min count ({len(age_min)}) does not match depths count ({len(depths)}).",
+                f"age_lower count ({len(eff_lower)}) does not match depths count ({len(depths)}).",
             )
-        if age_max is not None and len(age_max) != len(depths):
+        if eff_upper is not None and len(eff_upper) != len(depths):
             raise JsonRpcError(
                 INVALID_PARAMS,
-                f"age_max count ({len(age_max)}) does not match depths count ({len(depths)}).",
+                f"age_upper count ({len(eff_upper)}) does not match depths count ({len(depths)}).",
             )
 
         depths_arr = np.asarray(depths, dtype=float)
@@ -532,11 +556,11 @@ class AgeDepthSessionMixin:
 
         sorted_depths = depths_arr[s_idx]
         sorted_ages = ages_arr[s_idx]
-        sorted_min = (
-            np.asarray(age_min, dtype=float)[s_idx] if age_min is not None else None
+        sorted_lower = (
+            np.asarray(eff_lower, dtype=float)[s_idx] if eff_lower is not None else None
         )
-        sorted_max = (
-            np.asarray(age_max, dtype=float)[s_idx] if age_max is not None else None
+        sorted_upper = (
+            np.asarray(eff_upper, dtype=float)[s_idx] if eff_upper is not None else None
         )
 
         prev_insp = (
@@ -546,12 +570,12 @@ class AgeDepthSessionMixin:
         )
         prev_meta = prev_insp.get("metadata", {})
         meta = metadata or {}
-        curve_type = meta.get("curve_type", prev_meta.get("curve_type", "median"))
+        curve_type = meta.get("curve_type", prev_meta.get("curve_type", "mean"))
         envelope_type = meta.get(
             "envelope_type", prev_meta.get("envelope_type", "95_hpd")
         )
         depth_unit = meta.get("depth_unit", prev_meta.get("depth_unit", "cm"))
-        age_unit = meta.get("age_unit", prev_meta.get("age_unit", "cal BP"))
+        age_unit = meta.get("age_unit", prev_meta.get("age_unit", "cal yrBP"))
         cal_curve = meta.get(
             "calibration_curve", prev_meta.get("calibration_curve", "IntCal20")
         )
@@ -560,8 +584,8 @@ class AgeDepthSessionMixin:
         model = AgeDepthModel(
             depths=sorted_depths,
             ages=sorted_ages,
-            age_min=sorted_min,
-            age_max=sorted_max,
+            age_lower=sorted_lower,
+            age_upper=sorted_upper,
             curve_type=curve_type,
             envelope_type=envelope_type,
             depth_unit=depth_unit,
@@ -590,10 +614,10 @@ class AgeDepthSessionMixin:
             )
             model.px_y = np.asarray(calibrator.depth2px(sorted_depths), dtype=float)
             model.px_x_curve = np.asarray(calibrator.age2px(sorted_ages), dtype=float)
-            if sorted_min is not None:
-                model.px_x_min = np.asarray(calibrator.age2px(sorted_min), dtype=float)
-            if sorted_max is not None:
-                model.px_x_max = np.asarray(calibrator.age2px(sorted_max), dtype=float)
+            if sorted_lower is not None:
+                model.px_x_lower = np.asarray(calibrator.age2px(sorted_lower), dtype=float)
+            if sorted_upper is not None:
+                model.px_x_upper = np.asarray(calibrator.age2px(sorted_upper), dtype=float)
 
         self.age_depth_model = model
 
@@ -601,20 +625,8 @@ class AgeDepthSessionMixin:
         mapped_samples = model.predict_age(sample_depths) if sample_depths else None
         if mapped_samples:
             mapped_samples["depth_provenance"] = depth_provenance
-
-        if sample_depths and getattr(self, "age_depth_is_calendar_year", True):
-            ensemble_table = model.generate_age_ensemble(
-                sample_depths=sample_depths,
-                n_ensembles=1000,
-                name="AgeModel_Ensemble_1000",
-                return_diagnostics=True,
-            )
-            self.ensemble_tables = [
-                t
-                for t in self.ensemble_tables
-                if t.get("name") != ensemble_table["name"]
-            ]
-            self.ensemble_tables.append(ensemble_table)
+            self._attach_horizon_ids(mapped_samples)
+            self._attach_horizon_ids(mapped_samples)
 
         return {
             "success": True,
@@ -637,6 +649,7 @@ class AgeDepthSessionMixin:
         depth_step: float = 1.0,
     ) -> dict[str, Any]:
         """Runs native local Rscript rbacon simulation and updates current session age-depth model."""
+        rscript_path = (self.config.get("rscript_path") or "").strip() or None
         res = run_local_bacon_func(
             dates=dates,
             core_name=core_name,
@@ -649,23 +662,24 @@ class AgeDepthSessionMixin:
             depth_min=depth_min,
             depth_max=depth_max,
             depth_step=depth_step,
+            explicit_rscript=rscript_path,
         )
         if res.get("success"):
             depths = res.get("depths", [])
             ages = res.get("ages", [])
-            age_min = res.get("age_min", [])
-            age_max = res.get("age_max", [])
+            age_lower = res.get("age_lower", res.get("age_min", []))
+            age_upper = res.get("age_upper", res.get("age_max", []))
             model = AgeDepthModel(
                 depths=depths,
                 ages=ages,
-                age_min=age_min,
-                age_max=age_max,
-                curve_type="median",
+                age_lower=age_lower,
+                age_upper=age_upper,
+                curve_type="mean",
                 envelope_type="95_hpd",
                 depth_unit="cm",
-                age_unit="cal BP",
+                age_unit="cal yrBP",
                 cal_curve="IntCal20" if cc == 1 else f"cc_{cc}",
-                notes="Generated by native R rbacon MCMC simulation",
+                notes="Generated by native R rbacon MCMC simulation (mean curve)",
             )
             self.age_depth_model = model
 
@@ -703,6 +717,7 @@ class AgeDepthSessionMixin:
             mapped_samples = model.predict_age(sample_depths) if sample_depths else None
             if mapped_samples:
                 mapped_samples["depth_provenance"] = depth_provenance
+                self._attach_horizon_ids(mapped_samples)
             res["inspection"] = model.to_inspection_data()
             res["mapped_samples"] = mapped_samples
 
@@ -725,6 +740,118 @@ class AgeDepthSessionMixin:
                 }
 
         return res
+
+    def export_bacon_package(
+        self,
+        dates: list[dict[str, Any]],
+        core_name: str = "MyCore",
+        thickness: float = 5.0,
+        cc: int = 1,
+        hiatus_depths: list[float] | None = None,
+        hiatus_max: float | None = None,
+        slumps: list | None = None,
+        d_r: float | None = None,
+        d_std: float | None = None,
+    ) -> dict[str, Any]:
+        """Exports standard Bacon project package (core.csv + run_core.R + depths.txt in zip)."""
+        if not dates:
+            raise JsonRpcError(
+                INVALID_PARAMS,
+                "导出 Bacon 标准工程包至少需要一条测年数据。",
+            )
+        sample_depths, _ = (
+            self.sample_depths_for_model(self.age_depth_model)
+            if self.age_depth_model is not None
+            else (None, {})
+        )
+        return export_bacon_package_func(
+            dates=dates,
+            core_name=core_name,
+            thickness=thickness,
+            cc=cc,
+            sample_depths=sample_depths,
+            hiatus_depths=hiatus_depths,
+            hiatus_max=hiatus_max,
+            slumps=slumps,
+            d_r=d_r,
+            d_std=d_std,
+        )
+
+    def sync_to_samples(
+        self,
+        mapped_samples: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Writes current age-depth model predictions (mean age, 95% CI) back to Step 7 sample horizons."""
+        if not hasattr(self, "samples") or self.samples is None:
+            self._init_samples()
+
+        if self.age_depth_model is None and not mapped_samples:
+            raise JsonRpcError(
+                STATE_ERROR,
+                "当前工程没有可用的年代-深度模型，无法回写年代至采样层位。",
+            )
+
+        # If user passed custom mapped_samples from result table, use them directly
+        if mapped_samples and "depths" in mapped_samples and "age_est" in mapped_samples:
+            m_depths = [float(d) for d in mapped_samples["depths"]]
+            m_ages = [float(a) for a in mapped_samples["age_est"]]
+            m_lower = (
+                [float(l) for l in mapped_samples["age_lower"]]
+                if "age_lower" in mapped_samples and mapped_samples["age_lower"]
+                else ([float(l) for l in mapped_samples.get("age_min", [])] if mapped_samples.get("age_min") else None)
+            )
+            m_upper = (
+                [float(u) for u in mapped_samples["age_upper"]]
+                if "age_upper" in mapped_samples and mapped_samples["age_upper"]
+                else ([float(u) for u in mapped_samples.get("age_max", [])] if mapped_samples.get("age_max") else None)
+            )
+            new_samples = []
+            for i, md in enumerate(m_depths):
+                calc_px = self._row_px_for_depth(md)
+                # 尝试与已有 samples 匹配对应行像素（若存在深度极近的旧层位）
+                if calc_px is None and self.samples:
+                    matched = min(self.samples, key=lambda s: abs(float(s.get("depth", 0)) - md))
+                    if abs(float(matched.get("depth", 0)) - md) < 1.0:
+                        calc_px = float(matched.get("row_px", 0))
+                s_dict: dict[str, Any] = {
+                    "row_px": int(round(calc_px)) if calc_px is not None else 0,
+                    "depth": md,
+                    "source": "manual",
+                    "age_est": m_ages[i] if i < len(m_ages) else None,
+                }
+                if m_lower and i < len(m_lower):
+                    s_dict["age_lower"] = m_lower[i]
+                if m_upper and i < len(m_upper):
+                    s_dict["age_upper"] = m_upper[i]
+                new_samples.append(s_dict)
+            return self.samples_set(new_samples, source="manual")
+
+        # Otherwise evaluate from self.age_depth_model
+        if self.samples and self.age_depth_model is not None:
+            sample_depths = []
+            for s in self.samples:
+                d = s.get("depth")
+                if d is None and "row_px" in s:
+                    d = self._depth_for_row_px(s["row_px"])
+                if d is not None:
+                    sample_depths.append(float(d))
+            if sample_depths:
+                pred = self.age_depth_model.predict_age(sample_depths)
+                new_samples = []
+                for s, est, lo, up in zip(
+                    self.samples,
+                    pred["age_est"],
+                    pred.get("age_lower", pred.get("age_min", [])),
+                    pred.get("age_upper", pred.get("age_max", [])),
+                ):
+                    s_copy = dict(s)
+                    s_copy["age_est"] = est
+                    s_copy["age_lower"] = lo
+                    s_copy["age_upper"] = up
+                    new_samples.append(s_copy)
+                return self.samples_set(new_samples, source="manual")
+
+        return {"samples": self.samples, "count": len(self.samples)}
 
     def run_age_modeling(
         self,

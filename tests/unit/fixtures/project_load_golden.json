@@ -359,10 +359,12 @@
   "samples": [
    {
     "depth": 10.0,
+    "horizon_id": "H0001",
     "row_px": 50
    },
    {
     "depth": 60.0,
+    "horizon_id": "H0002",
     "row_px": 150
    }
   ],
@@ -924,10 +926,12 @@
   "samples": [
    {
     "depth": 10.0,
+    "horizon_id": "H0001",
     "row_px": 50
    },
    {
     "depth": 60.0,
+    "horizon_id": "H0002",
     "row_px": 150
    }
   ],

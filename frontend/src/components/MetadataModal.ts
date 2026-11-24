@@ -376,7 +376,7 @@ export class MetadataModal {
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                 <div class="form-group" style="margin: 0;">
                   <label style="font-size: 10.5px; color: var(--text-muted);">年代覆盖范围 (Age Range):</label>
-                  <input type="text" id="meta-chron-range" value="${this.metadata.chronology.age_range || ''}" placeholder="如 0-12000 cal BP" style="width: 100%; font-size: 11px;" />
+                  <input type="text" id="meta-chron-range" value="${this.metadata.chronology.age_range || ''}" placeholder="如 0-12000 cal yrBP" style="width: 100%; font-size: 11px;" />
                 </div>
                 <div class="form-group" style="margin: 0;">
                   <label style="font-size: 10.5px; color: var(--text-muted);">校正曲线 (Cal Curve):</label>

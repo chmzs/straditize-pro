@@ -25,7 +25,7 @@ export function render(data: DiagramData): string {
   // 文案与"未定"的判定走共享入口（core/calUnit）：页脚、属性面板、画布徽标与本面板
   // 必须说同一句话。本面板只决定排版（占位符、提示行、比值后缀）。
   const unitLabel = calUnitLabel(cal);
-  // What the Y axis MEASURES. 默认年代 (age)；四种类型：①age (yrBP), ②depth (cm), ③code (#), ④custom (如 elev / m)
+  // What the Y axis MEASURES. 默认年代 (age)；四种类型：①age (cal yrBP), ②depth (cm), ③code (#), ④custom (如 elev / m)
   const rawAxis = (cal.primaryAxis ?? 'age').trim().toLowerCase();
   const cleanCustomName = rawAxis.startsWith('custom:') ? rawAxis.slice(7) : rawAxis;
   const isKnown = ['age', 'depth', 'code'].includes(cleanCustomName);
@@ -131,7 +131,7 @@ export function render(data: DiagramData): string {
                 style="width: 58px; font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); font-weight: 600;"
               />
               <span id="ycal-unit-link-hint" style="font-size: 9.5px; color: var(--text-muted); ${axisCategory === 'custom' ? 'display: none;' : ''}">
-                ${axisCategory === 'age' ? 'yrBP 联动' : axisCategory === 'depth' ? 'cm 联动' : axisCategory === 'code' ? '无单位' : ''}
+                ${axisCategory === 'age' ? 'cal yrBP 联动' : axisCategory === 'depth' ? 'cm 联动' : axisCategory === 'code' ? '无单位' : ''}
               </span>
             </div>
             <div style="font-size: 10.5px; color: var(--text-muted);">
@@ -273,7 +273,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         if (unitInp) {
           unitInp.readOnly = false;
           unitInp.style.background = 'var(--bg-card)';
-          if (!unitInp.value || unitInp.value === 'yrBP' || unitInp.value === 'cm') {
+          if (!unitInp.value || unitInp.value === 'cal yrBP' || unitInp.value === 'yrBP' || unitInp.value === 'cm') {
             unitInp.value = 'm';
           }
         }
@@ -285,7 +285,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
           unitInp.readOnly = true;
           unitInp.style.background = 'transparent';
           if (type === 'age') {
-            unitInp.value = 'yrBP';
+            unitInp.value = 'cal yrBP';
           } else if (type === 'depth') {
             unitInp.value = 'cm';
           } else if (type === 'code') {
@@ -294,7 +294,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         }
         if (linkHint) {
           linkHint.style.display = '';
-          linkHint.textContent = type === 'age' ? 'yrBP 联动' : type === 'depth' ? 'cm 联动' : '无单位';
+          linkHint.textContent = type === 'age' ? 'cal yrBP 联动' : type === 'depth' ? 'cm 联动' : '无单位';
         }
       }
       commitCalibration(false);

@@ -785,7 +785,7 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
 
 ## 4A. 年代-深度模型与年代集合（`agedepth.*` / `ensemble.*`）
 
-> 本节是全量清单，不是示例：后端 `rpc_methods/agedepth.py` 注册的 12 个方法逐一在此展开。
+> 本节是全量清单，不是示例：后端 `rpc_methods/agedepth.py` 注册的 14 个方法逐一在此展开。
 > 其余方法族仍遵循 §4 的"示例目录"定位。
 >
 > 权威来源仍是代码；本节任何字段与 `straditize_core/session_parts/agedepth.py` 的返回字典
@@ -796,7 +796,7 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
 | 项 | 约定 |
 | :--- | :--- |
 | 深度单位 | 固定 `cm`，不做换算 |
-| 年代单位 | 固定 `cal BP`，不做换算 |
+| 年代单位 | 固定 `cal yrBP`，不做换算 |
 | 原图为 `ka` | 调用方须自行乘 1000（如 0–12 ka 填 0 / 12000） |
 | 原图为 AD/CE | 须自行换成 BP（`BP = 1950 − AD`），否则年代方向相反 |
 | 未校正 ¹⁴C BP | 不是时间轴；本族方法不做校正曲线 |
@@ -886,7 +886,7 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
   {
     "status": "extracted",
     "inspection": { "...": "见 §4A.3 的 inspection 字段" },
-    "mapped_samples": { "depths": [0.0, 5.0], "age_est": [], "age_min": [], "age_max": [],
+    "mapped_samples": { "horizon_id": ["H0001", "H0002"], "depths": [0.0, 5.0], "age_est": [], "age_lower": [], "age_upper": [],
                         "px_y": [], "px_x_curve": [], "rate": {} },
     "generated_ensemble": {"name": "Bacon_Ensemble_1000", "columns_count": 1002,
                            "rows_count": 30, "diagnostics": {}}
@@ -905,12 +905,12 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
   ```json
   {"has_model": true, "has_image": true, "image_width": 761, "image_height": 998,
    "calib_state": {"depth_px": [], "age_px": [], "depth_vals": [], "age_vals": [],
-                   "depth_unit": "cm", "age_unit": "cal BP", "cal_curve": "IntCal20",
+                   "depth_unit": "cm", "age_unit": "cal yrBP", "cal_curve": "IntCal20",
                    "depth_range": null, "resample_step": null, "depth_log": false,
                    "age_log": false, "exclude_boxes": [], "calib_markers": null, "notes": ""},
-   "inspection": { "depths": [], "ages": [], "age_min": [], "age_max": [],
+   "inspection": { "depths": [], "ages": [], "age_lower": [], "age_upper": [],
                    "sed_rate": [], "sed_rate_se": [], "sed_window_depth": 32.0,
-                   "px_points": {"y": [], "x_curve": [], "x_min": [], "x_max": []},
+                   "px_points": {"y": [], "x_curve": [], "x_lower": [], "x_upper": []},
                    "decimation_step": 2, "metadata": {} }}
   ```
   无模型且无图像时只返回 `{"has_model": false, "has_image": false}`。
@@ -928,7 +928,7 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
   | 键 | 类型 | 说明 |
   | :--- | :--- | :--- |
   | `curve_type` / `envelope_type` | string | 固定 `"median"` / `"95_hpd"` |
-  | `depth_unit` / `age_unit` | string | 固定 `"cm"` / `"cal BP"` |
+  | `depth_unit` / `age_unit` | string | 固定 `"cm"` / `"cal yrBP"` |
   | `calibration_curve` | string | 校正曲线名 |
   | `notes` | string | 备注 |
   | `curve_channel` | `"chroma"` \| `"darkness"` | 实际用于定位中值线的通道 |
@@ -948,10 +948,10 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
 - **参数 (params)**：
   ```json
   {"depths": [0.0, 50.0], "ages": [0.0, 3200.0],
-   "age_min": [0.0, 2900.0], "age_max": [0.0, 3500.0],
+   "age_lower": [0.0, 2900.0], "age_upper": [0.0, 3500.0],
    "metadata": {"notes": "手工校正"}}
   ```
-  `depths` 与 `ages` 长度必须一致且 ≥ 2；`age_min` / `age_max` 若给出，长度也须一致。
+  `depths` 与 `ages` 长度必须一致且 ≥ 2；`age_lower` / `age_upper` 若给出，长度也须一致。
 - **返回 (result)**：`{"success": true, "inspection": {...}, "mapped_samples": {...}}`
 - **副作用**：按深度升序重排后重建模型；若有 `calib_state` 则重算 `px_points`；
   若 `age_is_calendar_year` 为真，同时覆盖 `AgeModel_Ensemble_1000` 集合表
@@ -966,7 +966,7 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
 - **返回 (result)**：
   ```json
   {"success": true, "table_name": "My_Ensemble",
-   "columns": ["depth", "age", "age_min", "age_max", "... (+997 cols)"],
+   "columns": ["depth", "age", "age_lower", "age_upper", "... (+997 cols)"],
    "rows_count": 30, "total_ensembles": 2}
   ```
   **`columns` 被截断为前 5 项加一条汇总串**，不是完整列名。
@@ -1005,7 +1005,7 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
 - **参数 (params)**：`{"dates": [...], "core_name": "MyCore", "thickness": 5.0, "cc": 1, "hiatus_depths": null, "slumps": null, "d_r": null, "d_std": null, "depth_min": 0.0, "depth_max": 150.0, "depth_step": 1.0}`
 - **返回 (result)**：rbacon 原始结果合并下列键
   ```json
-  {"success": true, "depths": [], "ages": [], "age_min": [], "age_max": [],
+  {"success": true, "depths": [], "ages": [], "age_lower": [], "age_upper": [],
    "inspection": {...}, "mapped_samples": {...},
    "generated_ensemble": {"name": "Bacon_Native_Ensemble_1000",
                           "columns_count": 1002, "rows_count": 30}}
@@ -1040,7 +1040,21 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
 - **参数 (params)**：无
 - **返回 (result)**：`{"count": 1, "tables": [{"name": "Age_Ensemble_1000", "columns": ["depth", "..."], "rows": 30}]}`
 
-### 4A.13 `mapped_samples` 的速率字段（沉积速率计算方式）
+### 4A.13 `agedepth.exportBaconPackage`
+
+一键导出符合 Bacon 规范的标准工程包（`core.csv`、`run_core.R`，及可选深度层位 `core_depths.txt` 的 ZIP 压缩包）。
+
+- **参数 (params)**：`{"dates": [...], "core_name": "MyCore", "thickness": 5.0, "cc": 1, "hiatus_depths": null, "hiatus_max": null, "slumps": null, "d_r": null, "d_std": null}`
+- **返回 (result)**：`{"core_name": "MyCore", "filename": "MyCore_bacon_package.zip", "core_csv": "...", "core_r": "...", "zip_base64": "...", "size_bytes": 1024}`
+
+### 4A.14 `agedepth.syncToSamples`
+
+将当前年代-深度模型的预测年龄（均值 age_est 及 95% 置信区间 age_lower / age_upper）双向回写并挂载至 Step 7 采样层位（`self.samples`）。
+
+- **参数 (params)**：`{"mapped_samples": {"depths": [...], "age_est": [...], "age_lower": [...], "age_upper": [...]}}`（可选）
+- **返回 (result)**：`{"samples": [...], "count": 2}`
+
+### 4A.15 `mapped_samples` 的速率字段（沉积速率计算方式）
 
 `extractAndInspect` / `updateModel` / `runLocalBacon` 返回的 `mapped_samples` 带三组速率。
 它们都源自同一条年代模型曲线，差别只在**求导方式**，混用会得到不同数字。
@@ -1089,7 +1103,7 @@ ROI 内列分组管理（设计 2026-09-29 v2）。
    `acc_rate × sed_rate = 1` 的互倒数关系（实测最差 5.3%、32 个层位中 21 个不成立）；
    现直接发出计算值，互倒数精确成立，调用方可用两列相乘校验。
 
-### 4A.14 `mapped_samples.sedimentation` —— 带误差棒的速率（推荐使用）
+### 4A.16 `mapped_samples.sedimentation` —— 带误差棒的速率（推荐使用）
 
 上表五个字段都是「单条中值曲线的逐点导数」。那不适合作为最终报告值：逐点导数把逐像素
 追踪噪声直接放大进速率、不附任何不确定度、且在保序回归压平的段上退化为未定义。

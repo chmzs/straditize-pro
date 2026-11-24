@@ -33,6 +33,7 @@ export class AgeDepthModal {
   private pollenData: DiagramData | null = null;
   private rpcClient: RpcClient;
   private onApplyAgeModel: (model: AgeDepthModelInspectionData) => void;
+  private onSamplesChanged?: () => void;
 
   private modalEl: HTMLElement | null = null;
   private canvasComp: AgeDepthCanvas | null = null;
@@ -44,12 +45,14 @@ export class AgeDepthModal {
     container: HTMLElement,
     pollenData: DiagramData,
     rpcClient: RpcClient,
-    onApplyAgeModel: (model: AgeDepthModelInspectionData) => void
+    onApplyAgeModel: (model: AgeDepthModelInspectionData) => void,
+    onSamplesChanged?: () => void
   ) {
     this.container = container;
     this.pollenData = pollenData;
     this.rpcClient = rpcClient;
     this.onApplyAgeModel = onApplyAgeModel;
+    this.onSamplesChanged = onSamplesChanged;
   }
 
   public open(latestData?: DiagramData): void {
@@ -101,6 +104,27 @@ export class AgeDepthModal {
         }
       },
       onSwitchTab: (tab) => this.switchTab(tab),
+      onSamplesModified: async (mappedSamples) => {
+        if (this.controller) {
+          await this.controller.handleSyncToSamples(mappedSamples);
+          if (this.pollenData && mappedSamples?.depths) {
+            // 同步主界面 samples 结构
+            this.pollenData.samples = mappedSamples.depths.map((d, i) => {
+              const existing = this.pollenData?.samples?.[i];
+              return {
+                row_px: existing?.row_px ?? 0,
+                depth: d,
+                horizon_id: mappedSamples.horizon_id?.[i] ?? `H${String(i + 1).padStart(4, '0')}`,
+                age_est: mappedSamples.age_est[i],
+                age_lower: mappedSamples.age_lower?.[i],
+                age_upper: mappedSamples.age_upper?.[i],
+                source: existing?.source ?? 'manual',
+              };
+            });
+          }
+          this.onSamplesChanged?.();
+        }
+      },
     });
 
     this.controller = new AgeDepthController(modal, this.rpcClient, {
@@ -299,7 +323,7 @@ export class AgeDepthModal {
         badgeEl.style.background = 'rgba(59, 130, 246, 0.1)';
         badgeEl.style.color = 'var(--accent-blue)';
       }
-      const ageUnit = unit || 'cal BP';
+      const ageUnit = unit || 'cal yrBP';
       if (inpAgeUnit) inpAgeUnit.value = ageUnit;
 
       const topVal = cal.top_cm;
@@ -549,6 +573,24 @@ export class AgeDepthModal {
     // 导出 geoChronR 脚本
     modal.querySelector('#btn-ad-export-geochronr')?.addEventListener('click', () => {
       this.controller?.exportGeoChronRScript();
+    });
+
+    // 导出 Bacon 标准工程包
+    modal.querySelector('#btn-ad-export-bacon-pkg')?.addEventListener('click', () => {
+      if (!this.tableComp || !this.controller) return;
+      void this.controller.handleExportBaconPackage({
+        dates: this.tableComp.getDatingTableData(),
+        thickness: this.tableComp.getSelectedThickness(),
+        hiatusDepths: this.tableComp.getHiatusDepths() || [],
+        deltaR: this.tableComp.getDeltaR() ?? null,
+        deltaRStd: this.tableComp.getDeltaRStd() ?? null,
+      });
+    });
+
+    // 回写至采样层位
+    modal.querySelector('#btn-ad-writeback-samples')?.addEventListener('click', () => {
+      if (!this.controller || !this.tableComp) return;
+      void this.controller.handleSyncToSamples(this.tableComp.getMappedSamples());
     });
 
     // WebR 组件安装与离线导入

@@ -52,6 +52,8 @@ def test_sample_horizon_calibrated_calculates_depth():
     # row 400 -> 0.1 * 400 - 10 = 30.0 cm
     assert res["samples"][0]["depth"] == 10.0
     assert res["samples"][1]["depth"] == 30.0
+    assert res["samples"][0]["horizon_id"] == "H0001"
+    assert res["samples"][1]["horizon_id"] == "H0002"
 
 
 def test_sample_horizon_paste_depths():

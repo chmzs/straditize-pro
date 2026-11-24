@@ -436,7 +436,7 @@ class TestAgeDepthExportColumns(unittest.TestCase):
         from straditize_core.session import build_age_depth_frame
 
         df = build_age_depth_frame(self._pred(), [], "cal BP", "cm")
-        self.assertEqual(list(df.columns), ["depths", "age_est", "age_min", "age_max"])
+        self.assertEqual(list(df.columns), ["depths", "age_est", "age_lower", "age_upper"])
 
     def test_selected_rates_are_named_with_units(self):
         from straditize_core.session import build_age_depth_frame
@@ -538,7 +538,16 @@ class TestAgeDepthExportColumns(unittest.TestCase):
             self._pred(), list(AGE_DEPTH_RATE_COLUMNS), "ka cal BP", "m"
         )
         for col in df.columns:
-            if col in ("depths", "age_est", "age_min", "age_max", "rate_units"):
+            if col in (
+                "horizon_id",
+                "depths",
+                "age_est",
+                "age_lower",
+                "age_upper",
+                "age_min",
+                "age_max",
+                "rate_units",
+            ):
                 continue
             # Every rate column name must state its unit.
             self.assertTrue(

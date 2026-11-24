@@ -67,6 +67,56 @@ class SamplesMixin:
             return round(slope * float(row_px) + intercept, 4)
         return None
 
+    def _row_px_for_depth(self, depth: float) -> float | None:
+        """Calculate pixel row for physical depth, or return None if uncalibrated."""
+        if not getattr(self, "is_calibrated", False):
+            return None
+        marks = getattr(self, "y_marks", None)
+        d_val = float(depth)
+        if marks and len(marks) >= 2:
+            pixels = [float(m["pixel"]) for m in marks]
+            vals = [float(m["val"]) for m in marks]
+            if vals[-1] >= vals[0]:
+                if d_val <= vals[0]:
+                    s0 = (
+                        (vals[1] - vals[0]) / (pixels[1] - pixels[0])
+                        if pixels[1] != pixels[0]
+                        else 1.0
+                    )
+                    return pixels[0] + (d_val - vals[0]) / s0 if s0 != 0 else pixels[0]
+                if d_val >= vals[-1]:
+                    s1 = (
+                        (vals[-1] - vals[-2]) / (pixels[-1] - pixels[-2])
+                        if pixels[-1] != pixels[-2]
+                        else 1.0
+                    )
+                    return pixels[-1] + (d_val - vals[-1]) / s1 if s1 != 0 else pixels[-1]
+                return float(np.interp(d_val, vals, pixels))
+            rev_vals = vals[::-1]
+            rev_pixels = pixels[::-1]
+            if d_val <= rev_vals[0]:
+                s0 = (
+                    (rev_vals[1] - rev_vals[0]) / (rev_pixels[1] - rev_pixels[0])
+                    if rev_pixels[1] != rev_pixels[0]
+                    else 1.0
+                )
+                return rev_pixels[0] + (d_val - rev_vals[0]) / s0 if s0 != 0 else rev_pixels[0]
+            if d_val >= rev_vals[-1]:
+                s1 = (
+                    (rev_vals[-1] - rev_vals[-2]) / (rev_pixels[-1] - rev_pixels[-2])
+                    if rev_pixels[-1] != rev_pixels[-2]
+                    else 1.0
+                )
+                return rev_pixels[-1] + (d_val - rev_vals[-1]) / s1 if s1 != 0 else rev_pixels[-1]
+            return float(np.interp(d_val, rev_vals, rev_pixels))
+
+        if getattr(self, "y_scale", None) is not None:
+            slope = self.y_scale.get("slope", 0.0)
+            intercept = self.y_scale.get("intercept", 0.0)
+            if abs(slope) > 1e-9:
+                return (d_val - intercept) / slope
+        return None
+
     def samples_set(
         self,
         samples: Sequence[dict[str, Any]],
@@ -76,8 +126,8 @@ class SamplesMixin:
 
         Each sample must conform to:
         {
-          "row_px": int | float,
-          "depth": float | None,
+          "row_px"?: int | float,
+          "depth"?: float | None,
           "source": 'auto' | 'paste' | 'manual' | 'grid',
           # 可选，仅 `auto` 层位带：拐点共识诊断量（#83）
           "support_columns"?: int, "cluster_span_px"?: int, "member_count"?: int,
@@ -89,8 +139,16 @@ class SamplesMixin:
 
         valid_samples: list[dict[str, Any]] = []
         for s in samples:
-            row_px = float(s.get("row_px", 0.0))
             given_depth = s.get("depth")
+            given_px = s.get("row_px")
+            if given_px is not None:
+                row_px = float(given_px)
+            elif given_depth is not None:
+                calc_px = self._row_px_for_depth(float(given_depth))
+                row_px = float(calc_px) if calc_px is not None else 0.0
+            else:
+                row_px = 0.0
+
             # If session is calibrated, calculate depth if not given
             calc_depth = self._depth_for_row_px(row_px)
             depth_val = float(given_depth) if given_depth is not None else calc_depth
@@ -101,17 +159,33 @@ class SamplesMixin:
             if s_source not in ("auto", "paste", "manual", "grid"):
                 s_source = "manual"
 
-            valid_samples.append(
-                {
-                    "row_px": int(round(row_px)),
-                    "depth": depth_val,
-                    "source": s_source,
-                    **_sample_diagnostics(s),
-                }
-            )
+            sample_dict = {
+                "row_px": int(round(row_px)),
+                "depth": depth_val,
+                "source": s_source,
+                **_sample_diagnostics(s),
+            }
+            if "age_est" in s and s["age_est"] is not None:
+                sample_dict["age_est"] = float(s["age_est"])
+            elif "age" in s and s["age"] is not None:
+                sample_dict["age_est"] = float(s["age"])
+            if "age_lower" in s and s["age_lower"] is not None:
+                sample_dict["age_lower"] = float(s["age_lower"])
+            elif "age_min" in s and s["age_min"] is not None:
+                sample_dict["age_lower"] = float(s["age_min"])
+            if "age_upper" in s and s["age_upper"] is not None:
+                sample_dict["age_upper"] = float(s["age_upper"])
+            elif "age_max" in s and s["age_max"] is not None:
+                sample_dict["age_upper"] = float(s["age_max"])
+
+            valid_samples.append(sample_dict)
 
         # Sort by row_px ascending
         valid_samples.sort(key=lambda item: item["row_px"])
+
+        # 规范化赋予 4 位定长共识层位 ID (H0001, H0002, ...)
+        for idx, item in enumerate(valid_samples):
+            item["horizon_id"] = f"H{idx + 1:04d}"
 
         # **先记录，再修改，并把 samples 纳入快照**（B-06b / task-12）。
         #
@@ -219,66 +293,10 @@ class SamplesMixin:
             )
 
         new_samples = []
-        marks = getattr(self, "y_marks", None)
         for d in depths:
             d_val = float(d)
-            if marks and len(marks) >= 2:
-                pixels = [float(m["pixel"]) for m in marks]
-                vals = [float(m["val"]) for m in marks]
-                if vals[-1] >= vals[0]:
-                    if d_val <= vals[0]:
-                        s0 = (
-                            (vals[1] - vals[0]) / (pixels[1] - pixels[0])
-                            if pixels[1] != pixels[0]
-                            else 1.0
-                        )
-                        row_px = (
-                            pixels[0] + (d_val - vals[0]) / s0 if s0 != 0 else pixels[0]
-                        )
-                    elif d_val >= vals[-1]:
-                        s1 = (
-                            (vals[-1] - vals[-2]) / (pixels[-1] - pixels[-2])
-                            if pixels[-1] != pixels[-2]
-                            else 1.0
-                        )
-                        row_px = (
-                            pixels[-1] + (d_val - vals[-1]) / s1
-                            if s1 != 0
-                            else pixels[-1]
-                        )
-                    else:
-                        row_px = float(np.interp(d_val, vals, pixels))
-                else:
-                    rev_vals = vals[::-1]
-                    rev_pixels = pixels[::-1]
-                    if d_val <= rev_vals[0]:
-                        s0 = (
-                            (rev_vals[1] - rev_vals[0])
-                            / (rev_pixels[1] - rev_pixels[0])
-                            if rev_pixels[1] != rev_pixels[0]
-                            else 1.0
-                        )
-                        row_px = (
-                            rev_pixels[0] + (d_val - rev_vals[0]) / s0
-                            if s0 != 0
-                            else rev_pixels[0]
-                        )
-                    elif d_val >= rev_vals[-1]:
-                        s1 = (
-                            (rev_vals[-1] - rev_vals[-2])
-                            / (rev_pixels[-1] - rev_pixels[-2])
-                            if rev_pixels[-1] != rev_pixels[-2]
-                            else 1.0
-                        )
-                        row_px = (
-                            rev_pixels[-1] + (d_val - rev_vals[-1]) / s1
-                            if s1 != 0
-                            else rev_pixels[-1]
-                        )
-                    else:
-                        row_px = float(np.interp(d_val, rev_vals, rev_pixels))
-            else:
-                row_px = (d_val - intercept) / slope
+            calc_px = self._row_px_for_depth(d_val)
+            row_px = calc_px if calc_px is not None else 0.0
             new_samples.append(
                 {
                     "row_px": int(round(row_px)),

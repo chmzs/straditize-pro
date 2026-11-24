@@ -131,6 +131,7 @@ def test_column_label_table(primary_axis, legacy, expected) -> None:
         ("depth", "m", "Depth (m)"),
         ("age", "ka BP", "Age (ka BP)"),
         ("age", "ka", "Age (ka BP)"),  # 唯一补语义点：ka → ka BP
+        ("age", "cal yrBP", "Age (cal yrBP)"),
         ("age", "cal BP", "Age (cal BP)"),
         ("age", "AD", "Age (AD)"),
         ("age", "BC", "Age (BC)"),

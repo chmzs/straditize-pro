@@ -1,8 +1,10 @@
 export interface AgeDepthModelInspectionData {
   depths: number[];
   ages: number[];
-  age_min: number[];
-  age_max: number[];
+  age_lower: number[];
+  age_upper: number[];
+  age_min?: number[];
+  age_max?: number[];
   /**
    * Windowed-regression sedimentation rate (depth_unit per year) and its standard error,
    * ALREADY decimated to the same rows as `depths` by the backend. Null = undefined at
@@ -16,8 +18,10 @@ export interface AgeDepthModelInspectionData {
   px_points?: {
     y: number[];
     x_curve: number[];
-    x_min: number[];
-    x_max: number[];
+    x_lower?: number[];
+    x_upper?: number[];
+    x_min?: number[];
+    x_max?: number[];
   };
   metadata: {
     curve_type: string;
@@ -57,14 +61,17 @@ export interface ControlPoint {
   id: string;
   x: number;
   y: number;
-  kind: 'curve' | 'min' | 'max';
+  kind: 'curve' | 'lower' | 'upper' | 'min' | 'max';
 }
 
 export interface MappedSamplesData {
+  horizon_id?: string[];
   depths: number[];
   age_est: number[];
-  age_min: number[];
-  age_max: number[];
+  age_lower?: number[];
+  age_upper?: number[];
+  age_min?: number[];
+  age_max?: number[];
   px_y?: number[];
   px_x_curve?: number[];
   rate?: {
@@ -112,9 +119,12 @@ export const EXCLUDE_BOX_COLOR = 'rgba(239, 68, 68, 0.75)';
 export const MARKER_HIT_RADIUS = 10;
 
 export const CURVE_COLORS = {
-  median: '#38bdf8', // blue
-  max: '#a78bfa', // violet
-  min: '#fb923c', // orange
+  mean: '#38bdf8', // blue (Mean representative line)
+  median: '#38bdf8', // compatibility alias
+  upper: '#a78bfa', // violet
+  lower: '#fb923c', // orange
+  max: '#a78bfa',
+  min: '#fb923c',
 } as const;
 
 export const HALO_COLOR = 'rgba(15, 23, 42, 0.55)';

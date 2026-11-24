@@ -74,9 +74,9 @@ export function createAgeDepthModalHtml(): string {
                 <div style="display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding-left: 6px; border-left: 1px solid var(--border-color);">
                   <span style="font-size: 10px; color: var(--text-muted);">编辑目标:</span>
                   <select id="ad-sel-edit-target" class="ui-select ui-select--xs" style="font-size: 10px; padding: 1px 4px; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 3px;">
-                    <option value="curve" selected>中位线 (Median)</option>
-                    <option value="min">置信区间下界 (Min)</option>
-                    <option value="max">置信区间上界 (Max)</option>
+                    <option value="curve" selected>均值线 (Mean)</option>
+                    <option value="lower">置信区间下界 (Lower)</option>
+                    <option value="upper">置信区间上界 (Upper)</option>
                   </select>
                 </div>
               </div>
@@ -101,7 +101,7 @@ export function createAgeDepthModalHtml(): string {
             </div>
 
             <div style="font-size: 10.5px; color: var(--text-muted); display: flex; justify-content: space-between;">
-              <span>视觉检查标准：高亮蓝线应精确穿过深色脊线；琥珀色阴影应贴合灰色置信区间边缘。</span>
+              <span>视觉检查标准：高亮蓝线应精确穿过深色脊线（或均值红线）；琥珀色阴影应贴合灰色置信区间边缘。</span>
               <span id="ad-status-msg" style="color: var(--status-success);"></span>
             </div>
 
@@ -158,13 +158,13 @@ export function createAgeDepthModalHtml(): string {
                 <div style="font-size: 10.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 5px;">批量输入标定值:</div>
                 <div style="display: grid; grid-template-columns: auto 1fr; gap: 5px 6px; font-size: 10.5px; align-items: center;">
                   <label style="color: var(--accent-blue);">① 年龄 1</label>
-                  <input type="number" id="ad-inp-age-left" value="3000" style="width: 100%; font-size: 11px;" />
+                  <input type="number" id="ad-inp-age-left" value="" placeholder="如 3000" style="width: 100%; font-size: 11px;" />
                   <label style="color: var(--accent-blue);">② 年龄 2</label>
-                  <input type="number" id="ad-inp-age-right" value="0" style="width: 100%; font-size: 11px;" />
+                  <input type="number" id="ad-inp-age-right" value="" placeholder="如 0" style="width: 100%; font-size: 11px;" />
                   <label style="color: var(--accent-green);">③ 深度 1</label>
-                  <input type="number" id="ad-inp-depth-top" value="0" style="width: 100%; font-size: 11px;" />
+                  <input type="number" id="ad-inp-depth-top" value="" placeholder="如 0" style="width: 100%; font-size: 11px;" />
                   <label style="color: var(--accent-green);">④ 深度 2</label>
-                  <input type="number" id="ad-inp-depth-bottom" value="150" style="width: 100%; font-size: 11px;" />
+                  <input type="number" id="ad-inp-depth-bottom" value="" placeholder="如 150" style="width: 100%; font-size: 11px;" />
                 </div>
                 <div style="display: flex; gap: 12px; margin-top: 7px; font-size: 10px;">
                   <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
@@ -199,15 +199,23 @@ export function createAgeDepthModalHtml(): string {
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 10px;">
                 <div>
                   <label style="color: var(--text-muted); display: block; margin-bottom: 2px;">深度单位 (Depth Unit):</label>
-                  <input type="text" id="ad-inp-depth-unit" value="cm" placeholder="如 cm / m" style="width: 100%; font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);" />
+                  <input type="text" id="ad-inp-depth-unit" list="ad-list-depth-units" value="cm" placeholder="cm" style="width: 100%; font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);" />
+                  <datalist id="ad-list-depth-units">
+                    <option value="cm">cm (厘米 - 统一标准)</option>
+                  </datalist>
                 </div>
                 <div>
                   <label style="color: var(--text-muted); display: block; margin-bottom: 2px;">年代单位 (Age Unit):</label>
-                  <input type="text" id="ad-inp-age-unit" value="cal BP" placeholder="如 cal BP / yrBP" style="width: 100%; font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);" />
+                  <input type="text" id="ad-inp-age-unit" list="ad-list-age-units" value="cal yrBP" placeholder="如 cal yrBP / ka BP" style="width: 100%; font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);" />
+                  <datalist id="ad-list-age-units">
+                    <option value="cal yrBP">cal yrBP (日历年前 - 统一标准)</option>
+                    <option value="ka BP">ka BP (千年 - 1 ka = 1000 cal yrBP)</option>
+                    <option value="14C BP">14C BP (未校正碳十四年)</option>
+                  </datalist>
                 </div>
               </div>
               <div id="ad-ycal-sync-hint" style="font-size: 9.5px; color: var(--text-muted); line-height: 1.45; margin-top: 5px;">
-                单位默认自动与当前图谱 Y 轴（步骤 3）标定单位联动。原图若用 ka 轴可将单位设为 ka BP 或乘 1000 换算为 cal BP。
+                建议标准单位：深度统一为 <code>cm</code>；年代统一为 <code>cal yrBP</code>。若原图标注为 <code>ka BP</code>，建议将标定读数直接乘 1000 录入为 <code>cal yrBP</code>，以保证与全球古气候事件同量纲对齐。
               </div>
             </div>
 
@@ -216,9 +224,9 @@ export function createAgeDepthModalHtml(): string {
               <div style="font-size: 11px; font-weight: bold; color: var(--accent-green); margin-bottom: 6px;">② 提取深度范围 (Extraction Range)</div>
               <div style="display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 5px; font-size: 10.5px; align-items: center;">
                 <label style="color: var(--text-muted);">最小</label>
-                <input type="number" id="ad-inp-range-min" value="0" style="width: 100%; font-size: 11px;" />
+                <input type="number" id="ad-inp-range-min" value="" placeholder="如 0" style="width: 100%; font-size: 11px;" />
                 <label style="color: var(--text-muted);">最大</label>
-                <input type="number" id="ad-inp-range-max" value="450" style="width: 100%; font-size: 11px;" />
+                <input type="number" id="ad-inp-range-max" value="" placeholder="如 150" style="width: 100%; font-size: 11px;" />
               </div>
               <div style="font-size: 9.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;">
                 范围可窄于标定区间：标定打在坐标轴末端，只提取实际分析段。
@@ -341,19 +349,20 @@ export function createAgeDepthModalHtml(): string {
               <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-tbl-btn-paste" style="font-size: 10.5px; padding: 3px 8px;">粘贴导入 (Excel/TSV)</button>
               <label style="display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--text-muted);"
                      title="只影响表格显示位数；数据本身、同步与导出仍是全精度原始值。悬停单元格可看原值。">
-                格式
+                浮点精度
                 <select id="ad-tbl-fmt-digits" class="sample-select" style="font-size: 10.5px; padding: 2px 4px;">
-                  <option value="" selected>原始值</option>
+                  <option value="">原始值</option>
                   <option value="0">0 位小数</option>
                   <option value="1">1 位小数</option>
                   <option value="2">2 位小数</option>
-                  <option value="3">3 位小数</option>
+                  <option value="3" selected>3 位小数 (默认)</option>
                   <option value="4">4 位小数</option>
                   <option value="6">6 位小数</option>
                   <option value="8">8 位小数</option>
                 </select>
               </label>
               <button class="ui-btn ui-btn--primary" id="ad-tbl-btn-sync" style="font-size: 10.5px; padding: 3px 12px;">保存同步至模型</button>
+              <button class="ui-btn ui-btn--secondary" id="btn-ad-writeback-samples" style="font-size: 10.5px; padding: 3px 10px; color: var(--status-success); border-color: rgba(16,185,129,0.3);" title="将当前估算年代与 95% 置信区间直接回写至 Step 7 的花粉采样层位">回写至采样层位 (Step 7)</button>
             </div>
             <div id="ad-table-summary-badge" style="font-size: 10.5px; font-family: var(--font-mono); color: var(--text-secondary);">
               共 0 个层位
@@ -365,11 +374,11 @@ export function createAgeDepthModalHtml(): string {
             <table id="ad-tbl-full" class="wpd-preview-table ad-full-table" style="width: 100%;">
               <thead>
                 <tr>
-                  <th style="width: 45px; text-align: center;">#</th>
+                  <th style="width: 55px; text-align: center;">层位 ID</th>
                   <th class="ad-th-sortable" data-sort="depth" style="width: 110px; cursor: pointer;" title="点击按深度排序">深度 (cm) <span class="ad-sort-ind"></span></th>
-                  <th class="ad-th-sortable" data-sort="age" style="width: 130px; cursor: pointer;" title="点击按年代排序">年代 (cal BP) <span class="ad-sort-ind"></span></th>
-                  <th class="ad-th-sortable" data-sort="min" style="width: 110px; cursor: pointer;" title="点击按 95% 下界排序">95% 下界 <span class="ad-sort-ind"></span></th>
-                  <th class="ad-th-sortable" data-sort="max" style="width: 110px; cursor: pointer;" title="点击按 95% 上界排序">95% 上界 <span class="ad-sort-ind"></span></th>
+                  <th class="ad-th-sortable" data-sort="age" style="width: 130px; cursor: pointer;" title="点击按年代排序">年代 (cal yrBP) <span class="ad-sort-ind"></span></th>
+                  <th class="ad-th-sortable" data-sort="lower" style="width: 110px; cursor: pointer;" title="点击按 95% 下界排序">95% 下界 <span class="ad-sort-ind"></span></th>
+                  <th class="ad-th-sortable" data-sort="upper" style="width: 110px; cursor: pointer;" title="点击按 95% 上界排序">95% 上界 <span class="ad-sort-ind"></span></th>
                   <th style="width: 90px;">95% 区间宽度</th>
                   <th style="width: 110px;">沉积速率 (cm/yr)</th>
                   <th style="width: 110px;" title="分窗回归速率的标准误，与速率同单位">速率 ±SE</th>
@@ -548,6 +557,11 @@ export function createAgeDepthModalHtml(): string {
                 </button>
                 <button class="ui-btn ui-btn--secondary ui-btn--sm" id="btn-ad-export-geochronr" style="flex: 1;" title="生成绑定当前数据集的 geoChronR 驱动代码">
                   geoChronR 脚本
+                </button>
+              </div>
+              <div style="display: flex; gap: 6px; margin-top: 4px;">
+                <button class="ui-btn ui-btn--quiet ui-btn--xs" id="btn-ad-export-bacon-pkg" style="flex: 1; font-size: 10.5px; padding: 4px;" title="导出符合 rbacon 规范的标准工程目录 Cores/<core>/<core>.csv 与 R 驱动脚本 (ZIP 压缩包)">
+                  导出 Bacon 标准工程包 (.zip)
                 </button>
               </div>
             </div>

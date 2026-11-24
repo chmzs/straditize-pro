@@ -233,3 +233,11 @@ class StraditizeSession(
         """
         self._image = value
         self._image_fingerprint_cache = None
+
+    @property
+    def config(self) -> dict[str, Any]:
+        """获取系统配置（加载自 ~/.straditize/config.json）"""
+        from .config import load_config
+
+        return load_config()
+

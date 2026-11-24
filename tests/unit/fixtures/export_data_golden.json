@@ -257,8 +257,8 @@
    "columns": [
     "depth",
     "age_est",
-    "age_min_95",
-    "age_max_95",
+    "age_lower_95",
+    "age_upper_95",
     "col01",
     "col02",
     "col03",
@@ -278,17 +278,17 @@
    ],
    "columns_count": 20,
    "csv_content_equals_csv": true,
-   "csv_digest": "0c5e1da31db9b10d",
+   "csv_digest": "904c7bf6a9568a10",
    "csv_head": [
-    "depth,age_est,age_min_95,age_max_95,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
+    "depth,age_est,age_lower_95,age_upper_95,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
     "16.5,59.23754375,55.28045993534482,63.19912300403226,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
     "17.0,61.07826111111111,57.006306149425285,65.15495951612904,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA"
    ],
    "data_head": [
     {
      "age_est": 59.23754375,
-     "age_max_95": 63.19912300403226,
-     "age_min_95": 55.28045993534482,
+     "age_lower_95": 55.28045993534482,
+     "age_upper_95": 63.19912300403226,
      "col01": null,
      "col02": null,
      "col03": null,
@@ -309,8 +309,8 @@
     },
     {
      "age_est": 61.07826111111111,
-     "age_max_95": 65.15495951612904,
-     "age_min_95": 57.006306149425285,
+     "age_lower_95": 57.006306149425285,
+     "age_upper_95": 65.15495951612904,
      "col01": null,
      "col02": null,
      "col03": null,
@@ -331,8 +331,8 @@
     },
     {
      "age_est": 62.92161458333333,
-     "age_max_95": 67.1131527217742,
-     "age_min_95": 58.73507273706896,
+     "age_lower_95": 58.73507273706896,
+     "age_upper_95": 67.1131527217742,
      "col01": null,
      "col02": null,
      "col03": null,

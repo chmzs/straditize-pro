@@ -24,6 +24,7 @@ export interface AgeDepthControllerCallbacks {
     mapped_samples: MappedSamplesData | null;
   }) => void;
   onRateSelectionChanged?: () => void;
+  onSamplesSynced?: () => void;
 }
 
 export class AgeDepthController {
@@ -267,7 +268,7 @@ export class AgeDepthController {
         curve_type: 'median',
         envelope_type: '95_hpd',
         depth_unit: (this.container.querySelector('#ad-inp-depth-unit') as HTMLInputElement | null)?.value?.trim() || 'cm',
-        age_unit: (this.container.querySelector('#ad-inp-age-unit') as HTMLInputElement | null)?.value?.trim() || 'cal BP',
+        age_unit: (this.container.querySelector('#ad-inp-age-unit') as HTMLInputElement | null)?.value?.trim() || 'cal yrBP',
         cal_curve: 'IntCal20',
         age_increases_downcore: ageIncreasesDowncore,
         age_is_calendar_year: true,
@@ -649,7 +650,7 @@ export class AgeDepthController {
       '组件资产（WASM/JS）已安装到用户目录并通过 /components/webr/ 挂载，但浏览器端调用 ' +
       'rbacon 的执行代码还没有实现。\n\n' +
       '为避免用「线性内插 + 拍脑袋误差项」冒充贝叶斯年代模型（那会跳过 ¹⁴C 校正，' +
-      '把 ¹⁴C BP 当成 cal BP 写进结果），本路径不产出任何年代数据。\n\n' +
+      '把 ¹⁴C BP 当成 cal yrBP 写进结果），本路径不产出任何年代数据。\n\n' +
       '请改用以下真实通道：\n' +
       '1. 【▶ 运行 Bacon 年龄建模】→ 本地 R + rbacon 原生运行\n' +
       '2. 【geoChronR 脚本】→ 导出后在 R 中自行运行'
@@ -706,6 +707,81 @@ message("geoChronR 年代不确定性建模完成：已建立与图谱的时间�
     a.download = 'run_geochronr_bacon.R';
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  public async handleExportBaconPackage(params: {
+    dates: DatingPoint[];
+    thickness: number;
+    hiatusDepths: number[];
+    deltaR: number | null;
+    deltaRStd: number | null;
+  }): Promise<void> {
+    if (this.backendUnavailable()) {
+      notifyError('后端服务未连接，无法生成 Bacon 标准工程包。');
+      return;
+    }
+    if (!params.dates || params.dates.length === 0) {
+      notifyError('导出 Bacon 标准工程包至少需要一条测年数据。');
+      return;
+    }
+    try {
+      const res = await this.rpcClient.call<any, any>('agedepth.exportBaconPackage', {
+        dates: params.dates,
+        core_name: 'Core_AgeModel',
+        thickness: params.thickness,
+        hiatus_depths: params.hiatusDepths.length > 0 ? params.hiatusDepths : null,
+        d_r: params.deltaR,
+        d_std: params.deltaRStd,
+      });
+
+      if (res && res.zip_base64) {
+        const binStr = atob(res.zip_base64);
+        const len = binStr.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binStr.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: 'application/zip' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = res.filename || 'bacon_package.zip';
+        a.click();
+        URL.revokeObjectURL(url);
+        notify(
+          `成功导出 Bacon 标准工程包：${res.filename} (${(res.size_bytes / 1024).toFixed(1)} KB)`,
+          'success'
+        );
+      } else {
+        notifyError('未能获取 Bacon 工程包压缩数据。');
+      }
+    } catch (err: any) {
+      notifyError(`导出 Bacon 标准工程包失败: ${err.message || err}`);
+    }
+  }
+
+  public async handleSyncToSamples(mappedSamples: MappedSamplesData | null): Promise<void> {
+    if (this.backendUnavailable()) {
+      notifyError('后端服务未连接，无法回写至采样层位。');
+      return;
+    }
+    try {
+      const res = await this.rpcClient.call<any, any>('agedepth.syncToSamples', {
+        mapped_samples: mappedSamples,
+      });
+      if (res && res.count !== undefined) {
+        notify(
+          `已成功将年代深度模型预测值（均值及 95% 置信带）回写至步骤 7 的 ${res.count} 个采样层位！`,
+          'success'
+        );
+        this.callbacks.onSamplesSynced?.();
+      } else {
+        notify('已完成采样层位年代回写。', 'success');
+        this.callbacks.onSamplesSynced?.();
+      }
+    } catch (err: any) {
+      notifyError(`回写至采样层位失败: ${err.message || err}`);
+    }
   }
 
   public dispose(): void {

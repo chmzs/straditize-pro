@@ -58,7 +58,7 @@ export function render(data: DiagramData): string {
   const cal = data.calibration;
   // 单位文案走**唯一入口** `core/calUnit`：缺单位一律显示"单位未定"，与页脚、属性面板、
   // 画布徽标、步骤 3 面板说同一句话，不回落成 `cm`。本项目用户的轴可以是
-  // `ka` / `cal BP` / `m`，显示错单位会让"间隔 0.5"被读成 0.5 cm。
+  // `ka` / `cal yrBP` / `cm`，显示错单位会让"间隔 0.5"被读成 0.5 cm。
   const unitLabel = calUnitLabel(cal);
   const spanPx =
     cal?.top_px !== null && cal?.bottom_px !== null
@@ -199,12 +199,18 @@ export function render(data: DiagramData): string {
                         s.support_columns && s.support_columns > 1
                           ? `<span style="font-size: 8.5px; color: var(--text-muted);">${s.support_columns}列</span>`
                           : '';
+                      const ageBadge =
+                        (s.age_est !== undefined || s.age !== undefined)
+                          ? `<span style="font-size: 8.5px; color: var(--accent-amber); background: rgba(245, 158, 11, 0.1); padding: 0 3px; border-radius: 2px;" title="95% CI: ${s.age_lower ?? s.age_min ?? '--'} ~ ${s.age_upper ?? s.age_max ?? '--'} cal yrBP">≈ ${Math.round(s.age_est ?? s.age ?? 0)} cal yrBP</span>`
+                          : '';
+                      const hid = s.horizon_id || ('H' + String(idx + 1).padStart(4, '0'));
                       return `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 3px 6px; border-bottom: 1px solid rgba(0,0,0,0.04);">
                           <div style="display: flex; align-items: center; gap: 4px;">
-                            <span>#${idx + 1} Y=${s.row_px}px</span>
+                            <span><strong style="color: var(--accent-blue);">${hid}</strong> Y=${s.row_px}px</span>
                             ${polarityBadge}
                             ${supportText}
+                            ${ageBadge}
                           </div>
                           <div style="display: flex; align-items: center; gap: 6px;">
                             <span>${s.depth !== null ? `<strong>${s.depth}</strong> ${unitLabel}` : '[--]'}</span>

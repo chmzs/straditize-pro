@@ -944,8 +944,8 @@ def _rows_to_model(
     model = AgeDepthModel(
         depths=phys_depths,
         ages=phys_ages,
-        age_min=true_min,
-        age_max=true_max,
+        age_lower=true_min,
+        age_upper=true_max,
         curve_type=curve_type,
         envelope_type=envelope_type,
         depth_unit=calibrator.depth_unit,
@@ -955,8 +955,8 @@ def _rows_to_model(
     )
     model.px_y = abs_rows
     model.px_x_curve = abs_curve
-    model.px_x_min = abs_min
-    model.px_x_max = abs_max
+    model.px_x_lower = abs_min
+    model.px_x_upper = abs_max
     # Which response located the median, for diagnostics and for the UI to report honestly
     # when a figure fell back to darkness despite carrying colour.
     model.curve_channel = "chroma" if use_chroma else "darkness"

@@ -10,20 +10,15 @@ export interface AgeDepthDatingTableCallbacks {
   onDatingPointsChanged?: (points: DatingPoint[]) => void;
   onRequestSyncModel?: () => Promise<void>;
   onSwitchTab?: (tab: 'visual' | 'table' | 'modeling') => void;
+  onSamplesModified?: (mappedSamples: MappedSamplesData) => Promise<void>;
 }
 
 /**
- * Renders a number. By default **exactly as computed** (full precision): every fixed
- * rounding scheme here has burned a user at some point (`Math.round(age)` collapsed a
- * smooth curve onto ~10 columns; `toFixed(1)` printed a real 0.04 ka/cm rate as
- * "0.0 yr/cm", which reads as "no deposition").
- *
- * But full precision is unreadable in a status line or a 17-digit CI, so the table now
- * exposes a display-precision control (the Format button). It is DISPLAY-ONLY: the
- * underlying values, the sync to the backend and the exports keep full precision; only
- * the rendered text is rounded. `null` means "raw value" (the default).
+ * Renders a number. By default formatted to 3 decimal places (display precision).
+ * It is DISPLAY-ONLY: the underlying values, the sync to the backend and the
+ * exports keep full precision; only the rendered text is rounded.
  */
-let displayDecimals: number | null = null;
+let displayDecimals: number | null = 3;
 
 export function getDisplayDecimals(): number | null {
   return displayDecimals;
@@ -48,7 +43,7 @@ export class AgeDepthDatingTable {
   private mappedSamples: MappedSamplesData | null = null;
   private datingPoints: DatingPoint[] = [];
   /** Column currently driving the header sort; null = source order. */
-  private sortKey: 'depth' | 'age' | 'min' | 'max' | null = null;
+  private sortKey: 'depth' | 'age' | 'lower' | 'upper' | 'min' | 'max' | null = null;
   private sortAsc = true;
 
   constructor(container: HTMLElement, callbacks: AgeDepthDatingTableCallbacks = {}) {
@@ -89,6 +84,10 @@ export class AgeDepthDatingTable {
     this.renderSedRateProfile();
   }
 
+  public getMappedSamples(): MappedSamplesData | null {
+    return this.mappedSamples;
+  }
+
   public setDatingPoints(points: DatingPoint[]): void {
     this.datingPoints = points;
     this.renderDatingTable();
@@ -105,7 +104,7 @@ export class AgeDepthDatingTable {
 
   public getAgeUnit(): string {
     const el = this.container.querySelector('#ad-inp-age-unit') as HTMLInputElement | null;
-    return el?.value?.trim() || 'cal BP';
+    return el?.value?.trim() || 'cal yrBP';
   }
 
   public updateTableHeaders(): void {
@@ -126,9 +125,9 @@ export class AgeDepthDatingTable {
     if (thDepth) thDepth.innerHTML = `深度 (${dUnit}) <span class="ad-sort-ind"></span>`;
     const thAge = this.container.querySelector('#ad-tbl-full thead th[data-sort="age"]');
     if (thAge) thAge.innerHTML = `估算年代 (${aUnit}) <span class="ad-sort-ind"></span>`;
-    const thMin = this.container.querySelector('#ad-tbl-full thead th[data-sort="min"]');
+    const thMin = this.container.querySelector('#ad-tbl-full thead th[data-sort="lower"], #ad-tbl-full thead th[data-sort="min"]');
     if (thMin) thMin.innerHTML = `95% 下界 (${aUnit}) <span class="ad-sort-ind"></span>`;
-    const thMax = this.container.querySelector('#ad-tbl-full thead th[data-sort="max"]');
+    const thMax = this.container.querySelector('#ad-tbl-full thead th[data-sort="upper"], #ad-tbl-full thead th[data-sort="max"]');
     if (thMax) thMax.innerHTML = `95% 上界 (${aUnit}) <span class="ad-sort-ind"></span>`;
 
     const fullThs = this.container.querySelectorAll('#ad-tbl-full thead th');
@@ -509,10 +508,11 @@ export class AgeDepthDatingTable {
       const ms = this.mappedSamples;
       for (let i = 0; i < ms.depths.length; i++) {
         const tr = document.createElement('tr');
-        const minVal = ms.age_min ? ms.age_min[i] : ms.age_est[i] - 100;
-        const maxVal = ms.age_max ? ms.age_max[i] : ms.age_est[i] + 100;
+        const minVal = ms.age_lower !== undefined ? ms.age_lower[i] : (ms.age_min ? ms.age_min[i] : ms.age_est[i] - 100);
+        const maxVal = ms.age_upper !== undefined ? ms.age_upper[i] : (ms.age_max ? ms.age_max[i] : ms.age_est[i] + 100);
+        const hid = ms.horizon_id?.[i] || ('H' + String(i + 1).padStart(4, '0'));
         tr.innerHTML = `
-          <td style="font-weight: 600; color: var(--accent-blue); padding: 1px 2px;">${ms.depths[i]} ${dUnit}</td>
+          <td style="font-weight: 600; color: var(--accent-blue); padding: 1px 2px;"><span style="color: var(--text-muted); font-size: 8.5px; margin-right: 3px; font-family: var(--font-mono);">${hid}</span>${ms.depths[i]} ${dUnit}</td>
           <td style="padding: 1px 2px;">
             <input type="number" step="any" class="ad-tbl-input ad-input-side-sample-age" data-idx="${i}" value="${formatNumber(ms.age_est[i])}" style="font-size: 10px; font-weight: 600;" />
           </td>
@@ -543,8 +543,9 @@ export class AgeDepthDatingTable {
           const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
           const v = parseFloat((e.target as HTMLInputElement).value);
           if (Number.isFinite(v) && this.mappedSamples) {
-            if (!this.mappedSamples.age_min) this.mappedSamples.age_min = [...this.mappedSamples.age_est];
-            this.mappedSamples.age_min[idx] = v;
+            if (!this.mappedSamples.age_lower) this.mappedSamples.age_lower = [...this.mappedSamples.age_est];
+            this.mappedSamples.age_lower[idx] = v;
+            this.mappedSamples.age_min = this.mappedSamples.age_lower;
             this.renderFullDataTable();
           }
         });
@@ -554,8 +555,9 @@ export class AgeDepthDatingTable {
           const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
           const v = parseFloat((e.target as HTMLInputElement).value);
           if (Number.isFinite(v) && this.mappedSamples) {
-            if (!this.mappedSamples.age_max) this.mappedSamples.age_max = [...this.mappedSamples.age_est];
-            this.mappedSamples.age_max[idx] = v;
+            if (!this.mappedSamples.age_upper) this.mappedSamples.age_upper = [...this.mappedSamples.age_est];
+            this.mappedSamples.age_upper[idx] = v;
+            this.mappedSamples.age_max = this.mappedSamples.age_upper;
             this.renderFullDataTable();
           }
         });
@@ -567,8 +569,8 @@ export class AgeDepthDatingTable {
 
     const d = this.inspectionData.depths;
     const a = this.inspectionData.ages;
-    const mi = this.inspectionData.age_min || a;
-    const ma = this.inspectionData.age_max || a;
+    const mi = this.inspectionData.age_lower || this.inspectionData.age_min || a;
+    const ma = this.inspectionData.age_upper || this.inspectionData.age_max || a;
 
     for (let i = 0; i < d.length; i++) {
       const tr = document.createElement('tr');
@@ -655,16 +657,21 @@ export class AgeDepthDatingTable {
       const ms = this.mappedSamples;
       if (badge) badge.textContent = `花粉样品层位: 共 ${ms.depths.length} 个样品`;
       const sed = ms.sedimentation;
-      for (let i = 0; i < ms.depths.length; i++) {
+      const d = ms.depths;
+      const a = ms.age_est;
+      const mi = ms.age_lower !== undefined ? ms.age_lower : (ms.age_min ? ms.age_min : a.map((v) => v - 100));
+      const ma = ms.age_upper !== undefined ? ms.age_upper : (ms.age_max ? ms.age_max : a.map((v) => v + 100));
+      const order = this.displayOrder(d, a, mi, ma);
+
+      for (let pos = 0; pos < order.length; pos++) {
+        const i = order[pos];
         const tr = document.createElement('tr');
-        const d = ms.depths[i];
-        const a = ms.age_est[i];
-        const mi = ms.age_min ? ms.age_min[i] : a - 100;
-        const ma = ms.age_max ? ms.age_max[i] : a + 100;
-        const width = Math.abs(ma - mi);
-        // Windowed rate (depth_unit/yr) + its standard error in separate cells, mirroring the
-        // model table. The pointwise finite-difference fallback below is yr/depth_unit, so its
-        // unit label is stated inline to keep the two apart.
+        const depthVal = d[i];
+        const ageVal = a[i];
+        const minVal = mi[i];
+        const maxVal = ma[i];
+        const width = Math.abs(maxVal - minVal);
+
         let rateHtml = '—';
         let seHtml = '—';
         if (sed && Array.isArray(sed.sed_rate) && i < sed.sed_rate.length) {
@@ -679,27 +686,39 @@ export class AgeDepthDatingTable {
               ? `± ${formatNumber(se)}`
               : '—';
           }
-        } else if (i > 0 && d !== ms.depths[i - 1]) {
-          const acc = Math.abs(a - ms.age_est[i - 1]) / Math.abs(d - ms.depths[i - 1]);
+        } else if (i > 0 && depthVal !== d[i - 1]) {
+          const acc = Math.abs(ageVal - a[i - 1]) / Math.abs(depthVal - d[i - 1]);
           rateHtml = `${formatNumber(acc)} <span style="color:var(--text-muted);font-size:9px;">yr/${dUnit}</span>`;
         }
-        const isInverted = i > 0 && a < ms.age_est[i - 1];
+        const isInverted = i > 0 && ageVal < a[i - 1];
         if (isInverted) tr.classList.add('ad-row-inversion');
 
+        const hid = ms.horizon_id?.[i] || ('H' + String(i + 1).padStart(4, '0'));
         tr.innerHTML = `
-          <td style="text-align: center; color: var(--text-muted);">${i + 1}</td>
-          <td style="font-weight: 600; color: var(--accent-blue);">${formatNumber(d)} ${dUnit}</td>
-          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-age" data-idx="${i}" value="${formatNumber(a)}" /></td>
-          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-min" data-idx="${i}" value="${formatNumber(mi)}" /></td>
-          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-max" data-idx="${i}" value="${formatNumber(ma)}" /></td>
+          <td style="text-align: center; font-weight: 600; color: var(--text-primary); font-family: var(--font-mono); font-size: 10px;">${hid}</td>
+          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-depth" data-idx="${i}" value="${formatNumber(depthVal)}" style="width: 68px; font-weight: 600; font-size: 10.5px;" /> <span style="color:var(--text-muted); font-size:9.5px;">${dUnit}</span></td>
+          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-age" data-idx="${i}" value="${formatNumber(ageVal)}" /></td>
+          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-min" data-idx="${i}" value="${formatNumber(minVal)}" /></td>
+          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-max" data-idx="${i}" value="${formatNumber(maxVal)}" /></td>
           <td style="color: var(--text-muted); font-size: 10px;">${formatNumber(width)}</td>
           <td style="color: var(--text-secondary); font-size: 10px;">${rateHtml}</td>
           <td style="color: var(--text-muted); font-size: 9.5px;">${seHtml}</td>
-          <td style="text-align: center; color: var(--text-muted); font-size: 9px;">样品层位</td>
+          <td style="text-align: center;">
+            <button class="ui-btn ui-btn--quiet ui-btn--xs ad-btn-del-sample-row" data-idx="${i}" title="删除此采样层位" style="padding: 1px 6px; font-size: 9.5px; color: var(--accent-red);">✕</button>
+          </td>
         `;
         tbody.appendChild(tr);
       }
 
+      tbody.querySelectorAll('.ad-input-full-sample-depth').forEach((inp) => {
+        inp.addEventListener('change', (e) => {
+          const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
+          const v = parseFloat((e.target as HTMLInputElement).value);
+          if (Number.isFinite(v)) {
+            this.onSampleDepthEdited(idx, v);
+          }
+        });
+      });
       tbody.querySelectorAll('.ad-input-full-sample-age').forEach((inp) => {
         inp.addEventListener('change', (e) => {
           const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
@@ -707,6 +726,7 @@ export class AgeDepthDatingTable {
           if (Number.isFinite(v) && this.mappedSamples) {
             this.mappedSamples.age_est[idx] = v;
             this.updateMappingTable();
+            void this.callbacks.onSamplesModified?.(this.mappedSamples);
           }
         });
       });
@@ -715,9 +735,11 @@ export class AgeDepthDatingTable {
           const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
           const v = parseFloat((e.target as HTMLInputElement).value);
           if (Number.isFinite(v) && this.mappedSamples) {
-            if (!this.mappedSamples.age_min) this.mappedSamples.age_min = [...this.mappedSamples.age_est];
-            this.mappedSamples.age_min[idx] = v;
+            if (!this.mappedSamples.age_lower) this.mappedSamples.age_lower = [...this.mappedSamples.age_est];
+            this.mappedSamples.age_lower[idx] = v;
+            this.mappedSamples.age_min = this.mappedSamples.age_lower;
             this.updateMappingTable();
+            void this.callbacks.onSamplesModified?.(this.mappedSamples);
           }
         });
       });
@@ -726,10 +748,18 @@ export class AgeDepthDatingTable {
           const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
           const v = parseFloat((e.target as HTMLInputElement).value);
           if (Number.isFinite(v) && this.mappedSamples) {
-            if (!this.mappedSamples.age_max) this.mappedSamples.age_max = [...this.mappedSamples.age_est];
-            this.mappedSamples.age_max[idx] = v;
+            if (!this.mappedSamples.age_upper) this.mappedSamples.age_upper = [...this.mappedSamples.age_est];
+            this.mappedSamples.age_upper[idx] = v;
+            this.mappedSamples.age_max = this.mappedSamples.age_upper;
             this.updateMappingTable();
+            void this.callbacks.onSamplesModified?.(this.mappedSamples);
           }
+        });
+      });
+      tbody.querySelectorAll('.ad-btn-del-sample-row').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt((btn as HTMLElement).getAttribute('data-idx') || '0', 10);
+          this.deleteSampleRow(idx);
         });
       });
       return;
@@ -737,8 +767,8 @@ export class AgeDepthDatingTable {
 
     const d = this.inspectionData.depths;
     const a = this.inspectionData.ages;
-    const mi = this.inspectionData.age_min || a;
-    const ma = this.inspectionData.age_max || a;
+    const mi = this.inspectionData.age_lower || this.inspectionData.age_min || a;
+    const ma = this.inspectionData.age_upper || this.inspectionData.age_max || a;
     // Row-aligned windowed rates from the backend (already decimated to THESE rows).
     // Length guard: add/delete rows invalidate the alignment; edits clear the arrays in
     // onModelPointEdited. When absent, the rate cells fall back to a neighbour difference
@@ -890,12 +920,18 @@ export class AgeDepthDatingTable {
     return idx;
   }
 
-  /** Header click: toggle direction on the same column, or switch columns ascending. */
-  public sortByColumn(key: 'depth' | 'age' | 'min' | 'max'): void {
-    if (this.sortKey === key) {
-      this.sortAsc = !this.sortAsc;
+  /** Header click: toggle ascending -> descending -> raw (null). */
+  public sortByColumn(key: 'depth' | 'age' | 'min' | 'max' | 'lower' | 'upper'): void {
+    const canonicalKey = key === 'lower' ? 'min' : key === 'upper' ? 'max' : key;
+    if (this.sortKey === canonicalKey) {
+      if (this.sortAsc) {
+        this.sortAsc = false;
+      } else {
+        this.sortKey = null;
+        this.sortAsc = true;
+      }
     } else {
-      this.sortKey = key;
+      this.sortKey = canonicalKey;
       this.sortAsc = true;
     }
     this.renderFullDataTable();
@@ -1037,21 +1073,50 @@ export class AgeDepthDatingTable {
   }
 
   public addTableRow(): void {
+    if (this.tableMode === 'samples') {
+      if (!this.mappedSamples) {
+        this.mappedSamples = {
+          depths: [],
+          age_est: [],
+          age_lower: [],
+          age_upper: [],
+          horizon_id: [],
+        };
+      }
+      const ms = this.mappedSamples;
+      let newDepth = 10;
+      if (ms.depths.length > 0) {
+        const maxD = Math.max(...ms.depths);
+        newDepth = Math.round((maxD + 5) * 10) / 10;
+      }
+      let newAge = 0;
+      if (this.inspectionData && this.inspectionData.depths.length >= 2) {
+        newAge = Math.round(this.interpolateModelAge(newDepth));
+      } else if (ms.age_est.length > 0) {
+        const maxA = Math.max(...ms.age_est);
+        newAge = Math.round(maxA + 100);
+      }
+      const newMin = newAge - 100;
+      const newMax = newAge + 100;
+
+      ms.depths.push(newDepth);
+      ms.age_est.push(newAge);
+      if (!ms.age_lower) ms.age_lower = [...ms.age_est];
+      if (!ms.age_upper) ms.age_upper = [...ms.age_est];
+      ms.age_lower.push(newMin);
+      ms.age_upper.push(newMax);
+
+      this.reindexSampleHorizons();
+      this.renderFullDataTable();
+      this.updateMappingTable();
+      void this.callbacks.onSamplesModified?.(this.mappedSamples);
+      notify(`已添加花粉采样层位（${ms.horizon_id?.[ms.horizon_id.length - 1]}, 深度 ${newDepth} ${this.getDepthUnit()}），主画布已联动更新。`, 'success');
+      return;
+    }
+
     if (!this.inspectionData) {
       notifyError('请先运行提取或载入年代模型。');
       return;
-    }
-    // The samples view renders mappedSamples (depths inherited from the pollen diagram's
-    // columns); this button appends to the MODEL arrays, so in that view it genuinely did
-    // nothing the user could see -- a silent no-op, one of the reported symptoms. Say so
-    // and switch to the view where the new row actually appears.
-    if (this.tableMode === 'samples') {
-      this.tableMode = 'model';
-      this.container.querySelector('#ad-tbl-view-model')?.classList.add('active');
-      this.container.querySelector('#ad-tbl-view-samples')?.classList.remove('active');
-      const sideBtn = this.container.querySelector('#ad-btn-toggle-side-table') as HTMLElement | null;
-      if (sideBtn) sideBtn.textContent = '全量模型';
-      notify('已切换到「提取全量模型层位」视图：添加层位作用于模型数组，样品视图只显示花粉采样层位。', 'info');
     }
     const d = this.inspectionData.depths;
     const a = this.inspectionData.ages;
@@ -1079,15 +1144,74 @@ export class AgeDepthDatingTable {
     ma.push(newMax);
     this.inspectionData.age_min = mi;
     this.inspectionData.age_max = ma;
-    // Row count changed: attached rates are misaligned even though the length guard in
-    // the renderer would also catch it (add+delete restores the length with shifted
-    // content, which a length check cannot see).
+    // Row count changed: attached rates are misaligned
     this.invalidateWindowedRates();
 
     this.renderFullDataTable();
     this.updateMappingTable();
     this.updateQualityAuditCard();
     this.callbacks.onModelModified?.();
+  }
+
+  public deleteSampleRow(idx: number): void {
+    if (!this.mappedSamples || this.mappedSamples.depths.length <= 1) {
+      notifyError('花粉样品采样层位至少需要保留 1 个层位。');
+      return;
+    }
+    this.mappedSamples.depths.splice(idx, 1);
+    this.mappedSamples.age_est.splice(idx, 1);
+    if (this.mappedSamples.age_lower) this.mappedSamples.age_lower.splice(idx, 1);
+    if (this.mappedSamples.age_upper) this.mappedSamples.age_upper.splice(idx, 1);
+    if (this.mappedSamples.age_min) this.mappedSamples.age_min.splice(idx, 1);
+    if (this.mappedSamples.age_max) this.mappedSamples.age_max.splice(idx, 1);
+    this.reindexSampleHorizons();
+    this.renderFullDataTable();
+    this.updateMappingTable();
+    void this.callbacks.onSamplesModified?.(this.mappedSamples);
+    notify('已删除采样层位，主画布已同步移除对应共识层位绿线。', 'info');
+  }
+
+  private onSampleDepthEdited(idx: number, newDepth: number): void {
+    if (!this.mappedSamples || !Number.isFinite(newDepth)) return;
+    this.mappedSamples.depths[idx] = newDepth;
+    if (this.inspectionData && this.inspectionData.depths.length >= 2) {
+      const estAge = Math.round(this.interpolateModelAge(newDepth));
+      this.mappedSamples.age_est[idx] = estAge;
+      if (this.mappedSamples.age_lower && idx < this.mappedSamples.age_lower.length) {
+        this.mappedSamples.age_lower[idx] = estAge - 100;
+      }
+      if (this.mappedSamples.age_upper && idx < this.mappedSamples.age_upper.length) {
+        this.mappedSamples.age_upper[idx] = estAge + 100;
+      }
+    }
+    this.renderFullDataTable();
+    this.updateMappingTable();
+    void this.callbacks.onSamplesModified?.(this.mappedSamples);
+  }
+
+  private interpolateModelAge(targetDepth: number): number {
+    if (!this.inspectionData || this.inspectionData.depths.length < 2) return targetDepth * 20;
+    const ds = this.inspectionData.depths;
+    const as = this.inspectionData.ages;
+    for (let i = 0; i < ds.length - 1; i++) {
+      const d0 = ds[i];
+      const d1 = ds[i + 1];
+      if ((targetDepth >= d0 && targetDepth <= d1) || (targetDepth >= d1 && targetDepth <= d0)) {
+        const dd = d1 - d0;
+        if (Math.abs(dd) < 1e-9) return as[i];
+        const t = (targetDepth - d0) / dd;
+        return as[i] + t * (as[i + 1] - as[i]);
+      }
+    }
+    if (targetDepth <= ds[0]) return as[0];
+    return as[as.length - 1];
+  }
+
+  private reindexSampleHorizons(): void {
+    if (!this.mappedSamples) return;
+    this.mappedSamples.horizon_id = this.mappedSamples.depths.map(
+      (_, i) => `H${String(i + 1).padStart(4, '0')}`
+    );
   }
 
   public deleteTableRow(idx: number): void {
@@ -1114,11 +1238,17 @@ export class AgeDepthDatingTable {
 
     this.inspectionData.depths = indices.map((i) => this.inspectionData!.depths[i]);
     this.inspectionData.ages = indices.map((i) => this.inspectionData!.ages[i]);
+    if (this.inspectionData.age_lower) {
+      this.inspectionData.age_lower = indices.map((i) => this.inspectionData!.age_lower![i]);
+    }
+    if (this.inspectionData.age_upper) {
+      this.inspectionData.age_upper = indices.map((i) => this.inspectionData!.age_upper![i]);
+    }
     if (this.inspectionData.age_min) {
-      this.inspectionData.age_min = indices.map((i) => this.inspectionData!.age_min[i]);
+      this.inspectionData.age_min = indices.map((i) => this.inspectionData!.age_min![i]);
     }
     if (this.inspectionData.age_max) {
-      this.inspectionData.age_max = indices.map((i) => this.inspectionData!.age_max[i]);
+      this.inspectionData.age_max = indices.map((i) => this.inspectionData!.age_max![i]);
     }
     // This sort permutes the arrays themselves, so the attached windowed rates must be
     // permuted identically or they would describe the wrong horizons. (They are also
@@ -1230,21 +1360,27 @@ export class AgeDepthDatingTable {
       this.inspectionData = {
         depths: newDepths,
         ages: newAges,
+        age_lower: newMin,
+        age_upper: newMax,
         age_min: newMin,
         age_max: newMax,
         metadata: this.inspectionData?.metadata || {
           curve_type: 'median',
           envelope_type: '95_hpd',
           depth_unit: (this.container.querySelector('#ad-inp-depth-unit') as HTMLInputElement | null)?.value?.trim() || 'cm',
-          age_unit: (this.container.querySelector('#ad-inp-age-unit') as HTMLInputElement | null)?.value?.trim() || 'cal BP',
+          age_unit: (this.container.querySelector('#ad-inp-age-unit') as HTMLInputElement | null)?.value?.trim() || 'cal yrBP',
           calibration_curve: 'IntCal20',
         },
       };
     } else {
       this.inspectionData.depths.push(...newDepths);
       this.inspectionData.ages.push(...newAges);
+      if (!this.inspectionData.age_lower) this.inspectionData.age_lower = [...this.inspectionData.ages];
+      if (!this.inspectionData.age_upper) this.inspectionData.age_upper = [...this.inspectionData.ages];
       if (!this.inspectionData.age_min) this.inspectionData.age_min = [...this.inspectionData.ages];
       if (!this.inspectionData.age_max) this.inspectionData.age_max = [...this.inspectionData.ages];
+      this.inspectionData.age_lower.push(...newMin);
+      this.inspectionData.age_upper.push(...newMax);
       this.inspectionData.age_min.push(...newMin);
       this.inspectionData.age_max.push(...newMax);
       // Appended rows have no fitted rate; drop the stale attached arrays wholesale

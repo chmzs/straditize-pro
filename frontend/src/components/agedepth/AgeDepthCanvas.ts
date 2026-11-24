@@ -53,7 +53,7 @@ export class AgeDepthCanvas {
 
   // 控制点与模式
   private activeFMode: 'adjust' | 'add' | 'delete' | 'pickDate' = 'adjust';
-  private editTarget: 'curve' | 'min' | 'max' = 'curve';
+  private editTarget: 'curve' | 'lower' | 'upper' | 'min' | 'max' = 'curve';
   private controlPoints: ControlPoint[] = [];
   private selectedControlPointIndex: number | null = null;
   private draggingControlPoint: number | null = null;
@@ -275,14 +275,15 @@ export class AgeDepthCanvas {
     this.activeFMode = mode;
   }
 
-  public getEditTarget(): 'curve' | 'min' | 'max' {
+  public getEditTarget(): 'curve' | 'lower' | 'upper' | 'min' | 'max' {
     return this.editTarget;
   }
 
-  public setEditTarget(target: 'curve' | 'min' | 'max'): void {
-    this.editTarget = target;
+  public setEditTarget(target: 'curve' | 'lower' | 'upper' | 'min' | 'max'): void {
+    const norm = target === 'min' ? 'lower' : target === 'max' ? 'upper' : target;
+    this.editTarget = norm;
     const sel = this.container.querySelector('#ad-sel-edit-target') as HTMLSelectElement | null;
-    if (sel && sel.value !== target) sel.value = target;
+    if (sel && sel.value !== norm) sel.value = norm;
     this.renderCanvas();
   }
 
@@ -369,13 +370,27 @@ export class AgeDepthCanvas {
     if (el) el.textContent = `${Math.round(this.viewport.scale * 100)}%`;
   }
 
+  private getCalibValues(): { aL: number; aR: number; dT: number; dB: number } | null {
+    const parse = (id: string) => {
+      const el = this.container.querySelector(`#${id}`) as HTMLInputElement | null;
+      if (!el || !el.value.trim()) return null;
+      const v = parseFloat(el.value);
+      return Number.isFinite(v) ? v : null;
+    };
+    const aL = parse('ad-inp-age-left');
+    const aR = parse('ad-inp-age-right');
+    const dT = parse('ad-inp-depth-top');
+    const dB = parse('ad-inp-depth-bottom');
+    if (aL === null || aR === null || dT === null || dB === null) return null;
+    return { aL, aR, dT, dB };
+  }
+
   public ageDepthToPx(age: number, depth: number): { x: number; y: number } | null {
     if (this.calibMarkers.length < 4) return null;
+    const calib = this.getCalibValues();
+    if (!calib) return null;
+    const { aL, aR, dT, dB } = calib;
     const orientStd = (this.container.querySelector('#ad-orient-std') as HTMLInputElement)?.checked ?? true;
-    const aL = parseFloat((this.container.querySelector('#ad-inp-age-left') as HTMLInputElement)?.value || '3000');
-    const aR = parseFloat((this.container.querySelector('#ad-inp-age-right') as HTMLInputElement)?.value || '0');
-    const dT = parseFloat((this.container.querySelector('#ad-inp-depth-top') as HTMLInputElement)?.value || '0');
-    const dB = parseFloat((this.container.querySelector('#ad-inp-depth-bottom') as HTMLInputElement)?.value || '150');
 
     const x0 = this.calibMarkers[0].x;
     const x1 = this.calibMarkers[1].x;
@@ -395,11 +410,10 @@ export class AgeDepthCanvas {
 
   public pxToAgeDepth(x: number, y: number): { age: number; depth: number } | null {
     if (this.calibMarkers.length < 4) return null;
+    const calib = this.getCalibValues();
+    if (!calib) return null;
+    const { aL, aR, dT, dB } = calib;
     const orientStd = (this.container.querySelector('#ad-orient-std') as HTMLInputElement)?.checked ?? true;
-    const aL = parseFloat((this.container.querySelector('#ad-inp-age-left') as HTMLInputElement)?.value || '3000');
-    const aR = parseFloat((this.container.querySelector('#ad-inp-age-right') as HTMLInputElement)?.value || '0');
-    const dT = parseFloat((this.container.querySelector('#ad-inp-depth-top') as HTMLInputElement)?.value || '0');
-    const dB = parseFloat((this.container.querySelector('#ad-inp-depth-bottom') as HTMLInputElement)?.value || '150');
 
     const x0 = this.calibMarkers[0].x;
     const x1 = this.calibMarkers[1].x;
@@ -426,23 +440,23 @@ export class AgeDepthCanvas {
     if (!this.inspectionData || this.calibMarkers.length < 4) return;
     const d = this.inspectionData.depths;
     const a = this.inspectionData.ages;
-    const mi = this.inspectionData.age_min || a;
-    const ma = this.inspectionData.age_max || a;
+    const mi = this.inspectionData.age_lower || this.inspectionData.age_min || a;
+    const ma = this.inspectionData.age_upper || this.inspectionData.age_max || a;
 
     const ys: number[] = [];
     const xsCurve: number[] = [];
-    const xsMin: number[] = [];
-    const xsMax: number[] = [];
+    const xsLower: number[] = [];
+    const xsUpper: number[] = [];
 
     for (let i = 0; i < d.length; i++) {
-      const ptMedian = this.ageDepthToPx(a[i], d[i]);
-      const ptMin = this.ageDepthToPx(mi[i], d[i]);
-      const ptMax = this.ageDepthToPx(ma[i], d[i]);
-      if (ptMedian) {
-        ys.push(ptMedian.y);
-        xsCurve.push(ptMedian.x);
-        xsMin.push(ptMin ? ptMin.x : ptMedian.x);
-        xsMax.push(ptMax ? ptMax.x : ptMedian.x);
+      const ptMean = this.ageDepthToPx(a[i], d[i]);
+      const ptLower = this.ageDepthToPx(mi[i], d[i]);
+      const ptUpper = this.ageDepthToPx(ma[i], d[i]);
+      if (ptMean) {
+        ys.push(ptMean.y);
+        xsCurve.push(ptMean.x);
+        xsLower.push(ptLower ? ptLower.x : ptMean.x);
+        xsUpper.push(ptUpper ? ptUpper.x : ptMean.x);
       }
     }
 
@@ -450,8 +464,10 @@ export class AgeDepthCanvas {
       this.inspectionData.px_points = {
         y: ys,
         x_curve: xsCurve,
-        x_min: xsMin,
-        x_max: xsMax,
+        x_lower: xsLower,
+        x_upper: xsUpper,
+        x_min: xsLower,
+        x_max: xsUpper,
       };
       // 双向绑定：表格驱动画布控制点同步更新
       this.initControlPointsFromPx(this.inspectionData.px_points);
@@ -463,13 +479,15 @@ export class AgeDepthCanvas {
   public initControlPointsFromPx(px: {
     y: number[];
     x_curve: number[];
+    x_lower?: number[];
+    x_upper?: number[];
     x_min?: number[];
     x_max?: number[];
   }): void {
     const stepSize = Math.max(1, Math.floor(px.y.length / 18));
     this.controlPoints = [];
 
-    // 1. 中位线控制点 (kind: 'curve')
+    // 1. 均值代表线控制点 (kind: 'curve')
     for (let i = 0; i < px.y.length; i += stepSize) {
       this.controlPoints.push({
         id: `cp_curve_${i}`,
@@ -488,46 +506,48 @@ export class AgeDepthCanvas {
       });
     }
 
-    // 2. 置信区间下界 (kind: 'min')
-    if (px.x_min && px.x_min.length === px.y.length) {
+    // 2. 置信区间下界 (kind: 'lower')
+    const lowerXs = px.x_lower || px.x_min;
+    if (lowerXs && lowerXs.length === px.y.length) {
       const minStep = Math.max(1, Math.floor(px.y.length / 12));
       for (let i = 0; i < px.y.length; i += minStep) {
         this.controlPoints.push({
-          id: `cp_min_${i}`,
-          x: px.x_min[i],
+          id: `cp_lower_${i}`,
+          x: lowerXs[i],
           y: px.y[i],
-          kind: 'min',
+          kind: 'lower',
         });
       }
       if ((px.y.length - 1) % minStep !== 0) {
         const lastIdx = px.y.length - 1;
         this.controlPoints.push({
-          id: `cp_min_${lastIdx}`,
-          x: px.x_min[lastIdx],
+          id: `cp_lower_${lastIdx}`,
+          x: lowerXs[lastIdx],
           y: px.y[lastIdx],
-          kind: 'min',
+          kind: 'lower',
         });
       }
     }
 
-    // 3. 置信区间上界 (kind: 'max')
-    if (px.x_max && px.x_max.length === px.y.length) {
+    // 3. 置信区间上界 (kind: 'upper')
+    const upperXs = px.x_upper || px.x_max;
+    if (upperXs && upperXs.length === px.y.length) {
       const maxStep = Math.max(1, Math.floor(px.y.length / 12));
       for (let i = 0; i < px.y.length; i += maxStep) {
         this.controlPoints.push({
-          id: `cp_max_${i}`,
-          x: px.x_max[i],
+          id: `cp_upper_${i}`,
+          x: upperXs[i],
           y: px.y[i],
-          kind: 'max',
+          kind: 'upper',
         });
       }
       if ((px.y.length - 1) % maxStep !== 0) {
         const lastIdx = px.y.length - 1;
         this.controlPoints.push({
-          id: `cp_max_${lastIdx}`,
-          x: px.x_max[lastIdx],
+          id: `cp_upper_${lastIdx}`,
+          x: upperXs[lastIdx],
           y: px.y[lastIdx],
-          kind: 'max',
+          kind: 'upper',
         });
       }
     }
@@ -581,8 +601,8 @@ export class AgeDepthCanvas {
     const px = this.inspectionData.px_points;
 
     const curveCps = this.controlPoints.filter((p) => p.kind === 'curve').sort((a, b) => a.y - b.y);
-    const minCps = this.controlPoints.filter((p) => p.kind === 'min').sort((a, b) => a.y - b.y);
-    const maxCps = this.controlPoints.filter((p) => p.kind === 'max').sort((a, b) => a.y - b.y);
+    const lowerCps = this.controlPoints.filter((p) => p.kind === 'lower' || p.kind === 'min').sort((a, b) => a.y - b.y);
+    const upperCps = this.controlPoints.filter((p) => p.kind === 'upper' || p.kind === 'max').sort((a, b) => a.y - b.y);
 
     if (curveCps.length < 2) return;
 
@@ -603,31 +623,39 @@ export class AgeDepthCanvas {
     }
     px.y = newYs;
     px.x_curve = new Array(newYs.length).fill(0);
-    if (minCps.length >= 2) {
-      px.x_min = new Array(newYs.length).fill(0);
+    if (lowerCps.length >= 2) {
+      px.x_lower = new Array(newYs.length).fill(0);
+      px.x_min = px.x_lower;
     } else {
-      delete (px as { x_min?: number[] }).x_min;
+      delete px.x_lower;
+      delete px.x_min;
     }
-    if (maxCps.length >= 2) {
-      px.x_max = new Array(newYs.length).fill(0);
+    if (upperCps.length >= 2) {
+      px.x_upper = new Array(newYs.length).fill(0);
+      px.x_max = px.x_upper;
     } else {
-      delete (px as { x_max?: number[] }).x_max;
+      delete px.x_upper;
+      delete px.x_max;
     }
 
     this.inspectionData.depths = new Array(newYs.length).fill(0);
     this.inspectionData.ages = new Array(newYs.length).fill(0);
-    if (px.x_min) {
-      this.inspectionData.age_min = new Array(newYs.length).fill(0);
+    if (px.x_lower) {
+      this.inspectionData.age_lower = new Array(newYs.length).fill(0);
+      this.inspectionData.age_min = this.inspectionData.age_lower;
     } else {
-      delete (this.inspectionData as { age_min?: number[] }).age_min;
+      delete (this.inspectionData as any).age_lower;
+      delete (this.inspectionData as any).age_min;
     }
-    if (px.x_max) {
-      this.inspectionData.age_max = new Array(newYs.length).fill(0);
+    if (px.x_upper) {
+      this.inspectionData.age_upper = new Array(newYs.length).fill(0);
+      this.inspectionData.age_max = this.inspectionData.age_upper;
     } else {
-      delete (this.inspectionData as { age_max?: number[] }).age_max;
+      delete (this.inspectionData as any).age_upper;
+      delete (this.inspectionData as any).age_max;
     }
 
-    // 拟合中位线
+    // 拟合均值代表线
     this.fitLineFromPoints(curveCps, px.y, px.x_curve);
     for (let i = 0; i < px.y.length; i++) {
       const ad = this.pxToAgeDepth(px.x_curve[i], px.y[i]);
@@ -637,24 +665,24 @@ export class AgeDepthCanvas {
       }
     }
 
-    // 拟合 95% HPD 置信区间下界
-    if (minCps.length >= 2 && px.x_min) {
-      this.fitLineFromPoints(minCps, px.y, px.x_min);
+    // 拟合 95% 置信区间下界
+    if (lowerCps.length >= 2 && px.x_lower) {
+      this.fitLineFromPoints(lowerCps, px.y, px.x_lower);
       for (let i = 0; i < px.y.length; i++) {
-        const ad = this.pxToAgeDepth(px.x_min[i], px.y[i]);
-        if (ad && this.inspectionData.age_min) {
-          this.inspectionData.age_min[i] = ad.age;
+        const ad = this.pxToAgeDepth(px.x_lower[i], px.y[i]);
+        if (ad && this.inspectionData.age_lower) {
+          this.inspectionData.age_lower[i] = ad.age;
         }
       }
     }
 
-    // 拟合 95% HPD 置信区间上界
-    if (maxCps.length >= 2 && px.x_max) {
-      this.fitLineFromPoints(maxCps, px.y, px.x_max);
+    // 拟合 95% 置信区间上界
+    if (upperCps.length >= 2 && px.x_upper) {
+      this.fitLineFromPoints(upperCps, px.y, px.x_upper);
       for (let i = 0; i < px.y.length; i++) {
-        const ad = this.pxToAgeDepth(px.x_max[i], px.y[i]);
-        if (ad && this.inspectionData.age_max) {
-          this.inspectionData.age_max[i] = ad.age;
+        const ad = this.pxToAgeDepth(px.x_upper[i], px.y[i]);
+        if (ad && this.inspectionData.age_upper) {
+          this.inspectionData.age_upper[i] = ad.age;
         }
       }
     }
@@ -944,18 +972,21 @@ export class AgeDepthCanvas {
     const inv = 1 / Math.max(this.viewport.scale, 1e-6);
 
     const curveCps = this.controlPoints.filter((p) => p.kind === 'curve');
-    const minCps = this.controlPoints.filter((p) => p.kind === 'min');
-    const maxCps = this.controlPoints.filter((p) => p.kind === 'max');
+    const lowerCps = this.controlPoints.filter((p) => p.kind === 'lower' || p.kind === 'min');
+    const upperCps = this.controlPoints.filter((p) => p.kind === 'upper' || p.kind === 'max');
 
-    // 1. 置信区间包络带 (只在 min 与 max 均有控制点覆盖的 Y 范围内填充与描边)
-    if (this.showEnvelope && px.y && px.x_min && px.x_max && minCps.length >= 2 && maxCps.length >= 2) {
-      const minMinY = Math.min(...minCps.map((p) => p.y));
-      const maxMinY = Math.max(...minCps.map((p) => p.y));
-      const minMaxY = Math.min(...maxCps.map((p) => p.y));
-      const maxMaxY = Math.max(...maxCps.map((p) => p.y));
+    const lowerXs = px.x_lower || px.x_min;
+    const upperXs = px.x_upper || px.x_max;
 
-      const envTop = Math.max(minMinY, minMaxY);
-      const envBot = Math.min(maxMinY, maxMaxY);
+    // 1. 置信区间包络带 (只在 lower 与 upper 均有控制点覆盖的 Y 范围内填充与描边)
+    if (this.showEnvelope && px.y && lowerXs && upperXs && lowerCps.length >= 2 && upperCps.length >= 2) {
+      const minLowerY = Math.min(...lowerCps.map((p) => p.y));
+      const maxLowerY = Math.max(...lowerCps.map((p) => p.y));
+      const minUpperY = Math.min(...upperCps.map((p) => p.y));
+      const maxUpperY = Math.max(...upperCps.map((p) => p.y));
+
+      const envTop = Math.max(minLowerY, minUpperY);
+      const envBot = Math.min(maxLowerY, maxUpperY);
       const envIdxs: number[] = [];
       for (let i = 0; i < px.y.length; i++) {
         if (px.y[i] >= envTop && px.y[i] <= envBot) envIdxs.push(i);
@@ -963,50 +994,50 @@ export class AgeDepthCanvas {
 
       if (envIdxs.length >= 2) {
         ctx.beginPath();
-        ctx.moveTo(px.x_min[envIdxs[0]], px.y[envIdxs[0]]);
+        ctx.moveTo(lowerXs[envIdxs[0]], px.y[envIdxs[0]]);
         for (let k = 1; k < envIdxs.length; k++) {
           const idx = envIdxs[k];
-          ctx.lineTo(px.x_min[idx], px.y[idx]);
+          ctx.lineTo(lowerXs[idx], px.y[idx]);
         }
         for (let k = envIdxs.length - 1; k >= 0; k--) {
           const idx = envIdxs[k];
-          ctx.lineTo(px.x_max[idx], px.y[idx]);
+          ctx.lineTo(upperXs[idx], px.y[idx]);
         }
         ctx.closePath();
         ctx.fillStyle = 'rgba(245, 158, 11, 0.32)';
         ctx.fill();
       }
 
-      // 下界线 (仅在 min 控制点有效范围内)
-      const minIdxs: number[] = [];
+      // 下界线 (仅在 lower 控制点有效范围内)
+      const lowerIdxs: number[] = [];
       for (let i = 0; i < px.y.length; i++) {
-        if (px.y[i] >= minMinY && px.y[i] <= maxMinY) minIdxs.push(i);
+        if (px.y[i] >= minLowerY && px.y[i] <= maxLowerY) lowerIdxs.push(i);
       }
-      if (minIdxs.length >= 2) {
+      if (lowerIdxs.length >= 2) {
         strokeWithHalo(ctx, () => {
-          ctx.moveTo(px.x_min[minIdxs[0]], px.y[minIdxs[0]]);
-          for (let k = 1; k < minIdxs.length; k++) {
-            ctx.lineTo(px.x_min[minIdxs[k]], px.y[minIdxs[k]]);
+          ctx.moveTo(lowerXs[lowerIdxs[0]], px.y[lowerIdxs[0]]);
+          for (let k = 1; k < lowerIdxs.length; k++) {
+            ctx.lineTo(lowerXs[lowerIdxs[k]], px.y[lowerIdxs[k]]);
           }
-        }, CURVE_COLORS.min, 1.5 * inv);
+        }, CURVE_COLORS.lower, 1.5 * inv);
       }
 
-      // 上界线 (仅在 max 控制点有效范围内)
-      const maxIdxs: number[] = [];
+      // 上界线 (仅在 upper 控制点有效范围内)
+      const upperIdxs: number[] = [];
       for (let i = 0; i < px.y.length; i++) {
-        if (px.y[i] >= minMaxY && px.y[i] <= maxMaxY) maxIdxs.push(i);
+        if (px.y[i] >= minUpperY && px.y[i] <= maxUpperY) upperIdxs.push(i);
       }
-      if (maxIdxs.length >= 2) {
+      if (upperIdxs.length >= 2) {
         strokeWithHalo(ctx, () => {
-          ctx.moveTo(px.x_max[maxIdxs[0]], px.y[maxIdxs[0]]);
-          for (let k = 1; k < maxIdxs.length; k++) {
-            ctx.lineTo(px.x_max[maxIdxs[k]], px.y[maxIdxs[k]]);
+          ctx.moveTo(upperXs[upperIdxs[0]], px.y[upperIdxs[0]]);
+          for (let k = 1; k < upperIdxs.length; k++) {
+            ctx.lineTo(upperXs[upperIdxs[k]], px.y[upperIdxs[k]]);
           }
-        }, CURVE_COLORS.max, 1.5 * inv);
+        }, CURVE_COLORS.upper, 1.5 * inv);
       }
     }
 
-    // 2. 中位线 (仅在 curve 控制点有效范围内绘制)
+    // 2. 均值代表线 (仅在 curve 控制点有效范围内绘制)
     if (this.showCurve && px.y && px.x_curve && curveCps.length >= 2) {
       const minCurveY = Math.min(...curveCps.map((p) => p.y));
       const maxCurveY = Math.max(...curveCps.map((p) => p.y));
@@ -1020,7 +1051,7 @@ export class AgeDepthCanvas {
           for (let k = 1; k < cIdxs.length; k++) {
             ctx.lineTo(px.x_curve[cIdxs[k]], px.y[cIdxs[k]]);
           }
-        }, CURVE_COLORS.median, 2.5 * inv);
+        }, CURVE_COLORS.mean, 2.5 * inv);
       }
     }
 
@@ -1028,7 +1059,11 @@ export class AgeDepthCanvas {
       for (let i = 0; i < this.controlPoints.length; i++) {
         const cp = this.controlPoints[i];
         const isSelected = i === this.selectedControlPointIndex;
-        const color = cp.kind === 'min' ? '#10b981' : cp.kind === 'max' ? '#ef4444' : '#0284c7';
+        const color = (cp.kind === 'lower' || cp.kind === 'min')
+          ? '#10b981'
+          : (cp.kind === 'upper' || cp.kind === 'max')
+          ? '#ef4444'
+          : '#0284c7';
         const r = (cp.kind === 'curve' ? 4.2 : 3.6) * inv;
 
         // 选中高亮光环 (金黄醒目外环)
@@ -1060,42 +1095,42 @@ export class AgeDepthCanvas {
     }
 
     if (this.datingPoints.length > 0 && this.calibMarkers.length >= 4) {
-      const orientStd = (this.container.querySelector('#ad-orient-std') as HTMLInputElement)?.checked ?? true;
-      const aL = parseFloat((this.container.querySelector('#ad-inp-age-left') as HTMLInputElement)?.value || '3000');
-      const aR = parseFloat((this.container.querySelector('#ad-inp-age-right') as HTMLInputElement)?.value || '0');
-      const dT = parseFloat((this.container.querySelector('#ad-inp-depth-top') as HTMLInputElement)?.value || '0');
-      const dB = parseFloat((this.container.querySelector('#ad-inp-depth-bottom') as HTMLInputElement)?.value || '150');
+      const calib = this.getCalibValues();
+      if (calib) {
+        const { aL, aR, dT, dB } = calib;
+        const orientStd = (this.container.querySelector('#ad-orient-std') as HTMLInputElement)?.checked ?? true;
 
-      const x0 = this.calibMarkers[0].x;
-      const x1 = this.calibMarkers[1].x;
-      const y0 = this.calibMarkers[2].y;
-      const y1 = this.calibMarkers[3].y;
+        const x0 = this.calibMarkers[0].x;
+        const x1 = this.calibMarkers[1].x;
+        const y0 = this.calibMarkers[2].y;
+        const y1 = this.calibMarkers[3].y;
 
-      for (const dp of this.datingPoints) {
-        let pxX = 0;
-        let pxY = 0;
-        if (orientStd) {
-          const fx = (dp.age - aL) / Math.max(1, aR - aL);
-          const fy = (dp.depth - dT) / Math.max(1, dB - dT);
-          pxX = x0 + fx * (x1 - x0);
-          pxY = y0 + fy * (y1 - y0);
-        } else {
-          const fx = (dp.depth - dT) / Math.max(1, dB - dT);
-          const fy = (dp.age - aL) / Math.max(1, aR - aL);
-          pxX = x0 + fx * (x1 - x0);
-          pxY = y0 + fy * (y1 - y0);
+        for (const dp of this.datingPoints) {
+          let pxX = 0;
+          let pxY = 0;
+          if (orientStd) {
+            const fx = (dp.age - aL) / Math.max(1, aR - aL);
+            const fy = (dp.depth - dT) / Math.max(1, dB - dT);
+            pxX = x0 + fx * (x1 - x0);
+            pxY = y0 + fy * (y1 - y0);
+          } else {
+            const fx = (dp.depth - dT) / Math.max(1, dB - dT);
+            const fy = (dp.age - aL) / Math.max(1, aR - aL);
+            pxX = x0 + fx * (x1 - x0);
+            pxY = y0 + fy * (y1 - y0);
+          }
+          ctx.beginPath();
+          ctx.arc(pxX, pxY, 6.0 * inv, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(16, 185, 129, 0.35)';
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(pxX, pxY, 3.5 * inv, 0, Math.PI * 2);
+          ctx.fillStyle = '#10b981';
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.2 * inv;
+          ctx.stroke();
         }
-        ctx.beginPath();
-        ctx.arc(pxX, pxY, 6.0 * inv, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(16, 185, 129, 0.35)';
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(pxX, pxY, 3.5 * inv, 0, Math.PI * 2);
-        ctx.fillStyle = '#10b981';
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.2 * inv;
-        ctx.stroke();
       }
     }
 
@@ -1136,11 +1171,19 @@ export class AgeDepthCanvas {
 
     const d = this.inspectionData.depths[bestIdx];
     const a = this.inspectionData.ages[bestIdx];
-    const mi = this.inspectionData.age_min ? this.inspectionData.age_min[bestIdx] : a - 100;
-    const ma = this.inspectionData.age_max ? this.inspectionData.age_max[bestIdx] : a + 100;
+    const lowerVal = this.inspectionData.age_lower
+      ? this.inspectionData.age_lower[bestIdx]
+      : this.inspectionData.age_min
+      ? this.inspectionData.age_min[bestIdx]
+      : a - 100;
+    const upperVal = this.inspectionData.age_upper
+      ? this.inspectionData.age_upper[bestIdx]
+      : this.inspectionData.age_max
+      ? this.inspectionData.age_max[bestIdx]
+      : a + 100;
 
     const dUnit = (this.container.querySelector('#ad-inp-depth-unit') as HTMLInputElement | null)?.value?.trim() || 'cm';
-    const aUnit = (this.container.querySelector('#ad-inp-age-unit') as HTMLInputElement | null)?.value?.trim() || 'cal BP';
+    const aUnit = (this.container.querySelector('#ad-inp-age-unit') as HTMLInputElement | null)?.value?.trim() || 'cal yrBP';
 
     const cursorAd = this.pxToAgeDepth(pt.x, pt.y);
     const hudNum = (v: number): string => (Number.isFinite(v) ? v.toFixed(3) : '—');
@@ -1150,7 +1193,7 @@ export class AgeDepthCanvas {
       cursorInfo = `光标物理坐标: <strong style="color:var(--text-heading);">${hudNum(cursorAd.depth)} ${dUnit}</strong> | <strong style="color:var(--text-heading);">${hudNum(cursorAd.age)} ${aUnit}</strong> ➔ `;
     }
 
-    hud.innerHTML = `${cursorInfo}最近层位: <strong style="color:var(--accent-blue);">${hudNum(d)} ${dUnit}</strong> ➔ 年代: <strong style="color:var(--text-heading);">${hudNum(a)} ${aUnit}</strong> (95% CI: <span style="color:var(--accent-amber);">${hudNum(mi)} ~ ${hudNum(ma)}</span>)`;
+    hud.innerHTML = `${cursorInfo}最近层位: <strong style="color:var(--accent-blue);">${hudNum(d)} ${dUnit}</strong> ➔ 均值年代: <strong style="color:var(--text-heading);">${hudNum(a)} ${aUnit}</strong> (95% CI: <span style="color:var(--accent-amber);">${hudNum(lowerVal)} ~ ${hudNum(upperVal)}</span>)`;
   }
 
   // --- Interaction Listeners ---
@@ -1195,15 +1238,12 @@ export class AgeDepthCanvas {
       }
 
       if (this.activeFMode === 'pickDate') {
-        const orientStd = (this.container.querySelector('#ad-orient-std') as HTMLInputElement)?.checked ?? true;
-        const aL = parseFloat((this.container.querySelector('#ad-inp-age-left') as HTMLInputElement)?.value || '3000');
-        const aR = parseFloat((this.container.querySelector('#ad-inp-age-right') as HTMLInputElement)?.value || '0');
-        const dT = parseFloat((this.container.querySelector('#ad-inp-depth-top') as HTMLInputElement)?.value || '0');
-        const dB = parseFloat((this.container.querySelector('#ad-inp-depth-bottom') as HTMLInputElement)?.value || '150');
-
+        const calib = this.getCalibValues();
         let pickedDepth = 0;
         let pickedAge = 0;
-        if (this.calibMarkers.length >= 4) {
+        if (calib && this.calibMarkers.length >= 4) {
+          const { aL, aR, dT, dB } = calib;
+          const orientStd = (this.container.querySelector('#ad-orient-std') as HTMLInputElement)?.checked ?? true;
           const x0 = this.calibMarkers[0].x;
           const x1 = this.calibMarkers[1].x;
           const y0 = this.calibMarkers[2].y;

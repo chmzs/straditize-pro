@@ -14,6 +14,11 @@
     "image_base64": "<b64:32cbcf8312fd:376>",
     "image_path": "image/age_depth.png",
     "inspection": {
+     "age_lower": [
+      0.0,
+      450.0,
+      950.0
+     ],
      "age_max": [
       10.0,
       550.0,
@@ -23,6 +28,11 @@
       0.0,
       450.0,
       950.0
+     ],
+     "age_upper": [
+      10.0,
+      550.0,
+      1050.0
      ],
      "ages": [
       0.0,
@@ -55,6 +65,11 @@
        120.0,
        140.0
       ],
+      "x_lower": [
+       90.0,
+       110.0,
+       130.0
+      ],
       "x_max": [
        110.0,
        130.0,
@@ -64,6 +79,11 @@
        90.0,
        110.0,
        130.0
+      ],
+      "x_upper": [
+       110.0,
+       130.0,
+       150.0
       ],
       "y": [
        20.0,
@@ -397,10 +417,12 @@
    "samples": [
     {
      "depth": 10.0,
+     "horizon_id": "H0001",
      "row_px": 50
     },
     {
      "depth": 60.0,
+     "horizon_id": "H0002",
      "row_px": 150
     }
    ],
@@ -434,6 +456,11 @@
     "height": 90,
     "image_path": "image/age_depth.png",
     "inspection": {
+     "age_lower": [
+      0.0,
+      450.0,
+      950.0
+     ],
      "age_max": [
       10.0,
       550.0,
@@ -443,6 +470,11 @@
       0.0,
       450.0,
       950.0
+     ],
+     "age_upper": [
+      10.0,
+      550.0,
+      1050.0
      ],
      "ages": [
       0.0,
@@ -475,6 +507,11 @@
        120.0,
        140.0
       ],
+      "x_lower": [
+       90.0,
+       110.0,
+       130.0
+      ],
       "x_max": [
        110.0,
        130.0,
@@ -484,6 +521,11 @@
        90.0,
        110.0,
        130.0
+      ],
+      "x_upper": [
+       110.0,
+       130.0,
+       150.0
       ],
       "y": [
        20.0,
@@ -816,10 +858,12 @@
    "samples": [
     {
      "depth": 10.0,
+     "horizon_id": "H0001",
      "row_px": 50
     },
     {
      "depth": 60.0,
+     "horizon_id": "H0002",
      "row_px": 150
     }
    ],
@@ -856,11 +900,11 @@
  },
  "tar_csv_branch": {
   "data_csv": {
-   "digest": "2e3d6dd36bb7",
-   "size": 158
+   "digest": "130ed21481aa",
+   "size": 162
   },
   "data_csv_head": [
-   "depth,age_est,age_min_95,age_max_95,Pinus,Betula,Quercus",
+   "depth,age_est,age_lower_95,age_upper_95,Pinus,Betula,Quercus",
    "10.0,500.0,450.0,550.0,0.0,2.9167,0.0",
    "60.0,3000.0,3344.73684210526,2588.4615384615486,0.0,2.9167,0.0"
   ],
@@ -877,9 +921,9 @@
     "name": "manifest.json"
    },
    {
-    "digest": "bd118d610796",
+    "digest": "6295d6cf0503",
     "name": "straditize.json",
-    "size": 7911
+    "size": 8278
    },
    {
     "digest": "36238134d819",
@@ -892,14 +936,14 @@
     "size": 280
    },
    {
-    "digest": "2e3d6dd36bb7",
+    "digest": "130ed21481aa",
     "name": "data.csv",
-    "size": 158
+    "size": 162
    },
    {
-    "digest": "b882fb2e0935",
+    "digest": "7aca125d9c39",
     "name": "plot_strat.R",
-    "size": 1164
+    "size": 1168
    },
    {
     "digest": "8a618c6df400",

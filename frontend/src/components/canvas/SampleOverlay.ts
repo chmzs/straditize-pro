@@ -106,7 +106,8 @@ export function draw(ctx: CanvasRenderingContext2D, data: DiagramData, vp: Viewp
 
     if (s.depth !== null && s.depth !== undefined) {
       ctx.fillStyle = ctx.strokeStyle as string;
-      ctx.fillText(`${s.depth}`, rx0 - 30 * inv, s.row_px + 3 * inv);
+      const label = s.horizon_id ? `${s.horizon_id}: ${s.depth}` : `${s.depth}`;
+      ctx.fillText(label, rx0 - 55 * inv, s.row_px + 3 * inv);
     }
   }
 

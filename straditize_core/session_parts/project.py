@@ -425,8 +425,20 @@ class ProjectSessionMixin:
             self.redo_stack.clear()
 
         if isinstance(project_data, str):
+            self.age_depth_image = None
+            self.age_depth_image_path = None
+            self.age_depth_model = None
+            if hasattr(self, "age_depth_calib_state"):
+                delattr(self, "age_depth_calib_state")
+            self.ensemble_tables = []
             return self.project_load(self._decode_project_file(project_data))
         if isinstance(project_data, dict) and "tar_base64" in project_data:
+            self.age_depth_image = None
+            self.age_depth_image_path = None
+            self.age_depth_model = None
+            if hasattr(self, "age_depth_calib_state"):
+                delattr(self, "age_depth_calib_state")
+            self.ensemble_tables = []
             tar_bytes = base64.b64decode(project_data["tar_base64"])
             with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r") as tf:
                 parsed = self._extract_tar_members(tf)
@@ -1181,7 +1193,11 @@ class ProjectSessionMixin:
         if project_data.get("paper_metadata"):
             self.metadata_update(project_data["paper_metadata"])
         if project_data.get("samples") is not None:
-            self.samples = list(project_data["samples"])
+            raw_samples = list(project_data["samples"])
+            for idx, s in enumerate(raw_samples):
+                if isinstance(s, dict) and "horizon_id" not in s:
+                    s["horizon_id"] = f"H{idx + 1:04d}"
+            self.samples = raw_samples
         # 取样深度网格（P0-A）。**键缺失时显式清空**，不是"保持原值"：
         # `_reset_loaded_state` 不清它，若这里不动，载入一份没有网格的老包会继承
         # 上一份工程的网格（跨包串值），而交付数据的行集会因此错位。
@@ -1215,45 +1231,54 @@ class ProjectSessionMixin:
     def _restore_age_depth(self, project_data: dict[str, Any]) -> None:
         """恢复年代-深度底图、标定状态与模型（含像素点轨迹）。"""
         ad_data = project_data.get("age_depth")
-        ad_data = project_data.get("age_depth")
-        if isinstance(ad_data, dict):
-            if (
-                ad_data.get("image_base64")
-                and getattr(self, "age_depth_image", None) is None
-            ):
-                ad_b64 = ad_data["image_base64"]
-                if "," in ad_b64:
-                    ad_b64 = ad_b64.split(",", 1)[1]
-                ad_obj = Image.open(io.BytesIO(base64.b64decode(ad_b64)))
-                ad_obj.load()
-                self.age_depth_image = ad_obj
-                self.age_depth_image_path = "archive://image/age_depth.png"
-            if ad_data.get("calib_state"):
-                self.age_depth_calib_state = dict(ad_data["calib_state"])
-            insp = ad_data.get("inspection")
-            if isinstance(insp, dict) and insp.get("depths") and insp.get("ages"):
-                meta = insp.get("metadata") or {}
-                model = AgeDepthModel(
-                    depths=insp["depths"],
-                    ages=insp["ages"],
-                    age_min=insp.get("age_min"),
-                    age_max=insp.get("age_max"),
-                    curve_type=meta.get("curve_type", "median"),
-                    envelope_type=meta.get("envelope_type", "95_hpd"),
-                    depth_unit=meta.get("depth_unit", "cm"),
-                    age_unit=meta.get("age_unit", "cal BP"),
-                    cal_curve=meta.get("calibration_curve", "IntCal20"),
-                    notes=meta.get("notes", ""),
+        if not isinstance(ad_data, dict):
+            self.age_depth_image = None
+            self.age_depth_image_path = None
+            if hasattr(self, "age_depth_calib_state"):
+                delattr(self, "age_depth_calib_state")
+            self.age_depth_model = None
+            return
+
+        if ad_data.get("image_base64"):
+            ad_b64 = ad_data["image_base64"]
+            if "," in ad_b64:
+                ad_b64 = ad_b64.split(",", 1)[1]
+            ad_obj = Image.open(io.BytesIO(base64.b64decode(ad_b64)))
+            ad_obj.load()
+            self.age_depth_image = ad_obj
+            self.age_depth_image_path = "archive://image/age_depth.png"
+
+        if ad_data.get("calib_state"):
+            self.age_depth_calib_state = dict(ad_data["calib_state"])
+        elif hasattr(self, "age_depth_calib_state"):
+            delattr(self, "age_depth_calib_state")
+
+        insp = ad_data.get("inspection")
+        if isinstance(insp, dict) and insp.get("depths") and insp.get("ages"):
+            meta = insp.get("metadata") or {}
+            model = AgeDepthModel(
+                depths=insp["depths"],
+                ages=insp["ages"],
+                age_lower=insp.get("age_lower", insp.get("age_min")),
+                age_upper=insp.get("age_upper", insp.get("age_max")),
+                curve_type=meta.get("curve_type", "median"),
+                envelope_type=meta.get("envelope_type", "95_hpd"),
+                depth_unit=meta.get("depth_unit", "cm"),
+                age_unit=meta.get("age_unit", "cal yrBP"),
+                cal_curve=meta.get("calibration_curve", "IntCal20"),
+                notes=meta.get("notes", ""),
+            )
+            px_pts = insp.get("px_points")
+            if isinstance(px_pts, dict):
+                model.px_y = np.asarray(px_pts.get("y", []), dtype=float)
+                model.px_x_curve = np.asarray(
+                    px_pts.get("x_curve", []), dtype=float
                 )
-                px_pts = insp.get("px_points")
-                if isinstance(px_pts, dict):
-                    model.px_y = np.asarray(px_pts.get("y", []), dtype=float)
-                    model.px_x_curve = np.asarray(
-                        px_pts.get("x_curve", []), dtype=float
-                    )
-                    model.px_x_min = np.asarray(px_pts.get("x_min", []), dtype=float)
-                    model.px_x_max = np.asarray(px_pts.get("x_max", []), dtype=float)
-                self.age_depth_model = model
+                model.px_x_min = np.asarray(px_pts.get("x_min", []), dtype=float)
+                model.px_x_max = np.asarray(px_pts.get("x_max", []), dtype=float)
+            self.age_depth_model = model
+        else:
+            self.age_depth_model = None
 
     def project_save(
         self,
@@ -1526,6 +1551,49 @@ class ProjectSessionMixin:
             project_json["project_name"] = self.project_name
         return project_json
 
+    def _dump_project_json(self, project_json: dict[str, Any]) -> str:
+        """序列化工程 JSON：对包含大规模浮点数矩阵的 ensemble_tables 做行内紧凑处理，
+        防止 indent=2 将数十万个浮点数展开成数十万行导致文件体积暴涨至十数兆。"""
+        tables = project_json.get("ensemble_tables")
+        if not tables or not isinstance(tables, list):
+            return json.dumps(project_json, indent=2, ensure_ascii=False)
+
+        has_large_table = any(
+            isinstance(t, dict)
+            and (len(t.get("columns", [])) > 20 or len(t.get("data", [])) > 20)
+            for t in tables
+        )
+        if not has_large_table:
+            return json.dumps(project_json, indent=2, ensure_ascii=False)
+
+        serialized_tables: list[str] = []
+        for table in tables:
+            if not isinstance(table, dict):
+                serialized_tables.append(json.dumps(table, ensure_ascii=False))
+                continue
+            cols = table.get("columns")
+            data_rows = table.get("data")
+            parts: list[str] = []
+            for k, v in table.items():
+                if k == "columns" and isinstance(cols, list):
+                    parts.append(
+                        f'      "columns": {json.dumps(cols, ensure_ascii=False)}'
+                    )
+                elif k == "data" and isinstance(data_rows, list):
+                    data_lines = [json.dumps(r, ensure_ascii=False) for r in data_rows]
+                    data_str = "[\n        " + ",\n        ".join(data_lines) + "\n      ]"
+                    parts.append(f'      "data": {data_str}')
+                else:
+                    parts.append(f'      "{k}": {json.dumps(v, ensure_ascii=False)}')
+            serialized_tables.append("{\n" + ",\n".join(parts) + "\n    }")
+
+        placeholder = "__STRADITIZE_ENSEMBLE_TABLES_PLACEHOLDER__"
+        temp_json = dict(project_json)
+        temp_json["ensemble_tables"] = placeholder
+        base_json = json.dumps(temp_json, indent=2, ensure_ascii=False)
+        tables_block = "[\n    " + ",\n    ".join(serialized_tables) + "\n  ]"
+        return base_json.replace(f'"{placeholder}"', tables_block)
+
     def _save_project_json(
         self,
         project_json: dict[str, Any],
@@ -1550,7 +1618,7 @@ class ProjectSessionMixin:
                 ad_export["image_base64"] = base64.b64encode(ab.getvalue()).decode(
                     "ascii"
                 )
-        json_str = json.dumps(project_json, indent=2, ensure_ascii=False)
+        json_str = self._dump_project_json(project_json)
         if output_path:
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(json_str)
@@ -1666,6 +1734,8 @@ class ProjectSessionMixin:
                 fixed_cols=fixed_cols,
                 units=units,
                 exag_cols=roi_exag,
+                primary_axis=getattr(self, "primary_axis", None),
+                unit=getattr(self, "depth_unit", None),
             )
         )
         return ("\n".join(lines) + "\n").encode("utf-8")
@@ -1699,9 +1769,7 @@ class ProjectSessionMixin:
             tf.addfile(ti_m, io.BytesIO(m_bytes))
 
             # 2. straditize.json
-            sj_bytes = json.dumps(project_json, indent=2, ensure_ascii=False).encode(
-                "utf-8"
-            )
+            sj_bytes = self._dump_project_json(project_json).encode("utf-8")
             ti_sj = tarfile.TarInfo(name="straditize.json")
             ti_sj.size = len(sj_bytes)
             ti_sj.mtime = int(time.time())

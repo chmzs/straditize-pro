@@ -975,6 +975,8 @@ class ExportMixin:
                         fixed_cols=fixed_cols,
                         units=roi_units,
                         exag_cols=roi_exag,
+                        primary_axis=getattr(self, "primary_axis", None),
+                        unit=getattr(self, "depth_unit", None),
                     )
                 )
 
@@ -1112,14 +1114,21 @@ class ExportMixin:
                     )
                 elif getattr(self, "primary_axis", None) == "depth":
                     pred = age_depth_model.predict_age(depths)
-                    age_depth_df = pd.DataFrame(
-                        {
-                            "depth": depths,
-                            "age_est": pred.get("age_est", []),
-                            "age_min": pred.get("age_min", []),
-                            "age_max": pred.get("age_max", []),
+                    ad_data = {
+                        "depth": depths,
+                        "age_est": pred.get("age_est", []),
+                        "age_lower": pred.get("age_lower", pred.get("age_min", [])),
+                        "age_upper": pred.get("age_upper", pred.get("age_max", [])),
+                    }
+                    if getattr(self, "samples", None) and len(self.samples) == len(depths):
+                        ad_data = {
+                            "horizon_id": [
+                                s.get("horizon_id", f"H{idx + 1:04d}")
+                                for idx, s in enumerate(self.samples)
+                            ],
+                            **ad_data,
                         }
-                    )
+                    age_depth_df = pd.DataFrame(ad_data)
                 if getattr(age_depth_model, "has_envelope", False) and not any(
                     t.get("name") == "Age_Uncertainty_U1000" for t in ensemble_tables
                 ):
@@ -1221,14 +1230,21 @@ class ExportMixin:
                     )
                 elif getattr(self, "primary_axis", None) == "depth":
                     pred = age_depth_model.predict_age(depths)
-                    age_depth_df = pd.DataFrame(
-                        {
-                            "depth": depths,
-                            "age_est": pred.get("age_est", []),
-                            "age_min": pred.get("age_min", []),
-                            "age_max": pred.get("age_max", []),
+                    ad_data = {
+                        "depth": depths,
+                        "age_est": pred.get("age_est", []),
+                        "age_lower": pred.get("age_lower", pred.get("age_min", [])),
+                        "age_upper": pred.get("age_upper", pred.get("age_max", [])),
+                    }
+                    if getattr(self, "samples", None) and len(self.samples) == len(depths):
+                        ad_data = {
+                            "horizon_id": [
+                                s.get("horizon_id", f"H{idx + 1:04d}")
+                                for idx, s in enumerate(self.samples)
+                            ],
+                            **ad_data,
                         }
-                    )
+                    age_depth_df = pd.DataFrame(ad_data)
 
         selected_ensembles = None
         if include_ensemble_names:
@@ -1828,8 +1844,8 @@ class ExportMixin:
                 pred_frame = pd.DataFrame(
                     {
                         "age_est": age_pred["age_est"],
-                        "age_min_95": age_pred["age_min"],
-                        "age_max_95": age_pred["age_max"],
+                        "age_lower_95": age_pred.get("age_lower", age_pred.get("age_min")),
+                        "age_upper_95": age_pred.get("age_upper", age_pred.get("age_max")),
                     }
                 )
                 df = pd.concat([df[[y_col]], pred_frame, df.drop(columns=[y_col])], axis=1)
@@ -2381,6 +2397,8 @@ class ExportMixin:
                     self._primary_roi_name(), {}
                 ),
                 y_axis=(settings or {}).get("y_axis") if settings else None,
+                primary_axis=getattr(self, "primary_axis", None),
+                unit=getattr(self, "depth_unit", None),
             )
         )
         lines.extend(
@@ -2469,6 +2487,8 @@ class ExportMixin:
                     self._primary_roi_name(), {}
                 ),
                 y_axis=(settings or {}).get("y_axis") if settings else None,
+                primary_axis=getattr(self, "primary_axis", None),
+                unit=getattr(self, "depth_unit", None),
             )
         )
         script_lines.extend(["dev.off()", "message('已输出: ', out_path)", ""])
@@ -2617,6 +2637,11 @@ class ExportMixin:
                 pred = attach_windowed_rates(
                     pred, self.age_depth_model, getattr(self, "age_depth_rate_columns", [])
                 )
+                if getattr(self, "samples", None) and len(self.samples) == len(depths):
+                    pred["horizon_id"] = [
+                        s.get("horizon_id", f"H{idx + 1:04d}")
+                        for idx, s in enumerate(self.samples)
+                    ]
                 age_depth_df = build_age_depth_frame(
                     pred,
                     getattr(self, "age_depth_rate_columns", []),
@@ -2683,6 +2708,11 @@ class ExportMixin:
                 pred = attach_windowed_rates(
                     pred, self.age_depth_model, getattr(self, "age_depth_rate_columns", [])
                 )
+                if getattr(self, "samples", None) and len(self.samples) == len(depths):
+                    pred["horizon_id"] = [
+                        s.get("horizon_id", f"H{idx + 1:04d}")
+                        for idx, s in enumerate(self.samples)
+                    ]
                 age_depth_df = build_age_depth_frame(
                     pred,
                     getattr(self, "age_depth_rate_columns", []),

@@ -98,6 +98,10 @@ export class ExportModal {
     const modal = document.createElement('div');
     modal.className = 'modal-backdrop';
     const readiness = computeExportReadiness(this.data);
+    const cal = this.data.calibration;
+    const isAgeAxis = cal?.primaryAxis === 'age';
+    const yAxisName = isAgeAxis ? '年代' : '深度';
+    const yAxisUnit = cal?.unit || (isAgeAxis ? 'cal yrBP' : 'cm');
     // 列量程行：按组列，默认「跟随单位」（unit 是唯一事实源，这里只做覆盖）。
     const scaleGroups = this.plotScaleGroups();
     const scaleRowsHtml = scaleGroups.length
@@ -214,7 +218,7 @@ export class ExportModal {
                   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
                     <select id="wpd-sort-by" class="sample-select" style="font-size: var(--font-size-xs); padding: 4px 6px;">
                       <option value="raw" selected>Raw (原始采样顺序)</option>
-                      <option value="depth">Depth (深度/年代)</option>
+                      <option value="depth">${isAgeAxis ? 'Age (年代)' : 'Depth (深度)'}</option>
                     </select>
                     <select id="wpd-sort-order" class="sample-select" style="font-size: var(--font-size-xs); padding: 4px 6px;">
                       <option value="asc" selected>升序 (顶 -> 底)</option>
@@ -295,7 +299,7 @@ export class ExportModal {
               <div id="wpd-plot-empty-placeholder" class="wpd-plot-empty-box" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 320px; border: 2px dashed var(--border-light); border-radius: 6px; background: rgba(15, 23, 42, 0.2); text-align: center; padding: 24px;">
                 <h4 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: var(--font-size-base); font-weight: 600;">地层图实时预览</h4>
                 <p style="margin: 0 0 16px 0; color: var(--text-muted); font-size: var(--font-size-sm); max-width: 420px; line-height: 1.5;">
-                  根据当前标定的花粉百分比数据与深度标度，调用本机 R 语言 <code>rioja::strat.plot</code> 渲染地层图。
+                  根据当前标定的花粉百分比数据与${yAxisName}标度，调用本机 R 语言 <code>rioja::strat.plot</code> 渲染地层图。
                 </p>
                 <button type="button" class="ui-btn ui-btn--primary" id="btn-wpd-plot-generate-hero" style="font-size: var(--font-size-sm); padding: 6px 16px;">
                   立即生成地层图
@@ -345,10 +349,10 @@ export class ExportModal {
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--font-size-sm); margin-bottom: 8px;">
-                  <span style="color: var(--text-muted);" title="三项都填才生效（与后端 validate_y_axis 同一口径）；留空 = 按数据自动">Y 轴深度范围 (留空=自动)：</span>
+                  <span style="color: var(--text-muted);" title="三项都填才生效（与后端 validate_y_axis 同一口径）；留空 = 按数据自动">Y 轴${yAxisName}范围 (${yAxisUnit}，留空=自动)：</span>
                   <input type="number" id="inp-wpd-y-min" placeholder="min" style="width: 72px; font-size: var(--font-size-sm);" />
                   <input type="number" id="inp-wpd-y-max" placeholder="max" style="width: 72px; font-size: var(--font-size-sm);" />
-                  <input type="number" id="inp-wpd-y-interval" placeholder="间隔" style="width: 72px; font-size: var(--font-size-sm);" />
+                  <input type="number" id="inp-wpd-y-interval" placeholder="${isAgeAxis ? '如 1000' : '如 10'}" style="width: 72px; font-size: var(--font-size-sm);" />
                   <span id="wpd-plot-y-hint" style="font-size: var(--font-size-xs); color: var(--status-warning);"></span>
                 </div>
 
