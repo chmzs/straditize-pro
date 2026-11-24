@@ -697,30 +697,42 @@ digitize 用 ink & ~grid_line_mask & roi_mask
    - 在 Bacon / Bchron 等贝叶斯年代模型输出图谱中，中心红线代表**后验均值（Weighted Mean）**，而非几何中位数（Median）；严格遵循 rbacon 规范（`mn.col="red"`）；
    - 用户在微调或标定中值线时，系统以均值轨迹作为置信区间插值的基准中心线。
 
-### 11.4 数据流分流与稀疏序列化架构（Data Stream Separation）
+### 11.4 数据三表解耦与流式导出架构（Data Stream Separation）
 
-为保障大型工程文件的轻量化与秒级存盘，严禁将全量蒙特卡洛矩阵平铺写入工程 JSON：
+为保障数据纯粹性与大型工程文件的轻量化，主数据矩阵、年代模型推算与蒙特卡洛抽样严格实行物理三表解耦：
 
-1. **主数据（`data.csv`）职责单一化**：
-   - 仅包含主图 Y 轴物理量（若 Y 轴为深度则为 `depth`，若为年代则为 `age`） + 提取的花粉属种列；
-   - 严禁将年代预测衍生列（`age_est`, `age_lower` 等）直接掺入 `data.csv` 冒充花粉丰度。
-2. **年代深度表（`age_depth.csv`）独立出流**：
-   - 专司沉淀年代模型反演成果，包含 `horizon_id`, `depth`, `age_est`, `age_lower`, `age_upper`, `sed_rate`, `acc_rate` 等关键物理量；
-   - 用户通过 `horizon_id` 与主表执行左连接分析。
-3. **蒙特卡洛集合矩阵（Ensemble）解耦**：
-   - 1000 次 MCMC 模拟矩阵通常包含 $N \times 1001$ 个浮点数（数十万个数据点）；
-   - 集合数据作为衍生数据独立缓存，仅在用户显式触发导出或 LiPD 打包时动态导出，禁止平铺内嵌至 `straditize.json`，防止原本不足 250 KB 的工程文件膨胀至 12 MB+。
+1. **主数据矩阵（`data.csv`）纯净化**：
+   - 当行集为样品层位时，首列输出标准化定长主键 `horizon_id`（`H0001`），第二列为 Y 轴原生物理量（`depth` 或 `age`），其后为数字化花粉属种列；
+   - **绝对物理剥离**年代模型预测列（`age_est`, `age_lower`, `age_upper`, `sed_rate` 等），禁止任何将模型衍生列硬编码平铺追加至 `data.csv` 污染花粉属种矩阵的行为。
+2. **年代-深度关系表（`age_depth.csv`）独立出流**：
+   - 专司沉淀年代模型推算成果，标准化列结构为：`horizon_id`, `depth`, `age`, `age_lower`, `age_upper`, `sed_rate`；
+   - 在导出归档包（`.tar`）与出图整包（`.zip`）中与 `data.csv` 并行打包，并在 `manifest.json` 与 `README.txt` 中完整记录元数据；
+   - 用户与科研人员通过 `horizon_id` 将主表与年代表执行 1:1 关系型自然 Join。
+3. **蒙特卡洛集合矩阵（`ensemble.csv`）独立分流**：
+   - 1000 次 MCMC 模拟轨迹矩阵包含数十万个数据点，列结构为：`horizon_id`, `depth`, `ens_0001`, `ens_0002`, ...；
+   - 作为衍生数据独立分流并在归档中按需打包，严禁平铺嵌入主工程 JSON（`straditize.json`），防止工程文件膨胀数倍。
 
 ### 11.5 地层出图与 R 脚本包联动规范（Rioja & R Script Pipeline）
 
 1. **属种列严格防污染**：
-   - 本地绘图渲染（`plot.render`）与导出 R 脚本（`plot_strat.R` / `export.bundleZip`）通过 `_non_taxa` 白名单机制，绝对过滤 `horizon_id`, `age_est`, `age_lower`, `age_upper`, `depth_est` 等非属种衍生列，确保进入地层图（`rioja::strat.plot`）的只有真实花粉属种。
-2. **坐标轴自适应翻转（`y.rev` 机制）**：
-   - 依据 `primary_axis` 与单位自适应确定：
-     - 沉积深度（`depth`，cm）与日历年代（`age`，cal yrBP）地质深度向下增大，默认 `y.rev = TRUE`（表层在顶，深层在底）；
-     - 高程（`elev`, `elevation`，m）与公元纪年（`AD`, `CE`）向上增大，默认 `y.rev = FALSE`。
-3. **R 脚本形参洁净性**：
+   - 本地绘图渲染（`plot.render`）与导出 R 脚本（`plot_strat.R` / `export.bundleZip`）通过排除 `{"horizon_id", y_col}` 机制，绝对过滤元数据列，确保进入地层图（`rioja::strat.plot`）的只有真实花粉属种。
+2. **数值 Y 轴健壮提取**：
+   - R 脚本自动探测 `depth` 或 `age` 列，若首列为 `horizon_id` 自动定位次列物理数值向量为 `yvar`，杜绝将字符型 `horizon_id` 误传入 `yvar` 导致 R 崩溃。
+3. **坐标轴自适应翻转（`y.rev` 机制）**：
+   - 沉积深度（`depth`，cm）与日历年代（`age`，cal yrBP）地质深度向下增大，默认 `y.rev = TRUE`（表层在顶，深层在底）；
+   - 高程（`elev`, `elevation`，m）向上增大，默认 `y.rev = FALSE`；彻底清剿残留的 AD/CE 臆测翻转逻辑。
+4. **R 脚本形参洁净性**：
    - `rioja::strat.plot` 接口的纵轴标签形参严格使用 `ylabel`（杜绝简写 `ylab` 导致 R 报 `matches multiple formal arguments: ylabel, ylabPos` 错误）；
-   - 当用户未显式自定义轴标签时，保持原生 `yvar = df[[1]]` 由 R 自动读取首列名（`depth` 或 `age`），禁止在生成脚本中注入写死单位的字面量（如 `Depth (cm)`）。
+   - 当用户未显式自定义轴标签时，由 rioja 自然读取列名，禁止在生成脚本中注入写死单位的字面量。
+
+### 11.6 导出面板交互规范与表头多态排序
+
+1. **表头直击三态排序（Header Click Tri-State Sorting）**：
+   - 导出面板预览数据表的所有表头 `th` 均具备点击交互能力，支持按任意列切换：`asc`（升序 ▲） -> `desc`（降序 ▼） -> `raw`（恢复原始提取顺序）；
+   - 支持数值与文本双模自适应比较，用户可随时按 `horizon_id`、深度、或任意花粉百分比升降序检视数据。
+2. **首列主键视觉透出**：
+   - 当存在采样层位时，首列 `horizon_id` 居中高亮（`var(--accent-blue)`）展示，明确其为主键定位锚点；数据列支持就地编辑并实时同步导出文本。
+3. **数据集形态切换**：
+   - 导出面板支持在 Dataset 下拉菜单中直接选择 `age_depth`（年代-深度关系表），直观预览并单独导出模型结果。
 
 

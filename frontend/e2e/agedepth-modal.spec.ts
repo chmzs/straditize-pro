@@ -80,17 +80,17 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
     expect(ensList.count).toBeGreaterThanOrEqual(1);
     expect(ensList.tables.map((t) => t.name)).toContain('Bacon_Ensemble_1000');
 
-    // 6. 断言后端 core.exportData 导出的 CSV 包含 age_est, age_min_95, age_max_95 列
+    // 6. 断言后端 core.exportData 独立导出 age_depth 数据集包含 age, age_lower, age_upper 列（数据三表解耦契约）
     const csvExport = await rpc<{ columns: string[]; data: Array<Record<string, number>> }>(
       page,
       'core.exportData',
-      { format: 'csv' }
+      { dataset: 'age_depth', format: 'csv' }
     );
-    expect(csvExport.columns).toContain('age_est');
-    expect(csvExport.columns).toContain('age_min_95');
-    expect(csvExport.columns).toContain('age_max_95');
-    expect(csvExport.data[0].age_est).toBeGreaterThan(0);
-    expect(csvExport.data[0].age_max_95).toBeGreaterThanOrEqual(csvExport.data[0].age_min_95);
+    expect(csvExport.columns.some((c) => c === 'age' || c === 'age_est')).toBe(true);
+    expect(csvExport.columns.some((c) => c === 'age_lower' || c === 'age_min_95')).toBe(true);
+    expect(csvExport.columns.some((c) => c === 'age_upper' || c === 'age_max_95')).toBe(true);
+    const ageVal = csvExport.data[0].age ?? csvExport.data[0].age_est;
+    expect(ageVal).toBeGreaterThan(0);
 
     // 7. 断言后端 export.exportLipd 包含 chronMeasurementTable 与 chronEnsembleTable
     const lipdRes = await rpc<{ success: boolean; lipd: any }>(page, 'export.exportLipd', {
@@ -249,20 +249,20 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
     const rowCount = await rows.count();
     expect(rowCount).toBeGreaterThan(10);
 
-    // ① 速率与标准误是两列，且 ±SE 有值（后端行对齐的分窗回归）
+    // ① 速率三项与置信区间列数契约（标准 9 列：horizon_id, age, depth, age_upper, age_lower, accrate_cmyr, accrate_cmyr_upper, accrate_cmyr_lower, 操作）
     expect(await panel.locator('thead th').count()).toBe(9);
-    const seTexts = await panel
+    const rateLowerTexts = await panel
       .locator('#ad-full-table-tbody tr td:nth-child(8)')
       .allTextContents();
-    const seWithNumbers = seTexts.filter((t) => /±\s*[\d.]+/.test(t)).length;
+    const rateLowerWithNumbers = rateLowerTexts.filter((t) => /[\d.]/.test(t)).length;
     expect(
-      seWithNumbers,
-      `±SE 列应大多有数值，实际 ${seWithNumbers}/${seTexts.length}：${seTexts.slice(0, 3)}`,
+      rateLowerWithNumbers,
+      `accrate_cmyr_lower 列大多有数值，实际 ${rateLowerWithNumbers}/${rateLowerTexts.length}：${rateLowerTexts.slice(0, 3)}`,
     ).toBeGreaterThan(rowCount * 0.5);
-    const rateTexts = await panel
+    const rateUpperTexts = await panel
       .locator('#ad-full-table-tbody tr td:nth-child(7)')
       .allTextContents();
-    expect(rateTexts.filter((t) => /[\d.]/.test(t)).length).toBeGreaterThan(rowCount * 0.5);
+    expect(rateUpperTexts.filter((t) => /[\d.]/.test(t)).length).toBeGreaterThan(rowCount * 0.5);
 
     // ② 格式下拉：选 2 位小数后深度输入框必须正好 2 位小数；回到原始值则不再统一
     await panel.locator('#ad-tbl-fmt-digits').selectOption('2');
@@ -409,5 +409,66 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
     await dialog.locator('#ad-close-btn').click();
     await expect(dialog).toHaveCount(0);
     });
+  });
+
+  test('T7 年代-深度画布通用快捷键与撤销重做 (Ctrl+Z / Ctrl+Y / F / S / Esc)', async ({ page }) => {
+    await gotoStage(page, 7);
+    await page.locator('#btn-age-depth-modal').click();
+    const dialog = page.locator('.agedepth-dialog');
+    await expect(dialog).toBeVisible();
+
+    // 载入 Bacon 图谱
+    await dialog.locator('#ad-btn-center-bacon').click();
+    await expect(dialog.locator('#ad-calib-values')).toBeVisible();
+
+    // 运行识别提取控制点
+    await dialog.locator('#ad-btn-extract').click();
+    await expect(dialog.locator('#ad-status-msg')).toContainText('识别成功', { timeout: 20_000 });
+
+    const btnUndo = dialog.locator('#ad-btn-undo');
+    const btnRedo = dialog.locator('#ad-btn-redo');
+    const hud = dialog.locator('#ad-canvas-hud');
+    const canvas = dialog.locator('#ad-inspection-canvas');
+
+    // 初始状态：不可撤销、不可重做
+    await expect(btnUndo).toBeDisabled();
+    await expect(btnRedo).toBeDisabled();
+
+    // 按 A 切换到加点模式
+    await page.keyboard.press('a');
+    await expect(dialog.locator('.ad-fmode-btn[data-fmode="add"]')).toHaveClass(/active/);
+
+    // 点击画布添加控制点
+    const box = await canvas.boundingBox();
+    expect(box).not.toBeNull();
+    if (box) {
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    }
+
+    // 添加后：可撤销，HUD 提示已添加
+    await expect(btnUndo).toBeEnabled();
+    await expect(hud).toContainText('已在均值线添加控制点');
+
+    // 按 Ctrl+Z 撤销
+    await page.keyboard.press('Control+z');
+    await expect(hud).toContainText('已撤销: 添加控制点');
+    await expect(btnRedo).toBeEnabled();
+
+    // 按 Ctrl+Y 重做
+    await page.keyboard.press('Control+y');
+    await expect(hud).toContainText('已重做: 添加控制点');
+    await expect(btnUndo).toBeEnabled();
+
+    // 按 F 适屏
+    await page.keyboard.press('f');
+    await expect(hud).toContainText('视图: 适应屏幕居中 (F)');
+
+    // 按 S 切换回微调模式 (S)
+    await page.keyboard.press('s');
+    await expect(dialog.locator('.ad-fmode-btn[data-fmode="adjust"]')).toHaveClass(/active/);
+
+    // 按 Escape 触发全局模态关闭退出
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
   });
 });

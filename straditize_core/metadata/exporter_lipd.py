@@ -147,7 +147,31 @@ def _lipd_paleo_columns(
     paleo_columns: list[dict[str, Any]] = []
     for col_name in df.columns:
         vals = df[col_name].tolist()
-        clean_vals = [float(v) if pd.notna(v) else None for v in vals]
+        if col_name == "horizon_id" or col_name.lower().endswith("_id"):
+            clean_vals = [str(v) if pd.notna(v) else None for v in vals]
+            paleo_columns.append(
+                {
+                    "variableName": col_name,
+                    "units": None,
+                    "values": clean_vals,
+                    "dataType": "string",
+                    "variableType": "identifier",
+                    "proxy": None,
+                    "description": "Consensus horizon identifier",
+                }
+            )
+            continue
+
+        clean_vals = []
+        for v in vals:
+            if pd.isna(v) or v is None or v == "":
+                clean_vals.append(None)
+            else:
+                try:
+                    clean_vals.append(float(v))
+                except (ValueError, TypeError):
+                    clean_vals.append(str(v))
+
         is_depth = col_name.lower().startswith("depth")
         resolved_unit = (
             (depth_unit or "cm") if is_depth else (col_unit_map.get(col_name) or "%")
@@ -203,7 +227,30 @@ def _lipd_chron_table(age_depth_df: pd.DataFrame | None) -> list[dict[str, Any]]
     if age_depth_df is not None and not age_depth_df.empty:
         for col_name in age_depth_df.columns:
             vals = age_depth_df[col_name].tolist()
-            clean_vals = [float(v) if pd.notna(v) else None for v in vals]
+            if col_name == "horizon_id" or col_name.lower().endswith("_id"):
+                clean_vals = [str(v) if pd.notna(v) else None for v in vals]
+                chron_columns.append(
+                    {
+                        "variableName": col_name,
+                        "units": None,
+                        "values": clean_vals,
+                        "dataType": "string",
+                        "variableType": "identifier",
+                        "description": "Consensus horizon identifier",
+                    }
+                )
+                continue
+
+            clean_vals = []
+            for v in vals:
+                if pd.isna(v) or v is None or v == "":
+                    clean_vals.append(None)
+                else:
+                    try:
+                        clean_vals.append(float(v))
+                    except (ValueError, TypeError):
+                        clean_vals.append(str(v))
+
             is_depth = col_name.lower().startswith("depth")
             chron_columns.append(
                 {

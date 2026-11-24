@@ -499,6 +499,25 @@ class AgeDepthSessionMixin:
             and getattr(self, "age_depth_image", None) is None
         ):
             return {"has_model": False, "has_image": False}
+        mapped_samples = None
+        if self.age_depth_model is not None:
+            sample_depths, depth_provenance = self.sample_depths_for_model(
+                self.age_depth_model
+            )
+            if sample_depths:
+                mapped_samples = self.age_depth_model.predict_age(sample_depths)
+                if mapped_samples:
+                    mapped_samples["depth_provenance"] = depth_provenance
+                    self._attach_horizon_ids(mapped_samples)
+                    try:
+                        mapped_samples["sedimentation"] = (
+                            self.age_depth_model.estimate_sedimentation_rate(
+                                mapped_samples["depths"]
+                            )
+                        )
+                    except Exception:
+                        pass
+
         return {
             "has_model": self.age_depth_model is not None,
             "has_image": getattr(self, "age_depth_image", None) is not None,
@@ -514,6 +533,7 @@ class AgeDepthSessionMixin:
                 if self.age_depth_model is not None
                 else None
             ),
+            "mapped_samples": mapped_samples,
         }
 
     def update_age_depth_model(
@@ -795,6 +815,7 @@ class AgeDepthSessionMixin:
         if mapped_samples and "depths" in mapped_samples and "age_est" in mapped_samples:
             m_depths = [float(d) for d in mapped_samples["depths"]]
             m_ages = [float(a) for a in mapped_samples["age_est"]]
+            m_hids = mapped_samples.get("horizon_id") or []
             m_lower = (
                 [float(l) for l in mapped_samples["age_lower"]]
                 if "age_lower" in mapped_samples and mapped_samples["age_lower"]
@@ -805,17 +826,27 @@ class AgeDepthSessionMixin:
                 if "age_upper" in mapped_samples and mapped_samples["age_upper"]
                 else ([float(u) for u in mapped_samples.get("age_max", [])] if mapped_samples.get("age_max") else None)
             )
+            axis = getattr(self, "primary_axis", "depth") or "depth"
             new_samples = []
             for i, md in enumerate(m_depths):
-                calc_px = self._row_px_for_depth(md)
-                # 尝试与已有 samples 匹配对应行像素（若存在深度极近的旧层位）
+                y_val = m_ages[i] if axis == "age" and i < len(m_ages) else md
+                calc_px = self._row_px_for_depth(y_val)
+                # 尝试与已有 samples 匹配对应行像素（若存在深度/年代极近的旧层位）
                 if calc_px is None and self.samples:
-                    matched = min(self.samples, key=lambda s: abs(float(s.get("depth", 0)) - md))
-                    if abs(float(matched.get("depth", 0)) - md) < 1.0:
+                    if axis == "age" and i < len(m_ages):
+                        matched = min(self.samples, key=lambda s: abs(float(s.get("age_est") or s.get("depth", 0)) - m_ages[i]))
                         calc_px = float(matched.get("row_px", 0))
+                    else:
+                        matched = min(self.samples, key=lambda s: abs(float(s.get("depth", 0)) - md))
+                        if abs(float(matched.get("depth", 0)) - md) < 1.0:
+                            calc_px = float(matched.get("row_px", 0))
+                existing_hid = self.samples[i].get("horizon_id") if self.samples and i < len(self.samples) else None
+                hid = m_hids[i] if i < len(m_hids) else (existing_hid or f"H{i + 1:04d}")
                 s_dict: dict[str, Any] = {
+                    "horizon_id": hid,
                     "row_px": int(round(calc_px)) if calc_px is not None else 0,
-                    "depth": md,
+                    "depth": y_val if axis == "age" else md,
+                    "depth_est": md if axis == "age" else None,
                     "source": "manual",
                     "age_est": m_ages[i] if i < len(m_ages) else None,
                 }
@@ -828,28 +859,57 @@ class AgeDepthSessionMixin:
 
         # Otherwise evaluate from self.age_depth_model
         if self.samples and self.age_depth_model is not None:
-            sample_depths = []
-            for s in self.samples:
-                d = s.get("depth")
-                if d is None and "row_px" in s:
-                    d = self._depth_for_row_px(s["row_px"])
-                if d is not None:
-                    sample_depths.append(float(d))
-            if sample_depths:
-                pred = self.age_depth_model.predict_age(sample_depths)
-                new_samples = []
-                for s, est, lo, up in zip(
-                    self.samples,
-                    pred["age_est"],
-                    pred.get("age_lower", pred.get("age_min", [])),
-                    pred.get("age_upper", pred.get("age_max", [])),
-                ):
-                    s_copy = dict(s)
-                    s_copy["age_est"] = est
-                    s_copy["age_lower"] = lo
-                    s_copy["age_upper"] = up
-                    new_samples.append(s_copy)
-                return self.samples_set(new_samples, source="manual")
+            axis = getattr(self, "primary_axis", "depth") or "depth"
+            if axis == "age":
+                sample_ages = []
+                for s in self.samples:
+                    a = s.get("age_est")
+                    if a is None and "row_px" in s:
+                        a = self._depth_for_row_px(s["row_px"])
+                    if a is not None:
+                        sample_ages.append(float(a))
+                if sample_ages:
+                    inv = self.age_depth_model.predict_depth(sample_ages)
+                    pred = self.age_depth_model.predict_age(inv["depth_est"])
+                    new_samples = []
+                    for s, d_est, a_val, lo, up in zip(
+                        self.samples,
+                        inv["depth_est"],
+                        sample_ages,
+                        pred.get("age_lower", pred.get("age_min", [])),
+                        pred.get("age_upper", pred.get("age_max", [])),
+                    ):
+                        s_copy = dict(s)
+                        s_copy["depth"] = round(float(a_val), 2)
+                        s_copy["depth_est"] = round(float(d_est), 2)
+                        s_copy["age_est"] = round(float(a_val), 2)
+                        s_copy["age_lower"] = lo
+                        s_copy["age_upper"] = up
+                        new_samples.append(s_copy)
+                    return self.samples_set(new_samples, source="manual")
+            else:
+                sample_depths = []
+                for s in self.samples:
+                    d = s.get("depth")
+                    if d is None and "row_px" in s:
+                        d = self._depth_for_row_px(s["row_px"])
+                    if d is not None:
+                        sample_depths.append(float(d))
+                if sample_depths:
+                    pred = self.age_depth_model.predict_age(sample_depths)
+                    new_samples = []
+                    for s, est, lo, up in zip(
+                        self.samples,
+                        pred["age_est"],
+                        pred.get("age_lower", pred.get("age_min", [])),
+                        pred.get("age_upper", pred.get("age_max", [])),
+                    ):
+                        s_copy = dict(s)
+                        s_copy["age_est"] = est
+                        s_copy["age_lower"] = lo
+                        s_copy["age_upper"] = up
+                        new_samples.append(s_copy)
+                    return self.samples_set(new_samples, source="manual")
 
         return {"samples": self.samples, "count": len(self.samples)}
 

@@ -1,6 +1,8 @@
 import { Viewport } from '../../core/Viewport';
 import { panDeltaFromArrowKey } from '../canvas/keyBindings';
+import { AgeDepthHistory } from './AgeDepthHistory';
 import {
+  AgeDepthHistorySnapshot,
   AgeDepthModelInspectionData,
   CalibKind,
   CalibMarker,
@@ -58,6 +60,13 @@ export class AgeDepthCanvas {
   private selectedControlPointIndex: number | null = null;
   private draggingControlPoint: number | null = null;
 
+  // 历史撤销重做状态
+  private history: AgeDepthHistory = new AgeDepthHistory(50);
+  private dragStartSnapshot: AgeDepthHistorySnapshot | null = null;
+  private arrowKeyStartSnapshot: AgeDepthHistorySnapshot | null = null;
+  private arrowKeyHistoryTimer: number | null = null;
+  private hudNoticeTimer: number | null = null;
+
   // 视觉复选选项
   private showCurve: boolean = true;
   private showEnvelope: boolean = true;
@@ -74,6 +83,7 @@ export class AgeDepthCanvas {
     this.ctx = canvas.getContext('2d');
     this.callbacks = callbacks;
 
+    this.history.onChange = (canUndo, canRedo) => this.updateHistoryUI(canUndo, canRedo);
     this.bindInteractions();
     this.bindPaneSplitter();
   }
@@ -212,6 +222,7 @@ export class AgeDepthCanvas {
       } else {
         this.controlPoints = [];
       }
+      this.history.clear();
     }
   }
 
@@ -221,6 +232,24 @@ export class AgeDepthCanvas {
 
   public setMappedSamples(samples: MappedSamplesData | null): void {
     this.mappedSamples = samples;
+    this.syncMappedSamplesPx();
+  }
+
+  public syncMappedSamplesPx(): void {
+    if (!this.mappedSamples || this.calibMarkers.length < 4) return;
+    const depths = this.mappedSamples.depths;
+    const ages = this.mappedSamples.age_est;
+    const px_y: number[] = [];
+    const px_x_curve: number[] = [];
+    for (let i = 0; i < depths.length; i++) {
+      const pt = this.ageDepthToPx(ages[i] ?? 0, depths[i]);
+      if (pt) {
+        px_y.push(pt.y);
+        px_x_curve.push(pt.x);
+      }
+    }
+    this.mappedSamples.px_y = px_y;
+    this.mappedSamples.px_x_curve = px_x_curve;
   }
 
   public getCalibMarkers(): CalibMarker[] {
@@ -307,6 +336,103 @@ export class AgeDepthCanvas {
     this.renderCanvas();
   }
 
+  // --- History & Snapshots ---
+
+  public captureState(description: string = ''): AgeDepthHistorySnapshot {
+    return AgeDepthHistory.cloneSnapshot(description, {
+      controlPoints: this.controlPoints,
+      selectedControlPointIndex: this.selectedControlPointIndex,
+      editTarget: this.editTarget,
+      calibMarkers: this.calibMarkers,
+      excludeBoxes: this.excludeBoxes,
+      datingPoints: this.datingPoints,
+    });
+  }
+
+  public applySnapshot(snap: AgeDepthHistorySnapshot): void {
+    this.controlPoints = snap.controlPoints.map((cp) => ({ ...cp }));
+    this.selectedControlPointIndex = snap.selectedControlPointIndex;
+    this.editTarget = snap.editTarget;
+    if (snap.calibMarkers) {
+      this.calibMarkers = snap.calibMarkers.map((m) => ({ ...m }));
+      this.updateCalibChecklist();
+      this.updateCalibReadout();
+    }
+    if (snap.excludeBoxes) {
+      this.excludeBoxes = snap.excludeBoxes.map((b) => [...b]);
+      this.updateExcludeCount();
+    }
+    if (snap.datingPoints) {
+      this.datingPoints = snap.datingPoints.map((d) => ({ ...d }));
+    }
+    this.updateFModeUI(this.activeFMode);
+    const sel = this.container.querySelector('#ad-sel-edit-target') as HTMLSelectElement | null;
+    if (sel && sel.value !== this.editTarget) sel.value = this.editTarget;
+    this.refitCurveFromControlPoints(true);
+    this.renderCanvas();
+  }
+
+  public undo(): boolean {
+    if (this.arrowKeyHistoryTimer && this.arrowKeyStartSnapshot) {
+      clearTimeout(this.arrowKeyHistoryTimer);
+      this.history.pushSnapshot(this.arrowKeyStartSnapshot);
+      this.arrowKeyStartSnapshot = null;
+      this.arrowKeyHistoryTimer = null;
+    }
+    const prev = this.history.undo(this.captureState());
+    if (!prev) return false;
+    this.applySnapshot(prev);
+    this.showHudNotice(`已撤销: ${prev.description || '操作'} (Ctrl+Z)`);
+    return true;
+  }
+
+  public redo(): boolean {
+    const next = this.history.redo(this.captureState());
+    if (!next) return false;
+    this.applySnapshot(next);
+    this.showHudNotice(`已重做: ${next.description || '操作'} (Ctrl+Y)`);
+    return true;
+  }
+
+  public canUndo(): boolean {
+    return this.history.canUndo();
+  }
+
+  public canRedo(): boolean {
+    return this.history.canRedo();
+  }
+
+  public showHudNotice(msg: string): void {
+    const hud = this.container.querySelector('#ad-canvas-hud');
+    if (!hud) return;
+    hud.innerHTML = `<span style="color:var(--accent-blue); font-weight:600;">${msg}</span>`;
+    if (this.hudNoticeTimer) {
+      clearTimeout(this.hudNoticeTimer);
+    }
+    this.hudNoticeTimer = window.setTimeout(() => {
+      this.hudNoticeTimer = null;
+      const h = this.container.querySelector('#ad-canvas-hud');
+      if (h) {
+        h.textContent = '悬停查验: 移动光标在年代曲线上即可实时测读深度与对应年代';
+      }
+    }, 2500);
+  }
+
+  public updateHistoryUI(canUndo: boolean, canRedo: boolean): void {
+    const btnUndo = this.container.querySelector('#ad-btn-undo') as HTMLButtonElement | null;
+    const btnRedo = this.container.querySelector('#ad-btn-redo') as HTMLButtonElement | null;
+    if (btnUndo) {
+      btnUndo.disabled = !canUndo;
+      btnUndo.style.opacity = canUndo ? '1' : '0.45';
+      btnUndo.style.cursor = canUndo ? 'pointer' : 'not-allowed';
+    }
+    if (btnRedo) {
+      btnRedo.disabled = !canRedo;
+      btnRedo.style.opacity = canRedo ? '1' : '0.45';
+      btnRedo.style.cursor = canRedo ? 'pointer' : 'not-allowed';
+    }
+  }
+
   // --- Viewport & Coordinates ---
 
   public canvasToImage(clientX: number, clientY: number): { x: number; y: number } {
@@ -337,6 +463,7 @@ export class AgeDepthCanvas {
     const cssH = Math.max(1, Math.round(host.clientHeight));
     this.viewport.fitToScreen(cssW, cssH, this.bgImage.naturalWidth, this.bgImage.naturalHeight, 16);
     this.updateZoomLabel();
+    this.renderCanvas();
   }
 
   public reset100(): void {
@@ -596,7 +723,7 @@ export class AgeDepthCanvas {
     }
   }
 
-  public refitCurveFromControlPoints(): void {
+  public refitCurveFromControlPoints(notify: boolean = true): void {
     if (!this.inspectionData?.px_points || this.controlPoints.length < 2) return;
     const px = this.inspectionData.px_points;
 
@@ -690,7 +817,9 @@ export class AgeDepthCanvas {
     this.inspectionData.sed_rate = undefined;
     this.inspectionData.sed_rate_se = undefined;
     this.inspectionData.sed_window_depth = undefined;
-    this.callbacks.onModelRefitted?.();
+    if (notify) {
+      this.callbacks.onModelRefitted?.();
+    }
   }
 
   public findMarkerAt(pt: { x: number; y: number }): number {
@@ -1258,6 +1387,7 @@ export class AgeDepthCanvas {
             pickedAge = Math.round(aL + fy * (aR - aL));
           }
         }
+        this.history.push('拾取测年点', this.captureState());
         const newPoint: DatingPoint = {
           id: `14C_${this.datingPoints.length + 1}`,
           depth: Math.max(0, pickedDepth),
@@ -1268,11 +1398,13 @@ export class AgeDepthCanvas {
         };
         this.datingPoints.push(newPoint);
         this.callbacks.onDatingPointPicked?.(newPoint);
+        this.showHudNotice(`已拾取测年点: ${newPoint.depth} cm ➔ ${newPoint.age} cal yrBP (可按 Ctrl+Z 撤销)`);
         this.renderCanvas();
         return;
       }
 
       if (this.activeFMode === 'add') {
+        this.history.push('添加控制点', this.captureState());
         const newCp: ControlPoint = {
           id: `cp_${this.editTarget}_${Date.now()}`,
           x: pt.x,
@@ -1284,16 +1416,19 @@ export class AgeDepthCanvas {
         this.selectedControlPointIndex = this.controlPoints.indexOf(newCp);
         this.refitCurveFromControlPoints();
         this.renderCanvas();
+        this.showHudNotice(`已在${this.editTarget === 'curve' ? '均值线' : this.editTarget === 'lower' ? '下界线' : '上界线'}添加控制点 (可按 Ctrl+Z 撤销)`);
         return;
       }
 
       if (this.activeFMode === 'delete') {
         const cpIdx = this.findControlPointAt(pt);
         if (cpIdx >= 0) {
+          this.history.push('删除控制点', this.captureState());
           this.controlPoints.splice(cpIdx, 1);
           this.selectedControlPointIndex = null;
           this.refitCurveFromControlPoints();
           this.renderCanvas();
+          this.showHudNotice('已删除控制点 (可按 Ctrl+Z 撤销)');
           return;
         }
       }
@@ -1305,6 +1440,7 @@ export class AgeDepthCanvas {
           const cp = this.controlPoints[cpIdx];
           this.setEditTarget(cp.kind);
           this.draggingControlPoint = cpIdx;
+          this.dragStartSnapshot = this.captureState('移动控制点');
           e.preventDefault();
           this.renderCanvas();
           return;
@@ -1334,7 +1470,7 @@ export class AgeDepthCanvas {
       if (this.draggingControlPoint !== null && this.controlPoints[this.draggingControlPoint]) {
         this.controlPoints[this.draggingControlPoint].x = pt.x;
         this.controlPoints[this.draggingControlPoint].y = pt.y;
-        this.refitCurveFromControlPoints();
+        this.refitCurveFromControlPoints(false);
         this.renderCanvas();
         return;
       }
@@ -1363,7 +1499,18 @@ export class AgeDepthCanvas {
 
     const endDrag = () => {
       if (this.draggingControlPoint !== null) {
+        const cpIdx = this.draggingControlPoint;
         this.draggingControlPoint = null;
+        if (this.dragStartSnapshot && this.controlPoints[cpIdx]) {
+          const origCp = this.dragStartSnapshot.controlPoints[cpIdx];
+          const currCp = this.controlPoints[cpIdx];
+          if (!origCp || Math.hypot(currCp.x - origCp.x, currCp.y - origCp.y) > 0.5) {
+            this.history.pushSnapshot(this.dragStartSnapshot);
+            this.showHudNotice('已微调控制点位置 (可按 Ctrl+Z 撤销)');
+          }
+        }
+        this.dragStartSnapshot = null;
+        this.callbacks.onModelRefitted?.();
         return;
       }
       if (this.panning) {
@@ -1373,12 +1520,14 @@ export class AgeDepthCanvas {
       if (this.excludeArmed && this.excludePreview) {
         const [x0, y0, x1, y1] = this.excludePreview;
         if (Math.abs(x1 - x0) > 4 && Math.abs(y1 - y0) > 4) {
+          this.history.push('添加排除区', this.captureState());
           this.excludeBoxes.push([
             Math.round(x0),
             Math.round(y0),
             Math.round(x1),
             Math.round(y1),
           ]);
+          this.showHudNotice('已添加排除区 (可按 Ctrl+Z 撤销)');
         }
         this.excludePreview = null;
         this.excludeDragStart = null;
@@ -1392,7 +1541,11 @@ export class AgeDepthCanvas {
       this.draggingMarker = null;
     };
     canvas.addEventListener('mouseup', endDrag);
+    window.addEventListener('mouseup', endDrag);
     canvas.addEventListener('mouseleave', () => {
+      if (this.draggingControlPoint !== null) {
+        endDrag();
+      }
       this.draggingMarker = null;
       this.panning = null;
       if (this.excludeDragStart) endDrag();
@@ -1405,6 +1558,20 @@ export class AgeDepthCanvas {
       this.addCalibMarker(pt);
     });
 
+    // 绑定撤销/重做按钮
+    const btnUndo = this.container.querySelector('#ad-btn-undo');
+    const btnRedo = this.container.querySelector('#ad-btn-redo');
+    if (btnUndo) {
+      const handleUndoClick = () => this.undo();
+      btnUndo.addEventListener('click', handleUndoClick);
+      this.disposers.push(() => btnUndo.removeEventListener('click', handleUndoClick));
+    }
+    if (btnRedo) {
+      const handleRedoClick = () => this.redo();
+      btnRedo.addEventListener('click', handleRedoClick);
+      this.disposers.push(() => btnRedo.removeEventListener('click', handleRedoClick));
+    }
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !this.isSpaceDown) {
         this.isSpaceDown = true;
@@ -1413,7 +1580,60 @@ export class AgeDepthCanvas {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-      // 快捷键模式切换对齐主画布：S=选择微调, A=加点, D=删点, P=拾取测年点
+      // 撤销快捷键 (Ctrl+Z / Cmd+Z，排除 Shift)
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z' || e.code === 'KeyZ')) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.undo();
+        return;
+      }
+
+      // 重做快捷键 (Ctrl+Y / Cmd+Y 或 Ctrl+Shift+Z / Cmd+Shift+Z)
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        ((e.key === 'y' || e.key === 'Y' || e.code === 'KeyY') ||
+          (e.shiftKey && (e.key === 'z' || e.key === 'Z' || e.code === 'KeyZ')))
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.redo();
+        return;
+      }
+
+      // 视口快捷键对齐主画布
+      // 适屏 (F / f)
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'f' || e.key === 'F' || e.code === 'KeyF')) {
+        e.preventDefault();
+        this.fitViewport();
+        this.showHudNotice('视图: 适应屏幕居中 (F)');
+        return;
+      }
+
+      // 1:1 原始比例 (Ctrl+1 / Cmd+1)
+      if ((e.ctrlKey || e.metaKey) && (e.key === '1' || e.code === 'Digit1')) {
+        e.preventDefault();
+        this.reset100();
+        this.showHudNotice('视图: 1:1 原始尺寸 (Ctrl+1)');
+        return;
+      }
+
+      // 视图放大 (+ / =)
+      if (!e.altKey && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        this.zoomAtCentre(true, e.ctrlKey || e.metaKey);
+        this.showHudNotice(`视图放大: ${Math.round(this.viewport.scale * 100)}%`);
+        return;
+      }
+
+      // 视图缩小 (- / _)
+      if (!e.altKey && (e.key === '-' || e.key === '_')) {
+        e.preventDefault();
+        this.zoomAtCentre(false, e.ctrlKey || e.metaKey);
+        this.showHudNotice(`视图缩小: ${Math.round(this.viewport.scale * 100)}%`);
+        return;
+      }
+
+      // 快捷键模式切换对齐主画布：S=微调, A=加点, D=删点, P=拾取测年点
       if (!e.ctrlKey && !e.metaKey && !e.altKey) {
         const k = e.key.toLowerCase();
         if (k === 's') {
@@ -1445,10 +1665,12 @@ export class AgeDepthCanvas {
       // 控制点物理删除 (Delete / Backspace)
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (this.selectedControlPointIndex !== null && this.controlPoints[this.selectedControlPointIndex]) {
+          this.history.push('删除控制点', this.captureState());
           this.controlPoints.splice(this.selectedControlPointIndex, 1);
           this.selectedControlPointIndex = null;
           this.refitCurveFromControlPoints();
           this.renderCanvas();
+          this.showHudNotice('已删除控制点 (可按 Ctrl+Z 撤销)');
           e.preventDefault();
           return;
         }
@@ -1473,17 +1695,28 @@ export class AgeDepthCanvas {
           moved = true;
         }
         if (moved) {
-          this.refitCurveFromControlPoints();
+          if (!this.arrowKeyStartSnapshot) {
+            this.arrowKeyStartSnapshot = this.captureState('微调控制点');
+          }
+          if (this.arrowKeyHistoryTimer) {
+            clearTimeout(this.arrowKeyHistoryTimer);
+          }
+          this.arrowKeyHistoryTimer = window.setTimeout(() => {
+            if (this.arrowKeyStartSnapshot) {
+              this.history.pushSnapshot(this.arrowKeyStartSnapshot);
+              this.arrowKeyStartSnapshot = null;
+            }
+            this.arrowKeyHistoryTimer = null;
+          }, 500);
+
+          this.refitCurveFromControlPoints(false);
           this.renderCanvas();
           e.preventDefault();
           return;
         }
       }
 
-      // Alt+方向键平移（issue #106）：与主画布同一个入口、同一个步长、同一个方向
-      // （`canvas/keyBindings.ts::panDeltaFromArrowKey`）。全画布一致是硬不变量——
-      // 只在主画布生效会让本弹窗成为"这里按键没反应"的那一个。
-      // 焦点在输入框里时不抢：年代/深度那几个 number 输入要能用 Alt+方向键选词。
+      // Alt+方向键平移（issue #106）
       const pan = panDeltaFromArrowKey(e);
       if (pan) {
         e.preventDefault();
@@ -1513,6 +1746,14 @@ export class AgeDepthCanvas {
   }
 
   public dispose(): void {
+    if (this.arrowKeyHistoryTimer) {
+      clearTimeout(this.arrowKeyHistoryTimer);
+      this.arrowKeyHistoryTimer = null;
+    }
+    if (this.hudNoticeTimer) {
+      clearTimeout(this.hudNoticeTimer);
+      this.hudNoticeTimer = null;
+    }
     this.disposers.forEach((fn) => {
       try {
         fn();

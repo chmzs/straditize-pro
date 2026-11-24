@@ -208,6 +208,7 @@ export class ExportModal {
                   <select id="wpd-dataset-select" class="sample-select" style="width: 100%; font-size: var(--font-size-sm); margin-top: 4px; padding: 4px 6px;">
                     <option value="samples" selected>丰度矩阵表 (samples · 采样层位)</option>
                     <option value="turning_points">拐点坐标长表 (turning_points · 原始几何)</option>
+                    <option value="age_depth">年代-深度关系表 (age_depth · 模型结果)</option>
                   </select>
                   <div id="wpd-rowset-caption" style="margin-top: 4px; font-size: var(--font-size-xs); line-height: 1.4; color: var(--text-muted);"></div>
                 </div>
@@ -505,6 +506,12 @@ export class ExportModal {
       return lines.join('\n');
     };
 
+    // 当前表头排序状态：任意列点击三态切换 (raw -> asc -> desc -> raw)
+    let sortState: { colIdx: number; order: 'asc' | 'desc' | 'raw' } = {
+      colIdx: -1,
+      order: 'raw',
+    };
+
     // 核心应用排序与格式化
     const applySortAndFormat = () => {
       if (rawBackendHeaders.length === 0 || rawBackendRows.length === 0) {
@@ -519,6 +526,7 @@ export class ExportModal {
       currentHeaders = [...rawBackendHeaders];
       const isCustomized =
         userEdits.size > 0 ||
+        (sortState.colIdx >= 0 && sortState.order !== 'raw') ||
         (sortBySelect && sortBySelect.value !== 'raw') ||
         (sortOrderSelect && sortOrderSelect.value !== 'asc') ||
         (digitsInp && digitsInp.value.trim() !== '') ||
@@ -533,7 +541,6 @@ export class ExportModal {
         return;
       }
 
-      const sortBy = sortBySelect?.value || 'raw';
       const isDesc = sortOrderSelect?.value === 'desc';
       const digitsStr = digitsInp?.value.trim() ?? '';
       const digitsRaw = digitsStr !== '' ? parseInt(digitsStr, 10) : NaN;
@@ -561,14 +568,32 @@ export class ExportModal {
       });
 
       // 排序处理
-      if (sortBy === 'depth') {
+      let targetSortCol = -1;
+      let sortDescending = false;
+
+      if (sortState.colIdx >= 0 && sortState.order !== 'raw') {
+        targetSortCol = sortState.colIdx;
+        sortDescending = sortState.order === 'desc';
+      } else if (sortBySelect && sortBySelect.value === 'depth') {
+        sortDescending = isDesc;
+        let depthIdx = 0;
+        const found = currentHeaders.findIndex(
+          (hdr) => hdr.toLowerCase() === 'depth' || hdr.toLowerCase() === 'age'
+        );
+        if (found !== -1) depthIdx = found;
+        targetSortCol = depthIdx;
+      }
+
+      if (targetSortCol >= 0) {
         processed.sort((a, b) => {
-          const aVal = parseFloat(a[0]);
-          const bVal = parseFloat(b[0]);
+          const aRaw = a[targetSortCol] ?? '';
+          const bRaw = b[targetSortCol] ?? '';
+          const aVal = parseFloat(aRaw);
+          const bVal = parseFloat(bRaw);
           if (!isNaN(aVal) && !isNaN(bVal)) {
-            return isDesc ? bVal - aVal : aVal - bVal;
+            return sortDescending ? bVal - aVal : aVal - bVal;
           }
-          return isDesc ? b[0].localeCompare(a[0]) : a[0].localeCompare(b[0]);
+          return sortDescending ? bRaw.localeCompare(aRaw) : aRaw.localeCompare(bRaw);
         });
       } else if (isDesc) {
         processed.reverse();
@@ -581,8 +606,25 @@ export class ExportModal {
     };
 
     // 绑定排序与格式化联动事件
-    sortBySelect?.addEventListener('change', applySortAndFormat);
-    sortOrderSelect?.addEventListener('change', applySortAndFormat);
+    sortBySelect?.addEventListener('change', () => {
+      if (sortBySelect.value === 'raw') {
+        sortState = { colIdx: -1, order: 'raw' };
+      } else if (sortBySelect.value === 'depth') {
+        let depthIdx = 0;
+        const found = currentHeaders.findIndex(
+          (hdr) => hdr.toLowerCase() === 'depth' || hdr.toLowerCase() === 'age'
+        );
+        if (found !== -1) depthIdx = found;
+        sortState = { colIdx: depthIdx, order: (sortOrderSelect?.value as 'asc' | 'desc') || 'asc' };
+      }
+      applySortAndFormat();
+    });
+    sortOrderSelect?.addEventListener('change', () => {
+      if (sortState.colIdx >= 0) {
+        sortState.order = (sortOrderSelect.value as 'asc' | 'desc') || 'asc';
+      }
+      applySortAndFormat();
+    });
     digitsInp?.addEventListener('input', applySortAndFormat);
     colSepSelect?.addEventListener('change', applySortAndFormat);
     naFillSelect?.addEventListener('change', applySortAndFormat);
@@ -603,8 +645,13 @@ export class ExportModal {
 
       currentHeaders.forEach((h, cIdx) => {
         const th = document.createElement('th');
-        if (!isTurning && cIdx === 0) {
+        const isHorizonId = h.toLowerCase() === 'horizon_id';
+        const isDepthCol = !isTurning && (h.toLowerCase() === 'depth' || h.toLowerCase() === 'age' || (cIdx === 0 && !isHorizonId));
+
+        if (!isTurning && isDepthCol) {
           th.className = 'col-depth';
+        } else if (isHorizonId) {
+          th.style.color = 'var(--accent-blue)';
         } else if (isTurning) {
           if (cIdx < 2) th.style.textAlign = 'left';
           const lower = h.toLowerCase();
@@ -612,8 +659,45 @@ export class ExportModal {
             th.style.color = 'var(--status-success)';
           }
         }
-        th.textContent = h;
-        th.title = h;
+
+        th.style.cursor = 'pointer';
+        th.style.userSelect = 'none';
+
+        let indicator = '';
+        if (sortState.colIdx === cIdx) {
+          if (sortState.order === 'asc') indicator = ' ▲';
+          else if (sortState.order === 'desc') indicator = ' ▼';
+        }
+        th.textContent = h + indicator;
+        th.title = `${h}\n点击按此列排序（升序 / 降序 / 恢复默认）`;
+
+        th.addEventListener('click', () => {
+          if (sortState.colIdx === cIdx) {
+            if (sortState.order === 'raw') sortState.order = 'asc';
+            else if (sortState.order === 'asc') sortState.order = 'desc';
+            else {
+              sortState.order = 'raw';
+              sortState.colIdx = -1;
+            }
+          } else {
+            sortState.colIdx = cIdx;
+            sortState.order = 'asc';
+          }
+          if (sortBySelect && sortOrderSelect) {
+            if (sortState.order === 'raw') {
+              sortBySelect.value = 'raw';
+              sortOrderSelect.value = 'asc';
+            } else {
+              const lower = h.toLowerCase();
+              if (lower === 'depth' || lower === 'age') {
+                sortBySelect.value = 'depth';
+              }
+              sortOrderSelect.value = sortState.order;
+            }
+          }
+          applySortAndFormat();
+        });
+
         trHead.appendChild(th);
       });
       thead.appendChild(trHead);
@@ -649,7 +733,16 @@ export class ExportModal {
 
         row.forEach((cellVal, cIdx) => {
           const td = document.createElement('td');
-          if (!isTurning && cIdx === 0) {
+          const isHorizonId = currentHeaders[cIdx]?.toLowerCase() === 'horizon_id';
+          const isDepthCol = !isTurning && (currentHeaders[cIdx]?.toLowerCase() === 'depth' || currentHeaders[cIdx]?.toLowerCase() === 'age' || (cIdx === 0 && !isHorizonId));
+
+          if (isHorizonId) {
+            td.style.fontWeight = '600';
+            td.style.color = 'var(--accent-blue)';
+            td.style.textAlign = 'center';
+            td.textContent = cellVal;
+            td.title = cellVal;
+          } else if (isDepthCol) {
             td.className = 'col-depth';
             td.textContent = cellVal;
             td.title = cellVal;

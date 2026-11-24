@@ -78,6 +78,7 @@
  "csv_calibrated_columns": {
   "ok": {
    "columns": [
+    "horizon_id",
     "depth",
     "col01",
     "col02",
@@ -96,13 +97,13 @@
     "col15",
     "col16"
    ],
-   "columns_count": 17,
+   "columns_count": 18,
    "csv_content_equals_csv": true,
-   "csv_digest": "c6a8da6e013b517d",
+   "csv_digest": "d4cb23ce8171cb38",
    "csv_head": [
-    "depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
-    "10.0,2.6316,0.0,8.1081,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
-    "210.0,2.6316,0.0,2.7027,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA"
+    "horizon_id,depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
+    "H0001,10.0,2.6316,0.0,8.1081,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
+    "H0002,210.0,2.6316,0.0,2.7027,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA"
    ],
    "data_head": [
     {
@@ -122,7 +123,8 @@
      "col14": null,
      "col15": null,
      "col16": null,
-     "depth": 10.0
+     "depth": 10.0,
+     "horizon_id": "H0001"
     },
     {
      "col01": 2.6316,
@@ -141,7 +143,8 @@
      "col14": null,
      "col15": null,
      "col16": null,
-     "depth": 210.0
+     "depth": 210.0,
+     "horizon_id": "H0002"
     }
    ],
    "file_path": null,
@@ -152,6 +155,111 @@
   }
  },
  "csv_calibrated_with_samples": {
+  "ok": {
+   "columns": [
+    "horizon_id",
+    "depth",
+    "col01",
+    "col02",
+    "col03",
+    "col04",
+    "col05",
+    "col06",
+    "col07",
+    "col08",
+    "col09",
+    "col10",
+    "col11",
+    "col12",
+    "col13",
+    "col14",
+    "col15",
+    "col16"
+   ],
+   "columns_count": 18,
+   "csv_content_equals_csv": true,
+   "csv_digest": "c16d4e549974b154",
+   "csv_head": [
+    "horizon_id,depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
+    "H0001,50.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
+    "H0002,150.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA"
+   ],
+   "data_head": [
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "col04": null,
+     "col05": null,
+     "col06": null,
+     "col07": null,
+     "col08": null,
+     "col09": null,
+     "col10": null,
+     "col11": null,
+     "col12": null,
+     "col13": null,
+     "col14": null,
+     "col15": null,
+     "col16": null,
+     "depth": 50.0,
+     "horizon_id": "H0001"
+    },
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "col04": null,
+     "col05": null,
+     "col06": null,
+     "col07": null,
+     "col08": null,
+     "col09": null,
+     "col10": null,
+     "col11": null,
+     "col12": null,
+     "col13": null,
+     "col14": null,
+     "col15": null,
+     "col16": null,
+     "depth": 150.0,
+     "horizon_id": "H0002"
+    },
+    {
+     "col01": null,
+     "col02": null,
+     "col03": null,
+     "col04": null,
+     "col05": null,
+     "col06": null,
+     "col07": null,
+     "col08": null,
+     "col09": null,
+     "col10": null,
+     "col11": null,
+     "col12": null,
+     "col13": null,
+     "col14": null,
+     "col15": null,
+     "col16": null,
+     "depth": 250.0,
+     "horizon_id": "H0003"
+    }
+   ],
+   "file_path": null,
+   "format": "csv",
+   "path_matches_file_path": true,
+   "rows_count": 3,
+   "strict": false
+  }
+ },
+ "csv_uncalibrated": {
+  "raised": {
+   "code": -32003,
+   "message": "导出需要深度标定：请先完成步骤 3 的 Y 轴两点标定（当前 is_calibrated=false）。 Export requires depth calibration (two-point Y calibration)."
+  }
+ },
+ "csv_with_age_model": {
   "ok": {
    "columns": [
     "depth",
@@ -174,121 +282,14 @@
    ],
    "columns_count": 17,
    "csv_content_equals_csv": true,
-   "csv_digest": "6043835c5b31a03b",
+   "csv_digest": "010ed70b381dd6de",
    "csv_head": [
     "depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
-    "50.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
-    "150.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA"
+    "16.5,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
+    "17.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA"
    ],
    "data_head": [
     {
-     "col01": null,
-     "col02": null,
-     "col03": null,
-     "col04": null,
-     "col05": null,
-     "col06": null,
-     "col07": null,
-     "col08": null,
-     "col09": null,
-     "col10": null,
-     "col11": null,
-     "col12": null,
-     "col13": null,
-     "col14": null,
-     "col15": null,
-     "col16": null,
-     "depth": 50.0
-    },
-    {
-     "col01": null,
-     "col02": null,
-     "col03": null,
-     "col04": null,
-     "col05": null,
-     "col06": null,
-     "col07": null,
-     "col08": null,
-     "col09": null,
-     "col10": null,
-     "col11": null,
-     "col12": null,
-     "col13": null,
-     "col14": null,
-     "col15": null,
-     "col16": null,
-     "depth": 150.0
-    },
-    {
-     "col01": null,
-     "col02": null,
-     "col03": null,
-     "col04": null,
-     "col05": null,
-     "col06": null,
-     "col07": null,
-     "col08": null,
-     "col09": null,
-     "col10": null,
-     "col11": null,
-     "col12": null,
-     "col13": null,
-     "col14": null,
-     "col15": null,
-     "col16": null,
-     "depth": 250.0
-    }
-   ],
-   "file_path": null,
-   "format": "csv",
-   "path_matches_file_path": true,
-   "rows_count": 3,
-   "strict": false
-  }
- },
- "csv_uncalibrated": {
-  "raised": {
-   "code": -32003,
-   "message": "导出需要深度标定：请先完成步骤 3 的 Y 轴两点标定（当前 is_calibrated=false）。 Export requires depth calibration (two-point Y calibration)."
-  }
- },
- "csv_with_age_model": {
-  "ok": {
-   "columns": [
-    "depth",
-    "age_est",
-    "age_lower_95",
-    "age_upper_95",
-    "col01",
-    "col02",
-    "col03",
-    "col04",
-    "col05",
-    "col06",
-    "col07",
-    "col08",
-    "col09",
-    "col10",
-    "col11",
-    "col12",
-    "col13",
-    "col14",
-    "col15",
-    "col16"
-   ],
-   "columns_count": 20,
-   "csv_content_equals_csv": true,
-   "csv_digest": "904c7bf6a9568a10",
-   "csv_head": [
-    "depth,age_est,age_lower_95,age_upper_95,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
-    "16.5,59.23754375,55.28045993534482,63.19912300403226,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
-    "17.0,61.07826111111111,57.006306149425285,65.15495951612904,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA"
-   ],
-   "data_head": [
-    {
-     "age_est": 59.23754375,
-     "age_lower_95": 55.28045993534482,
-     "age_upper_95": 63.19912300403226,
      "col01": null,
      "col02": null,
      "col03": null,
@@ -308,9 +309,6 @@
      "depth": 16.5
     },
     {
-     "age_est": 61.07826111111111,
-     "age_lower_95": 57.006306149425285,
-     "age_upper_95": 65.15495951612904,
      "col01": null,
      "col02": null,
      "col03": null,
@@ -330,9 +328,6 @@
      "depth": 17.0
     },
     {
-     "age_est": 62.92161458333333,
-     "age_lower_95": 58.73507273706896,
-     "age_upper_95": 67.1131527217742,
      "col01": null,
      "col02": null,
      "col03": null,
@@ -362,6 +357,7 @@
  "csv_with_file": {
   "ok": {
    "columns": [
+    "horizon_id",
     "depth",
     "col01",
     "col02",
@@ -380,13 +376,13 @@
     "col15",
     "col16"
    ],
-   "columns_count": 17,
+   "columns_count": 18,
    "csv_content_equals_csv": true,
-   "csv_digest": "6043835c5b31a03b",
+   "csv_digest": "c16d4e549974b154",
    "csv_head": [
-    "depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
-    "50.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
-    "150.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA"
+    "horizon_id,depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
+    "H0001,50.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
+    "H0002,150.0,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA"
    ],
    "data_head": [
     {
@@ -406,7 +402,8 @@
      "col14": null,
      "col15": null,
      "col16": null,
-     "depth": 50.0
+     "depth": 50.0,
+     "horizon_id": "H0001"
     },
     {
      "col01": null,
@@ -425,7 +422,8 @@
      "col14": null,
      "col15": null,
      "col16": null,
-     "depth": 150.0
+     "depth": 150.0,
+     "horizon_id": "H0002"
     },
     {
      "col01": null,
@@ -444,7 +442,8 @@
      "col14": null,
      "col15": null,
      "col16": null,
-     "depth": 250.0
+     "depth": 250.0,
+     "horizon_id": "H0003"
     }
    ],
    "file_path": "data.csv",

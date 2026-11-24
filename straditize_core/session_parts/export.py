@@ -433,6 +433,116 @@ class ExportMixin:
         """
         self.control_point_columns: set[int] = set()
 
+    def get_age_depth_dataframe(self) -> pd.DataFrame | None:
+        """产出独立的年代-深度关系表 (age_depth.csv)。
+
+        列结构：horizon_id, depth, age, age_lower, age_upper, sed_rate
+        - 当存在 age_depth_model 时，基于模型预测与沉积速率推算；
+        - 当无模型但 samples 已包含年代数据时，提取 samples 内记录；
+        - 若两者均不存在，返回 None。
+        """
+        model = getattr(self, "age_depth_model", None)
+        samples = list(getattr(self, "samples", None) or [])
+        if model is None and not any(s.get("age") is not None for s in samples):
+            return None
+
+        if samples:
+            sample_depths: list[float] = []
+            for s in samples:
+                d = s.get("depth")
+                if d is None and "row_px" in s:
+                    d = self._depth_for_row_px(s["row_px"])
+                sample_depths.append(round(float(d), 4) if d is not None else 0.0)
+
+            horizon_ids = [
+                s.get("horizon_id") or f"H{idx + 1:04d}"
+                for idx, s in enumerate(samples)
+            ]
+
+            if model is not None:
+                pred = model.predict_age(sample_depths)
+                age_est = [round(float(a), 4) if a is not None else None for a in pred["age_est"]]
+                raw_lower = pred.get("age_lower", pred.get("age_min"))
+                age_lower = [round(float(l), 4) if l is not None else None for l in raw_lower] if raw_lower is not None else [None] * len(sample_depths)
+                raw_upper = pred.get("age_upper", pred.get("age_max"))
+                age_upper = [round(float(u), 4) if u is not None else None for u in raw_upper] if raw_upper is not None else [None] * len(sample_depths)
+
+                try:
+                    sed_info = model.estimate_sedimentation_rate(sample_depths)
+                    raw_sed = sed_info.get("sed_rate")
+                    sed_rate = [round(float(r), 4) if r is not None else None for r in raw_sed] if raw_sed is not None else [None] * len(sample_depths)
+                except Exception:
+                    sed_rate = [None] * len(sample_depths)
+            else:
+                age_est = [s.get("age") for s in samples]
+                age_lower = [s.get("age_lower", s.get("age_min")) for s in samples]
+                age_upper = [s.get("age_upper", s.get("age_max")) for s in samples]
+                sed_rate = [s.get("sed_rate") for s in samples]
+
+            return pd.DataFrame(
+                {
+                    "horizon_id": horizon_ids,
+                    "depth": sample_depths,
+                    "age": age_est,
+                    "age_lower": age_lower,
+                    "age_upper": age_upper,
+                    "sed_rate": sed_rate,
+                }
+            )
+
+        if model is not None:
+            depths = [round(float(d), 4) for d in model.depths]
+            horizon_ids = [f"H{idx + 1:04d}" for idx in range(len(depths))]
+            pred = model.predict_age(depths)
+            age_est = [round(float(a), 4) if a is not None else None for a in pred["age_est"]]
+            raw_lower = pred.get("age_lower", pred.get("age_min"))
+            age_lower = [round(float(l), 4) if l is not None else None for l in raw_lower] if raw_lower is not None else [None] * len(depths)
+            raw_upper = pred.get("age_upper", pred.get("age_max"))
+            age_upper = [round(float(u), 4) if u is not None else None for u in raw_upper] if raw_upper is not None else [None] * len(depths)
+            try:
+                sed_info = model.estimate_sedimentation_rate(depths)
+                raw_sed = sed_info.get("sed_rate")
+                sed_rate = [round(float(r), 4) if r is not None else None for r in raw_sed] if raw_sed is not None else [None] * len(depths)
+            except Exception:
+                sed_rate = [None] * len(depths)
+
+            return pd.DataFrame(
+                {
+                    "horizon_id": horizon_ids,
+                    "depth": depths,
+                    "age": age_est,
+                    "age_lower": age_lower,
+                    "age_upper": age_upper,
+                    "sed_rate": sed_rate,
+                }
+            )
+
+        return None
+
+    def get_ensemble_dataframe(self) -> pd.DataFrame | None:
+        """产出蒙特卡洛抽样集成表 (ensemble.csv)。
+
+        列结构：horizon_id (若有 samples), depth, ens_0001, ens_0002, ...
+        """
+        tables = getattr(self, "ensemble_tables", None) or []
+        if not tables:
+            return None
+        table = tables[-1]
+        columns = list(table.get("columns", []))
+        data = list(table.get("data", []))
+        if not columns or not data:
+            return None
+        df = pd.DataFrame(data)[columns]
+
+        samples = list(getattr(self, "samples", None) or [])
+        if samples and len(samples) == len(df):
+            horizon_ids = [
+                s.get("horizon_id") or f"H{idx + 1:04d}"
+                for idx, s in enumerate(samples)
+            ]
+            df.insert(0, "horizon_id", horizon_ids)
+        return df
+
     def _y_col_label(self, legacy_column_name: bool = False) -> str:
         """导出表**首列**的列名（本模块唯一的取名入口）。
 
@@ -607,8 +717,12 @@ class ExportMixin:
 
             if not roi_cols:
                 if samples:
+                    horizon_ids = [
+                        s.get("horizon_id") or f"H{idx + 1:04d}"
+                        for idx, s in enumerate(samples)
+                    ]
                     depths = [s.get("depth", s.get("row_px")) for s in samples]
-                    roi_dfs[roi_name] = pd.DataFrame({y_col: depths})
+                    roi_dfs[roi_name] = pd.DataFrame({"horizon_id": horizon_ids, y_col: depths})
                 else:
                     roi_dfs[roi_name] = pd.DataFrame({y_col: []})
                 continue
@@ -621,7 +735,14 @@ class ExportMixin:
             row_list = list(rowset.rows)
             depth_list = list(rowset.depths)
 
-            data_dict: dict[str, Any] = {y_col: depth_list}
+            data_dict: dict[str, Any] = {}
+            if rowset.is_sample_rows and samples:
+                horizon_ids = [
+                    s.get("horizon_id") or f"H{idx + 1:04d}"
+                    for idx, s in enumerate(samples)
+                ]
+                data_dict["horizon_id"] = horizon_ids
+            data_dict[y_col] = depth_list
 
             taxa_names = getattr(self, "taxa_names", None) or []
             for idx, col in enumerate(roi_cols):
@@ -884,6 +1005,9 @@ class ExportMixin:
         }
         primary_rowset = rowset_by_roi.get(primary_roi_name) or {}
 
+        age_depth_df = self.get_age_depth_dataframe()
+        ensemble_df = self.get_ensemble_dataframe()
+
         manifest = {
             "version": "2.0.0",
             "tool": "straditize pro",
@@ -900,6 +1024,8 @@ class ExportMixin:
             "column_units": units_by_roi,
             # 每组量纲（用户编辑的源头，见步骤 6「单位」输入）
             "group_units": group_units,
+            "age_depth_csv": "data/age_depth.csv" if age_depth_df is not None else None,
+            "ensemble_csv": "data/ensemble.csv" if ensemble_df is not None else None,
         }
 
         tar_bio = io.BytesIO()
@@ -989,6 +1115,20 @@ class ExportMixin:
             ti_data_csv.size = len(primary_csv_bytes)
             ti_data_csv.mtime = int(time.time())
             tf.addfile(ti_data_csv, io.BytesIO(primary_csv_bytes))
+
+            if age_depth_df is not None:
+                ad_bytes = serialize_export_frame(age_depth_df).encode("utf-8")
+                ti_ad = tarfile.TarInfo(name="data/age_depth.csv")
+                ti_ad.size = len(ad_bytes)
+                ti_ad.mtime = int(time.time())
+                tf.addfile(ti_ad, io.BytesIO(ad_bytes))
+
+            if ensemble_df is not None:
+                ens_bytes = serialize_export_frame(ensemble_df).encode("utf-8")
+                ti_ens = tarfile.TarInfo(name="data/ensemble.csv")
+                ti_ens.size = len(ens_bytes)
+                ti_ens.mtime = int(time.time())
+                tf.addfile(ti_ens, io.BytesIO(ens_bytes))
 
             r_script_bytes = "\n".join(r_scripts).encode("utf-8")
             ti_r = tarfile.TarInfo(name="plot_strat.R")
@@ -1479,7 +1619,8 @@ class ExportMixin:
     #: `export_data(dataset=...)` 允许的取值，顺序即产品下拉顺序。
     #: 第一项是丰度矩阵表（samples 优先，无 samples 时退化为全像素行）。
     #: 第二项是拐点原始坐标长表（纯几何记录，不拼假插值矩阵）。
-    EXPORT_DATASETS = ("samples", "turning_points")
+    #: 第三项是年代-深度关系表（独立模型预测表）。
+    EXPORT_DATASETS = ("samples", "turning_points", "age_depth")
 
     def _dataset_frame(
         self,
@@ -1493,6 +1634,7 @@ class ExportMixin:
         `dataset=None` 或 `samples`：`_primary_roi_export_frame`（数据转录矩阵，
         CSV/TAR/XLSX/LiPD/预览统一走 `read_column_values` 真实读数，不插值）。
         `dataset="turning_points"`：离散拐点长表。
+        `dataset="age_depth"`：独立的年代-深度关系表。
         """
         key = (dataset or "").strip().lower()
         if not key:
@@ -1505,6 +1647,16 @@ class ExportMixin:
                 INVALID_PARAMS,
                 f"Unsupported dataset '{dataset}'. Use one of: {', '.join(self.EXPORT_DATASETS)}.",
             )
+        if key == "age_depth":
+            df = self.get_age_depth_dataframe()
+            if df is None:
+                raise JsonRpcError(
+                    STATE_ERROR,
+                    "当前工程没有年代-深度模型或年代数据，无法导出 age_depth 数据集。"
+                    " No age-depth model or age data available for age_depth dataset.",
+                )
+            return df
+
         # 面板两张表都以「读数」为内容：一列都没标定 X 刻度时它们只能给出整表空白，
         # 那看起来像"这张图没数据"，而不是"你还没做步骤 6"。
         self._assert_export_column_scale()
@@ -1525,6 +1677,9 @@ class ExportMixin:
         （`_resolve_rowset` / `_control_point_rows` / 深度网格 / 拐点清单）。
         """
         key = (dataset or "").strip().lower()
+        if key == "age_depth":
+            df = self.get_age_depth_dataframe()
+            return len(df) if df is not None else 0
         if not key or key == "samples":
             points = getattr(self, "column_points", None) or {}
             if points:
@@ -1632,6 +1787,19 @@ class ExportMixin:
         """
         key = (dataset or "").strip().lower()
         samples_count = len(getattr(self, "samples", None) or [])
+        if key == "age_depth":
+            is_sample = bool(samples_count > 0 and rows_count == samples_count)
+            return {
+                "provenance": "age_depth",
+                "is_sample_rows": is_sample,
+                "rows_count": int(rows_count),
+                "samples_count": samples_count,
+                "label": f"年代-深度关系表（{rows_count} 行）",
+                "why": "基于年代-深度模型预测推算的层位年代与沉积速率数据。",
+                "dataset": "age_depth",
+                "quality": self._rowset_quality(rows_count, is_sample_rows=is_sample),
+            }
+
         if key != "turning_points":
             report = self._resolve_rowset().as_dict()
             report["rows_count"] = int(rows_count)
@@ -1823,33 +1991,6 @@ class ExportMixin:
         df = self._dataset_frame(
             dataset, strict=strict, legacy_column_name=legacy_column_name
         )
-        y_col = self._y_col_label(legacy_column_name)
-        depth_series = df[y_col].tolist()
-        all_rows = list(range(len(depth_series)))
-
-        if getattr(self, "age_depth_model", None) is not None:
-            primary_axis = getattr(self, "primary_axis", None)
-            if primary_axis == "age":
-                # Y 轴为 age 时，模型通过 predict_depth 反查产出各层位的真实深度
-                depth_pred = self.age_depth_model.predict_depth(depth_series)
-                pred_frame = pd.DataFrame(
-                    {
-                        "depth_est": depth_pred["depth_est"],
-                    }
-                )
-                df = pd.concat([df[[y_col]], pred_frame, df.drop(columns=[y_col])], axis=1)
-            elif primary_axis == "depth":
-                # Y 轴为 depth 时，模型通过 predict_age 产出各层位的年代估算
-                age_pred = self.age_depth_model.predict_age(depth_series)
-                pred_frame = pd.DataFrame(
-                    {
-                        "age_est": age_pred["age_est"],
-                        "age_lower_95": age_pred.get("age_lower", age_pred.get("age_min")),
-                        "age_upper_95": age_pred.get("age_upper", age_pred.get("age_max")),
-                    }
-                )
-                df = pd.concat([df[[y_col]], pred_frame, df.drop(columns=[y_col])], axis=1)
-            # code 或自定义物理量（如 elev）：年代-深度模型只能处理 depth 或 age 输入，不参与其他轴类型的追加运算
 
         # 行集身份 + 判据门禁（issue #113）：`samples` 语义下**行数必须等于 samples
         # 条数**。这不再是"测试里比一比"，而是后端在交付前自己拒绝不一致的表。
@@ -2361,7 +2502,12 @@ class ExportMixin:
         from .export_docs import strat_plot_script_lines
 
         frame = self._primary_roi_export_frame(strict=False)
-        names = [str(name) for name in list(getattr(frame, "columns", []))[1:]]
+        exclude_cols = {"horizon_id", self._y_col_label()}
+        names = [
+            str(name)
+            for name in list(getattr(frame, "columns", []))
+            if str(name) not in exclude_cols
+        ]
         units = self._primary_roi_units_for(names)
         pct_cols = [name for name in names if is_percent_unit(units.get(name))]
         fixed_cols = [name for name in names if not is_percent_unit(units.get(name))]
@@ -2452,7 +2598,10 @@ class ExportMixin:
 
         frame = self._primary_roi_export_frame(strict=False)
         frame = frame.rename(columns=lambda col: str(col).strip("\r\n"))
-        names = [str(name) for name in list(frame.columns)[1:]]
+        exclude_cols = {"horizon_id", self._y_col_label()}
+        names = [
+            str(name) for name in list(frame.columns) if str(name) not in exclude_cols
+        ]
         units = self._primary_roi_units_for(names)
         pct_cols = [name for name in names if is_percent_unit(units.get(name))]
         fixed_cols = [name for name in names if not is_percent_unit(units.get(name))]
@@ -2493,20 +2642,31 @@ class ExportMixin:
         )
         script_lines.extend(["dev.off()", "message('已输出: ', out_path)", ""])
 
+        age_depth_df = self.get_age_depth_dataframe()
+        ensemble_df = self.get_ensemble_dataframe()
+
         readme_lines = [
             "Straditize 出图包",
             "================",
             "",
             "文件：",
             "  data.csv       本工程的数字化数据（NA = 无数据，不是 0）",
-            "  plot_strat.R   rioja::strat.plot 出图脚本（与本目录的 data.csv 配套）",
-            "  plot_strat.jpg 同一份数据、同一生成器的成品图",
-            "",
-            "运行：",
-            "  cd 到本目录，然后  Rscript plot_strat.R",
-            "  可选覆盖：       Rscript plot_strat.R my.csv my.pdf",
-            "",
         ]
+        if age_depth_df is not None:
+            readme_lines.append("  age_depth.csv  年代-深度关系与沉积速率（来自模型预测或层位标注）")
+        if ensemble_df is not None:
+            readme_lines.append("  ensemble.csv   蒙特卡洛年代集成矩阵（1000 组独立轨迹）")
+        readme_lines.extend(
+            [
+                "  plot_strat.R   rioja::strat.plot 出图脚本（与本目录的 data.csv 配套）",
+                "  plot_strat.jpg 同一份数据、同一生成器的成品图",
+                "",
+                "运行：",
+                "  cd 到本目录，然后  Rscript plot_strat.R",
+                "  可选覆盖：       Rscript plot_strat.R my.csv my.pdf",
+                "",
+            ]
+        )
         # 行集身份进 README（issue #100）：`samples` 为空时这张 data.csv 的行是
         # 逐列像素行，不能当样品数引用；同一条记录也在 `core.exportData` 的
         # `rowset` 字段里，两边都来自 `_resolve_rowset`。
@@ -2542,6 +2702,10 @@ class ExportMixin:
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as bundle:
             bundle.writestr("data.csv", csv_bytes)
+            if age_depth_df is not None:
+                bundle.writestr("age_depth.csv", serialize_export_frame(age_depth_df).encode("utf-8"))
+            if ensemble_df is not None:
+                bundle.writestr("ensemble.csv", serialize_export_frame(ensemble_df).encode("utf-8"))
             bundle.writestr("plot_strat.R", "\n".join(script_lines).encode("utf-8"))
             bundle.writestr("README.txt", "\n".join(readme_lines).encode("utf-8"))
             with tempfile.TemporaryDirectory(prefix="straditize-bundle-") as tmp_dir:

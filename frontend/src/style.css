@@ -1698,6 +1698,20 @@ body.theme-light .canvas-hud {
   100% { transform: scale(0.95); opacity: 0.8; }
 }
 
+@keyframes uiSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.ui-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--accent-blue);
+  border-radius: 50%;
+  animation: uiSpin 0.8s linear infinite;
+}
+
 /* ================= 底部状态栏 Footer ================= */
 .app-footer {
   height: 28px;
@@ -3061,6 +3075,13 @@ body.theme-light #ad-floating-toolbar .ad-fmode-btn:hover {
   background: var(--action-primary-bg) !important;
   color: var(--action-primary-text) !important;
   border-color: var(--accent-blue, #0284c7) !important;
+  font-weight: 600;
+}
+
+.ad-btn-sedrate-axis.active {
+  background: var(--action-primary-bg);
+  color: var(--action-primary-text);
+  border-color: var(--accent-blue, #0284c7);
   font-weight: 600;
 }
 

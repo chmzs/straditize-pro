@@ -319,6 +319,7 @@ class ProjectSessionMixin:
         self.age_depth_model = None
         self.age_depth_image = None
         self.age_depth_image_path = None
+        self._age_depth_png_bytes = None
         self.ensemble_tables = {}
         self.chron_events = []
         self.undo_stack = []
@@ -427,6 +428,7 @@ class ProjectSessionMixin:
         if isinstance(project_data, str):
             self.age_depth_image = None
             self.age_depth_image_path = None
+            self._age_depth_png_bytes = None
             self.age_depth_model = None
             if hasattr(self, "age_depth_calib_state"):
                 delattr(self, "age_depth_calib_state")
@@ -435,6 +437,7 @@ class ProjectSessionMixin:
         if isinstance(project_data, dict) and "tar_base64" in project_data:
             self.age_depth_image = None
             self.age_depth_image_path = None
+            self._age_depth_png_bytes = None
             self.age_depth_model = None
             if hasattr(self, "age_depth_calib_state"):
                 delattr(self, "age_depth_calib_state")
@@ -571,6 +574,7 @@ class ProjectSessionMixin:
                 ad_obj.load()
                 self.age_depth_image = ad_obj
                 self.age_depth_image_path = "archive://image/age_depth.png"
+                self._age_depth_png_bytes = ad_bytes
 
         return parsed
 
@@ -651,6 +655,7 @@ class ProjectSessionMixin:
                             ad_obj.load()
                             self.age_depth_image = ad_obj
                             self.age_depth_image_path = "archive://image/age_depth.png"
+                            self._age_depth_png_bytes = ad_bytes
 
                     pass
             except zipfile.BadZipFile as e:
@@ -1234,6 +1239,7 @@ class ProjectSessionMixin:
         if not isinstance(ad_data, dict):
             self.age_depth_image = None
             self.age_depth_image_path = None
+            self._age_depth_png_bytes = None
             if hasattr(self, "age_depth_calib_state"):
                 delattr(self, "age_depth_calib_state")
             self.age_depth_model = None
@@ -1243,10 +1249,12 @@ class ProjectSessionMixin:
             ad_b64 = ad_data["image_base64"]
             if "," in ad_b64:
                 ad_b64 = ad_b64.split(",", 1)[1]
-            ad_obj = Image.open(io.BytesIO(base64.b64decode(ad_b64)))
+            raw_bytes = base64.b64decode(ad_b64)
+            ad_obj = Image.open(io.BytesIO(raw_bytes))
             ad_obj.load()
             self.age_depth_image = ad_obj
             self.age_depth_image_path = "archive://image/age_depth.png"
+            self._age_depth_png_bytes = raw_bytes
 
         if ad_data.get("calib_state"):
             self.age_depth_calib_state = dict(ad_data["calib_state"])

@@ -64,6 +64,17 @@ export interface ControlPoint {
   kind: 'curve' | 'lower' | 'upper' | 'min' | 'max';
 }
 
+export interface AgeDepthHistorySnapshot {
+  timestamp: number;
+  description: string;
+  controlPoints: ControlPoint[];
+  selectedControlPointIndex: number | null;
+  editTarget: 'curve' | 'lower' | 'upper' | 'min' | 'max';
+  calibMarkers?: CalibMarker[];
+  excludeBoxes?: number[][];
+  datingPoints?: DatingPoint[];
+}
+
 export interface MappedSamplesData {
   horizon_id?: string[];
   depths: number[];

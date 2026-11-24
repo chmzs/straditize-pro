@@ -144,7 +144,7 @@ export class ShortcutService {
             <div class="help-row"><span class="help-key">C</span><span class="help-desc">步骤 4 · 添加属种分列线模式</span></div>
             <div class="help-row"><span class="help-key">K</span><span class="help-desc">步骤 5 · 干扰线掩膜人工修复笔刷</span></div>
             <div class="help-row"><span class="help-key">T</span><span class="help-desc">步骤 6 · 点选 X 轴刻度齿 (列标定模式)</span></div>
-            <div class="help-row"><span class="help-key">A / S / D</span><span class="help-desc">步骤 7 · 添加 (A) / 微调选择 (S) / 删除 (D) 控制点</span></div>
+            <div class="help-row"><span class="help-key">A / S / D</span><span class="help-desc">步骤 7 · 添加 (A) / 微调 (S) / 删除 (D) 控制点</span></div>
           </div>
         </div>
         <div class="help-section">
@@ -155,7 +155,7 @@ export class ShortcutService {
             <div class="help-row"><span class="help-key">↑ ↓ ← →</span><span class="help-desc">选中图元 1 像素高精度微调 (1px Nudge)</span></div>
             <div class="help-row"><span class="help-key">Shift + 方向键</span><span class="help-desc">选中图元 10 像素快速微调 (10px Nudge)</span></div>
             <div class="help-row"><span class="help-key">Delete / Backspace</span><span class="help-desc">删除选中的控制点、分列线或干扰线几何</span></div>
-            <div class="help-row"><span class="help-key">Esc / 右键单击</span><span class="help-desc">退出当前工具返回选择微调 (S) / 取消选中</span></div>
+            <div class="help-row"><span class="help-key">Esc / 右键单击</span><span class="help-desc">退出当前工具返回微调模式 (S) / 取消选中</span></div>
           </div>
         </div>
         <div class="help-section">

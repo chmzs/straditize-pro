@@ -18,6 +18,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+
 from ..plotting import detect_rscript
 from ..protocol import EXPORT_ERROR, INVALID_PARAMS, STATE_ERROR, JsonRpcError
 from ..strat_plot import (
@@ -121,13 +123,25 @@ class PlottingMixin:
             "sample_id",
             "row_px",
         }
-        _valid_cols = [frame.columns[0]] + [
-            c
-            for c in frame.columns[1:]
-            if str(c).strip().lower() not in _non_taxa
+        y_col = self._y_col_label() if hasattr(self, "_y_col_label") else "depth"
+        if y_col in frame.columns:
+            y_series = frame[y_col]
+        else:
+            candidates = [
+                c for c in frame.columns if str(c).strip().lower() in ("depth", "age")
+            ]
+            y_col = candidates[0] if candidates else frame.columns[0]
+            y_series = frame[y_col]
+
+        taxa_cols = [
+            c for c in frame.columns if str(c).strip().lower() not in _non_taxa
         ]
-        if len(_valid_cols) > 1:
-            frame = frame[_valid_cols]
+        if not taxa_cols:
+            raise JsonRpcError(
+                STATE_ERROR,
+                "没有可绘制的属种数据：所有列均为元数据或非属种列。",
+            )
+        frame = pd.concat([pd.Series(y_series, name=y_col), frame[taxa_cols]], axis=1)
 
         # plot_scale_mode 的列名必须真在导出表里：拼错的列名会让「固定量程」静默不生效，
         # 用户以为调过了而图上什么都没变。这里当场拒绝并列出可用列。

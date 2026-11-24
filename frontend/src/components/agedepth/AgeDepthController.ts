@@ -13,6 +13,7 @@ export interface AgeDepthControllerCallbacks {
     img: HTMLImageElement;
     calibState?: any;
     inspection?: AgeDepthModelInspectionData;
+    mapped_samples?: MappedSamplesData | null;
   }) => void;
   onExtractionSuccess?: (result: {
     inspection: AgeDepthModelInspectionData;
@@ -109,22 +110,62 @@ export class AgeDepthController {
   // --- Session Restoration & Image Loading ---
 
   public async restoreExistingSessionModel(): Promise<void> {
-    if (this.backendUnavailable()) return;
+    const loadingZone = this.container.querySelector('#ad-loading-zone') as HTMLElement | null;
+    const emptyZone = this.container.querySelector('#ad-empty-drop-zone') as HTMLElement | null;
+    const srcLabel = this.container.querySelector('#ad-current-source-label');
+
+    if (this.backendUnavailable()) {
+      if (loadingZone) loadingZone.style.display = 'none';
+      if (emptyZone) emptyZone.style.display = 'flex';
+      if (srcLabel) srcLabel.textContent = '未载入';
+      return;
+    }
     try {
       const res = await this.rpcClient.call<void, any>('agedepth.getInspection');
-      if (!res || (!res.has_image && !res.has_model)) return;
+      if (!res || (!res.has_image && !res.has_model)) {
+        if (loadingZone) loadingZone.style.display = 'none';
+        if (emptyZone) emptyZone.style.display = 'flex';
+        if (srcLabel) srcLabel.textContent = '未载入';
+        return;
+      }
+
+      if (!res.has_image) {
+        if (loadingZone) loadingZone.style.display = 'none';
+        if (emptyZone) emptyZone.style.display = 'none';
+        if (srcLabel) srcLabel.textContent = '已载入模型数据';
+        this.callbacks.onSessionModelRestored?.({
+          img: new Image(),
+          calibState: res.calib_state,
+          inspection: res.inspection,
+          mapped_samples: res.mapped_samples,
+        });
+        return;
+      }
+
+      if (srcLabel) srcLabel.textContent = '已找到工程年代图，正在渲染...';
 
       const img = new Image();
       img.onload = () => {
+        if (loadingZone) loadingZone.style.display = 'none';
+        if (emptyZone) emptyZone.style.display = 'none';
+        if (srcLabel) srcLabel.textContent = '已载入工程年代图';
         this.callbacks.onSessionModelRestored?.({
           img,
           calibState: res.calib_state,
           inspection: res.has_model ? res.inspection : undefined,
+          mapped_samples: res.has_model ? res.mapped_samples : undefined,
         });
+      };
+      img.onerror = () => {
+        if (loadingZone) loadingZone.style.display = 'none';
+        if (emptyZone) emptyZone.style.display = 'flex';
+        if (srcLabel) srcLabel.textContent = '底图加载失败';
       };
       img.src = `/image/agedepth?t=${Date.now()}`;
     } catch {
-      // ignore if no image loaded
+      if (loadingZone) loadingZone.style.display = 'none';
+      if (emptyZone) emptyZone.style.display = 'flex';
+      if (srcLabel) srcLabel.textContent = '未载入';
     }
   }
 

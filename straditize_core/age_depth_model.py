@@ -1908,15 +1908,27 @@ def find_rscript(explicit: str | None = None) -> str | None:
     return detection.get("path")
 
 
-def check_local_r_environment(explicit_rscript: str | None = None) -> dict[str, Any]:
+_R_ENV_CACHE: dict[str, Any] | None = None
+_R_ENV_CACHE_KEY: str | None = None
+
+
+def check_local_r_environment(
+    explicit_rscript: str | None = None,
+    force_refresh: bool = False,
+) -> dict[str, Any]:
     """Detects local R installation and available geochronology packages (rbacon, geoChronR)."""
+    global _R_ENV_CACHE, _R_ENV_CACHE_KEY
+    cache_key = explicit_rscript or "__default__"
+    if not force_refresh and _R_ENV_CACHE is not None and _R_ENV_CACHE_KEY == cache_key:
+        return dict(_R_ENV_CACHE)
+
     import subprocess
     from .plotting import detect_rscript
 
     detection = detect_rscript(explicit_rscript)
     rscript_path = detection.get("path")
     if not rscript_path:
-        return {
+        res = {
             "has_r": False,
             "rscript_path": None,
             "has_rbacon": False,
@@ -1924,6 +1936,9 @@ def check_local_r_environment(explicit_rscript: str | None = None) -> dict[str, 
             "r_version": None,
             "error": detection.get("error"),
         }
+        _R_ENV_CACHE = dict(res)
+        _R_ENV_CACHE_KEY = cache_key
+        return res
 
     cmd = [
         rscript_path,
@@ -1940,7 +1955,7 @@ def check_local_r_environment(explicit_rscript: str | None = None) -> dict[str, 
         has_geochronr = "geoChronR: TRUE" in out
         version_line = out.splitlines()[0] if out.splitlines() else "R"
 
-        return {
+        result = {
             "has_r": True,
             "rscript_path": rscript_path,
             "has_rbacon": has_rbacon,
@@ -1948,7 +1963,7 @@ def check_local_r_environment(explicit_rscript: str | None = None) -> dict[str, 
             "r_version": version_line,
         }
     except Exception as e:
-        return {
+        result = {
             "has_r": True,
             "rscript_path": rscript_path,
             "has_rbacon": False,
@@ -1956,6 +1971,9 @@ def check_local_r_environment(explicit_rscript: str | None = None) -> dict[str, 
             "r_version": "Unknown",
             "error": str(e),
         }
+    _R_ENV_CACHE = dict(result)
+    _R_ENV_CACHE_KEY = cache_key
+    return result
 
 
 def run_local_bacon(

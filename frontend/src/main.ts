@@ -497,11 +497,11 @@ async function bootstrap() {
         for (const sample of canvasComponent.data.samples) {
           if (sample.depth !== null && sample.depth !== undefined) {
             if (isAgeAxis) {
-              const sampleAgeVal = sample.depth;
+              const sampleAgeVal = sample.age ?? sample.depth;
               sample.age = sampleAgeVal;
               const estDepth = interpolate1D(sampleAgeVal, ages, depths);
               if (estDepth !== null) {
-                sample.depth = Math.round(estDepth * 100) / 100;
+                (sample as any).depth_est = Math.round(estDepth * 100) / 100;
               }
             } else {
               sample.age = interpolate1D(sample.depth, depths, ages);

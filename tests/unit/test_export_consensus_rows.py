@@ -76,7 +76,8 @@ def _raw_cells(session: StraditizeSession) -> dict[float, list[str]]:
     text = session.export_data("csv")["csv"]
     rows = [line.split(",") for line in text.strip().splitlines()]
     header, body = rows[0], rows[1:]
-    return {float(row[0]): row[1:] for row in body}
+    d_idx = header.index("depth")
+    return {float(row[d_idx]): row[d_idx + 1 :] for row in body}
 
 
 def test_default_export_rows_equal_samples_not_turning_point_union() -> None:

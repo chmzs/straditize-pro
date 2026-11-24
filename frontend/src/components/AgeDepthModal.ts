@@ -5,6 +5,7 @@ import {
   DatingPoint,
   CalibKind,
   CalibMarker,
+  MappedSamplesData,
 } from './agedepth/types';
 import { AgeDepthCanvas } from './agedepth/AgeDepthCanvas';
 import { AgeDepthDatingTable } from './agedepth/AgeDepthDatingTable';
@@ -74,6 +75,9 @@ export class AgeDepthModal {
       onModelRefitted: () => {
         const insp = this.canvasComp?.getInspectionData() || null;
         this.tableComp?.setInspectionData(insp);
+        if (insp && this.controller) {
+          void this.controller.syncModelToBackend(insp);
+        }
       },
       onCalibMarkersChanged: () => {
         this.canvasComp?.updateCalibReadout();
@@ -92,30 +96,41 @@ export class AgeDepthModal {
       onModelModified: () => {
         this.canvasComp?.syncPxPointsFromModel();
         this.canvasComp?.renderCanvas();
+        const insp = this.canvasComp?.getInspectionData();
+        if (insp && this.controller) {
+          void this.controller.syncModelToBackend(insp);
+        }
       },
       onDatingPointsChanged: (points) => {
         this.canvasComp?.setDatingPoints(points);
         this.canvasComp?.renderCanvas();
       },
       onRequestSyncModel: async () => {
-        const insp = this.canvasComp?.getInspectionData();
+        const insp = this.tableComp?.getInspectionData() || this.canvasComp?.getInspectionData();
         if (insp && this.controller) {
           await this.controller.syncModelToBackend(insp);
         }
       },
       onSwitchTab: (tab) => this.switchTab(tab),
       onSamplesModified: async (mappedSamples) => {
+        this.canvasComp?.setMappedSamples(mappedSamples);
+        this.canvasComp?.renderCanvas();
         if (this.controller) {
           await this.controller.handleSyncToSamples(mappedSamples);
           if (this.pollenData && mappedSamples?.depths) {
-            // 同步主界面 samples 结构
+            const rawAxis = (this.pollenData.calibration?.primaryAxis ?? 'age').trim().toLowerCase();
+            const isAgeAxis = rawAxis === 'age';
+            // 同步主界面 samples 结构，确保当主轴为年代时物理标定 Y 坐标 depth 不被覆盖
             this.pollenData.samples = mappedSamples.depths.map((d, i) => {
               const existing = this.pollenData?.samples?.[i];
+              const ageEst = mappedSamples.age_est[i];
               return {
                 row_px: existing?.row_px ?? 0,
-                depth: d,
+                depth: isAgeAxis ? (existing?.depth ?? ageEst) : d,
+                depth_est: d,
                 horizon_id: mappedSamples.horizon_id?.[i] ?? `H${String(i + 1).padStart(4, '0')}`,
-                age_est: mappedSamples.age_est[i],
+                age: ageEst,
+                age_est: ageEst,
                 age_lower: mappedSamples.age_lower?.[i],
                 age_upper: mappedSamples.age_upper?.[i],
                 source: existing?.source ?? 'manual',
@@ -127,10 +142,15 @@ export class AgeDepthModal {
       },
     });
 
+    const primaryAxis = this.pollenData?.calibration?.primaryAxis === 'age' ? 'age' : 'depth';
+    this.tableComp.setPrimaryAxis(primaryAxis);
+
     this.controller = new AgeDepthController(modal, this.rpcClient, {
       onImageLoaded: (img, label) => {
         if (!this.canvasComp || !this.tableComp) return;
         this.canvasComp.setBgImage(img);
+        const loadingZone = modal.querySelector('#ad-loading-zone') as HTMLElement | null;
+        if (loadingZone) loadingZone.style.display = 'none';
         const emptyZone = modal.querySelector('#ad-empty-drop-zone') as HTMLElement | null;
         if (emptyZone) emptyZone.style.display = 'none';
 
@@ -145,6 +165,24 @@ export class AgeDepthModal {
 
         if (label.startsWith('范例:')) {
           this.canvasComp.seedCalibration(img.naturalWidth, img.naturalHeight);
+          const inpAL = modal.querySelector('#ad-inp-age-left') as HTMLInputElement | null;
+          const inpAR = modal.querySelector('#ad-inp-age-right') as HTMLInputElement | null;
+          const inpDT = modal.querySelector('#ad-inp-depth-top') as HTMLInputElement | null;
+          const inpDB = modal.querySelector('#ad-inp-depth-bottom') as HTMLInputElement | null;
+          if (label.toUpperCase().includes('BCHRON')) {
+            if (inpAL) inpAL.value = '0';
+            if (inpAR) inpAR.value = '10000';
+            if (inpDT) inpDT.value = '0';
+            if (inpDB) inpDB.value = '250';
+          } else {
+            // Default Bacon
+            if (inpAL) inpAL.value = '3000';
+            if (inpAR) inpAR.value = '0';
+            if (inpDT) inpDT.value = '0';
+            if (inpDB) inpDB.value = '150';
+          }
+          this.canvasComp.updateCalibReadout();
+          this.canvasComp.updateCalibChecklist();
         } else {
           this.canvasComp.startCalibration();
         }
@@ -154,6 +192,8 @@ export class AgeDepthModal {
       onSessionModelRestored: (payload) => {
         if (!this.canvasComp || !this.tableComp) return;
         this.canvasComp.setBgImage(payload.img);
+        const loadingZone = modal.querySelector('#ad-loading-zone') as HTMLElement | null;
+        if (loadingZone) loadingZone.style.display = 'none';
         const emptyZone = modal.querySelector('#ad-empty-drop-zone') as HTMLElement | null;
         if (emptyZone) emptyZone.style.display = 'none';
         const lbl = modal.querySelector('#ad-current-source-label');
@@ -215,6 +255,17 @@ export class AgeDepthModal {
         if (payload.inspection) {
           this.canvasComp.setInspectionData(payload.inspection);
           this.tableComp.setInspectionData(payload.inspection);
+          if (payload.mapped_samples) {
+            this.canvasComp.setMappedSamples(payload.mapped_samples);
+            this.tableComp.setMappedSamples(payload.mapped_samples);
+          } else if (this.pollenData?.samples?.length) {
+            this.deriveAndSetMappedSamples();
+          }
+          if (this.pollenData?.samples?.length) {
+            this.tableComp.setTableMode('samples');
+            modal.querySelector('#ad-tbl-view-samples')?.classList.add('active');
+            modal.querySelector('#ad-tbl-view-model')?.classList.remove('active');
+          }
           const statusEl = modal.querySelector('#ad-status-msg');
           if (statusEl) {
             statusEl.textContent = `已从工程还原年代模型（${(payload.inspection.depths || []).length} 个深度层位）`;
@@ -251,8 +302,8 @@ export class AgeDepthModal {
     // 3. 初始状态同步
     this.canvasComp.updateExcludeCount();
     this.canvasComp.updateCalibChecklist();
-    this.controller.checkLocalR();
-    this.controller.checkComponentStatus();
+    // 性能优化：不再在弹窗打开时同步探测外部 R 环境（Windows 下执行 Rscript 耗时 4s+ 且阻塞后端），
+    // 改在用户切换到「测年与建模」Tab 时按需懒加载触发
     this.controller.setupSseListener();
     this.controller.renderRateOptionsNote();
     this.syncFromPollenData();
@@ -339,11 +390,79 @@ export class AgeDepthModal {
       }
     }
 
+    if (this.pollenData.samples?.length && this.tableComp?.getInspectionData()) {
+      if (!this.tableComp.getMappedSamples()) {
+        this.deriveAndSetMappedSamples();
+      }
+      this.tableComp.setTableMode('samples');
+      modal.querySelector('#ad-tbl-view-samples')?.classList.add('active');
+      modal.querySelector('#ad-tbl-view-model')?.classList.remove('active');
+    }
+
     this.tableComp?.updateTableHeaders();
     this.tableComp?.renderFullDataTable();
   }
 
+  /**
+   * 从主图谱 135 个共识层位与当前年代模型中自动派生 MappedSamplesData，
+   * 确保图 2（花粉样品层位）与图 1（年代深度表）无缝打通
+   */
+  private deriveAndSetMappedSamples(): void {
+    if (!this.pollenData?.samples?.length || !this.tableComp) return;
+    const insp = this.tableComp.getInspectionData();
+    if (!insp || !insp.depths || insp.depths.length < 2) return;
+
+    const rawAxis = (this.pollenData.calibration?.primaryAxis ?? 'age').trim().toLowerCase();
+    const isAgeAxis = rawAxis === 'age';
+
+    const depths: number[] = [];
+    const ageEst: number[] = [];
+    const ageLower: number[] = [];
+    const ageUpper: number[] = [];
+    const horizonIds: string[] = [];
+
+    for (let i = 0; i < this.pollenData.samples.length; i++) {
+      const s = this.pollenData.samples[i];
+      const hid = s.horizon_id || ('H' + String(i + 1).padStart(4, '0'));
+      horizonIds.push(hid);
+
+      let a = s.age_est ?? s.age;
+      let d = s.depth;
+
+      if (isAgeAxis) {
+        if (a === null || a === undefined) a = d ?? 0;
+        const estD = this.tableComp.invertDepthFromAge(a);
+        depths.push(Math.round(estD * 1000) / 1000);
+        ageEst.push(a);
+        ageLower.push(s.age_lower ?? this.tableComp.interpAgeAtDepth(estD, 'lower'));
+        ageUpper.push(s.age_upper ?? this.tableComp.interpAgeAtDepth(estD, 'upper'));
+      } else {
+        if (d === null || d === undefined) d = 0;
+        const estA = this.tableComp.interpAgeAtDepth(d, 'mean');
+        depths.push(d);
+        ageEst.push(a ?? Math.round(estA * 1000) / 1000);
+        ageLower.push(s.age_lower ?? this.tableComp.interpAgeAtDepth(d, 'lower'));
+        ageUpper.push(s.age_upper ?? this.tableComp.interpAgeAtDepth(d, 'upper'));
+      }
+    }
+
+    const mapped: MappedSamplesData = {
+      depths,
+      age_est: ageEst,
+      age_lower: ageLower,
+      age_upper: ageUpper,
+      horizon_id: horizonIds,
+    };
+    this.canvasComp?.setMappedSamples(mapped);
+    this.tableComp.setMappedSamples(mapped);
+  }
+
   public close(): void {
+    const insp = this.canvasComp?.getInspectionData();
+    if (insp && this.controller) {
+      void this.controller.syncModelToBackend(insp);
+    }
+
     this.disposers.forEach((fn) => {
       try {
         fn();
@@ -399,6 +518,8 @@ export class AgeDepthModal {
       this.tableComp?.renderFullDataTable();
     } else if (pModeling) {
       pModeling.style.display = 'flex';
+      void this.controller?.checkLocalR();
+      void this.controller?.checkComponentStatus();
     }
   }
 

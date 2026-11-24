@@ -376,6 +376,10 @@ def _build_response_channels(
         rgb = img_arr[..., :3].astype(np.int16)
         centred = rgb - rgb.mean(axis=2, keepdims=True)
         ink_mask = (rgb.max(axis=2) - rgb.min(axis=2)) > 25
+        # 专门检测红色特征（常见 Bacon 红线：R 远大于 G 和 B）
+        r_sig = np.maximum(0, rgb[..., 0] - np.maximum(rgb[..., 1], rgb[..., 2]))
+        has_red_stroke = (r_sig > 35).sum() >= 50
+
         if ink_mask.sum() >= 50:
             direction = centred[ink_mask].mean(axis=0).astype(np.float32)
             norm = float(np.linalg.norm(direction))
@@ -386,6 +390,10 @@ def _build_response_channels(
                 chroma = np.zeros_like(dark)
         else:
             chroma = np.zeros_like(dark)
+
+        if has_red_stroke:
+            red_roi = r_sig[ry0:ry1, rx0:rx1].astype(np.float32)
+            chroma = np.maximum(chroma, red_roi)
     else:
         chroma = np.zeros_like(dark)
 
@@ -536,11 +544,12 @@ def _trace_curve(
             if peak < 0.8 * row_peak:
                 continue
             weights = np.maximum(seg - thr * 0.5, 0.0)
-            if weights.sum() <= 0:
+            w2 = weights ** 2
+            if w2.sum() <= 0:
                 centroid = (r0 + r1) / 2.0
             else:
                 centroid = float(
-                    r0 + (weights * np.arange(seg.size)).sum() / weights.sum()
+                    r0 + (w2 * np.arange(seg.size)).sum() / w2.sum()
                 )
             keep.append((centroid, peak, r0, r1))
         if keep:
@@ -594,11 +603,11 @@ def _trace_curve(
             if row not in candidates:
                 continue
             span = max(1, abs(row - last_row))
-            # 引入平滑动量惩罚：预测位置结合惯性，抑制被邻近文字或测年条干扰诱发的突变拐弯
+            # 引入平滑动量惩罚：预测位置结合惯性，权重设为 0.35 保证抗干扰的同时在曲线转折处能「该拐则拐」
             pred_x = anchor + prev_dx * span
             nearest = min(
                 candidates[row],
-                key=lambda c: abs(c[0] - anchor) + 0.5 * abs(c[0] - pred_x),
+                key=lambda c: abs(c[0] - anchor) + 0.35 * abs(c[0] - pred_x),
             )
             if abs(nearest[0] - anchor) > max_jump * span:
                 # Too far from the established track: hold position and keep scanning.
@@ -793,9 +802,10 @@ def _rows_to_model(
     min_arr = np.asarray(x_min, dtype=float)
     max_arr = np.asarray(x_max, dtype=float)
 
-    win = min(31, len(curve_arr) // 2 * 2 + 1)
-    if win >= 5:
-        baseline = median_filter(curve_arr, size=win)
+    # 离群点检测采用较长滑动窗口识别与主线脱靶的孤立噪点
+    win_outlier = min(31, len(curve_arr) // 2 * 2 + 1)
+    if win_outlier >= 5:
+        baseline = median_filter(curve_arr, size=win_outlier)
         tol = max(6.0, 0.06 * rw)
         keep = np.abs(curve_arr - baseline) <= tol
         if keep.sum() >= 5:
@@ -830,10 +840,12 @@ def _rows_to_model(
     min_f = np.interp(full_rows, rows_arr, min_arr)
     max_f = np.interp(full_rows, rows_arr, max_arr)
 
-    if win >= 5:
-        curve_f = median_filter(curve_f, size=win)
-        min_f = median_filter(min_f, size=win)
-        max_f = median_filter(max_f, size=win)
+    # 插值后微调平滑采用轻量 5 像素窗口，滤除单像素量化跳变的同时完整保留转折角与拐点（该拐则拐）
+    win_smooth = min(5, len(curve_f) // 2 * 2 + 1)
+    if win_smooth >= 3:
+        curve_f = median_filter(curve_f, size=win_smooth)
+        min_f = median_filter(min_f, size=win_smooth)
+        max_f = median_filter(max_f, size=win_smooth)
 
     # Row / column indices above are relative to the search window; the calibrator and
     # the canvas overlay both work in absolute image pixels, so offset them back.
