@@ -104,6 +104,15 @@ class PlottingMixin:
                 "没有可绘制的数据：先把列数字化并完成步骤 3（深度标定）与步骤 6（列刻度）。",
             )
 
+        # 过滤非属种列（如 age, age_min, age_max, sample_code 等），防止年代数值作为花粉属种污染图谱
+        _non_taxa = {"age", "age_min", "age_max", "sample_code", "sample_id", "row_px"}
+        _valid_cols = [frame.columns[0]] + [
+            c for c in frame.columns[1:]
+            if str(c).strip().lower() not in _non_taxa
+        ]
+        if len(_valid_cols) > 1:
+            frame = frame[_valid_cols]
+
         # plot_scale_mode 的列名必须真在导出表里：拼错的列名会让「固定量程」静默不生效，
         # 用户以为调过了而图上什么都没变。这里当场拒绝并列出可用列。
         scale_modes = merged.get("plot_scale_mode") or {}

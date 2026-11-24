@@ -147,13 +147,55 @@ class AgeDepthSessionMixin:
         """
         model_depths = getattr(model, "depths", None) if model is not None else None
 
-        if self.column_points and self.is_calibrated and self.y_scale:
+        # 1. 优先读取已检出的样品层位 (self.samples)
+        samples = getattr(self, "samples", None)
+        if samples and len(samples) > 0 and getattr(self, "is_calibrated", False):
+            readings = []
+            for s in samples:
+                d = s.get("depth")
+                if d is None and "row_px" in s:
+                    d = self._depth_for_row_px(s["row_px"])
+                if d is not None:
+                    readings.append(float(d))
+            if readings:
+                axis = getattr(self, "primary_axis", "depth") or "depth"
+                if axis == "age":
+                    if model is None:
+                        raise JsonRpcError(
+                            STATE_ERROR,
+                            "The diagram's Y axis is declared as age, but no age-depth model "
+                            "is loaded to invert, so sample depths cannot be recovered.",
+                        )
+                    inverse = model.predict_depth(readings)
+                    return [round(float(d), 2) for d in inverse["depth_est"]], {
+                        "primary_axis": "age",
+                        "depth_source": "sample horizons read as age; depths inverted from the model",
+                        "inverse_extrapolated_count": int(sum(inverse["extrapolated"])),
+                        "observed_age_range": inverse["observed_age_range"],
+                    }
+                elif axis == "depth":
+                    return [round(float(v), 2) for v in readings], {
+                        "primary_axis": "depth",
+                        "depth_source": "sample horizons read as depth",
+                    }
+                else:
+                    return [], {
+                        "primary_axis": axis,
+                        "depth_source": f"Y axis is {axis} (incompatible with age-depth model)",
+                    }
+
+        # 2. 次优先从列识别数据点 (column_points) 的行号换算
+        if self.column_points and self.is_calibrated and (self.y_scale or getattr(self, "y_marks", None)):
             rows = sorted(
                 {p["row"] for pts in self.column_points.values() for p in pts}
             )
-            sy = self.y_scale["slope"]
-            iy = self.y_scale["intercept"]
-            readings = [sy * r + iy for r in rows]
+            readings = []
+            for r in rows:
+                v = self._depth_for_row_px(r)
+                if v is None and self.y_scale:
+                    v = self.y_scale["slope"] * r + self.y_scale["intercept"]
+                if v is not None:
+                    readings.append(float(v))
             axis = getattr(self, "primary_axis", "depth") or "depth"
             if axis == "age":
                 if model is None:
@@ -243,9 +285,11 @@ class AgeDepthSessionMixin:
             raw_bytes = base64.b64decode(base64_data)
             self.age_depth_image = Image.open(io.BytesIO(raw_bytes))
             self.age_depth_image_path = None
+            self._age_depth_png_bytes = None
         elif image_path and os.path.exists(image_path):
             self.age_depth_image = Image.open(image_path)
             self.age_depth_image_path = os.path.abspath(image_path)
+            self._age_depth_png_bytes = None
         else:
             raise JsonRpcError(
                 FILE_NOT_FOUND_ERROR, f"Age-depth image not found: {image_path}"

@@ -71,13 +71,17 @@ class ImageServiceHandler:
         if raw_path in ("/image/agedepth", "/api/image/agedepth"):
             session = self.session
             if session and session.age_depth_image is not None:
-                bio = io.BytesIO()
-                session.age_depth_image.save(bio, format="PNG")
-                img_bytes = bio.getvalue()
+                # 缓存编码后的 PNG 字节，消除每次弹窗拉取时的重复 CPU 密集的实时压缩
+                img_bytes = getattr(session, "_age_depth_png_bytes", None)
+                if img_bytes is None:
+                    bio = io.BytesIO()
+                    session.age_depth_image.save(bio, format="PNG")
+                    img_bytes = bio.getvalue()
+                    session._age_depth_png_bytes = img_bytes
                 self.handler.send_response(200)
                 self.handler.send_header("Content-Type", "image/png")
                 self.handler.send_header("Content-Length", str(len(img_bytes)))
-                self.handler.send_header("Cache-Control", "no-cache, must-revalidate")
+                self.handler.send_header("Cache-Control", "public, max-age=3600")
                 self.handler._send_cors_headers()
                 self.handler.end_headers()
                 self.handler.wfile.write(img_bytes)

@@ -589,15 +589,22 @@ def _trace_curve(
         anchor = chosen[start]
         last_row = start
         stop = rh if direction > 0 else -1
+        prev_dx = 0.0
         for row in range(start + direction, stop, direction):
             if row not in candidates:
                 continue
-            nearest = min(candidates[row], key=lambda c: abs(c[0] - anchor))
             span = max(1, abs(row - last_row))
+            # 引入平滑动量惩罚：预测位置结合惯性，抑制被邻近文字或测年条干扰诱发的突变拐弯
+            pred_x = anchor + prev_dx * span
+            nearest = min(
+                candidates[row],
+                key=lambda c: abs(c[0] - anchor) + 0.5 * abs(c[0] - pred_x),
+            )
             if abs(nearest[0] - anchor) > max_jump * span:
                 # Too far from the established track: hold position and keep scanning.
                 continue
             chosen[row] = nearest[0]
+            prev_dx = 0.6 * prev_dx + 0.4 * ((nearest[0] - anchor) / span)
             anchor = nearest[0]
             last_row = row
 

@@ -314,6 +314,9 @@ export class AgeDepthModal {
         }
       }
     }
+
+    this.tableComp?.updateTableHeaders();
+    this.tableComp?.renderFullDataTable();
   }
 
   public close(): void {
@@ -419,6 +422,21 @@ export class AgeDepthModal {
         btn.classList.add('active');
         const mode = btn.getAttribute('data-fmode') as any;
         if (mode && this.canvasComp) this.canvasComp.setActiveFMode(mode);
+      });
+    });
+
+    // 编辑控制目标 (中位线/下界Min/上界Max)
+    modal.querySelector('#ad-sel-edit-target')?.addEventListener('change', (e) => {
+      const target = (e.target as HTMLSelectElement).value as 'curve' | 'min' | 'max';
+      this.canvasComp?.setEditTarget(target);
+    });
+
+    // 物理单位变更监听
+    (['ad-inp-depth-unit', 'ad-inp-age-unit'] as const).forEach((id) => {
+      modal.querySelector(`#${id}`)?.addEventListener('input', () => {
+        this.tableComp?.updateTableHeaders();
+        this.tableComp?.renderFullDataTable();
+        this.canvasComp?.renderCanvas();
       });
     });
 

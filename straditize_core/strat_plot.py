@@ -362,7 +362,13 @@ depth <- suppressWarnings(as.numeric(raw[[1]]))
 # `primary_axis` 给出（`age` / `depth`），所以这里不需要、也不允许再写一个轴名常量：
 # `tests/unit/test_y_axis_column_label.py` 断言本脚本里不出现轴名字面量。
 y_var_name <- names(raw)[[1]]
-taxa <- raw[, -1, drop = FALSE]
+# 排除非属种的坐标/元数据列，防止将年代或样本编号作为属种绘制
+non_taxa <- tolower(names(raw)) %in% c("age", "age_min", "age_max", "sample_code", "sample_id", "row_px")
+taxa_cols <- setdiff(names(raw)[-1], names(raw)[non_taxa])
+if (length(taxa_cols) == 0) {
+  taxa_cols <- names(raw)[-1]
+}
+taxa <- raw[, taxa_cols, drop = FALSE]
 taxa[] <- lapply(taxa, function(v) suppressWarnings(as.numeric(v)))
 usable <- vapply(taxa, function(v) any(is.finite(v)), logical(1))
 taxa <- taxa[, usable, drop = FALSE]
