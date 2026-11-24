@@ -702,12 +702,12 @@ digitize 用 ink & ~grid_line_mask & roi_mask
 为保障数据纯粹性与大型工程文件的轻量化，主数据矩阵、年代模型推算与蒙特卡洛抽样严格实行物理三表解耦：
 
 1. **主数据矩阵（`data.csv`）纯净化**：
-   - 当行集为样品层位时，首列输出标准化定长主键 `horizon_id`（`H0001`），第二列为 Y 轴原生物理量（`depth` 或 `age`），其后为数字化花粉属种列；
+   - 首列严格输出 Y 轴原生物理量（`depth` 或 `age`），其后为数字化花粉属种列，与 R rioja / Tilia 等地学地层工具协议绝对兼容；
    - **绝对物理剥离**年代模型预测列（`age_est`, `age_lower`, `age_upper`, `sed_rate` 等），禁止任何将模型衍生列硬编码平铺追加至 `data.csv` 污染花粉属种矩阵的行为。
 2. **年代-深度关系表（`age_depth.csv`）独立出流**：
    - 专司沉淀年代模型推算成果，标准化列结构为：`horizon_id`, `depth`, `age`, `age_lower`, `age_upper`, `sed_rate`；
    - 在导出归档包（`.tar`）与出图整包（`.zip`）中与 `data.csv` 并行打包，并在 `manifest.json` 与 `README.txt` 中完整记录元数据；
-   - 用户与科研人员通过 `horizon_id` 将主表与年代表执行 1:1 关系型自然 Join。
+   - 用户与科研人员通过 `horizon_id` 或采样深度 `depth` 将主表与年代表执行 1:1 关系型自然 Join。
 3. **蒙特卡洛集合矩阵（`ensemble.csv`）独立分流**：
    - 1000 次 MCMC 模拟轨迹矩阵包含数十万个数据点，列结构为：`horizon_id`, `depth`, `ens_0001`, `ens_0002`, ...；
    - 作为衍生数据独立分流并在归档中按需打包，严禁平铺嵌入主工程 JSON（`straditize.json`），防止工程文件膨胀数倍。
