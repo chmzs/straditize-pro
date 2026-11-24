@@ -53,7 +53,9 @@ export class AgeDepthCanvas {
 
   // 控制点与模式
   private activeFMode: 'adjust' | 'add' | 'delete' | 'pickDate' = 'adjust';
+  private editTarget: 'curve' | 'min' | 'max' = 'curve';
   private controlPoints: ControlPoint[] = [];
+  private selectedControlPointIndex: number | null = null;
   private draggingControlPoint: number | null = null;
 
   // 视觉复选选项
@@ -273,6 +275,24 @@ export class AgeDepthCanvas {
     this.activeFMode = mode;
   }
 
+  public getEditTarget(): 'curve' | 'min' | 'max' {
+    return this.editTarget;
+  }
+
+  public setEditTarget(target: 'curve' | 'min' | 'max'): void {
+    this.editTarget = target;
+    const sel = this.container.querySelector('#ad-sel-edit-target') as HTMLSelectElement | null;
+    if (sel && sel.value !== target) sel.value = target;
+    this.renderCanvas();
+  }
+
+  public updateFModeUI(mode: 'adjust' | 'add' | 'delete' | 'pickDate'): void {
+    this.container.querySelectorAll('.ad-fmode-btn').forEach((btn) => {
+      const m = btn.getAttribute('data-fmode');
+      btn.classList.toggle('active', m === mode);
+    });
+  }
+
   public setDisplayOptions(opts: {
     showCurve?: boolean;
     showEnvelope?: boolean;
@@ -433,17 +453,26 @@ export class AgeDepthCanvas {
         x_min: xsMin,
         x_max: xsMax,
       };
+      // 双向绑定：表格驱动画布控制点同步更新
+      this.initControlPointsFromPx(this.inspectionData.px_points);
     }
   }
 
   // --- Control Points & Calibration Logic ---
 
-  public initControlPointsFromPx(px: { y: number[]; x_curve: number[] }): void {
-    const stepSize = Math.max(1, Math.floor(px.y.length / 20));
+  public initControlPointsFromPx(px: {
+    y: number[];
+    x_curve: number[];
+    x_min?: number[];
+    x_max?: number[];
+  }): void {
+    const stepSize = Math.max(1, Math.floor(px.y.length / 18));
     this.controlPoints = [];
+
+    // 1. 中位线控制点 (kind: 'curve')
     for (let i = 0; i < px.y.length; i += stepSize) {
       this.controlPoints.push({
-        id: `cp_${i}`,
+        id: `cp_curve_${i}`,
         x: px.x_curve[i],
         y: px.y[i],
         kind: 'curve',
@@ -452,11 +481,55 @@ export class AgeDepthCanvas {
     if ((px.y.length - 1) % stepSize !== 0) {
       const lastIdx = px.y.length - 1;
       this.controlPoints.push({
-        id: `cp_${lastIdx}`,
+        id: `cp_curve_${lastIdx}`,
         x: px.x_curve[lastIdx],
         y: px.y[lastIdx],
         kind: 'curve',
       });
+    }
+
+    // 2. 置信区间下界 (kind: 'min')
+    if (px.x_min && px.x_min.length === px.y.length) {
+      const minStep = Math.max(1, Math.floor(px.y.length / 12));
+      for (let i = 0; i < px.y.length; i += minStep) {
+        this.controlPoints.push({
+          id: `cp_min_${i}`,
+          x: px.x_min[i],
+          y: px.y[i],
+          kind: 'min',
+        });
+      }
+      if ((px.y.length - 1) % minStep !== 0) {
+        const lastIdx = px.y.length - 1;
+        this.controlPoints.push({
+          id: `cp_min_${lastIdx}`,
+          x: px.x_min[lastIdx],
+          y: px.y[lastIdx],
+          kind: 'min',
+        });
+      }
+    }
+
+    // 3. 置信区间上界 (kind: 'max')
+    if (px.x_max && px.x_max.length === px.y.length) {
+      const maxStep = Math.max(1, Math.floor(px.y.length / 12));
+      for (let i = 0; i < px.y.length; i += maxStep) {
+        this.controlPoints.push({
+          id: `cp_max_${i}`,
+          x: px.x_max[i],
+          y: px.y[i],
+          kind: 'max',
+        });
+      }
+      if ((px.y.length - 1) % maxStep !== 0) {
+        const lastIdx = px.y.length - 1;
+        this.controlPoints.push({
+          id: `cp_max_${lastIdx}`,
+          x: px.x_max[lastIdx],
+          y: px.y[lastIdx],
+          kind: 'max',
+        });
+      }
     }
   }
 
@@ -469,37 +542,123 @@ export class AgeDepthCanvas {
     return -1;
   }
 
+  /**
+   * 单线在控制点跨度内的线性插值。
+   */
+  private fitLineFromPoints(
+    cps: ControlPoint[],
+    ys: number[],
+    targetXs: number[]
+  ): void {
+    if (cps.length === 0 || ys.length === 0) return;
+    if (cps.length === 1) {
+      targetXs.fill(cps[0].x);
+      return;
+    }
+    const sorted = [...cps].sort((a, b) => a.y - b.y);
+    const n = sorted.length;
+    const y0 = sorted[0].y;
+    const yLast = sorted[n - 1].y;
+
+    for (let i = 0; i < ys.length; i++) {
+      const cy = ys[i];
+      if (cy <= y0) {
+        targetXs[i] = sorted[0].x;
+      } else if (cy >= yLast) {
+        targetXs[i] = sorted[n - 1].x;
+      } else {
+        let j = 0;
+        while (j < n - 1 && sorted[j + 1].y < cy) j++;
+        const dy = Math.max(1e-6, sorted[j + 1].y - sorted[j].y);
+        const frac = (cy - sorted[j].y) / dy;
+        targetXs[i] = sorted[j].x + frac * (sorted[j + 1].x - sorted[j].x);
+      }
+    }
+  }
+
   public refitCurveFromControlPoints(): void {
     if (!this.inspectionData?.px_points || this.controlPoints.length < 2) return;
     const px = this.inspectionData.px_points;
-    const sorted = [...this.controlPoints].sort((a, b) => a.y - b.y);
-    const sortedY = sorted.map((p) => p.y);
-    const sortedX = sorted.map((p) => p.x);
+
+    const curveCps = this.controlPoints.filter((p) => p.kind === 'curve').sort((a, b) => a.y - b.y);
+    const minCps = this.controlPoints.filter((p) => p.kind === 'min').sort((a, b) => a.y - b.y);
+    const maxCps = this.controlPoints.filter((p) => p.kind === 'max').sort((a, b) => a.y - b.y);
+
+    if (curveCps.length < 2) return;
+
+    // 动态重算控制点 Y 范围：加点自适应延伸，删点立即收回（严禁脱离控制点的强制外推）
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const cp of this.controlPoints) {
+      if (cp.y < minY) minY = cp.y;
+      if (cp.y > maxY) maxY = cp.y;
+    }
+    if (!Number.isFinite(minY) || !Number.isFinite(maxY) || minY >= maxY) return;
+
+    const startY = Math.round(minY);
+    const endY = Math.round(maxY);
+    const newYs: number[] = [];
+    for (let y = startY; y <= endY; y++) {
+      newYs.push(y);
+    }
+    px.y = newYs;
+    px.x_curve = new Array(newYs.length).fill(0);
+    if (minCps.length >= 2) {
+      px.x_min = new Array(newYs.length).fill(0);
+    } else {
+      delete (px as { x_min?: number[] }).x_min;
+    }
+    if (maxCps.length >= 2) {
+      px.x_max = new Array(newYs.length).fill(0);
+    } else {
+      delete (px as { x_max?: number[] }).x_max;
+    }
+
+    this.inspectionData.depths = new Array(newYs.length).fill(0);
+    this.inspectionData.ages = new Array(newYs.length).fill(0);
+    if (px.x_min) {
+      this.inspectionData.age_min = new Array(newYs.length).fill(0);
+    } else {
+      delete (this.inspectionData as { age_min?: number[] }).age_min;
+    }
+    if (px.x_max) {
+      this.inspectionData.age_max = new Array(newYs.length).fill(0);
+    } else {
+      delete (this.inspectionData as { age_max?: number[] }).age_max;
+    }
+
+    // 拟合中位线
+    this.fitLineFromPoints(curveCps, px.y, px.x_curve);
     for (let i = 0; i < px.y.length; i++) {
-      const cy = px.y[i];
-      if (cy <= sortedY[0]) {
-        px.x_curve[i] = sortedX[0];
-      } else if (cy >= sortedY[sortedY.length - 1]) {
-        px.x_curve[i] = sortedX[sortedX.length - 1];
-      } else {
-        let j = 0;
-        while (j < sortedY.length - 1 && sortedY[j + 1] < cy) j++;
-        const frac = (cy - sortedY[j]) / Math.max(1e-6, sortedY[j + 1] - sortedY[j]);
-        px.x_curve[i] = sortedX[j] + frac * (sortedX[j + 1] - sortedX[j]);
-      }
-      const ad = this.pxToAgeDepth(px.x_curve[i], cy);
-      if (ad && this.inspectionData.ages[i] !== undefined) {
-        // Do NOT round here. On a "0 -> 9 ka BP" axis one integer age is 65.5 px, so
-        // rounding collapses a smooth curve onto a handful of discrete columns and draws
-        // it as a staircase (measured: 381 distinct x down to 8, median 15.5 px shift on
-        // 93% of rows). The displayed precision is a formatting concern, not a data one.
+      const ad = this.pxToAgeDepth(px.x_curve[i], px.y[i]);
+      if (ad) {
+        this.inspectionData.depths[i] = ad.depth;
         this.inspectionData.ages[i] = ad.age;
       }
     }
-    // The curve the table's attached windowed rates were fitted to just changed shape;
-    // those numbers now describe the pre-drag fit. Drop them -- the table falls back to a
-    // finite difference recomputed from the CURRENT values, which cannot show a stale
-    // number as a live one.
+
+    // 拟合 95% HPD 置信区间下界
+    if (minCps.length >= 2 && px.x_min) {
+      this.fitLineFromPoints(minCps, px.y, px.x_min);
+      for (let i = 0; i < px.y.length; i++) {
+        const ad = this.pxToAgeDepth(px.x_min[i], px.y[i]);
+        if (ad && this.inspectionData.age_min) {
+          this.inspectionData.age_min[i] = ad.age;
+        }
+      }
+    }
+
+    // 拟合 95% HPD 置信区间上界
+    if (maxCps.length >= 2 && px.x_max) {
+      this.fitLineFromPoints(maxCps, px.y, px.x_max);
+      for (let i = 0; i < px.y.length; i++) {
+        const ad = this.pxToAgeDepth(px.x_max[i], px.y[i]);
+        if (ad && this.inspectionData.age_max) {
+          this.inspectionData.age_max[i] = ad.age;
+        }
+      }
+    }
+
     this.inspectionData.sed_rate = undefined;
     this.inspectionData.sed_rate_se = undefined;
     this.inspectionData.sed_window_depth = undefined;
@@ -784,44 +943,117 @@ export class AgeDepthCanvas {
     ctx.globalAlpha = this.overlayOpacity;
     const inv = 1 / Math.max(this.viewport.scale, 1e-6);
 
-    const curvePath = () => {
-      ctx.moveTo(px.x_curve[0], px.y[0]);
-      for (let i = 1; i < px.y.length; i++) {
-        ctx.lineTo(px.x_curve[i], px.y[i]);
-      }
-    };
-    const edgePath = (xs: number[]) => {
-      ctx.moveTo(xs[0], px.y[0]);
-      for (let i = 1; i < px.y.length; i++) {
-        ctx.lineTo(xs[i], px.y[i]);
-      }
-    };
+    const curveCps = this.controlPoints.filter((p) => p.kind === 'curve');
+    const minCps = this.controlPoints.filter((p) => p.kind === 'min');
+    const maxCps = this.controlPoints.filter((p) => p.kind === 'max');
 
-    if (this.showEnvelope && px.y && px.x_min && px.x_max) {
-      ctx.beginPath();
-      edgePath(px.x_min);
-      for (let i = px.y.length - 1; i >= 0; i--) {
-        ctx.lineTo(px.x_max[i], px.y[i]);
-      }
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(245, 158, 11, 0.32)';
-      ctx.fill();
+    // 1. 置信区间包络带 (只在 min 与 max 均有控制点覆盖的 Y 范围内填充与描边)
+    if (this.showEnvelope && px.y && px.x_min && px.x_max && minCps.length >= 2 && maxCps.length >= 2) {
+      const minMinY = Math.min(...minCps.map((p) => p.y));
+      const maxMinY = Math.max(...minCps.map((p) => p.y));
+      const minMaxY = Math.min(...maxCps.map((p) => p.y));
+      const maxMaxY = Math.max(...maxCps.map((p) => p.y));
 
-      strokeWithHalo(ctx, () => edgePath(px.x_max), CURVE_COLORS.max, 1.5 * inv);
-      strokeWithHalo(ctx, () => edgePath(px.x_min), CURVE_COLORS.min, 1.5 * inv);
+      const envTop = Math.max(minMinY, minMaxY);
+      const envBot = Math.min(maxMinY, maxMaxY);
+      const envIdxs: number[] = [];
+      for (let i = 0; i < px.y.length; i++) {
+        if (px.y[i] >= envTop && px.y[i] <= envBot) envIdxs.push(i);
+      }
+
+      if (envIdxs.length >= 2) {
+        ctx.beginPath();
+        ctx.moveTo(px.x_min[envIdxs[0]], px.y[envIdxs[0]]);
+        for (let k = 1; k < envIdxs.length; k++) {
+          const idx = envIdxs[k];
+          ctx.lineTo(px.x_min[idx], px.y[idx]);
+        }
+        for (let k = envIdxs.length - 1; k >= 0; k--) {
+          const idx = envIdxs[k];
+          ctx.lineTo(px.x_max[idx], px.y[idx]);
+        }
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.32)';
+        ctx.fill();
+      }
+
+      // 下界线 (仅在 min 控制点有效范围内)
+      const minIdxs: number[] = [];
+      for (let i = 0; i < px.y.length; i++) {
+        if (px.y[i] >= minMinY && px.y[i] <= maxMinY) minIdxs.push(i);
+      }
+      if (minIdxs.length >= 2) {
+        strokeWithHalo(ctx, () => {
+          ctx.moveTo(px.x_min[minIdxs[0]], px.y[minIdxs[0]]);
+          for (let k = 1; k < minIdxs.length; k++) {
+            ctx.lineTo(px.x_min[minIdxs[k]], px.y[minIdxs[k]]);
+          }
+        }, CURVE_COLORS.min, 1.5 * inv);
+      }
+
+      // 上界线 (仅在 max 控制点有效范围内)
+      const maxIdxs: number[] = [];
+      for (let i = 0; i < px.y.length; i++) {
+        if (px.y[i] >= minMaxY && px.y[i] <= maxMaxY) maxIdxs.push(i);
+      }
+      if (maxIdxs.length >= 2) {
+        strokeWithHalo(ctx, () => {
+          ctx.moveTo(px.x_max[maxIdxs[0]], px.y[maxIdxs[0]]);
+          for (let k = 1; k < maxIdxs.length; k++) {
+            ctx.lineTo(px.x_max[maxIdxs[k]], px.y[maxIdxs[k]]);
+          }
+        }, CURVE_COLORS.max, 1.5 * inv);
+      }
     }
 
-    if (this.showCurve && px.y && px.x_curve) {
-      strokeWithHalo(ctx, curvePath, CURVE_COLORS.median, 2.5 * inv);
+    // 2. 中位线 (仅在 curve 控制点有效范围内绘制)
+    if (this.showCurve && px.y && px.x_curve && curveCps.length >= 2) {
+      const minCurveY = Math.min(...curveCps.map((p) => p.y));
+      const maxCurveY = Math.max(...curveCps.map((p) => p.y));
+      const cIdxs: number[] = [];
+      for (let i = 0; i < px.y.length; i++) {
+        if (px.y[i] >= minCurveY && px.y[i] <= maxCurveY) cIdxs.push(i);
+      }
+      if (cIdxs.length >= 2) {
+        strokeWithHalo(ctx, () => {
+          ctx.moveTo(px.x_curve[cIdxs[0]], px.y[cIdxs[0]]);
+          for (let k = 1; k < cIdxs.length; k++) {
+            ctx.lineTo(px.x_curve[cIdxs[k]], px.y[cIdxs[k]]);
+          }
+        }, CURVE_COLORS.median, 2.5 * inv);
+      }
     }
 
     if (this.showCurve && this.controlPoints.length > 0) {
-      for (const cp of this.controlPoints) {
+      for (let i = 0; i < this.controlPoints.length; i++) {
+        const cp = this.controlPoints[i];
+        const isSelected = i === this.selectedControlPointIndex;
+        const color = cp.kind === 'min' ? '#10b981' : cp.kind === 'max' ? '#ef4444' : '#0284c7';
+        const r = (cp.kind === 'curve' ? 4.2 : 3.6) * inv;
+
+        // 选中高亮光环 (金黄醒目外环)
+        if (isSelected) {
+          ctx.beginPath();
+          ctx.arc(cp.x, cp.y, r + 4.5 * inv, 0, Math.PI * 2);
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 2.4 * inv;
+          ctx.stroke();
+        }
+
         ctx.beginPath();
-        ctx.arc(cp.x, cp.y, 4.2 * inv, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffffff';
+        if (cp.kind === 'curve') {
+          ctx.arc(cp.x, cp.y, r, 0, Math.PI * 2);
+        } else {
+          // min 与 max 使用菱形标记区分
+          ctx.moveTo(cp.x, cp.y - r * 1.2);
+          ctx.lineTo(cp.x + r * 1.2, cp.y);
+          ctx.lineTo(cp.x, cp.y + r * 1.2);
+          ctx.lineTo(cp.x - r * 1.2, cp.y);
+          ctx.closePath();
+        }
+        ctx.fillStyle = isSelected ? '#fef3c7' : '#ffffff';
         ctx.fill();
-        ctx.strokeStyle = '#0284c7';
+        ctx.strokeStyle = color;
         ctx.lineWidth = 1.8 * inv;
         ctx.stroke();
       }
@@ -887,10 +1119,7 @@ export class AgeDepthCanvas {
 
   public handleCanvasHover(e: MouseEvent): void {
     if (!this.inspectionData?.px_points) return;
-    const rect = this.canvas.getBoundingClientRect();
-    const scaleY = this.canvas.height / rect.height;
-    const my = (e.clientY - rect.top) * scaleY;
-
+    const pt = this.canvasToImage(e.clientX, e.clientY);
     const px = this.inspectionData.px_points;
     const hud = this.container.querySelector('#ad-canvas-hud');
     if (!hud || !px.y || px.y.length === 0) return;
@@ -898,7 +1127,7 @@ export class AgeDepthCanvas {
     let bestIdx = 0;
     let minDiff = 99999;
     for (let i = 0; i < px.y.length; i++) {
-      const diff = Math.abs(px.y[i] - my);
+      const diff = Math.abs(px.y[i] - pt.y);
       if (diff < minDiff) {
         minDiff = diff;
         bestIdx = i;
@@ -907,14 +1136,21 @@ export class AgeDepthCanvas {
 
     const d = this.inspectionData.depths[bestIdx];
     const a = this.inspectionData.ages[bestIdx];
-    const mi = this.inspectionData.age_min[bestIdx];
-    const ma = this.inspectionData.age_max[bestIdx];
+    const mi = this.inspectionData.age_min ? this.inspectionData.age_min[bestIdx] : a - 100;
+    const ma = this.inspectionData.age_max ? this.inspectionData.age_max[bestIdx] : a + 100;
 
-    // 悬停读数固定 3 位小数。数据本身仍是全精度（表格那边要原样值），这里只是面板显示：
-    // 不格式化的直接后果是 `95% CI: 42567.04976038421 ~ 47696.07802908495`，17 位数字在
-    // 一行小字里既读不出来也放不下。3 位与图上刻度分辨率相当。
+    const dUnit = (this.container.querySelector('#ad-inp-depth-unit') as HTMLInputElement | null)?.value?.trim() || 'cm';
+    const aUnit = (this.container.querySelector('#ad-inp-age-unit') as HTMLInputElement | null)?.value?.trim() || 'cal BP';
+
+    const cursorAd = this.pxToAgeDepth(pt.x, pt.y);
     const hudNum = (v: number): string => (Number.isFinite(v) ? v.toFixed(3) : '—');
-    hud.innerHTML = `深度: <strong style="color:var(--accent-blue);">${hudNum(d)} cm</strong> ➔ 年代: <strong style="color:var(--text-heading);">${hudNum(a)} cal BP</strong> (95% CI: <span style="color:var(--accent-amber);">${hudNum(mi)} ~ ${hudNum(ma)}</span>)`;
+
+    let cursorInfo = '';
+    if (cursorAd) {
+      cursorInfo = `光标物理坐标: <strong style="color:var(--text-heading);">${hudNum(cursorAd.depth)} ${dUnit}</strong> | <strong style="color:var(--text-heading);">${hudNum(cursorAd.age)} ${aUnit}</strong> ➔ `;
+    }
+
+    hud.innerHTML = `${cursorInfo}最近层位: <strong style="color:var(--accent-blue);">${hudNum(d)} ${dUnit}</strong> ➔ 年代: <strong style="color:var(--text-heading);">${hudNum(a)} ${aUnit}</strong> (95% CI: <span style="color:var(--accent-amber);">${hudNum(mi)} ~ ${hudNum(ma)}</span>)`;
   }
 
   // --- Interaction Listeners ---
@@ -997,13 +1233,15 @@ export class AgeDepthCanvas {
       }
 
       if (this.activeFMode === 'add') {
-        this.controlPoints.push({
-          id: `cp_${Date.now()}`,
+        const newCp: ControlPoint = {
+          id: `cp_${this.editTarget}_${Date.now()}`,
           x: pt.x,
           y: pt.y,
-          kind: 'curve',
-        });
+          kind: this.editTarget,
+        };
+        this.controlPoints.push(newCp);
         this.controlPoints.sort((a, b) => a.y - b.y);
+        this.selectedControlPointIndex = this.controlPoints.indexOf(newCp);
         this.refitCurveFromControlPoints();
         this.renderCanvas();
         return;
@@ -1013,6 +1251,7 @@ export class AgeDepthCanvas {
         const cpIdx = this.findControlPointAt(pt);
         if (cpIdx >= 0) {
           this.controlPoints.splice(cpIdx, 1);
+          this.selectedControlPointIndex = null;
           this.refitCurveFromControlPoints();
           this.renderCanvas();
           return;
@@ -1022,9 +1261,16 @@ export class AgeDepthCanvas {
       if (this.activeFMode === 'adjust') {
         const cpIdx = this.findControlPointAt(pt);
         if (cpIdx >= 0) {
+          this.selectedControlPointIndex = cpIdx;
+          const cp = this.controlPoints[cpIdx];
+          this.setEditTarget(cp.kind);
           this.draggingControlPoint = cpIdx;
           e.preventDefault();
+          this.renderCanvas();
           return;
+        } else {
+          this.selectedControlPointIndex = null;
+          this.renderCanvas();
         }
       }
 
@@ -1124,12 +1370,80 @@ export class AgeDepthCanvas {
         this.isSpaceDown = true;
         canvas.style.cursor = 'grab';
       }
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      // 快捷键模式切换对齐主画布：S=选择微调, A=加点, D=删点, P=拾取测年点
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        const k = e.key.toLowerCase();
+        if (k === 's') {
+          this.setActiveFMode('adjust');
+          this.updateFModeUI('adjust');
+          e.preventDefault();
+          return;
+        }
+        if (k === 'a') {
+          this.setActiveFMode('add');
+          this.updateFModeUI('add');
+          e.preventDefault();
+          return;
+        }
+        if (k === 'd') {
+          this.setActiveFMode('delete');
+          this.updateFModeUI('delete');
+          e.preventDefault();
+          return;
+        }
+        if (k === 'p') {
+          this.setActiveFMode('pickDate');
+          this.updateFModeUI('pickDate');
+          e.preventDefault();
+          return;
+        }
+      }
+
+      // 控制点物理删除 (Delete / Backspace)
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (this.selectedControlPointIndex !== null && this.controlPoints[this.selectedControlPointIndex]) {
+          this.controlPoints.splice(this.selectedControlPointIndex, 1);
+          this.selectedControlPointIndex = null;
+          this.refitCurveFromControlPoints();
+          this.renderCanvas();
+          e.preventDefault();
+          return;
+        }
+      }
+
+      // 控制点键盘微调 (Arrow keys: 1px, 按住 Shift 为 10px)
+      if (!e.altKey && this.selectedControlPointIndex !== null && this.controlPoints[this.selectedControlPointIndex]) {
+        const step = e.shiftKey ? 10 : 1;
+        const cp = this.controlPoints[this.selectedControlPointIndex];
+        let moved = false;
+        if (e.key === 'ArrowLeft') {
+          cp.x -= step;
+          moved = true;
+        } else if (e.key === 'ArrowRight') {
+          cp.x += step;
+          moved = true;
+        } else if (e.key === 'ArrowUp') {
+          cp.y -= step;
+          moved = true;
+        } else if (e.key === 'ArrowDown') {
+          cp.y += step;
+          moved = true;
+        }
+        if (moved) {
+          this.refitCurveFromControlPoints();
+          this.renderCanvas();
+          e.preventDefault();
+          return;
+        }
+      }
+
       // Alt+方向键平移（issue #106）：与主画布同一个入口、同一个步长、同一个方向
       // （`canvas/keyBindings.ts::panDeltaFromArrowKey`）。全画布一致是硬不变量——
       // 只在主画布生效会让本弹窗成为"这里按键没反应"的那一个。
       // 焦点在输入框里时不抢：年代/深度那几个 number 输入要能用 Alt+方向键选词。
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       const pan = panDeltaFromArrowKey(e);
       if (pan) {
         e.preventDefault();

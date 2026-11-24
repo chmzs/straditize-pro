@@ -98,6 +98,7 @@ export type RpcMethod =
   | 'history.redo'
   | 'history.undo'
   | 'image.detectDeskew'
+  | 'image.getVisualSlice'
   | 'image.load'
   | 'image.rotate'
   | 'image.switchPdfPage'

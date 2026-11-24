@@ -66,21 +66,27 @@ export class AgeDepthDatingTable {
 
   public setTableMode(mode: 'model' | 'samples'): void {
     this.tableMode = mode;
+    this.updateTableHeaders();
     this.renderFullDataTable();
     this.updateMappingTable();
+    this.renderSedRateProfile();
   }
 
   public setInspectionData(data: AgeDepthModelInspectionData | null): void {
     this.inspectionData = data;
+    this.updateTableHeaders();
     this.renderFullDataTable();
     this.updateMappingTable();
     this.updateQualityAuditCard();
+    this.renderSedRateProfile();
   }
 
   public setMappedSamples(samples: MappedSamplesData | null): void {
     this.mappedSamples = samples;
+    this.updateTableHeaders();
     this.renderFullDataTable();
     this.updateMappingTable();
+    this.renderSedRateProfile();
   }
 
   public setDatingPoints(points: DatingPoint[]): void {
@@ -90,6 +96,222 @@ export class AgeDepthDatingTable {
 
   public getDatingPoints(): DatingPoint[] {
     return this.getDatingTableData();
+  }
+
+  public getDepthUnit(): string {
+    const el = this.container.querySelector('#ad-inp-depth-unit') as HTMLInputElement | null;
+    return el?.value?.trim() || 'cm';
+  }
+
+  public getAgeUnit(): string {
+    const el = this.container.querySelector('#ad-inp-age-unit') as HTMLInputElement | null;
+    return el?.value?.trim() || 'cal BP';
+  }
+
+  public updateTableHeaders(): void {
+    const dUnit = this.getDepthUnit();
+    const aUnit = this.getAgeUnit();
+
+    // 更新侧栏映射表表头
+    const mappingThs = this.container.querySelectorAll('#ad-tbl-mapping thead th');
+    if (mappingThs.length >= 4) {
+      mappingThs[0].textContent = `深度 (${dUnit})`;
+      mappingThs[1].textContent = `年代 (${aUnit})`;
+      mappingThs[2].textContent = `95% 区间 (${aUnit})`;
+      mappingThs[3].textContent = `沉积速率 (${dUnit}/yr)`;
+    }
+
+    // 更新全量数据大表表头
+    const thDepth = this.container.querySelector('#ad-tbl-full thead th[data-sort="depth"]');
+    if (thDepth) thDepth.innerHTML = `深度 (${dUnit}) <span class="ad-sort-ind"></span>`;
+    const thAge = this.container.querySelector('#ad-tbl-full thead th[data-sort="age"]');
+    if (thAge) thAge.innerHTML = `估算年代 (${aUnit}) <span class="ad-sort-ind"></span>`;
+    const thMin = this.container.querySelector('#ad-tbl-full thead th[data-sort="min"]');
+    if (thMin) thMin.innerHTML = `95% 下界 (${aUnit}) <span class="ad-sort-ind"></span>`;
+    const thMax = this.container.querySelector('#ad-tbl-full thead th[data-sort="max"]');
+    if (thMax) thMax.innerHTML = `95% 上界 (${aUnit}) <span class="ad-sort-ind"></span>`;
+
+    const fullThs = this.container.querySelectorAll('#ad-tbl-full thead th');
+    if (fullThs.length >= 7) {
+      fullThs[6].textContent = `沉积速率 (${dUnit}/yr)`;
+    }
+  }
+
+  public renderSedRateProfile(): void {
+    const canvas = this.container.querySelector('#ad-sedrate-canvas') as HTMLCanvasElement | null;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dUnit = this.getDepthUnit();
+    const summaryEl = this.container.querySelector('#ad-sedrate-meta');
+
+    if (!this.inspectionData || !this.inspectionData.depths || this.inspectionData.depths.length < 2) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (summaryEl) summaryEl.textContent = '暂无沉积速率数据';
+      return;
+    }
+
+    const d = this.inspectionData.depths;
+    const a = this.inspectionData.ages;
+    const sedRates = this.inspectionData.sed_rate;
+    const sedSes = this.inspectionData.sed_rate_se;
+
+    const pts: Array<{ depth: number; rate: number; se: number | null }> = [];
+    if (Array.isArray(sedRates) && sedRates.length === d.length) {
+      for (let i = 0; i < d.length; i++) {
+        const r = sedRates[i];
+        if (r !== null && r !== undefined && Number.isFinite(r)) {
+          pts.push({ depth: d[i], rate: r, se: sedSes?.[i] ?? null });
+        }
+      }
+    }
+
+    if (pts.length < 2) {
+      pts.length = 0;
+      for (let i = 1; i < d.length; i++) {
+        const dd = Math.abs(d[i] - d[i - 1]);
+        const da = Math.abs(a[i] - a[i - 1]);
+        if (da > 1e-6) {
+          const r = dd / da;
+          pts.push({ depth: (d[i] + d[i - 1]) / 2, rate: r, se: null });
+        }
+      }
+    }
+
+    if (pts.length < 2) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (summaryEl) summaryEl.textContent = '层位点过少，无法绘制速率曲线';
+      return;
+    }
+
+    // HiDPI 适配
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width > 0 ? rect.width : 600;
+    const h = rect.height > 0 ? rect.height : 140;
+    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+    }
+    ctx.resetTransform();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+
+    const padLeft = 48;
+    const padRight = 18;
+    const padTop = 14;
+    const padBottom = 22;
+    const plotW = w - padLeft - padRight;
+    const plotH = h - padTop - padBottom;
+
+    let minD = pts[0].depth;
+    let maxD = pts[0].depth;
+    let minR = pts[0].rate;
+    let maxR = pts[0].rate;
+    let sumR = 0;
+
+    for (const p of pts) {
+      if (p.depth < minD) minD = p.depth;
+      if (p.depth > maxD) maxD = p.depth;
+      if (p.rate < minR) minR = p.rate;
+      if (p.rate > maxR) maxR = p.rate;
+      sumR += p.rate;
+    }
+    const avgR = sumR / pts.length;
+    maxR = Math.max(maxR * 1.15, 1e-4);
+    minR = Math.max(0, minR * 0.85);
+
+    const roundNum = (v: number, decimals: number): string => {
+      const p = Math.pow(10, decimals);
+      return String(Math.round(v * p) / p);
+    };
+
+    if (summaryEl) {
+      summaryEl.textContent = `平均: ${roundNum(avgR, 4)} ${dUnit}/yr ｜ 范围: ${roundNum(minR, 4)} ~ ${roundNum(maxR, 4)} ${dUnit}/yr`;
+    }
+
+    const toX = (depthVal: number) => padLeft + ((depthVal - minD) / Math.max(1e-6, maxD - minD)) * plotW;
+    const toY = (rateVal: number) => padTop + plotH - ((rateVal - minR) / Math.max(1e-6, maxR - minR)) * plotH;
+
+    // 绘制横向网格线与 Y 轴刻度
+    ctx.strokeStyle = 'rgba(150, 150, 150, 0.18)';
+    ctx.lineWidth = 1;
+    ctx.fillStyle = 'rgba(160, 160, 160, 0.85)';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    const yTicks = 4;
+    for (let i = 0; i <= yTicks; i++) {
+      const frac = i / yTicks;
+      const yVal = minR + frac * (maxR - minR);
+      const py = padTop + plotH - frac * plotH;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, py);
+      ctx.lineTo(padLeft + plotW, py);
+      ctx.stroke();
+      ctx.fillText(roundNum(yVal, 3), padLeft - 4, py);
+    }
+
+    // 绘制纵向网格线与 X 轴 (深度) 刻度
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const xTicks = 5;
+    for (let i = 0; i <= xTicks; i++) {
+      const frac = i / xTicks;
+      const xVal = minD + frac * (maxD - minD);
+      const px = padLeft + frac * plotW;
+      ctx.beginPath();
+      ctx.moveTo(px, padTop);
+      ctx.lineTo(px, padTop + plotH);
+      ctx.stroke();
+      ctx.fillText(`${roundNum(xVal, 1)}${dUnit}`, px, padTop + plotH + 4);
+    }
+
+    // 绘制误差带 (若有 se)
+    const hasSe = pts.some((p) => p.se !== null && p.se > 0);
+    if (hasSe) {
+      ctx.fillStyle = 'rgba(2, 132, 199, 0.16)';
+      ctx.beginPath();
+      for (let i = 0; i < pts.length; i++) {
+        const seVal = pts[i].se || 0;
+        const px = toX(pts[i].depth);
+        const pyTop = toY(pts[i].rate + seVal);
+        if (i === 0) ctx.moveTo(px, pyTop);
+        else ctx.lineTo(px, pyTop);
+      }
+      for (let i = pts.length - 1; i >= 0; i--) {
+        const seVal = pts[i].se || 0;
+        const px = toX(pts[i].depth);
+        const pyBot = toY(Math.max(0, pts[i].rate - seVal));
+        ctx.lineTo(px, pyBot);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 绘制主体速率曲线
+    ctx.strokeStyle = '#0284c7';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const px = toX(pts[i].depth);
+      const py = toY(pts[i].rate);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // 绘制数据点小圆圈
+    ctx.fillStyle = '#0284c7';
+    for (const p of pts) {
+      const px = toX(p.depth);
+      const py = toY(p.rate);
+      ctx.beginPath();
+      ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   // --- Geological Parameters & Event Bounds ---
@@ -282,6 +504,7 @@ export class AgeDepthDatingTable {
       );
     };
 
+    const dUnit = this.getDepthUnit();
     if (this.tableMode === 'samples' && this.mappedSamples?.depths && this.mappedSamples.depths.length > 0) {
       const ms = this.mappedSamples;
       for (let i = 0; i < ms.depths.length; i++) {
@@ -289,7 +512,7 @@ export class AgeDepthDatingTable {
         const minVal = ms.age_min ? ms.age_min[i] : ms.age_est[i] - 100;
         const maxVal = ms.age_max ? ms.age_max[i] : ms.age_est[i] + 100;
         tr.innerHTML = `
-          <td style="font-weight: 600; color: var(--accent-blue); padding: 1px 2px;">${ms.depths[i]} cm</td>
+          <td style="font-weight: 600; color: var(--accent-blue); padding: 1px 2px;">${ms.depths[i]} ${dUnit}</td>
           <td style="padding: 1px 2px;">
             <input type="number" step="any" class="ad-tbl-input ad-input-side-sample-age" data-idx="${i}" value="${formatNumber(ms.age_est[i])}" style="font-size: 10px; font-weight: 600;" />
           </td>
@@ -425,6 +648,8 @@ export class AgeDepthDatingTable {
     }
 
     tbody.innerHTML = '';
+    const dUnit = this.getDepthUnit();
+    const aUnit = this.getAgeUnit();
 
     if (this.tableMode === 'samples' && this.mappedSamples?.depths?.length) {
       const ms = this.mappedSamples;
@@ -437,8 +662,8 @@ export class AgeDepthDatingTable {
         const mi = ms.age_min ? ms.age_min[i] : a - 100;
         const ma = ms.age_max ? ms.age_max[i] : a + 100;
         const width = Math.abs(ma - mi);
-        // Windowed rate (cm/yr) + its standard error in separate cells, mirroring the
-        // model table. The pointwise finite-difference fallback below is yr/cm, so its
+        // Windowed rate (depth_unit/yr) + its standard error in separate cells, mirroring the
+        // model table. The pointwise finite-difference fallback below is yr/depth_unit, so its
         // unit label is stated inline to keep the two apart.
         let rateHtml = '—';
         let seHtml = '—';
@@ -448,7 +673,7 @@ export class AgeDepthDatingTable {
             const why = sed.status?.[i] || '';
             rateHtml = `<span style="color:var(--status-warning);" title="该层位速率未定义（${why}）">—</span>`;
           } else {
-            rateHtml = `${formatNumber(mid)} <span style="color:var(--text-muted);font-size:9px;">cm/yr</span>`;
+            rateHtml = `${formatNumber(mid)} <span style="color:var(--text-muted);font-size:9px;">${dUnit}/yr</span>`;
             const se = sed.sed_rate_se?.[i];
             seHtml = se !== null && se !== undefined && Number.isFinite(se)
               ? `± ${formatNumber(se)}`
@@ -456,14 +681,14 @@ export class AgeDepthDatingTable {
           }
         } else if (i > 0 && d !== ms.depths[i - 1]) {
           const acc = Math.abs(a - ms.age_est[i - 1]) / Math.abs(d - ms.depths[i - 1]);
-          rateHtml = `${formatNumber(acc)} <span style="color:var(--text-muted);font-size:9px;">yr/cm</span>`;
+          rateHtml = `${formatNumber(acc)} <span style="color:var(--text-muted);font-size:9px;">yr/${dUnit}</span>`;
         }
         const isInverted = i > 0 && a < ms.age_est[i - 1];
         if (isInverted) tr.classList.add('ad-row-inversion');
 
         tr.innerHTML = `
           <td style="text-align: center; color: var(--text-muted);">${i + 1}</td>
-          <td style="font-weight: 600; color: var(--accent-blue);">${formatNumber(d)} cm</td>
+          <td style="font-weight: 600; color: var(--accent-blue);">${formatNumber(d)} ${dUnit}</td>
           <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-age" data-idx="${i}" value="${formatNumber(a)}" /></td>
           <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-min" data-idx="${i}" value="${formatNumber(mi)}" /></td>
           <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-max" data-idx="${i}" value="${formatNumber(ma)}" /></td>
@@ -525,7 +750,7 @@ export class AgeDepthDatingTable {
     const sedSe = hasAlignedRates ? this.inspectionData!.sed_rate_se || null : null;
 
     if (badge) {
-      badge.textContent = `共 ${d.length} 个层位 ｜ 深度 ${formatNumber(d[0]) || 0} ~ ${formatNumber(d[d.length - 1]) || 0} cm ｜ 年代 ${formatNumber(a[0]) || 0} ~ ${formatNumber(a[a.length - 1]) || 0} cal BP`;
+      badge.textContent = `共 ${d.length} 个层位 ｜ 深度 ${formatNumber(d[0]) || 0} ~ ${formatNumber(d[d.length - 1]) || 0} ${dUnit} ｜ 年代 ${formatNumber(a[0]) || 0} ~ ${formatNumber(a[a.length - 1]) || 0} ${aUnit}`;
     }
 
     // Header sort is a DISPLAY permutation only: the model arrays stay in their original
@@ -563,7 +788,7 @@ export class AgeDepthDatingTable {
       } else if (i > 0 && depth !== d[i - 1]) {
         // Fallback finite difference against the ORIGINAL-order neighbour (not display).
         const acc = Math.abs(age - a[i - 1]) / Math.abs(depth - d[i - 1]);
-        rateHtml = `${formatNumber(acc)} <span style="color:var(--text-muted);font-size:9px;">yr/cm</span>`;
+        rateHtml = `${formatNumber(acc)} <span style="color:var(--text-muted);font-size:9px;">yr/${dUnit}</span>`;
         seHtml = '—';
       } else {
         rateHtml = '—';
@@ -632,6 +857,8 @@ export class AgeDepthDatingTable {
         this.deleteTableRow(idx);
       });
     });
+
+    this.renderSedRateProfile();
   }
 
   /**
@@ -762,10 +989,13 @@ export class AgeDepthDatingTable {
       badge.style.border = '1px solid color-mix(in srgb, var(--accent-red) 40%, transparent)';
     }
 
+    const dUnit = this.getDepthUnit();
+    const aUnit = this.getAgeUnit();
+
     details.innerHTML = `
-      <div>• 深度跨度: <b>${formatNumber(d[0])} ~ ${formatNumber(d[d.length - 1])} cm</b> (跨 ${depthSpan} cm, ${d.length} 个点位)</div>
-      <div>• 年代跨度: <b>${formatNumber(a[0])} ~ ${formatNumber(a[a.length - 1])} cal BP</b> (平均 95% CI 宽度: ±${avgSpan} yr)</div>
-      ${inversions > 0 ? '<div style="color:var(--accent-red);">• 提示: 存在年代倒置，建议在倒置深度处修改表格数值、使用【微调 (V)】或拖框排除杂斑。</div>' : '<div style="color:var(--status-success);">• 年代单调递增，无层位倒置，拟合曲线连续平滑。</div>'}
+      <div>• 深度跨度: <b>${formatNumber(d[0])} ~ ${formatNumber(d[d.length - 1])} ${dUnit}</b> (跨 ${depthSpan} ${dUnit}, ${d.length} 个点位)</div>
+      <div>• 年代跨度: <b>${formatNumber(a[0])} ~ ${formatNumber(a[a.length - 1])} ${aUnit}</b> (平均 95% CI 宽度: ±${avgSpan} yr)</div>
+      ${inversions > 0 ? '<div style="color:var(--accent-red);">• 提示: 存在年代倒置，建议在倒置深度处修改表格数值、使用【选择 (S)】或拖框排除杂斑。</div>' : '<div style="color:var(--status-success);">• 年代单调递增，无层位倒置，拟合曲线连续平滑。</div>'}
     `;
   }
 
@@ -794,6 +1024,7 @@ export class AgeDepthDatingTable {
     this.invalidateWindowedRates();
 
     this.updateQualityAuditCard();
+    this.renderSedRateProfile();
     this.callbacks.onModelModified?.();
   }
 
@@ -916,13 +1147,16 @@ export class AgeDepthDatingTable {
     const mi = this.inspectionData.age_min || a;
     const ma = this.inspectionData.age_max || a;
 
+    const dUnit = this.getDepthUnit();
+    const aUnit = this.getAgeUnit();
+
     const sedRate = this.inspectionData.sed_rate || null;
     const sedSe = this.inspectionData.sed_rate_se || null;
     const hasRates = Boolean(sedRate && sedRate.length === d.length);
     // Header names carry the units; TSV pasted into a spreadsheet must stay interpretable.
     let tsv = hasRates
-      ? 'Depth_cm\tAge_calBP\tAge_Min_calBP\tAge_Max_calBP\tSed_rate_cm_per_yr\tSed_rate_se_cm_per_yr\n'
-      : 'Depth_cm\tAge_calBP\tAge_Min_calBP\tAge_Max_calBP\n';
+      ? `Depth_${dUnit}\tAge_${aUnit}\tAge_Min_${aUnit}\tAge_Max_${aUnit}\tSed_rate_${dUnit}_per_yr\tSed_rate_se_${dUnit}_per_yr\n`
+      : `Depth_${dUnit}\tAge_${aUnit}\tAge_Min_${aUnit}\tAge_Max_${aUnit}\n`;
     for (let i = 0; i < d.length; i++) {
       tsv += hasRates
         ? `${d[i]}\t${a[i]}\t${mi[i]}\t${ma[i]}\t${sedRate![i] ?? ''}\t${sedSe?.[i] ?? ''}\n`
@@ -1001,8 +1235,8 @@ export class AgeDepthDatingTable {
         metadata: this.inspectionData?.metadata || {
           curve_type: 'median',
           envelope_type: '95_hpd',
-          depth_unit: 'cm',
-          age_unit: 'cal BP',
+          depth_unit: (this.container.querySelector('#ad-inp-depth-unit') as HTMLInputElement | null)?.value?.trim() || 'cm',
+          age_unit: (this.container.querySelector('#ad-inp-age-unit') as HTMLInputElement | null)?.value?.trim() || 'cal BP',
           calibration_curve: 'IntCal20',
         },
       };

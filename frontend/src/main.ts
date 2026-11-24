@@ -442,14 +442,86 @@ async function bootstrap() {
     })
   );
 
+  function interpolate1D(xTarget: number, xs: number[], ys: number[]): number | null {
+    if (xs.length === 0 || ys.length === 0 || xs.length !== ys.length) return null;
+    if (xs.length === 1) return ys[0];
+    const isAscending = xs[xs.length - 1] > xs[0];
+    const xMin = isAscending ? xs[0] : xs[xs.length - 1];
+    const xMax = isAscending ? xs[xs.length - 1] : xs[0];
+
+    if (xTarget <= xMin) {
+      const idx0 = isAscending ? 0 : xs.length - 1;
+      const idx1 = isAscending ? 1 : xs.length - 2;
+      const dx = xs[idx1] - xs[idx0];
+      if (Math.abs(dx) < 1e-9) return ys[idx0];
+      const slope = (ys[idx1] - ys[idx0]) / dx;
+      return ys[idx0] + slope * (xTarget - xs[idx0]);
+    }
+    if (xTarget >= xMax) {
+      const idx0 = isAscending ? xs.length - 2 : 1;
+      const idx1 = isAscending ? xs.length - 1 : 0;
+      const dx = xs[idx1] - xs[idx0];
+      if (Math.abs(dx) < 1e-9) return ys[idx1];
+      const slope = (ys[idx1] - ys[idx0]) / dx;
+      return ys[idx1] + slope * (xTarget - xs[idx1]);
+    }
+
+    for (let i = 0; i < xs.length - 1; i++) {
+      const x0 = xs[i];
+      const x1 = xs[i + 1];
+      if ((xTarget >= x0 && xTarget <= x1) || (xTarget >= x1 && xTarget <= x0)) {
+        const dx = x1 - x0;
+        if (Math.abs(dx) < 1e-9) return ys[i];
+        const t = (xTarget - x0) / dx;
+        return ys[i] + t * (ys[i + 1] - ys[i]);
+      }
+    }
+    return null;
+  }
+
   const ageDepthModal = new AgeDepthModal(
     document.body,
     canvasComponent.data,
     rpcClient,
-    (_extractedModel) => {
-      canvasComponent.requestRender();
+    (extractedModel) => {
+      canvasComponent.data.age_depth_model = extractedModel;
+      const depths = extractedModel.depths || [];
+      const ages = extractedModel.ages || [];
+      const ageMin = extractedModel.age_min || [];
+      const ageMax = extractedModel.age_max || [];
+
+      if (depths.length >= 2 && ages.length >= 2 && canvasComponent.data.samples) {
+        const rawAxis = (canvasComponent.data.calibration?.primaryAxis ?? 'age').trim().toLowerCase();
+        const isAgeAxis = rawAxis === 'age';
+
+        for (const sample of canvasComponent.data.samples) {
+          if (sample.depth !== null && sample.depth !== undefined) {
+            if (isAgeAxis) {
+              const sampleAgeVal = sample.depth;
+              sample.age = sampleAgeVal;
+              const estDepth = interpolate1D(sampleAgeVal, ages, depths);
+              if (estDepth !== null) {
+                sample.depth = Math.round(estDepth * 100) / 100;
+              }
+            } else {
+              sample.age = interpolate1D(sample.depth, depths, ages);
+              if (ageMin.length === depths.length) {
+                sample.age_min = interpolate1D(sample.depth, depths, ageMin);
+              }
+              if (ageMax.length === depths.length) {
+                sample.age_max = interpolate1D(sample.depth, depths, ageMax);
+              }
+            }
+          }
+        }
+      }
+
+      sidebar?.updateData(canvasComponent.data);
       inspector?.updateData(canvasComponent.data);
-      setHudNotice('年代-深度模型已关联到当前图谱。');
+      updateFooter();
+      scheduleAutosave();
+      canvasComponent.requestRender();
+      setHudNotice('年代-深度模型已成功对接至 Y 轴与采样层位。', 4500);
     }
   );
 

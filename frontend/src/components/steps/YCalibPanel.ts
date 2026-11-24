@@ -128,8 +128,7 @@ export function render(data: DiagramData): string {
                 id="ycal-inp-unit"
                 value="${unit}"
                 placeholder="${unitLabel}"
-                ${axisCategory !== 'custom' ? 'readonly' : ''}
-                style="width: 58px; font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: ${axisCategory === 'custom' ? 'var(--bg-card)' : 'transparent'}; color: var(--text-primary); font-weight: 600;"
+                style="width: 58px; font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); font-weight: 600;"
               />
               <span id="ycal-unit-link-hint" style="font-size: 9.5px; color: var(--text-muted); ${axisCategory === 'custom' ? 'display: none;' : ''}">
                 ${axisCategory === 'age' ? 'yrBP 联动' : axisCategory === 'depth' ? 'cm 联动' : axisCategory === 'code' ? '无单位' : ''}

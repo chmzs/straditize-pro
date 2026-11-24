@@ -66,11 +66,19 @@ export function createAgeDepthModalHtml(): string {
 
             <div id="ad-canvas-container" style="flex: 1; min-height: 240px; position: relative; background: var(--bg-tertiary); border: 2px dashed var(--border-color); border-radius: 6px; overflow: hidden;">
               <!-- 画布左上角控制点与测年点交互工具条 -->
-              <div id="ad-floating-toolbar">
-                <button class="ui-btn ui-btn--quiet ui-btn--xs ad-fmode-btn active" data-fmode="adjust">微调 (V)</button>
-                <button class="ui-btn ui-btn--quiet ui-btn--xs ad-fmode-btn" data-fmode="add">加点 (A)</button>
-                <button class="ui-btn ui-btn--quiet ui-btn--xs ad-fmode-btn" data-fmode="delete">删点 (D)</button>
-                <button class="ui-btn ui-btn--quiet ui-btn--xs ad-fmode-btn" data-fmode="pickDate" style="color: var(--accent-green);">拾取测年点 (P)</button>
+              <div id="ad-floating-toolbar" style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                <button class="ui-btn ui-btn--quiet ui-btn--xs ad-fmode-btn active" data-fmode="adjust" title="选择/微调控制点 (快捷键 S)">选择 (S)</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs ad-fmode-btn" data-fmode="add" title="在所选目标线上增加控制点 (快捷键 A)">加点 (A)</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs ad-fmode-btn" data-fmode="delete" title="删除控制点 (快捷键 D / Delete)">删点 (D)</button>
+                <button class="ui-btn ui-btn--quiet ui-btn--xs ad-fmode-btn" data-fmode="pickDate" style="color: var(--accent-green);" title="拾取测年点 (快捷键 P)">拾取测年点 (P)</button>
+                <div style="display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding-left: 6px; border-left: 1px solid var(--border-color);">
+                  <span style="font-size: 10px; color: var(--text-muted);">编辑目标:</span>
+                  <select id="ad-sel-edit-target" class="ui-select ui-select--xs" style="font-size: 10px; padding: 1px 4px; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 3px;">
+                    <option value="curve" selected>中位线 (Median)</option>
+                    <option value="min">置信区间下界 (Min)</option>
+                    <option value="max">置信区间上界 (Max)</option>
+                  </select>
+                </div>
               </div>
               <canvas id="ad-inspection-canvas" style="position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; display: none;"></canvas>
               <div id="ad-empty-drop-zone" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg-card); z-index: 10; padding: 24px; text-align: center;">
@@ -182,16 +190,24 @@ export function createAgeDepthModalHtml(): string {
               </div>
             </div>
 
-            <!-- ============ 步骤 1b：单位约定（固定） ============ -->
-            <div class="form-group" style="margin: 0; padding: 8px; border-radius: 4px; border-left: 3px solid var(--accent-amber); background: rgba(245,158,11,0.07);">
-              <div style="font-size: 10.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 3px;">
-                ①b 单位固定为 <code>cm</code> 与 <code>cal BP</code>
+            <!-- ============ 步骤 1b：物理量单位与 Y 轴对接 ============ -->
+            <div class="form-group" style="margin: 0; padding: 8px; border-radius: 4px; border-left: 3px solid var(--accent-blue); background: var(--bg-card); border: 1px solid var(--border-light);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <span style="font-size: 10.5px; font-weight: 700; color: var(--text-primary);">①b 物理量单位与 Y 轴对接</span>
+                <span id="ad-ycal-sync-badge" style="font-size: 9.5px; padding: 1px 6px; border-radius: 3px; background: rgba(59, 130, 246, 0.1); color: var(--accent-blue); font-weight: 600;">未对接</span>
               </div>
-              <div style="font-size: 9.5px; color: var(--text-secondary); line-height: 1.55;">
-                本工具只认这两个单位，不做任何单位换算。<br>
-                原图若用 <b>ka</b>（如 0–12 ka），请自己乘 1000 后填入标定值（0 / 12000）；<br>
-                原图若用 <b>AD/CE</b>，请自己换成 BP（<code>BP = 1950 − AD</code>），否则年代方向相反。<br>
-                <b>未校正 ¹⁴C BP</b> 不是时间轴，需先过校正曲线，本工具不做校正。
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 10px;">
+                <div>
+                  <label style="color: var(--text-muted); display: block; margin-bottom: 2px;">深度单位 (Depth Unit):</label>
+                  <input type="text" id="ad-inp-depth-unit" value="cm" placeholder="如 cm / m" style="width: 100%; font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);" />
+                </div>
+                <div>
+                  <label style="color: var(--text-muted); display: block; margin-bottom: 2px;">年代单位 (Age Unit):</label>
+                  <input type="text" id="ad-inp-age-unit" value="cal BP" placeholder="如 cal BP / yrBP" style="width: 100%; font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);" />
+                </div>
+              </div>
+              <div id="ad-ycal-sync-hint" style="font-size: 9.5px; color: var(--text-muted); line-height: 1.45; margin-top: 5px;">
+                单位默认自动与当前图谱 Y 轴（步骤 3）标定单位联动。原图若用 ka 轴可将单位设为 ka BP 或乘 1000 换算为 cal BP。
               </div>
             </div>
 
@@ -264,7 +280,7 @@ export function createAgeDepthModalHtml(): string {
               </div>
 
               <div style="flex: 1; overflow-y: auto; border: 1px solid var(--border-light); border-radius: 4px; background: var(--bg-card);">
-                <table class="wpd-preview-table" style="width: 100%; font-size: 10px;">
+                <table id="ad-tbl-mapping" class="wpd-preview-table" style="width: 100%; font-size: 10px;">
                   <thead>
                     <tr>
                       <th style="width: 25%;">Depth</th>
@@ -346,7 +362,7 @@ export function createAgeDepthModalHtml(): string {
 
           <!-- 数据表格容器 -->
           <div style="flex: 1; min-height: 200px; overflow: auto; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card);">
-            <table class="wpd-preview-table ad-full-table" style="width: 100%;">
+            <table id="ad-tbl-full" class="wpd-preview-table ad-full-table" style="width: 100%;">
               <thead>
                 <tr>
                   <th style="width: 45px; text-align: center;">#</th>
@@ -364,6 +380,17 @@ export function createAgeDepthModalHtml(): string {
                 <tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 30px;">尚未执行识别提取或载入年代模型</td></tr>
               </tbody>
             </table>
+          </div>
+
+          <!-- 简易沉积速率 (Sedimentation Rate) 曲线折叠区 -->
+          <div id="ad-sedrate-panel" style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <strong style="font-size: 11px; color: var(--accent-blue);">沉积速率剖面 (Sedimentation Rate Profile)</strong>
+              <span id="ad-sedrate-meta" style="font-size: 10px; color: var(--text-muted); font-family: var(--font-mono);">—</span>
+            </div>
+            <div style="height: 110px; width: 100%; position: relative; background: var(--bg-card); border-radius: 4px; overflow: hidden; border: 1px solid var(--border-light);">
+              <canvas id="ad-sedrate-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
+            </div>
           </div>
 
           <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text-muted);">

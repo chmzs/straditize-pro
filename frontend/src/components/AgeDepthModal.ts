@@ -30,6 +30,7 @@ export type {
  */
 export class AgeDepthModal {
   private container: HTMLElement;
+  private pollenData: DiagramData | null = null;
   private rpcClient: RpcClient;
   private onApplyAgeModel: (model: AgeDepthModelInspectionData) => void;
 
@@ -46,12 +47,15 @@ export class AgeDepthModal {
     onApplyAgeModel: (model: AgeDepthModelInspectionData) => void
   ) {
     this.container = container;
-    void pollenData;
+    this.pollenData = pollenData;
     this.rpcClient = rpcClient;
     this.onApplyAgeModel = onApplyAgeModel;
   }
 
-  public open(): void {
+  public open(latestData?: DiagramData): void {
+    if (latestData) {
+      this.pollenData = latestData;
+    }
     this.close();
 
     const modal = document.createElement('div');
@@ -227,8 +231,92 @@ export class AgeDepthModal {
     this.controller.checkComponentStatus();
     this.controller.setupSseListener();
     this.controller.renderRateOptionsNote();
+    this.syncFromPollenData();
 
     void this.controller.restoreExistingSessionModel();
+  }
+
+  /**
+   * 与主图谱 Y 轴物理标定与性质无缝对接（步骤 3 深度/年代/单位/区间同步）。
+   */
+  private syncFromPollenData(): void {
+    if (!this.modalEl || !this.pollenData) return;
+    const modal = this.modalEl;
+    const cal = this.pollenData.calibration;
+    const badgeEl = modal.querySelector('#ad-ycal-sync-badge') as HTMLElement | null;
+    const hintEl = modal.querySelector('#ad-ycal-sync-hint') as HTMLElement | null;
+    const inpDepthUnit = modal.querySelector('#ad-inp-depth-unit') as HTMLInputElement | null;
+    const inpAgeUnit = modal.querySelector('#ad-inp-age-unit') as HTMLInputElement | null;
+    const inpDepthTop = modal.querySelector('#ad-inp-depth-top') as HTMLInputElement | null;
+    const inpDepthBot = modal.querySelector('#ad-inp-depth-bottom') as HTMLInputElement | null;
+    const inpRangeMin = modal.querySelector('#ad-inp-range-min') as HTMLInputElement | null;
+    const inpRangeMax = modal.querySelector('#ad-inp-range-max') as HTMLInputElement | null;
+    const inpAgeLeft = modal.querySelector('#ad-inp-age-left') as HTMLInputElement | null;
+    const inpAgeRight = modal.querySelector('#ad-inp-age-right') as HTMLInputElement | null;
+
+    if (!cal || !cal.isCalibrated) {
+      if (badgeEl) {
+        badgeEl.textContent = '主图未标定';
+        badgeEl.style.background = 'rgba(239, 68, 68, 0.1)';
+        badgeEl.style.color = 'var(--accent-red)';
+      }
+      if (hintEl) {
+        hintEl.textContent = '当前图谱 Y 轴尚未在步骤 3 完成标定，可先手动填报标定值与提取范围。';
+      }
+      return;
+    }
+
+    const rawAxis = (cal.primaryAxis ?? 'age').trim().toLowerCase();
+    const isAgeAxis = rawAxis === 'age';
+    const isDepthAxis = rawAxis === 'depth' || (!isAgeAxis && rawAxis !== 'code');
+    const unit = (cal.unit || '').trim();
+
+    if (isDepthAxis) {
+      if (badgeEl) {
+        badgeEl.textContent = '已对接 Y 轴 (深度)';
+        badgeEl.style.background = 'rgba(16, 185, 129, 0.1)';
+        badgeEl.style.color = 'var(--status-success)';
+      }
+      const depthUnit = unit || 'cm';
+      if (inpDepthUnit) inpDepthUnit.value = depthUnit;
+
+      const topVal = cal.top_cm;
+      const botVal = cal.bottom_cm;
+      if (topVal !== null && botVal !== null && Number.isFinite(topVal) && Number.isFinite(botVal)) {
+        if (inpDepthTop) inpDepthTop.value = String(topVal);
+        if (inpDepthBot) inpDepthBot.value = String(botVal);
+        const minD = Math.min(topVal, botVal);
+        const maxD = Math.max(topVal, botVal);
+        if (inpRangeMin) inpRangeMin.value = String(minD);
+        if (inpRangeMax) inpRangeMax.value = String(maxD);
+        if (hintEl) {
+          hintEl.textContent = `已自动同步主图 Y 轴深度区间：${topVal} ~ ${botVal} ${depthUnit}，提取范围已对齐 [${minD}, ${maxD}]。`;
+        }
+      }
+    } else if (isAgeAxis) {
+      if (badgeEl) {
+        badgeEl.textContent = '已对接 Y 轴 (年代)';
+        badgeEl.style.background = 'rgba(59, 130, 246, 0.1)';
+        badgeEl.style.color = 'var(--accent-blue)';
+      }
+      const ageUnit = unit || 'cal BP';
+      if (inpAgeUnit) inpAgeUnit.value = ageUnit;
+
+      const topVal = cal.top_cm;
+      const botVal = cal.bottom_cm;
+      if (topVal !== null && botVal !== null && Number.isFinite(topVal) && Number.isFinite(botVal)) {
+        const older = Math.max(topVal, botVal);
+        const younger = Math.min(topVal, botVal);
+        if (inpAgeLeft) inpAgeLeft.value = String(older);
+        if (inpAgeRight) inpAgeRight.value = String(younger);
+        if (hintEl) {
+          hintEl.textContent = `主图 Y 轴为年代轴（${older} ~ ${younger} ${ageUnit}），模型将用于层位反演深度。`;
+        }
+      }
+    }
+
+    this.tableComp?.updateTableHeaders();
+    this.tableComp?.renderFullDataTable();
   }
 
   public close(): void {
@@ -334,6 +422,21 @@ export class AgeDepthModal {
         btn.classList.add('active');
         const mode = btn.getAttribute('data-fmode') as any;
         if (mode && this.canvasComp) this.canvasComp.setActiveFMode(mode);
+      });
+    });
+
+    // 编辑控制目标 (中位线/下界Min/上界Max)
+    modal.querySelector('#ad-sel-edit-target')?.addEventListener('change', (e) => {
+      const target = (e.target as HTMLSelectElement).value as 'curve' | 'min' | 'max';
+      this.canvasComp?.setEditTarget(target);
+    });
+
+    // 物理单位变更监听
+    (['ad-inp-depth-unit', 'ad-inp-age-unit'] as const).forEach((id) => {
+      modal.querySelector(`#${id}`)?.addEventListener('input', () => {
+        this.tableComp?.updateTableHeaders();
+        this.tableComp?.renderFullDataTable();
+        this.canvasComp?.renderCanvas();
       });
     });
 

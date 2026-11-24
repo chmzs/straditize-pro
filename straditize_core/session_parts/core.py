@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from ..protocol import (
     FILE_ERROR,
@@ -773,6 +773,140 @@ class CoreMixin:
         new_w = max(1, round(self.width * scale))
         new_h = max(1, round(self.height * scale))
         return self.image.resize((new_w, new_h), Image.Resampling.BILINEAR)
+
+    def get_visual_slice(
+        self,
+        roi_id: str | None = None,
+        col_index: int | None = None,
+        bbox: list[int | float] | None = None,
+        max_dim: int = 1600,
+        include_overlays: bool = False,
+    ) -> dict[str, Any]:
+        """Extract a sub-image visual slice as high-quality Base64 PNG.
+
+        Enables multimodal vision AI agents and human users to visually inspect
+        specific ROIs, columns, or arbitrary coordinate bounding boxes without
+        dumping the entire gigapixel canvas.
+        """
+        if self.image is None:
+            raise JsonRpcError(STATE_ERROR, "No image loaded in session.")
+
+        desc = "Canvas sub-region"
+        x0: int
+        y0: int
+        x1: int
+        y1: int
+
+        if bbox is not None and len(bbox) == 4:
+            x0 = int(round(float(bbox[0])))
+            y0 = int(round(float(bbox[1])))
+            x1 = int(round(float(bbox[2])))
+            y1 = int(round(float(bbox[3])))
+            desc = f"Bounding box [{x0}, {y0}, {x1}, {y1}]"
+        elif col_index is not None:
+            columns = getattr(self, "columns", []) or []
+            if not (0 <= col_index < len(columns)):
+                raise JsonRpcError(
+                    INVALID_PARAMS,
+                    f"Column index {col_index} out of range (total {len(columns)} columns).",
+                )
+            col = columns[col_index]
+            c_name = col.get("name") or f"Column #{col_index}"
+            col_x0 = int(round(float(col.get("start", 0))))
+            col_x1 = int(round(float(col.get("end", col_x0 + 10))))
+            r_y0 = 0
+            r_y1 = self.height
+            if col.get("roi_id"):
+                try:
+                    r = self._get_roi(col["roi_id"])
+                    r_y0 = int(round(float(r.get("y0", 0))))
+                    r_y1 = int(round(float(r.get("y1", self.height))))
+                except Exception:
+                    pass
+            pad_x = 10
+            pad_y = 35
+            x0 = max(0, col_x0 - pad_x)
+            y0 = max(0, r_y0 - pad_y)
+            x1 = min(self.width, col_x1 + pad_x)
+            y1 = min(self.height, r_y1 + pad_y)
+            desc = f"Column #{col_index} '{c_name}' [{x0}, {y0}, {x1}, {y1}]"
+        elif roi_id is not None:
+            roi = self._get_roi(roi_id)
+            x0 = int(round(float(roi.get("x0", 0))))
+            y0 = int(round(float(roi.get("y0", 0))))
+            x1 = int(round(float(roi.get("x1", self.width))))
+            y1 = int(round(float(roi.get("y1", self.height))))
+            r_name = roi.get("name") or roi_id
+            desc = f"ROI '{r_name}' [{x0}, {y0}, {x1}, {y1}]"
+        else:
+            active_roi = None
+            if hasattr(self, "get_active_roi"):
+                try:
+                    active_roi = self.get_active_roi()
+                except Exception:
+                    active_roi = None
+            if active_roi is not None:
+                x0 = int(round(float(active_roi.get("x0", 0))))
+                y0 = int(round(float(active_roi.get("y0", 0))))
+                x1 = int(round(float(active_roi.get("x1", self.width))))
+                y1 = int(round(float(active_roi.get("y1", self.height))))
+                desc = f"Active ROI '{active_roi.get('name', 'active')}' [{x0}, {y0}, {x1}, {y1}]"
+            else:
+                x0, y0, x1, y1 = 0, 0, self.width, self.height
+                desc = f"Entire canvas [{x0}, {y0}, {x1}, {y1}]"
+
+        if x1 < x0:
+            x0, x1 = x1, x0
+        if y1 < y0:
+            y0, y1 = y1, y0
+        x0 = max(0, min(x0, self.width))
+        y0 = max(0, min(y0, self.height))
+        x1 = max(x0 + 1, min(x1, self.width))
+        y1 = max(y0 + 1, min(y1, self.height))
+
+        w = x1 - x0
+        h = y1 - y0
+
+        cropped = self.image.crop((x0, y0, x1, y1))
+
+        if include_overlays:
+            overlay_img = cropped.copy()
+            draw = ImageDraw.Draw(overlay_img, "RGBA")
+            columns = getattr(self, "columns", []) or []
+            if col_index is not None and 0 <= col_index < len(columns):
+                col = columns[col_index]
+                c_start = int(round(float(col.get("start", 0))))
+                c_end = int(round(float(col.get("end", 0))))
+                rel_start = c_start - x0
+                rel_end = c_end - x0
+                if 0 <= rel_start < w:
+                    draw.line([(rel_start, 0), (rel_start, h)], fill=(0, 200, 0, 200), width=2)
+                if 0 <= rel_end < w:
+                    draw.line([(rel_end, 0), (rel_end, h)], fill=(0, 100, 255, 200), width=2)
+            cropped = overlay_img
+
+        if max_dim > 0 and (cropped.width > max_dim or cropped.height > max_dim):
+            scale = max_dim / max(cropped.width, cropped.height)
+            new_w = max(1, int(round(cropped.width * scale)))
+            new_h = max(1, int(round(cropped.height * scale)))
+            cropped = cropped.resize((new_w, new_h), Image.Resampling.BILINEAR)
+
+        buf = io.BytesIO()
+        cropped.save(buf, format="PNG")
+        raw_bytes = buf.getvalue()
+        b64_str = base64.b64encode(raw_bytes).decode("ascii")
+
+        return {
+            "bbox": [x0, y0, x1, y1],
+            "width": cropped.width,
+            "height": cropped.height,
+            "original_width": w,
+            "original_height": h,
+            "format": "png",
+            "base64": b64_str,
+            "data_url": f"data:image/png;base64,{b64_str}",
+            "description": desc,
+        }
 
     def detect_deskew_angle(self) -> dict[str, Any]:
         """Detects whether the loaded diagram is tilted/skewed."""

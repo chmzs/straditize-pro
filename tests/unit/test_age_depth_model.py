@@ -308,6 +308,23 @@ class TestSedimentationRateEstimate(unittest.TestCase):
         fixed = model.estimate_sedimentation_rate(depths, window=20.0)
         self.assertAlmostEqual(fixed["window_depth"], 20.0)
 
+    def test_predict_depth_linear_extrapolation_stability(self):
+        """治理解析发散：超界年代（如 age=0、负年代或过老年代）必须端点线性外推，不得多项式爆炸。"""
+        depths = np.linspace(10.0, 100.0, 50)
+        ages = 200.0 + 30.0 * depths  # 200 + 300 = 500 到 3200 cal BP
+        model = AgeDepthModel(depths=depths, ages=ages)
+        # 测试在 age=0 与负年代 (-100) 处的反演，以及正常与过老年代 (4000)
+        query_ages = [-100.0, 0.0, 500.0, 2000.0, 3200.0, 4000.0]
+        res = model.predict_depth(query_ages)
+        self.assertEqual(len(res["depth_est"]), len(query_ages))
+        # age 变大，depth 必须单调递增，且负年代处深度不能发散成负几千几万
+        d_est = res["depth_est"]
+        self.assertTrue(np.all(np.diff(d_est) > 0), "预测深度必须保持严格单调递增")
+        # 斜率是 1/30 cm/yr，age 从 500 降到 0 差 500 年，深度应从 10 减少约 500/30 = 16.67，即约 -6.67 cm
+        self.assertAlmostEqual(d_est[1], 10.0 - 500.0 / 30.0, places=1)
+        # extrapolated 标志：-100, 0, 4000 必须被标记为 True，500, 2000, 3200 为 False
+        self.assertEqual(res["extrapolated"], [True, True, False, False, False, True])
+
 
 if __name__ == "__main__":
     unittest.main()

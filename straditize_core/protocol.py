@@ -124,6 +124,7 @@ ALL_RPC_METHODS: tuple[str, ...] = (
     "history.redo",
     "history.undo",
     "image.detectDeskew",
+    "image.getVisualSlice",
     "image.load",
     "image.rotate",
     "image.switchPdfPage",

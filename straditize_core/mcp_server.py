@@ -1,16 +1,19 @@
 """Straditize WebMCP (Model Context Protocol) Server & Live Web Session Bridge.
 
-Exposes the complete 8-step stratigraphic digitization workflow and topbar export
-as structured MCP tools for AI agents:
+Exposes the complete 8-step stratigraphic digitization workflow, visual feedback,
+chronology modeling, and automated pipelines as structured MCP tools for AI agents:
 - Step 1 (Load): straditize_load_image
 - Step 2 (ROI): straditize_roi_create, straditize_roi_set_primary
 - Step 3 (Y-Calib): straditize_calibrate_y
-- Step 4 (Cleanup): straditize_cleanup_lines
-- Step 5 (Columns & Naming): straditize_detect_columns, straditize_rename_column, straditize_snap_labels
-- Step 6 (X-Ticks): straditize_detect_xticks, straditize_calibrate_column
+- Step 4 (Cleanup): straditize_detect_line_candidates, straditize_apply_line_removal
+- Step 5 (Columns & Naming): straditize_detect_columns, straditize_rename_column, straditize_snap_labels, straditize_column_update
+- Step 6 (Calibration): straditize_group_create, straditize_group_update, straditize_group_remove, straditize_calibrate_group, straditize_calibrate_column
 - Step 7 (Horizons): straditize_extract_consensus_horizons, straditize_paste_depths
 - Step 8 (QA Gate): straditize_qa_summarize
 - Export (Topbar): straditize_export_readiness, straditize_export
+- Multimodal Vision: straditize_get_visual_slice
+- Chronology / Age-Depth: straditize_agedepth_generate_bacon_script, straditize_agedepth_check_r_env, straditize_agedepth_run_local_bacon, straditize_agedepth_generate_geochronr_script
+- Autopilot Macro: straditize_auto_digitize
 
 Supports two execution backends:
 1. Live Web Bridge Mode (default when web server is active on http://127.0.0.1:8765/rpc):
@@ -225,6 +228,22 @@ WEBMCP_TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "straditize_column_update",
+        "description": "Step 5/6: Update column properties (associate to group x_group_id, rename, set plot_type or exaggeration_mult).",
+        "rpc_method": "column.update",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "col_index": {"type": "integer", "description": "Column index."},
+                "name": {"type": "string", "description": "New taxon name."},
+                "x_group_id": {"type": "string", "description": "Target column group ID."},
+                "plot_type": {"type": "string", "enum": ["area", "bar", "line", "symbol"]},
+                "exaggeration_mult": {"type": "number", "description": "Column-level exaggeration factor."},
+            },
+            "required": ["col_index"],
+        },
+    },
+    {
         "name": "straditize_calibrate_column",
         "description": "Step 6: Calibrate a column's X-axis scale using two tick endpoints [Tick(px, value), Tick(px, value)].",
         "rpc_method": "column.calibrateXTicks",
@@ -262,6 +281,74 @@ WEBMCP_TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "straditize_group_create",
+        "description": "Step 6: Create an X-scale column group within an ROI (e.g. for shared slope or exaggeration).",
+        "rpc_method": "roi.groupCreate",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "roi_id": {"type": "string", "description": "Target ROI ID."},
+                "group_name": {"type": "string", "description": "Display name of the group."},
+                "unit": {"type": "string", "description": "Physical unit (e.g. '%', 'grains/g')."},
+                "plot_type": {"type": "string", "enum": ["area", "bar", "line", "symbol"]},
+                "scale_type": {"type": "string", "enum": ["linear", "log"]},
+                "exaggeration_mult": {"type": "number", "description": "Exaggeration multiplier (e.g. 5.0)."},
+                "layout": {"type": "string", "enum": ["single", "paired", "custom"]},
+            },
+            "required": ["roi_id"],
+        },
+    },
+    {
+        "name": "straditize_group_update",
+        "description": "Step 6: Update group-level calibration properties (value_per_px slope, axis_stroke_px, exaggeration_mult, unit).",
+        "rpc_method": "roi.groupUpdate",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "roi_id": {"type": "string", "description": "Target ROI ID."},
+                "group_id": {"type": "string", "description": "Group ID (e.g. 'grp_default')."},
+                "updates": {
+                    "type": "object",
+                    "description": "Dict of group properties to update: value_per_px, axis_stroke_px, exaggeration_mult, unit, plot_type, scale_type.",
+                },
+            },
+            "required": ["roi_id", "group_id", "updates"],
+        },
+    },
+    {
+        "name": "straditize_group_remove",
+        "description": "Step 6: Remove an X-scale column group from an ROI.",
+        "rpc_method": "roi.groupRemove",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "roi_id": {"type": "string", "description": "Target ROI ID."},
+                "group_id": {"type": "string", "description": "Group ID to remove."},
+            },
+            "required": ["roi_id", "group_id"],
+        },
+    },
+    {
+        "name": "straditize_calibrate_group",
+        "description": "Step 6: Calibrate an entire column group's slope (value_per_px) and physical parameters in one shot.",
+        "rpc_method": "roi.groupUpdate",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "roi_id": {"type": "string", "description": "Target ROI ID."},
+                "group_id": {"type": "string", "description": "Target Group ID (e.g. 'grp_default')."},
+                "value_per_px": {"type": "number", "description": "Direct group slope (value per pixel)."},
+                "px_span": {"type": "number", "description": "Pixel distance between 0 and reference tick."},
+                "val_span": {"type": "number", "description": "Value difference across px_span (used to calculate slope if value_per_px omitted)."},
+                "unit": {"type": "string", "description": "Measurement unit (default '%')."},
+                "axis_stroke_px": {"type": "number", "description": "Axis stroke width in px (0-point offset)."},
+                "exaggeration_mult": {"type": "number", "description": "Exaggeration multiplier (e.g. 5.0)."},
+                "plot_type": {"type": "string", "enum": ["area", "bar", "line", "symbol"]},
+            },
+            "required": ["roi_id", "group_id"],
+        },
+    },
+    {
         "name": "straditize_extract_consensus_horizons",
         "description": "Step 7: Discover real historical sampling horizons via multi-taxa turning point curvature consensus.",
         "rpc_method": "samples.extractConsensus",
@@ -277,6 +364,22 @@ WEBMCP_TOOLS: list[dict[str, Any]] = [
                     "description": "Minimum supporting taxa count (default 2).",
                 },
             },
+        },
+    },
+    {
+        "name": "straditize_paste_depths",
+        "description": "Step 7: Directly paste a list of known historical sample depths/ages (bypassing curvature consensus).",
+        "rpc_method": "samples.pasteDepths",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "depths": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "List of sample depths or ages.",
+                },
+            },
+            "required": ["depths"],
         },
     },
     {
@@ -319,6 +422,120 @@ WEBMCP_TOOLS: list[dict[str, Any]] = [
                     "type": "string",
                     "description": "Destination file path.",
                 },
+            },
+        },
+    },
+    {
+        "name": "straditize_get_visual_slice",
+        "description": "Visual feedback slice: Extract an image sub-region (by ROI, column, or bbox) as Base64 PNG for multimodal LLM inspection.",
+        "rpc_method": "image.getVisualSlice",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "roi_id": {"type": "string", "description": "Target ROI ID."},
+                "col_index": {"type": "integer", "description": "Target column index."},
+                "bbox": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "[x0, y0, x1, y1] pixel bounding box.",
+                },
+                "max_dim": {
+                    "type": "integer",
+                    "description": "Maximum dimension for downscaling (default 1600).",
+                },
+                "include_overlays": {
+                    "type": "boolean",
+                    "description": "Whether to draw column boundary overlay lines.",
+                },
+            },
+        },
+    },
+    {
+        "name": "straditize_agedepth_generate_bacon_script",
+        "description": "Chronology: Generate an executable rbacon age-depth modeling script with prior constraints.",
+        "rpc_method": "agedepth.generateBaconScript",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "dates": {
+                    "type": "array",
+                    "description": "List of dating objects: [{'depth': d, 'age': a, 'error': e, 'id': '...'}].",
+                    "items": {"type": "object"},
+                },
+                "core_name": {"type": "string", "description": "Core name (default 'MyCore')."},
+                "thickness": {"type": "number", "description": "Bacon section thickness in cm (default 5.0)."},
+                "cc": {"type": "integer", "description": "Calibration curve (1: IntCal20, 2: Marine20, 3: SHCal20)."},
+                "hiatus_depths": {"type": "array", "items": {"type": "number"}},
+                "acc_mean": {"type": "number", "description": "Prior accumulation mean in yr/cm."},
+                "mem_mean": {"type": "number", "description": "Prior memory mean (default 0.7)."},
+            },
+            "required": ["dates"],
+        },
+    },
+    {
+        "name": "straditize_agedepth_check_r_env",
+        "description": "Chronology: Inspect local R environment, testing rbacon and geoChronR package availability.",
+        "rpc_method": "agedepth.checkREnvironment",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "straditize_agedepth_run_local_bacon",
+        "description": "Chronology: Execute local Bacon Bayesian age-depth MCMC modeling via R background process.",
+        "rpc_method": "agedepth.runLocalBacon",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "core_name": {"type": "string"},
+                "dates": {"type": "array", "items": {"type": "object"}},
+                "thickness": {"type": "number"},
+                "cc": {"type": "integer"},
+                "hiatus_depths": {"type": "array", "items": {"type": "number"}},
+            },
+            "required": ["dates"],
+        },
+    },
+    {
+        "name": "straditize_agedepth_generate_geochronr_script",
+        "description": "Chronology: Generate an R script for LiPD age-depth integration with geoChronR.",
+        "rpc_method": "agedepth.generateGeoChronRScript",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lipd_file_name": {"type": "string"},
+                "site_name": {"type": "string"},
+                "thickness": {"type": "number"},
+                "hiatus_depths": {"type": "array", "items": {"type": "number"}},
+            },
+            "required": ["lipd_file_name"],
+        },
+    },
+    {
+        "name": "straditize_auto_digitize",
+        "description": "Autopilot Macro: Execute full end-to-end stratigraphic digitization pipeline (Load -> Calibrate -> Detect -> Digitize -> QA) in one shot.",
+        "rpc_method": "straditize.autoDigitize",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "image_path": {"type": "string", "description": "Path to image file."},
+                "sample_key": {"type": "string", "description": "Built-in sample key (e.g. 'hoya')."},
+                "y_marks": {
+                    "type": "array",
+                    "description": "Two calibration marks: [{'px': y, 'val': depth_or_age}, ...].",
+                    "items": {"type": "object"},
+                },
+                "roi": {
+                    "type": "object",
+                    "description": "ROI bounds: {'name': 'pollen', 'x0': ..., 'y0': ..., 'x1': ..., 'y1': ..., 'composition': True}.",
+                },
+                "group_calib": {
+                    "type": "object",
+                    "description": "Group calibration parameters: {'value_per_px': ..., 'axis_stroke_px': ..., 'unit': '%'}.",
+                },
+                "run_cleanup": {"type": "boolean", "description": "Whether to run automatic degrid line removal."},
+                "tolerance_px": {"type": "number", "description": "Consensus horizon clustering tolerance (default 3.0)."},
             },
         },
     },
@@ -426,8 +643,35 @@ class StraditizeWebMcpServer:
             else:
                 rpc_method = "export.tar"
 
+        # Route group calibration convenience tool
+        elif name == "straditize_calibrate_group":
+            roi_id = args.pop("roi_id")
+            group_id = args.pop("group_id")
+            updates = dict(args.pop("updates", {}) or {})
+            for fld in (
+                "value_per_px",
+                "axis_stroke_px",
+                "unit",
+                "exaggeration_mult",
+                "plot_type",
+            ):
+                if fld in args and args[fld] is not None:
+                    updates[fld] = args[fld]
+            # Convert px_span and val_span to value_per_px if omitted
+            if "value_per_px" not in updates and "px_span" in args and "val_span" in args:
+                px = float(args["px_span"])
+                val = float(args["val_span"])
+                if px != 0:
+                    updates["value_per_px"] = val / px
+            rpc_method = "roi.groupUpdate"
+            args = {"roi_id": roi_id, "group_id": group_id, "updates": updates}
+
         try:
-            result = self._call_rpc(rpc_method, args)
+            if name == "straditize_auto_digitize":
+                result = self._run_auto_digitize(args)
+            else:
+                result = self._call_rpc(rpc_method, args)
+
             # Strip raw binary bytes from text serialization if present
             if (
                 isinstance(result, dict)
@@ -456,6 +700,151 @@ class StraditizeWebMcpServer:
                 ],
                 "isError": True,
             }
+
+    def _run_auto_digitize(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute automated end-to-end digitization pipeline.
+
+        Strictly follows architectural invariants: all data is computed from
+        real backend execution, never mocked or substituted.
+        """
+        image_path = args.get("image_path")
+        sample_key = args.get("sample_key")
+        if not image_path and not sample_key:
+            sample_key = "hoya"
+
+        steps_done: list[str] = []
+
+        # Step 1: Load image
+        load_args: dict[str, Any] = {}
+        if image_path:
+            load_args["path"] = image_path
+        if sample_key:
+            load_args["sample_key"] = sample_key
+        self._call_rpc("core.loadImage", load_args)
+        steps_done.append("load_image")
+
+        # Step 2: Calibrate Y if y_marks provided
+        y_marks = args.get("y_marks")
+        if y_marks and isinstance(y_marks, list) and len(y_marks) >= 2:
+            self._call_rpc("core.calibrateAxes", {"y_marks": y_marks})
+            steps_done.append("calibrate_y")
+
+        # Step 3: Create ROI & set primary (or update if already exists from auto-suggestion)
+        roi_args = args.get("roi")
+        target_roi_id: str | None = None
+        if roi_args and isinstance(roi_args, dict):
+            status = self._call_rpc("core.getStatus", {})
+            existing_rois = (
+                status.get("rois", []) if isinstance(status, dict) else []
+            )
+            r_name = roi_args.get("name")
+            matched_roi = next(
+                (r for r in existing_rois if r.get("name") == r_name), None
+            )
+            if matched_roi:
+                target_roi_id = matched_roi.get("id")
+                update_params: dict[str, Any] = {"roi_id": target_roi_id}
+                for k in ("x0", "x1", "y0", "y1", "composition"):
+                    if k in roi_args:
+                        update_params[k] = roi_args[k]
+                self._call_rpc("roi.update", update_params)
+            else:
+                created = self._call_rpc("roi.create", roi_args)
+                if isinstance(created, dict):
+                    target_roi_id = created.get("roi", {}).get("id") or created.get(
+                        "id"
+                    )
+            if target_roi_id:
+                self._call_rpc("roi.setPrimary", {"roi_id": target_roi_id})
+                steps_done.append("create_roi")
+        else:
+            # If no explicit roi given, use primary/active from load_image
+            status = self._call_rpc("core.getStatus", {})
+            target_roi_id = (
+                status.get("primary_roi_id") if isinstance(status, dict) else None
+            )
+
+        # Step 4: Optional cleanup
+        if bool(args.get("run_cleanup")) and target_roi_id:
+            try:
+                self._call_rpc("algorithm.degrid", {"roi_id": target_roi_id})
+                steps_done.append("cleanup_degrid")
+            except Exception:
+                pass
+
+        # Step 5: Detect columns
+        detect_params: dict[str, Any] = {}
+        if target_roi_id:
+            detect_params["roi_id"] = target_roi_id
+        cols_res = self._call_rpc("core.detectColumns", detect_params)
+        steps_done.append("detect_columns")
+        columns = cols_res.get("columns", []) if isinstance(cols_res, dict) else []
+
+        # Step 6: Digitize curves / ink across all detected columns
+        self._call_rpc("column.redigitizeAll", {})
+        steps_done.append("digitize")
+
+        # Step 6.5: Apply group calibration prior if given
+        group_calib = args.get("group_calib")
+        if group_calib and isinstance(group_calib, dict) and target_roi_id:
+            try:
+                status = self._call_rpc("core.getStatus", {})
+                rois = status.get("rois", []) if isinstance(status, dict) else []
+                cur_roi = next((r for r in rois if r.get("id") == target_roi_id), None)
+                groups = cur_roi.get("x_groups", []) if cur_roi else []
+                group_id = groups[0].get("id") if groups else "grp_default"
+                self._call_rpc(
+                    "roi.groupUpdate",
+                    {
+                        "roi_id": target_roi_id,
+                        "group_id": group_id,
+                        "updates": group_calib,
+                    },
+                )
+                steps_done.append("group_calibration")
+            except Exception:
+                pass
+
+        # Step 7: Extract consensus horizons
+        tol = float(args.get("tolerance_px", 3.0))
+        horizons_res = self._call_rpc(
+            "samples.extractConsensus", {"tolerance_px": tol}
+        )
+        steps_done.append("extract_consensus_horizons")
+        horizons = (
+            horizons_res.get("horizons", []) if isinstance(horizons_res, dict) else []
+        )
+
+        # Step 8: QA summarize
+        qa_params: dict[str, Any] = {}
+        if target_roi_id:
+            qa_params["roi_id"] = target_roi_id
+        qa_res = self._call_rpc("qa.summarize", qa_params)
+        steps_done.append("qa_summarize")
+
+        violations = (
+            qa_res.get("violations_over", []) if isinstance(qa_res, dict) else []
+        )
+        empty_horizons = (
+            qa_res.get("empty_horizons", []) if isinstance(qa_res, dict) else []
+        )
+
+        return {
+            "status": "completed",
+            "steps_completed": steps_done,
+            "target_roi_id": target_roi_id,
+            "columns_count": len(columns),
+            "horizons_count": len(horizons),
+            "qa_summary": {
+                "composition_gate_passed": len(violations) == 0,
+                "violations_count": len(violations),
+                "empty_horizons_count": len(empty_horizons),
+                "n_horizons_with_data": qa_res.get("n_horizons_with_data", 0)
+                if isinstance(qa_res, dict)
+                else 0,
+            },
+            "qa_full": qa_res,
+        }
 
     def handle_mcp_message(self, msg: dict[str, Any]) -> dict[str, Any] | None:
         """Process a single JSON-RPC 2.0 MCP message."""
