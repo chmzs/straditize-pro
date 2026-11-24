@@ -543,7 +543,7 @@ export class AgeDepthCanvas {
   }
 
   /**
-   * 单线切线线性插值与两端切线外推（彻底废除平截死线）。
+   * 单线在控制点跨度内的线性插值。
    */
   private fitLineFromPoints(
     cps: ControlPoint[],
@@ -558,24 +558,14 @@ export class AgeDepthCanvas {
     const sorted = [...cps].sort((a, b) => a.y - b.y);
     const n = sorted.length;
     const y0 = sorted[0].y;
-    const x0 = sorted[0].x;
-    const y1 = sorted[1].y;
-    const x1 = sorted[1].x;
-    const slopeTop = (x1 - x0) / Math.max(1e-6, y1 - y0);
-
     const yLast = sorted[n - 1].y;
-    const xLast = sorted[n - 1].x;
-    const yPrev = sorted[n - 2].y;
-    const xPrev = sorted[n - 2].x;
-    const slopeBot = (xLast - xPrev) / Math.max(1e-6, yLast - yPrev);
 
     for (let i = 0; i < ys.length; i++) {
       const cy = ys[i];
       if (cy <= y0) {
-        // 两端切线线性外推（彻底解除平截锁死）
-        targetXs[i] = x0 + slopeTop * (cy - y0);
+        targetXs[i] = sorted[0].x;
       } else if (cy >= yLast) {
-        targetXs[i] = xLast + slopeBot * (cy - yLast);
+        targetXs[i] = sorted[n - 1].x;
       } else {
         let j = 0;
         while (j < n - 1 && sorted[j + 1].y < cy) j++;
@@ -590,52 +580,69 @@ export class AgeDepthCanvas {
     if (!this.inspectionData?.px_points || this.controlPoints.length < 2) return;
     const px = this.inspectionData.px_points;
 
-    // 自适应扩展：若控制点超出原有图像包围盒或像素范围，自适应扩展深度/年代范围
-    let minY = px.y[0];
-    let maxY = px.y[px.y.length - 1];
+    const curveCps = this.controlPoints.filter((p) => p.kind === 'curve').sort((a, b) => a.y - b.y);
+    const minCps = this.controlPoints.filter((p) => p.kind === 'min').sort((a, b) => a.y - b.y);
+    const maxCps = this.controlPoints.filter((p) => p.kind === 'max').sort((a, b) => a.y - b.y);
+
+    if (curveCps.length < 2) return;
+
+    // 动态重算控制点 Y 范围：加点自适应延伸，删点立即收回（严禁脱离控制点的强制外推）
+    let minY = Infinity;
+    let maxY = -Infinity;
     for (const cp of this.controlPoints) {
       if (cp.y < minY) minY = cp.y;
       if (cp.y > maxY) maxY = cp.y;
     }
-    if (minY < px.y[0] || maxY > px.y[px.y.length - 1]) {
-      const step = px.y.length > 1 ? Math.max(1, Math.round((px.y[px.y.length - 1] - px.y[0]) / (px.y.length - 1))) : 1;
-      const newYs: number[] = [];
-      for (let y = Math.floor(minY); y <= Math.ceil(maxY); y += step) {
-        newYs.push(y);
-      }
-      px.y = newYs;
-      px.x_curve = new Array(newYs.length).fill(0);
-      if (px.x_min) px.x_min = new Array(newYs.length).fill(0);
-      if (px.x_max) px.x_max = new Array(newYs.length).fill(0);
-      this.inspectionData.depths = new Array(newYs.length).fill(0);
-      this.inspectionData.ages = new Array(newYs.length).fill(0);
-      if (this.inspectionData.age_min) this.inspectionData.age_min = new Array(newYs.length).fill(0);
-      if (this.inspectionData.age_max) this.inspectionData.age_max = new Array(newYs.length).fill(0);
+    if (!Number.isFinite(minY) || !Number.isFinite(maxY) || minY >= maxY) return;
+
+    const startY = Math.round(minY);
+    const endY = Math.round(maxY);
+    const newYs: number[] = [];
+    for (let y = startY; y <= endY; y++) {
+      newYs.push(y);
+    }
+    px.y = newYs;
+    px.x_curve = new Array(newYs.length).fill(0);
+    if (minCps.length >= 2) {
+      px.x_min = new Array(newYs.length).fill(0);
+    } else {
+      delete (px as { x_min?: number[] }).x_min;
+    }
+    if (maxCps.length >= 2) {
+      px.x_max = new Array(newYs.length).fill(0);
+    } else {
+      delete (px as { x_max?: number[] }).x_max;
     }
 
-    const curveCps = this.controlPoints.filter((p) => p.kind === 'curve');
-    const minCps = this.controlPoints.filter((p) => p.kind === 'min');
-    const maxCps = this.controlPoints.filter((p) => p.kind === 'max');
+    this.inspectionData.depths = new Array(newYs.length).fill(0);
+    this.inspectionData.ages = new Array(newYs.length).fill(0);
+    if (px.x_min) {
+      this.inspectionData.age_min = new Array(newYs.length).fill(0);
+    } else {
+      delete (this.inspectionData as { age_min?: number[] }).age_min;
+    }
+    if (px.x_max) {
+      this.inspectionData.age_max = new Array(newYs.length).fill(0);
+    } else {
+      delete (this.inspectionData as { age_max?: number[] }).age_max;
+    }
 
     // 拟合中位线
-    if (curveCps.length >= 2) {
-      this.fitLineFromPoints(curveCps, px.y, px.x_curve);
-      for (let i = 0; i < px.y.length; i++) {
-        const ad = this.pxToAgeDepth(px.x_curve[i], px.y[i]);
-        if (ad) {
-          this.inspectionData.depths[i] = ad.depth;
-          this.inspectionData.ages[i] = ad.age;
-        }
+    this.fitLineFromPoints(curveCps, px.y, px.x_curve);
+    for (let i = 0; i < px.y.length; i++) {
+      const ad = this.pxToAgeDepth(px.x_curve[i], px.y[i]);
+      if (ad) {
+        this.inspectionData.depths[i] = ad.depth;
+        this.inspectionData.ages[i] = ad.age;
       }
     }
 
     // 拟合 95% HPD 置信区间下界
     if (minCps.length >= 2 && px.x_min) {
       this.fitLineFromPoints(minCps, px.y, px.x_min);
-      if (!this.inspectionData.age_min) this.inspectionData.age_min = [...this.inspectionData.ages];
       for (let i = 0; i < px.y.length; i++) {
         const ad = this.pxToAgeDepth(px.x_min[i], px.y[i]);
-        if (ad) {
+        if (ad && this.inspectionData.age_min) {
           this.inspectionData.age_min[i] = ad.age;
         }
       }
@@ -644,10 +651,9 @@ export class AgeDepthCanvas {
     // 拟合 95% HPD 置信区间上界
     if (maxCps.length >= 2 && px.x_max) {
       this.fitLineFromPoints(maxCps, px.y, px.x_max);
-      if (!this.inspectionData.age_max) this.inspectionData.age_max = [...this.inspectionData.ages];
       for (let i = 0; i < px.y.length; i++) {
         const ad = this.pxToAgeDepth(px.x_max[i], px.y[i]);
-        if (ad) {
+        if (ad && this.inspectionData.age_max) {
           this.inspectionData.age_max[i] = ad.age;
         }
       }
@@ -937,35 +943,85 @@ export class AgeDepthCanvas {
     ctx.globalAlpha = this.overlayOpacity;
     const inv = 1 / Math.max(this.viewport.scale, 1e-6);
 
-    const curvePath = () => {
-      ctx.moveTo(px.x_curve[0], px.y[0]);
-      for (let i = 1; i < px.y.length; i++) {
-        ctx.lineTo(px.x_curve[i], px.y[i]);
-      }
-    };
-    const edgePath = (xs: number[]) => {
-      ctx.moveTo(xs[0], px.y[0]);
-      for (let i = 1; i < px.y.length; i++) {
-        ctx.lineTo(xs[i], px.y[i]);
-      }
-    };
+    const curveCps = this.controlPoints.filter((p) => p.kind === 'curve');
+    const minCps = this.controlPoints.filter((p) => p.kind === 'min');
+    const maxCps = this.controlPoints.filter((p) => p.kind === 'max');
 
-    if (this.showEnvelope && px.y && px.x_min && px.x_max) {
-      ctx.beginPath();
-      edgePath(px.x_min);
-      for (let i = px.y.length - 1; i >= 0; i--) {
-        ctx.lineTo(px.x_max[i], px.y[i]);
-      }
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(245, 158, 11, 0.32)';
-      ctx.fill();
+    // 1. 置信区间包络带 (只在 min 与 max 均有控制点覆盖的 Y 范围内填充与描边)
+    if (this.showEnvelope && px.y && px.x_min && px.x_max && minCps.length >= 2 && maxCps.length >= 2) {
+      const minMinY = Math.min(...minCps.map((p) => p.y));
+      const maxMinY = Math.max(...minCps.map((p) => p.y));
+      const minMaxY = Math.min(...maxCps.map((p) => p.y));
+      const maxMaxY = Math.max(...maxCps.map((p) => p.y));
 
-      strokeWithHalo(ctx, () => edgePath(px.x_max), CURVE_COLORS.max, 1.5 * inv);
-      strokeWithHalo(ctx, () => edgePath(px.x_min), CURVE_COLORS.min, 1.5 * inv);
+      const envTop = Math.max(minMinY, minMaxY);
+      const envBot = Math.min(maxMinY, maxMaxY);
+      const envIdxs: number[] = [];
+      for (let i = 0; i < px.y.length; i++) {
+        if (px.y[i] >= envTop && px.y[i] <= envBot) envIdxs.push(i);
+      }
+
+      if (envIdxs.length >= 2) {
+        ctx.beginPath();
+        ctx.moveTo(px.x_min[envIdxs[0]], px.y[envIdxs[0]]);
+        for (let k = 1; k < envIdxs.length; k++) {
+          const idx = envIdxs[k];
+          ctx.lineTo(px.x_min[idx], px.y[idx]);
+        }
+        for (let k = envIdxs.length - 1; k >= 0; k--) {
+          const idx = envIdxs[k];
+          ctx.lineTo(px.x_max[idx], px.y[idx]);
+        }
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.32)';
+        ctx.fill();
+      }
+
+      // 下界线 (仅在 min 控制点有效范围内)
+      const minIdxs: number[] = [];
+      for (let i = 0; i < px.y.length; i++) {
+        if (px.y[i] >= minMinY && px.y[i] <= maxMinY) minIdxs.push(i);
+      }
+      if (minIdxs.length >= 2) {
+        strokeWithHalo(ctx, () => {
+          ctx.moveTo(px.x_min[minIdxs[0]], px.y[minIdxs[0]]);
+          for (let k = 1; k < minIdxs.length; k++) {
+            ctx.lineTo(px.x_min[minIdxs[k]], px.y[minIdxs[k]]);
+          }
+        }, CURVE_COLORS.min, 1.5 * inv);
+      }
+
+      // 上界线 (仅在 max 控制点有效范围内)
+      const maxIdxs: number[] = [];
+      for (let i = 0; i < px.y.length; i++) {
+        if (px.y[i] >= minMaxY && px.y[i] <= maxMaxY) maxIdxs.push(i);
+      }
+      if (maxIdxs.length >= 2) {
+        strokeWithHalo(ctx, () => {
+          ctx.moveTo(px.x_max[maxIdxs[0]], px.y[maxIdxs[0]]);
+          for (let k = 1; k < maxIdxs.length; k++) {
+            ctx.lineTo(px.x_max[maxIdxs[k]], px.y[maxIdxs[k]]);
+          }
+        }, CURVE_COLORS.max, 1.5 * inv);
+      }
     }
 
-    if (this.showCurve && px.y && px.x_curve) {
-      strokeWithHalo(ctx, curvePath, CURVE_COLORS.median, 2.5 * inv);
+    // 2. 中位线 (仅在 curve 控制点有效范围内绘制)
+    if (this.showCurve && px.y && px.x_curve && curveCps.length >= 2) {
+      const minCurveY = Math.min(...curveCps.map((p) => p.y));
+      const maxCurveY = Math.max(...curveCps.map((p) => p.y));
+      const cIdxs: number[] = [];
+      for (let i = 0; i < px.y.length; i++) {
+        if (px.y[i] >= minCurveY && px.y[i] <= maxCurveY) cIdxs.push(i);
+      }
+      if (cIdxs.length >= 2) {
+        strokeWithHalo(ctx, () => {
+          ctx.moveTo(px.x_curve[cIdxs[0]], px.y[cIdxs[0]]);
+          for (let k = 1; k < cIdxs.length; k++) {
+            ctx.lineTo(px.x_curve[cIdxs[k]], px.y[cIdxs[k]]);
+          }
+        }, CURVE_COLORS.median, 2.5 * inv);
+      }
     }
 
     if (this.showCurve && this.controlPoints.length > 0) {
