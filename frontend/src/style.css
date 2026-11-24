@@ -1843,17 +1843,37 @@ input[type="text"]:focus, input[type="number"]:focus {
 
 .export-textarea {
   width: 100%;
-  height: 320px;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+  box-sizing: border-box;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 11.5px;
   padding: 10px;
   resize: none;
   outline: none;
   line-height: 1.5;
+}
+
+.wpd-export-dialog #wpd-data-textarea {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  overflow: auto;
+}
+
+body.theme-light .export-textarea,
+body.theme-light .wpd-export-dialog #wpd-data-textarea {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: #cbd5e1;
 }
 
 /* 批次 G-e：`.modal-footer` 已并入原语 `.ui-modal__footer`（见上方 `.modal-header` 合并记录）。 */
@@ -2291,6 +2311,7 @@ body.theme-light .reset-all-btn:hover {
 /* ==============================================================================
    WPD 导出表格预览与交互编辑样式
    ============================================================================== */
+.modal-dialog.ui-modal.wpd-export-dialog,
 .modal-dialog.wpd-export-dialog {
   /* 宽度由 --modal-width 决定（ExportModal 内联设为 1180px）；设置稳定的大气高度与视口安全边距 */
   width: min(1180px, 94vw);
@@ -2299,6 +2320,7 @@ body.theme-light .reset-all-btn:hover {
   max-height: calc(100dvh - 36px);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* 现代分段药丸选项卡容器 (Segmented Control) */
@@ -2368,21 +2390,27 @@ body.theme-light .wpd-tab-btn.active {
 
 .wpd-tab-pane {
   width: 100%;
+  height: 100%;
+  flex: 1;
   min-height: 0;
 }
 
 .wpd-plot-main {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 16px;
   width: 100%;
+  height: 100%;
   min-height: 0;
+  flex: 1;
 }
 
 .wpd-plot-left-area {
   flex: 1;
   min-width: 0;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2391,52 +2419,72 @@ body.theme-light .wpd-tab-btn.active {
 .wpd-plot-right-controls {
   width: 310px;
   min-width: 310px;
+  max-height: 100%;
+  height: 100%;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  scrollbar-width: thin;
 }
 
-/* `.wpd-modal-body` 已下移至文件末尾 `.ui-modal__body` 之后（批次 G-d）。
-   该变体必须晚于原语声明，否则 gap:16px / padding:16px / flex-direction:row
-   会被原语的堆叠契约覆盖。 */
+.wpd-plot-main-column {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 
-/* 主区：左表格与出图 + 右控制栏横向并列。
-   整体高度由内容决定，纵向滚动**只**发生在 .ui-modal__body（单滚动容器）。 */
+/* 主区：左表格/文本 + 右控制栏横向并列撑满，高度严格跟随视口，外层弹窗绝对不滚 */
 .wpd-export-main {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 16px;
   min-height: 0;
+  height: 100%;
+  flex: 1;
   width: 100%;
 }
 
 .wpd-left-area {
   flex: 1;
   min-width: 0;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .wpd-right-controls {
-  /* 不再自己滚：控制栏的长内容交给 body 的滚动条，避免嵌套滚动容器。 */
   width: 310px;
   min-width: 310px;
+  max-height: 100%;
+  height: 100%;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  overflow: visible;
+  overflow-y: auto;
+  overflow-x: hidden;
   box-sizing: border-box;
+  scrollbar-width: thin;
 }
 
 .wpd-table-wrapper {
-  /* 完整支持横向与纵向双向滚动，表头与首列 sticky 吸附 */
+  /* 完整支持横向与纵向双向滚动，表头与首列 sticky 吸附，垂直撑满全部可用剩余空间 */
   flex: 1;
-  min-height: 360px;
-  max-height: 520px;
+  min-height: 0;
+  height: 100%;
   overflow-x: auto;
   overflow-y: auto;
   border: 1px solid var(--border-light);
@@ -3522,14 +3570,14 @@ body.theme-light .ad-row-inversion td {
   padding: var(--space-4);
 }
 
-/* WPD 导出弹窗主体：左侧表格区 + 右侧 270px 控制栏「并列排布」
-   （依据 ExportModal.ts 源码注释与 .wpd-right-controls 的定宽声明）。
-   必须晚于 .ui-modal__body，否则 gap/padding/flex-direction 会被原语覆盖。 */
+/* WPD 导出弹窗主体：左侧表格区 + 右侧 310px 控制栏「并列排布」。
+   必须晚于 .ui-modal__body，彻底覆盖原语的 overflow: auto，确保外层绝对不发生纵向滚动。 */
+.wpd-modal-body.ui-modal__body,
 .wpd-modal-body {
-  /* 纵向堆叠：主区（表格+控制栏）在上，出图设置与预览在下，全宽。
-     唯一的纵向滚动容器（.ui-modal__body 的 overflow: auto）就在这里。 */
   flex: 1;
   min-height: 0;
+  height: 100%;
+  overflow: hidden; /* 彻底杜绝外层弹窗上下滚动，纵向滚动完全下放至左侧表格区/文本区与右侧控制栏 */
   display: flex;
   flex-direction: column;
   gap: 12px;

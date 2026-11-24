@@ -143,12 +143,12 @@ export class ExportModal {
 
         <div class="wpd-modal-body ui-modal__body">
           <!-- 面板 1：数据表格与多格式导出 -->
-          <div id="wpd-tab-pane-data" class="wpd-tab-pane" role="tabpanel" aria-labelledby="wpd-tab-btn-data" style="display: flex; width: 100%;">
+          <div id="wpd-tab-pane-data" class="wpd-tab-pane" role="tabpanel" aria-labelledby="wpd-tab-btn-data" style="display: flex; width: 100%; height: 100%; flex: 1; min-height: 0;">
             <div class="wpd-export-main">
               <!-- 左侧：双模式（表格预览与交互编辑 / 原始代码） -->
               <div class="wpd-left-area">
                 <!-- 地层丰度百分比总和自检门禁 (Sum Check QA Gate) -->
-                <div id="wpd-sum-check-banner" class="wpd-qa-banner wpd-qa-banner--ok">
+                <div id="wpd-sum-check-banner" class="wpd-qa-banner wpd-qa-banner--ok" style="flex-shrink: 0;">
                   <span id="wpd-sum-check-text"><strong>百分比总和自检</strong>: 分析中...</span>
                   <span id="wpd-sum-check-sub" class="wpd-qa-banner__sub">-- 层位</span>
                 </div>
@@ -172,8 +172,8 @@ export class ExportModal {
                   </table>
                 </div>
 
-                <!-- 视图 2: 纯文本导出框 (可复制或手工调整) -->
-                <textarea id="wpd-data-textarea" class="export-textarea" style="display: none; flex: 1; min-height: 0; font-family: var(--font-mono); font-size: var(--font-size-sm); line-height: 1.45;"></textarea>
+                <!-- 视图 2: 纯文本导出框 (可复制或手工调整，与表格等大撑满) -->
+                <textarea id="wpd-data-textarea" class="export-textarea" style="display: none; flex: 1; height: 100%; min-height: 0; font-family: var(--font-mono); font-size: var(--font-size-sm); line-height: 1.45;"></textarea>
 
                 <div style="font-size: var(--font-size-xs); color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;">
                   <span>提示：点击任意表格单元格可直接修改数值（修改项呈橙色高亮），导出 CSV、R 脚本与 TAR 包将实时同步生效。</span>
@@ -289,7 +289,7 @@ export class ExportModal {
           </div>
 
           <!-- 面板 2：地层图绘制与预览 (独立 Tab 空间，全宽呈现) -->
-          <div id="wpd-tab-pane-plot" class="wpd-tab-pane" role="tabpanel" aria-labelledby="wpd-tab-btn-plot" style="display: none; width: 100%;">
+          <div id="wpd-tab-pane-plot" class="wpd-tab-pane" role="tabpanel" aria-labelledby="wpd-tab-btn-plot" style="display: none; width: 100%; height: 100%; flex: 1; min-height: 0;">
             <div class="wpd-plot-main-column" style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
               <!-- 空态引导卡片（尚未出图时显示） -->
               <div id="wpd-plot-empty-placeholder" class="wpd-plot-empty-box" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 320px; border: 2px dashed var(--border-light); border-radius: 6px; background: rgba(15, 23, 42, 0.2); text-align: center; padding: 24px;">
@@ -481,6 +481,8 @@ export class ExportModal {
       tabBtnGrid?.classList.remove('active-mode');
       tableWrapper.style.display = 'none';
       textarea.style.display = 'block';
+      textarea.style.height = '100%';
+      textarea.style.flex = '1';
     });
 
     const getActiveDelimiter = (): string => {
@@ -976,6 +978,8 @@ export class ExportModal {
     const plotZoomLabel = modal.querySelector('#wpd-plot-zoom-label') as HTMLElement | null;
 
     const switchMainTab = (targetTab: 'data' | 'plot') => {
+      const modalBody = modal.querySelector('.wpd-modal-body');
+      if (modalBody) modalBody.scrollTop = 0;
       if (targetTab === 'data') {
         tabBtnData?.classList.add('active');
         tabBtnData?.setAttribute('aria-selected', 'true');

@@ -138,7 +138,7 @@ test.describe('导出弹窗版面密度', () => {
       );
       expect(footer.top, 'footer 顶边在视口外').toBeGreaterThanOrEqual(-0.5);
 
-      // ---- 判据 2：body 内只有一个纵向滚动容器（且是 body 自己） ----
+      // ---- 判据 2：导出界面整体不发生外层纵向滚动（杜绝整体翻滚与顶部叠块），纵向滚动收敛在内部 ----
       const scrollers = await page.evaluate(() => {
         const body = document.querySelector('.ui-modal__body') as HTMLElement | null;
         if (!body) return null;
@@ -147,18 +147,12 @@ test.describe('导出弹窗版面密度', () => {
           const overflowY = style.overflowY;
           return (overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight + 1;
         };
-        const describe = (el: HTMLElement) =>
-          el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.split(/\s+/).join('.') : '');
         return {
           bodyScrollable: isVerticallyScrollable(body),
-          descendants: Array.from(body.querySelectorAll<HTMLElement>('*'))
-            .filter((el) => el.id !== 'wpd-table-wrapper' && isVerticallyScrollable(el))
-            .map(describe),
         };
       });
       expect(scrollers, '找不到 .ui-modal__body').not.toBeNull();
-      expect(scrollers!.descendants, 'body 内出现了嵌套的纵向滚动容器').toEqual([]);
-      expect(scrollers!.bodyScrollable, 'body 应当是唯一的纵向滚动容器（内容超长时它必须能滚）').toBe(true);
+      expect(scrollers!.bodyScrollable, 'body 外层绝对不得纵向滚动（杜绝顶部叠块）').toBe(false);
 
       // ---- 判据 3：字号只走 token ----
       const fonts = await page.evaluate(() => {
