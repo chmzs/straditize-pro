@@ -617,7 +617,7 @@ def _trace_curve(
             anchor = nearest[0]
             last_row = row
 
-    # Measure the envelope around each accepted row.
+    # Measure the envelope around each accepted row using connected outward tracing.
     # Deliberately reads the DARKNESS channel even in chroma mode: the MCMC cloud and
     # its outline are grey, so they contribute nothing to chroma and would give a
     # zero-width band. Chroma locates the median; darkness measures the spread.
@@ -625,6 +625,7 @@ def _trace_curve(
     curve_out: list[float] = []
     min_out: list[float] = []
     max_out: list[float] = []
+    gap_tolerance = 3
     for row in sorted(chosen):
         centroid = chosen[row]
         prof = smoothed[row]
@@ -632,10 +633,32 @@ def _trace_curve(
         mid_hi = int(np.ceil(centroid))
         lo = max(0, mid_lo - half_window)
         hi = min(rw - 1, mid_hi + half_window)
-        left = np.flatnonzero(prof[lo : mid_lo + 1] >= thr_loose)
-        right = np.flatnonzero(prof[mid_hi : hi + 1] >= thr_loose)
-        env_min = float(lo + left[0]) if left.size else centroid
-        env_max = float(mid_hi + right[-1]) if right.size else centroid
+
+        # 向左连通扫描（寻找 95% 置信区间下缘/左边界，杜绝跳过空白粘到坐标轴上）
+        last_valid_left = mid_lo
+        consecutive_low = 0
+        for x in range(mid_lo, lo - 1, -1):
+            if prof[x] >= thr_loose:
+                consecutive_low = 0
+                last_valid_left = x
+            else:
+                consecutive_low += 1
+                if consecutive_low > gap_tolerance:
+                    break
+        env_min = float(last_valid_left)
+
+        # 向右连通扫描（寻找 95% 置信区间上缘/右边界）
+        last_valid_right = mid_hi
+        consecutive_low = 0
+        for x in range(mid_hi, hi + 1):
+            if prof[x] >= thr_loose:
+                consecutive_low = 0
+                last_valid_right = x
+            else:
+                consecutive_low += 1
+                if consecutive_low > gap_tolerance:
+                    break
+        env_max = float(last_valid_right)
 
         rows_out.append(row)
         curve_out.append(centroid)

@@ -177,6 +177,7 @@ export function draftToProjectPayload(draft: DiagramData): DraftRestorePayload {
         bottom_px: draft.calibration?.bottom_px ?? null,
         bottom_cm: draft.calibration?.bottom_cm ?? null,
         unit: draft.calibration?.unit || undefined,
+        primary_axis: draft.calibration?.primaryAxis || 'depth',
       },
       calibration: {
         isCalibrated: !!draft.calibration?.isCalibrated,
@@ -185,6 +186,7 @@ export function draftToProjectPayload(draft: DiagramData): DraftRestorePayload {
         bottom_px: draft.calibration?.bottom_px ?? null,
         bottom_cm: draft.calibration?.bottom_cm ?? null,
         unit: draft.calibration?.unit || undefined,
+        primaryAxis: draft.calibration?.primaryAxis || 'depth',
       },
       // 清理几何三个键：`project_load` 一律 `is not None` 判定，传 `[]` 等于
       // **主动清空**后端。旧草稿（无这些键）不能因此把后端的候选线抹掉，
@@ -277,6 +279,7 @@ export function normalizeProject(
     // 由各消费点自行判断。类型上 `DepthCalibration.unit` 仍是必填 string —— 放宽它
     // 会让 SplineInterpolator.ts:326 报错（另开票范围），这里先保持契约不变。
     unit: cal.unit || undefined,
+    primaryAxis: (cal.primary_axis ?? cal.primaryAxis ?? (cal.unit?.toLowerCase().includes('bp') || cal.unit?.toLowerCase().includes('age') ? 'age' : 'depth')) as any,
     depthInterval: cal.depthInterval ?? cal.depth_interval ?? 2,
     // 默认**关**：这条浅色网格线不承载任何判定信息，是纯视觉噪声（用户明确要求删）。
     // 之前这里写 `?? true`，与 `GeologyCanvas` 的初始值 `depthGridEnabled: false` 打架 ——

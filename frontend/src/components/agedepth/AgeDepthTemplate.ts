@@ -349,18 +349,17 @@ export function createAgeDepthModalHtml(): string {
           <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-tertiary); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); flex-wrap: wrap; gap: 8px;">
             <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
               <span style="font-size: 11px; font-weight: 700; color: var(--accent-blue); margin-right: 4px;">数据视图:</span>
-              <button class="ui-btn ui-btn--quiet ui-btn--xs ad-table-view-btn active" id="ad-tbl-view-samples" style="font-size: 10.5px; padding: 3px 8px;">① 花粉样品层位表 (共识层位)</button>
-              <button class="ui-btn ui-btn--quiet ui-btn--xs ad-table-view-btn" id="ad-tbl-view-points" style="font-size: 10.5px; padding: 3px 8px;">② 年代深度图数值化点表 (三线控制点)</button>
-              <button class="ui-btn ui-btn--quiet ui-btn--xs ad-table-view-btn" id="ad-tbl-view-model" style="font-size: 10.5px; padding: 3px 8px;">③ 连续拟合网格点 (曲线底表)</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs ad-table-view-btn active" id="ad-tbl-view-points" style="font-size: 10.5px; padding: 3px 8px;">① 年代深度图数值化点表 (三线控制点)</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs ad-table-view-btn" id="ad-tbl-view-samples" style="font-size: 10.5px; padding: 3px 8px;">② 花粉样品层位表 (共识层位)</button>
               <span style="border-left: 1px solid var(--border-color); height: 16px; margin: 0 4px;"></span>
-              <select id="ad-tbl-points-filter" class="sample-select" style="font-size: 10.5px; padding: 2px 4px; display: none;">
+              <select id="ad-tbl-points-filter" class="sample-select" style="font-size: 10.5px; padding: 2px 4px;">
                 <option value="all" selected>全部线轨 (三条线)</option>
                 <option value="curve">均值线 (Mean)</option>
                 <option value="lower">95% 下界 (Lower)</option>
                 <option value="upper">95% 上界 (Upper)</option>
               </select>
-              <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-tbl-btn-add-point" style="font-size: 10.5px; padding: 3px 8px; color: var(--accent-blue); display: none;">＋ 添加控制点</button>
-              <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-tbl-btn-add" style="font-size: 10.5px; padding: 3px 8px; color: var(--status-success);">添加层位</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-tbl-btn-add-point" style="font-size: 10.5px; padding: 3px 8px; color: var(--accent-blue);">＋ 添加控制点</button>
+              <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-tbl-btn-add" style="font-size: 10.5px; padding: 3px 8px; color: var(--status-success); display: none;">添加层位</button>
               <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-tbl-btn-sort" style="font-size: 10.5px; padding: 3px 8px;">按深度升序排序</button>
               <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-tbl-btn-copy" style="font-size: 10.5px; padding: 3px 8px;">复制全部 (TSV)</button>
               <button class="ui-btn ui-btn--quiet ui-btn--xs" id="ad-tbl-btn-paste" style="font-size: 10.5px; padding: 3px 8px;">粘贴导入 (Excel/TSV)</button>

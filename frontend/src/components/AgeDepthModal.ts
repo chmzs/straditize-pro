@@ -92,6 +92,7 @@ export class AgeDepthModal {
       },
       onControlPointsChanged: (points) => {
         this.tableComp?.setControlPoints(points);
+        this.deriveAndSetMappedSamples();
       },
     });
 
@@ -99,6 +100,7 @@ export class AgeDepthModal {
       onModelModified: () => {
         this.canvasComp?.syncPxPointsFromModel();
         this.canvasComp?.renderCanvas();
+        this.deriveAndSetMappedSamples();
         const insp = this.canvasComp?.getInspectionData();
         if (insp && this.controller) {
           void this.controller.syncModelToBackend(insp);
@@ -110,6 +112,7 @@ export class AgeDepthModal {
       },
       onControlPointModified: (idx, age, depth) => {
         this.canvasComp?.updateControlPointAgeDepth(idx, age, depth);
+        this.deriveAndSetMappedSamples();
         const insp = this.canvasComp?.getInspectionData() || null;
         if (insp && this.controller) {
           void this.controller.syncModelToBackend(insp);
@@ -117,6 +120,7 @@ export class AgeDepthModal {
       },
       onControlPointDeleted: (idx) => {
         this.canvasComp?.deleteControlPointByIndex(idx);
+        this.deriveAndSetMappedSamples();
         const insp = this.canvasComp?.getInspectionData() || null;
         if (insp && this.controller) {
           void this.controller.syncModelToBackend(insp);
@@ -124,6 +128,7 @@ export class AgeDepthModal {
       },
       onControlPointAdded: (age, depth, kind) => {
         this.canvasComp?.addControlPointAgeDepth(age, depth, kind);
+        this.deriveAndSetMappedSamples();
         const insp = this.canvasComp?.getInspectionData() || null;
         if (insp && this.controller) {
           void this.controller.syncModelToBackend(insp);
@@ -420,12 +425,10 @@ export class AgeDepthModal {
     }
 
     if (this.pollenData.samples?.length && this.tableComp?.getInspectionData()) {
-      if (!this.tableComp.getMappedSamples()) {
-        this.deriveAndSetMappedSamples();
-      }
-      this.tableComp.setTableMode('samples');
-      modal.querySelector('#ad-tbl-view-samples')?.classList.add('active');
-      modal.querySelector('#ad-tbl-view-model')?.classList.remove('active');
+      this.deriveAndSetMappedSamples();
+      this.tableComp.setTableMode('points');
+      modal.querySelector('#ad-tbl-view-points')?.classList.add('active');
+      modal.querySelector('#ad-tbl-view-samples')?.classList.remove('active');
     }
 
     this.tableComp?.updateTableHeaders();
@@ -433,8 +436,8 @@ export class AgeDepthModal {
   }
 
   /**
-   * 从主图谱 135 个共识层位与当前年代模型中自动派生 MappedSamplesData，
-   * 确保图 2（花粉样品层位）与图 1（年代深度表）无缝打通
+   * 从主图谱共识层位与当前年代模型中自动派生 MappedSamplesData，
+   * 确保图 2（花粉样品层位）与图 1（年代深度点表）无缝打通
    */
   private deriveAndSetMappedSamples(): void {
     if (!this.pollenData?.samples?.length || !this.tableComp) return;
@@ -463,15 +466,19 @@ export class AgeDepthModal {
         const estD = this.tableComp.invertDepthFromAge(a);
         depths.push(Math.round(estD * 1000) / 1000);
         ageEst.push(a);
-        ageLower.push(s.age_lower ?? this.tableComp.interpAgeAtDepth(estD, 'lower'));
-        ageUpper.push(s.age_upper ?? this.tableComp.interpAgeAtDepth(estD, 'upper'));
+        const estLower = this.tableComp.interpAgeAtDepth(estD, 'lower');
+        const estUpper = this.tableComp.interpAgeAtDepth(estD, 'upper');
+        ageLower.push(Math.round(estLower * 1000) / 1000);
+        ageUpper.push(Math.round(estUpper * 1000) / 1000);
       } else {
         if (d === null || d === undefined) d = 0;
         const estA = this.tableComp.interpAgeAtDepth(d, 'mean');
+        const estLower = this.tableComp.interpAgeAtDepth(d, 'lower');
+        const estUpper = this.tableComp.interpAgeAtDepth(d, 'upper');
         depths.push(d);
-        ageEst.push(a ?? Math.round(estA * 1000) / 1000);
-        ageLower.push(s.age_lower ?? this.tableComp.interpAgeAtDepth(d, 'lower'));
-        ageUpper.push(s.age_upper ?? this.tableComp.interpAgeAtDepth(d, 'upper'));
+        ageEst.push(Math.round(estA * 1000) / 1000);
+        ageLower.push(Math.round(estLower * 1000) / 1000);
+        ageUpper.push(Math.round(estUpper * 1000) / 1000);
       }
     }
 
@@ -483,6 +490,7 @@ export class AgeDepthModal {
       horizon_id: horizonIds,
     };
     this.canvasComp?.setMappedSamples(mapped);
+    this.tableComp?.setMappedSamples(mapped);
     this.tableComp.setMappedSamples(mapped);
   }
 

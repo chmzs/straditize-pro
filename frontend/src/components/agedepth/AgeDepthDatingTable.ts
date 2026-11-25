@@ -42,7 +42,7 @@ export class AgeDepthDatingTable {
   private container: HTMLElement;
   private callbacks: AgeDepthDatingTableCallbacks;
 
-  private tableMode: 'samples' | 'points' | 'model' = 'samples';
+  private tableMode: 'points' | 'samples' = 'points';
   private inspectionData: AgeDepthModelInspectionData | null = null;
   private mappedSamples: MappedSamplesData | null = null;
   private controlPoints: ControlPoint[] = [];
@@ -66,11 +66,11 @@ export class AgeDepthDatingTable {
 
   // --- Getters & Setters ---
 
-  public getTableMode(): 'samples' | 'points' | 'model' {
+  public getTableMode(): 'points' | 'samples' {
     return this.tableMode;
   }
 
-  public setTableMode(mode: 'samples' | 'points' | 'model'): void {
+  public setTableMode(mode: 'points' | 'samples'): void {
     this.tableMode = mode;
     this.updateTableModeUI();
     this.updateTableHeaders();
@@ -80,22 +80,20 @@ export class AgeDepthDatingTable {
   }
 
   private updateTableModeUI(): void {
-    const btnSamples = this.container.querySelector('#ad-tbl-view-samples');
     const btnPoints = this.container.querySelector('#ad-tbl-view-points');
-    const btnModel = this.container.querySelector('#ad-tbl-view-model');
+    const btnSamples = this.container.querySelector('#ad-tbl-view-samples');
     const selFilter = this.container.querySelector('#ad-tbl-points-filter') as HTMLElement | null;
     const btnAddPoint = this.container.querySelector('#ad-tbl-btn-add-point') as HTMLElement | null;
     const btnAddSample = this.container.querySelector('#ad-tbl-btn-add') as HTMLElement | null;
 
-    btnSamples?.classList.toggle('active', this.tableMode === 'samples');
     btnPoints?.classList.toggle('active', this.tableMode === 'points');
-    btnModel?.classList.toggle('active', this.tableMode === 'model');
+    btnSamples?.classList.toggle('active', this.tableMode === 'samples');
 
     if (selFilter) selFilter.style.display = this.tableMode === 'points' ? 'inline-block' : 'none';
     if (btnAddPoint) btnAddPoint.style.display = this.tableMode === 'points' ? 'inline-block' : 'none';
     if (btnAddSample) {
-      btnAddSample.style.display = this.tableMode === 'points' ? 'none' : 'inline-block';
-      btnAddSample.textContent = this.tableMode === 'samples' ? '添加层位' : '添加网格点';
+      btnAddSample.style.display = this.tableMode === 'samples' ? 'inline-block' : 'none';
+      btnAddSample.textContent = '添加层位';
     }
   }
 
@@ -188,37 +186,41 @@ export class AgeDepthDatingTable {
     const isAscending = ages[n - 1] >= ages[0];
     if (isAscending) {
       if (targetAge <= ages[0]) {
-        const spanA = ages[1] - ages[0];
-        const slope = spanA !== 0 ? (depths[1] - depths[0]) / spanA : 0;
+        let k = 1;
+        while (k < n && Math.abs(ages[k] - ages[0]) < 1e-6) k++;
+        const slope = k < n ? (depths[k] - depths[0]) / (ages[k] - ages[0]) : 0;
         return depths[0] + (targetAge - ages[0]) * slope;
       }
       if (targetAge >= ages[n - 1]) {
-        const spanA = ages[n - 1] - ages[n - 2];
-        const slope = spanA !== 0 ? (depths[n - 1] - depths[n - 2]) / spanA : 0;
+        let k = n - 2;
+        while (k >= 0 && Math.abs(ages[n - 1] - ages[k]) < 1e-6) k--;
+        const slope = k >= 0 ? (depths[n - 1] - depths[k]) / (ages[n - 1] - ages[k]) : 0;
         return depths[n - 1] + (targetAge - ages[n - 1]) * slope;
       }
       for (let i = 0; i < n - 1; i++) {
         if (targetAge >= ages[i] && targetAge <= ages[i + 1]) {
           const spanA = ages[i + 1] - ages[i];
-          const frac = spanA !== 0 ? (targetAge - ages[i]) / spanA : 0;
+          const frac = Math.abs(spanA) > 1e-6 ? (targetAge - ages[i]) / spanA : 0;
           return depths[i] + frac * (depths[i + 1] - depths[i]);
         }
       }
     } else {
       if (targetAge >= ages[0]) {
-        const spanA = ages[1] - ages[0];
-        const slope = spanA !== 0 ? (depths[1] - depths[0]) / spanA : 0;
+        let k = 1;
+        while (k < n && Math.abs(ages[k] - ages[0]) < 1e-6) k++;
+        const slope = k < n ? (depths[k] - depths[0]) / (ages[k] - ages[0]) : 0;
         return depths[0] + (targetAge - ages[0]) * slope;
       }
       if (targetAge <= ages[n - 1]) {
-        const spanA = ages[n - 1] - ages[n - 2];
-        const slope = spanA !== 0 ? (depths[n - 1] - depths[n - 2]) / spanA : 0;
+        let k = n - 2;
+        while (k >= 0 && Math.abs(ages[n - 1] - ages[k]) < 1e-6) k--;
+        const slope = k >= 0 ? (depths[n - 1] - depths[k]) / (ages[n - 1] - ages[k]) : 0;
         return depths[n - 1] + (targetAge - ages[n - 1]) * slope;
       }
       for (let i = 0; i < n - 1; i++) {
         if (targetAge <= ages[i] && targetAge >= ages[i + 1]) {
           const spanA = ages[i + 1] - ages[i];
-          const frac = spanA !== 0 ? (targetAge - ages[i]) / spanA : 0;
+          const frac = Math.abs(spanA) > 1e-6 ? (targetAge - ages[i]) / spanA : 0;
           return depths[i] + frac * (depths[i + 1] - depths[i]);
         }
       }
@@ -244,19 +246,21 @@ export class AgeDepthDatingTable {
     if (n === 1) return targetArr[0];
 
     if (targetDepth <= depths[0]) {
-      const spanD = depths[1] - depths[0];
-      const slope = spanD !== 0 ? (targetArr[1] - targetArr[0]) / spanD : 0;
+      let k = 1;
+      while (k < n && Math.abs(depths[k] - depths[0]) < 1e-6) k++;
+      const slope = k < n ? (targetArr[k] - targetArr[0]) / (depths[k] - depths[0]) : 0;
       return targetArr[0] + (targetDepth - depths[0]) * slope;
     }
     if (targetDepth >= depths[n - 1]) {
-      const spanD = depths[n - 1] - depths[n - 2];
-      const slope = spanD !== 0 ? (targetArr[n - 1] - targetArr[n - 2]) / spanD : 0;
+      let k = n - 2;
+      while (k >= 0 && Math.abs(depths[n - 1] - depths[k]) < 1e-6) k--;
+      const slope = k >= 0 ? (targetArr[n - 1] - targetArr[k]) / (depths[n - 1] - depths[k]) : 0;
       return targetArr[n - 1] + (targetDepth - depths[n - 1]) * slope;
     }
     for (let i = 0; i < n - 1; i++) {
       if (targetDepth >= depths[i] && targetDepth <= depths[i + 1]) {
         const spanD = depths[i + 1] - depths[i];
-        const frac = spanD !== 0 ? (targetDepth - depths[i]) / spanD : 0;
+        const frac = Math.abs(spanD) > 1e-6 ? (targetDepth - depths[i]) / spanD : 0;
         return targetArr[i] + frac * (targetArr[i + 1] - targetArr[i]);
       }
     }
@@ -337,22 +341,6 @@ export class AgeDepthDatingTable {
       this.rebindSortHeaders();
       return;
     }
-
-    // 模型网格底表
-    thead.innerHTML = `
-      <tr>
-        <th style="width: 75px; text-align: center;" id="ad-tbl-th-id">模型网格 #</th>
-        <th class="ad-th-sortable" data-sort="age" style="width: 120px; cursor: pointer;" title="点击按年代排序">age (<span class="ad-th-unit-age">${aUnit}</span>) <span class="ad-sort-ind"></span></th>
-        <th class="ad-th-sortable" data-sort="depth" style="width: 110px; cursor: pointer;" title="点击按深度排序">depth (<span class="ad-th-unit-depth">${dUnit}</span>) <span class="ad-sort-ind"></span></th>
-        <th class="ad-th-sortable" data-sort="upper" style="width: 110px; cursor: pointer;" title="点击按 95% 上界排序">age_upper <span class="ad-sort-ind"></span></th>
-        <th class="ad-th-sortable" data-sort="lower" style="width: 110px; cursor: pointer;" title="点击按 95% 下界排序">age_lower <span class="ad-sort-ind"></span></th>
-        <th style="width: 115px;">accrate_cmyr (<span class="ad-th-unit-rate">${dUnit}/yr</span>)</th>
-        <th style="width: 115px;">accrate_cmyr_upper</th>
-        <th style="width: 115px;">accrate_cmyr_lower</th>
-        <th style="width: 50px; text-align: center;">操作</th>
-      </tr>
-    `;
-    this.rebindSortHeaders();
   }
 
   private rebindSortHeaders(): void {
@@ -939,10 +927,8 @@ export class AgeDepthDatingTable {
   public renderFullDataTable(): void {
     if (this.tableMode === 'points') {
       this.renderPointsTable();
-    } else if (this.tableMode === 'samples') {
-      this.renderSamplesTable();
     } else {
-      this.renderModelGridTable();
+      this.renderSamplesTable();
     }
     this.renderSedRateProfile();
   }
@@ -1226,138 +1212,6 @@ export class AgeDepthDatingTable {
       btn.addEventListener('click', () => {
         const idx = parseInt((btn as HTMLElement).getAttribute('data-idx') || '0', 10);
         this.deleteSampleRow(idx);
-      });
-    });
-  }
-
-  public renderModelGridTable(): void {
-    const tbody = this.container.querySelector('#ad-full-table-tbody');
-    const badge = this.container.querySelector('#ad-table-summary-badge');
-    if (!tbody) return;
-
-    if (!this.inspectionData || this.inspectionData.depths.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 30px;">尚未执行识别提取或载入年代模型</td></tr>`;
-      if (badge) badge.textContent = '共 0 个层位';
-      return;
-    }
-
-    const dUnit = this.getDepthUnit();
-    const aUnit = this.getAgeUnit();
-    tbody.innerHTML = '';
-
-    const d = this.inspectionData.depths;
-    const a = this.inspectionData.ages;
-    const mi = this.inspectionData.age_lower || this.inspectionData.age_min || a;
-    const ma = this.inspectionData.age_upper || this.inspectionData.age_max || a;
-    const hasAlignedRates =
-      Array.isArray(this.inspectionData.sed_rate) &&
-      this.inspectionData.sed_rate.length === d.length;
-    const sedRate = hasAlignedRates ? this.inspectionData!.sed_rate! : null;
-    const sedSe = hasAlignedRates ? this.inspectionData!.sed_rate_se || null : null;
-
-    if (badge) {
-      badge.textContent = `模型拟合网格: 共 ${d.length} 个网格点 ｜ 深度 ${formatNumber(d[0]) || 0} ~ ${formatNumber(d[d.length - 1]) || 0} ${dUnit} ｜ 年代 ${formatNumber(a[0]) || 0} ~ ${formatNumber(a[a.length - 1]) || 0} ${aUnit}`;
-    }
-
-    const order = this.displayOrder(d, a, mi, ma);
-
-    for (let pos = 0; pos < order.length; pos++) {
-      const i = order[pos];
-      const tr = document.createElement('tr');
-      const depth = d[i];
-      const age = a[i];
-      const minVal = mi[i] !== undefined ? mi[i] : age - 100;
-      const maxVal = ma[i] !== undefined ? ma[i] : age + 100;
-      const isInverted = i > 0 && age < a[i - 1];
-      if (isInverted) tr.classList.add('ad-row-inversion');
-
-      let accRate: number | null = null;
-      let accUpper: number | null = null;
-      let accLower: number | null = null;
-
-      if (sedRate) {
-        const mid = sedRate[i];
-        if (mid !== null && mid !== undefined && Number.isFinite(mid)) {
-          accRate = mid;
-          const se = sedSe ? sedSe[i] : null;
-          if (se !== null && se !== undefined && Number.isFinite(se)) {
-            accUpper = mid + 1.96 * se;
-            accLower = Math.max(0, mid - 1.96 * se);
-          }
-        }
-      } else if (i > 0 && depth !== d[i - 1]) {
-        const da = Math.abs(age - a[i - 1]);
-        const dd = Math.abs(depth - d[i - 1]);
-        if (da > 1e-6) {
-          accRate = dd / da;
-          accUpper = accRate;
-          accLower = accRate;
-        }
-      }
-
-      // 模型网格点序号：格式为 #001, #002...（与花粉采样层位 H0001 显式区分）
-      const hid = '#' + String(pos + 1).padStart(3, '0');
-
-      tr.innerHTML = `
-        <td style="text-align: center; font-weight: 600; color: var(--text-primary); font-family: var(--font-mono); font-size: 10px;">${hid}</td>
-        <td><input type="number" step="any" class="ad-tbl-input ad-input-full-age" data-idx="${i}" value="${formatNumber(age)}" /></td>
-        <td><input type="number" step="any" class="ad-tbl-input ad-input-full-depth" data-idx="${i}" value="${formatNumber(depth)}" style="font-weight: 600;" /></td>
-        <td><input type="number" step="any" class="ad-tbl-input ad-input-full-max" data-idx="${i}" value="${formatNumber(maxVal)}" /></td>
-        <td><input type="number" step="any" class="ad-tbl-input ad-input-full-min" data-idx="${i}" value="${formatNumber(minVal)}" /></td>
-        <td style="color: var(--text-secondary); font-size: 10px; font-family: var(--font-mono);">${formatNumber(accRate)}</td>
-        <td style="color: var(--text-muted); font-size: 9.5px; font-family: var(--font-mono);">${formatNumber(accUpper)}</td>
-        <td style="color: var(--text-muted); font-size: 9.5px; font-family: var(--font-mono);">${formatNumber(accLower)}</td>
-        <td style="text-align: center;">
-          <button class="ui-btn ui-btn--quiet ui-btn--xs ad-btn-del-full-row" data-idx="${i}" title="删除此行" style="padding: 1px 6px; font-size: 9.5px; color: var(--accent-red);">✕</button>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    }
-
-    tbody.querySelectorAll('.ad-input-full-age').forEach((inp) => {
-      inp.addEventListener('change', (e) => {
-        const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
-        const v = parseFloat((e.target as HTMLInputElement).value);
-        if (Number.isFinite(v)) {
-          this.onModelPointEdited(idx, 'age', v);
-          this.updateMappingTable();
-        }
-      });
-    });
-    tbody.querySelectorAll('.ad-input-full-depth').forEach((inp) => {
-      inp.addEventListener('change', (e) => {
-        const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
-        const v = parseFloat((e.target as HTMLInputElement).value);
-        if (Number.isFinite(v)) {
-          this.onModelPointEdited(idx, 'depth', v);
-          this.updateMappingTable();
-        }
-      });
-    });
-    tbody.querySelectorAll('.ad-input-full-max').forEach((inp) => {
-      inp.addEventListener('change', (e) => {
-        const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
-        const v = parseFloat((e.target as HTMLInputElement).value);
-        if (Number.isFinite(v)) {
-          this.onModelPointEdited(idx, 'max', v);
-          this.updateMappingTable();
-        }
-      });
-    });
-    tbody.querySelectorAll('.ad-input-full-min').forEach((inp) => {
-      inp.addEventListener('change', (e) => {
-        const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
-        const v = parseFloat((e.target as HTMLInputElement).value);
-        if (Number.isFinite(v)) {
-          this.onModelPointEdited(idx, 'min', v);
-          this.updateMappingTable();
-        }
-      });
-    });
-    tbody.querySelectorAll('.ad-btn-del-full-row').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const idx = parseInt((btn as HTMLElement).getAttribute('data-idx') || '0', 10);
-        this.deleteTableRow(idx);
       });
     });
   }
@@ -1870,25 +1724,20 @@ export class AgeDepthDatingTable {
       this.callbacks.onSwitchTab?.('table');
     });
 
-    // 侧边栏表格切换全量模型 vs 花粉样品
+    // 侧边栏表格切换数值点表 vs 花粉样品
     this.container.querySelector('#ad-btn-toggle-side-table')?.addEventListener('click', () => {
-      this.tableMode = this.tableMode === 'model' ? 'samples' : 'model';
+      this.tableMode = this.tableMode === 'points' ? 'samples' : 'points';
       const btn = this.container.querySelector('#ad-btn-toggle-side-table') as HTMLElement | null;
-      if (btn) btn.textContent = this.tableMode === 'model' ? '全量模型' : '花粉样品';
+      if (btn) btn.textContent = this.tableMode === 'points' ? '三线点表' : '花粉样品';
       this.updateMappingTable();
-    });
-
-    // Tab 2 大表控制工具栏
-    this.container.querySelector('#ad-tbl-view-samples')?.addEventListener('click', () => {
-      this.setTableMode('samples');
     });
 
     this.container.querySelector('#ad-tbl-view-points')?.addEventListener('click', () => {
       this.setTableMode('points');
     });
 
-    this.container.querySelector('#ad-tbl-view-model')?.addEventListener('click', () => {
-      this.setTableMode('model');
+    this.container.querySelector('#ad-tbl-view-samples')?.addEventListener('click', () => {
+      this.setTableMode('samples');
     });
 
     this.container.querySelector('#ad-tbl-points-filter')?.addEventListener('change', (e) => {
