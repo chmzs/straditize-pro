@@ -683,6 +683,10 @@ digitize 用 ink & ~grid_line_mask & roi_mask
 3. **兼容与持久化**：
    - Step 7 采样层位排序后即刻分配 `horizon_id`；
    - 载入缺失 `horizon_id` 的老工程文件时，在反序列化阶段自动根据深度排序回补 4 位定长主键，杜绝运行时空指针。
+4. **人工微调与层位锁定保护（Lock Protection & Re-consensus Guard，Issue #86）**：
+   - **保护语义**：层位对象支持 `locked: bool` 旗标；用户手工添加（`source == "manual"`）或显式加锁（`locked is True`）的层位享有最高优先级；
+   - **无损共识重算**：当用户在 Step 7 重新提取「拐点共识」时，系统完整保留所有受保护层位，杜绝算法重跑冲刷用户心血；
+   - **近邻冲突抑制**：当新算法行与受保护层位的像元间距 $\le \text{tolerance\_px}$ 时，系统自动抑制重复算法行，归并去重，确保层位唯一性。
 
 ### 11.2 严苛时间基准与量纲体系（Chronological Datum & Units）
 
