@@ -6,10 +6,45 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from scipy.interpolate import interp1d
 from scipy.ndimage import median_filter
 
 from .calibration import LinearCalibration, LogCalibration
+
+
+def interp_r_approx(
+    x_new: np.ndarray | list[float],
+    x: np.ndarray | list[float],
+    y: np.ndarray | list[float],
+    left: float = np.nan,
+    right: float = np.nan,
+) -> np.ndarray:
+    """严格对齐 R approx 语义的分段线性内插（numpy.interp 原生实现）。
+
+    严格遵守三大数值契约：
+    1. 显式禁止静默越界外推：默认传入 left=np.nan, right=np.nan（对齐 R approx 默认 rule=1 行为）。
+    2. 输入过滤非有限值：过滤 NaN / Inf。
+    3. 严格单调升序与均值聚合：按自变量单调升序排序（np.argsort），若存在重复深度/坐标先按均值聚合（ties="mean"）。
+    """
+    x_arr = np.asarray(x, dtype=float)
+    y_arr = np.asarray(y, dtype=float)
+    x_target = np.asarray(x_new, dtype=float)
+
+    valid = np.isfinite(x_arr) & np.isfinite(y_arr)
+    x_clean = x_arr[valid]
+    y_clean = y_arr[valid]
+    if x_clean.size < 2:
+        return np.full_like(x_target, np.nan, dtype=float)
+
+    unique_x, inverse_indices, counts = np.unique(x_clean, return_inverse=True, return_counts=True)
+    if len(unique_x) < len(x_clean):
+        sum_y = np.bincount(inverse_indices, weights=y_clean)
+        unique_y = sum_y / counts
+    else:
+        order = np.argsort(x_clean)
+        unique_x = x_clean[order]
+        unique_y = y_clean[order]
+
+    return np.interp(x_target, unique_x, unique_y, left=left, right=right)
 
 
 def _report(value: float) -> float | None:
@@ -221,11 +256,11 @@ class AgeDepthModel:
         self.analysis_age_min = fit_lower
         self.analysis_age_max = fit_upper
 
-        # Standard piecewise linear interpolators (strictly aligning with R approx)
+        # Standard piecewise linear interpolators (strictly aligning with R approx via numpy.interp)
         if len(fit_depths) >= 2:
-            self._interp_age = interp1d(fit_depths, fit_ages, kind="linear", fill_value="extrapolate", assume_sorted=True)
-            self._interp_min = interp1d(fit_depths, fit_lower, kind="linear", fill_value="extrapolate", assume_sorted=True)
-            self._interp_max = interp1d(fit_depths, fit_upper, kind="linear", fill_value="extrapolate", assume_sorted=True)
+            self._interp_age = lambda d: interp_r_approx(d, fit_depths, fit_ages, left=np.nan, right=np.nan)
+            self._interp_min = lambda d: interp_r_approx(d, fit_depths, fit_lower, left=np.nan, right=np.nan)
+            self._interp_max = lambda d: interp_r_approx(d, fit_depths, fit_upper, left=np.nan, right=np.nan)
         else:
             self._interp_age = None
             self._interp_min = None
@@ -729,9 +764,13 @@ class AgeDepthModel:
 
     def _median_rate(self, grid: np.ndarray) -> np.ndarray:
         """Median accumulation rate da/ddepth on ``grid``, floored strictly positive."""
-        if self._interp_age is None:
+        if self._interp_age is None or grid.size < 2:
             return np.ones_like(grid, dtype=float)
-        rate = np.asarray(self._interp_age.derivative()(grid), dtype=float)
+        ages_on_grid = interp_r_approx(
+            grid, self.analysis_depths, self.analysis_ages,
+            left=self.analysis_ages[0], right=self.analysis_ages[-1]
+        )
+        rate = np.abs(np.gradient(ages_on_grid, grid))
         positive = rate[rate > 0]
         floor = float(np.median(positive) * 0.05) if positive.size else 1e-3
         return np.maximum(rate, max(floor, 1e-9))
@@ -1649,12 +1688,13 @@ class AgeDepthModel:
     def predict_depth(
         self,
         sample_ages: list[float] | np.ndarray,
+        allow_extrapolate: bool = True,
     ) -> dict[str, Any]:
         """Inversely maps sample ages to physical depths using the median age-depth trajectory.
 
         Guards:
-        * Enforces strict monotonicity checks via PCHIP interpolation.
-        * Flags points beyond observed age bounds with ``extrapolated = True``.
+        * 统一使用 numpy.interp 分段线性内插（对标 R approx 语义）。
+        * 显式禁止静默越界外推：默认传入 left=np.nan, right=np.nan。
         """
         a_arr = np.asarray(sample_ages, dtype=float)
         if (
@@ -1688,16 +1728,17 @@ class AgeDepthModel:
         observed_max_a = float(np.max(unique_a))
         extrapolated = (a_arr < observed_min_a) | (a_arr > observed_max_a)
 
-        # Standard linear interpolation (aligning with R approx)
-        pred_d = np.interp(a_arr, unique_a, unique_d)
-        low_mask = a_arr < observed_min_a
-        if np.any(low_mask):
-            slope_lo = (unique_d[1] - unique_d[0]) / (unique_a[1] - unique_a[0]) if (unique_a[1] - unique_a[0]) != 0 else 0
-            pred_d[low_mask] = unique_d[0] + slope_lo * (a_arr[low_mask] - observed_min_a)
-        high_mask = a_arr > observed_max_a
-        if np.any(high_mask):
-            slope_hi = (unique_d[-1] - unique_d[-2]) / (unique_a[-1] - unique_a[-2]) if (unique_a[-1] - unique_a[-2]) != 0 else 0
-            pred_d[high_mask] = unique_d[-1] + slope_hi * (a_arr[high_mask] - observed_max_a)
+        # 严格遵守数据契约：numpy.interp 显式传 left=np.nan, right=np.nan
+        pred_d = interp_r_approx(a_arr, unique_a, unique_d, left=np.nan, right=np.nan)
+        if allow_extrapolate:
+            low_mask = a_arr < observed_min_a
+            if np.any(low_mask):
+                slope_lo = (unique_d[1] - unique_d[0]) / (unique_a[1] - unique_a[0]) if (unique_a[1] - unique_a[0]) != 0 else 0
+                pred_d[low_mask] = unique_d[0] + slope_lo * (a_arr[low_mask] - observed_min_a)
+            high_mask = a_arr > observed_max_a
+            if np.any(high_mask):
+                slope_hi = (unique_d[-1] - unique_d[-2]) / (unique_a[-1] - unique_a[-2]) if (unique_a[-1] - unique_a[-2]) != 0 else 0
+                pred_d[high_mask] = unique_d[-1] + slope_hi * (a_arr[high_mask] - observed_max_a)
 
         return {
             "ages": _report_list(a_arr),
