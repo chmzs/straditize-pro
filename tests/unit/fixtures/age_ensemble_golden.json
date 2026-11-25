@@ -78,51 +78,51 @@
    "age_reversal_rate": 0.0,
    "correlation_length": 2.5,
    "correlation_length_fitted": true,
-   "envelope_mismatch": 0.1993,
-   "envelope_mismatch_vs_extracted": 0.5475,
-   "median_curve_max_deviation": 52.37,
+   "envelope_mismatch": 0.1991,
+   "envelope_mismatch_vs_extracted": 0.5754,
+   "median_curve_max_deviation": 50.2,
    "rate": {
     "acc_rate_yr_per_depth": [
-     12.4651,
-     12.2878,
-     12.3146,
-     8.7176,
-     9.2382
+     12.1727,
+     11.8918,
+     11.6511,
+     9.2091,
+     9.086
     ],
     "acc_rate_yr_per_depth_max": [
-     29.2918,
-     16.2097,
-     14.8989,
-     10.1841,
-     10.3729
+     28.0891,
+     15.6364,
+     14.1036,
+     10.7786,
+     10.2012
     ],
     "acc_rate_yr_per_depth_min": [
-     5.4544,
-     9.3281,
-     10.2254,
-     7.4524,
-     7.9327
+     5.471,
+     9.0792,
+     9.6865,
+     7.8544,
+     7.8084
     ],
     "sed_rate_depth_per_yr": [
-     0.0802,
-     0.0814,
-     0.0812,
-     0.1147,
-     0.1082
+     0.0822,
+     0.0841,
+     0.0858,
+     0.1086,
+     0.1101
     ],
     "sed_rate_depth_per_yr_max": [
-     0.1833,
-     0.1072,
-     0.0978,
-     0.1342,
-     0.1261
+     0.1828,
+     0.1101,
+     0.1032,
+     0.1273,
+     0.1281
     ],
     "sed_rate_depth_per_yr_min": [
-     0.0341,
-     0.0617,
-     0.0671,
-     0.0982,
-     0.0964
+     0.0356,
+     0.064,
+     0.0709,
+     0.0928,
+     0.098
     ],
     "units": {
      "acc_rate": "cal BP per cm",
@@ -130,43 +130,43 @@
      "volume_ar": "cm per year (cm3 cm-2 yr-1)"
     },
     "volume_ar_cm_per_yr": [
-     0.0802,
-     0.0814,
-     0.0812,
-     0.1147,
-     0.1082
+     0.0822,
+     0.0841,
+     0.0858,
+     0.1086,
+     0.1101
     ],
     "volume_ar_cm_per_yr_max": [
-     0.1833,
-     0.1072,
-     0.0978,
-     0.1342,
-     0.1261
+     0.1828,
+     0.1101,
+     0.1032,
+     0.1273,
+     0.1281
     ],
     "volume_ar_cm_per_yr_min": [
-     0.0341,
-     0.0617,
-     0.0671,
-     0.0982,
-     0.0964
+     0.0356,
+     0.064,
+     0.0709,
+     0.0928,
+     0.098
     ]
    },
    "shared_offset_sigma": 0.0,
-   "simulated_envelope_median": 193.05,
+   "simulated_envelope_median": 198.06,
    "target_envelope_median": 120.0
   },
-  "matrix_digest": "dfb33de603913b83",
+  "matrix_digest": "78620d857469a828",
   "matrix_head": [
-   121.61,
-   119.45,
-   45.48,
-   61.03
+   127.53,
+   127.49,
+   49.04,
+   65.07
   ],
   "matrix_tail": [
-   967.71,
-   1003.69,
-   958.34,
-   930.32
+   967.08,
+   1004.35,
+   957.31,
+   929.07
   ],
   "member_count": 64,
   "row_count": 5
@@ -250,51 +250,51 @@
    "age_reversal_rate": 0.0,
    "correlation_length": 15.0,
    "correlation_length_fitted": true,
-   "envelope_mismatch": 0.2932,
-   "envelope_mismatch_vs_extracted": 0.737,
-   "median_curve_max_deviation": 76.41,
+   "envelope_mismatch": 0.2985,
+   "envelope_mismatch_vs_extracted": 0.7355,
+   "median_curve_max_deviation": 71.3,
    "rate": {
     "acc_rate_yr_per_depth": [
-     9.3973,
-     10.9909,
-     12.0361,
-     10.5721,
-     10.0123
+     9.165,
+     10.3761,
+     12.0193,
+     10.3427,
+     9.9754
     ],
     "acc_rate_yr_per_depth_max": [
-     14.8879,
-     12.8988,
-     13.6062,
-     11.6769,
-     10.765
+     14.2943,
+     12.1709,
+     13.6086,
+     11.4327,
+     10.7326
     ],
     "acc_rate_yr_per_depth_min": [
-     5.2188,
-     9.2177,
-     10.8834,
-     9.539,
-     9.1378
+     5.2075,
+     8.7041,
+     10.8547,
+     9.324,
+     9.0964
     ],
     "sed_rate_depth_per_yr": [
-     0.1064,
-     0.091,
-     0.0831,
-     0.0946,
-     0.0999
+     0.1091,
+     0.0964,
+     0.0832,
+     0.0967,
+     0.1002
     ],
     "sed_rate_depth_per_yr_max": [
-     0.1916,
-     0.1085,
-     0.0919,
-     0.1048,
-     0.1094
+     0.192,
+     0.1149,
+     0.0921,
+     0.1073,
+     0.1099
     ],
     "sed_rate_depth_per_yr_min": [
-     0.0672,
-     0.0775,
+     0.07,
+     0.0822,
      0.0735,
-     0.0856,
-     0.0929
+     0.0875,
+     0.0932
     ],
     "units": {
      "acc_rate": "cal BP per cm",
@@ -302,43 +302,43 @@
      "volume_ar": "cm per year (cm3 cm-2 yr-1)"
     },
     "volume_ar_cm_per_yr": [
-     0.1064,
-     0.091,
-     0.0831,
-     0.0946,
-     0.0999
+     0.1091,
+     0.0964,
+     0.0832,
+     0.0967,
+     0.1002
     ],
     "volume_ar_cm_per_yr_max": [
-     0.1916,
-     0.1085,
-     0.0919,
-     0.1048,
-     0.1094
+     0.192,
+     0.1149,
+     0.0921,
+     0.1073,
+     0.1099
     ],
     "volume_ar_cm_per_yr_min": [
-     0.0672,
-     0.0775,
+     0.07,
+     0.0822,
      0.0735,
-     0.0856,
-     0.0929
+     0.0875,
+     0.0932
     ]
    },
    "shared_offset_sigma": 0.0,
-   "simulated_envelope_median": 440.09,
+   "simulated_envelope_median": 439.4,
    "target_envelope_median": 240.0
   },
-  "matrix_digest": "765c40562b2be502",
+  "matrix_digest": "0503d18e11c99731",
   "matrix_head": [
-   299.3,
-   332.03,
-   141.58,
-   177.82
+   314.04,
+   349.08,
+   152.65,
+   189.2
   ],
   "matrix_tail": [
-   2926.48,
-   2968.87,
-   2858.83,
-   2808.04
+   2928.93,
+   2964.72,
+   2853.82,
+   2802.64
   ],
   "member_count": 64,
   "row_count": 5

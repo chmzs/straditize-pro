@@ -1,21 +1,23 @@
-import { Viewport } from '../../core/Viewport';
-import { panDeltaFromArrowKey } from '../canvas/keyBindings';
-import { AgeDepthHistory } from './AgeDepthHistory';
-import {
+import { Viewport } from '../../core/Viewport.ts';
+import { panDeltaFromArrowKey } from '../canvas/keyBindings.ts';
+import { AgeDepthHistory } from './AgeDepthHistory.ts';
+import type {
   AgeDepthHistorySnapshot,
   AgeDepthModelInspectionData,
   CalibKind,
   CalibMarker,
+  ControlPoint,
+  DatingPoint,
+  MappedSamplesData,
+} from './types.ts';
+import {
   CALIB_META,
   CALIB_ORDER,
-  ControlPoint,
   CURVE_COLORS,
-  DatingPoint,
   EXCLUDE_BOX_COLOR,
-  MappedSamplesData,
   MARKER_HIT_RADIUS,
   strokeWithHalo,
-} from './types';
+} from './types.ts';
 
 export interface AgeDepthCanvasCallbacks {
   onModelRefitted?: () => void;
@@ -59,6 +61,7 @@ export class AgeDepthCanvas {
   private editTarget: 'curve' | 'lower' | 'upper' | 'min' | 'max' = 'curve';
   private controlPoints: ControlPoint[] = [];
   private selectedControlPointIndex: number | null = null;
+  private hoveredControlPointIndex: number | null = null;
   private draggingControlPoint: number | null = null;
 
   // 历史撤销重做状态
@@ -356,7 +359,18 @@ export class AgeDepthCanvas {
     this.editTarget = norm;
     const sel = this.container.querySelector('#ad-sel-edit-target') as HTMLSelectElement | null;
     if (sel && sel.value !== norm) sel.value = norm;
+    this.updateEditTargetUI(norm);
     this.renderCanvas();
+  }
+
+  public updateEditTargetUI(target: 'curve' | 'lower' | 'upper'): void {
+    this.container.querySelectorAll('.ad-target-btn').forEach((btn) => {
+      const t = btn.getAttribute('data-target');
+      const active = t === target;
+      btn.classList.toggle('active', active);
+      (btn as HTMLElement).style.fontWeight = active ? '700' : '400';
+      (btn as HTMLElement).style.background = active ? 'var(--bg-hover, rgba(255,255,255,0.12))' : '';
+    });
   }
 
   public updateFModeUI(mode: 'adjust' | 'add' | 'delete' | 'pickDate'): void {
@@ -725,13 +739,38 @@ export class AgeDepthCanvas {
     this.callbacks.onControlPointsChanged?.(this.controlPoints);
   }
 
-  public findControlPointAt(pt: { x: number; y: number }): number {
-    const radius = 9.0 / Math.max(this.viewport.scale, 1e-6);
+  public findControlPointAt(
+    pt: { x: number; y: number },
+    preferredKind?: 'curve' | 'lower' | 'upper' | 'min' | 'max'
+  ): number {
+    const radius = 10.0 / Math.max(this.viewport.scale, 1e-6);
+    const norm = (k: string) => (k === 'min' ? 'lower' : k === 'max' ? 'upper' : k);
+    const targetKind = norm(preferredKind || this.editTarget);
+
+    let bestPrefIdx = -1;
+    let minPrefDist = Infinity;
+    let bestOtherIdx = -1;
+    let minOtherDist = Infinity;
+
     for (let i = 0; i < this.controlPoints.length; i++) {
       const cp = this.controlPoints[i];
-      if (Math.hypot(cp.x - pt.x, cp.y - pt.y) <= radius) return i;
+      const dist = Math.hypot(cp.x - pt.x, cp.y - pt.y);
+      if (dist <= radius) {
+        if (norm(cp.kind) === targetKind) {
+          if (dist < minPrefDist) {
+            minPrefDist = dist;
+            bestPrefIdx = i;
+          }
+        } else {
+          if (dist < minOtherDist) {
+            minOtherDist = dist;
+            bestOtherIdx = i;
+          }
+        }
+      }
     }
-    return -1;
+    // 严格优先返回当前激活目标线的最近控制点；仅当容差内完全没有当前目标点时才降级返回其它点
+    return bestPrefIdx >= 0 ? bestPrefIdx : bestOtherIdx;
   }
 
   /**
@@ -1230,23 +1269,60 @@ export class AgeDepthCanvas {
     }
 
     if (this.showCurve && this.controlPoints.length > 0) {
-      for (let i = 0; i < this.controlPoints.length; i++) {
+      const norm = (k: string) => (k === 'min' ? 'lower' : k === 'max' ? 'upper' : k);
+      const currTarget = norm(this.editTarget);
+
+      // 先画非当前编辑目标的控制点（半透明淡化），后画当前编辑目标的控制点（置顶高亮）
+      const sortedIndices = this.controlPoints.map((_, idx) => idx).sort((a, b) => {
+        const aIsTarget = norm(this.controlPoints[a].kind) === currTarget ? 1 : 0;
+        const bIsTarget = norm(this.controlPoints[b].kind) === currTarget ? 1 : 0;
+        return aIsTarget - bIsTarget;
+      });
+
+      for (const i of sortedIndices) {
         const cp = this.controlPoints[i];
         const isSelected = i === this.selectedControlPointIndex;
+        const isHovered = i === this.hoveredControlPointIndex;
+        const isCurrentTarget = norm(cp.kind) === currTarget;
+
         const color = (cp.kind === 'lower' || cp.kind === 'min')
           ? '#10b981'
           : (cp.kind === 'upper' || cp.kind === 'max')
           ? '#ef4444'
           : '#0284c7';
-        const r = (cp.kind === 'curve' ? 4.2 : 3.6) * inv;
+        const baseR = (cp.kind === 'curve' ? 4.2 : 3.6) * inv;
+        const r = isCurrentTarget ? baseR * 1.15 : baseR;
+
+        // 悬停发光外环 (白色高亮光晕)
+        if (isHovered) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(cp.x, cp.y, r + 4.2 * inv, 0, Math.PI * 2);
+          ctx.strokeStyle = isCurrentTarget ? '#ffffff' : 'rgba(255,255,255,0.7)';
+          ctx.lineWidth = 2.2 * inv;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 8;
+          ctx.stroke();
+          ctx.restore();
+        }
 
         // 选中高亮光环 (金黄醒目外环)
         if (isSelected) {
+          ctx.save();
           ctx.beginPath();
-          ctx.arc(cp.x, cp.y, r + 4.5 * inv, 0, Math.PI * 2);
+          ctx.arc(cp.x, cp.y, r + 5.0 * inv, 0, Math.PI * 2);
           ctx.strokeStyle = '#f59e0b';
-          ctx.lineWidth = 2.4 * inv;
+          ctx.lineWidth = 2.6 * inv;
+          ctx.shadowColor = '#f59e0b';
+          ctx.shadowBlur = 6;
           ctx.stroke();
+          ctx.restore();
+        }
+
+        ctx.save();
+        // 非当前编辑目标的点降低透明度（Focus & Dimming，彻底杜绝多层重叠混淆）
+        if (!isCurrentTarget && !isSelected && !isHovered) {
+          ctx.globalAlpha = 0.35;
         }
 
         ctx.beginPath();
@@ -1254,17 +1330,18 @@ export class AgeDepthCanvas {
           ctx.arc(cp.x, cp.y, r, 0, Math.PI * 2);
         } else {
           // min 与 max 使用菱形标记区分
-          ctx.moveTo(cp.x, cp.y - r * 1.2);
-          ctx.lineTo(cp.x + r * 1.2, cp.y);
-          ctx.lineTo(cp.x, cp.y + r * 1.2);
-          ctx.lineTo(cp.x - r * 1.2, cp.y);
+          ctx.moveTo(cp.x, cp.y - r * 1.25);
+          ctx.lineTo(cp.x + r * 1.25, cp.y);
+          ctx.lineTo(cp.x, cp.y + r * 1.25);
+          ctx.lineTo(cp.x - r * 1.25, cp.y);
           ctx.closePath();
         }
         ctx.fillStyle = isSelected ? '#fef3c7' : '#ffffff';
         ctx.fill();
         ctx.strokeStyle = color;
-        ctx.lineWidth = 1.8 * inv;
+        ctx.lineWidth = (isCurrentTarget ? 2.2 : 1.4) * inv;
         ctx.stroke();
+        ctx.restore();
       }
     }
 
@@ -1450,9 +1527,33 @@ export class AgeDepthCanvas {
 
       if (this.activeFMode === 'add') {
         this.history.push('添加控制点', this.captureState());
+        let targetX = pt.x;
+        // 智能吸附：如果在有效曲线范围内，吸附到该 Y 处的当前目标曲线拟合值，杜绝拉扯尖刺
+        if (this.inspectionData?.px_points?.y && this.inspectionData.px_points.y.length > 0) {
+          const px = this.inspectionData.px_points;
+          const norm = (k: string) => (k === 'min' ? 'lower' : k === 'max' ? 'upper' : k);
+          const xs = norm(this.editTarget) === 'lower'
+            ? (px.x_lower || px.x_min)
+            : norm(this.editTarget) === 'upper'
+            ? (px.x_upper || px.x_max)
+            : px.x_curve;
+          if (xs && px.y && px.y.length > 0) {
+            const minY = px.y[0];
+            const maxY = px.y[px.y.length - 1];
+            if (pt.y >= minY && pt.y <= maxY) {
+              const rowIdx = Math.round(pt.y - minY);
+              if (rowIdx >= 0 && rowIdx < xs.length) {
+                const curveX = xs[rowIdx];
+                if (Math.abs(pt.x - curveX) <= 30 / Math.max(this.viewport.scale, 1e-6)) {
+                  targetX = curveX;
+                }
+              }
+            }
+          }
+        }
         const newCp: ControlPoint = {
           id: `cp_${this.editTarget}_${Date.now()}`,
-          x: pt.x,
+          x: targetX,
           y: pt.y,
           kind: this.editTarget,
         };
@@ -1462,16 +1563,30 @@ export class AgeDepthCanvas {
         this.refitCurveFromControlPoints();
         this.renderCanvas();
         this.callbacks.onControlPointsChanged?.(this.controlPoints);
-        this.showHudNotice(`已在${this.editTarget === 'curve' ? '均值线' : this.editTarget === 'lower' ? '下界线' : '上界线'}添加控制点 (可按 Ctrl+Z 撤销)`);
+        const targetName = this.editTarget === 'curve' ? '均值线' : this.editTarget === 'lower' ? '下界线' : '上界线';
+        this.showHudNotice(`已在${targetName}添加控制点 (可按 Ctrl+Z 撤销)`);
         return;
       }
 
       if (this.activeFMode === 'delete') {
-        const cpIdx = this.findControlPointAt(pt);
+        const cpIdx = this.findControlPointAt(pt, this.editTarget);
         if (cpIdx >= 0) {
+          const cp = this.controlPoints[cpIdx];
+          const norm = (k: string) => (k === 'min' ? 'lower' : k === 'max' ? 'upper' : k);
+          if (norm(cp.kind) !== norm(this.editTarget)) {
+            const targetName = this.editTarget === 'curve' ? '均值线' : this.editTarget === 'lower' ? '下界线' : '上界线';
+            this.showHudNotice(`当前处于【${targetName}】编辑模式，已忽略其它图层的控制点（请按 1/2/3 切换编辑目标）`);
+            return;
+          }
+          const sameKindCount = this.controlPoints.filter((p) => norm(p.kind) === norm(this.editTarget)).length;
+          if (norm(cp.kind) === 'curve' && sameKindCount <= 2) {
+            this.showHudNotice('均值线至少需要保留 2 个端点控制点，无法继续删除');
+            return;
+          }
           this.history.push('删除控制点', this.captureState());
           this.controlPoints.splice(cpIdx, 1);
           this.selectedControlPointIndex = null;
+          this.hoveredControlPointIndex = null;
           this.refitCurveFromControlPoints();
           this.renderCanvas();
           this.callbacks.onControlPointsChanged?.(this.controlPoints);
@@ -1481,12 +1596,19 @@ export class AgeDepthCanvas {
       }
 
       if (this.activeFMode === 'adjust') {
-        const cpIdx = this.findControlPointAt(pt);
+        const cpIdx = this.findControlPointAt(pt, this.editTarget);
         if (cpIdx >= 0) {
           this.selectedControlPointIndex = cpIdx;
           const cp = this.controlPoints[cpIdx];
-          this.setEditTarget(cp.kind);
+          const norm = (k: string) => (k === 'min' ? 'lower' : k === 'max' ? 'upper' : k);
+          // 仅在明确点中了其它线的独立控制点时才切换目标线并提示，绝不在重叠区域误篡改
+          if (norm(cp.kind) !== norm(this.editTarget)) {
+            this.setEditTarget(cp.kind);
+            const name = norm(cp.kind) === 'curve' ? '均值线' : norm(cp.kind) === 'lower' ? '下界线' : '上界线';
+            this.showHudNotice(`已切换编辑目标为: ${name}`);
+          }
           this.draggingControlPoint = cpIdx;
+          canvas.style.cursor = 'grabbing';
           this.dragStartSnapshot = this.captureState('移动控制点');
           e.preventDefault();
           this.renderCanvas();
@@ -1541,6 +1663,30 @@ export class AgeDepthCanvas {
         return;
       }
 
+      // 控制点悬停检测与光标手势动态切换
+      if (!this.panning && this.draggingControlPoint === null && !this.excludeArmed && this.draggingMarker === null) {
+        if (this.activeFMode === 'adjust' || this.activeFMode === 'delete') {
+          const cpIdx = this.findControlPointAt(pt, this.editTarget);
+          if (cpIdx !== this.hoveredControlPointIndex) {
+            this.hoveredControlPointIndex = cpIdx >= 0 ? cpIdx : null;
+            this.renderCanvas();
+          }
+          if (this.activeFMode === 'adjust') {
+            canvas.style.cursor = cpIdx >= 0 ? 'grab' : 'crosshair';
+          } else if (this.activeFMode === 'delete') {
+            canvas.style.cursor = cpIdx >= 0 ? 'pointer' : 'crosshair';
+          }
+        } else {
+          if (this.hoveredControlPointIndex !== null) {
+            this.hoveredControlPointIndex = null;
+            this.renderCanvas();
+          }
+          if (this.activeFMode === 'add') {
+            canvas.style.cursor = 'crosshair';
+          }
+        }
+      }
+
       this.handleCanvasHover(e);
     });
 
@@ -1548,6 +1694,7 @@ export class AgeDepthCanvas {
       if (this.draggingControlPoint !== null) {
         const cpIdx = this.draggingControlPoint;
         this.draggingControlPoint = null;
+        canvas.style.cursor = this.hoveredControlPointIndex !== null ? 'grab' : 'crosshair';
         if (this.dragStartSnapshot && this.controlPoints[cpIdx]) {
           const origCp = this.dragStartSnapshot.controlPoints[cpIdx];
           const currCp = this.controlPoints[cpIdx];
@@ -1594,9 +1741,11 @@ export class AgeDepthCanvas {
       if (this.draggingControlPoint !== null) {
         endDrag();
       }
+      this.hoveredControlPointIndex = null;
       this.draggingMarker = null;
       this.panning = null;
       if (this.excludeDragStart) endDrag();
+      this.renderCanvas();
     });
 
     canvas.addEventListener('click', (e) => {
@@ -1605,6 +1754,31 @@ export class AgeDepthCanvas {
       if (this.findMarkerAt(pt) >= 0) return;
       this.addCalibMarker(pt);
     });
+
+    // 绑定编辑目标分段按钮 (均值/下界/上界)
+    this.container.querySelectorAll('.ad-target-btn').forEach((btn) => {
+      const handleTargetClick = () => {
+        const t = btn.getAttribute('data-target') as 'curve' | 'lower' | 'upper' | null;
+        if (t) {
+          this.setEditTarget(t);
+          const name = t === 'curve' ? '均值代表线' : t === 'lower' ? '95% 置信下界' : '95% 置信上界';
+          this.showHudNotice(`编辑目标: ${name}`);
+        }
+      };
+      btn.addEventListener('click', handleTargetClick);
+      this.disposers.push(() => btn.removeEventListener('click', handleTargetClick));
+    });
+
+    // 绑定编辑目标下拉框变更事件 (兼容外部驱动与测试)
+    const selTarget = this.container.querySelector('#ad-sel-edit-target') as HTMLSelectElement | null;
+    if (selTarget) {
+      const handleSelChange = () => {
+        const v = selTarget.value as 'curve' | 'lower' | 'upper';
+        this.setEditTarget(v);
+      };
+      selTarget.addEventListener('change', handleSelChange);
+      this.disposers.push(() => selTarget.removeEventListener('change', handleSelChange));
+    }
 
     // 绑定撤销/重做按钮
     const btnUndo = this.container.querySelector('#ad-btn-undo');
@@ -1708,6 +1882,37 @@ export class AgeDepthCanvas {
           e.preventDefault();
           return;
         }
+
+        // 快捷键 1/2/3 切换编辑目标：1=均值线, 2=置信下界, 3=置信上界
+        if (e.key === '1' || e.code === 'Digit1') {
+          this.setEditTarget('curve');
+          this.showHudNotice('编辑目标: 均值代表线 (1)');
+          e.preventDefault();
+          return;
+        }
+        if (e.key === '2' || e.code === 'Digit2') {
+          this.setEditTarget('lower');
+          this.showHudNotice('编辑目标: 95% 置信下界 (2)');
+          e.preventDefault();
+          return;
+        }
+        if (e.key === '3' || e.code === 'Digit3') {
+          this.setEditTarget('upper');
+          this.showHudNotice('编辑目标: 95% 置信上界 (3)');
+          e.preventDefault();
+          return;
+        }
+        if (e.key === 'Tab') {
+          const targets: Array<'curve' | 'lower' | 'upper'> = ['curve', 'lower', 'upper'];
+          const norm = (t: string) => (t === 'min' ? 'lower' : t === 'max' ? 'upper' : t);
+          const curIdx = targets.indexOf(norm(this.editTarget) as any);
+          const nextTarget = targets[(curIdx + 1) % targets.length];
+          this.setEditTarget(nextTarget);
+          const name = nextTarget === 'curve' ? '均值线' : nextTarget === 'lower' ? '置信下界' : '置信上界';
+          this.showHudNotice(`编辑目标: ${name} (Tab)`);
+          e.preventDefault();
+          return;
+        }
       }
 
       // 控制点物理删除 (Delete / Backspace)
@@ -1725,42 +1930,46 @@ export class AgeDepthCanvas {
       }
 
       // 控制点键盘微调 (Arrow keys: 1px, 按住 Shift 为 10px)
-      if (!e.altKey && this.selectedControlPointIndex !== null && this.controlPoints[this.selectedControlPointIndex]) {
-        const step = e.shiftKey ? 10 : 1;
-        const cp = this.controlPoints[this.selectedControlPointIndex];
-        let moved = false;
-        if (e.key === 'ArrowLeft') {
-          cp.x -= step;
-          moved = true;
-        } else if (e.key === 'ArrowRight') {
-          cp.x += step;
-          moved = true;
-        } else if (e.key === 'ArrowUp') {
-          cp.y -= step;
-          moved = true;
-        } else if (e.key === 'ArrowDown') {
-          cp.y += step;
-          moved = true;
-        }
-        if (moved) {
-          if (!this.arrowKeyStartSnapshot) {
-            this.arrowKeyStartSnapshot = this.captureState('微调控制点');
+      if (!e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        if (this.selectedControlPointIndex !== null && this.controlPoints[this.selectedControlPointIndex]) {
+          const step = e.shiftKey ? 10 : 1;
+          const cp = this.controlPoints[this.selectedControlPointIndex];
+          let moved = false;
+          if (e.key === 'ArrowLeft') {
+            cp.x -= step;
+            moved = true;
+          } else if (e.key === 'ArrowRight') {
+            cp.x += step;
+            moved = true;
+          } else if (e.key === 'ArrowUp') {
+            cp.y -= step;
+            moved = true;
+          } else if (e.key === 'ArrowDown') {
+            cp.y += step;
+            moved = true;
           }
-          if (this.arrowKeyHistoryTimer) {
-            clearTimeout(this.arrowKeyHistoryTimer);
-          }
-          this.arrowKeyHistoryTimer = window.setTimeout(() => {
-            if (this.arrowKeyStartSnapshot) {
-              this.history.pushSnapshot(this.arrowKeyStartSnapshot);
-              this.arrowKeyStartSnapshot = null;
+          if (moved) {
+            if (!this.arrowKeyStartSnapshot) {
+              this.arrowKeyStartSnapshot = this.captureState('微调控制点');
             }
-            this.arrowKeyHistoryTimer = null;
-          }, 500);
+            if (this.arrowKeyHistoryTimer) {
+              clearTimeout(this.arrowKeyHistoryTimer);
+            }
+            this.arrowKeyHistoryTimer = window.setTimeout(() => {
+              if (this.arrowKeyStartSnapshot) {
+                this.history.pushSnapshot(this.arrowKeyStartSnapshot);
+                this.arrowKeyStartSnapshot = null;
+              }
+              this.arrowKeyHistoryTimer = null;
+            }, 500);
 
-          this.refitCurveFromControlPoints(false);
-          this.renderCanvas();
-          e.preventDefault();
-          return;
+            this.refitCurveFromControlPoints(false);
+            this.renderCanvas();
+            e.preventDefault();
+            return;
+          }
+        } else {
+          this.showHudNotice('提示: 请先点击选中一个控制点，再使用方向键微调 (按 1/2/3 可切换目标线)');
         }
       }
 

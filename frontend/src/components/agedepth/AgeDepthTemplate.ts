@@ -77,7 +77,12 @@ export function createAgeDepthModalHtml(): string {
                 </div>
                 <div style="display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding-left: 6px; border-left: 1px solid var(--border-color);">
                   <span style="font-size: 10px; color: var(--text-muted);">编辑目标:</span>
-                  <select id="ad-sel-edit-target" class="ui-select ui-select--xs" style="font-size: 10px; padding: 1px 4px; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 3px;">
+                  <div class="ad-target-btn-group" style="display: inline-flex; gap: 2px;">
+                    <button class="ui-btn ui-btn--quiet ui-btn--xs ad-target-btn active" data-target="curve" style="color: var(--accent-blue); font-weight: 700; padding: 1px 5px;" title="编辑均值代表线 (快捷键 1)">均值 (1)</button>
+                    <button class="ui-btn ui-btn--quiet ui-btn--xs ad-target-btn" data-target="lower" style="color: var(--accent-green); padding: 1px 5px;" title="编辑置信区间下界 (快捷键 2)">下界 (2)</button>
+                    <button class="ui-btn ui-btn--quiet ui-btn--xs ad-target-btn" data-target="upper" style="color: var(--accent-red); padding: 1px 5px;" title="编辑置信区间上界 (快捷键 3)">上界 (3)</button>
+                  </div>
+                  <select id="ad-sel-edit-target" class="ui-select ui-select--xs" style="font-size: 10px; padding: 1px 4px; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 3px; display: none;">
                     <option value="curve" selected>均值线 (Mean)</option>
                     <option value="lower">置信区间下界 (Lower)</option>
                     <option value="upper">置信区间上界 (Upper)</option>

@@ -6,7 +6,13 @@ from dataclasses import dataclass
 
 import numpy as np
 from PIL import Image
-from scipy.ndimage import gaussian_filter, median_filter
+from scipy.ndimage import (
+    gaussian_filter,
+    grey_closing,
+    grey_opening,
+    median_filter,
+    uniform_filter1d,
+)
 
 from .age_depth_model import AgeDepthAxisCalibrator, AgeDepthModel
 
@@ -621,14 +627,19 @@ def _trace_curve(
     # Deliberately reads the DARKNESS channel even in chroma mode: the MCMC cloud and
     # its outline are grey, so they contribute nothing to chroma and would give a
     # zero-width band. Chroma locates the median; darkness measures the spread.
+    #
+    # 采用轻量形态学闭运算 (垂直3, 水平5) 弥合虚线与中值线周围的抗锯齿缝隙，
+    # 彻底杜绝在 3~4 像素微隙处因局部下凹提前腰斩塌陷。
+    closed_env = grey_closing(smoothed, size=(3, 5)) if smoothed.shape[0] >= 3 and smoothed.shape[1] >= 5 else smoothed
+
     rows_out: list[int] = []
     curve_out: list[float] = []
     min_out: list[float] = []
     max_out: list[float] = []
-    gap_tolerance = 3
+    gap_tolerance = 4
     for row in sorted(chosen):
         centroid = chosen[row]
-        prof = smoothed[row]
+        prof = closed_env[row]
         mid_lo = int(np.floor(centroid))
         mid_hi = int(np.ceil(centroid))
         lo = max(0, mid_lo - half_window)
@@ -863,12 +874,29 @@ def _rows_to_model(
     min_f = np.interp(full_rows, rows_arr, min_arr)
     max_f = np.interp(full_rows, rows_arr, max_arr)
 
-    # 插值后微调平滑采用轻量 5 像素窗口，滤除单像素量化跳变的同时完整保留转折角与拐点（该拐则拐）
+    # 中值线平滑采用轻量 5 像素窗口，滤除单像素量化跳变的同时完整保留转折角与拐点（该拐则拐）
     win_smooth = min(5, len(curve_f) // 2 * 2 + 1)
     if win_smooth >= 3:
         curve_f = median_filter(curve_f, size=win_smooth)
+
+    # 包络线形态学净化与平滑：
+    # 1. 采用一维形态学开/闭滤波精准消除 14C 测年点多边形引起的外凸尖刺与残留虚线留白微隙
+    win_morph = int(np.clip(len(curve_f) // 35 * 2 + 1, 15, 35))
+    if len(curve_f) >= win_morph:
+        max_f = grey_opening(max_f, size=win_morph)
+        min_f = grey_closing(min_f, size=win_morph)
+
+    # 2. 结合中值滤波与轻量均值平滑消除阶梯效应，保持 95% 置信区间边界光滑自然
+    if len(curve_f) >= 7:
+        max_f = uniform_filter1d(median_filter(max_f, size=7), size=5)
+        min_f = uniform_filter1d(median_filter(min_f, size=7), size=5)
+    elif win_smooth >= 3:
         min_f = median_filter(min_f, size=win_smooth)
         max_f = median_filter(max_f, size=win_smooth)
+
+    # 3. 强制包络线在像素空间严格包裹中值线
+    min_f = np.minimum(min_f, curve_f)
+    max_f = np.maximum(max_f, curve_f)
 
     # Row / column indices above are relative to the search window; the calibrator and
     # the canvas overlay both work in absolute image pixels, so offset them back.

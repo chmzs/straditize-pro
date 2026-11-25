@@ -447,17 +447,76 @@ class ExportMixin:
             return None
 
         if samples:
+            axis = getattr(self, "primary_axis", "depth") or "depth"
+            horizon_ids = [
+                s.get("horizon_id") or f"H{idx + 1:04d}"
+                for idx, s in enumerate(samples)
+            ]
+
+            if axis == "age":
+                # 图版主轴为年代：样品的读数属于年代（cal yr BP），物理深度需从模型反演
+                sample_ages: list[float] = []
+                for s in samples:
+                    a = s.get("depth")  # 兼容既有字段结构：age 标定下的层位值落在 depth 键
+                    if a is None and s.get("age") is not None:
+                        a = s["age"]
+                    if a is None and "row_px" in s:
+                        a = self._depth_for_row_px(s["row_px"])
+                    sample_ages.append(float(a) if a is not None else 0.0)
+
+                if model is not None:
+                    inverse = model.predict_depth(sample_ages)
+                    sample_depths = [
+                        round(float(d), 4) if d is not None else None
+                        for d in inverse["depth_est"]
+                    ]
+                    age_est = [round(float(a), 4) for a in sample_ages]
+                    pred_env = model.predict_age([d if d is not None else 0.0 for d in sample_depths])
+                    raw_lower = pred_env.get("age_lower", pred_env.get("age_min"))
+                    age_lower = [
+                        round(float(l), 4) if l is not None and sample_depths[i] is not None else None
+                        for i, l in enumerate(raw_lower)
+                    ] if raw_lower is not None else [None] * len(sample_depths)
+                    raw_upper = pred_env.get("age_upper", pred_env.get("age_max"))
+                    age_upper = [
+                        round(float(u), 4) if u is not None and sample_depths[i] is not None else None
+                        for i, u in enumerate(raw_upper)
+                    ] if raw_upper is not None else [None] * len(sample_depths)
+
+                    try:
+                        valid_for_sed = [d if d is not None else 0.0 for d in sample_depths]
+                        sed_info = model.estimate_sedimentation_rate(valid_for_sed)
+                        raw_sed = sed_info.get("sed_rate")
+                        sed_rate = [
+                            round(float(r), 4) if r is not None and sample_depths[i] is not None else None
+                            for i, r in enumerate(raw_sed)
+                        ] if raw_sed is not None else [None] * len(sample_depths)
+                    except Exception:
+                        sed_rate = [None] * len(sample_depths)
+                else:
+                    sample_depths = [None] * len(sample_ages)
+                    age_est = [round(float(a), 4) for a in sample_ages]
+                    age_lower = [s.get("age_lower", s.get("age_min")) for s in samples]
+                    age_upper = [s.get("age_upper", s.get("age_max")) for s in samples]
+                    sed_rate = [s.get("sed_rate") for s in samples]
+
+                return pd.DataFrame(
+                    {
+                        "horizon_id": horizon_ids,
+                        "depth": sample_depths,
+                        "age": age_est,
+                        "age_lower": age_lower,
+                        "age_upper": age_upper,
+                        "sed_rate": sed_rate,
+                    }
+                )
+
             sample_depths: list[float] = []
             for s in samples:
                 d = s.get("depth")
                 if d is None and "row_px" in s:
                     d = self._depth_for_row_px(s["row_px"])
                 sample_depths.append(round(float(d), 4) if d is not None else 0.0)
-
-            horizon_ids = [
-                s.get("horizon_id") or f"H{idx + 1:04d}"
-                for idx, s in enumerate(samples)
-            ]
 
             if model is not None:
                 pred = model.predict_age(sample_depths)
