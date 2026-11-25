@@ -286,6 +286,8 @@ class DigitizeSessionMixin:
 
         self._interpolate_across_hlines(points, c_start)
 
+        group = _resolve_column_group(self, col)
+        stroke = resolve_axis_stroke(col, group)
         control_points, ctrl_pts_list = self._turning_control_points(
             points,
             c_start,
@@ -293,7 +295,7 @@ class DigitizeSessionMixin:
             y1,
             col_index,
             float(c_end - c_start),
-            resolve_axis_stroke(col, None),
+            stroke,
         )
 
         # 重建只产出**算法**拐点；用户手工点原样并入（不删、不移动）。

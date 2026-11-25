@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import numpy as np
 from PIL import Image
+import pytest
 
 from straditize_core.session import StraditizeSession
 from straditize_core.session_parts.xscale import resolve_axis_stroke
@@ -103,3 +104,63 @@ def test_profile_rows_without_data_read_as_zero_point(tmp_path):
             "row %d 的采样点 x=%.1f 落进轴线区间（0 点 = %.1f）"
             % (row, points[row], AXIS_X0 + stroke)
         )
+
+
+def test_digitize_respects_group_axis_stroke(tmp_path):
+    """当 axis_stroke_px 定义在 ROI x_group 上而非列上时，控制点必须严守组级 0 点。"""
+    plate = tmp_path / "group_axis.png"
+    img = np.full((100, 100), 255, dtype=np.uint8)
+    # 轴线宽 1px (x=10)
+    img[:, 10:11] = 0
+    # 行 50..70 有数据填充到 x=30，其余行（如 10..49）只有轴线（应为 0 读数）
+    img[50:71, 10:30] = 0
+    Image.fromarray(img).save(plate)
+
+    session = StraditizeSession()
+    session._init_cleanup()
+    session.load_image(image_path=str(plate))
+    session.rois = [
+        {
+            "id": "roi_1",
+            "x_groups": [
+                {
+                    "id": "g0",
+                    "axis_stroke_px": 1.0,
+                    "unit": "%",
+                    "scale_type": "linear",
+                    "startValue": 0.0,
+                    "tickValue": 10.0,
+                    "tickEndX": 50.0,
+                }
+            ],
+        }
+    ]
+    session.columns = [
+        {
+            "col_index": 0,
+            "id": "roi_1_col00",
+            "name": "c0",
+            "species": "c0",
+            "roi_id": "roi_1",
+            "x_group_id": "g0",
+            "start": 10.0,
+            "startX": 10.0,
+            "end": 60.0,
+            "endX": 60.0,
+            "plot_type": "area",
+        }
+    ]
+    session.data_ylim = [10.0, 90.0]
+    session.digitize(0, reader_type="area")
+
+    ctrl = session.control_points[0]
+    assert ctrl, "必须产出控制点"
+    # 当 stroke = 1.0 时，0 点为 10.0 + 1.0 = 11.0。
+    # 若误传 None 会 fallback 到 2.0 导致被 clip 到 12.0。
+    for row, x in ctrl.items():
+        assert x >= 11.0 - 1e-9, f"控制点 x={x} 落入 0 点左侧"
+        if row <= 45:
+            assert x == pytest.approx(11.0), (
+                f"无数据行 {row} 控制点 x={x}，期望恰好等于组级 0 点 11.0"
+            )
+
