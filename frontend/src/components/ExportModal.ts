@@ -16,6 +16,7 @@ import {
   type QaScopePart,
 } from '../core/qaVerdict';
 import type { QaSummary } from '../types/pollen';
+import { generateAxisTicks } from '../utils/axisTicks';
 import { notify, notifyError } from '../ui/feedback';
 import { copyText } from '../ui/clipboard';
 
@@ -354,6 +355,7 @@ export class ExportModal {
                   <input type="number" id="inp-wpd-y-min" placeholder="min" style="width: 72px; font-size: var(--font-size-sm);" />
                   <input type="number" id="inp-wpd-y-max" placeholder="max" style="width: 72px; font-size: var(--font-size-sm);" />
                   <input type="number" id="inp-wpd-y-interval" placeholder="${isAgeAxis ? '如 1000' : '如 10'}" style="width: 72px; font-size: var(--font-size-sm);" />
+                  <button type="button" class="ui-btn ui-btn--quiet ui-btn--xs" id="btn-wpd-auto-ytick" style="font-size: 11px; padding: 2px 7px;" title="基于 Nice Numbers 算法，根据当前数据量级自适应填入整洁刻度范围与间隔">自动整洁刻度</button>
                   <span id="wpd-plot-y-hint" style="font-size: var(--font-size-xs); color: var(--status-warning);"></span>
                 </div>
 
@@ -1307,6 +1309,33 @@ export class ExportModal {
       modal.querySelector(sel)?.addEventListener('input', () => {
         readPlotSettings();
       });
+    });
+
+    modal.querySelector('#btn-wpd-auto-ytick')?.addEventListener('click', () => {
+      if (!rawBackendRows || rawBackendRows.length < 2) {
+        notify('当前数据行数过少，无法推断 Y 轴范围', 'warning');
+        return;
+      }
+      const yVals = rawBackendRows.map((r) => parseFloat(r[0])).filter((v) => Number.isFinite(v));
+      if (yVals.length < 2) {
+        notify('首列非有效数值，无法计算刻度', 'warning');
+        return;
+      }
+      const rawMin = Math.min(...yVals);
+      const rawMax = Math.max(...yVals);
+      const ticks = generateAxisTicks(rawMin, rawMax, 600, 80);
+      const yMinVal = ticks.majorTicks[0] !== undefined ? ticks.majorTicks[0] : rawMin;
+      const yMaxVal = ticks.majorTicks[ticks.majorTicks.length - 1] !== undefined ? ticks.majorTicks[ticks.majorTicks.length - 1] : rawMax;
+      const yIntVal = ticks.majorStep;
+
+      const inpMin = modal.querySelector('#inp-wpd-y-min') as HTMLInputElement | null;
+      const inpMax = modal.querySelector('#inp-wpd-y-max') as HTMLInputElement | null;
+      const inpInt = modal.querySelector('#inp-wpd-y-interval') as HTMLInputElement | null;
+      if (inpMin) inpMin.value = String(yMinVal);
+      if (inpMax) inpMax.value = String(yMaxVal);
+      if (inpInt) inpInt.value = String(yIntVal);
+      readPlotSettings();
+      notify(`已自动填充整洁刻度：${yMinVal} ~ ${yMaxVal} (步长: ${yIntVal})`, 'info', 3000);
     });
 
     /** 出图（唯一入口）：本机出图按钮与「按所选格式下载」都走这里。失败直接抛。 */

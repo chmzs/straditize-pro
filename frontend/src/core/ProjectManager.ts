@@ -493,7 +493,12 @@ export class ProjectManager {
     const draftH = Number(draft.imageHeight ?? 0);
     const curW = Number(current.imageWidth ?? 0);
     const curH = Number(current.imageHeight ?? 0);
-    if (draftW > 0 && draftH > 0 && (draftW !== curW || draftH !== curH)) {
+    if (draftW > 0 && draftH > 0 && (curW === 0 || curH === 0)) {
+      throw new Error(
+        `当前尚未载入任何底图（当前底图 0×0）。本草稿包含 ${draftW}×${draftH} 图谱的分列与标定数据。请先在【步骤 1 载入图像】中载入原图谱，然后再点击【恢复】即可无缝还原。`
+      );
+    }
+    if (draftW > 0 && draftH > 0 && curW > 0 && curH > 0 && (draftW !== curW || draftH !== curH)) {
       throw new Error(
         `草稿属于另一张图谱（草稿 ${draftW}×${draftH}，当前底图 ${curW}×${curH}），` +
           '拒绝恢复：把上一张图的分列与标定写到当前图上会产生错误的科学数据。请重新载入草稿对应的图谱后再恢复。'

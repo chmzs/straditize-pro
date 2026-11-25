@@ -411,10 +411,17 @@ export function createAgeDepthModalHtml(): string {
           <div id="ad-sedrate-panel" style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px;">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <strong style="font-size: 11px; color: var(--accent-blue);">沉积速率剖面 (Sedimentation Rate Profile)</strong>
+                <strong style="font-size: 11px; color: var(--accent-blue);" id="ad-sedrate-title">沉积速率剖面 (Sedimentation Rate Profile)</strong>
                 <div class="ad-sedrate-axis-toggle" style="display: inline-flex; align-items: center; gap: 2px; background: var(--bg-card); padding: 1px; border: 1px solid var(--border-color); border-radius: 4px;">
                   <button class="ui-btn ui-btn--quiet ui-btn--xs ad-btn-sedrate-axis active" data-axis="age" style="font-size: 10px; padding: 1px 6px; border-radius: 3px;" title="X 轴以年代 (Age) 展开">X: 年代 (Age)</button>
                   <button class="ui-btn ui-btn--quiet ui-btn--xs ad-btn-sedrate-axis" data-axis="depth" style="font-size: 10px; padding: 1px 6px; border-radius: 3px;" title="X 轴以深度 (Depth) 展开">X: 深度 (Depth)</button>
+                </div>
+                <!-- 变量选择下拉框，用于计算通量 Influx = acc * Concentration -->
+                <div style="display: inline-flex; align-items: center; gap: 3px; font-size: 10px;">
+                  <span style="color: var(--text-muted);">变量:</span>
+                  <select id="ad-sel-sedrate-var" class="ui-select ui-select--xs" style="font-size: 10px; height: 20px; padding: 0 4px; border-radius: 3px; max-width: 140px;" title="选择要与沉积速率相乘的变量（如浓度列计算沉积通量 Influx）">
+                    <option value="">纯速率 (accrate)</option>
+                  </select>
                 </div>
               </div>
               <span id="ad-sedrate-meta" style="font-size: 10px; color: var(--text-muted); font-family: var(--font-mono);">—</span>

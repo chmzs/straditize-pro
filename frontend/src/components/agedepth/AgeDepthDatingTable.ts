@@ -1,4 +1,5 @@
 import { notify, notifyError } from '../../ui/feedback';
+import { generateAxisTicks } from '../../utils/axisTicks';
 import {
   AgeDepthModelInspectionData,
   ControlPoint,
@@ -15,6 +16,7 @@ export interface AgeDepthDatingTableCallbacks {
   onControlPointModified?: (idx: number, age: number, depth: number) => void;
   onControlPointDeleted?: (idx: number) => void;
   onControlPointAdded?: (age: number, depth: number, kind: 'curve' | 'lower' | 'upper') => void;
+  onSedRateVariableChanged?: (colName: string) => void;
 }
 
 /**
@@ -56,6 +58,9 @@ export class AgeDepthDatingTable {
   private sortAsc = true;
   private sedRateXAxis: 'age' | 'depth' = 'age';
   private primaryAxis: 'age' | 'depth' = 'depth';
+  private availableColumns: Array<{ id: string; name: string; unit?: string }> = [];
+  private selectedVariableCol: string = '';
+  private columnValuesCache: Map<string, { depths: number[]; values: number[] }> = new Map();
 
   constructor(container: HTMLElement, callbacks: AgeDepthDatingTableCallbacks = {}) {
     this.container = container;
@@ -65,6 +70,39 @@ export class AgeDepthDatingTable {
   }
 
   // --- Getters & Setters ---
+
+  public setAvailableColumns(columns: Array<{ id: string; name: string; unit?: string }>): void {
+    this.availableColumns = columns.filter((c) => c && c.name && c.name.trim().length > 0);
+    this.populateVariableSelect();
+  }
+
+  public setVariableValues(colName: string, depths: number[], values: number[]): void {
+    this.columnValuesCache.set(colName, { depths, values });
+    this.renderSedRateProfile();
+  }
+
+  public getSelectedVariable(): string {
+    return this.selectedVariableCol;
+  }
+
+  public getCurrentProfileDepths(): number[] {
+    if (!this.inspectionData?.depths) return [];
+    return [...this.inspectionData.depths];
+  }
+
+  private populateVariableSelect(): void {
+    const sel = this.container.querySelector('#ad-sel-sedrate-var') as HTMLSelectElement | null;
+    if (!sel) return;
+    const currentVal = this.selectedVariableCol;
+    sel.innerHTML = '<option value="">纯速率 (accrate)</option>';
+    for (const col of this.availableColumns) {
+      const opt = document.createElement('option');
+      opt.value = col.name;
+      opt.textContent = col.unit ? `${col.name} (${col.unit})` : col.name;
+      if (col.name === currentVal) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
 
   public getTableMode(): 'points' | 'samples' {
     return this.tableMode;
@@ -132,6 +170,10 @@ export class AgeDepthDatingTable {
     this.renderFullDataTable();
     this.updateMappingTable();
     this.updateQualityAuditCard();
+    if (this.selectedVariableCol) {
+      // 深度网格或模型重算时，自动重新请求当前变量在新网格下的真实读数
+      this.callbacks.onSedRateVariableChanged?.(this.selectedVariableCol);
+    }
     this.renderSedRateProfile();
   }
 
@@ -354,8 +396,8 @@ export class AgeDepthDatingTable {
   }
 
   /**
-   * 绘制符合学术期刊出图规范的沉积速率剖面 (Sedimentation Rate Profile)
-   * 采用高对比度墨线边框、内向刻度线、高清晰加粗字体与显式学术轴标题
+   * 绘制符合学术期刊出图规范的沉积速率与通量剖面 (Sedimentation Rate & Influx Profile)
+   * 采用高对比度墨线边框、内向刻度线、极简小圆点与自适应学术轴标题
    */
   public renderSedRateProfile(): void {
     const canvas = this.container.querySelector('#ad-sedrate-canvas') as HTMLCanvasElement | null;
@@ -378,32 +420,78 @@ export class AgeDepthDatingTable {
     const sedRates = this.inspectionData.sed_rate;
     const sedSes = this.inspectionData.sed_rate_se;
 
-    const pts: Array<{ depth: number; age: number; rate: number; se: number | null }> = [];
+    const rawPts: Array<{ depth: number; age: number; rate: number; se: number | null }> = [];
     if (Array.isArray(sedRates) && sedRates.length === d.length) {
       for (let i = 0; i < d.length; i++) {
         const r = sedRates[i];
         if (r !== null && r !== undefined && Number.isFinite(r)) {
-          pts.push({ depth: d[i], age: a[i], rate: r, se: sedSes?.[i] ?? null });
+          rawPts.push({ depth: d[i], age: a[i], rate: r, se: sedSes?.[i] ?? null });
         }
       }
     }
 
-    if (pts.length < 2) {
-      pts.length = 0;
+    if (rawPts.length < 2) {
+      rawPts.length = 0;
       for (let i = 1; i < d.length; i++) {
         const dd = Math.abs(d[i] - d[i - 1]);
         const da = Math.abs(a[i] - a[i - 1]);
         if (da > 1e-6) {
           const r = dd / da;
-          pts.push({ depth: (d[i] + d[i - 1]) / 2, age: (a[i] + a[i - 1]) / 2, rate: r, se: null });
+          rawPts.push({ depth: (d[i] + d[i - 1]) / 2, age: (a[i] + a[i - 1]) / 2, rate: r, se: null });
         }
       }
     }
 
-    if (pts.length < 2) {
+    if (rawPts.length < 2) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (summaryEl) summaryEl.textContent = '层位点过少，无法绘制速率曲线';
       return;
+    }
+
+    // 变量计算：若选择了变量（如浓度），计算 通量 Influx = acc * Concentration
+    const isFlux = Boolean(this.selectedVariableCol);
+    const varName = this.selectedVariableCol;
+    const varCache = isFlux ? this.columnValuesCache.get(varName) : null;
+    const colMeta = isFlux ? this.availableColumns.find((c) => c.name === varName) : null;
+    const cUnit = colMeta?.unit ? colMeta.unit.trim() : '';
+    const fluxUnit = cUnit ? `${cUnit}·${dUnit}/yr` : `${dUnit}/yr`;
+
+    // 辅助线性插值函数：从已取到的各深度变量值中内插出特定深度对应值
+    const getVarValAtDepth = (targetD: number): number | null => {
+      if (!varCache || !varCache.depths.length || !varCache.values.length) return null;
+      const cd = varCache.depths;
+      const cv = varCache.values;
+      if (cd.length === 1) return cv[0];
+      if (targetD <= cd[0]) return cv[0];
+      if (targetD >= cd[cd.length - 1]) return cv[cv.length - 1];
+      for (let k = 0; k < cd.length - 1; k++) {
+        if (targetD >= cd[k] && targetD <= cd[k + 1]) {
+          const span = cd[k + 1] - cd[k];
+          if (span <= 1e-6) return cv[k];
+          const frac = (targetD - cd[k]) / span;
+          return cv[k] + frac * (cv[k + 1] - cv[k]);
+        }
+      }
+      return cv[cv.length - 1];
+    };
+
+    const pts: Array<{ depth: number; age: number; val: number; se: number | null }> = [];
+    for (const rp of rawPts) {
+      if (!isFlux) {
+        pts.push({ depth: rp.depth, age: rp.age, val: rp.rate, se: rp.se });
+      } else {
+        const cVal = getVarValAtDepth(rp.depth);
+        if (cVal !== null && Number.isFinite(cVal)) {
+          // 物理非负保护：地学花粉浓度与通量严禁出现负值
+          const nonNegC = Math.max(0, cVal);
+          const flux = Math.max(0, rp.rate * nonNegC);
+          const fluxSe = rp.se !== null ? Math.max(0, rp.se * nonNegC) : null;
+          pts.push({ depth: rp.depth, age: rp.age, val: flux, se: fluxSe });
+        } else {
+          // 变量值尚未加载完时保持显示速率或等待
+          pts.push({ depth: rp.depth, age: rp.age, val: rp.rate, se: rp.se });
+        }
+      }
     }
 
     // 根据选定的 X 轴进行排序 (确保折线从左往右连续单调绘制)
@@ -424,7 +512,7 @@ export class AgeDepthDatingTable {
     ctx.clearRect(0, 0, w, h);
 
     // 留出边距放置学术坐标轴标注与刻度
-    const padLeft = 56;
+    const padLeft = 58;
     const padRight = 24;
     const padTop = 18;
     const padBottom = 26;
@@ -433,21 +521,21 @@ export class AgeDepthDatingTable {
 
     let minX = isAge ? pts[0].age : pts[0].depth;
     let maxX = isAge ? pts[0].age : pts[0].depth;
-    let minR = pts[0].rate;
-    let maxR = pts[0].rate;
-    let sumR = 0;
+    let minVal = pts[0].val;
+    let maxVal = pts[0].val;
+    let sumVal = 0;
 
     for (const p of pts) {
       const xVal = isAge ? p.age : p.depth;
       if (xVal < minX) minX = xVal;
       if (xVal > maxX) maxX = xVal;
-      if (p.rate < minR) minR = p.rate;
-      if (p.rate > maxR) maxR = p.rate;
-      sumR += p.rate;
+      if (p.val < minVal) minVal = p.val;
+      if (p.val > maxVal) maxVal = p.val;
+      sumVal += p.val;
     }
-    const avgR = sumR / pts.length;
-    maxR = Math.max(maxR * 1.15, 1e-4);
-    minR = Math.max(0, minR * 0.85);
+    const avgVal = sumVal / pts.length;
+    maxVal = Math.max(maxVal * 1.15, 1e-4);
+    minVal = Math.max(0, minVal * 0.85);
 
     const roundNum = (v: number, decimals: number): string => {
       const p = Math.pow(10, decimals);
@@ -456,16 +544,28 @@ export class AgeDepthDatingTable {
 
     if (summaryEl) {
       const axisName = isAge ? `年代 Age (${aUnit})` : `深度 Depth (${dUnit})`;
-      summaryEl.textContent = `平均: ${roundNum(avgR, 4)} ${dUnit}/yr ｜ 范围: ${roundNum(minR, 4)} ~ ${roundNum(maxR, 4)} ${dUnit}/yr ｜ 坐标轴: ${axisName}`;
+      if (isFlux) {
+        if (!varCache) {
+          summaryEl.textContent = `正在提取 ${varName} 数值以计算通量... ｜ 坐标轴: ${axisName}`;
+        } else {
+          summaryEl.textContent = `平均通量: ${roundNum(avgVal, 4)} ${fluxUnit} ｜ 范围: ${roundNum(minVal, 4)} ~ ${roundNum(maxVal, 4)} ｜ 变量: ${varName}`;
+        }
+      } else {
+        summaryEl.textContent = `平均: ${roundNum(avgVal, 4)} ${dUnit}/yr ｜ 范围: ${roundNum(minVal, 4)} ~ ${roundNum(maxVal, 4)} ${dUnit}/yr ｜ 坐标轴: ${axisName}`;
+      }
     }
 
     const toX = (p: { depth: number; age: number }) => {
       const v = isAge ? p.age : p.depth;
       return padLeft + ((v - minX) / Math.max(1e-6, maxX - minX)) * plotW;
     };
-    const toY = (rateVal: number) => padTop + plotH - ((rateVal - minR) / Math.max(1e-6, maxR - minR)) * plotH;
+    const toY = (val: number) => padTop + plotH - ((val - minVal) / Math.max(1e-6, maxVal - minVal)) * plotH;
 
-    // 1. 绘制学术出图风格背景与浅灰虚线网格
+    // 1. 生成自适应学术整洁刻度 (Nice Numbers)
+    const xTicksRes = generateAxisTicks(minX, maxX, plotW, 110);
+    const yTicksRes = generateAxisTicks(minVal, maxVal, plotH, 28);
+
+    // 绘制学术出图风格背景与浅灰虚线网格 (仅在主刻度处对齐)
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(padLeft, padTop, plotW, plotH);
 
@@ -474,68 +574,70 @@ export class AgeDepthDatingTable {
     ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
     ctx.lineWidth = 1;
 
-    const yTicks = 4;
-    for (let i = 1; i < yTicks; i++) {
-      const frac = i / yTicks;
-      const py = padTop + plotH - frac * plotH;
-      ctx.beginPath();
-      ctx.moveTo(padLeft, py);
-      ctx.lineTo(padLeft + plotW, py);
-      ctx.stroke();
+    for (const yv of yTicksRes.majorTicks) {
+      const py = toY(yv);
+      if (py > padTop + 2 && py < padTop + plotH - 2) {
+        ctx.beginPath();
+        ctx.moveTo(padLeft, py);
+        ctx.lineTo(padLeft + plotW, py);
+        ctx.stroke();
+      }
     }
 
-    const xTicks = 5;
-    for (let i = 1; i < xTicks; i++) {
-      const frac = i / xTicks;
-      const px = padLeft + frac * plotW;
-      ctx.beginPath();
-      ctx.moveTo(px, padTop);
-      ctx.lineTo(px, padTop + plotH);
-      ctx.stroke();
+    for (const xv of xTicksRes.majorTicks) {
+      const px = padLeft + ((xv - minX) / Math.max(1e-6, maxX - minX)) * plotW;
+      if (px > padLeft + 2 && px < padLeft + plotW - 2) {
+        ctx.beginPath();
+        ctx.moveTo(px, padTop);
+        ctx.lineTo(px, padTop + plotH);
+        ctx.stroke();
+      }
     }
     ctx.restore();
 
     // 2. 绘制误差置信带 (若有 standard error)
     const hasSe = pts.some((p) => p.se !== null && p.se > 0);
     if (hasSe) {
-      ctx.fillStyle = 'rgba(29, 78, 216, 0.16)';
+      ctx.fillStyle = isFlux ? 'rgba(16, 185, 129, 0.16)' : 'rgba(29, 78, 216, 0.16)';
       ctx.beginPath();
       for (let i = 0; i < pts.length; i++) {
         const seVal = pts[i].se || 0;
         const px = toX(pts[i]);
-        const pyTop = toY(pts[i].rate + seVal);
+        const pyTop = toY(pts[i].val + seVal);
         if (i === 0) ctx.moveTo(px, pyTop);
         else ctx.lineTo(px, pyTop);
       }
       for (let i = pts.length - 1; i >= 0; i--) {
         const seVal = pts[i].se || 0;
         const px = toX(pts[i]);
-        const pyBot = toY(Math.max(0, pts[i].rate - seVal));
+        const pyBot = toY(Math.max(0, pts[i].val - seVal));
         ctx.lineTo(px, pyBot);
       }
       ctx.closePath();
       ctx.fill();
     }
 
-    // 3. 绘制主体速率曲线 (经典学术蓝，清晰饱满)
-    ctx.strokeStyle = '#1d4ed8';
+    // 3. 绘制主体折线 (速率用经典学术蓝，通量用墨绿以示区分)
+    const lineColor = isFlux ? '#059669' : '#1d4ed8';
+    ctx.strokeStyle = lineColor;
     ctx.lineWidth = 2;
     ctx.beginPath();
     for (let i = 0; i < pts.length; i++) {
       const px = toX(pts[i]);
-      const py = toY(pts[i].rate);
+      const py = toY(pts[i].val);
       if (i === 0) ctx.moveTo(px, py);
       else ctx.lineTo(px, py);
     }
     ctx.stroke();
 
-    // 4. 绘制数据点小圆圈
-    ctx.fillStyle = '#1d4ed8';
-    for (const p of pts) {
+    // 4. 绘制数据点小圆圈（极简小圆点，半径 1.2，零复杂抽样）
+    ctx.fillStyle = lineColor;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
       const px = toX(p);
-      const py = toY(p.rate);
+      const py = toY(p.val);
       ctx.beginPath();
-      ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+      ctx.arc(px, py, 1.2, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -544,53 +646,87 @@ export class AgeDepthDatingTable {
     ctx.lineWidth = 1.4;
     ctx.strokeRect(padLeft, padTop, plotW, plotH);
 
+    const tickMajorLen = 5;
+    const tickMinorLen = 2.5;
+
     // Y 轴刻度短线与高对比度文字
     ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillStyle = '#0f172a';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    const tickLen = 4;
 
-    for (let i = 0; i <= yTicks; i++) {
-      const frac = i / yTicks;
-      const yVal = minR + frac * (maxR - minR);
-      const py = padTop + plotH - frac * plotH;
-      // 内探 tick
-      ctx.beginPath();
-      ctx.moveTo(padLeft, py);
-      ctx.lineTo(padLeft + tickLen, py);
-      ctx.moveTo(padLeft + plotW, py);
-      ctx.lineTo(padLeft + plotW - tickLen, py);
-      ctx.stroke();
-      ctx.fillText(roundNum(yVal, 3), padLeft - 6, py);
+    // Y 轴次刻度 (短刻度，无标签)
+    ctx.lineWidth = 1.0;
+    for (const yv of yTicksRes.minorTicks) {
+      const py = toY(yv);
+      if (py >= padTop && py <= padTop + plotH) {
+        ctx.beginPath();
+        ctx.moveTo(padLeft, py);
+        ctx.lineTo(padLeft + tickMinorLen, py);
+        ctx.moveTo(padLeft + plotW, py);
+        ctx.lineTo(padLeft + plotW - tickMinorLen, py);
+        ctx.stroke();
+      }
+    }
+
+    // Y 轴主刻度 (长刻度 + 自动小数位标签)
+    ctx.lineWidth = 1.4;
+    for (const yv of yTicksRes.majorTicks) {
+      const py = toY(yv);
+      if (py >= padTop && py <= padTop + plotH) {
+        ctx.beginPath();
+        ctx.moveTo(padLeft, py);
+        ctx.lineTo(padLeft + tickMajorLen, py);
+        ctx.moveTo(padLeft + plotW, py);
+        ctx.lineTo(padLeft + plotW - tickMajorLen, py);
+        ctx.stroke();
+        ctx.fillText(yv.toFixed(yTicksRes.decimals), padLeft - 6, py);
+      }
     }
 
     // X 轴刻度短线与高对比度文字
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
 
-    for (let i = 0; i <= xTicks; i++) {
-      const frac = i / xTicks;
-      const xVal = minX + frac * (maxX - minX);
-      const px = padLeft + frac * plotW;
-      // 内探 tick
-      ctx.beginPath();
-      ctx.moveTo(px, padTop + plotH);
-      ctx.lineTo(px, padTop + plotH - tickLen);
-      ctx.moveTo(px, padTop);
-      ctx.lineTo(px, padTop + tickLen);
-      ctx.stroke();
-      const labelText = isAge ? `${Math.round(xVal)}` : `${roundNum(xVal, 1)}`;
-      ctx.fillText(labelText, px, padTop + plotH + 5);
+    // X 轴次刻度 (短刻度，无标签)
+    ctx.lineWidth = 1.0;
+    for (const xv of xTicksRes.minorTicks) {
+      const px = padLeft + ((xv - minX) / Math.max(1e-6, maxX - minX)) * plotW;
+      if (px >= padLeft && px <= padLeft + plotW) {
+        ctx.beginPath();
+        ctx.moveTo(px, padTop + plotH);
+        ctx.lineTo(px, padTop + plotH - tickMinorLen);
+        ctx.moveTo(px, padTop);
+        ctx.lineTo(px, padTop + tickMinorLen);
+        ctx.stroke();
+      }
+    }
+
+    // X 轴主刻度 (长刻度 + 自动小数位标签)
+    ctx.lineWidth = 1.4;
+    for (const xv of xTicksRes.majorTicks) {
+      const px = padLeft + ((xv - minX) / Math.max(1e-6, maxX - minX)) * plotW;
+      if (px >= padLeft && px <= padLeft + plotW) {
+        ctx.beginPath();
+        ctx.moveTo(px, padTop + plotH);
+        ctx.lineTo(px, padTop + plotH - tickMajorLen);
+        ctx.moveTo(px, padTop);
+        ctx.lineTo(px, padTop + tickMajorLen);
+        ctx.stroke();
+        const labelText = xv.toFixed(xTicksRes.decimals);
+        ctx.fillText(labelText, px, padTop + plotH + 5);
+      }
     }
 
     // 6. 绘制学术坐标轴标题与物理单位
     ctx.font = '700 10.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillStyle = '#0f172a';
-    // Y 轴标题（位于左上角上方，避免遮挡）
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
-    ctx.fillText(`沉积速率 accrate (${dUnit}/yr)`, padLeft, padTop - 3);
+    const yAxisTitle = isFlux
+      ? `通量 Influx (${varName} × acc, ${fluxUnit})`
+      : `沉积速率 accrate (${dUnit}/yr)`;
+    ctx.fillText(yAxisTitle, padLeft, padTop - 3);
 
     // X 轴标题（位于下方居中）
     ctx.textAlign = 'center';
@@ -1797,6 +1933,16 @@ export class AgeDepthDatingTable {
         this.sedRateXAxis = axis;
         this.renderSedRateProfile();
       });
+    });
+
+    // 沉积速率剖面 变量选择 (纯沉积速率 vs 通量计算 Influx = acc * Concentration)
+    const selVar = this.container.querySelector('#ad-sel-sedrate-var') as HTMLSelectElement | null;
+    selVar?.addEventListener('change', () => {
+      this.selectedVariableCol = selVar.value;
+      if (this.selectedVariableCol) {
+        this.callbacks.onSedRateVariableChanged?.(this.selectedVariableCol);
+      }
+      this.renderSedRateProfile();
     });
 
     // 粘贴导入弹窗控制

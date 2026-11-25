@@ -169,6 +169,27 @@ export class AgeDepthModal {
           this.onSamplesChanged?.();
         }
       },
+      onSedRateVariableChanged: async (colName: string) => {
+        if (!colName) {
+          this.tableComp?.renderSedRateProfile();
+          return;
+        }
+        const depths = this.tableComp?.getCurrentProfileDepths() || [];
+        if (depths.length === 0) return;
+
+        try {
+          const res = await this.rpcClient.call<any, any>('core.extractGridValues', { depths });
+          if (res?.records && Array.isArray(res.records)) {
+            const vals = res.records.map((r: any) => {
+              const v = r[colName];
+              return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+            });
+            this.tableComp?.setVariableValues(colName, depths, vals);
+          }
+        } catch (err: any) {
+          console.warn('[AgeDepth] Failed to fetch column values for flux:', err);
+        }
+      },
     });
 
     const primaryAxis = this.pollenData?.calibration?.primaryAxis === 'age' ? 'age' : 'depth';
@@ -177,6 +198,13 @@ export class AgeDepthModal {
       (x, y) => this.canvasComp?.pxToAgeDepth(x, y) ?? null,
       (age, depth) => this.canvasComp?.ageDepthToPx(age, depth) ?? null
     );
+
+    if (this.pollenData?.columns) {
+      const validCols = this.pollenData.columns
+        .filter((c) => c && c.name && c.name.trim().length > 0)
+        .map((c) => ({ id: c.id, name: c.name, unit: c.unit || '' }));
+      this.tableComp.setAvailableColumns(validCols);
+    }
 
     this.controller = new AgeDepthController(modal, this.rpcClient, {
       onImageLoaded: (img, label) => {
