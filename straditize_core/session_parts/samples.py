@@ -165,6 +165,8 @@ class SamplesMixin:
                 "source": s_source,
                 **_sample_diagnostics(s),
             }
+            if s.get("locked"):
+                sample_dict["locked"] = True
             if "age_est" in s and s["age_est"] is not None:
                 sample_dict["age_est"] = float(s["age_est"])
             elif "age" in s and s["age"] is not None:
@@ -239,6 +241,13 @@ class SamplesMixin:
                 -32603, "extract_horizon_consensus method not available on session."
             )
 
+        # 保护已锁定或手工创建的层位（issue #86）
+        protected_samples = [
+            dict(s)
+            for s in (getattr(self, "samples", None) or [])
+            if s.get("locked") is True or s.get("source") == "manual"
+        ]
+
         res = self.extract_horizon_consensus(
             tolerance_px=tolerance_px,
             min_taxa_support=min_taxa_support,
@@ -256,8 +265,16 @@ class SamplesMixin:
         # 一并落到 samples 上，否则画布无法区分「8 列共振」与「1 列孤峰」。
         diagnostics = {h["row_px"]: h for h in (res.get("horizons") or [])}
 
-        new_samples = []
+        protected_rows = [int(round(float(s["row_px"]))) for s in protected_samples]
+
+        new_samples = list(protected_samples)
         for row in pixel_y:
+            r_int = int(round(float(row)))
+            # 若新提取的共识行与某个受保护层位太接近（落在 tolerance_px 范围内），
+            # 优先使用保护层位，不生成重复算法项
+            if any(abs(r_int - pr) <= tolerance_px for pr in protected_rows):
+                continue
+
             entry: dict[str, Any] = {
                 "row_px": row,
                 "depth": self._depth_for_row_px(row),

@@ -212,8 +212,15 @@ export function render(data: DiagramData): string {
                             ${supportText}
                             ${ageBadge}
                           </div>
-                          <div style="display: flex; align-items: center; gap: 6px;">
+                          <div style="display: flex; align-items: center; gap: 4px;">
                             <span>${s.depth !== null ? `<strong>${s.depth}</strong> ${unitLabel}` : '[--]'}</span>
+                            <button class="icon-btn btn-toggle-lock-sample" data-sample-idx="${idx}" title="${s.locked ? '已锁定：重跑共识保留' : '未锁定：点击锁定保护'}" style="color: ${s.locked ? 'var(--status-warning)' : 'var(--text-muted)'}; display: inline-flex; align-items: center; padding: 0 2px; background: none; border: none; cursor: pointer;">
+                              ${
+                                s.locked
+                                  ? `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
+                                  : `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`
+                              }
+                            </button>
                             <button class="icon-btn btn-delete-sample" data-sample-idx="${idx}" title="删除该层位" style="color: var(--accent-red); font-size: 12px; padding: 0 4px; background: none; border: none; cursor: pointer;">&times;</button>
                           </div>
                         </div>
@@ -339,6 +346,26 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     } catch (err) {
       notifyError(err instanceof Error ? err.message : String(err));
     }
+  });
+
+  // 单行层位锁定/解锁切换 (issue #86)
+  root.querySelectorAll('.btn-toggle-lock-sample').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(btn.getAttribute('data-sample-idx') || '-1', 10);
+      if (idx >= 0 && cachedSamplesData && cachedSamplesData.samples && cachedSamplesData.samples[idx]) {
+        const item = cachedSamplesData.samples[idx];
+        item.locked = !item.locked;
+        if (ctx.rpcClient) {
+          try {
+            await ctx.rpcClient.call('samples.set', { samples: cachedSamplesData.samples });
+          } catch (err) {
+            notifyError(err instanceof Error ? err.message : String(err));
+            return;
+          }
+        }
+        ctx.onDataChange?.();
+      }
+    });
   });
 
   // 单行层位删除 (同步后端 samples.set)

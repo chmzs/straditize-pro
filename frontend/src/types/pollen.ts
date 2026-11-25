@@ -375,6 +375,7 @@ export interface SampleHorizon {
   depth: number | null; // 未标定必须是 null，不得填 0
   // `grid` = samples.fromDepthGrid 生成的等距网格层位（与拐点共识 / 粘贴 / 手工并列）。
   source: 'auto' | 'paste' | 'manual' | 'grid'; // 必须存活到导出元数据
+  locked?: boolean; // 手工锁定保护：重跑共识时不被覆盖 (issue #86)
   /**
    * 拐点共识的诊断量（issue #83），只有 `source === 'auto'` 的层位带这些字段：
    * 后端 `extract_horizon_consensus` 逐层回传，用于区分「8 列共振」与「1 列孤峰」。
