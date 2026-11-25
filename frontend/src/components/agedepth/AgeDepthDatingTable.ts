@@ -1,6 +1,7 @@
 import { notify, notifyError } from '../../ui/feedback';
 import {
   AgeDepthModelInspectionData,
+  ControlPoint,
   DatingPoint,
   MappedSamplesData,
 } from './types';
@@ -11,6 +12,9 @@ export interface AgeDepthDatingTableCallbacks {
   onRequestSyncModel?: () => Promise<void>;
   onSwitchTab?: (tab: 'visual' | 'table' | 'modeling') => void;
   onSamplesModified?: (mappedSamples: MappedSamplesData) => Promise<void>;
+  onControlPointModified?: (idx: number, age: number, depth: number) => void;
+  onControlPointDeleted?: (idx: number) => void;
+  onControlPointAdded?: (age: number, depth: number, kind: 'curve' | 'lower' | 'upper') => void;
 }
 
 /**
@@ -38,10 +42,15 @@ export class AgeDepthDatingTable {
   private container: HTMLElement;
   private callbacks: AgeDepthDatingTableCallbacks;
 
-  private tableMode: 'model' | 'samples' = 'model';
+  private tableMode: 'samples' | 'points' | 'model' = 'samples';
   private inspectionData: AgeDepthModelInspectionData | null = null;
   private mappedSamples: MappedSamplesData | null = null;
+  private controlPoints: ControlPoint[] = [];
+  private pointsFilter: 'all' | 'curve' | 'lower' | 'upper' = 'all';
   private datingPoints: DatingPoint[] = [];
+  private pxToAgeDepthFn: ((x: number, y: number) => { age: number; depth: number } | null) | null = null;
+  private ageDepthToPxFn: ((age: number, depth: number) => { x: number; y: number } | null) | null = null;
+
   /** Column currently driving the header sort; null = source order. */
   private sortKey: 'depth' | 'age' | 'lower' | 'upper' | 'min' | 'max' | null = null;
   private sortAsc = true;
@@ -57,16 +66,66 @@ export class AgeDepthDatingTable {
 
   // --- Getters & Setters ---
 
-  public getTableMode(): 'model' | 'samples' {
+  public getTableMode(): 'samples' | 'points' | 'model' {
     return this.tableMode;
   }
 
-  public setTableMode(mode: 'model' | 'samples'): void {
+  public setTableMode(mode: 'samples' | 'points' | 'model'): void {
     this.tableMode = mode;
+    this.updateTableModeUI();
     this.updateTableHeaders();
     this.renderFullDataTable();
     this.updateMappingTable();
     this.renderSedRateProfile();
+  }
+
+  private updateTableModeUI(): void {
+    const btnSamples = this.container.querySelector('#ad-tbl-view-samples');
+    const btnPoints = this.container.querySelector('#ad-tbl-view-points');
+    const btnModel = this.container.querySelector('#ad-tbl-view-model');
+    const selFilter = this.container.querySelector('#ad-tbl-points-filter') as HTMLElement | null;
+    const btnAddPoint = this.container.querySelector('#ad-tbl-btn-add-point') as HTMLElement | null;
+    const btnAddSample = this.container.querySelector('#ad-tbl-btn-add') as HTMLElement | null;
+
+    btnSamples?.classList.toggle('active', this.tableMode === 'samples');
+    btnPoints?.classList.toggle('active', this.tableMode === 'points');
+    btnModel?.classList.toggle('active', this.tableMode === 'model');
+
+    if (selFilter) selFilter.style.display = this.tableMode === 'points' ? 'inline-block' : 'none';
+    if (btnAddPoint) btnAddPoint.style.display = this.tableMode === 'points' ? 'inline-block' : 'none';
+    if (btnAddSample) {
+      btnAddSample.style.display = this.tableMode === 'points' ? 'none' : 'inline-block';
+      btnAddSample.textContent = this.tableMode === 'samples' ? '添加层位' : '添加网格点';
+    }
+  }
+
+  public setCoordinateConverters(
+    pxToAd: (x: number, y: number) => { age: number; depth: number } | null,
+    adToPx: (age: number, depth: number) => { x: number; y: number } | null
+  ): void {
+    this.pxToAgeDepthFn = pxToAd;
+    this.ageDepthToPxFn = adToPx;
+  }
+
+  public pxToAgeDepth(x: number, y: number): { age: number; depth: number } | null {
+    if (this.pxToAgeDepthFn) return this.pxToAgeDepthFn(x, y);
+    return null;
+  }
+
+  public ageDepthToPx(age: number, depth: number): { x: number; y: number } | null {
+    if (this.ageDepthToPxFn) return this.ageDepthToPxFn(age, depth);
+    return null;
+  }
+
+  public setControlPoints(cps: ControlPoint[]): void {
+    this.controlPoints = cps;
+    if (this.tableMode === 'points') {
+      this.renderFullDataTable();
+    }
+  }
+
+  public getControlPoints(): ControlPoint[] {
+    return this.controlPoints;
   }
 
   public setInspectionData(data: AgeDepthModelInspectionData | null): void {
@@ -227,21 +286,83 @@ export class AgeDepthDatingTable {
       mappingThs[3].textContent = `沉积速率 (${dUnit}/yr)`;
     }
 
-    // 更新全量数据大表表头（与用户要求的 8 列数据规范严格一致）
-    const thId = this.container.querySelector('#ad-tbl-th-id');
-    if (thId) {
-      thId.textContent = this.tableMode === 'samples' ? '共识层位 ID' : '模型网格 #';
+    const thead = this.container.querySelector('#ad-tbl-full thead');
+    if (!thead) return;
+
+    if (this.tableMode === 'points') {
+      thead.innerHTML = `
+        <tr>
+          <th style="width: 50px; text-align: center;">#</th>
+          <th style="width: 140px;">目标线轨 (Line)</th>
+          <th style="width: 120px;">深度 (${dUnit})</th>
+          <th style="width: 130px;">年代 (${aUnit})</th>
+          <th style="width: 130px;">像素位置 (X, Y)</th>
+          <th style="width: 90px; text-align: center;">点状态</th>
+          <th style="width: 50px; text-align: center;">操作</th>
+        </tr>
+      `;
+      return;
     }
-    const thAge = this.container.querySelector('#ad-tbl-full thead th[data-sort="age"]');
-    if (thAge) thAge.innerHTML = `age (<span class="ad-th-unit-age">${aUnit}</span>) <span class="ad-sort-ind"></span>`;
-    const thDepth = this.container.querySelector('#ad-tbl-full thead th[data-sort="depth"]');
-    if (thDepth) thDepth.innerHTML = `depth (<span class="ad-th-unit-depth">${dUnit}</span>) <span class="ad-sort-ind"></span>`;
-    const thUpper = this.container.querySelector('#ad-tbl-full thead th[data-sort="upper"]');
-    if (thUpper) thUpper.innerHTML = `age_upper <span class="ad-sort-ind"></span>`;
-    const thLower = this.container.querySelector('#ad-tbl-full thead th[data-sort="lower"]');
-    if (thLower) thLower.innerHTML = `age_lower <span class="ad-sort-ind"></span>`;
-    const unitRate = this.container.querySelector('.ad-th-unit-rate');
-    if (unitRate) unitRate.textContent = `${dUnit}/yr`;
+
+    if (this.tableMode === 'samples') {
+      if (this.primaryAxis === 'age') {
+        thead.innerHTML = `
+          <tr>
+            <th style="width: 85px; text-align: center;" id="ad-tbl-th-id">共识层位 ID</th>
+            <th class="ad-th-sortable" data-sort="age" style="width: 120px; cursor: pointer;" title="点击按年代排序">age (<span class="ad-th-unit-age">${aUnit}</span>) <span class="ad-sort-ind"></span></th>
+            <th class="ad-th-sortable" data-sort="depth" style="width: 110px; cursor: pointer;" title="点击按深度排序">depth (<span class="ad-th-unit-depth">${dUnit}</span>) <span class="ad-sort-ind"></span></th>
+            <th class="ad-th-sortable" data-sort="upper" style="width: 110px; cursor: pointer;" title="点击按 95% 上界排序">age_upper <span class="ad-sort-ind"></span></th>
+            <th class="ad-th-sortable" data-sort="lower" style="width: 110px; cursor: pointer;" title="点击按 95% 下界排序">age_lower <span class="ad-sort-ind"></span></th>
+            <th style="width: 115px;">accrate_cmyr (<span class="ad-th-unit-rate">${dUnit}/yr</span>)</th>
+            <th style="width: 115px;">accrate_cmyr_upper</th>
+            <th style="width: 115px;">accrate_cmyr_lower</th>
+            <th style="width: 50px; text-align: center;">操作</th>
+          </tr>
+        `;
+      } else {
+        thead.innerHTML = `
+          <tr>
+            <th style="width: 85px; text-align: center;" id="ad-tbl-th-id">共识层位 ID</th>
+            <th class="ad-th-sortable" data-sort="depth" style="width: 110px; cursor: pointer;" title="点击按深度排序">depth (<span class="ad-th-unit-depth">${dUnit}</span>) <span class="ad-sort-ind"></span></th>
+            <th class="ad-th-sortable" data-sort="age" style="width: 120px; cursor: pointer;" title="点击按年代排序">age (<span class="ad-th-unit-age">${aUnit}</span>) <span class="ad-sort-ind"></span></th>
+            <th class="ad-th-sortable" data-sort="upper" style="width: 110px; cursor: pointer;" title="点击按 95% 上界排序">age_upper <span class="ad-sort-ind"></span></th>
+            <th class="ad-th-sortable" data-sort="lower" style="width: 110px; cursor: pointer;" title="点击按 95% 下界排序">age_lower <span class="ad-sort-ind"></span></th>
+            <th style="width: 115px;">accrate_cmyr (<span class="ad-th-unit-rate">${dUnit}/yr</span>)</th>
+            <th style="width: 115px;">accrate_cmyr_upper</th>
+            <th style="width: 115px;">accrate_cmyr_lower</th>
+            <th style="width: 50px; text-align: center;">操作</th>
+          </tr>
+        `;
+      }
+      this.rebindSortHeaders();
+      return;
+    }
+
+    // 模型网格底表
+    thead.innerHTML = `
+      <tr>
+        <th style="width: 75px; text-align: center;" id="ad-tbl-th-id">模型网格 #</th>
+        <th class="ad-th-sortable" data-sort="age" style="width: 120px; cursor: pointer;" title="点击按年代排序">age (<span class="ad-th-unit-age">${aUnit}</span>) <span class="ad-sort-ind"></span></th>
+        <th class="ad-th-sortable" data-sort="depth" style="width: 110px; cursor: pointer;" title="点击按深度排序">depth (<span class="ad-th-unit-depth">${dUnit}</span>) <span class="ad-sort-ind"></span></th>
+        <th class="ad-th-sortable" data-sort="upper" style="width: 110px; cursor: pointer;" title="点击按 95% 上界排序">age_upper <span class="ad-sort-ind"></span></th>
+        <th class="ad-th-sortable" data-sort="lower" style="width: 110px; cursor: pointer;" title="点击按 95% 下界排序">age_lower <span class="ad-sort-ind"></span></th>
+        <th style="width: 115px;">accrate_cmyr (<span class="ad-th-unit-rate">${dUnit}/yr</span>)</th>
+        <th style="width: 115px;">accrate_cmyr_upper</th>
+        <th style="width: 115px;">accrate_cmyr_lower</th>
+        <th style="width: 50px; text-align: center;">操作</th>
+      </tr>
+    `;
+    this.rebindSortHeaders();
+  }
+
+  private rebindSortHeaders(): void {
+    this.container.querySelectorAll<HTMLElement>('.ad-th-sortable').forEach((th) => {
+      th.addEventListener('click', () => {
+        const key = th.getAttribute('data-sort') as 'depth' | 'age' | 'min' | 'max' | 'lower' | 'upper' | null;
+        if (key) this.sortByColumn(key);
+      });
+    });
+    this.updateSortIndicators();
   }
 
   /**
@@ -816,6 +937,300 @@ export class AgeDepthDatingTable {
   // --- Rendering Tab 2: Full Data Table ---
 
   public renderFullDataTable(): void {
+    if (this.tableMode === 'points') {
+      this.renderPointsTable();
+    } else if (this.tableMode === 'samples') {
+      this.renderSamplesTable();
+    } else {
+      this.renderModelGridTable();
+    }
+    this.renderSedRateProfile();
+  }
+
+  public renderPointsTable(): void {
+    const tbody = this.container.querySelector('#ad-full-table-tbody');
+    const badge = this.container.querySelector('#ad-table-summary-badge');
+    if (!tbody) return;
+
+    if (!this.controlPoints || this.controlPoints.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">暂无数值化控制点（可在左侧画布中点击【加点 (A)】或运行识别自动采集）</td></tr>`;
+      if (badge) badge.textContent = '共 0 个控制点';
+      return;
+    }
+
+    const dUnit = this.getDepthUnit();
+    const aUnit = this.getAgeUnit();
+
+    const curveCount = this.controlPoints.filter((p) => p.kind === 'curve').length;
+    const lowerCount = this.controlPoints.filter((p) => p.kind === 'lower' || p.kind === 'min').length;
+    const upperCount = this.controlPoints.filter((p) => p.kind === 'upper' || p.kind === 'max').length;
+
+    let items = this.controlPoints.map((cp, realIdx) => ({ cp, realIdx }));
+    if (this.pointsFilter !== 'all') {
+      items = items.filter(({ cp }) => {
+        const k = cp.kind === 'min' ? 'lower' : cp.kind === 'max' ? 'upper' : cp.kind;
+        return k === this.pointsFilter;
+      });
+    }
+
+    if (badge) {
+      badge.textContent = `三线数值化点表: 显示 ${items.length}/${this.controlPoints.length} 个点 ｜ 均值线: ${curveCount} ｜ 95%下界: ${lowerCount} ｜ 95%上界: ${upperCount}`;
+    }
+
+    tbody.innerHTML = '';
+    items.forEach(({ cp, realIdx }, pos) => {
+      const tr = document.createElement('tr');
+      const normKind = cp.kind === 'min' ? 'lower' : cp.kind === 'max' ? 'upper' : cp.kind;
+
+      const tagColor = normKind === 'curve' ? '#38bdf8' : normKind === 'lower' ? '#fb923c' : '#a78bfa';
+      const tagName = normKind === 'curve' ? '均值线 (Mean)' : normKind === 'lower' ? '95%下界 (Lower)' : '95%上界 (Upper)';
+
+      const ad = this.pxToAgeDepth(cp.x, cp.y);
+      const curAge = ad ? ad.age : 0;
+      const curDepth = ad ? ad.depth : 0;
+
+      tr.innerHTML = `
+        <td style="text-align: center; font-weight: 600; font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);">#${String(pos + 1).padStart(3, '0')}</td>
+        <td style="padding: 2px 6px;">
+          <span style="display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 9.5px; font-weight: 600; background: color-mix(in srgb, ${tagColor} 18%, transparent); color: ${tagColor}; border: 1px solid color-mix(in srgb, ${tagColor} 40%, transparent);">
+            ${tagName}
+          </span>
+        </td>
+        <td>
+          <input type="number" step="any" class="ad-tbl-input ad-input-point-depth" data-real-idx="${realIdx}" value="${formatNumber(curDepth)}" title="深度 (${dUnit})" style="font-weight: 600; font-size: 10.5px;" />
+        </td>
+        <td>
+          <input type="number" step="any" class="ad-tbl-input ad-input-point-age" data-real-idx="${realIdx}" value="${formatNumber(curAge)}" title="年代 (${aUnit})" style="font-size: 10.5px;" />
+        </td>
+        <td style="font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted);">
+          (${Math.round(cp.x)}, ${Math.round(cp.y)})
+        </td>
+        <td style="text-align: center;">
+          <span style="font-size: 9.5px; color: var(--status-success);">已捕获</span>
+        </td>
+        <td style="text-align: center;">
+          <button class="ui-btn ui-btn--quiet ui-btn--xs ad-btn-del-point-row" data-real-idx="${realIdx}" title="删除此控制点" style="padding: 1px 6px; font-size: 9.5px; color: var(--accent-red);">✕</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('.ad-input-point-depth').forEach((inp) => {
+      inp.addEventListener('change', (e) => {
+        const realIdx = parseInt((e.target as HTMLElement).getAttribute('data-real-idx') || '0', 10);
+        const newD = parseFloat((e.target as HTMLInputElement).value);
+        if (Number.isFinite(newD) && this.controlPoints[realIdx]) {
+          const cp = this.controlPoints[realIdx];
+          const ad = this.pxToAgeDepth(cp.x, cp.y);
+          const currentAge = ad ? ad.age : 0;
+          this.callbacks.onControlPointModified?.(realIdx, currentAge, newD);
+        }
+      });
+    });
+
+    tbody.querySelectorAll('.ad-input-point-age').forEach((inp) => {
+      inp.addEventListener('change', (e) => {
+        const realIdx = parseInt((e.target as HTMLElement).getAttribute('data-real-idx') || '0', 10);
+        const newA = parseFloat((e.target as HTMLInputElement).value);
+        if (Number.isFinite(newA) && this.controlPoints[realIdx]) {
+          const cp = this.controlPoints[realIdx];
+          const ad = this.pxToAgeDepth(cp.x, cp.y);
+          const currentDepth = ad ? ad.depth : 0;
+          this.callbacks.onControlPointModified?.(realIdx, newA, currentDepth);
+        }
+      });
+    });
+
+    tbody.querySelectorAll('.ad-btn-del-point-row').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const realIdx = parseInt((btn as HTMLElement).getAttribute('data-real-idx') || '0', 10);
+        this.callbacks.onControlPointDeleted?.(realIdx);
+      });
+    });
+  }
+
+  public renderSamplesTable(): void {
+    const tbody = this.container.querySelector('#ad-full-table-tbody');
+    const badge = this.container.querySelector('#ad-table-summary-badge');
+    if (!tbody) return;
+
+    if (!this.mappedSamples || !this.mappedSamples.depths || this.mappedSamples.depths.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 30px;">主图当前未检测到采样层位数据（Step 7）</td></tr>`;
+      if (badge) badge.textContent = '共 0 个层位';
+      return;
+    }
+
+    const ms = this.mappedSamples;
+    const dUnit = this.getDepthUnit();
+    const aUnit = this.getAgeUnit();
+
+    if (badge) {
+      badge.textContent = `花粉样品层位: 共 ${ms.depths.length} 个层位 ｜ 主轴基准: ${
+        this.primaryAxis === 'age'
+          ? `年代 (${aUnit}) ➔ 反演推导深度 (${dUnit})`
+          : `深度 (${dUnit}) ➔ 推算日历年代 (${aUnit})`
+      }`;
+    }
+
+    const sed = ms.sedimentation;
+    const d = ms.depths;
+    const a = ms.age_est;
+    const mi = ms.age_lower !== undefined ? ms.age_lower : (ms.age_min ? ms.age_min : a.map((v) => v - 100));
+    const ma = ms.age_upper !== undefined ? ms.age_upper : (ms.age_max ? ms.age_max : a.map((v) => v + 100));
+    const order = this.displayOrder(d, a, mi, ma);
+
+    tbody.innerHTML = '';
+    for (let pos = 0; pos < order.length; pos++) {
+      const i = order[pos];
+      const tr = document.createElement('tr');
+
+      let ageVal = a[i];
+      let depthVal = d[i];
+
+      if (this.primaryAxis === 'age') {
+        if (depthVal === undefined || depthVal === null || isNaN(depthVal)) {
+          depthVal = this.invertDepthFromAge(ageVal);
+          ms.depths[i] = depthVal;
+        }
+      } else {
+        if (ageVal === undefined || ageVal === null || isNaN(ageVal)) {
+          ageVal = this.interpAgeAtDepth(depthVal, 'mean');
+          ms.age_est[i] = ageVal;
+        }
+      }
+
+      const lowerVal = mi[i] !== undefined && !isNaN(mi[i]) ? mi[i] : this.interpAgeAtDepth(depthVal, 'lower');
+      const upperVal = ma[i] !== undefined && !isNaN(ma[i]) ? ma[i] : this.interpAgeAtDepth(depthVal, 'upper');
+
+      let accRate: number | null = null;
+      let accUpper: number | null = null;
+      let accLower: number | null = null;
+
+      if (sed && Array.isArray(sed.sed_rate) && i < sed.sed_rate.length) {
+        const mid = sed.sed_rate[i];
+        if (mid !== null && mid !== undefined && Number.isFinite(mid)) {
+          accRate = mid;
+          const se = sed.sed_rate_se?.[i];
+          if (se !== null && se !== undefined && Number.isFinite(se)) {
+            accUpper = mid + 1.96 * se;
+            accLower = Math.max(0, mid - 1.96 * se);
+          }
+        }
+      }
+
+      if (accRate === null && i > 0) {
+        const prevD = d[i - 1];
+        const prevA = a[i - 1];
+        const da = Math.abs(ageVal - prevA);
+        const dd = Math.abs(depthVal - prevD);
+        if (da > 1e-6) {
+          accRate = dd / da;
+          accUpper = accRate;
+          accLower = accRate;
+        }
+      }
+
+      const isInverted = i > 0 && ageVal < a[i - 1];
+      if (isInverted) tr.classList.add('ad-row-inversion');
+
+      const hid = ms.horizon_id?.[i] || ('H' + String(i + 1).padStart(4, '0'));
+
+      if (this.primaryAxis === 'age') {
+        tr.innerHTML = `
+          <td style="text-align: center; font-weight: 600; color: var(--text-primary); font-family: var(--font-mono); font-size: 10px;">${hid}</td>
+          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-age" data-idx="${i}" value="${formatNumber(ageVal)}" style="font-weight: 600;" /></td>
+          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-depth" data-idx="${i}" value="${formatNumber(depthVal)}" style="font-size: 10.5px;" /></td>
+          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-max" data-idx="${i}" value="${formatNumber(upperVal)}" /></td>
+          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-min" data-idx="${i}" value="${formatNumber(lowerVal)}" /></td>
+          <td style="color: var(--text-secondary); font-size: 10px; font-family: var(--font-mono);">${formatNumber(accRate)}</td>
+          <td style="color: var(--text-muted); font-size: 9.5px; font-family: var(--font-mono);">${formatNumber(accUpper)}</td>
+          <td style="color: var(--text-muted); font-size: 9.5px; font-family: var(--font-mono);">${formatNumber(accLower)}</td>
+          <td style="text-align: center;">
+            <button class="ui-btn ui-btn--quiet ui-btn--xs ad-btn-del-sample-row" data-idx="${i}" title="删除此采样层位" style="padding: 1px 6px; font-size: 9.5px; color: var(--accent-red);">✕</button>
+          </td>
+        `;
+      } else {
+        tr.innerHTML = `
+          <td style="text-align: center; font-weight: 600; color: var(--text-primary); font-family: var(--font-mono); font-size: 10px;">${hid}</td>
+          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-depth" data-idx="${i}" value="${formatNumber(depthVal)}" style="font-weight: 600; font-size: 10.5px;" /></td>
+          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-age" data-idx="${i}" value="${formatNumber(ageVal)}" /></td>
+          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-max" data-idx="${i}" value="${formatNumber(upperVal)}" /></td>
+          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-min" data-idx="${i}" value="${formatNumber(lowerVal)}" /></td>
+          <td style="color: var(--text-secondary); font-size: 10px; font-family: var(--font-mono);">${formatNumber(accRate)}</td>
+          <td style="color: var(--text-muted); font-size: 9.5px; font-family: var(--font-mono);">${formatNumber(accUpper)}</td>
+          <td style="color: var(--text-muted); font-size: 9.5px; font-family: var(--font-mono);">${formatNumber(accLower)}</td>
+          <td style="text-align: center;">
+            <button class="ui-btn ui-btn--quiet ui-btn--xs ad-btn-del-sample-row" data-idx="${i}" title="删除此采样层位" style="padding: 1px 6px; font-size: 9.5px; color: var(--accent-red);">✕</button>
+          </td>
+        `;
+      }
+      tbody.appendChild(tr);
+    }
+
+    tbody.querySelectorAll('.ad-input-full-sample-age').forEach((inp) => {
+      inp.addEventListener('change', (e) => {
+        const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
+        const v = parseFloat((e.target as HTMLInputElement).value);
+        if (Number.isFinite(v) && this.mappedSamples) {
+          this.mappedSamples.age_est[idx] = v;
+          if (this.primaryAxis === 'age') {
+            const invertedD = this.invertDepthFromAge(v);
+            this.mappedSamples.depths[idx] = invertedD;
+            this.renderSamplesTable();
+          }
+          this.updateMappingTable();
+          void this.callbacks.onSamplesModified?.(this.mappedSamples);
+        }
+      });
+    });
+
+    tbody.querySelectorAll('.ad-input-full-sample-depth').forEach((inp) => {
+      inp.addEventListener('change', (e) => {
+        const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
+        const v = parseFloat((e.target as HTMLInputElement).value);
+        if (Number.isFinite(v)) {
+          this.onSampleDepthEdited(idx, v);
+        }
+      });
+    });
+
+    tbody.querySelectorAll('.ad-input-full-sample-max').forEach((inp) => {
+      inp.addEventListener('change', (e) => {
+        const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
+        const v = parseFloat((e.target as HTMLInputElement).value);
+        if (Number.isFinite(v) && this.mappedSamples) {
+          if (!this.mappedSamples.age_upper) this.mappedSamples.age_upper = [...this.mappedSamples.age_est];
+          this.mappedSamples.age_upper[idx] = v;
+          this.mappedSamples.age_max = this.mappedSamples.age_upper;
+          this.updateMappingTable();
+          void this.callbacks.onSamplesModified?.(this.mappedSamples);
+        }
+      });
+    });
+
+    tbody.querySelectorAll('.ad-input-full-sample-min').forEach((inp) => {
+      inp.addEventListener('change', (e) => {
+        const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
+        const v = parseFloat((e.target as HTMLInputElement).value);
+        if (Number.isFinite(v) && this.mappedSamples) {
+          if (!this.mappedSamples.age_lower) this.mappedSamples.age_lower = [...this.mappedSamples.age_est];
+          this.mappedSamples.age_lower[idx] = v;
+          this.mappedSamples.age_min = this.mappedSamples.age_lower;
+          this.updateMappingTable();
+          void this.callbacks.onSamplesModified?.(this.mappedSamples);
+        }
+      });
+    });
+
+    tbody.querySelectorAll('.ad-btn-del-sample-row').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt((btn as HTMLElement).getAttribute('data-idx') || '0', 10);
+        this.deleteSampleRow(idx);
+      });
+    });
+  }
+
+  public renderModelGridTable(): void {
     const tbody = this.container.querySelector('#ad-full-table-tbody');
     const badge = this.container.querySelector('#ad-table-summary-badge');
     if (!tbody) return;
@@ -826,159 +1241,9 @@ export class AgeDepthDatingTable {
       return;
     }
 
-    tbody.innerHTML = '';
     const dUnit = this.getDepthUnit();
     const aUnit = this.getAgeUnit();
-
-    if (this.tableMode === 'samples' && this.mappedSamples?.depths?.length) {
-      const ms = this.mappedSamples;
-      if (badge) {
-        badge.textContent = `花粉样品层位: 共 ${ms.depths.length} 个层位 ｜ 主轴基准: ${
-          this.primaryAxis === 'age'
-            ? `年代 (${aUnit}) ➔ 反演深度 (${dUnit})`
-            : `深度 (${dUnit}) ➔ 推算年代 (${aUnit})`
-        }`;
-      }
-      const sed = ms.sedimentation;
-      const d = ms.depths;
-      const a = ms.age_est;
-      const mi = ms.age_lower !== undefined ? ms.age_lower : (ms.age_min ? ms.age_min : a.map((v) => v - 100));
-      const ma = ms.age_upper !== undefined ? ms.age_upper : (ms.age_max ? ms.age_max : a.map((v) => v + 100));
-      const order = this.displayOrder(d, a, mi, ma);
-
-      for (let pos = 0; pos < order.length; pos++) {
-        const i = order[pos];
-        const tr = document.createElement('tr');
-
-        // 双向推导分流逻辑：
-        // 若 primary_axis === 'age'：age 为已知值，depth 由均值线反向推导，upper/lower 由该深度插值求得
-        // 若 primary_axis === 'depth'：depth 为已知值，age 由 mean 线推导，upper/lower 由该深度插值求得
-        let ageVal = a[i];
-        let depthVal = d[i];
-
-        if (this.primaryAxis === 'age') {
-          if (depthVal === undefined || depthVal === null || isNaN(depthVal)) {
-            depthVal = this.invertDepthFromAge(ageVal);
-            ms.depths[i] = depthVal;
-          }
-        } else {
-          if (ageVal === undefined || ageVal === null || isNaN(ageVal)) {
-            ageVal = this.interpAgeAtDepth(depthVal, 'mean');
-            ms.age_est[i] = ageVal;
-          }
-        }
-
-        const lowerVal = mi[i] !== undefined && !isNaN(mi[i]) ? mi[i] : this.interpAgeAtDepth(depthVal, 'lower');
-        const upperVal = ma[i] !== undefined && !isNaN(ma[i]) ? ma[i] : this.interpAgeAtDepth(depthVal, 'upper');
-
-        // 沉积速率计算 (cm/yr)
-        let accRate: number | null = null;
-        let accUpper: number | null = null;
-        let accLower: number | null = null;
-
-        if (sed && Array.isArray(sed.sed_rate) && i < sed.sed_rate.length) {
-          const mid = sed.sed_rate[i];
-          if (mid !== null && mid !== undefined && Number.isFinite(mid)) {
-            accRate = mid;
-            const se = sed.sed_rate_se?.[i];
-            if (se !== null && se !== undefined && Number.isFinite(se)) {
-              accUpper = mid + 1.96 * se;
-              accLower = Math.max(0, mid - 1.96 * se);
-            }
-          }
-        }
-
-        if (accRate === null && i > 0) {
-          const prevD = d[i - 1];
-          const prevA = a[i - 1];
-          const da = Math.abs(ageVal - prevA);
-          const dd = Math.abs(depthVal - prevD);
-          if (da > 1e-6) {
-            accRate = dd / da;
-            accUpper = accRate;
-            accLower = accRate;
-          }
-        }
-
-        const isInverted = i > 0 && ageVal < a[i - 1];
-        if (isInverted) tr.classList.add('ad-row-inversion');
-
-        const hid = ms.horizon_id?.[i] || ('H' + String(i + 1).padStart(4, '0'));
-        tr.innerHTML = `
-          <td style="text-align: center; font-weight: 600; color: var(--text-primary); font-family: var(--font-mono); font-size: 10px;">${hid}</td>
-          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-age" data-idx="${i}" value="${formatNumber(ageVal)}" /></td>
-          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-depth" data-idx="${i}" value="${formatNumber(depthVal)}" style="font-weight: 600; font-size: 10.5px;" /></td>
-          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-max" data-idx="${i}" value="${formatNumber(upperVal)}" /></td>
-          <td><input type="number" step="any" class="ad-tbl-input ad-input-full-sample-min" data-idx="${i}" value="${formatNumber(lowerVal)}" /></td>
-          <td style="color: var(--text-secondary); font-size: 10px; font-family: var(--font-mono);">${formatNumber(accRate)}</td>
-          <td style="color: var(--text-muted); font-size: 9.5px; font-family: var(--font-mono);">${formatNumber(accUpper)}</td>
-          <td style="color: var(--text-muted); font-size: 9.5px; font-family: var(--font-mono);">${formatNumber(accLower)}</td>
-          <td style="text-align: center;">
-            <button class="ui-btn ui-btn--quiet ui-btn--xs ad-btn-del-sample-row" data-idx="${i}" title="删除此采样层位" style="padding: 1px 6px; font-size: 9.5px; color: var(--accent-red);">✕</button>
-          </td>
-        `;
-        tbody.appendChild(tr);
-      }
-
-      tbody.querySelectorAll('.ad-input-full-sample-age').forEach((inp) => {
-        inp.addEventListener('change', (e) => {
-          const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
-          const v = parseFloat((e.target as HTMLInputElement).value);
-          if (Number.isFinite(v) && this.mappedSamples) {
-            this.mappedSamples.age_est[idx] = v;
-            if (this.primaryAxis === 'age') {
-              const invertedD = this.invertDepthFromAge(v);
-              this.mappedSamples.depths[idx] = invertedD;
-              this.renderFullDataTable();
-            }
-            this.updateMappingTable();
-            void this.callbacks.onSamplesModified?.(this.mappedSamples);
-          }
-        });
-      });
-      tbody.querySelectorAll('.ad-input-full-sample-depth').forEach((inp) => {
-        inp.addEventListener('change', (e) => {
-          const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
-          const v = parseFloat((e.target as HTMLInputElement).value);
-          if (Number.isFinite(v)) {
-            this.onSampleDepthEdited(idx, v);
-          }
-        });
-      });
-      tbody.querySelectorAll('.ad-input-full-sample-max').forEach((inp) => {
-        inp.addEventListener('change', (e) => {
-          const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
-          const v = parseFloat((e.target as HTMLInputElement).value);
-          if (Number.isFinite(v) && this.mappedSamples) {
-            if (!this.mappedSamples.age_upper) this.mappedSamples.age_upper = [...this.mappedSamples.age_est];
-            this.mappedSamples.age_upper[idx] = v;
-            this.mappedSamples.age_max = this.mappedSamples.age_upper;
-            this.updateMappingTable();
-            void this.callbacks.onSamplesModified?.(this.mappedSamples);
-          }
-        });
-      });
-      tbody.querySelectorAll('.ad-input-full-sample-min').forEach((inp) => {
-        inp.addEventListener('change', (e) => {
-          const idx = parseInt((e.target as HTMLElement).getAttribute('data-idx') || '0', 10);
-          const v = parseFloat((e.target as HTMLInputElement).value);
-          if (Number.isFinite(v) && this.mappedSamples) {
-            if (!this.mappedSamples.age_lower) this.mappedSamples.age_lower = [...this.mappedSamples.age_est];
-            this.mappedSamples.age_lower[idx] = v;
-            this.mappedSamples.age_min = this.mappedSamples.age_lower;
-            this.updateMappingTable();
-            void this.callbacks.onSamplesModified?.(this.mappedSamples);
-          }
-        });
-      });
-      tbody.querySelectorAll('.ad-btn-del-sample-row').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const idx = parseInt((btn as HTMLElement).getAttribute('data-idx') || '0', 10);
-          this.deleteSampleRow(idx);
-        });
-      });
-      return;
-    }
+    tbody.innerHTML = '';
 
     const d = this.inspectionData.depths;
     const a = this.inspectionData.ages;
@@ -1095,8 +1360,6 @@ export class AgeDepthDatingTable {
         this.deleteTableRow(idx);
       });
     });
-
-    this.renderSedRateProfile();
   }
 
   /**
@@ -1616,24 +1879,42 @@ export class AgeDepthDatingTable {
     });
 
     // Tab 2 大表控制工具栏
-    this.container.querySelector('#ad-tbl-view-model')?.addEventListener('click', () => {
-      this.tableMode = 'model';
-      this.container.querySelector('#ad-tbl-view-model')?.classList.add('active');
-      this.container.querySelector('#ad-tbl-view-samples')?.classList.remove('active');
-      const sideBtn = this.container.querySelector('#ad-btn-toggle-side-table') as HTMLElement | null;
-      if (sideBtn) sideBtn.textContent = '全量模型';
-      this.renderFullDataTable();
-      this.updateMappingTable();
+    this.container.querySelector('#ad-tbl-view-samples')?.addEventListener('click', () => {
+      this.setTableMode('samples');
     });
 
-    this.container.querySelector('#ad-tbl-view-samples')?.addEventListener('click', () => {
-      this.tableMode = 'samples';
-      this.container.querySelector('#ad-tbl-view-samples')?.classList.add('active');
-      this.container.querySelector('#ad-tbl-view-model')?.classList.remove('active');
-      const sideBtn = this.container.querySelector('#ad-btn-toggle-side-table') as HTMLElement | null;
-      if (sideBtn) sideBtn.textContent = '花粉样品';
-      this.renderFullDataTable();
-      this.updateMappingTable();
+    this.container.querySelector('#ad-tbl-view-points')?.addEventListener('click', () => {
+      this.setTableMode('points');
+    });
+
+    this.container.querySelector('#ad-tbl-view-model')?.addEventListener('click', () => {
+      this.setTableMode('model');
+    });
+
+    this.container.querySelector('#ad-tbl-points-filter')?.addEventListener('change', (e) => {
+      this.pointsFilter = ((e.target as HTMLSelectElement).value as any) || 'all';
+      if (this.tableMode === 'points') {
+        this.renderPointsTable();
+      }
+    });
+
+    this.container.querySelector('#ad-tbl-btn-add-point')?.addEventListener('click', () => {
+      let defaultAge = 1000;
+      let defaultDepth = 10;
+      if (this.controlPoints.length > 0) {
+        const last = this.controlPoints[this.controlPoints.length - 1];
+        const ad = this.pxToAgeDepth(last.x, last.y);
+        if (ad) {
+          defaultAge = Math.round(ad.age + 100);
+          defaultDepth = Math.round((ad.depth + 5) * 10) / 10;
+        }
+      } else if (this.inspectionData?.ages?.length) {
+        const midIdx = Math.floor(this.inspectionData.ages.length / 2);
+        defaultAge = Math.round(this.inspectionData.ages[midIdx]);
+        defaultDepth = Math.round(this.inspectionData.depths[midIdx] * 10) / 10;
+      }
+      const kind = this.pointsFilter === 'all' ? 'curve' : this.pointsFilter;
+      this.callbacks.onControlPointAdded?.(defaultAge, defaultDepth, kind);
     });
 
     this.container.querySelector('#ad-tbl-btn-add')?.addEventListener('click', () => this.addTableRow());

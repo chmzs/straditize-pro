@@ -90,6 +90,9 @@ export class AgeDepthModal {
       onExcludeBoxesChanged: () => {
         this.canvasComp?.updateExcludeCount();
       },
+      onControlPointsChanged: (points) => {
+        this.tableComp?.setControlPoints(points);
+      },
     });
 
     this.tableComp = new AgeDepthDatingTable(modal, {
@@ -104,6 +107,27 @@ export class AgeDepthModal {
       onDatingPointsChanged: (points) => {
         this.canvasComp?.setDatingPoints(points);
         this.canvasComp?.renderCanvas();
+      },
+      onControlPointModified: (idx, age, depth) => {
+        this.canvasComp?.updateControlPointAgeDepth(idx, age, depth);
+        const insp = this.canvasComp?.getInspectionData() || null;
+        if (insp && this.controller) {
+          void this.controller.syncModelToBackend(insp);
+        }
+      },
+      onControlPointDeleted: (idx) => {
+        this.canvasComp?.deleteControlPointByIndex(idx);
+        const insp = this.canvasComp?.getInspectionData() || null;
+        if (insp && this.controller) {
+          void this.controller.syncModelToBackend(insp);
+        }
+      },
+      onControlPointAdded: (age, depth, kind) => {
+        this.canvasComp?.addControlPointAgeDepth(age, depth, kind);
+        const insp = this.canvasComp?.getInspectionData() || null;
+        if (insp && this.controller) {
+          void this.controller.syncModelToBackend(insp);
+        }
       },
       onRequestSyncModel: async () => {
         const insp = this.tableComp?.getInspectionData() || this.canvasComp?.getInspectionData();
@@ -144,6 +168,10 @@ export class AgeDepthModal {
 
     const primaryAxis = this.pollenData?.calibration?.primaryAxis === 'age' ? 'age' : 'depth';
     this.tableComp.setPrimaryAxis(primaryAxis);
+    this.tableComp.setCoordinateConverters(
+      (x, y) => this.canvasComp?.pxToAgeDepth(x, y) ?? null,
+      (age, depth) => this.canvasComp?.ageDepthToPx(age, depth) ?? null
+    );
 
     this.controller = new AgeDepthController(modal, this.rpcClient, {
       onImageLoaded: (img, label) => {
@@ -255,6 +283,7 @@ export class AgeDepthModal {
         if (payload.inspection) {
           this.canvasComp.setInspectionData(payload.inspection);
           this.tableComp.setInspectionData(payload.inspection);
+          this.tableComp.setControlPoints(this.canvasComp.getControlPoints());
           if (payload.mapped_samples) {
             this.canvasComp.setMappedSamples(payload.mapped_samples);
             this.tableComp.setMappedSamples(payload.mapped_samples);
@@ -263,8 +292,6 @@ export class AgeDepthModal {
           }
           if (this.pollenData?.samples?.length) {
             this.tableComp.setTableMode('samples');
-            modal.querySelector('#ad-tbl-view-samples')?.classList.add('active');
-            modal.querySelector('#ad-tbl-view-model')?.classList.remove('active');
           }
           const statusEl = modal.querySelector('#ad-status-msg');
           if (statusEl) {
@@ -280,6 +307,7 @@ export class AgeDepthModal {
         this.canvasComp.setMappedSamples(res.mapped_samples);
         this.tableComp.setInspectionData(res.inspection);
         this.tableComp.setMappedSamples(res.mapped_samples);
+        this.tableComp.setControlPoints(this.canvasComp.getControlPoints());
         this.canvasComp.renderCanvas();
       },
       onLocalBaconSuccess: (res) => {
@@ -288,6 +316,7 @@ export class AgeDepthModal {
         this.canvasComp.setMappedSamples(res.mapped_samples);
         this.tableComp.setInspectionData(res.inspection);
         this.tableComp.setMappedSamples(res.mapped_samples);
+        this.tableComp.setControlPoints(this.canvasComp.getControlPoints());
         this.canvasComp.renderCanvas();
         this.switchTab('visual');
       },

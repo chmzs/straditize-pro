@@ -22,6 +22,7 @@ export interface AgeDepthCanvasCallbacks {
   onCalibMarkersChanged?: () => void;
   onDatingPointPicked?: (point: DatingPoint) => void;
   onExcludeBoxesChanged?: () => void;
+  onControlPointsChanged?: (points: ControlPoint[]) => void;
 }
 
 export class AgeDepthCanvas {
@@ -280,14 +281,6 @@ export class AgeDepthCanvas {
     return this.excludeArmed;
   }
 
-  public getControlPoints(): ControlPoint[] {
-    return this.controlPoints;
-  }
-
-  public setControlPoints(points: ControlPoint[]): void {
-    this.controlPoints = points;
-  }
-
   public getDatingPoints(): DatingPoint[] {
     return this.datingPoints;
   }
@@ -306,6 +299,56 @@ export class AgeDepthCanvas {
 
   public getEditTarget(): 'curve' | 'lower' | 'upper' | 'min' | 'max' {
     return this.editTarget;
+  }
+
+  public getControlPoints(): ControlPoint[] {
+    return this.controlPoints;
+  }
+
+  public setControlPoints(cps: ControlPoint[]): void {
+    this.controlPoints = cps.map((cp) => ({ ...cp }));
+    this.refitCurveFromControlPoints(true);
+    this.renderCanvas();
+    this.callbacks.onControlPointsChanged?.(this.controlPoints);
+  }
+
+  public updateControlPointAgeDepth(idx: number, age: number, depth: number): void {
+    if (!this.controlPoints[idx]) return;
+    const pt = this.ageDepthToPx(age, depth);
+    if (!pt) return;
+    this.history.push('表格修改控制点', this.captureState());
+    this.controlPoints[idx].x = pt.x;
+    this.controlPoints[idx].y = pt.y;
+    this.refitCurveFromControlPoints(true);
+    this.renderCanvas();
+    this.callbacks.onControlPointsChanged?.(this.controlPoints);
+  }
+
+  public deleteControlPointByIndex(idx: number): void {
+    if (idx < 0 || idx >= this.controlPoints.length) return;
+    this.history.push('删除控制点', this.captureState());
+    this.controlPoints.splice(idx, 1);
+    this.selectedControlPointIndex = null;
+    this.refitCurveFromControlPoints(true);
+    this.renderCanvas();
+    this.callbacks.onControlPointsChanged?.(this.controlPoints);
+  }
+
+  public addControlPointAgeDepth(age: number, depth: number, kind: 'curve' | 'lower' | 'upper' = 'curve'): void {
+    const pt = this.ageDepthToPx(age, depth);
+    if (!pt) return;
+    this.history.push('添加控制点', this.captureState());
+    const newCp: ControlPoint = {
+      id: `cp_${kind}_${Date.now()}`,
+      x: pt.x,
+      y: pt.y,
+      kind,
+    };
+    this.controlPoints.push(newCp);
+    this.controlPoints.sort((a, b) => a.y - b.y);
+    this.refitCurveFromControlPoints(true);
+    this.renderCanvas();
+    this.callbacks.onControlPointsChanged?.(this.controlPoints);
   }
 
   public setEditTarget(target: 'curve' | 'lower' | 'upper' | 'min' | 'max'): void {
@@ -370,6 +413,7 @@ export class AgeDepthCanvas {
     if (sel && sel.value !== this.editTarget) sel.value = this.editTarget;
     this.refitCurveFromControlPoints(true);
     this.renderCanvas();
+    this.callbacks.onControlPointsChanged?.(this.controlPoints);
   }
 
   public undo(): boolean {
@@ -678,6 +722,7 @@ export class AgeDepthCanvas {
         });
       }
     }
+    this.callbacks.onControlPointsChanged?.(this.controlPoints);
   }
 
   public findControlPointAt(pt: { x: number; y: number }): number {
@@ -1416,6 +1461,7 @@ export class AgeDepthCanvas {
         this.selectedControlPointIndex = this.controlPoints.indexOf(newCp);
         this.refitCurveFromControlPoints();
         this.renderCanvas();
+        this.callbacks.onControlPointsChanged?.(this.controlPoints);
         this.showHudNotice(`已在${this.editTarget === 'curve' ? '均值线' : this.editTarget === 'lower' ? '下界线' : '上界线'}添加控制点 (可按 Ctrl+Z 撤销)`);
         return;
       }
@@ -1428,6 +1474,7 @@ export class AgeDepthCanvas {
           this.selectedControlPointIndex = null;
           this.refitCurveFromControlPoints();
           this.renderCanvas();
+          this.callbacks.onControlPointsChanged?.(this.controlPoints);
           this.showHudNotice('已删除控制点 (可按 Ctrl+Z 撤销)');
           return;
         }
@@ -1511,6 +1558,7 @@ export class AgeDepthCanvas {
         }
         this.dragStartSnapshot = null;
         this.callbacks.onModelRefitted?.();
+        this.callbacks.onControlPointsChanged?.(this.controlPoints);
         return;
       }
       if (this.panning) {
