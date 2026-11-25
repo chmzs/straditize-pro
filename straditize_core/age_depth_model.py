@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from scipy.interpolate import PchipInterpolator
+from scipy.interpolate import interp1d
 from scipy.ndimage import median_filter
 
 from .calibration import LinearCalibration, LogCalibration
@@ -221,11 +221,11 @@ class AgeDepthModel:
         self.analysis_age_min = fit_lower
         self.analysis_age_max = fit_upper
 
-        # Monotonic-preserving PCHIP interpolators
+        # Standard piecewise linear interpolators (strictly aligning with R approx)
         if len(fit_depths) >= 2:
-            self._interp_age = PchipInterpolator(fit_depths, fit_ages, extrapolate=True)
-            self._interp_min = PchipInterpolator(fit_depths, fit_lower, extrapolate=True)
-            self._interp_max = PchipInterpolator(fit_depths, fit_upper, extrapolate=True)
+            self._interp_age = interp1d(fit_depths, fit_ages, kind="linear", fill_value="extrapolate", assume_sorted=True)
+            self._interp_min = interp1d(fit_depths, fit_lower, kind="linear", fill_value="extrapolate", assume_sorted=True)
+            self._interp_max = interp1d(fit_depths, fit_upper, kind="linear", fill_value="extrapolate", assume_sorted=True)
         else:
             self._interp_age = None
             self._interp_min = None
@@ -1522,12 +1522,16 @@ class AgeDepthModel:
         observed_hi = float(np.max(self.analysis_depths))
         extrapolated = (d_arr < observed_lo) | (d_arr > observed_hi)
 
-        # Analytic PCHIP derivative: exact, and no finite-difference step to tune.
-        slope = np.asarray(self._interp_age.derivative()(d_arr), dtype=float)
-        # A rate is a magnitude. The sign is fixed by the age convention declared at
-        # extraction time (positive for BP axes, negative for AD axes), so report the
-        # absolute rate rather than leaking that convention into the units.
-        slope = np.abs(slope)
+        # Finite difference derivative for piecewise linear interpolation
+        if d_arr.size >= 2:
+            slope = np.abs(np.gradient(age_est, d_arr))
+        elif len(self.analysis_depths) >= 2:
+            idx = np.searchsorted(self.analysis_depths, d_arr[0])
+            i0 = max(0, min(idx - 1, len(self.analysis_depths) - 2))
+            dd = self.analysis_depths[i0 + 1] - self.analysis_depths[i0]
+            slope = np.array([abs((self.analysis_ages[i0 + 1] - self.analysis_ages[i0]) / dd) if abs(dd) > 1e-6 else np.nan])
+        else:
+            slope = np.zeros_like(d_arr)
         slope = np.where(slope < 1e-12, np.nan, slope)
 
         # The rate columns are LABELLED per year, so they must be per year. The extracted
@@ -1684,29 +1688,16 @@ class AgeDepthModel:
         observed_max_a = float(np.max(unique_a))
         extrapolated = (a_arr < observed_min_a) | (a_arr > observed_max_a)
 
-        from scipy.interpolate import PchipInterpolator
-
-        try:
-            inv_pchip = PchipInterpolator(unique_a, unique_d)
-            pred_d = np.asarray(inv_pchip(a_arr), dtype=float)
-            low_mask = a_arr < observed_min_a
-            if np.any(low_mask):
-                slope_lo = (unique_d[1] - unique_d[0]) / (unique_a[1] - unique_a[0])
-                pred_d[low_mask] = unique_d[0] + slope_lo * (a_arr[low_mask] - observed_min_a)
-            high_mask = a_arr > observed_max_a
-            if np.any(high_mask):
-                slope_hi = (unique_d[-1] - unique_d[-2]) / (unique_a[-1] - unique_a[-2])
-                pred_d[high_mask] = unique_d[-1] + slope_hi * (a_arr[high_mask] - observed_max_a)
-        except Exception:
-            pred_d = np.interp(a_arr, unique_a, unique_d)
-            low_mask = a_arr < observed_min_a
-            if np.any(low_mask):
-                slope_lo = (unique_d[1] - unique_d[0]) / (unique_a[1] - unique_a[0])
-                pred_d[low_mask] = unique_d[0] + slope_lo * (a_arr[low_mask] - observed_min_a)
-            high_mask = a_arr > observed_max_a
-            if np.any(high_mask):
-                slope_hi = (unique_d[-1] - unique_d[-2]) / (unique_a[-1] - unique_a[-2])
-                pred_d[high_mask] = unique_d[-1] + slope_hi * (a_arr[high_mask] - observed_max_a)
+        # Standard linear interpolation (aligning with R approx)
+        pred_d = np.interp(a_arr, unique_a, unique_d)
+        low_mask = a_arr < observed_min_a
+        if np.any(low_mask):
+            slope_lo = (unique_d[1] - unique_d[0]) / (unique_a[1] - unique_a[0]) if (unique_a[1] - unique_a[0]) != 0 else 0
+            pred_d[low_mask] = unique_d[0] + slope_lo * (a_arr[low_mask] - observed_min_a)
+        high_mask = a_arr > observed_max_a
+        if np.any(high_mask):
+            slope_hi = (unique_d[-1] - unique_d[-2]) / (unique_a[-1] - unique_a[-2]) if (unique_a[-1] - unique_a[-2]) != 0 else 0
+            pred_d[high_mask] = unique_d[-1] + slope_hi * (a_arr[high_mask] - observed_max_a)
 
         return {
             "ages": _report_list(a_arr),
