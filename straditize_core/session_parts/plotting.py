@@ -1,4 +1,4 @@
-"""Session mixin: 一键出图（本机 R + riojaPlot/rioja）。
+"""Session mixin: 一键出图（本机 R + rioja::strat.plot）。
 
 数据来源只有一处：ExportMixin._primary_roi_export_frame()，也就是 data.csv 那一张表。
 出图不另造格式、不重新插值——用户导出的数就是画出来的数。
@@ -32,9 +32,7 @@ from ..strat_plot import (
 #: R 缺失 / R 失败时给用户的下一步动作，随错误消息一起返回。
 R_MISSING_HINT = (
     "本机出图需要 R + rioja 包：安装 R（https://cran.r-project.org/）后，"
-    "在 R 里执行 install.packages('rioja')；要在图上启用 Italicise / Break long / "
-    "Exaggeration / Min-max 这些开关，还需 install.packages('riojaPlot', "
-    "repos = 'https://nsj3.r-universe.dev')；或在设置页填写 Rscript 路径。"
+    "在 R 里执行 install.packages('rioja')；或在设置页填写 Rscript 路径。"
 )
 
 
@@ -227,10 +225,7 @@ class PlottingMixin:
                 _main_first = 0
         if _seg_on and _by_gid:
             if not _main_names:
-                # 情景 C（全 fixed）：**列等宽**。riojaPlot 的面板宽度 ∝ 各列 max，
-                # 而 `graph.widths` 在这条路径上不生效（实测设进 style 与当直接参数传都
-                # 无效，产物字节不变）。所以让**每列自成一个段**：段宽我们说了算
-                # （avail / 列数），单列段必然铺满，于是所有列等宽。
+                # 情景 C（全 fixed）：**列等宽**。每列自成固定量程段，R 侧按等权平分可用宽度。
                 _by_gid = {
                     f"{_g}__{_n}": [_n] for _n, _u, _g in _resolved if _n in _fixed_cols
                 }

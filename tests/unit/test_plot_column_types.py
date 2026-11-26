@@ -7,16 +7,16 @@
 
 ## 做法
 
-`plot_type.<列名>` 写进 settings，R 侧按列拼逻辑向量传给 `riojaPlot`
-（`.riojaPlot2:401` 是 `plot.line[i]`，本来就是逐列取值）。
+`plot_type.<列名>` 写进 settings，R 侧按相邻同形态连续切片，用 `rioja::strat.plot(..., add = TRUE)`
+逐段渲染，保证只依赖 CRAN `rioja` 且严格对齐逐列形态。
 
 ## 判据
 
 1. settings 里每列都有一条 `plot_type.<列名>`；
 2. 把一列改成 `line`、另一列改成 `symbol`，产物字节必须变化；
-3. 脚本里必须出现 `plot.poly = poly_v`（缺 key 的列退回全局开关）。
+3. 脚本里必须出现 `rioja::strat.plot(` 与逐片 `plot.poly = sl$poly`（缺 key 的列退回全局开关）。
 
-反向验证：把四处 `plot.poly = poly_v...` 删掉 → 判据 2 变红（字节相同）。
+反向验证：把 `plot.poly = sl$poly` 改成恒 `TRUE` → 判据 2 变红（字节相同）。
 """
 
 from __future__ import annotations
@@ -93,10 +93,10 @@ def test_every_column_carries_a_plot_type_key() -> None:
 
 
 def test_template_wires_vectors_for_every_call() -> None:
-    # 四处接线：段内首段 / 段内后续 / 不分段 / 向量构造
-    assert STRAT_PLOT_SCRIPT.count("plot.poly = poly_v") >= 3
+    assert "rioja::strat.plot(" in STRAT_PLOT_SCRIPT
+    assert "plot.poly = sl$poly" in STRAT_PLOT_SCRIPT
     assert (
-        "symb_v[[.ptype_col]] <- identical(.ptype_val, 'symbol')" in STRAT_PLOT_SCRIPT
+        'symb_v[[.ptype_col]] <- identical(.ptype_val, "symbol")' in STRAT_PLOT_SCRIPT
     )
 
 

@@ -298,8 +298,8 @@ def test_plot_script_has_no_axis_name_literal() -> None:
     """R 脚本里不得再有轴名常量：兜底值就是首列名（由 Python 侧派生）。"""
     assert '"Depth"' not in STRAT_PLOT_SCRIPT
     assert "'Depth'" not in STRAT_PLOT_SCRIPT
-    assert STRAT_PLOT_SCRIPT.count('txt("ylabel", y_var_name)') == 2, (
-        "riojaPlot 的 yvar.name 与 rioja 的 ylabel 两处都必须走同一个兜底变量"
+    assert STRAT_PLOT_SCRIPT.count('txt("ylabel", y_var_name)') == 1, (
+        "rioja::strat.plot 的 ylabel 兜底必须走同一个首列名变量"
     )
     assert "y_var_name <- names(raw)[[1]]" in STRAT_PLOT_SCRIPT
     assert DEFAULT_PLOT_SETTINGS["ylabel"] == "", (
@@ -309,7 +309,7 @@ def test_plot_script_has_no_axis_name_literal() -> None:
 
 class _FakeProc:
     returncode = 0
-    stdout = "STRADITIZE_ENGINE\triojaPlot\n"
+    stdout = "STRADITIZE_ENGINE\trioja\n"
     stderr = ""
 
 

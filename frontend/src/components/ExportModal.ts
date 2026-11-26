@@ -1076,7 +1076,7 @@ export class ExportModal {
     // 使用（`export.py:1129` 直接转调 `export_data`），`export.exportXlsx` /
     // `export.exportLipd` 更是没有行集参数。所以"选择器同时控制下载"只能由前端
     // 把**同一个矩阵**写出去 —— 这同时保证了预览与下载物逐格同值（构造即成立）。
-    // 本机出图：走本机 R（riojaPlot 优先，缺失时回退 rioja::strat.plot），不联网。
+    // 本机出图：走本机 R（rioja::strat.plot），不联网。
     //
     // 产物**不落盘**：后端把图以 data URL 交回来，这里直接 <img src> 显示，
     // 「下载」交给浏览器下载事件。失败必须把「缺什么」原样告诉用户，

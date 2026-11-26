@@ -171,7 +171,7 @@ export class SettingsModal {
                 </div>
               </div>
               <div id="settings-r-hint" style="font-size: 10.5px; line-height: 1.5; color: var(--text-muted);">
-                本机出图用本机 R 的 riojaPlot/rioja 直接出图；没有 R 时本机出图不可用（不再提供网页手动上传的兜底路线）。
+                本机出图用本机 R 的 rioja::strat.plot 直接出图；没有 R 时本机出图不可用（不再提供网页手动上传的兜底路线）。
               </div>
             </div>
           </div>
