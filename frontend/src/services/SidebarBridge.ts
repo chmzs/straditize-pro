@@ -27,6 +27,7 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
   return {
     onSelectTaxa: (taxaId: string) => {
       p.canvasComponent.setActiveTaxa(taxaId);
+      p.canvasComponent.scrollToColumn(taxaId);
       p.updateFooter();
     },
     onToggleVisible: (taxaId: string) => {
@@ -273,20 +274,24 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
       try {
         const res = await p.rpcClient.redigitizeAllColumns(resetManual);
         if (res && res.success) {
-          const currentActiveId = p.canvasComponent.data.activeTaxaId;
           const freshData = await p.rpcClient.getDiagramData();
-          if (currentActiveId && freshData.columns.some((c) => c.id === currentActiveId)) {
-            freshData.activeTaxaId = currentActiveId;
+          for (const freshCol of freshData.columns || []) {
+            const col = p.canvasComponent.data.columns.find((c) => c.id === freshCol.id);
+            if (col) {
+              col.controlPoints = freshCol.controlPoints || [];
+              if (freshCol.curvePoints && freshCol.curvePoints.length > 0) {
+                col.curvePoints = freshCol.curvePoints;
+              }
+            }
           }
-          p.canvasComponent.loadNewDiagram(freshData);
           p.canvasComponent.history.push(
             `Reset all ${res.columns_count} columns`,
             p.canvasComponent.data.columns,
             p.canvasComponent.data.activeTaxaId
           );
+          p.canvasComponent.requestRender();
           p.getSidebar()?.updateData(p.canvasComponent.data);
           p.getInspector()?.updateData(p.canvasComponent.data);
-          p.canvasComponent.requestRender();
           p.setHudNotice(`已重设全部 ${res.columns_count} 列的轮廓线与拐点。`, 4000);
         }
       } catch (err) {
@@ -375,33 +380,6 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
     },
     onBatchRedigitizeColumns: async (taxaIds: string[]) => {
       if (!taxaIds || taxaIds.length === 0) return;
-      const allCols = p.canvasComponent.data.columns;
-      if (taxaIds.length === allCols.length && taxaIds.length > 2) {
-        try {
-          const res = await p.rpcClient.redigitizeAllColumns(false);
-          if (res && res.success) {
-            const currentActiveId = p.canvasComponent.data.activeTaxaId;
-            const freshData = await p.rpcClient.getDiagramData();
-            if (currentActiveId && freshData.columns.some((c) => c.id === currentActiveId)) {
-              freshData.activeTaxaId = currentActiveId;
-            }
-            p.canvasComponent.loadNewDiagram(freshData);
-            p.canvasComponent.history.push(
-              `Batch re-digitize ${allCols.length} columns`,
-              p.canvasComponent.data.columns,
-              p.canvasComponent.data.activeTaxaId
-            );
-            p.getSidebar()?.updateData(p.canvasComponent.data);
-            p.getInspector()?.updateData(p.canvasComponent.data);
-            p.canvasComponent.requestRender();
-            p.setHudNotice(`已为全部 ${allCols.length} 列批量重新识别轮廓与拐点。`, 3500);
-            return;
-          }
-        } catch {
-          // fallback
-        }
-      }
-
       let totalComp = { brokenRows: 0, ambiguousRows: 0 };
       let successCount = 0;
       try {

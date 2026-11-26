@@ -685,3 +685,78 @@ def slice_vector_polygon_at_depths(
             widths[k] = 0.0
 
     return widths
+
+
+
+def compute_column_luminance_levels(
+    gray_band: np.ndarray | None,
+) -> tuple[float, float]:
+    """计算列窗口内的局部背景与前景基准亮度 (95% 分位数与 10% 分位数)。
+
+    用于将扫描图局部灰度动态映射为连续浓度 I(x, y) in [0.0, 1.0]。
+    """
+    if gray_band is None or gray_band.size == 0:
+        return 255.0, 0.0
+    l_bg = float(np.percentile(gray_band, 95))
+    l_fg = float(np.percentile(gray_band, 10))
+    if l_bg - l_fg < 10.0:
+        l_bg = 255.0
+        l_fg = 0.0
+    return l_bg, l_fg
+
+
+def subpixel_edge_offset(
+    gray_row: np.ndarray | None,
+    x_right: int,
+    l_bg: float = 255.0,
+    l_fg: float = 0.0,
+    zero_offset: float = 0.0,
+) -> float:
+    """主连通域锚定 + 亚像素 50% 边缘定位（Sub-pixel Edge Localization）。
+
+    仅在 [x_right, min(x_right + 2, W - 1)] 过渡区寻找跨越半高阈值 tau = 0.5 的下降沿，
+    消除整数像素截断导致的阶梯锯齿与偏左缩进。
+
+    对于无花粉/贴轴零位行 (x_right <= zero_offset)，恒定返回 float(x_right)，严禁引入虚假位移或抬高零点。
+    """
+    if x_right <= zero_offset:
+        return float(x_right)
+    if gray_row is None or gray_row.size == 0:
+        return float(x_right)
+
+    w = gray_row.shape[0]
+    if x_right >= w - 1:
+        return float(x_right)
+
+    denom = max(float(l_bg - l_fg), 1.0)
+    w_start = max(0, x_right - 1)
+    w_end = min(w, x_right + 3)
+    crop = gray_row[w_start:w_end]
+    i_crop = np.clip((l_bg - crop) / denom, 0.0, 1.0)
+
+    idx_right = x_right - w_start
+    x_sub = float(x_right)
+
+    if idx_right + 1 < len(i_crop):
+        i0 = float(i_crop[idx_right])
+        i1 = float(i_crop[idx_right + 1])
+        if i0 >= 0.5 >= i1:
+            step = max(i0 - i1, 1e-6)
+            delta = float(np.clip((i0 - 0.5) / step, 0.0, 1.0))
+            x_sub = float(x_right) + delta
+        elif i0 < 0.5 and idx_right > 0:
+            im1 = float(i_crop[idx_right - 1])
+            if im1 >= 0.5:
+                step = max(im1 - i0, 1e-6)
+                delta = float(np.clip((im1 - 0.5) / step, 0.0, 1.0))
+                x_sub = float(x_right - 1) + delta
+        elif i1 > 0.5 and idx_right + 2 < len(i_crop):
+            i2 = float(i_crop[idx_right + 2])
+            if i2 <= 0.5:
+                step = max(i1 - i2, 1e-6)
+                delta = float(np.clip((i1 - 0.5) / step, 0.0, 1.0))
+                x_sub = float(x_right + 1) + delta
+
+    x_sub = float(np.clip(x_sub, max(zero_offset, float(x_right) - 0.5), float(x_right) + 1.5))
+    return x_sub
+

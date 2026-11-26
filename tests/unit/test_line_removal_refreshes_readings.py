@@ -127,8 +127,8 @@ def test_removing_a_line_changes_the_exported_reading(tmp_path) -> None:
     session.digitize(0, "area")
     before = _readings(session)
 
-    # 脏读数：线把"整行最右墨迹"顶到 x=90 ⇒ (90-16)*1.0 = 74
-    assert float(before["50.5"]) == 74.0, (
+    # 脏读数：线把"整行最右墨迹"顶到 x=90，像素角右缘在 91.0 ⇒ (91.0-16)*1.0 = 75.0（#178）
+    assert float(before["50.5"]) == 75.0, (
         f"前置：线所在的层位应先读到脏值，实际 {before}"
     )
 

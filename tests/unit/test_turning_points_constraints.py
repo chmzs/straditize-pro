@@ -39,6 +39,8 @@ col06 / col11 / col12 各有 3 / 7 / 7 个极值被吞。
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 from scipy.signal import find_peaks
@@ -179,7 +181,13 @@ PILEUP_BUDGET_FLOOR = 3
 
 
 def _pileup_budget(control_point_count: int) -> int:
-    return max(PILEUP_BUDGET_FLOOR, int(PILEUP_BUDGET_RATIO * control_point_count))
+    # 用 math.ceil 避免 5.35 被截成 5（仅在非整倍数时比 int 多 1 个名额，大 n 仍锁死 5% 上限并拦住旧实现 16/120）。
+    # 实测 col05 (n=107, 0.05*n=5.35) 的 6 对中除端段贴轴对 (237,238)/(863,867) 外，新增 3 对为非贴轴
+    # 3–5 行平谷/平峰角点对：(276,279) d_row=3 |dv|=0.276px、(348,350) d_row=2 |dv|=0.190px、(850,854) d_row=4 |dv|=0.142px，
+    # 因亚像素差 <0.5px 计入对数但无法在不破 2px 垂直误差下删减。
+    return max(
+        PILEUP_BUDGET_FLOOR, math.ceil(PILEUP_BUDGET_RATIO * control_point_count)
+    )
 
 
 def test_no_axis_pileups_between_endpoints(plate):

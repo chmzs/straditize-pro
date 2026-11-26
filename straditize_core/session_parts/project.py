@@ -1432,9 +1432,9 @@ class ProjectSessionMixin:
                 rec = manual.get(int(y_r)) or manual.get(y_r) or {}
                 pts.append(
                     {
-                        "x": round(x_c, 2),
+                        "x": float(x_c),
                         "y": y_r,
-                        "value": round(x_c, 2),
+                        "value": float(x_c),
                         "kind": str(rec.get("kind") or "peak"),
                         "valid_segment": True,
                         "isManual": bool(rec),

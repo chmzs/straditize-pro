@@ -246,10 +246,18 @@ export class AgeDepthCanvas {
     const px_y: number[] = [];
     const px_x_curve: number[] = [];
     for (let i = 0; i < depths.length; i++) {
-      const pt = this.ageDepthToPx(ages[i] ?? 0, depths[i]);
+      if (ages[i] == null || !Number.isFinite(ages[i]) || depths[i] == null || !Number.isFinite(depths[i])) {
+        px_y.push(null as unknown as number);
+        px_x_curve.push(null as unknown as number);
+        continue;
+      }
+      const pt = this.ageDepthToPx(ages[i], depths[i]);
       if (pt) {
         px_y.push(pt.y);
         px_x_curve.push(pt.x);
+      } else {
+        px_y.push(null as unknown as number);
+        px_x_curve.push(null as unknown as number);
       }
     }
     this.mappedSamples.px_y = px_y;
@@ -1393,6 +1401,7 @@ export class AgeDepthCanvas {
       ctx.strokeStyle = 'rgba(255,255,255,0.9)';
       ctx.lineWidth = 1 * inv;
       for (let i = 0; i < n; i++) {
+        if (xs[i] == null || ys[i] == null || !Number.isFinite(xs[i]) || !Number.isFinite(ys[i])) continue;
         ctx.beginPath();
         ctx.arc(xs[i], ys[i], 2.6 * inv, 0, Math.PI * 2);
         ctx.fill();

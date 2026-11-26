@@ -174,30 +174,69 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
       const isCalibrated = Number.isFinite(groupSlope) && groupSlope !== 0;
       let calibMark = getGroupCalibMark(groupOfCol?.id, groupOfCol);
 
-      // 兼容旧工程：若组已标定（有 value_per_px）但未存 calib_mark，智能推导刻度齿
+      // 兼容旧工程 / 恢复真标定：若组已标定但未存 calib_mark，严格依据列自身或组内真实标定端点恢复，绝不编造候选值
       if (!calibMark && isCalibrated) {
-        let reading = Number(groupOfCol?.ref_val_end);
-        if (!Number.isFinite(reading) || reading <= 0) {
-          if (Array.isArray(col.x_values) && Number.isFinite(Number(col.x_values[1]))) {
-            reading = Number(col.x_values[1]);
+        let realReading: number | null = null;
+        let realPx: number | null = null;
+
+        // 1. 优先读取列自身在工程保存时携带的权威标定端点 (tickValue + tickEndX)
+        const colTickVal = (col as any).tickValue;
+        const colTickEndX = (col as any).tickEndX;
+        const isSlopeUnitVector =
+          Number.isFinite(colTickVal) &&
+          Number.isFinite(colTickEndX) &&
+          Math.abs(colTickEndX - (zeroX + 1.0)) < 1e-3 &&
+          Math.abs(colTickVal - Math.abs(groupSlope)) < 1e-3;
+        if (
+          !isSlopeUnitVector &&
+          Number.isFinite(colTickVal) &&
+          colTickVal > 0 &&
+          Number.isFinite(colTickEndX) &&
+          colTickEndX > zeroX
+        ) {
+          realReading = Number(colTickVal);
+          realPx = Number(colTickEndX);
+        } else if (
+          (col as any).scaleCalib &&
+          Number.isFinite((col as any).scaleCalib.val1) &&
+          (col as any).scaleCalib.val1 > 0 &&
+          Number.isFinite((col as any).scaleCalib.abs_px1) &&
+          (col as any).scaleCalib.abs_px1 > zeroX &&
+          !(Math.abs((col as any).scaleCalib.abs_px1 - (zeroX + 1.0)) < 1e-3 && Math.abs((col as any).scaleCalib.val1 - Math.abs(groupSlope)) < 1e-3)
+        ) {
+          realReading = Number((col as any).scaleCalib.val1);
+          realPx = Number((col as any).scaleCalib.abs_px1);
+        } else if (Array.isArray(col.x_ticks) && col.x_ticks.length >= 2) {
+          const t1 = col.x_ticks[1];
+          const t1Val = Number(t1?.value);
+          const t1Px = Number(t1?.px);
+          if (Number.isFinite(t1Val) && t1Val > 0 && Number.isFinite(t1Px) && t1Px > zeroX) {
+            realReading = t1Val;
+            realPx = t1Px;
           }
+        } else if (
+          Array.isArray(col.x_values) &&
+          Number.isFinite(Number(col.x_values[1])) &&
+          Number(col.x_values[1]) > 0 &&
+          Math.abs(Number(col.x_values[1]) - Math.abs(groupSlope)) > 1e-3
+        ) {
+          realReading = Number(col.x_values[1]);
+          const d = realReading / Math.abs(groupSlope);
+          realPx = zeroX + d;
         }
-        if (!Number.isFinite(reading) || reading <= 0) {
-          const colW = Math.max(10, col.endX - zeroX);
-          const maxVal = colW * Math.abs(groupSlope);
-          const candidates = [100, 50, 20, 10, 5, 2, 1, 0.5, 0.2, 0.1];
-          reading = candidates.find((c) => c <= maxVal * 0.95 && c >= maxVal * 0.15) ?? (maxVal > 1 ? Math.floor(maxVal) : Number(maxVal.toFixed(1)));
-        }
-        if (Number.isFinite(reading) && reading > 0) {
-          const dist = reading / Math.abs(groupSlope);
-          calibMark = {
-            px: zeroX + dist,
-            reading,
-            dist,
-            col_id: col.id,
-          };
-          if (groupOfCol?.id) {
-            setGroupCalibMark(groupOfCol.id, calibMark);
+
+        if (realReading !== null && realPx !== null && realReading > 0) {
+          const dist = realPx - zeroX;
+          if (dist > 0) {
+            calibMark = {
+              px: realPx,
+              reading: realReading,
+              dist,
+              col_id: col.id,
+            };
+            if (groupOfCol?.id) {
+              setGroupCalibMark(groupOfCol.id, calibMark);
+            }
           }
         }
       }
@@ -220,7 +259,7 @@ export function drawColumnBoundariesOverlay(env: ColumnBoundaryEnv): void {
         drawCalibMark(zeroX, "0", "#22c55e");
         if (calibMark) {
           const isMatchingCol = calibMark.col_id
-            ? calibMark.col_id === col.id
+            ? (calibMark.col_id === col.id || (calibMark.px >= leftEdgeX - 2 && calibMark.px <= col.endX + 2))
             : (calibMark.px >= leftEdgeX - 2 && calibMark.px <= col.endX + 2);
           if (isMatchingCol) {
             const markX = calibMark.dist ? zeroX + calibMark.dist : calibMark.px;

@@ -231,6 +231,9 @@ export interface Column {
     calibVal: number;
     unit: string;
   };
+  startValue?: number;
+  tickValue?: number;
+  tickEndX?: number;
   /**
    * 后端 `resolve_column_scale` 给出的判定：这一列的标度是哪来的、算不算已标定。
    * 前端不得自己重新推导（x_ticks / x_values+tick_layout / x_scales 的优先级

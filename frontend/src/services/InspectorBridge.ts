@@ -444,10 +444,18 @@ export function createInspectorCallbacks(
         const res = await rpcClient.redigitizeAllColumns(resetManual);
         if (res && res.success) {
           const freshData = await rpcClient.getDiagramData();
-          canvasComponent.loadNewDiagram(freshData);
+          for (const freshCol of freshData.columns || []) {
+            const col = canvasComponent.data.columns.find((c) => c.id === freshCol.id);
+            if (col) {
+              col.controlPoints = freshCol.controlPoints || [];
+              if (freshCol.curvePoints && freshCol.curvePoints.length > 0) {
+                col.curvePoints = freshCol.curvePoints;
+              }
+            }
+          }
+          canvasComponent.requestRender();
           getSidebar()?.updateData(canvasComponent.data);
           getInspector()?.updateData(canvasComponent.data);
-          canvasComponent.requestRender();
           callbacks.setHudNotice(`已重设全部 ${res.columns_count} 列的轮廓线与拐点。`, 4000);
         }
       } catch (err) {

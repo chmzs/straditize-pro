@@ -529,13 +529,21 @@ export class AgeDepthDatingTable {
       const xVal = isAge ? p.age : p.depth;
       if (xVal < minX) minX = xVal;
       if (xVal > maxX) maxX = xVal;
-      if (p.val < minVal) minVal = p.val;
-      if (p.val > maxVal) maxVal = p.val;
+      const upper = p.se !== null && p.se > 0 ? p.val + p.se : p.val;
+      const lower = p.se !== null && p.se > 0 ? Math.max(0, p.val - p.se) : p.val;
+      if (lower < minVal) minVal = lower;
+      if (upper > maxVal) maxVal = upper;
       sumVal += p.val;
     }
     const avgVal = sumVal / pts.length;
-    maxVal = Math.max(maxVal * 1.15, 1e-4);
-    minVal = Math.max(0, minVal * 0.85);
+    const valSpan = maxVal - minVal;
+    if (valSpan > 1e-6) {
+      maxVal = maxVal + valSpan * 0.12;
+      minVal = Math.max(0, minVal - valSpan * 0.05);
+    } else {
+      maxVal = Math.max(maxVal * 1.2, 1e-4);
+      minVal = Math.max(0, minVal * 0.8);
+    }
 
     const roundNum = (v: number, decimals: number): string => {
       const p = Math.pow(10, decimals);

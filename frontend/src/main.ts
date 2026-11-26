@@ -16,7 +16,9 @@ import {
   type ControlPointWriteback,
 } from './core/undoActions';
 import { GeologyCanvas } from './components/GeologyCanvas';
-import { setGroupCalibMark } from './components/canvas/groupCalibMarks';
+import { setGroupCalibMark, getGroupCalibMark } from './components/canvas/groupCalibMarks';
+import { resolveColumnGroup } from './core/columnGroup';
+import { resolveAxisStroke } from './core/axisStroke';
 import { handleTickPicked } from './components/steps/XTicksPanel';
 import { Toolbar } from './components/Toolbar';
 import { Sidebar } from './components/Sidebar';
@@ -700,6 +702,41 @@ async function bootstrap() {
         for (const g of r.x_groups || []) {
           if (g.id && g.calib_mark) {
             setGroupCalibMark(g.id, g.calib_mark);
+          }
+        }
+      }
+    }
+    // 对未存 calib_mark 但列携带真实标定端点的旧工程，从列反向注册恢复到其所属组
+    if (projectData.columns && Array.isArray(projectData.columns)) {
+      const rois = projectData.rois || (projectData.roi ? [projectData.roi] : []);
+      for (const col of projectData.columns) {
+        const roiOfCol = rois.find((r: any) => r.id === col.roi_id) || rois[0];
+        const g = resolveColumnGroup(col, roiOfCol as any) as any;
+        if (g?.id && !getGroupCalibMark(g.id, g)) {
+          const groupSlope = Number(g.value_per_px);
+          const zeroX = col.startX + resolveAxisStroke(col, g);
+          const colTickVal = (col as any).tickValue;
+          const colTickEndX = (col as any).tickEndX;
+          const isSlopeUnitVector =
+            Number.isFinite(colTickVal) &&
+            Number.isFinite(colTickEndX) &&
+            Math.abs(colTickEndX - (zeroX + 1.0)) < 1e-3 &&
+            Math.abs(colTickVal - Math.abs(groupSlope)) < 1e-3;
+          if (
+            !isSlopeUnitVector &&
+            Number.isFinite(colTickVal) &&
+            colTickVal > 0 &&
+            Number.isFinite(colTickEndX) &&
+            colTickEndX > zeroX
+          ) {
+            const mark = {
+              px: Number(colTickEndX),
+              reading: Number(colTickVal),
+              dist: Number(colTickEndX) - zeroX,
+              col_id: col.id,
+            };
+            g.calib_mark = mark;
+            setGroupCalibMark(g.id, mark);
           }
         }
       }

@@ -356,7 +356,7 @@ def _payload_column(session: Any, c: dict[str, Any]) -> dict[str, Any]:
         pts.append(
             {
                 "id": f"pt_{c_idx}_{r_val}",
-                "x": round(x_val),
+                "x": float(x_val),
                 "y": int(r_val),
                 "type": str(rec.get("kind") or "peak"),
                 "isManual": bool(rec),
