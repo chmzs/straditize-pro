@@ -2,6 +2,14 @@ import './style.css';
 import { RpcClient } from './services/RpcClient';
 import { HistoryManager } from './core/HistoryManager';
 import { undoStack, refreshUndoButtons } from './core/undoRuntime';
+
+/** 后端 `controlPoints` 的读取形态（row 可能是 y 的别名，见 types/pollen.ts）。 */
+interface ControlPointLike {
+  row?: number;
+  y?: number;
+  x: number;
+  manual?: boolean;
+}
 import {
   makeCalibrationUndo,
   makeControlPointsUndo,
@@ -316,7 +324,16 @@ async function bootstrap() {
                 points,
                 undoPayload.prevControlPoints,
                 undoPayload.nextControlPoints,
-                (wb, uiPts) => applyControlPoints(wb, uiPts)
+                (wb, uiPts) => applyControlPoints(wb, uiPts),
+                async () => {
+                  const fresh = await rpcClient.getDiagramData();
+                  const target = fresh.columns.find((c) => c.id === col.id);
+                  return ((target?.controlPoints ?? []) as ControlPointLike[]).map((p) => ({
+                    row: Number(p.row ?? p.y),
+                    x: Number(p.x),
+                    manual: Boolean(p.manual),
+                  }));
+                }
               )
             );
             refreshUndoButtons({

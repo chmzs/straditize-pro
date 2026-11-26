@@ -185,7 +185,8 @@ check('控制点撤销/重做分别写回改前与改后快照', async () => {
     nextUi,
     async (wb, ui) => {
       calls.push({ wb, uiCount: ui.length });
-    }
+    },
+    async () => nextWb
   );
   await op.inverse();
   const forward = /** @type {NonNullable<typeof op.forward>} */ (op.forward);
@@ -193,6 +194,36 @@ check('控制点撤销/重做分别写回改前与改后快照', async () => {
   assert.equal(calls.length, 2);
   assert.deepEqual(calls[0], { wb: prevWb, uiCount: 1 });
   assert.deepEqual(calls[1], { wb: nextWb, uiCount: 2 });
+});
+
+// 9. 控制点撤销的 verify：读后端行号签名，不一致必须 false（#143 的门禁）
+check('控制点 verify 读后端签名：撤销要等于 prev、重做要等于 next', async () => {
+  const prevWb = [{ row: 10, x: 100 }];
+  const nextWb = [
+    { row: 10, x: 100 },
+    { row: 20, x: 120 },
+  ];
+  let backend = nextWb;
+  const op = makeControlPointsUndo(
+    'Pinus',
+    prevWb,
+    nextWb,
+    [{ id: 'p1' }],
+    [{ id: 'p1' }, { id: 'p2' }],
+    async () => {},
+    async () => backend
+  );
+  const verify = /** @type {NonNullable<typeof op.verify>} */ (op.verify);
+  assert.equal(await verify('inverse'), false, '后端仍是 next 时撤销不得算成功');
+  assert.equal(await verify('forward'), true);
+
+  backend = prevWb;
+  assert.equal(await verify('inverse'), true);
+  assert.equal(await verify('forward'), false);
+
+  // 行号相同、x 有浮点漂移时不得假红（签名只用点数+行号）
+  backend = [{ row: 10, x: 99.7 }];
+  assert.equal(await verify('inverse'), true, 'x 漂移不应让合法实现变红');
 });
 
 // 8. 删除类没有构造器：NON_UNDOABLE 必须非空（防止有人给删除编一个假逆操作）

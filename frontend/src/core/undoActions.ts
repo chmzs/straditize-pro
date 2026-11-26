@@ -107,12 +107,24 @@ export function makeControlPointsUndo<TPoint>(
   nextWriteback: ControlPointWriteback[],
   prevPoints: TPoint[],
   nextPoints: TPoint[],
-  apply: (writeback: ControlPointWriteback[], uiPoints: TPoint[]) => Promise<void>
+  apply: (writeback: ControlPointWriteback[], uiPoints: TPoint[]) => Promise<void>,
+  read: () => Promise<ControlPointWriteback[]>
 ): UndoableOp {
+  /**
+   * 行号序列是这条动作的**稳定签名**：`row` 是整数行号，`x` 是浮点读数
+   * （后端可能按 0.1px 归一），拿 x 做严格相等会在合法实现上假红。
+   * 用「点数 + 行号序列」足以区分 #143 的病根——"后端根本没变"时签名必然相同。
+   */
+  const signature = (pts: readonly ControlPointWriteback[]): string =>
+    `${pts.length}|${pts.map((point) => point.row).join(',')}`;
   return {
     label: `编辑控制点 ${colName}（${prevPoints.length} → ${nextPoints.length}）`,
     inverse: () => apply(prevWriteback, prevPoints),
     forward: () => apply(nextWriteback, nextPoints),
+    // 复核读后端权威状态（不是前端镜像）：撤销要等于 prev、重做要等于 next。
+    verify: async (direction) =>
+      signature(await read()) ===
+      signature(direction === 'inverse' ? prevWriteback : nextWriteback),
   };
 }
 
