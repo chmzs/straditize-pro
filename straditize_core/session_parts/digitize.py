@@ -736,7 +736,7 @@ class DigitizeSessionMixin:
                         INVALID_PARAMS, f"未实现的读取方式 {reader_type!r}"
                     )
             else:
-                feat_x = float(c_start + zero_offset)
+                feat_x = float(c_start)
 
             points.append({"row": row_y, "x": feat_x, "y": float(row_y)})
         return points

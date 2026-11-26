@@ -717,10 +717,10 @@ def subpixel_edge_offset(
     仅在 [x_right, min(x_right + 2, W - 1)] 过渡区寻找跨越半高阈值 tau = 0.5 的下降沿，
     消除整数像素截断导致的阶梯锯齿与偏左缩进。
 
-    对于无花粉/贴轴零位行 (x_right <= zero_offset)，恒定返回 zero_offset，严禁引入虚假位移。
+    对于无花粉/贴轴零位行 (x_right <= zero_offset)，恒定返回 float(x_right)，严禁引入虚假位移或抬高零点。
     """
     if x_right <= zero_offset:
-        return float(zero_offset)
+        return float(x_right)
     if gray_row is None or gray_row.size == 0:
         return float(x_right)
 

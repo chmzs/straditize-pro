@@ -86,7 +86,9 @@ def test_area_reader_takes_the_columns_own_ink_not_the_frame_line(tmp_path):
     result = session.digitize(0, reader_type="area")
     points = {int(p["row"]): float(p["x"]) for p in result["points"]}
     assert points, "合成图必须产出读数"
-    expected = float(BLOCK_X1 - ZERO_X) * SLOPE  # 39.0
+    expected = (
+        float(BLOCK_X1 - ZERO_X + 0.5) * SLOPE
+    )  # 39.5（修正 #178 的 -0.5px 偏置：50% 亚像素右缘在 BLOCK_X1 + 0.5）
     # 只断言窗口内部行：取样窗口的**最后一行**恒回落 c_start（读到列左缘），
     # 那是连通域标注少一行的既有问题，与本缺陷无关（真实工程包 4 列的最后一行
     # x 都等于各自 c_start）。已登记为已知风险，见 PR body。
