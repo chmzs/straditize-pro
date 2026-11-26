@@ -30,7 +30,9 @@ from ..digitize import (
     _own_run_last_offset,
     _run_bounds,
     _without_axis_ink,
+    compute_column_luminance_levels,
     interpolate_hlines,
+    subpixel_edge_offset,
 )
 from .layers import store_layer_pair
 from .xscale import _resolve_column_group, resolve_axis_stroke, resolve_column_scale
@@ -173,6 +175,22 @@ def _merge_row_windows(
 class DigitizeSessionMixin:
     """Digitization of curves/bars and manual/automatic control point manipulations."""
 
+    def _get_gray_image(self) -> np.ndarray | None:
+        """获取并缓存会话当前图像的灰度矩阵，供亚像素边缘定位使用。"""
+        img = getattr(self, "image", None)
+        if img is None:
+            return None
+        cached = getattr(self, "_gray_cache", None)
+        h = getattr(img, "height", None) or (img.size[1] if hasattr(img, "size") else 0)
+        w = getattr(img, "width", None) or (img.size[0] if hasattr(img, "size") else 0)
+        if cached is None or (h > 0 and cached.shape != (h, w)):
+            try:
+                cached = np.array(img.convert("L"), dtype=np.uint8)
+                self._gray_cache = cached
+            except Exception:
+                return None
+        return cached
+
     def _manual_store(self) -> dict[int, dict[int, dict[str, Any]]]:
         """手工控制点的存储：`col_index -> row -> {"x", "kind"}`。
 
@@ -238,6 +256,9 @@ class DigitizeSessionMixin:
             mask, col, c_start, c_end, y0, y1, col_index
         )
 
+        group = _resolve_column_group(self, col)
+        stroke = resolve_axis_stroke(col, group)
+
         if reader_type == "area_exaggerated":
             effective_mult = mult if (mult is not None and mult > 1.0) else 5.0
             zero_x = float(scale.abs_px0)
@@ -255,7 +276,7 @@ class DigitizeSessionMixin:
             broken_rows, ambiguous_rows = [], []
         else:
             points = self._read_column_profile(
-                mask, c_start, c_end, y0, y1, reader_type
+                mask, c_start, c_end, y0, y1, reader_type, zero_offset=float(stroke)
             )
             if points:
                 broken_rows, ambiguous_rows = self._compensate_broken_inner_rows(
@@ -286,8 +307,6 @@ class DigitizeSessionMixin:
 
         self._interpolate_across_hlines(points, c_start)
 
-        group = _resolve_column_group(self, col)
-        stroke = resolve_axis_stroke(col, group)
         control_points, ctrl_pts_list = self._turning_control_points(
             points,
             c_start,
@@ -367,6 +386,21 @@ class DigitizeSessionMixin:
         tag_exagg = f"exagg_{int(round(N))}x"
         border_threshold = W_col - 1
 
+        gray_image = self._get_gray_image()
+        if (
+            gray_image is not None
+            and y0 < gray_image.shape[0]
+            and c_start < gray_image.shape[1]
+        ):
+            gray_band = gray_image[
+                y0 : min(y1 + 1, gray_image.shape[0]),
+                c_start : min(c_end, gray_image.shape[1]),
+            ]
+            l_bg, l_fg = compute_column_luminance_levels(gray_band)
+        else:
+            gray_band = None
+            l_bg, l_fg = 255.0, 0.0
+
         # 第一遍扫描：收集逐行游程、确凿的独立外线位置，以及确凿的内线右缘
         row_runs: dict[int, list[tuple[int, int]]] = {}
         confirmed_outer_rows: list[int] = []
@@ -413,6 +447,13 @@ class DigitizeSessionMixin:
                 )
                 continue
 
+            local_y = row_y - y0
+            gray_row = (
+                gray_band[local_y]
+                if gray_band is not None and 0 <= local_y < gray_band.shape[0]
+                else None
+            )
+
             last_run = runs[-1]
             run_start, run_end = last_run
 
@@ -439,13 +480,17 @@ class DigitizeSessionMixin:
                     x_pos = float(zero_x)
                 tag = "main_1x"
             else:
-                # 正常外线（包括触碰边界的外线大峰顶）
-                if len(runs) >= 2 or run_start > axis_offset + 5:
+                # 正常外线（包括触碰边界的外线大峰顶）与粘连态保护（Glue Fallback）
+                is_tiny_hole_glue = (len(runs) == 2 and (runs[1][0] - runs[0][1]) <= 2)
+
+                if (len(runs) >= 2 and not is_tiny_hole_glue) or (run_start > axis_offset + 5):
                     # 独立外线游程：Line 取骨架中心，Area 取最右缘，物理像素直接输出供视觉核验
+                    sub_right = subpixel_edge_offset(gray_row, run_end, l_bg, l_fg, zero_offset=axis_offset)
+                    sub_start = float(run_start)
                     x_feat = (
-                        c_start + (run_start + run_end) / 2.0
+                        c_start + (sub_start + sub_right) / 2.0
                         if exagg_style != "area"
-                        else c_start + run_end
+                        else c_start + sub_right
                     )
                     x_pos = float(x_feat)
                     tag = tag_exagg
@@ -454,18 +499,25 @@ class DigitizeSessionMixin:
                     act_span = actual_right_edge - (c_start + axis_offset)
                     expected_outer_x = float(
                         np.interp(row_y, confirmed_outer_rows, confirmed_outer_xs)
-                    )
+                    ) if confirmed_outer_rows else (c_start + axis_offset)
                     exp_span = expected_outer_x - (c_start + axis_offset)
-                    # 仅当外线跨度很大 (>= 30px)，而该行突然暴跌到 < 0.4 且差距 >= 20px 时，才属于断线回退内线；
-                    # 正常花粉曲线的低谷或贴轴零值（小起伏）保持为外线点，绝不误打为蓝色截断点
-                    if exp_span >= 30.0 and act_span < 0.4 * exp_span and (expected_outer_x - actual_right_edge) >= 20.0:
+
+                    if not is_tiny_hole_glue and exp_span >= 30.0 and act_span < 0.4 * exp_span and (expected_outer_x - actual_right_edge) >= 20.0:
+                        # 确凿断线回退内线：外线缺失，抓贴轴内线右缘输出 1x 原值
                         x_pos = float(actual_right_edge)
                         tag = "main_1x"
                     else:
-                        # 粘连延伸到了外线，或外线自身平缓小起伏
-                        x_feat = actual_right_edge - (0.5 if exagg_style != "area" else 0.0)
-                        x_pos = float(x_feat)
-                        tag = tag_exagg
+                        # 粘连态保护（Glue Fallback）或外线平缓小起伏：
+                        # 不退回读 1x 内线，以亚像素右缘减去半个描边线宽换算为外线（触界则仍回退 1x 内层右缘）
+                        if run_end >= border_threshold:
+                            x_pos = float(c_start + runs[0][1])
+                            tag = "main_1x"
+                        else:
+                            sub_right = subpixel_edge_offset(gray_row, run_end, l_bg, l_fg, zero_offset=axis_offset)
+                            x_feat = c_start + sub_right - (0.5 if exagg_style != "area" else 0.0)
+                            x_pos = float(x_feat)
+                            tag = tag_exagg
+
 
             x_final = float(max(zero_x, x_pos))
             pt_dict = {"row": row_y, "x": x_final, "y": float(row_y), "source": tag}
@@ -596,64 +648,70 @@ class DigitizeSessionMixin:
         y0: int,
         y1: int,
         reader_type: str,
+        zero_offset: float = 0.0,
     ) -> list[dict[str, float]]:
         """逐行把墨迹变成特征 x：area 读本列墨迹右缘、line 读曲线中心或填充顶边、bar 读柱子右缘。"""
         points: list[dict[str, float]] = []
 
-        # The column's own curve is identified by connected-component size; the
-        # labelling is built once for the whole band rather than per row.
-        # ROI 的下边界行**不属于被检视的层位**（用户 2026-11-18 拍板）：那一行是
-        # 图框/轴齿所在，`_roi_mask` 按 `[y0, y1)` 右开区间给掩膜，若这里仍读到
-        # `y1` 就拿到一整行 False —— 逐行逻辑退化成 `feat_x = c_start`，整列底部凭空
-        # 多出一个"读数落在列左缘"的点（issue #60：读数回落列左缘、整列锚点同步报
-        # 「读数不能为负」）。所以扫描范围与掩膜同口径，一律 `[y0, y1)`。
         band = mask[y0:y1, c_start:c_end]
         band_labels, band_label_areas = _band_components(band)
-        # 面板自身的 Y 轴线不是数据（benchmark P-02）：曲线画法下它与曲线不相连，
-        # 且是整个 band 里最大的分量（Empetrum 1303/1606 px、贯穿 481/482 行），
-        # 不排除就会让整列读数压在轴上（该列 13/48 层读成 0，占其绝对误差 82%）。
         band_axis_offsets = _axis_ink_offsets(band)
-        # `line` 读取器要先判画法：填充型剖面读填充顶边，细线画读墨迹中心。
-        # 判定按整列做一次（见 `_band_is_filled`），不逐行翻转。
         band_is_filled = (
             _band_is_filled(band, band_axis_offsets) if reader_type == "line" else False
         )
+
+        gray_image = self._get_gray_image()
+        if (
+            gray_image is not None
+            and y0 < gray_image.shape[0]
+            and c_start < gray_image.shape[1]
+        ):
+            gray_band = gray_image[
+                y0 : min(y1, gray_image.shape[0]),
+                c_start : min(c_end, gray_image.shape[1]),
+            ]
+            l_bg, l_fg = compute_column_luminance_levels(gray_band)
+        else:
+            gray_band = None
+            l_bg, l_fg = 255.0, 0.0
 
         for row_y in range(y0, y1):
             if row_y >= self.height:
                 break
             row_pixels = mask[row_y, c_start:c_end]
             fg_indices = np.where(row_pixels)[0]
-            # 本行除轴线以外的墨迹（= 数据）。若整行只有轴线（曲线/填充值≈0），
-            # 就不再剔除：那几列此时是数据本身，剔除会把 2px 的读数抹成 0
-            # （填空型图实测因此多出 0.008 的全表 MAE）。
             data_indices = _without_axis_ink(fg_indices, band_axis_offsets)
             if not len(data_indices):
                 data_indices = fg_indices
 
+            local_y = row_y - y0
+            gray_row = (
+                gray_band[local_y]
+                if gray_band is not None and 0 <= local_y < gray_band.shape[0]
+                else None
+            )
+
             if len(fg_indices) > 0:
                 if reader_type in ("line", "area"):
-                    # 本行在整块 label 图里的行号（区域外则退化为全 0 = 无分量）。
-                    local_y = row_y - y0
                     if 0 <= local_y < band_labels.shape[0]:
                         row_labels = band_labels[local_y]
                     else:
                         row_labels = np.zeros(c_end - c_start, dtype=int)
                     if reader_type == "area":
-                        feat_x = float(
-                            c_start
-                            + _own_run_last_offset(
-                                data_indices,
-                                row_labels,
-                                band_label_areas,
-                            )
+                        last_offset = _own_run_last_offset(
+                            data_indices,
+                            row_labels,
+                            band_label_areas,
                         )
+                        sub_offset = subpixel_edge_offset(
+                            gray_row,
+                            last_offset,
+                            l_bg=l_bg,
+                            l_fg=l_fg,
+                            zero_offset=zero_offset,
+                        )
+                        feat_x = float(c_start + sub_offset)
                     else:
-                        # `line` 读取器：填充型剖面下"曲线"是填充的**顶边**，不是柱内
-                        # 均值。均值落在填充中点，读数恒为真值一半（benchmark D-08：
-                        # Diatom 填充剖面 P03 7.11 vs area 14.21、P09 8.42 vs 16.84、
-                        # P22 3.16 vs 6.32，比值精确 0.500）。判据与实现见
-                        # `straditize_core.digitize._line_own_offset`（单一事实源）。
                         feat_x = float(
                             c_start
                             + _line_own_offset(
@@ -664,18 +722,21 @@ class DigitizeSessionMixin:
                             )
                         )
                 elif reader_type == "bar":
-                    # 柱状 / 条带画法：读**柱子右缘**（该行最右墨迹），不是柱内均值。
-                    # 均值落在柱体中心，读数系统性只有真值一半：benchmark 实测
-                    # Betula@430cm 真值 73.91 → bar 36.44（全表 MAE 3.087 vs area 1.312）。
-                    # 单数 `bar` 是底层 `digitize_column` 的写法，复数 `bars` 是历史别名，
-                    # 两层契约曾因此错位：`bar` 静默落到 else 走 mean（issue P-04）。
-                    feat_x = float(c_start + np.max(fg_indices))
+                    last_offset = int(np.max(fg_indices))
+                    sub_offset = subpixel_edge_offset(
+                        gray_row,
+                        last_offset,
+                        l_bg=l_bg,
+                        l_fg=l_fg,
+                        zero_offset=zero_offset,
+                    )
+                    feat_x = float(c_start + sub_offset)
                 else:  # pragma: no cover - normalize_reader_type 已排除其余取值
                     raise JsonRpcError(
                         INVALID_PARAMS, f"未实现的读取方式 {reader_type!r}"
                     )
             else:
-                feat_x = float(c_start)
+                feat_x = float(c_start + zero_offset)
 
             points.append({"row": row_y, "x": feat_x, "y": float(row_y)})
         return points

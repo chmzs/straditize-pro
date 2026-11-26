@@ -446,6 +446,12 @@ private pointer: PointerState = {
     // 所以必须**先**把待提交的改动落库，否则防抖窗口内的最后一次微调会被这次刷新
     // 无声吃掉（本地改动被覆盖、闭包又还没发出去）。
     void this.flushPendingGeometryEdits();
+    const isSameImage = Boolean(
+      this.isImageLoaded &&
+      this.diagramImage &&
+      this.data?.imageSrc &&
+      this.data.imageSrc === newData.imageSrc
+    );
     this.data = newData;
     // 选中态是画布 UI 状态：数据刷新后若该 geometry 已不存在就必须清掉，
     // 否则 CleanupOverlay 会为一个悬空 id 画手柄。
@@ -456,7 +462,11 @@ private pointer: PointerState = {
       this.selectedGeometryId = null;
     }
     this.data.cleanup_selected_id = this.selectedGeometryId;
-    this.loadImage(newData.imageSrc);
+    if (!isSameImage) {
+      this.loadImage(newData.imageSrc);
+    } else {
+      this.requestRender();
+    }
     if (this.callbacks.onDataChange) {
       this.callbacks.onDataChange();
     }

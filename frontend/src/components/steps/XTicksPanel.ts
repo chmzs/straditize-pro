@@ -620,7 +620,8 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
    */
   const effectiveGroupId = (): string | undefined => {
     const roi = activeRoi();
-    return state.selectedGroupId || roi?.default_group_id || roi?.x_groups?.[0]?.id;
+    const activeCol = activeColumn();
+    return state.selectedGroupId || activeCol?.x_group_id || roi?.default_group_id || roi?.x_groups?.[0]?.id;
   };
 
   /** 生效组当前的单位（空串/缺省一律按 % 显示，与后端默认一致）。 */
@@ -635,8 +636,11 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   // #37 把这里改成 async + notifyError（失败必须冒泡）；本分支补上生效组回退。
   // 两者必须同时存在：只取 #37 版会让首屏点形态/单位继续静默无操作，
   // 只取本分支版会把 #37 的失败冒泡丢掉。
-  const patchGroup = async (field: Record<string, unknown>): Promise<boolean> => {
-    const gid = effectiveGroupId();
+  const patchGroup = async (
+    field: Record<string, unknown>,
+    targetGid?: string
+  ): Promise<boolean> => {
+    const gid = targetGid || effectiveGroupId();
     const roiId = activeRoi()?.id;
     const client = ctx.rpcClient as
       | { roiGroupUpdate?: (r: string, g: string, p: Record<string, unknown>) => Promise<unknown> }
@@ -705,6 +709,9 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       return;
     }
     state.pendingTick = { px: Math.round(pt.x), dist: pt.x - zero, col_id: col.id };
+    if (g?.id) {
+      state.selectedGroupId = g.id;
+    }
     // 只在**吸附成功**后切换选中列：点在空处不该改选中，否则用户以为点中了。
     // 画布点齿标定期间严禁触发 scrollToColumn 强行重置视口（避免视口突然跳动并中断拖拽平移）。
     if (col.id !== data?.activeTaxaId) ctx.onSelectTaxa?.(col.id, { skipScroll: true });
@@ -809,7 +816,10 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       // 斜率 = 值 / 距 0 点像素。0 点 = 左缘 + 轴线粗（见 ARCHITECTURE §6.4）。
       const pickedDist = state.pendingTick.dist;
       const slope = value / pickedDist;
-      const targetGroupId = effectiveGroupId();
+      const pickedCol = state.cachedData?.columns?.find((c) => c.id === state.pendingTick?.col_id);
+      const pickedRoi = state.cachedData?.rois?.find((r) => r.id === (pickedCol?.roi_id ?? state.cachedData?.active_roi_id)) || activeRoi();
+      const pickedGroup = pickedCol ? resolveColumnGroup(pickedCol, pickedRoi) : undefined;
+      const targetGroupId = pickedGroup?.id || pickedCol?.x_group_id || effectiveGroupId();
       const calibMark = {
         px: state.pendingTick.px,
         reading: value,
@@ -817,7 +827,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
         col_id: state.pendingTick.col_id,
       };
       setGroupCalibMark(targetGroupId, calibMark);
-      void patchGroup({ value_per_px: slope, calib_mark: calibMark });
+      void patchGroup({ value_per_px: slope, calib_mark: calibMark }, targetGroupId);
       state.pendingTick = null;
       notify(`已按「${value} 对应 ${pickedDist.toFixed(0)}px」标定本组：斜率 ${slope.toFixed(3)}`, 'info');
     });

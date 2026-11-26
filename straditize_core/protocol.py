@@ -21,6 +21,7 @@ from dataclasses import dataclass
 import inspect
 import json
 import logging
+import math
 import threading
 import traceback
 from typing import Any
@@ -256,6 +257,33 @@ class JsonRpcRequest:
         )
 
 
+def _sanitize_for_json(obj: Any) -> Any:
+    """Recursively converts non-finite floats (NaN, Inf, -Inf) and numpy scalars to valid JSON primitives."""
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    type_name = type(obj).__name__
+    if "float" in type_name:
+        try:
+            f = float(obj)
+            return f if math.isfinite(f) else None
+        except (TypeError, ValueError):
+            return None
+    if "int" in type_name and not isinstance(obj, bool):
+        try:
+            return int(obj)
+        except (TypeError, ValueError):
+            return None
+    if type_name == "bool_":
+        return bool(obj)
+    if hasattr(obj, "tolist") and callable(obj.tolist):
+        return _sanitize_for_json(obj.tolist())
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize_for_json(v) for v in obj]
+    return obj
+
+
 class JsonRpcDispatcher:
     """Manages method registration and handles execution of JSON-RPC 2.0 requests.
 
@@ -484,4 +512,5 @@ class JsonRpcDispatcher:
         res = self.handle_object(payload)
         if res is None:
             return None
-        return json.dumps(res, ensure_ascii=False)
+        clean_res = _sanitize_for_json(res)
+        return json.dumps(clean_res, ensure_ascii=False)

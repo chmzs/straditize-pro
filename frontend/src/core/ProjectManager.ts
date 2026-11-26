@@ -117,14 +117,20 @@ export function draftToProjectPayload(draft: DiagramData): DraftRestorePayload {
     const groupId = c.x_group_id || `${roiId}_grp_c${c.col_index ?? c.id}`;
     if (!groupsByRoi[roiId]) groupsByRoi[roiId] = [];
     if (!groupsByRoi[roiId].some((g) => g.id === groupId)) {
+      const existingGroup = (draft.rois ?? [])
+        .find((r) => r.id === roiId)
+        ?.x_groups?.find((g) => g.id === groupId);
       groupsByRoi[roiId].push({
         id: groupId,
-        name: `${c.name ?? c.id}组`,
-        unit: c.unit || '%',
-        plot_type: c.plot_type || 'area',
-        scale_type: c.scale_type || 'linear',
-        exaggeration_mult: c.exaggeration_mult ?? null,
-        tick_layout: [{ rel: rel0 }, { rel: rel1 }],
+        name: existingGroup?.name ?? `${c.name ?? c.id}组`,
+        unit: existingGroup?.unit ?? c.unit ?? '%',
+        plot_type: existingGroup?.plot_type ?? c.plot_type ?? 'area',
+        scale_type: existingGroup?.scale_type ?? c.scale_type ?? 'linear',
+        exaggeration_mult: existingGroup?.exaggeration_mult ?? c.exaggeration_mult ?? null,
+        value_per_px: existingGroup?.value_per_px ?? null,
+        calib_mark: existingGroup?.calib_mark ?? null,
+        axis_stroke_px: existingGroup?.axis_stroke_px ?? null,
+        tick_layout: existingGroup?.tick_layout ?? [{ rel: rel0 }, { rel: rel1 }],
       });
     }
 
@@ -332,6 +338,9 @@ export function normalizeProject(
       exaggeration_mult: exagMult,
       x_ticks: xTicks,
       controlPoints: pts,
+      startValue: c.startValue != null ? Number(c.startValue) : undefined,
+      tickValue: c.tickValue != null ? Number(c.tickValue) : undefined,
+      tickEndX: c.tickEndX != null ? Number(c.tickEndX) : undefined,
       // 缺 scaleCalib 就**不给**这个字段：CoordinateSystem.resolveColumnScale 会走
       // 未标定分支（界面显示"未标定"）。绝不能拿 startX 冒充 0 点 —— 0 点的定义是
       // startX + 轴粗（ARCHITECTURE §6.4），用列左缘会让每列读数系统性偏大

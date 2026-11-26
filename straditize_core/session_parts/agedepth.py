@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import io
+import math
 import os
 from pathlib import Path
 from typing import Any
@@ -462,12 +463,27 @@ class AgeDepthSessionMixin:
 
         if mapped_samples and mapped_samples.get("depths"):
             calib_year_ages = mapped_samples.get("age_est", [])
+
+            def _to_px(fn: Any, val: Any) -> float | None:
+                if val is None:
+                    return None
+                try:
+                    v = float(val)
+                    if not math.isfinite(v):
+                        return None
+                    px = fn(v)
+                    if px is None:
+                        return None
+                    f_px = float(px)
+                    return round(f_px, 1) if math.isfinite(f_px) else None
+                except (TypeError, ValueError, ZeroDivisionError):
+                    return None
+
             mapped_samples["px_y"] = [
-                round(float(calibrator.depth2px(d)), 1)
-                for d in mapped_samples["depths"]
+                _to_px(calibrator.depth2px, d) for d in mapped_samples["depths"]
             ]
             mapped_samples["px_x_curve"] = [
-                round(float(calibrator.age2px(a)), 1) for a in calib_year_ages
+                _to_px(calibrator.age2px, a) for a in calib_year_ages
             ]
             # Attach the windowed regression rate with its standard error. The pointwise
             # derivative already present in ``rate`` has no uncertainty and lapses to null

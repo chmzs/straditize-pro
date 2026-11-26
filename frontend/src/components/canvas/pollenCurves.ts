@@ -194,15 +194,20 @@ export function drawPollenCurvesOverlay(env: PollenCurveEnv): PollenCurveResult 
     }
 
     const zeroX = zero ? zero.x : col.startX;
+    // 稠密轮廓采样点不得落入 0 点左侧（轴线内）。
+    // 无墨迹行其轮廓位置应紧贴 0 点基线（zeroX），避免画在轴线左边缘（红线处）造成视觉错位。
+    const denseForPath = dense.some((pt) => pt.x < zeroX)
+      ? dense.map((pt) => (pt.x < zeroX ? { x: zeroX, y: pt.y } : pt))
+      : dense;
     const signature = curveSignature(col, view, zeroX, pType);
     let cached = pathCache.get(col.id);
     if (!cached || cached.signature !== signature) {
       cached = {
         signature,
-        curve: SplineInterpolator.buildDensePath(dense, denseView),
+        curve: SplineInterpolator.buildDensePath(denseForPath, denseView),
         area:
           pType === 'area' && zero
-            ? SplineInterpolator.buildDenseAreaPath(dense, zero.x, denseView)
+            ? SplineInterpolator.buildDenseAreaPath(denseForPath, zero.x, denseView)
             : null,
       };
       pathCache.set(col.id, cached);
@@ -213,8 +218,16 @@ export function drawPollenCurvesOverlay(env: PollenCurveEnv): PollenCurveResult 
       ctx.fill(cached.area);
     }
 
+    // 激活列绘制双层高对比度轮廓线：先画柔白打底层，再画属种主色，无论在暗色墨迹还是白色背景上均显著清晰
+    if (isActive) {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.lineWidth = 3.6 / scale;
+      ctx.setLineDash([]);
+      ctx.stroke(cached.curve);
+    }
+
     ctx.strokeStyle = col.color;
-    ctx.lineWidth = (isActive ? 2.5 : 1.4) / scale;
+    ctx.lineWidth = (isActive ? 2.4 : 1.6) / scale;
     ctx.setLineDash([]);
     ctx.stroke(cached.curve);
   });

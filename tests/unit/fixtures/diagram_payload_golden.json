@@ -50,11 +50,19 @@
       "y": 235
      },
      {
+      "createdAt": 1700000000236,
+      "id": "pt_0_236",
+      "isManual": false,
+      "type": "peak",
+      "x": 345,
+      "y": 236
+     },
+     {
       "createdAt": 1700000000237,
       "id": "pt_0_237",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 237
      },
      {
@@ -62,7 +70,7 @@
       "id": "pt_0_251",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 251
      },
      {
@@ -70,7 +78,7 @@
       "id": "pt_0_265",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 265
      },
      {
@@ -86,7 +94,7 @@
       "id": "pt_0_267",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 267
      },
      {
@@ -94,7 +102,7 @@
       "id": "pt_0_312",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 312
      },
      {
@@ -102,7 +110,7 @@
       "id": "pt_0_358",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 358
      },
      {
@@ -118,7 +126,7 @@
       "id": "pt_0_360",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 360
      },
      {
@@ -126,7 +134,7 @@
       "id": "pt_0_476",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 476
      },
      {
@@ -134,7 +142,7 @@
       "id": "pt_0_593",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 593
      },
      {
@@ -150,23 +158,23 @@
       "id": "pt_0_595",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 595
      },
      {
-      "createdAt": 1700000000661,
-      "id": "pt_0_661",
+      "createdAt": 1700000000668,
+      "id": "pt_0_668",
       "isManual": false,
       "type": "peak",
-      "x": 334,
-      "y": 661
+      "x": 338,
+      "y": 668
      },
      {
       "createdAt": 1700000000742,
       "id": "pt_0_742",
       "isManual": false,
       "type": "peak",
-      "x": 335,
+      "x": 338,
       "y": 742
      },
      {
@@ -182,87 +190,31 @@
       "id": "pt_0_744",
       "isManual": false,
       "type": "peak",
-      "x": 335,
+      "x": 338,
       "y": 744
      },
      {
-      "createdAt": 1700000000763,
-      "id": "pt_0_763",
-      "isManual": false,
-      "type": "peak",
-      "x": 337,
-      "y": 763
-     },
-     {
-      "createdAt": 1700000000774,
-      "id": "pt_0_774",
-      "isManual": false,
-      "type": "peak",
-      "x": 334,
-      "y": 774
-     },
-     {
-      "createdAt": 1700000000789,
-      "id": "pt_0_789",
+      "createdAt": 1700000000779,
+      "id": "pt_0_779",
       "isManual": false,
       "type": "peak",
       "x": 338,
-      "y": 789
+      "y": 779
      },
      {
-      "createdAt": 1700000000798,
-      "id": "pt_0_798",
+      "createdAt": 1700000000826,
+      "id": "pt_0_826",
       "isManual": false,
       "type": "peak",
-      "x": 334,
-      "y": 798
-     },
-     {
-      "createdAt": 1700000000809,
-      "id": "pt_0_809",
-      "isManual": false,
-      "type": "peak",
-      "x": 334,
-      "y": 809
-     },
-     {
-      "createdAt": 1700000000816,
-      "id": "pt_0_816",
-      "isManual": false,
-      "type": "peak",
-      "x": 340,
-      "y": 816
-     },
-     {
-      "createdAt": 1700000000822,
-      "id": "pt_0_822",
-      "isManual": false,
-      "type": "peak",
-      "x": 334,
-      "y": 822
-     },
-     {
-      "createdAt": 1700000000832,
-      "id": "pt_0_832",
-      "isManual": false,
-      "type": "peak",
-      "x": 334,
-      "y": 832
-     },
-     {
-      "createdAt": 1700000000836,
-      "id": "pt_0_836",
-      "isManual": false,
-      "type": "peak",
-      "x": 340,
-      "y": 836
+      "x": 338,
+      "y": 826
      },
      {
       "createdAt": 1700000000840,
       "id": "pt_0_840",
       "isManual": false,
       "type": "peak",
-      "x": 335,
+      "x": 338,
       "y": 840
      },
      {
@@ -278,47 +230,23 @@
       "id": "pt_0_850",
       "isManual": false,
       "type": "peak",
-      "x": 337,
+      "x": 338,
       "y": 850
      },
      {
-      "createdAt": 1700000000854,
-      "id": "pt_0_854",
+      "createdAt": 1700000000858,
+      "id": "pt_0_858",
       "isManual": false,
       "type": "peak",
-      "x": 340,
-      "y": 854
-     },
-     {
-      "createdAt": 1700000000859,
-      "id": "pt_0_859",
-      "isManual": false,
-      "type": "peak",
-      "x": 336,
-      "y": 859
-     },
-     {
-      "createdAt": 1700000000862,
-      "id": "pt_0_862",
-      "isManual": false,
-      "type": "peak",
-      "x": 340,
-      "y": 862
-     },
-     {
-      "createdAt": 1700000000863,
-      "id": "pt_0_863",
-      "isManual": false,
-      "type": "peak",
-      "x": 334,
-      "y": 863
+      "x": 338,
+      "y": 858
      },
      {
       "createdAt": 1700000000867,
       "id": "pt_0_867",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 867
      },
      {
@@ -393,7 +321,7 @@
       "id": "pt_1_237",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 237
      },
      {
@@ -401,7 +329,7 @@
       "id": "pt_1_251",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 251
      },
      {
@@ -409,7 +337,7 @@
       "id": "pt_1_265",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 265
      },
      {
@@ -425,7 +353,7 @@
       "id": "pt_1_267",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 267
      },
      {
@@ -433,7 +361,7 @@
       "id": "pt_1_312",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 312
      },
      {
@@ -441,7 +369,7 @@
       "id": "pt_1_358",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 358
      },
      {
@@ -457,7 +385,7 @@
       "id": "pt_1_360",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 360
      },
      {
@@ -465,7 +393,7 @@
       "id": "pt_1_476",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 476
      },
      {
@@ -473,7 +401,7 @@
       "id": "pt_1_593",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 593
      },
      {
@@ -489,7 +417,7 @@
       "id": "pt_1_595",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 595
      },
      {
@@ -497,7 +425,7 @@
       "id": "pt_1_668",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 668
      },
      {
@@ -505,7 +433,7 @@
       "id": "pt_1_742",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 742
      },
      {
@@ -521,48 +449,24 @@
       "id": "pt_1_744",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 744
      },
      {
-      "createdAt": 1700000000768,
-      "id": "pt_1_768",
-      "isManual": false,
-      "type": "peak",
-      "x": 372,
-      "y": 768
-     },
-     {
-      "createdAt": 1700000000791,
-      "id": "pt_1_791",
+      "createdAt": 1700000000793,
+      "id": "pt_1_793",
       "isManual": false,
       "type": "peak",
       "x": 376,
-      "y": 791
+      "y": 793
      },
      {
-      "createdAt": 1700000000817,
-      "id": "pt_1_817",
+      "createdAt": 1700000000842,
+      "id": "pt_1_842",
       "isManual": false,
       "type": "peak",
-      "x": 375,
-      "y": 817
-     },
-     {
-      "createdAt": 1700000000822,
-      "id": "pt_1_822",
-      "isManual": false,
-      "type": "peak",
-      "x": 372,
-      "y": 822
-     },
-     {
-      "createdAt": 1700000000839,
-      "id": "pt_1_839",
-      "isManual": false,
-      "type": "peak",
-      "x": 373,
-      "y": 839
+      "x": 376,
+      "y": 842
      },
      {
       "createdAt": 1700000000845,
@@ -573,43 +477,19 @@
       "y": 845
      },
      {
-      "createdAt": 1700000000849,
-      "id": "pt_1_849",
+      "createdAt": 1700000000848,
+      "id": "pt_1_848",
       "isManual": false,
       "type": "peak",
-      "x": 373,
-      "y": 849
-     },
-     {
-      "createdAt": 1700000000852,
-      "id": "pt_1_852",
-      "isManual": false,
-      "type": "peak",
-      "x": 372,
-      "y": 852
-     },
-     {
-      "createdAt": 1700000000862,
-      "id": "pt_1_862",
-      "isManual": false,
-      "type": "peak",
-      "x": 378,
-      "y": 862
-     },
-     {
-      "createdAt": 1700000000863,
-      "id": "pt_1_863",
-      "isManual": false,
-      "type": "peak",
-      "x": 372,
-      "y": 863
+      "x": 376,
+      "y": 848
      },
      {
       "createdAt": 1700000000867,
       "id": "pt_1_867",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 867
      },
      {
@@ -684,23 +564,23 @@
       "id": "pt_2_237",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 237
      },
      {
-      "createdAt": 1700000000244,
-      "id": "pt_2_244",
+      "createdAt": 1700000000251,
+      "id": "pt_2_251",
       "isManual": false,
       "type": "peak",
       "x": 413,
-      "y": 244
+      "y": 251
      },
      {
       "createdAt": 1700000000265,
       "id": "pt_2_265",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 265
      },
      {
@@ -716,119 +596,23 @@
       "id": "pt_2_267",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 267
      },
      {
-      "createdAt": 1700000000274,
-      "id": "pt_2_274",
+      "createdAt": 1700000000309,
+      "id": "pt_2_309",
       "isManual": false,
       "type": "peak",
-      "x": 409,
-      "y": 274
-     },
-     {
-      "createdAt": 1700000000276,
-      "id": "pt_2_276",
-      "isManual": false,
-      "type": "peak",
-      "x": 412,
-      "y": 276
-     },
-     {
-      "createdAt": 1700000000278,
-      "id": "pt_2_278",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 278
-     },
-     {
-      "createdAt": 1700000000297,
-      "id": "pt_2_297",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 297
-     },
-     {
-      "createdAt": 1700000000303,
-      "id": "pt_2_303",
-      "isManual": false,
-      "type": "peak",
-      "x": 412,
-      "y": 303
-     },
-     {
-      "createdAt": 1700000000306,
-      "id": "pt_2_306",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 306
-     },
-     {
-      "createdAt": 1700000000310,
-      "id": "pt_2_310",
-      "isManual": false,
-      "type": "peak",
-      "x": 412,
-      "y": 310
-     },
-     {
-      "createdAt": 1700000000312,
-      "id": "pt_2_312",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 312
-     },
-     {
-      "createdAt": 1700000000321,
-      "id": "pt_2_321",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 321
-     },
-     {
-      "createdAt": 1700000000328,
-      "id": "pt_2_328",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 328
-     },
-     {
-      "createdAt": 1700000000335,
-      "id": "pt_2_335",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 335
-     },
-     {
-      "createdAt": 1700000000348,
-      "id": "pt_2_348",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 348
-     },
-     {
-      "createdAt": 1700000000353,
-      "id": "pt_2_353",
-      "isManual": false,
-      "type": "peak",
-      "x": 415,
-      "y": 353
+      "x": 413,
+      "y": 309
      },
      {
       "createdAt": 1700000000358,
       "id": "pt_2_358",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 358
      },
      {
@@ -844,87 +628,23 @@
       "id": "pt_2_360",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 360
-     },
-     {
-      "createdAt": 1700000000391,
-      "id": "pt_2_391",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 391
-     },
-     {
-      "createdAt": 1700000000407,
-      "id": "pt_2_407",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 407
-     },
-     {
-      "createdAt": 1700000000434,
-      "id": "pt_2_434",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 434
-     },
-     {
-      "createdAt": 1700000000466,
-      "id": "pt_2_466",
-      "isManual": false,
-      "type": "peak",
-      "x": 412,
-      "y": 466
      },
      {
       "createdAt": 1700000000476,
       "id": "pt_2_476",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 476
-     },
-     {
-      "createdAt": 1700000000485,
-      "id": "pt_2_485",
-      "isManual": false,
-      "type": "peak",
-      "x": 412,
-      "y": 485
-     },
-     {
-      "createdAt": 1700000000541,
-      "id": "pt_2_541",
-      "isManual": false,
-      "type": "peak",
-      "x": 412,
-      "y": 541
-     },
-     {
-      "createdAt": 1700000000555,
-      "id": "pt_2_555",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 555
-     },
-     {
-      "createdAt": 1700000000582,
-      "id": "pt_2_582",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 582
      },
      {
       "createdAt": 1700000000593,
       "id": "pt_2_593",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 593
      },
      {
@@ -940,31 +660,23 @@
       "id": "pt_2_595",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 595
      },
      {
-      "createdAt": 1700000000607,
-      "id": "pt_2_607",
+      "createdAt": 1700000000668,
+      "id": "pt_2_668",
       "isManual": false,
       "type": "peak",
-      "x": 409,
-      "y": 607
-     },
-     {
-      "createdAt": 1700000000677,
-      "id": "pt_2_677",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 677
+      "x": 413,
+      "y": 668
      },
      {
       "createdAt": 1700000000742,
       "id": "pt_2_742",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 742
      },
      {
@@ -980,95 +692,23 @@
       "id": "pt_2_744",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 744
      },
      {
-      "createdAt": 1700000000754,
-      "id": "pt_2_754",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 754
-     },
-     {
-      "createdAt": 1700000000761,
-      "id": "pt_2_761",
+      "createdAt": 1700000000805,
+      "id": "pt_2_805",
       "isManual": false,
       "type": "peak",
       "x": 413,
-      "y": 761
-     },
-     {
-      "createdAt": 1700000000769,
-      "id": "pt_2_769",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 769
-     },
-     {
-      "createdAt": 1700000000783,
-      "id": "pt_2_783",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 783
-     },
-     {
-      "createdAt": 1700000000799,
-      "id": "pt_2_799",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 799
-     },
-     {
-      "createdAt": 1700000000812,
-      "id": "pt_2_812",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 812
-     },
-     {
-      "createdAt": 1700000000825,
-      "id": "pt_2_825",
-      "isManual": false,
-      "type": "peak",
-      "x": 413,
-      "y": 825
-     },
-     {
-      "createdAt": 1700000000831,
-      "id": "pt_2_831",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 831
-     },
-     {
-      "createdAt": 1700000000836,
-      "id": "pt_2_836",
-      "isManual": false,
-      "type": "peak",
-      "x": 412,
-      "y": 836
-     },
-     {
-      "createdAt": 1700000000856,
-      "id": "pt_2_856",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 856
+      "y": 805
      },
      {
       "createdAt": 1700000000867,
       "id": "pt_2_867",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 867
      },
      {
@@ -1139,27 +779,35 @@
       "y": 235
      },
      {
+      "createdAt": 1700000000236,
+      "id": "pt_3_236",
+      "isManual": false,
+      "type": "peak",
+      "x": 457,
+      "y": 236
+     },
+     {
       "createdAt": 1700000000237,
       "id": "pt_3_237",
       "isManual": false,
       "type": "peak",
-      "x": 446,
+      "x": 450,
       "y": 237
      },
      {
-      "createdAt": 1700000000254,
-      "id": "pt_3_254",
+      "createdAt": 1700000000251,
+      "id": "pt_3_251",
       "isManual": false,
       "type": "peak",
-      "x": 446,
-      "y": 254
+      "x": 450,
+      "y": 251
      },
      {
       "createdAt": 1700000000265,
       "id": "pt_3_265",
       "isManual": false,
       "type": "peak",
-      "x": 447,
+      "x": 450,
       "y": 265
      },
      {
@@ -1175,111 +823,23 @@
       "id": "pt_3_267",
       "isManual": false,
       "type": "peak",
-      "x": 446,
+      "x": 450,
       "y": 267
      },
      {
-      "createdAt": 1700000000274,
-      "id": "pt_3_274",
-      "isManual": false,
-      "type": "peak",
-      "x": 449,
-      "y": 274
-     },
-     {
-      "createdAt": 1700000000277,
-      "id": "pt_3_277",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 277
-     },
-     {
-      "createdAt": 1700000000282,
-      "id": "pt_3_282",
+      "createdAt": 1700000000312,
+      "id": "pt_3_312",
       "isManual": false,
       "type": "peak",
       "x": 450,
-      "y": 282
-     },
-     {
-      "createdAt": 1700000000298,
-      "id": "pt_3_298",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 298
-     },
-     {
-      "createdAt": 1700000000300,
-      "id": "pt_3_300",
-      "isManual": false,
-      "type": "peak",
-      "x": 449,
-      "y": 300
-     },
-     {
-      "createdAt": 1700000000301,
-      "id": "pt_3_301",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 301
-     },
-     {
-      "createdAt": 1700000000307,
-      "id": "pt_3_307",
-      "isManual": false,
-      "type": "peak",
-      "x": 450,
-      "y": 307
-     },
-     {
-      "createdAt": 1700000000310,
-      "id": "pt_3_310",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 310
-     },
-     {
-      "createdAt": 1700000000317,
-      "id": "pt_3_317",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 317
-     },
-     {
-      "createdAt": 1700000000324,
-      "id": "pt_3_324",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 324
-     },
-     {
-      "createdAt": 1700000000335,
-      "id": "pt_3_335",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 335
-     },
-     {
-      "createdAt": 1700000000349,
-      "id": "pt_3_349",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 349
+      "y": 312
      },
      {
       "createdAt": 1700000000358,
       "id": "pt_3_358",
       "isManual": false,
       "type": "peak",
-      "x": 446,
+      "x": 450,
       "y": 358
      },
      {
@@ -1295,64 +855,24 @@
       "id": "pt_3_360",
       "isManual": false,
       "type": "peak",
-      "x": 447,
+      "x": 450,
       "y": 360
      },
      {
-      "createdAt": 1700000000371,
-      "id": "pt_3_371",
+      "createdAt": 1700000000403,
+      "id": "pt_3_403",
       "isManual": false,
       "type": "peak",
-      "x": 446,
-      "y": 371
+      "x": 450,
+      "y": 403
      },
      {
-      "createdAt": 1700000000376,
-      "id": "pt_3_376",
+      "createdAt": 1700000000446,
+      "id": "pt_3_446",
       "isManual": false,
       "type": "peak",
-      "x": 446,
-      "y": 376
-     },
-     {
-      "createdAt": 1700000000378,
-      "id": "pt_3_378",
-      "isManual": false,
-      "type": "peak",
-      "x": 449,
-      "y": 378
-     },
-     {
-      "createdAt": 1700000000383,
-      "id": "pt_3_383",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 383
-     },
-     {
-      "createdAt": 1700000000392,
-      "id": "pt_3_392",
-      "isManual": false,
-      "type": "peak",
-      "x": 449,
-      "y": 392
-     },
-     {
-      "createdAt": 1700000000416,
-      "id": "pt_3_416",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 416
-     },
-     {
-      "createdAt": 1700000000444,
-      "id": "pt_3_444",
-      "isManual": false,
-      "type": "peak",
-      "x": 448,
-      "y": 444
+      "x": 450,
+      "y": 446
      },
      {
       "createdAt": 1700000000451,
@@ -1363,67 +883,27 @@
       "y": 451
      },
      {
-      "createdAt": 1700000000458,
-      "id": "pt_3_458",
+      "createdAt": 1700000000455,
+      "id": "pt_3_455",
       "isManual": false,
       "type": "peak",
-      "x": 446,
-      "y": 458
+      "x": 450,
+      "y": 455
      },
      {
-      "createdAt": 1700000000466,
-      "id": "pt_3_466",
+      "createdAt": 1700000000524,
+      "id": "pt_3_524",
       "isManual": false,
       "type": "peak",
-      "x": 446,
-      "y": 466
-     },
-     {
-      "createdAt": 1700000000484,
-      "id": "pt_3_484",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 484
-     },
-     {
-      "createdAt": 1700000000528,
-      "id": "pt_3_528",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 528
-     },
-     {
-      "createdAt": 1700000000549,
-      "id": "pt_3_549",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 549
-     },
-     {
-      "createdAt": 1700000000559,
-      "id": "pt_3_559",
-      "isManual": false,
-      "type": "peak",
-      "x": 449,
-      "y": 559
-     },
-     {
-      "createdAt": 1700000000568,
-      "id": "pt_3_568",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 568
+      "x": 450,
+      "y": 524
      },
      {
       "createdAt": 1700000000593,
       "id": "pt_3_593",
       "isManual": false,
       "type": "peak",
-      "x": 446,
+      "x": 450,
       "y": 593
      },
      {
@@ -1439,72 +919,24 @@
       "id": "pt_3_595",
       "isManual": false,
       "type": "peak",
-      "x": 447,
+      "x": 450,
       "y": 595
      },
      {
-      "createdAt": 1700000000611,
-      "id": "pt_3_611",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 611
-     },
-     {
-      "createdAt": 1700000000636,
-      "id": "pt_3_636",
+      "createdAt": 1700000000646,
+      "id": "pt_3_646",
       "isManual": false,
       "type": "peak",
       "x": 450,
-      "y": 636
+      "y": 646
      },
      {
-      "createdAt": 1700000000656,
-      "id": "pt_3_656",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 656
-     },
-     {
-      "createdAt": 1700000000672,
-      "id": "pt_3_672",
+      "createdAt": 1700000000721,
+      "id": "pt_3_721",
       "isManual": false,
       "type": "peak",
       "x": 450,
-      "y": 672
-     },
-     {
-      "createdAt": 1700000000684,
-      "id": "pt_3_684",
-      "isManual": false,
-      "type": "peak",
-      "x": 447,
-      "y": 684
-     },
-     {
-      "createdAt": 1700000000699,
-      "id": "pt_3_699",
-      "isManual": false,
-      "type": "peak",
-      "x": 451,
-      "y": 699
-     },
-     {
-      "createdAt": 1700000000706,
-      "id": "pt_3_706",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 706
-     },
-     {
-      "createdAt": 1700000000734,
-      "id": "pt_3_734",
-      "isManual": false,
-      "type": "peak",
-      "x": 447,
-      "y": 734
+      "y": 721
      },
      {
       "createdAt": 1700000000742,
@@ -1539,20 +971,28 @@
       "y": 747
      },
      {
-      "createdAt": 1700000000755,
-      "id": "pt_3_755",
+      "createdAt": 1700000000756,
+      "id": "pt_3_756",
       "isManual": false,
       "type": "peak",
-      "x": 449,
-      "y": 755
+      "x": 450,
+      "y": 756
      },
      {
-      "createdAt": 1700000000778,
-      "id": "pt_3_778",
+      "createdAt": 1700000000779,
+      "id": "pt_3_779",
       "isManual": false,
       "type": "peak",
-      "x": 449,
-      "y": 778
+      "x": 450,
+      "y": 779
+     },
+     {
+      "createdAt": 1700000000788,
+      "id": "pt_3_788",
+      "isManual": false,
+      "type": "peak",
+      "x": 450,
+      "y": 788
      },
      {
       "createdAt": 1700000000792,
@@ -1567,7 +1007,7 @@
       "id": "pt_3_798",
       "isManual": false,
       "type": "peak",
-      "x": 449,
+      "x": 450,
       "y": 798
      },
      {
@@ -1583,7 +1023,7 @@
       "id": "pt_3_810",
       "isManual": false,
       "type": "peak",
-      "x": 449,
+      "x": 450,
       "y": 810
      },
      {
@@ -1595,12 +1035,12 @@
       "y": 816
      },
      {
-      "createdAt": 1700000000822,
-      "id": "pt_3_822",
+      "createdAt": 1700000000821,
+      "id": "pt_3_821",
       "isManual": false,
       "type": "peak",
-      "x": 449,
-      "y": 822
+      "x": 450,
+      "y": 821
      },
      {
       "createdAt": 1700000000827,
@@ -1635,12 +1075,20 @@
       "y": 840
      },
      {
-      "createdAt": 1700000000845,
-      "id": "pt_3_845",
+      "createdAt": 1700000000844,
+      "id": "pt_3_844",
       "isManual": false,
       "type": "peak",
-      "x": 449,
-      "y": 845
+      "x": 450,
+      "y": 844
+     },
+     {
+      "createdAt": 1700000000846,
+      "id": "pt_3_846",
+      "isManual": false,
+      "type": "peak",
+      "x": 452,
+      "y": 846
      },
      {
       "createdAt": 1700000000850,
@@ -1651,27 +1099,27 @@
       "y": 850
      },
      {
-      "createdAt": 1700000000854,
-      "id": "pt_3_854",
+      "createdAt": 1700000000855,
+      "id": "pt_3_855",
       "isManual": false,
       "type": "peak",
-      "x": 453,
-      "y": 854
+      "x": 452,
+      "y": 855
      },
      {
-      "createdAt": 1700000000862,
-      "id": "pt_3_862",
+      "createdAt": 1700000000861,
+      "id": "pt_3_861",
       "isManual": false,
       "type": "peak",
-      "x": 453,
-      "y": 862
+      "x": 454,
+      "y": 861
      },
      {
       "createdAt": 1700000000863,
       "id": "pt_3_863",
       "isManual": false,
       "type": "peak",
-      "x": 446,
+      "x": 450,
       "y": 863
      },
      {
@@ -1679,7 +1127,7 @@
       "id": "pt_3_867",
       "isManual": false,
       "type": "peak",
-      "x": 446,
+      "x": 450,
       "y": 867
      },
      {
@@ -1754,15 +1202,23 @@
       "id": "pt_4_237",
       "isManual": false,
       "type": "peak",
-      "x": 484,
+      "x": 488,
       "y": 237
+     },
+     {
+      "createdAt": 1700000000251,
+      "id": "pt_4_251",
+      "isManual": false,
+      "type": "peak",
+      "x": 488,
+      "y": 251
      },
      {
       "createdAt": 1700000000265,
       "id": "pt_4_265",
       "isManual": false,
       "type": "peak",
-      "x": 484,
+      "x": 488,
       "y": 265
      },
      {
@@ -1778,72 +1234,24 @@
       "id": "pt_4_267",
       "isManual": false,
       "type": "peak",
-      "x": 484,
+      "x": 488,
       "y": 267
      },
      {
-      "createdAt": 1700000000273,
-      "id": "pt_4_273",
-      "isManual": false,
-      "type": "peak",
-      "x": 487,
-      "y": 273
-     },
-     {
-      "createdAt": 1700000000274,
-      "id": "pt_4_274",
-      "isManual": false,
-      "type": "peak",
-      "x": 485,
-      "y": 274
-     },
-     {
-      "createdAt": 1700000000276,
-      "id": "pt_4_276",
+      "createdAt": 1700000000283,
+      "id": "pt_4_283",
       "isManual": false,
       "type": "peak",
       "x": 488,
-      "y": 276
+      "y": 283
      },
      {
-      "createdAt": 1700000000281,
-      "id": "pt_4_281",
+      "createdAt": 1700000000303,
+      "id": "pt_4_303",
       "isManual": false,
       "type": "peak",
-      "x": 485,
-      "y": 281
-     },
-     {
-      "createdAt": 1700000000288,
-      "id": "pt_4_288",
-      "isManual": false,
-      "type": "peak",
-      "x": 485,
-      "y": 288
-     },
-     {
-      "createdAt": 1700000000300,
-      "id": "pt_4_300",
-      "isManual": false,
-      "type": "peak",
-      "x": 485,
-      "y": 300
-     },
-     {
-      "createdAt": 1700000000301,
-      "id": "pt_4_301",
-      "isManual": false,
-      "type": "peak",
-      "x": 489,
-      "y": 301
-     },
-     {
-      "createdAt": 1700000000304,
-      "id": "pt_4_304",
-      "isManual": false,
-      "type": "peak",
-      "x": 485,
-      "y": 304
+      "x": 488,
+      "y": 303
      },
      {
       "createdAt": 1700000000305,
@@ -1854,83 +1262,27 @@
       "y": 305
      },
      {
-      "createdAt": 1700000000306,
-      "id": "pt_4_306",
-      "isManual": false,
-      "type": "peak",
-      "x": 492,
-      "y": 306
-     },
-     {
       "createdAt": 1700000000307,
       "id": "pt_4_307",
       "isManual": false,
       "type": "peak",
-      "x": 486,
+      "x": 488,
       "y": 307
      },
      {
-      "createdAt": 1700000000311,
-      "id": "pt_4_311",
+      "createdAt": 1700000000327,
+      "id": "pt_4_327",
       "isManual": false,
       "type": "peak",
       "x": 488,
-      "y": 311
-     },
-     {
-      "createdAt": 1700000000314,
-      "id": "pt_4_314",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 314
-     },
-     {
-      "createdAt": 1700000000324,
-      "id": "pt_4_324",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 324
-     },
-     {
-      "createdAt": 1700000000344,
-      "id": "pt_4_344",
-      "isManual": false,
-      "type": "peak",
-      "x": 487,
-      "y": 344
-     },
-     {
-      "createdAt": 1700000000346,
-      "id": "pt_4_346",
-      "isManual": false,
-      "type": "peak",
-      "x": 485,
-      "y": 346
-     },
-     {
-      "createdAt": 1700000000348,
-      "id": "pt_4_348",
-      "isManual": false,
-      "type": "peak",
-      "x": 490,
-      "y": 348
-     },
-     {
-      "createdAt": 1700000000350,
-      "id": "pt_4_350",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 350
+      "y": 327
      },
      {
       "createdAt": 1700000000358,
       "id": "pt_4_358",
       "isManual": false,
       "type": "peak",
-      "x": 484,
+      "x": 488,
       "y": 358
      },
      {
@@ -1946,103 +1298,31 @@
       "id": "pt_4_360",
       "isManual": false,
       "type": "peak",
-      "x": 485,
+      "x": 488,
       "y": 360
      },
      {
-      "createdAt": 1700000000374,
-      "id": "pt_4_374",
+      "createdAt": 1700000000368,
+      "id": "pt_4_368",
       "isManual": false,
       "type": "peak",
-      "x": 484,
-      "y": 374
-     },
-     {
-      "createdAt": 1700000000378,
-      "id": "pt_4_378",
-      "isManual": false,
-      "type": "peak",
-      "x": 490,
-      "y": 378
-     },
-     {
-      "createdAt": 1700000000386,
-      "id": "pt_4_386",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 386
-     },
-     {
-      "createdAt": 1700000000394,
-      "id": "pt_4_394",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 394
-     },
-     {
-      "createdAt": 1700000000412,
-      "id": "pt_4_412",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 412
-     },
-     {
-      "createdAt": 1700000000427,
-      "id": "pt_4_427",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 427
-     },
-     {
-      "createdAt": 1700000000449,
-      "id": "pt_4_449",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 449
-     },
-     {
-      "createdAt": 1700000000468,
-      "id": "pt_4_468",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 468
-     },
-     {
-      "createdAt": 1700000000475,
-      "id": "pt_4_475",
-      "isManual": false,
-      "type": "peak",
-      "x": 487,
-      "y": 475
+      "x": 488,
+      "y": 368
      },
      {
       "createdAt": 1700000000486,
       "id": "pt_4_486",
       "isManual": false,
       "type": "peak",
-      "x": 484,
+      "x": 488,
       "y": 486
-     },
-     {
-      "createdAt": 1700000000539,
-      "id": "pt_4_539",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 539
      },
      {
       "createdAt": 1700000000593,
       "id": "pt_4_593",
       "isManual": false,
       "type": "peak",
-      "x": 484,
+      "x": 488,
       "y": 593
      },
      {
@@ -2058,72 +1338,24 @@
       "id": "pt_4_595",
       "isManual": false,
       "type": "peak",
-      "x": 485,
+      "x": 488,
       "y": 595
      },
      {
-      "createdAt": 1700000000610,
-      "id": "pt_4_610",
+      "createdAt": 1700000000632,
+      "id": "pt_4_632",
       "isManual": false,
       "type": "peak",
       "x": 488,
-      "y": 610
+      "y": 632
      },
      {
-      "createdAt": 1700000000622,
-      "id": "pt_4_622",
+      "createdAt": 1700000000707,
+      "id": "pt_4_707",
       "isManual": false,
       "type": "peak",
-      "x": 484,
-      "y": 622
-     },
-     {
-      "createdAt": 1700000000642,
-      "id": "pt_4_642",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 642
-     },
-     {
-      "createdAt": 1700000000663,
-      "id": "pt_4_663",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 663
-     },
-     {
-      "createdAt": 1700000000672,
-      "id": "pt_4_672",
-      "isManual": false,
-      "type": "peak",
-      "x": 490,
-      "y": 672
-     },
-     {
-      "createdAt": 1700000000685,
-      "id": "pt_4_685",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 685
-     },
-     {
-      "createdAt": 1700000000704,
-      "id": "pt_4_704",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 704
-     },
-     {
-      "createdAt": 1700000000721,
-      "id": "pt_4_721",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 721
+      "x": 488,
+      "y": 707
      },
      {
       "createdAt": 1700000000742,
@@ -2162,7 +1394,7 @@
       "id": "pt_4_754",
       "isManual": false,
       "type": "peak",
-      "x": 487,
+      "x": 488,
       "y": 754
      },
      {
@@ -2174,28 +1406,28 @@
       "y": 761
      },
      {
-      "createdAt": 1700000000768,
-      "id": "pt_4_768",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 768
-     },
-     {
-      "createdAt": 1700000000774,
-      "id": "pt_4_774",
+      "createdAt": 1700000000766,
+      "id": "pt_4_766",
       "isManual": false,
       "type": "peak",
       "x": 488,
-      "y": 774
+      "y": 766
      },
      {
-      "createdAt": 1700000000780,
-      "id": "pt_4_780",
+      "createdAt": 1700000000775,
+      "id": "pt_4_775",
       "isManual": false,
       "type": "peak",
-      "x": 485,
-      "y": 780
+      "x": 488,
+      "y": 775
+     },
+     {
+      "createdAt": 1700000000784,
+      "id": "pt_4_784",
+      "isManual": false,
+      "type": "peak",
+      "x": 488,
+      "y": 784
      },
      {
       "createdAt": 1700000000792,
@@ -2206,12 +1438,12 @@
       "y": 792
      },
      {
-      "createdAt": 1700000000799,
-      "id": "pt_4_799",
+      "createdAt": 1700000000798,
+      "id": "pt_4_798",
       "isManual": false,
       "type": "peak",
-      "x": 487,
-      "y": 799
+      "x": 488,
+      "y": 798
      },
      {
       "createdAt": 1700000000807,
@@ -2270,12 +1502,20 @@
       "y": 840
      },
      {
-      "createdAt": 1700000000845,
-      "id": "pt_4_845",
+      "createdAt": 1700000000844,
+      "id": "pt_4_844",
       "isManual": false,
       "type": "peak",
-      "x": 485,
-      "y": 845
+      "x": 488,
+      "y": 844
+     },
+     {
+      "createdAt": 1700000000846,
+      "id": "pt_4_846",
+      "isManual": false,
+      "type": "peak",
+      "x": 489,
+      "y": 846
      },
      {
       "createdAt": 1700000000850,
@@ -2294,35 +1534,11 @@
       "y": 854
      },
      {
-      "createdAt": 1700000000857,
-      "id": "pt_4_857",
-      "isManual": false,
-      "type": "peak",
-      "x": 486,
-      "y": 857
-     },
-     {
-      "createdAt": 1700000000862,
-      "id": "pt_4_862",
-      "isManual": false,
-      "type": "peak",
-      "x": 490,
-      "y": 862
-     },
-     {
-      "createdAt": 1700000000863,
-      "id": "pt_4_863",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 863
-     },
-     {
       "createdAt": 1700000000867,
       "id": "pt_4_867",
       "isManual": false,
       "type": "peak",
-      "x": 484,
+      "x": 488,
       "y": 867
      },
      {
@@ -2405,40 +1621,32 @@
       "id": "pt_5_237",
       "isManual": false,
       "type": "peak",
-      "x": 521,
+      "x": 525,
       "y": 237
      },
      {
-      "createdAt": 1700000000238,
-      "id": "pt_5_238",
+      "createdAt": 1700000000240,
+      "id": "pt_5_240",
       "isManual": false,
       "type": "peak",
-      "x": 521,
-      "y": 238
+      "x": 531,
+      "y": 240
      },
      {
-      "createdAt": 1700000000239,
-      "id": "pt_5_239",
+      "createdAt": 1700000000244,
+      "id": "pt_5_244",
       "isManual": false,
       "type": "peak",
-      "x": 530,
-      "y": 239
+      "x": 526,
+      "y": 244
      },
      {
-      "createdAt": 1700000000242,
-      "id": "pt_5_242",
+      "createdAt": 1700000000256,
+      "id": "pt_5_256",
       "isManual": false,
       "type": "peak",
-      "x": 527,
-      "y": 242
-     },
-     {
-      "createdAt": 1700000000255,
-      "id": "pt_5_255",
-      "isManual": false,
-      "type": "peak",
-      "x": 522,
-      "y": 255
+      "x": 525,
+      "y": 256
      },
      {
       "createdAt": 1700000000265,
@@ -2561,12 +1769,20 @@
       "y": 300
      },
      {
-      "createdAt": 1700000000306,
-      "id": "pt_5_306",
+      "createdAt": 1700000000305,
+      "id": "pt_5_305",
       "isManual": false,
       "type": "peak",
-      "x": 524,
-      "y": 306
+      "x": 525,
+      "y": 305
+     },
+     {
+      "createdAt": 1700000000307,
+      "id": "pt_5_307",
+      "isManual": false,
+      "type": "peak",
+      "x": 526,
+      "y": 307
      },
      {
       "createdAt": 1700000000309,
@@ -2793,12 +2009,12 @@
       "y": 374
      },
      {
-      "createdAt": 1700000000381,
-      "id": "pt_5_381",
+      "createdAt": 1700000000382,
+      "id": "pt_5_382",
       "isManual": false,
       "type": "peak",
-      "x": 523,
-      "y": 381
+      "x": 525,
+      "y": 382
      },
      {
       "createdAt": 1700000000390,
@@ -2813,7 +2029,7 @@
       "id": "pt_5_396",
       "isManual": false,
       "type": "peak",
-      "x": 524,
+      "x": 525,
       "y": 396
      },
      {
@@ -2825,20 +2041,28 @@
       "y": 402
      },
      {
-      "createdAt": 1700000000412,
-      "id": "pt_5_412",
+      "createdAt": 1700000000410,
+      "id": "pt_5_410",
       "isManual": false,
       "type": "peak",
-      "x": 524,
-      "y": 412
+      "x": 525,
+      "y": 410
      },
      {
-      "createdAt": 1700000000428,
-      "id": "pt_5_428",
+      "createdAt": 1700000000421,
+      "id": "pt_5_421",
       "isManual": false,
       "type": "peak",
-      "x": 521,
-      "y": 428
+      "x": 525,
+      "y": 421
+     },
+     {
+      "createdAt": 1700000000432,
+      "id": "pt_5_432",
+      "isManual": false,
+      "type": "peak",
+      "x": 525,
+      "y": 432
      },
      {
       "createdAt": 1700000000434,
@@ -2853,96 +2077,40 @@
       "id": "pt_5_443",
       "isManual": false,
       "type": "peak",
-      "x": 524,
+      "x": 525,
       "y": 443
      },
      {
-      "createdAt": 1700000000449,
-      "id": "pt_5_449",
-      "isManual": false,
-      "type": "peak",
-      "x": 526,
-      "y": 449
-     },
-     {
-      "createdAt": 1700000000454,
-      "id": "pt_5_454",
-      "isManual": false,
-      "type": "peak",
-      "x": 522,
-      "y": 454
-     },
-     {
-      "createdAt": 1700000000466,
-      "id": "pt_5_466",
-      "isManual": false,
-      "type": "peak",
-      "x": 523,
-      "y": 466
-     },
-     {
-      "createdAt": 1700000000470,
-      "id": "pt_5_470",
-      "isManual": false,
-      "type": "peak",
-      "x": 527,
-      "y": 470
-     },
-     {
-      "createdAt": 1700000000475,
-      "id": "pt_5_475",
-      "isManual": false,
-      "type": "peak",
-      "x": 524,
-      "y": 475
-     },
-     {
-      "createdAt": 1700000000480,
-      "id": "pt_5_480",
-      "isManual": false,
-      "type": "peak",
-      "x": 526,
-      "y": 480
-     },
-     {
-      "createdAt": 1700000000510,
-      "id": "pt_5_510",
-      "isManual": false,
-      "type": "peak",
-      "x": 522,
-      "y": 510
-     },
-     {
-      "createdAt": 1700000000531,
-      "id": "pt_5_531",
+      "createdAt": 1700000000459,
+      "id": "pt_5_459",
       "isManual": false,
       "type": "peak",
       "x": 525,
-      "y": 531
+      "y": 459
      },
      {
-      "createdAt": 1700000000549,
-      "id": "pt_5_549",
+      "createdAt": 1700000000476,
+      "id": "pt_5_476",
       "isManual": false,
       "type": "peak",
-      "x": 521,
-      "y": 549
+      "x": 525,
+      "y": 476
      },
      {
-      "createdAt": 1700000000560,
-      "id": "pt_5_560",
+      "createdAt": 1700000000519,
+      "id": "pt_5_519",
       "isManual": false,
       "type": "peak",
-      "x": 527,
-      "y": 560
+      "x": 525,
+      "y": 519
      },
      {
-      "createdAt": 1700000000576,
-      "id": "pt_5_576",
+      "createdAt": 1700000000580,
+      "id": "pt_5_580",
       "isManual": false,
       "type": "peak",
-      "x": 523,
-      "y": 576
+      "x": 525,
+      "y": 580
      },
      {
       "createdAt": 1700000000593,
@@ -3005,7 +2173,7 @@
       "id": "pt_5_649",
       "isManual": false,
       "type": "peak",
-      "x": 523,
+      "x": 525,
       "y": 649
      },
      {
@@ -3117,7 +2285,7 @@
       "id": "pt_5_786",
       "isManual": false,
       "type": "peak",
-      "x": 524,
+      "x": 525,
       "y": 786
      },
      {
@@ -3209,19 +2377,19 @@
       "y": 859
      },
      {
-      "createdAt": 1700000000862,
-      "id": "pt_5_862",
+      "createdAt": 1700000000860,
+      "id": "pt_5_860",
       "isManual": false,
       "type": "peak",
-      "x": 533,
-      "y": 862
+      "x": 547,
+      "y": 860
      },
      {
       "createdAt": 1700000000863,
       "id": "pt_5_863",
       "isManual": false,
       "type": "peak",
-      "x": 521,
+      "x": 525,
       "y": 863
      },
      {
@@ -3229,7 +2397,7 @@
       "id": "pt_5_867",
       "isManual": false,
       "type": "peak",
-      "x": 521,
+      "x": 525,
       "y": 867
      },
      {
@@ -3304,31 +2472,23 @@
       "id": "pt_6_237",
       "isManual": false,
       "type": "peak",
-      "x": 584,
+      "x": 588,
       "y": 237
      },
      {
-      "createdAt": 1700000000239,
-      "id": "pt_6_239",
+      "createdAt": 1700000000251,
+      "id": "pt_6_251",
       "isManual": false,
       "type": "peak",
       "x": 588,
-      "y": 239
-     },
-     {
-      "createdAt": 1700000000241,
-      "id": "pt_6_241",
-      "isManual": false,
-      "type": "peak",
-      "x": 584,
-      "y": 241
+      "y": 251
      },
      {
       "createdAt": 1700000000265,
       "id": "pt_6_265",
       "isManual": false,
       "type": "peak",
-      "x": 585,
+      "x": 588,
       "y": 265
      },
      {
@@ -3348,68 +2508,28 @@
       "y": 267
      },
      {
-      "createdAt": 1700000000270,
-      "id": "pt_6_270",
-      "isManual": false,
-      "type": "peak",
-      "x": 586,
-      "y": 270
-     },
-     {
-      "createdAt": 1700000000271,
-      "id": "pt_6_271",
-      "isManual": false,
-      "type": "peak",
-      "x": 589,
-      "y": 271
-     },
-     {
-      "createdAt": 1700000000273,
-      "id": "pt_6_273",
-      "isManual": false,
-      "type": "peak",
-      "x": 585,
-      "y": 273
-     },
-     {
-      "createdAt": 1700000000277,
-      "id": "pt_6_277",
-      "isManual": false,
-      "type": "peak",
-      "x": 584,
-      "y": 277
-     },
-     {
-      "createdAt": 1700000000279,
-      "id": "pt_6_279",
-      "isManual": false,
-      "type": "peak",
-      "x": 589,
-      "y": 279
-     },
-     {
-      "createdAt": 1700000000284,
-      "id": "pt_6_284",
-      "isManual": false,
-      "type": "peak",
-      "x": 585,
-      "y": 284
-     },
-     {
-      "createdAt": 1700000000286,
-      "id": "pt_6_286",
-      "isManual": false,
-      "type": "peak",
-      "x": 589,
-      "y": 286
-     },
-     {
-      "createdAt": 1700000000292,
-      "id": "pt_6_292",
+      "createdAt": 1700000000269,
+      "id": "pt_6_269",
       "isManual": false,
       "type": "peak",
       "x": 588,
-      "y": 292
+      "y": 269
+     },
+     {
+      "createdAt": 1700000000282,
+      "id": "pt_6_282",
+      "isManual": false,
+      "type": "peak",
+      "x": 588,
+      "y": 282
+     },
+     {
+      "createdAt": 1700000000290,
+      "id": "pt_6_290",
+      "isManual": false,
+      "type": "peak",
+      "x": 588,
+      "y": 290
      },
      {
       "createdAt": 1700000000296,
@@ -3456,24 +2576,8 @@
       "id": "pt_6_304",
       "isManual": false,
       "type": "peak",
-      "x": 587,
+      "x": 588,
       "y": 304
-     },
-     {
-      "createdAt": 1700000000307,
-      "id": "pt_6_307",
-      "isManual": false,
-      "type": "peak",
-      "x": 590,
-      "y": 307
-     },
-     {
-      "createdAt": 1700000000311,
-      "id": "pt_6_311",
-      "isManual": false,
-      "type": "peak",
-      "x": 585,
-      "y": 311
      },
      {
       "createdAt": 1700000000312,
@@ -3484,44 +2588,12 @@
       "y": 312
      },
      {
-      "createdAt": 1700000000315,
-      "id": "pt_6_315",
+      "createdAt": 1700000000321,
+      "id": "pt_6_321",
       "isManual": false,
       "type": "peak",
-      "x": 586,
-      "y": 315
-     },
-     {
-      "createdAt": 1700000000317,
-      "id": "pt_6_317",
-      "isManual": false,
-      "type": "peak",
-      "x": 590,
-      "y": 317
-     },
-     {
-      "createdAt": 1700000000318,
-      "id": "pt_6_318",
-      "isManual": false,
-      "type": "peak",
-      "x": 586,
-      "y": 318
-     },
-     {
-      "createdAt": 1700000000319,
-      "id": "pt_6_319",
-      "isManual": false,
-      "type": "peak",
-      "x": 589,
-      "y": 319
-     },
-     {
-      "createdAt": 1700000000322,
-      "id": "pt_6_322",
-      "isManual": false,
-      "type": "peak",
-      "x": 586,
-      "y": 322
+      "x": 588,
+      "y": 321
      },
      {
       "createdAt": 1700000000323,
@@ -3532,51 +2604,27 @@
       "y": 323
      },
      {
-      "createdAt": 1700000000324,
-      "id": "pt_6_324",
+      "createdAt": 1700000000326,
+      "id": "pt_6_326",
       "isManual": false,
       "type": "peak",
-      "x": 591,
-      "y": 324
+      "x": 588,
+      "y": 326
      },
      {
-      "createdAt": 1700000000325,
-      "id": "pt_6_325",
+      "createdAt": 1700000000343,
+      "id": "pt_6_343",
       "isManual": false,
       "type": "peak",
-      "x": 586,
-      "y": 325
-     },
-     {
-      "createdAt": 1700000000328,
-      "id": "pt_6_328",
-      "isManual": false,
-      "type": "peak",
-      "x": 589,
-      "y": 328
-     },
-     {
-      "createdAt": 1700000000330,
-      "id": "pt_6_330",
-      "isManual": false,
-      "type": "peak",
-      "x": 584,
-      "y": 330
-     },
-     {
-      "createdAt": 1700000000342,
-      "id": "pt_6_342",
-      "isManual": false,
-      "type": "peak",
-      "x": 584,
-      "y": 342
+      "x": 588,
+      "y": 343
      },
      {
       "createdAt": 1700000000358,
       "id": "pt_6_358",
       "isManual": false,
       "type": "peak",
-      "x": 584,
+      "x": 588,
       "y": 358
      },
      {
@@ -3592,31 +2640,23 @@
       "id": "pt_6_360",
       "isManual": false,
       "type": "peak",
-      "x": 584,
+      "x": 588,
       "y": 360
      },
      {
-      "createdAt": 1700000000371,
-      "id": "pt_6_371",
+      "createdAt": 1700000000476,
+      "id": "pt_6_476",
       "isManual": false,
       "type": "peak",
-      "x": 584,
-      "y": 371
-     },
-     {
-      "createdAt": 1700000000486,
-      "id": "pt_6_486",
-      "isManual": false,
-      "type": "peak",
-      "x": 584,
-      "y": 486
+      "x": 588,
+      "y": 476
      },
      {
       "createdAt": 1700000000593,
       "id": "pt_6_593",
       "isManual": false,
       "type": "peak",
-      "x": 584,
+      "x": 588,
       "y": 593
      },
      {
@@ -3632,31 +2672,23 @@
       "id": "pt_6_595",
       "isManual": false,
       "type": "peak",
-      "x": 584,
+      "x": 588,
       "y": 595
      },
      {
-      "createdAt": 1700000000652,
-      "id": "pt_6_652",
+      "createdAt": 1700000000668,
+      "id": "pt_6_668",
       "isManual": false,
       "type": "peak",
-      "x": 584,
-      "y": 652
-     },
-     {
-      "createdAt": 1700000000730,
-      "id": "pt_6_730",
-      "isManual": false,
-      "type": "peak",
-      "x": 584,
-      "y": 730
+      "x": 588,
+      "y": 668
      },
      {
       "createdAt": 1700000000742,
       "id": "pt_6_742",
       "isManual": false,
       "type": "peak",
-      "x": 585,
+      "x": 588,
       "y": 742
      },
      {
@@ -3672,40 +2704,24 @@
       "id": "pt_6_744",
       "isManual": false,
       "type": "peak",
-      "x": 585,
+      "x": 588,
       "y": 744
      },
      {
-      "createdAt": 1700000000762,
-      "id": "pt_6_762",
+      "createdAt": 1700000000767,
+      "id": "pt_6_767",
       "isManual": false,
       "type": "peak",
-      "x": 587,
-      "y": 762
+      "x": 588,
+      "y": 767
      },
      {
-      "createdAt": 1700000000768,
-      "id": "pt_6_768",
+      "createdAt": 1700000000798,
+      "id": "pt_6_798",
       "isManual": false,
       "type": "peak",
-      "x": 584,
-      "y": 768
-     },
-     {
-      "createdAt": 1700000000792,
-      "id": "pt_6_792",
-      "isManual": false,
-      "type": "peak",
-      "x": 589,
-      "y": 792
-     },
-     {
-      "createdAt": 1700000000799,
-      "id": "pt_6_799",
-      "isManual": false,
-      "type": "peak",
-      "x": 585,
-      "y": 799
+      "x": 588,
+      "y": 798
      },
      {
       "createdAt": 1700000000808,
@@ -3764,27 +2780,19 @@
       "y": 854
      },
      {
-      "createdAt": 1700000000862,
-      "id": "pt_6_862",
+      "createdAt": 1700000000860,
+      "id": "pt_6_860",
       "isManual": false,
       "type": "peak",
-      "x": 590,
-      "y": 862
-     },
-     {
-      "createdAt": 1700000000863,
-      "id": "pt_6_863",
-      "isManual": false,
-      "type": "peak",
-      "x": 584,
-      "y": 863
+      "x": 591,
+      "y": 860
      },
      {
       "createdAt": 1700000000867,
       "id": "pt_6_867",
       "isManual": false,
       "type": "peak",
-      "x": 584,
+      "x": 588,
       "y": 867
      },
      {
@@ -3855,11 +2863,19 @@
       "y": 235
      },
      {
+      "createdAt": 1700000000236,
+      "id": "pt_7_236",
+      "isManual": false,
+      "type": "peak",
+      "x": 632,
+      "y": 236
+     },
+     {
       "createdAt": 1700000000237,
       "id": "pt_7_237",
       "isManual": false,
       "type": "peak",
-      "x": 621,
+      "x": 625,
       "y": 237
      },
      {
@@ -3867,7 +2883,7 @@
       "id": "pt_7_251",
       "isManual": false,
       "type": "peak",
-      "x": 621,
+      "x": 625,
       "y": 251
      },
      {
@@ -3875,7 +2891,7 @@
       "id": "pt_7_265",
       "isManual": false,
       "type": "peak",
-      "x": 621,
+      "x": 625,
       "y": 265
      },
      {
@@ -3891,71 +2907,23 @@
       "id": "pt_7_267",
       "isManual": false,
       "type": "peak",
-      "x": 621,
+      "x": 625,
       "y": 267
      },
      {
-      "createdAt": 1700000000274,
-      "id": "pt_7_274",
+      "createdAt": 1700000000312,
+      "id": "pt_7_312",
       "isManual": false,
       "type": "peak",
-      "x": 621,
-      "y": 274
-     },
-     {
-      "createdAt": 1700000000307,
-      "id": "pt_7_307",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 307
-     },
-     {
-      "createdAt": 1700000000330,
-      "id": "pt_7_330",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 330
-     },
-     {
-      "createdAt": 1700000000331,
-      "id": "pt_7_331",
-      "isManual": false,
-      "type": "peak",
-      "x": 624,
-      "y": 331
-     },
-     {
-      "createdAt": 1700000000334,
-      "id": "pt_7_334",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 334
-     },
-     {
-      "createdAt": 1700000000341,
-      "id": "pt_7_341",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 341
-     },
-     {
-      "createdAt": 1700000000350,
-      "id": "pt_7_350",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 350
+      "x": 625,
+      "y": 312
      },
      {
       "createdAt": 1700000000358,
       "id": "pt_7_358",
       "isManual": false,
       "type": "peak",
-      "x": 623,
+      "x": 625,
       "y": 358
      },
      {
@@ -3971,72 +2939,40 @@
       "id": "pt_7_360",
       "isManual": false,
       "type": "peak",
-      "x": 621,
+      "x": 625,
       "y": 360
      },
      {
-      "createdAt": 1700000000375,
-      "id": "pt_7_375",
+      "createdAt": 1700000000374,
+      "id": "pt_7_374",
       "isManual": false,
       "type": "peak",
-      "x": 621,
-      "y": 375
+      "x": 625,
+      "y": 374
      },
      {
-      "createdAt": 1700000000389,
-      "id": "pt_7_389",
+      "createdAt": 1700000000410,
+      "id": "pt_7_410",
       "isManual": false,
       "type": "peak",
-      "x": 626,
-      "y": 389
+      "x": 625,
+      "y": 410
      },
      {
-      "createdAt": 1700000000396,
-      "id": "pt_7_396",
+      "createdAt": 1700000000441,
+      "id": "pt_7_441",
       "isManual": false,
       "type": "peak",
-      "x": 621,
-      "y": 396
+      "x": 625,
+      "y": 441
      },
      {
-      "createdAt": 1700000000409,
-      "id": "pt_7_409",
+      "createdAt": 1700000000455,
+      "id": "pt_7_455",
       "isManual": false,
       "type": "peak",
-      "x": 621,
-      "y": 409
-     },
-     {
-      "createdAt": 1700000000433,
-      "id": "pt_7_433",
-      "isManual": false,
-      "type": "peak",
-      "x": 627,
-      "y": 433
-     },
-     {
-      "createdAt": 1700000000440,
-      "id": "pt_7_440",
-      "isManual": false,
-      "type": "peak",
-      "x": 622,
-      "y": 440
-     },
-     {
-      "createdAt": 1700000000448,
-      "id": "pt_7_448",
-      "isManual": false,
-      "type": "peak",
-      "x": 626,
-      "y": 448
-     },
-     {
-      "createdAt": 1700000000453,
-      "id": "pt_7_453",
-      "isManual": false,
-      "type": "peak",
-      "x": 622,
-      "y": 453
+      "x": 625,
+      "y": 455
      },
      {
       "createdAt": 1700000000462,
@@ -4107,7 +3043,7 @@
       "id": "pt_7_533",
       "isManual": false,
       "type": "peak",
-      "x": 624,
+      "x": 625,
       "y": 533
      },
      {
@@ -4127,27 +3063,19 @@
       "y": 550
      },
      {
-      "createdAt": 1700000000562,
-      "id": "pt_7_562",
+      "createdAt": 1700000000579,
+      "id": "pt_7_579",
       "isManual": false,
       "type": "peak",
-      "x": 627,
-      "y": 562
-     },
-     {
-      "createdAt": 1700000000577,
-      "id": "pt_7_577",
-      "isManual": false,
-      "type": "peak",
-      "x": 623,
-      "y": 577
+      "x": 625,
+      "y": 579
      },
      {
       "createdAt": 1700000000593,
       "id": "pt_7_593",
       "isManual": false,
       "type": "peak",
-      "x": 623,
+      "x": 625,
       "y": 593
      },
      {
@@ -4163,63 +3091,23 @@
       "id": "pt_7_595",
       "isManual": false,
       "type": "peak",
-      "x": 623,
+      "x": 625,
       "y": 595
      },
      {
-      "createdAt": 1700000000605,
-      "id": "pt_7_605",
-      "isManual": false,
-      "type": "peak",
-      "x": 622,
-      "y": 605
-     },
-     {
-      "createdAt": 1700000000622,
-      "id": "pt_7_622",
+      "createdAt": 1700000000668,
+      "id": "pt_7_668",
       "isManual": false,
       "type": "peak",
       "x": 625,
-      "y": 622
-     },
-     {
-      "createdAt": 1700000000662,
-      "id": "pt_7_662",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 662
-     },
-     {
-      "createdAt": 1700000000680,
-      "id": "pt_7_680",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 680
-     },
-     {
-      "createdAt": 1700000000700,
-      "id": "pt_7_700",
-      "isManual": false,
-      "type": "peak",
-      "x": 624,
-      "y": 700
-     },
-     {
-      "createdAt": 1700000000724,
-      "id": "pt_7_724",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 724
+      "y": 668
      },
      {
       "createdAt": 1700000000742,
       "id": "pt_7_742",
       "isManual": false,
       "type": "peak",
-      "x": 622,
+      "x": 625,
       "y": 742
      },
      {
@@ -4235,63 +3123,23 @@
       "id": "pt_7_744",
       "isManual": false,
       "type": "peak",
-      "x": 622,
+      "x": 625,
       "y": 744
      },
      {
-      "createdAt": 1700000000753,
-      "id": "pt_7_753",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 753
-     },
-     {
-      "createdAt": 1700000000771,
-      "id": "pt_7_771",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 771
-     },
-     {
-      "createdAt": 1700000000786,
-      "id": "pt_7_786",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 786
-     },
-     {
-      "createdAt": 1700000000816,
-      "id": "pt_7_816",
+      "createdAt": 1700000000805,
+      "id": "pt_7_805",
       "isManual": false,
       "type": "peak",
       "x": 625,
-      "y": 816
-     },
-     {
-      "createdAt": 1700000000821,
-      "id": "pt_7_821",
-      "isManual": false,
-      "type": "peak",
-      "x": 622,
-      "y": 821
-     },
-     {
-      "createdAt": 1700000000845,
-      "id": "pt_7_845",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 845
+      "y": 805
      },
      {
       "createdAt": 1700000000867,
       "id": "pt_7_867",
       "isManual": false,
       "type": "peak",
-      "x": 621,
+      "x": 625,
       "y": 867
      },
      {
@@ -4366,23 +3214,23 @@
       "id": "pt_8_237",
       "isManual": false,
       "type": "peak",
-      "x": 658,
+      "x": 662,
       "y": 237
      },
      {
-      "createdAt": 1700000000258,
-      "id": "pt_8_258",
+      "createdAt": 1700000000251,
+      "id": "pt_8_251",
       "isManual": false,
       "type": "peak",
-      "x": 658,
-      "y": 258
+      "x": 662,
+      "y": 251
      },
      {
       "createdAt": 1700000000265,
       "id": "pt_8_265",
       "isManual": false,
       "type": "peak",
-      "x": 658,
+      "x": 662,
       "y": 265
      },
      {
@@ -4402,108 +3250,20 @@
       "y": 267
      },
      {
-      "createdAt": 1700000000270,
-      "id": "pt_8_270",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 270
-     },
-     {
-      "createdAt": 1700000000278,
-      "id": "pt_8_278",
-      "isManual": false,
-      "type": "peak",
-      "x": 659,
-      "y": 278
-     },
-     {
-      "createdAt": 1700000000280,
-      "id": "pt_8_280",
-      "isManual": false,
-      "type": "peak",
-      "x": 663,
-      "y": 280
-     },
-     {
-      "createdAt": 1700000000283,
-      "id": "pt_8_283",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 283
-     },
-     {
-      "createdAt": 1700000000295,
-      "id": "pt_8_295",
-      "isManual": false,
-      "type": "peak",
-      "x": 661,
-      "y": 295
-     },
-     {
-      "createdAt": 1700000000297,
-      "id": "pt_8_297",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 297
-     },
-     {
       "createdAt": 1700000000305,
       "id": "pt_8_305",
       "isManual": false,
       "type": "peak",
-      "x": 658,
+      "x": 662,
       "y": 305
      },
      {
-      "createdAt": 1700000000311,
-      "id": "pt_8_311",
-      "isManual": false,
-      "type": "peak",
-      "x": 661,
-      "y": 311
-     },
-     {
-      "createdAt": 1700000000313,
-      "id": "pt_8_313",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 313
-     },
-     {
-      "createdAt": 1700000000319,
-      "id": "pt_8_319",
+      "createdAt": 1700000000328,
+      "id": "pt_8_328",
       "isManual": false,
       "type": "peak",
       "x": 662,
-      "y": 319
-     },
-     {
-      "createdAt": 1700000000323,
-      "id": "pt_8_323",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 323
-     },
-     {
-      "createdAt": 1700000000325,
-      "id": "pt_8_325",
-      "isManual": false,
-      "type": "peak",
-      "x": 661,
-      "y": 325
-     },
-     {
-      "createdAt": 1700000000327,
-      "id": "pt_8_327",
-      "isManual": false,
-      "type": "peak",
-      "x": 659,
-      "y": 327
+      "y": 328
      },
      {
       "createdAt": 1700000000329,
@@ -4514,19 +3274,19 @@
       "y": 329
      },
      {
-      "createdAt": 1700000000333,
-      "id": "pt_8_333",
+      "createdAt": 1700000000332,
+      "id": "pt_8_332",
       "isManual": false,
       "type": "peak",
-      "x": 660,
-      "y": 333
+      "x": 662,
+      "y": 332
      },
      {
       "createdAt": 1700000000337,
       "id": "pt_8_337",
       "isManual": false,
       "type": "peak",
-      "x": 661,
+      "x": 662,
       "y": 337
      },
      {
@@ -4546,27 +3306,11 @@
       "y": 340
      },
      {
-      "createdAt": 1700000000344,
-      "id": "pt_8_344",
-      "isManual": false,
-      "type": "peak",
-      "x": 661,
-      "y": 344
-     },
-     {
-      "createdAt": 1700000000345,
-      "id": "pt_8_345",
-      "isManual": false,
-      "type": "peak",
-      "x": 664,
-      "y": 345
-     },
-     {
       "createdAt": 1700000000346,
       "id": "pt_8_346",
       "isManual": false,
       "type": "peak",
-      "x": 660,
+      "x": 662,
       "y": 346
      },
      {
@@ -4582,7 +3326,7 @@
       "id": "pt_8_350",
       "isManual": false,
       "type": "peak",
-      "x": 661,
+      "x": 662,
       "y": 350
      },
      {
@@ -4590,7 +3334,7 @@
       "id": "pt_8_358",
       "isManual": false,
       "type": "peak",
-      "x": 660,
+      "x": 662,
       "y": 358
      },
      {
@@ -4606,63 +3350,23 @@
       "id": "pt_8_360",
       "isManual": false,
       "type": "peak",
-      "x": 659,
+      "x": 662,
       "y": 360
      },
      {
-      "createdAt": 1700000000367,
-      "id": "pt_8_367",
+      "createdAt": 1700000000476,
+      "id": "pt_8_476",
       "isManual": false,
       "type": "peak",
-      "x": 661,
-      "y": 367
-     },
-     {
-      "createdAt": 1700000000373,
-      "id": "pt_8_373",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 373
-     },
-     {
-      "createdAt": 1700000000383,
-      "id": "pt_8_383",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 383
-     },
-     {
-      "createdAt": 1700000000424,
-      "id": "pt_8_424",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 424
-     },
-     {
-      "createdAt": 1700000000470,
-      "id": "pt_8_470",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 470
-     },
-     {
-      "createdAt": 1700000000537,
-      "id": "pt_8_537",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 537
+      "x": 662,
+      "y": 476
      },
      {
       "createdAt": 1700000000593,
       "id": "pt_8_593",
       "isManual": false,
       "type": "peak",
-      "x": 658,
+      "x": 662,
       "y": 593
      },
      {
@@ -4678,39 +3382,23 @@
       "id": "pt_8_595",
       "isManual": false,
       "type": "peak",
-      "x": 661,
+      "x": 662,
       "y": 595
      },
      {
-      "createdAt": 1700000000596,
-      "id": "pt_8_596",
+      "createdAt": 1700000000668,
+      "id": "pt_8_668",
       "isManual": false,
       "type": "peak",
-      "x": 658,
-      "y": 596
-     },
-     {
-      "createdAt": 1700000000658,
-      "id": "pt_8_658",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 658
-     },
-     {
-      "createdAt": 1700000000734,
-      "id": "pt_8_734",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 734
+      "x": 662,
+      "y": 668
      },
      {
       "createdAt": 1700000000742,
       "id": "pt_8_742",
       "isManual": false,
       "type": "peak",
-      "x": 658,
+      "x": 662,
       "y": 742
      },
      {
@@ -4726,31 +3414,23 @@
       "id": "pt_8_744",
       "isManual": false,
       "type": "peak",
-      "x": 659,
+      "x": 662,
       "y": 744
      },
      {
-      "createdAt": 1700000000792,
-      "id": "pt_8_792",
+      "createdAt": 1700000000805,
+      "id": "pt_8_805",
       "isManual": false,
       "type": "peak",
-      "x": 658,
-      "y": 792
-     },
-     {
-      "createdAt": 1700000000855,
-      "id": "pt_8_855",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 855
+      "x": 662,
+      "y": 805
      },
      {
       "createdAt": 1700000000867,
       "id": "pt_8_867",
       "isManual": false,
       "type": "peak",
-      "x": 658,
+      "x": 662,
       "y": 867
      },
      {
@@ -4825,7 +3505,7 @@
       "id": "pt_9_236",
       "isManual": false,
       "type": "peak",
-      "x": 696,
+      "x": 700,
       "y": 236
      },
      {
@@ -4833,7 +3513,7 @@
       "id": "pt_9_238",
       "isManual": false,
       "type": "peak",
-      "x": 696,
+      "x": 700,
       "y": 238
      },
      {
@@ -6105,7 +4785,7 @@
       "id": "pt_9_863",
       "isManual": false,
       "type": "peak",
-      "x": 696,
+      "x": 700,
       "y": 863
      },
      {
@@ -6113,7 +4793,7 @@
       "id": "pt_9_868",
       "isManual": false,
       "type": "peak",
-      "x": 696,
+      "x": 700,
       "y": 868
      }
     ],
@@ -6180,7 +4860,7 @@
       "id": "pt_10_236",
       "isManual": false,
       "type": "peak",
-      "x": 908,
+      "x": 912,
       "y": 236
      },
      {
@@ -6188,7 +4868,7 @@
       "id": "pt_10_238",
       "isManual": false,
       "type": "peak",
-      "x": 908,
+      "x": 912,
       "y": 238
      },
      {
@@ -6476,7 +5156,7 @@
       "id": "pt_10_305",
       "isManual": false,
       "type": "peak",
-      "x": 911,
+      "x": 912,
       "y": 305
      },
      {
@@ -7516,7 +6196,7 @@
       "id": "pt_10_863",
       "isManual": false,
       "type": "peak",
-      "x": 908,
+      "x": 912,
       "y": 863
      },
      {
@@ -7524,7 +6204,7 @@
       "id": "pt_10_868",
       "isManual": false,
       "type": "peak",
-      "x": 908,
+      "x": 912,
       "y": 868
      }
     ],
@@ -7591,32 +6271,8 @@
       "id": "pt_11_236",
       "isManual": false,
       "type": "peak",
-      "x": 1095,
-      "y": 236
-     },
-     {
-      "createdAt": 1700000000238,
-      "id": "pt_11_238",
-      "isManual": false,
-      "type": "peak",
-      "x": 1095,
-      "y": 238
-     },
-     {
-      "createdAt": 1700000000239,
-      "id": "pt_11_239",
-      "isManual": false,
-      "type": "peak",
-      "x": 1101,
-      "y": 239
-     },
-     {
-      "createdAt": 1700000000240,
-      "id": "pt_11_240",
-      "isManual": false,
-      "type": "peak",
       "x": 1099,
-      "y": 240
+      "y": 236
      },
      {
       "createdAt": 1700000000243,
@@ -7643,20 +6299,12 @@
       "y": 265
      },
      {
-      "createdAt": 1700000000270,
-      "id": "pt_11_270",
+      "createdAt": 1700000000269,
+      "id": "pt_11_269",
       "isManual": false,
       "type": "peak",
-      "x": 1096,
-      "y": 270
-     },
-     {
-      "createdAt": 1700000000271,
-      "id": "pt_11_271",
-      "isManual": false,
-      "type": "peak",
-      "x": 1102,
-      "y": 271
+      "x": 1099,
+      "y": 269
      },
      {
       "createdAt": 1700000000272,
@@ -7671,7 +6319,7 @@
       "id": "pt_11_274",
       "isManual": false,
       "type": "peak",
-      "x": 1097,
+      "x": 1099,
       "y": 274
      },
      {
@@ -7687,7 +6335,7 @@
       "id": "pt_11_278",
       "isManual": false,
       "type": "peak",
-      "x": 1098,
+      "x": 1099,
       "y": 278
      },
      {
@@ -7699,12 +6347,12 @@
       "y": 280
      },
      {
-      "createdAt": 1700000000286,
-      "id": "pt_11_286",
+      "createdAt": 1700000000288,
+      "id": "pt_11_288",
       "isManual": false,
       "type": "peak",
-      "x": 1098,
-      "y": 286
+      "x": 1100,
+      "y": 288
      },
      {
       "createdAt": 1700000000291,
@@ -8227,12 +6875,12 @@
       "y": 715
      },
      {
-      "createdAt": 1700000000723,
-      "id": "pt_11_723",
+      "createdAt": 1700000000724,
+      "id": "pt_11_724",
       "isManual": false,
       "type": "peak",
-      "x": 1096,
-      "y": 723
+      "x": 1099,
+      "y": 724
      },
      {
       "createdAt": 1700000000732,
@@ -8267,12 +6915,12 @@
       "y": 744
      },
      {
-      "createdAt": 1700000000780,
-      "id": "pt_11_780",
+      "createdAt": 1700000000776,
+      "id": "pt_11_776",
       "isManual": false,
       "type": "peak",
-      "x": 1098,
-      "y": 780
+      "x": 1099,
+      "y": 776
      },
      {
       "createdAt": 1700000000795,
@@ -8287,24 +6935,8 @@
       "id": "pt_11_816",
       "isManual": false,
       "type": "peak",
-      "x": 1098,
+      "x": 1099,
       "y": 816
-     },
-     {
-      "createdAt": 1700000000826,
-      "id": "pt_11_826",
-      "isManual": false,
-      "type": "peak",
-      "x": 1101,
-      "y": 826
-     },
-     {
-      "createdAt": 1700000000831,
-      "id": "pt_11_831",
-      "isManual": false,
-      "type": "peak",
-      "x": 1095,
-      "y": 831
      },
      {
       "createdAt": 1700000000840,
@@ -8327,31 +6959,15 @@
       "id": "pt_11_849",
       "isManual": false,
       "type": "peak",
-      "x": 1098,
+      "x": 1099,
       "y": 849
-     },
-     {
-      "createdAt": 1700000000862,
-      "id": "pt_11_862",
-      "isManual": false,
-      "type": "peak",
-      "x": 1100,
-      "y": 862
-     },
-     {
-      "createdAt": 1700000000863,
-      "id": "pt_11_863",
-      "isManual": false,
-      "type": "peak",
-      "x": 1095,
-      "y": 863
      },
      {
       "createdAt": 1700000000868,
       "id": "pt_11_868",
       "isManual": false,
       "type": "peak",
-      "x": 1095,
+      "x": 1099,
       "y": 868
      }
     ],
@@ -8414,28 +7030,36 @@
       "y": 235
      },
      {
+      "createdAt": 1700000000236,
+      "id": "pt_12_236",
+      "isManual": false,
+      "type": "peak",
+      "x": 1156,
+      "y": 236
+     },
+     {
       "createdAt": 1700000000237,
       "id": "pt_12_237",
       "isManual": false,
       "type": "peak",
-      "x": 1132,
+      "x": 1136,
       "y": 237
      },
      {
-      "createdAt": 1700000000238,
-      "id": "pt_12_238",
+      "createdAt": 1700000000250,
+      "id": "pt_12_250",
       "isManual": false,
       "type": "peak",
-      "x": 1138,
-      "y": 238
+      "x": 1136,
+      "y": 250
      },
      {
-      "createdAt": 1700000000255,
-      "id": "pt_12_255",
+      "createdAt": 1700000000259,
+      "id": "pt_12_259",
       "isManual": false,
       "type": "peak",
-      "x": 1133,
-      "y": 255
+      "x": 1136,
+      "y": 259
      },
      {
       "createdAt": 1700000000262,
@@ -8470,20 +7094,12 @@
       "y": 267
      },
      {
-      "createdAt": 1700000000269,
-      "id": "pt_12_269",
+      "createdAt": 1700000000271,
+      "id": "pt_12_271",
       "isManual": false,
       "type": "peak",
-      "x": 1139,
-      "y": 269
-     },
-     {
-      "createdAt": 1700000000270,
-      "id": "pt_12_270",
-      "isManual": false,
-      "type": "peak",
-      "x": 1134,
-      "y": 270
+      "x": 1136,
+      "y": 271
      },
      {
       "createdAt": 1700000000274,
@@ -8494,27 +7110,11 @@
       "y": 274
      },
      {
-      "createdAt": 1700000000276,
-      "id": "pt_12_276",
-      "isManual": false,
-      "type": "peak",
-      "x": 1135,
-      "y": 276
-     },
-     {
-      "createdAt": 1700000000278,
-      "id": "pt_12_278",
-      "isManual": false,
-      "type": "peak",
-      "x": 1138,
-      "y": 278
-     },
-     {
       "createdAt": 1700000000280,
       "id": "pt_12_280",
       "isManual": false,
       "type": "peak",
-      "x": 1135,
+      "x": 1136,
       "y": 280
      },
      {
@@ -8526,12 +7126,12 @@
       "y": 282
      },
      {
-      "createdAt": 1700000000285,
-      "id": "pt_12_285",
+      "createdAt": 1700000000286,
+      "id": "pt_12_286",
       "isManual": false,
       "type": "peak",
-      "x": 1135,
-      "y": 285
+      "x": 1136,
+      "y": 286
      },
      {
       "createdAt": 1700000000291,
@@ -8542,12 +7142,12 @@
       "y": 291
      },
      {
-      "createdAt": 1700000000297,
-      "id": "pt_12_297",
+      "createdAt": 1700000000294,
+      "id": "pt_12_294",
       "isManual": false,
       "type": "peak",
-      "x": 1135,
-      "y": 297
+      "x": 1136,
+      "y": 294
      },
      {
       "createdAt": 1700000000299,
@@ -8638,60 +7238,20 @@
       "y": 321
      },
      {
-      "createdAt": 1700000000327,
-      "id": "pt_12_327",
+      "createdAt": 1700000000323,
+      "id": "pt_12_323",
       "isManual": false,
       "type": "peak",
-      "x": 1134,
-      "y": 327
+      "x": 1136,
+      "y": 323
      },
      {
-      "createdAt": 1700000000328,
-      "id": "pt_12_328",
+      "createdAt": 1700000000332,
+      "id": "pt_12_332",
       "isManual": false,
       "type": "peak",
-      "x": 1137,
-      "y": 328
-     },
-     {
-      "createdAt": 1700000000333,
-      "id": "pt_12_333",
-      "isManual": false,
-      "type": "peak",
-      "x": 1134,
-      "y": 333
-     },
-     {
-      "createdAt": 1700000000335,
-      "id": "pt_12_335",
-      "isManual": false,
-      "type": "peak",
-      "x": 1138,
-      "y": 335
-     },
-     {
-      "createdAt": 1700000000336,
-      "id": "pt_12_336",
-      "isManual": false,
-      "type": "peak",
-      "x": 1133,
-      "y": 336
-     },
-     {
-      "createdAt": 1700000000338,
-      "id": "pt_12_338",
-      "isManual": false,
-      "type": "peak",
-      "x": 1139,
-      "y": 338
-     },
-     {
-      "createdAt": 1700000000339,
-      "id": "pt_12_339",
-      "isManual": false,
-      "type": "peak",
-      "x": 1137,
-      "y": 339
+      "x": 1136,
+      "y": 332
      },
      {
       "createdAt": 1700000000343,
@@ -8722,7 +7282,7 @@
       "id": "pt_12_349",
       "isManual": false,
       "type": "peak",
-      "x": 1135,
+      "x": 1136,
       "y": 349
      },
      {
@@ -8762,7 +7322,7 @@
       "id": "pt_12_358",
       "isManual": false,
       "type": "peak",
-      "x": 1135,
+      "x": 1136,
       "y": 358
      },
      {
@@ -8782,20 +7342,20 @@
       "y": 360
      },
      {
-      "createdAt": 1700000000381,
-      "id": "pt_12_381",
+      "createdAt": 1700000000375,
+      "id": "pt_12_375",
       "isManual": false,
       "type": "peak",
-      "x": 1138,
-      "y": 381
+      "x": 1136,
+      "y": 375
      },
      {
-      "createdAt": 1700000000388,
-      "id": "pt_12_388",
+      "createdAt": 1700000000387,
+      "id": "pt_12_387",
       "isManual": false,
       "type": "peak",
-      "x": 1134,
-      "y": 388
+      "x": 1136,
+      "y": 387
      },
      {
       "createdAt": 1700000000395,
@@ -8826,23 +7386,15 @@
       "id": "pt_12_414",
       "isManual": false,
       "type": "peak",
-      "x": 1134,
+      "x": 1136,
       "y": 414
-     },
-     {
-      "createdAt": 1700000000421,
-      "id": "pt_12_421",
-      "isManual": false,
-      "type": "peak",
-      "x": 1138,
-      "y": 421
      },
      {
       "createdAt": 1700000000427,
       "id": "pt_12_427",
       "isManual": false,
       "type": "peak",
-      "x": 1135,
+      "x": 1136,
       "y": 427
      },
      {
@@ -9242,7 +7794,7 @@
       "id": "pt_12_864",
       "isManual": false,
       "type": "peak",
-      "x": 1132,
+      "x": 1136,
       "y": 864
      },
      {
@@ -9250,7 +7802,7 @@
       "id": "pt_12_867",
       "isManual": false,
       "type": "peak",
-      "x": 1132,
+      "x": 1136,
       "y": 867
      },
      {
@@ -9321,27 +7873,35 @@
       "y": 235
      },
      {
+      "createdAt": 1700000000236,
+      "id": "pt_13_236",
+      "isManual": false,
+      "type": "peak",
+      "x": 1206,
+      "y": 236
+     },
+     {
       "createdAt": 1700000000237,
       "id": "pt_13_237",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
+      "x": 1199,
       "y": 237
      },
      {
-      "createdAt": 1700000000248,
-      "id": "pt_13_248",
+      "createdAt": 1700000000251,
+      "id": "pt_13_251",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
-      "y": 248
+      "x": 1199,
+      "y": 251
      },
      {
       "createdAt": 1700000000265,
       "id": "pt_13_265",
       "isManual": false,
       "type": "peak",
-      "x": 1196,
+      "x": 1199,
       "y": 265
      },
      {
@@ -9361,28 +7921,28 @@
       "y": 267
      },
      {
-      "createdAt": 1700000000279,
-      "id": "pt_13_279",
+      "createdAt": 1700000000274,
+      "id": "pt_13_274",
+      "isManual": false,
+      "type": "peak",
+      "x": 1200,
+      "y": 274
+     },
+     {
+      "createdAt": 1700000000276,
+      "id": "pt_13_276",
       "isManual": false,
       "type": "peak",
       "x": 1203,
-      "y": 279
+      "y": 276
      },
      {
-      "createdAt": 1700000000281,
-      "id": "pt_13_281",
+      "createdAt": 1700000000286,
+      "id": "pt_13_286",
       "isManual": false,
       "type": "peak",
-      "x": 1198,
-      "y": 281
-     },
-     {
-      "createdAt": 1700000000284,
-      "id": "pt_13_284",
-      "isManual": false,
-      "type": "peak",
-      "x": 1198,
-      "y": 284
+      "x": 1199,
+      "y": 286
      },
      {
       "createdAt": 1700000000288,
@@ -9393,99 +7953,27 @@
       "y": 288
      },
      {
-      "createdAt": 1700000000292,
-      "id": "pt_13_292",
+      "createdAt": 1700000000294,
+      "id": "pt_13_294",
       "isManual": false,
       "type": "peak",
       "x": 1199,
-      "y": 292
+      "y": 294
      },
      {
-      "createdAt": 1700000000301,
-      "id": "pt_13_301",
-      "isManual": false,
-      "type": "peak",
-      "x": 1201,
-      "y": 301
-     },
-     {
-      "createdAt": 1700000000304,
-      "id": "pt_13_304",
-      "isManual": false,
-      "type": "peak",
-      "x": 1195,
-      "y": 304
-     },
-     {
-      "createdAt": 1700000000311,
-      "id": "pt_13_311",
-      "isManual": false,
-      "type": "peak",
-      "x": 1195,
-      "y": 311
-     },
-     {
-      "createdAt": 1700000000320,
-      "id": "pt_13_320",
-      "isManual": false,
-      "type": "peak",
-      "x": 1195,
-      "y": 320
-     },
-     {
-      "createdAt": 1700000000340,
-      "id": "pt_13_340",
-      "isManual": false,
-      "type": "peak",
-      "x": 1195,
-      "y": 340
-     },
-     {
-      "createdAt": 1700000000358,
-      "id": "pt_13_358",
-      "isManual": false,
-      "type": "peak",
-      "x": 1195,
-      "y": 358
-     },
-     {
-      "createdAt": 1700000000359,
-      "id": "pt_13_359",
+      "createdAt": 1700000000447,
+      "id": "pt_13_447",
       "isManual": false,
       "type": "peak",
       "x": 1199,
-      "y": 359
-     },
-     {
-      "createdAt": 1700000000360,
-      "id": "pt_13_360",
-      "isManual": false,
-      "type": "peak",
-      "x": 1195,
-      "y": 360
-     },
-     {
-      "createdAt": 1700000000377,
-      "id": "pt_13_377",
-      "isManual": false,
-      "type": "peak",
-      "x": 1195,
-      "y": 377
-     },
-     {
-      "createdAt": 1700000000495,
-      "id": "pt_13_495",
-      "isManual": false,
-      "type": "peak",
-      "x": 1195,
-      "y": 495
+      "y": 447
      },
      {
       "createdAt": 1700000000593,
       "id": "pt_13_593",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
+      "x": 1199,
       "y": 593
      },
      {
@@ -9501,7 +7989,7 @@
       "id": "pt_13_595",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
+      "x": 1199,
       "y": 595
      },
      {
@@ -9509,7 +7997,7 @@
       "id": "pt_13_668",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
+      "x": 1199,
       "y": 668
      },
      {
@@ -9517,7 +8005,7 @@
       "id": "pt_13_742",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
+      "x": 1199,
       "y": 742
      },
      {
@@ -9533,7 +8021,7 @@
       "id": "pt_13_744",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
+      "x": 1199,
       "y": 744
      },
      {
@@ -9541,7 +8029,7 @@
       "id": "pt_13_805",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
+      "x": 1199,
       "y": 805
      },
      {
@@ -9549,7 +8037,7 @@
       "id": "pt_13_867",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
+      "x": 1199,
       "y": 867
      },
      {
@@ -9624,7 +8112,7 @@
       "id": "pt_14_237",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
+      "x": 1237,
       "y": 237
      },
      {
@@ -9632,7 +8120,7 @@
       "id": "pt_14_251",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
+      "x": 1237,
       "y": 251
      },
      {
@@ -9640,7 +8128,7 @@
       "id": "pt_14_265",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
+      "x": 1237,
       "y": 265
      },
      {
@@ -9656,24 +8144,16 @@
       "id": "pt_14_267",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
+      "x": 1237,
       "y": 267
      },
      {
-      "createdAt": 1700000000311,
-      "id": "pt_14_311",
+      "createdAt": 1700000000312,
+      "id": "pt_14_312",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 311
-     },
-     {
-      "createdAt": 1700000000356,
-      "id": "pt_14_356",
-      "isManual": false,
-      "type": "peak",
-      "x": 1233,
-      "y": 356
+      "x": 1237,
+      "y": 312
      },
      {
       "createdAt": 1700000000358,
@@ -9696,32 +8176,24 @@
       "id": "pt_14_360",
       "isManual": false,
       "type": "peak",
-      "x": 1234,
+      "x": 1237,
       "y": 360
      },
      {
-      "createdAt": 1700000000386,
-      "id": "pt_14_386",
+      "createdAt": 1700000000391,
+      "id": "pt_14_391",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 386
+      "x": 1237,
+      "y": 391
      },
      {
-      "createdAt": 1700000000408,
-      "id": "pt_14_408",
+      "createdAt": 1700000000422,
+      "id": "pt_14_422",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 408
-     },
-     {
-      "createdAt": 1700000000421,
-      "id": "pt_14_421",
-      "isManual": false,
-      "type": "peak",
-      "x": 1233,
-      "y": 421
+      "x": 1237,
+      "y": 422
      },
      {
       "createdAt": 1700000000428,
@@ -9732,12 +8204,20 @@
       "y": 428
      },
      {
-      "createdAt": 1700000000434,
-      "id": "pt_14_434",
+      "createdAt": 1700000000432,
+      "id": "pt_14_432",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 434
+      "x": 1237,
+      "y": 432
+     },
+     {
+      "createdAt": 1700000000436,
+      "id": "pt_14_436",
+      "isManual": false,
+      "type": "peak",
+      "x": 1237,
+      "y": 436
      },
      {
       "createdAt": 1700000000439,
@@ -9748,12 +8228,20 @@
       "y": 439
      },
      {
-      "createdAt": 1700000000444,
-      "id": "pt_14_444",
+      "createdAt": 1700000000442,
+      "id": "pt_14_442",
       "isManual": false,
       "type": "peak",
-      "x": 1234,
-      "y": 444
+      "x": 1237,
+      "y": 442
+     },
+     {
+      "createdAt": 1700000000445,
+      "id": "pt_14_445",
+      "isManual": false,
+      "type": "peak",
+      "x": 1237,
+      "y": 445
      },
      {
       "createdAt": 1700000000449,
@@ -9764,20 +8252,12 @@
       "y": 449
      },
      {
-      "createdAt": 1700000000453,
-      "id": "pt_14_453",
+      "createdAt": 1700000000452,
+      "id": "pt_14_452",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 453
-     },
-     {
-      "createdAt": 1700000000458,
-      "id": "pt_14_458",
-      "isManual": false,
-      "type": "peak",
-      "x": 1239,
-      "y": 458
+      "x": 1237,
+      "y": 452
      },
      {
       "createdAt": 1700000000462,
@@ -9796,12 +8276,20 @@
       "y": 466
      },
      {
-      "createdAt": 1700000000471,
-      "id": "pt_14_471",
+      "createdAt": 1700000000470,
+      "id": "pt_14_470",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 471
+      "x": 1237,
+      "y": 470
+     },
+     {
+      "createdAt": 1700000000472,
+      "id": "pt_14_472",
+      "isManual": false,
+      "type": "peak",
+      "x": 1241,
+      "y": 472
      },
      {
       "createdAt": 1700000000475,
@@ -9820,36 +8308,28 @@
       "y": 476
      },
      {
-      "createdAt": 1700000000480,
-      "id": "pt_14_480",
+      "createdAt": 1700000000479,
+      "id": "pt_14_479",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 480
+      "x": 1239,
+      "y": 479
      },
      {
-      "createdAt": 1700000000498,
-      "id": "pt_14_498",
+      "createdAt": 1700000000504,
+      "id": "pt_14_504",
       "isManual": false,
       "type": "peak",
-      "x": 1236,
-      "y": 498
+      "x": 1237,
+      "y": 504
      },
      {
-      "createdAt": 1700000000515,
-      "id": "pt_14_515",
+      "createdAt": 1700000000528,
+      "id": "pt_14_528",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 515
-     },
-     {
-      "createdAt": 1700000000525,
-      "id": "pt_14_525",
-      "isManual": false,
-      "type": "peak",
-      "x": 1233,
-      "y": 525
+      "x": 1237,
+      "y": 528
      },
      {
       "createdAt": 1700000000532,
@@ -9860,28 +8340,28 @@
       "y": 532
      },
      {
-      "createdAt": 1700000000540,
-      "id": "pt_14_540",
+      "createdAt": 1700000000538,
+      "id": "pt_14_538",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 540
+      "x": 1237,
+      "y": 538
      },
      {
-      "createdAt": 1700000000560,
-      "id": "pt_14_560",
+      "createdAt": 1700000000562,
+      "id": "pt_14_562",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 560
+      "x": 1237,
+      "y": 562
      },
      {
-      "createdAt": 1700000000581,
-      "id": "pt_14_581",
+      "createdAt": 1700000000586,
+      "id": "pt_14_586",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 581
+      "x": 1237,
+      "y": 586
      },
      {
       "createdAt": 1700000000589,
@@ -9896,7 +8376,7 @@
       "id": "pt_14_593",
       "isManual": false,
       "type": "peak",
-      "x": 1236,
+      "x": 1237,
       "y": 593
      },
      {
@@ -9912,23 +8392,23 @@
       "id": "pt_14_595",
       "isManual": false,
       "type": "peak",
-      "x": 1234,
+      "x": 1237,
       "y": 595
      },
      {
-      "createdAt": 1700000000669,
-      "id": "pt_14_669",
+      "createdAt": 1700000000668,
+      "id": "pt_14_668",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 669
+      "x": 1237,
+      "y": 668
      },
      {
       "createdAt": 1700000000742,
       "id": "pt_14_742",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
+      "x": 1237,
       "y": 742
      },
      {
@@ -9944,7 +8424,7 @@
       "id": "pt_14_744",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
+      "x": 1237,
       "y": 744
      },
      {
@@ -9952,7 +8432,7 @@
       "id": "pt_14_805",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
+      "x": 1237,
       "y": 805
      },
      {
@@ -9960,7 +8440,7 @@
       "id": "pt_14_867",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
+      "x": 1237,
       "y": 867
      },
      {
@@ -10216,11 +8696,19 @@
       "y": 235
      },
      {
+      "createdAt": 1700000000236,
+      "id": "pt_0_236",
+      "isManual": false,
+      "type": "peak",
+      "x": 345,
+      "y": 236
+     },
+     {
       "createdAt": 1700000000237,
       "id": "pt_0_237",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 237
      },
      {
@@ -10228,7 +8716,7 @@
       "id": "pt_0_251",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 251
      },
      {
@@ -10236,7 +8724,7 @@
       "id": "pt_0_265",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 265
      },
      {
@@ -10252,7 +8740,7 @@
       "id": "pt_0_267",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 267
      },
      {
@@ -10260,7 +8748,7 @@
       "id": "pt_0_312",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 312
      },
      {
@@ -10268,7 +8756,7 @@
       "id": "pt_0_358",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 358
      },
      {
@@ -10284,7 +8772,7 @@
       "id": "pt_0_360",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 360
      },
      {
@@ -10292,7 +8780,7 @@
       "id": "pt_0_476",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 476
      },
      {
@@ -10300,7 +8788,7 @@
       "id": "pt_0_593",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 593
      },
      {
@@ -10316,23 +8804,23 @@
       "id": "pt_0_595",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 595
      },
      {
-      "createdAt": 1700000000661,
-      "id": "pt_0_661",
+      "createdAt": 1700000000668,
+      "id": "pt_0_668",
       "isManual": false,
       "type": "peak",
-      "x": 334,
-      "y": 661
+      "x": 338,
+      "y": 668
      },
      {
       "createdAt": 1700000000742,
       "id": "pt_0_742",
       "isManual": false,
       "type": "peak",
-      "x": 335,
+      "x": 338,
       "y": 742
      },
      {
@@ -10348,87 +8836,31 @@
       "id": "pt_0_744",
       "isManual": false,
       "type": "peak",
-      "x": 335,
+      "x": 338,
       "y": 744
      },
      {
-      "createdAt": 1700000000763,
-      "id": "pt_0_763",
-      "isManual": false,
-      "type": "peak",
-      "x": 337,
-      "y": 763
-     },
-     {
-      "createdAt": 1700000000774,
-      "id": "pt_0_774",
-      "isManual": false,
-      "type": "peak",
-      "x": 334,
-      "y": 774
-     },
-     {
-      "createdAt": 1700000000789,
-      "id": "pt_0_789",
+      "createdAt": 1700000000779,
+      "id": "pt_0_779",
       "isManual": false,
       "type": "peak",
       "x": 338,
-      "y": 789
+      "y": 779
      },
      {
-      "createdAt": 1700000000798,
-      "id": "pt_0_798",
+      "createdAt": 1700000000826,
+      "id": "pt_0_826",
       "isManual": false,
       "type": "peak",
-      "x": 334,
-      "y": 798
-     },
-     {
-      "createdAt": 1700000000809,
-      "id": "pt_0_809",
-      "isManual": false,
-      "type": "peak",
-      "x": 334,
-      "y": 809
-     },
-     {
-      "createdAt": 1700000000816,
-      "id": "pt_0_816",
-      "isManual": false,
-      "type": "peak",
-      "x": 340,
-      "y": 816
-     },
-     {
-      "createdAt": 1700000000822,
-      "id": "pt_0_822",
-      "isManual": false,
-      "type": "peak",
-      "x": 334,
-      "y": 822
-     },
-     {
-      "createdAt": 1700000000832,
-      "id": "pt_0_832",
-      "isManual": false,
-      "type": "peak",
-      "x": 334,
-      "y": 832
-     },
-     {
-      "createdAt": 1700000000836,
-      "id": "pt_0_836",
-      "isManual": false,
-      "type": "peak",
-      "x": 340,
-      "y": 836
+      "x": 338,
+      "y": 826
      },
      {
       "createdAt": 1700000000840,
       "id": "pt_0_840",
       "isManual": false,
       "type": "peak",
-      "x": 335,
+      "x": 338,
       "y": 840
      },
      {
@@ -10444,47 +8876,23 @@
       "id": "pt_0_850",
       "isManual": false,
       "type": "peak",
-      "x": 337,
+      "x": 338,
       "y": 850
      },
      {
-      "createdAt": 1700000000854,
-      "id": "pt_0_854",
+      "createdAt": 1700000000858,
+      "id": "pt_0_858",
       "isManual": false,
       "type": "peak",
-      "x": 340,
-      "y": 854
-     },
-     {
-      "createdAt": 1700000000859,
-      "id": "pt_0_859",
-      "isManual": false,
-      "type": "peak",
-      "x": 336,
-      "y": 859
-     },
-     {
-      "createdAt": 1700000000862,
-      "id": "pt_0_862",
-      "isManual": false,
-      "type": "peak",
-      "x": 340,
-      "y": 862
-     },
-     {
-      "createdAt": 1700000000863,
-      "id": "pt_0_863",
-      "isManual": false,
-      "type": "peak",
-      "x": 334,
-      "y": 863
+      "x": 338,
+      "y": 858
      },
      {
       "createdAt": 1700000000867,
       "id": "pt_0_867",
       "isManual": false,
       "type": "peak",
-      "x": 334,
+      "x": 338,
       "y": 867
      },
      {
@@ -10575,7 +8983,7 @@
       "id": "pt_1_237",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 237
      },
      {
@@ -10583,7 +8991,7 @@
       "id": "pt_1_251",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 251
      },
      {
@@ -10591,7 +8999,7 @@
       "id": "pt_1_265",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 265
      },
      {
@@ -10607,7 +9015,7 @@
       "id": "pt_1_267",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 267
      },
      {
@@ -10615,7 +9023,7 @@
       "id": "pt_1_312",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 312
      },
      {
@@ -10623,7 +9031,7 @@
       "id": "pt_1_358",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 358
      },
      {
@@ -10639,7 +9047,7 @@
       "id": "pt_1_360",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 360
      },
      {
@@ -10647,7 +9055,7 @@
       "id": "pt_1_476",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 476
      },
      {
@@ -10655,7 +9063,7 @@
       "id": "pt_1_593",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 593
      },
      {
@@ -10671,7 +9079,7 @@
       "id": "pt_1_595",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 595
      },
      {
@@ -10679,7 +9087,7 @@
       "id": "pt_1_668",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 668
      },
      {
@@ -10687,7 +9095,7 @@
       "id": "pt_1_742",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 742
      },
      {
@@ -10703,48 +9111,24 @@
       "id": "pt_1_744",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 744
      },
      {
-      "createdAt": 1700000000768,
-      "id": "pt_1_768",
-      "isManual": false,
-      "type": "peak",
-      "x": 372,
-      "y": 768
-     },
-     {
-      "createdAt": 1700000000791,
-      "id": "pt_1_791",
+      "createdAt": 1700000000793,
+      "id": "pt_1_793",
       "isManual": false,
       "type": "peak",
       "x": 376,
-      "y": 791
+      "y": 793
      },
      {
-      "createdAt": 1700000000817,
-      "id": "pt_1_817",
+      "createdAt": 1700000000842,
+      "id": "pt_1_842",
       "isManual": false,
       "type": "peak",
-      "x": 375,
-      "y": 817
-     },
-     {
-      "createdAt": 1700000000822,
-      "id": "pt_1_822",
-      "isManual": false,
-      "type": "peak",
-      "x": 372,
-      "y": 822
-     },
-     {
-      "createdAt": 1700000000839,
-      "id": "pt_1_839",
-      "isManual": false,
-      "type": "peak",
-      "x": 373,
-      "y": 839
+      "x": 376,
+      "y": 842
      },
      {
       "createdAt": 1700000000845,
@@ -10755,43 +9139,19 @@
       "y": 845
      },
      {
-      "createdAt": 1700000000849,
-      "id": "pt_1_849",
+      "createdAt": 1700000000848,
+      "id": "pt_1_848",
       "isManual": false,
       "type": "peak",
-      "x": 373,
-      "y": 849
-     },
-     {
-      "createdAt": 1700000000852,
-      "id": "pt_1_852",
-      "isManual": false,
-      "type": "peak",
-      "x": 372,
-      "y": 852
-     },
-     {
-      "createdAt": 1700000000862,
-      "id": "pt_1_862",
-      "isManual": false,
-      "type": "peak",
-      "x": 378,
-      "y": 862
-     },
-     {
-      "createdAt": 1700000000863,
-      "id": "pt_1_863",
-      "isManual": false,
-      "type": "peak",
-      "x": 372,
-      "y": 863
+      "x": 376,
+      "y": 848
      },
      {
       "createdAt": 1700000000867,
       "id": "pt_1_867",
       "isManual": false,
       "type": "peak",
-      "x": 372,
+      "x": 376,
       "y": 867
      },
      {
@@ -10866,23 +9226,23 @@
       "id": "pt_2_237",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 237
      },
      {
-      "createdAt": 1700000000244,
-      "id": "pt_2_244",
+      "createdAt": 1700000000251,
+      "id": "pt_2_251",
       "isManual": false,
       "type": "peak",
       "x": 413,
-      "y": 244
+      "y": 251
      },
      {
       "createdAt": 1700000000265,
       "id": "pt_2_265",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 265
      },
      {
@@ -10898,119 +9258,23 @@
       "id": "pt_2_267",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 267
      },
      {
-      "createdAt": 1700000000274,
-      "id": "pt_2_274",
+      "createdAt": 1700000000309,
+      "id": "pt_2_309",
       "isManual": false,
       "type": "peak",
-      "x": 409,
-      "y": 274
-     },
-     {
-      "createdAt": 1700000000276,
-      "id": "pt_2_276",
-      "isManual": false,
-      "type": "peak",
-      "x": 412,
-      "y": 276
-     },
-     {
-      "createdAt": 1700000000278,
-      "id": "pt_2_278",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 278
-     },
-     {
-      "createdAt": 1700000000297,
-      "id": "pt_2_297",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 297
-     },
-     {
-      "createdAt": 1700000000303,
-      "id": "pt_2_303",
-      "isManual": false,
-      "type": "peak",
-      "x": 412,
-      "y": 303
-     },
-     {
-      "createdAt": 1700000000306,
-      "id": "pt_2_306",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 306
-     },
-     {
-      "createdAt": 1700000000310,
-      "id": "pt_2_310",
-      "isManual": false,
-      "type": "peak",
-      "x": 412,
-      "y": 310
-     },
-     {
-      "createdAt": 1700000000312,
-      "id": "pt_2_312",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 312
-     },
-     {
-      "createdAt": 1700000000321,
-      "id": "pt_2_321",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 321
-     },
-     {
-      "createdAt": 1700000000328,
-      "id": "pt_2_328",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 328
-     },
-     {
-      "createdAt": 1700000000335,
-      "id": "pt_2_335",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 335
-     },
-     {
-      "createdAt": 1700000000348,
-      "id": "pt_2_348",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 348
-     },
-     {
-      "createdAt": 1700000000353,
-      "id": "pt_2_353",
-      "isManual": false,
-      "type": "peak",
-      "x": 415,
-      "y": 353
+      "x": 413,
+      "y": 309
      },
      {
       "createdAt": 1700000000358,
       "id": "pt_2_358",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 358
      },
      {
@@ -11026,87 +9290,23 @@
       "id": "pt_2_360",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 360
-     },
-     {
-      "createdAt": 1700000000391,
-      "id": "pt_2_391",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 391
-     },
-     {
-      "createdAt": 1700000000407,
-      "id": "pt_2_407",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 407
-     },
-     {
-      "createdAt": 1700000000434,
-      "id": "pt_2_434",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 434
-     },
-     {
-      "createdAt": 1700000000466,
-      "id": "pt_2_466",
-      "isManual": false,
-      "type": "peak",
-      "x": 412,
-      "y": 466
      },
      {
       "createdAt": 1700000000476,
       "id": "pt_2_476",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 476
-     },
-     {
-      "createdAt": 1700000000485,
-      "id": "pt_2_485",
-      "isManual": false,
-      "type": "peak",
-      "x": 412,
-      "y": 485
-     },
-     {
-      "createdAt": 1700000000541,
-      "id": "pt_2_541",
-      "isManual": false,
-      "type": "peak",
-      "x": 412,
-      "y": 541
-     },
-     {
-      "createdAt": 1700000000555,
-      "id": "pt_2_555",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 555
-     },
-     {
-      "createdAt": 1700000000582,
-      "id": "pt_2_582",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 582
      },
      {
       "createdAt": 1700000000593,
       "id": "pt_2_593",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 593
      },
      {
@@ -11122,31 +9322,23 @@
       "id": "pt_2_595",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 595
      },
      {
-      "createdAt": 1700000000607,
-      "id": "pt_2_607",
+      "createdAt": 1700000000668,
+      "id": "pt_2_668",
       "isManual": false,
       "type": "peak",
-      "x": 409,
-      "y": 607
-     },
-     {
-      "createdAt": 1700000000677,
-      "id": "pt_2_677",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 677
+      "x": 413,
+      "y": 668
      },
      {
       "createdAt": 1700000000742,
       "id": "pt_2_742",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 742
      },
      {
@@ -11162,95 +9354,23 @@
       "id": "pt_2_744",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 744
      },
      {
-      "createdAt": 1700000000754,
-      "id": "pt_2_754",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 754
-     },
-     {
-      "createdAt": 1700000000761,
-      "id": "pt_2_761",
+      "createdAt": 1700000000805,
+      "id": "pt_2_805",
       "isManual": false,
       "type": "peak",
       "x": 413,
-      "y": 761
-     },
-     {
-      "createdAt": 1700000000769,
-      "id": "pt_2_769",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 769
-     },
-     {
-      "createdAt": 1700000000783,
-      "id": "pt_2_783",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 783
-     },
-     {
-      "createdAt": 1700000000799,
-      "id": "pt_2_799",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 799
-     },
-     {
-      "createdAt": 1700000000812,
-      "id": "pt_2_812",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 812
-     },
-     {
-      "createdAt": 1700000000825,
-      "id": "pt_2_825",
-      "isManual": false,
-      "type": "peak",
-      "x": 413,
-      "y": 825
-     },
-     {
-      "createdAt": 1700000000831,
-      "id": "pt_2_831",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 831
-     },
-     {
-      "createdAt": 1700000000836,
-      "id": "pt_2_836",
-      "isManual": false,
-      "type": "peak",
-      "x": 412,
-      "y": 836
-     },
-     {
-      "createdAt": 1700000000856,
-      "id": "pt_2_856",
-      "isManual": false,
-      "type": "peak",
-      "x": 409,
-      "y": 856
+      "y": 805
      },
      {
       "createdAt": 1700000000867,
       "id": "pt_2_867",
       "isManual": false,
       "type": "peak",
-      "x": 409,
+      "x": 413,
       "y": 867
      },
      {
@@ -11321,27 +9441,35 @@
       "y": 235
      },
      {
+      "createdAt": 1700000000236,
+      "id": "pt_3_236",
+      "isManual": false,
+      "type": "peak",
+      "x": 457,
+      "y": 236
+     },
+     {
       "createdAt": 1700000000237,
       "id": "pt_3_237",
       "isManual": false,
       "type": "peak",
-      "x": 446,
+      "x": 450,
       "y": 237
      },
      {
-      "createdAt": 1700000000254,
-      "id": "pt_3_254",
+      "createdAt": 1700000000251,
+      "id": "pt_3_251",
       "isManual": false,
       "type": "peak",
-      "x": 446,
-      "y": 254
+      "x": 450,
+      "y": 251
      },
      {
       "createdAt": 1700000000265,
       "id": "pt_3_265",
       "isManual": false,
       "type": "peak",
-      "x": 447,
+      "x": 450,
       "y": 265
      },
      {
@@ -11357,111 +9485,23 @@
       "id": "pt_3_267",
       "isManual": false,
       "type": "peak",
-      "x": 446,
+      "x": 450,
       "y": 267
      },
      {
-      "createdAt": 1700000000274,
-      "id": "pt_3_274",
-      "isManual": false,
-      "type": "peak",
-      "x": 449,
-      "y": 274
-     },
-     {
-      "createdAt": 1700000000277,
-      "id": "pt_3_277",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 277
-     },
-     {
-      "createdAt": 1700000000282,
-      "id": "pt_3_282",
+      "createdAt": 1700000000312,
+      "id": "pt_3_312",
       "isManual": false,
       "type": "peak",
       "x": 450,
-      "y": 282
-     },
-     {
-      "createdAt": 1700000000298,
-      "id": "pt_3_298",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 298
-     },
-     {
-      "createdAt": 1700000000300,
-      "id": "pt_3_300",
-      "isManual": false,
-      "type": "peak",
-      "x": 449,
-      "y": 300
-     },
-     {
-      "createdAt": 1700000000301,
-      "id": "pt_3_301",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 301
-     },
-     {
-      "createdAt": 1700000000307,
-      "id": "pt_3_307",
-      "isManual": false,
-      "type": "peak",
-      "x": 450,
-      "y": 307
-     },
-     {
-      "createdAt": 1700000000310,
-      "id": "pt_3_310",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 310
-     },
-     {
-      "createdAt": 1700000000317,
-      "id": "pt_3_317",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 317
-     },
-     {
-      "createdAt": 1700000000324,
-      "id": "pt_3_324",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 324
-     },
-     {
-      "createdAt": 1700000000335,
-      "id": "pt_3_335",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 335
-     },
-     {
-      "createdAt": 1700000000349,
-      "id": "pt_3_349",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 349
+      "y": 312
      },
      {
       "createdAt": 1700000000358,
       "id": "pt_3_358",
       "isManual": false,
       "type": "peak",
-      "x": 446,
+      "x": 450,
       "y": 358
      },
      {
@@ -11477,64 +9517,24 @@
       "id": "pt_3_360",
       "isManual": false,
       "type": "peak",
-      "x": 447,
+      "x": 450,
       "y": 360
      },
      {
-      "createdAt": 1700000000371,
-      "id": "pt_3_371",
+      "createdAt": 1700000000403,
+      "id": "pt_3_403",
       "isManual": false,
       "type": "peak",
-      "x": 446,
-      "y": 371
+      "x": 450,
+      "y": 403
      },
      {
-      "createdAt": 1700000000376,
-      "id": "pt_3_376",
+      "createdAt": 1700000000446,
+      "id": "pt_3_446",
       "isManual": false,
       "type": "peak",
-      "x": 446,
-      "y": 376
-     },
-     {
-      "createdAt": 1700000000378,
-      "id": "pt_3_378",
-      "isManual": false,
-      "type": "peak",
-      "x": 449,
-      "y": 378
-     },
-     {
-      "createdAt": 1700000000383,
-      "id": "pt_3_383",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 383
-     },
-     {
-      "createdAt": 1700000000392,
-      "id": "pt_3_392",
-      "isManual": false,
-      "type": "peak",
-      "x": 449,
-      "y": 392
-     },
-     {
-      "createdAt": 1700000000416,
-      "id": "pt_3_416",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 416
-     },
-     {
-      "createdAt": 1700000000444,
-      "id": "pt_3_444",
-      "isManual": false,
-      "type": "peak",
-      "x": 448,
-      "y": 444
+      "x": 450,
+      "y": 446
      },
      {
       "createdAt": 1700000000451,
@@ -11545,67 +9545,27 @@
       "y": 451
      },
      {
-      "createdAt": 1700000000458,
-      "id": "pt_3_458",
+      "createdAt": 1700000000455,
+      "id": "pt_3_455",
       "isManual": false,
       "type": "peak",
-      "x": 446,
-      "y": 458
+      "x": 450,
+      "y": 455
      },
      {
-      "createdAt": 1700000000466,
-      "id": "pt_3_466",
+      "createdAt": 1700000000524,
+      "id": "pt_3_524",
       "isManual": false,
       "type": "peak",
-      "x": 446,
-      "y": 466
-     },
-     {
-      "createdAt": 1700000000484,
-      "id": "pt_3_484",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 484
-     },
-     {
-      "createdAt": 1700000000528,
-      "id": "pt_3_528",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 528
-     },
-     {
-      "createdAt": 1700000000549,
-      "id": "pt_3_549",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 549
-     },
-     {
-      "createdAt": 1700000000559,
-      "id": "pt_3_559",
-      "isManual": false,
-      "type": "peak",
-      "x": 449,
-      "y": 559
-     },
-     {
-      "createdAt": 1700000000568,
-      "id": "pt_3_568",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 568
+      "x": 450,
+      "y": 524
      },
      {
       "createdAt": 1700000000593,
       "id": "pt_3_593",
       "isManual": false,
       "type": "peak",
-      "x": 446,
+      "x": 450,
       "y": 593
      },
      {
@@ -11621,72 +9581,24 @@
       "id": "pt_3_595",
       "isManual": false,
       "type": "peak",
-      "x": 447,
+      "x": 450,
       "y": 595
      },
      {
-      "createdAt": 1700000000611,
-      "id": "pt_3_611",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 611
-     },
-     {
-      "createdAt": 1700000000636,
-      "id": "pt_3_636",
+      "createdAt": 1700000000646,
+      "id": "pt_3_646",
       "isManual": false,
       "type": "peak",
       "x": 450,
-      "y": 636
+      "y": 646
      },
      {
-      "createdAt": 1700000000656,
-      "id": "pt_3_656",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 656
-     },
-     {
-      "createdAt": 1700000000672,
-      "id": "pt_3_672",
+      "createdAt": 1700000000721,
+      "id": "pt_3_721",
       "isManual": false,
       "type": "peak",
       "x": 450,
-      "y": 672
-     },
-     {
-      "createdAt": 1700000000684,
-      "id": "pt_3_684",
-      "isManual": false,
-      "type": "peak",
-      "x": 447,
-      "y": 684
-     },
-     {
-      "createdAt": 1700000000699,
-      "id": "pt_3_699",
-      "isManual": false,
-      "type": "peak",
-      "x": 451,
-      "y": 699
-     },
-     {
-      "createdAt": 1700000000706,
-      "id": "pt_3_706",
-      "isManual": false,
-      "type": "peak",
-      "x": 446,
-      "y": 706
-     },
-     {
-      "createdAt": 1700000000734,
-      "id": "pt_3_734",
-      "isManual": false,
-      "type": "peak",
-      "x": 447,
-      "y": 734
+      "y": 721
      },
      {
       "createdAt": 1700000000742,
@@ -11721,20 +9633,28 @@
       "y": 747
      },
      {
-      "createdAt": 1700000000755,
-      "id": "pt_3_755",
+      "createdAt": 1700000000756,
+      "id": "pt_3_756",
       "isManual": false,
       "type": "peak",
-      "x": 449,
-      "y": 755
+      "x": 450,
+      "y": 756
      },
      {
-      "createdAt": 1700000000778,
-      "id": "pt_3_778",
+      "createdAt": 1700000000779,
+      "id": "pt_3_779",
       "isManual": false,
       "type": "peak",
-      "x": 449,
-      "y": 778
+      "x": 450,
+      "y": 779
+     },
+     {
+      "createdAt": 1700000000788,
+      "id": "pt_3_788",
+      "isManual": false,
+      "type": "peak",
+      "x": 450,
+      "y": 788
      },
      {
       "createdAt": 1700000000792,
@@ -11749,7 +9669,7 @@
       "id": "pt_3_798",
       "isManual": false,
       "type": "peak",
-      "x": 449,
+      "x": 450,
       "y": 798
      },
      {
@@ -11765,7 +9685,7 @@
       "id": "pt_3_810",
       "isManual": false,
       "type": "peak",
-      "x": 449,
+      "x": 450,
       "y": 810
      },
      {
@@ -11777,12 +9697,12 @@
       "y": 816
      },
      {
-      "createdAt": 1700000000822,
-      "id": "pt_3_822",
+      "createdAt": 1700000000821,
+      "id": "pt_3_821",
       "isManual": false,
       "type": "peak",
-      "x": 449,
-      "y": 822
+      "x": 450,
+      "y": 821
      },
      {
       "createdAt": 1700000000827,
@@ -11817,12 +9737,20 @@
       "y": 840
      },
      {
-      "createdAt": 1700000000845,
-      "id": "pt_3_845",
+      "createdAt": 1700000000844,
+      "id": "pt_3_844",
       "isManual": false,
       "type": "peak",
-      "x": 449,
-      "y": 845
+      "x": 450,
+      "y": 844
+     },
+     {
+      "createdAt": 1700000000846,
+      "id": "pt_3_846",
+      "isManual": false,
+      "type": "peak",
+      "x": 452,
+      "y": 846
      },
      {
       "createdAt": 1700000000850,
@@ -11833,27 +9761,27 @@
       "y": 850
      },
      {
-      "createdAt": 1700000000854,
-      "id": "pt_3_854",
+      "createdAt": 1700000000855,
+      "id": "pt_3_855",
       "isManual": false,
       "type": "peak",
-      "x": 453,
-      "y": 854
+      "x": 452,
+      "y": 855
      },
      {
-      "createdAt": 1700000000862,
-      "id": "pt_3_862",
+      "createdAt": 1700000000861,
+      "id": "pt_3_861",
       "isManual": false,
       "type": "peak",
-      "x": 453,
-      "y": 862
+      "x": 454,
+      "y": 861
      },
      {
       "createdAt": 1700000000863,
       "id": "pt_3_863",
       "isManual": false,
       "type": "peak",
-      "x": 446,
+      "x": 450,
       "y": 863
      },
      {
@@ -11861,7 +9789,7 @@
       "id": "pt_3_867",
       "isManual": false,
       "type": "peak",
-      "x": 446,
+      "x": 450,
       "y": 867
      },
      {
@@ -11936,15 +9864,23 @@
       "id": "pt_4_237",
       "isManual": false,
       "type": "peak",
-      "x": 484,
+      "x": 488,
       "y": 237
+     },
+     {
+      "createdAt": 1700000000251,
+      "id": "pt_4_251",
+      "isManual": false,
+      "type": "peak",
+      "x": 488,
+      "y": 251
      },
      {
       "createdAt": 1700000000265,
       "id": "pt_4_265",
       "isManual": false,
       "type": "peak",
-      "x": 484,
+      "x": 488,
       "y": 265
      },
      {
@@ -11960,72 +9896,24 @@
       "id": "pt_4_267",
       "isManual": false,
       "type": "peak",
-      "x": 484,
+      "x": 488,
       "y": 267
      },
      {
-      "createdAt": 1700000000273,
-      "id": "pt_4_273",
-      "isManual": false,
-      "type": "peak",
-      "x": 487,
-      "y": 273
-     },
-     {
-      "createdAt": 1700000000274,
-      "id": "pt_4_274",
-      "isManual": false,
-      "type": "peak",
-      "x": 485,
-      "y": 274
-     },
-     {
-      "createdAt": 1700000000276,
-      "id": "pt_4_276",
+      "createdAt": 1700000000283,
+      "id": "pt_4_283",
       "isManual": false,
       "type": "peak",
       "x": 488,
-      "y": 276
+      "y": 283
      },
      {
-      "createdAt": 1700000000281,
-      "id": "pt_4_281",
+      "createdAt": 1700000000303,
+      "id": "pt_4_303",
       "isManual": false,
       "type": "peak",
-      "x": 485,
-      "y": 281
-     },
-     {
-      "createdAt": 1700000000288,
-      "id": "pt_4_288",
-      "isManual": false,
-      "type": "peak",
-      "x": 485,
-      "y": 288
-     },
-     {
-      "createdAt": 1700000000300,
-      "id": "pt_4_300",
-      "isManual": false,
-      "type": "peak",
-      "x": 485,
-      "y": 300
-     },
-     {
-      "createdAt": 1700000000301,
-      "id": "pt_4_301",
-      "isManual": false,
-      "type": "peak",
-      "x": 489,
-      "y": 301
-     },
-     {
-      "createdAt": 1700000000304,
-      "id": "pt_4_304",
-      "isManual": false,
-      "type": "peak",
-      "x": 485,
-      "y": 304
+      "x": 488,
+      "y": 303
      },
      {
       "createdAt": 1700000000305,
@@ -12036,83 +9924,27 @@
       "y": 305
      },
      {
-      "createdAt": 1700000000306,
-      "id": "pt_4_306",
-      "isManual": false,
-      "type": "peak",
-      "x": 492,
-      "y": 306
-     },
-     {
       "createdAt": 1700000000307,
       "id": "pt_4_307",
       "isManual": false,
       "type": "peak",
-      "x": 486,
+      "x": 488,
       "y": 307
      },
      {
-      "createdAt": 1700000000311,
-      "id": "pt_4_311",
+      "createdAt": 1700000000327,
+      "id": "pt_4_327",
       "isManual": false,
       "type": "peak",
       "x": 488,
-      "y": 311
-     },
-     {
-      "createdAt": 1700000000314,
-      "id": "pt_4_314",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 314
-     },
-     {
-      "createdAt": 1700000000324,
-      "id": "pt_4_324",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 324
-     },
-     {
-      "createdAt": 1700000000344,
-      "id": "pt_4_344",
-      "isManual": false,
-      "type": "peak",
-      "x": 487,
-      "y": 344
-     },
-     {
-      "createdAt": 1700000000346,
-      "id": "pt_4_346",
-      "isManual": false,
-      "type": "peak",
-      "x": 485,
-      "y": 346
-     },
-     {
-      "createdAt": 1700000000348,
-      "id": "pt_4_348",
-      "isManual": false,
-      "type": "peak",
-      "x": 490,
-      "y": 348
-     },
-     {
-      "createdAt": 1700000000350,
-      "id": "pt_4_350",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 350
+      "y": 327
      },
      {
       "createdAt": 1700000000358,
       "id": "pt_4_358",
       "isManual": false,
       "type": "peak",
-      "x": 484,
+      "x": 488,
       "y": 358
      },
      {
@@ -12128,103 +9960,31 @@
       "id": "pt_4_360",
       "isManual": false,
       "type": "peak",
-      "x": 485,
+      "x": 488,
       "y": 360
      },
      {
-      "createdAt": 1700000000374,
-      "id": "pt_4_374",
+      "createdAt": 1700000000368,
+      "id": "pt_4_368",
       "isManual": false,
       "type": "peak",
-      "x": 484,
-      "y": 374
-     },
-     {
-      "createdAt": 1700000000378,
-      "id": "pt_4_378",
-      "isManual": false,
-      "type": "peak",
-      "x": 490,
-      "y": 378
-     },
-     {
-      "createdAt": 1700000000386,
-      "id": "pt_4_386",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 386
-     },
-     {
-      "createdAt": 1700000000394,
-      "id": "pt_4_394",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 394
-     },
-     {
-      "createdAt": 1700000000412,
-      "id": "pt_4_412",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 412
-     },
-     {
-      "createdAt": 1700000000427,
-      "id": "pt_4_427",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 427
-     },
-     {
-      "createdAt": 1700000000449,
-      "id": "pt_4_449",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 449
-     },
-     {
-      "createdAt": 1700000000468,
-      "id": "pt_4_468",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 468
-     },
-     {
-      "createdAt": 1700000000475,
-      "id": "pt_4_475",
-      "isManual": false,
-      "type": "peak",
-      "x": 487,
-      "y": 475
+      "x": 488,
+      "y": 368
      },
      {
       "createdAt": 1700000000486,
       "id": "pt_4_486",
       "isManual": false,
       "type": "peak",
-      "x": 484,
+      "x": 488,
       "y": 486
-     },
-     {
-      "createdAt": 1700000000539,
-      "id": "pt_4_539",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 539
      },
      {
       "createdAt": 1700000000593,
       "id": "pt_4_593",
       "isManual": false,
       "type": "peak",
-      "x": 484,
+      "x": 488,
       "y": 593
      },
      {
@@ -12240,72 +10000,24 @@
       "id": "pt_4_595",
       "isManual": false,
       "type": "peak",
-      "x": 485,
+      "x": 488,
       "y": 595
      },
      {
-      "createdAt": 1700000000610,
-      "id": "pt_4_610",
+      "createdAt": 1700000000632,
+      "id": "pt_4_632",
       "isManual": false,
       "type": "peak",
       "x": 488,
-      "y": 610
+      "y": 632
      },
      {
-      "createdAt": 1700000000622,
-      "id": "pt_4_622",
+      "createdAt": 1700000000707,
+      "id": "pt_4_707",
       "isManual": false,
       "type": "peak",
-      "x": 484,
-      "y": 622
-     },
-     {
-      "createdAt": 1700000000642,
-      "id": "pt_4_642",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 642
-     },
-     {
-      "createdAt": 1700000000663,
-      "id": "pt_4_663",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 663
-     },
-     {
-      "createdAt": 1700000000672,
-      "id": "pt_4_672",
-      "isManual": false,
-      "type": "peak",
-      "x": 490,
-      "y": 672
-     },
-     {
-      "createdAt": 1700000000685,
-      "id": "pt_4_685",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 685
-     },
-     {
-      "createdAt": 1700000000704,
-      "id": "pt_4_704",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 704
-     },
-     {
-      "createdAt": 1700000000721,
-      "id": "pt_4_721",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 721
+      "x": 488,
+      "y": 707
      },
      {
       "createdAt": 1700000000742,
@@ -12344,7 +10056,7 @@
       "id": "pt_4_754",
       "isManual": false,
       "type": "peak",
-      "x": 487,
+      "x": 488,
       "y": 754
      },
      {
@@ -12356,28 +10068,28 @@
       "y": 761
      },
      {
-      "createdAt": 1700000000768,
-      "id": "pt_4_768",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 768
-     },
-     {
-      "createdAt": 1700000000774,
-      "id": "pt_4_774",
+      "createdAt": 1700000000766,
+      "id": "pt_4_766",
       "isManual": false,
       "type": "peak",
       "x": 488,
-      "y": 774
+      "y": 766
      },
      {
-      "createdAt": 1700000000780,
-      "id": "pt_4_780",
+      "createdAt": 1700000000775,
+      "id": "pt_4_775",
       "isManual": false,
       "type": "peak",
-      "x": 485,
-      "y": 780
+      "x": 488,
+      "y": 775
+     },
+     {
+      "createdAt": 1700000000784,
+      "id": "pt_4_784",
+      "isManual": false,
+      "type": "peak",
+      "x": 488,
+      "y": 784
      },
      {
       "createdAt": 1700000000792,
@@ -12388,12 +10100,12 @@
       "y": 792
      },
      {
-      "createdAt": 1700000000799,
-      "id": "pt_4_799",
+      "createdAt": 1700000000798,
+      "id": "pt_4_798",
       "isManual": false,
       "type": "peak",
-      "x": 487,
-      "y": 799
+      "x": 488,
+      "y": 798
      },
      {
       "createdAt": 1700000000807,
@@ -12452,12 +10164,20 @@
       "y": 840
      },
      {
-      "createdAt": 1700000000845,
-      "id": "pt_4_845",
+      "createdAt": 1700000000844,
+      "id": "pt_4_844",
       "isManual": false,
       "type": "peak",
-      "x": 485,
-      "y": 845
+      "x": 488,
+      "y": 844
+     },
+     {
+      "createdAt": 1700000000846,
+      "id": "pt_4_846",
+      "isManual": false,
+      "type": "peak",
+      "x": 489,
+      "y": 846
      },
      {
       "createdAt": 1700000000850,
@@ -12476,35 +10196,11 @@
       "y": 854
      },
      {
-      "createdAt": 1700000000857,
-      "id": "pt_4_857",
-      "isManual": false,
-      "type": "peak",
-      "x": 486,
-      "y": 857
-     },
-     {
-      "createdAt": 1700000000862,
-      "id": "pt_4_862",
-      "isManual": false,
-      "type": "peak",
-      "x": 490,
-      "y": 862
-     },
-     {
-      "createdAt": 1700000000863,
-      "id": "pt_4_863",
-      "isManual": false,
-      "type": "peak",
-      "x": 484,
-      "y": 863
-     },
-     {
       "createdAt": 1700000000867,
       "id": "pt_4_867",
       "isManual": false,
       "type": "peak",
-      "x": 484,
+      "x": 488,
       "y": 867
      },
      {
@@ -12587,40 +10283,32 @@
       "id": "pt_5_237",
       "isManual": false,
       "type": "peak",
-      "x": 521,
+      "x": 525,
       "y": 237
      },
      {
-      "createdAt": 1700000000238,
-      "id": "pt_5_238",
+      "createdAt": 1700000000240,
+      "id": "pt_5_240",
       "isManual": false,
       "type": "peak",
-      "x": 521,
-      "y": 238
+      "x": 531,
+      "y": 240
      },
      {
-      "createdAt": 1700000000239,
-      "id": "pt_5_239",
+      "createdAt": 1700000000244,
+      "id": "pt_5_244",
       "isManual": false,
       "type": "peak",
-      "x": 530,
-      "y": 239
+      "x": 526,
+      "y": 244
      },
      {
-      "createdAt": 1700000000242,
-      "id": "pt_5_242",
+      "createdAt": 1700000000256,
+      "id": "pt_5_256",
       "isManual": false,
       "type": "peak",
-      "x": 527,
-      "y": 242
-     },
-     {
-      "createdAt": 1700000000255,
-      "id": "pt_5_255",
-      "isManual": false,
-      "type": "peak",
-      "x": 522,
-      "y": 255
+      "x": 525,
+      "y": 256
      },
      {
       "createdAt": 1700000000265,
@@ -12743,12 +10431,20 @@
       "y": 300
      },
      {
-      "createdAt": 1700000000306,
-      "id": "pt_5_306",
+      "createdAt": 1700000000305,
+      "id": "pt_5_305",
       "isManual": false,
       "type": "peak",
-      "x": 524,
-      "y": 306
+      "x": 525,
+      "y": 305
+     },
+     {
+      "createdAt": 1700000000307,
+      "id": "pt_5_307",
+      "isManual": false,
+      "type": "peak",
+      "x": 526,
+      "y": 307
      },
      {
       "createdAt": 1700000000309,
@@ -12975,12 +10671,12 @@
       "y": 374
      },
      {
-      "createdAt": 1700000000381,
-      "id": "pt_5_381",
+      "createdAt": 1700000000382,
+      "id": "pt_5_382",
       "isManual": false,
       "type": "peak",
-      "x": 523,
-      "y": 381
+      "x": 525,
+      "y": 382
      },
      {
       "createdAt": 1700000000390,
@@ -12995,7 +10691,7 @@
       "id": "pt_5_396",
       "isManual": false,
       "type": "peak",
-      "x": 524,
+      "x": 525,
       "y": 396
      },
      {
@@ -13007,20 +10703,28 @@
       "y": 402
      },
      {
-      "createdAt": 1700000000412,
-      "id": "pt_5_412",
+      "createdAt": 1700000000410,
+      "id": "pt_5_410",
       "isManual": false,
       "type": "peak",
-      "x": 524,
-      "y": 412
+      "x": 525,
+      "y": 410
      },
      {
-      "createdAt": 1700000000428,
-      "id": "pt_5_428",
+      "createdAt": 1700000000421,
+      "id": "pt_5_421",
       "isManual": false,
       "type": "peak",
-      "x": 521,
-      "y": 428
+      "x": 525,
+      "y": 421
+     },
+     {
+      "createdAt": 1700000000432,
+      "id": "pt_5_432",
+      "isManual": false,
+      "type": "peak",
+      "x": 525,
+      "y": 432
      },
      {
       "createdAt": 1700000000434,
@@ -13035,96 +10739,40 @@
       "id": "pt_5_443",
       "isManual": false,
       "type": "peak",
-      "x": 524,
+      "x": 525,
       "y": 443
      },
      {
-      "createdAt": 1700000000449,
-      "id": "pt_5_449",
-      "isManual": false,
-      "type": "peak",
-      "x": 526,
-      "y": 449
-     },
-     {
-      "createdAt": 1700000000454,
-      "id": "pt_5_454",
-      "isManual": false,
-      "type": "peak",
-      "x": 522,
-      "y": 454
-     },
-     {
-      "createdAt": 1700000000466,
-      "id": "pt_5_466",
-      "isManual": false,
-      "type": "peak",
-      "x": 523,
-      "y": 466
-     },
-     {
-      "createdAt": 1700000000470,
-      "id": "pt_5_470",
-      "isManual": false,
-      "type": "peak",
-      "x": 527,
-      "y": 470
-     },
-     {
-      "createdAt": 1700000000475,
-      "id": "pt_5_475",
-      "isManual": false,
-      "type": "peak",
-      "x": 524,
-      "y": 475
-     },
-     {
-      "createdAt": 1700000000480,
-      "id": "pt_5_480",
-      "isManual": false,
-      "type": "peak",
-      "x": 526,
-      "y": 480
-     },
-     {
-      "createdAt": 1700000000510,
-      "id": "pt_5_510",
-      "isManual": false,
-      "type": "peak",
-      "x": 522,
-      "y": 510
-     },
-     {
-      "createdAt": 1700000000531,
-      "id": "pt_5_531",
+      "createdAt": 1700000000459,
+      "id": "pt_5_459",
       "isManual": false,
       "type": "peak",
       "x": 525,
-      "y": 531
+      "y": 459
      },
      {
-      "createdAt": 1700000000549,
-      "id": "pt_5_549",
+      "createdAt": 1700000000476,
+      "id": "pt_5_476",
       "isManual": false,
       "type": "peak",
-      "x": 521,
-      "y": 549
+      "x": 525,
+      "y": 476
      },
      {
-      "createdAt": 1700000000560,
-      "id": "pt_5_560",
+      "createdAt": 1700000000519,
+      "id": "pt_5_519",
       "isManual": false,
       "type": "peak",
-      "x": 527,
-      "y": 560
+      "x": 525,
+      "y": 519
      },
      {
-      "createdAt": 1700000000576,
-      "id": "pt_5_576",
+      "createdAt": 1700000000580,
+      "id": "pt_5_580",
       "isManual": false,
       "type": "peak",
-      "x": 523,
-      "y": 576
+      "x": 525,
+      "y": 580
      },
      {
       "createdAt": 1700000000593,
@@ -13187,7 +10835,7 @@
       "id": "pt_5_649",
       "isManual": false,
       "type": "peak",
-      "x": 523,
+      "x": 525,
       "y": 649
      },
      {
@@ -13299,7 +10947,7 @@
       "id": "pt_5_786",
       "isManual": false,
       "type": "peak",
-      "x": 524,
+      "x": 525,
       "y": 786
      },
      {
@@ -13391,19 +11039,19 @@
       "y": 859
      },
      {
-      "createdAt": 1700000000862,
-      "id": "pt_5_862",
+      "createdAt": 1700000000860,
+      "id": "pt_5_860",
       "isManual": false,
       "type": "peak",
-      "x": 533,
-      "y": 862
+      "x": 547,
+      "y": 860
      },
      {
       "createdAt": 1700000000863,
       "id": "pt_5_863",
       "isManual": false,
       "type": "peak",
-      "x": 521,
+      "x": 525,
       "y": 863
      },
      {
@@ -13411,7 +11059,7 @@
       "id": "pt_5_867",
       "isManual": false,
       "type": "peak",
-      "x": 521,
+      "x": 525,
       "y": 867
      },
      {
@@ -13486,31 +11134,23 @@
       "id": "pt_6_237",
       "isManual": false,
       "type": "peak",
-      "x": 584,
+      "x": 588,
       "y": 237
      },
      {
-      "createdAt": 1700000000239,
-      "id": "pt_6_239",
+      "createdAt": 1700000000251,
+      "id": "pt_6_251",
       "isManual": false,
       "type": "peak",
       "x": 588,
-      "y": 239
-     },
-     {
-      "createdAt": 1700000000241,
-      "id": "pt_6_241",
-      "isManual": false,
-      "type": "peak",
-      "x": 584,
-      "y": 241
+      "y": 251
      },
      {
       "createdAt": 1700000000265,
       "id": "pt_6_265",
       "isManual": false,
       "type": "peak",
-      "x": 585,
+      "x": 588,
       "y": 265
      },
      {
@@ -13530,68 +11170,28 @@
       "y": 267
      },
      {
-      "createdAt": 1700000000270,
-      "id": "pt_6_270",
-      "isManual": false,
-      "type": "peak",
-      "x": 586,
-      "y": 270
-     },
-     {
-      "createdAt": 1700000000271,
-      "id": "pt_6_271",
-      "isManual": false,
-      "type": "peak",
-      "x": 589,
-      "y": 271
-     },
-     {
-      "createdAt": 1700000000273,
-      "id": "pt_6_273",
-      "isManual": false,
-      "type": "peak",
-      "x": 585,
-      "y": 273
-     },
-     {
-      "createdAt": 1700000000277,
-      "id": "pt_6_277",
-      "isManual": false,
-      "type": "peak",
-      "x": 584,
-      "y": 277
-     },
-     {
-      "createdAt": 1700000000279,
-      "id": "pt_6_279",
-      "isManual": false,
-      "type": "peak",
-      "x": 589,
-      "y": 279
-     },
-     {
-      "createdAt": 1700000000284,
-      "id": "pt_6_284",
-      "isManual": false,
-      "type": "peak",
-      "x": 585,
-      "y": 284
-     },
-     {
-      "createdAt": 1700000000286,
-      "id": "pt_6_286",
-      "isManual": false,
-      "type": "peak",
-      "x": 589,
-      "y": 286
-     },
-     {
-      "createdAt": 1700000000292,
-      "id": "pt_6_292",
+      "createdAt": 1700000000269,
+      "id": "pt_6_269",
       "isManual": false,
       "type": "peak",
       "x": 588,
-      "y": 292
+      "y": 269
+     },
+     {
+      "createdAt": 1700000000282,
+      "id": "pt_6_282",
+      "isManual": false,
+      "type": "peak",
+      "x": 588,
+      "y": 282
+     },
+     {
+      "createdAt": 1700000000290,
+      "id": "pt_6_290",
+      "isManual": false,
+      "type": "peak",
+      "x": 588,
+      "y": 290
      },
      {
       "createdAt": 1700000000296,
@@ -13638,24 +11238,8 @@
       "id": "pt_6_304",
       "isManual": false,
       "type": "peak",
-      "x": 587,
+      "x": 588,
       "y": 304
-     },
-     {
-      "createdAt": 1700000000307,
-      "id": "pt_6_307",
-      "isManual": false,
-      "type": "peak",
-      "x": 590,
-      "y": 307
-     },
-     {
-      "createdAt": 1700000000311,
-      "id": "pt_6_311",
-      "isManual": false,
-      "type": "peak",
-      "x": 585,
-      "y": 311
      },
      {
       "createdAt": 1700000000312,
@@ -13666,44 +11250,12 @@
       "y": 312
      },
      {
-      "createdAt": 1700000000315,
-      "id": "pt_6_315",
+      "createdAt": 1700000000321,
+      "id": "pt_6_321",
       "isManual": false,
       "type": "peak",
-      "x": 586,
-      "y": 315
-     },
-     {
-      "createdAt": 1700000000317,
-      "id": "pt_6_317",
-      "isManual": false,
-      "type": "peak",
-      "x": 590,
-      "y": 317
-     },
-     {
-      "createdAt": 1700000000318,
-      "id": "pt_6_318",
-      "isManual": false,
-      "type": "peak",
-      "x": 586,
-      "y": 318
-     },
-     {
-      "createdAt": 1700000000319,
-      "id": "pt_6_319",
-      "isManual": false,
-      "type": "peak",
-      "x": 589,
-      "y": 319
-     },
-     {
-      "createdAt": 1700000000322,
-      "id": "pt_6_322",
-      "isManual": false,
-      "type": "peak",
-      "x": 586,
-      "y": 322
+      "x": 588,
+      "y": 321
      },
      {
       "createdAt": 1700000000323,
@@ -13714,51 +11266,27 @@
       "y": 323
      },
      {
-      "createdAt": 1700000000324,
-      "id": "pt_6_324",
+      "createdAt": 1700000000326,
+      "id": "pt_6_326",
       "isManual": false,
       "type": "peak",
-      "x": 591,
-      "y": 324
+      "x": 588,
+      "y": 326
      },
      {
-      "createdAt": 1700000000325,
-      "id": "pt_6_325",
+      "createdAt": 1700000000343,
+      "id": "pt_6_343",
       "isManual": false,
       "type": "peak",
-      "x": 586,
-      "y": 325
-     },
-     {
-      "createdAt": 1700000000328,
-      "id": "pt_6_328",
-      "isManual": false,
-      "type": "peak",
-      "x": 589,
-      "y": 328
-     },
-     {
-      "createdAt": 1700000000330,
-      "id": "pt_6_330",
-      "isManual": false,
-      "type": "peak",
-      "x": 584,
-      "y": 330
-     },
-     {
-      "createdAt": 1700000000342,
-      "id": "pt_6_342",
-      "isManual": false,
-      "type": "peak",
-      "x": 584,
-      "y": 342
+      "x": 588,
+      "y": 343
      },
      {
       "createdAt": 1700000000358,
       "id": "pt_6_358",
       "isManual": false,
       "type": "peak",
-      "x": 584,
+      "x": 588,
       "y": 358
      },
      {
@@ -13774,31 +11302,23 @@
       "id": "pt_6_360",
       "isManual": false,
       "type": "peak",
-      "x": 584,
+      "x": 588,
       "y": 360
      },
      {
-      "createdAt": 1700000000371,
-      "id": "pt_6_371",
+      "createdAt": 1700000000476,
+      "id": "pt_6_476",
       "isManual": false,
       "type": "peak",
-      "x": 584,
-      "y": 371
-     },
-     {
-      "createdAt": 1700000000486,
-      "id": "pt_6_486",
-      "isManual": false,
-      "type": "peak",
-      "x": 584,
-      "y": 486
+      "x": 588,
+      "y": 476
      },
      {
       "createdAt": 1700000000593,
       "id": "pt_6_593",
       "isManual": false,
       "type": "peak",
-      "x": 584,
+      "x": 588,
       "y": 593
      },
      {
@@ -13814,31 +11334,23 @@
       "id": "pt_6_595",
       "isManual": false,
       "type": "peak",
-      "x": 584,
+      "x": 588,
       "y": 595
      },
      {
-      "createdAt": 1700000000652,
-      "id": "pt_6_652",
+      "createdAt": 1700000000668,
+      "id": "pt_6_668",
       "isManual": false,
       "type": "peak",
-      "x": 584,
-      "y": 652
-     },
-     {
-      "createdAt": 1700000000730,
-      "id": "pt_6_730",
-      "isManual": false,
-      "type": "peak",
-      "x": 584,
-      "y": 730
+      "x": 588,
+      "y": 668
      },
      {
       "createdAt": 1700000000742,
       "id": "pt_6_742",
       "isManual": false,
       "type": "peak",
-      "x": 585,
+      "x": 588,
       "y": 742
      },
      {
@@ -13854,40 +11366,24 @@
       "id": "pt_6_744",
       "isManual": false,
       "type": "peak",
-      "x": 585,
+      "x": 588,
       "y": 744
      },
      {
-      "createdAt": 1700000000762,
-      "id": "pt_6_762",
+      "createdAt": 1700000000767,
+      "id": "pt_6_767",
       "isManual": false,
       "type": "peak",
-      "x": 587,
-      "y": 762
+      "x": 588,
+      "y": 767
      },
      {
-      "createdAt": 1700000000768,
-      "id": "pt_6_768",
+      "createdAt": 1700000000798,
+      "id": "pt_6_798",
       "isManual": false,
       "type": "peak",
-      "x": 584,
-      "y": 768
-     },
-     {
-      "createdAt": 1700000000792,
-      "id": "pt_6_792",
-      "isManual": false,
-      "type": "peak",
-      "x": 589,
-      "y": 792
-     },
-     {
-      "createdAt": 1700000000799,
-      "id": "pt_6_799",
-      "isManual": false,
-      "type": "peak",
-      "x": 585,
-      "y": 799
+      "x": 588,
+      "y": 798
      },
      {
       "createdAt": 1700000000808,
@@ -13946,27 +11442,19 @@
       "y": 854
      },
      {
-      "createdAt": 1700000000862,
-      "id": "pt_6_862",
+      "createdAt": 1700000000860,
+      "id": "pt_6_860",
       "isManual": false,
       "type": "peak",
-      "x": 590,
-      "y": 862
-     },
-     {
-      "createdAt": 1700000000863,
-      "id": "pt_6_863",
-      "isManual": false,
-      "type": "peak",
-      "x": 584,
-      "y": 863
+      "x": 591,
+      "y": 860
      },
      {
       "createdAt": 1700000000867,
       "id": "pt_6_867",
       "isManual": false,
       "type": "peak",
-      "x": 584,
+      "x": 588,
       "y": 867
      },
      {
@@ -14037,11 +11525,19 @@
       "y": 235
      },
      {
+      "createdAt": 1700000000236,
+      "id": "pt_7_236",
+      "isManual": false,
+      "type": "peak",
+      "x": 632,
+      "y": 236
+     },
+     {
       "createdAt": 1700000000237,
       "id": "pt_7_237",
       "isManual": false,
       "type": "peak",
-      "x": 621,
+      "x": 625,
       "y": 237
      },
      {
@@ -14049,7 +11545,7 @@
       "id": "pt_7_251",
       "isManual": false,
       "type": "peak",
-      "x": 621,
+      "x": 625,
       "y": 251
      },
      {
@@ -14057,7 +11553,7 @@
       "id": "pt_7_265",
       "isManual": false,
       "type": "peak",
-      "x": 621,
+      "x": 625,
       "y": 265
      },
      {
@@ -14073,71 +11569,23 @@
       "id": "pt_7_267",
       "isManual": false,
       "type": "peak",
-      "x": 621,
+      "x": 625,
       "y": 267
      },
      {
-      "createdAt": 1700000000274,
-      "id": "pt_7_274",
+      "createdAt": 1700000000312,
+      "id": "pt_7_312",
       "isManual": false,
       "type": "peak",
-      "x": 621,
-      "y": 274
-     },
-     {
-      "createdAt": 1700000000307,
-      "id": "pt_7_307",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 307
-     },
-     {
-      "createdAt": 1700000000330,
-      "id": "pt_7_330",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 330
-     },
-     {
-      "createdAt": 1700000000331,
-      "id": "pt_7_331",
-      "isManual": false,
-      "type": "peak",
-      "x": 624,
-      "y": 331
-     },
-     {
-      "createdAt": 1700000000334,
-      "id": "pt_7_334",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 334
-     },
-     {
-      "createdAt": 1700000000341,
-      "id": "pt_7_341",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 341
-     },
-     {
-      "createdAt": 1700000000350,
-      "id": "pt_7_350",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 350
+      "x": 625,
+      "y": 312
      },
      {
       "createdAt": 1700000000358,
       "id": "pt_7_358",
       "isManual": false,
       "type": "peak",
-      "x": 623,
+      "x": 625,
       "y": 358
      },
      {
@@ -14153,72 +11601,40 @@
       "id": "pt_7_360",
       "isManual": false,
       "type": "peak",
-      "x": 621,
+      "x": 625,
       "y": 360
      },
      {
-      "createdAt": 1700000000375,
-      "id": "pt_7_375",
+      "createdAt": 1700000000374,
+      "id": "pt_7_374",
       "isManual": false,
       "type": "peak",
-      "x": 621,
-      "y": 375
+      "x": 625,
+      "y": 374
      },
      {
-      "createdAt": 1700000000389,
-      "id": "pt_7_389",
+      "createdAt": 1700000000410,
+      "id": "pt_7_410",
       "isManual": false,
       "type": "peak",
-      "x": 626,
-      "y": 389
+      "x": 625,
+      "y": 410
      },
      {
-      "createdAt": 1700000000396,
-      "id": "pt_7_396",
+      "createdAt": 1700000000441,
+      "id": "pt_7_441",
       "isManual": false,
       "type": "peak",
-      "x": 621,
-      "y": 396
+      "x": 625,
+      "y": 441
      },
      {
-      "createdAt": 1700000000409,
-      "id": "pt_7_409",
+      "createdAt": 1700000000455,
+      "id": "pt_7_455",
       "isManual": false,
       "type": "peak",
-      "x": 621,
-      "y": 409
-     },
-     {
-      "createdAt": 1700000000433,
-      "id": "pt_7_433",
-      "isManual": false,
-      "type": "peak",
-      "x": 627,
-      "y": 433
-     },
-     {
-      "createdAt": 1700000000440,
-      "id": "pt_7_440",
-      "isManual": false,
-      "type": "peak",
-      "x": 622,
-      "y": 440
-     },
-     {
-      "createdAt": 1700000000448,
-      "id": "pt_7_448",
-      "isManual": false,
-      "type": "peak",
-      "x": 626,
-      "y": 448
-     },
-     {
-      "createdAt": 1700000000453,
-      "id": "pt_7_453",
-      "isManual": false,
-      "type": "peak",
-      "x": 622,
-      "y": 453
+      "x": 625,
+      "y": 455
      },
      {
       "createdAt": 1700000000462,
@@ -14289,7 +11705,7 @@
       "id": "pt_7_533",
       "isManual": false,
       "type": "peak",
-      "x": 624,
+      "x": 625,
       "y": 533
      },
      {
@@ -14309,27 +11725,19 @@
       "y": 550
      },
      {
-      "createdAt": 1700000000562,
-      "id": "pt_7_562",
+      "createdAt": 1700000000579,
+      "id": "pt_7_579",
       "isManual": false,
       "type": "peak",
-      "x": 627,
-      "y": 562
-     },
-     {
-      "createdAt": 1700000000577,
-      "id": "pt_7_577",
-      "isManual": false,
-      "type": "peak",
-      "x": 623,
-      "y": 577
+      "x": 625,
+      "y": 579
      },
      {
       "createdAt": 1700000000593,
       "id": "pt_7_593",
       "isManual": false,
       "type": "peak",
-      "x": 623,
+      "x": 625,
       "y": 593
      },
      {
@@ -14345,63 +11753,23 @@
       "id": "pt_7_595",
       "isManual": false,
       "type": "peak",
-      "x": 623,
+      "x": 625,
       "y": 595
      },
      {
-      "createdAt": 1700000000605,
-      "id": "pt_7_605",
-      "isManual": false,
-      "type": "peak",
-      "x": 622,
-      "y": 605
-     },
-     {
-      "createdAt": 1700000000622,
-      "id": "pt_7_622",
+      "createdAt": 1700000000668,
+      "id": "pt_7_668",
       "isManual": false,
       "type": "peak",
       "x": 625,
-      "y": 622
-     },
-     {
-      "createdAt": 1700000000662,
-      "id": "pt_7_662",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 662
-     },
-     {
-      "createdAt": 1700000000680,
-      "id": "pt_7_680",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 680
-     },
-     {
-      "createdAt": 1700000000700,
-      "id": "pt_7_700",
-      "isManual": false,
-      "type": "peak",
-      "x": 624,
-      "y": 700
-     },
-     {
-      "createdAt": 1700000000724,
-      "id": "pt_7_724",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 724
+      "y": 668
      },
      {
       "createdAt": 1700000000742,
       "id": "pt_7_742",
       "isManual": false,
       "type": "peak",
-      "x": 622,
+      "x": 625,
       "y": 742
      },
      {
@@ -14417,63 +11785,23 @@
       "id": "pt_7_744",
       "isManual": false,
       "type": "peak",
-      "x": 622,
+      "x": 625,
       "y": 744
      },
      {
-      "createdAt": 1700000000753,
-      "id": "pt_7_753",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 753
-     },
-     {
-      "createdAt": 1700000000771,
-      "id": "pt_7_771",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 771
-     },
-     {
-      "createdAt": 1700000000786,
-      "id": "pt_7_786",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 786
-     },
-     {
-      "createdAt": 1700000000816,
-      "id": "pt_7_816",
+      "createdAt": 1700000000805,
+      "id": "pt_7_805",
       "isManual": false,
       "type": "peak",
       "x": 625,
-      "y": 816
-     },
-     {
-      "createdAt": 1700000000821,
-      "id": "pt_7_821",
-      "isManual": false,
-      "type": "peak",
-      "x": 622,
-      "y": 821
-     },
-     {
-      "createdAt": 1700000000845,
-      "id": "pt_7_845",
-      "isManual": false,
-      "type": "peak",
-      "x": 621,
-      "y": 845
+      "y": 805
      },
      {
       "createdAt": 1700000000867,
       "id": "pt_7_867",
       "isManual": false,
       "type": "peak",
-      "x": 621,
+      "x": 625,
       "y": 867
      },
      {
@@ -14548,23 +11876,23 @@
       "id": "pt_8_237",
       "isManual": false,
       "type": "peak",
-      "x": 658,
+      "x": 662,
       "y": 237
      },
      {
-      "createdAt": 1700000000258,
-      "id": "pt_8_258",
+      "createdAt": 1700000000251,
+      "id": "pt_8_251",
       "isManual": false,
       "type": "peak",
-      "x": 658,
-      "y": 258
+      "x": 662,
+      "y": 251
      },
      {
       "createdAt": 1700000000265,
       "id": "pt_8_265",
       "isManual": false,
       "type": "peak",
-      "x": 658,
+      "x": 662,
       "y": 265
      },
      {
@@ -14584,108 +11912,20 @@
       "y": 267
      },
      {
-      "createdAt": 1700000000270,
-      "id": "pt_8_270",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 270
-     },
-     {
-      "createdAt": 1700000000278,
-      "id": "pt_8_278",
-      "isManual": false,
-      "type": "peak",
-      "x": 659,
-      "y": 278
-     },
-     {
-      "createdAt": 1700000000280,
-      "id": "pt_8_280",
-      "isManual": false,
-      "type": "peak",
-      "x": 663,
-      "y": 280
-     },
-     {
-      "createdAt": 1700000000283,
-      "id": "pt_8_283",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 283
-     },
-     {
-      "createdAt": 1700000000295,
-      "id": "pt_8_295",
-      "isManual": false,
-      "type": "peak",
-      "x": 661,
-      "y": 295
-     },
-     {
-      "createdAt": 1700000000297,
-      "id": "pt_8_297",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 297
-     },
-     {
       "createdAt": 1700000000305,
       "id": "pt_8_305",
       "isManual": false,
       "type": "peak",
-      "x": 658,
+      "x": 662,
       "y": 305
      },
      {
-      "createdAt": 1700000000311,
-      "id": "pt_8_311",
-      "isManual": false,
-      "type": "peak",
-      "x": 661,
-      "y": 311
-     },
-     {
-      "createdAt": 1700000000313,
-      "id": "pt_8_313",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 313
-     },
-     {
-      "createdAt": 1700000000319,
-      "id": "pt_8_319",
+      "createdAt": 1700000000328,
+      "id": "pt_8_328",
       "isManual": false,
       "type": "peak",
       "x": 662,
-      "y": 319
-     },
-     {
-      "createdAt": 1700000000323,
-      "id": "pt_8_323",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 323
-     },
-     {
-      "createdAt": 1700000000325,
-      "id": "pt_8_325",
-      "isManual": false,
-      "type": "peak",
-      "x": 661,
-      "y": 325
-     },
-     {
-      "createdAt": 1700000000327,
-      "id": "pt_8_327",
-      "isManual": false,
-      "type": "peak",
-      "x": 659,
-      "y": 327
+      "y": 328
      },
      {
       "createdAt": 1700000000329,
@@ -14696,19 +11936,19 @@
       "y": 329
      },
      {
-      "createdAt": 1700000000333,
-      "id": "pt_8_333",
+      "createdAt": 1700000000332,
+      "id": "pt_8_332",
       "isManual": false,
       "type": "peak",
-      "x": 660,
-      "y": 333
+      "x": 662,
+      "y": 332
      },
      {
       "createdAt": 1700000000337,
       "id": "pt_8_337",
       "isManual": false,
       "type": "peak",
-      "x": 661,
+      "x": 662,
       "y": 337
      },
      {
@@ -14728,27 +11968,11 @@
       "y": 340
      },
      {
-      "createdAt": 1700000000344,
-      "id": "pt_8_344",
-      "isManual": false,
-      "type": "peak",
-      "x": 661,
-      "y": 344
-     },
-     {
-      "createdAt": 1700000000345,
-      "id": "pt_8_345",
-      "isManual": false,
-      "type": "peak",
-      "x": 664,
-      "y": 345
-     },
-     {
       "createdAt": 1700000000346,
       "id": "pt_8_346",
       "isManual": false,
       "type": "peak",
-      "x": 660,
+      "x": 662,
       "y": 346
      },
      {
@@ -14764,7 +11988,7 @@
       "id": "pt_8_350",
       "isManual": false,
       "type": "peak",
-      "x": 661,
+      "x": 662,
       "y": 350
      },
      {
@@ -14772,7 +11996,7 @@
       "id": "pt_8_358",
       "isManual": false,
       "type": "peak",
-      "x": 660,
+      "x": 662,
       "y": 358
      },
      {
@@ -14788,63 +12012,23 @@
       "id": "pt_8_360",
       "isManual": false,
       "type": "peak",
-      "x": 659,
+      "x": 662,
       "y": 360
      },
      {
-      "createdAt": 1700000000367,
-      "id": "pt_8_367",
+      "createdAt": 1700000000476,
+      "id": "pt_8_476",
       "isManual": false,
       "type": "peak",
-      "x": 661,
-      "y": 367
-     },
-     {
-      "createdAt": 1700000000373,
-      "id": "pt_8_373",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 373
-     },
-     {
-      "createdAt": 1700000000383,
-      "id": "pt_8_383",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 383
-     },
-     {
-      "createdAt": 1700000000424,
-      "id": "pt_8_424",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 424
-     },
-     {
-      "createdAt": 1700000000470,
-      "id": "pt_8_470",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 470
-     },
-     {
-      "createdAt": 1700000000537,
-      "id": "pt_8_537",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 537
+      "x": 662,
+      "y": 476
      },
      {
       "createdAt": 1700000000593,
       "id": "pt_8_593",
       "isManual": false,
       "type": "peak",
-      "x": 658,
+      "x": 662,
       "y": 593
      },
      {
@@ -14860,39 +12044,23 @@
       "id": "pt_8_595",
       "isManual": false,
       "type": "peak",
-      "x": 661,
+      "x": 662,
       "y": 595
      },
      {
-      "createdAt": 1700000000596,
-      "id": "pt_8_596",
+      "createdAt": 1700000000668,
+      "id": "pt_8_668",
       "isManual": false,
       "type": "peak",
-      "x": 658,
-      "y": 596
-     },
-     {
-      "createdAt": 1700000000658,
-      "id": "pt_8_658",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 658
-     },
-     {
-      "createdAt": 1700000000734,
-      "id": "pt_8_734",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 734
+      "x": 662,
+      "y": 668
      },
      {
       "createdAt": 1700000000742,
       "id": "pt_8_742",
       "isManual": false,
       "type": "peak",
-      "x": 658,
+      "x": 662,
       "y": 742
      },
      {
@@ -14908,31 +12076,23 @@
       "id": "pt_8_744",
       "isManual": false,
       "type": "peak",
-      "x": 659,
+      "x": 662,
       "y": 744
      },
      {
-      "createdAt": 1700000000792,
-      "id": "pt_8_792",
+      "createdAt": 1700000000805,
+      "id": "pt_8_805",
       "isManual": false,
       "type": "peak",
-      "x": 658,
-      "y": 792
-     },
-     {
-      "createdAt": 1700000000855,
-      "id": "pt_8_855",
-      "isManual": false,
-      "type": "peak",
-      "x": 658,
-      "y": 855
+      "x": 662,
+      "y": 805
      },
      {
       "createdAt": 1700000000867,
       "id": "pt_8_867",
       "isManual": false,
       "type": "peak",
-      "x": 658,
+      "x": 662,
       "y": 867
      },
      {
@@ -15007,7 +12167,7 @@
       "id": "pt_9_236",
       "isManual": false,
       "type": "peak",
-      "x": 696,
+      "x": 700,
       "y": 236
      },
      {
@@ -15015,7 +12175,7 @@
       "id": "pt_9_238",
       "isManual": false,
       "type": "peak",
-      "x": 696,
+      "x": 700,
       "y": 238
      },
      {
@@ -16287,7 +13447,7 @@
       "id": "pt_9_863",
       "isManual": false,
       "type": "peak",
-      "x": 696,
+      "x": 700,
       "y": 863
      },
      {
@@ -16295,7 +13455,7 @@
       "id": "pt_9_868",
       "isManual": false,
       "type": "peak",
-      "x": 696,
+      "x": 700,
       "y": 868
      }
     ],
@@ -16362,7 +13522,7 @@
       "id": "pt_10_236",
       "isManual": false,
       "type": "peak",
-      "x": 908,
+      "x": 912,
       "y": 236
      },
      {
@@ -16370,7 +13530,7 @@
       "id": "pt_10_238",
       "isManual": false,
       "type": "peak",
-      "x": 908,
+      "x": 912,
       "y": 238
      },
      {
@@ -16658,7 +13818,7 @@
       "id": "pt_10_305",
       "isManual": false,
       "type": "peak",
-      "x": 911,
+      "x": 912,
       "y": 305
      },
      {
@@ -17698,7 +14858,7 @@
       "id": "pt_10_863",
       "isManual": false,
       "type": "peak",
-      "x": 908,
+      "x": 912,
       "y": 863
      },
      {
@@ -17706,7 +14866,7 @@
       "id": "pt_10_868",
       "isManual": false,
       "type": "peak",
-      "x": 908,
+      "x": 912,
       "y": 868
      }
     ],
@@ -17773,32 +14933,8 @@
       "id": "pt_11_236",
       "isManual": false,
       "type": "peak",
-      "x": 1095,
-      "y": 236
-     },
-     {
-      "createdAt": 1700000000238,
-      "id": "pt_11_238",
-      "isManual": false,
-      "type": "peak",
-      "x": 1095,
-      "y": 238
-     },
-     {
-      "createdAt": 1700000000239,
-      "id": "pt_11_239",
-      "isManual": false,
-      "type": "peak",
-      "x": 1101,
-      "y": 239
-     },
-     {
-      "createdAt": 1700000000240,
-      "id": "pt_11_240",
-      "isManual": false,
-      "type": "peak",
       "x": 1099,
-      "y": 240
+      "y": 236
      },
      {
       "createdAt": 1700000000243,
@@ -17825,20 +14961,12 @@
       "y": 265
      },
      {
-      "createdAt": 1700000000270,
-      "id": "pt_11_270",
+      "createdAt": 1700000000269,
+      "id": "pt_11_269",
       "isManual": false,
       "type": "peak",
-      "x": 1096,
-      "y": 270
-     },
-     {
-      "createdAt": 1700000000271,
-      "id": "pt_11_271",
-      "isManual": false,
-      "type": "peak",
-      "x": 1102,
-      "y": 271
+      "x": 1099,
+      "y": 269
      },
      {
       "createdAt": 1700000000272,
@@ -17853,7 +14981,7 @@
       "id": "pt_11_274",
       "isManual": false,
       "type": "peak",
-      "x": 1097,
+      "x": 1099,
       "y": 274
      },
      {
@@ -17869,7 +14997,7 @@
       "id": "pt_11_278",
       "isManual": false,
       "type": "peak",
-      "x": 1098,
+      "x": 1099,
       "y": 278
      },
      {
@@ -17881,12 +15009,12 @@
       "y": 280
      },
      {
-      "createdAt": 1700000000286,
-      "id": "pt_11_286",
+      "createdAt": 1700000000288,
+      "id": "pt_11_288",
       "isManual": false,
       "type": "peak",
-      "x": 1098,
-      "y": 286
+      "x": 1100,
+      "y": 288
      },
      {
       "createdAt": 1700000000291,
@@ -18409,12 +15537,12 @@
       "y": 715
      },
      {
-      "createdAt": 1700000000723,
-      "id": "pt_11_723",
+      "createdAt": 1700000000724,
+      "id": "pt_11_724",
       "isManual": false,
       "type": "peak",
-      "x": 1096,
-      "y": 723
+      "x": 1099,
+      "y": 724
      },
      {
       "createdAt": 1700000000732,
@@ -18449,12 +15577,12 @@
       "y": 744
      },
      {
-      "createdAt": 1700000000780,
-      "id": "pt_11_780",
+      "createdAt": 1700000000776,
+      "id": "pt_11_776",
       "isManual": false,
       "type": "peak",
-      "x": 1098,
-      "y": 780
+      "x": 1099,
+      "y": 776
      },
      {
       "createdAt": 1700000000795,
@@ -18469,24 +15597,8 @@
       "id": "pt_11_816",
       "isManual": false,
       "type": "peak",
-      "x": 1098,
+      "x": 1099,
       "y": 816
-     },
-     {
-      "createdAt": 1700000000826,
-      "id": "pt_11_826",
-      "isManual": false,
-      "type": "peak",
-      "x": 1101,
-      "y": 826
-     },
-     {
-      "createdAt": 1700000000831,
-      "id": "pt_11_831",
-      "isManual": false,
-      "type": "peak",
-      "x": 1095,
-      "y": 831
      },
      {
       "createdAt": 1700000000840,
@@ -18509,31 +15621,15 @@
       "id": "pt_11_849",
       "isManual": false,
       "type": "peak",
-      "x": 1098,
+      "x": 1099,
       "y": 849
-     },
-     {
-      "createdAt": 1700000000862,
-      "id": "pt_11_862",
-      "isManual": false,
-      "type": "peak",
-      "x": 1100,
-      "y": 862
-     },
-     {
-      "createdAt": 1700000000863,
-      "id": "pt_11_863",
-      "isManual": false,
-      "type": "peak",
-      "x": 1095,
-      "y": 863
      },
      {
       "createdAt": 1700000000868,
       "id": "pt_11_868",
       "isManual": false,
       "type": "peak",
-      "x": 1095,
+      "x": 1099,
       "y": 868
      }
     ],
@@ -18596,28 +15692,36 @@
       "y": 235
      },
      {
+      "createdAt": 1700000000236,
+      "id": "pt_12_236",
+      "isManual": false,
+      "type": "peak",
+      "x": 1156,
+      "y": 236
+     },
+     {
       "createdAt": 1700000000237,
       "id": "pt_12_237",
       "isManual": false,
       "type": "peak",
-      "x": 1132,
+      "x": 1136,
       "y": 237
      },
      {
-      "createdAt": 1700000000238,
-      "id": "pt_12_238",
+      "createdAt": 1700000000250,
+      "id": "pt_12_250",
       "isManual": false,
       "type": "peak",
-      "x": 1138,
-      "y": 238
+      "x": 1136,
+      "y": 250
      },
      {
-      "createdAt": 1700000000255,
-      "id": "pt_12_255",
+      "createdAt": 1700000000259,
+      "id": "pt_12_259",
       "isManual": false,
       "type": "peak",
-      "x": 1133,
-      "y": 255
+      "x": 1136,
+      "y": 259
      },
      {
       "createdAt": 1700000000262,
@@ -18652,20 +15756,12 @@
       "y": 267
      },
      {
-      "createdAt": 1700000000269,
-      "id": "pt_12_269",
+      "createdAt": 1700000000271,
+      "id": "pt_12_271",
       "isManual": false,
       "type": "peak",
-      "x": 1139,
-      "y": 269
-     },
-     {
-      "createdAt": 1700000000270,
-      "id": "pt_12_270",
-      "isManual": false,
-      "type": "peak",
-      "x": 1134,
-      "y": 270
+      "x": 1136,
+      "y": 271
      },
      {
       "createdAt": 1700000000274,
@@ -18676,27 +15772,11 @@
       "y": 274
      },
      {
-      "createdAt": 1700000000276,
-      "id": "pt_12_276",
-      "isManual": false,
-      "type": "peak",
-      "x": 1135,
-      "y": 276
-     },
-     {
-      "createdAt": 1700000000278,
-      "id": "pt_12_278",
-      "isManual": false,
-      "type": "peak",
-      "x": 1138,
-      "y": 278
-     },
-     {
       "createdAt": 1700000000280,
       "id": "pt_12_280",
       "isManual": false,
       "type": "peak",
-      "x": 1135,
+      "x": 1136,
       "y": 280
      },
      {
@@ -18708,12 +15788,12 @@
       "y": 282
      },
      {
-      "createdAt": 1700000000285,
-      "id": "pt_12_285",
+      "createdAt": 1700000000286,
+      "id": "pt_12_286",
       "isManual": false,
       "type": "peak",
-      "x": 1135,
-      "y": 285
+      "x": 1136,
+      "y": 286
      },
      {
       "createdAt": 1700000000291,
@@ -18724,12 +15804,12 @@
       "y": 291
      },
      {
-      "createdAt": 1700000000297,
-      "id": "pt_12_297",
+      "createdAt": 1700000000294,
+      "id": "pt_12_294",
       "isManual": false,
       "type": "peak",
-      "x": 1135,
-      "y": 297
+      "x": 1136,
+      "y": 294
      },
      {
       "createdAt": 1700000000299,
@@ -18820,60 +15900,20 @@
       "y": 321
      },
      {
-      "createdAt": 1700000000327,
-      "id": "pt_12_327",
+      "createdAt": 1700000000323,
+      "id": "pt_12_323",
       "isManual": false,
       "type": "peak",
-      "x": 1134,
-      "y": 327
+      "x": 1136,
+      "y": 323
      },
      {
-      "createdAt": 1700000000328,
-      "id": "pt_12_328",
+      "createdAt": 1700000000332,
+      "id": "pt_12_332",
       "isManual": false,
       "type": "peak",
-      "x": 1137,
-      "y": 328
-     },
-     {
-      "createdAt": 1700000000333,
-      "id": "pt_12_333",
-      "isManual": false,
-      "type": "peak",
-      "x": 1134,
-      "y": 333
-     },
-     {
-      "createdAt": 1700000000335,
-      "id": "pt_12_335",
-      "isManual": false,
-      "type": "peak",
-      "x": 1138,
-      "y": 335
-     },
-     {
-      "createdAt": 1700000000336,
-      "id": "pt_12_336",
-      "isManual": false,
-      "type": "peak",
-      "x": 1133,
-      "y": 336
-     },
-     {
-      "createdAt": 1700000000338,
-      "id": "pt_12_338",
-      "isManual": false,
-      "type": "peak",
-      "x": 1139,
-      "y": 338
-     },
-     {
-      "createdAt": 1700000000339,
-      "id": "pt_12_339",
-      "isManual": false,
-      "type": "peak",
-      "x": 1137,
-      "y": 339
+      "x": 1136,
+      "y": 332
      },
      {
       "createdAt": 1700000000343,
@@ -18904,7 +15944,7 @@
       "id": "pt_12_349",
       "isManual": false,
       "type": "peak",
-      "x": 1135,
+      "x": 1136,
       "y": 349
      },
      {
@@ -18944,7 +15984,7 @@
       "id": "pt_12_358",
       "isManual": false,
       "type": "peak",
-      "x": 1135,
+      "x": 1136,
       "y": 358
      },
      {
@@ -18964,20 +16004,20 @@
       "y": 360
      },
      {
-      "createdAt": 1700000000381,
-      "id": "pt_12_381",
+      "createdAt": 1700000000375,
+      "id": "pt_12_375",
       "isManual": false,
       "type": "peak",
-      "x": 1138,
-      "y": 381
+      "x": 1136,
+      "y": 375
      },
      {
-      "createdAt": 1700000000388,
-      "id": "pt_12_388",
+      "createdAt": 1700000000387,
+      "id": "pt_12_387",
       "isManual": false,
       "type": "peak",
-      "x": 1134,
-      "y": 388
+      "x": 1136,
+      "y": 387
      },
      {
       "createdAt": 1700000000395,
@@ -19008,23 +16048,15 @@
       "id": "pt_12_414",
       "isManual": false,
       "type": "peak",
-      "x": 1134,
+      "x": 1136,
       "y": 414
-     },
-     {
-      "createdAt": 1700000000421,
-      "id": "pt_12_421",
-      "isManual": false,
-      "type": "peak",
-      "x": 1138,
-      "y": 421
      },
      {
       "createdAt": 1700000000427,
       "id": "pt_12_427",
       "isManual": false,
       "type": "peak",
-      "x": 1135,
+      "x": 1136,
       "y": 427
      },
      {
@@ -19424,7 +16456,7 @@
       "id": "pt_12_864",
       "isManual": false,
       "type": "peak",
-      "x": 1132,
+      "x": 1136,
       "y": 864
      },
      {
@@ -19432,7 +16464,7 @@
       "id": "pt_12_867",
       "isManual": false,
       "type": "peak",
-      "x": 1132,
+      "x": 1136,
       "y": 867
      },
      {
@@ -19503,27 +16535,35 @@
       "y": 235
      },
      {
+      "createdAt": 1700000000236,
+      "id": "pt_13_236",
+      "isManual": false,
+      "type": "peak",
+      "x": 1206,
+      "y": 236
+     },
+     {
       "createdAt": 1700000000237,
       "id": "pt_13_237",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
+      "x": 1199,
       "y": 237
      },
      {
-      "createdAt": 1700000000248,
-      "id": "pt_13_248",
+      "createdAt": 1700000000251,
+      "id": "pt_13_251",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
-      "y": 248
+      "x": 1199,
+      "y": 251
      },
      {
       "createdAt": 1700000000265,
       "id": "pt_13_265",
       "isManual": false,
       "type": "peak",
-      "x": 1196,
+      "x": 1199,
       "y": 265
      },
      {
@@ -19543,28 +16583,28 @@
       "y": 267
      },
      {
-      "createdAt": 1700000000279,
-      "id": "pt_13_279",
+      "createdAt": 1700000000274,
+      "id": "pt_13_274",
+      "isManual": false,
+      "type": "peak",
+      "x": 1200,
+      "y": 274
+     },
+     {
+      "createdAt": 1700000000276,
+      "id": "pt_13_276",
       "isManual": false,
       "type": "peak",
       "x": 1203,
-      "y": 279
+      "y": 276
      },
      {
-      "createdAt": 1700000000281,
-      "id": "pt_13_281",
+      "createdAt": 1700000000286,
+      "id": "pt_13_286",
       "isManual": false,
       "type": "peak",
-      "x": 1198,
-      "y": 281
-     },
-     {
-      "createdAt": 1700000000284,
-      "id": "pt_13_284",
-      "isManual": false,
-      "type": "peak",
-      "x": 1198,
-      "y": 284
+      "x": 1199,
+      "y": 286
      },
      {
       "createdAt": 1700000000288,
@@ -19575,99 +16615,27 @@
       "y": 288
      },
      {
-      "createdAt": 1700000000292,
-      "id": "pt_13_292",
+      "createdAt": 1700000000294,
+      "id": "pt_13_294",
       "isManual": false,
       "type": "peak",
       "x": 1199,
-      "y": 292
+      "y": 294
      },
      {
-      "createdAt": 1700000000301,
-      "id": "pt_13_301",
-      "isManual": false,
-      "type": "peak",
-      "x": 1201,
-      "y": 301
-     },
-     {
-      "createdAt": 1700000000304,
-      "id": "pt_13_304",
-      "isManual": false,
-      "type": "peak",
-      "x": 1195,
-      "y": 304
-     },
-     {
-      "createdAt": 1700000000311,
-      "id": "pt_13_311",
-      "isManual": false,
-      "type": "peak",
-      "x": 1195,
-      "y": 311
-     },
-     {
-      "createdAt": 1700000000320,
-      "id": "pt_13_320",
-      "isManual": false,
-      "type": "peak",
-      "x": 1195,
-      "y": 320
-     },
-     {
-      "createdAt": 1700000000340,
-      "id": "pt_13_340",
-      "isManual": false,
-      "type": "peak",
-      "x": 1195,
-      "y": 340
-     },
-     {
-      "createdAt": 1700000000358,
-      "id": "pt_13_358",
-      "isManual": false,
-      "type": "peak",
-      "x": 1195,
-      "y": 358
-     },
-     {
-      "createdAt": 1700000000359,
-      "id": "pt_13_359",
+      "createdAt": 1700000000447,
+      "id": "pt_13_447",
       "isManual": false,
       "type": "peak",
       "x": 1199,
-      "y": 359
-     },
-     {
-      "createdAt": 1700000000360,
-      "id": "pt_13_360",
-      "isManual": false,
-      "type": "peak",
-      "x": 1195,
-      "y": 360
-     },
-     {
-      "createdAt": 1700000000377,
-      "id": "pt_13_377",
-      "isManual": false,
-      "type": "peak",
-      "x": 1195,
-      "y": 377
-     },
-     {
-      "createdAt": 1700000000495,
-      "id": "pt_13_495",
-      "isManual": false,
-      "type": "peak",
-      "x": 1195,
-      "y": 495
+      "y": 447
      },
      {
       "createdAt": 1700000000593,
       "id": "pt_13_593",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
+      "x": 1199,
       "y": 593
      },
      {
@@ -19683,7 +16651,7 @@
       "id": "pt_13_595",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
+      "x": 1199,
       "y": 595
      },
      {
@@ -19691,7 +16659,7 @@
       "id": "pt_13_668",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
+      "x": 1199,
       "y": 668
      },
      {
@@ -19699,7 +16667,7 @@
       "id": "pt_13_742",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
+      "x": 1199,
       "y": 742
      },
      {
@@ -19715,7 +16683,7 @@
       "id": "pt_13_744",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
+      "x": 1199,
       "y": 744
      },
      {
@@ -19723,7 +16691,7 @@
       "id": "pt_13_805",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
+      "x": 1199,
       "y": 805
      },
      {
@@ -19731,7 +16699,7 @@
       "id": "pt_13_867",
       "isManual": false,
       "type": "peak",
-      "x": 1195,
+      "x": 1199,
       "y": 867
      },
      {
@@ -19806,7 +16774,7 @@
       "id": "pt_14_237",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
+      "x": 1237,
       "y": 237
      },
      {
@@ -19814,7 +16782,7 @@
       "id": "pt_14_251",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
+      "x": 1237,
       "y": 251
      },
      {
@@ -19822,7 +16790,7 @@
       "id": "pt_14_265",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
+      "x": 1237,
       "y": 265
      },
      {
@@ -19838,24 +16806,16 @@
       "id": "pt_14_267",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
+      "x": 1237,
       "y": 267
      },
      {
-      "createdAt": 1700000000311,
-      "id": "pt_14_311",
+      "createdAt": 1700000000312,
+      "id": "pt_14_312",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 311
-     },
-     {
-      "createdAt": 1700000000356,
-      "id": "pt_14_356",
-      "isManual": false,
-      "type": "peak",
-      "x": 1233,
-      "y": 356
+      "x": 1237,
+      "y": 312
      },
      {
       "createdAt": 1700000000358,
@@ -19878,32 +16838,24 @@
       "id": "pt_14_360",
       "isManual": false,
       "type": "peak",
-      "x": 1234,
+      "x": 1237,
       "y": 360
      },
      {
-      "createdAt": 1700000000386,
-      "id": "pt_14_386",
+      "createdAt": 1700000000391,
+      "id": "pt_14_391",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 386
+      "x": 1237,
+      "y": 391
      },
      {
-      "createdAt": 1700000000408,
-      "id": "pt_14_408",
+      "createdAt": 1700000000422,
+      "id": "pt_14_422",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 408
-     },
-     {
-      "createdAt": 1700000000421,
-      "id": "pt_14_421",
-      "isManual": false,
-      "type": "peak",
-      "x": 1233,
-      "y": 421
+      "x": 1237,
+      "y": 422
      },
      {
       "createdAt": 1700000000428,
@@ -19914,12 +16866,20 @@
       "y": 428
      },
      {
-      "createdAt": 1700000000434,
-      "id": "pt_14_434",
+      "createdAt": 1700000000432,
+      "id": "pt_14_432",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 434
+      "x": 1237,
+      "y": 432
+     },
+     {
+      "createdAt": 1700000000436,
+      "id": "pt_14_436",
+      "isManual": false,
+      "type": "peak",
+      "x": 1237,
+      "y": 436
      },
      {
       "createdAt": 1700000000439,
@@ -19930,12 +16890,20 @@
       "y": 439
      },
      {
-      "createdAt": 1700000000444,
-      "id": "pt_14_444",
+      "createdAt": 1700000000442,
+      "id": "pt_14_442",
       "isManual": false,
       "type": "peak",
-      "x": 1234,
-      "y": 444
+      "x": 1237,
+      "y": 442
+     },
+     {
+      "createdAt": 1700000000445,
+      "id": "pt_14_445",
+      "isManual": false,
+      "type": "peak",
+      "x": 1237,
+      "y": 445
      },
      {
       "createdAt": 1700000000449,
@@ -19946,20 +16914,12 @@
       "y": 449
      },
      {
-      "createdAt": 1700000000453,
-      "id": "pt_14_453",
+      "createdAt": 1700000000452,
+      "id": "pt_14_452",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 453
-     },
-     {
-      "createdAt": 1700000000458,
-      "id": "pt_14_458",
-      "isManual": false,
-      "type": "peak",
-      "x": 1239,
-      "y": 458
+      "x": 1237,
+      "y": 452
      },
      {
       "createdAt": 1700000000462,
@@ -19978,12 +16938,20 @@
       "y": 466
      },
      {
-      "createdAt": 1700000000471,
-      "id": "pt_14_471",
+      "createdAt": 1700000000470,
+      "id": "pt_14_470",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 471
+      "x": 1237,
+      "y": 470
+     },
+     {
+      "createdAt": 1700000000472,
+      "id": "pt_14_472",
+      "isManual": false,
+      "type": "peak",
+      "x": 1241,
+      "y": 472
      },
      {
       "createdAt": 1700000000475,
@@ -20002,36 +16970,28 @@
       "y": 476
      },
      {
-      "createdAt": 1700000000480,
-      "id": "pt_14_480",
+      "createdAt": 1700000000479,
+      "id": "pt_14_479",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 480
+      "x": 1239,
+      "y": 479
      },
      {
-      "createdAt": 1700000000498,
-      "id": "pt_14_498",
+      "createdAt": 1700000000504,
+      "id": "pt_14_504",
       "isManual": false,
       "type": "peak",
-      "x": 1236,
-      "y": 498
+      "x": 1237,
+      "y": 504
      },
      {
-      "createdAt": 1700000000515,
-      "id": "pt_14_515",
+      "createdAt": 1700000000528,
+      "id": "pt_14_528",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 515
-     },
-     {
-      "createdAt": 1700000000525,
-      "id": "pt_14_525",
-      "isManual": false,
-      "type": "peak",
-      "x": 1233,
-      "y": 525
+      "x": 1237,
+      "y": 528
      },
      {
       "createdAt": 1700000000532,
@@ -20042,28 +17002,28 @@
       "y": 532
      },
      {
-      "createdAt": 1700000000540,
-      "id": "pt_14_540",
+      "createdAt": 1700000000538,
+      "id": "pt_14_538",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 540
+      "x": 1237,
+      "y": 538
      },
      {
-      "createdAt": 1700000000560,
-      "id": "pt_14_560",
+      "createdAt": 1700000000562,
+      "id": "pt_14_562",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 560
+      "x": 1237,
+      "y": 562
      },
      {
-      "createdAt": 1700000000581,
-      "id": "pt_14_581",
+      "createdAt": 1700000000586,
+      "id": "pt_14_586",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 581
+      "x": 1237,
+      "y": 586
      },
      {
       "createdAt": 1700000000589,
@@ -20078,7 +17038,7 @@
       "id": "pt_14_593",
       "isManual": false,
       "type": "peak",
-      "x": 1236,
+      "x": 1237,
       "y": 593
      },
      {
@@ -20094,23 +17054,23 @@
       "id": "pt_14_595",
       "isManual": false,
       "type": "peak",
-      "x": 1234,
+      "x": 1237,
       "y": 595
      },
      {
-      "createdAt": 1700000000669,
-      "id": "pt_14_669",
+      "createdAt": 1700000000668,
+      "id": "pt_14_668",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
-      "y": 669
+      "x": 1237,
+      "y": 668
      },
      {
       "createdAt": 1700000000742,
       "id": "pt_14_742",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
+      "x": 1237,
       "y": 742
      },
      {
@@ -20126,7 +17086,7 @@
       "id": "pt_14_744",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
+      "x": 1237,
       "y": 744
      },
      {
@@ -20134,7 +17094,7 @@
       "id": "pt_14_805",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
+      "x": 1237,
       "y": 805
      },
      {
@@ -20142,7 +17102,7 @@
       "id": "pt_14_867",
       "isManual": false,
       "type": "peak",
-      "x": 1233,
+      "x": 1237,
       "y": 867
      },
      {
