@@ -5,6 +5,7 @@ import { Toolbar } from '../components/Toolbar';
 import { Sidebar } from '../components/Sidebar';
 import { Inspector } from '../components/Inspector';
 import { HistoryManager } from '../core/HistoryManager';
+import { undoStack } from '../core/undoRuntime';
 import { extractProjectNameFromFilename } from '../utils/exportNaming';
 import { t } from '../i18n';
 
@@ -64,7 +65,7 @@ export class FileLoaderService {
       return;
     }
 
-    if (this.history.canUndo()) {
+    if (undoStack.state.canUndo) {
       if (
         !window.confirm('当前项目有未保存修改，重新加载图片将清空当前工作区。是否继续？')
       ) {

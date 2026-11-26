@@ -61,13 +61,6 @@ export class RoiToolStrategy implements ToolStrategy {
   ): boolean {
     if (this.draggingRoiHandle && this.dragInitialRoi) {
       const roi = ctx.data.roi;
-      ctx.history.push(
-        'Resize Data ROI',
-        ctx.data.columns,
-        ctx.data.activeTaxaId,
-        ctx.data.calibration,
-        roi
-      );
       ctx.notifyNotice(
         `数据有效区已调整为: X [${roi.xMin}, ${roi.xMax}] × Y [${roi.yMin}, ${roi.yMax}] px（深度标定不受影响）`
       );

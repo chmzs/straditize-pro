@@ -129,9 +129,61 @@ export function makeControlPointsUndo<TPoint>(
 }
 
 /**
- * 删除类动作**故意不提供构造器**：
- * 删除有列的分区 / 删除列目前没有逆操作（后端无"恢复"通道），
- * 按设计它们不得入栈 —— UI 上撤销按钮应保持 disabled 并说明"该操作不可撤销"。
- * 这条注释是给未来实现者的路标：别为了"让撤销按钮亮起来"给删除编一个假逆操作。
+ * 通用值写回类动作的构造器（列边界、轴线粗、形态覆盖、X 刻度、ROI 边界等）。
+ *
+ * 逆操作与重做均走同一写通道，参数分别为改前值与改后值；verify 读后端权威状态比对。
  */
-export const NON_UNDOABLE = ['roi.remove(有列)', 'column.remove'] as const;
+export function makeValueUndo<T>(
+  label: string,
+  prevValue: T,
+  nextValue: T,
+  apply: (value: T) => Promise<void>,
+  read: () => Promise<T>,
+  equals: (a: T, b: T) => boolean = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+): UndoableOp {
+  return {
+    label,
+    inverse: () => apply(prevValue),
+    forward: () => apply(nextValue),
+    verify: async (direction) =>
+      equals(await read(), direction === 'inverse' ? prevValue : nextValue),
+  };
+}
+
+/**
+ * 集合新增类动作的构造器（新增列 / 新增 ROI）：
+ * 撤销时调用对应的删除通道移除新建实体；重做时重新创建。
+ */
+export function makeCollectionAddUndo(
+  label: string,
+  removeAdded: () => Promise<void>,
+  recreateAdded: () => Promise<void>,
+  readCount: () => Promise<number>,
+  expectedPrevCount: number,
+  expectedNextCount: number
+): UndoableOp {
+  return {
+    label,
+    inverse: () => removeAdded(),
+    forward: () => recreateAdded(),
+    verify: async (direction) =>
+      (await readCount()) === (direction === 'inverse' ? expectedPrevCount : expectedNextCount),
+  };
+}
+
+/**
+ * 不可撤销动作清单：
+ * 删除有列的分区 / 删除列及整表清空/批量重算类动作没有单步逆操作通道，
+ * 按设计不得入栈 —— UI 上撤销按钮不亮，也不得编造假逆操作。
+ */
+export const NON_UNDOABLE = [
+  'roi.remove(有列)',
+  'column.remove',
+  'column.clearAll',
+  'column.redetect',
+  'xTicks.clearAll',
+  'column.batchDigitize',
+  'column.batchPlotType',
+  'column.insertGap',
+  'webmcp.sync',
+] as const;

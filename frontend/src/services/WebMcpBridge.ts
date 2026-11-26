@@ -7,6 +7,7 @@ import { PropertyPanel } from '../components/PropertyPanel';
 import { WorkflowController } from './WorkflowController';
 import { WorkflowStage } from '../types/workflow';
 import { visibleLayers } from '../core/WorkflowStage';
+import { undoStack } from '../core/undoRuntime';
 
 export interface WebMcpBridgeParams {
   rpcClient: RpcClient;
@@ -27,19 +28,12 @@ export function registerWebMcpAndInspectionHandles(p: WebMcpBridgeParams): void 
   const syncWebMcpState = async (actionName: string) => {
     const freshData = await p.rpcClient.getDiagramData();
     p.canvasComponent.loadNewDiagram(freshData);
-    p.canvasComponent.history.push(
-      `WebMCP: ${actionName}`,
-      p.canvasComponent.data.columns,
-      p.canvasComponent.data.activeTaxaId,
-      p.canvasComponent.data.calibration,
-      p.canvasComponent.data.roi
-    );
     p.getSidebar()?.updateData(p.canvasComponent.data);
     p.getInspector()?.updateData(p.canvasComponent.data);
     p.getToolbar()?.updateHistoryState();
     p.updateFooter();
     p.scheduleAutosave();
-    p.setHudNotice(`WebMCP 已执行: ${actionName}（支持 Ctrl+Z 撤销）`, 3500);
+    p.setHudNotice(`WebMCP 已执行: ${actionName}`, 3500);
   };
 
   const webMcpApi = {
@@ -164,6 +158,11 @@ export function registerWebMcpAndInspectionHandles(p: WebMcpBridgeParams): void 
           columnCount: data.columns.length,
         }),
         renderedLayers: p.canvasComponent.getLastRenderedLayers(),
+        undo: {
+          depth: undoStack.state.depth,
+          canUndo: undoStack.state.canUndo,
+          undoLabel: undoStack.state.undoLabel,
+        },
       };
     },
     gotoStage: (stage: number) =>

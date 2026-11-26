@@ -12,7 +12,9 @@ interface ControlPointLike {
 }
 import {
   makeCalibrationUndo,
+  makeCollectionAddUndo,
   makeControlPointsUndo,
+  makeValueUndo,
   type ControlPointWriteback,
 } from './core/undoActions';
 import { GeologyCanvas } from './components/GeologyCanvas';
@@ -252,15 +254,23 @@ async function bootstrap() {
     onUndo: historyHandlers.onUndo,
     onRedo: historyHandlers.onRedo,
     onAxisStrokeCommit: (colIndex, strokePx, previousStroke) => {
+      const col = canvasComponent.data.columns.find((c) => (c.col_index ?? -1) === colIndex);
+      const colId = col?.id ?? '';
+      const applyStroke = async (stroke: number): Promise<void> => {
+        await rpcClient.updateColumn(colIndex, { axis_stroke_px: stroke });
+        const fresh = await rpcClient.getDiagramData();
+        canvasComponent.loadNewDiagram(fresh);
+        sidebar?.updateData(canvasComponent.data);
+        inspector?.updateData(canvasComponent.data);
+        updateFooter();
+        scheduleAutosave();
+      };
       void (async () => {
         try {
           await rpcClient.updateColumn(colIndex, { axis_stroke_px: strokePx });
         } catch (err) {
           // 后端拒绝（列落在 ROI 外 / 轴粗越界）：把画布回滚到拖之前，
           // 否则界面会停在"拖了但没生效"的假象上。
-          const col = canvasComponent.data.columns.find(
-            (c) => (c.col_index ?? -1) === colIndex
-          );
           if (col) col.axis_stroke_px = previousStroke;
           canvasComponent.render();
           notifyError(
@@ -268,13 +278,143 @@ async function bootstrap() {
           );
           return;
         }
-        history.push(
-          `Axis stroke → ${strokePx}px (col ${colIndex})`,
-          canvasComponent.data.columns,
-          canvasComponent.data.activeTaxaId,
-          canvasComponent.data.calibration,
-          canvasComponent.data.roi
+        undoStack.push(
+          makeValueUndo(
+            `轴线粗 ${previousStroke}px → ${strokePx}px（列 ${col?.name ?? colIndex}）`,
+            previousStroke,
+            strokePx,
+            applyStroke,
+            async () => {
+              const fresh = await rpcClient.getDiagramData();
+              const target = fresh.columns.find((c) =>
+                colId ? c.id === colId : (c.col_index ?? -1) === colIndex
+              );
+              return Number(target?.axis_stroke_px ?? previousStroke);
+            }
+          )
         );
+        refreshUndoButtons({
+          canUndo: undoStack.state.canUndo,
+          canRedo: undoStack.state.canRedo,
+        });
+      })();
+    },
+    onAddColumnCommit: (newCol) => {
+      const prevCount = Math.max(0, canvasComponent.data.columns.length - 1);
+      const payload = {
+        name: newCol.name,
+        species: newCol.species,
+        startX: newCol.startX,
+        endX: newCol.endX,
+        scale_type: newCol.scale_type ?? 'linear',
+        startValue: 0,
+        tickValue: 100,
+        tickEndX: newCol.endX,
+      };
+      let currentColIdx: number | null = null;
+      const syncFromBackend = async (): Promise<void> => {
+        const fresh = await rpcClient.getDiagramData();
+        canvasComponent.loadNewDiagram(fresh);
+        sidebar?.updateData(canvasComponent.data);
+        inspector?.updateData(canvasComponent.data);
+        updateFooter();
+        scheduleAutosave();
+      };
+      void (async () => {
+        try {
+          const res = await rpcClient.call<{ column: Record<string, unknown> }, { col_index: number }>(
+            'column.add',
+            { column: payload }
+          );
+          currentColIdx = res.col_index;
+          await syncFromBackend();
+          const nextCount = canvasComponent.data.columns.length;
+          undoStack.push(
+            makeCollectionAddUndo(
+              `新增列 ${newCol.name}`,
+              async () => {
+                if (currentColIdx === null) return;
+                await rpcClient.removeColumn(currentColIdx);
+                currentColIdx = null;
+                await syncFromBackend();
+              },
+              async () => {
+                const recreated = await rpcClient.call<
+                  { column: Record<string, unknown> },
+                  { col_index: number }
+                >('column.add', { column: payload });
+                currentColIdx = recreated.col_index;
+                await syncFromBackend();
+              },
+              async () => (await rpcClient.getDiagramData()).columns.length,
+              prevCount,
+              nextCount
+            )
+          );
+          refreshUndoButtons({
+            canUndo: undoStack.state.canUndo,
+            canRedo: undoStack.state.canRedo,
+          });
+        } catch (err) {
+          notifyError(`新增列落库失败：${err instanceof Error ? err.message : String(err)}`);
+        }
+      })();
+    },
+    onColumnBoundsCommit: (colIndex, prevBounds, nextBounds) => {
+      const col = canvasComponent.data.columns.find(
+        (c, idx) => (c.col_index ?? idx) === colIndex
+      );
+      const colId = col?.id ?? '';
+      const applyBounds = async (bounds: { startX: number; endX: number }): Promise<void> => {
+        await rpcClient.updateColumn(colIndex, {
+          startX: bounds.startX,
+          endX: bounds.endX,
+        });
+        const fresh = await rpcClient.getDiagramData();
+        canvasComponent.loadNewDiagram(fresh);
+        sidebar?.updateData(canvasComponent.data);
+        inspector?.updateData(canvasComponent.data);
+        updateFooter();
+        scheduleAutosave();
+      };
+      void (async () => {
+        try {
+          await rpcClient.updateColumn(colIndex, {
+            startX: nextBounds.startX,
+            endX: nextBounds.endX,
+          });
+          undoStack.push(
+            makeValueUndo(
+              `调整列边界 ${col?.name ?? colIndex}`,
+              { ...prevBounds },
+              { ...nextBounds },
+              applyBounds,
+              async () => {
+                const fresh = await rpcClient.getDiagramData();
+                const target = fresh.columns.find((c, idx) =>
+                  colId ? c.id === colId : (c.col_index ?? idx) === colIndex
+                );
+                return {
+                  startX: Math.round(target?.startX ?? 0),
+                  endX: Math.round(target?.endX ?? 0),
+                };
+              },
+              (a, b) => Math.round(a.startX) === Math.round(b.startX) && Math.round(a.endX) === Math.round(b.endX)
+            )
+          );
+          refreshUndoButtons({
+            canUndo: undoStack.state.canUndo,
+            canRedo: undoStack.state.canRedo,
+          });
+          scheduleAutosave();
+        } catch (err) {
+          if (col) {
+            col.startX = prevBounds.startX;
+            col.endX = prevBounds.endX;
+            canvasComponent.requestRender();
+          }
+          notifyError(`调整列边界失败：${err instanceof Error ? err.message : String(err)}`);
+        }
       })();
     },
     // 列点编辑落库：拖动结束 / 删除锚点 / 微调去抖后把整列锚点推给后端。
@@ -341,7 +481,7 @@ async function bootstrap() {
               )
             );
             refreshUndoButtons({
-              canUndo: undoStack.state.canUndo || canvasComponent.history.canUndo(),
+              canUndo: undoStack.state.canUndo,
               canRedo: undoStack.state.canRedo,
             });
           }
@@ -790,7 +930,6 @@ async function bootstrap() {
     rpcClient,
     (newCal: DiagramCalibration) => {
       canvasComponent.data.calibration = newCal;
-      history.push('Update Grid Settings', canvasComponent.data.columns, canvasComponent.data.activeTaxaId, newCal, canvasComponent.data.roi);
       canvasComponent.requestRender();
       inspector?.updateData(canvasComponent.data);
       updateFooter();
@@ -828,7 +967,23 @@ async function bootstrap() {
     setHudNotice('请在图上依次点击 Y 轴上两个已知刻度所在的行，数值将实时填入侧栏。', 7000);
   }
 
-  async function applyDepthCalibration(
+  let depthCalibQueue: Promise<void> = Promise.resolve();
+
+  function applyDepthCalibration(
+    marks: Point2D[],
+    values: number[],
+    unit: string,
+    primaryAxis: string = 'age',
+    recordUndo = true
+  ): Promise<void> {
+    const task = depthCalibQueue.then(() =>
+      applyDepthCalibrationImpl(marks, values, unit, primaryAxis, recordUndo)
+    );
+    depthCalibQueue = task.catch(() => undefined);
+    return task;
+  }
+
+  async function applyDepthCalibrationImpl(
     marks: Point2D[],
     values: number[],
     unit: string,
@@ -850,13 +1005,6 @@ async function bootstrap() {
       );
       const previous = { ...cal };
       canvasComponent.data.calibration = { ...res.canvas, depthInterval: cal.depthInterval, depthGridEnabled: cal.depthGridEnabled };
-      history.push(
-        'Set Y-Axis Two-Point Calibration',
-        canvasComponent.data.columns,
-        canvasComponent.data.activeTaxaId,
-        previous,
-        canvasComponent.data.roi
-      );
       canvasComponent.setYCalibMarks(marks);
       // U2：标定登记为可撤销动作。逆操作 = 用**改前的五点**重新标一次（同一个
       // applyDepthCalibration 通道，recordUndo=false 防止递归压栈）；verify 读后端。

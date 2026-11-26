@@ -50,6 +50,7 @@ export interface InspectorCallbacks {
   onPreviewYCalibrationPx?: (topPx: number | null, bottomPx: number | null) => void;
   /** ROI 输入框提交，需要同步后端并重算线掩膜。 */
   onRoiCommitted?: (roi: DataRoi) => void;
+  onDeleteSelectedPoint?: (colId: string, pointId: string) => void;
   onSelectRoi?: (roiId: string) => void;
   onCreateRoi?: () => void;
   onSetPrimaryRoi?: (roiId: string) => void;
@@ -94,14 +95,12 @@ export interface InspectorCallbacks {
 export class Inspector {
   private element: HTMLElement;
   private data: DiagramData;
-  private history: HistoryManager;
   private callbacks: InspectorCallbacks;
   private isCollapsed: boolean = false;
   private currentStage: number = 1;
 
-  constructor(data: DiagramData, history: HistoryManager, callbacks: InspectorCallbacks) {
+  constructor(data: DiagramData, _history: HistoryManager, callbacks: InspectorCallbacks) {
     this.data = data;
-    this.history = history;
     this.callbacks = callbacks;
     this.element = document.createElement('aside');
     this.element.className = 'app-inspector';
@@ -354,9 +353,12 @@ export class Inspector {
         const col = this.data.columns.find((c) => c.id === sel.colId);
         const pt = col?.controlPoints.find((p) => p.id === sel.pointId);
         if (col && pt) {
-          new DeletePointCommand(col.id, pt, col.name).execute(this.data);
+          if (this.callbacks.onDeleteSelectedPoint) {
+            this.callbacks.onDeleteSelectedPoint(col.id, pt.id);
+          } else {
+            new DeletePointCommand(col.id, pt, col.name).execute(this.data);
+          }
           this.data.selectedEntity = null;
-          this.history.push(`Delete Anchor from ${col.name}`, this.data.columns, this.data.activeTaxaId);
           this.render();
           this.callbacks.onDataChange();
         }

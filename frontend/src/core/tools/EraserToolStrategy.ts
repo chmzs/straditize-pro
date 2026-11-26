@@ -98,7 +98,6 @@ export class EraserToolStrategy implements ToolStrategy {
     if (this.isErasing) {
       this.isErasing = false;
       if (this.erasedCount > 0) {
-        ctx.history.push(`Erase ${this.erasedCount} Anchor(s)`, ctx.data.columns, ctx.data.activeTaxaId);
         for (const colId of this.affectedColIds) {
           ctx.commitControlPoints(colId);
         }

@@ -3,7 +3,14 @@ import { setGroupCalibMark } from '../components/canvas/groupCalibMarks';
 import { compensationNote, addCompensation } from '../core/compensationNote';
 import { showConfirmDialog } from '../ui/confirm';
 import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
-import { makeRenameUndo } from '../core/undoActions';
+import {
+  makeCollectionAddUndo,
+  makeControlPointsUndo,
+  makeRenameUndo,
+  makeValueUndo,
+} from '../core/undoActions';
+import { controlPointsForWriteback } from '../core/controlPointWriteback';
+import { resolveAxisStroke } from '../core/axisStroke';
 import { GeologyCanvas } from '../components/GeologyCanvas';
 import { Sidebar } from '../components/Sidebar';
 import { Inspector } from '../components/Inspector';
@@ -12,8 +19,64 @@ import { ExportModal } from '../components/ExportModal';
 import { OcrReviewModal } from '../components/OcrReviewModal';
 import { CleanupManager } from './CleanupManager';
 import { WorkflowController } from './WorkflowController';
-import { DataRoi, Point2D } from '../types/pollen';
+import { DataRoi, Point2D, TaxaColumn } from '../types/pollen';
 import { WorkflowStage } from '../types/workflow';
+
+export function pushDigitizedControlPointsUndo(
+  rpcClient: RpcClient,
+  canvasComponent: GeologyCanvas,
+  col: TaxaColumn,
+  prevPoints: TaxaColumn['controlPoints'],
+  onSyncUi: () => void
+): void {
+  const rois = canvasComponent.data.rois ?? [];
+  const roi = rois.find((r) => r.id === col.roi_id);
+  const group = roi?.x_groups?.find((g) => g.id === col.x_group_id);
+  const zeroX = col.startX + resolveAxisStroke(col, group);
+  const prevWriteback = controlPointsForWriteback(prevPoints, zeroX);
+  const nextPoints = col.controlPoints.map((p) => ({ ...p }));
+  const nextWriteback = controlPointsForWriteback(nextPoints, zeroX);
+  const colIndex = col.col_index ?? canvasComponent.data.columns.indexOf(col);
+  const colId = col.id;
+  undoStack.push(
+    makeControlPointsUndo(
+      col.name,
+      prevWriteback,
+      nextWriteback,
+      prevPoints,
+      nextPoints,
+      async (wb, uiPts) => {
+        const res = await rpcClient.setControlPoints(colIndex, wb);
+        const target = canvasComponent.data.columns.find((c) => c.id === colId);
+        if (target) {
+          target.controlPoints = uiPts.map((p) => ({ ...p }));
+          if (res?.points) {
+            target.curvePoints = res.points.map((p) => ({
+              y: Number(p.row ?? p.y),
+              x: Number(p.x),
+            }));
+          }
+        }
+        onSyncUi();
+      },
+      async () => {
+        const fresh = await rpcClient.getDiagramData();
+        const target = fresh.columns.find((c) => c.id === colId);
+        return ((target?.controlPoints ?? []) as Array<{ row?: number; y?: number; x: number; manual?: boolean }>).map(
+          (p) => ({
+            row: Number(p.row ?? p.y),
+            x: Number(p.x),
+            manual: Boolean(p.manual),
+          })
+        );
+      }
+    )
+  );
+  refreshUndoButtons({
+    canUndo: undoStack.state.canUndo,
+    canRedo: undoStack.state.canRedo,
+  });
+}
 
 export interface InspectorBridgeCallbacks {
   setHudNotice: (text: string, duration?: number) => void;
@@ -54,6 +117,7 @@ export function createInspectorCallbacks(
     onDigitizeActiveColumn: async () => {
       const activeCol = canvasComponent.getActiveColumn();
       if (!activeCol) return;
+      const prevPoints = activeCol.controlPoints.map((p) => ({ ...p }));
       try {
         const { points, curvePoints, brokenRows, ambiguousRows } = await rpcClient.digitizeColumnWithStats(activeCol.id);
         if (points.length > 0) {
@@ -61,11 +125,13 @@ export function createInspectorCallbacks(
           if (curvePoints && curvePoints.length > 0) {
             activeCol.curvePoints = curvePoints;
           }
-          canvasComponent.history.push(
-            `Re-digitize ${activeCol.name}`,
-            canvasComponent.data.columns,
-            canvasComponent.data.activeTaxaId
-          );
+          pushDigitizedControlPointsUndo(rpcClient, canvasComponent, activeCol, prevPoints, () => {
+            canvasComponent.requestRender();
+            getSidebar()?.updateData(canvasComponent.data);
+            getInspector()?.updateData(canvasComponent.data);
+            callbacks.updateFooter();
+            callbacks.scheduleAutosave();
+          });
           canvasComponent.requestRender();
           getSidebar()?.updateData(canvasComponent.data);
           getInspector()?.updateData(canvasComponent.data);
@@ -93,6 +159,7 @@ export function createInspectorCallbacks(
     onRedigitizeColumn: async () => {
       const activeCol = canvasComponent.getActiveColumn();
       if (!activeCol) return;
+      const prevPoints = activeCol.controlPoints.map((p) => ({ ...p }));
       try {
         const { points, curvePoints, brokenRows, ambiguousRows } = await rpcClient.digitizeColumnWithStats(activeCol.id);
         if (points.length > 0) {
@@ -100,7 +167,13 @@ export function createInspectorCallbacks(
           if (curvePoints && curvePoints.length > 0) {
             activeCol.curvePoints = curvePoints;
           }
-          canvasComponent.history.push(`Re-digitize ${activeCol.name}`, canvasComponent.data.columns, canvasComponent.data.activeTaxaId);
+          pushDigitizedControlPointsUndo(rpcClient, canvasComponent, activeCol, prevPoints, () => {
+            canvasComponent.requestRender();
+            getSidebar()?.updateData(canvasComponent.data);
+            getInspector()?.updateData(canvasComponent.data);
+            callbacks.updateFooter();
+            callbacks.scheduleAutosave();
+          });
           canvasComponent.requestRender();
           getSidebar()?.updateData(canvasComponent.data);
           getInspector()?.updateData(canvasComponent.data);
@@ -170,21 +243,48 @@ export function createInspectorCallbacks(
     },
     onCreateRoi: async () => {
       try {
-        // 产品决策 ③：新建 ROI 是**待用户框选的空区域**，不是当前 ROI 的克隆。
-        //
-        // 因此这里刻意**不传** x0/x1/y0/y1，也**不传** name：
-        // - 不传边界 → 后端按默认值 [0,0]×[0,0] 建一个零面积壳，用户随后在画布上框选；
-        //   传当前 ROI 的边界会让新区域与旧区域逐像素重合（用户看不出任何区别）。
-        // - 不传 name → 后端自己编号并记 `name_source="default"`；显式传 name 会被
-        //   打成 "user"，等于谎称这是用户起的名字，后续重命名语义也会被污染。
+        const prevCount = (canvasComponent.data.rois ?? []).length;
         const res = await rpcClient.call<any, any>('roi.create', { composition: true });
         if (res?.roi) {
+          let createdRoiId: string | null = res.roi.id;
+          const reloadUi = async (): Promise<void> => {
+            const freshData = await rpcClient.getDiagramData();
+            canvasComponent.loadNewDiagram(freshData);
+            getSidebar()?.updateData(canvasComponent.data);
+            getInspector()?.updateData(canvasComponent.data);
+            canvasComponent.requestRender();
+            callbacks.updateFooter();
+            callbacks.scheduleAutosave();
+          };
           await rpcClient.call('roi.setActive', { roi_id: res.roi.id });
-          const freshData = await rpcClient.getDiagramData();
-          canvasComponent.loadNewDiagram(freshData);
-          getSidebar()?.updateData(canvasComponent.data);
-          getInspector()?.updateData(canvasComponent.data);
-          canvasComponent.requestRender();
+          await reloadUi();
+          const nextCount = (canvasComponent.data.rois ?? []).length;
+          undoStack.push(
+            makeCollectionAddUndo(
+              `新建有效区 ${res.roi.name}`,
+              async () => {
+                if (!createdRoiId) return;
+                await rpcClient.call('roi.remove', { roi_id: createdRoiId });
+                createdRoiId = null;
+                await reloadUi();
+              },
+              async () => {
+                const recreated = await rpcClient.call<any, any>('roi.create', { composition: true });
+                if (recreated?.roi?.id) {
+                  createdRoiId = recreated.roi.id;
+                  await rpcClient.call('roi.setActive', { roi_id: createdRoiId });
+                }
+                await reloadUi();
+              },
+              async () => ((await rpcClient.getDiagramData()).rois ?? []).length,
+              prevCount,
+              nextCount
+            )
+          );
+          refreshUndoButtons({
+            canUndo: undoStack.state.canUndo,
+            canRedo: undoStack.state.canRedo,
+          });
           callbacks.setHudNotice(`已新建并选中有效区: ${res.roi.name}`);
         }
       } catch (err) {
@@ -300,7 +400,7 @@ export function createInspectorCallbacks(
         getSidebar()?.updateData(canvasComponent.data);
         getInspector()?.updateData(canvasComponent.data);
         refreshUndoButtons({
-          canUndo: undoStack.state.canUndo || canvasComponent.history.canUndo(),
+          canUndo: undoStack.state.canUndo,
           canRedo: undoStack.state.canRedo,
         });
         callbacks.setHudNotice(`有效区已更名为: ${newName}`);
@@ -508,6 +608,24 @@ export function createInspectorCallbacks(
       // 端点像素**不传**：由后端自检（轴线右缘 + 检测末齿）。
       // 读数语义在前端、端点几何在后端——各管一段，谁都不替对方编。
       const unit = col.unit || '%';
+      const colId = col.id;
+      const prevTicks = col.x_ticks ? col.x_ticks.map((t) => ({ px: Number(t.px), value: Number(t.value) })) : null;
+      const applyXTicks = async (
+        ticks: Array<{ px: number; value: number }> | null
+      ): Promise<void> => {
+        if (ticks && ticks.length >= 2) {
+          await rpcClient.calibrateColumnXTicks(colIndex, ticks, unit);
+        } else {
+          await rpcClient.clearColumnXTicks(colIndex);
+        }
+        const fresh = await rpcClient.getDiagramData();
+        canvasComponent.loadNewDiagram(fresh);
+        getInspector()?.updateData(canvasComponent.data);
+        getSidebar()?.updateData(canvasComponent.data);
+        getToolbar()?.updateHistoryState();
+        callbacks.updateFooter();
+        callbacks.scheduleAutosave();
+      };
       try {
         const res = await rpcClient.calibrateColumnXTicks(
           colIndex,
@@ -526,11 +644,26 @@ export function createInspectorCallbacks(
           unit,
         };
         col.scale_provenance = { calibrated: true, source: 'x_ticks' };
-        canvasComponent.history.push(
-          `Calibrate X-Ticks ${col.name}`,
-          canvasComponent.data.columns,
-          canvasComponent.data.activeTaxaId
+        const nextTicks = res.x_ticks.map((t) => ({ px: Number(t.px), value: Number(t.value) }));
+        undoStack.push(
+          makeValueUndo(
+            `标定列 X 刻度 ${col.name}`,
+            prevTicks,
+            nextTicks,
+            applyXTicks,
+            async () => {
+              const fresh = await rpcClient.getDiagramData();
+              const target = fresh.columns.find((c) => c.id === colId);
+              return target?.x_ticks
+                ? target.x_ticks.map((t) => ({ px: Number(t.px), value: Number(t.value) }))
+                : null;
+            }
+          )
         );
+        refreshUndoButtons({
+          canUndo: undoStack.state.canUndo,
+          canRedo: undoStack.state.canRedo,
+        });
         canvasComponent.requestRender();
         getInspector()?.updateData(canvasComponent.data);
         getSidebar()?.updateData(canvasComponent.data);
@@ -551,15 +684,48 @@ export function createInspectorCallbacks(
         callbacks.reportBackendFailure('清空列 X 刻度', new Error(`载荷里找不到列 ${colIndex}`));
         return;
       }
+      const colId = col.id;
+      const unit = col.unit || '%';
+      const prevTicks = col.x_ticks ? col.x_ticks.map((t) => ({ px: Number(t.px), value: Number(t.value) })) : null;
+      const applyXTicks = async (
+        ticks: Array<{ px: number; value: number }> | null
+      ): Promise<void> => {
+        if (ticks && ticks.length >= 2) {
+          await rpcClient.calibrateColumnXTicks(colIndex, ticks, unit);
+        } else {
+          await rpcClient.clearColumnXTicks(colIndex);
+        }
+        const fresh = await rpcClient.getDiagramData();
+        canvasComponent.loadNewDiagram(fresh);
+        getInspector()?.updateData(canvasComponent.data);
+        getSidebar()?.updateData(canvasComponent.data);
+        getToolbar()?.updateHistoryState();
+        callbacks.updateFooter();
+        callbacks.scheduleAutosave();
+      };
       try {
         const res = await rpcClient.clearColumnXTicks(colIndex);
         col.x_ticks = null;
         if (res.cleared) {
-          canvasComponent.history.push(
-            `Clear X-Ticks ${col.name}`,
-            canvasComponent.data.columns,
-            canvasComponent.data.activeTaxaId
+          undoStack.push(
+            makeValueUndo(
+              `清空列 X 刻度 ${col.name}`,
+              prevTicks,
+              null,
+              applyXTicks,
+              async () => {
+                const fresh = await rpcClient.getDiagramData();
+                const target = fresh.columns.find((c) => c.id === colId);
+                return target?.x_ticks
+                  ? target.x_ticks.map((t) => ({ px: Number(t.px), value: Number(t.value) }))
+                  : null;
+              }
+            )
           );
+          refreshUndoButtons({
+            canUndo: undoStack.state.canUndo,
+            canRedo: undoStack.state.canRedo,
+          });
           callbacks.setHudNotice(`列 ${col.name} 的 X 标度已清空（回到未标定）`);
         }
         canvasComponent.requestRender();
@@ -612,11 +778,6 @@ export function createInspectorCallbacks(
           col.x_ticks = null;
         }
 
-        canvasComponent.history.push(
-          'Clear all X-Ticks',
-          canvasComponent.data.columns,
-          canvasComponent.data.activeTaxaId
-        );
         callbacks.setHudNotice('已清空全部列与组的 X 刻度标定（回到未标定状态）');
         canvasComponent.requestRender();
         getInspector()?.updateData(canvasComponent.data);
@@ -633,11 +794,6 @@ export function createInspectorCallbacks(
         await rpcClient.clearAllColumns();
         canvasComponent.data.columns = [];
         canvasComponent.data.activeTaxaId = '';
-        canvasComponent.history.push(
-          'Clear all columns',
-          canvasComponent.data.columns,
-          canvasComponent.data.activeTaxaId
-        );
         canvasComponent.requestRender();
         getInspector()?.updateData(canvasComponent.data);
         getSidebar()?.updateData(canvasComponent.data);
@@ -668,11 +824,6 @@ export function createInspectorCallbacks(
           yMax: ylim[1],
         });
         canvasComponent.data.columns = cols;
-        canvasComponent.history.push(
-          'Redetect Columns',
-          canvasComponent.data.columns,
-          canvasComponent.data.activeTaxaId
-        );
         callbacks.setHudNotice(`已重新分列：共识别出 ${cols.length} 个属种列。`, 4000);
         canvasComponent.requestRender();
         getInspector()?.updateData(canvasComponent.data);
@@ -787,6 +938,14 @@ export function createInspectorCallbacks(
     },
     onRoiCommitted: (roi: DataRoi) => {
       void cleanupManager.commitRoi(roi);
+    },
+    onDeleteSelectedPoint: (colId: string, pointId: string) => {
+      const col = canvasComponent.data.columns.find((c) => c.id === colId);
+      if (!col) return;
+      canvasComponent.recordControlPointsBeforeEdit(col.id);
+      col.controlPoints = col.controlPoints.filter((p) => p.id !== pointId);
+      canvasComponent.commitControlPoints(col.id);
+      canvasComponent.requestRender();
     },
     rpcClient,
   };

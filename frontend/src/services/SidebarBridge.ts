@@ -8,7 +8,8 @@ import { Toolbar } from '../components/Toolbar';
 // "Cannot access before initialization"。定义在 ProvenanceGate，main 只是转发。
 import { reportBackendFailure } from './ProvenanceGate';
 import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
-import { makeRenameUndo } from '../core/undoActions';
+import { makeRenameUndo, makeValueUndo } from '../core/undoActions';
+import { pushDigitizedControlPointsUndo } from './InspectorBridge';
 import { compensationNote, addCompensation } from '../core/compensationNote';
 
 export interface SidebarBridgeParams {
@@ -53,6 +54,17 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
       // 回填就把它抹掉（用户看到的正是「点了形态又变回去」）。
       // `null` = 清除列级覆盖、回到组级形态（组是单一事实源）。
       const colIndex = col.col_index ?? p.canvasComponent.data.columns.indexOf(col);
+      const colId = col.id;
+      const prevPlotType = col.plot_type ?? null;
+      const applyPlotType = async (pt: typeof plotType): Promise<void> => {
+        await p.rpcClient.updateColumn(colIndex, { plot_type: pt });
+        const fresh = await p.rpcClient.getDiagramData();
+        p.canvasComponent.loadNewDiagram(fresh);
+        p.getSidebar()?.updateData(p.canvasComponent.data);
+        p.getInspector()?.updateData(p.canvasComponent.data);
+        p.updateFooter();
+        p.scheduleAutosave();
+      };
       void (async () => {
         try {
           await p.rpcClient.updateColumn(colIndex, { plot_type: plotType });
@@ -62,13 +74,25 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
           return;
         }
         col.plot_type = plotType;
-        p.canvasComponent.history.push(
-          plotType
-            ? `Change ${col.name} Plot Type to ${plotType}`
-            : `Reset ${col.name} Plot Type to group`,
-          p.canvasComponent.data.columns,
-          p.canvasComponent.data.activeTaxaId
+        undoStack.push(
+          makeValueUndo(
+            plotType
+              ? `切换形态 ${col.name} → ${plotType}`
+              : `重置形态 ${col.name} 跟随组`,
+            prevPlotType,
+            plotType,
+            applyPlotType,
+            async () => {
+              const fresh = await p.rpcClient.getDiagramData();
+              const target = fresh.columns.find((c) => c.id === colId);
+              return (target?.plot_type ?? null) as typeof plotType;
+            }
+          )
         );
+        refreshUndoButtons({
+          canUndo: undoStack.state.canUndo,
+          canRedo: undoStack.state.canRedo,
+        });
         p.canvasComponent.requestRender();
         p.getSidebar()?.updateData(p.canvasComponent.data);
         p.getInspector()?.updateData(p.canvasComponent.data);
@@ -93,11 +117,6 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
       void (async () => {
         try {
           await p.rpcClient.renameColumn(taxaId, newName);
-          p.canvasComponent.history.push(
-            `Rename Taxa ${prevName} to ${newName}`,
-            p.canvasComponent.data.columns,
-            p.canvasComponent.data.activeTaxaId
-          );
           p.getToolbar()?.updateHistoryState();
           // U3：把改名登记为**可撤销动作**（逆操作 = 用同一个 renameColumn 写回旧名）。
           // 只有后端确认写入成功后才 push；逆操作自己刷后端状态，verify 也读后端。
@@ -128,7 +147,7 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
             );
           }
           refreshUndoButtons({
-            canUndo: p.canvasComponent.history.canUndo(),
+            canUndo: undoStack.state.canUndo,
             canRedo: false,
           });
           p.setHudNotice(`属种已更名为: ${newName}`);
@@ -171,11 +190,6 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
         scale_type: 'linear' as const,
       };
       cols.splice(insertAt, 0, newCol);
-      p.canvasComponent.history.push(
-        `Insert Gap Column ${newCol.name}`,
-        p.canvasComponent.data.columns,
-        newCol.id
-      );
       p.canvasComponent.setActiveTaxa(newCol.id);
       p.canvasComponent.requestRender();
       p.getSidebar()?.updateData(p.canvasComponent.data);
@@ -187,6 +201,7 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
     onDigitizeColumn: async (taxaId: string) => {
       const col = p.canvasComponent.data.columns.find((c) => c.id === taxaId);
       if (!col) return;
+      const prevPoints = col.controlPoints.map((pt) => ({ ...pt }));
       try {
         const { points, curvePoints, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(col.id);
         if (points.length > 0) {
@@ -194,11 +209,13 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
           if (curvePoints && curvePoints.length > 0) {
             col.curvePoints = curvePoints;
           }
-          p.canvasComponent.history.push(
-            `Re-digitize ${col.name}`,
-            p.canvasComponent.data.columns,
-            p.canvasComponent.data.activeTaxaId
-          );
+          pushDigitizedControlPointsUndo(p.rpcClient, p.canvasComponent, col, prevPoints, () => {
+            p.canvasComponent.requestRender();
+            p.getSidebar()?.updateData(p.canvasComponent.data);
+            p.getInspector()?.updateData(p.canvasComponent.data);
+            p.updateFooter();
+            p.scheduleAutosave();
+          });
           p.canvasComponent.requestRender();
           p.getSidebar()?.updateData(p.canvasComponent.data);
           p.getInspector()?.updateData(p.canvasComponent.data);
@@ -215,6 +232,7 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
     onRedigitizeColumn: async (taxaId: string) => {
       const col = p.canvasComponent.data.columns.find((c) => c.id === taxaId);
       if (!col) return;
+      const prevPoints = col.controlPoints.map((pt) => ({ ...pt }));
       try {
         const { points, curvePoints, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(col.id);
         if (points.length > 0) {
@@ -222,11 +240,13 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
           if (curvePoints && curvePoints.length > 0) {
             col.curvePoints = curvePoints;
           }
-          p.canvasComponent.history.push(
-            `Re-digitize ${col.name}`,
-            p.canvasComponent.data.columns,
-            p.canvasComponent.data.activeTaxaId
-          );
+          pushDigitizedControlPointsUndo(p.rpcClient, p.canvasComponent, col, prevPoints, () => {
+            p.canvasComponent.requestRender();
+            p.getSidebar()?.updateData(p.canvasComponent.data);
+            p.getInspector()?.updateData(p.canvasComponent.data);
+            p.updateFooter();
+            p.scheduleAutosave();
+          });
           p.canvasComponent.requestRender();
           p.getSidebar()?.updateData(p.canvasComponent.data);
           p.getInspector()?.updateData(p.canvasComponent.data);
@@ -244,6 +264,7 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
       const col = p.canvasComponent.data.columns.find((c) => c.id === taxaId);
       if (!col) return;
       const colIndex = col.col_index ?? p.canvasComponent.data.columns.indexOf(col);
+      const prevPoints = col.controlPoints.map((pt) => ({ ...pt }));
       try {
         const res = await p.rpcClient.call<
           { col_index?: number },
@@ -257,11 +278,13 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
         if (freshCol && freshCol.controlPoints) {
           col.controlPoints = freshCol.controlPoints;
         }
-        p.canvasComponent.history.push(
-          `Extract turning points for ${col.name}`,
-          p.canvasComponent.data.columns,
-          p.canvasComponent.data.activeTaxaId
-        );
+        pushDigitizedControlPointsUndo(p.rpcClient, p.canvasComponent, col, prevPoints, () => {
+          p.canvasComponent.requestRender();
+          p.getSidebar()?.updateData(p.canvasComponent.data);
+          p.getInspector()?.updateData(p.canvasComponent.data);
+          p.updateFooter();
+          p.scheduleAutosave();
+        });
         p.canvasComponent.requestRender();
         p.getSidebar()?.updateData(p.canvasComponent.data);
         p.getInspector()?.updateData(p.canvasComponent.data);
@@ -284,12 +307,7 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
               }
             }
           }
-          p.canvasComponent.history.push(
-            `Reset all ${res.columns_count} columns`,
-            p.canvasComponent.data.columns,
-            p.canvasComponent.data.activeTaxaId
-          );
-          p.canvasComponent.requestRender();
+          p.canvasComponent.loadNewDiagram(freshData);
           p.getSidebar()?.updateData(p.canvasComponent.data);
           p.getInspector()?.updateData(p.canvasComponent.data);
           p.setHudNotice(`已重设全部 ${res.columns_count} 列的轮廓线与拐点。`, 4000);
@@ -332,11 +350,6 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
           await p.rpcClient.updateColumn(colIndex, { plot_type: plotType });
           col.plot_type = plotType;
         }
-        p.canvasComponent.history.push(
-          `Batch change plot type to ${plotType} for ${taxaIds.length} columns`,
-          p.canvasComponent.data.columns,
-          p.canvasComponent.data.activeTaxaId
-        );
         p.canvasComponent.requestRender();
         p.getSidebar()?.updateData(p.canvasComponent.data);
         p.getInspector()?.updateData(p.canvasComponent.data);
@@ -362,11 +375,6 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
           totalComp = addCompensation(totalComp, { brokenRows, ambiguousRows });
           successCount++;
         }
-        p.canvasComponent.history.push(
-          `Batch re-digitize ${successCount} columns`,
-          p.canvasComponent.data.columns,
-          p.canvasComponent.data.activeTaxaId
-        );
         p.canvasComponent.requestRender();
         p.getSidebar()?.updateData(p.canvasComponent.data);
         p.getInspector()?.updateData(p.canvasComponent.data);
@@ -380,6 +388,28 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
     },
     onBatchRedigitizeColumns: async (taxaIds: string[]) => {
       if (!taxaIds || taxaIds.length === 0) return;
+      const allCols = p.canvasComponent.data.columns;
+      if (taxaIds.length === allCols.length && taxaIds.length > 2) {
+        try {
+          const res = await p.rpcClient.redigitizeAllColumns(false);
+          if (res && res.success) {
+            const currentActiveId = p.canvasComponent.data.activeTaxaId;
+            const freshData = await p.rpcClient.getDiagramData();
+            if (currentActiveId && freshData.columns.some((c) => c.id === currentActiveId)) {
+              freshData.activeTaxaId = currentActiveId;
+            }
+            p.canvasComponent.loadNewDiagram(freshData);
+            p.getSidebar()?.updateData(p.canvasComponent.data);
+            p.getInspector()?.updateData(p.canvasComponent.data);
+            p.canvasComponent.requestRender();
+            p.setHudNotice(`已为全部 ${allCols.length} 列批量重新识别轮廓与拐点。`, 3500);
+            return;
+          }
+        } catch {
+          // fallback
+        }
+      }
+
       let totalComp = { brokenRows: 0, ambiguousRows: 0 };
       let successCount = 0;
       try {
@@ -394,11 +424,6 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
           totalComp = addCompensation(totalComp, { brokenRows, ambiguousRows });
           successCount++;
         }
-        p.canvasComponent.history.push(
-          `Batch re-digitize ${successCount} columns`,
-          p.canvasComponent.data.columns,
-          p.canvasComponent.data.activeTaxaId
-        );
         p.canvasComponent.requestRender();
         p.getSidebar()?.updateData(p.canvasComponent.data);
         p.getInspector()?.updateData(p.canvasComponent.data);
@@ -432,11 +457,6 @@ export function createSidebarCallbacks(p: SidebarBridgeParams) {
             col.controlPoints = freshCol.controlPoints;
           }
         }
-        p.canvasComponent.history.push(
-          `Batch extract turning points for ${successCount} columns`,
-          p.canvasComponent.data.columns,
-          p.canvasComponent.data.activeTaxaId
-        );
         p.canvasComponent.requestRender();
         p.getSidebar()?.updateData(p.canvasComponent.data);
         p.getInspector()?.updateData(p.canvasComponent.data);

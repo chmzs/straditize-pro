@@ -31,6 +31,12 @@ export interface GeologyCanvasCallbacks {
   onLineFixStroke?: (stroke: LineMaskStroke) => void;
   onGeometryChanged?: () => void;
   onOverlayError?: (overlayId: string, error: unknown) => void;
+  onAddColumnCommit?: (newCol: TaxaColumn) => void;
+  onColumnBoundsCommit?: (
+    colIndex: number,
+    prevBounds: { startX: number; endX: number },
+    nextBounds: { startX: number; endX: number }
+  ) => void;
 }
 
 /**

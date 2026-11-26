@@ -7,8 +7,6 @@ export class AddPointToolStrategy implements ToolStrategy {
   public readonly mode: ToolMode = 'addPoint';
 
   private draggingAnchor: { taxaId: string; pointId: string } | null = null;
-  private hasDraggedAnchor: boolean = false;
-  private dragInitialPointPos: Point2D | null = null;
 
   public getDraggingAnchor(): { taxaId: string; pointId: string } | null {
     return this.draggingAnchor;
@@ -50,15 +48,12 @@ export class AddPointToolStrategy implements ToolStrategy {
 
       ctx.recordControlPointsBeforeEdit?.(activeCol.id);
       const cmd = new AddPointCommand(activeCol.id, newPoint, activeCol.name);
-      ctx.history.push(`Add Anchor to ${activeCol.name}`, ctx.data.columns, ctx.data.activeTaxaId);
       cmd.execute(ctx.data);
 
-      this.dragInitialPointPos = { x: newPoint.x, y: newPoint.y };
       this.draggingAnchor = {
         taxaId: activeCol.id,
         pointId: newPoint.id,
       };
-      this.hasDraggedAnchor = false;
       ctx.data.selectedEntity = { type: 'point', colId: activeCol.id, pointId: newPoint.id };
 
       ctx.requestRender();
@@ -77,7 +72,6 @@ export class AddPointToolStrategy implements ToolStrategy {
     ctx: ToolContext
   ): boolean {
     if (this.draggingAnchor) {
-      this.hasDraggedAnchor = true;
       const col = ctx.data.columns.find((c) => c.id === this.draggingAnchor!.taxaId);
       if (col) {
         const pt = col.controlPoints.find((p) => p.id === this.draggingAnchor!.pointId);
@@ -103,28 +97,19 @@ export class AddPointToolStrategy implements ToolStrategy {
     if (this.draggingAnchor) {
       const col = ctx.data.columns.find((c) => c.id === this.draggingAnchor!.taxaId);
       if (col) {
-        if (this.hasDraggedAnchor && this.dragInitialPointPos) {
-          ctx.history.push(`Move Anchor in ${col.name}`, ctx.data.columns, ctx.data.activeTaxaId);
-        }
         ctx.commitControlPoints(col.id);
         ctx.callbacks.onDataChange?.();
       }
       this.draggingAnchor = null;
-      this.hasDraggedAnchor = false;
-      this.dragInitialPointPos = null;
       return true;
     }
 
     this.draggingAnchor = null;
-    this.hasDraggedAnchor = false;
-    this.dragInitialPointPos = null;
     return false;
   }
 
   public onMouseLeave(_e: MouseEvent, _ctx: ToolContext): void {
     this.draggingAnchor = null;
-    this.hasDraggedAnchor = false;
-    this.dragInitialPointPos = null;
   }
 
   public getCursor(_ctx: ToolContext): string {
