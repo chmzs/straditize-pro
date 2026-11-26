@@ -1173,6 +1173,15 @@ class TestSectionFiveJsonRpcMethods(unittest.TestCase):
         self.assertTrue(degrid_res["overlay_png"].startswith("data:image/png;base64,"))
 
         # 3. export.r returns valid rioja script
+        #    #196 之后导出会校验「每列都能取到数」（不变量 2 / 11）。本用例验的是 RPC 表面，
+        #    故预置一列 + 一条手工点，避免用未数字化工程命中 -32001；
+        #    取数门禁本身由 test_export_no_synthetic_fallback 覆盖。
+        if not (self.session.columns or []):
+            self.session.column_add({"name": "Pinus", "startX": 315, "endX": 419})
+        self.session.column_points = {
+            int(col.get("col_index", position)): [{"row": 600, "x": 350.0}]
+            for position, col in enumerate(self.session.columns or [])
+        }
         r_script = self.rpc_call("export.r")
         self.assertIn("rioja", r_script)
         self.assertIn("strat.plot", r_script)
