@@ -297,20 +297,73 @@ def test_generated_script_actually_runs_on_a_mixed_project(tmp_path) -> None:
     assert (tmp_path / "Rplots.pdf").is_file(), "脚本必须真的画出图来"
 
 
-def test_export_script_includes_exaggeration_only_for_marked_columns() -> None:
-    """仅对标记了夸大的列在生成的 R 脚本中开启 plot.exag 与其倍率。"""
+def test_export_script_includes_exaggeration_only_for_marked_columns(tmp_path) -> None:
+    """仅对标记了夸大的列在生成的 R 脚本中开启 rioja::strat.plot 的 exag 并真跑出图验证。"""
     session = _session()
     _two_groups(session)
     col1 = session.columns[1]
     col2 = session.columns[2]
     name1 = col1.get("name") or "col02"
     name2 = col2.get("name") or "col03"
+
+    base_script = _script(session)
+    assert "exag =" not in base_script
+
     col1["exaggeration_mult"] = 5.0
     col2["exaggeration_mult"] = 5.0
 
     script = _script(session)
-    assert "plot.exag = pct_cols %in% c(" in script
+    assert "plot.exag" not in script, "rioja::strat.plot 形参是 exag，不能写 plot.exag"
+    assert "exag = pct_cols %in% c(" in script
     assert f'"{name1}"' in script
     assert f'"{name2}"' in script
     assert "exag.mult = 5" in script
+    assert "col.exag = '#cce0cc'" in script
+    assert "col.poly = 'darkgreen'" in script
+    assert "strwrap(" in script and "bquote(italic(" in script
+
+    if RSCRIPT is None or not _has_rioja():
+        return
+
+    # 判据层防假绿：真跑 R 脚本，验证开启 exag 与关闭 exag 渲染出的 PDF/SVG 字节确实不同。
+    def _run_export_svg(scr: str, tag: str) -> bytes:
+        work = tmp_path / tag
+        work.mkdir(parents=True, exist_ok=True)
+        members = _tar_members(session)
+        for name, data in members.items():
+            if not name.startswith("data/"):
+                continue
+            header = data.decode("utf-8").splitlines()[0]
+            cols = header.split(",")
+            rows = [header]
+            for r_i in range(1, 5):
+                vals = [str(r_i * 10)] + [
+                    str(round(2.0 * r_i + (0.5 if c_i in (1, 2) else 10.0), 2))
+                    for c_i in range(1, len(cols))
+                ]
+                rows.append(",".join(vals))
+            p = work / name
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text("\n".join(rows) + "\n", encoding="utf-8")
+        out_svg = work / "out.svg"
+        wrapped_scr = (
+            f"grDevices::svg('{out_svg.as_posix()}', width=12, height=8)\n"
+            + scr
+            + "\ndev.off()\n"
+        )
+        (work / "run.R").write_text(wrapped_scr, encoding="utf-8")
+        proc = subprocess.run(
+            [RSCRIPT, "run.R"],
+            cwd=str(work),
+            capture_output=True,
+            text=True,
+            timeout=180,
+            check=False,
+        )
+        assert proc.returncode == 0, proc.stderr or proc.stdout
+        return out_svg.read_bytes()
+
+    svg_off = _run_export_svg(base_script, "exag_off")
+    svg_on = _run_export_svg(script, "exag_on")
+    assert svg_off != svg_on, "开启 exag 后导出脚本渲染结果必须与关闭时不同"
 

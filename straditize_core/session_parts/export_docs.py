@@ -62,7 +62,7 @@ def strat_plot_script_lines(
     `data.csv` 必然对不上。
 
     ## 夸大线支持（按列标记精准开启）
-    - 仅对工程中标记了夸大的列（`exaggeration_mult > 1`）开启 `plot.exag`；
+    - 仅对工程中标记了夸大的列（`exaggeration_mult > 1`）开启 `rioja::strat.plot` 的 `exag`；
     - 全表未标记时保持关闭（零回归）；
     - 部分列标记时传逻辑向量（`pct_cols %in% c(...)`）与标量 `exag.mult`。
     """
@@ -98,8 +98,8 @@ def strat_plot_script_lines(
         if not in_group:
             return ""
         if len(in_group) == len(group_cols):
-            return f", plot.exag = TRUE, exag.mult = {exag_mult_val}"
-        return f", plot.exag = {var_expr} %in% {r_string_vector(in_group)}, exag.mult = {exag_mult_val}"
+            return f", exag = TRUE, exag.mult = {exag_mult_val}, col.exag = '#cce0cc'"
+        return f", exag = {var_expr} %in% {r_string_vector(in_group)}, exag.mult = {exag_mult_val}, col.exag = '#cce0cc'"
 
     y_axis_args = ""
     y_label: str | None = None
@@ -153,6 +153,15 @@ def strat_plot_script_lines(
         lines.append(f"if (file.exists({read_target})) {{")
         lines.append(f"  {df_var} <- read.csv({read_target}, check.names = FALSE)")
     lines.append(f"  if (ncol({df_var}) > 1) {{")
+    lines.append(f"    lbl_raw <- names({df_var})[-1]")
+    lines.append(
+        "    lbl_wrap <- vapply(lbl_raw, function(x) paste(strwrap(x, 20), collapse = '\\n'), character(1))"
+    )
+    lines.append(
+        "    lbl_expr <- as.expression(lapply(lbl_wrap, function(x) bquote(italic(.(x)))))"
+    )
+    lines.append("    names(lbl_expr) <- lbl_raw")
+    style_args = ", col.poly = 'darkgreen', srt.xlabel = 45, cex.xlabel = 0.7"
     if fixed:
         # 百分比列与绝对值列不能共用 0–100 基准：rioja::strat.plot 的
         # `scale.percent` 是整张表一个开关，所以分成两次调用，第二次 `add = TRUE`。
@@ -165,19 +174,19 @@ def strat_plot_script_lines(
         lines.append("    if (length(pct_cols) > 0) {")
         pct_ex = _exag_str(pct, "pct_cols")
         lines.append(
-            f"      strat.plot({df_var}[, pct_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = {rev_str}, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE{pct_ex}{y_axis_args}, title = '{roi_name}')"
+            f"      strat.plot({df_var}[, pct_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = {rev_str}, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE, x.names = lbl_expr[pct_cols]{style_args}{pct_ex}{y_axis_args}, title = '{roi_name}')"
         )
         lines.append("    }")
         lines.append("    if (length(fixed_cols) > 0) {")
         fixed_ex = _exag_str(fixed, "fixed_cols")
         lines.append(
-            f"      strat.plot({df_var}[, fixed_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = {rev_str}, scale.percent = FALSE, plot.poly = TRUE, plot.line = TRUE{fixed_ex}{y_axis_args}, add = length(pct_cols) > 0)"
+            f"      strat.plot({df_var}[, fixed_cols, drop = FALSE], yvar = {df_var}[[1]], y.rev = {rev_str}, scale.percent = FALSE, plot.poly = TRUE, plot.line = TRUE, x.names = lbl_expr[fixed_cols]{style_args}{fixed_ex}{y_axis_args}, add = length(pct_cols) > 0)"
         )
         lines.append("    }")
     else:
         all_ex = _exag_str(pct, f"names({df_var})[-1]")
         lines.append(
-            f"    strat.plot({df_var}[-1], yvar = {df_var}[[1]], y.rev = {rev_str}, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE{all_ex}{y_axis_args}, title = '{roi_name}')"
+            f"    strat.plot({df_var}[-1], yvar = {df_var}[[1]], y.rev = {rev_str}, scale.percent = TRUE, plot.poly = TRUE, plot.line = TRUE, x.names = lbl_expr{style_args}{all_ex}{y_axis_args}, title = '{roi_name}')"
         )
     lines.append("  }")
     lines.append("}\n")
