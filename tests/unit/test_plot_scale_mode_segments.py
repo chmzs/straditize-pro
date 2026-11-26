@@ -63,7 +63,6 @@ def stubbed(monkeypatch):
             "engine": "stub",
             "size_bytes": 7,
             "warnings": [],
-            "unsupported": [],
             "rscript": "/stub/Rscript",
             # plot_render 把 info["settings"] 原样回给调用方 —— 判据正是读它。
             "settings": dict(kwargs.get("settings") or {}),

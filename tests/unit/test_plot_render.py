@@ -9,8 +9,9 @@
 5. **产物去向**：默认不落盘（`path` 为 None），图以 `data_url` 交回前端；
    只有显式传 `output_path` 才写文件。旧行为默认写 `~/.straditize/plots`，
    用户点完按钮只拿到一句路径——那不是出图。
-6. 回退如实报告：只装了 rioja 时 `unsupported` 必须列出没生效的开关（Italicise /
-   Break long / Exaggeration / Min-max / 标签旋转），不许假装全应用了。
+6. **不降级**：只支持 riojaPlot。本机没有 riojaPlot 时 `render_strat_diagram` 必须抛错，
+   错误文案点名 `riojaPlot` 与安装命令；绝不许回退 `rioja::strat.plot` 出一张
+   "不夸大、不斜体、不折行"的图当成功（2026-11-26 用户裁决，原回退分支已删）。
 7. **格式枚举只有两种**（jpeg / svg）：`SUPPORTED_PLOT_FORMATS` 精确等于
    `("jpeg", "svg")`；请求 `pdf` / `png` / `jpg` / `webp` 一律 -32602，且错误消息点名
    可用值（不静默回落成 jpeg）；`format="svg"` 交回的字节以 `<?xml` 开头、含 `<svg`、> 5KB。
@@ -23,7 +24,8 @@
 把 plot_render 里的 raise JsonRpcError(...) 改成 return {"success": True} → 判据 4 变红。
 把 updateConfig 的路径校验删掉 → 判据 2 变红（坏路径被写进配置）。
 把 plot_render 的 data_url 去掉、改回只返回 path → 判据 5 变红。
-把 unsupported 恒置为空列表 → 判据 6 在只有 rioja 的机器上变红。
+把 riojaPlot 的 requireNamespace 守卫删掉、恢复 rioja 分支 → 判据 6 在任何机器上都变红
+（没有 riojaPlot 的机器会拿到一张图而不是错误）。
 把 "pdf" 加回 SUPPORTED_PLOT_FORMATS → 判据 7 的枚举与拒绝两条同时变红。
 把设备调用里的 `family = font_family` 删掉 → 判据 8 的墨迹对照变红（中文退化成方框/空白）。
 """
@@ -232,12 +234,14 @@ def test_render_writes_a_readable_svg(tmp_path) -> None:
     csv_path.write_text("depth,col01\n10,10\n20,50\n30,90\n", encoding="utf-8")
     out_path = tmp_path / "strat.svg"
 
-    if not _has_rioja():
+    if not _has_pkg("riojaPlot"):
+        # 缺 riojaPlot 必须硬失败，且文案点名安装命令（不再回退 rioja 出图）。
         with pytest.raises(RuntimeError) as excinfo:
             render_strat_diagram(
                 csv_path=str(csv_path), out_path=str(out_path), rscript=str(RSCRIPT)
             )
-        assert "rioja" in str(excinfo.value)
+        assert "riojaPlot" in str(excinfo.value), "失败提示必须点名 riojaPlot"
+        assert not out_path.is_file(), "缺包时不得产出任何图片"
         return
 
     info = render_strat_diagram(
@@ -250,7 +254,7 @@ def test_render_writes_a_readable_svg(tmp_path) -> None:
     assert out_path.is_file(), "出图必须真的落盘（这是直接调渲染层，不是 RPC）"
     assert out_path.stat().st_size > 0
     assert info["size_bytes"] == out_path.stat().st_size
-    assert info["engine"] in ("riojaPlot", "rioja")
+    assert info["engine"] == "riojaPlot", "引擎只有 riojaPlot（回退已删除）"
     with open(out_path, "rb") as handle:
         assert handle.read(5) == b"<?xml", "产物必须是能被浏览器/矢量软件打开的 SVG"
     assert b"<svg" in out_path.read_bytes()

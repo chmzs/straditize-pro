@@ -1,4 +1,4 @@
-"""本地地层图渲染：riojaPlot 优先、rioja 回退，返回图片字节。
+"""本地地层图渲染：只支持 riojaPlot，缺包即硬失败，返回图片字节。
 
 ## 为什么单独一个模块
 
@@ -7,10 +7,19 @@
 把产物以图片字节交回前端（不是默认落盘到 ~/.straditize/plots）、以及如实报告
 降级（装了 riojaPlot 才有 Italicise / Break long / Exaggeration / Min/max）。
 
-## 不静默降级
+## 不降级（2026-11-26 用户裁决）
 
-riojaPlot 缺失时回退 `rioja::strat.plot`，但**必须把这些开关没生效这件事报出去**
-（返回 `unsupported` 列表 + 一条 warning），而不是画一张少了一半特征的图当作成功。
+出图**只支持 riojaPlot**，缺包时直接 `stop()` 并给出安装命令。
+
+曾经有 `rioja::strat.plot` 回退分支，已删除，理由三条：
+1. 两个引擎的参数与能力**不等价**——`plot.exag` 是 riojaPlot 的 style 键，rioja 那边叫
+   形参 `exag`；Italicise / Break long / Min-max / 每列独立量程只有 riojaPlot 有。
+   回退分支把 `plot.exag` 传给 `rioja::strat.plot`，它会落进 `...` 被**静默忽略**，
+   画出来的图既不夸大也不报错。
+2. 双轨维护必然漂移（本次评测方就是照着 rioja 的形参去判 riojaPlot 的脚本，直接判错）。
+3. 与本文件对字体的既有政策冲突：字体缺失时明确 `stop()`，理由是"静默回退 sans 会把中文
+   画成方框"；引擎缺失却降级出图，是同一种自欺。也与 `ARCHITECTURE.md §2` 不变量 1 同源
+   ——取不到就报错，不返回替代数据。
 """
 
 from __future__ import annotations
@@ -65,17 +74,7 @@ DEFAULT_PLOT_SETTINGS: dict[str, Any] = {
     "seg_side_cap": 0.35,
 }
 
-#: 只有 riojaPlot 才有的开关；回退到 rioja 时这些不生效，必须报告。
-RIOJAPLOT_ONLY_KEYS = (
-    "italicise",
-    "break_long",
-    "break_n",
-    "minmax",
-    "plot_scale_mode",
-    "label_rotate",
-)
-
-#: 出图格式只有两种，前后端同一份枚举（用户裁决：jpg + svg；PDF 字体处理麻烦，砍掉）。
+##: 出图格式只有两种，前后端同一份枚举（用户裁决：jpg + svg；PDF 字体处理麻烦，砍掉）。
 #: jpeg = 位图，设备端烘焙好，所见即所得（预览固定用它）；svg = 矢量，适合排版放大。
 #: 曾先后支持过 png / jpg / webp / pdf：每多一种就要在前端下拉、RPC 校验、R 设备分支、
 #: 文档与测试五处各维护一遍，而用户实际只用得上位图与矢量两种。
@@ -463,8 +462,11 @@ fs <- num("font_scale", 2)
 ymin_v <- num("y_min", NA_real_)
 ymax_v <- num("y_max", NA_real_)
 yint_v <- num("y_interval", NA_real_)
-use_riojaplot <- requireNamespace("riojaPlot", quietly = TRUE)
-engine <- if (use_riojaplot) "riojaPlot" else "rioja"
+if (!requireNamespace("riojaPlot", quietly = TRUE)) {
+  stop("STRADITIZE_ERROR: 本机未安装 riojaPlot。出图只支持 riojaPlot（rioja 回退已移除），",
+       "请先执行 install.packages(\"riojaPlot\") 后重试。")
+}
+engine <- "riojaPlot"
 
 open_device()
 # 轴与刻度齿的线宽：axis() 不接收 lwd 形参，只认 par("lwd")。放这里只影响轴/齿，
@@ -472,8 +474,7 @@ open_device()
 par(lwd = num("axis_lwd", 4))
 warns <- tryCatch(
   collect_warnings({
-    if (use_riojaplot) {
-      # 参数与用户实测脚本一致：riojaPlot 默认 + 这 5 项 —— 字号不再放大，标签不重叠。
+    # 参数与用户实测脚本一致：riojaPlot 默认 + 这 5 项 —— 字号不再放大，标签不重叠。
       style <- riojaPlot::makeStyles(
         cex.xlabel = 0.7,
         srt.xlabel = 45,
@@ -653,33 +654,6 @@ warns <- tryCatch(
                              plot.exag = exag_v,
                              exag.mult = num("exag_mult", 5))
       }
-    } else {
-      y_lim <- if (is.finite(ymin_v) && is.finite(ymax_v)) c(ymin_v, ymax_v) else NULL
-      y_tks <- if (is.finite(ymin_v) && is.finite(ymax_v) && is.finite(yint_v) && yint_v > 0) {
-        seq(ymin_v, ymax_v, by = yint_v)
-      } else {
-        NULL
-      }
-      rioja::strat.plot(
-        d = as.matrix(taxa),
-        yvar = depth,
-        ylim = y_lim,
-        y.tks = y_tks,
-        y.rev = flag("rev_y", TRUE),
-        ylabel = txt("ylabel", y_var_name),
-        plot.poly = poly_v,
-        plot.bar = bar_v,
-        plot.line = line_v,
-        plot.symb = symb_v,
-        plot.exag = exag_v,
-        exag.mult = num("exag_mult", 5),
-        scale.percent = flag("percent", TRUE),
-        srt.xlabel = num("label_rotate", 45),
-        mgp = c(3, 0.45 * fs, 0.3),
-        x.pc.omit0 = TRUE,
-        title = txt("title", "")
-      )
-    }
   }),
   error = function(e) {
     graphics.off()
@@ -762,25 +736,13 @@ def render_strat_diagram(
         )
 
     engine, warnings = _parse_stdout(proc.stdout)
-    unsupported: list[str] = []
-    if engine == "rioja":
-        unsupported = [
-            k for k in RIOJAPLOT_ONLY_KEYS if merged.get(k) not in (False, None, "", 0)
-        ]
-        if unsupported:
-            warnings = warnings + [
-                "本机只装了 rioja（没有 riojaPlot）：Italicise / Break long / "
-                "Min/max / 每列独立量程（plot_scale_mode）/ 标签旋转 这些开关在 "
-                "rioja::strat.plot 里没有，本图未应用。"
-            ]
 
     return {
         "path": str(out.resolve()),
         "r_script": str(script_path.resolve()),
         "size_bytes": out.stat().st_size,
-        "engine": engine or "unknown",
+        "engine": engine or "riojaPlot",
         "warnings": warnings,
-        "unsupported": unsupported,
         "settings": merged,
         "rscript": rscript,
         "command": [

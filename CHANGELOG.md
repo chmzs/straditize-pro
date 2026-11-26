@@ -1,5 +1,14 @@
 # 变更记录（CHANGELOG）
 
+## [未发布]
+
+### 🔧 破坏性变更 (Breaking)
+- **出图只支持 riojaPlot，删除 `rioja::strat.plot` 回退分支（#191）**：缺 `riojaPlot` 时直接报错并给安装命令，
+  不再降级出图。理由：两引擎参数与能力不等价（`plot.exag` 是 riojaPlot 的 style 键，rioja 那边叫形参 `exag`；
+  Italicise / Break long / Min-max / 每列独立量程只有 riojaPlot 有），回退分支把 `plot.exag` 传给
+  `rioja::strat.plot` 会被 `...` 静默忽略，画出"不夸大、不斜体"的图却报成功。
+  同步删除 `RIOJAPLOT_ONLY_KEYS`、`plot.render` 响应里的 `unsupported` 字段与对应 warning。
+
 ## [2.1.0] - 2026-11-20
 
 ### ✨ 新增功能 (Added)

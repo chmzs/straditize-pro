@@ -289,7 +289,6 @@ class PlottingMixin:
             "columns_count": int(len(frame.columns) - 1),
             "settings": info["settings"],
             "warnings": info["warnings"] + setting_warnings,
-            "unsupported": info["unsupported"],
             "rscript": info["rscript"],
             "source": "data.csv（主 ROI 当前导出表）",
         }
