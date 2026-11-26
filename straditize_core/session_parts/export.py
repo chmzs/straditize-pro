@@ -629,7 +629,23 @@ class ExportMixin:
         data = list(table.get("data", []))
         if not columns or not data:
             return None
-        df = pd.DataFrame(data)[columns]
+        first_row = data[0]
+        if isinstance(first_row, dict):
+            missing = [col for col in columns if col not in first_row]
+            if missing:
+                raise JsonRpcError(
+                    EXPORT_ERROR,
+                    f"集成表结构不完整：缺少列 {', '.join(str(c) for c in missing[:5])}。",
+                )
+            df = pd.DataFrame(data)[columns]
+        else:
+            row_len = len(first_row) if hasattr(first_row, "__len__") else 0
+            if row_len != len(columns):
+                raise JsonRpcError(
+                    EXPORT_ERROR,
+                    f"集成表列数不匹配：表头 {len(columns)} 列，数据行 {row_len} 列。",
+                )
+            df = pd.DataFrame(data, columns=columns)
 
         samples = list(getattr(self, "samples", None) or [])
         if samples and len(samples) == len(df):

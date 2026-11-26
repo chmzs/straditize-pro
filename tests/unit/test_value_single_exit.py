@@ -136,3 +136,40 @@ def test_group_exaggeration_scales_without_redigitize() -> None:
     session.roi_group_update("roi_1", "roi_1_grp1", {"exaggeration_mult": 5})
     df5_back = pd.read_csv(io.StringIO(session.export_csv()))
     assert df5_back["Pinus"].tolist() == df5["Pinus"].tolist()
+
+
+def test_export_tar_and_bundle_zip_with_ensemble_table() -> None:
+    """#158/#185: export.tar and export.bundleZip succeed when ensemble_tables has list rows."""
+    import base64
+    import tarfile
+    import zipfile
+
+    session = _calibrated_session_with_points()
+    session.ensemble_tables = [
+        {
+            "name": "AgeModel_Ensemble_1000",
+            "columns": ["depth", "iter_1", "iter_2"],
+            "data": [
+                [0.0, 100.0, 105.0],
+                [10.0, 200.0, 210.0],
+                [20.0, 300.0, 315.0],
+            ],
+        }
+    ]
+    csv_cols = list(pd.read_csv(io.StringIO(session.export_csv())).columns)
+
+    tar_res = session.export_multi_tar()
+    assert tar_res.get("success") is True
+    tar_bytes = base64.b64decode(tar_res["tar_base64"])
+    with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r") as tf:
+        assert "data/ensemble.csv" in tf.getnames()
+        tar_data_cols = list(pd.read_csv(tf.extractfile("data.csv")).columns)
+        assert tar_data_cols == csv_cols
+
+    zip_res = session.export_bundle_zip()
+    assert zip_res.get("success") is True
+    zip_bytes = base64.b64decode(zip_res["base64"])
+    with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as zf:
+        assert "ensemble.csv" in zf.namelist()
+        zip_data_cols = list(pd.read_csv(io.BytesIO(zf.read("data.csv"))).columns)
+        assert zip_data_cols == csv_cols
