@@ -33,19 +33,205 @@
      "structure": []
     },
     "FLAG_COLLISION": {
-     "by_column": {},
+     "by_column": {
+      "col01": 4,
+      "col02": 4,
+      "col03": 4
+     },
      "columns_evaluated": 3,
-     "count": 0,
+     "count": 12,
      "criterion": "span_px >= full_span_px - 1px AND all neighbour |dx| > 2px",
      "downgraded_low_priority": 0,
      "flag": "FLAG_COLLISION",
      "missing": [],
      "reason": "",
-     "rows": [],
+     "rows": [
+      {
+       "column": "col01",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 38.0,
+       "neighbour_delta_px": [
+        36.0,
+        36.0
+       ],
+       "plot_type": "area",
+       "row_px": 266,
+       "span_px": 37.0,
+       "zero_step_fraction": 0.792
+      },
+      {
+       "column": "col01",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 38.0,
+       "neighbour_delta_px": [
+        36.0,
+        36.0
+       ],
+       "plot_type": "area",
+       "row_px": 359,
+       "span_px": 37.0,
+       "zero_step_fraction": 0.792
+      },
+      {
+       "column": "col01",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 38.0,
+       "neighbour_delta_px": [
+        36.0,
+        36.0
+       ],
+       "plot_type": "area",
+       "row_px": 594,
+       "span_px": 37.0,
+       "zero_step_fraction": 0.792
+      },
+      {
+       "column": "col01",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 38.0,
+       "neighbour_delta_px": [
+        33.5,
+        32.98
+       ],
+       "plot_type": "area",
+       "row_px": 743,
+       "span_px": 37.0,
+       "zero_step_fraction": 0.792
+      },
+      {
+       "column": "col02",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 37.0,
+       "neighbour_delta_px": [
+        35.0,
+        36.0
+       ],
+       "plot_type": "area",
+       "row_px": 266,
+       "span_px": 36.0,
+       "zero_step_fraction": 0.814
+      },
+      {
+       "column": "col02",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 37.0,
+       "neighbour_delta_px": [
+        36.0,
+        36.0
+       ],
+       "plot_type": "area",
+       "row_px": 359,
+       "span_px": 36.0,
+       "zero_step_fraction": 0.814
+      },
+      {
+       "column": "col02",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 37.0,
+       "neighbour_delta_px": [
+        36.0,
+        36.0
+       ],
+       "plot_type": "area",
+       "row_px": 594,
+       "span_px": 36.0,
+       "zero_step_fraction": 0.814
+      },
+      {
+       "column": "col02",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 37.0,
+       "neighbour_delta_px": [
+        35.0,
+        35.0
+       ],
+       "plot_type": "area",
+       "row_px": 743,
+       "span_px": 36.0,
+       "zero_step_fraction": 0.814
+      },
+      {
+       "column": "col03",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 37.0,
+       "neighbour_delta_px": [
+        32.51,
+        35.0
+       ],
+       "plot_type": "area",
+       "row_px": 266,
+       "span_px": 36.0,
+       "zero_step_fraction": 0.227
+      },
+      {
+       "column": "col03",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 37.0,
+       "neighbour_delta_px": [
+        32.24,
+        32.89
+       ],
+       "plot_type": "area",
+       "row_px": 359,
+       "span_px": 36.0,
+       "zero_step_fraction": 0.227
+      },
+      {
+       "column": "col03",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 37.0,
+       "neighbour_delta_px": [
+        32.95,
+        32.72
+       ],
+       "plot_type": "area",
+       "row_px": 594,
+       "span_px": 36.0,
+       "zero_step_fraction": 0.227
+      },
+      {
+       "column": "col03",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 37.0,
+       "neighbour_delta_px": [
+        35.0,
+        35.0
+       ],
+       "plot_type": "area",
+       "row_px": 743,
+       "span_px": 36.0,
+       "zero_step_fraction": 0.227
+      }
+     ],
      "rows_omitted": 0,
      "skipped_columns": [],
      "status": "computed",
-     "structure": []
+     "structure": [
+      {
+       "anchor_edited": true,
+       "bar_structure": false,
+       "column": "col01",
+       "full_span_px": 38.0,
+       "plot_type": "area",
+       "zero_step_fraction": 0.792
+      },
+      {
+       "anchor_edited": true,
+       "bar_structure": false,
+       "column": "col02",
+       "full_span_px": 37.0,
+       "plot_type": "area",
+       "zero_step_fraction": 0.814
+      },
+      {
+       "anchor_edited": true,
+       "bar_structure": false,
+       "column": "col03",
+       "full_span_px": 37.0,
+       "plot_type": "area",
+       "zero_step_fraction": 0.227
+      }
+     ]
     },
     "FLAG_EXAGG_RATIO": {
      "by_column": {},
@@ -91,7 +277,32 @@
      "rows_omitted": 0,
      "skipped_columns": [],
      "status": "computed",
-     "structure": []
+     "structure": [
+      {
+       "anchor_edited": true,
+       "bar_structure": false,
+       "column": "col01",
+       "full_span_px": 38.0,
+       "plot_type": "area",
+       "zero_step_fraction": 0.792
+      },
+      {
+       "anchor_edited": true,
+       "bar_structure": false,
+       "column": "col02",
+       "full_span_px": 37.0,
+       "plot_type": "area",
+       "zero_step_fraction": 0.814
+      },
+      {
+       "anchor_edited": true,
+       "bar_structure": false,
+       "column": "col03",
+       "full_span_px": 37.0,
+       "plot_type": "area",
+       "zero_step_fraction": 0.227
+      }
+     ]
     }
    },
    "n_horizons": 636,
@@ -104,35 +315,35 @@
      "declared_max": 100.0,
      "name": "col01",
      "over": false,
-     "peak": 94.7
+     "peak": 97.4
     },
     {
      "calibrated": true,
      "declared_max": 100.0,
      "name": "col02",
      "over": false,
-     "peak": 94.6
+     "peak": 97.3
     },
     {
      "calibrated": true,
      "declared_max": 100.0,
      "name": "col03",
      "over": false,
-     "peak": 94.6
+     "peak": 97.3
     }
    ],
    "roi_id": "roi_1",
    "roi_name": "pollen",
    "shortfall": {
     "max": 94.7,
-    "mean": 84.5,
+    "mean": 82.3,
     "min": 0.0
    },
    "sum": {
-    "max": 283.9,
-    "mean": 17.5,
+    "max": 292.0,
+    "mean": 19.7,
     "min": 5.3,
-    "p50": 12.3
+    "p50": 13.7
    },
    "sum_excluded_columns": [],
    "tolerance": 2.0,
@@ -140,39 +351,39 @@
    "violations_over": [
     {
      "depth": null,
-     "sum": 208.4
+     "sum": 212.4
     },
     {
      "depth": null,
-     "sum": 209.0
+     "sum": 213.0
     },
     {
      "depth": null,
-     "sum": 208.1
+     "sum": 212.1
     },
     {
      "depth": null,
-     "sum": 173.3
+     "sum": 177.3
     },
     {
      "depth": null,
-     "sum": 283.9
+     "sum": 292.0
     },
     {
      "depth": null,
-     "sum": 283.9
+     "sum": 292.0
     },
     {
      "depth": null,
-     "sum": 283.9
+     "sum": 292.0
     },
     {
      "depth": null,
-     "sum": 283.9
+     "sum": 292.0
     },
     {
      "depth": null,
-     "sum": 206.5
+     "sum": 210.5
     }
    ]
   }
@@ -299,19 +510,144 @@
       "structure": []
      },
      "FLAG_COLLISION": {
-      "by_column": {},
+      "by_column": {
+       "col01": 4,
+       "col02": 4
+      },
       "columns_evaluated": 2,
-      "count": 0,
+      "count": 8,
       "criterion": "span_px >= full_span_px - 1px AND all neighbour |dx| > 2px",
       "downgraded_low_priority": 0,
       "flag": "FLAG_COLLISION",
       "missing": [],
       "reason": "",
-      "rows": [],
+      "rows": [
+       {
+        "column": "col01",
+        "flag": "FLAG_COLLISION",
+        "full_span_px": 38.0,
+        "neighbour_delta_px": [
+         36.0,
+         36.0
+        ],
+        "plot_type": "area",
+        "row_px": 266,
+        "span_px": 37.0,
+        "zero_step_fraction": 0.792
+       },
+       {
+        "column": "col01",
+        "flag": "FLAG_COLLISION",
+        "full_span_px": 38.0,
+        "neighbour_delta_px": [
+         36.0,
+         36.0
+        ],
+        "plot_type": "area",
+        "row_px": 359,
+        "span_px": 37.0,
+        "zero_step_fraction": 0.792
+       },
+       {
+        "column": "col01",
+        "flag": "FLAG_COLLISION",
+        "full_span_px": 38.0,
+        "neighbour_delta_px": [
+         36.0,
+         36.0
+        ],
+        "plot_type": "area",
+        "row_px": 594,
+        "span_px": 37.0,
+        "zero_step_fraction": 0.792
+       },
+       {
+        "column": "col01",
+        "flag": "FLAG_COLLISION",
+        "full_span_px": 38.0,
+        "neighbour_delta_px": [
+         33.5,
+         32.98
+        ],
+        "plot_type": "area",
+        "row_px": 743,
+        "span_px": 37.0,
+        "zero_step_fraction": 0.792
+       },
+       {
+        "column": "col02",
+        "flag": "FLAG_COLLISION",
+        "full_span_px": 37.0,
+        "neighbour_delta_px": [
+         35.0,
+         36.0
+        ],
+        "plot_type": "area",
+        "row_px": 266,
+        "span_px": 36.0,
+        "zero_step_fraction": 0.814
+       },
+       {
+        "column": "col02",
+        "flag": "FLAG_COLLISION",
+        "full_span_px": 37.0,
+        "neighbour_delta_px": [
+         36.0,
+         36.0
+        ],
+        "plot_type": "area",
+        "row_px": 359,
+        "span_px": 36.0,
+        "zero_step_fraction": 0.814
+       },
+       {
+        "column": "col02",
+        "flag": "FLAG_COLLISION",
+        "full_span_px": 37.0,
+        "neighbour_delta_px": [
+         36.0,
+         36.0
+        ],
+        "plot_type": "area",
+        "row_px": 594,
+        "span_px": 36.0,
+        "zero_step_fraction": 0.814
+       },
+       {
+        "column": "col02",
+        "flag": "FLAG_COLLISION",
+        "full_span_px": 37.0,
+        "neighbour_delta_px": [
+         35.0,
+         35.0
+        ],
+        "plot_type": "area",
+        "row_px": 743,
+        "span_px": 36.0,
+        "zero_step_fraction": 0.814
+       }
+      ],
       "rows_omitted": 0,
       "skipped_columns": [],
       "status": "computed",
-      "structure": []
+      "structure": [
+       {
+        "anchor_edited": true,
+        "bar_structure": false,
+        "column": "col01",
+        "full_span_px": 38.0,
+        "plot_type": "area",
+        "zero_step_fraction": 0.792
+       },
+       {
+        "anchor_edited": true,
+        "bar_structure": false,
+        "column": "col02",
+        "full_span_px": 37.0,
+        "plot_type": "area",
+        "zero_step_fraction": 0.814
+       }
+      ]
      },
      "FLAG_EXAGG_RATIO": {
       "by_column": {},
@@ -353,7 +689,24 @@
       "rows_omitted": 0,
       "skipped_columns": [],
       "status": "computed",
-      "structure": []
+      "structure": [
+       {
+        "anchor_edited": true,
+        "bar_structure": false,
+        "column": "col01",
+        "full_span_px": 38.0,
+        "plot_type": "area",
+        "zero_step_fraction": 0.792
+       },
+       {
+        "anchor_edited": true,
+        "bar_structure": false,
+        "column": "col02",
+        "full_span_px": 37.0,
+        "plot_type": "area",
+        "zero_step_fraction": 0.814
+       }
+      ]
      }
     },
     "n_horizons": 636,
@@ -366,26 +719,26 @@
       "declared_max": 100.0,
       "name": "col01",
       "over": false,
-      "peak": 94.7
+      "peak": 97.4
      },
      {
       "calibrated": true,
       "declared_max": 100.0,
       "name": "col02",
       "over": false,
-      "peak": 94.6
+      "peak": 97.3
      }
     ],
     "roi_id": "roi_1",
     "roi_name": "pollen",
     "shortfall": {
      "max": 97.4,
-     "mean": 92.0,
+     "mean": 91.4,
      "min": 0.0
     },
     "sum": {
-     "max": 189.3,
-     "mean": 8.9,
+     "max": 194.7,
+     "mean": 9.5,
      "min": 2.6,
      "p50": 2.6
     },
@@ -395,39 +748,39 @@
     "violations_over": [
      {
       "depth": null,
-      "sum": 138.7
+      "sum": 141.3
      },
      {
       "depth": null,
-      "sum": 138.8
+      "sum": 141.5
      },
      {
       "depth": null,
-      "sum": 138.7
+      "sum": 141.3
      },
      {
       "depth": null,
-      "sum": 104.7
+      "sum": 107.3
      },
      {
       "depth": null,
-      "sum": 189.3
+      "sum": 194.7
      },
      {
       "depth": null,
-      "sum": 189.3
+      "sum": 194.7
      },
      {
       "depth": null,
-      "sum": 189.3
+      "sum": 194.7
      },
      {
       "depth": null,
-      "sum": 189.3
+      "sum": 194.7
      },
      {
       "depth": null,
-      "sum": 137.5
+      "sum": 140.2
      }
     ]
    }
@@ -462,19 +815,131 @@
       "structure": []
      },
      "FLAG_COLLISION": {
-      "by_column": {},
+      "by_column": {
+       "col03": 4,
+       "col04": 3
+      },
       "columns_evaluated": 2,
-      "count": 0,
+      "count": 7,
       "criterion": "span_px >= full_span_px - 1px AND all neighbour |dx| > 2px",
       "downgraded_low_priority": 0,
       "flag": "FLAG_COLLISION",
       "missing": [],
       "reason": "",
-      "rows": [],
+      "rows": [
+       {
+        "column": "col03",
+        "flag": "FLAG_COLLISION",
+        "full_span_px": 37.0,
+        "neighbour_delta_px": [
+         32.51,
+         35.0
+        ],
+        "plot_type": "area",
+        "row_px": 266,
+        "span_px": 36.0,
+        "zero_step_fraction": 0.227
+       },
+       {
+        "column": "col03",
+        "flag": "FLAG_COLLISION",
+        "full_span_px": 37.0,
+        "neighbour_delta_px": [
+         32.24,
+         32.89
+        ],
+        "plot_type": "area",
+        "row_px": 359,
+        "span_px": 36.0,
+        "zero_step_fraction": 0.227
+       },
+       {
+        "column": "col03",
+        "flag": "FLAG_COLLISION",
+        "full_span_px": 37.0,
+        "neighbour_delta_px": [
+         32.95,
+         32.72
+        ],
+        "plot_type": "area",
+        "row_px": 594,
+        "span_px": 36.0,
+        "zero_step_fraction": 0.227
+       },
+       {
+        "column": "col03",
+        "flag": "FLAG_COLLISION",
+        "full_span_px": 37.0,
+        "neighbour_delta_px": [
+         35.0,
+         35.0
+        ],
+        "plot_type": "area",
+        "row_px": 743,
+        "span_px": 36.0,
+        "zero_step_fraction": 0.227
+       },
+       {
+        "column": "col04",
+        "flag": "FLAG_COLLISION",
+        "full_span_px": 38.0,
+        "neighbour_delta_px": [
+         33.64,
+         36.0
+        ],
+        "plot_type": "area",
+        "row_px": 266,
+        "span_px": 37.0,
+        "zero_step_fraction": 0.077
+       },
+       {
+        "column": "col04",
+        "flag": "FLAG_COLLISION",
+        "full_span_px": 38.0,
+        "neighbour_delta_px": [
+         34.0,
+         32.93
+        ],
+        "plot_type": "area",
+        "row_px": 594,
+        "span_px": 37.0,
+        "zero_step_fraction": 0.077
+       },
+       {
+        "column": "col04",
+        "flag": "FLAG_COLLISION",
+        "full_span_px": 38.0,
+        "neighbour_delta_px": [
+         28.68,
+         26.66
+        ],
+        "plot_type": "area",
+        "row_px": 743,
+        "span_px": 37.0,
+        "zero_step_fraction": 0.077
+       }
+      ],
       "rows_omitted": 0,
       "skipped_columns": [],
       "status": "computed",
-      "structure": []
+      "structure": [
+       {
+        "anchor_edited": true,
+        "bar_structure": false,
+        "column": "col03",
+        "full_span_px": 37.0,
+        "plot_type": "area",
+        "zero_step_fraction": 0.227
+       },
+       {
+        "anchor_edited": true,
+        "bar_structure": false,
+        "column": "col04",
+        "full_span_px": 38.0,
+        "plot_type": "area",
+        "zero_step_fraction": 0.077
+       }
+      ]
      },
      "FLAG_EXAGG_RATIO": {
       "by_column": {},
@@ -516,7 +981,24 @@
       "rows_omitted": 0,
       "skipped_columns": [],
       "status": "computed",
-      "structure": []
+      "structure": [
+       {
+        "anchor_edited": true,
+        "bar_structure": false,
+        "column": "col03",
+        "full_span_px": 37.0,
+        "plot_type": "area",
+        "zero_step_fraction": 0.227
+       },
+       {
+        "anchor_edited": true,
+        "bar_structure": false,
+        "column": "col04",
+        "full_span_px": 38.0,
+        "plot_type": "area",
+        "zero_step_fraction": 0.077
+       }
+      ]
      }
     },
     "n_horizons": 636,
@@ -529,28 +1011,28 @@
       "declared_max": 100.0,
       "name": "col03",
       "over": false,
-      "peak": 94.6
+      "peak": 97.3
      },
      {
       "calibrated": true,
       "declared_max": 100.0,
       "name": "col04",
       "over": false,
-      "peak": 94.7
+      "peak": 97.4
      }
     ],
     "roi_id": "roi_2",
     "roi_name": "second",
     "shortfall": {
      "max": 94.7,
-     "mean": 79.8,
+     "mean": 76.8,
      "min": 0.0
     },
     "sum": {
-     "max": 189.3,
-     "mean": 20.9,
+     "max": 194.7,
+     "mean": 24.0,
      "min": 5.3,
-     "p50": 18.1
+     "p50": 21.7
     },
     "sum_excluded_columns": [],
     "tolerance": 2.0,
@@ -558,39 +1040,39 @@
     "violations_over": [
      {
       "depth": null,
-      "sum": 139.5
+      "sum": 142.1
      },
      {
       "depth": null,
-      "sum": 139.9
+      "sum": 142.6
+     },
+     {
+      "depth": null,
+      "sum": 141.9
+     },
+     {
+      "depth": null,
+      "sum": 106.1
+     },
+     {
+      "depth": null,
+      "sum": 194.7
+     },
+     {
+      "depth": null,
+      "sum": 126.5
+     },
+     {
+      "depth": null,
+      "sum": 194.7
+     },
+     {
+      "depth": null,
+      "sum": 194.7
      },
      {
       "depth": null,
       "sum": 139.2
-     },
-     {
-      "depth": null,
-      "sum": 103.4
-     },
-     {
-      "depth": null,
-      "sum": 189.3
-     },
-     {
-      "depth": null,
-      "sum": 122.5
-     },
-     {
-      "depth": null,
-      "sum": 189.3
-     },
-     {
-      "depth": null,
-      "sum": 189.3
-     },
-     {
-      "depth": null,
-      "sum": 136.5
      }
     ]
    }
@@ -630,19 +1112,205 @@
      "structure": []
     },
     "FLAG_COLLISION": {
-     "by_column": {},
+     "by_column": {
+      "col01": 4,
+      "col02": 4,
+      "col03": 4
+     },
      "columns_evaluated": 3,
-     "count": 0,
+     "count": 12,
      "criterion": "span_px >= full_span_px - 1px AND all neighbour |dx| > 2px",
      "downgraded_low_priority": 0,
      "flag": "FLAG_COLLISION",
      "missing": [],
      "reason": "",
-     "rows": [],
+     "rows": [
+      {
+       "column": "col01",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 38.0,
+       "neighbour_delta_px": [
+        36.0,
+        36.0
+       ],
+       "plot_type": "area",
+       "row_px": 266,
+       "span_px": 37.0,
+       "zero_step_fraction": 0.792
+      },
+      {
+       "column": "col01",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 38.0,
+       "neighbour_delta_px": [
+        36.0,
+        36.0
+       ],
+       "plot_type": "area",
+       "row_px": 359,
+       "span_px": 37.0,
+       "zero_step_fraction": 0.792
+      },
+      {
+       "column": "col01",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 38.0,
+       "neighbour_delta_px": [
+        36.0,
+        36.0
+       ],
+       "plot_type": "area",
+       "row_px": 594,
+       "span_px": 37.0,
+       "zero_step_fraction": 0.792
+      },
+      {
+       "column": "col01",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 38.0,
+       "neighbour_delta_px": [
+        33.5,
+        32.98
+       ],
+       "plot_type": "area",
+       "row_px": 743,
+       "span_px": 37.0,
+       "zero_step_fraction": 0.792
+      },
+      {
+       "column": "col02",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 37.0,
+       "neighbour_delta_px": [
+        35.0,
+        36.0
+       ],
+       "plot_type": "area",
+       "row_px": 266,
+       "span_px": 36.0,
+       "zero_step_fraction": 0.814
+      },
+      {
+       "column": "col02",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 37.0,
+       "neighbour_delta_px": [
+        36.0,
+        36.0
+       ],
+       "plot_type": "area",
+       "row_px": 359,
+       "span_px": 36.0,
+       "zero_step_fraction": 0.814
+      },
+      {
+       "column": "col02",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 37.0,
+       "neighbour_delta_px": [
+        36.0,
+        36.0
+       ],
+       "plot_type": "area",
+       "row_px": 594,
+       "span_px": 36.0,
+       "zero_step_fraction": 0.814
+      },
+      {
+       "column": "col02",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 37.0,
+       "neighbour_delta_px": [
+        35.0,
+        35.0
+       ],
+       "plot_type": "area",
+       "row_px": 743,
+       "span_px": 36.0,
+       "zero_step_fraction": 0.814
+      },
+      {
+       "column": "col03",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 37.0,
+       "neighbour_delta_px": [
+        32.51,
+        35.0
+       ],
+       "plot_type": "area",
+       "row_px": 266,
+       "span_px": 36.0,
+       "zero_step_fraction": 0.227
+      },
+      {
+       "column": "col03",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 37.0,
+       "neighbour_delta_px": [
+        32.24,
+        32.89
+       ],
+       "plot_type": "area",
+       "row_px": 359,
+       "span_px": 36.0,
+       "zero_step_fraction": 0.227
+      },
+      {
+       "column": "col03",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 37.0,
+       "neighbour_delta_px": [
+        32.95,
+        32.72
+       ],
+       "plot_type": "area",
+       "row_px": 594,
+       "span_px": 36.0,
+       "zero_step_fraction": 0.227
+      },
+      {
+       "column": "col03",
+       "flag": "FLAG_COLLISION",
+       "full_span_px": 37.0,
+       "neighbour_delta_px": [
+        35.0,
+        35.0
+       ],
+       "plot_type": "area",
+       "row_px": 743,
+       "span_px": 36.0,
+       "zero_step_fraction": 0.227
+      }
+     ],
      "rows_omitted": 0,
      "skipped_columns": [],
      "status": "computed",
-     "structure": []
+     "structure": [
+      {
+       "anchor_edited": true,
+       "bar_structure": false,
+       "column": "col01",
+       "full_span_px": 38.0,
+       "plot_type": "area",
+       "zero_step_fraction": 0.792
+      },
+      {
+       "anchor_edited": true,
+       "bar_structure": false,
+       "column": "col02",
+       "full_span_px": 37.0,
+       "plot_type": "area",
+       "zero_step_fraction": 0.814
+      },
+      {
+       "anchor_edited": true,
+       "bar_structure": false,
+       "column": "col03",
+       "full_span_px": 37.0,
+       "plot_type": "area",
+       "zero_step_fraction": 0.227
+      }
+     ]
     },
     "FLAG_EXAGG_RATIO": {
      "by_column": {},
@@ -688,7 +1356,32 @@
      "rows_omitted": 0,
      "skipped_columns": [],
      "status": "computed",
-     "structure": []
+     "structure": [
+      {
+       "anchor_edited": true,
+       "bar_structure": false,
+       "column": "col01",
+       "full_span_px": 38.0,
+       "plot_type": "area",
+       "zero_step_fraction": 0.792
+      },
+      {
+       "anchor_edited": true,
+       "bar_structure": false,
+       "column": "col02",
+       "full_span_px": 37.0,
+       "plot_type": "area",
+       "zero_step_fraction": 0.814
+      },
+      {
+       "anchor_edited": true,
+       "bar_structure": false,
+       "column": "col03",
+       "full_span_px": 37.0,
+       "plot_type": "area",
+       "zero_step_fraction": 0.227
+      }
+     ]
     }
    },
    "n_horizons": 3,
@@ -715,21 +1408,21 @@
      "declared_max": 100.0,
      "name": "col03",
      "over": false,
-     "peak": 9.7
+     "peak": 11.0
     }
    ],
    "roi_id": "roi_1",
    "roi_name": "pollen",
    "shortfall": {
     "max": 94.7,
-    "mean": 90.1,
-    "min": 87.7
+    "mean": 89.2,
+    "min": 86.3
    },
    "sum": {
-    "max": 12.3,
-    "mean": 9.9,
+    "max": 13.7,
+    "mean": 10.8,
     "min": 5.3,
-    "p50": 12.1
+    "p50": 13.5
    },
    "sum_excluded_columns": [],
    "tolerance": 2.0,

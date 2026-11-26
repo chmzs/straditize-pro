@@ -98,17 +98,17 @@
    ],
    "columns_count": 17,
    "csv_content_equals_csv": true,
-   "csv_digest": "e3cbf6c837a44f03",
+   "csv_digest": "f334749736d270ef",
    "csv_head": [
     "depth,col01,col02,col03,col04,col05,col06,col07,col08,col09,col10,col11,col12,col13,col14,col15,col16",
-    "10.0,2.6316,0.0,9.4793,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
+    "10.0,2.6316,0.0,10.8307,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA",
     "210.0,2.6316,0.0,2.7027,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA"
    ],
    "data_head": [
     {
      "col01": 2.6316,
      "col02": 0.0,
-     "col03": 9.4793,
+     "col03": 10.8307,
      "col04": null,
      "col05": null,
      "col06": null,
