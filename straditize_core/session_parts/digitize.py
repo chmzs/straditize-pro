@@ -172,6 +172,36 @@ def _merge_row_windows(
 # path and the batch ``trace_area_profile`` reader cannot drift apart.
 
 
+def _subpixel_right_boundary(
+    gray_row: np.ndarray | None,
+    last_offset: int,
+    w_col: int,
+    l_bg: float,
+    l_fg: float,
+    zero_offset: float,
+) -> float:
+    """将右缘像素索引转换为像素角边界坐标（中心系 + 0.5 = 边界系）。
+
+    轴线内部行（``last_offset < zero_offset``）原样返回 ``float(last_offset)``，避免稀疏列
+    噪声把轴线右缘推入数据区；到达列右界像素（``last_offset >= w_col - 1``）直接返回
+    ``float(last_offset + 1)``；其余实测墨迹行经 ``subpixel_edge_offset`` 求 50% 亮度穿越后
+    加 ``0.5`` 对齐像素角边界，使纯二值阶跃落在 ``last_offset + 1`` 并保留 ``1px`` 窄柱
+    （``last_offset == zero_offset``）。
+    """
+    if zero_offset > 0.0 and last_offset < zero_offset:
+        return float(last_offset)
+    if last_offset >= w_col - 1:
+        return float(last_offset + 1)
+    sub_offset = subpixel_edge_offset(
+        gray_row,
+        last_offset,
+        l_bg=l_bg,
+        l_fg=l_fg,
+        zero_offset=0.0,
+    )
+    return float(max(zero_offset, sub_offset + 0.5))
+
+
 class DigitizeSessionMixin:
     """Digitization of curves/bars and manual/automatic control point manipulations."""
 
@@ -235,7 +265,9 @@ class DigitizeSessionMixin:
             if mult is not None and mult > 1.0:
                 reader_type = "area_exaggerated"
             else:
-                reader_type = normalize_reader_type(col.get("reader_type") or col.get("plot_type") or "area")
+                reader_type = normalize_reader_type(
+                    col.get("reader_type") or col.get("plot_type") or "area"
+                )
 
         col_roi_id = col.get("roi_id")
         c_start, c_end, y0, y1 = self._digitize_column_window(
@@ -332,7 +364,9 @@ class DigitizeSessionMixin:
                     "y": float(row_int),
                     "type": str(manual.get(row_int, {}).get("kind") or "peak"),
                     "isManual": row_int in manual,
-                    "source": "manual" if row_int in manual else existing_sources.get(f"pt_{col_index}_{row_int}", "read"),
+                    "source": "manual"
+                    if row_int in manual
+                    else existing_sources.get(f"pt_{col_index}_{row_int}", "read"),
                 }
                 for row_int, x_val in sorted(control_points.items())
             ]
@@ -428,7 +462,9 @@ class DigitizeSessionMixin:
                 last_run = runs[-1]
                 if last_run[1] < border_threshold and last_run[0] > axis_offset + 3:
                     confirmed_outer_rows.append(row_y)
-                    confirmed_outer_xs.append(c_start + (last_run[0] + last_run[1]) / 2.0)
+                    confirmed_outer_xs.append(
+                        c_start + (last_run[0] + last_run[1]) / 2.0
+                    )
             elif len(runs) == 1:
                 r = runs[0]
                 if r[0] > axis_offset + 5 and r[1] < border_threshold:
@@ -443,7 +479,12 @@ class DigitizeSessionMixin:
             runs = row_runs.get(row_y, [])
             if not runs:
                 points.append(
-                    {"row": row_y, "x": float(zero_x), "y": float(row_y), "source": "main_1x"}
+                    {
+                        "row": row_y,
+                        "x": float(zero_x),
+                        "y": float(row_y),
+                        "source": "main_1x",
+                    }
                 )
                 continue
 
@@ -462,9 +503,15 @@ class DigitizeSessionMixin:
             # 且最右墨迹撞死在右边界（外线飞出列界被削断/不画），
             # 此时内线自身的起伏明显，才正式回退抓内线实心黑块作为 1x 原值输出，并打上蓝色点。
             first_run = runs[0]
-            inner_width = (first_run[1] - first_run[0]) if first_run[0] <= axis_offset + 2 else 0.0
+            inner_width = (
+                (first_run[1] - first_run[0])
+                if first_run[0] <= axis_offset + 2
+                else 0.0
+            )
 
-            is_true_truncation = (inner_width >= 0.45 * W_col) and (run_end >= border_threshold)
+            is_true_truncation = (inner_width >= 0.45 * W_col) and (
+                run_end >= border_threshold
+            )
 
             if not has_outer_curve or is_true_truncation:
                 # 真实截断：回退抓贴轴内线实心黑块右缘作为 1x 原值，打上科技蓝点 (main_1x)
@@ -473,7 +520,9 @@ class DigitizeSessionMixin:
                     inner_run = inner_candidates[0]
                     # 防横线噪点把截断内线拉到右边界：若 inner_run[1] 贯穿整个列宽且有参考内线，做插值保护
                     if inner_run[1] >= border_threshold and confirmed_inner_rows:
-                        x_pos = float(np.interp(row_y, confirmed_inner_rows, confirmed_inner_xs))
+                        x_pos = float(
+                            np.interp(row_y, confirmed_inner_rows, confirmed_inner_xs)
+                        )
                     else:
                         x_pos = float(c_start + inner_run[1])
                 else:
@@ -481,11 +530,15 @@ class DigitizeSessionMixin:
                 tag = "main_1x"
             else:
                 # 正常外线（包括触碰边界的外线大峰顶）与粘连态保护（Glue Fallback）
-                is_tiny_hole_glue = (len(runs) == 2 and (runs[1][0] - runs[0][1]) <= 2)
+                is_tiny_hole_glue = len(runs) == 2 and (runs[1][0] - runs[0][1]) <= 2
 
-                if (len(runs) >= 2 and not is_tiny_hole_glue) or (run_start > axis_offset + 5):
+                if (len(runs) >= 2 and not is_tiny_hole_glue) or (
+                    run_start > axis_offset + 5
+                ):
                     # 独立外线游程：Line 取骨架中心，Area 取最右缘，物理像素直接输出供视觉核验
-                    sub_right = subpixel_edge_offset(gray_row, run_end, l_bg, l_fg, zero_offset=axis_offset)
+                    sub_right = subpixel_edge_offset(
+                        gray_row, run_end, l_bg, l_fg, zero_offset=axis_offset
+                    )
                     sub_start = float(run_start)
                     x_feat = (
                         c_start + (sub_start + sub_right) / 2.0
@@ -497,12 +550,21 @@ class DigitizeSessionMixin:
                 else:
                     actual_right_edge = c_start + run_end
                     act_span = actual_right_edge - (c_start + axis_offset)
-                    expected_outer_x = float(
-                        np.interp(row_y, confirmed_outer_rows, confirmed_outer_xs)
-                    ) if confirmed_outer_rows else (c_start + axis_offset)
+                    expected_outer_x = (
+                        float(
+                            np.interp(row_y, confirmed_outer_rows, confirmed_outer_xs)
+                        )
+                        if confirmed_outer_rows
+                        else (c_start + axis_offset)
+                    )
                     exp_span = expected_outer_x - (c_start + axis_offset)
 
-                    if not is_tiny_hole_glue and exp_span >= 30.0 and act_span < 0.4 * exp_span and (expected_outer_x - actual_right_edge) >= 20.0:
+                    if (
+                        not is_tiny_hole_glue
+                        and exp_span >= 30.0
+                        and act_span < 0.4 * exp_span
+                        and (expected_outer_x - actual_right_edge) >= 20.0
+                    ):
                         # 确凿断线回退内线：外线缺失，抓贴轴内线右缘输出 1x 原值
                         x_pos = float(actual_right_edge)
                         tag = "main_1x"
@@ -513,11 +575,16 @@ class DigitizeSessionMixin:
                             x_pos = float(c_start + runs[0][1])
                             tag = "main_1x"
                         else:
-                            sub_right = subpixel_edge_offset(gray_row, run_end, l_bg, l_fg, zero_offset=axis_offset)
-                            x_feat = c_start + sub_right - (0.5 if exagg_style != "area" else 0.0)
+                            sub_right = subpixel_edge_offset(
+                                gray_row, run_end, l_bg, l_fg, zero_offset=axis_offset
+                            )
+                            x_feat = (
+                                c_start
+                                + sub_right
+                                - (0.5 if exagg_style != "area" else 0.0)
+                            )
                             x_pos = float(x_feat)
                             tag = tag_exagg
-
 
             x_final = float(max(zero_x, x_pos))
             pt_dict = {"row": row_y, "x": x_final, "y": float(row_y), "source": tag}
@@ -712,14 +779,15 @@ class DigitizeSessionMixin:
                             row_labels,
                             band_label_areas,
                         )
-                        sub_offset = subpixel_edge_offset(
+                        right_px = _subpixel_right_boundary(
                             gray_row,
                             last_offset,
-                            l_bg=l_bg,
-                            l_fg=l_fg,
-                            zero_offset=zero_offset,
+                            c_end - c_start,
+                            l_bg,
+                            l_fg,
+                            zero_offset,
                         )
-                        feat_x = float(c_start + sub_offset)
+                        feat_x = float(c_start + right_px)
                     else:
                         feat_x = float(
                             c_start
@@ -732,14 +800,15 @@ class DigitizeSessionMixin:
                         )
                 elif reader_type == "bar":
                     last_offset = int(np.max(fg_indices))
-                    sub_offset = subpixel_edge_offset(
+                    right_px = _subpixel_right_boundary(
                         gray_row,
                         last_offset,
-                        l_bg=l_bg,
-                        l_fg=l_fg,
-                        zero_offset=zero_offset,
+                        c_end - c_start,
+                        l_bg,
+                        l_fg,
+                        zero_offset,
                     )
-                    feat_x = float(c_start + sub_offset)
+                    feat_x = float(c_start + right_px)
                 else:  # pragma: no cover - normalize_reader_type 已排除其余取值
                     raise JsonRpcError(
                         INVALID_PARAMS, f"未实现的读取方式 {reader_type!r}"
@@ -1107,7 +1176,9 @@ class DigitizeSessionMixin:
                         "id": f"pt_{col_index}_{y0}",
                         "x": y0_x,
                         "y": float(y0),
-                        "type": "trough" if y0_x <= c_start + min_width + 1.0 else "transition",
+                        "type": "trough"
+                        if y0_x <= c_start + min_width + 1.0
+                        else "transition",
                         "isManual": False,
                         "source": row_source_map.get(int(y0), "read"),
                     },
@@ -1120,7 +1191,9 @@ class DigitizeSessionMixin:
                         "id": f"pt_{col_index}_{last_row}",
                         "x": y1_x,
                         "y": float(last_row),
-                        "type": "trough" if y1_x <= c_start + min_width + 1.0 else "transition",
+                        "type": "trough"
+                        if y1_x <= c_start + min_width + 1.0
+                        else "transition",
                         "isManual": False,
                         "source": row_source_map.get(last_row, "read"),
                     },
@@ -1603,11 +1676,15 @@ class DigitizeSessionMixin:
                 for cand in getattr(self, "line_candidates", []):
                     if cand.get("axis") == "h" and cand.get("status") == "removed":
                         geom = cand.get("geometry")
-                        w = int(round(float(cand.get("width", cand.get("thickness", 3)))))
+                        w = int(
+                            round(float(cand.get("width", cand.get("thickness", 3))))
+                        )
                         if isinstance(geom, dict):
                             y_min = min(geom.get("y0", 0), geom.get("y1", 0))
                             y_max = max(geom.get("y0", 0), geom.get("y1", 0))
-                            removed_hl_bands.append((int(y_min) - w // 2 - 1, int(y_max) + w // 2 + 1))
+                            removed_hl_bands.append(
+                                (int(y_min) - w // 2 - 1, int(y_max) + w // 2 + 1)
+                            )
                         else:
                             cy = int(round(float(cand.get("y", 0))))
                             removed_hl_bands.append((cy - w // 2 - 1, cy + w // 2 + 1))
@@ -1617,10 +1694,13 @@ class DigitizeSessionMixin:
 
                 valid_peaks = [p for p in peaks_idx if not _in_removed_hl(p_rows[p])]
                 valid_valleys = [
-                    v for v in valleys_idx
+                    v
+                    for v in valleys_idx
                     if p_x[v] > noise_cutoff and not _in_removed_hl(p_rows[v])
                 ]
-                detected_rows = set(p_rows[valid_peaks]).union(set(p_rows[valid_valleys]))
+                detected_rows = set(p_rows[valid_peaks]).union(
+                    set(p_rows[valid_valleys])
+                )
 
             # 合并控制点：峰谷算法点合并进已有控制点，严格保留原有控制点与用户手工点 (manual)
             existing_ctrls = self.control_points.get(c_idx, {})
@@ -1676,7 +1756,6 @@ class DigitizeSessionMixin:
 
         self._record_history("Redigitize all columns")
         return {"success": True, "columns_count": len(self.columns)}
-
 
 
 DigitizeMixin = DigitizeSessionMixin

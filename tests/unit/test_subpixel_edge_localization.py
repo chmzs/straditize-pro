@@ -120,3 +120,52 @@ def test_empty_row_does_not_get_lifted_by_zero_offset():
         mask, c_start=5, c_end=25, y0=0, y1=10, reader_type="area", zero_offset=2.0
     )
     assert pts[7]["x"] == 5.0
+
+
+def test_1px_bar_and_aa_edge_pixel_corner_accuracy(tmp_path):
+    # 1px 窄柱 (last_offset == zero_offset) 不得丢成 0；硬边与 25%/75% 灰度过渡边缘在像素角系下误差 < 0.1px
+    from PIL import Image
+
+    w, h = 100, 60
+    img = np.full((h, w), 255, dtype=np.uint8)
+    c_start, stroke = 10, 2
+    zero = c_start + stroke  # 12
+    img[:, c_start:zero] = 0
+    img[5:15, zero : zero + 1] = 0
+    img[20:30, zero : zero + 10] = 0
+    img[35:45, zero : zero + 20] = 0
+    img[35:45, zero + 20] = 192
+    img[48:58, zero : zero + 20] = 0
+    img[48:58, zero + 20] = 64
+    plate = tmp_path / "corner_probe.png"
+    Image.fromarray(img).save(plate)
+
+    sess = StraditizeSession()
+    sess._init_cleanup()
+    sess.load_image(image_path=str(plate))
+    sess.columns = [
+        {
+            "col_index": 0,
+            "id": "c0",
+            "name": "c0",
+            "species": "c0",
+            "start": float(c_start),
+            "startX": float(c_start),
+            "end": float(w),
+            "endX": float(w),
+            "plot_type": "area",
+            "scale_type": "linear",
+            "unit": "%",
+            "axis_stroke_px": float(stroke),
+            "x_ticks": [
+                {"px": float(zero), "value": 0.0},
+                {"px": float(zero + 80), "value": 80.0},
+            ],
+        }
+    ]
+    res = sess.digitize(0, reader_type="area")
+    pts = {int(p["row"]): float(p["x"]) for p in res["points"]}
+    assert abs((pts[10] - zero) - 1.0) < 1e-6
+    assert abs((pts[25] - zero) - 10.0) < 1e-6
+    assert abs((pts[40] - zero) - 20.247) < 0.1
+    assert abs((pts[53] - zero) - 20.749) < 0.1

@@ -267,11 +267,11 @@ def test_small_value_single_segment_row_is_not_compensated(tmp_path):
     assert ambiguous_rows == list(ASSERTED_ROWS)
     for row in SAMPLE_ROWS:
         assert points[row]["source"] == "ambiguous"
-        assert points[row]["x"] == float(ZERO_X + 3 + 0.5), (
-            "读数不动：仍是 50% 亚像素墨迹右缘（#178）"
+        assert points[row]["x"] == float(ZERO_X + 3 + 1), (
+            "读数不动：仍是 像素角右缘边界（#178）"
         )
-        assert abs(values[row] - 3 * SLOPE / MULT) <= 0.2, (
-            f"row {row}: 读数 {values[row]} 期望 {3 * SLOPE / MULT}（被乘 5 会得到 3.0）"
+        assert abs(values[row] - 4 * SLOPE / MULT) <= 0.2, (
+            f"row {row}: 读数 {values[row]} 期望 {4 * SLOPE / MULT}（被乘 5 会得到 4.0）"
         )
 
 
@@ -295,7 +295,7 @@ def test_small_value_two_layer_row_stays_ambiguous(tmp_path):
         assert abs(values[row] - 1.0) <= 0.2, (
             f"row {row}: 读数 {values[row]} 期望 1.0（外线 5px / 5；被补偿会得到 5.0）"
         )
-        assert points[row]["x"] == float(ZERO_X + 5 + 0.5)
+        assert points[row]["x"] == float(ZERO_X + 5 + 1)
 
 
 def test_column_without_multiplier_keeps_every_reading_unchanged(tmp_path):
@@ -305,7 +305,7 @@ def test_column_without_multiplier_keeps_every_reading_unchanged(tmp_path):
     assert broken_rows == [], "没有倍率就不存在'外线缺失'，不许产生断线行"
     assert ambiguous_rows == []
     for row in ASSERTED_ROWS:
-        assert points[row]["x"] == float(ZERO_X + INNER_DIST + 0.5), (
+        assert points[row]["x"] == float(ZERO_X + INNER_DIST + 1), (
             "读数必须还是改动前的墨迹右缘"
         )
         assert "source" not in points[row], "普通列的点字典必须与改动前逐字节相同"
@@ -321,8 +321,8 @@ def test_two_layer_column_without_multiplier_keeps_reading_the_outer_line(tmp_pa
     assert broken_rows == []
     assert ambiguous_rows == []
     for row in ASSERTED_ROWS:
-        assert points[row]["x"] == float(ZERO_X + OUTER_DIST + 0.5), (
-            "没有倍率 → 不做任何补偿（50% 亚像素右缘，#178）"
+        assert points[row]["x"] == float(ZERO_X + OUTER_DIST + 1), (
+            "没有倍率 → 不做任何补偿（像素角右缘边界，#178）"
         )
         assert "source" not in points[row]
     assert abs(values[Y0] - OUTER_DIST * SLOPE) <= 1.0 * SLOPE

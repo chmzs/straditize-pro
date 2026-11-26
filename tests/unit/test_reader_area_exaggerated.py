@@ -41,6 +41,7 @@
    （`points` 为空、行号进 `unreadable_rows`）。**退回"判不出就当内线读"**后 `points` 非空，
    红。这条守的是第一不变量：宁可留空，也不返回一个看起来像实测的数。
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -56,10 +57,10 @@ from straditize_core.session_parts.xscale import (
 
 W, H = 200, 260
 AXIS_X0, AXIS_W = 10, 6
-ZERO_X = AXIS_X0 + AXIS_W        # 16：读数 0 点（列左缘 + 轴粗）＝ x_ticks[0].px
-RATIO_ORIGIN = AXIS_X0 + 1       # 11：放大原点 z0 = startX + 1（比值分母）
-INNER_X1 = 26                    # 内线右缘 → (26-16)*1.0 = 10.0；内线距 = 15
-OUTER_X = 71                     # 外线 → 外线距 = 60 ⇒ k = 60/15 = 4.0
+ZERO_X = AXIS_X0 + AXIS_W  # 16：读数 0 点（列左缘 + 轴粗）＝ x_ticks[0].px
+RATIO_ORIGIN = AXIS_X0 + 1  # 11：放大原点 z0 = startX + 1（比值分母）
+INNER_X1 = 26  # 内线右缘 → (26-16)*1.0 = 10.0；内线距 = 15
+OUTER_X = 71  # 外线 → 外线距 = 60 ⇒ k = 60/15 = 4.0
 Y0, Y1 = 50, 180
 SLOPE = 1.0
 #: 取样窗口的最后一行恒无墨（`_extraction_mask` 的 y1 是开区间，最后一行被裁掉），
@@ -83,15 +84,15 @@ def _synthetic_plate(path, mode: str) -> None:
     外线画成 **1px**：右缘就是 `OUTER_X`，`k` 正好 4.0。
     """
     img = np.full((H, W), 255, dtype=np.uint8)
-    img[:, AXIS_X0 : AXIS_X0 + AXIS_W] = 0                # 列轴（通高）
-    img[Y0 : Y1 + 1, ZERO_X : INNER_X1 + 1] = 0           # 内线填充区（与轴相连）
+    img[:, AXIS_X0 : AXIS_X0 + AXIS_W] = 0  # 列轴（通高）
+    img[Y0 : Y1 + 1, ZERO_X : INNER_X1 + 1] = 0  # 内线填充区（与轴相连）
     if mode == "layers":
-        img[Y0 : Y1 + 1, OUTER_X] = 0                     # 连续外线
-        img[Y0, INNER_X1 + 1 : OUTER_X + 1] = 0            # 一行桥接 → 同连通域
+        img[Y0 : Y1 + 1, OUTER_X] = 0  # 连续外线
+        img[Y0, INNER_X1 + 1 : OUTER_X + 1] = 0  # 一行桥接 → 同连通域
     elif mode == "broken":
-        img[Y0 : Y1 + 1 : 2, OUTER_X] = 0                 # 隔行外线（断行）
+        img[Y0 : Y1 + 1 : 2, OUTER_X] = 0  # 隔行外线（断行）
     elif mode == "glued":
-        img[Y0 : Y1 + 1 : 2, OUTER_X] = 0                 # 偶数行：独立外段
+        img[Y0 : Y1 + 1 : 2, OUTER_X] = 0  # 偶数行：独立外段
         img[Y0 + 1 : Y1 + 1 : 2, ZERO_X : OUTER_X + 1] = 0  # 奇数行：填到外线（粘连）
     Image.fromarray(img).save(path)
 
@@ -184,10 +185,12 @@ def test_reads_inner_line_while_area_reads_outer(tmp_path):
     assert str(exaggerated[probe_row]["source"]).startswith("exagg_")
 
     session.column_update(0, {"reader_type": "area"})
-    area_points = {int(p["row"]): p for p in session.digitize(0, reader_type="area")["points"]}
+    area_points = {
+        int(p["row"]): p for p in session.digitize(0, reader_type="area")["points"]
+    }
     area_values = _values(session, area_points)
-    # 外线存在 + 内外线同连通域 ⇒ "最右墨迹"读到外线 55.0（亚像素定位在 55.5）。这是旧行为，也是本判据的对照。
-    assert abs(area_values[probe_row] - 55.0) <= 0.6, (
+    # 外线存在 + 内外线同连通域 ⇒ "最右墨迹"读到外线像素 71 的右角边界 72.0（72-16=56.0）。这是旧行为，也是本判据的对照。
+    assert abs(area_values[probe_row] - float(OUTER_X + 1 - ZERO_X)) <= 0.6, (
         f"area 在同图上应读到外线 ≈55.0，实际 {area_values[probe_row]:.2f} "
     )
 
@@ -245,7 +248,9 @@ def test_broken_outer_does_not_switch_scale(tmp_path):
         assert points[row]["source"] == "main_1x"
     # 读数跨度不再出现 45px 尖刺
     inner_rows = [row for row in values if row != LAST_ROW]
-    spread = max(values[row] for row in inner_rows) - min(values[row] for row in inner_rows)
+    spread = max(values[row] for row in inner_rows) - min(
+        values[row] for row in inner_rows
+    )
     assert spread <= 1.5, f"整列读数跨度过大（{spread:.2f}）：仍在 ×1/×5 之间跳变"
 
 
@@ -354,7 +359,7 @@ def test_column_update_rejects_unknown_reader_type(tmp_path):
 def test_legal_reader_type_is_stored_on_column_and_used(tmp_path):
     """合法读法：写进列字典 + 会话映射，且 `digitize` 按它取数（不传读法时）。"""
     session = _session(tmp_path, "exaggerated_update_ok.png", "layers")
-    session.column_update(0, {"reader_type": "bars"})   # 别名必须被归一化
+    session.column_update(0, {"reader_type": "bars"})  # 别名必须被归一化
     assert session.columns[0]["reader_type"] == "bar"
     assert session.reader_types[0] == "bar"
     assert session.digitize(0)["reader_type"] == "bar"
@@ -381,11 +386,15 @@ def test_step7_control_points_visual_inspection_parity(tmp_path):
         if src and src.startswith("exagg_"):
             has_outer_ctrl = True
             # 外线控制点在扫描件外线上，方便肉眼视觉核对
-            assert abs(pt["x"] - OUTER_X) <= 1.0, f"外线控制点 x={pt['x']} 必须在 {OUTER_X} 处"
+            assert abs(pt["x"] - OUTER_X) <= 1.0, (
+                f"外线控制点 x={pt['x']} 必须在 {OUTER_X} 处"
+            )
         elif src == "main_1x":
             has_inner_ctrl = True
             # 回退内线控制点在贴轴内线上
-            assert abs(pt["x"] - INNER_X1) <= 1.0, f"内线控制点 x={pt['x']} 必须在 {INNER_X1} 处"
+            assert abs(pt["x"] - INNER_X1) <= 1.0, (
+                f"内线控制点 x={pt['x']} 必须在 {INNER_X1} 处"
+            )
 
     assert has_outer_ctrl, "断线图中必须包含外线控制点 (黄色点)"
     assert has_inner_ctrl, "断线图中必须包含回退内线控制点 (科技蓝点)"
@@ -396,7 +405,11 @@ def test_step7_control_points_visual_inspection_parity(tmp_path):
     csv_str = session.export_data("csv")["csv"]
     assert "Picea" in csv_str
     # 读数均在 10.0 ~ 11.0 附近，绝不允许出现 55.0（末尾行 LAST_ROW 为开区间无墨行 0.0）
-    vals = [float(line.split(",")[1]) for line in csv_str.strip().splitlines()[1:] if line.strip()]
+    vals = [
+        float(line.split(",")[1])
+        for line in csv_str.strip().splitlines()[1:]
+        if line.strip()
+    ]
     assert len(vals) > 10
     for val in vals[:-1]:
         assert 9.5 <= val <= 11.5, f"导出科学读数必须换算为 1x，实际读出: {val}"
@@ -440,8 +453,10 @@ def test_redigitize_all_columns_matches_single_column_digitize(tmp_path):
     session.is_calibrated = True
     session.y_scale = {"slope": 1.0, "intercept": 0.0}
     csv_str = session.export_data("csv")["csv"]
-    vals = [float(line.split(",")[1]) for line in csv_str.strip().splitlines()[1:] if line.strip()]
+    vals = [
+        float(line.split(",")[1])
+        for line in csv_str.strip().splitlines()[1:]
+        if line.strip()
+    ]
     for val in vals[:-1]:
         assert 9.5 <= val <= 11.5, f"批量重新识别后读数出现未折算的异常夸大值: {val}"
-
-
