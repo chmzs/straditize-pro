@@ -13,7 +13,6 @@ from .layers import INNER_XS_KEY, OUTER_XS_KEY, paired_layer_xs
 from .xscale import (
     READ_PROFILE_QA,
     _resolve_column_group,
-    read_column_values,
     resolve_axis_stroke,
     resolve_column_scale,
 )
@@ -75,13 +74,16 @@ class QaMixin:
         roi_name = target_roi.get("name", target_roi_id)
         composition = bool(target_roi.get("composition", True))
 
-        # 掩膜变过（步骤 4 确认过干扰线 / 加过排除区）⇒ 受影响列的逐行点已被作废。
-        # 不先补齐的话，`_qa_column_values` 会把缺行按 0 点读出满量程 0 值，
-        # QA 会因为"清理过"而给出与导出不同的结论。
-        if any(
+        # 掩膜变过（步骤 4 确认过干扰线 / 加过排除区）或逐行点尚未填充时，
+        # 与导出通道同口径补齐逐行点，避免 QA 与导出各读一份状态（#157）。
+        has_stale = any(
             bool(roi.get("columns_stale"))
             for roi in (getattr(self, "rois", None) or [])
-        ):
+        )
+        has_points = bool(getattr(self, "column_points", None))
+        has_controls = any((getattr(self, "control_points", None) or {}).values())
+        has_image = getattr(self, "image", None) is not None
+        if has_stale or (not has_points and (has_controls or has_image)):
             self._fill_missing_column_points()
 
         target_columns = self._qa_target_columns(target_roi_id)
@@ -248,20 +250,21 @@ class QaMixin:
                 if hasattr(self, "column_points")
                 else []
             )
-            p_dict = {p["row"]: p["x"] for p in pts}
-            sources_dict = {p["row"]: p.get("source") for p in pts}
+            # 与导出共用唯一行值出口（`export.resolve_row_values`），仅 profile 为
+            # `READ_PROFILE_QA`（允许未标定列粗算且保留全精度），保证与导出同源（#157）。
+            from .export import resolve_row_values
 
-            # 与导出同一个读取入口，差异只由 profile 表达：QA 允许未标定列粗算
-            # （否则"该列没标定"这条提醒永远不触发）且保留全精度（门限判定不该被取整影响）。
-            # 这个差异现在是**显式命名**的，不再是散落在调用处的两个参数。
             baseline_px = float(scale.abs_px0)
-            c_vals = read_column_values(
-                scale,
-                [p_dict.get(r, baseline_px) for r in horizon_rows],
+            resolved_vals = resolve_row_values(
+                self,
+                col,
+                c_idx,
+                horizon_rows,
+                strict=False,
                 profile=READ_PROFILE_QA,
                 col_name=c_name,
-                sources=[sources_dict.get(r) for r in horizon_rows],
             )
+            c_vals = [0.0 if v is None else float(v) for v in resolved_vals]
 
             col_values_by_column.append(c_vals)
 
