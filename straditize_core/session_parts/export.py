@@ -44,7 +44,7 @@ from ..protocol import (
 #: 本模块所有构造首列的地方都走 `_y_col_label`，不在各处另写 `if primary_axis == "age"`。
 from ..strat_plot import _y_column_label
 from .agedepth import attach_windowed_rates, build_age_depth_frame
-from .xscale import read_column_values, resolve_column_scale
+from .xscale import READ_PROFILE_EXPORT, read_column_values, resolve_column_scale
 
 
 #: 视为「百分比类」的单位写法。**其余一律按该列自身量程画** —— 炭屑（counts）、
@@ -246,6 +246,7 @@ def _read_row_values(
     col_name: str,
     missing_is_na: bool,
     sources_dict: dict[int, str] | None = None,
+    profile: str = READ_PROFILE_EXPORT,
 ) -> list[Any]:
     """按行读一列读数；缺行怎么补由该列的来历决定。
 
@@ -265,6 +266,7 @@ def _read_row_values(
         values = read_column_values(
             scale,
             [baseline_px if p is None else p for p in filled],
+            profile=profile,
             strict=strict,
             col_name=col_name,
             sources=srcs,
@@ -273,11 +275,47 @@ def _read_row_values(
     values = read_column_values(
         scale,
         [baseline_px if p is None else p for p in px],
+        profile=profile,
         strict=strict,
         col_name=col_name,
         sources=srcs,
     )
     return list(values)
+
+
+def resolve_row_values(
+    session: Any,
+    col_def: dict[str, Any],
+    col_index: int,
+    rows: Sequence[int],
+    *,
+    strict: bool = False,
+    profile: str = READ_PROFILE_EXPORT,
+    col_name: str = "",
+) -> list[Any]:
+    """唯一行值出口：normalize/points → 逐行科学读数（导出 CSV/XLSX/LiPD/TAR/R 与 QA 共用）。"""
+    column_points = getattr(session, "column_points", None) or {}
+    pts = column_points.get(col_index, [])
+    p_dict = {p["row"]: p["x"] for p in pts}
+    sources_dict = {p["row"]: p.get("source") for p in pts}
+    scale = resolve_column_scale(session, col_def, col_index)
+    missing_is_na = col_index in _control_point_only_columns(session)
+    raw_values = _read_row_values(
+        scale,
+        rows,
+        p_dict,
+        strict=strict,
+        col_name=col_name,
+        missing_is_na=missing_is_na,
+        sources_dict=sources_dict,
+        profile=profile,
+    )
+    return _mask_outside_window(
+        rows,
+        raw_values,
+        _column_row_window(session, col_def, col_index),
+        p_dict,
+    )
 
 
 def _interpolate_missing_px(
@@ -719,9 +757,9 @@ class ExportMixin:
         `legacy_column_name` 只改**首列名**（`age` → `depth`），不改任何数值；给按旧
         列名读的下游脚本一个过渡口。首列名本身来自 `_y_col_label`（唯一来源）。
         """
-        # 若 column_points 尚未从控制点合成（例如刚从 .tar 工程包载入），
-        # 且存在 control_points，则自动从 control_points 填充 column_points，
-        # 确保真实数据不会因点集未合成而退化为空点集。
+        # 导出前统一门禁：任何导出通道（CSV / XLSX / LiPD / TAR / R）都必须先补齐
+        # 逐行点并在无可取数列时抛出 -32001，不允许静默交付空表。
+        self._ensure_export_column_points()
         controls = getattr(self, "control_points", None) or {}
         points = getattr(self, "column_points", None)
         if points is None:
@@ -806,25 +844,13 @@ class ExportMixin:
                         col.get("name") or col.get("species") or f"col{c_idx + 1:02d}"
                     )
 
-                scale = resolve_column_scale(self, col, c_idx)
-                pts = column_points.get(c_idx, [])
-                p_dict = {p["row"]: p["x"] for p in pts}
-                sources_dict = {p["row"]: p.get("source") for p in pts}
-                # 未标定整列不给数在 read_column_values 里判；缺行给 0 还是 NA 由
-                # 该列是不是「控制点合成」决定（与 _export_value_columns 同一入口）。
-                data_dict[col_name] = _mask_outside_window(
+                data_dict[col_name] = resolve_row_values(
+                    self,
+                    col,
+                    c_idx,
                     row_list,
-                    _read_row_values(
-                        scale,
-                        row_list,
-                        p_dict,
-                        strict=strict,
-                        col_name=col_name,
-                        missing_is_na=c_idx in _control_point_only_columns(self),
-                        sources_dict=sources_dict,
-                    ),
-                    _column_row_window(self, col, c_idx),
-                    p_dict,
+                    strict=strict,
+                    col_name=col_name,
                 )
 
             frame = pd.DataFrame(data_dict)
@@ -2236,7 +2262,6 @@ class ExportMixin:
         """
         columns = getattr(self, "columns", [])
         taxa_names = getattr(self, "taxa_names", [])
-        sparse_columns = _control_point_only_columns(self)
         values: dict[str, Any] = {}
         for c_idx in sorted(self.column_points.keys()):
             col_def = columns[c_idx] if c_idx < len(columns) else {}
@@ -2249,25 +2274,13 @@ class ExportMixin:
                     or f"col{c_idx + 1:02d}"
                 )
 
-            pts = self.column_points[c_idx]
-            p_dict = {p["row"]: p["x"] for p in pts}
-            sources_dict = {p["row"]: p.get("source") for p in pts}
-            scale = resolve_column_scale(self, col_def, c_idx)
-            # 未标定整列不给数在 read_column_values 里判；缺行给 0 点（无墨迹 = 真零）
-            # 还是 None（控制点合成列 = 没有这一行的读数），由该列的来历决定。
-            values[col_name] = _mask_outside_window(
+            values[col_name] = resolve_row_values(
+                self,
+                col_def,
+                c_idx,
                 all_rows,
-                _read_row_values(
-                    scale,
-                    all_rows,
-                    p_dict,
-                    strict=strict,
-                    col_name=col_name,
-                    missing_is_na=c_idx in sparse_columns,
-                    sources_dict=sources_dict,
-                ),
-                _column_row_window(self, col_def, c_idx),
-                p_dict,
+                strict=strict,
+                col_name=col_name,
             )
         return values
 

@@ -38,6 +38,8 @@ export interface ScaleSnapshotTarget {
   plot_type?: unknown;
   /** 列级轴粗覆盖（`null` = 跟随组）。拖绿线改的就是它，面板「仅本列」直接读这个字段。 */
   axis_stroke_px?: unknown;
+  /** 列生效的放大倍数（由后端 `resolve_column_scale` 随 `getDiagramData` 下发）。 */
+  exaggeration_mult?: unknown;
 }
 
 /**
@@ -72,6 +74,8 @@ export function applyScaleSnapshot<T extends ScaleSnapshotTarget>(
     target.plot_type = freshCol.plot_type;
     // 列级轴粗同理：拖完绿线后端已经写进去了，镜像不跟就会让「仅本列」停在旧值。
     target.axis_stroke_px = freshCol.axis_stroke_px;
+    // 放大倍数同步回填：侧栏峰值读的是 col.exaggeration_mult，不同步会与导出差 M 倍（#150）。
+    target.exaggeration_mult = freshCol.exaggeration_mult;
     applied += 1;
   }
   return applied;
