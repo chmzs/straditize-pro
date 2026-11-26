@@ -251,6 +251,22 @@ def test_tar_readme_states_missing_data_semantics():
     assert b"never NA" not in readme, "不得再出现 never-NA 断言"
 
 
+def _seed_column_points(session) -> None:
+    """为「只验导出结构」的用例预置取数点。
+
+    这些用例验的是 tar / xlsx 的文件命名与 README 文案，不验取数算法；而 #196 把
+    「无可取数的列必须报错」（不变量 2 / 11）下沉到了 `get_roi_dataframes` 入口，
+    未预置点的工程会被直接拒掉。取数门禁本身由
+    `tests/unit/test_export_no_synthetic_fallback.py` 覆盖，不在这里重复验。
+    """
+    session.column_points = {
+        int(col.get("col_index", position)): [
+            {"row": 50, "x": float(col.get("startX", 0.0)) + 10.0},
+        ]
+        for position, col in enumerate(session.columns or [])
+    }
+
+
 def test_unnamed_roi_csv_files_use_data_roi_sequence():
     """未命名的 ROI：per-ROI CSV 文件名用 `data_roi_<序号>`，不把内部 ID 暴露给下游。
 
@@ -270,6 +286,7 @@ def test_unnamed_roi_csv_files_use_data_roi_sequence():
     session.column_add({"name": "Chenopodiaceae", "startX": 500, "endX": 620})
     session.column_update(1, {"roi_id": roi_b["id"]})
     session.roi_set_primary(roi_a["id"])
+    _seed_column_points(session)
 
     result = session.export_multi_tar()
     raw = base64.b64decode(result.get("data") or result.get("tar_base64"))
@@ -298,6 +315,9 @@ def test_auto_created_roi_uses_sequence_name_not_pollen():
     session.load_image("straditize_core/assets/tutorials/hoya-del-castillo.png")
     roi = session.rois[0]
     assert roi.get("name_source") == "default", roi
+    # 载图后没有任何列：本用例只验 ROI 命名，故补一列 + 预置点，让导出能过取数门禁。
+    session.column_add({"name": "Pinus", "startX": 320, "endX": 419})
+    _seed_column_points(session)
     res = session.export_multi_tar()
     with tarfile.open(fileobj=io.BytesIO(base64.b64decode(res["tar_base64"]))) as tf:
         names = tf.getnames()
