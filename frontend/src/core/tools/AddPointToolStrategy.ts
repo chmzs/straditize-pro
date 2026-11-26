@@ -48,6 +48,7 @@ export class AddPointToolStrategy implements ToolStrategy {
         createdAt: Date.now(),
       };
 
+      ctx.recordControlPointsBeforeEdit?.(activeCol.id);
       const cmd = new AddPointCommand(activeCol.id, newPoint, activeCol.name);
       ctx.history.push(`Add Anchor to ${activeCol.name}`, ctx.data.columns, ctx.data.activeTaxaId);
       cmd.execute(ctx.data);

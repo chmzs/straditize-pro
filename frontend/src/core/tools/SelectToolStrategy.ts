@@ -65,8 +65,9 @@ export class SelectToolStrategy implements ToolStrategy {
       ctx.data.selectedEntity = { type: 'point', colId: hitAnchor.taxaId, pointId: hitAnchor.pointId };
       const col = ctx.data.columns.find((c) => c.id === hitAnchor.taxaId);
       const pt = col?.controlPoints.find((p) => p.id === hitAnchor.pointId);
-      if (pt) {
+      if (pt && col) {
         this.dragInitialPointPos = { x: pt.x, y: pt.y };
+        ctx.recordControlPointsBeforeEdit?.(col.id);
       }
       ctx.callbacks.onTaxaChange?.(hitAnchor.taxaId);
       ctx.updateCursor();

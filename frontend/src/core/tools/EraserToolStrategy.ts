@@ -34,6 +34,7 @@ export class EraserToolStrategy implements ToolStrategy {
       if (col) {
         const pt = col.controlPoints.find((p) => p.id === hitAnchor.pointId);
         if (pt) {
+          ctx.recordControlPointsBeforeEdit?.(col.id);
           const cmd = new DeletePointCommand(col.id, pt, col.name);
           cmd.execute(ctx.data);
           this.erasedCount++;

@@ -57,7 +57,7 @@ export function makeCalibrationUndo(
     label: `标定 ${prev.topValue}${prev.unit} → ${next.topValue}${next.unit}（Y 轴）`,
     inverse: () => apply(prev),
     forward: () => apply(next),
-    verify: async () => same(await read(), prev),
+    verify: async (direction) => same(await read(), direction === 'inverse' ? prev : next),
   };
 }
 
@@ -86,7 +86,45 @@ export function makeRenameUndo(
     label: `重命名${kindLabel} ${oldName} → ${newName}（${id}）`,
     inverse: () => apply(oldName),
     forward: () => apply(newName),
-    verify: async () => (await read()) === oldName,
+    verify: async (direction) => (await read()) === (direction === 'inverse' ? oldName : newName),
+  };
+}
+
+export interface ControlPointWriteback {
+  row: number;
+  x: number;
+  manual?: boolean;
+}
+
+/**
+ * 控制点整列写回类动作的构造器（#143：添加 / 拖动 / 微调 / 删除锚点）。
+ *
+ * 逆操作与重做均走同一 `setControlPoints` 写入口，确保后端 `column_points` 与前端镜像同步回退。
+ */
+export function makeControlPointsUndo<TPoint>(
+  colName: string,
+  prevWriteback: ControlPointWriteback[],
+  nextWriteback: ControlPointWriteback[],
+  prevPoints: TPoint[],
+  nextPoints: TPoint[],
+  apply: (writeback: ControlPointWriteback[], uiPoints: TPoint[]) => Promise<void>,
+  read: () => Promise<ControlPointWriteback[]>
+): UndoableOp {
+  /**
+   * 行号序列是这条动作的**稳定签名**：`row` 是整数行号，`x` 是浮点读数
+   * （后端可能按 0.1px 归一），拿 x 做严格相等会在合法实现上假红。
+   * 用「点数 + 行号序列」足以区分 #143 的病根——"后端根本没变"时签名必然相同。
+   */
+  const signature = (pts: readonly ControlPointWriteback[]): string =>
+    `${pts.length}|${pts.map((point) => point.row).join(',')}`;
+  return {
+    label: `编辑控制点 ${colName}（${prevPoints.length} → ${nextPoints.length}）`,
+    inverse: () => apply(prevWriteback, prevPoints),
+    forward: () => apply(nextWriteback, nextPoints),
+    // 复核读后端权威状态（不是前端镜像）：撤销要等于 prev、重做要等于 next。
+    verify: async (direction) =>
+      signature(await read()) ===
+      signature(direction === 'inverse' ? prevWriteback : nextWriteback),
   };
 }
 

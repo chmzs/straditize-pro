@@ -59,6 +59,7 @@ export interface ToolContext {
    * 不回写后端的话导出面板与 data.csv 读到的还是上一次数字化时的点。
    */
   commitControlPoints: (colId: string) => void;
+  recordControlPointsBeforeEdit?: (colId: string) => void;
   /** 触发光标重评估 */
   updateCursor: () => void;
   /** 切换工具模式 */

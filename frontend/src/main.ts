@@ -1,8 +1,20 @@
 import './style.css';
 import { RpcClient } from './services/RpcClient';
 import { HistoryManager } from './core/HistoryManager';
-import { undoStack } from './core/undoRuntime';
-import { makeCalibrationUndo } from './core/undoActions';
+import { undoStack, refreshUndoButtons } from './core/undoRuntime';
+
+/** 后端 `controlPoints` 的读取形态（row 可能是 y 的别名，见 types/pollen.ts）。 */
+interface ControlPointLike {
+  row?: number;
+  y?: number;
+  x: number;
+  manual?: boolean;
+}
+import {
+  makeCalibrationUndo,
+  makeControlPointsUndo,
+  type ControlPointWriteback,
+} from './core/undoActions';
 import { GeologyCanvas } from './components/GeologyCanvas';
 import { setGroupCalibMark } from './components/canvas/groupCalibMarks';
 import { handleTickPicked } from './components/steps/XTicksPanel';
@@ -34,7 +46,7 @@ import { FileLoaderService } from './services/FileLoaderService';
 import { WorkflowController } from './services/WorkflowController';
 import { CleanupManager } from './services/CleanupManager';
 import { createInspectorCallbacks } from './services/InspectorBridge';
-import { createToolbarCallbacks } from './services/ToolbarBridge';
+import { createHistoryHandlers, createToolbarCallbacks } from './services/ToolbarBridge';
 import { createSidebarCallbacks } from './services/SidebarBridge';
 import { registerWebMcpAndInspectionHandles } from './services/WebMcpBridge';
 import { applyTheme, createFooterDom, createHudDom, createWorkspaceDom } from './app/dom';
@@ -225,7 +237,16 @@ async function bootstrap() {
     }
   );
 
+  const historyHandlers = createHistoryHandlers({
+    getCanvas: () => canvasComponent,
+    cleanupManager,
+    getToolbar: () => toolbar,
+    reportBackendFailure,
+  });
+
   const canvasComponent = new GeologyCanvas(canvasWrapper, initialData, history, {
+    onUndo: historyHandlers.onUndo,
+    onRedo: historyHandlers.onRedo,
     onAxisStrokeCommit: (colIndex, strokePx, previousStroke) => {
       void (async () => {
         try {
@@ -255,18 +276,70 @@ async function bootstrap() {
     // 列点编辑落库：拖动结束 / 删除锚点 / 微调去抖后把整列锚点推给后端。
     // 失败必须冒泡（后端会因 data_ylim 缺失等拒绝），不许只在控制台留一行。
     onControlPointsCommit: (colIndex, points) => {
+      const undoPayload = canvasComponent.consumeControlPointsUndoPayload(colIndex);
       void (async () => {
-        try {
-          const res = await rpcClient.setControlPoints(colIndex, points);
-          if (res?.points) {
-            const col = canvasComponent.data.columns[colIndex];
-            if (col) {
+        const applyControlPoints = async (
+          writeback: ControlPointWriteback[],
+          uiPoints?: typeof undoPayload extends infer P
+            ? P extends { prevControlPoints: infer U }
+              ? U
+              : never
+            : never
+        ): Promise<void> => {
+          const res = await rpcClient.setControlPoints(colIndex, writeback);
+          const col = canvasComponent.data.columns[colIndex];
+          if (col) {
+            if (uiPoints) {
+              col.controlPoints = uiPoints.map((p) => ({ ...p }));
+            }
+            if (res?.points) {
               col.curvePoints = res.points.map((p) => ({
                 y: Number(p.row ?? p.y),
                 x: Number(p.x),
               }));
-              canvasComponent.requestRender();
             }
+            canvasComponent.requestRender();
+            sidebar?.updateData(canvasComponent.data);
+            inspector?.updateData(canvasComponent.data);
+            updateFooter();
+            scheduleAutosave();
+          }
+        };
+
+        try {
+          const res = await rpcClient.setControlPoints(colIndex, points);
+          const col = canvasComponent.data.columns[colIndex];
+          if (col && res?.points) {
+            col.curvePoints = res.points.map((p) => ({
+              y: Number(p.row ?? p.y),
+              x: Number(p.x),
+            }));
+            canvasComponent.requestRender();
+          }
+          if (col && undoPayload) {
+            undoStack.push(
+              makeControlPointsUndo(
+                col.name,
+                undoPayload.prevWriteback,
+                points,
+                undoPayload.prevControlPoints,
+                undoPayload.nextControlPoints,
+                (wb, uiPts) => applyControlPoints(wb, uiPts),
+                async () => {
+                  const fresh = await rpcClient.getDiagramData();
+                  const target = fresh.columns.find((c) => c.id === col.id);
+                  return ((target?.controlPoints ?? []) as ControlPointLike[]).map((p) => ({
+                    row: Number(p.row ?? p.y),
+                    x: Number(p.x),
+                    manual: Boolean(p.manual),
+                  }));
+                }
+              )
+            );
+            refreshUndoButtons({
+              canUndo: undoStack.state.canUndo || canvasComponent.history.canUndo(),
+              canRedo: undoStack.state.canRedo,
+            });
           }
         } catch (err) {
           notifyError(

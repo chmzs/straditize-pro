@@ -47,6 +47,74 @@ export interface ToolbarBridgeParams {
   autosaveKey: string;
 }
 
+export interface HistoryHandlersDeps {
+  getCanvas: () => GeologyCanvas;
+  cleanupManager: CleanupManager;
+  getToolbar: () => Toolbar | undefined;
+  reportBackendFailure: (action: string, error: unknown) => void;
+}
+
+/**
+ * 撤销/重做的统一执行入口（顶栏按钮与键盘 Ctrl+Z / Ctrl+Y 共用）。
+ */
+export function createHistoryHandlers(deps: HistoryHandlersDeps): {
+  onUndo: () => void;
+  onRedo: () => void;
+} {
+  const syncButtons = (): void => {
+    const canvasComponent = deps.getCanvas();
+    refreshUndoButtons({
+      canUndo: undoStack.state.canUndo || canvasComponent.history.canUndo(),
+      canRedo: undoStack.state.canRedo,
+    });
+  };
+
+  return {
+    onUndo: () => {
+      // 迁移期：栈里有「已迁移动作」的逆操作时优先走它（真正的后端回退）；
+      // 否则回落到旧的前端快照重放（未迁移动作，行为与改造前一致）。
+      if (undoStack.state.canUndo) {
+        void undoStack
+          .undo()
+          .then((ok) => {
+            if (ok) deps.getToolbar()?.updateHistoryState();
+            syncButtons();
+          })
+          .catch((err) => {
+            syncButtons();
+            deps.reportBackendFailure('撤销', err);
+          });
+        return;
+      }
+      const canvasComponent = deps.getCanvas();
+      const prev = canvasComponent.history.undo();
+      if (prev) {
+        deps.cleanupManager.applyHistorySnapshot(prev);
+      }
+    },
+    onRedo: () => {
+      if (undoStack.state.canRedo) {
+        void undoStack
+          .redo()
+          .then((ok) => {
+            if (ok) deps.getToolbar()?.updateHistoryState();
+            syncButtons();
+          })
+          .catch((err) => {
+            syncButtons();
+            deps.reportBackendFailure('重做', err);
+          });
+        return;
+      }
+      const canvasComponent = deps.getCanvas();
+      const next = canvasComponent.history.redo();
+      if (next) {
+        deps.cleanupManager.applyHistorySnapshot(next);
+      }
+    },
+  };
+}
+
 export function createToolbarCallbacks(p: ToolbarBridgeParams) {
   // 缩放读数有两个消费者：顶栏徽标（`Toolbar.updateScale`）与页脚（`updateFooter` →
   // `app/footer.ts:32` 现读 `viewport.scale`）。两者各自快照，**必须同一次调用里一起刷新**。
@@ -55,6 +123,12 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
     p.getToolbar()?.updateScale(p.canvasComponent.viewport.scale);
     p.updateFooter();
   };
+  const historyHandlers = createHistoryHandlers({
+    getCanvas: () => p.canvasComponent,
+    cleanupManager: p.cleanupManager,
+    getToolbar: p.getToolbar,
+    reportBackendFailure: p.reportBackendFailure,
+  });
 
   return {
     onFit: () => {
@@ -77,40 +151,8 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
       p.canvasComponent.requestRender();
       syncZoomReadouts();
     },
-    onUndo: () => {
-      // 迁移期：栈里有「已迁移动作」的逆操作时优先走它（真正的后端回退）；
-      // 否则回落到旧的前端快照重放（未迁移动作，行为与改造前一致）。
-      if (undoStack.state.canUndo) {
-        void undoStack.undo().then((ok) => {
-          if (ok) p.getToolbar()?.updateHistoryState();
-          refreshUndoButtons({
-            canUndo: undoStack.state.canUndo || p.canvasComponent.history.canUndo(),
-            canRedo: undoStack.state.canRedo,
-          });
-        });
-        return;
-      }
-      const prev = p.canvasComponent.history.undo();
-      if (prev) {
-        p.cleanupManager.applyHistorySnapshot(prev);
-      }
-    },
-    onRedo: () => {
-      if (undoStack.state.canRedo) {
-        void undoStack.redo().then((ok) => {
-          if (ok) p.getToolbar()?.updateHistoryState();
-          refreshUndoButtons({
-            canUndo: undoStack.state.canUndo || p.canvasComponent.history.canUndo(),
-            canRedo: undoStack.state.canRedo,
-          });
-        });
-        return;
-      }
-      const next = p.canvasComponent.history.redo();
-      if (next) {
-        p.cleanupManager.applyHistorySnapshot(next);
-      }
-    },
+    onUndo: historyHandlers.onUndo,
+    onRedo: historyHandlers.onRedo,
     onDigitize: async () => {
       const activeCol = p.canvasComponent.getActiveColumn();
       if (!activeCol) return;
