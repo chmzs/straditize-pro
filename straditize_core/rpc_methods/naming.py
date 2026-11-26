@@ -113,6 +113,7 @@ def register(dispatcher: Any, session: Any) -> None:
 
         col["name"] = clean_name
         col["species"] = clean_name
+        session.session_epoch = int(getattr(session, "session_epoch", 0)) + 1
         # `session.taxa_names` 是 `detect_columns` 重新分列时唯一的名字来源
         # （session.py:901-908），但它只在"载入项目"（session.py:1898）与
         # "新增列"（session.py:2168）时被填充。走"载入图片 → 自动分列"这条常规路径

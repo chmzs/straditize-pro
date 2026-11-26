@@ -477,15 +477,23 @@ export class ProjectManager {
    * 再用后端权威数据重建前端镜像。`project.load` 失败即抛出 —— 由调用方冒泡，
    * 绝不"前端恢复了就算恢复"。
    */
-  public async restoreDraft(draft: DiagramData): Promise<{
+  public async restoreDraft(
+    draft: DiagramData,
+    draftEpoch?: number
+  ): Promise<{
     /** 后端真的接受了这份草稿。 */
     restored: boolean;
+    /** 后端已有更新的修改，已跳过陈旧草稿（#180）。 */
+    staleSkipped?: boolean;
     /** 草稿里有、但工程包契约承载不了的状态说明（调用方必须展示给用户）。 */
     unrestored: string[];
     /** 后端恢复后的**权威**图谱数据；调用方据此重建画布镜像。 */
     data: DiagramData;
   }> {
     const { projectData, unrestored } = draftToProjectPayload(draft);
+    if (typeof draftEpoch === 'number') {
+      (projectData as Record<string, unknown>).draft_epoch = draftEpoch;
+    }
 
     // ## 图像一致性前置校验：草稿必须属于后端当前这张图
     //
@@ -520,10 +528,10 @@ export class ProjectManager {
       );
     }
 
-    const res = await this.rpcClient.call<Record<string, unknown>, { success?: boolean; columns_count?: number }>(
-      'project.load',
-      { project_data: projectData }
-    );
+    const res = await this.rpcClient.call<
+      Record<string, unknown>,
+      { success?: boolean; columns_count?: number; stale_draft_skipped?: boolean }
+    >('project.load', { project_data: projectData });
     if (!res || res.success !== true) {
       // 后端没明确应答成功就不能算恢复。
       throw new Error('project.load 未返回 success=true，草稿恢复中止');
@@ -531,6 +539,9 @@ export class ProjectManager {
 
     // 镜像重建只认后端回来的状态：草稿是"请求"，后端是"事实"。
     const fresh = await this.rpcClient.getDiagramData();
+    if (res.stale_draft_skipped) {
+      return { restored: false, staleSkipped: true, unrestored: [], data: fresh };
+    }
     const expected = (draft.columns ?? []).length;
     const got = (fresh.columns ?? []).length;
     // 两种真实的"静默丢数据"必须当场拆穿，而不是把界面填上草稿就当成功：

@@ -188,41 +188,50 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
    * `placeholder` 是 `556 / 0 / 1320 / 1500` 这组字面量常量，看起来像已填好 ——
    * 用户点完以为标定过了，实际上什么都没发生（T-02）。
    */
-  const commitCalibration = (reportMissing: boolean) => {
+  const readInputs = () => {
     const raw = (selector: string): string =>
       (root.querySelector(selector) as HTMLInputElement | null)?.value.trim() ?? '';
     const num = (selector: string): number => Number.parseFloat(raw(selector));
+    return {
+      topPx: num('#ycal-inp-top-px'),
+      topVal: num('#ycal-inp-top-val'),
+      botPx: num('#ycal-inp-bot-px'),
+      botVal: num('#ycal-inp-bot-val'),
+      unit: raw('#ycal-inp-unit'),
+      primaryAxis: raw('#ycal-sel-primary-axis') || 'age',
+    };
+  };
 
-    const topPx = num('#ycal-inp-top-px');
-    const topVal = num('#ycal-inp-top-val');
-    const botPx = num('#ycal-inp-bot-px');
-    const botVal = num('#ycal-inp-bot-val');
-    /**
-     * 单位原样透传，**不做任何默认值**（#111）。
-     *
-     * 空串直接送到 `core.calibrateAxes`：后端 `calibrate_axes` 的写法是
-     * `if unit: self.depth_unit = str(unit).strip() or self.depth_unit`，空串为假 ⇒
-     * 保留 `depth_unit` 原值。于是"用户没给单位"与"改个单位"被区分开：前者不写回，
-     * 后者才写。老代码这里是 `|| 'cm'`，缺一次就把 ka 轴静默改成 cm。
-     */
-    const unit = raw('#ycal-inp-unit');
-    const primaryAxis = raw('#ycal-sel-primary-axis') || 'age';
-
-    // 即使真实数值尚未填齐，也实时同步 Y1/Y2 像素位置到画布预览
+  /** 仅更新画布像素预览与比例尺读数，绝不写入后端（#172）。 */
+  const previewCalibration = () => {
+    const { topPx, topVal, botPx, botVal, unit } = readInputs();
     if (ctx.onPreviewYCalibrationPx) {
       ctx.onPreviewYCalibrationPx(
         Number.isFinite(topPx) ? topPx : null,
         Number.isFinite(botPx) ? botPx : null
       );
     }
-
-    const boundsRatio = Number.isFinite(topPx) && Number.isFinite(botPx) && Math.abs(botPx - topPx) > 0 && Number.isFinite(topVal) && Number.isFinite(botVal)
-      ? Math.abs((botVal - topVal) / (botPx - topPx))
-      : null;
+    const boundsRatio =
+      Number.isFinite(topPx) &&
+      Number.isFinite(botPx) &&
+      Math.abs(botPx - topPx) > 0 &&
+      Number.isFinite(topVal) &&
+      Number.isFinite(botVal)
+        ? Math.abs((botVal - topVal) / (botPx - topPx))
+        : null;
     const ratioEl = root.querySelector('#lbl-ycal-ratio');
     if (ratioEl && boundsRatio !== null) {
-      ratioEl.textContent = unit === '' ? `${boundsRatio.toFixed(4)}/px` : `${boundsRatio.toFixed(4)} ${unit}/px`;
+      ratioEl.textContent =
+        unit === '' ? `${boundsRatio.toFixed(4)}/px` : `${boundsRatio.toFixed(4)} ${unit}/px`;
     }
+  };
+
+  const commitCalibration = (reportMissing: boolean) => {
+    const raw = (selector: string): string =>
+      (root.querySelector(selector) as HTMLInputElement | null)?.value.trim() ?? '';
+    const num = (selector: string): number => Number.parseFloat(raw(selector));
+    const { topPx, topVal, botPx, botVal, unit, primaryAxis } = readInputs();
+    previewCalibration();
 
     // 空串与"打了但不是数字"（`-`、`1e`）同属缺有效输入，一起点名。
     const missing = REQUIRED.filter(([selector]) => !Number.isFinite(num(selector)));
@@ -297,7 +306,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
           linkHint.textContent = type === 'age' ? 'cal yrBP 联动' : type === 'depth' ? 'cm 联动' : '无单位';
         }
       }
-      commitCalibration(false);
+      previewCalibration();
     });
   });
 
@@ -306,7 +315,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     const val = (e.target as HTMLInputElement).value.trim().toLowerCase() || 'elev';
     const axisHidden = root.querySelector('#ycal-sel-primary-axis') as HTMLInputElement | null;
     if (axisHidden) axisHidden.value = `custom:${val}`;
-    commitCalibration(false);
+    previewCalibration();
   });
 
   // 输入或失去焦点时即时同步画布锚点与标定
@@ -320,7 +329,7 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
 
   root.querySelectorAll('#ycal-inp-top-px, #ycal-inp-top-val, #ycal-inp-bot-px, #ycal-inp-bot-val, #ycal-inp-unit, #ycal-sel-primary-axis').forEach((inp) => {
     // 自动提交保持静默：逐框填写时前几次必然缺项（见 commitCalibration 的注释）。
-    inp.addEventListener('change', () => commitCalibration(false));
+    inp.addEventListener('change', () => previewCalibration());
   });
 
   // 手动点击应用：这是用户明确表达"我要提交"，缺项必须报出来。

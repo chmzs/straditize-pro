@@ -83,8 +83,11 @@ export function setupDraftRecovery(deps: DraftRecoveryDeps): void {
         btn.textContent = '正在恢复到后端...';
       }
       void projectManager
-        .restoreDraft(draft.data)
-        .then(({ data, unrestored }) => {
+        .restoreDraft(
+          draft.data,
+          typeof draft.session_epoch === 'number' ? draft.session_epoch : undefined
+        )
+        .then(({ data, unrestored, staleSkipped }) => {
           const canvasComponent = getCanvas();
           // 镜像与撤销基线都按**后端返回的权威数据**重建；草稿只是"请求"。
           canvasComponent.loadNewDiagram(data);
@@ -97,6 +100,15 @@ export function setupDraftRecovery(deps: DraftRecoveryDeps): void {
             data.primary_roi_id,
             data.active_roi_id
           );
+          if (staleSkipped) {
+            localStorage.removeItem(autosaveKey);
+            getSidebar()?.updateData(canvasComponent.data);
+            getInspector()?.updateData(canvasComponent.data);
+            getToolbar()?.updateHistoryState();
+            updateFooter();
+            banner.remove();
+            return;
+          }
           // 草稿里存过清理叠层就先按后端重算一次掩膜（此时 ROI 确实存在，
           // 不会再出现 B-07 那种"归零后拿旧 roi_id 重算"的必然失败）。
           if ((data.line_candidates ?? []).length > 0) {

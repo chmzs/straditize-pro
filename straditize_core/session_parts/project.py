@@ -455,6 +455,21 @@ class ProjectSessionMixin:
 
         self._check_project_schema_version(project_data)
 
+        draft_epoch = (
+            project_data.get("draft_epoch")
+            if isinstance(project_data, dict)
+            else None
+        )
+        current_epoch = int(getattr(self, "session_epoch", 0))
+        if draft_epoch is not None and current_epoch > int(draft_epoch):
+            return {
+                "success": True,
+                "stale_draft_skipped": True,
+                "session_epoch": current_epoch,
+                "columns_count": len(getattr(self, "columns", []) or []),
+            }
+        self.session_epoch = 0
+
         # 清理状态必须**先**初始化，再让 payload 覆盖。
         #
         # ## 缺这一行会怎样（用户实测，2026-11-09）

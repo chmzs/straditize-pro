@@ -284,6 +284,8 @@ def _payload_zero_state(session: Any, cleanup: dict[str, Any]) -> dict[str, Any]
         "columns": [],
         "activeTaxaId": "",
         "selectedEntity": None,
+        "session_epoch": int(getattr(session, "session_epoch", 0)),
+        "samples_epoch": int(getattr(session, "samples_epoch", 0)),
         "isDesktopMode": getattr(session, "is_desktop_mode", False),
         "roi": None,
         "rois": [],
@@ -480,6 +482,8 @@ def _payload_loaded(
         "columns": formatted_cols,
         "activeTaxaId": formatted_cols[0]["id"] if formatted_cols else "",
         "selectedEntity": None,
+        "session_epoch": int(getattr(session, "session_epoch", 0)),
+        "samples_epoch": int(getattr(session, "samples_epoch", 0)),
         "isDesktopMode": getattr(session, "is_desktop_mode", False),
         "roi": (
             {
