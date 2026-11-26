@@ -32,10 +32,12 @@ class SamplesMixin:
     """Session mixin for sample horizons and consensus extraction."""
 
     samples: list[dict[str, Any]]
+    samples_epoch: int
 
     def _init_samples(self) -> None:
         """Initialize samples state."""
         self.samples = []
+        self.samples_epoch = 0
 
     def _depth_for_row_px(self, row_px: float) -> float | None:
         """Calculate real physical depth for pixel row, or return None if uncalibrated."""
@@ -121,6 +123,7 @@ class SamplesMixin:
         self,
         samples: Sequence[dict[str, Any]],
         source: str = "manual",
+        expected_epoch: int | None = None,
     ) -> dict[str, Any]:
         """Set sample horizons.
 
@@ -136,6 +139,12 @@ class SamplesMixin:
         """
         if not hasattr(self, "samples") or self.samples is None:
             self._init_samples()
+        current_epoch = int(getattr(self, "samples_epoch", 0))
+        if expected_epoch is not None and int(expected_epoch) != current_epoch:
+            raise JsonRpcError(
+                STATE_ERROR,
+                f"层位列表已更新（期望 epoch={expected_epoch}，当前={current_epoch}），请刷新后重试。",
+            )
 
         valid_samples: list[dict[str, Any]] = []
         for s in samples:
@@ -211,14 +220,24 @@ class SamplesMixin:
             record_history(f"Set {len(valid_samples)} sample horizons")
 
         self.samples = valid_samples
+        self.samples_epoch = int(getattr(self, "samples_epoch", 0)) + 1
+        self.session_epoch = int(getattr(self, "session_epoch", 0)) + 1
 
-        return {"samples": self.samples, "count": len(self.samples)}
+        return {
+            "samples": self.samples,
+            "count": len(self.samples),
+            "samples_epoch": self.samples_epoch,
+        }
 
     def samples_list(self) -> dict[str, Any]:
         """List all current sample horizons."""
         if not hasattr(self, "samples") or self.samples is None:
             self._init_samples()
-        return {"samples": self.samples, "count": len(self.samples)}
+        return {
+            "samples": self.samples,
+            "count": len(self.samples),
+            "samples_epoch": int(getattr(self, "samples_epoch", 0)),
+        }
 
     def samples_clear(self) -> dict[str, Any]:
         """Clear all sample horizons."""
@@ -226,7 +245,13 @@ class SamplesMixin:
             self._init_samples()
         cleared_count = len(self.samples)
         self.samples = []
-        return {"success": True, "cleared_count": cleared_count}
+        self.samples_epoch = int(getattr(self, "samples_epoch", 0)) + 1
+        self.session_epoch = int(getattr(self, "session_epoch", 0)) + 1
+        return {
+            "success": True,
+            "cleared_count": cleared_count,
+            "samples_epoch": self.samples_epoch,
+        }
 
     def samples_extract_consensus(
         self,

@@ -11,6 +11,7 @@ export const step = 7;
 export const title = '7. 拐点与采样层位';
 
 let cachedSamplesData: DiagramData | null = null;
+let cachedSamplesEpoch: number | null = null;
 
 /**
  * 「等距网格层位」折叠区是否展开。
@@ -28,6 +29,8 @@ let consensusMinSupport: number = 2;
 
 export function render(data: DiagramData): string {
   cachedSamplesData = data;
+  const rawEpoch = (data as { samples_epoch?: unknown }).samples_epoch;
+  if (typeof rawEpoch === 'number') cachedSamplesEpoch = rawEpoch;
   const samples = data.samples || [];
   const autoCount = samples.filter((s) => s.source === 'auto').length;
   const pasteCount = samples.filter((s) => s.source === 'paste').length;
@@ -313,6 +316,21 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     gridFoldOpen = gridFold.open;
   });
 
+  const applySamplesSnapshot = (res?: {
+    samples?: DiagramData['samples'];
+    samples_epoch?: number;
+  }): void => {
+    if (cachedSamplesData && Array.isArray(res?.samples)) {
+      cachedSamplesData.samples = res.samples;
+    }
+    if (typeof res?.samples_epoch === 'number') {
+      cachedSamplesEpoch = res.samples_epoch;
+      if (cachedSamplesData) {
+        (cachedSamplesData as { samples_epoch?: number }).samples_epoch = res.samples_epoch;
+      }
+    }
+  };
+
   root.querySelector('#btn-grid-samples')?.addEventListener('click', async () => {
     const input = root.querySelector('#input-grid-step') as HTMLInputElement | null;
     const raw = input ? Number(input.value) : NaN;
@@ -334,7 +352,10 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
       const res = (await ctx.rpcClient.call('samples.fromDepthGrid', { step: raw })) as {
         count?: number;
         row_step_px?: number;
+        samples?: DiagramData['samples'];
+        samples_epoch?: number;
       };
+      applySamplesSnapshot(res);
       notify(
         t('step7.gridDone', {
           count: String(res?.count ?? '?'),
@@ -348,41 +369,65 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     }
   });
 
-  // 单行层位锁定/解锁切换 (issue #86)
+  const syncSamplesFromBackend = async (): Promise<void> => {
+    if (!ctx.rpcClient) return;
+    const latest = (await ctx.rpcClient.call('samples.list', {})) as {
+      samples?: DiagramData['samples'];
+      samples_epoch?: number;
+    };
+    applySamplesSnapshot(latest);
+  };
+
+  // 单行层位锁定/解锁切换 (issue #86 / #156：写前先校验 epoch，防陈旧快照整表回滚)
   root.querySelectorAll('.btn-toggle-lock-sample').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const idx = parseInt(btn.getAttribute('data-sample-idx') || '-1', 10);
-      if (idx >= 0 && cachedSamplesData && cachedSamplesData.samples && cachedSamplesData.samples[idx]) {
-        const item = cachedSamplesData.samples[idx];
-        item.locked = !item.locked;
-        if (ctx.rpcClient) {
-          try {
-            await ctx.rpcClient.call('samples.set', { samples: cachedSamplesData.samples });
-          } catch (err) {
-            notifyError(err instanceof Error ? err.message : String(err));
-            return;
-          }
+      if (idx < 0 || !ctx.rpcClient) return;
+      try {
+        if (cachedSamplesEpoch === null) {
+          await syncSamplesFromBackend();
         }
+        const samples = cachedSamplesData?.samples;
+        if (!samples || !samples[idx]) return;
+        const nextSamples = samples.map((s, i) =>
+          i === idx ? { ...s, locked: !s.locked } : s
+        );
+        const res = (await ctx.rpcClient.call('samples.set', {
+          samples: nextSamples,
+          ...(cachedSamplesEpoch !== null ? { expected_epoch: cachedSamplesEpoch } : {}),
+        })) as { samples?: DiagramData['samples']; samples_epoch?: number };
+        applySamplesSnapshot(res);
         ctx.onDataChange?.();
+      } catch (err) {
+        await syncSamplesFromBackend().catch(() => {});
+        ctx.onDataChange?.();
+        notifyError(err instanceof Error ? err.message : String(err));
       }
     });
   });
 
-  // 单行层位删除 (同步后端 samples.set)
+  // 单行层位删除 (同步后端 samples.set + epoch 校验 #156)
   root.querySelectorAll('.btn-delete-sample').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const idx = parseInt(btn.getAttribute('data-sample-idx') || '-1', 10);
-      if (idx >= 0 && cachedSamplesData && cachedSamplesData.samples && cachedSamplesData.samples[idx]) {
-        cachedSamplesData.samples.splice(idx, 1);
-        if (ctx.rpcClient) {
-          try {
-            await ctx.rpcClient.call('samples.set', { samples: cachedSamplesData.samples });
-          } catch (err) {
-            notifyError(err instanceof Error ? err.message : String(err));
-            return;
-          }
+      if (idx < 0 || !ctx.rpcClient) return;
+      try {
+        if (cachedSamplesEpoch === null) {
+          await syncSamplesFromBackend();
         }
+        const samples = cachedSamplesData?.samples;
+        if (!samples || !samples[idx]) return;
+        const nextSamples = samples.filter((_, i) => i !== idx);
+        const res = (await ctx.rpcClient.call('samples.set', {
+          samples: nextSamples,
+          ...(cachedSamplesEpoch !== null ? { expected_epoch: cachedSamplesEpoch } : {}),
+        })) as { samples?: DiagramData['samples']; samples_epoch?: number };
+        applySamplesSnapshot(res);
         ctx.onDataChange?.();
+      } catch (err) {
+        await syncSamplesFromBackend().catch(() => {});
+        ctx.onDataChange?.();
+        notifyError(err instanceof Error ? err.message : String(err));
       }
     });
   });

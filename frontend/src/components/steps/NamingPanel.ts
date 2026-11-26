@@ -122,9 +122,10 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
     if (!window.confirm('确定清空当前所有属种列吗？已有的列边界与命名将被重置。')) return;
     if (ctx.onClearAllColumns) {
       await ctx.onClearAllColumns();
-    } else if (ctx.onRedetectColumns) {
+    }
+    if (ctx.onRedetectColumns) {
       await ctx.onRedetectColumns();
-    } else {
+    } else if (!ctx.onClearAllColumns) {
       ctx.onAdvanceWorkflowStage?.(4);
     }
   });

@@ -127,8 +127,10 @@ async function bootstrap() {
     if (autosaveTimer) clearTimeout(autosaveTimer);
     autosaveTimer = window.setTimeout(() => {
       try {
+        const epoch = (canvasComponent.data as { session_epoch?: number }).session_epoch;
         const draft = {
           timestamp: Date.now(),
+          session_epoch: typeof epoch === 'number' ? epoch : 0,
           data: canvasComponent.data,
         };
         localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(draft));
