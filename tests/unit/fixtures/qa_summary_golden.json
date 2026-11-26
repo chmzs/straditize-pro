@@ -125,14 +125,14 @@
    "roi_name": "pollen",
    "shortfall": {
     "max": 94.7,
-    "mean": 85.5,
+    "mean": 84.5,
     "min": 0.0
    },
    "sum": {
     "max": 283.9,
-    "mean": 16.4,
+    "mean": 17.5,
     "min": 5.3,
-    "p50": 10.7
+    "p50": 12.3
    },
    "sum_excluded_columns": [],
    "tolerance": 2.0,
@@ -140,23 +140,19 @@
    "violations_over": [
     {
      "depth": null,
-     "sum": 203.6
+     "sum": 208.4
     },
     {
      "depth": null,
-     "sum": 203.6
+     "sum": 209.0
     },
     {
      "depth": null,
-     "sum": 203.6
+     "sum": 208.1
     },
     {
      "depth": null,
-     "sum": 169.3
-    },
-    {
-     "depth": null,
-     "sum": 283.9
+     "sum": 173.3
     },
     {
      "depth": null,
@@ -172,7 +168,11 @@
     },
     {
      "depth": null,
-     "sum": 200.9
+     "sum": 283.9
+    },
+    {
+     "depth": null,
+     "sum": 206.5
     }
    ]
   }
@@ -380,12 +380,12 @@
     "roi_name": "pollen",
     "shortfall": {
      "max": 97.4,
-     "mean": 92.2,
+     "mean": 92.0,
      "min": 0.0
     },
     "sum": {
      "max": 189.3,
-     "mean": 8.5,
+     "mean": 8.9,
      "min": 2.6,
      "p50": 2.6
     },
@@ -395,23 +395,19 @@
     "violations_over": [
      {
       "depth": null,
-      "sum": 136.0
+      "sum": 138.7
      },
      {
       "depth": null,
-      "sum": 136.0
+      "sum": 138.8
      },
      {
       "depth": null,
-      "sum": 136.0
+      "sum": 138.7
      },
      {
       "depth": null,
-      "sum": 189.3
-     },
-     {
-      "depth": null,
-      "sum": 189.3
+      "sum": 104.7
      },
      {
       "depth": null,
@@ -423,7 +419,15 @@
      },
      {
       "depth": null,
-      "sum": 133.4
+      "sum": 189.3
+     },
+     {
+      "depth": null,
+      "sum": 189.3
+     },
+     {
+      "depth": null,
+      "sum": 137.5
      }
     ]
    }
@@ -539,14 +543,14 @@
     "roi_name": "second",
     "shortfall": {
      "max": 94.7,
-     "mean": 81.5,
+     "mean": 79.8,
      "min": 0.0
     },
     "sum": {
      "max": 189.3,
-     "mean": 19.2,
+     "mean": 20.9,
      "min": 5.3,
-     "p50": 16.0
+     "p50": 18.1
     },
     "sum_excluded_columns": [],
     "tolerance": 2.0,
@@ -554,23 +558,19 @@
     "violations_over": [
      {
       "depth": null,
-      "sum": 136.0
+      "sum": 139.5
      },
      {
       "depth": null,
-      "sum": 136.0
+      "sum": 139.9
      },
      {
       "depth": null,
-      "sum": 136.0
+      "sum": 139.2
      },
      {
       "depth": null,
-      "sum": 189.3
-     },
-     {
-      "depth": null,
-      "sum": 120.9
+      "sum": 103.4
      },
      {
       "depth": null,
@@ -578,11 +578,19 @@
      },
      {
       "depth": null,
+      "sum": 122.5
+     },
+     {
+      "depth": null,
       "sum": 189.3
      },
      {
       "depth": null,
-      "sum": 133.4
+      "sum": 189.3
+     },
+     {
+      "depth": null,
+      "sum": 136.5
      }
     ]
    }
@@ -707,21 +715,21 @@
      "declared_max": 100.0,
      "name": "col03",
      "over": false,
-     "peak": 8.1
+     "peak": 9.7
     }
    ],
    "roi_id": "roi_1",
    "roi_name": "pollen",
    "shortfall": {
     "max": 94.7,
-    "mean": 91.1,
-    "min": 89.3
+    "mean": 90.1,
+    "min": 87.7
    },
    "sum": {
-    "max": 10.7,
-    "mean": 8.9,
+    "max": 12.3,
+    "mean": 9.9,
     "min": 5.3,
-    "p50": 10.7
+    "p50": 12.1
    },
    "sum_excluded_columns": [],
    "tolerance": 2.0,

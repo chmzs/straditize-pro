@@ -140,7 +140,7 @@
   },
   "point_count": 636,
   "reader_type": "area",
-  "x_digest": "54b371657191bd9b"
+  "x_digest": "350b37b8ec817a6e"
  },
  "col0_bar": {
   "col_index": 0,
@@ -283,7 +283,7 @@
   },
   "point_count": 636,
   "reader_type": "bar",
-  "x_digest": "54b371657191bd9b"
+  "x_digest": "350b37b8ec817a6e"
  },
  "col0_line": {
   "col_index": 0,
@@ -800,7 +800,7 @@
   },
   "point_count": 636,
   "reader_type": "area",
-  "x_digest": "2fb49ae238905a4f"
+  "x_digest": "43bba6b75db5b6ab"
  },
  "col3_bar": {
   "col_index": 3,
@@ -1063,7 +1063,7 @@
   },
   "point_count": 636,
   "reader_type": "bar",
-  "x_digest": "1cbff736e5c16283"
+  "x_digest": "a51a8c976f22d1c1"
  },
  "col3_line": {
   "col_index": 3,
@@ -1487,7 +1487,7 @@
   },
   "point_count": 636,
   "reader_type": "area",
-  "x_digest": "729763a479a205a9"
+  "x_digest": "9299de6667ab0e4f"
  },
  "col8_bar": {
   "col_index": 8,
@@ -1678,7 +1678,7 @@
   },
   "point_count": 636,
   "reader_type": "bar",
-  "x_digest": "1e6b31535d67edbc"
+  "x_digest": "bfa019d7629c4633"
  },
  "col8_line": {
   "col_index": 8,
@@ -2124,7 +2124,7 @@
   ],
   "first_point": {
    "row": 75.0,
-   "x": 1731.0,
+   "x": 1729.0,
    "y": 75.0
   },
   "last_point": {
@@ -2134,7 +2134,7 @@
   },
   "point_count": 587,
   "reader_type": "area",
-  "x_digest": "593b1072b71dc76e"
+  "x_digest": "533bc8e0783403b9"
  },
  "scan_col23_bar": {
   "col_index": 23,
@@ -2387,7 +2387,7 @@
   ],
   "first_point": {
    "row": 75.0,
-   "x": 1731.0,
+   "x": 1729.0,
    "y": 75.0
   },
   "last_point": {
@@ -2397,7 +2397,7 @@
   },
   "point_count": 587,
   "reader_type": "bar",
-  "x_digest": "593b1072b71dc76e"
+  "x_digest": "533bc8e0783403b9"
  },
  "scan_col23_line": {
   "col_index": 23,
@@ -2749,7 +2749,7 @@
   ],
   "first_point": {
    "row": 75.0,
-   "x": 1731.0,
+   "x": 1729.0,
    "y": 75.0
   },
   "last_point": {
@@ -2759,7 +2759,7 @@
   },
   "point_count": 587,
   "reader_type": "line",
-  "x_digest": "2386ce7022c39406"
+  "x_digest": "3aacfecc637c45d2"
  },
  "scan_col3_area": {
   "col_index": 3,
@@ -2922,7 +2922,7 @@
   ],
   "first_point": {
    "row": 75.0,
-   "x": 379.0,
+   "x": 378.0,
    "y": 75.0
   },
   "last_point": {
@@ -2932,7 +2932,7 @@
   },
   "point_count": 587,
   "reader_type": "area",
-  "x_digest": "b191448a22dd1f29"
+  "x_digest": "6efd2ed9bfc3e702"
  },
  "scan_col3_bar": {
   "col_index": 3,
@@ -3110,7 +3110,7 @@
   ],
   "first_point": {
    "row": 75.0,
-   "x": 379.0,
+   "x": 378.0,
    "y": 75.0
   },
   "last_point": {
@@ -3120,7 +3120,7 @@
   },
   "point_count": 587,
   "reader_type": "bar",
-  "x_digest": "63a5e5bba5d24986"
+  "x_digest": "39468d42d4c345a0"
  },
  "scan_col3_line": {
   "col_index": 3,
