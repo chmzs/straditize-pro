@@ -650,7 +650,16 @@ class DigitizeSessionMixin:
         reader_type: str,
         zero_offset: float = 0.0,
     ) -> list[dict[str, float]]:
-        """逐行把墨迹变成特征 x：area 读本列墨迹右缘、line 读曲线中心或填充顶边、bar 读柱子右缘。"""
+        """逐行把墨迹变成特征 x：area 读本列墨迹右缘、line 读曲线中心或填充顶边、bar 读柱子右缘。
+
+        ``zero_offset``（由调用方传 ``float(stroke)``）仅作**轴内零花粉保护**，不可整个删除：
+        稀疏列（仅轴线有墨迹、其余为空白）下 ``compute_column_luminance_levels`` 的 10%
+        分位会落进 JPEG/纸底灰度噪声（实测 ``han2026GPC`` col01 ``l_fg=230``），若不以
+        ``zero_offset`` 拦住 ``x_right <= zero_offset``，``subpixel_edge_offset`` 会把
+        轴线右缘虚假右移 ``0.5–1.46px``；保留它后 ``aber`` 低丰度物种 MAE 从 ``0.55–0.71%``
+        降至 ``0.35–0.43%``。同时 ``subpixel_edge_offset`` 在 ``x_right <= zero_offset`` 时
+        返回 ``float(x_right)``、无前景行停留 ``float(c_start)``，绝不把零值行抬高到 ``zero_offset``。
+        """
         points: list[dict[str, float]] = []
 
         band = mask[y0:y1, c_start:c_end]
