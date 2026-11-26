@@ -183,15 +183,17 @@ def _subpixel_right_boundary(
     """将右缘像素索引转换为像素角边界坐标（中心系 + 0.5 = 边界系）。
 
     轴线内部行（``last_offset < zero_offset``）原样返回 ``float(last_offset)``，避免稀疏列
-    噪声把轴线右缘推入数据区；到达列右界像素（``last_offset >= w_col - 1``）直接返回
-    ``float(last_offset + 1)``；其余实测墨迹行经 ``subpixel_edge_offset`` 求 50% 亮度穿越后
-    加 ``0.5`` 对齐像素角边界，使纯二值阶跃落在 ``last_offset + 1`` 并保留 ``1px`` 窄柱
-    （``last_offset == zero_offset``）。
+    噪声把轴线右缘推入数据区；到达列右界像素（``last_offset >= w_col - 1``）或无灰度图时
+    直接返回 ``float(last_offset + 1)``；其余实测墨迹行经 ``subpixel_edge_offset`` 求 50%
+    亮度穿越后加 ``0.5`` 对齐像素角边界，使纯二值阶跃落在 ``last_offset + 1`` 并保留
+    ``1px`` 窄柱（``last_offset == zero_offset``）。
     """
     if zero_offset > 0.0 and last_offset < zero_offset:
         return float(last_offset)
     if last_offset >= w_col - 1:
         return float(last_offset + 1)
+    if gray_row is None or gray_row.size == 0:
+        return float(max(zero_offset, float(last_offset + 1)))
     sub_offset = subpixel_edge_offset(
         gray_row,
         last_offset,
@@ -200,6 +202,82 @@ def _subpixel_right_boundary(
         zero_offset=0.0,
     )
     return float(max(zero_offset, sub_offset + 0.5))
+
+
+def _subpixel_left_boundary(
+    gray_row: np.ndarray | None,
+    first_offset: int,
+    w_col: int,
+    l_bg: float,
+    l_fg: float,
+) -> float:
+    """将左缘像素索引转换为像素角边界坐标（镜像复用右缘亚像素 50% 定位）。"""
+    if first_offset <= 0:
+        return 0.0
+    if gray_row is None or gray_row.size == 0:
+        return float(first_offset)
+    mirrored_right = _subpixel_right_boundary(
+        gray_row[::-1],
+        w_col - 1 - first_offset,
+        w_col,
+        l_bg,
+        l_fg,
+        zero_offset=0.0,
+    )
+    return float(max(0.0, w_col - mirrored_right))
+
+
+def _is_exaggerated_border_truncation(
+    runs: list[tuple[int, int]],
+    w_col: int,
+    border_threshold: int,
+    axis_offset: float,
+    mult: float,
+    exagg_style: str,
+) -> bool:
+    """判断触及列右界（`run_end >= border_threshold`）的夸大行是否属于物理截断。
+
+    两类情况必须回退 `main_1x` 读贴轴内线：
+    1) **物理溢出**：内线宽 `>= 0.45 * W_col`，或完整内线乘以倍率 `N * inner_dist >= 1.30 * (W_col - axis_offset)`；
+       （旧判据只查 `0.45 * W_col`，在 `N >= 3` 如 `5×` 时只需 ~20% 列宽外线即溢出，导致漏判）。
+    2) **右界削边贴壁**（如 `synth_s3` `d_in=20/34` 外线压在 `c_end-2..c_end`）：存在完整内线且末段
+       紧贴右壁（`run_start >= border_threshold - 2`，或 `<= 5px` 内且相对 `N * inner_dist` 偏高 > 35%）。
+    """
+    run_start, run_end = runs[-1]
+    if run_end < border_threshold:
+        return False
+
+    first_run = runs[0]
+    inner_width = (
+        float(first_run[1] - first_run[0]) if first_run[0] <= axis_offset + 2 else 0.0
+    )
+    if inner_width >= 0.45 * w_col:
+        return True
+
+    has_intact_inner = (
+        first_run[0] <= axis_offset + 2 and first_run[1] < border_threshold
+    )
+    if not has_intact_inner:
+        return False
+
+    inner_dist = max(0.0, float(first_run[1] + 1) - axis_offset)
+    avail_span = max(w_col - axis_offset, 1.0)
+    if mult > 1.0 and mult * inner_dist >= 1.30 * avail_span:
+        return True
+
+    if len(runs) >= 2:
+        if run_start >= border_threshold - 2:
+            return True
+        if run_start >= border_threshold - 5:
+            outer_center = (
+                (run_start + run_end + 1) / 2.0
+                if exagg_style != "area"
+                else float(run_end + 1)
+            )
+            outer_span = max(0.0, outer_center - axis_offset)
+            if outer_span > max(mult * inner_dist, 10.0) * 1.35:
+                return True
+    return False
 
 
 class DigitizeSessionMixin:
@@ -401,12 +479,12 @@ class DigitizeSessionMixin:
         """`area_exaggerated`：二选一最外缘优先 + 撞界回退内线模型。
 
         【Step 7 视觉核验与科学换算契约】：
-        1. Canvas 视觉层（供用户肉眼检查）：
+        1. Canvas 视觉层（供用户肉眼检查，统一对齐像素角边界坐标系）：
            - 常态（未截断外线）：提取扫描图上外线的真实物理像素位置（不提前除以 N），
              来源记为 exagg_Nx（如 exagg_5x），黄色控制点与轮廓直接描绘外线！
-             - exagg_style == 'line'（默认）：外层为细折线，计入线宽，取骨架中心 (start+end)/2.0；
-             - exagg_style == 'area'：外层为浅色填充，取最右轮廓边缘。
-           - 截断/断线回退：外线撞右分割线削边或彻底丢失时，取贴轴实心黑块右缘物理像素，
+             - exagg_style == 'line'（默认）：外层为细折线，取像素角左右边缘中点 (sub_left+sub_right)/2.0；
+             - exagg_style == 'area'：外层为浅色填充，取像素角最右轮廓边缘。
+           - 截断/断线回退：外线撞右分割线削边、物理溢出或彻底丢失时，取贴轴实心黑块右缘像素角边界，
              来源记为 main_1x，蓝色控制点与轮廓描绘内线！
         2. 数值换算层（Step 7 之后：导出 CSV / 侧栏读数 / QA 质检）：
            - 由 read_column_values / px_to_value 统一换算为 1x 科学值：
@@ -451,25 +529,30 @@ class DigitizeSessionMixin:
             runs = _ink_runs(row_pixels)
             row_runs[row_y] = runs
 
-            # 收集确凿内线（贴轴黑块右缘未撞列右边界）
+            # 收集确凿内线（贴轴黑块右缘像素角边界，未撞列右边界）
             first_run = runs[0]
             if first_run[0] <= axis_offset + 2 and first_run[1] < border_threshold:
                 confirmed_inner_rows.append(row_y)
-                confirmed_inner_xs.append(c_start + float(first_run[1]))
+                confirmed_inner_xs.append(c_start + float(first_run[1] + 1))
 
-            # 收集确凿外线
+            # 收集确凿外线（像素角坐标，与 Pass 2 一致）
+            outer_cand: tuple[int, int] | None = None
             if len(runs) >= 2:
                 last_run = runs[-1]
                 if last_run[1] < border_threshold and last_run[0] > axis_offset + 3:
-                    confirmed_outer_rows.append(row_y)
-                    confirmed_outer_xs.append(
-                        c_start + (last_run[0] + last_run[1]) / 2.0
-                    )
+                    outer_cand = last_run
             elif len(runs) == 1:
                 r = runs[0]
                 if r[0] > axis_offset + 5 and r[1] < border_threshold:
-                    confirmed_outer_rows.append(row_y)
-                    confirmed_outer_xs.append(c_start + (r[0] + r[1]) / 2.0)
+                    outer_cand = r
+            if outer_cand is not None:
+                confirmed_outer_rows.append(row_y)
+                outer_center = (
+                    (outer_cand[0] + outer_cand[1] + 1) / 2.0
+                    if exagg_style != "area"
+                    else float(outer_cand[1] + 1)
+                )
+                confirmed_outer_xs.append(c_start + outer_center)
 
         has_outer_curve = len(confirmed_outer_rows) > 0
 
@@ -498,23 +581,17 @@ class DigitizeSessionMixin:
             last_run = runs[-1]
             run_start, run_end = last_run
 
-            # 真正截断的判据：
-            # 只有当贴轴内线黑块自身宽度已经占据了列宽的大部分 (>= 0.45 * W_col)，
-            # 且最右墨迹撞死在右边界（外线飞出列界被削断/不画），
-            # 此时内线自身的起伏明显，才正式回退抓内线实心黑块作为 1x 原值输出，并打上蓝色点。
-            first_run = runs[0]
-            inner_width = (
-                (first_run[1] - first_run[0])
-                if first_run[0] <= axis_offset + 2
-                else 0.0
-            )
-
-            is_true_truncation = (inner_width >= 0.45 * W_col) and (
-                run_end >= border_threshold
+            is_true_truncation = _is_exaggerated_border_truncation(
+                runs,
+                W_col,
+                border_threshold,
+                axis_offset,
+                N,
+                exagg_style,
             )
 
             if not has_outer_curve or is_true_truncation:
-                # 真实截断：回退抓贴轴内线实心黑块右缘作为 1x 原值，打上科技蓝点 (main_1x)
+                # 真实截断：回退抓贴轴内线实心黑块右缘像素角边界作为 1x 原值，打上科技蓝点 (main_1x)
                 inner_candidates = [r for r in runs if r[0] <= axis_offset + 2]
                 if inner_candidates:
                     inner_run = inner_candidates[0]
@@ -524,31 +601,39 @@ class DigitizeSessionMixin:
                             np.interp(row_y, confirmed_inner_rows, confirmed_inner_xs)
                         )
                     else:
-                        x_pos = float(c_start + inner_run[1])
+                        x_pos = float(
+                            c_start
+                            + _subpixel_right_boundary(
+                                gray_row, inner_run[1], W_col, l_bg, l_fg, axis_offset
+                            )
+                        )
                 else:
                     x_pos = float(zero_x)
                 tag = "main_1x"
             else:
-                # 正常外线（包括触碰边界的外线大峰顶）与粘连态保护（Glue Fallback）
+                # 正常外线（包括未削边触碰边界的外线大峰顶）与粘连态保护（Glue Fallback）
                 is_tiny_hole_glue = len(runs) == 2 and (runs[1][0] - runs[0][1]) <= 2
 
                 if (len(runs) >= 2 and not is_tiny_hole_glue) or (
                     run_start > axis_offset + 5
                 ):
-                    # 独立外线游程：Line 取骨架中心，Area 取最右缘，物理像素直接输出供视觉核验
-                    sub_right = subpixel_edge_offset(
-                        gray_row, run_end, l_bg, l_fg, zero_offset=axis_offset
+                    # 独立外线游程：Line 取像素角左右缘中点，Area 取像素角最右缘，供视觉核验
+                    sub_right = _subpixel_right_boundary(
+                        gray_row, run_end, W_col, l_bg, l_fg, axis_offset
                     )
-                    sub_start = float(run_start)
-                    x_feat = (
-                        c_start + (sub_start + sub_right) / 2.0
-                        if exagg_style != "area"
-                        else c_start + sub_right
-                    )
+                    if exagg_style != "area":
+                        sub_start = _subpixel_left_boundary(
+                            gray_row, run_start, W_col, l_bg, l_fg
+                        )
+                        x_feat = c_start + (sub_start + sub_right) / 2.0
+                    else:
+                        x_feat = c_start + sub_right
                     x_pos = float(x_feat)
                     tag = tag_exagg
                 else:
-                    actual_right_edge = c_start + run_end
+                    actual_right_edge = c_start + _subpixel_right_boundary(
+                        gray_row, run_end, W_col, l_bg, l_fg, axis_offset
+                    )
                     act_span = actual_right_edge - (c_start + axis_offset)
                     expected_outer_x = (
                         float(
@@ -565,18 +650,28 @@ class DigitizeSessionMixin:
                         and act_span < 0.4 * exp_span
                         and (expected_outer_x - actual_right_edge) >= 20.0
                     ):
-                        # 确凿断线回退内线：外线缺失，抓贴轴内线右缘输出 1x 原值
+                        # 确凿断线回退内线：外线缺失，抓贴轴内线右缘像素角边界输出 1x 原值
                         x_pos = float(actual_right_edge)
                         tag = "main_1x"
                     else:
                         # 粘连态保护（Glue Fallback）或外线平缓小起伏：
-                        # 不退回读 1x 内线，以亚像素右缘减去半个描边线宽换算为外线（触界则仍回退 1x 内层右缘）
+                        # 不退回读 1x 内线，以像素角右缘减去半个描边线宽换算为外线（触界则回退 1x 内层右缘）
                         if run_end >= border_threshold:
-                            x_pos = float(c_start + runs[0][1])
+                            x_pos = float(
+                                c_start
+                                + _subpixel_right_boundary(
+                                    gray_row,
+                                    runs[0][1],
+                                    W_col,
+                                    l_bg,
+                                    l_fg,
+                                    axis_offset,
+                                )
+                            )
                             tag = "main_1x"
                         else:
-                            sub_right = subpixel_edge_offset(
-                                gray_row, run_end, l_bg, l_fg, zero_offset=axis_offset
+                            sub_right = _subpixel_right_boundary(
+                                gray_row, run_end, W_col, l_bg, l_fg, axis_offset
                             )
                             x_feat = (
                                 c_start

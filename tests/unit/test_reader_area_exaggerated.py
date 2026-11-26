@@ -238,12 +238,15 @@ def test_broken_outer_does_not_switch_scale(tmp_path):
             f"row {row}（有外线）: 画布物理像素 x={points[row]['x']} 期望落在外线 {OUTER_X}"
         )
         assert str(points[row]["source"]).startswith("exagg_")
+    expected_inner = float(
+        INNER_X1 + 1 - ZERO_X
+    )  # 像素块 [16, 27) 的右角边界在 27.0 → 11.0
     for row in (Y0 + 21, Y0 + 41, LAST_ROW - 1):
-        assert abs(values[row] - 10.0) <= 0.5, (
-            f"row {row}（无外线，回退内线）: {values[row]:.2f} 期望 10.0"
+        assert abs(values[row] - expected_inner) <= 0.5, (
+            f"row {row}（无外线，回退内线）: {values[row]:.2f} 期望 {expected_inner}"
         )
-        assert abs(points[row]["x"] - INNER_X1) <= 1.0, (
-            f"row {row}（无外线，回退内线）: 画布物理像素 x={points[row]['x']} 期望落在内线右缘 {INNER_X1}"
+        assert abs(points[row]["x"] - (INNER_X1 + 1)) <= 0.5, (
+            f"row {row}（无外线，回退内线）: 画布物理像素 x={points[row]['x']} 期望落在内线右角边界 {INNER_X1 + 1}"
         )
         assert points[row]["source"] == "main_1x"
     # 读数跨度不再出现 45px 尖刺
@@ -268,7 +271,7 @@ def test_rows_without_any_separated_row_are_not_guessed(tmp_path):
     for p in result["points"]:
         if int(p["row"]) != LAST_ROW:
             assert p["source"] == "main_1x"
-            assert abs(p["x"] - INNER_X1) <= 1.0
+            assert abs(p["x"] - (INNER_X1 + 1)) <= 0.5
 
 
 # --------------------------------------------------------------------------- #
@@ -460,3 +463,129 @@ def test_redigitize_all_columns_matches_single_column_digitize(tmp_path):
     ]
     for val in vals[:-1]:
         assert 9.5 <= val <= 11.5, f"批量重新识别后读数出现未折算的异常夸大值: {val}"
+
+
+# --------------------------------------------------------------------------- #
+# 7. #178：右界削边贴壁（s3 模型）+ N× 溢出截断 + 像素角坐标系一致性
+# --------------------------------------------------------------------------- #
+def test_border_clipped_truncation_falls_back_to_inner_pixel_corner(tmp_path):
+    """外线撞列右界被削边（即使内宽仅 7.7%~13.1% < 45%），必须回退 main_1x 并对齐像素角边界；
+    正常未截断峰值贴右缘时（5×内线 ≈ 列宽）仍保持 exagg_5x 不削峰。
+    """
+    w, h = 320, 200
+    c_start, c_end = 40, 300
+    stroke = 2
+    zero = c_start + stroke  # 42
+    img = np.full((h, w), 255, dtype=np.uint8)
+    img[:, c_start:zero] = 0
+
+    # Band A (rows 20..40): d_in=6, 3px 外线居中于 42+30=72（pixels 71..73）→ 像素角中心 72.5
+    img[20:40, zero : zero + 6] = 0
+    img[20:40, zero + 29 : zero + 32] = 0
+    # Band B (rows 50..70): d_in=20（仅 7.7% 列宽），外线压在列右壁 c_end-2..c_end → 真实截断回退 62.0
+    img[50:70, zero : zero + 20] = 0
+    img[50:70, c_end - 2 : c_end] = 0
+    # Band C (rows 80..100): d_in=34（13.1% 列宽），外线压在列右壁 c_end-2..c_end → 真实截断回退 76.0
+    img[80:100, zero : zero + 34] = 0
+    img[80:100, c_end - 2 : c_end] = 0
+
+    plate = tmp_path / "s3_trunc_wall.png"
+    Image.fromarray(img).save(plate)
+    session = StraditizeSession()
+    session._init_cleanup()
+    session.load_image(image_path=str(plate))
+    session.columns = [
+        {
+            "col_index": 0,
+            "id": "roi_1_col00",
+            "name": "S3_exag5x",
+            "species": "S3_exag5x",
+            "roi_id": None,
+            "start": float(c_start),
+            "startX": float(c_start),
+            "end": float(c_end),
+            "endX": float(c_end),
+            "x_ticks": [
+                {"px": float(zero), "value": 0.0},
+                {"px": float(c_end), "value": 50.0},
+            ],
+            "plot_type": "area",
+            "scale_type": "linear",
+            "unit": "%",
+            "axis_stroke_px": float(stroke),
+            "exaggeration_mult": 5.0,
+            "exagg_style": "line",
+            "reader_type": "area_exaggerated",
+        }
+    ]
+    session.rois = {}
+    session.roi = None
+    session.data_ylim = [20.0, 100.0]
+
+    pts = {int(p["row"]): p for p in session.digitize(0)["points"]}
+    assert pts[30]["source"] == "exagg_5x"
+    assert pts[30]["x"] == pytest.approx(72.5, abs=1e-6)
+    assert pts[60]["source"] == "main_1x"
+    assert pts[60]["x"] == pytest.approx(float(zero + 20), abs=1e-6)
+    assert pts[90]["source"] == "main_1x"
+    assert pts[90]["x"] == pytest.approx(float(zero + 34), abs=1e-6)
+
+
+def test_exagg_area_style_and_overflow_truncation(tmp_path):
+    """exagg_style='area' 对齐像素角右边界；N× 溢出（28% < 45% 但 5×28=140 > 98）仍能回退 main_1x。"""
+    w, h = 140, 140
+    c_start, c_end = 10, 110
+    stroke = 2
+    zero = c_start + stroke  # 12
+    img = np.full((h, w), 255, dtype=np.uint8)
+    img[:, c_start:zero] = 0
+
+    # Band A (rows 20..40): 内线 4px + 分离外线填块 [zero+10 .. zero+20) → area 模式右角 zero+20 = 32.0
+    img[20:40, zero : zero + 4] = 0
+    img[20:40, zero + 10 : zero + 20] = 0
+    # Band B (rows 50..70): 内线 28px（28% < 45%），外斜坡贴右界 (48..98) → 5×28=140 >= 1.3*98 → 回退 main_1x
+    img[50:70, zero : zero + 28] = 0
+    img[50:70, zero + 48 : c_end] = 0
+    # Band C (rows 80..100): 内线 16px（5×16=80 < 1.3*98），非贴壁峰 (45..98) → 保留 exagg_5x
+    img[80:100, zero : zero + 16] = 0
+    img[80:100, zero + 45 : c_end] = 0
+
+    plate = tmp_path / "s3_area_overflow.png"
+    Image.fromarray(img).save(plate)
+    session = StraditizeSession()
+    session._init_cleanup()
+    session.load_image(image_path=str(plate))
+    session.columns = [
+        {
+            "col_index": 0,
+            "id": "roi_1_col00",
+            "name": "ExagArea",
+            "species": "ExagArea",
+            "roi_id": None,
+            "start": float(c_start),
+            "startX": float(c_start),
+            "end": float(c_end),
+            "endX": float(c_end),
+            "x_ticks": [
+                {"px": float(zero), "value": 0.0},
+                {"px": float(c_end), "value": 100.0},
+            ],
+            "plot_type": "area",
+            "scale_type": "linear",
+            "unit": "%",
+            "axis_stroke_px": float(stroke),
+            "exaggeration_mult": 5.0,
+            "exagg_style": "area",
+            "reader_type": "area_exaggerated",
+        }
+    ]
+    session.rois = {}
+    session.roi = None
+    session.data_ylim = [20.0, 100.0]
+
+    pts = {int(p["row"]): p for p in session.digitize(0)["points"]}
+    assert pts[30]["source"] == "exagg_5x"
+    assert pts[30]["x"] == pytest.approx(float(zero + 20), abs=1e-6)
+    assert pts[60]["source"] == "main_1x"
+    assert pts[60]["x"] == pytest.approx(float(zero + 28), abs=1e-6)
+    assert pts[90]["source"] == "exagg_5x"

@@ -320,10 +320,10 @@
     `"area_exaggerated"` 是**读取策略名**，不是画法：同一列被画了两层时用它（贴轴的填充区
     = 真实值「内线」，其外侧一条独立细线或淡色填充 = 同一条数据放大 N 倍的「外线」）。
     采用**最外缘优先 + 真实物理截断回退内线模型**（详见 `docs/findings/exaggerated-reader-physical-model.md`）：
-    - **常态（外线）**：提取最外侧轮廓（若组级 `exagg_style="line"` 计入线宽取骨架中心 `(start+end)/2.0`；若 `"area"` 取最外右缘），
+    - **常态（外线）**：提取最外侧轮廓并统一对齐像素角边界坐标系（若组级 `exagg_style="line"` 取像素角左右缘中点 `(sub_left+sub_right)/2.0`；若 `"area"` 取像素角最外右缘），
       `points[].source` 记为 `"exagg_{N}x"`（画布呈经典黄点，导出与数值计算由 `read_column_values` 统一自动 ÷ N）；
-    - **真实物理截断（回退内线）**：仅当内线实心黑块自身宽度占列宽大部分（`inner_width >= 0.45 * W_col`）且贴死列右分割线时，
-      才判定为外线飞出边界的真实截断，回退抓取内线实心黑块右缘作为 1x 原值，`points[].source` 记为 `"main_1x"`
+    - **真实物理截断（回退内线）**：当末段触及列右界，且满足物理溢出（`inner_width >= 0.45 * W_col` 或 `N * inner_dist >= 1.30 * (W_col - axis_offset)`）或右界削边贴壁（`len(runs) >= 2` 且完整内线存在、外段紧贴 `border_threshold - 2..border_threshold` 或 `5px` 内显著偏离 `N * inner_dist`）时，
+      判定为真实截断，回退抓取内线实心黑块右缘像素角边界作为 1x 原值，`points[].source` 记为 `"main_1x"`
       （画布呈科技蓝点，数值已是 1x 原值，不再除以 N）；
     - **低丰度与零值保护**：正常大峰触碰右边界不削峰、低谷起伏与近零值 100% 保留为外线点，杜绝断崖式误判。
     历史别名 `"bars"` 只在入口归一化为 `"bar"`
