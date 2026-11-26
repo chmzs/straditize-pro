@@ -57,7 +57,7 @@ export function makeCalibrationUndo(
     label: `标定 ${prev.topValue}${prev.unit} → ${next.topValue}${next.unit}（Y 轴）`,
     inverse: () => apply(prev),
     forward: () => apply(next),
-    verify: async () => same(await read(), prev),
+    verify: async (direction) => same(await read(), direction === 'inverse' ? prev : next),
   };
 }
 
@@ -86,7 +86,33 @@ export function makeRenameUndo(
     label: `重命名${kindLabel} ${oldName} → ${newName}（${id}）`,
     inverse: () => apply(oldName),
     forward: () => apply(newName),
-    verify: async () => (await read()) === oldName,
+    verify: async (direction) => (await read()) === (direction === 'inverse' ? oldName : newName),
+  };
+}
+
+export interface ControlPointWriteback {
+  row: number;
+  x: number;
+  manual?: boolean;
+}
+
+/**
+ * 控制点整列写回类动作的构造器（#143：添加 / 拖动 / 微调 / 删除锚点）。
+ *
+ * 逆操作与重做均走同一 `setControlPoints` 写入口，确保后端 `column_points` 与前端镜像同步回退。
+ */
+export function makeControlPointsUndo<TPoint>(
+  colName: string,
+  prevWriteback: ControlPointWriteback[],
+  nextWriteback: ControlPointWriteback[],
+  prevPoints: TPoint[],
+  nextPoints: TPoint[],
+  apply: (writeback: ControlPointWriteback[], uiPoints: TPoint[]) => Promise<void>
+): UndoableOp {
+  return {
+    label: `编辑控制点 ${colName}（${prevPoints.length} → ${nextPoints.length}）`,
+    inverse: () => apply(prevWriteback, prevPoints),
+    forward: () => apply(nextWriteback, nextPoints),
   };
 }
 

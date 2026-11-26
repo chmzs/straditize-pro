@@ -1,4 +1,5 @@
 import {
+  ControlPoint,
   Point2D,
   TaxaColumn,
   DiagramData,
@@ -78,6 +79,8 @@ interface PointerState {
 export interface CanvasEventCallbacks {
   onTaxaChange?: (taxaId: string) => void;
   onDataChange?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
   /** 列点编辑落库：拖动结束 / 删除锚点 / 微调去抖后，把整列锚点推给后端。 */
   onControlPointsCommit?: (
     colIndex: number,
@@ -1153,6 +1156,10 @@ private pointer: PointerState = {
       ctrl: true,
       when: (e) => !e.shiftKey,
       run: () => {
+        if (this.callbacks.onUndo) {
+          this.callbacks.onUndo();
+          return;
+        }
         const prev = this.history.undo();
         if (!prev) return;
         this.data.columns = prev.columns;
@@ -1165,6 +1172,10 @@ private pointer: PointerState = {
       keys: ['y'],
       ctrl: true,
       run: () => {
+        if (this.callbacks.onRedo) {
+          this.callbacks.onRedo();
+          return;
+        }
         const next = this.history.redo();
         if (!next) return;
         this.data.columns = next.columns;
@@ -1296,6 +1307,7 @@ private pointer: PointerState = {
       requestRender: () => this.requestRender(),
       notifyNotice: (msg) => this.notifyNotice(msg),
       commitControlPoints: (colId) => this.commitControlPoints(colId),
+      recordControlPointsBeforeEdit: (colId) => this.recordControlPointsBeforeEdit(colId),
       updateCursor: () => this.updateCursor(),
       setToolMode: (mode) => this.setToolMode(mode),
       getActiveColumn: () => this.getActiveColumn() ?? null,
@@ -1630,6 +1642,36 @@ private pointer: PointerState = {
    * 画布上的拖动/删除/微调只改前端模型；不回写后端，导出面板与 data.csv
    * 拿到的仍是上一次 `core.digitize` / `project.load` 时的锚点。
    */
+  private pendingPrevControlPoints = new Map<string, ControlPoint[]>();
+  private lastControlPointsUndoPayload = new Map<
+    number,
+    {
+      prevWriteback: Array<{ row: number; x: number; manual: boolean }>;
+      prevControlPoints: ControlPoint[];
+      nextControlPoints: ControlPoint[];
+    }
+  >();
+
+  public recordControlPointsBeforeEdit(colId: string): void {
+    if (this.pendingPrevControlPoints.has(colId)) return;
+    const col = this.data.columns.find((c) => c.id === colId);
+    if (!col) return;
+    this.pendingPrevControlPoints.set(
+      colId,
+      col.controlPoints.map((p) => ({ ...p }))
+    );
+  }
+
+  public consumeControlPointsUndoPayload(colIndex: number): {
+    prevWriteback: Array<{ row: number; x: number; manual: boolean }>;
+    prevControlPoints: ControlPoint[];
+    nextControlPoints: ControlPoint[];
+  } | null {
+    const payload = this.lastControlPointsUndoPayload.get(colIndex) ?? null;
+    this.lastControlPointsUndoPayload.delete(colIndex);
+    return payload;
+  }
+
   public commitControlPoints(colId: string): void {
     const idx = this.data.columns.findIndex((c) => c.id === colId);
     if (idx < 0) return;
@@ -1643,6 +1685,15 @@ private pointer: PointerState = {
     // （`DEFAULT_AXIS_STROKE_PX`，不在本文件写数）。
     const zeroX = col.startX + resolveAxisStroke(col, this.groupOfColumn(col));
     const points = controlPointsForWriteback(col.controlPoints, zeroX);
+    const prevControlPoints = this.pendingPrevControlPoints.get(colId);
+    this.pendingPrevControlPoints.delete(colId);
+    if (prevControlPoints) {
+      this.lastControlPointsUndoPayload.set(idx, {
+        prevWriteback: controlPointsForWriteback(prevControlPoints, zeroX),
+        prevControlPoints,
+        nextControlPoints: col.controlPoints.map((p) => ({ ...p })),
+      });
+    }
     // 提交控制点给后端同步。前端保留当前 curvePoints 避免白屏蒸发，
     // 后端 setControlPoints 重建邻域点集后，将在 onControlPointsCommit 回调中就地更新。
     this.callbacks.onControlPointsCommit?.(idx, points);
@@ -1659,6 +1710,7 @@ private pointer: PointerState = {
       if (col) {
         const pt = col.controlPoints.find((p) => p.id === pointId);
         if (pt) {
+          this.recordControlPointsBeforeEdit(col.id);
           pt.x += dx;
           pt.y += dy;
           pt.isManual = true;
@@ -1816,6 +1868,7 @@ private pointer: PointerState = {
       const { colId, pointId } = this.data.selectedEntity;
       const col = this.data.columns.find((c) => c.id === colId);
       if (col) {
+        this.recordControlPointsBeforeEdit(col.id);
         const pt = col.controlPoints.find((p) => p.id === pointId);
         col.controlPoints = col.controlPoints.filter((p) => p.id !== pointId);
         this.commitControlPoints(col.id);
