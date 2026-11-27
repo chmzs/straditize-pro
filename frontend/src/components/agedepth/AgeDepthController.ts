@@ -815,6 +815,11 @@ message("geoChronR 年代不确定性建模完成：已建立与图谱的时间�
           `已成功将年代深度模型预测值（均值及 95% 置信带）回写至步骤 7 的 ${res.count} 个采样层位！`,
           'success'
         );
+        // 后端会跳过缺少 depth/age 的样品并回报行号（#207）：必须让用户看见少了哪些，
+        // 不能只报"回写成功"——静默少写与静默失败同样是数据可靠性问题。
+        if (res.warning) {
+          notify(String(res.warning), 'warning', 12_000);
+        }
         this.callbacks.onSamplesSynced?.();
       } else {
         notify('已完成采样层位年代回写。', 'success');
