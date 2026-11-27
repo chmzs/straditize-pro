@@ -437,6 +437,17 @@ export interface DiagramData {
   project_name?: string;
   image_name?: string;
 
+  /**
+   * 会话纪元：后端每次**写操作**递增（#180）。前端随草稿读写它，
+   * 用来拒绝「恢复陈旧草稿把新改动回滚」；读取点见 `app/draftRecovery.ts`。
+   */
+  session_epoch?: number;
+  /**
+   * 样品纪元：`samples` 每次变更递增（#156）。前端用它做行锁/删除的并发校验，
+   * 不匹配时后端抛 STATE_ERROR；读取点见 `components/steps/SamplesPanel.ts`。
+   */
+  samples_epoch?: number;
+
   /** 多 ROI 列表与指针（严格冻结契约 v1.3 §2.6） */
   rois: DataRoi[];
   primary_roi_id: string;

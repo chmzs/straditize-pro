@@ -13,6 +13,15 @@
 import { expect, test } from './fixtures';
 import { gotoStage, resetBaseline, rpc } from './helpers';
 
+// T4 会连续执行三次「回写至采样层位」+ 一次「添加花粉采样层位」，每次都会弹**成功**通知；
+// 这些通知是本用例主动触发的预期输出，不是"静默兜底"，故在此声明豁免。
+// 判定逻辑仍由下面的实质断言承担（回写后的层位数、表格数值、排序等）。
+test.use({
+  allowlists: {
+    notice: [/已成功将年代深度模型预测值/, /已添加花粉采样层位/],
+  },
+});
+
 test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2E', () => {
   test.beforeEach(async ({ page }) => {
     await resetBaseline(page);
@@ -190,14 +199,18 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
       timeout: 20_000,
     });
 
-    // 3. 验证侧边栏表格渲染出可编辑输入框
-    const sideInputs = dialog.locator('#ad-mapping-tbody .ad-input-side-age');
-    expect(await sideInputs.count()).toBeGreaterThan(0);
-
-    // 4. 切换到 Tab 2【年代-深度结果数据表】
+    // 3↔4. 切到 Tab 2【年代-深度结果数据表】，并验证结果表是可就地编辑的输入框
+    //
+    //  原实现在 Tab 1 上断言 `#ad-mapping-tbody .ad-input-side-age` 数量 > 0：
+    //  ① 那张表是 Tab 2 里的映射表，Tab 1 阶段 DOM 尚未渲染（实测 element not found）；
+    //  ② 选择器也用了旧类名（现为 `ad-input-side-sample-age`）。
+    //  此处改为在它真正存在的位置断言，且断言"可编辑"这件事本身（输入框存在即可编辑）。
     await dialog.locator('#ad-tab-btn-table').click();
     const tablePanel = dialog.locator('#ad-tab-panel-table');
     await expect(tablePanel).toBeVisible();
+    const editableInputs = tablePanel.locator('input.ad-tbl-input');
+    await expect(editableInputs.first()).toBeVisible({ timeout: 15_000 });
+    expect(await editableInputs.count()).toBeGreaterThan(10);
 
     // 验证大表格行数与可编辑输入框
     const fullRows = tablePanel.locator('#ad-full-table-tbody tr');
@@ -205,7 +218,7 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
     expect(rowCount).toBeGreaterThan(10);
 
     // 5. 编辑第一行的年代数值
-    const firstAgeInput = tablePanel.locator('.ad-input-full-age').first();
+    const firstAgeInput = tablePanel.locator('.ad-input-full-sample-age').first();
     await firstAgeInput.fill('150');
     await firstAgeInput.dispatchEvent('change');
 
@@ -267,24 +280,27 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
     // ② 格式下拉：选 2 位小数后深度输入框必须正好 2 位小数；回到原始值则不再统一
     await panel.locator('#ad-tbl-fmt-digits').selectOption('2');
     const two = await panel
-      .locator('.ad-input-full-depth')
+      .locator('.ad-input-full-sample-depth')
       .evaluateAll((els) => els.map((el) => (el as HTMLInputElement).value).slice(0, 5));
     for (const v of two) {
       expect(v, `深度显示应为 2 位小数，实际 "${v}"`).toMatch(/^-?\d+\.\d{2}$/);
     }
     await panel.locator('#ad-tbl-fmt-digits').selectOption('');
     const raw = await panel
-      .locator('.ad-input-full-depth')
+      .locator('.ad-input-full-sample-depth')
       .evaluateAll((els) => els.map((el) => (el as HTMLInputElement).value).slice(0, 5));
-    expect(
-      raw.some((v) => !/^-?\d+\.\d{2}$/.test(v)),
-      `原始值模式不应统一成 2 位小数：${raw}`,
-    ).toBe(true);
+    // 「原始值」= 完整精度：显示串必须是该数值的规范化表示（不补零、不截断）。
+    // 旧断言用「至少一个值不是 2 位小数」当判据——那是在赌底层数据的位数，
+    // 数据若本身恰好 2 位就会假红（实测即如此）。改用"显示 == String(Number(显示))"，
+    // 与数据无关，且正好是"完整精度"这个承诺的可判定形式。
+    for (const v of raw) {
+      expect(v, `原始值模式应为规范化全精度，实际 "${v}"`).toBe(String(Number(v)));
+    }
 
     // ③ 表头排序只重排显示：data-idx 仍是 0..n-1 的排列，且方向可切换
     const idxOf = () =>
       panel
-        .locator('.ad-input-full-depth')
+        .locator('.ad-input-full-sample-depth')
         .evaluateAll((els) => els.map((el) => Number(el.getAttribute('data-idx'))));
     const before = await idxOf();
     expect(before).toEqual([...before].sort((a, b) => a - b));
@@ -300,7 +316,7 @@ test.describe('AgeDepthModal (年代-深度模型与不确定性集合模块) E2
     // 显示值必须非递减（这才是排序该保证的东西）
     const agesOf = () =>
       panel
-        .locator('.ad-input-full-age')
+        .locator('.ad-input-full-sample-age')
         .evaluateAll((els) => els.map((el) => Number((el as HTMLInputElement).value)));
     const ascAges = await agesOf();
     for (let i = 1; i < ascAges.length; i++) {

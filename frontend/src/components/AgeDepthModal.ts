@@ -341,6 +341,13 @@ export class AgeDepthModal {
         this.tableComp.setInspectionData(res.inspection);
         this.tableComp.setMappedSamples(res.mapped_samples);
         this.tableComp.setControlPoints(this.canvasComp.getControlPoints());
+        // 提取成功后表格应落在「花粉样品层位表」（9 列，含速率±SE）——
+        // 这是用户此刻要看的东西；控制点表（7 列）是"三线点"阶段的视图。
+        // 与「从工程还原」路径同口径（下方 payload.inspection 分支早就是这么做的），
+        // 此前漏了这一步，导致 #205 里提取后仍停在 7 列控制点表。
+        if (res.mapped_samples?.depths?.length) {
+          this.tableComp.setTableMode('samples');
+        }
         this.canvasComp.renderCanvas();
       },
       onLocalBaconSuccess: (res) => {

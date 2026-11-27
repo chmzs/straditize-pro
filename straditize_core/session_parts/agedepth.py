@@ -827,30 +827,56 @@ class AgeDepthSessionMixin:
                 "当前工程没有可用的年代-深度模型，无法回写年代至采样层位。",
             )
 
+        def _as_float(value: Any) -> float | None:
+            """把表格回传的值转成有限浮点；`None`/空串/非数/NaN/inf 一律返回 None。
+
+            不能直接 `float(v)`：结果表里未被模型覆盖的层位、或用户清空的格子会以
+            `None` 回传，`float(None)` 会把**整批**回写打成 -32603 内部错误（issue #207）。
+            """
+            if value is None:
+                return None
+            if isinstance(value, str) and not value.strip():
+                return None
+            try:
+                parsed = float(value)
+            except (TypeError, ValueError):
+                return None
+            return parsed if math.isfinite(parsed) else None
+
+        def _skip_list(values: Any) -> list[float | None] | None:
+            return [_as_float(v) for v in values] if values else None
+
         # If user passed custom mapped_samples from result table, use them directly
         if mapped_samples and "depths" in mapped_samples and "age_est" in mapped_samples:
-            m_depths = [float(d) for d in mapped_samples["depths"]]
-            m_ages = [float(a) for a in mapped_samples["age_est"]]
+            m_depths = [_as_float(d) for d in mapped_samples["depths"]]
+            m_ages = [_as_float(a) for a in mapped_samples["age_est"]]
             m_hids = mapped_samples.get("horizon_id") or []
-            m_lower = (
-                [float(l) for l in mapped_samples["age_lower"]]
-                if "age_lower" in mapped_samples and mapped_samples["age_lower"]
-                else ([float(l) for l in mapped_samples.get("age_min", [])] if mapped_samples.get("age_min") else None)
+            m_lower = _skip_list(
+                mapped_samples.get("age_lower")
+                or mapped_samples.get("age_min")
+                or None
             )
-            m_upper = (
-                [float(u) for u in mapped_samples["age_upper"]]
-                if "age_upper" in mapped_samples and mapped_samples["age_upper"]
-                else ([float(u) for u in mapped_samples.get("age_max", [])] if mapped_samples.get("age_max") else None)
+            m_upper = _skip_list(
+                mapped_samples.get("age_upper")
+                or mapped_samples.get("age_max")
+                or None
             )
+            # 缺 depth 或 age 的行不能凭空补：如实跳过并回报行号（1-based），
+            # 让用户知道"哪几行没被回写"，而不是整批失败或静默少写。
+            skipped_rows: list[int] = []
             axis = getattr(self, "primary_axis", "depth") or "depth"
             new_samples = []
             for i, md in enumerate(m_depths):
-                y_val = m_ages[i] if axis == "age" and i < len(m_ages) else md
+                age_i = m_ages[i] if i < len(m_ages) else None
+                if md is None or age_i is None:
+                    skipped_rows.append(i + 1)
+                    continue
+                y_val = age_i if axis == "age" else md
                 calc_px = self._row_px_for_depth(y_val)
                 # 尝试与已有 samples 匹配对应行像素（若存在深度/年代极近的旧层位）
                 if calc_px is None and self.samples:
-                    if axis == "age" and i < len(m_ages):
-                        matched = min(self.samples, key=lambda s: abs(float(s.get("age_est") or s.get("depth", 0)) - m_ages[i]))
+                    if axis == "age":
+                        matched = min(self.samples, key=lambda s: abs(float(s.get("age_est") or s.get("depth", 0)) - age_i))
                         calc_px = float(matched.get("row_px", 0))
                     else:
                         matched = min(self.samples, key=lambda s: abs(float(s.get("depth", 0)) - md))
@@ -864,14 +890,27 @@ class AgeDepthSessionMixin:
                     "depth": y_val if axis == "age" else md,
                     "depth_est": md if axis == "age" else None,
                     "source": "manual",
-                    "age_est": m_ages[i] if i < len(m_ages) else None,
+                    "age_est": age_i,
                 }
-                if m_lower and i < len(m_lower):
+                if m_lower and i < len(m_lower) and m_lower[i] is not None:
                     s_dict["age_lower"] = m_lower[i]
-                if m_upper and i < len(m_upper):
+                if m_upper and i < len(m_upper) and m_upper[i] is not None:
                     s_dict["age_upper"] = m_upper[i]
                 new_samples.append(s_dict)
-            return self.samples_set(new_samples, source="manual")
+            result = self.samples_set(new_samples, source="manual")
+            if skipped_rows:
+                if not isinstance(result, dict):
+                    result = {"result": result}
+                result["skipped_rows"] = skipped_rows
+                result["warning"] = (
+                    f"{len(skipped_rows)} 个样品缺少 depth 或 age，未回写（行 "
+                    + "、".join(str(r) for r in skipped_rows[:20])
+                    + ("…" if len(skipped_rows) > 20 else "")
+                    + "）；其余 "
+                    + str(len(new_samples))
+                    + " 个已回写。"
+                )
+            return result
 
         # Otherwise evaluate from self.age_depth_model
         if self.samples and self.age_depth_model is not None:
