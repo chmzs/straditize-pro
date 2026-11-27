@@ -553,9 +553,15 @@ digitize 用 ink & ~grid_line_mask & roi_mask
 14. **标度只有一个真相源**：后端 `resolve_column_scale` + `scale_provenance`；
     前端禁止自行解析 `x_ticks` / `x_values` / `x_scales`（`CoordinateSystem.resolveColumnScale`
     是纯取值器，只读后端结论）。
-15. **未标定列一律不给数**，三处同源：`px_to_value` 默认抛错、
-    导出抛 `CALIBRATION_ERROR`（`-32003`，面板照常打开 + caption 说明原因，
-    **不再整表写 `NA`**）、界面「未标定」。
+15. **未标定列一律不给数**，且导出**分两档**（`_assert_export_column_scale` 是唯一判定入口）：
+    - **全列未标定**（`calibrated == 0`）→ 拒绝导出，抛 `CALIBRATION_ERROR`（`-32003`），
+      面板照常打开 + caption 说明原因；
+    - **部分列未标定** → 照常导出，**未标定列整列 `NA`**（缺的是那一列的刻度，不是整份数据），
+      caption 说明哪几列未标定。
+
+    三处同源：`px_to_value` 默认抛错、导出按上表两档、界面「未标定」。
+    两个**禁止**：禁止因"有列没标定"整体拒绝；禁止整表写 `NA`。
+    （2026-11-26 评审曾因本条字面读作"任一列未标定即拒"而误判一次，故在此写明分档。）
 16. **单列标定的端点由后端自检**（轴线右缘 + 检测到的末齿），前端不得传猜测像素；
     分列期写入的 `tickEndX` 不得参与任何标定。
 17. **无横轴列按 `source` 折算**（`column_width_as_unit` / `shared_scale`），
