@@ -8,7 +8,8 @@
 | 项 | 值 |
 | :--- | :--- |
 | main | `68cbf74`（含 #203 #200 #199 #202 #206 #201） |
-| 已合 PR | **#209** `fix/agedepth-table-mode` → main `429ba1a` |
+| 已合 PR | #209（`429ba1a`）、#210、**#211**（外派任务书）→ main **`9581a09`** |
+| 未合 PR | **0** |
 | 本轮关闭 issue | #178 #197 #194 #198 #156 #171 #172 #180 #158 #185 #143 #181 #182 #150 #157 #175 #186 #195 |
 | 仍开 issue | **#208**（CI 最后两条红）+ **#204**（+0.5px 残余）+ **#177**（掩膜未复现）+ 历史债 |
 
@@ -27,23 +28,29 @@ pixi run lint && pixi run test                    # 后端：ruff + 全量 pytes
 ## 未闭合
 
 1. ~~#205 / #207~~ —— 已随 #209 合入并关闭（`agedepth-modal` 7 passed、`contract.spec` 5 passed、`test_agedepth_sync_none` 1 passed）。
-2. **#208** —— 全量 e2e 剩两条红，已收窄：
-   - `qa.spec.ts`：单独跑绿（`empty=2`），全量跑 1。**已排除**轴粗影响（已钉 0）、**已排除** `step2-roi` 污染（配对跑 qa 通过）→ 污染源更靠前，需继续二分；
-   - `step2-roi.spec.ts:115`：**`page.reload` 60s 不完成** + 一条**空文本**通知。这条比断言不符严重（应用在某状态重载挂住），建议升 P1 单独查。
+2. **#208** —— 已拆成两个**可外派**的子项，任务书都入库了：
+   - **A｜`step2-roi.spec.ts:115`**：`page.reload` **60s 不完成** + 一条**空文本**通知 → 应用在某状态重载挂住（真缺陷，建议 P1）。任务书 **`docs/PROMPT-208.md`**。
+   - **B｜`qa.spec.ts` 单独绿 / 全量红**：**污染源已定位为 `contract.spec.ts`**（`contract qa` 两分钟可复现）。二分矩阵与"可见状态逐项相同、差异在隐藏状态"的证据在
+     [issue 评论](https://github.com/chmzs/straditize-pro/issues/208#issuecomment-7209241337)。任务书 **`docs/PROMPT-208B.md`**。
 3. **#204** —— `synth_s3` 非撞界单行残余 `+0.5px`（P3，交 digitize 作者）。
 4. **#177** —— 跨图载入丢掩膜，始终未复现，保持 open。
 
 ## 下一步原子动作
 
-**#208 用二分定位污染源，别猜一个改一个**（试过的组合都记在 issue 里）：
+两条都已外派，接手指令即对应任务书：
 
 ```bash
-cd frontend && STRADITIZE_E2E_PORT=2292x npx playwright test <前序spec> qa.spec.ts --reporter=line
+# A：重载挂死（P1）
+#   文件：docs/PROMPT-208.md
+STRADITIZE_E2E_PORT=22921 npx playwright test step2-roi.spec.ts --reporter=line
+
+# B：reset 卫生（P2，污染源已定位）
+#   文件：docs/PROMPT-208B.md
+STRADITIZE_E2E_PORT=22926 npx playwright test contract.spec.ts qa.spec.ts --reporter=line
 ```
 
-判据：qa 变红 ⇒ 前序 spec 是污染源，继续二分；qa 仍绿 ⇒ 换更靠前的 spec，或怀疑 worker 级状态。
-
-另一条独立工作：`step2-roi` 的 `page.reload` 60s 挂住——先看 `/health` 是否卡、前端 bootstrap 在等哪个 RPC。
+两份任务书都要求**第一步只回答、不动代码**（A：三个观察点；B：`e2e.reset` 的清理清单与差集），
+并明令 **不得修改 qa 的期望值**（那是掩盖）。
 
 ## 环境坑（跨会话通用）
 
