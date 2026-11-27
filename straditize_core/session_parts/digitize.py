@@ -452,6 +452,9 @@ class DigitizeSessionMixin:
         self.column_points[col_index] = points
         self.control_points[col_index] = control_points
         self.reader_types[col_index] = reader_type
+        ctrl_cols = getattr(self, "control_point_columns", None)
+        if isinstance(ctrl_cols, set):
+            ctrl_cols.discard(col_index)
 
         return {
             "col_index": col_index,

@@ -318,4 +318,47 @@ test.describe('前后端契约（真实 payload 对 TS 声明）', () => {
       `这些字段已经在真实 payload 里出现，请从 NOT_SENT_BY_DESIGN 删除：${JSON.stringify(stale)}`
     ).toEqual([]);
   });
+
+  test('reset 卫生：清理操作后再 resetBaseline，隐藏状态不泄漏到下一用例（#208B 回归钉子）', async ({
+    page,
+  }) => {
+    await gotoStage(page, 5);
+    await page.click('#btn-detect-candidates');
+    await expect
+      .poll(
+        async () => ((await diagramData<{ line_candidates: unknown[] }>(page)).line_candidates ?? []).length,
+        { message: '扫描后应产生线候选几何', timeout: 30_000 }
+      )
+      .toBeGreaterThan(0);
+
+    // 经 resetBaseline（内部调 e2e.reset 并重载前端）复位后，隐藏的数字化/采样/清理状态必须归零
+    await resetBaseline(page);
+
+    const status = await rpc<{ is_calibrated: boolean; has_depth_grid: boolean }>(
+      page,
+      'core.getStatus'
+    );
+    expect(status.is_calibrated, 'resetBaseline 后标定状态必须归零').toBe(false);
+    expect(status.has_depth_grid, 'resetBaseline 后 depth_grid 必须归零').toBe(false);
+
+    const baselineData = await diagramData<{
+      line_candidates: unknown[];
+      exclusion_regions: unknown[];
+      line_strokes: unknown[];
+    }>(page);
+    expect(baselineData.line_candidates, 'resetBaseline 后不得残留候选几何').toEqual([]);
+    expect(baselineData.exclusion_regions, 'resetBaseline 后不得残留排除区').toEqual([]);
+    expect(baselineData.line_strokes, 'resetBaseline 后不得残留清理笔迹').toEqual([]);
+
+    const summary = await rpc<{
+      flags?: Record<string, { skipped?: Array<{ reason?: string }> }>;
+    }>(page, 'qa.summarize', {});
+    const synthSkips = Object.values(summary.flags ?? {}).flatMap((flagBlock) =>
+      (flagBlock.skipped ?? []).filter((s) => s.reason === 'points_synthesized_from_control_points')
+    );
+    expect(
+      synthSkips,
+      'resetBaseline 后不得残留 control_point_columns（否则列会被误标为控制点合成）'
+    ).toEqual([]);
+  });
 });

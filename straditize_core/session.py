@@ -233,6 +233,7 @@ class StraditizeSession(
         """
         self._image = value
         self._image_fingerprint_cache = None
+        self.__dict__.pop("_gray_cache", None)
 
     @property
     def config(self) -> dict[str, Any]:

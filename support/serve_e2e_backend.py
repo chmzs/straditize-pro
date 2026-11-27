@@ -62,6 +62,9 @@ def _reset(session: StraditizeSession) -> dict:
     _load_baseline(session)
     session._init_cleanup()
     session.samples_clear()
+    session.control_point_columns = set()
+    for lazy_attr in ("_points_invalidated", "_gray_cache", "tick_band"):
+        session.__dict__.pop(lazy_attr, None)
     session.age_depth_model = None
     session.age_depth_image = None
     session.age_depth_image_path = None
@@ -75,6 +78,8 @@ def _reset(session: StraditizeSession) -> dict:
         "exclusion_regions": len(session.exclusion_regions or []),
         "line_strokes": len(session.line_strokes or []),
         "samples": len(session.samples or []),
+        "control_point_columns": len(getattr(session, "control_point_columns", None) or ()),
+        "_points_invalidated": len(getattr(session, "_points_invalidated", None) or ()),
     }
     dirty = {k: v for k, v in residual.items() if v}
     if dirty:

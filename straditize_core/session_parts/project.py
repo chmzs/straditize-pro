@@ -288,11 +288,16 @@ class ProjectSessionMixin:
         self.columns = []
         self.column_points = {}
         self.control_points = {}
+        self.control_point_columns = set()
+        self.__dict__.pop("_points_invalidated", None)
         self.reader_types = {}
         self.is_calibrated = False
         self.y_scale = None
+        self.y_marks = None
         self.x_scales = {}
         self.depth_calib = None
+        self.depth_unit = "cm"
+        self.primary_axis = "depth"
         self.grid_line_mask = None
         self.candidate_line_mask = None
         self.degrid_line_mask = None
@@ -302,6 +307,7 @@ class ProjectSessionMixin:
         self.cleanup_stats = {}
         self.cleanup_overlay_png = None
         self.degrid_strength = None
+        self.degrid_remove_vertical = True
         self.degrid_info = None
         self.line_corrections = []
         # 与 `load_image()` 同样的理由（见那里的长注释）：新建项目必须清掉
@@ -316,7 +322,12 @@ class ProjectSessionMixin:
         self.active_column_index = 0
         self.depth_grid = []
         self.samples = []
+        self.__dict__.pop("_last_consensus_config", None)
+        self.__dict__.pop("_load_axis_stroke_warnings", None)
         self.age_depth_model = None
+        self.age_depth_is_calendar_year = True
+        self.age_depth_rate_columns = []
+        self.__dict__.pop("age_depth_calib_state", None)
         self.age_depth_image = None
         self.age_depth_image_path = None
         self._age_depth_png_bytes = None
@@ -330,9 +341,23 @@ class ProjectSessionMixin:
         if clear_image:
             self.image = None
             self.image_path = None
+            self.image_array = None
             self.width = 0
             self.height = 0
+            self.format = ""
+            self.mode = ""
             self.foreground_mask = None
+            self.threshold = None
+            self.segmentation_mode = None
+            self.extraction_mode = "standard"
+            self.foreground_column_edges = None
+            self.shadow_mask = None
+            self.solid_layers = None
+            self.__dict__.pop("two_layer_report", None)
+            self.__dict__.pop("_gray_cache", None)
+            self.cached_pdf_data = None
+            self.cached_pdf_path = None
+            self.pdf_info = None
             self.data_xlim = None
             self.data_ylim = None
             self.meta_info = {}
