@@ -8,9 +8,9 @@
 | 项 | 值 |
 | :--- | :--- |
 | main | `68cbf74`（含 #203 #200 #199 #202 #206 #201） |
-| 待合 PR | **#209** `fix/agedepth-table-mode`（`e4a7d21` + `ba222ce`） |
+| 已合 PR | **#209** `fix/agedepth-table-mode` → main `429ba1a` |
 | 本轮关闭 issue | #178 #197 #194 #198 #156 #171 #172 #180 #158 #185 #143 #181 #182 #150 #157 #175 #186 #195 |
-| 仍开 issue | #204 #205 #207 #208 #177（+ 历史债） |
+| 仍开 issue | **#208**（CI 最后两条红）+ **#204**（+0.5px 残余）+ **#177**（掩膜未复现）+ 历史债 |
 
 ## 一键验证（按成本从低到高）
 
@@ -26,21 +26,24 @@ pixi run lint && pixi run test                    # 后端：ruff + 全量 pytes
 
 ## 未闭合
 
-1. **#205 / #207** —— 已在 #209 修好（`agedepth-modal` 7 passed、`contract.spec` 5 passed、`test_agedepth_sync_none` 1 passed），等 #209 合并即关。
-2. **#208** —— 全量 e2e 的两条红：`qa` 空层位 2→1、`step2-roi` 超时并弹**空文本**通知。**注意：单独跑 `qa.spec.ts --grep "76 层位"` 通过（`empty=2, max=103.2`）**，全量跑红 → 先怀疑"并发/资源争用"，再怀疑代码。
+1. ~~#205 / #207~~ —— 已随 #209 合入并关闭（`agedepth-modal` 7 passed、`contract.spec` 5 passed、`test_agedepth_sync_none` 1 passed）。
+2. **#208** —— 全量 e2e 剩两条红，已收窄：
+   - `qa.spec.ts`：单独跑绿（`empty=2`），全量跑 1。**已排除**轴粗影响（已钉 0）、**已排除** `step2-roi` 污染（配对跑 qa 通过）→ 污染源更靠前，需继续二分；
+   - `step2-roi.spec.ts:115`：**`page.reload` 60s 不完成** + 一条**空文本**通知。这条比断言不符严重（应用在某状态重载挂住），建议升 P1 单独查。
 3. **#204** —— `synth_s3` 非撞界单行残余 `+0.5px`（P3，交 digitize 作者）。
 4. **#177** —— 跨图载入丢掩膜，始终未复现，保持 open。
 
 ## 下一步原子动作
 
-跑一次**没有其他 playwright 在跑**的全量 e2e（CPU 争用会造成 60s 超时假红）：
+**#208 用二分定位污染源，别猜一个改一个**（试过的组合都记在 issue 里）：
 
 ```bash
-cd frontend && STRADITIZE_E2E_PORT=22916 npx playwright test --reporter=line
+cd frontend && STRADITIZE_E2E_PORT=2292x npx playwright test <前序spec> qa.spec.ts --reporter=line
 ```
 
-- 全绿 → #208 收敛为"并发假红"，记录后关闭；
-- 仍有红 → 取该用例的 `test-results-*/error-context.md`，按"是不是跨用例状态残留"排查（`serve_e2e_backend.py` 的 `e2e.reset` 是否漏清 `samples` / `columns`）。
+判据：qa 变红 ⇒ 前序 spec 是污染源，继续二分；qa 仍绿 ⇒ 换更靠前的 spec，或怀疑 worker 级状态。
+
+另一条独立工作：`step2-roi` 的 `page.reload` 60s 挂住——先看 `/health` 是否卡、前端 bootstrap 在等哪个 RPC。
 
 ## 环境坑（跨会话通用）
 
