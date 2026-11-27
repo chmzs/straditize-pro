@@ -8,6 +8,7 @@ import { PropertyPanel } from '../components/PropertyPanel';
 import { ExportModal } from '../components/ExportModal';
 import { ProjectManager } from '../core/ProjectManager';
 import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
+import { pushDigitizedControlPointsUndo } from './InspectorBridge';
 import { AgeDepthModal } from '../components/AgeDepthModal';
 import { MetadataModal } from '../components/MetadataModal';
 import { OcrReviewModal } from '../components/OcrReviewModal';
@@ -62,55 +63,38 @@ export function createHistoryHandlers(deps: HistoryHandlersDeps): {
   onRedo: () => void;
 } {
   const syncButtons = (): void => {
-    const canvasComponent = deps.getCanvas();
     refreshUndoButtons({
-      canUndo: undoStack.state.canUndo || canvasComponent.history.canUndo(),
+      canUndo: undoStack.state.canUndo,
       canRedo: undoStack.state.canRedo,
     });
   };
 
   return {
     onUndo: () => {
-      // 迁移期：栈里有「已迁移动作」的逆操作时优先走它（真正的后端回退）；
-      // 否则回落到旧的前端快照重放（未迁移动作，行为与改造前一致）。
-      if (undoStack.state.canUndo) {
-        void undoStack
-          .undo()
-          .then((ok) => {
-            if (ok) deps.getToolbar()?.updateHistoryState();
-            syncButtons();
-          })
-          .catch((err) => {
-            syncButtons();
-            deps.reportBackendFailure('撤销', err);
-          });
-        return;
-      }
-      const canvasComponent = deps.getCanvas();
-      const prev = canvasComponent.history.undo();
-      if (prev) {
-        deps.cleanupManager.applyHistorySnapshot(prev);
-      }
+      if (!undoStack.state.canUndo) return;
+      void undoStack
+        .undo()
+        .then((ok) => {
+          if (ok) deps.getToolbar()?.updateHistoryState();
+          syncButtons();
+        })
+        .catch((err) => {
+          syncButtons();
+          deps.reportBackendFailure('撤销', err);
+        });
     },
     onRedo: () => {
-      if (undoStack.state.canRedo) {
-        void undoStack
-          .redo()
-          .then((ok) => {
-            if (ok) deps.getToolbar()?.updateHistoryState();
-            syncButtons();
-          })
-          .catch((err) => {
-            syncButtons();
-            deps.reportBackendFailure('重做', err);
-          });
-        return;
-      }
-      const canvasComponent = deps.getCanvas();
-      const next = canvasComponent.history.redo();
-      if (next) {
-        deps.cleanupManager.applyHistorySnapshot(next);
-      }
+      if (!undoStack.state.canRedo) return;
+      void undoStack
+        .redo()
+        .then((ok) => {
+          if (ok) deps.getToolbar()?.updateHistoryState();
+          syncButtons();
+        })
+        .catch((err) => {
+          syncButtons();
+          deps.reportBackendFailure('重做', err);
+        });
     },
   };
 }
@@ -156,6 +140,7 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
     onDigitize: async () => {
       const activeCol = p.canvasComponent.getActiveColumn();
       if (!activeCol) return;
+      const prevPoints = activeCol.controlPoints.map((pt) => ({ ...pt }));
       try {
         const { points, curvePoints, brokenRows, ambiguousRows } = await p.rpcClient.digitizeColumnWithStats(activeCol.id);
         if (points.length > 0) {
@@ -163,11 +148,12 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
           if (curvePoints && curvePoints.length > 0) {
             activeCol.curvePoints = curvePoints;
           }
-          p.canvasComponent.history.push(
-            `Re-digitize ${activeCol.name}`,
-            p.canvasComponent.data.columns,
-            p.canvasComponent.data.activeTaxaId
-          );
+          pushDigitizedControlPointsUndo(p.rpcClient, p.canvasComponent, activeCol, prevPoints, () => {
+            p.canvasComponent.requestRender();
+            p.getSidebar()?.updateData(p.canvasComponent.data);
+            p.getInspector()?.updateData(p.canvasComponent.data);
+            p.updateFooter();
+          });
           p.canvasComponent.requestRender();
           p.getSidebar()?.updateData(p.canvasComponent.data);
           const note = compensationNote({ brokenRows, ambiguousRows });

@@ -36,7 +36,7 @@ export class AddColToolStrategy implements ToolStrategy {
     ctx.data.columns.push(newCol);
     ctx.data.columns.sort((a, b) => a.startX - b.startX);
     ctx.data.activeTaxaId = newCol.id;
-    ctx.history.push(`Add Column ${newCol.name}`, ctx.data.columns, ctx.data.activeTaxaId);
+    ctx.callbacks.onAddColumnCommit?.(newCol);
     ctx.notifyNotice(`已在 X:${newX}px 处插入新属种分列。`);
     ctx.setToolMode('select');
     ctx.requestRender();

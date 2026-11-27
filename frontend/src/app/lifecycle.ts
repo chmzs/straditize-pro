@@ -7,8 +7,9 @@
  * 谁改写它、为什么改写一目了然。
  */
 import type { HistoryManager } from '../core/HistoryManager';
+import { undoStack } from '../core/undoRuntime';
 
-export function installBeforeUnloadGuard(history: HistoryManager): void {
+export function installBeforeUnloadGuard(_history: HistoryManager): void {
   let isShuttingDown = false;
   (window as any).__straditize_suppress_beforeunload = () => {
     isShuttingDown = true;
@@ -16,7 +17,7 @@ export function installBeforeUnloadGuard(history: HistoryManager): void {
 
   window.addEventListener('beforeunload', (e) => {
     if (isShuttingDown) return;
-    if (history.canUndo()) {
+    if (undoStack.state.canUndo) {
       e.preventDefault();
       e.returnValue = '您有未保存的地学数字化工程修改，确定离开吗？';
     }

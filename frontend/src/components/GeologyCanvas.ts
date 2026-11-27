@@ -107,6 +107,12 @@ export interface CanvasEventCallbacks {
    * 三个参数都必要 —— `previousStroke` 用于后端拒绝时把画布回滚，避免"拖了但没生效"。
    */
   onAxisStrokeCommit?: (colIndex: number, strokePx: number, previousStroke: number) => void;
+  onAddColumnCommit?: (newCol: TaxaColumn) => void;
+  onColumnBoundsCommit?: (
+    colIndex: number,
+    prevBounds: { startX: number; endX: number },
+    nextBounds: { startX: number; endX: number }
+  ) => void;
   /** 线掩膜人工修正笔迹结束，调用方负责提交后端并回灌新叠加层。 */
   onLineFixStroke?: (stroke: LineMaskStroke) => void;
   /** Step 4：一条 geometry 被拖动/缩放/新建完成，调用方提交后端。 */
@@ -1166,15 +1172,7 @@ private pointer: PointerState = {
       ctrl: true,
       when: (e) => !e.shiftKey,
       run: () => {
-        if (this.callbacks.onUndo) {
-          this.callbacks.onUndo();
-          return;
-        }
-        const prev = this.history.undo();
-        if (!prev) return;
-        this.data.columns = prev.columns;
-        this.data.activeTaxaId = prev.activeTaxaId;
-        this.requestRender();
+        this.callbacks.onUndo?.();
       },
       label: 'Ctrl+Z 撤销',
     },
@@ -1182,15 +1180,7 @@ private pointer: PointerState = {
       keys: ['y'],
       ctrl: true,
       run: () => {
-        if (this.callbacks.onRedo) {
-          this.callbacks.onRedo();
-          return;
-        }
-        const next = this.history.redo();
-        if (!next) return;
-        this.data.columns = next.columns;
-        this.data.activeTaxaId = next.activeTaxaId;
-        this.requestRender();
+        this.callbacks.onRedo?.();
       },
       label: 'Ctrl+Y 重做',
     },
@@ -1710,6 +1700,7 @@ private pointer: PointerState = {
   }
 
   private nudgeTimer: number | null = null;
+  private pendingColumnNudgeBounds = new Map<string, { startX: number; endX: number }>();
 
   public nudgeSelectedEntity(dx: number, dy: number): void {
     if (!this.data.selectedEntity) return;
@@ -1729,10 +1720,9 @@ private pointer: PointerState = {
           this.callbacks.onDataChange?.();
           this.notifyNotice(`微调控制点: ${col.name} [X:${pt.x}, Y:${pt.y}] (${dx !== 0 ? (dx > 0 ? `+${dx}px` : `${dx}px`) : ''} ${dy !== 0 ? (dy > 0 ? `+${dy}px` : `${dy}px`) : ''})`);
 
-          // 连续微调 500ms 后提交撤销历史记录
+          // 连续微调 500ms 后提交控制点写回与撤销记录
           if (this.nudgeTimer) clearTimeout(this.nudgeTimer);
           this.nudgeTimer = window.setTimeout(() => {
-            this.history.push(`Nudge Anchor in ${col.name}`, this.data.columns, this.data.activeTaxaId);
             this.commitControlPoints(col.id);
             this.nudgeTimer = null;
           }, 500);
@@ -1741,8 +1731,12 @@ private pointer: PointerState = {
     } else if (this.data.selectedEntity.type === 'column') {
       const colId = this.data.selectedEntity.id;
       const part = this.data.selectedEntity.part;
-      const col = this.data.columns.find((c) => c.id === colId);
+      const colIdx = this.data.columns.findIndex((c) => c.id === colId);
+      const col = colIdx >= 0 ? this.data.columns[colIdx] : undefined;
       if (col && dx !== 0) {
+        if (!this.pendingColumnNudgeBounds.has(col.id)) {
+          this.pendingColumnNudgeBounds.set(col.id, { startX: col.startX, endX: col.endX });
+        }
         if (part === 'start') {
           col.startX += dx;
           // 0 点 = 列左缘 + 轴粗：拖列左缘只挪几何，轴粗不变，originX 必须跟着加回轴粗，
@@ -1759,7 +1753,18 @@ private pointer: PointerState = {
 
         if (this.nudgeTimer) clearTimeout(this.nudgeTimer);
         this.nudgeTimer = window.setTimeout(() => {
-          this.history.push(`Nudge Column ${col.name}`, this.data.columns, this.data.activeTaxaId);
+          const prevBounds = this.pendingColumnNudgeBounds.get(col.id);
+          this.pendingColumnNudgeBounds.delete(col.id);
+          if (
+            prevBounds &&
+            (prevBounds.startX !== col.startX || prevBounds.endX !== col.endX)
+          ) {
+            this.callbacks.onColumnBoundsCommit?.(
+              col.col_index ?? colIdx,
+              prevBounds,
+              { startX: col.startX, endX: col.endX }
+            );
+          }
           this.nudgeTimer = null;
         }, 500);
       }
@@ -1882,7 +1887,6 @@ private pointer: PointerState = {
         const pt = col.controlPoints.find((p) => p.id === pointId);
         col.controlPoints = col.controlPoints.filter((p) => p.id !== pointId);
         this.commitControlPoints(col.id);
-        this.history.push(`Delete Anchor from ${col.name}`, this.data.columns, this.data.activeTaxaId);
         this.data.selectedEntity = null;
         this.pointer.anchor = null;
         this.updateCursor();

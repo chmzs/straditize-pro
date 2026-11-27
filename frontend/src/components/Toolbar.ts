@@ -45,7 +45,6 @@ export interface ToolbarCallbacks {
 
 export class Toolbar {
   private element: HTMLElement;
-  private history: HistoryManager;
   private backendStatus: BackendStatus;
   private callbacks: ToolbarCallbacks;
   private currentScaleText: string = '100%';
@@ -68,11 +67,10 @@ export class Toolbar {
   }
 
   constructor(
-    history: HistoryManager,
+    _history: HistoryManager,
     backendStatus: BackendStatus,
     callbacks: ToolbarCallbacks
   ) {
-    this.history = history;
     this.backendStatus = backendStatus;
     this.callbacks = callbacks;
     this.element = document.createElement('header');
@@ -174,13 +172,8 @@ export class Toolbar {
   }
 
   public updateHistoryState(): void {
-    // 撤销/重做的可用状态**只有这一个写入口**：真回退栈（undoStack）+ 迁移期兜底（旧 history）。
-    // 曾经这里直接按 `history.canUndo()` 设 disabled，于是"栈里明明有可撤销动作、
-    // 按钮却是灰的"（U1 缺陷）。现在统一交给 refreshUndoButtons 决定。
-    refreshUndoButtons({
-      canUndo: this.history.canUndo(),
-      canRedo: this.history.canRedo(),
-    });
+    // 撤销/重做的可用状态唯一来源：真回退栈（undoStack）。
+    refreshUndoButtons();
   }
 
   public render(): void {
@@ -284,12 +277,12 @@ export class Toolbar {
           </button>
 
           <!-- 撤销/重做 -->
-          <button id="btn-undo" class="ui-btn ui-icon-btn" aria-label="${t('toolbar.undoTitle')}" title="${t('toolbar.undoTitle')}" ${!this.history.canUndo() ? 'disabled' : ''}>
+          <button id="btn-undo" class="ui-btn ui-icon-btn" aria-label="${t('toolbar.undoTitle')}" title="${t('toolbar.undoTitle')}" disabled>
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/>
             </svg>
           </button>
-          <button id="btn-redo" class="ui-btn ui-icon-btn" aria-label="${t('toolbar.redoTitle')}" title="${t('toolbar.redoTitle')}" ${!this.history.canRedo() ? 'disabled' : ''}>
+          <button id="btn-redo" class="ui-btn ui-icon-btn" aria-label="${t('toolbar.redoTitle')}" title="${t('toolbar.redoTitle')}" disabled>
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/>
             </svg>

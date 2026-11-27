@@ -23,7 +23,9 @@ export const undoStack = new UndoStack();
  *
  * @param legacy 旧 history 的可用性（迁移期未迁移动作的来源）
  */
-export function refreshUndoButtons(legacy: { canUndo: boolean; canRedo: boolean }): void {
+export function refreshUndoButtons(
+  legacy: { canUndo: boolean; canRedo: boolean } = { canUndo: false, canRedo: false }
+): void {
   const s: UndoState = undoStack.state;
   const undo = document.getElementById('btn-undo') as HTMLButtonElement | null;
   const redo = document.getElementById('btn-redo') as HTMLButtonElement | null;

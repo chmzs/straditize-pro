@@ -241,7 +241,6 @@ export class SelectToolStrategy implements ToolStrategy {
     if (this.draggingAnchor && this.hasDraggedAnchor && this.dragInitialPointPos) {
       const col = ctx.data.columns.find((c) => c.id === this.draggingAnchor!.taxaId);
       if (col) {
-        ctx.history.push(`Move Anchor in ${col.name}`, ctx.data.columns, ctx.data.activeTaxaId);
         ctx.commitControlPoints(col.id);
         ctx.callbacks.onDataChange?.();
       }
@@ -249,9 +248,17 @@ export class SelectToolStrategy implements ToolStrategy {
     }
 
     if (this.draggingBoundary && this.dragInitialColumn) {
-      const col = ctx.data.columns.find((c) => c.id === this.draggingBoundary!.taxaId);
-      if (col) {
-        ctx.history.push(`Adjust Column Boundary ${col.name}`, ctx.data.columns, ctx.data.activeTaxaId);
+      const colIdx = ctx.data.columns.findIndex((c) => c.id === this.draggingBoundary!.taxaId);
+      const col = colIdx >= 0 ? ctx.data.columns[colIdx] : undefined;
+      if (
+        col &&
+        (col.startX !== this.dragInitialColumn.startX || col.endX !== this.dragInitialColumn.endX)
+      ) {
+        ctx.callbacks.onColumnBoundsCommit?.(
+          col.col_index ?? colIdx,
+          this.dragInitialColumn,
+          { startX: col.startX, endX: col.endX }
+        );
         ctx.callbacks.onDataChange?.();
       }
       handled = true;
