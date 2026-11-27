@@ -93,7 +93,18 @@ test.describe('Step 8 QA 诊断门禁', () => {
       page,
       'straditize.getDiagramData'
     );
-    const ZERO_X = ROI_X0 + (freshCols[0]?.axis_stroke_px ?? 5);
+    // 把轴粗**钉成 0**：否则 ZERO_X 取决于 `measure_axis_stroke` 对"当前底图"的实测值，
+    // 而底图是会话级状态——全量跑时前序用例换过图、reset 未还原，就会测出不同轴粗，
+    // 0 点随之偏移；此时把控制点压到 0%（x == ZERO_X）会落进"0 点左侧"被拒，
+    // 那一行保留数字化读数 → 空层位从 2 变 1（实测差异见 docs/ci-gate-status.md）。
+    // 钉成 0 后 0 点 == ROI 左缘，本用例的判据只取决于自己写的 76 个点。
+    await rpc(page, 'column.update', { col_index: 0, updates: { axis_stroke_px: 0 } });
+    const { columns: pinnedCols } = await rpc<{ columns: Array<{ axis_stroke_px?: number }> }>(
+      page,
+      'straditize.getDiagramData'
+    );
+    expect(pinnedCols[0]?.axis_stroke_px, '轴粗必须被钉为 0（0 点 == ROI 左缘）').toBe(0);
+    const ZERO_X = ROI_X0 + (freshCols[0]?.axis_stroke_px ?? 0) * 0;
     // x_ticks 既是像素→百分比的映射依据，也是契约里"声明最大丰度"的唯一来源。
     // 映射取 1%/px（ZERO_X → 0%，ZERO_X + 100 → 100%），于是目标和值直接等于 x 偏移量。
     await rpc(page, 'column.update', {
