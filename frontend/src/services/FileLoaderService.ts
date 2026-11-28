@@ -8,6 +8,7 @@ import { HistoryManager } from '../core/HistoryManager';
 import { undoStack } from '../core/undoRuntime';
 import { extractProjectNameFromFilename } from '../utils/exportNaming';
 import { t } from '../i18n';
+import { showConfirmDialog } from '../ui/confirm';
 
 export interface FileLoaderCallbacks {
   setHudNotice: (text: string, duration?: number) => void;
@@ -67,7 +68,11 @@ export class FileLoaderService {
 
     if (undoStack.state.canUndo) {
       if (
-        !window.confirm('当前项目有未保存修改，重新加载图片将清空当前工作区。是否继续？')
+        !(await showConfirmDialog(
+          '重新加载图片',
+          '当前项目有未保存修改，重新加载图片将清空当前工作区。是否继续？',
+          { confirmText: '继续加载', destructive: true }
+        ))
       ) {
         return;
       }
@@ -162,10 +167,12 @@ export class FileLoaderService {
         const WARN_H = 9000;
 
         if (w > MAX_W || h > MAX_H) {
-          const okDownsample = window.confirm(
-            `【图像尺寸过大提示】\n当前图像尺寸为 ${w}×${h} px，超过建议最大限制 (${MAX_W}×${MAX_H} px)。\n直接加载可能会耗尽浏览器内存导致崩溃。\n\n点击【确定】以 50% 降采样安全加载 (${Math.round(
+          const okDownsample = await showConfirmDialog(
+            '图像尺寸过大提示',
+            `当前图像尺寸为 ${w}×${h} px，超过建议最大限制 (${MAX_W}×${MAX_H} px)。直接加载可能会耗尽浏览器内存导致崩溃。点击【降采样加载】以 50% 降采样安全加载 (${Math.round(
               w / 2
-            )}×${Math.round(h / 2)} px)；\n点击【取消】中止加载。`
+            )}×${Math.round(h / 2)} px)；点击【取消】中止加载。`,
+            { confirmText: '降采样加载' }
           );
           if (!okDownsample) {
             this.callbacks.setHudNotice('已取消加载超限大图');

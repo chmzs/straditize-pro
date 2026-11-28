@@ -2,6 +2,7 @@ import { DiagramData } from '../../types/pollen';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
 import { renderResetButton } from '../../ui/resetButton';
+import { showConfirmDialog } from '../../ui/confirm';
 
 export const step = 2;
 export const title = '2. 数据有效区 (ROI)';
@@ -219,8 +220,16 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   });
 
   // 重设本步
-  root.querySelector('#btn-reset-step2-roi')?.addEventListener('click', () => {
-    if (!window.confirm('确定将当前数据有效区重设回整张图谱的初始全图范围吗？')) return;
+  root.querySelector('#btn-reset-step2-roi')?.addEventListener('click', async () => {
+    if (
+      !(await showConfirmDialog(
+        '重设数据有效区',
+        '确定将当前数据有效区重设回整张图谱的初始全图范围吗？',
+        { destructive: true }
+      ))
+    ) {
+      return;
+    }
     const d = cachedRoiData;
     if (!d) return;
     const rois = d.rois && d.rois.length > 0 ? d.rois : [{ id: 'roi_1', name: 'pollen', name_source: 'default', composition: true, visible: true, xlim: [d.roi.xMin, d.roi.xMax], ylim: [d.roi.yMin, d.roi.yMax], columns_stale: false, form_defaults: null }];

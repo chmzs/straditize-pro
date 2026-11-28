@@ -13,6 +13,7 @@ import { AgeDepthModal } from '../components/AgeDepthModal';
 import { MetadataModal } from '../components/MetadataModal';
 import { OcrReviewModal } from '../components/OcrReviewModal';
 import { SettingsModal } from '../components/SettingsModal';
+import { showConfirmDialog } from '../ui/confirm';
 import { AboutModal } from '../components/AboutModal';
 import { CleanupManager } from './CleanupManager';
 import { WorkflowController } from './WorkflowController';
@@ -274,12 +275,10 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
      *    画布上照样画出已不存在的 ROI。
      */
     onResetAll: async () => {
-      const confirmed = window.confirm(
-        '确定要重置当前图谱的全部操作吗？\n\n' +
-          '· 将清空：全部分列、控制点、刻度齿、深度标尺与 ROI 边界\n' +
-          '· 撤销历史将一并清空，且本操作不可撤销\n' +
-          '· 底图图片本身会完整保留\n\n' +
-          '重置后从步骤 1（载入）重新开始。'
+      const confirmed = await showConfirmDialog(
+        '重置全部操作',
+        '确定要重置当前图谱的全部操作吗？将清空全部分列、控制点、刻度齿、深度标尺、ROI 边界与撤销历史（不可撤销），底图图片本身会完整保留。重置后从步骤 1（载入）重新开始。',
+        { confirmText: '确认重置', destructive: true }
       );
       if (!confirmed) return;
 

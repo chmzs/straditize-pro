@@ -5,6 +5,7 @@ import { StepContext } from './_registry';
 import { t } from '../../i18n';
 import { notifyError } from '../../ui/feedback';
 import { renderResetButton } from '../../ui/resetButton';
+import { showConfirmDialog } from '../../ui/confirm';
 
 export const step = 3;
 export const title = '3. Y 轴物理标定';
@@ -347,8 +348,14 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   });
 
   // 重设本步
-  root.querySelector('#btn-reset-step3-ycalib')?.addEventListener('click', () => {
-    if (!window.confirm('确定清空当前 Y 轴两点标定吗？')) return;
+  root.querySelector('#btn-reset-step3-ycalib')?.addEventListener('click', async () => {
+    if (
+      !(await showConfirmDialog('清空 Y 轴标定', '确定清空当前 Y 轴两点标定吗？', {
+        destructive: true,
+      }))
+    ) {
+      return;
+    }
     const tPx = root.querySelector('#ycal-inp-top-px') as HTMLInputElement | null;
     const tVal = root.querySelector('#ycal-inp-top-val') as HTMLInputElement | null;
     const bPx = root.querySelector('#ycal-inp-bot-px') as HTMLInputElement | null;
