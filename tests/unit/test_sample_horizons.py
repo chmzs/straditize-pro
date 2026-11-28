@@ -82,6 +82,15 @@ def test_sample_horizon_paste_depths():
     assert res["samples"][1]["depth"] == 25.0
     assert res["samples"][1]["source"] == "paste"
 
+    # Out-of-image-height paste must raise INVALID_PARAMS (-32602) instead of producing out-of-bounds row_px
+    import numpy as np
+
+    session.image = np.zeros((400, 100, 3), dtype=np.uint8)
+    with pytest.raises(JsonRpcError) as exc_oob:
+        session.samples_paste_depths([15.0, 200.0])  # 200.0 -> row_px 2000 >= 400
+    assert exc_oob.value.code == -32602
+    assert "超出图像高度范围" in exc_oob.value.message
+
 
 def test_consensus_extraction_workflow():
     """Consensus extraction discovers sample horizons from multi-taxa turning point curvature extrema."""
