@@ -64,4 +64,11 @@ assert.equal(
   `KeyC 必须只绑定一次，实测 ${keycCount} 处（曾因 KeyC 双绑定导致「高对比度」快捷键永远不可达）`
 );
 
-console.log('✔ 键位绑定 5 组断言全部通过');
+// 6) 回归哨兵：TOOL_STAGE_HINT 必须包含 measure（步骤 7 按 M 不得静默）
+assert.match(
+  src,
+  /TOOL_STAGE_HINT[\s\S]*?measure:\s*'[^']*测量尺/,
+  'TOOL_STAGE_HINT 必须包含 measure 阶段提示（issue #152）'
+);
+
+console.log('✔ 键位绑定 6 组断言全部通过');
