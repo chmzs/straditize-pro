@@ -321,9 +321,6 @@ export function createToolbarCallbacks(p: ToolbarBridgeParams) {
         }
       }
 
-      p.canvasComponent.data.project_name = undefined;
-      p.getToolbar()?.setProjectName('');
-      p.exportModal.setProjectName('');
       p.exportModal.updateData(p.canvasComponent.data);
       p.projectManager.updateData(p.canvasComponent.data);
       p.workflowController.setCurrentStage(1);
