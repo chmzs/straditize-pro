@@ -138,8 +138,7 @@ export class FileLoaderService {
         this.applyLoadedDiagram(
           newDiagramData,
           file.name,
-          `已载入图谱 [${file.name}] (${w}×${h})。在画布上调整数据有效区（步骤 1），再点下方推进。`,
-          true
+          `已载入图谱 [${file.name}] (${w}×${h})。在画布上调整数据有效区（步骤 1），再点下方推进。`
         );
         return;
       }
@@ -198,8 +197,7 @@ export class FileLoaderService {
         this.applyLoadedDiagram(
           newDiagramData,
           file.name,
-          `已载入图谱 [${file.name}] (${w}×${h})。在画布上调整数据有效区（步骤 1），再点下方推进。`,
-          true
+          `已载入图谱 [${file.name}] (${w}×${h})。在画布上调整数据有效区（步骤 1），再点下方推进。`
         );
       };
       img.src = dataUrl;
@@ -211,22 +209,21 @@ export class FileLoaderService {
     newDiagramData: DiagramData,
     fileName: string,
     noticeText: string,
-    syncProjectName: boolean
+    runDeskew: boolean = true
   ): void {
+    // 进入 S1 时清空：ROI、所有列、所有点、深度标定、撤销栈、选中状态，并同步工程名
     this.canvasComponent.loadNewDiagram(newDiagramData);
-    if (syncProjectName) {
-      const inferred = extractProjectNameFromFilename(fileName);
-      if (inferred) {
-        this.canvasComponent.data.project_name = inferred;
-        this.canvasComponent.data.image_name = fileName;
-        this.getToolbar()?.setProjectName(inferred);
-        this.rpcClient.call('project.setName', { name: inferred }).catch(() => {});
-      } else {
-        this.canvasComponent.data.project_name = undefined;
-        this.canvasComponent.data.image_name = fileName;
-        this.getToolbar()?.setProjectName('');
-        this.rpcClient.call('project.setName', { name: null }).catch(() => {});
-      }
+    const inferred = extractProjectNameFromFilename(fileName);
+    if (inferred) {
+      this.canvasComponent.data.project_name = inferred;
+      this.canvasComponent.data.image_name = fileName;
+      this.getToolbar()?.setProjectName(inferred);
+      this.rpcClient.call('project.setName', { name: inferred }).catch(() => {});
+    } else {
+      this.canvasComponent.data.project_name = undefined;
+      this.canvasComponent.data.image_name = fileName;
+      this.getToolbar()?.setProjectName('');
+      this.rpcClient.call('project.setName', { name: null }).catch(() => {});
     }
     this.history.reset([], '');
     this.callbacks.setCurrentStage(1);
@@ -243,7 +240,7 @@ export class FileLoaderService {
     this.callbacks.updateFooter();
 
     this.callbacks.setHudNotice(noticeText, 5000);
-    if (syncProjectName) {
+    if (runDeskew) {
       this.runDeskewCheck();
     }
   }
