@@ -452,6 +452,9 @@ class CoreMixin:
         self.columns = []
         self.column_points = {}
         self.control_points = {}
+        self.control_point_columns = set()
+        self.__dict__.pop("_points_invalidated", None)
+        self.__dict__.pop("_gray_cache", None)
         self.manual_points = {}
         self.reader_types = {}
         self.is_calibrated = False
@@ -943,6 +946,9 @@ class CoreMixin:
         self.columns = []
         self.column_points = {}
         self.control_points = {}
+        self.control_point_columns = set()
+        self.__dict__.pop("_points_invalidated", None)
+        self.__dict__.pop("_gray_cache", None)
         self.manual_points = {}
 
         return {
@@ -1880,12 +1886,16 @@ class CoreMixin:
         new_manual_points: dict[int, dict[int, dict[str, Any]]] = {}
         new_reader_types: dict[int, str] = {}
         new_x_scales: dict[int, dict[str, float]] = {}
+        new_control_point_columns: set[int] = set()
+        new_points_invalidated: set[int] = set()
 
         old_column_points = getattr(self, "column_points", {}) or {}
         old_control_points = getattr(self, "control_points", {}) or {}
         old_manual_points = getattr(self, "manual_points", {}) or {}
         old_reader_types = getattr(self, "reader_types", {}) or {}
         old_x_scales = getattr(self, "x_scales", {}) or {}
+        old_ctrl_cols = getattr(self, "control_point_columns", None) or set()
+        old_invalidated = getattr(self, "_points_invalidated", None) or set()
 
         matched_manual: set[int] = set()
         for new_idx, col in enumerate(self.columns):
@@ -1906,6 +1916,10 @@ class CoreMixin:
                     new_reader_types[new_idx] = old_reader_types[old_idx]
                 if old_idx in old_x_scales:
                     new_x_scales[new_idx] = old_x_scales[old_idx]
+                if old_idx in old_ctrl_cols:
+                    new_control_point_columns.add(new_idx)
+                if old_idx in old_invalidated:
+                    new_points_invalidated.add(new_idx)
 
         # 整列重建（重分列）时旧列被整体替换，旧 col_index 一个都对不上；手工点
         # 是**像素坐标**，按 x 落到新列里继续有效——否则用户手工补的点在"检测分列"
@@ -1923,6 +1937,9 @@ class CoreMixin:
         self.manual_points = new_manual_points
         self.reader_types = new_reader_types
         self.x_scales = new_x_scales
+        self.control_point_columns = new_control_point_columns
+        if hasattr(self, "_points_invalidated"):
+            self._points_invalidated = new_points_invalidated
 
         if sync_taxa_names:
             self.taxa_names = [
@@ -1968,6 +1985,8 @@ class CoreMixin:
         self.columns = []
         self.column_points = {}
         self.control_points = {}
+        self.control_point_columns = set()
+        self.__dict__.pop("_points_invalidated", None)
         self.reader_types = {}
         self.active_column_index = 0
         if hasattr(self, "manual_points"):
