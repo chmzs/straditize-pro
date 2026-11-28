@@ -2609,6 +2609,7 @@ class ExportMixin:
             "# 列量纲来自工程里的列组单位：% 列按 rioja 的 scale.percent 各自归一，",
             "# 非 % 列（比值 / 浓度 / 粒数）按该列自身量程画，两种不能共用一把尺。",
             "",
+            "if (!file.exists('data.csv')) stop('找不到 data.csv：请用导出面板的「出图包」，或把 data.csv 放到同目录。')",
             "pdf('stratigraphic_diagram.pdf', width = 12, height = 8)",
         ]
         lines.extend(
@@ -2616,6 +2617,7 @@ class ExportMixin:
                 df_var="df",
                 csv_filename="data.csv",
                 roi_name=self._primary_roi_name(),
+                require_file=True,
                 pct_cols=pct_cols,
                 fixed_cols=fixed_cols,
                 units=units,
