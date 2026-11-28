@@ -30,5 +30,7 @@ def register_all(dispatcher: Any, session: Any) -> list[str]:
             logger.exception("Failed to load RPC method module '%s'", name)
             raise
 
+    if hasattr(dispatcher, "bind_session"):
+        dispatcher.bind_session(session)
     logger.debug("Registered RPC method modules: %s", registered)
     return registered

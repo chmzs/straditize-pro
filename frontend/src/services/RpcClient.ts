@@ -120,6 +120,85 @@ export interface SystemConfig {
   rscript_path?: string;
 }
 
+const SESSION_SYNC_CHANNEL = 'straditize-session-sync';
+
+/** 与后端 MUTATING_RPC_METHODS 对齐：所有会修改服务端会话状态的 RPC。 */
+const MUTATING_RPC_METHODS = new Set<string>([
+  'agedepth.extractAndInspect',
+  'agedepth.generateEnsemble',
+  'agedepth.loadModelDiagram',
+  'agedepth.runBaconModeling',
+  'agedepth.runLocalBacon',
+  'agedepth.syncToSamples',
+  'agedepth.updateModel',
+  'algorithm.applyLineRemoval',
+  'algorithm.clearCleanupEdits',
+  'algorithm.degrid',
+  'algorithm.deleteLineGeometry',
+  'algorithm.detectColumns',
+  'algorithm.detectLineCandidates',
+  'algorithm.extractHorizonConsensus',
+  'algorithm.extractTurningPoints',
+  'algorithm.setGeometryStatus',
+  'algorithm.setLineThickness',
+  'algorithm.upsertLineGeometry',
+  'column.add',
+  'column.calibrateXTicks',
+  'column.clearAll',
+  'column.clearXTicks',
+  'column.redigitizeAll',
+  'column.remove',
+  'column.setControlPoints',
+  'column.update',
+  'core.applyDepthGrid',
+  'core.batchSetTaxa',
+  'core.calibrateAxes',
+  'core.detectColumns',
+  'core.digitize',
+  'core.extractForeground',
+  'core.loadImage',
+  'core.reset',
+  'core.updateControlPoint',
+  'ensemble.add',
+  'history.redo',
+  'history.undo',
+  'image.load',
+  'image.rotate',
+  'image.switchPdfPage',
+  'metadata.extractFromPdf',
+  'metadata.fetchByDoi',
+  'metadata.parseExternalText',
+  'metadata.update',
+  'naming.renameColumn',
+  'naming.snapLabels',
+  'ocr.applyLabels',
+  'point.add',
+  'point.move',
+  'point.remove',
+  'project.load',
+  'project.new',
+  'project.setName',
+  'roi.create',
+  'roi.groupCreate',
+  'roi.groupRemove',
+  'roi.groupUpdate',
+  'roi.remove',
+  'roi.setActive',
+  'roi.setPrimary',
+  'roi.update',
+  'samples.clear',
+  'samples.extractConsensus',
+  'samples.fromDepthGrid',
+  'samples.pasteDepths',
+  'samples.set',
+]);
+
+export interface ExternalSessionMutationEvent {
+  epoch: number | null;
+  method: string;
+  reason: 'broadcast' | 'conflict';
+}
+
 export class RpcClient {
   private endpoint: string;
   /**
@@ -135,6 +214,10 @@ export class RpcClient {
   private authToken: string | null = null;
   private onAuthRequiredListeners: Array<() => void> = [];
   private needsAuthentication: boolean = false;
+  private knownSessionEpoch: number | null = null;
+  private readonly tabId: string = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  private syncChannel: BroadcastChannel | null = null;
+  private externalMutationListeners: Array<(event: ExternalSessionMutationEvent) => void> = [];
 
   constructor(endpoint?: string) {
     if (typeof window !== 'undefined') {
@@ -160,6 +243,51 @@ export class RpcClient {
       this.endpoint = 'http://127.0.0.1:8765/rpc';
     }
     this.currentDiagramData = createEmptyDiagramData();
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        this.syncChannel = new BroadcastChannel(SESSION_SYNC_CHANNEL);
+        this.syncChannel.addEventListener('message', (event: MessageEvent) => {
+          const msg = event.data as {
+            type?: string;
+            sourceTabId?: string;
+            epoch?: number;
+            method?: string;
+          } | null;
+          if (!msg || msg.type !== 'session_mutated' || msg.sourceTabId === this.tabId) {
+            return;
+          }
+          if (typeof msg.epoch === 'number') {
+            this.knownSessionEpoch = msg.epoch;
+          }
+          this.notifyExternalSessionMutated({
+            epoch: typeof msg.epoch === 'number' ? msg.epoch : null,
+            method: msg.method || 'unknown',
+            reason: 'broadcast',
+          });
+        });
+      } catch {
+        this.syncChannel = null;
+      }
+    }
+  }
+
+  public onExternalSessionMutated(
+    listener: (event: ExternalSessionMutationEvent) => void
+  ): () => void {
+    this.externalMutationListeners.push(listener);
+    return () => {
+      this.externalMutationListeners = this.externalMutationListeners.filter((l) => l !== listener);
+    };
+  }
+
+  private notifyExternalSessionMutated(event: ExternalSessionMutationEvent): void {
+    for (const listener of this.externalMutationListeners) {
+      try {
+        listener(event);
+      } catch (err) {
+        console.warn('External session mutation listener failed:', err);
+      }
+    }
   }
 
   /** 当前会话图谱的浏览器可直接访问的 URL（由后端提供，前端不再自带示例图片副本） */
@@ -385,14 +513,24 @@ export class RpcClient {
 
     // === 路径 B：真实后端（唯一的数据来源）===
     {
+      let effectiveParams: unknown = params;
+      const isMutating = MUTATING_RPC_METHODS.has(method);
+      if (isMutating && this.knownSessionEpoch !== null) {
+        if (params === undefined || params === null) {
+          effectiveParams = { _expected_epoch: this.knownSessionEpoch };
+        } else if (typeof params === 'object' && !Array.isArray(params)) {
+          effectiveParams = { ...(params as Record<string, unknown>), _expected_epoch: this.knownSessionEpoch };
+        }
+      }
+
       // ---- 1. 传输层：DNS/连接/超时失败 → 标记离线并抛错 ----
       let response: Response;
       try {
-        const payload: JsonRpcRequest<TParams> = {
+        const payload: JsonRpcRequest<unknown> = {
           jsonrpc: '2.0',
           id: ++this.requestId,
           method,
-          params,
+          params: effectiveParams,
         };
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (this.authToken) {
@@ -441,13 +579,29 @@ export class RpcClient {
         // 只能去猜关键词（ExportModal 正在这么做，实测就把用户引去了错误的步骤）。
         (rpcError as Error & { code?: number; data?: unknown }).code = rpcRes.error.code;
         (rpcError as Error & { code?: number; data?: unknown }).data = rpcRes.error.data;
+        const errData = rpcRes.error.data as { kind?: string; current_epoch?: number } | undefined;
+        if (errData?.kind === 'epoch_conflict') {
+          if (typeof errData.current_epoch === 'number') {
+            this.knownSessionEpoch = errData.current_epoch;
+          }
+          this.notifyExternalSessionMutated({
+            epoch: typeof errData.current_epoch === 'number' ? errData.current_epoch : null,
+            method,
+            reason: 'conflict',
+          });
+        }
         throw rpcError;
       }
-      // ---- 5. 标度写入成功后广播 ----
-      // 落在传输层而不是各包装方法：会写标度的方法不止一处（roiGroupUpdate
-      // → roi.groupUpdate、calibrateColumnXTicks、clearColumnXTicks），而包装方法与
-      // 实际调用点会漂移（`onCalibrateXTicks` 至今只有声明、没有调用点）。收在这里，
-      // "任何写标度的调用都会触发一次权威回填"才是结构性成立的。
+      // ---- 5. 跨标签同步与标度变更广播 ----
+      if (isMutating) {
+        this.knownSessionEpoch = (this.knownSessionEpoch ?? 0) + 1;
+        this.syncChannel?.postMessage({
+          type: 'session_mutated',
+          sourceTabId: this.tabId,
+          epoch: this.knownSessionEpoch,
+          method,
+        });
+      }
       if (SCALE_MUTATING_METHODS.has(method)) {
         this.notifyScaleMutated();
       }
@@ -520,6 +674,7 @@ export class RpcClient {
       unit: 'cm',
     };
     this.currentDiagramData = data;
+    this.knownSessionEpoch = typeof data.session_epoch === 'number' ? data.session_epoch : 0;
     return data;
   }
 
