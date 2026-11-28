@@ -233,6 +233,30 @@ _META_ROWS: tuple[_MetaRowSpec, ...] = (
         source="User",
         confidence="high",
     ),
+    _MetaRowSpec(
+        "Chronology",
+        "Dating Sample Counts",
+        "chronology",
+        "dating_counts",
+        source="LLM",
+        optional=True,
+    ),
+    _MetaRowSpec(
+        "Chronology",
+        "Total Dated Samples",
+        "chronology",
+        "total_dates",
+        source="LLM",
+        optional=True,
+    ),
+    _MetaRowSpec(
+        "Chronology",
+        "Reservoir Correction",
+        "chronology",
+        "reservoir_correction",
+        source="LLM",
+        optional=True,
+    ),
     # Group 4: Technical & Laboratory
     _MetaRowSpec(
         "Technical",

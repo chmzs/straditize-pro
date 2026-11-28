@@ -174,6 +174,9 @@ class StraditizeSession(
                 "age_range": "",
                 "dating_method": "14C",
                 "cal_curve": "IntCal20",
+                "dating_counts": "",
+                "total_dates": "",
+                "reservoir_correction": "",
             },
             "technical": {
                 "pollen_extraction_method": "",

@@ -84,47 +84,67 @@ class MetadataSessionMixin:
             pub_curr["funding_grant"] = extracted["funding_grant"]["value"]
         self.paper_metadata["publication"] = pub_curr
 
+        from ..metadata.exporter_lipd import normalize_lipd_archive_type
+
+        def _pick(section: dict[str, Any], field: str, fallback: Any = "") -> Any:
+            val = extracted.get(field, {}).get("value", "")
+            if val not in (None, ""):
+                return val
+            existing = section.get(field, "")
+            if existing not in (None, ""):
+                return existing
+            return fallback
+
+        site_curr = self.paper_metadata.get("site", {})
+        raw_archive = _pick(site_curr, "archive_type", "LakeSediment")
         self.paper_metadata["site"] = {
-            "site_name": extracted.get("site_name", {}).get("value", ""),
-            "country": extracted.get("country", {}).get("value", ""),
-            "latitude": extracted.get("latitude", {}).get("value", ""),
-            "longitude": extracted.get("longitude", {}).get("value", ""),
-            "elevation_m": extracted.get("elevation_m", {}).get("value", ""),
-            "water_depth_m": extracted.get("water_depth_m", {}).get("value", ""),
-            "core_length_m": extracted.get("core_length_m", {}).get("value", ""),
-            "archive_type": extracted.get("archive_type", {}).get("value", "")
-            or "lake sediment",
-            "collection_date": extracted.get("collection_date", {}).get("value", ""),
-            "confidence": extracted.get("site_name", {}).get("confidence", "medium"),
-            "conflict": extracted.get("site_name", {}).get("conflict", False),
-            "candidates": extracted.get("site_name", {}).get("candidates", []),
+            "site_name": _pick(site_curr, "site_name"),
+            "country": _pick(site_curr, "country"),
+            "latitude": _pick(site_curr, "latitude"),
+            "longitude": _pick(site_curr, "longitude"),
+            "elevation_m": _pick(site_curr, "elevation_m"),
+            "water_depth_m": _pick(site_curr, "water_depth_m"),
+            "core_length_m": _pick(site_curr, "core_length_m"),
+            "archive_type": normalize_lipd_archive_type(
+                raw_archive, default="LakeSediment"
+            ),
+            "collection_date": _pick(site_curr, "collection_date"),
+            "confidence": extracted.get("site_name", {}).get(
+                "confidence", site_curr.get("confidence", "medium")
+            ),
+            "conflict": extracted.get("site_name", {}).get(
+                "conflict", site_curr.get("conflict", False)
+            ),
+            "candidates": extracted.get("site_name", {}).get(
+                "candidates", site_curr.get("candidates", [])
+            ),
             "source": "LLM",
         }
+        chron_curr = self.paper_metadata.get("chronology", {})
         self.paper_metadata["chronology"] = {
-            "age_model": extracted.get("age_model", {}).get("value", ""),
-            "age_range": extracted.get("age_range", {}).get("value", ""),
-            "dating_method": extracted.get("dating_method", {}).get("value", ""),
-            "cal_curve": extracted.get("cal_curve", {}).get("value", "") or "IntCal20",
+            "age_model": _pick(chron_curr, "age_model"),
+            "age_range": _pick(chron_curr, "age_range"),
+            "dating_method": _pick(chron_curr, "dating_method"),
+            "cal_curve": _pick(chron_curr, "cal_curve"),
+            "dating_counts": _pick(chron_curr, "dating_counts"),
+            "total_dates": _pick(chron_curr, "total_dates"),
+            "reservoir_correction": _pick(chron_curr, "reservoir_correction"),
             "source": "LLM",
         }
         tech_curr = self.paper_metadata.get("technical", {})
         self.paper_metadata["technical"] = {
-            "pollen_extraction_method": extracted.get(
-                "pollen_extraction_method", {}
-            ).get("value", ""),
-            "laboratory": extracted.get("laboratory", {}).get("value", ""),
-            "investigators": extracted.get("investigators", {}).get("value", ""),
+            "pollen_extraction_method": _pick(tech_curr, "pollen_extraction_method"),
+            "laboratory": _pick(tech_curr, "laboratory"),
+            "investigators": _pick(tech_curr, "investigators"),
             "digitizer": tech_curr.get("digitizer", ""),
             "affiliation": tech_curr.get("affiliation", ""),
             "digitization_date": tech_curr.get("digitization_date", ""),
-            "sampling_interval_cm": extracted.get("sampling_interval_cm", {}).get(
-                "value", ""
-            ),
+            "sampling_interval_cm": _pick(tech_curr, "sampling_interval_cm"),
             "source": "LLM",
         }
         qual_curr = self.paper_metadata.get("quality", {})
         self.paper_metadata["quality"] = {
-            "quality_notes": extracted.get("quality_notes", {}).get("value", ""),
+            "quality_notes": _pick(qual_curr, "quality_notes"),
             "dataset_version": qual_curr.get("dataset_version", "1.0.0"),
             "original_data_url": qual_curr.get("original_data_url", ""),
             "source": "LLM",

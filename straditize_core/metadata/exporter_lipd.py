@@ -10,12 +10,66 @@ Conforms strictly to LiPD / LinkedEarth v1.3 standard format:
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
 from typing import Any
 import zipfile
 import pandas as pd
+
+
+_ARCHIVE_TYPE_MAP: dict[str, str] = {
+    "lake": "LakeSediment",
+    "lake sediment": "LakeSediment",
+    "lake sediments": "LakeSediment",
+    "lacustrine": "LakeSediment",
+    "lacustrine sediment": "LakeSediment",
+    "lakesediment": "LakeSediment",
+    "marine": "MarineSediment",
+    "marine sediment": "MarineSediment",
+    "marine sediments": "MarineSediment",
+    "marinesediment": "MarineSediment",
+    "peat": "Peat",
+    "peat bog": "Peat",
+    "peatland": "Peat",
+    "mire": "Peat",
+    "bog": "Peat",
+    "fen": "Peat",
+    "loess": "TerrestrialSediment",
+    "terrestrial sediment": "TerrestrialSediment",
+    "terrestrialsediment": "TerrestrialSediment",
+    "fluvial sediment": "TerrestrialSediment",
+    "alluvial": "TerrestrialSediment",
+    "speleothem": "Speleothem",
+    "stalagmite": "Speleothem",
+    "ice core": "GlacierIce",
+    "glacier ice": "GlacierIce",
+    "glacierice": "GlacierIce",
+    "coral": "Coral",
+    "tree": "Wood",
+    "tree ring": "Wood",
+    "wood": "Wood",
+    "bivalve": "Bivalve",
+    "mollusk shell": "MolluskShell",
+    "molluskshell": "MolluskShell",
+    "midden": "Midden",
+    "document": "Document",
+    "other": "Other",
+}
+
+
+def normalize_lipd_archive_type(raw: Any, default: str = "LakeSediment") -> str:
+    """Normalize free-text archive_type into LiPD v1.3 camelCase controlled vocabulary."""
+    text = str(raw or "").strip()
+    if not text:
+        return default
+    key = " ".join(text.lower().replace("_", " ").replace("-", " ").split())
+    if key in _ARCHIVE_TYPE_MAP:
+        return _ARCHIVE_TYPE_MAP[key]
+    if " " not in text and text[0].isupper():
+        return text
+    return "".join(part.capitalize() for part in key.split())
 
 
 def export_lipd_jsonld(
@@ -26,6 +80,7 @@ def export_lipd_jsonld(
     ensemble_tables: list[dict[str, Any]] | None = None,
     column_units: dict[str, str] | None = None,
     depth_unit: str = "cm",
+    primary_axis: str = "depth",
 ) -> dict[str, Any]:
     """Builds a complete Linked Paleo Data (LiPD) JSON-LD structure conforming to LiPDverse and Contract §4.2."""
     meta_info = meta_info or {}
@@ -57,7 +112,9 @@ def export_lipd_jsonld(
     lipd_obj: dict[str, Any] = {
         "@context": "https://linkedearth.github.io/schema/context.json",
         "dataSetName": dataset_name,
-        "archiveType": site.get("archive_type", "LakeSediment"),
+        "archiveType": normalize_lipd_archive_type(
+            site.get("archive_type"), default="LakeSediment"
+        ),
         "investigators": investigators,
         "pub": pub_meta,
         "geo": geo_meta,
@@ -74,6 +131,24 @@ def export_lipd_jsonld(
     }
 
     _lipd_apply_optional_fields(lipd_obj, pub, site, tech, qual)
+
+    chron_summary: dict[str, Any] = {}
+    if chron.get("age_model"):
+        chron_summary["ageModel"] = str(chron["age_model"])
+    if chron.get("dating_method"):
+        chron_summary["datingMethod"] = str(chron["dating_method"])
+    if chron.get("cal_curve"):
+        chron_summary["calibrationCurve"] = str(chron["cal_curve"])
+    if chron.get("age_range"):
+        chron_summary["ageRange"] = str(chron["age_range"])
+    if chron.get("total_dates") not in (None, ""):
+        chron_summary["totalDates"] = chron["total_dates"]
+    if chron.get("dating_counts"):
+        chron_summary["datingCounts"] = chron["dating_counts"]
+    if chron.get("reservoir_correction"):
+        chron_summary["reservoirCorrection"] = str(chron["reservoir_correction"])
+    if chron_summary:
+        lipd_obj["chronData"][0]["chronologyMetadata"] = chron_summary
 
     if ensemble_measurement_table:
         lipd_obj["chronData"][0]["chronEnsembleTable"] = ensemble_measurement_table
@@ -105,6 +180,9 @@ def _lipd_geo_metadata(site: dict[str, Any], site_name: str) -> dict[str, Any]:
         "longitude": lon,
         "elevation": elev,
     }
+    if lat is not None and lon is not None:
+        coords: list[float] = [lon, lat] if elev is None else [lon, lat, elev]
+        geo_meta["geometry"] = {"type": "Point", "coordinates": coords}
     if site.get("country"):
         geo_meta["country"] = str(site["country"])
     if site.get("water_depth_m") not in (None, ""):
@@ -172,21 +250,55 @@ def _lipd_paleo_columns(
                 except (ValueError, TypeError):
                     clean_vals.append(str(v))
 
-        is_depth = col_name.lower().startswith("depth")
-        resolved_unit = (
-            (depth_unit or "cm") if is_depth else (col_unit_map.get(col_name) or "%")
+        lower_name = col_name.strip().lower()
+        is_depth = (
+            lower_name == "depth"
+            or lower_name.startswith("depth ")
+            or lower_name.startswith("depth(")
         )
+        is_age = (
+            lower_name == "age"
+            or lower_name.startswith("age ")
+            or lower_name.startswith("age(")
+            or lower_name in ("cal yr bp", "cal yrbp", "yr bp", "age_cal_bp")
+        )
+        is_elev = (
+            lower_name == "elevation"
+            or lower_name.startswith("elevation ")
+            or lower_name.startswith("elevation(")
+        )
+        if is_depth:
+            resolved_unit = depth_unit or "cm"
+            var_type = "depth"
+            proxy = None
+            desc = "Core composite depth"
+        elif is_age:
+            resolved_unit = col_unit_map.get(col_name) or (
+                depth_unit if depth_unit and "yr" in depth_unit.lower() else "cal yrBP"
+            )
+            var_type = "chronology"
+            proxy = None
+            desc = "Sample age"
+        elif is_elev:
+            resolved_unit = col_unit_map.get(col_name) or depth_unit or "m"
+            var_type = "elevation"
+            proxy = None
+            desc = "Sample elevation"
+        else:
+            resolved_unit = col_unit_map.get(col_name) or "%"
+            var_type = "measured"
+            proxy = "pollen"
+            desc = f"Digitized {col_name} ({resolved_unit})"
+
         paleo_columns.append(
             {
                 "variableName": col_name,
                 "units": resolved_unit,
                 "values": clean_vals,
                 "dataType": "float",
-                "variableType": "depth" if is_depth else "measured",
-                "proxy": "pollen" if not is_depth else None,
-                "description": f"Digitized {col_name} ({resolved_unit})"
-                if not is_depth
-                else "Core composite depth",
+                "variableType": var_type,
+                "proxy": proxy,
+                "description": desc,
             }
         )
     return paleo_columns
@@ -255,7 +367,7 @@ def _lipd_chron_table(age_depth_df: pd.DataFrame | None) -> list[dict[str, Any]]
             chron_columns.append(
                 {
                     "variableName": col_name,
-                    "units": "cm" if is_depth else "yr BP",
+                    "units": "cm" if is_depth else "cal yrBP",
                     "values": clean_vals,
                     "dataType": "float",
                     "variableType": "depth" if is_depth else "chronology",
@@ -288,7 +400,7 @@ def _lipd_ensemble_tables(
                     ens_cols.append(
                         {
                             "variableName": col_name,
-                            "units": "yr BP" if "age" in col_name.lower() else "cm",
+                            "units": "cal yrBP" if "age" in col_name.lower() else "cm",
                             "values": [
                                 float(v) if pd.notna(v) else None
                                 for v in df_temp[col_name]
@@ -354,28 +466,60 @@ def package_lipd_archive(
     lipd_jsonld: dict[str, Any],
     output_path: str | None = None,
 ) -> bytes:
-    """Packages a LiPD JSON-LD and its CSV tables into a standard .lpd ZIP container."""
-    bio = io.BytesIO()
-    with zipfile.ZipFile(bio, "w", zipfile.ZIP_DEFLATED) as zf:
-        # Write metadata JSON-LD
-        jsonld_str = json.dumps(lipd_jsonld, indent=2, ensure_ascii=False)
-        zf.writestr(f"{lipd_jsonld.get('dataSetName', 'dataset')}.jsonld", jsonld_str)
+    """Packages a LiPD JSON-LD and its CSV tables into a BagIt-compliant .lpd ZIP container."""
+    dataset_name = lipd_jsonld.get("dataSetName", "dataset")
+    data_files: dict[str, bytes] = {}
 
-        # Write paleo measurement CSVs
-        for table in lipd_jsonld.get("paleoData", [{}])[0].get(
-            "paleoMeasurementTable", []
-        ):
-            t_name = table.get("tableName", "paleo")
+    jsonld_bytes = json.dumps(lipd_jsonld, indent=2, ensure_ascii=False).encode("utf-8")
+    data_files[f"data/{dataset_name}.jsonld"] = jsonld_bytes
+
+    def _add_tables(tables: list[dict[str, Any]], fallback_prefix: str) -> None:
+        for idx, table in enumerate(tables):
+            t_name = str(table.get("tableName") or f"{fallback_prefix}_{idx + 1}")
             cols = table.get("columns", [])
             data_dict = {
                 c["variableName"]: c["values"]
                 for c in cols
                 if "variableName" in c and "values" in c
             }
-            if data_dict:
-                df = pd.DataFrame(data_dict)
-                csv_bytes = df.to_csv(index=False, lineterminator="\n").encode("utf-8")
-                zf.writestr(f"{t_name}.csv", csv_bytes)
+            if not data_dict:
+                continue
+            rel_path = f"data/{t_name}.csv"
+            if rel_path in data_files:
+                rel_path = f"data/{fallback_prefix}_{t_name}.csv"
+            df = pd.DataFrame(data_dict)
+            data_files[rel_path] = df.to_csv(index=False, lineterminator="\n").encode(
+                "utf-8"
+            )
+
+    paleo_root = (lipd_jsonld.get("paleoData") or [{}])[0]
+    _add_tables(paleo_root.get("paleoMeasurementTable", []), "paleo")
+
+    chron_root = (lipd_jsonld.get("chronData") or [{}])[0]
+    _add_tables(chron_root.get("chronMeasurementTable", []), "chron")
+    _add_tables(chron_root.get("chronEnsembleTable", []), "ensemble")
+
+    manifest_lines = [
+        f"{hashlib.md5(content).hexdigest()}  {rel_path}"
+        for rel_path, content in sorted(data_files.items())
+    ]
+    manifest_bytes = ("\n".join(manifest_lines) + "\n").encode("utf-8")
+    bagit_bytes = (
+        "BagIt-Version: 0.97\nTag-File-Character-Encoding: UTF-8\n"
+    ).encode("utf-8")
+    tagmanifest_lines = [
+        f"{hashlib.md5(bagit_bytes).hexdigest()}  bagit.txt",
+        f"{hashlib.md5(manifest_bytes).hexdigest()}  manifest-md5.txt",
+    ]
+    tagmanifest_bytes = ("\n".join(tagmanifest_lines) + "\n").encode("utf-8")
+
+    bio = io.BytesIO()
+    with zipfile.ZipFile(bio, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("bagit.txt", bagit_bytes)
+        zf.writestr("manifest-md5.txt", manifest_bytes)
+        zf.writestr("tagmanifest-md5.txt", tagmanifest_bytes)
+        for rel_path, content in sorted(data_files.items()):
+            zf.writestr(rel_path, content)
 
     zip_bytes = bio.getvalue()
     if output_path:
