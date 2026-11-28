@@ -298,7 +298,10 @@
      "age_model": "",
      "age_range": "",
      "cal_curve": "IntCal20",
-     "dating_method": "14C"
+     "dating_counts": "",
+     "dating_method": "14C",
+     "reservoir_correction": "",
+     "total_dates": ""
     },
     "publication": {
      "authors": [],
@@ -739,7 +742,10 @@
      "age_model": "",
      "age_range": "",
      "cal_curve": "IntCal20",
-     "dating_method": "14C"
+     "dating_counts": "",
+     "dating_method": "14C",
+     "reservoir_correction": "",
+     "total_dates": ""
     },
     "publication": {
      "authors": [],
@@ -921,9 +927,9 @@
     "name": "manifest.json"
    },
    {
-    "digest": "6295d6cf0503",
+    "digest": "cc10e24cb717",
     "name": "straditize.json",
-    "size": 8278
+    "size": 8364
    },
    {
     "digest": "36238134d819",

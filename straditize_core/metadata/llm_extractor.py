@@ -35,6 +35,9 @@ TARGET_FIELDS = [
     "age_range",
     "dating_method",
     "cal_curve",
+    "dating_counts",
+    "total_dates",
+    "reservoir_correction",
     "pollen_extraction_method",
     "laboratory",
     "sampling_interval_cm",
@@ -66,6 +69,9 @@ Return a valid JSON object matching this schema:
   "age_range": {"value": string, "confidence": "high"|"medium"|"low", "quote": string},
   "dating_method": {"value": string, "confidence": "high"|"medium"|"low", "quote": string},
   "cal_curve": {"value": string, "confidence": "high"|"medium"|"low", "quote": string},
+  "dating_counts": {"value": string, "confidence": "high"|"medium"|"low", "quote": string},
+  "total_dates": {"value": string, "confidence": "high"|"medium"|"low", "quote": string},
+  "reservoir_correction": {"value": string, "confidence": "high"|"medium"|"low", "quote": string},
   "pollen_extraction_method": {"value": string, "confidence": "high"|"medium"|"low", "quote": string},
   "laboratory": {"value": string, "confidence": "high"|"medium"|"low", "quote": string},
   "sampling_interval_cm": {"value": string, "confidence": "high"|"medium"|"low", "quote": string},
@@ -74,8 +80,11 @@ Return a valid JSON object matching this schema:
 
 Special notes:
 - latitude/longitude: Return decimal degrees if written, or convert explicit degrees/minutes/seconds if unambiguously stated. Otherwise keep verbatim string.
-- archive_type: e.g. "lake sediment", "peat bog", "marine sediment", "fluvial sediment".
+- archive_type: Use LiPD controlled camelCase when possible: "LakeSediment", "Peat", "MarineSediment", "TerrestrialSediment", "Speleothem", "GlacierIce", "Coral", "Wood", "Other".
 - age_model: e.g. "Bacon", "Bchron", "CLAM", "OxCal", "linear interpolation", or "".
+- dating_counts: Counts per dating method/material explicitly stated, e.g. "AMS 14C: 12 (plant macrofossils); 210Pb: 18".
+- total_dates: Total number of dated horizons/samples as integer string, e.g. "30".
+- reservoir_correction: Stated reservoir age or correction applied, e.g. "450 yr" or "None".
 - investigators: Field/coring team or laboratory analysts explicitly mentioned.
 - quote: Provide the short verbatim sentence proving this extraction. If value is "", quote must be "".
 """
@@ -290,14 +299,17 @@ EXTERNAL_CHAT_PROMPT = """你是一名第四纪古生态、孢粉学与古气候
     "elevation_m": "海拔米数（纯数字字符串，如 2848）",
     "water_depth_m": "采样处水深米数（如 11.4）",
     "core_length_m": "钻孔总长米数（如 14.0）",
-    "archive_type": "沉积档案类型（如 lake sediment, peat, loess, marine sediment）",
+    "archive_type": "沉积档案类型（优先 LiPD 词表：LakeSediment, Peat, MarineSediment, TerrestrialSediment, Speleothem, GlacierIce）",
     "collection_date": "野外钻取/采集时间（如 2008-05 或 2018）"
   },
   "chronology": {
     "age_model": "年代-深度模型方法（如 Bacon, Bchron, CLAM, linear interpolation）",
     "dating_method": "测年方法与材料（如 AMS 14C (plant macrofossils / bulk organic)）",
-    "age_range": "年代覆盖范围（如 0-11400 cal yr BP）",
-    "cal_curve": "校正曲线（如 IntCal20, Marine20）"
+    "age_range": "年代覆盖范围（如 0-11400 cal yrBP）",
+    "cal_curve": "校正曲线（如 IntCal20, Marine20）",
+    "dating_counts": "各测年方法/材料样本数（如 AMS 14C: 12 (plant macrofossils); 210Pb: 18）",
+    "total_dates": "总测年样本点数（如 30）",
+    "reservoir_correction": "碳库效应/硬水校正（如 450 yr 或 None）"
   },
   "technical": {
     "investigators": "野外钻取与实验分析人员名单（逗号分隔）",
@@ -410,6 +422,9 @@ def parse_external_llm_metadata(raw_text: str) -> dict[str, Any]:
         r"^https?://(?:dx\.)?doi\.org/", "", raw_doi, flags=re.IGNORECASE
     ).strip()
 
+    from .exporter_lipd import normalize_lipd_archive_type
+
+    raw_archive = str(pick(site_in, "archive_type", "")).strip()
     normalized: dict[str, Any] = {
         "publication": {
             "doi": raw_doi,
@@ -429,18 +444,24 @@ def parse_external_llm_metadata(raw_text: str) -> dict[str, Any]:
             "elevation_m": str(pick(site_in, "elevation_m", "")).strip(),
             "water_depth_m": str(pick(site_in, "water_depth_m", "")).strip(),
             "core_length_m": str(pick(site_in, "core_length_m", "")).strip(),
-            "archive_type": str(pick(site_in, "archive_type", "lake sediment")).strip()
-            or "lake sediment",
+            "archive_type": normalize_lipd_archive_type(
+                raw_archive, default="LakeSediment"
+            )
+            if raw_archive
+            else "",
             "collection_date": str(pick(site_in, "collection_date", "")).strip(),
             "source": "External LLM",
         },
         "chronology": {
-            "age_model": str(pick(chron_in, "age_model", "Bacon")).strip() or "Bacon",
+            "age_model": str(pick(chron_in, "age_model", "")).strip(),
             "age_range": str(pick(chron_in, "age_range", "")).strip(),
-            "dating_method": str(pick(chron_in, "dating_method", "14C AMS")).strip()
-            or "14C AMS",
-            "cal_curve": str(pick(chron_in, "cal_curve", "IntCal20")).strip()
-            or "IntCal20",
+            "dating_method": str(pick(chron_in, "dating_method", "")).strip(),
+            "cal_curve": str(pick(chron_in, "cal_curve", "")).strip(),
+            "dating_counts": str(pick(chron_in, "dating_counts", "")).strip(),
+            "total_dates": str(pick(chron_in, "total_dates", "")).strip(),
+            "reservoir_correction": str(
+                pick(chron_in, "reservoir_correction", "")
+            ).strip(),
             "source": "External LLM",
         },
         "technical": {

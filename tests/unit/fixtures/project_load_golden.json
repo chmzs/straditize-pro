@@ -225,7 +225,10 @@
     "age_model": "",
     "age_range": "",
     "cal_curve": "IntCal20",
-    "dating_method": "14C"
+    "dating_counts": "",
+    "dating_method": "14C",
+    "reservoir_correction": "",
+    "total_dates": ""
    },
    "publication": {
     "authors": [],
@@ -452,7 +455,10 @@
     "age_model": "",
     "age_range": "",
     "cal_curve": "IntCal20",
-    "dating_method": "14C"
+    "dating_counts": "",
+    "dating_method": "14C",
+    "reservoir_correction": "",
+    "total_dates": ""
    },
    "publication": {
     "authors": [],
@@ -792,7 +798,10 @@
     "age_model": "",
     "age_range": "",
     "cal_curve": "IntCal20",
-    "dating_method": "14C"
+    "dating_counts": "",
+    "dating_method": "14C",
+    "reservoir_correction": "",
+    "total_dates": ""
    },
    "publication": {
     "authors": [],

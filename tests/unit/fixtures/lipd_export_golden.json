@@ -10,7 +10,11 @@
       "columns": [],
       "tableName": "chron_model"
      }
-    ]
+    ],
+    "chronologyMetadata": {
+     "calibrationCurve": "IntCal20",
+     "datingMethod": "14C"
+    }
    }
   ],
   "collectionDate": "2023-08",
@@ -150,7 +154,7 @@
        },
        {
         "dataType": "float",
-        "units": "yr BP",
+        "units": "cal yrBP",
         "values": [
          0.0,
          480.0
@@ -159,7 +163,7 @@
        },
        {
         "dataType": "float",
-        "units": "yr BP",
+        "units": "cal yrBP",
         "values": [
          5.0,
          512.0
@@ -188,7 +192,7 @@
        {
         "dataType": "float",
         "description": "Modeled Age (yr BP) parameter",
-        "units": "yr BP",
+        "units": "cal yrBP",
         "values": [
          0.0,
          500.0,
@@ -200,7 +204,11 @@
       ],
       "tableName": "chron_model"
      }
-    ]
+    ],
+    "chronologyMetadata": {
+     "calibrationCurve": "IntCal20",
+     "datingMethod": "14C"
+    }
    }
   ],
   "collectionDate": "2023-08",
@@ -219,6 +227,14 @@
    "coreLength": 320.0,
    "country": "China",
    "elevation": 4720.0,
+   "geometry": {
+    "coordinates": [
+     85.25,
+     29.5,
+     4720.0
+    ],
+    "type": "Point"
+   },
    "latitude": 29.5,
    "longitude": 85.25,
    "siteName": "Ngamring",
@@ -331,7 +347,11 @@
       "columns": [],
       "tableName": "chron_model"
      }
-    ]
+    ],
+    "chronologyMetadata": {
+     "calibrationCurve": "IntCal20",
+     "datingMethod": "14C"
+    }
    }
   ],
   "collectionDate": "2023-08",
@@ -350,6 +370,14 @@
    "coreLength": 320.0,
    "country": "China",
    "elevation": 4720.0,
+   "geometry": {
+    "coordinates": [
+     85.25,
+     29.5,
+     4720.0
+    ],
+    "type": "Point"
+   },
    "latitude": 29.5,
    "longitude": 85.25,
    "siteName": "Ngamring",
@@ -468,6 +496,14 @@
   "dataSetName": "Unnamed_Site_Author_2026",
   "geo": {
    "elevation": 0.0,
+   "geometry": {
+    "coordinates": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "type": "Point"
+   },
    "latitude": 0.0,
    "longitude": 0.0,
    "siteName": "Unnamed_Site"
@@ -535,6 +571,14 @@
   "dataSetName": "Unnamed_Site_Author_2026",
   "geo": {
    "elevation": 0.0,
+   "geometry": {
+    "coordinates": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "type": "Point"
+   },
    "latitude": 0.0,
    "longitude": 0.0,
    "siteName": "Unnamed_Site"
