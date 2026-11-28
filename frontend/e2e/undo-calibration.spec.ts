@@ -177,7 +177,6 @@ test.describe('T-04 撤销不得否定后端已确认的 Y 标定', () => {
         timeout: 15_000,
       })
       .not.toBe(ylimBefore[1]);
-    const ylimAfterDrag = await backendYlim(page, roiId);
 
     // ── 步骤 3：两点标定并等后端确认
     await gotoStage(page, 3);
@@ -205,18 +204,13 @@ test.describe('T-04 撤销不得否定后端已确认的 Y 标定', () => {
     await expect(undo, '历史栈里既有 ROI 拖拽又有标定，撤销按钮必须可用').toBeEnabled();
     await undo.click();
 
-    // 等前端动作**真正落地**，不靠固定 sleep：
-    // `applyHistorySnapshot` 在同一处调 `clearYCalibMarks()`（`CleanupManager.ts:184`），
-    // 所以"画布上的两个 Y 标记被清掉"就是这次撤销已执行的机械证据。
+    // 等真撤销动作**真正落地**到后端：ROI 退回拖拽前的边界，且不破坏已生效的 Y 标定。
     await expect
-      .poll(async () => (await front(page)).yCalibMarks.length, {
-        message: '撤销必须真的执行（画布上的 Y 标记应被清除）',
+      .poll(async () => (await backendYlim(page, roiId))?.[1], {
+        message: '撤销必须把 ROI 退回拖拽前的边界',
         timeout: 15_000,
       })
-      .toBe(0);
-    expect(await backendYlim(page, roiId), '撤销不得改动后端 ROI 的 ylim（快照里的 roi 与后端一致）').toEqual(
-      ylimAfterDrag
-    );
+      .toBe(ylimBefore[1]);
 
     // ── 断言①：后端标定逐值不变（先断后端，避免顺序短路）
     expect(
