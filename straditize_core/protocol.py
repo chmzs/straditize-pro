@@ -43,6 +43,79 @@ ALGORITHM_ERROR = (
 )  # Algorithmic calculation / extraction failure or boundary violation
 FILE_ERROR = -32004  # File not found, format corrupted, or unreadable
 
+# 会修改后端会话状态的 RPC 方法集合（用于乐观并发控制与 session_epoch 递增）。
+MUTATING_RPC_METHODS: frozenset[str] = frozenset(
+    {
+        "agedepth.extractAndInspect",
+        "agedepth.generateEnsemble",
+        "agedepth.loadModelDiagram",
+        "agedepth.runBaconModeling",
+        "agedepth.runLocalBacon",
+        "agedepth.syncToSamples",
+        "agedepth.updateModel",
+        "algorithm.applyLineRemoval",
+        "algorithm.clearCleanupEdits",
+        "algorithm.degrid",
+        "algorithm.deleteLineGeometry",
+        "algorithm.detectColumns",
+        "algorithm.detectLineCandidates",
+        "algorithm.extractHorizonConsensus",
+        "algorithm.extractTurningPoints",
+        "algorithm.setGeometryStatus",
+        "algorithm.setLineThickness",
+        "algorithm.upsertLineGeometry",
+        "column.add",
+        "column.calibrateXTicks",
+        "column.clearAll",
+        "column.clearXTicks",
+        "column.redigitizeAll",
+        "column.remove",
+        "column.setControlPoints",
+        "column.update",
+        "core.applyDepthGrid",
+        "core.batchSetTaxa",
+        "core.calibrateAxes",
+        "core.detectColumns",
+        "core.digitize",
+        "core.extractForeground",
+        "core.loadImage",
+        "core.reset",
+        "core.updateControlPoint",
+        "ensemble.add",
+        "history.redo",
+        "history.undo",
+        "image.load",
+        "image.rotate",
+        "image.switchPdfPage",
+        "metadata.extractFromPdf",
+        "metadata.fetchByDoi",
+        "metadata.parseExternalText",
+        "metadata.update",
+        "naming.renameColumn",
+        "naming.snapLabels",
+        "ocr.applyLabels",
+        "point.add",
+        "point.move",
+        "point.remove",
+        "project.load",
+        "project.new",
+        "project.setName",
+        "roi.create",
+        "roi.groupCreate",
+        "roi.groupRemove",
+        "roi.groupUpdate",
+        "roi.remove",
+        "roi.setActive",
+        "roi.setPrimary",
+        "roi.update",
+        "samples.clear",
+        "samples.extractConsensus",
+        "samples.fromDepthGrid",
+        "samples.pasteDepths",
+        "samples.set",
+    }
+)
+
 # Backward compatibility aliases
 FILE_NOT_FOUND_ERROR = FILE_ERROR
 CALIBRATION_ERROR = ALGORITHM_ERROR
@@ -319,9 +392,14 @@ class JsonRpcDispatcher:
 
     def __init__(self):
         self._methods: dict[str, Callable[..., Any]] = {}
+        self._session: Any | None = None
         #: Serialises every request against the shared session. See class docstring:
         #: reentrant because ``tools/call`` re-enters the dispatcher on the same thread.
         self._request_lock = threading.RLock()
+
+    def bind_session(self, session: Any) -> None:
+        """Bind the shared session so mutating RPCs enforce optimistic epoch checks."""
+        self._session = session
 
     def register_method(self, name: str, func: Callable[..., Any]) -> None:
         """Register a callable under a JSON-RPC method name."""
@@ -357,22 +435,57 @@ class JsonRpcDispatcher:
             }
 
         func = self._methods[request.method]
+        is_mutating = (
+            self._session is not None and request.method in MUTATING_RPC_METHODS
+        )
+        before_epoch = (
+            int(getattr(self._session, "session_epoch", 0))
+            if self._session is not None
+            else 0
+        )
         try:
             # Bind parameters with flexible kwargs support
             if request.params is None:
                 result = func()
             elif isinstance(request.params, dict):
+                params = dict(request.params)
+                has_expected_epoch = "_expected_epoch" in params
+                expected_epoch_raw = params.pop("_expected_epoch", None)
+                if (
+                    is_mutating
+                    and has_expected_epoch
+                    and expected_epoch_raw is not None
+                ):
+                    try:
+                        expected_epoch = int(expected_epoch_raw)
+                    except (TypeError, ValueError) as exc:
+                        raise JsonRpcError(
+                            INVALID_PARAMS,
+                            f"_expected_epoch 必须为整数，收到: {expected_epoch_raw!r}",
+                        ) from exc
+                    if expected_epoch != before_epoch:
+                        raise JsonRpcError(
+                            CONFLICT_ERROR,
+                            f"会话状态已被其他窗口修改（当前版本 {before_epoch}，本窗口基于版本 {expected_epoch}），已阻止覆盖。请同步最新数据后重试。",
+                            data={
+                                "kind": "epoch_conflict",
+                                "expected_epoch": expected_epoch,
+                                "current_epoch": before_epoch,
+                                "method": request.method,
+                            },
+                        )
+
                 sig = inspect.signature(func)
                 has_varkw = any(
                     p.kind == inspect.Parameter.VAR_KEYWORD
                     for p in sig.parameters.values()
                 )
                 if has_varkw:
-                    result = func(**request.params)
+                    result = func(**params)
                 else:
                     # Filter parameters accepting only known keywords if func does not take **kwargs
                     valid_params = {}
-                    for k, v in request.params.items():
+                    for k, v in params.items():
                         if k in sig.parameters:
                             valid_params[k] = v
                     try:
@@ -397,6 +510,11 @@ class JsonRpcDispatcher:
                 raise JsonRpcError(
                     INVALID_PARAMS, "参数类型不支持，必须为 JSON 对象或数组。"
                 )
+
+            if is_mutating and self._session is not None:
+                after_epoch = int(getattr(self._session, "session_epoch", 0))
+                if after_epoch == before_epoch:
+                    self._session.session_epoch = before_epoch + 1
 
             if request.is_notification:
                 return None

@@ -1217,6 +1217,36 @@ async function bootstrap() {
     setHudNotice,
   });
 
+  // 跨标签页失效同步（#183）：另一标签页修改后端状态后，清空本窗口陈旧撤销栈并拉取最新数据。
+  let externalSyncInFlight = false;
+  rpcClient.onExternalSessionMutated((event) => {
+    if (externalSyncInFlight) return;
+    externalSyncInFlight = true;
+    history.reset([], '');
+    undoStack.clear();
+    void rpcClient
+      .getDiagramData()
+      .then((fresh) => {
+        canvasComponent.loadNewDiagram(fresh);
+        sidebar?.updateData(fresh);
+        inspector?.updateData(fresh);
+        toolbar?.updateHistoryState();
+        workflowController.updateWorkflowBar();
+        updateFooter();
+        const prefix =
+          event.reason === 'conflict'
+            ? '检测到其他窗口已抢先修改数据，已阻止覆盖并同步最新状态'
+            : '检测到其他标签页修改了数据，已自动同步最新状态（撤销栈已重置）';
+        setHudNotice(prefix, 5000);
+      })
+      .catch((err) => {
+        reportBackendFailure('跨标签状态同步', err);
+      })
+      .finally(() => {
+        externalSyncInFlight = false;
+      });
+  });
+
   registerWebMcpAndInspectionHandles({
     rpcClient,
     canvasComponent,
