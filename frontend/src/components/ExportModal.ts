@@ -321,8 +321,9 @@ export class ExportModal {
                     <span id="wpd-plot-zoom-label" style="min-width: 36px; text-align: right;">100%</span>
                   </div>
                   <div style="display: flex; align-items: center; gap: 6px;">
-                    <select id="sel-wpd-plot-format" class="sample-select" style="font-size: var(--font-size-xs); height: 22px; padding: 1px 6px;" title="下载格式：JPEG 位图，直接分享；SVG 矢量，适合排版放大（只影响下载，预览固定 JPEG）">
+                    <select id="sel-wpd-plot-format" class="sample-select" style="font-size: var(--font-size-xs); height: 22px; padding: 1px 6px;" title="下载格式：JPEG / PNG 位图，SVG 矢量（只影响下载，预览固定 JPEG）">
                       <option value="jpeg" selected>JPEG (位图 · 分享)</option>
+                      <option value="png">PNG (位图 · 无损)</option>
                       <option value="svg">SVG (矢量 · 排版)</option>
                     </select>
                     <button class="ui-btn ui-btn--secondary ui-btn--xs" id="btn-wpd-plot-download" disabled>下载图片</button>

@@ -206,21 +206,19 @@ def test_unsupported_format_is_rejected() -> None:
     assert "不支持的出图格式" in str(excinfo.value)
 
 
-def test_supported_format_enum_is_exactly_jpeg_and_svg() -> None:
-    # 前后端同一份口径：多一个格式就要在前端下拉、文档、测试里各维护一遍。用户裁决
-    # 「出图只提供 jpg 与 svg 两种」（PDF 字体处理麻烦，砍掉）。
-    assert SUPPORTED_PLOT_FORMATS == ("jpeg", "svg"), SUPPORTED_PLOT_FORMATS
-    assert set(MIME_BY_FORMAT) == {"jpeg", "svg"}, MIME_BY_FORMAT
+def test_supported_format_enum_is_exactly_jpeg_png_and_svg() -> None:
+    assert SUPPORTED_PLOT_FORMATS == ("jpeg", "png", "svg"), SUPPORTED_PLOT_FORMATS
+    assert set(MIME_BY_FORMAT) == {"jpeg", "png", "svg"}, MIME_BY_FORMAT
 
 
-@pytest.mark.parametrize("dropped", ["pdf", "png", "jpg", "webp"])
+@pytest.mark.parametrize("dropped", ["pdf", "jpg", "webp"])
 def test_dropped_formats_are_rejected_with_the_supported_list(dropped: str) -> None:
     # 不许静默回落到 jpeg：请求 svg 却拿到一张 jpeg，用户会以为拿到了矢量图。
     with pytest.raises(JsonRpcError) as excinfo:
         _session().plot_render(format=dropped)
     message = str(excinfo.value)
     assert "不支持的出图格式" in message, message
-    assert "jpeg" in message and "svg" in message, "错误消息必须点名可用的两个格式"
+    assert "jpeg" in message and "png" in message and "svg" in message, "错误消息必须点名可用的三个格式"
     assert dropped not in message.replace("不支持的出图格式", ""), (
         "被拒的格式不得出现在「可用」列表里：" + message
     )
