@@ -867,6 +867,9 @@ export function createInspectorCallbacks(
         const res = await rpcClient.call<any, any>('samples.extractConsensus', callParams);
         if (res?.samples) {
           canvasComponent.data.samples = res.samples;
+          if (typeof res.samples_epoch === 'number') {
+            (canvasComponent.data as { samples_epoch?: number }).samples_epoch = res.samples_epoch;
+          }
           getInspector()?.updateData(canvasComponent.data);
           canvasComponent.requestRender();
           const modeLabel = callParams.mode === 'peaks' ? '仅波峰' : callParams.mode === 'dual' ? '双轨极性分离' : '混合兼容';
@@ -883,8 +886,11 @@ export function createInspectorCallbacks(
     },
     onClearHorizons: async () => {
       try {
-        await rpcClient.call('samples.clear', {});
+        const res = await rpcClient.call<Record<string, never>, { samples_epoch?: number }>('samples.clear', {});
         canvasComponent.data.samples = [];
+        if (typeof res?.samples_epoch === 'number') {
+          (canvasComponent.data as { samples_epoch?: number }).samples_epoch = res.samples_epoch;
+        }
         getInspector()?.updateData(canvasComponent.data);
         canvasComponent.requestRender();
         callbacks.setHudNotice('已清空全部采样层位');

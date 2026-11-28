@@ -1,7 +1,7 @@
 import './style.css';
 import { RpcClient } from './services/RpcClient';
 import { HistoryManager } from './core/HistoryManager';
-import { undoStack, refreshUndoButtons } from './core/undoRuntime';
+import { undoStack, refreshUndoButtons, bindUndoButtons } from './core/undoRuntime';
 
 /** 后端 `controlPoints` 的读取形态（row 可能是 y 的别名，见 types/pollen.ts）。 */
 interface ControlPointLike {
@@ -1154,6 +1154,10 @@ async function bootstrap() {
   if (initialInspectorCollapsed) setInspectorCollapsed(true);
 
   workflowController.updateWorkflowBar();
+  bindUndoButtons(() => ({
+    canUndo: history.canUndo(),
+    canRedo: history.canRedo(),
+  }));
 
   // 页脚刷新：实现移到 app/footer.ts（纯读，12 处回调共用）。
   const updateFooter = createFooterUpdater({ getCanvas: () => canvasComponent });

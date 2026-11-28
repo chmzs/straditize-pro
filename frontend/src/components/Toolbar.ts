@@ -410,6 +410,7 @@ export class Toolbar {
 
     this.bindEvents();
     this.relocateViewControls();
+    this.updateHistoryState();
   }
 
   private bindEvents(): void {

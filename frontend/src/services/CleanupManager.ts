@@ -11,6 +11,7 @@ import {
   LineMaskStroke,
 } from '../types/pollen';
 import { undoStack, refreshUndoButtons } from '../core/undoRuntime';
+import { makeValueUndo } from '../core/undoActions';
 import { axisWarningHeadline } from '../core/axisWarnings';
 import { notify } from '../ui/feedback';
 
@@ -191,17 +192,73 @@ export class CleanupManager {
     return task;
   }
 
-  public async commitRoi(roi: DataRoi): Promise<void> {
+  public async commitRoi(roi: DataRoi, recordUndo = true): Promise<void> {
+    const list = this.canvasComponent.data.rois ?? [];
+    const targetId = roi.id || this.canvasComponent.data.active_roi_id || list[0]?.id || 'roi_1';
+    const existing = list.find((r) => r.id === targetId) ?? this.canvasComponent.data.roi;
+    const prevBounds = {
+      x0: Math.round(existing?.xlim?.[0] ?? existing?.xMin ?? 0),
+      x1: Math.round(existing?.xlim?.[1] ?? existing?.xMax ?? 0),
+      y0: Math.round(existing?.ylim?.[0] ?? existing?.yMin ?? 0),
+      y1: Math.round(existing?.ylim?.[1] ?? existing?.yMax ?? 0),
+    };
+    const nextBounds = {
+      x0: Math.round(roi.xMin),
+      x1: Math.round(roi.xMax),
+      y0: Math.round(roi.yMin),
+      y1: Math.round(roi.yMax),
+    };
+
     try {
-      await this.rpcClient.updateRoi(roi);
+      await this.rpcClient.updateRoi({ ...roi, id: targetId });
     } catch (err) {
       this.callbacks.reportBackendFailure('同步取数区到后端', err);
       return;
     }
-    this.syncActiveRoiBounds(roi);
+    this.syncActiveRoiBounds({ ...roi, id: targetId });
     this.getSidebar()?.updateData(this.canvasComponent.data);
     this.getInspector()?.updateData(this.canvasComponent.data);
+    this.canvasComponent.requestRender();
     await this.recomposeCleanupState('ROI 变更后重算清理掩膜');
+
+    const changed =
+      prevBounds.x0 !== nextBounds.x0 ||
+      prevBounds.x1 !== nextBounds.x1 ||
+      prevBounds.y0 !== nextBounds.y0 ||
+      prevBounds.y1 !== nextBounds.y1;
+    if (recordUndo && changed) {
+      undoStack.push(
+        makeValueUndo(
+          `调整数据有效区 (${targetId})`,
+          prevBounds,
+          nextBounds,
+          async (b) => {
+            const restored: DataRoi = {
+              ...(existing ?? roi),
+              id: targetId,
+              xMin: b.x0,
+              xMax: b.x1,
+              yMin: b.y0,
+              yMax: b.y1,
+              xlim: [b.x0, b.x1],
+              ylim: [b.y0, b.y1],
+            };
+            this.canvasComponent.data.roi = restored;
+            await this.commitRoi(restored, false);
+          },
+          async () => {
+            const fresh = await this.rpcClient.getDiagramData();
+            const r = fresh.rois?.find((item) => item.id === targetId);
+            return {
+              x0: Math.round(r?.xlim?.[0] ?? r?.xMin ?? 0),
+              x1: Math.round(r?.xlim?.[1] ?? r?.xMax ?? 0),
+              y0: Math.round(r?.ylim?.[0] ?? r?.yMin ?? 0),
+              y1: Math.round(r?.ylim?.[1] ?? r?.yMax ?? 0),
+            };
+          }
+        )
+      );
+    }
   }
 
   public syncActiveRoiBounds(roi: DataRoi): void {
