@@ -188,7 +188,7 @@ export class ExportModal {
               <!-- 右侧：控制面板 (就绪清单、项目名称、Dataset、导出内容选择) -->
               <div class="wpd-right-controls" style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-light); gap: 10px;">
                 <!-- 导出就绪状态清单 -->
-                ${renderExportReadiness(this.data)}
+                ${renderExportReadiness(this.data, this.rpcClient.getStatus().connected)}
 
                 <!-- 项目名称 Project Name -->
                 <div class="form-group" style="margin: 0;">

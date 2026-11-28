@@ -1,6 +1,6 @@
-import { DiagramData } from '../../types/pollen';
-import { renderExportSuspectBlockRow } from './SuspectBlockNotice';
-import { isColumnCalibrated } from '../../core/calibProgress';
+import type { DiagramData } from '../../types/pollen.ts';
+import { renderExportSuspectBlockRow } from './SuspectBlockNotice.ts';
+import { isColumnCalibrated } from '../../core/calibProgress.ts';
 
 export interface ExportReadinessState {
   sheets: string[];
@@ -45,7 +45,7 @@ export function computeExportReadiness(data: DiagramData): ExportReadinessState 
   };
 }
 
-export function renderExportReadiness(data: DiagramData): string {
+export function renderExportReadiness(data: DiagramData, backendConnected: boolean = true): string {
   const state = computeExportReadiness(data);
   const sheetsStr = `[${state.sheets.join(',')}]`;
   const missingStr = `[${state.readinessMissing.join(',')}]`;
@@ -57,16 +57,27 @@ export function renderExportReadiness(data: DiagramData): string {
   const calibratedCount = cols.filter((c) => isColumnCalibrated(c)).length;
   const uncalibratedCount = cols.length - calibratedCount;
 
+  const badgeStyle = !backendConnected
+    ? 'background: var(--bg-secondary); color: var(--text-muted); border: 1px solid var(--border-color);'
+    : state.allReady
+      ? 'background: var(--pill-success-bg); color: var(--pill-success-text);'
+      : 'background: var(--pill-warning-bg); color: var(--pill-warning-text);';
+  const badgeText = !backendConnected
+    ? '后端未连接 · 就绪度未知'
+    : state.allReady
+      ? '✓ 已就绪'
+      : `待完善 (${state.readinessMissing.length})`;
+
   return `
     <div id="export-readiness-container" class="export-readiness-box"
          data-sheets="${state.sheets.join(',')}"
          data-primary="${state.primaryRoi}"
          data-readiness-missing="${state.readinessMissing.join(',')}"
-         style="padding: 10px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light); margin-bottom: 0;">
+         style="padding: 10px; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border-light); margin-bottom: 0;${!backendConnected ? ' opacity: 0.72;' : ''}">
       <div style="font-weight: 600; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
         <span style="font-size: var(--font-size-sm); color: var(--text-primary);">数据就绪状态</span>
-        <span style="font-size: var(--font-size-xs); padding: 2px 8px; border-radius: 9999px; font-weight: 500; ${state.allReady ? 'background: var(--pill-success-bg); color: var(--pill-success-text);' : 'background: var(--pill-warning-bg); color: var(--pill-warning-text);'}">
-          ${state.allReady ? '✓ 已就绪' : `待完善 (${state.readinessMissing.length})`}
+        <span style="font-size: var(--font-size-xs); padding: 2px 8px; border-radius: 9999px; font-weight: 500; ${badgeStyle}">
+          ${badgeText}
         </span>
       </div>
 
@@ -91,11 +102,15 @@ export function renderExportReadiness(data: DiagramData): string {
       </div>
       ${renderExportSuspectBlockRow(data)}
       ${
-        state.readinessMissing.length > 0
-          ? `<div style="margin-top: 6px; font-size: var(--font-size-xs); color: var(--status-warning); line-height: 1.4; padding: 4px 6px; background: rgba(245, 158, 11, 0.08); border-radius: 4px;">
-               提示：存在未命名或无属种列的分区，已列入缺失清单。
+        !backendConnected
+          ? `<div style="margin-top: 6px; font-size: var(--font-size-xs); color: var(--text-muted); line-height: 1.4; padding: 4px 6px; background: var(--bg-secondary); border-radius: 4px;">
+               后端未连接，无法核验真实就绪状态；请先启动或重连后端。
              </div>`
-          : ''
+          : state.readinessMissing.length > 0
+            ? `<div style="margin-top: 6px; font-size: var(--font-size-xs); color: var(--status-warning); line-height: 1.4; padding: 4px 6px; background: rgba(245, 158, 11, 0.08); border-radius: 4px;">
+                 提示：存在未命名或无属种列的分区，已列入缺失清单。
+               </div>`
+            : ''
       }
     </div>
   `;
