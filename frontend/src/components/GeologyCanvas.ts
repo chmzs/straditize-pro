@@ -1518,6 +1518,7 @@ private pointer: PointerState = {
       roi: this.data.roi,
       scale: this.viewport.scale,
       activeColumn: this.getActiveColumn() ?? null,
+      columns: this.data.columns,
     });
     this.pointer.depthHorizon = probe.horizon;
 

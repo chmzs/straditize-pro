@@ -11,7 +11,7 @@
  * 3. `percent` 用 `CoordinateSystem.hasRealCalibration` 把门：未标定列的换算只是
  *    猜测标度下的数字，宁可显示 `--` 也不编一个丰度出来。
  */
-import { CoordinateSystem } from '../../core/CoordinateSystem';
+import { CoordinateSystem } from '../../core/CoordinateSystem.ts';
 import type { DataRoi, DiagramCalibration, Point2D, TaxaColumn } from '../../types/pollen';
 
 export interface HoverInfoPayload {
@@ -28,6 +28,34 @@ export interface HoverProbeEnv {
   roi: DataRoi;
   scale: number;
   activeColumn: TaxaColumn | null;
+  columns?: TaxaColumn[];
+}
+
+function isInsideRoi(worldPt: Point2D, roi: DataRoi): boolean {
+  if (!(roi.xMax > roi.xMin && roi.yMax > roi.yMin)) return false;
+  return (
+    worldPt.x >= roi.xMin &&
+    worldPt.x <= roi.xMax &&
+    worldPt.y >= roi.yMin &&
+    worldPt.y <= roi.yMax
+  );
+}
+
+function findColumnAtX(
+  worldX: number,
+  activeColumn: TaxaColumn | null,
+  columns?: TaxaColumn[],
+): TaxaColumn | null {
+  const inBounds = (col: TaxaColumn): boolean =>
+    col.visible !== false && worldX >= col.startX && worldX <= col.endX;
+
+  if (activeColumn && inBounds(activeColumn)) {
+    return activeColumn;
+  }
+  if (!columns || columns.length === 0) {
+    return null;
+  }
+  return columns.find((col) => inBounds(col)) ?? null;
 }
 
 export interface HoverProbe {
@@ -73,10 +101,15 @@ export function probeHover(env: HoverProbeEnv): HoverProbe {
     worldPt.y >= roi.yMin - 35 &&
     worldPt.y <= roi.yMin + 5;
 
-  // 未标定列的换算只会给出猜测标度下的数字，宁可留空也不编造丰度。
-  const percent =
-    activeColumn && CoordinateSystem.hasRealCalibration(activeColumn)
-      ? CoordinateSystem.imageXToValue(worldPt.x, activeColumn)
+  // 仅当光标位于 ROI 内且落在某列 [startX, endX] 范围内时才计算该列的丰度；
+  // 列外、ROI 外返回 undefined（状态栏显示 --），且不做 Math.max(0, ...) 钳零，
+  // 负值应如实暴露标定/锚点问题而非冒充 0%。
+  const targetColumn = isInsideRoi(worldPt, roi)
+    ? findColumnAtX(worldPt.x, activeColumn, env.columns)
+    : null;
+  const rawPercent =
+    targetColumn && CoordinateSystem.hasRealCalibration(targetColumn)
+      ? CoordinateSystem.imageXToValue(worldPt.x, targetColumn)
       : undefined;
 
   return {
@@ -86,9 +119,9 @@ export function probeHover(env: HoverProbeEnv): HoverProbe {
     info: {
       worldX: Math.round(worldPt.x),
       worldY: Math.round(worldPt.y),
-      // 保持原行为：0 也按"无"处理（状态栏显示 --），不要顺手改成 ??。
+      // 保持原行为：depth 为 0 也按"无"处理（状态栏显示 --），不要顺手改成 ??。
       depth: depth ? Number(depth.toFixed(2)) : undefined,
-      percent: percent ? Number(Math.max(0, percent).toFixed(1)) : undefined,
+      percent: rawPercent !== undefined ? Number(rawPercent.toFixed(1)) : undefined,
       horizonDepth: horizon,
     },
   };
