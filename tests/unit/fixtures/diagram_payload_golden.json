@@ -9184,10 +9184,12 @@
     ]
    }
   ],
+  "samples_epoch": 0,
   "selectedEntity": null,
   "selected_candidate_ids": [
    "cand_a"
-  ]
+  ],
+  "session_epoch": 0
  },
  "with_dropped_and_suspect": {
   "activeRoiId": "roi_1",
@@ -18390,10 +18392,12 @@
     ]
    }
   ],
+  "samples_epoch": 0,
   "selectedEntity": null,
   "selected_candidate_ids": [
    "cand_a"
-  ]
+  ],
+  "session_epoch": 0
  },
  "zero_state": {
   "activeRoiId": null,
@@ -18437,7 +18441,9 @@
   "primary_roi_id": null,
   "roi": null,
   "rois": [],
+  "samples_epoch": 0,
   "selectedEntity": null,
-  "selected_candidate_ids": []
+  "selected_candidate_ids": [],
+  "session_epoch": 0
  }
 }
