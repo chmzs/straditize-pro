@@ -76,6 +76,10 @@ export class FileLoaderService {
     this.callbacks.setHudNotice(`正在载入图谱: ${file.name}...`, 8000);
 
     const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+    const isTiff =
+      lowerName.endsWith('.tif') ||
+      lowerName.endsWith('.tiff') ||
+      file.type === 'image/tiff';
     const reader = new FileReader();
     reader.onload = async (e) => {
       let dataUrl = e.target?.result as string;
@@ -106,24 +110,36 @@ export class FileLoaderService {
           return;
         }
 
-        this.canvasComponent.loadNewDiagram(newDiagramData);
-        this.history.reset([], '');
-        this.callbacks.setCurrentStage(1);
-        this.callbacks.updateWorkflowBar();
-
-        this.getSidebar()?.updateData(this.canvasComponent.data);
-        this.getInspector()?.updateData(this.canvasComponent.data);
-        this.getToolbar()?.updateHistoryState();
-        this.getToolbar()?.updateScale(this.canvasComponent.viewport.scale);
-        this.getToolbar()?.updateFilterState(
-          this.canvasComponent.viewport.imageMode,
-          this.canvasComponent.viewport.showBinaryOverlay
-        );
-        this.callbacks.updateFooter();
-
-        this.callbacks.setHudNotice(
+        this.applyLoadedDiagram(
+          newDiagramData,
+          file.name,
           `已载入 PDF [${file.name}] 第 ${pageNum} 页图谱 (${newDiagramData.imageWidth}×${newDiagramData.imageHeight})。在画布上调整数据有效区（步骤 1），再点下方推进。`,
-          5000
+          false
+        );
+        return;
+      }
+
+      if (isTiff) {
+        let newDiagramData: DiagramData;
+        try {
+          // Chromium 无法原生解码 TIFF；直接交由后端 Pillow 解码并返回 PNG dataURL。
+          newDiagramData = await this.rpcClient.loadCustomImage(dataUrl, 0, 0, file.name);
+        } catch (err) {
+          this.callbacks.reportBackendFailure('图谱载入', err);
+          this.callbacks.setHudNotice(
+            '图谱载入失败：后端未确认接收该图像，未进入工作流。',
+            6000
+          );
+          return;
+        }
+
+        const w = newDiagramData.imageWidth;
+        const h = newDiagramData.imageHeight;
+        this.applyLoadedDiagram(
+          newDiagramData,
+          file.name,
+          `已载入图谱 [${file.name}] (${w}×${h})。在画布上调整数据有效区（步骤 1），再点下方推进。`,
+          true
         );
         return;
       }
@@ -179,96 +195,113 @@ export class FileLoaderService {
           return;
         }
 
-        // 进入 S1 时清空：ROI、所有列、所有点、深度标定、撤销栈、选中状态
-        this.canvasComponent.loadNewDiagram(newDiagramData);
-        const inferred = extractProjectNameFromFilename(file.name);
-        if (inferred) {
-          this.canvasComponent.data.project_name = inferred;
-          this.canvasComponent.data.image_name = file.name;
-          this.getToolbar()?.setProjectName(inferred);
-          this.rpcClient.call('project.setName', { name: inferred }).catch(() => {});
-        } else {
-          this.canvasComponent.data.project_name = undefined;
-          this.canvasComponent.data.image_name = file.name;
-          this.getToolbar()?.setProjectName('');
-          this.rpcClient.call('project.setName', { name: null }).catch(() => {});
-        }
-        this.history.reset([], '');
-        this.callbacks.setCurrentStage(1);
-        this.callbacks.updateWorkflowBar();
-
-        this.getSidebar()?.updateData(this.canvasComponent.data);
-        this.getInspector()?.updateData(this.canvasComponent.data);
-        this.getToolbar()?.updateHistoryState();
-        this.getToolbar()?.updateScale(this.canvasComponent.viewport.scale);
-        this.getToolbar()?.updateFilterState(
-          this.canvasComponent.viewport.imageMode,
-          this.canvasComponent.viewport.showBinaryOverlay
-        );
-        this.callbacks.updateFooter();
-
-        this.callbacks.setHudNotice(
+        this.applyLoadedDiagram(
+          newDiagramData,
+          file.name,
           `已载入图谱 [${file.name}] (${w}×${h})。在画布上调整数据有效区（步骤 1），再点下方推进。`,
-          5000
+          true
         );
-
-        // 异步执行微小倾斜检测提示 (Deskew Helper)
-        this.rpcClient
-          .detectDeskew()
-          .then((skewRes) => {
-            if (
-              skewRes &&
-              skewRes.has_skew &&
-              Math.abs(skewRes.suggested_rotation_angle) >= 0.3
-            ) {
-              const ang = skewRes.suggested_rotation_angle;
-              const banner = document.createElement('div');
-              banner.className = 'deskew-notice-banner';
-              banner.style.cssText =
-                'position: fixed; top: 52px; right: 20px; z-index: 9999;';
-              banner.innerHTML = `
-                <div class="app-toast-badge" style="border: 1px solid var(--status-warning);">
-                  <span><strong>图谱微斜提示</strong>: 检测到主轴倾斜约 <strong>${
-                    ang > 0 ? '+' : ''
-                  }${ang}°</strong>，是否自动水平矫正？</span>
-                  <div style="display: flex; gap: 6px;">
-                    <button id="btn-deskew-apply" class="ui-btn ui-btn--warning" style="padding: 2px 8px; font-size: 10px;">旋转校正</button>
-                    <button id="btn-deskew-ignore" class="ui-btn ui-btn--secondary" style="padding: 2px 8px; font-size: 10px;">忽略</button>
-                  </div>
-                </div>
-              `;
-              document.body.appendChild(banner);
-              banner.querySelector('#btn-deskew-apply')?.addEventListener('click', async () => {
-                banner.remove();
-                this.callbacks.setHudNotice(`正在旋转矫正图谱 (${ang}°)...`, 5000);
-                try {
-                  const rotRes = await this.rpcClient.rotateImage(ang);
-                  if (rotRes && rotRes.success) {
-                    const refreshed = await this.rpcClient.getDiagramData();
-                    this.canvasComponent.loadNewDiagram(refreshed);
-                    this.history.reset([], '');
-                    this.callbacks.setCurrentStage(1);
-                    this.callbacks.updateWorkflowBar();
-                    this.callbacks.setHudNotice(`已水平矫正图谱，有效区已重置。`, 3500);
-                  } else {
-                    throw new Error(t('error.unknown'));
-                  }
-                } catch (err) {
-                  this.callbacks.reportBackendFailure('图谱旋转校正', err);
-                }
-              });
-              banner.querySelector('#btn-deskew-ignore')?.addEventListener('click', () => {
-                banner.remove();
-              });
-            }
-          })
-          .catch((err) => {
-            this.callbacks.reportBackendFailure('图谱倾斜检测', err);
-          });
       };
       img.src = dataUrl;
     };
     reader.readAsDataURL(file);
+  }
+
+  private applyLoadedDiagram(
+    newDiagramData: DiagramData,
+    fileName: string,
+    noticeText: string,
+    syncProjectName: boolean
+  ): void {
+    this.canvasComponent.loadNewDiagram(newDiagramData);
+    if (syncProjectName) {
+      const inferred = extractProjectNameFromFilename(fileName);
+      if (inferred) {
+        this.canvasComponent.data.project_name = inferred;
+        this.canvasComponent.data.image_name = fileName;
+        this.getToolbar()?.setProjectName(inferred);
+        this.rpcClient.call('project.setName', { name: inferred }).catch(() => {});
+      } else {
+        this.canvasComponent.data.project_name = undefined;
+        this.canvasComponent.data.image_name = fileName;
+        this.getToolbar()?.setProjectName('');
+        this.rpcClient.call('project.setName', { name: null }).catch(() => {});
+      }
+    }
+    this.history.reset([], '');
+    this.callbacks.setCurrentStage(1);
+    this.callbacks.updateWorkflowBar();
+
+    this.getSidebar()?.updateData(this.canvasComponent.data);
+    this.getInspector()?.updateData(this.canvasComponent.data);
+    this.getToolbar()?.updateHistoryState();
+    this.getToolbar()?.updateScale(this.canvasComponent.viewport.scale);
+    this.getToolbar()?.updateFilterState(
+      this.canvasComponent.viewport.imageMode,
+      this.canvasComponent.viewport.showBinaryOverlay
+    );
+    this.callbacks.updateFooter();
+
+    this.callbacks.setHudNotice(noticeText, 5000);
+    if (syncProjectName) {
+      this.runDeskewCheck();
+    }
+  }
+
+  private runDeskewCheck(): void {
+    // 异步执行微小倾斜检测提示 (Deskew Helper)
+    this.rpcClient
+      .detectDeskew()
+      .then((skewRes) => {
+        if (
+          skewRes &&
+          skewRes.has_skew &&
+          Math.abs(skewRes.suggested_rotation_angle) >= 0.3
+        ) {
+          const ang = skewRes.suggested_rotation_angle;
+          const banner = document.createElement('div');
+          banner.className = 'deskew-notice-banner';
+          banner.style.cssText =
+            'position: fixed; top: 52px; right: 20px; z-index: 9999;';
+          banner.innerHTML = `
+            <div class="app-toast-badge" style="border: 1px solid var(--status-warning);">
+              <span><strong>图谱微斜提示</strong>: 检测到主轴倾斜约 <strong>${
+                ang > 0 ? '+' : ''
+              }${ang}°</strong>，是否自动水平矫正？</span>
+              <div style="display: flex; gap: 6px;">
+                <button id="btn-deskew-apply" class="ui-btn ui-btn--warning" style="padding: 2px 8px; font-size: 10px;">旋转校正</button>
+                <button id="btn-deskew-ignore" class="ui-btn ui-btn--secondary" style="padding: 2px 8px; font-size: 10px;">忽略</button>
+              </div>
+            </div>
+          `;
+          document.body.appendChild(banner);
+          banner.querySelector('#btn-deskew-apply')?.addEventListener('click', async () => {
+            banner.remove();
+            this.callbacks.setHudNotice(`正在旋转矫正图谱 (${ang}°)...`, 5000);
+            try {
+              const rotRes = await this.rpcClient.rotateImage(ang);
+              if (rotRes && rotRes.success) {
+                const refreshed = await this.rpcClient.getDiagramData();
+                this.canvasComponent.loadNewDiagram(refreshed);
+                this.history.reset([], '');
+                this.callbacks.setCurrentStage(1);
+                this.callbacks.updateWorkflowBar();
+                this.callbacks.setHudNotice(`已水平矫正图谱，有效区已重置。`, 3500);
+              } else {
+                throw new Error(t('error.unknown'));
+              }
+            } catch (err) {
+              this.callbacks.reportBackendFailure('图谱旋转校正', err);
+            }
+          });
+          banner.querySelector('#btn-deskew-ignore')?.addEventListener('click', () => {
+            banner.remove();
+          });
+        }
+      })
+      .catch((err) => {
+        this.callbacks.reportBackendFailure('图谱倾斜检测', err);
+      });
   }
 
   public downsampleImage(

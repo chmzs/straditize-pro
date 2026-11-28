@@ -226,7 +226,7 @@ export class Toolbar {
             </svg>
             <span>${t('toolbar.diagram')}</span>
           </button>
-          <input type="file" id="file-input-image" accept="image/*,.pdf,application/pdf" hidden />
+          <input type="file" id="file-input-image" accept="image/*,.tif,.tiff,.pdf,application/pdf" hidden />
 
           <button id="btn-save-project" class="ui-btn ui-btn--secondary ui-btn--sm" title="${t('toolbar.saveProjTitle')}">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
