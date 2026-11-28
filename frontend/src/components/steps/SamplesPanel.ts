@@ -3,6 +3,7 @@ import { SAMPLE_SOURCE_ORDER, sampleSourceColor } from '../canvas/SampleOverlay'
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
 import { calUnitLabel } from '../../core/calUnit';
+import { parsePasteDepthsText } from '../../utils/pasteDepths';
 import { notify, notifyError } from '../../ui/feedback';
 import { showConfirmDialog } from '../../ui/confirm';
 import { renderResetButton } from '../../ui/resetButton';
@@ -450,6 +451,9 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
  * 粘贴 12.5 而读数取自 12.48 那一行是正常的，但用户必须能看见这件事。
  */
 function openPasteDepthsModal(ctx: StepContext): void {
+  if (document.querySelector('#txt-paste-depths')) {
+    return;
+  }
   const modal = document.createElement('div');
   modal.className = 'modal-backdrop';
   modal.innerHTML = `
@@ -479,19 +483,25 @@ function openPasteDepthsModal(ctx: StepContext): void {
   let parsedDepths: number[] = [];
 
   const updateFeedback = () => {
-    const nums = txt.value
-      .split(/[\r\n,;]+/)
-      .map((line) => parseFloat(line.trim()))
-      .filter((n) => !isNaN(n));
-    parsedDepths = Array.from(new Set(nums)).sort((a, b) => a - b);
+    const { depths, invalidCount, duplicateCount } = parsePasteDepthsText(txt.value);
+    parsedDepths = depths;
+    const notices: string[] = [];
+    if (invalidCount > 0) {
+      notices.push(`已忽略 ${invalidCount} 行非数字`);
+    }
+    if (duplicateCount > 0) {
+      notices.push(`已去重 ${duplicateCount} 个重复值`);
+    }
+    const suffix = notices.length > 0 ? `（${notices.join('，')}）` : '';
+
     if (parsedDepths.length >= 2) {
-      fb.style.color = 'var(--status-success)';
+      fb.style.color = invalidCount > 0 ? 'var(--status-warning, var(--status-success))' : 'var(--status-success)';
       const last = parsedDepths[parsedDepths.length - 1];
-      fb.textContent = `已识别 ${parsedDepths.length} 个深度层位（${parsedDepths[0]} ~ ${last}）`;
+      fb.textContent = `已识别 ${parsedDepths.length} 个深度层位（${parsedDepths[0]} ~ ${last}）${suffix}`;
       confirmBtn.disabled = false;
     } else {
-      fb.style.color = 'var(--text-muted)';
-      fb.textContent = '请输入至少 2 个有效深度（每行一个，或逗号 / 分号分隔）';
+      fb.style.color = invalidCount > 0 ? 'var(--status-warning, var(--text-muted))' : 'var(--text-muted)';
+      fb.textContent = `请输入至少 2 个有效深度（每行一个，或逗号 / 分号分隔）${suffix}`;
       confirmBtn.disabled = true;
     }
   };
