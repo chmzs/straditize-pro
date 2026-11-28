@@ -64,10 +64,11 @@ DEFAULT_PLOT_SETTINGS: dict[str, Any] = {
 #: jpeg = 位图，设备端烘焙好，所见即所得（预览固定用它）；svg = 矢量，适合排版放大。
 #: 曾先后支持过 png / jpg / webp / pdf：每多一种就要在前端下拉、RPC 校验、R 设备分支、
 #: 文档与测试五处各维护一遍，而用户实际只用得上位图与矢量两种。
-SUPPORTED_PLOT_FORMATS = ("jpeg", "svg")
+SUPPORTED_PLOT_FORMATS = ("jpeg", "png", "svg")
 
 MIME_BY_FORMAT = {
     "jpeg": "image/jpeg",
+    "png": "image/png",
     "svg": "image/svg+xml",
 }
 
@@ -418,10 +419,13 @@ open_device <- function() {
   if (fmt == "jpeg") {
     grDevices::jpeg(out_path, width = W, height = H, res = DPI, quality = 95,
                     type = "cairo", family = font_family)
+  } else if (fmt == "png") {
+    grDevices::png(out_path, width = W, height = H, res = DPI,
+                   type = "cairo", family = font_family)
   } else if (fmt == "svg") {
     grDevices::svg(out_path, width = W / DPI, height = H / DPI, family = font_family)
   } else {
-    stop("STRADITIZE_ERROR: 不支持的输出格式 ", fmt, "（支持 jpeg/svg）")
+    stop("STRADITIZE_ERROR: 不支持的输出格式 ", fmt, "（支持 jpeg/png/svg）")
   }
 }
 
