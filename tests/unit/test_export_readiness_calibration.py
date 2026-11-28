@@ -211,3 +211,38 @@ class TestReadinessIsHonestAboutSources:
             "标定一列后来源分布没变 —— provenance 没有真的按列统计"
         )
         assert sum(after.values()) == len(session.columns)
+
+
+class TestSingleRoiDefaultNameReadinessAlignment:
+    """#168：后端 get_export_readiness 与前端 ExportReadinessPanel 单源对齐。"""
+
+    def test_single_roi_default_name_is_ready_when_columns_calibrated(self) -> None:
+        session = StraditizeSession()
+        session._init_cleanup()
+        session.load_image(sample_key="hoya")
+        assert len(session.rois) == 1
+        assert session.rois[0].get("name_source") == "default"
+        session.detect_columns(HOYA_X, HOYA_Y, roi_id=session.rois[0]["id"])
+        for idx in range(len(session.columns)):
+            _calibrate_column(session, idx)
+
+        readiness = session.get_export_readiness()
+        assert readiness["readiness_missing"] == []
+        assert readiness["ready"] is True
+
+    def test_multi_roi_default_name_still_flags_missing(self) -> None:
+        session = StraditizeSession()
+        session._init_cleanup()
+        session.load_image(sample_key="hoya")
+        session.roi_update(roi_id=session.rois[0]["id"], name="pollen")
+        session.detect_columns([315, 1000], HOYA_Y, roi_id=session.rois[0]["id"])
+
+        second = session.roi_create(x0=1020, x1=1946, y0=511, y1=1311)["roi"]
+        assert second["name_source"] == "default"
+        session.detect_columns([1020, 1946], HOYA_Y, roi_id=second["id"])
+        for idx in range(len(session.columns)):
+            _calibrate_column(session, idx)
+
+        readiness = session.get_export_readiness()
+        assert second["name"] in readiness["readiness_missing"]
+        assert readiness["ready"] is False

@@ -950,7 +950,11 @@ class ExportMixin:
             name_source = r.get("name_source", "default")
             cols = [c for c in all_columns if c.get("roi_id") == r_id]
 
-            if name_source == "default" or len(cols) == 0:
+            # 与前端 ExportReadinessPanel.ts 单一真相源对齐：
+            # 单 ROI 使用默认名（如 'pollen'）是标准且完备的，不作未命名阻拦；
+            # 仅多 ROI 时仍为默认名，或任意 ROI 尚无属种列，才记入未就绪。
+            is_unnamed = len(rois) > 1 and name_source == "default"
+            if is_unnamed or len(cols) == 0:
                 missing_rois.append(r_name)
 
         # ---- 逐列标定审计 ----
