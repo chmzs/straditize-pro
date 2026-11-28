@@ -22,7 +22,15 @@ export class AddPointToolStrategy implements ToolStrategy {
     if (!ctx.isToolAllowed('addPoint')) return false;
 
     const activeCol = ctx.getActiveColumn();
-    if (activeCol && ctx.isWithinDiagramBounds(worldPt)) {
+    if (!activeCol) {
+      ctx.notifyNotice('请先在画布上选中一列再按 A 加点');
+      return true;
+    }
+    if (!ctx.isWithinDiagramBounds(worldPt)) {
+      ctx.notifyNotice('请在图表区域内点击以添加控制点');
+      return true;
+    }
+    {
       let targetY = Math.round(worldPt.y);
 
       // 磁力吸附到标准层位高度（仅在已完成 Y 轴标定时才有层位可言）
@@ -57,11 +65,10 @@ export class AddPointToolStrategy implements ToolStrategy {
       ctx.data.selectedEntity = { type: 'point', colId: activeCol.id, pointId: newPoint.id };
 
       ctx.requestRender();
+      ctx.notifyNotice(`已在 ${activeCol.name} 添加控制点 (y=${targetY} px)`);
       ctx.callbacks.onDataChange?.();
       return true;
     }
-
-    return false;
   }
 
   public onMouseMove(
