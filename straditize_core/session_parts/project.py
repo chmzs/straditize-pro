@@ -755,6 +755,19 @@ class ProjectSessionMixin:
         self.cleanup_stats = {}
         self.cleanup_overlay_png = None
         self.degrid_info = None
+        self._clear_pixel_derived_masks()
+
+    def _clear_pixel_derived_masks(self) -> None:
+        """清空所有由底图像素派生的掩膜与分割缓存（换图 / 载入工程共用）。"""
+        self.image_array = None
+        self.foreground_mask = None
+        self.threshold = None
+        self.segmentation_mode = None
+        self.shadow_mask = None
+        self.solid_layers = None
+        self.foreground_column_edges = None
+        self.__dict__.pop("two_layer_report", None)
+        self.__dict__.pop("_gray_cache", None)
 
     def _reset_line_removal(self, project_data: dict[str, Any]) -> None:
         """恢复去线强度/竖线开关与笔迹，并把旧包缺 `mode` 的笔迹补成 erase。"""
@@ -812,7 +825,9 @@ class ProjectSessionMixin:
     def _reset_columns(self) -> None:
         """清空列/控制点/物种名，准备按 payload 逐列重建。"""
         self.columns = []
+        self.column_points = {}
         self.control_points = {}
+        self.control_point_columns = set()
         self.manual_points = {}
         self.taxa_names = []
         # `reader_types` 按 col_index 存，列一旦重建，旧索引指向的是别的列（P0-A）。
@@ -1224,13 +1239,7 @@ class ProjectSessionMixin:
             # 旧 `shadow_mask` / `solid_layers` 会把上一张图的像素计数报给用户；
             # 旧 `image_array` 会被 `extract_foreground` 当作新图的像素源。
             # 这些**不**由下面的 rois/columns 读取覆盖，必须在这里清。
-            self.image_array = None
-            self.foreground_mask = None
-            self.threshold = None
-            self.segmentation_mode = None
-            self.shadow_mask = None
-            self.solid_layers = None
-            self.foreground_column_edges = None
+            self._clear_pixel_derived_masks()
 
     def _restore_aux_fields(self, project_data: dict[str, Any]) -> None:
         """回填论文元数据、样本、候选线（含 status 兼容视图）、集合表。"""

@@ -1808,6 +1808,13 @@ class CoreMixin:
         from ..image import is_supported_grid_line_strength
 
         mask = self.foreground_mask
+        h = int(getattr(self, "height", 0) or 0)
+        w = int(getattr(self, "width", 0) or 0)
+        if mask is not None and h > 0 and w > 0 and mask.shape[:2] != (h, w):
+            raise JsonRpcError(
+                STATE_ERROR,
+                f"前景掩膜尺寸 {mask.shape[:2]} 与当前图像尺寸 {(h, w)} 不符，请先重新提取前景掩膜。",
+            )
         # 去线强度是枚举（weak/medium/strong），这里只接受预设名。这不是多余的校验：
         # `degrid_strength` 除了 RPC 之外还能被工程包载入、被外部客户端写入，非法值会一路
         # 走到 `algorithm_degrid` 抛 ValueError，再被导出侧的保底逻辑吞成一份全 0 的占位 CSV。
