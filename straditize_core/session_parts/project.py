@@ -335,10 +335,10 @@ class ProjectSessionMixin:
         self.chron_events = []
         self.undo_stack = []
         self.redo_stack = []
-        self.project_name = None
         self._init_rois()
 
         if clear_image:
+            self.project_name = None
             self.image = None
             self.image_path = None
             self.image_array = None

@@ -140,6 +140,18 @@ def test_project_new_and_load_image_clear_derived_point_state() -> None:
     assert "_gray_cache" not in session.__dict__
 
 
+def test_project_new_preserves_project_name_when_keeping_image() -> None:
+    """`project_new(clear_image=False)`（重置全部操作）应保留 `project_name`，`clear_image=True` 才清空。"""
+    session = StraditizeSession()
+    _load_baseline(session)
+    session.set_project_name("Gahai_Lake_2024")
+    session.project_new(clear_image=False)
+    assert session.project_name == "Gahai_Lake_2024"
+
+    session.project_new(clear_image=True)
+    assert session.project_name is None
+
+
 def test_digitize_clears_control_point_column_flag() -> None:
     """重新真实数字化某列后，必须将该列移出 `control_point_columns`。"""
     session = StraditizeSession()
