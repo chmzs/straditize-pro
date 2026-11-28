@@ -869,8 +869,13 @@ export class RpcClient {
     const backendResult = await this.call<Record<string, unknown>, any>('core.loadImage', payload);
     // 新载入图像：仅保留图谱元数据与后端建议 ROI，严禁自动切列或数字化，
     // 严格停在 S1 等待用户界定有效区。本地上传图沿用用户自己的 data URL 显示。
-    const isPdf = imageSrc.startsWith('data:application/pdf') || fileName.toLowerCase().endsWith('.pdf');
-    const effectiveSrc = isPdf ? this.imageUrl() : imageSrc;
+    const lowerFile = fileName.toLowerCase();
+    const isPdf = imageSrc.startsWith('data:application/pdf') || lowerFile.endsWith('.pdf');
+    const isTiff =
+      imageSrc.startsWith('data:image/tiff') ||
+      lowerFile.endsWith('.tif') ||
+      lowerFile.endsWith('.tiff');
+    const effectiveSrc = isPdf || isTiff ? this.imageUrl() : imageSrc;
     this.applyLoadedImage(backendResult, effectiveSrc);
     return this.currentDiagramData;
   }
