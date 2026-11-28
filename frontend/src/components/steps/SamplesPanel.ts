@@ -275,10 +275,21 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
 
   // 固定容差输入
   const inputTol = root.querySelector('#input-consensus-tol') as HTMLInputElement | null;
-  inputTol?.addEventListener('change', () => {
-    const val = Number(inputTol.value);
-    if (Number.isFinite(val) && val > 0) consensusTolerancePx = val;
-  });
+  const validateConsensusTol = (): boolean => {
+    if (!inputTol) return true;
+    const raw = inputTol.value.trim();
+    const val = Number(raw);
+    if (!raw || !Number.isFinite(val) || val < 0.5 || val > 20) {
+      inputTol.style.borderColor = 'var(--status-error)';
+      notifyError(`固定容差无效（需 0.5 ~ 20 px），已恢复为 ${consensusTolerancePx} px`);
+      inputTol.value = String(consensusTolerancePx);
+      return false;
+    }
+    inputTol.style.borderColor = 'var(--border-color)';
+    consensusTolerancePx = val;
+    return true;
+  };
+  inputTol?.addEventListener('change', validateConsensusTol);
 
   // 共振门槛切换
   root.querySelectorAll('.btn-consensus-support').forEach((btn) => {
@@ -292,6 +303,9 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   });
 
   root.querySelector('#btn-extract-consensus')?.addEventListener('click', () => {
+    if (!consensusAdaptive && !validateConsensusTol()) {
+      return;
+    }
     ctx.onExtractConsensusHorizons?.({
       mode: consensusMode,
       adaptive_window: consensusAdaptive,
