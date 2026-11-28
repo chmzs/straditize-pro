@@ -2459,6 +2459,7 @@ private pointer: PointerState = {
     addPoint: '提示: 控制点编辑在步骤 7 (拐点与采样) 启用',
     eraser: '提示: 删除操作在步骤 4 起启用',
     ycalib: '提示: Y 轴两点标定在步骤 3 (Y标定) 启用',
+    measure: '提示: 测量尺在步骤 5 (去线清理) 启用',
     linefix: '提示: 线掩膜人工修正在步骤 5 (清理) 启用',
     pickTick: '提示: 点选刻度齿在步骤 6 (列标定) 启用',
   };
