@@ -80,6 +80,13 @@ export async function watchPage(page: Page): Promise<PageTelemetry> {
   });
   page.on('pageerror', (err) => telemetry.consoleErrors.push(`pageerror: ${err.message}`));
   page.on('dialog', (dialog) => {
+    // `beforeunload` 是浏览器在 `undoStack.canUndo` 为真时弹出的离开确认，
+    // message 恒为空串 `""`；若调 dismiss() 会取消导航导致 `page.reload()` 挂死 60s
+    // 且把 `""` 记成未预期通知（#208A）。测试调 reload/goto 意图是离开，故放行。
+    if (dialog.type() === 'beforeunload') {
+      void dialog.accept();
+      return;
+    }
     telemetry.notices.push(dialog.message());
     void dialog.dismiss();
   });
