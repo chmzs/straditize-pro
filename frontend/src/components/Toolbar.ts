@@ -6,6 +6,7 @@ import { WORKFLOW_STEP_ITEMS } from '../types/workflow';
 import { t } from '../i18n';
 import { refreshUndoButtons } from '../core/undoRuntime';
 import { showsSampleHorizons } from '../core/WorkflowStage';
+import { showConfirmDialog } from '../ui/confirm';
 
 export interface ToolbarCallbacks {
   onFit: () => void;
@@ -416,7 +417,13 @@ export class Toolbar {
   private bindEvents(): void {
     // 桌面模式退出程序按钮
     this.element.querySelector('#btn-shutdown')?.addEventListener('click', async () => {
-      if (!window.confirm('确定要退出并关闭 Straditize 本地服务吗？')) {
+      if (
+        !(await showConfirmDialog(
+          '退出应用',
+          '确定要退出并关闭 Straditize 本地服务吗？',
+          { confirmText: '退出', destructive: true }
+        ))
+      ) {
         return;
       }
       if (typeof (window as any).__straditize_suppress_beforeunload === 'function') {

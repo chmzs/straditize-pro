@@ -3,6 +3,7 @@ import { countCalibratedColumns } from '../../core/calibProgress';
 import { StepContext } from './_registry';
 import { t } from '../../i18n';
 import { notify, notifyError } from '../../ui/feedback';
+import { showConfirmDialog } from '../../ui/confirm';
 import { columnPick, beginColumnPick, resetColumnPick } from './columnPick';
 import {
   renderActiveColumnLostNotice,
@@ -1209,7 +1210,15 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   });
 
   root.querySelector('#btn-reset-step6-xticks')?.addEventListener('click', async () => {
-    if (!window.confirm('确定清空所有属种列的 X 刻度标定吗？全部列将回到未标定状态。')) return;
+    if (
+      !(await showConfirmDialog(
+        '清空列 X 刻度标定',
+        '确定清空所有属种列的 X 刻度标定吗？全部列将回到未标定状态。',
+        { destructive: true }
+      ))
+    ) {
+      return;
+    }
     state.pendingTick = null;
     clearAllGroupCalibMarks();
     await ctx.onClearAllXTicks?.();

@@ -438,7 +438,15 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   });
 
   root.querySelector('#btn-reset-step7-samples')?.addEventListener('click', async () => {
-    if (!window.confirm('确定清空当前已提取或导入的全部采样层位吗？')) return;
+    if (
+      !(await showConfirmDialog(
+        '清空采样层位',
+        '确定清空当前已提取或导入的全部采样层位吗？',
+        { destructive: true }
+      ))
+    ) {
+      return;
+    }
     await ctx.onClearHorizons?.();
   });
 }

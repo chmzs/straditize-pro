@@ -117,6 +117,7 @@ test.describe('B-07 重置全部操作', () => {
     expect(before.columns.length, '重置前必须有列，否则本用例不成立').toBeGreaterThan(0);
 
     await page.locator('#btn-reset-all').click();
+    await page.locator('#ui-confirm-ok').click();
 
     // 后端归零是**异步**的（`project.new` + 一次 `roi.update`），必须轮询到落定。
     await expect

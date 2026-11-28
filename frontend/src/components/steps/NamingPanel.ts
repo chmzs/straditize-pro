@@ -5,6 +5,7 @@ import { notifyError } from '../../ui/feedback';
 import { renderSplitLostXTicksNotice } from './XTicksDroppedNotice';
 import { renderSplitSuspectNotice } from './SuspectBlockNotice';
 import { renderResetButton } from '../../ui/resetButton';
+import { showConfirmDialog } from '../../ui/confirm';
 
 export const step = 4;
 export const title = '4. 自动分列与属种命名';
@@ -119,7 +120,15 @@ export function mount(root: HTMLElement, ctx: StepContext): void {
   });
 
   root.querySelector('#btn-reset-step4-split')?.addEventListener('click', async () => {
-    if (!window.confirm('确定清空当前所有属种列吗？已有的列边界与命名将被重置。')) return;
+    if (
+      !(await showConfirmDialog(
+        '清空属种列',
+        '确定清空当前所有属种列吗？已有的列边界与命名将被重置。',
+        { destructive: true }
+      ))
+    ) {
+      return;
+    }
     if (ctx.onClearAllColumns) {
       await ctx.onClearAllColumns();
     }
