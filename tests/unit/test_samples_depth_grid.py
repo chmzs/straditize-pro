@@ -24,7 +24,7 @@ import math
 
 import pytest
 
-from straditize_core.protocol import JsonRpcError
+from straditize_core.protocol import ALGORITHM_ERROR, JsonRpcError
 from straditize_core.session import StraditizeSession
 
 PLATE = "tests/data/figures/plates/han2026GPC_ngamringLake_withbackcolor.jpeg"
@@ -109,3 +109,12 @@ def test_grid_count_matches_formula_for_odd_span() -> None:
     result = session.samples_from_depth_grid(step=step)
     expected = int(math.floor(100.0 / step)) + 1
     assert result["count"] == expected
+
+
+def test_grid_step_exceeding_span_raises_algorithm_error() -> None:
+    """步长大于区间长度（只能生成 1 个层位）应报 ALGORITHM_ERROR，而非参数格式不合规。"""
+    session = _session()
+    with pytest.raises(JsonRpcError) as exc:
+        session.samples_from_depth_grid(step=150.0)
+    assert exc.value.code == ALGORITHM_ERROR
+    assert "不足以生成两个层位" in str(exc.value)

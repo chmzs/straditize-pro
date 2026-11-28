@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any, Sequence
 import numpy as np
-from ..protocol import INVALID_PARAMS, STATE_ERROR, JsonRpcError
+from ..protocol import ALGORITHM_ERROR, INVALID_PARAMS, STATE_ERROR, JsonRpcError
 
 
 #: 拐点共识层位的诊断量（issue #83, #124）。只有 `source == 'auto'` 的层位带这些键，
@@ -447,7 +447,7 @@ class SamplesMixin:
         count = int(math.floor(span / step_value + 1e-9)) + 1
         if count < 2:
             raise JsonRpcError(
-                INVALID_PARAMS,
+                ALGORITHM_ERROR,
                 f"步长 {step_value} 与区间 [{lo}, {hi}] 不足以生成两个层位（只有 {count} 个）。",
             )
         depths = [round(lo + index * step_value, 6) for index in range(count)]
