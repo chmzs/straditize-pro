@@ -2576,9 +2576,10 @@ class ExportMixin:
 
         ## 形态
 
-        保留"一次跑出 PDF"的便利（`pdf(...)` 包住调用 + `dev.off()`），但绘图调用段改为
+        保留"一次跑出 SVG"的便利（`grDevices::svg(...)` 包住调用 + `dev.off()`），但绘图调用段改为
         `strat_plot_script_lines` 生成，因此：`%` 列用 `scale.percent = TRUE`、非 `%` 列
-        用该列自身量程（`add = TRUE` 叠加），与归档脚本口径一致。
+        用该列自身量程（`add = TRUE` 叠加），与归档脚本口径一致（设备同 `export_bundle_zip`
+        的 cairo SVG，不用 R 原生 `pdf()`）。
         """
         from .export_docs import strat_plot_script_lines
 
@@ -2610,7 +2611,7 @@ class ExportMixin:
             "# 非 % 列（比值 / 浓度 / 粒数）按该列自身量程画，两种不能共用一把尺。",
             "",
             "if (!file.exists('data.csv')) stop('找不到 data.csv：请用导出面板的「出图包」，或把 data.csv 放到同目录。')",
-            "pdf('stratigraphic_diagram.pdf', width = 12, height = 8)",
+            "grDevices::svg('stratigraphic_diagram.svg', width = 12, height = 8)",
         ]
         lines.extend(
             strat_plot_script_lines(
@@ -2632,7 +2633,7 @@ class ExportMixin:
         lines.extend(
             [
                 "dev.off()",
-                "message('Diagram successfully rendered: stratigraphic_diagram.pdf')",
+                "message('Diagram successfully rendered: stratigraphic_diagram.svg')",
                 "",
             ]
         )

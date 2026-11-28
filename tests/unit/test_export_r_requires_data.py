@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""回归钉子（#188）：`export.r` 缺少 `data.csv` 时必须 fail-fast，不得产出空 PDF 并报成功。"""
+"""回归钉子（#188）：`export.r` 缺少 `data.csv` 时必须 fail-fast，不得产出空图并报成功；默认出图设备为 SVG。"""
 
 from __future__ import annotations
 
@@ -26,18 +26,19 @@ def _calibrated_session() -> StraditizeSession:
     return session
 
 
-def test_export_r_checks_data_csv_before_opening_pdf() -> None:
-    """`export_r` 生成的脚本必须在 `pdf()` 之前检查 `data.csv` 并 `stop()`。"""
+def test_export_r_checks_data_csv_before_opening_svg() -> None:
+    """`export_r` 生成的脚本必须在 `grDevices::svg()` 之前检查 `data.csv` 并 `stop()`，且不使用 `pdf()`。"""
     session = _calibrated_session()
     script = session.export_r()
     assert isinstance(script, str)
     assert "if (!file.exists('data.csv')) stop(" in script
     assert "出图包" in script
-    assert script.index("stop(") < script.index("pdf('stratigraphic_diagram.pdf'")
+    assert "pdf(" not in script
+    assert script.index("stop(") < script.index("grDevices::svg('stratigraphic_diagram.svg'")
 
 
 def test_export_r_script_fails_in_empty_dir_and_renders_with_data(tmp_path: Path) -> None:
-    """空目录运行 `Rscript plot_strat.R` 必须非零退出且不产出 PDF；放上 `data.csv` 则正常出图。"""
+    """空目录运行 `Rscript plot_strat.R` 必须非零退出且不产出空图；放上 `data.csv` 则正常出 SVG。"""
     rscript = shutil.which("Rscript")
     if not rscript:
         pytest.skip("Rscript not installed")
@@ -59,12 +60,13 @@ def test_export_r_script_fails_in_empty_dir_and_renders_with_data(tmp_path: Path
         timeout=30,
     )
     assert proc_solo.returncode != 0, "缺 data.csv 时 Rscript 不得返回 exit 0"
-    assert not (solo_dir / "stratigraphic_diagram.pdf").exists(), (
-        "缺 data.csv 时不得产出空 PDF"
+    assert not (solo_dir / "stratigraphic_diagram.svg").exists(), (
+        "缺 data.csv 时不得产出空 SVG"
     )
+    assert not (solo_dir / "stratigraphic_diagram.pdf").exists()
     assert "Diagram successfully rendered" not in (proc_solo.stdout + proc_solo.stderr)
 
-    # 反向哨兵：若本机装有 rioja，同目录放入 data.csv 后应正常出图且退出码为 0
+    # 反向哨兵：若本机装有 rioja，同目录放入 data.csv 后应正常出 SVG 且退出码为 0
     has_rioja = (
         subprocess.run(
             [rscript, "-e", "quit(status = ifelse(requireNamespace('rioja', quietly=TRUE), 0, 1))"],
@@ -86,5 +88,5 @@ def test_export_r_script_fails_in_empty_dir_and_renders_with_data(tmp_path: Path
             timeout=60,
         )
         assert proc_ok.returncode == 0, proc_ok.stderr
-        pdf_file = with_data_dir / "stratigraphic_diagram.pdf"
-        assert pdf_file.is_file() and pdf_file.stat().st_size > 10_000
+        svg_file = with_data_dir / "stratigraphic_diagram.svg"
+        assert svg_file.is_file() and svg_file.stat().st_size > 10_000
