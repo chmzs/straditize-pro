@@ -334,14 +334,32 @@ class SamplesMixin:
                 "算法解算中断：当前 Y 轴标定斜率为 0，无法将物理深度逆向映射回像素行。请在【步骤 3: Y轴标定】中重新设置有效的两点标定。",
             )
 
+        img = getattr(self, "image", None)
+        img_height = int(img.shape[0]) if img is not None and hasattr(img, "shape") else None
+
         new_samples = []
         for d in depths:
             d_val = float(d)
+            if not math.isfinite(d_val):
+                raise JsonRpcError(
+                    INVALID_PARAMS,
+                    f"粘贴深度必须是有限数值（收到 {d!r}）。",
+                )
             calc_px = self._row_px_for_depth(d_val)
-            row_px = calc_px if calc_px is not None else 0.0
+            if calc_px is None:
+                raise JsonRpcError(
+                    STATE_ERROR,
+                    "前置状态缺失：无法将粘贴深度映射回像素行，请检查 Y 轴标定。",
+                )
+            row_px = int(round(calc_px))
+            if img_height is not None and (row_px < 0 or row_px >= img_height):
+                raise JsonRpcError(
+                    INVALID_PARAMS,
+                    f"粘贴深度 {d_val} 映射像素行 row_px={row_px} 超出图像高度范围 [0, {img_height - 1}]。",
+                )
             new_samples.append(
                 {
-                    "row_px": int(round(row_px)),
+                    "row_px": row_px,
                     "depth": round(d_val, 4),
                     "source": "paste",
                 }
